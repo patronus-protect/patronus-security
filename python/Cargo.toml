@@ -1,0 +1,13 @@
+[package]
+name = "patronus-security-python"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "_patronus_security"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.22", features = ["extension-module", "abi3-py311"] }
+patronus-security = { path = "../rust" }
+serde_json = "1.0"
