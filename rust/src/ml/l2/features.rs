@@ -1,35 +1,59 @@
 use std::collections::HashSet;
 
-pub(super) fn extract_ngrams(tokens: &[&str], min_n: usize, max_n: usize) -> Vec<String> {
-    let mut ngrams = Vec::new();
+pub(super) fn for_each_ngram<F>(tokens: &[&str], min_n: usize, max_n: usize, mut visit: F)
+where
+    F: FnMut(&str),
+{
     let len = tokens.len();
     for n in min_n..=max_n {
         if len >= n {
             for i in 0..=(len - n) {
-                let ngram = tokens[i..i + n].join(" ");
-                ngrams.push(ngram);
+                if n == 1 {
+                    visit(tokens[i]);
+                } else {
+                    let ngram = tokens[i..i + n].join(" ");
+                    visit(&ngram);
+                }
             }
         }
     }
-    ngrams
 }
 
-pub(super) fn extract_char_ngrams(text: &str, min_n: usize, max_n: usize) -> Vec<String> {
+pub(super) fn for_each_char_ngram<F>(text: &str, min_n: usize, max_n: usize, mut visit: F)
+where
+    F: FnMut(&str),
+{
+    if text.is_ascii() {
+        let len = text.len();
+        for n in min_n..=max_n {
+            if len >= n {
+                for i in 0..=(len - n) {
+                    visit(&text[i..i + n]);
+                }
+            }
+        }
+        return;
+    }
+
     let chars: Vec<char> = text.chars().collect();
     let len = chars.len();
-    let mut ngrams = Vec::new();
     for n in min_n..=max_n {
         if len >= n {
             for i in 0..=(len - n) {
                 let ngram: String = chars[i..i + n].iter().collect();
-                ngrams.push(ngram);
+                visit(&ngram);
             }
         }
     }
-    ngrams
 }
 
 pub(super) fn extract_handcrafted_features(text: &str) -> Vec<f64> {
+    let mut features = vec![0.0; 13];
+    extract_handcrafted_features_into(text, &mut features);
+    features
+}
+
+pub(super) fn extract_handcrafted_features_into(text: &str, out: &mut [f64]) {
     let t = text;
     let n = t.len().max(1) as f64;
 
@@ -98,7 +122,7 @@ pub(super) fn extract_handcrafted_features(text: &str) -> Vec<f64> {
     let lower = t.to_lowercase();
     let url_count = (lower.matches("http://").count() + lower.matches("https://").count()) as f64;
 
-    vec![
+    let values = [
         n.ln_1p(),
         nw,
         avg_word_len,
@@ -112,5 +136,7 @@ pub(super) fn extract_handcrafted_features(text: &str) -> Vec<f64> {
         punct / n,
         n_sentences,
         n / n_sentences,
-    ]
+    ];
+    let limit = values.len().min(out.len());
+    out[..limit].copy_from_slice(&values[..limit]);
 }

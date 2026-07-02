@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::{atomic::AtomicU64, Arc};
 use std::time::Instant;
 
 use crate::{
@@ -14,9 +15,12 @@ use crate::{
         mcp::{mcp_policy, mcp_runtime_risk},
         pii::pii,
     },
-    pipeline::{Pipeline, PromptInjectionPipeline},
-    EvaluationResult, LayerResult, SecurityCategory, SecurityLevel, SecurityScanResult,
+    pipeline::{L3Worker, Pipeline, PromptInjectionPipeline, RequestRegistry},
+    EvaluationResult, ExecutionBackend, LayerResult, LongTextPolicy, OnnxBatchMode, ScanExecution,
+    ScanGateMatrix, SecurityCategory, SecurityLevel, SecurityScanResult,
 };
+
+mod request_queue;
 
 /// Main scanner gateway for native and model-backed security categories.
 pub struct PatronusSecurity {
@@ -30,6 +34,8 @@ pub struct PatronusSecurity {
     pub download_files: bool,
     /// Optional allowlist of categories that may download missing assets.
     pub download_categories: Option<Vec<SecurityCategory>>,
+    /// Execution gates consumed by scan methods.
+    pub execution: ScanExecution,
 
     // Lazy-loaded model-based pipelines
     pub injection_pipeline: Option<PromptInjectionPipeline>,
@@ -63,6 +69,10 @@ pub struct PatronusSecurity {
     pub zero_width_obfuscation_pipeline:
         Option<zero_width_obfuscation::ZeroWidthObfuscationPipeline>,
     pub mcp_policy_pipeline: Option<mcp_policy::McpPolicyPipeline>,
+
+    request_counter: AtomicU64,
+    requests: Arc<RequestRegistry>,
+    l3_worker: L3Worker,
 }
 
 /// Preferred public name for the security scanner gateway.
@@ -84,24 +94,6 @@ fn scan_result(
         duration_ms,
         layers,
     }
-}
-
-fn into_scan_result(
-    category: SecurityCategory,
-    model: impl Into<String>,
-    result: EvaluationResult,
-) -> SecurityScanResult {
-    let layer = LayerResult {
-        level: result.level.clone(),
-        layer_type: "native".to_string(),
-        class_name: result.class_name.clone(),
-        confidence: result.confidence,
-        matched: true,
-        duration_ms: 0.0,
-        thresholds: HashMap::new(),
-        details: HashMap::new(),
-    };
-    scan_result(category, model, result, vec![layer])
 }
 
 fn native_scan_result_with_duration(
@@ -151,12 +143,13 @@ fn pii_model_scan_result(
     model: impl Into<String>,
     pipe: &Pipeline,
     text: &str,
-) -> SecurityScanResult {
-    model_scan_result(
-        category,
-        model,
-        pipe.evaluate_with_layers(text, SecurityLevel::L2),
-    )
+) -> Option<SecurityScanResult> {
+    let execution = ScanExecution::with_gates(
+        SecurityLevel::L2,
+        ScanGateMatrix::levels(false, true, false),
+    );
+    pipe.evaluate_with_execution(text, &execution)
+        .map(|output| model_scan_result(category, model, output))
 }
 
 fn generic_model_scan_result(
@@ -164,33 +157,20 @@ fn generic_model_scan_result(
     model: impl Into<String>,
     pipe: &Pipeline,
     text: &str,
-    max_level: SecurityLevel,
-) -> SecurityScanResult {
-    model_scan_result(category, model, pipe.evaluate_with_layers(text, max_level))
+    execution: &ScanExecution,
+) -> Option<SecurityScanResult> {
+    pipe.evaluate_with_execution(text, execution)
+        .map(|output| model_scan_result(category, model, output))
 }
 
 fn injection_model_scan_result(
     category: SecurityCategory,
     pipe: &PromptInjectionPipeline,
     text: &str,
-    max_level: SecurityLevel,
-) -> SecurityScanResult {
-    model_scan_result(
-        category,
-        "wolf-defender-small",
-        pipe.evaluate_with_layers(text, max_level),
-    )
-}
-
-fn scan_result_batch(
-    category: SecurityCategory,
-    model: &str,
-    outputs: Vec<(EvaluationResult, Vec<LayerResult>)>,
-) -> Vec<SecurityScanResult> {
-    outputs
-        .into_iter()
-        .map(|output| model_scan_result(category, model, output))
-        .collect()
+    execution: &ScanExecution,
+) -> Option<SecurityScanResult> {
+    pipe.evaluate_with_execution(text, execution)
+        .map(|output| model_scan_result(category, "wolf-defender-small", output))
 }
 
 #[derive(Clone, Copy)]
@@ -231,26 +211,6 @@ fn log_pipeline_warmup(label: &str, started: Instant, has_l3: bool, l3_loaded: b
     );
 }
 
-fn select_first_unsafe_or_model(
-    mut results: Vec<SecurityScanResult>,
-    preferred_model: &str,
-) -> Option<SecurityScanResult> {
-    if let Some(index) = results
-        .iter()
-        .position(|result| result.class_name != "safe")
-    {
-        Some(results.remove(index))
-    } else {
-        let preferred_index = results
-            .iter()
-            .position(|result| result.model == preferred_model);
-        match preferred_index {
-            Some(index) => Some(results.remove(index)),
-            None => results.into_iter().next(),
-        }
-    }
-}
-
 impl PatronusSecurity {
     /// Create a gateway with `SecurityLevel::L2` as the maximum level.
     pub fn new(
@@ -282,12 +242,15 @@ impl PatronusSecurity {
         download_files: bool,
         download_categories: Option<Vec<SecurityCategory>>,
     ) -> Self {
+        let requests = Arc::new(RequestRegistry::default());
+        let l3_worker = L3Worker::start(Arc::clone(&requests));
         let mut ps = PatronusSecurity {
             categories,
             max_level,
             use_dir,
             download_files,
             download_categories,
+            execution: ScanExecution::new(max_level),
             injection_pipeline: None,
             tool_classifier_prompts: None,
             tool_classifier_executions: None,
@@ -313,6 +276,9 @@ impl PatronusSecurity {
             unicode_confusable_pipeline: None,
             zero_width_obfuscation_pipeline: None,
             mcp_policy_pipeline: None,
+            request_counter: AtomicU64::new(1),
+            requests,
+            l3_worker,
         };
 
         // Immediately instantiate native rule pipelines for configured categories
@@ -375,6 +341,39 @@ impl PatronusSecurity {
         }
     }
 
+    /// Replace the execution gate matrix used by subsequent scans.
+    pub fn set_execution_gates(&mut self, gates: ScanGateMatrix) {
+        self.execution.set_gates(gates);
+    }
+
+    /// Replace the ONNX batch mode used by subsequent batch scans.
+    pub fn set_onnx_batch_mode(&mut self, mode: OnnxBatchMode) {
+        self.execution.set_onnx_batch_mode(mode);
+    }
+
+    /// Replace the execution backend and apply its default L3 mode.
+    pub fn set_execution_backend(&mut self, backend: ExecutionBackend) {
+        self.execution.set_backend(backend);
+    }
+
+    /// Replace the long-text routing policy.
+    pub fn set_long_text_policy(&mut self, policy: LongTextPolicy) {
+        self.execution.set_long_text_policy(policy);
+    }
+
+    /// Return the execution state that should be consumed by this scan.
+    fn scan_execution(&self) -> ScanExecution {
+        self.execution.clone().with_max_level(self.max_level)
+    }
+
+    fn level_enabled(&self, execution: &ScanExecution, level: SecurityLevel) -> bool {
+        execution.allows_level(level)
+    }
+
+    fn model_enabled(&self, execution: &ScanExecution, model: &str) -> bool {
+        execution.allows_model(model)
+    }
+
     /// Download allowed missing assets and initialize model-backed pipelines.
     pub fn warmup(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let base_dir = match &self.use_dir {
@@ -388,6 +387,13 @@ impl PatronusSecurity {
             "[warmup] model_dir={}; max_level={}",
             base_dir.display(),
             self.max_level.as_str()
+        );
+        let onnx_started = Instant::now();
+        let configured_onnx_runtime = crate::ml::onnx::warmup_runtime();
+        println!(
+            "[warmup] onnx runtime initialized in {:.2} ms; configured_now={}; model_sessions_loaded=false",
+            onnx_started.elapsed().as_secs_f64() * 1000.0,
+            configured_onnx_runtime
         );
 
         let mut init_tasks = Vec::new();
@@ -547,13 +553,14 @@ impl PatronusSecurity {
                         WarmupPipeline::Generic(pipeline)
                     }
                 };
-                Ok((task.kind, pipeline))
+                Ok((task.kind, task.path, pipeline))
             })
             .collect();
 
-        for (kind, pipeline) in
+        for (kind, _path, pipeline) in
             init_results.map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?
         {
+            self.register_l3_worker_pipeline(kind, &pipeline);
             match (kind, pipeline) {
                 (WarmupPipelineKind::Injection, WarmupPipeline::Injection(pipeline)) => {
                     self.injection_pipeline = Some(pipeline);
@@ -589,154 +596,155 @@ impl PatronusSecurity {
         Ok(())
     }
 
-    /// Scan text with a single category.
-    pub fn scan_category(&self, category: SecurityCategory, text: &str) -> Vec<SecurityScanResult> {
+    fn register_l3_worker_pipeline(&self, kind: WarmupPipelineKind, pipeline: &WarmupPipeline) {
+        let model = match pipeline {
+            WarmupPipeline::Injection(pipeline) => pipeline.l3_worker_model(),
+            WarmupPipeline::Generic(pipeline) => pipeline.l3_worker_model(),
+        };
+        let Some(model) = model else {
+            return;
+        };
+
+        match kind {
+            WarmupPipelineKind::Injection => {
+                self.l3_worker.register_model("wolf-defender-small", model);
+            }
+            WarmupPipelineKind::ToolClassifierPrompts => {
+                self.l3_worker.register_model("tool-prompts-model", model);
+            }
+            WarmupPipelineKind::ToolClassifierExecutions => {
+                self.l3_worker
+                    .register_model("tool-executions-model", model);
+            }
+            WarmupPipelineKind::UserIntentPrompts => {
+                self.l3_worker.register_model("user-intent-model", model);
+            }
+            WarmupPipelineKind::SensitiveDocumentsPrompts => {
+                self.l3_worker
+                    .register_model("orca-sonar-document-classifier", model);
+            }
+            WarmupPipelineKind::ToolDescriptionPrompts => {
+                self.l3_worker
+                    .register_model("tool-description-model", model);
+            }
+            WarmupPipelineKind::PiiPrompts => {}
+        }
+    }
+
+    fn scan_category_with_execution(
+        &self,
+        category: SecurityCategory,
+        text: &str,
+        execution: &ScanExecution,
+    ) -> Vec<SecurityScanResult> {
         let mut results = Vec::new();
+        macro_rules! push_native {
+            ($pipeline:expr, $model:literal) => {
+                if self.level_enabled(&execution, SecurityLevel::L1)
+                    && self.model_enabled(&execution, $model)
+                {
+                    if let Some(ref pipe) = $pipeline {
+                        results.push(timed_into_scan_result(category, $model, || {
+                            pipe.evaluate(text)
+                        }));
+                    }
+                }
+            };
+        }
+
         match category {
             SecurityCategory::Injection => {
-                if let Some(ref pipe) = self.injection_pipeline {
-                    results.push(injection_model_scan_result(
-                        category,
-                        pipe,
-                        text,
-                        self.max_level,
-                    ));
+                if self.model_enabled(&execution, "wolf-defender-small") {
+                    if let Some(ref pipe) = self.injection_pipeline {
+                        if let Some(result) =
+                            injection_model_scan_result(category, pipe, text, execution)
+                        {
+                            results.push(result);
+                        }
+                    }
                 }
-                if let Some(ref pipe) = self.cross_tool_instruction_pipeline {
-                    results.push(timed_into_scan_result(
-                        category,
-                        "native:cross_tool_instruction",
-                        || pipe.evaluate(text),
-                    ));
-                }
-                if let Some(ref pipe) = self.instruction_leak_pipeline {
-                    results.push(timed_into_scan_result(
-                        category,
-                        "native:instruction_leak",
-                        || pipe.evaluate(text),
-                    ));
-                }
-                if let Some(ref pipe) = self.encoded_instruction_pipeline {
-                    results.push(timed_into_scan_result(
-                        category,
-                        "native:encoded_instruction",
-                        || pipe.evaluate(text),
-                    ));
-                }
-                if let Some(ref pipe) = self.multi_turn_escalation_pipeline {
-                    results.push(timed_into_scan_result(
-                        category,
-                        "native:multi_turn_escalation",
-                        || pipe.evaluate(text),
-                    ));
-                }
-                if let Some(ref pipe) = self.guardrail_tamper_pipeline {
-                    results.push(timed_into_scan_result(
-                        category,
-                        "native:guardrail_tamper",
-                        || pipe.evaluate(text),
-                    ));
-                }
-                if let Some(ref pipe) = self.tool_output_instruction_pipeline {
-                    results.push(timed_into_scan_result(
-                        category,
-                        "native:tool_output_instruction",
-                        || pipe.evaluate(text),
-                    ));
-                }
-                if let Some(ref pipe) = self.hidden_html_instruction_pipeline {
-                    results.push(timed_into_scan_result(
-                        category,
-                        "native:hidden_html_instruction",
-                        || pipe.evaluate(text),
-                    ));
-                }
-                if let Some(ref pipe) = self.unicode_confusable_pipeline {
-                    results.push(timed_into_scan_result(
-                        category,
-                        "native:unicode_confusable",
-                        || pipe.evaluate(text),
-                    ));
-                }
-                if let Some(ref pipe) = self.zero_width_obfuscation_pipeline {
-                    results.push(timed_into_scan_result(
-                        category,
-                        "native:zero_width_obfuscation",
-                        || pipe.evaluate(text),
-                    ));
-                }
-                if let Some(ref pipe) = self.agentic_control_abuse_pipeline {
-                    results.push(timed_into_scan_result(
-                        category,
-                        "native:agentic_control_abuse",
-                        || pipe.evaluate(text),
-                    ));
-                }
-                if let Some(ref pipe) = self.binary_smuggling_pipeline {
-                    results.push(timed_into_scan_result(
-                        category,
-                        "native:binary_smuggling",
-                        || pipe.evaluate(text),
-                    ));
-                }
+                push_native!(
+                    self.cross_tool_instruction_pipeline,
+                    "native:cross_tool_instruction"
+                );
+                push_native!(self.instruction_leak_pipeline, "native:instruction_leak");
+                push_native!(
+                    self.encoded_instruction_pipeline,
+                    "native:encoded_instruction"
+                );
+                push_native!(
+                    self.multi_turn_escalation_pipeline,
+                    "native:multi_turn_escalation"
+                );
+                push_native!(self.guardrail_tamper_pipeline, "native:guardrail_tamper");
+                push_native!(
+                    self.tool_output_instruction_pipeline,
+                    "native:tool_output_instruction"
+                );
+                push_native!(
+                    self.hidden_html_instruction_pipeline,
+                    "native:hidden_html_instruction"
+                );
+                push_native!(
+                    self.unicode_confusable_pipeline,
+                    "native:unicode_confusable"
+                );
+                push_native!(
+                    self.zero_width_obfuscation_pipeline,
+                    "native:zero_width_obfuscation"
+                );
+                push_native!(
+                    self.agentic_control_abuse_pipeline,
+                    "native:agentic_control_abuse"
+                );
+                push_native!(self.binary_smuggling_pipeline, "native:binary_smuggling");
             }
             SecurityCategory::Dlp => {
-                if let Some(ref pipe) = self.dlp_pipeline {
-                    results.push(timed_into_scan_result(category, "native:dlp", || {
-                        pipe.evaluate(text)
-                    }));
-                }
-                if let Some(ref pipe) = self.sensitive_material_pipeline {
-                    results.push(timed_into_scan_result(
-                        category,
-                        "native:sensitive_material",
-                        || pipe.evaluate(text),
-                    ));
-                }
-                if let Some(ref pipe) = self.secret_transfer_pipeline {
-                    results.push(timed_into_scan_result(
-                        category,
-                        "native:secret_transfer",
-                        || pipe.evaluate(text),
-                    ));
-                }
-                if let Some(ref pipe) = self.mcp_runtime_risk_pipeline {
-                    results.push(timed_into_scan_result(
-                        category,
-                        "native:mcp_runtime_risk",
-                        || pipe.evaluate(text),
-                    ));
-                }
-                if let Some(ref pipe) = self.mcp_policy_pipeline {
-                    results.push(timed_into_scan_result(
-                        category,
-                        "native:mcp_policy",
-                        || pipe.evaluate(text),
-                    ));
-                }
-                if let Some(ref pipe) = self.destructive_operation_pipeline {
-                    results.push(timed_into_scan_result(
-                        category,
-                        "native:destructive_operation",
-                        || pipe.evaluate(text),
-                    ));
-                }
+                push_native!(self.dlp_pipeline, "native:dlp");
+                push_native!(
+                    self.sensitive_material_pipeline,
+                    "native:sensitive_material"
+                );
+                push_native!(self.secret_transfer_pipeline, "native:secret_transfer");
+                push_native!(self.mcp_runtime_risk_pipeline, "native:mcp_runtime_risk");
+                push_native!(self.mcp_policy_pipeline, "native:mcp_policy");
+                push_native!(
+                    self.destructive_operation_pipeline,
+                    "native:destructive_operation"
+                );
             }
             SecurityCategory::Pii => {
-                if let Some(ref native) = self.pii_pipeline {
-                    let native_started = Instant::now();
-                    let native_res = native.evaluate(text);
-                    let native_duration_ms = native_started.elapsed().as_secs_f64() * 1000.0;
-                    if native_res.class_name != "safe" {
-                        results.push(native_scan_result_with_duration(
-                            category,
-                            "native:pii",
-                            native_res,
-                            native_duration_ms,
-                        ));
-                    } else if self.max_level >= SecurityLevel::L2 {
-                        if let Some(ref model) = self.pii_model_pipeline {
-                            results.push(pii_model_scan_result(category, "pii-model", model, text));
+                let native_enabled = self.level_enabled(&execution, SecurityLevel::L1)
+                    && self.model_enabled(&execution, "native:pii");
+                let model_enabled = self.level_enabled(&execution, SecurityLevel::L2)
+                    && self.model_enabled(&execution, "pii-model");
+                if native_enabled {
+                    if let Some(ref native) = self.pii_pipeline {
+                        let native_started = Instant::now();
+                        let native_res = native.evaluate(text);
+                        let native_duration_ms = native_started.elapsed().as_secs_f64() * 1000.0;
+                        if native_res.class_name != "safe" {
+                            results.push(native_scan_result_with_duration(
+                                category,
+                                "native:pii",
+                                native_res,
+                                native_duration_ms,
+                            ));
+                        } else if model_enabled {
+                            if let Some(ref model) = self.pii_model_pipeline {
+                                if let Some(result) =
+                                    pii_model_scan_result(category, "pii-model", model, text)
+                                {
+                                    results.push(result);
+                                }
+                            } else {
+                                results.push(native_scan_result_with_duration(
+                                    category,
+                                    "native:pii",
+                                    native_res,
+                                    native_duration_ms,
+                                ));
+                            }
                         } else {
                             results.push(native_scan_result_with_duration(
                                 category,
@@ -745,328 +753,131 @@ impl PatronusSecurity {
                                 native_duration_ms,
                             ));
                         }
-                    } else {
-                        results.push(native_scan_result_with_duration(
-                            category,
-                            "native:pii",
-                            native_res,
-                            native_duration_ms,
-                        ));
+                    }
+                } else if model_enabled {
+                    if let Some(ref model) = self.pii_model_pipeline {
+                        if let Some(result) =
+                            pii_model_scan_result(category, "pii-model", model, text)
+                        {
+                            results.push(result);
+                        }
                     }
                 }
             }
             SecurityCategory::ToolClassifier => {
-                if let Some(ref pipe) = self.tool_classifier_prompts {
-                    results.push(generic_model_scan_result(
-                        category,
-                        "tool-prompts-model",
-                        pipe,
-                        text,
-                        self.max_level,
-                    ));
+                if self.model_enabled(&execution, "tool-prompts-model") {
+                    if let Some(ref pipe) = self.tool_classifier_prompts {
+                        if let Some(result) = generic_model_scan_result(
+                            category,
+                            "tool-prompts-model",
+                            pipe,
+                            text,
+                            execution,
+                        ) {
+                            results.push(result);
+                        }
+                    }
                 }
-                if let Some(ref pipe) = self.tool_classifier_executions {
-                    results.push(generic_model_scan_result(
-                        category,
-                        "tool-executions-model",
-                        pipe,
-                        text,
-                        self.max_level,
-                    ));
+                if self.model_enabled(&execution, "tool-executions-model") {
+                    if let Some(ref pipe) = self.tool_classifier_executions {
+                        if let Some(result) = generic_model_scan_result(
+                            category,
+                            "tool-executions-model",
+                            pipe,
+                            text,
+                            execution,
+                        ) {
+                            results.push(result);
+                        }
+                    }
                 }
             }
             SecurityCategory::SensitiveDocuments => {
-                if let Some(ref pipe) = self.sensitive_documents_prompts {
-                    results.push(generic_model_scan_result(
-                        category,
-                        "orca-sonar-document-classifier",
-                        pipe,
-                        text,
-                        self.max_level,
-                    ));
+                if self.model_enabled(&execution, "orca-sonar-document-classifier") {
+                    if let Some(ref pipe) = self.sensitive_documents_prompts {
+                        if let Some(result) = generic_model_scan_result(
+                            category,
+                            "orca-sonar-document-classifier",
+                            pipe,
+                            text,
+                            execution,
+                        ) {
+                            results.push(result);
+                        }
+                    }
                 }
             }
             SecurityCategory::ToolDescription => {
-                if let Some(ref pipe) = self.tool_description_prompts {
-                    results.push(generic_model_scan_result(
-                        category,
-                        "tool-description-model",
-                        pipe,
-                        text,
-                        self.max_level,
-                    ));
+                if self.model_enabled(&execution, "tool-description-model") {
+                    if let Some(ref pipe) = self.tool_description_prompts {
+                        if let Some(result) = generic_model_scan_result(
+                            category,
+                            "tool-description-model",
+                            pipe,
+                            text,
+                            execution,
+                        ) {
+                            results.push(result);
+                        }
+                    }
                 }
             }
             SecurityCategory::UserIntent => {
-                if let Some(ref pipe) = self.user_intent_prompts {
-                    results.push(generic_model_scan_result(
-                        category,
-                        "user-intent-model",
-                        pipe,
-                        text,
-                        self.max_level,
-                    ));
+                if self.model_enabled(&execution, "user-intent-model") {
+                    if let Some(ref pipe) = self.user_intent_prompts {
+                        if let Some(result) = generic_model_scan_result(
+                            category,
+                            "user-intent-model",
+                            pipe,
+                            text,
+                            execution,
+                        ) {
+                            results.push(result);
+                        }
+                    }
                 }
             }
         }
         results
     }
 
-    /// Evaluate a legacy-compatible pipeline name for one text.
-    ///
-    /// This returns one final result for the selected pipeline. For categories
-    /// with multiple native subscanners, unsafe findings are preferred over the
-    /// category's safe baseline result.
-    pub fn evaluate_pipeline(&self, pipeline: &str, text: &str) -> Option<SecurityScanResult> {
-        match pipeline {
-            "tool_classifier_prompts" => self.tool_classifier_prompts.as_ref().map(|pipe| {
-                generic_model_scan_result(
-                    SecurityCategory::ToolClassifier,
-                    "tool-prompts-model",
-                    pipe,
-                    text,
-                    self.max_level,
-                )
-            }),
-            "tool_classifier_executions" => self.tool_classifier_executions.as_ref().map(|pipe| {
-                generic_model_scan_result(
-                    SecurityCategory::ToolClassifier,
-                    "tool-executions-model",
-                    pipe,
-                    text,
-                    self.max_level,
-                )
-            }),
-            "user_intent_prompts" => self.user_intent_prompts.as_ref().map(|pipe| {
-                generic_model_scan_result(
-                    SecurityCategory::UserIntent,
-                    "user-intent-model",
-                    pipe,
-                    text,
-                    self.max_level,
-                )
-            }),
-            "sensitive_documents_prompts" => {
-                self.sensitive_documents_prompts.as_ref().map(|pipe| {
-                    generic_model_scan_result(
-                        SecurityCategory::SensitiveDocuments,
-                        "orca-sonar-document-classifier",
-                        pipe,
-                        text,
-                        self.max_level,
-                    )
-                })
-            }
-            "tool_description_prompts" => self.tool_description_prompts.as_ref().map(|pipe| {
-                generic_model_scan_result(
-                    SecurityCategory::ToolDescription,
-                    "tool-description-model",
-                    pipe,
-                    text,
-                    self.max_level,
-                )
-            }),
-            "injection" => self.injection_pipeline.as_ref().map(|pipe| {
-                injection_model_scan_result(SecurityCategory::Injection, pipe, text, self.max_level)
-            }),
-            "dlp" => select_first_unsafe_or_model(
-                self.scan_category(SecurityCategory::Dlp, text),
-                "native:dlp",
-            ),
-            "pii" => select_first_unsafe_or_model(
-                self.scan_category(SecurityCategory::Pii, text),
-                "native:pii",
-            ),
-            _ => None,
-        }
-    }
-
-    fn evaluate_dlp_batch(&self, texts: &[String]) -> Vec<SecurityScanResult> {
-        let mut per_text = vec![Vec::<SecurityScanResult>::new(); texts.len()];
-
-        if let Some(ref pipe) = self.dlp_pipeline {
-            for (index, result) in pipe.evaluate_batch(texts).into_iter().enumerate() {
-                per_text[index].push(into_scan_result(
-                    SecurityCategory::Dlp,
-                    "native:dlp",
-                    result,
-                ));
-            }
-        }
-        if let Some(ref pipe) = self.sensitive_material_pipeline {
-            for (index, result) in pipe.evaluate_batch(texts).into_iter().enumerate() {
-                per_text[index].push(into_scan_result(
-                    SecurityCategory::Dlp,
-                    "native:sensitive_material",
-                    result,
-                ));
-            }
-        }
-        if let Some(ref pipe) = self.secret_transfer_pipeline {
-            for (index, result) in pipe.evaluate_batch(texts).into_iter().enumerate() {
-                per_text[index].push(into_scan_result(
-                    SecurityCategory::Dlp,
-                    "native:secret_transfer",
-                    result,
-                ));
-            }
-        }
-        if let Some(ref pipe) = self.mcp_runtime_risk_pipeline {
-            for (index, result) in pipe.evaluate_batch(texts).into_iter().enumerate() {
-                per_text[index].push(into_scan_result(
-                    SecurityCategory::Dlp,
-                    "native:mcp_runtime_risk",
-                    result,
-                ));
-            }
-        }
-        if let Some(ref pipe) = self.mcp_policy_pipeline {
-            for (index, result) in pipe.evaluate_batch(texts).into_iter().enumerate() {
-                per_text[index].push(into_scan_result(
-                    SecurityCategory::Dlp,
-                    "native:mcp_policy",
-                    result,
-                ));
-            }
-        }
-        if let Some(ref pipe) = self.destructive_operation_pipeline {
-            for (index, result) in pipe.evaluate_batch(texts).into_iter().enumerate() {
-                per_text[index].push(into_scan_result(
-                    SecurityCategory::Dlp,
-                    "native:destructive_operation",
-                    result,
-                ));
-            }
-        }
-
-        per_text
-            .into_iter()
-            .filter_map(|results| select_first_unsafe_or_model(results, "native:dlp"))
-            .collect()
-    }
-
-    fn evaluate_pii_batch(&self, texts: &[String]) -> Vec<SecurityScanResult> {
-        let Some(ref native) = self.pii_pipeline else {
-            return Vec::new();
-        };
-
-        let native_results = native.evaluate_batch(texts);
-        let mut output = vec![None; texts.len()];
-        let mut model_indices = Vec::new();
-        let mut model_texts = Vec::new();
-        let can_use_model =
-            self.max_level >= SecurityLevel::L2 && self.pii_model_pipeline.is_some();
-
-        for (index, native_result) in native_results.into_iter().enumerate() {
-            if native_result.class_name != "safe" || !can_use_model {
-                output[index] = Some(into_scan_result(
-                    SecurityCategory::Pii,
-                    "native:pii",
-                    native_result,
-                ));
-            } else {
-                model_indices.push(index);
-                model_texts.push(texts[index].clone());
-            }
-        }
-
-        if let Some(ref model) = self.pii_model_pipeline {
-            let model_results = scan_result_batch(
-                SecurityCategory::Pii,
-                "pii-model",
-                model.evaluate_batch_with_layers(&model_texts, SecurityLevel::L2),
-            );
-            for (index, result) in model_indices.into_iter().zip(model_results) {
-                output[index] = Some(result);
-            }
-        }
-
-        output.into_iter().flatten().collect()
-    }
-
-    /// Evaluate a legacy-compatible pipeline name for many texts.
-    ///
-    /// This is the optimized bulk path used by benchmarks and Python
-    /// `evaluate_batch`. Native subscanners and model-backed pipelines are
-    /// batched internally instead of looping through `evaluate_pipeline`.
-    pub fn evaluate_pipeline_batch(
-        &self,
-        pipeline: &str,
-        texts: &[String],
-    ) -> Option<Vec<SecurityScanResult>> {
-        match pipeline {
-            "tool_classifier_prompts" => self.tool_classifier_prompts.as_ref().map(|pipe| {
-                scan_result_batch(
-                    SecurityCategory::ToolClassifier,
-                    "tool-prompts-model",
-                    pipe.evaluate_batch_with_layers(texts, self.max_level),
-                )
-            }),
-            "tool_classifier_executions" => self.tool_classifier_executions.as_ref().map(|pipe| {
-                scan_result_batch(
-                    SecurityCategory::ToolClassifier,
-                    "tool-executions-model",
-                    pipe.evaluate_batch_with_layers(texts, self.max_level),
-                )
-            }),
-            "user_intent_prompts" => self.user_intent_prompts.as_ref().map(|pipe| {
-                scan_result_batch(
-                    SecurityCategory::UserIntent,
-                    "user-intent-model",
-                    pipe.evaluate_batch_with_layers(texts, self.max_level),
-                )
-            }),
-            "sensitive_documents_prompts" => {
-                self.sensitive_documents_prompts.as_ref().map(|pipe| {
-                    scan_result_batch(
-                        SecurityCategory::SensitiveDocuments,
-                        "orca-sonar-document-classifier",
-                        pipe.evaluate_batch_with_layers(texts, self.max_level),
-                    )
-                })
-            }
-            "tool_description_prompts" => self.tool_description_prompts.as_ref().map(|pipe| {
-                scan_result_batch(
-                    SecurityCategory::ToolDescription,
-                    "tool-description-model",
-                    pipe.evaluate_batch_with_layers(texts, self.max_level),
-                )
-            }),
-            "injection" => self.injection_pipeline.as_ref().map(|pipe| {
-                scan_result_batch(
-                    SecurityCategory::Injection,
-                    "wolf-defender-small",
-                    pipe.evaluate_batch_with_layers(texts, self.max_level),
-                )
-            }),
-            "dlp" => Some(self.evaluate_dlp_batch(texts)),
-            "pii" => Some(self.evaluate_pii_batch(texts)),
-            _ => None,
-        }
-    }
-
-    /// Scan text with a caller-provided category subset.
-    pub fn scan_categories(
+    fn scan_categories_direct(
         &self,
         categories: &[SecurityCategory],
         text: &str,
     ) -> Vec<SecurityScanResult> {
-        let mut results = Vec::new();
-        for cat in categories {
-            results.extend(self.scan_category(*cat, text));
-        }
-        results
-    }
+        use rayon::prelude::*;
 
-    /// Scan text with every category configured on this gateway.
-    pub fn scan_all(&self, text: &str) -> Vec<SecurityScanResult> {
-        self.scan_categories(&self.categories, text)
+        let execution = self.scan_execution();
+        if !execution.allows_level(SecurityLevel::L3) || !execution.l3_policy().enabled {
+            return categories
+                .par_iter()
+                .map(|cat| self.scan_category_with_execution(*cat, text, &execution))
+                .collect::<Vec<_>>()
+                .into_iter()
+                .flatten()
+                .collect();
+        }
+
+        let mut deferred_execution = execution.clone();
+        deferred_execution.set_defer_l3(true);
+        let results: Vec<SecurityScanResult> = categories
+            .par_iter()
+            .map(|cat| self.scan_category_with_execution(*cat, text, &deferred_execution))
+            .collect::<Vec<_>>()
+            .into_iter()
+            .flatten()
+            .collect();
+        results
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
+
+    use crate::RequestId;
 
     #[test]
     fn download_categories_limit_asset_downloads() {
@@ -1157,31 +968,201 @@ mod tests {
     }
 
     #[test]
-    fn selector_returns_first_safe_result_when_preferred_safe_model_is_absent() {
-        let selected = select_first_unsafe_or_model(
-            vec![SecurityScanResult {
-                category: "pii".to_string(),
-                class_name: "safe".to_string(),
-                confidence: 0.99,
-                level: "L2".to_string(),
-                model: "pii-model".to_string(),
-                duration_ms: 1.0,
-                layers: vec![LayerResult {
-                    level: "L2".to_string(),
-                    layer_type: "fast_ml".to_string(),
-                    class_name: "safe".to_string(),
-                    confidence: 0.99,
-                    matched: true,
-                    duration_ms: 1.0,
-                    thresholds: HashMap::new(),
-                    details: HashMap::new(),
-                }],
-            }],
-            "native:pii",
-        )
-        .unwrap();
+    fn consume_streams_l1_l2_result_while_l3_worker_is_still_running() {
+        let scanner = PatronusSecurity::with_max_level(
+            vec![SecurityCategory::Injection],
+            SecurityLevel::L3,
+            None,
+            false,
+        );
+        let request_id = scanner.enqueue_test_l3_delay_request(0, 250, "slow-l3-model");
 
-        assert_eq!(selected.model, "pii-model");
-        assert_eq!(selected.class_name, "safe");
+        let first = scanner
+            .consume_results(request_id.clone(), Some(Duration::from_millis(20)))
+            .expect("L1/L2 fallback should be immediately consumable");
+        assert_eq!(first.level, "L2");
+        assert!(first
+            .layers
+            .iter()
+            .any(|layer| layer.layer_type == "l3_pending"));
+
+        let none_while_l3_runs =
+            scanner.consume_results(request_id.clone(), Some(Duration::from_millis(20)));
+        assert!(none_while_l3_runs.is_none());
+        assert!(
+            scanner.has_request(&request_id),
+            "timing out while L3 is pending must not clear the request"
+        );
+
+        let final_result = scanner
+            .consume_results(request_id.clone(), Some(Duration::from_secs(2)))
+            .expect("L3 worker should eventually publish the final result");
+        assert_eq!(final_result.level, "L3");
+        assert_eq!(final_result.class_name, "test_l3");
+        assert!(final_result.layers.iter().any(|layer| {
+            layer.level == "L3"
+                && layer.matched
+                && layer.details.get("l3_worker") == Some(&serde_json::json!("rust_l3_worker"))
+        }));
+        assert!(scanner
+            .consume_results(request_id.clone(), Some(Duration::from_millis(20)))
+            .is_none());
+        assert!(
+            !scanner.has_request(&request_id),
+            "fully drained requests should be removed from the registry"
+        );
+    }
+
+    #[test]
+    fn ingress_can_enqueue_while_egress_thread_waits_for_l3() {
+        let scanner = std::sync::Arc::new(PatronusSecurity::with_max_level(
+            vec![SecurityCategory::Injection],
+            SecurityLevel::L3,
+            None,
+            false,
+        ));
+        let request_a = scanner.enqueue_test_l3_delay_request(0, 300, "blocking-l3-a");
+        let (first_tx, first_rx) = std::sync::mpsc::channel();
+        let consumer_scanner = std::sync::Arc::clone(&scanner);
+
+        let consumer = std::thread::spawn(move || {
+            let mut levels = Vec::new();
+            if let Some(first) =
+                consumer_scanner.consume_results(request_a.clone(), Some(Duration::from_secs(1)))
+            {
+                first_tx.send(first.level.clone()).unwrap();
+                levels.push(first.level);
+            }
+            while let Some(result) =
+                consumer_scanner.consume_results(request_a.clone(), Some(Duration::from_secs(2)))
+            {
+                levels.push(result.level);
+            }
+            levels
+        });
+
+        assert_eq!(first_rx.recv_timeout(Duration::from_secs(1)).unwrap(), "L2");
+
+        let request_b = scanner.enqueue_test_l3_delay_request(0, 10, "second-request-l3");
+        let b_first = scanner
+            .consume_results(request_b.clone(), Some(Duration::from_millis(20)))
+            .expect("ingress should enqueue another request while egress waits on L3");
+        assert_eq!(b_first.level, "L2");
+
+        let b_final = scanner
+            .consume_results(request_b, Some(Duration::from_secs(2)))
+            .expect("second request L3 should eventually finish");
+        assert_eq!(b_final.level, "L3");
+
+        let levels = consumer.join().unwrap();
+        assert_eq!(levels, vec!["L2".to_string(), "L3".to_string()]);
+    }
+
+    #[test]
+    fn dispatcher_consumes_multiple_requests_while_ingress_adds_work() {
+        let scanner = std::sync::Arc::new(PatronusSecurity::with_max_level(
+            vec![SecurityCategory::Injection],
+            SecurityLevel::L3,
+            None,
+            false,
+        ));
+        let (request_tx, request_rx) = std::sync::mpsc::channel::<RequestId>();
+        let (result_tx, result_rx) = std::sync::mpsc::channel::<(RequestId, String, String)>();
+        let dispatcher_scanner = std::sync::Arc::clone(&scanner);
+
+        let dispatcher = std::thread::spawn(move || {
+            let mut active = Vec::<RequestId>::new();
+            let mut ingress_open = true;
+            while ingress_open || !active.is_empty() {
+                loop {
+                    match request_rx.try_recv() {
+                        Ok(request_id) => active.push(request_id),
+                        Err(std::sync::mpsc::TryRecvError::Empty) => break,
+                        Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                            ingress_open = false;
+                            break;
+                        }
+                    }
+                }
+
+                let mut index = 0;
+                while index < active.len() {
+                    let request_id = active[index].clone();
+                    match dispatcher_scanner
+                        .consume_results(request_id.clone(), Some(Duration::from_millis(10)))
+                    {
+                        Some(result) => {
+                            result_tx
+                                .send((request_id, result.level, result.model))
+                                .unwrap();
+                            index += 1;
+                        }
+                        None if !dispatcher_scanner.has_request(&request_id) => {
+                            active.swap_remove(index);
+                        }
+                        None => {
+                            index += 1;
+                        }
+                    }
+                }
+            }
+        });
+
+        let request_a = scanner.enqueue_test_l3_delay_request(0, 300, "dispatcher-slow-l3");
+        request_tx.send(request_a.clone()).unwrap();
+        let first = result_rx.recv_timeout(Duration::from_secs(1)).unwrap();
+        assert_eq!(
+            (first.0.clone(), first.1.as_str()),
+            (request_a.clone(), "L2")
+        );
+
+        let request_b = scanner.enqueue_test_l3_delay_request(0, 10, "dispatcher-fast-l3");
+        request_tx.send(request_b.clone()).unwrap();
+        let started = Instant::now();
+        let mut saw_b_l2 = false;
+        while started.elapsed() < Duration::from_millis(150) {
+            let Ok((request_id, level, _model)) = result_rx.recv_timeout(Duration::from_millis(25))
+            else {
+                continue;
+            };
+            if request_id == request_b && level == "L2" {
+                saw_b_l2 = true;
+                break;
+            }
+        }
+        assert!(
+            saw_b_l2,
+            "dispatcher should emit request B L1/L2 while request A L3 is still running"
+        );
+
+        drop(request_tx);
+        dispatcher.join().unwrap();
+    }
+
+    #[test]
+    fn l3_worker_processes_jobs_by_priority() {
+        let scanner = PatronusSecurity::with_max_level(
+            vec![SecurityCategory::Injection],
+            SecurityLevel::L3,
+            None,
+            false,
+        );
+        let request_ids = scanner.enqueue_test_l3_delay_requests(&[
+            (10, 10, "low-priority-l3"),
+            (0, 10, "high-priority-l3"),
+        ]);
+        let low = request_ids[0].clone();
+        let high = request_ids[1].clone();
+
+        let _low_fallback = scanner.consume_results(low.clone(), Some(Duration::from_secs(1)));
+        let _high_fallback = scanner.consume_results(high.clone(), Some(Duration::from_secs(1)));
+        let high_final = scanner
+            .consume_results(high.clone(), Some(Duration::from_secs(2)))
+            .expect("high priority L3 job should finish first");
+        assert_eq!(high_final.model, "high-priority-l3");
+        let low_final = scanner
+            .consume_results(low.clone(), Some(Duration::from_secs(2)))
+            .expect("low priority L3 job should finish after high priority");
+        assert_eq!(low_final.model, "low-priority-l3");
     }
 }

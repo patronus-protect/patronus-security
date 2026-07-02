@@ -14,43 +14,52 @@ impl FastTextPredictorMulticlass {
 
     pub fn predict_probs(&self, text: &str) -> Vec<f64> {
         let lower = text.to_lowercase();
-        let words: Vec<&str> = lower.split_whitespace().collect();
-        let mut hashes = Vec::new();
+        let mut mean_embedding = vec![0.0; self.config.embed_dim];
+        let mut num_hashes = 0usize;
 
-        for w in words {
+        for w in lower.split_whitespace() {
             let h_w = (fasttext_hash(w) as usize) % self.config.bucket_size;
-            hashes.push(h_w);
+            add_embedding(
+                &self.config.embeddings,
+                self.config.embed_dim,
+                &mut mean_embedding,
+                h_w,
+            );
+            num_hashes += 1;
 
-            let w_bound = format!("<{}>", w);
-            let chars: Vec<char> = w_bound.chars().collect();
+            let mut chars = Vec::with_capacity(w.chars().count() + 2);
+            chars.push('<');
+            chars.extend(w.chars());
+            chars.push('>');
             let wl = chars.len();
             for n in self.config.min_n..=self.config.max_n {
                 if wl >= n {
                     for i in 0..=(wl - n) {
-                        let ngram: String = chars[i..i + n].iter().collect();
-                        let h_ng = (fasttext_hash(&ngram) as usize) % self.config.bucket_size;
-                        hashes.push(h_ng);
+                        let h_ng = (fasttext_hash_chars(&chars[i..i + n]) as usize)
+                            % self.config.bucket_size;
+                        add_embedding(
+                            &self.config.embeddings,
+                            self.config.embed_dim,
+                            &mut mean_embedding,
+                            h_ng,
+                        );
+                        num_hashes += 1;
                     }
                 }
             }
         }
 
-        if hashes.is_empty() {
-            hashes.push(0);
+        if num_hashes == 0 {
+            add_embedding(
+                &self.config.embeddings,
+                self.config.embed_dim,
+                &mut mean_embedding,
+                0,
+            );
+            num_hashes = 1;
         }
 
-        let mut mean_embedding = vec![0.0; self.config.embed_dim];
-        let num_hashes = hashes.len() as f64;
-
-        for &h in &hashes {
-            if h < self.config.embeddings.len() {
-                let embed_vector = &self.config.embeddings[h];
-                for d in 0..self.config.embed_dim {
-                    mean_embedding[d] += embed_vector[d];
-                }
-            }
-        }
-
+        let num_hashes = num_hashes as f64;
         for d in 0..self.config.embed_dim {
             mean_embedding[d] /= num_hashes;
         }
@@ -104,46 +113,52 @@ impl FastTextPredictor {
 
     pub fn predict(&self, text: &str) -> f64 {
         let lower = text.to_lowercase();
-        let words: Vec<&str> = lower.split_whitespace().collect();
-        let mut hashes = Vec::new();
+        let mut mean_embedding = vec![0.0; self.config.embed_dim];
+        let mut num_hashes = 0usize;
 
-        for w in words {
-            // 1. Word hash
+        for w in lower.split_whitespace() {
             let h_w = (fasttext_hash(w) as usize) % self.config.bucket_size;
-            hashes.push(h_w);
+            add_embedding(
+                &self.config.embeddings,
+                self.config.embed_dim,
+                &mut mean_embedding,
+                h_w,
+            );
+            num_hashes += 1;
 
-            // 2. Char n-grams with word boundaries
-            let w_bound = format!("<{}>", w);
-            let chars: Vec<char> = w_bound.chars().collect();
+            let mut chars = Vec::with_capacity(w.chars().count() + 2);
+            chars.push('<');
+            chars.extend(w.chars());
+            chars.push('>');
             let wl = chars.len();
             for n in self.config.min_n..=self.config.max_n {
                 if wl >= n {
                     for i in 0..=(wl - n) {
-                        let ngram: String = chars[i..i + n].iter().collect();
-                        let h_ng = (fasttext_hash(&ngram) as usize) % self.config.bucket_size;
-                        hashes.push(h_ng);
+                        let h_ng = (fasttext_hash_chars(&chars[i..i + n]) as usize)
+                            % self.config.bucket_size;
+                        add_embedding(
+                            &self.config.embeddings,
+                            self.config.embed_dim,
+                            &mut mean_embedding,
+                            h_ng,
+                        );
+                        num_hashes += 1;
                     }
                 }
             }
         }
 
-        if hashes.is_empty() {
-            hashes.push(0);
+        if num_hashes == 0 {
+            add_embedding(
+                &self.config.embeddings,
+                self.config.embed_dim,
+                &mut mean_embedding,
+                0,
+            );
+            num_hashes = 1;
         }
 
-        // Mode: Mean embedding
-        let mut mean_embedding = vec![0.0; self.config.embed_dim];
-        let num_hashes = hashes.len() as f64;
-
-        for &h in &hashes {
-            if h < self.config.embeddings.len() {
-                let embed_vector = &self.config.embeddings[h];
-                for d in 0..self.config.embed_dim {
-                    mean_embedding[d] += embed_vector[d];
-                }
-            }
-        }
-
+        let num_hashes = num_hashes as f64;
         for d in 0..self.config.embed_dim {
             mean_embedding[d] /= num_hashes;
         }
@@ -165,4 +180,29 @@ pub fn fasttext_hash(s: &str) -> u32 {
         h = h.wrapping_mul(33).wrapping_add(*byte as u32);
     }
     h
+}
+
+fn fasttext_hash_chars(chars: &[char]) -> u32 {
+    let mut h: u32 = 0;
+    let mut buf = [0; 4];
+    for c in chars {
+        for byte in c.encode_utf8(&mut buf).as_bytes() {
+            h = h.wrapping_mul(33).wrapping_add(*byte as u32);
+        }
+    }
+    h
+}
+
+fn add_embedding(
+    embeddings: &[Vec<f64>],
+    embed_dim: usize,
+    mean_embedding: &mut [f64],
+    hash: usize,
+) {
+    if hash < embeddings.len() {
+        let embed_vector = &embeddings[hash];
+        for d in 0..embed_dim {
+            mean_embedding[d] += embed_vector[d];
+        }
+    }
 }

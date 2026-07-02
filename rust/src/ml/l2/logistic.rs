@@ -3,7 +3,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 
 use super::config::{L2ModelConfig, CLASSES};
-use super::features::{extract_char_ngrams, extract_ngrams};
+use super::features::{for_each_char_ngram, for_each_ngram};
 
 #[derive(Clone)]
 pub struct L2LogisticRegression {
@@ -23,49 +23,50 @@ impl L2LogisticRegression {
     pub fn predict_probs(&self, text: &str) -> Vec<f64> {
         let lower = text.to_lowercase();
 
-        let ngrams = if self.config.analyzer == "char" {
-            let min_n = self
-                .config
-                .ngram_range
-                .as_ref()
-                .and_then(|r| r.first().copied())
-                .unwrap_or(2);
-            let max_n = self
-                .config
-                .ngram_range
-                .as_ref()
-                .and_then(|r| r.last().copied())
-                .unwrap_or(5);
-            extract_char_ngrams(&lower, min_n, max_n)
-        } else {
-            // word
-            let tokens: Vec<&str> = self
-                .token_regex
-                .find_iter(&lower)
-                .map(|m| m.as_str())
-                .collect();
-            let min_n = self
-                .config
-                .ngram_range
-                .as_ref()
-                .and_then(|r| r.first().copied())
-                .unwrap_or(1);
-            let max_n = self
-                .config
-                .ngram_range
-                .as_ref()
-                .and_then(|r| r.last().copied())
-                .unwrap_or(3);
-            extract_ngrams(&tokens, min_n, max_n)
-        };
-
         // Sparse TF-IDF Weighting
         let mut counts = HashMap::new();
         if let Some(ref vocab) = self.config.vocabulary {
-            for ngram in ngrams {
-                if let Some(&idx) = vocab.get(&ngram) {
-                    *counts.entry(idx).or_insert(0.0) += 1.0;
-                }
+            if self.config.analyzer == "char" {
+                let min_n = self
+                    .config
+                    .ngram_range
+                    .as_ref()
+                    .and_then(|r| r.first().copied())
+                    .unwrap_or(2);
+                let max_n = self
+                    .config
+                    .ngram_range
+                    .as_ref()
+                    .and_then(|r| r.last().copied())
+                    .unwrap_or(5);
+                for_each_char_ngram(&lower, min_n, max_n, |ngram| {
+                    if let Some(&idx) = vocab.get(ngram) {
+                        *counts.entry(idx).or_insert(0.0) += 1.0;
+                    }
+                });
+            } else {
+                let tokens: Vec<&str> = self
+                    .token_regex
+                    .find_iter(&lower)
+                    .map(|m| m.as_str())
+                    .collect();
+                let min_n = self
+                    .config
+                    .ngram_range
+                    .as_ref()
+                    .and_then(|r| r.first().copied())
+                    .unwrap_or(1);
+                let max_n = self
+                    .config
+                    .ngram_range
+                    .as_ref()
+                    .and_then(|r| r.last().copied())
+                    .unwrap_or(3);
+                for_each_ngram(&tokens, min_n, max_n, |ngram| {
+                    if let Some(&idx) = vocab.get(ngram) {
+                        *counts.entry(idx).or_insert(0.0) += 1.0;
+                    }
+                });
             }
         }
 

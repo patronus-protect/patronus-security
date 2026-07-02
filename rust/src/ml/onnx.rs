@@ -1,12 +1,23 @@
-use crate::EvaluationResult;
+use crate::{EvaluationResult, ExecutionBackend};
 use half::f16;
-use ort::{session::Session, value::Tensor};
+use ort::{
+    ep::{self, ExecutionProviderDispatch},
+    session::{
+        builder::{GraphOptimizationLevel, SessionBuilder},
+        Session,
+    },
+    value::Tensor,
+};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use tokenizers::Tokenizer;
 
-const DEFAULT_MAX_LEN: usize = 128;
+const DEFAULT_MAX_LEN: usize = 512;
 const DEFAULT_L3_TTL_SECS: u64 = 300;
+
+pub fn warmup_runtime() -> bool {
+    ort::init().commit()
+}
 
 pub struct LazyOnnxTextClassifier {
     dir: PathBuf,
@@ -17,6 +28,7 @@ pub struct LazyOnnxTextClassifier {
     max_len: usize,
     ttl: Duration,
     loaded: Option<OnnxTextClassifier>,
+    loaded_backend: Option<ExecutionBackend>,
     last_used: Option<Instant>,
 }
 
@@ -70,17 +82,50 @@ impl LazyOnnxTextClassifier {
             max_len,
             ttl: l3_ttl(),
             loaded: None,
+            loaded_backend: None,
             last_used: None,
         }))
     }
 
-    pub fn infer(&mut self, text: &str) -> Result<EvaluationResult, Box<dyn std::error::Error>> {
+    pub fn infer(
+        &mut self,
+        text: &str,
+        backend: ExecutionBackend,
+    ) -> Result<EvaluationResult, Box<dyn std::error::Error>> {
         self.evict_expired();
-        self.ensure_loaded()?;
+        self.ensure_loaded(backend)?;
         let model = self.loaded.as_mut().ok_or("L3 ONNX model is not loaded")?;
         let result = model.infer(text)?;
         self.last_used = Some(Instant::now());
         Ok(result)
+    }
+
+    pub fn infer_batch(
+        &mut self,
+        texts: &[String],
+        backend: ExecutionBackend,
+    ) -> Result<Vec<EvaluationResult>, Box<dyn std::error::Error>> {
+        self.evict_expired();
+        self.ensure_loaded(backend)?;
+        let model = self.loaded.as_mut().ok_or("L3 ONNX model is not loaded")?;
+        let results = model.infer_batch(texts)?;
+        self.last_used = Some(Instant::now());
+        Ok(results)
+    }
+
+    pub fn metadata_clone(&self) -> Self {
+        Self {
+            dir: self.dir.clone(),
+            class_names: self.class_names.clone(),
+            model_name: self.model_name.clone(),
+            onnx_candidates: self.onnx_candidates.clone(),
+            tokenizer_path: self.tokenizer_path.clone(),
+            max_len: self.max_len,
+            ttl: self.ttl,
+            loaded: None,
+            loaded_backend: None,
+            last_used: None,
+        }
     }
 
     pub fn model_name(&self) -> &str {
@@ -98,6 +143,10 @@ impl LazyOnnxTextClassifier {
         self.loaded.as_ref().map(|model| model.precision())
     }
 
+    pub fn execution_provider(&self) -> Option<&str> {
+        self.loaded.as_ref().map(|model| model.execution_provider())
+    }
+
     pub fn is_loaded(&self) -> bool {
         self.loaded.is_some()
     }
@@ -108,14 +157,20 @@ impl LazyOnnxTextClassifier {
             .is_some_and(|last_used| last_used.elapsed() > self.ttl)
         {
             self.loaded = None;
+            self.loaded_backend = None;
             self.last_used = None;
         }
     }
 
-    fn ensure_loaded(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        if self.loaded.is_some() {
+    fn ensure_loaded(
+        &mut self,
+        backend: ExecutionBackend,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        if self.loaded.is_some() && self.loaded_backend == Some(backend) {
             return Ok(());
         }
+        self.loaded = None;
+        self.loaded_backend = None;
 
         let candidates: Vec<&str> = self
             .onnx_candidates
@@ -129,11 +184,13 @@ impl LazyOnnxTextClassifier {
             &candidates,
             &self.tokenizer_path,
             self.max_len,
+            backend,
         )?
         else {
             return Err("L3 ONNX assets are no longer available".into());
         };
         self.loaded = Some(model);
+        self.loaded_backend = Some(backend);
         Ok(())
     }
 }
@@ -147,6 +204,7 @@ pub struct OnnxTextClassifier {
     model_name: String,
     model_path: PathBuf,
     precision: String,
+    execution_provider: String,
 }
 
 fn l3_ttl() -> Duration {
@@ -170,6 +228,7 @@ impl OnnxTextClassifier {
             &["onnx/model_fp16.onnx", "onnx/model.onnx"],
             "tokenizer.json",
             DEFAULT_MAX_LEN,
+            ExecutionBackend::Auto,
         )
     }
 
@@ -180,6 +239,7 @@ impl OnnxTextClassifier {
         onnx_candidates: &[&str],
         tokenizer_path: &str,
         max_len: usize,
+        backend: ExecutionBackend,
     ) -> Result<Option<Self>, Box<dyn std::error::Error>> {
         let dir = dir.as_ref();
         let tokenizer_file = dir.join(tokenizer_path);
@@ -197,7 +257,9 @@ impl OnnxTextClassifier {
 
         let tokenizer = Tokenizer::from_file(&tokenizer_file)
             .map_err(|err| format!("failed to load tokenizer {:?}: {}", tokenizer_file, err))?;
-        let session = Session::builder()?.commit_from_file(&model_path)?;
+        let (mut session_builder, execution_provider) =
+            configured_session_builder(backend, Some(dir))?;
+        let session = session_builder.commit_from_file(&model_path)?;
         let input_names = session
             .inputs()
             .iter()
@@ -213,10 +275,74 @@ impl OnnxTextClassifier {
             model_name: model_name.into(),
             precision: precision_for_path(&model_path),
             model_path,
+            execution_provider,
         }))
     }
 
     pub fn infer(&mut self, text: &str) -> Result<EvaluationResult, Box<dyn std::error::Error>> {
+        let mut results = self.infer_batch(&[text.to_string()])?;
+        results.pop().ok_or("ONNX batch returned no result".into())
+    }
+
+    pub fn infer_batch(
+        &mut self,
+        texts: &[String],
+    ) -> Result<Vec<EvaluationResult>, Box<dyn std::error::Error>> {
+        if texts.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let batch_size = texts.len();
+        let mut input_ids_all = Vec::with_capacity(batch_size * self.max_len);
+        let mut attention_mask_all = Vec::with_capacity(batch_size * self.max_len);
+        let mut token_type_ids_all = Vec::with_capacity(batch_size * self.max_len);
+
+        for text in texts {
+            let (input_ids, attention_mask, token_type_ids) = self.encode_inputs(text)?;
+            input_ids_all.extend(input_ids);
+            attention_mask_all.extend(attention_mask);
+            token_type_ids_all.extend(token_type_ids);
+        }
+
+        let shape = vec![batch_size, self.max_len];
+        let mut inputs = Vec::with_capacity(self.input_names.len().max(1));
+        if self.input_names.is_empty() {
+            inputs.push((
+                "input_ids".to_string(),
+                Tensor::from_array((shape.clone(), input_ids_all.clone()))?,
+            ));
+        } else {
+            for name in &self.input_names {
+                let lower = name.to_lowercase();
+                let values = if lower.contains("attention") {
+                    attention_mask_all.clone()
+                } else if lower.contains("token_type")
+                    || lower.contains("token_type_ids")
+                    || lower.contains("segment")
+                {
+                    token_type_ids_all.clone()
+                } else {
+                    input_ids_all.clone()
+                };
+                inputs.push((name.clone(), Tensor::from_array((shape.clone(), values))?));
+            }
+        }
+
+        let logits = {
+            let outputs = self.session.run(inputs)?;
+            first_logits_batch(&outputs, self.class_names.len(), batch_size)?
+        };
+        let class_names = self.class_names.clone();
+        Ok(logits
+            .iter()
+            .map(|row| result_from_logits(row, &class_names))
+            .collect())
+    }
+
+    fn encode_inputs(
+        &self,
+        text: &str,
+    ) -> Result<(Vec<i64>, Vec<i64>, Vec<i64>), Box<dyn std::error::Error>> {
         let encoding = self
             .tokenizer
             .encode(text, true)
@@ -231,51 +357,7 @@ impl OnnxTextClassifier {
         truncate_and_pad(&mut input_ids, self.max_len, 0);
         truncate_and_pad(&mut attention_mask, self.max_len, 0);
         let token_type_ids = vec![0_i64; self.max_len];
-
-        let shape = vec![1_usize, self.max_len];
-        let mut inputs = Vec::with_capacity(self.input_names.len().max(1));
-        if self.input_names.is_empty() {
-            inputs.push((
-                "input_ids".to_string(),
-                Tensor::from_array((shape.clone(), input_ids.clone()))?,
-            ));
-        } else {
-            for name in &self.input_names {
-                let lower = name.to_lowercase();
-                let values = if lower.contains("attention") {
-                    attention_mask.clone()
-                } else if lower.contains("token_type")
-                    || lower.contains("token_type_ids")
-                    || lower.contains("segment")
-                {
-                    token_type_ids.clone()
-                } else {
-                    input_ids.clone()
-                };
-                inputs.push((name.clone(), Tensor::from_array((shape.clone(), values))?));
-            }
-        }
-
-        let outputs = self.session.run(inputs)?;
-        let logits = first_logits(&outputs, self.class_names.len())?;
-        let probabilities = softmax(&logits);
-        let (best_idx, confidence) = probabilities
-            .iter()
-            .copied()
-            .enumerate()
-            .max_by(|a, b| a.1.total_cmp(&b.1))
-            .ok_or("ONNX model returned empty logits")?;
-        let class_name = self
-            .class_names
-            .get(best_idx)
-            .cloned()
-            .unwrap_or_else(|| best_idx.to_string());
-
-        Ok(EvaluationResult {
-            class_name,
-            confidence: confidence as f64,
-            level: "L3".to_string(),
-        })
+        Ok((input_ids, attention_mask, token_type_ids))
     }
 
     pub fn model_name(&self) -> &str {
@@ -289,6 +371,140 @@ impl OnnxTextClassifier {
     pub fn precision(&self) -> &str {
         &self.precision
     }
+
+    pub fn execution_provider(&self) -> &str {
+        &self.execution_provider
+    }
+}
+
+fn configured_session_builder(
+    backend: ExecutionBackend,
+    model_dir: Option<&Path>,
+) -> Result<(SessionBuilder, String), Box<dyn std::error::Error>> {
+    let mut builder = Session::builder()?.with_optimization_level(GraphOptimizationLevel::All)?;
+    if let Some(threads) = env_usize("PATRONUS_ONNX_INTRA_THREADS") {
+        builder = builder.with_intra_threads(threads)?;
+    }
+    if let Some(threads) = env_usize("PATRONUS_ONNX_INTER_THREADS") {
+        builder = builder.with_inter_threads(threads)?;
+    }
+    if let Some(enabled) = env_bool("PATRONUS_ONNX_SPINNING") {
+        builder = builder.with_intra_op_spinning(enabled)?;
+        builder = builder.with_inter_op_spinning(enabled)?;
+    }
+    let plan = execution_provider_plan(backend, model_dir)?;
+    if !plan.providers.is_empty() {
+        builder = builder.with_execution_providers(plan.providers)?;
+    }
+    Ok((builder, plan.name))
+}
+
+struct ExecutionProviderPlan {
+    name: String,
+    providers: Vec<ExecutionProviderDispatch>,
+}
+
+fn execution_provider_plan(
+    backend: ExecutionBackend,
+    model_dir: Option<&Path>,
+) -> Result<ExecutionProviderPlan, Box<dyn std::error::Error>> {
+    let requested = std::env::var("PATRONUS_ONNX_EXECUTION_PROVIDER")
+        .ok()
+        .map(|value| value.to_lowercase().replace('-', "_"));
+    let provider = requested
+        .as_deref()
+        .or_else(|| default_accelerator_provider(backend));
+
+    if provider == Some("cpu") || provider.is_none() && backend != ExecutionBackend::Gpu {
+        return Ok(ExecutionProviderPlan {
+            name: "cpu".to_string(),
+            providers: Vec::new(),
+        });
+    }
+
+    let Some(provider) = provider else {
+        return Err(format!(
+            "ONNX GPU backend is not available on this platform; enable and select one of: coreml, cuda, directml, tensorrt"
+        )
+        .into());
+    };
+
+    let strict = backend != ExecutionBackend::Auto || requested.is_some();
+    let mut dispatch = match provider {
+        "cuda" => Some(ep::CUDA::default().build()),
+        "coreml" => coreml_provider(model_dir),
+        "directml" => Some(ep::DirectML::default().build()),
+        "tensorrt" => Some(ep::TensorRT::default().build()),
+        _ => None,
+    };
+
+    let Some(provider_dispatch) = dispatch.take() else {
+        return Err(format!("Unknown ONNX execution provider: {}", provider).into());
+    };
+
+    let provider_dispatch = if strict {
+        provider_dispatch.error_on_failure()
+    } else {
+        provider_dispatch.fail_silently()
+    };
+    Ok(ExecutionProviderPlan {
+        name: provider.to_string(),
+        providers: vec![provider_dispatch],
+    })
+}
+
+fn default_accelerator_provider(backend: ExecutionBackend) -> Option<&'static str> {
+    match backend {
+        ExecutionBackend::Cpu => Some("cpu"),
+        ExecutionBackend::Auto if cfg!(target_os = "windows") => Some("directml"),
+        ExecutionBackend::Auto if cfg!(target_vendor = "apple") => Some("cpu"),
+        ExecutionBackend::Auto => Some("cuda"),
+        ExecutionBackend::Gpu if cfg!(target_os = "windows") => Some("directml"),
+        ExecutionBackend::Gpu if cfg!(target_vendor = "apple") => None,
+        ExecutionBackend::Gpu => Some("cuda"),
+        ExecutionBackend::CoreMl => Some("coreml"),
+        ExecutionBackend::Cuda => Some("cuda"),
+        ExecutionBackend::DirectMl => Some("directml"),
+        ExecutionBackend::TensorRt => Some("tensorrt"),
+    }
+}
+
+#[cfg(feature = "onnx-coreml")]
+fn coreml_provider(model_dir: Option<&Path>) -> Option<ExecutionProviderDispatch> {
+    let mut provider = ep::CoreML::default()
+        .with_compute_units(ep::coreml::ComputeUnits::CPUAndGPU)
+        .with_low_precision_accumulation_on_gpu(true);
+    if let Some(model_dir) = model_dir {
+        let cache_dir = model_dir.join(".coreml-cache");
+        let tmp_dir = model_dir.join(".coreml-tmp");
+        let _ = std::fs::create_dir_all(&cache_dir);
+        let _ = std::fs::create_dir_all(&tmp_dir);
+        std::env::set_var("TMPDIR", &tmp_dir);
+        provider = provider.with_model_cache_dir(cache_dir.to_string_lossy());
+    }
+    Some(provider.build())
+}
+
+#[cfg(not(feature = "onnx-coreml"))]
+fn coreml_provider(_model_dir: Option<&Path>) -> Option<ExecutionProviderDispatch> {
+    None
+}
+
+fn env_usize(name: &str) -> Option<usize> {
+    std::env::var(name)
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .filter(|value| *value > 0)
+}
+
+fn env_bool(name: &str) -> Option<bool> {
+    std::env::var(name)
+        .ok()
+        .and_then(|value| match value.to_lowercase().as_str() {
+            "1" | "true" | "yes" | "on" => Some(true),
+            "0" | "false" | "no" | "off" => Some(false),
+            _ => None,
+        })
 }
 
 fn precision_for_path(path: &Path) -> String {
@@ -307,28 +523,68 @@ fn truncate_and_pad(values: &mut Vec<i64>, max_len: usize, pad: i64) {
     }
 }
 
-fn first_logits<'run>(
+fn first_logits_batch<'run>(
     outputs: &ort::session::SessionOutputs<'run>,
     expected_classes: usize,
-) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
+    batch_size: usize,
+) -> Result<Vec<Vec<f32>>, Box<dyn std::error::Error>> {
     let min_classes = expected_classes.max(2);
+    let required = min_classes * batch_size;
     for (_name, value) in outputs.iter() {
         if let Ok((_shape, data)) = value.try_extract_tensor::<f32>() {
-            if data.len() >= min_classes {
-                return Ok(data.iter().take(expected_classes).copied().collect());
+            if data.len() >= required {
+                return Ok(rows_from_logits(
+                    data.iter().copied(),
+                    expected_classes,
+                    batch_size,
+                ));
             }
         }
         if let Ok((_shape, data)) = value.try_extract_tensor::<f16>() {
-            if data.len() >= min_classes {
-                return Ok(data
-                    .iter()
-                    .take(expected_classes)
-                    .map(|value| value.to_f32())
-                    .collect());
+            if data.len() >= required {
+                return Ok(rows_from_logits(
+                    data.iter().map(|value| value.to_f32()),
+                    expected_classes,
+                    batch_size,
+                ));
             }
         }
     }
     Err("ONNX model did not return f32/f16 logits".into())
+}
+
+fn rows_from_logits<I>(values: I, expected_classes: usize, batch_size: usize) -> Vec<Vec<f32>>
+where
+    I: IntoIterator<Item = f32>,
+{
+    let flat: Vec<f32> = values
+        .into_iter()
+        .take(batch_size * expected_classes)
+        .collect();
+    flat.chunks(expected_classes)
+        .take(batch_size)
+        .map(|chunk| chunk.to_vec())
+        .collect()
+}
+
+fn result_from_logits(logits: &[f32], class_names: &[String]) -> EvaluationResult {
+    let probabilities = softmax(logits);
+    let (best_idx, confidence) = probabilities
+        .iter()
+        .copied()
+        .enumerate()
+        .max_by(|a, b| a.1.total_cmp(&b.1))
+        .unwrap_or((0, 0.0));
+    let class_name = class_names
+        .get(best_idx)
+        .cloned()
+        .unwrap_or_else(|| best_idx.to_string());
+
+    EvaluationResult {
+        class_name,
+        confidence: confidence as f64,
+        level: "L3".to_string(),
+    }
 }
 
 fn softmax(logits: &[f32]) -> Vec<f32> {

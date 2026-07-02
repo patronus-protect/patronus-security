@@ -1,8 +1,9 @@
 use super::fasttext::{FastTextConfig, FastTextPredictor};
-use super::features::extract_handcrafted_features;
+use super::features::{extract_handcrafted_features, extract_handcrafted_features_into};
 use super::lgbm::LGBMBooster;
 use super::logistic::{LogisticRegressionConfig, LogisticRegressionPredictor};
 use super::tfidf::{TFIDFVectorizer, TFIDFVectorizerConfig};
+use std::time::Instant;
 
 #[derive(Clone)]
 pub struct PromptInjectionClassifier {
@@ -17,6 +18,32 @@ pub struct PromptInjectionClassifier {
     tfidf_char_c: TFIDFVectorizer,
     logistic_regression: LogisticRegressionPredictor,
     fasttext: FastTextPredictor,
+}
+
+pub struct PromptInjectionL2Buffers {
+    features: Vec<f64>,
+}
+
+impl PromptInjectionL2Buffers {
+    pub fn new() -> Self {
+        Self {
+            features: vec![0.0; 10013],
+        }
+    }
+}
+
+pub struct PromptInjectionL2Scores {
+    pub p_lgbm: f64,
+    pub p_lr: f64,
+    pub p_fasttext: f64,
+    pub timings: PromptInjectionL2Timings,
+}
+
+pub struct PromptInjectionL2Timings {
+    pub feature_ms: f64,
+    pub lgbm_ms: f64,
+    pub logistic_regression_ms: f64,
+    pub fasttext_ms: f64,
 }
 
 impl PromptInjectionClassifier {
@@ -98,13 +125,16 @@ impl PromptInjectionClassifier {
 
     pub fn extract_features_c(&self, text: &str) -> Vec<f64> {
         let mut features = vec![0.0; 10013];
-        let w_feats = self.tfidf_word_c.transform_word(text);
-        features[..5000].copy_from_slice(&w_feats);
-        let c_feats = self.tfidf_char_c.transform_char(text);
-        features[5000..10000].copy_from_slice(&c_feats);
-        let h_feats = extract_handcrafted_features(text);
-        features[10000..10013].copy_from_slice(&h_feats);
+        self.extract_features_c_into(text, &mut features);
         features
+    }
+
+    pub fn extract_features_c_into(&self, text: &str, features: &mut [f64]) {
+        self.tfidf_word_c
+            .transform_word_into(text, &mut features[..5000]);
+        self.tfidf_char_c
+            .transform_char_into(text, &mut features[5000..10000]);
+        extract_handcrafted_features_into(text, &mut features[10000..10013]);
     }
 
     pub fn predict_c_from_features(&self, features: &[f64]) -> f64 {
@@ -118,4 +148,42 @@ impl PromptInjectionClassifier {
     pub fn predict_ft(&self, text: &str) -> f64 {
         self.fasttext.predict(text)
     }
+
+    pub fn predict_c_with_buffers(
+        &self,
+        text: &str,
+        buffers: &mut PromptInjectionL2Buffers,
+    ) -> PromptInjectionL2Scores {
+        let feature_started = Instant::now();
+        self.extract_features_c_into(text, &mut buffers.features);
+        let feature_ms = elapsed_ms(feature_started);
+
+        let lgbm_started = Instant::now();
+        let p_lgbm = self.predict_c_from_features(&buffers.features);
+        let lgbm_ms = elapsed_ms(lgbm_started);
+
+        let lr_started = Instant::now();
+        let p_lr = self.predict_lr_from_features(&buffers.features);
+        let logistic_regression_ms = elapsed_ms(lr_started);
+
+        let fasttext_started = Instant::now();
+        let p_fasttext = self.predict_ft(text);
+        let fasttext_ms = elapsed_ms(fasttext_started);
+
+        PromptInjectionL2Scores {
+            p_lgbm,
+            p_lr,
+            p_fasttext,
+            timings: PromptInjectionL2Timings {
+                feature_ms,
+                lgbm_ms,
+                logistic_regression_ms,
+                fasttext_ms,
+            },
+        }
+    }
+}
+
+fn elapsed_ms(started: Instant) -> f64 {
+    started.elapsed().as_secs_f64() * 1000.0
 }

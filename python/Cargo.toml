@@ -11,3 +11,10 @@ crate-type = ["cdylib"]
 pyo3 = { version = "0.22", features = ["extension-module", "abi3-py311"] }
 patronus-security = { path = "../rust" }
 serde_json = "1.0"
+
+[features]
+default = []
+onnx-coreml = ["patronus-security/onnx-coreml"]
+onnx-cuda = ["patronus-security/onnx-cuda"]
+onnx-directml = ["patronus-security/onnx-directml"]
+onnx-tensorrt = ["patronus-security/onnx-tensorrt"]

@@ -23,5 +23,7 @@ venv/
 *.so
 *.dylib
 *.pyd
+benchmarks/**
 benchmarks/legacy_*
 benchmarks/__pycache__/
+!benchmarks/standalone_*

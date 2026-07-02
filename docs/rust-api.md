@@ -16,7 +16,9 @@ pub mod types;
 
 pub use pipeline::{PatronusSecurity, Pipeline, PromptInjectionPipeline, SecurityGateway};
 pub use types::{
-    EvaluationResult, LayerResult, SecurityCategory, SecurityLevel, SecurityScanResult,
+    EvaluationResult, ExecutionBackend, L3SchedulerPolicy, LayerResult, LongTextPolicy,
+    OnnxBatchMode, RequestId, ScanExecution, ScanGateMatrix, SecurityCategory, SecurityLevel,
+    SecurityScanResult, TextChunking,
 };
 ```
 
@@ -34,6 +36,8 @@ pub struct PatronusSecurity {
     pub download_files: bool,
     /// Optional allowlist of categories that may download missing assets.
     pub download_categories: Option<Vec<SecurityCategory>>,
+    /// Execution gates consumed by scan methods.
+    pub execution: ScanExecution,
 
     // Lazy-loaded model-based pipelines
     pub injection_pipeline: Option<PromptInjectionPipeline>,
@@ -67,6 +71,10 @@ pub struct PatronusSecurity {
     pub zero_width_obfuscation_pipeline:
         Option<zero_width_obfuscation::ZeroWidthObfuscationPipeline>,
     pub mcp_policy_pipeline: Option<mcp_policy::McpPolicyPipeline>,
+
+    request_counter: AtomicU64,
+    requests: Arc<RequestRegistry>,
+    l3_worker: L3Worker,
 }
 ```
 
@@ -115,6 +123,30 @@ When `download_categories` is `None`, all configured categories may
 download missing assets if `download_files` is `true`.
 
 ```rust
+pub fn set_execution_gates(&mut self, gates: ScanGateMatrix);
+```
+
+Replace the execution gate matrix used by subsequent scans.
+
+```rust
+pub fn set_onnx_batch_mode(&mut self, mode: OnnxBatchMode);
+```
+
+Replace the ONNX batch mode used by subsequent batch scans.
+
+```rust
+pub fn set_execution_backend(&mut self, backend: ExecutionBackend);
+```
+
+Replace the execution backend and apply its default L3 mode.
+
+```rust
+pub fn set_long_text_policy(&mut self, policy: LongTextPolicy);
+```
+
+Replace the long-text routing policy.
+
+```rust
 pub fn warmup(&mut self) -> Result<(), Box<dyn std::error::Error>>;
 ```
 
@@ -127,28 +159,36 @@ pub fn scan_category(&self, category: SecurityCategory, text: &str) -> Vec<Secur
 Scan text with a single category.
 
 ```rust
-pub fn evaluate_pipeline(&self, pipeline: &str, text: &str) -> Option<SecurityScanResult>;
+pub fn enqueue(&self, text: impl Into<String>) -> RequestId;
 ```
 
-Evaluate a legacy-compatible pipeline name for one text.
-
-This returns one final result for the selected pipeline. For categories
-with multiple native subscanners, unsafe findings are preferred over the
-category's safe baseline result.
+Queue a scan with every category configured on this gateway.
 
 ```rust
-pub fn evaluate_pipeline_batch(
+pub fn enqueue_categories(
     &self,
-    pipeline: &str,
-    texts: &[String],
-) -> Option<Vec<SecurityScanResult>>;
+    categories: Vec<SecurityCategory>,
+    text: impl Into<String>,
+) -> RequestId;
 ```
 
-Evaluate a legacy-compatible pipeline name for many texts.
+Queue a scan with a caller-provided category subset.
 
-This is the optimized bulk path used by benchmarks and Python
-`evaluate_batch`. Native subscanners and model-backed pipelines are
-batched internally instead of looping through `evaluate_pipeline`.
+```rust
+pub fn consume_results(
+    &self,
+    request_id: RequestId,
+    timeout: Option<Duration>,
+) -> Option<SecurityScanResult>;
+```
+
+Consume the next complete ResultSchema result for a queued request.
+
+```rust
+pub fn has_request(&self, request_id: &str) -> bool;
+```
+
+Return whether a queued request id is still known to the Rust aggregator.
 
 ```rust
 pub fn scan_categories(
@@ -167,6 +207,12 @@ pub fn scan_all(&self, text: &str) -> Vec<SecurityScanResult>;
 Scan text with every category configured on this gateway.
 
 ## Result And Category Types
+
+```rust
+pub type RequestId = String;
+```
+
+No public documentation is available yet.
 
 ```rust
 pub struct EvaluationResult {
@@ -193,6 +239,8 @@ pub struct LayerResult {
     pub confidence: f64,
     /// Whether the layer produced a matched decision.
     pub matched: bool,
+    /// Wall-clock time spent in this layer, in milliseconds.
+    pub duration_ms: f64,
     /// Threshold values that were applied by the layer.
     pub thresholds: HashMap<String, f64>,
     /// Layer-specific metadata, kept as JSON values for forward compatibility.
@@ -214,6 +262,8 @@ pub struct SecurityScanResult {
     pub level: String,
     /// Model or native scanner name that produced the final decision.
     pub model: String,
+    /// Sum of recorded layer durations, in milliseconds.
+    pub duration_ms: f64,
     /// Ordered layer evidence that explains the final decision.
     pub layers: Vec<LayerResult>,
 }
@@ -239,6 +289,297 @@ pub fn as_str(self) -> &'static str;
 ```
 
 Return the canonical uppercase level string.
+
+```rust
+pub enum OnnxBatchMode {
+    /// Keep the existing lazy per-text ONNX execution path.
+    LazyBatches,
+    /// Execute all L3 fallback texts as one ONNX tensor batch where possible.
+    TensorBatch,
+}
+```
+
+How model pipelines execute ONNX L3 fallback batches.
+
+```rust
+pub fn as_str(self) -> &'static str;
+```
+
+Return the canonical snake_case mode string.
+
+```rust
+pub enum ExecutionBackend {
+    /// Keep conservative CPU defaults unless a caller overrides execution mode.
+    Auto,
+    /// CPU execution: prefer lazy L3 execution and low concurrency.
+    Cpu,
+    /// Platform GPU alias: DirectML on Windows, CUDA on Linux, unsupported on macOS.
+    Gpu,
+    /// CoreML execution provider.
+    CoreMl,
+    /// CUDA execution provider.
+    Cuda,
+    /// DirectML execution provider.
+    DirectMl,
+    /// TensorRT execution provider.
+    TensorRt,
+}
+```
+
+Runtime backend profile used to choose default L3 execution behavior.
+
+```rust
+pub fn as_str(self) -> &'static str;
+```
+
+Return the canonical snake_case backend string.
+
+```rust
+pub struct LongTextPolicy {
+    /// Whether long-text routing is enabled.
+    pub enabled: bool,
+    /// Full-text L2 is skipped at and above this UTF-8 byte length after L1 is benign.
+    pub no_full_l2_byte_limit: usize,
+    /// UTF-8 byte size for chunks sent through chunked L1/L2.
+    pub chunk_size_bytes: usize,
+    /// UTF-8 byte overlap between neighboring chunks.
+    pub overlap_bytes: usize,
+    /// Whether non-benign L2 chunk decisions should be eligible for L3 verification.
+    pub verify_non_benign_l2: bool,
+}
+```
+
+Long-text routing policy for model-backed pipelines.
+
+```rust
+pub fn should_skip_full_l2(self, text: &str) -> bool;
+```
+
+Return whether this text should skip full-text L2 after a benign L1.
+
+```rust
+pub fn chunking(self) -> Result<TextChunking, String>;
+```
+
+Return the chunking profile implied by this policy.
+
+```rust
+pub struct TextChunking {
+    /// Maximum UTF-8 byte size per chunk before overlap.
+    pub chunk_size_bytes: usize,
+    /// UTF-8 byte overlap between neighboring chunks.
+    pub overlap_bytes: usize,
+}
+```
+
+Byte chunking used by long-text L1/L2 routing.
+
+```rust
+pub fn new(chunk_size_bytes: usize, overlap_bytes: usize) -> Result<Self, String>;
+```
+
+Create a validated byte chunking configuration.
+
+```rust
+pub struct ScanGateMatrix {
+    /// Optional L1 override. `None` means enabled.
+    pub l1: Option<bool>,
+    /// Optional L2 override. `None` means enabled.
+    pub l2: Option<bool>,
+    /// Optional L3 override. `None` means enabled.
+    pub l3: Option<bool>,
+    /// Optional per-model or per-native-scanner overrides keyed by result model
+    /// names such as `native:mcp_runtime_risk` or `tool-executions-model`.
+    pub models: HashMap<String, bool>,
+    /// L3 worker scheduling policy.
+    pub l3_policy: L3SchedulerPolicy,
+}
+```
+
+Caller-controlled execution gates for one scanner execution profile.
+
+Unspecified gates default to enabled. `max_level` is still enforced by
+`ScanExecution`, so a gate can only further restrict the configured scanner.
+
+```rust
+pub struct L3SchedulerPolicy {
+    /// Whether model L3 work should be centrally queued by scan methods.
+    pub enabled: bool,
+    /// Ordered category/model priority list. Earlier entries run first.
+    pub priority: Vec<String>,
+    /// Per category/model timeout before an unstarted L3 job degrades.
+    pub ttl_ms: HashMap<String, u64>,
+    /// Multiplier applied to L2 confidence when L3 degrades.
+    pub degraded_factor: f64,
+}
+```
+
+Priority and timeout policy for centrally scheduled L3 work.
+
+```rust
+pub fn all_enabled() -> Self;
+```
+
+Create a matrix where every level and model is enabled by default.
+
+```rust
+pub fn levels(l1: bool, l2: bool, l3: bool) -> Self;
+```
+
+Create a matrix with explicit level gates.
+
+```rust
+pub fn set_level(&mut self, level: SecurityLevel, enabled: bool);
+```
+
+Set one level gate.
+
+```rust
+pub fn set_model(&mut self, model: impl Into<String>, enabled: bool);
+```
+
+Set one model/native scanner gate.
+
+```rust
+pub fn with_model(mut self, model: impl Into<String>, enabled: bool) -> Self;
+```
+
+Builder-style model/native scanner gate setter.
+
+```rust
+pub fn allows_level(&self, level: SecurityLevel) -> bool;
+```
+
+Return whether the level is allowed by this matrix before max-level
+enforcement.
+
+```rust
+pub fn allows_model(&self, model: &str) -> bool;
+```
+
+Return whether the model/native scanner is allowed by this matrix.
+
+```rust
+pub fn set_l3_policy(&mut self, policy: L3SchedulerPolicy);
+```
+
+Replace the L3 worker scheduling policy.
+
+```rust
+pub struct ScanExecution {
+    max_level: SecurityLevel,
+    gates: ScanGateMatrix,
+    backend: ExecutionBackend,
+    onnx_batch_mode: OnnxBatchMode,
+    long_text_policy: LongTextPolicy,
+    defer_l3: bool,
+}
+```
+
+Effective execution state consumed by scan methods and model pipelines.
+
+```rust
+pub fn new(max_level: SecurityLevel) -> Self;
+```
+
+Create an execution with every gate enabled up to `max_level`.
+
+```rust
+pub fn with_gates(max_level: SecurityLevel, gates: ScanGateMatrix) -> Self;
+```
+
+Create an execution with explicit gates up to `max_level`.
+
+```rust
+pub fn set_gates(&mut self, gates: ScanGateMatrix);
+```
+
+Replace the gate matrix.
+
+```rust
+pub fn set_onnx_batch_mode(&mut self, mode: OnnxBatchMode);
+```
+
+Replace the ONNX batch execution mode.
+
+```rust
+pub fn set_backend(&mut self, backend: ExecutionBackend);
+```
+
+Replace the execution backend and apply its default L3 batch mode.
+
+```rust
+pub fn set_long_text_policy(&mut self, policy: LongTextPolicy);
+```
+
+Replace the long-text routing policy.
+
+```rust
+pub fn set_defer_l3(&mut self, defer_l3: bool);
+```
+
+Set whether L3 should be marked pending instead of executed immediately.
+
+```rust
+pub fn with_max_level(mut self, max_level: SecurityLevel) -> Self;
+```
+
+Return a copy with a different max-level cap.
+
+```rust
+pub fn allows_level(&self, level: SecurityLevel) -> bool;
+```
+
+Return whether a level is enabled for this execution after max-level
+enforcement.
+
+```rust
+pub fn allows_model(&self, model: &str) -> bool;
+```
+
+Return whether a model/native scanner is enabled for this execution.
+
+```rust
+pub fn gates(&self) -> &ScanGateMatrix;
+```
+
+Return the matrix backing this execution.
+
+```rust
+pub fn onnx_batch_mode(&self) -> OnnxBatchMode;
+```
+
+Return the ONNX batch mode backing this execution.
+
+```rust
+pub fn backend(&self) -> ExecutionBackend;
+```
+
+Return the configured execution backend.
+
+```rust
+pub fn long_text_policy(&self) -> LongTextPolicy;
+```
+
+Return the long-text routing policy.
+
+```rust
+pub fn defer_l3(&self) -> bool;
+```
+
+Return whether L3 should be centrally scheduled.
+
+```rust
+pub fn l3_policy(&self) -> &L3SchedulerPolicy;
+```
+
+Return the L3 worker policy.
+
+```rust
+pub fn max_level(&self) -> SecurityLevel;
+```
+
+Return the max-level cap backing this execution.
 
 ```rust
 pub enum SecurityCategory {

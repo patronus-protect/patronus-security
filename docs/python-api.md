@@ -22,6 +22,18 @@ Args:
     download_categories: Optional category allowlist for asset downloads.
         When omitted, every configured category may download if
         `download_files` is true.
+    execution_gates: Optional scan execution matrix. Use
+        `{"levels": {"l1": True, "l2": False, "l3": False},
+        "models": {"native:mcp_runtime_risk": False}}` to disable
+        levels or model/native scanner areas for subsequent scan calls.
+        Unspecified gates default to enabled.
+    onnx_batch_mode: `lazy_batches` keeps per-text ONNX execution;
+        `tensor_batch` executes L3 fallbacks as one ONNX tensor batch
+        when using batch APIs.
+    execution_backend: `auto`, `cpu`, `gpu`, `coreml`, `cuda`,
+        `directml`, or `tensorrt`. Backend defaults choose lazy L3 on
+        CPU/auto and tensor batches on accelerator backends unless
+        `onnx_batch_mode` is explicitly set.
 
 ### `warmup()`
 
@@ -41,6 +53,41 @@ Raises:
 
 Scan text with every category configured on this gateway.
 
+### `set_execution_gates(execution_gates: dict | None)`
+
+Replace the gate matrix used by subsequent scan calls.
+
+Pass `None` to reset to the default all-enabled matrix. The matrix
+accepts `levels` and `models` dictionaries; model keys match result
+`model` values such as `native:mcp_runtime_risk`.
+
+### `set_onnx_batch_mode(mode: str)`
+
+Replace the ONNX batch mode for subsequent batch calls.
+
+`lazy_batches` preserves the per-text ONNX execution path.
+`tensor_batch` executes L3 fallbacks as one ONNX tensor batch when
+pipelines can batch their fallback texts.
+
+### `set_execution_backend(backend: str)`
+
+Replace execution backend and apply its default L3 mode.
+
+`auto` and `cpu` default to lazy L3 execution. `gpu`, `coreml`,
+`cuda`, `directml`, and `tensorrt` default to tensor batches. Call
+`set_onnx_batch_mode` afterwards to override.
+
+### `set_long_text_policy(enabled: bool = True, no_full_l2_byte_limit: int = 1024, chunk_size_bytes: int = 512, overlap_bytes: int = 96, verify_non_benign_l2: bool = True)`
+
+Replace long-text routing policy for model-backed pipelines.
+
+Full-text L1 always runs first. If L1 returns a non-benign result,
+the pipeline can stop there. If L1 is benign and the text is at or
+above `no_full_l2_byte_limit`, full-text L2 is skipped and the text
+is evaluated through overlapping L1/L2 chunks instead. Chunks with
+unresolved or non-benign L2 decisions are then verified by L3 when
+L3 is enabled.
+
 ### `scan_category(category: str, text: str) -> list[dict]`
 
 Scan text with a single category.
@@ -49,50 +96,20 @@ Scan text with a single category.
 
 Scan text with a caller-provided category subset.
 
-### `evaluate(pipeline: str, text: str) -> dict`
+### `enqueue(text: str, categories: list[str] | None = None) -> str`
 
-Evaluate one legacy-compatible pipeline for one input.
+Queue one scan request and return its request id.
 
-Pipeline names are `injection`, `dlp`, `pii`,
-`tool_classifier_prompts`, `tool_classifier_executions`,
-`sensitive_documents_prompts`, `tool_description_prompts`, and
-`user_intent_prompts`.
+`consume_results(request_id)` yields complete Result-Schema dicts as
+soon as the configured category scan for that request finishes.
 
-### `evaluate_batch(pipeline: str, texts: list[str]) -> list[dict]`
+### `consume_results(request_id: str, timeout: float | None = None)`
 
-Evaluate one legacy-compatible pipeline for many inputs.
+Yield queued complete scan results for one request id.
 
-This is the optimized path for bulk scanning. Native scanners and
-model-backed pipelines use their batch implementations internally
-instead of looping through the public single-input API.
+Raises:
+    KeyError: If the request id is unknown or already consumed.
 
-### `evaluate_injection(text: str) -> dict`
+### `has_request(request_id: str) -> bool`
 
-Evaluate the prompt-injection pipeline for one input.
-
-### `evaluate_injection_batch(texts: list[str]) -> list[dict]`
-
-Evaluate the prompt-injection pipeline for many inputs.
-
-### `evaluate_dlp(text: str) -> dict`
-
-Evaluate the DLP pipeline for one input.
-
-### `evaluate_dlp_batch(texts: list[str]) -> list[dict]`
-
-Evaluate the DLP pipeline for many inputs.
-
-### `evaluate_pii(text: str) -> dict`
-
-Evaluate the PII pipeline for one input.
-
-### `evaluate_pii_batch(texts: list[str]) -> list[dict]`
-
-Evaluate the PII pipeline for many inputs.
-
-## `useLibrary(categories: list[str], maxLevel: str = 'l2', useDir: str = None, modelDir: str = None, downloadFiles: bool = True, downloadCategories: list[str] | None = None) -> PatronusSecurity`
-
-Compatibility alias for constructing `PatronusSecurity`.
-
-New code should use `SecurityGateway` or `PatronusSecurity` with snake_case
-keyword arguments. `modelDir` is the camelCase alias for `model_dir`.
+Return whether a queued request is still active in the Rust aggregator.

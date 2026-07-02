@@ -12,5 +12,8 @@ pub use config::{FastTextMulticlassConfig, L2ModelConfig, CLASSES};
 pub use fasttext::{fasttext_hash, FastTextConfig, FastTextPredictor, FastTextPredictorMulticlass};
 pub use lgbm::{LGBMBooster, LGBMTree};
 pub use logistic::{L2LogisticRegression, LogisticRegressionConfig, LogisticRegressionPredictor};
-pub use prompt_injection::PromptInjectionClassifier;
+pub use prompt_injection::{
+    PromptInjectionClassifier, PromptInjectionL2Buffers, PromptInjectionL2Scores,
+    PromptInjectionL2Timings,
+};
 pub use tfidf::{TFIDFVectorizer, TFIDFVectorizerConfig};

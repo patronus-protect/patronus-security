@@ -7,5 +7,7 @@ pub mod types;
 
 pub use pipeline::{PatronusSecurity, Pipeline, PromptInjectionPipeline, SecurityGateway};
 pub use types::{
-    EvaluationResult, LayerResult, SecurityCategory, SecurityLevel, SecurityScanResult,
+    EvaluationResult, ExecutionBackend, L3SchedulerPolicy, LayerResult, LongTextPolicy,
+    OnnxBatchMode, RequestId, ScanExecution, ScanGateMatrix, SecurityCategory, SecurityLevel,
+    SecurityScanResult, TextChunking,
 };

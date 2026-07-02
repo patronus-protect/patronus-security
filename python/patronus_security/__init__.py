@@ -37,6 +37,45 @@ def _to_dict(result):
     }
 
 
+def _execution_gates_json(execution_gates):
+    if execution_gates is None:
+        return None
+    if not isinstance(execution_gates, dict):
+        raise ValueError("execution_gates must be a dict")
+
+    normalized = {"levels": {}, "models": {}}
+    levels = execution_gates.get("levels", {})
+    models = execution_gates.get("models", execution_gates.get("model_areas", {}))
+    l3_policy = execution_gates.get("l3")
+
+    if not isinstance(levels, dict):
+        raise ValueError("execution_gates['levels'] must be a dict")
+    if not isinstance(models, dict):
+        raise ValueError("execution_gates['models'] must be a dict")
+    levels = dict(levels)
+    models = dict(models)
+
+    for key, value in execution_gates.items():
+        lowered = str(key).lower()
+        if lowered in {"l1", "l2"} or (lowered == "l3" and isinstance(value, bool)):
+            levels[key] = value
+
+    for key, value in levels.items():
+        if not isinstance(value, bool):
+            raise ValueError(f"execution_gates level {key!r} must be a bool")
+        normalized["levels"][str(key).lower()] = value
+    for key, value in models.items():
+        if not isinstance(value, bool):
+            raise ValueError(f"execution_gates model {key!r} must be a bool")
+        normalized["models"][str(key)] = value
+    if l3_policy is not None and not isinstance(l3_policy, bool):
+        if not isinstance(l3_policy, dict):
+            raise ValueError("execution_gates['l3'] must be a dict or bool")
+        normalized["l3"] = l3_policy
+
+    return json.dumps(normalized)
+
+
 class PatronusSecurity:
     """Python gateway for Patronus Security scanners.
 
@@ -52,6 +91,18 @@ class PatronusSecurity:
         download_categories: Optional category allowlist for asset downloads.
             When omitted, every configured category may download if
             `download_files` is true.
+        execution_gates: Optional scan execution matrix. Use
+            `{"levels": {"l1": True, "l2": False, "l3": False},
+            "models": {"native:mcp_runtime_risk": False}}` to disable
+            levels or model/native scanner areas for subsequent scan calls.
+            Unspecified gates default to enabled.
+        onnx_batch_mode: `lazy_batches` keeps per-text ONNX execution;
+            `tensor_batch` executes L3 fallbacks as one ONNX tensor batch
+            when using batch APIs.
+        execution_backend: `auto`, `cpu`, `gpu`, `coreml`, `cuda`,
+            `directml`, or `tensorrt`. Backend defaults choose lazy L3 on
+            CPU/auto and tensor batches on accelerator backends unless
+            `onnx_batch_mode` is explicitly set.
     """
 
     def __init__(
@@ -62,6 +113,9 @@ class PatronusSecurity:
         model_dir: str = None,
         download_files: bool = True,
         download_categories: list[str] | None = None,
+        execution_gates: dict | None = None,
+        onnx_batch_mode: str = "backend_default",
+        execution_backend: str = "auto",
     ):
         if use_dir is not None and model_dir is not None:
             raise ValueError("Pass only one of use_dir or model_dir")
@@ -72,6 +126,9 @@ class PatronusSecurity:
             use_dir=resolved_model_dir,
             download_files=download_files,
             download_categories=download_categories,
+            execution_gates_json=_execution_gates_json(execution_gates),
+            onnx_batch_mode=onnx_batch_mode,
+            execution_backend=execution_backend,
         )
 
     def warmup(self):
@@ -94,6 +151,58 @@ class PatronusSecurity:
         results = self.rust_gateway.scan_all(text)
         return [_to_dict(r) for r in results]
 
+    def set_execution_gates(self, execution_gates: dict | None):
+        """Replace the gate matrix used by subsequent scan calls.
+
+        Pass `None` to reset to the default all-enabled matrix. The matrix
+        accepts `levels` and `models` dictionaries; model keys match result
+        `model` values such as `native:mcp_runtime_risk`.
+        """
+        self.rust_gateway.set_execution_gates(_execution_gates_json(execution_gates))
+
+    def set_onnx_batch_mode(self, mode: str):
+        """Replace the ONNX batch mode for subsequent batch calls.
+
+        `lazy_batches` preserves the per-text ONNX execution path.
+        `tensor_batch` executes L3 fallbacks as one ONNX tensor batch when
+        pipelines can batch their fallback texts.
+        """
+        self.rust_gateway.set_onnx_batch_mode(mode)
+
+    def set_execution_backend(self, backend: str):
+        """Replace execution backend and apply its default L3 mode.
+
+        `auto` and `cpu` default to lazy L3 execution. `gpu`, `coreml`,
+        `cuda`, `directml`, and `tensorrt` default to tensor batches. Call
+        `set_onnx_batch_mode` afterwards to override.
+        """
+        self.rust_gateway.set_execution_backend(backend)
+
+    def set_long_text_policy(
+        self,
+        enabled: bool = True,
+        no_full_l2_byte_limit: int = 1024,
+        chunk_size_bytes: int = 512,
+        overlap_bytes: int = 96,
+        verify_non_benign_l2: bool = True,
+    ):
+        """Replace long-text routing policy for model-backed pipelines.
+
+        Full-text L1 always runs first. If L1 returns a non-benign result,
+        the pipeline can stop there. If L1 is benign and the text is at or
+        above `no_full_l2_byte_limit`, full-text L2 is skipped and the text
+        is evaluated through overlapping L1/L2 chunks instead. Chunks with
+        unresolved or non-benign L2 decisions are then verified by L3 when
+        L3 is enabled.
+        """
+        self.rust_gateway.set_long_text_policy(
+            enabled,
+            no_full_l2_byte_limit,
+            chunk_size_bytes,
+            overlap_bytes,
+            verify_non_benign_l2,
+        )
+
     def scan_category(self, category: str, text: str) -> list[dict]:
         """Scan text with a single category."""
         results = self.rust_gateway.scan_category(category, text)
@@ -104,72 +213,28 @@ class PatronusSecurity:
         results = self.rust_gateway.scan_categories(categories, text)
         return [_to_dict(r) for r in results]
 
-    def evaluate(self, pipeline: str, text: str) -> dict:
-        """Evaluate one legacy-compatible pipeline for one input.
+    def enqueue(self, text: str, categories: list[str] | None = None) -> str:
+        """Queue one scan request and return its request id.
 
-        Pipeline names are `injection`, `dlp`, `pii`,
-        `tool_classifier_prompts`, `tool_classifier_executions`,
-        `sensitive_documents_prompts`, `tool_description_prompts`, and
-        `user_intent_prompts`.
+        `consume_results(request_id)` yields complete Result-Schema dicts as
+        soon as the configured category scan for that request finishes.
         """
-        return _to_dict(self.rust_gateway.evaluate(pipeline, text))
+        return self.rust_gateway.enqueue(text, categories)
 
-    def evaluate_batch(self, pipeline: str, texts: list[str]) -> list[dict]:
-        """Evaluate one legacy-compatible pipeline for many inputs.
+    def consume_results(self, request_id: str, timeout: float | None = None):
+        """Yield queued complete scan results for one request id.
 
-        This is the optimized path for bulk scanning. Native scanners and
-        model-backed pipelines use their batch implementations internally
-        instead of looping through the public single-input API.
+        Raises:
+            KeyError: If the request id is unknown or already consumed.
         """
-        results = self.rust_gateway.evaluate_batch(pipeline, texts)
-        return [_to_dict(r) for r in results]
+        while True:
+            result = self.rust_gateway.consume_next_result(request_id, timeout)
+            if result is None:
+                return
+            yield _to_dict(result)
 
-    def evaluate_injection(self, text: str) -> dict:
-        """Evaluate the prompt-injection pipeline for one input."""
-        return self.evaluate("injection", text)
-
-    def evaluate_injection_batch(self, texts: list[str]) -> list[dict]:
-        """Evaluate the prompt-injection pipeline for many inputs."""
-        return self.evaluate_batch("injection", texts)
-
-    def evaluate_dlp(self, text: str) -> dict:
-        """Evaluate the DLP pipeline for one input."""
-        return self.evaluate("dlp", text)
-
-    def evaluate_dlp_batch(self, texts: list[str]) -> list[dict]:
-        """Evaluate the DLP pipeline for many inputs."""
-        return self.evaluate_batch("dlp", texts)
-
-    def evaluate_pii(self, text: str) -> dict:
-        """Evaluate the PII pipeline for one input."""
-        return self.evaluate("pii", text)
-
-    def evaluate_pii_batch(self, texts: list[str]) -> list[dict]:
-        """Evaluate the PII pipeline for many inputs."""
-        return self.evaluate_batch("pii", texts)
-
+    def has_request(self, request_id: str) -> bool:
+        """Return whether a queued request is still active in the Rust aggregator."""
+        return self.rust_gateway.has_request(request_id)
 
 SecurityGateway = PatronusSecurity
-
-
-def useLibrary(
-    categories: list[str],
-    maxLevel: str = "l2",
-    useDir: str = None,
-    modelDir: str = None,
-    downloadFiles: bool = True,
-    downloadCategories: list[str] | None = None,
-) -> PatronusSecurity:
-    """Compatibility alias for constructing `PatronusSecurity`.
-
-    New code should use `SecurityGateway` or `PatronusSecurity` with snake_case
-    keyword arguments. `modelDir` is the camelCase alias for `model_dir`.
-    """
-    return PatronusSecurity(
-        categories=categories,
-        max_level=maxLevel,
-        use_dir=useDir,
-        model_dir=modelDir,
-        download_files=downloadFiles,
-        download_categories=downloadCategories,
-    )
