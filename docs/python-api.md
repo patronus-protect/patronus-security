@@ -26,7 +26,10 @@ Args:
         `{"levels": {"l1": True, "l2": False, "l3": False},
         "models": {"native:mcp_runtime_risk": False}}` to disable
         levels or model/native scanner areas for subsequent scan calls.
-        Unspecified gates default to enabled.
+        For `tool_classifier`, use
+        `{"tool_classifier": {"description": False, "execution": True,
+        "prompt": False}}` to gate its subpipelines. Unspecified gates
+        default to enabled.
     onnx_batch_mode: `lazy_batches` keeps per-text ONNX execution;
         `tensor_batch` executes L3 fallbacks as one ONNX tensor batch
         when using batch APIs.
@@ -77,7 +80,7 @@ Replace execution backend and apply its default L3 mode.
 `cuda`, `directml`, and `tensorrt` default to tensor batches. Call
 `set_onnx_batch_mode` afterwards to override.
 
-### `set_long_text_policy(enabled: bool = True, no_full_l2_byte_limit: int = 1024, chunk_size_bytes: int = 512, overlap_bytes: int = 96, verify_non_benign_l2: bool = True)`
+### `set_long_text_policy(enabled: bool = True, no_full_l2_byte_limit: int = 1024, chunk_size_bytes: int = 256, overlap_bytes: int = 96, verify_non_benign_l2: bool = True)`
 
 Replace long-text routing policy for model-backed pipelines.
 

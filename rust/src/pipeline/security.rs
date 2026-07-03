@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::sync::{atomic::AtomicU64, Arc};
 use std::time::Instant;
 
+use super::PipelineStrategy;
 use crate::{
     assets,
     detectors::{
@@ -41,9 +42,9 @@ pub struct PatronusSecurity {
     pub injection_pipeline: Option<PromptInjectionPipeline>,
     pub tool_classifier_prompts: Option<Pipeline>,
     pub tool_classifier_executions: Option<Pipeline>,
+    pub tool_classifier_descriptions: Option<Pipeline>,
     pub user_intent_prompts: Option<Pipeline>,
     pub sensitive_documents_prompts: Option<Pipeline>,
-    pub tool_description_prompts: Option<Pipeline>,
     pub pii_model_pipeline: Option<Pipeline>,
 
     // Instantiated native rule-based pipelines
@@ -179,7 +180,7 @@ enum WarmupPipelineKind {
     SensitiveDocumentsPrompts,
     ToolClassifierPrompts,
     ToolClassifierExecutions,
-    ToolDescriptionPrompts,
+    ToolClassifierDescriptions,
     UserIntentPrompts,
     PiiPrompts,
 }
@@ -193,6 +194,24 @@ struct WarmupPipelineTask {
 enum WarmupPipeline {
     Injection(PromptInjectionPipeline),
     Generic(Pipeline),
+}
+
+const TOOL_CLASSIFIER_DESCRIPTIONS_MODEL: &str = "tool-classifier-descriptions-model";
+
+fn pipeline_strategy(kind: WarmupPipelineKind) -> PipelineStrategy {
+    match kind {
+        WarmupPipelineKind::Injection => PipelineStrategy::prompt_injection(),
+        WarmupPipelineKind::SensitiveDocumentsPrompts => PipelineStrategy::sensitive_documents(),
+        WarmupPipelineKind::ToolClassifierPrompts => PipelineStrategy::tool_classifier_prompts(),
+        WarmupPipelineKind::ToolClassifierExecutions => {
+            PipelineStrategy::tool_classifier_executions()
+        }
+        WarmupPipelineKind::ToolClassifierDescriptions => {
+            PipelineStrategy::tool_classifier_descriptions()
+        }
+        WarmupPipelineKind::UserIntentPrompts => PipelineStrategy::user_intent(),
+        WarmupPipelineKind::PiiPrompts => PipelineStrategy::pii_model(),
+    }
 }
 
 fn log_pipeline_warmup(label: &str, started: Instant, has_l3: bool, l3_loaded: bool) {
@@ -209,6 +228,37 @@ fn log_pipeline_warmup(label: &str, started: Instant, has_l3: bool, l3_loaded: b
         "[warmup] {label} initialized in {:.2} ms; l3={l3_state}",
         started.elapsed().as_secs_f64() * 1000.0
     );
+}
+
+fn generic_pipeline_assets_present(path: &std::path::Path, max_level: SecurityLevel) -> bool {
+    path.join("l1_rules.json").exists()
+        && (max_level == SecurityLevel::L1 || path.join("l2_config.json").exists())
+}
+
+fn first_existing_generic_pipeline_path(
+    max_level: SecurityLevel,
+    paths: impl IntoIterator<Item = PathBuf>,
+) -> Option<PathBuf> {
+    paths
+        .into_iter()
+        .find(|path| generic_pipeline_assets_present(path, max_level))
+}
+
+fn tool_classifier_area_enabled(execution: &ScanExecution, model: &str, aliases: &[&str]) -> bool {
+    execution.allows_model("tool_classifier")
+        && execution.allows_model(model)
+        && aliases.iter().all(|alias| execution.allows_model(alias))
+}
+
+fn model_explicitly_enabled(execution: &ScanExecution, aliases: &[&str]) -> bool {
+    aliases.iter().any(|alias| {
+        execution
+            .gates()
+            .models
+            .get(*alias)
+            .copied()
+            .unwrap_or(false)
+    })
 }
 
 impl PatronusSecurity {
@@ -254,9 +304,9 @@ impl PatronusSecurity {
             injection_pipeline: None,
             tool_classifier_prompts: None,
             tool_classifier_executions: None,
+            tool_classifier_descriptions: None,
             user_intent_prompts: None,
             sensitive_documents_prompts: None,
-            tool_description_prompts: None,
             pii_model_pipeline: None,
             dlp_pipeline: None,
             pii_pipeline: None,
@@ -399,11 +449,17 @@ impl PatronusSecurity {
         let mut init_tasks = Vec::new();
 
         for cat in &self.categories {
+            if *cat == SecurityCategory::Pii
+                && !model_explicitly_enabled(&self.execution, &["pii-model"])
+            {
+                println!("[warmup] pii native-only; pii-model disabled by default");
+                continue;
+            }
+
             let cat_dir = match cat {
                 SecurityCategory::Injection => base_dir.join("injection"),
                 SecurityCategory::SensitiveDocuments => base_dir.join("sensitive_documents"),
                 SecurityCategory::ToolClassifier => base_dir.join("tool_classifier"),
-                SecurityCategory::ToolDescription => base_dir.join("tool_description"),
                 SecurityCategory::UserIntent => base_dir.join("user_intent"),
                 SecurityCategory::Pii => base_dir.join("pii"),
                 SecurityCategory::Dlp => {
@@ -452,9 +508,7 @@ impl PatronusSecurity {
                 }
                 SecurityCategory::SensitiveDocuments => {
                     let prompts_path = cat_dir.join("prompts");
-                    if self.max_level >= SecurityLevel::L2
-                        && prompts_path.join("l2_config.json").exists()
-                    {
+                    if generic_pipeline_assets_present(&prompts_path, self.max_level) {
                         init_tasks.push(WarmupPipelineTask {
                             kind: WarmupPipelineKind::SensitiveDocumentsPrompts,
                             label: "sensitive_documents/prompts",
@@ -464,9 +518,7 @@ impl PatronusSecurity {
                 }
                 SecurityCategory::ToolClassifier => {
                     let prompts_path = cat_dir.join("prompts");
-                    if self.max_level >= SecurityLevel::L2
-                        && prompts_path.join("l2_config.json").exists()
-                    {
+                    if generic_pipeline_assets_present(&prompts_path, self.max_level) {
                         init_tasks.push(WarmupPipelineTask {
                             kind: WarmupPipelineKind::ToolClassifierPrompts,
                             label: "tool_classifier/prompts",
@@ -474,33 +526,31 @@ impl PatronusSecurity {
                         });
                     }
                     let executions_path = cat_dir.join("executions");
-                    if self.max_level >= SecurityLevel::L2
-                        && executions_path.join("l2_config.json").exists()
-                    {
+                    if generic_pipeline_assets_present(&executions_path, self.max_level) {
                         init_tasks.push(WarmupPipelineTask {
                             kind: WarmupPipelineKind::ToolClassifierExecutions,
                             label: "tool_classifier/executions",
                             path: executions_path,
                         });
                     }
-                }
-                SecurityCategory::ToolDescription => {
-                    let prompts_path = cat_dir.join("prompts");
-                    if self.max_level >= SecurityLevel::L2
-                        && prompts_path.join("l2_config.json").exists()
-                    {
+                    let descriptions_path = first_existing_generic_pipeline_path(
+                        self.max_level,
+                        [
+                            cat_dir.join("descriptions"),
+                            base_dir.join("tool_description").join("prompts"),
+                        ],
+                    );
+                    if let Some(descriptions_path) = descriptions_path {
                         init_tasks.push(WarmupPipelineTask {
-                            kind: WarmupPipelineKind::ToolDescriptionPrompts,
-                            label: "tool_description/prompts",
-                            path: prompts_path,
+                            kind: WarmupPipelineKind::ToolClassifierDescriptions,
+                            label: "tool_classifier/descriptions",
+                            path: descriptions_path,
                         });
                     }
                 }
                 SecurityCategory::UserIntent => {
                     let prompts_path = cat_dir.join("prompts");
-                    if self.max_level >= SecurityLevel::L2
-                        && prompts_path.join("l2_config.json").exists()
-                    {
+                    if generic_pipeline_assets_present(&prompts_path, self.max_level) {
                         init_tasks.push(WarmupPipelineTask {
                             kind: WarmupPipelineKind::UserIntentPrompts,
                             label: "user_intent/prompts",
@@ -511,7 +561,7 @@ impl PatronusSecurity {
                 SecurityCategory::Pii => {
                     let prompts_path = cat_dir.join("prompts");
                     if self.max_level >= SecurityLevel::L2
-                        && prompts_path.join("l2_config.json").exists()
+                        && generic_pipeline_assets_present(&prompts_path, self.max_level)
                     {
                         init_tasks.push(WarmupPipelineTask {
                             kind: WarmupPipelineKind::PiiPrompts,
@@ -542,8 +592,12 @@ impl PatronusSecurity {
                         WarmupPipeline::Injection(pipeline)
                     }
                     _ => {
-                        let pipeline = Pipeline::new(&task.path)
-                            .map_err(|err| format!("{}: {}", task.label, err))?;
+                        let pipeline = Pipeline::new_with_strategy(
+                            &task.path,
+                            self.max_level,
+                            pipeline_strategy(task.kind),
+                        )
+                        .map_err(|err| format!("{}: {}", task.label, err))?;
                         log_pipeline_warmup(
                             task.label,
                             started,
@@ -580,8 +634,11 @@ impl PatronusSecurity {
                 ) => {
                     self.tool_classifier_executions = Some(pipeline);
                 }
-                (WarmupPipelineKind::ToolDescriptionPrompts, WarmupPipeline::Generic(pipeline)) => {
-                    self.tool_description_prompts = Some(pipeline);
+                (
+                    WarmupPipelineKind::ToolClassifierDescriptions,
+                    WarmupPipeline::Generic(pipeline),
+                ) => {
+                    self.tool_classifier_descriptions = Some(pipeline);
                 }
                 (WarmupPipelineKind::UserIntentPrompts, WarmupPipeline::Generic(pipeline)) => {
                     self.user_intent_prompts = Some(pipeline);
@@ -616,16 +673,16 @@ impl PatronusSecurity {
                 self.l3_worker
                     .register_model("tool-executions-model", model);
             }
+            WarmupPipelineKind::ToolClassifierDescriptions => {
+                self.l3_worker
+                    .register_model(TOOL_CLASSIFIER_DESCRIPTIONS_MODEL, model);
+            }
             WarmupPipelineKind::UserIntentPrompts => {
                 self.l3_worker.register_model("user-intent-model", model);
             }
             WarmupPipelineKind::SensitiveDocumentsPrompts => {
                 self.l3_worker
                     .register_model("orca-sonar-document-classifier", model);
-            }
-            WarmupPipelineKind::ToolDescriptionPrompts => {
-                self.l3_worker
-                    .register_model("tool-description-model", model);
             }
             WarmupPipelineKind::PiiPrompts => {}
         }
@@ -717,7 +774,8 @@ impl PatronusSecurity {
                 let native_enabled = self.level_enabled(&execution, SecurityLevel::L1)
                     && self.model_enabled(&execution, "native:pii");
                 let model_enabled = self.level_enabled(&execution, SecurityLevel::L2)
-                    && self.model_enabled(&execution, "pii-model");
+                    && self.model_enabled(&execution, "pii-model")
+                    && model_explicitly_enabled(&execution, &["pii-model"]);
                 if native_enabled {
                     if let Some(ref native) = self.pii_pipeline {
                         let native_started = Instant::now();
@@ -765,7 +823,16 @@ impl PatronusSecurity {
                 }
             }
             SecurityCategory::ToolClassifier => {
-                if self.model_enabled(&execution, "tool-prompts-model") {
+                if tool_classifier_area_enabled(
+                    execution,
+                    "tool-prompts-model",
+                    &[
+                        "tool_classifier.prompt",
+                        "tool_classifier.prompts",
+                        "tool_classifier_prompt",
+                        "tool_classifier_prompts",
+                    ],
+                ) {
                     if let Some(ref pipe) = self.tool_classifier_prompts {
                         if let Some(result) = generic_model_scan_result(
                             category,
@@ -778,11 +845,42 @@ impl PatronusSecurity {
                         }
                     }
                 }
-                if self.model_enabled(&execution, "tool-executions-model") {
+                if tool_classifier_area_enabled(
+                    execution,
+                    "tool-executions-model",
+                    &[
+                        "tool_classifier.execution",
+                        "tool_classifier.executions",
+                        "tool_classifier_execution",
+                        "tool_classifier_executions",
+                    ],
+                ) {
                     if let Some(ref pipe) = self.tool_classifier_executions {
                         if let Some(result) = generic_model_scan_result(
                             category,
                             "tool-executions-model",
+                            pipe,
+                            text,
+                            execution,
+                        ) {
+                            results.push(result);
+                        }
+                    }
+                }
+                if tool_classifier_area_enabled(
+                    execution,
+                    TOOL_CLASSIFIER_DESCRIPTIONS_MODEL,
+                    &[
+                        "tool_classifier.description",
+                        "tool_classifier.descriptions",
+                        "tool_classifier_description",
+                        "tool_classifier_descriptions",
+                    ],
+                ) {
+                    if let Some(ref pipe) = self.tool_classifier_descriptions {
+                        if let Some(result) = generic_model_scan_result(
+                            category,
+                            TOOL_CLASSIFIER_DESCRIPTIONS_MODEL,
                             pipe,
                             text,
                             execution,
@@ -798,21 +896,6 @@ impl PatronusSecurity {
                         if let Some(result) = generic_model_scan_result(
                             category,
                             "orca-sonar-document-classifier",
-                            pipe,
-                            text,
-                            execution,
-                        ) {
-                            results.push(result);
-                        }
-                    }
-                }
-            }
-            SecurityCategory::ToolDescription => {
-                if self.model_enabled(&execution, "tool-description-model") {
-                    if let Some(ref pipe) = self.tool_description_prompts {
-                        if let Some(result) = generic_model_scan_result(
-                            category,
-                            "tool-description-model",
                             pipe,
                             text,
                             execution,

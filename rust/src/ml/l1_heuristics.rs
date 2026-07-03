@@ -71,9 +71,53 @@ fn is_word_char(c: char) -> bool {
 }
 
 pub fn clean_text_for_rules(text: &str) -> String {
-    let lower = text.to_lowercase();
+    let normalized = normalize_json_text_for_rules(text).unwrap_or_else(|| text.to_string());
+    let lower = normalized.to_lowercase();
     let parts: Vec<&str> = lower.split_whitespace().collect();
     parts.join(" ")
+}
+
+fn normalize_json_text_for_rules(text: &str) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_str(text).ok()?;
+    if !value.is_object() && !value.is_array() {
+        return None;
+    }
+
+    let mut parts = Vec::new();
+    flatten_json_value_for_rules(&value, &mut parts);
+    if parts.is_empty() {
+        None
+    } else {
+        Some(parts.join(" "))
+    }
+}
+
+fn flatten_json_value_for_rules(value: &serde_json::Value, parts: &mut Vec<String>) {
+    match value {
+        serde_json::Value::Object(object) => {
+            for (key, value) in object {
+                parts.push(normalize_json_key_for_rules(key));
+                flatten_json_value_for_rules(value, parts);
+            }
+        }
+        serde_json::Value::Array(values) => {
+            for value in values {
+                flatten_json_value_for_rules(value, parts);
+            }
+        }
+        serde_json::Value::String(value) => parts.push(value.clone()),
+        serde_json::Value::Number(value) => parts.push(value.to_string()),
+        serde_json::Value::Bool(value) => parts.push(value.to_string()),
+        serde_json::Value::Null => {}
+    }
+}
+
+fn normalize_json_key_for_rules(key: &str) -> String {
+    match key {
+        "cmd" | "command" => "command".to_string(),
+        "name" | "tool" | "tool_name" => "tool_name".to_string(),
+        _ => key.to_string(),
+    }
 }
 
 pub struct NativeHeuristicsEngine {
@@ -93,5 +137,34 @@ impl NativeHeuristicsEngine {
     pub fn evaluate(&self, text: &str) -> bool {
         let cleaned = clean_text_for_rules(text);
         self.set.is_match(&cleaned)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{clean_text_for_rules, HeuristicsEngine, RawRule};
+
+    #[test]
+    fn clean_text_for_rules_flattens_json_before_ngram_matching() {
+        let cleaned = clean_text_for_rules(
+            r#"{"arguments":{"cmd":"rg token rust/src"},"name":"exec_command"}"#,
+        );
+
+        assert!(cleaned.contains("arguments command rg token rust/src"));
+        assert!(cleaned.contains("tool_name exec_command"));
+    }
+
+    #[test]
+    fn heuristics_engine_matches_rules_against_flattened_json() {
+        let engine = HeuristicsEngine::new(vec![RawRule {
+            ngram: "arguments command".to_string(),
+            class: "tool_class.shell.execute".to_string(),
+            count: 1,
+        }]);
+
+        assert_eq!(
+            engine.evaluate(r#"{"arguments":{"cmd":"rg token rust/src"},"name":"exec_command"}"#),
+            Some(("tool_class.shell.execute".to_string(), 1.0))
+        );
     }
 }

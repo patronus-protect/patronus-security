@@ -23,6 +23,7 @@ ureq = { version = "2.10", features = ["json"] }
 ort = { version = "2.0.0-rc.12", features = ["half"] }
 tokenizers = "0.23.1"
 half = "2.1"
+blake3 = "1.5"
 
 [features]
 default = []

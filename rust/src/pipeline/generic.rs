@@ -6,10 +6,12 @@ use std::path::Path;
 use std::sync::Mutex;
 use std::time::Instant;
 
+use super::decision_cache::DecisionCache;
 use super::long_text::{
     aggregate_chunk_outputs, candidate_selection, chunk_text_bytes, infer_l3_candidate_texts,
     l3_metadata,
 };
+use super::PipelineStrategy;
 use super::{degraded_fallback_confidence, l3_pending_layer};
 use crate::ml::l1_heuristics::{HeuristicsEngine, RawRule};
 use crate::ml::l2::{L2Classifier, L2ModelConfig};
@@ -84,10 +86,13 @@ const TOOL_CLASS_NAMES: &[&str] = &[
 
 pub struct Pipeline {
     l1: HeuristicsEngine,
-    l2: L2Classifier,
+    l2: Option<L2Classifier>,
     l3: Option<Mutex<LazyOnnxTextClassifier>>,
     thresholds: HashMap<String, f64>,
     global_k: f64,
+    cache_namespace: String,
+    decision_cache: DecisionCache,
+    strategy: PipelineStrategy,
 }
 
 enum BatchEval {
@@ -107,6 +112,21 @@ impl Pipeline {
     }
 
     pub fn new<P: AsRef<Path>>(dir: P) -> Result<Self, Box<dyn std::error::Error>> {
+        Self::new_with_max_level(dir, SecurityLevel::L3)
+    }
+
+    pub fn new_with_max_level<P: AsRef<Path>>(
+        dir: P,
+        max_level: SecurityLevel,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        Self::new_with_strategy(dir, max_level, PipelineStrategy::generic_text_local_multi())
+    }
+
+    pub(crate) fn new_with_strategy<P: AsRef<Path>>(
+        dir: P,
+        max_level: SecurityLevel,
+        strategy: PipelineStrategy,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         let dir = dir.as_ref();
 
         // 1. Load L1 rules
@@ -114,6 +134,19 @@ impl Pipeline {
         let r_reader = BufReader::new(r_file);
         let raw_rules: Vec<RawRule> = serde_json::from_reader(r_reader)?;
         let l1 = HeuristicsEngine::new(raw_rules);
+
+        if max_level == SecurityLevel::L1 {
+            return Ok(Pipeline {
+                l1,
+                l2: None,
+                l3: None,
+                thresholds: HashMap::new(),
+                global_k: 0.0,
+                cache_namespace: cache_namespace(dir),
+                decision_cache: DecisionCache::default(),
+                strategy,
+            });
+        }
 
         // 2. Load L2 model config
         let m_file = File::open(dir.join("l2_config.json"))?;
@@ -129,7 +162,7 @@ impl Pipeline {
 
         Ok(Pipeline {
             l1,
-            l2,
+            l2: Some(l2),
             l3: LazyOnnxTextClassifier::from_dir(
                 dir,
                 l3_class_names,
@@ -140,6 +173,9 @@ impl Pipeline {
             .map(Mutex::new),
             thresholds: t_config.thresholds,
             global_k: t_config.global_k,
+            cache_namespace: cache_namespace(dir),
+            decision_cache: DecisionCache::default(),
+            strategy,
         })
     }
 
@@ -187,6 +223,13 @@ impl Pipeline {
             return None;
         }
 
+        if let Some(cached) = self
+            .decision_cache
+            .get(&self.cache_namespace, text, execution)
+        {
+            return Some(cached);
+        }
+
         let mut layers = Vec::new();
 
         let mut l1_safe = false;
@@ -203,14 +246,16 @@ impl Pipeline {
                     HashMap::new(),
                     HashMap::new(),
                 ));
-                return Some((
+                return self.cache_and_return(
+                    text,
+                    execution,
                     EvaluationResult {
                         class_name,
                         confidence: conf,
                         level: "L1".to_string(),
                     },
                     layers,
-                ));
+                );
             }
             layers.push(layer_result(
                 "L1",
@@ -232,17 +277,39 @@ impl Pipeline {
                 level: SecurityLevel::L1.as_str().to_string(),
             };
             mark_last_layer_matched(&mut layers, &result);
-            return Some((result, layers));
+            return self.cache_and_return(text, execution, result, layers);
         }
 
-        if l1_safe && l2_enabled && execution.long_text_policy().should_skip_full_l2(text) {
-            return self.evaluate_long_text_after_l1(text, execution, layers, "safe");
+        if l1_safe
+            && l2_enabled
+            && self
+                .strategy
+                .should_skip_full_l2(text, execution.long_text_policy())
+        {
+            return self
+                .evaluate_long_text_after_l1(text, execution, layers, "safe")
+                .and_then(|(result, layers)| {
+                    self.cache_and_return(text, execution, result, layers)
+                });
         }
 
         let mut l2_candidate = None;
         if l2_enabled {
             let l2_started = Instant::now();
-            let (class_name, confidence) = self.l2.predict(text);
+            let Some(l2) = &self.l2 else {
+                return if l1_safe {
+                    let result = EvaluationResult {
+                        class_name: "safe".to_string(),
+                        confidence: 1.0,
+                        level: SecurityLevel::L1.as_str().to_string(),
+                    };
+                    mark_last_layer_matched(&mut layers, &result);
+                    self.cache_and_return(text, execution, result, layers)
+                } else {
+                    None
+                };
+            };
+            let (class_name, confidence) = l2.predict(text);
             let threshold = self
                 .thresholds
                 .get(&class_name)
@@ -277,19 +344,38 @@ impl Pipeline {
             ));
 
             if l2_matched {
-                return Some((
+                return self.cache_and_return(
+                    text,
+                    execution,
                     EvaluationResult {
                         class_name,
                         confidence,
                         level: "L2".to_string(),
                     },
                     layers,
-                ));
+                );
             }
             l2_candidate = Some((class_name, confidence));
         }
 
         let mut fallback_due_to_error = false;
+        if l3_enabled && !self.strategy.l3_allowed_for_text(text) {
+            if let Some((class_name, confidence)) = l2_candidate {
+                let result = EvaluationResult {
+                    class_name,
+                    confidence,
+                    level: "L2".to_string(),
+                };
+                layers.push(l3_skipped_size_layer(
+                    &result,
+                    self.strategy.l3_max_bytes,
+                    text.len(),
+                ));
+                mark_last_level_layer_matched(&mut layers, &result);
+                return self.cache_and_return(text, execution, result, layers);
+            }
+        }
+
         if l3_enabled && execution.defer_l3() && self.l3.is_some() {
             if let Some((class_name, confidence)) = l2_candidate {
                 let result = EvaluationResult {
@@ -298,7 +384,7 @@ impl Pipeline {
                     level: "L2".to_string(),
                 };
                 layers.push(l3_pending_layer(&result, execution));
-                return Some((result, layers));
+                return self.cache_and_return(text, execution, result, layers);
             }
         }
         if l3_enabled {
@@ -328,7 +414,7 @@ impl Pipeline {
                                 HashMap::new(),
                                 details,
                             ));
-                            return Some((result, layers));
+                            return self.cache_and_return(text, execution, result, layers);
                         }
                         Err(err) => {
                             let mut details = l3_metadata(
@@ -373,7 +459,7 @@ impl Pipeline {
                 level: "L2".to_string(),
             };
             mark_last_level_layer_matched(&mut layers, &result);
-            return Some((result, layers));
+            return self.cache_and_return(text, execution, result, layers);
         }
 
         if l1_safe {
@@ -383,10 +469,22 @@ impl Pipeline {
                 level: SecurityLevel::L1.as_str().to_string(),
             };
             mark_last_layer_matched(&mut layers, &result);
-            return Some((result, layers));
+            return self.cache_and_return(text, execution, result, layers);
         }
 
         None
+    }
+
+    fn cache_and_return(
+        &self,
+        text: &str,
+        execution: &ScanExecution,
+        result: EvaluationResult,
+        layers: Vec<LayerResult>,
+    ) -> Option<(EvaluationResult, Vec<LayerResult>)> {
+        self.decision_cache
+            .insert(&self.cache_namespace, text, execution, &result, &layers);
+        Some((result, layers))
     }
 
     fn evaluate_long_text_after_l1(
@@ -396,7 +494,7 @@ impl Pipeline {
         full_text_layers: Vec<LayerResult>,
         safe_class: &str,
     ) -> Option<(EvaluationResult, Vec<LayerResult>)> {
-        let policy = execution.long_text_policy();
+        let policy = self.strategy.long_text_policy(execution.long_text_policy());
         let chunking = policy.chunking().ok()?;
         let chunks = chunk_text_bytes(text, chunking);
         let mut chunk_execution = execution.clone();
@@ -420,6 +518,7 @@ impl Pipeline {
             chunks.len(),
             safe_class,
             policy.verify_non_benign_l2,
+            self.strategy.aggregation,
         )?;
         if execution.allows_level(SecurityLevel::L3)
             && execution.defer_l3()
@@ -441,7 +540,7 @@ impl Pipeline {
         execution: &ScanExecution,
         safe_class: &str,
     ) {
-        let policy = execution.long_text_policy();
+        let policy = self.strategy.long_text_policy(execution.long_text_policy());
         let selection = candidate_selection(chunk_outputs, |result, layers| {
             chunk_output_needs_l3(result, layers, safe_class, policy.verify_non_benign_l2)
         });
@@ -769,7 +868,12 @@ impl Pipeline {
             return Some(BatchEval::Ready(result, layers));
         }
 
-        if l1_safe && l2_enabled && execution.long_text_policy().should_skip_full_l2(text) {
+        if l1_safe
+            && l2_enabled
+            && self
+                .strategy
+                .should_skip_full_l2(text, execution.long_text_policy())
+        {
             return self
                 .evaluate_long_text_after_l1(text, execution, layers, "safe")
                 .map(|(result, layers)| BatchEval::Ready(result, layers));
@@ -778,7 +882,20 @@ impl Pipeline {
         let mut fallback = None;
         if l2_enabled {
             let l2_started = Instant::now();
-            let (class_name, confidence) = self.l2.predict(text);
+            let Some(l2) = &self.l2 else {
+                return if l1_safe {
+                    let result = EvaluationResult {
+                        class_name: "safe".to_string(),
+                        confidence: 1.0,
+                        level: SecurityLevel::L1.as_str().to_string(),
+                    };
+                    mark_last_layer_matched(&mut layers, &result);
+                    Some(BatchEval::Ready(result, layers))
+                } else {
+                    None
+                };
+            };
+            let (class_name, confidence) = l2.predict(text);
             let threshold = self
                 .thresholds
                 .get(&class_name)
@@ -828,6 +945,19 @@ impl Pipeline {
             });
         }
 
+        if l3_enabled && !self.strategy.l3_allowed_for_text(text) {
+            return fallback.map(|result| {
+                let mut layers = layers;
+                layers.push(l3_skipped_size_layer(
+                    &result,
+                    self.strategy.l3_max_bytes,
+                    text.len(),
+                ));
+                mark_last_level_layer_matched(&mut layers, &result);
+                BatchEval::Ready(result, layers)
+            });
+        }
+
         if l3_enabled {
             return Some(BatchEval::NeedsL3 {
                 text: text.to_string(),
@@ -842,6 +972,10 @@ impl Pipeline {
             BatchEval::Ready(result, layers)
         })
     }
+}
+
+fn cache_namespace(dir: &Path) -> String {
+    format!("generic:{}", dir.to_string_lossy())
 }
 
 fn chunk_output_needs_l3(
@@ -888,6 +1022,30 @@ fn layer_result(
         thresholds,
         details,
     }
+}
+
+fn l3_skipped_size_layer(
+    result: &EvaluationResult,
+    max_bytes: Option<usize>,
+    text_bytes: usize,
+) -> LayerResult {
+    layer_result(
+        "L3",
+        "onnx_skipped",
+        &result.class_name,
+        result.confidence,
+        false,
+        0.0,
+        HashMap::new(),
+        HashMap::from([
+            (
+                "reason".to_string(),
+                serde_json::json!("text_too_large_for_l3"),
+            ),
+            ("text_bytes".to_string(), serde_json::json!(text_bytes)),
+            ("max_bytes".to_string(), serde_json::json!(max_bytes)),
+        ]),
+    )
 }
 
 fn mark_last_layer_matched(layers: &mut [LayerResult], result: &EvaluationResult) {

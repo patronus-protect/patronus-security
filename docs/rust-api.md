@@ -43,9 +43,9 @@ pub struct PatronusSecurity {
     pub injection_pipeline: Option<PromptInjectionPipeline>,
     pub tool_classifier_prompts: Option<Pipeline>,
     pub tool_classifier_executions: Option<Pipeline>,
+    pub tool_classifier_descriptions: Option<Pipeline>,
     pub user_intent_prompts: Option<Pipeline>,
     pub sensitive_documents_prompts: Option<Pipeline>,
-    pub tool_description_prompts: Option<Pipeline>,
     pub pii_model_pipeline: Option<Pipeline>,
 
     // Instantiated native rule-based pipelines
@@ -595,8 +595,6 @@ pub enum SecurityCategory {
     UserIntent,
     /// Sensitive document classification.
     SensitiveDocuments,
-    /// Tool description risk classification.
-    ToolDescription,
 }
 ```
 

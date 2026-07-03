@@ -46,14 +46,18 @@ def _execution_gates_json(execution_gates):
     normalized = {"levels": {}, "models": {}}
     levels = execution_gates.get("levels", {})
     models = execution_gates.get("models", execution_gates.get("model_areas", {}))
+    tool_classifier = execution_gates.get("tool_classifier", {})
     l3_policy = execution_gates.get("l3")
 
     if not isinstance(levels, dict):
         raise ValueError("execution_gates['levels'] must be a dict")
     if not isinstance(models, dict):
         raise ValueError("execution_gates['models'] must be a dict")
+    if tool_classifier and not isinstance(tool_classifier, dict):
+        raise ValueError("execution_gates['tool_classifier'] must be a dict")
     levels = dict(levels)
     models = dict(models)
+    tool_classifier = dict(tool_classifier)
 
     for key, value in execution_gates.items():
         lowered = str(key).lower()
@@ -68,6 +72,28 @@ def _execution_gates_json(execution_gates):
         if not isinstance(value, bool):
             raise ValueError(f"execution_gates model {key!r} must be a bool")
         normalized["models"][str(key)] = value
+    for key, value in tool_classifier.items():
+        if not isinstance(value, bool):
+            raise ValueError(f"execution_gates tool_classifier {key!r} must be a bool")
+        lowered = str(key).lower()
+        valid_areas = {
+            "description",
+            "descriptions",
+            "execution",
+            "executions",
+            "prompt",
+            "prompts",
+        }
+        if lowered not in valid_areas:
+            raise ValueError(
+                "execution_gates['tool_classifier'] keys must be description, execution, or prompt"
+            )
+        canonical = {
+            "descriptions": "description",
+            "executions": "execution",
+            "prompts": "prompt",
+        }.get(lowered, lowered)
+        normalized["models"][f"tool_classifier.{canonical}"] = value
     if l3_policy is not None and not isinstance(l3_policy, bool):
         if not isinstance(l3_policy, dict):
             raise ValueError("execution_gates['l3'] must be a dict or bool")
@@ -95,7 +121,10 @@ class PatronusSecurity:
             `{"levels": {"l1": True, "l2": False, "l3": False},
             "models": {"native:mcp_runtime_risk": False}}` to disable
             levels or model/native scanner areas for subsequent scan calls.
-            Unspecified gates default to enabled.
+            For `tool_classifier`, use
+            `{"tool_classifier": {"description": False, "execution": True,
+            "prompt": False}}` to gate its subpipelines. Unspecified gates
+            default to enabled.
         onnx_batch_mode: `lazy_batches` keeps per-text ONNX execution;
             `tensor_batch` executes L3 fallbacks as one ONNX tensor batch
             when using batch APIs.
@@ -182,7 +211,7 @@ class PatronusSecurity:
         self,
         enabled: bool = True,
         no_full_l2_byte_limit: int = 1024,
-        chunk_size_bytes: int = 512,
+        chunk_size_bytes: int = 256,
         overlap_bytes: int = 96,
         verify_non_benign_l2: bool = True,
     ):

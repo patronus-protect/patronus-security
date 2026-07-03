@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use tokenizers::Tokenizer;
 
-const DEFAULT_MAX_LEN: usize = 512;
+const DEFAULT_MAX_LEN: usize = 256;
 const DEFAULT_L3_TTL_SECS: u64 = 300;
 
 pub fn warmup_runtime() -> bool {

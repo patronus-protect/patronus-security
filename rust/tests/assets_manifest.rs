@@ -28,7 +28,6 @@ fn all_model_categories_except_pii_have_l3_required_assets() {
         SecurityCategory::ToolClassifier,
         SecurityCategory::UserIntent,
         SecurityCategory::SensitiveDocuments,
-        SecurityCategory::ToolDescription,
     ] {
         let assets = category_assets(category, SecurityLevel::L3);
         assert!(
@@ -51,7 +50,6 @@ fn asset_manifest_has_unique_destination_paths_per_category() {
         SecurityCategory::ToolClassifier,
         SecurityCategory::UserIntent,
         SecurityCategory::SensitiveDocuments,
-        SecurityCategory::ToolDescription,
         SecurityCategory::Pii,
     ] {
         let mut seen = HashSet::new();

@@ -41,10 +41,9 @@ The sizes below show required cold-cache downloads for the selected maximum leve
 | `injection` | 0 B | 129.4 MiB | 430.9 MiB | patronus-studio/wolf-defender-prompt-injection-small |
 | `dlp` | 0 B | 0 B | 0 B | none |
 | `pii` | unknown | unknown | unknown | patronus-studio/pii-model |
-| `tool_classifier` | unknown | unknown | unknown | patronus-studio/tool-executions-model, patronus-studio/tool-prompts-model |
+| `tool_classifier` | unknown | unknown | unknown | patronus-studio/tool-description-model, patronus-studio/tool-executions-model, patronus-studio/tool-prompts-model |
 | `user_intent` | unknown | unknown | unknown | patronus-studio/user-intent-model |
 | `sensitive_documents` | 16.8 KiB | 127.7 MiB | 429.2 MiB | patronus-studio/orca-sonar-document-classifier |
-| `tool_description` | unknown | unknown | unknown | patronus-studio/tool-description-model |
 
 The following repositories were not accessible when the snapshot was generated, so their sizes are listed as `unknown`:
 
@@ -93,6 +92,15 @@ The following repositories were not accessible when the snapshot was generated, 
 | `tool_classifier` | `L3` | yes | `patronus-studio/tool-executions-model/onnx/model_fp16.onnx` | `tool_classifier/executions/onnx/model_fp16.onnx` | unknown |
 | `tool_classifier` | `L3` | optional | `patronus-studio/tool-executions-model/onnx/model.onnx` | `tool_classifier/executions/onnx/model.onnx` | unknown |
 | `tool_classifier` | `L3` | optional | `patronus-studio/tool-executions-model/onnx/model.onnx.data` | `tool_classifier/executions/onnx/model.onnx.data` | unknown |
+| `tool_classifier` | `L1` | yes | `patronus-studio/tool-description-model/l1/l1_rules.json` | `tool_classifier/descriptions/l1_rules.json` | unknown |
+| `tool_classifier` | `L2` | yes | `patronus-studio/tool-description-model/l2/l2_config.json` | `tool_classifier/descriptions/l2_config.json` | unknown |
+| `tool_classifier` | `L2` | yes | `patronus-studio/tool-description-model/cascade/cascade_config.json` | `tool_classifier/descriptions/cascade_config.json` | unknown |
+| `tool_classifier` | `L3` | yes | `patronus-studio/tool-description-model/tokenizer.json` | `tool_classifier/descriptions/tokenizer.json` | unknown |
+| `tool_classifier` | `L3` | optional | `patronus-studio/tool-description-model/tokenizer_config.json` | `tool_classifier/descriptions/tokenizer_config.json` | unknown |
+| `tool_classifier` | `L3` | optional | `patronus-studio/tool-description-model/special_tokens_map.json` | `tool_classifier/descriptions/special_tokens_map.json` | unknown |
+| `tool_classifier` | `L3` | yes | `patronus-studio/tool-description-model/onnx/model_fp16.onnx` | `tool_classifier/descriptions/onnx/model_fp16.onnx` | unknown |
+| `tool_classifier` | `L3` | optional | `patronus-studio/tool-description-model/onnx/model.onnx` | `tool_classifier/descriptions/onnx/model.onnx` | unknown |
+| `tool_classifier` | `L3` | optional | `patronus-studio/tool-description-model/onnx/model.onnx.data` | `tool_classifier/descriptions/onnx/model.onnx.data` | unknown |
 | `user_intent` | `L1` | yes | `patronus-studio/user-intent-model/l1/l1_rules.json` | `user_intent/prompts/l1_rules.json` | unknown |
 | `user_intent` | `L2` | yes | `patronus-studio/user-intent-model/l2/l2_config.json` | `user_intent/prompts/l2_config.json` | unknown |
 | `user_intent` | `L2` | yes | `patronus-studio/user-intent-model/cascade/cascade_config.json` | `user_intent/prompts/cascade_config.json` | unknown |
@@ -111,15 +119,6 @@ The following repositories were not accessible when the snapshot was generated, 
 | `sensitive_documents` | `L3` | yes | `patronus-studio/orca-sonar-document-classifier/onnx/onnx_fp16/model_fp16.onnx` | `sensitive_documents/prompts/onnx/model_fp16.onnx` | 268.7 MiB |
 | `sensitive_documents` | `L3` | optional | `patronus-studio/orca-sonar-document-classifier/onnx/model.onnx` | `sensitive_documents/prompts/onnx/model.onnx` | unknown |
 | `sensitive_documents` | `L3` | optional | `patronus-studio/orca-sonar-document-classifier/onnx/model.onnx.data` | `sensitive_documents/prompts/onnx/model.onnx.data` | unknown |
-| `tool_description` | `L1` | yes | `patronus-studio/tool-description-model/l1/l1_rules.json` | `tool_description/prompts/l1_rules.json` | unknown |
-| `tool_description` | `L2` | yes | `patronus-studio/tool-description-model/l2/l2_config.json` | `tool_description/prompts/l2_config.json` | unknown |
-| `tool_description` | `L2` | yes | `patronus-studio/tool-description-model/cascade/cascade_config.json` | `tool_description/prompts/cascade_config.json` | unknown |
-| `tool_description` | `L3` | yes | `patronus-studio/tool-description-model/tokenizer.json` | `tool_description/prompts/tokenizer.json` | unknown |
-| `tool_description` | `L3` | optional | `patronus-studio/tool-description-model/tokenizer_config.json` | `tool_description/prompts/tokenizer_config.json` | unknown |
-| `tool_description` | `L3` | optional | `patronus-studio/tool-description-model/special_tokens_map.json` | `tool_description/prompts/special_tokens_map.json` | unknown |
-| `tool_description` | `L3` | yes | `patronus-studio/tool-description-model/onnx/model_fp16.onnx` | `tool_description/prompts/onnx/model_fp16.onnx` | unknown |
-| `tool_description` | `L3` | optional | `patronus-studio/tool-description-model/onnx/model.onnx` | `tool_description/prompts/onnx/model.onnx` | unknown |
-| `tool_description` | `L3` | optional | `patronus-studio/tool-description-model/onnx/model.onnx.data` | `tool_description/prompts/onnx/model.onnx.data` | unknown |
 | `pii` | `L1` | yes | `patronus-studio/pii-model/l1/l1_rules.json` | `pii/prompts/l1_rules.json` | unknown |
 | `pii` | `L2` | yes | `patronus-studio/pii-model/l2/l2_config.json` | `pii/prompts/l2_config.json` | unknown |
 | `pii` | `L2` | yes | `patronus-studio/pii-model/cascade/cascade_config.json` | `pii/prompts/cascade_config.json` | unknown |

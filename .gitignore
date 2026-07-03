@@ -27,3 +27,5 @@ benchmarks/**
 benchmarks/legacy_*
 benchmarks/__pycache__/
 !benchmarks/standalone_*
+!benchmarks/patronus_val_*
+benchmarks/patronus_val_*.jsonl

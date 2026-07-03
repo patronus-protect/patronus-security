@@ -202,7 +202,7 @@ impl Default for LongTextPolicy {
         Self {
             enabled: true,
             no_full_l2_byte_limit: 1024,
-            chunk_size_bytes: 512,
+            chunk_size_bytes: 256,
             overlap_bytes: 96,
             verify_non_benign_l2: true,
         }
@@ -292,8 +292,7 @@ impl Default for L3SchedulerPolicy {
         ttl_ms.insert("tool_classifier".to_string(), 5_000);
         ttl_ms.insert("tool-prompts-model".to_string(), 5_000);
         ttl_ms.insert("tool-executions-model".to_string(), 5_000);
-        ttl_ms.insert("tool_description".to_string(), 5_000);
-        ttl_ms.insert("tool-description-model".to_string(), 5_000);
+        ttl_ms.insert("tool-classifier-descriptions-model".to_string(), 5_000);
         Self {
             enabled: true,
             priority: vec![
@@ -308,8 +307,7 @@ impl Default for L3SchedulerPolicy {
                 "tool_classifier".to_string(),
                 "tool-prompts-model".to_string(),
                 "tool-executions-model".to_string(),
-                "tool_description".to_string(),
-                "tool-description-model".to_string(),
+                "tool-classifier-descriptions-model".to_string(),
             ],
             ttl_ms,
             degraded_factor: 0.75,
@@ -530,8 +528,6 @@ pub enum SecurityCategory {
     UserIntent,
     /// Sensitive document classification.
     SensitiveDocuments,
-    /// Tool description risk classification.
-    ToolDescription,
 }
 
 impl SecurityCategory {
@@ -544,7 +540,6 @@ impl SecurityCategory {
             SecurityCategory::ToolClassifier => "tool_classifier",
             SecurityCategory::UserIntent => "user_intent",
             SecurityCategory::SensitiveDocuments => "sensitive_documents",
-            SecurityCategory::ToolDescription => "tool_description",
         }
     }
 }
@@ -560,7 +555,6 @@ impl std::str::FromStr for SecurityCategory {
             "tool_classifier" => Ok(SecurityCategory::ToolClassifier),
             "user_intent" => Ok(SecurityCategory::UserIntent),
             "sensitive_documents" => Ok(SecurityCategory::SensitiveDocuments),
-            "tool_description" => Ok(SecurityCategory::ToolDescription),
             _ => Err(format!("Unknown security category: {}", s)),
         }
     }

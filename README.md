@@ -140,7 +140,6 @@ Supported categories:
 - `tool_classifier`
 - `user_intent`
 - `sensitive_documents`
-- `tool_description`
 
 See `docs/python-api.md` for the generated Python API reference.
 

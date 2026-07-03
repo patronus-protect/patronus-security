@@ -6,10 +6,12 @@ use std::path::Path;
 use std::sync::Mutex;
 use std::time::Instant;
 
+use super::decision_cache::DecisionCache;
 use super::long_text::{
     aggregate_chunk_outputs, candidate_selection, chunk_text_bytes, infer_l3_candidate_texts,
     l3_metadata,
 };
+use super::PipelineStrategy;
 use super::{degraded_fallback_confidence, l3_pending_layer};
 use crate::ml::l1_heuristics::NativeHeuristicsEngine;
 use crate::ml::l2::{
@@ -37,6 +39,8 @@ pub struct PromptInjectionPipeline {
     t_consensus_attack: f64,
     t_consensus_benign: f64,
     t_bert: f64,
+    decision_cache: DecisionCache,
+    strategy: PipelineStrategy,
 }
 
 enum BatchEval {
@@ -94,6 +98,7 @@ impl PromptInjectionPipeline {
             .get("t_consensus_benign")
             .unwrap_or(&0.8);
         let t_bert = *t_config.thresholds.get("t_bert").unwrap_or(&0.9);
+        let strategy = PipelineStrategy::prompt_injection();
 
         Ok(PromptInjectionPipeline {
             l1,
@@ -109,7 +114,7 @@ impl PromptInjectionPipeline {
                     "l3/onnx/model.onnx",
                 ],
                 "l3/tokenizer.json",
-                512,
+                256,
             )?
             .map(Mutex::new),
             t_low_lgbm,
@@ -121,6 +126,8 @@ impl PromptInjectionPipeline {
             t_consensus_attack,
             t_consensus_benign,
             t_bert,
+            decision_cache: DecisionCache::default(),
+            strategy,
         })
     }
 
@@ -252,6 +259,13 @@ impl PromptInjectionPipeline {
             return None;
         }
 
+        if let Some(cached) =
+            self.decision_cache
+                .get("prompt_injection:wolf-defender-small", text, execution)
+        {
+            return Some(cached);
+        }
+
         let mut layers = Vec::new();
 
         let mut l1_benign = false;
@@ -268,14 +282,16 @@ impl PromptInjectionPipeline {
                     HashMap::new(),
                     HashMap::new(),
                 ));
-                return Some((
+                return self.cache_and_return(
+                    text,
+                    execution,
                     EvaluationResult {
                         class_name: "attack".to_string(),
                         confidence: 1.0,
                         level: "L1".to_string(),
                     },
                     layers,
-                ));
+                );
             }
             layers.push(layer_result(
                 "L1",
@@ -297,11 +313,20 @@ impl PromptInjectionPipeline {
                 level: SecurityLevel::L1.as_str().to_string(),
             };
             mark_last_level_layer_matched(&mut layers, &result);
-            return Some((result, layers));
+            return self.cache_and_return(text, execution, result, layers);
         }
 
-        if l1_benign && l2_enabled && execution.long_text_policy().should_skip_full_l2(text) {
-            return self.evaluate_long_text_after_l1(text, execution, layers, "benign");
+        if l1_benign
+            && l2_enabled
+            && self
+                .strategy
+                .should_skip_full_l2(text, execution.long_text_policy())
+        {
+            return self
+                .evaluate_long_text_after_l1(text, execution, layers, "benign")
+                .and_then(|(result, layers)| {
+                    self.cache_and_return(text, execution, result, layers)
+                });
         }
 
         let mut l2_fallback_confidence = None;
@@ -365,7 +390,7 @@ impl PromptInjectionPipeline {
                     None,
                     Some(&scores.timings),
                 ));
-                return Some((result, layers));
+                return self.cache_and_return(text, execution, result, layers);
             } else if veto_benign {
                 decision = "veto_benign";
                 let result = EvaluationResult {
@@ -385,7 +410,7 @@ impl PromptInjectionPipeline {
                     None,
                     Some(&scores.timings),
                 ));
-                return Some((result, layers));
+                return self.cache_and_return(text, execution, result, layers);
             }
 
             let vote_lgbm = if p_lgbm >= 0.5 { 1 } else { 0 };
@@ -427,7 +452,7 @@ impl PromptInjectionPipeline {
                         Some((vote_lgbm, vote_lr, vote_ft)),
                         Some(&scores.timings),
                     ));
-                    return Some((result, layers));
+                    return self.cache_and_return(text, execution, result, layers);
                 }
             } else {
                 if vote_lgbm == 0 {
@@ -460,7 +485,7 @@ impl PromptInjectionPipeline {
                         Some((vote_lgbm, vote_lr, vote_ft)),
                         Some(&scores.timings),
                     ));
-                    return Some((result, layers));
+                    return self.cache_and_return(text, execution, result, layers);
                 }
             }
 
@@ -478,14 +503,16 @@ impl PromptInjectionPipeline {
                 Some(&scores.timings),
             ));
             if l2_matched {
-                return Some((
+                return self.cache_and_return(
+                    text,
+                    execution,
                     EvaluationResult {
                         class_name: "benign".to_string(),
                         confidence: p_lgbm,
                         level: "L2".to_string(),
                     },
                     layers,
-                ));
+                );
             }
             l2_fallback_confidence = Some(p_lgbm);
         }
@@ -499,7 +526,7 @@ impl PromptInjectionPipeline {
                     level: "L2".to_string(),
                 };
                 layers.push(l3_pending_layer(&result, execution));
-                return Some((result, layers));
+                return self.cache_and_return(text, execution, result, layers);
             }
         }
         if l3_enabled {
@@ -529,7 +556,7 @@ impl PromptInjectionPipeline {
                                 HashMap::from([("t_bert".to_string(), self.t_bert)]),
                                 details,
                             ));
-                            return Some((result, layers));
+                            return self.cache_and_return(text, execution, result, layers);
                         }
                         Err(err) => {
                             let mut details = l3_metadata(
@@ -573,7 +600,7 @@ impl PromptInjectionPipeline {
                 level: "L2".to_string(),
             };
             mark_last_l2_layer_matched(&mut layers, &result);
-            return Some((result, layers));
+            return self.cache_and_return(text, execution, result, layers);
         }
 
         if l1_benign {
@@ -583,10 +610,27 @@ impl PromptInjectionPipeline {
                 level: SecurityLevel::L1.as_str().to_string(),
             };
             mark_last_layer_matched(&mut layers, &result);
-            return Some((result, layers));
+            return self.cache_and_return(text, execution, result, layers);
         }
 
         None
+    }
+
+    fn cache_and_return(
+        &self,
+        text: &str,
+        execution: &ScanExecution,
+        result: EvaluationResult,
+        layers: Vec<LayerResult>,
+    ) -> Option<(EvaluationResult, Vec<LayerResult>)> {
+        self.decision_cache.insert(
+            "prompt_injection:wolf-defender-small",
+            text,
+            execution,
+            &result,
+            &layers,
+        );
+        Some((result, layers))
     }
 
     fn evaluate_long_text_after_l1(
@@ -596,7 +640,7 @@ impl PromptInjectionPipeline {
         full_text_layers: Vec<LayerResult>,
         safe_class: &str,
     ) -> Option<(EvaluationResult, Vec<LayerResult>)> {
-        let policy = execution.long_text_policy();
+        let policy = self.strategy.long_text_policy(execution.long_text_policy());
         let chunking = policy.chunking().ok()?;
         let chunks = chunk_text_bytes(text, chunking);
         let mut chunk_execution = execution.clone();
@@ -620,6 +664,7 @@ impl PromptInjectionPipeline {
             chunks.len(),
             safe_class,
             policy.verify_non_benign_l2,
+            self.strategy.aggregation,
         )?;
         if execution.allows_level(SecurityLevel::L3)
             && execution.defer_l3()
@@ -641,7 +686,7 @@ impl PromptInjectionPipeline {
         execution: &ScanExecution,
         safe_class: &str,
     ) {
-        let policy = execution.long_text_policy();
+        let policy = self.strategy.long_text_policy(execution.long_text_policy());
         let selection = candidate_selection(chunk_outputs, |result, layers| {
             chunk_output_needs_l3(result, layers, safe_class, policy.verify_non_benign_l2)
         });
@@ -985,7 +1030,12 @@ impl PromptInjectionPipeline {
             return Some(BatchEval::Ready(result, layers));
         }
 
-        if l1_benign && l2_enabled && execution.long_text_policy().should_skip_full_l2(text) {
+        if l1_benign
+            && l2_enabled
+            && self
+                .strategy
+                .should_skip_full_l2(text, execution.long_text_policy())
+        {
             return self
                 .evaluate_long_text_after_l1(text, execution, layers, "benign")
                 .map(|(result, layers)| BatchEval::Ready(result, layers));

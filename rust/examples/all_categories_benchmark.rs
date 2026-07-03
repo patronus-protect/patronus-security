@@ -40,7 +40,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             SecurityCategory::ToolClassifier,
             SecurityCategory::UserIntent,
             SecurityCategory::SensitiveDocuments,
-            SecurityCategory::ToolDescription,
         ],
         SecurityLevel::L3,
         Some(asset_dir.clone()),
@@ -158,8 +157,7 @@ fn json_report(stats: &[CaseStats], asset_dir: &PathBuf, warmup_seconds: f64) ->
             "pii",
             "tool_classifier",
             "user_intent",
-            "sensitive_documents",
-            "tool_description"
+            "sensitive_documents"
         ],
         "asset_dir": asset_dir,
         "download_files": allow_downloads(),
@@ -174,7 +172,9 @@ fn markdown_report(stats: &[CaseStats], asset_dir: &PathBuf, warmup_seconds: f64
     let mut out = String::new();
     out.push_str("# Standalone All-Categories Benchmark\n\n");
     out.push_str("- Library: `patronus-security` Rust core\n");
-    out.push_str("- Categories: injection, dlp, pii, tool_classifier, user_intent, sensitive_documents, tool_description\n");
+    out.push_str(
+        "- Categories: injection, dlp, pii, tool_classifier, user_intent, sensitive_documents\n",
+    );
     out.push_str("- Mode: all categories scanned together via `scan_all`\n");
     out.push_str("- Max level: `L3`\n");
     out.push_str(&format!("- Asset dir: `{}`\n", asset_dir.display()));

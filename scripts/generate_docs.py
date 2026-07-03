@@ -27,7 +27,6 @@ CATEGORY_NAMES = {
     "ToolClassifier": "tool_classifier",
     "UserIntent": "user_intent",
     "SensitiveDocuments": "sensitive_documents",
-    "ToolDescription": "tool_description",
 }
 
 CATEGORY_ORDER = [
@@ -37,7 +36,6 @@ CATEGORY_ORDER = [
     "ToolClassifier",
     "UserIntent",
     "SensitiveDocuments",
-    "ToolDescription",
 ]
 
 

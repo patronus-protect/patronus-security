@@ -243,6 +243,32 @@ class PublicApiTests(unittest.TestCase):
         self.assertTrue(results)
         assert_result_schema(self, results[0])
 
+    def test_tool_classifier_subpipeline_gates_are_accepted(self):
+        scanner = PatronusSecurity(
+            categories=["tool_classifier"],
+            max_level="l1",
+            download_files=False,
+            execution_gates={
+                "tool_classifier": {
+                    "description": False,
+                    "execution": True,
+                    "prompt": False,
+                }
+            },
+        )
+        scanner.set_execution_gates(
+            {
+                "tool_classifier": {
+                    "descriptions": False,
+                    "executions": True,
+                    "prompts": False,
+                }
+            }
+        )
+
+        with self.assertRaises(ValueError):
+            scanner.set_execution_gates({"tool_classifier": {"unknown": False}})
+
     def test_enqueue_and_consume_results_yields_complete_schema_results(self):
         scanner = PatronusSecurity(categories=["dlp"], max_level="l2", download_files=False)
         scanner.warmup()

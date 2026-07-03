@@ -138,7 +138,6 @@ fn warmup_without_downloads_does_not_require_model_assets() {
             SecurityCategory::ToolClassifier,
             SecurityCategory::UserIntent,
             SecurityCategory::SensitiveDocuments,
-            SecurityCategory::ToolDescription,
             SecurityCategory::Pii,
         ],
         SecurityLevel::L3,
@@ -150,10 +149,195 @@ fn warmup_without_downloads_does_not_require_model_assets() {
 
     assert!(scanner.injection_pipeline.is_none());
     assert!(scanner.tool_classifier_prompts.is_none());
+    assert!(scanner.tool_classifier_executions.is_none());
+    assert!(scanner.tool_classifier_descriptions.is_none());
     assert!(scanner.user_intent_prompts.is_none());
     assert!(scanner.sensitive_documents_prompts.is_none());
-    assert!(scanner.tool_description_prompts.is_none());
     assert!(scanner.pii_model_pipeline.is_none());
+
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn tool_classifier_l1_loads_rules_and_classifies_raw_execution_json() {
+    let dir = temp_model_dir("tool_l1_json");
+    let tool_dir = dir.join("tool_classifier");
+    let prompts_dir = tool_dir.join("prompts");
+    let executions_dir = tool_dir.join("executions");
+    let descriptions_dir = tool_dir.join("descriptions");
+    std::fs::create_dir_all(&prompts_dir).unwrap();
+    std::fs::create_dir_all(&executions_dir).unwrap();
+    std::fs::create_dir_all(&descriptions_dir).unwrap();
+    std::fs::write(
+        prompts_dir.join("l1_rules.json"),
+        r#"[{"ngram":"tool_name exec_command","class":"tool_class.shell.execute","count":1}]"#,
+    )
+    .unwrap();
+    std::fs::write(
+        executions_dir.join("l1_rules.json"),
+        r#"[{"ngram":"arguments command","class":"tool_class.shell.execute","count":1}]"#,
+    )
+    .unwrap();
+    std::fs::write(
+        descriptions_dir.join("l1_rules.json"),
+        r#"[{"ngram":"run shell commands","class":"tool_class.shell.execute","count":1}]"#,
+    )
+    .unwrap();
+
+    let mut scanner = PatronusSecurity::with_max_level(
+        vec![SecurityCategory::ToolClassifier],
+        SecurityLevel::L1,
+        Some(dir.clone()),
+        false,
+    );
+
+    scanner.warmup().unwrap();
+
+    assert!(scanner.tool_classifier_prompts.is_some());
+    assert!(scanner.tool_classifier_executions.is_some());
+    assert!(scanner.tool_classifier_descriptions.is_some());
+
+    let results = scanner.scan_category(
+        SecurityCategory::ToolClassifier,
+        r#"{"arguments":{"command":"rg token rust/src"},"description":"run shell commands","call_id":"call_1","name":"exec_command"}"#,
+    );
+
+    assert_result_schema(&results, "tool_classifier");
+    assert!(has_result(
+        &results,
+        "tool-prompts-model",
+        "tool_class.shell.execute"
+    ));
+    assert!(has_result(
+        &results,
+        "tool-executions-model",
+        "tool_class.shell.execute"
+    ));
+    assert!(has_result(
+        &results,
+        "tool-classifier-descriptions-model",
+        "tool_class.shell.execute"
+    ));
+    let execution = results
+        .iter()
+        .find(|result| result.model == "tool-executions-model")
+        .unwrap();
+    assert_eq!(execution.level, "L1");
+
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn tool_classifier_subpipeline_gates_select_which_areas_run() {
+    let dir = temp_model_dir("tool_area_gates");
+    let tool_dir = dir.join("tool_classifier");
+    let prompts_dir = tool_dir.join("prompts");
+    let executions_dir = tool_dir.join("executions");
+    let descriptions_dir = tool_dir.join("descriptions");
+    std::fs::create_dir_all(&prompts_dir).unwrap();
+    std::fs::create_dir_all(&executions_dir).unwrap();
+    std::fs::create_dir_all(&descriptions_dir).unwrap();
+    std::fs::write(
+        prompts_dir.join("l1_rules.json"),
+        r#"[{"ngram":"prompt marker","class":"tool_class.file.list","count":1}]"#,
+    )
+    .unwrap();
+    std::fs::write(
+        executions_dir.join("l1_rules.json"),
+        r#"[{"ngram":"execution marker","class":"tool_class.shell.execute","count":1}]"#,
+    )
+    .unwrap();
+    std::fs::write(
+        descriptions_dir.join("l1_rules.json"),
+        r#"[{"ngram":"description marker","class":"tool_class.api.read","count":1}]"#,
+    )
+    .unwrap();
+
+    let mut scanner = PatronusSecurity::with_max_level(
+        vec![SecurityCategory::ToolClassifier],
+        SecurityLevel::L1,
+        Some(dir.clone()),
+        false,
+    );
+    scanner.warmup().unwrap();
+
+    let text = "prompt marker execution marker description marker";
+    let baseline = scanner.scan_category(SecurityCategory::ToolClassifier, text);
+    assert!(has_result(
+        &baseline,
+        "tool-prompts-model",
+        "tool_class.file.list"
+    ));
+    assert!(has_result(
+        &baseline,
+        "tool-executions-model",
+        "tool_class.shell.execute"
+    ));
+    assert!(has_result(
+        &baseline,
+        "tool-classifier-descriptions-model",
+        "tool_class.api.read"
+    ));
+
+    scanner.set_execution_gates(
+        ScanGateMatrix::all_enabled()
+            .with_model("tool_classifier.prompt", false)
+            .with_model("tool_classifier.description", false),
+    );
+    let gated = scanner.scan_category(SecurityCategory::ToolClassifier, text);
+
+    assert!(!gated
+        .iter()
+        .any(|result| result.model == "tool-prompts-model"));
+    assert!(has_result(
+        &gated,
+        "tool-executions-model",
+        "tool_class.shell.execute"
+    ));
+    assert!(!gated
+        .iter()
+        .any(|result| result.model == "tool-classifier-descriptions-model"));
+
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn model_pipeline_reuses_exact_decision_cache_hits() {
+    let dir = temp_model_dir("tool_l1_cache");
+    let tool_dir = dir.join("tool_classifier");
+    let prompts_dir = tool_dir.join("prompts");
+    let executions_dir = tool_dir.join("executions");
+    std::fs::create_dir_all(&prompts_dir).unwrap();
+    std::fs::create_dir_all(&executions_dir).unwrap();
+    std::fs::write(prompts_dir.join("l1_rules.json"), "[]").unwrap();
+    std::fs::write(
+        executions_dir.join("l1_rules.json"),
+        r#"[{"ngram":"arguments command","class":"tool_class.shell.execute","count":1}]"#,
+    )
+    .unwrap();
+
+    let mut scanner = PatronusSecurity::with_max_level(
+        vec![SecurityCategory::ToolClassifier],
+        SecurityLevel::L1,
+        Some(dir.clone()),
+        false,
+    );
+    scanner.warmup().unwrap();
+
+    let text =
+        r#"{"arguments":{"command":"rg token rust/src"},"call_id":"call_1","name":"exec_command"}"#;
+    let first = scanner.scan_category(SecurityCategory::ToolClassifier, text);
+    let second = scanner.scan_category(SecurityCategory::ToolClassifier, text);
+
+    assert_result_schema(&first, "tool_classifier");
+    assert_result_schema(&second, "tool_classifier");
+    let execution = second
+        .iter()
+        .find(|result| result.model == "tool-executions-model")
+        .expect("execution model result should be present");
+    assert!(execution.layers.iter().any(|layer| {
+        layer.details.get("decision_cache_hit") == Some(&serde_json::json!(true))
+    }));
 
     std::fs::remove_dir_all(dir).unwrap();
 }
@@ -299,7 +483,6 @@ fn l3_scheduler_defaults_match_cpu_ttl_policy() {
     assert_eq!(policy.ttl_ms["sensitive_documents"], 8_000);
     assert_eq!(policy.ttl_ms["user_intent"], 7_000);
     assert_eq!(policy.ttl_ms["tool_classifier"], 5_000);
-    assert_eq!(policy.ttl_ms["tool_description"], 5_000);
     assert_eq!(policy.priority[0], "injection");
     assert_eq!(policy.priority[2], "pii");
 }

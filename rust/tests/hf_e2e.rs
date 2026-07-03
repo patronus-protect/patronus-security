@@ -60,7 +60,6 @@ fn hf_download_warmup_smoke_and_l3_onnx_loading() {
         SecurityCategory::Injection,
         SecurityCategory::ToolClassifier,
         SecurityCategory::SensitiveDocuments,
-        SecurityCategory::ToolDescription,
         SecurityCategory::Pii,
         SecurityCategory::Dlp,
     ];
@@ -82,11 +81,11 @@ fn hf_download_warmup_smoke_and_l3_onnx_loading() {
         .as_ref()
         .is_some_and(|pipeline| pipeline.has_l3_model()));
     assert!(scanner
-        .sensitive_documents_prompts
+        .tool_classifier_descriptions
         .as_ref()
         .is_some_and(|pipeline| pipeline.has_l3_model()));
     assert!(scanner
-        .tool_description_prompts
+        .sensitive_documents_prompts
         .as_ref()
         .is_some_and(|pipeline| pipeline.has_l3_model()));
 
@@ -103,11 +102,11 @@ fn hf_download_warmup_smoke_and_l3_onnx_loading() {
         .as_ref()
         .is_some_and(|pipeline| !pipeline.is_l3_loaded()));
     assert!(scanner
-        .sensitive_documents_prompts
+        .tool_classifier_descriptions
         .as_ref()
         .is_some_and(|pipeline| !pipeline.is_l3_loaded()));
     assert!(scanner
-        .tool_description_prompts
+        .sensitive_documents_prompts
         .as_ref()
         .is_some_and(|pipeline| !pipeline.is_l3_loaded()));
 
@@ -121,7 +120,6 @@ fn hf_download_warmup_smoke_and_l3_onnx_loading() {
         (SecurityCategory::Injection, "injection"),
         (SecurityCategory::ToolClassifier, "tool_classifier"),
         (SecurityCategory::SensitiveDocuments, "sensitive_documents"),
-        (SecurityCategory::ToolDescription, "tool_description"),
         (SecurityCategory::Pii, "pii"),
         (SecurityCategory::Dlp, "dlp"),
     ] {
