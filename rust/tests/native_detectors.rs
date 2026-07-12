@@ -190,3 +190,27 @@ fn mcp_scanners_detect_policy_and_runtime_risk() {
         "mcp_runtime_risk",
     );
 }
+
+mod pii_validators {
+    use patronus_security::detectors::pii::validators::{luhn, mod97};
+
+    #[test]
+    fn luhn_valid_visa() {
+        assert!(luhn("4111111111111111"));
+    }
+
+    #[test]
+    fn luhn_invalid() {
+        assert!(!luhn("4111111111111112"));
+    }
+
+    #[test]
+    fn mod97_valid_de_iban() {
+        assert!(mod97("DE89370400440532013000"));
+    }
+
+    #[test]
+    fn mod97_invalid() {
+        assert!(!mod97("DE00370400440532013000"));
+    }
+}

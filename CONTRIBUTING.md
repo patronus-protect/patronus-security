@@ -2,7 +2,7 @@
 
 ## Development Setup
 
-Install Rust stable and Python 3.8 or newer.
+Install Rust stable and Python 3.11 or newer.
 
 ```bash
 python -m venv .venv

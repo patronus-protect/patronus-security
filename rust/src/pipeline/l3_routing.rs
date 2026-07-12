@@ -14,5 +14,5 @@ pub fn ttl_ms(policy: &L3SchedulerPolicy, category: &str, model: &str) -> u64 {
         .get(model)
         .or_else(|| policy.ttl_ms.get(category))
         .copied()
-        .unwrap_or(5_000)
+        .unwrap_or(7_500)
 }

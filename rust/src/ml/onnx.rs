@@ -128,6 +128,24 @@ impl LazyOnnxTextClassifier {
         }
     }
 
+    pub(crate) fn cache_namespace(
+        &mut self,
+        backend: ExecutionBackend,
+    ) -> Result<String, Box<dyn std::error::Error>> {
+        self.evict_expired();
+        self.ensure_loaded(backend)?;
+        let model = self.loaded.as_ref().ok_or("L3 ONNX model is not loaded")?;
+        Ok(format!(
+            "l3:{}:{}:{}:{}:max_len={}:tokenizer={}",
+            model.model_name(),
+            model.model_path().display(),
+            model.precision(),
+            model.execution_provider(),
+            self.max_len,
+            self.dir.join(&self.tokenizer_path).display()
+        ))
+    }
+
     pub fn model_name(&self) -> &str {
         self.loaded
             .as_ref()

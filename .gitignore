@@ -23,9 +23,9 @@ venv/
 *.so
 *.dylib
 *.pyd
-benchmarks/**
-benchmarks/legacy_*
-benchmarks/__pycache__/
-!benchmarks/standalone_*
-!benchmarks/patronus_val_*
-benchmarks/patronus_val_*.jsonl
+# run_local_benchmark() output; per-device, never committed
+benchmark/
+
+# Local planning notes stay out of the public repo
+docs/ntdb-l2-integration-plan.md
+benchmark_todo.md

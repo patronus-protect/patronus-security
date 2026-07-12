@@ -6,7 +6,7 @@ Patronus Security does not bundle model assets in the Rust crate or Python wheel
 
 ## Cache Location
 
-If Rust `use_dir` or Python `model_dir` is set, that directory is used as the asset root. Otherwise the library uses the platform cache directory and appends `patronus_security`:
+If `model_dir` is set, that directory is used as the asset root. Otherwise the library uses the platform cache directory and appends `patronus_security`:
 
 | Platform | Typical default cache root |
 | --- | --- |
@@ -30,6 +30,18 @@ Category assets are stored below that root, for example `injection/`, `pii/`, or
 - L3 ONNX sessions are lazy-loaded on first L3 inference and are evicted after `PATRONUS_L3_TTL_SECS` seconds of idleness. The default TTL is `300` seconds.
 - Set `HF_TOKEN` when a model repository requires authenticated or rate-limited Hugging Face access.
 
+## NTDB L2 Packages
+
+NTDB v2 L2 packages are manifest-first: the runtime downloads `manifest.json` and every file it references. Sizes therefore depend on the published package contents.
+
+| Category | Model | Repository | Source prefix | Cache path |
+| --- | --- | --- | --- | --- |
+| Injection | `wolf-defender-small` | `patronus-studio/wolf-defender-prompt-injection-small` | `l2` | `l2_ntdb/injection_current` |
+| SensitiveDocuments | `orca-sonar-document-classifier` | `patronus-studio/orca-sonar-document-classifier` | `l2` | `l2_ntdb/sensitive_documents_current` |
+| ToolClassifier | `tool-prompts-model` | `patronus-studio/tool-prompts-model` | `l2` | `l2_ntdb/tool_prompts_current` |
+| ToolClassifier | `tool-executions-model` | `patronus-studio/tool-executions-model` | `l2` | `l2_ntdb/tool_executions_current` |
+| ToolClassifier | `tool-classifier-descriptions-model` | `patronus-studio/tool-description-model` | `l2` | `l2_ntdb/tool_descriptions_current` |
+
 ## Download Size Snapshot
 
 Snapshot generated: `2026-07-01T17:36:32+00:00`.
@@ -38,12 +50,12 @@ The sizes below show required cold-cache downloads for the selected maximum leve
 
 | Category | L1 required | L2 required | L3 required | Repositories |
 | --- | ---: | ---: | ---: | --- |
-| `injection` | 0 B | 129.4 MiB | 430.9 MiB | patronus-studio/wolf-defender-prompt-injection-small |
+| `injection` | 0 B | 0 B | unknown | patronus-studio/wolf-defender-prompt-injection-small |
 | `dlp` | 0 B | 0 B | 0 B | none |
-| `pii` | unknown | unknown | unknown | patronus-studio/pii-model |
+| `pii` | 0 B | 0 B | 0 B | none |
 | `tool_classifier` | unknown | unknown | unknown | patronus-studio/tool-description-model, patronus-studio/tool-executions-model, patronus-studio/tool-prompts-model |
 | `user_intent` | unknown | unknown | unknown | patronus-studio/user-intent-model |
-| `sensitive_documents` | 16.8 KiB | 127.7 MiB | 429.2 MiB | patronus-studio/orca-sonar-document-classifier |
+| `sensitive_documents` | 16.8 KiB | 16.8 KiB | 301.5 MiB | patronus-studio/orca-sonar-document-classifier |
 
 The following repositories were not accessible when the snapshot was generated, so their sizes are listed as `unknown`:
 
@@ -57,68 +69,17 @@ The following repositories were not accessible when the snapshot was generated, 
 
 | Category | Level | Required | Source | Cache path | Size |
 | --- | --- | --- | --- | --- | ---: |
-| `injection` | `L2` | yes | `patronus-studio/wolf-defender-prompt-injection-small/cascade/cascade_config.json` | `injection/cascade_config.json` | 0.4 KiB |
-| `injection` | `L2` | yes | `patronus-studio/wolf-defender-prompt-injection-small/l2/model_A.txt` | `injection/model_A.txt` | 704.7 KiB |
-| `injection` | `L2` | yes | `patronus-studio/wolf-defender-prompt-injection-small/l2/model_B.txt` | `injection/model_B.txt` | 713.7 KiB |
-| `injection` | `L2` | yes | `patronus-studio/wolf-defender-prompt-injection-small/l2/model_C.txt` | `injection/model_C.txt` | 714.4 KiB |
-| `injection` | `L2` | yes | `patronus-studio/wolf-defender-prompt-injection-small/l2/tfidf_word_A.json` | `injection/tfidf_word_A.json` | 225.6 KiB |
-| `injection` | `L2` | yes | `patronus-studio/wolf-defender-prompt-injection-small/l2/tfidf_char_A.json` | `injection/tfidf_char_A.json` | 198.4 KiB |
-| `injection` | `L2` | yes | `patronus-studio/wolf-defender-prompt-injection-small/l2/tfidf_word_B.json` | `injection/tfidf_word_B.json` | 224.0 KiB |
-| `injection` | `L2` | yes | `patronus-studio/wolf-defender-prompt-injection-small/l2/tfidf_char_B.json` | `injection/tfidf_char_B.json` | 200.0 KiB |
-| `injection` | `L2` | yes | `patronus-studio/wolf-defender-prompt-injection-small/l2/tfidf_word_C.json` | `injection/tfidf_word_C.json` | 183.8 KiB |
-| `injection` | `L2` | yes | `patronus-studio/wolf-defender-prompt-injection-small/l2/tfidf_char_C.json` | `injection/tfidf_char_C.json` | 160.7 KiB |
-| `injection` | `L2` | yes | `patronus-studio/wolf-defender-prompt-injection-small/l2/logistic_regression_C.json` | `injection/logistic_regression_C.json` | 207.2 KiB |
-| `injection` | `L2` | yes | `patronus-studio/wolf-defender-prompt-injection-small/l2/fasttext_C.json` | `injection/fasttext_C.json` | 125.9 MiB |
 | `injection` | `L3` | yes | `patronus-studio/wolf-defender-prompt-injection-small/config.json` | `injection/l3/config.json` | 1.9 KiB |
 | `injection` | `L3` | yes | `patronus-studio/wolf-defender-prompt-injection-small/tokenizer.json` | `injection/l3/tokenizer.json` | 32.8 MiB |
 | `injection` | `L3` | optional | `patronus-studio/wolf-defender-prompt-injection-small/tokenizer_config.json` | `injection/l3/tokenizer_config.json` | 0.5 KiB |
 | `injection` | `L3` | optional | `patronus-studio/wolf-defender-prompt-injection-small/special_tokens_map.json` | `injection/l3/special_tokens_map.json` | unknown |
-| `injection` | `L3` | yes | `patronus-studio/wolf-defender-prompt-injection-small/onnx/onnx_fp16/model_fp16.onnx` | `injection/l3/onnx/onnx_fp16/model_fp16.onnx` | 268.7 MiB |
+| `injection` | `L3` | yes | `patronus-studio/wolf-defender-prompt-injection-small/onnx/onnx_mixed/model_mixed.onnx` | `injection/l3/onnx/onnx_mixed/model_mixed.onnx` | unknown |
 | `tool_classifier` | `L1` | yes | `patronus-studio/tool-prompts-model/l1/l1_rules.json` | `tool_classifier/prompts/l1_rules.json` | unknown |
-| `tool_classifier` | `L2` | yes | `patronus-studio/tool-prompts-model/l2/l2_config.json` | `tool_classifier/prompts/l2_config.json` | unknown |
-| `tool_classifier` | `L2` | yes | `patronus-studio/tool-prompts-model/cascade/cascade_config.json` | `tool_classifier/prompts/cascade_config.json` | unknown |
-| `tool_classifier` | `L3` | yes | `patronus-studio/tool-prompts-model/tokenizer.json` | `tool_classifier/prompts/tokenizer.json` | unknown |
-| `tool_classifier` | `L3` | optional | `patronus-studio/tool-prompts-model/tokenizer_config.json` | `tool_classifier/prompts/tokenizer_config.json` | unknown |
-| `tool_classifier` | `L3` | optional | `patronus-studio/tool-prompts-model/special_tokens_map.json` | `tool_classifier/prompts/special_tokens_map.json` | unknown |
-| `tool_classifier` | `L3` | yes | `patronus-studio/tool-prompts-model/onnx/model_fp16.onnx` | `tool_classifier/prompts/onnx/model_fp16.onnx` | unknown |
-| `tool_classifier` | `L3` | optional | `patronus-studio/tool-prompts-model/onnx/model.onnx` | `tool_classifier/prompts/onnx/model.onnx` | unknown |
-| `tool_classifier` | `L3` | optional | `patronus-studio/tool-prompts-model/onnx/model.onnx.data` | `tool_classifier/prompts/onnx/model.onnx.data` | unknown |
 | `tool_classifier` | `L1` | yes | `patronus-studio/tool-executions-model/l1/l1_rules.json` | `tool_classifier/executions/l1_rules.json` | unknown |
-| `tool_classifier` | `L2` | yes | `patronus-studio/tool-executions-model/l2/l2_config.json` | `tool_classifier/executions/l2_config.json` | unknown |
-| `tool_classifier` | `L2` | yes | `patronus-studio/tool-executions-model/cascade/cascade_config.json` | `tool_classifier/executions/cascade_config.json` | unknown |
-| `tool_classifier` | `L3` | yes | `patronus-studio/tool-executions-model/tokenizer.json` | `tool_classifier/executions/tokenizer.json` | unknown |
-| `tool_classifier` | `L3` | optional | `patronus-studio/tool-executions-model/tokenizer_config.json` | `tool_classifier/executions/tokenizer_config.json` | unknown |
-| `tool_classifier` | `L3` | optional | `patronus-studio/tool-executions-model/special_tokens_map.json` | `tool_classifier/executions/special_tokens_map.json` | unknown |
-| `tool_classifier` | `L3` | yes | `patronus-studio/tool-executions-model/onnx/model_fp16.onnx` | `tool_classifier/executions/onnx/model_fp16.onnx` | unknown |
-| `tool_classifier` | `L3` | optional | `patronus-studio/tool-executions-model/onnx/model.onnx` | `tool_classifier/executions/onnx/model.onnx` | unknown |
-| `tool_classifier` | `L3` | optional | `patronus-studio/tool-executions-model/onnx/model.onnx.data` | `tool_classifier/executions/onnx/model.onnx.data` | unknown |
 | `tool_classifier` | `L1` | yes | `patronus-studio/tool-description-model/l1/l1_rules.json` | `tool_classifier/descriptions/l1_rules.json` | unknown |
-| `tool_classifier` | `L2` | yes | `patronus-studio/tool-description-model/l2/l2_config.json` | `tool_classifier/descriptions/l2_config.json` | unknown |
-| `tool_classifier` | `L2` | yes | `patronus-studio/tool-description-model/cascade/cascade_config.json` | `tool_classifier/descriptions/cascade_config.json` | unknown |
-| `tool_classifier` | `L3` | yes | `patronus-studio/tool-description-model/tokenizer.json` | `tool_classifier/descriptions/tokenizer.json` | unknown |
-| `tool_classifier` | `L3` | optional | `patronus-studio/tool-description-model/tokenizer_config.json` | `tool_classifier/descriptions/tokenizer_config.json` | unknown |
-| `tool_classifier` | `L3` | optional | `patronus-studio/tool-description-model/special_tokens_map.json` | `tool_classifier/descriptions/special_tokens_map.json` | unknown |
-| `tool_classifier` | `L3` | yes | `patronus-studio/tool-description-model/onnx/model_fp16.onnx` | `tool_classifier/descriptions/onnx/model_fp16.onnx` | unknown |
-| `tool_classifier` | `L3` | optional | `patronus-studio/tool-description-model/onnx/model.onnx` | `tool_classifier/descriptions/onnx/model.onnx` | unknown |
-| `tool_classifier` | `L3` | optional | `patronus-studio/tool-description-model/onnx/model.onnx.data` | `tool_classifier/descriptions/onnx/model.onnx.data` | unknown |
 | `user_intent` | `L1` | yes | `patronus-studio/user-intent-model/l1/l1_rules.json` | `user_intent/prompts/l1_rules.json` | unknown |
-| `user_intent` | `L2` | yes | `patronus-studio/user-intent-model/l2/l2_config.json` | `user_intent/prompts/l2_config.json` | unknown |
-| `user_intent` | `L2` | yes | `patronus-studio/user-intent-model/cascade/cascade_config.json` | `user_intent/prompts/cascade_config.json` | unknown |
-| `user_intent` | `L3` | yes | `patronus-studio/user-intent-model/tokenizer.json` | `user_intent/prompts/tokenizer.json` | unknown |
-| `user_intent` | `L3` | optional | `patronus-studio/user-intent-model/tokenizer_config.json` | `user_intent/prompts/tokenizer_config.json` | unknown |
-| `user_intent` | `L3` | optional | `patronus-studio/user-intent-model/special_tokens_map.json` | `user_intent/prompts/special_tokens_map.json` | unknown |
-| `user_intent` | `L3` | yes | `patronus-studio/user-intent-model/onnx/model_fp16.onnx` | `user_intent/prompts/onnx/model_fp16.onnx` | unknown |
-| `user_intent` | `L3` | optional | `patronus-studio/user-intent-model/onnx/model.onnx` | `user_intent/prompts/onnx/model.onnx` | unknown |
-| `user_intent` | `L3` | optional | `patronus-studio/user-intent-model/onnx/model.onnx.data` | `user_intent/prompts/onnx/model.onnx.data` | unknown |
 | `sensitive_documents` | `L1` | yes | `patronus-studio/orca-sonar-document-classifier/l1/l1_rules.json` | `sensitive_documents/prompts/l1_rules.json` | 16.8 KiB |
-| `sensitive_documents` | `L2` | yes | `patronus-studio/orca-sonar-document-classifier/l2/l2_config.json` | `sensitive_documents/prompts/l2_config.json` | 127.7 MiB |
-| `sensitive_documents` | `L2` | yes | `patronus-studio/orca-sonar-document-classifier/cascade/cascade_config.json` | `sensitive_documents/prompts/cascade_config.json` | 0.0 KiB |
 | `sensitive_documents` | `L3` | yes | `patronus-studio/orca-sonar-document-classifier/tokenizer.json` | `sensitive_documents/prompts/tokenizer.json` | 32.8 MiB |
 | `sensitive_documents` | `L3` | optional | `patronus-studio/orca-sonar-document-classifier/tokenizer_config.json` | `sensitive_documents/prompts/tokenizer_config.json` | 0.6 KiB |
 | `sensitive_documents` | `L3` | optional | `patronus-studio/orca-sonar-document-classifier/special_tokens_map.json` | `sensitive_documents/prompts/special_tokens_map.json` | unknown |
 | `sensitive_documents` | `L3` | yes | `patronus-studio/orca-sonar-document-classifier/onnx/onnx_fp16/model_fp16.onnx` | `sensitive_documents/prompts/onnx/model_fp16.onnx` | 268.7 MiB |
-| `sensitive_documents` | `L3` | optional | `patronus-studio/orca-sonar-document-classifier/onnx/model.onnx` | `sensitive_documents/prompts/onnx/model.onnx` | unknown |
-| `sensitive_documents` | `L3` | optional | `patronus-studio/orca-sonar-document-classifier/onnx/model.onnx.data` | `sensitive_documents/prompts/onnx/model.onnx.data` | unknown |
-| `pii` | `L1` | yes | `patronus-studio/pii-model/l1/l1_rules.json` | `pii/prompts/l1_rules.json` | unknown |
-| `pii` | `L2` | yes | `patronus-studio/pii-model/l2/l2_config.json` | `pii/prompts/l2_config.json` | unknown |
-| `pii` | `L2` | yes | `patronus-studio/pii-model/cascade/cascade_config.json` | `pii/prompts/cascade_config.json` | unknown |

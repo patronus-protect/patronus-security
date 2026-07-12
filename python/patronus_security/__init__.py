@@ -11,9 +11,8 @@ def _decode_json_object(value):
 
 
 def _to_dict(result):
-    return {
+    output = {
         "category": result.category,
-        "class": result.class_name,
         "class_name": result.class_name,
         "confidence": result.confidence,
         "level": result.level,
@@ -22,9 +21,7 @@ def _to_dict(result):
         "layers": [
             {
                 "level": layer.level,
-                "type": layer.layer_type,
                 "layer_type": layer.layer_type,
-                "class": layer.class_name,
                 "class_name": layer.class_name,
                 "confidence": layer.confidence,
                 "matched": layer.matched,
@@ -35,6 +32,10 @@ def _to_dict(result):
             for layer in result.layers
         ],
     }
+    request_id = getattr(result, "request_id", None)
+    if request_id is not None:
+        output["request_id"] = request_id
+    return output
 
 
 def _execution_gates_json(execution_gates):
@@ -102,17 +103,14 @@ def _execution_gates_json(execution_gates):
     return json.dumps(normalized)
 
 
-class PatronusSecurity:
+class SecurityGateway:
     """Python gateway for Patronus Security scanners.
 
     Args:
         categories: Scanner categories to use for `scan_all`.
         max_level: Maximum scanner level: `l1`, `l2`, or `l3`.
-        use_dir: Optional asset cache root. Defaults to the platform cache
-            directory plus `patronus_security`. Prefer `model_dir` in new
-            code.
-        model_dir: Public alias for the asset cache root. Pass either
-            `model_dir` or `use_dir`, not both.
+        model_dir: Optional asset cache root. Defaults to the platform cache
+            directory plus `patronus_security`.
         download_files: Whether `warmup()` may download missing model assets.
         download_categories: Optional category allowlist for asset downloads.
             When omitted, every configured category may download if
@@ -132,33 +130,46 @@ class PatronusSecurity:
             `directml`, or `tensorrt`. Backend defaults choose lazy L3 on
             CPU/auto and tensor batches on accelerator backends unless
             `onnx_batch_mode` is explicitly set.
+        ntdb_operating_point: Calibrated NTDB threshold set. One of
+            `best_promote` (default), `best_f1`, `best_fpr_in_f1`,
+            `best_fnr_in_f1`, or `best_latency_in_f1`.
     """
 
     def __init__(
         self,
         categories: list[str],
         max_level: str = "l2",
-        use_dir: str = None,
         model_dir: str = None,
         download_files: bool = True,
         download_categories: list[str] | None = None,
         execution_gates: dict | None = None,
         onnx_batch_mode: str = "backend_default",
         execution_backend: str = "auto",
+        ntdb_operating_point: str = "best_promote",
     ):
-        if use_dir is not None and model_dir is not None:
-            raise ValueError("Pass only one of use_dir or model_dir")
-        resolved_model_dir = model_dir if model_dir is not None else use_dir
+        self._categories = list(categories)
+        self._max_level = max_level
         self.rust_gateway = RustSecurityGateway(
             categories,
             max_level,
-            use_dir=resolved_model_dir,
+            model_dir=model_dir,
             download_files=download_files,
             download_categories=download_categories,
             execution_gates_json=_execution_gates_json(execution_gates),
             onnx_batch_mode=onnx_batch_mode,
             execution_backend=execution_backend,
+            ntdb_operating_point=ntdb_operating_point,
         )
+
+    @property
+    def categories(self) -> list[str]:
+        """Categories configured for `scan_all`."""
+        return list(self._categories)
+
+    @property
+    def max_level(self) -> str:
+        """Maximum scanner level configured for this gateway."""
+        return self._max_level
 
     def warmup(self):
         """Initialize model-backed scanners and download allowed missing assets.
@@ -207,6 +218,10 @@ class PatronusSecurity:
         """
         self.rust_gateway.set_execution_backend(backend)
 
+    def set_ntdb_operating_point(self, point: str):
+        """Select the calibrated NTDB threshold set for subsequent scans."""
+        self.rust_gateway.set_ntdb_operating_point(point)
+
     def set_long_text_policy(
         self,
         enabled: bool = True,
@@ -215,14 +230,14 @@ class PatronusSecurity:
         overlap_bytes: int = 96,
         verify_non_benign_l2: bool = True,
     ):
-        """Replace long-text routing policy for model-backed pipelines.
+        """Replace the long-text policy used for L3 chunked verification.
 
-        Full-text L1 always runs first. If L1 returns a non-benign result,
-        the pipeline can stop there. If L1 is benign and the text is at or
-        above `no_full_l2_byte_limit`, full-text L2 is skipped and the text
-        is evaluated through overlapping L1/L2 chunks instead. Chunks with
-        unresolved or non-benign L2 decisions are then verified by L3 when
-        L3 is enabled.
+        NTDB L2 always scans the full text; the model packages chunk
+        internally and aggregate across chunks. When a scan is promoted to
+        L3, the L3 worker splits the full text into overlapping
+        `chunk_size_bytes`/`overlap_bytes` windows and verifies them by
+        priority. `verify_non_benign_l2` keeps non-benign L2 chunk decisions
+        subject to L3 verification during aggregation.
         """
         self.rust_gateway.set_long_text_policy(
             enabled,
@@ -245,25 +260,58 @@ class PatronusSecurity:
     def enqueue(self, text: str, categories: list[str] | None = None) -> str:
         """Queue one scan request and return its request id.
 
-        `consume_results(request_id)` yields complete Result-Schema dicts as
-        soon as the configured category scan for that request finishes.
+        This method does not return scan results. A background gateway worker
+        executes L1/L2 and a separate worker executes promoted L3 jobs.
+        `consume_results()` yields complete Result-Schema dicts from the shared
+        result queue. Each queued result includes its `request_id`.
         """
         return self.rust_gateway.enqueue(text, categories)
 
-    def consume_results(self, request_id: str, timeout: float | None = None):
-        """Yield queued complete scan results for one request id.
-
-        Raises:
-            KeyError: If the request id is unknown or already consumed.
-        """
+    def consume_results(self, timeout: float | None = None):
+        """Yield complete results from the shared result queue until timeout."""
         while True:
-            result = self.rust_gateway.consume_next_result(request_id, timeout)
+            result = self.consume_next_result(timeout)
             if result is None:
                 return
-            yield _to_dict(result)
+            yield result
+
+    def consume_next_result(self, timeout: float | None = None) -> dict | None:
+        """Return the next complete result from the shared result queue."""
+        result = self.rust_gateway.consume_next_result(timeout)
+        return None if result is None else _to_dict(result)
 
     def has_request(self, request_id: str) -> bool:
         """Return whether a queued request is still active in the Rust aggregator."""
         return self.rust_gateway.has_request(request_id)
 
-SecurityGateway = PatronusSecurity
+    def run_local_benchmark(
+        self,
+        output_dir: str = "benchmark",
+        limit_per_pipeline: int | None = None,
+        load_requests: int = 200,
+        print_summary: bool = True,
+    ) -> dict:
+        """Benchmark this gateway against the sample data shipped with the package.
+
+        Runs benchmark phases and writes a readable `BENCHMARK.md` plus JSON into `output_dir`:
+        one complete queued response (`example_result.json`), benign false
+        positives (`benign_result.json`), labelled classifier
+        validation (`classifier_result.json`), and a queue load test where one
+        producer enqueues texts while one consumer drains the shared result queue
+        (`load_result.json`). Only pipelines whose
+        category is configured on this gateway are evaluated; the L3 load
+        scenario runs only when `max_level` is `l3`. Call `warmup()` first.
+
+        Note: the classifier phase temporarily replaces the execution gate
+        matrix to isolate tool-classifier subpipelines and resets it to the
+        default all-enabled matrix afterwards.
+        """
+        from . import benchmark
+
+        return benchmark.run_local_benchmark(
+            self,
+            output_dir=output_dir,
+            limit_per_pipeline=limit_per_pipeline,
+            load_requests=load_requests,
+            print_summary=print_summary,
+        )

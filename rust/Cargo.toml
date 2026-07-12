@@ -13,6 +13,7 @@ keywords = ["security", "prompt-injection", "dlp", "pii"]
 categories = ["authentication", "text-processing"]
 
 [dependencies]
+log = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 regex = "1.10"
@@ -27,7 +28,12 @@ blake3 = "1.5"
 
 [features]
 default = []
+# Internal hooks for the integration test suite; never enable in production builds.
+test-util = []
 onnx-coreml = ["ort/coreml"]
 onnx-cuda = ["ort/cuda"]
 onnx-directml = ["ort/directml"]
 onnx-tensorrt = ["ort/tensorrt"]
+
+[dev-dependencies]
+patronus-security = { path = ".", features = ["test-util"] }

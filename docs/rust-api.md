@@ -14,82 +14,83 @@ pub mod pipeline;
 pub mod threat;
 pub mod types;
 
-pub use pipeline::{PatronusSecurity, Pipeline, PromptInjectionPipeline, SecurityGateway};
+pub use pipeline::{Pipeline, SecurityGateway};
 pub use types::{
     EvaluationResult, ExecutionBackend, L3SchedulerPolicy, LayerResult, LongTextPolicy,
-    OnnxBatchMode, RequestId, ScanExecution, ScanGateMatrix, SecurityCategory, SecurityLevel,
-    SecurityScanResult, TextChunking,
+    NtdbOperatingPoint, OnnxBatchMode, QueuedSecurityScanResult, RequestId, ScanExecution,
+    ScanGateMatrix, SecurityCategory, SecurityLevel, SecurityScanResult, TextChunking,
 };
 ```
 
 ## Core Gateway
 
 ```rust
-pub struct PatronusSecurity {
-    /// Categories configured for `scan_all`.
-    pub categories: Vec<SecurityCategory>,
-    /// Maximum layer to evaluate for configured categories.
-    pub max_level: SecurityLevel,
-    /// Optional asset root. Defaults to the platform cache directory.
-    pub use_dir: Option<PathBuf>,
-    /// Whether missing model assets may be downloaded during `warmup`.
-    pub download_files: bool,
-    /// Optional allowlist of categories that may download missing assets.
-    pub download_categories: Option<Vec<SecurityCategory>>,
-    /// Execution gates consumed by scan methods.
-    pub execution: ScanExecution,
-
-    // Lazy-loaded model-based pipelines
-    pub injection_pipeline: Option<PromptInjectionPipeline>,
-    pub tool_classifier_prompts: Option<Pipeline>,
-    pub tool_classifier_executions: Option<Pipeline>,
-    pub tool_classifier_descriptions: Option<Pipeline>,
-    pub user_intent_prompts: Option<Pipeline>,
-    pub sensitive_documents_prompts: Option<Pipeline>,
-    pub pii_model_pipeline: Option<Pipeline>,
-
-    // Instantiated native rule-based pipelines
-    pub dlp_pipeline: Option<dlp::DlpPipeline>,
-    pub pii_pipeline: Option<pii::PiiPipeline>,
-    pub cross_tool_instruction_pipeline:
-        Option<cross_tool_instruction::CrossToolInstructionPipeline>,
-    pub instruction_leak_pipeline: Option<instruction_leak::InstructionLeakPipeline>,
-    pub secret_transfer_pipeline: Option<secret_transfer::SecretTransferPipeline>,
-    pub sensitive_material_pipeline: Option<sensitive_material::SensitiveMaterialPipeline>,
-    pub encoded_instruction_pipeline: Option<encoded_instruction::EncodedInstructionPipeline>,
-    pub multi_turn_escalation_pipeline: Option<multi_turn_escalation::MultiTurnEscalationPipeline>,
-    pub guardrail_tamper_pipeline: Option<guardrail_tamper::GuardrailTamperPipeline>,
-    pub destructive_operation_pipeline: Option<destructive_operation::DestructiveOperationPipeline>,
-    pub agentic_control_abuse_pipeline: Option<agentic_control_abuse::AgenticControlAbusePipeline>,
-    pub binary_smuggling_pipeline: Option<binary_smuggling::BinarySmugglingPipeline>,
-    pub tool_output_instruction_pipeline:
-        Option<tool_output_instruction::ToolOutputInstructionPipeline>,
-    pub mcp_runtime_risk_pipeline: Option<mcp_runtime_risk::McpRuntimeRiskPipeline>,
-    pub hidden_html_instruction_pipeline:
-        Option<hidden_html_instruction::HiddenHtmlInstructionPipeline>,
-    pub unicode_confusable_pipeline: Option<unicode_confusable::UnicodeConfusablePipeline>,
-    pub zero_width_obfuscation_pipeline:
-        Option<zero_width_obfuscation::ZeroWidthObfuscationPipeline>,
-    pub mcp_policy_pipeline: Option<mcp_policy::McpPolicyPipeline>,
-
-    request_counter: AtomicU64,
-    requests: Arc<RequestRegistry>,
-    l3_worker: L3Worker,
+pub struct SecurityGateway {
+    core: Arc<SecurityGatewayCore>,
+    queue_sender: OnceLock<mpsc::Sender<request_queue::QueueWork>>,
 }
 ```
 
 Main scanner gateway for native and model-backed security categories.
 
 ```rust
-pub type SecurityGateway = PatronusSecurity;
+pub struct SecurityGatewayCore {
+    /// Categories configured for `scan_all`.
+    categories: Vec<SecurityCategory>,
+    /// Maximum layer to evaluate for configured categories.
+    max_level: SecurityLevel,
+    /// Optional asset root. Defaults to the platform cache directory.
+    model_dir: Option<PathBuf>,
+    /// Whether missing model assets may be downloaded during `warmup`.
+    download_files: bool,
+    /// Optional allowlist of categories that may download missing assets.
+    download_categories: Option<Vec<SecurityCategory>>,
+    /// Execution gates consumed by scan methods.
+    execution: Mutex<ScanExecution>,
+
+    // Lazy-loaded L1 rule pipelines. Model-backed L2 is NTDB-only.
+    tool_classifier_prompts: Option<Pipeline>,
+    tool_classifier_executions: Option<Pipeline>,
+    tool_classifier_descriptions: Option<Pipeline>,
+    user_intent_prompts: Option<Pipeline>,
+    sensitive_documents_prompts: Option<Pipeline>,
+    ntdb_executor: Option<Mutex<NtdbExecutor>>,
+
+    // Instantiated native rule-based pipelines
+    dlp_pipeline: Option<dlp::DlpPipeline>,
+    pii_pipeline: Option<pii::PiiPipeline>,
+    cross_tool_instruction_pipeline: Option<cross_tool_instruction::CrossToolInstructionPipeline>,
+    instruction_leak_pipeline: Option<instruction_leak::InstructionLeakPipeline>,
+    secret_transfer_pipeline: Option<secret_transfer::SecretTransferPipeline>,
+    sensitive_material_pipeline: Option<sensitive_material::SensitiveMaterialPipeline>,
+    encoded_instruction_pipeline: Option<encoded_instruction::EncodedInstructionPipeline>,
+    multi_turn_escalation_pipeline: Option<multi_turn_escalation::MultiTurnEscalationPipeline>,
+    guardrail_tamper_pipeline: Option<guardrail_tamper::GuardrailTamperPipeline>,
+    destructive_operation_pipeline: Option<destructive_operation::DestructiveOperationPipeline>,
+    agentic_control_abuse_pipeline: Option<agentic_control_abuse::AgenticControlAbusePipeline>,
+    binary_smuggling_pipeline: Option<binary_smuggling::BinarySmugglingPipeline>,
+    tool_output_instruction_pipeline:
+        Option<tool_output_instruction::ToolOutputInstructionPipeline>,
+    mcp_runtime_risk_pipeline: Option<mcp_runtime_risk::McpRuntimeRiskPipeline>,
+    hidden_html_instruction_pipeline:
+        Option<hidden_html_instruction::HiddenHtmlInstructionPipeline>,
+    unicode_confusable_pipeline: Option<unicode_confusable::UnicodeConfusablePipeline>,
+    zero_width_obfuscation_pipeline: Option<zero_width_obfuscation::ZeroWidthObfuscationPipeline>,
+    mcp_policy_pipeline: Option<mcp_policy::McpPolicyPipeline>,
+
+    request_counter: AtomicU64,
+    requests: Arc<RequestRegistry>,
+    l3_worker: L3Worker,
+    ntdb_decision_cache: DecisionCache,
+}
 ```
 
-Preferred public name for the security scanner gateway.
+No public documentation is available yet.
 
 ```rust
 pub fn new(
     categories: Vec<SecurityCategory>,
-    use_dir: Option<PathBuf>,
+    model_dir: Option<PathBuf>,
     download_files: bool,
 ) -> Self;
 ```
@@ -100,7 +101,7 @@ Create a gateway with `SecurityLevel::L2` as the maximum level.
 pub fn with_max_level(
     categories: Vec<SecurityCategory>,
     max_level: SecurityLevel,
-    use_dir: Option<PathBuf>,
+    model_dir: Option<PathBuf>,
     download_files: bool,
 ) -> Self;
 ```
@@ -111,7 +112,7 @@ Create a gateway with an explicit maximum security level.
 pub fn with_download_categories(
     categories: Vec<SecurityCategory>,
     max_level: SecurityLevel,
-    use_dir: Option<PathBuf>,
+    model_dir: Option<PathBuf>,
     download_files: bool,
     download_categories: Option<Vec<SecurityCategory>>,
 ) -> Self;
@@ -123,88 +124,52 @@ When `download_categories` is `None`, all configured categories may
 download missing assets if `download_files` is `true`.
 
 ```rust
-pub fn set_execution_gates(&mut self, gates: ScanGateMatrix);
+pub fn categories(&self) -> &[SecurityCategory];
+```
+
+Categories configured for `scan_all`.
+
+```rust
+pub fn max_level(&self) -> SecurityLevel;
+```
+
+Maximum level evaluated for configured categories.
+
+```rust
+pub fn should_download_assets_for(&self, category: SecurityCategory) -> bool;
+```
+
+No public documentation is available yet.
+
+```rust
+pub fn set_execution_gates(&self, gates: ScanGateMatrix);
 ```
 
 Replace the execution gate matrix used by subsequent scans.
 
 ```rust
-pub fn set_onnx_batch_mode(&mut self, mode: OnnxBatchMode);
+pub fn set_onnx_batch_mode(&self, mode: OnnxBatchMode);
 ```
 
 Replace the ONNX batch mode used by subsequent batch scans.
 
 ```rust
-pub fn set_execution_backend(&mut self, backend: ExecutionBackend);
+pub fn set_execution_backend(&self, backend: ExecutionBackend);
 ```
 
 Replace the execution backend and apply its default L3 mode.
 
 ```rust
-pub fn set_long_text_policy(&mut self, policy: LongTextPolicy);
+pub fn set_long_text_policy(&self, policy: LongTextPolicy);
 ```
 
 Replace the long-text routing policy.
 
 ```rust
-pub fn warmup(&mut self) -> Result<(), Box<dyn std::error::Error>>;
+pub fn set_ntdb_operating_point(&self, point: NtdbOperatingPoint);
 ```
 
-Download allowed missing assets and initialize model-backed pipelines.
-
-```rust
-pub fn scan_category(&self, category: SecurityCategory, text: &str) -> Vec<SecurityScanResult>;
-```
-
-Scan text with a single category.
-
-```rust
-pub fn enqueue(&self, text: impl Into<String>) -> RequestId;
-```
-
-Queue a scan with every category configured on this gateway.
-
-```rust
-pub fn enqueue_categories(
-    &self,
-    categories: Vec<SecurityCategory>,
-    text: impl Into<String>,
-) -> RequestId;
-```
-
-Queue a scan with a caller-provided category subset.
-
-```rust
-pub fn consume_results(
-    &self,
-    request_id: RequestId,
-    timeout: Option<Duration>,
-) -> Option<SecurityScanResult>;
-```
-
-Consume the next complete ResultSchema result for a queued request.
-
-```rust
-pub fn has_request(&self, request_id: &str) -> bool;
-```
-
-Return whether a queued request id is still known to the Rust aggregator.
-
-```rust
-pub fn scan_categories(
-    &self,
-    categories: &[SecurityCategory],
-    text: &str,
-) -> Vec<SecurityScanResult>;
-```
-
-Scan text with a caller-provided category subset.
-
-```rust
-pub fn scan_all(&self, text: &str) -> Vec<SecurityScanResult>;
-```
-
-Scan text with every category configured on this gateway.
+Select the calibrated NTDB operating point used by subsequent scans.
 
 ## Result And Category Types
 
@@ -213,6 +178,17 @@ pub type RequestId = String;
 ```
 
 No public documentation is available yet.
+
+```rust
+pub struct QueuedSecurityScanResult {
+    /// Request id returned by `SecurityGateway::enqueue`.
+    pub request_id: RequestId,
+    /// Complete classifier result published by L1/L2 or the L3 worker.
+    pub result: SecurityScanResult,
+}
+```
+
+A completed queued scan result together with the request that produced it.
 
 ```rust
 pub struct EvaluationResult {
@@ -306,6 +282,24 @@ pub fn as_str(self) -> &'static str;
 ```
 
 Return the canonical snake_case mode string.
+
+```rust
+pub enum NtdbOperatingPoint {
+    BestF1,
+    BestPromote,
+    BestFprInF1,
+    BestFnrInF1,
+    BestLatencyInF1,
+}
+```
+
+Calibrated NTDB operating point selected from each package manifest.
+
+```rust
+pub fn as_str(self) -> &'static str;
+```
+
+Return the manifest key for this operating point.
 
 ```rust
 pub enum ExecutionBackend {
@@ -472,6 +466,7 @@ pub struct ScanExecution {
     backend: ExecutionBackend,
     onnx_batch_mode: OnnxBatchMode,
     long_text_policy: LongTextPolicy,
+    ntdb_operating_point: NtdbOperatingPoint,
     defer_l3: bool,
 }
 ```
@@ -513,6 +508,12 @@ pub fn set_long_text_policy(&mut self, policy: LongTextPolicy);
 ```
 
 Replace the long-text routing policy.
+
+```rust
+pub fn set_ntdb_operating_point(&mut self, point: NtdbOperatingPoint);
+```
+
+Select the calibrated NTDB operating point used by subsequent scans.
 
 ```rust
 pub fn set_defer_l3(&mut self, defer_l3: bool);
@@ -562,6 +563,12 @@ pub fn long_text_policy(&self) -> LongTextPolicy;
 ```
 
 Return the long-text routing policy.
+
+```rust
+pub fn ntdb_operating_point(&self) -> NtdbOperatingPoint;
+```
+
+Return the selected NTDB operating point.
 
 ```rust
 pub fn defer_l3(&self) -> bool;
@@ -627,6 +634,27 @@ pub struct AssetSpec {
 
 A model asset declared in the static download manifest.
 
+```rust
+pub struct NtdbL2PackageAssetSpec {
+    /// Scanner category that owns this package.
+    pub category: SecurityCategory,
+    /// Minimum security level that needs this package.
+    pub level: SecurityLevel,
+    /// Public model identifier used by gates and scan results.
+    pub model: &'static str,
+    /// Hugging Face repository identifier.
+    pub repo: &'static str,
+    /// Directory prefix inside the Hugging Face repository.
+    pub source_prefix: &'static str,
+    /// Relative package directory below the category cache directory.
+    pub destination_path: &'static str,
+    /// Whether missing or failed downloads should block `warmup`.
+    pub required: bool,
+}
+```
+
+A manifest-first NTDB v2 L2 package declared for Hugging Face download.
+
 ## Asset Download Helpers
 
 ```rust
@@ -634,6 +662,25 @@ pub fn category_assets(category: SecurityCategory, max_level: SecurityLevel) -> 
 ```
 
 Return manifest entries needed for a category up to `max_level`.
+
+```rust
+pub fn ntdb_l2_package_assets(
+    category: SecurityCategory,
+    max_level: SecurityLevel,
+) -> Vec<NtdbL2PackageAssetSpec>;
+```
+
+Return NTDB v2 L2 package entries needed for a category up to `max_level`.
+
+```rust
+pub fn ntdb_l2_package_asset(
+    category: SecurityCategory,
+    max_level: SecurityLevel,
+    model: &str,
+) -> Option<NtdbL2PackageAssetSpec>;
+```
+
+Return the NTDB v2 L2 package entry for a public model name.
 
 ```rust
 pub fn required_assets_present(
@@ -656,3 +703,35 @@ pub fn download_category_assets(
 Download missing manifest assets for a category into `target_dir`.
 
 Required asset failures return an error. Optional asset failures are skipped.
+
+```rust
+pub fn download_ntdb_l2_package(
+    category: SecurityCategory,
+    max_level: SecurityLevel,
+    model: &str,
+    target_dir: &Path,
+) -> Result<PathBuf, Box<dyn std::error::Error>>;
+```
+
+Download a missing NTDB v2 L2 package from Hugging Face into `target_dir`.
+
+The package is downloaded manifest-first: `manifest.json` is fetched from
+the package prefix, then runtime files referenced by that manifest are
+downloaded into the same local package tree.
+
+```rust
+pub fn download_ntdb_l2_package_asset(
+    asset: NtdbL2PackageAssetSpec,
+    target_dir: &Path,
+) -> Result<PathBuf, Box<dyn std::error::Error>>;
+```
+
+Download a missing NTDB v2 L2 package described by `asset`.
+
+```rust
+pub fn ntdb_l2_package_manifest_files(
+    manifest_json: &str,
+) -> Result<Vec<String>, Box<dyn std::error::Error>>;
+```
+
+Return all runtime files referenced by an NTDB v2 package manifest.

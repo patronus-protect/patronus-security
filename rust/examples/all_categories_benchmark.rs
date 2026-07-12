@@ -1,4 +1,4 @@
-use patronus_security::{PatronusSecurity, SecurityCategory, SecurityLevel};
+use patronus_security::{SecurityCategory, SecurityGateway, SecurityLevel};
 use serde_json::json;
 use std::fs;
 use std::path::PathBuf;
@@ -32,7 +32,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let out_json = workspace_root().join("benchmarks/standalone_all_categories_results.json");
     let out_md = workspace_root().join("benchmarks/standalone_all_categories_results.md");
 
-    let mut scanner = PatronusSecurity::with_max_level(
+    let mut scanner = SecurityGateway::with_max_level(
         vec![
             SecurityCategory::Injection,
             SecurityCategory::Dlp,
@@ -102,7 +102,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn run_case(scanner: &PatronusSecurity, case: &Case) -> CaseStats {
+fn run_case(scanner: &SecurityGateway, case: &Case) -> CaseStats {
     let mut samples = Vec::with_capacity(case.iterations);
     let mut result_count = 0;
 

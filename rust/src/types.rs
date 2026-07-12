@@ -3,6 +3,15 @@ use std::collections::HashMap;
 pub type RequestId = String;
 
 #[derive(Debug, Clone)]
+/// A completed queued scan result together with the request that produced it.
+pub struct QueuedSecurityScanResult {
+    /// Request id returned by `SecurityGateway::enqueue`.
+    pub request_id: RequestId,
+    /// Complete classifier result published by L1/L2 or the L3 worker.
+    pub result: SecurityScanResult,
+}
+
+#[derive(Debug, Clone)]
 /// A single classifier decision before it is wrapped in a public scan result.
 pub struct EvaluationResult {
     /// Stable class label returned by the scanner.
@@ -121,6 +130,50 @@ impl std::str::FromStr for OnnxBatchMode {
             "lazy" | "lazy_batches" | "lazybatches" => Ok(OnnxBatchMode::LazyBatches),
             "tensor" | "tensor_batch" | "tensorbatch" => Ok(OnnxBatchMode::TensorBatch),
             _ => Err(format!("Unknown ONNX batch mode: {}", s)),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+/// Calibrated NTDB operating point selected from each package manifest.
+pub enum NtdbOperatingPoint {
+    BestF1,
+    BestPromote,
+    BestFprInF1,
+    BestFnrInF1,
+    BestLatencyInF1,
+}
+
+impl NtdbOperatingPoint {
+    /// Return the manifest key for this operating point.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::BestF1 => "best_f1",
+            Self::BestPromote => "best_promote",
+            Self::BestFprInF1 => "best_fpr_in_f1",
+            Self::BestFnrInF1 => "best_fnr_in_f1",
+            Self::BestLatencyInF1 => "best_latency_in_f1",
+        }
+    }
+}
+
+impl Default for NtdbOperatingPoint {
+    fn default() -> Self {
+        Self::BestPromote
+    }
+}
+
+impl std::str::FromStr for NtdbOperatingPoint {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().replace('-', "_").as_str() {
+            "best_f1" => Ok(Self::BestF1),
+            "best_promote" => Ok(Self::BestPromote),
+            "best_fpr_in_f1" => Ok(Self::BestFprInF1),
+            "best_fnr_in_f1" => Ok(Self::BestFnrInF1),
+            "best_latency_in_f1" => Ok(Self::BestLatencyInF1),
+            _ => Err(format!("Unknown NTDB operating point: {s}")),
         }
     }
 }
@@ -281,18 +334,18 @@ pub struct L3SchedulerPolicy {
 impl Default for L3SchedulerPolicy {
     fn default() -> Self {
         let mut ttl_ms = HashMap::new();
-        ttl_ms.insert("injection".to_string(), 10_000);
-        ttl_ms.insert("wolf-defender-small".to_string(), 10_000);
-        ttl_ms.insert("pii".to_string(), 8_000);
-        ttl_ms.insert("pii-model".to_string(), 8_000);
-        ttl_ms.insert("sensitive_documents".to_string(), 8_000);
-        ttl_ms.insert("orca-sonar-document-classifier".to_string(), 8_000);
-        ttl_ms.insert("user_intent".to_string(), 7_000);
-        ttl_ms.insert("user-intent-model".to_string(), 7_000);
-        ttl_ms.insert("tool_classifier".to_string(), 5_000);
-        ttl_ms.insert("tool-prompts-model".to_string(), 5_000);
-        ttl_ms.insert("tool-executions-model".to_string(), 5_000);
-        ttl_ms.insert("tool-classifier-descriptions-model".to_string(), 5_000);
+        ttl_ms.insert("injection".to_string(), 15_000);
+        ttl_ms.insert("wolf-defender-small".to_string(), 15_000);
+        ttl_ms.insert("pii".to_string(), 12_000);
+        ttl_ms.insert("pii-model".to_string(), 12_000);
+        ttl_ms.insert("sensitive_documents".to_string(), 12_000);
+        ttl_ms.insert("orca-sonar-document-classifier".to_string(), 12_000);
+        ttl_ms.insert("user_intent".to_string(), 10_500);
+        ttl_ms.insert("user-intent-model".to_string(), 10_500);
+        ttl_ms.insert("tool_classifier".to_string(), 7_500);
+        ttl_ms.insert("tool-prompts-model".to_string(), 7_500);
+        ttl_ms.insert("tool-executions-model".to_string(), 7_500);
+        ttl_ms.insert("tool-classifier-descriptions-model".to_string(), 7_500);
         Self {
             enabled: true,
             priority: vec![
@@ -393,6 +446,7 @@ pub struct ScanExecution {
     backend: ExecutionBackend,
     onnx_batch_mode: OnnxBatchMode,
     long_text_policy: LongTextPolicy,
+    ntdb_operating_point: NtdbOperatingPoint,
     defer_l3: bool,
 }
 
@@ -405,6 +459,7 @@ impl ScanExecution {
             backend: ExecutionBackend::default(),
             onnx_batch_mode: OnnxBatchMode::LazyBatches,
             long_text_policy: LongTextPolicy::default(),
+            ntdb_operating_point: NtdbOperatingPoint::default(),
             defer_l3: false,
         }
     }
@@ -417,6 +472,7 @@ impl ScanExecution {
             backend: ExecutionBackend::default(),
             onnx_batch_mode: OnnxBatchMode::LazyBatches,
             long_text_policy: LongTextPolicy::default(),
+            ntdb_operating_point: NtdbOperatingPoint::default(),
             defer_l3: false,
         }
     }
@@ -447,6 +503,11 @@ impl ScanExecution {
     /// Replace the long-text routing policy.
     pub fn set_long_text_policy(&mut self, policy: LongTextPolicy) {
         self.long_text_policy = policy;
+    }
+
+    /// Select the calibrated NTDB operating point used by subsequent scans.
+    pub fn set_ntdb_operating_point(&mut self, point: NtdbOperatingPoint) {
+        self.ntdb_operating_point = point;
     }
 
     /// Set whether L3 should be marked pending instead of executed immediately.
@@ -489,6 +550,11 @@ impl ScanExecution {
     /// Return the long-text routing policy.
     pub fn long_text_policy(&self) -> LongTextPolicy {
         self.long_text_policy
+    }
+
+    /// Return the selected NTDB operating point.
+    pub fn ntdb_operating_point(&self) -> NtdbOperatingPoint {
+        self.ntdb_operating_point
     }
 
     /// Return whether L3 should be centrally scheduled.
@@ -556,6 +622,28 @@ impl std::str::FromStr for SecurityCategory {
             "user_intent" => Ok(SecurityCategory::UserIntent),
             "sensitive_documents" => Ok(SecurityCategory::SensitiveDocuments),
             _ => Err(format!("Unknown security category: {}", s)),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ntdb_operating_point_defaults_to_best_promote_and_parses_all_variants() {
+        assert_eq!(
+            NtdbOperatingPoint::default(),
+            NtdbOperatingPoint::BestPromote
+        );
+        for name in [
+            "best_f1",
+            "best_promote",
+            "best_fpr_in_f1",
+            "best_fnr_in_f1",
+            "best_latency_in_f1",
+        ] {
+            assert_eq!(name.parse::<NtdbOperatingPoint>().unwrap().as_str(), name);
         }
     }
 }

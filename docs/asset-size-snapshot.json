@@ -48,7 +48,6 @@
         "l2/tfidf_word_A.json": 230967,
         "l2/tfidf_word_B.json": 229378,
         "l2/tfidf_word_C.json": 188167,
-        "onnx/onnx_fp16/model_fp16.onnx": 281744314,
         "tokenizer.json": 34363287,
         "tokenizer_config.json": 545
       },

@@ -9,7 +9,7 @@ const DEFAULT_MAX_ENTRIES: usize = 100_000;
 const DEFAULT_MAX_BYTES: usize = 128 * 1024 * 1024;
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct DecisionCacheConfig {
+pub struct DecisionCacheConfig {
     pub max_entries: usize,
     pub max_bytes: usize,
 }
@@ -63,21 +63,21 @@ struct DecisionCacheInner {
 }
 
 #[derive(Default)]
-pub(crate) struct DecisionCache {
+pub struct DecisionCache {
     config: DecisionCacheConfig,
     inner: Mutex<DecisionCacheInner>,
 }
 
 impl DecisionCache {
-    #[cfg(test)]
-    pub(crate) fn with_config(config: DecisionCacheConfig) -> Self {
+    #[cfg(feature = "test-util")]
+    pub fn with_config(config: DecisionCacheConfig) -> Self {
         Self {
             config,
             inner: Mutex::new(DecisionCacheInner::default()),
         }
     }
 
-    pub(crate) fn get(
+    pub fn get(
         &self,
         namespace: &str,
         text: &str,
@@ -107,7 +107,7 @@ impl DecisionCache {
         Some((entry.result.clone(), layers))
     }
 
-    pub(crate) fn insert(
+    pub fn insert(
         &self,
         namespace: &str,
         text: &str,
@@ -159,6 +159,7 @@ fn cache_key(namespace: &str, text: &str, execution: &ScanExecution) -> Decision
     ]);
     scope.update(execution.backend().as_str().as_bytes());
     scope.update(execution.onnx_batch_mode().as_str().as_bytes());
+    scope.update(execution.ntdb_operating_point().as_str().as_bytes());
     let policy = execution.long_text_policy();
     scope.update(&[policy.enabled as u8, policy.verify_non_benign_l2 as u8]);
     scope.update(&policy.no_full_l2_byte_limit.to_le_bytes());
@@ -190,6 +191,8 @@ fn ttl_for_len(len: usize) -> Duration {
 fn cacheable_layers(layers: &[LayerResult]) -> bool {
     !layers.iter().any(|layer| {
         layer.layer_type == "onnx_error"
+            || layer.layer_type == "ntdb_error"
+            || layer.layer_type == "l3_pending"
             || layer.layer_type == "degraded_timeout"
             || layer.layer_type == "degraded_error"
             || layer
@@ -283,82 +286,5 @@ fn prune(inner: &mut DecisionCacheInner, config: DecisionCacheConfig, now: Insta
         if let Some(entry) = inner.entries.remove(&key) {
             inner.used_bytes = inner.used_bytes.saturating_sub(entry.estimated_bytes);
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::SecurityLevel;
-
-    fn result(class_name: &str) -> EvaluationResult {
-        EvaluationResult {
-            class_name: class_name.to_string(),
-            confidence: 0.9,
-            level: "L2".to_string(),
-        }
-    }
-
-    fn layers(class_name: &str) -> Vec<LayerResult> {
-        vec![LayerResult {
-            level: "L2".to_string(),
-            layer_type: "fast_ml".to_string(),
-            class_name: class_name.to_string(),
-            confidence: 0.9,
-            matched: true,
-            duration_ms: 12.0,
-            thresholds: HashMap::new(),
-            details: HashMap::new(),
-        }]
-    }
-
-    #[test]
-    fn cache_hit_returns_zeroed_decision_with_hit_metadata() {
-        let cache = DecisionCache::default();
-        let execution = ScanExecution::new(SecurityLevel::L2);
-        let result = result("secret");
-        let layers = layers("secret");
-
-        cache.insert("model-a", "repeat me", &execution, &result, &layers);
-        let (cached, cached_layers) = cache
-            .get("model-a", "repeat me", &execution)
-            .expect("decision should be cached");
-
-        assert_eq!(cached.class_name, "secret");
-        assert!(cached_layers[0].duration_ms < 5.0);
-        assert_eq!(
-            cached_layers[0].details.get("decision_cache_hit"),
-            Some(&serde_json::json!(true))
-        );
-    }
-
-    #[test]
-    fn cache_scope_includes_execution_policy() {
-        let cache = DecisionCache::default();
-        let mut execution = ScanExecution::new(SecurityLevel::L2);
-        let result = result("secret");
-        let layers = layers("secret");
-
-        cache.insert("model-a", "repeat me", &execution, &result, &layers);
-        execution.set_defer_l3(true);
-
-        assert!(cache.get("model-a", "repeat me", &execution).is_none());
-    }
-
-    #[test]
-    fn cache_prunes_to_entry_cap() {
-        let cache = DecisionCache::with_config(DecisionCacheConfig {
-            max_entries: 1,
-            max_bytes: usize::MAX,
-        });
-        let execution = ScanExecution::new(SecurityLevel::L2);
-        let result = result("secret");
-        let layers = layers("secret");
-
-        cache.insert("model-a", "first", &execution, &result, &layers);
-        cache.insert("model-a", "second", &execution, &result, &layers);
-
-        assert!(cache.get("model-a", "first", &execution).is_none());
-        assert!(cache.get("model-a", "second", &execution).is_some());
     }
 }

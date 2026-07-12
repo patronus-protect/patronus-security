@@ -1,6 +1,6 @@
 import unittest
 
-from patronus_security import PatronusSecurity
+from patronus_security import SecurityGateway
 
 
 def classes(results):
@@ -9,7 +9,7 @@ def classes(results):
 
 class NativeScannerTests(unittest.TestCase):
     def test_dlp_and_pii_native_scans_find_obvious_matches(self):
-        scanner = PatronusSecurity(
+        scanner = SecurityGateway(
             categories=["dlp", "pii"], max_level="l2", download_files=False
         )
         scanner.warmup()
@@ -23,8 +23,10 @@ class NativeScannerTests(unittest.TestCase):
         self.assertIn("EMAIL", classes(pii_results))
 
     def test_injection_native_scan_finds_instruction_leak(self):
-        scanner = PatronusSecurity(
-            categories=["injection"], max_level="l2", download_files=False
+        # max_level l1 keeps the scan native-only; l2 would require the NTDB
+        # injection export and warmup() fails offline when it is missing.
+        scanner = SecurityGateway(
+            categories=["injection"], max_level="l1", download_files=False
         )
         scanner.warmup()
 
@@ -33,9 +35,9 @@ class NativeScannerTests(unittest.TestCase):
         self.assertIn("instruction_leak", classes(results))
 
     def test_scan_categories_combines_requested_native_categories(self):
-        scanner = PatronusSecurity(
+        scanner = SecurityGateway(
             categories=["dlp", "pii", "injection"],
-            max_level="l2",
+            max_level="l1",
             download_files=False,
         )
         scanner.warmup()

@@ -94,28 +94,3 @@ pub fn steuer_id(s: &str) -> bool {
     let check = (11 - product) % 10;
     check == digits[10]
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn luhn_valid_visa() {
-        assert!(luhn("4111111111111111"));
-    }
-
-    #[test]
-    fn luhn_invalid() {
-        assert!(!luhn("4111111111111112"));
-    }
-
-    #[test]
-    fn mod97_valid_de_iban() {
-        assert!(mod97("DE89370400440532013000"));
-    }
-
-    #[test]
-    fn mod97_invalid() {
-        assert!(!mod97("DE00370400440532013000"));
-    }
-}

@@ -52,8 +52,9 @@ class Asset:
 def parse_assets() -> list[Asset]:
     source = (ROOT / "rust/src/assets/specs.rs").read_text()
     source = source.split("pub const ASSET_MANIFEST", 1)[1]
+    source = source.split("pub const NTDB_L2_PACKAGE_MANIFEST", 1)[0]
     assets: list[Asset] = []
-    for block in re.findall(r"AssetSpec\s*\{(.*?)\}", source, flags=re.S):
+    for block in re.findall(r"\bAssetSpec\s*\{(.*?)\}", source, flags=re.S):
         category = _field(block, "category").replace("SecurityCategory::", "")
         level = _field(block, "level").replace("SecurityLevel::", "")
         assets.append(
@@ -67,6 +68,32 @@ def parse_assets() -> list[Asset]:
             )
         )
     return assets
+
+
+@dataclass(frozen=True)
+class NtdbPackage:
+    category: str
+    model: str
+    repo: str
+    source_prefix: str
+    destination_path: str
+
+
+def parse_ntdb_packages() -> list[NtdbPackage]:
+    source = (ROOT / "rust/src/assets/specs.rs").read_text()
+    source = source.split("pub const NTDB_L2_PACKAGE_MANIFEST", 1)[1]
+    packages: list[NtdbPackage] = []
+    for block in re.findall(r"\bNtdbL2PackageAssetSpec\s*\{(.*?)\}", source, flags=re.S):
+        packages.append(
+            NtdbPackage(
+                category=_field(block, "category").replace("SecurityCategory::", ""),
+                model=_field(block, "model").strip('"'),
+                repo=_field(block, "repo").strip('"'),
+                source_prefix=_field(block, "source_prefix").strip('"'),
+                destination_path=_field(block, "destination_path").strip('"'),
+            )
+        )
+    return packages
 
 
 def _field(block: str, name: str) -> str:
@@ -137,6 +164,23 @@ def format_size(num_bytes: int | None) -> str:
     return f"{kib:.1f} KiB"
 
 
+def ntdb_package_table(packages: list[NtdbPackage]) -> list[str]:
+    lines = [
+        "## NTDB L2 Packages",
+        "",
+        "NTDB v2 L2 packages are manifest-first: the runtime downloads `manifest.json` and every file it references. Sizes therefore depend on the published package contents.",
+        "",
+        "| Category | Model | Repository | Source prefix | Cache path |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for package in packages:
+        lines.append(
+            f"| {package.category} | `{package.model}` | `{package.repo}` | `{package.source_prefix}` | `{package.destination_path}` |"
+        )
+    lines.append("")
+    return lines
+
+
 def generate_assets_doc(assets: list[Asset], snapshot: dict) -> str:
     lines = [
         "# Asset Downloads",
@@ -147,7 +191,7 @@ def generate_assets_doc(assets: list[Asset], snapshot: dict) -> str:
         "",
         "## Cache Location",
         "",
-        "If Rust `use_dir` or Python `model_dir` is set, that directory is used as the asset root. Otherwise the library uses the platform cache directory and appends `patronus_security`:",
+        "If `model_dir` is set, that directory is used as the asset root. Otherwise the library uses the platform cache directory and appends `patronus_security`:",
         "",
         "| Platform | Typical default cache root |",
         "| --- | --- |",
@@ -171,9 +215,12 @@ def generate_assets_doc(assets: list[Asset], snapshot: dict) -> str:
         "- L3 ONNX sessions are lazy-loaded on first L3 inference and are evicted after `PATRONUS_L3_TTL_SECS` seconds of idleness. The default TTL is `300` seconds.",
         "- Set `HF_TOKEN` when a model repository requires authenticated or rate-limited Hugging Face access.",
         "",
+    ]
+    lines.extend(ntdb_package_table(parse_ntdb_packages()))
+    lines.extend([
         "## Download Size Snapshot",
         "",
-    ]
+    ])
     if snapshot.get("generated_at"):
         lines.append(f"Snapshot generated: `{snapshot['generated_at']}`.")
     else:
@@ -253,14 +300,10 @@ def generate_python_api_doc() -> str:
         "",
         "Import from `patronus_security` after installing the wheel or running `maturin develop`.",
         "",
-        "`SecurityGateway` is the preferred public alias for `PatronusSecurity`.",
-        "",
     ]
     for node in tree.body:
-        if isinstance(node, ast.ClassDef) and node.name == "PatronusSecurity":
+        if isinstance(node, ast.ClassDef) and node.name == "SecurityGateway":
             lines.extend(_python_class_doc(node))
-        if isinstance(node, ast.FunctionDef) and node.name == "useLibrary":
-            lines.extend(_python_function_doc(node, heading_level=2))
     return "\n".join(lines).rstrip() + "\n"
 
 

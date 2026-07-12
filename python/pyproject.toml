@@ -38,3 +38,5 @@ Issues = "https://github.com/patronus-protect/patronus-security/issues"
 [tool.maturin]
 features = ["pyo3/extension-module"]
 module-name = "patronus_security._patronus_security"
+include = [{ path = "patronus_security/benchmark_data/*.jsonl", format = ["sdist", "wheel"] }]
+exclude = [{ path = "patronus_security/__pycache__/**", format = ["sdist", "wheel"] }]

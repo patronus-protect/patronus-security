@@ -1,6 +1,7 @@
 use patronus_security::{
-    ExecutionBackend, L3SchedulerPolicy, LayerResult, LongTextPolicy, OnnxBatchMode,
-    PatronusSecurity, ScanGateMatrix, SecurityCategory, SecurityLevel,
+    ExecutionBackend, L3SchedulerPolicy, LayerResult, LongTextPolicy, NtdbOperatingPoint,
+    OnnxBatchMode, QueuedSecurityScanResult, ScanGateMatrix, SecurityCategory,
+    SecurityGateway as RustSecurityGateway, SecurityLevel,
 };
 use pyo3::prelude::*;
 use std::path::PathBuf;
@@ -8,37 +9,38 @@ use std::time::Duration;
 
 #[pyclass]
 struct SecurityGateway {
-    inner: PatronusSecurity,
+    inner: RustSecurityGateway,
 }
 
 #[pymethods]
 impl SecurityGateway {
     #[new]
-    #[pyo3(signature = (categories, max_level="l2", use_dir=None, download_files=true, download_categories=None, execution_gates_json=None, onnx_batch_mode="backend_default", execution_backend="auto"))]
+    #[pyo3(signature = (categories, max_level="l2", model_dir=None, download_files=true, download_categories=None, execution_gates_json=None, onnx_batch_mode="backend_default", execution_backend="auto", ntdb_operating_point="best_promote"))]
     fn new(
         categories: Vec<String>,
         max_level: &str,
-        use_dir: Option<String>,
+        model_dir: Option<String>,
         download_files: bool,
         download_categories: Option<Vec<String>>,
         execution_gates_json: Option<&str>,
         onnx_batch_mode: &str,
         execution_backend: &str,
+        ntdb_operating_point: &str,
     ) -> PyResult<Self> {
         let rust_categories = parse_categories(categories)?;
         let rust_max_level = match max_level.parse::<SecurityLevel>() {
             Ok(level) => level,
             Err(e) => return Err(pyo3::exceptions::PyValueError::new_err(e)),
         };
-        let rust_use_dir = use_dir.map(PathBuf::from);
+        let rust_model_dir = model_dir.map(PathBuf::from);
         let rust_download_categories = match download_categories {
             Some(categories) => Some(parse_categories(categories)?),
             None => None,
         };
-        let mut inner = PatronusSecurity::with_download_categories(
+        let inner = RustSecurityGateway::with_download_categories(
             rust_categories,
             rust_max_level,
-            rust_use_dir,
+            rust_model_dir,
             download_files,
             rust_download_categories,
         );
@@ -46,6 +48,7 @@ impl SecurityGateway {
             inner.set_execution_gates(gates);
         }
         inner.set_execution_backend(parse_execution_backend(execution_backend)?);
+        inner.set_ntdb_operating_point(parse_ntdb_operating_point(ntdb_operating_point)?);
         if onnx_batch_mode != "backend_default" {
             inner.set_onnx_batch_mode(parse_onnx_batch_mode(onnx_batch_mode)?);
         }
@@ -82,6 +85,12 @@ impl SecurityGateway {
     fn set_execution_backend(&mut self, backend: &str) -> PyResult<()> {
         self.inner
             .set_execution_backend(parse_execution_backend(backend)?);
+        Ok(())
+    }
+
+    fn set_ntdb_operating_point(&mut self, point: &str) -> PyResult<()> {
+        self.inner
+            .set_ntdb_operating_point(parse_ntdb_operating_point(point)?);
         Ok(())
     }
 
@@ -156,48 +165,16 @@ impl SecurityGateway {
         Ok(request_id)
     }
 
-    #[pyo3(signature = (request_id, timeout=None))]
+    #[pyo3(signature = (timeout=None))]
     fn consume_next_result(
         &self,
         py: Python<'_>,
-        request_id: &str,
         timeout: Option<f64>,
     ) -> PyResult<Option<PyEvaluationResult>> {
-        if !self.inner.has_request(request_id) {
-            return Err(pyo3::exceptions::PyKeyError::new_err(
-                request_id.to_string(),
-            ));
-        }
         let timeout = timeout.map(Duration::from_secs_f64);
-        let request_id = request_id.to_string();
         Ok(py
-            .allow_threads(|| self.inner.consume_results(request_id, timeout))
+            .allow_threads(|| self.inner.consume_next_result(timeout))
             .map(PyEvaluationResult::from))
-    }
-
-    #[pyo3(signature = (request_id, timeout=None))]
-    fn consume_results(
-        &self,
-        py: Python<'_>,
-        request_id: &str,
-        timeout: Option<f64>,
-    ) -> PyResult<Vec<PyEvaluationResult>> {
-        if !self.inner.has_request(request_id) {
-            return Err(pyo3::exceptions::PyKeyError::new_err(
-                request_id.to_string(),
-            ));
-        }
-        let timeout = timeout.map(Duration::from_secs_f64);
-        let mut results = Vec::new();
-        loop {
-            let request_id = request_id.to_string();
-            let next = py.allow_threads(|| self.inner.consume_results(request_id, timeout));
-            match next {
-                Some(result) => results.push(PyEvaluationResult::from(result)),
-                None => break,
-            }
-        }
-        Ok(results)
     }
 
     fn has_request(&self, request_id: &str) -> bool {
@@ -225,6 +202,12 @@ fn parse_onnx_batch_mode(value: &str) -> PyResult<OnnxBatchMode> {
 fn parse_execution_backend(value: &str) -> PyResult<ExecutionBackend> {
     value
         .parse::<ExecutionBackend>()
+        .map_err(pyo3::exceptions::PyValueError::new_err)
+}
+
+fn parse_ntdb_operating_point(value: &str) -> PyResult<NtdbOperatingPoint> {
+    value
+        .parse::<NtdbOperatingPoint>()
         .map_err(pyo3::exceptions::PyValueError::new_err)
 }
 
@@ -358,6 +341,8 @@ struct PyLayerResult {
 #[derive(Clone)]
 struct PyEvaluationResult {
     #[pyo3(get)]
+    request_id: Option<String>,
+    #[pyo3(get)]
     category: String,
     #[pyo3(get)]
     class_name: String,
@@ -376,6 +361,7 @@ struct PyEvaluationResult {
 impl From<patronus_security::SecurityScanResult> for PyEvaluationResult {
     fn from(result: patronus_security::SecurityScanResult) -> Self {
         PyEvaluationResult {
+            request_id: None,
             category: result.category,
             class_name: result.class_name,
             confidence: result.confidence,
@@ -384,6 +370,14 @@ impl From<patronus_security::SecurityScanResult> for PyEvaluationResult {
             duration_ms: result.duration_ms,
             layers: result.layers.into_iter().map(PyLayerResult::from).collect(),
         }
+    }
+}
+
+impl From<QueuedSecurityScanResult> for PyEvaluationResult {
+    fn from(queued: QueuedSecurityScanResult) -> Self {
+        let mut result = PyEvaluationResult::from(queued.result);
+        result.request_id = Some(queued.request_id);
+        result
     }
 }
 

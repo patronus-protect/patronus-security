@@ -4,20 +4,15 @@
 
 Import from `patronus_security` after installing the wheel or running `maturin develop`.
 
-`SecurityGateway` is the preferred public alias for `PatronusSecurity`.
-
-## `PatronusSecurity`
+## `SecurityGateway`
 
 Python gateway for Patronus Security scanners.
 
 Args:
     categories: Scanner categories to use for `scan_all`.
     max_level: Maximum scanner level: `l1`, `l2`, or `l3`.
-    use_dir: Optional asset cache root. Defaults to the platform cache
-        directory plus `patronus_security`. Prefer `model_dir` in new
-        code.
-    model_dir: Public alias for the asset cache root. Pass either
-        `model_dir` or `use_dir`, not both.
+    model_dir: Optional asset cache root. Defaults to the platform cache
+        directory plus `patronus_security`.
     download_files: Whether `warmup()` may download missing model assets.
     download_categories: Optional category allowlist for asset downloads.
         When omitted, every configured category may download if
@@ -37,6 +32,17 @@ Args:
         `directml`, or `tensorrt`. Backend defaults choose lazy L3 on
         CPU/auto and tensor batches on accelerator backends unless
         `onnx_batch_mode` is explicitly set.
+    ntdb_operating_point: Calibrated NTDB threshold set. One of
+        `best_promote` (default), `best_f1`, `best_fpr_in_f1`,
+        `best_fnr_in_f1`, or `best_latency_in_f1`.
+
+### `categories() -> list[str]`
+
+Categories configured for `scan_all`.
+
+### `max_level() -> str`
+
+Maximum scanner level configured for this gateway.
 
 ### `warmup()`
 
@@ -80,16 +86,20 @@ Replace execution backend and apply its default L3 mode.
 `cuda`, `directml`, and `tensorrt` default to tensor batches. Call
 `set_onnx_batch_mode` afterwards to override.
 
+### `set_ntdb_operating_point(point: str)`
+
+Select the calibrated NTDB threshold set for subsequent scans.
+
 ### `set_long_text_policy(enabled: bool = True, no_full_l2_byte_limit: int = 1024, chunk_size_bytes: int = 256, overlap_bytes: int = 96, verify_non_benign_l2: bool = True)`
 
-Replace long-text routing policy for model-backed pipelines.
+Replace the long-text policy used for L3 chunked verification.
 
-Full-text L1 always runs first. If L1 returns a non-benign result,
-the pipeline can stop there. If L1 is benign and the text is at or
-above `no_full_l2_byte_limit`, full-text L2 is skipped and the text
-is evaluated through overlapping L1/L2 chunks instead. Chunks with
-unresolved or non-benign L2 decisions are then verified by L3 when
-L3 is enabled.
+NTDB L2 always scans the full text; the model packages chunk
+internally and aggregate across chunks. When a scan is promoted to
+L3, the L3 worker splits the full text into overlapping
+`chunk_size_bytes`/`overlap_bytes` windows and verifies them by
+priority. `verify_non_benign_l2` keeps non-benign L2 chunk decisions
+subject to L3 verification during aggregation.
 
 ### `scan_category(category: str, text: str) -> list[dict]`
 
@@ -103,16 +113,36 @@ Scan text with a caller-provided category subset.
 
 Queue one scan request and return its request id.
 
-`consume_results(request_id)` yields complete Result-Schema dicts as
-soon as the configured category scan for that request finishes.
+This method does not return scan results. A background gateway worker
+executes L1/L2 and a separate worker executes promoted L3 jobs.
+`consume_results()` yields complete Result-Schema dicts from the shared
+result queue. Each queued result includes its `request_id`.
 
-### `consume_results(request_id: str, timeout: float | None = None)`
+### `consume_results(timeout: float | None = None)`
 
-Yield queued complete scan results for one request id.
+Yield complete results from the shared result queue until timeout.
 
-Raises:
-    KeyError: If the request id is unknown or already consumed.
+### `consume_next_result(timeout: float | None = None) -> dict | None`
+
+Return the next complete result from the shared result queue.
 
 ### `has_request(request_id: str) -> bool`
 
 Return whether a queued request is still active in the Rust aggregator.
+
+### `run_local_benchmark(output_dir: str = 'benchmark', limit_per_pipeline: int | None = None, load_requests: int = 200, print_summary: bool = True) -> dict`
+
+Benchmark this gateway against the sample data shipped with the package.
+
+Runs benchmark phases and writes a readable `BENCHMARK.md` plus JSON into `output_dir`:
+one complete queued response (`example_result.json`), benign false
+positives (`benign_result.json`), labelled classifier
+validation (`classifier_result.json`), and a queue load test where one
+producer enqueues texts while one consumer drains the shared result queue
+(`load_result.json`). Only pipelines whose
+category is configured on this gateway are evaluated; the L3 load
+scenario runs only when `max_level` is `l3`. Call `warmup()` first.
+
+Note: the classifier phase temporarily replaces the execution gate
+matrix to isolate tool-classifier subpipelines and resets it to the
+default all-enabled matrix afterwards.

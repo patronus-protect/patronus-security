@@ -1,31 +1,22 @@
 use std::collections::HashMap;
-use std::sync::Mutex;
-use std::time::Instant;
 
 use super::ChunkAggregation;
-use crate::ml::onnx::LazyOnnxTextClassifier;
-use crate::{EvaluationResult, LayerResult, OnnxBatchMode, ScanExecution, TextChunking};
+use crate::{EvaluationResult, LayerResult, TextChunking};
 
-pub(crate) struct LongTextAggregate {
+pub struct LongTextAggregate {
     pub result: EvaluationResult,
     pub layers: Vec<LayerResult>,
 }
 
-pub(crate) type L3CandidateInference = (EvaluationResult, HashMap<String, serde_json::Value>, f64);
-
-pub(crate) struct L3CandidateSelection {
+#[cfg(feature = "test-util")]
+pub struct L3CandidateSelection {
     pub indexes: Vec<usize>,
     pub raw_count: usize,
     pub deduped_count: usize,
     pub strategy: &'static str,
 }
 
-pub(crate) struct L3CandidateError {
-    pub details: HashMap<String, serde_json::Value>,
-    pub duration_ms: f64,
-}
-
-pub(crate) fn chunk_text_bytes(text: &str, chunking: TextChunking) -> Vec<String> {
+pub fn chunk_text_bytes(text: &str, chunking: TextChunking) -> Vec<String> {
     let raw = text.as_bytes();
     if raw.len() <= chunking.chunk_size_bytes {
         return vec![text.to_string()];
@@ -48,50 +39,8 @@ pub(crate) fn chunk_text_bytes(text: &str, chunking: TextChunking) -> Vec<String
     chunks
 }
 
-pub(crate) fn infer_l3_candidate_texts(
-    l3: &Option<Mutex<LazyOnnxTextClassifier>>,
-    texts: &[String],
-    execution: &ScanExecution,
-) -> Option<Result<Vec<L3CandidateInference>, L3CandidateError>> {
-    if texts.is_empty() {
-        return Some(Ok(Vec::new()));
-    }
-    let mut model = l3.as_ref()?.lock().ok()?;
-    let started = Instant::now();
-    let result = match execution.onnx_batch_mode() {
-        OnnxBatchMode::LazyBatches => texts
-            .iter()
-            .map(|text| model.infer(text, execution.backend()))
-            .collect::<Result<Vec<_>, _>>(),
-        OnnxBatchMode::TensorBatch => model.infer_batch(texts, execution.backend()),
-    };
-    let duration_ms = elapsed_ms(started) / texts.len() as f64;
-    let metadata = l3_metadata(
-        model.precision(),
-        model.model_path(),
-        model.model_name(),
-        model.execution_provider(),
-        execution.onnx_batch_mode().as_str(),
-        texts.len(),
-    );
-    Some(match result {
-        Ok(results) => Ok(results
-            .into_iter()
-            .map(|result| (result, metadata.clone(), duration_ms))
-            .collect()),
-        Err(err) => {
-            let mut details = metadata;
-            details.insert("error".to_string(), serde_json::json!(err.to_string()));
-            details.insert("fallback_due_to_error".to_string(), serde_json::json!(true));
-            Err(L3CandidateError {
-                details,
-                duration_ms,
-            })
-        }
-    })
-}
-
-pub(crate) fn candidate_selection<F>(
+#[cfg(feature = "test-util")]
+pub fn candidate_selection<F>(
     chunk_outputs: &[(EvaluationResult, Vec<LayerResult>)],
     mut needs_l3: F,
 ) -> L3CandidateSelection
@@ -146,6 +95,7 @@ where
     }
 }
 
+#[cfg(feature = "test-util")]
 fn best_candidate_in_run(
     run: &[usize],
     chunk_outputs: &[(EvaluationResult, Vec<LayerResult>)],
@@ -160,7 +110,7 @@ fn best_candidate_in_run(
         .expect("candidate run must not be empty")
 }
 
-pub(crate) fn aggregate_chunk_outputs(
+pub fn aggregate_chunk_outputs(
     full_text_layers: Vec<LayerResult>,
     chunk_outputs: Vec<(EvaluationResult, Vec<LayerResult>)>,
     chunk_count: usize,
@@ -254,14 +204,10 @@ fn select_chunk_output<'a>(
         ChunkAggregation::MajorityVoteOrHighest => {
             majority_vote_chunk(chunk_outputs).or_else(|| highest_confidence_chunk(chunk_outputs))
         }
-        ChunkAggregation::FirstPositive => chunk_outputs
-            .iter()
-            .enumerate()
-            .find(|(_, (result, _))| result.class_name != safe_class)
-            .or_else(|| chunk_outputs.iter().enumerate().next()),
         ChunkAggregation::HighestRiskOrConfidence => {
             highest_risk_or_confidence_chunk(chunk_outputs, safe_class)
         }
+        ChunkAggregation::FirstPositive => first_positive_chunk(chunk_outputs, safe_class),
     }
 }
 
@@ -310,6 +256,17 @@ fn majority_vote_chunk<'a>(
         .enumerate()
         .filter(|(_, (result, _))| result.class_name == winning_class)
         .max_by(|(_, (left, _)), (_, (right, _))| left.confidence.total_cmp(&right.confidence))
+}
+
+fn first_positive_chunk<'a>(
+    chunk_outputs: &'a [(EvaluationResult, Vec<LayerResult>)],
+    safe_class: &str,
+) -> Option<(usize, &'a (EvaluationResult, Vec<LayerResult>))> {
+    chunk_outputs
+        .iter()
+        .enumerate()
+        .find(|(_, (result, _))| result.class_name != safe_class)
+        .or_else(|| chunk_outputs.iter().enumerate().next())
 }
 
 fn summary_layer(
@@ -366,7 +323,8 @@ fn layer_duration_totals(layers: &[LayerResult]) -> HashMap<String, f64> {
     })
 }
 
-pub(crate) fn l3_metadata(
+#[cfg(feature = "test-util")]
+pub fn l3_metadata(
     precision: Option<&str>,
     model_path: Option<&std::path::Path>,
     model_name: &str,
@@ -393,238 +351,4 @@ pub(crate) fn l3_metadata(
     }
     details.insert("model_name".to_string(), serde_json::json!(model_name));
     details
-}
-
-fn elapsed_ms(started: Instant) -> f64 {
-    started.elapsed().as_secs_f64() * 1000.0
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn result(class_name: &str, confidence: f64, level: &str) -> EvaluationResult {
-        EvaluationResult {
-            class_name: class_name.to_string(),
-            confidence,
-            level: level.to_string(),
-        }
-    }
-
-    fn layer(
-        level: &str,
-        class_name: &str,
-        confidence: f64,
-        matched: bool,
-        duration_ms: f64,
-    ) -> LayerResult {
-        LayerResult {
-            level: level.to_string(),
-            layer_type: "test".to_string(),
-            class_name: class_name.to_string(),
-            confidence,
-            matched,
-            duration_ms,
-            thresholds: HashMap::new(),
-            details: HashMap::new(),
-        }
-    }
-
-    #[test]
-    fn chunk_text_bytes_preserves_tail_and_overlap() {
-        let chunking = TextChunking::new(5, 2).unwrap();
-
-        let chunks = chunk_text_bytes("abcdefghijkl", chunking);
-
-        assert_eq!(chunks, vec!["abcde", "defgh", "ghijk", "jkl"]);
-        assert_eq!(chunks.last().unwrap(), "jkl");
-    }
-
-    #[test]
-    fn candidate_selection_dedupes_contiguous_same_class_by_best_confidence() {
-        let chunk_outputs = vec![
-            (
-                result("secret", 0.60, "L2"),
-                vec![layer("L2", "secret", 0.60, true, 1.0)],
-            ),
-            (
-                result("secret", 0.90, "L2"),
-                vec![layer("L2", "secret", 0.90, true, 1.0)],
-            ),
-            (
-                result("credential", 0.80, "L2"),
-                vec![layer("L2", "credential", 0.80, true, 1.0)],
-            ),
-            (
-                result("safe", 1.0, "L1"),
-                vec![layer("L1", "safe", 1.0, true, 1.0)],
-            ),
-        ];
-
-        let selection =
-            candidate_selection(&chunk_outputs, |result, _| result.class_name != "safe");
-
-        assert_eq!(selection.raw_count, 3);
-        assert_eq!(selection.deduped_count, 2);
-        assert_eq!(selection.indexes, vec![1, 2]);
-        assert_eq!(selection.strategy, "contiguous_same_class_best_confidence");
-    }
-
-    #[test]
-    fn aggregate_chunk_outputs_selects_highest_risk_and_summarizes_omitted_work() {
-        let full_text_layers = vec![layer("L1", "safe", 0.0, false, 0.5)];
-        let chunk_outputs = vec![
-            (
-                result("safe", 0.99, "L1"),
-                vec![layer("L1", "safe", 0.99, true, 1.0)],
-            ),
-            (
-                result("secret", 0.70, "L2"),
-                vec![layer("L2", "secret", 0.70, true, 2.0)],
-            ),
-            (
-                result("credential", 0.95, "L2"),
-                vec![layer("L2", "credential", 0.95, true, 3.0)],
-            ),
-        ];
-
-        let aggregate = aggregate_chunk_outputs(
-            full_text_layers,
-            chunk_outputs,
-            3,
-            "safe",
-            true,
-            ChunkAggregation::HighestRiskOrConfidence,
-        )
-        .unwrap();
-
-        assert_eq!(aggregate.result.class_name, "credential");
-        assert_eq!(aggregate.result.confidence, 0.95);
-        let selected_chunk_layer = aggregate
-            .layers
-            .iter()
-            .find(|layer| {
-                layer.class_name == "credential"
-                    && layer.details.get("chunk_id") == Some(&serde_json::json!(2))
-            })
-            .expect("selected chunk layer should be retained");
-        assert_eq!(
-            selected_chunk_layer.details.get("chunk_count"),
-            Some(&serde_json::json!(3))
-        );
-
-        let l2_summary = aggregate
-            .layers
-            .iter()
-            .find(|layer| layer.level == "L2" && layer.layer_type == "chunked_batch_summary")
-            .expect("omitted L2 work should be summarized");
-        assert_eq!(l2_summary.duration_ms, 2.0);
-        assert_eq!(
-            l2_summary.details.get("total_chunk_layer_count"),
-            Some(&serde_json::json!(2))
-        );
-    }
-
-    #[test]
-    fn l3_metadata_records_runtime_backend_and_batch_shape() {
-        let metadata = l3_metadata(
-            Some("fp16"),
-            Some(std::path::Path::new("/tmp/model.onnx")),
-            "demo-model",
-            Some("CPUExecutionProvider"),
-            "tensor_batch",
-            4,
-        );
-
-        assert_eq!(
-            metadata.get("runtime"),
-            Some(&serde_json::json!("onnxruntime"))
-        );
-        assert_eq!(metadata.get("precision"), Some(&serde_json::json!("fp16")));
-        assert_eq!(
-            metadata.get("model_name"),
-            Some(&serde_json::json!("demo-model"))
-        );
-        assert_eq!(
-            metadata.get("batch_mode"),
-            Some(&serde_json::json!("tensor_batch"))
-        );
-        assert_eq!(metadata.get("batch_size"), Some(&serde_json::json!(4)));
-    }
-
-    #[test]
-    fn binary_any_positive_threshold_wins_before_highest_confidence() {
-        let chunk_outputs = vec![
-            (
-                EvaluationResult {
-                    class_name: "benign".to_string(),
-                    confidence: 0.99,
-                    level: "L3".to_string(),
-                },
-                vec![],
-            ),
-            (
-                EvaluationResult {
-                    class_name: "attack".to_string(),
-                    confidence: 0.94,
-                    level: "L3".to_string(),
-                },
-                vec![],
-            ),
-        ];
-
-        let aggregate = aggregate_chunk_outputs(
-            vec![],
-            chunk_outputs,
-            2,
-            "benign",
-            true,
-            ChunkAggregation::AnyPositiveOrHighest {
-                positive_class: "attack",
-                threshold: 0.93,
-            },
-        )
-        .unwrap();
-
-        assert_eq!(aggregate.result.class_name, "attack");
-        assert_eq!(aggregate.result.confidence, 0.94);
-    }
-
-    #[test]
-    fn binary_any_positive_falls_back_to_highest_confidence_below_threshold() {
-        let chunk_outputs = vec![
-            (
-                EvaluationResult {
-                    class_name: "benign".to_string(),
-                    confidence: 0.99,
-                    level: "L3".to_string(),
-                },
-                vec![],
-            ),
-            (
-                EvaluationResult {
-                    class_name: "attack".to_string(),
-                    confidence: 0.92,
-                    level: "L3".to_string(),
-                },
-                vec![],
-            ),
-        ];
-
-        let aggregate = aggregate_chunk_outputs(
-            vec![],
-            chunk_outputs,
-            2,
-            "benign",
-            true,
-            ChunkAggregation::AnyPositiveOrHighest {
-                positive_class: "attack",
-                threshold: 0.93,
-            },
-        )
-        .unwrap();
-
-        assert_eq!(aggregate.result.class_name, "benign");
-        assert_eq!(aggregate.result.confidence, 0.99);
-    }
 }
