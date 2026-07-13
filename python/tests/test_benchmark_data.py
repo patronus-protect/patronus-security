@@ -1,6 +1,8 @@
 import json
 import threading
 import unittest
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from patronus_security import benchmark
 
@@ -53,25 +55,21 @@ class BenchmarkDataTests(unittest.TestCase):
                 self.enqueue_threads.append(threading.get_ident())
                 self.next_id += 1
                 request_id = f"request-{self.next_id}"
-                self.requests[request_id] = 1
                 self.ready.append(
-                    {"request_id": request_id, "level": "L2", "layers": []}
+                    {
+                        "event_type": "result",
+                        "request_id": request_id,
+                        "result": {"request_id": request_id, "level": "L2", "layers": []},
+                    }
+                )
+                self.ready.append(
+                    {"event_type": "finished", "request_id": request_id, "completion": "complete"}
                 )
                 return request_id
 
-            def consume_next_result(self, timeout=None):
+            def consume_next_event(self, timeout=None):
                 self.consume_threads.append(threading.get_ident())
-                if not self.ready:
-                    return None
-                result = self.ready.pop(0)
-                request_id = result["request_id"]
-                self.requests[request_id] -= 1
-                if self.requests[request_id] == 0:
-                    del self.requests[request_id]
-                return result
-
-            def has_request(self, request_id):
-                return request_id in self.requests
+                return self.ready.pop(0) if self.ready else None
 
         gateway = FakeGateway()
         original = benchmark._load_scenario_texts
@@ -102,34 +100,38 @@ class BenchmarkDataTests(unittest.TestCase):
             def enqueue(self, _text):
                 self.next_id += 1
                 request_id = f"request-{self.next_id}"
-                levels = ["L2", "L3"] if self.next_id == 1 else ["L2"]
-                self.requests[request_id] = len(levels)
                 self.ready.append(
-                    {"request_id": request_id, "level": "L2", "layers": []}
+                    {
+                        "event_type": "result",
+                        "request_id": request_id,
+                        "result": {"request_id": request_id, "level": "L2", "layers": []},
+                    }
                 )
                 if self.next_id == 1:
                     self.delayed_l3 = {
+                        "event_type": "result",
                         "request_id": request_id,
-                        "level": "L3",
-                        "layers": [],
+                        "result": {"request_id": request_id, "level": "L3", "layers": []},
                     }
                 else:
+                    self.ready.append(
+                        {"event_type": "finished", "request_id": request_id, "completion": "complete"}
+                    )
                     self.ready.append(self.delayed_l3)
+                    self.ready.append(
+                        {"event_type": "finished", "request_id": "request-1", "completion": "complete"}
+                    )
                 return request_id
 
-            def consume_next_result(self, timeout=None):
+            def consume_next_event(self, timeout=None):
                 if not self.ready:
                     return None
-                result = self.ready.pop(0)
-                request_id = result["request_id"]
-                self.result_order.append((request_id, result["level"]))
-                self.requests[request_id] -= 1
-                if self.requests[request_id] == 0:
-                    del self.requests[request_id]
-                return result
-
-            def has_request(self, request_id):
-                return request_id in self.requests
+                event = self.ready.pop(0)
+                if event["event_type"] == "result":
+                    self.result_order.append(
+                        (event["request_id"], event["result"]["level"])
+                    )
+                return event
 
         gateway = FakeGateway()
         original = benchmark._load_scenario_texts
@@ -206,10 +208,31 @@ class BenchmarkDataTests(unittest.TestCase):
                     }
                 }
             },
+            {
+                "profiles": {
+                    "injection_all": {
+                        "categories": ["injection"],
+                        "benign": {
+                            "iterations": 2,
+                            "results_per_scan": 18.0,
+                            "findings_per_scan": 0.0,
+                            "latency": latency,
+                        },
+                        "match_at_end": {
+                            "iterations": 2,
+                            "results_per_scan": 18.0,
+                            "findings_per_scan": 1.0,
+                            "latency": latency,
+                        },
+                    }
+                }
+            },
         )
         self.assertIn("# Benchmark", report)
         self.assertIn("One producer", report)
         self.assertIn("L3 queue wait", report)
+        self.assertIn("## Native L1 on 10 KiB", report)
+        self.assertIn("| injection_all | injection | match_at_end |", report)
         self.assertIn("| injection | with_l3 |", report)
         self.assertIn("## One complete queued response", report)
         self.assertIn('"request_id": "request-1"', report)
@@ -219,6 +242,102 @@ class BenchmarkDataTests(unittest.TestCase):
             report.index("## One complete queued response"),
         )
 
+    def test_native_l1_benchmark_uses_10kb_texts_and_isolates_models(self):
+        class FakeGateway:
+            categories = ["injection", "dlp", "pii"]
+
+            def __init__(self):
+                self.gates = []
+                self.scans = []
+
+            def set_execution_gates(self, gates):
+                self.gates.append(gates)
+
+            def scan_categories(self, categories, text):
+                self.scans.append((list(categories), text))
+                category = categories[0]
+                return [
+                    {
+                        "category": category,
+                        "class_name": "safe",
+                    }
+                ]
+
+        gateway = FakeGateway()
+        result = benchmark._run_native_l1_10kb(
+            gateway,
+            iterations=2,
+            warmup_iterations=0,
+        )
+
+        self.assertEqual(
+            set(result["profiles"]),
+            {"injection_all", "dlp", "pii", "mcp_policy", "all_native_l1"},
+        )
+        self.assertTrue(gateway.scans)
+        self.assertTrue(
+            all(len(text.encode("utf-8")) == 10 * 1024 for _, text in gateway.scans)
+        )
+        self.assertEqual(len({text for _, text in gateway.scans}), len(gateway.scans))
+        self.assertTrue(any(text.startswith("bash ") for _, text in gateway.scans))
+        self.assertIsNone(gateway.gates[-1])
+
+        model_gates = [
+            gates["models"]
+            for gates in gateway.gates
+            if gates and "models" in gates
+        ]
+        self.assertIn(
+            {model: model == "native:dlp" for model in benchmark.DLP_NATIVE_MODELS},
+            model_gates,
+        )
+        self.assertIn(
+            {model: model == "native:mcp_policy" for model in benchmark.DLP_NATIVE_MODELS},
+            model_gates,
+        )
+
+    def test_run_local_benchmark_writes_native_l1_result(self):
+        class FakeGateway:
+            categories = ["injection", "dlp", "pii"]
+            max_level = "l1"
+
+        native_l1 = {
+            "text_bytes": 10 * 1024,
+            "iterations": 7,
+            "warmup_iterations": 10,
+            "profiles": {"injection_all": {}},
+        }
+        with (
+            TemporaryDirectory() as output_dir,
+            patch.object(benchmark, "_warm_l3_sessions"),
+            patch.object(benchmark, "_run_queue_example", return_value={"example": True}),
+            patch.object(benchmark, "_run_benign", return_value={"benign": True}),
+            patch.object(benchmark, "_run_classifier", return_value={"classifier": True}),
+            patch.object(
+                benchmark,
+                "_run_native_l1_10kb",
+                return_value=native_l1,
+            ) as run_native_l1,
+            patch.object(benchmark, "_run_load", return_value={"load": True}),
+            patch.object(benchmark, "_benchmark_markdown", return_value="# Benchmark\n"),
+        ):
+            result = benchmark.run_local_benchmark(
+                FakeGateway(),
+                output_dir=output_dir,
+                load_requests=1,
+                print_summary=False,
+                native_l1_iterations=7,
+            )
+
+            run_native_l1.assert_called_once()
+            self.assertEqual(run_native_l1.call_args.args[1], 7)
+            self.assertEqual(result["native_l1"], native_l1)
+            payload = json.loads(
+                (benchmark.Path(output_dir) / "native_l1_result.json").read_text()
+            )
+            self.assertEqual(payload["text_bytes"], 10 * 1024)
+            self.assertEqual(payload["iterations"], 7)
+
     def test_queue_example_preserves_every_consumed_result(self):
         class FakeGateway:
             categories = ["injection", "dlp"]
@@ -226,27 +345,33 @@ class BenchmarkDataTests(unittest.TestCase):
             def __init__(self):
                 self.results = [
                     {
+                        "event_type": "result",
                         "request_id": "request-1",
-                        "category": "injection",
-                        "level": "L2",
-                        "layers": [{"level": "L2"}],
+                        "result": {
+                            "request_id": "request-1",
+                            "category": "injection",
+                            "level": "L2",
+                            "layers": [{"level": "L2"}],
+                        },
                     },
                     {
+                        "event_type": "result",
                         "request_id": "request-1",
-                        "category": "injection",
-                        "level": "L3",
-                        "layers": [{"level": "L3"}],
+                        "result": {
+                            "request_id": "request-1",
+                            "category": "injection",
+                            "level": "L3",
+                            "layers": [{"level": "L3"}],
+                        },
                     },
+                    {"event_type": "finished", "request_id": "request-1", "completion": "complete"},
                 ]
 
             def enqueue(self, _text):
                 return "request-1"
 
-            def consume_next_result(self, timeout=None):
+            def consume_next_event(self, timeout=None):
                 return self.results.pop(0) if self.results else None
-
-            def has_request(self, _request_id):
-                return bool(self.results)
 
         example = benchmark._run_queue_example(FakeGateway())
 

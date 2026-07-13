@@ -149,23 +149,33 @@ fn scan_via_security_queue(
     category: SecurityCategory,
     text: &str,
 ) -> Result<Vec<SecurityScanResult>, Box<dyn std::error::Error>> {
-    let request_id = scanner.enqueue_categories(vec![category], text);
+    let request_id = scanner.enqueue_categories(vec![category], text, None);
     let mut results = Vec::new();
     let started = Instant::now();
     loop {
-        if let Some(queued) = scanner.consume_next_result(Some(Duration::from_secs(30))) {
-            if queued.request_id != request_id {
+        if let Some(event) = scanner.consume_next_event(Some(Duration::from_secs(30))) {
+            if event.request_id() != request_id {
                 return Err(format!(
-                    "received result for unexpected request {}",
-                    queued.request_id
+                    "received event for unexpected request {}",
+                    event.request_id()
                 )
                 .into());
             }
-            results.push(queued.result);
+            match event {
+                patronus_security::QueuedSecurityEvent::Result(queued) => {
+                    results.push(queued.result)
+                }
+                patronus_security::QueuedSecurityEvent::Finished { completion, .. } => {
+                    if matches!(
+                        completion,
+                        patronus_security::SecurityRequestCompletion::Failed { .. }
+                    ) {
+                        return Err("queued security request failed".into());
+                    }
+                    break;
+                }
+            }
             continue;
-        }
-        if !scanner.has_request(&request_id) {
-            break;
         }
         if started.elapsed() > Duration::from_secs(180) {
             return Err(

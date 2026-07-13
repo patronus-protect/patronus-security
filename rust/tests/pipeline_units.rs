@@ -2,7 +2,7 @@
 //! `test-util` feature surface (enabled for the test suite via dev-dependencies).
 
 mod strategy {
-    use patronus_security::pipeline::test_util::{PipelineInput, PipelineScope, PipelineStrategy};
+    use patronus_security::pipeline::test_util::PipelineStrategy;
     use patronus_security::LongTextPolicy;
 
     #[test]
@@ -27,35 +27,10 @@ mod strategy {
                 .overlap_bytes,
             128
         );
-        assert_eq!(
-            PipelineStrategy::sensitive_documents().scope(),
-            PipelineScope::Global
-        );
-        assert!(
-            !PipelineStrategy::sensitive_documents().should_skip_full_l2(&"x".repeat(4096), policy)
-        );
     }
 
     #[test]
-    fn local_text_pipeline_can_skip_full_l2_for_long_text() {
-        let policy = LongTextPolicy {
-            enabled: true,
-            no_full_l2_byte_limit: 1024,
-            chunk_size_bytes: 512,
-            overlap_bytes: 128,
-            verify_non_benign_l2: true,
-        };
-
-        let strategy = PipelineStrategy::prompt_injection();
-
-        assert_eq!(strategy.scope(), PipelineScope::Local);
-        assert_eq!(strategy.input(), PipelineInput::Text);
-        assert!(strategy.should_skip_full_l2(&"x".repeat(4096), policy));
-        assert!(!strategy.should_skip_full_l2("short", policy));
-    }
-
-    #[test]
-    fn structural_tool_pipeline_uses_local_chunk_policy_but_never_skips_full_l2() {
+    fn structural_tool_pipeline_uses_local_chunk_policy() {
         let strategy = PipelineStrategy::tool_classifier_executions();
         let policy = LongTextPolicy {
             enabled: true,
@@ -69,11 +44,6 @@ mod strategy {
             strategy.long_text_policy(policy).chunk_size_bytes,
             PipelineStrategy::LOCAL_CHUNK_SIZE_BYTES
         );
-        assert_eq!(strategy.scope(), PipelineScope::Local);
-        assert_eq!(strategy.input(), PipelineInput::Structural);
-        assert!(!strategy.should_skip_full_l2(&"x".repeat(4096), policy));
-        assert!(!strategy.l3_allowed_for_text(&"x".repeat(2049)));
-        assert!(strategy.l3_allowed_for_text(&"x".repeat(2048)));
     }
 }
 
@@ -431,43 +401,6 @@ mod long_text {
 
         assert_eq!(aggregate.result.class_name, "benign");
         assert_eq!(aggregate.result.confidence, 0.99);
-    }
-
-    #[test]
-    fn first_positive_aggregation_keeps_first_non_safe_chunk() {
-        let chunk_outputs = vec![
-            (result("safe", 0.99, "L2"), vec![]),
-            (
-                result("EMAIL", 0.60, "L2"),
-                vec![layer("L2", "EMAIL", 0.60, true, 1.0)],
-            ),
-            (
-                result("CREDIT_CARD", 0.95, "L2"),
-                vec![layer("L2", "CREDIT_CARD", 0.95, true, 1.0)],
-            ),
-        ];
-
-        let aggregate = aggregate_chunk_outputs(
-            vec![],
-            chunk_outputs,
-            3,
-            "safe",
-            true,
-            ChunkAggregation::FirstPositive,
-        )
-        .unwrap();
-
-        assert_eq!(aggregate.result.class_name, "EMAIL");
-        let selected_layer = aggregate
-            .layers
-            .iter()
-            .find(|layer| layer.details.get("chunk_id") == Some(&serde_json::json!(1)))
-            .expect("selected positive chunk layer should be retained");
-        assert_eq!(selected_layer.class_name, "EMAIL");
-        assert_eq!(
-            selected_layer.details.get("chunk_id"),
-            Some(&serde_json::json!(1))
-        );
     }
 }
 

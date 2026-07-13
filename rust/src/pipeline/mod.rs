@@ -15,7 +15,10 @@ pub use l3_result::{
 pub use l3_routing::{priority_index, ttl_ms};
 pub use security::SecurityGateway;
 
-pub(crate) use l3_worker::{L3JobSpec, L3Worker, RequestRegistry, RequestState};
+pub(crate) use l3_worker::{
+    failure_from_scan_result, finish_request_if_ready, L3JobSpec, L3Worker, RequestRegistry,
+    RequestState,
+};
 pub(crate) use strategy::{ChunkAggregation, PipelineStrategy};
 
 /// Internal items re-exported for the integration test suite. Not public API.
@@ -32,5 +35,5 @@ pub mod test_util {
         NTDB_TOOL_DESCRIPTIONS_MODEL_ID, NTDB_TOOL_EXECUTIONS_MODEL_ID, NTDB_TOOL_PROMPTS_MODEL_ID,
         TOOL_PROMPTS_MODEL,
     };
-    pub use super::strategy::{ChunkAggregation, PipelineInput, PipelineScope, PipelineStrategy};
+    pub use super::strategy::{ChunkAggregation, PipelineStrategy};
 }

@@ -1,7 +1,6 @@
-#![allow(dead_code)]
-
 use crate::EvaluationResult;
 use regex::Regex;
+use serde_json::Value;
 use std::sync::OnceLock;
 
 /// Severity of a MCP tool policy violation.
@@ -185,15 +184,42 @@ impl McpToolPolicyScanner {
     }
 
     pub fn scan_text(&self, text: &str) -> Vec<McpPolicyViolation> {
+        let Some(tool_name) = tool_name_from_text(text) else {
+            return Vec::new();
+        };
+        self.scan_tool_call(&tool_name, text)
+    }
+
+    pub fn scan_tool_call(&self, tool_name: &str, arguments: &str) -> Vec<McpPolicyViolation> {
         self.rules
             .iter()
-            .filter(|r| r.arg_re.is_match(text))
+            .filter(|rule| rule.tool_re.is_match(tool_name) && rule.arg_re.is_match(arguments))
             .map(|r| McpPolicyViolation {
                 rule_name: r.name,
                 severity: r.severity,
             })
             .collect()
     }
+}
+
+fn tool_name_from_text(text: &str) -> Option<String> {
+    let trimmed = text.trim_start();
+    if trimmed.starts_with('{') {
+        let value: Value = serde_json::from_str(trimmed).ok()?;
+        let object = value.as_object()?;
+        return ["tool_name", "tool", "name", "command"]
+            .into_iter()
+            .find_map(|key| object.get(key).and_then(Value::as_str))
+            .and_then(first_token)
+            .map(str::to_string);
+    }
+    first_token(trimmed).map(str::to_string)
+}
+
+fn first_token(text: &str) -> Option<&str> {
+    text.split_whitespace()
+        .next()
+        .filter(|token| !token.is_empty())
 }
 
 impl Default for McpToolPolicyScanner {

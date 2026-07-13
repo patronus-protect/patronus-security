@@ -10,8 +10,8 @@ use crate::{
         ntdb_executor::{manifest::PackageManifest, NtdbExecutor},
         onnx::LazyOnnxTextClassifier,
     },
-    pipeline::{Pipeline, PipelineStrategy},
-    SecurityCategory, SecurityLevel,
+    pipeline::Pipeline,
+    SecurityCategory, SecurityFailure, SecurityFailureKind, SecurityFailureStage, SecurityLevel,
 };
 
 use super::ntdb_l2::{
@@ -33,20 +33,6 @@ struct WarmupPipelineTask {
     kind: WarmupPipelineKind,
     label: &'static str,
     path: PathBuf,
-}
-
-fn pipeline_strategy(kind: WarmupPipelineKind) -> PipelineStrategy {
-    match kind {
-        WarmupPipelineKind::SensitiveDocumentsPrompts => PipelineStrategy::sensitive_documents(),
-        WarmupPipelineKind::ToolClassifierPrompts => PipelineStrategy::tool_classifier_prompts(),
-        WarmupPipelineKind::ToolClassifierExecutions => {
-            PipelineStrategy::tool_classifier_executions()
-        }
-        WarmupPipelineKind::ToolClassifierDescriptions => {
-            PipelineStrategy::tool_classifier_descriptions()
-        }
-        WarmupPipelineKind::UserIntentPrompts => PipelineStrategy::user_intent(),
-    }
 }
 
 fn log_pipeline_warmup(label: &str, started: Instant, has_l3: bool, l3_loaded: bool) {
@@ -74,7 +60,12 @@ fn first_existing_l1_rules_path(paths: impl IntoIterator<Item = PathBuf>) -> Opt
 }
 
 impl SecurityGateway {
-    pub fn warmup(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn warmup(&mut self) -> Result<(), SecurityFailure> {
+        self.warmup_inner()
+            .map_err(|error| warmup_failure(error.to_string()))
+    }
+
+    fn warmup_inner(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let base_dir = match &self.model_dir {
             Some(path) => path.clone(),
             None => dirs::cache_dir()
@@ -247,12 +238,8 @@ impl SecurityGateway {
             .into_par_iter()
             .map(|task| {
                 let started = Instant::now();
-                let pipeline = Pipeline::new_with_strategy(
-                    &task.path,
-                    SecurityLevel::L1,
-                    pipeline_strategy(task.kind),
-                )
-                .map_err(|err| format!("{}: {}", task.label, err))?;
+                let pipeline = Pipeline::new_with_max_level(&task.path, SecurityLevel::L1)
+                    .map_err(|err| format!("{}: {}", task.label, err))?;
                 log_pipeline_warmup(
                     task.label,
                     started,
@@ -335,6 +322,43 @@ impl SecurityGateway {
         );
         self.l3_worker.register_model(config.public_model, model);
         Ok(())
+    }
+}
+
+fn warmup_failure(message: String) -> SecurityFailure {
+    let lower = message.to_lowercase();
+    let (stage, kind, retryable) = if lower.contains("integrity")
+        || lower.contains("checksum")
+        || lower.contains("hash mismatch")
+    {
+        (
+            SecurityFailureStage::Asset,
+            SecurityFailureKind::IntegrityFailure,
+            false,
+        )
+    } else if lower.contains("missing")
+        || lower.contains("not found")
+        || lower.contains("no such file")
+    {
+        (
+            SecurityFailureStage::Asset,
+            SecurityFailureKind::MissingAsset,
+            true,
+        )
+    } else {
+        (
+            SecurityFailureStage::Warmup,
+            SecurityFailureKind::InitializationFailure,
+            false,
+        )
+    };
+    SecurityFailure {
+        stage,
+        level: None,
+        detector_id: None,
+        kind,
+        retryable,
+        message,
     }
 }
 

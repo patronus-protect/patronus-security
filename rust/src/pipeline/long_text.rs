@@ -207,7 +207,6 @@ fn select_chunk_output<'a>(
         ChunkAggregation::HighestRiskOrConfidence => {
             highest_risk_or_confidence_chunk(chunk_outputs, safe_class)
         }
-        ChunkAggregation::FirstPositive => first_positive_chunk(chunk_outputs, safe_class),
     }
 }
 
@@ -256,17 +255,6 @@ fn majority_vote_chunk<'a>(
         .enumerate()
         .filter(|(_, (result, _))| result.class_name == winning_class)
         .max_by(|(_, (left, _)), (_, (right, _))| left.confidence.total_cmp(&right.confidence))
-}
-
-fn first_positive_chunk<'a>(
-    chunk_outputs: &'a [(EvaluationResult, Vec<LayerResult>)],
-    safe_class: &str,
-) -> Option<(usize, &'a (EvaluationResult, Vec<LayerResult>))> {
-    chunk_outputs
-        .iter()
-        .enumerate()
-        .find(|(_, (result, _))| result.class_name != safe_class)
-        .or_else(|| chunk_outputs.iter().enumerate().next())
 }
 
 fn summary_layer(

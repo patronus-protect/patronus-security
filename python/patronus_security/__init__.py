@@ -38,6 +38,45 @@ def _to_dict(result):
     return output
 
 
+def _failure_to_dict(failure):
+    return {
+        "stage": failure.stage,
+        "level": failure.level,
+        "detector_id": failure.detector_id,
+        "kind": failure.kind,
+        "retryable": failure.retryable,
+        "message": failure.message,
+    }
+
+
+def _event_to_dict(event):
+    output = {
+        "event_type": event.event_type,
+        "request_id": event.request_id,
+    }
+    if event.event_type == "result":
+        output["result"] = _to_dict(event.result)
+    else:
+        output["completion"] = event.completion
+        output["failures"] = [_failure_to_dict(failure) for failure in event.failures]
+    return output
+
+
+def _request_state_to_dict(state):
+    return {
+        "state": state.state,
+        "completion": state.completion,
+        "failures": [_failure_to_dict(failure) for failure in state.failures],
+    }
+
+
+def _level_readiness_to_dict(readiness):
+    return {
+        "state": readiness.state,
+        "failures": [_failure_to_dict(failure) for failure in readiness.failures],
+    }
+
+
 def _execution_gates_json(execution_gates):
     if execution_gates is None:
         return None
@@ -257,32 +296,60 @@ class SecurityGateway:
         results = self.rust_gateway.scan_categories(categories, text)
         return [_to_dict(r) for r in results]
 
-    def enqueue(self, text: str, categories: list[str] | None = None) -> str:
+    def enqueue(
+        self,
+        text: str,
+        categories: list[str] | None = None,
+        execution_gates: dict | None = None,
+    ) -> str:
         """Queue one scan request and return its request id.
 
         This method does not return scan results. A background gateway worker
         executes L1/L2 and a separate worker executes promoted L3 jobs.
-        `consume_results()` yields complete Result-Schema dicts from the shared
-        result queue. Each queued result includes its `request_id`.
+        `consume_events()` yields result and terminal events from the shared
+        queue. Every event includes its `request_id`. `execution_gates`, when
+        provided, applies only to this request.
         """
-        return self.rust_gateway.enqueue(text, categories)
+        return self.rust_gateway.enqueue(
+            text,
+            categories,
+            _execution_gates_json(execution_gates),
+        )
 
-    def consume_results(self, timeout: float | None = None):
-        """Yield complete results from the shared result queue until timeout."""
+    def consume_events(self, timeout: float | None = None):
+        """Yield result and terminal events from the shared queue until timeout."""
         while True:
-            result = self.consume_next_result(timeout)
-            if result is None:
+            event = self.consume_next_event(timeout)
+            if event is None:
                 return
-            yield result
+            yield event
 
-    def consume_next_result(self, timeout: float | None = None) -> dict | None:
-        """Return the next complete result from the shared result queue."""
-        result = self.rust_gateway.consume_next_result(timeout)
-        return None if result is None else _to_dict(result)
+    def consume_next_event(self, timeout: float | None = None) -> dict | None:
+        """Return the next result or terminal event from the shared queue."""
+        event = self.rust_gateway.consume_next_event(timeout)
+        return None if event is None else _event_to_dict(event)
 
     def has_request(self, request_id: str) -> bool:
-        """Return whether a queued request is still active in the Rust aggregator."""
+        """Return whether work or an unconsumed terminal event exists for a request."""
         return self.rust_gateway.has_request(request_id)
+
+    def request_state(self, request_id: str) -> dict | None:
+        """Return lifecycle state until the terminal event is consumed."""
+        state = self.rust_gateway.request_state(request_id)
+        return None if state is None else _request_state_to_dict(state)
+
+    def is_finished(self, request_id: str) -> bool | None:
+        """Return whether a known request is terminal."""
+        return self.rust_gateway.is_finished(request_id)
+
+    def runtime_readiness(self) -> dict:
+        """Return L1/L2/L3 readiness using the request failure schema."""
+        readiness = self.rust_gateway.runtime_readiness()
+        return {
+            "l1": _level_readiness_to_dict(readiness.l1),
+            "l2": _level_readiness_to_dict(readiness.l2),
+            "l3": _level_readiness_to_dict(readiness.l3),
+        }
 
     def run_local_benchmark(
         self,
@@ -290,21 +357,23 @@ class SecurityGateway:
         limit_per_pipeline: int | None = None,
         load_requests: int = 200,
         print_summary: bool = True,
+        native_l1_iterations: int = 200,
     ) -> dict:
         """Benchmark this gateway against the sample data shipped with the package.
 
         Runs benchmark phases and writes a readable `BENCHMARK.md` plus JSON into `output_dir`:
         one complete queued response (`example_result.json`), benign false
         positives (`benign_result.json`), labelled classifier
-        validation (`classifier_result.json`), and a queue load test where one
+        validation (`classifier_result.json`), native L1 scans on exact 10 KiB
+        texts (`native_l1_result.json`), and a queue load test where one
         producer enqueues texts while one consumer drains the shared result queue
         (`load_result.json`). Only pipelines whose
         category is configured on this gateway are evaluated; the L3 load
         scenario runs only when `max_level` is `l3`. Call `warmup()` first.
 
-        Note: the classifier phase temporarily replaces the execution gate
-        matrix to isolate tool-classifier subpipelines and resets it to the
-        default all-enabled matrix afterwards.
+        Note: the classifier and native L1 phases temporarily replace the
+        execution gate matrix to isolate individual scanners and reset it to
+        the default all-enabled matrix afterwards.
         """
         from . import benchmark
 
@@ -313,5 +382,6 @@ class SecurityGateway:
             output_dir=output_dir,
             limit_per_pipeline=limit_per_pipeline,
             load_requests=load_requests,
+            native_l1_iterations=native_l1_iterations,
             print_summary=print_summary,
         )

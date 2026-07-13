@@ -1,4 +1,6 @@
-use crate::threat::looks_like_encoded_instruction_request_lower;
+use crate::threat::{
+    looks_like_encoded_instruction_request_lower, looks_like_obfuscated_instruction,
+};
 use crate::EvaluationResult;
 
 pub struct EncodedInstructionPipeline;
@@ -9,7 +11,8 @@ impl EncodedInstructionPipeline {
     }
 
     pub fn evaluate(&self, text: &str) -> EvaluationResult {
-        let is_violation = looks_like_encoded_instruction_request_lower(&text.to_lowercase());
+        let is_violation = looks_like_encoded_instruction_request_lower(&text.to_lowercase())
+            || looks_like_obfuscated_instruction(text);
         let class_name = if is_violation {
             "encoded_instruction"
         } else {

@@ -5,7 +5,6 @@ use std::path::Path;
 use std::time::Instant;
 
 use super::decision_cache::DecisionCache;
-use super::PipelineStrategy;
 use crate::ml::l1_heuristics::{HeuristicsEngine, RawRule};
 use crate::{EvaluationResult, LayerResult, ScanExecution, SecurityLevel};
 
@@ -23,18 +22,6 @@ impl Pipeline {
     pub fn new_with_max_level<P: AsRef<Path>>(
         dir: P,
         _max_level: SecurityLevel,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
-        Self::new_with_strategy(
-            dir,
-            SecurityLevel::L1,
-            PipelineStrategy::generic_text_local_multi(),
-        )
-    }
-
-    pub(crate) fn new_with_strategy<P: AsRef<Path>>(
-        dir: P,
-        _max_level: SecurityLevel,
-        _strategy: PipelineStrategy,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let dir = dir.as_ref();
         let rules_file = File::open(dir.join("l1_rules.json"))?;

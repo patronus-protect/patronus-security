@@ -19,7 +19,6 @@ mod l1_heuristics {
         let engine = HeuristicsEngine::new(vec![RawRule {
             ngram: "arguments command".to_string(),
             class: "tool_class.shell.execute".to_string(),
-            count: 1,
         }]);
 
         assert_eq!(

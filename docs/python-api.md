@@ -109,40 +109,54 @@ Scan text with a single category.
 
 Scan text with a caller-provided category subset.
 
-### `enqueue(text: str, categories: list[str] | None = None) -> str`
+### `enqueue(text: str, categories: list[str] | None = None, execution_gates: dict | None = None) -> str`
 
 Queue one scan request and return its request id.
 
 This method does not return scan results. A background gateway worker
 executes L1/L2 and a separate worker executes promoted L3 jobs.
-`consume_results()` yields complete Result-Schema dicts from the shared
-result queue. Each queued result includes its `request_id`.
+`consume_events()` yields result and terminal events from the shared
+queue. Every event includes its `request_id`. `execution_gates`, when
+provided, applies only to this request.
 
-### `consume_results(timeout: float | None = None)`
+### `consume_events(timeout: float | None = None)`
 
-Yield complete results from the shared result queue until timeout.
+Yield result and terminal events from the shared queue until timeout.
 
-### `consume_next_result(timeout: float | None = None) -> dict | None`
+### `consume_next_event(timeout: float | None = None) -> dict | None`
 
-Return the next complete result from the shared result queue.
+Return the next result or terminal event from the shared queue.
 
 ### `has_request(request_id: str) -> bool`
 
-Return whether a queued request is still active in the Rust aggregator.
+Return whether work or an unconsumed terminal event exists for a request.
 
-### `run_local_benchmark(output_dir: str = 'benchmark', limit_per_pipeline: int | None = None, load_requests: int = 200, print_summary: bool = True) -> dict`
+### `request_state(request_id: str) -> dict | None`
+
+Return lifecycle state until the terminal event is consumed.
+
+### `is_finished(request_id: str) -> bool | None`
+
+Return whether a known request is terminal.
+
+### `runtime_readiness() -> dict`
+
+Return L1/L2/L3 readiness using the request failure schema.
+
+### `run_local_benchmark(output_dir: str = 'benchmark', limit_per_pipeline: int | None = None, load_requests: int = 200, print_summary: bool = True, native_l1_iterations: int = 200) -> dict`
 
 Benchmark this gateway against the sample data shipped with the package.
 
 Runs benchmark phases and writes a readable `BENCHMARK.md` plus JSON into `output_dir`:
 one complete queued response (`example_result.json`), benign false
 positives (`benign_result.json`), labelled classifier
-validation (`classifier_result.json`), and a queue load test where one
+validation (`classifier_result.json`), native L1 scans on exact 10 KiB
+texts (`native_l1_result.json`), and a queue load test where one
 producer enqueues texts while one consumer drains the shared result queue
 (`load_result.json`). Only pipelines whose
 category is configured on this gateway are evaluated; the L3 load
 scenario runs only when `max_level` is `l3`. Call `warmup()` first.
 
-Note: the classifier phase temporarily replaces the execution gate
-matrix to isolate tool-classifier subpipelines and resets it to the
-default all-enabled matrix afterwards.
+Note: the classifier and native L1 phases temporarily replace the
+execution gate matrix to isolate individual scanners and reset it to
+the default all-enabled matrix afterwards.

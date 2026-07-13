@@ -6,8 +6,9 @@ use std::time::{Duration, Instant};
 use crate::ml::ntdb_executor::ByteSpan;
 use crate::ml::onnx::LazyOnnxTextClassifier;
 use crate::{
-    EvaluationResult, LayerResult, QueuedSecurityScanResult, RequestId, ScanExecution,
-    SecurityScanResult,
+    EvaluationResult, LayerResult, QueuedSecurityEvent, QueuedSecurityScanResult, RequestId,
+    ScanExecution, SecurityFailure, SecurityFailureKind, SecurityFailureStage, SecurityLevel,
+    SecurityRequestCompletion, SecurityScanResult,
 };
 
 use super::decision_cache::DecisionCache;
@@ -23,7 +24,7 @@ pub(crate) struct RequestRegistry {
 
 pub(crate) struct RequestRegistryState {
     pub requests: HashMap<RequestId, RequestState>,
-    pub ready: VecDeque<QueuedSecurityScanResult>,
+    pub ready: VecDeque<QueuedSecurityEvent>,
 }
 
 impl Default for RequestRegistry {
@@ -39,10 +40,21 @@ impl Default for RequestRegistry {
 }
 
 pub(crate) struct RequestState {
-    pub expected_results: usize,
-    pub consumed_results: usize,
     pub pending_l3_job_ids: HashSet<u64>,
-    pub finished: bool,
+    pub usable_results: usize,
+    pub failures: Vec<SecurityFailure>,
+    pub completion: Option<SecurityRequestCompletion>,
+}
+
+impl RequestState {
+    pub(crate) fn running() -> Self {
+        Self {
+            pending_l3_job_ids: HashSet::new(),
+            usable_results: 0,
+            failures: Vec::new(),
+            completion: None,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -128,6 +140,14 @@ impl L3Worker {
             .lock()
             .expect("l3 model registry mutex poisoned")
             .insert(model.into(), Arc::new(Mutex::new(classifier)));
+    }
+
+    pub(crate) fn has_model(&self, model: &str) -> bool {
+        self.state
+            .models
+            .lock()
+            .expect("l3 model registry mutex poisoned")
+            .contains_key(model)
     }
 
     pub(crate) fn enqueue(&self, spec: L3JobSpec) {
@@ -570,18 +590,115 @@ fn finish_job(
         .state
         .lock()
         .expect("request registry mutex poisoned");
-    if let Some(state) = registry.requests.get_mut(&request_id) {
-        if !state.pending_l3_job_ids.remove(&job_id) {
+    let failure = failure_from_scan_result(&result);
+    let publish_result = if let Some(state) = registry.requests.get_mut(&request_id) {
+        if state.completion.is_some() || !state.pending_l3_job_ids.remove(&job_id) {
             return;
         }
-        if state.pending_l3_job_ids.is_empty() {
-            state.finished = true;
+        match failure {
+            Some(failure) => {
+                state.failures.push(failure);
+                false
+            }
+            None => {
+                state.usable_results += 1;
+                true
+            }
         }
+    } else {
+        false
+    };
+    if publish_result {
         registry
             .ready
-            .push_back(QueuedSecurityScanResult { request_id, result });
+            .push_back(QueuedSecurityEvent::Result(QueuedSecurityScanResult {
+                request_id: request_id.clone(),
+                result,
+            }));
     }
+    finish_request_if_ready(&mut registry, &request_id);
     requests.available.notify_all();
+}
+
+pub(crate) fn failure_from_scan_result(result: &SecurityScanResult) -> Option<SecurityFailure> {
+    let layer = result.layers.iter().find(|layer| {
+        matches!(
+            layer.layer_type.as_str(),
+            "scanner_error" | "ntdb_error" | "degraded_timeout" | "degraded_error"
+        )
+    })?;
+    let (stage, kind, retryable, message_key) = match layer.layer_type.as_str() {
+        "scanner_error" => (
+            SecurityFailureStage::Scanner,
+            SecurityFailureKind::Internal,
+            false,
+            "error",
+        ),
+        "ntdb_error" => (
+            SecurityFailureStage::Inference,
+            SecurityFailureKind::InferenceFailure,
+            true,
+            "error",
+        ),
+        "degraded_timeout" => (
+            SecurityFailureStage::Worker,
+            SecurityFailureKind::Timeout,
+            true,
+            "degraded_reason",
+        ),
+        "degraded_error" => (
+            SecurityFailureStage::Worker,
+            SecurityFailureKind::WorkerUnavailable,
+            true,
+            "error",
+        ),
+        _ => unreachable!(),
+    };
+    let message = layer
+        .details
+        .get(message_key)
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or(layer.layer_type.as_str())
+        .to_string();
+    Some(SecurityFailure {
+        stage,
+        level: layer.level.parse::<SecurityLevel>().ok(),
+        detector_id: Some(result.model.clone()),
+        kind,
+        retryable,
+        message,
+    })
+}
+
+pub(crate) fn finish_request_if_ready(
+    registry: &mut RequestRegistryState,
+    request_id: &str,
+) -> Option<SecurityRequestCompletion> {
+    let completion = {
+        let state = registry.requests.get_mut(request_id)?;
+        if state.completion.is_some() || !state.pending_l3_job_ids.is_empty() {
+            return None;
+        }
+        let completion = if state.failures.is_empty() {
+            SecurityRequestCompletion::Complete
+        } else if state.usable_results > 0 {
+            SecurityRequestCompletion::Degraded {
+                failures: state.failures.clone(),
+            }
+        } else {
+            SecurityRequestCompletion::Failed {
+                failures: state.failures.clone(),
+            }
+        };
+        state.completion = Some(completion.clone());
+        completion
+    };
+
+    registry.ready.push_back(QueuedSecurityEvent::Finished {
+        request_id: request_id.to_string(),
+        completion: completion.clone(),
+    });
+    Some(completion)
 }
 
 fn elapsed_ms(started: Instant) -> f64 {

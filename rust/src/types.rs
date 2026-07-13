@@ -2,6 +2,135 @@ use std::collections::HashMap;
 
 pub type RequestId = String;
 
+/// Lifecycle state for an accepted queued request until its terminal event is consumed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SecurityRequestState {
+    /// At least one planned scanner or promoted L3 job can still publish an event.
+    Running,
+    /// All planned work has reached a terminal outcome.
+    Finished(SecurityRequestCompletion),
+}
+
+/// Terminal outcome for one accepted queued request.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SecurityRequestCompletion {
+    /// Every planned scanner completed without a failure.
+    Complete,
+    /// At least one usable result and at least one failure were produced.
+    Degraded { failures: Vec<SecurityFailure> },
+    /// No planned scanner produced a usable result.
+    Failed { failures: Vec<SecurityFailure> },
+}
+
+/// Typed failure attached to one scanner stage.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SecurityFailure {
+    pub stage: SecurityFailureStage,
+    pub level: Option<SecurityLevel>,
+    pub detector_id: Option<String>,
+    pub kind: SecurityFailureKind,
+    pub retryable: bool,
+    pub message: String,
+}
+
+/// Runtime stage at which a security operation failed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SecurityFailureStage {
+    Warmup,
+    Asset,
+    Scanner,
+    Inference,
+    Queue,
+    Worker,
+}
+
+/// Stable failure classification for product logic.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SecurityFailureKind {
+    NotReady,
+    MissingAsset,
+    IntegrityFailure,
+    InitializationFailure,
+    InferenceFailure,
+    Timeout,
+    WorkerUnavailable,
+    Internal,
+}
+
+/// Readiness of the configured scanner runtime by security level.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SecurityRuntimeReadiness {
+    pub l1: SecurityLevelReadiness,
+    pub l2: SecurityLevelReadiness,
+    pub l3: SecurityLevelReadiness,
+}
+
+/// Readiness of one security level before request execution.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SecurityLevelReadiness {
+    Ready,
+    NotConfigured,
+    NotReady { failures: Vec<SecurityFailure> },
+}
+
+impl std::fmt::Display for SecurityFailure {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "{}", self.message)
+    }
+}
+
+impl std::error::Error for SecurityFailure {}
+
+impl SecurityFailureStage {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Warmup => "warmup",
+            Self::Asset => "asset",
+            Self::Scanner => "scanner",
+            Self::Inference => "inference",
+            Self::Queue => "queue",
+            Self::Worker => "worker",
+        }
+    }
+}
+
+impl SecurityFailureKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::NotReady => "not_ready",
+            Self::MissingAsset => "missing_asset",
+            Self::IntegrityFailure => "integrity_failure",
+            Self::InitializationFailure => "initialization_failure",
+            Self::InferenceFailure => "inference_failure",
+            Self::Timeout => "timeout",
+            Self::WorkerUnavailable => "worker_unavailable",
+            Self::Internal => "internal",
+        }
+    }
+}
+
+/// Ordered event published by the queue.
+#[derive(Debug, Clone)]
+pub enum QueuedSecurityEvent {
+    /// One usable scanner result.
+    Result(QueuedSecurityScanResult),
+    /// The unique terminal event for an accepted request.
+    Finished {
+        request_id: RequestId,
+        completion: SecurityRequestCompletion,
+    },
+}
+
+impl QueuedSecurityEvent {
+    /// Return the request id carried by this event.
+    pub fn request_id(&self) -> &str {
+        match self {
+            Self::Result(queued) => &queued.request_id,
+            Self::Finished { request_id, .. } => request_id,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 /// A completed queued scan result together with the request that produced it.
 pub struct QueuedSecurityScanResult {
@@ -263,11 +392,6 @@ impl Default for LongTextPolicy {
 }
 
 impl LongTextPolicy {
-    /// Return whether this text should skip full-text L2 after a benign L1.
-    pub fn should_skip_full_l2(self, text: &str) -> bool {
-        self.enabled && text.len() >= self.no_full_l2_byte_limit
-    }
-
     /// Return the chunking profile implied by this policy.
     pub fn chunking(self) -> Result<TextChunking, String> {
         TextChunking::new(self.chunk_size_bytes, self.overlap_bytes)

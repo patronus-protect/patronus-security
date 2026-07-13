@@ -363,6 +363,8 @@ def generate_rust_api_doc() -> str:
     ]
     sections = [
         ("Core Gateway", ROOT / "rust/src/pipeline/security.rs"),
+        ("Queued Request API", ROOT / "rust/src/pipeline/security/request_queue.rs"),
+        ("External L1 API", ROOT / "rust/src/external_l1.rs"),
         ("Result And Category Types", ROOT / "rust/src/types.rs"),
         ("Asset Manifest Helpers", ROOT / "rust/src/assets/specs.rs"),
         ("Asset Download Helpers", ROOT / "rust/src/assets/download.rs"),
@@ -380,6 +382,7 @@ def rust_public_items(path: Path) -> list[tuple[str, str | None]]:
     lines = path.read_text().splitlines()
     index = 0
     pending_docs: list[str] = []
+    hidden_item = False
     while index < len(lines):
         line = lines[index]
         stripped = line.strip()
@@ -387,14 +390,21 @@ def rust_public_items(path: Path) -> list[tuple[str, str | None]]:
             pending_docs.append(stripped.removeprefix("///").strip())
             index += 1
             continue
+        if stripped == "#[doc(hidden)]":
+            hidden_item = True
+            index += 1
+            continue
         if _is_public_rust_item(stripped):
             signature, index = _collect_rust_signature(lines, index)
-            doc = "\n".join(pending_docs) if pending_docs else None
-            items.append((signature, doc))
+            if not hidden_item:
+                doc = "\n".join(pending_docs) if pending_docs else None
+                items.append((signature, doc))
             pending_docs = []
+            hidden_item = False
             continue
         if stripped and not stripped.startswith("#["):
             pending_docs = []
+            hidden_item = False
         index += 1
     return items
 
@@ -403,6 +413,7 @@ def _is_public_rust_item(stripped: str) -> bool:
     return (
         stripped.startswith("pub struct ")
         or stripped.startswith("pub enum ")
+        or stripped.startswith("pub trait ")
         or stripped.startswith("pub type ")
         or stripped.startswith("pub fn ")
     )
@@ -410,7 +421,11 @@ def _is_public_rust_item(stripped: str) -> bool:
 
 def _collect_rust_signature(lines: list[str], start: int) -> tuple[str, int]:
     first = lines[start].strip()
-    if (first.startswith("pub struct ") or first.startswith("pub enum ")) and "{" in first:
+    if (
+        first.startswith("pub struct ")
+        or first.startswith("pub enum ")
+        or first.startswith("pub trait ")
+    ) and "{" in first:
         collected = []
         depth = 0
         index = start

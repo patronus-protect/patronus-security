@@ -9,16 +9,20 @@ Import public items from the `patronus_security` crate.
 ```rust
 pub mod assets;
 pub mod detectors;
+pub mod external_l1;
 pub mod ml;
 pub mod pipeline;
 pub mod threat;
 pub mod types;
 
+pub use external_l1::{ExternalL1Detector, ExternalL1Input};
 pub use pipeline::{Pipeline, SecurityGateway};
 pub use types::{
     EvaluationResult, ExecutionBackend, L3SchedulerPolicy, LayerResult, LongTextPolicy,
-    NtdbOperatingPoint, OnnxBatchMode, QueuedSecurityScanResult, RequestId, ScanExecution,
-    ScanGateMatrix, SecurityCategory, SecurityLevel, SecurityScanResult, TextChunking,
+    NtdbOperatingPoint, OnnxBatchMode, QueuedSecurityEvent, QueuedSecurityScanResult, RequestId,
+    ScanExecution, ScanGateMatrix, SecurityCategory, SecurityFailure, SecurityFailureKind,
+    SecurityFailureStage, SecurityLevel, SecurityLevelReadiness, SecurityRequestCompletion,
+    SecurityRequestState, SecurityRuntimeReadiness, SecurityScanResult, TextChunking,
 };
 ```
 
@@ -32,60 +36,6 @@ pub struct SecurityGateway {
 ```
 
 Main scanner gateway for native and model-backed security categories.
-
-```rust
-pub struct SecurityGatewayCore {
-    /// Categories configured for `scan_all`.
-    categories: Vec<SecurityCategory>,
-    /// Maximum layer to evaluate for configured categories.
-    max_level: SecurityLevel,
-    /// Optional asset root. Defaults to the platform cache directory.
-    model_dir: Option<PathBuf>,
-    /// Whether missing model assets may be downloaded during `warmup`.
-    download_files: bool,
-    /// Optional allowlist of categories that may download missing assets.
-    download_categories: Option<Vec<SecurityCategory>>,
-    /// Execution gates consumed by scan methods.
-    execution: Mutex<ScanExecution>,
-
-    // Lazy-loaded L1 rule pipelines. Model-backed L2 is NTDB-only.
-    tool_classifier_prompts: Option<Pipeline>,
-    tool_classifier_executions: Option<Pipeline>,
-    tool_classifier_descriptions: Option<Pipeline>,
-    user_intent_prompts: Option<Pipeline>,
-    sensitive_documents_prompts: Option<Pipeline>,
-    ntdb_executor: Option<Mutex<NtdbExecutor>>,
-
-    // Instantiated native rule-based pipelines
-    dlp_pipeline: Option<dlp::DlpPipeline>,
-    pii_pipeline: Option<pii::PiiPipeline>,
-    cross_tool_instruction_pipeline: Option<cross_tool_instruction::CrossToolInstructionPipeline>,
-    instruction_leak_pipeline: Option<instruction_leak::InstructionLeakPipeline>,
-    secret_transfer_pipeline: Option<secret_transfer::SecretTransferPipeline>,
-    sensitive_material_pipeline: Option<sensitive_material::SensitiveMaterialPipeline>,
-    encoded_instruction_pipeline: Option<encoded_instruction::EncodedInstructionPipeline>,
-    multi_turn_escalation_pipeline: Option<multi_turn_escalation::MultiTurnEscalationPipeline>,
-    guardrail_tamper_pipeline: Option<guardrail_tamper::GuardrailTamperPipeline>,
-    destructive_operation_pipeline: Option<destructive_operation::DestructiveOperationPipeline>,
-    agentic_control_abuse_pipeline: Option<agentic_control_abuse::AgenticControlAbusePipeline>,
-    binary_smuggling_pipeline: Option<binary_smuggling::BinarySmugglingPipeline>,
-    tool_output_instruction_pipeline:
-        Option<tool_output_instruction::ToolOutputInstructionPipeline>,
-    mcp_runtime_risk_pipeline: Option<mcp_runtime_risk::McpRuntimeRiskPipeline>,
-    hidden_html_instruction_pipeline:
-        Option<hidden_html_instruction::HiddenHtmlInstructionPipeline>,
-    unicode_confusable_pipeline: Option<unicode_confusable::UnicodeConfusablePipeline>,
-    zero_width_obfuscation_pipeline: Option<zero_width_obfuscation::ZeroWidthObfuscationPipeline>,
-    mcp_policy_pipeline: Option<mcp_policy::McpPolicyPipeline>,
-
-    request_counter: AtomicU64,
-    requests: Arc<RequestRegistry>,
-    l3_worker: L3Worker,
-    ntdb_decision_cache: DecisionCache,
-}
-```
-
-No public documentation is available yet.
 
 ```rust
 pub fn new(
@@ -136,10 +86,21 @@ pub fn max_level(&self) -> SecurityLevel;
 Maximum level evaluated for configured categories.
 
 ```rust
-pub fn should_download_assets_for(&self, category: SecurityCategory) -> bool;
+pub fn runtime_readiness(&self) -> SecurityRuntimeReadiness;
 ```
 
-No public documentation is available yet.
+Return runtime readiness for the currently configured levels and models.
+
+```rust
+pub fn register_external_l1(
+    &self,
+    detector: Arc<dyn ExternalL1Detector>,
+) -> Result<(), String>;
+```
+
+Register an external L1 heuristic for the category returned by the detector.
+
+Detectors run after the built-in L1 heuristics in registration order.
 
 ```rust
 pub fn set_execution_gates(&self, gates: ScanGateMatrix);
@@ -171,6 +132,122 @@ pub fn set_ntdb_operating_point(&self, point: NtdbOperatingPoint);
 
 Select the calibrated NTDB operating point used by subsequent scans.
 
+## Queued Request API
+
+```rust
+pub fn scan_category(&self, category: SecurityCategory, text: &str) -> Vec<SecurityScanResult>;
+```
+
+Scan text with a single category.
+
+```rust
+pub fn enqueue(&self, text: impl Into<String>, gates: Option<ScanGateMatrix>) -> RequestId;
+```
+
+Submit a scan to the background L1/L2 worker and return immediately
+with its request id. Results and completion are published through
+[`SecurityGateway::consume_next_event`].
+
+```rust
+pub fn enqueue_categories(
+    &self,
+    categories: Vec<SecurityCategory>,
+    text: impl Into<String>,
+    gates: Option<ScanGateMatrix>,
+) -> RequestId;
+```
+
+Submit a scan with a caller-provided category subset to the background
+worker. This method returns a request id, not scan results.
+
+```rust
+pub fn enqueue_input(
+    &self,
+    input: ExternalL1Input,
+    gates: Option<ScanGateMatrix>,
+) -> RequestId;
+```
+
+Submit one category scan to the background worker.
+
+```rust
+pub fn consume_next_event(&self, timeout: Option<Duration>) -> Option<QueuedSecurityEvent>;
+```
+
+Consume the next result or terminal event published by the queue.
+
+```rust
+pub fn has_request(&self, request_id: &str) -> bool;
+```
+
+Return whether a request is running or its terminal event is still queued.
+
+```rust
+pub fn request_state(&self, request_id: &str) -> Option<SecurityRequestState>;
+```
+
+Return the lifecycle state until the request's terminal event is consumed.
+
+```rust
+pub fn is_finished(&self, request_id: &str) -> Option<bool>;
+```
+
+Return whether a known request has reached a terminal state.
+
+```rust
+pub fn scan_categories(
+    &self,
+    categories: &[SecurityCategory],
+    text: &str,
+) -> Vec<SecurityScanResult>;
+```
+
+Scan text with a caller-provided category subset.
+
+```rust
+pub fn scan_input(&self, input: &ExternalL1Input) -> Vec<SecurityScanResult>;
+```
+
+Scan one category through native and registered external scanners.
+
+```rust
+pub fn scan_all(&self, text: &str) -> Vec<SecurityScanResult>;
+```
+
+Scan text with every category configured on this gateway.
+
+## External L1 API
+
+```rust
+pub struct ExternalL1Input {
+    pub category: SecurityCategory,
+    pub text: String,
+}
+```
+
+Input passed to an externally registered L1 heuristic.
+
+```rust
+pub fn new(category: SecurityCategory, text: impl Into<String>) -> Self;
+```
+
+Create an input for one security category.
+
+```rust
+pub trait ExternalL1Detector: Send + Sync {
+    /// Stable detector id used in the public model name `external:<id>`.
+    fn id(&self) -> &'static str;
+
+    /// Security pipeline extended by this detector.
+    fn category(&self) -> SecurityCategory;
+
+    /// Evaluate one request input.
+    fn evaluate(&self, input: &ExternalL1Input) -> EvaluationResult;
+}
+```
+
+An application-provided L1 heuristic attached to one security category.
+
 ## Result And Category Types
 
 ```rust
@@ -178,6 +255,123 @@ pub type RequestId = String;
 ```
 
 No public documentation is available yet.
+
+```rust
+pub enum SecurityRequestState {
+    /// At least one planned scanner or promoted L3 job can still publish an event.
+    Running,
+    /// All planned work has reached a terminal outcome.
+    Finished(SecurityRequestCompletion),
+}
+```
+
+Lifecycle state for an accepted queued request until its terminal event is consumed.
+
+```rust
+pub enum SecurityRequestCompletion {
+    /// Every planned scanner completed without a failure.
+    Complete,
+    /// At least one usable result and at least one failure were produced.
+    Degraded { failures: Vec<SecurityFailure> },
+    /// No planned scanner produced a usable result.
+    Failed { failures: Vec<SecurityFailure> },
+}
+```
+
+Terminal outcome for one accepted queued request.
+
+```rust
+pub struct SecurityFailure {
+    pub stage: SecurityFailureStage,
+    pub level: Option<SecurityLevel>,
+    pub detector_id: Option<String>,
+    pub kind: SecurityFailureKind,
+    pub retryable: bool,
+    pub message: String,
+}
+```
+
+Typed failure attached to one scanner stage.
+
+```rust
+pub enum SecurityFailureStage {
+    Warmup,
+    Asset,
+    Scanner,
+    Inference,
+    Queue,
+    Worker,
+}
+```
+
+Runtime stage at which a security operation failed.
+
+```rust
+pub enum SecurityFailureKind {
+    NotReady,
+    MissingAsset,
+    IntegrityFailure,
+    InitializationFailure,
+    InferenceFailure,
+    Timeout,
+    WorkerUnavailable,
+    Internal,
+}
+```
+
+Stable failure classification for product logic.
+
+```rust
+pub struct SecurityRuntimeReadiness {
+    pub l1: SecurityLevelReadiness,
+    pub l2: SecurityLevelReadiness,
+    pub l3: SecurityLevelReadiness,
+}
+```
+
+Readiness of the configured scanner runtime by security level.
+
+```rust
+pub enum SecurityLevelReadiness {
+    Ready,
+    NotConfigured,
+    NotReady { failures: Vec<SecurityFailure> },
+}
+```
+
+Readiness of one security level before request execution.
+
+```rust
+pub fn as_str(self) -> &'static str;
+```
+
+No public documentation is available yet.
+
+```rust
+pub fn as_str(self) -> &'static str;
+```
+
+No public documentation is available yet.
+
+```rust
+pub enum QueuedSecurityEvent {
+    /// One usable scanner result.
+    Result(QueuedSecurityScanResult),
+    /// The unique terminal event for an accepted request.
+    Finished {
+        request_id: RequestId,
+        completion: SecurityRequestCompletion,
+    },
+}
+```
+
+Ordered event published by the queue.
+
+```rust
+pub fn request_id(&self) -> &str;
+```
+
+Return the request id carried by this event.
 
 ```rust
 pub struct QueuedSecurityScanResult {
@@ -344,12 +538,6 @@ pub struct LongTextPolicy {
 ```
 
 Long-text routing policy for model-backed pipelines.
-
-```rust
-pub fn should_skip_full_l2(self, text: &str) -> bool;
-```
-
-Return whether this text should skip full-text L2 after a benign L1.
 
 ```rust
 pub fn chunking(self) -> Result<TextChunking, String>;

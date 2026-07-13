@@ -1,7 +1,8 @@
 use patronus_security::{
     ExecutionBackend, L3SchedulerPolicy, LayerResult, LongTextPolicy, NtdbOperatingPoint,
-    OnnxBatchMode, QueuedSecurityScanResult, ScanGateMatrix, SecurityCategory,
-    SecurityGateway as RustSecurityGateway, SecurityLevel,
+    OnnxBatchMode, QueuedSecurityEvent, QueuedSecurityScanResult, ScanGateMatrix, SecurityCategory,
+    SecurityFailure, SecurityGateway as RustSecurityGateway, SecurityLevel, SecurityLevelReadiness,
+    SecurityRequestCompletion, SecurityRequestState, SecurityRuntimeReadiness,
 };
 use pyo3::prelude::*;
 use std::path::PathBuf;
@@ -148,37 +149,53 @@ impl SecurityGateway {
         Ok(results.into_iter().map(PyEvaluationResult::from).collect())
     }
 
-    #[pyo3(signature = (text, categories=None))]
+    #[pyo3(signature = (text, categories=None, execution_gates_json=None))]
     fn enqueue(
         &self,
         py: Python<'_>,
         text: &str,
         categories: Option<Vec<String>>,
+        execution_gates_json: Option<&str>,
     ) -> PyResult<String> {
+        let gates = parse_execution_gates_json(execution_gates_json)?;
         let request_id = match categories {
             Some(categories) => {
                 let rust_categories = parse_categories(categories)?;
-                py.allow_threads(|| self.inner.enqueue_categories(rust_categories, text))
+                py.allow_threads(|| self.inner.enqueue_categories(rust_categories, text, gates))
             }
-            None => py.allow_threads(|| self.inner.enqueue(text)),
+            None => py.allow_threads(|| self.inner.enqueue(text, gates)),
         };
         Ok(request_id)
     }
 
     #[pyo3(signature = (timeout=None))]
-    fn consume_next_result(
+    fn consume_next_event(
         &self,
         py: Python<'_>,
         timeout: Option<f64>,
-    ) -> PyResult<Option<PyEvaluationResult>> {
+    ) -> PyResult<Option<PySecurityEvent>> {
         let timeout = timeout.map(Duration::from_secs_f64);
         Ok(py
-            .allow_threads(|| self.inner.consume_next_result(timeout))
-            .map(PyEvaluationResult::from))
+            .allow_threads(|| self.inner.consume_next_event(timeout))
+            .map(PySecurityEvent::from))
     }
 
     fn has_request(&self, request_id: &str) -> bool {
         self.inner.has_request(request_id)
+    }
+
+    fn request_state(&self, request_id: &str) -> Option<PyRequestState> {
+        self.inner
+            .request_state(request_id)
+            .map(PyRequestState::from)
+    }
+
+    fn is_finished(&self, request_id: &str) -> Option<bool> {
+        self.inner.is_finished(request_id)
+    }
+
+    fn runtime_readiness(&self) -> PyRuntimeReadiness {
+        PyRuntimeReadiness::from(self.inner.runtime_readiness())
     }
 }
 
@@ -358,6 +375,172 @@ struct PyEvaluationResult {
     layers: Vec<PyLayerResult>,
 }
 
+#[pyclass]
+#[derive(Clone)]
+struct PySecurityFailure {
+    #[pyo3(get)]
+    stage: String,
+    #[pyo3(get)]
+    level: Option<String>,
+    #[pyo3(get)]
+    detector_id: Option<String>,
+    #[pyo3(get)]
+    kind: String,
+    #[pyo3(get)]
+    retryable: bool,
+    #[pyo3(get)]
+    message: String,
+}
+
+#[pyclass]
+#[derive(Clone)]
+struct PySecurityEvent {
+    #[pyo3(get)]
+    event_type: String,
+    #[pyo3(get)]
+    request_id: String,
+    #[pyo3(get)]
+    result: Option<PyEvaluationResult>,
+    #[pyo3(get)]
+    completion: Option<String>,
+    #[pyo3(get)]
+    failures: Vec<PySecurityFailure>,
+}
+
+#[pyclass]
+#[derive(Clone)]
+struct PyRequestState {
+    #[pyo3(get)]
+    state: String,
+    #[pyo3(get)]
+    completion: Option<String>,
+    #[pyo3(get)]
+    failures: Vec<PySecurityFailure>,
+}
+
+#[pyclass]
+#[derive(Clone)]
+struct PyLevelReadiness {
+    #[pyo3(get)]
+    state: String,
+    #[pyo3(get)]
+    failures: Vec<PySecurityFailure>,
+}
+
+#[pyclass]
+#[derive(Clone)]
+struct PyRuntimeReadiness {
+    #[pyo3(get)]
+    l1: PyLevelReadiness,
+    #[pyo3(get)]
+    l2: PyLevelReadiness,
+    #[pyo3(get)]
+    l3: PyLevelReadiness,
+}
+
+impl From<SecurityFailure> for PySecurityFailure {
+    fn from(failure: SecurityFailure) -> Self {
+        Self {
+            stage: failure.stage.as_str().to_string(),
+            level: failure.level.map(|level| level.as_str().to_string()),
+            detector_id: failure.detector_id,
+            kind: failure.kind.as_str().to_string(),
+            retryable: failure.retryable,
+            message: failure.message,
+        }
+    }
+}
+
+fn completion_parts(completion: SecurityRequestCompletion) -> (String, Vec<PySecurityFailure>) {
+    match completion {
+        SecurityRequestCompletion::Complete => ("complete".to_string(), Vec::new()),
+        SecurityRequestCompletion::Degraded { failures } => (
+            "degraded".to_string(),
+            failures.into_iter().map(PySecurityFailure::from).collect(),
+        ),
+        SecurityRequestCompletion::Failed { failures } => (
+            "failed".to_string(),
+            failures.into_iter().map(PySecurityFailure::from).collect(),
+        ),
+    }
+}
+
+impl From<QueuedSecurityEvent> for PySecurityEvent {
+    fn from(event: QueuedSecurityEvent) -> Self {
+        match event {
+            QueuedSecurityEvent::Result(queued) => Self {
+                event_type: "result".to_string(),
+                request_id: queued.request_id.clone(),
+                result: Some(PyEvaluationResult::from(queued)),
+                completion: None,
+                failures: Vec::new(),
+            },
+            QueuedSecurityEvent::Finished {
+                request_id,
+                completion,
+            } => {
+                let (completion, failures) = completion_parts(completion);
+                Self {
+                    event_type: "finished".to_string(),
+                    request_id,
+                    result: None,
+                    completion: Some(completion),
+                    failures,
+                }
+            }
+        }
+    }
+}
+
+impl From<SecurityRequestState> for PyRequestState {
+    fn from(state: SecurityRequestState) -> Self {
+        match state {
+            SecurityRequestState::Running => Self {
+                state: "running".to_string(),
+                completion: None,
+                failures: Vec::new(),
+            },
+            SecurityRequestState::Finished(completion) => {
+                let (completion, failures) = completion_parts(completion);
+                Self {
+                    state: "finished".to_string(),
+                    completion: Some(completion),
+                    failures,
+                }
+            }
+        }
+    }
+}
+
+impl From<SecurityLevelReadiness> for PyLevelReadiness {
+    fn from(readiness: SecurityLevelReadiness) -> Self {
+        match readiness {
+            SecurityLevelReadiness::Ready => Self {
+                state: "ready".to_string(),
+                failures: Vec::new(),
+            },
+            SecurityLevelReadiness::NotConfigured => Self {
+                state: "not_configured".to_string(),
+                failures: Vec::new(),
+            },
+            SecurityLevelReadiness::NotReady { failures } => Self {
+                state: "not_ready".to_string(),
+                failures: failures.into_iter().map(PySecurityFailure::from).collect(),
+            },
+        }
+    }
+}
+
+impl From<SecurityRuntimeReadiness> for PyRuntimeReadiness {
+    fn from(readiness: SecurityRuntimeReadiness) -> Self {
+        Self {
+            l1: PyLevelReadiness::from(readiness.l1),
+            l2: PyLevelReadiness::from(readiness.l2),
+            l3: PyLevelReadiness::from(readiness.l3),
+        }
+    }
+}
+
 impl From<patronus_security::SecurityScanResult> for PyEvaluationResult {
     fn from(result: patronus_security::SecurityScanResult) -> Self {
         PyEvaluationResult {
@@ -403,5 +586,10 @@ fn _patronus_security(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<SecurityGateway>()?;
     m.add_class::<PyLayerResult>()?;
     m.add_class::<PyEvaluationResult>()?;
+    m.add_class::<PySecurityFailure>()?;
+    m.add_class::<PySecurityEvent>()?;
+    m.add_class::<PyRequestState>()?;
+    m.add_class::<PyLevelReadiness>()?;
+    m.add_class::<PyRuntimeReadiness>()?;
     Ok(())
 }

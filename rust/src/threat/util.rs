@@ -1,46 +1,4 @@
-#![allow(dead_code)]
-
-use super::patterns::{
-    email_address_re, injection_signal_re, secret_transfer_material_re, sensitive_term_ac,
-    url_transfer_destination_re,
-};
-
-pub(super) fn contains_any(text: &str, needles: &[&str]) -> bool {
-    needles.iter().any(|needle| text.contains(needle))
-}
-
-pub(super) fn contains_transfer_verb(lower: &str) -> bool {
-    contains_any(
-        lower,
-        &[
-            "send", "upload", "post", "email", "forward", "leak", "share", "paste", "copy",
-        ],
-    )
-}
-
-pub(super) fn contains_secret_transfer_material(lower: &str) -> bool {
-    contains_any(
-        lower,
-        &[
-            "api key",
-            "access token",
-            "auth token",
-            "bearer token",
-            "refresh token",
-            "secret token",
-            "private key",
-            "password",
-            "credential",
-            ".env",
-        ],
-    ) || secret_transfer_material_re().is_match(lower)
-}
-
-pub(super) fn contains_secret_transfer_destination(lower: &str) -> bool {
-    contains_any(lower, &["webhook", "attacker", "external", "pastebin"])
-        || email_address_re().is_match(lower)
-        || url_transfer_destination_re().is_match(lower)
-}
+use super::patterns::{injection_signal_re, sensitive_term_ac};
 
 pub(super) fn text_windows(text: &str, window_bytes: usize) -> impl Iterator<Item = &str> {
     text.split('\n').flat_map(move |paragraph| {

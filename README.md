@@ -32,25 +32,36 @@ print(results)
 
 `enqueue()` only submits work and returns a request ID; it never returns scan
 results. One gateway worker processes L1/L2 and promoted L3 work runs in its
-own worker. `consume_next_result()` reads the next available result from the
-shared result queue, regardless of which request finished first.
+own worker. `consume_next_event()` reads the next result or terminal event
+from the shared queue, regardless of which request finished first.
 
 ```python
 request_ids = {
-    scanner.enqueue("first text"),
+    scanner.enqueue(
+        "first text",
+        execution_gates={"levels": {"l1": True, "l2": False, "l3": False}},
+    ),
     scanner.enqueue("second text"),
 }
 
-while any(scanner.has_request(request_id) for request_id in request_ids):
-    result = scanner.consume_next_result(timeout=1.0)
-    if result is None:
+while request_ids:
+    event = scanner.consume_next_event(timeout=1.0)
+    if event is None:
         continue
-    print(result["request_id"], result["level"], result["class_name"])
+    if event["event_type"] == "result":
+        result = event["result"]
+        print(event["request_id"], result["level"], result["class_name"])
+    else:
+        print(event["request_id"], event["completion"], event["failures"])
+        request_ids.remove(event["request_id"])
 ```
 
 One request can publish multiple results: L1/L2 pipeline results arrive first;
-an L2 promotion produces an additional L3 result later. Use `request_id` to
-associate each result with the submitted text.
+an L2 promotion produces an additional L3 result later. Exactly one terminal
+event follows all results. Use `request_id` to correlate every event.
+Request-specific `execution_gates` are snapshotted by `enqueue()` and do not
+change the gateway defaults. Consuming `finished` removes all library state for
+that request ID.
 
 ### Native-Only / Offline Scanning
 
@@ -237,12 +248,13 @@ scanner.warmup()
 scanner.run_local_benchmark()
 ```
 
-This prints a summary and writes a readable `BENCHMARK.md` plus four JSON files
+This prints a summary and writes a readable `BENCHMARK.md` plus five JSON files
 (with the real prompts, so mispredictions can be inspected) into `./benchmark/`:
 
 - `benign_result.json` — 100 benign prompts through the joint `scan_all` decision: class distribution, false-positive rate, latency.
 - `example_result.json` — one real queued sample with all configured pipelines active. Contains the input and every complete result exactly as returned by the shared consume queue, including L2 and L3.
 - `classifier_result.json` — labelled validation samples per configured pipeline (up to 100 per class): accuracy, macro-F1, class distribution, latency. Measured once L2-only and, when `max_level="l3"`, once more with L3 promotions/executions.
+- `native_l1_result.json` — native L1 latency for unique, exact 10 KiB inputs. It measures all configured injection L1 detectors, isolated DLP, isolated PII, isolated MCP policy, and all configured native L1 detectors together. Each profile includes a benign input and a match placed at the end of the text.
 - `load_result.json` — one producer submits many texts through `enqueue` while one consumer worker drains the shared result queue. Every result carries its request ID, so ready L2 results are not blocked by another request waiting for L3. The scenarios cover short L2 texts, L3-promoting texts (when `max_level="l3"`), >16-chunk long texts with an embedded attack, and repeated cache-hit texts. Reports error counts, throughput, enqueue/first/total latency, chunk counts, L3 queue wait, and pure L3 execution time.
 
 ## Assets

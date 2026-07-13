@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::PathBuf;
 use std::sync::{atomic::AtomicU64, mpsc, Arc, Mutex, OnceLock};
 use std::time::Instant;
@@ -9,8 +10,10 @@ use crate::{
     detectors::{
         dlp::{destructive_operation, dlp, secret_transfer, sensitive_material},
         injection::{
-            agentic_control_abuse, binary_smuggling, cross_tool_instruction, encoded_instruction,
-            guardrail_tamper, hidden_html_instruction, instruction_leak, multi_turn_escalation,
+            agentic_control_abuse, authority_escalation, binary_smuggling, covert_instruction,
+            cross_tool_instruction, encoded_instruction, guardrail_tamper, hidden_html_instruction,
+            instruction_boundary, instruction_leak, instruction_override, jailbreak_framing,
+            multi_turn_escalation, output_manipulation, tool_call_injection,
             tool_output_instruction, unicode_confusable, zero_width_obfuscation,
         },
         mcp::{mcp_policy, mcp_runtime_risk},
@@ -18,9 +21,10 @@ use crate::{
     },
     ml::ntdb_executor::NtdbExecutor,
     pipeline::{L3Worker, Pipeline, RequestRegistry},
-    EvaluationResult, ExecutionBackend, LayerResult, LongTextPolicy, NtdbOperatingPoint,
-    OnnxBatchMode, ScanExecution, ScanGateMatrix, SecurityCategory, SecurityLevel,
-    SecurityScanResult,
+    EvaluationResult, ExecutionBackend, ExternalL1Detector, ExternalL1Input, LayerResult,
+    LongTextPolicy, NtdbOperatingPoint, OnnxBatchMode, ScanExecution, ScanGateMatrix,
+    SecurityCategory, SecurityFailure, SecurityFailureKind, SecurityFailureStage, SecurityLevel,
+    SecurityLevelReadiness, SecurityRuntimeReadiness, SecurityScanResult,
 };
 
 mod ntdb_l2;
@@ -62,6 +66,8 @@ pub struct SecurityGatewayCore {
     download_categories: Option<Vec<SecurityCategory>>,
     /// Execution gates consumed by scan methods.
     execution: Mutex<ScanExecution>,
+    /// Application-provided L1 heuristics, grouped in registration order by category.
+    external_l1: Mutex<HashMap<SecurityCategory, Vec<Arc<dyn ExternalL1Detector>>>>,
 
     // Lazy-loaded L1 rule pipelines. Model-backed L2 is NTDB-only.
     tool_classifier_prompts: Option<Pipeline>,
@@ -91,6 +97,13 @@ pub struct SecurityGatewayCore {
         Option<hidden_html_instruction::HiddenHtmlInstructionPipeline>,
     unicode_confusable_pipeline: Option<unicode_confusable::UnicodeConfusablePipeline>,
     zero_width_obfuscation_pipeline: Option<zero_width_obfuscation::ZeroWidthObfuscationPipeline>,
+    instruction_override_pipeline: Option<instruction_override::InstructionOverridePipeline>,
+    jailbreak_framing_pipeline: Option<jailbreak_framing::JailbreakFramingPipeline>,
+    covert_instruction_pipeline: Option<covert_instruction::CovertInstructionPipeline>,
+    instruction_boundary_pipeline: Option<instruction_boundary::InstructionBoundaryPipeline>,
+    authority_escalation_pipeline: Option<authority_escalation::AuthorityEscalationPipeline>,
+    tool_call_injection_pipeline: Option<tool_call_injection::ToolCallInjectionPipeline>,
+    output_manipulation_pipeline: Option<output_manipulation::OutputManipulationPipeline>,
     mcp_policy_pipeline: Option<mcp_policy::McpPolicyPipeline>,
 
     request_counter: AtomicU64,
@@ -131,15 +144,16 @@ fn scan_result(
     }
 }
 
-fn native_scan_result_with_duration(
+fn l1_scan_result_with_duration(
     category: SecurityCategory,
     model: impl Into<String>,
+    layer_type: &str,
     result: EvaluationResult,
     duration_ms: f64,
 ) -> SecurityScanResult {
     let layer = LayerResult {
         level: result.level.clone(),
-        layer_type: "native".to_string(),
+        layer_type: layer_type.to_string(),
         class_name: result.class_name.clone(),
         confidence: result.confidence,
         matched: true,
@@ -153,15 +167,58 @@ fn native_scan_result_with_duration(
 fn timed_into_scan_result<F>(
     category: SecurityCategory,
     model: impl Into<String>,
+    layer_type: &str,
     evaluate: F,
 ) -> SecurityScanResult
 where
     F: FnOnce() -> EvaluationResult,
 {
+    let model = model.into();
     let started = Instant::now();
-    let result = evaluate();
-    let duration_ms = started.elapsed().as_secs_f64() * 1000.0;
-    native_scan_result_with_duration(category, model, result, duration_ms)
+    match catch_unwind(AssertUnwindSafe(evaluate)) {
+        Ok(output) => l1_scan_result_with_duration(
+            category,
+            model,
+            layer_type,
+            output,
+            started.elapsed().as_secs_f64() * 1000.0,
+        ),
+        Err(payload) => scanner_error_scan_result(category, model, panic_message(payload)),
+    }
+}
+
+fn scanner_error_scan_result(
+    category: SecurityCategory,
+    model: impl Into<String>,
+    message: String,
+) -> SecurityScanResult {
+    let model = model.into();
+    let result = EvaluationResult {
+        class_name: "error".to_string(),
+        confidence: 0.0,
+        level: SecurityLevel::L1.as_str().to_string(),
+    };
+    let layer = LayerResult {
+        level: result.level.clone(),
+        layer_type: "scanner_error".to_string(),
+        class_name: result.class_name.clone(),
+        confidence: 0.0,
+        matched: false,
+        duration_ms: 0.0,
+        thresholds: HashMap::new(),
+        details: HashMap::from([("error".to_string(), serde_json::json!(message))]),
+    };
+    scan_result(category, model, result, vec![layer])
+}
+
+fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
+    if let Some(message) = payload.downcast_ref::<&str>() {
+        (*message).to_string()
+    } else if let Some(message) = payload.downcast_ref::<String>() {
+        message.clone()
+    } else {
+        "scanner panicked".to_string()
+    }
 }
 
 fn model_scan_result(
@@ -180,9 +237,18 @@ fn l1_rule_scan_result(
     text: &str,
     execution: &ScanExecution,
 ) -> Option<SecurityScanResult> {
+    let model = model.into();
     let l1_execution = execution.clone().with_max_level(SecurityLevel::L1);
-    pipe.evaluate_with_execution(text, &l1_execution)
-        .map(|output| model_scan_result(category, model, output))
+    match catch_unwind(AssertUnwindSafe(|| {
+        pipe.evaluate_with_execution(text, &l1_execution)
+    })) {
+        Ok(output) => output.map(|output| model_scan_result(category, model, output)),
+        Err(payload) => Some(scanner_error_scan_result(
+            category,
+            model,
+            panic_message(payload),
+        )),
+    }
 }
 
 impl SecurityGateway {
@@ -225,6 +291,7 @@ impl SecurityGateway {
             download_files,
             download_categories,
             execution: Mutex::new(ScanExecution::new(max_level)),
+            external_l1: Mutex::new(HashMap::new()),
             tool_classifier_prompts: None,
             tool_classifier_executions: None,
             tool_classifier_descriptions: None,
@@ -248,6 +315,13 @@ impl SecurityGateway {
             hidden_html_instruction_pipeline: None,
             unicode_confusable_pipeline: None,
             zero_width_obfuscation_pipeline: None,
+            instruction_override_pipeline: None,
+            jailbreak_framing_pipeline: None,
+            covert_instruction_pipeline: None,
+            instruction_boundary_pipeline: None,
+            authority_escalation_pipeline: None,
+            tool_call_injection_pipeline: None,
+            output_manipulation_pipeline: None,
             mcp_policy_pipeline: None,
             request_counter: AtomicU64::new(1),
             requests,
@@ -281,6 +355,20 @@ impl SecurityGateway {
                         Some(agentic_control_abuse::AgenticControlAbusePipeline::new());
                     core.binary_smuggling_pipeline =
                         Some(binary_smuggling::BinarySmugglingPipeline::new());
+                    core.instruction_override_pipeline =
+                        Some(instruction_override::InstructionOverridePipeline::new());
+                    core.jailbreak_framing_pipeline =
+                        Some(jailbreak_framing::JailbreakFramingPipeline::new());
+                    core.covert_instruction_pipeline =
+                        Some(covert_instruction::CovertInstructionPipeline::new());
+                    core.instruction_boundary_pipeline =
+                        Some(instruction_boundary::InstructionBoundaryPipeline::new());
+                    core.authority_escalation_pipeline =
+                        Some(authority_escalation::AuthorityEscalationPipeline::new());
+                    core.tool_call_injection_pipeline =
+                        Some(tool_call_injection::ToolCallInjectionPipeline::new());
+                    core.output_manipulation_pipeline =
+                        Some(output_manipulation::OutputManipulationPipeline::new());
                 }
                 SecurityCategory::Dlp => {
                     core.dlp_pipeline = Some(dlp::DlpPipeline::new());
@@ -315,6 +403,98 @@ impl SecurityGateway {
     /// Maximum level evaluated for configured categories.
     pub fn max_level(&self) -> SecurityLevel {
         self.max_level
+    }
+
+    /// Return runtime readiness for the currently configured levels and models.
+    pub fn runtime_readiness(&self) -> SecurityRuntimeReadiness {
+        let execution = self.scan_execution();
+        let l1 = if execution.allows_level(SecurityLevel::L1) {
+            SecurityLevelReadiness::Ready
+        } else {
+            SecurityLevelReadiness::NotConfigured
+        };
+
+        let l2_configs = self
+            .categories
+            .iter()
+            .copied()
+            .flat_map(|category| ntdb_l2_model_configs_for_category(&execution, category))
+            .collect::<Vec<_>>();
+        let l2 = if l2_configs.is_empty() {
+            SecurityLevelReadiness::NotConfigured
+        } else if self.ntdb_executor.is_some() {
+            SecurityLevelReadiness::Ready
+        } else {
+            SecurityLevelReadiness::NotReady {
+                failures: l2_configs
+                    .iter()
+                    .map(|config| SecurityFailure {
+                        stage: SecurityFailureStage::Inference,
+                        level: Some(SecurityLevel::L2),
+                        detector_id: Some(config.public_model.to_string()),
+                        kind: SecurityFailureKind::NotReady,
+                        retryable: true,
+                        message: format!("{} L2 runtime is not initialized", config.public_model),
+                    })
+                    .collect(),
+            }
+        };
+
+        let l3_configs = l2_configs
+            .iter()
+            .filter(|config| config.has_l3 && execution.allows_level(SecurityLevel::L3))
+            .collect::<Vec<_>>();
+        let l3_failures = l3_configs
+            .iter()
+            .filter(|config| !self.l3_worker.has_model(config.public_model))
+            .map(|config| SecurityFailure {
+                stage: SecurityFailureStage::Worker,
+                level: Some(SecurityLevel::L3),
+                detector_id: Some(config.public_model.to_string()),
+                kind: SecurityFailureKind::NotReady,
+                retryable: true,
+                message: format!("{} L3 worker model is not registered", config.public_model),
+            })
+            .collect::<Vec<_>>();
+        let l3 = if l3_configs.is_empty() {
+            SecurityLevelReadiness::NotConfigured
+        } else if l3_failures.is_empty() {
+            SecurityLevelReadiness::Ready
+        } else {
+            SecurityLevelReadiness::NotReady {
+                failures: l3_failures,
+            }
+        };
+
+        SecurityRuntimeReadiness { l1, l2, l3 }
+    }
+
+    /// Register an external L1 heuristic for the category returned by the detector.
+    ///
+    /// Detectors run after the built-in L1 heuristics in registration order.
+    pub fn register_external_l1(
+        &self,
+        detector: Arc<dyn ExternalL1Detector>,
+    ) -> Result<(), String> {
+        let category = detector.category();
+        let id = detector.id();
+        if id.is_empty() {
+            return Err("external L1 detector id must not be empty".to_string());
+        }
+
+        let mut registry = self
+            .external_l1
+            .lock()
+            .expect("external L1 registry mutex poisoned");
+        let detectors = registry.entry(category).or_default();
+        if detectors.iter().any(|registered| registered.id() == id) {
+            return Err(format!(
+                "external L1 detector '{id}' is already registered for {}",
+                category.as_str()
+            ));
+        }
+        detectors.push(detector);
+        Ok(())
     }
 
     #[doc(hidden)]
@@ -386,14 +566,13 @@ impl SecurityGateway {
         execution.allows_model(model)
     }
 
-    /// Download allowed missing assets and initialize model-backed pipelines.
-
     fn scan_category_with_execution(
         &self,
-        category: SecurityCategory,
-        text: &str,
+        input: &ExternalL1Input,
         execution: &ScanExecution,
     ) -> Vec<SecurityScanResult> {
+        let category = input.category;
+        let text = input.text.as_str();
         let mut results = Vec::new();
         macro_rules! push_native {
             ($pipeline:expr, $model:literal) => {
@@ -401,7 +580,7 @@ impl SecurityGateway {
                     && self.model_enabled(&execution, $model)
                 {
                     if let Some(ref pipe) = $pipeline {
-                        results.push(timed_into_scan_result(category, $model, || {
+                        results.push(timed_into_scan_result(category, $model, "native", || {
                             pipe.evaluate(text)
                         }));
                     }
@@ -446,6 +625,31 @@ impl SecurityGateway {
                     "native:agentic_control_abuse"
                 );
                 push_native!(self.binary_smuggling_pipeline, "native:binary_smuggling");
+                push_native!(
+                    self.instruction_override_pipeline,
+                    "native:instruction_override"
+                );
+                push_native!(self.jailbreak_framing_pipeline, "native:jailbreak_framing");
+                push_native!(
+                    self.covert_instruction_pipeline,
+                    "native:covert_instruction"
+                );
+                push_native!(
+                    self.instruction_boundary_pipeline,
+                    "native:instruction_boundary"
+                );
+                push_native!(
+                    self.authority_escalation_pipeline,
+                    "native:authority_escalation"
+                );
+                push_native!(
+                    self.tool_call_injection_pipeline,
+                    "native:tool_call_injection"
+                );
+                push_native!(
+                    self.output_manipulation_pipeline,
+                    "native:output_manipulation"
+                );
             }
             SecurityCategory::Dlp => {
                 push_native!(self.dlp_pipeline, "native:dlp");
@@ -466,14 +670,11 @@ impl SecurityGateway {
                     && self.model_enabled(&execution, "native:pii");
                 if native_enabled {
                     if let Some(ref native) = self.pii_pipeline {
-                        let native_started = Instant::now();
-                        let native_res = native.evaluate(text);
-                        let native_duration_ms = native_started.elapsed().as_secs_f64() * 1000.0;
-                        results.push(native_scan_result_with_duration(
+                        results.push(timed_into_scan_result(
                             category,
                             "native:pii",
-                            native_res,
-                            native_duration_ms,
+                            "native",
+                            || native.evaluate(text),
                         ));
                     }
                 }
@@ -573,6 +774,40 @@ impl SecurityGateway {
                 }
             }
         }
+
+        if self.level_enabled(execution, SecurityLevel::L1) {
+            let detectors = self
+                .external_l1
+                .lock()
+                .expect("external L1 registry mutex poisoned")
+                .get(&category)
+                .cloned()
+                .unwrap_or_default();
+            for detector in detectors {
+                let model = format!("external:{}", detector.id());
+                if !self.model_enabled(execution, &model) {
+                    continue;
+                }
+                let started = Instant::now();
+                match catch_unwind(AssertUnwindSafe(|| detector.evaluate(input))) {
+                    Ok(mut result) => {
+                        result.level = SecurityLevel::L1.as_str().to_string();
+                        results.push(l1_scan_result_with_duration(
+                            category,
+                            model.clone(),
+                            "external_l1",
+                            result,
+                            started.elapsed().as_secs_f64() * 1000.0,
+                        ));
+                    }
+                    Err(payload) => results.push(scanner_error_scan_result(
+                        category,
+                        model,
+                        panic_message(payload),
+                    )),
+                }
+            }
+        }
         results
     }
 
@@ -592,7 +827,12 @@ impl SecurityGateway {
         }
 
         let Some(executor_mutex) = &self.ntdb_executor else {
-            return Vec::new();
+            return requested
+                .into_iter()
+                .map(|config| {
+                    ntdb_l2_error_scan_result(config, "NTDB L2 runtime is not initialized")
+                })
+                .collect();
         };
 
         let mut cached_results: HashMap<&'static str, Vec<SecurityScanResult>> = HashMap::new();
@@ -726,26 +966,42 @@ impl SecurityGateway {
         results
     }
 
-    fn scan_categories_direct(
+    fn scan_inputs_direct(
         &self,
-        categories: &[SecurityCategory],
-        text: &str,
+        inputs: &[ExternalL1Input],
+        execution: &ScanExecution,
     ) -> Vec<SecurityScanResult> {
         use rayon::prelude::*;
 
-        let mut execution = self.scan_execution();
+        let mut execution = execution.clone();
         if execution.allows_level(SecurityLevel::L3) && execution.l3_policy().enabled {
             execution.set_defer_l3(true);
         }
 
-        let mut results: Vec<SecurityScanResult> = categories
+        let mut results: Vec<SecurityScanResult> = inputs
             .par_iter()
-            .map(|cat| self.scan_category_with_execution(*cat, text, &execution))
+            .map(|input| self.scan_category_with_execution(input, &execution))
             .collect::<Vec<_>>()
             .into_iter()
             .flatten()
             .collect();
-        results.extend(self.scan_ntdb_l2_categories(categories, text, &execution));
+        if let Some(first) = inputs.first() {
+            if inputs.iter().all(|input| input.text == first.text) {
+                let categories = inputs
+                    .iter()
+                    .map(|input| input.category)
+                    .collect::<Vec<_>>();
+                results.extend(self.scan_ntdb_l2_categories(&categories, &first.text, &execution));
+            } else {
+                for input in inputs {
+                    results.extend(self.scan_ntdb_l2_categories(
+                        &[input.category],
+                        &input.text,
+                        &execution,
+                    ));
+                }
+            }
+        }
         results
     }
 }

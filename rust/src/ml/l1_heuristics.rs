@@ -1,12 +1,10 @@
 use aho_corasick::AhoCorasick;
-use regex::RegexSet;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct RawRule {
     pub ngram: String,
     pub class: String,
-    pub count: u32,
 }
 
 pub struct HeuristicsEngine {
@@ -117,25 +115,5 @@ fn normalize_json_key_for_rules(key: &str) -> String {
         "cmd" | "command" => "command".to_string(),
         "name" | "tool" | "tool_name" => "tool_name".to_string(),
         _ => key.to_string(),
-    }
-}
-
-pub struct NativeHeuristicsEngine {
-    set: RegexSet,
-}
-
-impl NativeHeuristicsEngine {
-    pub fn new() -> Self {
-        let patterns: Vec<&str> = crate::detectors::injection::pi::PI_PATTERNS
-            .iter()
-            .map(|p| p.pattern)
-            .collect();
-        let set = RegexSet::new(patterns).unwrap();
-        NativeHeuristicsEngine { set }
-    }
-
-    pub fn evaluate(&self, text: &str) -> bool {
-        let cleaned = clean_text_for_rules(text);
-        self.set.is_match(&cleaned)
     }
 }
