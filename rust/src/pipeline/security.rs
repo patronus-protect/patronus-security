@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -7,6 +8,7 @@ use std::time::Instant;
 
 use super::decision_cache::DecisionCache;
 use crate::{
+    assets::DYNAMIC_PII_ASSET,
     detectors::{
         dlp::{destructive_operation, dlp, secret_transfer, sensitive_material},
         injection::{
@@ -21,8 +23,8 @@ use crate::{
     },
     ml::ntdb_executor::NtdbExecutor,
     pipeline::{L3Worker, Pipeline, RequestRegistry},
-    EvaluationResult, ExecutionBackend, ExternalL1Detector, ExternalL1Input, LayerResult,
-    LongTextPolicy, NtdbOperatingPoint, OnnxBatchMode, ScanExecution, ScanGateMatrix,
+    DynamicPiiConfig, EvaluationResult, ExecutionBackend, ExternalL1Detector, ExternalL1Input,
+    LayerResult, NtdbOperatingPoint, OnnxBatchMode, ScanExecution, ScanGateMatrix,
     SecurityCategory, SecurityFailure, SecurityFailureKind, SecurityFailureStage, SecurityLevel,
     SecurityLevelReadiness, SecurityRuntimeReadiness, SecurityScanResult,
 };
@@ -68,6 +70,8 @@ pub struct SecurityGatewayCore {
     execution: Mutex<ScanExecution>,
     /// Application-provided L1 heuristics, grouped in registration order by category.
     external_l1: Mutex<HashMap<SecurityCategory, Vec<Arc<dyn ExternalL1Detector>>>>,
+    /// Request-independent configuration for the L3-only dynamic entity pipeline.
+    dynamic_pii_config: Mutex<DynamicPiiConfig>,
 
     // Lazy-loaded L1 rule pipelines. Model-backed L2 is NTDB-only.
     tool_classifier_prompts: Option<Pipeline>,
@@ -141,7 +145,22 @@ fn scan_result(
         model: model.into(),
         duration_ms,
         layers,
+        evidence_spans: Vec::new(),
     }
+}
+
+pub(super) fn dynamic_pii_pending_result(execution: &ScanExecution) -> SecurityScanResult {
+    let result = EvaluationResult {
+        class_name: "pending".to_string(),
+        confidence: 0.0,
+        level: SecurityLevel::L3.as_str().to_string(),
+    };
+    scan_result(
+        SecurityCategory::DynamicPii,
+        DYNAMIC_PII_ASSET.model,
+        result.clone(),
+        vec![crate::pipeline::l3_pending_layer(&result, execution)],
+    )
 }
 
 fn l1_scan_result_with_duration(
@@ -292,6 +311,7 @@ impl SecurityGateway {
             download_categories,
             execution: Mutex::new(ScanExecution::new(max_level)),
             external_l1: Mutex::new(HashMap::new()),
+            dynamic_pii_config: Mutex::new(DynamicPiiConfig::default()),
             tool_classifier_prompts: None,
             tool_classifier_executions: None,
             tool_classifier_descriptions: None,
@@ -408,7 +428,11 @@ impl SecurityGateway {
     /// Return runtime readiness for the currently configured levels and models.
     pub fn runtime_readiness(&self) -> SecurityRuntimeReadiness {
         let execution = self.scan_execution();
-        let l1 = if execution.allows_level(SecurityLevel::L1) {
+        let has_l1_category = self
+            .categories
+            .iter()
+            .any(|category| *category != SecurityCategory::DynamicPii);
+        let l1 = if execution.allows_level(SecurityLevel::L1) && has_l1_category {
             SecurityLevelReadiness::Ready
         } else {
             SecurityLevelReadiness::NotConfigured
@@ -440,23 +464,30 @@ impl SecurityGateway {
             }
         };
 
-        let l3_configs = l2_configs
+        let mut l3_models = l2_configs
             .iter()
             .filter(|config| config.has_l3 && execution.allows_level(SecurityLevel::L3))
+            .map(|config| config.public_model)
             .collect::<Vec<_>>();
-        let l3_failures = l3_configs
+        if self.categories.contains(&SecurityCategory::DynamicPii)
+            && execution.allows_level(SecurityLevel::L3)
+            && execution.allows_model(DYNAMIC_PII_ASSET.model)
+        {
+            l3_models.push(DYNAMIC_PII_ASSET.model);
+        }
+        let l3_failures = l3_models
             .iter()
-            .filter(|config| !self.l3_worker.has_model(config.public_model))
-            .map(|config| SecurityFailure {
+            .filter(|model| !self.l3_worker.has_model(model))
+            .map(|model| SecurityFailure {
                 stage: SecurityFailureStage::Worker,
                 level: Some(SecurityLevel::L3),
-                detector_id: Some(config.public_model.to_string()),
+                detector_id: Some((*model).to_string()),
                 kind: SecurityFailureKind::NotReady,
                 retryable: true,
-                message: format!("{} L3 worker model is not registered", config.public_model),
+                message: format!("{model} L3 worker model is not registered"),
             })
             .collect::<Vec<_>>();
-        let l3 = if l3_configs.is_empty() {
+        let l3 = if l3_models.is_empty() {
             SecurityLevelReadiness::NotConfigured
         } else if l3_failures.is_empty() {
             SecurityLevelReadiness::Ready
@@ -533,20 +564,30 @@ impl SecurityGateway {
             .set_backend(backend);
     }
 
-    /// Replace the long-text routing policy.
-    pub fn set_long_text_policy(&self, policy: LongTextPolicy) {
-        self.execution
-            .lock()
-            .expect("execution mutex poisoned")
-            .set_long_text_policy(policy);
-    }
-
     /// Select the calibrated NTDB operating point used by subsequent scans.
     pub fn set_ntdb_operating_point(&self, point: NtdbOperatingPoint) {
         self.execution
             .lock()
             .expect("execution mutex poisoned")
             .set_ntdb_operating_point(point);
+    }
+
+    /// Replace the pipeline-specific `dynamic-pii` configuration.
+    pub fn set_dynamic_pii_config(&self, config: DynamicPiiConfig) -> Result<(), String> {
+        let config = config.validated()?;
+        *self
+            .dynamic_pii_config
+            .lock()
+            .expect("dynamic-pii config mutex poisoned") = config;
+        Ok(())
+    }
+
+    /// Return the currently configured `dynamic-pii` settings.
+    pub fn dynamic_pii_config(&self) -> DynamicPiiConfig {
+        self.dynamic_pii_config
+            .lock()
+            .expect("dynamic-pii config mutex poisoned")
+            .clone()
     }
 
     /// Return the execution state that should be consumed by this scan.
@@ -679,6 +720,7 @@ impl SecurityGateway {
                     }
                 }
             }
+            SecurityCategory::DynamicPii => {}
             SecurityCategory::ToolClassifier => {
                 if tool_classifier_area_enabled(
                     execution,

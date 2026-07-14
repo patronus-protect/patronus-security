@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use aho_corasick::AhoCorasick;
 use regex::Regex;
 use std::sync::OnceLock;

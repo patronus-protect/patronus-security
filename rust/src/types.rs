@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use std::collections::HashMap;
 
 pub type RequestId = String;
@@ -189,6 +190,8 @@ pub struct SecurityScanResult {
     pub duration_ms: f64,
     /// Ordered layer evidence that explains the final decision.
     pub layers: Vec<LayerResult>,
+    /// Exact entity evidence returned by span-producing pipelines.
+    pub evidence_spans: Vec<crate::dynamic_pii::EvidenceSpan>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -364,65 +367,6 @@ impl std::str::FromStr for ExecutionBackend {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-/// Long-text routing policy for model-backed pipelines.
-pub struct LongTextPolicy {
-    /// Whether long-text routing is enabled.
-    pub enabled: bool,
-    /// Full-text L2 is skipped at and above this UTF-8 byte length after L1 is benign.
-    pub no_full_l2_byte_limit: usize,
-    /// UTF-8 byte size for chunks sent through chunked L1/L2.
-    pub chunk_size_bytes: usize,
-    /// UTF-8 byte overlap between neighboring chunks.
-    pub overlap_bytes: usize,
-    /// Whether non-benign L2 chunk decisions should be eligible for L3 verification.
-    pub verify_non_benign_l2: bool,
-}
-
-impl Default for LongTextPolicy {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            no_full_l2_byte_limit: 1024,
-            chunk_size_bytes: 256,
-            overlap_bytes: 96,
-            verify_non_benign_l2: true,
-        }
-    }
-}
-
-impl LongTextPolicy {
-    /// Return the chunking profile implied by this policy.
-    pub fn chunking(self) -> Result<TextChunking, String> {
-        TextChunking::new(self.chunk_size_bytes, self.overlap_bytes)
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-/// Byte chunking used by long-text L1/L2 routing.
-pub struct TextChunking {
-    /// Maximum UTF-8 byte size per chunk before overlap.
-    pub chunk_size_bytes: usize,
-    /// UTF-8 byte overlap between neighboring chunks.
-    pub overlap_bytes: usize,
-}
-
-impl TextChunking {
-    /// Create a validated byte chunking configuration.
-    pub fn new(chunk_size_bytes: usize, overlap_bytes: usize) -> Result<Self, String> {
-        if chunk_size_bytes == 0 {
-            return Err("chunk size must be greater than zero".to_string());
-        }
-        if overlap_bytes >= chunk_size_bytes {
-            return Err("chunk overlap must be smaller than chunk size".to_string());
-        }
-        Ok(Self {
-            chunk_size_bytes,
-            overlap_bytes,
-        })
-    }
-}
-
 #[derive(Debug, Clone)]
 /// Caller-controlled execution gates for one scanner execution profile.
 ///
@@ -451,6 +395,13 @@ pub struct L3SchedulerPolicy {
     pub priority: Vec<String>,
     /// Per category/model timeout before an unstarted L3 job degrades.
     pub ttl_ms: HashMap<String, u64>,
+    /// Initial execution-cost estimate per category/model. The worker replaces
+    /// this gradually with observed wall time while it is running.
+    pub estimated_cost_ms: HashMap<String, u64>,
+    /// Compute-time credit granted during one fair-scheduling round.
+    pub fairness_quantum_ms: u64,
+    /// Maximum queue wait before the oldest job bypasses priority and cost.
+    pub max_wait_ms: u64,
     /// Multiplier applied to L2 confidence when L3 degrades.
     pub degraded_factor: f64,
 }
@@ -460,8 +411,8 @@ impl Default for L3SchedulerPolicy {
         let mut ttl_ms = HashMap::new();
         ttl_ms.insert("injection".to_string(), 15_000);
         ttl_ms.insert("wolf-defender-small".to_string(), 15_000);
-        ttl_ms.insert("pii".to_string(), 12_000);
-        ttl_ms.insert("pii-model".to_string(), 12_000);
+        ttl_ms.insert("dynamic-pii".to_string(), 12_000);
+        ttl_ms.insert("gliner_small-v2.5-edge".to_string(), 12_000);
         ttl_ms.insert("sensitive_documents".to_string(), 12_000);
         ttl_ms.insert("orca-sonar-document-classifier".to_string(), 12_000);
         ttl_ms.insert("user_intent".to_string(), 10_500);
@@ -470,13 +421,26 @@ impl Default for L3SchedulerPolicy {
         ttl_ms.insert("tool-prompts-model".to_string(), 7_500);
         ttl_ms.insert("tool-executions-model".to_string(), 7_500);
         ttl_ms.insert("tool-classifier-descriptions-model".to_string(), 7_500);
+        let mut estimated_cost_ms = HashMap::new();
+        estimated_cost_ms.insert("injection".to_string(), 200);
+        estimated_cost_ms.insert("wolf-defender-small".to_string(), 200);
+        estimated_cost_ms.insert("dynamic-pii".to_string(), 240);
+        estimated_cost_ms.insert("gliner_small-v2.5-edge".to_string(), 240);
+        estimated_cost_ms.insert("sensitive_documents".to_string(), 150);
+        estimated_cost_ms.insert("orca-sonar-document-classifier".to_string(), 150);
+        estimated_cost_ms.insert("user_intent".to_string(), 150);
+        estimated_cost_ms.insert("user-intent-model".to_string(), 150);
+        estimated_cost_ms.insert("tool_classifier".to_string(), 150);
+        estimated_cost_ms.insert("tool-prompts-model".to_string(), 150);
+        estimated_cost_ms.insert("tool-executions-model".to_string(), 150);
+        estimated_cost_ms.insert("tool-classifier-descriptions-model".to_string(), 150);
         Self {
             enabled: true,
             priority: vec![
                 "injection".to_string(),
                 "wolf-defender-small".to_string(),
-                "pii".to_string(),
-                "pii-model".to_string(),
+                "dynamic-pii".to_string(),
+                "gliner_small-v2.5-edge".to_string(),
                 "sensitive_documents".to_string(),
                 "orca-sonar-document-classifier".to_string(),
                 "user_intent".to_string(),
@@ -487,6 +451,9 @@ impl Default for L3SchedulerPolicy {
                 "tool-classifier-descriptions-model".to_string(),
             ],
             ttl_ms,
+            estimated_cost_ms,
+            fairness_quantum_ms: 50,
+            max_wait_ms: 2_000,
             degraded_factor: 0.75,
         }
     }
@@ -569,7 +536,6 @@ pub struct ScanExecution {
     gates: ScanGateMatrix,
     backend: ExecutionBackend,
     onnx_batch_mode: OnnxBatchMode,
-    long_text_policy: LongTextPolicy,
     ntdb_operating_point: NtdbOperatingPoint,
     defer_l3: bool,
 }
@@ -582,7 +548,6 @@ impl ScanExecution {
             gates: ScanGateMatrix::all_enabled(),
             backend: ExecutionBackend::default(),
             onnx_batch_mode: OnnxBatchMode::LazyBatches,
-            long_text_policy: LongTextPolicy::default(),
             ntdb_operating_point: NtdbOperatingPoint::default(),
             defer_l3: false,
         }
@@ -595,7 +560,6 @@ impl ScanExecution {
             gates,
             backend: ExecutionBackend::default(),
             onnx_batch_mode: OnnxBatchMode::LazyBatches,
-            long_text_policy: LongTextPolicy::default(),
             ntdb_operating_point: NtdbOperatingPoint::default(),
             defer_l3: false,
         }
@@ -622,11 +586,6 @@ impl ScanExecution {
             | ExecutionBackend::DirectMl
             | ExecutionBackend::TensorRt => OnnxBatchMode::TensorBatch,
         };
-    }
-
-    /// Replace the long-text routing policy.
-    pub fn set_long_text_policy(&mut self, policy: LongTextPolicy) {
-        self.long_text_policy = policy;
     }
 
     /// Select the calibrated NTDB operating point used by subsequent scans.
@@ -671,11 +630,6 @@ impl ScanExecution {
         self.backend
     }
 
-    /// Return the long-text routing policy.
-    pub fn long_text_policy(&self) -> LongTextPolicy {
-        self.long_text_policy
-    }
-
     /// Return the selected NTDB operating point.
     pub fn ntdb_operating_point(&self) -> NtdbOperatingPoint {
         self.ntdb_operating_point
@@ -712,6 +666,8 @@ pub enum SecurityCategory {
     Dlp,
     /// Personally identifiable information checks.
     Pii,
+    /// Dynamic zero-shot entity extraction in the L3 worker.
+    DynamicPii,
     /// Agentic tool prompt and execution risk checks.
     ToolClassifier,
     /// User-intent classification.
@@ -727,6 +683,7 @@ impl SecurityCategory {
             SecurityCategory::Injection => "injection",
             SecurityCategory::Dlp => "dlp",
             SecurityCategory::Pii => "pii",
+            SecurityCategory::DynamicPii => "dynamic-pii",
             SecurityCategory::ToolClassifier => "tool_classifier",
             SecurityCategory::UserIntent => "user_intent",
             SecurityCategory::SensitiveDocuments => "sensitive_documents",
@@ -742,6 +699,7 @@ impl std::str::FromStr for SecurityCategory {
             "injection" => Ok(SecurityCategory::Injection),
             "dlp" => Ok(SecurityCategory::Dlp),
             "pii" => Ok(SecurityCategory::Pii),
+            "dynamic-pii" | "dynamic_pii" => Ok(SecurityCategory::DynamicPii),
             "tool_classifier" => Ok(SecurityCategory::ToolClassifier),
             "user_intent" => Ok(SecurityCategory::UserIntent),
             "sensitive_documents" => Ok(SecurityCategory::SensitiveDocuments),

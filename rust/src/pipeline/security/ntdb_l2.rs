@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! NTDB v2 L2 model configuration and result mapping for the gateway.
 
 use std::collections::HashMap;
@@ -58,17 +59,6 @@ pub(super) fn tool_classifier_area_enabled(
     execution.allows_model("tool_classifier")
         && execution.allows_model(model)
         && aliases.iter().all(|alias| execution.allows_model(alias))
-}
-
-pub(super) fn model_explicitly_enabled(execution: &ScanExecution, aliases: &[&str]) -> bool {
-    aliases.iter().any(|alias| {
-        execution
-            .gates()
-            .models
-            .get(*alias)
-            .copied()
-            .unwrap_or(false)
-    })
 }
 
 pub fn ntdb_l2_model_configs_for_category(
@@ -172,37 +162,10 @@ pub fn ntdb_l2_model_configs_for_category(
             }
             configs
         }
-        SecurityCategory::Dlp | SecurityCategory::Pii | SecurityCategory::UserIntent => Vec::new(),
-    }
-}
-
-pub(super) fn unsupported_ntdb_l2_models(
-    execution: &ScanExecution,
-    category: SecurityCategory,
-) -> Vec<&'static str> {
-    if !execution.allows_level(SecurityLevel::L2) {
-        return Vec::new();
-    }
-
-    match category {
-        SecurityCategory::UserIntent
-            if execution.allows_model("user_intent")
-                && execution.allows_model("user-intent-model") =>
-        {
-            vec!["user-intent-model"]
-        }
-        SecurityCategory::Pii
-            if execution.allows_model("pii")
-                && model_explicitly_enabled(execution, &["pii-model"]) =>
-        {
-            vec!["pii-model"]
-        }
         SecurityCategory::Dlp
-        | SecurityCategory::Injection
-        | SecurityCategory::SensitiveDocuments
-        | SecurityCategory::ToolClassifier
-        | SecurityCategory::UserIntent
-        | SecurityCategory::Pii => Vec::new(),
+        | SecurityCategory::Pii
+        | SecurityCategory::DynamicPii
+        | SecurityCategory::UserIntent => Vec::new(),
     }
 }
 

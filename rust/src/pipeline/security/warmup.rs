@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Asset verification, model downloads, and pipeline initialization.
 
 use std::path::PathBuf;
@@ -7,6 +8,7 @@ use std::time::Instant;
 use crate::{
     assets,
     ml::{
+        dynamic_pii::DynamicPiiRuntime,
         ntdb_executor::{manifest::PackageManifest, NtdbExecutor},
         onnx::LazyOnnxTextClassifier,
     },
@@ -15,8 +17,8 @@ use crate::{
 };
 
 use super::ntdb_l2::{
-    model_explicitly_enabled, ntdb_l2_model_configs_for_category, ntdb_l2_package_dir,
-    unsupported_ntdb_l2_models, validate_ntdb_l2_package, NtdbL2ModelConfig,
+    ntdb_l2_model_configs_for_category, ntdb_l2_package_dir, validate_ntdb_l2_package,
+    NtdbL2ModelConfig,
 };
 use super::SecurityGateway;
 
@@ -91,10 +93,52 @@ impl SecurityGateway {
         let mut ntdb_specs = Vec::new();
 
         for cat in &self.categories {
-            if *cat == SecurityCategory::Pii
-                && !model_explicitly_enabled(&execution, &["pii-model"])
-            {
-                log::info!("pii native-only; pii-model disabled by default");
+            if *cat == SecurityCategory::DynamicPii {
+                if self.max_level < SecurityLevel::L3
+                    || !execution.allows_level(SecurityLevel::L3)
+                    || !execution.allows_model(assets::DYNAMIC_PII_ASSET.model)
+                {
+                    log::info!("dynamic-pii is L3-only and is disabled by the current execution");
+                    continue;
+                }
+                let bundle_dir = base_dir.join(assets::DYNAMIC_PII_ASSET.destination_path);
+                if !assets::dynamic_pii_assets_present(&base_dir) {
+                    if self.should_download_assets_for(*cat) {
+                        assets::download_dynamic_pii_assets(&base_dir)?;
+                    } else {
+                        return Err(format!(
+                            "missing dynamic-pii assets at {}; downloads disabled",
+                            bundle_dir.display()
+                        )
+                        .into());
+                    }
+                }
+                let missing_files = assets::DYNAMIC_PII_ASSET
+                    .files
+                    .iter()
+                    .filter(|file| !bundle_dir.join(file).is_file())
+                    .copied()
+                    .collect::<Vec<_>>();
+                if !missing_files.is_empty() {
+                    return Err(format!(
+                        "missing dynamic-pii bundle files at {}: {}",
+                        bundle_dir.display(),
+                        missing_files.join(", ")
+                    )
+                    .into());
+                }
+                let runtime = DynamicPiiRuntime::from_path(&bundle_dir)?;
+                self.l3_worker
+                    .register_dynamic_pii(assets::DYNAMIC_PII_ASSET.model, runtime);
+                log::info!(
+                    "dynamic-pii L3 worker model registered from {}",
+                    bundle_dir.display()
+                );
+                continue;
+            }
+
+            if *cat == SecurityCategory::Pii {
+                log::info!("pii native-only; no model assets");
                 continue;
             }
 
@@ -103,7 +147,8 @@ impl SecurityGateway {
                 SecurityCategory::SensitiveDocuments => base_dir.join("sensitive_documents"),
                 SecurityCategory::ToolClassifier => base_dir.join("tool_classifier"),
                 SecurityCategory::UserIntent => base_dir.join("user_intent"),
-                SecurityCategory::Pii => base_dir.join("pii"),
+                SecurityCategory::Pii => unreachable!("handled above"),
+                SecurityCategory::DynamicPii => unreachable!("handled above"),
                 SecurityCategory::Dlp => {
                     log::info!("dlp native-only; no model assets");
                     continue;
@@ -111,15 +156,6 @@ impl SecurityGateway {
             };
 
             let ntdb_l2_configs = ntdb_l2_model_configs_for_category(&execution, *cat);
-            let unsupported_l2_models = unsupported_ntdb_l2_models(&execution, *cat);
-            if !unsupported_l2_models.is_empty() {
-                return Err(format!(
-                    "missing NTDB v2 L2 export mapping for {}/{}; legacy L2 has been removed",
-                    cat.as_str(),
-                    unsupported_l2_models.join(",")
-                )
-                .into());
-            }
 
             let mut validated_ntdb_l3 = Vec::new();
             for config in &ntdb_l2_configs {
@@ -142,6 +178,17 @@ impl SecurityGateway {
                     )?;
                 }
                 let (spec, manifest) = validate_ntdb_l2_package(*config, package_dir.clone())?;
+                if !env_override {
+                    if let Err(err) =
+                        assets::prepare_cached_ntdb_l2_compact_tokenizer(&manifest, &package_dir)
+                    {
+                        log::warn!(
+                            "failed to prepare compact Granite tokenizer for cached {}/{} package: {err}; tokenizer.json remains available",
+                            cat.as_str(),
+                            config.public_model
+                        );
+                    }
+                }
                 log::info!(
                     "{}/{} NTDB v2 L2 package present at {}",
                     cat.as_str(),
@@ -229,6 +276,7 @@ impl SecurityGateway {
                     }
                 }
                 SecurityCategory::Pii => {}
+                SecurityCategory::DynamicPii => unreachable!("handled above"),
                 SecurityCategory::Dlp => {}
             }
         }

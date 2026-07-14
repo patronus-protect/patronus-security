@@ -65,6 +65,28 @@ fn pii_native_detects_valid_identifiers_and_rejects_invalid_credit_card() {
             .class_name,
         "safe",
     );
+    assert_class(
+        &pipe.evaluate("Connect to 192.168.10.42 now.").class_name,
+        "IP_ADDRESS",
+    );
+    assert_class(
+        &pipe.evaluate("Connect to 2001:db8::1 now.").class_name,
+        "IP_ADDRESS",
+    );
+    assert_class(
+        &pipe.evaluate("The SWIFT code is DEUTDEFF500.").class_name,
+        "SWIFT_CODE",
+    );
+    assert_class(
+        &pipe
+            .evaluate("Version 999.168.10.42 is not an IP.")
+            .class_name,
+        "safe",
+    );
+    assert_class(
+        &pipe.evaluate("The BIC code is invalid.").class_name,
+        "safe",
+    );
 }
 
 #[test]

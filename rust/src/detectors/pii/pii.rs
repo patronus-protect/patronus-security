@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use crate::EvaluationResult;
 
 use super::validators;
@@ -22,6 +23,31 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
         pattern: r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}",
         entity_group: "EMAIL",
         validator: None,
+    },
+    // ── IP-Adressen ─────────────────────────────────────────────────────────
+    PiiPattern {
+        name: "pii_ipv4",
+        pattern: r"\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b",
+        entity_group: "IP_ADDRESS",
+        validator: Some(validators::ip_address),
+    },
+    PiiPattern {
+        name: "pii_ipv6_full",
+        pattern: r"\b(?:[0-9A-Fa-f]{1,4}:){7}[0-9A-Fa-f]{1,4}\b",
+        entity_group: "IP_ADDRESS",
+        validator: Some(validators::ip_address),
+    },
+    PiiPattern {
+        name: "pii_ipv6_compressed",
+        pattern: r"\b(?:[0-9A-Fa-f]{1,4}:){1,7}:(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4})*)?\b",
+        entity_group: "IP_ADDRESS",
+        validator: Some(validators::ip_address),
+    },
+    PiiPattern {
+        name: "pii_ipv6_loopback",
+        pattern: r"::(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4})*)?\b",
+        entity_group: "IP_ADDRESS",
+        validator: Some(validators::ip_address),
     },
     // ── Telefon ──────────────────────────────────────────────────────────────
     PiiPattern {
@@ -61,6 +87,13 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
         pattern: r"\b[A-Z]{2}\d{2}[A-Z0-9]{4}\d{7,26}\b",
         entity_group: "IBAN",
         validator: Some(validators::mod97),
+    },
+    // ── SWIFT / BIC ─────────────────────────────────────────────────────────
+    PiiPattern {
+        name: "pii_swift_bic_context",
+        pattern: r"(?i)\b(?:SWIFT|BIC)(?:\s+code)?(?:\s+is)?\s*[:#\-]?\s*[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}(?:[A-Z0-9]{3})?\b",
+        entity_group: "SWIFT_CODE",
+        validator: None,
     },
     // ── Deutsche Steuer-IDs ──────────────────────────────────────────────────
     PiiPattern {

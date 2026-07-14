@@ -2,10 +2,10 @@
 name = "patronus-security"
 version = "0.1.0"
 edition = "2021"
-authors = ["Patronus <team@patronus.studio>"]
+authors = ["Casdo Labs GmbH <team@patronus.studio>"]
 description = "Hybrid Rust security scanners for prompt injection, DLP, PII, and agentic tool risks."
 readme = "../README.md"
-license = "Apache-2.0"
+license = "AGPL-3.0-only"
 repository = "https://github.com/patronus-protect/patronus-security"
 homepage = "https://github.com/patronus-protect/patronus-security"
 documentation = "https://docs.rs/patronus-security"
@@ -23,8 +23,12 @@ dirs = "5.0"
 ureq = { version = "2.10", features = ["json"] }
 ort = { version = "2.0.0-rc.12", features = ["half"] }
 tokenizers = "0.23.1"
+kitoken = { version = "=0.11.0", default-features = false, features = ["std", "serialization", "normalization", "regex-perf", "multiversion", "convert-tokenizers"] }
+sentencepiece-rust = "0.1.1"
 half = "2.1"
 blake3 = "1.5"
+memmap2 = "0.9"
+thiserror = "1.0"
 
 [features]
 default = []
@@ -37,3 +41,47 @@ onnx-tensorrt = ["ort/tensorrt"]
 
 [dev-dependencies]
 patronus-security = { path = ".", features = ["test-util"] }
+
+# Internal development, benchmark, and tokenizer-parity scripts.
+# These are NOT user-facing examples (those live in examples/0X_*). They are
+# kept under dev/ and registered with explicit paths so they keep compiling.
+
+[[example]]
+name = "all_categories_benchmark"
+path = "dev/all_categories_benchmark.rs"
+
+[[example]]
+name = "gliner_onnx_ner_benchmark"
+path = "dev/gliner_onnx_ner_benchmark.rs"
+
+[[example]]
+name = "injection_gliner_memory_smoke"
+path = "dev/injection_gliner_memory_smoke.rs"
+
+[[example]]
+name = "injection_pair_gliner_benchmark"
+path = "dev/injection_pair_gliner_benchmark.rs"
+
+[[example]]
+name = "local_l1_l2_gliner_benchmark"
+path = "dev/local_l1_l2_gliner_benchmark.rs"
+
+[[example]]
+name = "mmbert_pair_tokenizer"
+path = "dev/mmbert_pair_tokenizer.rs"
+
+[[example]]
+name = "ntdb_memory_smoke"
+path = "dev/ntdb_memory_smoke.rs"
+
+[[example]]
+name = "ntdb_tokenizer_parity"
+path = "dev/ntdb_tokenizer_parity.rs"
+
+[[example]]
+name = "tokenizer_to_kit"
+path = "dev/tokenizer_to_kit.rs"
+
+[[example]]
+name = "wolf_memory_smoke"
+path = "dev/wolf_memory_smoke.rs"

@@ -1,0 +1,85 @@
+{"id":"person-01","label":"person","text":"The patient is Reza Fazekas and the appointment is confidential.","entity":"Reza Fazekas"}
+{"id":"person-02","label":"person","text":"Employee Pascal Müller-Aebischer requested access to the payroll archive.","entity":"Pascal Müller-Aebischer"}
+{"id":"person-03","label":"person","text":"Please send the background check to Amelia Hartwell before Friday.","entity":"Amelia Hartwell"}
+{"id":"person-04","label":"person","text":"Der Lebenslauf von Florian Steinegger liegt der Personalabteilung vor.","entity":"Florian Steinegger"}
+{"id":"person-05","label":"person","text":"Customer Priya Nanduri asked us to delete her profile.","entity":"Priya Nanduri"}
+{"id":"legal-party-01","label":"legal_party","text":"In the dispute, claimant Northwind Logistics GmbH seeks damages.","entity":"Northwind Logistics GmbH"}
+{"id":"legal-party-02","label":"legal_party","text":"Defendant Maria Alvarez filed a response with the court.","entity":"Maria Alvarez"}
+{"id":"legal-party-03","label":"legal_party","text":"The agreement is entered into by Cedar Labs Inc. as the supplier.","entity":"Cedar Labs Inc."}
+{"id":"legal-party-04","label":"legal_party","text":"Klägerin ist die Havel & Sohn KG.","entity":"Havel & Sohn KG"}
+{"id":"legal-party-05","label":"legal_party","text":"The contracting party Jonathan Reed signed the amendment.","entity":"Jonathan Reed"}
+{"id":"physical-address-01","label":"physical_address","text":"Employee home address: Eichenweg 17, 80331 München.","entity":"Eichenweg 17, 80331 München"}
+{"id":"physical-address-02","label":"physical_address","text":"Please deliver the card to 42 Willow Crescent, Bristol BS8 2QH.","entity":"42 Willow Crescent, Bristol BS8 2QH"}
+{"id":"physical-address-03","label":"physical_address","text":"Her residential address is 918 Pine Street, Seattle, WA 98101.","entity":"918 Pine Street, Seattle, WA 98101"}
+{"id":"physical-address-04","label":"physical_address","text":"Wohnhaft in Rue de Lausanne 55, 1202 Genève.","entity":"Rue de Lausanne 55, 1202 Genève"}
+{"id":"physical-address-05","label":"physical_address","text":"The registered home address is 7 Harbour View Road, Dublin D04 F2X3.","entity":"7 Harbour View Road, Dublin D04 F2X3"}
+{"id":"street-address-01","label":"street_address","text":"Employee home address: Eichenweg 17, 80331 München.","entity":"Eichenweg 17"}
+{"id":"street-address-02","label":"street_address","text":"Please deliver the card to 42 Willow Crescent, Bristol BS8 2QH.","entity":"42 Willow Crescent"}
+{"id":"street-address-03","label":"street_address","text":"Her residential address is 918 Pine Street, Seattle, WA 98101.","entity":"918 Pine Street"}
+{"id":"street-address-04","label":"street_address","text":"Wohnhaft in Rue de Lausanne 55, 1202 Genève.","entity":"Rue de Lausanne 55"}
+{"id":"street-address-05","label":"street_address","text":"The registered home address is 7 Harbour View Road, Dublin D04 F2X3.","entity":"7 Harbour View Road"}
+{"id":"username-01","label":"username","text":"Portal username: JohnDoe78; reset is pending.","entity":"JohnDoe78"}
+{"id":"username-02","label":"username","text":"The affected account uses the username maria_ops_24.","entity":"maria_ops_24"}
+{"id":"username-03","label":"username","text":"Login name b.veith-admin was assigned elevated access.","entity":"b.veith-admin"}
+{"id":"username-04","label":"username","text":"Git user handle: secure_fox91.","entity":"secure_fox91"}
+{"id":"username-05","label":"username","text":"Der Benutzername lautet florian.stg.","entity":"florian.stg"}
+{"id":"passport-number-01","label":"passport_number","text":"Passport number C01X00T47 was copied into the case file.","entity":"C01X00T47"}
+{"id":"passport-number-02","label":"passport_number","text":"The traveller presented passport 533258426.","entity":"533258426"}
+{"id":"passport-number-03","label":"passport_number","text":"Reisepassnummer L7K4P2M8Q ist bis 2029 gültig.","entity":"L7K4P2M8Q"}
+{"id":"passport-number-04","label":"passport_number","text":"Her passport identifier is 15AB43821.","entity":"15AB43821"}
+{"id":"passport-number-05","label":"passport_number","text":"Travel record lists passport no. XK0001846.","entity":"XK0001846"}
+{"id":"driver-license-number-01","label":"driver_license_number","text":"California driver's license number D1234567 appears in the report.","entity":"D1234567"}
+{"id":"driver-license-number-02","label":"driver_license_number","text":"Führerscheinnummer B072RRE2I55 wurde geprüft.","entity":"B072RRE2I55"}
+{"id":"driver-license-number-03","label":"driver_license_number","text":"The rental profile stores driving licence ID MORGA753116SM9IJ.","entity":"MORGA753116SM9IJ"}
+{"id":"driver-license-number-04","label":"driver_license_number","text":"Driver license: S123-4567-8901.","entity":"S123-4567-8901"}
+{"id":"driver-license-number-05","label":"driver_license_number","text":"The commercial driver's licence number is DL-8842917.","entity":"DL-8842917"}
+{"id":"medical-record-number-01","label":"medical_record_number","text":"Medical record number MRN-204817 belongs to this patient.","entity":"MRN-204817"}
+{"id":"medical-record-number-02","label":"medical_record_number","text":"Patient chart ID HSP-771029 was exported.","entity":"HSP-771029"}
+{"id":"medical-record-number-03","label":"medical_record_number","text":"Krankenaktenzeichen KA-2026-1184 ist vertraulich.","entity":"KA-2026-1184"}
+{"id":"medical-record-number-04","label":"medical_record_number","text":"The clinic's medical record ID is 00918472-A.","entity":"00918472-A"}
+{"id":"medical-record-number-05","label":"medical_record_number","text":"Electronic health record number EHR-558901 was merged.","entity":"EHR-558901"}
+{"id":"health-insurance-number-01","label":"health_insurance_number","text":"Health insurance number X123456789 is in the claim.","entity":"X123456789"}
+{"id":"health-insurance-number-02","label":"health_insurance_number","text":"Versichertennummer A987654321 wurde aktualisiert.","entity":"A987654321"}
+{"id":"health-insurance-number-03","label":"health_insurance_number","text":"The member's insurance ID is NHS-44018276.","entity":"NHS-44018276"}
+{"id":"health-insurance-number-04","label":"health_insurance_number","text":"Policyholder health plan number HP-7720-1844 is active.","entity":"HP-7720-1844"}
+{"id":"health-insurance-number-05","label":"health_insurance_number","text":"Medical insurance identifier KASSE-581902 was disclosed.","entity":"KASSE-581902"}
+{"id":"medical-condition-01","label":"medical_condition","text":"The patient has type 2 diabetes and requires monitoring.","entity":"type 2 diabetes"}
+{"id":"medical-condition-02","label":"medical_condition","text":"Her diagnosis of rheumatoid arthritis is documented.","entity":"rheumatoid arthritis"}
+{"id":"medical-condition-03","label":"medical_condition","text":"Bei ihm wurde multiple Sklerose diagnostiziert.","entity":"multiple Sklerose"}
+{"id":"medical-condition-04","label":"medical_condition","text":"The confidential note confirms severe asthma.","entity":"severe asthma"}
+{"id":"medical-condition-05","label":"medical_condition","text":"Last year's urinary tract infection appears in the history.","entity":"urinary tract infection"}
+{"id":"medication-01","label":"medication","text":"Current medication: metformin 500 mg twice daily.","entity":"metformin"}
+{"id":"medication-02","label":"medication","text":"She was prescribed amoxicillin after the examination.","entity":"amoxicillin"}
+{"id":"medication-03","label":"medication","text":"The treatment plan includes salbutamol as needed.","entity":"salbutamol"}
+{"id":"medication-04","label":"medication","text":"Medikament: Interferon beta-1a einmal wöchentlich.","entity":"Interferon beta-1a"}
+{"id":"medication-05","label":"medication","text":"The patient currently takes methotrexate.","entity":"methotrexate"}
+{"id":"religion-01","label":"religion","text":"The employee voluntarily stated their religion as Roman Catholic.","entity":"Roman Catholic"}
+{"id":"religion-02","label":"religion","text":"Religious affiliation: Muslim.","entity":"Muslim"}
+{"id":"religion-03","label":"religion","text":"The intake form records her faith as Jewish.","entity":"Jewish"}
+{"id":"religion-04","label":"religion","text":"Religionszugehörigkeit: buddhistisch.","entity":"buddhistisch"}
+{"id":"religion-05","label":"religion","text":"He identifies as Hindu on the diversity survey.","entity":"Hindu"}
+{"id":"sexual-orientation-01","label":"sexual_orientation","text":"The confidential HR record states that the employee is bisexual.","entity":"bisexual"}
+{"id":"sexual-orientation-02","label":"sexual_orientation","text":"She describes her sexual orientation as lesbian.","entity":"lesbian"}
+{"id":"sexual-orientation-03","label":"sexual_orientation","text":"Sexuelle Orientierung: homosexuell.","entity":"homosexuell"}
+{"id":"sexual-orientation-04","label":"sexual_orientation","text":"The survey response identifies the participant as heterosexual.","entity":"heterosexual"}
+{"id":"sexual-orientation-05","label":"sexual_orientation","text":"He selected queer in the sexual-orientation field.","entity":"queer"}
+{"id":"disability-01","label":"disability","text":"The accommodation request states a visual impairment.","entity":"visual impairment"}
+{"id":"disability-02","label":"disability","text":"The employee disclosed a hearing disability to HR.","entity":"hearing disability"}
+{"id":"disability-03","label":"disability","text":"Disability status: wheelchair user.","entity":"wheelchair user"}
+{"id":"disability-04","label":"disability","text":"Für den Nachteilsausgleich wurde Autismus angegeben.","entity":"Autismus"}
+{"id":"disability-05","label":"disability","text":"The form records a cognitive disability.","entity":"cognitive disability"}
+{"id":"political-affiliation-01","label":"political_affiliation","text":"Political affiliation: Green Party.","entity":"Green Party"}
+{"id":"political-affiliation-02","label":"political_affiliation","text":"The donor profile lists the Republican Party as her affiliation.","entity":"Republican Party"}
+{"id":"political-affiliation-03","label":"political_affiliation","text":"Parteizugehörigkeit: Sozialdemokratische Partei Deutschlands.","entity":"Sozialdemokratische Partei Deutschlands"}
+{"id":"political-affiliation-04","label":"political_affiliation","text":"He declared an affiliation with the Labour Party.","entity":"Labour Party"}
+{"id":"political-affiliation-05","label":"political_affiliation","text":"The survey records Christian Democratic Union membership.","entity":"Christian Democratic Union"}
+{"id":"negative-01","label":"negative","text":"The security team reviewed the quarterly access policy and found no personal records."}
+{"id":"negative-02","label":"negative","text":"This template explains where a passport number would appear but contains no identifier."}
+{"id":"negative-03","label":"negative","text":"Our company supports employees of every religion, orientation, and political view."}
+{"id":"negative-04","label":"negative","text":"The empty medical form contains fields for diagnosis, medication, and insurance details."}
+{"id":"negative-05","label":"negative","text":"Use a unique username and never share credentials with another user."}
+{"id":"negative-06","label":"negative","text":"The court published general guidance for contracting parties."}
+{"id":"negative-07","label":"negative","text":"The delivery workflow validates addresses before creating a shipping label."}
+{"id":"negative-08","label":"negative","text":"The clinic migrated its electronic record system over the weekend."}
+{"id":"negative-09","label":"negative","text":"The diversity policy prohibits discrimination based on disability."}
+{"id":"negative-10","label":"negative","text":"Driver licenses must be valid, but no license data is stored in this document."}

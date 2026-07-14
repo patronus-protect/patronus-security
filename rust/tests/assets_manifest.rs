@@ -2,7 +2,10 @@ use std::collections::HashSet;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use patronus_security::{
-    assets::{category_assets, ntdb_l2_package_assets, required_assets_present},
+    assets::{
+        category_assets, dynamic_pii_assets_present, ntdb_l2_package_assets,
+        required_assets_present, DYNAMIC_PII_ASSET,
+    },
     SecurityCategory, SecurityLevel,
 };
 
@@ -19,6 +22,38 @@ fn temp_dir(name: &str) -> std::path::PathBuf {
     ));
     std::fs::create_dir_all(&dir).unwrap();
     dir
+}
+
+#[test]
+fn dynamic_pii_bundle_is_complete_and_revision_pinned() {
+    assert_eq!(DYNAMIC_PII_ASSET.category, SecurityCategory::DynamicPii);
+    assert_eq!(
+        DYNAMIC_PII_ASSET.repo,
+        "patronus-studio/gliner_small-v2.5-edge"
+    );
+    assert_eq!(DYNAMIC_PII_ASSET.revision.len(), 40);
+    assert!(DYNAMIC_PII_ASSET
+        .revision
+        .chars()
+        .all(|ch| ch.is_ascii_hexdigit()));
+    assert!(DYNAMIC_PII_ASSET
+        .files
+        .contains(&"model_int4_embeddings_int8.onnx"));
+    assert!(DYNAMIC_PII_ASSET
+        .files
+        .contains(&"quantization_manifest.json"));
+    assert!(DYNAMIC_PII_ASSET.files.contains(&"spm.model"));
+    assert!(DYNAMIC_PII_ASSET.files.contains(&"tokenizer.json"));
+
+    let dir = temp_dir("dynamic_pii");
+    assert!(!dynamic_pii_assets_present(&dir));
+    for file in DYNAMIC_PII_ASSET.files {
+        let path = dir.join(DYNAMIC_PII_ASSET.destination_path).join(file);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, b"asset").unwrap();
+    }
+    assert!(dynamic_pii_assets_present(&dir));
+    std::fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]
@@ -90,6 +125,7 @@ fn ntdb_l2_package_manifest_has_available_model_specs() {
         ]
     );
     assert!(ntdb_l2_package_assets(SecurityCategory::UserIntent, SecurityLevel::L2).is_empty());
+    assert!(ntdb_l2_package_assets(SecurityCategory::Dlp, SecurityLevel::L2).is_empty());
     assert!(ntdb_l2_package_assets(SecurityCategory::Pii, SecurityLevel::L2).is_empty());
 }
 
@@ -224,6 +260,7 @@ mod asset_downloads {
         );
 
         assert!(ntdb_l2_package_assets(SecurityCategory::UserIntent, SecurityLevel::L2).is_empty());
+        assert!(ntdb_l2_package_assets(SecurityCategory::Dlp, SecurityLevel::L2).is_empty());
         assert!(ntdb_l2_package_assets(SecurityCategory::Pii, SecurityLevel::L2).is_empty());
     }
 

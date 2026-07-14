@@ -14,7 +14,7 @@ If `model_dir` is set, that directory is used as the asset root. Otherwise the l
 | Linux | `~/.cache/patronus_security` |
 | Windows | `%LOCALAPPDATA%\patronus_security` |
 
-Category assets are stored below that root, for example `injection/`, `pii/`, or `tool_classifier/`.
+Category assets are stored below that root, for example `injection/`, `pii/`, `dynamic_pii/`, or `tool_classifier/`.
 
 ## Offline And Missing-Asset Behavior
 
@@ -26,13 +26,16 @@ Category assets are stored below that root, for example `injection/`, `pii/`, or
 - Missing optional assets do not block `warmup()`.
 - Optional assets are skipped by default during downloads. Set `PATRONUS_DOWNLOAD_OPTIONAL_ASSETS=1` to download optional full ONNX files and sidecar data.
 - Required L3 assets prefer fp16 ONNX files where available.
-- PII does not use ONNX/L3; PII runs native checks and L2 model assets when available.
+- PII is native L1-only and has no model assets.
+- `dynamic-pii` is L3-only and requires the revision-pinned `gliner_small-v2.5-edge` bundle below the regular `model_dir` asset root.
 - L3 ONNX sessions are lazy-loaded on first L3 inference and are evicted after `PATRONUS_L3_TTL_SECS` seconds of idleness. The default TTL is `300` seconds.
 - Set `HF_TOKEN` when a model repository requires authenticated or rate-limited Hugging Face access.
 
 ## NTDB L2 Packages
 
 NTDB v2 L2 packages are manifest-first: the runtime downloads `manifest.json` and every file it references. Sizes therefore depend on the published package contents.
+
+For supported Granite/ModernBERT packages, the Security Lib generates a compact `tokenizer.kit` locally after the verified asset download. Existing official caches are migrated during warmup, while local environment overrides are left untouched. The original `tokenizer.json` remains the canonical fallback. Generated files are written atomically under a cross-process lock and invalidated by source hash, compact hash, converter version, and format version.
 
 | Category | Model | Repository | Source prefix | Cache path |
 | --- | --- | --- | --- | --- |
@@ -53,13 +56,13 @@ The sizes below show required cold-cache downloads for the selected maximum leve
 | `injection` | 0 B | 0 B | unknown | patronus-studio/wolf-defender-prompt-injection-small |
 | `dlp` | 0 B | 0 B | 0 B | none |
 | `pii` | 0 B | 0 B | 0 B | none |
+| `dynamic-pii` | 0 B | 0 B | unknown | patronus-studio/gliner_small-v2.5-edge |
 | `tool_classifier` | unknown | unknown | unknown | patronus-studio/tool-description-model, patronus-studio/tool-executions-model, patronus-studio/tool-prompts-model |
 | `user_intent` | unknown | unknown | unknown | patronus-studio/user-intent-model |
 | `sensitive_documents` | 16.8 KiB | 16.8 KiB | 301.5 MiB | patronus-studio/orca-sonar-document-classifier |
 
 The following repositories were not accessible when the snapshot was generated, so their sizes are listed as `unknown`:
 
-- `patronus-studio/pii-model`: HTTP 401
 - `patronus-studio/tool-description-model`: HTTP 401
 - `patronus-studio/tool-executions-model`: HTTP 401
 - `patronus-studio/tool-prompts-model`: HTTP 401
@@ -83,3 +86,11 @@ The following repositories were not accessible when the snapshot was generated, 
 | `sensitive_documents` | `L3` | optional | `patronus-studio/orca-sonar-document-classifier/tokenizer_config.json` | `sensitive_documents/prompts/tokenizer_config.json` | 0.6 KiB |
 | `sensitive_documents` | `L3` | optional | `patronus-studio/orca-sonar-document-classifier/special_tokens_map.json` | `sensitive_documents/prompts/special_tokens_map.json` | unknown |
 | `sensitive_documents` | `L3` | yes | `patronus-studio/orca-sonar-document-classifier/onnx/onnx_fp16/model_fp16.onnx` | `sensitive_documents/prompts/onnx/model_fp16.onnx` | 268.7 MiB |
+| `dynamic-pii` | `L3` | yes | `patronus-studio/gliner_small-v2.5-edge/gliner_config.json` | `dynamic_pii/gliner_small_v2_5/gliner_config.json` | unknown |
+| `dynamic-pii` | `L3` | yes | `patronus-studio/gliner_small-v2.5-edge/gliner_onnx_config.json` | `dynamic_pii/gliner_small_v2_5/gliner_onnx_config.json` | unknown |
+| `dynamic-pii` | `L3` | yes | `patronus-studio/gliner_small-v2.5-edge/model_int4_embeddings_int8.onnx` | `dynamic_pii/gliner_small_v2_5/model_int4_embeddings_int8.onnx` | unknown |
+| `dynamic-pii` | `L3` | yes | `patronus-studio/gliner_small-v2.5-edge/quantization_manifest.json` | `dynamic_pii/gliner_small_v2_5/quantization_manifest.json` | unknown |
+| `dynamic-pii` | `L3` | yes | `patronus-studio/gliner_small-v2.5-edge/special_tokens_map.json` | `dynamic_pii/gliner_small_v2_5/special_tokens_map.json` | unknown |
+| `dynamic-pii` | `L3` | yes | `patronus-studio/gliner_small-v2.5-edge/spm.model` | `dynamic_pii/gliner_small_v2_5/spm.model` | unknown |
+| `dynamic-pii` | `L3` | yes | `patronus-studio/gliner_small-v2.5-edge/tokenizer.json` | `dynamic_pii/gliner_small_v2_5/tokenizer.json` | unknown |
+| `dynamic-pii` | `L3` | yes | `patronus-studio/gliner_small-v2.5-edge/tokenizer_config.json` | `dynamic_pii/gliner_small_v2_5/tokenizer_config.json` | unknown |

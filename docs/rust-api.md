@@ -9,20 +9,27 @@ Import public items from the `patronus_security` crate.
 ```rust
 pub mod assets;
 pub mod detectors;
+pub mod dynamic_pii;
 pub mod external_l1;
+#[path = "../gliner-onnx-engine/mod.rs"]
+pub mod gliner_onnx_engine;
 pub mod ml;
 pub mod pipeline;
 pub mod threat;
 pub mod types;
 
+pub use dynamic_pii::{
+    DynamicPiiConditionalLabels, DynamicPiiConfig, DynamicPiiExecutionGate,
+    DynamicPiiResultCondition, EvidenceSpan,
+};
 pub use external_l1::{ExternalL1Detector, ExternalL1Input};
 pub use pipeline::{Pipeline, SecurityGateway};
 pub use types::{
-    EvaluationResult, ExecutionBackend, L3SchedulerPolicy, LayerResult, LongTextPolicy,
-    NtdbOperatingPoint, OnnxBatchMode, QueuedSecurityEvent, QueuedSecurityScanResult, RequestId,
-    ScanExecution, ScanGateMatrix, SecurityCategory, SecurityFailure, SecurityFailureKind,
-    SecurityFailureStage, SecurityLevel, SecurityLevelReadiness, SecurityRequestCompletion,
-    SecurityRequestState, SecurityRuntimeReadiness, SecurityScanResult, TextChunking,
+    EvaluationResult, ExecutionBackend, L3SchedulerPolicy, LayerResult, NtdbOperatingPoint,
+    OnnxBatchMode, QueuedSecurityEvent, QueuedSecurityScanResult, RequestId, ScanExecution,
+    ScanGateMatrix, SecurityCategory, SecurityFailure, SecurityFailureKind, SecurityFailureStage,
+    SecurityLevel, SecurityLevelReadiness, SecurityRequestCompletion, SecurityRequestState,
+    SecurityRuntimeReadiness, SecurityScanResult,
 };
 ```
 
@@ -121,16 +128,22 @@ pub fn set_execution_backend(&self, backend: ExecutionBackend);
 Replace the execution backend and apply its default L3 mode.
 
 ```rust
-pub fn set_long_text_policy(&self, policy: LongTextPolicy);
-```
-
-Replace the long-text routing policy.
-
-```rust
 pub fn set_ntdb_operating_point(&self, point: NtdbOperatingPoint);
 ```
 
 Select the calibrated NTDB operating point used by subsequent scans.
+
+```rust
+pub fn set_dynamic_pii_config(&self, config: DynamicPiiConfig) -> Result<(), String>;
+```
+
+Replace the pipeline-specific `dynamic-pii` configuration.
+
+```rust
+pub fn dynamic_pii_config(&self) -> DynamicPiiConfig;
+```
+
+Return the currently configured `dynamic-pii` settings.
 
 ## Queued Request API
 
@@ -247,6 +260,90 @@ pub trait ExternalL1Detector: Send + Sync {
 ```
 
 An application-provided L1 heuristic attached to one security category.
+
+## Dynamic PII Types
+
+```rust
+pub enum DynamicPiiExecutionGate {
+    /// Run whenever the category and L3 model are enabled.
+    Always,
+    /// Run when a source pipeline returns one of the configured results.
+    IfResultIn {
+        pipeline: String,
+        results: Vec<String>,
+    },
+    /// Run only after a source pipeline finishes without a usable result.
+    IfNoResult { pipeline: String },
+}
+```
+
+Request-local condition controlling whether `dynamic-pii` runs.
+
+```rust
+pub struct DynamicPiiResultCondition {
+    pub pipeline: String,
+    pub results: Vec<String>,
+}
+```
+
+Positive source-result condition used by a conditional label rule.
+
+```rust
+pub struct DynamicPiiConditionalLabels {
+    pub labels: Vec<String>,
+    pub when: DynamicPiiResultCondition,
+}
+```
+
+Labels activated when another pipeline returns a configured result.
+
+```rust
+pub struct DynamicPiiConfig {
+    /// Entity labels passed to GLiNER in this order.
+    pub labels: Vec<String>,
+    /// Default entity score threshold.
+    pub threshold: f32,
+    /// Optional threshold overrides keyed by entity label.
+    #[serde(default)]
+    pub label_thresholds: HashMap<String, f32>,
+    /// Request-local gate deciding whether this pipeline runs.
+    #[serde(default)]
+    pub execution_gate: DynamicPiiExecutionGate,
+    /// Additional labels activated by final source-pipeline results.
+    #[serde(default)]
+    pub conditional_labels: Vec<DynamicPiiConditionalLabels>,
+    /// Maximum accepted UTF-8 input size.
+    pub max_text_bytes: usize,
+    /// Maximum whitespace-token count per GLiNER chunk.
+    pub chunk_size_words: usize,
+    /// Repeated whitespace-token count between neighboring chunks.
+    pub chunk_overlap_words: usize,
+    /// End-to-end queue and inference deadline for one L3 job.
+    pub timeout_ms: u64,
+}
+```
+
+Pipeline-specific configuration for the L3-only `dynamic-pii` scanner.
+
+```rust
+pub fn validated(mut self) -> Result<Self, String>;
+```
+
+Validate and normalize this configuration.
+
+```rust
+pub struct EvidenceSpan {
+    pub label: String,
+    pub text: String,
+    pub score: f64,
+    pub start_byte: usize,
+    pub end_byte: usize,
+    pub start_char: usize,
+    pub end_char: usize,
+}
+```
+
+Exact evidence span returned by an entity-producing pipeline.
 
 ## Result And Category Types
 
@@ -436,6 +533,8 @@ pub struct SecurityScanResult {
     pub duration_ms: f64,
     /// Ordered layer evidence that explains the final decision.
     pub layers: Vec<LayerResult>,
+    /// Exact entity evidence returned by span-producing pipelines.
+    pub evidence_spans: Vec<crate::dynamic_pii::EvidenceSpan>,
 }
 ```
 
@@ -523,46 +622,6 @@ pub fn as_str(self) -> &'static str;
 Return the canonical snake_case backend string.
 
 ```rust
-pub struct LongTextPolicy {
-    /// Whether long-text routing is enabled.
-    pub enabled: bool,
-    /// Full-text L2 is skipped at and above this UTF-8 byte length after L1 is benign.
-    pub no_full_l2_byte_limit: usize,
-    /// UTF-8 byte size for chunks sent through chunked L1/L2.
-    pub chunk_size_bytes: usize,
-    /// UTF-8 byte overlap between neighboring chunks.
-    pub overlap_bytes: usize,
-    /// Whether non-benign L2 chunk decisions should be eligible for L3 verification.
-    pub verify_non_benign_l2: bool,
-}
-```
-
-Long-text routing policy for model-backed pipelines.
-
-```rust
-pub fn chunking(self) -> Result<TextChunking, String>;
-```
-
-Return the chunking profile implied by this policy.
-
-```rust
-pub struct TextChunking {
-    /// Maximum UTF-8 byte size per chunk before overlap.
-    pub chunk_size_bytes: usize,
-    /// UTF-8 byte overlap between neighboring chunks.
-    pub overlap_bytes: usize,
-}
-```
-
-Byte chunking used by long-text L1/L2 routing.
-
-```rust
-pub fn new(chunk_size_bytes: usize, overlap_bytes: usize) -> Result<Self, String>;
-```
-
-Create a validated byte chunking configuration.
-
-```rust
 pub struct ScanGateMatrix {
     /// Optional L1 override. `None` means enabled.
     pub l1: Option<bool>,
@@ -591,6 +650,13 @@ pub struct L3SchedulerPolicy {
     pub priority: Vec<String>,
     /// Per category/model timeout before an unstarted L3 job degrades.
     pub ttl_ms: HashMap<String, u64>,
+    /// Initial execution-cost estimate per category/model. The worker replaces
+    /// this gradually with observed wall time while it is running.
+    pub estimated_cost_ms: HashMap<String, u64>,
+    /// Compute-time credit granted during one fair-scheduling round.
+    pub fairness_quantum_ms: u64,
+    /// Maximum queue wait before the oldest job bypasses priority and cost.
+    pub max_wait_ms: u64,
     /// Multiplier applied to L2 confidence when L3 degrades.
     pub degraded_factor: f64,
 }
@@ -653,7 +719,6 @@ pub struct ScanExecution {
     gates: ScanGateMatrix,
     backend: ExecutionBackend,
     onnx_batch_mode: OnnxBatchMode,
-    long_text_policy: LongTextPolicy,
     ntdb_operating_point: NtdbOperatingPoint,
     defer_l3: bool,
 }
@@ -690,12 +755,6 @@ pub fn set_backend(&mut self, backend: ExecutionBackend);
 ```
 
 Replace the execution backend and apply its default L3 batch mode.
-
-```rust
-pub fn set_long_text_policy(&mut self, policy: LongTextPolicy);
-```
-
-Replace the long-text routing policy.
 
 ```rust
 pub fn set_ntdb_operating_point(&mut self, point: NtdbOperatingPoint);
@@ -747,12 +806,6 @@ pub fn backend(&self) -> ExecutionBackend;
 Return the configured execution backend.
 
 ```rust
-pub fn long_text_policy(&self) -> LongTextPolicy;
-```
-
-Return the long-text routing policy.
-
-```rust
 pub fn ntdb_operating_point(&self) -> NtdbOperatingPoint;
 ```
 
@@ -784,6 +837,8 @@ pub enum SecurityCategory {
     Dlp,
     /// Personally identifiable information checks.
     Pii,
+    /// Dynamic zero-shot entity extraction in the L3 worker.
+    DynamicPii,
     /// Agentic tool prompt and execution risk checks.
     ToolClassifier,
     /// User-intent classification.
@@ -843,6 +898,25 @@ pub struct NtdbL2PackageAssetSpec {
 
 A manifest-first NTDB v2 L2 package declared for Hugging Face download.
 
+```rust
+pub struct PipelineModelAssetSpec {
+    /// Scanner category that owns this pipeline model.
+    pub category: SecurityCategory,
+    /// Public model name.
+    pub model: &'static str,
+    /// Hugging Face repository identifier.
+    pub repo: &'static str,
+    /// Immutable Hugging Face commit revision.
+    pub revision: &'static str,
+    /// Relative bundle directory below the model cache.
+    pub destination_path: &'static str,
+    /// Files required to load and validate the bundle.
+    pub files: &'static [&'static str],
+}
+```
+
+A revision-pinned model bundle used by a standalone pipeline.
+
 ## Asset Download Helpers
 
 ```rust
@@ -879,6 +953,20 @@ pub fn required_assets_present(
 ```
 
 Check whether all required assets for a category are present in `target_dir`.
+
+```rust
+pub fn dynamic_pii_assets_present(target_dir: &Path) -> bool;
+```
+
+Check whether the complete revision-pinned `dynamic-pii` model is cached.
+
+```rust
+pub fn download_dynamic_pii_assets(
+    target_dir: &Path,
+) -> Result<PathBuf, Box<dyn std::error::Error>>;
+```
+
+Download the revision-pinned `dynamic-pii` GLiNER bundle.
 
 ```rust
 pub fn download_category_assets(

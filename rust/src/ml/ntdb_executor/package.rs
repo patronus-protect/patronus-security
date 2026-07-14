@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use std::{
     collections::{HashMap, HashSet},
     fs,
@@ -5,11 +6,9 @@ use std::{
     sync::Arc,
 };
 
+use crate::NtdbOperatingPoint;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
-use tokenizers::Tokenizer;
-
-use crate::NtdbOperatingPoint;
 
 use super::{
     encoder::{StaticEncoder, StaticEncoderStore},
@@ -17,6 +16,7 @@ use super::{
     manifest::PackageManifest,
     ntdb_error,
     runtime::{AggregatorRuntime, HeadRuntime},
+    tokenizer::RuntimeTokenizer,
     NtdbResult,
 };
 
@@ -68,7 +68,7 @@ impl NtdbPackageSpec {
 
 pub struct NtdbPackage {
     manifest: PackageManifest,
-    tokenizer: Tokenizer,
+    tokenizer: RuntimeTokenizer,
     encoder: Arc<StaticEncoder>,
     heads: Vec<HeadRuntime>,
     aggregators: Vec<AggregatorRuntime>,
@@ -113,19 +113,7 @@ impl NtdbPackage {
         .map_err(|err| ntdb_error(format!("failed to parse NTDB manifest: {err}")))?;
         manifest.validate()?;
 
-        let tokenizer_path = package_dir
-            .join(&manifest.tokenizer_dir)
-            .join("tokenizer.json");
-        let mut tokenizer = Tokenizer::from_file(&tokenizer_path).map_err(|err| {
-            ntdb_error(format!(
-                "failed to load NTDB tokenizer {}: {err}",
-                tokenizer_path.display()
-            ))
-        })?;
-        tokenizer
-            .with_truncation(None)
-            .map_err(|err| ntdb_error(format!("failed to disable tokenizer truncation: {err}")))?;
-        tokenizer.with_padding(None);
+        let tokenizer = RuntimeTokenizer::load(package_dir.join(&manifest.tokenizer_dir))?;
 
         let encoder = encoders.load_for_package(&package_dir, &manifest)?;
         if encoder.vocab_size() != manifest.minilm.vocab_size {
@@ -247,13 +235,10 @@ impl NtdbPackage {
     }
 
     fn prepare_document(&self, text: &str) -> NtdbResult<PreparedDocument> {
-        let encoding = self
-            .tokenizer
-            .encode(text, false)
-            .map_err(|err| ntdb_error(format!("failed to encode NTDB text: {err}")))?;
+        let encoding = self.tokenizer.encode(text, false)?;
         let chunks = chunk_token_ids(
-            encoding.get_ids(),
-            encoding.get_offsets(),
+            &encoding.ids,
+            &encoding.offsets,
             self.manifest.minilm.content_tokens_per_chunk,
         );
         let raw_embeddings = self.embed_chunks(&chunks)?;
@@ -263,7 +248,7 @@ impl NtdbPackage {
             chunk_width: self.manifest.minilm.content_tokens_per_chunk,
             raw_embeddings,
             local_features,
-            doc_token_ids: encoding.get_ids().to_vec(),
+            doc_token_ids: encoding.ids,
         })
     }
 
@@ -284,10 +269,7 @@ impl NtdbPackage {
                             "token id {token_index} exceeds embedding matrix vocab size"
                         )));
                     }
-                    let source_offset = token_index * embedding_dim;
-                    target.iter_mut().enumerate().for_each(|(dim, value)| {
-                        *value += self.encoder.embedding_matrix()[source_offset + dim];
-                    });
+                    self.encoder.accumulate_token_embedding(token_index, target);
                 }
                 let denom = chunk.token_ids.len() as f32;
                 for value in target {
@@ -301,10 +283,7 @@ impl NtdbPackage {
     fn local_features(&self, chunks: &[TokenChunk]) -> NtdbResult<Vec<f32>> {
         let mut output = Vec::with_capacity(chunks.len() * LOCAL_FEATURE_COUNT);
         for chunk in chunks {
-            let chunk_text = self
-                .tokenizer
-                .decode(&chunk.token_ids, true)
-                .map_err(|err| ntdb_error(format!("failed to decode NTDB chunk: {err}")))?;
+            let chunk_text = self.tokenizer.decode(&chunk.token_ids, true)?;
             output.extend_from_slice(&local_text_heuristics(&chunk_text, &chunk.token_ids));
         }
         Ok(output)

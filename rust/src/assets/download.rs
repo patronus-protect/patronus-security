@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use std::collections::HashSet;
 use std::fs::{self, File};
 use std::io;
@@ -7,7 +8,13 @@ use crate::{SecurityCategory, SecurityLevel};
 
 use crate::ml::ntdb_executor::manifest::PackageManifest;
 
-use super::specs::{AssetSpec, NtdbL2PackageAssetSpec, ASSET_MANIFEST, NTDB_L2_PACKAGE_MANIFEST};
+use super::{
+    compact_tokenizer::ensure_granite_compact_tokenizer,
+    specs::{
+        AssetSpec, NtdbL2PackageAssetSpec, PipelineModelAssetSpec, ASSET_MANIFEST,
+        DYNAMIC_PII_ASSET, NTDB_L2_PACKAGE_MANIFEST,
+    },
+};
 
 struct SharedEmbedderFile {
     relative_path: String,
@@ -57,6 +64,50 @@ pub fn required_assets_present(
         .into_iter()
         .filter(|asset| asset.required)
         .all(|asset| target_dir.join(asset.destination_path).exists())
+}
+
+/// Check whether the complete revision-pinned `dynamic-pii` model is cached.
+pub fn dynamic_pii_assets_present(target_dir: &Path) -> bool {
+    pipeline_model_assets_present(DYNAMIC_PII_ASSET, target_dir)
+}
+
+/// Download the revision-pinned `dynamic-pii` GLiNER bundle.
+pub fn download_dynamic_pii_assets(
+    target_dir: &Path,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    download_pipeline_model_assets(DYNAMIC_PII_ASSET, target_dir)
+}
+
+fn pipeline_model_assets_present(asset: PipelineModelAssetSpec, target_dir: &Path) -> bool {
+    let bundle_dir = target_dir.join(asset.destination_path);
+    asset
+        .files
+        .iter()
+        .all(|file| bundle_dir.join(file).is_file())
+}
+
+fn download_pipeline_model_assets(
+    asset: PipelineModelAssetSpec,
+    target_dir: &Path,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let token = hf_token();
+    let bundle_dir = target_dir.join(asset.destination_path);
+    for file in asset.files {
+        let destination = bundle_dir.join(file);
+        if destination.is_file() {
+            continue;
+        }
+        download_hf_file_at_revision(
+            token.as_deref(),
+            asset.repo,
+            asset.revision,
+            file,
+            &destination,
+            true,
+            asset.category.as_str(),
+        )?;
+    }
+    Ok(bundle_dir)
 }
 
 /// Download missing manifest assets for a category into `target_dir`.
@@ -170,7 +221,72 @@ pub fn download_ntdb_l2_package_asset(
         )?;
     }
 
+    if let Err(err) = prepare_downloaded_compact_tokenizer(&manifest, &shared_embedder_files) {
+        log::warn!(
+            "failed to prepare compact Granite tokenizer for {}: {err}; tokenizer.json remains available",
+            package_dir.display()
+        );
+    }
+
     Ok(package_dir)
+}
+
+fn prepare_downloaded_compact_tokenizer(
+    manifest: &PackageManifest,
+    shared_embedder_files: &[SharedEmbedderFile],
+) -> Result<(), Box<dyn std::error::Error>> {
+    let Some(tokenizer_file) = shared_embedder_files
+        .iter()
+        .find(|file| file.relative_path.ends_with("/tokenizer.json"))
+    else {
+        return Ok(());
+    };
+    prepare_compact_tokenizer(
+        manifest,
+        &tokenizer_file.shared_file,
+        &tokenizer_file.package_file,
+    )
+}
+
+/// Prepare the generated compact tokenizer for an already cached official package.
+///
+/// The package tokenizer is normally a link into the shared encoder cache. Resolving
+/// it first keeps one generated `.kit` per shared Granite tokenizer. Local model
+/// overrides are deliberately handled by the caller and are not modified here.
+pub(crate) fn prepare_cached_ntdb_l2_compact_tokenizer(
+    manifest: &PackageManifest,
+    package_dir: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let package_tokenizer_json = package_dir
+        .join(manifest.tokenizer_dir.trim_end_matches('/'))
+        .join("tokenizer.json");
+    let source_tokenizer_json = fs::canonicalize(&package_tokenizer_json).map_err(|err| {
+        format!(
+            "failed to resolve cached NTDB tokenizer {}: {err}",
+            package_tokenizer_json.display()
+        )
+    })?;
+    prepare_compact_tokenizer(manifest, &source_tokenizer_json, &package_tokenizer_json)
+}
+
+fn prepare_compact_tokenizer(
+    manifest: &PackageManifest,
+    source_tokenizer_json: &Path,
+    package_tokenizer_json: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let Some(shared_compact_path) =
+        ensure_granite_compact_tokenizer(&manifest.minilm, source_tokenizer_json)?
+    else {
+        return Ok(());
+    };
+    let package_compact_path = package_tokenizer_json
+        .parent()
+        .ok_or("NTDB tokenizer package path has no parent")?
+        .join("tokenizer.kit");
+    if shared_compact_path == package_compact_path {
+        return Ok(());
+    }
+    link_shared_embedder_file(&shared_compact_path, &package_compact_path)
 }
 
 /// Return all runtime files referenced by an NTDB v2 package manifest.
@@ -425,11 +541,23 @@ fn download_hf_file(
     required: bool,
     label: &str,
 ) -> Result<bool, Box<dyn std::error::Error>> {
+    download_hf_file_at_revision(token, repo, "main", source_path, dest_file, required, label)
+}
+
+fn download_hf_file_at_revision(
+    token: Option<&str>,
+    repo: &str,
+    revision: &str,
+    source_path: &str,
+    dest_file: &Path,
+    required: bool,
+    label: &str,
+) -> Result<bool, Box<dyn std::error::Error>> {
     if let Some(parent) = dest_file.parent() {
         fs::create_dir_all(parent)?;
     }
 
-    let file_url = format!("https://huggingface.co/{repo}/resolve/main/{source_path}");
+    let file_url = format!("https://huggingface.co/{repo}/resolve/{revision}/{source_path}");
 
     log::info!(
         "Downloading {label} {source_path} from Hugging Face -> {:?}",
@@ -507,6 +635,7 @@ mod tests {
     };
 
     use super::*;
+    use crate::assets::compact_tokenizer::ensure_granite_compact_tokenizer_with;
 
     fn temp_dir(name: &str) -> PathBuf {
         let suffix = SystemTime::now()
@@ -537,7 +666,8 @@ mod tests {
                     "embedding_dim": 1,
                     "content_tokens_per_chunk": 2,
                     "source_model_path": "{identity}",
-                    "model": "ibm-granite/granite-embedding-97m-multilingual-r2"
+                    "model": "ibm-granite/granite-embedding-97m-multilingual-r2",
+                    "tokenizer_family": "ModernBERT"
                 }},
                 "feature_contract": {{
                     "local_feature_order": [],
@@ -634,6 +764,66 @@ mod tests {
 
         assert_eq!(fs::read_link(&package_file).unwrap(), shared_file);
         assert_eq!(fs::read_to_string(&package_file).unwrap(), "shared");
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn downloaded_granite_package_links_generated_shared_kit_tokenizer() {
+        let root = temp_dir("compact_link");
+        let category_dir = root.join("injection");
+        let package_dir = category_dir.join("l2_ntdb/injection_current");
+        let manifest: PackageManifest = serde_json::from_str(&manifest_json(
+            "ntdb/artifacts/granite_embedding_97m_multilingual_r2",
+        ))
+        .unwrap();
+        let files = ntdb_l2_shared_embedder_files(&manifest, &category_dir, &package_dir).unwrap();
+        let tokenizer_file = files
+            .iter()
+            .find(|file| file.relative_path.ends_with("/tokenizer.json"))
+            .unwrap();
+        fs::create_dir_all(tokenizer_file.shared_file.parent().unwrap()).unwrap();
+        fs::write(
+            &tokenizer_file.shared_file,
+            br#"{"model":"test-tokenizer"}"#,
+        )
+        .unwrap();
+        fn fake_converter(
+            source: &Path,
+            destination: &Path,
+        ) -> crate::ml::ntdb_executor::NtdbResult<()> {
+            fs::write(destination, blake3::hash(&fs::read(source)?).as_bytes())?;
+            Ok(())
+        }
+        ensure_granite_compact_tokenizer_with(
+            &manifest.minilm,
+            &tokenizer_file.shared_file,
+            fake_converter,
+        )
+        .unwrap();
+
+        prepare_downloaded_compact_tokenizer(&manifest, &files).unwrap();
+
+        let shared_kit = tokenizer_file
+            .shared_file
+            .parent()
+            .unwrap()
+            .join("tokenizer.kit");
+        let package_kit = tokenizer_file
+            .package_file
+            .parent()
+            .unwrap()
+            .join("tokenizer.kit");
+        assert!(shared_kit.is_file());
+        assert_eq!(
+            fs::read(&package_kit).unwrap(),
+            fs::read(&shared_kit).unwrap()
+        );
+        assert!(shared_kit
+            .parent()
+            .unwrap()
+            .join("tokenizer.kit.meta.json")
+            .is_file());
 
         fs::remove_dir_all(root).unwrap();
     }

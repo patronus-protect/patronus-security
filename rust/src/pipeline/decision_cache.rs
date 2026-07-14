@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::sync::Mutex;
@@ -160,12 +161,6 @@ fn cache_key(namespace: &str, text: &str, execution: &ScanExecution) -> Decision
     scope.update(execution.backend().as_str().as_bytes());
     scope.update(execution.onnx_batch_mode().as_str().as_bytes());
     scope.update(execution.ntdb_operating_point().as_str().as_bytes());
-    let policy = execution.long_text_policy();
-    scope.update(&[policy.enabled as u8, policy.verify_non_benign_l2 as u8]);
-    scope.update(&policy.no_full_l2_byte_limit.to_le_bytes());
-    scope.update(&policy.chunk_size_bytes.to_le_bytes());
-    scope.update(&policy.overlap_bytes.to_le_bytes());
-
     DecisionCacheKey {
         scope_hash: *scope.finalize().as_bytes(),
         text_hash: *blake3::hash(text.as_bytes()).as_bytes(),

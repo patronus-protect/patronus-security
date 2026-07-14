@@ -1,5 +1,4 @@
-use crate::LongTextPolicy;
-
+// SPDX-License-Identifier: AGPL-3.0-only
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ChunkAggregation {
     HighestRiskOrConfidence,
@@ -13,16 +12,9 @@ pub enum ChunkAggregation {
 #[derive(Debug, Clone, Copy)]
 pub struct PipelineStrategy {
     pub aggregation: ChunkAggregation,
-    pub chunk_size_bytes: usize,
-    pub overlap_bytes: usize,
 }
 
 impl PipelineStrategy {
-    pub const LOCAL_CHUNK_SIZE_BYTES: usize = 256;
-    pub const GLOBAL_CHUNK_SIZE_BYTES: usize = 512;
-    pub const LOCAL_OVERLAP_BYTES: usize = 96;
-    pub const GLOBAL_OVERLAP_BYTES: usize = 128;
-
     pub fn for_category_model(category: &str, model: &str) -> Self {
         match (category, model) {
             ("injection", _) | (_, "wolf-defender-small") => Self::prompt_injection(),
@@ -43,24 +35,18 @@ impl PipelineStrategy {
                 positive_class: "attack",
                 threshold: 0.93,
             },
-            chunk_size_bytes: Self::LOCAL_CHUNK_SIZE_BYTES,
-            overlap_bytes: Self::LOCAL_OVERLAP_BYTES,
         }
     }
 
     pub fn sensitive_documents() -> Self {
         Self {
             aggregation: ChunkAggregation::MajorityVoteOrHighest,
-            chunk_size_bytes: Self::GLOBAL_CHUNK_SIZE_BYTES,
-            overlap_bytes: Self::GLOBAL_OVERLAP_BYTES,
         }
     }
 
     pub fn user_intent() -> Self {
         Self {
             aggregation: ChunkAggregation::MajorityVoteOrHighest,
-            chunk_size_bytes: Self::GLOBAL_CHUNK_SIZE_BYTES,
-            overlap_bytes: Self::GLOBAL_OVERLAP_BYTES,
         }
     }
 
@@ -75,32 +61,18 @@ impl PipelineStrategy {
     pub fn tool_classifier_executions() -> Self {
         Self {
             aggregation: ChunkAggregation::HighestRiskOrConfidence,
-            chunk_size_bytes: Self::LOCAL_CHUNK_SIZE_BYTES,
-            overlap_bytes: Self::LOCAL_OVERLAP_BYTES,
         }
     }
 
     pub fn generic_text_local_multi() -> Self {
         Self {
             aggregation: ChunkAggregation::HighestRiskOrConfidence,
-            chunk_size_bytes: Self::LOCAL_CHUNK_SIZE_BYTES,
-            overlap_bytes: Self::LOCAL_OVERLAP_BYTES,
         }
-    }
-
-    pub fn long_text_policy(self, mut policy: LongTextPolicy) -> LongTextPolicy {
-        policy.chunk_size_bytes = self.chunk_size_bytes;
-        policy.overlap_bytes = self
-            .overlap_bytes
-            .min(self.chunk_size_bytes.saturating_sub(1));
-        policy
     }
 
     fn tool_classifier_text() -> Self {
         Self {
             aggregation: ChunkAggregation::HighestRiskOrConfidence,
-            chunk_size_bytes: Self::LOCAL_CHUNK_SIZE_BYTES,
-            overlap_bytes: Self::LOCAL_OVERLAP_BYTES,
         }
     }
 }

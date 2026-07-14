@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use crate::threat::looks_like_mcp_runtime_risk_lower;
 use crate::EvaluationResult;
 

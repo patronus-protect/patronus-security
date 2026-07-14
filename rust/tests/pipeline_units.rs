@@ -1,52 +1,6 @@
 //! Unit tests for internal pipeline building blocks, reached through the
 //! `test-util` feature surface (enabled for the test suite via dev-dependencies).
 
-mod strategy {
-    use patronus_security::pipeline::test_util::PipelineStrategy;
-    use patronus_security::LongTextPolicy;
-
-    #[test]
-    fn global_text_pipelines_use_global_chunk_policy() {
-        let policy = LongTextPolicy {
-            enabled: true,
-            no_full_l2_byte_limit: 1,
-            chunk_size_bytes: 256,
-            overlap_bytes: 96,
-            verify_non_benign_l2: true,
-        };
-
-        assert_eq!(
-            PipelineStrategy::sensitive_documents()
-                .long_text_policy(policy)
-                .chunk_size_bytes,
-            512
-        );
-        assert_eq!(
-            PipelineStrategy::user_intent()
-                .long_text_policy(policy)
-                .overlap_bytes,
-            128
-        );
-    }
-
-    #[test]
-    fn structural_tool_pipeline_uses_local_chunk_policy() {
-        let strategy = PipelineStrategy::tool_classifier_executions();
-        let policy = LongTextPolicy {
-            enabled: true,
-            no_full_l2_byte_limit: 1,
-            chunk_size_bytes: 512,
-            overlap_bytes: 128,
-            verify_non_benign_l2: true,
-        };
-
-        assert_eq!(
-            strategy.long_text_policy(policy).chunk_size_bytes,
-            PipelineStrategy::LOCAL_CHUNK_SIZE_BYTES
-        );
-    }
-}
-
 mod l3_results {
     use std::collections::HashMap;
 
@@ -87,6 +41,7 @@ mod l3_results {
                     details: HashMap::new(),
                 },
             ],
+            evidence_spans: Vec::new(),
         }
     }
 
@@ -201,10 +156,9 @@ mod long_text {
     use std::collections::HashMap;
 
     use patronus_security::pipeline::test_util::{
-        aggregate_chunk_outputs, candidate_selection, chunk_text_bytes, l3_metadata,
-        ChunkAggregation,
+        aggregate_chunk_outputs, candidate_selection, l3_metadata, ChunkAggregation,
     };
-    use patronus_security::{EvaluationResult, LayerResult, TextChunking};
+    use patronus_security::{EvaluationResult, LayerResult};
 
     fn result(class_name: &str, confidence: f64, level: &str) -> EvaluationResult {
         EvaluationResult {
@@ -231,16 +185,6 @@ mod long_text {
             thresholds: HashMap::new(),
             details: HashMap::new(),
         }
-    }
-
-    #[test]
-    fn chunk_text_bytes_preserves_tail_and_overlap() {
-        let chunking = TextChunking::new(5, 2).unwrap();
-
-        let chunks = chunk_text_bytes("abcdefghijkl", chunking);
-
-        assert_eq!(chunks, vec!["abcde", "defgh", "ghijk", "jkl"]);
-        assert_eq!(chunks.last().unwrap(), "jkl");
     }
 
     #[test]
@@ -296,7 +240,6 @@ mod long_text {
             chunk_outputs,
             3,
             "safe",
-            true,
             ChunkAggregation::HighestRiskOrConfidence,
         )
         .unwrap();
@@ -367,7 +310,6 @@ mod long_text {
             chunk_outputs,
             2,
             "benign",
-            true,
             ChunkAggregation::AnyPositiveOrHighest {
                 positive_class: "attack",
                 threshold: 0.93,
@@ -391,7 +333,6 @@ mod long_text {
             chunk_outputs,
             2,
             "benign",
-            true,
             ChunkAggregation::AnyPositiveOrHighest {
                 positive_class: "attack",
                 threshold: 0.93,

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use crate::threat::{
     looks_like_encoded_instruction_request_lower, looks_like_obfuscated_instruction,
 };

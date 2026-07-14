@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use std::collections::HashSet;
 
 pub(super) fn push_variant(text: String, seen: &mut HashSet<String>, variants: &mut Vec<String>) {

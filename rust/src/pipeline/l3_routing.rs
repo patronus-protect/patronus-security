@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use crate::L3SchedulerPolicy;
 
 pub fn priority_index(policy: &L3SchedulerPolicy, category: &str, model: &str) -> usize {
@@ -15,4 +16,14 @@ pub fn ttl_ms(policy: &L3SchedulerPolicy, category: &str, model: &str) -> u64 {
         .or_else(|| policy.ttl_ms.get(category))
         .copied()
         .unwrap_or(7_500)
+}
+
+pub fn estimated_cost_ms(policy: &L3SchedulerPolicy, category: &str, model: &str) -> u64 {
+    policy
+        .estimated_cost_ms
+        .get(model)
+        .or_else(|| policy.estimated_cost_ms.get(category))
+        .copied()
+        .unwrap_or(40)
+        .max(1)
 }

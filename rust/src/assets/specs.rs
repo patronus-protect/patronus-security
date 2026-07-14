@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use crate::{SecurityCategory, SecurityLevel};
 
 #[derive(Debug, Clone, Copy)]
@@ -35,6 +36,41 @@ pub struct NtdbL2PackageAssetSpec {
     /// Whether missing or failed downloads should block `warmup`.
     pub required: bool,
 }
+
+#[derive(Debug, Clone, Copy)]
+/// A revision-pinned model bundle used by a standalone pipeline.
+pub struct PipelineModelAssetSpec {
+    /// Scanner category that owns this pipeline model.
+    pub category: SecurityCategory,
+    /// Public model name.
+    pub model: &'static str,
+    /// Hugging Face repository identifier.
+    pub repo: &'static str,
+    /// Immutable Hugging Face commit revision.
+    pub revision: &'static str,
+    /// Relative bundle directory below the model cache.
+    pub destination_path: &'static str,
+    /// Files required to load and validate the bundle.
+    pub files: &'static [&'static str],
+}
+
+pub const DYNAMIC_PII_ASSET: PipelineModelAssetSpec = PipelineModelAssetSpec {
+    category: SecurityCategory::DynamicPii,
+    model: "gliner_small-v2.5-edge",
+    repo: "patronus-studio/gliner_small-v2.5-edge",
+    revision: "1319787d9247f854b7bcf13299d66ab13aec762a",
+    destination_path: "dynamic_pii/gliner_small_v2_5",
+    files: &[
+        "gliner_config.json",
+        "gliner_onnx_config.json",
+        "model_int4_embeddings_int8.onnx",
+        "quantization_manifest.json",
+        "special_tokens_map.json",
+        "spm.model",
+        "tokenizer.json",
+        "tokenizer_config.json",
+    ],
+};
 
 pub const ASSET_MANIFEST: &[AssetSpec] = &[
     // Injection L2 is NTDB-local-only in Phase 5. These are L3 assets only.

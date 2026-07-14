@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use crate::EvaluationResult;
 use regex::Regex;
 use serde_json::Value;

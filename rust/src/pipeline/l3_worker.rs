@@ -1,21 +1,27 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::{mpsc, Arc, Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::ml::dynamic_pii::DynamicPiiRuntime;
 use crate::ml::ntdb_executor::ByteSpan;
-use crate::ml::onnx::LazyOnnxTextClassifier;
+use crate::ml::onnx::{LazyOnnxTextClassifier, TokenTextChunk};
 use crate::{
-    EvaluationResult, LayerResult, QueuedSecurityEvent, QueuedSecurityScanResult, RequestId,
-    ScanExecution, SecurityFailure, SecurityFailureKind, SecurityFailureStage, SecurityLevel,
-    SecurityRequestCompletion, SecurityScanResult,
+    DynamicPiiConfig, EvaluationResult, LayerResult, QueuedSecurityEvent, QueuedSecurityScanResult,
+    RequestId, ScanExecution, SecurityFailure, SecurityFailureKind, SecurityFailureStage,
+    SecurityLevel, SecurityRequestCompletion, SecurityScanResult,
 };
 
 use super::decision_cache::DecisionCache;
-use super::long_text::{aggregate_chunk_outputs, chunk_text_bytes};
+use super::l3_routing::estimated_cost_ms;
+use super::long_text::aggregate_chunk_outputs;
 use super::{degraded_error_result, degraded_timeout_result, l3_metadata_layer, PipelineStrategy};
 
 type L3ModelHandle = Arc<Mutex<LazyOnnxTextClassifier>>;
+type DynamicPiiHandle = Arc<Mutex<DynamicPiiRuntime>>;
+const L3_OVERLAP_TOKENS: usize = 32;
+const L3_IDLE_SWEEP_INTERVAL: Duration = Duration::from_secs(30);
 
 pub(crate) struct RequestRegistry {
     pub state: Mutex<RequestRegistryState>,
@@ -41,6 +47,9 @@ impl Default for RequestRegistry {
 
 pub(crate) struct RequestState {
     pub pending_l3_job_ids: HashSet<u64>,
+    pub pending_l3_job_categories: HashMap<u64, String>,
+    pub gate_results: HashMap<String, Vec<String>>,
+    pub pending_dynamic_pii: Option<PendingDynamicPii>,
     pub usable_results: usize,
     pub failures: Vec<SecurityFailure>,
     pub completion: Option<SecurityRequestCompletion>,
@@ -50,6 +59,9 @@ impl RequestState {
     pub(crate) fn running() -> Self {
         Self {
             pending_l3_job_ids: HashSet::new(),
+            pending_l3_job_categories: HashMap::new(),
+            gate_results: HashMap::new(),
+            pending_dynamic_pii: None,
             usable_results: 0,
             failures: Vec::new(),
             completion: None,
@@ -64,11 +76,20 @@ pub(crate) struct L3Worker {
 
 struct L3WorkerState {
     jobs: Mutex<Vec<L3WorkerJob>>,
+    scheduler: Mutex<FairSchedulerState>,
     available: Condvar,
     models: Mutex<HashMap<String, L3ModelHandle>>,
+    dynamic_pii_models: Mutex<HashMap<String, DynamicPiiHandle>>,
     chunk_cache: Arc<DecisionCache>,
     requests: Arc<RequestRegistry>,
     next_sequence: Mutex<u64>,
+}
+
+#[derive(Default)]
+struct FairSchedulerState {
+    deficits_ms: HashMap<String, f64>,
+    observed_cost_ms: HashMap<String, f64>,
+    cursor: Option<String>,
 }
 
 #[derive(Clone)]
@@ -81,10 +102,15 @@ struct L3WorkerJob {
     fallback: SecurityScanResult,
     priority: usize,
     ttl_ms: u64,
+    estimated_cost_ms: u64,
+    fairness_quantum_ms: u64,
+    max_wait_ms: u64,
     enqueued_at: Instant,
     execution: ScanExecution,
     degraded_factor: f64,
     l3_candidate_spans: Vec<ByteSpan>,
+    dynamic_pii_config: Option<DynamicPiiConfig>,
+    dynamic_pii_activated_rules: Vec<usize>,
     sequence: u64,
     #[cfg(feature = "test-util")]
     test_delay_ms: Option<u64>,
@@ -102,14 +128,23 @@ pub(crate) struct L3JobSpec {
     pub execution: ScanExecution,
     pub degraded_factor: f64,
     pub l3_candidate_spans: Vec<ByteSpan>,
+    pub dynamic_pii_config: Option<DynamicPiiConfig>,
+    pub dynamic_pii_activated_rules: Vec<usize>,
+}
+
+pub(crate) struct PendingDynamicPii {
+    pub job: L3JobSpec,
+    pub accepted_at: Instant,
 }
 
 impl L3Worker {
     pub(crate) fn start(requests: Arc<RequestRegistry>) -> Self {
         let state = Arc::new(L3WorkerState {
             jobs: Mutex::new(Vec::new()),
+            scheduler: Mutex::new(FairSchedulerState::default()),
             available: Condvar::new(),
             models: Mutex::new(HashMap::new()),
+            dynamic_pii_models: Mutex::new(HashMap::new()),
             chunk_cache: Arc::new(DecisionCache::default()),
             requests,
             next_sequence: Mutex::new(0),
@@ -148,9 +183,28 @@ impl L3Worker {
             .lock()
             .expect("l3 model registry mutex poisoned")
             .contains_key(model)
+            || self
+                .state
+                .dynamic_pii_models
+                .lock()
+                .expect("dynamic-pii model registry mutex poisoned")
+                .contains_key(model)
+    }
+
+    pub(crate) fn register_dynamic_pii(
+        &self,
+        model: impl Into<String>,
+        runtime: DynamicPiiRuntime,
+    ) {
+        self.state
+            .dynamic_pii_models
+            .lock()
+            .expect("dynamic-pii model registry mutex poisoned")
+            .insert(model.into(), Arc::new(Mutex::new(runtime)));
     }
 
     pub(crate) fn enqueue(&self, spec: L3JobSpec) {
+        let (estimated_cost_ms, fairness_quantum_ms, max_wait_ms) = scheduling_values(&spec);
         let job = L3WorkerJob {
             job_id: spec.job_id,
             request_id: spec.request_id,
@@ -160,10 +214,15 @@ impl L3Worker {
             fallback: spec.fallback,
             priority: spec.priority,
             ttl_ms: spec.ttl_ms,
+            estimated_cost_ms,
+            fairness_quantum_ms,
+            max_wait_ms,
             enqueued_at: Instant::now(),
             execution: spec.execution,
             degraded_factor: spec.degraded_factor,
             l3_candidate_spans: spec.l3_candidate_spans,
+            dynamic_pii_config: spec.dynamic_pii_config,
+            dynamic_pii_activated_rules: spec.dynamic_pii_activated_rules,
             sequence: spec.job_id,
             #[cfg(feature = "test-util")]
             test_delay_ms: None,
@@ -176,6 +235,10 @@ impl L3Worker {
         self.state.available.notify_one();
     }
 
+    pub(crate) fn resolve_dynamic_pii(&self, request_id: &str) {
+        resolve_dynamic_pii(&self.state, request_id);
+    }
+
     #[cfg(feature = "test-util")]
     pub(crate) fn enqueue_test_delay(&self, spec: L3JobSpec, delay_ms: u64) {
         self.enqueue_test_delays(vec![(spec, delay_ms)]);
@@ -185,6 +248,7 @@ impl L3Worker {
     pub(crate) fn enqueue_test_delays(&self, specs: Vec<(L3JobSpec, u64)>) {
         let mut jobs = self.state.jobs.lock().expect("l3 job queue mutex poisoned");
         for (spec, delay_ms) in specs {
+            let (estimated_cost_ms, fairness_quantum_ms, max_wait_ms) = scheduling_values(&spec);
             jobs.push(L3WorkerJob {
                 job_id: spec.job_id,
                 request_id: spec.request_id,
@@ -194,10 +258,15 @@ impl L3Worker {
                 fallback: spec.fallback,
                 priority: spec.priority,
                 ttl_ms: spec.ttl_ms,
+                estimated_cost_ms,
+                fairness_quantum_ms,
+                max_wait_ms,
                 enqueued_at: Instant::now(),
                 execution: spec.execution,
                 degraded_factor: spec.degraded_factor,
                 l3_candidate_spans: spec.l3_candidate_spans,
+                dynamic_pii_config: spec.dynamic_pii_config,
+                dynamic_pii_activated_rules: spec.dynamic_pii_activated_rules,
                 sequence: spec.job_id,
                 test_delay_ms: Some(delay_ms),
             });
@@ -210,8 +279,18 @@ impl L3Worker {
 fn worker_loop(state: Arc<L3WorkerState>) {
     loop {
         let job = next_job(&state);
+        sweep_expired_models(&state);
+        let workload = job.category.clone();
+        let configured_cost_ms = job.estimated_cost_ms;
+        let started = Instant::now();
         let (job_id, request_id, result) = execute_job(&state, job);
-        finish_job(&state.requests, job_id, request_id, result);
+        observe_cost(
+            &state,
+            &workload,
+            configured_cost_ms,
+            started.elapsed().as_secs_f64() * 1_000.0,
+        );
+        finish_job(&state, job_id, request_id, result);
     }
 }
 
@@ -219,22 +298,129 @@ fn next_job(state: &L3WorkerState) -> L3WorkerJob {
     let mut jobs = state.jobs.lock().expect("l3 job queue mutex poisoned");
     loop {
         if !jobs.is_empty() {
-            let selected = jobs
-                .iter()
-                .enumerate()
-                .min_by(|(_, left), (_, right)| {
-                    left.priority
-                        .cmp(&right.priority)
-                        .then_with(|| left.sequence.cmp(&right.sequence))
-                })
-                .map(|(index, _)| index)
-                .unwrap();
+            let mut scheduler = state.scheduler.lock().expect("l3 scheduler mutex poisoned");
+            let selected = select_fair_job(&jobs, &mut scheduler);
             return jobs.swap_remove(selected);
         }
-        jobs = state
+        let (next_jobs, wait) = state
             .available
-            .wait(jobs)
+            .wait_timeout(jobs, L3_IDLE_SWEEP_INTERVAL)
             .expect("l3 job queue mutex poisoned");
+        jobs = next_jobs;
+        if wait.timed_out() && jobs.is_empty() {
+            drop(jobs);
+            sweep_expired_models(state);
+            jobs = state.jobs.lock().expect("l3 job queue mutex poisoned");
+        }
+    }
+}
+
+fn scheduling_values(spec: &L3JobSpec) -> (u64, u64, u64) {
+    let policy = spec.execution.l3_policy();
+    (
+        estimated_cost_ms(policy, &spec.category, &spec.model),
+        policy.fairness_quantum_ms.max(1),
+        policy.max_wait_ms,
+    )
+}
+
+fn select_fair_job(jobs: &[L3WorkerJob], scheduler: &mut FairSchedulerState) -> usize {
+    if let Some((index, _)) = jobs
+        .iter()
+        .enumerate()
+        .filter(|(_, job)| {
+            job.max_wait_ms > 0
+                && job.enqueued_at.elapsed().as_millis() >= u128::from(job.max_wait_ms)
+        })
+        .min_by(|(_, left), (_, right)| {
+            left.enqueued_at
+                .cmp(&right.enqueued_at)
+                .then_with(|| left.sequence.cmp(&right.sequence))
+        })
+    {
+        return index;
+    }
+
+    let mut workloads = jobs
+        .iter()
+        .map(|job| job.category.clone())
+        .collect::<Vec<_>>();
+    workloads.sort();
+    workloads.dedup();
+    workloads.sort_by_key(|workload| {
+        jobs.iter()
+            .filter(|job| &job.category == workload)
+            .map(|job| (job.priority, job.sequence))
+            .min()
+            .unwrap()
+    });
+    let active = workloads.iter().cloned().collect::<HashSet<_>>();
+    scheduler
+        .deficits_ms
+        .retain(|workload, _| active.contains(workload));
+
+    let mut cursor = scheduler
+        .cursor
+        .as_ref()
+        .and_then(|workload| workloads.iter().position(|item| item == workload))
+        .unwrap_or(0);
+    loop {
+        let workload = &workloads[cursor];
+        let candidate = jobs
+            .iter()
+            .enumerate()
+            .filter(|(_, job)| &job.category == workload)
+            .min_by_key(|(_, job)| (job.priority, job.sequence))
+            .map(|(index, _)| index)
+            .unwrap();
+        let job = &jobs[candidate];
+        let cost_ms = scheduler
+            .observed_cost_ms
+            .get(workload)
+            .copied()
+            .unwrap_or(job.estimated_cost_ms as f64)
+            .max(1.0);
+        let is_new = !scheduler.deficits_ms.contains_key(workload);
+        let deficit = scheduler
+            .deficits_ms
+            .entry(workload.clone())
+            .or_insert(cost_ms);
+        if !is_new {
+            *deficit += job.fairness_quantum_ms as f64;
+        }
+        if *deficit >= cost_ms {
+            *deficit -= cost_ms;
+            cursor = (cursor + 1) % workloads.len();
+            scheduler.cursor = Some(workloads[cursor].clone());
+            return candidate;
+        }
+        cursor = (cursor + 1) % workloads.len();
+    }
+}
+
+fn observe_cost(state: &L3WorkerState, workload: &str, configured_ms: u64, actual_ms: f64) {
+    let mut scheduler = state.scheduler.lock().expect("l3 scheduler mutex poisoned");
+    let previous = scheduler
+        .observed_cost_ms
+        .entry(workload.to_string())
+        .or_insert(configured_ms.max(1) as f64);
+    *previous = (*previous * 0.8 + actual_ms.max(1.0) * 0.2).clamp(1.0, 60_000.0);
+}
+
+fn sweep_expired_models(state: &L3WorkerState) {
+    if let Ok(models) = state.models.try_lock() {
+        for model in models.values() {
+            if let Ok(mut model) = model.try_lock() {
+                model.evict_expired();
+            }
+        }
+    }
+    if let Ok(models) = state.dynamic_pii_models.try_lock() {
+        for model in models.values() {
+            if let Ok(mut model) = model.try_lock() {
+                model.evict_expired();
+            }
+        }
     }
 }
 
@@ -253,6 +439,29 @@ fn execute_job(state: &L3WorkerState, job: L3WorkerJob) -> (u64, RequestId, Secu
             job.degraded_factor,
         );
         return (job.job_id, job.request_id, result);
+    }
+
+    if job.dynamic_pii_config.is_some() {
+        let model = match state
+            .dynamic_pii_models
+            .lock()
+            .expect("dynamic-pii model registry mutex poisoned")
+            .get(&job.model)
+            .cloned()
+        {
+            Some(model) => model,
+            None => {
+                let result = degraded_error_result(
+                    job.fallback.clone(),
+                    elapsed_ms(job.enqueued_at),
+                    job.ttl_ms,
+                    job.degraded_factor,
+                    format!("L3 model '{}' is not registered", job.model),
+                );
+                return (job.job_id, job.request_id, result);
+            }
+        };
+        return execute_with_deadline(job, move |job| run_dynamic_pii_job(job, model));
     }
 
     let model = match state
@@ -277,6 +486,78 @@ fn execute_job(state: &L3WorkerState, job: L3WorkerJob) -> (u64, RequestId, Secu
     };
     let chunk_cache = Arc::clone(&state.chunk_cache);
     execute_with_deadline(job, move |job| run_model_job(job, model, chunk_cache))
+}
+
+fn run_dynamic_pii_job(
+    job: L3WorkerJob,
+    runtime: DynamicPiiHandle,
+) -> Result<SecurityScanResult, String> {
+    let config = job
+        .dynamic_pii_config
+        .as_ref()
+        .ok_or_else(|| "dynamic-pii job is missing its configuration".to_string())?;
+    let output = runtime
+        .lock()
+        .map_err(|error| format!("dynamic-pii runtime mutex poisoned: {error}"))?
+        .infer(&job.text, config)
+        .map_err(|error| error.to_string())?;
+    let confidence = output
+        .evidence_spans
+        .iter()
+        .map(|span| span.score)
+        .max_by(f64::total_cmp)
+        .unwrap_or(0.0);
+    let has_entities = !output.evidence_spans.is_empty();
+    let class_name = if has_entities {
+        "entities"
+    } else {
+        "no_entities"
+    };
+    let layer = LayerResult {
+        level: SecurityLevel::L3.as_str().to_string(),
+        layer_type: "dynamic_pii".to_string(),
+        class_name: class_name.to_string(),
+        confidence,
+        matched: true,
+        duration_ms: output.duration_ms,
+        thresholds: HashMap::from([("default".to_string(), f64::from(config.threshold))]),
+        details: HashMap::from([
+            ("pipeline".to_string(), serde_json::json!(job.category)),
+            ("model".to_string(), serde_json::json!(job.model)),
+            (
+                "model_path".to_string(),
+                serde_json::json!(output.model_path.display().to_string()),
+            ),
+            ("labels".to_string(), serde_json::json!(config.labels)),
+            (
+                "execution_gate".to_string(),
+                serde_json::json!(config.execution_gate),
+            ),
+            (
+                "activated_conditional_rules".to_string(),
+                serde_json::json!(job.dynamic_pii_activated_rules),
+            ),
+            (
+                "entity_count".to_string(),
+                serde_json::json!(output.evidence_spans.len()),
+            ),
+            (
+                "l3_queue_wait_ms".to_string(),
+                serde_json::json!((elapsed_ms(job.enqueued_at) - output.duration_ms).max(0.0)),
+            ),
+            ("ttl_ms".to_string(), serde_json::json!(job.ttl_ms)),
+            ("priority".to_string(), serde_json::json!(job.priority)),
+            ("job_id".to_string(), serde_json::json!(job.job_id)),
+        ]),
+    };
+    let mut result = job.fallback;
+    result.class_name = class_name.to_string();
+    result.confidence = confidence;
+    result.level = SecurityLevel::L3.as_str().to_string();
+    result.duration_ms = output.duration_ms;
+    result.layers = vec![layer];
+    result.evidence_spans = output.evidence_spans;
+    Ok(result)
 }
 
 fn execute_with_deadline<F>(job: L3WorkerJob, run: F) -> (u64, RequestId, SecurityScanResult)
@@ -365,11 +646,12 @@ fn run_model_job(
 ) -> Result<SecurityScanResult, String> {
     let queue_wait_ms = elapsed_ms(job.enqueued_at);
     let strategy = l3_strategy(&job);
-    let policy = strategy.long_text_policy(job.execution.long_text_policy());
-    let chunking = policy
-        .chunking()
-        .map_err(|error| format!("invalid L3 chunking policy: {error}"))?;
-    let chunks = selected_l3_chunks(&job.text, &job.l3_candidate_spans, chunking);
+    let token_chunks = model
+        .lock()
+        .map_err(|err| format!("L3 model mutex poisoned: {err}"))?
+        .token_chunks(&job.text, L3_OVERLAP_TOKENS, job.execution.backend())
+        .map_err(|err| err.to_string())?;
+    let chunks = selected_l3_chunks(token_chunks, &job.l3_candidate_spans);
     let mut chunk_outputs = Vec::with_capacity(chunks.len());
 
     for chunk in &chunks {
@@ -391,7 +673,6 @@ fn run_model_job(
         chunk_outputs,
         chunks.len(),
         l3_safe_class(&job),
-        policy.verify_non_benign_l2,
         strategy.aggregation,
     )
     .ok_or_else(|| "L3 chunk aggregation produced no result".to_string())?;
@@ -405,55 +686,25 @@ fn run_model_job(
     Ok(result)
 }
 
-fn selected_l3_chunks(
-    text: &str,
-    candidate_spans: &[ByteSpan],
-    chunking: crate::TextChunking,
-) -> Vec<String> {
+fn selected_l3_chunks(chunks: Vec<TokenTextChunk>, candidate_spans: &[ByteSpan]) -> Vec<String> {
     if candidate_spans.is_empty() {
-        return chunk_text_bytes(text, chunking);
+        return chunks.into_iter().map(|chunk| chunk.text).collect();
     }
 
-    let mut spans = candidate_spans
+    let selected = chunks
         .iter()
-        .filter_map(|span| expanded_span(text, *span, chunking.overlap_bytes))
-        .collect::<Vec<_>>();
-    spans.sort_by_key(|span| span.start);
-    let mut merged: Vec<ByteSpan> = Vec::new();
-    for span in spans {
-        if let Some(previous) = merged.last_mut() {
-            if span.start <= previous.end {
-                previous.end = previous.end.max(span.end);
-                continue;
-            }
-        }
-        merged.push(span);
-    }
-
-    let selected = merged
-        .into_iter()
-        .flat_map(|span| chunk_text_bytes(&text[span.start..span.end], chunking))
+        .filter(|chunk| {
+            candidate_spans
+                .iter()
+                .any(|span| span.start < chunk.end_byte && span.end > chunk.start_byte)
+        })
+        .map(|chunk| chunk.text.clone())
         .collect::<Vec<_>>();
     if selected.is_empty() {
-        chunk_text_bytes(text, chunking)
+        chunks.into_iter().map(|chunk| chunk.text).collect()
     } else {
         selected
     }
-}
-
-fn expanded_span(text: &str, span: ByteSpan, overlap: usize) -> Option<ByteSpan> {
-    if span.start >= span.end || span.start >= text.len() {
-        return None;
-    }
-    let mut start = span.start.saturating_sub(overlap).min(text.len());
-    let mut end = span.end.saturating_add(overlap).min(text.len());
-    while start > 0 && !text.is_char_boundary(start) {
-        start -= 1;
-    }
-    while end < text.len() && !text.is_char_boundary(end) {
-        end += 1;
-    }
-    (start < end).then_some(ByteSpan { start, end })
 }
 
 fn infer_l3_chunk(
@@ -581,12 +832,13 @@ fn l3_safe_class(job: &L3WorkerJob) -> &'static str {
 }
 
 fn finish_job(
-    requests: &Arc<RequestRegistry>,
+    worker: &Arc<L3WorkerState>,
     job_id: u64,
     request_id: RequestId,
     result: SecurityScanResult,
 ) {
-    let mut registry = requests
+    let mut registry = worker
+        .requests
         .state
         .lock()
         .expect("request registry mutex poisoned");
@@ -595,6 +847,7 @@ fn finish_job(
         if state.completion.is_some() || !state.pending_l3_job_ids.remove(&job_id) {
             return;
         }
+        state.pending_l3_job_categories.remove(&job_id);
         match failure {
             Some(failure) => {
                 state.failures.push(failure);
@@ -602,6 +855,11 @@ fn finish_job(
             }
             None => {
                 state.usable_results += 1;
+                state
+                    .gate_results
+                    .entry(result.category.clone())
+                    .or_default()
+                    .push(result.class_name.clone());
                 true
             }
         }
@@ -616,8 +874,81 @@ fn finish_job(
                 result,
             }));
     }
+    drop(registry);
+    resolve_dynamic_pii(worker, &request_id);
+    let mut registry = worker
+        .requests
+        .state
+        .lock()
+        .expect("request registry mutex poisoned");
     finish_request_if_ready(&mut registry, &request_id);
-    requests.available.notify_all();
+    worker.requests.available.notify_all();
+}
+
+fn resolve_dynamic_pii(worker: &Arc<L3WorkerState>, request_id: &str) {
+    let job = {
+        let mut registry = worker
+            .requests
+            .state
+            .lock()
+            .expect("request registry mutex poisoned");
+        let Some(request) = registry.requests.get(request_id) else {
+            return;
+        };
+        let Some(pending) = request.pending_dynamic_pii.as_ref() else {
+            return;
+        };
+        let config = pending
+            .job
+            .dynamic_pii_config
+            .as_ref()
+            .expect("pending dynamic-pii job is missing config");
+        let waiting_for_source = config.referenced_pipelines().iter().any(|pipeline| {
+            request
+                .pending_l3_job_categories
+                .values()
+                .any(|category| category == pipeline)
+        });
+        if waiting_for_source {
+            return;
+        }
+
+        let request = registry
+            .requests
+            .get_mut(request_id)
+            .expect("request disappeared while resolving dynamic-pii");
+        let mut pending = request
+            .pending_dynamic_pii
+            .take()
+            .expect("pending dynamic-pii job disappeared");
+        let config = pending
+            .job
+            .dynamic_pii_config
+            .as_ref()
+            .expect("pending dynamic-pii job is missing config");
+        let timeout_ms = config.timeout_ms;
+        match config.resolve(&request.gate_results) {
+            Some(resolution) => {
+                pending.job.dynamic_pii_config = Some(resolution.config);
+                pending.job.dynamic_pii_activated_rules = resolution.activated_conditional_rules;
+                pending.job.ttl_ms =
+                    timeout_ms.saturating_sub(pending.accepted_at.elapsed().as_millis() as u64);
+                Some(pending.job)
+            }
+            None => {
+                request.pending_l3_job_ids.remove(&pending.job.job_id);
+                finish_request_if_ready(&mut registry, request_id);
+                worker.requests.available.notify_all();
+                None
+            }
+        }
+    };
+    if let Some(job) = job {
+        L3Worker {
+            state: Arc::clone(worker),
+        }
+        .enqueue(job);
+    }
 }
 
 pub(crate) fn failure_from_scan_result(result: &SecurityScanResult) -> Option<SecurityFailure> {
@@ -711,20 +1042,23 @@ mod tests {
 
     #[test]
     fn candidate_spans_reduce_l3_chunks() {
-        let text = "x".repeat(1_000);
-        let chunking = crate::TextChunking::new(256, 96).unwrap();
-
-        let full = selected_l3_chunks(&text, &[], chunking);
+        let chunks = (0..4)
+            .map(|index| TokenTextChunk {
+                start_byte: index * 200,
+                end_byte: index * 200 + 256,
+                text: index.to_string(),
+            })
+            .collect::<Vec<_>>();
+        let full = selected_l3_chunks(chunks.clone(), &[]);
         let selected = selected_l3_chunks(
-            &text,
+            chunks,
             &[ByteSpan {
                 start: 400,
                 end: 500,
             }],
-            chunking,
         );
 
         assert!(selected.len() < full.len());
-        assert_eq!(selected.len(), 2);
+        assert_eq!(selected, ["1", "2"]);
     }
 }

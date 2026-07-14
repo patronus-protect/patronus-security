@@ -35,6 +35,9 @@ Args:
     ntdb_operating_point: Calibrated NTDB threshold set. One of
         `best_promote` (default), `best_f1`, `best_fpr_in_f1`,
         `best_fnr_in_f1`, or `best_latency_in_f1`.
+    dynamic_pii_config: Pipeline-specific labels, result gates,
+        thresholds, chunking, text limit, and timeout for the L3-only
+        `dynamic-pii` category.
 
 ### `categories() -> list[str]`
 
@@ -90,16 +93,9 @@ Replace execution backend and apply its default L3 mode.
 
 Select the calibrated NTDB threshold set for subsequent scans.
 
-### `set_long_text_policy(enabled: bool = True, no_full_l2_byte_limit: int = 1024, chunk_size_bytes: int = 256, overlap_bytes: int = 96, verify_non_benign_l2: bool = True)`
+### `set_dynamic_pii_config(config: dict)`
 
-Replace the long-text policy used for L3 chunked verification.
-
-NTDB L2 always scans the full text; the model packages chunk
-internally and aggregate across chunks. When a scan is promoted to
-L3, the L3 worker splits the full text into overlapping
-`chunk_size_bytes`/`overlap_bytes` windows and verifies them by
-priority. `verify_non_benign_l2` keeps non-benign L2 chunk decisions
-subject to L3 verification during aggregation.
+Replace labels, result gates, thresholds, limits, and timeout for `dynamic-pii`.
 
 ### `scan_category(category: str, text: str) -> list[dict]`
 
@@ -150,8 +146,10 @@ Benchmark this gateway against the sample data shipped with the package.
 Runs benchmark phases and writes a readable `BENCHMARK.md` plus JSON into `output_dir`:
 one complete queued response (`example_result.json`), benign false
 positives (`benign_result.json`), labelled classifier
-validation (`classifier_result.json`), native L1 scans on exact 10 KiB
-texts (`native_l1_result.json`), and a queue load test where one
+validation (`classifier_result.json`), exact-span GLiNER NER quality
+by sensitive-document, tool, and combined context plus joint L2/L3/GLiNER
+latency and process peak RSS (`dynamic_pii_result.json`), native L1 scans
+on exact 10 KiB texts (`native_l1_result.json`), and a queue load test where one
 producer enqueues texts while one consumer drains the shared result queue
 (`load_result.json`). Only pipelines whose
 category is configured on this gateway are evaluated; the L3 load

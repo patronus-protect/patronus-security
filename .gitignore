@@ -29,3 +29,6 @@ benchmark/
 # Local planning notes stay out of the public repo
 docs/ntdb-l2-integration-plan.md
 benchmark_todo.md
+
+# Stray compiled tokenizer artifact accidentally emitted at repo root
+/config

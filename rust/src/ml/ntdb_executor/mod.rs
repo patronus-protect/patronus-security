@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use std::error::Error;
 use std::path::PathBuf;
 
@@ -10,6 +11,7 @@ mod lightgbm;
 pub mod manifest;
 mod package;
 mod runtime;
+pub(crate) mod tokenizer;
 
 pub use decision::NtdbDecision;
 pub use package::{ByteSpan, MultiScoreOutput, NtdbMultiPackage, NtdbPackageSpec, ScoreOutput};

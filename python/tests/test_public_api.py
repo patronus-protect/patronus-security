@@ -14,6 +14,7 @@ def assert_result_schema(test_case, result):
             "model",
             "duration_ms",
             "layers",
+            "evidence_spans",
         }
         <= result.keys()
     )
@@ -23,6 +24,20 @@ def assert_result_schema(test_case, result):
     test_case.assertIsInstance(result["duration_ms"], float)
     test_case.assertGreaterEqual(result["duration_ms"], 0.0)
     test_case.assertTrue(result["layers"])
+    test_case.assertIsInstance(result["evidence_spans"], list)
+    for span in result["evidence_spans"]:
+        test_case.assertEqual(
+            set(span),
+            {
+                "label",
+                "text",
+                "score",
+                "start_byte",
+                "end_byte",
+                "start_char",
+                "end_char",
+            },
+        )
 
     matched_layers = [layer for layer in result["layers"] if layer["matched"]]
     test_case.assertEqual(len(matched_layers), 1)
@@ -87,6 +102,64 @@ class PublicApiTests(unittest.TestCase):
         )
 
         self.assertIsInstance(scanner, SecurityGateway)
+
+    def test_dynamic_pii_config_is_pipeline_specific_public_api(self):
+        scanner = SecurityGateway(
+            categories=["dynamic-pii"],
+            max_level="l3",
+            download_files=False,
+            dynamic_pii_config={
+                "labels": ["person", "organization", "person"],
+                "threshold": 0.6,
+                "label_thresholds": {"organization": 0.7},
+                "execution_gate": {
+                    "type": "if_result_in",
+                    "pipeline": "injection",
+                    "results": ["attack"],
+                },
+                "conditional_labels": [
+                    {
+                        "labels": ["location"],
+                        "when": {"pipeline": "user_intent", "results": ["action"]},
+                    }
+                ],
+                "chunk_size_words": 128,
+                "chunk_overlap_words": 16,
+            },
+        )
+        scanner.set_dynamic_pii_config({"labels": ["person"], "threshold": 0.5})
+        self.assertEqual(scanner.categories, ["dynamic-pii"])
+
+        with self.assertRaises(ValueError):
+            scanner.set_dynamic_pii_config({"labels": ["person"], "threshold": 1.1})
+        with self.assertRaises(ValueError):
+            scanner.set_dynamic_pii_config(
+                {
+                    "labels": ["person"],
+                    "execution_gate": {
+                        "type": "if_result_in",
+                        "pipeline": "missing",
+                        "results": ["attack"],
+                    },
+                }
+            )
+        with self.assertRaises(ValueError):
+            scanner.set_dynamic_pii_config(
+                {
+                    "labels": ["person"],
+                    "execution_gate": {
+                        "type": "if_result_in",
+                        "pipeline": "injection",
+                        "results": [],
+                    },
+                }
+            )
+        with self.assertRaises(ValueError):
+            SecurityGateway(
+                categories=["dynamic-pii"],
+                dynamic_pii_config=["person"],
+                download_files=False,
+            )
 
     def test_constructor_rejects_invalid_public_arguments(self):
         invalid_kwargs = [
@@ -169,6 +242,10 @@ class PublicApiTests(unittest.TestCase):
             {"l3": {"priority": [1]}},
             {"l3": {"ttl_ms": []}},
             {"l3": {"ttl_ms": {"injection": "soon"}}},
+            {"l3": {"estimated_cost_ms": []}},
+            {"l3": {"estimated_cost_ms": {"dynamic-pii": 0}}},
+            {"l3": {"fairness_quantum_ms": 0}},
+            {"l3": {"max_wait_ms": -1}},
             {"l3": {"degraded_factor": 2.0}},
         ]
 
@@ -177,7 +254,7 @@ class PublicApiTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     scanner.set_execution_gates(gates)
 
-    def test_execution_backend_and_long_text_policy_are_public_api(self):
+    def test_execution_backend_is_public_api(self):
         scanner = SecurityGateway(categories=["dlp"], max_level="l2", download_files=False)
 
         scanner.set_execution_backend("cpu")
@@ -191,19 +268,10 @@ class PublicApiTests(unittest.TestCase):
         scanner.set_ntdb_operating_point("best_fpr_in_f1")
         scanner.set_ntdb_operating_point("best_fnr_in_f1")
         scanner.set_ntdb_operating_point("best_latency_in_f1")
-        scanner.set_long_text_policy(
-            enabled=True,
-            no_full_l2_byte_limit=1024,
-            chunk_size_bytes=512,
-            overlap_bytes=96,
-            verify_non_benign_l2=True,
-        )
         with self.assertRaises(ValueError):
             scanner.set_execution_backend("quantum")
         with self.assertRaises(ValueError):
             scanner.set_ntdb_operating_point("best_guess")
-        with self.assertRaises(ValueError):
-            scanner.set_long_text_policy(chunk_size_bytes=512, overlap_bytes=512)
 
     def test_l3_scheduler_policy_is_accepted_in_execution_gates(self):
         scanner = SecurityGateway(
@@ -215,6 +283,9 @@ class PublicApiTests(unittest.TestCase):
                     "enabled": True,
                     "priority": ["injection", "sensitive_documents", "tool_classifier"],
                     "ttl_ms": {"injection": 10000, "tool_classifier": 5000},
+                    "estimated_cost_ms": {"injection": 60, "dynamic-pii": 20},
+                    "fairness_quantum_ms": 20,
+                    "max_wait_ms": 250,
                     "degraded_factor": 0.7,
                 }
             },
@@ -225,6 +296,9 @@ class PublicApiTests(unittest.TestCase):
                     "enabled": False,
                     "priority": ["tool_classifier", "injection"],
                     "ttl_ms": {"tool_classifier": 1234},
+                    "estimated_cost_ms": {"tool_classifier": 30},
+                    "fairness_quantum_ms": 10,
+                    "max_wait_ms": 100,
                     "degraded_factor": 0.5,
                 }
             }

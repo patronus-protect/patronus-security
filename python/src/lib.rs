@@ -1,8 +1,10 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use patronus_security::{
-    ExecutionBackend, L3SchedulerPolicy, LayerResult, LongTextPolicy, NtdbOperatingPoint,
-    OnnxBatchMode, QueuedSecurityEvent, QueuedSecurityScanResult, ScanGateMatrix, SecurityCategory,
-    SecurityFailure, SecurityGateway as RustSecurityGateway, SecurityLevel, SecurityLevelReadiness,
-    SecurityRequestCompletion, SecurityRequestState, SecurityRuntimeReadiness,
+    DynamicPiiConfig, EvidenceSpan, ExecutionBackend, L3SchedulerPolicy, LayerResult,
+    NtdbOperatingPoint, OnnxBatchMode, QueuedSecurityEvent, QueuedSecurityScanResult,
+    ScanGateMatrix, SecurityCategory, SecurityFailure, SecurityGateway as RustSecurityGateway,
+    SecurityLevel, SecurityLevelReadiness, SecurityRequestCompletion, SecurityRequestState,
+    SecurityRuntimeReadiness,
 };
 use pyo3::prelude::*;
 use std::path::PathBuf;
@@ -16,7 +18,7 @@ struct SecurityGateway {
 #[pymethods]
 impl SecurityGateway {
     #[new]
-    #[pyo3(signature = (categories, max_level="l2", model_dir=None, download_files=true, download_categories=None, execution_gates_json=None, onnx_batch_mode="backend_default", execution_backend="auto", ntdb_operating_point="best_promote"))]
+    #[pyo3(signature = (categories, max_level="l2", model_dir=None, download_files=true, download_categories=None, execution_gates_json=None, onnx_batch_mode="backend_default", execution_backend="auto", ntdb_operating_point="best_promote", dynamic_pii_config_json=None))]
     fn new(
         categories: Vec<String>,
         max_level: &str,
@@ -27,6 +29,7 @@ impl SecurityGateway {
         onnx_batch_mode: &str,
         execution_backend: &str,
         ntdb_operating_point: &str,
+        dynamic_pii_config_json: Option<&str>,
     ) -> PyResult<Self> {
         let rust_categories = parse_categories(categories)?;
         let rust_max_level = match max_level.parse::<SecurityLevel>() {
@@ -52,6 +55,11 @@ impl SecurityGateway {
         inner.set_ntdb_operating_point(parse_ntdb_operating_point(ntdb_operating_point)?);
         if onnx_batch_mode != "backend_default" {
             inner.set_onnx_batch_mode(parse_onnx_batch_mode(onnx_batch_mode)?);
+        }
+        if let Some(config) = parse_dynamic_pii_config_json(dynamic_pii_config_json)? {
+            inner
+                .set_dynamic_pii_config(config)
+                .map_err(pyo3::exceptions::PyValueError::new_err)?;
         }
         Ok(SecurityGateway { inner })
     }
@@ -95,33 +103,12 @@ impl SecurityGateway {
         Ok(())
     }
 
-    #[pyo3(signature = (enabled=true, no_full_l2_byte_limit=1024, chunk_size_bytes=512, overlap_bytes=96, verify_non_benign_l2=true))]
-    fn set_long_text_policy(
-        &mut self,
-        enabled: bool,
-        no_full_l2_byte_limit: usize,
-        chunk_size_bytes: usize,
-        overlap_bytes: usize,
-        verify_non_benign_l2: bool,
-    ) -> PyResult<()> {
-        if chunk_size_bytes == 0 {
-            return Err(pyo3::exceptions::PyValueError::new_err(
-                "chunk size must be greater than zero",
-            ));
-        }
-        if overlap_bytes >= chunk_size_bytes {
-            return Err(pyo3::exceptions::PyValueError::new_err(
-                "chunk overlap must be smaller than chunk size",
-            ));
-        }
-        self.inner.set_long_text_policy(LongTextPolicy {
-            enabled,
-            no_full_l2_byte_limit,
-            chunk_size_bytes,
-            overlap_bytes,
-            verify_non_benign_l2,
-        });
-        Ok(())
+    fn set_dynamic_pii_config(&self, config_json: &str) -> PyResult<()> {
+        let config = parse_dynamic_pii_config_json(Some(config_json))?
+            .expect("dynamic-pii config JSON was provided");
+        self.inner
+            .set_dynamic_pii_config(config)
+            .map_err(pyo3::exceptions::PyValueError::new_err)
     }
 
     fn scan_category(
@@ -228,6 +215,17 @@ fn parse_ntdb_operating_point(value: &str) -> PyResult<NtdbOperatingPoint> {
         .map_err(pyo3::exceptions::PyValueError::new_err)
 }
 
+fn parse_dynamic_pii_config_json(value: Option<&str>) -> PyResult<Option<DynamicPiiConfig>> {
+    value
+        .map(|value| {
+            serde_json::from_str::<DynamicPiiConfig>(value)
+                .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?
+                .validated()
+                .map_err(pyo3::exceptions::PyValueError::new_err)
+        })
+        .transpose()
+}
+
 fn parse_execution_gates_json(value: Option<&str>) -> PyResult<Option<ScanGateMatrix>> {
     let Some(value) = value else {
         return Ok(None);
@@ -315,6 +313,38 @@ fn parse_execution_gates_json(value: Option<&str>) -> PyResult<Option<ScanGateMa
                 policy.ttl_ms.insert(key.clone(), ttl);
             }
         }
+        if let Some(estimated_cost_ms) = l3.get("estimated_cost_ms") {
+            let estimated_cost_ms = estimated_cost_ms.as_object().ok_or_else(|| {
+                pyo3::exceptions::PyValueError::new_err(
+                    "execution_gates.l3.estimated_cost_ms must be an object",
+                )
+            })?;
+            for (key, value) in estimated_cost_ms {
+                let cost = value.as_u64().filter(|value| *value > 0).ok_or_else(|| {
+                    pyo3::exceptions::PyValueError::new_err(format!(
+                        "execution_gates.l3.estimated_cost_ms.{key} must be a positive integer"
+                    ))
+                })?;
+                policy.estimated_cost_ms.insert(key.clone(), cost);
+            }
+        }
+        if let Some(fairness_quantum_ms) = l3.get("fairness_quantum_ms") {
+            policy.fairness_quantum_ms = fairness_quantum_ms
+                .as_u64()
+                .filter(|value| *value > 0)
+                .ok_or_else(|| {
+                    pyo3::exceptions::PyValueError::new_err(
+                        "execution_gates.l3.fairness_quantum_ms must be a positive integer",
+                    )
+                })?;
+        }
+        if let Some(max_wait_ms) = l3.get("max_wait_ms") {
+            policy.max_wait_ms = max_wait_ms.as_u64().ok_or_else(|| {
+                pyo3::exceptions::PyValueError::new_err(
+                    "execution_gates.l3.max_wait_ms must be a non-negative integer",
+                )
+            })?;
+        }
         if let Some(degraded_factor) = l3.get("degraded_factor") {
             let degraded_factor = degraded_factor.as_f64().ok_or_else(|| {
                 pyo3::exceptions::PyValueError::new_err(
@@ -373,6 +403,27 @@ struct PyEvaluationResult {
     duration_ms: f64,
     #[pyo3(get)]
     layers: Vec<PyLayerResult>,
+    #[pyo3(get)]
+    evidence_spans: Vec<PyEvidenceSpan>,
+}
+
+#[pyclass]
+#[derive(Clone)]
+struct PyEvidenceSpan {
+    #[pyo3(get)]
+    label: String,
+    #[pyo3(get)]
+    text: String,
+    #[pyo3(get)]
+    score: f64,
+    #[pyo3(get)]
+    start_byte: usize,
+    #[pyo3(get)]
+    end_byte: usize,
+    #[pyo3(get)]
+    start_char: usize,
+    #[pyo3(get)]
+    end_char: usize,
 }
 
 #[pyclass]
@@ -552,6 +603,25 @@ impl From<patronus_security::SecurityScanResult> for PyEvaluationResult {
             model: result.model,
             duration_ms: result.duration_ms,
             layers: result.layers.into_iter().map(PyLayerResult::from).collect(),
+            evidence_spans: result
+                .evidence_spans
+                .into_iter()
+                .map(PyEvidenceSpan::from)
+                .collect(),
+        }
+    }
+}
+
+impl From<EvidenceSpan> for PyEvidenceSpan {
+    fn from(span: EvidenceSpan) -> Self {
+        Self {
+            label: span.label,
+            text: span.text,
+            score: span.score,
+            start_byte: span.start_byte,
+            end_byte: span.end_byte,
+            start_char: span.start_char,
+            end_char: span.end_char,
         }
     }
 }
@@ -586,6 +656,7 @@ fn _patronus_security(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<SecurityGateway>()?;
     m.add_class::<PyLayerResult>()?;
     m.add_class::<PyEvaluationResult>()?;
+    m.add_class::<PyEvidenceSpan>()?;
     m.add_class::<PySecurityFailure>()?;
     m.add_class::<PySecurityEvent>()?;
     m.add_class::<PyRequestState>()?;

@@ -1,6 +1,7 @@
+# SPDX-License-Identifier: AGPL-3.0-only
 """Local benchmark for a configured `SecurityGateway`.
 
-Runs three phases against sample data shipped with the package
+Runs benchmark phases against sample data shipped with the package
 (`patronus_security/benchmark_data/*.jsonl`, copied from the Patronus
 validation splits) and writes one JSON file per phase into `output_dir`:
 
@@ -10,6 +11,9 @@ validation splits) and writes one JSON file per phase into `output_dir`:
   (up to 100 per class): accuracy, macro-F1, class distribution, latency.
   Runs once L2-only and, when `max_level` is `l3`, once more with L3
   promotions/executions enabled.
+- `dynamic_pii_result.json` — exact-span NER precision/recall/F1 for the
+  classification-aware GLiNER label map plus latency for requests where L2,
+  L3, and GLiNER all execute.
 - `native_l1_result.json` — native L1 latency on exact 10 KB texts for all
   configured injection detectors plus isolated DLP, PII, and MCP policy runs.
 - `load_result.json` — one producer submits many texts through `enqueue`
@@ -25,17 +29,32 @@ Results contain the real prompts so mispredictions can be inspected directly.
 import json
 import platform
 import statistics
+import sys
 import time
 from collections import defaultdict
+from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
 from queue import Empty, Queue
 from threading import Thread
 
+from .gliner_category_map import (
+    GLINER_LABELS,
+    GLINER_LABEL_THRESHOLDS,
+    labels_for_classification,
+    labels_for_contexts,
+)
+
+try:
+    import resource
+except ImportError:  # pragma: no cover - unavailable on Windows
+    resource = None
+
 DATA_DIR = Path(__file__).resolve().parent / "benchmark_data"
 QUEUE_EXAMPLE_SAMPLE_ID = "attack-0003"
 NATIVE_L1_TEXT_BYTES = 10 * 1024
 NATIVE_L1_WARMUP_ITERATIONS = 10
+GLINER_BENCHMARK_THRESHOLD = 0.5
 
 DLP_NATIVE_MODELS = (
     "native:dlp",
@@ -92,6 +111,28 @@ def _round_robin_by_class(samples, limit):
     by_class = {}
     for sample in samples:
         by_class.setdefault(sample["expected_class"], []).append(sample)
+    picked, index = [], 0
+    while len(picked) < limit:
+        added = False
+        for group in by_class.values():
+            if index < len(group) and len(picked) < limit:
+                picked.append(group[index])
+                added = True
+        if not added:
+            break
+        index += 1
+    return picked
+
+
+def _round_robin_by_source_class(samples, limit):
+    """Limit NER samples without dropping classification-specific label groups."""
+    by_class = {}
+    for sample in samples:
+        key = (
+            sample.get("source_category", "default"),
+            sample.get("source_class", "default"),
+        )
+        by_class.setdefault(key, []).append(sample)
     picked, index = [], 0
     while len(picked) < limit:
         added = False
@@ -289,6 +330,352 @@ def _run_classifier(gateway, limit_per_pipeline):
 
     gateway.set_execution_gates(None)
     return {"pipelines": pipelines}
+
+
+def _entity_key(entity):
+    return (
+        entity["label"],
+        entity.get("start_char", entity.get("start")),
+        entity.get("end_char", entity.get("end")),
+    )
+
+
+def _ner_metrics(rows):
+    labels = set()
+    totals = defaultdict(lambda: {"gold": 0, "predicted": 0, "true_positives": 0})
+    true_positives = gold_count = predicted_count = exact_samples = 0
+    for row in rows:
+        gold = {_entity_key(entity) for entity in row["expected_entities"]}
+        predicted = {_entity_key(entity) for entity in row["predicted_entities"]}
+        matches = gold & predicted
+        gold_count += len(gold)
+        predicted_count += len(predicted)
+        true_positives += len(matches)
+        exact_samples += gold == predicted
+        row_labels = {label for label, _, _ in gold | predicted}
+        labels.update(row_labels)
+        for label in row_labels:
+            totals[label]["gold"] += sum(entity[0] == label for entity in gold)
+            totals[label]["predicted"] += sum(entity[0] == label for entity in predicted)
+            totals[label]["true_positives"] += sum(entity[0] == label for entity in matches)
+
+    def scores(counts):
+        precision = (
+            counts["true_positives"] / counts["predicted"] if counts["predicted"] else 0.0
+        )
+        recall = counts["true_positives"] / counts["gold"] if counts["gold"] else 0.0
+        f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
+        return {
+            **counts,
+            "precision": round(precision, 4),
+            "recall": round(recall, 4),
+            "f1": round(f1, 4),
+        }
+
+    overall = scores(
+        {
+            "gold": gold_count,
+            "predicted": predicted_count,
+            "true_positives": true_positives,
+        }
+    )
+    overall["exact_samples"] = exact_samples
+    overall["exact_sample_rate"] = round(exact_samples / len(rows), 4) if rows else 0.0
+    overall["per_label"] = {label: scores(totals[label]) for label in sorted(labels)}
+    return overall
+
+
+def _dynamic_pii_result(results):
+    return next((result for result in results if result["category"] == "dynamic-pii"), None)
+
+
+def _process_peak_rss_mb():
+    """Return this process' cumulative peak resident memory in MiB."""
+    if resource is None:
+        return None
+    peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    divisor = 1024 * 1024 if sys.platform == "darwin" else 1024
+    return peak / divisor
+
+
+def _benchmark_dynamic_config(labels):
+    return {
+        "labels": list(labels),
+        "threshold": GLINER_BENCHMARK_THRESHOLD,
+        "label_thresholds": {
+            label: GLINER_LABEL_THRESHOLDS[label]
+            for label in labels
+            if label in GLINER_LABEL_THRESHOLDS
+        },
+        "execution_gate": {"type": "always"},
+        "conditional_labels": [],
+    }
+
+
+def _run_dynamic_pii_quality(gateway, samples):
+    rows, latencies = [], []
+    skipped_samples = 0
+    groups = {}
+    for sample in samples:
+        key = (
+            sample.get("source_category", "default"),
+            sample.get("source_class", "default"),
+            sample.get("source_tool_class"),
+        )
+        groups.setdefault(key, []).append(sample)
+
+    warmup_ms = None
+    for (source_category, source_class, source_tool_class), group in groups.items():
+        labels = labels_for_classification(source_category, source_class)
+        if source_tool_class:
+            labels = labels_for_contexts(
+                (source_category, source_class),
+                ("tool_classifier", source_tool_class),
+            )
+        if not labels:
+            skipped_samples += len(group)
+            continue
+        gateway.set_dynamic_pii_config(_benchmark_dynamic_config(labels))
+        if warmup_ms is None and group:
+            started = time.perf_counter()
+            gateway.scan_categories(["dynamic-pii"], group[0]["text"])
+            warmup_ms = (time.perf_counter() - started) * 1000.0
+
+        for sample in group:
+            expected = [
+                entity for entity in sample["entities"] if entity["label"] in labels
+            ]
+            started = time.perf_counter()
+            results = gateway.scan_categories(["dynamic-pii"], sample["text"])
+            latency_ms = (time.perf_counter() - started) * 1000.0
+            latencies.append(latency_ms)
+            result = _dynamic_pii_result(results)
+            predicted = result["evidence_spans"] if result else []
+            rows.append(
+                {
+                    "id": sample["id"],
+                    "source_category": source_category,
+                    "source_class": source_class,
+                    "source_tool_class": source_tool_class,
+                    "active_labels": list(labels),
+                    "text": sample["text"],
+                    "expected_entities": expected,
+                    "predicted_entities": predicted,
+                    "executed": result is not None,
+                    "exact": {_entity_key(entity) for entity in expected}
+                    == {_entity_key(entity) for entity in predicted},
+                    "latency_ms": round(latency_ms, 3),
+                }
+            )
+
+    metrics = _ner_metrics(rows)
+    per_source_class = {}
+    for source_category, source_class, _ in groups:
+        group_rows = [
+            row
+            for row in rows
+            if (row["source_category"], row["source_class"])
+            == (source_category, source_class)
+        ]
+        if not group_rows:
+            continue
+        group_metrics = _ner_metrics(group_rows)
+        group_metrics.pop("per_label")
+        per_source_class[f"{source_category}:{source_class}"] = group_metrics
+
+    tool_classes = {row["source_tool_class"] for row in rows if row["source_tool_class"]}
+    per_tool_class = {}
+    for tool_class in sorted(tool_classes):
+        group_metrics = _ner_metrics(
+            [row for row in rows if row["source_tool_class"] == tool_class]
+        )
+        group_metrics.pop("per_label")
+        per_tool_class[tool_class] = group_metrics
+
+    context_pairs = {
+        (row["source_class"], row["source_tool_class"])
+        for row in rows
+        if row["source_tool_class"]
+    }
+    per_context_pair = {}
+    for source_class, tool_class in sorted(context_pairs):
+        group_metrics = _ner_metrics(
+            [
+                row
+                for row in rows
+                if (row["source_class"], row["source_tool_class"])
+                == (source_class, tool_class)
+            ]
+        )
+        group_metrics.pop("per_label")
+        per_context_pair[f"{source_class} + {tool_class}"] = group_metrics
+    return {
+        "samples": len(rows),
+        "skipped_samples_without_labels": skipped_samples,
+        "executed_samples": sum(row["executed"] for row in rows),
+        "threshold": GLINER_BENCHMARK_THRESHOLD,
+        "warmup_ms": round(warmup_ms, 3) if warmup_ms is not None else None,
+        "latency": _latency_stats(latencies),
+        **metrics,
+        "per_source_class": per_source_class,
+        "per_tool_class": per_tool_class,
+        "per_context_pair": per_context_pair,
+        "rows": rows,
+    }
+
+
+def _layer_duration(result, level=None, layer_type=None):
+    if result is None:
+        return 0.0
+    return sum(
+        layer["duration_ms"]
+        for layer in result["layers"]
+        if (level is None or layer["level"] == level)
+        and (layer_type is None or layer["layer_type"] == layer_type)
+    )
+
+
+def _layer_detail(result, key):
+    if result is None:
+        return 0.0
+    return next(
+        (
+            layer["details"][key]
+            for layer in result["layers"]
+            if isinstance(layer["details"].get(key), (int, float))
+        ),
+        0.0,
+    )
+
+
+def _run_l2_l3_gliner_latency(
+    gateway, samples, benchmark_start_peak_rss_mb=None
+):
+    rows = []
+    peak_rss_before_mb = _process_peak_rss_mb()
+    for sample in samples:
+        labels = GLINER_LABELS
+        gateway.set_dynamic_pii_config(_benchmark_dynamic_config(labels))
+        # The classifier phase scans the same corpus first. A trailing space is
+        # tokenization-neutral but keeps this latency phase out of its decision cache.
+        text = sample["text"] + " "
+        started = time.perf_counter()
+        results = gateway.scan_categories(["injection", "dynamic-pii"], text)
+        total_ms = (time.perf_counter() - started) * 1000.0
+        l2 = next(
+            (
+                result
+                for result in results
+                if result["category"] == "injection" and result["level"] == "L2"
+            ),
+            None,
+        )
+        l3 = next(
+            (
+                result
+                for result in results
+                if result["category"] == "injection" and result["level"] == "L3"
+            ),
+            None,
+        )
+        gliner = _dynamic_pii_result(results)
+        rows.append(
+            {
+                "id": sample["id"],
+                "expected_class": sample["expected_class"],
+                "active_labels": list(labels),
+                "l2": l2 is not None,
+                "l3": l3 is not None,
+                "gliner": gliner is not None,
+                "total_ms": round(total_ms, 3),
+                "l2_execution_ms": round(_layer_duration(l2, level="L2"), 3),
+                "l3_execution_ms": round(_layer_duration(l3, level="L3"), 3),
+                "l3_queue_wait_ms": round(_layer_detail(l3, "l3_queue_wait_ms"), 3),
+                "gliner_execution_ms": round(
+                    _layer_duration(gliner, layer_type="dynamic_pii"), 3
+                ),
+                "gliner_queue_wait_ms": round(
+                    _layer_detail(gliner, "l3_queue_wait_ms"), 3
+                ),
+                "gliner_entities": len(gliner["evidence_spans"]) if gliner else 0,
+            }
+        )
+
+    joint = [row for row in rows if row["l2"] and row["l3"] and row["gliner"]]
+    peak_rss_after_mb = _process_peak_rss_mb()
+    delta_baseline_mb = (
+        benchmark_start_peak_rss_mb
+        if benchmark_start_peak_rss_mb is not None
+        else peak_rss_before_mb
+    )
+    memory = {
+        "metric": "process_peak_rss",
+        "benchmark_start_mb": round(benchmark_start_peak_rss_mb, 3)
+        if benchmark_start_peak_rss_mb is not None
+        else None,
+        "before_mb": round(peak_rss_before_mb, 3)
+        if peak_rss_before_mb is not None
+        else None,
+        "after_mb": round(peak_rss_after_mb, 3)
+        if peak_rss_after_mb is not None
+        else None,
+        "delta_mb": round(max(0.0, peak_rss_after_mb - delta_baseline_mb), 3)
+        if delta_baseline_mb is not None and peak_rss_after_mb is not None
+        else None,
+        "phase_delta_mb": round(
+            max(0.0, peak_rss_after_mb - peak_rss_before_mb), 3
+        )
+        if peak_rss_before_mb is not None and peak_rss_after_mb is not None
+        else None,
+    }
+    return {
+        "samples": len(rows),
+        "l2_gliner_samples": sum(row["l2"] and row["gliner"] for row in rows),
+        "l2_l3_gliner_samples": len(joint),
+        "total_latency": _latency_stats([row["total_ms"] for row in joint]),
+        "l2_execution": _latency_stats([row["l2_execution_ms"] for row in joint]),
+        "l3_execution": _latency_stats([row["l3_execution_ms"] for row in joint]),
+        "l3_queue_wait": _latency_stats([row["l3_queue_wait_ms"] for row in joint]),
+        "gliner_execution": _latency_stats([row["gliner_execution_ms"] for row in joint]),
+        "gliner_queue_wait": _latency_stats([row["gliner_queue_wait_ms"] for row in joint]),
+        "memory": memory,
+        "rows": rows,
+    }
+
+
+def _run_dynamic_pii(
+    gateway, limit_per_pipeline, benchmark_start_peak_rss_mb=None
+):
+    configured = set(gateway.categories)
+    if "dynamic-pii" not in configured or gateway.max_level != "l3":
+        return {
+            "enabled": False,
+            "reason": "dynamic-pii requires the configured category and max_level=l3",
+        }
+
+    snapshot = deepcopy(getattr(gateway, "_dynamic_pii_config", {}))
+    try:
+        samples = _load_samples("dynamic_pii")
+        if limit_per_pipeline:
+            samples = _round_robin_by_source_class(samples, limit_per_pipeline)
+        quality = _run_dynamic_pii_quality(gateway, samples)
+
+        combined = {"enabled": False, "reason": "injection is not configured"}
+        if "injection" in configured:
+            injection = _load_samples("injection")
+            if limit_per_pipeline:
+                injection = _round_robin_by_class(injection, limit_per_pipeline)
+            combined = {
+                "enabled": True,
+                **_run_l2_l3_gliner_latency(
+                    gateway,
+                    injection,
+                    benchmark_start_peak_rss_mb,
+                ),
+            }
+        return {"enabled": True, "quality": quality, "combined_latency": combined}
+    finally:
+        gateway.set_dynamic_pii_config(snapshot)
 
 
 def _native_l1_text(tail="", sequence=0, head=""):
@@ -523,19 +910,9 @@ def _run_load(gateway, requests_per_scenario):
                         producer_done = True
                     else:
                         index, request_id, started, enqueue_ms = item
-                        active[request_id] = {
-                            "index": index,
-                            "request_id": request_id,
-                            "started": started,
-                            "enqueue_ms": enqueue_ms,
-                            "first_result_ms": None,
-                            "levels": [],
-                            "l2_chunks": [],
-                            "candidate_spans": [],
-                            "l3_chunks": [],
-                            "l3_queue_wait_ms": [],
-                            "l3_execution_ms": [],
-                        }
+                        active[request_id] = _new_load_request(
+                            index, request_id, started, enqueue_ms
+                        )
                         for event in early_events.pop(request_id, []):
                             handle_event(event)
 
@@ -682,6 +1059,7 @@ def _record_load_result_metrics(request, result):
     l3_duration_ms = 0.0
     l3_chunk_count = None
     l3_queue_wait_ms = None
+    has_l3 = False
     for layer in result["layers"]:
         details = layer["details"]
         if layer["layer_type"] == "ntdb_l2":
@@ -691,6 +1069,7 @@ def _record_load_result_metrics(request, result):
             if isinstance(spans, list):
                 request["candidate_spans"].append(len(spans))
         if layer["level"] == "L3":
+            has_l3 = True
             l3_duration_ms += layer["duration_ms"]
             if isinstance(details.get("chunk_count"), int):
                 l3_chunk_count = details["chunk_count"]
@@ -698,6 +1077,7 @@ def _record_load_result_metrics(request, result):
                 l3_queue_wait_ms = details["l3_queue_wait_ms"]
     if l3_chunk_count is not None:
         request["l3_chunks"].append(l3_chunk_count)
+    if has_l3:
         request["l3_execution_ms"].append(l3_duration_ms)
     if l3_queue_wait_ms is not None:
         request["l3_queue_wait_ms"].append(l3_queue_wait_ms)
@@ -719,7 +1099,7 @@ def _completed_load_outcome(request):
     }
 
 
-def _print_summary(benign, classifier, load, native_l1=None):
+def _print_summary(benign, classifier, load, native_l1=None, dynamic_pii=None):
     print("== benign ==")
     print(
         f"  {benign['samples']} samples, "
@@ -736,6 +1116,28 @@ def _print_summary(benign, classifier, load, native_l1=None):
                 f"  {name} [{mode}]: {stats['samples']} samples, "
                 f"accuracy {stats['accuracy']:.1%}, macro-F1 {stats['macro_f1']:.3f}, "
                 f"avg {stats['latency']['avg_ms']:.1f} ms{l3_note}"
+            )
+    if dynamic_pii and dynamic_pii["enabled"]:
+        quality = dynamic_pii["quality"]
+        print("== GLiNER NER ==")
+        print(
+            f"  {quality['samples']} samples, precision {quality['precision']:.3f}, "
+            f"recall {quality['recall']:.3f}, F1 {quality['f1']:.3f}, "
+            f"avg {quality['latency']['avg_ms']:.1f} ms"
+        )
+        combined = dynamic_pii["combined_latency"]
+        if combined["enabled"]:
+            memory = combined["memory"]
+            memory_note = (
+                f", peak RSS {memory['after_mb']:.1f} MiB "
+                f"(+{memory['delta_mb']:.1f} MiB)"
+                if memory["after_mb"] is not None
+                else ""
+            )
+            print(
+                f"  L2+L3+GLiNER: {combined['l2_l3_gliner_samples']} samples, "
+                f"total avg {combined['total_latency']['avg_ms']:.1f} ms, "
+                f"p95 {combined['total_latency']['p95_ms']:.1f} ms{memory_note}"
             )
     if native_l1 and native_l1["profiles"]:
         print("== native L1 / 10 KiB ==")
@@ -759,7 +1161,9 @@ def _print_summary(benign, classifier, load, native_l1=None):
         )
 
 
-def _benchmark_markdown(meta, example, benign, classifier, load, native_l1=None):
+def _benchmark_markdown(
+    meta, example, benign, classifier, load, native_l1=None, dynamic_pii=None
+):
     def value(stats, key="avg_ms"):
         return f"{stats.get(key, 0.0):.1f}"
 
@@ -790,6 +1194,103 @@ def _benchmark_markdown(meta, example, benign, classifier, load, native_l1=None)
                 f"| {name} | {mode} | {stats['samples']} | {stats['accuracy']:.1%} | "
                 f"{stats['macro_f1']:.3f} | {stats['l3_scans']} | "
                 f"{value(stats['latency'])} ms | {value(stats['latency'], 'p95_ms')} ms |"
+            )
+
+    if dynamic_pii and dynamic_pii["enabled"]:
+        quality = dynamic_pii["quality"]
+        lines.extend(
+            [
+                "",
+                "## GLiNER NER",
+                "",
+                "Entity matches require the same label and exact character offsets.",
+                "",
+                "| Samples | Executed | Gold entities | Predicted | True positives | Precision | Recall | F1 | Exact samples | Avg | p95 |",
+                "| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+                f"| {quality['samples']} | {quality['executed_samples']} | {quality['gold']} | "
+                f"{quality['predicted']} | {quality['true_positives']} | "
+                f"{quality['precision']:.3f} | {quality['recall']:.3f} | "
+                f"{quality['f1']:.3f} | {quality['exact_samples']} | "
+                f"{value(quality['latency'])} ms | "
+                f"{value(quality['latency'], 'p95_ms')} ms |",
+                "",
+                "| Source classification | Gold entities | Precision | Recall | F1 |",
+                "| --- | ---: | ---: | ---: | ---: |",
+            ]
+        )
+        for source, stats in quality["per_source_class"].items():
+            lines.append(
+                f"| {source} | {stats['gold']} | {stats['precision']:.3f} | "
+                f"{stats['recall']:.3f} | {stats['f1']:.3f} |"
+            )
+        if quality.get("per_tool_class"):
+            lines.extend(
+                [
+                    "",
+                    "| Tool classification | Gold entities | Precision | Recall | F1 |",
+                    "| --- | ---: | ---: | ---: | ---: |",
+                ]
+            )
+            for source, stats in quality["per_tool_class"].items():
+                lines.append(
+                    f"| {source} | {stats['gold']} | {stats['precision']:.3f} | "
+                    f"{stats['recall']:.3f} | {stats['f1']:.3f} |"
+                )
+        if quality.get("per_context_pair"):
+            lines.extend(
+                [
+                    "",
+                    "| Sensitive-document + tool context | Gold entities | Precision | Recall | F1 |",
+                    "| --- | ---: | ---: | ---: | ---: |",
+                ]
+            )
+            for source, stats in quality["per_context_pair"].items():
+                lines.append(
+                    f"| {source} | {stats['gold']} | {stats['precision']:.3f} | "
+                    f"{stats['recall']:.3f} | {stats['f1']:.3f} |"
+                )
+        lines.extend(
+            [
+                "",
+                "| Label | Gold | Predicted | Precision | Recall | F1 |",
+                "| --- | ---: | ---: | ---: | ---: | ---: |",
+            ]
+        )
+        for label, stats in quality["per_label"].items():
+            lines.append(
+                f"| {label} | {stats['gold']} | {stats['predicted']} | "
+                f"{stats['precision']:.3f} | {stats['recall']:.3f} | {stats['f1']:.3f} |"
+            )
+
+        combined = dynamic_pii["combined_latency"]
+        if combined["enabled"]:
+            memory = combined.get(
+                "memory",
+                {"after_mb": None, "delta_mb": None},
+            )
+            lines.extend(
+                [
+                    "",
+                    "### L2 + L3 + GLiNER latency",
+                    "",
+                    "Only requests that produced an injection L2 fallback, an injection L3 "
+                    "result, and a GLiNER result contribute to these latency values.",
+                    "RAM is the cumulative peak RSS of the benchmark process. `From start` "
+                    "uses the value before L3 sessions are initialized; `joint delta` starts "
+                    "immediately before this phase.",
+                    "",
+                    "| Samples | Joint samples | Total avg/p95 | L2 avg/p95 | L3 avg/p95 | GLiNER avg/p95 | GLiNER queue avg/p95 | Peak RSS | From start | Joint delta |",
+                    "| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+                    f"| {combined['samples']} | {combined['l2_l3_gliner_samples']} | "
+                    f"{value(combined['total_latency'])}/{value(combined['total_latency'], 'p95_ms')} ms | "
+                    f"{value(combined['l2_execution'])}/{value(combined['l2_execution'], 'p95_ms')} ms | "
+                    f"{value(combined['l3_execution'])}/{value(combined['l3_execution'], 'p95_ms')} ms | "
+                    f"{value(combined['gliner_execution'])}/{value(combined['gliner_execution'], 'p95_ms')} ms | "
+                    f"{value(combined['gliner_queue_wait'])}/{value(combined['gliner_queue_wait'], 'p95_ms')} ms | "
+                    f"{memory['after_mb'] or 0.0:.1f} MiB | "
+                    f"{memory['delta_mb'] or 0.0:.1f} MiB | "
+                    f"{memory.get('phase_delta_mb') or 0.0:.1f} MiB |",
+                ]
             )
 
     if native_l1 and native_l1["profiles"]:
@@ -923,10 +1424,16 @@ def run_local_benchmark(
         "host": _host_info(),
     }
 
+    benchmark_start_peak_rss_mb = _process_peak_rss_mb()
     _warm_l3_sessions(gateway)
     example = _run_queue_example(gateway)
     benign = _run_benign(gateway)
     classifier = _run_classifier(gateway, limit_per_pipeline)
+    dynamic_pii = _run_dynamic_pii(
+        gateway,
+        limit_per_pipeline,
+        benchmark_start_peak_rss_mb,
+    )
     native_l1 = _run_native_l1_10kb(gateway, native_l1_iterations)
     load = _run_load(gateway, load_requests)
 
@@ -934,6 +1441,7 @@ def run_local_benchmark(
         "example_result.json": {**meta, **example},
         "benign_result.json": {**meta, **benign},
         "classifier_result.json": {**meta, **classifier},
+        "dynamic_pii_result.json": {**meta, **dynamic_pii},
         "native_l1_result.json": {**meta, **native_l1},
         "load_result.json": {**meta, **load},
     }
@@ -942,18 +1450,19 @@ def run_local_benchmark(
             json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
         )
     (output / "BENCHMARK.md").write_text(
-        _benchmark_markdown(meta, example, benign, classifier, load, native_l1),
+        _benchmark_markdown(meta, example, benign, classifier, load, native_l1, dynamic_pii),
         encoding="utf-8",
     )
 
     if print_summary:
-        _print_summary(benign, classifier, load, native_l1)
+        _print_summary(benign, classifier, load, native_l1, dynamic_pii)
         print(f"results written to {output}/")
 
     return {
         "example": example,
         "benign": benign,
         "classifier": classifier,
+        "dynamic_pii": dynamic_pii,
         "native_l1": native_l1,
         "load": load,
     }

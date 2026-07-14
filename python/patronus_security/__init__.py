@@ -1,4 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-only
 from ._patronus_security import SecurityGateway as RustSecurityGateway
+from copy import deepcopy
 import json
 
 
@@ -30,6 +32,18 @@ def _to_dict(result):
                 "details": _decode_json_object(layer.details_json),
             }
             for layer in result.layers
+        ],
+        "evidence_spans": [
+            {
+                "label": span.label,
+                "text": span.text,
+                "score": span.score,
+                "start_byte": span.start_byte,
+                "end_byte": span.end_byte,
+                "start_char": span.start_char,
+                "end_char": span.end_char,
+            }
+            for span in result.evidence_spans
         ],
     }
     request_id = getattr(result, "request_id", None)
@@ -142,6 +156,14 @@ def _execution_gates_json(execution_gates):
     return json.dumps(normalized)
 
 
+def _dynamic_pii_config_json(config):
+    if config is None:
+        return None
+    if not isinstance(config, dict):
+        raise ValueError("dynamic_pii_config must be a dict")
+    return json.dumps(config)
+
+
 class SecurityGateway:
     """Python gateway for Patronus Security scanners.
 
@@ -172,6 +194,9 @@ class SecurityGateway:
         ntdb_operating_point: Calibrated NTDB threshold set. One of
             `best_promote` (default), `best_f1`, `best_fpr_in_f1`,
             `best_fnr_in_f1`, or `best_latency_in_f1`.
+        dynamic_pii_config: Pipeline-specific labels, result gates,
+            thresholds, chunking, text limit, and timeout for the L3-only
+            `dynamic-pii` category.
     """
 
     def __init__(
@@ -185,9 +210,11 @@ class SecurityGateway:
         onnx_batch_mode: str = "backend_default",
         execution_backend: str = "auto",
         ntdb_operating_point: str = "best_promote",
+        dynamic_pii_config: dict | None = None,
     ):
         self._categories = list(categories)
         self._max_level = max_level
+        self._dynamic_pii_config = deepcopy(dynamic_pii_config or {})
         self.rust_gateway = RustSecurityGateway(
             categories,
             max_level,
@@ -198,6 +225,7 @@ class SecurityGateway:
             onnx_batch_mode=onnx_batch_mode,
             execution_backend=execution_backend,
             ntdb_operating_point=ntdb_operating_point,
+            dynamic_pii_config_json=_dynamic_pii_config_json(dynamic_pii_config),
         )
 
     @property
@@ -261,30 +289,10 @@ class SecurityGateway:
         """Select the calibrated NTDB threshold set for subsequent scans."""
         self.rust_gateway.set_ntdb_operating_point(point)
 
-    def set_long_text_policy(
-        self,
-        enabled: bool = True,
-        no_full_l2_byte_limit: int = 1024,
-        chunk_size_bytes: int = 256,
-        overlap_bytes: int = 96,
-        verify_non_benign_l2: bool = True,
-    ):
-        """Replace the long-text policy used for L3 chunked verification.
-
-        NTDB L2 always scans the full text; the model packages chunk
-        internally and aggregate across chunks. When a scan is promoted to
-        L3, the L3 worker splits the full text into overlapping
-        `chunk_size_bytes`/`overlap_bytes` windows and verifies them by
-        priority. `verify_non_benign_l2` keeps non-benign L2 chunk decisions
-        subject to L3 verification during aggregation.
-        """
-        self.rust_gateway.set_long_text_policy(
-            enabled,
-            no_full_l2_byte_limit,
-            chunk_size_bytes,
-            overlap_bytes,
-            verify_non_benign_l2,
-        )
+    def set_dynamic_pii_config(self, config: dict):
+        """Replace labels, result gates, thresholds, limits, and timeout for `dynamic-pii`."""
+        self.rust_gateway.set_dynamic_pii_config(_dynamic_pii_config_json(config))
+        self._dynamic_pii_config = deepcopy(config)
 
     def scan_category(self, category: str, text: str) -> list[dict]:
         """Scan text with a single category."""
@@ -364,8 +372,10 @@ class SecurityGateway:
         Runs benchmark phases and writes a readable `BENCHMARK.md` plus JSON into `output_dir`:
         one complete queued response (`example_result.json`), benign false
         positives (`benign_result.json`), labelled classifier
-        validation (`classifier_result.json`), native L1 scans on exact 10 KiB
-        texts (`native_l1_result.json`), and a queue load test where one
+        validation (`classifier_result.json`), exact-span GLiNER NER quality
+        by document/tool context and joint L2/L3/GLiNER latency plus process
+        peak RSS (`dynamic_pii_result.json`), native L1
+        scans on exact 10 KiB texts (`native_l1_result.json`), and a queue load test where one
         producer enqueues texts while one consumer drains the shared result queue
         (`load_result.json`). Only pipelines whose
         category is configured on this gateway are evaluated; the L3 load

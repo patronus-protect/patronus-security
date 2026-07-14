@@ -24,6 +24,7 @@ CATEGORY_NAMES = {
     "Injection": "injection",
     "Dlp": "dlp",
     "Pii": "pii",
+    "DynamicPii": "dynamic-pii",
     "ToolClassifier": "tool_classifier",
     "UserIntent": "user_intent",
     "SensitiveDocuments": "sensitive_documents",
@@ -33,6 +34,7 @@ CATEGORY_ORDER = [
     "Injection",
     "Dlp",
     "Pii",
+    "DynamicPii",
     "ToolClassifier",
     "UserIntent",
     "SensitiveDocuments",
@@ -50,8 +52,8 @@ class Asset:
 
 
 def parse_assets() -> list[Asset]:
-    source = (ROOT / "rust/src/assets/specs.rs").read_text()
-    source = source.split("pub const ASSET_MANIFEST", 1)[1]
+    full_source = (ROOT / "rust/src/assets/specs.rs").read_text()
+    source = full_source.split("pub const ASSET_MANIFEST", 1)[1]
     source = source.split("pub const NTDB_L2_PACKAGE_MANIFEST", 1)[0]
     assets: list[Asset] = []
     for block in re.findall(r"\bAssetSpec\s*\{(.*?)\}", source, flags=re.S):
@@ -65,6 +67,21 @@ def parse_assets() -> list[Asset]:
                 source_path=_field(block, "source_path").strip('"'),
                 destination_path=_field(block, "destination_path").strip('"'),
                 required=_field(block, "required") == "true",
+            )
+        )
+    dynamic_block = full_source.split("pub const DYNAMIC_PII_ASSET", 1)[1].split("};", 1)[0]
+    dynamic_repo = _field(dynamic_block, "repo").strip('"')
+    dynamic_destination = _field(dynamic_block, "destination_path").strip('"')
+    files_block = dynamic_block.split("files: &[", 1)[1].split("],", 1)[0]
+    for filename in re.findall(r'"([^"]+)"', files_block):
+        assets.append(
+            Asset(
+                category="DynamicPii",
+                level="L3",
+                repo=dynamic_repo,
+                source_path=filename,
+                destination_path=f"{dynamic_destination}/{filename}",
+                required=True,
             )
         )
     return assets
@@ -170,6 +187,8 @@ def ntdb_package_table(packages: list[NtdbPackage]) -> list[str]:
         "",
         "NTDB v2 L2 packages are manifest-first: the runtime downloads `manifest.json` and every file it references. Sizes therefore depend on the published package contents.",
         "",
+        "For supported Granite/ModernBERT packages, the Security Lib generates a compact `tokenizer.kit` locally after the verified asset download. Existing official caches are migrated during warmup, while local environment overrides are left untouched. The original `tokenizer.json` remains the canonical fallback. Generated files are written atomically under a cross-process lock and invalidated by source hash, compact hash, converter version, and format version.",
+        "",
         "| Category | Model | Repository | Source prefix | Cache path |",
         "| --- | --- | --- | --- | --- |",
     ]
@@ -199,7 +218,7 @@ def generate_assets_doc(assets: list[Asset], snapshot: dict) -> str:
         "| Linux | `~/.cache/patronus_security` |",
         "| Windows | `%LOCALAPPDATA%\\patronus_security` |",
         "",
-        "Category assets are stored below that root, for example `injection/`, `pii/`, or `tool_classifier/`.",
+        "Category assets are stored below that root, for example `injection/`, `pii/`, `dynamic_pii/`, or `tool_classifier/`.",
         "",
         "## Offline And Missing-Asset Behavior",
         "",
@@ -211,7 +230,8 @@ def generate_assets_doc(assets: list[Asset], snapshot: dict) -> str:
         "- Missing optional assets do not block `warmup()`.",
         "- Optional assets are skipped by default during downloads. Set `PATRONUS_DOWNLOAD_OPTIONAL_ASSETS=1` to download optional full ONNX files and sidecar data.",
         "- Required L3 assets prefer fp16 ONNX files where available.",
-        "- PII does not use ONNX/L3; PII runs native checks and L2 model assets when available.",
+        "- PII is native L1-only and has no model assets.",
+        "- `dynamic-pii` is L3-only and requires the revision-pinned `gliner_small-v2.5-edge` bundle below the regular `model_dir` asset root.",
         "- L3 ONNX sessions are lazy-loaded on first L3 inference and are evicted after `PATRONUS_L3_TTL_SECS` seconds of idleness. The default TTL is `300` seconds.",
         "- Set `HF_TOKEN` when a model repository requires authenticated or rate-limited Hugging Face access.",
         "",
@@ -273,7 +293,7 @@ def generate_assets_doc(assets: list[Asset], snapshot: dict) -> str:
     for asset in assets:
         required = "yes" if asset.required else "optional"
         source = f"`{asset.repo}/{asset.source_path}`"
-        cache_path = f"`{CATEGORY_NAMES[asset.category]}/{asset.destination_path}`"
+        cache_path = f"`{asset.destination_path}`" if asset.category == "DynamicPii" else f"`{CATEGORY_NAMES[asset.category]}/{asset.destination_path}`"
         lines.append(
             f"| `{CATEGORY_NAMES[asset.category]}` | `{asset.level}` | {required} | {source} | {cache_path} | {format_size(asset_size(asset, snapshot))} |"
         )
@@ -365,6 +385,7 @@ def generate_rust_api_doc() -> str:
         ("Core Gateway", ROOT / "rust/src/pipeline/security.rs"),
         ("Queued Request API", ROOT / "rust/src/pipeline/security/request_queue.rs"),
         ("External L1 API", ROOT / "rust/src/external_l1.rs"),
+        ("Dynamic PII Types", ROOT / "rust/src/dynamic_pii.rs"),
         ("Result And Category Types", ROOT / "rust/src/types.rs"),
         ("Asset Manifest Helpers", ROOT / "rust/src/assets/specs.rs"),
         ("Asset Download Helpers", ROOT / "rust/src/assets/download.rs"),

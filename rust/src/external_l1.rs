@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use crate::{EvaluationResult, SecurityCategory};
 
 /// Input passed to an externally registered L1 heuristic.

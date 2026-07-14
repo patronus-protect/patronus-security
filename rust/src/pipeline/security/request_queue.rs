@@ -1,32 +1,31 @@
-#[cfg(any(test, feature = "test-util"))]
-use std::collections::HashMap;
-use std::collections::HashSet;
+// SPDX-License-Identifier: AGPL-3.0-only
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::Ordering;
 use std::sync::{mpsc, Arc, OnceLock};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::ml::ntdb_executor::ByteSpan;
 use crate::pipeline::{
     failure_from_scan_result, finish_request_if_ready, has_l3_pending, priority_index, ttl_ms,
-    L3JobSpec, RequestState,
+    L3JobSpec, PendingDynamicPii, RequestState,
 };
 #[cfg(any(test, feature = "test-util"))]
 use crate::LayerResult;
-#[cfg(feature = "test-util")]
-use crate::SecurityLevel;
 use crate::{
-    ExternalL1Input, QueuedSecurityEvent, QueuedSecurityScanResult, RequestId, ScanExecution,
-    ScanGateMatrix, SecurityCategory, SecurityFailure, SecurityFailureKind, SecurityFailureStage,
-    SecurityRequestState, SecurityScanResult,
+    assets::DYNAMIC_PII_ASSET, ExternalL1Input, QueuedSecurityEvent, QueuedSecurityScanResult,
+    RequestId, ScanExecution, ScanGateMatrix, SecurityCategory, SecurityFailure,
+    SecurityFailureKind, SecurityFailureStage, SecurityLevel, SecurityRequestState,
+    SecurityScanResult,
 };
 
-use super::SecurityGateway;
+use super::{dynamic_pii_pending_result, SecurityGateway};
 
 pub(super) struct QueueWork {
     request_id: RequestId,
     inputs: Vec<ExternalL1Input>,
     execution: ScanExecution,
+    accepted_at: Instant,
     #[cfg(feature = "test-util")]
     delay_ms: Option<u64>,
 }
@@ -77,6 +76,7 @@ impl SecurityGateway {
         #[cfg_attr(not(feature = "test-util"), allow(unused_variables))] delay_ms: Option<u64>,
     ) -> RequestId {
         let request_id = self.next_request_id();
+        let accepted_at = Instant::now();
         let mut execution = self.scan_execution();
         if let Some(gates) = gates {
             execution.set_gates(gates);
@@ -93,6 +93,7 @@ impl SecurityGateway {
                 request_id: request_id.clone(),
                 inputs,
                 execution,
+                accepted_at,
                 #[cfg(feature = "test-util")]
                 delay_ms,
             })
@@ -140,6 +141,7 @@ impl SecurityGateway {
             request_id,
             inputs,
             execution,
+            accepted_at,
             #[cfg(feature = "test-util")]
             delay_ms,
         } = work;
@@ -185,7 +187,28 @@ impl SecurityGateway {
             .map(|input| input.text.as_str())
             .unwrap_or_default();
         let l3_jobs = self.l3_jobs_for_results(&request_id, &text, &results, &execution);
-        let pending_l3_job_ids = l3_jobs.iter().map(|job| job.job_id).collect::<HashSet<_>>();
+        let pending_dynamic_pii = self.pending_dynamic_pii_for_request(
+            &request_id,
+            &text,
+            &inputs,
+            &execution,
+            accepted_at,
+        );
+        let mut pending_l3_job_ids = l3_jobs.iter().map(|job| job.job_id).collect::<HashSet<_>>();
+        if let Some(pending) = &pending_dynamic_pii {
+            pending_l3_job_ids.insert(pending.job.job_id);
+        }
+        let pending_l3_job_categories = l3_jobs
+            .iter()
+            .map(|job| (job.job_id, job.category.clone()))
+            .collect::<HashMap<_, _>>();
+        let mut gate_results = HashMap::<String, Vec<String>>::new();
+        for result in results.iter().filter(|result| !has_l3_pending(result)) {
+            gate_results
+                .entry(result.category.clone())
+                .or_default()
+                .push(result.class_name.clone());
+        }
 
         let mut registry = self
             .requests
@@ -194,6 +217,9 @@ impl SecurityGateway {
             .expect("request registry mutex poisoned");
         if let Some(state) = registry.requests.get_mut(&request_id) {
             state.pending_l3_job_ids = pending_l3_job_ids;
+            state.pending_l3_job_categories = pending_l3_job_categories;
+            state.gate_results = gate_results;
+            state.pending_dynamic_pii = pending_dynamic_pii;
             state.usable_results += results.len();
             state.failures.extend(failures);
             registry.ready.extend(results.into_iter().map(|result| {
@@ -210,6 +236,7 @@ impl SecurityGateway {
         for job in l3_jobs {
             self.l3_worker.enqueue(job);
         }
+        self.l3_worker.resolve_dynamic_pii(&request_id);
     }
 
     /// Consume the next result or terminal event published by the queue.
@@ -368,8 +395,54 @@ impl SecurityGateway {
                 execution: execution.clone(),
                 degraded_factor: policy.degraded_factor,
                 l3_candidate_spans: l3_candidate_spans(result),
+                dynamic_pii_config: None,
+                dynamic_pii_activated_rules: Vec::new(),
             })
             .collect()
+    }
+
+    fn pending_dynamic_pii_for_request(
+        &self,
+        request_id: &str,
+        text: &str,
+        inputs: &[ExternalL1Input],
+        execution: &ScanExecution,
+        accepted_at: Instant,
+    ) -> Option<PendingDynamicPii> {
+        if !inputs
+            .iter()
+            .any(|input| input.category == SecurityCategory::DynamicPii)
+            || !execution.allows_level(SecurityLevel::L3)
+            || !execution.allows_model(DYNAMIC_PII_ASSET.model)
+            || !execution.l3_policy().enabled
+        {
+            return None;
+        }
+        let config = self.dynamic_pii_config();
+        let policy = execution.l3_policy();
+        let job_id = self.l3_worker.next_job_id();
+        Some(PendingDynamicPii {
+            job: L3JobSpec {
+                job_id,
+                request_id: request_id.to_string(),
+                category: DYNAMIC_PII_ASSET.category.as_str().to_string(),
+                model: DYNAMIC_PII_ASSET.model.to_string(),
+                text: text.to_string(),
+                fallback: dynamic_pii_pending_result(execution),
+                priority: priority_index(
+                    policy,
+                    DYNAMIC_PII_ASSET.category.as_str(),
+                    DYNAMIC_PII_ASSET.model,
+                ),
+                ttl_ms: config.timeout_ms,
+                execution: execution.clone(),
+                degraded_factor: policy.degraded_factor,
+                l3_candidate_spans: Vec::new(),
+                dynamic_pii_config: Some(config),
+                dynamic_pii_activated_rules: Vec::new(),
+            },
+            accepted_at,
+        })
     }
 
     #[cfg(feature = "test-util")]
@@ -421,6 +494,8 @@ impl SecurityGateway {
                 execution: ScanExecution::new(SecurityLevel::L3),
                 degraded_factor: 0.75,
                 l3_candidate_spans: Vec::new(),
+                dynamic_pii_config: None,
+                dynamic_pii_activated_rules: Vec::new(),
             },
             delay_ms,
         );
@@ -449,6 +524,8 @@ impl SecurityGateway {
                     execution: ScanExecution::new(SecurityLevel::L3),
                     degraded_factor: 0.75,
                     l3_candidate_spans: Vec::new(),
+                    dynamic_pii_config: None,
+                    dynamic_pii_activated_rules: Vec::new(),
                 },
                 *delay_ms,
             ));
@@ -459,11 +536,143 @@ impl SecurityGateway {
     }
 
     #[cfg(feature = "test-util")]
-    fn insert_test_l3_request(&self, model: &str, job_id: u64) -> RequestId {
+    #[doc(hidden)]
+    pub fn enqueue_test_l3_scheduler_requests(
+        &self,
+        jobs: &[(&str, usize, u64, &str, u64)],
+        fairness_quantum_ms: u64,
+        max_wait_ms: u64,
+    ) -> Vec<RequestId> {
+        let mut specs = Vec::new();
+        let mut request_ids = Vec::new();
+        for (category, priority, delay_ms, model, estimated_cost_ms) in jobs {
+            let job_id = self.l3_worker.next_job_id();
+            let request_id = self.insert_test_l3_request_in_category(model, category, job_id);
+            let mut fallback = self.test_l3_fallback(model);
+            fallback.category = (*category).to_string();
+            let mut gates = ScanGateMatrix::all_enabled();
+            let mut policy = crate::L3SchedulerPolicy::default();
+            policy
+                .estimated_cost_ms
+                .insert((*category).to_string(), *estimated_cost_ms);
+            policy.fairness_quantum_ms = fairness_quantum_ms;
+            policy.max_wait_ms = max_wait_ms;
+            gates.set_l3_policy(policy);
+            specs.push((
+                L3JobSpec {
+                    job_id,
+                    request_id: request_id.clone(),
+                    category: (*category).to_string(),
+                    model: (*model).to_string(),
+                    text: "test".to_string(),
+                    fallback,
+                    priority: *priority,
+                    ttl_ms: 10_000,
+                    execution: ScanExecution::with_gates(SecurityLevel::L3, gates),
+                    degraded_factor: 0.75,
+                    l3_candidate_spans: Vec::new(),
+                    dynamic_pii_config: None,
+                    dynamic_pii_activated_rules: Vec::new(),
+                },
+                *delay_ms,
+            ));
+            request_ids.push(request_id);
+        }
+        self.l3_worker.enqueue_test_delays(specs);
+        request_ids
+    }
+
+    #[cfg(feature = "test-util")]
+    #[doc(hidden)]
+    pub fn enqueue_test_dynamic_pii_dependency_request(&self, delay_ms: u64) -> RequestId {
+        self.set_dynamic_pii_config(crate::DynamicPiiConfig {
+            labels: vec!["person".to_string()],
+            execution_gate: crate::DynamicPiiExecutionGate::IfResultIn {
+                pipeline: "injection".to_string(),
+                results: vec!["test_l3".to_string()],
+            },
+            ..crate::DynamicPiiConfig::default()
+        })
+        .expect("test dynamic-pii config must be valid");
         let request_id = self.next_request_id();
-        let fallback = self.test_l3_fallback(model);
+        let execution = ScanExecution::new(SecurityLevel::L3);
+        let dynamic = self
+            .pending_dynamic_pii_for_request(
+                &request_id,
+                "Benedikt works in Frankfurt.",
+                &[ExternalL1Input::new(
+                    SecurityCategory::DynamicPii,
+                    "Benedikt works in Frankfurt.",
+                )],
+                &execution,
+                Instant::now(),
+            )
+            .expect("test dynamic-pii job must be enabled");
+        let source_job_id = self.l3_worker.next_job_id();
+        let source_fallback = self.test_l3_fallback("test-source-l3");
+        let source_job = L3JobSpec {
+            job_id: source_job_id,
+            request_id: request_id.clone(),
+            category: source_fallback.category.clone(),
+            model: source_fallback.model.clone(),
+            text: "test".to_string(),
+            fallback: source_fallback.clone(),
+            priority: 0,
+            ttl_ms: 10_000,
+            execution,
+            degraded_factor: 0.75,
+            l3_candidate_spans: Vec::new(),
+            dynamic_pii_config: None,
+            dynamic_pii_activated_rules: Vec::new(),
+        };
+        let state = RequestState {
+            pending_l3_job_ids: HashSet::from([source_job_id, dynamic.job.job_id]),
+            pending_l3_job_categories: HashMap::from([(source_job_id, "injection".to_string())]),
+            gate_results: HashMap::new(),
+            pending_dynamic_pii: Some(dynamic),
+            usable_results: 1,
+            failures: Vec::new(),
+            completion: None,
+        };
+        let mut registry = self
+            .requests
+            .state
+            .lock()
+            .expect("request registry mutex poisoned");
+        registry.requests.insert(request_id.clone(), state);
+        registry
+            .ready
+            .push_back(QueuedSecurityEvent::Result(QueuedSecurityScanResult {
+                request_id: request_id.clone(),
+                result: source_fallback,
+            }));
+        drop(registry);
+        self.l3_worker.enqueue_test_delay(source_job, delay_ms);
+        self.l3_worker.resolve_dynamic_pii(&request_id);
+        self.requests.available.notify_all();
+        request_id
+    }
+
+    #[cfg(feature = "test-util")]
+    fn insert_test_l3_request(&self, model: &str, job_id: u64) -> RequestId {
+        self.insert_test_l3_request_in_category(model, "injection", job_id)
+    }
+
+    #[cfg(feature = "test-util")]
+    fn insert_test_l3_request_in_category(
+        &self,
+        model: &str,
+        category: &str,
+        job_id: u64,
+    ) -> RequestId {
+        let request_id = self.next_request_id();
+        let mut fallback = self.test_l3_fallback(model);
+        fallback.category = category.to_string();
         let state = RequestState {
             pending_l3_job_ids: HashSet::from([job_id]),
+            pending_l3_job_categories: HashMap::from([(job_id, category.to_string())]),
+            gate_results: HashMap::new(),
+            pending_dynamic_pii: None,
             usable_results: 1,
             failures: Vec::new(),
             completion: None,
@@ -516,6 +725,7 @@ impl SecurityGateway {
                     details: HashMap::new(),
                 },
             ],
+            evidence_spans: Vec::new(),
         }
     }
 }
@@ -556,6 +766,7 @@ mod tests {
                     serde_json::json!([{"start": 10, "end": 42}]),
                 )]),
             }],
+            evidence_spans: Vec::new(),
         };
 
         let spans = l3_candidate_spans(&result);

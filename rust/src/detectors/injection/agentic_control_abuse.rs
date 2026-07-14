@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use crate::threat::looks_like_agentic_control_abuse_lower;
 use crate::EvaluationResult;
 

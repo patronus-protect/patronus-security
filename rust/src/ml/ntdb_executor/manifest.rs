@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use serde::Deserialize;
 use std::collections::HashMap;
 
@@ -162,6 +163,7 @@ pub struct MetricSweepManifest {
     pub source: String,
     pub f1_window: Option<f32>,
     pub points: HashMap<String, OperatingPointManifest>,
+    #[serde(default, skip_deserializing)]
     pub sweep: Vec<serde_json::Value>,
 }
 

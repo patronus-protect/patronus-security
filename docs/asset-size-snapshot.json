@@ -13,10 +13,6 @@
       "last_modified": "2026-07-01T15:56:48.000Z",
       "sha": "c09bcf4e5702c03dab6d08a3cac8c890add08d93"
     },
-    "patronus-studio/pii-model": {
-      "error": "HTTP 401",
-      "files": {}
-    },
     "patronus-studio/tool-description-model": {
       "error": "HTTP 401",
       "files": {}

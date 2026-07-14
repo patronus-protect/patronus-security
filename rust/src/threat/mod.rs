@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 mod detection;
 mod obfuscation;
 mod patterns;

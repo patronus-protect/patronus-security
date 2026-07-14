@@ -262,26 +262,48 @@ fn warmup_without_downloads_requires_ntdb_l2_exports() {
 }
 
 #[test]
-fn warmup_rejects_legacy_l2_assets_without_ntdb_mapping() {
-    let dir = temp_model_dir("legacy_l2_ignored");
+fn user_intent_remains_l1_only_at_l3_max_level() {
+    let dir = temp_model_dir("user_intent_l1_only");
     let prompts_dir = dir.join("user_intent").join("prompts");
     std::fs::create_dir_all(&prompts_dir).unwrap();
-    std::fs::write(prompts_dir.join("l1_rules.json"), "[]").unwrap();
+    std::fs::write(
+        prompts_dir.join("l1_rules.json"),
+        r#"[{"ngram":"schedule meeting","class":"action","count":1}]"#,
+    )
+    .unwrap();
     std::fs::write(prompts_dir.join("l2_config.json"), "{}").unwrap();
     std::fs::write(prompts_dir.join("cascade_config.json"), "{}").unwrap();
 
     let mut scanner = SecurityGateway::with_max_level(
         vec![SecurityCategory::UserIntent],
-        SecurityLevel::L2,
+        SecurityLevel::L3,
         Some(dir.clone()),
         false,
     );
 
-    let err = scanner.warmup().unwrap_err().to_string();
-    assert!(
-        err.contains("missing NTDB v2 L2 export mapping for user_intent/user-intent-model"),
-        "{err}"
-    );
+    scanner.warmup().unwrap();
+    let readiness = scanner.runtime_readiness();
+    assert!(matches!(
+        readiness.l1,
+        patronus_security::SecurityLevelReadiness::Ready
+    ));
+    assert!(matches!(
+        readiness.l2,
+        patronus_security::SecurityLevelReadiness::NotConfigured
+    ));
+    assert!(matches!(
+        readiness.l3,
+        patronus_security::SecurityLevelReadiness::NotConfigured
+    ));
+
+    let results = scanner.scan_category(SecurityCategory::UserIntent, "schedule meeting tomorrow");
+    let result = results
+        .iter()
+        .find(|result| result.model == "user-intent-model")
+        .expect("expected user-intent L1 result");
+    assert_eq!(result.level, "L1");
+    assert_eq!(result.class_name, "action");
+    assert!(result.layers.iter().all(|layer| layer.level == "L1"));
 
     std::fs::remove_dir_all(dir).unwrap();
 }
@@ -785,27 +807,35 @@ fn l3_scheduler_defaults_match_cpu_ttl_policy() {
     let policy = L3SchedulerPolicy::default();
 
     assert_eq!(policy.ttl_ms["injection"], 15_000);
+    assert_eq!(policy.ttl_ms["dynamic-pii"], 12_000);
     assert_eq!(policy.ttl_ms["sensitive_documents"], 12_000);
     assert_eq!(policy.ttl_ms["user_intent"], 10_500);
     assert_eq!(policy.ttl_ms["tool_classifier"], 7_500);
     assert_eq!(policy.priority[0], "injection");
-    assert_eq!(policy.priority[2], "pii");
+    assert_eq!(policy.priority[2], "dynamic-pii");
+    assert_eq!(policy.estimated_cost_ms["injection"], 200);
+    assert_eq!(policy.estimated_cost_ms["dynamic-pii"], 240);
+    assert_eq!(policy.fairness_quantum_ms, 50);
+    assert_eq!(policy.max_wait_ms, 2_000);
 }
 
 #[test]
-fn pii_uses_native_result_when_no_model_assets_exist() {
-    let scanner = SecurityGateway::with_max_level(
+fn pii_is_native_l1_even_when_gateway_allows_l3() {
+    let mut scanner = SecurityGateway::with_max_level(
         vec![SecurityCategory::Pii],
         SecurityLevel::L3,
         None,
         false,
     );
+    scanner.warmup().unwrap();
 
     let result = scanner.scan_category(SecurityCategory::Pii, "Email ada@example.com");
 
     assert_result_schema(&result, "pii");
     assert!(has_result(&result, "native:pii", "EMAIL"));
-    assert!(result.iter().all(|item| item.model != "pii-model"));
+    assert!(result
+        .iter()
+        .all(|item| item.level == "L1" && item.model == "native:pii"));
 }
 
 mod l3_worker_streaming {

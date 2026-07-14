@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use super::patterns::{injection_signal_re, sensitive_term_ac};
 
 pub(super) fn text_windows(text: &str, window_bytes: usize) -> impl Iterator<Item = &str> {

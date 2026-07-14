@@ -24,17 +24,49 @@ fn hf_ntdb_l2_download_warmup_smoke() {
     }
 
     let dir = model_dir();
-    let categories = vec![SecurityCategory::Injection];
-    let mut scanner =
-        SecurityGateway::with_max_level(categories, SecurityLevel::L2, Some(dir.clone()), true);
+    let categories = vec![
+        SecurityCategory::Injection,
+        SecurityCategory::SensitiveDocuments,
+        SecurityCategory::ToolClassifier,
+    ];
+    let mut scanner = SecurityGateway::with_max_level(
+        categories.clone(),
+        SecurityLevel::L2,
+        Some(dir.clone()),
+        true,
+    );
 
     scanner.warmup().unwrap();
-    assert!(dir
-        .join("injection")
-        .join("l2_ntdb")
-        .join("injection_current")
-        .join("manifest.json")
-        .exists());
+    for manifest in [
+        "injection/l2_ntdb/injection_current/manifest.json",
+        "sensitive_documents/l2_ntdb/sensitive_documents_current/manifest.json",
+        "tool_classifier/l2_ntdb/tool_prompts_current/manifest.json",
+        "tool_classifier/l2_ntdb/tool_executions_current/manifest.json",
+        "tool_classifier/l2_ntdb/tool_descriptions_current/manifest.json",
+    ] {
+        assert!(dir.join(manifest).is_file(), "missing {manifest}");
+    }
+
+    let results = scanner.scan_categories(
+        &categories,
+        "Review this contract, search the web, and save the confidential findings to a file.",
+    );
+    for model in [
+        "wolf-defender-small",
+        "orca-sonar-document-classifier",
+        "tool-prompts-model",
+        "tool-executions-model",
+        "tool-classifier-descriptions-model",
+    ] {
+        let result = results
+            .iter()
+            .find(|result| result.model == model && result.level == "L2")
+            .unwrap_or_else(|| panic!("missing real L2 inference result for {model}"));
+        assert!(result
+            .layers
+            .iter()
+            .any(|layer| layer.layer_type == "ntdb_l2"));
+    }
 
     eprintln!("HF E2E model dir: {}", dir.display());
 }

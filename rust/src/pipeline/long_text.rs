@@ -1,7 +1,8 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use std::collections::HashMap;
 
 use super::ChunkAggregation;
-use crate::{EvaluationResult, LayerResult, TextChunking};
+use crate::{EvaluationResult, LayerResult};
 
 pub struct LongTextAggregate {
     pub result: EvaluationResult,
@@ -14,29 +15,6 @@ pub struct L3CandidateSelection {
     pub raw_count: usize,
     pub deduped_count: usize,
     pub strategy: &'static str,
-}
-
-pub fn chunk_text_bytes(text: &str, chunking: TextChunking) -> Vec<String> {
-    let raw = text.as_bytes();
-    if raw.len() <= chunking.chunk_size_bytes {
-        return vec![text.to_string()];
-    }
-
-    let mut chunks = Vec::new();
-    let step = chunking.chunk_size_bytes - chunking.overlap_bytes;
-    let mut start = 0;
-    while start < raw.len() {
-        let end = (start + chunking.chunk_size_bytes).min(raw.len());
-        let chunk = String::from_utf8_lossy(&raw[start..end]).to_string();
-        if !chunk.is_empty() {
-            chunks.push(chunk);
-        }
-        if end == raw.len() {
-            break;
-        }
-        start += step;
-    }
-    chunks
 }
 
 #[cfg(feature = "test-util")]
@@ -115,7 +93,6 @@ pub fn aggregate_chunk_outputs(
     chunk_outputs: Vec<(EvaluationResult, Vec<LayerResult>)>,
     chunk_count: usize,
     safe_class: &str,
-    verify_non_benign_l2: bool,
     aggregation: ChunkAggregation,
 ) -> Option<LongTextAggregate> {
     let selected = select_chunk_output(&chunk_outputs, safe_class, aggregation)?;
@@ -150,10 +127,6 @@ pub fn aggregate_chunk_outputs(
         layer
             .details
             .insert("long_text_routing".to_string(), serde_json::json!(true));
-        layer.details.insert(
-            "verify_non_benign_l2".to_string(),
-            serde_json::json!(verify_non_benign_l2),
-        );
     }
 
     for level in ["L1", "L2", "L3"] {

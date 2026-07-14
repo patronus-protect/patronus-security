@@ -1,3 +1,11 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+use std::net::IpAddr;
+
+/// Validate an IPv4 or IPv6 candidate matched by a PII regex.
+pub fn ip_address(s: &str) -> bool {
+    s.parse::<IpAddr>().is_ok()
+}
+
 /// Luhn algorithm (ISO/IEC 7812) — credit card number validation.
 /// Strips whitespace and dashes before checking.
 pub fn luhn(s: &str) -> bool {

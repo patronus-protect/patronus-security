@@ -1,0 +1,54 @@
+# cargo-deny configuration.
+#
+# Purpose: protect the AGPL-3.0 + commercial dual-licensing model. Dependencies
+# must be permissively licensed so they can be redistributed under BOTH our
+# AGPL and our commercial license. Any copyleft (GPL/AGPL/MPL) or source-available
+# (Elastic-2.0, BUSL, SSPL) dependency would poison the commercial license, so
+# only the permissive licenses below are allowed — everything else fails the build.
+#
+# Run:  cargo deny check licenses
+#
+# NOTE: the `exceptions` crate names below are the pre-rename names. Update them
+# to `patronus-ark` / `patronus-ark-python` during the Phase 5 rename.
+
+[licenses]
+version = 2
+confidence-threshold = 0.9
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "MPL-2.0",
+    "CC0-1.0",
+    "0BSD",
+    "MIT-0",
+    "Unlicense",
+    "BSL-1.0",
+    "CDLA-Permissive-2.0",
+]
+
+# Our own crates are intentionally AGPL-3.0; allow it for them only, not for
+# third-party dependencies.
+exceptions = [
+    { allow = ["AGPL-3.0-only"], crate = "patronus-security" },
+    { allow = ["AGPL-3.0-only"], crate = "patronus-security-python" },
+]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "allow"
+
+[advisories]
+version = 2
+yanked = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

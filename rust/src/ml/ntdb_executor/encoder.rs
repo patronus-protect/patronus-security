@@ -1,9 +1,12 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use std::{
     collections::HashMap,
-    fs,
+    fs::File,
     path::{Path, PathBuf},
     sync::Arc,
 };
+
+use memmap2::{Mmap, MmapOptions};
 
 use super::{
     manifest::{MiniLmManifest, PackageManifest},
@@ -19,22 +22,47 @@ struct EncoderKey {
 
 #[derive(Debug)]
 pub struct StaticEncoder {
-    embedding_matrix: Arc<[f32]>,
+    embedding_matrix: EmbeddingMatrix,
     vocab_size: usize,
     embedding_dim: usize,
 }
 
-impl StaticEncoder {
-    pub fn embedding_matrix(&self) -> &[f32] {
-        &self.embedding_matrix
-    }
+#[derive(Debug)]
+enum EmbeddingMatrix {
+    F16(Mmap),
+    F32(Mmap),
+}
 
+impl StaticEncoder {
     pub fn vocab_size(&self) -> usize {
         self.vocab_size
     }
 
     pub fn embedding_dim(&self) -> usize {
         self.embedding_dim
+    }
+
+    pub(super) fn accumulate_token_embedding(&self, token_index: usize, target: &mut [f32]) {
+        let start = token_index * self.embedding_dim;
+        let end = start + self.embedding_dim;
+        match &self.embedding_matrix {
+            EmbeddingMatrix::F16(values) => {
+                for (target, bytes) in target
+                    .iter_mut()
+                    .zip(values[start * 2..end * 2].chunks_exact(2))
+                {
+                    *target += f16_to_f32(u16::from_le_bytes([bytes[0], bytes[1]]));
+                }
+            }
+            EmbeddingMatrix::F32(values) => {
+                for (target, bytes) in target
+                    .iter_mut()
+                    .zip(values[start * 4..end * 4].chunks_exact(4))
+                {
+                    *target += f32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+                }
+            }
+        }
     }
 }
 
@@ -72,7 +100,7 @@ impl StaticEncoderStore {
         let expected_len = manifest.vocab_size * manifest.embedding_dim;
         let embedding_matrix = read_embedding_matrix(embedding_path, expected_len)?;
         let encoder = Arc::new(StaticEncoder {
-            embedding_matrix: Arc::from(embedding_matrix),
+            embedding_matrix,
             vocab_size: manifest.vocab_size,
             embedding_dim: manifest.embedding_dim,
         });
@@ -101,35 +129,101 @@ fn canonical_or_original(path: &Path) -> PathBuf {
     path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
 }
 
-fn read_embedding_matrix(path: impl AsRef<Path>, expected_len: usize) -> NtdbResult<Vec<f32>> {
+fn read_embedding_matrix(
+    path: impl AsRef<Path>,
+    expected_len: usize,
+) -> NtdbResult<EmbeddingMatrix> {
     let path = path.as_ref();
-    let bytes = fs::read(path).map_err(|err| {
+    let file = File::open(path).map_err(|err| {
         ntdb_error(format!(
-            "failed to read embedding matrix {}: {err}",
+            "failed to open embedding matrix {}: {err}",
+            path.display()
+        ))
+    })?;
+    let byte_len = file
+        .metadata()
+        .map_err(|err| {
+            ntdb_error(format!(
+                "failed to read embedding matrix metadata {}: {err}",
+                path.display()
+            ))
+        })?
+        .len() as usize;
+    // The package is immutable while loaded. Mapping it avoids copying the full
+    // lookup table and lets the OS page in only token rows that are actually used.
+    let bytes = unsafe { MmapOptions::new().map(&file) }.map_err(|err| {
+        ntdb_error(format!(
+            "failed to map embedding matrix {}: {err}",
             path.display()
         ))
     })?;
 
-    if bytes.len() == expected_len * 2 {
-        Ok(bytes
-            .chunks_exact(2)
-            .map(|chunk| {
-                let bits = u16::from_le_bytes([chunk[0], chunk[1]]);
-                f16_to_f32(bits)
-            })
-            .collect())
-    } else if bytes.len() == expected_len * 4 {
-        Ok(bytes
-            .chunks_exact(4)
-            .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
-            .collect())
+    if byte_len == expected_len * 2 {
+        Ok(EmbeddingMatrix::F16(bytes))
+    } else if byte_len == expected_len * 4 {
+        Ok(EmbeddingMatrix::F32(bytes))
     } else {
         Err(ntdb_error(format!(
             "embedding matrix size mismatch: got {} bytes, expected {} for f16 or {} for f32",
-            bytes.len(),
+            byte_len,
             expected_len * 2,
             expected_len * 4
         )))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{read_embedding_matrix, StaticEncoder};
+    use std::{fs, time::SystemTime};
+
+    fn mapped(values: &[u8], expected_len: usize) -> super::EmbeddingMatrix {
+        let path = std::env::temp_dir().join(format!(
+            "patronus_embedding_map_{}_{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::write(&path, values).unwrap();
+        let matrix = read_embedding_matrix(&path, expected_len).unwrap();
+        fs::remove_file(path).unwrap();
+        matrix
+    }
+
+    #[test]
+    fn accumulates_f16_embeddings_without_expanding_the_matrix() {
+        let encoder = StaticEncoder {
+            embedding_matrix: mapped(&[0x00, 0x3c, 0x00, 0x40, 0x00, 0x42, 0x00, 0x44], 4),
+            vocab_size: 2,
+            embedding_dim: 2,
+        };
+        let mut target = [0.5, 1.0];
+
+        encoder.accumulate_token_embedding(1, &mut target);
+
+        assert_eq!(target, [3.5, 5.0]);
+    }
+
+    #[test]
+    fn accumulates_f32_embedding_packages_unchanged() {
+        let encoder = StaticEncoder {
+            embedding_matrix: mapped(
+                &[1.0_f32, 2.0, 3.0, 4.0]
+                    .into_iter()
+                    .flat_map(f32::to_le_bytes)
+                    .collect::<Vec<_>>(),
+                4,
+            ),
+            vocab_size: 2,
+            embedding_dim: 2,
+        };
+        let mut target = [0.5, 1.0];
+
+        encoder.accumulate_token_embedding(1, &mut target);
+
+        assert_eq!(target, [3.5, 5.0]);
     }
 }
 
