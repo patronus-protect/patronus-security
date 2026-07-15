@@ -114,49 +114,7 @@ pub const ASSET_MANIFEST: &[AssetSpec] = &[
         destination_path: "l3/onnx/onnx_mixed/model_mixed.onnx",
         required: true,
     },
-    // Tool Classifier keeps L1 rules. The three Tool L2 models are NTDB packages.
-    AssetSpec {
-        category: SecurityCategory::ToolClassifier,
-        level: SecurityLevel::L1,
-        repo: "patronus-studio/tool-prompts-model",
-        source_path: "l1/l1_rules.json",
-        destination_path: "prompts/l1_rules.json",
-        required: true,
-    },
-    AssetSpec {
-        category: SecurityCategory::ToolClassifier,
-        level: SecurityLevel::L1,
-        repo: "patronus-studio/tool-executions-model",
-        source_path: "l1/l1_rules.json",
-        destination_path: "executions/l1_rules.json",
-        required: true,
-    },
-    AssetSpec {
-        category: SecurityCategory::ToolClassifier,
-        level: SecurityLevel::L1,
-        repo: "patronus-studio/tool-description-model",
-        source_path: "l1/l1_rules.json",
-        destination_path: "descriptions/l1_rules.json",
-        required: true,
-    },
-    // User Intent has no NTDB L2 mapping yet. L1 rules may still be used at L1 only.
-    AssetSpec {
-        category: SecurityCategory::UserIntent,
-        level: SecurityLevel::L1,
-        repo: "patronus-studio/user-intent-model",
-        source_path: "l1/l1_rules.json",
-        destination_path: "prompts/l1_rules.json",
-        required: true,
-    },
-    // Sensitive Documents L2 is NTDB-local-only in Phase 5. L1 rules and L3 stay.
-    AssetSpec {
-        category: SecurityCategory::SensitiveDocuments,
-        level: SecurityLevel::L1,
-        repo: "patronus-studio/orca-sonar-document-classifier",
-        source_path: "l1/l1_rules.json",
-        destination_path: "prompts/l1_rules.json",
-        required: true,
-    },
+    // Sensitive Documents L2 is NTDB-local-only in Phase 5. L3 assets stay.
     AssetSpec {
         category: SecurityCategory::SensitiveDocuments,
         level: SecurityLevel::L3,

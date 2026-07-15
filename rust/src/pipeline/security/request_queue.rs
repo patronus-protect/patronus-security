@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::Ordering;
-use std::sync::{mpsc, Arc, OnceLock};
+use std::sync::{mpsc, Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -123,15 +123,28 @@ impl SecurityGateway {
     fn queue_sender(&self) -> &mpsc::Sender<QueueWork> {
         self.queue_sender.get_or_init(|| {
             let (sender, receiver) = mpsc::channel::<QueueWork>();
-            let worker = SecurityGateway {
-                core: Arc::clone(&self.core),
-                queue_sender: OnceLock::new(),
-            };
-            thread::spawn(move || {
-                while let Ok(work) = receiver.recv() {
-                    worker.process_queue_work(work);
-                }
-            });
+            let receiver = Arc::new(Mutex::new(receiver));
+            let worker_count = thread::available_parallelism()
+                .map(usize::from)
+                .unwrap_or(1)
+                .min(4);
+            for _ in 0..worker_count {
+                let receiver = Arc::clone(&receiver);
+                let worker = SecurityGateway {
+                    core: Arc::clone(&self.core),
+                    queue_sender: OnceLock::new(),
+                };
+                thread::spawn(move || loop {
+                    let work = receiver
+                        .lock()
+                        .expect("gateway queue receiver mutex poisoned")
+                        .recv();
+                    match work {
+                        Ok(work) => worker.process_queue_work(work),
+                        Err(_) => break,
+                    }
+                });
+            }
             sender
         })
     }

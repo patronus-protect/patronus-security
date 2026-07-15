@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-use crate::EvaluationResult;
+use crate::{detectors::NativeRegexDetector, EvaluationResult};
 
 use super::validators;
 use regex::{Regex, RegexSet};
@@ -181,36 +181,29 @@ impl PiiPipeline {
     }
 
     pub fn evaluate(&self, text: &str) -> EvaluationResult {
-        let matches = self.set.matches(text);
-        for idx in matches.iter() {
-            if let Some(validator) = self.validators[idx] {
-                if let Some(mat) = self.regexes[idx].find(text) {
-                    if validator(mat.as_str()) {
-                        return EvaluationResult {
-                            class_name: self.entity_groups[idx].to_string(),
-                            confidence: 1.0,
-                            level: "L1".to_string(),
-                        };
-                    }
-                }
-            } else {
-                return EvaluationResult {
-                    class_name: self.entity_groups[idx].to_string(),
-                    confidence: 1.0,
-                    level: "L1".to_string(),
-                };
-            }
-        }
-
-        EvaluationResult {
-            class_name: "safe".to_string(),
-            confidence: 1.0,
-            level: "L1".to_string(),
-        }
+        self.detect(text).result
     }
 
     pub fn evaluate_batch(&self, texts: &[String]) -> Vec<EvaluationResult> {
         use rayon::prelude::*;
         texts.par_iter().map(|text| self.evaluate(text)).collect()
+    }
+}
+
+impl NativeRegexDetector for PiiPipeline {
+    fn regex_set(&self) -> &RegexSet {
+        &self.set
+    }
+
+    fn regexes(&self) -> &[Regex] {
+        &self.regexes
+    }
+
+    fn entity_groups(&self) -> &[&'static str] {
+        &self.entity_groups
+    }
+
+    fn validators(&self) -> &[Option<fn(&str) -> bool>] {
+        &self.validators
     }
 }

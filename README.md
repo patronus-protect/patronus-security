@@ -223,6 +223,9 @@ execution_gates = {
 
 `scan_all`, `scan_category`, and `scan_categories` return a list of dictionaries:
 
+Native PII and DLP findings populate `evidence_spans` with exact byte and
+character offsets. Safe native results leave `evidence_spans` empty.
+
 ```python
 [
     {

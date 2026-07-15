@@ -20,9 +20,10 @@ use crate::{
         },
         mcp::{mcp_policy, mcp_runtime_risk},
         pii::pii,
+        NativeRegexDetector,
     },
     ml::ntdb_executor::NtdbExecutor,
-    pipeline::{L3Worker, Pipeline, RequestRegistry},
+    pipeline::{L3Worker, RequestRegistry},
     DynamicPiiConfig, EvaluationResult, ExecutionBackend, ExternalL1Detector, ExternalL1Input,
     LayerResult, NtdbOperatingPoint, OnnxBatchMode, ScanExecution, ScanGateMatrix,
     SecurityCategory, SecurityFailure, SecurityFailureKind, SecurityFailureStage, SecurityLevel,
@@ -35,12 +36,7 @@ mod warmup;
 
 #[cfg(feature = "test-util")]
 pub use ntdb_l2::TOOL_PROMPTS_MODEL;
-#[cfg(not(feature = "test-util"))]
-use ntdb_l2::TOOL_PROMPTS_MODEL;
-use ntdb_l2::{
-    ntdb_l2_cache_namespace, ntdb_l2_error_scan_result, tool_classifier_area_enabled,
-    TOOL_CLASSIFIER_DESCRIPTIONS_MODEL, TOOL_EXECUTIONS_MODEL,
-};
+use ntdb_l2::{ntdb_l2_cache_namespace, ntdb_l2_error_scan_result};
 #[cfg(feature = "test-util")]
 pub use ntdb_l2::{
     ntdb_l2_enabled_for_category, ntdb_l2_model_config_for_id, NtdbL2ModelConfig,
@@ -73,12 +69,6 @@ pub struct SecurityGatewayCore {
     /// Request-independent configuration for the L3-only dynamic entity pipeline.
     dynamic_pii_config: Mutex<DynamicPiiConfig>,
 
-    // Lazy-loaded L1 rule pipelines. Model-backed L2 is NTDB-only.
-    tool_classifier_prompts: Option<Pipeline>,
-    tool_classifier_executions: Option<Pipeline>,
-    tool_classifier_descriptions: Option<Pipeline>,
-    user_intent_prompts: Option<Pipeline>,
-    sensitive_documents_prompts: Option<Pipeline>,
     ntdb_executor: Option<Mutex<NtdbExecutor>>,
 
     // Instantiated native rule-based pipelines
@@ -206,6 +196,30 @@ where
     }
 }
 
+fn timed_native_regex_scan_result<T: NativeRegexDetector>(
+    category: SecurityCategory,
+    model: impl Into<String>,
+    detector: &T,
+    text: &str,
+) -> SecurityScanResult {
+    let model = model.into();
+    let started = Instant::now();
+    match catch_unwind(AssertUnwindSafe(|| detector.detect(text))) {
+        Ok(detection) => {
+            let mut result = l1_scan_result_with_duration(
+                category,
+                model,
+                "native",
+                detection.result,
+                started.elapsed().as_secs_f64() * 1000.0,
+            );
+            result.evidence_spans = detection.evidence_spans;
+            result
+        }
+        Err(payload) => scanner_error_scan_result(category, model, panic_message(payload)),
+    }
+}
+
 fn scanner_error_scan_result(
     category: SecurityCategory,
     model: impl Into<String>,
@@ -237,36 +251,6 @@ fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
         message.clone()
     } else {
         "scanner panicked".to_string()
-    }
-}
-
-fn model_scan_result(
-    category: SecurityCategory,
-    model: impl Into<String>,
-    output: (EvaluationResult, Vec<LayerResult>),
-) -> SecurityScanResult {
-    let (result, layers) = output;
-    scan_result(category, model, result, layers)
-}
-
-fn l1_rule_scan_result(
-    category: SecurityCategory,
-    model: impl Into<String>,
-    pipe: &Pipeline,
-    text: &str,
-    execution: &ScanExecution,
-) -> Option<SecurityScanResult> {
-    let model = model.into();
-    let l1_execution = execution.clone().with_max_level(SecurityLevel::L1);
-    match catch_unwind(AssertUnwindSafe(|| {
-        pipe.evaluate_with_execution(text, &l1_execution)
-    })) {
-        Ok(output) => output.map(|output| model_scan_result(category, model, output)),
-        Err(payload) => Some(scanner_error_scan_result(
-            category,
-            model,
-            panic_message(payload),
-        )),
     }
 }
 
@@ -312,11 +296,6 @@ impl SecurityGateway {
             execution: Mutex::new(ScanExecution::new(max_level)),
             external_l1: Mutex::new(HashMap::new()),
             dynamic_pii_config: Mutex::new(DynamicPiiConfig::default()),
-            tool_classifier_prompts: None,
-            tool_classifier_executions: None,
-            tool_classifier_descriptions: None,
-            user_intent_prompts: None,
-            sensitive_documents_prompts: None,
             ntdb_executor: None,
             dlp_pipeline: None,
             pii_pipeline: None,
@@ -428,10 +407,18 @@ impl SecurityGateway {
     /// Return runtime readiness for the currently configured levels and models.
     pub fn runtime_readiness(&self) -> SecurityRuntimeReadiness {
         let execution = self.scan_execution();
-        let has_l1_category = self
-            .categories
-            .iter()
-            .any(|category| *category != SecurityCategory::DynamicPii);
+        let external_l1 = self
+            .external_l1
+            .lock()
+            .expect("external L1 registry mutex poisoned");
+        let has_l1_category = self.categories.iter().any(|category| {
+            matches!(
+                category,
+                SecurityCategory::Injection | SecurityCategory::Dlp | SecurityCategory::Pii
+            ) || external_l1
+                .get(category)
+                .is_some_and(|detectors| !detectors.is_empty())
+        });
         let l1 = if execution.allows_level(SecurityLevel::L1) && has_l1_category {
             SecurityLevelReadiness::Ready
         } else {
@@ -693,7 +680,18 @@ impl SecurityGateway {
                 );
             }
             SecurityCategory::Dlp => {
-                push_native!(self.dlp_pipeline, "native:dlp");
+                if self.level_enabled(&execution, SecurityLevel::L1)
+                    && self.model_enabled(&execution, "native:dlp")
+                {
+                    if let Some(ref native) = self.dlp_pipeline {
+                        results.push(timed_native_regex_scan_result(
+                            category,
+                            "native:dlp",
+                            native,
+                            text,
+                        ));
+                    }
+                }
                 push_native!(
                     self.sensitive_material_pipeline,
                     "native:sensitive_material"
@@ -711,110 +709,19 @@ impl SecurityGateway {
                     && self.model_enabled(&execution, "native:pii");
                 if native_enabled {
                     if let Some(ref native) = self.pii_pipeline {
-                        results.push(timed_into_scan_result(
+                        results.push(timed_native_regex_scan_result(
                             category,
                             "native:pii",
-                            "native",
-                            || native.evaluate(text),
+                            native,
+                            text,
                         ));
                     }
                 }
             }
             SecurityCategory::DynamicPii => {}
-            SecurityCategory::ToolClassifier => {
-                if tool_classifier_area_enabled(
-                    execution,
-                    TOOL_PROMPTS_MODEL,
-                    &[
-                        "tool_classifier.prompt",
-                        "tool_classifier.prompts",
-                        "tool_classifier_prompt",
-                        "tool_classifier_prompts",
-                    ],
-                ) {
-                    if let Some(ref pipe) = self.tool_classifier_prompts {
-                        if let Some(result) =
-                            l1_rule_scan_result(category, TOOL_PROMPTS_MODEL, pipe, text, execution)
-                        {
-                            results.push(result);
-                        }
-                    }
-                }
-                if tool_classifier_area_enabled(
-                    execution,
-                    TOOL_EXECUTIONS_MODEL,
-                    &[
-                        "tool_classifier.execution",
-                        "tool_classifier.executions",
-                        "tool_classifier_execution",
-                        "tool_classifier_executions",
-                    ],
-                ) {
-                    if let Some(ref pipe) = self.tool_classifier_executions {
-                        if let Some(result) = l1_rule_scan_result(
-                            category,
-                            TOOL_EXECUTIONS_MODEL,
-                            pipe,
-                            text,
-                            execution,
-                        ) {
-                            results.push(result);
-                        }
-                    }
-                }
-                if tool_classifier_area_enabled(
-                    execution,
-                    TOOL_CLASSIFIER_DESCRIPTIONS_MODEL,
-                    &[
-                        "tool_classifier.description",
-                        "tool_classifier.descriptions",
-                        "tool_classifier_description",
-                        "tool_classifier_descriptions",
-                    ],
-                ) {
-                    if let Some(ref pipe) = self.tool_classifier_descriptions {
-                        if let Some(result) = l1_rule_scan_result(
-                            category,
-                            TOOL_CLASSIFIER_DESCRIPTIONS_MODEL,
-                            pipe,
-                            text,
-                            execution,
-                        ) {
-                            results.push(result);
-                        }
-                    }
-                }
-            }
-            SecurityCategory::SensitiveDocuments => {
-                if self.model_enabled(&execution, "orca-sonar-document-classifier") {
-                    if let Some(ref pipe) = self.sensitive_documents_prompts {
-                        if let Some(result) = l1_rule_scan_result(
-                            category,
-                            "orca-sonar-document-classifier",
-                            pipe,
-                            text,
-                            execution,
-                        ) {
-                            results.push(result);
-                        }
-                    }
-                }
-            }
-            SecurityCategory::UserIntent => {
-                if self.model_enabled(&execution, "user-intent-model") {
-                    if let Some(ref pipe) = self.user_intent_prompts {
-                        if let Some(result) = l1_rule_scan_result(
-                            category,
-                            "user-intent-model",
-                            pipe,
-                            text,
-                            execution,
-                        ) {
-                            results.push(result);
-                        }
-                    }
-                }
-            }
+            SecurityCategory::ToolClassifier
+            | SecurityCategory::SensitiveDocuments
+            | SecurityCategory::UserIntent => {}
         }
 
         if self.level_enabled(execution, SecurityLevel::L1) {

@@ -106,6 +106,21 @@ class BenchmarkDataTests(unittest.TestCase):
         }
         self.assertTrue(set(GLINER_LABELS) <= fixture_labels)
 
+    def test_education_pii_sweep_fixture_has_exact_entities_and_negatives(self):
+        rows = benchmark._load_samples("education_pii_threshold_sweep")
+        positives = [row for row in rows if row["label"] != "negative"]
+        negatives = [row for row in rows if row["label"] == "negative"]
+        self.assertEqual(len({row["label"] for row in positives}), 8)
+        self.assertEqual(len(positives), 40)
+        self.assertEqual(len(negatives), 10)
+        for row in positives:
+            self.assertEqual(row["text"].count(row["entity"]), 1, row["id"])
+
+    def test_education_document_indicator_fixture_is_balanced(self):
+        rows = benchmark._load_samples("education_document_indicator")
+        self.assertEqual(sum(row["positive"] for row in rows), 15)
+        self.assertEqual(sum(not row["positive"] for row in rows), 15)
+
     def test_ner_metrics_use_exact_label_and_offsets(self):
         metrics = benchmark._ner_metrics(
             [

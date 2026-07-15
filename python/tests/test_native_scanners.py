@@ -22,6 +22,35 @@ class NativeScannerTests(unittest.TestCase):
         self.assertIn("secret_transfer", classes(dlp_results))
         self.assertIn("EMAIL", classes(pii_results))
 
+        evidence_dlp_results = scanner.scan_category(
+            "dlp", "prefix sk-proj-abcdefghijklmnopqrstuvwxyz012345 suffix"
+        )
+        native_dlp = next(
+            result
+            for result in evidence_dlp_results
+            if result["model"] == "native:dlp"
+        )
+        self.assertEqual(
+            native_dlp["evidence_spans"],
+            [
+                {
+                    "label": "API_KEY",
+                    "text": "sk-proj-abcdefghijklmnopqrstuvwxyz012345",
+                    "score": 1.0,
+                    "start_byte": 7,
+                    "end_byte": 47,
+                    "start_char": 7,
+                    "end_char": 47,
+                }
+            ],
+        )
+
+        native_pii = next(
+            result for result in pii_results if result["model"] == "native:pii"
+        )
+        self.assertEqual(native_pii["evidence_spans"][0]["label"], "EMAIL")
+        self.assertEqual(native_pii["evidence_spans"][0]["text"], "ada@example.com")
+
     def test_injection_native_scan_finds_instruction_leak(self):
         # max_level l1 keeps the scan native-only; l2 would require the NTDB
         # injection export and warmup() fails offline when it is missing.

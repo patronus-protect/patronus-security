@@ -334,7 +334,7 @@ pub(crate) fn looks_like_destructive_operation_lower(lower: &str) -> bool {
 pub(crate) fn looks_like_agentic_control_abuse_lower(lower: &str) -> bool {
     text_windows(lower, THREAT_SIGNAL_WINDOW_BYTES).any(|window| {
         let mut matched = vec![false; 51];
-        for mat in agentic_abuse_ac().find_iter(window) {
+        for mat in agentic_abuse_ac().find_overlapping_iter(window) {
             matched[mat.pattern().as_usize()] = true;
         }
 

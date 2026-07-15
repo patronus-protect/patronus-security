@@ -57,9 +57,9 @@ The sizes below show required cold-cache downloads for the selected maximum leve
 | `dlp` | 0 B | 0 B | 0 B | none |
 | `pii` | 0 B | 0 B | 0 B | none |
 | `dynamic-pii` | 0 B | 0 B | unknown | patronus-studio/gliner_small-v2.5-edge |
-| `tool_classifier` | unknown | unknown | unknown | patronus-studio/tool-description-model, patronus-studio/tool-executions-model, patronus-studio/tool-prompts-model |
-| `user_intent` | unknown | unknown | unknown | patronus-studio/user-intent-model |
-| `sensitive_documents` | 16.8 KiB | 16.8 KiB | 301.5 MiB | patronus-studio/orca-sonar-document-classifier |
+| `tool_classifier` | 0 B | 0 B | 0 B | none |
+| `user_intent` | 0 B | 0 B | 0 B | none |
+| `sensitive_documents` | 0 B | 0 B | 301.5 MiB | patronus-studio/orca-sonar-document-classifier |
 
 The following repositories were not accessible when the snapshot was generated, so their sizes are listed as `unknown`:
 
@@ -77,11 +77,6 @@ The following repositories were not accessible when the snapshot was generated, 
 | `injection` | `L3` | optional | `patronus-studio/wolf-defender-prompt-injection-small/tokenizer_config.json` | `injection/l3/tokenizer_config.json` | 0.5 KiB |
 | `injection` | `L3` | optional | `patronus-studio/wolf-defender-prompt-injection-small/special_tokens_map.json` | `injection/l3/special_tokens_map.json` | unknown |
 | `injection` | `L3` | yes | `patronus-studio/wolf-defender-prompt-injection-small/onnx/onnx_mixed/model_mixed.onnx` | `injection/l3/onnx/onnx_mixed/model_mixed.onnx` | unknown |
-| `tool_classifier` | `L1` | yes | `patronus-studio/tool-prompts-model/l1/l1_rules.json` | `tool_classifier/prompts/l1_rules.json` | unknown |
-| `tool_classifier` | `L1` | yes | `patronus-studio/tool-executions-model/l1/l1_rules.json` | `tool_classifier/executions/l1_rules.json` | unknown |
-| `tool_classifier` | `L1` | yes | `patronus-studio/tool-description-model/l1/l1_rules.json` | `tool_classifier/descriptions/l1_rules.json` | unknown |
-| `user_intent` | `L1` | yes | `patronus-studio/user-intent-model/l1/l1_rules.json` | `user_intent/prompts/l1_rules.json` | unknown |
-| `sensitive_documents` | `L1` | yes | `patronus-studio/orca-sonar-document-classifier/l1/l1_rules.json` | `sensitive_documents/prompts/l1_rules.json` | 16.8 KiB |
 | `sensitive_documents` | `L3` | yes | `patronus-studio/orca-sonar-document-classifier/tokenizer.json` | `sensitive_documents/prompts/tokenizer.json` | 32.8 MiB |
 | `sensitive_documents` | `L3` | optional | `patronus-studio/orca-sonar-document-classifier/tokenizer_config.json` | `sensitive_documents/prompts/tokenizer_config.json` | 0.6 KiB |
 | `sensitive_documents` | `L3` | optional | `patronus-studio/orca-sonar-document-classifier/special_tokens_map.json` | `sensitive_documents/prompts/special_tokens_map.json` | unknown |

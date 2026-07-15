@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Asset verification, model downloads, and pipeline initialization.
 
-use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Instant;
 
@@ -12,7 +11,6 @@ use crate::{
         ntdb_executor::{manifest::PackageManifest, NtdbExecutor},
         onnx::LazyOnnxTextClassifier,
     },
-    pipeline::Pipeline,
     SecurityCategory, SecurityFailure, SecurityFailureKind, SecurityFailureStage, SecurityLevel,
 };
 
@@ -21,45 +19,6 @@ use super::ntdb_l2::{
     NtdbL2ModelConfig,
 };
 use super::SecurityGateway;
-
-#[derive(Clone, Copy)]
-enum WarmupPipelineKind {
-    SensitiveDocumentsPrompts,
-    ToolClassifierPrompts,
-    ToolClassifierExecutions,
-    ToolClassifierDescriptions,
-    UserIntentPrompts,
-}
-
-struct WarmupPipelineTask {
-    kind: WarmupPipelineKind,
-    label: &'static str,
-    path: PathBuf,
-}
-
-fn log_pipeline_warmup(label: &str, started: Instant, has_l3: bool, l3_loaded: bool) {
-    let l3_state = if has_l3 {
-        if l3_loaded {
-            "loaded"
-        } else {
-            "lazy-present/session-not-loaded"
-        }
-    } else {
-        "not-present"
-    };
-    log::info!(
-        "{label} initialized in {:.2} ms; l3={l3_state}",
-        started.elapsed().as_secs_f64() * 1000.0
-    );
-}
-
-fn l1_rules_present(path: &std::path::Path) -> bool {
-    path.join("l1_rules.json").exists()
-}
-
-fn first_existing_l1_rules_path(paths: impl IntoIterator<Item = PathBuf>) -> Option<PathBuf> {
-    paths.into_iter().find(|path| l1_rules_present(path))
-}
 
 impl SecurityGateway {
     pub fn warmup(&mut self) -> Result<(), SecurityFailure> {
@@ -89,7 +48,6 @@ impl SecurityGateway {
         );
 
         let execution = self.scan_execution();
-        let mut init_tasks = Vec::new();
         let mut ntdb_specs = Vec::new();
 
         for cat in &self.categories {
@@ -223,100 +181,6 @@ impl SecurityGateway {
 
             for (config, manifest) in validated_ntdb_l3 {
                 self.register_ntdb_l3_worker_model(config, &cat_dir, &manifest)?;
-            }
-
-            match cat {
-                SecurityCategory::Injection => {}
-                SecurityCategory::SensitiveDocuments => {
-                    let prompts_path = cat_dir.join("prompts");
-                    if l1_rules_present(&prompts_path) {
-                        init_tasks.push(WarmupPipelineTask {
-                            kind: WarmupPipelineKind::SensitiveDocumentsPrompts,
-                            label: "sensitive_documents/prompts",
-                            path: prompts_path,
-                        });
-                    }
-                }
-                SecurityCategory::ToolClassifier => {
-                    let prompts_path = cat_dir.join("prompts");
-                    if l1_rules_present(&prompts_path) {
-                        init_tasks.push(WarmupPipelineTask {
-                            kind: WarmupPipelineKind::ToolClassifierPrompts,
-                            label: "tool_classifier/prompts",
-                            path: prompts_path,
-                        });
-                    }
-                    let executions_path = cat_dir.join("executions");
-                    if l1_rules_present(&executions_path) {
-                        init_tasks.push(WarmupPipelineTask {
-                            kind: WarmupPipelineKind::ToolClassifierExecutions,
-                            label: "tool_classifier/executions",
-                            path: executions_path,
-                        });
-                    }
-                    if let Some(descriptions_path) = first_existing_l1_rules_path([
-                        cat_dir.join("descriptions"),
-                        base_dir.join("tool_description").join("prompts"),
-                    ]) {
-                        init_tasks.push(WarmupPipelineTask {
-                            kind: WarmupPipelineKind::ToolClassifierDescriptions,
-                            label: "tool_classifier/descriptions",
-                            path: descriptions_path,
-                        });
-                    }
-                }
-                SecurityCategory::UserIntent => {
-                    let prompts_path = cat_dir.join("prompts");
-                    if l1_rules_present(&prompts_path) {
-                        init_tasks.push(WarmupPipelineTask {
-                            kind: WarmupPipelineKind::UserIntentPrompts,
-                            label: "user_intent/prompts",
-                            path: prompts_path,
-                        });
-                    }
-                }
-                SecurityCategory::Pii => {}
-                SecurityCategory::DynamicPii => unreachable!("handled above"),
-                SecurityCategory::Dlp => {}
-            }
-        }
-
-        use rayon::prelude::*;
-        let init_results: Result<Vec<_>, String> = init_tasks
-            .into_par_iter()
-            .map(|task| {
-                let started = Instant::now();
-                let pipeline = Pipeline::new_with_max_level(&task.path, SecurityLevel::L1)
-                    .map_err(|err| format!("{}: {}", task.label, err))?;
-                log_pipeline_warmup(
-                    task.label,
-                    started,
-                    pipeline.has_l3_model(),
-                    pipeline.is_l3_loaded(),
-                );
-                Ok((task.kind, task.path, pipeline))
-            })
-            .collect();
-
-        for (kind, _path, pipeline) in
-            init_results.map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?
-        {
-            match kind {
-                WarmupPipelineKind::SensitiveDocumentsPrompts => {
-                    self.sensitive_documents_prompts = Some(pipeline);
-                }
-                WarmupPipelineKind::ToolClassifierPrompts => {
-                    self.tool_classifier_prompts = Some(pipeline);
-                }
-                WarmupPipelineKind::ToolClassifierExecutions => {
-                    self.tool_classifier_executions = Some(pipeline);
-                }
-                WarmupPipelineKind::ToolClassifierDescriptions => {
-                    self.tool_classifier_descriptions = Some(pipeline);
-                }
-                WarmupPipelineKind::UserIntentPrompts => {
-                    self.user_intent_prompts = Some(pipeline);
-                }
             }
         }
 

@@ -262,7 +262,7 @@ fn warmup_without_downloads_requires_ntdb_l2_exports() {
 }
 
 #[test]
-fn user_intent_remains_l1_only_at_l3_max_level() {
+fn legacy_user_intent_l1_rules_are_ignored() {
     let dir = temp_model_dir("user_intent_l1_only");
     let prompts_dir = dir.join("user_intent").join("prompts");
     std::fs::create_dir_all(&prompts_dir).unwrap();
@@ -285,7 +285,7 @@ fn user_intent_remains_l1_only_at_l3_max_level() {
     let readiness = scanner.runtime_readiness();
     assert!(matches!(
         readiness.l1,
-        patronus_security::SecurityLevelReadiness::Ready
+        patronus_security::SecurityLevelReadiness::NotConfigured
     ));
     assert!(matches!(
         readiness.l2,
@@ -297,19 +297,13 @@ fn user_intent_remains_l1_only_at_l3_max_level() {
     ));
 
     let results = scanner.scan_category(SecurityCategory::UserIntent, "schedule meeting tomorrow");
-    let result = results
-        .iter()
-        .find(|result| result.model == "user-intent-model")
-        .expect("expected user-intent L1 result");
-    assert_eq!(result.level, "L1");
-    assert_eq!(result.class_name, "action");
-    assert!(result.layers.iter().all(|layer| layer.level == "L1"));
+    assert!(results.is_empty());
 
     std::fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]
-fn tool_classifier_l1_loads_rules_and_classifies_raw_execution_json() {
+fn legacy_tool_classifier_l1_rules_are_ignored() {
     let dir = temp_model_dir("tool_l1_json");
     let tool_dir = dir.join("tool_classifier");
     let prompts_dir = tool_dir.join("prompts");
@@ -348,33 +342,13 @@ fn tool_classifier_l1_loads_rules_and_classifies_raw_execution_json() {
         r#"{"arguments":{"command":"rg token rust/src"},"description":"run shell commands","call_id":"call_1","name":"exec_command"}"#,
     );
 
-    assert_result_schema(&results, "tool_classifier");
-    assert!(has_result(
-        &results,
-        "tool-prompts-model",
-        "tool_class.shell.execute"
-    ));
-    assert!(has_result(
-        &results,
-        "tool-executions-model",
-        "tool_class.shell.execute"
-    ));
-    assert!(has_result(
-        &results,
-        "tool-classifier-descriptions-model",
-        "tool_class.shell.execute"
-    ));
-    let execution = results
-        .iter()
-        .find(|result| result.model == "tool-executions-model")
-        .unwrap();
-    assert_eq!(execution.level, "L1");
+    assert!(results.is_empty());
 
     std::fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]
-fn tool_classifier_subpipeline_gates_select_which_areas_run() {
+fn legacy_tool_classifier_l1_rules_remain_ignored_with_area_gates() {
     let dir = temp_model_dir("tool_area_gates");
     let tool_dir = dir.join("tool_classifier");
     let prompts_dir = tool_dir.join("prompts");
@@ -409,21 +383,7 @@ fn tool_classifier_subpipeline_gates_select_which_areas_run() {
 
     let text = "prompt marker execution marker description marker";
     let baseline = scanner.scan_category(SecurityCategory::ToolClassifier, text);
-    assert!(has_result(
-        &baseline,
-        "tool-prompts-model",
-        "tool_class.file.list"
-    ));
-    assert!(has_result(
-        &baseline,
-        "tool-executions-model",
-        "tool_class.shell.execute"
-    ));
-    assert!(has_result(
-        &baseline,
-        "tool-classifier-descriptions-model",
-        "tool_class.api.read"
-    ));
+    assert!(baseline.is_empty());
 
     scanner.set_execution_gates(
         ScanGateMatrix::all_enabled()
@@ -432,23 +392,13 @@ fn tool_classifier_subpipeline_gates_select_which_areas_run() {
     );
     let gated = scanner.scan_category(SecurityCategory::ToolClassifier, text);
 
-    assert!(!gated
-        .iter()
-        .any(|result| result.model == "tool-prompts-model"));
-    assert!(has_result(
-        &gated,
-        "tool-executions-model",
-        "tool_class.shell.execute"
-    ));
-    assert!(!gated
-        .iter()
-        .any(|result| result.model == "tool-classifier-descriptions-model"));
+    assert!(gated.is_empty());
 
     std::fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]
-fn model_pipeline_reuses_exact_decision_cache_hits() {
+fn legacy_tool_classifier_l1_rules_do_not_populate_decision_cache() {
     let dir = temp_model_dir("tool_l1_cache");
     let tool_dir = dir.join("tool_classifier");
     let prompts_dir = tool_dir.join("prompts");
@@ -475,15 +425,8 @@ fn model_pipeline_reuses_exact_decision_cache_hits() {
     let first = scanner.scan_category(SecurityCategory::ToolClassifier, text);
     let second = scanner.scan_category(SecurityCategory::ToolClassifier, text);
 
-    assert_result_schema(&first, "tool_classifier");
-    assert_result_schema(&second, "tool_classifier");
-    let execution = second
-        .iter()
-        .find(|result| result.model == "tool-executions-model")
-        .expect("execution model result should be present");
-    assert!(execution.layers.iter().any(|layer| {
-        layer.details.get("decision_cache_hit") == Some(&serde_json::json!(true))
-    }));
+    assert!(first.is_empty());
+    assert!(second.is_empty());
 
     std::fs::remove_dir_all(dir).unwrap();
 }
@@ -836,6 +779,90 @@ fn pii_is_native_l1_even_when_gateway_allows_l3() {
     assert!(result
         .iter()
         .all(|item| item.level == "L1" && item.model == "native:pii"));
+}
+
+#[test]
+fn native_pii_and_dlp_results_include_exact_evidence_only_for_findings() {
+    let mut scanner = SecurityGateway::with_max_level(
+        vec![SecurityCategory::Pii, SecurityCategory::Dlp],
+        SecurityLevel::L1,
+        None,
+        false,
+    );
+    scanner.warmup().unwrap();
+
+    let pii = scanner
+        .scan_category(SecurityCategory::Pii, "Grüße ada@example.com")
+        .into_iter()
+        .find(|result| result.model == "native:pii")
+        .expect("native PII result must be present");
+    assert_eq!(pii.evidence_spans.len(), 1);
+    assert_eq!(pii.evidence_spans[0].label, "EMAIL");
+    assert_eq!(pii.evidence_spans[0].text, "ada@example.com");
+    assert_eq!(pii.evidence_spans[0].score, 1.0);
+    assert_eq!(pii.evidence_spans[0].start_byte, 8);
+    assert_eq!(pii.evidence_spans[0].end_byte, 23);
+    assert_eq!(pii.evidence_spans[0].start_char, 6);
+    assert_eq!(pii.evidence_spans[0].end_char, 21);
+
+    let ipv6 = scanner
+        .scan_category(SecurityCategory::Pii, "Connect to 2001:db8::1 now.")
+        .into_iter()
+        .find(|result| result.model == "native:pii")
+        .expect("native PII result must be present");
+    assert_eq!(ipv6.evidence_spans.len(), 1);
+    assert_eq!(ipv6.evidence_spans[0].text, "2001:db8::1");
+
+    let dlp = scanner
+        .scan_category(
+            SecurityCategory::Dlp,
+            "prefix sk-proj-abcdefghijklmnopqrstuvwxyz012345 suffix",
+        )
+        .into_iter()
+        .find(|result| result.model == "native:dlp")
+        .expect("native DLP result must be present");
+    assert_eq!(dlp.evidence_spans.len(), 1);
+    assert_eq!(dlp.evidence_spans[0].label, "API_KEY");
+    assert_eq!(
+        dlp.evidence_spans[0].text,
+        "sk-proj-abcdefghijklmnopqrstuvwxyz012345"
+    );
+    assert_eq!(dlp.evidence_spans[0].start_byte, 7);
+    assert_eq!(dlp.evidence_spans[0].end_byte, 47);
+
+    let safe = scanner
+        .scan_category(SecurityCategory::Pii, "Plain release notes only.")
+        .into_iter()
+        .find(|result| result.model == "native:pii")
+        .expect("native PII result must be present");
+    assert!(safe.evidence_spans.is_empty());
+}
+
+#[test]
+fn native_dlp_evidence_covers_governance_github_token_fixture() {
+    let mut scanner = SecurityGateway::with_max_level(
+        vec![SecurityCategory::Dlp],
+        SecurityLevel::L1,
+        None,
+        false,
+    );
+    scanner.warmup().unwrap();
+
+    let result = scanner
+        .scan_category(
+            SecurityCategory::Dlp,
+            "Authorization: Bearer ghp_abcdefghijklmnopqrstuvwxyz123456",
+        )
+        .into_iter()
+        .find(|result| result.model == "native:dlp")
+        .expect("native DLP result must be present");
+
+    assert_eq!(result.class_name, "SECRET_TOKEN");
+    assert_eq!(result.evidence_spans.len(), 1);
+    assert_eq!(
+        result.evidence_spans[0].text,
+        "ghp_abcdefghijklmnopqrstuvwxyz123456"
+    );
 }
 
 mod l3_worker_streaming {

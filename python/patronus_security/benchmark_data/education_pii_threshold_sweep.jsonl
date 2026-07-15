@@ -1,0 +1,50 @@
+{"id":"edu-student-id-01","label":"student_identifier","text":"Die Matrikelnummer lautet S89750921.","entity":"S89750921","source":"hf-torchsight-derived-de"}
+{"id":"edu-student-id-02","label":"student_identifier","text":"Studierenden-ID: S40767714; Status: Vollzeit.","entity":"S40767714","source":"hf-torchsight-derived-de"}
+{"id":"edu-student-id-03","label":"student_identifier","text":"Für die Schülerin ist die Schülernummer SCH-2048-771 hinterlegt.","entity":"SCH-2048-771","source":"synthetic-de"}
+{"id":"edu-student-id-04","label":"student_identifier","text":"Campus-Kennung des Studierenden: STU-DE-884291.","entity":"STU-DE-884291","source":"synthetic-de"}
+{"id":"edu-student-id-05","label":"student_identifier","text":"Der Datensatz mit Studierendenkennung aad144 enthält die Prüfungsnoten.","entity":"aad144","source":"hf-cleanlab-derived-de"}
+{"id":"edu-applicant-id-01","label":"applicant_identifier","text":"Ihre Bewerbernummer ist BEW-2026-10482.","entity":"BEW-2026-10482","source":"synthetic-de"}
+{"id":"edu-applicant-id-02","label":"applicant_identifier","text":"Application ID APP-DE-88421 wurde zum Wintersemester angelegt.","entity":"APP-DE-88421","source":"synthetic-de"}
+{"id":"edu-applicant-id-03","label":"applicant_identifier","text":"Die Zulassungs-ID ZUL-991827 gehört zu dieser Bewerbung.","entity":"ZUL-991827","source":"synthetic-de"}
+{"id":"edu-applicant-id-04","label":"applicant_identifier","text":"Bitte geben Sie bei Rückfragen die Antragsnummer UNI-AN-551904 an.","entity":"UNI-AN-551904","source":"synthetic-de"}
+{"id":"edu-applicant-id-05","label":"applicant_identifier","text":"Bewerbungscode: CAND-73B-2026.","entity":"CAND-73B-2026","source":"synthetic-de"}
+{"id":"edu-academic-grade-01","label":"academic_grade","text":"Die Gesamtnote des Abschlusses beträgt 1,7.","entity":"1,7","source":"synthetic-de"}
+{"id":"edu-academic-grade-02","label":"academic_grade","text":"Kumulativer GPA: 3.81.","entity":"3.81","source":"hf-torchsight-derived-de"}
+{"id":"edu-academic-grade-03","label":"academic_grade","text":"Für das Modul Datenbanken wurde die Note B+ eingetragen.","entity":"B+","source":"hf-cleanlab-derived-de"}
+{"id":"edu-academic-grade-04","label":"academic_grade","text":"Abschlussnote: gut (1,9).","entity":"gut (1,9)","source":"synthetic-de"}
+{"id":"edu-academic-grade-05","label":"academic_grade","text":"Die Zeugnisnote im Fach Mathematik ist sehr gut.","entity":"sehr gut","source":"synthetic-de"}
+{"id":"edu-exam-result-01","label":"exam_result","text":"Klausurergebnis: 87 von 100 Punkten.","entity":"87 von 100 Punkten","source":"hf-cleanlab-derived-de"}
+{"id":"edu-exam-result-02","label":"exam_result","text":"Die mündliche Prüfung wurde bestanden.","entity":"bestanden","source":"synthetic-de"}
+{"id":"edu-exam-result-03","label":"exam_result","text":"Prüfungsstatus: nicht bestanden.","entity":"nicht bestanden","source":"synthetic-de"}
+{"id":"edu-exam-result-04","label":"exam_result","text":"Im Eignungstest erreichte die Bewerberin Rang 4 von 120.","entity":"Rang 4 von 120","source":"synthetic-de"}
+{"id":"edu-exam-result-05","label":"exam_result","text":"Testergebnis Mathematik: 92 Punkte.","entity":"92 Punkte","source":"hf-student-performance-derived-de"}
+{"id":"edu-guardian-01","label":"parent_or_guardian","text":"Sorgeberechtigte: Sabine Krüger.","entity":"Sabine Krüger","source":"synthetic-de"}
+{"id":"edu-guardian-02","label":"parent_or_guardian","text":"Als Erziehungsberechtigter ist Martin Aydin eingetragen.","entity":"Martin Aydin","source":"synthetic-de"}
+{"id":"edu-guardian-03","label":"parent_or_guardian","text":"Notfallkontakt und Vormund: Elena Petrova.","entity":"Elena Petrova","source":"synthetic-de"}
+{"id":"edu-guardian-04","label":"parent_or_guardian","text":"Abholberechtigte Person ist Claudia Neumann.","entity":"Claudia Neumann","source":"synthetic-de"}
+{"id":"edu-guardian-05","label":"parent_or_guardian","text":"Gesetzlicher Vertreter des Schülers: Youssef Benali.","entity":"Youssef Benali","source":"synthetic-de"}
+{"id":"edu-degree-program-01","label":"degree_program","text":"Studiengang: Informatik M.Sc.","entity":"Informatik M.Sc.","source":"synthetic-de"}
+{"id":"edu-degree-program-02","label":"degree_program","text":"Hauptfach der Studentin ist Psychologie.","entity":"Psychologie","source":"hf-torchsight-derived-de"}
+{"id":"edu-degree-program-03","label":"degree_program","text":"Der Studierende ist im Bachelor Maschinenbau eingeschrieben.","entity":"Bachelor Maschinenbau","source":"synthetic-de"}
+{"id":"edu-degree-program-04","label":"degree_program","text":"Zulassung zum Masterstudiengang Data Science erteilt.","entity":"Masterstudiengang Data Science","source":"synthetic-de"}
+{"id":"edu-degree-program-05","label":"degree_program","text":"Fachrichtung: Business Administration.","entity":"Business Administration","source":"hf-torchsight-derived-de"}
+{"id":"edu-financial-aid-01","label":"financial_aid","text":"BAföG-Leistung: 812 Euro monatlich.","entity":"812 Euro monatlich","source":"synthetic-de"}
+{"id":"edu-financial-aid-02","label":"financial_aid","text":"Die Studentin erhält ein Deutschlandstipendium in Höhe von 300 Euro monatlich.","entity":"Deutschlandstipendium in Höhe von 300 Euro monatlich","source":"synthetic-de"}
+{"id":"edu-financial-aid-03","label":"financial_aid","text":"Financial Aid: $42,135/year.","entity":"$42,135/year","source":"hf-torchsight"}
+{"id":"edu-financial-aid-04","label":"financial_aid","text":"Bewilligte Studienbeihilfe: 4.800 Euro pro Jahr.","entity":"4.800 Euro pro Jahr","source":"synthetic-de"}
+{"id":"edu-financial-aid-05","label":"financial_aid","text":"Das Sozialstipendium beträgt 650 Euro je Semester.","entity":"650 Euro je Semester","source":"synthetic-de"}
+{"id":"edu-research-id-01","label":"research_participant_identifier","text":"Probanden-ID: R017.","entity":"R017","source":"synthetic-de"}
+{"id":"edu-research-id-02","label":"research_participant_identifier","text":"Der Studiencode PART-2026-044 wurde pseudonymisiert gespeichert.","entity":"PART-2026-044","source":"synthetic-de"}
+{"id":"edu-research-id-03","label":"research_participant_identifier","text":"Teilnehmerkennung der Bildungsstudie: EDU-P-8192.","entity":"EDU-P-8192","source":"synthetic-de"}
+{"id":"edu-research-id-04","label":"research_participant_identifier","text":"Research subject ID SUBJ-DE-0771 completed session four.","entity":"SUBJ-DE-0771","source":"synthetic-de"}
+{"id":"edu-research-id-05","label":"research_participant_identifier","text":"Das Pseudonym VP-44018 gehört zur befragten Lehramtsstudentin.","entity":"VP-44018","source":"synthetic-de"}
+{"id":"edu-negative-01","label":"negative","text":"Die Prüfungsordnung erklärt allgemein, wie Noten und Prüfungsergebnisse gebildet werden."}
+{"id":"edu-negative-02","label":"negative","text":"Das leere Bewerbungsformular enthält Felder für Bewerbernummer und Studiengang."}
+{"id":"edu-negative-03","label":"negative","text":"Matrikelnummern dürfen laut Datenschutzrichtlinie nicht öffentlich weitergegeben werden."}
+{"id":"edu-negative-04","label":"negative","text":"Der Kurskatalog listet Informatik, Psychologie und Maschinenbau ohne personenbezogene Zuordnung."}
+{"id":"edu-negative-05","label":"negative","text":"Im Durchschnitt erzielte der Jahrgang 78 Punkte; Einzelergebnisse werden nicht veröffentlicht."}
+{"id":"edu-negative-06","label":"negative","text":"Die Universität beschreibt auf ihrer Website die Voraussetzungen für BAföG und Stipendien."}
+{"id":"edu-negative-07","label":"negative","text":"Diese Vorlage enthält Platzhalter für Sorgeberechtigte und Notfallkontakte."}
+{"id":"edu-negative-08","label":"negative","text":"Forschende müssen Probanden-IDs verwenden, aber dieses Dokument enthält keine Teilnehmerdaten."}
+{"id":"edu-negative-09","label":"negative","text":"Die aggregierte Anwesenheitsquote der gesamten Schule liegt bei 94 Prozent."}
+{"id":"edu-negative-10","label":"negative","text":"Es wurden keine individuellen Bildungsakten oder vertraulichen Studierendendaten übermittelt."}

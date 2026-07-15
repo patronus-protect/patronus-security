@@ -265,7 +265,7 @@ mod asset_downloads {
     }
 
     #[test]
-    fn manifest_keeps_only_l1_rules_and_l3_assets() {
+    fn manifest_excludes_legacy_l1_rules_and_keeps_l3_assets() {
         let injection_assets = category_assets(SecurityCategory::Injection, SecurityLevel::L3);
         assert!(injection_assets.iter().any(|asset| asset.source_path
             == "onnx/onnx_mixed/model_mixed.onnx"
@@ -273,13 +273,10 @@ mod asset_downloads {
             && asset.required));
 
         let tool_assets = category_assets(SecurityCategory::ToolClassifier, SecurityLevel::L3);
-        assert!(tool_assets
-            .iter()
-            .any(|asset| asset.source_path == "l1/l1_rules.json"
-                && asset.destination_path == "prompts/l1_rules.json"));
-        assert!(tool_assets
-            .iter()
-            .all(|asset| asset.level == SecurityLevel::L1));
+        assert!(tool_assets.is_empty());
+
+        let user_intent_assets = category_assets(SecurityCategory::UserIntent, SecurityLevel::L3);
+        assert!(user_intent_assets.is_empty());
 
         let sensitive_document_assets =
             category_assets(SecurityCategory::SensitiveDocuments, SecurityLevel::L3);
@@ -290,6 +287,9 @@ mod asset_downloads {
                     && asset.destination_path == "prompts/onnx/model_fp16.onnx"
                     && asset.required
             ));
+        assert!(sensitive_document_assets
+            .iter()
+            .all(|asset| asset.level == SecurityLevel::L3));
     }
 
     #[test]
