@@ -7,6 +7,7 @@ Import public items from the `patronus_security` crate.
 ## Public Exports
 
 ```rust
+// SPDX-License-Identifier: AGPL-3.0-only
 pub mod assets;
 pub mod detectors;
 pub mod dynamic_pii;
@@ -27,9 +28,9 @@ pub use pipeline::{Pipeline, SecurityGateway};
 pub use types::{
     EvaluationResult, ExecutionBackend, L3SchedulerPolicy, LayerResult, NtdbOperatingPoint,
     OnnxBatchMode, QueuedSecurityEvent, QueuedSecurityScanResult, RequestId, ScanExecution,
-    ScanGateMatrix, SecurityCategory, SecurityFailure, SecurityFailureKind, SecurityFailureStage,
-    SecurityLevel, SecurityLevelReadiness, SecurityRequestCompletion, SecurityRequestState,
-    SecurityRuntimeReadiness, SecurityScanResult,
+    ScanGateMatrix, SecurityAssetReadiness, SecurityCategory, SecurityFailure, SecurityFailureKind,
+    SecurityFailureStage, SecurityLevel, SecurityLevelReadiness, SecurityRequestCompletion,
+    SecurityRequestState, SecurityRuntimeReadiness, SecurityScanResult,
 };
 ```
 
@@ -134,6 +135,12 @@ pub fn set_ntdb_operating_point(&self, point: NtdbOperatingPoint);
 Select the calibrated NTDB operating point used by subsequent scans.
 
 ```rust
+pub fn ntdb_operating_point(&self) -> NtdbOperatingPoint;
+```
+
+Return the calibrated NTDB operating point used by subsequent scans.
+
+```rust
 pub fn set_dynamic_pii_config(&self, config: DynamicPiiConfig) -> Result<(), String>;
 ```
 
@@ -144,6 +151,37 @@ pub fn dynamic_pii_config(&self) -> DynamicPiiConfig;
 ```
 
 Return the currently configured `dynamic-pii` settings.
+
+## Asset And Runtime Lifecycle
+
+```rust
+pub fn warmup(&mut self) -> Result<(), SecurityFailure>;
+```
+
+Backwards-compatible combined lifecycle. New integrations should call
+`prepare_assets` in their delivery window and
+`warmup_from_local_assets` when starting their runtime.
+
+```rust
+pub fn prepare_assets(&self) -> Result<SecurityAssetReadiness, SecurityFailure>;
+```
+
+Download and verify configured model assets without initializing ONNX,
+tokenizers, executors, workers, or model sessions.
+
+```rust
+pub fn asset_readiness(&self) -> SecurityAssetReadiness;
+```
+
+Inspect configured model assets without downloading or warming them.
+
+```rust
+pub fn warmup_from_local_assets(&mut self) -> Result<(), SecurityFailure>;
+```
+
+Initialize all configured model runtimes strictly from local assets.
+This method has no download path regardless of the gateway's download
+policy.
 
 ## Queued Request API
 
@@ -299,7 +337,7 @@ Labels activated when another pipeline returns a configured result.
 
 ```rust
 pub struct DynamicPiiConfig {
-    /// Entity labels passed to GLiNER in this order.
+    /// Canonical entity labels; GLiNER receives underscores as spaces in this order.
     pub labels: Vec<String>,
     /// Default entity score threshold.
     pub threshold: f32,
@@ -427,6 +465,18 @@ pub struct SecurityRuntimeReadiness {
 ```
 
 Readiness of the configured scanner runtime by security level.
+
+```rust
+pub struct SecurityAssetReadiness {
+    pub l2: SecurityLevelReadiness,
+    pub l3: SecurityLevelReadiness,
+}
+```
+
+Readiness of model assets on disk before runtime warmup.
+
+L1 is intentionally absent because native L1 scanners require no model
+assets. Runtime readiness remains a separate contract.
 
 ```rust
 pub enum SecurityLevelReadiness {

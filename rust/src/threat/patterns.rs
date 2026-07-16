@@ -50,6 +50,7 @@ pub(super) const IO_GOAL_QUALIFIER: u64 = 1 << 21;
 pub(super) const IO_GOAL_NOUN: u64 = 1 << 22;
 pub(super) const IO_COPULA_DE: u64 = 1 << 23;
 pub(super) const IO_DOWNGRADE_RESULT: u64 = 1 << 24;
+pub(super) const IO_ATTENTION_DE: u64 = 1 << 25;
 
 pub(super) fn instruction_override_patterns() -> &'static GroupedPatterns {
     static PATTERNS: OnceLock<GroupedPatterns> = OnceLock::new();
@@ -162,6 +163,7 @@ pub(super) fn instruction_override_patterns() -> &'static GroupedPatterns {
             (" ist", IO_COPULA_DE),
             ("lautet", IO_COPULA_DE),
             ("wird", IO_COPULA_DE),
+            ("achtung", IO_ATTENTION_DE),
         ])
     })
 }
@@ -204,6 +206,7 @@ pub(super) fn jailbreak_framing_patterns() -> &'static GroupedPatterns {
             ("dont have any", JF_NO_QUANTIFIER_EN),
             ("restrictions", JF_NO_LIMIT_EN | JF_STRONG_NO_LIMIT_EN),
             ("limits", JF_NO_LIMIT_EN | JF_STRONG_NO_LIMIT_EN),
+            ("do anything", JF_STRONG_NO_LIMIT_EN),
             ("rules", JF_NO_LIMIT_EN),
             ("guidelines", JF_NO_LIMIT_EN),
             ("du bist", JF_ROLE_DE_PREFIX | JF_YOU_DE),
@@ -465,13 +468,14 @@ pub(super) fn instruction_leak_de_ac() -> &'static AhoCorasick {
     AC.get_or_init(|| {
         AhoCorasick::new(&[
             "wiederhole",
-            "zeige",
+            "zeig",
             "gib aus",
             "nenne",
             "enthülle",
             "offenbare", // 0..6 verbs
             "deine systemanweisung",
             "deinen systemprompt",
+            "deinen system-prompt",
             "den systemprompt",
             "deine anweisungen",
             "deine regeln",

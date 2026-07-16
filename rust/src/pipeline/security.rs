@@ -559,6 +559,11 @@ impl SecurityGateway {
             .set_ntdb_operating_point(point);
     }
 
+    /// Return the calibrated NTDB operating point used by subsequent scans.
+    pub fn ntdb_operating_point(&self) -> NtdbOperatingPoint {
+        self.scan_execution().ntdb_operating_point()
+    }
+
     /// Replace the pipeline-specific `dynamic-pii` configuration.
     pub fn set_dynamic_pii_config(&self, config: DynamicPiiConfig) -> Result<(), String> {
         let config = config.validated()?;

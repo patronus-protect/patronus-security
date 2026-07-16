@@ -16,9 +16,10 @@ validation splits) and writes one JSON file per phase into `output_dir`:
   L3, and GLiNER all execute.
 - `native_l1_result.json` — native L1 latency on exact 10 KB texts for all
   configured injection detectors plus isolated DLP, PII, and MCP policy runs.
-- `load_result.json` — one producer submits many texts through `enqueue`
-  while one consumer worker drains the shared result queue, covering short L2
-  texts, L3-promoting texts, >16-chunk long texts, and cache hits.
+- `load_result.json` — one producer submits texts through `enqueue` as both a
+  burst and a paced 10 req/s stream while one consumer worker drains the shared
+  result queue, covering short L2 texts, L3-promoting texts, >16-chunk long
+  texts, and cache hits.
 - `example_result.json` — one real queued sample and every result returned by
   the shared consume queue, preserving L2/L3 response order and shape.
 - `BENCHMARK.md` — readable summary plus L2/L3 queue diagnostics.
@@ -29,6 +30,7 @@ Results contain the real prompts so mispredictions can be inspected directly.
 import json
 import platform
 import statistics
+import subprocess
 import sys
 import time
 from collections import defaultdict
@@ -554,7 +556,9 @@ def _run_l2_l3_gliner_latency(
     rows = []
     peak_rss_before_mb = _process_peak_rss_mb()
     for sample in samples:
-        labels = GLINER_LABELS
+        # The runtime supports at most 30 labels in one request. The catalog
+        # may be larger because classification-specific maps use only a subset.
+        labels = GLINER_LABELS[:30]
         gateway.set_dynamic_pii_config(_benchmark_dynamic_config(labels))
         # The classifier phase scans the same corpus first. A trailing space is
         # tokenization-neutral but keeps this latency phase out of its decision cache.
@@ -644,7 +648,10 @@ def _run_l2_l3_gliner_latency(
 
 
 def _run_dynamic_pii(
-    gateway, limit_per_pipeline, benchmark_start_peak_rss_mb=None
+    gateway,
+    limit_per_pipeline,
+    benchmark_start_peak_rss_mb=None,
+    combined_runner=None,
 ):
     configured = set(gateway.categories)
     if "dynamic-pii" not in configured or gateway.max_level != "l3":
@@ -665,9 +672,10 @@ def _run_dynamic_pii(
             injection = _load_samples("injection")
             if limit_per_pipeline:
                 injection = _round_robin_by_class(injection, limit_per_pipeline)
+            runner = combined_runner or _run_l2_l3_gliner_latency
             combined = {
                 "enabled": True,
-                **_run_l2_l3_gliner_latency(
+                **runner(
                     gateway,
                     injection,
                     benchmark_start_peak_rss_mb,
@@ -676,6 +684,27 @@ def _run_dynamic_pii(
         return {"enabled": True, "quality": quality, "combined_latency": combined}
     finally:
         gateway.set_dynamic_pii_config(snapshot)
+
+
+def _run_isolated_l2_l3_gliner(gateway, samples, _benchmark_start_peak_rss_mb=None):
+    """Run the joint latency and memory phase in a fresh, model-scoped process."""
+    worker_config = getattr(gateway, "_benchmark_worker_config", None)
+    if worker_config is None:
+        raise RuntimeError("gateway does not expose isolated benchmark worker settings")
+    completed = subprocess.run(
+        [sys.executable, "-m", "patronus_security.benchmark_worker"],
+        input=json.dumps({"gateway": worker_config, "samples": samples}),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if completed.returncode:
+        detail = completed.stderr.strip() or completed.stdout.strip()
+        raise RuntimeError(f"isolated benchmark worker failed: {detail}")
+    try:
+        return json.loads(completed.stdout)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("isolated benchmark worker returned invalid JSON") from exc
 
 
 def _native_l1_text(tail="", sequence=0, head=""):
@@ -872,7 +901,7 @@ def _load_scenario_texts(gateway):
     return scenarios
 
 
-def _run_load(gateway, requests_per_scenario):
+def _run_load(gateway, requests_per_scenario, target_rps=None):
     scenarios = _load_scenario_texts(gateway)
     results = {}
     for name, texts in scenarios.items():
@@ -941,10 +970,17 @@ def _run_load(gateway, requests_per_scenario):
                     active.clear()
 
         wall_start = time.perf_counter()
+        submission_times = []
         consumer = Thread(target=consume_requests, name="patronus-benchmark-consumer")
         consumer.start()
         for index in range(requests_per_scenario):
+            if target_rps:
+                deadline = wall_start + index / target_rps
+                delay = deadline - time.perf_counter()
+                if delay > 0:
+                    time.sleep(delay)
             started = time.perf_counter()
+            submission_times.append(started)
             try:
                 request_id = gateway.enqueue(texts[index % len(texts)])
                 enqueue_ms = (time.perf_counter() - started) * 1000.0
@@ -960,6 +996,11 @@ def _run_load(gateway, requests_per_scenario):
         ok = [outcome for outcome in completed if outcome["error"] is None]
         errors = [outcome["error"] for outcome in completed if outcome["error"] is not None]
         errors.extend(["consumer produced no outcome"] * (requests_per_scenario - len(completed)))
+        submission_seconds = (
+            submission_times[-1] - submission_times[0]
+            if len(submission_times) > 1
+            else 0.0
+        )
         level_counts = {}
         for outcome in ok:
             level = outcome["final_level"]
@@ -968,6 +1009,12 @@ def _run_load(gateway, requests_per_scenario):
             "requests": requests_per_scenario,
             "producer_workers": 1,
             "consumer_workers": 1,
+            "target_rps": target_rps,
+            "submission_rate_rps": round(
+                (len(submission_times) - 1) / submission_seconds, 2
+            )
+            if submission_seconds > 0
+            else 0.0,
             "errors": len(errors),
             "error_messages": errors[:10],
             "throughput_rps": round(requests_per_scenario / wall_seconds, 2) if wall_seconds else 0.0,
@@ -993,7 +1040,11 @@ def _run_load(gateway, requests_per_scenario):
                 [value for outcome in ok for value in outcome["l3_execution_ms"]]
             ),
         }
-    return {"scenarios": results}
+    return {
+        "mode": "paced" if target_rps else "burst",
+        "target_rps": target_rps,
+        "scenarios": results,
+    }
 
 
 def _run_queue_example(gateway):
@@ -1159,6 +1210,18 @@ def _print_summary(benign, classifier, load, native_l1=None, dynamic_pii=None):
             f"p95 {stats['total_latency']['p95_ms']:.1f} ms, "
             f"levels {stats['final_levels']}"
         )
+    paced = load.get("steady_10_rps")
+    if paced:
+        print("== sustained load / 10 req/s ==")
+        for name, stats in paced["scenarios"].items():
+            print(
+                f"  {name}: {stats['requests']} requests, "
+                f"submitted at {stats['submission_rate_rps']} req/s, "
+                f"{stats['errors']} errors, total avg "
+                f"{stats['total_latency']['avg_ms']:.1f} ms, p95 "
+                f"{stats['total_latency']['p95_ms']:.1f} ms, "
+                f"levels {stats['final_levels']}"
+            )
 
 
 def _benchmark_markdown(
@@ -1275,9 +1338,9 @@ def _benchmark_markdown(
                     "",
                     "Only requests that produced an injection L2 fallback, an injection L3 "
                     "result, and a GLiNER result contribute to these latency values.",
-                    "RAM is the cumulative peak RSS of the benchmark process. `From start` "
-                    "uses the value before L3 sessions are initialized; `joint delta` starts "
-                    "immediately before this phase.",
+                    "RAM is measured in a fresh process configured only for `injection` and "
+                    "`dynamic-pii`. `From start` uses that process before its gateway is built; "
+                    "`joint delta` starts after both model sessions are warmed.",
                     "",
                     "| Samples | Joint samples | Total avg/p95 | L2 avg/p95 | L3 avg/p95 | GLiNER avg/p95 | GLiNER queue avg/p95 | Peak RSS | From start | Joint delta |",
                     "| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
@@ -1323,7 +1386,7 @@ def _benchmark_markdown(
     lines.extend(
         [
             "",
-            "## Queue load",
+            "## Burst queue load",
             "",
             "One producer enqueues all texts. One consumer drains the shared result queue, "
             "so an L3 request cannot hide an already available L2 result.",
@@ -1341,6 +1404,32 @@ def _benchmark_markdown(
             f"{value(stats['total_latency'], 'p95_ms')} ms | {levels or 'none'} |"
         )
 
+    paced = load.get("steady_10_rps")
+    if paced:
+        lines.extend(
+            [
+                "",
+                "## Sustained queue load at 10 req/s",
+                "",
+                "One producer submits requests at 100 ms intervals. One consumer drains "
+                "the shared result queue concurrently.",
+                "",
+                "| Scenario | Requests | Errors | Submitted req/s | Completed req/s | First avg | Total avg | Total p95 | Final levels |",
+                "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
+            ]
+        )
+        for name, stats in paced["scenarios"].items():
+            levels = ", ".join(
+                f"{level}: {count}" for level, count in stats["final_levels"].items()
+            )
+            lines.append(
+                f"| {name} | {stats['requests']} | {stats['errors']} | "
+                f"{stats['submission_rate_rps']:.2f} | {stats['throughput_rps']:.2f} | "
+                f"{value(stats['first_result_latency'])} ms | "
+                f"{value(stats['total_latency'])} ms | "
+                f"{value(stats['total_latency'], 'p95_ms')} ms | {levels or 'none'} |"
+            )
+
     lines.extend(
         [
             "",
@@ -1353,7 +1442,12 @@ def _benchmark_markdown(
             "| --- | ---: | ---: | ---: | ---: | ---: |",
         ]
     )
-    for name, stats in load["scenarios"].items():
+    diagnostic_scenarios = [(f"burst/{name}", stats) for name, stats in load["scenarios"].items()]
+    if paced:
+        diagnostic_scenarios.extend(
+            (f"10rps/{name}", stats) for name, stats in paced["scenarios"].items()
+        )
+    for name, stats in diagnostic_scenarios:
         lines.append(
             f"| {name} | {value(stats['ntdb_l2_chunks'])}/{value(stats['ntdb_l2_chunks'], 'max_ms')} | "
             f"{value(stats['l3_candidate_spans'])}/{value(stats['l3_candidate_spans'], 'max_ms')} | "
@@ -1433,9 +1527,14 @@ def run_local_benchmark(
         gateway,
         limit_per_pipeline,
         benchmark_start_peak_rss_mb,
+        combined_runner=_run_isolated_l2_l3_gliner,
     )
     native_l1 = _run_native_l1_10kb(gateway, native_l1_iterations)
-    load = _run_load(gateway, load_requests)
+    burst_load = _run_load(gateway, load_requests)
+    load = {
+        **burst_load,
+        "steady_10_rps": _run_load(gateway, load_requests, target_rps=10.0),
+    }
 
     outputs = {
         "example_result.json": {**meta, **example},

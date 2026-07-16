@@ -20,10 +20,13 @@ Category assets are stored below that root, for example `injection/`, `pii/`, `d
 
 - `download_files=False` disables network downloads even when `download_categories` is set.
 - Existing cached assets are still used in offline mode.
-- Missing model assets are downloaded during `warmup()` only when downloads are enabled for that category.
-- If required assets are missing and downloads are disabled for that category, model-backed pipelines for that category are not initialized; native scanners still run where available.
-- Failed downloads for required assets return an error from `warmup()`.
-- Missing optional assets do not block `warmup()`.
+- `prepare_assets()` downloads and verifies configured model assets without initializing model runtimes.
+- `asset_readiness()` verifies the local cache without downloading or warming models.
+- `warmup_from_local_assets()` initializes configured runtimes strictly from the local cache and has no download path.
+- `warmup()` remains the combined compatibility operation: asset preparation followed by offline runtime warmup.
+- If required assets are missing and downloads are disabled for that category, asset preparation fails; native scanners still run where available.
+- Failed downloads for required assets return an error from `prepare_assets()` and therefore from compatibility `warmup()`.
+- Missing optional assets do not block asset preparation.
 - Optional assets are skipped by default during downloads. Set `PATRONUS_DOWNLOAD_OPTIONAL_ASSETS=1` to download optional full ONNX files and sidecar data.
 - Required L3 assets prefer fp16 ONNX files where available.
 - PII is native L1-only and has no model assets.

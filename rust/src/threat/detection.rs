@@ -193,6 +193,7 @@ pub(crate) fn looks_like_instruction_override_lower(lower: &str) -> bool {
                 flags,
                 IO_GOAL_PREFIX | IO_GOAL_QUALIFIER | IO_GOAL_NOUN | IO_COPULA_DE,
             )
+            || has_all(flags, IO_ATTENTION_DE | IO_NEW_DE | IO_GOAL_NOUN)
     })
 }
 

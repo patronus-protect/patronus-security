@@ -66,6 +66,16 @@ pub struct SecurityRuntimeReadiness {
     pub l3: SecurityLevelReadiness,
 }
 
+/// Readiness of model assets on disk before runtime warmup.
+///
+/// L1 is intentionally absent because native L1 scanners require no model
+/// assets. Runtime readiness remains a separate contract.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SecurityAssetReadiness {
+    pub l2: SecurityLevelReadiness,
+    pub l3: SecurityLevelReadiness,
+}
+
 /// Readiness of one security level before request execution.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SecurityLevelReadiness {

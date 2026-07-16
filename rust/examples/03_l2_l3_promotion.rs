@@ -23,8 +23,15 @@ fn main() {
         Some(vec![SecurityCategory::Injection]),
     );
 
-    if let Err(failure) = scanner.warmup() {
-        eprintln!("warmup failed (missing assets or offline?): {failure:?}");
+    // Delivery/installer phase: this is the only call that may download.
+    if let Err(failure) = scanner.prepare_assets() {
+        eprintln!("asset preparation failed: {failure:?}");
+        return;
+    }
+
+    // Runtime-start phase: model initialization is strictly local/offline.
+    if let Err(failure) = scanner.warmup_from_local_assets() {
+        eprintln!("offline runtime warmup failed: {failure:?}");
         return;
     }
 

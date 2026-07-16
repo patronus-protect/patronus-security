@@ -40,6 +40,11 @@ GLINER_LABELS = (
     "sexual_orientation",
     "disability",
     "political_affiliation",
+    "student_identifier",
+    "applicant_identifier",
+    "research_participant_identifier",
+    "parent_or_guardian",
+    "degree_program",
 )
 
 # Per-label runtime thresholds. They start at the isolated-sweep optimum and
@@ -60,11 +65,17 @@ GLINER_LABEL_THRESHOLDS = {
     "sexual_orientation": 0.55,
     "disability": 0.65,
     "political_affiliation": 0.75,
+    "student_identifier": 0.65,
+    "applicant_identifier": 0.35,
+    "research_participant_identifier": 0.55,
+    "parent_or_guardian": 0.8,
+    "degree_program": 0.6,
 }
 
-# Measured on 2026-07-14 with gliner_small-v2.5. ``physical_address`` is kept
-# here as a rejected result: GLiNER split full addresses into several valid
-# spans, so exact-span F1 was zero. ``street_address`` is the usable boundary.
+# Measured on 2026-07-14 (general labels) and 2026-07-15 (school labels) with
+# gliner_small-v2.5. ``physical_address`` is kept here as a rejected result:
+# GLiNER split full addresses into several valid spans, so exact-span F1 was
+# zero. ``street_address`` is the usable boundary.
 GLINER_THRESHOLD_SWEEP = {
     "person": {"threshold": 0.8, "precision": 1.0, "recall": 1.0, "f1": 1.0},
     "legal_party": {
@@ -141,6 +152,36 @@ GLINER_THRESHOLD_SWEEP = {
         "recall": 0.8,
         "f1": 0.8889,
     },
+    "student_identifier": {
+        "threshold": 0.65,
+        "precision": 0.75,
+        "recall": 0.6,
+        "f1": 0.6667,
+    },
+    "applicant_identifier": {
+        "threshold": 0.35,
+        "precision": 0.625,
+        "recall": 1.0,
+        "f1": 0.7692,
+    },
+    "research_participant_identifier": {
+        "threshold": 0.55,
+        "precision": 0.6667,
+        "recall": 0.8,
+        "f1": 0.7273,
+    },
+    "parent_or_guardian": {
+        "threshold": 0.8,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+    },
+    "degree_program": {
+        "threshold": 0.6,
+        "precision": 0.6667,
+        "recall": 0.8,
+        "f1": 0.7273,
+    },
     "physical_address": {
         "threshold": 0.8,
         "precision": 0.0,
@@ -189,6 +230,13 @@ GLINER_CATEGORY_MAP = {
             "political_affiliation",
         ),
         "marketing": ("product", "brand", "campaign"),
+        "school": (
+            "student_identifier",
+            "applicant_identifier",
+            "research_participant_identifier",
+            "parent_or_guardian",
+            "degree_program",
+        ),
         "other": (
             "person",
             "street_address",

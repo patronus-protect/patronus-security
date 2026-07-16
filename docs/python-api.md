@@ -147,11 +147,12 @@ Runs benchmark phases and writes a readable `BENCHMARK.md` plus JSON into `outpu
 one complete queued response (`example_result.json`), benign false
 positives (`benign_result.json`), labelled classifier
 validation (`classifier_result.json`), exact-span GLiNER NER quality
-by sensitive-document, tool, and combined context plus joint L2/L3/GLiNER
-latency and process peak RSS (`dynamic_pii_result.json`), native L1 scans
-on exact 10 KiB texts (`native_l1_result.json`), and a queue load test where one
-producer enqueues texts while one consumer drains the shared result queue
-(`load_result.json`). Only pipelines whose
+by document/tool context and joint L2/L3/GLiNER latency plus process
+peak RSS (`dynamic_pii_result.json`), native L1
+scans on exact 10 KiB texts (`native_l1_result.json`), and queue load tests where one
+producer enqueues texts as a burst and at a paced 10 req/s while one consumer drains
+the shared result queue (`load_result.json`). Injection L2/L3 plus GLiNER latency and
+peak RSS run in a fresh process containing only those two categories. Only pipelines whose
 category is configured on this gateway are evaluated; the L3 load
 scenario runs only when `max_level` is `l3`. Call `warmup()` first.
 

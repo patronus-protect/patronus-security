@@ -19,7 +19,7 @@ pub use pipeline::{Pipeline, SecurityGateway};
 pub use types::{
     EvaluationResult, ExecutionBackend, L3SchedulerPolicy, LayerResult, NtdbOperatingPoint,
     OnnxBatchMode, QueuedSecurityEvent, QueuedSecurityScanResult, RequestId, ScanExecution,
-    ScanGateMatrix, SecurityCategory, SecurityFailure, SecurityFailureKind, SecurityFailureStage,
-    SecurityLevel, SecurityLevelReadiness, SecurityRequestCompletion, SecurityRequestState,
-    SecurityRuntimeReadiness, SecurityScanResult,
+    ScanGateMatrix, SecurityAssetReadiness, SecurityCategory, SecurityFailure, SecurityFailureKind,
+    SecurityFailureStage, SecurityLevel, SecurityLevelReadiness, SecurityRequestCompletion,
+    SecurityRequestState, SecurityRuntimeReadiness, SecurityScanResult,
 };
