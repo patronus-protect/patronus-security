@@ -1,4 +1,4 @@
-use patronus_security::{SecurityCategory, SecurityGateway, SecurityLevel};
+use patronus_security::{L3Strategy, SecurityCategory, SecurityGateway, SecurityLevel};
 use serde_json::json;
 use std::fs;
 use std::path::PathBuf;
@@ -37,14 +37,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             SecurityCategory::Injection,
             SecurityCategory::Dlp,
             SecurityCategory::Pii,
-            SecurityCategory::ToolClassifier,
-            SecurityCategory::UserIntent,
-            SecurityCategory::SensitiveDocuments,
+            SecurityCategory::SensitiveDocument,
+            SecurityCategory::ToolClass,
+            SecurityCategory::ToolAction,
+            SecurityCategory::ToolTags,
+            SecurityCategory::Routing,
+            SecurityCategory::Threat,
         ],
         SecurityLevel::L3,
         Some(asset_dir.clone()),
         allow_downloads(),
     );
+    scanner.set_l3_strategy(L3Strategy::Multi);
 
     let warmup_start = Instant::now();
     scanner.warmup()?;
@@ -155,9 +159,9 @@ fn json_report(stats: &[CaseStats], asset_dir: &PathBuf, warmup_seconds: f64) ->
             "injection",
             "dlp",
             "pii",
-            "tool_classifier",
-            "user_intent",
-            "sensitive_documents"
+            "tool_class",
+            "routing",
+            "sensitive_document"
         ],
         "asset_dir": asset_dir,
         "download_files": allow_downloads(),

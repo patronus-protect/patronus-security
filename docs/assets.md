@@ -14,7 +14,7 @@ If `model_dir` is set, that directory is used as the asset root. Otherwise the l
 | Linux | `~/.cache/patronus_security` |
 | Windows | `%LOCALAPPDATA%\patronus_security` |
 
-Category assets are stored below that root, for example `injection/`, `pii/`, `dynamic_pii/`, or `tool_classifier/`.
+Category assets are stored below that root, for example `injection/`, `sensitive_document/`, `tool_class/`, or `dynamic_pii/`.
 
 ## Offline And Missing-Asset Behavior
 
@@ -34,6 +34,12 @@ Category assets are stored below that root, for example `injection/`, `pii/`, `d
 - L3 ONNX sessions are lazy-loaded on first L3 inference and are evicted after `PATRONUS_L3_TTL_SECS` seconds of idleness. The default TTL is `300` seconds.
 - Set `HF_TOKEN` when a model repository requires authenticated or rate-limited Hugging Face access.
 
+## L3 Strategy
+
+`dedicated` loads the configured per-pipeline L3 bundles. `multi` loads only the revision-pinned `patronus-studio/unified-multitask-model-augmented-v3` classifier bundle at revision `9bcc55dcf955cda68c171524cd242ada9f5547d4`; GLiNER remains separate in both strategies.
+
+The shared ONNX artifact is `onnx/int8_int4_embeddings/model.onnx`. See `docs/unified-multitask-l3-plan.md` for its seven-head tensor contract and the request-local worker coalescing contract.
+
 ## NTDB L2 Packages
 
 NTDB v2 L2 packages are manifest-first: the runtime downloads `manifest.json` and every file it references. Sizes therefore depend on the published package contents.
@@ -43,10 +49,12 @@ For supported Granite/ModernBERT packages, the Security Lib generates a compact 
 | Category | Model | Repository | Source prefix | Cache path |
 | --- | --- | --- | --- | --- |
 | Injection | `wolf-defender-small` | `patronus-studio/wolf-defender-prompt-injection-small` | `l2` | `l2_ntdb/injection_current` |
-| SensitiveDocuments | `orca-sonar-document-classifier` | `patronus-studio/orca-sonar-document-classifier` | `l2` | `l2_ntdb/sensitive_documents_current` |
-| ToolClassifier | `tool-prompts-model` | `patronus-studio/tool-prompts-model` | `l2` | `l2_ntdb/tool_prompts_current` |
-| ToolClassifier | `tool-executions-model` | `patronus-studio/tool-executions-model` | `l2` | `l2_ntdb/tool_executions_current` |
-| ToolClassifier | `tool-classifier-descriptions-model` | `patronus-studio/tool-description-model` | `l2` | `l2_ntdb/tool_descriptions_current` |
+| SensitiveDocument | `orca-sonar-document-classifier` | `patronus-studio/orca-sonar-document-classifier` | `l2` | `l2_ntdb/sensitive_document_current` |
+| ToolClass | `unified-v3-tool-class` | `patronus-studio/unified-multitask-model-augmented-v3-tool-class` | `l2` | `l2_ntdb/tool_class_current` |
+| ToolAction | `unified-v3-tool-action` | `patronus-studio/unified-multitask-model-augmented-v3-tool-action` | `l2` | `l2_ntdb/tool_action_current` |
+| ToolTags | `unified-v3-tool-tags` | `patronus-studio/unified-multitask-model-augmented-v3-tool-tags` | `l2` | `l2_ntdb/tool_tags_current` |
+| Routing | `unified-v3-routing` | `patronus-studio/unified-multitask-model-augmented-v3-routing` | `l2` | `l2_ntdb/routing_current` |
+| Threat | `unified-v3-threat` | `patronus-studio/unified-multitask-model-augmented-v3-threat` | `l2` | `l2_ntdb/threat_current` |
 
 ## Download Size Snapshot
 
@@ -60,16 +68,12 @@ The sizes below show required cold-cache downloads for the selected maximum leve
 | `dlp` | 0 B | 0 B | 0 B | none |
 | `pii` | 0 B | 0 B | 0 B | none |
 | `dynamic-pii` | 0 B | 0 B | unknown | patronus-studio/gliner_small-v2.5-edge |
-| `tool_classifier` | 0 B | 0 B | 0 B | none |
-| `user_intent` | 0 B | 0 B | 0 B | none |
-| `sensitive_documents` | 0 B | 0 B | 301.5 MiB | patronus-studio/orca-sonar-document-classifier |
-
-The following repositories were not accessible when the snapshot was generated, so their sizes are listed as `unknown`:
-
-- `patronus-studio/tool-description-model`: HTTP 401
-- `patronus-studio/tool-executions-model`: HTTP 401
-- `patronus-studio/tool-prompts-model`: HTTP 401
-- `patronus-studio/user-intent-model`: HTTP 401
+| `sensitive_document` | 0 B | 0 B | 301.5 MiB | patronus-studio/orca-sonar-document-classifier |
+| `tool_class` | 0 B | 0 B | 0 B | none |
+| `tool_action` | 0 B | 0 B | 0 B | none |
+| `tool_tags` | 0 B | 0 B | 0 B | none |
+| `routing` | 0 B | 0 B | 0 B | none |
+| `threat` | 0 B | 0 B | 0 B | none |
 
 ## Manifest Detail
 
@@ -80,10 +84,10 @@ The following repositories were not accessible when the snapshot was generated, 
 | `injection` | `L3` | optional | `patronus-studio/wolf-defender-prompt-injection-small/tokenizer_config.json` | `injection/l3/tokenizer_config.json` | 0.5 KiB |
 | `injection` | `L3` | optional | `patronus-studio/wolf-defender-prompt-injection-small/special_tokens_map.json` | `injection/l3/special_tokens_map.json` | unknown |
 | `injection` | `L3` | yes | `patronus-studio/wolf-defender-prompt-injection-small/onnx/onnx_mixed/model_mixed.onnx` | `injection/l3/onnx/onnx_mixed/model_mixed.onnx` | unknown |
-| `sensitive_documents` | `L3` | yes | `patronus-studio/orca-sonar-document-classifier/tokenizer.json` | `sensitive_documents/prompts/tokenizer.json` | 32.8 MiB |
-| `sensitive_documents` | `L3` | optional | `patronus-studio/orca-sonar-document-classifier/tokenizer_config.json` | `sensitive_documents/prompts/tokenizer_config.json` | 0.6 KiB |
-| `sensitive_documents` | `L3` | optional | `patronus-studio/orca-sonar-document-classifier/special_tokens_map.json` | `sensitive_documents/prompts/special_tokens_map.json` | unknown |
-| `sensitive_documents` | `L3` | yes | `patronus-studio/orca-sonar-document-classifier/onnx/onnx_fp16/model_fp16.onnx` | `sensitive_documents/prompts/onnx/model_fp16.onnx` | 268.7 MiB |
+| `sensitive_document` | `L3` | yes | `patronus-studio/orca-sonar-document-classifier/tokenizer.json` | `sensitive_document/prompts/tokenizer.json` | 32.8 MiB |
+| `sensitive_document` | `L3` | optional | `patronus-studio/orca-sonar-document-classifier/tokenizer_config.json` | `sensitive_document/prompts/tokenizer_config.json` | 0.6 KiB |
+| `sensitive_document` | `L3` | optional | `patronus-studio/orca-sonar-document-classifier/special_tokens_map.json` | `sensitive_document/prompts/special_tokens_map.json` | unknown |
+| `sensitive_document` | `L3` | yes | `patronus-studio/orca-sonar-document-classifier/onnx/onnx_fp16/model_fp16.onnx` | `sensitive_document/prompts/onnx/model_fp16.onnx` | 268.7 MiB |
 | `dynamic-pii` | `L3` | yes | `patronus-studio/gliner_small-v2.5-edge/gliner_config.json` | `dynamic_pii/gliner_small_v2_5/gliner_config.json` | unknown |
 | `dynamic-pii` | `L3` | yes | `patronus-studio/gliner_small-v2.5-edge/gliner_onnx_config.json` | `dynamic_pii/gliner_small_v2_5/gliner_onnx_config.json` | unknown |
 | `dynamic-pii` | `L3` | yes | `patronus-studio/gliner_small-v2.5-edge/model_int4_embeddings_int8.onnx` | `dynamic_pii/gliner_small_v2_5/model_int4_embeddings_int8.onnx` | unknown |

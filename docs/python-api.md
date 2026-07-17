@@ -21,10 +21,8 @@ Args:
         `{"levels": {"l1": True, "l2": False, "l3": False},
         "models": {"native:mcp_runtime_risk": False}}` to disable
         levels or model/native scanner areas for subsequent scan calls.
-        For `tool_classifier`, use
-        `{"tool_classifier": {"description": False, "execution": True,
-        "prompt": False}}` to gate its subpipelines. Unspecified gates
-        default to enabled.
+        New classifier pipelines can be gated independently through
+        `models`, for example `{"models": {"tool_action": False}}`.
     onnx_batch_mode: `lazy_batches` keeps per-text ONNX execution;
         `tensor_batch` executes L3 fallbacks as one ONNX tensor batch
         when using batch APIs.
@@ -35,6 +33,8 @@ Args:
     ntdb_operating_point: Calibrated NTDB threshold set. One of
         `best_promote` (default), `best_f1`, `best_fpr_in_f1`,
         `best_fnr_in_f1`, or `best_latency_in_f1`.
+    l3_strategy: `dedicated` for one L3 model per classifier pipeline or
+        `multi` for the shared unified multi-head ONNX model.
     dynamic_pii_config: Pipeline-specific labels, result gates,
         thresholds, chunking, text limit, and timeout for the L3-only
         `dynamic-pii` category.
@@ -46,6 +46,10 @@ Categories configured for `scan_all`.
 ### `max_level() -> str`
 
 Maximum scanner level configured for this gateway.
+
+### `l3_strategy() -> str`
+
+Active global L3 model strategy.
 
 ### `warmup()`
 
@@ -92,6 +96,10 @@ Replace execution backend and apply its default L3 mode.
 ### `set_ntdb_operating_point(point: str)`
 
 Select the calibrated NTDB threshold set for subsequent scans.
+
+### `set_l3_strategy(strategy: str)`
+
+Select `dedicated` per-pipeline L3 models or the shared `multi` model.
 
 ### `set_dynamic_pii_config(config: dict)`
 
@@ -143,7 +151,10 @@ Return L1/L2/L3 readiness using the request failure schema.
 
 Benchmark this gateway against the sample data shipped with the package.
 
-Runs benchmark phases and writes a readable `BENCHMARK.md` plus JSON into `output_dir`:
+Runs every benchmark phase once with dedicated L3 models and once with the
+unified multi-head L3 model. The root `BENCHMARK.md` links the two runs, while
+their detailed summaries and JSON files are written to the `dedicated/` and
+`multi/` subdirectories:
 one complete queued response (`example_result.json`), benign false
 positives (`benign_result.json`), labelled classifier
 validation (`classifier_result.json`), exact-span GLiNER NER quality

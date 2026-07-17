@@ -72,6 +72,89 @@ pub const DYNAMIC_PII_ASSET: PipelineModelAssetSpec = PipelineModelAssetSpec {
     ],
 };
 
+pub const UNIFIED_L3_ASSET: PipelineModelAssetSpec = PipelineModelAssetSpec {
+    category: SecurityCategory::Injection,
+    model: "unified-multitask-model-augmented-v3",
+    repo: "patronus-studio/unified-multitask-model-augmented-v3",
+    revision: "9bcc55dcf955cda68c171524cd242ada9f5547d4",
+    destination_path: "unified_multitask_v3",
+    files: &[
+        "onnx/int8_int4_embeddings/model.onnx",
+        "onnx/quantization_manifest.json",
+        "config.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+    ],
+};
+
+pub const DEDICATED_L3_ASSETS: &[PipelineModelAssetSpec] = &[
+    PipelineModelAssetSpec {
+        category: SecurityCategory::ToolClass,
+        model: "unified-v3-tool-class",
+        repo: "patronus-studio/unified-multitask-model-augmented-v3-tool-class",
+        revision: "55f6af9ec657eb896ea6508c07a712edbd9fd1a1",
+        destination_path: "tool_class/l3",
+        files: &[
+            "onnx/int8_int4_embeddings/model.onnx",
+            "config.json",
+            "tokenizer.json",
+            "tokenizer_config.json",
+        ],
+    },
+    PipelineModelAssetSpec {
+        category: SecurityCategory::ToolAction,
+        model: "unified-v3-tool-action",
+        repo: "patronus-studio/unified-multitask-model-augmented-v3-tool-action",
+        revision: "ce011f02bcaf41656001e3c15826320ca1151ac8",
+        destination_path: "tool_action/l3",
+        files: &[
+            "onnx/int8_int4_embeddings/model.onnx",
+            "config.json",
+            "tokenizer.json",
+            "tokenizer_config.json",
+        ],
+    },
+    PipelineModelAssetSpec {
+        category: SecurityCategory::ToolTags,
+        model: "unified-v3-tool-tags",
+        repo: "patronus-studio/unified-multitask-model-augmented-v3-tool-tags",
+        revision: "62ea84b88bfd2c6d26a6ca9f28842991e16a61ca",
+        destination_path: "tool_tags/l3",
+        files: &[
+            "onnx/int8_int4_embeddings/model.onnx",
+            "config.json",
+            "tokenizer.json",
+            "tokenizer_config.json",
+        ],
+    },
+    PipelineModelAssetSpec {
+        category: SecurityCategory::Routing,
+        model: "unified-v3-routing",
+        repo: "patronus-studio/unified-multitask-model-augmented-v3-routing",
+        revision: "6f0f992670a0a7b9ecb5d540e95872f98baba2ae",
+        destination_path: "routing/l3",
+        files: &[
+            "onnx/int8_int4_embeddings/model.onnx",
+            "config.json",
+            "tokenizer.json",
+            "tokenizer_config.json",
+        ],
+    },
+    PipelineModelAssetSpec {
+        category: SecurityCategory::Threat,
+        model: "unified-v3-threat",
+        repo: "patronus-studio/unified-multitask-model-augmented-v3-threat",
+        revision: "ddd084e2a9ab149992bf59303abcd90fd8e55c82",
+        destination_path: "threat/l3",
+        files: &[
+            "onnx/int8_int4_embeddings/model.onnx",
+            "config.json",
+            "tokenizer.json",
+            "tokenizer_config.json",
+        ],
+    },
+];
+
 pub const ASSET_MANIFEST: &[AssetSpec] = &[
     // Injection L2 is NTDB-local-only in Phase 5. These are L3 assets only.
     AssetSpec {
@@ -116,7 +199,7 @@ pub const ASSET_MANIFEST: &[AssetSpec] = &[
     },
     // Sensitive Documents L2 is NTDB-local-only in Phase 5. L3 assets stay.
     AssetSpec {
-        category: SecurityCategory::SensitiveDocuments,
+        category: SecurityCategory::SensitiveDocument,
         level: SecurityLevel::L3,
         repo: "patronus-studio/orca-sonar-document-classifier",
         source_path: "tokenizer.json",
@@ -124,7 +207,7 @@ pub const ASSET_MANIFEST: &[AssetSpec] = &[
         required: true,
     },
     AssetSpec {
-        category: SecurityCategory::SensitiveDocuments,
+        category: SecurityCategory::SensitiveDocument,
         level: SecurityLevel::L3,
         repo: "patronus-studio/orca-sonar-document-classifier",
         source_path: "tokenizer_config.json",
@@ -132,7 +215,7 @@ pub const ASSET_MANIFEST: &[AssetSpec] = &[
         required: false,
     },
     AssetSpec {
-        category: SecurityCategory::SensitiveDocuments,
+        category: SecurityCategory::SensitiveDocument,
         level: SecurityLevel::L3,
         repo: "patronus-studio/orca-sonar-document-classifier",
         source_path: "special_tokens_map.json",
@@ -140,7 +223,7 @@ pub const ASSET_MANIFEST: &[AssetSpec] = &[
         required: false,
     },
     AssetSpec {
-        category: SecurityCategory::SensitiveDocuments,
+        category: SecurityCategory::SensitiveDocument,
         level: SecurityLevel::L3,
         repo: "patronus-studio/orca-sonar-document-classifier",
         source_path: "onnx/onnx_fp16/model_fp16.onnx",
@@ -160,39 +243,57 @@ pub const NTDB_L2_PACKAGE_MANIFEST: &[NtdbL2PackageAssetSpec] = &[
         required: true,
     },
     NtdbL2PackageAssetSpec {
-        category: SecurityCategory::SensitiveDocuments,
+        category: SecurityCategory::SensitiveDocument,
         level: SecurityLevel::L2,
         model: "orca-sonar-document-classifier",
         repo: "patronus-studio/orca-sonar-document-classifier",
         source_prefix: "l2",
-        destination_path: "l2_ntdb/sensitive_documents_current",
+        destination_path: "l2_ntdb/sensitive_document_current",
         required: true,
     },
     NtdbL2PackageAssetSpec {
-        category: SecurityCategory::ToolClassifier,
+        category: SecurityCategory::ToolClass,
         level: SecurityLevel::L2,
-        model: "tool-prompts-model",
-        repo: "patronus-studio/tool-prompts-model",
+        model: "unified-v3-tool-class",
+        repo: "patronus-studio/unified-multitask-model-augmented-v3-tool-class",
         source_prefix: "l2",
-        destination_path: "l2_ntdb/tool_prompts_current",
+        destination_path: "l2_ntdb/tool_class_current",
         required: true,
     },
     NtdbL2PackageAssetSpec {
-        category: SecurityCategory::ToolClassifier,
+        category: SecurityCategory::ToolAction,
         level: SecurityLevel::L2,
-        model: "tool-executions-model",
-        repo: "patronus-studio/tool-executions-model",
+        model: "unified-v3-tool-action",
+        repo: "patronus-studio/unified-multitask-model-augmented-v3-tool-action",
         source_prefix: "l2",
-        destination_path: "l2_ntdb/tool_executions_current",
+        destination_path: "l2_ntdb/tool_action_current",
         required: true,
     },
     NtdbL2PackageAssetSpec {
-        category: SecurityCategory::ToolClassifier,
+        category: SecurityCategory::ToolTags,
         level: SecurityLevel::L2,
-        model: "tool-classifier-descriptions-model",
-        repo: "patronus-studio/tool-description-model",
+        model: "unified-v3-tool-tags",
+        repo: "patronus-studio/unified-multitask-model-augmented-v3-tool-tags",
         source_prefix: "l2",
-        destination_path: "l2_ntdb/tool_descriptions_current",
+        destination_path: "l2_ntdb/tool_tags_current",
+        required: true,
+    },
+    NtdbL2PackageAssetSpec {
+        category: SecurityCategory::Routing,
+        level: SecurityLevel::L2,
+        model: "unified-v3-routing",
+        repo: "patronus-studio/unified-multitask-model-augmented-v3-routing",
+        source_prefix: "l2",
+        destination_path: "l2_ntdb/routing_current",
+        required: true,
+    },
+    NtdbL2PackageAssetSpec {
+        category: SecurityCategory::Threat,
+        level: SecurityLevel::L2,
+        model: "unified-v3-threat",
+        repo: "patronus-studio/unified-multitask-model-augmented-v3-threat",
+        source_prefix: "l2",
+        destination_path: "l2_ntdb/threat_current",
         required: true,
     },
 ];

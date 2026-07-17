@@ -58,13 +58,13 @@ fn gate_config_normalizes_sources_and_validates_possible_labels() {
         labels: Vec::new(),
         label_thresholds: HashMap::from([("organization".to_string(), 0.7)]),
         execution_gate: DynamicPiiExecutionGate::IfResultIn {
-            pipeline: "tool_classifier".to_string(),
+            pipeline: "tool_class".to_string(),
             results: vec![" tool_class.web.fetch ".to_string()],
         },
         conditional_labels: vec![DynamicPiiConditionalLabels {
             labels: vec!["organization".to_string(), "organization".to_string()],
             when: DynamicPiiResultCondition {
-                pipeline: "user_intent".to_string(),
+                pipeline: "routing".to_string(),
                 results: vec!["action".to_string()],
             },
         }],
@@ -77,7 +77,7 @@ fn gate_config_normalizes_sources_and_validates_possible_labels() {
     assert!(matches!(
         config.execution_gate,
         DynamicPiiExecutionGate::IfResultIn { ref pipeline, ref results }
-            if pipeline == "tool_classifier" && results == &["tool_class.web.fetch"]
+            if pipeline == "tool_class" && results == &["tool_class.web.fetch"]
     ));
 
     let self_dependency = DynamicPiiConfig {
@@ -174,7 +174,7 @@ fn execution_gates_skip_or_enqueue_dynamic_pii_deterministically() {
         .set_dynamic_pii_config(DynamicPiiConfig {
             labels: vec!["person".to_string()],
             execution_gate: DynamicPiiExecutionGate::IfNoResult {
-                pipeline: "user_intent".to_string(),
+                pipeline: "routing".to_string(),
             },
             ..DynamicPiiConfig::default()
         })

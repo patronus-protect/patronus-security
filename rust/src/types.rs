@@ -202,6 +202,16 @@ pub struct SecurityScanResult {
     pub layers: Vec<LayerResult>,
     /// Exact entity evidence returned by span-producing pipelines.
     pub evidence_spans: Vec<crate::dynamic_pii::EvidenceSpan>,
+    /// Per-label scores for multi-label classifier outputs.
+    pub label_scores: Vec<LabelScore>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+/// One scored label returned by a multi-label classifier head.
+pub struct LabelScore {
+    pub label: String,
+    pub confidence: f64,
+    pub matched: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -320,7 +330,7 @@ impl std::str::FromStr for NtdbOperatingPoint {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 /// Runtime backend profile used to choose default L3 execution behavior.
 pub enum ExecutionBackend {
     /// Keep conservative CPU defaults unless a caller overrides execution mode.
@@ -337,6 +347,42 @@ pub enum ExecutionBackend {
     DirectMl,
     /// TensorRT execution provider.
     TensorRt,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+/// Physical L3 classifier topology.
+pub enum L3Strategy {
+    /// Each promoted pipeline executes its own L3 model.
+    Dedicated,
+    /// Promoted classifier pipelines share one request-local multi-head model run.
+    Multi,
+}
+
+impl L3Strategy {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Dedicated => "dedicated",
+            Self::Multi => "multi",
+        }
+    }
+}
+
+impl Default for L3Strategy {
+    fn default() -> Self {
+        Self::Dedicated
+    }
+}
+
+impl std::str::FromStr for L3Strategy {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value.trim().to_lowercase().replace('-', "_").as_str() {
+            "dedicated" | "single" | "single_model" => Ok(Self::Dedicated),
+            "multi" | "multitask" | "multi_task" => Ok(Self::Multi),
+            _ => Err(format!("Unknown L3 strategy: {value}")),
+        }
+    }
 }
 
 impl ExecutionBackend {
@@ -390,7 +436,7 @@ pub struct ScanGateMatrix {
     /// Optional L3 override. `None` means enabled.
     pub l3: Option<bool>,
     /// Optional per-model or per-native-scanner overrides keyed by result model
-    /// names such as `native:mcp_runtime_risk` or `tool-executions-model`.
+    /// names such as `native:mcp_runtime_risk` or `unified-v3-tool-action`.
     pub models: HashMap<String, bool>,
     /// L3 worker scheduling policy.
     pub l3_policy: L3SchedulerPolicy,
@@ -423,27 +469,45 @@ impl Default for L3SchedulerPolicy {
         ttl_ms.insert("wolf-defender-small".to_string(), 15_000);
         ttl_ms.insert("dynamic-pii".to_string(), 12_000);
         ttl_ms.insert("gliner_small-v2.5-edge".to_string(), 12_000);
-        ttl_ms.insert("sensitive_documents".to_string(), 12_000);
+        ttl_ms.insert("sensitive_document".to_string(), 12_000);
         ttl_ms.insert("orca-sonar-document-classifier".to_string(), 12_000);
-        ttl_ms.insert("user_intent".to_string(), 10_500);
-        ttl_ms.insert("user-intent-model".to_string(), 10_500);
-        ttl_ms.insert("tool_classifier".to_string(), 7_500);
-        ttl_ms.insert("tool-prompts-model".to_string(), 7_500);
-        ttl_ms.insert("tool-executions-model".to_string(), 7_500);
-        ttl_ms.insert("tool-classifier-descriptions-model".to_string(), 7_500);
+        for name in [
+            "tool_class",
+            "tool_action",
+            "tool_tags",
+            "routing",
+            "threat",
+            "unified-v3-tool-class",
+            "unified-v3-tool-action",
+            "unified-v3-tool-tags",
+            "unified-v3-routing",
+            "unified-v3-threat",
+        ] {
+            ttl_ms.insert(name.to_string(), 10_500);
+        }
+        ttl_ms.insert("unified-multitask-model-augmented-v3".to_string(), 15_000);
         let mut estimated_cost_ms = HashMap::new();
         estimated_cost_ms.insert("injection".to_string(), 200);
         estimated_cost_ms.insert("wolf-defender-small".to_string(), 200);
         estimated_cost_ms.insert("dynamic-pii".to_string(), 240);
         estimated_cost_ms.insert("gliner_small-v2.5-edge".to_string(), 240);
-        estimated_cost_ms.insert("sensitive_documents".to_string(), 150);
+        estimated_cost_ms.insert("sensitive_document".to_string(), 150);
         estimated_cost_ms.insert("orca-sonar-document-classifier".to_string(), 150);
-        estimated_cost_ms.insert("user_intent".to_string(), 150);
-        estimated_cost_ms.insert("user-intent-model".to_string(), 150);
-        estimated_cost_ms.insert("tool_classifier".to_string(), 150);
-        estimated_cost_ms.insert("tool-prompts-model".to_string(), 150);
-        estimated_cost_ms.insert("tool-executions-model".to_string(), 150);
-        estimated_cost_ms.insert("tool-classifier-descriptions-model".to_string(), 150);
+        for name in [
+            "tool_class",
+            "tool_action",
+            "tool_tags",
+            "routing",
+            "threat",
+            "unified-v3-tool-class",
+            "unified-v3-tool-action",
+            "unified-v3-tool-tags",
+            "unified-v3-routing",
+            "unified-v3-threat",
+        ] {
+            estimated_cost_ms.insert(name.to_string(), 150);
+        }
+        estimated_cost_ms.insert("unified-multitask-model-augmented-v3".to_string(), 200);
         Self {
             enabled: true,
             priority: vec![
@@ -451,14 +515,14 @@ impl Default for L3SchedulerPolicy {
                 "wolf-defender-small".to_string(),
                 "dynamic-pii".to_string(),
                 "gliner_small-v2.5-edge".to_string(),
-                "sensitive_documents".to_string(),
+                "sensitive_document".to_string(),
                 "orca-sonar-document-classifier".to_string(),
-                "user_intent".to_string(),
-                "user-intent-model".to_string(),
-                "tool_classifier".to_string(),
-                "tool-prompts-model".to_string(),
-                "tool-executions-model".to_string(),
-                "tool-classifier-descriptions-model".to_string(),
+                "tool_class".to_string(),
+                "tool_action".to_string(),
+                "tool_tags".to_string(),
+                "routing".to_string(),
+                "threat".to_string(),
+                "unified-multitask-model-augmented-v3".to_string(),
             ],
             ttl_ms,
             estimated_cost_ms,
@@ -547,6 +611,7 @@ pub struct ScanExecution {
     backend: ExecutionBackend,
     onnx_batch_mode: OnnxBatchMode,
     ntdb_operating_point: NtdbOperatingPoint,
+    l3_strategy: L3Strategy,
     defer_l3: bool,
 }
 
@@ -559,6 +624,7 @@ impl ScanExecution {
             backend: ExecutionBackend::default(),
             onnx_batch_mode: OnnxBatchMode::LazyBatches,
             ntdb_operating_point: NtdbOperatingPoint::default(),
+            l3_strategy: L3Strategy::default(),
             defer_l3: false,
         }
     }
@@ -571,6 +637,7 @@ impl ScanExecution {
             backend: ExecutionBackend::default(),
             onnx_batch_mode: OnnxBatchMode::LazyBatches,
             ntdb_operating_point: NtdbOperatingPoint::default(),
+            l3_strategy: L3Strategy::default(),
             defer_l3: false,
         }
     }
@@ -601,6 +668,11 @@ impl ScanExecution {
     /// Select the calibrated NTDB operating point used by subsequent scans.
     pub fn set_ntdb_operating_point(&mut self, point: NtdbOperatingPoint) {
         self.ntdb_operating_point = point;
+    }
+
+    /// Select the physical L3 classifier topology.
+    pub fn set_l3_strategy(&mut self, strategy: L3Strategy) {
+        self.l3_strategy = strategy;
     }
 
     /// Set whether L3 should be marked pending instead of executed immediately.
@@ -645,6 +717,11 @@ impl ScanExecution {
         self.ntdb_operating_point
     }
 
+    /// Return the selected physical L3 classifier topology.
+    pub fn l3_strategy(&self) -> L3Strategy {
+        self.l3_strategy
+    }
+
     /// Return whether L3 should be centrally scheduled.
     pub fn defer_l3(&self) -> bool {
         self.defer_l3
@@ -678,12 +755,18 @@ pub enum SecurityCategory {
     Pii,
     /// Dynamic zero-shot entity extraction in the L3 worker.
     DynamicPii,
-    /// Agentic tool prompt and execution risk checks.
-    ToolClassifier,
-    /// User-intent classification.
-    UserIntent,
     /// Sensitive document classification.
-    SensitiveDocuments,
+    SensitiveDocument,
+    /// Tool type classification.
+    ToolClass,
+    /// Tool operation classification.
+    ToolAction,
+    /// Multi-label tool source and sink tags.
+    ToolTags,
+    /// Operational request routing.
+    Routing,
+    /// Security threat classification.
+    Threat,
 }
 
 impl SecurityCategory {
@@ -694,10 +777,27 @@ impl SecurityCategory {
             SecurityCategory::Dlp => "dlp",
             SecurityCategory::Pii => "pii",
             SecurityCategory::DynamicPii => "dynamic-pii",
-            SecurityCategory::ToolClassifier => "tool_classifier",
-            SecurityCategory::UserIntent => "user_intent",
-            SecurityCategory::SensitiveDocuments => "sensitive_documents",
+            SecurityCategory::SensitiveDocument => "sensitive_document",
+            SecurityCategory::ToolClass => "tool_class",
+            SecurityCategory::ToolAction => "tool_action",
+            SecurityCategory::ToolTags => "tool_tags",
+            SecurityCategory::Routing => "routing",
+            SecurityCategory::Threat => "threat",
         }
+    }
+
+    /// Return whether this category is backed by one head of the unified classifier.
+    pub fn is_unified_classifier(self) -> bool {
+        matches!(
+            self,
+            Self::Injection
+                | Self::SensitiveDocument
+                | Self::ToolClass
+                | Self::ToolAction
+                | Self::ToolTags
+                | Self::Routing
+                | Self::Threat
+        )
     }
 }
 
@@ -710,32 +810,13 @@ impl std::str::FromStr for SecurityCategory {
             "dlp" => Ok(SecurityCategory::Dlp),
             "pii" => Ok(SecurityCategory::Pii),
             "dynamic-pii" | "dynamic_pii" => Ok(SecurityCategory::DynamicPii),
-            "tool_classifier" => Ok(SecurityCategory::ToolClassifier),
-            "user_intent" => Ok(SecurityCategory::UserIntent),
-            "sensitive_documents" => Ok(SecurityCategory::SensitiveDocuments),
+            "sensitive_document" => Ok(SecurityCategory::SensitiveDocument),
+            "tool_class" => Ok(SecurityCategory::ToolClass),
+            "tool_action" => Ok(SecurityCategory::ToolAction),
+            "tool_tags" => Ok(SecurityCategory::ToolTags),
+            "routing" => Ok(SecurityCategory::Routing),
+            "threat" => Ok(SecurityCategory::Threat),
             _ => Err(format!("Unknown security category: {}", s)),
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn ntdb_operating_point_defaults_to_best_promote_and_parses_all_variants() {
-        assert_eq!(
-            NtdbOperatingPoint::default(),
-            NtdbOperatingPoint::BestPromote
-        );
-        for name in [
-            "best_f1",
-            "best_promote",
-            "best_fpr_in_f1",
-            "best_fnr_in_f1",
-            "best_latency_in_f1",
-        ] {
-            assert_eq!(name.parse::<NtdbOperatingPoint>().unwrap().as_str(), name);
         }
     }
 }

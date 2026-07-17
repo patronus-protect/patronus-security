@@ -237,9 +237,9 @@ fn warmup_without_downloads_requires_ntdb_l2_exports() {
     let mut scanner = SecurityGateway::with_max_level(
         vec![
             SecurityCategory::Injection,
-            SecurityCategory::ToolClassifier,
-            SecurityCategory::UserIntent,
-            SecurityCategory::SensitiveDocuments,
+            SecurityCategory::ToolClass,
+            SecurityCategory::Routing,
+            SecurityCategory::SensitiveDocument,
             SecurityCategory::Pii,
         ],
         SecurityLevel::L3,
@@ -254,7 +254,7 @@ fn warmup_without_downloads_requires_ntdb_l2_exports() {
     );
     let err = failure.to_string();
     assert!(
-        err.contains("missing NTDB v2 L2 export for injection"),
+        err.contains("missing wolf-defender-small L2 package"),
         "{err}"
     );
 
@@ -262,9 +262,9 @@ fn warmup_without_downloads_requires_ntdb_l2_exports() {
 }
 
 #[test]
-fn legacy_user_intent_l1_rules_are_ignored() {
+fn legacy_routing_l1_files_are_ignored() {
     let dir = temp_model_dir("user_intent_l1_only");
-    let prompts_dir = dir.join("user_intent").join("prompts");
+    let prompts_dir = dir.join("routing").join("prompts");
     std::fs::create_dir_all(&prompts_dir).unwrap();
     std::fs::write(
         prompts_dir.join("l1_rules.json"),
@@ -275,8 +275,8 @@ fn legacy_user_intent_l1_rules_are_ignored() {
     std::fs::write(prompts_dir.join("cascade_config.json"), "{}").unwrap();
 
     let mut scanner = SecurityGateway::with_max_level(
-        vec![SecurityCategory::UserIntent],
-        SecurityLevel::L3,
+        vec![SecurityCategory::Routing],
+        SecurityLevel::L1,
         Some(dir.clone()),
         false,
     );
@@ -296,7 +296,7 @@ fn legacy_user_intent_l1_rules_are_ignored() {
         patronus_security::SecurityLevelReadiness::NotConfigured
     ));
 
-    let results = scanner.scan_category(SecurityCategory::UserIntent, "schedule meeting tomorrow");
+    let results = scanner.scan_category(SecurityCategory::Routing, "schedule meeting tomorrow");
     assert!(results.is_empty());
 
     std::fs::remove_dir_all(dir).unwrap();
@@ -305,7 +305,7 @@ fn legacy_user_intent_l1_rules_are_ignored() {
 #[test]
 fn legacy_tool_classifier_l1_rules_are_ignored() {
     let dir = temp_model_dir("tool_l1_json");
-    let tool_dir = dir.join("tool_classifier");
+    let tool_dir = dir.join("tool_class");
     let prompts_dir = tool_dir.join("prompts");
     let executions_dir = tool_dir.join("executions");
     let descriptions_dir = tool_dir.join("descriptions");
@@ -329,7 +329,7 @@ fn legacy_tool_classifier_l1_rules_are_ignored() {
     .unwrap();
 
     let mut scanner = SecurityGateway::with_max_level(
-        vec![SecurityCategory::ToolClassifier],
+        vec![SecurityCategory::ToolClass],
         SecurityLevel::L1,
         Some(dir.clone()),
         false,
@@ -338,7 +338,7 @@ fn legacy_tool_classifier_l1_rules_are_ignored() {
     scanner.warmup().unwrap();
 
     let results = scanner.scan_category(
-        SecurityCategory::ToolClassifier,
+        SecurityCategory::ToolClass,
         r#"{"arguments":{"command":"rg token rust/src"},"description":"run shell commands","call_id":"call_1","name":"exec_command"}"#,
     );
 
@@ -350,7 +350,7 @@ fn legacy_tool_classifier_l1_rules_are_ignored() {
 #[test]
 fn legacy_tool_classifier_l1_rules_remain_ignored_with_area_gates() {
     let dir = temp_model_dir("tool_area_gates");
-    let tool_dir = dir.join("tool_classifier");
+    let tool_dir = dir.join("tool_class");
     let prompts_dir = tool_dir.join("prompts");
     let executions_dir = tool_dir.join("executions");
     let descriptions_dir = tool_dir.join("descriptions");
@@ -374,7 +374,7 @@ fn legacy_tool_classifier_l1_rules_remain_ignored_with_area_gates() {
     .unwrap();
 
     let mut scanner = SecurityGateway::with_max_level(
-        vec![SecurityCategory::ToolClassifier],
+        vec![SecurityCategory::ToolClass],
         SecurityLevel::L1,
         Some(dir.clone()),
         false,
@@ -382,7 +382,7 @@ fn legacy_tool_classifier_l1_rules_remain_ignored_with_area_gates() {
     scanner.warmup().unwrap();
 
     let text = "prompt marker execution marker description marker";
-    let baseline = scanner.scan_category(SecurityCategory::ToolClassifier, text);
+    let baseline = scanner.scan_category(SecurityCategory::ToolClass, text);
     assert!(baseline.is_empty());
 
     scanner.set_execution_gates(
@@ -390,7 +390,7 @@ fn legacy_tool_classifier_l1_rules_remain_ignored_with_area_gates() {
             .with_model("tool_classifier.prompt", false)
             .with_model("tool_classifier.description", false),
     );
-    let gated = scanner.scan_category(SecurityCategory::ToolClassifier, text);
+    let gated = scanner.scan_category(SecurityCategory::ToolClass, text);
 
     assert!(gated.is_empty());
 
@@ -400,7 +400,7 @@ fn legacy_tool_classifier_l1_rules_remain_ignored_with_area_gates() {
 #[test]
 fn legacy_tool_classifier_l1_rules_do_not_populate_decision_cache() {
     let dir = temp_model_dir("tool_l1_cache");
-    let tool_dir = dir.join("tool_classifier");
+    let tool_dir = dir.join("tool_class");
     let prompts_dir = tool_dir.join("prompts");
     let executions_dir = tool_dir.join("executions");
     std::fs::create_dir_all(&prompts_dir).unwrap();
@@ -413,7 +413,7 @@ fn legacy_tool_classifier_l1_rules_do_not_populate_decision_cache() {
     .unwrap();
 
     let mut scanner = SecurityGateway::with_max_level(
-        vec![SecurityCategory::ToolClassifier],
+        vec![SecurityCategory::ToolClass],
         SecurityLevel::L1,
         Some(dir.clone()),
         false,
@@ -422,8 +422,8 @@ fn legacy_tool_classifier_l1_rules_do_not_populate_decision_cache() {
 
     let text =
         r#"{"arguments":{"command":"rg token rust/src"},"call_id":"call_1","name":"exec_command"}"#;
-    let first = scanner.scan_category(SecurityCategory::ToolClassifier, text);
-    let second = scanner.scan_category(SecurityCategory::ToolClassifier, text);
+    let first = scanner.scan_category(SecurityCategory::ToolClass, text);
+    let second = scanner.scan_category(SecurityCategory::ToolClass, text);
 
     assert!(first.is_empty());
     assert!(second.is_empty());
@@ -668,14 +668,14 @@ fn one_scanner_failure_with_usable_results_is_degraded() {
 #[test]
 fn all_planned_scanners_failing_is_failed() {
     let scanner = SecurityGateway::with_max_level(
-        vec![SecurityCategory::UserIntent],
+        vec![SecurityCategory::Routing],
         SecurityLevel::L1,
         None,
         false,
     );
     scanner
         .register_external_l1(Arc::new(PanickingL1 {
-            category: SecurityCategory::UserIntent,
+            category: SecurityCategory::Routing,
         }))
         .unwrap();
 
@@ -751,9 +751,9 @@ fn l3_scheduler_defaults_match_cpu_ttl_policy() {
 
     assert_eq!(policy.ttl_ms["injection"], 15_000);
     assert_eq!(policy.ttl_ms["dynamic-pii"], 12_000);
-    assert_eq!(policy.ttl_ms["sensitive_documents"], 12_000);
-    assert_eq!(policy.ttl_ms["user_intent"], 10_500);
-    assert_eq!(policy.ttl_ms["tool_classifier"], 7_500);
+    assert_eq!(policy.ttl_ms["sensitive_document"], 12_000);
+    assert_eq!(policy.ttl_ms["routing"], 10_500);
+    assert_eq!(policy.ttl_ms["tool_class"], 10_500);
     assert_eq!(policy.priority[0], "injection");
     assert_eq!(policy.priority[2], "dynamic-pii");
     assert_eq!(policy.estimated_cost_ms["injection"], 200);

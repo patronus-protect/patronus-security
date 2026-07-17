@@ -103,6 +103,16 @@ class PublicApiTests(unittest.TestCase):
 
         self.assertIsInstance(scanner, SecurityGateway)
 
+    def test_l3_strategy_is_global_and_validated(self):
+        scanner = SecurityGateway(
+            categories=["dlp"], max_level="l3", download_files=False, l3_strategy="multi"
+        )
+        self.assertEqual(scanner.l3_strategy, "multi")
+        scanner.set_l3_strategy("dedicated")
+        self.assertEqual(scanner.l3_strategy, "dedicated")
+        with self.assertRaises(ValueError):
+            scanner.set_l3_strategy("unknown")
+
     def test_dynamic_pii_config_is_pipeline_specific_public_api(self):
         scanner = SecurityGateway(
             categories=["dynamic-pii"],
@@ -120,7 +130,7 @@ class PublicApiTests(unittest.TestCase):
                 "conditional_labels": [
                     {
                         "labels": ["location"],
-                        "when": {"pipeline": "user_intent", "results": ["action"]},
+                        "when": {"pipeline": "routing", "results": ["office_request"]},
                     }
                 ],
                 "chunk_size_words": 128,
@@ -281,8 +291,8 @@ class PublicApiTests(unittest.TestCase):
             execution_gates={
                 "l3": {
                     "enabled": True,
-                    "priority": ["injection", "sensitive_documents", "tool_classifier"],
-                    "ttl_ms": {"injection": 10000, "tool_classifier": 5000},
+                    "priority": ["injection", "sensitive_document", "tool_class"],
+                    "ttl_ms": {"injection": 10000, "tool_class": 5000},
                     "estimated_cost_ms": {"injection": 60, "dynamic-pii": 20},
                     "fairness_quantum_ms": 20,
                     "max_wait_ms": 250,
@@ -294,9 +304,9 @@ class PublicApiTests(unittest.TestCase):
             {
                 "l3": {
                     "enabled": False,
-                    "priority": ["tool_classifier", "injection"],
-                    "ttl_ms": {"tool_classifier": 1234},
-                    "estimated_cost_ms": {"tool_classifier": 30},
+                    "priority": ["tool_class", "injection"],
+                    "ttl_ms": {"tool_class": 1234},
+                    "estimated_cost_ms": {"tool_class": 30},
                     "fairness_quantum_ms": 10,
                     "max_wait_ms": 100,
                     "degraded_factor": 0.5,
@@ -309,31 +319,17 @@ class PublicApiTests(unittest.TestCase):
         self.assertTrue(results)
         assert_result_schema(self, results[0])
 
-    def test_tool_classifier_subpipeline_gates_are_accepted(self):
+    def test_new_pipeline_model_gates_are_accepted(self):
         scanner = SecurityGateway(
-            categories=["tool_classifier"],
+            categories=["tool_class"],
             max_level="l1",
             download_files=False,
-            execution_gates={
-                "tool_classifier": {
-                    "description": False,
-                    "execution": True,
-                    "prompt": False,
-                }
-            },
+            execution_gates={"models": {"tool_class": False}},
         )
-        scanner.set_execution_gates(
-            {
-                "tool_classifier": {
-                    "descriptions": False,
-                    "executions": True,
-                    "prompts": False,
-                }
-            }
-        )
+        scanner.set_execution_gates({"models": {"tool_class": True}})
 
         with self.assertRaises(ValueError):
-            scanner.set_execution_gates({"tool_classifier": {"unknown": False}})
+            SecurityGateway(categories=["tool_classifier"], max_level="l1", download_files=False)
 
     def test_enqueue_and_consume_events_yields_results_then_completion(self):
         scanner = SecurityGateway(categories=["dlp"], max_level="l2", download_files=False)
@@ -462,7 +458,7 @@ class PublicApiTests(unittest.TestCase):
             with self.assertRaises(ValueError) as raised:
                 scanner.warmup()
 
-        self.assertIn("missing NTDB v2 L2 export", str(raised.exception))
+        self.assertIn("missing wolf-defender-small L2 package", str(raised.exception))
 
 
 if __name__ == "__main__":

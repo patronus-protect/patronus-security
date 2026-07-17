@@ -25,6 +25,7 @@ def main():
         onnx_batch_mode=config["onnx_batch_mode"],
         execution_backend=config["execution_backend"],
         ntdb_operating_point=config["ntdb_operating_point"],
+        l3_strategy=config["l3_strategy"],
     )
     gateway.warmup()
 

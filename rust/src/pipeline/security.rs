@@ -34,14 +34,9 @@ mod ntdb_l2;
 mod request_queue;
 mod warmup;
 
-#[cfg(feature = "test-util")]
-pub use ntdb_l2::TOOL_PROMPTS_MODEL;
 use ntdb_l2::{ntdb_l2_cache_namespace, ntdb_l2_error_scan_result};
 #[cfg(feature = "test-util")]
-pub use ntdb_l2::{
-    ntdb_l2_enabled_for_category, ntdb_l2_model_config_for_id, NtdbL2ModelConfig,
-    NTDB_TOOL_DESCRIPTIONS_MODEL_ID, NTDB_TOOL_EXECUTIONS_MODEL_ID, NTDB_TOOL_PROMPTS_MODEL_ID,
-};
+pub use ntdb_l2::{ntdb_l2_enabled_for_category, ntdb_l2_model_config_for_id, NtdbL2ModelConfig};
 pub use ntdb_l2::{ntdb_l2_model_configs_for_category, ntdb_l2_scan_result};
 
 /// Main scanner gateway for native and model-backed security categories.
@@ -136,6 +131,7 @@ fn scan_result(
         duration_ms,
         layers,
         evidence_spans: Vec::new(),
+        label_scores: Vec::new(),
     }
 }
 
@@ -451,11 +447,23 @@ impl SecurityGateway {
             }
         };
 
-        let mut l3_models = l2_configs
+        let has_classifier_l3 = l2_configs
             .iter()
-            .filter(|config| config.has_l3 && execution.allows_level(SecurityLevel::L3))
-            .map(|config| config.public_model)
-            .collect::<Vec<_>>();
+            .any(|config| config.has_l3 && execution.allows_level(SecurityLevel::L3));
+        let mut l3_models = match execution.l3_strategy() {
+            crate::L3Strategy::Multi
+                if has_classifier_l3
+                    && execution.allows_model(crate::ml::unified_onnx::UNIFIED_MODEL) =>
+            {
+                vec![crate::ml::unified_onnx::UNIFIED_MODEL]
+            }
+            crate::L3Strategy::Multi => Vec::new(),
+            crate::L3Strategy::Dedicated => l2_configs
+                .iter()
+                .filter(|config| config.has_l3 && execution.allows_level(SecurityLevel::L3))
+                .map(|config| config.public_model)
+                .collect::<Vec<_>>(),
+        };
         if self.categories.contains(&SecurityCategory::DynamicPii)
             && execution.allows_level(SecurityLevel::L3)
             && execution.allows_model(DYNAMIC_PII_ASSET.model)
@@ -557,6 +565,22 @@ impl SecurityGateway {
             .lock()
             .expect("execution mutex poisoned")
             .set_ntdb_operating_point(point);
+    }
+
+    /// Select dedicated per-pipeline L3 models or the shared multi-head model.
+    pub fn set_l3_strategy(&self, strategy: crate::L3Strategy) {
+        self.execution
+            .lock()
+            .expect("execution mutex poisoned")
+            .set_l3_strategy(strategy);
+    }
+
+    /// Return the active global L3 model strategy.
+    pub fn l3_strategy(&self) -> crate::L3Strategy {
+        self.execution
+            .lock()
+            .expect("execution mutex poisoned")
+            .l3_strategy()
     }
 
     /// Return the calibrated NTDB operating point used by subsequent scans.
@@ -724,9 +748,12 @@ impl SecurityGateway {
                 }
             }
             SecurityCategory::DynamicPii => {}
-            SecurityCategory::ToolClassifier
-            | SecurityCategory::SensitiveDocuments
-            | SecurityCategory::UserIntent => {}
+            SecurityCategory::SensitiveDocument
+            | SecurityCategory::ToolClass
+            | SecurityCategory::ToolAction
+            | SecurityCategory::ToolTags
+            | SecurityCategory::Routing
+            | SecurityCategory::Threat => {}
         }
 
         if self.level_enabled(execution, SecurityLevel::L1) {

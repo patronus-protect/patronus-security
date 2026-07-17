@@ -26,8 +26,8 @@ fn hf_ntdb_l2_download_warmup_smoke() {
     let dir = model_dir();
     let categories = vec![
         SecurityCategory::Injection,
-        SecurityCategory::SensitiveDocuments,
-        SecurityCategory::ToolClassifier,
+        SecurityCategory::SensitiveDocument,
+        SecurityCategory::ToolClass,
     ];
     let mut scanner = SecurityGateway::with_max_level(
         categories.clone(),
@@ -86,8 +86,8 @@ fn local_ntdb_model_dir_symlink_warmup_smoke() {
     let mut scanner = SecurityGateway::with_max_level(
         vec![
             SecurityCategory::Injection,
-            SecurityCategory::SensitiveDocuments,
-            SecurityCategory::ToolClassifier,
+            SecurityCategory::SensitiveDocument,
+            SecurityCategory::ToolClass,
         ],
         SecurityLevel::L2,
         Some(model_dir.clone()),
@@ -98,8 +98,8 @@ fn local_ntdb_model_dir_symlink_warmup_smoke() {
     let results = scanner.scan_categories(
         &[
             SecurityCategory::Injection,
-            SecurityCategory::SensitiveDocuments,
-            SecurityCategory::ToolClassifier,
+            SecurityCategory::SensitiveDocument,
+            SecurityCategory::ToolClass,
         ],
         "Review this contract and decide whether it contains confidential business information.",
     );
@@ -188,7 +188,7 @@ fn hf_l3_download_warmup_and_cache_smoke_with_local_ntdb_l2() {
 
     let categories = vec![
         SecurityCategory::Injection,
-        SecurityCategory::SensitiveDocuments,
+        SecurityCategory::SensitiveDocument,
     ];
     let mut scanner = SecurityGateway::with_download_categories(
         categories.clone(),

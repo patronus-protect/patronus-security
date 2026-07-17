@@ -480,7 +480,7 @@ impl OnnxTextClassifier {
     }
 }
 
-fn token_chunks<F>(
+pub(crate) fn token_chunks<F>(
     text: &str,
     max_tokens: usize,
     overlap_tokens: usize,
@@ -545,7 +545,7 @@ where
     Ok(chunks)
 }
 
-fn configured_session_builder(
+pub(crate) fn configured_session_builder(
     backend: ExecutionBackend,
     model_dir: Option<&Path>,
 ) -> Result<(SessionBuilder, String), Box<dyn std::error::Error>> {

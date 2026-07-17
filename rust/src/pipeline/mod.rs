@@ -27,12 +27,14 @@ pub(crate) use strategy::{ChunkAggregation, PipelineStrategy};
 #[doc(hidden)]
 pub mod test_util {
     pub use super::decision_cache::{DecisionCache, DecisionCacheConfig};
+    pub use super::l3_worker::{
+        aggregate_unified_head_for_test, public_unified_class_for_test,
+        selected_l3_chunks_for_test, unified_coalescing_snapshot, UnifiedCoalescingSnapshot,
+    };
     pub use super::long_text::{aggregate_chunk_outputs, candidate_selection, l3_metadata};
     pub use super::security::{
         ntdb_l2_enabled_for_category, ntdb_l2_model_config_for_id,
         ntdb_l2_model_configs_for_category, ntdb_l2_scan_result, NtdbL2ModelConfig,
-        NTDB_TOOL_DESCRIPTIONS_MODEL_ID, NTDB_TOOL_EXECUTIONS_MODEL_ID, NTDB_TOOL_PROMPTS_MODEL_ID,
-        TOOL_PROMPTS_MODEL,
     };
     pub use super::strategy::ChunkAggregation;
 }

@@ -1,9 +1,11 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 """Local benchmark for a configured `SecurityGateway`.
 
-Runs benchmark phases against sample data shipped with the package
+Runs every benchmark phase once with dedicated L3 models and once with the
+unified multi-head L3 model against sample data shipped with the package
 (`patronus_security/benchmark_data/*.jsonl`, copied from the Patronus
-validation splits) and writes one JSON file per phase into `output_dir`:
+validation splits). Strategy-specific files are written below
+`output_dir/dedicated` and `output_dir/multi`:
 
 - `benign_result.json` — 100 benign prompts through the joint `scan_all`
   decision: class distribution, false-positive rate, latency.
@@ -68,8 +70,7 @@ DLP_NATIVE_MODELS = (
 )
 
 # Only threat categories count toward the benign false-positive rate;
-# classification categories (tool_classifier, user_intent, sensitive_documents)
-# always assign a content class and are reported informationally.
+# Classifier pipelines always assign a content class and are informational.
 FLAG_CATEGORIES = {"injection", "dlp", "pii"}
 
 # Classes that count as "not flagged" per category.
@@ -77,34 +78,17 @@ NEUTRAL_CLASSES = {
     "injection": {"benign", "safe"},
     "pii": {"safe", "benign"},
     "dlp": {"safe", "benign"},
-    "tool_classifier": {"safe", "benign", "none", "missing", "tool_class.unknown"},
-    "user_intent": {"safe", "benign", "none", "missing", "benign_conv"},
-    "sensitive_documents": {"safe", "benign", "none", "missing", "other"},
+    "tool_class": {"safe", "benign", "none", "missing", "unknown"},
+    "routing": {"safe", "benign", "none", "missing", "benign_conv"},
+    "sensitive_document": {"safe", "benign", "none", "missing", "other"},
 }
 
-# (data file stem, gateway category, tool_classifier area gates, result model)
+# Historical fixture stems are retained where their labels still map exactly.
 CLASSIFIER_PIPELINES = [
     ("injection", "injection", None, "wolf-defender-small"),
-    ("sensitive_documents", "sensitive_documents", None, "orca-sonar-document-classifier"),
-    (
-        "tool_prompts",
-        "tool_classifier",
-        {"prompt": True, "execution": False, "description": False},
-        "tool-prompts-model",
-    ),
-    (
-        "tool_executions",
-        "tool_classifier",
-        {"prompt": False, "execution": True, "description": False},
-        "tool-executions-model",
-    ),
-    (
-        "tool_descriptions",
-        "tool_classifier",
-        {"prompt": False, "execution": False, "description": True},
-        "tool-classifier-descriptions-model",
-    ),
-    ("user_intent", "user_intent", None, "user-intent-model"),
+    ("sensitive_document", "sensitive_document", None, "orca-sonar-document-classifier"),
+    ("tool_class", "tool_class", None, "unified-v3-tool-class"),
+    ("routing", "routing", None, "unified-v3-routing"),
 ]
 
 
@@ -260,8 +244,6 @@ def _classifier_modes(gateway):
 
 def _run_classifier_mode(gateway, samples, category, tool_gates, model, mode_gates):
     gates = dict(mode_gates)
-    if tool_gates is not None:
-        gates["tool_classifier"] = tool_gates
     gateway.set_execution_gates(gates or None)
 
     expected, predicted, latencies, rows = [], [], [], []
@@ -273,22 +255,29 @@ def _run_classifier_mode(gateway, samples, category, tool_gates, model, mode_gat
         latencies.append(latency_ms)
 
         # Prefer the deepest result the model produced (L3 over its L2 fallback).
-        model_results = [result for result in results if result["model"] == model]
+        model_results = [
+            result
+            for result in results
+            if result["model"] in {model, "unified-multitask-model-augmented-v3"}
+        ]
         model_results.sort(key=lambda result: result["level"])
         chosen = model_results[-1] if model_results else None
         prediction = chosen["class_name"] if chosen else "missing"
         level = chosen["level"] if chosen else "none"
         if level == "L3":
             l3_scans += 1
-        expected.append(sample["expected_class"])
+        expected_class = sample["expected_class"]
+        if category == "tool_class" and expected_class.startswith("tool_class."):
+            expected_class = expected_class.split(".", 2)[1]
+        expected.append(expected_class)
         predicted.append(prediction)
         rows.append(
             {
                 "id": sample["id"],
                 "text": sample["text"],
-                "expected_class": sample["expected_class"],
+                "expected_class": expected_class,
                 "predicted_class": prediction,
-                "correct": prediction == sample["expected_class"],
+                "correct": prediction == expected_class,
                 "level": level,
                 "latency_ms": round(latency_ms, 3),
             }
@@ -432,7 +421,7 @@ def _run_dynamic_pii_quality(gateway, samples):
         if source_tool_class:
             labels = labels_for_contexts(
                 (source_category, source_class),
-                ("tool_classifier", source_tool_class),
+                ("tool_class", source_tool_class.split(".", 2)[1]),
             )
         if not labels:
             skipped_samples += len(group)
@@ -1493,7 +1482,7 @@ def _warm_l3_sessions(gateway):
         (s["text"] for s in _load_samples("injection") if s["expected_class"] == "attack"),
         None,
     )
-    document = _load_samples("sensitive_documents")[0]["text"]
+    document = _load_samples("sensitive_document")[0]["text"]
     for text in (attack, document):
         if not text:
             continue
@@ -1501,15 +1490,15 @@ def _warm_l3_sessions(gateway):
             gateway.scan_all(text)
 
 
-def run_local_benchmark(
+def _run_local_benchmark_for_strategy(
     gateway,
-    output_dir="benchmark",
+    output_dir,
     limit_per_pipeline=None,
     load_requests=200,
     print_summary=True,
     native_l1_iterations=200,
 ):
-    """Run benchmark phases and write JSON details plus `BENCHMARK.md`."""
+    """Run every benchmark phase for the gateway's active L3 strategy."""
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
     meta = {
@@ -1565,3 +1554,92 @@ def run_local_benchmark(
         "native_l1": native_l1,
         "load": load,
     }
+
+
+def run_local_benchmark(
+    gateway,
+    output_dir="benchmark",
+    limit_per_pipeline=None,
+    load_requests=200,
+    print_summary=True,
+    native_l1_iterations=200,
+):
+    """Run the identical benchmark in fresh dedicated and multi processes."""
+    output = Path(output_dir)
+    output.mkdir(parents=True, exist_ok=True)
+    results = {}
+
+    for strategy in ("dedicated", "multi"):
+        if print_summary:
+            print(f"\nL3 strategy: {strategy}")
+        results[strategy] = _run_strategy_benchmark_process(
+            gateway,
+            strategy,
+            output / strategy,
+            limit_per_pipeline=limit_per_pipeline,
+            load_requests=load_requests,
+            native_l1_iterations=native_l1_iterations,
+        )
+        if print_summary:
+            result = results[strategy]
+            _print_summary(
+                result["benign"],
+                result["classifier"],
+                result["load"],
+                result["native_l1"],
+                result["dynamic_pii"],
+            )
+            print(f"results written to {output / strategy}/")
+
+    ordered_results = {
+        "dedicated": results["dedicated"],
+        "multi": results["multi"],
+    }
+    (output / "benchmark_result.json").write_text(
+        json.dumps(ordered_results, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    (output / "BENCHMARK.md").write_text(
+        "# Local benchmark\n\n"
+        "The complete benchmark suite ran once per L3 strategy.\n\n"
+        "- [Dedicated L3](dedicated/BENCHMARK.md)\n"
+        "- [Unified multi-head L3](multi/BENCHMARK.md)\n",
+        encoding="utf-8",
+    )
+    if print_summary:
+        print(f"combined results written to {output}/")
+    return ordered_results
+
+
+def _run_strategy_benchmark_process(
+    gateway,
+    strategy,
+    output_dir,
+    limit_per_pipeline,
+    load_requests,
+    native_l1_iterations,
+):
+    config = deepcopy(gateway._benchmark_gateway_config)
+    config["l3_strategy"] = strategy
+    completed = subprocess.run(
+        [sys.executable, "-m", "patronus_security.benchmark_strategy_worker"],
+        input=json.dumps(
+            {
+                "gateway": config,
+                "output_dir": str(Path(output_dir).resolve()),
+                "limit_per_pipeline": limit_per_pipeline,
+                "load_requests": load_requests,
+                "native_l1_iterations": native_l1_iterations,
+            }
+        ),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if completed.returncode:
+        detail = completed.stderr.strip() or completed.stdout.strip()
+        raise RuntimeError(f"{strategy} benchmark worker failed: {detail}")
+    try:
+        return json.loads(completed.stdout)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"{strategy} benchmark worker returned invalid JSON") from exc

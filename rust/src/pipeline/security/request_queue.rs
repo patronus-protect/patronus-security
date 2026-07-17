@@ -283,6 +283,7 @@ impl SecurityGateway {
                     .expect("ready index disappeared");
                 if matches!(event, QueuedSecurityEvent::Finished { .. }) {
                     registry.requests.remove(event.request_id());
+                    self.l3_worker.remove_request(event.request_id());
                     self.requests.available.notify_all();
                 }
                 return Some(event);
@@ -739,6 +740,7 @@ impl SecurityGateway {
                 },
             ],
             evidence_spans: Vec::new(),
+            label_scores: Vec::new(),
         }
     }
 }
@@ -780,6 +782,7 @@ mod tests {
                 )]),
             }],
             evidence_spans: Vec::new(),
+            label_scores: Vec::new(),
         };
 
         let spans = l3_candidate_spans(&result);

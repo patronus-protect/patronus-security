@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 use patronus_security::{
-    DynamicPiiConfig, EvidenceSpan, ExecutionBackend, L3SchedulerPolicy, LayerResult,
-    NtdbOperatingPoint, OnnxBatchMode, QueuedSecurityEvent, QueuedSecurityScanResult,
+    DynamicPiiConfig, EvidenceSpan, ExecutionBackend, L3SchedulerPolicy, L3Strategy, LabelScore,
+    LayerResult, NtdbOperatingPoint, OnnxBatchMode, QueuedSecurityEvent, QueuedSecurityScanResult,
     ScanGateMatrix, SecurityCategory, SecurityFailure, SecurityGateway as RustSecurityGateway,
     SecurityLevel, SecurityLevelReadiness, SecurityRequestCompletion, SecurityRequestState,
     SecurityRuntimeReadiness,
@@ -18,7 +18,7 @@ struct SecurityGateway {
 #[pymethods]
 impl SecurityGateway {
     #[new]
-    #[pyo3(signature = (categories, max_level="l2", model_dir=None, download_files=true, download_categories=None, execution_gates_json=None, onnx_batch_mode="backend_default", execution_backend="auto", ntdb_operating_point="best_promote", dynamic_pii_config_json=None))]
+    #[pyo3(signature = (categories, max_level="l2", model_dir=None, download_files=true, download_categories=None, execution_gates_json=None, onnx_batch_mode="backend_default", execution_backend="auto", ntdb_operating_point="best_promote", l3_strategy="dedicated", dynamic_pii_config_json=None))]
     fn new(
         categories: Vec<String>,
         max_level: &str,
@@ -29,6 +29,7 @@ impl SecurityGateway {
         onnx_batch_mode: &str,
         execution_backend: &str,
         ntdb_operating_point: &str,
+        l3_strategy: &str,
         dynamic_pii_config_json: Option<&str>,
     ) -> PyResult<Self> {
         let rust_categories = parse_categories(categories)?;
@@ -53,6 +54,7 @@ impl SecurityGateway {
         }
         inner.set_execution_backend(parse_execution_backend(execution_backend)?);
         inner.set_ntdb_operating_point(parse_ntdb_operating_point(ntdb_operating_point)?);
+        inner.set_l3_strategy(parse_l3_strategy(l3_strategy)?);
         if onnx_batch_mode != "backend_default" {
             inner.set_onnx_batch_mode(parse_onnx_batch_mode(onnx_batch_mode)?);
         }
@@ -100,6 +102,11 @@ impl SecurityGateway {
     fn set_ntdb_operating_point(&mut self, point: &str) -> PyResult<()> {
         self.inner
             .set_ntdb_operating_point(parse_ntdb_operating_point(point)?);
+        Ok(())
+    }
+
+    fn set_l3_strategy(&mut self, strategy: &str) -> PyResult<()> {
+        self.inner.set_l3_strategy(parse_l3_strategy(strategy)?);
         Ok(())
     }
 
@@ -184,6 +191,11 @@ impl SecurityGateway {
     fn runtime_readiness(&self) -> PyRuntimeReadiness {
         PyRuntimeReadiness::from(self.inner.runtime_readiness())
     }
+
+    #[getter]
+    fn l3_strategy(&self) -> String {
+        self.inner.l3_strategy().as_str().to_string()
+    }
 }
 
 fn parse_categories(categories: Vec<String>) -> PyResult<Vec<SecurityCategory>> {
@@ -212,6 +224,12 @@ fn parse_execution_backend(value: &str) -> PyResult<ExecutionBackend> {
 fn parse_ntdb_operating_point(value: &str) -> PyResult<NtdbOperatingPoint> {
     value
         .parse::<NtdbOperatingPoint>()
+        .map_err(pyo3::exceptions::PyValueError::new_err)
+}
+
+fn parse_l3_strategy(value: &str) -> PyResult<L3Strategy> {
+    value
+        .parse::<L3Strategy>()
         .map_err(pyo3::exceptions::PyValueError::new_err)
 }
 
@@ -405,6 +423,19 @@ struct PyEvaluationResult {
     layers: Vec<PyLayerResult>,
     #[pyo3(get)]
     evidence_spans: Vec<PyEvidenceSpan>,
+    #[pyo3(get)]
+    label_scores: Vec<PyLabelScore>,
+}
+
+#[pyclass]
+#[derive(Clone)]
+struct PyLabelScore {
+    #[pyo3(get)]
+    label: String,
+    #[pyo3(get)]
+    confidence: f64,
+    #[pyo3(get)]
+    matched: bool,
 }
 
 #[pyclass]
@@ -608,6 +639,21 @@ impl From<patronus_security::SecurityScanResult> for PyEvaluationResult {
                 .into_iter()
                 .map(PyEvidenceSpan::from)
                 .collect(),
+            label_scores: result
+                .label_scores
+                .into_iter()
+                .map(PyLabelScore::from)
+                .collect(),
+        }
+    }
+}
+
+impl From<LabelScore> for PyLabelScore {
+    fn from(score: LabelScore) -> Self {
+        Self {
+            label: score.label,
+            confidence: score.confidence,
+            matched: score.matched,
         }
     }
 }
@@ -656,6 +702,7 @@ fn _patronus_security(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<SecurityGateway>()?;
     m.add_class::<PyLayerResult>()?;
     m.add_class::<PyEvaluationResult>()?;
+    m.add_class::<PyLabelScore>()?;
     m.add_class::<PyEvidenceSpan>()?;
     m.add_class::<PySecurityFailure>()?;
     m.add_class::<PySecurityEvent>()?;

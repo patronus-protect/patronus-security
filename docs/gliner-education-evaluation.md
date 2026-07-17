@@ -33,7 +33,7 @@ they do not contain real student data.
 
 ## Runtime mapping
 
-The five accepted labels are enabled for `sensitive_documents: school` with
+The five accepted labels are enabled for `sensitive_document: school` with
 their isolated-sweep thresholds:
 
 | Canonical label | Runtime threshold |

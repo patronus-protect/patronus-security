@@ -25,9 +25,12 @@ CATEGORY_NAMES = {
     "Dlp": "dlp",
     "Pii": "pii",
     "DynamicPii": "dynamic-pii",
-    "ToolClassifier": "tool_classifier",
-    "UserIntent": "user_intent",
-    "SensitiveDocuments": "sensitive_documents",
+    "SensitiveDocument": "sensitive_document",
+    "ToolClass": "tool_class",
+    "ToolAction": "tool_action",
+    "ToolTags": "tool_tags",
+    "Routing": "routing",
+    "Threat": "threat",
 }
 
 CATEGORY_ORDER = [
@@ -35,9 +38,12 @@ CATEGORY_ORDER = [
     "Dlp",
     "Pii",
     "DynamicPii",
-    "ToolClassifier",
-    "UserIntent",
-    "SensitiveDocuments",
+    "SensitiveDocument",
+    "ToolClass",
+    "ToolAction",
+    "ToolTags",
+    "Routing",
+    "Threat",
 ]
 
 
@@ -218,7 +224,7 @@ def generate_assets_doc(assets: list[Asset], snapshot: dict) -> str:
         "| Linux | `~/.cache/patronus_security` |",
         "| Windows | `%LOCALAPPDATA%\\patronus_security` |",
         "",
-        "Category assets are stored below that root, for example `injection/`, `pii/`, `dynamic_pii/`, or `tool_classifier/`.",
+        "Category assets are stored below that root, for example `injection/`, `sensitive_document/`, `tool_class/`, or `dynamic_pii/`.",
         "",
         "## Offline And Missing-Asset Behavior",
         "",
@@ -237,6 +243,12 @@ def generate_assets_doc(assets: list[Asset], snapshot: dict) -> str:
         "- `dynamic-pii` is L3-only and requires the revision-pinned `gliner_small-v2.5-edge` bundle below the regular `model_dir` asset root.",
         "- L3 ONNX sessions are lazy-loaded on first L3 inference and are evicted after `PATRONUS_L3_TTL_SECS` seconds of idleness. The default TTL is `300` seconds.",
         "- Set `HF_TOKEN` when a model repository requires authenticated or rate-limited Hugging Face access.",
+        "",
+        "## L3 Strategy",
+        "",
+        "`dedicated` loads the configured per-pipeline L3 bundles. `multi` loads only the revision-pinned `patronus-studio/unified-multitask-model-augmented-v3` classifier bundle at revision `9bcc55dcf955cda68c171524cd242ada9f5547d4`; GLiNER remains separate in both strategies.",
+        "",
+        "The shared ONNX artifact is `onnx/int8_int4_embeddings/model.onnx`. See `docs/unified-multitask-l3-plan.md` for its seven-head tensor contract and the request-local worker coalescing contract.",
         "",
     ]
     lines.extend(ntdb_package_table(parse_ntdb_packages()))
@@ -270,10 +282,11 @@ def generate_assets_doc(assets: list[Asset], snapshot: dict) -> str:
         lines.append(
             f"| `{CATEGORY_NAMES[category]}` | {format_size(l1_size)} | {format_size(l2_size)} | {format_size(l3_size)} | {repos} |"
         )
+    active_repos = {asset.repo for asset in assets}
     repo_errors = [
         f"- `{repo}`: {data['error']}"
         for repo, data in sorted(snapshot.get("repos", {}).items())
-        if data.get("error")
+        if repo in active_repos and data.get("error")
     ]
     if repo_errors:
         lines.extend(

@@ -14,9 +14,9 @@ This repository contains:
 
 Runnable examples for the main flows live in [`rust/examples/`](rust/examples/)
 and [`python/examples/`](python/examples/): basic scan, enqueue/consume,
-L2→L3 promotion, execution gates, and dynamic PII. See [docs/USAGE.md](docs/USAGE.md)
-for a walkthrough of when to use each. Internal benchmark and parity scripts live
-under [`rust/dev/`](rust/dev/).
+L2→L3 promotion, execution gates, dynamic PII, and a Dedicated-vs-Multi L3
+comparison. See [docs/USAGE.md](docs/USAGE.md) for a walkthrough of when to use
+each. Internal benchmark and parity scripts live under [`rust/dev/`](rust/dev/).
 
 ```bash
 cargo run --example 01_basic_scan
@@ -256,9 +256,12 @@ Supported categories:
 - `dlp`
 - `pii`
 - `dynamic-pii`
-- `tool_classifier`
-- `user_intent`
-- `sensitive_documents`
+- `sensitive_document`
+- `tool_class`
+- `tool_action`
+- `tool_tags`
+- `routing`
+- `threat`
 
 See `docs/python-api.md` for the generated Python API reference.
 
@@ -336,15 +339,18 @@ Every gateway can benchmark itself on the validation samples shipped with the pa
 from patronus_security import SecurityGateway
 
 scanner = SecurityGateway(
-    categories=["injection", "sensitive_documents", "tool_classifier"],
-    max_level="l2",
+    categories=["injection", "sensitive_document", "tool_class", "threat"],
+    max_level="l3",
+    l3_strategy="multi",
 )
 scanner.warmup()
 scanner.run_local_benchmark()
 ```
 
-This prints a summary and writes a readable `BENCHMARK.md` plus six JSON files
-(with the real prompts, so mispredictions can be inspected) into `./benchmark/`:
+This executes the complete suite once with dedicated L3 models and once with
+the unified multi-head L3 model. `./benchmark/BENCHMARK.md` links both runs;
+their six JSON files and detailed summaries live in `./benchmark/dedicated/`
+and `./benchmark/multi/` (with the real prompts, so mispredictions can be inspected):
 
 - `benign_result.json` — 100 benign prompts through the joint `scan_all` decision: class distribution, false-positive rate, latency.
 - `example_result.json` — one real queued sample with all configured pipelines active. Contains the input and every complete result exactly as returned by the shared consume queue, including L2 and L3.

@@ -12,7 +12,7 @@ use super::{
     compact_tokenizer::ensure_granite_compact_tokenizer,
     specs::{
         AssetSpec, NtdbL2PackageAssetSpec, PipelineModelAssetSpec, ASSET_MANIFEST,
-        DYNAMIC_PII_ASSET, NTDB_L2_PACKAGE_MANIFEST,
+        DEDICATED_L3_ASSETS, DYNAMIC_PII_ASSET, NTDB_L2_PACKAGE_MANIFEST, UNIFIED_L3_ASSET,
     },
 };
 
@@ -78,6 +78,42 @@ pub fn download_dynamic_pii_assets(
     download_pipeline_model_assets(DYNAMIC_PII_ASSET, target_dir)
 }
 
+/// Check whether the complete revision-pinned unified L3 model is cached.
+pub fn unified_l3_assets_present(target_dir: &Path) -> bool {
+    pipeline_model_assets_present(UNIFIED_L3_ASSET, target_dir)
+}
+
+/// Download the revision-pinned unified L3 bundle.
+pub fn download_unified_l3_assets(
+    target_dir: &Path,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    download_pipeline_model_assets(UNIFIED_L3_ASSET, target_dir)
+}
+
+/// Return the revision-pinned dedicated L3 bundle for a classifier category.
+pub fn dedicated_l3_asset(category: SecurityCategory) -> Option<PipelineModelAssetSpec> {
+    DEDICATED_L3_ASSETS
+        .iter()
+        .copied()
+        .find(|asset| asset.category == category)
+}
+
+/// Check whether a category's dedicated L3 bundle is cached.
+pub fn dedicated_l3_assets_present(category: SecurityCategory, target_dir: &Path) -> bool {
+    dedicated_l3_asset(category)
+        .is_none_or(|asset| pipeline_model_assets_present(asset, target_dir))
+}
+
+/// Download a category's revision-pinned dedicated L3 bundle when it has one.
+pub fn download_dedicated_l3_assets(
+    category: SecurityCategory,
+    target_dir: &Path,
+) -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
+    dedicated_l3_asset(category)
+        .map(|asset| download_pipeline_model_assets(asset, target_dir))
+        .transpose()
+}
+
 fn pipeline_model_assets_present(asset: PipelineModelAssetSpec, target_dir: &Path) -> bool {
     let bundle_dir = target_dir.join(asset.destination_path);
     asset
@@ -104,7 +140,7 @@ fn download_pipeline_model_assets(
             file,
             &destination,
             true,
-            asset.category.as_str(),
+            asset.model,
         )?;
     }
     Ok(bundle_dir)

@@ -13,34 +13,6 @@ use crate::{
 
 use super::scan_result;
 
-pub const TOOL_PROMPTS_MODEL: &str = "tool-prompts-model";
-pub const TOOL_EXECUTIONS_MODEL: &str = "tool-executions-model";
-pub const TOOL_CLASSIFIER_DESCRIPTIONS_MODEL: &str = "tool-classifier-descriptions-model";
-pub const NTDB_TOOL_PROMPTS_MODEL_ID: &str = "tool_prompts";
-pub const NTDB_TOOL_EXECUTIONS_MODEL_ID: &str = "tool_executions";
-pub const NTDB_TOOL_DESCRIPTIONS_MODEL_ID: &str = "tool_descriptions";
-const TOOL_CLASS_NAMES: &[&str] = &[
-    "tool_class.file.read",
-    "tool_class.file.search",
-    "tool_class.file.list",
-    "tool_class.file.write",
-    "tool_class.file.delete",
-    "tool_class.shell.execute",
-    "tool_class.web.search",
-    "tool_class.web.fetch",
-    "tool_class.browser.action",
-    "tool_class.api.read",
-    "tool_class.api.write",
-    "tool_class.database.read",
-    "tool_class.database.write",
-    "tool_class.vcs.read",
-    "tool_class.vcs.write",
-    "tool_class.memory.read",
-    "tool_class.memory.write",
-    "tool_class.messaging.send",
-    "tool_class.unknown",
-];
-
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct NtdbL2ModelConfig {
     pub category: SecurityCategory,
@@ -49,16 +21,6 @@ pub struct NtdbL2ModelConfig {
     pub env_key: &'static str,
     pub package_name: &'static str,
     pub has_l3: bool,
-}
-
-pub(super) fn tool_classifier_area_enabled(
-    execution: &ScanExecution,
-    model: &str,
-    aliases: &[&str],
-) -> bool {
-    execution.allows_model("tool_classifier")
-        && execution.allows_model(model)
-        && aliases.iter().all(|alias| execution.allows_model(alias))
 }
 
 pub fn ntdb_l2_model_configs_for_category(
@@ -85,88 +47,79 @@ pub fn ntdb_l2_model_configs_for_category(
                 Vec::new()
             }
         }
-        SecurityCategory::SensitiveDocuments => {
-            if execution.allows_model("sensitive_documents")
+        SecurityCategory::SensitiveDocument => {
+            if execution.allows_model("sensitive_document")
                 && execution.allows_model("orca-sonar-document-classifier")
             {
                 vec![NtdbL2ModelConfig {
                     category,
-                    model_id: "sensitive_documents",
+                    model_id: "sensitive_document",
                     public_model: "orca-sonar-document-classifier",
                     env_key: "PATRONUS_NTDB_SENSITIVE_DOCUMENTS_DIR",
-                    package_name: "sensitive_documents_current",
+                    package_name: "sensitive_document_current",
                     has_l3: true,
                 }]
             } else {
                 Vec::new()
             }
         }
-        SecurityCategory::ToolClassifier => {
-            let mut configs = Vec::new();
-            if tool_classifier_area_enabled(
-                execution,
-                TOOL_PROMPTS_MODEL,
-                &[
-                    "tool_classifier.prompt",
-                    "tool_classifier.prompts",
-                    "tool_classifier_prompt",
-                    "tool_classifier_prompts",
-                ],
-            ) {
-                configs.push(NtdbL2ModelConfig {
-                    category,
-                    model_id: NTDB_TOOL_PROMPTS_MODEL_ID,
-                    public_model: TOOL_PROMPTS_MODEL,
-                    env_key: "PATRONUS_NTDB_TOOL_PROMPTS_DIR",
-                    package_name: "tool_prompts_current",
-                    has_l3: false,
-                });
-            }
-            if tool_classifier_area_enabled(
-                execution,
-                TOOL_EXECUTIONS_MODEL,
-                &[
-                    "tool_classifier.execution",
-                    "tool_classifier.executions",
-                    "tool_classifier_execution",
-                    "tool_classifier_executions",
-                ],
-            ) {
-                configs.push(NtdbL2ModelConfig {
-                    category,
-                    model_id: NTDB_TOOL_EXECUTIONS_MODEL_ID,
-                    public_model: TOOL_EXECUTIONS_MODEL,
-                    env_key: "PATRONUS_NTDB_TOOL_EXECUTIONS_DIR",
-                    package_name: "tool_executions_current",
-                    has_l3: false,
-                });
-            }
-            if tool_classifier_area_enabled(
-                execution,
-                TOOL_CLASSIFIER_DESCRIPTIONS_MODEL,
-                &[
-                    "tool_classifier.description",
-                    "tool_classifier.descriptions",
-                    "tool_classifier_description",
-                    "tool_classifier_descriptions",
-                ],
-            ) {
-                configs.push(NtdbL2ModelConfig {
-                    category,
-                    model_id: NTDB_TOOL_DESCRIPTIONS_MODEL_ID,
-                    public_model: TOOL_CLASSIFIER_DESCRIPTIONS_MODEL,
-                    env_key: "PATRONUS_NTDB_TOOL_DESCRIPTIONS_DIR",
-                    package_name: "tool_descriptions_current",
-                    has_l3: false,
-                });
-            }
-            configs
-        }
-        SecurityCategory::Dlp
-        | SecurityCategory::Pii
-        | SecurityCategory::DynamicPii
-        | SecurityCategory::UserIntent => Vec::new(),
+        SecurityCategory::ToolClass => model_config(
+            execution,
+            category,
+            "unified-v3-tool-class",
+            "PATRONUS_NTDB_TOOL_CLASS_DIR",
+            "tool_class_current",
+        ),
+        SecurityCategory::ToolAction => model_config(
+            execution,
+            category,
+            "unified-v3-tool-action",
+            "PATRONUS_NTDB_TOOL_ACTION_DIR",
+            "tool_action_current",
+        ),
+        SecurityCategory::ToolTags => model_config(
+            execution,
+            category,
+            "unified-v3-tool-tags",
+            "PATRONUS_NTDB_TOOL_TAGS_DIR",
+            "tool_tags_current",
+        ),
+        SecurityCategory::Routing => model_config(
+            execution,
+            category,
+            "unified-v3-routing",
+            "PATRONUS_NTDB_ROUTING_DIR",
+            "routing_current",
+        ),
+        SecurityCategory::Threat => model_config(
+            execution,
+            category,
+            "unified-v3-threat",
+            "PATRONUS_NTDB_THREAT_DIR",
+            "threat_current",
+        ),
+        SecurityCategory::Dlp | SecurityCategory::Pii | SecurityCategory::DynamicPii => Vec::new(),
     }
+}
+
+fn model_config(
+    execution: &ScanExecution,
+    category: SecurityCategory,
+    public_model: &'static str,
+    env_key: &'static str,
+    package_name: &'static str,
+) -> Vec<NtdbL2ModelConfig> {
+    if !execution.allows_model(category.as_str()) || !execution.allows_model(public_model) {
+        return Vec::new();
+    }
+    vec![NtdbL2ModelConfig {
+        category,
+        model_id: category.as_str(),
+        public_model,
+        env_key,
+        package_name,
+        has_l3: true,
+    }]
 }
 
 #[cfg(feature = "test-util")]
@@ -174,8 +127,12 @@ pub fn ntdb_l2_model_config_for_id(model_id: &str) -> Option<NtdbL2ModelConfig> 
     let execution = ScanExecution::new(SecurityLevel::L2);
     [
         SecurityCategory::Injection,
-        SecurityCategory::SensitiveDocuments,
-        SecurityCategory::ToolClassifier,
+        SecurityCategory::SensitiveDocument,
+        SecurityCategory::ToolClass,
+        SecurityCategory::ToolAction,
+        SecurityCategory::ToolTags,
+        SecurityCategory::Routing,
+        SecurityCategory::Threat,
     ]
     .into_iter()
     .flat_map(|category| ntdb_l2_model_configs_for_category(&execution, category))
@@ -316,7 +273,10 @@ pub fn ntdb_l2_scan_result(
     execution: &ScanExecution,
     duration_ms: f64,
 ) -> SecurityScanResult {
-    let (result, layers) = ntdb_l2_result_parts(decision, execution, duration_ms, config.has_l3);
+    let allow_l3 = config.has_l3
+        && (execution.l3_strategy() == crate::L3Strategy::Dedicated
+            || execution.allows_model(crate::ml::unified_onnx::UNIFIED_MODEL));
+    let (result, layers) = ntdb_l2_result_parts(decision, execution, duration_ms, allow_l3);
     scan_result(config.category, config.public_model, result, layers)
 }
 
@@ -343,95 +303,5 @@ pub(super) fn validate_ntdb_l2_package(
             config.public_model
         )
     })?;
-    validate_ntdb_l2_label_contract(config, &manifest)?;
     Ok((NtdbPackageSpec::new(config.model_id, package_dir), manifest))
-}
-
-fn validate_ntdb_l2_label_contract(
-    config: NtdbL2ModelConfig,
-    manifest: &PackageManifest,
-) -> Result<(), Box<dyn std::error::Error>> {
-    if config.category != SecurityCategory::ToolClassifier {
-        return Ok(());
-    }
-
-    validate_tool_class_labels(config, "task", &manifest.task.labels)?;
-    for aggregator in &manifest.aggregators {
-        validate_tool_class_labels(config, &aggregator.id, &aggregator.task.labels)?;
-    }
-    Ok(())
-}
-
-fn validate_tool_class_labels(
-    config: NtdbL2ModelConfig,
-    scope: &str,
-    labels: &[String],
-) -> Result<(), Box<dyn std::error::Error>> {
-    if labels.is_empty() {
-        return Err(format!(
-            "invalid NTDB v2 L2 export for {}/{}: empty tool labels in {}",
-            config.category.as_str(),
-            config.public_model,
-            scope
-        )
-        .into());
-    }
-    let unknown = labels
-        .iter()
-        .filter(|label| !TOOL_CLASS_NAMES.contains(&label.as_str()))
-        .collect::<Vec<_>>();
-    if !unknown.is_empty() {
-        return Err(format!(
-            "invalid NTDB v2 L2 export for {}/{}: unknown tool label(s) in {}: {}",
-            config.category.as_str(),
-            config.public_model,
-            scope,
-            unknown
-                .into_iter()
-                .map(String::as_str)
-                .collect::<Vec<_>>()
-                .join(",")
-        )
-        .into());
-    }
-    Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn tool_config() -> NtdbL2ModelConfig {
-        NtdbL2ModelConfig {
-            category: SecurityCategory::ToolClassifier,
-            model_id: NTDB_TOOL_PROMPTS_MODEL_ID,
-            public_model: TOOL_PROMPTS_MODEL,
-            env_key: "PATRONUS_NTDB_TOOL_PROMPTS_DIR",
-            package_name: "tool_prompts_current",
-            has_l3: false,
-        }
-    }
-
-    #[test]
-    fn tool_class_label_contract_accepts_known_labels() {
-        let labels = vec![
-            "tool_class.file.read".to_string(),
-            "tool_class.messaging.send".to_string(),
-            "tool_class.unknown".to_string(),
-        ];
-
-        validate_tool_class_labels(tool_config(), "task", &labels).unwrap();
-    }
-
-    #[test]
-    fn tool_class_label_contract_rejects_unknown_labels() {
-        let labels = vec!["17".to_string(), "tool_class.file.read".to_string()];
-
-        let err = validate_tool_class_labels(tool_config(), "task", &labels)
-            .unwrap_err()
-            .to_string();
-
-        assert!(err.contains("unknown tool label"));
-        assert!(err.contains("17"));
-    }
 }

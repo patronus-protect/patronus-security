@@ -194,7 +194,7 @@ GLINER_CATEGORY_MAP = {
     "default": {
         "default": ("organization", "location", "date", "person"),
     },
-    "sensitive_documents": {
+    "sensitive_document": {
         "finance": ("accounting_period", "person", "legal_party", "street_address"),
         "hr": (
             "employee_identifier",
@@ -245,8 +245,8 @@ GLINER_CATEGORY_MAP = {
             "medication",
         ),
     },
-    "tool_classifier": {
-        "tool_class.file.read": (
+    "tool_class": {
+        "file": (
             "contract",
             "person",
             "legal_party",
@@ -263,14 +263,14 @@ GLINER_CATEGORY_MAP = {
             "disability",
             "political_affiliation",
         ),
-        "tool_class.web.fetch": (
+        "web": (
             "law_or_regulation",
             "court",
             "product",
             "brand",
             "campaign",
         ),
-        "tool_class.database.read": (
+        "database": (
             "accounting_period",
             "employee_identifier",
             "job_title",
@@ -291,7 +291,7 @@ GLINER_CATEGORY_MAP = {
             "disability",
             "political_affiliation",
         ),
-        "tool_class.api.read": (
+        "api": (
             "person",
             "legal_party",
             "street_address",
@@ -307,7 +307,7 @@ GLINER_CATEGORY_MAP = {
             "disability",
             "political_affiliation",
         ),
-        "tool_class.memory.read": (
+        "memory": (
             "person",
             "street_address",
             "username",
@@ -320,7 +320,7 @@ GLINER_CATEGORY_MAP = {
             "disability",
             "political_affiliation",
         ),
-        "tool_class.messaging.send": (
+        "messaging": (
             "person",
             "street_address",
             "username",

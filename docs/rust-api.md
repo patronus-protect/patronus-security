@@ -26,11 +26,11 @@ pub use dynamic_pii::{
 pub use external_l1::{ExternalL1Detector, ExternalL1Input};
 pub use pipeline::{Pipeline, SecurityGateway};
 pub use types::{
-    EvaluationResult, ExecutionBackend, L3SchedulerPolicy, LayerResult, NtdbOperatingPoint,
-    OnnxBatchMode, QueuedSecurityEvent, QueuedSecurityScanResult, RequestId, ScanExecution,
-    ScanGateMatrix, SecurityAssetReadiness, SecurityCategory, SecurityFailure, SecurityFailureKind,
-    SecurityFailureStage, SecurityLevel, SecurityLevelReadiness, SecurityRequestCompletion,
-    SecurityRequestState, SecurityRuntimeReadiness, SecurityScanResult,
+    EvaluationResult, ExecutionBackend, L3SchedulerPolicy, L3Strategy, LabelScore, LayerResult,
+    NtdbOperatingPoint, OnnxBatchMode, QueuedSecurityEvent, QueuedSecurityScanResult, RequestId,
+    ScanExecution, ScanGateMatrix, SecurityAssetReadiness, SecurityCategory, SecurityFailure,
+    SecurityFailureKind, SecurityFailureStage, SecurityLevel, SecurityLevelReadiness,
+    SecurityRequestCompletion, SecurityRequestState, SecurityRuntimeReadiness, SecurityScanResult,
 };
 ```
 
@@ -133,6 +133,18 @@ pub fn set_ntdb_operating_point(&self, point: NtdbOperatingPoint);
 ```
 
 Select the calibrated NTDB operating point used by subsequent scans.
+
+```rust
+pub fn set_l3_strategy(&self, strategy: crate::L3Strategy);
+```
+
+Select dedicated per-pipeline L3 models or the shared multi-head model.
+
+```rust
+pub fn l3_strategy(&self) -> crate::L3Strategy;
+```
+
+Return the active global L3 model strategy.
 
 ```rust
 pub fn ntdb_operating_point(&self) -> NtdbOperatingPoint;
@@ -585,10 +597,22 @@ pub struct SecurityScanResult {
     pub layers: Vec<LayerResult>,
     /// Exact entity evidence returned by span-producing pipelines.
     pub evidence_spans: Vec<crate::dynamic_pii::EvidenceSpan>,
+    /// Per-label scores for multi-label classifier outputs.
+    pub label_scores: Vec<LabelScore>,
 }
 ```
 
 Public scan result returned by `SecurityGateway` methods.
+
+```rust
+pub struct LabelScore {
+    pub label: String,
+    pub confidence: f64,
+    pub matched: bool,
+}
+```
+
+One scored label returned by a multi-label classifier head.
 
 ```rust
 pub enum SecurityLevel {
@@ -666,6 +690,23 @@ pub enum ExecutionBackend {
 Runtime backend profile used to choose default L3 execution behavior.
 
 ```rust
+pub enum L3Strategy {
+    /// Each promoted pipeline executes its own L3 model.
+    Dedicated,
+    /// Promoted classifier pipelines share one request-local multi-head model run.
+    Multi,
+}
+```
+
+Physical L3 classifier topology.
+
+```rust
+pub fn as_str(self) -> &'static str;
+```
+
+No public documentation is available yet.
+
+```rust
 pub fn as_str(self) -> &'static str;
 ```
 
@@ -680,7 +721,7 @@ pub struct ScanGateMatrix {
     /// Optional L3 override. `None` means enabled.
     pub l3: Option<bool>,
     /// Optional per-model or per-native-scanner overrides keyed by result model
-    /// names such as `native:mcp_runtime_risk` or `tool-executions-model`.
+    /// names such as `native:mcp_runtime_risk` or `unified-v3-tool-action`.
     pub models: HashMap<String, bool>,
     /// L3 worker scheduling policy.
     pub l3_policy: L3SchedulerPolicy,
@@ -770,6 +811,7 @@ pub struct ScanExecution {
     backend: ExecutionBackend,
     onnx_batch_mode: OnnxBatchMode,
     ntdb_operating_point: NtdbOperatingPoint,
+    l3_strategy: L3Strategy,
     defer_l3: bool,
 }
 ```
@@ -811,6 +853,12 @@ pub fn set_ntdb_operating_point(&mut self, point: NtdbOperatingPoint);
 ```
 
 Select the calibrated NTDB operating point used by subsequent scans.
+
+```rust
+pub fn set_l3_strategy(&mut self, strategy: L3Strategy);
+```
+
+Select the physical L3 classifier topology.
 
 ```rust
 pub fn set_defer_l3(&mut self, defer_l3: bool);
@@ -862,6 +910,12 @@ pub fn ntdb_operating_point(&self) -> NtdbOperatingPoint;
 Return the selected NTDB operating point.
 
 ```rust
+pub fn l3_strategy(&self) -> L3Strategy;
+```
+
+Return the selected physical L3 classifier topology.
+
+```rust
 pub fn defer_l3(&self) -> bool;
 ```
 
@@ -889,12 +943,18 @@ pub enum SecurityCategory {
     Pii,
     /// Dynamic zero-shot entity extraction in the L3 worker.
     DynamicPii,
-    /// Agentic tool prompt and execution risk checks.
-    ToolClassifier,
-    /// User-intent classification.
-    UserIntent,
     /// Sensitive document classification.
-    SensitiveDocuments,
+    SensitiveDocument,
+    /// Tool type classification.
+    ToolClass,
+    /// Tool operation classification.
+    ToolAction,
+    /// Multi-label tool source and sink tags.
+    ToolTags,
+    /// Operational request routing.
+    Routing,
+    /// Security threat classification.
+    Threat,
 }
 ```
 
@@ -905,6 +965,12 @@ pub fn as_str(self) -> &'static str;
 ```
 
 Return the canonical snake_case category string.
+
+```rust
+pub fn is_unified_classifier(self) -> bool;
+```
+
+Return whether this category is backed by one head of the unified classifier.
 
 ## Asset Manifest Helpers
 
@@ -1017,6 +1083,41 @@ pub fn download_dynamic_pii_assets(
 ```
 
 Download the revision-pinned `dynamic-pii` GLiNER bundle.
+
+```rust
+pub fn unified_l3_assets_present(target_dir: &Path) -> bool;
+```
+
+Check whether the complete revision-pinned unified L3 model is cached.
+
+```rust
+pub fn download_unified_l3_assets(
+    target_dir: &Path,
+) -> Result<PathBuf, Box<dyn std::error::Error>>;
+```
+
+Download the revision-pinned unified L3 bundle.
+
+```rust
+pub fn dedicated_l3_asset(category: SecurityCategory) -> Option<PipelineModelAssetSpec>;
+```
+
+Return the revision-pinned dedicated L3 bundle for a classifier category.
+
+```rust
+pub fn dedicated_l3_assets_present(category: SecurityCategory, target_dir: &Path) -> bool;
+```
+
+Check whether a category's dedicated L3 bundle is cached.
+
+```rust
+pub fn download_dedicated_l3_assets(
+    category: SecurityCategory,
+    target_dir: &Path,
+) -> Result<Option<PathBuf>, Box<dyn std::error::Error>>;
+```
+
+Download a category's revision-pinned dedicated L3 bundle when it has one.
 
 ```rust
 pub fn download_category_assets(

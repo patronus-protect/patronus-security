@@ -11,8 +11,9 @@ use crate::{
         dynamic_pii::DynamicPiiRuntime,
         ntdb_executor::{manifest::PackageManifest, NtdbExecutor, NtdbPackageSpec},
         onnx::LazyOnnxTextClassifier,
+        unified_onnx::LazyUnifiedOnnxClassifier,
     },
-    SecurityAssetReadiness, SecurityCategory, SecurityFailure, SecurityFailureKind,
+    L3Strategy, SecurityAssetReadiness, SecurityCategory, SecurityFailure, SecurityFailureKind,
     SecurityFailureStage, SecurityLevel, SecurityLevelReadiness,
 };
 
@@ -70,6 +71,8 @@ impl SecurityGateway {
     fn warmup_from_local_assets_inner(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let base_dir = self.model_base_dir()?;
         let prepared = self.prepare_assets_inner(false)?;
+        self.l3_worker
+            .configure_strategy(self.scan_execution().l3_strategy());
 
         log::info!(
             "model_dir={}; max_level={}; downloads=false",
@@ -92,6 +95,25 @@ impl SecurityGateway {
                 &assets.manifest,
             )?;
             ntdb_specs.push(assets.spec);
+        }
+
+        let execution = self.scan_execution();
+        if execution.l3_strategy() == L3Strategy::Multi
+            && execution.allows_level(SecurityLevel::L3)
+            && execution.allows_model(crate::ml::unified_onnx::UNIFIED_MODEL)
+            && self.categories.iter().copied().any(|category| {
+                ntdb_l2_model_configs_for_category(&execution, category)
+                    .iter()
+                    .any(|config| config.has_l3)
+            })
+        {
+            let bundle_dir = base_dir.join(assets::UNIFIED_L3_ASSET.destination_path);
+            self.l3_worker
+                .register_unified(LazyUnifiedOnnxClassifier::from_dir(&bundle_dir)?);
+            log::info!(
+                "unified multi-head L3 worker model registered from {}",
+                bundle_dir.display()
+            );
         }
 
         if self.categories.contains(&SecurityCategory::DynamicPii)
@@ -136,6 +158,36 @@ impl SecurityGateway {
         let execution = self.scan_execution();
         let mut prepared = PreparedAssets::default();
 
+        if execution.l3_strategy() == L3Strategy::Multi
+            && execution.allows_level(SecurityLevel::L3)
+            && execution.allows_model(crate::ml::unified_onnx::UNIFIED_MODEL)
+            && self.categories.iter().copied().any(|category| {
+                ntdb_l2_model_configs_for_category(&execution, category)
+                    .iter()
+                    .any(|config| config.has_l3)
+            })
+        {
+            let bundle_dir = base_dir.join(assets::UNIFIED_L3_ASSET.destination_path);
+            if !assets::unified_l3_assets_present(&base_dir) {
+                let may_download = allow_download
+                    && self
+                        .categories
+                        .iter()
+                        .copied()
+                        .filter(|category| category.is_unified_classifier())
+                        .any(|category| self.should_download_assets_for(category));
+                if may_download {
+                    assets::download_unified_l3_assets(&base_dir)?;
+                } else {
+                    return Err(format!(
+                        "missing unified L3 assets at {}; downloads disabled",
+                        bundle_dir.display()
+                    )
+                    .into());
+                }
+            }
+        }
+
         for category in &self.categories {
             if *category == SecurityCategory::DynamicPii {
                 if self.max_level < SecurityLevel::L3
@@ -175,11 +227,13 @@ impl SecurityGateway {
 
             let category_dir = match category {
                 SecurityCategory::Injection => base_dir.join("injection"),
-                SecurityCategory::SensitiveDocuments => base_dir.join("sensitive_documents"),
-                SecurityCategory::ToolClassifier => base_dir.join("tool_classifier"),
-                SecurityCategory::UserIntent | SecurityCategory::Dlp | SecurityCategory::Pii => {
-                    continue
-                }
+                SecurityCategory::SensitiveDocument => base_dir.join("sensitive_document"),
+                SecurityCategory::ToolClass => base_dir.join("tool_class"),
+                SecurityCategory::ToolAction => base_dir.join("tool_action"),
+                SecurityCategory::ToolTags => base_dir.join("tool_tags"),
+                SecurityCategory::Routing => base_dir.join("routing"),
+                SecurityCategory::Threat => base_dir.join("threat"),
+                SecurityCategory::Dlp | SecurityCategory::Pii => continue,
                 SecurityCategory::DynamicPii => unreachable!("handled above"),
             };
             let configs = ntdb_l2_model_configs_for_category(&execution, *category);
@@ -233,9 +287,30 @@ impl SecurityGateway {
                 });
             }
 
-            if !assets::required_assets_present(*category, self.max_level, &category_dir) {
+            let asset_level = if execution.l3_strategy() == L3Strategy::Multi {
+                SecurityLevel::L2.min(self.max_level)
+            } else {
+                self.max_level
+            };
+            if execution.l3_strategy() == L3Strategy::Dedicated
+                && execution.allows_level(SecurityLevel::L3)
+                && assets::dedicated_l3_asset(*category).is_some()
+                && !assets::dedicated_l3_assets_present(*category, &base_dir)
+            {
                 if allow_download && self.should_download_assets_for(*category) {
-                    assets::download_category_assets(*category, self.max_level, &category_dir)?;
+                    assets::download_dedicated_l3_assets(*category, &base_dir)?;
+                } else {
+                    return Err(format!(
+                        "missing {} dedicated L3 assets below {}; downloads disabled",
+                        category.as_str(),
+                        base_dir.display()
+                    )
+                    .into());
+                }
+            }
+            if !assets::required_assets_present(*category, asset_level, &category_dir) {
+                if allow_download && self.should_download_assets_for(*category) {
+                    assets::download_category_assets(*category, asset_level, &category_dir)?;
                 } else {
                     return Err(format!(
                         "missing {} assets at {}; downloads disabled",
@@ -256,13 +331,24 @@ impl SecurityGateway {
             self.categories.iter().copied().any(|category| {
                 !ntdb_l2_model_configs_for_category(&execution, category).is_empty()
             });
-        let l3_configured = execution.allows_level(SecurityLevel::L3)
-            && (self.categories.iter().copied().any(|category| {
+        let classifier_l3 = if execution.l3_strategy() == L3Strategy::Multi {
+            execution.allows_model(crate::ml::unified_onnx::UNIFIED_MODEL)
+                && self.categories.iter().copied().any(|category| {
+                    ntdb_l2_model_configs_for_category(&execution, category)
+                        .iter()
+                        .any(|config| config.has_l3)
+                })
+        } else {
+            self.categories.iter().copied().any(|category| {
                 ntdb_l2_model_configs_for_category(&execution, category)
                     .iter()
                     .any(|config| config.has_l3)
-            }) || (self.categories.contains(&SecurityCategory::DynamicPii)
-                && execution.allows_model(assets::DYNAMIC_PII_ASSET.model)));
+            })
+        };
+        let l3_configured = execution.allows_level(SecurityLevel::L3)
+            && (classifier_l3
+                || (self.categories.contains(&SecurityCategory::DynamicPii)
+                    && execution.allows_model(assets::DYNAMIC_PII_ASSET.model)));
         SecurityAssetReadiness {
             l2: configured_level_readiness(l2_configured),
             l3: configured_level_readiness(l3_configured),
@@ -295,12 +381,27 @@ impl SecurityGateway {
         if !config.has_l3 || self.max_level < SecurityLevel::L3 {
             return Ok(());
         }
+        if self.scan_execution().l3_strategy() == L3Strategy::Multi {
+            return Ok(());
+        }
         let model = match config.category {
             SecurityCategory::Injection => ntdb_injection_l3_worker_model(category_dir)?,
-            SecurityCategory::SensitiveDocuments => LazyOnnxTextClassifier::from_dir(
+            SecurityCategory::SensitiveDocument => LazyOnnxTextClassifier::from_dir(
                 category_dir.join("prompts"),
                 manifest.task.labels.clone(),
                 config.public_model,
+            )?,
+            SecurityCategory::ToolClass
+            | SecurityCategory::ToolAction
+            | SecurityCategory::ToolTags
+            | SecurityCategory::Routing
+            | SecurityCategory::Threat => LazyOnnxTextClassifier::from_dir_with_paths(
+                category_dir,
+                manifest.task.labels.clone(),
+                config.public_model,
+                &["l3/onnx/int8_int4_embeddings/model.onnx"],
+                "l3/tokenizer.json",
+                256,
             )?,
             _ => return Ok(()),
         };

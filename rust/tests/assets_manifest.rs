@@ -3,8 +3,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use patronus_security::{
     assets::{
-        category_assets, dynamic_pii_assets_present, ntdb_l2_package_assets,
-        required_assets_present, DYNAMIC_PII_ASSET,
+        category_assets, dedicated_l3_asset, dynamic_pii_assets_present, ntdb_l2_package_assets,
+        required_assets_present, DEDICATED_L3_ASSETS, DYNAMIC_PII_ASSET, UNIFIED_L3_ASSET,
     },
     SecurityCategory, SecurityLevel,
 };
@@ -57,10 +57,35 @@ fn dynamic_pii_bundle_is_complete_and_revision_pinned() {
 }
 
 #[test]
+fn unified_l3_bundle_and_dedicated_models_are_revision_pinned() {
+    assert_eq!(
+        UNIFIED_L3_ASSET.revision,
+        "9bcc55dcf955cda68c171524cd242ada9f5547d4"
+    );
+    assert!(UNIFIED_L3_ASSET
+        .files
+        .contains(&"onnx/int8_int4_embeddings/model.onnx"));
+    assert_eq!(DEDICATED_L3_ASSETS.len(), 5);
+    for category in [
+        SecurityCategory::ToolClass,
+        SecurityCategory::ToolAction,
+        SecurityCategory::ToolTags,
+        SecurityCategory::Routing,
+        SecurityCategory::Threat,
+    ] {
+        let asset = dedicated_l3_asset(category).expect("dedicated L3 asset");
+        assert_eq!(asset.revision.len(), 40);
+        assert!(asset
+            .files
+            .contains(&"onnx/int8_int4_embeddings/model.onnx"));
+    }
+}
+
+#[test]
 fn l3_model_categories_have_required_l3_assets() {
     for category in [
         SecurityCategory::Injection,
-        SecurityCategory::SensitiveDocuments,
+        SecurityCategory::SensitiveDocument,
     ] {
         let assets = category_assets(category, SecurityLevel::L3);
         assert!(
@@ -72,8 +97,8 @@ fn l3_model_categories_have_required_l3_assets() {
     }
 
     for category in [
-        SecurityCategory::ToolClassifier,
-        SecurityCategory::UserIntent,
+        SecurityCategory::ToolClass,
+        SecurityCategory::Routing,
         SecurityCategory::Pii,
     ] {
         assert!(category_assets(category, SecurityLevel::L3)
@@ -86,9 +111,9 @@ fn l3_model_categories_have_required_l3_assets() {
 fn static_manifest_has_no_legacy_l2_file_assets() {
     for category in [
         SecurityCategory::Injection,
-        SecurityCategory::ToolClassifier,
-        SecurityCategory::UserIntent,
-        SecurityCategory::SensitiveDocuments,
+        SecurityCategory::ToolClass,
+        SecurityCategory::Routing,
+        SecurityCategory::SensitiveDocument,
         SecurityCategory::Pii,
     ] {
         assert!(category_assets(category, SecurityLevel::L3)
@@ -107,24 +132,23 @@ fn ntdb_l2_package_manifest_has_available_model_specs() {
         vec!["l2_ntdb/injection_current"]
     );
     assert_eq!(
-        ntdb_l2_package_assets(SecurityCategory::SensitiveDocuments, SecurityLevel::L2)
+        ntdb_l2_package_assets(SecurityCategory::SensitiveDocument, SecurityLevel::L2)
             .iter()
             .map(|asset| asset.destination_path)
             .collect::<Vec<_>>(),
-        vec!["l2_ntdb/sensitive_documents_current"]
+        vec!["l2_ntdb/sensitive_document_current"]
     );
     assert_eq!(
-        ntdb_l2_package_assets(SecurityCategory::ToolClassifier, SecurityLevel::L2)
+        ntdb_l2_package_assets(SecurityCategory::ToolClass, SecurityLevel::L2)
             .iter()
             .map(|asset| asset.destination_path)
             .collect::<Vec<_>>(),
-        vec![
-            "l2_ntdb/tool_prompts_current",
-            "l2_ntdb/tool_executions_current",
-            "l2_ntdb/tool_descriptions_current"
-        ]
+        vec!["l2_ntdb/tool_class_current"]
     );
-    assert!(ntdb_l2_package_assets(SecurityCategory::UserIntent, SecurityLevel::L2).is_empty());
+    assert_eq!(
+        ntdb_l2_package_assets(SecurityCategory::Routing, SecurityLevel::L2).len(),
+        1
+    );
     assert!(ntdb_l2_package_assets(SecurityCategory::Dlp, SecurityLevel::L2).is_empty());
     assert!(ntdb_l2_package_assets(SecurityCategory::Pii, SecurityLevel::L2).is_empty());
 }
@@ -133,9 +157,9 @@ fn ntdb_l2_package_manifest_has_available_model_specs() {
 fn asset_manifest_has_unique_destination_paths_per_category() {
     for category in [
         SecurityCategory::Injection,
-        SecurityCategory::ToolClassifier,
-        SecurityCategory::UserIntent,
-        SecurityCategory::SensitiveDocuments,
+        SecurityCategory::ToolClass,
+        SecurityCategory::Routing,
+        SecurityCategory::SensitiveDocument,
         SecurityCategory::Pii,
     ] {
         let mut seen = HashSet::new();
@@ -153,9 +177,9 @@ fn asset_manifest_has_unique_destination_paths_per_category() {
 fn ntdb_l2_package_manifest_has_unique_destination_paths_per_category() {
     for category in [
         SecurityCategory::Injection,
-        SecurityCategory::ToolClassifier,
-        SecurityCategory::UserIntent,
-        SecurityCategory::SensitiveDocuments,
+        SecurityCategory::ToolClass,
+        SecurityCategory::Routing,
+        SecurityCategory::SensitiveDocument,
         SecurityCategory::Pii,
     ] {
         let mut seen = HashSet::new();
@@ -174,7 +198,7 @@ fn ntdb_l2_package_manifest_has_unique_destination_paths_per_category() {
 #[test]
 fn only_required_assets_are_needed_for_presence_check() {
     let dir = temp_dir("required_only");
-    let required: Vec<_> = category_assets(SecurityCategory::ToolClassifier, SecurityLevel::L3)
+    let required: Vec<_> = category_assets(SecurityCategory::ToolClass, SecurityLevel::L3)
         .into_iter()
         .filter(|asset| asset.required)
         .collect();
@@ -186,7 +210,7 @@ fn only_required_assets_are_needed_for_presence_check() {
     }
 
     assert!(required_assets_present(
-        SecurityCategory::ToolClassifier,
+        SecurityCategory::ToolClass,
         SecurityLevel::L3,
         &dir
     ));
@@ -240,26 +264,22 @@ mod asset_downloads {
         assert_eq!(injection[0].destination_path, "l2_ntdb/injection_current");
 
         let sensitive =
-            ntdb_l2_package_assets(SecurityCategory::SensitiveDocuments, SecurityLevel::L2);
+            ntdb_l2_package_assets(SecurityCategory::SensitiveDocument, SecurityLevel::L2);
         assert_eq!(sensitive.len(), 1);
         assert_eq!(sensitive[0].model, "orca-sonar-document-classifier");
         assert_eq!(
             sensitive[0].destination_path,
-            "l2_ntdb/sensitive_documents_current"
+            "l2_ntdb/sensitive_document_current"
         );
 
-        let tool = ntdb_l2_package_assets(SecurityCategory::ToolClassifier, SecurityLevel::L2);
+        let tool = ntdb_l2_package_assets(SecurityCategory::ToolClass, SecurityLevel::L2);
         let models = tool.iter().map(|asset| asset.model).collect::<Vec<_>>();
-        assert_eq!(
-            models,
-            vec![
-                "tool-prompts-model",
-                "tool-executions-model",
-                "tool-classifier-descriptions-model"
-            ]
-        );
+        assert_eq!(models, vec!["unified-v3-tool-class"]);
 
-        assert!(ntdb_l2_package_assets(SecurityCategory::UserIntent, SecurityLevel::L2).is_empty());
+        assert_eq!(
+            ntdb_l2_package_assets(SecurityCategory::Routing, SecurityLevel::L2)[0].model,
+            "unified-v3-routing"
+        );
         assert!(ntdb_l2_package_assets(SecurityCategory::Dlp, SecurityLevel::L2).is_empty());
         assert!(ntdb_l2_package_assets(SecurityCategory::Pii, SecurityLevel::L2).is_empty());
     }
@@ -272,14 +292,14 @@ mod asset_downloads {
             && asset.destination_path == "l3/onnx/onnx_mixed/model_mixed.onnx"
             && asset.required));
 
-        let tool_assets = category_assets(SecurityCategory::ToolClassifier, SecurityLevel::L3);
+        let tool_assets = category_assets(SecurityCategory::ToolClass, SecurityLevel::L3);
         assert!(tool_assets.is_empty());
 
-        let user_intent_assets = category_assets(SecurityCategory::UserIntent, SecurityLevel::L3);
+        let user_intent_assets = category_assets(SecurityCategory::Routing, SecurityLevel::L3);
         assert!(user_intent_assets.is_empty());
 
         let sensitive_document_assets =
-            category_assets(SecurityCategory::SensitiveDocuments, SecurityLevel::L3);
+            category_assets(SecurityCategory::SensitiveDocument, SecurityLevel::L3);
         assert!(sensitive_document_assets
             .iter()
             .any(

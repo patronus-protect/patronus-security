@@ -45,6 +45,14 @@ def _to_dict(result):
             }
             for span in result.evidence_spans
         ],
+        "label_scores": [
+            {
+                "label": score.label,
+                "confidence": score.confidence,
+                "matched": score.matched,
+            }
+            for score in result.label_scores
+        ],
     }
     request_id = getattr(result, "request_id", None)
     if request_id is not None:
@@ -100,18 +108,14 @@ def _execution_gates_json(execution_gates):
     normalized = {"levels": {}, "models": {}}
     levels = execution_gates.get("levels", {})
     models = execution_gates.get("models", execution_gates.get("model_areas", {}))
-    tool_classifier = execution_gates.get("tool_classifier", {})
     l3_policy = execution_gates.get("l3")
 
     if not isinstance(levels, dict):
         raise ValueError("execution_gates['levels'] must be a dict")
     if not isinstance(models, dict):
         raise ValueError("execution_gates['models'] must be a dict")
-    if tool_classifier and not isinstance(tool_classifier, dict):
-        raise ValueError("execution_gates['tool_classifier'] must be a dict")
     levels = dict(levels)
     models = dict(models)
-    tool_classifier = dict(tool_classifier)
 
     for key, value in execution_gates.items():
         lowered = str(key).lower()
@@ -126,28 +130,6 @@ def _execution_gates_json(execution_gates):
         if not isinstance(value, bool):
             raise ValueError(f"execution_gates model {key!r} must be a bool")
         normalized["models"][str(key)] = value
-    for key, value in tool_classifier.items():
-        if not isinstance(value, bool):
-            raise ValueError(f"execution_gates tool_classifier {key!r} must be a bool")
-        lowered = str(key).lower()
-        valid_areas = {
-            "description",
-            "descriptions",
-            "execution",
-            "executions",
-            "prompt",
-            "prompts",
-        }
-        if lowered not in valid_areas:
-            raise ValueError(
-                "execution_gates['tool_classifier'] keys must be description, execution, or prompt"
-            )
-        canonical = {
-            "descriptions": "description",
-            "executions": "execution",
-            "prompts": "prompt",
-        }.get(lowered, lowered)
-        normalized["models"][f"tool_classifier.{canonical}"] = value
     if l3_policy is not None and not isinstance(l3_policy, bool):
         if not isinstance(l3_policy, dict):
             raise ValueError("execution_gates['l3'] must be a dict or bool")
@@ -180,10 +162,8 @@ class SecurityGateway:
             `{"levels": {"l1": True, "l2": False, "l3": False},
             "models": {"native:mcp_runtime_risk": False}}` to disable
             levels or model/native scanner areas for subsequent scan calls.
-            For `tool_classifier`, use
-            `{"tool_classifier": {"description": False, "execution": True,
-            "prompt": False}}` to gate its subpipelines. Unspecified gates
-            default to enabled.
+            New classifier pipelines can be gated independently through
+            `models`, for example `{"models": {"tool_action": False}}`.
         onnx_batch_mode: `lazy_batches` keeps per-text ONNX execution;
             `tensor_batch` executes L3 fallbacks as one ONNX tensor batch
             when using batch APIs.
@@ -194,6 +174,8 @@ class SecurityGateway:
         ntdb_operating_point: Calibrated NTDB threshold set. One of
             `best_promote` (default), `best_f1`, `best_fpr_in_f1`,
             `best_fnr_in_f1`, or `best_latency_in_f1`.
+        l3_strategy: `dedicated` for one L3 model per classifier pipeline or
+            `multi` for the shared unified multi-head ONNX model.
         dynamic_pii_config: Pipeline-specific labels, result gates,
             thresholds, chunking, text limit, and timeout for the L3-only
             `dynamic-pii` category.
@@ -210,16 +192,33 @@ class SecurityGateway:
         onnx_batch_mode: str = "backend_default",
         execution_backend: str = "auto",
         ntdb_operating_point: str = "best_promote",
+        l3_strategy: str = "dedicated",
         dynamic_pii_config: dict | None = None,
     ):
         self._categories = list(categories)
         self._max_level = max_level
+        self._l3_strategy = l3_strategy
+        self._execution_gates = deepcopy(execution_gates)
         self._dynamic_pii_config = deepcopy(dynamic_pii_config or {})
+        self._benchmark_gateway_config = {
+            "categories": list(categories),
+            "max_level": max_level,
+            "model_dir": model_dir,
+            "download_files": download_files,
+            "download_categories": deepcopy(download_categories),
+            "execution_gates": deepcopy(execution_gates),
+            "onnx_batch_mode": onnx_batch_mode,
+            "execution_backend": execution_backend,
+            "ntdb_operating_point": ntdb_operating_point,
+            "l3_strategy": l3_strategy,
+            "dynamic_pii_config": deepcopy(dynamic_pii_config),
+        }
         self._benchmark_worker_config = {
             "model_dir": model_dir,
             "onnx_batch_mode": onnx_batch_mode,
             "execution_backend": execution_backend,
             "ntdb_operating_point": ntdb_operating_point,
+            "l3_strategy": l3_strategy,
         }
         self.rust_gateway = RustSecurityGateway(
             categories,
@@ -231,6 +230,7 @@ class SecurityGateway:
             onnx_batch_mode=onnx_batch_mode,
             execution_backend=execution_backend,
             ntdb_operating_point=ntdb_operating_point,
+            l3_strategy=l3_strategy,
             dynamic_pii_config_json=_dynamic_pii_config_json(dynamic_pii_config),
         )
 
@@ -243,6 +243,11 @@ class SecurityGateway:
     def max_level(self) -> str:
         """Maximum scanner level configured for this gateway."""
         return self._max_level
+
+    @property
+    def l3_strategy(self) -> str:
+        """Active global L3 model strategy."""
+        return self._l3_strategy
 
     def warmup(self):
         """Initialize model-backed scanners and download allowed missing assets.
@@ -272,6 +277,8 @@ class SecurityGateway:
         `model` values such as `native:mcp_runtime_risk`.
         """
         self.rust_gateway.set_execution_gates(_execution_gates_json(execution_gates))
+        self._execution_gates = deepcopy(execution_gates)
+        self._benchmark_gateway_config["execution_gates"] = deepcopy(execution_gates)
 
     def set_onnx_batch_mode(self, mode: str):
         """Replace the ONNX batch mode for subsequent batch calls.
@@ -281,6 +288,8 @@ class SecurityGateway:
         pipelines can batch their fallback texts.
         """
         self.rust_gateway.set_onnx_batch_mode(mode)
+        self._benchmark_worker_config["onnx_batch_mode"] = mode
+        self._benchmark_gateway_config["onnx_batch_mode"] = mode
 
     def set_execution_backend(self, backend: str):
         """Replace execution backend and apply its default L3 mode.
@@ -290,15 +299,33 @@ class SecurityGateway:
         `set_onnx_batch_mode` afterwards to override.
         """
         self.rust_gateway.set_execution_backend(backend)
+        self._benchmark_worker_config["execution_backend"] = backend
+        self._benchmark_gateway_config["execution_backend"] = backend
 
     def set_ntdb_operating_point(self, point: str):
         """Select the calibrated NTDB threshold set for subsequent scans."""
         self.rust_gateway.set_ntdb_operating_point(point)
+        self._benchmark_worker_config["ntdb_operating_point"] = point
+        self._benchmark_gateway_config["ntdb_operating_point"] = point
+
+    def set_l3_strategy(self, strategy: str):
+        """Select `dedicated` per-pipeline L3 models or the shared `multi` model."""
+        self.rust_gateway.set_l3_strategy(strategy)
+        self._l3_strategy = self.rust_gateway.l3_strategy
+        self._benchmark_worker_config["l3_strategy"] = strategy
+        self._benchmark_gateway_config["l3_strategy"] = strategy
 
     def set_dynamic_pii_config(self, config: dict):
         """Replace labels, result gates, thresholds, limits, and timeout for `dynamic-pii`."""
         self.rust_gateway.set_dynamic_pii_config(_dynamic_pii_config_json(config))
         self._dynamic_pii_config = deepcopy(config)
+        self._benchmark_gateway_config["dynamic_pii_config"] = deepcopy(config)
+
+    def _new_benchmark_gateway(self, l3_strategy: str):
+        """Create an isolated gateway for one benchmark strategy."""
+        config = deepcopy(self._benchmark_gateway_config)
+        config["l3_strategy"] = l3_strategy
+        return type(self)(**config)
 
     def scan_category(self, category: str, text: str) -> list[dict]:
         """Scan text with a single category."""
@@ -375,7 +402,10 @@ class SecurityGateway:
     ) -> dict:
         """Benchmark this gateway against the sample data shipped with the package.
 
-        Runs benchmark phases and writes a readable `BENCHMARK.md` plus JSON into `output_dir`:
+        Runs every benchmark phase once with `dedicated` L3 and once with
+        `multi` L3. Each strategy gets its own subdirectory below
+        `output_dir`, plus a combined root `BENCHMARK.md` and
+        `benchmark_result.json`:
         one complete queued response (`example_result.json`), benign false
         positives (`benign_result.json`), labelled classifier
         validation (`classifier_result.json`), exact-span GLiNER NER quality

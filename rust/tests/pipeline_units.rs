@@ -42,6 +42,7 @@ mod l3_results {
                 },
             ],
             evidence_spans: Vec::new(),
+            label_scores: Vec::new(),
         }
     }
 
@@ -149,6 +150,37 @@ mod l3_results {
             ..pending
         };
         assert!(!has_l3_pending(&without_pending));
+    }
+}
+
+mod public_strategy_types {
+    use patronus_security::{L3Strategy, NtdbOperatingPoint};
+
+    #[test]
+    fn ntdb_operating_point_defaults_to_best_promote_and_parses_all_variants() {
+        assert_eq!(
+            NtdbOperatingPoint::default(),
+            NtdbOperatingPoint::BestPromote
+        );
+        for name in [
+            "best_f1",
+            "best_promote",
+            "best_fpr_in_f1",
+            "best_fnr_in_f1",
+            "best_latency_in_f1",
+        ] {
+            assert_eq!(name.parse::<NtdbOperatingPoint>().unwrap().as_str(), name);
+        }
+    }
+
+    #[test]
+    fn l3_strategy_defaults_to_dedicated_and_parses_multi() {
+        assert_eq!(L3Strategy::default(), L3Strategy::Dedicated);
+        assert_eq!("multi".parse::<L3Strategy>().unwrap(), L3Strategy::Multi);
+        assert_eq!(
+            "dedicated".parse::<L3Strategy>().unwrap(),
+            L3Strategy::Dedicated
+        );
     }
 }
 
@@ -453,8 +485,7 @@ mod ntdb_l2_results {
     use patronus_security::ml::ntdb_executor::{ByteSpan, NtdbDecision};
     use patronus_security::pipeline::test_util::{
         ntdb_l2_enabled_for_category, ntdb_l2_model_config_for_id,
-        ntdb_l2_model_configs_for_category, ntdb_l2_scan_result, NTDB_TOOL_DESCRIPTIONS_MODEL_ID,
-        NTDB_TOOL_EXECUTIONS_MODEL_ID, NTDB_TOOL_PROMPTS_MODEL_ID, TOOL_PROMPTS_MODEL,
+        ntdb_l2_model_configs_for_category, ntdb_l2_scan_result,
     };
     use patronus_security::{
         L3SchedulerPolicy, ScanExecution, ScanGateMatrix, SecurityCategory, SecurityLevel,
@@ -518,7 +549,7 @@ mod ntdb_l2_results {
     fn ntdb_l2_multiclass_result_maps_sensitive_documents_without_l3_pending() {
         let execution = ScanExecution::new(SecurityLevel::L3);
         let decision = NtdbDecision {
-            model_id: "sensitive_documents".to_string(),
+            model_id: "sensitive_document".to_string(),
             aggregator_id: "doc_router".to_string(),
             task: "multiclass".to_string(),
             fallback_label: "source_code".to_string(),
@@ -533,10 +564,10 @@ mod ntdb_l2_results {
             l3_candidate_spans: Vec::new(),
         };
 
-        let config = ntdb_l2_model_config_for_id("sensitive_documents").unwrap();
+        let config = ntdb_l2_model_config_for_id("sensitive_document").unwrap();
         let result = ntdb_l2_scan_result(config, &decision, &execution, 2.5);
 
-        assert_eq!(result.category, "sensitive_documents");
+        assert_eq!(result.category, "sensitive_document");
         assert_eq!(result.model, "orca-sonar-document-classifier");
         assert_eq!(result.class_name, "source_code");
         assert_eq!(result.confidence, 0.73);
@@ -546,11 +577,11 @@ mod ntdb_l2_results {
     }
 
     #[test]
-    fn ntdb_l2_tool_multiclass_result_uses_old_api_model_without_l3_pending() {
+    fn ntdb_l2_tool_class_result_uses_pipeline_model_and_queues_l3() {
         let mut execution = ScanExecution::new(SecurityLevel::L3);
         execution.set_defer_l3(true);
         let decision = NtdbDecision {
-            model_id: NTDB_TOOL_PROMPTS_MODEL_ID.to_string(),
+            model_id: "tool_class".to_string(),
             aggregator_id: "main".to_string(),
             task: "multiclass".to_string(),
             fallback_label: "tool_class.web.search".to_string(),
@@ -565,15 +596,15 @@ mod ntdb_l2_results {
             l3_candidate_spans: Vec::new(),
         };
 
-        let config = ntdb_l2_model_config_for_id(NTDB_TOOL_PROMPTS_MODEL_ID).unwrap();
+        let config = ntdb_l2_model_config_for_id("tool_class").unwrap();
         let result = ntdb_l2_scan_result(config, &decision, &execution, 1.5);
 
-        assert_eq!(result.category, "tool_classifier");
-        assert_eq!(result.model, TOOL_PROMPTS_MODEL);
+        assert_eq!(result.category, "tool_class");
+        assert_eq!(result.model, "unified-v3-tool-class");
         assert_eq!(result.class_name, "tool_class.web.search");
-        assert_eq!(result.layers.len(), 1);
+        assert_eq!(result.layers.len(), 2);
         assert_eq!(result.layers[0].layer_type, "ntdb_l2");
-        assert!(!result
+        assert!(result
             .layers
             .iter()
             .any(|layer| layer.layer_type == "l3_pending"));
@@ -588,11 +619,10 @@ mod ntdb_l2_results {
         ));
         assert!(!ntdb_l2_enabled_for_category(
             &l1_only,
-            SecurityCategory::SensitiveDocuments
+            SecurityCategory::SensitiveDocument
         ));
         assert!(
-            ntdb_l2_model_configs_for_category(&l1_only, SecurityCategory::ToolClassifier)
-                .is_empty()
+            ntdb_l2_model_configs_for_category(&l1_only, SecurityCategory::ToolClass).is_empty()
         );
 
         let mut execution = ScanExecution::new(SecurityLevel::L2);
@@ -679,6 +709,18 @@ mod ntdb_l2_results {
             .layers
             .iter()
             .any(|layer| layer.layer_type == "l3_pending"));
+
+        let mut multi_disabled = ScanExecution::new(SecurityLevel::L3);
+        multi_disabled.set_l3_strategy(patronus_security::L3Strategy::Multi);
+        multi_disabled.set_defer_l3(true);
+        multi_disabled.set_gates(
+            ScanGateMatrix::all_enabled().with_model("unified-multitask-model-augmented-v3", false),
+        );
+        let result = ntdb_l2_scan_result(config, &decision, &multi_disabled, 1.0);
+        assert!(!result
+            .layers
+            .iter()
+            .any(|layer| layer.layer_type == "l3_pending"));
     }
 
     #[test]
@@ -687,7 +729,7 @@ mod ntdb_l2_results {
 
         assert!(ntdb_l2_enabled_for_category(
             &execution,
-            SecurityCategory::SensitiveDocuments
+            SecurityCategory::SensitiveDocument
         ));
 
         execution.set_gates(
@@ -695,50 +737,38 @@ mod ntdb_l2_results {
         );
         assert!(!ntdb_l2_enabled_for_category(
             &execution,
-            SecurityCategory::SensitiveDocuments
+            SecurityCategory::SensitiveDocument
         ));
 
-        execution.set_gates(ScanGateMatrix::all_enabled().with_model("sensitive_documents", false));
+        execution.set_gates(ScanGateMatrix::all_enabled().with_model("sensitive_document", false));
         assert!(!ntdb_l2_enabled_for_category(
             &execution,
-            SecurityCategory::SensitiveDocuments
+            SecurityCategory::SensitiveDocument
         ));
 
         execution.set_gates(ScanGateMatrix::levels(true, false, true));
         assert!(!ntdb_l2_enabled_for_category(
             &execution,
-            SecurityCategory::SensitiveDocuments
+            SecurityCategory::SensitiveDocument
         ));
     }
 
     #[test]
-    fn ntdb_l2_respects_tool_classifier_submodel_gates() {
+    fn ntdb_l2_respects_pipeline_and_model_gates() {
         let mut execution = ScanExecution::new(SecurityLevel::L2);
-        let model_ids =
-            ntdb_l2_model_configs_for_category(&execution, SecurityCategory::ToolClassifier)
-                .into_iter()
-                .map(|config| config.model_id)
-                .collect::<Vec<_>>();
-        assert_eq!(
-            model_ids,
-            vec![
-                NTDB_TOOL_PROMPTS_MODEL_ID,
-                NTDB_TOOL_EXECUTIONS_MODEL_ID,
-                NTDB_TOOL_DESCRIPTIONS_MODEL_ID,
-            ]
-        );
+        let model_ids = ntdb_l2_model_configs_for_category(&execution, SecurityCategory::ToolClass)
+            .into_iter()
+            .map(|config| config.model_id)
+            .collect::<Vec<_>>();
+        assert_eq!(model_ids, vec!["tool_class"]);
 
-        execution.set_gates(
-            ScanGateMatrix::all_enabled()
-                .with_model(TOOL_PROMPTS_MODEL, false)
-                .with_model("tool_classifier.description", false),
-        );
-        let model_ids =
-            ntdb_l2_model_configs_for_category(&execution, SecurityCategory::ToolClassifier)
-                .into_iter()
-                .map(|config| config.model_id)
-                .collect::<Vec<_>>();
-        assert_eq!(model_ids, vec![NTDB_TOOL_EXECUTIONS_MODEL_ID]);
+        execution
+            .set_gates(ScanGateMatrix::all_enabled().with_model("unified-v3-tool-class", false));
+        let model_ids = ntdb_l2_model_configs_for_category(&execution, SecurityCategory::ToolClass)
+            .into_iter()
+            .map(|config| config.model_id)
+            .collect::<Vec<_>>();
+        assert!(model_ids.is_empty());
     }
 }
 

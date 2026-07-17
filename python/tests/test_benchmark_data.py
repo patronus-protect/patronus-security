@@ -40,7 +40,7 @@ class BenchmarkDataTests(unittest.TestCase):
             self.assertLessEqual(max(counts.values()), 100, name)
 
     def test_round_robin_limit_keeps_all_classes(self):
-        samples = benchmark._load_samples("sensitive_documents")
+        samples = benchmark._load_samples("sensitive_document")
         classes = {s["expected_class"] for s in samples}
         limited = benchmark._round_robin_by_class(samples, len(classes) * 2)
         self.assertEqual({s["expected_class"] for s in limited}, classes)
@@ -79,7 +79,7 @@ class BenchmarkDataTests(unittest.TestCase):
             "degree_program",
         )
         self.assertEqual(
-            labels_for_classification("sensitive_documents", "school"),
+            labels_for_classification("sensitive_document", "school"),
             school_labels,
         )
         self.assertEqual(
@@ -96,8 +96,8 @@ class BenchmarkDataTests(unittest.TestCase):
     def test_gliner_double_context_keeps_only_jointly_measured_labels(self):
         self.assertEqual(
             labels_for_contexts(
-                ("sensitive_documents", "legal"),
-                ("tool_classifier", "tool_class.file.read"),
+                ("sensitive_document", "legal"),
+                ("tool_class", "file"),
             ),
             (
                 "contract",
@@ -115,8 +115,8 @@ class BenchmarkDataTests(unittest.TestCase):
         )
         self.assertEqual(
             labels_for_contexts(
-                ("sensitive_documents", "finance"),
-                ("tool_classifier", "tool_class.web.fetch"),
+                ("sensitive_document", "finance"),
+                ("tool_class", "web"),
             ),
             (),
         )
@@ -662,7 +662,7 @@ class BenchmarkDataTests(unittest.TestCase):
             model_gates,
         )
 
-    def test_run_local_benchmark_writes_native_l1_and_dynamic_pii_results(self):
+    def test_strategy_benchmark_writes_native_l1_and_dynamic_pii_results(self):
         class FakeGateway:
             categories = ["injection", "dlp", "pii"]
             max_level = "l1"
@@ -693,7 +693,7 @@ class BenchmarkDataTests(unittest.TestCase):
             ) as run_load,
             patch.object(benchmark, "_benchmark_markdown", return_value="# Benchmark\n"),
         ):
-            result = benchmark.run_local_benchmark(
+            result = benchmark._run_local_benchmark_for_strategy(
                 FakeGateway(),
                 output_dir=output_dir,
                 load_requests=1,
@@ -721,6 +721,40 @@ class BenchmarkDataTests(unittest.TestCase):
                 (benchmark.Path(output_dir) / "dynamic_pii_result.json").read_text()
             )
             self.assertEqual(dynamic_payload["reason"], "not configured")
+
+    def test_run_local_benchmark_runs_both_strategies_in_workers(self):
+        class FakeGateway:
+            _benchmark_gateway_config = {"categories": ["injection"]}
+
+        strategy_result = {
+            "example": {},
+            "benign": {},
+            "classifier": {},
+            "dynamic_pii": {},
+            "native_l1": {},
+            "load": {},
+        }
+        with (
+            TemporaryDirectory() as output_dir,
+            patch.object(
+                benchmark,
+                "_run_strategy_benchmark_process",
+                side_effect=[strategy_result, strategy_result],
+            ) as run_strategy,
+        ):
+            result = benchmark.run_local_benchmark(
+                FakeGateway(), output_dir=output_dir, print_summary=False
+            )
+
+            self.assertEqual(
+                [call.args[1] for call in run_strategy.call_args_list],
+                ["dedicated", "multi"],
+            )
+            self.assertEqual(set(result), {"dedicated", "multi"})
+            combined = json.loads(
+                (benchmark.Path(output_dir) / "benchmark_result.json").read_text()
+            )
+            self.assertEqual(set(combined), {"dedicated", "multi"})
 
     def test_queue_example_preserves_every_consumed_result(self):
         class FakeGateway:

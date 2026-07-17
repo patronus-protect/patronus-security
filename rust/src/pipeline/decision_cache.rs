@@ -161,6 +161,7 @@ fn cache_key(namespace: &str, text: &str, execution: &ScanExecution) -> Decision
     scope.update(execution.backend().as_str().as_bytes());
     scope.update(execution.onnx_batch_mode().as_str().as_bytes());
     scope.update(execution.ntdb_operating_point().as_str().as_bytes());
+    scope.update(execution.l3_strategy().as_str().as_bytes());
     DecisionCacheKey {
         scope_hash: *scope.finalize().as_bytes(),
         text_hash: *blake3::hash(text.as_bytes()).as_bytes(),
