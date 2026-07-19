@@ -18,7 +18,21 @@ The full documentation lives in [`docs/`](docs/) and is organized with the
 | 📖 **Reference** | [Configuration](docs/reference/configuration.md) · [Result schema](docs/reference/result-schema.md) · [Python API](docs/python-api.md) · [Rust API](docs/rust-api.md) · [Assets](docs/assets.md) |
 | 👥 **Contributing** | [Development](docs/contributing/development.md) · [Testing](docs/contributing/testing.md) · [Releasing](docs/contributing/releasing.md) |
 
-Preview the site locally with `pip install mkdocs-material && mkdocs serve`.
+### Preview the docs locally
+
+The documentation currently lives on the `docs/mkdocs-documentation` branch (it is not merged
+to `main` yet, and GitHub Pages is unavailable while this repository is private):
+
+```bash
+git fetch origin
+git checkout docs/mkdocs-documentation
+
+pip install "mkdocs-material>=9.5"
+mkdocs serve            # live-reloading preview at http://127.0.0.1:8000
+```
+
+`mkdocs build --strict` builds the static site into `site/` and fails on any broken internal
+link — the same check CI runs.
 
 This repository contains:
 
