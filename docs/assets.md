@@ -36,7 +36,7 @@ Category assets are stored below that root, for example `injection/`, `sensitive
 
 ## L3 Strategy
 
-`dedicated` loads the configured per-pipeline L3 bundles. `multi` loads only the revision-pinned `patronus-studio/unified-multitask-model-augmented-v3` classifier bundle at revision `9bcc55dcf955cda68c171524cd242ada9f5547d4`; GLiNER remains separate in both strategies.
+`dedicated` loads the configured per-pipeline L3 bundles. `multi` loads only the revision-pinned `patronus-studio/lion-warden-ai-security-classifier` classifier bundle at revision `5711c4169442da12f0f4ec20e32f90d940684d20`; GLiNER remains separate in both strategies.
 
 The shared ONNX artifact is `onnx/int8_int4_embeddings/model.onnx`. See `docs/unified-multitask-l3-plan.md` for its seven-head tensor contract and the request-local worker coalescing contract.
 
@@ -50,11 +50,11 @@ For supported Granite/ModernBERT packages, the Security Lib generates a compact 
 | --- | --- | --- | --- | --- |
 | Injection | `wolf-defender-small` | `patronus-studio/wolf-defender-prompt-injection-small` | `l2` | `l2_ntdb/injection_current` |
 | SensitiveDocument | `orca-sonar-document-classifier` | `patronus-studio/orca-sonar-document-classifier` | `l2` | `l2_ntdb/sensitive_document_current` |
-| ToolClass | `unified-v3-tool-class` | `patronus-studio/unified-multitask-model-augmented-v3-tool-class` | `l2` | `l2_ntdb/tool_class_current` |
-| ToolAction | `unified-v3-tool-action` | `patronus-studio/unified-multitask-model-augmented-v3-tool-action` | `l2` | `l2_ntdb/tool_action_current` |
-| ToolTags | `unified-v3-tool-tags` | `patronus-studio/unified-multitask-model-augmented-v3-tool-tags` | `l2` | `l2_ntdb/tool_tags_current` |
-| Routing | `unified-v3-routing` | `patronus-studio/unified-multitask-model-augmented-v3-routing` | `l2` | `l2_ntdb/routing_current` |
-| Threat | `unified-v3-threat` | `patronus-studio/unified-multitask-model-augmented-v3-threat` | `l2` | `l2_ntdb/threat_current` |
+| ToolClass | `unified-v3-tool-class` | `patronus-studio/husky-sight-tool-type-classifier` | `l2` | `l2_ntdb/tool_class_current` |
+| ToolAction | `unified-v3-tool-action` | `patronus-studio/husky-paw-tool-action-classifier` | `l2` | `l2_ntdb/tool_action_current` |
+| ToolTags | `unified-v3-tool-tags` | `patronus-studio/husky-nose-tool-security-properties-classifier` | `l2` | `l2_ntdb/tool_tags_current` |
+| Routing | `unified-v3-routing` | `patronus-studio/panther-read-intent-classifier` | `l2` | `l2_ntdb/routing_current` |
+| Threat | `unified-v3-threat` | `patronus-studio/wolf-defender-threat-classifier` | `l2` | `l2_ntdb/threat_current` |
 
 ## Download Size Snapshot
 

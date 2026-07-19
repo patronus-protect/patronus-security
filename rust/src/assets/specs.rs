@@ -75,8 +75,8 @@ pub const DYNAMIC_PII_ASSET: PipelineModelAssetSpec = PipelineModelAssetSpec {
 pub const UNIFIED_L3_ASSET: PipelineModelAssetSpec = PipelineModelAssetSpec {
     category: SecurityCategory::Injection,
     model: "unified-multitask-model-augmented-v3",
-    repo: "patronus-studio/unified-multitask-model-augmented-v3",
-    revision: "9bcc55dcf955cda68c171524cd242ada9f5547d4",
+    repo: "patronus-studio/lion-warden-ai-security-classifier",
+    revision: "5711c4169442da12f0f4ec20e32f90d940684d20",
     destination_path: "unified_multitask_v3",
     files: &[
         "onnx/int8_int4_embeddings/model.onnx",
@@ -91,8 +91,8 @@ pub const DEDICATED_L3_ASSETS: &[PipelineModelAssetSpec] = &[
     PipelineModelAssetSpec {
         category: SecurityCategory::ToolClass,
         model: "unified-v3-tool-class",
-        repo: "patronus-studio/unified-multitask-model-augmented-v3-tool-class",
-        revision: "55f6af9ec657eb896ea6508c07a712edbd9fd1a1",
+        repo: "patronus-studio/husky-sight-tool-type-classifier",
+        revision: "d2e21547d9690f72d33b7852b65b16e14706e5d6",
         destination_path: "tool_class/l3",
         files: &[
             "onnx/int8_int4_embeddings/model.onnx",
@@ -104,8 +104,8 @@ pub const DEDICATED_L3_ASSETS: &[PipelineModelAssetSpec] = &[
     PipelineModelAssetSpec {
         category: SecurityCategory::ToolAction,
         model: "unified-v3-tool-action",
-        repo: "patronus-studio/unified-multitask-model-augmented-v3-tool-action",
-        revision: "ce011f02bcaf41656001e3c15826320ca1151ac8",
+        repo: "patronus-studio/husky-paw-tool-action-classifier",
+        revision: "75a94e7651b812839b53fc52909b74120b965ff5",
         destination_path: "tool_action/l3",
         files: &[
             "onnx/int8_int4_embeddings/model.onnx",
@@ -117,8 +117,8 @@ pub const DEDICATED_L3_ASSETS: &[PipelineModelAssetSpec] = &[
     PipelineModelAssetSpec {
         category: SecurityCategory::ToolTags,
         model: "unified-v3-tool-tags",
-        repo: "patronus-studio/unified-multitask-model-augmented-v3-tool-tags",
-        revision: "62ea84b88bfd2c6d26a6ca9f28842991e16a61ca",
+        repo: "patronus-studio/husky-nose-tool-security-properties-classifier",
+        revision: "5d1ecc7cd0c441284a86dc0dfecb0cc8c1180f49",
         destination_path: "tool_tags/l3",
         files: &[
             "onnx/int8_int4_embeddings/model.onnx",
@@ -130,8 +130,8 @@ pub const DEDICATED_L3_ASSETS: &[PipelineModelAssetSpec] = &[
     PipelineModelAssetSpec {
         category: SecurityCategory::Routing,
         model: "unified-v3-routing",
-        repo: "patronus-studio/unified-multitask-model-augmented-v3-routing",
-        revision: "6f0f992670a0a7b9ecb5d540e95872f98baba2ae",
+        repo: "patronus-studio/panther-read-intent-classifier",
+        revision: "509b548cf3f87d9f4aaf83d5ed34e15b62f03b11",
         destination_path: "routing/l3",
         files: &[
             "onnx/int8_int4_embeddings/model.onnx",
@@ -143,8 +143,8 @@ pub const DEDICATED_L3_ASSETS: &[PipelineModelAssetSpec] = &[
     PipelineModelAssetSpec {
         category: SecurityCategory::Threat,
         model: "unified-v3-threat",
-        repo: "patronus-studio/unified-multitask-model-augmented-v3-threat",
-        revision: "ddd084e2a9ab149992bf59303abcd90fd8e55c82",
+        repo: "patronus-studio/wolf-defender-threat-classifier",
+        revision: "f7233204ce14185f4cbb4dc0b42ae43c88242c03",
         destination_path: "threat/l3",
         files: &[
             "onnx/int8_int4_embeddings/model.onnx",
@@ -255,7 +255,7 @@ pub const NTDB_L2_PACKAGE_MANIFEST: &[NtdbL2PackageAssetSpec] = &[
         category: SecurityCategory::ToolClass,
         level: SecurityLevel::L2,
         model: "unified-v3-tool-class",
-        repo: "patronus-studio/unified-multitask-model-augmented-v3-tool-class",
+        repo: "patronus-studio/husky-sight-tool-type-classifier",
         source_prefix: "l2",
         destination_path: "l2_ntdb/tool_class_current",
         required: true,
@@ -264,7 +264,7 @@ pub const NTDB_L2_PACKAGE_MANIFEST: &[NtdbL2PackageAssetSpec] = &[
         category: SecurityCategory::ToolAction,
         level: SecurityLevel::L2,
         model: "unified-v3-tool-action",
-        repo: "patronus-studio/unified-multitask-model-augmented-v3-tool-action",
+        repo: "patronus-studio/husky-paw-tool-action-classifier",
         source_prefix: "l2",
         destination_path: "l2_ntdb/tool_action_current",
         required: true,
@@ -273,7 +273,7 @@ pub const NTDB_L2_PACKAGE_MANIFEST: &[NtdbL2PackageAssetSpec] = &[
         category: SecurityCategory::ToolTags,
         level: SecurityLevel::L2,
         model: "unified-v3-tool-tags",
-        repo: "patronus-studio/unified-multitask-model-augmented-v3-tool-tags",
+        repo: "patronus-studio/husky-nose-tool-security-properties-classifier",
         source_prefix: "l2",
         destination_path: "l2_ntdb/tool_tags_current",
         required: true,
@@ -282,7 +282,7 @@ pub const NTDB_L2_PACKAGE_MANIFEST: &[NtdbL2PackageAssetSpec] = &[
         category: SecurityCategory::Routing,
         level: SecurityLevel::L2,
         model: "unified-v3-routing",
-        repo: "patronus-studio/unified-multitask-model-augmented-v3-routing",
+        repo: "patronus-studio/panther-read-intent-classifier",
         source_prefix: "l2",
         destination_path: "l2_ntdb/routing_current",
         required: true,
@@ -291,7 +291,7 @@ pub const NTDB_L2_PACKAGE_MANIFEST: &[NtdbL2PackageAssetSpec] = &[
         category: SecurityCategory::Threat,
         level: SecurityLevel::L2,
         model: "unified-v3-threat",
-        repo: "patronus-studio/unified-multitask-model-augmented-v3-threat",
+        repo: "patronus-studio/wolf-defender-threat-classifier",
         source_prefix: "l2",
         destination_path: "l2_ntdb/threat_current",
         required: true,

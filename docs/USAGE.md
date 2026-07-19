@@ -1,8 +1,8 @@
 # Usage walkthrough
 
-Six runnable examples cover the main flows. Each exists in both Rust
-([`rust/examples/`](../rust/examples/)) and Python
-([`python/examples/`](../python/examples/)).
+Six paired Rust/Python examples and one Python validation example cover the
+main flows ([`rust/examples/`](../rust/examples/),
+[`python/examples/`](../python/examples/)).
 
 | # | Flow | When to use it | Rust | Python |
 | --- | --- | --- | --- | --- |
@@ -12,10 +12,11 @@ Six runnable examples cover the main flows. Each exists in both Rust
 | 04 | Execution gates | Turn levels/models on or off per request | `cargo run --example 04_execution_gates` | `python python/examples/04_execution_gates.py` |
 | 05 | Dynamic PII | Runtime GLiNER labels + evidence spans | `cargo run --example 05_dynamic_pii` | `python python/examples/05_dynamic_pii.py` |
 | 06 | Unified L3 speedup | Compare two promoted Dedicated models with one coalesced Multi inference | `cargo run --release --example 06_multi_l3_speedup` | `python python/examples/06_multi_l3_speedup.py` |
+| 07 | Multi-head L2 validation | Run all seven L2 classifiers on real unified-v3 Val rows | — | `python python/examples/07_multitask_val_l2.py` |
 
 Examples 01, 02, and 04 run fully offline (`download_files=false`, native L1 +
-cached L2). Examples 03, 05, and 06 need model assets and will print a warmup
-error if they are missing.
+cached L2). Examples 03, 05, 06, and 07 need model assets and will print a
+warmup error if they are missing.
 
 ## 01 — Basic scan
 

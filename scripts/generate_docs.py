@@ -246,7 +246,7 @@ def generate_assets_doc(assets: list[Asset], snapshot: dict) -> str:
         "",
         "## L3 Strategy",
         "",
-        "`dedicated` loads the configured per-pipeline L3 bundles. `multi` loads only the revision-pinned `patronus-studio/unified-multitask-model-augmented-v3` classifier bundle at revision `9bcc55dcf955cda68c171524cd242ada9f5547d4`; GLiNER remains separate in both strategies.",
+        "`dedicated` loads the configured per-pipeline L3 bundles. `multi` loads only the revision-pinned `patronus-studio/lion-warden-ai-security-classifier` classifier bundle at revision `5711c4169442da12f0f4ec20e32f90d940684d20`; GLiNER remains separate in both strategies.",
         "",
         "The shared ONNX artifact is `onnx/int8_int4_embeddings/model.onnx`. See `docs/unified-multitask-l3-plan.md` for its seven-head tensor contract and the request-local worker coalescing contract.",
         "",

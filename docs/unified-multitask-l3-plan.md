@@ -53,7 +53,7 @@ GLiNER bleibt ein separates L3-Modell mit unveraendertem fachlichem Verhalten.
 Unified-Modell:
 
 - Repository:
-  `patronus-studio/unified-multitask-model-augmented-v3`
+  `patronus-studio/lion-warden-ai-security-classifier`
 - Gepinnte Revision:
   `9bcc55dcf955cda68c171524cd242ada9f5547d4`
 - ONNX-Artefakt:
@@ -187,7 +187,7 @@ l3:
   strategy: multi
 
   multi:
-    model: patronus-studio/unified-multitask-model-augmented-v3
+    model: patronus-studio/lion-warden-ai-security-classifier
     revision: 9bcc55dcf955cda68c171524cd242ada9f5547d4
     onnx_path: onnx/int8_int4_embeddings/model.onnx
     bindings:

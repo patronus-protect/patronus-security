@@ -14,9 +14,11 @@ This repository contains:
 
 Runnable examples for the main flows live in [`rust/examples/`](rust/examples/)
 and [`python/examples/`](python/examples/): basic scan, enqueue/consume,
-L2→L3 promotion, execution gates, dynamic PII, and a Dedicated-vs-Multi L3
-comparison. See [docs/USAGE.md](docs/USAGE.md) for a walkthrough of when to use
-each. Internal benchmark and parity scripts live under [`rust/dev/`](rust/dev/).
+L2→L3 promotion, execution gates, dynamic PII, a Dedicated-vs-Multi L3
+comparison, and a Python example that runs all seven L2 classifiers on real
+multi-head validation rows. See [docs/USAGE.md](docs/USAGE.md) for a walkthrough
+of when to use each. Internal benchmark and parity scripts live under
+[`rust/dev/`](rust/dev/).
 
 ```bash
 cargo run --example 01_basic_scan
