@@ -32,3 +32,4 @@ benchmark_todo.md
 
 # Stray compiled tokenizer artifact accidentally emitted at repo root
 /config
+site/

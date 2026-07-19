@@ -1,5 +1,13 @@
 # Security Policy
 
+## Scope and threat model
+
+Patronus Security is a probabilistic risk **classifier**, not a guarantee. Before relying on
+it, read the [Threat model](https://github.com/patronus-protect/patronus-security/blob/main/docs/concepts/threat-model.md), which states the trust boundaries
+it sits on, the assumptions it makes, and — importantly — what it does **not** defend against.
+This policy covers vulnerabilities in the library itself (the Rust core, the Python bindings,
+and asset handling).
+
 ## Supported Versions
 
 This project is pre-1.0. Security fixes are expected to target the latest released version.

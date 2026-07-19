@@ -4,6 +4,22 @@ Hybrid Rust/Python security scanners for prompt injection, DLP, PII, and agentic
 
 Dual-licensed: **AGPL-3.0** for open-source and evaluation use, or a **commercial license** for embedding in closed-source or revenue-generating products. See [LICENSE](LICENSE) and [LICENSE-COMMERCIAL.md](LICENSE-COMMERCIAL.md).
 
+## Documentation
+
+The full documentation lives in [`docs/`](docs/) and is organized with the
+[Diátaxis](https://diataxis.fr/) framework (built as a MkDocs Material site):
+
+| | |
+| --- | --- |
+| 🚀 **Getting started** | [Installation](docs/getting-started/installation.md) · [Quickstart](docs/getting-started/quickstart.md) |
+| 🎓 **Tutorials** | [Examples walkthrough](docs/USAGE.md) |
+| 🔧 **How-to guides** | [Offline scanning](docs/how-to/offline-airgapped.md) · [Choose categories & levels](docs/how-to/choose-categories-and-levels.md) · [Manage assets](docs/how-to/manage-assets.md) · [Tune performance](docs/how-to/tune-performance.md) · [Run the benchmark](docs/how-to/run-local-benchmark.md) · [External L1 signals](docs/how-to/external-l1-signals.md) |
+| 💡 **Concepts** | [Architecture](docs/concepts/architecture.md) · [Layered scanning](docs/concepts/layered-scanning.md) · [Categories](docs/concepts/categories.md) · [Detectors](docs/concepts/detectors.md) · [Models & NTDB](docs/concepts/models-and-ntdb.md) · [Threat model](docs/concepts/threat-model.md) · [Performance](docs/concepts/performance.md) |
+| 📖 **Reference** | [Configuration](docs/reference/configuration.md) · [Result schema](docs/reference/result-schema.md) · [Python API](docs/python-api.md) · [Rust API](docs/rust-api.md) · [Assets](docs/assets.md) |
+| 👥 **Contributing** | [Development](docs/contributing/development.md) · [Testing](docs/contributing/testing.md) · [Releasing](docs/contributing/releasing.md) |
+
+Preview the site locally with `pip install mkdocs-material && mkdocs serve`.
+
 This repository contains:
 
 - `rust/`: the core Rust library crate, `patronus-security`.

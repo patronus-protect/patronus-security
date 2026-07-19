@@ -1,8 +1,8 @@
 # Usage walkthrough
 
 Six paired Rust/Python examples and one Python validation example cover the
-main flows ([`rust/examples/`](../rust/examples/),
-[`python/examples/`](../python/examples/)).
+main flows ([`rust/examples/`](https://github.com/patronus-protect/patronus-security/tree/main/rust/examples),
+[`python/examples/`](https://github.com/patronus-protect/patronus-security/tree/main/python/examples)).
 
 | # | Flow | When to use it | Rust | Python |
 | --- | --- | --- | --- | --- |
@@ -50,7 +50,8 @@ pass a gate per request to `enqueue`. `max_level` remains the hard upper bound.
 `dynamic-pii` is an L3-only GLiNER pipeline. Choose entity labels at runtime,
 gate it on another pipeline's result (e.g. run only when injection flags the
 text), and read first-class `evidence_spans` with byte- and char-accurate
-offsets. See the pipeline design in [gliner-integration.md](../gliner-integration.md).
+offsets. See the pipeline design in [Models & the NTDB format](concepts/models-and-ntdb.md#onnx-transformers-the-l3-format)
+and the [dynamic PII configuration](reference/configuration.md#dynamic-pii).
 
 ## 06 — Unified L3 speedup
 
