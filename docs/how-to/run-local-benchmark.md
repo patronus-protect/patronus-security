@@ -7,7 +7,7 @@ config, or environment variables.
 ## Run it
 
 ```python
-from patronus_security import SecurityGateway
+from patronus_ark import SecurityGateway
 
 scanner = SecurityGateway(
     categories=["injection", "sensitive_document", "tool_class", "threat"],

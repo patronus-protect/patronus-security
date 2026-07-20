@@ -1,10 +1,10 @@
 /target
 target/
-/python/patronus_security/_patronus_security*.so
-/python/patronus_security/*.so
-/python/patronus_security/*.pyd
-/python/patronus_security/*.dll
-/python/patronus_security/*.dylib
+/python/patronus_ark/_patronus_ark*.so
+/python/patronus_ark/*.so
+/python/patronus_ark/*.pyd
+/python/patronus_ark/*.dll
+/python/patronus_ark/*.dylib
 /python/build
 /python/dist
 /python/target

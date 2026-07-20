@@ -1,6 +1,6 @@
 # Commercial License
 
-Patronus Ark, distributed as the `patronus-security` Rust crate and Python
+Patronus Ark, distributed as the `patronus-ark` Rust crate and Python
 package, is dual-licensed.
 
 ## Open-source license (default)

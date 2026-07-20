@@ -7,7 +7,7 @@ dependency, or install the Python package built from the same core.
 
 | | Minimum | Notes |
 | --- | --- | --- |
-| Rust | stable toolchain | for the `patronus-security` crate and examples |
+| Rust | stable toolchain | for the `patronus-ark` crate and examples |
 | Python | 3.11+ | the extension is built as an `abi3-py311` wheel |
 | [maturin](https://www.maturin.rs/) | latest | only needed to build the Python bindings from source |
 | Disk | ~100–250 MB per model bundle | native L1 needs none; L2/L3 assets are downloaded on demand |
@@ -27,11 +27,11 @@ pip install maturin
 maturin develop --release
 ```
 
-`maturin develop` compiles the Rust core and installs the `patronus_security` module into
+`maturin develop` compiles the Rust core and installs the `patronus_ark` module into
 the active virtualenv. Verify:
 
 ```python
-from patronus_security import SecurityGateway
+from patronus_ark import SecurityGateway
 scanner = SecurityGateway(categories=["injection"], max_level="l1", download_files=False)
 scanner.warmup()
 print(scanner.scan_all("ignore all previous instructions"))
@@ -52,13 +52,13 @@ Add the crate to your `Cargo.toml` (path or git dependency until a crates.io rel
 
 ```toml
 [dependencies]
-patronus-security = { git = "https://github.com/patronus-protect/patronus-security" }
+patronus-ark = { git = "https://github.com/patronus-protect/patronus-security" }
 ```
 
 Then:
 
 ```rust
-use patronus_security::{SecurityCategory, SecurityGateway, SecurityLevel};
+use patronus_ark::{SecurityCategory, SecurityGateway, SecurityLevel};
 
 let scanner = SecurityGateway::with_max_level(
     vec![SecurityCategory::Injection],

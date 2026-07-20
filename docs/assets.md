@@ -6,13 +6,13 @@ Patronus Ark does not bundle model assets in the Rust crate or Python wheel. Rus
 
 ## Cache Location
 
-If `model_dir` is set, that directory is used as the asset root. Otherwise the library uses the platform cache directory and appends `patronus_security`:
+If `model_dir` is set, that directory is used as the asset root. Otherwise the library uses the platform cache directory and appends `patronus_ark`:
 
 | Platform | Typical default cache root |
 | --- | --- |
-| macOS | `~/Library/Caches/patronus_security` |
-| Linux | `~/.cache/patronus_security` |
-| Windows | `%LOCALAPPDATA%\patronus_security` |
+| macOS | `~/Library/Caches/patronus_ark` |
+| Linux | `~/.cache/patronus_ark` |
+| Windows | `%LOCALAPPDATA%\patronus_ark` |
 
 Category assets are stored below that root, for example `injection/`, `sensitive_document/`, `tool_class/`, or `dynamic_pii/`.
 

@@ -10,7 +10,7 @@ Run: python python/examples/07_multitask_val_l2.py
 
 import os
 
-from patronus_security import SecurityGateway
+from patronus_ark import SecurityGateway
 
 
 CATEGORIES = [

@@ -9,7 +9,7 @@ The `SecurityGateway` is the single entry point. You tell it **which categories*
 and **how far to escalate** (`max_level`).
 
 ```python
-from patronus_security import SecurityGateway
+from patronus_ark import SecurityGateway
 
 scanner = SecurityGateway(
     categories=["injection", "dlp", "pii"],

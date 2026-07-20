@@ -1,4 +1,4 @@
-use patronus_security::{
+use patronus_ark::{
     ml::ntdb_executor::{NtdbDecision, NtdbExecutor},
     NtdbOperatingPoint,
 };

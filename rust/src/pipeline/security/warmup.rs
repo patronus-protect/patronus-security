@@ -124,7 +124,8 @@ impl SecurityGateway {
                 .allows_model(assets::DYNAMIC_PII_ASSET.model)
         {
             let bundle_dir = base_dir.join(assets::DYNAMIC_PII_ASSET.destination_path);
-            let runtime = DynamicPiiRuntime::from_path(&bundle_dir)?;
+            let mut runtime = DynamicPiiRuntime::from_path(&bundle_dir)?;
+            runtime.warmup(&self.dynamic_pii_config())?;
             self.l3_worker
                 .register_dynamic_pii(assets::DYNAMIC_PII_ASSET.model, runtime);
             log::info!(
@@ -368,7 +369,7 @@ impl SecurityGateway {
             Some(path) => Ok(path.clone()),
             None => Ok(dirs::cache_dir()
                 .ok_or("Could not resolve cache directory")?
-                .join("patronus_security")),
+                .join("patronus_ark")),
         }
     }
 

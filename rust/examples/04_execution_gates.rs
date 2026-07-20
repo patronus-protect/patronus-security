@@ -7,7 +7,7 @@
 //!
 //! Run: `cargo run --example 04_execution_gates`
 
-use patronus_security::{ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel};
+use patronus_ark::{ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel};
 
 fn main() {
     let scanner = SecurityGateway::with_max_level(
@@ -34,7 +34,7 @@ fn main() {
     let _id = scanner.enqueue(text, Some(ScanGateMatrix::levels(true, true, false)));
 }
 
-fn print_models(results: &[patronus_security::SecurityScanResult]) {
+fn print_models(results: &[patronus_ark::SecurityScanResult]) {
     for r in results {
         println!("  {:<3} {} ({})", r.level, r.model, r.class_name);
     }

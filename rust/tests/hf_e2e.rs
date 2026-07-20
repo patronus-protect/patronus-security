@@ -3,7 +3,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use patronus_security::{
+use patronus_ark::{
     L3SchedulerPolicy, ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel,
 };
 
@@ -11,7 +11,7 @@ fn model_dir() -> PathBuf {
     let dir = std::env::var("PATRONUS_HF_E2E_MODEL_DIR")
         .or_else(|_| std::env::var("PATRONUS_MODEL_DIR"))
         .map(PathBuf::from)
-        .unwrap_or_else(|_| std::env::temp_dir().join("patronus_security_standalone_bench_assets"));
+        .unwrap_or_else(|_| std::env::temp_dir().join("patronus_ark_standalone_bench_assets"));
     std::fs::create_dir_all(&dir).unwrap();
     dir
 }
@@ -73,7 +73,7 @@ fn hf_ntdb_l2_download_warmup_smoke() {
     assert!(results.iter().all(|result| result.level != "L3"));
     assert!(matches!(
         scanner.runtime_readiness().l2,
-        patronus_security::SecurityLevelReadiness::Ready
+        patronus_ark::SecurityLevelReadiness::Ready
     ));
 
     eprintln!("HF E2E model dir: {}", dir.display());
@@ -219,7 +219,7 @@ fn hf_l3_download_warmup_and_cache_smoke_with_local_ntdb_l2() {
         .exists());
     assert!(matches!(
         scanner.runtime_readiness().l3,
-        patronus_security::SecurityLevelReadiness::Ready
+        patronus_ark::SecurityLevelReadiness::Ready
     ));
 
     let mut cached_scanner = SecurityGateway::with_download_categories(
@@ -232,7 +232,7 @@ fn hf_l3_download_warmup_and_cache_smoke_with_local_ntdb_l2() {
     cached_scanner.warmup().unwrap();
     assert!(matches!(
         cached_scanner.runtime_readiness().l3,
-        patronus_security::SecurityLevelReadiness::Ready
+        patronus_ark::SecurityLevelReadiness::Ready
     ));
 
     std::fs::remove_dir_all(model_dir).unwrap();
@@ -336,9 +336,9 @@ fn symlink_package_env(env_key: &str, model_dir: &Path, relative_dest: &str) {
 
 #[cfg(unix)]
 fn ntdb_l2_result<'a>(
-    results: &'a [patronus_security::SecurityScanResult],
+    results: &'a [patronus_ark::SecurityScanResult],
     model: &str,
-) -> &'a patronus_security::SecurityScanResult {
+) -> &'a patronus_ark::SecurityScanResult {
     results
         .iter()
         .find(|result| {
@@ -352,9 +352,7 @@ fn ntdb_l2_result<'a>(
 }
 
 #[cfg(unix)]
-fn ntdb_l2_layer(
-    result: &patronus_security::SecurityScanResult,
-) -> &patronus_security::LayerResult {
+fn ntdb_l2_layer(result: &patronus_ark::SecurityScanResult) -> &patronus_ark::LayerResult {
     result
         .layers
         .iter()

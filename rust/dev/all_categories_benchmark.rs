@@ -1,4 +1,4 @@
-use patronus_security::{L3Strategy, SecurityCategory, SecurityGateway, SecurityLevel};
+use patronus_ark::{L3Strategy, SecurityCategory, SecurityGateway, SecurityLevel};
 use serde_json::json;
 use std::fs;
 use std::path::PathBuf;
@@ -175,7 +175,7 @@ fn json_report(stats: &[CaseStats], asset_dir: &PathBuf, warmup_seconds: f64) ->
 fn markdown_report(stats: &[CaseStats], asset_dir: &PathBuf, warmup_seconds: f64) -> String {
     let mut out = String::new();
     out.push_str("# Standalone All-Categories Benchmark\n\n");
-    out.push_str("- Library: `patronus-security` Rust core\n");
+    out.push_str("- Library: `patronus-ark` Rust core\n");
     out.push_str(
         "- Categories: injection, dlp, pii, tool_classifier, user_intent, sensitive_documents\n",
     );
@@ -229,7 +229,7 @@ fn asset_dir() -> PathBuf {
         .or_else(|_| std::env::var("PATRONUS_BENCH_ASSET_DIR"))
         .or_else(|_| std::env::var("PATRONUS_MODEL_DIR"))
         .map(PathBuf::from)
-        .unwrap_or_else(|_| std::env::temp_dir().join("patronus_security_standalone_bench_assets"))
+        .unwrap_or_else(|_| std::env::temp_dir().join("patronus_ark_standalone_bench_assets"))
 }
 
 fn allow_downloads() -> bool {

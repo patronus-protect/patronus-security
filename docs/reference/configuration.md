@@ -163,7 +163,7 @@ dynamic_pii_config = {
 
 Only labels with measured exact-span F1 ≥ 0.6 are mapped; deterministic identifiers (email, IP,
 IBAN, SWIFT/BIC, phone, card) stay native L1 heuristics. See
-[`gliner_category_map.py`](https://github.com/patronus-protect/patronus-security/blob/main/python/patronus_security/gliner_category_map.py).
+[`gliner_category_map.py`](https://github.com/patronus-protect/patronus-security/blob/main/python/patronus_ark/gliner_category_map.py).
 
 ## Environment variables
 

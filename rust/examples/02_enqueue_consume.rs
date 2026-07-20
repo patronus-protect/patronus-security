@@ -10,7 +10,7 @@
 use std::collections::HashSet;
 use std::time::Duration;
 
-use patronus_security::{QueuedSecurityEvent, SecurityCategory, SecurityGateway, SecurityLevel};
+use patronus_ark::{QueuedSecurityEvent, SecurityCategory, SecurityGateway, SecurityLevel};
 
 fn main() {
     let scanner = SecurityGateway::with_max_level(

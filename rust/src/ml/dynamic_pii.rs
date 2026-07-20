@@ -40,6 +40,23 @@ impl DynamicPiiRuntime {
         })
     }
 
+    pub(crate) fn warmup(
+        &mut self,
+        config: &DynamicPiiConfig,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        self.initialize_engine()?;
+        self.engine
+            .as_mut()
+            .expect("GLiNER engine was initialized")
+            .extract_entity_candidates(
+                "Patronus security runtime warmup.",
+                &config.possible_inference_labels(),
+                config.inference_threshold(),
+            )?;
+        self.last_used = Some(Instant::now());
+        Ok(())
+    }
+
     pub(crate) fn infer(
         &mut self,
         text: &str,
@@ -55,9 +72,7 @@ impl DynamicPiiRuntime {
             .into());
         }
         let started = Instant::now();
-        if self.engine.is_none() {
-            self.engine = Some(GlinerEngine::from_path(&self.model_dir)?);
-        }
+        self.initialize_engine()?;
         self.last_used = Some(Instant::now());
         let ranges = chunk_ranges(
             &self.splitter,
@@ -108,6 +123,13 @@ impl DynamicPiiRuntime {
             duration_ms: started.elapsed().as_secs_f64() * 1_000.0,
             model_path: self.model_dir.clone(),
         })
+    }
+
+    fn initialize_engine(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        if self.engine.is_none() {
+            self.engine = Some(GlinerEngine::from_path(&self.model_dir)?);
+        }
+        Ok(())
     }
 
     pub(crate) fn evict_expired(&mut self) {

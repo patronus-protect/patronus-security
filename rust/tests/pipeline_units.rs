@@ -4,10 +4,10 @@
 mod l3_results {
     use std::collections::HashMap;
 
-    use patronus_security::pipeline::{
+    use patronus_ark::pipeline::{
         degraded_error_result, degraded_timeout_result, has_l3_pending, l3_pending_layer,
     };
-    use patronus_security::{
+    use patronus_ark::{
         EvaluationResult, LayerResult, ScanExecution, SecurityLevel, SecurityScanResult,
     };
 
@@ -154,7 +154,7 @@ mod l3_results {
 }
 
 mod public_strategy_types {
-    use patronus_security::{L3Strategy, NtdbOperatingPoint};
+    use patronus_ark::{L3Strategy, NtdbOperatingPoint};
 
     #[test]
     fn ntdb_operating_point_defaults_to_best_promote_and_parses_all_variants() {
@@ -187,10 +187,10 @@ mod public_strategy_types {
 mod long_text {
     use std::collections::HashMap;
 
-    use patronus_security::pipeline::test_util::{
+    use patronus_ark::pipeline::test_util::{
         aggregate_chunk_outputs, candidate_selection, l3_metadata, ChunkAggregation,
     };
-    use patronus_security::{EvaluationResult, LayerResult};
+    use patronus_ark::{EvaluationResult, LayerResult};
 
     fn result(class_name: &str, confidence: f64, level: &str) -> EvaluationResult {
         EvaluationResult {
@@ -380,8 +380,8 @@ mod long_text {
 mod decision_cache {
     use std::collections::HashMap;
 
-    use patronus_security::pipeline::test_util::{DecisionCache, DecisionCacheConfig};
-    use patronus_security::{EvaluationResult, LayerResult, ScanExecution, SecurityLevel};
+    use patronus_ark::pipeline::test_util::{DecisionCache, DecisionCacheConfig};
+    use patronus_ark::{EvaluationResult, LayerResult, ScanExecution, SecurityLevel};
 
     fn result(class_name: &str) -> EvaluationResult {
         EvaluationResult {
@@ -482,12 +482,12 @@ mod decision_cache {
 }
 
 mod ntdb_l2_results {
-    use patronus_security::ml::ntdb_executor::{ByteSpan, NtdbDecision};
-    use patronus_security::pipeline::test_util::{
+    use patronus_ark::ml::ntdb_executor::{ByteSpan, NtdbDecision};
+    use patronus_ark::pipeline::test_util::{
         ntdb_l2_enabled_for_category, ntdb_l2_model_config_for_id,
         ntdb_l2_model_configs_for_category, ntdb_l2_scan_result,
     };
-    use patronus_security::{
+    use patronus_ark::{
         L3SchedulerPolicy, ScanExecution, ScanGateMatrix, SecurityCategory, SecurityLevel,
     };
 
@@ -711,7 +711,7 @@ mod ntdb_l2_results {
             .any(|layer| layer.layer_type == "l3_pending"));
 
         let mut multi_disabled = ScanExecution::new(SecurityLevel::L3);
-        multi_disabled.set_l3_strategy(patronus_security::L3Strategy::Multi);
+        multi_disabled.set_l3_strategy(patronus_ark::L3Strategy::Multi);
         multi_disabled.set_defer_l3(true);
         multi_disabled.set_gates(
             ScanGateMatrix::all_enabled().with_model("unified-multitask-model-augmented-v3", false),
@@ -773,7 +773,7 @@ mod ntdb_l2_results {
 }
 
 mod download_policy {
-    use patronus_security::{SecurityCategory, SecurityGateway, SecurityLevel};
+    use patronus_ark::{SecurityCategory, SecurityGateway, SecurityLevel};
 
     #[test]
     fn download_categories_limit_asset_downloads() {

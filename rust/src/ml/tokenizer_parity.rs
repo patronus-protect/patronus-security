@@ -13,8 +13,8 @@ pub(crate) fn texts() -> Vec<String> {
     ))
     .expect("tokenizer adversarial fixture must be valid JSON");
 
-    let dataset_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../python/patronus_security/benchmark_data");
+    let dataset_dir =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../python/patronus_ark/benchmark_data");
     let mut paths = fs::read_dir(&dataset_dir)
         .unwrap_or_else(|err| panic!("failed to read {}: {err}", dataset_dir.display()))
         .filter_map(Result::ok)

@@ -12,7 +12,7 @@ Run all three before merging or releasing — these mirror CI:
 cargo fmt --check
 
 # 2. Rust unit + integration tests
-cargo test -p patronus-security
+cargo test -p patronus-ark
 
 # 3. Python binding tests (after `maturin develop`)
 .venv/bin/python -m unittest discover -s python/tests

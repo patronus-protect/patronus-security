@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-from ._patronus_security import SecurityGateway as RustSecurityGateway
+from ._patronus_ark import SecurityGateway as RustSecurityGateway
 from copy import deepcopy
 import json
 
@@ -153,7 +153,7 @@ class SecurityGateway:
         categories: Scanner categories to use for `scan_all`.
         max_level: Maximum scanner level: `l1`, `l2`, or `l3`.
         model_dir: Optional asset cache root. Defaults to the platform cache
-            directory plus `patronus_security`.
+            directory plus `patronus_ark`.
         download_files: Whether `warmup()` may download missing model assets.
         download_categories: Optional category allowlist for asset downloads.
             When omitted, every configured category may download if

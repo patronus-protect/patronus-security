@@ -1,4 +1,4 @@
-use patronus_security::gliner_onnx_engine::GlinerEngine;
+use patronus_ark::gliner_onnx_engine::GlinerEngine;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{collections::HashSet, fs, path::Path, time::Instant};

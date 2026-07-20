@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use patronus_security::{
+use patronus_ark::{
     assets::{
         category_assets, dedicated_l3_asset, dynamic_pii_assets_present, ntdb_l2_package_assets,
         required_assets_present, DEDICATED_L3_ASSETS, DYNAMIC_PII_ASSET, UNIFIED_L3_ASSET,
@@ -304,11 +304,11 @@ mod asset_downloads {
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    use patronus_security::assets::{
+    use patronus_ark::assets::{
         category_assets, ntdb_l2_package_assets, ntdb_l2_package_manifest_files,
         required_assets_present, ASSET_MANIFEST,
     };
-    use patronus_security::{SecurityCategory, SecurityLevel};
+    use patronus_ark::{SecurityCategory, SecurityLevel};
 
     fn temp_dir(name: &str) -> std::path::PathBuf {
         let suffix = SystemTime::now()

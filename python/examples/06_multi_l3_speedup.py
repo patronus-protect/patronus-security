@@ -15,7 +15,7 @@ import subprocess
 import sys
 import time
 
-from patronus_security import SecurityGateway
+from patronus_ark import SecurityGateway
 
 
 RUNS = 8

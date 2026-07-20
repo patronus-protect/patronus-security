@@ -3,7 +3,7 @@
 
 Runs every benchmark phase once with dedicated L3 models and once with the
 unified multi-head L3 model against sample data shipped with the package
-(`patronus_security/benchmark_data/*.jsonl`, copied from the Patronus
+(`patronus_ark/benchmark_data/*.jsonl`, copied from the Patronus
 validation splits). Strategy-specific files are written below
 `output_dir/dedicated` and `output_dir/multi`:
 
@@ -681,7 +681,7 @@ def _run_isolated_l2_l3_gliner(gateway, samples, _benchmark_start_peak_rss_mb=No
     if worker_config is None:
         raise RuntimeError("gateway does not expose isolated benchmark worker settings")
     completed = subprocess.run(
-        [sys.executable, "-m", "patronus_security.benchmark_worker"],
+        [sys.executable, "-m", "patronus_ark.benchmark_worker"],
         input=json.dumps({"gateway": worker_config, "samples": samples}),
         text=True,
         capture_output=True,
@@ -1622,7 +1622,7 @@ def _run_strategy_benchmark_process(
     config = deepcopy(gateway._benchmark_gateway_config)
     config["l3_strategy"] = strategy
     completed = subprocess.run(
-        [sys.executable, "-m", "patronus_security.benchmark_strategy_worker"],
+        [sys.executable, "-m", "patronus_ark.benchmark_strategy_worker"],
         input=json.dumps(
             {
                 "gateway": config,

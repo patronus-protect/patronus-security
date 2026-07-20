@@ -1,21 +1,21 @@
 [package]
-name = "patronus-security-python"
+name = "patronus-ark-python"
 version = "0.1.0"
 edition = "2021"
 license = "AGPL-3.0-only"
 
 [lib]
-name = "_patronus_security"
+name = "_patronus_ark"
 crate-type = ["cdylib"]
 
 [dependencies]
 pyo3 = { version = "0.22", features = ["extension-module", "abi3-py311"] }
-patronus-security = { path = "../rust" }
+patronus-ark = { path = "../rust" }
 serde_json = "1.0"
 
 [features]
 default = []
-onnx-coreml = ["patronus-security/onnx-coreml"]
-onnx-cuda = ["patronus-security/onnx-cuda"]
-onnx-directml = ["patronus-security/onnx-directml"]
-onnx-tensorrt = ["patronus-security/onnx-tensorrt"]
+onnx-coreml = ["patronus-ark/onnx-coreml"]
+onnx-cuda = ["patronus-ark/onnx-cuda"]
+onnx-directml = ["patronus-ark/onnx-directml"]
+onnx-tensorrt = ["patronus-ark/onnx-tensorrt"]

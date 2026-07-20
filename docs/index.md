@@ -12,7 +12,7 @@ bindings (PyO3/maturin). Everything runs on the endpoint: most traffic is resolv
 microseconds by native rules, and only genuinely uncertain cases reach a transformer model.
 
 ```python
-from patronus_security import SecurityGateway
+from patronus_ark import SecurityGateway
 
 scanner = SecurityGateway(categories=["injection", "dlp", "pii"], max_level="l2")
 scanner.warmup()
@@ -80,7 +80,7 @@ See [Categories](concepts/categories.md) for what each one classifies and which 
 
 ## License
 
-Patronus Ark, distributed as `patronus-security`, is **dual-licensed**:
+Patronus Ark, distributed as `patronus-ark`, is **dual-licensed**:
 
 - **AGPL-3.0** for open-source and evaluation use.
 - A **commercial license** for embedding in closed-source or revenue-generating products.

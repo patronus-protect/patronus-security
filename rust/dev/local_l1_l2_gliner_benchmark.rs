@@ -1,4 +1,4 @@
-use patronus_security::{
+use patronus_ark::{
     gliner_onnx_engine::GlinerEngine, NtdbOperatingPoint, SecurityCategory, SecurityGateway,
     SecurityLevel, SecurityScanResult,
 };

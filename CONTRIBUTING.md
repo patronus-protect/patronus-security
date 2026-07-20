@@ -24,7 +24,7 @@ Run these before opening a pull request (they mirror CI):
 
 ```bash
 cargo fmt --check
-cargo test -p patronus-security
+cargo test -p patronus-ark
 .venv/bin/python -m unittest discover -s python/tests
 ```
 

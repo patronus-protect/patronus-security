@@ -8,7 +8,7 @@ byte and char offsets.
 Needs GLiNER assets. Run: python python/examples/05_dynamic_pii.py
 """
 
-from patronus_security import SecurityGateway
+from patronus_ark import SecurityGateway
 
 
 def main() -> None:

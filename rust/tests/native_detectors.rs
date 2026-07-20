@@ -1,4 +1,4 @@
-use patronus_security::detectors::{
+use patronus_ark::detectors::{
     dlp::{
         destructive_operation::DestructiveOperationPipeline, dlp::DlpPipeline,
         secret_transfer::SecretTransferPipeline, sensitive_material::SensitiveMaterialPipeline,
@@ -21,7 +21,7 @@ use patronus_security::detectors::{
     },
     pii::pii::PiiPipeline,
 };
-use patronus_security::{SecurityCategory, SecurityGateway, SecurityLevel};
+use patronus_ark::{SecurityCategory, SecurityGateway, SecurityLevel};
 
 fn assert_class(actual: &str, expected: &str) {
     assert_eq!(actual, expected);
@@ -594,7 +594,7 @@ fn mcp_scanners_detect_policy_and_runtime_risk() {
 }
 
 mod pii_validators {
-    use patronus_security::detectors::pii::validators::{luhn, mod97};
+    use patronus_ark::detectors::pii::validators::{luhn, mod97};
 
     #[test]
     fn luhn_valid_visa() {

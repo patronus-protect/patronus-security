@@ -22,20 +22,20 @@ python -m venv .venv
 maturin develop --manifest-path python/Cargo.toml
 ```
 
-`maturin develop` rebuilds the Rust extension and reinstalls the `patronus_security` module.
+`maturin develop` rebuilds the Rust extension and reinstalls the `patronus_ark` module.
 Re-run it after changing Rust code that the Python bindings touch.
 
 ## Repository layout
 
 | Path | What lives here |
 | --- | --- |
-| `rust/src/` | The `patronus-security` crate: gateway, pipelines, detectors, ml, assets, threat. |
+| `rust/src/` | The `patronus-ark` crate: gateway, pipelines, detectors, ml, assets, threat. |
 | `rust/src/detectors/` | Native L1 detectors (injection, dlp, pii, mcp). |
 | `rust/src/pipeline/` | Gateway, per-category pipelines, L3 worker, strategies, caching. |
 | `rust/src/ml/`, `rust/src/assets/` | ONNX/NTDB execution and asset download/verify/cache. |
 | `rust/examples/`, `python/examples/` | Runnable examples for the six core flows (+ stress harnesses). |
 | `rust/tests/`, `python/tests/` | Integration and unit tests. |
-| `python/patronus_security/` | Python wrapper, benchmark harness, GLiNER category map. |
+| `python/patronus_ark/` | Python wrapper, benchmark harness, GLiNER category map. |
 | `scripts/generate_docs.py` | **Generates** `docs/{rust-api,python-api,assets}.md` — do not hand-edit those. |
 | `docs/` | This documentation site (MkDocs Material). |
 

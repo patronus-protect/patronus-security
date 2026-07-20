@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use patronus_security::{
+use patronus_ark::{
     EvaluationResult, ExternalL1Detector, ExternalL1Input, L3SchedulerPolicy, QueuedSecurityEvent,
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityRequestCompletion,
 };
@@ -71,17 +71,13 @@ fn temp_model_dir(name: &str) -> std::path::PathBuf {
     dir
 }
 
-fn has_result(
-    results: &[patronus_security::SecurityScanResult],
-    model: &str,
-    class_name: &str,
-) -> bool {
+fn has_result(results: &[patronus_ark::SecurityScanResult], model: &str, class_name: &str) -> bool {
     results
         .iter()
         .any(|result| result.model == model && result.class_name == class_name)
 }
 
-fn assert_result_schema(results: &[patronus_security::SecurityScanResult], category: &str) {
+fn assert_result_schema(results: &[patronus_ark::SecurityScanResult], category: &str) {
     assert!(!results.is_empty());
     for result in results {
         assert_eq!(result.category, category);
@@ -110,7 +106,7 @@ fn assert_result_schema(results: &[patronus_security::SecurityScanResult], categ
 }
 
 fn result_signature(
-    results: &[patronus_security::SecurityScanResult],
+    results: &[patronus_ark::SecurityScanResult],
 ) -> Vec<(String, String, String, String)> {
     let mut signature: Vec<_> = results
         .iter()
@@ -131,7 +127,7 @@ fn consume_for(
     scanner: &SecurityGateway,
     request_id: &str,
     timeout: Option<std::time::Duration>,
-) -> Option<patronus_security::SecurityScanResult> {
+) -> Option<patronus_ark::SecurityScanResult> {
     loop {
         match scanner.consume_next_event(timeout)? {
             QueuedSecurityEvent::Result(queued) => {
@@ -151,7 +147,7 @@ fn drain_for(
     scanner: &SecurityGateway,
     request_id: &str,
 ) -> (
-    Vec<patronus_security::SecurityScanResult>,
+    Vec<patronus_ark::SecurityScanResult>,
     SecurityRequestCompletion,
 ) {
     let mut results = Vec::new();
@@ -250,7 +246,7 @@ fn warmup_without_downloads_requires_ntdb_l2_exports() {
     let failure = scanner.warmup().unwrap_err();
     assert_eq!(
         failure.kind,
-        patronus_security::SecurityFailureKind::MissingAsset
+        patronus_ark::SecurityFailureKind::MissingAsset
     );
     let err = failure.to_string();
     assert!(
@@ -285,15 +281,15 @@ fn legacy_routing_l1_files_are_ignored() {
     let readiness = scanner.runtime_readiness();
     assert!(matches!(
         readiness.l1,
-        patronus_security::SecurityLevelReadiness::NotConfigured
+        patronus_ark::SecurityLevelReadiness::NotConfigured
     ));
     assert!(matches!(
         readiness.l2,
-        patronus_security::SecurityLevelReadiness::NotConfigured
+        patronus_ark::SecurityLevelReadiness::NotConfigured
     ));
     assert!(matches!(
         readiness.l3,
-        patronus_security::SecurityLevelReadiness::NotConfigured
+        patronus_ark::SecurityLevelReadiness::NotConfigured
     ));
 
     let results = scanner.scan_category(SecurityCategory::Routing, "schedule meeting tomorrow");
@@ -700,7 +696,7 @@ fn missing_l2_runtime_is_reported_as_degraded_and_not_ready() {
     let readiness = scanner.runtime_readiness();
     assert!(matches!(
         readiness.l2,
-        patronus_security::SecurityLevelReadiness::NotReady { .. }
+        patronus_ark::SecurityLevelReadiness::NotReady { .. }
     ));
 
     let request_id = scanner.enqueue("ordinary text", None);
@@ -868,7 +864,7 @@ fn native_dlp_evidence_covers_governance_github_token_fixture() {
 mod l3_worker_streaming {
     use std::time::{Duration, Instant};
 
-    use patronus_security::{
+    use patronus_ark::{
         QueuedSecurityEvent, SecurityCategory, SecurityFailureKind, SecurityGateway, SecurityLevel,
         SecurityRequestCompletion, SecurityRequestState,
     };

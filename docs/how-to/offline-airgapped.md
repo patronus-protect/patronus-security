@@ -8,7 +8,7 @@ were fetched during a separate, controlled window.
 Native L1 detectors need no downloads. Set `download_files=False` and cap at L1:
 
 ```python
-from patronus_security import SecurityGateway
+from patronus_ark import SecurityGateway
 
 scanner = SecurityGateway(
     categories=["injection", "dlp", "pii"],
@@ -31,12 +31,12 @@ pattern for installers and locked-down deployments.
 === "Rust"
 
     ```rust
-    use patronus_security::{SecurityCategory, SecurityGateway, SecurityLevel};
+    use patronus_ark::{SecurityCategory, SecurityGateway, SecurityLevel};
 
     let scanner = SecurityGateway::with_download_categories(
         vec![SecurityCategory::Injection],
         SecurityLevel::L3,
-        Some("/opt/patronus-security-assets".into()),
+        Some("/opt/patronus-ark-assets".into()),
         true,
         Some(vec![SecurityCategory::Injection]),
     );
@@ -56,7 +56,7 @@ pattern for installers and locked-down deployments.
     scanner = SecurityGateway(
         categories=["injection"],
         max_level="l3",
-        model_dir="/opt/patronus-security-assets",
+        model_dir="/opt/patronus-ark-assets",
         download_files=True,
         download_categories=["injection"],
     )

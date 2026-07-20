@@ -12,7 +12,7 @@ import argparse
 import json
 from pathlib import Path
 
-from patronus_security import SecurityGateway
+from patronus_ark import SecurityGateway
 
 
 def parse_args():
@@ -22,7 +22,7 @@ def parse_args():
         "--fixture",
         type=Path,
         default=Path(__file__).parents[1]
-        / "python/patronus_security/benchmark_data/dynamic_pii_threshold_sweep.jsonl",
+        / "python/patronus_ark/benchmark_data/dynamic_pii_threshold_sweep.jsonl",
     )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument(

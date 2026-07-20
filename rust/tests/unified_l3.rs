@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-use patronus_security::ml::ntdb_executor::ByteSpan;
-use patronus_security::ml::unified_onnx::{
+use patronus_ark::ml::ntdb_executor::ByteSpan;
+use patronus_ark::ml::unified_onnx::{
     decode_head_logits_for_test, LazyUnifiedOnnxClassifier, UnifiedHeadOutput, UNIFIED_MODEL,
 };
-use patronus_security::pipeline::test_util::{
+use patronus_ark::pipeline::test_util::{
     aggregate_unified_head_for_test, public_unified_class_for_test, selected_l3_chunks_for_test,
     unified_coalescing_snapshot,
 };
-use patronus_security::ExecutionBackend;
+use patronus_ark::ExecutionBackend;
 
 #[test]
 fn unified_model_decodes_binary_softmax_and_multilabel_heads() {
@@ -108,7 +108,7 @@ fn candidate_spans_reduce_dedicated_l3_chunks() {
 fn real_pinned_bundle_loads_and_returns_all_heads() {
     let dir = std::env::var("PATRONUS_TEST_UNIFIED_DIR")
         .expect("PATRONUS_TEST_UNIFIED_DIR must point at the unified model bundle");
-    patronus_security::ml::onnx::warmup_runtime();
+    patronus_ark::ml::onnx::warmup_runtime();
     let mut model = LazyUnifiedOnnxClassifier::from_dir(dir).unwrap();
     let outputs = model
         .infer_batch(

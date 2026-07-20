@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 #[cfg(unix)]
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use patronus_security::{
+use patronus_ark::{
     assets::DYNAMIC_PII_ASSET, DynamicPiiConditionalLabels, DynamicPiiConfig,
     DynamicPiiExecutionGate, DynamicPiiResultCondition, QueuedSecurityEvent, SecurityCategory,
     SecurityGateway, SecurityLevel, SecurityLevelReadiness, SecurityRequestCompletion,
@@ -374,6 +374,69 @@ fn local_edge_bundle_runs_through_gateway_and_l3_worker() {
         dynamic.layers[0].details.get("activated_conditional_rules"),
         Some(&serde_json::json!([0]))
     );
+    drop(gateway);
+    std::fs::remove_dir_all(model_dir).unwrap();
+}
+
+#[test]
+#[cfg(unix)]
+#[ignore = "requires PATRONUS_TEST_GLINER_DIR"]
+fn warmed_gliner_single_scan_excludes_warmup_from_latency() {
+    let bundle_source = std::env::var("PATRONUS_TEST_GLINER_DIR")
+        .expect("PATRONUS_TEST_GLINER_DIR must point to the Edge bundle");
+    let suffix = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let model_dir = std::env::temp_dir().join(format!(
+        "patronus_dynamic_pii_latency_test_{}_{}",
+        std::process::id(),
+        suffix
+    ));
+    let bundle_dir = model_dir.join(DYNAMIC_PII_ASSET.destination_path);
+    std::fs::create_dir_all(bundle_dir.parent().unwrap()).unwrap();
+    symlink(bundle_source, &bundle_dir).unwrap();
+
+    let mut gateway = SecurityGateway::with_max_level(
+        vec![SecurityCategory::DynamicPii],
+        SecurityLevel::L3,
+        Some(model_dir.clone()),
+        false,
+    );
+    gateway
+        .set_dynamic_pii_config(DynamicPiiConfig {
+            labels: ["person", "organization", "location"]
+                .map(String::from)
+                .to_vec(),
+            ..DynamicPiiConfig::default()
+        })
+        .unwrap();
+
+    let warmup_started = Instant::now();
+    gateway.warmup().unwrap();
+    let warmup_ms = warmup_started.elapsed().as_secs_f64() * 1_000.0;
+
+    let scan_started = Instant::now();
+    let results = gateway.scan_category(
+        SecurityCategory::DynamicPii,
+        "Benedikt works at Patronus-Studio in Frankfurt.",
+    );
+    let scan_wall_ms = scan_started.elapsed().as_secs_f64() * 1_000.0;
+    let result = results
+        .iter()
+        .find(|result| result.category == "dynamic-pii")
+        .expect("warmed GLiNER scan must return a Dynamic PII result");
+
+    eprintln!(
+        "GLiNER single scan: warmup_ms={warmup_ms:.2} (excluded), inference_ms={:.2}, wall_ms={scan_wall_ms:.2}",
+        result.duration_ms
+    );
+    assert_eq!(result.class_name, "entities");
+    assert!(
+        scan_wall_ms < 1_000.0,
+        "warmed GLiNER single scan took {scan_wall_ms:.2} ms; warmup took {warmup_ms:.2} ms and was excluded"
+    );
+
     drop(gateway);
     std::fs::remove_dir_all(model_dir).unwrap();
 }

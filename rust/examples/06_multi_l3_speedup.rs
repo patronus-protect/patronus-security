@@ -12,7 +12,7 @@ use std::env;
 use std::process::Command;
 use std::time::Instant;
 
-use patronus_security::{
+use patronus_ark::{
     L3Strategy, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
 use serde_json::{json, Value};

@@ -9,7 +9,7 @@ Needs Injection model assets (set ``HF_TOKEN`` if the repo requires it).
 Run: python python/examples/03_l2_l3_promotion.py
 """
 
-from patronus_security import SecurityGateway
+from patronus_ark import SecurityGateway
 
 
 def main() -> None:

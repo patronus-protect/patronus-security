@@ -6,14 +6,14 @@ optional downloads. For the generated inventory (sizes, exact paths), see the
 
 ## Where assets are cached
 
-By default, assets are stored under the platform cache directory in `patronus_security/`.
+By default, assets are stored under the platform cache directory in `patronus_ark/`.
 Override the location with `model_dir` (Python) / the model-dir argument (Rust):
 
 ```python
 scanner = SecurityGateway(
     categories=["injection"],
     max_level="l3",
-    model_dir="/opt/patronus-security-assets",
+    model_dir="/opt/patronus-ark-assets",
     download_files=True,
     download_categories=["injection"],
 )

@@ -7,7 +7,7 @@ Native (L1) and NTDB (L2) scanners for a few categories, one blocking
 Run: python python/examples/01_basic_scan.py
 """
 
-from patronus_security import SecurityGateway
+from patronus_ark import SecurityGateway
 
 
 def main() -> None:

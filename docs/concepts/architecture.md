@@ -13,14 +13,14 @@ a typed convenience wrapper over the same gateway object.
 ```mermaid
 flowchart TB
     subgraph client["Your application"]
-        Py["Python<br/>patronus_security.SecurityGateway"]
-        Rs["Rust<br/>patronus_security::SecurityGateway"]
+        Py["Python<br/>patronus_ark.SecurityGateway"]
+        Rs["Rust<br/>patronus_ark::SecurityGateway"]
     end
 
     Py -->|PyO3| GW
     Rs --> GW
 
-    subgraph core["Rust core (patronus-security)"]
+    subgraph core["Rust core (patronus-ark)"]
         GW["SecurityGateway<br/>(orchestrator + request registry)"]
         GW --> PIPE["Per-category Pipelines"]
         PIPE --> L1["L1 · native detectors<br/>(injection / dlp / pii / mcp)"]

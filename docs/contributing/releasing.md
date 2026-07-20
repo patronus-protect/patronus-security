@@ -5,7 +5,7 @@ workflow. The project is pre-1.0; see [`SECURITY.md`](../security.md) for the su
 
 ## What a release publishes
 
-- The **Rust crate** `patronus-security` to crates.io.
+- The **Rust crate** `patronus-ark` to crates.io.
 - The **Python wheels** and source distribution to PyPI.
 
 ## The pipeline
@@ -13,8 +13,8 @@ workflow. The project is pre-1.0; see [`SECURITY.md`](../security.md) for the su
 1. **Validate** — on manual dispatch, CI runs:
    ```bash
    cargo fmt --check
-   cargo test -p patronus-security
-   cargo publish -p patronus-security --dry-run
+   cargo test -p patronus-ark
+   cargo publish -p patronus-ark --dry-run
    python scripts/generate_docs.py --check   # generated docs must be current
    ```
 2. **Build artifacts** — `PyO3/maturin-action` builds `abi3-py311` wheels for Linux x86_64,
@@ -49,7 +49,7 @@ For a local macOS check before dispatching the workflow:
 ```bash
 maturin build --manifest-path python/Cargo.toml --release --out dist
 .venv/bin/python -m pip install --force-reinstall dist/*.whl
-.venv/bin/python -c "import patronus_security"
+.venv/bin/python -c "import patronus_ark"
 ```
 
 ## Versioning

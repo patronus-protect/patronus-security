@@ -7,7 +7,7 @@
 //!
 //! Run: `cargo run --example 01_basic_scan`
 
-use patronus_security::{SecurityCategory, SecurityGateway, SecurityLevel};
+use patronus_ark::{SecurityCategory, SecurityGateway, SecurityLevel};
 
 fn main() {
     let scanner = SecurityGateway::with_max_level(

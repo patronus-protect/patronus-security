@@ -217,6 +217,13 @@ impl DynamicPiiConfig {
         labels
     }
 
+    pub(crate) fn possible_inference_labels(&self) -> Vec<String> {
+        self.possible_labels()
+            .iter()
+            .map(|label| gliner_inference_label(label))
+            .collect()
+    }
+
     pub(crate) fn inference_threshold(&self) -> f32 {
         self.label_thresholds
             .values()

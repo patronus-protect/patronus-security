@@ -1,5 +1,5 @@
 [package]
-name = "patronus-security"
+name = "patronus-ark"
 version = "0.1.0"
 edition = "2021"
 authors = ["Casdo Labs GmbH <team@patronus.studio>"]
@@ -8,7 +8,7 @@ readme = "../README.md"
 license = "AGPL-3.0-only"
 repository = "https://github.com/patronus-protect/patronus-security"
 homepage = "https://github.com/patronus-protect/patronus-security"
-documentation = "https://docs.rs/patronus-security"
+documentation = "https://docs.rs/patronus-ark"
 keywords = ["security", "prompt-injection", "dlp", "pii"]
 categories = ["authentication", "text-processing"]
 
@@ -40,7 +40,7 @@ onnx-directml = ["ort/directml"]
 onnx-tensorrt = ["ort/tensorrt"]
 
 [dev-dependencies]
-patronus-security = { path = ".", features = ["test-util"] }
+patronus-ark = { path = ".", features = ["test-util"] }
 
 # Internal development, benchmark, and tokenizer-parity scripts.
 # These are NOT user-facing examples (those live in examples/0X_*). They are

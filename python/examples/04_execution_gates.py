@@ -9,7 +9,7 @@ scanners run. Set them in the constructor, as a new default with
 Run: python python/examples/04_execution_gates.py
 """
 
-from patronus_security import SecurityGateway
+from patronus_ark import SecurityGateway
 
 
 def print_models(results) -> None:

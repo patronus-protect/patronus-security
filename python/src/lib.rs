@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-use patronus_security::{
+use patronus_ark::{
     DynamicPiiConfig, EvidenceSpan, ExecutionBackend, L3SchedulerPolicy, L3Strategy, LabelScore,
     LayerResult, NtdbOperatingPoint, OnnxBatchMode, QueuedSecurityEvent, QueuedSecurityScanResult,
     ScanGateMatrix, SecurityCategory, SecurityFailure, SecurityGateway as RustSecurityGateway,
@@ -623,8 +623,8 @@ impl From<SecurityRuntimeReadiness> for PyRuntimeReadiness {
     }
 }
 
-impl From<patronus_security::SecurityScanResult> for PyEvaluationResult {
-    fn from(result: patronus_security::SecurityScanResult) -> Self {
+impl From<patronus_ark::SecurityScanResult> for PyEvaluationResult {
+    fn from(result: patronus_ark::SecurityScanResult) -> Self {
         PyEvaluationResult {
             request_id: None,
             category: result.category,
@@ -698,7 +698,7 @@ impl From<LayerResult> for PyLayerResult {
 }
 
 #[pymodule]
-fn _patronus_security(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn _patronus_ark(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<SecurityGateway>()?;
     m.add_class::<PyLayerResult>()?;
     m.add_class::<PyEvaluationResult>()?;

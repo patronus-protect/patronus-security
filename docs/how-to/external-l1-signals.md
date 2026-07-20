@@ -10,7 +10,7 @@ under the model name `external:<id>`.
 ## Implement the trait
 
 ```rust
-use patronus_security::{
+use patronus_ark::{
     EvaluationResult, ExternalL1Detector, ExternalL1Input, SecurityCategory,
 };
 

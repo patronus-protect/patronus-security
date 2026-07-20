@@ -1,7 +1,7 @@
 import tempfile
 import unittest
 
-from patronus_security import SecurityGateway
+from patronus_ark import SecurityGateway
 
 
 def assert_result_schema(test_case, result):
@@ -97,7 +97,7 @@ class PublicApiTests(unittest.TestCase):
         scanner = SecurityGateway(
             categories=["dlp"],
             max_level="l2",
-            model_dir="/tmp/patronus-security-test-models",
+            model_dir="/tmp/patronus-ark-test-models",
             download_files=False,
         )
 

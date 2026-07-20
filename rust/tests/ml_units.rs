@@ -2,7 +2,7 @@
 //! reached through the `test-util` feature surface.
 
 mod l1_heuristics {
-    use patronus_security::ml::l1_heuristics::{clean_text_for_rules, HeuristicsEngine, RawRule};
+    use patronus_ark::ml::l1_heuristics::{clean_text_for_rules, HeuristicsEngine, RawRule};
 
     #[test]
     fn clean_text_for_rules_flattens_json_before_ngram_matching() {
@@ -29,7 +29,7 @@ mod l1_heuristics {
 }
 
 mod ntdb_decision {
-    use patronus_security::ml::ntdb_executor::{NtdbDecision, ScoreOutput};
+    use patronus_ark::ml::ntdb_executor::{NtdbDecision, ScoreOutput};
 
     fn binary_output() -> ScoreOutput {
         ScoreOutput {
@@ -108,7 +108,7 @@ mod ntdb_decision {
 }
 
 mod ntdb_heuristics {
-    use patronus_security::ml::ntdb_executor::test_util::{
+    use patronus_ark::ml::ntdb_executor::test_util::{
         global_text_heuristics, local_text_heuristics,
     };
 
@@ -128,8 +128,8 @@ mod ntdb_encoder {
         time::{SystemTime, UNIX_EPOCH},
     };
 
-    use patronus_security::ml::ntdb_executor::manifest::MiniLmManifest;
-    use patronus_security::ml::ntdb_executor::test_util::StaticEncoderStore;
+    use patronus_ark::ml::ntdb_executor::manifest::MiniLmManifest;
+    use patronus_ark::ml::ntdb_executor::test_util::StaticEncoderStore;
 
     fn temp_dir(name: &str) -> std::path::PathBuf {
         let suffix = SystemTime::now()
@@ -201,7 +201,7 @@ mod ntdb_encoder {
 }
 
 mod ntdb_lightgbm {
-    use patronus_security::ml::ntdb_executor::test_util::Tree;
+    use patronus_ark::ml::ntdb_executor::test_util::Tree;
 
     #[test]
     fn stump_tree_predicts_single_leaf_value() {
@@ -224,8 +224,8 @@ is_linear=0
 }
 
 mod ntdb_package {
-    use patronus_security::ml::ntdb_executor::test_util::unit_left_dot;
-    use patronus_security::ml::ntdb_executor::{NtdbMultiPackage, NtdbPackageSpec};
+    use patronus_ark::ml::ntdb_executor::test_util::unit_left_dot;
+    use patronus_ark::ml::ntdb_executor::{NtdbMultiPackage, NtdbPackageSpec};
 
     #[test]
     fn centroid_feature_matches_python_contract() {

@@ -9,7 +9,7 @@
 
 use std::time::Duration;
 
-use patronus_security::{
+use patronus_ark::{
     DynamicPiiConfig, DynamicPiiExecutionGate, QueuedSecurityEvent, SecurityCategory,
     SecurityGateway, SecurityLevel,
 };

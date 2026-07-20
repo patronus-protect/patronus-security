@@ -60,6 +60,6 @@ detector than exact-span NER.
 ```bash
 .venv/bin/python scripts/sweep_gliner_pii.py \
   --model-dir /path/to/models \
-  --fixture python/patronus_security/benchmark_data/education_pii_threshold_sweep.jsonl \
+  --fixture python/patronus_ark/benchmark_data/education_pii_threshold_sweep.jsonl \
   --output /tmp/gliner_education_ner_sweep.json
 ```

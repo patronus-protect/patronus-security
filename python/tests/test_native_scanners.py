@@ -1,6 +1,6 @@
 import unittest
 
-from patronus_security import SecurityGateway
+from patronus_ark import SecurityGateway
 
 
 def classes(results):

@@ -8,7 +8,7 @@ ready first. Correlate every event by ``request_id``.
 Run: python python/examples/02_enqueue_consume.py
 """
 
-from patronus_security import SecurityGateway
+from patronus_ark import SecurityGateway
 
 
 def main() -> None:

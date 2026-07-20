@@ -3,7 +3,7 @@ requires = ["maturin>=1.5,<2.0"]
 build-backend = "maturin"
 
 [project]
-name = "patronus_security"
+name = "patronus-ark"
 version = "0.1.0"
 description = "Python bindings for Patronus Ark's hybrid Rust security scanners."
 readme = "../README.md"
@@ -37,6 +37,6 @@ Issues = "https://github.com/patronus-protect/patronus-security/issues"
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
-module-name = "patronus_security._patronus_security"
-include = [{ path = "patronus_security/benchmark_data/*.jsonl", format = ["sdist", "wheel"] }]
-exclude = [{ path = "patronus_security/__pycache__/**", format = ["sdist", "wheel"] }]
+module-name = "patronus_ark._patronus_ark"
+include = [{ path = "patronus_ark/benchmark_data/*.jsonl", format = ["sdist", "wheel"] }]
+exclude = [{ path = "patronus_ark/__pycache__/**", format = ["sdist", "wheel"] }]
