@@ -1,12 +1,10 @@
 name: docs
 
 # Build and deploy the MkDocs Material site to GitHub Pages.
-# Deployment currently runs from the docs branch (docs are not merged to main yet);
-# switch the branch filters back to main once the documentation lands there.
 
 on:
   push:
-    branches: [docs/mkdocs-documentation]
+    branches: [main]
     paths:
       - "docs/**"
       - "mkdocs.yml"
@@ -40,17 +38,14 @@ jobs:
       - name: Build site (strict)
         run: mkdocs build --strict
       - name: Upload artifact
-        if: github.ref == 'refs/heads/docs/mkdocs-documentation'
+        if: github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v3
         with:
           path: site
 
   deploy:
-    if: github.ref == 'refs/heads/docs/mkdocs-documentation'
+    if: github.ref == 'refs/heads/main'
     needs: build
-    # GitHub Pages is unavailable while this repository is private (free plan).
-    # Non-blocking until the repo goes public and Pages is enabled — then remove this line.
-    continue-on-error: true
     runs-on: ubuntu-latest
     environment:
       name: github-pages

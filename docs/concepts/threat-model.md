@@ -1,11 +1,11 @@
 # Threat model
 
-This page states what Patronus Security is designed to defend against, what it explicitly does
+This page states what Patronus Ark is designed to defend against, what it explicitly does
 **not** guarantee, the trust boundaries it sits on, and the assumptions it makes. It follows
 the spirit of the [OWASP Threat Model](https://owasp.org/www-project-threat-model-library/)
 approach: name the assets, the boundaries, and the limits honestly.
 
-!!! warning "Patronus Security is a detector, not a guarantee"
+!!! warning "Patronus Ark is a detector, not a guarantee"
     It is a probabilistic risk **classifier** that raises signals for a policy engine to act
     on. It reduces risk; it does not eliminate it. No classifier catches every attack, and a
     positive result is a *signal*, not proof. Treat it as one control in a defense-in-depth
@@ -28,7 +28,7 @@ Concretely, the library provides signals to:
 
 ## Trust boundaries
 
-Patronus Security is meant to run **on the endpoint**, in the request path between components
+Patronus Ark is meant to run **on the endpoint**, in the request path between components
 that do not fully trust each other:
 
 ```mermaid
@@ -36,7 +36,7 @@ flowchart LR
     U([User / untrusted input]) -->|prompt| APP
     WEB([Web / tool outputs<br/>untrusted]) -->|ingested text| APP
     subgraph APP["Your AI application (trusted)"]
-        SCAN["Patronus Security<br/>(scan at the boundary)"]
+        SCAN["Patronus Ark<br/>(scan at the boundary)"]
         AGENT["Model / agent"]
         SCAN --> AGENT
         AGENT -->|tool calls| SCAN

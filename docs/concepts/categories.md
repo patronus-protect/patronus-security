@@ -1,6 +1,6 @@
 # Categories
 
-A **category** is one kind of security question Patronus Security can answer about a text.
+A **category** is one kind of security question Patronus Ark can answer about a text.
 You choose the categories a gateway scans at construction time. Each category is backed by a
 specific set of layers — some are native-only, some are model-backed, one is transformer-only.
 

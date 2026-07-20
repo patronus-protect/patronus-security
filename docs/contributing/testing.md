@@ -1,11 +1,11 @@
 # Testing
 
-The suite has Rust unit/integration tests and Python binding tests. CI runs both on every push
-and pull request.
+The suite has Rust unit/integration tests and Python binding tests. CI runs both on pushes to
+`main` and on internal pull requests.
 
-## Pre-PR checks
+## Pre-release checks
 
-Run all three before opening a pull request — these mirror CI:
+Run all three before merging or releasing — these mirror CI:
 
 ```bash
 # 1. Formatting
@@ -57,4 +57,4 @@ output (it is machine-specific and git-ignored).
 
 - New native detector → add cases to `native_detectors.rs` and, if exposed, `test_native_scanners.py`.
 - New public API → extend `test_public_api.py` so the result shape is pinned.
-- Threshold/manifest/result-shape change → update the affected tests and call it out in the PR.
+- Threshold/manifest/result-shape change → update the affected tests and document it in the changelog.

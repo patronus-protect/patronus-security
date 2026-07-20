@@ -5,12 +5,13 @@ build-backend = "maturin"
 [project]
 name = "patronus_security"
 version = "0.1.0"
-description = "Python bindings for Patronus Security's hybrid Rust security scanners."
+description = "Python bindings for Patronus Ark's hybrid Rust security scanners."
 readme = "../README.md"
 requires-python = ">=3.11"
 dependencies = []
 keywords = ["security", "prompt-injection", "dlp", "pii"]
-license = { text = "AGPL-3.0-only" }
+license = "AGPL-3.0-only"
+license-files = ["LICENSE", "LICENSE-COMMERCIAL.md", "NOTICE"]
 authors = [
     { name = "Casdo Labs GmbH", email = "team@patronus.studio" },
 ]
@@ -20,7 +21,6 @@ maintainers = [
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: GNU Affero General Public License v3",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",

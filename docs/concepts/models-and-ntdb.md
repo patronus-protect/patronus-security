@@ -1,6 +1,6 @@
 # Models & the NTDB format
 
-Patronus Security's L2 and L3 layers are backed by Patronus-trained models. This page explains
+Patronus Ark's L2 and L3 layers are backed by Patronus-trained models. This page explains
 the two model formats (NTDB for L2, ONNX transformers for L3), the model families, and how
 assets are organized.
 

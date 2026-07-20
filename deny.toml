@@ -8,9 +8,6 @@
 #
 # Run:  cargo deny check licenses
 #
-# NOTE: the `exceptions` crate names below are the pre-rename names. Update them
-# to `patronus-ark` / `patronus-ark-python` during the Phase 5 rename.
-
 [licenses]
 version = 2
 confidence-threshold = 0.9

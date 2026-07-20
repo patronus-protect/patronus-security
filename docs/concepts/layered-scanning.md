@@ -1,6 +1,6 @@
 # Layered scanning (L1 / L2 / L3)
 
-Patronus Security scans each category with up to three layers. The layers escalate: cheap,
+Patronus Ark scans each category with up to three layers. The layers escalate: cheap,
 always-available checks run first, and expensive models run only for the traffic that earns
 them. This page explains what each layer is, when the pipeline moves to the next one, and how
 the layers combine into a single verdict.

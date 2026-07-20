@@ -6,20 +6,24 @@ workflow. The project is pre-1.0; see [`SECURITY.md`](../security.md) for the su
 ## What a release publishes
 
 - The **Rust crate** `patronus-security` to crates.io.
-- The **Python wheels** (built per-OS with maturin) to PyPI.
+- The **Python wheels** and source distribution to PyPI.
 
 ## The pipeline
 
-1. **Validate** — on a release tag or manual dispatch, CI runs:
+1. **Validate** — on manual dispatch, CI runs:
    ```bash
    cargo fmt --check
    cargo test -p patronus-security
    cargo publish -p patronus-security --dry-run
    python scripts/generate_docs.py --check   # generated docs must be current
    ```
-2. **Build wheels** — `PyO3/maturin-action` builds `abi3-py311` wheels on each target OS and
-   uploads them as artifacts.
-3. **Publish** — the crate is published to crates.io and the wheels to PyPI.
+2. **Build artifacts** — `PyO3/maturin-action` builds `abi3-py311` wheels for Linux x86_64,
+   macOS ARM64, and Windows x86_64, plus a source distribution. Every wheel is installed and
+   smoke-tested; the source distribution must rebuild into a wheel.
+3. **Publish** — choose one workflow channel:
+   - `build` only stores the artifacts;
+   - `testpypi` uploads the Python artifacts to TestPyPI;
+   - `production` publishes the Rust crate first and then uploads the Python artifacts to PyPI.
 
 ## Cutting a release
 
@@ -31,10 +35,22 @@ workflow. The project is pre-1.0; see [`SECURITY.md`](../security.md) for the su
    python scripts/generate_docs.py
    git diff --exit-code docs/   # must be clean
    ```
-4. Tag the release (the workflow triggers on the tag) or run the workflow manually with the
-   publish input.
+4. Create and push the release tag, then manually run the Release workflow on that tag. Start
+   with `testpypi`; after installation succeeds, rerun the same tag with `production`.
 5. After publishing, enable a GitHub Security Advisory draft channel for coordinated disclosure
    (per [`SECURITY.md`](../security.md)).
+
+TestPyPI and PyPI publishing use trusted publishing. Configure the GitHub environments
+`testpypi` and `release` as trusted publishers for `.github/workflows/release.yml`. crates.io
+publishing uses the `CARGO_REGISTRY_TOKEN` secret in the `release` environment.
+
+For a local macOS check before dispatching the workflow:
+
+```bash
+maturin build --manifest-path python/Cargo.toml --release --out dist
+.venv/bin/python -m pip install --force-reinstall dist/*.whl
+.venv/bin/python -c "import patronus_security"
+```
 
 ## Versioning
 

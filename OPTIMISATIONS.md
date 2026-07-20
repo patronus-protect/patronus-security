@@ -4,7 +4,7 @@ Last updated: July 14, 2026
 
 ## Purpose
 
-This document describes the production runtime architecture of the Patronus Security Lib and explains the memory and latency optimizations behind it. It covers the implemented paths for:
+This document describes the production runtime architecture of Patronus Ark and explains the memory and latency optimizations behind it. It covers the implemented paths for:
 
 - NTDB L2 with static Granite embeddings;
 - Injection L3 with Wolf Defender Small;

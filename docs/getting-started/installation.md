@@ -1,6 +1,6 @@
 # Installation
 
-Patronus Security is a Rust crate with Python bindings. You can use it as a native Rust
+Patronus Ark is published as a Rust crate with Python bindings. You can use it as a native Rust
 dependency, or install the Python package built from the same core.
 
 ## Requirements

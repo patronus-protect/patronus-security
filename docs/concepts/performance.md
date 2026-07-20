@@ -1,6 +1,6 @@
 # Performance & memory
 
-Patronus Security is built to sit in the request path on ordinary hardware — a laptop CPU, no
+Patronus Ark is built to sit in the request path on ordinary hardware — a laptop CPU, no
 GPU required. This page explains the design levers that make that possible. For step-by-step
 tuning, see [Tune performance & memory](../how-to/tune-performance.md); for the full
 measurements and rationale, see

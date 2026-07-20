@@ -6,7 +6,7 @@ Import from `patronus_security` after installing the wheel or running `maturin d
 
 ## `SecurityGateway`
 
-Python gateway for Patronus Security scanners.
+Python gateway for Patronus Ark scanners.
 
 Args:
     categories: Scanner categories to use for `scan_all`.
@@ -151,10 +151,10 @@ Return L1/L2/L3 readiness using the request failure schema.
 
 Benchmark this gateway against the sample data shipped with the package.
 
-Runs every benchmark phase once with dedicated L3 models and once with the
-unified multi-head L3 model. The root `BENCHMARK.md` links the two runs, while
-their detailed summaries and JSON files are written to the `dedicated/` and
-`multi/` subdirectories:
+Runs every benchmark phase once with `dedicated` L3 and once with
+`multi` L3. Each strategy gets its own subdirectory below
+`output_dir`, plus a combined root `BENCHMARK.md` and
+`benchmark_result.json`:
 one complete queued response (`example_result.json`), benign false
 positives (`benign_result.json`), labelled classifier
 validation (`classifier_result.json`), exact-span GLiNER NER quality

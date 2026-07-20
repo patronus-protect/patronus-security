@@ -1,4 +1,4 @@
-site_name: Patronus Security
+site_name: Patronus Ark
 site_description: >-
   Hybrid Rust/Python security scanners for prompt injection, DLP, PII, and
   agentic tool risks — a layered, on-device AI firewall library.

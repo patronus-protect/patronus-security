@@ -1,6 +1,8 @@
-# Patronus Security Standalone
+# Patronus Ark
 
 Hybrid Rust/Python security scanners for prompt injection, DLP, PII, and agentic tool risks.
+The project is published as the `patronus-security` Rust crate and Python package;
+the Python import remains `patronus_security`.
 
 Dual-licensed: **AGPL-3.0** for open-source and evaluation use, or a **commercial license** for embedding in closed-source or revenue-generating products. See [LICENSE](LICENSE) and [LICENSE-COMMERCIAL.md](LICENSE-COMMERCIAL.md).
 
@@ -20,13 +22,7 @@ The full documentation lives in [`docs/`](docs/) and is organized with the
 
 ### Preview the docs locally
 
-The documentation currently lives on the `docs/mkdocs-documentation` branch (it is not merged
-to `main` yet, and GitHub Pages is unavailable while this repository is private):
-
 ```bash
-git fetch origin
-git checkout docs/mkdocs-documentation
-
 pip install "mkdocs-material>=9.5"
 mkdocs serve            # live-reloading preview at http://127.0.0.1:8000
 ```

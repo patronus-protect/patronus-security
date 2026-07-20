@@ -147,7 +147,7 @@ def _dynamic_pii_config_json(config):
 
 
 class SecurityGateway:
-    """Python gateway for Patronus Security scanners.
+    """Python gateway for Patronus Ark scanners.
 
     Args:
         categories: Scanner categories to use for `scan_all`.

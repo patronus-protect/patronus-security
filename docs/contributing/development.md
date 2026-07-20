@@ -39,7 +39,7 @@ Re-run it after changing Rust code that the Python bindings touch.
 | `scripts/generate_docs.py` | **Generates** `docs/{rust-api,python-api,assets}.md` — do not hand-edit those. |
 | `docs/` | This documentation site (MkDocs Material). |
 
-## Making a change
+## Making a maintainer change
 
 1. Work in a focused branch.
 2. Add or update tests for any behavior change ([Testing](testing.md)).
@@ -48,9 +48,9 @@ Re-run it after changing Rust code that the Python bindings touch.
    python scripts/generate_docs.py
    ```
    CI checks these are up to date (`generate_docs.py --check`).
-4. Run all [checks](testing.md#pre-pr-checks) before opening a PR.
+4. Run all [checks](testing.md#pre-release-checks) before merging.
 
-## Pull request expectations
+## Change expectations
 
 - Keep changes focused and reversible.
 - Add or update tests for behavior changes.
@@ -59,7 +59,7 @@ Re-run it after changing Rust code that the Python bindings touch.
 - **Explicitly call out** any change to detection thresholds, asset manifests, or public result
   shapes — these affect downstream users and are reviewed with extra care.
 
-Contributors sign the CLA (see [`CLA.md`](https://github.com/patronus-protect/patronus-security/blob/main/CLA.md)).
+External pull requests are not accepted at this time.
 
 ## Editing this documentation
 

@@ -16,6 +16,7 @@ use super::{
     },
 };
 
+#[derive(Clone)]
 struct SharedEmbedderFile {
     relative_path: String,
     shared_file: PathBuf,
@@ -229,6 +230,7 @@ pub fn download_ntdb_l2_package_asset(
     })?;
     let manifest: PackageManifest = serde_json::from_str(&manifest_json)?;
     let shared_embedder_files = ntdb_l2_shared_embedder_files(&manifest, target_dir, &package_dir)?;
+    migrate_legacy_shared_embedder_files(&manifest, &shared_embedder_files)?;
     let shared_relative_paths = shared_embedder_files
         .iter()
         .map(|file| file.relative_path.clone())
@@ -293,16 +295,15 @@ pub(crate) fn prepare_cached_ntdb_l2_compact_tokenizer(
     manifest: &PackageManifest,
     package_dir: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let package_tokenizer_json = package_dir
-        .join(manifest.tokenizer_dir.trim_end_matches('/'))
-        .join("tokenizer.json");
-    let source_tokenizer_json = fs::canonicalize(&package_tokenizer_json).map_err(|err| {
+    let category_dir = package_dir.parent().and_then(Path::parent).ok_or_else(|| {
         format!(
-            "failed to resolve cached NTDB tokenizer {}: {err}",
-            package_tokenizer_json.display()
+            "invalid cached NTDB package path: {}",
+            package_dir.display()
         )
     })?;
-    prepare_compact_tokenizer(manifest, &source_tokenizer_json, &package_tokenizer_json)
+    let shared_embedder_files = ntdb_l2_shared_embedder_files(manifest, category_dir, package_dir)?;
+    migrate_legacy_shared_embedder_files(manifest, &shared_embedder_files)?;
+    prepare_downloaded_compact_tokenizer(manifest, &shared_embedder_files)
 }
 
 fn prepare_compact_tokenizer(
@@ -415,12 +416,138 @@ fn shared_embedder_dir_name(manifest: &PackageManifest) -> String {
         .shared_embedder_identity()
         .unwrap_or("manifest-local-embedder");
     format!(
-        "{}__v{}_d{}_c{}",
+        "{}__v{}_d{}",
         sanitize_shared_embedder_identity(identity),
         manifest.minilm.vocab_size,
-        manifest.minilm.embedding_dim,
-        manifest.minilm.content_tokens_per_chunk
+        manifest.minilm.embedding_dim
     )
+}
+
+fn migrate_legacy_shared_embedder_files(
+    manifest: &PackageManifest,
+    files: &[SharedEmbedderFile],
+) -> Result<(), Box<dyn std::error::Error>> {
+    let Some(shared_root) = files
+        .first()
+        .and_then(|file| file.shared_file.parent())
+        .and_then(Path::parent)
+    else {
+        return Ok(());
+    };
+    let Some(encoders_dir) = shared_root.parent() else {
+        return Ok(());
+    };
+    let Some(shared_name) = shared_root.file_name().and_then(|name| name.to_str()) else {
+        return Ok(());
+    };
+    let legacy_prefix = format!("{shared_name}_c");
+    let current_legacy_name = format!(
+        "{legacy_prefix}{}",
+        manifest.minilm.content_tokens_per_chunk
+    );
+    let mut legacy_roots = Vec::new();
+    if encoders_dir.is_dir() {
+        for entry in fs::read_dir(encoders_dir)? {
+            let entry = entry?;
+            let name = entry.file_name();
+            let Some(name) = name.to_str() else {
+                continue;
+            };
+            let Some(chunk) = name.strip_prefix(&legacy_prefix) else {
+                continue;
+            };
+            if chunk.parse::<usize>().is_err() {
+                continue;
+            }
+            legacy_roots.push((name != current_legacy_name, name.to_string(), entry.path()));
+        }
+    }
+    legacy_roots.sort_by(|left, right| left.0.cmp(&right.0).then(left.1.cmp(&right.1)));
+
+    let mut migration_files = files.to_vec();
+    if let Some(tokenizer) = files
+        .iter()
+        .find(|file| file.relative_path.ends_with("/tokenizer.json"))
+    {
+        for name in ["tokenizer.kit", "tokenizer.kit.meta.json"] {
+            migration_files.push(SharedEmbedderFile {
+                relative_path: tokenizer.relative_path.replace("tokenizer.json", name),
+                shared_file: tokenizer.shared_file.with_file_name(name),
+                package_file: tokenizer.package_file.with_file_name(name),
+            });
+        }
+    }
+
+    for file in &migration_files {
+        let legacy_files = legacy_roots
+            .iter()
+            .map(|(_, _, root)| root.join(&file.relative_path))
+            .filter(|path| path.is_file())
+            .collect::<Vec<_>>();
+        let mut candidates = Vec::with_capacity(legacy_files.len() + 2);
+        if file.shared_file.is_file() {
+            candidates.push(file.shared_file.clone());
+        }
+        candidates.extend(legacy_files.iter().cloned());
+        if file.package_file.is_file() {
+            candidates.push(file.package_file.clone());
+        }
+        let Some(reference) = candidates.first() else {
+            continue;
+        };
+        for candidate in candidates.iter().skip(1) {
+            if !same_cached_file(reference, candidate)? {
+                return Err(format!(
+                    "conflicting cached NTDB shared embedder files for {}: {} and {}",
+                    file.relative_path,
+                    reference.display(),
+                    candidate.display()
+                )
+                .into());
+            }
+        }
+
+        if !file.shared_file.is_file() {
+            clone_cached_file(reference, &file.shared_file)?;
+        }
+        for legacy_file in legacy_files {
+            link_shared_embedder_file(&file.shared_file, &legacy_file)?;
+        }
+        if file.package_file.is_file() {
+            link_shared_embedder_file(&file.shared_file, &file.package_file)?;
+        }
+    }
+    Ok(())
+}
+
+fn same_cached_file(left: &Path, right: &Path) -> Result<bool, Box<dyn std::error::Error>> {
+    if fs::canonicalize(left)? == fs::canonicalize(right)? {
+        return Ok(true);
+    }
+    if fs::metadata(left)?.len() != fs::metadata(right)?.len() {
+        return Ok(false);
+    }
+    Ok(blake3_file(left)? == blake3_file(right)?)
+}
+
+fn blake3_file(path: &Path) -> Result<blake3::Hash, Box<dyn std::error::Error>> {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update_reader(File::open(path)?)?;
+    Ok(hasher.finalize())
+}
+
+fn clone_cached_file(source: &Path, destination: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    if let Some(parent) = destination.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let source = fs::canonicalize(source)?;
+    match fs::hard_link(&source, destination) {
+        Ok(()) => Ok(()),
+        Err(_) => {
+            fs::copy(source, destination)?;
+            Ok(())
+        }
+    }
 }
 
 fn sanitize_shared_embedder_identity(identity: &str) -> String {
@@ -760,7 +887,7 @@ mod tests {
         let files = ntdb_l2_shared_embedder_files(&manifest, &category_dir, &package_dir).unwrap();
         let shared_dir = root
             .join("l2_ntdb/_shared/encoders")
-            .join("ntdb_artifacts_granite_embedding_97m__v1_d1_c2");
+            .join("ntdb_artifacts_granite_embedding_97m__v1_d1");
 
         assert_eq!(
             files
@@ -781,6 +908,112 @@ mod tests {
             files[0].package_file,
             package_dir.join("tokenizer/tokenizer.json")
         );
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn shared_embedder_directory_does_not_depend_on_chunk_size() {
+        let root = temp_dir("chunk_independent_shared_path");
+        let category_dir = root.join("injection");
+        let first: PackageManifest =
+            serde_json::from_str(&manifest_json("ntdb/artifacts/granite_embedding_97m")).unwrap();
+        let mut second: PackageManifest =
+            serde_json::from_str(&manifest_json("ntdb/artifacts/granite_embedding_97m")).unwrap();
+        second.chunk_size = 384;
+        second.minilm.content_tokens_per_chunk = 384;
+
+        assert_eq!(
+            ntdb_l2_shared_embedder_dir(&category_dir, &first),
+            ntdb_l2_shared_embedder_dir(&category_dir, &second)
+        );
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn migrates_identical_chunk_keyed_encoder_files_to_one_shared_copy() {
+        let root = temp_dir("legacy_chunk_keys");
+        let category_dir = root.join("injection");
+        let package_dir = category_dir.join("l2_ntdb/injection_current");
+        let manifest: PackageManifest =
+            serde_json::from_str(&manifest_json("ntdb/artifacts/granite_embedding_97m")).unwrap();
+        let files = ntdb_l2_shared_embedder_files(&manifest, &category_dir, &package_dir).unwrap();
+        let encoders_dir = root.join("l2_ntdb/_shared/encoders");
+        let legacy_roots = [
+            encoders_dir.join("ntdb_artifacts_granite_embedding_97m__v1_d1_c2"),
+            encoders_dir.join("ntdb_artifacts_granite_embedding_97m__v1_d1_c384"),
+        ];
+        for legacy_root in &legacy_roots {
+            fs::create_dir_all(legacy_root.join("tokenizer")).unwrap();
+            fs::create_dir_all(legacy_root.join("minilm")).unwrap();
+            fs::write(legacy_root.join("tokenizer/tokenizer.json"), "tokenizer").unwrap();
+            fs::write(legacy_root.join("tokenizer/tokenizer.kit"), "compact").unwrap();
+            fs::write(
+                legacy_root.join("tokenizer/tokenizer.kit.meta.json"),
+                "metadata",
+            )
+            .unwrap();
+            fs::write(legacy_root.join("minilm/embedding_matrix.f16"), "matrix").unwrap();
+        }
+
+        migrate_legacy_shared_embedder_files(&manifest, &files).unwrap();
+
+        for file in &files {
+            assert!(file.shared_file.is_file());
+            for legacy_root in &legacy_roots {
+                let legacy_file = legacy_root.join(&file.relative_path);
+                assert_eq!(
+                    fs::canonicalize(legacy_file).unwrap(),
+                    fs::canonicalize(&file.shared_file).unwrap()
+                );
+            }
+        }
+        for relative_path in [
+            "tokenizer/tokenizer.kit",
+            "tokenizer/tokenizer.kit.meta.json",
+        ] {
+            let shared_file = root
+                .join("l2_ntdb/_shared/encoders")
+                .join("ntdb_artifacts_granite_embedding_97m__v1_d1")
+                .join(relative_path);
+            assert!(shared_file.is_file());
+            for legacy_root in &legacy_roots {
+                assert_eq!(
+                    fs::canonicalize(legacy_root.join(relative_path)).unwrap(),
+                    fs::canonicalize(&shared_file).unwrap()
+                );
+            }
+        }
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn rejects_conflicting_files_for_the_same_shared_encoder_identity() {
+        let root = temp_dir("conflicting_legacy_chunk_keys");
+        let category_dir = root.join("injection");
+        let package_dir = category_dir.join("l2_ntdb/injection_current");
+        let manifest: PackageManifest =
+            serde_json::from_str(&manifest_json("ntdb/artifacts/granite_embedding_97m")).unwrap();
+        let files = ntdb_l2_shared_embedder_files(&manifest, &category_dir, &package_dir).unwrap();
+        let encoders_dir = root.join("l2_ntdb/_shared/encoders");
+        let first = encoders_dir
+            .join("ntdb_artifacts_granite_embedding_97m__v1_d1_c2/minilm/embedding_matrix.f16");
+        let second = encoders_dir
+            .join("ntdb_artifacts_granite_embedding_97m__v1_d1_c384/minilm/embedding_matrix.f16");
+        fs::create_dir_all(first.parent().unwrap()).unwrap();
+        fs::create_dir_all(second.parent().unwrap()).unwrap();
+        fs::write(&first, "first").unwrap();
+        fs::write(&second, "other").unwrap();
+
+        let error = migrate_legacy_shared_embedder_files(&manifest, &files).unwrap_err();
+
+        assert!(error
+            .to_string()
+            .contains("conflicting cached NTDB shared embedder files"));
+        assert!(!files[1].shared_file.exists());
 
         fs::remove_dir_all(root).unwrap();
     }

@@ -1,12 +1,12 @@
 # Architecture
 
-This page explains how Patronus Security is put together — the major components, how a scan
+This page explains how Patronus Ark is put together — the major components, how a scan
 flows through them, and why the design looks the way it does. For the moment-to-moment
 escalation rules, see [Layered scanning](layered-scanning.md).
 
 ## The big picture
 
-Patronus Security is a **Rust core** with a thin **Python binding**. The core owns all
+Patronus Ark is a **Rust core** with a thin **Python binding**. The core owns all
 scanning logic, model execution, asset management, and the async worker; the Python layer is
 a typed convenience wrapper over the same gateway object.
 

@@ -1,10 +1,11 @@
 # Contributing
 
-Thanks for helping improve Patronus Security. This file is the quick version; the full guides
-live in the documentation:
+Patronus Ark is currently maintained as an open-source project, but
+external pull requests are not accepted at this time. The guides below document
+the maintainer workflow:
 
-- [Development](docs/contributing/development.md) — environment setup, repo layout, PR expectations.
-- [Testing](docs/contributing/testing.md) — the test suite and pre-PR checks.
+- [Development](docs/contributing/development.md) — environment setup and repository layout.
+- [Testing](docs/contributing/testing.md) — the test suite and pre-release checks.
 - [Releasing](docs/contributing/releasing.md) — how releases are cut and published.
 
 ## Development setup
@@ -34,7 +35,7 @@ the result (CI checks it is current):
 python scripts/generate_docs.py
 ```
 
-## Pull requests
+## Maintainer changes
 
 - Keep changes focused.
 - Add or update tests for behavior changes.
@@ -42,9 +43,6 @@ python scripts/generate_docs.py
   benchmark outputs.
 - Explicitly call out any changes to detection thresholds, asset manifests, or public result
   shapes — record them in [`CHANGELOG.md`](CHANGELOG.md).
-
-Contributions are accepted under the terms in [`CLA.md`](CLA.md) and the project's dual
-AGPL-3.0 / commercial license.
 
 ## Security issues
 

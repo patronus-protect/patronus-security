@@ -1,8 +1,8 @@
-# Patronus Security
+# Patronus Ark
 
 **Hybrid Rust/Python security scanners for prompt injection, DLP, PII, and agentic tool risks.**
 
-Patronus Security is the open-source scanning core behind [Patronus Protect](https://patronus.studio),
+Patronus Ark is the open-source scanning core behind [Patronus Protect](https://patronus.studio),
 an on-device AI firewall. It inspects the text flowing in and out of AI applications —
 prompts, tool calls, tool outputs, and documents — and classifies the security risk
 **locally**, without sending anything to a cloud service.
@@ -80,7 +80,7 @@ See [Categories](concepts/categories.md) for what each one classifies and which 
 
 ## License
 
-Patronus Security is **dual-licensed**:
+Patronus Ark, distributed as `patronus-security`, is **dual-licensed**:
 
 - **AGPL-3.0** for open-source and evaluation use.
 - A **commercial license** for embedding in closed-source or revenue-generating products.
