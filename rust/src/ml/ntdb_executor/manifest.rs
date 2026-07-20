@@ -71,9 +71,9 @@ pub struct MiniLmManifest {
 
 impl MiniLmManifest {
     pub fn shared_embedder_identity(&self) -> Option<&str> {
-        self.source_model_path
+        self.model
             .as_deref()
-            .or(self.model.as_deref())
+            .or(self.source_model_path.as_deref())
             .filter(|identity| !identity.trim().is_empty())
     }
 }

@@ -76,6 +76,23 @@ pub struct SecurityAssetReadiness {
     pub l3: SecurityLevelReadiness,
 }
 
+/// Progress emitted while configured model assets are downloaded.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SecurityAssetProgress {
+    /// Pipeline category whose assets are currently being prepared.
+    pub category: SecurityCategory,
+    /// Public model identifier from the asset manifest.
+    pub model: String,
+    /// Files already present or downloaded for this model.
+    pub completed_files: usize,
+    /// Total files required by this model.
+    pub total_files: usize,
+}
+
+/// Thread-safe callback used by asset preparation workers.
+pub type SecurityAssetProgressCallback =
+    std::sync::Arc<dyn Fn(SecurityAssetProgress) + Send + Sync>;
+
 /// Readiness of one security level before request execution.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SecurityLevelReadiness {

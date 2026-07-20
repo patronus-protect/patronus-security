@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Asset synchronization and model-runtime initialization.
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Instant;
@@ -13,8 +14,9 @@ use crate::{
         onnx::LazyOnnxTextClassifier,
         unified_onnx::LazyUnifiedOnnxClassifier,
     },
-    L3Strategy, SecurityAssetReadiness, SecurityCategory, SecurityFailure, SecurityFailureKind,
-    SecurityFailureStage, SecurityLevel, SecurityLevelReadiness,
+    L3Strategy, SecurityAssetProgressCallback, SecurityAssetReadiness, SecurityCategory,
+    SecurityFailure, SecurityFailureKind, SecurityFailureStage, SecurityLevel,
+    SecurityLevelReadiness,
 };
 
 use super::ntdb_l2::{
@@ -47,14 +49,25 @@ impl SecurityGateway {
     /// Download and verify configured model assets without initializing ONNX,
     /// tokenizers, executors, workers, or model sessions.
     pub fn prepare_assets(&self) -> Result<SecurityAssetReadiness, SecurityFailure> {
-        self.prepare_assets_inner(true)
+        self.prepare_assets_inner(true, None)
+            .map_err(|error| asset_failure(error.to_string()))?;
+        Ok(self.configured_asset_readiness())
+    }
+
+    /// Download and verify configured model assets while reporting per-model
+    /// file progress. Callbacks may run concurrently on asset download threads.
+    pub fn prepare_assets_with_progress(
+        &self,
+        progress: SecurityAssetProgressCallback,
+    ) -> Result<SecurityAssetReadiness, SecurityFailure> {
+        self.prepare_assets_inner(true, Some(&progress))
             .map_err(|error| asset_failure(error.to_string()))?;
         Ok(self.configured_asset_readiness())
     }
 
     /// Inspect configured model assets without downloading or warming them.
     pub fn asset_readiness(&self) -> SecurityAssetReadiness {
-        match self.prepare_assets_inner(false) {
+        match self.prepare_assets_inner(false, None) {
             Ok(_) => self.configured_asset_readiness(),
             Err(error) => self.failed_asset_readiness(asset_failure(error.to_string())),
         }
@@ -70,7 +83,7 @@ impl SecurityGateway {
 
     fn warmup_from_local_assets_inner(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let base_dir = self.model_base_dir()?;
-        let prepared = self.prepare_assets_inner(false)?;
+        let prepared = self.prepare_assets_inner(false, None)?;
         self.l3_worker
             .configure_strategy(self.scan_execution().l3_strategy());
 
@@ -154,10 +167,12 @@ impl SecurityGateway {
     fn prepare_assets_inner(
         &self,
         allow_download: bool,
+        progress: Option<&SecurityAssetProgressCallback>,
     ) -> Result<PreparedAssets, Box<dyn std::error::Error>> {
         let base_dir = self.model_base_dir()?;
         let execution = self.scan_execution();
         let mut prepared = PreparedAssets::default();
+        let mut prepared_compact_tokenizers = HashSet::new();
 
         if execution.l3_strategy() == L3Strategy::Multi
             && execution.allows_level(SecurityLevel::L3)
@@ -178,7 +193,11 @@ impl SecurityGateway {
                         .filter(|category| category.is_unified_classifier())
                         .any(|category| self.should_download_assets_for(category));
                 if may_download {
-                    assets::download_unified_l3_assets(&base_dir)?;
+                    if let Some(progress) = progress {
+                        assets::download_unified_l3_assets_with_progress(&base_dir, progress)?;
+                    } else {
+                        assets::download_unified_l3_assets(&base_dir)?;
+                    }
                 } else {
                     return Err(format!(
                         "missing unified L3 assets at {}; downloads disabled",
@@ -200,7 +219,11 @@ impl SecurityGateway {
                 let bundle_dir = base_dir.join(assets::DYNAMIC_PII_ASSET.destination_path);
                 if !assets::dynamic_pii_assets_present(&base_dir) {
                     if allow_download && self.should_download_assets_for(*category) {
-                        assets::download_dynamic_pii_assets(&base_dir)?;
+                        if let Some(progress) = progress {
+                            assets::download_dynamic_pii_assets_with_progress(&base_dir, progress)?;
+                        } else {
+                            assets::download_dynamic_pii_assets(&base_dir)?;
+                        }
                     } else {
                         return Err(format!(
                             "missing dynamic-pii assets at {}; downloads disabled",
@@ -252,12 +275,22 @@ impl SecurityGateway {
                             category.as_str(),
                             config.public_model
                         );
-                        assets::download_ntdb_l2_package(
-                            *category,
-                            self.max_level,
-                            config.public_model,
-                            &category_dir,
-                        )?;
+                        if let Some(progress) = progress {
+                            assets::download_ntdb_l2_package_with_progress(
+                                *category,
+                                self.max_level,
+                                config.public_model,
+                                &category_dir,
+                                progress,
+                            )?;
+                        } else {
+                            assets::download_ntdb_l2_package(
+                                *category,
+                                self.max_level,
+                                config.public_model,
+                                &category_dir,
+                            )?;
+                        }
                     } else {
                         return Err(format!(
                             "missing {} L2 package at {}; downloads disabled",
@@ -270,9 +303,11 @@ impl SecurityGateway {
 
                 let (spec, manifest) = validate_ntdb_l2_package(config, package_dir.clone())?;
                 if allow_download && !env_override {
-                    if let Err(error) =
-                        assets::prepare_cached_ntdb_l2_compact_tokenizer(&manifest, &package_dir)
-                    {
+                    if let Err(error) = assets::prepare_cached_ntdb_l2_compact_tokenizer(
+                        &manifest,
+                        &package_dir,
+                        &mut prepared_compact_tokenizers,
+                    ) {
                         log::warn!(
                             "failed to prepare compact Granite tokenizer for cached {}/{} package: {error}; tokenizer.json remains available",
                             category.as_str(),

@@ -3,8 +3,13 @@ use std::collections::HashSet;
 use std::fs::{self, File};
 use std::io;
 use std::path::{Component, Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 
-use crate::{SecurityCategory, SecurityLevel};
+use rayon::prelude::*;
+
+use crate::{
+    SecurityAssetProgress, SecurityAssetProgressCallback, SecurityCategory, SecurityLevel,
+};
 
 use crate::ml::ntdb_executor::manifest::PackageManifest;
 
@@ -21,6 +26,67 @@ struct SharedEmbedderFile {
     relative_path: String,
     shared_file: PathBuf,
     package_file: PathBuf,
+}
+
+const ASSET_DOWNLOAD_CONCURRENCY: usize = 6;
+
+fn download_agent() -> &'static ureq::Agent {
+    static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
+    AGENT.get_or_init(|| ureq::AgentBuilder::new().build())
+}
+
+fn asset_download_pool() -> &'static rayon::ThreadPool {
+    static POOL: OnceLock<rayon::ThreadPool> = OnceLock::new();
+    POOL.get_or_init(|| {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(ASSET_DOWNLOAD_CONCURRENCY)
+            .thread_name(|index| format!("patronus-ark-asset-download-{index}"))
+            .build()
+            .expect("failed to create Patronus Ark asset download pool")
+    })
+}
+
+fn run_downloads_in_parallel<T, F>(
+    items: &[T],
+    progress: Option<&SecurityAssetProgressCallback>,
+    category: SecurityCategory,
+    model: &str,
+    completed_files: usize,
+    total_files: usize,
+    download: F,
+) -> Result<(), Box<dyn std::error::Error>>
+where
+    T: Sync,
+    F: Fn(&T) -> Result<(), String> + Send + Sync,
+{
+    if let Some(callback) = progress {
+        callback(SecurityAssetProgress {
+            category,
+            model: model.to_string(),
+            completed_files,
+            total_files,
+        });
+    }
+    let completed = Mutex::new(completed_files);
+    let result: Result<(), String> = asset_download_pool().install(|| {
+        items.par_iter().try_for_each(|item| {
+            download(item)?;
+            if let Some(callback) = progress {
+                let mut completed = completed
+                    .lock()
+                    .map_err(|error| format!("asset progress lock poisoned: {error}"))?;
+                *completed += 1;
+                callback(SecurityAssetProgress {
+                    category,
+                    model: model.to_string(),
+                    completed_files: *completed,
+                    total_files,
+                });
+            }
+            Ok(())
+        })
+    });
+    result.map_err(Into::into)
 }
 
 /// Return manifest entries needed for a category up to `max_level`.
@@ -76,7 +142,14 @@ pub fn dynamic_pii_assets_present(target_dir: &Path) -> bool {
 pub fn download_dynamic_pii_assets(
     target_dir: &Path,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    download_pipeline_model_assets(DYNAMIC_PII_ASSET, target_dir)
+    download_pipeline_model_assets(DYNAMIC_PII_ASSET, target_dir, None)
+}
+
+pub(crate) fn download_dynamic_pii_assets_with_progress(
+    target_dir: &Path,
+    progress: &SecurityAssetProgressCallback,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    download_pipeline_model_assets(DYNAMIC_PII_ASSET, target_dir, Some(progress))
 }
 
 /// Check whether the complete revision-pinned unified L3 model is cached.
@@ -88,7 +161,14 @@ pub fn unified_l3_assets_present(target_dir: &Path) -> bool {
 pub fn download_unified_l3_assets(
     target_dir: &Path,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    download_pipeline_model_assets(UNIFIED_L3_ASSET, target_dir)
+    download_pipeline_model_assets(UNIFIED_L3_ASSET, target_dir, None)
+}
+
+pub(crate) fn download_unified_l3_assets_with_progress(
+    target_dir: &Path,
+    progress: &SecurityAssetProgressCallback,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    download_pipeline_model_assets(UNIFIED_L3_ASSET, target_dir, Some(progress))
 }
 
 /// Return the revision-pinned dedicated L3 bundle for a classifier category.
@@ -111,7 +191,7 @@ pub fn download_dedicated_l3_assets(
     target_dir: &Path,
 ) -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
     dedicated_l3_asset(category)
-        .map(|asset| download_pipeline_model_assets(asset, target_dir))
+        .map(|asset| download_pipeline_model_assets(asset, target_dir, None))
         .transpose()
 }
 
@@ -126,24 +206,37 @@ fn pipeline_model_assets_present(asset: PipelineModelAssetSpec, target_dir: &Pat
 fn download_pipeline_model_assets(
     asset: PipelineModelAssetSpec,
     target_dir: &Path,
+    progress: Option<&SecurityAssetProgressCallback>,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     let token = hf_token();
     let bundle_dir = target_dir.join(asset.destination_path);
-    for file in asset.files {
-        let destination = bundle_dir.join(file);
-        if destination.is_file() {
-            continue;
-        }
-        download_hf_file_at_revision(
-            token.as_deref(),
-            asset.repo,
-            asset.revision,
-            file,
-            &destination,
-            true,
-            asset.model,
-        )?;
-    }
+    let missing_files = asset
+        .files
+        .iter()
+        .copied()
+        .filter(|file| !bundle_dir.join(file).is_file())
+        .collect::<Vec<_>>();
+    run_downloads_in_parallel(
+        &missing_files,
+        progress,
+        asset.category,
+        asset.model,
+        asset.files.len() - missing_files.len(),
+        asset.files.len(),
+        |file| {
+            download_hf_file_at_revision(
+                token.as_deref(),
+                asset.repo,
+                asset.revision,
+                file,
+                &bundle_dir.join(file),
+                true,
+                asset.model,
+            )
+            .map(|_| ())
+            .map_err(|error| error.to_string())
+        },
+    )?;
     Ok(bundle_dir)
 }
 
@@ -156,28 +249,35 @@ pub fn download_category_assets(
     target_dir: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let token = hf_token();
-
-    for asset in category_assets(category, max_level) {
-        if !asset.required && !download_optional_assets() {
-            continue;
-        }
-
-        let dest_file = target_dir.join(asset.destination_path);
-        if dest_file.exists() {
-            continue;
-        }
-
-        download_hf_file(
-            token.as_deref(),
-            asset.repo,
-            asset.source_path,
-            &dest_file,
-            asset.required,
-            &format!("L{} asset", asset.level as u8),
-        )?;
-    }
-
-    Ok(())
+    let assets = category_assets(category, max_level)
+        .into_iter()
+        .filter(|asset| asset.required || download_optional_assets())
+        .collect::<Vec<_>>();
+    let missing_assets = assets
+        .iter()
+        .copied()
+        .filter(|asset| !target_dir.join(asset.destination_path).exists())
+        .collect::<Vec<_>>();
+    run_downloads_in_parallel(
+        &missing_assets,
+        None,
+        category,
+        category.as_str(),
+        assets.len() - missing_assets.len(),
+        assets.len(),
+        |asset| {
+            download_hf_file(
+                token.as_deref(),
+                asset.repo,
+                asset.source_path,
+                &target_dir.join(asset.destination_path),
+                asset.required,
+                &format!("L{} asset", asset.level as u8),
+            )
+            .map(|_| ())
+            .map_err(|error| error.to_string())
+        },
+    )
 }
 
 /// Download a missing NTDB v2 L2 package from Hugging Face into `target_dir`.
@@ -198,13 +298,38 @@ pub fn download_ntdb_l2_package(
             model
         )
     })?;
-    download_ntdb_l2_package_asset(asset, target_dir)
+    download_ntdb_l2_package_asset_inner(asset, target_dir, None)
 }
 
-/// Download a missing NTDB v2 L2 package described by `asset`.
-pub fn download_ntdb_l2_package_asset(
+pub(crate) fn download_ntdb_l2_package_with_progress(
+    category: SecurityCategory,
+    max_level: SecurityLevel,
+    model: &str,
+    target_dir: &Path,
+    progress: &SecurityAssetProgressCallback,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let asset = ntdb_l2_package_asset(category, max_level, model).ok_or_else(|| {
+        format!(
+            "missing NTDB v2 L2 asset spec for {}/{}",
+            category.as_str(),
+            model
+        )
+    })?;
+    download_ntdb_l2_package_asset_inner(asset, target_dir, Some(progress))
+}
+
+enum NtdbDownloadJob {
+    Shared(SharedEmbedderFile),
+    Package {
+        source_path: String,
+        destination: PathBuf,
+    },
+}
+
+fn download_ntdb_l2_package_asset_inner(
     asset: NtdbL2PackageAssetSpec,
     target_dir: &Path,
+    progress: Option<&SecurityAssetProgressCallback>,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     let token = hf_token();
     let package_dir = target_dir.join(asset.destination_path);
@@ -212,6 +337,14 @@ pub fn download_ntdb_l2_package_asset(
     let manifest_source = prefixed_source_path(asset.source_prefix, "manifest.json");
 
     if !manifest_dest.exists() {
+        if let Some(callback) = progress {
+            callback(SecurityAssetProgress {
+                category: asset.category,
+                model: asset.model.to_string(),
+                completed_files: 0,
+                total_files: 1,
+            });
+        }
         download_hf_file(
             token.as_deref(),
             asset.repo,
@@ -220,6 +353,14 @@ pub fn download_ntdb_l2_package_asset(
             asset.required,
             "NTDB v2 L2 manifest",
         )?;
+        if let Some(callback) = progress {
+            callback(SecurityAssetProgress {
+                category: asset.category,
+                model: asset.model.to_string(),
+                completed_files: 1,
+                total_files: 1,
+            });
+        }
     }
 
     let manifest_json = fs::read_to_string(&manifest_dest).map_err(|err| {
@@ -236,28 +377,57 @@ pub fn download_ntdb_l2_package_asset(
         .map(|file| file.relative_path.clone())
         .collect::<HashSet<_>>();
 
+    let manifest_files = ntdb_l2_package_manifest_files_from_manifest(&manifest)?;
+    let mut jobs = Vec::new();
     for file in &shared_embedder_files {
-        download_shared_embedder_file(token.as_deref(), asset, file)?;
+        if file.shared_file.exists() {
+            link_shared_embedder_file(&file.shared_file, &file.package_file)?;
+        } else {
+            jobs.push(NtdbDownloadJob::Shared(file.clone()));
+        }
     }
-
-    for relative_path in ntdb_l2_package_manifest_files_from_manifest(&manifest)? {
-        if shared_relative_paths.contains(&relative_path) {
+    for relative_path in &manifest_files {
+        if shared_relative_paths.contains(relative_path) {
             continue;
         }
         let dest_file = package_dir.join(&relative_path);
         if dest_file.exists() {
             continue;
         }
-        let source_path = prefixed_source_path(asset.source_prefix, &relative_path);
-        download_hf_file(
-            token.as_deref(),
-            asset.repo,
-            &source_path,
-            &dest_file,
-            asset.required,
-            "NTDB v2 L2 package file",
-        )?;
+        jobs.push(NtdbDownloadJob::Package {
+            source_path: prefixed_source_path(asset.source_prefix, relative_path),
+            destination: dest_file,
+        });
     }
+
+    let total_files = manifest_files.len() + 1;
+    run_downloads_in_parallel(
+        &jobs,
+        progress,
+        asset.category,
+        asset.model,
+        total_files - jobs.len(),
+        total_files,
+        |job| match job {
+            NtdbDownloadJob::Shared(file) => {
+                download_shared_embedder_file(token.as_deref(), asset, file)
+                    .map_err(|error| error.to_string())
+            }
+            NtdbDownloadJob::Package {
+                source_path,
+                destination,
+            } => download_hf_file(
+                token.as_deref(),
+                asset.repo,
+                source_path,
+                destination,
+                asset.required,
+                "NTDB v2 L2 package file",
+            )
+            .map(|_| ())
+            .map_err(|error| error.to_string()),
+        },
+    )?;
 
     if let Err(err) = prepare_downloaded_compact_tokenizer(&manifest, &shared_embedder_files) {
         log::warn!(
@@ -294,6 +464,7 @@ fn prepare_downloaded_compact_tokenizer(
 pub(crate) fn prepare_cached_ntdb_l2_compact_tokenizer(
     manifest: &PackageManifest,
     package_dir: &Path,
+    prepared_shared_tokenizers: &mut HashSet<PathBuf>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let category_dir = package_dir.parent().and_then(Path::parent).ok_or_else(|| {
         format!(
@@ -303,7 +474,21 @@ pub(crate) fn prepare_cached_ntdb_l2_compact_tokenizer(
     })?;
     let shared_embedder_files = ntdb_l2_shared_embedder_files(manifest, category_dir, package_dir)?;
     migrate_legacy_shared_embedder_files(manifest, &shared_embedder_files)?;
-    prepare_downloaded_compact_tokenizer(manifest, &shared_embedder_files)
+    let Some(tokenizer_file) = shared_embedder_files
+        .iter()
+        .find(|file| file.relative_path.ends_with("/tokenizer.json"))
+    else {
+        return Ok(());
+    };
+    if prepared_shared_tokenizers.contains(&tokenizer_file.shared_file) {
+        let shared_compact_path = tokenizer_file.shared_file.with_file_name("tokenizer.kit");
+        if shared_compact_path.is_file() {
+            return link_compact_tokenizer(&shared_compact_path, &tokenizer_file.package_file);
+        }
+    }
+    prepare_downloaded_compact_tokenizer(manifest, &shared_embedder_files)?;
+    prepared_shared_tokenizers.insert(tokenizer_file.shared_file.clone());
+    Ok(())
 }
 
 fn prepare_compact_tokenizer(
@@ -316,6 +501,13 @@ fn prepare_compact_tokenizer(
     else {
         return Ok(());
     };
+    link_compact_tokenizer(&shared_compact_path, package_tokenizer_json)
+}
+
+fn link_compact_tokenizer(
+    shared_compact_path: &Path,
+    package_tokenizer_json: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
     let package_compact_path = package_tokenizer_json
         .parent()
         .ok_or("NTDB tokenizer package path has no parent")?
@@ -440,9 +632,20 @@ fn migrate_legacy_shared_embedder_files(
     let Some(shared_name) = shared_root.file_name().and_then(|name| name.to_str()) else {
         return Ok(());
     };
-    let legacy_prefix = format!("{shared_name}_c");
+    let mut legacy_names = vec![shared_name.to_string()];
+    if let Some(source_identity) = manifest.minilm.source_model_path.as_deref() {
+        let source_name = format!(
+            "{}__v{}_d{}",
+            sanitize_shared_embedder_identity(source_identity),
+            manifest.minilm.vocab_size,
+            manifest.minilm.embedding_dim
+        );
+        if source_name != shared_name {
+            legacy_names.push(source_name);
+        }
+    }
     let current_legacy_name = format!(
-        "{legacy_prefix}{}",
+        "{shared_name}_c{}",
         manifest.minilm.content_tokens_per_chunk
     );
     let mut legacy_roots = Vec::new();
@@ -453,13 +656,16 @@ fn migrate_legacy_shared_embedder_files(
             let Some(name) = name.to_str() else {
                 continue;
             };
-            let Some(chunk) = name.strip_prefix(&legacy_prefix) else {
-                continue;
-            };
-            if chunk.parse::<usize>().is_err() {
-                continue;
+            let is_legacy = legacy_names.iter().any(|legacy_name| {
+                if name == legacy_name {
+                    return name != shared_name;
+                }
+                name.strip_prefix(&format!("{legacy_name}_c"))
+                    .is_some_and(|chunk| chunk.parse::<usize>().is_ok())
+            });
+            if is_legacy {
+                legacy_roots.push((name != current_legacy_name, name.to_string(), entry.path()));
             }
-            legacy_roots.push((name != current_legacy_name, name.to_string(), entry.path()));
         }
     }
     legacy_roots.sort_by(|left, right| left.0.cmp(&right.0).then(left.1.cmp(&right.1)));
@@ -727,7 +933,7 @@ fn download_hf_file_at_revision(
         dest_file
     );
 
-    let mut request = ureq::get(&file_url);
+    let mut request = download_agent().get(&file_url);
     if let Some(tk) = token {
         request = request.set("Authorization", &format!("Bearer {}", tk));
     }
@@ -794,6 +1000,12 @@ fn hf_token_path() -> Option<PathBuf> {
 mod tests {
     use std::{
         fs,
+        sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc, Mutex,
+        },
+        thread,
+        time::Duration,
         time::{SystemTime, UNIX_EPOCH},
     };
 
@@ -877,6 +1089,51 @@ mod tests {
     }
 
     #[test]
+    fn download_agent_is_reused() {
+        assert!(std::ptr::eq(download_agent(), download_agent()));
+    }
+
+    #[test]
+    fn asset_downloads_are_parallel_but_bounded_and_report_progress() {
+        let active = Arc::new(AtomicUsize::new(0));
+        let maximum = Arc::new(AtomicUsize::new(0));
+        let reported = Arc::new(Mutex::new(Vec::new()));
+        let callback_reported = reported.clone();
+        let progress: SecurityAssetProgressCallback = Arc::new(move |progress| {
+            callback_reported.lock().unwrap().push(progress);
+        });
+        let items = (0..12).collect::<Vec<_>>();
+        let task_active = active.clone();
+        let task_maximum = maximum.clone();
+
+        run_downloads_in_parallel(
+            &items,
+            Some(&progress),
+            SecurityCategory::Injection,
+            "test-model",
+            0,
+            items.len(),
+            move |_| {
+                let current = task_active.fetch_add(1, Ordering::SeqCst) + 1;
+                task_maximum.fetch_max(current, Ordering::SeqCst);
+                thread::sleep(Duration::from_millis(10));
+                task_active.fetch_sub(1, Ordering::SeqCst);
+                Ok(())
+            },
+        )
+        .unwrap();
+
+        assert!(maximum.load(Ordering::SeqCst) > 1);
+        assert!(maximum.load(Ordering::SeqCst) <= ASSET_DOWNLOAD_CONCURRENCY);
+        let reported = reported.lock().unwrap();
+        assert_eq!(reported.first().unwrap().completed_files, 0);
+        assert_eq!(reported.last().unwrap().completed_files, items.len());
+        assert!(reported
+            .iter()
+            .all(|progress| progress.total_files == items.len()));
+    }
+
+    #[test]
     fn ntdb_l2_shared_embedder_files_use_model_root_and_manifest_identity() {
         let root = temp_dir("shared_paths");
         let category_dir = root.join("injection");
@@ -887,7 +1144,7 @@ mod tests {
         let files = ntdb_l2_shared_embedder_files(&manifest, &category_dir, &package_dir).unwrap();
         let shared_dir = root
             .join("l2_ntdb/_shared/encoders")
-            .join("ntdb_artifacts_granite_embedding_97m__v1_d1");
+            .join("ibm-granite_granite-embedding-97m-multilingual-r2__v1_d1");
 
         assert_eq!(
             files
@@ -908,6 +1165,56 @@ mod tests {
             files[0].package_file,
             package_dir.join("tokenizer/tokenizer.json")
         );
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn shared_embedder_directory_uses_canonical_model_over_export_path() {
+        let root = temp_dir("canonical_shared_path");
+        let category_dir = root.join("injection");
+        let exported: PackageManifest =
+            serde_json::from_str(&manifest_json("ntdb/artifacts/granite_embedding_97m")).unwrap();
+        let canonical: PackageManifest = serde_json::from_str(&manifest_json(
+            "ibm-granite/granite-embedding-97m-multilingual-r2",
+        ))
+        .unwrap();
+
+        assert_eq!(
+            ntdb_l2_shared_embedder_dir(&category_dir, &exported),
+            ntdb_l2_shared_embedder_dir(&category_dir, &canonical)
+        );
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn migrates_export_path_encoder_alias_to_canonical_model_cache() {
+        let root = temp_dir("export_path_alias");
+        let category_dir = root.join("injection");
+        let package_dir = category_dir.join("l2_ntdb/injection_current");
+        let manifest: PackageManifest =
+            serde_json::from_str(&manifest_json("ntdb/artifacts/granite_embedding_97m")).unwrap();
+        let files = ntdb_l2_shared_embedder_files(&manifest, &category_dir, &package_dir).unwrap();
+        let legacy_root = root
+            .join("l2_ntdb/_shared/encoders")
+            .join("ntdb_artifacts_granite_embedding_97m__v1_d1");
+        fs::create_dir_all(legacy_root.join("tokenizer")).unwrap();
+        fs::create_dir_all(legacy_root.join("minilm")).unwrap();
+        fs::write(legacy_root.join("tokenizer/tokenizer.json"), "tokenizer").unwrap();
+        fs::write(legacy_root.join("minilm/embedding_matrix.f16"), "matrix").unwrap();
+
+        migrate_legacy_shared_embedder_files(&manifest, &files).unwrap();
+
+        for file in &files {
+            let legacy_file = legacy_root.join(&file.relative_path);
+            assert!(file.shared_file.is_file());
+            assert_eq!(
+                fs::canonicalize(legacy_file).unwrap(),
+                fs::canonicalize(&file.shared_file).unwrap()
+            );
+        }
 
         fs::remove_dir_all(root).unwrap();
     }
@@ -942,8 +1249,8 @@ mod tests {
         let files = ntdb_l2_shared_embedder_files(&manifest, &category_dir, &package_dir).unwrap();
         let encoders_dir = root.join("l2_ntdb/_shared/encoders");
         let legacy_roots = [
-            encoders_dir.join("ntdb_artifacts_granite_embedding_97m__v1_d1_c2"),
-            encoders_dir.join("ntdb_artifacts_granite_embedding_97m__v1_d1_c384"),
+            encoders_dir.join("ibm-granite_granite-embedding-97m-multilingual-r2__v1_d1_c2"),
+            encoders_dir.join("ibm-granite_granite-embedding-97m-multilingual-r2__v1_d1_c384"),
         ];
         for legacy_root in &legacy_roots {
             fs::create_dir_all(legacy_root.join("tokenizer")).unwrap();
@@ -976,7 +1283,7 @@ mod tests {
         ] {
             let shared_file = root
                 .join("l2_ntdb/_shared/encoders")
-                .join("ntdb_artifacts_granite_embedding_97m__v1_d1")
+                .join("ibm-granite_granite-embedding-97m-multilingual-r2__v1_d1")
                 .join(relative_path);
             assert!(shared_file.is_file());
             for legacy_root in &legacy_roots {
@@ -1000,9 +1307,9 @@ mod tests {
         let files = ntdb_l2_shared_embedder_files(&manifest, &category_dir, &package_dir).unwrap();
         let encoders_dir = root.join("l2_ntdb/_shared/encoders");
         let first = encoders_dir
-            .join("ntdb_artifacts_granite_embedding_97m__v1_d1_c2/minilm/embedding_matrix.f16");
+            .join("ibm-granite_granite-embedding-97m-multilingual-r2__v1_d1_c2/minilm/embedding_matrix.f16");
         let second = encoders_dir
-            .join("ntdb_artifacts_granite_embedding_97m__v1_d1_c384/minilm/embedding_matrix.f16");
+            .join("ibm-granite_granite-embedding-97m-multilingual-r2__v1_d1_c384/minilm/embedding_matrix.f16");
         fs::create_dir_all(first.parent().unwrap()).unwrap();
         fs::create_dir_all(second.parent().unwrap()).unwrap();
         fs::write(&first, "first").unwrap();

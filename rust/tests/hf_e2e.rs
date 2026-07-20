@@ -1,10 +1,12 @@
 use std::{
     path::{Path, PathBuf},
-    time::{SystemTime, UNIX_EPOCH},
+    sync::Arc,
+    time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
 use patronus_ark::{
-    L3SchedulerPolicy, ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel,
+    L3SchedulerPolicy, L3Strategy, ScanGateMatrix, SecurityAssetProgressCallback, SecurityCategory,
+    SecurityGateway, SecurityLevel, SecurityLevelReadiness,
 };
 
 fn model_dir() -> PathBuf {
@@ -77,6 +79,54 @@ fn hf_ntdb_l2_download_warmup_smoke() {
     ));
 
     eprintln!("HF E2E model dir: {}", dir.display());
+}
+
+#[test]
+fn hf_product_asset_sync_progress_smoke() {
+    if std::env::var("PATRONUS_RUN_HF_ASSET_SYNC_E2E").as_deref() != Ok("1") {
+        eprintln!("skipping product asset-sync E2E; set PATRONUS_RUN_HF_ASSET_SYNC_E2E=1 to run");
+        return;
+    }
+
+    let dir = model_dir();
+    let categories = vec![
+        SecurityCategory::Injection,
+        SecurityCategory::Dlp,
+        SecurityCategory::Pii,
+        SecurityCategory::SensitiveDocument,
+        SecurityCategory::ToolClass,
+        SecurityCategory::ToolAction,
+        SecurityCategory::ToolTags,
+        SecurityCategory::Routing,
+        SecurityCategory::Threat,
+        SecurityCategory::DynamicPii,
+    ];
+    let scanner =
+        SecurityGateway::with_max_level(categories, SecurityLevel::L3, Some(dir.clone()), true);
+    scanner.set_l3_strategy(L3Strategy::Multi);
+    let progress: SecurityAssetProgressCallback = Arc::new(|progress| {
+        eprintln!(
+            "asset-progress model={} files={}/{}",
+            progress.model, progress.completed_files, progress.total_files
+        );
+    });
+
+    let started = Instant::now();
+    let readiness = scanner.prepare_assets_with_progress(progress).unwrap();
+    eprintln!(
+        "product asset sync finished in {:.2}s at {}",
+        started.elapsed().as_secs_f64(),
+        dir.display()
+    );
+
+    assert!(matches!(readiness.l2, SecurityLevelReadiness::Ready));
+    assert!(matches!(readiness.l3, SecurityLevelReadiness::Ready));
+    let shared_encoders = std::fs::read_dir(dir.join("l2_ntdb/_shared/encoders"))
+        .unwrap()
+        .filter_map(Result::ok)
+        .filter(|entry| entry.path().is_dir())
+        .count();
+    assert_eq!(shared_encoders, 1, "Granite encoder must be cached once");
 }
 
 #[cfg(unix)]
