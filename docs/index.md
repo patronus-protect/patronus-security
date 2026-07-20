@@ -27,7 +27,7 @@ Each category is scanned by up to three layers, escalating only when needed:
 
 | Layer | What it is | Cost | Always available |
 | --- | --- | --- | --- |
-| **L1** | Native rule-based detectors | microseconds | ✅ yes, no assets |
+| **L1** | Native rule-based detectors | microseconds | yes, no assets |
 | **L2** | NTDB model packages (shared static encoder + ONNX heads) | milliseconds | when assets cached |
 | **L3** | Full ONNX transformer models, lazily loaded, run by a background worker | tens of ms | when assets cached |
 
@@ -41,36 +41,33 @@ real detection without paying the transformer cost on every request. See
 This documentation follows the [Diátaxis](https://diataxis.fr/) framework — four kinds of
 material for four different needs:
 
-<div class="grid cards" markdown>
-
-- :material-rocket-launch: **[Getting started](getting-started/installation.md)**
+- **[Getting started](getting-started/installation.md)**
 
     Install the library and run your first scan. Start here if you are new.
 
-- :material-school: **[Tutorials](USAGE.md)**
+- **[Tutorials](USAGE.md)**
 
     Learning-oriented, hands-on walkthroughs of the six core flows, in Rust and Python.
 
-- :material-wrench: **[How-to guides](how-to/offline-airgapped.md)**
+- **[How-to guides](how-to/offline-airgapped.md)**
 
     Task-oriented recipes: offline scanning, asset management, performance tuning,
     benchmarking, and wiring in your own signals.
 
-- :material-lightbulb-on: **[Concepts](concepts/architecture.md)**
+- **[Concepts](concepts/architecture.md)**
 
     Understanding-oriented explanation: architecture, the layered pipeline, categories,
     detectors, model formats, the **[threat model](concepts/threat-model.md)**, and performance.
 
-- :material-book-open-variant: **[Reference](reference/configuration.md)**
+- **[Reference](reference/configuration.md)**
 
     Information-oriented, precise: configuration knobs, result schema, and the generated
     [Python](python-api.md) and [Rust](rust-api.md) API references.
 
-- :material-account-group: **[Contributing](contributing/development.md)**
+- **[Contributing](contributing/development.md)**
 
     Development setup, testing, and the release process.
 
-</div>
 
 ## What it detects
 
