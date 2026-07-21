@@ -861,6 +861,31 @@ fn native_dlp_evidence_covers_governance_github_token_fixture() {
     );
 }
 
+#[test]
+fn native_dlp_multiple_evidence_spans_keep_unicode_offsets() {
+    let mut scanner = SecurityGateway::with_max_level(
+        vec![SecurityCategory::Dlp],
+        SecurityLevel::L1,
+        None,
+        false,
+    );
+    scanner.warmup().unwrap();
+    let text = "Grüße sk-proj-abcdefghijklmnopqrstuvwxyz012345 🦀 sk-ant-abcdefghijk";
+
+    let result = scanner
+        .scan_category(SecurityCategory::Dlp, text)
+        .into_iter()
+        .find(|result| result.model == "native:dlp")
+        .expect("native DLP result must be present");
+
+    assert_eq!(result.evidence_spans.len(), 2);
+    for span in result.evidence_spans {
+        assert_eq!(text.get(span.start_byte..span.end_byte), Some(&*span.text));
+        assert_eq!(text[..span.start_byte].chars().count(), span.start_char);
+        assert_eq!(text[..span.end_byte].chars().count(), span.end_char);
+    }
+}
+
 mod l3_worker_streaming {
     use std::time::{Duration, Instant};
 

@@ -172,9 +172,9 @@ pub static DLP_PATTERNS: &[DlpPattern] = &[
     },
     DlpPattern {
         name: "dlp_credential_in_url",
-        pattern: r"(?i)\b(?:password|passwd|secret|token|apikey|api_key|api-key)\s*=\s*[^\s&]{4,}",
+        pattern: r#"(?i)\b(?:password|passwd|secret|token|apikey|api_key|api-key)\s*=\s*[^\\\s&"'\]},]{4,}"#,
         entity_group: "CREDENTIAL",
-        validator: None,
+        validator: Some(is_unredacted_url_credential),
     },
     DlpPattern {
         name: "dlp_env_var_secret",
@@ -183,6 +183,16 @@ pub static DLP_PATTERNS: &[DlpPattern] = &[
         validator: None,
     },
 ];
+
+fn is_unredacted_url_credential(candidate: &str) -> bool {
+    let Some((_, value)) = candidate.split_once('=') else {
+        return false;
+    };
+    !matches!(
+        value.trim().to_ascii_lowercase().as_str(),
+        "redacted" | "[redacted]" | "%5bredacted%5d"
+    )
+}
 
 pub struct DlpPipeline {
     set: RegexSet,

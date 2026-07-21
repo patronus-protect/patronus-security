@@ -41,6 +41,18 @@ fn dlp_native_detects_secret_patterns_and_safe_text() {
         &pipe.evaluate("Plain release notes only.").class_name,
         "safe",
     );
+    assert_class(
+        &pipe
+            .evaluate(r#"{"url":"https://example.test?token=actual-secret"}"#)
+            .class_name,
+        "CREDENTIAL",
+    );
+    assert_class(
+        &pipe
+            .evaluate(r#"{"url":"https://example.test?token=%5Bredacted%5D"}"#)
+            .class_name,
+        "safe",
+    );
 }
 
 #[test]

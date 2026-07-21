@@ -45,8 +45,8 @@ pub(crate) trait NativeRegexDetector {
                     score: 1.0,
                     start_byte: matched.start(),
                     end_byte: matched.end(),
-                    start_char: text[..matched.start()].chars().count(),
-                    end_char: text[..matched.end()].chars().count(),
+                    start_char: 0,
+                    end_char: 0,
                 });
             }
         }
@@ -67,6 +67,7 @@ pub(crate) trait NativeRegexDetector {
             }
         }
         non_overlapping_spans.sort_by_key(|span| (span.start_byte, span.end_byte));
+        populate_char_offsets(text, &mut non_overlapping_spans);
         NativeDetection {
             result: EvaluationResult {
                 class_name: class_name.to_string(),
@@ -75,6 +76,18 @@ pub(crate) trait NativeRegexDetector {
             },
             evidence_spans: non_overlapping_spans,
         }
+    }
+}
+
+fn populate_char_offsets(text: &str, spans: &mut [EvidenceSpan]) {
+    let mut byte_cursor = 0;
+    let mut char_cursor = 0;
+    for span in spans {
+        char_cursor += text[byte_cursor..span.start_byte].chars().count();
+        span.start_char = char_cursor;
+        char_cursor += text[span.start_byte..span.end_byte].chars().count();
+        span.end_char = char_cursor;
+        byte_cursor = span.end_byte;
     }
 }
 
