@@ -82,8 +82,8 @@ See [Categories](concepts/categories.md) for what each one classifies and which 
 
 Patronus Ark, distributed as `patronus-ark`, is **dual-licensed**:
 
-- **AGPL-3.0** for open-source and evaluation use.
-- A **commercial license** for embedding in closed-source or revenue-generating products.
+- **GPL-3.0-only** for open-source use.
+- A **commercial license** for distributing Patronus Ark in proprietary products without the GPL obligations.
 
 See [`LICENSE`](https://github.com/patronus-protect/patronus-security/blob/main/LICENSE) and
 [`LICENSE-COMMERCIAL.md`](https://github.com/patronus-protect/patronus-security/blob/main/LICENSE-COMMERCIAL.md).

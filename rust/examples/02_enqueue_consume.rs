@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: GPL-3.0-only
 //! Asynchronous enqueue / consume.
 //!
 //! `enqueue` submits work and returns immediately with a request id. One shared

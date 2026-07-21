@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: GPL-3.0-only
 use super::{ntdb_error, package::ByteSpan, NtdbResult, ScoreOutput};
 
 #[derive(Debug, Clone)]

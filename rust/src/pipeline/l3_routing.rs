@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: GPL-3.0-only
 use crate::L3SchedulerPolicy;
 
 pub fn priority_index(policy: &L3SchedulerPolicy, category: &str, model: &str) -> usize {

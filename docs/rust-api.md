@@ -7,7 +7,7 @@ Import public items from the `patronus_ark` crate.
 ## Public Exports
 
 ```rust
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: GPL-3.0-only
 pub mod assets;
 pub mod detectors;
 pub mod dynamic_pii;

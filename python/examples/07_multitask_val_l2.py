@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-only
 """Run all seven classifier L2 pipelines on real unified-v3 validation rows.
 
 The two embedded rows come from ``data/val.jsonl`` in

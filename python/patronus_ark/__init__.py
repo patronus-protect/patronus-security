@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-only
 from ._patronus_ark import SecurityGateway as RustSecurityGateway
 from copy import deepcopy
 import json

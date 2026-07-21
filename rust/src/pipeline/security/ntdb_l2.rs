@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: GPL-3.0-only
 //! NTDB v2 L2 model configuration and result mapping for the gateway.
 
 use std::collections::HashMap;

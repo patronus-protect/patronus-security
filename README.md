@@ -4,7 +4,7 @@ Hybrid Rust/Python security scanners for prompt injection, DLP, PII, and agentic
 The project is published as the `patronus-ark` Rust crate and Python package;
 the Python import remains `patronus_ark`.
 
-Dual-licensed: **AGPL-3.0** for open-source and evaluation use, or a **commercial license** for embedding in closed-source or revenue-generating products. See [LICENSE](LICENSE) and [LICENSE-COMMERCIAL.md](LICENSE-COMMERCIAL.md).
+Dual-licensed: **GPL-3.0-only** for open-source use, or a **commercial license** for distributing Patronus Ark in proprietary products. See [LICENSE](LICENSE) and [LICENSE-COMMERCIAL.md](LICENSE-COMMERCIAL.md).
 
 ## Documentation
 

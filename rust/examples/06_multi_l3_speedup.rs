@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: GPL-3.0-only
 //! Compare two dedicated L3 models with one unified multi-head L3 model.
 //!
 //! The same text promotes both Injection and Sensitive Document to L3. Each

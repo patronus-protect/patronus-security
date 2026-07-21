@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: GPL-3.0-only
 use std::net::IpAddr;
 
 /// Validate an IPv4 or IPv6 candidate matched by a PII regex.

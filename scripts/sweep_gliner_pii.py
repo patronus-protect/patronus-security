@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-only
 """Measure exact-span GLiNER quality across confidence thresholds.
 
 The fixture intentionally contains one target entity per positive row plus a

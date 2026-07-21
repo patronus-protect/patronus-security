@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: GPL-3.0-only
 //! Execution gates.
 //!
 //! `ScanGateMatrix` decides which levels and which individual models / native

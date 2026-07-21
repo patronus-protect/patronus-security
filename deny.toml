@@ -1,9 +1,9 @@
 # cargo-deny configuration.
 #
-# Purpose: protect the AGPL-3.0 + commercial dual-licensing model. Dependencies
+# Purpose: protect the GPL-3.0-only + commercial dual-licensing model. Dependencies
 # must be permissively licensed so they can be redistributed under BOTH our
-# AGPL and our commercial license. Any copyleft (GPL/AGPL/MPL) or source-available
-# (Elastic-2.0, BUSL, SSPL) dependency would poison the commercial license, so
+# GPL and our commercial license. Third-party copyleft (GPL/AGPL/MPL) or source-available
+# (Elastic-2.0, BUSL, SSPL) dependency would restrict the commercial distribution path, so
 # only the permissive licenses below are allowed — everything else fails the build.
 #
 # Run:  cargo deny check licenses
@@ -30,11 +30,11 @@ allow = [
     "CDLA-Permissive-2.0",
 ]
 
-# Our own crates are intentionally AGPL-3.0; allow it for them only, not for
+# Our own crates are intentionally GPL-3.0-only; allow it for them only, not for
 # third-party dependencies.
 exceptions = [
-    { allow = ["AGPL-3.0-only"], crate = "patronus-ark" },
-    { allow = ["AGPL-3.0-only"], crate = "patronus-ark-python" },
+    { allow = ["GPL-3.0-only"], crate = "patronus-ark" },
+    { allow = ["GPL-3.0-only"], crate = "patronus-ark-python" },
 ]
 
 [bans]

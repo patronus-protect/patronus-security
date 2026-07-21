@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: GPL-3.0-only
 use patronus_ark::{
     DynamicPiiConfig, EvidenceSpan, ExecutionBackend, L3SchedulerPolicy, L3Strategy, LabelScore,
     LayerResult, NtdbOperatingPoint, OnnxBatchMode, QueuedSecurityEvent, QueuedSecurityScanResult,

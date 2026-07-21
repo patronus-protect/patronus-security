@@ -1,68 +1,47 @@
 # Commercial License
 
 Patronus Ark, distributed as the `patronus-ark` Rust crate and Python
-package, is dual-licensed.
+package, is available under two alternative licensing paths:
 
-## Open-source license (default)
+1. the **GNU General Public License, version 3.0 only (GPL-3.0-only)**, as
+   provided in [LICENSE](LICENSE); or
+2. a separate **commercial license agreement** with Casdo Labs GmbH.
 
-Unless you hold a valid commercial license, Patronus Ark is licensed to you
-under the **GNU Affero General Public License, version 3.0 (AGPL-3.0-only)**, as
-found in [LICENSE](LICENSE).
+You may choose either path. Unless Casdo Labs GmbH has granted you a valid
+commercial license, the GPL-3.0-only terms apply.
 
-The AGPL requires, among other things, that if you modify Patronus Ark and
-convey it — or make its functionality available to third parties over a network
-— you must release the **complete corresponding source code** of your work under
-the AGPL as well.
+## GPL option
 
-## When you need a commercial license
+The GPL permits use, modification, and distribution, including commercial
+use, subject to its terms. Private or internal use does not by itself require
+source disclosure. Mere interaction with software over a computer network,
+without transferring a copy, is not conveying under GPLv3.
 
-The AGPL is often incompatible with **closed-source** or **revenue-generating**
-products. You need a commercial license if you want to do any of the following
-without releasing your own source under the AGPL:
+If you convey Patronus Ark or a covered combined work, the GPL generally
+requires you to provide the corresponding source code and the GPL rights to
+recipients. Refer to [LICENSE](LICENSE) for the binding terms.
 
-- embed Patronus Ark in a proprietary application, SDK, or desktop product
-  that you distribute;
-- offer a hosted or network service built on Patronus Ark without publishing
-  your source;
-- otherwise use Patronus Ark in a way that is incompatible with the AGPL's
-  copyleft obligations.
+## When a commercial license is needed
 
-A commercial license removes the AGPL copyleft requirements and can include
-support and indemnification terms.
+A commercial license is needed when you want rights beyond those granted by
+the GPL. Typical examples include:
 
-## No fee for AGPL-compliant use
+- distributing Patronus Ark as part of a proprietary application, SDK,
+  appliance, container, or on-premises product without licensing the covered
+  work under GPL-3.0-only;
+- distributing a modified or binary version without meeting the GPL source
+  and notice requirements; or
+- giving recipients terms that would conflict with the GPL.
 
-You do not owe a commercial license **fee** if you use Patronus Ark in
-compliance with the AGPL. "No fee" is **not** "no obligations" — the AGPL still
-applies:
+A commercial license is not required solely because an organization earns
+revenue or uses Patronus Ark internally. It is also not normally required for
+a hosted service when no copy is conveyed. The exact result can depend on how
+the software is combined and distributed.
 
-- **Pure internal use** — you neither distribute the software nor make its
-  functionality available to third parties over a network — triggers **no**
-  source-disclosure obligation. This is genuinely free.
-- **Distributing it, or offering it to others over a network** (AGPL §13),
-  requires you to release the **complete corresponding source** of your work
-  under the AGPL, even when you charge nothing. A commercial license removes
-  that requirement.
-
-There is no separate "community license": the open-source track *is* the AGPL.
-
-## Startup License (free commercial exception)
-
-Small organizations may use Patronus Ark under a **royalty-free commercial
-license** — which lifts the AGPL copyleft obligations — provided that, in the
-most recent fiscal year, the organization (together with its affiliates) had:
-
-- total gross revenue of no more than **€1,000,000**, and
-- no more than **10 employees**.
-
-Qualifying startups therefore get the commercial terms (embed in closed-source
-or revenue products, no source-disclosure) **without paying a fee**. Once the
-organization exceeds either threshold, a paid commercial license is required
-going forward.
-
-> The exact thresholds and terms are set out in the Startup License grant
-> provided by Casdo Labs GmbH. Contact team@patronus.studio to confirm
-> eligibility.
+A commercial license replaces the GPL obligations for code owned by Casdo
+Labs GmbH and may include separately agreed support, warranty, or
+indemnification terms. Third-party components remain subject to their own
+licenses and notices.
 
 ## Contact
 
@@ -70,6 +49,6 @@ To obtain a commercial license, contact:
 
 **Casdo Labs GmbH** — team@patronus.studio
 
-> This file is a summary for convenience and is **not** the commercial license
-> agreement itself. The binding terms are set out in a signed commercial license
-> agreement provided by Casdo Labs GmbH.
+> This file is an explanatory summary, not legal advice and not the commercial
+> license agreement itself. Commercial rights are granted only by a separate
+> agreement with Casdo Labs GmbH.

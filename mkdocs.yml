@@ -8,7 +8,7 @@ repo_url: https://github.com/patronus-protect/patronus-security
 edit_uri: edit/main/docs/
 copyright: >-
   Copyright &copy; Patronus Protect / Casdo Labs GmbH —
-  AGPL-3.0 or commercial license.
+  GPL-3.0-only or commercial license.
 
 theme:
   name: material

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: GPL-3.0-only
 use patronus_ark::ml::ntdb_executor::ByteSpan;
 use patronus_ark::ml::unified_onnx::{
     decode_head_logits_for_test, LazyUnifiedOnnxClassifier, UnifiedHeadOutput, UNIFIED_MODEL,

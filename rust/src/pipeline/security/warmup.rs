@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: GPL-3.0-only
 //! Asset synchronization and model-runtime initialization.
 
 use std::collections::HashSet;

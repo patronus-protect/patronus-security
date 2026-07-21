@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-only
 """Fresh-process worker for isolated Injection L2/L3 plus GLiNER benchmarks."""
 
 import json

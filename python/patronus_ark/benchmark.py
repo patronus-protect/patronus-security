@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-only
 """Local benchmark for a configured `SecurityGateway`.
 
 Runs every benchmark phase once with dedicated L3 models and once with the

@@ -10,7 +10,7 @@ readme = "../README.md"
 requires-python = ">=3.11"
 dependencies = []
 keywords = ["security", "prompt-injection", "dlp", "pii"]
-license = "AGPL-3.0-only"
+license = "GPL-3.0-only"
 license-files = ["LICENSE", "LICENSE-COMMERCIAL.md", "NOTICE"]
 authors = [
     { name = "Casdo Labs GmbH", email = "team@patronus.studio" },

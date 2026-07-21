@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: GPL-3.0-only
 //! Dynamic PII (GLiNER) with runtime labels, a result gate, and evidence spans.
 //!
 //! `dynamic-pii` is an L3-only GLiNER pipeline. You choose the entity labels at

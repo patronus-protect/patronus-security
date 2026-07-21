@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: GPL-3.0-only
 //! L2 -> L3 promotion.
 //!
 //! With `max_level = L3`, an NTDB L2 classifier can promote a scan to the heavy

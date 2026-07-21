@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: GPL-3.0-only
 pub mod agentic_control_abuse;
 pub mod authority_escalation;
 pub mod binary_smuggling;

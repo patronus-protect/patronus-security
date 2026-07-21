@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: GPL-3.0-only
 //! Per-head and per-aggregator ONNX runtimes for an NTDB package.
 
 use std::{collections::HashMap, fs, path::Path};

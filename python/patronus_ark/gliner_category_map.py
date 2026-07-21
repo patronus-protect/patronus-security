@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-License-Identifier: GPL-3.0-only
 """Measured, classification-aware entity labels for GLiNER.
 
 Native L1 owns deterministic values such as email, IP, IBAN, BIC and phone

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: GPL-3.0-only
 pub(crate) mod dynamic_pii;
 pub mod l1_heuristics;
 mod mmbert_tokenizer;
