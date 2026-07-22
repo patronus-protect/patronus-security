@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use std::collections::HashMap;
 
+use serde::{Deserialize, Serialize};
+
 pub type RequestId = String;
 
 /// Lifecycle state for an accepted queued request until its terminal event is consumed.
@@ -231,7 +233,8 @@ pub struct LabelScore {
     pub matched: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "UPPERCASE")]
 /// Maximum scanner depth to run.
 pub enum SecurityLevel {
     /// Native rule-based checks only.
@@ -455,6 +458,8 @@ pub struct ScanGateMatrix {
     /// Optional per-model or per-native-scanner overrides keyed by result model
     /// names such as `native:mcp_runtime_risk` or `unified-v3-tool-action`.
     pub models: HashMap<String, bool>,
+    /// Request-context and prior-result conditions applied before L2 or L3.
+    pub conditional: Vec<ConditionalPipelineGate>,
     /// L3 worker scheduling policy.
     pub l3_policy: L3SchedulerPolicy,
 }
@@ -477,6 +482,63 @@ pub struct L3SchedulerPolicy {
     pub max_wait_ms: u64,
     /// Multiplier applied to L2 confidence when L3 degrades.
     pub degraded_factor: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+/// One conditional L2/L3 pipeline gate.
+pub struct ConditionalPipelineGate {
+    /// Phase controlled by this gate. L1 is intentionally not supported.
+    pub level: SecurityLevel,
+    /// Optional category/model selector. `None` applies to every pipeline at the level.
+    #[serde(default)]
+    pub pipeline: Option<String>,
+    /// Condition that must match for the selected pipeline to execute.
+    pub when: GateExpression,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+/// Recursive expression over enqueue metadata and completed L1/L2 results.
+pub enum GateExpression {
+    All(Vec<GateExpression>),
+    Any(Vec<GateExpression>),
+    Not(Box<GateExpression>),
+    Metadata(MetadataCondition),
+    Result(ResultCondition),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+/// Predicate over a dotted path in request metadata.
+pub struct MetadataCondition {
+    pub path: String,
+    #[serde(default)]
+    pub equals: Option<serde_json::Value>,
+    #[serde(default, rename = "in")]
+    pub in_values: Option<Vec<serde_json::Value>>,
+    #[serde(default)]
+    pub exists: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+/// Predicate over a previously completed L1/L2 pipeline result.
+pub struct ResultCondition {
+    pub pipeline: String,
+    #[serde(default)]
+    pub classes: Vec<String>,
+    #[serde(default)]
+    pub min_confidence: Option<f64>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+/// Minimal result view exposed to conditional gate evaluation.
+pub struct GateResult {
+    pub pipeline: String,
+    pub class_name: String,
+    pub confidence: f64,
+    pub level: SecurityLevel,
 }
 
 impl Default for L3SchedulerPolicy {
@@ -564,6 +626,7 @@ impl ScanGateMatrix {
             l2: None,
             l3: None,
             models: HashMap::new(),
+            conditional: Vec::new(),
             l3_policy: L3SchedulerPolicy::default(),
         }
     }
@@ -575,6 +638,7 @@ impl ScanGateMatrix {
             l2: Some(l2),
             l3: Some(l3),
             models: HashMap::new(),
+            conditional: Vec::new(),
             l3_policy: L3SchedulerPolicy::default(),
         }
     }
@@ -599,6 +663,15 @@ impl ScanGateMatrix {
         self
     }
 
+    /// Replace request-context and prior-result gates.
+    pub fn set_conditional(&mut self, gates: Vec<ConditionalPipelineGate>) -> Result<(), String> {
+        for gate in &gates {
+            gate.validate()?;
+        }
+        self.conditional = gates;
+        Ok(())
+    }
+
     /// Return whether the level is allowed by this matrix before max-level
     /// enforcement.
     pub fn allows_level(&self, level: SecurityLevel) -> bool {
@@ -617,6 +690,76 @@ impl ScanGateMatrix {
     /// Replace the L3 worker scheduling policy.
     pub fn set_l3_policy(&mut self, policy: L3SchedulerPolicy) {
         self.l3_policy = policy;
+    }
+}
+
+impl ConditionalPipelineGate {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.level == SecurityLevel::L1 {
+            return Err("conditional gates may only target L2 or L3".to_string());
+        }
+        if self
+            .pipeline
+            .as_ref()
+            .is_some_and(|value| value.trim().is_empty())
+        {
+            return Err("conditional gate pipeline must not be empty".to_string());
+        }
+        self.when.validate()
+    }
+}
+
+impl GateExpression {
+    fn validate(&self) -> Result<(), String> {
+        match self {
+            Self::All(items) | Self::Any(items) => {
+                if items.is_empty() {
+                    return Err("conditional gate all/any must not be empty".to_string());
+                }
+                for item in items {
+                    item.validate()?;
+                }
+                Ok(())
+            }
+            Self::Not(item) => item.validate(),
+            Self::Metadata(condition) => condition.validate(),
+            Self::Result(condition) => condition.validate(),
+        }
+    }
+}
+
+impl MetadataCondition {
+    fn validate(&self) -> Result<(), String> {
+        if self.path.trim().is_empty() {
+            return Err("metadata gate path must not be empty".to_string());
+        }
+        let predicates = usize::from(self.equals.is_some())
+            + usize::from(self.in_values.is_some())
+            + usize::from(self.exists.is_some());
+        if predicates != 1 {
+            return Err(
+                "metadata gate must configure exactly one of equals, in, or exists".to_string(),
+            );
+        }
+        if self.in_values.as_ref().is_some_and(Vec::is_empty) {
+            return Err("metadata gate in list must not be empty".to_string());
+        }
+        Ok(())
+    }
+}
+
+impl ResultCondition {
+    fn validate(&self) -> Result<(), String> {
+        if self.pipeline.trim().is_empty() {
+            return Err("result gate pipeline must not be empty".to_string());
+        }
+        if self
+            .min_confidence
+            .is_some_and(|value| !(0.0..=1.0).contains(&value))
+        {
+            return Err("result gate min_confidence must be between 0.0 and 1.0".to_string());
+        }
+        Ok(())
     }
 }
 

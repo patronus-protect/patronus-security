@@ -37,12 +37,24 @@ pub struct ScoreOutput {
     pub promote_threshold: Option<f32>,
     pub chunk_promote_scores: Vec<Option<f32>>,
     pub l3_candidate_spans: Vec<ByteSpan>,
+    pub l3_candidates: Vec<L3Candidate>,
 }
 
-#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
 pub struct ByteSpan {
     pub start: usize,
     pub end: usize,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+/// Scored L2 evidence used to select and prioritize L3 text windows.
+pub struct L3Candidate {
+    pub span: ByteSpan,
+    pub promote_score: f32,
+    pub promote_threshold: f32,
+    pub source_pipeline: String,
+    pub source_model: String,
+    pub l2_class: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -216,7 +228,7 @@ impl NtdbPackage {
                     .zip(output.promote_threshold)
                     .is_some_and(|(score, threshold)| score >= threshold)
                 {
-                    let (scores, spans) = chunk_promotions(
+                    let (scores, candidates) = chunk_promotions(
                         aggregator,
                         &self.manifest.task.kind,
                         &self.manifest.task.labels,
@@ -227,7 +239,9 @@ impl NtdbPackage {
                         operating_point,
                     )?;
                     output.chunk_promote_scores = scores;
-                    output.l3_candidate_spans = candidate_spans_or_full(spans, text.len());
+                    output.l3_candidate_spans =
+                        candidates.iter().map(|candidate| candidate.span).collect();
+                    output.l3_candidates = candidates;
                 }
                 Ok(output)
             })
@@ -437,7 +451,7 @@ fn chunk_promotions(
     feature_by_name: &HashMap<String, Vec<f32>>,
     embedding_dim: usize,
     operating_point: NtdbOperatingPoint,
-) -> NtdbResult<(Vec<Option<f32>>, Vec<ByteSpan>)> {
+) -> NtdbResult<(Vec<Option<f32>>, Vec<L3Candidate>)> {
     let mut scores = Vec::with_capacity(prepared.chunks.len());
     let mut thresholds = Vec::with_capacity(prepared.chunks.len());
     for (index, chunk) in prepared.chunks.iter().enumerate() {
@@ -473,24 +487,29 @@ fn chunk_promotions(
         scores.push(output.promote_score);
         thresholds.push(output.promote_threshold);
     }
-    let spans = promoted_chunk_spans(&prepared.chunks, &scores, &thresholds);
-    Ok((scores, spans))
+    let candidates = promoted_chunk_candidates(&prepared.chunks, &scores, &thresholds);
+    Ok((scores, candidates))
 }
 
-fn promoted_chunk_spans(
+fn promoted_chunk_candidates(
     chunks: &[TokenChunk],
     scores: &[Option<f32>],
     thresholds: &[Option<f32>],
-) -> Vec<ByteSpan> {
+) -> Vec<L3Candidate> {
     chunks
         .iter()
         .zip(scores)
         .zip(thresholds)
         .filter_map(|((chunk, score), threshold)| {
-            score
-                .zip(*threshold)
-                .is_some_and(|(score, threshold)| score >= threshold)
-                .then_some(chunk.byte_span)
+            let (score, threshold) = score.zip(*threshold)?;
+            (score >= threshold).then_some(L3Candidate {
+                span: chunk.byte_span,
+                promote_score: score,
+                promote_threshold: threshold,
+                source_pipeline: String::new(),
+                source_model: String::new(),
+                l2_class: String::new(),
+            })
         })
         .collect()
 }
@@ -531,17 +550,6 @@ fn byte_span(offsets: &[(usize, usize)]) -> ByteSpan {
     ByteSpan { start, end }
 }
 
-fn candidate_spans_or_full(spans: Vec<ByteSpan>, text_len: usize) -> Vec<ByteSpan> {
-    if spans.is_empty() {
-        vec![ByteSpan {
-            start: 0,
-            end: text_len,
-        }]
-    } else {
-        spans
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -556,14 +564,6 @@ mod tests {
             (chunks[1].byte_span.start, chunks[1].byte_span.end),
             (6, 11)
         );
-    }
-
-    #[test]
-    fn document_promote_without_chunk_candidates_falls_back_to_full_text() {
-        let spans = candidate_spans_or_full(Vec::new(), 8192);
-
-        assert_eq!(spans.len(), 1);
-        assert_eq!((spans[0].start, spans[0].end), (0, 8192));
     }
 
     #[test]
@@ -589,14 +589,21 @@ mod tests {
             },
         ];
 
-        let spans = promoted_chunk_spans(
+        let candidates = promoted_chunk_candidates(
             &chunks,
             &[Some(0.2), Some(0.95), Some(0.8)],
             &[Some(0.8), Some(0.8), Some(0.8)],
         );
 
-        assert_eq!(spans.len(), 2);
-        assert_eq!((spans[0].start, spans[0].end), (100, 200));
-        assert_eq!((spans[1].start, spans[1].end), (200, 300));
+        assert_eq!(candidates.len(), 2);
+        assert_eq!(
+            (candidates[0].span.start, candidates[0].span.end),
+            (100, 200)
+        );
+        assert_eq!(
+            (candidates[1].span.start, candidates[1].span.end),
+            (200, 300)
+        );
+        assert_eq!(candidates[0].promote_score, 0.95);
     }
 }

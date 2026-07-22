@@ -17,8 +17,9 @@ pub use dynamic_pii::{
 pub use external_l1::{ExternalL1Detector, ExternalL1Input};
 pub use pipeline::{Pipeline, SecurityGateway};
 pub use types::{
-    EvaluationResult, ExecutionBackend, L3SchedulerPolicy, L3Strategy, LabelScore, LayerResult,
-    NtdbOperatingPoint, OnnxBatchMode, QueuedSecurityEvent, QueuedSecurityScanResult, RequestId,
+    ConditionalPipelineGate, EvaluationResult, ExecutionBackend, GateExpression, GateResult,
+    L3SchedulerPolicy, L3Strategy, LabelScore, LayerResult, MetadataCondition, NtdbOperatingPoint,
+    OnnxBatchMode, QueuedSecurityEvent, QueuedSecurityScanResult, RequestId, ResultCondition,
     ScanExecution, ScanGateMatrix, SecurityAssetProgress, SecurityAssetProgressCallback,
     SecurityAssetReadiness, SecurityCategory, SecurityFailure, SecurityFailureKind,
     SecurityFailureStage, SecurityLevel, SecurityLevelReadiness, SecurityRequestCompletion,

@@ -148,6 +148,9 @@ dynamic_pii_config = {
     "chunk_overlap_words": 32,
     "max_text_bytes": 1_048_576,
     "timeout_ms": 5_000,
+    "queue_timeout_ms": 5_000,
+    "timeout_per_chunk_ms": 500,
+    "max_timeout_ms": 120_000,
 }
 ```
 
@@ -159,7 +162,10 @@ dynamic_pii_config = {
 | `conditional_labels` | Extra labels enabled only when a source pipeline returns given results. |
 | `chunk_size_words` / `chunk_overlap_words` | Windowing for long text. |
 | `max_text_bytes` | Hard input size limit. |
-| `timeout_ms` | Per-scan timeout for the pipeline. |
+| `timeout_ms` | Minimum inference timeout for the pipeline. |
+| `queue_timeout_ms` | Maximum wait after the L2 gate resolves and before inference starts. |
+| `timeout_per_chunk_ms` | Inference budget contributed by each planned chunk. |
+| `max_timeout_ms` | Upper bound for the adaptive inference timeout. |
 
 Only labels with measured exact-span F1 ≥ 0.6 are mapped; deterministic identifiers (email, IP,
 IBAN, SWIFT/BIC, phone, card) stay native L1 heuristics. See

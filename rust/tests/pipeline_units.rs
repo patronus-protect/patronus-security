@@ -482,7 +482,7 @@ mod decision_cache {
 }
 
 mod ntdb_l2_results {
-    use patronus_ark::ml::ntdb_executor::{ByteSpan, NtdbDecision};
+    use patronus_ark::ml::ntdb_executor::{ByteSpan, L3Candidate, NtdbDecision};
     use patronus_ark::pipeline::test_util::{
         ntdb_l2_enabled_for_category, ntdb_l2_model_config_for_id,
         ntdb_l2_model_configs_for_category, ntdb_l2_scan_result,
@@ -511,6 +511,17 @@ mod ntdb_l2_results {
             l3_candidate_spans: vec![ByteSpan {
                 start: 256,
                 end: 512,
+            }],
+            l3_candidates: vec![L3Candidate {
+                span: ByteSpan {
+                    start: 256,
+                    end: 512,
+                },
+                promote_score: 0.8,
+                promote_threshold: 0.7,
+                source_pipeline: String::new(),
+                source_model: "injection".to_string(),
+                l2_class: "attack".to_string(),
             }],
         };
 
@@ -562,6 +573,7 @@ mod ntdb_l2_results {
             chunks: 1,
             chunk_promote_scores: Vec::new(),
             l3_candidate_spans: Vec::new(),
+            l3_candidates: Vec::new(),
         };
 
         let config = ntdb_l2_model_config_for_id("sensitive_document").unwrap();
@@ -594,6 +606,7 @@ mod ntdb_l2_results {
             chunks: 1,
             chunk_promote_scores: Vec::new(),
             l3_candidate_spans: Vec::new(),
+            l3_candidates: Vec::new(),
         };
 
         let config = ntdb_l2_model_config_for_id("tool_class").unwrap();
@@ -670,6 +683,7 @@ mod ntdb_l2_results {
             chunks: 1,
             chunk_promote_scores: Vec::new(),
             l3_candidate_spans: Vec::new(),
+            l3_candidates: Vec::new(),
         };
         let config = ntdb_l2_model_config_for_id("injection").unwrap();
 

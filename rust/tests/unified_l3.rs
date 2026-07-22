@@ -4,10 +4,12 @@ use patronus_ark::ml::unified_onnx::{
     decode_head_logits_for_test, LazyUnifiedOnnxClassifier, UnifiedHeadOutput, UNIFIED_MODEL,
 };
 use patronus_ark::pipeline::test_util::{
-    aggregate_unified_head_for_test, public_unified_class_for_test, selected_l3_chunks_for_test,
+    aggregate_unified_head_for_test, public_unified_class_for_test,
+    replace_unified_pending_layer_for_test, selected_l3_chunks_for_test,
     unified_coalescing_snapshot,
 };
-use patronus_ark::ExecutionBackend;
+use patronus_ark::{ExecutionBackend, LayerResult};
+use std::collections::HashMap;
 
 #[test]
 fn unified_model_decodes_binary_softmax_and_multilabel_heads() {
@@ -48,12 +50,51 @@ fn unified_injection_head_uses_the_public_attack_class() {
 }
 
 #[test]
+fn completed_unified_l3_replaces_pending_marker_and_keeps_timing() {
+    let pending = LayerResult {
+        level: "L3".to_string(),
+        layer_type: "l3_pending".to_string(),
+        class_name: "fallback".to_string(),
+        confidence: 0.0,
+        matched: false,
+        duration_ms: 0.0,
+        thresholds: HashMap::new(),
+        details: HashMap::new(),
+    };
+    let completed = LayerResult {
+        level: "L3".to_string(),
+        layer_type: "onnx".to_string(),
+        class_name: "tool_class.web.search".to_string(),
+        confidence: 0.91,
+        matched: true,
+        duration_ms: 12.5,
+        thresholds: HashMap::new(),
+        details: HashMap::from([("l3_queue_wait_ms".to_string(), serde_json::json!(3.25))]),
+    };
+
+    let layers = replace_unified_pending_layer_for_test(vec![pending], completed);
+
+    assert!(layers.iter().all(|layer| layer.layer_type != "l3_pending"));
+    let prediction = layers
+        .iter()
+        .find(|layer| layer.layer_type == "onnx")
+        .expect("completed unified L3 prediction must remain visible");
+    assert_eq!(prediction.class_name, "tool_class.web.search");
+    assert_eq!(prediction.duration_ms, 12.5);
+    assert_eq!(
+        prediction.details.get("l3_queue_wait_ms"),
+        Some(&serde_json::json!(3.25))
+    );
+}
+
+#[test]
 fn multi_strategy_coalesces_promotions_for_the_same_request() {
     let snapshot = unified_coalescing_snapshot(&["injection", "threat"]);
 
     assert_eq!(snapshot.physical_jobs, 1);
     assert_eq!(snapshot.physical_model, UNIFIED_MODEL);
     assert_eq!(snapshot.physical_ttl_ms, 15_000);
+    assert_eq!(snapshot.physical_candidate_count, 2);
     assert_eq!(snapshot.subscribers, ["injection", "threat"]);
 }
 
@@ -89,6 +130,8 @@ fn candidate_spans_reduce_dedicated_l3_chunks() {
         (200, 456, "1"),
         (400, 656, "2"),
         (600, 856, "3"),
+        (800, 1056, "4"),
+        (1000, 1256, "5"),
     ];
     let full = selected_l3_chunks_for_test(&chunks, &[]);
     let selected = selected_l3_chunks_for_test(
@@ -100,7 +143,32 @@ fn candidate_spans_reduce_dedicated_l3_chunks() {
     );
 
     assert!(selected.len() < full.len());
-    assert_eq!(selected, ["1", "2"]);
+    assert_eq!(selected, ["0", "1", "2", "3"]);
+}
+
+#[test]
+fn candidate_selection_caps_and_deduplicates_repetitive_chunks() {
+    let chunks = (0..20)
+        .map(|index| {
+            let text = if index % 2 == 0 {
+                "repeated"
+            } else {
+                "context"
+            };
+            (index * 256, (index + 1) * 256, text)
+        })
+        .collect::<Vec<_>>();
+    let candidates = (0..20)
+        .map(|index| ByteSpan {
+            start: index * 256,
+            end: (index + 1) * 256,
+        })
+        .collect::<Vec<_>>();
+
+    let selected = selected_l3_chunks_for_test(&chunks, &candidates);
+
+    assert_eq!(selected, ["repeated", "context"]);
+    assert!(selected.len() <= 8);
 }
 
 #[test]

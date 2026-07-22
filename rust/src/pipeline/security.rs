@@ -947,7 +947,7 @@ impl SecurityGateway {
         results
     }
 
-    fn scan_inputs_direct(
+    fn scan_l1_inputs(
         &self,
         inputs: &[ExternalL1Input],
         execution: &ScanExecution,
@@ -959,26 +959,82 @@ impl SecurityGateway {
             execution.set_defer_l3(true);
         }
 
-        let mut results: Vec<SecurityScanResult> = inputs
+        inputs
             .par_iter()
             .map(|input| self.scan_category_with_execution(input, &execution))
             .collect::<Vec<_>>()
             .into_iter()
             .flatten()
-            .collect();
-        if let Some(first) = inputs.first() {
-            if inputs.iter().all(|input| input.text == first.text) {
-                let categories = inputs
+            .collect()
+    }
+
+    fn scan_l2_inputs(
+        &self,
+        inputs: &[ExternalL1Input],
+        execution: &ScanExecution,
+        metadata: &serde_json::Value,
+        gate_results: &[crate::GateResult],
+    ) -> Vec<SecurityScanResult> {
+        let mut execution = execution.clone();
+        if execution.allows_level(SecurityLevel::L3) && execution.l3_policy().enabled {
+            execution.set_defer_l3(true);
+        }
+        let allowed_categories = inputs
+            .iter()
+            .filter(|input| {
+                crate::pipeline::conditional_gate::pipeline_allowed(
+                    &execution,
+                    SecurityLevel::L2,
+                    input.category.as_str(),
+                    metadata,
+                    gate_results,
+                )
+            })
+            .collect::<Vec<_>>();
+        let mut l2_execution = execution.clone();
+        let mut l2_gates = l2_execution.gates().clone();
+        for input in &allowed_categories {
+            for config in ntdb_l2_model_configs_for_category(&l2_execution, input.category) {
+                let model_allowed =
+                    [config.model_id, config.public_model]
+                        .into_iter()
+                        .all(|model| {
+                            crate::pipeline::conditional_gate::pipeline_allowed(
+                                &execution,
+                                SecurityLevel::L2,
+                                model,
+                                metadata,
+                                gate_results,
+                            )
+                        });
+                if !model_allowed {
+                    l2_gates.set_model(config.model_id, false);
+                    l2_gates.set_model(config.public_model, false);
+                }
+            }
+        }
+        l2_execution.set_gates(l2_gates);
+        let mut results = Vec::new();
+        if let Some(first) = allowed_categories.first() {
+            if allowed_categories
+                .iter()
+                .all(|input| input.text == first.text)
+            {
+                let categories = allowed_categories
                     .iter()
                     .map(|input| input.category)
                     .collect::<Vec<_>>();
-                results.extend(self.scan_ntdb_l2_categories(&categories, &first.text, &execution));
+                results.extend(self.scan_ntdb_l2_categories(
+                    &categories,
+                    &first.text,
+                    &l2_execution,
+                ));
             } else {
-                for input in inputs {
+                for input in allowed_categories {
                     results.extend(self.scan_ntdb_l2_categories(
                         &[input.category],
                         &input.text,
-                        &execution,
+                        &l2_execution,
                     ));
                 }
             }

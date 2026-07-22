@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::{ntdb_error, package::ByteSpan, NtdbResult, ScoreOutput};
+use super::{
+    ntdb_error,
+    package::{ByteSpan, L3Candidate},
+    NtdbResult, ScoreOutput,
+};
 
 #[derive(Debug, Clone)]
 pub struct NtdbDecision {
@@ -16,6 +20,7 @@ pub struct NtdbDecision {
     pub chunks: usize,
     pub chunk_promote_scores: Vec<Option<f32>>,
     pub l3_candidate_spans: Vec<ByteSpan>,
+    pub l3_candidates: Vec<L3Candidate>,
 }
 
 impl NtdbDecision {
@@ -49,6 +54,11 @@ fn binary_promote_decision(model_id: String, output: ScoreOutput) -> NtdbResult<
         1.0 - attack_score
     };
 
+    let mut l3_candidates = output.l3_candidates;
+    for candidate in &mut l3_candidates {
+        candidate.source_model = model_id.clone();
+        candidate.l2_class = fallback_label.clone();
+    }
     Ok(NtdbDecision {
         model_id,
         aggregator_id: output.aggregator_id,
@@ -63,6 +73,7 @@ fn binary_promote_decision(model_id: String, output: ScoreOutput) -> NtdbResult<
         chunks: output.chunks,
         chunk_promote_scores: output.chunk_promote_scores,
         l3_candidate_spans: output.l3_candidate_spans,
+        l3_candidates,
     })
 }
 
@@ -89,6 +100,11 @@ fn multiclass_or_plain_decision(model_id: String, output: ScoreOutput) -> NtdbRe
         .zip(output.promote_threshold)
         .is_some_and(|(score, threshold)| score >= threshold);
 
+    let mut l3_candidates = output.l3_candidates;
+    for candidate in &mut l3_candidates {
+        candidate.source_model = model_id.clone();
+        candidate.l2_class = fallback_label.clone();
+    }
     Ok(NtdbDecision {
         model_id,
         aggregator_id: output.aggregator_id,
@@ -103,6 +119,7 @@ fn multiclass_or_plain_decision(model_id: String, output: ScoreOutput) -> NtdbRe
         chunks: output.chunks,
         chunk_promote_scores: output.chunk_promote_scores,
         l3_candidate_spans: output.l3_candidate_spans,
+        l3_candidates,
     })
 }
 

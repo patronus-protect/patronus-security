@@ -187,7 +187,7 @@ fn execution_gates_skip_or_enqueue_dynamic_pii_deterministically() {
 }
 
 #[test]
-fn dynamic_pii_gate_waits_for_final_l3_source_result() {
+fn dynamic_pii_gate_resolves_without_waiting_for_l3_source_result() {
     let gateway = SecurityGateway::with_max_level(
         vec![SecurityCategory::Injection, SecurityCategory::DynamicPii],
         SecurityLevel::L3,
@@ -209,7 +209,7 @@ fn dynamic_pii_gate_waits_for_final_l3_source_result() {
     );
     assert!(matches!(
         completion_for(&gateway, &request_id),
-        SecurityRequestCompletion::Degraded { .. }
+        SecurityRequestCompletion::Complete
     ));
     assert!(started.elapsed() >= Duration::from_millis(100));
 }

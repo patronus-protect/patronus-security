@@ -411,6 +411,7 @@ impl AggregatorRuntime {
                 promote_threshold: promote_score.and(thresholds.promote_threshold),
                 chunk_promote_scores: Vec::new(),
                 l3_candidate_spans: Vec::new(),
+                l3_candidates: Vec::new(),
             });
         }
 
@@ -468,6 +469,7 @@ impl AggregatorRuntime {
             promote_threshold: promote_score.and(thresholds.promote_threshold),
             chunk_promote_scores: Vec::new(),
             l3_candidate_spans: Vec::new(),
+            l3_candidates: Vec::new(),
         })
     }
 

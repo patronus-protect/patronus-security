@@ -188,6 +188,22 @@ impl LazyUnifiedOnnxClassifier {
         })
     }
 
+    pub fn infer(
+        &mut self,
+        text: &str,
+        backend: ExecutionBackend,
+    ) -> Result<UnifiedModelOutput, Box<dyn std::error::Error>> {
+        self.evict_expired();
+        self.ensure_loaded(backend)?;
+        let output = self
+            .loaded
+            .as_mut()
+            .ok_or("unified L3 model is not loaded")?
+            .infer(text)?;
+        self.last_used = Some(Instant::now());
+        Ok(output)
+    }
+
     pub fn infer_batch(
         &mut self,
         texts: &[String],
@@ -302,6 +318,12 @@ struct UnifiedOnnxClassifier {
 }
 
 impl UnifiedOnnxClassifier {
+    fn infer(&mut self, text: &str) -> Result<UnifiedModelOutput, Box<dyn std::error::Error>> {
+        self.infer_batch(&[text.to_string()])?
+            .pop()
+            .ok_or_else(|| "unified L3 returned no output".into())
+    }
+
     fn from_dir(dir: &Path, backend: ExecutionBackend) -> Result<Self, Box<dyn std::error::Error>> {
         let tokenizer = Tokenizer::from_file(dir.join("tokenizer.json"))
             .map_err(|error| format!("failed to load unified tokenizer: {error}"))?;

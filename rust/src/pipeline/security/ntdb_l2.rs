@@ -202,6 +202,10 @@ pub(super) fn ntdb_l2_result_parts(
     if let Some(threshold) = decision.promote_threshold {
         thresholds.insert("promote".to_string(), threshold);
     }
+    let mut l3_candidates = decision.l3_candidates.clone();
+    for candidate in &mut l3_candidates {
+        candidate.source_pipeline = decision.model_id.clone();
+    }
     let mut details = HashMap::from([
         (
             "ntdb_model_id".to_string(),
@@ -224,6 +228,10 @@ pub(super) fn ntdb_l2_result_parts(
         (
             "l3_candidate_spans".to_string(),
             serde_json::json!(decision.l3_candidate_spans),
+        ),
+        (
+            "l3_candidates".to_string(),
+            serde_json::json!(l3_candidates),
         ),
         (
             "class_scores".to_string(),
@@ -276,7 +284,26 @@ pub fn ntdb_l2_scan_result(
     let allow_l3 = config.has_l3
         && (execution.l3_strategy() == crate::L3Strategy::Dedicated
             || execution.allows_model(crate::ml::unified_onnx::UNIFIED_MODEL));
-    let (result, layers) = ntdb_l2_result_parts(decision, execution, duration_ms, allow_l3);
+    let (result, mut layers) = ntdb_l2_result_parts(decision, execution, duration_ms, allow_l3);
+    if let Some(layer) = layers
+        .iter_mut()
+        .find(|layer| layer.layer_type == "ntdb_l2")
+    {
+        if let Some(candidates) = layer
+            .details
+            .get_mut("l3_candidates")
+            .and_then(serde_json::Value::as_array_mut)
+        {
+            for candidate in candidates {
+                if let Some(candidate) = candidate.as_object_mut() {
+                    candidate.insert(
+                        "source_pipeline".to_string(),
+                        serde_json::json!(config.category.as_str()),
+                    );
+                }
+            }
+        }
+    }
     scan_result(config.category, config.public_model, result, layers)
 }
 

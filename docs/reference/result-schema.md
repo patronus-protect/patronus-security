@@ -84,8 +84,15 @@ offsets. Safe native results leave `evidence_spans` empty.
 }
 ```
 
-One request can emit **several** `result` events — an L1/L2 result first, then a later L3
-result if it was promoted.
+One request can emit **several** `result` events. L1 results are visible as soon as L1
+finishes; L2 and a later promoted L3 result follow independently.
+
+Promoting NTDB L2 layers expose `details.l3_candidates`. Each entry carries a byte `span`,
+`promote_score`, `promote_threshold`, `source_pipeline`, `source_model`, and `l2_class`.
+Unified L3 merges overlapping candidates from the request's promoted heads and scans only
+the highest-scored windows plus bounded neighboring context. Candidate-driven execution is
+capped at eight distinct chunk texts per physical L3 call, so repetitive chunks are inferred
+only once. An empty or unusable candidate list deliberately falls back to full-text L3.
 
 ### `finished`
 

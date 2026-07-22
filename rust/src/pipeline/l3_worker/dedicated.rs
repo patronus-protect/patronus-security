@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{mpsc, Arc};
 use std::thread;
 use std::time::{Duration, Instant};
 
+#[cfg(feature = "test-util")]
 use crate::ml::ntdb_executor::ByteSpan;
+use crate::ml::ntdb_executor::L3Candidate;
 use crate::ml::onnx::TokenTextChunk;
 use crate::{EvaluationResult, LayerResult, RequestId, SecurityLevel, SecurityScanResult};
 
@@ -17,6 +19,8 @@ use super::{
 };
 use crate::pipeline::decision_cache::DecisionCache;
 
+const MAX_CANDIDATE_L3_CHUNKS: usize = 8;
+
 pub(super) fn execute(
     state: &L3WorkerState,
     job: L3WorkerJob,
@@ -28,12 +32,7 @@ pub(super) fn execute(
 
     let elapsed_before_start_ms = elapsed_ms(job.enqueued_at);
     if elapsed_before_start_ms >= job.ttl_ms as f64 {
-        let result = degraded_timeout_result(
-            job.fallback.clone(),
-            elapsed_before_start_ms,
-            job.ttl_ms,
-            job.degraded_factor,
-        );
+        let result = timeout_result(&job, "expired_before_inference", elapsed_before_start_ms);
         return (job.job_id, job.request_id, result);
     }
 
@@ -142,6 +141,14 @@ fn run_dynamic_pii_job(
                 serde_json::json!((elapsed_ms(job.enqueued_at) - output.duration_ms).max(0.0)),
             ),
             ("ttl_ms".to_string(), serde_json::json!(job.ttl_ms)),
+            (
+                "inference_timeout_ms".to_string(),
+                serde_json::json!(job.inference_timeout_ms),
+            ),
+            (
+                "planned_chunk_count".to_string(),
+                serde_json::json!(config.planned_chunk_count(&job.text)),
+            ),
             ("priority".to_string(), serde_json::json!(job.priority)),
             ("job_id".to_string(), serde_json::json!(job.job_id)),
         ]),
@@ -162,16 +169,11 @@ where
 {
     let elapsed_before_start_ms = elapsed_ms(job.enqueued_at);
     if elapsed_before_start_ms >= job.ttl_ms as f64 {
-        let result = degraded_timeout_result(
-            job.fallback.clone(),
-            elapsed_before_start_ms,
-            job.ttl_ms,
-            job.degraded_factor,
-        );
+        let result = timeout_result(&job, "expired_before_inference", elapsed_before_start_ms);
         return (job.job_id, job.request_id, result);
     }
 
-    let remaining = Duration::from_millis(job.ttl_ms).saturating_sub(job.enqueued_at.elapsed());
+    let remaining = Duration::from_millis(job.inference_timeout_ms);
     let (tx, rx) = mpsc::channel();
     let thread_job = job.clone();
     thread::spawn(move || {
@@ -187,12 +189,9 @@ where
             job.degraded_factor,
             error,
         ),
-        Err(mpsc::RecvTimeoutError::Timeout) => degraded_timeout_result(
-            job.fallback.clone(),
-            elapsed_ms(job.enqueued_at),
-            job.ttl_ms,
-            job.degraded_factor,
-        ),
+        Err(mpsc::RecvTimeoutError::Timeout) => {
+            timeout_result(&job, "inference_timeout", elapsed_ms(job.enqueued_at))
+        }
         Err(mpsc::RecvTimeoutError::Disconnected) => degraded_error_result(
             job.fallback.clone(),
             elapsed_ms(job.enqueued_at),
@@ -203,6 +202,33 @@ where
     };
 
     (job.job_id, job.request_id, result)
+}
+
+fn timeout_result(job: &L3WorkerJob, reason: &str, queue_wait_ms: f64) -> SecurityScanResult {
+    let mut result = degraded_timeout_result(
+        job.fallback.clone(),
+        queue_wait_ms,
+        job.inference_timeout_ms,
+        job.degraded_factor,
+    );
+    if let Some(layer) = result
+        .layers
+        .iter_mut()
+        .find(|layer| layer.layer_type == "degraded_timeout")
+    {
+        layer
+            .details
+            .insert("timeout_reason".to_string(), serde_json::json!(reason));
+        layer.details.insert(
+            "queue_timeout_ms".to_string(),
+            serde_json::json!(job.ttl_ms),
+        );
+        layer.details.insert(
+            "inference_timeout_ms".to_string(),
+            serde_json::json!(job.inference_timeout_ms),
+        );
+    }
+    result
 }
 
 #[cfg(feature = "test-util")]
@@ -247,7 +273,7 @@ fn run_model_job(
         .map_err(|err| format!("L3 model mutex poisoned: {err}"))?
         .token_chunks(&job.text, L3_OVERLAP_TOKENS, job.execution.backend())
         .map_err(|err| err.to_string())?;
-    let chunks = selected_l3_chunks(token_chunks, &job.l3_candidate_spans);
+    let chunks = selected_l3_chunks(token_chunks, &job.l3_candidates);
     let mut chunk_outputs = Vec::with_capacity(chunks.len());
 
     for chunk in &chunks {
@@ -282,19 +308,45 @@ fn run_model_job(
     Ok(result)
 }
 
-fn selected_l3_chunks(chunks: Vec<TokenTextChunk>, candidate_spans: &[ByteSpan]) -> Vec<String> {
-    if candidate_spans.is_empty() {
+pub(super) fn selected_l3_chunks(
+    chunks: Vec<TokenTextChunk>,
+    candidates: &[L3Candidate],
+) -> Vec<String> {
+    if chunks.is_empty() {
+        return Vec::new();
+    }
+    if candidates.is_empty() {
         return chunks.into_iter().map(|chunk| chunk.text).collect();
     }
-
-    let selected = chunks
-        .iter()
-        .filter(|chunk| {
-            candidate_spans
-                .iter()
-                .any(|span| span.start < chunk.end_byte && span.end > chunk.start_byte)
-        })
-        .map(|chunk| chunk.text.clone())
+    let mut ranked = candidates.to_vec();
+    ranked.sort_by(|left, right| candidate_priority(right).total_cmp(&candidate_priority(left)));
+    let mut selected_indices = Vec::new();
+    let mut selected_texts = HashSet::new();
+    for candidate in ranked {
+        for (index, chunk) in chunks.iter().enumerate() {
+            if candidate.span.start < chunk.end_byte && candidate.span.end > chunk.start_byte {
+                for neighbor in index.saturating_sub(1)..=(index + 1).min(chunks.len() - 1) {
+                    if selected_indices.len() == MAX_CANDIDATE_L3_CHUNKS {
+                        break;
+                    }
+                    if !selected_indices.contains(&neighbor)
+                        && selected_texts.insert(chunks[neighbor].text.clone())
+                    {
+                        selected_indices.push(neighbor);
+                    }
+                }
+            }
+            if selected_indices.len() == MAX_CANDIDATE_L3_CHUNKS {
+                break;
+            }
+        }
+        if selected_indices.len() == MAX_CANDIDATE_L3_CHUNKS {
+            break;
+        }
+    }
+    let selected = selected_indices
+        .into_iter()
+        .map(|index| chunks[index].text.clone())
         .collect::<Vec<_>>();
     if selected.is_empty() {
         chunks.into_iter().map(|chunk| chunk.text).collect()
@@ -303,12 +355,29 @@ fn selected_l3_chunks(chunks: Vec<TokenTextChunk>, candidate_spans: &[ByteSpan])
     }
 }
 
+fn candidate_priority(candidate: &L3Candidate) -> f32 {
+    let remaining = (1.0 - candidate.promote_threshold).max(f32::EPSILON);
+    ((candidate.promote_score - candidate.promote_threshold) / remaining).clamp(0.0, 1.0)
+}
+
 #[cfg(feature = "test-util")]
 #[doc(hidden)]
 pub fn selected_l3_chunks_for_test(
     chunks: &[(usize, usize, &str)],
     candidate_spans: &[ByteSpan],
 ) -> Vec<String> {
+    let candidates = candidate_spans
+        .iter()
+        .copied()
+        .map(|span| L3Candidate {
+            span,
+            promote_score: 1.0,
+            promote_threshold: 0.5,
+            source_pipeline: "test".to_string(),
+            source_model: "test".to_string(),
+            l2_class: "test".to_string(),
+        })
+        .collect::<Vec<_>>();
     selected_l3_chunks(
         chunks
             .iter()
@@ -318,7 +387,7 @@ pub fn selected_l3_chunks_for_test(
                 text: (*text).to_string(),
             })
             .collect(),
-        candidate_spans,
+        &candidates,
     )
 }
 
@@ -443,5 +512,52 @@ fn l3_safe_class(job: &L3WorkerJob) -> &'static str {
         "benign"
     } else {
         "safe"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ml::ntdb_executor::ByteSpan;
+
+    #[test]
+    fn candidate_budget_keeps_the_highest_scored_window() {
+        let chunks = (0..12)
+            .map(|index| TokenTextChunk {
+                start_byte: index * 256,
+                end_byte: (index + 1) * 256,
+                text: index.to_string(),
+            })
+            .collect::<Vec<_>>();
+        let mut candidates = (0..10)
+            .map(|index| L3Candidate {
+                span: ByteSpan {
+                    start: index * 256,
+                    end: (index + 1) * 256,
+                },
+                promote_score: 0.51,
+                promote_threshold: 0.5,
+                source_pipeline: "low".to_string(),
+                source_model: "low".to_string(),
+                l2_class: "promote".to_string(),
+            })
+            .collect::<Vec<_>>();
+        candidates.push(L3Candidate {
+            span: ByteSpan {
+                start: 10 * 256,
+                end: 11 * 256,
+            },
+            promote_score: 0.99,
+            promote_threshold: 0.5,
+            source_pipeline: "high".to_string(),
+            source_model: "high".to_string(),
+            l2_class: "promote".to_string(),
+        });
+
+        let selected = selected_l3_chunks(chunks, &candidates);
+
+        assert_eq!(selected.len(), MAX_CANDIDATE_L3_CHUNKS);
+        assert!(selected.contains(&"10".to_string()));
+        assert!(!selected.contains(&"8".to_string()));
     }
 }

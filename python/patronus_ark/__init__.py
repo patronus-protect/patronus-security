@@ -109,6 +109,7 @@ def _execution_gates_json(execution_gates):
     levels = execution_gates.get("levels", {})
     models = execution_gates.get("models", execution_gates.get("model_areas", {}))
     l3_policy = execution_gates.get("l3")
+    conditional = execution_gates.get("conditional")
 
     if not isinstance(levels, dict):
         raise ValueError("execution_gates['levels'] must be a dict")
@@ -134,6 +135,10 @@ def _execution_gates_json(execution_gates):
         if not isinstance(l3_policy, dict):
             raise ValueError("execution_gates['l3'] must be a dict or bool")
         normalized["l3"] = l3_policy
+    if conditional is not None:
+        if not isinstance(conditional, list):
+            raise ValueError("execution_gates['conditional'] must be a list")
+        normalized["conditional"] = conditional
 
     return json.dumps(normalized)
 
@@ -342,6 +347,7 @@ class SecurityGateway:
         text: str,
         categories: list[str] | None = None,
         execution_gates: dict | None = None,
+        metadata: dict | None = None,
     ) -> str:
         """Queue one scan request and return its request id.
 
@@ -351,10 +357,13 @@ class SecurityGateway:
         queue. Every event includes its `request_id`. `execution_gates`, when
         provided, applies only to this request.
         """
+        if metadata is not None and not isinstance(metadata, dict):
+            raise ValueError("metadata must be a dict")
         return self.rust_gateway.enqueue(
             text,
             categories,
             _execution_gates_json(execution_gates),
+            None if metadata is None else json.dumps(metadata),
         )
 
     def consume_events(self, timeout: float | None = None):

@@ -50,6 +50,7 @@ mod ntdb_decision {
             promote_threshold: Some(0.7),
             chunk_promote_scores: Vec::new(),
             l3_candidate_spans: Vec::new(),
+            l3_candidates: Vec::new(),
         }
     }
 
@@ -98,6 +99,7 @@ mod ntdb_decision {
             promote_threshold: Some(0.8),
             chunk_promote_scores: Vec::new(),
             l3_candidate_spans: Vec::new(),
+            l3_candidates: Vec::new(),
         };
 
         let decision = NtdbDecision::from_score_output("sensitive".to_string(), output).unwrap();

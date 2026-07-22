@@ -1042,12 +1042,53 @@ mod l3_worker_streaming {
         };
         assert_eq!(failures.len(), 1);
         assert_eq!(failures[0].kind, SecurityFailureKind::Timeout);
+        assert_eq!(failures[0].message, "inference_timeout");
 
         std::thread::sleep(Duration::from_millis(300));
         assert!(scanner
             .consume_next_event(Some(Duration::from_millis(20)))
             .is_none());
         assert_eq!(scanner.is_finished(&request_id), None);
+    }
+
+    #[test]
+    fn l3_job_expired_in_queue_reports_distinct_reason() {
+        let scanner = SecurityGateway::with_max_level(
+            vec![SecurityCategory::Injection],
+            SecurityLevel::L3,
+            None,
+            false,
+        );
+        let blocker = scanner.enqueue_test_l3_delay_request(0, 200, "blocking-l3");
+        let expired = scanner.enqueue_test_l3_delay_request_with_ttl(1, 10, "expired-l3", 30);
+
+        let _ = consume_for(&scanner, &blocker, Some(Duration::from_millis(20)));
+        let _ = consume_for(&scanner, &expired, Some(Duration::from_millis(20)));
+        let blocker_terminal = scanner
+            .consume_next_event(Some(Duration::from_secs(1)))
+            .expect("blocking request must finish");
+        assert!(matches!(
+            blocker_terminal,
+            QueuedSecurityEvent::Result(_) | QueuedSecurityEvent::Finished { .. }
+        ));
+
+        let mut expired_completion = None;
+        while let Some(event) = scanner.consume_next_event(Some(Duration::from_secs(1))) {
+            if let QueuedSecurityEvent::Finished {
+                request_id,
+                completion,
+            } = event
+            {
+                if request_id == expired {
+                    expired_completion = Some(completion);
+                    break;
+                }
+            }
+        }
+        let Some(SecurityRequestCompletion::Degraded { failures }) = expired_completion else {
+            panic!("expired request must degrade to its L2 fallback");
+        };
+        assert_eq!(failures[0].message, "expired_before_inference");
     }
 
     #[test]

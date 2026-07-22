@@ -5,7 +5,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::ml::dynamic_pii::DynamicPiiRuntime;
-use crate::ml::ntdb_executor::ByteSpan;
+use crate::ml::ntdb_executor::L3Candidate;
 use crate::ml::onnx::LazyOnnxTextClassifier;
 use crate::ml::unified_onnx::{LazyUnifiedOnnxClassifier, UNIFIED_MODEL};
 use crate::{
@@ -24,8 +24,8 @@ mod unified;
 pub use dedicated::selected_l3_chunks_for_test;
 #[cfg(feature = "test-util")]
 pub use unified::{
-    aggregate_unified_head_for_test, public_unified_class_for_test, unified_coalescing_snapshot,
-    UnifiedCoalescingSnapshot,
+    aggregate_unified_head_for_test, public_unified_class_for_test,
+    replace_unified_pending_layer_for_test, unified_coalescing_snapshot, UnifiedCoalescingSnapshot,
 };
 
 type L3ModelHandle = Arc<Mutex<LazyOnnxTextClassifier>>;
@@ -116,13 +116,14 @@ struct L3WorkerJob {
     fallback: SecurityScanResult,
     priority: usize,
     ttl_ms: u64,
+    inference_timeout_ms: u64,
     estimated_cost_ms: u64,
     fairness_quantum_ms: u64,
     max_wait_ms: u64,
     enqueued_at: Instant,
     execution: ScanExecution,
     degraded_factor: f64,
-    l3_candidate_spans: Vec<ByteSpan>,
+    l3_candidates: Vec<L3Candidate>,
     dynamic_pii_config: Option<DynamicPiiConfig>,
     dynamic_pii_activated_rules: Vec<usize>,
     sequence: u64,
@@ -140,16 +141,16 @@ pub(crate) struct L3JobSpec {
     pub fallback: SecurityScanResult,
     pub priority: usize,
     pub ttl_ms: u64,
+    pub inference_timeout_ms: u64,
     pub execution: ScanExecution,
     pub degraded_factor: f64,
-    pub l3_candidate_spans: Vec<ByteSpan>,
+    pub l3_candidates: Vec<L3Candidate>,
     pub dynamic_pii_config: Option<DynamicPiiConfig>,
     pub dynamic_pii_activated_rules: Vec<usize>,
 }
 
 pub(crate) struct PendingDynamicPii {
     pub job: L3JobSpec,
-    pub accepted_at: Instant,
 }
 
 impl L3Worker {
@@ -285,13 +286,14 @@ impl L3Worker {
             fallback: spec.fallback,
             priority: spec.priority,
             ttl_ms: spec.ttl_ms,
+            inference_timeout_ms: spec.inference_timeout_ms,
             estimated_cost_ms,
             fairness_quantum_ms,
             max_wait_ms,
             enqueued_at: Instant::now(),
             execution: spec.execution,
             degraded_factor: spec.degraded_factor,
-            l3_candidate_spans: spec.l3_candidate_spans,
+            l3_candidates: spec.l3_candidates,
             dynamic_pii_config: spec.dynamic_pii_config,
             dynamic_pii_activated_rules: spec.dynamic_pii_activated_rules,
             sequence: spec.job_id,
@@ -333,13 +335,14 @@ impl L3Worker {
                 fallback: spec.fallback,
                 priority: spec.priority,
                 ttl_ms: spec.ttl_ms,
+                inference_timeout_ms: spec.inference_timeout_ms,
                 estimated_cost_ms,
                 fairness_quantum_ms,
                 max_wait_ms,
                 enqueued_at: Instant::now(),
                 execution: spec.execution,
                 degraded_factor: spec.degraded_factor,
-                l3_candidate_spans: spec.l3_candidate_spans,
+                l3_candidates: spec.l3_candidates,
                 dynamic_pii_config: spec.dynamic_pii_config,
                 dynamic_pii_activated_rules: spec.dynamic_pii_activated_rules,
                 sequence: spec.job_id,
@@ -577,24 +580,9 @@ fn resolve_dynamic_pii(worker: &Arc<L3WorkerState>, request_id: &str) {
         let Some(request) = registry.requests.get(request_id) else {
             return;
         };
-        let Some(pending) = request.pending_dynamic_pii.as_ref() else {
-            return;
-        };
-        let config = pending
-            .job
-            .dynamic_pii_config
-            .as_ref()
-            .expect("pending dynamic-pii job is missing config");
-        let waiting_for_source = config.referenced_pipelines().iter().any(|pipeline| {
-            request
-                .pending_l3_job_categories
-                .values()
-                .any(|category| category == pipeline)
-        });
-        if waiting_for_source {
+        if request.pending_dynamic_pii.is_none() {
             return;
         }
-
         let request = registry
             .requests
             .get_mut(request_id)
@@ -608,13 +596,10 @@ fn resolve_dynamic_pii(worker: &Arc<L3WorkerState>, request_id: &str) {
             .dynamic_pii_config
             .as_ref()
             .expect("pending dynamic-pii job is missing config");
-        let timeout_ms = config.timeout_ms;
         match config.resolve(&request.gate_results) {
             Some(resolution) => {
                 pending.job.dynamic_pii_config = Some(resolution.config);
                 pending.job.dynamic_pii_activated_rules = resolution.activated_conditional_rules;
-                pending.job.ttl_ms =
-                    timeout_ms.saturating_sub(pending.accepted_at.elapsed().as_millis() as u64);
                 Some(pending.job)
             }
             None => {
@@ -657,7 +642,7 @@ pub(crate) fn failure_from_scan_result(result: &SecurityScanResult) -> Option<Se
             SecurityFailureStage::Worker,
             SecurityFailureKind::Timeout,
             true,
-            "degraded_reason",
+            "timeout_reason",
         ),
         "degraded_error" => (
             SecurityFailureStage::Worker,

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+mod conditional_gate;
 mod decision_cache;
 mod generic;
 mod l3_result;
@@ -29,7 +30,8 @@ pub mod test_util {
     pub use super::decision_cache::{DecisionCache, DecisionCacheConfig};
     pub use super::l3_worker::{
         aggregate_unified_head_for_test, public_unified_class_for_test,
-        selected_l3_chunks_for_test, unified_coalescing_snapshot, UnifiedCoalescingSnapshot,
+        replace_unified_pending_layer_for_test, selected_l3_chunks_for_test,
+        unified_coalescing_snapshot, UnifiedCoalescingSnapshot,
     };
     pub use super::long_text::{aggregate_chunk_outputs, candidate_selection, l3_metadata};
     pub use super::security::{

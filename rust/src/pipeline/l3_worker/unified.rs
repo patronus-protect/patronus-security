@@ -17,6 +17,7 @@ use crate::{SecurityLevel, SecurityScanResult};
 use super::super::decision_cache::DecisionCache;
 use super::super::l3_routing::{priority_index, ttl_ms};
 use super::super::{degraded_error_result, degraded_timeout_result, l3_metadata_layer};
+use super::dedicated::selected_l3_chunks;
 use super::{
     elapsed_ms, finish_job, L3JobSpec, L3Worker, L3WorkerJob, L3WorkerState, UnifiedModelHandle,
     L3_OVERLAP_TOKENS,
@@ -43,7 +44,8 @@ pub(super) struct UnifiedRunResult {
 pub(super) enum UnifiedRunFailure {
     Timeout {
         queued_ms: f64,
-        ttl_ms: u64,
+        timeout_ms: u64,
+        reason: &'static str,
     },
     Error {
         queued_ms: f64,
@@ -114,7 +116,7 @@ pub(super) fn enqueue(worker: &L3Worker, spec: L3JobSpec) {
     physical.priority =
         priority_index(physical.execution.l3_policy(), UNIFIED_MODEL, UNIFIED_MODEL);
     physical.ttl_ms = ttl_ms(physical.execution.l3_policy(), UNIFIED_MODEL, UNIFIED_MODEL);
-    physical.l3_candidate_spans.clear();
+    physical.inference_timeout_ms = physical.ttl_ms;
     worker.enqueue_physical(physical);
 }
 
@@ -146,7 +148,8 @@ pub(super) fn execute(state: &L3WorkerState, job: L3WorkerJob) -> UnifiedRunOutc
     if queued_ms >= job.ttl_ms as f64 {
         return UnifiedRunOutcome::Failed(UnifiedRunFailure::Timeout {
             queued_ms,
-            ttl_ms: job.ttl_ms,
+            timeout_ms: job.ttl_ms,
+            reason: "expired_before_inference",
         });
     }
     let model = state
@@ -161,7 +164,7 @@ pub(super) fn execute(state: &L3WorkerState, job: L3WorkerJob) -> UnifiedRunOutc
             error: "unified L3 model is not registered".to_string(),
         });
     };
-    let remaining = Duration::from_millis(job.ttl_ms).saturating_sub(job.enqueued_at.elapsed());
+    let remaining = Duration::from_millis(job.inference_timeout_ms);
     let (tx, rx) = mpsc::channel();
     let thread_job = job.clone();
     thread::spawn(move || {
@@ -177,7 +180,8 @@ pub(super) fn execute(state: &L3WorkerState, job: L3WorkerJob) -> UnifiedRunOutc
         Err(mpsc::RecvTimeoutError::Timeout) => {
             UnifiedRunOutcome::Failed(UnifiedRunFailure::Timeout {
                 queued_ms: elapsed_ms(job.enqueued_at),
-                ttl_ms: job.ttl_ms,
+                timeout_ms: job.inference_timeout_ms,
+                reason: "inference_timeout",
             })
         }
         Err(mpsc::RecvTimeoutError::Disconnected) => {
@@ -206,15 +210,17 @@ fn run_unified_model_job(
         .map_err(|error| format!("unified L3 model mutex poisoned: {error}"))?
         .token_chunks(&job.text, L3_OVERLAP_TOKENS, job.execution.backend())
         .map_err(|error| error.to_string())?;
-    let texts = chunks
-        .iter()
-        .map(|chunk| chunk.text.clone())
-        .collect::<Vec<_>>();
-    let outputs = model
-        .lock()
-        .map_err(|error| format!("unified L3 model mutex poisoned: {error}"))?
-        .infer_batch(&texts, job.execution.backend())
-        .map_err(|error| error.to_string())?;
+    let texts = selected_l3_chunks(chunks, &job.l3_candidates);
+    let mut outputs = Vec::with_capacity(texts.len());
+    for text in &texts {
+        outputs.push(
+            model
+                .lock()
+                .map_err(|error| format!("unified L3 model mutex poisoned: {error}"))?
+                .infer(text, job.execution.backend())
+                .map_err(|error| error.to_string())?,
+        );
+    }
     let chunk_count = outputs.len();
     Ok(UnifiedRunResult {
         output: aggregate_unified_outputs(outputs)?,
@@ -351,12 +357,23 @@ pub fn public_unified_class_for_test(head: &str, class_name: &str) -> String {
 }
 
 #[cfg(feature = "test-util")]
+#[doc(hidden)]
+pub fn replace_unified_pending_layer_for_test(
+    mut layers: Vec<crate::LayerResult>,
+    completed: crate::LayerResult,
+) -> Vec<crate::LayerResult> {
+    replace_unified_pending_layer(&mut layers, completed);
+    layers
+}
+
+#[cfg(feature = "test-util")]
 #[derive(Debug, PartialEq, Eq)]
 #[doc(hidden)]
 pub struct UnifiedCoalescingSnapshot {
     pub physical_jobs: usize,
     pub physical_model: String,
     pub physical_ttl_ms: u64,
+    pub physical_candidate_count: usize,
     pub subscribers: Vec<String>,
 }
 
@@ -378,6 +395,21 @@ pub fn unified_coalescing_snapshot(categories: &[&str]) -> UnifiedCoalescingSnap
             next_sequence: Mutex::new(0),
         }),
     };
+    let request_candidates = categories
+        .iter()
+        .enumerate()
+        .map(|(index, category)| crate::ml::ntdb_executor::L3Candidate {
+            span: crate::ml::ntdb_executor::ByteSpan {
+                start: index * 100,
+                end: index * 100 + 80,
+            },
+            promote_score: 0.9,
+            promote_threshold: 0.7,
+            source_pipeline: (*category).to_string(),
+            source_model: format!("l2-{category}"),
+            l2_class: "promote".to_string(),
+        })
+        .collect::<Vec<_>>();
     for (index, category) in categories.iter().enumerate() {
         let mut execution = ScanExecution::new(SecurityLevel::L3);
         execution.set_l3_strategy(L3Strategy::Multi);
@@ -402,9 +434,10 @@ pub fn unified_coalescing_snapshot(categories: &[&str]) -> UnifiedCoalescingSnap
                 },
                 priority: 0,
                 ttl_ms: 10_000,
+                inference_timeout_ms: 10_000,
                 execution,
                 degraded_factor: 0.75,
-                l3_candidate_spans: Vec::new(),
+                l3_candidates: request_candidates.clone(),
                 dynamic_pii_config: None,
                 dynamic_pii_activated_rules: Vec::new(),
             },
@@ -422,6 +455,10 @@ pub fn unified_coalescing_snapshot(categories: &[&str]) -> UnifiedCoalescingSnap
         .map(|job| job.model.clone())
         .unwrap_or_default();
     let physical_ttl_ms = jobs.first().map(|job| job.ttl_ms).unwrap_or_default();
+    let physical_candidate_count = jobs
+        .first()
+        .map(|job| job.l3_candidates.len())
+        .unwrap_or_default();
     drop(jobs);
     let runs = worker
         .state
@@ -444,6 +481,7 @@ pub fn unified_coalescing_snapshot(categories: &[&str]) -> UnifiedCoalescingSnap
         physical_jobs,
         physical_model,
         physical_ttl_ms,
+        physical_candidate_count,
         subscribers,
     }
 }
@@ -529,9 +567,6 @@ fn materialize_unified_result(
     };
     let class_name = public_class_name(head, &output.class_name);
     let mut result = subscriber.fallback.clone();
-    for layer in &mut result.layers {
-        layer.matched = false;
-    }
     let mut layer = l3_metadata_layer(
         class_name,
         UNIFIED_MODEL,
@@ -555,7 +590,7 @@ fn materialize_unified_result(
             serde_json::json!(run.physical_job_id),
         ),
     ]));
-    result.layers.push(layer);
+    replace_unified_pending_layer(&mut result.layers, layer);
     result.class_name = class_name.to_string();
     result.confidence = output.confidence;
     result.level = SecurityLevel::L3.as_str().to_string();
@@ -573,6 +608,17 @@ fn materialize_unified_result(
     result
 }
 
+fn replace_unified_pending_layer(
+    layers: &mut Vec<crate::LayerResult>,
+    completed: crate::LayerResult,
+) {
+    layers.retain(|layer| layer.layer_type != "l3_pending");
+    for layer in layers.iter_mut() {
+        layer.matched = false;
+    }
+    layers.push(completed);
+}
+
 fn public_class_name<'a>(head: &str, class_name: &'a str) -> &'a str {
     if head == "injection" && class_name == "injection" {
         "attack"
@@ -586,12 +632,28 @@ fn materialize_unified_failure(
     failure: &UnifiedRunFailure,
 ) -> SecurityScanResult {
     match failure {
-        UnifiedRunFailure::Timeout { queued_ms, ttl_ms } => degraded_timeout_result(
-            subscriber.fallback.clone(),
-            *queued_ms,
-            *ttl_ms,
-            subscriber.degraded_factor,
-        ),
+        UnifiedRunFailure::Timeout {
+            queued_ms,
+            timeout_ms,
+            reason,
+        } => {
+            let mut result = degraded_timeout_result(
+                subscriber.fallback.clone(),
+                *queued_ms,
+                *timeout_ms,
+                subscriber.degraded_factor,
+            );
+            if let Some(layer) = result
+                .layers
+                .iter_mut()
+                .find(|layer| layer.layer_type == "degraded_timeout")
+            {
+                layer
+                    .details
+                    .insert("timeout_reason".to_string(), serde_json::json!(reason));
+            }
+            result
+        }
         UnifiedRunFailure::Error {
             queued_ms,
             ttl_ms,
@@ -611,6 +673,7 @@ fn unified_run_key(spec: &L3JobSpec) -> String {
         Some(spec.request_id.as_str()),
         &spec.text,
         spec.execution.backend(),
+        &spec.l3_candidates,
     )
 }
 
@@ -619,19 +682,38 @@ pub(super) fn run_key_for_job(job: &L3WorkerJob) -> String {
         Some(job.request_id.as_str()),
         &job.text,
         job.execution.backend(),
+        &job.l3_candidates,
     )
 }
 
 fn unified_cache_key(spec: &L3JobSpec) -> String {
-    unified_key(None, &spec.text, spec.execution.backend())
+    unified_key(
+        None,
+        &spec.text,
+        spec.execution.backend(),
+        &spec.l3_candidates,
+    )
 }
 
 pub(super) fn cache_key_for_job(job: &L3WorkerJob) -> String {
-    unified_key(None, &job.text, job.execution.backend())
+    unified_key(None, &job.text, job.execution.backend(), &job.l3_candidates)
 }
 
-fn unified_key(request_id: Option<&str>, text: &str, backend: crate::ExecutionBackend) -> String {
-    let hash = blake3::hash(text.as_bytes());
+fn unified_key(
+    request_id: Option<&str>,
+    text: &str,
+    backend: crate::ExecutionBackend,
+    candidates: &[crate::ml::ntdb_executor::L3Candidate],
+) -> String {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(text.as_bytes());
+    for candidate in candidates {
+        hasher.update(&candidate.span.start.to_le_bytes());
+        hasher.update(&candidate.span.end.to_le_bytes());
+        hasher.update(&candidate.promote_score.to_bits().to_le_bytes());
+        hasher.update(candidate.source_pipeline.as_bytes());
+    }
+    let hash = hasher.finalize();
     format!(
         "{}{}:{}:{}",
         request_id

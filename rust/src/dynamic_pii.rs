@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use std::collections::{HashMap, HashSet};
+use std::sync::OnceLock;
 
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 use crate::SecurityCategory;
@@ -65,8 +67,14 @@ pub struct DynamicPiiConfig {
     pub chunk_size_words: usize,
     /// Repeated whitespace-token count between neighboring chunks.
     pub chunk_overlap_words: usize,
-    /// End-to-end queue and inference deadline for one L3 job.
+    /// Minimum inference deadline for one resolved L3 job.
     pub timeout_ms: u64,
+    /// Maximum time the resolved job may wait in the shared L3 queue.
+    pub queue_timeout_ms: u64,
+    /// Additional inference budget granted for every planned GLiNER chunk.
+    pub timeout_per_chunk_ms: u64,
+    /// Upper bound for the adaptive inference budget.
+    pub max_timeout_ms: u64,
 }
 
 impl Default for DynamicPiiConfig {
@@ -83,6 +91,9 @@ impl Default for DynamicPiiConfig {
             chunk_size_words: 256,
             chunk_overlap_words: 32,
             timeout_ms: 5_000,
+            queue_timeout_ms: 5_000,
+            timeout_per_chunk_ms: 500,
+            max_timeout_ms: 120_000,
         }
     }
 }
@@ -148,24 +159,16 @@ impl DynamicPiiConfig {
         if self.timeout_ms == 0 {
             return Err("dynamic-pii timeout_ms must be greater than zero".to_string());
         }
-        Ok(self)
-    }
-
-    pub(crate) fn referenced_pipelines(&self) -> HashSet<&str> {
-        let mut pipelines = HashSet::new();
-        match &self.execution_gate {
-            DynamicPiiExecutionGate::Always => {}
-            DynamicPiiExecutionGate::IfResultIn { pipeline, .. }
-            | DynamicPiiExecutionGate::IfNoResult { pipeline } => {
-                pipelines.insert(pipeline.as_str());
-            }
+        if self.queue_timeout_ms == 0 {
+            return Err("dynamic-pii queue_timeout_ms must be greater than zero".to_string());
         }
-        pipelines.extend(
-            self.conditional_labels
-                .iter()
-                .map(|rule| rule.when.pipeline.as_str()),
-        );
-        pipelines
+        if self.timeout_per_chunk_ms == 0 {
+            return Err("dynamic-pii timeout_per_chunk_ms must be greater than zero".to_string());
+        }
+        if self.max_timeout_ms < self.timeout_ms {
+            return Err("dynamic-pii max_timeout_ms must be at least timeout_ms".to_string());
+        }
+        Ok(self)
     }
 
     pub(crate) fn resolve(
@@ -250,6 +253,28 @@ impl DynamicPiiConfig {
             .iter()
             .find(|label| gliner_inference_label(label) == inference_label)
             .map(String::as_str)
+    }
+
+    pub(crate) fn planned_chunk_count(&self, text: &str) -> usize {
+        static SPLITTER: OnceLock<Regex> = OnceLock::new();
+        let splitter = SPLITTER.get_or_init(|| {
+            Regex::new(r"\w+(?:[-_]\w+)*|\S").expect("dynamic-pii splitter regex is valid")
+        });
+        let words = splitter.find_iter(text).count();
+        if words == 0 {
+            return 0;
+        }
+        if words <= self.chunk_size_words {
+            return 1;
+        }
+        let step = self.chunk_size_words - self.chunk_overlap_words;
+        1 + (words - self.chunk_size_words).div_ceil(step)
+    }
+
+    pub(crate) fn inference_timeout_ms(&self, text: &str) -> u64 {
+        let chunk_budget =
+            (self.planned_chunk_count(text) as u64).saturating_mul(self.timeout_per_chunk_ms);
+        self.timeout_ms.max(chunk_budget).min(self.max_timeout_ms)
     }
 }
 
@@ -378,6 +403,35 @@ mod tests {
         assert_eq!(
             config.canonical_label_for("passport number"),
             Some("passport_number")
+        );
+    }
+
+    #[test]
+    fn inference_timeout_scales_with_planned_chunks_and_is_capped() {
+        let config = DynamicPiiConfig {
+            chunk_size_words: 4,
+            chunk_overlap_words: 1,
+            timeout_ms: 1_000,
+            timeout_per_chunk_ms: 600,
+            max_timeout_ms: 2_000,
+            ..DynamicPiiConfig::default()
+        };
+
+        assert_eq!(config.planned_chunk_count("one two three four"), 1);
+        assert_eq!(config.inference_timeout_ms("one two three four"), 1_000);
+        assert_eq!(
+            config.planned_chunk_count("one two three four five six seven eight nine ten"),
+            3
+        );
+        assert_eq!(
+            config.inference_timeout_ms("one two three four five six seven eight nine ten"),
+            1_800
+        );
+        assert_eq!(
+            config.inference_timeout_ms(
+                "one two three four five six seven eight nine ten eleven twelve thirteen"
+            ),
+            2_000
         );
     }
 }

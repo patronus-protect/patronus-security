@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use patronus_ark::{
-    DynamicPiiConfig, EvidenceSpan, ExecutionBackend, L3SchedulerPolicy, L3Strategy, LabelScore,
-    LayerResult, NtdbOperatingPoint, OnnxBatchMode, QueuedSecurityEvent, QueuedSecurityScanResult,
-    ScanGateMatrix, SecurityCategory, SecurityFailure, SecurityGateway as RustSecurityGateway,
-    SecurityLevel, SecurityLevelReadiness, SecurityRequestCompletion, SecurityRequestState,
-    SecurityRuntimeReadiness,
+    ConditionalPipelineGate, DynamicPiiConfig, EvidenceSpan, ExecutionBackend, L3SchedulerPolicy,
+    L3Strategy, LabelScore, LayerResult, NtdbOperatingPoint, OnnxBatchMode, QueuedSecurityEvent,
+    QueuedSecurityScanResult, ScanGateMatrix, SecurityCategory, SecurityFailure,
+    SecurityGateway as RustSecurityGateway, SecurityLevel, SecurityLevelReadiness,
+    SecurityRequestCompletion, SecurityRequestState, SecurityRuntimeReadiness,
 };
 use pyo3::prelude::*;
 use std::path::PathBuf;
@@ -143,21 +143,36 @@ impl SecurityGateway {
         Ok(results.into_iter().map(PyEvaluationResult::from).collect())
     }
 
-    #[pyo3(signature = (text, categories=None, execution_gates_json=None))]
+    #[pyo3(signature = (text, categories=None, execution_gates_json=None, metadata_json=None))]
     fn enqueue(
         &self,
         py: Python<'_>,
         text: &str,
         categories: Option<Vec<String>>,
         execution_gates_json: Option<&str>,
+        metadata_json: Option<&str>,
     ) -> PyResult<String> {
         let gates = parse_execution_gates_json(execution_gates_json)?;
+        let metadata = metadata_json
+            .map(|value| {
+                serde_json::from_str(value)
+                    .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))
+            })
+            .transpose()?
+            .unwrap_or_else(|| serde_json::json!({}));
         let request_id = match categories {
             Some(categories) => {
                 let rust_categories = parse_categories(categories)?;
-                py.allow_threads(|| self.inner.enqueue_categories(rust_categories, text, gates))
+                py.allow_threads(|| {
+                    self.inner.enqueue_categories_with_metadata(
+                        rust_categories,
+                        text,
+                        metadata,
+                        gates,
+                    )
+                })
             }
-            None => py.allow_threads(|| self.inner.enqueue(text, gates)),
+            None => py.allow_threads(|| self.inner.enqueue_with_metadata(text, metadata, gates)),
         };
         Ok(request_id)
     }
@@ -283,6 +298,14 @@ fn parse_execution_gates_json(value: Option<&str>) -> PyResult<Option<ScanGateMa
             })?;
             gates.set_model(model, enabled);
         }
+    }
+    if let Some(conditional) = object.get("conditional") {
+        let conditional =
+            serde_json::from_value::<Vec<ConditionalPipelineGate>>(conditional.clone())
+                .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
+        gates
+            .set_conditional(conditional)
+            .map_err(pyo3::exceptions::PyValueError::new_err)?;
     }
     if let Some(l3) = object.get("l3") {
         let l3 = l3.as_object().ok_or_else(|| {

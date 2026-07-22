@@ -368,8 +368,14 @@ pub struct DynamicPiiConfig {
     pub chunk_size_words: usize,
     /// Repeated whitespace-token count between neighboring chunks.
     pub chunk_overlap_words: usize,
-    /// End-to-end queue and inference deadline for one L3 job.
+    /// Minimum inference deadline for one resolved L3 job.
     pub timeout_ms: u64,
+    /// Maximum time the resolved job may wait in the shared L3 queue.
+    pub queue_timeout_ms: u64,
+    /// Additional inference budget granted for every planned GLiNER chunk.
+    pub timeout_per_chunk_ms: u64,
+    /// Upper bound for the adaptive inference budget.
+    pub max_timeout_ms: u64,
 }
 ```
 

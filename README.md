@@ -101,12 +101,16 @@ while request_ids:
         request_ids.remove(event["request_id"])
 ```
 
-One request can publish multiple results: L1/L2 pipeline results arrive first;
-an L2 promotion produces an additional L3 result later. Exactly one terminal
+One request can publish multiple results: completed L1 results are published immediately,
+followed by L2 and any promoted L3 results. Exactly one terminal
 event follows all results. Use `request_id` to correlate every event.
 Request-specific `execution_gates` are snapshotted by `enqueue()` and do not
 change the gateway defaults. Consuming `finished` removes all library state for
 that request ID.
+
+`enqueue(..., metadata={...})` accepts a free-form JSON object. Conditional L2/L3
+gates can combine dotted metadata paths and completed L1/L2 results with `all`,
+`any`, and `not`. L1 remains outside conditional gates.
 
 ### Native-Only / Offline Scanning
 
@@ -201,6 +205,9 @@ scanner = SecurityGateway(
         "chunk_overlap_words": 32,
         "max_text_bytes": 1_048_576,
         "timeout_ms": 5_000,
+        "queue_timeout_ms": 5_000,
+        "timeout_per_chunk_ms": 500,
+        "max_timeout_ms": 120_000,
     },
 )
 scanner.warmup()
@@ -213,6 +220,10 @@ for span in result["evidence_spans"]:
 ```
 
 ### Execution Gates
+
+Conditional gates are request-local and operate on free-form enqueue metadata or
+earlier phase results. See [`rust/examples/07_contextual_gates.rs`](rust/examples/07_contextual_gates.rs)
+for a complete metadata/result gate with adaptive Dynamic-PII timeouts.
 
 Use `execution_gates` to decide which levels and model/native scanner areas are active for subsequent scans. Unspecified gates stay enabled, and `max_level` remains the hard upper bound.
 
