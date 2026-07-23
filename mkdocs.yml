@@ -5,7 +5,9 @@ site_description: >-
 site_author: Patronus Protect
 repo_name: patronus-protect/patronus-security
 repo_url: https://github.com/patronus-protect/patronus-security
-edit_uri: edit/main/docs/
+# No edit_uri: this repository does not accept external contributions,
+# so pages intentionally omit an "edit this page" link.
+edit_uri: ""
 copyright: >-
   Copyright &copy; Patronus Protect / Casdo Labs GmbH —
   GPL-3.0-only or commercial license.
@@ -107,7 +109,7 @@ nav:
       - Python API: python-api.md
       - Rust API: rust-api.md
       - Assets: assets.md
-  - Contributing:
+  - Maintainers:
       - Development: contributing/development.md
       - Testing: contributing/testing.md
       - Releasing: contributing/releasing.md

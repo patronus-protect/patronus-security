@@ -26,15 +26,32 @@ for what each one classifies and which layers back it.
 | `l2` | You want learned classification but never the transformer cost. Great default for high-throughput paths. |
 | `l3` | You want maximum accuracy and can afford occasional transformer inference on promoted requests. |
 
-```python
-scanner = SecurityGateway(
-    categories=["injection", "threat"],
-    max_level="l2",          # learned classifiers, no L3
-    download_files=True,
-    download_categories=["injection", "threat"],
-)
-scanner.warmup()
-```
+=== "Python"
+
+    ```python
+    scanner = SecurityGateway(
+        categories=["injection", "threat"],
+        max_level="l2",          # learned classifiers, no L3
+        download_files=True,
+        download_categories=["injection", "threat"],
+    )
+    scanner.warmup()
+    ```
+
+=== "Rust"
+
+    ```rust
+    use patronus_ark::{SecurityCategory, SecurityGateway, SecurityLevel};
+
+    let mut scanner = SecurityGateway::with_download_categories(
+        vec![SecurityCategory::Injection, SecurityCategory::Threat],
+        SecurityLevel::L2,       // learned classifiers, no L3
+        None,
+        true,                    // download_files
+        Some(vec![SecurityCategory::Injection, SecurityCategory::Threat]),
+    );
+    scanner.warmup().expect("warmup");
+    ```
 
 ## Consider the offline implications
 
@@ -65,8 +82,20 @@ scanner = SecurityGateway(
 Use [execution gates](../reference/configuration.md#execution-gates) to disable a level or a
 specific detector below the ceiling, without rebuilding the gateway:
 
-```python
-scanner.set_execution_gates({"levels": {"l1": True, "l2": True, "l3": False}})
-# ... later ...
-scanner.set_execution_gates(None)   # reset to all enabled
-```
+=== "Python"
+
+    ```python
+    scanner.set_execution_gates({"levels": {"l1": True, "l2": True, "l3": False}})
+    # ... later ...
+    scanner.set_execution_gates(None)   # reset to all enabled
+    ```
+
+=== "Rust"
+
+    ```rust
+    use patronus_ark::ScanGateMatrix;
+
+    scanner.set_execution_gates(ScanGateMatrix::levels(true, true, false));
+    // ... later ...
+    scanner.set_execution_gates(ScanGateMatrix::all_enabled());   // reset
+    ```

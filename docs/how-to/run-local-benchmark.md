@@ -4,6 +4,11 @@
 own hardware, using the validation samples shipped with the package — no extra datasets,
 config, or environment variables.
 
+!!! note "Python only"
+    `run_local_benchmark` is a convenience of the Python package (it drives the queue and
+    aggregates reports for you). From Rust, drive the benchmark yourself via `enqueue`/
+    `consume_next_event`, or use the internal harnesses under `rust/dev/`.
+
 ## Run it
 
 ```python
@@ -41,7 +46,7 @@ you can inspect mispredictions:
 
 | File | Reports |
 | --- | --- |
-| `benign_result.json` | 100 benign prompts through the joint `scan_all` decision: class distribution, **false-positive rate**, latency. |
+| `benign_result.json` | 100 benign prompts through the joint scan decision: class distribution, **false-positive rate**, latency. |
 | `example_result.json` | One real queued sample with all pipelines active — every complete result exactly as returned by the consume queue (L2 and L3). |
 | `classifier_result.json` | Labelled validation samples per pipeline (up to 100/class): **accuracy, macro-F1**, class distribution, latency — measured L2-only and (at `l3`) with L3. |
 | `dynamic_pii_result.json` | Exact-span GLiNER NER precision/recall/F1, per-label and per-context. Runs in a fresh process so its peak RSS excludes other pipelines. |

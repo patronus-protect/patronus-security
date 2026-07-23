@@ -1,12 +1,14 @@
 # Result schema
 
-What `scan_all`, `scan_category`, `scan_categories`, and the async queue return. Python names
-are shown; the Rust types (`SecurityScanResult`, `LayerResult`, `EvaluationResult`,
-`QueuedSecurityEvent`, `SecurityFailure`) are in the [Rust API reference](../rust-api.md).
+What the async queue (`enqueue` + `consume_next_event`) and the blocking `scan_*` helpers
+return. Python names are shown; the Rust types (`SecurityScanResult`, `LayerResult`,
+`EvaluationResult`, `QueuedSecurityEvent`, `SecurityFailure`) are in the
+[Rust API reference](../rust-api.md).
 
 ## Scan result
 
-The synchronous scan methods return a **list of result dictionaries — one per category**:
+A single result — the `result` field of a queue `result` event, or one element of the list the
+blocking `scan_*` helpers return — is a **dictionary describing one category's verdict**:
 
 ```python
 [
@@ -16,7 +18,9 @@ The synchronous scan methods return a **list of result dictionaries — one per 
         "confidence": 1.0,
         "level": "L1",
         "model": "native:dlp",
+        "duration_ms": 0.4,
         "evidence_spans": [],
+        "label_scores": [],
         "layers": [
             {
                 "level": "L1",
@@ -24,6 +28,7 @@ The synchronous scan methods return a **list of result dictionaries — one per 
                 "class_name": "safe",
                 "confidence": 1.0,
                 "matched": True,
+                "duration_ms": 0.4,
                 "thresholds": {},
                 "details": {},
             }
@@ -39,7 +44,9 @@ The synchronous scan methods return a **list of result dictionaries — one per 
 | `confidence` | float | Confidence in `class_name`, `0.0`–`1.0`. |
 | `level` | str | The level that produced the winning verdict: `L1`, `L2`, or `L3`. |
 | `model` | str | The producing scanner, e.g. `native:dlp`, `external:<id>`, or a model id. |
+| `duration_ms` | float | Wall-clock time spent producing this result. |
 | `evidence_spans` | list | Exact matched spans (PII/DLP/dynamic-pii); empty for safe/model-only results. |
+| `label_scores` | list | Per-label scores for multi-label heads (e.g. `tool_tags`); each entry is `{label, confidence, matched}`. Empty for single-label results. |
 | `layers` | list | Per-layer breakdown of everything that ran for this category. |
 
 ### Layer entry
@@ -53,6 +60,7 @@ Each element of `layers` records one layer's output:
 | `class_name` | str | This layer's class. |
 | `confidence` | float | This layer's confidence. |
 | `matched` | bool | Whether this layer produced a positive match. |
+| `duration_ms` | float | Wall-clock time spent in this layer. |
 | `thresholds` | dict | Thresholds applied at this layer (operating point, etc.). |
 | `details` | dict | Layer-specific extra detail. |
 
@@ -63,11 +71,12 @@ offsets:
 
 ```python
 for span in result["evidence_spans"]:
-    print(span["label"], span["text"], span["start_byte"], span["end_byte"])
+    print(span["label"], span["text"], span["score"], span["start_byte"], span["end_byte"])
 ```
 
-Spans carry the matched `label`, the matched `text`, and both **byte** and **character**
-offsets. Safe native results leave `evidence_spans` empty.
+Each span carries the matched `label`, the matched `text`, a `score`, and both **byte** and
+**character** offsets (`start_byte`/`end_byte`/`start_char`/`end_char`). Safe native results
+leave `evidence_spans` empty.
 
 ## Async queue events
 
@@ -102,24 +111,32 @@ Exactly one terminal event follows all results for a request:
 {
     "event_type": "finished",
     "request_id": "…",
-    "completion": "…",     # how the request completed
+    "completion": "…",     # "complete" | "degraded" | "failed"
     "failures": [ … ],     # structured failures, if any
 }
 ```
 
-Consuming `finished` removes all library state for that request ID. Correlate every event by
-`request_id`.
+`completion` is one of `complete` (all planned work succeeded), `degraded` (some layer failed
+but a lower-layer result was delivered), or `failed` (no usable result). Consuming `finished`
+removes all library state for that request ID. Correlate every event by `request_id`.
 
 ### Failures
 
-`failures` entries are structured (`SecurityFailure`) with a **stage** and a **kind**:
+Each `failures` entry is a structured `SecurityFailure` dict:
 
-- **Stage:** `warmup`, `asset`, `scanner`, `inference`, `queue`, `worker`.
-- **Kind:** `not_ready`, `missing_asset`, `integrity_failure`, `initialization_failure`,
-  `inference_failure`, `timeout`, `worker_unavailable`, `internal`.
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `stage` | str | `warmup`, `asset`, `scanner`, `inference`, `queue`, or `worker`. |
+| `kind` | str | `not_ready`, `missing_asset`, `integrity_failure`, `initialization_failure`, `inference_failure`, `timeout`, `worker_unavailable`, or `internal`. |
+| `level` | str \| null | The level that failed (`L1`/`L2`/`L3`), if applicable. |
+| `detector_id` | str \| null | The specific detector or model that failed, if applicable. |
+| `retryable` | bool | Whether the failure is transient and could succeed on retry. |
+| `message` | str | Human-readable description. |
 
-A failure does not throw — the scan [degrades](../concepts/layered-scanning.md#degradation-contract)
-to the best available lower-layer result and reports the failure here.
+A failure does not throw during scanning — the scan
+[degrades](../concepts/layered-scanning.md#degradation-contract) to the best available
+lower-layer result and reports the failure here. (`warmup()` itself is the exception: a missing
+required asset there raises rather than degrades.)
 
 ## Request introspection
 

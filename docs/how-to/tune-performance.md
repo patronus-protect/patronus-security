@@ -5,6 +5,19 @@ levers, see [Performance & memory](../concepts/performance.md).
 
 Always [measure on your own hardware](run-local-benchmark.md) before and after each change.
 
+!!! note "Both APIs expose the same knobs"
+    The examples below are shown in Python. The Rust gateway has the identical setters —
+    `set_l3_strategy`, `set_execution_backend`, `set_ntdb_operating_point`,
+    `set_onnx_batch_mode`, `set_execution_gates` — the only difference is that Rust takes typed
+    enums (`L3Strategy::Multi`, `ExecutionBackend::CoreMl`, …) where Python takes the equivalent
+    strings. For example:
+
+    ```rust
+    use patronus_ark::{ExecutionBackend, L3Strategy};
+    scanner.set_l3_strategy(L3Strategy::Multi);
+    scanner.set_execution_backend(ExecutionBackend::CoreMl);
+    ```
+
 ## Cap escalation
 
 The cheapest lever is not running L3. If you don't need transformer-grade accuracy on a path,
@@ -73,7 +86,7 @@ scanner.set_onnx_batch_mode("tensor_batch")   # vs. "lazy_batches"
 
 ## Manage L3 session lifetime
 
-L3 sessions load lazily and evict after an idle TTL. Raise it for bursty traffic to avoid
+L3 sessions are held resident in RAM and evict after an idle TTL. Raise it for bursty traffic to avoid
 reload cost, or lower it to reclaim memory sooner:
 
 ```bash

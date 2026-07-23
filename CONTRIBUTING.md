@@ -20,7 +20,7 @@ maturin develop --manifest-path python/Cargo.toml
 
 ## Checks
 
-Run these before opening a pull request (they mirror CI):
+Run these before pushing (they mirror CI):
 
 ```bash
 cargo fmt --check
@@ -29,7 +29,8 @@ cargo test -p patronus-ark
 ```
 
 If you changed the public API or the asset manifest, regenerate the reference docs and commit
-the result (CI checks it is current):
+the result (the release pipeline verifies this with `generate_docs.py --check`; regular CI
+does not):
 
 ```bash
 python scripts/generate_docs.py

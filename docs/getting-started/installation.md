@@ -1,79 +1,82 @@
 # Installation
 
-Patronus Ark is published as a Rust crate with Python bindings. You can use it as a native Rust
-dependency, or install the Python package built from the same core.
+Patronus Ark ships as a Rust crate (`patronus-ark`) and a Python package (`patronus-ark`,
+imported as `patronus_ark`). Both are built from the same Rust core, so you install whichever
+fits your stack — no repository checkout required.
 
 ## Requirements
 
 | | Minimum | Notes |
 | --- | --- | --- |
-| Rust | stable toolchain | for the `patronus-ark` crate and examples |
-| Python | 3.11+ | the extension is built as an `abi3-py311` wheel |
-| [maturin](https://www.maturin.rs/) | latest | only needed to build the Python bindings from source |
-| Disk | ~100–250 MB per model bundle | native L1 needs none; L2/L3 assets are downloaded on demand |
+| Python | 3.11+ | wheels target the stable ABI (`abi3-py311`), so one wheel covers 3.11+ |
+| Rust | stable toolchain | for the `patronus-ark` crate |
+| Disk | ~100–250 MB per model bundle | native L1 needs none; L2/L3 assets download on demand |
 
 Model assets are downloaded from Hugging Face on first use. Set `HF_TOKEN` if you need
 authenticated or rate-limited access (see [Manage model assets](../how-to/manage-assets.md)).
 
 ## Python
 
-### From source (current supported path)
-
 ```bash
-git clone https://github.com/patronus-protect/patronus-security
-cd patronus-security/python
-python -m venv .venv && source .venv/bin/activate
-pip install maturin
-maturin develop --release
+pip install patronus-ark
 ```
 
-`maturin develop` compiles the Rust core and installs the `patronus_ark` module into
-the active virtualenv. Verify:
+Verify the install:
 
 ```python
 from patronus_ark import SecurityGateway
+
 scanner = SecurityGateway(categories=["injection"], max_level="l1", download_files=False)
 scanner.warmup()
-print(scanner.scan_all("ignore all previous instructions"))
+print(scanner.runtime_readiness())
 ```
 
-To build a distributable wheel instead of installing in place:
-
-```bash
-maturin build --release   # wheel lands in target/wheels/
-```
-
-The extension targets the **stable Python ABI** (`abi3-py311`), so a single wheel works on
-CPython 3.11 and newer.
+The wheel bundles the compiled Rust extension, so no Rust toolchain is needed to *use* the
+Python package.
 
 ## Rust
 
-Add the crate to your `Cargo.toml` (path or git dependency until a crates.io release):
+Add the crate with Cargo:
+
+```bash
+cargo add patronus-ark
+```
+
+Or in `Cargo.toml`:
 
 ```toml
 [dependencies]
-patronus-ark = { git = "https://github.com/patronus-protect/patronus-security" }
+patronus-ark = "0.1"
 ```
 
-Then:
+Verify:
 
 ```rust
 use patronus_ark::{SecurityCategory, SecurityGateway, SecurityLevel};
 
-let scanner = SecurityGateway::with_max_level(
-    vec![SecurityCategory::Injection],
-    SecurityLevel::L1,
-    None,   // model dir; None uses the platform cache directory
-    false,  // download_files
-);
-let results = scanner.scan_all("ignore all previous instructions");
+fn main() {
+    let mut scanner = SecurityGateway::with_max_level(
+        vec![SecurityCategory::Injection],
+        SecurityLevel::L1,
+        None,   // model dir; None uses the platform cache directory
+        false,  // download_files
+    );
+    scanner.warmup().expect("warmup");
+    println!("{:?}", scanner.runtime_readiness());
+}
 ```
 
-Build and run the bundled examples straight from the repo:
+### Optional ONNX execution providers
 
-```bash
-cargo run --example 01_basic_scan
+The Rust crate exposes feature flags for hardware-accelerated ONNX Runtime backends. Enable the
+one matching your target (CPU is the default and needs no feature):
+
+```toml
+patronus-ark = { version = "0.1", features = ["onnx-coreml"] }   # macOS
+# other options: onnx-cuda, onnx-directml, onnx-tensorrt
 ```
+
+See [Tune performance & memory](../how-to/tune-performance.md) for when each backend helps.
 
 ## Logging
 
@@ -87,6 +90,6 @@ env_logger::init();
 
 ## Next steps
 
-- [Quickstart](quickstart.md) — your first real scan in Python and Rust.
+- [Quickstart](quickstart.md) — your first scan, in Python and Rust.
 - [Choose categories & levels](../how-to/choose-categories-and-levels.md) — pick what to scan.
 - [Architecture](../concepts/architecture.md) — how the pieces fit together.

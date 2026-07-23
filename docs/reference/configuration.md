@@ -8,18 +8,24 @@ generated [Python API](../python-api.md) and [Rust API](../rust-api.md); for con
 
 Set at gateway construction:
 
-| Option | Type | Meaning |
-| --- | --- | --- |
-| `categories` | list of category names | Which [categories](../concepts/categories.md) to scan. |
-| `max_level` | `"l1"` \| `"l2"` \| `"l3"` | Hard ceiling on escalation. |
-| `download_files` | bool | Whether missing assets may be downloaded on warmup. |
-| `download_categories` | list | Restrict automatic downloads to these categories. |
-| `model_dir` | path | Custom asset cache location (default: platform cache dir). |
-| `l3_strategy` | `"dedicated"` \| `"multi"` | One model per category, or one coalesced multi-head model. |
-| `execution_gates` | dict / matrix | Initial [execution gates](#execution-gates). |
-| `dynamic_pii_config` | dict | Configuration for the [`dynamic-pii`](#dynamic-pii) pipeline. |
+| Option | Type | Meaning | Rust |
+| --- | --- | --- | --- |
+| `categories` | list of category names | Which [categories](../concepts/categories.md) to scan. | constructor |
+| `max_level` | `"l1"` \| `"l2"` \| `"l3"` | Hard ceiling on escalation. | constructor |
+| `download_files` | bool | Whether missing assets may be downloaded on warmup. | constructor |
+| `download_categories` | list | Restrict automatic downloads to these categories. | constructor |
+| `model_dir` | path | Custom asset cache location (default: platform cache dir). | constructor |
+| `l3_strategy` | `"dedicated"` \| `"multi"` | One model per category, or one coalesced multi-head model. | setter |
+| `execution_gates` | dict / matrix | Initial [execution gates](#execution-gates). | setter |
+| `dynamic_pii_config` | dict | Configuration for the [`dynamic-pii`](#dynamic-pii) pipeline. | setter |
+| `execution_backend` | str | ONNX [execution backend](#execution-backend) (default `"auto"`). | setter |
+| `onnx_batch_mode` | str | [ONNX batch mode](#onnx-batch-mode); default `"backend_default"` follows whatever the backend implies. | setter |
 
-Rust exposes the same via `with_max_level(...)` and `with_download_categories(...)`.
+In Python, all of these are keyword arguments to `SecurityGateway(...)`. In Rust, the
+constructors `with_max_level(...)` and `with_download_categories(...)` accept only the first
+five (marked *constructor* above); every other option is applied after construction with its
+setter (`set_l3_strategy`, `set_execution_gates`, `set_dynamic_pii_config`,
+`set_execution_backend`, `set_onnx_batch_mode`).
 
 ## Runtime setters
 
@@ -59,6 +65,7 @@ scanner.set_execution_gates({
 - `levels` — per-level on/off (`l1`, `l2`, `l3`).
 - `models` — per-detector on/off, keyed by public model name: `native:<name>` for native
   detectors, `external:<id>` for [external L1 detectors](../how-to/external-l1-signals.md).
+- `conditional` — conditional gates (see [below](#conditional-gates)).
 - `l3` — optional worker policy (see [below](#l3-worker-policy)).
 
 Per-request gates passed to `enqueue()` are **snapshotted** at enqueue time and do not change
@@ -79,20 +86,46 @@ bootstrap values; the worker updates them with an EWMA of observed execution tim
 ```python
 execution_gates = {
     "l3": {
+        "enabled": True,                # master switch for the L3 worker policy
         "priority": ["injection", "dynamic-pii"],
         "estimated_cost_ms": {"injection": 200, "dynamic-pii": 240},
         "fairness_quantum_ms": 50,
         "max_wait_ms": 2_000,
+        "degraded_factor": 0.75,        # confidence multiplier applied to degraded fallbacks
         "ttl_ms": {"injection": 15_000, "dynamic-pii": 12_000},
     }
 }
 ```
 
+### Conditional gates
+
+Beyond flat on/off gates, `conditional` gates suppress L2 or L3 work for a pipeline unless a
+predicate holds. The predicate (`when`) is evaluated against caller-supplied request
+`metadata` (arbitrary JSON passed to `enqueue`) and the results of pipelines that already ran
+earlier in the same request. This lets you, for example, run the expensive `dynamic-pii` L3
+pass **only** when `injection` flagged the text.
+
+```python
+scanner.set_execution_gates({
+    "conditional": [
+        {
+            "level": "l3",
+            "pipeline": "dynamic-pii",
+            "when": {"result": {"pipeline": "injection", "classes": ["attack"], "min_confidence": 0.8}},
+        }
+    ]
+})
+```
+
+Predicate forms: `all` / `any` / `not` (combinators), `metadata` (`{path, equals|in|exists}`),
+and `result` (`{pipeline, classes, min_confidence}`). A runnable example is
+[`rust/examples/07_contextual_gates.rs`](https://github.com/patronus-protect/patronus-security/blob/main/rust/examples/07_contextual_gates.rs).
+
 ## L3 strategy
 
 | Value | Behavior |
 | --- | --- |
-| `dedicated` | One transformer per category (Wolf Defender, Orca Sonar, Husky, …). Best per-category tuning. |
+| `dedicated` *(default)* | One transformer per category (Wolf Defender, Orca Sonar, Husky, …). Best per-category tuning. |
 | `multi` | One coalesced multi-head model (Lion Warden) serves several categories per inference. Best throughput when several model-backed categories are active. |
 
 See [Models & the NTDB format](../concepts/models-and-ntdb.md#dedicated-vs-unified-l3).
@@ -104,7 +137,7 @@ Selects the precomputed L2 threshold profile:
 | Value | Optimizes |
 | --- | --- |
 | `best_f1` | Balanced F1. |
-| `best_promote` | Quality of what L2 promotes to L3. |
+| `best_promote` *(default)* | Quality of what L2 promotes to L3. |
 | `best_fpr_in_f1` | Low false-positive rate within an F1 band. |
 | `best_fnr_in_f1` | Low false-negative rate within an F1 band. |
 | `best_latency_in_f1` | Lowest latency within an F1 band. |

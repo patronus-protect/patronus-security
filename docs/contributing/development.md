@@ -13,7 +13,7 @@ for how the code is organized.
 
 ```bash
 git clone https://github.com/patronus-protect/patronus-security
-cd patronus-security
+cd patronus-ark
 
 python -m venv .venv
 .venv/bin/python -m pip install maturin
@@ -47,7 +47,8 @@ Re-run it after changing Rust code that the Python bindings touch.
    ```bash
    python scripts/generate_docs.py
    ```
-   CI checks these are up to date (`generate_docs.py --check`).
+   The release pipeline verifies these are current (`generate_docs.py --check` in
+   `release.yml`); the regular push/PR CI does not, so regenerate and commit them yourself.
 4. Run all [checks](testing.md#pre-release-checks) before merging.
 
 ## Change expectations

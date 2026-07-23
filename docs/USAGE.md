@@ -36,8 +36,8 @@ request waiting on L3. Correlate each event by `request_id`; exactly one termina
 
 With `max_level = L3`, an NTDB L2 classifier can promote a scan to the full ONNX
 transformer. The queue first publishes the L2 fallback result, then the final L3
-result — both under the same `request_id`. L3 sessions are lazily created on the
-first promoted scan and evicted after the idle TTL (`PATRONUS_L3_TTL_SECS`).
+result — both under the same `request_id`. Configured L3 models are held resident
+in RAM and evicted only after the idle TTL (`PATRONUS_L3_TTL_SECS`).
 
 ## 04 — Execution gates
 
@@ -57,6 +57,6 @@ and the [dynamic PII configuration](reference/configuration.md#dynamic-pii).
 
 The same cache-unique text promotes both Injection and Sensitive Document to
 L3. Dedicated executes two L3 models; Multi returns both logical head results
-from one shared `physical_job_id`. Each strategy runs in a fresh process, lazy
-ONNX session creation happens before timing, and the example prints median and
+from one shared `physical_job_id`. Each strategy runs in a fresh process, L3
+sessions are materialized before timing, and the example prints median and
 mean end-to-end latency plus the measured speedup.

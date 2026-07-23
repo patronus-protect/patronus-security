@@ -9,15 +9,29 @@ optional downloads. For the generated inventory (sizes, exact paths), see the
 By default, assets are stored under the platform cache directory in `patronus_ark/`.
 Override the location with `model_dir` (Python) / the model-dir argument (Rust):
 
-```python
-scanner = SecurityGateway(
-    categories=["injection"],
-    max_level="l3",
-    model_dir="/opt/patronus-ark-assets",
-    download_files=True,
-    download_categories=["injection"],
-)
-```
+=== "Python"
+
+    ```python
+    scanner = SecurityGateway(
+        categories=["injection"],
+        max_level="l3",
+        model_dir="/opt/patronus-ark-assets",
+        download_files=True,
+        download_categories=["injection"],
+    )
+    ```
+
+=== "Rust"
+
+    ```rust
+    let scanner = SecurityGateway::with_download_categories(
+        vec![SecurityCategory::Injection],
+        SecurityLevel::L3,
+        Some("/opt/patronus-ark-assets".into()),   // model_dir
+        true,                                       // download_files
+        Some(vec![SecurityCategory::Injection]),
+    );
+    ```
 
 A custom `model_dir` is convenient for shipping a pre-populated cache to another machine
 (see [Offline & air-gapped](offline-airgapped.md)).

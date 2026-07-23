@@ -29,7 +29,8 @@ promotion rate — see [`ntdb_operating_point`](../reference/configuration.md#nt
 ### L3 — full ONNX transformers
 
 Full transformer models (ModernBERT / mmBERT family), exported to ONNX and quantized. They
-are the most accurate and the most expensive, so they are **lazily loaded** and executed by a
+are the most accurate and the most expensive. Which L3 models a gateway holds is fixed by
+configuration; they are kept **resident in RAM** (idle-TTL evicted) and executed by a
 **background worker**, not on the request path. L3 answers in **tens of milliseconds** and
 makes the final call for cases L2 could not resolve confidently.
 

@@ -26,7 +26,7 @@ flowchart TB
         PIPE --> L1["L1 · native detectors<br/>(injection / dlp / pii / mcp)"]
         PIPE --> L2["L2 · NTDB executor<br/>(shared static encoder + ONNX heads)"]
         PIPE -.promote.-> WORKER["L3 background worker<br/>(cost-scheduled queue)"]
-        WORKER --> L3["L3 · full ONNX transformers<br/>(lazy sessions)"]
+        WORKER --> L3["L3 · full ONNX transformers<br/>(RAM-resident, TTL-evicted)"]
         GW --> ASSETS["Asset manager<br/>(download · verify · cache)"]
         L2 --> ASSETS
         L3 --> ASSETS
@@ -50,8 +50,8 @@ The orchestrator and the only public entry point. It:
 - builds one **pipeline per category**;
 - owns the **request registry** that tracks which scanners and promoted L3 jobs may still
   publish an event for a given request ID;
-- exposes both a **synchronous** API (`scan_all`, `scan_category`, `scan_categories`) and an
-  **asynchronous** API (`enqueue` + `consume_next_event`).
+- exposes the primary **asynchronous** API (`enqueue` + `consume_next_event`) and, as a
+  convenience for one-off scripts, blocking helpers (`scan_all`, `scan_category`).
 
 Construction is layered so you can separate a network-capable *asset-sync* phase from a
 strictly-local *runtime-start* phase — see [Asset & runtime lifecycle](#asset-and-runtime-lifecycle).
@@ -69,10 +69,12 @@ See [Categories](categories.md) for the per-category layer map.
 | --- | --- | --- | --- |
 | **L1** | Native Rust detectors in `detectors/` and `threat/` | always | microseconds |
 | **L2** | NTDB model packages executed by a shared static-embedding encoder | on warmup (if cached) | milliseconds |
-| **L3** | Full ONNX transformer sessions | lazily, on first promotion | tens of milliseconds |
+| **L3** | Full ONNX transformer sessions | RAM-resident per config, idle-TTL evicted | tens of milliseconds |
 
-L1 and L2 run inline on the gateway worker. L3 runs in a **separate background worker** so a
-heavy transformer never blocks a fast L1/L2 answer. Detailed escalation logic lives in
+L1 and L2 run on a **pool of gateway workers** (up to 4 threads, sized to available cores). L3
+runs in a **single separate background worker** so a heavy transformer never blocks a fast
+L1/L2 answer — and because that worker processes one L3 job at a time, its fair scheduler (below)
+decides ordering across categories. Detailed escalation logic lives in
 [Layered scanning](layered-scanning.md); the model formats live in
 [Models & the NTDB format](models-and-ntdb.md).
 
@@ -95,10 +97,11 @@ and [Performance](performance.md).
 
 ### The shared result queue
 
-All results — synchronous or asynchronous, L1/L2 or L3 — are published to one shared queue
-keyed by `request_id`. This is what lets a ready L2 result for request B overtake request A
-that is still waiting for L3. In the async API you drain this queue with
-`consume_next_event()`; in the sync API the gateway drains it for you.
+All results — L1/L2 or L3 — are published to one shared queue keyed by `request_id`. This is
+what lets a ready L2 result for request B overtake request A that is still waiting for L3. You
+drain this queue with `consume_next_event()`, which you should run on its own thread so it
+never blocks your producer from calling `enqueue`. (The blocking `scan_*` helpers drain the
+queue for you internally, which is why they only suit single-shot scripts.)
 
 ### The asset manager
 
@@ -111,7 +114,8 @@ on-disk form once. See [Manage model assets](../how-to/manage-assets.md) and
 
 ## How a scan flows
 
-A synchronous `scan_all(text)` for a category that supports all three layers:
+An `enqueue(text)` for a category that supports all three layers. The app enqueues on one
+thread and consumes on another:
 
 ```mermaid
 sequenceDiagram
@@ -122,20 +126,20 @@ sequenceDiagram
     participant W as L3 worker
     participant Q as Result queue
 
-    App->>GW: scan_all(text)
+    App->>GW: enqueue(text) → request_id
     GW->>L1: native detectors
     L1-->>GW: L1 verdict
     GW->>L2: NTDB classifiers (if assets ready)
     L2-->>GW: L2 verdict (+ promote?)
     alt L2 promotes to L3
-        GW->>Q: publish L2 fallback
+        GW->>Q: publish L2 fallback (result event)
         GW->>W: enqueue L3 job
         W->>W: schedule by cost, window long text
-        W-->>Q: publish final L3 result
+        W-->>Q: publish final L3 result event
     else no promotion
-        GW->>Q: publish L2 result
+        GW->>Q: publish L2 result event
     end
-    Q-->>App: combined result(s)
+    Q-->>App: consume_next_event() → result / finished
 ```
 
 ## Asset and runtime lifecycle

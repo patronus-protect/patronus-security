@@ -18,7 +18,7 @@ The full documentation lives in [`docs/`](docs/) and is organized with the
 | 🔧 **How-to guides** | [Offline scanning](docs/how-to/offline-airgapped.md) · [Choose categories & levels](docs/how-to/choose-categories-and-levels.md) · [Manage assets](docs/how-to/manage-assets.md) · [Tune performance](docs/how-to/tune-performance.md) · [Run the benchmark](docs/how-to/run-local-benchmark.md) · [External L1 signals](docs/how-to/external-l1-signals.md) |
 | 💡 **Concepts** | [Architecture](docs/concepts/architecture.md) · [Layered scanning](docs/concepts/layered-scanning.md) · [Categories](docs/concepts/categories.md) · [Detectors](docs/concepts/detectors.md) · [Models & NTDB](docs/concepts/models-and-ntdb.md) · [Threat model](docs/concepts/threat-model.md) · [Performance](docs/concepts/performance.md) |
 | 📖 **Reference** | [Configuration](docs/reference/configuration.md) · [Result schema](docs/reference/result-schema.md) · [Python API](docs/python-api.md) · [Rust API](docs/rust-api.md) · [Assets](docs/assets.md) |
-| 👥 **Contributing** | [Development](docs/contributing/development.md) · [Testing](docs/contributing/testing.md) · [Releasing](docs/contributing/releasing.md) |
+| 👥 **Maintainers** (no external contributions) | [Development](docs/contributing/development.md) · [Testing](docs/contributing/testing.md) · [Releasing](docs/contributing/releasing.md) |
 
 ### Preview the docs locally
 
@@ -56,7 +56,7 @@ python python/examples/01_basic_scan.py
 Each category runs up to three layers:
 
 - **L1** — native rule-based detectors. No model assets, always available.
-- **L2** — NTDB model packages. NTDB is the Patronus export format for lightweight text classifiers: a static token-embedding encoder plus ONNX heads and aggregators, packaged with a `manifest.json` (`format: ntdb_model_package`). All L2 packages share one encoder per process and execute in a common Rust executor.
+- **L2** — NTDB (**Non Transformer Decision Block**) model packages. An NTDB is a small network architecture that bundles several non-transformer classifiers: a static token-embedding encoder, one or more lightweight heads (gradient-boosted trees, logistic regression, centroid-cosine, text-CNN), a trained aggregator that fuses their outputs into the L2 verdict, and a trained promote-router that decides when a case needs L3 at all — so most traffic never reaches a transformer. Packaged with a `manifest.json` (`format: ntdb_model_package`). All L2 packages share one encoder per process and execute in a common Rust executor.
 - **L3** — full ONNX transformer models, lazily loaded and executed by a background worker. When L2 promotes a scan to L3, the shared result queue first publishes the L2 fallback and later the final L3 result. The L3-only `dynamic-pii` pipeline enqueues directly and publishes only its completed entity result. The worker schedules pipeline workloads by estimated and observed compute cost, applies a maximum-wait guard against starvation, and splits long texts into tokenizer-bounded windows with token overlap. L3 errors and timeouts degrade back to the L2 result where a fallback exists.
 
 For supported Granite L2 packages, asset preparation converts the downloaded HuggingFace `tokenizer.json` once into a compact `tokenizer.kit` in the shared encoder cache. The source JSON remains canonical and is used automatically if conversion, validation, or compact loading fails. Source/content hashes and converter versions invalidate stale generated files; local model overrides are never rewritten.

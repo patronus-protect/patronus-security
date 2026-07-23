@@ -40,11 +40,14 @@ Tokenizers are converted once into a compact on-disk form (`.kit` for Granite/Mo
 `.mmbpe` for Wolf/mmBERT) in the shared cache, with the source JSON kept as canonical
 fallback. This reduces load time and memory.
 
-### Lazy L3 sessions with idle eviction
+### L3 sessions: built on first use, then RAM-resident
 
-An L3 ONNX session is created only when a scan first reaches L3, and evicted only after a long
-idle TTL (`PATRONUS_L3_TTL_SECS`, default 300 s). Models are never hot-swapped per request, so
-you do not pay repeated load/unload costs under steady traffic.
+An L3 ONNX session is built the first time a scan reaches that model, then held **resident in
+RAM** and evicted only after a long idle TTL (`PATRONUS_L3_TTL_SECS`, default 300 s). Models are
+never hot-swapped per request, so you do not pay repeated load/unload costs under steady
+traffic — but budget memory for the L3 models your configuration enables, since a hot model
+stays resident. (The one exception is `dynamic-pii`: its GLiNER session is warmed eagerly during
+`warmup()`, before any request, then follows the same idle-TTL eviction.)
 
 ### Cost-scheduled worker
 
