@@ -2,8 +2,10 @@
 mod conditional_gate;
 mod decision_cache;
 mod generic;
+mod l3_engine;
 mod l3_result;
 mod l3_routing;
+mod l3_schedule;
 mod l3_worker;
 mod long_text;
 mod security;
@@ -31,7 +33,8 @@ pub mod test_util {
     pub use super::l3_worker::{
         aggregate_unified_head_for_test, public_unified_class_for_test,
         replace_unified_pending_layer_for_test, selected_l3_chunks_for_test,
-        unified_coalescing_snapshot, UnifiedCoalescingSnapshot,
+        unified_coalescing_snapshot, unified_metadata_details_for_test,
+        unified_outputs_have_same_classes_for_heads_for_test, UnifiedCoalescingSnapshot,
     };
     pub use super::long_text::{aggregate_chunk_outputs, candidate_selection, l3_metadata};
     pub use super::security::{

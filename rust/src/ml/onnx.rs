@@ -37,6 +37,7 @@ pub struct LazyOnnxTextClassifier {
     dir: PathBuf,
     class_names: Vec<String>,
     model_name: String,
+    model_sha: Option<String>,
     onnx_candidates: Vec<String>,
     tokenizer_path: String,
     max_len: usize,
@@ -44,6 +45,11 @@ pub struct LazyOnnxTextClassifier {
     loaded: Option<OnnxTextClassifier>,
     loaded_backend: Option<ExecutionBackend>,
     last_used: Option<Instant>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct RawClassifierOutput {
+    pub(crate) logits: Vec<f32>,
 }
 
 impl LazyOnnxTextClassifier {
@@ -70,6 +76,46 @@ impl LazyOnnxTextClassifier {
         tokenizer_path: &str,
         max_len: usize,
     ) -> Result<Option<Self>, Box<dyn std::error::Error>> {
+        Self::from_dir_with_paths_and_sha(
+            dir,
+            class_names,
+            model_name,
+            onnx_candidates,
+            tokenizer_path,
+            max_len,
+            None,
+        )
+    }
+
+    pub(crate) fn from_dir_with_paths_at_sha<P: AsRef<Path>>(
+        dir: P,
+        class_names: Vec<String>,
+        model_name: impl Into<String>,
+        onnx_candidates: &[&str],
+        tokenizer_path: &str,
+        max_len: usize,
+        model_sha: &str,
+    ) -> Result<Option<Self>, Box<dyn std::error::Error>> {
+        Self::from_dir_with_paths_and_sha(
+            dir,
+            class_names,
+            model_name,
+            onnx_candidates,
+            tokenizer_path,
+            max_len,
+            Some(model_sha.to_string()),
+        )
+    }
+
+    fn from_dir_with_paths_and_sha<P: AsRef<Path>>(
+        dir: P,
+        class_names: Vec<String>,
+        model_name: impl Into<String>,
+        onnx_candidates: &[&str],
+        tokenizer_path: &str,
+        max_len: usize,
+        model_sha: Option<String>,
+    ) -> Result<Option<Self>, Box<dyn std::error::Error>> {
         let dir = dir.as_ref();
         let tokenizer_file = dir.join(tokenizer_path);
         if !tokenizer_file.exists() {
@@ -88,6 +134,7 @@ impl LazyOnnxTextClassifier {
             dir: dir.to_path_buf(),
             class_names,
             model_name: model_name.into(),
+            model_sha,
             onnx_candidates: onnx_candidates
                 .iter()
                 .map(|candidate| candidate.to_string())
@@ -127,11 +174,29 @@ impl LazyOnnxTextClassifier {
         Ok(results)
     }
 
+    pub(crate) fn infer_raw(
+        &mut self,
+        text: &str,
+        backend: ExecutionBackend,
+    ) -> Result<RawClassifierOutput, Box<dyn std::error::Error>> {
+        self.evict_expired();
+        self.ensure_loaded(backend)?;
+        let model = self.loaded.as_mut().ok_or("L3 ONNX model is not loaded")?;
+        let result = model.infer_raw(text)?;
+        self.last_used = Some(Instant::now());
+        Ok(result)
+    }
+
+    pub(crate) fn decode_raw(&self, output: &RawClassifierOutput) -> EvaluationResult {
+        result_from_logits(&output.logits, &self.class_names)
+    }
+
     pub fn metadata_clone(&self) -> Self {
         Self {
             dir: self.dir.clone(),
             class_names: self.class_names.clone(),
             model_name: self.model_name.clone(),
+            model_sha: self.model_sha.clone(),
             onnx_candidates: self.onnx_candidates.clone(),
             tokenizer_path: self.tokenizer_path.clone(),
             max_len: self.max_len,
@@ -142,22 +207,8 @@ impl LazyOnnxTextClassifier {
         }
     }
 
-    pub(crate) fn cache_namespace(
-        &mut self,
-        backend: ExecutionBackend,
-    ) -> Result<String, Box<dyn std::error::Error>> {
-        self.evict_expired();
-        self.ensure_loaded(backend)?;
-        let model = self.loaded.as_ref().ok_or("L3 ONNX model is not loaded")?;
-        Ok(format!(
-            "l3:{}:{}:{}:{}:max_len={}:tokenizer={}",
-            model.model_name(),
-            model.model_path().display(),
-            model.precision(),
-            model.execution_provider(),
-            self.max_len,
-            self.dir.join(&self.tokenizer_path).display()
-        ))
+    pub(crate) fn model_sha(&self) -> Option<&str> {
+        self.model_sha.as_deref()
     }
 
     pub(crate) fn token_chunks(
@@ -345,6 +396,23 @@ impl OnnxTextClassifier {
         &mut self,
         texts: &[String],
     ) -> Result<Vec<EvaluationResult>, Box<dyn std::error::Error>> {
+        Ok(self
+            .infer_batch_raw(texts)?
+            .iter()
+            .map(|output| result_from_logits(&output.logits, &self.class_names))
+            .collect())
+    }
+
+    fn infer_raw(&mut self, text: &str) -> Result<RawClassifierOutput, Box<dyn std::error::Error>> {
+        self.infer_batch_raw(&[text.to_string()])?
+            .pop()
+            .ok_or_else(|| "ONNX batch returned no raw output".into())
+    }
+
+    fn infer_batch_raw(
+        &mut self,
+        texts: &[String],
+    ) -> Result<Vec<RawClassifierOutput>, Box<dyn std::error::Error>> {
         if texts.is_empty() {
             return Ok(Vec::new());
         }
@@ -389,10 +457,9 @@ impl OnnxTextClassifier {
             let outputs = self.session.run(inputs)?;
             first_logits_batch(&outputs, self.class_names.len(), batch_size)?
         };
-        let class_names = self.class_names.clone();
         Ok(logits
-            .iter()
-            .map(|row| result_from_logits(row, &class_names))
+            .into_iter()
+            .map(|logits| RawClassifierOutput { logits })
             .collect())
     }
 

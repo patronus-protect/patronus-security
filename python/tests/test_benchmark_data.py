@@ -279,6 +279,145 @@ class BenchmarkDataTests(unittest.TestCase):
         self.assertEqual(request["l3_execution_ms"], [4.0])
         self.assertEqual(request["l3_queue_wait_ms"], [1.0])
 
+    def test_load_does_not_count_l3_pending_as_execution(self):
+        request = benchmark._new_load_request(0, "request-1", 0.0, 0.0)
+        benchmark._record_load_result_metrics(
+            request,
+            {
+                "layers": [
+                    {
+                        "level": "L3",
+                        "layer_type": "l3_pending",
+                        "duration_ms": 0.0,
+                        "details": {"queued": True},
+                    }
+                ]
+            },
+        )
+
+        self.assertEqual(request["l3_execution_ms"], [])
+        self.assertEqual(request["l3_chunks"], [])
+        self.assertEqual(request["l3_timeouts"], 0)
+
+    def test_load_records_l3_timeout_separately_from_execution(self):
+        request = benchmark._new_load_request(0, "request-1", 0.0, 0.0)
+        benchmark._record_load_result_metrics(
+            request,
+            {
+                "layers": [
+                    {
+                        "level": "L3",
+                        "layer_type": "degraded_timeout",
+                        "duration_ms": 0.0,
+                        "details": {"queued_ms": 42.0},
+                    }
+                ]
+            },
+        )
+
+        self.assertEqual(request["l3_execution_ms"], [])
+        self.assertEqual(request["l3_queue_wait_ms"], [42.0])
+        self.assertEqual(request["l3_timeouts"], 1)
+
+    def test_load_records_l3_early_exit_and_clustering_diagnostics(self):
+        class FakeGateway:
+            max_level = "l3"
+
+            def __init__(self):
+                self.next_id = 0
+                self.ready = []
+
+            def enqueue(self, _text):
+                self.next_id += 1
+                request_id = f"request-{self.next_id}"
+                self.ready.extend(
+                    [
+                        {
+                            "event_type": "result",
+                            "request_id": request_id,
+                            "result": {
+                                "request_id": request_id,
+                                "level": "L3",
+                                "layers": [
+                                    {
+                                        "level": "L3",
+                                        "layer_type": "onnx",
+                                        "duration_ms": 3.0,
+                                        "details": {
+                                            "chunk_count": 9,
+                                            "early_exit": True,
+                                            "inferred_chunks": 4,
+                                            "propagated_chunks": 3,
+                                            "planned_l3_chunks": 8,
+                                            "resolved_chunks": 5,
+                                            "total_effective_chunks": 9,
+                                            "cache_hits": 1,
+                                            "l3_clustering_strategy": "representative",
+                                        },
+                                    }
+                                ],
+                            },
+                        },
+                        {
+                            "event_type": "finished",
+                            "request_id": request_id,
+                            "completion": "complete",
+                        },
+                    ]
+                )
+                return request_id
+
+            def consume_next_event(self, timeout=None):
+                return self.ready.pop(0) if self.ready else None
+
+        with patch.object(benchmark, "_load_scenario_texts", return_value={"load": ["text"]}):
+            result = benchmark._run_load(FakeGateway(), requests_per_scenario=1)
+
+        stats = result["scenarios"]["load"]
+        self.assertEqual(stats["l3_early_exits"], 1)
+        self.assertEqual(stats["l3_inferred_chunks"]["avg_ms"], 4)
+        self.assertEqual(stats["l3_propagated_chunks"]["avg_ms"], 3)
+        self.assertEqual(stats["l3_planned_chunks"]["avg_ms"], 8)
+        self.assertEqual(stats["l3_resolved_chunks"]["avg_ms"], 5)
+        self.assertEqual(stats["l3_effective_chunks"]["avg_ms"], 9)
+        self.assertEqual(stats["l3_cache_hits"], 1)
+        self.assertEqual(stats["l3_clustering_strategies"], {"representative": 1})
+
+    def test_load_deduplicates_unified_physical_l3_metrics(self):
+        request = benchmark._new_load_request(0, "request-1", 0.0, 0.0)
+        result = {
+            "model": "unified-multitask-model-augmented-v3",
+            "layers": [
+                {
+                    "level": "L3",
+                    "layer_type": "onnx",
+                    "duration_ms": 12.0,
+                    "details": {
+                        "model": "unified-multitask-model-augmented-v3",
+                        "physical_job_id": 7,
+                        "l3_worker_wall_ms": 12.0,
+                        "l3_queue_wait_ms": 1.0,
+                        "chunk_count": 4,
+                        "inferred_chunks": 2,
+                        "planned_l3_chunks": 4,
+                        "early_exit": True,
+                        "l3_clustering_strategy": "rank_only",
+                    },
+                }
+            ],
+        }
+
+        benchmark._record_load_result_metrics(request, result)
+        benchmark._record_load_result_metrics(request, result)
+
+        self.assertEqual(request["l3_execution_ms"], [12.0])
+        self.assertEqual(request["l3_worker_wall_ms"], [12.0])
+        self.assertEqual(request["l3_queue_wait_ms"], [1.0])
+        self.assertEqual(request["l3_inferred_chunks"], [2])
+        self.assertEqual(request["l3_planned_chunks"], [4])
+        self.assertEqual(request["l3_early_exit"], [True])
+        self.assertEqual(request["l3_clustering_strategies"], ["rank_only"])
+
     def test_joint_injection_gliner_phase_uses_fresh_worker_process(self):
         worker_result = {
             "samples": 1,

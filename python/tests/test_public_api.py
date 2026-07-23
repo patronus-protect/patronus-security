@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from pathlib import Path
 
 from patronus_ark import SecurityGateway
 
@@ -78,6 +79,39 @@ def result_signature(results):
 
 
 class PublicApiTests(unittest.TestCase):
+    def test_persistent_cache_location_and_flush_are_public_api(self):
+        with tempfile.TemporaryDirectory() as directory:
+            cache_path = Path(directory) / "ark-cache.redb"
+            scanner = SecurityGateway(
+                categories=["dlp"],
+                max_level="l1",
+                download_files=False,
+                cache_storage_location=str(cache_path),
+            )
+
+            scanner.flush_cache()
+
+            self.assertTrue(cache_path.exists())
+
+    def test_cache_ttl_and_hot_limits_are_public_api(self):
+        scanner = SecurityGateway(
+            categories=["dlp"],
+            max_level="l1",
+            download_files=False,
+            cache_entry_ttl_seconds=60,
+            cache_memory_max_entries=32,
+            cache_memory_max_bytes=4096,
+        )
+
+        self.assertIsInstance(scanner, SecurityGateway)
+        with self.assertRaises(ValueError):
+            SecurityGateway(
+                categories=["dlp"],
+                max_level="l1",
+                download_files=False,
+                cache_entry_ttl_seconds=0,
+            )
+
     def test_security_gateway_is_public_api(self):
         scanner = SecurityGateway(categories=["dlp"], max_level="l2", download_files=False)
 
@@ -257,6 +291,9 @@ class PublicApiTests(unittest.TestCase):
             {"l3": {"fairness_quantum_ms": 0}},
             {"l3": {"max_wait_ms": -1}},
             {"l3": {"degraded_factor": 2.0}},
+            {"l3": {"early_exit": "sometimes"}},
+            {"l3": {"progress": "verbose"}},
+            {"l3": {"clustering": "aggressive"}},
         ]
 
         for gates in invalid_gates:
@@ -297,6 +334,33 @@ class PublicApiTests(unittest.TestCase):
                     "fairness_quantum_ms": 20,
                     "max_wait_ms": 250,
                     "degraded_factor": 0.7,
+                    "early_exit": "class_stable",
+                    "progress": "disabled",
+                    "clustering": "rank_only",
+                    "representatives_per_cluster": 2,
+                    "verify_representatives_per_cluster": 2,
+                    "min_cluster_similarity": 0.9,
+                    "max_cluster_size": 8,
+                    "pipelines": {
+                        "injection": {
+                            "execution": "representative",
+                            "representatives_per_cluster": 1,
+                            "min_cluster_similarity": 0.96,
+                            "max_cluster_size": 4,
+                            "aggregation": {
+                                "type": "any_positive_or_highest",
+                                "positive_class": "attack",
+                                "threshold": 0.93,
+                            },
+                            "early_exit": "request_wide_positive",
+                        },
+                        "tool_class": {
+                            "clustering": "verify_representative",
+                            "verify_representatives_per_cluster": 2,
+                            "aggregation": {"type": "majority_vote_or_highest"},
+                            "early_exit": "head_stable",
+                        },
+                    },
                 }
             },
         )
@@ -310,9 +374,31 @@ class PublicApiTests(unittest.TestCase):
                     "fairness_quantum_ms": 10,
                     "max_wait_ms": 100,
                     "degraded_factor": 0.5,
+                    "early_exit": "disabled",
+                    "progress": "provisional",
+                    "clustering": "verify_representative",
+                    "representatives_per_cluster": 1,
+                    "verify_representatives_per_cluster": 2,
                 }
             }
         )
+        scanner.set_execution_gates({"l3": {"clustering": "representative"}})
+        with self.assertRaises(ValueError):
+            scanner.set_execution_gates({"l3": {"representatives_per_cluster": 0}})
+        with self.assertRaises(ValueError):
+            scanner.set_execution_gates(
+                {"l3": {"pipelines": {"injection": {"max_cluster_size": 0}}}}
+            )
+        with self.assertRaises(ValueError):
+            scanner.set_execution_gates(
+                {
+                    "l3": {
+                        "pipelines": {
+                            "injection": {"min_cluster_similarity": 1.5}
+                        }
+                    }
+                }
+            )
         scanner.set_execution_gates(None)
 
         results = scanner.scan_category("dlp", "safe status update")
@@ -394,7 +480,7 @@ class PublicApiTests(unittest.TestCase):
         )
 
         skipped = scanner.enqueue(
-            "Benedikt works in Frankfurt",
+            "Alexandr works in Frankfurt",
             metadata={"tool": {"action": "read"}, "content": {"kind": "source_code"}},
         )
         skipped_events = list(scanner.consume_events(timeout=1))
@@ -403,7 +489,7 @@ class PublicApiTests(unittest.TestCase):
         self.assertFalse(any(event["event_type"] == "result" for event in skipped_events))
 
         attempted = scanner.enqueue(
-            "Benedikt works in Frankfurt",
+            "Alexandr works in Frankfurt",
             metadata={"tool": {"action": "read"}, "content": {"kind": "text"}},
         )
         attempted_events = list(scanner.consume_events(timeout=1))
@@ -443,6 +529,41 @@ class PublicApiTests(unittest.TestCase):
         attempted_events = list(scanner.consume_events(timeout=1))
         self.assertEqual(attempted_events[-1]["request_id"], attempted)
         self.assertEqual(attempted_events[-1]["completion"], "failed")
+
+    def test_conditional_gate_accepts_l3_pipeline_policy_override(self):
+        scanner = SecurityGateway(
+            categories=["injection"],
+            max_level="l3",
+            download_files=False,
+            execution_gates={
+                "conditional": [
+                    {
+                        "level": "L3",
+                        "pipeline": "injection",
+                        "when": {
+                            "result": {
+                                "pipeline": "routing",
+                                "classes": ["source_code"],
+                                "min_confidence": 0.8,
+                            }
+                        },
+                        "l3_policy": {
+                            "execution": "representative",
+                            "representatives_per_cluster": 1,
+                            "min_cluster_similarity": 0.96,
+                            "aggregation": {
+                                "type": "any_positive_or_highest",
+                                "positive_class": "attack",
+                                "threshold": 0.93,
+                            },
+                            "early_exit": "disabled",
+                        },
+                    }
+                ]
+            },
+        )
+
+        self.assertEqual(scanner.categories, ["injection"])
 
     def test_enqueue_execution_gates_apply_only_to_one_request(self):
         scanner = SecurityGateway(categories=["dlp"], max_level="l1", download_files=False)

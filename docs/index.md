@@ -54,11 +54,12 @@ material for four different needs:
 
 - **[Tutorials](USAGE.md)**
 
-    Learning-oriented, hands-on walkthroughs of the six core flows, in Rust and Python.
+    Learning-oriented, hands-on walkthroughs of the numbered Rust and Python examples.
 
 - **[How-to guides](how-to/offline-airgapped.md)**
 
-    Task-oriented recipes: offline scanning, asset management, performance tuning,
+    Task-oriented recipes: offline scanning, asset management,
+    [cache configuration](how-to/configure-caching.md), performance tuning,
     benchmarking, and wiring in your own signals.
 
 - **[Concepts](concepts/architecture.md)**

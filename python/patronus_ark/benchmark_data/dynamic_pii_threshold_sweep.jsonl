@@ -20,7 +20,7 @@
 {"id":"street-address-05","label":"street_address","text":"The registered home address is 7 Harbour View Road, Dublin D04 F2X3.","entity":"7 Harbour View Road"}
 {"id":"username-01","label":"username","text":"Portal username: JohnDoe78; reset is pending.","entity":"JohnDoe78"}
 {"id":"username-02","label":"username","text":"The affected account uses the username maria_ops_24.","entity":"maria_ops_24"}
-{"id":"username-03","label":"username","text":"Login name b.veith-admin was assigned elevated access.","entity":"b.veith-admin"}
+{"id":"username-03","label":"username","text":"Login name a.stone-admin was assigned elevated access.","entity":"a.stone-admin"}
 {"id":"username-04","label":"username","text":"Git user handle: secure_fox91.","entity":"secure_fox91"}
 {"id":"username-05","label":"username","text":"Der Benutzername lautet florian.stg.","entity":"florian.stg"}
 {"id":"passport-number-01","label":"passport_number","text":"Passport number C01X00T47 was copied into the case file.","entity":"C01X00T47"}

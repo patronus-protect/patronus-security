@@ -144,6 +144,10 @@ impl SecurityFailureKind {
 pub enum QueuedSecurityEvent {
     /// One usable scanner result.
     Result(QueuedSecurityScanResult),
+    /// Non-authoritative progress for UI status.
+    Progress(QueuedSecurityProgress),
+    /// Non-authoritative interim result for UI preview.
+    Provisional(QueuedSecurityScanResult),
     /// The unique terminal event for an accepted request.
     Finished {
         request_id: RequestId,
@@ -156,9 +160,28 @@ impl QueuedSecurityEvent {
     pub fn request_id(&self) -> &str {
         match self {
             Self::Result(queued) => &queued.request_id,
+            Self::Progress(progress) => &progress.request_id,
+            Self::Provisional(queued) => &queued.request_id,
             Self::Finished { request_id, .. } => request_id,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Progress emitted while L3 resolves a multi-chunk request.
+pub struct QueuedSecurityProgress {
+    pub request_id: RequestId,
+    pub category: String,
+    pub model: String,
+    pub stage: String,
+    pub completed_chunks: usize,
+    pub total_chunks: usize,
+    pub inferred_chunks: usize,
+    pub propagated_chunks: usize,
+    pub cache_hits: usize,
+    pub early_exit: bool,
+    pub coverage: f64,
+    pub details: HashMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone)]
@@ -482,6 +505,112 @@ pub struct L3SchedulerPolicy {
     pub max_wait_ms: u64,
     /// Multiplier applied to L2 confidence when L3 degrades.
     pub degraded_factor: f64,
+    /// Whether L3 may stop once the final class is stable.
+    pub early_exit: L3EarlyExitMode,
+    /// Whether L3 should emit non-authoritative progress/provisional events.
+    pub progress: L3ProgressMode,
+    /// Logical chunk ordering strategy. This does not enable tensor batching.
+    pub clustering: L3ClusteringStrategy,
+    /// Number of high-priority members inferred per similarity cluster for
+    /// representative scheduling. Values below 1 are treated as 1.
+    pub representatives_per_cluster: usize,
+    /// Number of least-similar verification members inferred per cluster for
+    /// verify-representative scheduling. Values below 1 are treated as 1.
+    pub verify_representatives_per_cluster: usize,
+    /// Minimum request-local similarity required to place two chunks in the
+    /// same representative cluster.
+    pub min_cluster_similarity: f64,
+    /// Maximum number of chunks assigned to one representative cluster.
+    pub max_cluster_size: usize,
+    /// Optional execution-policy overrides keyed by pipeline category or model.
+    /// Category keys take precedence over model keys.
+    pub pipelines: HashMap<String, L3PipelinePolicy>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+/// Optional per-pipeline overrides for L3 chunk execution.
+pub struct L3PipelinePolicy {
+    /// Chunk execution strategy. `None` inherits the request-wide default.
+    #[serde(default, alias = "execution")]
+    pub clustering: Option<L3ClusteringStrategy>,
+    /// Representatives inferred from the high-priority side of each cluster.
+    #[serde(default)]
+    pub representatives_per_cluster: Option<usize>,
+    /// Least-similar members used to verify a representative cluster.
+    #[serde(default)]
+    pub verify_representatives_per_cluster: Option<usize>,
+    /// Minimum request-local similarity required for cluster membership.
+    #[serde(default)]
+    pub min_cluster_similarity: Option<f64>,
+    /// Maximum number of members allowed in one cluster.
+    #[serde(default)]
+    pub max_cluster_size: Option<usize>,
+    /// Chunk-output aggregation. `None` keeps the pipeline's built-in rule.
+    #[serde(default)]
+    pub aggregation: Option<L3AggregationStrategy>,
+    /// Early-exit scope. `None` inherits the request-wide default semantics.
+    #[serde(default)]
+    pub early_exit: Option<L3PipelineEarlyExit>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
+/// Configurable aggregation for one L3 pipeline.
+pub enum L3AggregationStrategy {
+    AnyPositiveOrHighest {
+        positive_class: String,
+        threshold: f64,
+    },
+    HighestRiskAboveThresholdOrConfidence {
+        threshold: f64,
+    },
+    MajorityVoteOrHighest,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+/// Scope at which a stable per-pipeline L3 decision stops work.
+pub enum L3PipelineEarlyExit {
+    Disabled,
+    HeadStable,
+    RequestWidePositive,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+/// Fully resolved execution settings for one pipeline and request.
+pub struct EffectiveL3PipelinePolicy {
+    pub clustering: L3ClusteringStrategy,
+    pub representatives_per_cluster: usize,
+    pub verify_representatives_per_cluster: usize,
+    pub min_cluster_similarity: f64,
+    pub max_cluster_size: usize,
+    pub aggregation: Option<L3AggregationStrategy>,
+    pub early_exit: L3PipelineEarlyExit,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum L3EarlyExitMode {
+    Disabled,
+    ClassStable,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum L3ProgressMode {
+    Disabled,
+    Progress,
+    Provisional,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum L3ClusteringStrategy {
+    Disabled,
+    RankOnly,
+    Representative,
+    VerifyRepresentative,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -493,8 +622,12 @@ pub struct ConditionalPipelineGate {
     /// Optional category/model selector. `None` applies to every pipeline at the level.
     #[serde(default)]
     pub pipeline: Option<String>,
-    /// Condition that must match for the selected pipeline to execute.
+    /// Condition that enables a normal gate or activates an `l3_policy` override.
     pub when: GateExpression,
+    /// Optional L3 execution-policy override applied when `when` matches.
+    /// Policy gates do not suppress the pipeline when the condition is false.
+    #[serde(default)]
+    pub l3_policy: Option<L3PipelinePolicy>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -592,6 +725,8 @@ impl Default for L3SchedulerPolicy {
             priority: vec![
                 "injection".to_string(),
                 "wolf-defender-small".to_string(),
+                "threat".to_string(),
+                "unified-v3-threat".to_string(),
                 "dynamic-pii".to_string(),
                 "gliner_small-v2.5-edge".to_string(),
                 "sensitive_document".to_string(),
@@ -600,7 +735,6 @@ impl Default for L3SchedulerPolicy {
                 "tool_action".to_string(),
                 "tool_tags".to_string(),
                 "routing".to_string(),
-                "threat".to_string(),
                 "unified-multitask-model-augmented-v3".to_string(),
             ],
             ttl_ms,
@@ -608,6 +742,61 @@ impl Default for L3SchedulerPolicy {
             fairness_quantum_ms: 50,
             max_wait_ms: 2_000,
             degraded_factor: 0.75,
+            early_exit: L3EarlyExitMode::ClassStable,
+            progress: L3ProgressMode::Disabled,
+            clustering: L3ClusteringStrategy::RankOnly,
+            representatives_per_cluster: 1,
+            verify_representatives_per_cluster: 1,
+            min_cluster_similarity: 0.90,
+            max_cluster_size: 8,
+            pipelines: HashMap::new(),
+        }
+    }
+}
+
+impl L3SchedulerPolicy {
+    /// Resolve request-wide defaults and a category/model override.
+    pub fn pipeline_policy(&self, category: &str, model: &str) -> EffectiveL3PipelinePolicy {
+        let pipeline = self
+            .pipelines
+            .get(category)
+            .or_else(|| self.pipelines.get(model));
+        let inherited_early_exit = match self.early_exit {
+            L3EarlyExitMode::Disabled => L3PipelineEarlyExit::Disabled,
+            L3EarlyExitMode::ClassStable
+                if category == "injection"
+                    || category == "threat"
+                    || model == "wolf-defender-small"
+                    || model == "unified-v3-threat" =>
+            {
+                L3PipelineEarlyExit::RequestWidePositive
+            }
+            L3EarlyExitMode::ClassStable => L3PipelineEarlyExit::HeadStable,
+        };
+        EffectiveL3PipelinePolicy {
+            clustering: pipeline
+                .and_then(|policy| policy.clustering)
+                .unwrap_or(self.clustering),
+            representatives_per_cluster: pipeline
+                .and_then(|policy| policy.representatives_per_cluster)
+                .unwrap_or(self.representatives_per_cluster)
+                .max(1),
+            verify_representatives_per_cluster: pipeline
+                .and_then(|policy| policy.verify_representatives_per_cluster)
+                .unwrap_or(self.verify_representatives_per_cluster)
+                .max(1),
+            min_cluster_similarity: pipeline
+                .and_then(|policy| policy.min_cluster_similarity)
+                .unwrap_or(self.min_cluster_similarity)
+                .clamp(0.0, 1.0),
+            max_cluster_size: pipeline
+                .and_then(|policy| policy.max_cluster_size)
+                .unwrap_or(self.max_cluster_size)
+                .max(1),
+            aggregation: pipeline.and_then(|policy| policy.aggregation.clone()),
+            early_exit: pipeline
+                .and_then(|policy| policy.early_exit)
+                .unwrap_or(inherited_early_exit),
         }
     }
 }
@@ -705,7 +894,40 @@ impl ConditionalPipelineGate {
         {
             return Err("conditional gate pipeline must not be empty".to_string());
         }
+        if self.l3_policy.is_some() && (self.level != SecurityLevel::L3 || self.pipeline.is_none())
+        {
+            return Err(
+                "conditional l3_policy overrides require level l3 and a pipeline".to_string(),
+            );
+        }
         self.when.validate()
+    }
+}
+
+impl L3PipelinePolicy {
+    pub(crate) fn apply_override(&mut self, override_policy: &Self) {
+        if override_policy.clustering.is_some() {
+            self.clustering = override_policy.clustering;
+        }
+        if override_policy.representatives_per_cluster.is_some() {
+            self.representatives_per_cluster = override_policy.representatives_per_cluster;
+        }
+        if override_policy.verify_representatives_per_cluster.is_some() {
+            self.verify_representatives_per_cluster =
+                override_policy.verify_representatives_per_cluster;
+        }
+        if override_policy.min_cluster_similarity.is_some() {
+            self.min_cluster_similarity = override_policy.min_cluster_similarity;
+        }
+        if override_policy.max_cluster_size.is_some() {
+            self.max_cluster_size = override_policy.max_cluster_size;
+        }
+        if override_policy.aggregation.is_some() {
+            self.aggregation = override_policy.aggregation.clone();
+        }
+        if override_policy.early_exit.is_some() {
+            self.early_exit = override_policy.early_exit;
+        }
     }
 }
 
@@ -978,5 +1200,82 @@ impl std::str::FromStr for SecurityCategory {
             "threat" => Ok(SecurityCategory::Threat),
             _ => Err(format!("Unknown security category: {}", s)),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn l3_pipeline_policy_overrides_request_defaults_by_category() {
+        let mut policy = L3SchedulerPolicy::default();
+        policy.clustering = L3ClusteringStrategy::RankOnly;
+        policy.pipelines.insert(
+            "injection".to_string(),
+            L3PipelinePolicy {
+                clustering: Some(L3ClusteringStrategy::VerifyRepresentative),
+                representatives_per_cluster: Some(2),
+                verify_representatives_per_cluster: Some(1),
+                min_cluster_similarity: Some(0.96),
+                max_cluster_size: Some(4),
+                aggregation: Some(L3AggregationStrategy::AnyPositiveOrHighest {
+                    positive_class: "attack".to_string(),
+                    threshold: 0.9,
+                }),
+                early_exit: Some(L3PipelineEarlyExit::RequestWidePositive),
+            },
+        );
+
+        let resolved = policy.pipeline_policy("injection", "wolf-defender-small");
+
+        assert_eq!(
+            resolved.clustering,
+            L3ClusteringStrategy::VerifyRepresentative
+        );
+        assert_eq!(resolved.representatives_per_cluster, 2);
+        assert_eq!(resolved.min_cluster_similarity, 0.96);
+        assert_eq!(resolved.max_cluster_size, 4);
+        assert_eq!(
+            resolved.early_exit,
+            L3PipelineEarlyExit::RequestWidePositive
+        );
+    }
+
+    #[test]
+    fn l3_pipeline_policy_uses_model_override_when_category_is_absent() {
+        let mut policy = L3SchedulerPolicy::default();
+        policy.pipelines.insert(
+            "unified-v3-tool-class".to_string(),
+            L3PipelinePolicy {
+                clustering: Some(L3ClusteringStrategy::Representative),
+                ..L3PipelinePolicy::default()
+            },
+        );
+
+        assert_eq!(
+            policy
+                .pipeline_policy("tool_class", "unified-v3-tool-class")
+                .clustering,
+            L3ClusteringStrategy::Representative
+        );
+    }
+
+    #[test]
+    fn l3_default_early_exit_scope_matches_pipeline_semantics() {
+        let policy = L3SchedulerPolicy::default();
+
+        assert_eq!(
+            policy
+                .pipeline_policy("threat", "unified-v3-threat")
+                .early_exit,
+            L3PipelineEarlyExit::RequestWidePositive
+        );
+        assert_eq!(
+            policy
+                .pipeline_policy("tool_class", "unified-v3-tool-class")
+                .early_exit,
+            L3PipelineEarlyExit::HeadStable
+        );
     }
 }

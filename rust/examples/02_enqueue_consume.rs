@@ -41,6 +41,21 @@ fn main() {
                     queued.result.confidence,
                 );
             }
+            QueuedSecurityEvent::Progress(progress) => {
+                println!(
+                    "progress {} -> {}/{} chunks",
+                    progress.request_id, progress.completed_chunks, progress.total_chunks
+                );
+            }
+            QueuedSecurityEvent::Provisional(queued) => {
+                println!(
+                    "preview  {} -> {}/{} ({:.3})",
+                    queued.request_id,
+                    queued.result.category,
+                    queued.result.class_name,
+                    queued.result.confidence,
+                );
+            }
             QueuedSecurityEvent::Finished {
                 request_id,
                 completion,

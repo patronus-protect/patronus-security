@@ -15,6 +15,10 @@ Set at gateway construction:
 | `download_files` | bool | Whether missing assets may be downloaded on warmup. | constructor |
 | `download_categories` | list | Restrict automatic downloads to these categories. | constructor |
 | `model_dir` | path | Custom asset cache location (default: platform cache dir). | constructor |
+| `cache_storage_location` | path or `None` | Explicit persistent cache database; `None` keeps the cache memory-only. | cache constructor |
+| `cache_entry_ttl_seconds` | positive integer | Shared hot/persistent TTL; defaults to 30 days (`2_592_000`). | `ExactCacheConfig.entry_ttl` |
+| `cache_memory_max_entries` | non-negative integer | Per-hot-tier entry bound; `0` disables hot retention. | `ExactCacheConfig.memory.max_entries` |
+| `cache_memory_max_bytes` | non-negative integer | Per-hot-tier byte bound; `0` disables hot retention. | `ExactCacheConfig.memory.max_bytes` |
 | `l3_strategy` | `"dedicated"` \| `"multi"` | One model per category, or one coalesced multi-head model. | setter |
 | `execution_gates` | dict / matrix | Initial [execution gates](#execution-gates). | setter |
 | `dynamic_pii_config` | dict | Configuration for the [`dynamic-pii`](#dynamic-pii) pipeline. | setter |
@@ -25,7 +29,14 @@ In Python, all of these are keyword arguments to `SecurityGateway(...)`. In Rust
 constructors `with_max_level(...)` and `with_download_categories(...)` accept only the first
 five (marked *constructor* above); every other option is applied after construction with its
 setter (`set_l3_strategy`, `set_execution_gates`, `set_dynamic_pii_config`,
-`set_execution_backend`, `set_onnx_batch_mode`).
+`set_execution_backend`, `set_onnx_batch_mode`). Rust persistent caching uses
+`try_with_download_categories_and_cache(...)` with `ExactCacheConfig`; the path is fixed for
+the gateway lifecycle and cannot be overridden per request.
+
+Python persistent writes are asynchronous. Call `flush_cache()` when shutdown or a durability
+boundary must wait for all queued writes. See
+[Configure and understand caching](../how-to/configure-caching.md) for storage variants,
+cache-hit behavior, Dynamic PII events, metadata, and measured latencies.
 
 ## Runtime setters
 
@@ -93,9 +104,62 @@ execution_gates = {
         "max_wait_ms": 2_000,
         "degraded_factor": 0.75,        # confidence multiplier applied to degraded fallbacks
         "ttl_ms": {"injection": 15_000, "dynamic-pii": 12_000},
+        # Request-wide defaults:
+        "execution": "rank_only",
+        "representatives_per_cluster": 1,
+        "verify_representatives_per_cluster": 1,
+        "min_cluster_similarity": 0.90,
+        "max_cluster_size": 8,
+        # Category/model-specific overrides:
+        "pipelines": {
+            "injection": {
+                "execution": "representative",
+                "representatives_per_cluster": 1,
+                "min_cluster_similarity": 0.96,
+                "aggregation": {
+                    "type": "any_positive_or_highest",
+                    "positive_class": "attack",
+                    "threshold": 0.93,
+                },
+                "early_exit": "request_wide_positive",
+            },
+            "tool_class": {
+                "execution": "verify_representative",
+                "verify_representatives_per_cluster": 1,
+                "aggregation": {"type": "majority_vote_or_highest"},
+                "early_exit": "head_stable",
+            },
+        },
     }
 }
 ```
+
+`execution` accepts `disabled`, `rank_only`, `representative`, and
+`verify_representative`; `clustering` remains a compatible alias. Pipeline overrides are
+resolved by category first and model name second. They are part of the enqueue-time gate
+snapshot, so two requests on the same gateway can use different policies.
+
+`representative` first infers the configured number of highest-priority members from every cluster
+in global L2-priority order, then propagates each aggregated representative decision to the
+remaining cluster. `verify_representative` runs a second global wave containing the configured
+number of least-similar members. A class mismatch opens only that cluster and schedules its
+remaining members in global priority order. `rank_only` never propagates.
+
+Early exits have explicit scope:
+
+- `disabled`: do not stop from a stable head decision.
+- `head_stable`: stop only the current head when its result can no longer change.
+- `request_wide_positive`: a thresholded positive result stops lower-priority heads for the
+  request. This is the default behavior for Injection and Threat.
+
+Dedicated and unified L3 use the same cluster planner, representative/verify state machine,
+aggregation rules, and early-exit state. Unified keeps the full output of every physical chunk and
+reuses it when a later head requests the same chunk.
+
+Runnable examples:
+
+- `rust/examples/08_l3_pipeline_policies.rs`
+- `python/examples/08_l3_pipeline_policies.py`
 
 ### Conditional gates
 
@@ -114,6 +178,32 @@ scanner.set_execution_gates({
             "when": {"result": {"pipeline": "injection", "classes": ["attack"], "min_confidence": 0.8}},
         }
     ]
+})
+```
+
+An L3 conditional may instead carry `l3_policy`. When its predicate matches, the specified
+execution, clustering, aggregation, and early-exit fields override that pipeline's request-local
+policy. A policy conditional does not suppress the pipeline when its predicate does not match:
+
+```python
+scanner.set_execution_gates({
+    "conditional": [{
+        "level": "l3",
+        "pipeline": "injection",
+        "when": {
+            "result": {
+                "pipeline": "routing",
+                "classes": ["code_development_request"],
+                "min_confidence": 0.8,
+            }
+        },
+        "l3_policy": {
+            "execution": "representative",
+            "representatives_per_cluster": 1,
+            "min_cluster_similarity": 0.96,
+            "early_exit": "disabled",
+        },
+    }]
 })
 ```
 
@@ -203,6 +293,11 @@ dynamic_pii_config = {
 Only labels with measured exact-span F1 ≥ 0.6 are mapped; deterministic identifiers (email, IP,
 IBAN, SWIFT/BIC, phone, card) stay native L1 heuristics. See
 [`gliner_category_map.py`](https://github.com/patronus-protect/patronus-security/blob/main/python/patronus_ark/gliner_category_map.py).
+
+The first detected Dynamic PII entity—whether from the persistent entity cache or fresh
+inference—is emitted immediately as a partial `result` queue event. It contains
+`details.partial_result = true` and one evidence span. The authoritative complete result follows
+after the remaining chunks finish.
 
 ## Environment variables
 

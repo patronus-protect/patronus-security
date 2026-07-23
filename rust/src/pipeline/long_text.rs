@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use std::collections::HashMap;
 
+use super::strategy::{aggregate_decision_index, ChunkDecision};
 use super::ChunkAggregation;
 use crate::{EvaluationResult, LayerResult};
 
@@ -95,7 +96,7 @@ pub fn aggregate_chunk_outputs(
     safe_class: &str,
     aggregation: ChunkAggregation,
 ) -> Option<LongTextAggregate> {
-    let selected = select_chunk_output(&chunk_outputs, safe_class, aggregation)?;
+    let selected = select_chunk_output(&chunk_outputs, safe_class, &aggregation)?;
 
     let chunk_id = selected.0;
     let result = (selected.1).0.clone();
@@ -160,74 +161,17 @@ pub fn aggregate_chunk_outputs(
 fn select_chunk_output<'a>(
     chunk_outputs: &'a [(EvaluationResult, Vec<LayerResult>)],
     safe_class: &str,
-    aggregation: ChunkAggregation,
+    aggregation: &ChunkAggregation,
 ) -> Option<(usize, &'a (EvaluationResult, Vec<LayerResult>))> {
-    match aggregation {
-        ChunkAggregation::AnyPositiveOrHighest {
-            positive_class,
-            threshold,
-        } => chunk_outputs
-            .iter()
-            .enumerate()
-            .filter(|(_, (result, _))| {
-                result.class_name == positive_class && result.confidence >= threshold
-            })
-            .max_by(|(_, (left, _)), (_, (right, _))| left.confidence.total_cmp(&right.confidence))
-            .or_else(|| highest_confidence_chunk(chunk_outputs)),
-        ChunkAggregation::MajorityVoteOrHighest => {
-            majority_vote_chunk(chunk_outputs).or_else(|| highest_confidence_chunk(chunk_outputs))
-        }
-        ChunkAggregation::HighestRiskOrConfidence => {
-            highest_risk_or_confidence_chunk(chunk_outputs, safe_class)
-        }
-    }
-}
-
-fn highest_confidence_chunk<'a>(
-    chunk_outputs: &'a [(EvaluationResult, Vec<LayerResult>)],
-) -> Option<(usize, &'a (EvaluationResult, Vec<LayerResult>))> {
-    chunk_outputs
+    let decisions = chunk_outputs
         .iter()
-        .enumerate()
-        .max_by(|(_, (left, _)), (_, (right, _))| left.confidence.total_cmp(&right.confidence))
-}
-
-fn highest_risk_or_confidence_chunk<'a>(
-    chunk_outputs: &'a [(EvaluationResult, Vec<LayerResult>)],
-    safe_class: &str,
-) -> Option<(usize, &'a (EvaluationResult, Vec<LayerResult>))> {
-    chunk_outputs
-        .iter()
-        .enumerate()
-        .filter(|(_, (result, _))| result.class_name != safe_class)
-        .max_by(|(_, (left, _)), (_, (right, _))| left.confidence.total_cmp(&right.confidence))
-        .or_else(|| highest_confidence_chunk(chunk_outputs))
-}
-
-fn majority_vote_chunk<'a>(
-    chunk_outputs: &'a [(EvaluationResult, Vec<LayerResult>)],
-) -> Option<(usize, &'a (EvaluationResult, Vec<LayerResult>))> {
-    let mut votes: HashMap<&str, (usize, f64, f64)> = HashMap::new();
-    for (result, _) in chunk_outputs {
-        let entry = votes
-            .entry(result.class_name.as_str())
-            .or_insert((0, 0.0, 0.0));
-        entry.0 += 1;
-        entry.1 += result.confidence;
-        entry.2 = entry.2.max(result.confidence);
-    }
-    let (winning_class, _) = votes.into_iter().max_by(|(_, left), (_, right)| {
-        left.0
-            .cmp(&right.0)
-            .then_with(|| left.1.total_cmp(&right.1))
-            .then_with(|| left.2.total_cmp(&right.2))
-    })?;
-
-    chunk_outputs
-        .iter()
-        .enumerate()
-        .filter(|(_, (result, _))| result.class_name == winning_class)
-        .max_by(|(_, (left, _)), (_, (right, _))| left.confidence.total_cmp(&right.confidence))
+        .map(|(result, _)| ChunkDecision {
+            class_name: &result.class_name,
+            confidence: result.confidence,
+        })
+        .collect::<Vec<_>>();
+    let index = aggregate_decision_index(&decisions, aggregation, safe_class)?;
+    Some((index, &chunk_outputs[index]))
 }
 
 fn summary_layer(

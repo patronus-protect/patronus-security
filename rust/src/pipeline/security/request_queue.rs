@@ -210,6 +210,11 @@ impl SecurityGateway {
         };
         let (mut l2_results, l2_failures) = split_results(raw_l2);
         conditional_results.extend(l2_results.iter().filter_map(gate_result));
+        let l3_execution = crate::pipeline::conditional_gate::apply_l3_policy_overrides(
+            &execution,
+            &metadata,
+            &conditional_results,
+        );
         let text = inputs
             .first()
             .map(|input| input.text.as_str())
@@ -218,7 +223,7 @@ impl SecurityGateway {
             &request_id,
             &text,
             &mut l2_results,
-            &execution,
+            &l3_execution,
             &metadata,
             &conditional_results,
         );
@@ -226,7 +231,7 @@ impl SecurityGateway {
             &request_id,
             &text,
             &inputs,
-            &execution,
+            &l3_execution,
             &metadata,
             &conditional_results,
         );
@@ -425,7 +430,12 @@ impl SecurityGateway {
         let mut results = Vec::new();
         while let Some(event) = self.consume_matching_event(Some(&request_id), None) {
             match event {
-                QueuedSecurityEvent::Result(queued) => results.push(queued.result),
+                QueuedSecurityEvent::Result(queued) => {
+                    if !is_partial_result(&queued.result) {
+                        results.push(queued.result);
+                    }
+                }
+                QueuedSecurityEvent::Progress(_) | QueuedSecurityEvent::Provisional(_) => {}
                 QueuedSecurityEvent::Finished { .. } => break,
             }
         }
@@ -506,9 +516,11 @@ impl SecurityGateway {
                 execution: execution.clone(),
                 degraded_factor: policy.degraded_factor,
                 l3_candidates: l3_candidates(result),
+                l2_chunk_outputs: l2_chunk_outputs(result),
                 dynamic_pii_config: None,
                 dynamic_pii_activated_rules: Vec::new(),
             });
+            strip_internal_l2_embeddings(result);
         }
         if execution.l3_strategy() == crate::L3Strategy::Multi {
             let merged = merge_l3_candidates(
@@ -516,8 +528,13 @@ impl SecurityGateway {
                     .flat_map(|job| job.l3_candidates.iter().cloned())
                     .collect(),
             );
+            let merged_l2_chunk_outputs = jobs
+                .iter()
+                .flat_map(|job| job.l2_chunk_outputs.iter().cloned())
+                .collect::<Vec<_>>();
             for job in &mut jobs {
                 job.l3_candidates = merged.clone();
+                job.l2_chunk_outputs = merged_l2_chunk_outputs.clone();
             }
         }
         jobs
@@ -569,6 +586,7 @@ impl SecurityGateway {
                 execution: execution.clone(),
                 degraded_factor: policy.degraded_factor,
                 l3_candidates: Vec::new(),
+                l2_chunk_outputs: Vec::new(),
                 dynamic_pii_config: Some(config),
                 dynamic_pii_activated_rules: Vec::new(),
             },
@@ -623,9 +641,10 @@ impl SecurityGateway {
                 priority,
                 ttl_ms,
                 inference_timeout_ms: ttl_ms,
-                execution: ScanExecution::new(SecurityLevel::L3),
+                execution: self.scan_execution(),
                 degraded_factor: 0.75,
                 l3_candidates: Vec::new(),
+                l2_chunk_outputs: Vec::new(),
                 dynamic_pii_config: None,
                 dynamic_pii_activated_rules: Vec::new(),
             },
@@ -654,9 +673,10 @@ impl SecurityGateway {
                     priority: *priority,
                     ttl_ms: 10_000,
                     inference_timeout_ms: 10_000,
-                    execution: ScanExecution::new(SecurityLevel::L3),
+                    execution: self.scan_execution(),
                     degraded_factor: 0.75,
                     l3_candidates: Vec::new(),
+                    l2_chunk_outputs: Vec::new(),
                     dynamic_pii_config: None,
                     dynamic_pii_activated_rules: Vec::new(),
                 },
@@ -705,6 +725,7 @@ impl SecurityGateway {
                     execution: ScanExecution::with_gates(SecurityLevel::L3, gates),
                     degraded_factor: 0.75,
                     l3_candidates: Vec::new(),
+                    l2_chunk_outputs: Vec::new(),
                     dynamic_pii_config: None,
                     dynamic_pii_activated_rules: Vec::new(),
                 },
@@ -714,6 +735,95 @@ impl SecurityGateway {
         }
         self.l3_worker.enqueue_test_delays(specs);
         request_ids
+    }
+
+    #[cfg(feature = "test-util")]
+    #[doc(hidden)]
+    pub fn enqueue_test_request_wide_early_exit_request(&self) -> RequestId {
+        let request_id = self.next_request_id();
+        let threat_job_id = self.l3_worker.next_job_id();
+        let tool_job_id = self.l3_worker.next_job_id();
+        let mut threat_fallback = self.test_l3_fallback("test-threat-l3");
+        threat_fallback.category = "threat".to_string();
+        let mut tool_fallback = self.test_l3_fallback("test-tool-l3");
+        tool_fallback.category = "tool_class".to_string();
+        let execution = self.scan_execution();
+        let state = RequestState {
+            pending_l3_job_ids: HashSet::from([threat_job_id, tool_job_id]),
+            pending_l3_job_categories: HashMap::from([
+                (threat_job_id, "threat".to_string()),
+                (tool_job_id, "tool_class".to_string()),
+            ]),
+            gate_results: HashMap::new(),
+            pending_dynamic_pii: None,
+            usable_results: 2,
+            failures: Vec::new(),
+            completion: None,
+        };
+        let mut registry = self
+            .requests
+            .state
+            .lock()
+            .expect("request registry mutex poisoned");
+        registry.requests.insert(request_id.clone(), state);
+        registry
+            .ready
+            .push_back(QueuedSecurityEvent::Result(QueuedSecurityScanResult {
+                request_id: request_id.clone(),
+                result: threat_fallback.clone(),
+            }));
+        registry
+            .ready
+            .push_back(QueuedSecurityEvent::Result(QueuedSecurityScanResult {
+                request_id: request_id.clone(),
+                result: tool_fallback.clone(),
+            }));
+        drop(registry);
+
+        self.l3_worker.enqueue_test_delays(vec![
+            (
+                L3JobSpec {
+                    job_id: threat_job_id,
+                    request_id: request_id.clone(),
+                    category: "threat".to_string(),
+                    model: "test-threat-l3".to_string(),
+                    text: "test".to_string(),
+                    fallback: threat_fallback,
+                    priority: 0,
+                    ttl_ms: 10_000,
+                    inference_timeout_ms: 10_000,
+                    execution: execution.clone(),
+                    degraded_factor: 0.75,
+                    l3_candidates: Vec::new(),
+                    l2_chunk_outputs: Vec::new(),
+                    dynamic_pii_config: None,
+                    dynamic_pii_activated_rules: Vec::new(),
+                },
+                5,
+            ),
+            (
+                L3JobSpec {
+                    job_id: tool_job_id,
+                    request_id: request_id.clone(),
+                    category: "tool_class".to_string(),
+                    model: "test-tool-l3".to_string(),
+                    text: "test".to_string(),
+                    fallback: tool_fallback,
+                    priority: 10,
+                    ttl_ms: 10_000,
+                    inference_timeout_ms: 10_000,
+                    execution,
+                    degraded_factor: 0.75,
+                    l3_candidates: Vec::new(),
+                    l2_chunk_outputs: Vec::new(),
+                    dynamic_pii_config: None,
+                    dynamic_pii_activated_rules: Vec::new(),
+                },
+                5,
+            ),
+        ]);
+        self.requests.available.notify_all();
+        request_id
     }
 
     #[cfg(feature = "test-util")]
@@ -733,10 +843,10 @@ impl SecurityGateway {
         let dynamic = self
             .pending_dynamic_pii_for_request(
                 &request_id,
-                "Benedikt works in Frankfurt.",
+                "Alexandr works in Frankfurt.",
                 &[ExternalL1Input::new(
                     SecurityCategory::DynamicPii,
-                    "Benedikt works in Frankfurt.",
+                    "Alexandr works in Frankfurt.",
                 )],
                 &execution,
                 &serde_json::json!({}),
@@ -758,6 +868,7 @@ impl SecurityGateway {
             execution,
             degraded_factor: 0.75,
             l3_candidates: Vec::new(),
+            l2_chunk_outputs: Vec::new(),
             dynamic_pii_config: None,
             dynamic_pii_activated_rules: Vec::new(),
         };
@@ -867,6 +978,16 @@ impl SecurityGateway {
     }
 }
 
+fn is_partial_result(result: &SecurityScanResult) -> bool {
+    result.layers.iter().any(|layer| {
+        layer
+            .details
+            .get("partial_result")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+    })
+}
+
 fn split_results(
     raw_results: Vec<SecurityScanResult>,
 ) -> (Vec<SecurityScanResult>, Vec<SecurityFailure>) {
@@ -900,6 +1021,39 @@ fn l3_candidates(result: &SecurityScanResult) -> Vec<L3Candidate> {
         .unwrap_or_default()
 }
 
+fn l2_chunk_outputs(result: &SecurityScanResult) -> Vec<crate::ml::ntdb_executor::L2ChunkOutput> {
+    result
+        .layers
+        .iter()
+        .find(|layer| layer.layer_type == "ntdb_l2")
+        .and_then(|layer| layer.details.get("l2_chunk_outputs"))
+        .and_then(|value| serde_json::from_value(value.clone()).ok())
+        .unwrap_or_default()
+}
+
+fn strip_internal_l2_embeddings(result: &mut SecurityScanResult) {
+    let Some(layer) = result
+        .layers
+        .iter_mut()
+        .find(|layer| layer.layer_type == "ntdb_l2")
+    else {
+        return;
+    };
+    let Some(value) = layer.details.get_mut("l2_chunk_outputs") else {
+        return;
+    };
+    let Ok(mut outputs) =
+        serde_json::from_value::<Vec<crate::ml::ntdb_executor::L2ChunkOutput>>(value.clone())
+    else {
+        return;
+    };
+    for output in &mut outputs {
+        output.embedding.clear();
+        output.embedding_space.clear();
+    }
+    *value = serde_json::json!(outputs);
+}
+
 fn merge_l3_candidates(mut candidates: Vec<L3Candidate>) -> Vec<L3Candidate> {
     candidates.sort_by_key(|candidate| (candidate.span.start, candidate.span.end));
     let mut merged: Vec<L3Candidate> = Vec::new();
@@ -908,21 +1062,35 @@ fn merge_l3_candidates(mut candidates: Vec<L3Candidate>) -> Vec<L3Candidate> {
             merged.push(candidate);
             continue;
         };
-        if candidate.span.start >= last.span.end {
+        if candidate.span.start != last.span.start || candidate.span.end != last.span.end {
             merged.push(candidate);
             continue;
         }
-        let start = last.span.start.min(candidate.span.start);
-        let end = last.span.end.max(candidate.span.end);
+        let source_pipeline = merge_csvish_field(&last.source_pipeline, &candidate.source_pipeline);
+        let source_model = merge_csvish_field(&last.source_model, &candidate.source_model);
+        let l2_class = merge_csvish_field(&last.l2_class, &candidate.l2_class);
         let last_margin = last.promote_score - last.promote_threshold;
         let candidate_margin = candidate.promote_score - candidate.promote_threshold;
         if candidate_margin > last_margin {
             *last = candidate;
         }
-        last.span.start = start;
-        last.span.end = end;
+        last.source_pipeline = source_pipeline;
+        last.source_model = source_model;
+        last.l2_class = l2_class;
     }
     merged
+}
+
+fn merge_csvish_field(left: &str, right: &str) -> String {
+    let mut values = left
+        .split(',')
+        .chain(right.split(','))
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>();
+    values.sort_unstable();
+    values.dedup();
+    values.join(",")
 }
 
 #[cfg(test)]
@@ -969,7 +1137,7 @@ mod tests {
     }
 
     #[test]
-    fn merges_overlapping_candidates_and_keeps_strongest_source() {
+    fn merges_exact_span_candidates_and_preserves_source_pipeline_union() {
         let candidates = merge_l3_candidates(vec![
             L3Candidate {
                 span: crate::ml::ntdb_executor::ByteSpan { start: 10, end: 30 },
@@ -980,7 +1148,7 @@ mod tests {
                 l2_class: "code".to_string(),
             },
             L3Candidate {
-                span: crate::ml::ntdb_executor::ByteSpan { start: 20, end: 50 },
+                span: crate::ml::ntdb_executor::ByteSpan { start: 10, end: 30 },
                 promote_score: 0.95,
                 promote_threshold: 0.7,
                 source_pipeline: "injection".to_string(),
@@ -990,7 +1158,154 @@ mod tests {
         ]);
 
         assert_eq!(candidates.len(), 1);
-        assert_eq!((candidates[0].span.start, candidates[0].span.end), (10, 50));
-        assert_eq!(candidates[0].source_pipeline, "injection");
+        assert_eq!((candidates[0].span.start, candidates[0].span.end), (10, 30));
+        assert_eq!(candidates[0].source_pipeline, "injection,routing");
+        assert_eq!(candidates[0].source_model, "injection,routing");
+        assert_eq!(candidates[0].l2_class, "attack,code");
+    }
+
+    #[test]
+    fn keeps_overlapping_candidate_spans_separate_to_preserve_head_relevance() {
+        let candidates = merge_l3_candidates(vec![
+            L3Candidate {
+                span: crate::ml::ntdb_executor::ByteSpan { start: 10, end: 40 },
+                promote_score: 0.75,
+                promote_threshold: 0.7,
+                source_pipeline: "routing".to_string(),
+                source_model: "routing".to_string(),
+                l2_class: "code".to_string(),
+            },
+            L3Candidate {
+                span: crate::ml::ntdb_executor::ByteSpan { start: 20, end: 30 },
+                promote_score: 0.95,
+                promote_threshold: 0.7,
+                source_pipeline: "injection".to_string(),
+                source_model: "injection".to_string(),
+                l2_class: "attack".to_string(),
+            },
+        ]);
+
+        assert_eq!(candidates.len(), 2);
+        assert_eq!(candidates[0].source_pipeline, "routing");
+        assert_eq!(candidates[1].source_pipeline, "injection");
+    }
+
+    #[test]
+    fn multi_l3_jobs_share_l2_chunk_output_union() {
+        let scanner = SecurityGateway::with_max_level(
+            vec![SecurityCategory::Injection, SecurityCategory::ToolClass],
+            SecurityLevel::L3,
+            None,
+            false,
+        );
+        let mut execution = ScanExecution::new(SecurityLevel::L3);
+        execution.set_l3_strategy(crate::L3Strategy::Multi);
+        let mut results = vec![
+            pending_l3_result_with_chunks(
+                "injection",
+                "wolf-defender-small",
+                vec![l2_chunk_output(0, 10, "injection", "benign", false)],
+            ),
+            pending_l3_result_with_chunks(
+                "tool_class",
+                "unified-v3-tool-class",
+                vec![l2_chunk_output(10, 20, "tool_class", "vcs", false)],
+            ),
+        ];
+
+        let jobs = scanner.l3_jobs_for_results(
+            "rq-test",
+            "text",
+            &mut results,
+            &execution,
+            &serde_json::json!({}),
+            &[],
+        );
+
+        assert_eq!(jobs.len(), 2);
+        for job in jobs {
+            let pipelines = job
+                .l2_chunk_outputs
+                .iter()
+                .map(|chunk| chunk.source_pipeline.as_str())
+                .collect::<Vec<_>>();
+            assert_eq!(pipelines, vec!["injection", "tool_class"]);
+        }
+    }
+
+    fn pending_l3_result_with_chunks(
+        category: &str,
+        model: &str,
+        l2_chunk_outputs: Vec<crate::ml::ntdb_executor::L2ChunkOutput>,
+    ) -> SecurityScanResult {
+        SecurityScanResult {
+            category: category.to_string(),
+            class_name: "benign".to_string(),
+            confidence: 0.5,
+            level: "L2".to_string(),
+            model: model.to_string(),
+            duration_ms: 1.0,
+            layers: vec![
+                LayerResult {
+                    level: "L2".to_string(),
+                    layer_type: "ntdb_l2".to_string(),
+                    class_name: "benign".to_string(),
+                    confidence: 0.5,
+                    matched: false,
+                    duration_ms: 1.0,
+                    thresholds: HashMap::new(),
+                    details: HashMap::from([
+                        (
+                            "l3_candidates".to_string(),
+                            serde_json::json!([{
+                                "span": {"start": 0, "end": 10},
+                                "promote_score": 0.9,
+                                "promote_threshold": 0.7,
+                                "source_pipeline": category,
+                                "source_model": model,
+                                "l2_class": "benign"
+                            }]),
+                        ),
+                        (
+                            "l2_chunk_outputs".to_string(),
+                            serde_json::json!(l2_chunk_outputs),
+                        ),
+                    ]),
+                },
+                LayerResult {
+                    level: "L3".to_string(),
+                    layer_type: "l3_pending".to_string(),
+                    class_name: "benign".to_string(),
+                    confidence: 0.0,
+                    matched: false,
+                    duration_ms: 0.0,
+                    thresholds: HashMap::new(),
+                    details: HashMap::new(),
+                },
+            ],
+            evidence_spans: Vec::new(),
+            label_scores: Vec::new(),
+        }
+    }
+
+    fn l2_chunk_output(
+        start: usize,
+        end: usize,
+        source_pipeline: &str,
+        class_name: &str,
+        promoted: bool,
+    ) -> crate::ml::ntdb_executor::L2ChunkOutput {
+        crate::ml::ntdb_executor::L2ChunkOutput {
+            span: crate::ml::ntdb_executor::ByteSpan { start, end },
+            class_name: class_name.to_string(),
+            confidence: 0.9,
+            promoted,
+            promote_score: Some(0.9),
+            promote_threshold: Some(0.7),
+            source_pipeline: source_pipeline.to_string(),
+            source_model: source_pipeline.to_string(),
+            embedding: Vec::new(),
+            embedding_space: String::new(),
+        }
     }
 }

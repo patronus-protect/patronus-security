@@ -44,6 +44,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 min_confidence: Some(0.9),
             }),
         ]))),
+        l3_policy: None,
     }])?;
 
     let request_id = gateway.enqueue_with_metadata(
@@ -63,6 +64,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 queued.result.level,
                 queued.result.category,
                 queued.result.class_name
+            ),
+            QueuedSecurityEvent::Progress(progress) => println!(
+                "{} progress {}/{} chunks",
+                progress.request_id, progress.completed_chunks, progress.total_chunks
+            ),
+            QueuedSecurityEvent::Provisional(queued) => println!(
+                "{} provisional {} {}",
+                queued.request_id, queued.result.category, queued.result.class_name
             ),
             QueuedSecurityEvent::Finished {
                 request_id,

@@ -412,6 +412,7 @@ impl AggregatorRuntime {
                 chunk_promote_scores: Vec::new(),
                 l3_candidate_spans: Vec::new(),
                 l3_candidates: Vec::new(),
+                l2_chunk_outputs: Vec::new(),
             });
         }
 
@@ -470,6 +471,7 @@ impl AggregatorRuntime {
             chunk_promote_scores: Vec::new(),
             l3_candidate_spans: Vec::new(),
             l3_candidates: Vec::new(),
+            l2_chunk_outputs: Vec::new(),
         })
     }
 

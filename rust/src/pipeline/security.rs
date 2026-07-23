@@ -251,6 +251,16 @@ fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
 }
 
 impl SecurityGateway {
+    /// Flush queued persistent cache writes. Memory-only gateways are a no-op.
+    pub fn flush_cache(&self) -> Result<(), crate::CacheError> {
+        self.l3_worker.flush_cache()
+    }
+
+    /// Explicit persistent cache location configured for this gateway.
+    pub fn cache_storage_location(&self) -> Option<PathBuf> {
+        self.l3_worker.cache_storage_location()
+    }
+
     /// Create a gateway with `SecurityLevel::L2` as the maximum level.
     pub fn new(
         categories: Vec<SecurityCategory>,
@@ -281,8 +291,31 @@ impl SecurityGateway {
         download_files: bool,
         download_categories: Option<Vec<SecurityCategory>>,
     ) -> Self {
+        Self::try_with_download_categories_and_cache(
+            categories,
+            max_level,
+            model_dir,
+            download_files,
+            download_categories,
+            crate::ExactCacheConfig::default(),
+        )
+        .expect("memory-only exact cache must initialize")
+    }
+
+    /// Create a gateway with lifecycle-scoped exact-cache configuration.
+    ///
+    /// Persistent caching is enabled only when `cache_config.persistent`
+    /// contains an explicit storage location. Requests cannot override it.
+    pub fn try_with_download_categories_and_cache(
+        categories: Vec<SecurityCategory>,
+        max_level: SecurityLevel,
+        model_dir: Option<PathBuf>,
+        download_files: bool,
+        download_categories: Option<Vec<SecurityCategory>>,
+        cache_config: crate::ExactCacheConfig,
+    ) -> Result<Self, crate::CacheError> {
         let requests = Arc::new(RequestRegistry::default());
-        let l3_worker = L3Worker::start(Arc::clone(&requests));
+        let l3_worker = L3Worker::start_with_cache(Arc::clone(&requests), cache_config)?;
         let mut core = SecurityGatewayCore {
             categories,
             max_level,
@@ -384,10 +417,10 @@ impl SecurityGateway {
             }
         }
 
-        SecurityGateway {
+        Ok(SecurityGateway {
             core: Arc::new(core),
             queue_sender: OnceLock::new(),
-        }
+        })
     }
 
     /// Categories configured for `scan_all`.

@@ -38,6 +38,7 @@ pub struct ScoreOutput {
     pub chunk_promote_scores: Vec<Option<f32>>,
     pub l3_candidate_spans: Vec<ByteSpan>,
     pub l3_candidates: Vec<L3Candidate>,
+    pub l2_chunk_outputs: Vec<L2ChunkOutput>,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
@@ -55,6 +56,26 @@ pub struct L3Candidate {
     pub source_pipeline: String,
     pub source_model: String,
     pub l2_class: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+/// Per-chunk L2 output retained so promoted L3 documents can aggregate with
+/// non-promoted L2 chunk decisions.
+pub struct L2ChunkOutput {
+    pub span: ByteSpan,
+    pub class_name: String,
+    pub confidence: f32,
+    pub promoted: bool,
+    pub promote_score: Option<f32>,
+    pub promote_threshold: Option<f32>,
+    pub source_pipeline: String,
+    pub source_model: String,
+    /// Internal L2 vector reused by L3 scheduling. It is removed from the
+    /// externally published L2 result after the L3 job has been created.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub embedding: Vec<f32>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub embedding_space: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -108,6 +129,17 @@ pub(super) struct TokenChunk {
     pub(super) byte_span: ByteSpan,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct PreparationKey {
+    tokenizer_dir: String,
+    tokenizer_family: Option<String>,
+    vocab_size: usize,
+    embedding_dim: usize,
+    content_tokens_per_chunk: usize,
+    encoder_ptr: usize,
+    local_feature_order: Vec<String>,
+}
+
 impl NtdbPackage {
     pub fn load(
         package_dir: impl AsRef<Path>,
@@ -159,12 +191,12 @@ impl NtdbPackage {
         })
     }
 
-    pub fn score_all(
+    fn score_prepared(
         &mut self,
         text: &str,
+        prepared: &PreparedDocument,
         operating_point: NtdbOperatingPoint,
     ) -> NtdbResult<Vec<ScoreOutput>> {
-        let prepared = self.prepare_document(text)?;
         let chunk_count = prepared.chunks.len();
         let embedding_dim = self.manifest.minilm.embedding_dim;
 
@@ -228,7 +260,7 @@ impl NtdbPackage {
                     .zip(output.promote_threshold)
                     .is_some_and(|(score, threshold)| score >= threshold)
                 {
-                    let (scores, candidates) = chunk_promotions(
+                    let (scores, candidates, chunk_outputs) = chunk_promotions(
                         aggregator,
                         &self.manifest.task.kind,
                         &self.manifest.task.labels,
@@ -236,16 +268,33 @@ impl NtdbPackage {
                         &prepared,
                         &feature_by_name,
                         embedding_dim,
+                        self.manifest
+                            .minilm
+                            .shared_embedder_identity()
+                            .unwrap_or("unknown-l2-encoder"),
                         operating_point,
                     )?;
                     output.chunk_promote_scores = scores;
                     output.l3_candidate_spans =
                         candidates.iter().map(|candidate| candidate.span).collect();
                     output.l3_candidates = candidates;
+                    output.l2_chunk_outputs = chunk_outputs;
                 }
                 Ok(output)
             })
             .collect()
+    }
+
+    fn preparation_key(&self) -> PreparationKey {
+        PreparationKey {
+            tokenizer_dir: self.manifest.tokenizer_dir.clone(),
+            tokenizer_family: self.manifest.minilm.tokenizer_family.clone(),
+            vocab_size: self.manifest.minilm.vocab_size,
+            embedding_dim: self.manifest.minilm.embedding_dim,
+            content_tokens_per_chunk: self.manifest.minilm.content_tokens_per_chunk,
+            encoder_ptr: Arc::as_ptr(&self.encoder) as usize,
+            local_feature_order: self.manifest.feature_contract.local_feature_order.clone(),
+        }
     }
 
     fn prepare_document(&self, text: &str) -> NtdbResult<PreparedDocument> {
@@ -383,12 +432,24 @@ impl NtdbMultiPackage {
         text: &str,
         operating_point: NtdbOperatingPoint,
     ) -> NtdbResult<Vec<MultiScoreOutput>> {
+        let prepared = self.shared_prepared_documents(text, None)?;
         self.packages
             .par_iter_mut()
             .map(|entry| {
+                let key = entry.package.preparation_key();
+                let prepared = prepared.get(&key).ok_or_else(|| {
+                    ntdb_error(format!(
+                        "missing shared NTDB prepared document for model {}",
+                        entry.id
+                    ))
+                })?;
                 Ok(MultiScoreOutput {
                     model_id: entry.id.clone(),
-                    outputs: entry.package.score_all(text, operating_point)?,
+                    outputs: entry.package.score_prepared(
+                        text,
+                        prepared.as_ref(),
+                        operating_point,
+                    )?,
                 })
             })
             .collect()
@@ -429,16 +490,48 @@ impl NtdbMultiPackage {
             )));
         }
 
+        let prepared = self.shared_prepared_documents(text, Some(&requested))?;
         self.packages
             .par_iter_mut()
             .filter(|entry| requested.contains(&entry.id))
             .map(|entry| {
+                let key = entry.package.preparation_key();
+                let prepared = prepared.get(&key).ok_or_else(|| {
+                    ntdb_error(format!(
+                        "missing shared NTDB prepared document for model {}",
+                        entry.id
+                    ))
+                })?;
                 Ok(MultiScoreOutput {
                     model_id: entry.id.clone(),
-                    outputs: entry.package.score_all(text, operating_point)?,
+                    outputs: entry.package.score_prepared(
+                        text,
+                        prepared.as_ref(),
+                        operating_point,
+                    )?,
                 })
             })
             .collect()
+    }
+
+    fn shared_prepared_documents(
+        &self,
+        text: &str,
+        requested: Option<&HashSet<String>>,
+    ) -> NtdbResult<HashMap<PreparationKey, Arc<PreparedDocument>>> {
+        let mut prepared = HashMap::new();
+        for entry in self
+            .packages
+            .iter()
+            .filter(|entry| requested.map_or(true, |requested| requested.contains(&entry.id)))
+        {
+            let key = entry.package.preparation_key();
+            if prepared.contains_key(&key) {
+                continue;
+            }
+            prepared.insert(key, Arc::new(entry.package.prepare_document(text)?));
+        }
+        Ok(prepared)
     }
 }
 
@@ -450,10 +543,12 @@ fn chunk_promotions(
     prepared: &PreparedDocument,
     feature_by_name: &HashMap<String, Vec<f32>>,
     embedding_dim: usize,
+    embedding_space: &str,
     operating_point: NtdbOperatingPoint,
-) -> NtdbResult<(Vec<Option<f32>>, Vec<L3Candidate>)> {
+) -> NtdbResult<(Vec<Option<f32>>, Vec<L3Candidate>, Vec<L2ChunkOutput>)> {
     let mut scores = Vec::with_capacity(prepared.chunks.len());
     let mut thresholds = Vec::with_capacity(prepared.chunks.len());
+    let mut chunk_outputs = Vec::with_capacity(prepared.chunks.len());
     for (index, chunk) in prepared.chunks.iter().enumerate() {
         let chunk_prepared = PreparedDocument {
             chunks: vec![TokenChunk {
@@ -486,9 +581,108 @@ fn chunk_promotions(
         )?;
         scores.push(output.promote_score);
         thresholds.push(output.promote_threshold);
+        let mut embedding =
+            prepared.raw_embeddings[index * embedding_dim..(index + 1) * embedding_dim].to_vec();
+        normalize_embedding(&mut embedding);
+        chunk_outputs.push(l2_chunk_output(
+            chunk.byte_span,
+            task,
+            labels,
+            &output,
+            embedding,
+            embedding_space,
+        ));
     }
     let candidates = promoted_chunk_candidates(&prepared.chunks, &scores, &thresholds);
-    Ok((scores, candidates))
+    Ok((scores, candidates, chunk_outputs))
+}
+
+fn l2_chunk_output(
+    span: ByteSpan,
+    task: &str,
+    labels: &[String],
+    output: &ScoreOutput,
+    embedding: Vec<f32>,
+    embedding_space: &str,
+) -> L2ChunkOutput {
+    let (class_name, confidence) = if task == "binary_promote"
+        || (label_index(labels, "benign").is_some()
+            && label_index(labels, "attack").is_some()
+            && label_index(labels, "promote").is_some())
+    {
+        let attack_index = label_index(labels, "attack").unwrap_or(1);
+        let attack_score = output
+            .class_scores
+            .get(attack_index)
+            .copied()
+            .unwrap_or_default();
+        let threshold = output.attack_threshold.unwrap_or(0.5);
+        if attack_score >= threshold {
+            ("attack".to_string(), attack_score)
+        } else {
+            ("benign".to_string(), 1.0 - attack_score)
+        }
+    } else {
+        let predicted_index = if output.predicted_label == "promote" {
+            best_non_promote_index(labels, &output.class_scores).unwrap_or(output.predicted_index)
+        } else {
+            output.predicted_index
+        };
+        let class_name = labels
+            .get(predicted_index)
+            .cloned()
+            .unwrap_or_else(|| output.predicted_label.clone());
+        let confidence = output
+            .class_scores
+            .get(predicted_index)
+            .copied()
+            .unwrap_or(output.promote_score.unwrap_or_default());
+        (class_name, confidence)
+    };
+
+    L2ChunkOutput {
+        span,
+        class_name,
+        confidence: confidence.clamp(0.0, 1.0),
+        promoted: output
+            .promote_score
+            .zip(output.promote_threshold)
+            .is_some_and(|(score, threshold)| score >= threshold),
+        promote_score: output.promote_score,
+        promote_threshold: output.promote_threshold,
+        source_pipeline: String::new(),
+        source_model: String::new(),
+        embedding,
+        embedding_space: embedding_space.to_string(),
+    }
+}
+
+fn normalize_embedding(embedding: &mut [f32]) {
+    let norm = embedding
+        .iter()
+        .map(|value| f64::from(*value) * f64::from(*value))
+        .sum::<f64>()
+        .sqrt();
+    if norm <= f64::EPSILON {
+        return;
+    }
+    for value in embedding {
+        *value = (f64::from(*value) / norm) as f32;
+    }
+}
+
+fn label_index(labels: &[String], needle: &str) -> Option<usize> {
+    labels.iter().position(|label| label == needle)
+}
+
+fn best_non_promote_index(labels: &[String], scores: &[f32]) -> Option<usize> {
+    scores
+        .iter()
+        .copied()
+        .enumerate()
+        .filter(|(index, _)| labels.get(*index).is_some_and(|label| label != "promote"))
+        .max_by(|left, right| left.1.total_cmp(&right.1))
+        .map(|(index, _)| index)
 }
 
 fn promoted_chunk_candidates(

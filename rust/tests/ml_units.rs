@@ -51,6 +51,7 @@ mod ntdb_decision {
             chunk_promote_scores: Vec::new(),
             l3_candidate_spans: Vec::new(),
             l3_candidates: Vec::new(),
+            l2_chunk_outputs: Vec::new(),
         }
     }
 
@@ -100,6 +101,7 @@ mod ntdb_decision {
             chunk_promote_scores: Vec::new(),
             l3_candidate_spans: Vec::new(),
             l3_candidates: Vec::new(),
+            l2_chunk_outputs: Vec::new(),
         };
 
         let decision = NtdbDecision::from_score_output("sensitive".to_string(), output).unwrap();

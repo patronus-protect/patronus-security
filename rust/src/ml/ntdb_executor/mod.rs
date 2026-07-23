@@ -15,7 +15,8 @@ pub(crate) mod tokenizer;
 
 pub use decision::NtdbDecision;
 pub use package::{
-    ByteSpan, L3Candidate, MultiScoreOutput, NtdbMultiPackage, NtdbPackageSpec, ScoreOutput,
+    ByteSpan, L2ChunkOutput, L3Candidate, MultiScoreOutput, NtdbMultiPackage, NtdbPackageSpec,
+    ScoreOutput,
 };
 
 /// Internal items re-exported for the integration test suite. Not public API.

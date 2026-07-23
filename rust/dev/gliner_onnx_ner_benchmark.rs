@@ -114,7 +114,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let load_started = Instant::now();
     let mut engine = Engine::load(Path::new(&args[1]))?;
     let load_ms = load_started.elapsed().as_secs_f64() * 1_000.0;
-    engine.extract("Benedikt works at Patronus in Berlin.", &dataset.labels)?;
+    engine.extract("Alexandr works at Patronus in Berlin.", &dataset.labels)?;
 
     let mut latencies = Vec::with_capacity(dataset.samples.len());
     let mut predictions = Vec::with_capacity(dataset.samples.len());

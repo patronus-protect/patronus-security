@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use std::{
     path::{Path, PathBuf},
+    sync::Arc,
     time::{Duration, Instant},
 };
 
 use regex::Regex;
 
 use crate::{
+    cache::PiiChunkCache,
     dynamic_pii::{DynamicPiiConfig, EvidenceSpan},
     gliner_onnx_engine::{Entity, GlinerEngine},
 };
@@ -25,6 +27,7 @@ pub(crate) struct DynamicPiiOutput {
     pub evidence_spans: Vec<EvidenceSpan>,
     pub duration_ms: f64,
     pub model_path: PathBuf,
+    pub chunk_cache_hits: usize,
 }
 
 impl DynamicPiiRuntime {
@@ -57,10 +60,12 @@ impl DynamicPiiRuntime {
         Ok(())
     }
 
-    pub(crate) fn infer(
+    pub(crate) fn infer_with_callback(
         &mut self,
         text: &str,
         config: &DynamicPiiConfig,
+        chunk_cache: Arc<PiiChunkCache>,
+        mut on_entity: impl FnMut(&EvidenceSpan),
     ) -> Result<DynamicPiiOutput, Box<dyn std::error::Error>> {
         self.evict_expired();
         if text.len() > config.max_text_bytes {
@@ -84,12 +89,30 @@ impl DynamicPiiRuntime {
         let inference_threshold = config.inference_threshold();
         let engine = self.engine.as_mut().expect("GLiNER engine was initialized");
         let mut candidates = Vec::new();
+        let mut chunk_cache_hits = 0usize;
         for range in ranges {
-            for mut entity in engine.extract_entity_candidates(
-                &text[range.clone()],
+            let chunk_text = &text[range.clone()];
+            let chunk_entities = if let Some(entities) = chunk_cache.get(
+                crate::assets::DYNAMIC_PII_ASSET.revision,
+                chunk_text,
                 &labels,
                 inference_threshold,
-            )? {
+            ) {
+                chunk_cache_hits += 1;
+                entities
+            } else {
+                let entities =
+                    engine.extract_entity_candidates(chunk_text, &labels, inference_threshold)?;
+                chunk_cache.put(
+                    crate::assets::DYNAMIC_PII_ASSET.revision,
+                    chunk_text,
+                    &labels,
+                    inference_threshold,
+                    &entities,
+                );
+                entities
+            };
+            for mut entity in chunk_entities {
                 let canonical_label = config
                     .canonical_label_for(&entity.label)
                     .ok_or_else(|| format!("GLiNER returned unknown label {:?}", entity.label))?;
@@ -102,6 +125,15 @@ impl DynamicPiiRuntime {
                 entity.start_char = text[..entity.start_byte].chars().count();
                 entity.end_char = text[..entity.end_byte].chars().count();
                 entity.text = text[entity.start_byte..entity.end_byte].to_string();
+                on_entity(&EvidenceSpan {
+                    label: entity.label.clone(),
+                    text: entity.text.clone(),
+                    score: f64::from(entity.score),
+                    start_byte: entity.start_byte,
+                    end_byte: entity.end_byte,
+                    start_char: entity.start_char,
+                    end_char: entity.end_char,
+                });
                 candidates.push(entity);
             }
         }
@@ -122,6 +154,7 @@ impl DynamicPiiRuntime {
             evidence_spans,
             duration_ms: started.elapsed().as_secs_f64() * 1_000.0,
             model_path: self.model_dir.clone(),
+            chunk_cache_hits,
         })
     }
 

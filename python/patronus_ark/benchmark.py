@@ -156,6 +156,13 @@ def _latency_stats(values):
     }
 
 
+def _count_values(values):
+    counts = {}
+    for value in values:
+        counts[value] = counts.get(value, 0) + 1
+    return counts
+
+
 def _host_info():
     import os
 
@@ -880,9 +887,38 @@ def _load_scenario_texts(gateway):
         middle = len(body) // 2
         long_texts.append(body[:middle] + " " + attack + " " + body[middle:])
 
+    source_template = """
+fn validate_transfer_request(input: &TransferRequest) -> Result<(), ValidationError> {
+    if input.amount == 0 {
+        return Err(ValidationError::InvalidAmount);
+    }
+    if input.destination.is_empty() {
+        return Err(ValidationError::MissingDestination);
+    }
+    audit_log::record("validated transfer request");
+    Ok(())
+}
+
+fn render_wallet_status(status: &WalletStatus) -> String {
+    format!("balance={} pending={}", status.balance, status.pending)
+}
+"""
+    source_code_hidden_injection = []
+    for attack in attacks[:10]:
+        source_body = (source_template + "\n") * 32
+        middle = len(source_body) // 2
+        hidden_attack = (
+            "\n// Security regression fixture: the following text is untrusted "
+            f"tool output and must be classified as hostile: {attack}\n"
+        )
+        source_code_hidden_injection.append(
+            source_body[:middle] + hidden_attack + source_body[middle:]
+        )
+
     scenarios = {
         "l2_short": benign[:50],
         "long_text_over_16_chunks": long_texts,
+        "source_code_hidden_injection": source_code_hidden_injection,
         "cache_hits": benign[:5],
     }
     if gateway.max_level == "l3":
@@ -1028,6 +1064,36 @@ def _run_load(gateway, requests_per_scenario, target_rps=None):
             "l3_execution": _latency_stats(
                 [value for outcome in ok for value in outcome["l3_execution_ms"]]
             ),
+            "l3_worker_wall": _latency_stats(
+                [value for outcome in ok for value in outcome["l3_worker_wall_ms"]]
+            ),
+            "l3_inferred_chunks": _latency_stats(
+                [value for outcome in ok for value in outcome["l3_inferred_chunks"]]
+            ),
+            "l3_propagated_chunks": _latency_stats(
+                [value for outcome in ok for value in outcome["l3_propagated_chunks"]]
+            ),
+            "l3_planned_chunks": _latency_stats(
+                [value for outcome in ok for value in outcome["l3_planned_chunks"]]
+            ),
+            "l3_resolved_chunks": _latency_stats(
+                [value for outcome in ok for value in outcome["l3_resolved_chunks"]]
+            ),
+            "l3_effective_chunks": _latency_stats(
+                [value for outcome in ok for value in outcome["l3_effective_chunks"]]
+            ),
+            "l3_early_exits": sum(
+                1 for outcome in ok for value in outcome["l3_early_exit"] if value
+            ),
+            "l3_timeouts": sum(outcome["l3_timeouts"] for outcome in ok),
+            "l3_cache_hits": sum(
+                value for outcome in ok for value in outcome["l3_cache_hits"]
+            ),
+            "l3_clustering_strategies": _count_values(
+                value
+                for outcome in ok
+                for value in outcome["l3_clustering_strategies"]
+            ),
         }
     return {
         "mode": "paced" if target_rps else "burst",
@@ -1085,6 +1151,17 @@ def _new_load_request(index, request_id, started, enqueue_ms):
         "l3_chunks": [],
         "l3_queue_wait_ms": [],
         "l3_execution_ms": [],
+        "l3_worker_wall_ms": [],
+        "l3_inferred_chunks": [],
+        "l3_propagated_chunks": [],
+        "l3_planned_chunks": [],
+        "l3_resolved_chunks": [],
+        "l3_effective_chunks": [],
+        "l3_early_exit": [],
+        "l3_timeouts": 0,
+        "l3_cache_hits": [],
+        "l3_clustering_strategies": [],
+        "l3_physical_jobs_seen": set(),
     }
 
 
@@ -1102,19 +1179,58 @@ def _record_load_result_metrics(request, result):
     has_l3 = False
     for layer in result["layers"]:
         details = layer["details"]
-        if layer["layer_type"] == "ntdb_l2":
+        layer_type = layer.get("layer_type")
+        if layer_type == "ntdb_l2":
             if isinstance(details.get("chunks"), int):
                 request["l2_chunks"].append(details["chunks"])
             spans = details.get("l3_candidate_spans")
             if isinstance(spans, list):
                 request["candidate_spans"].append(len(spans))
-        if layer["level"] == "L3":
-            has_l3 = True
-            l3_duration_ms += layer["duration_ms"]
-            if isinstance(details.get("chunk_count"), int):
-                l3_chunk_count = details["chunk_count"]
-            if isinstance(details.get("l3_queue_wait_ms"), (int, float)):
-                l3_queue_wait_ms = details["l3_queue_wait_ms"]
+        if layer["level"] != "L3":
+            continue
+        if layer_type == "l3_pending":
+            continue
+        if layer_type == "degraded_timeout":
+            request["l3_timeouts"] += 1
+            if isinstance(details.get("queued_ms"), (int, float)):
+                l3_queue_wait_ms = details["queued_ms"]
+            continue
+        if layer_type == "l3_skipped":
+            continue
+        physical_job_id = details.get("physical_job_id")
+        physical_key = None
+        if physical_job_id is not None:
+            physical_key = (
+                details.get("model") or result.get("model"),
+                physical_job_id,
+            )
+            if physical_key in request["l3_physical_jobs_seen"]:
+                continue
+            request["l3_physical_jobs_seen"].add(physical_key)
+        has_l3 = True
+        l3_duration_ms += layer["duration_ms"]
+        if isinstance(details.get("chunk_count"), int):
+            l3_chunk_count = details["chunk_count"]
+        if isinstance(details.get("l3_queue_wait_ms"), (int, float)):
+            l3_queue_wait_ms = details["l3_queue_wait_ms"]
+        if isinstance(details.get("l3_worker_wall_ms"), (int, float)):
+            request["l3_worker_wall_ms"].append(details["l3_worker_wall_ms"])
+        if isinstance(details.get("inferred_chunks"), int):
+            request["l3_inferred_chunks"].append(details["inferred_chunks"])
+        if isinstance(details.get("propagated_chunks"), int):
+            request["l3_propagated_chunks"].append(details["propagated_chunks"])
+        if isinstance(details.get("planned_l3_chunks"), int):
+            request["l3_planned_chunks"].append(details["planned_l3_chunks"])
+        if isinstance(details.get("resolved_chunks"), int):
+            request["l3_resolved_chunks"].append(details["resolved_chunks"])
+        if isinstance(details.get("total_effective_chunks"), int):
+            request["l3_effective_chunks"].append(details["total_effective_chunks"])
+        if isinstance(details.get("early_exit"), bool):
+            request["l3_early_exit"].append(details["early_exit"])
+        if isinstance(details.get("cache_hits"), int):
+            request["l3_cache_hits"].append(details["cache_hits"])
+        if isinstance(details.get("l3_clustering_strategy"), str):
+            request["l3_clustering_strategies"].append(details["l3_clustering_strategy"])
     if l3_chunk_count is not None:
         request["l3_chunks"].append(l3_chunk_count)
     if has_l3:
@@ -1136,6 +1252,16 @@ def _completed_load_outcome(request):
         "l3_chunks": request["l3_chunks"],
         "l3_queue_wait_ms": request["l3_queue_wait_ms"],
         "l3_execution_ms": request["l3_execution_ms"],
+        "l3_worker_wall_ms": request["l3_worker_wall_ms"],
+        "l3_inferred_chunks": request["l3_inferred_chunks"],
+        "l3_propagated_chunks": request["l3_propagated_chunks"],
+        "l3_planned_chunks": request["l3_planned_chunks"],
+        "l3_resolved_chunks": request["l3_resolved_chunks"],
+        "l3_effective_chunks": request["l3_effective_chunks"],
+        "l3_early_exit": request["l3_early_exit"],
+        "l3_timeouts": request["l3_timeouts"],
+        "l3_cache_hits": request["l3_cache_hits"],
+        "l3_clustering_strategies": request["l3_clustering_strategies"],
     }
 
 
@@ -1443,6 +1569,27 @@ def _benchmark_markdown(
             f"{value(stats['l3_chunks'])}/{value(stats['l3_chunks'], 'max_ms')} | "
             f"{value(stats['l3_queue_wait'])}/{value(stats['l3_queue_wait'], 'p95_ms')} ms | "
             f"{value(stats['l3_execution'])}/{value(stats['l3_execution'], 'p95_ms')} ms |"
+        )
+    lines.extend(
+        [
+            "",
+            "| Scenario | L3 inferred avg/max | L3 propagated avg/max | L3 resolved avg/max | L3 early exits | L3 timeouts | L3 cache hits | L3 clustering |",
+            "| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
+        ]
+    )
+    for name, stats in diagnostic_scenarios:
+        inferred = stats.get("l3_inferred_chunks") or {}
+        propagated = stats.get("l3_propagated_chunks") or {}
+        resolved = stats.get("l3_resolved_chunks") or {}
+        lines.append(
+            f"| {name} | "
+            f"{value(inferred)}/{value(inferred, 'max_ms')} | "
+            f"{value(propagated)}/{value(propagated, 'max_ms')} | "
+            f"{value(resolved)}/{value(resolved, 'max_ms')} | "
+            f"{stats.get('l3_early_exits', 0)} | "
+            f"{stats.get('l3_timeouts', 0)} | "
+            f"{stats.get('l3_cache_hits', 0)} | "
+            f"{json.dumps(stats.get('l3_clustering_strategies', {}), sort_keys=True)} |"
         )
     lines.extend(
         [

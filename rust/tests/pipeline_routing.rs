@@ -138,6 +138,7 @@ fn consume_for(
                 request_id: finished_id,
                 ..
             } if finished_id == request_id => return None,
+            QueuedSecurityEvent::Progress(_) | QueuedSecurityEvent::Provisional(_) => continue,
             QueuedSecurityEvent::Finished { .. } => continue,
         }
     }
@@ -164,6 +165,7 @@ fn drain_for(
                 assert_eq!(finished_id, request_id);
                 return (results, completion);
             }
+            QueuedSecurityEvent::Progress(_) | QueuedSecurityEvent::Provisional(_) => {}
         }
     }
 }
@@ -751,7 +753,8 @@ fn l3_scheduler_defaults_match_cpu_ttl_policy() {
     assert_eq!(policy.ttl_ms["routing"], 10_500);
     assert_eq!(policy.ttl_ms["tool_class"], 10_500);
     assert_eq!(policy.priority[0], "injection");
-    assert_eq!(policy.priority[2], "dynamic-pii");
+    assert_eq!(policy.priority[2], "threat");
+    assert_eq!(policy.priority[4], "dynamic-pii");
     assert_eq!(policy.estimated_cost_ms["injection"], 200);
     assert_eq!(policy.estimated_cost_ms["dynamic-pii"], 240);
     assert_eq!(policy.fairness_quantum_ms, 50);
@@ -1018,6 +1021,78 @@ mod l3_worker_streaming {
     }
 
     #[test]
+    fn l3_progress_and_provisional_events_are_non_terminal() {
+        let scanner = SecurityGateway::with_max_level(
+            vec![SecurityCategory::Injection],
+            SecurityLevel::L3,
+            None,
+            false,
+        );
+        let mut policy = patronus_ark::L3SchedulerPolicy::default();
+        policy.progress = patronus_ark::L3ProgressMode::Provisional;
+        let mut gates = patronus_ark::ScanGateMatrix::all_enabled();
+        gates.set_l3_policy(policy);
+        scanner.set_execution_gates(gates);
+
+        let request_id = scanner.enqueue_test_l3_delay_request(0, 50, "progress-l3-model");
+        let first = consume_for(&scanner, &request_id, Some(Duration::from_secs(1)))
+            .expect("L2 fallback should be immediately consumable");
+        assert_eq!(first.level, "L2");
+
+        let mut saw_progress = false;
+        let mut saw_provisional = false;
+        let mut saw_final = false;
+        let mut saw_finished = false;
+        for _ in 0..8 {
+            let Some(event) = scanner.consume_next_event(Some(Duration::from_secs(1))) else {
+                continue;
+            };
+            match event {
+                QueuedSecurityEvent::Progress(progress) => {
+                    assert_eq!(progress.request_id, request_id);
+                    assert_eq!(progress.total_chunks, 1);
+                    assert!(matches!(progress.stage.as_str(), "l3_started" | "l3_chunk"));
+                    assert_eq!(
+                        scanner.request_state(&request_id),
+                        Some(SecurityRequestState::Running)
+                    );
+                    saw_progress = true;
+                }
+                QueuedSecurityEvent::Provisional(queued) => {
+                    assert_eq!(queued.request_id, request_id);
+                    assert_eq!(queued.result.level, "L3");
+                    assert_eq!(queued.result.class_name, "test_l3");
+                    assert_eq!(
+                        scanner.request_state(&request_id),
+                        Some(SecurityRequestState::Running)
+                    );
+                    saw_provisional = true;
+                }
+                QueuedSecurityEvent::Result(queued) => {
+                    assert_eq!(queued.request_id, request_id);
+                    assert_eq!(queued.result.level, "L3");
+                    saw_final = true;
+                }
+                QueuedSecurityEvent::Finished {
+                    request_id: finished_id,
+                    completion,
+                } => {
+                    assert_eq!(finished_id, request_id);
+                    assert_eq!(completion, SecurityRequestCompletion::Complete);
+                    saw_finished = true;
+                    break;
+                }
+            }
+        }
+
+        assert!(saw_progress);
+        assert!(saw_provisional);
+        assert!(saw_final);
+        assert!(saw_finished);
+        assert_eq!(scanner.request_state(&request_id), None);
+    }
+
+    #[test]
     fn l3_runtime_timeout_degrades_and_late_result_is_ignored() {
         let scanner = SecurityGateway::with_max_level(
             vec![SecurityCategory::Injection],
@@ -1069,7 +1144,10 @@ mod l3_worker_streaming {
             .expect("blocking request must finish");
         assert!(matches!(
             blocker_terminal,
-            QueuedSecurityEvent::Result(_) | QueuedSecurityEvent::Finished { .. }
+            QueuedSecurityEvent::Result(_)
+                | QueuedSecurityEvent::Progress(_)
+                | QueuedSecurityEvent::Provisional(_)
+                | QueuedSecurityEvent::Finished { .. }
         ));
 
         let mut expired_completion = None;

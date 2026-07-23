@@ -192,6 +192,7 @@ pub(super) fn ntdb_l2_result_parts(
     execution: &ScanExecution,
     duration_ms: f64,
     allow_l3: bool,
+    source_pipeline: &str,
 ) -> (EvaluationResult, Vec<LayerResult>) {
     let result = EvaluationResult {
         class_name: decision.fallback_label.clone(),
@@ -204,7 +205,11 @@ pub(super) fn ntdb_l2_result_parts(
     }
     let mut l3_candidates = decision.l3_candidates.clone();
     for candidate in &mut l3_candidates {
-        candidate.source_pipeline = decision.model_id.clone();
+        candidate.source_pipeline = source_pipeline.to_string();
+    }
+    let mut l2_chunk_outputs = decision.l2_chunk_outputs.clone();
+    for chunk in &mut l2_chunk_outputs {
+        chunk.source_pipeline = source_pipeline.to_string();
     }
     let mut details = HashMap::from([
         (
@@ -226,12 +231,12 @@ pub(super) fn ntdb_l2_result_parts(
             serde_json::json!(decision.chunk_promote_scores),
         ),
         (
-            "l3_candidate_spans".to_string(),
-            serde_json::json!(decision.l3_candidate_spans),
-        ),
-        (
             "l3_candidates".to_string(),
             serde_json::json!(l3_candidates),
+        ),
+        (
+            "l2_chunk_outputs".to_string(),
+            serde_json::json!(l2_chunk_outputs),
         ),
         (
             "class_scores".to_string(),
@@ -284,26 +289,13 @@ pub fn ntdb_l2_scan_result(
     let allow_l3 = config.has_l3
         && (execution.l3_strategy() == crate::L3Strategy::Dedicated
             || execution.allows_model(crate::ml::unified_onnx::UNIFIED_MODEL));
-    let (result, mut layers) = ntdb_l2_result_parts(decision, execution, duration_ms, allow_l3);
-    if let Some(layer) = layers
-        .iter_mut()
-        .find(|layer| layer.layer_type == "ntdb_l2")
-    {
-        if let Some(candidates) = layer
-            .details
-            .get_mut("l3_candidates")
-            .and_then(serde_json::Value::as_array_mut)
-        {
-            for candidate in candidates {
-                if let Some(candidate) = candidate.as_object_mut() {
-                    candidate.insert(
-                        "source_pipeline".to_string(),
-                        serde_json::json!(config.category.as_str()),
-                    );
-                }
-            }
-        }
-    }
+    let (result, layers) = ntdb_l2_result_parts(
+        decision,
+        execution,
+        duration_ms,
+        allow_l3,
+        config.category.as_str(),
+    );
     scan_result(config.category, config.public_model, result, layers)
 }
 

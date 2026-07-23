@@ -421,24 +421,38 @@ impl SecurityGateway {
             return Ok(());
         }
         let model = match config.category {
-            SecurityCategory::Injection => ntdb_injection_l3_worker_model(category_dir)?,
-            SecurityCategory::SensitiveDocument => LazyOnnxTextClassifier::from_dir(
-                category_dir.join("prompts"),
-                manifest.task.labels.clone(),
-                config.public_model,
-            )?,
+            SecurityCategory::Injection => {
+                let asset = revision_pinned_l3_asset(config.category)?;
+                ntdb_injection_l3_worker_model(category_dir, asset.revision)?
+            }
+            SecurityCategory::SensitiveDocument => {
+                let asset = revision_pinned_l3_asset(config.category)?;
+                LazyOnnxTextClassifier::from_dir_with_paths_at_sha(
+                    category_dir,
+                    manifest.task.labels.clone(),
+                    config.public_model,
+                    &["prompts/onnx/int8_int4_embeddings/model.onnx"],
+                    "prompts/tokenizer.json",
+                    256,
+                    asset.revision,
+                )?
+            }
             SecurityCategory::ToolClass
             | SecurityCategory::ToolAction
             | SecurityCategory::ToolTags
             | SecurityCategory::Routing
-            | SecurityCategory::Threat => LazyOnnxTextClassifier::from_dir_with_paths(
-                category_dir,
-                manifest.task.labels.clone(),
-                config.public_model,
-                &["l3/onnx/int8_int4_embeddings/model.onnx"],
-                "l3/tokenizer.json",
-                256,
-            )?,
+            | SecurityCategory::Threat => {
+                let asset = revision_pinned_l3_asset(config.category)?;
+                LazyOnnxTextClassifier::from_dir_with_paths_at_sha(
+                    category_dir,
+                    manifest.task.labels.clone(),
+                    config.public_model,
+                    &["l3/onnx/int8_int4_embeddings/model.onnx"],
+                    "l3/tokenizer.json",
+                    256,
+                    asset.revision,
+                )?
+            }
             _ => return Ok(()),
         };
         let Some(model) = model else {
@@ -516,14 +530,28 @@ fn warmup_failure(message: String) -> SecurityFailure {
 
 fn ntdb_injection_l3_worker_model(
     category_dir: &Path,
+    model_sha: &str,
 ) -> Result<Option<LazyOnnxTextClassifier>, Box<dyn std::error::Error>> {
     let labels = vec!["benign".to_string(), "attack".to_string()];
-    LazyOnnxTextClassifier::from_dir_with_paths(
+    LazyOnnxTextClassifier::from_dir_with_paths_at_sha(
         category_dir,
         labels,
         "wolf-defender-small",
-        &["l3/onnx/onnx_mixed/model_mixed.onnx"],
+        &["l3/onnx/int8_int4_embeddings/model.onnx"],
         "l3/tokenizer.json",
         256,
+        model_sha,
     )
+}
+
+fn revision_pinned_l3_asset(
+    category: SecurityCategory,
+) -> Result<assets::PipelineModelAssetSpec, Box<dyn std::error::Error>> {
+    assets::dedicated_l3_asset(category).ok_or_else(|| {
+        format!(
+            "missing revision-pinned L3 asset for '{}'",
+            category.as_str()
+        )
+        .into()
+    })
 }

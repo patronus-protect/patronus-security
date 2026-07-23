@@ -76,8 +76,10 @@ def _event_to_dict(event):
         "event_type": event.event_type,
         "request_id": event.request_id,
     }
-    if event.event_type == "result":
+    if event.event_type in ("result", "provisional"):
         output["result"] = _to_dict(event.result)
+    elif event.event_type == "progress":
+        output["progress"] = _decode_json_object(getattr(event, "progress_json", None))
     else:
         output["completion"] = event.completion
         output["failures"] = [_failure_to_dict(failure) for failure in event.failures]
@@ -184,6 +186,11 @@ class SecurityGateway:
         dynamic_pii_config: Pipeline-specific labels, result gates,
             thresholds, chunking, text limit, and timeout for the L3-only
             `dynamic-pii` category.
+        cache_storage_location: Optional path to the persistent cache database.
+            If omitted, caching remains memory-only.
+        cache_entry_ttl_seconds: Cache entry TTL shared by hot and persistent tiers.
+        cache_memory_max_entries: Maximum entries retained by a hot cache tier.
+        cache_memory_max_bytes: Maximum bytes retained by a hot cache tier.
     """
 
     def __init__(
@@ -199,6 +206,10 @@ class SecurityGateway:
         ntdb_operating_point: str = "best_promote",
         l3_strategy: str = "dedicated",
         dynamic_pii_config: dict | None = None,
+        cache_storage_location: str | None = None,
+        cache_entry_ttl_seconds: int = 30 * 24 * 60 * 60,
+        cache_memory_max_entries: int = 100_000,
+        cache_memory_max_bytes: int = 128 * 1024 * 1024,
     ):
         self._categories = list(categories)
         self._max_level = max_level
@@ -217,6 +228,10 @@ class SecurityGateway:
             "ntdb_operating_point": ntdb_operating_point,
             "l3_strategy": l3_strategy,
             "dynamic_pii_config": deepcopy(dynamic_pii_config),
+            "cache_storage_location": cache_storage_location,
+            "cache_entry_ttl_seconds": cache_entry_ttl_seconds,
+            "cache_memory_max_entries": cache_memory_max_entries,
+            "cache_memory_max_bytes": cache_memory_max_bytes,
         }
         self._benchmark_worker_config = {
             "model_dir": model_dir,
@@ -237,6 +252,10 @@ class SecurityGateway:
             ntdb_operating_point=ntdb_operating_point,
             l3_strategy=l3_strategy,
             dynamic_pii_config_json=_dynamic_pii_config_json(dynamic_pii_config),
+            cache_storage_location=cache_storage_location,
+            cache_entry_ttl_seconds=cache_entry_ttl_seconds,
+            cache_memory_max_entries=cache_memory_max_entries,
+            cache_memory_max_bytes=cache_memory_max_bytes,
         )
 
     @property
@@ -268,6 +287,10 @@ class SecurityGateway:
                 initialization fails.
         """
         self.rust_gateway.warmup()
+
+    def flush_cache(self):
+        """Wait until all queued persistent cache writes are durable."""
+        self.rust_gateway.flush_cache()
 
     def scan_all(self, text: str) -> list[dict]:
         """Scan text with every category configured on this gateway."""

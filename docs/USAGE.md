@@ -1,6 +1,6 @@
 # Usage walkthrough
 
-Six paired Rust/Python examples and one Python validation example cover the
+Nine numbered examples cover the
 main flows ([`rust/examples/`](https://github.com/patronus-protect/patronus-security/tree/main/rust/examples),
 [`python/examples/`](https://github.com/patronus-protect/patronus-security/tree/main/python/examples)).
 
@@ -13,9 +13,11 @@ main flows ([`rust/examples/`](https://github.com/patronus-protect/patronus-secu
 | 05 | Dynamic PII | Runtime GLiNER labels + evidence spans | `cargo run --example 05_dynamic_pii` | `python python/examples/05_dynamic_pii.py` |
 | 06 | Unified L3 speedup | Compare two promoted Dedicated models with one coalesced Multi inference | `cargo run --release --example 06_multi_l3_speedup` | `python python/examples/06_multi_l3_speedup.py` |
 | 07 | Multi-head L2 validation | Run all seven L2 classifiers on real unified-v3 Val rows | — | `python python/examples/07_multitask_val_l2.py` |
+| 08 | L3 pipeline policies | Configure clustering, aggregation, progress, and early exit by logical head | `cargo run --example 08_l3_pipeline_policies` | `python python/examples/08_l3_pipeline_policies.py` |
+| 09 | Caching | Compare memory-only, persistent async, write-through, and cache metadata | `cargo run --example 09_caching -- async` | `python python/examples/09_caching.py /tmp/patronus-cache.redb` |
 
 Examples 01, 02, and 04 run fully offline (`download_files=false`, native L1 +
-cached L2). Examples 03, 05, 06, and 07 need model assets and will print a
+cached L2). Examples 03, 05, 06, 07, 08, and 09 need model assets and will print a
 warmup error if they are missing.
 
 ## 01 — Basic scan
@@ -60,3 +62,10 @@ L3. Dedicated executes two L3 models; Multi returns both logical head results
 from one shared `physical_job_id`. Each strategy runs in a fresh process, L3
 sessions are materialized before timing, and the example prints median and
 mean end-to-end latency plus the measured speedup.
+
+## 09 — Caching
+
+Runs the same input twice and prints cache metadata. The Python example also
+shows the early partial Dynamic PII `result` event. See
+[Configure and understand caching](how-to/configure-caching.md) for the exact,
+similarity, Dynamic PII, storage-mode, and latency breakdown.

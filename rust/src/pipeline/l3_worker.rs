@@ -4,14 +4,18 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::cache::{
+    CacheCoordinator, CacheError, ExactCacheConfig, HistoricalSimilarityCache, PiiChunkCache,
+    PiiEntityCache,
+};
 use crate::ml::dynamic_pii::DynamicPiiRuntime;
-use crate::ml::ntdb_executor::L3Candidate;
+use crate::ml::ntdb_executor::{L2ChunkOutput, L3Candidate};
 use crate::ml::onnx::LazyOnnxTextClassifier;
 use crate::ml::unified_onnx::{LazyUnifiedOnnxClassifier, UNIFIED_MODEL};
 use crate::{
-    DynamicPiiConfig, L3Strategy, QueuedSecurityEvent, QueuedSecurityScanResult, RequestId,
-    ScanExecution, SecurityFailure, SecurityFailureKind, SecurityFailureStage, SecurityLevel,
-    SecurityRequestCompletion, SecurityScanResult,
+    DynamicPiiConfig, L3Strategy, QueuedSecurityEvent, QueuedSecurityProgress,
+    QueuedSecurityScanResult, RequestId, ScanExecution, SecurityFailure, SecurityFailureKind,
+    SecurityFailureStage, SecurityLevel, SecurityRequestCompletion, SecurityScanResult,
 };
 
 use super::decision_cache::DecisionCache;
@@ -25,7 +29,9 @@ pub use dedicated::selected_l3_chunks_for_test;
 #[cfg(feature = "test-util")]
 pub use unified::{
     aggregate_unified_head_for_test, public_unified_class_for_test,
-    replace_unified_pending_layer_for_test, unified_coalescing_snapshot, UnifiedCoalescingSnapshot,
+    replace_unified_pending_layer_for_test, unified_coalescing_snapshot,
+    unified_metadata_details_for_test, unified_outputs_have_same_classes_for_heads_for_test,
+    UnifiedCoalescingSnapshot,
 };
 
 type L3ModelHandle = Arc<Mutex<LazyOnnxTextClassifier>>;
@@ -33,6 +39,8 @@ type DynamicPiiHandle = Arc<Mutex<DynamicPiiRuntime>>;
 type UnifiedModelHandle = Arc<Mutex<LazyUnifiedOnnxClassifier>>;
 const L3_OVERLAP_TOKENS: usize = 32;
 const L3_IDLE_SWEEP_INTERVAL: Duration = Duration::from_secs(30);
+/// Minimum L3 confidence for an `injection`/`threat` positive to stop the whole request.
+const REQUEST_WIDE_EARLY_EXIT_CONFIDENCE: f64 = 0.93;
 
 pub(crate) struct RequestRegistry {
     pub state: Mutex<RequestRegistryState>,
@@ -95,6 +103,10 @@ struct L3WorkerState {
     unified_runs: Mutex<HashMap<String, unified::UnifiedRunState>>,
     unified_cache: Mutex<HashMap<String, unified::UnifiedCacheEntry>>,
     chunk_cache: Arc<DecisionCache>,
+    exact_cache: Arc<CacheCoordinator>,
+    pii_entity_cache: Arc<PiiEntityCache>,
+    pii_chunk_cache: Arc<PiiChunkCache>,
+    similarity_cache: Arc<HistoricalSimilarityCache>,
     requests: Arc<RequestRegistry>,
     next_sequence: Mutex<u64>,
 }
@@ -124,6 +136,7 @@ struct L3WorkerJob {
     execution: ScanExecution,
     degraded_factor: f64,
     l3_candidates: Vec<L3Candidate>,
+    l2_chunk_outputs: Vec<L2ChunkOutput>,
     dynamic_pii_config: Option<DynamicPiiConfig>,
     dynamic_pii_activated_rules: Vec<usize>,
     sequence: u64,
@@ -145,6 +158,7 @@ pub(crate) struct L3JobSpec {
     pub execution: ScanExecution,
     pub degraded_factor: f64,
     pub l3_candidates: Vec<L3Candidate>,
+    pub l2_chunk_outputs: Vec<L2ChunkOutput>,
     pub dynamic_pii_config: Option<DynamicPiiConfig>,
     pub dynamic_pii_activated_rules: Vec<usize>,
 }
@@ -154,7 +168,14 @@ pub(crate) struct PendingDynamicPii {
 }
 
 impl L3Worker {
-    pub(crate) fn start(requests: Arc<RequestRegistry>) -> Self {
+    pub(crate) fn start_with_cache(
+        requests: Arc<RequestRegistry>,
+        cache_config: ExactCacheConfig,
+    ) -> Result<Self, CacheError> {
+        let exact_cache = Arc::new(CacheCoordinator::from_config(cache_config)?);
+        let pii_entity_cache = Arc::new(PiiEntityCache::new(Arc::clone(&exact_cache)));
+        let pii_chunk_cache = Arc::new(PiiChunkCache::new(Arc::clone(&exact_cache)));
+        let similarity_cache = Arc::new(HistoricalSimilarityCache::new(Arc::clone(&exact_cache)));
         let state = Arc::new(L3WorkerState {
             jobs: Mutex::new(Vec::new()),
             scheduler: Mutex::new(FairSchedulerState::default()),
@@ -165,12 +186,16 @@ impl L3Worker {
             unified_runs: Mutex::new(HashMap::new()),
             unified_cache: Mutex::new(HashMap::new()),
             chunk_cache: Arc::new(DecisionCache::default()),
+            exact_cache,
+            pii_entity_cache,
+            pii_chunk_cache,
+            similarity_cache,
             requests,
             next_sequence: Mutex::new(0),
         });
         let worker_state = Arc::clone(&state);
         thread::spawn(move || worker_loop(worker_state));
-        Self { state }
+        Ok(Self { state })
     }
 
     pub(crate) fn next_job_id(&self) -> u64 {
@@ -182,6 +207,17 @@ impl L3Worker {
         let sequence = *next;
         *next += 1;
         sequence
+    }
+
+    pub(crate) fn flush_cache(&self) -> Result<(), CacheError> {
+        self.state.exact_cache.flush()
+    }
+
+    pub(crate) fn cache_storage_location(&self) -> Option<std::path::PathBuf> {
+        self.state
+            .exact_cache
+            .storage_location()
+            .map(std::path::Path::to_path_buf)
     }
 
     pub(crate) fn register_model(
@@ -294,6 +330,7 @@ impl L3Worker {
             execution: spec.execution,
             degraded_factor: spec.degraded_factor,
             l3_candidates: spec.l3_candidates,
+            l2_chunk_outputs: spec.l2_chunk_outputs,
             dynamic_pii_config: spec.dynamic_pii_config,
             dynamic_pii_activated_rules: spec.dynamic_pii_activated_rules,
             sequence: spec.job_id,
@@ -343,6 +380,7 @@ impl L3Worker {
                 execution: spec.execution,
                 degraded_factor: spec.degraded_factor,
                 l3_candidates: spec.l3_candidates,
+                l2_chunk_outputs: spec.l2_chunk_outputs,
                 dynamic_pii_config: spec.dynamic_pii_config,
                 dynamic_pii_activated_rules: spec.dynamic_pii_activated_rules,
                 sequence: spec.job_id,
@@ -416,9 +454,11 @@ fn scheduling_values(spec: &L3JobSpec) -> (u64, u64, u64) {
 }
 
 fn select_fair_job(jobs: &[L3WorkerJob], scheduler: &mut FairSchedulerState) -> usize {
+    let eligible_indices = eligible_l3_job_indices(jobs);
     if let Some((index, _)) = jobs
         .iter()
         .enumerate()
+        .filter(|(index, _)| eligible_indices.contains(index))
         .filter(|(_, job)| {
             job.max_wait_ms > 0
                 && job.enqueued_at.elapsed().as_millis() >= u128::from(job.max_wait_ms)
@@ -432,17 +472,30 @@ fn select_fair_job(jobs: &[L3WorkerJob], scheduler: &mut FairSchedulerState) -> 
         return index;
     }
 
-    let mut workloads = jobs
+    let mut workloads = eligible_indices
         .iter()
-        .map(|job| job.category.clone())
+        .map(|index| jobs[*index].category.clone())
         .collect::<Vec<_>>();
+    if workloads.is_empty() {
+        workloads = jobs
+            .iter()
+            .map(|job| job.category.clone())
+            .collect::<Vec<_>>();
+    }
     workloads.sort();
     workloads.dedup();
     workloads.sort_by_key(|workload| {
-        jobs.iter()
-            .filter(|job| &job.category == workload)
-            .map(|job| (job.priority, job.sequence))
+        eligible_indices
+            .iter()
+            .filter(|index| jobs[**index].category == *workload)
+            .map(|index| (jobs[*index].priority, jobs[*index].sequence))
             .min()
+            .or_else(|| {
+                jobs.iter()
+                    .filter(|job| &job.category == workload)
+                    .map(|job| (job.priority, job.sequence))
+                    .min()
+            })
             .unwrap()
     });
     let active = workloads.iter().cloned().collect::<HashSet<_>>();
@@ -457,12 +510,18 @@ fn select_fair_job(jobs: &[L3WorkerJob], scheduler: &mut FairSchedulerState) -> 
         .unwrap_or(0);
     loop {
         let workload = &workloads[cursor];
-        let candidate = jobs
+        let candidate = eligible_indices
             .iter()
-            .enumerate()
-            .filter(|(_, job)| &job.category == workload)
-            .min_by_key(|(_, job)| (job.priority, job.sequence))
-            .map(|(index, _)| index)
+            .copied()
+            .filter(|index| jobs[*index].category == *workload)
+            .min_by_key(|index| (jobs[*index].priority, jobs[*index].sequence))
+            .or_else(|| {
+                jobs.iter()
+                    .enumerate()
+                    .filter(|(_, job)| &job.category == workload)
+                    .min_by_key(|(_, job)| (job.priority, job.sequence))
+                    .map(|(index, _)| index)
+            })
             .unwrap();
         let job = &jobs[candidate];
         let cost_ms = scheduler
@@ -487,6 +546,26 @@ fn select_fair_job(jobs: &[L3WorkerJob], scheduler: &mut FairSchedulerState) -> 
         }
         cursor = (cursor + 1) % workloads.len();
     }
+}
+
+fn eligible_l3_job_indices(jobs: &[L3WorkerJob]) -> HashSet<usize> {
+    let mut best_priority_by_request: HashMap<&str, usize> = HashMap::new();
+    for job in jobs {
+        best_priority_by_request
+            .entry(job.request_id.as_str())
+            .and_modify(|priority| *priority = (*priority).min(job.priority))
+            .or_insert(job.priority);
+    }
+    jobs.iter()
+        .enumerate()
+        .filter_map(|(index, job)| {
+            let best = best_priority_by_request
+                .get(job.request_id.as_str())
+                .copied()
+                .unwrap_or(job.priority);
+            (job.priority == best).then_some(index)
+        })
+        .collect()
 }
 
 fn observe_cost(state: &L3WorkerState, workload: &str, configured_ms: u64, actual_ms: f64) {
@@ -522,6 +601,7 @@ fn finish_job(
     request_id: RequestId,
     result: SecurityScanResult,
 ) {
+    let request_wide_stop = request_wide_early_exit(&result);
     let mut registry = worker
         .requests
         .state
@@ -560,6 +640,9 @@ fn finish_job(
             }));
     }
     drop(registry);
+    if let Some(reason) = request_wide_stop {
+        abort_queued_l3_jobs_for_request(worker, &request_id, &reason);
+    }
     resolve_dynamic_pii(worker, &request_id);
     let mut registry = worker
         .requests
@@ -568,6 +651,168 @@ fn finish_job(
         .expect("request registry mutex poisoned");
     finish_request_if_ready(&mut registry, &request_id);
     worker.requests.available.notify_all();
+}
+
+pub(super) fn request_wide_early_exit(result: &SecurityScanResult) -> Option<String> {
+    if result.level != SecurityLevel::L3.as_str() {
+        return None;
+    }
+    if result.category != "injection" && result.category != "threat" {
+        return None;
+    }
+    let class = result.class_name.as_str();
+    if matches!(class, "safe" | "benign") {
+        return None;
+    }
+    if result.confidence < REQUEST_WIDE_EARLY_EXIT_CONFIDENCE {
+        return None;
+    }
+    Some(format!(
+        "{}:{}:{:.4}",
+        result.category, result.class_name, result.confidence
+    ))
+}
+
+fn abort_queued_l3_jobs_for_request(worker: &Arc<L3WorkerState>, request_id: &str, reason: &str) {
+    let aborted = {
+        let mut jobs = worker.jobs.lock().expect("l3 job mutex poisoned");
+        let mut aborted = Vec::new();
+        let mut kept = Vec::with_capacity(jobs.len());
+        for job in jobs.drain(..) {
+            if job.request_id == request_id {
+                aborted.push(job);
+            } else {
+                kept.push(job);
+            }
+        }
+        *jobs = kept;
+        aborted
+    };
+    if aborted.is_empty() {
+        return;
+    }
+
+    let mut registry = worker
+        .requests
+        .state
+        .lock()
+        .expect("request registry mutex poisoned");
+    let Some(state) = registry.requests.get_mut(request_id) else {
+        return;
+    };
+    if state.completion.is_some() {
+        return;
+    }
+    let mut ready = Vec::new();
+    for job in aborted {
+        if state.pending_l3_job_ids.remove(&job.job_id) {
+            state.pending_l3_job_categories.remove(&job.job_id);
+            state.usable_results += 1;
+            ready.push(QueuedSecurityEvent::Result(QueuedSecurityScanResult {
+                request_id: request_id.to_string(),
+                result: request_wide_degraded_result(job, reason),
+            }));
+        }
+    }
+    registry.ready.extend(ready);
+    worker.requests.available.notify_all();
+}
+
+fn request_wide_degraded_result(job: L3WorkerJob, reason: &str) -> SecurityScanResult {
+    let mut result = job.fallback;
+    result.confidence = (result.confidence * job.degraded_factor).clamp(0.0, 1.0);
+    for layer in &mut result.layers {
+        if layer.level == result.level && layer.layer_type != "l3_pending" {
+            layer.confidence = result.confidence;
+            layer
+                .details
+                .insert("degraded".to_string(), serde_json::json!(true));
+            layer.details.insert(
+                "degraded_reason".to_string(),
+                serde_json::json!("request_wide_early_exit"),
+            );
+        }
+        if layer.layer_type == "l3_pending" {
+            layer.layer_type = "l3_skipped".to_string();
+            layer.class_name = "skipped".to_string();
+            layer.details.insert(
+                "skip_reason".to_string(),
+                serde_json::json!("request_wide_early_exit"),
+            );
+            layer.details.insert(
+                "request_wide_early_exit_reason".to_string(),
+                serde_json::json!(reason),
+            );
+        }
+    }
+    result.duration_ms = result.layers.iter().map(|layer| layer.duration_ms).sum();
+    result
+}
+
+fn publish_progress(worker: &L3WorkerState, progress: QueuedSecurityProgress) {
+    let mut registry = worker
+        .requests
+        .state
+        .lock()
+        .expect("request registry mutex poisoned");
+    if registry
+        .requests
+        .get(&progress.request_id)
+        .is_some_and(|state| state.completion.is_none())
+    {
+        registry
+            .ready
+            .push_back(QueuedSecurityEvent::Progress(progress));
+        worker.requests.available.notify_all();
+    }
+}
+
+fn publish_provisional(worker: &L3WorkerState, request_id: RequestId, result: SecurityScanResult) {
+    let mut registry = worker
+        .requests
+        .state
+        .lock()
+        .expect("request registry mutex poisoned");
+    if registry
+        .requests
+        .get(&request_id)
+        .is_some_and(|state| state.completion.is_none())
+    {
+        registry
+            .ready
+            .push_back(QueuedSecurityEvent::Provisional(QueuedSecurityScanResult {
+                request_id,
+                result,
+            }));
+        worker.requests.available.notify_all();
+    }
+}
+
+/// Publishes an early result-shaped event without marking a scanner job
+/// complete. Used by Dynamic PII so UI consumers can react to the first entity.
+fn publish_result_preview(
+    worker: &L3WorkerState,
+    request_id: RequestId,
+    result: SecurityScanResult,
+) {
+    let mut registry = worker
+        .requests
+        .state
+        .lock()
+        .expect("request registry mutex poisoned");
+    if registry
+        .requests
+        .get(&request_id)
+        .is_some_and(|state| state.completion.is_none())
+    {
+        registry
+            .ready
+            .push_back(QueuedSecurityEvent::Result(QueuedSecurityScanResult {
+                request_id,
+                result,
+            }));
+        worker.requests.available.notify_all();
+    }
 }
 
 fn resolve_dynamic_pii(worker: &Arc<L3WorkerState>, request_id: &str) {
@@ -701,4 +946,157 @@ pub(crate) fn finish_request_if_ready(
 
 fn elapsed_ms(started: Instant) -> f64 {
     started.elapsed().as_secs_f64() * 1000.0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::LayerResult;
+
+    #[test]
+    fn fair_scheduler_does_not_run_lower_priority_job_before_same_request_threat() {
+        let jobs = vec![
+            test_job("rq-a", "tool_class", 10, 1),
+            test_job("rq-a", "threat", 2, 2),
+        ];
+        let mut scheduler = FairSchedulerState {
+            deficits_ms: HashMap::from([("tool_class".to_string(), 10_000.0)]),
+            observed_cost_ms: HashMap::from([("tool_class".to_string(), 1.0)]),
+            cursor: Some("tool_class".to_string()),
+        };
+
+        let selected = select_fair_job(&jobs, &mut scheduler);
+
+        assert_eq!(jobs[selected].request_id, "rq-a");
+        assert_eq!(jobs[selected].category, "threat");
+    }
+
+    #[test]
+    fn request_wide_early_exit_requires_confidence_threshold() {
+        let mut result = test_result("injection", "attack", 0.62, "L3");
+        assert_eq!(request_wide_early_exit(&result), None);
+
+        result.confidence = 0.94;
+        assert_eq!(
+            request_wide_early_exit(&result),
+            Some("injection:attack:0.9400".to_string())
+        );
+    }
+
+    #[test]
+    fn partial_result_event_does_not_complete_or_count_the_request() {
+        let requests = Arc::new(RequestRegistry::default());
+        requests
+            .state
+            .lock()
+            .unwrap()
+            .requests
+            .insert("rq-pii".to_string(), RequestState::running());
+        let result = test_result("dynamic-pii", "entities", 0.91, "L3");
+
+        publish_result_preview(
+            &L3WorkerState {
+                jobs: Mutex::new(Vec::new()),
+                scheduler: Mutex::new(FairSchedulerState::default()),
+                available: Condvar::new(),
+                models: Mutex::new(HashMap::new()),
+                dynamic_pii_models: Mutex::new(HashMap::new()),
+                unified_model: Mutex::new(None),
+                unified_runs: Mutex::new(HashMap::new()),
+                unified_cache: Mutex::new(HashMap::new()),
+                chunk_cache: Arc::new(DecisionCache::default()),
+                exact_cache: Arc::new(
+                    CacheCoordinator::from_config(ExactCacheConfig::default()).unwrap(),
+                ),
+                pii_entity_cache: Arc::new(PiiEntityCache::new(Arc::new(
+                    CacheCoordinator::from_config(ExactCacheConfig::default()).unwrap(),
+                ))),
+                pii_chunk_cache: Arc::new(PiiChunkCache::new(Arc::new(
+                    CacheCoordinator::from_config(ExactCacheConfig::default()).unwrap(),
+                ))),
+                similarity_cache: Arc::new(HistoricalSimilarityCache::new(Arc::new(
+                    CacheCoordinator::from_config(ExactCacheConfig::default()).unwrap(),
+                ))),
+                requests: Arc::clone(&requests),
+                next_sequence: Mutex::new(0),
+            },
+            "rq-pii".to_string(),
+            result,
+        );
+
+        // The preview is externally a Result event, but request accounting
+        // remains untouched until the final L3 job finishes.
+        let state = requests.state.lock().unwrap();
+        assert!(matches!(
+            state.ready.front(),
+            Some(QueuedSecurityEvent::Result(_))
+        ));
+        assert_eq!(state.requests["rq-pii"].usable_results, 0);
+        assert!(state.requests["rq-pii"].completion.is_none());
+    }
+
+    fn test_job(request_id: &str, category: &str, priority: usize, sequence: u64) -> L3WorkerJob {
+        L3WorkerJob {
+            job_id: sequence,
+            request_id: request_id.to_string(),
+            category: category.to_string(),
+            model: category.to_string(),
+            text: "test".to_string(),
+            fallback: SecurityScanResult {
+                category: category.to_string(),
+                class_name: "benign".to_string(),
+                confidence: 0.5,
+                level: "L2".to_string(),
+                model: category.to_string(),
+                duration_ms: 0.0,
+                layers: vec![LayerResult {
+                    level: "L2".to_string(),
+                    layer_type: "test".to_string(),
+                    class_name: "benign".to_string(),
+                    confidence: 0.5,
+                    matched: false,
+                    duration_ms: 0.0,
+                    thresholds: HashMap::new(),
+                    details: HashMap::new(),
+                }],
+                evidence_spans: Vec::new(),
+                label_scores: Vec::new(),
+            },
+            priority,
+            ttl_ms: 10_000,
+            inference_timeout_ms: 10_000,
+            estimated_cost_ms: 100,
+            fairness_quantum_ms: 50,
+            max_wait_ms: 2_000,
+            enqueued_at: Instant::now(),
+            execution: ScanExecution::new(SecurityLevel::L3),
+            degraded_factor: 0.75,
+            l3_candidates: Vec::new(),
+            l2_chunk_outputs: Vec::new(),
+            dynamic_pii_config: None,
+            dynamic_pii_activated_rules: Vec::new(),
+            sequence,
+            #[cfg(feature = "test-util")]
+            test_delay_ms: None,
+        }
+    }
+
+    fn test_result(
+        category: &str,
+        class_name: &str,
+        confidence: f64,
+        level: &str,
+    ) -> SecurityScanResult {
+        SecurityScanResult {
+            category: category.to_string(),
+            class_name: class_name.to_string(),
+            confidence,
+            level: level.to_string(),
+            model: category.to_string(),
+            duration_ms: 0.0,
+            layers: Vec::new(),
+            evidence_spans: Vec::new(),
+            label_scores: Vec::new(),
+        }
+    }
 }

@@ -197,10 +197,11 @@ pub fn download_dedicated_l3_assets(
 
 fn pipeline_model_assets_present(asset: PipelineModelAssetSpec, target_dir: &Path) -> bool {
     let bundle_dir = target_dir.join(asset.destination_path);
-    asset
-        .files
-        .iter()
-        .all(|file| bundle_dir.join(file).is_file())
+    bundle_revision_matches(&bundle_dir, asset.revision)
+        && asset
+            .files
+            .iter()
+            .all(|file| bundle_dir.join(file).is_file())
 }
 
 fn download_pipeline_model_assets(
@@ -210,11 +211,12 @@ fn download_pipeline_model_assets(
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     let token = hf_token();
     let bundle_dir = target_dir.join(asset.destination_path);
+    let revision_matches = bundle_revision_matches(&bundle_dir, asset.revision);
     let missing_files = asset
         .files
         .iter()
         .copied()
-        .filter(|file| !bundle_dir.join(file).is_file())
+        .filter(|file| !revision_matches || !bundle_dir.join(file).is_file())
         .collect::<Vec<_>>();
     run_downloads_in_parallel(
         &missing_files,
@@ -237,7 +239,13 @@ fn download_pipeline_model_assets(
             .map_err(|error| error.to_string())
         },
     )?;
+    fs::write(bundle_dir.join(".patronus-revision"), asset.revision)?;
     Ok(bundle_dir)
+}
+
+fn bundle_revision_matches(bundle_dir: &Path, revision: &str) -> bool {
+    fs::read_to_string(bundle_dir.join(".patronus-revision"))
+        .is_ok_and(|stored| stored.trim() == revision)
 }
 
 /// Download missing manifest assets for a category into `target_dir`.
@@ -266,9 +274,10 @@ pub fn download_category_assets(
         assets.len() - missing_assets.len(),
         assets.len(),
         |asset| {
-            download_hf_file(
+            download_hf_file_at_revision(
                 token.as_deref(),
                 asset.repo,
+                asset.revision.unwrap_or("main"),
                 asset.source_path,
                 &target_dir.join(asset.destination_path),
                 asset.required,
@@ -719,7 +728,7 @@ fn migrate_legacy_shared_embedder_files(
         for legacy_file in legacy_files {
             link_shared_embedder_file(&file.shared_file, &legacy_file)?;
         }
-        if file.package_file.is_file() {
+        if file.shared_file.is_file() {
             link_shared_embedder_file(&file.shared_file, &file.package_file)?;
         }
     }

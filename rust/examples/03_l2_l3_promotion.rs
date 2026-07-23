@@ -54,6 +54,23 @@ fn main() {
                     queued.result.model,
                 );
             }
+            Some(QueuedSecurityEvent::Progress(progress)) => {
+                println!(
+                    "progress: {}/{} chunks ({:.0}%)",
+                    progress.completed_chunks,
+                    progress.total_chunks,
+                    progress.coverage * 100.0,
+                );
+            }
+            Some(QueuedSecurityEvent::Provisional(queued)) => {
+                println!(
+                    "provisional: {}/{} ({:.3}) via {}",
+                    queued.result.category,
+                    queued.result.class_name,
+                    queued.result.confidence,
+                    queued.result.model,
+                );
+            }
             Some(QueuedSecurityEvent::Finished { completion, .. }) => {
                 println!("\nfinished: {completion:?}");
                 break;

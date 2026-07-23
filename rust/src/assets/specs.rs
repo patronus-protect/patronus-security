@@ -10,6 +10,8 @@ pub struct AssetSpec {
     pub level: SecurityLevel,
     /// Hugging Face repository identifier.
     pub repo: &'static str,
+    /// Immutable Hugging Face commit revision, when the asset is pinned.
+    pub revision: Option<&'static str>,
     /// File path inside the Hugging Face repository.
     pub source_path: &'static str,
     /// Relative path below the category cache directory.
@@ -89,10 +91,36 @@ pub const UNIFIED_L3_ASSET: PipelineModelAssetSpec = PipelineModelAssetSpec {
 
 pub const DEDICATED_L3_ASSETS: &[PipelineModelAssetSpec] = &[
     PipelineModelAssetSpec {
+        category: SecurityCategory::Injection,
+        model: "wolf-defender-small",
+        repo: "patronus-studio/wolf-defender-prompt-injection-small-edge",
+        revision: "e2002adb623ce644ecc8283ee0699377548541fa",
+        destination_path: "injection/l3",
+        files: &[
+            "onnx/int8_int4_embeddings/model.onnx",
+            "config.json",
+            "tokenizer.json",
+            "tokenizer_config.json",
+        ],
+    },
+    PipelineModelAssetSpec {
+        category: SecurityCategory::SensitiveDocument,
+        model: "orca-sonar-document-classifier",
+        repo: "patronus-studio/orca-sonar-document-classifier-edge",
+        revision: "8596617186b7d14e8d3492214bda292f5e72456d",
+        destination_path: "sensitive_document/prompts",
+        files: &[
+            "onnx/int8_int4_embeddings/model.onnx",
+            "config.json",
+            "tokenizer.json",
+            "tokenizer_config.json",
+        ],
+    },
+    PipelineModelAssetSpec {
         category: SecurityCategory::ToolClass,
         model: "unified-v3-tool-class",
-        repo: "patronus-studio/husky-sight-tool-type-classifier",
-        revision: "d2e21547d9690f72d33b7852b65b16e14706e5d6",
+        repo: "patronus-studio/husky-sight-tool-type-classifier-edge",
+        revision: "0f425da68608af007dceb56b35ef51992477877e",
         destination_path: "tool_class/l3",
         files: &[
             "onnx/int8_int4_embeddings/model.onnx",
@@ -104,8 +132,8 @@ pub const DEDICATED_L3_ASSETS: &[PipelineModelAssetSpec] = &[
     PipelineModelAssetSpec {
         category: SecurityCategory::ToolAction,
         model: "unified-v3-tool-action",
-        repo: "patronus-studio/husky-paw-tool-action-classifier",
-        revision: "75a94e7651b812839b53fc52909b74120b965ff5",
+        repo: "patronus-studio/husky-paw-tool-action-classifier-edge",
+        revision: "8c224609ed22841be6a53ac94e3dc20ee2c73757",
         destination_path: "tool_action/l3",
         files: &[
             "onnx/int8_int4_embeddings/model.onnx",
@@ -117,8 +145,8 @@ pub const DEDICATED_L3_ASSETS: &[PipelineModelAssetSpec] = &[
     PipelineModelAssetSpec {
         category: SecurityCategory::ToolTags,
         model: "unified-v3-tool-tags",
-        repo: "patronus-studio/husky-nose-tool-security-properties-classifier",
-        revision: "5d1ecc7cd0c441284a86dc0dfecb0cc8c1180f49",
+        repo: "patronus-studio/husky-nose-tool-security-properties-classifier-edge",
+        revision: "374f97cb202ce3097ae0c7844f7ac0febb8f4fec",
         destination_path: "tool_tags/l3",
         files: &[
             "onnx/int8_int4_embeddings/model.onnx",
@@ -130,8 +158,8 @@ pub const DEDICATED_L3_ASSETS: &[PipelineModelAssetSpec] = &[
     PipelineModelAssetSpec {
         category: SecurityCategory::Routing,
         model: "unified-v3-routing",
-        repo: "patronus-studio/panther-read-intent-classifier",
-        revision: "509b548cf3f87d9f4aaf83d5ed34e15b62f03b11",
+        repo: "patronus-studio/panther-read-intent-classifier-edge",
+        revision: "7a638cdefebd7f8a815cda3428ab98e57bf1fb08",
         destination_path: "routing/l3",
         files: &[
             "onnx/int8_int4_embeddings/model.onnx",
@@ -143,8 +171,8 @@ pub const DEDICATED_L3_ASSETS: &[PipelineModelAssetSpec] = &[
     PipelineModelAssetSpec {
         category: SecurityCategory::Threat,
         model: "unified-v3-threat",
-        repo: "patronus-studio/wolf-defender-threat-classifier",
-        revision: "f7233204ce14185f4cbb4dc0b42ae43c88242c03",
+        repo: "patronus-studio/wolf-defender-threat-classifier-edge",
+        revision: "20a2553e8baeb29bc0a5150f20d7ae0d9af89e49",
         destination_path: "threat/l3",
         files: &[
             "onnx/int8_int4_embeddings/model.onnx",
@@ -156,11 +184,11 @@ pub const DEDICATED_L3_ASSETS: &[PipelineModelAssetSpec] = &[
 ];
 
 pub const ASSET_MANIFEST: &[AssetSpec] = &[
-    // Injection L2 is NTDB-local-only in Phase 5. These are L3 assets only.
     AssetSpec {
         category: SecurityCategory::Injection,
         level: SecurityLevel::L3,
-        repo: "patronus-studio/wolf-defender-prompt-injection-small",
+        repo: "patronus-studio/wolf-defender-prompt-injection-small-edge",
+        revision: Some("e2002adb623ce644ecc8283ee0699377548541fa"),
         source_path: "config.json",
         destination_path: "l3/config.json",
         required: true,
@@ -168,7 +196,8 @@ pub const ASSET_MANIFEST: &[AssetSpec] = &[
     AssetSpec {
         category: SecurityCategory::Injection,
         level: SecurityLevel::L3,
-        repo: "patronus-studio/wolf-defender-prompt-injection-small",
+        repo: "patronus-studio/wolf-defender-prompt-injection-small-edge",
+        revision: Some("e2002adb623ce644ecc8283ee0699377548541fa"),
         source_path: "tokenizer.json",
         destination_path: "l3/tokenizer.json",
         required: true,
@@ -176,7 +205,8 @@ pub const ASSET_MANIFEST: &[AssetSpec] = &[
     AssetSpec {
         category: SecurityCategory::Injection,
         level: SecurityLevel::L3,
-        repo: "patronus-studio/wolf-defender-prompt-injection-small",
+        repo: "patronus-studio/wolf-defender-prompt-injection-small-edge",
+        revision: Some("e2002adb623ce644ecc8283ee0699377548541fa"),
         source_path: "tokenizer_config.json",
         destination_path: "l3/tokenizer_config.json",
         required: false,
@@ -184,24 +214,26 @@ pub const ASSET_MANIFEST: &[AssetSpec] = &[
     AssetSpec {
         category: SecurityCategory::Injection,
         level: SecurityLevel::L3,
-        repo: "patronus-studio/wolf-defender-prompt-injection-small",
-        source_path: "special_tokens_map.json",
-        destination_path: "l3/special_tokens_map.json",
-        required: false,
-    },
-    AssetSpec {
-        category: SecurityCategory::Injection,
-        level: SecurityLevel::L3,
-        repo: "patronus-studio/wolf-defender-prompt-injection-small",
-        source_path: "onnx/onnx_mixed/model_mixed.onnx",
-        destination_path: "l3/onnx/onnx_mixed/model_mixed.onnx",
+        repo: "patronus-studio/wolf-defender-prompt-injection-small-edge",
+        revision: Some("e2002adb623ce644ecc8283ee0699377548541fa"),
+        source_path: "onnx/int8_int4_embeddings/model.onnx",
+        destination_path: "l3/onnx/int8_int4_embeddings/model.onnx",
         required: true,
     },
-    // Sensitive Documents L2 is NTDB-local-only in Phase 5. L3 assets stay.
     AssetSpec {
         category: SecurityCategory::SensitiveDocument,
         level: SecurityLevel::L3,
-        repo: "patronus-studio/orca-sonar-document-classifier",
+        repo: "patronus-studio/orca-sonar-document-classifier-edge",
+        revision: Some("8596617186b7d14e8d3492214bda292f5e72456d"),
+        source_path: "config.json",
+        destination_path: "prompts/config.json",
+        required: true,
+    },
+    AssetSpec {
+        category: SecurityCategory::SensitiveDocument,
+        level: SecurityLevel::L3,
+        repo: "patronus-studio/orca-sonar-document-classifier-edge",
+        revision: Some("8596617186b7d14e8d3492214bda292f5e72456d"),
         source_path: "tokenizer.json",
         destination_path: "prompts/tokenizer.json",
         required: true,
@@ -209,7 +241,8 @@ pub const ASSET_MANIFEST: &[AssetSpec] = &[
     AssetSpec {
         category: SecurityCategory::SensitiveDocument,
         level: SecurityLevel::L3,
-        repo: "patronus-studio/orca-sonar-document-classifier",
+        repo: "patronus-studio/orca-sonar-document-classifier-edge",
+        revision: Some("8596617186b7d14e8d3492214bda292f5e72456d"),
         source_path: "tokenizer_config.json",
         destination_path: "prompts/tokenizer_config.json",
         required: false,
@@ -217,17 +250,10 @@ pub const ASSET_MANIFEST: &[AssetSpec] = &[
     AssetSpec {
         category: SecurityCategory::SensitiveDocument,
         level: SecurityLevel::L3,
-        repo: "patronus-studio/orca-sonar-document-classifier",
-        source_path: "special_tokens_map.json",
-        destination_path: "prompts/special_tokens_map.json",
-        required: false,
-    },
-    AssetSpec {
-        category: SecurityCategory::SensitiveDocument,
-        level: SecurityLevel::L3,
-        repo: "patronus-studio/orca-sonar-document-classifier",
-        source_path: "onnx/onnx_fp16/model_fp16.onnx",
-        destination_path: "prompts/onnx/model_fp16.onnx",
+        repo: "patronus-studio/orca-sonar-document-classifier-edge",
+        revision: Some("8596617186b7d14e8d3492214bda292f5e72456d"),
+        source_path: "onnx/int8_int4_embeddings/model.onnx",
+        destination_path: "prompts/onnx/int8_int4_embeddings/model.onnx",
         required: true,
     },
 ];

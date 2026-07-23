@@ -16,12 +16,45 @@ pub(crate) fn pipeline_allowed(
         .iter()
         .filter(|gate| {
             gate.level == level
+                && gate.l3_policy.is_none()
                 && gate
                     .pipeline
                     .as_deref()
                     .is_none_or(|target| target == pipeline)
         })
         .all(|gate| expression_matches(&gate.when, metadata, results))
+}
+
+pub(crate) fn apply_l3_policy_overrides(
+    execution: &ScanExecution,
+    metadata: &Value,
+    results: &[GateResult],
+) -> ScanExecution {
+    let mut effective = execution.clone();
+    let mut gates = execution.gates().clone();
+    let mut changed = false;
+    let conditional = gates.conditional.clone();
+    for gate in &conditional {
+        let (Some(pipeline), Some(override_policy)) =
+            (gate.pipeline.as_ref(), gate.l3_policy.as_ref())
+        else {
+            continue;
+        };
+        if gate.level != SecurityLevel::L3 || !expression_matches(&gate.when, metadata, results) {
+            continue;
+        }
+        gates
+            .l3_policy
+            .pipelines
+            .entry(pipeline.clone())
+            .or_default()
+            .apply_override(override_policy);
+        changed = true;
+    }
+    if changed {
+        effective.set_gates(gates);
+    }
+    effective
 }
 
 fn expression_matches(
@@ -98,6 +131,7 @@ mod tests {
                         min_confidence: Some(0.8),
                     }))),
                 ]),
+                l3_policy: None,
             }])
             .unwrap();
         let execution = ScanExecution::with_gates(SecurityLevel::L3, gates);
@@ -122,5 +156,62 @@ mod tests {
                 level: SecurityLevel::L2,
             }]
         ));
+    }
+
+    #[test]
+    fn matching_policy_gate_overrides_l3_policy_without_suppressing_on_miss() {
+        let mut gates = ScanGateMatrix::all_enabled();
+        gates
+            .set_conditional(vec![ConditionalPipelineGate {
+                level: SecurityLevel::L3,
+                pipeline: Some("injection".to_string()),
+                when: GateExpression::Result(ResultCondition {
+                    pipeline: "routing".to_string(),
+                    classes: vec!["source_code".to_string()],
+                    min_confidence: Some(0.8),
+                }),
+                l3_policy: Some(crate::L3PipelinePolicy {
+                    clustering: Some(crate::L3ClusteringStrategy::Representative),
+                    early_exit: Some(crate::L3PipelineEarlyExit::Disabled),
+                    ..crate::L3PipelinePolicy::default()
+                }),
+            }])
+            .unwrap();
+        let execution = ScanExecution::with_gates(SecurityLevel::L3, gates);
+        let source_code = GateResult {
+            pipeline: "routing".to_string(),
+            class_name: "source_code".to_string(),
+            confidence: 0.9,
+            level: SecurityLevel::L2,
+        };
+
+        let matched = apply_l3_policy_overrides(&execution, &Value::Null, &[source_code]);
+        let matched_policy = matched
+            .l3_policy()
+            .pipeline_policy("injection", "wolf-defender-small");
+        assert_eq!(
+            matched_policy.clustering,
+            crate::L3ClusteringStrategy::Representative
+        );
+        assert_eq!(
+            matched_policy.early_exit,
+            crate::L3PipelineEarlyExit::Disabled
+        );
+
+        let missed = apply_l3_policy_overrides(&execution, &Value::Null, &[]);
+        assert!(pipeline_allowed(
+            &missed,
+            SecurityLevel::L3,
+            "injection",
+            &Value::Null,
+            &[]
+        ));
+        assert_eq!(
+            missed
+                .l3_policy()
+                .pipeline_policy("injection", "wolf-defender-small")
+                .clustering,
+            crate::L3ClusteringStrategy::RankOnly
+        );
     }
 }

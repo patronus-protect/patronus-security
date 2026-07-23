@@ -259,13 +259,13 @@ fn hf_l3_download_warmup_and_cache_smoke_with_local_ntdb_l2() {
     scanner.warmup().unwrap();
     assert!(model_dir.join("injection/l3/tokenizer.json").exists());
     assert!(model_dir
-        .join("injection/l3/onnx/onnx_mixed/model_mixed.onnx")
+        .join("injection/l3/onnx/int8_int4_embeddings/model.onnx")
         .exists());
     assert!(model_dir
         .join("sensitive_documents/prompts/tokenizer.json")
         .exists());
     assert!(model_dir
-        .join("sensitive_documents/prompts/onnx/model_fp16.onnx")
+        .join("sensitive_documents/prompts/onnx/int8_int4_embeddings/model.onnx")
         .exists());
     assert!(matches!(
         scanner.runtime_readiness().l3,

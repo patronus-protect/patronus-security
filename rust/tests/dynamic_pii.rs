@@ -104,6 +104,7 @@ fn completion_for(gateway: &SecurityGateway, request_id: &str) -> SecurityReques
             .expect("request must reach a terminal event")
         {
             QueuedSecurityEvent::Result(result) => assert_eq!(result.request_id, request_id),
+            QueuedSecurityEvent::Progress(_) | QueuedSecurityEvent::Provisional(_) => {}
             QueuedSecurityEvent::Finished {
                 request_id: finished_id,
                 completion,
@@ -300,7 +301,7 @@ fn local_edge_bundle_runs_through_gateway_and_l3_worker() {
 
     let results = gateway.scan_category(
         SecurityCategory::DynamicPii,
-        "Benedikt works at Patronus-Studio in Frankfurt.",
+        "Alexandr works at Patronus-Studio in Frankfurt.",
     );
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].category, "dynamic-pii");
@@ -320,7 +321,7 @@ fn local_edge_bundle_runs_through_gateway_and_l3_worker() {
     assert_eq!(
         spans,
         [
-            ("person", "Benedikt", 0, 8),
+            ("person", "Alexandr", 0, 8),
             ("organization", "Patronus-Studio", 18, 33),
             ("location", "Frankfurt", 37, 46),
         ]
@@ -337,7 +338,7 @@ fn local_edge_bundle_runs_through_gateway_and_l3_worker() {
         .unwrap();
     let filtered = gateway.scan_category(
         SecurityCategory::DynamicPii,
-        "Benedikt works at Patronus-Studio in Frankfurt.",
+        "Alexandr works at Patronus-Studio in Frankfurt.",
     );
     assert_eq!(filtered.len(), 1);
     assert!(filtered[0]
@@ -360,7 +361,7 @@ fn local_edge_bundle_runs_through_gateway_and_l3_worker() {
         .unwrap();
     let conditional = gateway.scan_categories(
         &[SecurityCategory::Dlp, SecurityCategory::DynamicPii],
-        "Benedikt works at Patronus-Studio in Frankfurt.",
+        "Alexandr works at Patronus-Studio in Frankfurt.",
     );
     let dynamic = conditional
         .iter()
@@ -419,7 +420,7 @@ fn warmed_gliner_single_scan_excludes_warmup_from_latency() {
     let scan_started = Instant::now();
     let results = gateway.scan_category(
         SecurityCategory::DynamicPii,
-        "Benedikt works at Patronus-Studio in Frankfurt.",
+        "Alexandr works at Patronus-Studio in Frankfurt.",
     );
     let scan_wall_ms = scan_started.elapsed().as_secs_f64() * 1_000.0;
     let result = results

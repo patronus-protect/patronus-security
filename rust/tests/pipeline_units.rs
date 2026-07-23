@@ -272,7 +272,7 @@ mod long_text {
             chunk_outputs,
             3,
             "safe",
-            ChunkAggregation::HighestRiskOrConfidence,
+            ChunkAggregation::HighestRiskAboveThresholdOrConfidence { threshold: 0.93 },
         )
         .unwrap();
 
@@ -301,6 +301,26 @@ mod long_text {
             l2_summary.details.get("total_chunk_layer_count"),
             Some(&serde_json::json!(2))
         );
+    }
+
+    #[test]
+    fn aggregate_chunk_outputs_ignores_risk_below_threshold() {
+        let chunk_outputs = vec![
+            (result("safe", 0.99, "L3"), vec![]),
+            (result("credential", 0.92, "L3"), vec![]),
+        ];
+
+        let aggregate = aggregate_chunk_outputs(
+            vec![],
+            chunk_outputs,
+            2,
+            "safe",
+            ChunkAggregation::HighestRiskAboveThresholdOrConfidence { threshold: 0.93 },
+        )
+        .unwrap();
+
+        assert_eq!(aggregate.result.class_name, "safe");
+        assert_eq!(aggregate.result.confidence, 0.99);
     }
 
     #[test]
@@ -343,7 +363,7 @@ mod long_text {
             2,
             "benign",
             ChunkAggregation::AnyPositiveOrHighest {
-                positive_class: "attack",
+                positive_class: "attack".to_string(),
                 threshold: 0.93,
             },
         )
@@ -366,7 +386,7 @@ mod long_text {
             2,
             "benign",
             ChunkAggregation::AnyPositiveOrHighest {
-                positive_class: "attack",
+                positive_class: "attack".to_string(),
                 threshold: 0.93,
             },
         )
@@ -374,6 +394,44 @@ mod long_text {
 
         assert_eq!(aggregate.result.class_name, "benign");
         assert_eq!(aggregate.result.confidence, 0.99);
+    }
+
+    #[test]
+    fn majority_vote_ignores_safe_labels_when_non_safe_exists() {
+        let mut chunk_outputs = (0..9)
+            .map(|_| (result("benign", 0.99, "L3"), vec![]))
+            .collect::<Vec<_>>();
+        chunk_outputs.push((result("legal", 0.65, "L3"), vec![]));
+
+        let aggregate = aggregate_chunk_outputs(
+            vec![],
+            chunk_outputs,
+            10,
+            "benign",
+            ChunkAggregation::MajorityVoteOrHighest,
+        )
+        .unwrap();
+
+        assert_eq!(aggregate.result.class_name, "legal");
+    }
+
+    #[test]
+    fn majority_vote_still_prefers_largest_non_safe_class() {
+        let mut chunk_outputs = (0..9)
+            .map(|_| (result("hr", 0.70, "L3"), vec![]))
+            .collect::<Vec<_>>();
+        chunk_outputs.push((result("legal", 0.99, "L3"), vec![]));
+
+        let aggregate = aggregate_chunk_outputs(
+            vec![],
+            chunk_outputs,
+            10,
+            "safe",
+            ChunkAggregation::MajorityVoteOrHighest,
+        )
+        .unwrap();
+
+        assert_eq!(aggregate.result.class_name, "hr");
     }
 }
 
@@ -482,7 +540,7 @@ mod decision_cache {
 }
 
 mod ntdb_l2_results {
-    use patronus_ark::ml::ntdb_executor::{ByteSpan, L3Candidate, NtdbDecision};
+    use patronus_ark::ml::ntdb_executor::{ByteSpan, L2ChunkOutput, L3Candidate, NtdbDecision};
     use patronus_ark::pipeline::test_util::{
         ntdb_l2_enabled_for_category, ntdb_l2_model_config_for_id,
         ntdb_l2_model_configs_for_category, ntdb_l2_scan_result,
@@ -523,6 +581,35 @@ mod ntdb_l2_results {
                 source_model: "injection".to_string(),
                 l2_class: "attack".to_string(),
             }],
+            l2_chunk_outputs: vec![
+                L2ChunkOutput {
+                    span: ByteSpan { start: 0, end: 256 },
+                    class_name: "benign".to_string(),
+                    confidence: 0.9,
+                    promoted: false,
+                    promote_score: Some(0.1),
+                    promote_threshold: Some(0.7),
+                    source_pipeline: String::new(),
+                    source_model: "injection".to_string(),
+                    embedding: Vec::new(),
+                    embedding_space: String::new(),
+                },
+                L2ChunkOutput {
+                    span: ByteSpan {
+                        start: 256,
+                        end: 512,
+                    },
+                    class_name: "attack".to_string(),
+                    confidence: 0.91,
+                    promoted: true,
+                    promote_score: Some(0.8),
+                    promote_threshold: Some(0.7),
+                    source_pipeline: String::new(),
+                    source_model: "injection".to_string(),
+                    embedding: Vec::new(),
+                    embedding_space: String::new(),
+                },
+            ],
         };
 
         let config = ntdb_l2_model_config_for_id("injection").unwrap();
@@ -545,10 +632,20 @@ mod ntdb_l2_results {
             None,
             "cache metadata is added by the gateway around the pure L2 result builder"
         );
+        let chunk_outputs = result.layers[0]
+            .details
+            .get("l2_chunk_outputs")
+            .and_then(serde_json::Value::as_array)
+            .expect("L2 chunk outputs should be transported");
+        assert_eq!(chunk_outputs.len(), 2);
+        assert_eq!(chunk_outputs[0]["class_name"], serde_json::json!("benign"));
+        assert_eq!(chunk_outputs[0]["promoted"], serde_json::json!(false));
         assert_eq!(
-            result.layers[0].details.get("l3_candidate_spans"),
-            Some(&serde_json::json!([{"start": 256, "end": 512}]))
+            chunk_outputs[0]["source_pipeline"],
+            serde_json::json!("injection")
         );
+        assert_eq!(chunk_outputs[1]["class_name"], serde_json::json!("attack"));
+        assert_eq!(chunk_outputs[1]["promoted"], serde_json::json!(true));
         assert!(result.layers[0].matched);
         assert!(result
             .layers
@@ -574,6 +671,7 @@ mod ntdb_l2_results {
             chunk_promote_scores: Vec::new(),
             l3_candidate_spans: Vec::new(),
             l3_candidates: Vec::new(),
+            l2_chunk_outputs: Vec::new(),
         };
 
         let config = ntdb_l2_model_config_for_id("sensitive_document").unwrap();
@@ -607,6 +705,7 @@ mod ntdb_l2_results {
             chunk_promote_scores: Vec::new(),
             l3_candidate_spans: Vec::new(),
             l3_candidates: Vec::new(),
+            l2_chunk_outputs: Vec::new(),
         };
 
         let config = ntdb_l2_model_config_for_id("tool_class").unwrap();
@@ -684,6 +783,7 @@ mod ntdb_l2_results {
             chunk_promote_scores: Vec::new(),
             l3_candidate_spans: Vec::new(),
             l3_candidates: Vec::new(),
+            l2_chunk_outputs: Vec::new(),
         };
         let config = ntdb_l2_model_config_for_id("injection").unwrap();
 

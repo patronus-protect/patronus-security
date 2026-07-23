@@ -11,7 +11,6 @@ use crate::{ExecutionBackend, LabelScore};
 use super::onnx::{configured_session_builder, l3_ttl, token_chunks, TokenTextChunk};
 
 pub const UNIFIED_MODEL: &str = "unified-multitask-model-augmented-v3";
-pub const UNIFIED_REVISION: &str = "9bcc55dcf955cda68c171524cd242ada9f5547d4";
 pub const UNIFIED_ONNX_PATH: &str = "onnx/int8_int4_embeddings/model.onnx";
 pub const UNIFIED_MAX_LEN: usize = 256;
 
@@ -154,6 +153,11 @@ pub struct UnifiedModelOutput {
     pub heads: HashMap<String, UnifiedHeadOutput>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct UnifiedRawModelOutput {
+    pub(crate) heads: HashMap<String, Vec<f32>>,
+}
+
 pub struct LazyUnifiedOnnxClassifier {
     dir: PathBuf,
     ttl: Duration,
@@ -218,6 +222,29 @@ impl LazyUnifiedOnnxClassifier {
             .infer_batch(texts)?;
         self.last_used = Some(Instant::now());
         Ok(outputs)
+    }
+
+    pub(crate) fn infer_raw(
+        &mut self,
+        text: &str,
+        backend: ExecutionBackend,
+    ) -> Result<UnifiedRawModelOutput, Box<dyn std::error::Error>> {
+        self.evict_expired();
+        self.ensure_loaded(backend)?;
+        let output = self
+            .loaded
+            .as_mut()
+            .ok_or("unified L3 model is not loaded")?
+            .infer_raw(text)?;
+        self.last_used = Some(Instant::now());
+        Ok(output)
+    }
+
+    pub(crate) fn decode_raw(
+        &self,
+        output: &UnifiedRawModelOutput,
+    ) -> Result<UnifiedModelOutput, Box<dyn std::error::Error>> {
+        decode_raw_output(output)
     }
 
     pub(crate) fn token_chunks(
@@ -354,6 +381,25 @@ impl UnifiedOnnxClassifier {
         &mut self,
         texts: &[String],
     ) -> Result<Vec<UnifiedModelOutput>, Box<dyn std::error::Error>> {
+        self.infer_batch_raw(texts)?
+            .iter()
+            .map(decode_raw_output)
+            .collect()
+    }
+
+    fn infer_raw(
+        &mut self,
+        text: &str,
+    ) -> Result<UnifiedRawModelOutput, Box<dyn std::error::Error>> {
+        self.infer_batch_raw(&[text.to_string()])?
+            .pop()
+            .ok_or_else(|| "unified L3 returned no raw output".into())
+    }
+
+    fn infer_batch_raw(
+        &mut self,
+        texts: &[String],
+    ) -> Result<Vec<UnifiedRawModelOutput>, Box<dyn std::error::Error>> {
         if texts.is_empty() {
             return Ok(Vec::new());
         }
@@ -386,7 +432,7 @@ impl UnifiedOnnxClassifier {
             "attention_mask" => Tensor::from_array((shape, attention_mask))?,
         ])?;
         let mut results = (0..batch)
-            .map(|_| UnifiedModelOutput {
+            .map(|_| UnifiedRawModelOutput {
                 heads: HashMap::new(),
             })
             .collect::<Vec<_>>();
@@ -409,7 +455,7 @@ impl UnifiedOnnxClassifier {
             for (index, row) in values.chunks(width).enumerate() {
                 results[index]
                     .heads
-                    .insert(head.id.to_string(), decode_head(*head, row));
+                    .insert(head.id.to_string(), row.to_vec());
             }
         }
         Ok(results)
@@ -433,6 +479,32 @@ impl UnifiedOnnxClassifier {
                 .map_err(|error| format!("failed to tokenize unified L3 chunk: {error}").into())
         })
     }
+}
+
+fn decode_raw_output(
+    output: &UnifiedRawModelOutput,
+) -> Result<UnifiedModelOutput, Box<dyn std::error::Error>> {
+    let mut heads = HashMap::with_capacity(HEADS.len());
+    for spec in HEADS {
+        let logits = output
+            .heads
+            .get(spec.id)
+            .ok_or_else(|| format!("cached unified output is missing head '{}'", spec.id))?;
+        let expected = match spec.kind {
+            HeadKind::Binary => 1,
+            _ => spec.labels.len(),
+        };
+        if logits.len() != expected {
+            return Err(format!(
+                "cached unified head '{}' has {} logits, expected {expected}",
+                spec.id,
+                logits.len()
+            )
+            .into());
+        }
+        heads.insert(spec.id.to_string(), decode_head(*spec, logits));
+    }
+    Ok(UnifiedModelOutput { heads })
 }
 
 fn decode_head(spec: HeadSpec, logits: &[f32]) -> UnifiedHeadOutput {
