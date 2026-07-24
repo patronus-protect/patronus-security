@@ -645,7 +645,7 @@ fn token_arrays(chunks: &[TokenChunk], chunk_width: usize) -> (Vec<i64>, Vec<i64
     (token_ids, token_lengths, max_len)
 }
 
-fn load_single_thread_session(path: impl AsRef<Path>) -> NtdbResult<Session> {
+pub(super) fn load_single_thread_session(path: impl AsRef<Path>) -> NtdbResult<Session> {
     let path = path.as_ref();
     let builder = Session::builder()
         .map_err(|err| ntdb_error(format!("failed to create ORT session builder: {err}")))?;
@@ -695,7 +695,7 @@ fn session_input_feature_dim(session: &Session, input_name: &str) -> Option<usiz
     usize::try_from(last_dim).ok().filter(|dim| *dim > 0)
 }
 
-fn tensor_values<'a, 'r>(
+pub(super) fn tensor_values<'a, 'r>(
     outputs: &'a ort::session::SessionOutputs<'r>,
     name: &str,
 ) -> NtdbResult<&'a [f32]> {

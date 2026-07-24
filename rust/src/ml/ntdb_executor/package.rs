@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use super::{
     encoder::{StaticEncoder, StaticEncoderStore},
     heuristics::local_text_heuristics,
+    joint_v2::JointV2Runtime,
     manifest::PackageManifest,
     ntdb_error,
     runtime::{AggregatorRuntime, HeadRuntime},
@@ -105,6 +106,7 @@ pub struct NtdbPackage {
     encoder: Arc<StaticEncoder>,
     heads: Vec<HeadRuntime>,
     aggregators: Vec<AggregatorRuntime>,
+    joint_v2: Option<JointV2Runtime>,
 }
 
 pub struct NtdbMultiPackage {
@@ -181,6 +183,11 @@ impl NtdbPackage {
             .iter()
             .map(|aggregator| AggregatorRuntime::load(&package_dir, aggregator))
             .collect::<NtdbResult<Vec<_>>>()?;
+        let joint_v2 = manifest
+            .joint_v2
+            .as_ref()
+            .map(|joint| JointV2Runtime::load(&package_dir, joint, manifest.metric_sweep.as_ref()))
+            .transpose()?;
 
         Ok(Self {
             manifest,
@@ -188,6 +195,7 @@ impl NtdbPackage {
             encoder,
             heads,
             aggregators,
+            joint_v2,
         })
     }
 
@@ -199,6 +207,28 @@ impl NtdbPackage {
     ) -> NtdbResult<Vec<ScoreOutput>> {
         let chunk_count = prepared.chunks.len();
         let embedding_dim = self.manifest.minilm.embedding_dim;
+        if let Some(joint_v2) = &mut self.joint_v2 {
+            let embedding_space = self
+                .manifest
+                .minilm
+                .shared_embedder_identity()
+                .unwrap_or("unknown-l2-encoder")
+                .to_string();
+            let (mut output, scores, candidates, chunk_outputs) = joint_v2_chunk_promotions(
+                joint_v2,
+                &self.manifest.task.kind,
+                &self.manifest.task.labels,
+                prepared,
+                embedding_dim,
+                &embedding_space,
+                operating_point,
+            )?;
+            output.chunk_promote_scores = scores;
+            output.l3_candidate_spans = candidates.iter().map(|candidate| candidate.span).collect();
+            output.l3_candidates = candidates;
+            output.l2_chunk_outputs = chunk_outputs;
+            return Ok(vec![output]);
+        }
 
         let per_head = self
             .heads
@@ -418,12 +448,16 @@ impl NtdbMultiPackage {
             .iter()
             .find(|entry| entry.id == model_id)
             .map(|entry| {
-                entry
-                    .package
-                    .aggregators
-                    .iter()
-                    .map(|aggregator| aggregator.id.clone())
-                    .collect()
+                if entry.package.joint_v2.is_some() {
+                    vec!["joint_v2".to_string()]
+                } else {
+                    entry
+                        .package
+                        .aggregators
+                        .iter()
+                        .map(|aggregator| aggregator.id.clone())
+                        .collect()
+                }
             })
     }
 
@@ -597,6 +631,51 @@ fn chunk_promotions(
     Ok((scores, candidates, chunk_outputs))
 }
 
+fn joint_v2_chunk_promotions(
+    joint_v2: &mut JointV2Runtime,
+    task: &str,
+    labels: &[String],
+    prepared: &PreparedDocument,
+    embedding_dim: usize,
+    embedding_space: &str,
+    operating_point: NtdbOperatingPoint,
+) -> NtdbResult<(
+    ScoreOutput,
+    Vec<Option<f32>>,
+    Vec<L3Candidate>,
+    Vec<L2ChunkOutput>,
+)> {
+    let chunk_scores =
+        joint_v2.score_chunks(task, labels, prepared, embedding_dim, operating_point)?;
+    if chunk_scores.len() != prepared.chunks.len() {
+        return Err(ntdb_error(
+            "Joint-v2 chunk score count does not match chunks",
+        ));
+    }
+    let mut scores = Vec::with_capacity(prepared.chunks.len());
+    let mut thresholds = Vec::with_capacity(prepared.chunks.len());
+    let mut chunk_outputs = Vec::with_capacity(prepared.chunks.len());
+    for (index, (chunk, output)) in prepared.chunks.iter().zip(chunk_scores.iter()).enumerate() {
+        scores.push(output.promote_score);
+        thresholds.push(output.promote_threshold);
+        let mut embedding =
+            prepared.raw_embeddings[index * embedding_dim..(index + 1) * embedding_dim].to_vec();
+        normalize_embedding(&mut embedding);
+        chunk_outputs.push(l2_chunk_output(
+            chunk.byte_span,
+            task,
+            labels,
+            output,
+            embedding,
+            embedding_space,
+        ));
+    }
+    let candidates = promoted_chunk_candidates(&prepared.chunks, &scores, &thresholds);
+    let output =
+        joint_v2_document_output_from_chunks(task, labels, prepared.chunks.len(), &chunk_scores)?;
+    Ok((output, scores, candidates, chunk_outputs))
+}
+
 fn l2_chunk_output(
     span: ByteSpan,
     task: &str,
@@ -655,6 +734,103 @@ fn l2_chunk_output(
         embedding,
         embedding_space: embedding_space.to_string(),
     }
+}
+
+fn joint_v2_document_output_from_chunks(
+    task: &str,
+    labels: &[String],
+    chunks: usize,
+    chunk_scores: &[ScoreOutput],
+) -> NtdbResult<ScoreOutput> {
+    let first = chunk_scores
+        .first()
+        .ok_or_else(|| ntdb_error("Joint-v2 emitted no chunk scores"))?;
+    let promote_score = chunk_scores
+        .iter()
+        .filter_map(|output| output.promote_score)
+        .max_by(f32::total_cmp);
+
+    let (class_scores, class_logits) = if let (Some(benign_index), Some(attack_index)) =
+        (label_index(labels, "benign"), label_index(labels, "attack"))
+    {
+        let (attack_score, attack_logits) = chunk_scores
+            .iter()
+            .map(|output| {
+                (
+                    output
+                        .class_scores
+                        .get(attack_index)
+                        .copied()
+                        .unwrap_or_default(),
+                    output.class_logits.clone(),
+                )
+            })
+            .max_by(|left, right| left.0.total_cmp(&right.0))
+            .unwrap_or((0.0, first.class_logits.clone()));
+        let mut class_scores = vec![0.0; first.class_scores.len().max(labels.len())];
+        class_scores[benign_index] = 1.0 - attack_score;
+        class_scores[attack_index] = attack_score;
+        class_scores.truncate(first.class_scores.len().max(attack_index + 1));
+        (class_scores, attack_logits)
+    } else {
+        let class_count = first.class_scores.len();
+        let mut class_scores = vec![0.0; class_count];
+        let mut class_logits = vec![0.0; first.class_logits.len()];
+        for class_index in 0..class_count {
+            if let Some(best) = chunk_scores.iter().max_by(|left, right| {
+                left.class_scores
+                    .get(class_index)
+                    .copied()
+                    .unwrap_or_default()
+                    .total_cmp(
+                        &right
+                            .class_scores
+                            .get(class_index)
+                            .copied()
+                            .unwrap_or_default(),
+                    )
+            }) {
+                class_scores[class_index] = best
+                    .class_scores
+                    .get(class_index)
+                    .copied()
+                    .unwrap_or_default();
+                if let Some(logit) = best.class_logits.get(class_index).copied() {
+                    class_logits[class_index] = logit;
+                }
+            }
+        }
+        (class_scores, class_logits)
+    };
+
+    let predicted_index = class_scores
+        .iter()
+        .copied()
+        .enumerate()
+        .max_by(|left, right| left.1.total_cmp(&right.1))
+        .map(|(index, _)| index)
+        .unwrap_or_default();
+
+    Ok(ScoreOutput {
+        aggregator_id: first.aggregator_id.clone(),
+        task: task.to_string(),
+        labels: labels.to_vec(),
+        predicted_label: labels
+            .get(predicted_index)
+            .cloned()
+            .unwrap_or_else(|| predicted_index.to_string()),
+        predicted_index,
+        class_scores,
+        class_logits,
+        chunks,
+        attack_threshold: first.attack_threshold,
+        promote_score,
+        promote_threshold: promote_score.and(first.promote_threshold),
+        chunk_promote_scores: Vec::new(),
+        l3_candidate_spans: Vec::new(),
+        l3_candidates: Vec::new(),
+        l2_chunk_outputs: Vec::new(),
+    })
 }
 
 fn normalize_embedding(embedding: &mut [f32]) {
