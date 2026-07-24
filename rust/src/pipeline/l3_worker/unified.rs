@@ -253,7 +253,12 @@ fn run_unified_model_job(
     let token_chunks = model
         .lock()
         .map_err(|error| format!("unified L3 model mutex poisoned: {error}"))?
-        .token_chunks(&job.text, L3_OVERLAP_TOKENS, job.execution.backend())
+        .token_chunks(
+            &job.text,
+            L3_OVERLAP_TOKENS,
+            job.execution.backend(),
+            job.execution.onnx_runtime_options(),
+        )
         .map_err(|error| error.to_string())?;
     let candidate_heads = candidate_head_names(&job.l3_candidates, &job.category);
     let selection_clustering = candidate_heads
@@ -371,6 +376,7 @@ fn run_unified_model_job(
             exact_cache: &exact_cache,
             similarity_cache: &similarity_cache,
             backend: job.execution.backend(),
+            onnx_runtime_options: job.execution.onnx_runtime_options(),
             chunks: &chunks,
             head_chunks: &head_chunks,
             global_indices: &global_indices,
@@ -446,6 +452,7 @@ struct UnifiedExecutionAdapter<'a> {
     exact_cache: &'a Arc<CacheCoordinator>,
     similarity_cache: &'a Arc<HistoricalSimilarityCache>,
     backend: crate::ExecutionBackend,
+    onnx_runtime_options: crate::OnnxRuntimeOptions,
     chunks: &'a [SelectedL3Chunk],
     head_chunks: &'a [SelectedL3Chunk],
     global_indices: &'a [usize],
@@ -477,6 +484,7 @@ impl L3ExecutionAdapter for UnifiedExecutionAdapter<'_> {
                     &self.head_chunks[chunk_index],
                     self.head,
                     self.backend,
+                    self.onnx_runtime_options,
                 )?;
                 exact_cache_hit = cache_hit;
                 similarity_propagated = propagated;
@@ -579,6 +587,7 @@ fn infer_unified_exact(
     chunk: &SelectedL3Chunk,
     requested_head: &str,
     backend: crate::ExecutionBackend,
+    onnx_runtime_options: crate::OnnxRuntimeOptions,
 ) -> Result<(UnifiedModelOutput, bool, bool), String> {
     const CACHE_SCHEMA_VERSION: u32 = 1;
 
@@ -622,7 +631,7 @@ fn infer_unified_exact(
             let raw = model
                 .lock()
                 .map_err(|error| format!("unified L3 model mutex poisoned: {error}"))?
-                .infer_raw(&chunk.text, backend)
+                .infer_raw(&chunk.text, backend, onnx_runtime_options)
                 .map_err(|error| error.to_string())?;
             Ok::<_, String>(
                 raw.heads

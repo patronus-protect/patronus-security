@@ -84,11 +84,11 @@ chunks and known entity spans the same way. The cache is memory-only by default;
 
 ## Execution backend and threading
 
-The ONNX execution provider and thread counts are configurable via environment variables
-(`PATRONUS_ONNX_EXECUTION_PROVIDER`, `PATRONUS_ONNX_INTER_THREADS`,
-`PATRONUS_ONNX_INTRA_THREADS`, `PATRONUS_ONNX_SPINNING`) and the
-[`set_execution_backend`](../reference/configuration.md#execution-backend) setter (CPU, CoreML,
-CUDA, …). Defaults target CPU. See the [configuration reference](../reference/configuration.md).
+The ONNX execution provider is configured via
+[`set_execution_backend`](../reference/configuration.md#execution-backend) (CPU, CoreML, CUDA, …).
+Threading and spin-wait behavior are configured with `OnnxRuntimeOptions` through
+`set_onnx_runtime_options`. Defaults target constrained CPU execution. See the
+[configuration reference](../reference/configuration.md).
 
 ## Measuring on your hardware
 

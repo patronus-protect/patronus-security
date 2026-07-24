@@ -30,7 +30,8 @@ In Python, all of these are keyword arguments to `SecurityGateway(...)`. In Rust
 download_files)` takes four arguments (it always downloads for every configured category), and
 `with_download_categories(...)` adds the fifth, `download_categories`. Every other option is
 applied after construction with its setter (`set_l3_strategy`, `set_execution_gates`,
-`set_dynamic_pii_config`, `set_execution_backend`, `set_onnx_batch_mode`). Rust persistent caching uses
+`set_dynamic_pii_config`, `set_execution_backend`, `set_onnx_runtime_options`,
+`set_onnx_batch_mode`). Rust persistent caching uses
 `try_with_download_categories_and_cache(...)` with `ExactCacheConfig`; the path is fixed for
 the gateway lifecycle and cannot be overridden per request.
 
@@ -50,6 +51,7 @@ Change behavior on a live gateway (Python names; Rust has equivalents):
 | `set_ntdb_operating_point(str)` | see [below](#ntdb-operating-point) | Pick the L2 threshold profile. |
 | `set_onnx_batch_mode(str)` | `lazy_batches`, `tensor_batch` | How L3 fallback batches execute. |
 | `set_execution_backend(str)` | see [below](#execution-backend) | ONNX execution provider. |
+| `set_onnx_runtime_options(...)` | constrained CPU | Configure ONNX Runtime intra/inter threads and spin-wait behavior. |
 | `set_dynamic_pii_config(dict)` | see [dynamic PII](#dynamic-pii) | Reconfigure the GLiNER pipeline. |
 
 ## Levels
@@ -336,10 +338,6 @@ after the remaining chunks finish.
 | `PATRONUS_DOWNLOAD_OPTIONAL_ASSETS` | unset | `1` also downloads non-required asset files (currently `tokenizer_config.json` for the legacy L3 manifest). |
 | `PATRONUS_L3_TTL_SECS` | `300` | Idle seconds before an L3 session is evicted. |
 | `PATRONUS_L3_TRACE_CHUNKS` | unset | `1` logs per-chunk L3 execution traces (diagnostic). |
-| `PATRONUS_ONNX_EXECUTION_PROVIDER` | platform | Override the ONNX execution provider. |
-| `PATRONUS_ONNX_INTRA_THREADS` | ORT default | Intra-op thread count. |
-| `PATRONUS_ONNX_INTER_THREADS` | ORT default | Inter-op thread count. |
-| `PATRONUS_ONNX_SPINNING` | ORT default | Toggle ORT spin-wait (set `0` to lower idle CPU). |
 | `PATRONUS_NTDB_INJECTION_DIR` | — | Local NTDB override for `injection`. |
 | `PATRONUS_NTDB_ROUTING_DIR` | — | Local NTDB override for `routing`. |
 | `PATRONUS_NTDB_SENSITIVE_DOCUMENTS_DIR` | — | Local NTDB override for `sensitive_document`. |

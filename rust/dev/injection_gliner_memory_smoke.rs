@@ -4,7 +4,7 @@ use patronus_ark::{
         ntdb_executor::NtdbExecutor,
         onnx::{warmup_runtime, OnnxTextClassifier},
     },
-    ExecutionBackend, NtdbOperatingPoint,
+    ExecutionBackend, NtdbOperatingPoint, OnnxRuntimeOptions,
 };
 use std::{io, path::Path, process::Command, time::Instant};
 
@@ -66,6 +66,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "tokenizer.json",
         256,
         ExecutionBackend::Cpu,
+        OnnxRuntimeOptions::default(),
     )?
     .ok_or("Wolf L3 model or tokenizer is missing")?;
     let l3_loaded = rss_mb();

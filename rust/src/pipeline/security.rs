@@ -3,7 +3,10 @@ use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::PathBuf;
-use std::sync::{atomic::AtomicU64, mpsc, Arc, Mutex, OnceLock};
+use std::sync::{
+    atomic::{AtomicU64, AtomicUsize, Ordering},
+    mpsc, Arc, Mutex, OnceLock,
+};
 use std::time::Instant;
 
 use super::decision_cache::DecisionCache;
@@ -39,6 +42,8 @@ use ntdb_l2::{ntdb_l2_cache_namespace, ntdb_l2_error_scan_result};
 pub use ntdb_l2::{ntdb_l2_enabled_for_category, ntdb_l2_model_config_for_id, NtdbL2ModelConfig};
 pub use ntdb_l2::{ntdb_l2_model_configs_for_category, ntdb_l2_scan_result};
 
+const DEFAULT_QUEUE_WORKER_COUNT: usize = 2;
+
 /// Main scanner gateway for native and model-backed security categories.
 pub struct SecurityGateway {
     core: Arc<SecurityGatewayCore>,
@@ -63,6 +68,7 @@ pub struct SecurityGatewayCore {
     external_l1: Mutex<HashMap<SecurityCategory, Vec<Arc<dyn ExternalL1Detector>>>>,
     /// Request-independent configuration for the L3-only dynamic entity pipeline.
     dynamic_pii_config: Mutex<DynamicPiiConfig>,
+    queue_worker_count: AtomicUsize,
 
     ntdb_executor: Option<Mutex<NtdbExecutor>>,
 
@@ -261,6 +267,21 @@ impl SecurityGateway {
         self.l3_worker.cache_storage_location()
     }
 
+    /// Set the number of Ark queue workers spawned on first queued request.
+    pub fn set_queue_worker_count(&self, worker_count: usize) {
+        self.core
+            .queue_worker_count
+            .store(worker_count.max(1), Ordering::Relaxed);
+    }
+
+    /// Set ONNX Runtime session options for subsequent scans.
+    pub fn set_onnx_runtime_options(&self, options: crate::OnnxRuntimeOptions) {
+        self.execution
+            .lock()
+            .expect("scan execution mutex poisoned")
+            .set_onnx_runtime_options(options);
+    }
+
     /// Create a gateway with `SecurityLevel::L2` as the maximum level.
     pub fn new(
         categories: Vec<SecurityCategory>,
@@ -325,6 +346,7 @@ impl SecurityGateway {
             execution: Mutex::new(ScanExecution::new(max_level)),
             external_l1: Mutex::new(HashMap::new()),
             dynamic_pii_config: Mutex::new(DynamicPiiConfig::default()),
+            queue_worker_count: AtomicUsize::new(DEFAULT_QUEUE_WORKER_COUNT),
             ntdb_executor: None,
             dlp_pipeline: None,
             pii_pipeline: None,

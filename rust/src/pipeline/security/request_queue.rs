@@ -145,10 +145,7 @@ impl SecurityGateway {
         self.queue_sender.get_or_init(|| {
             let (sender, receiver) = mpsc::channel::<QueueWork>();
             let receiver = Arc::new(Mutex::new(receiver));
-            let worker_count = thread::available_parallelism()
-                .map(usize::from)
-                .unwrap_or(1)
-                .min(4);
+            let worker_count = self.core.queue_worker_count.load(Ordering::Relaxed).max(1);
             for _ in 0..worker_count {
                 let receiver = Arc::clone(&receiver);
                 let worker = SecurityGateway {

@@ -466,6 +466,38 @@ impl std::str::FromStr for ExecutionBackend {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+/// Caller-provided ONNX Runtime session options.
+pub struct OnnxRuntimeOptions {
+    pub intra_threads: Option<usize>,
+    pub inter_threads: Option<usize>,
+    pub spinning: Option<bool>,
+}
+
+impl OnnxRuntimeOptions {
+    pub const fn constrained_cpu() -> Self {
+        Self {
+            intra_threads: Some(1),
+            inter_threads: Some(1),
+            spinning: Some(false),
+        }
+    }
+
+    pub fn normalized(self) -> Self {
+        Self {
+            intra_threads: self.intra_threads.filter(|value| *value > 0),
+            inter_threads: self.inter_threads.filter(|value| *value > 0),
+            spinning: self.spinning,
+        }
+    }
+}
+
+impl Default for OnnxRuntimeOptions {
+    fn default() -> Self {
+        Self::constrained_cpu()
+    }
+}
+
 #[derive(Debug, Clone)]
 /// Caller-controlled execution gates for one scanner execution profile.
 ///
@@ -991,6 +1023,7 @@ pub struct ScanExecution {
     max_level: SecurityLevel,
     gates: ScanGateMatrix,
     backend: ExecutionBackend,
+    onnx_runtime_options: OnnxRuntimeOptions,
     onnx_batch_mode: OnnxBatchMode,
     ntdb_operating_point: NtdbOperatingPoint,
     l3_strategy: L3Strategy,
@@ -1004,6 +1037,7 @@ impl ScanExecution {
             max_level,
             gates: ScanGateMatrix::all_enabled(),
             backend: ExecutionBackend::default(),
+            onnx_runtime_options: OnnxRuntimeOptions::default(),
             onnx_batch_mode: OnnxBatchMode::LazyBatches,
             ntdb_operating_point: NtdbOperatingPoint::default(),
             l3_strategy: L3Strategy::default(),
@@ -1017,6 +1051,7 @@ impl ScanExecution {
             max_level,
             gates,
             backend: ExecutionBackend::default(),
+            onnx_runtime_options: OnnxRuntimeOptions::default(),
             onnx_batch_mode: OnnxBatchMode::LazyBatches,
             ntdb_operating_point: NtdbOperatingPoint::default(),
             l3_strategy: L3Strategy::default(),
@@ -1045,6 +1080,11 @@ impl ScanExecution {
             | ExecutionBackend::DirectMl
             | ExecutionBackend::TensorRt => OnnxBatchMode::TensorBatch,
         };
+    }
+
+    /// Replace ONNX Runtime session options used by L3 ONNX classifiers.
+    pub fn set_onnx_runtime_options(&mut self, options: OnnxRuntimeOptions) {
+        self.onnx_runtime_options = options.normalized();
     }
 
     /// Select the calibrated NTDB operating point used by subsequent scans.
@@ -1092,6 +1132,11 @@ impl ScanExecution {
     /// Return the configured execution backend.
     pub fn backend(&self) -> ExecutionBackend {
         self.backend
+    }
+
+    /// Return the ONNX Runtime session options backing this execution.
+    pub fn onnx_runtime_options(&self) -> OnnxRuntimeOptions {
+        self.onnx_runtime_options
     }
 
     /// Return the selected NTDB operating point.

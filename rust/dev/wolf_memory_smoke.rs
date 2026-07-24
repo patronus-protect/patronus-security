@@ -3,7 +3,7 @@ use ort::{
     session::{builder::GraphOptimizationLevel, Session},
 };
 use patronus_ark::ml::onnx::{warmup_runtime, OnnxTextClassifier};
-use patronus_ark::ExecutionBackend;
+use patronus_ark::{ExecutionBackend, OnnxRuntimeOptions};
 use std::{path::Path, process::Command, thread, time::Duration, time::Instant};
 use tokenizers::Tokenizer;
 
@@ -62,6 +62,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "tokenizer.json",
                 256,
                 ExecutionBackend::Cpu,
+                OnnxRuntimeOptions::default(),
             )?
             .ok_or("Wolf model or tokenizer is missing")?;
             print_loaded("full", baseline, started);

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::{EvaluationResult, ExecutionBackend};
+use crate::{EvaluationResult, ExecutionBackend, OnnxRuntimeOptions};
 use half::f16;
 use ort::{
     environment::GlobalThreadPoolOptions,
@@ -44,6 +44,7 @@ pub struct LazyOnnxTextClassifier {
     ttl: Duration,
     loaded: Option<OnnxTextClassifier>,
     loaded_backend: Option<ExecutionBackend>,
+    loaded_options: Option<OnnxRuntimeOptions>,
     last_used: Option<Instant>,
 }
 
@@ -144,6 +145,7 @@ impl LazyOnnxTextClassifier {
             ttl: l3_ttl(),
             loaded: None,
             loaded_backend: None,
+            loaded_options: None,
             last_used: None,
         }))
     }
@@ -152,9 +154,10 @@ impl LazyOnnxTextClassifier {
         &mut self,
         text: &str,
         backend: ExecutionBackend,
+        options: OnnxRuntimeOptions,
     ) -> Result<EvaluationResult, Box<dyn std::error::Error>> {
         self.evict_expired();
-        self.ensure_loaded(backend)?;
+        self.ensure_loaded(backend, options)?;
         let model = self.loaded.as_mut().ok_or("L3 ONNX model is not loaded")?;
         let result = model.infer(text)?;
         self.last_used = Some(Instant::now());
@@ -165,9 +168,10 @@ impl LazyOnnxTextClassifier {
         &mut self,
         texts: &[String],
         backend: ExecutionBackend,
+        options: OnnxRuntimeOptions,
     ) -> Result<Vec<EvaluationResult>, Box<dyn std::error::Error>> {
         self.evict_expired();
-        self.ensure_loaded(backend)?;
+        self.ensure_loaded(backend, options)?;
         let model = self.loaded.as_mut().ok_or("L3 ONNX model is not loaded")?;
         let results = model.infer_batch(texts)?;
         self.last_used = Some(Instant::now());
@@ -178,9 +182,10 @@ impl LazyOnnxTextClassifier {
         &mut self,
         text: &str,
         backend: ExecutionBackend,
+        options: OnnxRuntimeOptions,
     ) -> Result<RawClassifierOutput, Box<dyn std::error::Error>> {
         self.evict_expired();
-        self.ensure_loaded(backend)?;
+        self.ensure_loaded(backend, options)?;
         let model = self.loaded.as_mut().ok_or("L3 ONNX model is not loaded")?;
         let result = model.infer_raw(text)?;
         self.last_used = Some(Instant::now());
@@ -203,6 +208,7 @@ impl LazyOnnxTextClassifier {
             ttl: self.ttl,
             loaded: None,
             loaded_backend: None,
+            loaded_options: None,
             last_used: None,
         }
     }
@@ -216,9 +222,10 @@ impl LazyOnnxTextClassifier {
         text: &str,
         overlap_tokens: usize,
         backend: ExecutionBackend,
+        options: OnnxRuntimeOptions,
     ) -> Result<Vec<TokenTextChunk>, Box<dyn std::error::Error>> {
         self.evict_expired();
-        self.ensure_loaded(backend)?;
+        self.ensure_loaded(backend, options)?;
         let model = self.loaded.as_ref().ok_or("L3 ONNX model is not loaded")?;
         model.token_chunks(text, overlap_tokens)
     }
@@ -253,6 +260,7 @@ impl LazyOnnxTextClassifier {
         {
             self.loaded = None;
             self.loaded_backend = None;
+            self.loaded_options = None;
             self.last_used = None;
         }
     }
@@ -260,12 +268,18 @@ impl LazyOnnxTextClassifier {
     fn ensure_loaded(
         &mut self,
         backend: ExecutionBackend,
+        options: OnnxRuntimeOptions,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        if self.loaded.is_some() && self.loaded_backend == Some(backend) {
+        let options = options.normalized();
+        if self.loaded.is_some()
+            && self.loaded_backend == Some(backend)
+            && self.loaded_options == Some(options)
+        {
             return Ok(());
         }
         self.loaded = None;
         self.loaded_backend = None;
+        self.loaded_options = None;
 
         let candidates: Vec<&str> = self
             .onnx_candidates
@@ -280,12 +294,14 @@ impl LazyOnnxTextClassifier {
             &self.tokenizer_path,
             self.max_len,
             backend,
+            options,
         )?
         else {
             return Err("L3 ONNX assets are no longer available".into());
         };
         self.loaded = Some(model);
         self.loaded_backend = Some(backend);
+        self.loaded_options = Some(options);
         Ok(())
     }
 }
@@ -329,6 +345,7 @@ impl OnnxTextClassifier {
             "tokenizer.json",
             DEFAULT_MAX_LEN,
             ExecutionBackend::Auto,
+            OnnxRuntimeOptions::default(),
         )
     }
 
@@ -340,6 +357,7 @@ impl OnnxTextClassifier {
         tokenizer_path: &str,
         max_len: usize,
         backend: ExecutionBackend,
+        options: OnnxRuntimeOptions,
     ) -> Result<Option<Self>, Box<dyn std::error::Error>> {
         let dir = dir.as_ref();
         let tokenizer_file = dir.join(tokenizer_path);
@@ -366,7 +384,7 @@ impl OnnxTextClassifier {
             )
         };
         let (mut session_builder, execution_provider) =
-            configured_session_builder(backend, Some(dir))?;
+            configured_session_builder(backend, Some(dir), options)?;
         let session = session_builder.commit_from_file(&model_path)?;
         let input_names = session
             .inputs()
@@ -615,15 +633,17 @@ where
 pub(crate) fn configured_session_builder(
     backend: ExecutionBackend,
     model_dir: Option<&Path>,
+    options: OnnxRuntimeOptions,
 ) -> Result<(SessionBuilder, String), Box<dyn std::error::Error>> {
     let mut builder = Session::builder()?.with_optimization_level(GraphOptimizationLevel::All)?;
-    if let Some(threads) = env_usize("PATRONUS_ONNX_INTRA_THREADS") {
+    let options = options.normalized();
+    if let Some(threads) = options.intra_threads {
         builder = builder.with_intra_threads(threads)?;
     }
-    if let Some(threads) = env_usize("PATRONUS_ONNX_INTER_THREADS") {
+    if let Some(threads) = options.inter_threads {
         builder = builder.with_inter_threads(threads)?;
     }
-    if let Some(enabled) = env_bool("PATRONUS_ONNX_SPINNING") {
+    if let Some(enabled) = options.spinning {
         builder = builder.with_intra_op_spinning(enabled)?;
         builder = builder.with_inter_op_spinning(enabled)?;
     }
@@ -643,12 +663,7 @@ fn execution_provider_plan(
     backend: ExecutionBackend,
     model_dir: Option<&Path>,
 ) -> Result<ExecutionProviderPlan, Box<dyn std::error::Error>> {
-    let requested = std::env::var("PATRONUS_ONNX_EXECUTION_PROVIDER")
-        .ok()
-        .map(|value| value.to_lowercase().replace('-', "_"));
-    let provider = requested
-        .as_deref()
-        .or_else(|| default_accelerator_provider(backend));
+    let provider = default_accelerator_provider(backend);
 
     if provider == Some("cpu") || provider.is_none() && backend != ExecutionBackend::Gpu {
         return Ok(ExecutionProviderPlan {
@@ -664,7 +679,7 @@ fn execution_provider_plan(
         .into());
     };
 
-    let strict = backend != ExecutionBackend::Auto || requested.is_some();
+    let strict = backend != ExecutionBackend::Auto;
     let mut dispatch = match provider {
         "cuda" => Some(ep::CUDA::default().build()),
         "coreml" => coreml_provider(model_dir),
@@ -723,23 +738,6 @@ fn coreml_provider(model_dir: Option<&Path>) -> Option<ExecutionProviderDispatch
 #[cfg(not(feature = "onnx-coreml"))]
 fn coreml_provider(_model_dir: Option<&Path>) -> Option<ExecutionProviderDispatch> {
     None
-}
-
-fn env_usize(name: &str) -> Option<usize> {
-    std::env::var(name)
-        .ok()
-        .and_then(|value| value.parse::<usize>().ok())
-        .filter(|value| *value > 0)
-}
-
-fn env_bool(name: &str) -> Option<bool> {
-    std::env::var(name)
-        .ok()
-        .and_then(|value| match value.to_lowercase().as_str() {
-            "1" | "true" | "yes" | "on" => Some(true),
-            "0" | "false" | "no" | "off" => Some(false),
-            _ => None,
-        })
 }
 
 fn precision_for_path(path: &Path) -> String {

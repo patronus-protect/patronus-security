@@ -402,7 +402,12 @@ fn run_model_job(
     let token_chunks = model
         .lock()
         .map_err(|err| format!("L3 model mutex poisoned: {err}"))?
-        .token_chunks(&job.text, L3_OVERLAP_TOKENS, job.execution.backend())
+        .token_chunks(
+            &job.text,
+            L3_OVERLAP_TOKENS,
+            job.execution.backend(),
+            job.execution.onnx_runtime_options(),
+        )
         .map_err(|err| err.to_string())?;
     let mut chunks =
         selected_l3_chunks(token_chunks, &job.l3_candidates, pipeline_policy.clustering);
@@ -1063,7 +1068,11 @@ fn infer_l3_chunk(
             .lock()
             .map_err(|err| format!("L3 model mutex poisoned: {err}"))?;
         let result = model
-            .infer(&chunk.text, job.execution.backend())
+            .infer(
+                &chunk.text,
+                job.execution.backend(),
+                job.execution.onnx_runtime_options(),
+            )
             .map_err(|err| err.to_string())?;
         let mut layer = l3_metadata_layer(
             &result.class_name,
@@ -1177,7 +1186,11 @@ fn infer_l3_chunk_exact(
             let raw = model
                 .lock()
                 .map_err(|err| format!("L3 model mutex poisoned: {err}"))?
-                .infer_raw(&chunk.text, job.execution.backend())
+                .infer_raw(
+                    &chunk.text,
+                    job.execution.backend(),
+                    job.execution.onnx_runtime_options(),
+                )
                 .map_err(|err| err.to_string())?;
             Ok::<_, String>(vec![CachedHeadOutput {
                 head: CLASSIFICATION_HEAD.to_string(),

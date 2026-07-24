@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use ort::{session::Session, value::Tensor};
 use tokenizers::Tokenizer;
 
-use crate::{ExecutionBackend, LabelScore};
+use crate::{ExecutionBackend, LabelScore, OnnxRuntimeOptions};
 
 use super::onnx::{configured_session_builder, l3_ttl, token_chunks, TokenTextChunk};
 
@@ -163,6 +163,7 @@ pub struct LazyUnifiedOnnxClassifier {
     ttl: Duration,
     loaded: Option<UnifiedOnnxClassifier>,
     loaded_backend: Option<ExecutionBackend>,
+    loaded_options: Option<OnnxRuntimeOptions>,
     last_used: Option<Instant>,
 }
 
@@ -188,6 +189,7 @@ impl LazyUnifiedOnnxClassifier {
             ttl: l3_ttl(),
             loaded: None,
             loaded_backend: None,
+            loaded_options: None,
             last_used: None,
         })
     }
@@ -196,9 +198,10 @@ impl LazyUnifiedOnnxClassifier {
         &mut self,
         text: &str,
         backend: ExecutionBackend,
+        options: OnnxRuntimeOptions,
     ) -> Result<UnifiedModelOutput, Box<dyn std::error::Error>> {
         self.evict_expired();
-        self.ensure_loaded(backend)?;
+        self.ensure_loaded(backend, options)?;
         let output = self
             .loaded
             .as_mut()
@@ -212,9 +215,10 @@ impl LazyUnifiedOnnxClassifier {
         &mut self,
         texts: &[String],
         backend: ExecutionBackend,
+        options: OnnxRuntimeOptions,
     ) -> Result<Vec<UnifiedModelOutput>, Box<dyn std::error::Error>> {
         self.evict_expired();
-        self.ensure_loaded(backend)?;
+        self.ensure_loaded(backend, options)?;
         let outputs = self
             .loaded
             .as_mut()
@@ -228,9 +232,10 @@ impl LazyUnifiedOnnxClassifier {
         &mut self,
         text: &str,
         backend: ExecutionBackend,
+        options: OnnxRuntimeOptions,
     ) -> Result<UnifiedRawModelOutput, Box<dyn std::error::Error>> {
         self.evict_expired();
-        self.ensure_loaded(backend)?;
+        self.ensure_loaded(backend, options)?;
         let output = self
             .loaded
             .as_mut()
@@ -252,9 +257,10 @@ impl LazyUnifiedOnnxClassifier {
         text: &str,
         overlap_tokens: usize,
         backend: ExecutionBackend,
+        options: OnnxRuntimeOptions,
     ) -> Result<Vec<TokenTextChunk>, Box<dyn std::error::Error>> {
         self.evict_expired();
-        self.ensure_loaded(backend)?;
+        self.ensure_loaded(backend, options)?;
         let chunks = self
             .loaded
             .as_ref()
@@ -271,6 +277,7 @@ impl LazyUnifiedOnnxClassifier {
         {
             self.loaded = None;
             self.loaded_backend = None;
+            self.loaded_options = None;
             self.last_used = None;
         }
     }
@@ -278,12 +285,20 @@ impl LazyUnifiedOnnxClassifier {
     fn ensure_loaded(
         &mut self,
         backend: ExecutionBackend,
+        options: OnnxRuntimeOptions,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        if self.loaded.is_some() && self.loaded_backend == Some(backend) {
+        let options = options.normalized();
+        if self.loaded.is_some()
+            && self.loaded_backend == Some(backend)
+            && self.loaded_options == Some(options)
+        {
             return Ok(());
         }
-        self.loaded = Some(UnifiedOnnxClassifier::from_dir(&self.dir, backend)?);
+        self.loaded = Some(UnifiedOnnxClassifier::from_dir(
+            &self.dir, backend, options,
+        )?);
         self.loaded_backend = Some(backend);
+        self.loaded_options = Some(options);
         Ok(())
     }
 }
@@ -351,10 +366,14 @@ impl UnifiedOnnxClassifier {
             .ok_or_else(|| "unified L3 returned no output".into())
     }
 
-    fn from_dir(dir: &Path, backend: ExecutionBackend) -> Result<Self, Box<dyn std::error::Error>> {
+    fn from_dir(
+        dir: &Path,
+        backend: ExecutionBackend,
+        options: OnnxRuntimeOptions,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         let tokenizer = Tokenizer::from_file(dir.join("tokenizer.json"))
             .map_err(|error| format!("failed to load unified tokenizer: {error}"))?;
-        let (mut builder, _) = configured_session_builder(backend, Some(dir))?;
+        let (mut builder, _) = configured_session_builder(backend, Some(dir), options)?;
         let session = builder.commit_from_file(dir.join(UNIFIED_ONNX_PATH))?;
         let inputs = session
             .inputs()

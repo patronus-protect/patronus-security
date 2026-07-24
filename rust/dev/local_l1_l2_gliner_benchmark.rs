@@ -1,6 +1,6 @@
 use patronus_ark::{
-    gliner_onnx_engine::GlinerEngine, NtdbOperatingPoint, SecurityCategory, SecurityGateway,
-    SecurityLevel, SecurityScanResult,
+    gliner_onnx_engine::GlinerEngine, ExecutionBackend, NtdbOperatingPoint, SecurityCategory,
+    SecurityGateway, SecurityLevel, SecurityScanResult,
 };
 use serde::Deserialize;
 use serde_json::json;
@@ -49,7 +49,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(Path::new)
         .unwrap_or_else(|| Path::new("../benchmark/gliner_result.json"));
     std::env::set_var("PATRONUS_NTDB_INJECTION_DIR", &args[1]);
-    std::env::set_var("PATRONUS_ONNX_EXECUTION_PROVIDER", "cpu");
 
     let rss_before_mb = rss_mb();
     let started = Instant::now();
@@ -59,6 +58,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         None,
         false,
     );
+    scanner.set_execution_backend(ExecutionBackend::Cpu);
     scanner.set_ntdb_operating_point(NtdbOperatingPoint::BestLatencyInF1);
     scanner.warmup()?;
     let l1_l2_load_ms = elapsed_ms(started);

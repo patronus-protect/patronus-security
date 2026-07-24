@@ -63,17 +63,13 @@ Compare `l3_strategy="dedicated"` vs `"multi"` with the [local benchmark](run-lo
 
 Pick a backend and thread counts to match your hardware:
 
-```python
-scanner.set_execution_backend("coreml")   # or "cpu", "cuda", "auto", …
-```
-
-Or via environment before startup:
-
-```bash
-export PATRONUS_ONNX_EXECUTION_PROVIDER=cpu
-export PATRONUS_ONNX_INTRA_THREADS=4
-export PATRONUS_ONNX_INTER_THREADS=1
-export PATRONUS_ONNX_SPINNING=0     # disable spin-wait to lower idle CPU
+```rust
+scanner.set_execution_backend(ExecutionBackend::CoreMl); // or Cpu, Cuda, Auto, ...
+scanner.set_onnx_runtime_options(OnnxRuntimeOptions {
+    intra_threads: Some(2),
+    inter_threads: Some(1),
+    spinning: Some(false),
+});
 ```
 
 ## Batch L3 fallback inference
