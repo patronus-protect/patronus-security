@@ -76,6 +76,10 @@ name = "ntdb_memory_smoke"
 path = "dev/ntdb_memory_smoke.rs"
 
 [[example]]
+name = "ntdb_v2_v3_benchmark"
+path = "dev/ntdb_v2_v3_benchmark.rs"
+
+[[example]]
 name = "ntdb_tokenizer_parity"
 path = "dev/ntdb_tokenizer_parity.rs"
 
