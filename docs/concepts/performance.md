@@ -29,16 +29,18 @@ to add categories to. See [NTDB format](models-and-ntdb.md).
 
 ### Quantized ONNX at L3
 
-L3 transformers are quantized (FP16 / INT8 / INT4-embedding variants) so a model bundle is a
-few hundred MB on disk and a few hundred MB resident — small enough to run several classifiers
-on a laptop. Optional full-precision ONNX assets are downloaded only when
-`PATRONUS_DOWNLOAD_OPTIONAL_ASSETS=1`.
+L3 transformers ship as a single combined INT8-weight / INT4-embedding ONNX variant, so a model
+bundle is a few hundred MB on disk and a few hundred MB resident — small enough to run several
+classifiers on a laptop. (`PATRONUS_DOWNLOAD_OPTIONAL_ASSETS=1` only adds non-required files such
+as `tokenizer_config.json`; there is no separate full-precision ONNX asset.)
 
 ### Compact tokenizers
 
-Tokenizers are converted once into a compact on-disk form (`.kit` for Granite/ModernBERT,
-`.mmbpe` for Wolf/mmBERT) in the shared cache, with the source JSON kept as canonical
-fallback. This reduces load time and memory.
+The L2 Granite embedder's tokenizer is converted once, on first use, into a compact `.kit` file
+in the shared encoder cache (hash- and version-invalidated, with the source JSON as fallback),
+which cuts load time and memory. A separate `.mmbpe` compact format exists for mmBERT-style
+(Wolf) tokenizers, but it is produced by an offline dev tool, not runtime-converted, and is not
+part of any downloaded asset today.
 
 ### L3 sessions: built on first use, then RAM-resident
 
@@ -57,9 +59,12 @@ the request path so a slow transformer never blocks a fast L1/L2 answer.
 
 ### Long-text windowing
 
-Long inputs are split into tokenizer-bounded windows with token overlap and aggregated, so
-memory stays bounded regardless of input length while still catching attacks buried deep in a
-document.
+Long inputs are split into tokenizer-bounded windows and aggregated, so memory stays bounded
+regardless of input length while still catching attacks buried deep in a document. With
+representative clustering enabled (off by default) near-duplicate windows are grouped by
+similarity and only cluster representatives run — the rest inherit the representative's verdict —
+which cuts physical inferences per request on top of the memory bound. See the
+[L3 worker policy](../reference/configuration.md#l3-worker-policy).
 
 ### Unified multi-head L3
 
@@ -67,6 +72,15 @@ Running one coalesced multi-head model (`l3_strategy="multi"`) instead of one mo
 category lets several promoted categories share a single inference — a large throughput win
 when multiple model-backed categories are active. Compare both strategies with the
 [local benchmark](../how-to/run-local-benchmark.md).
+
+### Cache-skip inference for repeats and near-duplicates
+
+The optional [model-output cache](../how-to/configure-caching.md) is the largest latency lever
+for repetitive traffic: an exact-chunk hit returns stored logits from RAM in microseconds instead
+of running the transformer (tens of milliseconds), and a close L2-embedding match can propagate a
+non-safe verdict without any L3 inference. The `dynamic-pii` GLiNER pipeline caches both exact
+chunks and known entity spans the same way. The cache is memory-only by default; add a persistent
+[redb](https://github.com/cberner/redb) file to keep hits across restarts.
 
 ## Execution backend and threading
 

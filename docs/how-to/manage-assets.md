@@ -43,10 +43,10 @@ A custom `model_dir` is convenient for shipping a pre-populated cache to another
 | `download_files=False` | Never download; use native L1 + already-cached assets only. |
 | `download_files=True` | Download required assets for configured categories on demand. |
 | `download_categories=[…]` | Restrict automatic downloads to just these categories. |
-| `PATRONUS_DOWNLOAD_OPTIONAL_ASSETS=1` | Also fetch optional full-precision ONNX assets (skipped by default). |
+| `PATRONUS_DOWNLOAD_OPTIONAL_ASSETS=1` | Also fetch non-required asset files (currently `tokenizer_config.json` for the legacy L3 manifest), which are skipped by default. |
 
-Required assets download during `warmup()` (or `prepare_assets()`); optional ones stay skipped
-unless the environment variable is set.
+Required assets download during `warmup()` (or, in Rust, `prepare_assets()`); optional ones stay
+skipped unless the environment variable is set.
 
 ## Authenticated / rate-limited access
 
@@ -61,8 +61,11 @@ export HF_TOKEN=hf_xxx
 
 ## Split download from runtime (delivery windows)
 
-If downloads must not happen at runtime, use the two-phase lifecycle: `prepare_assets()` while
-the network is available, then `warmup_from_local_assets()` at runtime (local-only). See
+If downloads must not happen at runtime, use the two-phase lifecycle (**Rust only**):
+`prepare_assets()` while the network is available, then `warmup_from_local_assets()` at runtime
+(local-only). In Python, `warmup()` always performs the combined prepare-and-warmup cycle; ship a
+pre-populated `model_dir` and reconstruct offline with `download_files=False` instead (see
+[Offline & air-gapped](offline-airgapped.md)). See
 [Architecture → asset & runtime lifecycle](../concepts/architecture.md#asset-and-runtime-lifecycle).
 
 ## Local model overrides
@@ -74,6 +77,6 @@ are treated as canonical and are never rewritten by the asset manager.
 
 ## Inspect the cache
 
-`asset_readiness()` reports what is present locally **without** downloading or loading anything
-into memory; `runtime_readiness()` reports initialized runtime state. Use these to verify a
-cache before going offline.
+`asset_readiness()` (Rust only) reports what is present locally **without** downloading or loading
+anything into memory; `runtime_readiness()` (both languages) reports initialized runtime state. Use
+these to verify a cache before going offline.

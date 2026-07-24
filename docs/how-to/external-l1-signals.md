@@ -11,7 +11,7 @@ under the model name `external:<id>`.
 
 ```rust
 use patronus_ark::{
-    EvaluationResult, ExternalL1Detector, ExternalL1Input, SecurityCategory,
+    EvaluationResult, ExternalL1Detector, ExternalL1Input, SecurityCategory, SecurityLevel,
 };
 
 struct InternalTokenRule;
@@ -30,23 +30,32 @@ impl ExternalL1Detector for InternalTokenRule {
     /// Evaluate one input and return a classifier result.
     fn evaluate(&self, input: &ExternalL1Input) -> EvaluationResult {
         if input.text.contains("ACME-SECRET-") {
-            EvaluationResult::detected("internal_token_leak", 0.99)
+            EvaluationResult {
+                class_name: "internal_token_leak".to_string(),
+                confidence: 0.99,
+                level: SecurityLevel::L1.as_str().to_string(),
+            }
         } else {
-            EvaluationResult::safe()
+            EvaluationResult {
+                class_name: "safe".to_string(),
+                confidence: 1.0,
+                level: SecurityLevel::L1.as_str().to_string(),
+            }
         }
     }
 }
 ```
 
-The exact constructors on `EvaluationResult` are in the
-[Rust API reference](../rust-api.md); the input carries the `category` and the
+`EvaluationResult` is a plain struct with public fields `class_name`, `confidence`, and `level`
+(the framework overwrites `level` to `L1` for external L1 detectors, so its value here does not
+matter) — see the [Rust API reference](../rust-api.md). The input carries the `category` and the
 `text` to score.
 
 ## Register it with the gateway
 
-Attach your detector when building the gateway so it participates in L1 for its category. It
-then runs on every scan of that category, and its verdict is combined into the category result
-just like a native detector.
+Register your detector on the gateway — `register_external_l1` takes `&self`, so you can call it
+any time before the scans that should use it, not only at construction. It then runs on every scan
+of that category, and its verdict is combined into the category result just like a native detector.
 
 ## Control it per request
 

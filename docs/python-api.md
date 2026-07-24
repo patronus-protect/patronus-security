@@ -38,6 +38,11 @@ Args:
     dynamic_pii_config: Pipeline-specific labels, result gates,
         thresholds, chunking, text limit, and timeout for the L3-only
         `dynamic-pii` category.
+    cache_storage_location: Optional path to the persistent cache database.
+        If omitted, caching remains memory-only.
+    cache_entry_ttl_seconds: Cache entry TTL shared by hot and persistent tiers.
+    cache_memory_max_entries: Maximum entries retained by a hot cache tier.
+    cache_memory_max_bytes: Maximum bytes retained by a hot cache tier.
 
 ### `categories() -> list[str]`
 
@@ -64,6 +69,10 @@ L3 ONNX sessions are lazy-loaded on first L3 inference, not during
 Raises:
     ValueError: If an allowed required asset download or model
         initialization fails.
+
+### `flush_cache()`
+
+Wait until all queued persistent cache writes are durable.
 
 ### `scan_all(text: str) -> list[dict]`
 
@@ -113,7 +122,7 @@ Scan text with a single category.
 
 Scan text with a caller-provided category subset.
 
-### `enqueue(text: str, categories: list[str] | None = None, execution_gates: dict | None = None) -> str`
+### `enqueue(text: str, categories: list[str] | None = None, execution_gates: dict | None = None, metadata: dict | None = None) -> str`
 
 Queue one scan request and return its request id.
 

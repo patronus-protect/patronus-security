@@ -27,7 +27,8 @@ while (event := scanner.consume_next_event(timeout=1.0)) is not None:
 ```
 
 This gateway never touches the network and is always available. `pii` and `dlp` are fully
-covered here; `injection` and `threat` get their native L1 stage.
+covered here; `injection` gets its native L1 stage. `threat` (like `sensitive_document`, `tool_*`,
+and `routing`) is model-only and produces no verdict at `max_level="l1"`.
 
 ## Offline with pre-cached models (split lifecycle)
 
@@ -76,8 +77,9 @@ pattern for installers and locked-down deployments.
 
 ## Verify readiness without downloading or loading
 
-`asset_readiness()` inspects the local cache **without** downloading or loading models into
-memory; `runtime_readiness()` reports initialized state. Use them to gate startup:
+`asset_readiness()` (Rust only) inspects the local cache **without** downloading or loading models
+into memory; `runtime_readiness()` (both languages) reports initialized state. Use them to gate
+startup:
 
 ```python
 print(scanner.runtime_readiness())

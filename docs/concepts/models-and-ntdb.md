@@ -61,14 +61,17 @@ local model overrides are never rewritten. Details are in
 
 ## ONNX transformers — the L3 format
 
-L3 models are full transformers (the ModernBERT / mmBERT family) exported to ONNX and
-quantized (typically FP16 / INT8 / INT4-embedding variants). Which L3 models a gateway holds is
+L3 models are full transformers (the ModernBERT / mmBERT family) exported to ONNX and quantized
+to a single combined INT8-weight / INT4-embedding variant (`int8_int4_embeddings` — the only L3
+ONNX file each repo ships to the runtime). Which L3 models a gateway holds is
 determined by configuration — the [L3 strategy](#dedicated-vs-unified-l3) and the configured
 categories — and those models are kept **resident in RAM**, subject to an idle-TTL policy
 (`PATRONUS_L3_TTL_SECS`, default 300 s) that evicts a session after a period of no use and
 re-materializes it on the next promotion. Budget memory for the L3 models you enable. They are
-executed by the L3 background worker. Only required assets are downloaded by default; optional
-full ONNX assets are fetched only when `PATRONUS_DOWNLOAD_OPTIONAL_ASSETS=1`.
+executed by the L3 background worker. Only required assets are downloaded by default;
+`PATRONUS_DOWNLOAD_OPTIONAL_ASSETS=1` additionally fetches non-required files (currently
+`tokenizer_config.json` for the legacy L3 manifest) — there is no separate full-precision ONNX
+asset today.
 
 ## The model families
 
@@ -102,6 +105,8 @@ them on your own hardware.
 The category → level → repository mapping is defined in
 [`rust/src/assets/specs.rs`](https://github.com/patronus-protect/patronus-security/blob/main/rust/src/assets/specs.rs).
 Assets are cached under the platform cache directory (or a custom `model_dir`) and downloaded on
-first use from the immutable, pinned Hugging Face revisions in `specs.rs`. See
+first use. The L3 transformers, the unified L3 model, and the dynamic-pii bundle are pinned to
+immutable commit revisions in `specs.rs`; the seven L2 NTDB packages are currently fetched from
+each repo's mutable `main` branch (no revision is pinned for them). See
 [Manage model assets](../how-to/manage-assets.md) and the generated
 [Assets reference](../assets.md) for cache locations, sizes, and offline behavior.

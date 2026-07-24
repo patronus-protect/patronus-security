@@ -71,8 +71,10 @@ dedicated consumer thread lets you keep enqueuing while results stream back.
             if event["event_type"] == "result":
                 r = event["result"]
                 print(event["request_id"], r["level"], r["class_name"], r["confidence"])
-            else:  # "finished"
+            elif event["event_type"] == "finished":
                 print(event["request_id"], "done:", event["completion"])
+            # "progress"/"provisional" events only appear if you opt into L3 progress
+            # mode (disabled by default); ignore them here.
 
     stop = threading.Event()
     consumer = threading.Thread(target=consume_loop, args=(scanner, stop), daemon=True)
@@ -105,6 +107,9 @@ dedicated consumer thread lets you keep enqueuing while results stream back.
             ),
             Some(QueuedSecurityEvent::Finished { request_id, completion }) =>
                 println!("{request_id} done: {completion:?}"),
+            // Progress/Provisional are opt-in (L3 progress mode, disabled by default);
+            // the match must still cover them or it will not compile.
+            Some(QueuedSecurityEvent::Progress(_)) | Some(QueuedSecurityEvent::Provisional(_)) => {}
             None => {} // timeout tick; check a shutdown flag here in real code
         }
     });
@@ -121,8 +126,15 @@ One request can publish **several** events, always correlated by `request_id`:
 
 - one or more **`result`** events — the L1/L2 verdict first, then a later L3 verdict if the scan
   was promoted;
-- exactly one terminal **`finished`** event, carrying a completion status (`Complete`,
-  `Degraded`, or `Failed`).
+- exactly one terminal **`finished`** event, carrying a completion status (`complete`,
+  `degraded`, or `failed`; the Rust enum `SecurityRequestCompletion` is the PascalCase
+  `Complete` / `Degraded` / `Failed`).
+
+If you opt into L3 progress reporting (`execution_gates.l3.progress`, off by default) two more,
+non-terminal kinds can appear while a long L3 scan resolves: **`progress`** (chunk counters, no
+verdict) and **`provisional`** (an interim, non-authoritative `result` preview). Handle them
+explicitly — in Rust the enum `match` will not compile otherwise. The blocking `scan_*` helpers
+never surface them.
 
 Track a request as open until you see its `finished` event. See the
 [Result schema](../reference/result-schema.md) for every field.

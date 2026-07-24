@@ -64,11 +64,11 @@ The sizes below show required cold-cache downloads for the selected maximum leve
 
 | Category | L1 required | L2 required | L3 required | Repositories |
 | --- | ---: | ---: | ---: | --- |
-| `injection` | 0 B | 0 B | unknown | patronus-studio/wolf-defender-prompt-injection-small |
+| `injection` | 0 B | 0 B | unknown | patronus-studio/wolf-defender-prompt-injection-small-edge |
 | `dlp` | 0 B | 0 B | 0 B | none |
 | `pii` | 0 B | 0 B | 0 B | none |
 | `dynamic-pii` | 0 B | 0 B | unknown | patronus-studio/gliner_small-v2.5-edge |
-| `sensitive_document` | 0 B | 0 B | 301.5 MiB | patronus-studio/orca-sonar-document-classifier |
+| `sensitive_document` | 0 B | 0 B | unknown | patronus-studio/orca-sonar-document-classifier-edge |
 | `tool_class` | 0 B | 0 B | 0 B | none |
 | `tool_action` | 0 B | 0 B | 0 B | none |
 | `tool_tags` | 0 B | 0 B | 0 B | none |
@@ -79,15 +79,14 @@ The sizes below show required cold-cache downloads for the selected maximum leve
 
 | Category | Level | Required | Source | Cache path | Size |
 | --- | --- | --- | --- | --- | ---: |
-| `injection` | `L3` | yes | `patronus-studio/wolf-defender-prompt-injection-small/config.json` | `injection/l3/config.json` | 1.9 KiB |
-| `injection` | `L3` | yes | `patronus-studio/wolf-defender-prompt-injection-small/tokenizer.json` | `injection/l3/tokenizer.json` | 32.8 MiB |
-| `injection` | `L3` | optional | `patronus-studio/wolf-defender-prompt-injection-small/tokenizer_config.json` | `injection/l3/tokenizer_config.json` | 0.5 KiB |
-| `injection` | `L3` | optional | `patronus-studio/wolf-defender-prompt-injection-small/special_tokens_map.json` | `injection/l3/special_tokens_map.json` | unknown |
-| `injection` | `L3` | yes | `patronus-studio/wolf-defender-prompt-injection-small/onnx/onnx_mixed/model_mixed.onnx` | `injection/l3/onnx/onnx_mixed/model_mixed.onnx` | unknown |
-| `sensitive_document` | `L3` | yes | `patronus-studio/orca-sonar-document-classifier/tokenizer.json` | `sensitive_document/prompts/tokenizer.json` | 32.8 MiB |
-| `sensitive_document` | `L3` | optional | `patronus-studio/orca-sonar-document-classifier/tokenizer_config.json` | `sensitive_document/prompts/tokenizer_config.json` | 0.6 KiB |
-| `sensitive_document` | `L3` | optional | `patronus-studio/orca-sonar-document-classifier/special_tokens_map.json` | `sensitive_document/prompts/special_tokens_map.json` | unknown |
-| `sensitive_document` | `L3` | yes | `patronus-studio/orca-sonar-document-classifier/onnx/onnx_fp16/model_fp16.onnx` | `sensitive_document/prompts/onnx/model_fp16.onnx` | 268.7 MiB |
+| `injection` | `L3` | yes | `patronus-studio/wolf-defender-prompt-injection-small-edge/config.json` | `injection/l3/config.json` | unknown |
+| `injection` | `L3` | yes | `patronus-studio/wolf-defender-prompt-injection-small-edge/tokenizer.json` | `injection/l3/tokenizer.json` | unknown |
+| `injection` | `L3` | optional | `patronus-studio/wolf-defender-prompt-injection-small-edge/tokenizer_config.json` | `injection/l3/tokenizer_config.json` | unknown |
+| `injection` | `L3` | yes | `patronus-studio/wolf-defender-prompt-injection-small-edge/onnx/int8_int4_embeddings/model.onnx` | `injection/l3/onnx/int8_int4_embeddings/model.onnx` | unknown |
+| `sensitive_document` | `L3` | yes | `patronus-studio/orca-sonar-document-classifier-edge/config.json` | `sensitive_document/prompts/config.json` | unknown |
+| `sensitive_document` | `L3` | yes | `patronus-studio/orca-sonar-document-classifier-edge/tokenizer.json` | `sensitive_document/prompts/tokenizer.json` | unknown |
+| `sensitive_document` | `L3` | optional | `patronus-studio/orca-sonar-document-classifier-edge/tokenizer_config.json` | `sensitive_document/prompts/tokenizer_config.json` | unknown |
+| `sensitive_document` | `L3` | yes | `patronus-studio/orca-sonar-document-classifier-edge/onnx/int8_int4_embeddings/model.onnx` | `sensitive_document/prompts/onnx/int8_int4_embeddings/model.onnx` | unknown |
 | `dynamic-pii` | `L3` | yes | `patronus-studio/gliner_small-v2.5-edge/gliner_config.json` | `dynamic_pii/gliner_small_v2_5/gliner_config.json` | unknown |
 | `dynamic-pii` | `L3` | yes | `patronus-studio/gliner_small-v2.5-edge/gliner_onnx_config.json` | `dynamic_pii/gliner_small_v2_5/gliner_onnx_config.json` | unknown |
 | `dynamic-pii` | `L3` | yes | `patronus-studio/gliner_small-v2.5-edge/model_int4_embeddings_int8.onnx` | `dynamic_pii/gliner_small_v2_5/model_int4_embeddings_int8.onnx` | unknown |

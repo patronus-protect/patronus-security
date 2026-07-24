@@ -86,11 +86,14 @@ See [Categories](categories.md) for each category's layer support.
 
 ## Long text and windowing
 
-The L3 worker splits long inputs into **tokenizer-bounded windows with token overlap**, runs
-each window, and aggregates the per-window outputs into one result. This keeps memory bounded
-and lets an attack embedded deep in a long document still be caught. Window aggregation and
-chunk counts are surfaced in the [local benchmark](../how-to/run-local-benchmark.md)'s load
-report.
+The L3 worker splits long inputs into **tokenizer-bounded windows**, aggregates the per-window
+outputs into one result, and keeps memory bounded so an attack buried deep in a long document is
+still caught. With representative **clustering** enabled (off by default) it groups near-duplicate
+windows by similarity, runs only cluster representatives, and propagates their verdict to the
+rest, so most windows never reach the model; **early exit** stops a head once its aggregate can no
+longer change. Aggregation strategy, clustering, and early exit are tunable per pipeline — see the
+[L3 worker policy](../reference/configuration.md#l3-worker-policy). Window and chunk counts are
+surfaced in the [local benchmark](../how-to/run-local-benchmark.md)'s load report.
 
 ## Degradation contract
 

@@ -9,6 +9,8 @@ Import public items from the `patronus_ark` crate.
 ```rust
 // SPDX-License-Identifier: GPL-3.0-only
 pub mod assets;
+#[allow(dead_code, unused_imports)]
+mod cache;
 pub mod detectors;
 pub mod dynamic_pii;
 pub mod external_l1;
@@ -19,6 +21,10 @@ pub mod pipeline;
 pub mod threat;
 pub mod types;
 
+pub use cache::{
+    CacheError, CacheWriteMode, ExactCacheConfig, MemoryCacheConfig, PersistentCacheConfig,
+    WriteBehindConfig,
+};
 pub use dynamic_pii::{
     DynamicPiiConditionalLabels, DynamicPiiConfig, DynamicPiiExecutionGate,
     DynamicPiiResultCondition, EvidenceSpan,
@@ -26,9 +32,13 @@ pub use dynamic_pii::{
 pub use external_l1::{ExternalL1Detector, ExternalL1Input};
 pub use pipeline::{Pipeline, SecurityGateway};
 pub use types::{
-    EvaluationResult, ExecutionBackend, L3SchedulerPolicy, L3Strategy, LabelScore, LayerResult,
-    NtdbOperatingPoint, OnnxBatchMode, QueuedSecurityEvent, QueuedSecurityScanResult, RequestId,
-    ScanExecution, ScanGateMatrix, SecurityAssetReadiness, SecurityCategory, SecurityFailure,
+    ConditionalPipelineGate, EffectiveL3PipelinePolicy, EvaluationResult, ExecutionBackend,
+    GateExpression, GateResult, L3AggregationStrategy, L3ClusteringStrategy, L3EarlyExitMode,
+    L3PipelineEarlyExit, L3PipelinePolicy, L3ProgressMode, L3SchedulerPolicy, L3Strategy,
+    LabelScore, LayerResult, MetadataCondition, NtdbOperatingPoint, OnnxBatchMode,
+    QueuedSecurityEvent, QueuedSecurityProgress, QueuedSecurityScanResult, RequestId,
+    ResultCondition, ScanExecution, ScanGateMatrix, SecurityAssetProgress,
+    SecurityAssetProgressCallback, SecurityAssetReadiness, SecurityCategory, SecurityFailure,
     SecurityFailureKind, SecurityFailureStage, SecurityLevel, SecurityLevelReadiness,
     SecurityRequestCompletion, SecurityRequestState, SecurityRuntimeReadiness, SecurityScanResult,
 };
@@ -44,6 +54,18 @@ pub struct SecurityGateway {
 ```
 
 Main scanner gateway for native and model-backed security categories.
+
+```rust
+pub fn flush_cache(&self) -> Result<(), crate::CacheError>;
+```
+
+Flush queued persistent cache writes. Memory-only gateways are a no-op.
+
+```rust
+pub fn cache_storage_location(&self) -> Option<PathBuf>;
+```
+
+Explicit persistent cache location configured for this gateway.
 
 ```rust
 pub fn new(
@@ -80,6 +102,22 @@ Create a gateway with an optional per-category asset download allowlist.
 
 When `download_categories` is `None`, all configured categories may
 download missing assets if `download_files` is `true`.
+
+```rust
+pub fn try_with_download_categories_and_cache(
+    categories: Vec<SecurityCategory>,
+    max_level: SecurityLevel,
+    model_dir: Option<PathBuf>,
+    download_files: bool,
+    download_categories: Option<Vec<SecurityCategory>>,
+    cache_config: crate::ExactCacheConfig,
+) -> Result<Self, crate::CacheError>;
+```
+
+Create a gateway with lifecycle-scoped exact-cache configuration.
+
+Persistent caching is enabled only when `cache_config.persistent`
+contains an explicit storage location. Requests cannot override it.
 
 ```rust
 pub fn categories(&self) -> &[SecurityCategory];
@@ -182,6 +220,16 @@ Download and verify configured model assets without initializing ONNX,
 tokenizers, executors, workers, or model sessions.
 
 ```rust
+pub fn prepare_assets_with_progress(
+    &self,
+    progress: SecurityAssetProgressCallback,
+) -> Result<SecurityAssetReadiness, SecurityFailure>;
+```
+
+Download and verify configured model assets while reporting per-model
+file progress. Callbacks may run concurrently on asset download threads.
+
+```rust
 pub fn asset_readiness(&self) -> SecurityAssetReadiness;
 ```
 
@@ -212,6 +260,17 @@ with its request id. Results and completion are published through
 [`SecurityGateway::consume_next_event`].
 
 ```rust
+pub fn enqueue_with_metadata(
+    &self,
+    text: impl Into<String>,
+    metadata: serde_json::Value,
+    gates: Option<ScanGateMatrix>,
+) -> RequestId;
+```
+
+Submit a scan with caller-provided request metadata used by conditional gates.
+
+```rust
 pub fn enqueue_categories(
     &self,
     categories: Vec<SecurityCategory>,
@@ -222,6 +281,18 @@ pub fn enqueue_categories(
 
 Submit a scan with a caller-provided category subset to the background
 worker. This method returns a request id, not scan results.
+
+```rust
+pub fn enqueue_categories_with_metadata(
+    &self,
+    categories: Vec<SecurityCategory>,
+    text: impl Into<String>,
+    metadata: serde_json::Value,
+    gates: Option<ScanGateMatrix>,
+) -> RequestId;
+```
+
+Submit selected categories with request-local metadata.
 
 ```rust
 pub fn enqueue_input(
@@ -497,6 +568,28 @@ L1 is intentionally absent because native L1 scanners require no model
 assets. Runtime readiness remains a separate contract.
 
 ```rust
+pub struct SecurityAssetProgress {
+    /// Pipeline category whose assets are currently being prepared.
+    pub category: SecurityCategory,
+    /// Public model identifier from the asset manifest.
+    pub model: String,
+    /// Files already present or downloaded for this model.
+    pub completed_files: usize,
+    /// Total files required by this model.
+    pub total_files: usize,
+}
+```
+
+Progress emitted while configured model assets are downloaded.
+
+```rust
+pub type SecurityAssetProgressCallback =
+    std::sync::Arc<dyn Fn(SecurityAssetProgress) + Send + Sync>;
+```
+
+Thread-safe callback used by asset preparation workers.
+
+```rust
 pub enum SecurityLevelReadiness {
     Ready,
     NotConfigured,
@@ -522,6 +615,10 @@ No public documentation is available yet.
 pub enum QueuedSecurityEvent {
     /// One usable scanner result.
     Result(QueuedSecurityScanResult),
+    /// Non-authoritative progress for UI status.
+    Progress(QueuedSecurityProgress),
+    /// Non-authoritative interim result for UI preview.
+    Provisional(QueuedSecurityScanResult),
     /// The unique terminal event for an accepted request.
     Finished {
         request_id: RequestId,
@@ -537,6 +634,25 @@ pub fn request_id(&self) -> &str;
 ```
 
 Return the request id carried by this event.
+
+```rust
+pub struct QueuedSecurityProgress {
+    pub request_id: RequestId,
+    pub category: String,
+    pub model: String,
+    pub stage: String,
+    pub completed_chunks: usize,
+    pub total_chunks: usize,
+    pub inferred_chunks: usize,
+    pub propagated_chunks: usize,
+    pub cache_hits: usize,
+    pub early_exit: bool,
+    pub coverage: f64,
+    pub details: HashMap<String, serde_json::Value>,
+}
+```
+
+Progress emitted while L3 resolves a multi-chunk request.
 
 ```rust
 pub struct QueuedSecurityScanResult {
@@ -729,6 +845,8 @@ pub struct ScanGateMatrix {
     /// Optional per-model or per-native-scanner overrides keyed by result model
     /// names such as `native:mcp_runtime_risk` or `unified-v3-tool-action`.
     pub models: HashMap<String, bool>,
+    /// Request-context and prior-result conditions applied before L2 or L3.
+    pub conditional: Vec<ConditionalPipelineGate>,
     /// L3 worker scheduling policy.
     pub l3_policy: L3SchedulerPolicy,
 }
@@ -756,10 +874,200 @@ pub struct L3SchedulerPolicy {
     pub max_wait_ms: u64,
     /// Multiplier applied to L2 confidence when L3 degrades.
     pub degraded_factor: f64,
+    /// Whether L3 may stop once the final class is stable.
+    pub early_exit: L3EarlyExitMode,
+    /// Whether L3 should emit non-authoritative progress/provisional events.
+    pub progress: L3ProgressMode,
+    /// Logical chunk ordering strategy. This does not enable tensor batching.
+    pub clustering: L3ClusteringStrategy,
+    /// Number of high-priority members inferred per similarity cluster for
+    /// representative scheduling. Values below 1 are treated as 1.
+    pub representatives_per_cluster: usize,
+    /// Number of least-similar verification members inferred per cluster for
+    /// verify-representative scheduling. Values below 1 are treated as 1.
+    pub verify_representatives_per_cluster: usize,
+    /// Minimum request-local similarity required to place two chunks in the
+    /// same representative cluster.
+    pub min_cluster_similarity: f64,
+    /// Maximum number of chunks assigned to one representative cluster.
+    pub max_cluster_size: usize,
+    /// Optional execution-policy overrides keyed by pipeline category or model.
+    /// Category keys take precedence over model keys.
+    pub pipelines: HashMap<String, L3PipelinePolicy>,
 }
 ```
 
 Priority and timeout policy for centrally scheduled L3 work.
+
+```rust
+pub struct L3PipelinePolicy {
+    /// Chunk execution strategy. `None` inherits the request-wide default.
+    #[serde(default, alias = "execution")]
+    pub clustering: Option<L3ClusteringStrategy>,
+    /// Representatives inferred from the high-priority side of each cluster.
+    #[serde(default)]
+    pub representatives_per_cluster: Option<usize>,
+    /// Least-similar members used to verify a representative cluster.
+    #[serde(default)]
+    pub verify_representatives_per_cluster: Option<usize>,
+    /// Minimum request-local similarity required for cluster membership.
+    #[serde(default)]
+    pub min_cluster_similarity: Option<f64>,
+    /// Maximum number of members allowed in one cluster.
+    #[serde(default)]
+    pub max_cluster_size: Option<usize>,
+    /// Chunk-output aggregation. `None` keeps the pipeline's built-in rule.
+    #[serde(default)]
+    pub aggregation: Option<L3AggregationStrategy>,
+    /// Early-exit scope. `None` inherits the request-wide default semantics.
+    #[serde(default)]
+    pub early_exit: Option<L3PipelineEarlyExit>,
+}
+```
+
+Optional per-pipeline overrides for L3 chunk execution.
+
+```rust
+pub enum L3AggregationStrategy {
+    AnyPositiveOrHighest {
+        positive_class: String,
+        threshold: f64,
+    },
+    HighestRiskAboveThresholdOrConfidence {
+        threshold: f64,
+    },
+    MajorityVoteOrHighest,
+}
+```
+
+Configurable aggregation for one L3 pipeline.
+
+```rust
+pub enum L3PipelineEarlyExit {
+    Disabled,
+    HeadStable,
+    RequestWidePositive,
+}
+```
+
+Scope at which a stable per-pipeline L3 decision stops work.
+
+```rust
+pub struct EffectiveL3PipelinePolicy {
+    pub clustering: L3ClusteringStrategy,
+    pub representatives_per_cluster: usize,
+    pub verify_representatives_per_cluster: usize,
+    pub min_cluster_similarity: f64,
+    pub max_cluster_size: usize,
+    pub aggregation: Option<L3AggregationStrategy>,
+    pub early_exit: L3PipelineEarlyExit,
+}
+```
+
+Fully resolved execution settings for one pipeline and request.
+
+```rust
+pub enum L3EarlyExitMode {
+    Disabled,
+    ClassStable,
+}
+```
+
+No public documentation is available yet.
+
+```rust
+pub enum L3ProgressMode {
+    Disabled,
+    Progress,
+    Provisional,
+}
+```
+
+No public documentation is available yet.
+
+```rust
+pub enum L3ClusteringStrategy {
+    Disabled,
+    RankOnly,
+    Representative,
+    VerifyRepresentative,
+}
+```
+
+No public documentation is available yet.
+
+```rust
+pub struct ConditionalPipelineGate {
+    /// Phase controlled by this gate. L1 is intentionally not supported.
+    pub level: SecurityLevel,
+    /// Optional category/model selector. `None` applies to every pipeline at the level.
+    #[serde(default)]
+    pub pipeline: Option<String>,
+    /// Condition that enables a normal gate or activates an `l3_policy` override.
+    pub when: GateExpression,
+    /// Optional L3 execution-policy override applied when `when` matches.
+    /// Policy gates do not suppress the pipeline when the condition is false.
+    #[serde(default)]
+    pub l3_policy: Option<L3PipelinePolicy>,
+}
+```
+
+One conditional L2/L3 pipeline gate.
+
+```rust
+pub enum GateExpression {
+    All(Vec<GateExpression>),
+    Any(Vec<GateExpression>),
+    Not(Box<GateExpression>),
+    Metadata(MetadataCondition),
+    Result(ResultCondition),
+}
+```
+
+Recursive expression over enqueue metadata and completed L1/L2 results.
+
+```rust
+pub struct MetadataCondition {
+    pub path: String,
+    #[serde(default)]
+    pub equals: Option<serde_json::Value>,
+    #[serde(default, rename = "in")]
+    pub in_values: Option<Vec<serde_json::Value>>,
+    #[serde(default)]
+    pub exists: Option<bool>,
+}
+```
+
+Predicate over a dotted path in request metadata.
+
+```rust
+pub struct ResultCondition {
+    pub pipeline: String,
+    #[serde(default)]
+    pub classes: Vec<String>,
+    #[serde(default)]
+    pub min_confidence: Option<f64>,
+}
+```
+
+Predicate over a previously completed L1/L2 pipeline result.
+
+```rust
+pub struct GateResult {
+    pub pipeline: String,
+    pub class_name: String,
+    pub confidence: f64,
+    pub level: SecurityLevel,
+}
+```
+
+Minimal result view exposed to conditional gate evaluation.
+
+```rust
+pub fn pipeline_policy(&self, category: &str, model: &str) -> EffectiveL3PipelinePolicy;
+```
+
+Resolve request-wide defaults and a category/model override.
 
 ```rust
 pub fn all_enabled() -> Self;
@@ -792,6 +1100,12 @@ pub fn with_model(mut self, model: impl Into<String>, enabled: bool) -> Self;
 Builder-style model/native scanner gate setter.
 
 ```rust
+pub fn set_conditional(&mut self, gates: Vec<ConditionalPipelineGate>) -> Result<(), String>;
+```
+
+Replace request-context and prior-result gates.
+
+```rust
 pub fn allows_level(&self, level: SecurityLevel) -> bool;
 ```
 
@@ -809,6 +1123,12 @@ pub fn set_l3_policy(&mut self, policy: L3SchedulerPolicy);
 ```
 
 Replace the L3 worker scheduling policy.
+
+```rust
+pub fn validate(&self) -> Result<(), String>;
+```
+
+No public documentation is available yet.
 
 ```rust
 pub struct ScanExecution {
@@ -988,6 +1308,8 @@ pub struct AssetSpec {
     pub level: SecurityLevel,
     /// Hugging Face repository identifier.
     pub repo: &'static str,
+    /// Immutable Hugging Face commit revision, when the asset is pinned.
+    pub revision: Option<&'static str>,
     /// File path inside the Hugging Face repository.
     pub source_path: &'static str,
     /// Relative path below the category cache directory.
@@ -1151,15 +1473,6 @@ Download a missing NTDB v2 L2 package from Hugging Face into `target_dir`.
 The package is downloaded manifest-first: `manifest.json` is fetched from
 the package prefix, then runtime files referenced by that manifest are
 downloaded into the same local package tree.
-
-```rust
-pub fn download_ntdb_l2_package_asset(
-    asset: NtdbL2PackageAssetSpec,
-    target_dir: &Path,
-) -> Result<PathBuf, Box<dyn std::error::Error>>;
-```
-
-Download a missing NTDB v2 L2 package described by `asset`.
 
 ```rust
 pub fn ntdb_l2_package_manifest_files(

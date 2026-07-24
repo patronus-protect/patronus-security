@@ -63,6 +63,23 @@ from one shared `physical_job_id`. Each strategy runs in a fresh process, L3
 sessions are materialized before timing, and the example prints median and
 mean end-to-end latency plus the measured speedup.
 
+## 07 — Multi-head L2 validation
+
+Runs all seven L2 NTDB classifiers on real unified-v3 validation rows and reports their per-head
+agreement — a fast way to sanity-check the L2 packages without invoking L3. Python only
+(`07_multitask_val_l2.py`). The Rust example in slot 07 is a separate contextual-gates demo
+(`07_contextual_gates.rs`), documented under
+[Conditional gates](reference/configuration.md#conditional-gates).
+
+## 08 — L3 pipeline policies
+
+Tune L3 execution per logical head and per request. The example turns on request-wide `progress`
+reporting and sets per-pipeline policies — `injection` uses `representative` clustering with an
+`any_positive_or_highest` aggregation and request-wide early exit, `tool_class` uses
+`verify_representative` — then adds a `conditional` `l3_policy` override that applies only when
+`routing` classified the text as a code request. See the
+[L3 worker policy](reference/configuration.md#l3-worker-policy).
+
 ## 09 — Caching
 
 Runs the same input twice and prints cache metadata. The Python example also

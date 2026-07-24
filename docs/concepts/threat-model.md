@@ -60,11 +60,13 @@ activity is the optional, one-time download of model assets from Hugging Face.
 - **The host is trusted.** The library trusts the process and machine it runs in. It does not
   defend against a compromised host, a malicious operator, or tampering with its own binaries
   or cached model files.
-- **Assets are authentic.** Downloaded model bundles are fetched from **immutable, pinned
-  Hugging Face revisions** (commit SHAs) recorded in
-  [`specs.rs`](https://github.com/patronus-protect/patronus-security/blob/main/rust/src/assets/specs.rs);
-  the root of trust is therefore the Hugging Face repositories and those pinned revisions. Note
-  the download step does not additionally re-verify file bytes against a separate content hash.
+- **Assets are authentic.** The L3 transformers, the unified L3 model, and the dynamic-pii bundle
+  are fetched from **immutable, pinned commit revisions** (SHAs) recorded in
+  [`specs.rs`](https://github.com/patronus-protect/patronus-security/blob/main/rust/src/assets/specs.rs).
+  The seven L2 NTDB packages are currently fetched from each repo's mutable `main` branch — they
+  are **not** revision-pinned, so their root of trust is narrower (the repository/account, not a
+  specific reviewed commit) until pinning is added. Either way the download step does not
+  re-verify file bytes against a separate published content hash.
 - **The caller acts on the signals.** The library classifies; enforcement (blocking, routing,
   approval) is the caller's responsibility. A signal nobody acts on protects nothing.
 - **Scanned text is the actual text.** If content is decrypted, decoded, or assembled *after*

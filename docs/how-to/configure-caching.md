@@ -145,7 +145,9 @@ scanner.flush_cache()
 ```
 
 The request path only enqueues persistent writes. A bounded queue and batched
-`redb` transactions keep those writes off the inference path.
+`redb` transactions keep those writes off the inference path. Python always uses asynchronous
+write-behind with the default queue and batch size; `CacheWriteMode` and `WriteBehindConfig` are
+Rust-only, so write-through and custom queue sizing are not reachable from Python.
 
 ### Rust: memory only
 
@@ -198,6 +200,13 @@ write_mode: CacheWriteMode::WriteThrough,
 
 Write-through is useful only when every new entry must be durable immediately;
 it adds millisecond-scale storage latency to misses.
+
+**Write-behind back-pressure.** Under `Async`, if the bounded write queue fills faster than the
+background writer drains it, the overflowing writes are **dropped silently** — no error, no
+exposed counter — so the cache never blocks a miss or an inference. Entries dropped this way are
+simply recomputed the next time. Call `flush_cache()` before a durability boundary rather than
+relying on back-pressure, and raise `WriteBehindConfig.queue_capacity` (Rust) if you see repeated
+misses under sustained write bursts.
 
 ## What happens during two scans
 

@@ -56,8 +56,8 @@ for what each one classifies and which layers back it.
 ## Consider the offline implications
 
 - `pii`, `dlp` → native L1, no assets ever.
-- `injection`, `threat` → native L1 always works; L2/L3 need assets.
-- `sensitive_document`, `tool_*`, `routing` → **model-only**; with no cached assets they produce
+- `injection` → native L1 always works; L2/L3 need assets.
+- `sensitive_document`, `tool_*`, `routing`, `threat` → **model-only**; with no cached assets they produce
   no verdict.
 - `dynamic-pii` → **L3-only**; needs its GLiNER bundle or it cannot run.
 

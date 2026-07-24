@@ -62,7 +62,7 @@ Each element of `layers` records one layer's output:
 | `matched` | bool | Whether this layer produced a positive match. |
 | `duration_ms` | float | Wall-clock time spent in this layer. |
 | `thresholds` | dict | Thresholds applied at this layer (operating point, etc.). |
-| `details` | dict | Layer-specific extra detail. |
+| `details` | dict | Layer-specific extra detail. L2 layers add `l3_candidates` / `l2_chunk_outputs`; L3 layers add `inferred_chunks`, `propagated_chunks`, `resolved_chunks`, `planned_l3_chunks`, `total_effective_chunks`, `cache_hits`, `early_exit`, `coverage`, `l3_clustering_strategy`, `l3_worker_wall_ms` (unified adds `physical_job_id`). |
 
 ### Evidence spans
 
@@ -81,7 +81,10 @@ leave `evidence_spans` empty.
 ## Async queue events
 
 `consume_next_event(timeout)` returns one event dict at a time (or `None` on timeout).
-`consume_events(timeout)` yields them. There are two `event_type`s:
+`consume_events(timeout)` yields them. There are up to four `event_type`s: `result` and
+`finished` always, plus `progress` and `provisional` when L3 progress reporting is enabled
+(`execution_gates.l3.progress`, off by default). The blocking `scan_*` helpers only ever return
+`result` / `finished`.
 
 ### `result`
 
@@ -96,12 +99,45 @@ leave `evidence_spans` empty.
 One request can emit **several** `result` events. L1 results are visible as soon as L1
 finishes; L2 and a later promoted L3 result follow independently.
 
-Promoting NTDB L2 layers expose `details.l3_candidates`. Each entry carries a byte `span`,
-`promote_score`, `promote_threshold`, `source_pipeline`, `source_model`, and `l2_class`.
-Unified L3 merges overlapping candidates from the request's promoted heads and scans only
-the highest-scored windows plus bounded neighboring context. Candidate-driven execution is
-capped at eight distinct chunk texts per physical L3 call, so repetitive chunks are inferred
-only once. An empty or unusable candidate list deliberately falls back to full-text L3.
+Promoting NTDB L2 layers expose `details.l3_candidates` (each entry: byte `span`,
+`promote_score`, `promote_threshold`, `source_pipeline`, `source_model`, `l2_class`) and
+`details.l2_chunk_outputs` (the per-chunk L2 outputs retained for aggregation, with the raw
+embeddings stripped). Under `l3_strategy="multi"`, candidates from every promoted pipeline in the
+coalesced run are deduplicated by **exact span match** — when two heads promote the same span,
+`source_pipeline` / `source_model` / `l2_class` become comma-joined unions; under the default
+`l3_strategy="dedicated"` each pipeline's candidates stay separate and this merge never runs. The
+L3 worker maps candidate spans onto tokenizer-bounded windows; with representative
+clustering enabled it groups near-duplicate windows, infers only cluster representatives, and
+propagates their verdict to the rest (see
+[L3 worker policy](configuration.md#l3-worker-policy)). An empty or unusable candidate list
+deliberately falls back to full-text L3.
+
+### `progress`
+
+Opt-in, non-authoritative status while a long L3 scan resolves — only under the dedicated L3
+strategy (`l3_strategy="multi"` never emits it):
+
+```python
+{
+    "event_type": "progress",
+    "request_id": "…",
+    "progress": {
+        "category": "injection", "model": "…", "stage": "l3_chunk",
+        "completed_chunks": 3, "total_chunks": 8,
+        "inferred_chunks": 2, "propagated_chunks": 1, "cache_hits": 0,
+        "early_exit": False, "coverage": 0.375, "details": { … },
+    },
+}
+```
+
+`stage` is one of `l3_started`, `l3_chunk`, `l3_cluster_propagated`, `l3_early_exit`. A progress
+event carries no verdict — never treat it as a result.
+
+### `provisional`
+
+Same shape as a `result` event's `result`, but an **interim preview** re-aggregated from the
+chunks resolved so far. It is non-authoritative and may be superseded by later `result` /
+`finished` events; only emitted when `execution_gates.l3.progress` is set to `"provisional"`.
 
 ### `finished`
 

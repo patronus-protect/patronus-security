@@ -47,9 +47,10 @@ groups: **instruction manipulation**, **obfuscation/smuggling**, and **agentic/t
 | `cross_tool_instruction` | Instructions that try to make one tool act on another's behalf. |
 | `agentic_control_abuse` | Abuse of agent control flow (loops, planning, autonomy) to subvert intent. |
 
-The `threat` category adds a native pattern/obfuscation/detection layer of its own
-([`rust/src/threat/`](https://github.com/patronus-protect/patronus-security/tree/main/rust/src/threat))
-before its L2/L3 classifiers.
+The [`rust/src/threat/`](https://github.com/patronus-protect/patronus-security/tree/main/rust/src/threat)
+module provides shared pattern- and obfuscation-detection primitives used internally by several
+injection and DLP detectors. The `threat` *category* itself has **no native L1 stage** — it starts
+at NTDB L2 (see [Categories](categories.md#model-backed-l2--l3)).
 
 ## DLP
 
@@ -57,11 +58,14 @@ Data-loss-prevention detectors flag content that leaks or destroys data:
 
 | Detector | Catches |
 | --- | --- |
+| `dlp` | Regex bank for leaked secrets/credentials — API keys, cloud keys, private keys, JWTs, webhook secrets, and similar — reported with exact evidence spans. |
 | `secret_transfer` | Secrets and credentials being read or moved (API keys, private keys, tokens, `.env`). |
 | `destructive_operation` | Destructive commands/operations (mass delete, disable protections, wipe). |
 | `sensitive_material` | Transfer of sensitive material beyond a trust boundary. |
 
-DLP findings populate `evidence_spans` with the exact matched offsets.
+Only the `dlp` regex detector populates `evidence_spans` with the exact matched offsets;
+`secret_transfer`, `destructive_operation`, and `sensitive_material` are boolean heuristics and
+return no spans.
 
 ## PII
 
@@ -78,7 +82,7 @@ Two native detectors evaluate agentic tool use against MCP policy:
 
 | Detector | Catches |
 | --- | --- |
-| `mcp_policy` | Violations of a configured MCP tool policy, with a severity per tool call. |
+| `mcp_policy` | Matches against a fixed built-in set of MCP tool-policy rules (e.g. destructive shell ops, credential-file reads) and returns the fired rule name. The internal per-rule severity is not surfaced in the result. |
 | `mcp_runtime_risk` | Runtime risk in an MCP tool invocation. |
 
 These can be toggled per request via [execution gates](../reference/configuration.md#execution-gates)

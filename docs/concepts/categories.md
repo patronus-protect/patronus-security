@@ -17,7 +17,7 @@ specific set of layers — some are native-only, some are model-backed, one is t
 | `tool_action` | Which operation does the tool perform (read, write, exec, …)? | — | ✅ | Husky Paw |
 | `tool_tags` | Data-flow properties (sensitive source, untrusted source, external sink)? | — | ✅ | Husky Nose |
 | `routing` | What is the operational intent of the request? | — | ✅ | Panther Read |
-| `threat` | What *type* of security threat is this? | ✅ | ✅ | Wolf Defender Threat |
+| `threat` | What *type* of security threat is this? | — | ✅ | Wolf Defender Threat |
 
 The models are documented on Hugging Face under the
 [`patronus-studio`](https://huggingface.co/patronus-studio) organization and mapped to
@@ -36,15 +36,15 @@ sensitive-material transfers. Both populate `evidence_spans` with exact offsets.
 
 ### Native + model-backed (L1 → L2 → L3)
 
-`injection` and `threat` start with native L1 detectors and can escalate to an NTDB L2
-classifier and, on promotion, a full transformer at L3. This gives immediate rule-based
-coverage plus learned generalization for novel phrasings.
+`injection` starts with native L1 detectors and can escalate to an NTDB L2 classifier and, on
+promotion, a full transformer at L3. This gives immediate rule-based coverage plus learned
+generalization for novel phrasings.
 
 ### Model-backed (L2 → L3)
 
-`sensitive_document`, `tool_class`, `tool_action`, `tool_tags`, and `routing` are learned
-classifiers with an NTDB L2 package and a dedicated L3 transformer. They have no native L1
-stage; if their assets are not cached they simply do not produce a model verdict.
+`sensitive_document`, `tool_class`, `tool_action`, `tool_tags`, `routing`, and `threat` are
+learned classifiers with an NTDB L2 package and a dedicated L3 transformer. They have no native
+L1 stage; if their assets are not cached they simply do not produce a model verdict.
 
 ### Transformer-only (L3)
 

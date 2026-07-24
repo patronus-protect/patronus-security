@@ -11,7 +11,7 @@ Set at gateway construction:
 | Option | Type | Meaning | Rust |
 | --- | --- | --- | --- |
 | `categories` | list of category names | Which [categories](../concepts/categories.md) to scan. | constructor |
-| `max_level` | `"l1"` \| `"l2"` \| `"l3"` | Hard ceiling on escalation. | constructor |
+| `max_level` | `"l1"` \| `"l2"` \| `"l3"` | Hard ceiling on escalation (default `"l2"`). | constructor |
 | `download_files` | bool | Whether missing assets may be downloaded on warmup. | constructor |
 | `download_categories` | list | Restrict automatic downloads to these categories. | constructor |
 | `model_dir` | path | Custom asset cache location (default: platform cache dir). | constructor |
@@ -25,11 +25,12 @@ Set at gateway construction:
 | `execution_backend` | str | ONNX [execution backend](#execution-backend) (default `"auto"`). | setter |
 | `onnx_batch_mode` | str | [ONNX batch mode](#onnx-batch-mode); default `"backend_default"` follows whatever the backend implies. | setter |
 
-In Python, all of these are keyword arguments to `SecurityGateway(...)`. In Rust, the
-constructors `with_max_level(...)` and `with_download_categories(...)` accept only the first
-five (marked *constructor* above); every other option is applied after construction with its
-setter (`set_l3_strategy`, `set_execution_gates`, `set_dynamic_pii_config`,
-`set_execution_backend`, `set_onnx_batch_mode`). Rust persistent caching uses
+In Python, all of these are keyword arguments to `SecurityGateway(...)`. In Rust the
+*constructor*-marked options are positional: `with_max_level(categories, max_level, model_dir,
+download_files)` takes four arguments (it always downloads for every configured category), and
+`with_download_categories(...)` adds the fifth, `download_categories`. Every other option is
+applied after construction with its setter (`set_l3_strategy`, `set_execution_gates`,
+`set_dynamic_pii_config`, `set_execution_backend`, `set_onnx_batch_mode`). Rust persistent caching uses
 `try_with_download_categories_and_cache(...)` with `ExactCacheConfig`; the path is fixed for
 the gateway lifecycle and cannot be overridden per request.
 
@@ -106,6 +107,8 @@ execution_gates = {
         "ttl_ms": {"injection": 15_000, "dynamic-pii": 12_000},
         # Request-wide defaults:
         "execution": "rank_only",
+        "early_exit": "class_stable",   # request-wide master switch: "disabled" | "class_stable"
+        "progress": "disabled",         # "disabled" | "progress" | "provisional" (both dedicated-only)
         "representatives_per_cluster": 1,
         "verify_representatives_per_cluster": 1,
         "min_cluster_similarity": 0.90,
@@ -145,12 +148,33 @@ remaining cluster. `verify_representative` runs a second global wave containing 
 number of least-similar members. A class mismatch opens only that cluster and schedules its
 remaining members in global priority order. `rank_only` never propagates.
 
-Early exits have explicit scope:
+`aggregation.type` selects how the per-chunk L3 outputs combine into the category verdict:
+`any_positive_or_highest` (fields `positive_class`, `threshold`),
+`highest_risk_above_threshold_or_confidence` (field `threshold`), or `majority_vote_or_highest`.
+When omitted it defaults per pipeline — `any_positive_or_highest` for injection,
+`majority_vote_or_highest` for routing/tool_class/tool_action/sensitive_document, and
+`highest_risk_above_threshold_or_confidence` (threshold `0.93`) for every other pipeline.
+
+There are **two** `early_exit` fields with different value sets. The request-wide
+`execution_gates.l3.early_exit` (shown in the defaults block above) is the master switch —
+`disabled` or `class_stable` (default `class_stable`); it turns early exit on or off and resolves
+each pipeline's default scope. The per-pipeline `early_exit` inside `pipelines.<name>` overrides
+that pipeline's scope explicitly:
 
 - `disabled`: do not stop from a stable head decision.
 - `head_stable`: stop only the current head when its result can no longer change.
 - `request_wide_positive`: a thresholded positive result stops lower-priority heads for the
   request. This is the default behavior for Injection and Threat.
+
+Independently of the per-pipeline `early_exit` scope above, a fixed cross-pipeline guard cancels
+the rest of a request's queued (or coalesced) L3 jobs once any Injection or Threat result crosses
+`0.93` confidence on a non-safe class. That threshold is not configurable.
+
+`progress` controls streaming status while L3 resolves: `disabled` (default), `progress`
+(non-terminal `progress` events carrying chunk counters), or `provisional` (also emits interim
+`provisional` result previews). It takes effect only under `l3_strategy="dedicated"` — the unified
+`multi` strategy never emits progress or provisional events. See
+[Result schema](result-schema.md#async-queue-events) for the event shapes.
 
 Dedicated and unified L3 use the same cluster planner, representative/verify state machine,
 aggregation rules, and early-exit state. Unified keeps the full output of every physical chunk and
@@ -241,6 +265,10 @@ ONNX execution provider for L3 (and model-backed L2 where applicable):
 `auto` selects a provider based on the platform; `cpu` is the portable default. Availability of
 GPU providers depends on the ONNX Runtime build.
 
+Setting the backend also **resets `onnx_batch_mode`**: `auto`/`cpu` → `lazy_batches`, and the GPU
+providers (`gpu`/`coreml`/`cuda`/`directml`/`tensorrt`) → `tensor_batch`. If you need a non-default
+batch mode, call `set_onnx_batch_mode(...)` *after* `set_execution_backend(...)`.
+
 ## ONNX batch mode
 
 | Value | Behavior |
@@ -303,10 +331,11 @@ after the remaining chunks finish.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `HF_TOKEN` | — | Authenticated / rate-limited Hugging Face access for asset downloads. |
+| `HF_TOKEN` | — | Authenticated / rate-limited Hugging Face access for asset downloads. Falls back to `HUGGINGFACE_HUB_TOKEN`, then `HUGGING_FACE_HUB_TOKEN`, then the cached `huggingface-cli login` token file. |
 | `HF_HOME` | HF default | Hugging Face cache location. |
-| `PATRONUS_DOWNLOAD_OPTIONAL_ASSETS` | unset | `1` also downloads optional full-precision ONNX assets. |
+| `PATRONUS_DOWNLOAD_OPTIONAL_ASSETS` | unset | `1` also downloads non-required asset files (currently `tokenizer_config.json` for the legacy L3 manifest). |
 | `PATRONUS_L3_TTL_SECS` | `300` | Idle seconds before an L3 session is evicted. |
+| `PATRONUS_L3_TRACE_CHUNKS` | unset | `1` logs per-chunk L3 execution traces (diagnostic). |
 | `PATRONUS_ONNX_EXECUTION_PROVIDER` | platform | Override the ONNX execution provider. |
 | `PATRONUS_ONNX_INTRA_THREADS` | ORT default | Intra-op thread count. |
 | `PATRONUS_ONNX_INTER_THREADS` | ORT default | Inter-op thread count. |

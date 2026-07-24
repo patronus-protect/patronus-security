@@ -27,6 +27,7 @@ flowchart TB
         PIPE --> L2["L2 · NTDB executor<br/>(shared static encoder + ONNX heads)"]
         PIPE -.promote.-> WORKER["L3 background worker<br/>(cost-scheduled queue)"]
         WORKER --> L3["L3 · full ONNX transformers<br/>(RAM-resident, TTL-evicted)"]
+        WORKER -.check.-> CACHE["Model-output cache<br/>(logits · similarity · PII)"]
         GW --> ASSETS["Asset manager<br/>(download · verify · cache)"]
         L2 --> ASSETS
         L3 --> ASSETS
@@ -85,8 +86,14 @@ L3 is expensive, so it is decoupled from the request path:
 - When L2 **promotes** a scan, the pipeline first publishes the **L2 fallback** result to the
   shared queue, then enqueues an L3 job.
 - The worker **schedules by estimated and observed compute cost** (an exponentially weighted
-  moving average of real execution time), applies a **max-wait guard** against starvation,
-  and splits long texts into **tokenizer-bounded windows with token overlap**.
+  moving average of real execution time) and applies a **max-wait guard** against starvation.
+- Long texts split into **tokenizer-bounded windows**. With clustering enabled the worker groups
+  near-duplicate windows by similarity, infers only cluster **representatives**, and **propagates**
+  their verdict to the rest — so most windows never reach the model. **Early exit** stops a head
+  once its aggregate can no longer change. See the
+  [L3 worker policy](../reference/configuration.md#l3-worker-policy) (clustering is off by default).
+- With progress reporting enabled the worker streams non-terminal **`progress`** / **`provisional`**
+  events as chunks resolve (dedicated strategy only).
 - L3 errors and timeouts **degrade back to the L2 result** where a fallback exists.
 - Sessions are evicted only after a long idle TTL (`PATRONUS_L3_TTL_SECS`, default 300 s);
   the worker never hot-swaps models per request.
@@ -102,6 +109,18 @@ what lets a ready L2 result for request B overtake request A that is still waiti
 drain this queue with `consume_next_event()`, which you should run on its own thread so it
 never blocks your producer from calling `enqueue`. (The blocking `scan_*` helpers drain the
 queue for you internally, which is why they only suit single-shot scripts.)
+
+### The model-output cache
+
+Separate from the asset download cache, an optional **model-output cache** sits in front of L3
+and the `dynamic-pii` GLiNER pipeline. It stores **raw per-head logits** — not final decisions,
+so policy and thresholds are re-applied on every hit — keyed by the immutable model SHA plus the
+exact chunk bytes, so an identical chunk skips inference entirely. A **historical similarity**
+tier can propagate a non-safe verdict to a close L2-embedding match without running L3, and a
+**dynamic-PII** tier remembers normalized entity spans across texts. A memory tier is always on;
+an optional [redb](https://github.com/cberner/redb)-backed file adds persistence across restarts.
+Because the PII tier stores cleartext spans, protect that file like other sensitive local data.
+See [Configure caching](../how-to/configure-caching.md).
 
 ### The asset manager
 
