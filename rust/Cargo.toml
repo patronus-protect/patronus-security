@@ -22,7 +22,7 @@ rayon = "1.10"
 dirs = "5.0"
 ureq = { version = "2.10", features = ["json"] }
 ort = { version = "2.0.0-rc.12", features = ["half"] }
-tokenizers = "0.23.1"
+tokenizers = { version = "0.23.1", default-features = false, features = ["onig"] }
 kitoken = { version = "=0.11.0", default-features = false, features = ["std", "serialization", "normalization", "regex-perf", "multiversion", "convert-tokenizers"] }
 sentencepiece-rust = "0.1.1"
 half = "2.1"

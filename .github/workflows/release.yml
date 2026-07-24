@@ -59,8 +59,8 @@ jobs:
       - uses: PyO3/maturin-action@v1
         with:
           command: build
-          args: --manifest-path python/Cargo.toml --release --out dist --interpreter python
-          manylinux: auto
+          args: --manifest-path python/Cargo.toml --release --out dist --interpreter python3.11
+          manylinux: 2014
       - name: Install and smoke-test wheel
         shell: bash
         run: |
