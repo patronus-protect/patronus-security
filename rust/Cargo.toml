@@ -21,7 +21,7 @@ aho-corasick = "1.1"
 rayon = "1.10"
 dirs = "5.0"
 ureq = { version = "2.10", features = ["json"] }
-ort = { version = "2.0.0-rc.12", features = ["half"] }
+ort = { version = "2.0.0-rc.12", default-features = false, features = ["std", "ndarray", "tracing", "download-binaries", "tls-rustls", "copy-dylibs", "api-24", "half"] }
 tokenizers = { version = "0.23.1", default-features = false, features = ["onig"] }
 kitoken = { version = "=0.11.0", default-features = false, features = ["std", "serialization", "normalization", "regex-perf", "multiversion", "convert-tokenizers"] }
 sentencepiece-rust = "0.1.1"
