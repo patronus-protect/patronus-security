@@ -1,0 +1,150 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Build artifacts or publish them"
+        required: true
+        default: build
+        type: choice
+        options:
+          - build
+          - testpypi
+          - production
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: cargo fmt --check
+      - run: cargo test -p patronus-ark
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check licenses
+      - run: cargo publish -p patronus-ark --dry-run
+      - run: python scripts/generate_docs.py --check
+      - name: Verify packaged legal files are current
+        run: |
+          cmp LICENSE rust/LICENSE
+          cmp LICENSE-COMMERCIAL.md rust/LICENSE-COMMERCIAL.md
+          cmp NOTICE rust/NOTICE
+          cmp LICENSE python/LICENSE
+          cmp LICENSE-COMMERCIAL.md python/LICENSE-COMMERCIAL.md
+          cmp NOTICE python/NOTICE
+
+  wheels:
+    name: Build wheel (${{ matrix.os }})
+    needs: validate
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          args: --manifest-path python/Cargo.toml --release --out dist --interpreter python
+          manylinux: auto
+      - name: Install and smoke-test wheel
+        shell: bash
+        run: |
+          python -m pip install --no-index --no-deps --find-links dist patronus-ark
+          python -c "from patronus_ark import SecurityGateway; gateway = SecurityGateway(categories=['pii'], max_level='l1', download_files=False); gateway.warmup(); assert gateway.scan_all('Contact ada@example.com')"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}
+          path: dist
+
+  sdist:
+    name: Build source distribution
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --manifest-path python/Cargo.toml --out dist
+      - name: Rebuild wheel from source distribution
+        run: python -m pip wheel --no-deps --wheel-dir rebuilt-wheel dist/*.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+
+  publish-testpypi:
+    name: Publish Python package to TestPyPI
+    needs: [wheels, sdist]
+    if: inputs.channel == 'testpypi'
+    runs-on: ubuntu-latest
+    environment: testpypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          path: dist
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: sdist
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  publish-crate:
+    name: Publish Rust crate
+    needs: [wheels, sdist]
+    runs-on: ubuntu-latest
+    if: inputs.channel == 'production'
+    environment: release
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo publish -p patronus-ark
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  publish-python:
+    name: Publish Python package
+    needs: [wheels, sdist, publish-crate]
+    runs-on: ubuntu-latest
+    if: inputs.channel == 'production'
+    environment: release
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          path: dist
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: sdist
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1

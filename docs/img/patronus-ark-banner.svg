@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" width="1200" height="300" role="img" aria-label="Patronus Ark — layered security scanning for LLM and agent traffic">
+  <title>Patronus Ark</title>
+  <desc>Shield mark containing three stacked layers, with the Patronus Ark wordmark and the L1, L2 and L3 scanning layers.</desc>
+
+  <defs>
+    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0e1626"/>
+      <stop offset="55%" stop-color="#101d33"/>
+      <stop offset="100%" stop-color="#0c1322"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#818cf8"/>
+    </linearGradient>
+    <linearGradient id="wordAccent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#a78bfa"/>
+    </linearGradient>
+    <clipPath id="shieldClip">
+      <path d="M50 2 L98 21 L98 67 C98 99 76 117 50 125 C24 117 2 99 2 67 L2 21 Z"/>
+    </clipPath>
+  </defs>
+
+  <rect x="0" y="0" width="1200" height="300" rx="22" fill="url(#panel)"/>
+  <rect x="0.75" y="0.75" width="1198.5" height="298.5" rx="21.5" fill="none" stroke="#1e293b" stroke-width="1.5"/>
+
+  <!-- Mark: shield with three layer strata, widest at the base -->
+  <g transform="translate(92 88)">
+    <g clip-path="url(#shieldClip)">
+      <rect x="0" y="0" width="100" height="127" fill="#0b1220"/>
+      <!-- Traffic funnels downward: every request enters L1, few reach L3 -->
+      <rect x="13" y="29" width="74" height="19" rx="6" fill="#34d399"/>
+      <rect x="24" y="58" width="52" height="19" rx="6" fill="#fbbf24"/>
+      <rect x="37" y="87" width="26" height="17" rx="6" fill="#a78bfa"/>
+    </g>
+    <path d="M50 2 L98 21 L98 67 C98 99 76 117 50 125 C24 117 2 99 2 67 L2 21 Z"
+          fill="none" stroke="url(#rim)" stroke-width="3.5" stroke-linejoin="round"/>
+  </g>
+
+  <!-- Wordmark -->
+  <g font-family="system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif">
+    <text x="248" y="142" font-size="60" font-weight="700" letter-spacing="1.5" fill="#f1f5f9">PATRONUS</text>
+    <text x="592" y="142" font-size="60" font-weight="700" letter-spacing="1.5" fill="url(#wordAccent)">ARK</text>
+    <text x="251" y="182" font-size="20" font-weight="400" letter-spacing="0.2" fill="#94a3b8">Layered security scanning for LLM and agent traffic</text>
+    <text x="251" y="219" font-size="15" font-weight="500" letter-spacing="1.4" fill="#64748b">PROMPT INJECTION &#183; DLP &#183; PII &#183; AGENTIC TOOL RISK</text>
+
+    <!-- Layer legend -->
+    <g transform="translate(872 74)">
+      <rect x="0" y="0" width="272" height="46" rx="10" fill="#111e33" stroke="#1e3a5f" stroke-width="1"/>
+      <circle cx="24" cy="23" r="7" fill="#34d399"/>
+      <text x="44" y="21" font-size="14" font-weight="600" fill="#e2e8f0">L1 &#183; native rules</text>
+      <text x="44" y="36" font-size="12" fill="#7c8ba1">no model assets</text>
+
+      <rect x="0" y="55" width="272" height="46" rx="10" fill="#111e33" stroke="#1e3a5f" stroke-width="1"/>
+      <circle cx="24" cy="78" r="7" fill="#fbbf24"/>
+      <text x="44" y="76" font-size="14" font-weight="600" fill="#e2e8f0">L2 &#183; NTDB packages</text>
+      <text x="44" y="91" font-size="12" fill="#7c8ba1">non-transformer, stops most traffic</text>
+
+      <rect x="0" y="110" width="272" height="46" rx="10" fill="#111e33" stroke="#1e3a5f" stroke-width="1"/>
+      <circle cx="24" cy="133" r="7" fill="#a78bfa"/>
+      <text x="44" y="131" font-size="14" font-weight="600" fill="#e2e8f0">L3 &#183; ONNX transformers</text>
+      <text x="44" y="146" font-size="12" fill="#7c8ba1">background worker, on promotion</text>
+    </g>
+  </g>
+</svg>

@@ -1,0 +1,151 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 640" width="1240" height="640" role="img" aria-label="Patronus Ark scanning flow from input through L1, L2 and L3 to the ordered result stream">
+  <title>Patronus Ark — scanning flow</title>
+  <desc>A request enters through scan or enqueue, passes native L1 rules, NTDB L2 packages whose promote-router stops most traffic, and only promoted work reaches the L3 ONNX transformer worker. Results are published on an ordered event stream, with the L2 fallback emitted before the final L3 result.</desc>
+
+  <defs>
+    <linearGradient id="flowPanel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0e1626"/>
+      <stop offset="60%" stop-color="#101d33"/>
+      <stop offset="100%" stop-color="#0c1322"/>
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrowMuted" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#f87171"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1240" height="640" rx="22" fill="url(#flowPanel)"/>
+  <rect x="0.75" y="0.75" width="1238.5" height="638.5" rx="21.5" fill="none" stroke="#1e293b" stroke-width="1.5"/>
+
+  <g font-family="system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif">
+    <text x="40" y="54" font-size="23" font-weight="700" fill="#f1f5f9">How a scan flows through Patronus Ark</text>
+    <text x="40" y="80" font-size="14" fill="#7c8ba1">Every request enters at L1. Only what the promote-router escalates ever reaches a transformer.</text>
+
+    <!-- ============ Input ============ -->
+    <g>
+      <rect x="36" y="140" width="180" height="200" rx="14" fill="#111e33" stroke="#26456e" stroke-width="1.5"/>
+      <text x="56" y="172" font-size="16" font-weight="700" fill="#e2e8f0">Request</text>
+      <line x1="56" y1="186" x2="196" y2="186" stroke="#1e3a5f" stroke-width="1"/>
+      <text x="56" y="212" font-size="12.5" fill="#a8b6c8">scan() direct, or</text>
+      <text x="56" y="233" font-size="12.5" fill="#a8b6c8">enqueue() async</text>
+      <text x="56" y="254" font-size="12.5" fill="#a8b6c8">+ request metadata</text>
+      <rect x="56" y="284" width="140" height="26" rx="7" fill="#0e2038" stroke="#26456e" stroke-width="1"/>
+      <text x="68" y="301" font-size="11.5" fill="#7c8ba1">categories &#183; gates</text>
+    </g>
+
+    <!-- ============ L1 ============ -->
+    <g>
+      <rect x="252" y="140" width="212" height="200" rx="14" fill="#111e33" stroke="#1e5b45" stroke-width="1.5"/>
+      <rect x="252" y="140" width="212" height="4" rx="2" fill="#34d399"/>
+      <circle cx="274" cy="172" r="6" fill="#34d399"/>
+      <text x="290" y="177" font-size="16" font-weight="700" fill="#e2e8f0">L1 &#183; native rules</text>
+      <line x1="272" y1="192" x2="444" y2="192" stroke="#1e3a5f" stroke-width="1"/>
+      <text x="272" y="218" font-size="12.5" fill="#a8b6c8">Regex + heuristic rules</text>
+      <text x="272" y="239" font-size="12.5" fill="#a8b6c8">Unicode / obfuscation</text>
+      <text x="272" y="260" font-size="12.5" fill="#a8b6c8">External L1 signals</text>
+      <rect x="272" y="284" width="172" height="26" rx="7" fill="#0d2b21" stroke="#1e5b45" stroke-width="1"/>
+      <text x="284" y="301" font-size="11.5" fill="#6ee7b7">no assets &#183; always available</text>
+    </g>
+
+    <!-- ============ L2 ============ -->
+    <g>
+      <rect x="500" y="140" width="212" height="200" rx="14" fill="#111e33" stroke="#4a3610" stroke-width="1.5"/>
+      <rect x="500" y="140" width="212" height="4" rx="2" fill="#fbbf24"/>
+      <circle cx="522" cy="172" r="6" fill="#fbbf24"/>
+      <text x="538" y="177" font-size="16" font-weight="700" fill="#e2e8f0">L2 &#183; NTDB</text>
+      <line x1="520" y1="192" x2="692" y2="192" stroke="#1e3a5f" stroke-width="1"/>
+      <text x="520" y="218" font-size="12.5" fill="#a8b6c8">Static token encoder</text>
+      <text x="520" y="239" font-size="12.5" fill="#a8b6c8">GBT &#183; logreg &#183; CNN heads</text>
+      <text x="520" y="260" font-size="12.5" fill="#a8b6c8">Aggregator &#8594; verdict</text>
+      <rect x="520" y="284" width="172" height="26" rx="7" fill="#33270a" stroke="#6b4a12" stroke-width="1"/>
+      <text x="532" y="301" font-size="11.5" fill="#fcd34d">non-transformer</text>
+    </g>
+
+    <!-- ============ L3 ============ -->
+    <g>
+      <rect x="748" y="140" width="212" height="200" rx="14" fill="#111e33" stroke="#4c3a86" stroke-width="1.5"/>
+      <rect x="748" y="140" width="212" height="4" rx="2" fill="#a78bfa"/>
+      <circle cx="770" cy="172" r="6" fill="#a78bfa"/>
+      <text x="786" y="177" font-size="16" font-weight="700" fill="#e2e8f0">L3 &#183; ONNX</text>
+      <line x1="768" y1="192" x2="940" y2="192" stroke="#1e3a5f" stroke-width="1"/>
+      <text x="768" y="218" font-size="12.5" fill="#a8b6c8">Transformer models</text>
+      <text x="768" y="239" font-size="12.5" fill="#a8b6c8">Cost-based scheduling</text>
+      <text x="768" y="260" font-size="12.5" fill="#a8b6c8">Chunk windows + overlap</text>
+      <rect x="768" y="284" width="172" height="26" rx="7" fill="#241b45" stroke="#4c3a86" stroke-width="1"/>
+      <text x="780" y="301" font-size="11.5" fill="#c4b5fd">background worker</text>
+    </g>
+
+    <!-- ============ Result ============ -->
+    <g>
+      <rect x="996" y="140" width="208" height="200" rx="14" fill="#111e33" stroke="#26456e" stroke-width="1.5"/>
+      <text x="1016" y="172" font-size="16" font-weight="700" fill="#e2e8f0">Result</text>
+      <line x1="1016" y1="186" x2="1184" y2="186" stroke="#1e3a5f" stroke-width="1"/>
+      <text x="1016" y="212" font-size="12.5" fill="#a8b6c8">class + confidence</text>
+      <text x="1016" y="233" font-size="12.5" fill="#a8b6c8">per-layer breakdown</text>
+      <text x="1016" y="254" font-size="12.5" fill="#a8b6c8">evidence spans</text>
+      <rect x="1016" y="284" width="168" height="26" rx="7" fill="#0e2038" stroke="#26456e" stroke-width="1"/>
+      <text x="1028" y="301" font-size="11.5" fill="#7c8ba1">failures &#183; timings</text>
+    </g>
+
+    <!-- ============ Arrows ============ -->
+    <line x1="220" y1="240" x2="246" y2="240" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+    <line x1="468" y1="240" x2="494" y2="240" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+    <text x="481" y="126" font-size="11" font-weight="600" fill="#7c8ba1" text-anchor="middle">conditional</text>
+    <text x="481" y="139" font-size="11" font-weight="600" fill="#7c8ba1" text-anchor="middle">gates</text>
+
+    <line x1="716" y1="240" x2="742" y2="240" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+    <text x="729" y="126" font-size="11" font-weight="600" fill="#fcd34d" text-anchor="middle">promote-</text>
+    <text x="729" y="139" font-size="11" font-weight="600" fill="#fcd34d" text-anchor="middle">router</text>
+
+    <line x1="964" y1="240" x2="990" y2="240" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+    <!-- L3 degrades back to the L2 verdict on timeout or error (upper lane) -->
+    <path d="M820 344 L820 380 L660 380 L660 348" fill="none" stroke="#f87171" stroke-width="1.75"
+          stroke-dasharray="4 4" marker-end="url(#arrowMuted)"/>
+    <text x="745" y="399" font-size="11.5" fill="#f4a3a3" text-anchor="middle">L3 timeout or error &#8594; degrade to L2</text>
+
+    <!-- L2 short-circuits straight to the result for most traffic (lower lane) -->
+    <path d="M606 344 L606 424 L1100 424 L1100 346" fill="none" stroke="#34d399" stroke-width="2"
+          stroke-dasharray="6 5" marker-end="url(#arrow)"/>
+    <rect x="700" y="410" width="300" height="28" rx="8" fill="#0d2b21" stroke="#1e5b45" stroke-width="1"/>
+    <text x="850" y="429" font-size="12" font-weight="600" fill="#6ee7b7" text-anchor="middle">most traffic resolves here &#8212; no transformer runs</text>
+
+    <!-- ============ Event stream ============ -->
+    <g>
+      <rect x="36" y="470" width="1168" height="132" rx="14" fill="#0d1728" stroke="#1e3a5f" stroke-width="1.5"/>
+      <text x="60" y="502" font-size="15" font-weight="700" fill="#e2e8f0">consume_next_event() &#8212; ordered event stream</text>
+      <text x="60" y="523" font-size="12" fill="#7c8ba1">A promoted scan publishes its L2 fallback immediately, then replaces it with the final L3 result.</text>
+
+      <g transform="translate(60 540)">
+        <rect x="0" y="0" width="196" height="44" rx="10" fill="#0d2b21" stroke="#1e5b45" stroke-width="1"/>
+        <circle cx="20" cy="22" r="6" fill="#34d399"/>
+        <text x="36" y="19" font-size="12.5" font-weight="600" fill="#e2e8f0">Result</text>
+        <text x="36" y="34" font-size="11" fill="#7c8ba1">L1 / L2 verdicts</text>
+
+        <path d="M206 22 L232 22" stroke="#64748b" stroke-width="1.75" marker-end="url(#arrow)"/>
+
+        <rect x="242" y="0" width="220" height="44" rx="10" fill="#33270a" stroke="#6b4a12" stroke-width="1"/>
+        <circle cx="262" cy="22" r="6" fill="#fbbf24"/>
+        <text x="278" y="19" font-size="12.5" font-weight="600" fill="#e2e8f0">Result &#183; l3_pending</text>
+        <text x="278" y="34" font-size="11" fill="#7c8ba1">L2 fallback, published first</text>
+
+        <path d="M472 22 L498 22" stroke="#64748b" stroke-width="1.75" marker-end="url(#arrow)"/>
+
+        <rect x="508" y="0" width="212" height="44" rx="10" fill="#241b45" stroke="#4c3a86" stroke-width="1"/>
+        <circle cx="528" cy="22" r="6" fill="#a78bfa"/>
+        <text x="544" y="19" font-size="12.5" font-weight="600" fill="#e2e8f0">Result &#183; final</text>
+        <text x="544" y="34" font-size="11" fill="#7c8ba1">L3 verdict replaces fallback</text>
+
+        <path d="M730 22 L756 22" stroke="#64748b" stroke-width="1.75" marker-end="url(#arrow)"/>
+
+        <rect x="766" y="0" width="196" height="44" rx="10" fill="#0e2038" stroke="#26456e" stroke-width="1"/>
+        <circle cx="786" cy="22" r="6" fill="#7c8ba1"/>
+        <text x="802" y="19" font-size="12.5" font-weight="600" fill="#e2e8f0">Finished</text>
+        <text x="802" y="34" font-size="11" fill="#7c8ba1">terminal event, once</text>
+      </g>
+    </g>
+  </g>
+</svg>

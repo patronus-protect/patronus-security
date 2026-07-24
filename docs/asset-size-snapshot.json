@@ -1,0 +1,55 @@
+{
+  "generated_at": "2026-07-01T17:36:32+00:00",
+  "repos": {
+    "patronus-studio/orca-sonar-document-classifier": {
+      "files": {
+        "cascade/cascade_config.json": 42,
+        "l1/l1_rules.json": 17236,
+        "l2/l2_config.json": 133907775,
+        "onnx/onnx_fp16/model_fp16.onnx": 281759682,
+        "tokenizer.json": 34363286,
+        "tokenizer_config.json": 574
+      },
+      "last_modified": "2026-07-01T15:56:48.000Z",
+      "sha": "c09bcf4e5702c03dab6d08a3cac8c890add08d93"
+    },
+    "patronus-studio/tool-description-model": {
+      "error": "HTTP 401",
+      "files": {}
+    },
+    "patronus-studio/tool-executions-model": {
+      "error": "HTTP 401",
+      "files": {}
+    },
+    "patronus-studio/tool-prompts-model": {
+      "error": "HTTP 401",
+      "files": {}
+    },
+    "patronus-studio/user-intent-model": {
+      "error": "HTTP 401",
+      "files": {}
+    },
+    "patronus-studio/wolf-defender-prompt-injection-small": {
+      "files": {
+        "cascade/cascade_config.json": 388,
+        "config.json": 1938,
+        "l2/fasttext_C.json": 132054394,
+        "l2/logistic_regression_C.json": 212223,
+        "l2/model_A.txt": 721621,
+        "l2/model_B.txt": 730822,
+        "l2/model_C.txt": 731578,
+        "l2/tfidf_char_A.json": 203191,
+        "l2/tfidf_char_B.json": 204774,
+        "l2/tfidf_char_C.json": 164607,
+        "l2/tfidf_word_A.json": 230967,
+        "l2/tfidf_word_B.json": 229378,
+        "l2/tfidf_word_C.json": 188167,
+        "tokenizer.json": 34363287,
+        "tokenizer_config.json": 545
+      },
+      "last_modified": "2026-07-01T15:59:41.000Z",
+      "sha": "a3b846e3ac5caa52fc2c41d1866f8ca04c1141de"
+    }
+  },
+  "source": "https://huggingface.co/api/models/{repo}?blobs=true"
+}

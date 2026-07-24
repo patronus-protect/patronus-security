@@ -1,0 +1,118 @@
+site_name: Patronus Ark
+site_description: >-
+  Hybrid Rust/Python security scanners for prompt injection, DLP, PII, and
+  agentic tool risks — a layered, on-device AI firewall library.
+site_author: Patronus Protect
+repo_name: patronus-protect/patronus-security
+repo_url: https://github.com/patronus-protect/patronus-security
+# No edit_uri: this repository does not accept external contributions,
+# so pages intentionally omit an "edit this page" link.
+edit_uri: ""
+copyright: >-
+  Copyright &copy; Patronus Protect / Casdo Labs GmbH —
+  GPL-3.0-only or commercial license.
+
+theme:
+  name: material
+  language: en
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - toc.follow
+    - content.code.copy
+    - content.code.annotate
+    - search.suggest
+    - search.highlight
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  icon:
+    repo: fontawesome/brands/github
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets:
+      base_path:
+        - "."
+        - "docs"
+      check_paths: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+plugins:
+  - search
+
+# Internal planning / evaluation notes kept in the repo but not published on the site.
+exclude_docs: |
+  gliner-education-evaluation.md
+  unified-multitask-l3-plan.md
+  asset-size-snapshot.json
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - Installation: getting-started/installation.md
+      - Quickstart: getting-started/quickstart.md
+  - Tutorials:
+      - Examples walkthrough: USAGE.md
+  - How-to guides:
+      - Offline & air-gapped scanning: how-to/offline-airgapped.md
+      - Choose categories & levels: how-to/choose-categories-and-levels.md
+      - Manage model assets: how-to/manage-assets.md
+      - Tune performance & memory: how-to/tune-performance.md
+      - Run the local benchmark: how-to/run-local-benchmark.md
+      - Configure caching: how-to/configure-caching.md
+      - Add external L1 signals: how-to/external-l1-signals.md
+  - Concepts:
+      - Architecture: concepts/architecture.md
+      - Layered scanning (L1/L2/L3): concepts/layered-scanning.md
+      - Categories: concepts/categories.md
+      - Native detectors: concepts/detectors.md
+      - Models & the NTDB format: concepts/models-and-ntdb.md
+      - Threat model: concepts/threat-model.md
+      - Performance & memory: concepts/performance.md
+  - Reference:
+      - Configuration: reference/configuration.md
+      - Result schema: reference/result-schema.md
+      - Python API: python-api.md
+      - Rust API: rust-api.md
+      - Assets: assets.md
+  - Maintainers:
+      - Development: contributing/development.md
+      - Testing: contributing/testing.md
+      - Releasing: contributing/releasing.md
+  - Security policy: security.md
+  - Changelog: changelog.md

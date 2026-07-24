@@ -1,0 +1,18 @@
+[workspace]
+members = [
+    "rust",
+    "python"
+]
+resolver = "2"
+
+[profile.dev]
+debug = "line-tables-only"
+incremental = false
+
+[profile.test]
+debug = "line-tables-only"
+incremental = false
+
+[profile.release]
+debug = false
+strip = "debuginfo"

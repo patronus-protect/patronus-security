@@ -1,0 +1,42 @@
+[build-system]
+requires = ["maturin>=1.5,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "patronus-ark"
+version = "0.1.0"
+description = "Python bindings for Patronus Ark's hybrid Rust security scanners."
+readme = "../README.md"
+requires-python = ">=3.11"
+dependencies = []
+keywords = ["security", "prompt-injection", "dlp", "pii"]
+license = "GPL-3.0-only"
+license-files = ["LICENSE", "LICENSE-COMMERCIAL.md", "NOTICE"]
+authors = [
+    { name = "Casdo Labs GmbH", email = "team@patronus.studio" },
+]
+maintainers = [
+    { name = "Casdo Labs GmbH", email = "team@patronus.studio" },
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Rust",
+    "Topic :: Security",
+    "Topic :: Software Development :: Libraries",
+]
+
+[project.urls]
+Homepage = "https://github.com/patronus-protect/patronus-security"
+Repository = "https://github.com/patronus-protect/patronus-security"
+Issues = "https://github.com/patronus-protect/patronus-security/issues"
+
+[tool.maturin]
+features = ["pyo3/extension-module"]
+module-name = "patronus_ark._patronus_ark"
+include = [{ path = "patronus_ark/benchmark_data/*.jsonl", format = ["sdist", "wheel"] }]
+exclude = [{ path = "patronus_ark/__pycache__/**", format = ["sdist", "wheel"] }]

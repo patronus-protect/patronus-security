@@ -1,0 +1,36 @@
+/target
+target/
+/python/patronus_ark/_patronus_ark*.so
+/python/patronus_ark/*.so
+/python/patronus_ark/*.pyd
+/python/patronus_ark/*.dll
+/python/patronus_ark/*.dylib
+/python/build
+/python/dist
+/python/target
+/python/.pytest_cache
+.DS_Store
+**/.DS_Store
+*.pyc
+__pycache__/
+**/__pycache__/
+.venv/
+.venv311/
+venv/
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+*.so
+*.dylib
+*.pyd
+# run_local_benchmark() output; per-device, never committed
+benchmark/
+
+# Local planning notes stay out of the public repo
+OPEN_TODO.md
+docs/ntdb-l2-integration-plan.md
+benchmark_todo.md
+
+# Stray compiled tokenizer artifact accidentally emitted at repo root
+/config
+site/
