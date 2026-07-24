@@ -105,8 +105,7 @@ them on your own hardware.
 The category → level → repository mapping is defined in
 [`rust/src/assets/specs.rs`](https://github.com/patronus-protect/patronus-security/blob/main/rust/src/assets/specs.rs).
 Assets are cached under the platform cache directory (or a custom `model_dir`) and downloaded on
-first use. The L3 transformers, the unified L3 model, and the dynamic-pii bundle are pinned to
-immutable commit revisions in `specs.rs`; the seven L2 NTDB packages are currently fetched from
-each repo's mutable `main` branch (no revision is pinned for them). See
+first use. The L2 NTDB packages, L3 transformers, the unified L3 model, and the dynamic-pii
+bundle are pinned to immutable commit revisions in `specs.rs`. See
 [Manage model assets](../how-to/manage-assets.md) and the generated
 [Assets reference](../assets.md) for cache locations, sizes, and offline behavior.

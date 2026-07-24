@@ -1331,6 +1331,8 @@ pub struct NtdbL2PackageAssetSpec {
     pub model: &'static str,
     /// Hugging Face repository identifier.
     pub repo: &'static str,
+    /// Immutable Hugging Face commit revision.
+    pub revision: &'static str,
     /// Directory prefix inside the Hugging Face repository.
     pub source_prefix: &'static str,
     /// Relative package directory below the category cache directory.

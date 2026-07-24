@@ -39,8 +39,11 @@ as `tokenizer_config.json`; there is no separate full-precision ONNX asset.)
 The L2 Granite embedder's tokenizer is converted once, on first use, into a compact `.kit` file
 in the shared encoder cache (hash- and version-invalidated, with the source JSON as fallback),
 which cuts load time and memory. A separate `.mmbpe` compact format exists for mmBERT-style
-(Wolf) tokenizers, but it is produced by an offline dev tool, not runtime-converted, and is not
-part of any downloaded asset today.
+(Wolf) tokenizers. It is not generated during runtime because mmBERT BPE parity depends on
+explicit merge-pair identity, not only on byte concatenations, so producing the compact file is
+a release-time validation step. The runtime only consumes `tokenizer.mmbpe` when that reviewed
+file ships in an installed asset bundle; otherwise it uses the canonical Hugging Face
+`tokenizer.json`.
 
 ### L3 sessions: built on first use, then RAM-resident
 

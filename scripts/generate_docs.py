@@ -98,6 +98,7 @@ class NtdbPackage:
     category: str
     model: str
     repo: str
+    revision: str
     source_prefix: str
     destination_path: str
 
@@ -112,6 +113,7 @@ def parse_ntdb_packages() -> list[NtdbPackage]:
                 category=_field(block, "category").replace("SecurityCategory::", ""),
                 model=_field(block, "model").strip('"'),
                 repo=_field(block, "repo").strip('"'),
+                revision=_field(block, "revision").strip('"'),
                 source_prefix=_field(block, "source_prefix").strip('"'),
                 destination_path=_field(block, "destination_path").strip('"'),
             )
@@ -191,16 +193,16 @@ def ntdb_package_table(packages: list[NtdbPackage]) -> list[str]:
     lines = [
         "## NTDB L2 Packages",
         "",
-        "NTDB v2 L2 packages are manifest-first: the runtime downloads `manifest.json` and every file it references. Sizes therefore depend on the published package contents.",
+        "NTDB v2 L2 packages are manifest-first and revision-pinned: the runtime downloads `manifest.json` and every file it references from the immutable Hugging Face commit listed below. Sizes therefore depend on the published package contents at that revision.",
         "",
         "For supported Granite/ModernBERT packages, the Security Lib generates a compact `tokenizer.kit` locally after the verified asset download. Existing official caches are migrated during warmup, while local environment overrides are left untouched. The original `tokenizer.json` remains the canonical fallback. Generated files are written atomically under a cross-process lock and invalidated by source hash, compact hash, converter version, and format version.",
         "",
-        "| Category | Model | Repository | Source prefix | Cache path |",
-        "| --- | --- | --- | --- | --- |",
+        "| Category | Model | Repository | Revision | Source prefix | Cache path |",
+        "| --- | --- | --- | --- | --- | --- |",
     ]
     for package in packages:
         lines.append(
-            f"| {package.category} | `{package.model}` | `{package.repo}` | `{package.source_prefix}` | `{package.destination_path}` |"
+            f"| {package.category} | `{package.model}` | `{package.repo}` | `{package.revision}` | `{package.source_prefix}` | `{package.destination_path}` |"
         )
     lines.append("")
     return lines

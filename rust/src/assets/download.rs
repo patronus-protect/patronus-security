@@ -344,8 +344,9 @@ fn download_ntdb_l2_package_asset_inner(
     let package_dir = target_dir.join(asset.destination_path);
     let manifest_dest = package_dir.join("manifest.json");
     let manifest_source = prefixed_source_path(asset.source_prefix, "manifest.json");
+    let revision_matches = bundle_revision_matches(&package_dir, asset.revision);
 
-    if !manifest_dest.exists() {
+    if !revision_matches || !manifest_dest.exists() {
         if let Some(callback) = progress {
             callback(SecurityAssetProgress {
                 category: asset.category,
@@ -354,9 +355,10 @@ fn download_ntdb_l2_package_asset_inner(
                 total_files: 1,
             });
         }
-        download_hf_file(
+        download_hf_file_at_revision(
             token.as_deref(),
             asset.repo,
+            asset.revision,
             &manifest_source,
             &manifest_dest,
             asset.required,
@@ -389,7 +391,7 @@ fn download_ntdb_l2_package_asset_inner(
     let manifest_files = ntdb_l2_package_manifest_files_from_manifest(&manifest)?;
     let mut jobs = Vec::new();
     for file in &shared_embedder_files {
-        if file.shared_file.exists() {
+        if revision_matches && file.shared_file.exists() {
             link_shared_embedder_file(&file.shared_file, &file.package_file)?;
         } else {
             jobs.push(NtdbDownloadJob::Shared(file.clone()));
@@ -400,7 +402,7 @@ fn download_ntdb_l2_package_asset_inner(
             continue;
         }
         let dest_file = package_dir.join(&relative_path);
-        if dest_file.exists() {
+        if revision_matches && dest_file.exists() {
             continue;
         }
         jobs.push(NtdbDownloadJob::Package {
@@ -425,9 +427,10 @@ fn download_ntdb_l2_package_asset_inner(
             NtdbDownloadJob::Package {
                 source_path,
                 destination,
-            } => download_hf_file(
+            } => download_hf_file_at_revision(
                 token.as_deref(),
                 asset.repo,
+                asset.revision,
                 source_path,
                 destination,
                 asset.required,
@@ -437,6 +440,7 @@ fn download_ntdb_l2_package_asset_inner(
             .map_err(|error| error.to_string()),
         },
     )?;
+    fs::write(package_dir.join(".patronus-revision"), asset.revision)?;
 
     if let Err(err) = prepare_downloaded_compact_tokenizer(&manifest, &shared_embedder_files) {
         log::warn!(
@@ -790,17 +794,16 @@ fn download_shared_embedder_file(
     asset: NtdbL2PackageAssetSpec,
     file: &SharedEmbedderFile,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    if !file.shared_file.exists() {
-        let source_path = prefixed_source_path(asset.source_prefix, &file.relative_path);
-        download_hf_file(
-            token,
-            asset.repo,
-            &source_path,
-            &file.shared_file,
-            asset.required,
-            "NTDB v2 shared L2 embedder file",
-        )?;
-    }
+    let source_path = prefixed_source_path(asset.source_prefix, &file.relative_path);
+    download_hf_file_at_revision(
+        token,
+        asset.repo,
+        asset.revision,
+        &source_path,
+        &file.shared_file,
+        asset.required,
+        "NTDB v2 shared L2 embedder file",
+    )?;
     link_shared_embedder_file(&file.shared_file, &file.package_file)
 }
 
@@ -909,17 +912,6 @@ fn prefixed_source_path(prefix: &str, relative_path: &str) -> String {
     } else {
         format!("{prefix}/{}", relative_path.trim_start_matches('/'))
     }
-}
-
-fn download_hf_file(
-    token: Option<&str>,
-    repo: &str,
-    source_path: &str,
-    dest_file: &Path,
-    required: bool,
-    label: &str,
-) -> Result<bool, Box<dyn std::error::Error>> {
-    download_hf_file_at_revision(token, repo, "main", source_path, dest_file, required, label)
 }
 
 fn download_hf_file_at_revision(

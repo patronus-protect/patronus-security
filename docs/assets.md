@@ -42,19 +42,19 @@ The shared ONNX artifact is `onnx/int8_int4_embeddings/model.onnx`. See `docs/un
 
 ## NTDB L2 Packages
 
-NTDB v2 L2 packages are manifest-first: the runtime downloads `manifest.json` and every file it references. Sizes therefore depend on the published package contents.
+NTDB v2 L2 packages are manifest-first and revision-pinned: the runtime downloads `manifest.json` and every file it references from the immutable Hugging Face commit listed below. Sizes therefore depend on the published package contents at that revision.
 
 For supported Granite/ModernBERT packages, the Security Lib generates a compact `tokenizer.kit` locally after the verified asset download. Existing official caches are migrated during warmup, while local environment overrides are left untouched. The original `tokenizer.json` remains the canonical fallback. Generated files are written atomically under a cross-process lock and invalidated by source hash, compact hash, converter version, and format version.
 
-| Category | Model | Repository | Source prefix | Cache path |
-| --- | --- | --- | --- | --- |
-| Injection | `wolf-defender-small` | `patronus-studio/wolf-defender-prompt-injection-small` | `l2` | `l2_ntdb/injection_current` |
-| SensitiveDocument | `orca-sonar-document-classifier` | `patronus-studio/orca-sonar-document-classifier` | `l2` | `l2_ntdb/sensitive_document_current` |
-| ToolClass | `unified-v3-tool-class` | `patronus-studio/husky-sight-tool-type-classifier` | `l2` | `l2_ntdb/tool_class_current` |
-| ToolAction | `unified-v3-tool-action` | `patronus-studio/husky-paw-tool-action-classifier` | `l2` | `l2_ntdb/tool_action_current` |
-| ToolTags | `unified-v3-tool-tags` | `patronus-studio/husky-nose-tool-security-properties-classifier` | `l2` | `l2_ntdb/tool_tags_current` |
-| Routing | `unified-v3-routing` | `patronus-studio/panther-read-intent-classifier` | `l2` | `l2_ntdb/routing_current` |
-| Threat | `unified-v3-threat` | `patronus-studio/wolf-defender-threat-classifier` | `l2` | `l2_ntdb/threat_current` |
+| Category | Model | Repository | Revision | Source prefix | Cache path |
+| --- | --- | --- | --- | --- | --- |
+| Injection | `wolf-defender-small` | `patronus-studio/wolf-defender-prompt-injection-small` | `eff31df5c97ca127b7b55da255a160f88a625c97` | `l2` | `l2_ntdb/injection_current` |
+| SensitiveDocument | `orca-sonar-document-classifier` | `patronus-studio/orca-sonar-document-classifier` | `64360dd35400f32a11df17e337de4f648d17656d` | `l2` | `l2_ntdb/sensitive_document_current` |
+| ToolClass | `unified-v3-tool-class` | `patronus-studio/husky-sight-tool-type-classifier` | `e5dac8417697c725edf3c676410a4dd8187bb69d` | `l2` | `l2_ntdb/tool_class_current` |
+| ToolAction | `unified-v3-tool-action` | `patronus-studio/husky-paw-tool-action-classifier` | `f3ace2a7d0b8d10f6e4d40611521e895e2689e13` | `l2` | `l2_ntdb/tool_action_current` |
+| ToolTags | `unified-v3-tool-tags` | `patronus-studio/husky-nose-tool-security-properties-classifier` | `448a1332cdb3f14a7c3473561b2cfbca0fd17562` | `l2` | `l2_ntdb/tool_tags_current` |
+| Routing | `unified-v3-routing` | `patronus-studio/panther-read-intent-classifier` | `17de8464180c5227802ac44512dd7b039ff45abe` | `l2` | `l2_ntdb/routing_current` |
+| Threat | `unified-v3-threat` | `patronus-studio/wolf-defender-threat-classifier` | `54a862f9367fec529c90e8af237083dc11b2cd74` | `l2` | `l2_ntdb/threat_current` |
 
 ## Download Size Snapshot
 
