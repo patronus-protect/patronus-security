@@ -1,9 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::{EvaluationResult, ExecutionBackend, OnnxRuntimeOptions};
 use half::f16;
+#[cfg(feature = "onnx-coreml")]
+#[allow(deprecated)]
+use ort::execution_providers::{ArbitrarilyConfigurableExecutionProvider, CoreMLExecutionProvider};
+#[allow(deprecated)]
 use ort::{
     environment::GlobalThreadPoolOptions,
-    ep::{self, ExecutionProviderDispatch},
+    execution_providers::{
+        CUDAExecutionProvider, DirectMLExecutionProvider, ExecutionProviderDispatch,
+        TensorRTExecutionProvider,
+    },
     session::{
         builder::{GraphOptimizationLevel, SessionBuilder},
         Session,
@@ -30,7 +37,15 @@ pub fn warmup_runtime() -> bool {
     let Ok(threading) = GlobalThreadPoolOptions::default().with_spin_control(false) else {
         return false;
     };
-    ort::init().with_global_thread_pool(threading).commit()
+    let initialized = ort::init().with_global_thread_pool(threading).commit();
+    #[cfg(ort_rc_10)]
+    {
+        initialized.unwrap_or(false)
+    }
+    #[cfg(not(ort_rc_10))]
+    {
+        initialized
+    }
 }
 
 pub struct LazyOnnxTextClassifier {
@@ -386,11 +401,7 @@ impl OnnxTextClassifier {
         let (mut session_builder, execution_provider) =
             configured_session_builder(backend, Some(dir), options)?;
         let session = session_builder.commit_from_file(&model_path)?;
-        let input_names = session
-            .inputs()
-            .iter()
-            .map(|input| input.name().to_string())
-            .collect();
+        let input_names = session_input_names(&session);
 
         Ok(Some(OnnxTextClassifier {
             tokenizer,
@@ -635,7 +646,8 @@ pub(crate) fn configured_session_builder(
     model_dir: Option<&Path>,
     options: OnnxRuntimeOptions,
 ) -> Result<(SessionBuilder, String), Box<dyn std::error::Error>> {
-    let mut builder = Session::builder()?.with_optimization_level(GraphOptimizationLevel::All)?;
+    let mut builder =
+        Session::builder()?.with_optimization_level(GraphOptimizationLevel::Level3)?;
     let options = options.normalized();
     if let Some(threads) = options.intra_threads {
         builder = builder.with_intra_threads(threads)?;
@@ -681,10 +693,10 @@ fn execution_provider_plan(
 
     let strict = backend != ExecutionBackend::Auto;
     let mut dispatch = match provider {
-        "cuda" => Some(ep::CUDA::default().build()),
+        "cuda" => Some(CUDAExecutionProvider::default().build()),
         "coreml" => coreml_provider(model_dir),
-        "directml" => Some(ep::DirectML::default().build()),
-        "tensorrt" => Some(ep::TensorRT::default().build()),
+        "directml" => Some(DirectMLExecutionProvider::default().build()),
+        "tensorrt" => Some(TensorRTExecutionProvider::default().build()),
         _ => None,
     };
 
@@ -721,8 +733,8 @@ fn default_accelerator_provider(backend: ExecutionBackend) -> Option<&'static st
 
 #[cfg(feature = "onnx-coreml")]
 fn coreml_provider(model_dir: Option<&Path>) -> Option<ExecutionProviderDispatch> {
-    let mut provider = ep::CoreML::default()
-        .with_compute_units(ep::coreml::ComputeUnits::CPUAndGPU)
+    let mut provider = CoreMLExecutionProvider::default()
+        .with_arbitrary_config("MLComputeUnits", "CPUAndGPU")
         .with_low_precision_accumulation_on_gpu(true);
     if let Some(model_dir) = model_dir {
         let cache_dir = model_dir.join(".coreml-cache");
@@ -747,6 +759,24 @@ fn precision_for_path(path: &Path) -> String {
     } else {
         "full".to_string()
     }
+}
+
+#[cfg(ort_rc_10)]
+fn session_input_names(session: &Session) -> Vec<String> {
+    session
+        .inputs
+        .iter()
+        .map(|input| input.name.clone())
+        .collect()
+}
+
+#[cfg(not(ort_rc_10))]
+fn session_input_names(session: &Session) -> Vec<String> {
+    session
+        .inputs()
+        .iter()
+        .map(|input| input.name().to_string())
+        .collect()
 }
 
 fn truncate_and_pad(values: &mut Vec<i64>, max_len: usize, pad: i64) {

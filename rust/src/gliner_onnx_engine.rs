@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Entity-only inference for classic GLiNER span-level ONNX models.
 
+#[allow(deprecated)]
 use ort::{
-    ep::CPU,
+    execution_providers::CPUExecutionProvider,
     session::{builder::GraphOptimizationLevel, Session},
     value::{DynValue, Tensor},
 };
@@ -62,16 +63,8 @@ pub enum ArkEngineError {
     Io(#[from] io::Error),
 }
 
-// `ort::Error` is generic over a context marker (e.g. `ort::Error<SessionBuilder>`),
-// so a single `#[from]` cannot cover every call site. This blanket conversion
-// flattens any ORT error context into a message.
-impl<C> From<ort::Error<C>> for ArkEngineError
-where
-    ort::Error<C>: std::fmt::Display,
-{
-    fn from(error: ort::Error<C>) -> Self {
-        ArkEngineError::Onnx(error.to_string())
-    }
+fn onnx_error(error: impl std::fmt::Display) -> ArkEngineError {
+    ArkEngineError::Onnx(error.to_string())
 }
 
 pub type EngineResult<T> = Result<T, ArkEngineError>;
@@ -158,12 +151,20 @@ impl GlinerEngine {
         let tokenizer = SentencePieceProcessor::open(path.join("spm.model")).map_err(|error| {
             ArkEngineError::Tokenizer(format!("failed to load spm.model: {error}"))
         })?;
-        let session = Session::builder()?
-            .with_optimization_level(GraphOptimizationLevel::All)?
-            .with_execution_providers([CPU::default().with_arena_allocator(false).build()])?
-            .with_memory_pattern(false)?
-            .with_prepacking(false)?
-            .commit_from_file(&model_path)?;
+        let session = Session::builder()
+            .map_err(onnx_error)?
+            .with_optimization_level(GraphOptimizationLevel::Level3)
+            .map_err(onnx_error)?
+            .with_execution_providers([CPUExecutionProvider::default()
+                .with_arena_allocator(false)
+                .build()])
+            .map_err(onnx_error)?
+            .with_memory_pattern(false)
+            .map_err(onnx_error)?
+            .with_prepacking(false)
+            .map_err(onnx_error)?
+            .commit_from_file(&model_path)
+            .map_err(onnx_error)?;
         Ok(Self {
             session,
             tokenizer,
@@ -215,29 +216,34 @@ impl GlinerEngine {
 
         let sequence_length = prepared.input_ids.len();
         let span_count = prepared.span_mask.len();
-        let outputs = self.session.run(vec![
-            input("input_ids", vec![1, sequence_length], prepared.input_ids)?,
-            input(
-                "attention_mask",
-                vec![1, sequence_length],
-                prepared.attention_mask,
-            )?,
-            input("words_mask", vec![1, sequence_length], prepared.words_mask)?,
-            input(
-                "text_lengths",
-                vec![1, 1],
-                vec![prepared.text_length as i64],
-            )?,
-            input("span_idx", vec![1, span_count, 2], prepared.span_idx)?,
-            (
-                "span_mask".to_string(),
-                Tensor::from_array((vec![1, span_count], prepared.span_mask))?.into_dyn(),
-            ),
-        ])?;
+        let outputs = self
+            .session
+            .run(vec![
+                input("input_ids", vec![1, sequence_length], prepared.input_ids)?,
+                input(
+                    "attention_mask",
+                    vec![1, sequence_length],
+                    prepared.attention_mask,
+                )?,
+                input("words_mask", vec![1, sequence_length], prepared.words_mask)?,
+                input(
+                    "text_lengths",
+                    vec![1, 1],
+                    vec![prepared.text_length as i64],
+                )?,
+                input("span_idx", vec![1, span_count, 2], prepared.span_idx)?,
+                (
+                    "span_mask".to_string(),
+                    Tensor::from_array((vec![1, span_count], prepared.span_mask))
+                        .map_err(onnx_error)?
+                        .into_dyn(),
+                ),
+            ])
+            .map_err(onnx_error)?;
         let logits = outputs
             .get("logits")
             .ok_or_else(|| ArkEngineError::Inference("missing logits output".to_string()))?;
-        let (shape, logits) = logits.try_extract_tensor::<f32>()?;
+        let (shape, logits) = logits.try_extract_tensor::<f32>().map_err(onnx_error)?;
         let expected_shape = [1, prepared.text_length, self.max_width, labels.len()];
         let actual_shape = shape
             .iter()
@@ -490,7 +496,9 @@ fn normalize_labels(labels: &[String], max_types: usize) -> EngineResult<Vec<Str
 fn input(name: &str, shape: Vec<usize>, values: Vec<i64>) -> EngineResult<(String, DynValue)> {
     Ok((
         name.to_string(),
-        Tensor::from_array((shape, values))?.into_dyn(),
+        Tensor::from_array((shape, values))
+            .map_err(onnx_error)?
+            .into_dyn(),
     ))
 }
 
