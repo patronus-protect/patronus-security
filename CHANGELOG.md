@@ -9,7 +9,46 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ## [Unreleased]
 
-No unreleased changes yet.
+### Added
+
+- Added bundled NTDB final-decision thresholds for L2, L3, and weighted L2/L3 union arbitration
+  across classifier pipelines.
+- Added request-local `enqueue(..., ntdb_operating_point=...)` support for overriding the
+  final-decision threshold profile on queued scans.
+- Added `threat` validation samples to the built-in local benchmark.
+
+### Changed
+
+- Changed classifier final arbitration to accept L3 first, then a weighted L2/L3 union, then L2,
+  and otherwise return the pipeline default class.
+- Changed Python's `ntdb_operating_point` meaning to select the final-decision threshold profile;
+  L2 promotion continues to use the NTDB package promote operating point and is not changed by
+  that Python setting.
+- Changed the default final-decision threshold profile to `best_f1`.
+
+### Removed
+
+- Removed `tool_class` validation samples from the built-in local benchmark fixture set.
+
+### Breaking
+
+- Classifier result decisions can change because calibrated final-decision thresholds now apply
+  to L2, L3, and union arbitration.
+- Benchmark comparisons against previous local runs are not one-to-one for `tool_class`, because
+  the packaged benchmark fixture was removed and `threat` was added.
+
+## [0.1.1] - 2026-07-26
+
+### Added
+
+- Added `normalize_text(text, configs={})` as a pure text-normalization API for applying
+  `canonical_security_text_v1` before scanning or for direct caller use.
+
+### Fixed
+
+- Added a separate macOS Intel wheel build that pins `ort` to `2.0.0-rc.10`, which still provides
+  prebuilt ONNX Runtime binaries for `x86_64-apple-darwin`.
+- Kept macOS arm64, Linux, and Windows wheel builds on `ort` `2.0.0-rc.12`.
 
 ## [0.1.0] - 2026-07-24
 

@@ -33,16 +33,19 @@ Or gate L3 off per request while keeping the ceiling:
 scanner.set_execution_gates({"levels": {"l1": True, "l2": True, "l3": False}})
 ```
 
-## Choose an L2 operating point
+## Choose a final-decision threshold profile
 
-Trade recall, precision, and latency at L2 with the operating point:
+Trade final-decision recall and precision with the NTDB threshold profile:
 
 ```python
-scanner.set_ntdb_operating_point("best_latency_in_f1")   # lowest latency within an F1 band
+scanner.set_ntdb_operating_point("best_fpr_in_f1")   # lower false positives within an F1 band
 ```
 
 Options: `best_f1`, `best_promote`, `best_fpr_in_f1`, `best_fnr_in_f1`, `best_latency_in_f1`.
 See the [reference](../reference/configuration.md#ntdb-operating-point).
+
+This does not change which chunks promote to L3. Use `max_level`, execution gates, and
+`l3_strategy` for L3 cost/throughput control.
 
 ## Use the unified multi-head model when several categories are active
 
@@ -51,7 +54,7 @@ in a single inference:
 
 ```python
 scanner = SecurityGateway(
-    categories=["injection", "sensitive_document", "tool_class", "threat"],
+    categories=["injection", "sensitive_document", "threat", "routing"],
     max_level="l3",
     l3_strategy="multi",     # one inference vs. one per category
 )

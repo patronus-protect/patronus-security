@@ -30,6 +30,7 @@ blake3 = "1.5"
 memmap2 = "0.9"
 redb = "4.1"
 thiserror = "1.0"
+unicode-normalization = "0.1"
 
 [features]
 default = []

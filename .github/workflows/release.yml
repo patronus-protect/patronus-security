@@ -43,19 +43,47 @@ jobs:
           cmp NOTICE python/NOTICE
 
   wheels:
-    name: Build wheel (${{ matrix.os }})
+    name: Build wheel (${{ matrix.artifact }})
     needs: validate
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            artifact: linux
+            legacy_ort: false
+          - os: macos-latest
+            artifact: macos-arm64
+            legacy_ort: false
+          - os: macos-15-intel
+            artifact: macos-x86_64
+            legacy_ort: true
+          - os: windows-latest
+            artifact: windows
+            legacy_ort: false
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - name: Pin ort for macOS Intel
+        if: matrix.legacy_ort
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("rust/Cargo.toml")
+          text = path.read_text()
+          old = 'ort = { version = "2.0.0-rc.12", default-features = false, features = ["std", "ndarray", "tracing", "download-binaries", "tls-rustls", "copy-dylibs", "api-24", "half"] }'
+          new = 'ort = { version = "=2.0.0-rc.10", default-features = false, features = ["std", "ndarray", "tracing", "download-binaries", "copy-dylibs", "half"] }'
+          if old not in text:
+              raise SystemExit("expected ort rc12 dependency line not found")
+          path.write_text(text.replace(old, new))
+          PY
+          cargo update -p ort --precise 2.0.0-rc.10
       - uses: PyO3/maturin-action@v1
         with:
           command: build
@@ -68,7 +96,7 @@ jobs:
           python -c "from patronus_ark import SecurityGateway; gateway = SecurityGateway(categories=['pii'], max_level='l1', download_files=False); gateway.warmup(); assert gateway.scan_all('Contact ada@example.com')"
       - uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ matrix.os }}
+          name: wheels-${{ matrix.artifact }}
           path: dist
 
   sdist:

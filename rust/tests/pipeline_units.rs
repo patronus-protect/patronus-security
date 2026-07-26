@@ -8,8 +8,33 @@ mod l3_results {
         degraded_error_result, degraded_timeout_result, has_l3_pending, l3_pending_layer,
     };
     use patronus_ark::{
-        EvaluationResult, LayerResult, ScanExecution, SecurityLevel, SecurityScanResult,
+        EvaluationResult, LayerResult, NtdbOperatingPoint, ScanExecution, SecurityLevel,
+        SecurityScanResult,
     };
+
+    #[test]
+    fn ntdb_decision_threshold_point_is_separate_from_promote_point() {
+        let mut execution = ScanExecution::new(SecurityLevel::L3);
+        assert_eq!(
+            execution.ntdb_operating_point(),
+            NtdbOperatingPoint::BestPromote
+        );
+        assert_eq!(
+            execution.ntdb_decision_threshold_point(),
+            NtdbOperatingPoint::BestF1
+        );
+
+        execution.set_ntdb_decision_threshold_point(NtdbOperatingPoint::BestFprInF1);
+
+        assert_eq!(
+            execution.ntdb_operating_point(),
+            NtdbOperatingPoint::BestPromote
+        );
+        assert_eq!(
+            execution.ntdb_decision_threshold_point(),
+            NtdbOperatingPoint::BestFprInF1
+        );
+    }
 
     fn fallback_result() -> SecurityScanResult {
         SecurityScanResult {
@@ -557,6 +582,11 @@ mod ntdb_l2_results {
             model_id: "injection".to_string(),
             aggregator_id: "router".to_string(),
             task: "binary_promote".to_string(),
+            labels: vec![
+                "benign".to_string(),
+                "attack".to_string(),
+                "promote".to_string(),
+            ],
             fallback_label: "attack".to_string(),
             fallback_confidence: 0.91,
             route_to_l3: true,
@@ -660,6 +690,11 @@ mod ntdb_l2_results {
             model_id: "sensitive_document".to_string(),
             aggregator_id: "doc_router".to_string(),
             task: "multiclass".to_string(),
+            labels: vec![
+                "source_code".to_string(),
+                "other".to_string(),
+                "legal".to_string(),
+            ],
             fallback_label: "source_code".to_string(),
             fallback_confidence: 0.73,
             route_to_l3: false,
@@ -694,6 +729,11 @@ mod ntdb_l2_results {
             model_id: "tool_class".to_string(),
             aggregator_id: "main".to_string(),
             task: "multiclass".to_string(),
+            labels: vec![
+                "unknown".to_string(),
+                "tool_class.web.search".to_string(),
+                "tool_class.file.read".to_string(),
+            ],
             fallback_label: "tool_class.web.search".to_string(),
             fallback_confidence: 0.88,
             route_to_l3: true,
@@ -772,6 +812,11 @@ mod ntdb_l2_results {
             model_id: "injection".to_string(),
             aggregator_id: "router".to_string(),
             task: "binary_promote".to_string(),
+            labels: vec![
+                "benign".to_string(),
+                "attack".to_string(),
+                "promote".to_string(),
+            ],
             fallback_label: "attack".to_string(),
             fallback_confidence: 0.91,
             route_to_l3: true,

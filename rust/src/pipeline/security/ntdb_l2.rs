@@ -6,8 +6,9 @@ use std::path::PathBuf;
 
 use crate::{
     ml::ntdb_executor::{manifest::PackageManifest, NtdbDecision, NtdbPackageSpec},
+    pipeline::decision_thresholds::{arbitration_name, threshold_l2_result},
     pipeline::l3_pending_layer,
-    EvaluationResult, LayerResult, ScanExecution, SecurityCategory, SecurityLevel,
+    EvaluationResult, LabelScore, LayerResult, ScanExecution, SecurityCategory, SecurityLevel,
     SecurityScanResult,
 };
 
@@ -194,10 +195,27 @@ pub(super) fn ntdb_l2_result_parts(
     allow_l3: bool,
     source_pipeline: &str,
 ) -> (EvaluationResult, Vec<LayerResult>) {
-    let result = EvaluationResult {
+    let raw_result = EvaluationResult {
         class_name: decision.fallback_label.clone(),
         confidence: decision.fallback_confidence,
         level: "L2".to_string(),
+    };
+    let l3_pending = allow_l3
+        && decision.route_to_l3
+        && execution.defer_l3()
+        && execution.allows_level(SecurityLevel::L3)
+        && execution.l3_policy().enabled;
+    let (result, final_arbitration) = if l3_pending {
+        (
+            raw_result.clone(),
+            crate::pipeline::decision_thresholds::LayerDecision::L2,
+        )
+    } else {
+        threshold_l2_result(
+            source_pipeline,
+            raw_result.clone(),
+            execution.ntdb_decision_threshold_point(),
+        )
     };
     let mut thresholds = HashMap::new();
     if let Some(threshold) = decision.promote_threshold {
@@ -246,6 +264,18 @@ pub(super) fn ntdb_l2_result_parts(
             "class_logits".to_string(),
             serde_json::json!(decision.class_logits),
         ),
+        (
+            "raw_class_name".to_string(),
+            serde_json::json!(raw_result.class_name),
+        ),
+        (
+            "raw_confidence".to_string(),
+            serde_json::json!(raw_result.confidence),
+        ),
+        (
+            "final_arbitration".to_string(),
+            serde_json::json!(arbitration_name(final_arbitration)),
+        ),
     ]);
     if let Some(score) = decision.promote_score {
         details.insert("promote_score".to_string(), serde_json::json!(score));
@@ -268,12 +298,7 @@ pub(super) fn ntdb_l2_result_parts(
         details,
     }];
 
-    if allow_l3
-        && decision.route_to_l3
-        && execution.defer_l3()
-        && execution.allows_level(SecurityLevel::L3)
-        && execution.l3_policy().enabled
-    {
+    if l3_pending {
         layers.push(l3_pending_layer(&result, execution));
     }
 
@@ -296,7 +321,19 @@ pub fn ntdb_l2_scan_result(
         allow_l3,
         config.category.as_str(),
     );
-    scan_result(config.category, config.public_model, result, layers)
+    let mut scan = scan_result(config.category, config.public_model, result, layers);
+    scan.label_scores = decision
+        .labels
+        .iter()
+        .zip(decision.class_scores.iter())
+        .filter(|(label, _)| label.as_str() != "promote")
+        .map(|(label, confidence)| LabelScore {
+            label: label.clone(),
+            confidence: f64::from(confidence.clamp(0.0, 1.0)),
+            matched: label == &decision.fallback_label,
+        })
+        .collect();
+    scan
 }
 
 pub(super) fn validate_ntdb_l2_package(

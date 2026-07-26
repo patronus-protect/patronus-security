@@ -1026,6 +1026,7 @@ pub struct ScanExecution {
     onnx_runtime_options: OnnxRuntimeOptions,
     onnx_batch_mode: OnnxBatchMode,
     ntdb_operating_point: NtdbOperatingPoint,
+    ntdb_decision_threshold_point: NtdbOperatingPoint,
     l3_strategy: L3Strategy,
     defer_l3: bool,
 }
@@ -1040,6 +1041,7 @@ impl ScanExecution {
             onnx_runtime_options: OnnxRuntimeOptions::default(),
             onnx_batch_mode: OnnxBatchMode::LazyBatches,
             ntdb_operating_point: NtdbOperatingPoint::default(),
+            ntdb_decision_threshold_point: NtdbOperatingPoint::BestF1,
             l3_strategy: L3Strategy::default(),
             defer_l3: false,
         }
@@ -1054,6 +1056,7 @@ impl ScanExecution {
             onnx_runtime_options: OnnxRuntimeOptions::default(),
             onnx_batch_mode: OnnxBatchMode::LazyBatches,
             ntdb_operating_point: NtdbOperatingPoint::default(),
+            ntdb_decision_threshold_point: NtdbOperatingPoint::BestF1,
             l3_strategy: L3Strategy::default(),
             defer_l3: false,
         }
@@ -1090,6 +1093,11 @@ impl ScanExecution {
     /// Select the calibrated NTDB operating point used by subsequent scans.
     pub fn set_ntdb_operating_point(&mut self, point: NtdbOperatingPoint) {
         self.ntdb_operating_point = point;
+    }
+
+    /// Select the calibrated NTDB final-decision threshold set.
+    pub fn set_ntdb_decision_threshold_point(&mut self, point: NtdbOperatingPoint) {
+        self.ntdb_decision_threshold_point = point;
     }
 
     /// Select the physical L3 classifier topology.
@@ -1142,6 +1150,11 @@ impl ScanExecution {
     /// Return the selected NTDB operating point.
     pub fn ntdb_operating_point(&self) -> NtdbOperatingPoint {
         self.ntdb_operating_point
+    }
+
+    /// Return the selected NTDB final-decision threshold set.
+    pub fn ntdb_decision_threshold_point(&self) -> NtdbOperatingPoint {
+        self.ntdb_decision_threshold_point
     }
 
     /// Return the selected physical L3 classifier topology.

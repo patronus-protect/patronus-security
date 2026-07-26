@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-only
 from ._patronus_ark import SecurityGateway as RustSecurityGateway
+from ._patronus_ark import normalize_text as _rust_normalize_text
 from copy import deepcopy
 import json
 
@@ -153,6 +154,24 @@ def _dynamic_pii_config_json(config):
     return json.dumps(config)
 
 
+def _normalization_configs_json(configs):
+    if configs is None:
+        return None
+    if not isinstance(configs, dict):
+        raise ValueError("configs must be a dict")
+    return json.dumps(configs)
+
+
+def normalize_text(text: str, configs: dict | None = None) -> str:
+    """Return canonical_security_text_v1-style normalized text.
+
+    `configs` gates individual normalization steps. Supported keys are
+    `html_entities`, `nfkc`, `confusables`, `format_characters`, `whitespace`,
+    and `trim`; omitted steps default to enabled.
+    """
+    return _rust_normalize_text(text, _normalization_configs_json(configs))
+
+
 class SecurityGateway:
     """Python gateway for Patronus Ark scanners.
 
@@ -178,9 +197,10 @@ class SecurityGateway:
             `directml`, or `tensorrt`. Backend defaults choose lazy L3 on
             CPU/auto and tensor batches on accelerator backends unless
             `onnx_batch_mode` is explicitly set.
-        ntdb_operating_point: Calibrated NTDB threshold set. One of
-            `best_promote` (default), `best_f1`, `best_fpr_in_f1`,
-            `best_fnr_in_f1`, or `best_latency_in_f1`.
+        ntdb_operating_point: Calibrated NTDB final-decision threshold set. One of
+            `best_f1` (default), `best_promote`, `best_fpr_in_f1`,
+            `best_fnr_in_f1`, or `best_latency_in_f1`. This does not change
+            L3 promote thresholds.
         l3_strategy: `dedicated` for one L3 model per classifier pipeline or
             `multi` for the shared unified multi-head ONNX model.
         dynamic_pii_config: Pipeline-specific labels, result gates,
@@ -203,7 +223,7 @@ class SecurityGateway:
         execution_gates: dict | None = None,
         onnx_batch_mode: str = "backend_default",
         execution_backend: str = "auto",
-        ntdb_operating_point: str = "best_promote",
+        ntdb_operating_point: str = "best_f1",
         l3_strategy: str = "dedicated",
         dynamic_pii_config: dict | None = None,
         cache_storage_location: str | None = None,
@@ -331,7 +351,7 @@ class SecurityGateway:
         self._benchmark_gateway_config["execution_backend"] = backend
 
     def set_ntdb_operating_point(self, point: str):
-        """Select the calibrated NTDB threshold set for subsequent scans."""
+        """Select the calibrated NTDB final-decision threshold set for subsequent scans."""
         self.rust_gateway.set_ntdb_operating_point(point)
         self._benchmark_worker_config["ntdb_operating_point"] = point
         self._benchmark_gateway_config["ntdb_operating_point"] = point
@@ -371,14 +391,17 @@ class SecurityGateway:
         categories: list[str] | None = None,
         execution_gates: dict | None = None,
         metadata: dict | None = None,
+        ntdb_operating_point: str | None = None,
     ) -> str:
         """Queue one scan request and return its request id.
 
         This method does not return scan results. A background gateway worker
         executes L1/L2 and a separate worker executes promoted L3 jobs.
         `consume_events()` yields result and terminal events from the shared
-        queue. Every event includes its `request_id`. `execution_gates`, when
-        provided, applies only to this request.
+            queue. Every event includes its `request_id`. `execution_gates`, when
+            provided, applies only to this request. `ntdb_operating_point`, when
+            provided, overrides the gateway final-decision threshold profile for this
+            request and does not change L3 promotion.
         """
         if metadata is not None and not isinstance(metadata, dict):
             raise ValueError("metadata must be a dict")
@@ -387,6 +410,7 @@ class SecurityGateway:
             categories,
             _execution_gates_json(execution_gates),
             None if metadata is None else json.dumps(metadata),
+            ntdb_operating_point,
         )
 
     def consume_events(self, timeout: float | None = None):

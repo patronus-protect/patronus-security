@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.1.0-38bdf8?style=flat-square" alt="Version 0.1.0">
+  <img src="https://img.shields.io/badge/version-0.1.1-38bdf8?style=flat-square" alt="Version 0.1.1">
   <img src="https://img.shields.io/badge/license-GPL--3.0--only-34d399?style=flat-square" alt="License: GPL-3.0-only">
   <img src="https://img.shields.io/badge/commercial%20license-available-a78bfa?style=flat-square" alt="Commercial license available">
   <img src="https://img.shields.io/badge/rust-2021%20edition-dea584?style=flat-square&logo=rust&logoColor=white" alt="Rust 2021 edition">
@@ -94,6 +94,11 @@ Each category runs up to three layers:
 - **L1** — native rule-based detectors. No model assets, always available.
 - **L2** — NTDB (**Non Transformer Decision Block**) model packages. An NTDB is a small network architecture that bundles several non-transformer classifiers: a static token-embedding encoder, one or more lightweight heads (gradient-boosted trees, logistic regression, centroid-cosine, text-CNN), a trained aggregator that fuses their outputs into the L2 verdict, and a trained promote-router that decides when a case needs L3 at all — so most traffic never reaches a transformer. Packaged with a `manifest.json` (`format: ntdb_model_package`). All L2 packages share one encoder per process and execute in a common Rust executor.
 - **L3** — full ONNX transformer models, lazily loaded and executed by a background worker. When L2 promotes a scan to L3, the shared result queue first publishes the L2 fallback and later the final L3 result. The L3-only `dynamic-pii` pipeline enqueues directly and publishes only its completed entity result. The worker schedules pipeline workloads by estimated and observed compute cost, applies a maximum-wait guard against starvation, and splits long texts into tokenizer-bounded windows with token overlap. L3 errors and timeouts degrade back to the L2 result where a fallback exists.
+
+Classifier pipelines apply bundled final-decision thresholds after scoring. At `max_level="l3"`,
+the final verdict accepts L3 first, then a weighted L2/L3 union, then L2, and otherwise returns
+the pipeline default class. Configure the profile with `ntdb_operating_point` at gateway init or
+per queued request; this does not change L2 promotion thresholds.
 
 For supported Granite L2 packages, asset preparation converts the downloaded HuggingFace `tokenizer.json` once into a compact `tokenizer.kit` in the shared encoder cache. The source JSON remains canonical and is used automatically if conversion, validation, or compact loading fails. Source/content hashes and converter versions invalidate stale generated files; local model overrides are never rewritten.
 
@@ -414,7 +419,7 @@ Every gateway can benchmark itself on the validation samples shipped with the pa
 from patronus_ark import SecurityGateway
 
 scanner = SecurityGateway(
-    categories=["injection", "sensitive_document", "tool_class", "threat"],
+    categories=["injection", "sensitive_document", "threat", "routing"],
     max_level="l3",
     l3_strategy="multi",
 )

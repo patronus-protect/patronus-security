@@ -7,6 +7,7 @@ pub mod dynamic_pii;
 pub mod external_l1;
 pub mod gliner_onnx_engine;
 pub mod ml;
+pub mod normalization;
 pub mod pipeline;
 pub mod threat;
 pub mod types;
@@ -20,6 +21,7 @@ pub use dynamic_pii::{
     DynamicPiiResultCondition, EvidenceSpan,
 };
 pub use external_l1::{ExternalL1Detector, ExternalL1Input};
+pub use normalization::{canonical_security_text_v1, normalize_text, TextNormalizationConfig};
 pub use pipeline::{Pipeline, SecurityGateway};
 pub use types::{
     ConditionalPipelineGate, EffectiveL3PipelinePolicy, EvaluationResult, ExecutionBackend,

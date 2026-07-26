@@ -622,6 +622,14 @@ impl SecurityGateway {
             .set_ntdb_operating_point(point);
     }
 
+    /// Select the calibrated NTDB final-decision threshold set used by subsequent scans.
+    pub fn set_ntdb_decision_threshold_point(&self, point: NtdbOperatingPoint) {
+        self.execution
+            .lock()
+            .expect("execution mutex poisoned")
+            .set_ntdb_decision_threshold_point(point);
+    }
+
     /// Select dedicated per-pipeline L3 models or the shared multi-head model.
     pub fn set_l3_strategy(&self, strategy: crate::L3Strategy) {
         self.execution
@@ -641,6 +649,11 @@ impl SecurityGateway {
     /// Return the calibrated NTDB operating point used by subsequent scans.
     pub fn ntdb_operating_point(&self) -> NtdbOperatingPoint {
         self.scan_execution().ntdb_operating_point()
+    }
+
+    /// Return the calibrated NTDB final-decision threshold set used by subsequent scans.
+    pub fn ntdb_decision_threshold_point(&self) -> NtdbOperatingPoint {
+        self.scan_execution().ntdb_decision_threshold_point()
     }
 
     /// Replace the pipeline-specific `dynamic-pii` configuration.
