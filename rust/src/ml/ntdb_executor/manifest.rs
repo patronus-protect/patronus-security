@@ -18,23 +18,29 @@ pub struct PackageManifest {
     pub runtime: RuntimeContract,
     pub heads: Vec<HeadManifest>,
     pub aggregators: Vec<AggregatorManifest>,
+    pub joint_v2: Option<JointV2Manifest>,
+    pub metric_sweep: Option<MetricSweepManifest>,
 }
 
 impl PackageManifest {
     pub fn validate(&self) -> NtdbResult<()> {
-        if self.format != "ntdb_model_package" || self.version != 2 {
+        if self.format != "ntdb_model_package" || !matches!(self.version, 2 | 3) {
             return Err(ntdb_error(format!(
                 "unsupported NTDB package format {} v{}",
                 self.format, self.version
             )));
         }
-        if self.heads.is_empty() {
-            return Err(ntdb_error("NTDB package must contain at least one head"));
-        }
-        if self.aggregators.is_empty() {
-            return Err(ntdb_error(
-                "NTDB package must contain at least one aggregator",
-            ));
+        if self.version == 2 {
+            if self.heads.is_empty() {
+                return Err(ntdb_error("NTDB package must contain at least one head"));
+            }
+            if self.aggregators.is_empty() {
+                return Err(ntdb_error(
+                    "NTDB package must contain at least one aggregator",
+                ));
+            }
+        } else if self.joint_v2.is_none() {
+            return Err(ntdb_error("NTDB v3 package must contain joint_v2"));
         }
         if self.task.labels.is_empty() {
             return Err(ntdb_error("NTDB package task labels must not be empty"));
@@ -55,6 +61,27 @@ impl PackageManifest {
         }
         Ok(())
     }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct JointV2Manifest {
+    pub neural_onnx: String,
+    pub frozen_lightgbm: JointV2FrozenLightGbmManifest,
+    pub lightgbm_l3_surrogate: String,
+    pub conditional_branches: HashMap<String, String>,
+    pub pre_lgb_feature_dim: usize,
+    pub promoter_feature_dim: usize,
+    pub l2_threshold: f32,
+    pub l3_call_cost: f32,
+    pub branch_utilities: HashMap<String, Vec<f32>>,
+    pub default_operating_point: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct JointV2FrozenLightGbmManifest {
+    pub patronus: String,
+    pub jayavibhav: String,
+    pub nn_l3_surrogate: String,
 }
 
 #[derive(Debug, Deserialize)]

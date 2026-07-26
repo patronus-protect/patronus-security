@@ -7,6 +7,7 @@ use crate::NtdbOperatingPoint;
 mod decision;
 mod encoder;
 mod heuristics;
+mod joint_v2;
 mod lightgbm;
 pub mod manifest;
 mod package;
