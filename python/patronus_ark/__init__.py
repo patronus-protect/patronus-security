@@ -398,10 +398,10 @@ class SecurityGateway:
         This method does not return scan results. A background gateway worker
         executes L1/L2 and a separate worker executes promoted L3 jobs.
         `consume_events()` yields result and terminal events from the shared
-            queue. Every event includes its `request_id`. `execution_gates`, when
-            provided, applies only to this request. `ntdb_operating_point`, when
-            provided, overrides the gateway final-decision threshold profile for this
-            request and does not change L3 promotion.
+        queue. Every event includes its `request_id`. `execution_gates`, when
+        provided, applies only to this request. `ntdb_operating_point`, when
+        provided, overrides the gateway final-decision threshold profile for this
+        request and does not change L3 promotion.
         """
         if metadata is not None and not isinstance(metadata, dict):
             raise ValueError("metadata must be a dict")

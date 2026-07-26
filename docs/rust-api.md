@@ -16,6 +16,7 @@ pub mod dynamic_pii;
 pub mod external_l1;
 pub mod gliner_onnx_engine;
 pub mod ml;
+pub mod normalization;
 pub mod pipeline;
 pub mod threat;
 pub mod types;
@@ -29,6 +30,7 @@ pub use dynamic_pii::{
     DynamicPiiResultCondition, EvidenceSpan,
 };
 pub use external_l1::{ExternalL1Detector, ExternalL1Input};
+pub use normalization::{canonical_security_text_v1, normalize_text, TextNormalizationConfig};
 pub use pipeline::{Pipeline, SecurityGateway};
 pub use types::{
     ConditionalPipelineGate, EffectiveL3PipelinePolicy, EvaluationResult, ExecutionBackend,
@@ -181,8 +183,7 @@ Replace the execution backend and apply its default L3 mode.
 pub fn set_ntdb_operating_point(&self, point: NtdbOperatingPoint);
 ```
 
-Select the calibrated NTDB package operating point used by subsequent scans, including L2
-promotion thresholds.
+Select the calibrated NTDB operating point used by subsequent scans.
 
 ```rust
 pub fn set_ntdb_decision_threshold_point(&self, point: NtdbOperatingPoint);
@@ -206,7 +207,7 @@ Return the active global L3 model strategy.
 pub fn ntdb_operating_point(&self) -> NtdbOperatingPoint;
 ```
 
-Return the calibrated NTDB package operating point used by subsequent scans.
+Return the calibrated NTDB operating point used by subsequent scans.
 
 ```rust
 pub fn ntdb_decision_threshold_point(&self) -> NtdbOperatingPoint;
@@ -295,6 +296,18 @@ pub fn enqueue_with_metadata(
 Submit a scan with caller-provided request metadata used by conditional gates.
 
 ```rust
+pub fn enqueue_with_options(
+    &self,
+    text: impl Into<String>,
+    metadata: serde_json::Value,
+    gates: Option<ScanGateMatrix>,
+    ntdb_decision_threshold_point: Option<crate::NtdbOperatingPoint>,
+) -> RequestId;
+```
+
+Submit a scan with request-local execution options.
+
+```rust
 pub fn enqueue_categories(
     &self,
     categories: Vec<SecurityCategory>,
@@ -317,6 +330,19 @@ pub fn enqueue_categories_with_metadata(
 ```
 
 Submit selected categories with request-local metadata.
+
+```rust
+pub fn enqueue_categories_with_options(
+    &self,
+    categories: Vec<SecurityCategory>,
+    text: impl Into<String>,
+    metadata: serde_json::Value,
+    gates: Option<ScanGateMatrix>,
+    ntdb_decision_threshold_point: Option<crate::NtdbOperatingPoint>,
+) -> RequestId;
+```
+
+Submit selected categories with request-local execution options.
 
 ```rust
 pub fn enqueue_input(
@@ -1226,8 +1252,7 @@ Replace ONNX Runtime session options used by L3 ONNX classifiers.
 pub fn set_ntdb_operating_point(&mut self, point: NtdbOperatingPoint);
 ```
 
-Select the calibrated NTDB package operating point used by subsequent scans, including L2
-promotion thresholds.
+Select the calibrated NTDB operating point used by subsequent scans.
 
 ```rust
 pub fn set_ntdb_decision_threshold_point(&mut self, point: NtdbOperatingPoint);
@@ -1294,7 +1319,7 @@ Return the ONNX Runtime session options backing this execution.
 pub fn ntdb_operating_point(&self) -> NtdbOperatingPoint;
 ```
 
-Return the selected NTDB package operating point.
+Return the selected NTDB operating point.
 
 ```rust
 pub fn ntdb_decision_threshold_point(&self) -> NtdbOperatingPoint;
