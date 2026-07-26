@@ -11,7 +11,7 @@ training data and are not shipped as part of the compiled extension.
 | `benign.jsonl` | 100 | Negative controls — must not trigger any detector |
 | `injection.jsonl` | 200 | Prompt-injection and jailbreak phrasings |
 | `routing.jsonl` | 500 | Request routing across five classes (100 each) |
-| `tool_class.jsonl` | 1900 | Tool-call classification by action taxonomy |
+| `threat.jsonl` | 200 | Threat classification across seven classes |
 | `tool_descriptions.jsonl` | 240 | MCP tool-description risk scoring |
 | `tool_executions.jsonl` | 1800 | Tool-execution gating |
 | `sensitive_document.jsonl` | 699 | Document-class sensitivity |

@@ -95,6 +95,7 @@ nav:
       - Tune performance & memory: how-to/tune-performance.md
       - Run the local benchmark: how-to/run-local-benchmark.md
       - Configure caching: how-to/configure-caching.md
+      - Normalize text before scanning: how-to/normalize-text-before-scanning.md
       - Add external L1 signals: how-to/external-l1-signals.md
   - Concepts:
       - Architecture: concepts/architecture.md

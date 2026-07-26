@@ -6,7 +6,6 @@ use std::time::{Duration, Instant};
 
 #[cfg(feature = "test-util")]
 use crate::ml::ntdb_executor::ByteSpan;
-use crate::ml::ntdb_executor::L2ChunkOutput;
 #[cfg(feature = "test-util")]
 use crate::ml::ntdb_executor::L3Candidate;
 #[cfg(feature = "test-util")]
@@ -36,6 +35,7 @@ use crate::cache::{
 };
 use crate::ml::onnx::RawClassifierOutput;
 use crate::pipeline::decision_cache::DecisionCache;
+use crate::pipeline::decision_thresholds::arbitrate_l3_l2;
 use crate::pipeline::strategy::{aggregate_decision_index, ChunkDecision, HeadDecisionState};
 use crate::pipeline::ChunkAggregation;
 
@@ -418,25 +418,21 @@ fn run_model_job(
         &job.category,
         l3_safe_class(&job),
     );
-    let mut chunk_outputs = non_promoted_l2_chunk_outputs(&job.l2_chunk_outputs);
-    let l2_non_promoted_count = chunk_outputs.len();
-    let total_chunks = chunks.len() + l2_non_promoted_count;
+    let mut chunk_outputs = Vec::new();
+    let total_chunks = chunks.len();
     let mut chunk_trace = l3_chunk_trace_enabled().then(Vec::new);
-    let mut decision = HeadDecisionState::new(
+    let decision = HeadDecisionState::new(
         strategy.aggregation.clone(),
         l3_safe_class(&job),
         pipeline_policy.early_exit,
         total_chunks,
     );
-    for (result, _) in &chunk_outputs {
-        decision.observe(&result.class_name, result.confidence);
-    }
 
     publish_l3_progress(
         &worker_state,
         &job,
         "l3_started",
-        chunk_outputs.len(),
+        0,
         total_chunks,
         0,
         0,
@@ -450,7 +446,7 @@ fn run_model_job(
             &worker_state,
             &job,
             "l3_early_exit",
-            chunk_outputs.len(),
+            0,
             total_chunks,
             0,
             0,
@@ -490,51 +486,56 @@ fn run_model_job(
     drop(adapter);
     let resolved_chunks = chunk_outputs.len();
 
-    let mut full_text_layers = job.fallback.layers.clone();
-    for layer in &mut full_text_layers {
-        layer.matched = false;
-    }
     let aggregate = aggregate_chunk_outputs(
-        full_text_layers,
+        Vec::new(),
         chunk_outputs,
         total_chunks,
         l3_safe_class(&job),
         strategy.aggregation.clone(),
-    )
-    .ok_or_else(|| "L3 chunk aggregation produced no result".to_string())?;
-
-    let mut result = job.fallback;
-    result.class_name = aggregate.result.class_name;
-    result.confidence = aggregate.result.confidence;
-    result.level = "L3".to_string();
-    result.layers = aggregate.layers;
-    annotate_l3_execution(
-        &mut result.layers,
-        EarlyExitMetadata {
-            early_exit: stopped_early,
-            coverage: coverage(resolved_chunks, total_chunks),
-            inferred_chunks,
-            propagated_chunks,
-            planned_l3_chunks: chunks.len(),
-            resolved_chunks,
-            total_chunks,
-            cache_hits,
-            complete: !stopped_early && resolved_chunks == total_chunks,
-            worker_wall_ms: job_started.elapsed().as_secs_f64() * 1_000.0,
-        },
-        pipeline_policy.clustering,
     );
-    if let Some(chunk_trace) = chunk_trace {
-        for layer in result
-            .layers
-            .iter_mut()
-            .filter(|layer| layer.level == "L3" && layer.layer_type == "onnx")
-        {
-            layer
-                .details
-                .insert("l3_chunk_trace".to_string(), serde_json::json!(chunk_trace));
+
+    let l3_result = aggregate.map(|aggregate| {
+        let mut l3_result = job.fallback.clone();
+        l3_result.class_name = aggregate.result.class_name;
+        l3_result.confidence = aggregate.result.confidence;
+        l3_result.level = "L3".to_string();
+        l3_result.layers = aggregate.layers;
+        annotate_l3_execution(
+            &mut l3_result.layers,
+            EarlyExitMetadata {
+                early_exit: stopped_early,
+                coverage: coverage(resolved_chunks, total_chunks),
+                inferred_chunks,
+                propagated_chunks,
+                planned_l3_chunks: chunks.len(),
+                resolved_chunks,
+                total_chunks,
+                cache_hits,
+                complete: !stopped_early && resolved_chunks == total_chunks,
+                worker_wall_ms: job_started.elapsed().as_secs_f64() * 1_000.0,
+            },
+            pipeline_policy.clustering,
+        );
+        if let Some(chunk_trace) = &chunk_trace {
+            for layer in l3_result
+                .layers
+                .iter_mut()
+                .filter(|layer| layer.level == "L3" && layer.layer_type == "onnx")
+            {
+                layer
+                    .details
+                    .insert("l3_chunk_trace".to_string(), serde_json::json!(chunk_trace));
+            }
         }
-    }
+        l3_result.duration_ms = l3_result.layers.iter().map(|layer| layer.duration_ms).sum();
+        l3_result
+    });
+    let mut result = arbitrate_l3_l2(
+        &job.category,
+        l3_result,
+        job.fallback,
+        job.execution.ntdb_decision_threshold_point(),
+    );
     result.duration_ms = result.layers.iter().map(|layer| layer.duration_ms).sum();
     Ok(result)
 }
@@ -755,58 +756,6 @@ pub fn selected_l3_chunks_for_test(
     .collect()
 }
 
-fn non_promoted_l2_chunk_outputs(
-    chunks: &[L2ChunkOutput],
-) -> Vec<(EvaluationResult, Vec<LayerResult>)> {
-    chunks
-        .iter()
-        .filter(|chunk| !chunk.promoted)
-        .map(|chunk| {
-            let result = EvaluationResult {
-                class_name: chunk.class_name.clone(),
-                confidence: f64::from(chunk.confidence),
-                level: SecurityLevel::L2.as_str().to_string(),
-            };
-            let layer = LayerResult {
-                level: SecurityLevel::L2.as_str().to_string(),
-                layer_type: "ntdb_l2_chunk_final".to_string(),
-                class_name: chunk.class_name.clone(),
-                confidence: f64::from(chunk.confidence),
-                matched: true,
-                duration_ms: 0.0,
-                thresholds: HashMap::new(),
-                details: HashMap::from([
-                    (
-                        "span".to_string(),
-                        serde_json::json!({
-                            "start": chunk.span.start,
-                            "end": chunk.span.end,
-                        }),
-                    ),
-                    ("promoted".to_string(), serde_json::json!(false)),
-                    (
-                        "promote_score".to_string(),
-                        serde_json::json!(chunk.promote_score),
-                    ),
-                    (
-                        "promote_threshold".to_string(),
-                        serde_json::json!(chunk.promote_threshold),
-                    ),
-                    (
-                        "source_pipeline".to_string(),
-                        serde_json::json!(chunk.source_pipeline),
-                    ),
-                    (
-                        "source_model".to_string(),
-                        serde_json::json!(chunk.source_model),
-                    ),
-                ]),
-            };
-            (result, vec![layer])
-        })
-        .collect()
-}
-
 #[derive(Debug, Clone, Copy)]
 struct EarlyExitMetadata {
     early_exit: bool,
@@ -878,12 +827,8 @@ fn publish_l3_provisional(
     {
         return;
     }
-    let mut full_text_layers = job.fallback.layers.clone();
-    for layer in &mut full_text_layers {
-        layer.matched = false;
-    }
     let Some(aggregate) = aggregate_chunk_outputs(
-        full_text_layers,
+        Vec::new(),
         chunk_outputs.to_vec(),
         total_chunks,
         safe_class,

@@ -30,9 +30,10 @@ Args:
         `directml`, or `tensorrt`. Backend defaults choose lazy L3 on
         CPU/auto and tensor batches on accelerator backends unless
         `onnx_batch_mode` is explicitly set.
-    ntdb_operating_point: Calibrated NTDB threshold set. One of
-        `best_promote` (default), `best_f1`, `best_fpr_in_f1`,
-        `best_fnr_in_f1`, or `best_latency_in_f1`.
+    ntdb_operating_point: Calibrated NTDB final-decision threshold set. One of
+        `best_f1` (default), `best_promote`, `best_fpr_in_f1`,
+        `best_fnr_in_f1`, or `best_latency_in_f1`. This does not change
+        L3 promote thresholds.
     l3_strategy: `dedicated` for one L3 model per classifier pipeline or
         `multi` for the shared unified multi-head ONNX model.
     dynamic_pii_config: Pipeline-specific labels, result gates,
@@ -104,7 +105,7 @@ Replace execution backend and apply its default L3 mode.
 
 ### `set_ntdb_operating_point(point: str)`
 
-Select the calibrated NTDB threshold set for subsequent scans.
+Select the calibrated NTDB final-decision threshold set for subsequent scans.
 
 ### `set_l3_strategy(strategy: str)`
 
@@ -122,7 +123,7 @@ Scan text with a single category.
 
 Scan text with a caller-provided category subset.
 
-### `enqueue(text: str, categories: list[str] | None = None, execution_gates: dict | None = None, metadata: dict | None = None) -> str`
+### `enqueue(text: str, categories: list[str] | None = None, execution_gates: dict | None = None, metadata: dict | None = None, ntdb_operating_point: str | None = None) -> str`
 
 Queue one scan request and return its request id.
 
@@ -130,7 +131,9 @@ This method does not return scan results. A background gateway worker
 executes L1/L2 and a separate worker executes promoted L3 jobs.
 `consume_events()` yields result and terminal events from the shared
 queue. Every event includes its `request_id`. `execution_gates`, when
-provided, applies only to this request.
+provided, applies only to this request. `ntdb_operating_point`, when
+provided, overrides the gateway final-decision threshold profile for this
+request and does not change L3 promotion.
 
 ### `consume_events(timeout: float | None = None)`
 

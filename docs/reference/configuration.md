@@ -48,7 +48,7 @@ Change behavior on a live gateway (Python names; Rust has equivalents):
 | --- | --- | --- |
 | `set_execution_gates(dict \| None)` | see [below](#execution-gates) | Enable/disable levels and detectors; `None` resets to all-enabled. |
 | `set_l3_strategy(str)` | `dedicated`, `multi` | Switch the [L3 strategy](#l3-strategy). |
-| `set_ntdb_operating_point(str)` | see [below](#ntdb-operating-point) | Pick the L2 threshold profile. |
+| `set_ntdb_operating_point(str)` | see [below](#ntdb-operating-point) | Pick the final-decision threshold profile. |
 | `set_onnx_batch_mode(str)` | `lazy_batches`, `tensor_batch` | How L3 fallback batches execute. |
 | `set_execution_backend(str)` | see [below](#execution-backend) | ONNX execution provider. |
 | `set_onnx_runtime_options(...)` | constrained CPU | Configure ONNX Runtime intra/inter threads and spin-wait behavior. |
@@ -248,15 +248,21 @@ See [Models & the NTDB format](../concepts/models-and-ntdb.md#dedicated-vs-unifi
 
 ## NTDB operating point
 
-Selects the precomputed L2 threshold profile:
+Selects the precomputed final-decision threshold profile used after L2/L3 scoring. The profile
+controls the L2 acceptance threshold, L3 acceptance threshold, and L2/L3 union threshold/weights
+for supported classifier pipelines. It does **not** change the L2 promote-router threshold; L3
+promotion still uses the package's promote operating point.
 
 | Value | Optimizes |
 | --- | --- |
-| `best_f1` | Balanced F1. |
-| `best_promote` *(default)* | Quality of what L2 promotes to L3. |
+| `best_f1` *(default)* | Balanced final-decision F1. |
+| `best_promote` | Uses the bundled final-decision profile named `best_promote`; promotion itself remains separate. |
 | `best_fpr_in_f1` | Low false-positive rate within an F1 band. |
 | `best_fnr_in_f1` | Low false-negative rate within an F1 band. |
 | `best_latency_in_f1` | Lowest latency within an F1 band. |
+
+For queued scans, Python callers can override the profile per request with
+`enqueue(..., ntdb_operating_point="best_fpr_in_f1")`.
 
 ## Execution backend
 

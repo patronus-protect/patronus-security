@@ -954,6 +954,7 @@ dependencies = [
  "serde_json",
  "thiserror 1.0.69",
  "tokenizers",
+ "unicode-normalization",
  "ureq 2.12.1",
 ]
 

@@ -1,16 +1,24 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use patronus_ark::{
-    CacheWriteMode, ConditionalPipelineGate, DynamicPiiConfig, EvidenceSpan, ExactCacheConfig,
-    ExecutionBackend, L3ClusteringStrategy, L3EarlyExitMode, L3PipelinePolicy, L3ProgressMode,
-    L3SchedulerPolicy, L3Strategy, LabelScore, LayerResult, MemoryCacheConfig, NtdbOperatingPoint,
-    OnnxBatchMode, PersistentCacheConfig, QueuedSecurityEvent, QueuedSecurityScanResult,
-    ScanGateMatrix, SecurityCategory, SecurityFailure, SecurityGateway as RustSecurityGateway,
-    SecurityLevel, SecurityLevelReadiness, SecurityRequestCompletion, SecurityRequestState,
-    SecurityRuntimeReadiness, WriteBehindConfig,
+    normalize_text as rust_normalize_text, CacheWriteMode, ConditionalPipelineGate,
+    DynamicPiiConfig, EvidenceSpan, ExactCacheConfig, ExecutionBackend, L3ClusteringStrategy,
+    L3EarlyExitMode, L3PipelinePolicy, L3ProgressMode, L3SchedulerPolicy, L3Strategy, LabelScore,
+    LayerResult, MemoryCacheConfig, NtdbOperatingPoint, OnnxBatchMode, PersistentCacheConfig,
+    QueuedSecurityEvent, QueuedSecurityScanResult, ScanGateMatrix, SecurityCategory,
+    SecurityFailure, SecurityGateway as RustSecurityGateway, SecurityLevel, SecurityLevelReadiness,
+    SecurityRequestCompletion, SecurityRequestState, SecurityRuntimeReadiness,
+    TextNormalizationConfig, WriteBehindConfig,
 };
 use pyo3::prelude::*;
 use std::path::PathBuf;
 use std::time::Duration;
+
+#[pyfunction]
+#[pyo3(signature = (text, configs_json=None))]
+fn normalize_text(text: &str, configs_json: Option<&str>) -> PyResult<String> {
+    let config = parse_text_normalization_config_json(configs_json)?;
+    Ok(rust_normalize_text(text, &config))
+}
 
 #[pyclass]
 struct SecurityGateway {
@@ -20,7 +28,7 @@ struct SecurityGateway {
 #[pymethods]
 impl SecurityGateway {
     #[new]
-    #[pyo3(signature = (categories, max_level="l2", model_dir=None, download_files=true, download_categories=None, execution_gates_json=None, onnx_batch_mode="backend_default", execution_backend="auto", ntdb_operating_point="best_promote", l3_strategy="dedicated", dynamic_pii_config_json=None, cache_storage_location=None, cache_entry_ttl_seconds=2_592_000, cache_memory_max_entries=100_000, cache_memory_max_bytes=134_217_728))]
+    #[pyo3(signature = (categories, max_level="l2", model_dir=None, download_files=true, download_categories=None, execution_gates_json=None, onnx_batch_mode="backend_default", execution_backend="auto", ntdb_operating_point="best_f1", l3_strategy="dedicated", dynamic_pii_config_json=None, cache_storage_location=None, cache_entry_ttl_seconds=2_592_000, cache_memory_max_entries=100_000, cache_memory_max_bytes=134_217_728))]
     fn new(
         categories: Vec<String>,
         max_level: &str,
@@ -78,7 +86,7 @@ impl SecurityGateway {
             inner.set_execution_gates(gates);
         }
         inner.set_execution_backend(parse_execution_backend(execution_backend)?);
-        inner.set_ntdb_operating_point(parse_ntdb_operating_point(ntdb_operating_point)?);
+        inner.set_ntdb_decision_threshold_point(parse_ntdb_operating_point(ntdb_operating_point)?);
         inner.set_l3_strategy(parse_l3_strategy(l3_strategy)?);
         if onnx_batch_mode != "backend_default" {
             inner.set_onnx_batch_mode(parse_onnx_batch_mode(onnx_batch_mode)?);
@@ -131,7 +139,7 @@ impl SecurityGateway {
 
     fn set_ntdb_operating_point(&mut self, point: &str) -> PyResult<()> {
         self.inner
-            .set_ntdb_operating_point(parse_ntdb_operating_point(point)?);
+            .set_ntdb_decision_threshold_point(parse_ntdb_operating_point(point)?);
         Ok(())
     }
 
@@ -173,7 +181,7 @@ impl SecurityGateway {
         Ok(results.into_iter().map(PyEvaluationResult::from).collect())
     }
 
-    #[pyo3(signature = (text, categories=None, execution_gates_json=None, metadata_json=None))]
+    #[pyo3(signature = (text, categories=None, execution_gates_json=None, metadata_json=None, ntdb_operating_point=None))]
     fn enqueue(
         &self,
         py: Python<'_>,
@@ -181,8 +189,12 @@ impl SecurityGateway {
         categories: Option<Vec<String>>,
         execution_gates_json: Option<&str>,
         metadata_json: Option<&str>,
+        ntdb_operating_point: Option<&str>,
     ) -> PyResult<String> {
         let gates = parse_execution_gates_json(execution_gates_json)?;
+        let ntdb_operating_point = ntdb_operating_point
+            .map(parse_ntdb_operating_point)
+            .transpose()?;
         let metadata = metadata_json
             .map(|value| {
                 serde_json::from_str(value)
@@ -194,15 +206,19 @@ impl SecurityGateway {
             Some(categories) => {
                 let rust_categories = parse_categories(categories)?;
                 py.allow_threads(|| {
-                    self.inner.enqueue_categories_with_metadata(
+                    self.inner.enqueue_categories_with_options(
                         rust_categories,
                         text,
                         metadata,
                         gates,
+                        ntdb_operating_point,
                     )
                 })
             }
-            None => py.allow_threads(|| self.inner.enqueue_with_metadata(text, metadata, gates)),
+            None => py.allow_threads(|| {
+                self.inner
+                    .enqueue_with_options(text, metadata, gates, ntdb_operating_point)
+            }),
         };
         Ok(request_id)
     }
@@ -287,6 +303,39 @@ fn parse_dynamic_pii_config_json(value: Option<&str>) -> PyResult<Option<Dynamic
                 .map_err(pyo3::exceptions::PyValueError::new_err)
         })
         .transpose()
+}
+
+fn parse_text_normalization_config_json(value: Option<&str>) -> PyResult<TextNormalizationConfig> {
+    let Some(value) = value else {
+        return Ok(TextNormalizationConfig::default());
+    };
+    let parsed: serde_json::Value = serde_json::from_str(value)
+        .map_err(|err| pyo3::exceptions::PyValueError::new_err(err.to_string()))?;
+    let object = parsed
+        .as_object()
+        .ok_or_else(|| pyo3::exceptions::PyValueError::new_err("configs must be a JSON object"))?;
+    let mut config = TextNormalizationConfig::default();
+    for (key, value) in object {
+        let enabled = value.as_bool().ok_or_else(|| {
+            pyo3::exceptions::PyValueError::new_err(format!("configs.{key} must be a boolean"))
+        })?;
+        match key.as_str() {
+            "html_entities" | "html" | "decode_html_entities" => config.html_entities = enabled,
+            "nfkc" | "unicode_nfkc" | "unicode_normalization" => config.nfkc = enabled,
+            "confusables" | "homoglyphs" => config.confusables = enabled,
+            "format_characters" | "unicode_format_characters" | "zero_width" => {
+                config.format_characters = enabled
+            }
+            "whitespace" | "collapse_whitespace" => config.whitespace = enabled,
+            "trim" => config.trim = enabled,
+            _ => {
+                return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                    "unknown normalize_text config: {key}"
+                )));
+            }
+        }
+    }
+    Ok(config)
 }
 
 fn parse_execution_gates_json(value: Option<&str>) -> PyResult<Option<ScanGateMatrix>> {
@@ -957,6 +1006,7 @@ impl From<LayerResult> for PyLayerResult {
 
 #[pymodule]
 fn _patronus_ark(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(normalize_text, m)?)?;
     m.add_class::<SecurityGateway>()?;
     m.add_class::<PyLayerResult>()?;
     m.add_class::<PyEvaluationResult>()?;

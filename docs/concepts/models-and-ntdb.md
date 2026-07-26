@@ -34,21 +34,23 @@ All L2 packages in a process **share a single static encoder instance**. Embeddi
 per token lookup, so running seven L2 categories costs barely more than running one — which is
 what makes L2 fast enough to sit on the request path.
 
-### Operating points
+### Final-decision threshold profiles
 
-Each NTDB package ships several **operating points** — precomputed threshold configurations
-that trade off recall, precision, latency, and promotion rate. You select one globally with
+Patronus Ark also ships bundled **final-decision threshold profiles** derived from validation
+sweeps. You select one globally with
 [`ntdb_operating_point`](../reference/configuration.md#ntdb-operating-point):
 
-| Operating point | Optimizes for |
+| Profile | Optimizes for |
 | --- | --- |
-| `best_f1` | Overall balanced F1 |
-| `best_promote` | Promotion quality (what L2 hands to L3) |
+| `best_f1` | Overall balanced final-decision F1 |
+| `best_promote` | The bundled final-decision profile named `best_promote` |
 | `best_fpr_in_f1` | Low false-positive rate within an F1 band |
 | `best_fnr_in_f1` | Low false-negative rate within an F1 band |
 | `best_latency_in_f1` | Lowest latency within an F1 band |
 
-The metric sweeps that back these points stay on disk and are loaded only as needed.
+These profiles are applied after scoring: L3 can be accepted first, then a weighted L2/L3 union
+can be accepted, then L2 can be accepted, otherwise the pipeline returns its default class. They
+do not change the NTDB promote-router threshold that decides which chunks are sent to L3.
 
 ### Compact tokenizers
 

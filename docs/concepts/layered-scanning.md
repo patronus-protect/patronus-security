@@ -23,8 +23,9 @@ encoder plus small ONNX heads and aggregators, packaged with a `manifest.json`. 
 packages in a process **share one static encoder**, so adding categories is cheap. L2 answers
 in **milliseconds** and refines the L1 verdict with a learned classifier.
 
-L2 has a configurable **operating point** that trades off recall, precision, latency, and
-promotion rate — see [`ntdb_operating_point`](../reference/configuration.md#ntdb-operating-point).
+L2 promotion is decided by the NTDB package's promote-router. Separately, classifier verdicts
+use a configurable final-decision threshold profile — see
+[`ntdb_operating_point`](../reference/configuration.md#ntdb-operating-point).
 
 ### L3 — full ONNX transformers
 

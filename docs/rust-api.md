@@ -181,7 +181,14 @@ Replace the execution backend and apply its default L3 mode.
 pub fn set_ntdb_operating_point(&self, point: NtdbOperatingPoint);
 ```
 
-Select the calibrated NTDB operating point used by subsequent scans.
+Select the calibrated NTDB package operating point used by subsequent scans, including L2
+promotion thresholds.
+
+```rust
+pub fn set_ntdb_decision_threshold_point(&self, point: NtdbOperatingPoint);
+```
+
+Select the calibrated NTDB final-decision threshold set used by subsequent scans.
 
 ```rust
 pub fn set_l3_strategy(&self, strategy: crate::L3Strategy);
@@ -199,7 +206,13 @@ Return the active global L3 model strategy.
 pub fn ntdb_operating_point(&self) -> NtdbOperatingPoint;
 ```
 
-Return the calibrated NTDB operating point used by subsequent scans.
+Return the calibrated NTDB package operating point used by subsequent scans.
+
+```rust
+pub fn ntdb_decision_threshold_point(&self) -> NtdbOperatingPoint;
+```
+
+Return the calibrated NTDB final-decision threshold set used by subsequent scans.
 
 ```rust
 pub fn set_dynamic_pii_config(&self, config: DynamicPiiConfig) -> Result<(), String>;
@@ -1165,6 +1178,7 @@ pub struct ScanExecution {
     onnx_runtime_options: OnnxRuntimeOptions,
     onnx_batch_mode: OnnxBatchMode,
     ntdb_operating_point: NtdbOperatingPoint,
+    ntdb_decision_threshold_point: NtdbOperatingPoint,
     l3_strategy: L3Strategy,
     defer_l3: bool,
 }
@@ -1212,7 +1226,14 @@ Replace ONNX Runtime session options used by L3 ONNX classifiers.
 pub fn set_ntdb_operating_point(&mut self, point: NtdbOperatingPoint);
 ```
 
-Select the calibrated NTDB operating point used by subsequent scans.
+Select the calibrated NTDB package operating point used by subsequent scans, including L2
+promotion thresholds.
+
+```rust
+pub fn set_ntdb_decision_threshold_point(&mut self, point: NtdbOperatingPoint);
+```
+
+Select the calibrated NTDB final-decision threshold set.
 
 ```rust
 pub fn set_l3_strategy(&mut self, strategy: L3Strategy);
@@ -1273,7 +1294,13 @@ Return the ONNX Runtime session options backing this execution.
 pub fn ntdb_operating_point(&self) -> NtdbOperatingPoint;
 ```
 
-Return the selected NTDB operating point.
+Return the selected NTDB package operating point.
+
+```rust
+pub fn ntdb_decision_threshold_point(&self) -> NtdbOperatingPoint;
+```
+
+Return the selected NTDB final-decision threshold set.
 
 ```rust
 pub fn l3_strategy(&self) -> L3Strategy;

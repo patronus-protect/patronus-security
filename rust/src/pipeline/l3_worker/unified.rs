@@ -28,6 +28,7 @@ use super::{
 };
 #[cfg(feature = "test-util")]
 use super::{FairSchedulerState, RequestRegistry};
+use crate::pipeline::decision_thresholds::arbitrate_l3_l2;
 use crate::pipeline::l3_engine::{execute_l3_plan, L3ExecutionAdapter, L3ResolvedKind};
 use crate::pipeline::l3_schedule::{selected_l3_chunks, SelectedL3Chunk};
 use crate::pipeline::strategy::{
@@ -285,7 +286,6 @@ fn run_unified_model_job(
         .cloned()
         .collect::<Vec<_>>();
     promoted_heads.sort_by_key(|head| priority_index(job.execution.l3_policy(), head, head));
-    let mut l2_outputs = non_promoted_unified_l2_outputs(&job.l2_chunk_outputs);
     let mut outputs = Vec::new();
     let mut physical_outputs = HashMap::<usize, UnifiedModelOutput>::new();
     let mut chunk_trace = l3_chunk_trace_enabled().then(Vec::new);
@@ -349,19 +349,15 @@ fn run_unified_model_job(
             strategy.aggregation = aggregation;
         }
         let safe_class = unified_safe_class(&head);
-        let l2_head_outputs = l2_outputs.get(&head).cloned().unwrap_or_default();
-        let head_total = l2_head_outputs.len() + head_chunks.len();
+        let head_total = head_chunks.len();
         total_effective_chunks = total_effective_chunks.max(head_total);
         total_chunks_by_head.insert(head.clone(), head_total);
-        let mut decision = HeadDecisionState::new(
+        let decision = HeadDecisionState::new(
             strategy.aggregation.clone(),
             safe_class,
             policy.early_exit,
             head_total,
         );
-        for output in &l2_head_outputs {
-            decision.observe(&output.class_name, output.confidence);
-        }
         if decision.head_is_stable() {
             head_early_exits.insert(head.clone());
             resolved_chunks_by_head.insert(head.clone(), decision.observed_chunks());
@@ -405,11 +401,7 @@ fn run_unified_model_job(
     }
 
     Ok(UnifiedRunResult {
-        output: aggregate_unified_outputs(
-            outputs,
-            &mut l2_outputs,
-            Some(job.execution.l3_policy()),
-        )?,
+        output: aggregate_unified_outputs(outputs, Some(job.execution.l3_policy()))?,
         duration_ms: started.elapsed().as_secs_f64() * 1_000.0,
         queue_wait_ms,
         chunk_count: chunks.len(),
@@ -795,10 +787,9 @@ fn unified_head_chunk_plan(
 
 fn aggregate_unified_outputs(
     outputs: Vec<UnifiedChunkOutput>,
-    l2_outputs: &mut HashMap<String, Vec<UnifiedHeadOutput>>,
     policy: Option<&crate::L3SchedulerPolicy>,
 ) -> Result<UnifiedModelOutput, String> {
-    let mut head_names = l2_outputs.keys().cloned().collect::<HashSet<_>>();
+    let mut head_names = HashSet::new();
     for output in &outputs {
         head_names.extend(output.allowed_heads.iter().cloned());
     }
@@ -807,13 +798,11 @@ fn aggregate_unified_outputs(
     }
     let mut heads = HashMap::new();
     for head in head_names {
-        let l2_candidates = l2_outputs.remove(&head).unwrap_or_default();
-        let mut candidates = outputs
+        let candidates = outputs
             .iter()
             .filter(|output| output.allowed_heads.contains(&head))
             .filter_map(|output| output.output.heads.get(&head))
             .collect::<Vec<_>>();
-        candidates.extend(l2_candidates.iter());
         let aggregation = policy
             .and_then(|policy| policy.pipeline_policy(&head, &head).aggregation)
             .map(ChunkAggregation::from);
@@ -823,36 +812,6 @@ fn aggregate_unified_outputs(
         heads.insert(head, selected);
     }
     Ok(UnifiedModelOutput { heads })
-}
-
-fn non_promoted_unified_l2_outputs(
-    chunks: &[crate::ml::ntdb_executor::L2ChunkOutput],
-) -> HashMap<String, Vec<UnifiedHeadOutput>> {
-    let mut outputs = HashMap::<String, Vec<UnifiedHeadOutput>>::new();
-    for chunk in chunks.iter().filter(|chunk| !chunk.promoted) {
-        for head in chunk.source_pipeline.split(',').map(str::trim) {
-            if head.is_empty() {
-                continue;
-            }
-            outputs
-                .entry(head.to_string())
-                .or_default()
-                .push(UnifiedHeadOutput {
-                    class_name: internal_unified_class(head, &chunk.class_name).to_string(),
-                    confidence: f64::from(chunk.confidence),
-                    label_scores: Vec::new(),
-                });
-        }
-    }
-    outputs
-}
-
-fn internal_unified_class<'a>(head: &str, class_name: &'a str) -> &'a str {
-    if head == "injection" && class_name == "attack" {
-        "injection"
-    } else {
-        class_name
-    }
 }
 
 fn unified_head_aggregation(head: &str) -> Option<ChunkAggregation> {
@@ -1058,7 +1017,7 @@ pub fn unified_metadata_details_for_test(
             heads: HashMap::from([(
                 "threat".to_string(),
                 UnifiedHeadOutput {
-                    class_name: "benign".to_string(),
+                    class_name: "instruction_override".to_string(),
                     confidence: 0.9,
                     label_scores: Vec::new(),
                 },
@@ -1474,6 +1433,13 @@ fn materialize_unified_result(
         })
         .collect();
     result.duration_ms = result.layers.iter().map(|layer| layer.duration_ms).sum();
+    let mut result = arbitrate_l3_l2(
+        head,
+        Some(result),
+        subscriber.fallback.clone(),
+        subscriber.execution.ntdb_decision_threshold_point(),
+    );
+    result.duration_ms = result.layers.iter().map(|layer| layer.duration_ms).sum();
     result
 }
 
@@ -1814,18 +1780,14 @@ mod tests {
     }
 
     #[test]
-    fn unified_aggregation_uses_l2_and_l3_union() {
+    fn unified_aggregation_ignores_non_promoted_l2_outputs() {
         let outputs = vec![observed_chunk(
             0,
             &["sensitive_document"],
             &[("sensitive_document", head_output("safe", 0.99))],
         )];
-        let mut l2_outputs = HashMap::from([(
-            "sensitive_document".to_string(),
-            vec![head_output("legal", 0.8), head_output("legal", 0.81)],
-        )]);
 
-        let aggregate = aggregate_unified_outputs(outputs, &mut l2_outputs, None).unwrap();
+        let aggregate = aggregate_unified_outputs(outputs, None).unwrap();
 
         assert_eq!(
             aggregate
@@ -1833,7 +1795,7 @@ mod tests {
                 .get("sensitive_document")
                 .unwrap()
                 .class_name,
-            "legal"
+            "safe"
         );
     }
 
@@ -1854,9 +1816,7 @@ mod tests {
                 &[("tool_class", head_output("file", 0.8))],
             ),
         ];
-        let mut l2_outputs = HashMap::new();
-
-        let aggregate = aggregate_unified_outputs(outputs, &mut l2_outputs, None).unwrap();
+        let aggregate = aggregate_unified_outputs(outputs, None).unwrap();
 
         assert_eq!(
             aggregate.heads.get("tool_class").unwrap().class_name,

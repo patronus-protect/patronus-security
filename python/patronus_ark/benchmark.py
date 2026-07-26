@@ -81,13 +81,14 @@ NEUTRAL_CLASSES = {
     "tool_class": {"safe", "benign", "none", "missing", "unknown"},
     "routing": {"safe", "benign", "none", "missing", "benign_conv"},
     "sensitive_document": {"safe", "benign", "none", "missing", "other"},
+    "threat": {"safe", "benign", "none", "missing"},
 }
 
 # Historical fixture stems are retained where their labels still map exactly.
 CLASSIFIER_PIPELINES = [
     ("injection", "injection", None, "wolf-defender-small"),
     ("sensitive_document", "sensitive_document", None, "orca-sonar-document-classifier"),
-    ("tool_class", "tool_class", None, "unified-v3-tool-class"),
+    ("threat", "threat", None, "unified-v3-threat"),
     ("routing", "routing", None, "unified-v3-routing"),
 ]
 
