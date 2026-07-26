@@ -7,7 +7,7 @@ All notable changes to this project are documented here. The format is based on
 This project is **pre-1.0**: any change to detection thresholds, the asset manifest, or public
 result shapes may be breaking for downstream users, and is called out explicitly below.
 
-## [Unreleased]
+## [0.1.1] - 2026-07-26
 
 ### Added
 
@@ -36,8 +36,6 @@ result shapes may be breaking for downstream users, and is called out explicitly
   to L2, L3, and union arbitration.
 - Benchmark comparisons against previous local runs are not one-to-one for `tool_class`, because
   the packaged benchmark fixture was removed and `threat` was added.
-
-## [0.1.1] - 2026-07-26
 
 ### Added
 

@@ -935,7 +935,7 @@ checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
 
 [[package]]
 name = "patronus-ark"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "aho-corasick",
  "blake3",
@@ -960,7 +960,7 @@ dependencies = [
 
 [[package]]
 name = "patronus-ark-python"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "patronus-ark",
  "pyo3",
