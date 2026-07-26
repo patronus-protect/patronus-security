@@ -375,19 +375,11 @@ impl UnifiedOnnxClassifier {
             .map_err(|error| format!("failed to load unified tokenizer: {error}"))?;
         let (mut builder, _) = configured_session_builder(backend, Some(dir), options)?;
         let session = builder.commit_from_file(dir.join(UNIFIED_ONNX_PATH))?;
-        let inputs = session
-            .inputs()
-            .iter()
-            .map(|input| input.name())
-            .collect::<Vec<_>>();
+        let inputs = session_input_names(&session);
         if inputs != ["input_ids", "attention_mask"] {
             return Err(format!("unexpected unified L3 inputs: {inputs:?}").into());
         }
-        let outputs = session
-            .outputs()
-            .iter()
-            .map(|output| output.name())
-            .collect::<Vec<_>>();
+        let outputs = session_output_names(&session);
         for head in HEADS {
             if !outputs.contains(&head.output) {
                 return Err(format!("unified L3 output '{}' is missing", head.output).into());
@@ -621,6 +613,38 @@ fn softmax(values: &[f32]) -> Vec<f32> {
         scores.iter_mut().for_each(|score| *score /= sum);
     }
     scores
+}
+
+#[cfg(ort_rc_10)]
+fn session_input_names(session: &Session) -> Vec<&str> {
+    session
+        .inputs
+        .iter()
+        .map(|input| input.name.as_str())
+        .collect()
+}
+
+#[cfg(not(ort_rc_10))]
+fn session_input_names(session: &Session) -> Vec<&str> {
+    session.inputs().iter().map(|input| input.name()).collect()
+}
+
+#[cfg(ort_rc_10)]
+fn session_output_names(session: &Session) -> Vec<&str> {
+    session
+        .outputs
+        .iter()
+        .map(|output| output.name.as_str())
+        .collect()
+}
+
+#[cfg(not(ort_rc_10))]
+fn session_output_names(session: &Session) -> Vec<&str> {
+    session
+        .outputs()
+        .iter()
+        .map(|output| output.name())
+        .collect()
 }
 
 fn truncate_and_pad(values: &mut Vec<i64>, max_len: usize, pad: i64) {

@@ -684,11 +684,26 @@ fn validate_session_feature_dim(
 }
 
 fn session_input_feature_dim(session: &Session, input_name: &str) -> Option<usize> {
-    let input = session
-        .inputs()
-        .iter()
-        .find(|input| input.name() == input_name)?;
-    let ValueType::Tensor { shape, .. } = input.dtype() else {
+    #[cfg(ort_rc_10)]
+    let mut inputs = session.inputs.iter();
+    #[cfg(not(ort_rc_10))]
+    let mut inputs = session.inputs().iter();
+
+    let input = inputs.find(|input| {
+        #[cfg(ort_rc_10)]
+        {
+            input.name == input_name
+        }
+        #[cfg(not(ort_rc_10))]
+        {
+            input.name() == input_name
+        }
+    })?;
+    #[cfg(ort_rc_10)]
+    let dtype = &input.input_type;
+    #[cfg(not(ort_rc_10))]
+    let dtype = input.dtype();
+    let ValueType::Tensor { shape, .. } = dtype else {
         return None;
     };
     let last_dim = shape.iter().last().copied()?;
