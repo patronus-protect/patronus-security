@@ -246,6 +246,64 @@ pub struct SecurityScanResult {
     pub evidence_spans: Vec<crate::dynamic_pii::EvidenceSpan>,
     /// Per-label scores for multi-label classifier outputs.
     pub label_scores: Vec<LabelScore>,
+    /// Structured classifier decision contract for policy consumers.
+    pub decision: Option<DecisionEnvelope>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// Stable classifier decision envelope for downstream policy evaluation.
+pub struct DecisionEnvelope {
+    pub schema_version: String,
+    pub final_result: DecisionResult,
+    pub decision_candidate: Option<DecisionCandidate>,
+    pub recommendation: DecisionRecommendation,
+    pub candidates: Vec<DecisionCandidate>,
+    pub terminality: DecisionTerminality,
+    pub provenance: DecisionProvenance,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// Final Ark verdict recorded inside a decision envelope.
+pub struct DecisionResult {
+    pub class_name: String,
+    pub confidence: f64,
+    pub source: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// One typed classifier candidate considered by final-decision arbitration.
+pub struct DecisionCandidate {
+    pub source: String,
+    pub class_name: String,
+    pub confidence: f64,
+    pub acceptance_threshold: f64,
+    pub accepted: bool,
+    pub evidence: Option<HashMap<String, f64>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// Ark's calibrated default recommendation for a classifier result.
+pub struct DecisionRecommendation {
+    pub accepted: bool,
+    pub final_arbitration: String,
+    pub operating_point: String,
+    pub acceptance_threshold: Option<f64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// Terminal request state relevant to decision consumers.
+pub struct DecisionTerminality {
+    pub completion: String,
+    pub degraded: bool,
+    pub degradation_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// Minimal provenance for a classifier decision envelope.
+pub struct DecisionProvenance {
+    pub ark_version: String,
+    pub schema_version: String,
+    pub model: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -1,8 +1,9 @@
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
-from patronus_ark import SecurityGateway, normalize_text
+from patronus_ark import SecurityGateway, _event_to_dict, _to_dict, normalize_text
 
 
 def assert_result_schema(test_case, result):
@@ -236,6 +237,116 @@ class PublicApiTests(unittest.TestCase):
             with self.subTest(kwargs=kwargs):
                 with self.assertRaises(ValueError):
                     SecurityGateway(download_files=False, **kwargs)
+
+    def test_result_to_dict_decodes_decision_json(self):
+        result = SimpleNamespace(
+            request_id=None,
+            category="threat",
+            class_name="benign",
+            confidence=0.0,
+            level="L2",
+            model="unified-v3-threat",
+            duration_ms=1.0,
+            layers=[
+                SimpleNamespace(
+                    level="L2",
+                    layer_type="ntdb_l2",
+                    class_name="benign",
+                    confidence=0.0,
+                    matched=True,
+                    duration_ms=1.0,
+                    thresholds_json="{}",
+                    details_json="{}",
+                )
+            ],
+            evidence_spans=[],
+            label_scores=[],
+            decision_json='{"schema_version":"ark.decision.v1","decision_candidate":{"source":"l2"}}',
+        )
+
+        output = _to_dict(result)
+
+        self.assertEqual(output["decision"]["schema_version"], "ark.decision.v1")
+        self.assertEqual(output["decision"]["decision_candidate"]["source"], "l2")
+
+    def test_result_to_dict_omits_decision_for_l2_pending(self):
+        result = SimpleNamespace(
+            request_id=None,
+            category="threat",
+            class_name="benign",
+            confidence=0.0,
+            level="L2",
+            model="unified-v3-threat",
+            duration_ms=1.0,
+            layers=[
+                SimpleNamespace(
+                    level="L2",
+                    layer_type="ntdb_l2",
+                    class_name="benign",
+                    confidence=0.0,
+                    matched=True,
+                    duration_ms=1.0,
+                    thresholds_json="{}",
+                    details_json="{}",
+                ),
+                SimpleNamespace(
+                    level="L3",
+                    layer_type="l3_pending",
+                    class_name="benign",
+                    confidence=0.0,
+                    matched=False,
+                    duration_ms=0.0,
+                    thresholds_json="{}",
+                    details_json='{"queued":true}',
+                ),
+            ],
+            evidence_spans=[],
+            label_scores=[],
+            decision_json=None,
+        )
+
+        self.assertNotIn("decision", _to_dict(result))
+
+    def test_event_to_dict_omits_decision_for_provisional_and_result_preview(self):
+        result = SimpleNamespace(
+            request_id="rq",
+            category="injection",
+            class_name="attack",
+            confidence=0.91,
+            level="L3",
+            model="test-l3",
+            duration_ms=1.0,
+            layers=[
+                SimpleNamespace(
+                    level="L3",
+                    layer_type="onnx",
+                    class_name="attack",
+                    confidence=0.91,
+                    matched=True,
+                    duration_ms=1.0,
+                    thresholds_json="{}",
+                    details_json='{"provisional":true}',
+                )
+            ],
+            evidence_spans=[],
+            label_scores=[],
+            decision_json=None,
+        )
+
+        for event_type in ("provisional", "result"):
+            with self.subTest(event_type=event_type):
+                event = SimpleNamespace(
+                    event_type=event_type,
+                    request_id="rq",
+                    result=result,
+                    completion=None,
+                    failures=[],
+                    progress_json=None,
+                )
+
+                output = _event_to_dict(event)
+
+                self.assertNotIn("decision", output["result"])
 
     def test_dlp_scan_returns_dict_results(self):
         scanner = SecurityGateway(categories=["dlp"], max_level="l2", download_files=False)

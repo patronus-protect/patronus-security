@@ -1618,6 +1618,7 @@ mod tests {
                 layers: Vec::new(),
                 evidence_spans: Vec::new(),
                 label_scores: Vec::new(),
+                decision: None,
             },
             priority: 0,
             ttl_ms: 10_000,

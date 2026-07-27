@@ -710,6 +710,8 @@ struct PyEvaluationResult {
     evidence_spans: Vec<PyEvidenceSpan>,
     #[pyo3(get)]
     label_scores: Vec<PyLabelScore>,
+    #[pyo3(get)]
+    decision_json: Option<String>,
 }
 
 #[pyclass]
@@ -932,6 +934,10 @@ impl From<SecurityRuntimeReadiness> for PyRuntimeReadiness {
 
 impl From<patronus_ark::SecurityScanResult> for PyEvaluationResult {
     fn from(result: patronus_ark::SecurityScanResult) -> Self {
+        let decision_json = result
+            .decision
+            .as_ref()
+            .and_then(|decision| serde_json::to_string(decision).ok());
         PyEvaluationResult {
             request_id: None,
             category: result.category,
@@ -951,6 +957,7 @@ impl From<patronus_ark::SecurityScanResult> for PyEvaluationResult {
                 .into_iter()
                 .map(PyLabelScore::from)
                 .collect(),
+            decision_json,
         }
     }
 }

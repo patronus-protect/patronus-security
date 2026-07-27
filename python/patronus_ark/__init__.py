@@ -58,6 +58,9 @@ def _to_dict(result):
     request_id = getattr(result, "request_id", None)
     if request_id is not None:
         output["request_id"] = request_id
+    decision = _decode_json_object(getattr(result, "decision_json", None))
+    if decision:
+        output["decision"] = decision
     return output
 
 

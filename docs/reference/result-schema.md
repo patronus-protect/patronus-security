@@ -19,6 +19,7 @@ blocking `scan_*` helpers return — is a **dictionary describing one category's
         "level": "L1",
         "model": "native:dlp",
         "duration_ms": 0.4,
+        "decision": None,
         "evidence_spans": [],
         "label_scores": [],
         "layers": [
@@ -45,6 +46,7 @@ blocking `scan_*` helpers return — is a **dictionary describing one category's
 | `level` | str | The level that produced the winning verdict: `L1`, `L2`, or `L3`. |
 | `model` | str | The producing scanner, e.g. `native:dlp`, `external:<id>`, or a model id. |
 | `duration_ms` | float | Wall-clock time spent producing this result. |
+| `decision` | dict \| null | Structured classifier decision envelope for model-backed classifier pipelines. `None` for native-only/non-classifier results without a policy candidate. |
 | `evidence_spans` | list | Exact matched spans (PII/DLP/dynamic-pii); empty for safe/model-only results. |
 | `label_scores` | list | Per-label scores for multi-label heads (e.g. `tool_tags`); each entry is `{label, confidence, matched}`. Empty for single-label results. |
 | `layers` | list | Per-layer breakdown of everything that ran for this category. |
@@ -62,7 +64,92 @@ Each element of `layers` records one layer's output:
 | `matched` | bool | Whether this layer produced a positive match. |
 | `duration_ms` | float | Wall-clock time spent in this layer. |
 | `thresholds` | dict | Thresholds applied at this layer (operating point, etc.). |
-| `details` | dict | Layer-specific extra detail. L2 layers add `l3_candidates` / `l2_chunk_outputs`; L3 layers add `inferred_chunks`, `propagated_chunks`, `resolved_chunks`, `planned_l3_chunks`, `total_effective_chunks`, `cache_hits`, `early_exit`, `coverage`, `l3_clustering_strategy`, `l3_worker_wall_ms` (unified adds `physical_job_id`). |
+| `details` | dict | Layer-specific extra detail. NTDB L2 layers add L3 promotion context; L3 layers add chunk execution metadata. The stable policy contract is `decision`, not free-form `details`. |
+
+### Decision envelope
+
+Model-backed classifier pipelines (`injection`, `threat`, `routing`, `sensitive_document`,
+`tool_class`, `tool_action`, and `tool_tags`) apply the configured final-decision threshold profile
+after raw L2/L3 scoring. The top-level `class_name` / `confidence` is the accepted final verdict.
+When no candidate passes its threshold, the result falls back to the pipeline default class
+(`benign`, `unknown`, `other`, etc.) with `confidence: 0.0`.
+
+Terminal classifier results expose that policy input and Ark's calibrated recommendation under
+`decision`. `decision.is_some()` is the lifecycle marker for an authoritative classifier policy
+input. Early L2 results that still contain an `l3_pending` layer, provisional events, progress
+events, and result-preview events have `decision: None` even when they carry classifier-looking
+scores.
+
+```python
+{
+    "schema_version": "ark.decision.v1",
+    "final_result": {"class_name": "benign", "confidence": 0.0, "source": "default"},
+    "decision_candidate": {
+        "source": "l2",
+        "class_name": "instruction_override",
+        "confidence": 0.5640919208526611,
+        "acceptance_threshold": 0.86471,
+        "accepted": False,
+        "evidence": None,
+    },
+    "recommendation": {
+        "accepted": False,
+        "final_arbitration": "default",
+        "operating_point": "best_f1",
+        "acceptance_threshold": 0.86471,
+    },
+    "candidates": [
+        {
+            "source": "l2",
+            "class_name": "instruction_override",
+            "confidence": 0.5640919208526611,
+            "acceptance_threshold": 0.86471,
+            "accepted": False,
+            "evidence": None,
+        }
+    ],
+    "terminality": {"completion": "complete", "degraded": False, "degradation_reason": None},
+    "provenance": {
+        "ark_version": "0.1.2",
+        "schema_version": "ark.decision.v1",
+        "model": "unified-v3-threat",
+    },
+}
+```
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `schema_version` | str | Decision-envelope schema version. Currently `ark.decision.v1`. |
+| `final_result` | dict | The final Ark verdict after threshold arbitration: `{class_name, confidence, source}`. |
+| `decision_candidate` | dict \| null | Canonical policy input. It is the winning accepted candidate when `final_arbitration` is `l2`, `l3`, or `union`; for `default`, it is the highest-priority rejected candidate in `l3`, `union`, `l2` order. `None` when no valid classifier candidate exists. |
+| `recommendation` | dict | Ark's calibrated default recommendation. `accepted` is false only for `final_arbitration: "default"`. |
+| `candidates` | list | All typed L2, L3, and Union candidates available to arbitration. |
+| `terminality` | dict | Completion state for the result: `completion`, `degraded`, and optional `degradation_reason`. |
+| `provenance` | dict | Minimal source provenance: `ark_version`, `schema_version`, and `model`. |
+
+Candidate entries have this shape:
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `source` | str | `l2`, `l3`, or `union`. `final_result.source` may also be `default`. |
+| `class_name` | str | Candidate class before downstream Patronus policy. |
+| `confidence` | float | Candidate confidence from that source. |
+| `acceptance_threshold` | float | Ark's calibrated acceptance threshold for this candidate's source/class/operating point. |
+| `accepted` | bool | Whether this candidate passed Ark's calibrated acceptance threshold. |
+| `evidence` | dict \| null | Extra candidate evidence. Union candidates include `l2_weight`, `l3_weight`, `l2_confidence`, and `l3_confidence`. |
+
+Example: if Threat L2 predicts `instruction_override` at `0.5640919`, but the selected threshold
+profile requires a higher L2 confidence, the top-level result is the default `benign` class while
+`decision.decision_candidate` retains the rejected `l2` candidate with
+`acceptance_threshold: 0.86471` and `decision.recommendation.accepted: False`.
+
+`label_scores[].matched` is layer-local model output metadata. It is not threshold acceptance and
+must not be treated as equivalent to `decision.recommendation.accepted` or
+`decision.candidates[].accepted`.
+
+Candidate confidences are calibrated for Ark's bundled threshold profiles. Treat them in the
+context of their `category`, `source`, `model`, and `operating_point`; do not compare scores across
+unrelated sources or model versions without their matching thresholds.
 
 ### Evidence spans
 

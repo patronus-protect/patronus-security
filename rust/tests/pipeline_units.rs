@@ -68,6 +68,7 @@ mod l3_results {
             ],
             evidence_spans: Vec::new(),
             label_scores: Vec::new(),
+            decision: None,
         }
     }
 
@@ -722,7 +723,7 @@ mod ntdb_l2_results {
     }
 
     #[test]
-    fn ntdb_l2_tool_class_result_uses_pipeline_model_and_queues_l3() {
+    fn ntdb_l2_tool_class_result_thresholds_fallback_and_queues_l3() {
         let mut execution = ScanExecution::new(SecurityLevel::L3);
         execution.set_defer_l3(true);
         let decision = NtdbDecision {
@@ -753,7 +754,12 @@ mod ntdb_l2_results {
 
         assert_eq!(result.category, "tool_class");
         assert_eq!(result.model, "unified-v3-tool-class");
-        assert_eq!(result.class_name, "tool_class.web.search");
+        assert_eq!(result.class_name, "unknown");
+        assert_eq!(result.confidence, 0.0);
+        assert!(
+            result.decision.is_none(),
+            "queued L2 results with l3_pending are not authoritative policy inputs"
+        );
         assert_eq!(result.layers.len(), 2);
         assert_eq!(result.layers[0].layer_type, "ntdb_l2");
         assert!(result

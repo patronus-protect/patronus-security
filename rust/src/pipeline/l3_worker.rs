@@ -745,6 +745,7 @@ fn request_wide_degraded_result(job: L3WorkerJob, reason: &str) -> SecurityScanR
             );
         }
     }
+    super::mark_decision_degraded(&mut result, "request_wide_early_exit");
     result.duration_ms = result.layers.iter().map(|layer| layer.duration_ms).sum();
     result
 }
@@ -767,7 +768,12 @@ fn publish_progress(worker: &L3WorkerState, progress: QueuedSecurityProgress) {
     }
 }
 
-fn publish_provisional(worker: &L3WorkerState, request_id: RequestId, result: SecurityScanResult) {
+fn publish_provisional(
+    worker: &L3WorkerState,
+    request_id: RequestId,
+    mut result: SecurityScanResult,
+) {
+    result.decision = None;
     let mut registry = worker
         .requests
         .state
@@ -793,8 +799,9 @@ fn publish_provisional(worker: &L3WorkerState, request_id: RequestId, result: Se
 fn publish_result_preview(
     worker: &L3WorkerState,
     request_id: RequestId,
-    result: SecurityScanResult,
+    mut result: SecurityScanResult,
 ) {
+    result.decision = None;
     let mut registry = worker
         .requests
         .state
@@ -1035,6 +1042,113 @@ mod tests {
         assert!(state.requests["rq-pii"].completion.is_none());
     }
 
+    #[test]
+    fn result_preview_event_strips_authoritative_decision() {
+        let requests = Arc::new(RequestRegistry::default());
+        requests
+            .state
+            .lock()
+            .unwrap()
+            .requests
+            .insert("rq-preview".to_string(), RequestState::running());
+        let mut result = test_result("dynamic-pii", "entities", 0.91, "L3");
+        result.decision = Some(test_decision("dynamic-pii"));
+
+        publish_result_preview(
+            &test_worker_state(Arc::clone(&requests)),
+            "rq-preview".to_string(),
+            result,
+        );
+
+        let state = requests.state.lock().unwrap();
+        let Some(QueuedSecurityEvent::Result(queued)) = state.ready.front() else {
+            panic!("expected result preview event");
+        };
+        assert!(queued.result.decision.is_none());
+    }
+
+    #[test]
+    fn provisional_event_strips_authoritative_decision() {
+        let requests = Arc::new(RequestRegistry::default());
+        requests
+            .state
+            .lock()
+            .unwrap()
+            .requests
+            .insert("rq-provisional".to_string(), RequestState::running());
+        let mut result = test_result("injection", "attack", 0.91, "L3");
+        result.decision = Some(test_decision("injection"));
+
+        publish_provisional(
+            &test_worker_state(Arc::clone(&requests)),
+            "rq-provisional".to_string(),
+            result,
+        );
+
+        let state = requests.state.lock().unwrap();
+        let Some(QueuedSecurityEvent::Provisional(queued)) = state.ready.front() else {
+            panic!("expected provisional event");
+        };
+        assert!(queued.result.decision.is_none());
+    }
+
+    fn test_worker_state(requests: Arc<RequestRegistry>) -> L3WorkerState {
+        L3WorkerState {
+            jobs: Mutex::new(Vec::new()),
+            scheduler: Mutex::new(FairSchedulerState::default()),
+            available: Condvar::new(),
+            models: Mutex::new(HashMap::new()),
+            dynamic_pii_models: Mutex::new(HashMap::new()),
+            unified_model: Mutex::new(None),
+            unified_runs: Mutex::new(HashMap::new()),
+            unified_cache: Mutex::new(HashMap::new()),
+            chunk_cache: Arc::new(DecisionCache::default()),
+            exact_cache: Arc::new(
+                CacheCoordinator::from_config(ExactCacheConfig::default()).unwrap(),
+            ),
+            pii_entity_cache: Arc::new(PiiEntityCache::new(Arc::new(
+                CacheCoordinator::from_config(ExactCacheConfig::default()).unwrap(),
+            ))),
+            pii_chunk_cache: Arc::new(PiiChunkCache::new(Arc::new(
+                CacheCoordinator::from_config(ExactCacheConfig::default()).unwrap(),
+            ))),
+            similarity_cache: Arc::new(HistoricalSimilarityCache::new(Arc::new(
+                CacheCoordinator::from_config(ExactCacheConfig::default()).unwrap(),
+            ))),
+            requests,
+            next_sequence: Mutex::new(0),
+        }
+    }
+
+    fn test_decision(model: &str) -> crate::DecisionEnvelope {
+        crate::DecisionEnvelope {
+            schema_version: "ark.decision.v1".to_string(),
+            final_result: crate::DecisionResult {
+                class_name: "attack".to_string(),
+                confidence: 0.91,
+                source: "l3".to_string(),
+            },
+            decision_candidate: None,
+            recommendation: crate::DecisionRecommendation {
+                accepted: true,
+                final_arbitration: "l3".to_string(),
+                operating_point: "best_f1".to_string(),
+                acceptance_threshold: None,
+            },
+            candidates: Vec::new(),
+            terminality: crate::DecisionTerminality {
+                completion: "complete".to_string(),
+                degraded: false,
+                degradation_reason: None,
+            },
+            provenance: crate::DecisionProvenance {
+                ark_version: "test".to_string(),
+                schema_version: "ark.decision.v1".to_string(),
+                model: model.to_string(),
+            },
+        }
+    }
+
     fn test_job(request_id: &str, category: &str, priority: usize, sequence: u64) -> L3WorkerJob {
         L3WorkerJob {
             job_id: sequence,
@@ -1061,6 +1175,7 @@ mod tests {
                 }],
                 evidence_spans: Vec::new(),
                 label_scores: Vec::new(),
+                decision: None,
             },
             priority,
             ttl_ms: 10_000,
@@ -1097,6 +1212,7 @@ mod tests {
             layers: Vec::new(),
             evidence_spans: Vec::new(),
             label_scores: Vec::new(),
+            decision: None,
         }
     }
 }

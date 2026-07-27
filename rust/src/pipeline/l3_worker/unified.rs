@@ -1001,6 +1001,7 @@ pub fn unified_metadata_details_for_test(
             )],
             evidence_spans: Vec::new(),
             label_scores: Vec::new(),
+            decision: None,
         },
         priority: 0,
         ttl_ms: 10_000,
@@ -1137,6 +1138,7 @@ pub fn unified_coalescing_snapshot(categories: &[&str]) -> UnifiedCoalescingSnap
                     layers: Vec::new(),
                     evidence_spans: Vec::new(),
                     label_scores: Vec::new(),
+                    decision: None,
                 },
                 priority: 0,
                 ttl_ms: 10_000,
@@ -1316,6 +1318,7 @@ fn materialize_unified_request_wide_skip(
             );
         }
     }
+    super::super::mark_decision_degraded(&mut result, "request_wide_early_exit");
     result.duration_ms = result.layers.iter().map(|layer| layer.duration_ms).sum();
     result
 }
@@ -1766,6 +1769,7 @@ mod tests {
                 ],
                 evidence_spans: Vec::new(),
                 label_scores: Vec::new(),
+                decision: None,
             },
             priority,
             ttl_ms: 10_000,

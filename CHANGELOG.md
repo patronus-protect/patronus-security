@@ -7,6 +7,29 @@ All notable changes to this project are documented here. The format is based on
 This project is **pre-1.0**: any change to detection thresholds, the asset manifest, or public
 result shapes may be breaking for downstream users, and is called out explicitly below.
 
+## [0.1.2] - 2026-07-26
+
+### Changed
+
+- Added the structured `decision` envelope to model-backed classifier results. The envelope exposes
+  the final Ark verdict, the canonical policy candidate, all typed L2/L3/Union candidates, Ark's
+  calibrated recommendation, terminality, and minimal provenance.
+- Restricted `decision` to terminal authoritative classifier results. Early L2 results with
+  `l3_pending`, provisional events, and result-preview events now leave `decision` unset so
+  downstream policy consumers can key on `result.decision.is_some()`.
+
+### Fixed
+
+- Fixed promoted NTDB L2 fallback results so the final-decision threshold profile is still applied
+  before publishing the fallback class.
+
+### Breaking
+
+- Removed the redundant NTDB L2 `details.raw_class_name` and `details.raw_confidence` fields.
+  Consumers should read `decision.decision_candidate` and `decision.candidates[]` instead.
+- Candidate arbitration data is no longer exposed as public `layers[].details.arbitration_*` fields.
+  The public contract is the top-level `decision` envelope.
+
 ## [0.1.1] - 2026-07-26
 
 ### Added

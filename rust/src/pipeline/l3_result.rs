@@ -7,6 +7,16 @@ pub fn degraded_fallback_confidence(confidence: f64) -> f64 {
     (confidence * 0.5).min(0.5)
 }
 
+pub(crate) fn mark_decision_degraded(result: &mut SecurityScanResult, reason: &str) {
+    if let Some(decision) = &mut result.decision {
+        decision.final_result.class_name = result.class_name.clone();
+        decision.final_result.confidence = result.confidence;
+        decision.terminality.completion = "degraded".to_string();
+        decision.terminality.degraded = true;
+        decision.terminality.degradation_reason = Some(reason.to_string());
+    }
+}
+
 pub fn l3_pending_layer(result: &EvaluationResult, execution: &ScanExecution) -> LayerResult {
     LayerResult {
         level: "L3".to_string(),
@@ -69,6 +79,7 @@ pub fn degraded_timeout_result(
             );
         }
     }
+    mark_decision_degraded(&mut result, "l3_timeout");
     result.layers.push(LayerResult {
         level: "L3".to_string(),
         layer_type: "degraded_timeout".to_string(),
@@ -115,6 +126,7 @@ pub fn degraded_error_result(
                 .insert("degraded_reason".to_string(), serde_json::json!("l3_error"));
         }
     }
+    mark_decision_degraded(&mut result, "l3_error");
     result.layers.push(LayerResult {
         level: "L3".to_string(),
         layer_type: "degraded_error".to_string(),
@@ -154,5 +166,81 @@ pub fn l3_metadata_layer(
         duration_ms,
         thresholds: HashMap::new(),
         details: HashMap::from([("model".to_string(), serde_json::json!(model))]),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        DecisionCandidate, DecisionEnvelope, DecisionProvenance, DecisionRecommendation,
+        DecisionResult, DecisionTerminality,
+    };
+
+    #[test]
+    fn degraded_timeout_marks_decision_terminality_degraded() {
+        let result = SecurityScanResult {
+            category: "threat".to_string(),
+            class_name: "benign".to_string(),
+            confidence: 0.8,
+            level: "L2".to_string(),
+            model: "unified-v3-threat".to_string(),
+            duration_ms: 1.0,
+            layers: vec![LayerResult {
+                level: "L2".to_string(),
+                layer_type: "ntdb_l2".to_string(),
+                class_name: "benign".to_string(),
+                confidence: 0.8,
+                matched: true,
+                duration_ms: 1.0,
+                thresholds: HashMap::new(),
+                details: HashMap::new(),
+            }],
+            evidence_spans: Vec::new(),
+            label_scores: Vec::new(),
+            decision: Some(DecisionEnvelope {
+                schema_version: "ark.decision.v1".to_string(),
+                final_result: DecisionResult {
+                    class_name: "benign".to_string(),
+                    confidence: 0.8,
+                    source: "l2".to_string(),
+                },
+                decision_candidate: Some(DecisionCandidate {
+                    source: "l2".to_string(),
+                    class_name: "instruction_override".to_string(),
+                    confidence: 0.9,
+                    acceptance_threshold: 0.86471,
+                    accepted: true,
+                    evidence: None,
+                }),
+                recommendation: DecisionRecommendation {
+                    accepted: true,
+                    final_arbitration: "l2".to_string(),
+                    operating_point: "best_f1".to_string(),
+                    acceptance_threshold: Some(0.86471),
+                },
+                candidates: Vec::new(),
+                terminality: DecisionTerminality {
+                    completion: "complete".to_string(),
+                    degraded: false,
+                    degradation_reason: None,
+                },
+                provenance: DecisionProvenance {
+                    ark_version: "test".to_string(),
+                    schema_version: "ark.decision.v1".to_string(),
+                    model: "unified-v3-threat".to_string(),
+                },
+            }),
+        };
+
+        let degraded = degraded_timeout_result(result, 100.0, 50, 0.75);
+        let terminality = &degraded.decision.unwrap().terminality;
+
+        assert_eq!(terminality.completion, "degraded");
+        assert!(terminality.degraded);
+        assert_eq!(
+            terminality.degradation_reason.as_deref(),
+            Some("l3_timeout")
+        );
     }
 }

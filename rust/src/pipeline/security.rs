@@ -138,6 +138,7 @@ fn scan_result(
         layers,
         evidence_spans: Vec::new(),
         label_scores: Vec::new(),
+        decision: None,
     }
 }
 

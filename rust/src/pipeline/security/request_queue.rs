@@ -1005,6 +1005,7 @@ impl SecurityGateway {
             ],
             evidence_spans: Vec::new(),
             label_scores: Vec::new(),
+            decision: None,
         }
     }
 }
@@ -1159,6 +1160,7 @@ mod tests {
             }],
             evidence_spans: Vec::new(),
             label_scores: Vec::new(),
+            decision: None,
         };
 
         let candidates = l3_candidates(&result);
@@ -1316,6 +1318,7 @@ mod tests {
             ],
             evidence_spans: Vec::new(),
             label_scores: Vec::new(),
+            decision: None,
         }
     }
 
