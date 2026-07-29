@@ -97,7 +97,7 @@ The specialized `.mmbpe` format therefore stores:
 - added tokens, including `lstrip`;
 - no generic JSON structure.
 
-The Wolf runtime looks for `tokenizer.mmbpe` next to `tokenizer.json` and prefers the compact file when it is part of the installed assets. Without `.mmbpe`, it loads the Hugging Face tokenizer. This keeps the regular asset contract backward compatible and does not change the model format or classification output.
+The asset path generates `tokenizer.mmbpe` locally next to compatible mmBERT `tokenizer.json` files during verified downloads and cached warmup. The runtime prefers the compact file when present. Without `.mmbpe`, it loads the Hugging Face tokenizer. This keeps the regular asset contract backward compatible and does not change the model format or classification output.
 
 Across 5,439 repository texts and 61 adversarial cases, 11,000 encodings with and without special tokens produced no ID differences. Wolf does not require evidence offsets in this classification path; padding and truncation occur after the parity-safe ID sequence in the shared ONNX input path.
 

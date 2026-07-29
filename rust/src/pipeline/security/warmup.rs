@@ -206,6 +206,10 @@ impl SecurityGateway {
                     .into());
                 }
             }
+            assets::prepare_cached_pipeline_model_compact_tokenizer(
+                assets::UNIFIED_L3_ASSET,
+                &base_dir,
+            );
         }
 
         for category in &self.categories {
@@ -309,7 +313,7 @@ impl SecurityGateway {
                         &mut prepared_compact_tokenizers,
                     ) {
                         log::warn!(
-                            "failed to prepare compact Granite tokenizer for cached {}/{} package: {error}; tokenizer.json remains available",
+                            "failed to prepare compact tokenizer for cached {}/{} package: {error}; tokenizer.json remains available",
                             category.as_str(),
                             config.public_model
                         );
@@ -342,6 +346,13 @@ impl SecurityGateway {
                         base_dir.display()
                     )
                     .into());
+                }
+            }
+            if execution.l3_strategy() == L3Strategy::Dedicated
+                && execution.allows_level(SecurityLevel::L3)
+            {
+                if let Some(asset) = assets::dedicated_l3_asset(*category) {
+                    assets::prepare_cached_pipeline_model_compact_tokenizer(asset, &base_dir);
                 }
             }
             if !assets::required_assets_present(*category, asset_level, &category_dir) {
