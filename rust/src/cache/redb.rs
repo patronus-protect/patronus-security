@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use std::collections::HashSet;
+use std::sync::{RwLock, RwLockReadGuard};
 
 use redb::{
-    Database, MultimapTableDefinition, ReadableDatabase, ReadableMultimapTable, ReadableTable,
-    TableDefinition,
+    Database, DatabaseError, MultimapTableDefinition, ReadableDatabase, ReadableMultimapTable,
+    ReadableTable, StorageError, TableDefinition,
 };
 
 use super::{
@@ -27,30 +28,33 @@ const MAX_HEAD_NAME_BYTES: usize = 16 * 1024;
 const MAX_LOGITS_PER_HEAD: usize = 1_000_000;
 
 pub(crate) struct RedbCacheStore {
-    database: Database,
+    path: PathBuf,
+    database: RwLock<Database>,
 }
 
 impl RedbCacheStore {
     pub(crate) fn open(path: impl AsRef<Path>) -> Result<Self, CacheError> {
-        let path = path.as_ref();
-        if let Some(parent) = path
-            .parent()
-            .filter(|parent| !parent.as_os_str().is_empty())
-        {
-            fs::create_dir_all(parent).map_err(storage_error)?;
+        let path = path.as_ref().to_path_buf();
+        let database = open_database(&path)?;
+        Ok(Self {
+            path,
+            database: RwLock::new(database),
+        })
+    }
+
+    fn database(&self) -> Result<RwLockReadGuard<'_, Database>, CacheError> {
+        if !self.path.exists() {
+            let mut database = self
+                .database
+                .write()
+                .map_err(|_| CacheError::Storage("cache database lock poisoned".to_string()))?;
+            if !self.path.exists() {
+                *database = open_database(&self.path)?;
+            }
         }
-        prepare_database_file(path)?;
-        let database = Database::create(path).map_err(storage_error)?;
-        let write = database.begin_write().map_err(storage_error)?;
-        write.open_table(RECORDS).map_err(storage_error)?;
-        write
-            .open_table(SIMILARITY_RECORDS)
-            .map_err(storage_error)?;
-        write
-            .open_multimap_table(SIMILARITY_BUCKETS)
-            .map_err(storage_error)?;
-        write.commit().map_err(storage_error)?;
-        Ok(Self { database })
+        self.database
+            .read()
+            .map_err(|_| CacheError::Storage("cache database lock poisoned".to_string()))
     }
 }
 
@@ -60,8 +64,9 @@ impl ExactCacheStore for RedbCacheStore {
         key: &CacheKey,
         now_unix_ms: u64,
     ) -> Result<Option<CachedModelOutput>, CacheError> {
+        let database = self.database()?;
         let key = key.to_bytes();
-        let read = self.database.begin_read().map_err(storage_error)?;
+        let read = database.begin_read().map_err(storage_error)?;
         let table = read.open_table(RECORDS).map_err(storage_error)?;
         let Some(value) = table.get(key.as_slice()).map_err(storage_error)? else {
             return Ok(None);
@@ -71,7 +76,7 @@ impl ExactCacheStore for RedbCacheStore {
             drop(value);
             drop(table);
             drop(read);
-            self.remove_key(&key)?;
+            remove_key(&database, &key)?;
             return Ok(None);
         }
         Ok(Some(output))
@@ -86,7 +91,8 @@ impl ExactCacheStore for RedbCacheStore {
             .into_iter()
             .map(|(key, value)| Ok((key.to_bytes(), encode_record(&value)?)))
             .collect::<Result<Vec<_>, CacheError>>()?;
-        let write = self.database.begin_write().map_err(storage_error)?;
+        let database = self.database()?;
+        let write = database.begin_write().map_err(storage_error)?;
         {
             let mut table = write.open_table(RECORDS).map_err(storage_error)?;
             for (key, value) in &entries {
@@ -99,7 +105,8 @@ impl ExactCacheStore for RedbCacheStore {
     }
 
     fn remove_expired(&self, now_unix_ms: u64) -> Result<usize, CacheError> {
-        let read = self.database.begin_read().map_err(storage_error)?;
+        let database = self.database()?;
+        let read = database.begin_read().map_err(storage_error)?;
         let table = read.open_table(RECORDS).map_err(storage_error)?;
         let mut expired = Vec::new();
         for entry in table.iter().map_err(storage_error)? {
@@ -111,7 +118,7 @@ impl ExactCacheStore for RedbCacheStore {
         drop(table);
         drop(read);
 
-        let similarity_read = self.database.begin_read().map_err(storage_error)?;
+        let similarity_read = database.begin_read().map_err(storage_error)?;
         let similarity_table = similarity_read
             .open_table(SIMILARITY_RECORDS)
             .map_err(storage_error)?;
@@ -129,7 +136,7 @@ impl ExactCacheStore for RedbCacheStore {
         if expired.is_empty() && expired_similarity.is_empty() {
             return Ok(0);
         }
-        let write = self.database.begin_write().map_err(storage_error)?;
+        let write = database.begin_write().map_err(storage_error)?;
         {
             let mut table = write.open_table(RECORDS).map_err(storage_error)?;
             for key in &expired {
@@ -167,7 +174,8 @@ impl ExactCacheStore for RedbCacheStore {
         if limit == 0 {
             return Ok(Vec::new());
         }
-        let read = self.database.begin_read().map_err(storage_error)?;
+        let database = self.database()?;
+        let read = database.begin_read().map_err(storage_error)?;
         let buckets = read
             .open_multimap_table(SIMILARITY_BUCKETS)
             .map_err(storage_error)?;
@@ -211,7 +219,8 @@ impl ExactCacheStore for RedbCacheStore {
             .into_iter()
             .map(|record| Ok((encode_similarity_record(&record)?, record)))
             .collect::<Result<Vec<_>, CacheError>>()?;
-        let write = self.database.begin_write().map_err(storage_error)?;
+        let database = self.database()?;
+        let write = database.begin_write().map_err(storage_error)?;
         {
             let mut records = write
                 .open_table(SIMILARITY_RECORDS)
@@ -238,15 +247,38 @@ impl ExactCacheStore for RedbCacheStore {
     }
 }
 
-impl RedbCacheStore {
-    fn remove_key(&self, key: &[u8]) -> Result<(), CacheError> {
-        let write = self.database.begin_write().map_err(storage_error)?;
-        {
-            let mut table = write.open_table(RECORDS).map_err(storage_error)?;
-            table.remove(key).map_err(storage_error)?;
-        }
-        write.commit().map_err(storage_error)
+fn open_database(path: &Path) -> Result<Database, CacheError> {
+    if let Some(parent) = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        fs::create_dir_all(parent).map_err(storage_error)?;
     }
+    prepare_database_file(path)?;
+    let database = Database::create(path).map_err(database_error)?;
+    initialize_tables(&database)?;
+    Ok(database)
+}
+
+fn initialize_tables(database: &Database) -> Result<(), CacheError> {
+    let write = database.begin_write().map_err(storage_error)?;
+    write.open_table(RECORDS).map_err(storage_error)?;
+    write
+        .open_table(SIMILARITY_RECORDS)
+        .map_err(storage_error)?;
+    write
+        .open_multimap_table(SIMILARITY_BUCKETS)
+        .map_err(storage_error)?;
+    write.commit().map_err(storage_error)
+}
+
+fn remove_key(database: &Database, key: &[u8]) -> Result<(), CacheError> {
+    let write = database.begin_write().map_err(storage_error)?;
+    {
+        let mut table = write.open_table(RECORDS).map_err(storage_error)?;
+        table.remove(key).map_err(storage_error)?;
+    }
+    write.commit().map_err(storage_error)
 }
 
 fn encode_record(output: &CachedModelOutput) -> Result<Vec<u8>, CacheError> {
@@ -547,6 +579,18 @@ fn storage_error(error: impl std::fmt::Display) -> CacheError {
     CacheError::Storage(error.to_string())
 }
 
+fn database_error(error: DatabaseError) -> CacheError {
+    match error {
+        DatabaseError::DatabaseAlreadyOpen => {
+            CacheError::Storage("cache database is already open by another writer".to_string())
+        }
+        DatabaseError::Storage(StorageError::Corrupted(message)) => {
+            CacheError::Storage(format!("cache database is corrupted: {message}"))
+        }
+        other => storage_error(other),
+    }
+}
+
 #[cfg(unix)]
 fn prepare_database_file(path: &Path) -> Result<(), CacheError> {
     use std::fs::OpenOptions;
@@ -612,6 +656,105 @@ mod tests {
             created_at_unix_ms: 10,
             expires_at_unix_ms,
         }
+    }
+
+    #[test]
+    fn open_creates_missing_database_file() {
+        let path = temp_path("missing-db");
+        assert!(!path.exists());
+
+        let store = RedbCacheStore::open(&path).unwrap();
+
+        assert!(path.exists());
+        drop(store);
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn open_creates_missing_parent_directory() {
+        let path = temp_path("missing-parent")
+            .with_extension("")
+            .join("nested")
+            .join("cache.redb");
+        let parent = path.parent().unwrap().to_path_buf();
+        assert!(!parent.exists());
+
+        let store = RedbCacheStore::open(&path).unwrap();
+
+        assert!(parent.exists());
+        assert!(path.exists());
+        drop(store);
+        fs::remove_dir_all(parent.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn deleted_database_file_is_recreated_with_live_handle() {
+        let path = temp_path("deleted-live-handle");
+        let store = RedbCacheStore::open(&path).unwrap();
+        store.put(key("before-delete"), output(100)).unwrap();
+        fs::remove_file(&path).unwrap();
+        assert!(!path.exists());
+
+        store.put(key("after-delete"), output(100)).unwrap();
+
+        assert!(path.exists());
+        assert!(store.get(&key("after-delete"), 10).unwrap().is_some());
+        assert!(store.get(&key("before-delete"), 10).unwrap().is_none());
+        drop(store);
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn deleted_database_file_is_recreated_on_next_open() {
+        let path = temp_path("deleted-next-open");
+        let store = RedbCacheStore::open(&path).unwrap();
+        store.put(key("before-delete"), output(100)).unwrap();
+        fs::remove_file(&path).unwrap();
+        assert!(!path.exists());
+
+        let reopened = RedbCacheStore::open(&path).unwrap();
+
+        assert!(path.exists());
+        assert!(reopened.get(&key("before-delete"), 10).unwrap().is_none());
+        reopened.put(key("after-delete"), output(100)).unwrap();
+        assert!(reopened.get(&key("after-delete"), 10).unwrap().is_some());
+        drop(reopened);
+        drop(store);
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn corrupt_database_file_remains_an_error() {
+        let path = temp_path("corrupt");
+        fs::write(&path, b"not a redb database").unwrap();
+
+        let error = match RedbCacheStore::open(&path) {
+            Ok(_) => panic!("corrupt database must not be recreated silently"),
+            Err(error) => error,
+        };
+
+        assert!(error.to_string().contains("corrupt") || error.to_string().contains("invalid"));
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn active_second_writer_remains_an_error() {
+        let path = temp_path("active-writer");
+        let store = RedbCacheStore::open(&path).unwrap();
+
+        let error = match RedbCacheStore::open(&path) {
+            Ok(second) => {
+                drop(second);
+                drop(store);
+                fs::remove_file(path).unwrap();
+                panic!("active second writer must not be treated as stale cache state");
+            }
+            Err(error) => error,
+        };
+
+        assert!(error.to_string().contains("another writer"));
+        drop(store);
+        fs::remove_file(path).unwrap();
     }
 
     #[test]
