@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use crate::{
     ml::ntdb_executor::{manifest::PackageManifest, NtdbDecision, NtdbPackageSpec},
-    pipeline::decision_thresholds::{arbitration_name, l2_decision_envelope, threshold_l2_result},
+    pipeline::decision_thresholds::{arbitrate_l2, arbitration_name, threshold_l2_result},
     pipeline::l3_pending_layer,
     EvaluationResult, LabelScore, LayerResult, ScanExecution, SecurityCategory, SecurityLevel,
     SecurityScanResult,
@@ -307,16 +307,6 @@ pub fn ntdb_l2_scan_result(
         config.category.as_str(),
     );
     let mut scan = scan_result(config.category, config.public_model, result, layers);
-    let raw_result = EvaluationResult {
-        class_name: decision.fallback_label.clone(),
-        confidence: decision.fallback_confidence,
-        level: "L2".to_string(),
-    };
-    let (final_result, final_arbitration) = threshold_l2_result(
-        config.category.as_str(),
-        raw_result.clone(),
-        execution.ntdb_decision_threshold_point(),
-    );
     scan.label_scores = decision
         .labels
         .iter()
@@ -328,15 +318,14 @@ pub fn ntdb_l2_scan_result(
             matched: label == &decision.fallback_label,
         })
         .collect();
-    if !crate::pipeline::has_l3_pending(&scan) {
-        scan.decision = Some(l2_decision_envelope(
-            config.category.as_str(),
-            config.public_model,
-            &final_result,
-            &raw_result,
-            final_arbitration,
-            execution.ntdb_decision_threshold_point(),
-        ));
+    let has_l3_pending = crate::pipeline::has_l3_pending(&scan);
+    scan = arbitrate_l2(
+        config.category.as_str(),
+        scan,
+        execution.ntdb_decision_threshold_point(),
+    );
+    if has_l3_pending {
+        scan.decision = None;
     }
     scan
 }
