@@ -174,17 +174,33 @@ impl SecurityGateway {
         let mut prepared = PreparedAssets::default();
         let mut prepared_compact_tokenizers = HashSet::new();
 
-        if execution.l3_strategy() == L3Strategy::Multi
-            && execution.allows_level(SecurityLevel::L3)
-            && execution.allows_model(crate::ml::unified_onnx::UNIFIED_MODEL)
-            && self.categories.iter().copied().any(|category| {
-                ntdb_l2_model_configs_for_category(&execution, category)
-                    .iter()
-                    .any(|config| config.has_l3)
-            })
+        let unified_strategy_multi = execution.l3_strategy() == L3Strategy::Multi;
+        let unified_l3_allowed = execution.allows_level(SecurityLevel::L3);
+        let unified_model_allowed = execution.allows_model(crate::ml::unified_onnx::UNIFIED_MODEL);
+        let unified_category_has_l3 = self.categories.iter().copied().any(|category| {
+            ntdb_l2_model_configs_for_category(&execution, category)
+                .iter()
+                .any(|config| config.has_l3)
+        });
+        let unified_assets_present = assets::unified_l3_assets_present(&base_dir);
+        log::debug!(
+            "checked unified L3 asset preparation state; base_dir={}; allow_download={}; strategy_multi={}; l3_allowed={}; unified_model_allowed={}; category_has_l3={}; unified_assets_present={}",
+            base_dir.display(),
+            allow_download,
+            unified_strategy_multi,
+            unified_l3_allowed,
+            unified_model_allowed,
+            unified_category_has_l3,
+            unified_assets_present
+        );
+
+        if unified_strategy_multi
+            && unified_l3_allowed
+            && unified_model_allowed
+            && unified_category_has_l3
         {
             let bundle_dir = base_dir.join(assets::UNIFIED_L3_ASSET.destination_path);
-            if !assets::unified_l3_assets_present(&base_dir) {
+            if !unified_assets_present {
                 let may_download = allow_download
                     && self
                         .categories
@@ -192,6 +208,11 @@ impl SecurityGateway {
                         .copied()
                         .filter(|category| category.is_unified_classifier())
                         .any(|category| self.should_download_assets_for(category));
+                log::debug!(
+                    "unified L3 assets missing during preparation; bundle_dir={}; may_download={}",
+                    bundle_dir.display(),
+                    may_download
+                );
                 if may_download {
                     if let Some(progress) = progress {
                         assets::download_unified_l3_assets_with_progress(&base_dir, progress)?;
@@ -206,6 +227,10 @@ impl SecurityGateway {
                     .into());
                 }
             }
+            log::debug!(
+                "preparing cached unified L3 compact tokenizer; bundle_dir={}",
+                bundle_dir.display()
+            );
             assets::prepare_cached_pipeline_model_compact_tokenizer(
                 assets::UNIFIED_L3_ASSET,
                 &base_dir,

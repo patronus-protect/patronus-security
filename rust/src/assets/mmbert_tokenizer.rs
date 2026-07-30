@@ -63,7 +63,19 @@ pub(super) fn ensure_mmbert_compact_tokenizer_with(
     tokenizer_json: &Path,
     converter: fn(&Path, &Path) -> Result<(), Box<dyn std::error::Error>>,
 ) -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
-    if !supports_mmbert_mmbpe(tokenizer_json)? {
+    log::debug!(
+        "checking compact mmBERT tokenizer support; source_model={}; tokenizer_json={}; tokenizer_json_exists={}",
+        source_model,
+        tokenizer_json.display(),
+        tokenizer_json.is_file()
+    );
+    let supported = supports_mmbert_mmbpe(tokenizer_json)?;
+    log::debug!(
+        "compact mmBERT tokenizer support checked; source_model={}; supported={}",
+        source_model,
+        supported
+    );
+    if !supported {
         return Ok(None);
     }
     let tokenizer_dir = tokenizer_json
@@ -75,13 +87,34 @@ pub(super) fn ensure_mmbert_compact_tokenizer_with(
     let metadata_path = tokenizer_dir.join("tokenizer.mmbpe.meta.json");
     let lock_path = tokenizer_dir.join("tokenizer.mmbpe.lock");
     let source_hash = file_blake3(tokenizer_json)?;
-    if cache_is_current(&compact_path, &metadata_path, source_model, &source_hash)? {
+    let cache_current =
+        cache_is_current(&compact_path, &metadata_path, source_model, &source_hash)?;
+    log::debug!(
+        "checked compact mmBERT tokenizer cache before lock; source_model={}; compact_path={}; metadata_path={}; cache_current={}",
+        source_model,
+        compact_path.display(),
+        metadata_path.display(),
+        cache_current
+    );
+    if cache_current {
         return Ok(Some(compact_path));
     }
 
     let _lock = CacheLock::acquire(&lock_path)?;
+    log::debug!(
+        "acquired compact mmBERT tokenizer cache lock; source_model={}; lock_path={}",
+        source_model,
+        lock_path.display()
+    );
     let source_hash = file_blake3(tokenizer_json)?;
-    if cache_is_current(&compact_path, &metadata_path, source_model, &source_hash)? {
+    let cache_current =
+        cache_is_current(&compact_path, &metadata_path, source_model, &source_hash)?;
+    log::debug!(
+        "checked compact mmBERT tokenizer cache after lock; source_model={}; cache_current={}",
+        source_model,
+        cache_current
+    );
+    if cache_current {
         return Ok(Some(compact_path));
     }
 
@@ -89,8 +122,21 @@ pub(super) fn ensure_mmbert_compact_tokenizer_with(
     remove_file_if_exists(&metadata_path)?;
 
     let mut compact_temp = TemporaryPath::new(tokenizer_dir, "tokenizer.mmbpe.tmp")?;
-    converter(tokenizer_json, compact_temp.path())
-        .map_err(|err| format!("mmBERT tokenizer conversion failed: {err}"))?;
+    log::debug!(
+        "converting HuggingFace tokenizer to mmBERT compact tokenizer; source_model={}; source={}; temp={}",
+        source_model,
+        tokenizer_json.display(),
+        compact_temp.path().display()
+    );
+    if let Err(err) = converter(tokenizer_json, compact_temp.path()) {
+        log::debug!(
+            "failed to convert HuggingFace tokenizer to mmBERT compact tokenizer; source_model={}; source={}; temp={}; error={err}",
+            source_model,
+            tokenizer_json.display(),
+            compact_temp.path().display()
+        );
+        return Err(format!("mmBERT tokenizer conversion failed: {err}").into());
+    }
     File::open(compact_temp.path())?.sync_all()?;
     let mmbpe_hash = file_blake3(compact_temp.path())?;
 
@@ -105,6 +151,14 @@ pub(super) fn ensure_mmbert_compact_tokenizer_with(
     };
     write_json_atomic(&metadata_path, &metadata)?;
 
+    log::debug!(
+        "persisted compact mmBERT tokenizer; source_model={}; compact_path={}; metadata_path={}; compact_exists={}; metadata_exists={}",
+        source_model,
+        compact_path.display(),
+        metadata_path.display(),
+        compact_path.is_file(),
+        metadata_path.is_file()
+    );
     log::info!(
         "generated compact mmBERT tokenizer {} from {}",
         compact_path.display(),
@@ -116,7 +170,13 @@ pub(super) fn ensure_mmbert_compact_tokenizer_with(
 fn supports_mmbert_mmbpe(tokenizer_json: &Path) -> Result<bool, Box<dyn std::error::Error>> {
     let parsed: TokenizerJson = match serde_json::from_slice(&fs::read(tokenizer_json)?) {
         Ok(parsed) => parsed,
-        Err(_) => return Ok(false),
+        Err(error) => {
+            log::debug!(
+                "failed to parse tokenizer while checking mmBERT compact support; tokenizer_json={}; error={error}",
+                tokenizer_json.display()
+            );
+            return Ok(false);
+        }
     };
     let vocab = &parsed.model.vocab;
     let is_bpe = parsed
@@ -124,12 +184,31 @@ fn supports_mmbert_mmbpe(tokenizer_json: &Path) -> Result<bool, Box<dyn std::err
         .tokenizer_type
         .as_deref()
         .is_none_or(|value| value.eq_ignore_ascii_case("BPE"));
-    Ok(is_bpe
+    let has_bos = vocab.contains_key("<bos>");
+    let has_eos = vocab.contains_key("<eos>");
+    let has_unk = vocab.contains_key("<unk>");
+    let missing_bytes = (0..=255)
+        .filter(|byte| byte_token_id(vocab, *byte as u8).is_none())
+        .collect::<Vec<_>>();
+    let supported = is_bpe
         && parsed.model.byte_fallback
-        && vocab.contains_key("<bos>")
-        && vocab.contains_key("<eos>")
-        && vocab.contains_key("<unk>")
-        && (0..=255).all(|byte| vocab.contains_key(&format!("<{byte:#04X}>"))))
+        && has_bos
+        && has_eos
+        && has_unk
+        && missing_bytes.is_empty();
+    log::debug!(
+        "checked mmBERT compact tokenizer requirements; tokenizer_json={}; is_bpe={}; byte_fallback={}; has_bos={}; has_eos={}; has_unk={}; missing_byte_count={}; first_missing_byte={:?}; supported={}",
+        tokenizer_json.display(),
+        is_bpe,
+        parsed.model.byte_fallback,
+        has_bos,
+        has_eos,
+        has_unk,
+        missing_bytes.len(),
+        missing_bytes.first(),
+        supported
+    );
+    Ok(supported)
 }
 
 fn cache_is_current(
@@ -139,12 +218,25 @@ fn cache_is_current(
     source_hash: &str,
 ) -> Result<bool, Box<dyn std::error::Error>> {
     if !compact_path.is_file() || !metadata_path.is_file() {
+        log::debug!(
+            "compact mmBERT tokenizer cache is incomplete; compact_exists={}; metadata_exists={}; compact_path={}; metadata_path={}",
+            compact_path.is_file(),
+            metadata_path.is_file(),
+            compact_path.display(),
+            metadata_path.display()
+        );
         return Ok(false);
     }
     let metadata: MmbertTokenizerMetadata = match serde_json::from_slice(&fs::read(metadata_path)?)
     {
         Ok(metadata) => metadata,
-        Err(_) => return Ok(false),
+        Err(error) => {
+            log::debug!(
+                "failed to parse compact mmBERT tokenizer metadata; metadata_path={}; error={error}",
+                metadata_path.display()
+            );
+            return Ok(false);
+        }
     };
     if metadata.schema_version != CACHE_SCHEMA_VERSION
         || metadata.converter_version != CONVERTER_VERSION
@@ -152,9 +244,23 @@ fn cache_is_current(
         || metadata.source_model != source_model
         || metadata.source_blake3 != source_hash
     {
+        log::debug!(
+            "compact mmBERT tokenizer metadata is stale; schema_match={}; converter_match={}; format_match={}; source_model_match={}; source_hash_match={}",
+            metadata.schema_version == CACHE_SCHEMA_VERSION,
+            metadata.converter_version == CONVERTER_VERSION,
+            metadata.format_version == FORMAT_VERSION,
+            metadata.source_model == source_model,
+            metadata.source_blake3 == source_hash
+        );
         return Ok(false);
     }
-    Ok(file_blake3(compact_path)? == metadata.mmbpe_blake3)
+    let hash_matches = file_blake3(compact_path)? == metadata.mmbpe_blake3;
+    log::debug!(
+        "checked compact mmBERT tokenizer content hash; compact_path={}; hash_matches={}",
+        compact_path.display(),
+        hash_matches
+    );
+    Ok(hash_matches)
 }
 
 fn convert_huggingface_to_mmbpe(
@@ -175,10 +281,8 @@ fn convert_huggingface_to_mmbpe(
 
     let mut bytes = [0; 256];
     for (byte, id) in bytes.iter_mut().enumerate() {
-        *id = vocab
-            .get(&format!("<{byte:#04X}>"))
-            .copied()
-            .unwrap_or(u32::MAX);
+        *id = byte_token_id(vocab, byte as u8)
+            .ok_or_else(|| format!("missing byte fallback token for byte {byte:#04X}"))?;
     }
 
     let mut writer = BufWriter::new(File::create(destination)?);
@@ -227,6 +331,20 @@ fn write_u32(writer: &mut impl Write, value: u32) -> std::io::Result<()> {
     writer.write_all(&value.to_le_bytes())
 }
 
+fn byte_token_id(vocab: &HashMap<String, u32>, byte: u8) -> Option<u32> {
+    vocab
+        .get(&format!("<{byte:#04X}>"))
+        .copied()
+        .or_else(|| literal_ascii_byte_token(byte).and_then(|token| vocab.get(token).copied()))
+}
+
+fn literal_ascii_byte_token(byte: u8) -> Option<&'static str> {
+    match byte {
+        b'\t' => Some("\t"),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::{fs, path::Path, sync::Arc, thread, time::SystemTime};
@@ -267,6 +385,35 @@ mod tests {
                 "vocab": vocab,
                 "merges": [],
                 "test_marker": extra
+            }
+        });
+        fs::write(path, serde_json::to_vec_pretty(&value).unwrap()).unwrap();
+    }
+
+    fn write_supported_tokenizer_with_literal_tab_byte(path: &Path) {
+        let mut vocab = serde_json::Map::new();
+        vocab.insert("<bos>".to_string(), 0.into());
+        vocab.insert("<eos>".to_string(), 1.into());
+        vocab.insert("<unk>".to_string(), 2.into());
+        vocab.insert("▁".to_string(), 3.into());
+        for byte in 0..=255 {
+            let id = byte as u32 + 10;
+            if byte == b'\t' {
+                vocab.insert("\t".to_string(), id.into());
+            } else {
+                vocab.insert(format!("<{byte:#04X}>"), id.into());
+            }
+        }
+        let value = serde_json::json!({
+            "added_tokens": [
+                {"id": 0, "content": "<bos>", "lstrip": false},
+                {"id": 1, "content": "<eos>", "lstrip": false}
+            ],
+            "model": {
+                "type": "BPE",
+                "byte_fallback": true,
+                "vocab": vocab,
+                "merges": []
             }
         });
         fs::write(path, serde_json::to_vec_pretty(&value).unwrap()).unwrap();
@@ -334,6 +481,21 @@ mod tests {
             .unwrap()
             .is_none());
         assert!(!root.join("tokenizer.mmbpe").exists());
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn accepts_literal_tab_as_byte_fallback_token() {
+        let root = temp_dir("literal_tab");
+        let tokenizer_json = root.join("tokenizer.json");
+        write_supported_tokenizer_with_literal_tab_byte(&tokenizer_json);
+
+        assert!(supports_mmbert_mmbpe(&tokenizer_json).unwrap());
+        let compact_path = ensure_mmbert_compact_tokenizer("mmbert-test", &tokenizer_json)
+            .unwrap()
+            .unwrap();
+        assert!(compact_path.is_file());
 
         fs::remove_dir_all(root).unwrap();
     }

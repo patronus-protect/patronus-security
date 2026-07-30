@@ -250,22 +250,55 @@ pub(crate) fn prepare_cached_pipeline_model_compact_tokenizer(
     target_dir: &Path,
 ) {
     let bundle_dir = target_dir.join(asset.destination_path);
-    if pipeline_model_assets_present(asset, target_dir) {
+    let assets_present = pipeline_model_assets_present(asset, target_dir);
+    log::debug!(
+        "checked cached pipeline model assets before compact tokenizer preparation; model={}; target_dir={}; bundle_dir={}; assets_present={}",
+        asset.model,
+        target_dir.display(),
+        bundle_dir.display(),
+        assets_present
+    );
+    if assets_present {
         prepare_pipeline_model_compact_tokenizer(asset, &bundle_dir);
     }
 }
 
 fn prepare_pipeline_model_compact_tokenizer(asset: PipelineModelAssetSpec, bundle_dir: &Path) {
     let tokenizer_json = bundle_dir.join("tokenizer.json");
+    log::debug!(
+        "checking pipeline model tokenizer before compact tokenizer preparation; model={}; bundle_dir={}; tokenizer_json={}; tokenizer_json_exists={}",
+        asset.model,
+        bundle_dir.display(),
+        tokenizer_json.display(),
+        tokenizer_json.is_file()
+    );
     if !tokenizer_json.is_file() {
         return;
     }
-    if let Err(err) = ensure_mmbert_compact_tokenizer(asset.model, &tokenizer_json) {
-        log::warn!(
-            "failed to prepare compact mmBERT tokenizer for {} at {}: {err}; tokenizer.json remains available",
+    match ensure_mmbert_compact_tokenizer(asset.model, &tokenizer_json) {
+        Ok(Some(compact_path)) => log::debug!(
+            "compact mmBERT tokenizer ready; model={}; compact_path={}; compact_exists={}",
             asset.model,
-            bundle_dir.display()
-        );
+            compact_path.display(),
+            compact_path.is_file()
+        ),
+        Ok(None) => log::debug!(
+            "compact mmBERT tokenizer unsupported; model={}; tokenizer_json={}",
+            asset.model,
+            tokenizer_json.display()
+        ),
+        Err(err) => {
+            log::debug!(
+                "compact mmBERT tokenizer preparation failed; model={}; bundle_dir={}; error={err}; tokenizer.json remains available",
+                asset.model,
+                bundle_dir.display()
+            );
+            log::warn!(
+                "failed to prepare compact mmBERT tokenizer for {} at {}: {err}; tokenizer.json remains available",
+                asset.model,
+                bundle_dir.display()
+            );
+        }
     }
 }
 
