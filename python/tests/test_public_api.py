@@ -3,7 +3,12 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from patronus_ark import SecurityGateway, _event_to_dict, _to_dict, normalize_text
+from patronus_ark import (
+    SecurityGateway,
+    _event_to_dict,
+    _to_dict,
+    normalize_text,
+)
 
 
 def assert_result_schema(test_case, result):
@@ -110,6 +115,63 @@ class PublicApiTests(unittest.TestCase):
             scanner.flush_cache()
 
             self.assertTrue(cache_path.exists())
+
+    def test_persistent_cache_connections_can_be_reset_without_deleting_storage(self):
+        with tempfile.TemporaryDirectory() as directory:
+            cache_path = Path(directory) / "ark-cache.redb"
+            scanner = SecurityGateway(
+                categories=["dlp"],
+                max_level="l1",
+                download_files=False,
+                cache_storage_location=str(cache_path),
+            )
+            scanner.flush_cache()
+
+            scanner.reset_cache_connections()
+
+            self.assertTrue(cache_path.exists())
+            scanner.flush_cache()
+
+    def test_persistent_cache_can_be_reset_by_retention_cutoff(self):
+        with tempfile.TemporaryDirectory() as directory:
+            cache_path = Path(directory) / "ark-cache.redb"
+            scanner = SecurityGateway(
+                categories=["dlp"],
+                max_level="l1",
+                download_files=False,
+                cache_storage_location=str(cache_path),
+            )
+            scanner.flush_cache()
+
+            removed = scanner.reset_cache(until_ts=1_700_000_000)
+
+            self.assertIsInstance(removed, int)
+            self.assertTrue(cache_path.exists())
+            with self.assertRaises(ValueError):
+                scanner.reset_cache(until_ts=-1)
+            with self.assertRaises(ValueError):
+                scanner.reset_cache(until_ts=True)
+
+    def test_same_persistent_cache_path_can_be_opened_by_multiple_gateways(self):
+        with tempfile.TemporaryDirectory() as directory:
+            cache_path = Path(directory) / "ark-cache.redb"
+            first = SecurityGateway(
+                categories=["dlp"],
+                max_level="l1",
+                download_files=False,
+                cache_storage_location=str(cache_path),
+            )
+            second = SecurityGateway(
+                categories=["dlp"],
+                max_level="l1",
+                download_files=False,
+                cache_storage_location=str(cache_path),
+            )
+
+            first.flush_cache()
+            second.flush_cache()
+            first.reset_cache_connections()
+            second.reset_cache_connections()
 
     def test_cache_ttl_and_hot_limits_are_public_api(self):
         scanner = SecurityGateway(

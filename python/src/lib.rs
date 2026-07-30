@@ -111,6 +111,16 @@ impl SecurityGateway {
             .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))
     }
 
+    fn reset_cache_connections(&self, py: Python<'_>) -> PyResult<()> {
+        py.allow_threads(|| self.inner.reset_cache_connections())
+            .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))
+    }
+
+    fn reset_cache(&self, py: Python<'_>, until_ts_unix_ms: u64) -> PyResult<usize> {
+        py.allow_threads(|| self.inner.reset_cache(until_ts_unix_ms))
+            .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))
+    }
+
     fn scan_all(&self, py: Python<'_>, text: &str) -> PyResult<Vec<PyEvaluationResult>> {
         let results = py.allow_threads(|| self.inner.scan_all(text));
         Ok(results.into_iter().map(PyEvaluationResult::from).collect())

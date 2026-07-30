@@ -3,6 +3,7 @@ from ._patronus_ark import SecurityGateway as RustSecurityGateway
 from ._patronus_ark import normalize_text as _rust_normalize_text
 from copy import deepcopy
 import json
+import math
 
 
 def _decode_json_object(value):
@@ -165,6 +166,16 @@ def _normalization_configs_json(configs):
     return json.dumps(configs)
 
 
+def _unix_ms_from_ts(value):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError("until_ts must be a Unix timestamp")
+    if not math.isfinite(value) or value < 0:
+        raise ValueError("until_ts must be a non-negative finite Unix timestamp")
+    if value >= 1_000_000_000_000:
+        return int(value)
+    return int(value * 1000)
+
+
 def normalize_text(text: str, configs: dict | None = None) -> str:
     """Return canonical_security_text_v1-style normalized text.
 
@@ -314,6 +325,22 @@ class SecurityGateway:
     def flush_cache(self):
         """Wait until all queued persistent cache writes are durable."""
         self.rust_gateway.flush_cache()
+
+    def reset_cache_connections(self):
+        """Flush and close persistent cache handles.
+
+        The cache database file is preserved. A configured persistent cache is
+        reopened lazily on the next cache access.
+        """
+        self.rust_gateway.reset_cache_connections()
+
+    def reset_cache(self, until_ts: int | float) -> int:
+        """Delete cache records created before `until_ts`.
+
+        `until_ts` accepts Unix seconds or Unix milliseconds. The cache database
+        file is preserved.
+        """
+        return self.rust_gateway.reset_cache(_unix_ms_from_ts(until_ts))
 
     def scan_all(self, text: str) -> list[dict]:
         """Scan text with every category configured on this gateway."""

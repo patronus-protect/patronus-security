@@ -52,6 +52,10 @@ module provides shared pattern- and obfuscation-detection primitives used intern
 injection and DLP detectors. The `threat` *category* itself has **no native L1 stage** — it starts
 at NTDB L2 (see [Categories](categories.md#model-backed-l2--l3)).
 
+`instruction_override` includes common German imperative variants such as attempts to forget,
+ignore, disregard, override, skip, or discard prior instructions, while contextless everyday
+uses of those verbs remain safe.
+
 ## DLP
 
 Data-loss-prevention detectors flag content that leaks or destroys data:

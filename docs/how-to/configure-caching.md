@@ -33,6 +33,11 @@ Dynamic PII intentionally stores normalized cleartext spans. It does not hash
 names. The cache database must therefore be protected like other local
 application data.
 
+Persistent cache files are opened with `redb`. Ark creates missing parent directories and missing
+database files on startup. If the database file is externally deleted while a gateway is still
+alive, the next cache operation recreates an empty database rather than continuing to write through
+a stale handle. Corrupt database files and active second-writer conflicts remain hard errors.
+
 ## Five concrete scenarios
 
 The Python example executes these in order and asserts the observable result:

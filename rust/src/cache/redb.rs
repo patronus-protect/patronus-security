@@ -2,8 +2,8 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use std::collections::HashSet;
-use std::sync::{RwLock, RwLockReadGuard};
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex, OnceLock, RwLock, RwLockReadGuard, Weak};
 
 use redb::{
     Database, DatabaseError, MultimapTableDefinition, ReadableDatabase, ReadableMultimapTable,
@@ -33,6 +33,24 @@ pub(crate) struct RedbCacheStore {
 }
 
 impl RedbCacheStore {
+    pub(crate) fn open_shared(path: impl AsRef<Path>) -> Result<Arc<Self>, CacheError> {
+        static OPEN_STORES: OnceLock<Mutex<HashMap<PathBuf, Weak<RedbCacheStore>>>> =
+            OnceLock::new();
+
+        let path = registry_path(path.as_ref())?;
+        let mut stores = OPEN_STORES
+            .get_or_init(|| Mutex::new(HashMap::new()))
+            .lock()
+            .map_err(|_| CacheError::Storage("cache connection registry poisoned".to_string()))?;
+        if let Some(store) = stores.get(&path).and_then(Weak::upgrade) {
+            return Ok(store);
+        }
+
+        let store = Arc::new(Self::open(&path)?);
+        stores.insert(path, Arc::downgrade(&store));
+        Ok(store)
+    }
+
     pub(crate) fn open(path: impl AsRef<Path>) -> Result<Self, CacheError> {
         let path = path.as_ref().to_path_buf();
         let database = open_database(&path)?;
@@ -165,6 +183,67 @@ impl ExactCacheStore for RedbCacheStore {
         Ok(expired.len() + expired_similarity.len())
     }
 
+    fn remove_created_before(&self, until_unix_ms: u64) -> Result<usize, CacheError> {
+        let database = self.database()?;
+        let read = database.begin_read().map_err(storage_error)?;
+        let table = read.open_table(RECORDS).map_err(storage_error)?;
+        let mut stale = Vec::new();
+        for entry in table.iter().map_err(storage_error)? {
+            let (key, value) = entry.map_err(storage_error)?;
+            if decode_record(value.value())?.created_at_unix_ms < until_unix_ms {
+                stale.push(key.value().to_vec());
+            }
+        }
+        drop(table);
+        drop(read);
+
+        let similarity_read = database.begin_read().map_err(storage_error)?;
+        let similarity_table = similarity_read
+            .open_table(SIMILARITY_RECORDS)
+            .map_err(storage_error)?;
+        let mut stale_similarity = Vec::new();
+        for entry in similarity_table.iter().map_err(storage_error)? {
+            let (id, value) = entry.map_err(storage_error)?;
+            let record = decode_similarity_record(id.value(), value.value())?;
+            if record.created_at_unix_ms < until_unix_ms {
+                stale_similarity.push(record);
+            }
+        }
+        drop(similarity_table);
+        drop(similarity_read);
+
+        if stale.is_empty() && stale_similarity.is_empty() {
+            return Ok(0);
+        }
+        let write = database.begin_write().map_err(storage_error)?;
+        {
+            let mut table = write.open_table(RECORDS).map_err(storage_error)?;
+            for key in &stale {
+                table.remove(key.as_slice()).map_err(storage_error)?;
+            }
+        }
+        {
+            let mut records = write
+                .open_table(SIMILARITY_RECORDS)
+                .map_err(storage_error)?;
+            let mut buckets = write
+                .open_multimap_table(SIMILARITY_BUCKETS)
+                .map_err(storage_error)?;
+            for record in &stale_similarity {
+                records
+                    .remove(record.id.as_slice())
+                    .map_err(storage_error)?;
+                for bucket in &record.bucket_keys {
+                    buckets
+                        .remove(bucket.as_slice(), record.id.as_slice())
+                        .map_err(storage_error)?;
+                }
+            }
+        }
+        write.commit().map_err(storage_error)?;
+        Ok(stale.len() + stale_similarity.len())
+    }
+
     fn similarity_candidates(
         &self,
         bucket_keys: &[Vec<u8>],
@@ -258,6 +337,16 @@ fn open_database(path: &Path) -> Result<Database, CacheError> {
     let database = Database::create(path).map_err(database_error)?;
     initialize_tables(&database)?;
     Ok(database)
+}
+
+fn registry_path(path: &Path) -> Result<PathBuf, CacheError> {
+    if path.is_absolute() {
+        Ok(path.to_path_buf())
+    } else {
+        std::env::current_dir()
+            .map(|current_dir| current_dir.join(path))
+            .map_err(storage_error)
+    }
 }
 
 fn initialize_tables(database: &Database) -> Result<(), CacheError> {
@@ -641,6 +730,10 @@ mod tests {
     }
 
     fn output(expires_at_unix_ms: u64) -> CachedModelOutput {
+        output_created(10, expires_at_unix_ms)
+    }
+
+    fn output_created(created_at_unix_ms: u64, expires_at_unix_ms: u64) -> CachedModelOutput {
         CachedModelOutput {
             schema_version: 7,
             heads: vec![
@@ -653,7 +746,7 @@ mod tests {
                     logits: vec![f32::NEG_INFINITY, f32::NAN],
                 },
             ],
-            created_at_unix_ms: 10,
+            created_at_unix_ms,
             expires_at_unix_ms,
         }
     }
@@ -801,6 +894,20 @@ mod tests {
         assert_eq!(store.remove_expired(20).unwrap(), 1);
         assert!(store.get(&key("sweep"), 20).unwrap().is_none());
         assert!(store.get(&key("current"), 20).unwrap().is_some());
+        drop(store);
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn entries_created_before_cutoff_are_removed_by_cleanup() {
+        let path = temp_path("created-before");
+        let store = RedbCacheStore::open(&path).unwrap();
+        store.put(key("old"), output_created(10, 100)).unwrap();
+        store.put(key("new"), output_created(20, 100)).unwrap();
+
+        assert_eq!(store.remove_created_before(20).unwrap(), 1);
+        assert!(store.get(&key("old"), 20).unwrap().is_none());
+        assert!(store.get(&key("new"), 20).unwrap().is_some());
         drop(store);
         fs::remove_file(path).unwrap();
     }

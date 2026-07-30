@@ -263,6 +263,16 @@ impl SecurityGateway {
         self.l3_worker.flush_cache()
     }
 
+    /// Flush queued persistent cache writes and reopen storage on the next cache access.
+    pub fn reset_cache_connections(&self) -> Result<(), crate::CacheError> {
+        self.l3_worker.reset_cache_connections()
+    }
+
+    /// Remove hot and persistent cache records created before `until_unix_ms`.
+    pub fn reset_cache(&self, until_unix_ms: u64) -> Result<usize, crate::CacheError> {
+        self.l3_worker.reset_cache(until_unix_ms)
+    }
+
     /// Explicit persistent cache location configured for this gateway.
     pub fn cache_storage_location(&self) -> Option<PathBuf> {
         self.l3_worker.cache_storage_location()

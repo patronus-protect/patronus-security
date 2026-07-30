@@ -55,10 +55,15 @@ do not change the NTDB promote-router threshold that decides which chunks are se
 ### Compact tokenizers
 
 For supported packages, asset preparation converts the downloaded Hugging Face
-`tokenizer.json` **once** into a compact `tokenizer.kit` in the shared encoder cache. The
-source JSON remains canonical and is used automatically if conversion, validation, or compact
-loading fails. Source/content hashes and converter versions invalidate stale generated files;
-local model overrides are never rewritten. Details are in
+`tokenizer.json` **once** into a compact generated tokenizer beside the source JSON:
+`tokenizer.kit` for supported Granite/ModernBERT shared embedders and `tokenizer.mmbpe` for
+compatible mmBERT byte-fallback BPE tokenizers. NTDB packages linked to a shared embedder reuse
+the generated shared artifact. Dedicated and unified L3 bundles can also generate `.mmbpe` during
+verified downloads or cached warmup.
+
+The source JSON remains canonical and is used automatically if conversion, validation, or compact
+loading fails. Source/content hashes, format versions, and converter versions invalidate stale
+generated files; local model overrides are never rewritten. Details are in
 [Performance & memory](performance.md).
 
 ## ONNX transformers — the L3 format

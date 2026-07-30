@@ -19,7 +19,6 @@ blocking `scan_*` helpers return — is a **dictionary describing one category's
         "level": "L1",
         "model": "native:dlp",
         "duration_ms": 0.4,
-        "decision": None,
         "evidence_spans": [],
         "label_scores": [],
         "layers": [
@@ -46,7 +45,7 @@ blocking `scan_*` helpers return — is a **dictionary describing one category's
 | `level` | str | The level that produced the winning verdict: `L1`, `L2`, or `L3`. |
 | `model` | str | The producing scanner, e.g. `native:dlp`, `external:<id>`, or a model id. |
 | `duration_ms` | float | Wall-clock time spent producing this result. |
-| `decision` | dict \| null | Structured classifier decision envelope for model-backed classifier pipelines. `None` for native-only/non-classifier results without a policy candidate. |
+| `decision` | dict | Structured classifier decision envelope for terminal model-backed classifier results. Python omits this key when no authoritative classifier decision exists; Rust exposes `SecurityScanResult.decision: Option<DecisionEnvelope>`. |
 | `evidence_spans` | list | Exact matched spans (PII/DLP/dynamic-pii); empty for safe/model-only results. |
 | `label_scores` | list | Per-label scores for multi-label heads (e.g. `tool_tags`); each entry is `{label, confidence, matched}`. Empty for single-label results. |
 | `layers` | list | Per-layer breakdown of everything that ran for this category. |
@@ -72,13 +71,14 @@ Model-backed classifier pipelines (`injection`, `threat`, `routing`, `sensitive_
 `tool_class`, `tool_action`, and `tool_tags`) apply the configured final-decision threshold profile
 after raw L2/L3 scoring. The top-level `class_name` / `confidence` is the accepted final verdict.
 When no candidate passes its threshold, the result falls back to the pipeline default class
-(`benign`, `unknown`, `other`, etc.) with `confidence: 0.0`.
+(`benign`, `unknown`, `other`, etc.) and uses the model's default-class confidence when available,
+or `0.0` otherwise.
 
 Terminal classifier results expose that policy input and Ark's calibrated recommendation under
 `decision`. `decision.is_some()` is the lifecycle marker for an authoritative classifier policy
 input. Early L2 results that still contain an `l3_pending` layer, provisional events, progress
-events, and result-preview events have `decision: None` even when they carry classifier-looking
-scores.
+events, and result-preview events leave `decision` unset (`None` in Rust) even when they carry
+classifier-looking scores.
 
 ```python
 {

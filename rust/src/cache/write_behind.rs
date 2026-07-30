@@ -125,6 +125,11 @@ impl ExactCacheStore for WriteBehindStore {
         self.inner.remove_expired(now_unix_ms)
     }
 
+    fn remove_created_before(&self, until_unix_ms: u64) -> Result<usize, CacheError> {
+        self.flush()?;
+        self.inner.remove_created_before(until_unix_ms)
+    }
+
     fn similarity_candidates(
         &self,
         bucket_keys: &[Vec<u8>],
@@ -396,6 +401,10 @@ mod tests {
             fn remove_expired(&self, now_unix_ms: u64) -> Result<usize, CacheError> {
                 self.memory.remove_expired(now_unix_ms)
             }
+
+            fn remove_created_before(&self, until_unix_ms: u64) -> Result<usize, CacheError> {
+                self.memory.remove_created_before(until_unix_ms)
+            }
         }
 
         let first_started = Arc::new((Mutex::new(false), Condvar::new()));
@@ -466,6 +475,10 @@ mod tests {
             fn remove_expired(&self, _now_unix_ms: u64) -> Result<usize, CacheError> {
                 Ok(0)
             }
+
+            fn remove_created_before(&self, _until_unix_ms: u64) -> Result<usize, CacheError> {
+                Ok(0)
+            }
         }
 
         let started = Arc::new((Mutex::new(false), Condvar::new()));
@@ -515,6 +528,10 @@ mod tests {
             }
 
             fn remove_expired(&self, _now_unix_ms: u64) -> Result<usize, CacheError> {
+                Ok(0)
+            }
+
+            fn remove_created_before(&self, _until_unix_ms: u64) -> Result<usize, CacheError> {
                 Ok(0)
             }
         }

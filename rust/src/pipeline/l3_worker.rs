@@ -213,6 +213,14 @@ impl L3Worker {
         self.state.exact_cache.flush()
     }
 
+    pub(crate) fn reset_cache_connections(&self) -> Result<(), CacheError> {
+        self.state.exact_cache.reset_persistent_connections()
+    }
+
+    pub(crate) fn reset_cache(&self, until_unix_ms: u64) -> Result<usize, CacheError> {
+        self.state.exact_cache.reset_cache(until_unix_ms)
+    }
+
     pub(crate) fn cache_storage_location(&self) -> Option<std::path::PathBuf> {
         self.state
             .exact_cache

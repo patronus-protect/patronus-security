@@ -41,6 +41,8 @@ pub(crate) trait ExactCacheStore: Send + Sync {
 
     fn remove_expired(&self, now_unix_ms: u64) -> Result<usize, CacheError>;
 
+    fn remove_created_before(&self, until_unix_ms: u64) -> Result<usize, CacheError>;
+
     fn similarity_candidates(
         &self,
         _bucket_keys: &[Vec<u8>],
