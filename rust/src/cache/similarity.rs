@@ -523,6 +523,7 @@ mod tests {
                 storage_location: path.clone(),
                 write_mode: CacheWriteMode::WriteThrough,
                 write_behind: WriteBehindConfig::default(),
+                encryption: None,
             }),
             ..ExactCacheConfig::default()
         };
@@ -558,6 +559,7 @@ mod tests {
                     storage_location: path.clone(),
                     write_mode: CacheWriteMode::WriteThrough,
                     write_behind: WriteBehindConfig::default(),
+                    encryption: None,
                 }),
                 ..ExactCacheConfig::default()
             })

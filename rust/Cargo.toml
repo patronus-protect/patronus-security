@@ -29,6 +29,7 @@ half = "2.1"
 blake3 = "1.5"
 memmap2 = "0.9"
 redb = "4.1"
+ring = "0.17"
 thiserror = "1.0"
 unicode-normalization = "0.1"
 

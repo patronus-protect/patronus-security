@@ -222,6 +222,8 @@ class SecurityGateway:
             `dynamic-pii` category.
         cache_storage_location: Optional path to the persistent cache database.
             If omitted, caching remains memory-only.
+        cache_encryption_key_hex: Optional 64-character hex-encoded persistent
+            cache encryption key. Ignored when `cache_storage_location` is omitted.
         cache_entry_ttl_seconds: Cache entry TTL shared by hot and persistent tiers.
         cache_memory_max_entries: Maximum entries retained by a hot cache tier.
         cache_memory_max_bytes: Maximum bytes retained by a hot cache tier.
@@ -241,6 +243,7 @@ class SecurityGateway:
         l3_strategy: str = "dedicated",
         dynamic_pii_config: dict | None = None,
         cache_storage_location: str | None = None,
+        cache_encryption_key_hex: str | None = None,
         cache_entry_ttl_seconds: int = 30 * 24 * 60 * 60,
         cache_memory_max_entries: int = 100_000,
         cache_memory_max_bytes: int = 128 * 1024 * 1024,
@@ -263,6 +266,7 @@ class SecurityGateway:
             "l3_strategy": l3_strategy,
             "dynamic_pii_config": deepcopy(dynamic_pii_config),
             "cache_storage_location": cache_storage_location,
+            "cache_encryption_key_hex": cache_encryption_key_hex,
             "cache_entry_ttl_seconds": cache_entry_ttl_seconds,
             "cache_memory_max_entries": cache_memory_max_entries,
             "cache_memory_max_bytes": cache_memory_max_bytes,
@@ -287,6 +291,7 @@ class SecurityGateway:
             l3_strategy=l3_strategy,
             dynamic_pii_config_json=_dynamic_pii_config_json(dynamic_pii_config),
             cache_storage_location=cache_storage_location,
+            cache_encryption_key_hex=cache_encryption_key_hex,
             cache_entry_ttl_seconds=cache_entry_ttl_seconds,
             cache_memory_max_entries=cache_memory_max_entries,
             cache_memory_max_bytes=cache_memory_max_bytes,

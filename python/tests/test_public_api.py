@@ -116,6 +116,46 @@ class PublicApiTests(unittest.TestCase):
 
             self.assertTrue(cache_path.exists())
 
+    def test_persistent_cache_encryption_key_is_public_api(self):
+        with tempfile.TemporaryDirectory() as directory:
+            cache_path = Path(directory) / "ark-cache.redb"
+            key = "11" * 32
+            first = SecurityGateway(
+                categories=["dlp"],
+                max_level="l1",
+                download_files=False,
+                cache_storage_location=str(cache_path),
+                cache_encryption_key_hex=key,
+            )
+            second = SecurityGateway(
+                categories=["dlp"],
+                max_level="l1",
+                download_files=False,
+                cache_storage_location=str(cache_path),
+                cache_encryption_key_hex=key,
+            )
+
+            first.flush_cache()
+            second.flush_cache()
+            self.assertTrue(cache_path.exists())
+
+        with self.assertRaises(ValueError):
+            SecurityGateway(
+                categories=["dlp"],
+                max_level="l1",
+                download_files=False,
+                cache_storage_location="/tmp/patronus-invalid-cache.redb",
+                cache_encryption_key_hex="abc",
+            )
+        with self.assertRaises(ValueError):
+            SecurityGateway(
+                categories=["dlp"],
+                max_level="l1",
+                download_files=False,
+                cache_storage_location="/tmp/patronus-invalid-cache.redb",
+                cache_encryption_key_hex=("11" * 31) + "zz",
+            )
+
     def test_persistent_cache_connections_can_be_reset_without_deleting_storage(self):
         with tempfile.TemporaryDirectory() as directory:
             cache_path = Path(directory) / "ark-cache.redb"

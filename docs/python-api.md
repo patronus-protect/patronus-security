@@ -41,6 +41,8 @@ Args:
         `dynamic-pii` category.
     cache_storage_location: Optional path to the persistent cache database.
         If omitted, caching remains memory-only.
+    cache_encryption_key_hex: Optional 64-character hex-encoded persistent
+        cache encryption key. Ignored when `cache_storage_location` is omitted.
     cache_entry_ttl_seconds: Cache entry TTL shared by hot and persistent tiers.
     cache_memory_max_entries: Maximum entries retained by a hot cache tier.
     cache_memory_max_bytes: Maximum bytes retained by a hot cache tier.

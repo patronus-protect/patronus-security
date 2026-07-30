@@ -16,6 +16,7 @@ Set at gateway construction:
 | `download_categories` | list | Restrict automatic downloads to these categories. | constructor |
 | `model_dir` | path | Custom asset cache location (default: platform cache dir). | constructor |
 | `cache_storage_location` | path or `None` | Explicit persistent cache database; `None` keeps the cache memory-only. | cache constructor |
+| `cache_encryption_key_hex` | 64 hex chars or `None` | Encrypt persistent cache values and keyed similarity bucket indexes. | `PersistentCacheConfig.encryption` |
 | `cache_entry_ttl_seconds` | positive integer | Shared hot/persistent TTL; defaults to 30 days (`2_592_000`). | `ExactCacheConfig.entry_ttl` |
 | `cache_memory_max_entries` | non-negative integer | Per-hot-tier entry bound; `0` disables hot retention. | `ExactCacheConfig.memory.max_entries` |
 | `cache_memory_max_bytes` | non-negative integer | Per-hot-tier byte bound; `0` disables hot retention. | `ExactCacheConfig.memory.max_bytes` |

@@ -308,6 +308,7 @@ mod tests {
                 storage_location: path.clone(),
                 write_mode: CacheWriteMode::WriteThrough,
                 write_behind: WriteBehindConfig::default(),
+                encryption: None,
             }),
             entry_ttl: Duration::from_secs(60),
         };

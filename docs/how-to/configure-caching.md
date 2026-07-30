@@ -29,9 +29,9 @@ model-specific, because their tensor layouts can differ. The additional
 canonical logical-head decision allows a finding produced by Dedicated to
 prioritize or propagate for Unified, and vice versa.
 
-Dynamic PII intentionally stores normalized cleartext spans. It does not hash
-names. The cache database must therefore be protected like other local
-application data.
+Without persistent cache encryption, Dynamic PII stores normalized cleartext
+spans. Configure cache encryption when the redb file can outlive the process or
+may be inspected outside the application.
 
 Persistent cache files are opened with `redb`. Ark creates missing parent directories and missing
 database files on startup. If the database file is externally deleted while a gateway is still
@@ -136,10 +136,13 @@ No persistent file is created. Entries disappear with the gateway/process.
 ### Python: persistent async
 
 ```python
+import os
+
 scanner = SecurityGateway(
     categories=["injection", "dynamic-pii"],
     max_level="l3",
     cache_storage_location="/var/lib/my-app/patronus-cache.redb",
+    cache_encryption_key_hex=os.environ["PATRONUS_CACHE_KEY_HEX"],
     cache_entry_ttl_seconds=30 * 24 * 60 * 60,
     cache_memory_max_entries=100_000,
     cache_memory_max_bytes=128 * 1024 * 1024,
@@ -172,15 +175,17 @@ let scanner = SecurityGateway::with_max_level(
 ```rust
 use std::path::PathBuf;
 use patronus_ark::{
-    CacheWriteMode, ExactCacheConfig, PersistentCacheConfig,
+    CacheEncryptionConfig, CacheWriteMode, ExactCacheConfig, PersistentCacheConfig,
     SecurityCategory, SecurityGateway, SecurityLevel, WriteBehindConfig,
 };
 
+let cache_key = [0u8; 32]; // Load 32 bytes from your OS keychain or secret manager.
 let config = ExactCacheConfig {
     persistent: Some(PersistentCacheConfig {
         storage_location: PathBuf::from("/var/lib/my-app/patronus-cache.redb"),
         write_mode: CacheWriteMode::Async,
         write_behind: WriteBehindConfig::default(),
+        encryption: Some(CacheEncryptionConfig::from_key(cache_key)),
     }),
     ..ExactCacheConfig::default()
 };

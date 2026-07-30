@@ -13,8 +13,8 @@ pub mod threat;
 pub mod types;
 
 pub use cache::{
-    CacheError, CacheWriteMode, ExactCacheConfig, MemoryCacheConfig, PersistentCacheConfig,
-    WriteBehindConfig,
+    CacheEncryptionConfig, CacheError, CacheWriteMode, ExactCacheConfig, MemoryCacheConfig,
+    PersistentCacheConfig, WriteBehindConfig,
 };
 pub use dynamic_pii::{
     DynamicPiiConditionalLabels, DynamicPiiConfig, DynamicPiiExecutionGate,

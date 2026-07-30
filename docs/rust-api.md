@@ -130,7 +130,9 @@ pub fn try_with_download_categories_and_cache(
 Create a gateway with lifecycle-scoped exact-cache configuration.
 
 Persistent caching is enabled only when `cache_config.persistent`
-contains an explicit storage location. Requests cannot override it.
+contains an explicit storage location. Set `PersistentCacheConfig.encryption`
+with a `CacheEncryptionConfig` to encrypt persistent cache values and keyed
+similarity bucket indexes. Requests cannot override it.
 
 ```rust
 pub fn categories(&self) -> &[SecurityCategory];

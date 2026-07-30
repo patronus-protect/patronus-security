@@ -304,7 +304,8 @@ impl CacheCoordinator {
 fn open_persistent_store(
     config: &super::PersistentCacheConfig,
 ) -> Result<(Arc<dyn ExactCacheStore>, Option<Arc<WriteBehindStats>>), CacheError> {
-    let redb: Arc<dyn ExactCacheStore> = RedbCacheStore::open_shared(&config.storage_location)?;
+    let redb: Arc<dyn ExactCacheStore> =
+        RedbCacheStore::open_shared(&config.storage_location, config.encryption.clone())?;
     Ok(match config.write_mode {
         CacheWriteMode::WriteThrough => (redb, None),
         CacheWriteMode::Async => {
@@ -395,6 +396,7 @@ mod tests {
                 storage_location: path,
                 write_mode: CacheWriteMode::Async,
                 write_behind: WriteBehindConfig::default(),
+                encryption: None,
             }),
             entry_ttl: Duration::from_secs(60),
         }

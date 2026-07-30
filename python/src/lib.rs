@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use patronus_ark::{
-    normalize_text as rust_normalize_text, CacheWriteMode, ConditionalPipelineGate,
-    DynamicPiiConfig, EvidenceSpan, ExactCacheConfig, ExecutionBackend, L3ClusteringStrategy,
-    L3EarlyExitMode, L3PipelinePolicy, L3ProgressMode, L3SchedulerPolicy, L3Strategy, LabelScore,
-    LayerResult, MemoryCacheConfig, NtdbOperatingPoint, OnnxBatchMode, PersistentCacheConfig,
-    QueuedSecurityEvent, QueuedSecurityScanResult, ScanGateMatrix, SecurityCategory,
-    SecurityFailure, SecurityGateway as RustSecurityGateway, SecurityLevel, SecurityLevelReadiness,
-    SecurityRequestCompletion, SecurityRequestState, SecurityRuntimeReadiness,
-    TextNormalizationConfig, WriteBehindConfig,
+    normalize_text as rust_normalize_text, CacheEncryptionConfig, CacheWriteMode,
+    ConditionalPipelineGate, DynamicPiiConfig, EvidenceSpan, ExactCacheConfig, ExecutionBackend,
+    L3ClusteringStrategy, L3EarlyExitMode, L3PipelinePolicy, L3ProgressMode, L3SchedulerPolicy,
+    L3Strategy, LabelScore, LayerResult, MemoryCacheConfig, NtdbOperatingPoint, OnnxBatchMode,
+    PersistentCacheConfig, QueuedSecurityEvent, QueuedSecurityScanResult, ScanGateMatrix,
+    SecurityCategory, SecurityFailure, SecurityGateway as RustSecurityGateway, SecurityLevel,
+    SecurityLevelReadiness, SecurityRequestCompletion, SecurityRequestState,
+    SecurityRuntimeReadiness, TextNormalizationConfig, WriteBehindConfig,
 };
 use pyo3::prelude::*;
 use std::path::PathBuf;
@@ -28,7 +28,7 @@ struct SecurityGateway {
 #[pymethods]
 impl SecurityGateway {
     #[new]
-    #[pyo3(signature = (categories, max_level="l2", model_dir=None, download_files=true, download_categories=None, execution_gates_json=None, onnx_batch_mode="backend_default", execution_backend="auto", ntdb_operating_point="best_f1", l3_strategy="dedicated", dynamic_pii_config_json=None, cache_storage_location=None, cache_entry_ttl_seconds=2_592_000, cache_memory_max_entries=100_000, cache_memory_max_bytes=134_217_728))]
+    #[pyo3(signature = (categories, max_level="l2", model_dir=None, download_files=true, download_categories=None, execution_gates_json=None, onnx_batch_mode="backend_default", execution_backend="auto", ntdb_operating_point="best_f1", l3_strategy="dedicated", dynamic_pii_config_json=None, cache_storage_location=None, cache_encryption_key_hex=None, cache_entry_ttl_seconds=2_592_000, cache_memory_max_entries=100_000, cache_memory_max_bytes=134_217_728))]
     fn new(
         categories: Vec<String>,
         max_level: &str,
@@ -42,6 +42,7 @@ impl SecurityGateway {
         l3_strategy: &str,
         dynamic_pii_config_json: Option<&str>,
         cache_storage_location: Option<String>,
+        cache_encryption_key_hex: Option<&str>,
         cache_entry_ttl_seconds: u64,
         cache_memory_max_entries: usize,
         cache_memory_max_bytes: usize,
@@ -61,6 +62,7 @@ impl SecurityGateway {
             Some(categories) => Some(parse_categories(categories)?),
             None => None,
         };
+        let encryption = parse_cache_encryption_key_hex(cache_encryption_key_hex)?;
         let cache_config = ExactCacheConfig {
             memory: MemoryCacheConfig {
                 max_entries: cache_memory_max_entries,
@@ -70,6 +72,7 @@ impl SecurityGateway {
                 storage_location: PathBuf::from(storage_location),
                 write_mode: CacheWriteMode::Async,
                 write_behind: WriteBehindConfig::default(),
+                encryption: encryption.clone(),
             }),
             entry_ttl: Duration::from_secs(cache_entry_ttl_seconds),
         };
@@ -302,6 +305,35 @@ fn parse_l3_strategy(value: &str) -> PyResult<L3Strategy> {
     value
         .parse::<L3Strategy>()
         .map_err(pyo3::exceptions::PyValueError::new_err)
+}
+
+fn parse_cache_encryption_key_hex(value: Option<&str>) -> PyResult<Option<CacheEncryptionConfig>> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    if value.len() != 64 {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "cache_encryption_key_hex must contain exactly 64 hex characters",
+        ));
+    }
+    let mut key = [0u8; 32];
+    for (index, chunk) in value.as_bytes().chunks_exact(2).enumerate() {
+        let high = hex_nibble(chunk[0])?;
+        let low = hex_nibble(chunk[1])?;
+        key[index] = (high << 4) | low;
+    }
+    Ok(Some(CacheEncryptionConfig::from_key(key)))
+}
+
+fn hex_nibble(value: u8) -> PyResult<u8> {
+    match value {
+        b'0'..=b'9' => Ok(value - b'0'),
+        b'a'..=b'f' => Ok(value - b'a' + 10),
+        b'A'..=b'F' => Ok(value - b'A' + 10),
+        _ => Err(pyo3::exceptions::PyValueError::new_err(
+            "cache_encryption_key_hex must contain only hex characters",
+        )),
+    }
 }
 
 fn parse_dynamic_pii_config_json(value: Option<&str>) -> PyResult<Option<DynamicPiiConfig>> {
