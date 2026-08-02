@@ -73,9 +73,27 @@ Raises:
     ValueError: If an allowed required asset download or model
         initialization fails.
 
+### `stop_l3_models()`
+
+Unload resident L3 model sessions while preserving gateway configuration.
+
 ### `flush_cache()`
 
 Wait until all queued persistent cache writes are durable.
+
+### `reset_cache_connections()`
+
+Flush and close persistent cache handles.
+
+The cache database file is preserved. A configured persistent cache is
+reopened lazily on the next cache access.
+
+### `reset_cache(until_ts: int | float) -> int`
+
+Delete cache records created before `until_ts`.
+
+`until_ts` accepts Unix seconds or Unix milliseconds. The cache database
+file is preserved.
 
 ### `scan_all(text: str) -> list[dict]`
 

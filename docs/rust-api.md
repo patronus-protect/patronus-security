@@ -12,6 +12,7 @@ pub mod assets;
 #[allow(dead_code, unused_imports)]
 mod cache;
 pub mod detectors;
+mod diagnostics;
 pub mod dynamic_pii;
 pub mod external_l1;
 pub mod gliner_onnx_engine;
@@ -22,8 +23,8 @@ pub mod threat;
 pub mod types;
 
 pub use cache::{
-    CacheError, CacheWriteMode, ExactCacheConfig, MemoryCacheConfig, PersistentCacheConfig,
-    WriteBehindConfig,
+    CacheEncryptionConfig, CacheError, CacheWriteMode, ExactCacheConfig, MemoryCacheConfig,
+    PersistentCacheConfig, WriteBehindConfig,
 };
 pub use dynamic_pii::{
     DynamicPiiConditionalLabels, DynamicPiiConfig, DynamicPiiExecutionGate,
@@ -33,15 +34,17 @@ pub use external_l1::{ExternalL1Detector, ExternalL1Input};
 pub use normalization::{canonical_security_text_v1, normalize_text, TextNormalizationConfig};
 pub use pipeline::{Pipeline, SecurityGateway};
 pub use types::{
-    ConditionalPipelineGate, EffectiveL3PipelinePolicy, EvaluationResult, ExecutionBackend,
-    GateExpression, GateResult, L3AggregationStrategy, L3ClusteringStrategy, L3EarlyExitMode,
-    L3PipelineEarlyExit, L3PipelinePolicy, L3ProgressMode, L3SchedulerPolicy, L3Strategy,
-    LabelScore, LayerResult, MetadataCondition, NtdbOperatingPoint, OnnxBatchMode,
-    OnnxRuntimeOptions, QueuedSecurityEvent, QueuedSecurityProgress, QueuedSecurityScanResult,
-    RequestId, ResultCondition, ScanExecution, ScanGateMatrix, SecurityAssetProgress,
-    SecurityAssetProgressCallback, SecurityAssetReadiness, SecurityCategory, SecurityFailure,
-    SecurityFailureKind, SecurityFailureStage, SecurityLevel, SecurityLevelReadiness,
-    SecurityRequestCompletion, SecurityRequestState, SecurityRuntimeReadiness, SecurityScanResult,
+    ConditionalPipelineGate, DecisionCandidate, DecisionEnvelope, DecisionProvenance,
+    DecisionRecommendation, DecisionResult, DecisionTerminality, EffectiveL3PipelinePolicy,
+    EvaluationResult, ExecutionBackend, GateExpression, GateResult, L3AggregationStrategy,
+    L3ClusteringStrategy, L3EarlyExitMode, L3PipelineEarlyExit, L3PipelinePolicy, L3ProgressMode,
+    L3SchedulerPolicy, L3Strategy, LabelScore, LayerResult, MetadataCondition, NtdbOperatingPoint,
+    OnnxBatchMode, OnnxRuntimeOptions, QueuedSecurityEvent, QueuedSecurityProgress,
+    QueuedSecurityScanResult, RequestId, ResultCondition, ScanExecution, ScanGateMatrix,
+    SecurityAssetProgress, SecurityAssetProgressCallback, SecurityAssetReadiness, SecurityCategory,
+    SecurityFailure, SecurityFailureKind, SecurityFailureStage, SecurityLevel,
+    SecurityLevelReadiness, SecurityRequestCompletion, SecurityRequestState,
+    SecurityRuntimeReadiness, SecurityScanResult,
 };
 ```
 
@@ -61,6 +64,18 @@ pub fn flush_cache(&self) -> Result<(), crate::CacheError>;
 ```
 
 Flush queued persistent cache writes. Memory-only gateways are a no-op.
+
+```rust
+pub fn reset_cache_connections(&self) -> Result<(), crate::CacheError>;
+```
+
+Flush queued persistent cache writes and reopen storage on the next cache access.
+
+```rust
+pub fn reset_cache(&self, until_unix_ms: u64) -> Result<usize, crate::CacheError>;
+```
+
+Remove hot and persistent cache records created before `until_unix_ms`.
 
 ```rust
 pub fn cache_storage_location(&self) -> Option<PathBuf>;
@@ -130,9 +145,7 @@ pub fn try_with_download_categories_and_cache(
 Create a gateway with lifecycle-scoped exact-cache configuration.
 
 Persistent caching is enabled only when `cache_config.persistent`
-contains an explicit storage location. Set `PersistentCacheConfig.encryption`
-with a `CacheEncryptionConfig` to encrypt persistent cache values and keyed
-similarity bucket indexes. Requests cannot override it.
+contains an explicit storage location. Requests cannot override it.
 
 ```rust
 pub fn categories(&self) -> &[SecurityCategory];
@@ -198,6 +211,15 @@ pub fn set_l3_strategy(&self, strategy: crate::L3Strategy);
 ```
 
 Select dedicated per-pipeline L3 models or the shared multi-head model.
+
+```rust
+pub fn stop_l3_models(&self);
+```
+
+Unload resident L3 model sessions while keeping registered model metadata.
+
+Subsequent L3 scans can reload the same configured models without another
+gateway construction or asset warmup.
 
 ```rust
 pub fn l3_strategy(&self) -> crate::L3Strategy;
@@ -407,7 +429,7 @@ Scan text with every category configured on this gateway.
 ```rust
 pub struct ExternalL1Input {
     pub category: SecurityCategory,
-    pub text: String,
+    pub text: Arc<str>,
 }
 ```
 
@@ -418,6 +440,12 @@ pub fn new(category: SecurityCategory, text: impl Into<String>) -> Self;
 ```
 
 Create an input for one security category.
+
+```rust
+pub fn from_shared_text(category: SecurityCategory, text: Arc<str>) -> Self;
+```
+
+Create an input that shares request text with other categories.
 
 ```rust
 pub trait ExternalL1Detector: Send + Sync {
@@ -769,14 +797,88 @@ pub struct SecurityScanResult {
     pub duration_ms: f64,
     /// Ordered layer evidence that explains the final decision.
     pub layers: Vec<LayerResult>,
+    /// Internal L2 chunk outputs reused by L3 planning. This field is cleared
+    /// before results are published outside the gateway.
+    #[doc(hidden)]
+    pub internal_l2_chunk_outputs: Vec<crate::ml::ntdb_executor::L2ChunkOutput>,
     /// Exact entity evidence returned by span-producing pipelines.
     pub evidence_spans: Vec<crate::dynamic_pii::EvidenceSpan>,
     /// Per-label scores for multi-label classifier outputs.
     pub label_scores: Vec<LabelScore>,
+    /// Structured classifier decision contract for policy consumers.
+    pub decision: Option<DecisionEnvelope>,
 }
 ```
 
 Public scan result returned by `SecurityGateway` methods.
+
+```rust
+pub struct DecisionEnvelope {
+    pub schema_version: String,
+    pub final_result: DecisionResult,
+    pub decision_candidate: Option<DecisionCandidate>,
+    pub recommendation: DecisionRecommendation,
+    pub candidates: Vec<DecisionCandidate>,
+    pub terminality: DecisionTerminality,
+    pub provenance: DecisionProvenance,
+}
+```
+
+Stable classifier decision envelope for downstream policy evaluation.
+
+```rust
+pub struct DecisionResult {
+    pub class_name: String,
+    pub confidence: f64,
+    pub source: String,
+}
+```
+
+Final Ark verdict recorded inside a decision envelope.
+
+```rust
+pub struct DecisionCandidate {
+    pub source: String,
+    pub class_name: String,
+    pub confidence: f64,
+    pub acceptance_threshold: f64,
+    pub accepted: bool,
+    pub evidence: Option<HashMap<String, f64>>,
+}
+```
+
+One typed classifier candidate considered by final-decision arbitration.
+
+```rust
+pub struct DecisionRecommendation {
+    pub accepted: bool,
+    pub final_arbitration: String,
+    pub operating_point: String,
+    pub acceptance_threshold: Option<f64>,
+}
+```
+
+Ark's calibrated default recommendation for a classifier result.
+
+```rust
+pub struct DecisionTerminality {
+    pub completion: String,
+    pub degraded: bool,
+    pub degradation_reason: Option<String>,
+}
+```
+
+Terminal request state relevant to decision consumers.
+
+```rust
+pub struct DecisionProvenance {
+    pub ark_version: String,
+    pub schema_version: String,
+    pub model: String,
+}
+```
+
+Minimal provenance for a classifier decision envelope.
 
 ```rust
 pub struct LabelScore {

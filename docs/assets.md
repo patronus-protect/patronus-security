@@ -44,7 +44,7 @@ The shared ONNX artifact is `onnx/int8_int4_embeddings/model.onnx`. See `docs/un
 
 NTDB v2 L2 packages are manifest-first and revision-pinned: the runtime downloads `manifest.json` and every file it references from the immutable Hugging Face commit listed below. Sizes therefore depend on the published package contents at that revision.
 
-For supported Granite/ModernBERT packages, the Security Lib generates a compact `tokenizer.kit` locally after the verified asset download. For compatible mmBERT byte-fallback BPE tokenizers, it generates `tokenizer.mmbpe` during verified downloads and cached warmup. Existing official caches are migrated during warmup, while local environment overrides are left untouched. The original `tokenizer.json` remains the canonical fallback. Generated files are written atomically under a cross-process lock and invalidated by source hash, compact hash, converter version, and format version.
+For supported Granite/ModernBERT packages, the Security Lib generates a compact `tokenizer.kit` locally after the verified asset download. Existing official caches are migrated during warmup, while local environment overrides are left untouched. The original `tokenizer.json` remains the canonical fallback. Generated files are written atomically under a cross-process lock and invalidated by source hash, compact hash, converter version, and format version.
 
 | Category | Model | Repository | Revision | Source prefix | Cache path |
 | --- | --- | --- | --- | --- | --- |
