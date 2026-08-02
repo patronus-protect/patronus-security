@@ -207,6 +207,16 @@ impl LazyOnnxTextClassifier {
         Ok(result)
     }
 
+    pub(crate) fn warmup_session(
+        &mut self,
+        backend: ExecutionBackend,
+        options: OnnxRuntimeOptions,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        self.ensure_loaded(backend, options)?;
+        self.last_used = Some(Instant::now());
+        Ok(())
+    }
+
     pub(crate) fn decode_raw(&self, output: &RawClassifierOutput) -> EvaluationResult {
         result_from_logits(&output.logits, &self.class_names)
     }
@@ -273,11 +283,15 @@ impl LazyOnnxTextClassifier {
             .last_used
             .is_some_and(|last_used| last_used.elapsed() > self.ttl)
         {
-            self.loaded = None;
-            self.loaded_backend = None;
-            self.loaded_options = None;
-            self.last_used = None;
+            self.force_unload();
         }
+    }
+
+    pub(crate) fn force_unload(&mut self) {
+        self.loaded = None;
+        self.loaded_backend = None;
+        self.loaded_options = None;
+        self.last_used = None;
     }
 
     fn ensure_loaded(
@@ -862,7 +876,8 @@ fn softmax(logits: &[f32]) -> Vec<f32> {
 
 #[cfg(test)]
 mod tests {
-    use super::{token_chunks, truncate_and_pad};
+    use super::{token_chunks, truncate_and_pad, LazyOnnxTextClassifier};
+    use crate::{ExecutionBackend, OnnxRuntimeOptions};
 
     #[test]
     fn tokenizer_inputs_use_fixed_right_padding_and_truncation() {
@@ -891,5 +906,36 @@ mod tests {
         assert!(chunks.iter().all(|chunk| {
             chunk.text == "abcdefghijklm🦀nopqrstuvwxyz"[chunk.start_byte..chunk.end_byte]
         }));
+    }
+
+    #[test]
+    fn warmup_session_loads_registered_lazy_assets() {
+        let dir = fake_lazy_onnx_dir("warmup-session-loads-registered-lazy-assets");
+        let mut classifier = LazyOnnxTextClassifier::from_dir_with_paths(
+            &dir,
+            vec!["benign".to_string(), "attack".to_string()],
+            "fake-l3",
+            &["onnx/model.onnx"],
+            "tokenizer.json",
+            16,
+        )
+        .unwrap()
+        .expect("fake lazy metadata should be accepted");
+
+        assert!(classifier
+            .warmup_session(ExecutionBackend::Cpu, OnnxRuntimeOptions::default())
+            .is_err());
+        assert!(!classifier.is_loaded());
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    fn fake_lazy_onnx_dir(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("patronus-ark-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("onnx")).unwrap();
+        std::fs::write(dir.join("tokenizer.json"), "{}").unwrap();
+        std::fs::write(dir.join("onnx/model.onnx"), []).unwrap();
+        dir
     }
 }

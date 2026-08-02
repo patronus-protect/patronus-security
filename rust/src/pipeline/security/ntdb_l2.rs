@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::{
-    ml::ntdb_executor::{manifest::PackageManifest, NtdbDecision, NtdbPackageSpec},
+    ml::ntdb_executor::{manifest::PackageManifest, L2ChunkOutput, NtdbDecision, NtdbPackageSpec},
     pipeline::decision_thresholds::{arbitrate_l2, arbitration_name, threshold_l2_result},
     pipeline::l3_pending_layer,
     EvaluationResult, LabelScore, LayerResult, ScanExecution, SecurityCategory, SecurityLevel,
@@ -218,10 +218,8 @@ pub(super) fn ntdb_l2_result_parts(
     for candidate in &mut l3_candidates {
         candidate.source_pipeline = source_pipeline.to_string();
     }
-    let mut l2_chunk_outputs = decision.l2_chunk_outputs.clone();
-    for chunk in &mut l2_chunk_outputs {
-        chunk.source_pipeline = source_pipeline.to_string();
-    }
+    let public_l2_chunk_outputs =
+        public_l2_chunk_outputs(&decision.l2_chunk_outputs, source_pipeline);
     let mut details = HashMap::from([
         (
             "ntdb_model_id".to_string(),
@@ -247,7 +245,7 @@ pub(super) fn ntdb_l2_result_parts(
         ),
         (
             "l2_chunk_outputs".to_string(),
-            serde_json::json!(l2_chunk_outputs),
+            serde_json::json!(public_l2_chunk_outputs),
         ),
         (
             "class_scores".to_string(),
@@ -307,6 +305,8 @@ pub fn ntdb_l2_scan_result(
         config.category.as_str(),
     );
     let mut scan = scan_result(config.category, config.public_model, result, layers);
+    scan.internal_l2_chunk_outputs =
+        l2_chunk_outputs_with_source(decision, config.category.as_str());
     scan.label_scores = decision
         .labels
         .iter()
@@ -328,6 +328,35 @@ pub fn ntdb_l2_scan_result(
         scan.decision = None;
     }
     scan
+}
+
+fn l2_chunk_outputs_with_source(
+    decision: &NtdbDecision,
+    source_pipeline: &str,
+) -> Vec<L2ChunkOutput> {
+    let mut outputs = decision.l2_chunk_outputs.clone();
+    for output in &mut outputs {
+        output.source_pipeline = source_pipeline.to_string();
+    }
+    outputs
+}
+
+fn public_l2_chunk_outputs(outputs: &[L2ChunkOutput], source_pipeline: &str) -> Vec<L2ChunkOutput> {
+    outputs
+        .iter()
+        .map(|output| L2ChunkOutput {
+            span: output.span,
+            class_name: output.class_name.clone(),
+            confidence: output.confidence,
+            promoted: output.promoted,
+            promote_score: output.promote_score,
+            promote_threshold: output.promote_threshold,
+            source_pipeline: source_pipeline.to_string(),
+            source_model: output.source_model.clone(),
+            embedding: Vec::new(),
+            embedding_space: String::new(),
+        })
+        .collect()
 }
 
 pub(super) fn validate_ntdb_l2_package(
@@ -359,7 +388,10 @@ pub(super) fn validate_ntdb_l2_package(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ml::ntdb_executor::NtdbDecision, NtdbOperatingPoint};
+    use crate::{
+        ml::ntdb_executor::{ByteSpan, NtdbDecision},
+        NtdbOperatingPoint,
+    };
 
     #[test]
     fn promoted_l2_fallback_still_obeys_decision_thresholds() {
@@ -452,6 +484,71 @@ mod tests {
             .iter()
             .any(|layer| layer.layer_type == "l3_pending"));
         assert!(result.decision.is_none());
+    }
+
+    #[test]
+    fn l2_embeddings_stay_internal_and_are_not_serialized_into_layer_details() {
+        let decision = NtdbDecision {
+            model_id: "threat".to_string(),
+            aggregator_id: "test".to_string(),
+            task: "multiclass".to_string(),
+            labels: vec!["benign".to_string(), "attack".to_string()],
+            fallback_label: "attack".to_string(),
+            fallback_confidence: 0.9,
+            route_to_l3: true,
+            promote_score: Some(0.9),
+            promote_threshold: Some(0.8),
+            class_scores: vec![0.1, 0.9],
+            class_logits: Vec::new(),
+            chunks: 1,
+            chunk_promote_scores: vec![Some(0.9)],
+            l3_candidate_spans: Vec::new(),
+            l3_candidates: Vec::new(),
+            l2_chunk_outputs: vec![L2ChunkOutput {
+                span: ByteSpan { start: 0, end: 10 },
+                class_name: "attack".to_string(),
+                confidence: 0.9,
+                promoted: true,
+                promote_score: Some(0.9),
+                promote_threshold: Some(0.8),
+                source_pipeline: String::new(),
+                source_model: "threat".to_string(),
+                embedding: vec![1.0, 2.0, 3.0],
+                embedding_space: "minilm-test".to_string(),
+            }],
+        };
+
+        let result = ntdb_l2_scan_result(
+            NtdbL2ModelConfig {
+                category: SecurityCategory::Threat,
+                model_id: "threat",
+                public_model: "unified-v3-threat",
+                env_key: "TEST",
+                package_name: "test",
+                has_l3: true,
+            },
+            &decision,
+            &ScanExecution::new(SecurityLevel::L3),
+            1.0,
+        );
+
+        assert_eq!(
+            result.internal_l2_chunk_outputs[0].embedding,
+            vec![1.0, 2.0, 3.0]
+        );
+        assert_eq!(
+            result.internal_l2_chunk_outputs[0].embedding_space,
+            "minilm-test"
+        );
+        let layer = result
+            .layers
+            .iter()
+            .find(|layer| layer.layer_type == "ntdb_l2")
+            .unwrap();
+        let public_outputs: Vec<L2ChunkOutput> =
+            serde_json::from_value(layer.details["l2_chunk_outputs"].clone()).unwrap();
+        assert!(public_outputs[0].embedding.is_empty());
+        assert!(public_outputs[0].embedding_space.is_empty());
     }
 
     #[test]

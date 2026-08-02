@@ -196,6 +196,7 @@ mod tests {
                 thresholds: HashMap::new(),
                 details: HashMap::new(),
             }],
+            internal_l2_chunk_outputs: Vec::new(),
             evidence_spans: Vec::new(),
             label_scores: Vec::new(),
             decision: Some(DecisionEnvelope {

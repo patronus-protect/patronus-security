@@ -245,6 +245,16 @@ impl LazyUnifiedOnnxClassifier {
         Ok(output)
     }
 
+    pub(crate) fn warmup_session(
+        &mut self,
+        backend: ExecutionBackend,
+        options: OnnxRuntimeOptions,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        self.ensure_loaded(backend, options)?;
+        self.last_used = Some(Instant::now());
+        Ok(())
+    }
+
     pub(crate) fn decode_raw(
         &self,
         output: &UnifiedRawModelOutput,
@@ -275,11 +285,15 @@ impl LazyUnifiedOnnxClassifier {
             .last_used
             .is_some_and(|last_used| last_used.elapsed() >= self.ttl)
         {
-            self.loaded = None;
-            self.loaded_backend = None;
-            self.loaded_options = None;
-            self.last_used = None;
+            self.force_unload();
         }
+    }
+
+    pub(crate) fn force_unload(&mut self) {
+        self.loaded = None;
+        self.loaded_backend = None;
+        self.loaded_options = None;
+        self.last_used = None;
     }
 
     fn ensure_loaded(

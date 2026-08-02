@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use std::collections::{HashMap, HashSet};
-use std::sync::{mpsc, Arc};
+use std::sync::Arc;
 #[cfg(feature = "test-util")]
 use std::sync::{Condvar, Mutex};
-use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::assets::UNIFIED_L3_ASSET;
@@ -23,14 +22,14 @@ use super::super::decision_cache::DecisionCache;
 use super::super::l3_routing::{priority_index, ttl_ms};
 use super::super::{degraded_error_result, degraded_timeout_result, l3_metadata_layer};
 use super::{
-    elapsed_ms, finish_job, request_wide_early_exit, L3JobSpec, L3Worker, L3WorkerJob,
-    L3WorkerState, UnifiedModelHandle, L3_OVERLAP_TOKENS,
+    elapsed_ms, finish_job, request_wide_early_exit, L3JobSpec, L3Worker, L3WorkerInput,
+    L3WorkerJob, L3WorkerState, UnifiedModelHandle,
 };
 #[cfg(feature = "test-util")]
 use super::{FairSchedulerState, RequestRegistry};
 use crate::pipeline::decision_thresholds::arbitrate_l3_l2;
 use crate::pipeline::l3_engine::{execute_l3_plan, L3ExecutionAdapter, L3ResolvedKind};
-use crate::pipeline::l3_schedule::{selected_l3_chunks, SelectedL3Chunk};
+use crate::pipeline::l3_schedule::SelectedL3Chunk;
 use crate::pipeline::strategy::{
     aggregate_decision_index, ChunkAggregation, ChunkDecision, HeadDecisionState, PipelineStrategy,
 };
@@ -119,7 +118,7 @@ pub(super) fn enqueue(worker: &L3Worker, spec: L3JobSpec) {
         .expect("unified run mutex poisoned");
     match runs.get_mut(&run_key) {
         Some(UnifiedRunState::Running { subscribers }) => {
-            subscribers.push(spec);
+            subscribers.push(subscriber_spec(spec));
             return;
         }
         Some(UnifiedRunState::Completed(result)) => {
@@ -138,9 +137,9 @@ pub(super) fn enqueue(worker: &L3Worker, spec: L3JobSpec) {
         }
         None => {
             runs.insert(
-                run_key,
+                run_key.clone(),
                 UnifiedRunState::Running {
-                    subscribers: vec![spec.clone()],
+                    subscribers: vec![subscriber_spec(spec.clone())],
                 },
             );
         }
@@ -154,7 +153,13 @@ pub(super) fn enqueue(worker: &L3Worker, spec: L3JobSpec) {
         priority_index(physical.execution.l3_policy(), UNIFIED_MODEL, UNIFIED_MODEL);
     physical.ttl_ms = ttl_ms(physical.execution.l3_policy(), UNIFIED_MODEL, UNIFIED_MODEL);
     physical.inference_timeout_ms = physical.ttl_ms;
-    worker.enqueue_physical(physical);
+    worker.enqueue_unified_physical(physical, run_key, cache_key);
+}
+
+fn subscriber_spec(mut spec: L3JobSpec) -> L3JobSpec {
+    spec.l3_candidates.clear();
+    spec.l2_chunk_outputs = Vec::new().into();
+    spec
 }
 
 pub(super) fn remove_request(state: &L3WorkerState, request_id: &str) {
@@ -201,40 +206,15 @@ pub(super) fn execute(state: &L3WorkerState, job: L3WorkerJob) -> UnifiedRunOutc
             error: "unified L3 model is not registered".to_string(),
         });
     };
-    let remaining = Duration::from_millis(job.inference_timeout_ms);
-    let (tx, rx) = mpsc::channel();
-    let thread_job = job.clone();
     let exact_cache = Arc::clone(&state.exact_cache);
     let similarity_cache = Arc::clone(&state.similarity_cache);
-    thread::spawn(move || {
-        let _ = tx.send(run_unified_model_job(
-            &thread_job,
-            model,
-            exact_cache,
-            similarity_cache,
-        ));
-    });
-    match rx.recv_timeout(remaining) {
-        Ok(Ok(result)) => UnifiedRunOutcome::Completed(result),
-        Ok(Err(error)) => UnifiedRunOutcome::Failed(UnifiedRunFailure::Error {
+    match run_unified_model_job(&job, model, exact_cache, similarity_cache) {
+        Ok(result) => UnifiedRunOutcome::Completed(result),
+        Err(error) => UnifiedRunOutcome::Failed(UnifiedRunFailure::Error {
             queued_ms: elapsed_ms(job.enqueued_at),
             ttl_ms: job.ttl_ms,
             error,
         }),
-        Err(mpsc::RecvTimeoutError::Timeout) => {
-            UnifiedRunOutcome::Failed(UnifiedRunFailure::Timeout {
-                queued_ms: elapsed_ms(job.enqueued_at),
-                timeout_ms: job.inference_timeout_ms,
-                reason: "inference_timeout",
-            })
-        }
-        Err(mpsc::RecvTimeoutError::Disconnected) => {
-            UnifiedRunOutcome::Failed(UnifiedRunFailure::Error {
-                queued_ms: elapsed_ms(job.enqueued_at),
-                ttl_ms: job.ttl_ms,
-                error: "unified L3 inference thread terminated without a result".to_string(),
-            })
-        }
     }
 }
 
@@ -251,34 +231,8 @@ fn run_unified_model_job(
 ) -> Result<UnifiedRunResult, String> {
     let queue_wait_ms = elapsed_ms(job.enqueued_at);
     let started = Instant::now();
-    let token_chunks = model
-        .lock()
-        .map_err(|error| format!("unified L3 model mutex poisoned: {error}"))?
-        .token_chunks(
-            &job.text,
-            L3_OVERLAP_TOKENS,
-            job.execution.backend(),
-            job.execution.onnx_runtime_options(),
-        )
-        .map_err(|error| error.to_string())?;
-    let candidate_heads = candidate_head_names(&job.l3_candidates, &job.category);
-    let selection_clustering = candidate_heads
-        .iter()
-        .map(|head| {
-            job.execution
-                .l3_policy()
-                .pipeline_policy(head, head)
-                .clustering
-        })
-        .find(|clustering| {
-            matches!(
-                clustering,
-                L3ClusteringStrategy::Representative | L3ClusteringStrategy::VerifyRepresentative
-            )
-        })
-        .unwrap_or(job.execution.l3_policy().clustering);
-    let mut chunks = selected_l3_chunks(token_chunks, &job.l3_candidates, selection_clustering);
-    crate::pipeline::l3_schedule::attach_l2_embeddings(&mut chunks, &job.l2_chunk_outputs);
+    let chunks = planned_chunks(job)?;
+    let selection_clustering = selection_clustering_for_job(job);
     let head_plan = unified_head_chunk_plan(&chunks, &job.l3_candidates, &job.category);
     let mut promoted_heads = head_plan
         .l3_chunks_by_head
@@ -436,6 +390,42 @@ fn candidate_head_names(
         heads.insert(fallback_head.to_string());
     }
     heads
+}
+
+pub(super) fn selection_clustering_for_spec(spec: &L3JobSpec) -> L3ClusteringStrategy {
+    selection_clustering(
+        &spec.l3_candidates,
+        &spec.category,
+        spec.execution.l3_policy(),
+    )
+}
+
+fn selection_clustering_for_job(job: &L3WorkerJob) -> L3ClusteringStrategy {
+    selection_clustering(&job.l3_candidates, &job.category, job.execution.l3_policy())
+}
+
+fn selection_clustering(
+    candidates: &[crate::ml::ntdb_executor::L3Candidate],
+    fallback_head: &str,
+    policy: &crate::L3SchedulerPolicy,
+) -> L3ClusteringStrategy {
+    candidate_head_names(candidates, fallback_head)
+        .iter()
+        .map(|head| policy.pipeline_policy(head, head).clustering)
+        .find(|clustering| {
+            matches!(
+                clustering,
+                L3ClusteringStrategy::Representative | L3ClusteringStrategy::VerifyRepresentative
+            )
+        })
+        .unwrap_or(policy.clustering)
+}
+
+fn planned_chunks(job: &L3WorkerJob) -> Result<Vec<SelectedL3Chunk>, String> {
+    match &job.input {
+        L3WorkerInput::PlannedChunks(chunks) => Ok(chunks.clone()),
+        L3WorkerInput::Text(_) => Err("unified L3 job is missing planned chunks".to_string()),
+    }
 }
 
 struct UnifiedExecutionAdapter<'a> {
@@ -983,7 +973,7 @@ pub fn unified_metadata_details_for_test(
         request_id: "request-1".to_string(),
         category: "threat".to_string(),
         model: "dedicated-threat".to_string(),
-        text: "same request text".to_string(),
+        text: "same request text".into(),
         fallback: SecurityScanResult {
             category: "threat".to_string(),
             class_name: "benign".to_string(),
@@ -999,6 +989,7 @@ pub fn unified_metadata_details_for_test(
                 },
                 &ScanExecution::new(SecurityLevel::L3),
             )],
+            internal_l2_chunk_outputs: Vec::new(),
             evidence_spans: Vec::new(),
             label_scores: Vec::new(),
             decision: None,
@@ -1009,7 +1000,7 @@ pub fn unified_metadata_details_for_test(
         execution: ScanExecution::new(SecurityLevel::L3),
         degraded_factor: 0.75,
         l3_candidates: Vec::new(),
-        l2_chunk_outputs: Vec::new(),
+        l2_chunk_outputs: Vec::new().into(),
         dynamic_pii_config: None,
         dynamic_pii_activated_rules: Vec::new(),
     };
@@ -1127,7 +1118,7 @@ pub fn unified_coalescing_snapshot(categories: &[&str]) -> UnifiedCoalescingSnap
                 request_id: "request-1".to_string(),
                 category: (*category).to_string(),
                 model: format!("dedicated-{category}"),
-                text: "same request text".to_string(),
+                text: "same request text".into(),
                 fallback: SecurityScanResult {
                     category: (*category).to_string(),
                     class_name: "fallback".to_string(),
@@ -1136,6 +1127,7 @@ pub fn unified_coalescing_snapshot(categories: &[&str]) -> UnifiedCoalescingSnap
                     model: format!("l2-{category}"),
                     duration_ms: 1.0,
                     layers: Vec::new(),
+                    internal_l2_chunk_outputs: Vec::new(),
                     evidence_spans: Vec::new(),
                     label_scores: Vec::new(),
                     decision: None,
@@ -1146,7 +1138,7 @@ pub fn unified_coalescing_snapshot(categories: &[&str]) -> UnifiedCoalescingSnap
                 execution,
                 degraded_factor: 0.75,
                 l3_candidates: request_candidates.clone(),
-                l2_chunk_outputs: Vec::new(),
+                l2_chunk_outputs: Vec::new().into(),
                 dynamic_pii_config: None,
                 dynamic_pii_activated_rules: Vec::new(),
             },
@@ -1534,12 +1526,14 @@ fn unified_run_key(spec: &L3JobSpec) -> String {
 }
 
 pub(super) fn run_key_for_job(job: &L3WorkerJob) -> String {
-    unified_key(
+    if let Some(key) = &job.unified_run_key {
+        return key.clone();
+    }
+    unified_job_key(
         Some(job.request_id.as_str()),
-        &job.text,
+        job,
         job.execution.backend(),
         job.execution.l3_policy(),
-        &job.l3_candidates,
     )
 }
 
@@ -1554,13 +1548,39 @@ fn unified_cache_key(spec: &L3JobSpec) -> String {
 }
 
 pub(super) fn cache_key_for_job(job: &L3WorkerJob) -> String {
-    unified_key(
+    if let Some(key) = &job.unified_cache_key {
+        return key.clone();
+    }
+    unified_job_key(
         None,
-        &job.text,
+        job,
         job.execution.backend(),
         job.execution.l3_policy(),
-        &job.l3_candidates,
     )
+}
+
+fn unified_job_key(
+    request_id: Option<&str>,
+    job: &L3WorkerJob,
+    backend: crate::ExecutionBackend,
+    policy: &crate::L3SchedulerPolicy,
+) -> String {
+    let mut hasher = blake3::Hasher::new();
+    match &job.input {
+        L3WorkerInput::PlannedChunks(chunks) => {
+            hasher.update(&(chunks.len() as u64).to_le_bytes());
+            for chunk in chunks {
+                hasher.update(&chunk.start_byte.to_le_bytes());
+                hasher.update(&chunk.end_byte.to_le_bytes());
+                hasher.update(chunk.text.as_bytes());
+            }
+        }
+        L3WorkerInput::Text(text) => {
+            hasher.update(text.as_bytes());
+        }
+    }
+    update_unified_key(&mut hasher, policy, &job.l3_candidates);
+    finalized_unified_key(request_id, backend, hasher)
 }
 
 fn unified_key(
@@ -1572,6 +1592,15 @@ fn unified_key(
 ) -> String {
     let mut hasher = blake3::Hasher::new();
     hasher.update(text.as_bytes());
+    update_unified_key(&mut hasher, policy, candidates);
+    finalized_unified_key(request_id, backend, hasher)
+}
+
+fn update_unified_key(
+    hasher: &mut blake3::Hasher,
+    policy: &crate::L3SchedulerPolicy,
+    candidates: &[crate::ml::ntdb_executor::L3Candidate],
+) {
     hasher.update(unified_policy_key(policy).as_bytes());
     for candidate in candidates {
         hasher.update(&candidate.span.start.to_le_bytes());
@@ -1580,6 +1609,13 @@ fn unified_key(
         hasher.update(&candidate.promote_threshold.to_bits().to_le_bytes());
         hasher.update(candidate.source_pipeline.as_bytes());
     }
+}
+
+fn finalized_unified_key(
+    request_id: Option<&str>,
+    backend: crate::ExecutionBackend,
+    hasher: blake3::Hasher,
+) -> String {
     let hash = hasher.finalize();
     format!(
         "{}{}:{}:{}",
@@ -1731,13 +1767,49 @@ mod tests {
         }));
     }
 
+    #[test]
+    fn unified_subscriber_spec_drops_heavy_shared_request_state() {
+        let mut spec = test_subscriber(1, "threat", 2);
+        spec.text = Arc::<str>::from("large request text".repeat(1024));
+        let shared_text = Arc::clone(&spec.text);
+        spec.l3_candidates = vec![crate::ml::ntdb_executor::L3Candidate {
+            span: ByteSpan { start: 0, end: 10 },
+            promote_score: 0.9,
+            promote_threshold: 0.7,
+            source_pipeline: "threat".to_string(),
+            source_model: "threat".to_string(),
+            l2_class: "attack".to_string(),
+        }];
+        spec.l2_chunk_outputs = vec![crate::ml::ntdb_executor::L2ChunkOutput {
+            span: ByteSpan { start: 0, end: 10 },
+            class_name: "attack".to_string(),
+            confidence: 0.9,
+            promoted: true,
+            promote_score: Some(0.9),
+            promote_threshold: Some(0.7),
+            source_pipeline: "threat".to_string(),
+            source_model: "threat".to_string(),
+            embedding: vec![1.0, 0.0],
+            embedding_space: "test-space".to_string(),
+        }]
+        .into();
+
+        let subscriber = subscriber_spec(spec);
+
+        assert!(Arc::ptr_eq(&subscriber.text, &shared_text));
+        assert!(subscriber.l3_candidates.is_empty());
+        assert!(subscriber.l2_chunk_outputs.is_empty());
+        assert_eq!(subscriber.category, "threat");
+        assert_eq!(subscriber.priority, 2);
+    }
+
     fn test_subscriber(job_id: u64, category: &str, priority: usize) -> L3JobSpec {
         L3JobSpec {
             job_id,
             request_id: "rq-test".to_string(),
             category: category.to_string(),
             model: UNIFIED_MODEL.to_string(),
-            text: "test".to_string(),
+            text: "test".into(),
             fallback: SecurityScanResult {
                 category: category.to_string(),
                 class_name: "benign".to_string(),
@@ -1767,6 +1839,7 @@ mod tests {
                         details: HashMap::new(),
                     },
                 ],
+                internal_l2_chunk_outputs: Vec::new(),
                 evidence_spans: Vec::new(),
                 label_scores: Vec::new(),
                 decision: None,
@@ -1777,7 +1850,7 @@ mod tests {
             execution: ScanExecution::new(SecurityLevel::L3),
             degraded_factor: 0.75,
             l3_candidates: Vec::new(),
-            l2_chunk_outputs: Vec::new(),
+            l2_chunk_outputs: Vec::new().into(),
             dynamic_pii_config: None,
             dynamic_pii_activated_rules: Vec::new(),
         }

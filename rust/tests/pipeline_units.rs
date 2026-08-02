@@ -66,6 +66,7 @@ mod l3_results {
                     details: HashMap::new(),
                 },
             ],
+            internal_l2_chunk_outputs: Vec::new(),
             evidence_spans: Vec::new(),
             label_scores: Vec::new(),
             decision: None,

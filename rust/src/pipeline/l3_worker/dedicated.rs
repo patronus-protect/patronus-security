@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use std::collections::HashMap;
-use std::sync::{mpsc, Arc};
+use std::sync::Arc;
+#[cfg(feature = "test-util")]
 use std::thread;
-use std::time::{Duration, Instant};
+#[cfg(feature = "test-util")]
+use std::time::Duration;
+use std::time::Instant;
 
 #[cfg(feature = "test-util")]
 use crate::ml::ntdb_executor::ByteSpan;
@@ -11,6 +14,7 @@ use crate::ml::ntdb_executor::L3Candidate;
 #[cfg(feature = "test-util")]
 use crate::ml::onnx::TokenTextChunk;
 use crate::pipeline::l3_engine::{execute_l3_plan, L3ExecutionAdapter, L3ResolvedKind};
+#[cfg(any(test, feature = "test-util"))]
 use crate::pipeline::l3_schedule::selected_l3_chunks;
 #[cfg(test)]
 use crate::pipeline::l3_schedule::{chunk_clusters, SelectedL3Chunk};
@@ -27,7 +31,7 @@ use super::super::{
 };
 use super::{
     elapsed_ms, publish_progress, publish_provisional, DynamicPiiHandle, L3ModelHandle,
-    L3WorkerJob, L3WorkerState, L3_OVERLAP_TOKENS,
+    L3WorkerInput, L3WorkerJob, L3WorkerState,
 };
 use crate::cache::{
     decision_output, merge_pii_spans, CacheCoordinator, CacheKey, CacheNamespace, CacheSource,
@@ -46,9 +50,10 @@ pub(super) fn execute(
     #[cfg(feature = "test-util")]
     if job.test_delay_ms.is_some() {
         let progress_state = Arc::clone(state);
-        return execute_with_deadline(job, move |job| {
-            Ok(test_delay_result(job, Some(progress_state)))
-        });
+        let job_id = job.job_id;
+        let request_id = job.request_id.clone();
+        let result = test_delay_result(job, Some(progress_state));
+        return (job_id, request_id, result);
     }
 
     let elapsed_before_start_ms = elapsed_ms(job.enqueued_at);
@@ -80,9 +85,9 @@ pub(super) fn execute(
         let entity_cache = Arc::clone(&state.pii_entity_cache);
         let pii_chunk_cache = Arc::clone(&state.pii_chunk_cache);
         let event_state = Arc::clone(state);
-        return execute_with_deadline(job, move |job| {
-            run_dynamic_pii_job(job, model, entity_cache, pii_chunk_cache, event_state)
-        });
+        let completion = RunCompletion::from_job(&job);
+        let output = run_dynamic_pii_job(job, model, entity_cache, pii_chunk_cache, event_state);
+        return finish_run_result(completion, output);
     }
 
     let model = match state
@@ -109,16 +114,16 @@ pub(super) fn execute(
     let exact_cache = Arc::clone(&state.exact_cache);
     let similarity_cache = Arc::clone(&state.similarity_cache);
     let progress_state = Arc::clone(state);
-    execute_with_deadline(job, move |job| {
-        run_model_job(
-            job,
-            model,
-            chunk_cache,
-            exact_cache,
-            similarity_cache,
-            progress_state,
-        )
-    })
+    let completion = RunCompletion::from_job(&job);
+    let output = run_model_job(
+        job,
+        model,
+        chunk_cache,
+        exact_cache,
+        similarity_cache,
+        progress_state,
+    );
+    finish_run_result(completion, output)
 }
 
 fn run_dynamic_pii_job(
@@ -128,12 +133,12 @@ fn run_dynamic_pii_job(
     chunk_cache: Arc<crate::cache::PiiChunkCache>,
     worker_state: Arc<L3WorkerState>,
 ) -> Result<SecurityScanResult, String> {
+    let text = dynamic_text(&job)?;
     let config = job
         .dynamic_pii_config
         .as_ref()
         .ok_or_else(|| "dynamic-pii job is missing its configuration".to_string())?;
-    let cached_spans =
-        entity_cache.find(crate::assets::DYNAMIC_PII_ASSET.revision, &job.text, config);
+    let cached_spans = entity_cache.find(crate::assets::DYNAMIC_PII_ASSET.revision, text, config);
     let cache_hits = cached_spans.len();
     let first_published = Arc::new(std::sync::atomic::AtomicBool::new(false));
     if let Some(span) = cached_spans.first() {
@@ -146,7 +151,7 @@ fn run_dynamic_pii_job(
     let mut output = runtime
         .lock()
         .map_err(|error| format!("dynamic-pii runtime mutex poisoned: {error}"))?
-        .infer_with_callback(&job.text, config, chunk_cache, move |span| {
+        .infer_with_callback(text, config, chunk_cache, move |span| {
             if callback_published
                 .compare_exchange(
                     false,
@@ -225,7 +230,7 @@ fn run_dynamic_pii_job(
             ),
             (
                 "planned_chunk_count".to_string(),
-                serde_json::json!(config.planned_chunk_count(&job.text)),
+                serde_json::json!(config.planned_chunk_count(text)),
             ),
             ("priority".to_string(), serde_json::json!(job.priority)),
             ("job_id".to_string(), serde_json::json!(job.job_id)),
@@ -273,52 +278,68 @@ fn publish_first_pii_result(
     super::publish_result_preview(worker, job.request_id.clone(), result);
 }
 
-fn execute_with_deadline<F>(job: L3WorkerJob, run: F) -> (u64, RequestId, SecurityScanResult)
-where
-    F: FnOnce(L3WorkerJob) -> Result<SecurityScanResult, String> + Send + 'static,
-{
-    let elapsed_before_start_ms = elapsed_ms(job.enqueued_at);
-    if elapsed_before_start_ms >= job.ttl_ms as f64 {
-        let result = timeout_result(&job, "expired_before_inference", elapsed_before_start_ms);
-        return (job.job_id, job.request_id, result);
+fn dynamic_text(job: &L3WorkerJob) -> Result<&str, String> {
+    match &job.input {
+        L3WorkerInput::Text(text) => Ok(text),
+        L3WorkerInput::PlannedChunks(_) => {
+            Err("dynamic-pii job is missing source text".to_string())
+        }
     }
+}
 
-    let remaining = Duration::from_millis(job.inference_timeout_ms);
-    let (tx, rx) = mpsc::channel();
-    let thread_job = job.clone();
-    thread::spawn(move || {
-        let _ = tx.send(run(thread_job));
-    });
+fn planned_chunks(
+    job: &L3WorkerJob,
+) -> Result<Vec<crate::pipeline::l3_schedule::SelectedL3Chunk>, String> {
+    match &job.input {
+        L3WorkerInput::PlannedChunks(chunks) => Ok(chunks.clone()),
+        L3WorkerInput::Text(_) => Err("L3 job is missing planned chunks".to_string()),
+    }
+}
 
-    let result = match rx.recv_timeout(remaining) {
-        Ok(Ok(result)) => result,
-        Ok(Err(error)) => degraded_error_result(
-            job.fallback.clone(),
-            elapsed_ms(job.enqueued_at),
-            job.ttl_ms,
-            job.degraded_factor,
+struct RunCompletion {
+    job_id: u64,
+    request_id: RequestId,
+    fallback: SecurityScanResult,
+    enqueued_at: Instant,
+    ttl_ms: u64,
+    degraded_factor: f64,
+}
+
+impl RunCompletion {
+    fn from_job(job: &L3WorkerJob) -> Self {
+        Self {
+            job_id: job.job_id,
+            request_id: job.request_id.clone(),
+            fallback: job.fallback.clone(),
+            enqueued_at: job.enqueued_at,
+            ttl_ms: job.ttl_ms,
+            degraded_factor: job.degraded_factor,
+        }
+    }
+}
+
+fn finish_run_result(
+    completion: RunCompletion,
+    output: Result<SecurityScanResult, String>,
+) -> (u64, RequestId, SecurityScanResult) {
+    let result = match output {
+        Ok(result) => result,
+        Err(error) => degraded_error_result(
+            completion.fallback,
+            elapsed_ms(completion.enqueued_at),
+            completion.ttl_ms,
+            completion.degraded_factor,
             error,
         ),
-        Err(mpsc::RecvTimeoutError::Timeout) => {
-            timeout_result(&job, "inference_timeout", elapsed_ms(job.enqueued_at))
-        }
-        Err(mpsc::RecvTimeoutError::Disconnected) => degraded_error_result(
-            job.fallback.clone(),
-            elapsed_ms(job.enqueued_at),
-            job.ttl_ms,
-            job.degraded_factor,
-            "L3 worker inference thread terminated without a result".to_string(),
-        ),
     };
-
-    (job.job_id, job.request_id, result)
+    (completion.job_id, completion.request_id, result)
 }
 
 fn timeout_result(job: &L3WorkerJob, reason: &str, queue_wait_ms: f64) -> SecurityScanResult {
     let mut result = degraded_timeout_result(
         job.fallback.clone(),
         queue_wait_ms,
-        job.inference_timeout_ms,
+        job.ttl_ms,
         job.degraded_factor,
     );
     if let Some(layer) = result
@@ -399,19 +420,7 @@ fn run_model_job(
     if let Some(aggregation) = pipeline_policy.aggregation.clone() {
         strategy.aggregation = aggregation.into();
     }
-    let token_chunks = model
-        .lock()
-        .map_err(|err| format!("L3 model mutex poisoned: {err}"))?
-        .token_chunks(
-            &job.text,
-            L3_OVERLAP_TOKENS,
-            job.execution.backend(),
-            job.execution.onnx_runtime_options(),
-        )
-        .map_err(|err| err.to_string())?;
-    let mut chunks =
-        selected_l3_chunks(token_chunks, &job.l3_candidates, pipeline_policy.clustering);
-    crate::pipeline::l3_schedule::attach_l2_embeddings(&mut chunks, &job.l2_chunk_outputs);
+    let mut chunks = planned_chunks(&job)?;
     prioritize_historical_non_safe(
         &mut chunks,
         &similarity_cache,
@@ -1607,7 +1616,7 @@ mod tests {
             request_id: "request-1".to_string(),
             category: "threat".to_string(),
             model: "unified-v3-threat".to_string(),
-            text: "text".to_string(),
+            input: L3WorkerInput::PlannedChunks(vec![selected_chunk("text", 0)]),
             fallback: SecurityScanResult {
                 category: "threat".to_string(),
                 class_name: "benign".to_string(),
@@ -1616,6 +1625,7 @@ mod tests {
                 model: "threat".to_string(),
                 duration_ms: 0.0,
                 layers: Vec::new(),
+                internal_l2_chunk_outputs: Vec::new(),
                 evidence_spans: Vec::new(),
                 label_scores: Vec::new(),
                 decision: None,
@@ -1629,9 +1639,10 @@ mod tests {
             fairness_quantum_ms: 1,
             max_wait_ms: 0,
             execution: ScanExecution::new(SecurityLevel::L3),
+            unified_run_key: None,
+            unified_cache_key: None,
             degraded_factor: 0.75,
             l3_candidates: Vec::new(),
-            l2_chunk_outputs: Vec::new(),
             dynamic_pii_config: None,
             dynamic_pii_activated_rules: Vec::new(),
             test_delay_ms: None,

@@ -242,6 +242,10 @@ pub struct SecurityScanResult {
     pub duration_ms: f64,
     /// Ordered layer evidence that explains the final decision.
     pub layers: Vec<LayerResult>,
+    /// Internal L2 chunk outputs reused by L3 planning. This field is cleared
+    /// before results are published outside the gateway.
+    #[doc(hidden)]
+    pub internal_l2_chunk_outputs: Vec<crate::ml::ntdb_executor::L2ChunkOutput>,
     /// Exact entity evidence returned by span-producing pipelines.
     pub evidence_spans: Vec<crate::dynamic_pii::EvidenceSpan>,
     /// Per-label scores for multi-label classifier outputs.

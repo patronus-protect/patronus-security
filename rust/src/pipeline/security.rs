@@ -25,6 +25,7 @@ use crate::{
         pii::pii,
         NativeRegexDetector,
     },
+    diagnostics::PhaseMetricScope,
     ml::ntdb_executor::NtdbExecutor,
     pipeline::{L3Worker, RequestRegistry},
     DynamicPiiConfig, EvaluationResult, ExecutionBackend, ExternalL1Detector, ExternalL1Input,
@@ -43,6 +44,32 @@ pub use ntdb_l2::{ntdb_l2_enabled_for_category, ntdb_l2_model_config_for_id, Ntd
 pub use ntdb_l2::{ntdb_l2_model_configs_for_category, ntdb_l2_scan_result};
 
 const DEFAULT_QUEUE_WORKER_COUNT: usize = 2;
+
+fn run_measured_l1_detector<F>(
+    category: SecurityCategory,
+    model: &str,
+    text_bytes: usize,
+    evaluate: F,
+) -> SecurityScanResult
+where
+    F: FnOnce() -> SecurityScanResult,
+{
+    let mut metrics = PhaseMetricScope::new(
+        "security_l1_detector",
+        format!(
+            "category={} model={} text_bytes={}",
+            category.as_str(),
+            model,
+            text_bytes
+        ),
+    );
+    let result = evaluate();
+    metrics.checkpoint(
+        "after_evaluate",
+        format!("category={} model={model}", category.as_str()),
+    );
+    result
+}
 
 /// Main scanner gateway for native and model-backed security categories.
 pub struct SecurityGateway {
@@ -136,6 +163,7 @@ fn scan_result(
         model: model.into(),
         duration_ms,
         layers,
+        internal_l2_chunk_outputs: Vec::new(),
         evidence_spans: Vec::new(),
         label_scores: Vec::new(),
         decision: None,
@@ -649,6 +677,14 @@ impl SecurityGateway {
             .set_l3_strategy(strategy);
     }
 
+    /// Unload resident L3 model sessions while keeping registered model metadata.
+    ///
+    /// Subsequent L3 scans can reload the same configured models without another
+    /// gateway construction or asset warmup.
+    pub fn stop_l3_models(&self) {
+        self.l3_worker.stop_models();
+    }
+
     /// Return the active global L3 model strategy.
     pub fn l3_strategy(&self) -> crate::L3Strategy {
         self.execution
@@ -708,7 +744,7 @@ impl SecurityGateway {
         execution: &ScanExecution,
     ) -> Vec<SecurityScanResult> {
         let category = input.category;
-        let text = input.text.as_str();
+        let text = input.text.as_ref();
         let mut results = Vec::new();
         macro_rules! push_native {
             ($pipeline:expr, $model:literal) => {
@@ -716,9 +752,16 @@ impl SecurityGateway {
                     && self.model_enabled(&execution, $model)
                 {
                     if let Some(ref pipe) = $pipeline {
-                        results.push(timed_into_scan_result(category, $model, "native", || {
-                            pipe.evaluate(text)
-                        }));
+                        results.push(run_measured_l1_detector(
+                            category,
+                            $model,
+                            text.len(),
+                            || {
+                                timed_into_scan_result(category, $model, "native", || {
+                                    pipe.evaluate(text)
+                                })
+                            },
+                        ));
                     }
                 }
             };
@@ -792,11 +835,11 @@ impl SecurityGateway {
                     && self.model_enabled(&execution, "native:dlp")
                 {
                     if let Some(ref native) = self.dlp_pipeline {
-                        results.push(timed_native_regex_scan_result(
+                        results.push(run_measured_l1_detector(
                             category,
                             "native:dlp",
-                            native,
-                            text,
+                            text.len(),
+                            || timed_native_regex_scan_result(category, "native:dlp", native, text),
                         ));
                     }
                 }
@@ -817,11 +860,11 @@ impl SecurityGateway {
                     && self.model_enabled(&execution, "native:pii");
                 if native_enabled {
                     if let Some(ref native) = self.pii_pipeline {
-                        results.push(timed_native_regex_scan_result(
+                        results.push(run_measured_l1_detector(
                             category,
                             "native:pii",
-                            native,
-                            text,
+                            text.len(),
+                            || timed_native_regex_scan_result(category, "native:pii", native, text),
                         ));
                     }
                 }
@@ -848,24 +891,31 @@ impl SecurityGateway {
                 if !self.model_enabled(execution, &model) {
                     continue;
                 }
-                let started = Instant::now();
-                match catch_unwind(AssertUnwindSafe(|| detector.evaluate(input))) {
-                    Ok(mut result) => {
-                        result.level = SecurityLevel::L1.as_str().to_string();
-                        results.push(l1_scan_result_with_duration(
-                            category,
-                            model.clone(),
-                            "external_l1",
-                            result,
-                            started.elapsed().as_secs_f64() * 1000.0,
-                        ));
-                    }
-                    Err(payload) => results.push(scanner_error_scan_result(
-                        category,
-                        model,
-                        panic_message(payload),
-                    )),
-                }
+                results.push(run_measured_l1_detector(
+                    category,
+                    &model,
+                    text.len(),
+                    || {
+                        let started = Instant::now();
+                        match catch_unwind(AssertUnwindSafe(|| detector.evaluate(input))) {
+                            Ok(mut result) => {
+                                result.level = SecurityLevel::L1.as_str().to_string();
+                                l1_scan_result_with_duration(
+                                    category,
+                                    model.clone(),
+                                    "external_l1",
+                                    result,
+                                    started.elapsed().as_secs_f64() * 1000.0,
+                                )
+                            }
+                            Err(payload) => scanner_error_scan_result(
+                                category,
+                                model.clone(),
+                                panic_message(payload),
+                            ),
+                        }
+                    },
+                ));
             }
         }
         results
@@ -877,6 +927,10 @@ impl SecurityGateway {
         text: &str,
         execution: &ScanExecution,
     ) -> Vec<SecurityScanResult> {
+        let mut metrics = PhaseMetricScope::new(
+            "security_ntdb_l2_categories",
+            format!("categories={} text_bytes={}", categories.len(), text.len()),
+        );
         let requested = categories
             .iter()
             .copied()
@@ -945,7 +999,15 @@ impl SecurityGateway {
                 }
             }
         }
-
+        metrics.checkpoint(
+            "after_cache_check",
+            format!(
+                "requested={} cached_models={} missing={}",
+                requested.len(),
+                cached_results.len(),
+                missing_configs.len()
+            ),
+        );
         let mut scored_results = cached_results;
         if !missing_configs.is_empty() {
             let model_ids = missing_configs
@@ -953,6 +1015,10 @@ impl SecurityGateway {
                 .map(|config| config.model_id)
                 .collect::<Vec<_>>();
             let scoring_started = Instant::now();
+            metrics.checkpoint(
+                "before_executor_score",
+                format!("model_ids={}", model_ids.len()),
+            );
             let decisions = match executor_mutex.lock() {
                 Ok(mut executor) => executor.score_models(
                     model_ids.iter().copied(),
@@ -965,6 +1031,10 @@ impl SecurityGateway {
                 ))
                     as Box<dyn std::error::Error + Send + Sync>),
             };
+            metrics.checkpoint(
+                "after_executor_score",
+                format!("model_ids={}", model_ids.len()),
+            );
             let duration_ms = scoring_started.elapsed().as_secs_f64() * 1000.0;
 
             match decisions {
@@ -1004,6 +1074,7 @@ impl SecurityGateway {
                             .or_default()
                             .push(result);
                     }
+                    metrics.checkpoint("after_result_build", "");
                 }
                 Err(err) => {
                     let message = err.to_string();
@@ -1023,6 +1094,7 @@ impl SecurityGateway {
                 results.append(&mut scored);
             }
         }
+        metrics.checkpoint("after_result_mapping", format!("results={}", results.len()));
         results
     }
 
@@ -1054,6 +1126,14 @@ impl SecurityGateway {
         metadata: &serde_json::Value,
         gate_results: &[crate::GateResult],
     ) -> Vec<SecurityScanResult> {
+        let mut metrics = PhaseMetricScope::new(
+            "security_scan_l2_inputs",
+            format!(
+                "inputs={} gate_results={}",
+                inputs.len(),
+                gate_results.len()
+            ),
+        );
         let mut execution = execution.clone();
         if execution.allows_level(SecurityLevel::L3) && execution.l3_policy().enabled {
             execution.set_defer_l3(true);
@@ -1070,6 +1150,10 @@ impl SecurityGateway {
                 )
             })
             .collect::<Vec<_>>();
+        metrics.checkpoint(
+            "after_allowed_categories",
+            format!("allowed={}", allowed_categories.len()),
+        );
         let mut l2_execution = execution.clone();
         let mut l2_gates = l2_execution.gates().clone();
         for input in &allowed_categories {
@@ -1093,6 +1177,7 @@ impl SecurityGateway {
             }
         }
         l2_execution.set_gates(l2_gates);
+        metrics.checkpoint("after_gate_filtering", "");
         let mut results = Vec::new();
         if let Some(first) = allowed_categories.first() {
             if allowed_categories
@@ -1103,21 +1188,33 @@ impl SecurityGateway {
                     .iter()
                     .map(|input| input.category)
                     .collect::<Vec<_>>();
+                metrics.checkpoint(
+                    "before_shared_ntdb_l2",
+                    format!("categories={}", categories.len()),
+                );
                 results.extend(self.scan_ntdb_l2_categories(
                     &categories,
                     &first.text,
                     &l2_execution,
                 ));
+                metrics.checkpoint("after_shared_ntdb_l2", format!("results={}", results.len()));
             } else {
                 for input in allowed_categories {
+                    metrics.checkpoint(
+                        "before_single_ntdb_l2",
+                        format!("category={}", input.category.as_str()),
+                    );
                     results.extend(self.scan_ntdb_l2_categories(
                         &[input.category],
                         &input.text,
                         &l2_execution,
                     ));
+                    metrics
+                        .checkpoint("after_single_ntdb_l2", format!("results={}", results.len()));
                 }
             }
         }
+        metrics.checkpoint("done", format!("results={}", results.len()));
         results
     }
 }

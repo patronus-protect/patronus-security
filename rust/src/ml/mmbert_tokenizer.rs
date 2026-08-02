@@ -137,7 +137,11 @@ impl MmbertPairTokenizer {
         self.encode_with_special_tokens(text, true)
     }
 
-    fn encode_with_special_tokens(&self, text: &str, add_special_tokens: bool) -> Vec<u32> {
+    pub(crate) fn encode_with_special_tokens(
+        &self,
+        text: &str,
+        add_special_tokens: bool,
+    ) -> Vec<u32> {
         let mut ids = Vec::new();
         if add_special_tokens {
             ids.push(self.bos);

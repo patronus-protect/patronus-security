@@ -4,6 +4,8 @@ use std::collections::HashMap;
 
 use super::{ntdb_error, NtdbResult};
 
+const NTDB_L2_CONTENT_TOKENS_PER_CHUNK: usize = 256;
+
 #[derive(Debug, Deserialize)]
 pub struct PackageManifest {
     pub format: String,
@@ -21,6 +23,11 @@ pub struct PackageManifest {
 }
 
 impl PackageManifest {
+    pub fn normalize_runtime_defaults(&mut self) {
+        self.chunk_size = NTDB_L2_CONTENT_TOKENS_PER_CHUNK;
+        self.minilm.content_tokens_per_chunk = NTDB_L2_CONTENT_TOKENS_PER_CHUNK;
+    }
+
     pub fn validate(&self) -> NtdbResult<()> {
         if self.format != "ntdb_model_package" || self.version != 2 {
             return Err(ntdb_error(format!(
@@ -173,4 +180,153 @@ pub struct OperatingPointManifest {
     pub metrics: serde_json::Value,
     pub attack_threshold: Option<f32>,
     pub promote_threshold: Option<f32>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ntdb_l2_manifests_use_canonical_256_token_chunks_at_runtime() {
+        let mut manifest: PackageManifest = serde_json::from_str(
+            r#"{
+                "format": "ntdb_model_package",
+                "version": 2,
+                "runtime_contract": "raw_text_to_ntdb_outputs",
+                "task": {"type": "binary", "labels": ["benign", "attack"]},
+                "chunk_size": 384,
+                "tokenizer_dir": "tokenizer",
+                "minilm": {
+                    "embedding_matrix_file": "embedding_matrix.f16",
+                    "vocab_size": 180000,
+                    "embedding_dim": 384,
+                    "content_tokens_per_chunk": 384,
+                    "source_model_path": "ntdb/artifacts/granite_embedding_97m_multilingual_r2",
+                    "model": "ibm-granite/granite-embedding-97m-multilingual-r2",
+                    "tokenizer_family": "ModernBERT"
+                },
+                "feature_contract": {
+                    "local_feature_order": [],
+                    "global_feature_order": []
+                },
+                "runtime": {
+                    "shared_preprocessing": ["tokenization"],
+                    "parallel_stages": [],
+                    "ordering": "manifest_order"
+                },
+                "heads": [{
+                    "id": "h",
+                    "type": "binary",
+                    "task": {"type": "binary", "labels": ["benign", "attack"]},
+                    "classifiers": [],
+                    "feature_order": [],
+                    "static_dir": "heads/h",
+                    "static_components": [],
+                    "projection_onnx": null,
+                    "ntdb_head_onnx": "heads/h/ntdb_head.onnx",
+                    "model_type": "sequential_ntdb",
+                    "reliability": {
+                        "enabled": false,
+                        "hidden_dim": 0,
+                        "execution": "inside_onnx_model"
+                    }
+                }],
+                "aggregators": [{
+                    "id": "a",
+                    "type": "binary",
+                    "task": {"type": "binary", "labels": ["benign", "attack"]},
+                    "onnx": "aggregators/a.onnx",
+                    "model_type": "sequential_ntdb",
+                    "input_feature_order": [],
+                    "global_feature_order": [],
+                    "reliability": {
+                        "enabled": false,
+                        "hidden_dim": 0,
+                        "execution": "inside_onnx_model"
+                    },
+                    "metric_sweep": null,
+                    "promote_router": null
+                }]
+            }"#,
+        )
+        .unwrap();
+
+        manifest.normalize_runtime_defaults();
+
+        assert_eq!(manifest.chunk_size, 256);
+        assert_eq!(manifest.minilm.content_tokens_per_chunk, 256);
+        manifest.validate().unwrap();
+    }
+
+    #[test]
+    fn runtime_normalization_overrides_declared_chunk_size() {
+        let mut manifest: PackageManifest = serde_json::from_str(
+            r#"{
+                "format": "ntdb_model_package",
+                "version": 2,
+                "runtime_contract": "raw_text_to_ntdb_outputs",
+                "task": {"type": "binary", "labels": ["benign", "attack"]},
+                "chunk_size": 2,
+                "tokenizer_dir": "tokenizer",
+                "minilm": {
+                    "embedding_matrix_file": "embedding_matrix.f16",
+                    "vocab_size": 1,
+                    "embedding_dim": 1,
+                    "content_tokens_per_chunk": 2,
+                    "source_model_path": "test-embedder",
+                    "model": null,
+                    "tokenizer_family": null
+                },
+                "feature_contract": {
+                    "local_feature_order": [],
+                    "global_feature_order": []
+                },
+                "runtime": {
+                    "shared_preprocessing": ["tokenization"],
+                    "parallel_stages": [],
+                    "ordering": "manifest_order"
+                },
+                "heads": [{
+                    "id": "h",
+                    "type": "binary",
+                    "task": {"type": "binary", "labels": ["benign", "attack"]},
+                    "classifiers": [],
+                    "feature_order": [],
+                    "static_dir": "heads/h",
+                    "static_components": [],
+                    "projection_onnx": null,
+                    "ntdb_head_onnx": "heads/h/ntdb_head.onnx",
+                    "model_type": "sequential_ntdb",
+                    "reliability": {
+                        "enabled": false,
+                        "hidden_dim": 0,
+                        "execution": "inside_onnx_model"
+                    }
+                }],
+                "aggregators": [{
+                    "id": "a",
+                    "type": "binary",
+                    "task": {"type": "binary", "labels": ["benign", "attack"]},
+                    "onnx": "aggregators/a.onnx",
+                    "model_type": "sequential_ntdb",
+                    "input_feature_order": [],
+                    "global_feature_order": [],
+                    "reliability": {
+                        "enabled": false,
+                        "hidden_dim": 0,
+                        "execution": "inside_onnx_model"
+                    },
+                    "metric_sweep": null,
+                    "promote_router": null
+                }]
+            }"#,
+        )
+        .unwrap();
+
+        manifest.normalize_runtime_defaults();
+
+        assert_eq!(manifest.chunk_size, 256);
+        assert_eq!(manifest.minilm.content_tokens_per_chunk, 256);
+        manifest.validate().unwrap();
+    }
 }

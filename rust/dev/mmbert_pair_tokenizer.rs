@@ -1,8 +1,10 @@
 use aho_corasick::{AhoCorasick, AhoCorasickBuilder, MatchKind};
+use kitoken::Kitoken;
 use serde::Deserialize;
 use std::{
     cmp::Ordering,
     collections::{BinaryHeap, HashMap},
+    ffi::{c_int, c_long},
     fs::{self, File},
     io::{self, BufReader, BufWriter, Read, Write},
     path::Path,
@@ -451,6 +453,7 @@ fn benchmark_compact(binary: &Path, dataset_dir: &Path) -> Result<(), Box<dyn st
     let started = Instant::now();
     let tokenizer = PairTokenizer::from_file(binary)?;
     let load_ms = started.elapsed().as_secs_f64() * 1000.0;
+    let load_peak_mb = peak_rss_mb();
     let texts = load_texts(dataset_dir)?;
     let started = Instant::now();
     let (tokens, checksum) = texts.iter().fold((0usize, 0u64), |(count, hash), text| {
@@ -463,9 +466,35 @@ fn benchmark_compact(binary: &Path, dataset_dir: &Path) -> Result<(), Box<dyn st
         )
     });
     println!(
-        "runtime=compact texts={} tokens={tokens} checksum={checksum} load_ms={load_ms:.2} encode_ms={:.2}",
+        "runtime=mmbpe texts={} tokens={tokens} checksum={checksum} load_ms={load_ms:.2} encode_ms={:.2} load_peak_mb={load_peak_mb:.3} encode_peak_mb={:.3}",
         texts.len(),
-        started.elapsed().as_secs_f64() * 1000.0
+        started.elapsed().as_secs_f64() * 1000.0,
+        peak_rss_mb()
+    );
+    Ok(())
+}
+
+fn benchmark_kit(binary: &Path, dataset_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    let started = Instant::now();
+    let tokenizer = Kitoken::from_file(binary).map_err(io::Error::other)?;
+    let load_ms = started.elapsed().as_secs_f64() * 1000.0;
+    let load_peak_mb = peak_rss_mb();
+    let texts = load_texts(dataset_dir)?;
+    let started = Instant::now();
+    let mut tokens = 0usize;
+    let mut checksum = 0u64;
+    for text in &texts {
+        let ids = tokenizer.encode(text, true).map_err(io::Error::other)?;
+        tokens += ids.len();
+        checksum = ids.iter().fold(checksum, |hash, id| {
+            hash.wrapping_mul(31).wrapping_add(*id as u64)
+        });
+    }
+    println!(
+        "runtime=kit texts={} tokens={tokens} checksum={checksum} load_ms={load_ms:.2} encode_ms={:.2} load_peak_mb={load_peak_mb:.3} encode_peak_mb={:.3}",
+        texts.len(),
+        started.elapsed().as_secs_f64() * 1000.0,
+        peak_rss_mb()
     );
     Ok(())
 }
@@ -477,6 +506,7 @@ fn benchmark_reference(
     let started = Instant::now();
     let tokenizer = Tokenizer::from_file(tokenizer_json).map_err(io::Error::other)?;
     let load_ms = started.elapsed().as_secs_f64() * 1000.0;
+    let load_peak_mb = peak_rss_mb();
     let texts = load_texts(dataset_dir)?;
     let started = Instant::now();
     let mut tokens = 0;
@@ -491,11 +521,60 @@ fn benchmark_reference(
         });
     }
     println!(
-        "runtime=reference texts={} tokens={tokens} checksum={checksum} load_ms={load_ms:.2} encode_ms={:.2}",
+        "runtime=reference texts={} tokens={tokens} checksum={checksum} load_ms={load_ms:.2} encode_ms={:.2} load_peak_mb={load_peak_mb:.3} encode_peak_mb={:.3}",
         texts.len(),
-        started.elapsed().as_secs_f64() * 1000.0
+        started.elapsed().as_secs_f64() * 1000.0,
+        peak_rss_mb()
     );
     Ok(())
+}
+
+fn peak_rss_mb() -> f64 {
+    #[repr(C)]
+    #[derive(Clone, Copy, Default)]
+    struct TimeVal {
+        tv_sec: c_long,
+        tv_usec: c_long,
+    }
+
+    #[repr(C)]
+    #[derive(Clone, Copy, Default)]
+    struct RUsage {
+        ru_utime: TimeVal,
+        ru_stime: TimeVal,
+        ru_maxrss: c_long,
+        ru_ixrss: c_long,
+        ru_idrss: c_long,
+        ru_isrss: c_long,
+        ru_minflt: c_long,
+        ru_majflt: c_long,
+        ru_nswap: c_long,
+        ru_inblock: c_long,
+        ru_oublock: c_long,
+        ru_msgsnd: c_long,
+        ru_msgrcv: c_long,
+        ru_nsignals: c_long,
+        ru_nvcsw: c_long,
+        ru_nivcsw: c_long,
+    }
+
+    extern "C" {
+        fn getrusage(who: c_int, usage: *mut RUsage) -> c_int;
+    }
+
+    let mut usage = RUsage::default();
+    let status = unsafe { getrusage(0, &mut usage) };
+    if status != 0 {
+        return f64::NAN;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        usage.ru_maxrss as f64 / (1024.0 * 1024.0)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        usage.ru_maxrss as f64 / 1024.0
+    }
 }
 
 fn load_texts(dataset_dir: &Path) -> Result<Vec<String>, Box<dyn std::error::Error>> {
@@ -553,9 +632,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         [_, command, binary, dataset_dir] if command == "benchmark-compact" => {
             benchmark_compact(Path::new(binary), Path::new(dataset_dir))
         }
+        [_, command, binary, dataset_dir] if command == "benchmark-kit" => {
+            benchmark_kit(Path::new(binary), Path::new(dataset_dir))
+        }
         [_, command, tokenizer_json, dataset_dir] if command == "benchmark-reference" => {
             benchmark_reference(Path::new(tokenizer_json), Path::new(dataset_dir))
         }
-        _ => Err("usage: mmbert_pair_tokenizer convert <tokenizer.json> <tokenizer.mmbpe> | parity <tokenizer.json> <tokenizer.mmbpe> <dataset-dir> | benchmark-compact <tokenizer.mmbpe> <dataset-dir> | benchmark-reference <tokenizer.json> <dataset-dir>".into()),
+        _ => Err("usage: mmbert_pair_tokenizer convert <tokenizer.json> <tokenizer.mmbpe> | parity <tokenizer.json> <tokenizer.mmbpe> <dataset-dir> | benchmark-compact <tokenizer.mmbpe> <dataset-dir> | benchmark-kit <tokenizer.kit> <dataset-dir> | benchmark-reference <tokenizer.json> <dataset-dir>".into()),
     }
 }

@@ -95,7 +95,7 @@ impl SecurityGateway {
         let onnx_started = Instant::now();
         let configured_onnx_runtime = crate::ml::onnx::warmup_runtime();
         log::info!(
-            "onnx runtime initialized in {:.2} ms; configured_now={}; model_sessions_loaded=false",
+            "onnx runtime initialized in {:.2} ms; configured_now={}; model_sessions_loaded=true",
             onnx_started.elapsed().as_secs_f64() * 1000.0,
             configured_onnx_runtime
         );
@@ -121,10 +121,11 @@ impl SecurityGateway {
             })
         {
             let bundle_dir = base_dir.join(assets::UNIFIED_L3_ASSET.destination_path);
-            self.l3_worker
-                .register_unified(LazyUnifiedOnnxClassifier::from_dir(&bundle_dir)?);
+            let mut classifier = LazyUnifiedOnnxClassifier::from_dir(&bundle_dir)?;
+            classifier.warmup_session(execution.backend(), execution.onnx_runtime_options())?;
+            self.l3_worker.register_unified(classifier);
             log::info!(
-                "unified multi-head L3 worker model registered from {}",
+                "unified multi-head L3 worker model warmed and registered from {}",
                 bundle_dir.display()
             );
         }
@@ -491,9 +492,11 @@ impl SecurityGateway {
             }
             _ => return Ok(()),
         };
-        let Some(model) = model else {
+        let Some(mut model) = model else {
             return Ok(());
         };
+        let execution = self.scan_execution();
+        model.warmup_session(execution.backend(), execution.onnx_runtime_options())?;
         self.l3_worker.register_model(config.public_model, model);
         Ok(())
     }

@@ -10,8 +10,9 @@ use crate::cache::{
 };
 use crate::ml::dynamic_pii::DynamicPiiRuntime;
 use crate::ml::ntdb_executor::{L2ChunkOutput, L3Candidate};
-use crate::ml::onnx::LazyOnnxTextClassifier;
+use crate::ml::onnx::{LazyOnnxTextClassifier, TokenTextChunk};
 use crate::ml::unified_onnx::{LazyUnifiedOnnxClassifier, UNIFIED_MODEL};
+use crate::pipeline::l3_schedule::{attach_l2_embeddings, selected_l3_chunks, SelectedL3Chunk};
 use crate::{
     DynamicPiiConfig, L3Strategy, QueuedSecurityEvent, QueuedSecurityProgress,
     QueuedSecurityScanResult, RequestId, ScanExecution, SecurityFailure, SecurityFailureKind,
@@ -20,6 +21,7 @@ use crate::{
 
 use super::decision_cache::DecisionCache;
 use super::l3_routing::estimated_cost_ms;
+use super::{degraded_error_result, degraded_timeout_result};
 
 mod dedicated;
 mod unified;
@@ -124,7 +126,7 @@ struct L3WorkerJob {
     request_id: RequestId,
     category: String,
     model: String,
-    text: String,
+    input: L3WorkerInput,
     fallback: SecurityScanResult,
     priority: usize,
     ttl_ms: u64,
@@ -134,9 +136,10 @@ struct L3WorkerJob {
     max_wait_ms: u64,
     enqueued_at: Instant,
     execution: ScanExecution,
+    unified_run_key: Option<String>,
+    unified_cache_key: Option<String>,
     degraded_factor: f64,
     l3_candidates: Vec<L3Candidate>,
-    l2_chunk_outputs: Vec<L2ChunkOutput>,
     dynamic_pii_config: Option<DynamicPiiConfig>,
     dynamic_pii_activated_rules: Vec<usize>,
     sequence: u64,
@@ -145,12 +148,18 @@ struct L3WorkerJob {
 }
 
 #[derive(Clone)]
+enum L3WorkerInput {
+    Text(Arc<str>),
+    PlannedChunks(Vec<SelectedL3Chunk>),
+}
+
+#[derive(Clone)]
 pub(crate) struct L3JobSpec {
     pub job_id: u64,
     pub request_id: RequestId,
     pub category: String,
     pub model: String,
-    pub text: String,
+    pub text: Arc<str>,
     pub fallback: SecurityScanResult,
     pub priority: usize,
     pub ttl_ms: u64,
@@ -158,7 +167,7 @@ pub(crate) struct L3JobSpec {
     pub execution: ScanExecution,
     pub degraded_factor: f64,
     pub l3_candidates: Vec<L3Candidate>,
-    pub l2_chunk_outputs: Vec<L2ChunkOutput>,
+    pub l2_chunk_outputs: Arc<[L2ChunkOutput]>,
     pub dynamic_pii_config: Option<DynamicPiiConfig>,
     pub dynamic_pii_activated_rules: Vec<usize>,
 }
@@ -238,6 +247,58 @@ impl L3Worker {
             .lock()
             .expect("l3 model registry mutex poisoned")
             .insert(model.into(), Arc::new(Mutex::new(classifier)));
+    }
+
+    pub(crate) fn stop_models(&self) {
+        let models = self
+            .state
+            .models
+            .lock()
+            .expect("l3 model registry mutex poisoned");
+        for model in models.values() {
+            model
+                .lock()
+                .expect("l3 model mutex poisoned")
+                .force_unload();
+        }
+        drop(models);
+
+        let dynamic_models = self
+            .state
+            .dynamic_pii_models
+            .lock()
+            .expect("dynamic-pii model registry mutex poisoned");
+        for model in dynamic_models.values() {
+            model
+                .lock()
+                .expect("dynamic-pii model mutex poisoned")
+                .force_unload();
+        }
+        drop(dynamic_models);
+
+        let unified = self
+            .state
+            .unified_model
+            .lock()
+            .expect("unified model registry mutex poisoned");
+        if let Some(model) = unified.as_ref() {
+            model
+                .lock()
+                .expect("unified model mutex poisoned")
+                .force_unload();
+        }
+        drop(unified);
+
+        self.state
+            .unified_runs
+            .lock()
+            .expect("unified run mutex poisoned")
+            .clear();
+        self.state
+            .unified_cache
+            .lock()
+            .expect("unified cache mutex poisoned")
+            .clear();
     }
 
     pub(crate) fn has_model(&self, model: &str) -> bool {
@@ -320,13 +381,63 @@ impl L3Worker {
     }
 
     fn enqueue_physical(&self, spec: L3JobSpec) {
+        let job = match self.build_physical_job(spec, None, None) {
+            Ok(job) => job,
+            Err((job_id, request_id, result)) => {
+                finish_job(&self.state, job_id, request_id, result);
+                return;
+            }
+        };
+        self.state
+            .jobs
+            .lock()
+            .expect("l3 job queue mutex poisoned")
+            .push(job);
+        self.state.available.notify_one();
+    }
+
+    fn enqueue_unified_physical(&self, spec: L3JobSpec, run_key: String, cache_key: String) {
+        let job = match self.build_physical_job(spec, Some(run_key), Some(cache_key)) {
+            Ok(job) => job,
+            Err((job_id, request_id, result)) => {
+                finish_job(&self.state, job_id, request_id, result);
+                return;
+            }
+        };
+        self.state
+            .jobs
+            .lock()
+            .expect("l3 job queue mutex poisoned")
+            .push(job);
+        self.state.available.notify_one();
+    }
+
+    fn build_physical_job(
+        &self,
+        spec: L3JobSpec,
+        unified_run_key: Option<String>,
+        unified_cache_key: Option<String>,
+    ) -> Result<L3WorkerJob, (u64, RequestId, SecurityScanResult)> {
         let (estimated_cost_ms, fairness_quantum_ms, max_wait_ms) = scheduling_values(&spec);
-        let job = L3WorkerJob {
+        let input = match self.input_for_spec(&spec) {
+            Ok(input) => input,
+            Err(error) => {
+                let result = degraded_error_result(
+                    spec.fallback,
+                    0.0,
+                    spec.ttl_ms,
+                    spec.degraded_factor,
+                    error,
+                );
+                return Err((spec.job_id, spec.request_id, result));
+            }
+        };
+        Ok(L3WorkerJob {
             job_id: spec.job_id,
             request_id: spec.request_id,
             category: spec.category,
             model: spec.model,
-            text: spec.text,
+            input,
             fallback: spec.fallback,
             priority: spec.priority,
             ttl_ms: spec.ttl_ms,
@@ -336,21 +447,85 @@ impl L3Worker {
             max_wait_ms,
             enqueued_at: Instant::now(),
             execution: spec.execution,
+            unified_run_key,
+            unified_cache_key,
             degraded_factor: spec.degraded_factor,
             l3_candidates: spec.l3_candidates,
-            l2_chunk_outputs: spec.l2_chunk_outputs,
             dynamic_pii_config: spec.dynamic_pii_config,
             dynamic_pii_activated_rules: spec.dynamic_pii_activated_rules,
             sequence: spec.job_id,
             #[cfg(feature = "test-util")]
             test_delay_ms: None,
+        })
+    }
+
+    fn input_for_spec(&self, spec: &L3JobSpec) -> Result<L3WorkerInput, String> {
+        if spec.dynamic_pii_config.is_some() {
+            return Ok(L3WorkerInput::Text(spec.text.clone()));
+        }
+        self.plan_chunks_for_spec(spec)
+            .map(L3WorkerInput::PlannedChunks)
+    }
+
+    fn plan_chunks_for_spec(&self, spec: &L3JobSpec) -> Result<Vec<SelectedL3Chunk>, String> {
+        let token_chunks = match token_chunks_from_l2_outputs(spec)? {
+            Some(chunks) => chunks,
+            None => self.token_chunks_from_model(spec)?,
         };
-        self.state
-            .jobs
-            .lock()
-            .expect("l3 job queue mutex poisoned")
-            .push(job);
-        self.state.available.notify_one();
+        let clustering = if spec.execution.l3_strategy() == L3Strategy::Multi {
+            unified::selection_clustering_for_spec(spec)
+        } else {
+            spec.execution
+                .l3_policy()
+                .pipeline_policy(&spec.category, &spec.model)
+                .clustering
+        };
+        let mut chunks = selected_l3_chunks(token_chunks, &spec.l3_candidates, clustering);
+        attach_l2_embeddings(&mut chunks, &spec.l2_chunk_outputs);
+        Ok(chunks)
+    }
+
+    fn token_chunks_from_model(&self, spec: &L3JobSpec) -> Result<Vec<TokenTextChunk>, String> {
+        if spec.execution.l3_strategy() == L3Strategy::Multi {
+            let model = self
+                .state
+                .unified_model
+                .lock()
+                .expect("unified model registry mutex poisoned")
+                .clone()
+                .ok_or_else(|| "unified L3 model is not registered".to_string())?;
+            let chunks = model
+                .lock()
+                .map_err(|error| format!("unified L3 model mutex poisoned: {error}"))?
+                .token_chunks(
+                    &spec.text,
+                    L3_OVERLAP_TOKENS,
+                    spec.execution.backend(),
+                    spec.execution.onnx_runtime_options(),
+                )
+                .map_err(|error| error.to_string())?;
+            Ok(chunks)
+        } else {
+            let model = self
+                .state
+                .models
+                .lock()
+                .expect("l3 model registry mutex poisoned")
+                .get(&spec.model)
+                .cloned()
+                .ok_or_else(|| format!("L3 model '{}' is not registered", spec.model))?;
+            let chunks = model
+                .lock()
+                .map_err(|error| format!("L3 model mutex poisoned: {error}"))?
+                .token_chunks(
+                    &spec.text,
+                    L3_OVERLAP_TOKENS,
+                    spec.execution.backend(),
+                    spec.execution.onnx_runtime_options(),
+                )
+                .map_err(|error| error.to_string())?;
+            Ok(chunks)
+        }
     }
 
     pub(crate) fn resolve_dynamic_pii(&self, request_id: &str) {
@@ -376,7 +551,7 @@ impl L3Worker {
                 request_id: spec.request_id,
                 category: spec.category,
                 model: spec.model,
-                text: spec.text,
+                input: L3WorkerInput::Text(spec.text),
                 fallback: spec.fallback,
                 priority: spec.priority,
                 ttl_ms: spec.ttl_ms,
@@ -386,9 +561,10 @@ impl L3Worker {
                 max_wait_ms,
                 enqueued_at: Instant::now(),
                 execution: spec.execution,
+                unified_run_key: None,
+                unified_cache_key: None,
                 degraded_factor: spec.degraded_factor,
                 l3_candidates: spec.l3_candidates,
-                l2_chunk_outputs: spec.l2_chunk_outputs,
                 dynamic_pii_config: spec.dynamic_pii_config,
                 dynamic_pii_activated_rules: spec.dynamic_pii_activated_rules,
                 sequence: spec.job_id,
@@ -431,9 +607,16 @@ fn worker_loop(state: Arc<L3WorkerState>) {
     }
 }
 
-fn next_job(state: &L3WorkerState) -> L3WorkerJob {
+fn next_job(state: &Arc<L3WorkerState>) -> L3WorkerJob {
     let mut jobs = state.jobs.lock().expect("l3 job queue mutex poisoned");
     loop {
+        let expired = drain_expired_jobs(&mut jobs);
+        if !expired.is_empty() {
+            drop(jobs);
+            finish_expired_jobs(state, expired);
+            jobs = state.jobs.lock().expect("l3 job queue mutex poisoned");
+            continue;
+        }
         if !jobs.is_empty() {
             let mut scheduler = state.scheduler.lock().expect("l3 scheduler mutex poisoned");
             let selected = select_fair_job(&jobs, &mut scheduler);
@@ -452,6 +635,78 @@ fn next_job(state: &L3WorkerState) -> L3WorkerJob {
     }
 }
 
+fn drain_expired_jobs(jobs: &mut Vec<L3WorkerJob>) -> Vec<L3WorkerJob> {
+    let mut expired = Vec::new();
+    let mut index = 0;
+    while index < jobs.len() {
+        if queue_ttl_expired(&jobs[index]) {
+            expired.push(jobs.swap_remove(index));
+        } else {
+            index += 1;
+        }
+    }
+    expired
+}
+
+fn queue_ttl_expired(job: &L3WorkerJob) -> bool {
+    job.enqueued_at.elapsed().as_millis() >= u128::from(job.ttl_ms)
+}
+
+fn finish_expired_jobs(state: &Arc<L3WorkerState>, jobs: Vec<L3WorkerJob>) {
+    for job in jobs {
+        finish_expired_job(state, job);
+    }
+}
+
+fn finish_expired_job(state: &Arc<L3WorkerState>, job: L3WorkerJob) {
+    let queued_ms = elapsed_ms(job.enqueued_at);
+    if job.execution.l3_strategy() == L3Strategy::Multi && job.dynamic_pii_config.is_none() {
+        let run_key = unified::run_key_for_job(&job);
+        let cache_key = unified::cache_key_for_job(&job);
+        unified::finish_run(
+            state,
+            run_key,
+            cache_key,
+            unified::UnifiedRunOutcome::Failed(unified::UnifiedRunFailure::Timeout {
+                queued_ms,
+                timeout_ms: job.ttl_ms,
+                reason: "expired_before_inference",
+            }),
+        );
+        return;
+    }
+
+    let result = queue_timeout_result(&job, queued_ms, "expired_before_inference");
+    finish_job(state, job.job_id, job.request_id, result);
+}
+
+fn queue_timeout_result(job: &L3WorkerJob, queued_ms: f64, reason: &str) -> SecurityScanResult {
+    let mut result = degraded_timeout_result(
+        job.fallback.clone(),
+        queued_ms,
+        job.ttl_ms,
+        job.degraded_factor,
+    );
+    if let Some(layer) = result
+        .layers
+        .iter_mut()
+        .find(|layer| layer.layer_type == "degraded_timeout")
+    {
+        layer
+            .details
+            .insert("timeout_reason".to_string(), serde_json::json!(reason));
+        layer.details.insert(
+            "queue_timeout_ms".to_string(),
+            serde_json::json!(job.ttl_ms),
+        );
+        layer.details.insert(
+            "inference_timeout_ms".to_string(),
+            serde_json::json!(job.inference_timeout_ms),
+        );
+    }
+    result
+}
+
 fn scheduling_values(spec: &L3JobSpec) -> (u64, u64, u64) {
     let policy = spec.execution.l3_policy();
     (
@@ -459,6 +714,36 @@ fn scheduling_values(spec: &L3JobSpec) -> (u64, u64, u64) {
         policy.fairness_quantum_ms.max(1),
         policy.max_wait_ms,
     )
+}
+
+fn token_chunks_from_l2_outputs(spec: &L3JobSpec) -> Result<Option<Vec<TokenTextChunk>>, String> {
+    if spec.l2_chunk_outputs.is_empty() {
+        return Ok(None);
+    }
+
+    let mut spans = spec
+        .l2_chunk_outputs
+        .iter()
+        .map(|output| output.span)
+        .collect::<Vec<_>>();
+    spans.sort_by_key(|span| (span.start, span.end));
+    spans.dedup_by_key(|span| (span.start, span.end));
+
+    let mut chunks = Vec::with_capacity(spans.len());
+    for span in spans {
+        let text = spec.text.get(span.start..span.end).ok_or_else(|| {
+            format!(
+                "L2 chunk span {}..{} is not a valid source text range",
+                span.start, span.end
+            )
+        })?;
+        chunks.push(TokenTextChunk {
+            text: text.to_string(),
+            start_byte: span.start,
+            end_byte: span.end,
+        });
+    }
+    Ok(Some(chunks))
 }
 
 fn select_fair_job(jobs: &[L3WorkerJob], scheduler: &mut FairSchedulerState) -> usize {
@@ -1100,6 +1385,120 @@ mod tests {
         assert!(queued.result.decision.is_none());
     }
 
+    #[test]
+    fn stop_models_preserves_registered_l3_model_metadata() {
+        let worker = L3Worker {
+            state: Arc::new(test_worker_state(Arc::new(RequestRegistry::default()))),
+        };
+        let model_dir = fake_lazy_onnx_dir("stop-models-preserves-registered-l3-model-metadata");
+        let classifier = LazyOnnxTextClassifier::from_dir_with_paths(
+            &model_dir,
+            vec!["benign".to_string(), "attack".to_string()],
+            "fake-l3",
+            &["onnx/model.onnx"],
+            "tokenizer.json",
+            16,
+        )
+        .unwrap()
+        .expect("fake L3 metadata should be registered");
+        worker.register_model("fake-l3", classifier);
+
+        assert!(worker.has_model("fake-l3"));
+
+        worker.stop_models();
+        worker.stop_models();
+
+        assert!(worker.has_model("fake-l3"));
+        let _ = std::fs::remove_dir_all(model_dir);
+    }
+
+    #[test]
+    fn physical_l3_job_uses_l2_chunk_spans_without_full_text_tokenization() {
+        let worker = L3Worker {
+            state: Arc::new(test_worker_state(Arc::new(RequestRegistry::default()))),
+        };
+        let mut spec = test_l3_spec(
+            "rq-chunks",
+            "threat",
+            1,
+            ScanExecution::new(SecurityLevel::L3),
+        );
+        spec.text = Arc::<str>::from("safe prefix ATTACK_CHUNK safe suffix");
+        spec.l2_chunk_outputs = vec![test_l2_chunk_output(12, 24, "threat", true)].into();
+        spec.l3_candidates = vec![test_l3_candidate(12, 24, "threat")];
+
+        let job = worker
+            .build_physical_job(spec, None, None)
+            .expect("L2 chunk spans should avoid model-backed full-text tokenization");
+
+        let L3WorkerInput::PlannedChunks(chunks) = job.input else {
+            panic!("normal L3 jobs should queue planned chunks, not source text");
+        };
+        assert_eq!(chunks.len(), 1);
+        assert_eq!(chunks[0].text, "ATTACK_CHUNK");
+        assert_eq!(chunks[0].start_byte, 12);
+        assert_eq!(chunks[0].end_byte, 24);
+    }
+
+    #[test]
+    fn expired_unified_physical_job_finishes_all_subscribers() {
+        let requests = Arc::new(RequestRegistry::default());
+        let state = Arc::new(test_worker_state(Arc::clone(&requests)));
+        let worker = L3Worker {
+            state: Arc::clone(&state),
+        };
+        requests.state.lock().unwrap().requests.insert(
+            "rq-unified".to_string(),
+            RequestState {
+                pending_l3_job_ids: HashSet::from([1, 2]),
+                pending_l3_job_categories: HashMap::from([
+                    (1, "injection".to_string()),
+                    (2, "threat".to_string()),
+                ]),
+                gate_results: HashMap::new(),
+                pending_dynamic_pii: None,
+                usable_results: 1,
+                failures: Vec::new(),
+                completion: None,
+            },
+        );
+        let mut execution = ScanExecution::new(SecurityLevel::L3);
+        execution.set_l3_strategy(L3Strategy::Multi);
+        let candidates = vec![
+            test_l3_candidate(0, 4, "injection"),
+            test_l3_candidate(0, 4, "threat"),
+        ];
+        let chunk_outputs = vec![
+            test_l2_chunk_output(0, 4, "injection", true),
+            test_l2_chunk_output(0, 4, "threat", true),
+        ];
+        let mut injection = test_l3_spec("rq-unified", "injection", 1, execution.clone());
+        injection.l3_candidates = candidates.clone();
+        injection.l2_chunk_outputs = chunk_outputs.clone().into();
+        let mut threat = test_l3_spec("rq-unified", "threat", 2, execution);
+        threat.l3_candidates = candidates;
+        threat.l2_chunk_outputs = chunk_outputs.into();
+
+        worker.enqueue(injection);
+        worker.enqueue(threat);
+        let physical = state.jobs.lock().unwrap().pop().unwrap();
+
+        finish_expired_job(&state, physical);
+
+        let registry = requests.state.lock().unwrap();
+        let completion = registry.requests["rq-unified"]
+            .completion
+            .as_ref()
+            .expect("unified subscribers should finish together");
+        let SecurityRequestCompletion::Degraded { failures } = completion else {
+            panic!("expired unified run should degrade the request");
+        };
+        assert_eq!(failures.len(), 2);
+        assert!(failures
+            .iter()
+            .all(|failure| failure.message == "expired_before_inference"));
+    }
+
     fn test_worker_state(requests: Arc<RequestRegistry>) -> L3WorkerState {
         L3WorkerState {
             jobs: Mutex::new(Vec::new()),
@@ -1125,6 +1524,75 @@ mod tests {
             ))),
             requests,
             next_sequence: Mutex::new(0),
+        }
+    }
+
+    fn fake_lazy_onnx_dir(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("patronus-ark-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("onnx")).unwrap();
+        std::fs::write(dir.join("tokenizer.json"), "{}").unwrap();
+        std::fs::write(dir.join("onnx/model.onnx"), []).unwrap();
+        dir
+    }
+
+    fn test_l3_spec(
+        request_id: &str,
+        category: &str,
+        job_id: u64,
+        execution: ScanExecution,
+    ) -> L3JobSpec {
+        L3JobSpec {
+            job_id,
+            request_id: request_id.to_string(),
+            category: category.to_string(),
+            model: category.to_string(),
+            text: Arc::<str>::from("test"),
+            fallback: test_result(category, "benign", 0.5, "L2"),
+            priority: 0,
+            ttl_ms: 1,
+            inference_timeout_ms: 1,
+            execution,
+            degraded_factor: 0.75,
+            l3_candidates: vec![test_l3_candidate(0, 4, category)],
+            l2_chunk_outputs: vec![test_l2_chunk_output(0, 4, category, true)].into(),
+            dynamic_pii_config: None,
+            dynamic_pii_activated_rules: Vec::new(),
+        }
+    }
+
+    fn test_l3_candidate(
+        start: usize,
+        end: usize,
+        source_pipeline: &str,
+    ) -> crate::ml::ntdb_executor::L3Candidate {
+        crate::ml::ntdb_executor::L3Candidate {
+            span: crate::ml::ntdb_executor::ByteSpan { start, end },
+            promote_score: 0.9,
+            promote_threshold: 0.7,
+            source_pipeline: source_pipeline.to_string(),
+            source_model: source_pipeline.to_string(),
+            l2_class: "attack".to_string(),
+        }
+    }
+
+    fn test_l2_chunk_output(
+        start: usize,
+        end: usize,
+        source_pipeline: &str,
+        promoted: bool,
+    ) -> crate::ml::ntdb_executor::L2ChunkOutput {
+        crate::ml::ntdb_executor::L2ChunkOutput {
+            span: crate::ml::ntdb_executor::ByteSpan { start, end },
+            class_name: "attack".to_string(),
+            confidence: 0.9,
+            promoted,
+            promote_score: Some(0.9),
+            promote_threshold: Some(0.7),
+            source_pipeline: source_pipeline.to_string(),
+            source_model: source_pipeline.to_string(),
+            embedding: Vec::new(),
+            embedding_space: String::new(),
         }
     }
 
@@ -1163,7 +1631,7 @@ mod tests {
             request_id: request_id.to_string(),
             category: category.to_string(),
             model: category.to_string(),
-            text: "test".to_string(),
+            input: L3WorkerInput::Text(Arc::<str>::from("test")),
             fallback: SecurityScanResult {
                 category: category.to_string(),
                 class_name: "benign".to_string(),
@@ -1181,6 +1649,7 @@ mod tests {
                     thresholds: HashMap::new(),
                     details: HashMap::new(),
                 }],
+                internal_l2_chunk_outputs: Vec::new(),
                 evidence_spans: Vec::new(),
                 label_scores: Vec::new(),
                 decision: None,
@@ -1193,9 +1662,10 @@ mod tests {
             max_wait_ms: 2_000,
             enqueued_at: Instant::now(),
             execution: ScanExecution::new(SecurityLevel::L3),
+            unified_run_key: None,
+            unified_cache_key: None,
             degraded_factor: 0.75,
             l3_candidates: Vec::new(),
-            l2_chunk_outputs: Vec::new(),
             dynamic_pii_config: None,
             dynamic_pii_activated_rules: Vec::new(),
             sequence,
@@ -1218,6 +1688,7 @@ mod tests {
             model: category.to_string(),
             duration_ms: 0.0,
             layers: Vec::new(),
+            internal_l2_chunk_outputs: Vec::new(),
             evidence_spans: Vec::new(),
             label_scores: Vec::new(),
             decision: None,

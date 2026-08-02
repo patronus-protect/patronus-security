@@ -603,10 +603,10 @@ fn external_injection_l1_uses_parallel_article_number_ngrams_in_sync_and_queue_s
         .iter()
         .any(|result| result.model == "external:article_number"));
 
-    let benign = scanner.scan_input(&ExternalL1Input {
-        category: SecurityCategory::Injection,
-        text: "Bitte beachte die zehn Schritte".to_string(),
-    });
+    let benign = scanner.scan_input(&ExternalL1Input::new(
+        SecurityCategory::Injection,
+        "Bitte beachte die zehn Schritte",
+    ));
     assert!(has_result(&benign, "external:article_number", "benign"));
 }
 
@@ -893,7 +893,7 @@ mod l3_worker_streaming {
     use std::time::{Duration, Instant};
 
     use patronus_ark::{
-        QueuedSecurityEvent, SecurityCategory, SecurityFailureKind, SecurityGateway, SecurityLevel,
+        QueuedSecurityEvent, SecurityCategory, SecurityGateway, SecurityLevel,
         SecurityRequestCompletion, SecurityRequestState,
     };
 
@@ -1087,7 +1087,7 @@ mod l3_worker_streaming {
     }
 
     #[test]
-    fn l3_runtime_timeout_degrades_and_late_result_is_ignored() {
+    fn l3_started_job_runs_to_completion_after_queue_ttl() {
         let scanner = SecurityGateway::with_max_level(
             vec![SecurityCategory::Injection],
             SecurityLevel::L3,
@@ -1100,23 +1100,18 @@ mod l3_worker_streaming {
             .expect("fallback should be immediately available");
         assert_eq!(first.level, "L2");
 
+        let final_result = consume_for(&scanner, &request_id, Some(Duration::from_secs(1)))
+            .expect("started L3 job should finish even after its queue TTL");
+        assert_eq!(final_result.level, "L3");
+        assert_eq!(final_result.class_name, "test_l3");
+
         let terminal = scanner
             .consume_next_event(Some(Duration::from_secs(1)))
-            .expect("slow L3 should terminate as degraded");
+            .expect("request should complete after started L3 result");
         let QueuedSecurityEvent::Finished { completion, .. } = terminal else {
-            panic!("L3 timeout must not be published as a security result");
+            panic!("expected finished event after L3 result");
         };
-        let SecurityRequestCompletion::Degraded { failures } = completion else {
-            panic!("usable L2 fallback plus L3 timeout must be degraded");
-        };
-        assert_eq!(failures.len(), 1);
-        assert_eq!(failures[0].kind, SecurityFailureKind::Timeout);
-        assert_eq!(failures[0].message, "inference_timeout");
-
-        std::thread::sleep(Duration::from_millis(300));
-        assert!(scanner
-            .consume_next_event(Some(Duration::from_millis(20)))
-            .is_none());
+        assert_eq!(completion, SecurityRequestCompletion::Complete);
         assert_eq!(scanner.is_finished(&request_id), None);
     }
 

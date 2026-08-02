@@ -10,7 +10,7 @@ use ort::{
 };
 use serde::Deserialize;
 
-use crate::NtdbOperatingPoint;
+use crate::{diagnostics::PhaseMetricScope, NtdbOperatingPoint};
 
 use super::{
     heuristics::global_text_heuristics,
@@ -295,6 +295,10 @@ impl HeadRuntime {
 }
 
 impl AggregatorRuntime {
+    pub(super) fn id(&self) -> &str {
+        &self.id
+    }
+
     pub(super) fn load(package_dir: &Path, manifest: &AggregatorManifest) -> NtdbResult<Self> {
         let session = load_single_thread_session(package_dir.join(&manifest.onnx))?;
         validate_session_feature_dim(
@@ -334,29 +338,48 @@ impl AggregatorRuntime {
         feature_by_name: &HashMap<String, Vec<f32>>,
         operating_point: NtdbOperatingPoint,
     ) -> NtdbResult<ScoreOutput> {
+        let mut metrics = PhaseMetricScope::new(
+            "ntdb_aggregator_runtime",
+            format!("aggregator_id={} text_bytes={}", self.id, text.len()),
+        );
         let thresholds = self.thresholds(operating_point)?;
+        metrics.checkpoint("after_thresholds", format!("aggregator_id={}", self.id));
         let chunk_count = prepared.chunks.len();
         let (sequence_features, global) = build_sequence_and_global_features(
-            text,
             prepared,
             feature_by_name,
             &self.input_feature_order,
             &self.global_feature_order,
         )?;
+        metrics.checkpoint(
+            "after_build_features",
+            format!(
+                "aggregator_id={} chunks={chunk_count} sequence_values={} global_values={}",
+                self.id,
+                sequence_features.len(),
+                global.len()
+            ),
+        );
         let feature_dim = self.input_feature_order.len();
         let outputs = self.session.run(inputs! {
             "features" => TensorRef::from_array_view(([1usize, chunk_count, feature_dim], &sequence_features[..]))?,
             "global_features" => TensorRef::from_array_view(([1usize, global.len()], &global[..]))?
         })?;
+        metrics.checkpoint("after_onnx_run", format!("aggregator_id={}", self.id));
         if self.kind == "binary_promote_router" || outputs.contains_key("attack_score") {
             let attack_score = first_output(&outputs, "attack_score")?;
             let attack_logit = first_output(&outputs, "attack_logit")?;
+            metrics.checkpoint("after_attack_outputs", format!("aggregator_id={}", self.id));
             let promote = if let Some(router) = &mut self.promote_router {
                 Some(router.score(text, prepared, feature_by_name)?)
             } else {
                 optional_first_output(&outputs, "promote_score")?
                     .zip(optional_first_output(&outputs, "promote_logit")?)
             };
+            metrics.checkpoint(
+                "after_promote_outputs",
+                format!("aggregator_id={}", self.id),
+            );
             let promote_score = promote.map(|(score, _)| score);
             let promote_logit = promote.map(|(_, logit)| logit);
             let benign_score =
@@ -418,6 +441,7 @@ impl AggregatorRuntime {
 
         let scores = tensor_values(&outputs, "doc_class_scores")?;
         let logits = tensor_values(&outputs, "doc_class_logits")?;
+        metrics.checkpoint("after_doc_outputs", format!("aggregator_id={}", self.id));
         let promote = if let Some(router) = &mut self.promote_router {
             let (score, logit) = router.score(text, prepared, feature_by_name)?;
             Some((score, logit))
@@ -425,6 +449,10 @@ impl AggregatorRuntime {
             optional_first_output(&outputs, "promote_score")?
                 .zip(optional_first_output(&outputs, "promote_logit")?)
         };
+        metrics.checkpoint(
+            "after_promote_outputs",
+            format!("aggregator_id={}", self.id),
+        );
         let mut class_scores = scores.to_vec();
         let mut class_logits = logits.to_vec();
         if labels.len() > class_scores.len() {
@@ -531,19 +559,31 @@ impl PromoteRouterRuntime {
         prepared: &PreparedDocument,
         feature_by_name: &HashMap<String, Vec<f32>>,
     ) -> NtdbResult<(f32, f32)> {
+        let mut metrics = PhaseMetricScope::new(
+            "ntdb_promote_router_runtime",
+            format!("text_bytes={} chunks={}", text.len(), prepared.chunks.len()),
+        );
         let chunk_count = prepared.chunks.len();
         let (sequence_features, global) = build_sequence_and_global_features(
-            text,
             prepared,
             feature_by_name,
             &self.input_feature_order,
             &self.global_feature_order,
         )?;
+        metrics.checkpoint(
+            "after_build_features",
+            format!(
+                "chunks={chunk_count} sequence_values={} global_values={}",
+                sequence_features.len(),
+                global.len()
+            ),
+        );
         let feature_dim = self.input_feature_order.len();
         let outputs = self.session.run(inputs! {
             "features" => TensorRef::from_array_view(([1usize, chunk_count, feature_dim], &sequence_features[..]))?,
             "global_features" => TensorRef::from_array_view(([1usize, global.len()], &global[..]))?
         })?;
+        metrics.checkpoint("after_onnx_run", "");
         Ok((
             first_output(&outputs, "promote_score")?,
             first_output(&outputs, "promote_logit")?,
@@ -552,7 +592,6 @@ impl PromoteRouterRuntime {
 }
 
 fn build_sequence_and_global_features(
-    text: &str,
     prepared: &PreparedDocument,
     feature_by_name: &HashMap<String, Vec<f32>>,
     input_feature_order: &[String],
@@ -581,16 +620,15 @@ fn build_sequence_and_global_features(
         step_means.push(mean(row));
         disagreements.push(stddev(row));
     }
-    let local_entropy = feature_by_name
+    let (mean_local_entropy, max_local_entropy) = feature_by_name
         .get("local_shannon_entropy_norm")
-        .cloned()
-        .unwrap_or_else(|| vec![0.0; chunk_count]);
+        .map(|values| (mean(values), max(values)))
+        .unwrap_or((0.0, 0.0));
     let global = global_text_heuristics(
-        text,
-        &prepared.doc_token_ids,
+        prepared.global_text_features,
         chunk_count,
-        mean(&local_entropy),
-        max(&local_entropy),
+        mean_local_entropy,
+        max_local_entropy,
         mean(&disagreements),
         max(&disagreements),
         max(&step_means),

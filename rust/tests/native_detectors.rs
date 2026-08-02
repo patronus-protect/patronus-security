@@ -50,7 +50,31 @@ fn dlp_native_detects_secret_patterns_and_safe_text() {
     );
     assert_class(
         &pipe
+            .evaluate(r#"{"url":"https://example.test/path?x=1&token=actual-secret"}"#)
+            .class_name,
+        "CREDENTIAL",
+    );
+    assert_class(
+        &pipe
             .evaluate(r#"{"url":"https://example.test?token=%5Bredacted%5D"}"#)
+            .class_name,
+        "safe",
+    );
+    assert_class(
+        &pipe
+            .evaluate(r#"token = os.getenv("GITHUB_TOKEN")"#)
+            .class_name,
+        "safe",
+    );
+    assert_class(
+        &pipe
+            .evaluate(r#"api_key = os.environ.get("API_KEY")"#)
+            .class_name,
+        "safe",
+    );
+    assert_class(
+        &pipe
+            .evaluate("const token = process.env.GITHUB_TOKEN;")
             .class_name,
         "safe",
     );

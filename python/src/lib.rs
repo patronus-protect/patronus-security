@@ -109,6 +109,10 @@ impl SecurityGateway {
         }
     }
 
+    fn stop_l3_models(&self, py: Python<'_>) {
+        py.allow_threads(|| self.inner.stop_l3_models());
+    }
+
     fn flush_cache(&self, py: Python<'_>) -> PyResult<()> {
         py.allow_threads(|| self.inner.flush_cache())
             .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))

@@ -170,9 +170,13 @@ impl DynamicPiiRuntime {
             .last_used
             .is_some_and(|last_used| last_used.elapsed() > self.ttl)
         {
-            self.engine = None;
-            self.last_used = None;
+            self.force_unload();
         }
+    }
+
+    pub(crate) fn force_unload(&mut self) {
+        self.engine = None;
+        self.last_used = None;
     }
 }
 

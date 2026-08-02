@@ -327,6 +327,10 @@ class SecurityGateway:
         """
         self.rust_gateway.warmup()
 
+    def stop_l3_models(self):
+        """Unload resident L3 model sessions while preserving gateway configuration."""
+        self.rust_gateway.stop_l3_models()
+
     def flush_cache(self):
         """Wait until all queued persistent cache writes are durable."""
         self.rust_gateway.flush_cache()
