@@ -114,13 +114,18 @@ mod ntdb_decision {
 mod ntdb_heuristics {
     use patronus_ark::ml::ntdb_executor::test_util::{
         global_text_heuristics, local_text_heuristics,
+        shared_global_text_heuristics_from_token_stats, TokenIdStats,
     };
 
     #[test]
     fn heuristic_shapes_match_router_contract() {
+        let mut token_stats = TokenIdStats::default();
+        token_stats.observe_all(&[100, 200, 300]);
+        let shared = shared_global_text_heuristics_from_token_stats("ABC{}", token_stats);
+
         assert_eq!(local_text_heuristics("ABC{}", &[100, 200, 300]).len(), 11);
         assert_eq!(
-            global_text_heuristics("ABC{}", &[100, 200, 300], 1, 0.1, 0.2, 0.3, 0.4, 0.8).len(),
+            global_text_heuristics(shared, 1, 0.1, 0.2, 0.3, 0.4, 0.8).len(),
             18
         );
     }
