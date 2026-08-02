@@ -1,15 +1,21 @@
 use aho_corasick::{AhoCorasick, AhoCorasickBuilder, MatchKind};
+use kitoken::Kitoken;
 use serde::Deserialize;
 use std::{
-    collections::HashMap,
+    cmp::Ordering,
+    collections::{BinaryHeap, HashMap},
+    ffi::{c_int, c_long},
     fs::{self, File},
     io::{self, BufReader, BufWriter, Read, Write},
     path::Path,
+    sync::Mutex,
     time::Instant,
 };
 use tokenizers::Tokenizer;
 
 const MAGIC: &[u8; 8] = b"MMBPE\0\x01\0";
+const PIECE_CACHE_MAX_ENTRIES: usize = 65_536;
+const PIECE_CACHE_MAX_BYTES: usize = 96;
 
 #[derive(Deserialize)]
 struct TokenizerJson {
@@ -36,6 +42,30 @@ struct Merge {
     output: u32,
 }
 
+#[derive(Clone, Copy, Eq, PartialEq)]
+struct MergeCandidate {
+    rank: u32,
+    index: usize,
+    output: u32,
+    left: u32,
+    right: u32,
+}
+
+impl Ord for MergeCandidate {
+    fn cmp(&self, other: &Self) -> Ordering {
+        other
+            .rank
+            .cmp(&self.rank)
+            .then_with(|| other.index.cmp(&self.index))
+    }
+}
+
+impl PartialOrd for MergeCandidate {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 struct PairTokenizer {
     chars: HashMap<char, u32>,
     bytes: [u32; 256],
@@ -45,6 +75,7 @@ struct PairTokenizer {
     bos: u32,
     eos: u32,
     unknown: u32,
+    piece_cache: Mutex<HashMap<String, Vec<u32>>>,
 }
 
 impl PairTokenizer {
@@ -115,6 +146,7 @@ impl PairTokenizer {
             bos,
             eos,
             unknown,
+            piece_cache: Mutex::new(HashMap::new()),
         })
     }
 
@@ -161,41 +193,136 @@ impl PairTokenizer {
     }
 
     fn encode_piece(&self, piece: &str, output: &mut Vec<u32>) {
+        if piece.len() <= PIECE_CACHE_MAX_BYTES {
+            if let Some(ids) = self
+                .piece_cache
+                .lock()
+                .expect("mmBERT piece cache mutex poisoned")
+                .get(piece)
+                .cloned()
+            {
+                output.extend(ids);
+                return;
+            }
+            let start = output.len();
+            self.encode_piece_uncached(piece, output);
+            let ids = output[start..].to_vec();
+            let mut cache = self
+                .piece_cache
+                .lock()
+                .expect("mmBERT piece cache mutex poisoned");
+            if cache.len() < PIECE_CACHE_MAX_ENTRIES {
+                cache.insert(piece.to_string(), ids);
+            }
+            return;
+        }
+        self.encode_piece_uncached(piece, output);
+    }
+
+    fn encode_piece_uncached(&self, piece: &str, output: &mut Vec<u32>) {
         let mut symbols = Vec::with_capacity(piece.chars().count());
         for value in piece.chars() {
             if let Some(id) = self.chars.get(&value) {
                 symbols.push(*id);
             } else {
                 let mut encoded = [0; 4];
-                let fallback = value
-                    .encode_utf8(&mut encoded)
-                    .bytes()
-                    .map(|byte| self.bytes[byte as usize])
-                    .collect::<Vec<_>>();
-                if fallback.iter().any(|id| *id == u32::MAX) {
+                let bytes = value.encode_utf8(&mut encoded).as_bytes();
+                if bytes
+                    .iter()
+                    .any(|byte| self.bytes[*byte as usize] == u32::MAX)
+                {
                     symbols.push(self.unknown);
                 } else {
-                    symbols.extend(fallback);
+                    symbols.extend(bytes.iter().map(|byte| self.bytes[*byte as usize]));
                 }
             }
         }
-        loop {
-            let next = symbols
-                .windows(2)
-                .enumerate()
-                .filter_map(|(index, pair)| {
-                    self.merges
-                        .get(&pair_key(pair[0], pair[1]))
-                        .map(|merge| (merge.rank, index, merge.output))
-                })
-                .min_by_key(|(rank, index, _)| (*rank, *index));
-            let Some((_, index, merged)) = next else {
-                break;
-            };
-            symbols[index] = merged;
-            symbols.remove(index + 1);
-        }
+        merge_symbols(&mut symbols, &self.merges);
         output.extend(symbols);
+    }
+}
+
+fn merge_symbols(symbols: &mut Vec<u32>, merges: &HashMap<u64, Merge>) {
+    const END: usize = usize::MAX;
+
+    if symbols.len() < 2 {
+        return;
+    }
+
+    let mut previous = vec![END; symbols.len()];
+    let mut next = vec![END; symbols.len()];
+    let mut active = vec![true; symbols.len()];
+    for index in 0..symbols.len() {
+        if index > 0 {
+            previous[index] = index - 1;
+        }
+        if index + 1 < symbols.len() {
+            next[index] = index + 1;
+        }
+    }
+
+    let mut heap = BinaryHeap::with_capacity(symbols.len());
+    for index in 0..symbols.len() - 1 {
+        push_candidate(index, symbols, &next, merges, &mut heap);
+    }
+
+    while let Some(candidate) = heap.pop() {
+        let right_index = next[candidate.index];
+        if right_index == END
+            || !active[candidate.index]
+            || !active[right_index]
+            || symbols[candidate.index] != candidate.left
+            || symbols[right_index] != candidate.right
+        {
+            continue;
+        }
+
+        symbols[candidate.index] = candidate.output;
+        active[right_index] = false;
+        let after = next[right_index];
+        next[candidate.index] = after;
+        if after != END {
+            previous[after] = candidate.index;
+        }
+
+        let before = previous[candidate.index];
+        if before != END {
+            push_candidate(before, symbols, &next, merges, &mut heap);
+        }
+        push_candidate(candidate.index, symbols, &next, merges, &mut heap);
+    }
+
+    let mut write = 0;
+    for read in 0..symbols.len() {
+        if active[read] {
+            symbols[write] = symbols[read];
+            write += 1;
+        }
+    }
+    symbols.truncate(write);
+}
+
+fn push_candidate(
+    index: usize,
+    symbols: &[u32],
+    next: &[usize],
+    merges: &HashMap<u64, Merge>,
+    heap: &mut BinaryHeap<MergeCandidate>,
+) {
+    let right_index = next[index];
+    if right_index == usize::MAX {
+        return;
+    }
+    let left = symbols[index];
+    let right = symbols[right_index];
+    if let Some(merge) = merges.get(&pair_key(left, right)) {
+        heap.push(MergeCandidate {
+            rank: merge.rank,
+            index,
+            output: merge.output,
+            left,
+            right,
+        });
     }
 }
 
@@ -326,6 +453,7 @@ fn benchmark_compact(binary: &Path, dataset_dir: &Path) -> Result<(), Box<dyn st
     let started = Instant::now();
     let tokenizer = PairTokenizer::from_file(binary)?;
     let load_ms = started.elapsed().as_secs_f64() * 1000.0;
+    let load_peak_mb = peak_rss_mb();
     let texts = load_texts(dataset_dir)?;
     let started = Instant::now();
     let (tokens, checksum) = texts.iter().fold((0usize, 0u64), |(count, hash), text| {
@@ -338,9 +466,35 @@ fn benchmark_compact(binary: &Path, dataset_dir: &Path) -> Result<(), Box<dyn st
         )
     });
     println!(
-        "runtime=compact texts={} tokens={tokens} checksum={checksum} load_ms={load_ms:.2} encode_ms={:.2}",
+        "runtime=mmbpe texts={} tokens={tokens} checksum={checksum} load_ms={load_ms:.2} encode_ms={:.2} load_peak_mb={load_peak_mb:.3} encode_peak_mb={:.3}",
         texts.len(),
-        started.elapsed().as_secs_f64() * 1000.0
+        started.elapsed().as_secs_f64() * 1000.0,
+        peak_rss_mb()
+    );
+    Ok(())
+}
+
+fn benchmark_kit(binary: &Path, dataset_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    let started = Instant::now();
+    let tokenizer = Kitoken::from_file(binary).map_err(io::Error::other)?;
+    let load_ms = started.elapsed().as_secs_f64() * 1000.0;
+    let load_peak_mb = peak_rss_mb();
+    let texts = load_texts(dataset_dir)?;
+    let started = Instant::now();
+    let mut tokens = 0usize;
+    let mut checksum = 0u64;
+    for text in &texts {
+        let ids = tokenizer.encode(text, true).map_err(io::Error::other)?;
+        tokens += ids.len();
+        checksum = ids.iter().fold(checksum, |hash, id| {
+            hash.wrapping_mul(31).wrapping_add(*id as u64)
+        });
+    }
+    println!(
+        "runtime=kit texts={} tokens={tokens} checksum={checksum} load_ms={load_ms:.2} encode_ms={:.2} load_peak_mb={load_peak_mb:.3} encode_peak_mb={:.3}",
+        texts.len(),
+        started.elapsed().as_secs_f64() * 1000.0,
+        peak_rss_mb()
     );
     Ok(())
 }
@@ -352,6 +506,7 @@ fn benchmark_reference(
     let started = Instant::now();
     let tokenizer = Tokenizer::from_file(tokenizer_json).map_err(io::Error::other)?;
     let load_ms = started.elapsed().as_secs_f64() * 1000.0;
+    let load_peak_mb = peak_rss_mb();
     let texts = load_texts(dataset_dir)?;
     let started = Instant::now();
     let mut tokens = 0;
@@ -366,11 +521,60 @@ fn benchmark_reference(
         });
     }
     println!(
-        "runtime=reference texts={} tokens={tokens} checksum={checksum} load_ms={load_ms:.2} encode_ms={:.2}",
+        "runtime=reference texts={} tokens={tokens} checksum={checksum} load_ms={load_ms:.2} encode_ms={:.2} load_peak_mb={load_peak_mb:.3} encode_peak_mb={:.3}",
         texts.len(),
-        started.elapsed().as_secs_f64() * 1000.0
+        started.elapsed().as_secs_f64() * 1000.0,
+        peak_rss_mb()
     );
     Ok(())
+}
+
+fn peak_rss_mb() -> f64 {
+    #[repr(C)]
+    #[derive(Clone, Copy, Default)]
+    struct TimeVal {
+        tv_sec: c_long,
+        tv_usec: c_long,
+    }
+
+    #[repr(C)]
+    #[derive(Clone, Copy, Default)]
+    struct RUsage {
+        ru_utime: TimeVal,
+        ru_stime: TimeVal,
+        ru_maxrss: c_long,
+        ru_ixrss: c_long,
+        ru_idrss: c_long,
+        ru_isrss: c_long,
+        ru_minflt: c_long,
+        ru_majflt: c_long,
+        ru_nswap: c_long,
+        ru_inblock: c_long,
+        ru_oublock: c_long,
+        ru_msgsnd: c_long,
+        ru_msgrcv: c_long,
+        ru_nsignals: c_long,
+        ru_nvcsw: c_long,
+        ru_nivcsw: c_long,
+    }
+
+    extern "C" {
+        fn getrusage(who: c_int, usage: *mut RUsage) -> c_int;
+    }
+
+    let mut usage = RUsage::default();
+    let status = unsafe { getrusage(0, &mut usage) };
+    if status != 0 {
+        return f64::NAN;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        usage.ru_maxrss as f64 / (1024.0 * 1024.0)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        usage.ru_maxrss as f64 / 1024.0
+    }
 }
 
 fn load_texts(dataset_dir: &Path) -> Result<Vec<String>, Box<dyn std::error::Error>> {
@@ -428,9 +632,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         [_, command, binary, dataset_dir] if command == "benchmark-compact" => {
             benchmark_compact(Path::new(binary), Path::new(dataset_dir))
         }
+        [_, command, binary, dataset_dir] if command == "benchmark-kit" => {
+            benchmark_kit(Path::new(binary), Path::new(dataset_dir))
+        }
         [_, command, tokenizer_json, dataset_dir] if command == "benchmark-reference" => {
             benchmark_reference(Path::new(tokenizer_json), Path::new(dataset_dir))
         }
-        _ => Err("usage: mmbert_pair_tokenizer convert <tokenizer.json> <tokenizer.mmbpe> | parity <tokenizer.json> <tokenizer.mmbpe> <dataset-dir> | benchmark-compact <tokenizer.mmbpe> <dataset-dir> | benchmark-reference <tokenizer.json> <dataset-dir>".into()),
+        _ => Err("usage: mmbert_pair_tokenizer convert <tokenizer.json> <tokenizer.mmbpe> | parity <tokenizer.json> <tokenizer.mmbpe> <dataset-dir> | benchmark-compact <tokenizer.mmbpe> <dataset-dir> | benchmark-kit <tokenizer.kit> <dataset-dir> | benchmark-reference <tokenizer.json> <dataset-dir>".into()),
     }
 }

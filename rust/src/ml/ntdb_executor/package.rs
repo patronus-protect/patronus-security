@@ -6,13 +6,16 @@ use std::{
     sync::Arc,
 };
 
-use crate::NtdbOperatingPoint;
+use crate::{diagnostics::PhaseMetricScope, NtdbOperatingPoint};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use super::{
     encoder::{StaticEncoder, StaticEncoderStore},
-    heuristics::local_text_heuristics,
+    heuristics::{
+        local_text_heuristics, shared_global_text_heuristics_from_token_stats,
+        SharedGlobalTextHeuristics, TokenIdStats,
+    },
     manifest::PackageManifest,
     ntdb_error,
     runtime::{AggregatorRuntime, HeadRuntime},
@@ -121,7 +124,7 @@ pub(super) struct PreparedDocument {
     pub(super) chunk_width: usize,
     pub(super) raw_embeddings: Vec<f32>,
     pub(super) local_features: Vec<f32>,
-    pub(super) doc_token_ids: Vec<u32>,
+    pub(super) global_text_features: SharedGlobalTextHeuristics,
 }
 
 pub(super) struct TokenChunk {
@@ -146,7 +149,7 @@ impl NtdbPackage {
         encoders: &mut StaticEncoderStore,
     ) -> NtdbResult<Self> {
         let package_dir = package_dir.as_ref().to_path_buf();
-        let manifest: PackageManifest = serde_json::from_str(
+        let mut manifest: PackageManifest = serde_json::from_str(
             &fs::read_to_string(package_dir.join("manifest.json")).map_err(|err| {
                 ntdb_error(format!(
                     "failed to read NTDB manifest {}: {err}",
@@ -155,6 +158,7 @@ impl NtdbPackage {
             })?,
         )
         .map_err(|err| ntdb_error(format!("failed to parse NTDB manifest: {err}")))?;
+        manifest.normalize_runtime_defaults();
         manifest.validate()?;
 
         let tokenizer = RuntimeTokenizer::load(package_dir.join(&manifest.tokenizer_dir))?;
@@ -193,18 +197,24 @@ impl NtdbPackage {
 
     fn score_prepared(
         &mut self,
+        model_id: &str,
         text: &str,
         prepared: &PreparedDocument,
         operating_point: NtdbOperatingPoint,
     ) -> NtdbResult<Vec<ScoreOutput>> {
         let chunk_count = prepared.chunks.len();
         let embedding_dim = self.manifest.minilm.embedding_dim;
+        let mut metrics = PhaseMetricScope::new(
+            "ntdb_score_prepared",
+            format!("model_id={model_id} chunks={chunk_count} embedding_dim={embedding_dim}"),
+        );
 
         let per_head = self
             .heads
             .par_iter_mut()
             .map(|head| head.score(&prepared, chunk_count, embedding_dim))
             .collect::<NtdbResult<Vec<_>>>()?;
+        metrics.checkpoint("after_heads", "");
         let mut feature_by_name: HashMap<String, Vec<f32>> = HashMap::new();
         for (head, scores) in self.heads.iter().zip(per_head.into_iter()) {
             let names = head.output_feature_names();
@@ -224,6 +234,10 @@ impl NtdbPackage {
                 );
             }
         }
+        metrics.checkpoint(
+            "after_head_features",
+            format!("features={}", feature_by_name.len()),
+        );
         for chunk_index in 0..chunk_count {
             for (local_index, name) in self
                 .manifest
@@ -243,10 +257,21 @@ impl NtdbPackage {
                     prepared.local_features[chunk_index * LOCAL_FEATURE_COUNT + local_index];
             }
         }
-
-        self.aggregators
+        metrics.checkpoint(
+            "after_local_features",
+            format!("features={}", feature_by_name.len()),
+        );
+        let outputs = self
+            .aggregators
             .par_iter_mut()
             .map(|aggregator| {
+                let aggregator_id = aggregator.id().to_string();
+                let mut aggregator_metrics = PhaseMetricScope::new(
+                    "ntdb_aggregator_score",
+                    format!(
+                        "model_id={model_id} aggregator_id={aggregator_id} chunks={chunk_count}"
+                    ),
+                );
                 let mut output = aggregator.score(
                     &self.manifest.task.kind,
                     &self.manifest.task.labels,
@@ -255,6 +280,10 @@ impl NtdbPackage {
                     &feature_by_name,
                     operating_point,
                 )?;
+                aggregator_metrics.checkpoint(
+                    "after_score",
+                    format!("model_id={model_id} aggregator_id={aggregator_id}"),
+                );
                 if output
                     .promote_score
                     .zip(output.promote_threshold)
@@ -279,10 +308,16 @@ impl NtdbPackage {
                         candidates.iter().map(|candidate| candidate.span).collect();
                     output.l3_candidates = candidates;
                     output.l2_chunk_outputs = chunk_outputs;
+                    aggregator_metrics.checkpoint(
+                        "after_chunk_promotions",
+                        format!("model_id={model_id} aggregator_id={aggregator_id}"),
+                    );
                 }
                 Ok(output)
             })
-            .collect()
+            .collect();
+        metrics.checkpoint("after_aggregators", "");
+        outputs
     }
 
     fn preparation_key(&self) -> PreparationKey {
@@ -298,26 +333,67 @@ impl NtdbPackage {
     }
 
     fn prepare_document(&self, text: &str) -> NtdbResult<PreparedDocument> {
-        let encoding = self.tokenizer.encode(text, false)?;
-        let chunks = chunk_token_ids(
-            &encoding.ids,
-            &encoding.offsets,
-            self.manifest.minilm.content_tokens_per_chunk,
+        let mut metrics = PhaseMetricScope::new(
+            "ntdb_prepare_document",
+            format!("text_bytes={}", text.len()),
         );
+        let chunks = self
+            .tokenizer
+            .encode_token_chunks(text, self.manifest.minilm.content_tokens_per_chunk)?
+            .into_iter()
+            .map(|chunk| TokenChunk {
+                token_ids: chunk.ids,
+                byte_span: ByteSpan {
+                    start: chunk.byte_span.0,
+                    end: chunk.byte_span.1,
+                },
+            })
+            .collect::<Vec<_>>();
+        let mut token_stats = TokenIdStats::default();
+        for chunk in &chunks {
+            token_stats.observe_all(&chunk.token_ids);
+        }
+        metrics.checkpoint(
+            "after_tokenize",
+            format!(
+                "doc_tokens={} chunks={}",
+                chunks
+                    .iter()
+                    .map(|chunk| chunk.token_ids.len())
+                    .sum::<usize>(),
+                chunks.len()
+            ),
+        );
+        let global_text_features =
+            shared_global_text_heuristics_from_token_stats(text, token_stats);
+        metrics.checkpoint("after_global_text_features", "");
         let raw_embeddings = self.embed_chunks(&chunks)?;
-        let local_features = self.local_features(&chunks)?;
+        metrics.checkpoint(
+            "after_embeddings",
+            format!("embedding_values={}", raw_embeddings.len()),
+        );
+        let local_features = self.local_features(text, &chunks)?;
+        metrics.checkpoint(
+            "after_local_features",
+            format!("feature_values={}", local_features.len()),
+        );
         Ok(PreparedDocument {
             chunks,
             chunk_width: self.manifest.minilm.content_tokens_per_chunk,
             raw_embeddings,
             local_features,
-            doc_token_ids: encoding.ids,
+            global_text_features,
         })
     }
 
     fn embed_chunks(&self, chunks: &[TokenChunk]) -> NtdbResult<Vec<f32>> {
         let embedding_dim = self.manifest.minilm.embedding_dim;
+        let mut metrics = PhaseMetricScope::new(
+            "ntdb_embed_chunks",
+            format!("chunks={} embedding_dim={embedding_dim}", chunks.len()),
+        );
         let mut output = vec![0.0_f32; chunks.len() * embedding_dim];
+        metrics.checkpoint("after_output_alloc", format!("values={}", output.len()));
         output
             .par_chunks_mut(embedding_dim)
             .zip(chunks.par_iter())
@@ -340,14 +416,17 @@ impl NtdbPackage {
                 }
                 Ok(())
             })?;
+        metrics.checkpoint("after_fill", "");
         Ok(output)
     }
 
-    fn local_features(&self, chunks: &[TokenChunk]) -> NtdbResult<Vec<f32>> {
+    fn local_features(&self, text: &str, chunks: &[TokenChunk]) -> NtdbResult<Vec<f32>> {
         let mut output = Vec::with_capacity(chunks.len() * LOCAL_FEATURE_COUNT);
         for chunk in chunks {
-            let chunk_text = self.tokenizer.decode(&chunk.token_ids, true)?;
-            output.extend_from_slice(&local_text_heuristics(&chunk_text, &chunk.token_ids));
+            let chunk_text = text
+                .get(chunk.byte_span.start..chunk.byte_span.end)
+                .unwrap_or_default();
+            output.extend_from_slice(&local_text_heuristics(chunk_text, &chunk.token_ids));
         }
         Ok(output)
     }
@@ -446,6 +525,7 @@ impl NtdbMultiPackage {
                 Ok(MultiScoreOutput {
                     model_id: entry.id.clone(),
                     outputs: entry.package.score_prepared(
+                        &entry.id,
                         text,
                         prepared.as_ref(),
                         operating_point,
@@ -465,6 +545,8 @@ impl NtdbMultiPackage {
         I: IntoIterator<Item = S>,
         S: AsRef<str>,
     {
+        let mut metrics =
+            PhaseMetricScope::new("ntdb_score_models", format!("text_bytes={}", text.len()));
         let requested = model_ids
             .into_iter()
             .map(|id| id.as_ref().to_string())
@@ -491,7 +573,12 @@ impl NtdbMultiPackage {
         }
 
         let prepared = self.shared_prepared_documents(text, Some(&requested))?;
-        self.packages
+        metrics.checkpoint(
+            "after_shared_prepare",
+            format!("prepared_docs={}", prepared.len()),
+        );
+        let outputs = self
+            .packages
             .par_iter_mut()
             .filter(|entry| requested.contains(&entry.id))
             .map(|entry| {
@@ -505,13 +592,16 @@ impl NtdbMultiPackage {
                 Ok(MultiScoreOutput {
                     model_id: entry.id.clone(),
                     outputs: entry.package.score_prepared(
+                        &entry.id,
                         text,
                         prepared.as_ref(),
                         operating_point,
                     )?,
                 })
             })
-            .collect()
+            .collect();
+        metrics.checkpoint("after_score_prepared", "");
+        outputs
     }
 
     fn shared_prepared_documents(
@@ -529,7 +619,12 @@ impl NtdbMultiPackage {
             if prepared.contains_key(&key) {
                 continue;
             }
+            let mut metrics = PhaseMetricScope::new(
+                "ntdb_shared_prepare",
+                format!("model_id={} text_bytes={}", entry.id, text.len()),
+            );
             prepared.insert(key, Arc::new(entry.package.prepare_document(text)?));
+            metrics.checkpoint("after_prepare_document", format!("model_id={}", entry.id));
         }
         Ok(prepared)
     }
@@ -562,7 +657,7 @@ fn chunk_promotions(
             local_features: prepared.local_features
                 [index * LOCAL_FEATURE_COUNT..(index + 1) * LOCAL_FEATURE_COUNT]
                 .to_vec(),
-            doc_token_ids: chunk.token_ids.clone(),
+            global_text_features: prepared.global_text_features,
         };
         let chunk_features = feature_by_name
             .iter()
@@ -708,57 +803,9 @@ fn promoted_chunk_candidates(
         .collect()
 }
 
-fn chunk_token_ids(
-    token_ids: &[u32],
-    offsets: &[(usize, usize)],
-    chunk_size: usize,
-) -> Vec<TokenChunk> {
-    if token_ids.is_empty() {
-        return vec![TokenChunk {
-            token_ids: Vec::new(),
-            byte_span: ByteSpan { start: 0, end: 0 },
-        }];
-    }
-    token_ids
-        .chunks(chunk_size)
-        .zip(offsets.chunks(chunk_size))
-        .map(|(ids, chunk_offsets)| TokenChunk {
-            token_ids: ids.to_vec(),
-            byte_span: byte_span(chunk_offsets),
-        })
-        .collect()
-}
-
-fn byte_span(offsets: &[(usize, usize)]) -> ByteSpan {
-    let start = offsets
-        .iter()
-        .find(|(start, end)| end > start)
-        .map(|(start, _)| *start)
-        .unwrap_or(0);
-    let end = offsets
-        .iter()
-        .rev()
-        .find(|(start, end)| end > start)
-        .map(|(_, end)| *end)
-        .unwrap_or(start);
-    ByteSpan { start, end }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn token_chunks_keep_byte_spans() {
-        let chunks = chunk_token_ids(&[1, 2, 3, 4], &[(0, 2), (3, 5), (6, 8), (9, 11)], 2);
-
-        assert_eq!(chunks.len(), 2);
-        assert_eq!((chunks[0].byte_span.start, chunks[0].byte_span.end), (0, 5));
-        assert_eq!(
-            (chunks[1].byte_span.start, chunks[1].byte_span.end),
-            (6, 11)
-        );
-    }
 
     #[test]
     fn per_chunk_promote_selects_only_scores_at_or_above_threshold() {

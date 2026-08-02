@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use std::fmt;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -21,11 +22,31 @@ impl Default for ExactCacheConfig {
     }
 }
 
+#[derive(Clone)]
+pub struct CacheEncryptionConfig {
+    pub key: [u8; 32],
+}
+
+impl CacheEncryptionConfig {
+    pub fn from_key(key: [u8; 32]) -> Self {
+        Self { key }
+    }
+}
+
+impl fmt::Debug for CacheEncryptionConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CacheEncryptionConfig")
+            .field("key", &"<redacted>")
+            .finish()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct PersistentCacheConfig {
     pub storage_location: PathBuf,
     pub write_mode: CacheWriteMode,
     pub write_behind: WriteBehindConfig,
+    pub encryption: Option<CacheEncryptionConfig>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

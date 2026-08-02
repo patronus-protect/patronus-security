@@ -5,6 +5,7 @@
 mod benchmark;
 mod config;
 mod coordinator;
+mod crypto;
 mod memory;
 mod pii_chunk;
 mod pii_entity;
@@ -14,8 +15,9 @@ mod store;
 mod types;
 mod write_behind;
 
-pub use config::{CacheWriteMode, ExactCacheConfig, PersistentCacheConfig};
+pub use config::{CacheEncryptionConfig, CacheWriteMode, ExactCacheConfig, PersistentCacheConfig};
 pub(crate) use coordinator::{CacheCoordinator, CacheLookup, CacheSource, Clock, SystemClock};
+pub(crate) use crypto::CacheCrypto;
 pub use memory::MemoryCacheConfig;
 pub(crate) use memory::MemoryCacheStore;
 pub(crate) use pii_chunk::PiiChunkCache;

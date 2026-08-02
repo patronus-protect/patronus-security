@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 mod compact_tokenizer;
 mod download;
+mod mmbert_tokenizer;
 mod specs;
 
 pub use download::{
@@ -13,6 +14,7 @@ pub use download::{
 pub(crate) use download::{
     download_dynamic_pii_assets_with_progress, download_ntdb_l2_package_with_progress,
     download_unified_l3_assets_with_progress, prepare_cached_ntdb_l2_compact_tokenizer,
+    prepare_cached_pipeline_model_compact_tokenizer,
 };
 pub use specs::{
     AssetSpec, NtdbL2PackageAssetSpec, PipelineModelAssetSpec, ASSET_MANIFEST, DEDICATED_L3_ASSETS,

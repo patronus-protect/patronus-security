@@ -1,13 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use aho_corasick::{AhoCorasick, AhoCorasickBuilder, MatchKind};
 use std::{
-    collections::HashMap,
+    cmp::Ordering,
+    collections::{BinaryHeap, HashMap},
     fs::File,
     io::{self, BufReader, Read},
     path::Path,
+    sync::Mutex,
 };
 
 const MAGIC: &[u8; 8] = b"MMBPE\0\x01\0";
+const PIECE_CACHE_MAX_ENTRIES: usize = 65_536;
+const PIECE_CACHE_MAX_BYTES: usize = 96;
 
 #[derive(Clone)]
 struct AddedToken {
@@ -22,6 +26,30 @@ struct Merge {
     output: u32,
 }
 
+#[derive(Clone, Copy, Eq, PartialEq)]
+struct MergeCandidate {
+    rank: u32,
+    index: usize,
+    output: u32,
+    left: u32,
+    right: u32,
+}
+
+impl Ord for MergeCandidate {
+    fn cmp(&self, other: &Self) -> Ordering {
+        other
+            .rank
+            .cmp(&self.rank)
+            .then_with(|| other.index.cmp(&self.index))
+    }
+}
+
+impl PartialOrd for MergeCandidate {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 pub(crate) struct MmbertPairTokenizer {
     chars: HashMap<char, u32>,
     bytes: [u32; 256],
@@ -31,6 +59,7 @@ pub(crate) struct MmbertPairTokenizer {
     bos: u32,
     eos: u32,
     unknown: u32,
+    piece_cache: Mutex<HashMap<String, Vec<u32>>>,
 }
 
 impl MmbertPairTokenizer {
@@ -100,6 +129,7 @@ impl MmbertPairTokenizer {
             bos,
             eos,
             unknown,
+            piece_cache: Mutex::new(HashMap::new()),
         })
     }
 
@@ -107,7 +137,11 @@ impl MmbertPairTokenizer {
         self.encode_with_special_tokens(text, true)
     }
 
-    fn encode_with_special_tokens(&self, text: &str, add_special_tokens: bool) -> Vec<u32> {
+    pub(crate) fn encode_with_special_tokens(
+        &self,
+        text: &str,
+        add_special_tokens: bool,
+    ) -> Vec<u32> {
         let mut ids = Vec::new();
         if add_special_tokens {
             ids.push(self.bos);
@@ -150,41 +184,136 @@ impl MmbertPairTokenizer {
     }
 
     fn encode_piece(&self, piece: &str, output: &mut Vec<u32>) {
+        if piece.len() <= PIECE_CACHE_MAX_BYTES {
+            if let Some(ids) = self
+                .piece_cache
+                .lock()
+                .expect("mmBERT piece cache mutex poisoned")
+                .get(piece)
+                .cloned()
+            {
+                output.extend(ids);
+                return;
+            }
+            let start = output.len();
+            self.encode_piece_uncached(piece, output);
+            let ids = output[start..].to_vec();
+            let mut cache = self
+                .piece_cache
+                .lock()
+                .expect("mmBERT piece cache mutex poisoned");
+            if cache.len() < PIECE_CACHE_MAX_ENTRIES {
+                cache.insert(piece.to_string(), ids);
+            }
+            return;
+        }
+        self.encode_piece_uncached(piece, output);
+    }
+
+    fn encode_piece_uncached(&self, piece: &str, output: &mut Vec<u32>) {
         let mut symbols = Vec::with_capacity(piece.chars().count());
         for value in piece.chars() {
             if let Some(id) = self.chars.get(&value) {
                 symbols.push(*id);
             } else {
                 let mut encoded = [0; 4];
-                let fallback = value
-                    .encode_utf8(&mut encoded)
-                    .bytes()
-                    .map(|byte| self.bytes[byte as usize])
-                    .collect::<Vec<_>>();
-                if fallback.iter().any(|id| *id == u32::MAX) {
+                let bytes = value.encode_utf8(&mut encoded).as_bytes();
+                if bytes
+                    .iter()
+                    .any(|byte| self.bytes[*byte as usize] == u32::MAX)
+                {
                     symbols.push(self.unknown);
                 } else {
-                    symbols.extend(fallback);
+                    symbols.extend(bytes.iter().map(|byte| self.bytes[*byte as usize]));
                 }
             }
         }
-        loop {
-            let next = symbols
-                .windows(2)
-                .enumerate()
-                .filter_map(|(index, pair)| {
-                    self.merges
-                        .get(&pair_key(pair[0], pair[1]))
-                        .map(|merge| (merge.rank, index, merge.output))
-                })
-                .min_by_key(|(rank, index, _)| (*rank, *index));
-            let Some((_, index, merged)) = next else {
-                break;
-            };
-            symbols[index] = merged;
-            symbols.remove(index + 1);
-        }
+        merge_symbols(&mut symbols, &self.merges);
         output.extend(symbols);
+    }
+}
+
+fn merge_symbols(symbols: &mut Vec<u32>, merges: &HashMap<u64, Merge>) {
+    const END: usize = usize::MAX;
+
+    if symbols.len() < 2 {
+        return;
+    }
+
+    let mut previous = vec![END; symbols.len()];
+    let mut next = vec![END; symbols.len()];
+    let mut active = vec![true; symbols.len()];
+    for index in 0..symbols.len() {
+        if index > 0 {
+            previous[index] = index - 1;
+        }
+        if index + 1 < symbols.len() {
+            next[index] = index + 1;
+        }
+    }
+
+    let mut heap = BinaryHeap::with_capacity(symbols.len());
+    for index in 0..symbols.len() - 1 {
+        push_candidate(index, symbols, &next, merges, &mut heap);
+    }
+
+    while let Some(candidate) = heap.pop() {
+        let right_index = next[candidate.index];
+        if right_index == END
+            || !active[candidate.index]
+            || !active[right_index]
+            || symbols[candidate.index] != candidate.left
+            || symbols[right_index] != candidate.right
+        {
+            continue;
+        }
+
+        symbols[candidate.index] = candidate.output;
+        active[right_index] = false;
+        let after = next[right_index];
+        next[candidate.index] = after;
+        if after != END {
+            previous[after] = candidate.index;
+        }
+
+        let before = previous[candidate.index];
+        if before != END {
+            push_candidate(before, symbols, &next, merges, &mut heap);
+        }
+        push_candidate(candidate.index, symbols, &next, merges, &mut heap);
+    }
+
+    let mut write = 0;
+    for read in 0..symbols.len() {
+        if active[read] {
+            symbols[write] = symbols[read];
+            write += 1;
+        }
+    }
+    symbols.truncate(write);
+}
+
+fn push_candidate(
+    index: usize,
+    symbols: &[u32],
+    next: &[usize],
+    merges: &HashMap<u64, Merge>,
+    heap: &mut BinaryHeap<MergeCandidate>,
+) {
+    let right_index = next[index];
+    if right_index == usize::MAX {
+        return;
+    }
+    let left = symbols[index];
+    let right = symbols[right_index];
+    if let Some(merge) = merges.get(&pair_key(left, right)) {
+        heap.push(MergeCandidate {
+            rank: merge.rank,
+            index,
+            output: merge.output,
+            left,
+            right,
+        });
     }
 }
 

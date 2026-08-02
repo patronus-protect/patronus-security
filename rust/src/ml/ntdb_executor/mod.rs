@@ -24,7 +24,10 @@ pub use package::{
 #[doc(hidden)]
 pub mod test_util {
     pub use super::encoder::StaticEncoderStore;
-    pub use super::heuristics::{global_text_heuristics, local_text_heuristics};
+    pub use super::heuristics::{
+        global_text_heuristics, local_text_heuristics,
+        shared_global_text_heuristics_from_token_stats, TokenIdStats,
+    };
     pub use super::lightgbm::Tree;
     pub use super::runtime::unit_left_dot;
 }

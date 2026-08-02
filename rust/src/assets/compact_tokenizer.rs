@@ -93,7 +93,7 @@ pub(super) fn ensure_granite_compact_tokenizer_with(
     Ok(Some(compact_path))
 }
 
-fn remove_file_if_exists(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+pub(super) fn remove_file_if_exists(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     match fs::remove_file(path) {
         Ok(()) => Ok(()),
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
@@ -137,7 +137,7 @@ fn cache_is_current(
     Ok(file_blake3(compact_path)? == metadata.kit_blake3)
 }
 
-fn file_blake3(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
+pub(super) fn file_blake3(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
     let mut file = File::open(path)?;
     let mut hasher = blake3::Hasher::new();
     let mut buffer = [0u8; 64 * 1024];
@@ -151,7 +151,7 @@ fn file_blake3(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
     Ok(hasher.finalize().to_hex().to_string())
 }
 
-fn write_json_atomic<T: Serialize>(
+pub(super) fn write_json_atomic<T: Serialize>(
     destination: &Path,
     value: &T,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -171,13 +171,13 @@ fn write_json_atomic<T: Serialize>(
     temporary.persist(destination)
 }
 
-struct TemporaryPath {
+pub(super) struct TemporaryPath {
     path: PathBuf,
     active: bool,
 }
 
 impl TemporaryPath {
-    fn new(parent: &Path, name: &str) -> Result<Self, Box<dyn std::error::Error>> {
+    pub(super) fn new(parent: &Path, name: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let suffix = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)?
             .as_nanos();
@@ -189,11 +189,11 @@ impl TemporaryPath {
         Ok(Self { path, active: true })
     }
 
-    fn path(&self) -> &Path {
+    pub(super) fn path(&self) -> &Path {
         &self.path
     }
 
-    fn persist(&mut self, destination: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    pub(super) fn persist(&mut self, destination: &Path) -> Result<(), Box<dyn std::error::Error>> {
         replace_file(&self.path, destination)?;
         self.active = false;
         Ok(())
@@ -223,12 +223,12 @@ fn replace_file(source: &Path, destination: &Path) -> Result<(), Box<dyn std::er
     Ok(())
 }
 
-struct CacheLock {
+pub(super) struct CacheLock {
     path: PathBuf,
 }
 
 impl CacheLock {
-    fn acquire(path: &Path) -> Result<Self, Box<dyn std::error::Error>> {
+    pub(super) fn acquire(path: &Path) -> Result<Self, Box<dyn std::error::Error>> {
         let started = Instant::now();
         loop {
             match OpenOptions::new().write(true).create_new(true).open(path) {
@@ -246,7 +246,7 @@ impl CacheLock {
                     }
                     if started.elapsed() >= LOCK_TIMEOUT {
                         return Err(format!(
-                            "timed out waiting for Granite tokenizer conversion lock {}",
+                            "timed out waiting for compact tokenizer conversion lock {}",
                             path.display()
                         )
                         .into());

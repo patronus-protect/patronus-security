@@ -7,6 +7,44 @@ All notable changes to this project are documented here. The format is based on
 This project is **pre-1.0**: any change to detection thresholds, the asset manifest, or public
 result shapes may be breaking for downstream users, and is called out explicitly below.
 
+## [0.1.2] - 2026-07-26
+
+### Added
+
+- Added compact `.mmbpe` tokenizer generation for compatible mmBERT byte-fallback BPE
+  tokenizers during verified downloads and cached warmup. The original `tokenizer.json` remains
+  the canonical fallback.
+- Added German imperative variants to the native `instruction_override` L1 detector.
+
+### Changed
+
+- Added the structured `decision` envelope to model-backed classifier results. The envelope exposes
+  the final Ark verdict, the canonical policy candidate, all typed L2/L3/Union candidates, Ark's
+  calibrated recommendation, terminality, and minimal provenance.
+- Restricted `decision` to terminal authoritative classifier results. Early L2 results with
+  `l3_pending`, provisional events, and result-preview events now leave `decision` unset so
+  downstream policy consumers can key on `result.decision.is_some()`.
+- Extended compact tokenizer asset preparation beyond Granite `.kit` generation so supported
+  mmBERT L2/L3 bundles can reuse hash- and version-invalidated generated artifacts.
+- Changed classifier default arbitration to preserve a calibrated default-class confidence when
+  the producing model exposes one, instead of always forcing `0.0`.
+
+### Fixed
+
+- Fixed promoted NTDB L2 fallback results so the final-decision threshold profile is still applied
+  before publishing the fallback class.
+- Fixed L2-only classifier arbitration so accepted candidates are selected from model label scores
+  instead of the already defaulted top-level result.
+- Fixed persistent `redb` cache handling to recreate a missing or externally deleted database file
+  while still surfacing corrupt databases and active second-writer conflicts as errors.
+
+### Breaking
+
+- Removed the redundant NTDB L2 `details.raw_class_name` and `details.raw_confidence` fields.
+  Consumers should read `decision.decision_candidate` and `decision.candidates[]` instead.
+- Candidate arbitration data is no longer exposed as public `layers[].details.arbitration_*` fields.
+  The public contract is the top-level `decision` envelope.
+
 ## [0.1.1] - 2026-07-26
 
 ### Added

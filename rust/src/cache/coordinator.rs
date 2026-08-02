@@ -40,9 +40,10 @@ pub(crate) struct CacheLookup {
 
 pub(crate) struct CacheCoordinator {
     memory: Arc<dyn ExactCacheStore>,
-    persistent: Option<Arc<dyn ExactCacheStore>>,
+    persistent: Mutex<Option<Arc<dyn ExactCacheStore>>>,
+    persistent_config: Option<super::PersistentCacheConfig>,
     storage_location: Option<PathBuf>,
-    write_stats: Option<Arc<WriteBehindStats>>,
+    write_stats: Mutex<Option<Arc<WriteBehindStats>>>,
     clock: Arc<dyn Clock>,
     entry_ttl_ms: u64,
     memory_config: MemoryCacheConfig,
@@ -58,9 +59,10 @@ impl CacheCoordinator {
     ) -> Self {
         Self {
             memory,
-            persistent,
+            persistent: Mutex::new(persistent),
+            persistent_config: None,
             storage_location: None,
-            write_stats: None,
+            write_stats: Mutex::new(None),
             clock,
             entry_ttl_ms: ExactCacheConfig::default().entry_ttl.as_millis() as u64,
             memory_config: MemoryCacheConfig::default(),
@@ -87,24 +89,15 @@ impl CacheCoordinator {
             return Ok(coordinator);
         };
 
-        let storage_location = persistent_config.storage_location;
-        let redb: Arc<dyn ExactCacheStore> = Arc::new(RedbCacheStore::open(&storage_location)?);
-        let (persistent, write_stats): (Arc<dyn ExactCacheStore>, Option<Arc<WriteBehindStats>>) =
-            match persistent_config.write_mode {
-                CacheWriteMode::WriteThrough => (redb, None),
-                CacheWriteMode::Async => {
-                    let store =
-                        Arc::new(WriteBehindStore::new(redb, persistent_config.write_behind));
-                    let stats = Some(store.stats());
-                    (store, stats)
-                }
-            };
+        let storage_location = persistent_config.storage_location.clone();
+        let (persistent, write_stats) = open_persistent_store(&persistent_config)?;
 
         Ok(Self {
             memory,
-            persistent: Some(persistent),
+            persistent: Mutex::new(Some(persistent)),
+            persistent_config: Some(persistent_config),
             storage_location: Some(storage_location),
-            write_stats,
+            write_stats: Mutex::new(write_stats),
             clock,
             entry_ttl_ms,
             memory_config,
@@ -118,14 +111,42 @@ impl CacheCoordinator {
     }
 
     pub(crate) fn write_stats(&self) -> Option<WriteBehindStatsSnapshot> {
-        self.write_stats.as_ref().map(|stats| stats.snapshot())
+        self.write_stats
+            .lock()
+            .expect("cache write stats mutex poisoned")
+            .as_ref()
+            .map(|stats| stats.snapshot())
     }
 
     pub(crate) fn flush(&self) -> Result<(), CacheError> {
-        match &self.persistent {
+        match self.persistent_store()? {
             Some(persistent) => persistent.flush(),
             None => Ok(()),
         }
+    }
+
+    pub(crate) fn reset_persistent_connections(&self) -> Result<(), CacheError> {
+        let persistent = self
+            .persistent
+            .lock()
+            .map_err(|_| CacheError::Storage("cache connection mutex poisoned".to_string()))?
+            .take();
+        self.write_stats
+            .lock()
+            .map_err(|_| CacheError::Storage("cache write stats mutex poisoned".to_string()))?
+            .take();
+        if let Some(persistent) = persistent {
+            persistent.flush()?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn reset_cache(&self, until_unix_ms: u64) -> Result<usize, CacheError> {
+        let mut removed = self.memory.remove_created_before(until_unix_ms)?;
+        if let Some(persistent) = self.persistent_store()? {
+            removed += persistent.remove_created_before(until_unix_ms)?;
+        }
+        Ok(removed)
     }
 
     pub(crate) fn memory_config(&self) -> MemoryCacheConfig {
@@ -137,8 +158,9 @@ impl CacheCoordinator {
         bucket_keys: &[Vec<u8>],
         limit: usize,
     ) -> Vec<SimilarityStoreRecord> {
-        self.persistent
-            .as_ref()
+        self.persistent_store()
+            .ok()
+            .flatten()
             .and_then(|store| {
                 store
                     .similarity_candidates(bucket_keys, self.clock.now_unix_ms(), limit)
@@ -154,7 +176,7 @@ impl CacheCoordinator {
         let now = self.clock.now_unix_ms();
         record.created_at_unix_ms = now;
         record.expires_at_unix_ms = now.saturating_add(self.entry_ttl_ms);
-        match &self.persistent {
+        match self.persistent_store()? {
             Some(store) => store.put_similarity(record),
             None => Ok(()),
         }
@@ -195,7 +217,7 @@ impl CacheCoordinator {
 
         let output = compute.take().expect("compute closure already used")()?;
         let _ = self.memory.put(key, output.clone());
-        if let Some(persistent) = &self.persistent {
+        if let Ok(Some(persistent)) = self.persistent_store() {
             let _ = persistent.put(key, output.clone());
         }
         Ok(CacheLookup {
@@ -238,7 +260,7 @@ impl CacheCoordinator {
             expires_at_unix_ms: created_at_unix_ms.saturating_add(self.entry_ttl_ms),
         };
         self.memory.put(key, output.clone())?;
-        if let Some(persistent) = &self.persistent {
+        if let Some(persistent) = self.persistent_store()? {
             persistent.put(key, output)?;
         }
         Ok(())
@@ -253,13 +275,45 @@ impl CacheCoordinator {
             });
         }
 
-        let output = self.persistent.as_ref()?.get(key, now).ok()??;
+        let output = self.persistent_store().ok()??.get(key, now).ok()??;
         let _ = self.memory.put(*key, output.clone());
         Some(CacheLookup {
             output,
             source: CacheSource::Persistent,
         })
     }
+
+    fn persistent_store(&self) -> Result<Option<Arc<dyn ExactCacheStore>>, CacheError> {
+        let mut persistent = self
+            .persistent
+            .lock()
+            .map_err(|_| CacheError::Storage("cache connection mutex poisoned".to_string()))?;
+        if persistent.is_none() {
+            if let Some(config) = &self.persistent_config {
+                let (store, stats) = open_persistent_store(config)?;
+                *persistent = Some(store);
+                *self.write_stats.lock().map_err(|_| {
+                    CacheError::Storage("cache write stats mutex poisoned".to_string())
+                })? = stats;
+            }
+        }
+        Ok(persistent.clone())
+    }
+}
+
+fn open_persistent_store(
+    config: &super::PersistentCacheConfig,
+) -> Result<(Arc<dyn ExactCacheStore>, Option<Arc<WriteBehindStats>>), CacheError> {
+    let redb: Arc<dyn ExactCacheStore> =
+        RedbCacheStore::open_shared(&config.storage_location, config.encryption.clone())?;
+    Ok(match config.write_mode {
+        CacheWriteMode::WriteThrough => (redb, None),
+        CacheWriteMode::Async => {
+            let store = Arc::new(WriteBehindStore::new(redb, config.write_behind));
+            let stats = Some(store.stats());
+            (store, stats)
+        }
+    })
 }
 
 struct FlightGuard<'a> {
@@ -301,7 +355,11 @@ mod tests {
     }
 
     fn key() -> CacheKey {
-        CacheKey::for_chunk(CacheNamespace::from_components(1, &[b"model"]), b"chunk")
+        key_for(b"chunk")
+    }
+
+    fn key_for(value: &[u8]) -> CacheKey {
+        CacheKey::for_chunk(CacheNamespace::from_components(1, &[b"model"]), value)
     }
 
     fn output() -> CachedModelOutput {
@@ -331,6 +389,19 @@ mod tests {
         std::env::temp_dir().join(format!("patronus-config-{name}-{unique}.redb"))
     }
 
+    fn persistent_config(path: PathBuf) -> ExactCacheConfig {
+        ExactCacheConfig {
+            memory: MemoryCacheConfig::default(),
+            persistent: Some(PersistentCacheConfig {
+                storage_location: path,
+                write_mode: CacheWriteMode::Async,
+                write_behind: WriteBehindConfig::default(),
+                encryption: None,
+            }),
+            entry_ttl: Duration::from_secs(60),
+        }
+    }
+
     #[test]
     fn default_config_does_not_create_persistent_storage() {
         let cache = CacheCoordinator::from_config_with_clock(
@@ -346,15 +417,7 @@ mod tests {
     #[test]
     fn configured_storage_location_survives_coordinator_reopen() {
         let path = temp_path("reopen");
-        let config = ExactCacheConfig {
-            memory: MemoryCacheConfig::default(),
-            persistent: Some(PersistentCacheConfig {
-                storage_location: path.clone(),
-                write_mode: CacheWriteMode::Async,
-                write_behind: WriteBehindConfig::default(),
-            }),
-            entry_ttl: Duration::from_secs(60),
-        };
+        let config = persistent_config(path.clone());
         {
             let cache = CacheCoordinator::from_config_with_clock(
                 config.clone(),
@@ -380,6 +443,99 @@ mod tests {
 
         assert_eq!(lookup.source, CacheSource::Persistent);
         drop(reopened);
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn shared_storage_location_allows_concurrent_coordinators() {
+        let path = temp_path("shared-open");
+        let config = persistent_config(path.clone());
+
+        let first = CacheCoordinator::from_config_with_clock(
+            config.clone(),
+            Arc::new(TestClock(AtomicU64::new(10))),
+        )
+        .unwrap();
+        let second = CacheCoordinator::from_config_with_clock(
+            config,
+            Arc::new(TestClock(AtomicU64::new(10))),
+        )
+        .unwrap();
+
+        first
+            .get_or_compute(key(), || -> Result<_, ()> { Ok(output()) })
+            .unwrap();
+        first.flush().unwrap();
+        assert_eq!(
+            second
+                .get_or_compute(key(), || -> Result<_, ()> { panic!("must not compute") })
+                .unwrap()
+                .source,
+            CacheSource::Persistent
+        );
+
+        drop(second);
+        drop(first);
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn reset_persistent_connections_preserves_storage_and_reopens() {
+        let path = temp_path("reset-connections");
+        let config = persistent_config(path.clone());
+        let cache = CacheCoordinator::from_config_with_clock(
+            config,
+            Arc::new(TestClock(AtomicU64::new(10))),
+        )
+        .unwrap();
+        cache
+            .get_or_compute(key(), || -> Result<_, ()> { Ok(output()) })
+            .unwrap();
+        cache.flush().unwrap();
+
+        cache.reset_persistent_connections().unwrap();
+
+        assert!(path.exists());
+        cache.flush().unwrap();
+        drop(cache);
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn reset_cache_removes_records_created_before_cutoff() {
+        let path = temp_path("reset-cache-cutoff");
+        let config = persistent_config(path.clone());
+        let clock = Arc::new(TestClock(AtomicU64::new(10)));
+        let cache = CacheCoordinator::from_config_with_clock(config, clock.clone()).unwrap();
+        let old_key = key_for(b"old");
+        let new_key = key_for(b"new");
+
+        cache
+            .get_or_compute_heads(old_key, || -> Result<_, ()> { Ok(output().heads) })
+            .unwrap();
+        clock.0.store(20, Ordering::Relaxed);
+        cache
+            .get_or_compute_heads(new_key, || -> Result<_, ()> { Ok(output().heads) })
+            .unwrap();
+        cache.flush().unwrap();
+
+        assert!(cache.reset_cache(20).unwrap() >= 1);
+
+        assert_eq!(
+            cache
+                .get_or_compute_heads(old_key, || -> Result<_, ()> { Ok(output().heads) })
+                .unwrap()
+                .source,
+            CacheSource::Computed
+        );
+        assert_ne!(
+            cache
+                .get_or_compute_heads(new_key, || -> Result<_, ()> { panic!("must not compute") })
+                .unwrap()
+                .source,
+            CacheSource::Computed
+        );
+        drop(cache);
         std::fs::remove_file(path).unwrap();
     }
 
@@ -419,6 +575,10 @@ mod tests {
             }
 
             fn remove_expired(&self, _now_unix_ms: u64) -> Result<usize, CacheError> {
+                Err(CacheError::Storage("cleanup failed".to_string()))
+            }
+
+            fn remove_created_before(&self, _until_unix_ms: u64) -> Result<usize, CacheError> {
                 Err(CacheError::Storage("cleanup failed".to_string()))
             }
         }

@@ -172,7 +172,7 @@ pub static DLP_PATTERNS: &[DlpPattern] = &[
     },
     DlpPattern {
         name: "dlp_credential_in_url",
-        pattern: r#"(?i)\b(?:password|passwd|secret|token|apikey|api_key|api-key)\s*=\s*[^\\\s&"'\]},]{4,}"#,
+        pattern: r#"(?i)[?&](?:password|passwd|secret|token|apikey|api_key|api-key)=[^\\\s&"'\]},]{4,}"#,
         entity_group: "CREDENTIAL",
         validator: Some(is_unredacted_url_credential),
     },

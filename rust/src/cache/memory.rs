@@ -126,6 +126,24 @@ impl ExactCacheStore for MemoryCacheStore {
         }
         Ok(removed)
     }
+
+    fn remove_created_before(&self, until_unix_ms: u64) -> Result<usize, CacheError> {
+        let mut state = self.state.lock().expect("cache mutex poisoned");
+        let stale = state
+            .entries
+            .iter()
+            .filter_map(|(key, entry)| {
+                (entry.output.created_at_unix_ms < until_unix_ms).then_some(*key)
+            })
+            .collect::<Vec<_>>();
+        let removed = stale.len();
+        for key in stale {
+            if let Some(entry) = state.entries.remove(&key) {
+                state.used_bytes = state.used_bytes.saturating_sub(entry.estimated_bytes);
+            }
+        }
+        Ok(removed)
+    }
 }
 
 fn prune(state: &mut State, config: MemoryCacheConfig) {
@@ -163,13 +181,17 @@ mod tests {
     }
 
     fn output(expires_at_unix_ms: u64) -> CachedModelOutput {
+        output_created(10, expires_at_unix_ms)
+    }
+
+    fn output_created(created_at_unix_ms: u64, expires_at_unix_ms: u64) -> CachedModelOutput {
         CachedModelOutput {
             schema_version: 1,
             heads: vec![CachedHeadOutput {
                 head: "test".to_string(),
                 logits: vec![0.1, 0.9],
             }],
-            created_at_unix_ms: 10,
+            created_at_unix_ms,
             expires_at_unix_ms,
         }
     }
@@ -192,6 +214,17 @@ mod tests {
         assert_eq!(store.remove_expired(20).unwrap(), 1);
         assert!(store.get(&key("expired"), 20).unwrap().is_none());
         assert!(store.get(&key("current"), 20).unwrap().is_some());
+    }
+
+    #[test]
+    fn cleanup_removes_entries_created_before_cutoff() {
+        let store = MemoryCacheStore::new(MemoryCacheConfig::default());
+        store.put(key("old"), output_created(10, 100)).unwrap();
+        store.put(key("new"), output_created(20, 100)).unwrap();
+
+        assert_eq!(store.remove_created_before(20).unwrap(), 1);
+        assert!(store.get(&key("old"), 20).unwrap().is_none());
+        assert!(store.get(&key("new"), 20).unwrap().is_some());
     }
 
     #[test]

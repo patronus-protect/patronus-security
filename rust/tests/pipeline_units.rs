@@ -66,8 +66,10 @@ mod l3_results {
                     details: HashMap::new(),
                 },
             ],
+            internal_l2_chunk_outputs: Vec::new(),
             evidence_spans: Vec::new(),
             label_scores: Vec::new(),
+            decision: None,
         }
     }
 
@@ -715,14 +717,65 @@ mod ntdb_l2_results {
         assert_eq!(result.category, "sensitive_document");
         assert_eq!(result.model, "orca-sonar-document-classifier");
         assert_eq!(result.class_name, "source_code");
-        assert_eq!(result.confidence, 0.73);
+        assert!((result.confidence - 0.73).abs() < 1e-6);
         assert_eq!(result.layers.len(), 1);
         assert_eq!(result.layers[0].layer_type, "ntdb_l2");
         assert!(result.layers[0].matched);
     }
 
     #[test]
-    fn ntdb_l2_tool_class_result_uses_pipeline_model_and_queues_l3() {
+    fn ntdb_l2_injection_result_uses_accepted_attack_candidate_from_label_scores() {
+        let execution = ScanExecution::new(SecurityLevel::L2);
+        let decision = NtdbDecision {
+            model_id: "injection".to_string(),
+            aggregator_id: "router".to_string(),
+            task: "binary_promote".to_string(),
+            labels: vec![
+                "benign".to_string(),
+                "attack".to_string(),
+                "promote".to_string(),
+            ],
+            fallback_label: "benign".to_string(),
+            fallback_confidence: 0.1,
+            route_to_l3: false,
+            promote_score: Some(0.1),
+            promote_threshold: Some(0.7),
+            class_scores: vec![0.1, 0.9, 0.1],
+            class_logits: vec![0.0, 2.0, 0.0],
+            chunks: 1,
+            chunk_promote_scores: Vec::new(),
+            l3_candidate_spans: Vec::new(),
+            l3_candidates: Vec::new(),
+            l2_chunk_outputs: Vec::new(),
+        };
+
+        let config = ntdb_l2_model_config_for_id("injection").unwrap();
+        let result = ntdb_l2_scan_result(config, &decision, &execution, 1.0);
+
+        assert_eq!(result.class_name, "attack");
+        assert!((result.confidence - 0.9).abs() < 1e-6);
+        let decision = result
+            .decision
+            .expect("L2-only result should carry a decision envelope");
+        assert_eq!(decision.final_result.class_name, "attack");
+        assert!((decision.final_result.confidence - 0.9).abs() < 1e-6);
+        assert_eq!(decision.final_result.source, "l2");
+        assert!(decision.recommendation.accepted);
+        assert_eq!(decision.candidates.len(), 1);
+        assert_eq!(decision.candidates[0].source, "l2");
+        assert_eq!(decision.candidates[0].class_name, "attack");
+        assert!((decision.candidates[0].confidence - 0.9).abs() < 1e-6);
+
+        let candidate = decision
+            .decision_candidate
+            .expect("L2 final label should expose the L2 policy candidate");
+        assert_eq!(candidate.source, "l2");
+        assert_eq!(candidate.class_name, "attack");
+        assert!((candidate.confidence - 0.9).abs() < 1e-6);
+    }
+
+    #[test]
+    fn ntdb_l2_tool_class_result_thresholds_fallback_and_queues_l3() {
         let mut execution = ScanExecution::new(SecurityLevel::L3);
         execution.set_defer_l3(true);
         let decision = NtdbDecision {
@@ -753,7 +806,12 @@ mod ntdb_l2_results {
 
         assert_eq!(result.category, "tool_class");
         assert_eq!(result.model, "unified-v3-tool-class");
-        assert_eq!(result.class_name, "tool_class.web.search");
+        assert_eq!(result.class_name, "unknown");
+        assert!((result.confidence - 0.02).abs() < 1e-6);
+        assert!(
+            result.decision.is_none(),
+            "queued L2 results with l3_pending are not authoritative policy inputs"
+        );
         assert_eq!(result.layers.len(), 2);
         assert_eq!(result.layers[0].layer_type, "ntdb_l2");
         assert!(result

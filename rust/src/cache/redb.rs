@@ -1,19 +1,22 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex, OnceLock, RwLock, RwLockReadGuard, Weak};
 
 use redb::{
-    Database, MultimapTableDefinition, ReadableDatabase, ReadableMultimapTable, ReadableTable,
-    TableDefinition,
+    Database, DatabaseError, MultimapTableDefinition, ReadableDatabase, ReadableMultimapTable,
+    ReadableTable, StorageError, TableDefinition,
 };
 
 use super::{
-    CacheError, CacheKey, CachedHeadOutput, CachedModelOutput, ExactCacheStore,
-    SimilarityStoreRecord,
+    CacheCrypto, CacheEncryptionConfig, CacheError, CacheKey, CachedHeadOutput, CachedModelOutput,
+    ExactCacheStore, SimilarityStoreRecord,
 };
 
+const RECORDS_NAME: &[u8] = b"exact_model_outputs_v1";
+const SIMILARITY_RECORDS_NAME: &[u8] = b"similarity_records_v1";
 const RECORDS: TableDefinition<&[u8], &[u8]> = TableDefinition::new("exact_model_outputs_v1");
 const SIMILARITY_RECORDS: TableDefinition<&[u8], &[u8]> =
     TableDefinition::new("similarity_records_v1");
@@ -27,31 +30,152 @@ const MAX_HEAD_NAME_BYTES: usize = 16 * 1024;
 const MAX_LOGITS_PER_HEAD: usize = 1_000_000;
 
 pub(crate) struct RedbCacheStore {
-    database: Database,
+    path: PathBuf,
+    database: RwLock<Database>,
+    crypto: Option<CacheCrypto>,
 }
 
 impl RedbCacheStore {
-    pub(crate) fn open(path: impl AsRef<Path>) -> Result<Self, CacheError> {
-        let path = path.as_ref();
-        if let Some(parent) = path
-            .parent()
-            .filter(|parent| !parent.as_os_str().is_empty())
-        {
-            fs::create_dir_all(parent).map_err(storage_error)?;
+    pub(crate) fn open_shared(
+        path: impl AsRef<Path>,
+        encryption: Option<CacheEncryptionConfig>,
+    ) -> Result<Arc<Self>, CacheError> {
+        static OPEN_STORES: OnceLock<Mutex<HashMap<StoreRegistryKey, Weak<RedbCacheStore>>>> =
+            OnceLock::new();
+
+        let path = registry_path(path.as_ref())?;
+        let crypto = encryption.as_ref().map(CacheCrypto::new).transpose()?;
+        let registry_key = StoreRegistryKey {
+            path: path.clone(),
+            encryption_fingerprint: crypto.as_ref().map(CacheCrypto::fingerprint),
+        };
+        let mut stores = OPEN_STORES
+            .get_or_init(|| Mutex::new(HashMap::new()))
+            .lock()
+            .map_err(|_| CacheError::Storage("cache connection registry poisoned".to_string()))?;
+        if let Some(store) = stores.get(&registry_key).and_then(Weak::upgrade) {
+            return Ok(store);
         }
-        prepare_database_file(path)?;
-        let database = Database::create(path).map_err(storage_error)?;
-        let write = database.begin_write().map_err(storage_error)?;
-        write.open_table(RECORDS).map_err(storage_error)?;
-        write
-            .open_table(SIMILARITY_RECORDS)
-            .map_err(storage_error)?;
-        write
-            .open_multimap_table(SIMILARITY_BUCKETS)
-            .map_err(storage_error)?;
-        write.commit().map_err(storage_error)?;
-        Ok(Self { database })
+
+        let store = Arc::new(Self::open_with_crypto(&path, crypto)?);
+        stores.insert(registry_key, Arc::downgrade(&store));
+        Ok(store)
     }
+
+    pub(crate) fn open(path: impl AsRef<Path>) -> Result<Self, CacheError> {
+        Self::open_with_encryption(path, None)
+    }
+
+    pub(crate) fn open_with_encryption(
+        path: impl AsRef<Path>,
+        encryption: Option<CacheEncryptionConfig>,
+    ) -> Result<Self, CacheError> {
+        let crypto = encryption.as_ref().map(CacheCrypto::new).transpose()?;
+        Self::open_with_crypto(path, crypto)
+    }
+
+    fn open_with_crypto(
+        path: impl AsRef<Path>,
+        crypto: Option<CacheCrypto>,
+    ) -> Result<Self, CacheError> {
+        let path = path.as_ref().to_path_buf();
+        let database = open_database(&path)?;
+        Ok(Self {
+            path,
+            database: RwLock::new(database),
+            crypto,
+        })
+    }
+
+    fn database(&self) -> Result<RwLockReadGuard<'_, Database>, CacheError> {
+        if !self.path.exists() {
+            let mut database = self
+                .database
+                .write()
+                .map_err(|_| CacheError::Storage("cache database lock poisoned".to_string()))?;
+            if !self.path.exists() {
+                *database = open_database(&self.path)?;
+            }
+        }
+        self.database
+            .read()
+            .map_err(|_| CacheError::Storage("cache database lock poisoned".to_string()))
+    }
+
+    fn encode_exact(&self, key: &[u8], value: &CachedModelOutput) -> Result<Vec<u8>, CacheError> {
+        let bytes = encode_record(value)?;
+        match &self.crypto {
+            Some(crypto) => crypto.encrypt(
+                RECORDS_NAME,
+                key,
+                value.created_at_unix_ms,
+                value.expires_at_unix_ms,
+                &bytes,
+            ),
+            None => Ok(bytes),
+        }
+    }
+
+    fn decode_exact(&self, key: &[u8], bytes: &[u8]) -> Result<CachedModelOutput, CacheError> {
+        let bytes = match &self.crypto {
+            Some(crypto) => crypto.decrypt(RECORDS_NAME, key, bytes)?,
+            None => bytes.to_vec(),
+        };
+        decode_record(&bytes)
+    }
+
+    fn exact_times(&self, bytes: &[u8]) -> Result<(u64, u64), CacheError> {
+        match &self.crypto {
+            Some(_) => CacheCrypto::envelope_times(bytes),
+            None => decode_record_times(bytes),
+        }
+    }
+
+    fn encode_similarity(&self, record: &SimilarityStoreRecord) -> Result<Vec<u8>, CacheError> {
+        let bytes = encode_similarity_record(record)?;
+        match &self.crypto {
+            Some(crypto) => crypto.encrypt(
+                SIMILARITY_RECORDS_NAME,
+                &record.id,
+                record.created_at_unix_ms,
+                record.expires_at_unix_ms,
+                &bytes,
+            ),
+            None => Ok(bytes),
+        }
+    }
+
+    fn decode_similarity(
+        &self,
+        id: &[u8],
+        bytes: &[u8],
+    ) -> Result<SimilarityStoreRecord, CacheError> {
+        let bytes = match &self.crypto {
+            Some(crypto) => crypto.decrypt(SIMILARITY_RECORDS_NAME, id, bytes)?,
+            None => bytes.to_vec(),
+        };
+        decode_similarity_record(id, &bytes)
+    }
+
+    fn similarity_times(&self, bytes: &[u8]) -> Result<(u64, u64), CacheError> {
+        match &self.crypto {
+            Some(_) => CacheCrypto::envelope_times(bytes),
+            None => decode_similarity_record_times(bytes),
+        }
+    }
+
+    fn stored_similarity_bucket(&self, bucket: &[u8]) -> Vec<u8> {
+        match &self.crypto {
+            Some(crypto) => crypto.index_keyed_hash(bucket).to_vec(),
+            None => bucket.to_vec(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct StoreRegistryKey {
+    path: PathBuf,
+    encryption_fingerprint: Option<[u8; 32]>,
 }
 
 impl ExactCacheStore for RedbCacheStore {
@@ -60,20 +184,22 @@ impl ExactCacheStore for RedbCacheStore {
         key: &CacheKey,
         now_unix_ms: u64,
     ) -> Result<Option<CachedModelOutput>, CacheError> {
+        let database = self.database()?;
         let key = key.to_bytes();
-        let read = self.database.begin_read().map_err(storage_error)?;
+        let read = database.begin_read().map_err(storage_error)?;
         let table = read.open_table(RECORDS).map_err(storage_error)?;
         let Some(value) = table.get(key.as_slice()).map_err(storage_error)? else {
             return Ok(None);
         };
-        let output = decode_record(value.value())?;
-        if output.is_expired(now_unix_ms) {
+        let (_, expires_at_unix_ms) = self.exact_times(value.value())?;
+        if expires_at_unix_ms <= now_unix_ms {
             drop(value);
             drop(table);
             drop(read);
-            self.remove_key(&key)?;
+            remove_key(&database, &key)?;
             return Ok(None);
         }
+        let output = self.decode_exact(&key, value.value())?;
         Ok(Some(output))
     }
 
@@ -84,9 +210,13 @@ impl ExactCacheStore for RedbCacheStore {
     fn put_batch(&self, entries: Vec<(CacheKey, CachedModelOutput)>) -> Result<(), CacheError> {
         let entries = entries
             .into_iter()
-            .map(|(key, value)| Ok((key.to_bytes(), encode_record(&value)?)))
+            .map(|(key, value)| {
+                let key = key.to_bytes();
+                Ok((key, self.encode_exact(&key, &value)?))
+            })
             .collect::<Result<Vec<_>, CacheError>>()?;
-        let write = self.database.begin_write().map_err(storage_error)?;
+        let database = self.database()?;
+        let write = database.begin_write().map_err(storage_error)?;
         {
             let mut table = write.open_table(RECORDS).map_err(storage_error)?;
             for (key, value) in &entries {
@@ -99,28 +229,30 @@ impl ExactCacheStore for RedbCacheStore {
     }
 
     fn remove_expired(&self, now_unix_ms: u64) -> Result<usize, CacheError> {
-        let read = self.database.begin_read().map_err(storage_error)?;
+        let database = self.database()?;
+        let read = database.begin_read().map_err(storage_error)?;
         let table = read.open_table(RECORDS).map_err(storage_error)?;
         let mut expired = Vec::new();
         for entry in table.iter().map_err(storage_error)? {
             let (key, value) = entry.map_err(storage_error)?;
-            if decode_record(value.value())?.is_expired(now_unix_ms) {
+            let (_, expires_at_unix_ms) = self.exact_times(value.value())?;
+            if expires_at_unix_ms <= now_unix_ms {
                 expired.push(key.value().to_vec());
             }
         }
         drop(table);
         drop(read);
 
-        let similarity_read = self.database.begin_read().map_err(storage_error)?;
+        let similarity_read = database.begin_read().map_err(storage_error)?;
         let similarity_table = similarity_read
             .open_table(SIMILARITY_RECORDS)
             .map_err(storage_error)?;
         let mut expired_similarity = Vec::new();
         for entry in similarity_table.iter().map_err(storage_error)? {
             let (id, value) = entry.map_err(storage_error)?;
-            let record = decode_similarity_record(id.value(), value.value())?;
-            if record.expires_at_unix_ms <= now_unix_ms {
-                expired_similarity.push(record);
+            let (_, expires_at_unix_ms) = self.similarity_times(value.value())?;
+            if expires_at_unix_ms <= now_unix_ms {
+                expired_similarity.push(self.decode_similarity(id.value(), value.value())?);
             }
         }
         drop(similarity_table);
@@ -129,7 +261,7 @@ impl ExactCacheStore for RedbCacheStore {
         if expired.is_empty() && expired_similarity.is_empty() {
             return Ok(0);
         }
-        let write = self.database.begin_write().map_err(storage_error)?;
+        let write = database.begin_write().map_err(storage_error)?;
         {
             let mut table = write.open_table(RECORDS).map_err(storage_error)?;
             for key in &expired {
@@ -148,6 +280,7 @@ impl ExactCacheStore for RedbCacheStore {
                     .remove(record.id.as_slice())
                     .map_err(storage_error)?;
                 for bucket in &record.bucket_keys {
+                    let bucket = self.stored_similarity_bucket(bucket);
                     buckets
                         .remove(bucket.as_slice(), record.id.as_slice())
                         .map_err(storage_error)?;
@@ -156,6 +289,69 @@ impl ExactCacheStore for RedbCacheStore {
         }
         write.commit().map_err(storage_error)?;
         Ok(expired.len() + expired_similarity.len())
+    }
+
+    fn remove_created_before(&self, until_unix_ms: u64) -> Result<usize, CacheError> {
+        let database = self.database()?;
+        let read = database.begin_read().map_err(storage_error)?;
+        let table = read.open_table(RECORDS).map_err(storage_error)?;
+        let mut stale = Vec::new();
+        for entry in table.iter().map_err(storage_error)? {
+            let (key, value) = entry.map_err(storage_error)?;
+            let (created_at_unix_ms, _) = self.exact_times(value.value())?;
+            if created_at_unix_ms < until_unix_ms {
+                stale.push(key.value().to_vec());
+            }
+        }
+        drop(table);
+        drop(read);
+
+        let similarity_read = database.begin_read().map_err(storage_error)?;
+        let similarity_table = similarity_read
+            .open_table(SIMILARITY_RECORDS)
+            .map_err(storage_error)?;
+        let mut stale_similarity = Vec::new();
+        for entry in similarity_table.iter().map_err(storage_error)? {
+            let (id, value) = entry.map_err(storage_error)?;
+            let (created_at_unix_ms, _) = self.similarity_times(value.value())?;
+            if created_at_unix_ms < until_unix_ms {
+                stale_similarity.push(self.decode_similarity(id.value(), value.value())?);
+            }
+        }
+        drop(similarity_table);
+        drop(similarity_read);
+
+        if stale.is_empty() && stale_similarity.is_empty() {
+            return Ok(0);
+        }
+        let write = database.begin_write().map_err(storage_error)?;
+        {
+            let mut table = write.open_table(RECORDS).map_err(storage_error)?;
+            for key in &stale {
+                table.remove(key.as_slice()).map_err(storage_error)?;
+            }
+        }
+        {
+            let mut records = write
+                .open_table(SIMILARITY_RECORDS)
+                .map_err(storage_error)?;
+            let mut buckets = write
+                .open_multimap_table(SIMILARITY_BUCKETS)
+                .map_err(storage_error)?;
+            for record in &stale_similarity {
+                records
+                    .remove(record.id.as_slice())
+                    .map_err(storage_error)?;
+                for bucket in &record.bucket_keys {
+                    let bucket = self.stored_similarity_bucket(bucket);
+                    buckets
+                        .remove(bucket.as_slice(), record.id.as_slice())
+                        .map_err(storage_error)?;
+                }
+            }
+        }
+        write.commit().map_err(storage_error)?;
+        Ok(stale.len() + stale_similarity.len())
     }
 
     fn similarity_candidates(
@@ -167,13 +363,18 @@ impl ExactCacheStore for RedbCacheStore {
         if limit == 0 {
             return Ok(Vec::new());
         }
-        let read = self.database.begin_read().map_err(storage_error)?;
+        let database = self.database()?;
+        let read = database.begin_read().map_err(storage_error)?;
         let buckets = read
             .open_multimap_table(SIMILARITY_BUCKETS)
             .map_err(storage_error)?;
         let records = read.open_table(SIMILARITY_RECORDS).map_err(storage_error)?;
         let mut ids = HashSet::<[u8; 32]>::new();
-        'buckets: for bucket in bucket_keys {
+        let bucket_keys = bucket_keys
+            .iter()
+            .map(|bucket| self.stored_similarity_bucket(bucket))
+            .collect::<Vec<_>>();
+        'buckets: for bucket in &bucket_keys {
             let values = buckets.get(bucket.as_slice()).map_err(storage_error)?;
             for value in values {
                 let value = value.map_err(storage_error)?;
@@ -191,7 +392,7 @@ impl ExactCacheStore for RedbCacheStore {
             let Some(value) = records.get(id.as_slice()).map_err(storage_error)? else {
                 continue;
             };
-            let record = decode_similarity_record(&id, value.value())?;
+            let record = self.decode_similarity(&id, value.value())?;
             if record.expires_at_unix_ms > now_unix_ms {
                 output.push(record);
             }
@@ -209,9 +410,10 @@ impl ExactCacheStore for RedbCacheStore {
     ) -> Result<(), CacheError> {
         let encoded = records_to_write
             .into_iter()
-            .map(|record| Ok((encode_similarity_record(&record)?, record)))
+            .map(|record| Ok((self.encode_similarity(&record)?, record)))
             .collect::<Result<Vec<_>, CacheError>>()?;
-        let write = self.database.begin_write().map_err(storage_error)?;
+        let database = self.database()?;
+        let write = database.begin_write().map_err(storage_error)?;
         {
             let mut records = write
                 .open_table(SIMILARITY_RECORDS)
@@ -228,6 +430,7 @@ impl ExactCacheStore for RedbCacheStore {
                 .map_err(storage_error)?;
             for (_, record) in &encoded {
                 for bucket in &record.bucket_keys {
+                    let bucket = self.stored_similarity_bucket(bucket);
                     buckets
                         .insert(bucket.as_slice(), record.id.as_slice())
                         .map_err(storage_error)?;
@@ -238,15 +441,48 @@ impl ExactCacheStore for RedbCacheStore {
     }
 }
 
-impl RedbCacheStore {
-    fn remove_key(&self, key: &[u8]) -> Result<(), CacheError> {
-        let write = self.database.begin_write().map_err(storage_error)?;
-        {
-            let mut table = write.open_table(RECORDS).map_err(storage_error)?;
-            table.remove(key).map_err(storage_error)?;
-        }
-        write.commit().map_err(storage_error)
+fn open_database(path: &Path) -> Result<Database, CacheError> {
+    if let Some(parent) = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        fs::create_dir_all(parent).map_err(storage_error)?;
     }
+    prepare_database_file(path)?;
+    let database = Database::create(path).map_err(database_error)?;
+    initialize_tables(&database)?;
+    Ok(database)
+}
+
+fn registry_path(path: &Path) -> Result<PathBuf, CacheError> {
+    if path.is_absolute() {
+        Ok(path.to_path_buf())
+    } else {
+        std::env::current_dir()
+            .map(|current_dir| current_dir.join(path))
+            .map_err(storage_error)
+    }
+}
+
+fn initialize_tables(database: &Database) -> Result<(), CacheError> {
+    let write = database.begin_write().map_err(storage_error)?;
+    write.open_table(RECORDS).map_err(storage_error)?;
+    write
+        .open_table(SIMILARITY_RECORDS)
+        .map_err(storage_error)?;
+    write
+        .open_multimap_table(SIMILARITY_BUCKETS)
+        .map_err(storage_error)?;
+    write.commit().map_err(storage_error)
+}
+
+fn remove_key(database: &Database, key: &[u8]) -> Result<(), CacheError> {
+    let write = database.begin_write().map_err(storage_error)?;
+    {
+        let mut table = write.open_table(RECORDS).map_err(storage_error)?;
+        table.remove(key).map_err(storage_error)?;
+    }
+    write.commit().map_err(storage_error)
 }
 
 fn encode_record(output: &CachedModelOutput) -> Result<Vec<u8>, CacheError> {
@@ -355,6 +591,25 @@ fn decode_record(bytes: &[u8]) -> Result<CachedModelOutput, CacheError> {
         created_at_unix_ms,
         expires_at_unix_ms,
     })
+}
+
+fn decode_record_times(bytes: &[u8]) -> Result<(u64, u64), CacheError> {
+    let mut cursor = Cursor::new(bytes);
+    if cursor.take(RECORD_MAGIC.len())? != RECORD_MAGIC {
+        return Err(CacheError::InvalidRecord(
+            "record magic does not match".to_string(),
+        ));
+    }
+    let format_version = cursor.u32()?;
+    if format_version != RECORD_FORMAT_VERSION {
+        return Err(CacheError::InvalidRecord(format!(
+            "unsupported record format version {format_version}"
+        )));
+    }
+    let _schema_version = cursor.u32()?;
+    let created_at_unix_ms = cursor.u64()?;
+    let expires_at_unix_ms = cursor.u64()?;
+    Ok((created_at_unix_ms, expires_at_unix_ms))
 }
 
 fn encode_similarity_record(record: &SimilarityStoreRecord) -> Result<Vec<u8>, CacheError> {
@@ -478,6 +733,18 @@ fn decode_similarity_record(id: &[u8], bytes: &[u8]) -> Result<SimilarityStoreRe
     })
 }
 
+fn decode_similarity_record_times(bytes: &[u8]) -> Result<(u64, u64), CacheError> {
+    let mut cursor = Cursor::new(bytes);
+    if cursor.take(SIMILARITY_MAGIC.len())? != SIMILARITY_MAGIC {
+        return Err(CacheError::InvalidRecord(
+            "similarity record magic does not match".to_string(),
+        ));
+    }
+    let created_at_unix_ms = cursor.u64()?;
+    let expires_at_unix_ms = cursor.u64()?;
+    Ok((created_at_unix_ms, expires_at_unix_ms))
+}
+
 struct Cursor<'a> {
     remaining: &'a [u8],
 }
@@ -547,6 +814,18 @@ fn storage_error(error: impl std::fmt::Display) -> CacheError {
     CacheError::Storage(error.to_string())
 }
 
+fn database_error(error: DatabaseError) -> CacheError {
+    match error {
+        DatabaseError::DatabaseAlreadyOpen => {
+            CacheError::Storage("cache database is already open by another writer".to_string())
+        }
+        DatabaseError::Storage(StorageError::Corrupted(message)) => {
+            CacheError::Storage(format!("cache database is corrupted: {message}"))
+        }
+        other => storage_error(other),
+    }
+}
+
 #[cfg(unix)]
 fn prepare_database_file(path: &Path) -> Result<(), CacheError> {
     use std::fs::OpenOptions;
@@ -579,7 +858,7 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use super::*;
-    use crate::cache::CacheNamespace;
+    use crate::cache::{CacheEncryptionConfig, CacheNamespace};
 
     fn temp_path(name: &str) -> std::path::PathBuf {
         let unique = SystemTime::now()
@@ -597,6 +876,10 @@ mod tests {
     }
 
     fn output(expires_at_unix_ms: u64) -> CachedModelOutput {
+        output_created(10, expires_at_unix_ms)
+    }
+
+    fn output_created(created_at_unix_ms: u64, expires_at_unix_ms: u64) -> CachedModelOutput {
         CachedModelOutput {
             schema_version: 7,
             heads: vec![
@@ -609,9 +892,112 @@ mod tests {
                     logits: vec![f32::NEG_INFINITY, f32::NAN],
                 },
             ],
-            created_at_unix_ms: 10,
+            created_at_unix_ms,
             expires_at_unix_ms,
         }
+    }
+
+    fn encryption_config(seed: u8) -> CacheEncryptionConfig {
+        CacheEncryptionConfig::from_key([seed; 32])
+    }
+
+    #[test]
+    fn open_creates_missing_database_file() {
+        let path = temp_path("missing-db");
+        assert!(!path.exists());
+
+        let store = RedbCacheStore::open(&path).unwrap();
+
+        assert!(path.exists());
+        drop(store);
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn open_creates_missing_parent_directory() {
+        let path = temp_path("missing-parent")
+            .with_extension("")
+            .join("nested")
+            .join("cache.redb");
+        let parent = path.parent().unwrap().to_path_buf();
+        assert!(!parent.exists());
+
+        let store = RedbCacheStore::open(&path).unwrap();
+
+        assert!(parent.exists());
+        assert!(path.exists());
+        drop(store);
+        fs::remove_dir_all(parent.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn deleted_database_file_is_recreated_with_live_handle() {
+        let path = temp_path("deleted-live-handle");
+        let store = RedbCacheStore::open(&path).unwrap();
+        store.put(key("before-delete"), output(100)).unwrap();
+        fs::remove_file(&path).unwrap();
+        assert!(!path.exists());
+
+        store.put(key("after-delete"), output(100)).unwrap();
+
+        assert!(path.exists());
+        assert!(store.get(&key("after-delete"), 10).unwrap().is_some());
+        assert!(store.get(&key("before-delete"), 10).unwrap().is_none());
+        drop(store);
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn deleted_database_file_is_recreated_on_next_open() {
+        let path = temp_path("deleted-next-open");
+        let store = RedbCacheStore::open(&path).unwrap();
+        store.put(key("before-delete"), output(100)).unwrap();
+        fs::remove_file(&path).unwrap();
+        assert!(!path.exists());
+
+        let reopened = RedbCacheStore::open(&path).unwrap();
+
+        assert!(path.exists());
+        assert!(reopened.get(&key("before-delete"), 10).unwrap().is_none());
+        reopened.put(key("after-delete"), output(100)).unwrap();
+        assert!(reopened.get(&key("after-delete"), 10).unwrap().is_some());
+        drop(reopened);
+        drop(store);
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn corrupt_database_file_remains_an_error() {
+        let path = temp_path("corrupt");
+        fs::write(&path, b"not a redb database").unwrap();
+
+        let error = match RedbCacheStore::open(&path) {
+            Ok(_) => panic!("corrupt database must not be recreated silently"),
+            Err(error) => error,
+        };
+
+        assert!(error.to_string().contains("corrupt") || error.to_string().contains("invalid"));
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn active_second_writer_remains_an_error() {
+        let path = temp_path("active-writer");
+        let store = RedbCacheStore::open(&path).unwrap();
+
+        let error = match RedbCacheStore::open(&path) {
+            Ok(second) => {
+                drop(second);
+                drop(store);
+                fs::remove_file(path).unwrap();
+                panic!("active second writer must not be treated as stale cache state");
+            }
+            Err(error) => error,
+        };
+
+        assert!(error.to_string().contains("another writer"));
+        drop(store);
+        fs::remove_file(path).unwrap();
     }
 
     #[test]
@@ -647,6 +1033,167 @@ mod tests {
     }
 
     #[test]
+    fn encrypted_persistent_hit_survives_reopen_without_plaintext_value() {
+        let path = temp_path("encrypted-reopen");
+        let secret = "Alexandr Stone";
+        {
+            let store =
+                RedbCacheStore::open_with_encryption(&path, Some(encryption_config(7))).unwrap();
+            store
+                .put(
+                    key("secret-chunk"),
+                    CachedModelOutput {
+                        schema_version: 7,
+                        heads: vec![CachedHeadOutput {
+                            head: secret.to_string(),
+                            logits: vec![0.95],
+                        }],
+                        created_at_unix_ms: 10,
+                        expires_at_unix_ms: 100,
+                    },
+                )
+                .unwrap();
+        }
+
+        let file_bytes = fs::read(&path).unwrap();
+        assert!(!file_bytes
+            .windows(secret.len())
+            .any(|window| window == secret.as_bytes()));
+
+        let reopened =
+            RedbCacheStore::open_with_encryption(&path, Some(encryption_config(7))).unwrap();
+        let cached = reopened.get(&key("secret-chunk"), 10).unwrap().unwrap();
+        assert_eq!(cached.heads[0].head, secret);
+        drop(reopened);
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn encrypted_record_rejects_wrong_key_after_reopen() {
+        let path = temp_path("encrypted-wrong-key");
+        {
+            let store =
+                RedbCacheStore::open_with_encryption(&path, Some(encryption_config(3))).unwrap();
+            store.put(key("chunk"), output(100)).unwrap();
+        }
+
+        let reopened =
+            RedbCacheStore::open_with_encryption(&path, Some(encryption_config(4))).unwrap();
+        assert!(reopened.get(&key("chunk"), 10).is_err());
+        drop(reopened);
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn encrypted_cleanup_removes_exact_records_and_keyed_similarity_buckets() {
+        let path = temp_path("encrypted-cleanup");
+        let store =
+            RedbCacheStore::open_with_encryption(&path, Some(encryption_config(9))).unwrap();
+        store.put(key("old"), output(20)).unwrap();
+        store.put(key("new"), output(30)).unwrap();
+
+        let expired_similarity = SimilarityStoreRecord {
+            id: [1; 32],
+            vector_space: "space".to_string(),
+            producer_model_sha: "model".to_string(),
+            embedding: vec![1.0, 0.0],
+            heads: vec![CachedHeadOutput {
+                head: "decision\0injection\0attack".to_string(),
+                logits: vec![0.91],
+            }],
+            bucket_keys: vec![b"expired-bucket".to_vec()],
+            created_at_unix_ms: 10,
+            expires_at_unix_ms: 20,
+        };
+        let current_similarity = SimilarityStoreRecord {
+            id: [2; 32],
+            bucket_keys: vec![b"current-bucket".to_vec()],
+            expires_at_unix_ms: 30,
+            ..expired_similarity.clone()
+        };
+        store.put_similarity(expired_similarity.clone()).unwrap();
+        store.put_similarity(current_similarity.clone()).unwrap();
+
+        assert_eq!(store.remove_expired(20).unwrap(), 2);
+        assert!(store.get(&key("old"), 20).unwrap().is_none());
+        assert!(store.get(&key("new"), 20).unwrap().is_some());
+        assert!(store
+            .similarity_candidates(&expired_similarity.bucket_keys, 20, 10)
+            .unwrap()
+            .is_empty());
+        assert_eq!(
+            store
+                .similarity_candidates(&current_similarity.bucket_keys, 20, 10)
+                .unwrap()
+                .len(),
+            1
+        );
+        drop(store);
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn shared_registry_separates_encryption_identity() {
+        let path = temp_path("registry-encryption");
+        let first = RedbCacheStore::open_shared(&path, Some(encryption_config(5))).unwrap();
+        let second = RedbCacheStore::open_shared(&path, Some(encryption_config(5))).unwrap();
+        assert!(Arc::ptr_eq(&first, &second));
+
+        let error = match RedbCacheStore::open_shared(&path, Some(encryption_config(6))) {
+            Ok(_) => panic!("different encryption identity must not reuse the open store"),
+            Err(error) => error,
+        };
+        assert!(error.to_string().contains("another writer"));
+        drop(second);
+        drop(first);
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn encrypted_similarity_round_trips_with_keyed_buckets() {
+        let path = temp_path("encrypted-similarity");
+        let record = SimilarityStoreRecord {
+            id: [9; 32],
+            vector_space: "space".to_string(),
+            producer_model_sha: "model".to_string(),
+            embedding: vec![1.0, 0.0],
+            heads: vec![CachedHeadOutput {
+                head: "decision\0injection\0attack".to_string(),
+                logits: vec![0.91],
+            }],
+            bucket_keys: vec![b"bucket-a".to_vec()],
+            created_at_unix_ms: 10,
+            expires_at_unix_ms: 100,
+        };
+        {
+            let store =
+                RedbCacheStore::open_with_encryption(&path, Some(encryption_config(8))).unwrap();
+            store.put_similarity(record.clone()).unwrap();
+        }
+
+        let file_bytes = fs::read(&path).unwrap();
+        assert!(!file_bytes
+            .windows(record.vector_space.len())
+            .any(|window| window == record.vector_space.as_bytes()));
+        assert!(!file_bytes
+            .windows(record.bucket_keys[0].len())
+            .any(|window| window == record.bucket_keys[0].as_slice()));
+
+        let reopened =
+            RedbCacheStore::open_with_encryption(&path, Some(encryption_config(8))).unwrap();
+        let candidates = reopened
+            .similarity_candidates(&record.bucket_keys, 10, 10)
+            .unwrap();
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0].id, record.id);
+        assert_eq!(candidates[0].vector_space, record.vector_space);
+        assert_eq!(candidates[0].bucket_keys, record.bucket_keys);
+        assert_eq!(candidates[0].heads[0].head, record.heads[0].head);
+        drop(reopened);
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
     fn expired_entries_are_removed_lazily_and_by_cleanup() {
         let path = temp_path("expiry");
         let store = RedbCacheStore::open(&path).unwrap();
@@ -658,6 +1205,20 @@ mod tests {
         assert_eq!(store.remove_expired(20).unwrap(), 1);
         assert!(store.get(&key("sweep"), 20).unwrap().is_none());
         assert!(store.get(&key("current"), 20).unwrap().is_some());
+        drop(store);
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn entries_created_before_cutoff_are_removed_by_cleanup() {
+        let path = temp_path("created-before");
+        let store = RedbCacheStore::open(&path).unwrap();
+        store.put(key("old"), output_created(10, 100)).unwrap();
+        store.put(key("new"), output_created(20, 100)).unwrap();
+
+        assert_eq!(store.remove_created_before(20).unwrap(), 1);
+        assert!(store.get(&key("old"), 20).unwrap().is_none());
+        assert!(store.get(&key("new"), 20).unwrap().is_some());
         drop(store);
         fs::remove_file(path).unwrap();
     }

@@ -15,6 +15,7 @@ use crate::ml::ntdb_executor::manifest::PackageManifest;
 
 use super::{
     compact_tokenizer::ensure_granite_compact_tokenizer,
+    mmbert_tokenizer::ensure_mmbert_compact_tokenizer,
     specs::{
         AssetSpec, NtdbL2PackageAssetSpec, PipelineModelAssetSpec, ASSET_MANIFEST,
         DEDICATED_L3_ASSETS, DYNAMIC_PII_ASSET, NTDB_L2_PACKAGE_MANIFEST, UNIFIED_L3_ASSET,
@@ -240,7 +241,65 @@ fn download_pipeline_model_assets(
         },
     )?;
     fs::write(bundle_dir.join(".patronus-revision"), asset.revision)?;
+    prepare_pipeline_model_compact_tokenizer(asset, &bundle_dir);
     Ok(bundle_dir)
+}
+
+pub(crate) fn prepare_cached_pipeline_model_compact_tokenizer(
+    asset: PipelineModelAssetSpec,
+    target_dir: &Path,
+) {
+    let bundle_dir = target_dir.join(asset.destination_path);
+    let assets_present = pipeline_model_assets_present(asset, target_dir);
+    log::debug!(
+        "checked cached pipeline model assets before compact tokenizer preparation; model={}; target_dir={}; bundle_dir={}; assets_present={}",
+        asset.model,
+        target_dir.display(),
+        bundle_dir.display(),
+        assets_present
+    );
+    if assets_present {
+        prepare_pipeline_model_compact_tokenizer(asset, &bundle_dir);
+    }
+}
+
+fn prepare_pipeline_model_compact_tokenizer(asset: PipelineModelAssetSpec, bundle_dir: &Path) {
+    let tokenizer_json = bundle_dir.join("tokenizer.json");
+    log::debug!(
+        "checking pipeline model tokenizer before compact tokenizer preparation; model={}; bundle_dir={}; tokenizer_json={}; tokenizer_json_exists={}",
+        asset.model,
+        bundle_dir.display(),
+        tokenizer_json.display(),
+        tokenizer_json.is_file()
+    );
+    if !tokenizer_json.is_file() {
+        return;
+    }
+    match ensure_mmbert_compact_tokenizer(asset.model, &tokenizer_json) {
+        Ok(Some(compact_path)) => log::debug!(
+            "compact mmBERT tokenizer ready; model={}; compact_path={}; compact_exists={}",
+            asset.model,
+            compact_path.display(),
+            compact_path.is_file()
+        ),
+        Ok(None) => log::debug!(
+            "compact mmBERT tokenizer unsupported; model={}; tokenizer_json={}",
+            asset.model,
+            tokenizer_json.display()
+        ),
+        Err(err) => {
+            log::debug!(
+                "compact mmBERT tokenizer preparation failed; model={}; bundle_dir={}; error={err}; tokenizer.json remains available",
+                asset.model,
+                bundle_dir.display()
+            );
+            log::warn!(
+                "failed to prepare compact mmBERT tokenizer for {} at {}: {err}; tokenizer.json remains available",
+                asset.model,
+                bundle_dir.display()
+            );
+        }
+    }
 }
 
 fn bundle_revision_matches(bundle_dir: &Path, revision: &str) -> bool {
@@ -444,7 +503,7 @@ fn download_ntdb_l2_package_asset_inner(
 
     if let Err(err) = prepare_downloaded_compact_tokenizer(&manifest, &shared_embedder_files) {
         log::warn!(
-            "failed to prepare compact Granite tokenizer for {}: {err}; tokenizer.json remains available",
+            "failed to prepare compact tokenizer for {}: {err}; tokenizer.json remains available",
             package_dir.display()
         );
     }
@@ -494,10 +553,19 @@ pub(crate) fn prepare_cached_ntdb_l2_compact_tokenizer(
         return Ok(());
     };
     if prepared_shared_tokenizers.contains(&tokenizer_file.shared_file) {
-        let shared_compact_path = tokenizer_file.shared_file.with_file_name("tokenizer.kit");
-        if shared_compact_path.is_file() {
-            return link_compact_tokenizer(&shared_compact_path, &tokenizer_file.package_file);
+        for extension in ["kit", "mmbpe"] {
+            let shared_compact_path = tokenizer_file
+                .shared_file
+                .with_file_name(format!("tokenizer.{extension}"));
+            if shared_compact_path.is_file() {
+                link_compact_tokenizer(
+                    &shared_compact_path,
+                    &tokenizer_file.package_file,
+                    extension,
+                )?;
+            }
         }
+        return Ok(());
     }
     prepare_downloaded_compact_tokenizer(manifest, &shared_embedder_files)?;
     prepared_shared_tokenizers.insert(tokenizer_file.shared_file.clone());
@@ -512,19 +580,29 @@ fn prepare_compact_tokenizer(
     let Some(shared_compact_path) =
         ensure_granite_compact_tokenizer(&manifest.minilm, source_tokenizer_json)?
     else {
-        return Ok(());
+        let source_model = manifest
+            .minilm
+            .shared_embedder_identity()
+            .unwrap_or("manifest-local-embedder");
+        let Some(shared_compact_path) =
+            ensure_mmbert_compact_tokenizer(source_model, source_tokenizer_json)?
+        else {
+            return Ok(());
+        };
+        return link_compact_tokenizer(&shared_compact_path, package_tokenizer_json, "mmbpe");
     };
-    link_compact_tokenizer(&shared_compact_path, package_tokenizer_json)
+    link_compact_tokenizer(&shared_compact_path, package_tokenizer_json, "kit")
 }
 
 fn link_compact_tokenizer(
     shared_compact_path: &Path,
     package_tokenizer_json: &Path,
+    extension: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let package_compact_path = package_tokenizer_json
         .parent()
         .ok_or("NTDB tokenizer package path has no parent")?
-        .join("tokenizer.kit");
+        .join(format!("tokenizer.{extension}"));
     if shared_compact_path == package_compact_path {
         return Ok(());
     }
@@ -688,7 +766,12 @@ fn migrate_legacy_shared_embedder_files(
         .iter()
         .find(|file| file.relative_path.ends_with("/tokenizer.json"))
     {
-        for name in ["tokenizer.kit", "tokenizer.kit.meta.json"] {
+        for name in [
+            "tokenizer.kit",
+            "tokenizer.kit.meta.json",
+            "tokenizer.mmbpe",
+            "tokenizer.mmbpe.meta.json",
+        ] {
             migration_files.push(SharedEmbedderFile {
                 relative_path: tokenizer.relative_path.replace("tokenizer.json", name),
                 shared_file: tokenizer.shared_file.with_file_name(name),
@@ -1401,6 +1484,53 @@ mod tests {
             .unwrap()
             .join("tokenizer.kit.meta.json")
             .is_file());
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    fn write_supported_mmbpe_tokenizer(path: &Path) {
+        let mut vocab = serde_json::Map::new();
+        vocab.insert("<bos>".to_string(), 0.into());
+        vocab.insert("<eos>".to_string(), 1.into());
+        vocab.insert("<unk>".to_string(), 2.into());
+        vocab.insert("▁".to_string(), 3.into());
+        for byte in 0..=255 {
+            vocab.insert(format!("<{byte:#04X}>"), (byte + 10).into());
+        }
+        let value = serde_json::json!({
+            "added_tokens": [
+                {"id": 0, "content": "<bos>", "lstrip": false},
+                {"id": 1, "content": "<eos>", "lstrip": false}
+            ],
+            "model": {
+                "type": "BPE",
+                "byte_fallback": true,
+                "vocab": vocab,
+                "merges": []
+            }
+        });
+        fs::write(path, serde_json::to_vec_pretty(&value).unwrap()).unwrap();
+    }
+
+    #[test]
+    fn pipeline_model_prepare_generates_mmbpe_tokenizer() {
+        let root = temp_dir("pipeline_mmbpe");
+        let bundle_dir = root.join("pipeline");
+        fs::create_dir_all(&bundle_dir).unwrap();
+        write_supported_mmbpe_tokenizer(&bundle_dir.join("tokenizer.json"));
+        let asset = PipelineModelAssetSpec {
+            category: SecurityCategory::Injection,
+            model: "mmbert-test",
+            repo: "example/repo",
+            revision: "rev",
+            destination_path: "pipeline",
+            files: &["tokenizer.json"],
+        };
+
+        prepare_pipeline_model_compact_tokenizer(asset, &bundle_dir);
+
+        assert!(bundle_dir.join("tokenizer.mmbpe").is_file());
+        assert!(bundle_dir.join("tokenizer.mmbpe.meta.json").is_file());
 
         fs::remove_dir_all(root).unwrap();
     }

@@ -3,6 +3,7 @@ from ._patronus_ark import SecurityGateway as RustSecurityGateway
 from ._patronus_ark import normalize_text as _rust_normalize_text
 from copy import deepcopy
 import json
+import math
 
 
 def _decode_json_object(value):
@@ -58,6 +59,9 @@ def _to_dict(result):
     request_id = getattr(result, "request_id", None)
     if request_id is not None:
         output["request_id"] = request_id
+    decision = _decode_json_object(getattr(result, "decision_json", None))
+    if decision:
+        output["decision"] = decision
     return output
 
 
@@ -162,6 +166,16 @@ def _normalization_configs_json(configs):
     return json.dumps(configs)
 
 
+def _unix_ms_from_ts(value):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError("until_ts must be a Unix timestamp")
+    if not math.isfinite(value) or value < 0:
+        raise ValueError("until_ts must be a non-negative finite Unix timestamp")
+    if value >= 1_000_000_000_000:
+        return int(value)
+    return int(value * 1000)
+
+
 def normalize_text(text: str, configs: dict | None = None) -> str:
     """Return canonical_security_text_v1-style normalized text.
 
@@ -208,6 +222,8 @@ class SecurityGateway:
             `dynamic-pii` category.
         cache_storage_location: Optional path to the persistent cache database.
             If omitted, caching remains memory-only.
+        cache_encryption_key_hex: Optional 64-character hex-encoded persistent
+            cache encryption key. Ignored when `cache_storage_location` is omitted.
         cache_entry_ttl_seconds: Cache entry TTL shared by hot and persistent tiers.
         cache_memory_max_entries: Maximum entries retained by a hot cache tier.
         cache_memory_max_bytes: Maximum bytes retained by a hot cache tier.
@@ -227,6 +243,7 @@ class SecurityGateway:
         l3_strategy: str = "dedicated",
         dynamic_pii_config: dict | None = None,
         cache_storage_location: str | None = None,
+        cache_encryption_key_hex: str | None = None,
         cache_entry_ttl_seconds: int = 30 * 24 * 60 * 60,
         cache_memory_max_entries: int = 100_000,
         cache_memory_max_bytes: int = 128 * 1024 * 1024,
@@ -249,6 +266,7 @@ class SecurityGateway:
             "l3_strategy": l3_strategy,
             "dynamic_pii_config": deepcopy(dynamic_pii_config),
             "cache_storage_location": cache_storage_location,
+            "cache_encryption_key_hex": cache_encryption_key_hex,
             "cache_entry_ttl_seconds": cache_entry_ttl_seconds,
             "cache_memory_max_entries": cache_memory_max_entries,
             "cache_memory_max_bytes": cache_memory_max_bytes,
@@ -273,6 +291,7 @@ class SecurityGateway:
             l3_strategy=l3_strategy,
             dynamic_pii_config_json=_dynamic_pii_config_json(dynamic_pii_config),
             cache_storage_location=cache_storage_location,
+            cache_encryption_key_hex=cache_encryption_key_hex,
             cache_entry_ttl_seconds=cache_entry_ttl_seconds,
             cache_memory_max_entries=cache_memory_max_entries,
             cache_memory_max_bytes=cache_memory_max_bytes,
@@ -308,9 +327,29 @@ class SecurityGateway:
         """
         self.rust_gateway.warmup()
 
+    def stop_l3_models(self):
+        """Unload resident L3 model sessions while preserving gateway configuration."""
+        self.rust_gateway.stop_l3_models()
+
     def flush_cache(self):
         """Wait until all queued persistent cache writes are durable."""
         self.rust_gateway.flush_cache()
+
+    def reset_cache_connections(self):
+        """Flush and close persistent cache handles.
+
+        The cache database file is preserved. A configured persistent cache is
+        reopened lazily on the next cache access.
+        """
+        self.rust_gateway.reset_cache_connections()
+
+    def reset_cache(self, until_ts: int | float) -> int:
+        """Delete cache records created before `until_ts`.
+
+        `until_ts` accepts Unix seconds or Unix milliseconds. The cache database
+        file is preserved.
+        """
+        return self.rust_gateway.reset_cache(_unix_ms_from_ts(until_ts))
 
     def scan_all(self, text: str) -> list[dict]:
         """Scan text with every category configured on this gateway."""

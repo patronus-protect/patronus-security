@@ -4,10 +4,10 @@ use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use super::{
-    decision_output, CacheCoordinator, CacheKey, CacheNamespace, CacheWriteMode, CachedHeadOutput,
-    CachedModelOutput, ExactCacheConfig, ExactCacheStore, HistoricalSimilarityCache,
-    MemoryCacheConfig, MemoryCacheStore, PersistentCacheConfig, RedbCacheStore, WriteBehindConfig,
-    WriteBehindStore,
+    decision_output, CacheCoordinator, CacheEncryptionConfig, CacheKey, CacheNamespace,
+    CacheWriteMode, CachedHeadOutput, CachedModelOutput, ExactCacheConfig, ExactCacheStore,
+    HistoricalSimilarityCache, MemoryCacheConfig, MemoryCacheStore, PersistentCacheConfig,
+    RedbCacheStore, WriteBehindConfig, WriteBehindStore,
 };
 
 #[test]
@@ -18,12 +18,18 @@ fn cache_latency_microbenchmark() {
     let read_key = key("read");
     let memory = MemoryCacheStore::new(MemoryCacheConfig::default());
     let redb = Arc::new(RedbCacheStore::open(&path).unwrap());
+    let encrypted_path = temp_path();
+    let encrypted_redb = Arc::new(
+        RedbCacheStore::open_with_encryption(&encrypted_path, Some(encryption_config())).unwrap(),
+    );
     memory.put(read_key, output.clone()).unwrap();
     redb.put(read_key, output.clone()).unwrap();
+    encrypted_redb.put(read_key, output.clone()).unwrap();
 
     for _ in 0..1_000 {
         black_box(memory.get(&read_key, 10).unwrap().unwrap());
         black_box(redb.get(&read_key, 10).unwrap().unwrap());
+        black_box(encrypted_redb.get(&read_key, 10).unwrap().unwrap());
     }
     report(
         "ram_read",
@@ -32,9 +38,15 @@ fn cache_latency_microbenchmark() {
         }),
     );
     report(
-        "redb_read",
+        "redb_plain_read",
         measure(20_000, || {
             black_box(redb.get(&read_key, 10).unwrap().unwrap());
+        }),
+    );
+    report(
+        "redb_encrypted_read",
+        measure(20_000, || {
+            black_box(encrypted_redb.get(&read_key, 10).unwrap().unwrap());
         }),
     );
 
@@ -43,10 +55,23 @@ fn cache_latency_microbenchmark() {
         .collect::<Vec<_>>();
     let mut write_index = 0;
     report(
-        "redb_durable_single_write",
+        "redb_plain_durable_single_write",
         measure(write_keys.len(), || {
             redb.put(write_keys[write_index], output.clone()).unwrap();
             write_index += 1;
+        }),
+    );
+    let encrypted_write_keys = (0..500)
+        .map(|index| key(&format!("encrypted-single-{index}")))
+        .collect::<Vec<_>>();
+    let mut encrypted_write_index = 0;
+    report(
+        "redb_encrypted_durable_single_write",
+        measure(encrypted_write_keys.len(), || {
+            encrypted_redb
+                .put(encrypted_write_keys[encrypted_write_index], output.clone())
+                .unwrap();
+            encrypted_write_index += 1;
         }),
     );
 
@@ -62,12 +87,47 @@ fn cache_latency_microbenchmark() {
         redb.put_batch(batches[batch_index].clone()).unwrap();
         batch_index += 1;
     });
-    report("redb_durable_batch_64_transaction", batch_times.clone());
+    report(
+        "redb_plain_durable_batch_64_transaction",
+        batch_times.clone(),
+    );
     let batch_mean_per_entry_ns =
         batch_times.iter().map(Duration::as_nanos).sum::<u128>() / (batch_times.len() as u128 * 64);
     println!(
-        "redb_durable_batch_64_amortized mean_us={:.3}",
+        "redb_plain_durable_batch_64_amortized mean_us={:.3}",
         batch_mean_per_entry_ns as f64 / 1_000.0
+    );
+    let encrypted_batches = (0..100)
+        .map(|batch| {
+            (0..64)
+                .map(|entry| {
+                    (
+                        key(&format!("encrypted-batch-{batch}-{entry}")),
+                        output.clone(),
+                    )
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+    let mut encrypted_batch_index = 0;
+    let encrypted_batch_times = measure(encrypted_batches.len(), || {
+        encrypted_redb
+            .put_batch(encrypted_batches[encrypted_batch_index].clone())
+            .unwrap();
+        encrypted_batch_index += 1;
+    });
+    report(
+        "redb_encrypted_durable_batch_64_transaction",
+        encrypted_batch_times.clone(),
+    );
+    let encrypted_batch_mean_per_entry_ns = encrypted_batch_times
+        .iter()
+        .map(Duration::as_nanos)
+        .sum::<u128>()
+        / (encrypted_batch_times.len() as u128 * 64);
+    println!(
+        "redb_encrypted_durable_batch_64_amortized mean_us={:.3}",
+        encrypted_batch_mean_per_entry_ns as f64 / 1_000.0
     );
 
     let write_behind = WriteBehindStore::new(
@@ -92,17 +152,54 @@ fn cache_latency_microbenchmark() {
     write_behind.flush().unwrap();
     let flush_time = flush_started.elapsed();
     let enqueue_and_flush = enqueue_started.elapsed();
-    report("write_behind_enqueue", enqueue_times);
+    report("write_behind_plain_enqueue", enqueue_times);
     println!(
-        "write_behind_flush total_ms={:.3} enqueue_and_flush_ms={:.3} written={} dropped={}",
+        "write_behind_plain_flush total_ms={:.3} enqueue_and_flush_ms={:.3} written={} dropped={}",
         flush_time.as_secs_f64() * 1_000.0,
         enqueue_and_flush.as_secs_f64() * 1_000.0,
         write_behind.stats().snapshot().written,
         write_behind.stats().snapshot().dropped,
     );
 
+    let encrypted_write_behind = WriteBehindStore::new(
+        encrypted_redb.clone(),
+        WriteBehindConfig {
+            queue_capacity: 20_000,
+            max_batch_size: 64,
+        },
+    );
+    let encrypted_enqueue_keys = (0..10_000)
+        .map(|index| key(&format!("encrypted-async-{index}")))
+        .collect::<Vec<_>>();
+    let mut encrypted_enqueue_index = 0;
+    let encrypted_enqueue_started = Instant::now();
+    let encrypted_enqueue_times = measure(encrypted_enqueue_keys.len(), || {
+        encrypted_write_behind
+            .put(
+                encrypted_enqueue_keys[encrypted_enqueue_index],
+                output.clone(),
+            )
+            .unwrap();
+        encrypted_enqueue_index += 1;
+    });
+    let encrypted_flush_started = Instant::now();
+    encrypted_write_behind.flush().unwrap();
+    let encrypted_flush_time = encrypted_flush_started.elapsed();
+    let encrypted_enqueue_and_flush = encrypted_enqueue_started.elapsed();
+    report("write_behind_encrypted_enqueue", encrypted_enqueue_times);
+    println!(
+        "write_behind_encrypted_flush total_ms={:.3} enqueue_and_flush_ms={:.3} written={} dropped={}",
+        encrypted_flush_time.as_secs_f64() * 1_000.0,
+        encrypted_enqueue_and_flush.as_secs_f64() * 1_000.0,
+        encrypted_write_behind.stats().snapshot().written,
+        encrypted_write_behind.stats().snapshot().dropped,
+    );
+
+    drop(encrypted_write_behind);
     drop(write_behind);
+    drop(encrypted_redb);
     drop(redb);
+    std::fs::remove_file(encrypted_path).unwrap();
     std::fs::remove_file(path).unwrap();
 }
 
@@ -158,6 +255,7 @@ fn similarity_cache_scaling_microbenchmark() {
                     storage_location: path.clone(),
                     write_mode: CacheWriteMode::WriteThrough,
                     write_behind: WriteBehindConfig::default(),
+                    encryption: None,
                 }),
                 ..ExactCacheConfig::default()
             })
@@ -189,7 +287,54 @@ fn similarity_cache_scaling_microbenchmark() {
         persistent.flush().unwrap();
         drop(cache);
         drop(persistent);
+        std::fs::remove_file(path).unwrap();
 
+        let encrypted_path = temp_path();
+        let encrypted_persistent = Arc::new(
+            CacheCoordinator::from_config(ExactCacheConfig {
+                memory: MemoryCacheConfig {
+                    max_entries: 0,
+                    max_bytes: 0,
+                },
+                persistent: Some(PersistentCacheConfig {
+                    storage_location: encrypted_path.clone(),
+                    write_mode: CacheWriteMode::WriteThrough,
+                    write_behind: WriteBehindConfig::default(),
+                    encryption: Some(encryption_config()),
+                }),
+                ..ExactCacheConfig::default()
+            })
+            .unwrap(),
+        );
+        let encrypted_cache = HistoricalSimilarityCache::new(Arc::clone(&encrypted_persistent));
+        for index in 0..size {
+            remember_similarity(&encrypted_cache, index);
+        }
+        report(
+            &format!("similarity_encrypted_persistent_read_entries_{size}"),
+            measure(READS, || {
+                encrypted_cache.clear_hot_for_benchmark();
+                black_box(
+                    encrypted_cache
+                        .find_best_for_head("benchmark-space", &query, "injection")
+                        .unwrap(),
+                );
+            }),
+        );
+        let mut next = size;
+        report(
+            &format!("similarity_encrypted_persistent_durable_write_entries_{size}"),
+            measure(DURABLE_WRITES, || {
+                remember_similarity(&encrypted_cache, next);
+                next += 1;
+            }),
+        );
+        encrypted_persistent.flush().unwrap();
+        drop(encrypted_cache);
+        drop(encrypted_persistent);
+        std::fs::remove_file(encrypted_path).unwrap();
+
+        let async_path = temp_path();
         let async_persistent = Arc::new(
             CacheCoordinator::from_config(ExactCacheConfig {
                 memory: MemoryCacheConfig {
@@ -197,12 +342,13 @@ fn similarity_cache_scaling_microbenchmark() {
                     max_bytes: 0,
                 },
                 persistent: Some(PersistentCacheConfig {
-                    storage_location: path.clone(),
+                    storage_location: async_path.clone(),
                     write_mode: CacheWriteMode::Async,
                     write_behind: WriteBehindConfig {
                         queue_capacity: 1_024,
                         max_batch_size: 64,
                     },
+                    encryption: None,
                 }),
                 ..ExactCacheConfig::default()
             })
@@ -226,7 +372,48 @@ fn similarity_cache_scaling_microbenchmark() {
         );
         drop(async_cache);
         drop(async_persistent);
-        std::fs::remove_file(path).unwrap();
+        std::fs::remove_file(async_path).unwrap();
+
+        let encrypted_async_path = temp_path();
+        let encrypted_async_persistent = Arc::new(
+            CacheCoordinator::from_config(ExactCacheConfig {
+                memory: MemoryCacheConfig {
+                    max_entries: 0,
+                    max_bytes: 0,
+                },
+                persistent: Some(PersistentCacheConfig {
+                    storage_location: encrypted_async_path.clone(),
+                    write_mode: CacheWriteMode::Async,
+                    write_behind: WriteBehindConfig {
+                        queue_capacity: 1_024,
+                        max_batch_size: 64,
+                    },
+                    encryption: Some(encryption_config()),
+                }),
+                ..ExactCacheConfig::default()
+            })
+            .unwrap(),
+        );
+        let encrypted_async_cache =
+            HistoricalSimilarityCache::new(Arc::clone(&encrypted_async_persistent));
+        let mut next = size + DURABLE_WRITES;
+        report(
+            &format!("similarity_encrypted_persistent_async_write_entries_{size}"),
+            measure(WRITES, || {
+                remember_similarity(&encrypted_async_cache, next);
+                next += 1;
+            }),
+        );
+        let flush_started = Instant::now();
+        encrypted_async_persistent.flush().unwrap();
+        println!(
+            "similarity_encrypted_persistent_async_flush_entries_{size} total_ms={:.3} amortized_us={:.3}",
+            flush_started.elapsed().as_secs_f64() * 1_000.0,
+            flush_started.elapsed().as_secs_f64() * 1_000_000.0 / WRITES as f64,
+        );
+        drop(encrypted_async_cache);
+        drop(encrypted_async_persistent);
+        std::fs::remove_file(encrypted_async_path).unwrap();
     }
 }
 
@@ -302,6 +489,49 @@ fn exact_cache_scaling_microbenchmark() {
 
         drop(redb);
         std::fs::remove_file(path).unwrap();
+
+        let encrypted_path = temp_path();
+        let encrypted_redb =
+            RedbCacheStore::open_with_encryption(&encrypted_path, Some(encryption_config()))
+                .unwrap();
+        for batch_start in (0..size).step_by(64) {
+            let batch_end = (batch_start + 64).min(size);
+            encrypted_redb
+                .put_batch(
+                    (batch_start..batch_end)
+                        .map(|index| {
+                            (
+                                key(&format!("exact-encrypted-redb-{size}-{index}")),
+                                output.clone(),
+                            )
+                        })
+                        .collect(),
+                )
+                .unwrap();
+        }
+        encrypted_redb.put(read_key, output.clone()).unwrap();
+        report(
+            &format!("exact_encrypted_persistent_read_entries_{size}"),
+            measure(READS, || {
+                black_box(encrypted_redb.get(&read_key, 10).unwrap().unwrap());
+            }),
+        );
+        let mut next = size;
+        report(
+            &format!("exact_encrypted_persistent_durable_write_entries_{size}"),
+            measure(DURABLE_WRITES, || {
+                encrypted_redb
+                    .put(
+                        key(&format!("exact-encrypted-redb-write-{size}-{next}")),
+                        output.clone(),
+                    )
+                    .unwrap();
+                next += 1;
+            }),
+        );
+
+        drop(encrypted_redb);
+        std::fs::remove_file(encrypted_path).unwrap();
     }
 }
 
@@ -389,4 +619,8 @@ fn temp_path() -> std::path::PathBuf {
         .unwrap()
         .as_nanos();
     std::env::temp_dir().join(format!("patronus-cache-benchmark-{unique}.redb"))
+}
+
+fn encryption_config() -> CacheEncryptionConfig {
+    CacheEncryptionConfig::from_key([42; 32])
 }

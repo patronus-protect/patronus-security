@@ -16,6 +16,7 @@ Set at gateway construction:
 | `download_categories` | list | Restrict automatic downloads to these categories. | constructor |
 | `model_dir` | path | Custom asset cache location (default: platform cache dir). | constructor |
 | `cache_storage_location` | path or `None` | Explicit persistent cache database; `None` keeps the cache memory-only. | cache constructor |
+| `cache_encryption_key_hex` | 64 hex chars or `None` | Encrypt persistent cache values and keyed similarity bucket indexes. | `PersistentCacheConfig.encryption` |
 | `cache_entry_ttl_seconds` | positive integer | Shared hot/persistent TTL; defaults to 30 days (`2_592_000`). | `ExactCacheConfig.entry_ttl` |
 | `cache_memory_max_entries` | non-negative integer | Per-hot-tier entry bound; `0` disables hot retention. | `ExactCacheConfig.memory.max_entries` |
 | `cache_memory_max_bytes` | non-negative integer | Per-hot-tier byte bound; `0` disables hot retention. | `ExactCacheConfig.memory.max_bytes` |
@@ -24,6 +25,7 @@ Set at gateway construction:
 | `dynamic_pii_config` | dict | Configuration for the [`dynamic-pii`](#dynamic-pii) pipeline. | setter |
 | `execution_backend` | str | ONNX [execution backend](#execution-backend) (default `"auto"`). | setter |
 | `onnx_batch_mode` | str | [ONNX batch mode](#onnx-batch-mode); default `"backend_default"` follows whatever the backend implies. | setter |
+| `ntdb_operating_point` | str | Initial [final-decision threshold profile](#ntdb-operating-point), default `"best_f1"`. | setter |
 
 In Python, all of these are keyword arguments to `SecurityGateway(...)`. In Rust the
 *constructor*-marked options are positional: `with_max_level(categories, max_level, model_dir,
@@ -251,7 +253,9 @@ See [Models & the NTDB format](../concepts/models-and-ntdb.md#dedicated-vs-unifi
 Selects the precomputed final-decision threshold profile used after L2/L3 scoring. The profile
 controls the L2 acceptance threshold, L3 acceptance threshold, and L2/L3 union threshold/weights
 for supported classifier pipelines. It does **not** change the L2 promote-router threshold; L3
-promotion still uses the package's promote operating point.
+promotion still uses the package's promote operating point. When no candidate is accepted, the
+pipeline returns its default class and preserves the model's default-class confidence when one is
+available.
 
 | Value | Optimizes |
 | --- | --- |

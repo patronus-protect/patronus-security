@@ -5,6 +5,7 @@ use std::sync::{mpsc, Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
 
+use crate::diagnostics::PhaseMetricScope;
 use crate::ml::ntdb_executor::L3Candidate;
 use crate::pipeline::{
     failure_from_scan_result, finish_request_if_ready, has_l3_pending, priority_index, ttl_ms,
@@ -102,10 +103,10 @@ impl SecurityGateway {
         gates: Option<ScanGateMatrix>,
         ntdb_decision_threshold_point: Option<crate::NtdbOperatingPoint>,
     ) -> RequestId {
-        let text = text.into();
+        let text = Arc::<str>::from(text.into());
         let inputs = categories
             .into_iter()
-            .map(|category| ExternalL1Input::new(category, text.clone()))
+            .map(|category| ExternalL1Input::from_shared_text(category, Arc::clone(&text)))
             .collect();
         self.enqueue_work(inputs, metadata, gates, ntdb_decision_threshold_point, None)
     }
@@ -209,10 +210,15 @@ impl SecurityGateway {
             #[cfg(feature = "test-util")]
             delay_ms,
         } = work;
+        let mut metrics = PhaseMetricScope::new(
+            "security_queue_work",
+            format!("request_id={request_id} inputs={}", inputs.len()),
+        );
         #[cfg(feature = "test-util")]
         if let Some(delay_ms) = delay_ms {
             thread::sleep(Duration::from_millis(delay_ms));
         }
+        metrics.checkpoint("before_l1", format!("request_id={request_id}"));
         let raw_l1 = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             self.scan_l1_inputs(&inputs, &execution)
         })) {
@@ -222,13 +228,30 @@ impl SecurityGateway {
                 return;
             }
         };
+        metrics.checkpoint(
+            "after_l1",
+            format!("request_id={request_id} raw_results={}", raw_l1.len()),
+        );
         let (l1_results, l1_failures) = split_results(raw_l1);
+        metrics.checkpoint(
+            "after_split_l1",
+            format!(
+                "request_id={request_id} results={} failures={}",
+                l1_results.len(),
+                l1_failures.len()
+            ),
+        );
         self.publish_phase_results(&request_id, &l1_results, l1_failures);
+        metrics.checkpoint(
+            "after_publish_l1",
+            format!("request_id={request_id} results={}", l1_results.len()),
+        );
 
         let mut conditional_results = l1_results
             .iter()
             .filter_map(gate_result)
             .collect::<Vec<_>>();
+        metrics.checkpoint("before_l2", format!("request_id={request_id}"));
         let raw_l2 = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             self.scan_l2_inputs(&inputs, &execution, &metadata, &conditional_results)
         })) {
@@ -238,7 +261,19 @@ impl SecurityGateway {
                 return;
             }
         };
+        metrics.checkpoint(
+            "after_l2_raw",
+            format!("request_id={request_id} raw_results={}", raw_l2.len()),
+        );
         let (mut l2_results, l2_failures) = split_results(raw_l2);
+        metrics.checkpoint(
+            "after_split_l2",
+            format!(
+                "request_id={request_id} results={} failures={}",
+                l2_results.len(),
+                l2_failures.len()
+            ),
+        );
         conditional_results.extend(l2_results.iter().filter_map(gate_result));
         let l3_execution = crate::pipeline::conditional_gate::apply_l3_policy_overrides(
             &execution,
@@ -247,23 +282,32 @@ impl SecurityGateway {
         );
         let text = inputs
             .first()
-            .map(|input| input.text.as_str())
-            .unwrap_or_default();
+            .map(|input| Arc::clone(&input.text))
+            .unwrap_or_else(|| Arc::<str>::from(""));
         let l3_jobs = self.l3_jobs_for_results(
             &request_id,
-            &text,
+            Arc::clone(&text),
             &mut l2_results,
             &l3_execution,
             &metadata,
             &conditional_results,
         );
+        metrics.checkpoint(
+            "after_l3_planning",
+            format!("request_id={request_id} l3_jobs={}", l3_jobs.len()),
+        );
         let pending_dynamic_pii = self.pending_dynamic_pii_for_request(
             &request_id,
-            &text,
+            Arc::clone(&text),
             &inputs,
             &l3_execution,
             &metadata,
             &conditional_results,
+        );
+        drop_internal_l2_chunk_outputs(&mut l2_results);
+        metrics.checkpoint(
+            "before_publish_l2",
+            format!("request_id={request_id} results={}", l2_results.len()),
         );
         let mut pending_l3_job_ids = l3_jobs.iter().map(|job| job.job_id).collect::<HashSet<_>>();
         if let Some(pending) = &pending_dynamic_pii {
@@ -303,11 +347,13 @@ impl SecurityGateway {
         finish_request_if_ready(&mut registry, &request_id);
         self.requests.available.notify_all();
         drop(registry);
+        metrics.checkpoint("after_publish_l2", format!("request_id={request_id}"));
 
         for job in l3_jobs {
             self.l3_worker.enqueue(job);
         }
         self.l3_worker.resolve_dynamic_pii(&request_id);
+        metrics.checkpoint("after_l3_enqueue", format!("request_id={request_id}"));
     }
 
     fn publish_phase_results(
@@ -496,7 +542,7 @@ impl SecurityGateway {
     fn l3_jobs_for_results(
         &self,
         request_id: &str,
-        text: &str,
+        text: Arc<str>,
         results: &mut [SecurityScanResult],
         execution: &ScanExecution,
         metadata: &serde_json::Value,
@@ -538,7 +584,7 @@ impl SecurityGateway {
                 request_id: request_id.to_string(),
                 category: result.category.clone(),
                 model: result.model.clone(),
-                text: text.to_string(),
+                text: Arc::clone(&text),
                 fallback: result.clone(),
                 priority: priority_index(policy, &result.category, &result.model),
                 ttl_ms: ttl_ms(policy, &result.category, &result.model),
@@ -546,11 +592,10 @@ impl SecurityGateway {
                 execution: execution.clone(),
                 degraded_factor: policy.degraded_factor,
                 l3_candidates: l3_candidates(result),
-                l2_chunk_outputs: l2_chunk_outputs(result),
+                l2_chunk_outputs: take_internal_l2_chunk_outputs(result),
                 dynamic_pii_config: None,
                 dynamic_pii_activated_rules: Vec::new(),
             });
-            strip_internal_l2_embeddings(result);
         }
         if execution.l3_strategy() == crate::L3Strategy::Multi {
             let merged = merge_l3_candidates(
@@ -561,10 +606,11 @@ impl SecurityGateway {
             let merged_l2_chunk_outputs = jobs
                 .iter()
                 .flat_map(|job| job.l2_chunk_outputs.iter().cloned())
-                .collect::<Vec<_>>();
+                .collect::<Vec<_>>()
+                .into();
             for job in &mut jobs {
                 job.l3_candidates = merged.clone();
-                job.l2_chunk_outputs = merged_l2_chunk_outputs.clone();
+                job.l2_chunk_outputs = Arc::clone(&merged_l2_chunk_outputs);
             }
         }
         jobs
@@ -573,7 +619,7 @@ impl SecurityGateway {
     fn pending_dynamic_pii_for_request(
         &self,
         request_id: &str,
-        text: &str,
+        text: Arc<str>,
         inputs: &[ExternalL1Input],
         execution: &ScanExecution,
         metadata: &serde_json::Value,
@@ -604,7 +650,7 @@ impl SecurityGateway {
                 request_id: request_id.to_string(),
                 category: DYNAMIC_PII_ASSET.category.as_str().to_string(),
                 model: DYNAMIC_PII_ASSET.model.to_string(),
-                text: text.to_string(),
+                text: Arc::clone(&text),
                 fallback: dynamic_pii_pending_result(execution),
                 priority: priority_index(
                     policy,
@@ -612,11 +658,11 @@ impl SecurityGateway {
                     DYNAMIC_PII_ASSET.model,
                 ),
                 ttl_ms: config.queue_timeout_ms,
-                inference_timeout_ms: config.inference_timeout_ms(text),
+                inference_timeout_ms: config.inference_timeout_ms(text.as_ref()),
                 execution: execution.clone(),
                 degraded_factor: policy.degraded_factor,
                 l3_candidates: Vec::new(),
-                l2_chunk_outputs: Vec::new(),
+                l2_chunk_outputs: Vec::new().into(),
                 dynamic_pii_config: Some(config),
                 dynamic_pii_activated_rules: Vec::new(),
             },
@@ -667,7 +713,7 @@ impl SecurityGateway {
                 request_id: request_id.clone(),
                 category: fallback.category.clone(),
                 model: fallback.model.clone(),
-                text: "test".to_string(),
+                text: "test".into(),
                 fallback,
                 priority,
                 ttl_ms,
@@ -675,7 +721,7 @@ impl SecurityGateway {
                 execution: self.scan_execution(),
                 degraded_factor: 0.75,
                 l3_candidates: Vec::new(),
-                l2_chunk_outputs: Vec::new(),
+                l2_chunk_outputs: Vec::new().into(),
                 dynamic_pii_config: None,
                 dynamic_pii_activated_rules: Vec::new(),
             },
@@ -699,7 +745,7 @@ impl SecurityGateway {
                     request_id: request_id.clone(),
                     category: fallback.category.clone(),
                     model: fallback.model.clone(),
-                    text: "test".to_string(),
+                    text: "test".into(),
                     fallback,
                     priority: *priority,
                     ttl_ms: 10_000,
@@ -707,7 +753,7 @@ impl SecurityGateway {
                     execution: self.scan_execution(),
                     degraded_factor: 0.75,
                     l3_candidates: Vec::new(),
-                    l2_chunk_outputs: Vec::new(),
+                    l2_chunk_outputs: Vec::new().into(),
                     dynamic_pii_config: None,
                     dynamic_pii_activated_rules: Vec::new(),
                 },
@@ -748,7 +794,7 @@ impl SecurityGateway {
                     request_id: request_id.clone(),
                     category: (*category).to_string(),
                     model: (*model).to_string(),
-                    text: "test".to_string(),
+                    text: "test".into(),
                     fallback,
                     priority: *priority,
                     ttl_ms: 10_000,
@@ -756,7 +802,7 @@ impl SecurityGateway {
                     execution: ScanExecution::with_gates(SecurityLevel::L3, gates),
                     degraded_factor: 0.75,
                     l3_candidates: Vec::new(),
-                    l2_chunk_outputs: Vec::new(),
+                    l2_chunk_outputs: Vec::new().into(),
                     dynamic_pii_config: None,
                     dynamic_pii_activated_rules: Vec::new(),
                 },
@@ -818,7 +864,7 @@ impl SecurityGateway {
                     request_id: request_id.clone(),
                     category: "threat".to_string(),
                     model: "test-threat-l3".to_string(),
-                    text: "test".to_string(),
+                    text: "test".into(),
                     fallback: threat_fallback,
                     priority: 0,
                     ttl_ms: 10_000,
@@ -826,7 +872,7 @@ impl SecurityGateway {
                     execution: execution.clone(),
                     degraded_factor: 0.75,
                     l3_candidates: Vec::new(),
-                    l2_chunk_outputs: Vec::new(),
+                    l2_chunk_outputs: Vec::new().into(),
                     dynamic_pii_config: None,
                     dynamic_pii_activated_rules: Vec::new(),
                 },
@@ -838,7 +884,7 @@ impl SecurityGateway {
                     request_id: request_id.clone(),
                     category: "tool_class".to_string(),
                     model: "test-tool-l3".to_string(),
-                    text: "test".to_string(),
+                    text: "test".into(),
                     fallback: tool_fallback,
                     priority: 10,
                     ttl_ms: 10_000,
@@ -846,7 +892,7 @@ impl SecurityGateway {
                     execution,
                     degraded_factor: 0.75,
                     l3_candidates: Vec::new(),
-                    l2_chunk_outputs: Vec::new(),
+                    l2_chunk_outputs: Vec::new().into(),
                     dynamic_pii_config: None,
                     dynamic_pii_activated_rules: Vec::new(),
                 },
@@ -874,7 +920,7 @@ impl SecurityGateway {
         let dynamic = self
             .pending_dynamic_pii_for_request(
                 &request_id,
-                "Alexandr works in Frankfurt.",
+                Arc::<str>::from("Alexandr works in Frankfurt."),
                 &[ExternalL1Input::new(
                     SecurityCategory::DynamicPii,
                     "Alexandr works in Frankfurt.",
@@ -891,7 +937,7 @@ impl SecurityGateway {
             request_id: request_id.clone(),
             category: source_fallback.category.clone(),
             model: source_fallback.model.clone(),
-            text: "test".to_string(),
+            text: "test".into(),
             fallback: source_fallback.clone(),
             priority: 0,
             ttl_ms: 10_000,
@@ -899,7 +945,7 @@ impl SecurityGateway {
             execution,
             degraded_factor: 0.75,
             l3_candidates: Vec::new(),
-            l2_chunk_outputs: Vec::new(),
+            l2_chunk_outputs: Vec::new().into(),
             dynamic_pii_config: None,
             dynamic_pii_activated_rules: Vec::new(),
         };
@@ -1003,8 +1049,10 @@ impl SecurityGateway {
                     details: HashMap::new(),
                 },
             ],
+            internal_l2_chunk_outputs: Vec::new(),
             evidence_spans: Vec::new(),
             label_scores: Vec::new(),
+            decision: None,
         }
     }
 }
@@ -1052,37 +1100,16 @@ fn l3_candidates(result: &SecurityScanResult) -> Vec<L3Candidate> {
         .unwrap_or_default()
 }
 
-fn l2_chunk_outputs(result: &SecurityScanResult) -> Vec<crate::ml::ntdb_executor::L2ChunkOutput> {
-    result
-        .layers
-        .iter()
-        .find(|layer| layer.layer_type == "ntdb_l2")
-        .and_then(|layer| layer.details.get("l2_chunk_outputs"))
-        .and_then(|value| serde_json::from_value(value.clone()).ok())
-        .unwrap_or_default()
+fn take_internal_l2_chunk_outputs(
+    result: &mut SecurityScanResult,
+) -> Arc<[crate::ml::ntdb_executor::L2ChunkOutput]> {
+    std::mem::take(&mut result.internal_l2_chunk_outputs).into()
 }
 
-fn strip_internal_l2_embeddings(result: &mut SecurityScanResult) {
-    let Some(layer) = result
-        .layers
-        .iter_mut()
-        .find(|layer| layer.layer_type == "ntdb_l2")
-    else {
-        return;
-    };
-    let Some(value) = layer.details.get_mut("l2_chunk_outputs") else {
-        return;
-    };
-    let Ok(mut outputs) =
-        serde_json::from_value::<Vec<crate::ml::ntdb_executor::L2ChunkOutput>>(value.clone())
-    else {
-        return;
-    };
-    for output in &mut outputs {
-        output.embedding.clear();
-        output.embedding_space.clear();
+fn drop_internal_l2_chunk_outputs(results: &mut [SecurityScanResult]) {
+    for result in results {
+        result.internal_l2_chunk_outputs = Vec::new();
     }
-    *value = serde_json::json!(outputs);
 }
 
 fn merge_l3_candidates(mut candidates: Vec<L3Candidate>) -> Vec<L3Candidate> {
@@ -1157,8 +1184,10 @@ mod tests {
                     }]),
                 )]),
             }],
+            internal_l2_chunk_outputs: Vec::new(),
             evidence_spans: Vec::new(),
             label_scores: Vec::new(),
+            decision: None,
         };
 
         let candidates = l3_candidates(&result);
@@ -1246,7 +1275,7 @@ mod tests {
 
         let jobs = scanner.l3_jobs_for_results(
             "rq-test",
-            "text",
+            Arc::<str>::from("text"),
             &mut results,
             &execution,
             &serde_json::json!({}),
@@ -1254,7 +1283,14 @@ mod tests {
         );
 
         assert_eq!(jobs.len(), 2);
-        for job in jobs {
+        assert!(Arc::ptr_eq(
+            &jobs[0].l2_chunk_outputs,
+            &jobs[1].l2_chunk_outputs
+        ));
+        assert!(results
+            .iter()
+            .all(|result| result.internal_l2_chunk_outputs.is_empty()));
+        for job in &jobs {
             let pipelines = job
                 .l2_chunk_outputs
                 .iter()
@@ -1299,7 +1335,7 @@ mod tests {
                         ),
                         (
                             "l2_chunk_outputs".to_string(),
-                            serde_json::json!(l2_chunk_outputs),
+                            serde_json::json!(l2_chunk_outputs.clone()),
                         ),
                     ]),
                 },
@@ -1314,8 +1350,10 @@ mod tests {
                     details: HashMap::new(),
                 },
             ],
+            internal_l2_chunk_outputs: l2_chunk_outputs,
             evidence_spans: Vec::new(),
             label_scores: Vec::new(),
+            decision: None,
         }
     }
 

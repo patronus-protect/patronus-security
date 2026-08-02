@@ -20,6 +20,7 @@ pub use l3_result::{
 pub use l3_routing::{priority_index, ttl_ms};
 pub use security::SecurityGateway;
 
+pub(crate) use l3_result::mark_decision_degraded;
 pub(crate) use l3_worker::{
     failure_from_scan_result, finish_request_if_ready, L3JobSpec, L3Worker, PendingDynamicPii,
     RequestRegistry, RequestState,

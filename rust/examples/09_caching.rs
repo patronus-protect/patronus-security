@@ -232,6 +232,7 @@ fn new_scanner(
             storage_location: storage_location.clone(),
             write_mode: CacheWriteMode::Async,
             write_behind: WriteBehindConfig::default(),
+            encryption: None,
         }),
         ..ExactCacheConfig::default()
     };
