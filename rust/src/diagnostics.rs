@@ -262,6 +262,7 @@ fn current_rss_bytes() -> Option<u64> {
     None
 }
 
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 fn peak_rss_bytes() -> Option<u64> {
     use std::ffi::{c_int, c_long};
 
@@ -309,4 +310,9 @@ fn peak_rss_bytes() -> Option<u64> {
     {
         Some(usage.ru_maxrss as u64 * 1024)
     }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+fn peak_rss_bytes() -> Option<u64> {
+    None
 }
