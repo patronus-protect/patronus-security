@@ -1108,6 +1108,22 @@ pub fn unified_coalescing_snapshot(categories: &[&str]) -> UnifiedCoalescingSnap
             l2_class: "promote".to_string(),
         })
         .collect::<Vec<_>>();
+    let request_l2_chunk_outputs = request_candidates
+        .iter()
+        .map(|candidate| crate::ml::ntdb_executor::L2ChunkOutput {
+            span: candidate.span,
+            class_name: "attack".to_string(),
+            confidence: 0.9,
+            promoted: true,
+            promote_score: Some(candidate.promote_score),
+            promote_threshold: Some(candidate.promote_threshold),
+            source_pipeline: candidate.source_pipeline.clone(),
+            source_model: candidate.source_model.clone(),
+            embedding: Vec::new(),
+            embedding_space: String::new(),
+        })
+        .collect::<Vec<_>>();
+    let request_text = Arc::<str>::from("x".repeat(categories.len() * 100 + 80));
     for (index, category) in categories.iter().enumerate() {
         let mut execution = ScanExecution::new(SecurityLevel::L3);
         execution.set_l3_strategy(L3Strategy::Multi);
@@ -1118,7 +1134,7 @@ pub fn unified_coalescing_snapshot(categories: &[&str]) -> UnifiedCoalescingSnap
                 request_id: "request-1".to_string(),
                 category: (*category).to_string(),
                 model: format!("dedicated-{category}"),
-                text: "same request text".into(),
+                text: Arc::clone(&request_text),
                 fallback: SecurityScanResult {
                     category: (*category).to_string(),
                     class_name: "fallback".to_string(),
@@ -1138,7 +1154,7 @@ pub fn unified_coalescing_snapshot(categories: &[&str]) -> UnifiedCoalescingSnap
                 execution,
                 degraded_factor: 0.75,
                 l3_candidates: request_candidates.clone(),
-                l2_chunk_outputs: Vec::new().into(),
+                l2_chunk_outputs: request_l2_chunk_outputs.clone().into(),
                 dynamic_pii_config: None,
                 dynamic_pii_activated_rules: Vec::new(),
             },
