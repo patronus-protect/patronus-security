@@ -215,10 +215,18 @@ L3 ONNX sessions are lazy-loaded. `warmup()` verifies/downloads required assets 
 `python/patronus_ark/gliner_category_map.py` contains the classification-aware
 entity catalogue used by the local NER benchmark. It is a single semantic
 allowlist: deterministic identifiers such as email, IP, IBAN, SWIFT/BIC, phone,
-and credit-card numbers remain native L1 heuristics. Only labels with measured
-exact-span F1 of at least 0.6 are mapped. Sensitive-document and tool classes
-select smaller label sets; when both contexts are known, their intersection is
-used and an empty intersection skips GLiNER.
+and credit-card numbers remain native L1 heuristics. Most labels are calibrated
+on the synthetic threshold sweep (exact-span matching, best F1 >= 0.6). Newer
+general labels (`city`, `country`, `first_name`, `last_name`, `date_of_birth`)
+and the `date` re-calibration are measured on a real PII corpus
+(`Ai4Privacy/pii-masking-300k`) via `scripts/sweep_gliner_pii_real.py` and tuned
+**precision-first** — the highest-recall threshold that keeps precision >= 0.8
+(else the max-precision point) — so they detect fewer entities but rarely
+wrongly. A real-corpus label is mapped only if precision stays >= 0.6 at that
+point; labels that cannot (e.g. `password`, `postal_code`, `national_id_number`)
+are left unmapped and recorded in `gliner_category_map.py`. Sensitive-document
+and tool classes select smaller label sets; when both contexts are known, their
+intersection is used and an empty intersection skips GLiNER.
 
 ```python
 scanner = SecurityGateway(

@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::{detectors::NativeRegexDetector, EvaluationResult};
+use crate::{
+    detectors::NativeRegexDetector, post_prediction::is_real_secret_assignment, EvaluationResult,
+};
 use regex::{Regex, RegexSet};
 
 /// A single DLP heuristic pattern (credentials / secrets).
@@ -18,7 +20,7 @@ pub static DLP_PATTERNS: &[DlpPattern] = &[
         name: "dlp_anthropic_key",
         pattern: r"sk-ant-[a-zA-Z0-9\-_]{10,}",
         entity_group: "API_KEY",
-        validator: None,
+        validator: Some(is_real_secret_assignment),
     },
     DlpPattern {
         name: "dlp_openai_key",
@@ -180,7 +182,7 @@ pub static DLP_PATTERNS: &[DlpPattern] = &[
         name: "dlp_env_var_secret",
         pattern: r"(?-i:[A-Z][A-Z0-9]*[_\-](?:SECRET(?:[_\-]ACCESS)?[_\-]?KEY|SECRET|PASSWORD|PASSWD|TOKEN|API[_\-]?KEY))\s*=\s*\S{8,}",
         entity_group: "CREDENTIAL",
-        validator: None,
+        validator: Some(is_real_secret_assignment),
     },
 ];
 

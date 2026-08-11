@@ -146,7 +146,7 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
         name: "pii_plz_stadt_de",
         pattern: r"\b\d{5}\s+[A-ZÄÖÜ][a-zäöüß]{2,}",
         entity_group: "POSTALADDRESS",
-        validator: None,
+        validator: Some(validators::postal_address_de),
     },
 ];
 

@@ -28,6 +28,7 @@ use crate::{
     diagnostics::PhaseMetricScope,
     ml::ntdb_executor::NtdbExecutor,
     pipeline::{L3Worker, RequestRegistry},
+    post_prediction::filter_evidence,
     DynamicPiiConfig, EvaluationResult, ExecutionBackend, ExternalL1Detector, ExternalL1Input,
     LayerResult, NtdbOperatingPoint, OnnxBatchMode, ScanExecution, ScanGateMatrix,
     SecurityCategory, SecurityFailure, SecurityFailureKind, SecurityFailureStage, SecurityLevel,
@@ -244,7 +245,7 @@ fn timed_native_regex_scan_result<T: NativeRegexDetector>(
                 detection.result,
                 started.elapsed().as_secs_f64() * 1000.0,
             );
-            result.evidence_spans = detection.evidence_spans;
+            result.evidence_spans = filter_evidence(category, text, detection.evidence_spans);
             result
         }
         Err(payload) => scanner_error_scan_result(category, model, panic_message(payload)),
