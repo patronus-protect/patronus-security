@@ -83,6 +83,9 @@ pub(crate) fn looks_like_instruction_leak_request_lower(lower: &str) -> bool {
 }
 
 pub(crate) fn looks_like_secret_transfer_lower(lower: &str) -> bool {
+    if is_template_env_copy(lower) {
+        return false;
+    }
     text_windows(lower, THREAT_SIGNAL_WINDOW_BYTES).any(|window| {
         let mut matched_verbs = false;
         let mut matched_exfiltrate = false;
@@ -405,6 +408,13 @@ pub(crate) fn looks_like_tool_output_instruction_lower(lower: &str) -> bool {
         }
         false
     })
+}
+
+pub(crate) fn is_template_env_copy(lower: &str) -> bool {
+    (lower.contains("cp ") || lower.contains("copy "))
+        && [".env.example", ".env.sample", ".env.template"]
+            .iter()
+            .any(|name| lower.contains(name))
 }
 
 pub(crate) fn looks_like_mcp_runtime_risk_lower(lower: &str) -> bool {

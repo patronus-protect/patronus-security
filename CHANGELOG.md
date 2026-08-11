@@ -7,6 +7,34 @@ All notable changes to this project are documented here. The format is based on
 This project is **pre-1.0**: any change to detection thresholds, the asset manifest, or public
 result shapes may be breaking for downstream users, and is called out explicitly below.
 
+## [0.1.3] - 2026-08-11
+
+### Added
+
+- Added public post-prediction hooks for filtering non-actionable credential and local-path
+  evidence while retaining model predictions for diagnostics.
+- Added precision-first, real-corpus calibration data and a local sweep tool for general Dynamic
+  PII labels, plus benchmark coverage for names, dates of birth, cities, and countries.
+
+### Changed
+
+- Expanded the default and document-aware Dynamic PII label sets with calibrated `first_name`,
+  `last_name`, `date_of_birth`, `city`, and `country` entities, and recalibrated `date`.
+
+### Fixed
+
+- Reduced false-positive DLP and MCP findings for template `.env` copies, empty or placeholder
+  secret assignments, and low-entropy credential values.
+- Suppressed `person` evidence when a detected name is only a username inside a local filesystem
+  path.
+- Rejected loopback, multicast, unspecified, and truncated IPv6 candidates as PII, and rejected
+  terminal metadata words and invalid zero postal codes as German postal addresses.
+
+### Breaking
+
+- Dynamic PII findings and native PII/DLP/MCP decisions can change because label sets, thresholds,
+  evidence filtering, and native validators were updated.
+
 ## [0.1.2] - 2026-07-26
 
 ### Added

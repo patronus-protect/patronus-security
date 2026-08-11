@@ -18,11 +18,12 @@ use crate::pipeline::l3_engine::{execute_l3_plan, L3ExecutionAdapter, L3Resolved
 use crate::pipeline::l3_schedule::selected_l3_chunks;
 #[cfg(test)]
 use crate::pipeline::l3_schedule::{chunk_clusters, SelectedL3Chunk};
+use crate::post_prediction::{filter_evidence, LocalPathPersonHook, PostPredictionHook};
 #[cfg(test)]
 use crate::ScanExecution;
 use crate::{
     EvaluationResult, L3ClusteringStrategy, L3ProgressMode, LayerResult, QueuedSecurityProgress,
-    RequestId, SecurityLevel, SecurityScanResult,
+    RequestId, SecurityCategory, SecurityLevel, SecurityScanResult,
 };
 
 use super::super::long_text::aggregate_chunk_outputs;
@@ -138,7 +139,11 @@ fn run_dynamic_pii_job(
         .dynamic_pii_config
         .as_ref()
         .ok_or_else(|| "dynamic-pii job is missing its configuration".to_string())?;
-    let cached_spans = entity_cache.find(crate::assets::DYNAMIC_PII_ASSET.revision, text, config);
+    let cached_spans = filter_evidence(
+        SecurityCategory::DynamicPii,
+        text,
+        entity_cache.find(crate::assets::DYNAMIC_PII_ASSET.revision, text, config),
+    );
     let cache_hits = cached_spans.len();
     let first_published = Arc::new(std::sync::atomic::AtomicBool::new(false));
     if let Some(span) = cached_spans.first() {
@@ -152,6 +157,9 @@ fn run_dynamic_pii_job(
         .lock()
         .map_err(|error| format!("dynamic-pii runtime mutex poisoned: {error}"))?
         .infer_with_callback(text, config, chunk_cache, move |span| {
+            if !LocalPathPersonHook.retain(SecurityCategory::DynamicPii, text, span) {
+                return;
+            }
             if callback_published
                 .compare_exchange(
                     false,
@@ -166,7 +174,11 @@ fn run_dynamic_pii_job(
         })
         .map_err(|error| error.to_string())?;
     output.evidence_spans.extend(cached_spans);
-    output.evidence_spans = merge_pii_spans(output.evidence_spans);
+    output.evidence_spans = filter_evidence(
+        SecurityCategory::DynamicPii,
+        text,
+        merge_pii_spans(output.evidence_spans),
+    );
     entity_cache.remember(
         crate::assets::DYNAMIC_PII_ASSET.revision,
         &output.evidence_spans,

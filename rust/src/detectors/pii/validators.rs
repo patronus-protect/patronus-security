@@ -3,7 +3,22 @@ use std::net::IpAddr;
 
 /// Validate an IPv4 or IPv6 candidate matched by a PII regex.
 pub fn ip_address(s: &str) -> bool {
-    s.parse::<IpAddr>().is_ok()
+    let Ok(candidate) = s.parse::<IpAddr>() else {
+        return false;
+    };
+    if candidate.is_loopback() || candidate.is_multicast() || candidate.is_unspecified() {
+        return false;
+    }
+    match candidate {
+        IpAddr::V4(_) => true,
+        IpAddr::V6(_) => {
+            let compact = s.trim();
+            compact.len() >= 7
+                && ((compact.contains("::")
+                    && compact.chars().filter(|ch| *ch == ':').count() >= 2)
+                    || compact.split(':').filter(|part| !part.is_empty()).count() >= 3)
+        }
+    }
 }
 
 /// Luhn algorithm (ISO/IEC 7812) — credit card number validation.
@@ -101,4 +116,61 @@ pub fn steuer_id(s: &str) -> bool {
     }
     let check = (11 - product) % 10;
     check == digits[10]
+}
+
+pub fn postal_address_de(s: &str) -> bool {
+    let mut parts = s.split_whitespace();
+    let Some(postal_code) = parts.next() else {
+        return false;
+    };
+    let Some(city) = parts.next() else {
+        return false;
+    };
+    if postal_code == "00000"
+        || postal_code.len() != 5
+        || !postal_code.chars().all(|ch| ch.is_ascii_digit())
+    {
+        return false;
+    }
+    !matches!(
+        city.to_ascii_lowercase().as_str(),
+        "chunk"
+            | "error"
+            | "file"
+            | "input"
+            | "line"
+            | "lines"
+            | "original"
+            | "output"
+            | "process"
+            | "result"
+            | "token"
+            | "tokens"
+            | "total"
+            | "trace"
+            | "warning"
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ip_address, postal_address_de};
+
+    #[test]
+    fn ip_address_rejects_local_and_tiny_ipv6_literals() {
+        assert!(!ip_address("::"));
+        assert!(!ip_address("::1"));
+        assert!(!ip_address("a::"));
+        assert!(!ip_address("on"));
+        assert!(ip_address("192.168.10.42"));
+        assert!(ip_address("2001:db8::1"));
+    }
+
+    #[test]
+    fn postal_address_de_rejects_terminal_metadata_words() {
+        assert!(postal_address_de("10115 Berlin"));
+        assert!(!postal_address_de("00000 Berlin"));
+        assert!(!postal_address_de("12345 Output"));
+        assert!(!postal_address_de("12345 Tokens"));
+    }
 }

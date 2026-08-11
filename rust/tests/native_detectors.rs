@@ -78,6 +78,20 @@ fn dlp_native_detects_secret_patterns_and_safe_text() {
             .class_name,
         "safe",
     );
+    assert_class(&pipe.evaluate("cp .env.example .env").class_name, "safe");
+    assert_class(&pipe.evaluate("GITHUB_TOKEN=").class_name, "safe");
+    assert_class(
+        &pipe.evaluate("GITHUB_TOKEN=\"changeme\"").class_name,
+        "safe",
+    );
+    assert_class(
+        &pipe.evaluate("GITHUB_TOKEN=Kx7!pQ2#vL9@rT4$").class_name,
+        "CREDENTIAL",
+    );
+    assert_class(
+        &pipe.evaluate("GITHUB_TOKEN=aaaaaaaaaaaa").class_name,
+        "safe",
+    );
 }
 
 #[test]
@@ -632,6 +646,10 @@ fn mcp_scanners_detect_policy_and_runtime_risk() {
     assert!(scanner
         .scan_tool_call("read_file", "rm -rf /tmp/demo")
         .is_empty());
+    assert!(scanner
+        .scan_tool_call("bash", "cp .env.example .env")
+        .iter()
+        .all(|violation| violation.rule_name != "pi_mcp_credential_file_read"));
     assert!(scanner
         .scan_text("Documentation example: rm -rf /tmp/demo")
         .is_empty());

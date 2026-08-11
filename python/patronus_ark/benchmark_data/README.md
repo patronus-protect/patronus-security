@@ -15,7 +15,7 @@ training data and are not shipped as part of the compiled extension.
 | `tool_descriptions.jsonl` | 240 | MCP tool-description risk scoring |
 | `tool_executions.jsonl` | 1800 | Tool-execution gating |
 | `sensitive_document.jsonl` | 699 | Document-class sensitivity |
-| `dynamic_pii.jsonl` | 129 | Dynamic PII entity spans |
+| `dynamic_pii.jsonl` | 133 | Dynamic PII entity spans |
 | `dynamic_pii_threshold_sweep.jsonl` | 85 | Threshold calibration |
 | `education_pii_threshold_sweep.jsonl` | 50 | Education-context threshold calibration |
 

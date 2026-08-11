@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use crate::threat::is_template_env_copy;
 use crate::EvaluationResult;
 use regex::Regex;
 use serde_json::Value;
@@ -195,6 +196,10 @@ impl McpToolPolicyScanner {
         self.rules
             .iter()
             .filter(|rule| rule.tool_re.is_match(tool_name) && rule.arg_re.is_match(arguments))
+            .filter(|rule| {
+                rule.name != "pi_mcp_credential_file_read"
+                    || !is_template_env_copy(&arguments.to_ascii_lowercase())
+            })
             .map(|r| McpPolicyViolation {
                 rule_name: r.name,
                 severity: r.severity,
