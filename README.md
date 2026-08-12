@@ -1,11 +1,17 @@
-# Patronus Ark
+<p align="center">
+  <img src="https://raw.githubusercontent.com/patronus-protect/patronus-security/main/docs/img/patronus-ark-banner.svg" alt="Patronus Ark — layered security scanning for LLM and agent traffic" width="100%">
+</p>
 
-[![crates.io](https://img.shields.io/crates/v/patronus-ark.svg?logo=rust)](https://crates.io/crates/patronus-ark)
-[![PyPI](https://img.shields.io/pypi/v/patronus-ark.svg?logo=pypi&logoColor=white)](https://pypi.org/project/patronus-ark/)
-[![Python](https://img.shields.io/pypi/pyversions/patronus-ark.svg)](https://pypi.org/project/patronus-ark/)
-[![Docs](https://img.shields.io/badge/docs-patronus--ark-blue)](https://patronus-protect.github.io/patronus-security/)
-[![CI](https://github.com/patronus-protect/patronus-security/actions/workflows/ci.yml/badge.svg)](https://github.com/patronus-protect/patronus-security/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/license-GPL--3.0--only%20or%20Commercial-informational)](https://github.com/patronus-protect/patronus-security/blob/main/LICENSE)
+<p align="center">
+  <a href="https://crates.io/crates/patronus-ark"><img src="https://img.shields.io/crates/v/patronus-ark.svg?style=flat-square&logo=rust&logoColor=white" alt="crates.io"></a>
+  <a href="https://pypi.org/project/patronus-ark/"><img src="https://img.shields.io/pypi/v/patronus-ark.svg?style=flat-square&logo=pypi&logoColor=white" alt="PyPI"></a>
+  <a href="https://pypi.org/project/patronus-ark/"><img src="https://img.shields.io/pypi/pyversions/patronus-ark.svg?style=flat-square&logo=python&logoColor=white" alt="Python 3.11+"></a>
+  <a href="https://patronus-protect.github.io/patronus-security/"><img src="https://img.shields.io/badge/docs-patronus--ark-38bdf8?style=flat-square" alt="Documentation"></a>
+  <a href="https://github.com/patronus-protect/patronus-security/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/patronus-protect/patronus-security/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
+  <a href="https://github.com/patronus-protect/patronus-security/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0--only%20or%20commercial-34d399?style=flat-square" alt="License: GPL-3.0-only or commercial"></a>
+</p>
+
+# Patronus Ark
 
 **Hybrid Rust/Python security scanners for prompt injection, DLP, PII, and agentic tool risks.**
 
