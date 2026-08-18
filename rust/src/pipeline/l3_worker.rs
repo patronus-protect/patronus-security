@@ -1537,8 +1537,18 @@ mod tests {
             test_l3_candidate(0, 4, "threat"),
         ];
         let chunk_outputs = vec![
-            test_l2_chunk_output(0, 4, "injection", true),
-            test_l2_chunk_output(0, 4, "threat", true),
+            {
+                let mut output = test_l2_chunk_output(0, 4, "injection", true);
+                output.token_ids = vec![1, 2, 3];
+                output.tokenizer_family = "mmbert".to_string();
+                output
+            },
+            {
+                let mut output = test_l2_chunk_output(0, 4, "threat", true);
+                output.token_ids = vec![1, 2, 3];
+                output.tokenizer_family = "mmbert".to_string();
+                output
+            },
         ];
         let mut injection = test_l3_spec("rq-unified", "injection", 1, execution.clone());
         injection.l3_candidates = candidates.clone();

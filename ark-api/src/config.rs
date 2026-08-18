@@ -126,7 +126,9 @@ impl Config {
     /// Effective gate matrix for a given key: its own override, else the
     /// pipeline-wide default.
     pub fn gates_for(&self, key: &ApiKeyConfig) -> ScanGateMatrix {
-        key.gates.clone().unwrap_or_else(|| self.default_gates.clone())
+        key.gates
+            .clone()
+            .unwrap_or_else(|| self.default_gates.clone())
     }
 }
 
@@ -172,18 +174,16 @@ impl Config {
                 path: path.to_path_buf(),
                 source,
             })?;
-        let json_value = serde_json::to_value(yaml_value).map_err(|source| {
-            ConfigError::ParseStructure {
+        let json_value =
+            serde_json::to_value(yaml_value).map_err(|source| ConfigError::ParseStructure {
                 path: path.to_path_buf(),
                 source,
-            }
-        })?;
-        let raw: RawConfig = serde_json::from_value(json_value).map_err(|source| {
-            ConfigError::ParseStructure {
+            })?;
+        let raw: RawConfig =
+            serde_json::from_value(json_value).map_err(|source| ConfigError::ParseStructure {
                 path: path.to_path_buf(),
                 source,
-            }
-        })?;
+            })?;
         raw.into_config()
     }
 }

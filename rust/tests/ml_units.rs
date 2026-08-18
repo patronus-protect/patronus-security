@@ -353,4 +353,3 @@ mod tokenizer_parity_and_compat {
         let _ = fs::remove_dir_all(dir);
     }
 }
-

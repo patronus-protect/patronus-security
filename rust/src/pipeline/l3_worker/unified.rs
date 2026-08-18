@@ -1132,8 +1132,8 @@ pub fn unified_coalescing_snapshot(categories: &[&str]) -> UnifiedCoalescingSnap
             source_model: candidate.source_model.clone(),
             embedding: Vec::new(),
             embedding_space: String::new(),
-            token_ids: Vec::new(),
-            tokenizer_family: String::new(),
+            token_ids: vec![1, 2, 3],
+            tokenizer_family: "mmbert".to_string(),
         })
         .collect::<Vec<_>>();
     let request_text = Arc::<str>::from("x".repeat(categories.len() * 100 + 80));

@@ -44,15 +44,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // than a bare file path); `PersistentCacheConfig::storage_location` wants
     // the redb database file itself, so append a fixed filename.
     let cache_config = ExactCacheConfig {
-        persistent: config
-            .cache_dir
-            .clone()
-            .map(|dir| PersistentCacheConfig {
-                storage_location: dir.join("decisions.redb"),
-                write_mode: patronus_ark::CacheWriteMode::Async,
-                write_behind: Default::default(),
-                encryption: None,
-            }),
+        persistent: config.cache_dir.clone().map(|dir| PersistentCacheConfig {
+            storage_location: dir.join("decisions.redb"),
+            write_mode: patronus_ark::CacheWriteMode::Async,
+            write_behind: Default::default(),
+            encryption: None,
+        }),
         ..Default::default()
     };
     let mut gateway = SecurityGateway::try_with_download_categories_and_cache(
@@ -76,7 +73,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let protected = Router::new()
         .route("/v1/scan", post(routes::scan::submit_scan))
-        .route("/v1/scan/:request_id/events", get(routes::scan::scan_events))
+        .route(
+            "/v1/scan/:request_id/events",
+            get(routes::scan::scan_events),
+        )
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             auth::require_api_key,

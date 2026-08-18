@@ -70,8 +70,14 @@ impl AppState {
     pub fn subscribe(
         &self,
         request_id: &str,
-    ) -> Option<(Vec<QueuedSecurityEvent>, broadcast::Receiver<QueuedSecurityEvent>)> {
-        let channels = self.channels.lock().expect("channel registry mutex poisoned");
+    ) -> Option<(
+        Vec<QueuedSecurityEvent>,
+        broadcast::Receiver<QueuedSecurityEvent>,
+    )> {
+        let channels = self
+            .channels
+            .lock()
+            .expect("channel registry mutex poisoned");
         let channel = channels.get(request_id)?;
         Some((channel.buffer.clone(), channel.sender.subscribe()))
     }

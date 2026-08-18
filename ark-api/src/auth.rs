@@ -26,7 +26,10 @@ pub async fn require_api_key(
     };
 
     let digest = Sha256::digest(token.as_bytes());
-    let digest_hex = digest.iter().map(|b| format!("{b:02x}")).collect::<String>();
+    let digest_hex = digest
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect::<String>();
 
     let matched = state
         .config
@@ -37,7 +40,9 @@ pub async fn require_api_key(
     match matched {
         Some(key) => {
             tracing::debug!(key = %key.name, "authenticated request");
-            request.extensions_mut().insert(AuthenticatedKey(key.clone()));
+            request
+                .extensions_mut()
+                .insert(AuthenticatedKey(key.clone()));
             next.run(request).await
         }
         None => (StatusCode::UNAUTHORIZED, "invalid api key").into_response(),
