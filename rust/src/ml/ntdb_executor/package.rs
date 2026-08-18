@@ -79,6 +79,12 @@ pub struct L2ChunkOutput {
     pub embedding: Vec<f32>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub embedding_space: String,
+    /// Pre-computed token IDs from L2 chunk tokenization passed to L3 to eliminate
+    /// redundant re-tokenization.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub token_ids: Vec<u32>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub tokenizer_family: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -301,6 +307,8 @@ impl NtdbPackage {
                             .minilm
                             .shared_embedder_identity()
                             .unwrap_or("unknown-l2-encoder"),
+                        self.manifest.minilm.is_l3_tokenizer_compatible(),
+                        self.manifest.minilm.tokenizer_family.as_deref(),
                         operating_point,
                     )?;
                     output.chunk_promote_scores = scores;
@@ -639,6 +647,8 @@ fn chunk_promotions(
     feature_by_name: &HashMap<String, Vec<f32>>,
     embedding_dim: usize,
     embedding_space: &str,
+    is_l3_tokenizer_compatible: bool,
+    tokenizer_family: Option<&str>,
     operating_point: NtdbOperatingPoint,
 ) -> NtdbResult<(Vec<Option<f32>>, Vec<L3Candidate>, Vec<L2ChunkOutput>)> {
     let mut scores = Vec::with_capacity(prepared.chunks.len());
@@ -679,6 +689,14 @@ fn chunk_promotions(
         let mut embedding =
             prepared.raw_embeddings[index * embedding_dim..(index + 1) * embedding_dim].to_vec();
         normalize_embedding(&mut embedding);
+        let (token_ids, tok_family) = if is_l3_tokenizer_compatible {
+            (
+                chunk.token_ids.clone(),
+                tokenizer_family.unwrap_or("mmbert").to_string(),
+            )
+        } else {
+            (Vec::new(), String::new())
+        };
         chunk_outputs.push(l2_chunk_output(
             chunk.byte_span,
             task,
@@ -686,6 +704,8 @@ fn chunk_promotions(
             &output,
             embedding,
             embedding_space,
+            token_ids,
+            tok_family,
         ));
     }
     let candidates = promoted_chunk_candidates(&prepared.chunks, &scores, &thresholds);
@@ -699,6 +719,8 @@ fn l2_chunk_output(
     output: &ScoreOutput,
     embedding: Vec<f32>,
     embedding_space: &str,
+    token_ids: Vec<u32>,
+    tokenizer_family: String,
 ) -> L2ChunkOutput {
     let (class_name, confidence) = if task == "binary_promote"
         || (label_index(labels, "benign").is_some()
@@ -749,6 +771,8 @@ fn l2_chunk_output(
         source_model: String::new(),
         embedding,
         embedding_space: embedding_space.to_string(),
+        token_ids,
+        tokenizer_family,
     }
 }
 

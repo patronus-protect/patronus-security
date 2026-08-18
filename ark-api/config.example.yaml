@@ -1,0 +1,71 @@
+# Copy to config.yaml, generate a real key with:
+#   printf '%s' "<your-secret-token>" | sha256sum
+# and mount this file into the container at /etc/ark-api/config.yaml.
+
+server:
+  bind: "0.0.0.0:8080"
+  max_upload_mb: 25
+
+auth:
+  keys:
+    - name: "slack-workspace-acme"
+      # sha256 hex digest of the raw bearer token clients send as
+      # `Authorization: Bearer <token>`. Never store the raw token here.
+      key_hash: "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      # Omit `categories` to allow every category listed under `pipeline.categories`.
+      categories: ["injection", "dlp", "pii"]
+      # Optional per-key gate override. Falls back to `pipeline.gates` when
+      # omitted. Same shape as `pipeline.gates` below.
+      # gates:
+      #   l3: false
+
+pipeline:
+  categories: ["injection", "dlp", "pii"]
+  max_level: "L2"
+  model_dir: "/data/models"
+  # Assets are baked into the image at build time (see Dockerfile); leave
+  # this false in production so a misconfigured deployment fails fast
+  # instead of silently downloading models at request time.
+  download_files: false
+
+  # Default execution gates for every scan (overridable per API key above).
+  # Mirrors `patronus_ark::ScanGateMatrix`: `l1`/`l2`/`l3` are top-level
+  # on/off switches (omit for "enabled"), `models` disables individual
+  # native scanners or models by their result `model` name (e.g.
+  # `native:mcp_runtime_risk`), and `conditional` is the deep gate logic —
+  # arbitrary `all`/`any`/`not` trees of `metadata`/`result` predicates that
+  # enable or disable an L2/L3 pipeline based on request metadata or an
+  # already-completed L1/L2 result, optionally overriding that pipeline's L3
+  # execution policy when the condition matches.
+  gates:
+    l1: true
+    l2: true
+    l3: true
+    models:
+      # Disable one specific native scanner while leaving its category on.
+      native:mcp_runtime_risk: false
+    conditional:
+      # Only run the (expensive) L3 injection classifier once L1 already
+      # flagged something suspicious for this request.
+      - level: "L3"
+        pipeline: "injection"
+        when:
+          any:
+            - result:
+                pipeline: "injection"
+                classes: ["instruction_override", "instruction_leak"]
+                min_confidence: 0.5
+            - metadata:
+                path: "source"
+                equals: "slack_file_upload"
+      # Skip DLP's L2 pass entirely for a caller-tagged low-risk channel.
+      - level: "L2"
+        pipeline: "dlp"
+        when:
+          not:
+            metadata:
+              path: "channel_risk"
+              equals: "low"
+
+cache:
+  dir: "/data/cache"

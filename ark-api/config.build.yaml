@@ -1,0 +1,16 @@
+# Used only by the Docker build's asset-warmup stage (`ark-api --warmup-only`)
+# to fetch model assets into the image. Never shipped or run as a server.
+
+server:
+  bind: "0.0.0.0:8080"
+
+auth:
+  keys:
+    - name: "build-time-placeholder"
+      key_hash: "sha256:3d46dab01df11228e2ccf88613ed995487c65cba309568731273f0988e5416b1"
+
+pipeline:
+  categories: ["injection", "dlp", "pii"]
+  max_level: "L2"
+  model_dir: "/data/models"
+  download_files: true

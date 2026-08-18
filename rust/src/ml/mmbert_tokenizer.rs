@@ -50,7 +50,7 @@ impl PartialOrd for MergeCandidate {
     }
 }
 
-pub(crate) struct MmbertPairTokenizer {
+pub struct MmbertPairTokenizer {
     chars: HashMap<char, u32>,
     bytes: [u32; 256],
     merges: HashMap<u64, Merge>,
@@ -131,6 +131,19 @@ impl MmbertPairTokenizer {
             unknown,
             piece_cache: Mutex::new(HashMap::new()),
         })
+    }
+
+    pub(crate) fn bos(&self) -> u32 {
+        self.bos
+    }
+
+    pub(crate) fn eos(&self) -> u32 {
+        self.eos
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn unknown(&self) -> u32 {
+        self.unknown
     }
 
     pub(crate) fn encode(&self, text: &str) -> Vec<u32> {

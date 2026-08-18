@@ -40,6 +40,7 @@ type L3ModelHandle = Arc<Mutex<LazyOnnxTextClassifier>>;
 type DynamicPiiHandle = Arc<Mutex<DynamicPiiRuntime>>;
 type UnifiedModelHandle = Arc<Mutex<LazyUnifiedOnnxClassifier>>;
 const L3_OVERLAP_TOKENS: usize = 32;
+pub(super) const L3_DIRECT_CONTENT_TOKEN_LIMIT: usize = 254;
 const L3_IDLE_SWEEP_INTERVAL: Duration = Duration::from_secs(30);
 /// Minimum L3 confidence for an `injection`/`threat` positive to stop the whole request.
 const REQUEST_WIDE_EARLY_EXIT_CONFIDENCE: f64 = 0.93;
@@ -721,16 +722,25 @@ fn token_chunks_from_l2_outputs(spec: &L3JobSpec) -> Result<Option<Vec<TokenText
         return Ok(None);
     }
 
-    let mut spans = spec
-        .l2_chunk_outputs
-        .iter()
-        .map(|output| output.span)
-        .collect::<Vec<_>>();
-    spans.sort_by_key(|span| (span.start, span.end));
-    spans.dedup_by_key(|span| (span.start, span.end));
+    let mut outputs = spec.l2_chunk_outputs.to_vec();
+    outputs.sort_by_key(|output| (output.span.start, output.span.end));
 
-    let mut chunks = Vec::with_capacity(spans.len());
-    for span in spans {
+    let mut chunks = Vec::with_capacity(outputs.len());
+    let mut index = 0;
+    while index < outputs.len() {
+        let span = outputs[index].span;
+        let mut group_end = index + 1;
+        while group_end < outputs.len() && outputs[group_end].span == span {
+            group_end += 1;
+        }
+        let Some(output) = outputs[index..group_end]
+            .iter()
+            .find(|output| direct_l3_token_handoff_usable(output))
+        else {
+            // Re-plan the complete document with the L3 tokenizer. Its model-backed
+            // chunker applies the configured overlap and cannot truncate an L2 span.
+            return Ok(None);
+        };
         let text = spec.text.get(span.start..span.end).ok_or_else(|| {
             format!(
                 "L2 chunk span {}..{} is not a valid source text range",
@@ -741,9 +751,18 @@ fn token_chunks_from_l2_outputs(spec: &L3JobSpec) -> Result<Option<Vec<TokenText
             text: text.to_string(),
             start_byte: span.start,
             end_byte: span.end,
+            token_ids: output.token_ids.clone(),
+            tokenizer_family: output.tokenizer_family.clone(),
         });
+        index = group_end;
     }
     Ok(Some(chunks))
+}
+
+fn direct_l3_token_handoff_usable(output: &L2ChunkOutput) -> bool {
+    !output.token_ids.is_empty()
+        && output.token_ids.len() <= L3_DIRECT_CONTENT_TOKEN_LIMIT
+        && output.tokenizer_family.eq_ignore_ascii_case("mmbert")
 }
 
 fn select_fair_job(jobs: &[L3WorkerJob], scheduler: &mut FairSchedulerState) -> usize {
@@ -1424,7 +1443,10 @@ mod tests {
             ScanExecution::new(SecurityLevel::L3),
         );
         spec.text = Arc::<str>::from("safe prefix ATTACK_CHUNK safe suffix");
-        spec.l2_chunk_outputs = vec![test_l2_chunk_output(12, 24, "threat", true)].into();
+        let mut l2_output = test_l2_chunk_output(12, 24, "threat", true);
+        l2_output.token_ids = vec![42];
+        l2_output.tokenizer_family = "mmbert".to_string();
+        spec.l2_chunk_outputs = vec![l2_output].into();
         spec.l3_candidates = vec![test_l3_candidate(12, 24, "threat")];
 
         let job = worker
@@ -1438,6 +1460,52 @@ mod tests {
         assert_eq!(chunks[0].text, "ATTACK_CHUNK");
         assert_eq!(chunks[0].start_byte, 12);
         assert_eq!(chunks[0].end_byte, 24);
+        assert_eq!(chunks[0].token_ids, [42]);
+    }
+
+    #[test]
+    fn invalid_l2_token_handoff_forces_model_backed_rechunking() {
+        for (token_ids, tokenizer_family) in [
+            (Vec::new(), "mmbert"),
+            (vec![1; L3_DIRECT_CONTENT_TOKEN_LIMIT + 1], "mmbert"),
+            (vec![1], "modernbert"),
+        ] {
+            let mut spec = test_l3_spec(
+                "rq-invalid-handoff",
+                "threat",
+                1,
+                ScanExecution::new(SecurityLevel::L3),
+            );
+            let mut output = test_l2_chunk_output(0, 4, "threat", true);
+            output.token_ids = token_ids;
+            output.tokenizer_family = tokenizer_family.to_string();
+            spec.l2_chunk_outputs = vec![output].into();
+
+            assert!(token_chunks_from_l2_outputs(&spec).unwrap().is_none());
+        }
+    }
+
+    #[test]
+    fn valid_duplicate_l2_handoff_is_preferred_over_incompatible_output() {
+        let mut spec = test_l3_spec(
+            "rq-compatible-handoff",
+            "threat",
+            1,
+            ScanExecution::new(SecurityLevel::L3),
+        );
+        let incompatible = test_l2_chunk_output(0, 4, "threat", true);
+        let mut compatible = test_l2_chunk_output(0, 4, "injection", true);
+        compatible.token_ids = vec![7, 8];
+        compatible.tokenizer_family = "mmbert".to_string();
+        spec.l2_chunk_outputs = vec![incompatible, compatible].into();
+
+        let chunks = token_chunks_from_l2_outputs(&spec)
+            .unwrap()
+            .expect("a compatible output exists for the span");
+
+        assert_eq!(chunks.len(), 1);
+        assert_eq!(chunks[0].token_ids, [7, 8]);
+        assert_eq!(chunks[0].tokenizer_family, "mmbert");
     }
 
     #[test]
@@ -1593,6 +1661,8 @@ mod tests {
             source_model: source_pipeline.to_string(),
             embedding: Vec::new(),
             embedding_space: String::new(),
+            token_ids: Vec::new(),
+            tokenizer_family: String::new(),
         }
     }
 

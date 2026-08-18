@@ -259,3 +259,98 @@ mod ntdb_package {
         assert!(result.is_err());
     }
 }
+
+mod tokenizer_parity_and_compat {
+    use patronus_ark::ml::ntdb_executor::manifest::MiniLmManifest;
+    use patronus_ark::ml::ntdb_executor::test_util::RuntimeTokenizer;
+    use std::fs;
+
+    #[test]
+    fn manifest_evaluates_compat_l3_tokenizer_and_family() {
+        let manifest_mmbert: MiniLmManifest = serde_json::from_str(
+            r#"{
+                "embedding_matrix_file": "matrix.f16",
+                "vocab_size": 100,
+                "embedding_dim": 64,
+                "content_tokens_per_chunk": 256,
+                "tokenizer_family": "mmbert"
+            }"#,
+        )
+        .unwrap();
+        assert!(manifest_mmbert.is_l3_tokenizer_compatible());
+
+        let manifest_flag: MiniLmManifest = serde_json::from_str(
+            r#"{
+                "embedding_matrix_file": "matrix.f16",
+                "vocab_size": 100,
+                "embedding_dim": 64,
+                "content_tokens_per_chunk": 256,
+                "compat_l3_tokenizer": true
+            }"#,
+        )
+        .unwrap();
+        assert!(manifest_flag.is_l3_tokenizer_compatible());
+
+        let manifest_legacy_name: MiniLmManifest = serde_json::from_str(
+            r#"{
+                "embedding_matrix_file": "matrix.f16",
+                "vocab_size": 100,
+                "embedding_dim": 64,
+                "content_tokens_per_chunk": 256,
+                "compab_l3_tokenizer": true
+            }"#,
+        )
+        .unwrap();
+        assert!(manifest_legacy_name.is_l3_tokenizer_compatible());
+
+        let manifest_incompatible: MiniLmManifest = serde_json::from_str(
+            r#"{
+                "embedding_matrix_file": "matrix.f16",
+                "vocab_size": 100,
+                "embedding_dim": 64,
+                "content_tokens_per_chunk": 256,
+                "tokenizer_family": "modernbert",
+                "compat_l3_tokenizer": false
+            }"#,
+        )
+        .unwrap();
+        assert!(!manifest_incompatible.is_l3_tokenizer_compatible());
+
+        let manifest_explicit_false_with_mmbert: MiniLmManifest = serde_json::from_str(
+            r#"{
+                "embedding_matrix_file": "matrix.f16",
+                "vocab_size": 100,
+                "embedding_dim": 64,
+                "content_tokens_per_chunk": 254,
+                "tokenizer_family": "mmbert",
+                "compat_l3_tokenizer": false
+            }"#,
+        )
+        .unwrap();
+        assert!(!manifest_explicit_false_with_mmbert.is_l3_tokenizer_compatible());
+    }
+
+    #[test]
+    fn tokenizer_store_shares_arc_across_calls() {
+        let dir = std::env::temp_dir().join(format!("patronus-tok-store-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(
+            dir.join("tokenizer.json"),
+            r#"{"version":"1.0","truncation":null,"padding":null,"added_tokens":[],"normalizer":null,"pre_tokenizer":null,"post_processor":null,"decoder":null,"model":{"type":"BPE","dropout":null,"unk_token":null,"continuing_subword_prefix":null,"end_of_word_suffix":null,"fuse_unk":null,"byte_fallback":false,"vocab":{"[PAD]":0,"hello":1},"merges":[]}}"#,
+        )
+        .unwrap();
+
+        let tok1 = RuntimeTokenizer::load(&dir).unwrap();
+        let tok2 = RuntimeTokenizer::load(&dir).unwrap();
+
+        match (tok1, tok2) {
+            (RuntimeTokenizer::HuggingFace(a), RuntimeTokenizer::HuggingFace(b)) => {
+                assert!(std::sync::Arc::ptr_eq(&a, &b));
+            }
+            _ => panic!("expected HuggingFace tokenizer"),
+        }
+
+        let _ = fs::remove_dir_all(dir);
+    }
+}
+

@@ -1,0 +1,23 @@
+# Self-hosted reference deployment. Run from the repo root:
+#   docker compose -f ark-api/docker-compose.yml build
+#   docker compose -f ark-api/docker-compose.yml up -d
+services:
+  ark-api:
+    build:
+      context: ..
+      dockerfile: ark-api/Dockerfile
+    image: ark-api:local
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config.yaml:/etc/ark-api/config.yaml:ro
+      - ark-cache:/data/cache
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  ark-cache:

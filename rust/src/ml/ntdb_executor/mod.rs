@@ -30,6 +30,7 @@ pub mod test_util {
     };
     pub use super::lightgbm::Tree;
     pub use super::runtime::unit_left_dot;
+    pub use super::tokenizer::RuntimeTokenizer;
 }
 
 pub type NtdbResult<T> = Result<T, Box<dyn Error + Send + Sync>>;

@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use super::{ntdb_error, NtdbResult};
 
-const NTDB_L2_CONTENT_TOKENS_PER_CHUNK: usize = 256;
+const NTDB_L2_CONTENT_TOKENS_PER_CHUNK: usize = 254;
 
 #[derive(Debug, Deserialize)]
 pub struct PackageManifest {
@@ -24,8 +24,13 @@ pub struct PackageManifest {
 
 impl PackageManifest {
     pub fn normalize_runtime_defaults(&mut self) {
-        self.chunk_size = NTDB_L2_CONTENT_TOKENS_PER_CHUNK;
-        self.minilm.content_tokens_per_chunk = NTDB_L2_CONTENT_TOKENS_PER_CHUNK;
+        let target_size = if self.minilm.is_l3_tokenizer_compatible() {
+            NTDB_L2_CONTENT_TOKENS_PER_CHUNK
+        } else {
+            256
+        };
+        self.chunk_size = target_size;
+        self.minilm.content_tokens_per_chunk = target_size;
     }
 
     pub fn validate(&self) -> NtdbResult<()> {
@@ -73,10 +78,20 @@ pub struct MiniLmManifest {
     pub source_model_path: Option<String>,
     pub model: Option<String>,
     pub tokenizer_family: Option<String>,
+    #[serde(alias = "compat_l3_tokenizer")]
     pub compab_l3_tokenizer: Option<bool>,
 }
 
 impl MiniLmManifest {
+    pub fn is_l3_tokenizer_compatible(&self) -> bool {
+        if let Some(compat) = self.compab_l3_tokenizer {
+            return compat;
+        }
+        self.tokenizer_family
+            .as_deref()
+            .is_some_and(|family| family.eq_ignore_ascii_case("mmbert"))
+    }
+
     pub fn shared_embedder_identity(&self) -> Option<&str> {
         self.model
             .as_deref()
@@ -327,6 +342,78 @@ mod tests {
 
         assert_eq!(manifest.chunk_size, 256);
         assert_eq!(manifest.minilm.content_tokens_per_chunk, 256);
+        manifest.validate().unwrap();
+    }
+
+    #[test]
+    fn mmbert_manifest_normalizes_to_254_content_tokens_at_runtime() {
+        let mut manifest: PackageManifest = serde_json::from_str(
+            r#"{
+                "format": "ntdb_model_package",
+                "version": 2,
+                "runtime_contract": "raw_text_to_ntdb_outputs",
+                "task": {"type": "binary", "labels": ["benign", "attack"]},
+                "chunk_size": 256,
+                "tokenizer_dir": "tokenizer",
+                "minilm": {
+                    "embedding_matrix_file": "embedding_matrix.f16",
+                    "vocab_size": 100,
+                    "embedding_dim": 64,
+                    "content_tokens_per_chunk": 256,
+                    "source_model_path": "test-embedder",
+                    "model": null,
+                    "tokenizer_family": "mmbert"
+                },
+                "feature_contract": {
+                    "local_feature_order": [],
+                    "global_feature_order": []
+                },
+                "runtime": {
+                    "shared_preprocessing": ["tokenization"],
+                    "parallel_stages": [],
+                    "ordering": "manifest_order"
+                },
+                "heads": [{
+                    "id": "h",
+                    "type": "binary",
+                    "task": {"type": "binary", "labels": ["benign", "attack"]},
+                    "classifiers": [],
+                    "feature_order": [],
+                    "static_dir": "heads/h",
+                    "static_components": [],
+                    "projection_onnx": null,
+                    "ntdb_head_onnx": "heads/h/ntdb_head.onnx",
+                    "model_type": "sequential_ntdb",
+                    "reliability": {
+                        "enabled": false,
+                        "hidden_dim": 0,
+                        "execution": "inside_onnx_model"
+                    }
+                }],
+                "aggregators": [{
+                    "id": "a",
+                    "type": "binary",
+                    "task": {"type": "binary", "labels": ["benign", "attack"]},
+                    "onnx": "aggregators/a.onnx",
+                    "model_type": "sequential_ntdb",
+                    "input_feature_order": [],
+                    "global_feature_order": [],
+                    "reliability": {
+                        "enabled": false,
+                        "hidden_dim": 0,
+                        "execution": "inside_onnx_model"
+                    },
+                    "metric_sweep": null,
+                    "promote_router": null
+                }]
+            }"#,
+        )
+        .unwrap();
+
+        manifest.normalize_runtime_defaults();
+
+        assert_eq!(manifest.chunk_size, 254);
+        assert_eq!(manifest.minilm.content_tokens_per_chunk, 254);
         manifest.validate().unwrap();
     }
 }

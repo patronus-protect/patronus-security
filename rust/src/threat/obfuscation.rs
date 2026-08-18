@@ -42,6 +42,56 @@ pub(super) fn token_contains_unicode_confusable(token: &str) -> bool {
     has_ascii_letter && has_confusable
 }
 
+pub(super) fn unicode_confusable_skeleton(text: &str) -> String {
+    text.chars()
+        .map(|ch| confusable_ascii(ch).unwrap_or(ch))
+        .collect()
+}
+
+fn confusable_ascii(ch: char) -> Option<char> {
+    let cp = ch as u32;
+    if (0xFF21..=0xFF3A).contains(&cp) {
+        return char::from_u32(b'A' as u32 + cp - 0xFF21);
+    }
+    if (0xFF41..=0xFF5A).contains(&cp) {
+        return char::from_u32(b'a' as u32 + cp - 0xFF41);
+    }
+    Some(match cp {
+        0x0430 | 0x03B1 | 0x0251 => 'a',
+        0x0410 | 0x0391 => 'A',
+        0x0432 | 0x03B2 => 'b',
+        0x0412 | 0x0392 => 'B',
+        0x0441 | 0x03F2 => 'c',
+        0x0421 => 'C',
+        0x0435 | 0x03B5 => 'e',
+        0x0415 | 0x0395 => 'E',
+        0x0261 => 'g',
+        0x043D | 0x03B7 => 'h',
+        0x041D | 0x0397 => 'H',
+        0x0406 | 0x0456 | 0x03B9 | 0x0131 => 'i',
+        0x0399 => 'I',
+        0x0458 => 'j',
+        0x043A | 0x03BA => 'k',
+        0x041A | 0x039A => 'K',
+        0x0142 => 'l',
+        0x043C => 'm',
+        0x041C | 0x039C => 'M',
+        0x03BD => 'v',
+        0x043E | 0x03BF | 0x0254 => 'o',
+        0x041E | 0x039F => 'O',
+        0x0440 | 0x03C1 => 'p',
+        0x0420 | 0x03A1 => 'P',
+        0x0455 => 's',
+        0x0442 | 0x03C4 => 't',
+        0x0422 | 0x03A4 => 'T',
+        0x0443 | 0x03C5 => 'y',
+        0x03A5 => 'Y',
+        0x0445 | 0x03C7 => 'x',
+        0x0425 | 0x03A7 => 'X',
+        _ => return None,
+    })
+}
+
 pub(super) fn is_confusable_codepoint(cp: u32) -> bool {
     if (0xFF21..=0xFF5A).contains(&cp) {
         return true;
@@ -112,11 +162,6 @@ pub(super) fn is_confusable_codepoint(cp: u32) -> bool {
             | 0x0261
             | 0x0274
             | 0x0280
-            | 0x200B
-            | 0x200C
-            | 0x200D
-            | 0x2060
-            | 0xFEFF
     )
 }
 
