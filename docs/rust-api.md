@@ -35,8 +35,7 @@ pub use external_l1::{ExternalL1Detector, ExternalL1Input};
 pub use normalization::{canonical_security_text_v1, normalize_text, TextNormalizationConfig};
 pub use pipeline::{Pipeline, SecurityGateway};
 pub use post_prediction::{
-    CredentialTemplateHook, LocalPathPersonHook, PostPredictionHook,
-    PrivateNetworkDiagnosticHook,
+    CredentialTemplateHook, LocalPathPersonHook, PostPredictionHook, PrivateNetworkDiagnosticHook,
 };
 pub use types::{
     ConditionalPipelineGate, DecisionCandidate, DecisionEnvelope, DecisionProvenance,
