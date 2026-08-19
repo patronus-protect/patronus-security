@@ -1,6 +1,6 @@
 [package]
 name = "patronus-ark"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2021"
 authors = ["Casdo Labs GmbH <team@patronus.studio>"]
 description = "Hybrid Rust security scanners for prompt injection, DLP, PII, and agentic tool risks."

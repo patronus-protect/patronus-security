@@ -273,6 +273,8 @@ mod tests {
             source_order,
             embedding,
             embedding_space: "test-space".to_string(),
+            token_ids: Vec::new(),
+            tokenizer_family: String::new(),
         }
     }
 

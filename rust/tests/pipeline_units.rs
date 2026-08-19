@@ -625,6 +625,8 @@ mod ntdb_l2_results {
                     source_model: "injection".to_string(),
                     embedding: Vec::new(),
                     embedding_space: String::new(),
+                    token_ids: Vec::new(),
+                    tokenizer_family: String::new(),
                 },
                 L2ChunkOutput {
                     span: ByteSpan {
@@ -640,6 +642,8 @@ mod ntdb_l2_results {
                     source_model: "injection".to_string(),
                     embedding: Vec::new(),
                     embedding_space: String::new(),
+                    token_ids: Vec::new(),
+                    tokenizer_family: String::new(),
                 },
             ],
         };

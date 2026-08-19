@@ -355,6 +355,8 @@ fn public_l2_chunk_outputs(outputs: &[L2ChunkOutput], source_pipeline: &str) -> 
             source_model: output.source_model.clone(),
             embedding: Vec::new(),
             embedding_space: String::new(),
+            token_ids: Vec::new(),
+            tokenizer_family: String::new(),
         })
         .collect()
 }
@@ -515,6 +517,8 @@ mod tests {
                 source_model: "threat".to_string(),
                 embedding: vec![1.0, 2.0, 3.0],
                 embedding_space: "minilm-test".to_string(),
+                token_ids: Vec::new(),
+                tokenizer_family: String::new(),
             }],
         };
 

@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 
 use kitoken::{InsertionPosition, Kitoken};
 use tokenizers::Tokenizer;
 
-use crate::{diagnostics::PhaseMetricScope, ml::mmbert_tokenizer::MmbertPairTokenizer};
+use crate::{
+    diagnostics::PhaseMetricScope,
+    ml::{mmbert_tokenizer::MmbertPairTokenizer, tokenizer_store::global_tokenizer_store},
+};
 
 use super::{ntdb_error, NtdbResult};
 
@@ -21,18 +24,20 @@ pub(super) struct EncodedTokenChunk {
     pub(super) byte_span: (usize, usize),
 }
 
-pub(super) enum RuntimeTokenizer {
-    Compact(Kitoken),
-    MmbertPair(MmbertPairTokenizer),
-    HuggingFace(Tokenizer),
+#[derive(Clone)]
+pub enum RuntimeTokenizer {
+    Compact(Arc<Kitoken>),
+    MmbertPair(Arc<MmbertPairTokenizer>),
+    HuggingFace(Arc<Tokenizer>),
 }
 
 impl RuntimeTokenizer {
-    pub(super) fn load(dir: impl AsRef<Path>) -> NtdbResult<Self> {
+    pub fn load(dir: impl AsRef<Path>) -> NtdbResult<Self> {
         let dir = dir.as_ref();
+        let store = global_tokenizer_store();
         let compact_path = dir.join("tokenizer.kit");
         if compact_path.exists() {
-            match Kitoken::from_file(&compact_path) {
+            match store.load_kitoken(&compact_path) {
                 Ok(tokenizer) => return Ok(Self::Compact(tokenizer)),
                 Err(err) => log::warn!(
                     "failed to load compact NTDB tokenizer {}; falling back to tokenizer.json: {err}",
@@ -43,7 +48,7 @@ impl RuntimeTokenizer {
 
         let mmbpe_path = dir.join("tokenizer.mmbpe");
         if mmbpe_path.exists() {
-            match MmbertPairTokenizer::from_file(&mmbpe_path) {
+            match store.load_mmbert(&mmbpe_path) {
                 Ok(tokenizer) => return Ok(Self::MmbertPair(tokenizer)),
                 Err(err) => log::warn!(
                     "failed to load mmBERT compact NTDB tokenizer {}; falling back to tokenizer.json: {err}",
@@ -53,7 +58,10 @@ impl RuntimeTokenizer {
         }
 
         let json_path = dir.join("tokenizer.json");
-        Ok(Self::HuggingFace(load_huggingface(&json_path)?))
+        store
+            .load_huggingface(&json_path)
+            .map(Self::HuggingFace)
+            .map_err(|err| ntdb_error(format!("failed to load NTDB tokenizer: {err}")))
     }
 
     pub(super) fn encode(&self, text: &str, add_special_tokens: bool) -> NtdbResult<EncodedText> {
@@ -202,13 +210,15 @@ pub(crate) fn convert_huggingface_to_compact(
 }
 
 fn validate_compact_tokenizer(json_path: &Path, compact_path: &Path) -> NtdbResult<()> {
-    let reference = RuntimeTokenizer::HuggingFace(load_huggingface(json_path)?);
-    let compact = RuntimeTokenizer::Compact(Kitoken::from_file(compact_path).map_err(|err| {
-        ntdb_error(format!(
-            "failed to validate compact tokenizer {}: {err}",
-            compact_path.display()
-        ))
-    })?);
+    let reference = RuntimeTokenizer::HuggingFace(Arc::new(load_huggingface(json_path)?));
+    let compact = RuntimeTokenizer::Compact(Arc::new(Kitoken::from_file(compact_path).map_err(
+        |err| {
+            ntdb_error(format!(
+                "failed to validate compact tokenizer {}: {err}",
+                compact_path.display()
+            ))
+        },
+    )?));
 
     const SMOKE_TEXTS: &[&str] = &[
         "",
@@ -576,7 +586,7 @@ mod tests {
             .unwrap();
         let mut tokenizer = Tokenizer::new(model);
         tokenizer.with_pre_tokenizer(Some(Whitespace));
-        let runtime = RuntimeTokenizer::HuggingFace(tokenizer);
+        let runtime = RuntimeTokenizer::HuggingFace(std::sync::Arc::new(tokenizer));
 
         let text = "hello world hello";
         let encoded = runtime.encode(text, false).unwrap();

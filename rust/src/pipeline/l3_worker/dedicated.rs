@@ -32,7 +32,7 @@ use super::super::{
 };
 use super::{
     elapsed_ms, publish_progress, publish_provisional, DynamicPiiHandle, L3ModelHandle,
-    L3WorkerInput, L3WorkerJob, L3WorkerState,
+    L3WorkerInput, L3WorkerJob, L3WorkerState, L3_DIRECT_CONTENT_TOKEN_LIMIT,
 };
 use crate::cache::{
     decision_output, merge_pii_spans, CacheCoordinator, CacheKey, CacheNamespace, CacheSource,
@@ -767,6 +767,8 @@ pub fn selected_l3_chunks_for_test(
                 start_byte: *start_byte,
                 end_byte: *end_byte,
                 text: (*text).to_string(),
+                token_ids: Vec::new(),
+                tokenizer_family: String::new(),
             })
             .collect(),
         &candidates,
@@ -1149,15 +1151,30 @@ fn infer_l3_chunk_exact(
 
     let lookup = exact_cache
         .get_or_compute_heads(key, || {
-            let raw = model
-                .lock()
-                .map_err(|err| format!("L3 model mutex poisoned: {err}"))?
-                .infer_raw(
-                    &chunk.text,
-                    job.execution.backend(),
-                    job.execution.onnx_runtime_options(),
-                )
-                .map_err(|err| err.to_string())?;
+            let raw = if !chunk.token_ids.is_empty()
+                && chunk.tokenizer_family.eq_ignore_ascii_case("mmbert")
+                && chunk.token_ids.len() <= L3_DIRECT_CONTENT_TOKEN_LIMIT
+            {
+                model
+                    .lock()
+                    .map_err(|err| format!("L3 model mutex poisoned: {err}"))?
+                    .infer_token_ids_raw(
+                        &chunk.token_ids,
+                        job.execution.backend(),
+                        job.execution.onnx_runtime_options(),
+                    )
+                    .map_err(|err| err.to_string())?
+            } else {
+                model
+                    .lock()
+                    .map_err(|err| format!("L3 model mutex poisoned: {err}"))?
+                    .infer_raw(
+                        &chunk.text,
+                        job.execution.backend(),
+                        job.execution.onnx_runtime_options(),
+                    )
+                    .map_err(|err| err.to_string())?
+            };
             Ok::<_, String>(vec![CachedHeadOutput {
                 head: CLASSIFICATION_HEAD.to_string(),
                 logits: raw.logits,
@@ -1439,6 +1456,8 @@ mod tests {
                 start_byte: index * 256,
                 end_byte: (index + 1) * 256,
                 text: index.to_string(),
+                token_ids: Vec::new(),
+                tokenizer_family: String::new(),
             })
             .collect::<Vec<_>>();
         let mut candidates = (0..10)
@@ -1484,6 +1503,8 @@ mod tests {
                 start_byte: index * 100,
                 end_byte: (index + 1) * 100,
                 text: index.to_string(),
+                token_ids: Vec::new(),
+                tokenizer_family: String::new(),
             })
             .collect::<Vec<_>>();
         let candidates = vec![
@@ -1533,11 +1554,15 @@ mod tests {
                 start_byte: 0,
                 end_byte: 100,
                 text: "repeat safe technical documentation".to_string(),
+                token_ids: Vec::new(),
+                tokenizer_family: String::new(),
             },
             TokenTextChunk {
                 start_byte: 100,
                 end_byte: 200,
                 text: "repeat safe technical documentation".to_string(),
+                token_ids: Vec::new(),
+                tokenizer_family: String::new(),
             },
         ];
         let candidates = vec![L3Candidate {
@@ -1618,6 +1643,8 @@ mod tests {
             source_order,
             embedding,
             embedding_space: "test-space".to_string(),
+            token_ids: Vec::new(),
+            tokenizer_family: String::new(),
         }
     }
 

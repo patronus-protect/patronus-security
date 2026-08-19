@@ -1375,6 +1375,8 @@ mod tests {
             source_model: source_pipeline.to_string(),
             embedding: Vec::new(),
             embedding_space: String::new(),
+            token_ids: Vec::new(),
+            tokenizer_family: String::new(),
         }
     }
 }

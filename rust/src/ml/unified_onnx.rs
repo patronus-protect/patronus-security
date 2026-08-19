@@ -4,11 +4,12 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use ort::{session::Session, value::Tensor};
-use tokenizers::Tokenizer;
 
 use crate::{ExecutionBackend, LabelScore, OnnxRuntimeOptions};
 
-use super::onnx::{configured_session_builder, l3_ttl, token_chunks, TokenTextChunk};
+use super::onnx::{
+    configured_session_builder, l3_ttl, token_chunks, RuntimeTokenizer, TokenTextChunk,
+};
 
 pub const UNIFIED_MODEL: &str = "unified-multitask-model-augmented-v3";
 pub const UNIFIED_ONNX_PATH: &str = "onnx/int8_int4_embeddings/model.onnx";
@@ -173,7 +174,6 @@ impl LazyUnifiedOnnxClassifier {
         for path in [
             UNIFIED_ONNX_PATH,
             "onnx/quantization_manifest.json",
-            "tokenizer.json",
             "tokenizer_config.json",
             "config.json",
         ] {
@@ -182,6 +182,13 @@ impl LazyUnifiedOnnxClassifier {
                     format!("missing unified L3 asset: {}", dir.join(path).display()).into(),
                 );
             }
+        }
+        if !dir.join("tokenizer.mmbpe").is_file() && !dir.join("tokenizer.json").is_file() {
+            return Err(format!(
+                "missing unified L3 tokenizer (neither tokenizer.mmbpe nor tokenizer.json found) in {}",
+                dir.display()
+            )
+            .into());
         }
         validate_bundle_contract(dir)?;
         Ok(Self {
@@ -241,6 +248,23 @@ impl LazyUnifiedOnnxClassifier {
             .as_mut()
             .ok_or("unified L3 model is not loaded")?
             .infer_raw(text)?;
+        self.last_used = Some(Instant::now());
+        Ok(output)
+    }
+
+    pub(crate) fn infer_token_ids_raw(
+        &mut self,
+        token_ids: &[u32],
+        backend: ExecutionBackend,
+        options: OnnxRuntimeOptions,
+    ) -> Result<UnifiedRawModelOutput, Box<dyn std::error::Error>> {
+        self.evict_expired();
+        self.ensure_loaded(backend, options)?;
+        let output = self
+            .loaded
+            .as_mut()
+            .ok_or("unified L3 model is not loaded")?
+            .infer_token_ids_raw(token_ids)?;
         self.last_used = Some(Instant::now());
         Ok(output)
     }
@@ -369,7 +393,7 @@ fn validate_bundle_contract(dir: &Path) -> Result<(), Box<dyn std::error::Error>
 }
 
 struct UnifiedOnnxClassifier {
-    tokenizer: Tokenizer,
+    tokenizer: RuntimeTokenizer,
     session: Session,
 }
 
@@ -385,8 +409,7 @@ impl UnifiedOnnxClassifier {
         backend: ExecutionBackend,
         options: OnnxRuntimeOptions,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        let tokenizer = Tokenizer::from_file(dir.join("tokenizer.json"))
-            .map_err(|error| format!("failed to load unified tokenizer: {error}"))?;
+        let tokenizer = RuntimeTokenizer::load(dir, "tokenizer.json")?;
         let (mut builder, _) = configured_session_builder(backend, Some(dir), options)?;
         let session = builder.commit_from_file(dir.join(UNIFIED_ONNX_PATH))?;
         let inputs = session_input_names(&session);
@@ -421,6 +444,67 @@ impl UnifiedOnnxClassifier {
             .ok_or_else(|| "unified L3 returned no raw output".into())
     }
 
+    pub(crate) fn infer_token_ids_raw(
+        &mut self,
+        token_ids: &[u32],
+    ) -> Result<UnifiedRawModelOutput, Box<dyn std::error::Error>> {
+        self.infer_token_ids_batch_raw(&[token_ids])?
+            .pop()
+            .ok_or_else(|| "unified L3 returned no raw output".into())
+    }
+
+    pub(crate) fn infer_token_ids_batch_raw(
+        &mut self,
+        batch_token_ids: &[&[u32]],
+    ) -> Result<Vec<UnifiedRawModelOutput>, Box<dyn std::error::Error>> {
+        if batch_token_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let batch = batch_token_ids.len();
+        let mut input_ids = Vec::with_capacity(batch * UNIFIED_MAX_LEN);
+        let mut attention_mask = Vec::with_capacity(batch * UNIFIED_MAX_LEN);
+        for tokens in batch_token_ids {
+            let (ids, mask, _) = self
+                .tokenizer
+                .encode_inputs_from_token_ids(tokens, UNIFIED_MAX_LEN);
+            input_ids.extend(ids);
+            attention_mask.extend(mask);
+        }
+        let shape = [batch, UNIFIED_MAX_LEN];
+        let outputs = self.session.run(ort::inputs![
+            "input_ids" => Tensor::from_array((shape, input_ids))?,
+            "attention_mask" => Tensor::from_array((shape, attention_mask))?,
+        ])?;
+        let mut results = (0..batch)
+            .map(|_| UnifiedRawModelOutput {
+                heads: HashMap::new(),
+            })
+            .collect::<Vec<_>>();
+        for head in HEADS {
+            let value = outputs
+                .get(head.output)
+                .ok_or_else(|| format!("unified L3 output '{}' is missing", head.output))?;
+            let (shape, values) = value.try_extract_tensor::<f32>()?;
+            let width = match head.kind {
+                HeadKind::Binary => 1,
+                _ => head.labels.len(),
+            };
+            if shape.as_ref() != [batch as i64, width as i64] || values.len() != batch * width {
+                return Err(format!(
+                    "unified L3 output '{}' has shape {shape:?}, expected [{batch}, {width}]",
+                    head.output
+                )
+                .into());
+            }
+            for (index, row) in values.chunks(width).enumerate() {
+                results[index]
+                    .heads
+                    .insert(head.id.to_string(), row.to_vec());
+            }
+        }
+        Ok(results)
+    }
+
     fn infer_batch_raw(
         &mut self,
         texts: &[String],
@@ -432,22 +516,7 @@ impl UnifiedOnnxClassifier {
         let mut input_ids = Vec::with_capacity(batch * UNIFIED_MAX_LEN);
         let mut attention_mask = Vec::with_capacity(batch * UNIFIED_MAX_LEN);
         for text in texts {
-            let encoding = self
-                .tokenizer
-                .encode(text.as_str(), true)
-                .map_err(|error| format!("failed to tokenize unified L3 input: {error}"))?;
-            let mut ids = encoding
-                .get_ids()
-                .iter()
-                .map(|value| i64::from(*value))
-                .collect();
-            let mut mask = encoding
-                .get_attention_mask()
-                .iter()
-                .map(|value| i64::from(*value))
-                .collect();
-            truncate_and_pad(&mut ids, UNIFIED_MAX_LEN, 0);
-            truncate_and_pad(&mut mask, UNIFIED_MAX_LEN, 0);
+            let (ids, mask, _) = self.tokenizer.encode_inputs(text, UNIFIED_MAX_LEN)?;
             input_ids.extend(ids);
             attention_mask.extend(mask);
         }
@@ -491,17 +560,10 @@ impl UnifiedOnnxClassifier {
         text: &str,
         overlap_tokens: usize,
     ) -> Result<Vec<TokenTextChunk>, Box<dyn std::error::Error>> {
-        let special_tokens = self
-            .tokenizer
-            .encode("", true)
-            .map_err(|error| format!("failed to tokenize unified L3 input: {error}"))?
-            .len();
+        let special_tokens = self.tokenizer.token_count("", true)?;
         let content_tokens = UNIFIED_MAX_LEN.saturating_sub(special_tokens).max(1);
         token_chunks(text, content_tokens, overlap_tokens, |value| {
-            self.tokenizer
-                .encode(value, false)
-                .map(|encoding| encoding.len())
-                .map_err(|error| format!("failed to tokenize unified L3 chunk: {error}").into())
+            self.tokenizer.token_count(value, false)
         })
     }
 }
@@ -659,11 +721,6 @@ fn session_output_names(session: &Session) -> Vec<&str> {
         .iter()
         .map(|output| output.name())
         .collect()
-}
-
-fn truncate_and_pad(values: &mut Vec<i64>, max_len: usize, pad: i64) {
-    values.truncate(max_len);
-    values.resize(max_len, pad);
 }
 
 #[cfg(feature = "test-util")]

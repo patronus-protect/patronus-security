@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use std::net::IpAddr;
+
 use crate::{EvidenceSpan, SecurityCategory};
 
 /// Post-prediction evidence filter. Predictions remain available for diagnostics;
@@ -14,6 +16,11 @@ pub struct LocalPathPersonHook;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct CredentialTemplateHook;
+
+/// Keeps private/local IP predictions for diagnostics while preventing their
+/// evidence spans from triggering redaction in network diagnostic output.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct PrivateNetworkDiagnosticHook;
 
 impl PostPredictionHook for CredentialTemplateHook {
     fn retain(&self, category: SecurityCategory, _text: &str, span: &EvidenceSpan) -> bool {
@@ -40,6 +47,43 @@ impl PostPredictionHook for LocalPathPersonHook {
         }
         !is_local_path_span(text, span)
     }
+}
+
+impl PostPredictionHook for PrivateNetworkDiagnosticHook {
+    fn retain(&self, category: SecurityCategory, text: &str, span: &EvidenceSpan) -> bool {
+        if category != SecurityCategory::Pii || !span.label.eq_ignore_ascii_case("IP_ADDRESS") {
+            return true;
+        }
+        !(is_private_or_local_ip(&span.text) && looks_like_network_diagnostic(text))
+    }
+}
+
+fn is_private_or_local_ip(value: &str) -> bool {
+    match value.parse::<IpAddr>() {
+        Ok(IpAddr::V4(address)) => {
+            address.is_private() || address.is_link_local() || address.is_loopback()
+        }
+        Ok(IpAddr::V6(address)) => {
+            address.is_unique_local() || address.is_unicast_link_local() || address.is_loopback()
+        }
+        Err(_) => false,
+    }
+}
+
+fn looks_like_network_diagnostic(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    [
+        "networkstate",
+        "network state",
+        "network diagnostic",
+        "local endpoint",
+        "private endpoint",
+        "network interface",
+        "interface address",
+        "lan address",
+    ]
+    .iter()
+    .any(|marker| lower.contains(marker))
 }
 
 fn is_local_path_span(text: &str, span: &EvidenceSpan) -> bool {
@@ -71,6 +115,7 @@ pub(crate) fn filter_evidence(
         .into_iter()
         .filter(|span| hook.retain(category, text, span))
         .filter(|span| CredentialTemplateHook.retain(category, text, span))
+        .filter(|span| PrivateNetworkDiagnosticHook.retain(category, text, span))
         .collect()
 }
 
@@ -113,7 +158,9 @@ fn shannon_entropy(value: &[u8]) -> f64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{filter_evidence, LocalPathPersonHook, PostPredictionHook};
+    use super::{
+        filter_evidence, LocalPathPersonHook, PostPredictionHook, PrivateNetworkDiagnosticHook,
+    };
     use crate::{EvidenceSpan, SecurityCategory};
 
     fn person(text: &str, start: usize) -> EvidenceSpan {
@@ -147,5 +194,45 @@ mod tests {
             }
         ));
         assert!(filter_evidence(SecurityCategory::Pii, path, vec![span]).is_empty());
+    }
+
+    #[test]
+    fn filters_private_ip_evidence_only_from_network_diagnostics() {
+        let private = EvidenceSpan {
+            label: "IP_ADDRESS".into(),
+            text: "192.168.178.96".into(),
+            score: 1.0,
+            start_byte: 41,
+            end_byte: 55,
+            start_char: 41,
+            end_char: 55,
+        };
+        let diagnostic = "NetworkState diagnostics: local endpoint 192.168.178.96";
+
+        assert!(!PrivateNetworkDiagnosticHook.retain(SecurityCategory::Pii, diagnostic, &private));
+        assert!(PrivateNetworkDiagnosticHook.retain(
+            SecurityCategory::Pii,
+            "Connect to 192.168.178.96 now.",
+            &EvidenceSpan {
+                start_byte: 11,
+                end_byte: 25,
+                start_char: 11,
+                end_char: 25,
+                ..private.clone()
+            }
+        ));
+        assert!(PrivateNetworkDiagnosticHook.retain(
+            SecurityCategory::Pii,
+            "Network diagnostics: public endpoint 8.8.8.8",
+            &EvidenceSpan {
+                text: "8.8.8.8".into(),
+                start_byte: 37,
+                end_byte: 44,
+                start_char: 37,
+                end_char: 44,
+                ..private.clone()
+            }
+        ));
+        assert!(filter_evidence(SecurityCategory::Pii, diagnostic, vec![private]).is_empty());
     }
 }

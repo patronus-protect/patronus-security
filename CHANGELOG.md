@@ -7,6 +7,52 @@ All notable changes to this project are documented here. The format is based on
 This project is **pre-1.0**: any change to detection thresholds, the asset manifest, or public
 result shapes may be breaking for downstream users, and is called out explicitly below.
 
+## [0.1.4] - 2026-08-18
+
+### Added
+
+- Added the public `PrivateNetworkDiagnosticHook`, which retains private and local IP predictions
+  for diagnostics while filtering their evidence spans from network-diagnostic output.
+- Added shared tokenizer caching and direct mmBERT token-ID handoff from compatible NTDB L2
+  chunks to dedicated and unified L3 inference.
+- Added `ark-api`, an ephemeral HTTP API around the security pipeline for self-hosted and
+  Patronus-hosted deployment: `POST /v1/scan` accepts text and/or one or more files and returns a
+  `request_id` per input, `GET /v1/scan/{request_id}/events` streams progress and per-category
+  results over Server-Sent Events, buffering events so a client that only starts polling after a
+  fast scan completes still sees the full history instead of a 404.
+- Added YAML-based `ark-api` configuration, including per-API-key category scoping and gate
+  overrides: `pipeline.gates` (and per-key `auth.keys[].gates`) deserialize directly into
+  `ConditionalPipelineGate`/`GateExpression`, so the full metadata/prior-result condition tree and
+  per-pipeline L3 policy overrides are configurable in YAML without a bespoke parser.
+- Added a multi-stage `ark-api` Dockerfile that bakes model assets in at build time (via
+  `ark-api --warmup-only`) and a `docker-compose.yml` reference deployment for self-hosting.
+
+### Changed
+
+- Changed compatible mmBERT NTDB runtime chunks to 254 content tokens so L2 tokenization can be
+  reused safely by 256-token L3 models with their boundary tokens.
+- Tightened native injection, DLP, and MCP relationship matching so actionable verbs, targets,
+  and destinations must occur in supported request forms.
+- Expanded Unicode-confusable normalization so mixed-script security signals are evaluated through
+  an ASCII skeleton before a finding is emitted.
+
+### Fixed
+
+- Reduced false-positive native findings in source code, test names, logs, documentation, benign
+  tool output, and ordinary developer-mode or network-diagnostic text.
+- Prevented compatible L2 spans from being re-tokenized or silently truncated during L3 inference;
+  incompatible or oversized handoffs now fall back to model-backed L3 rechunking.
+- Allowed unified and dedicated L3 bundles to load a compact `tokenizer.mmbpe` when
+  `tokenizer.json` is unavailable, while preserving the JSON fallback.
+- Worked around a `serde_yaml` 0.9 bug deserializing recursive enums nested inside sequences (hit
+  by `ark-api`'s conditional gate config) by routing YAML config parsing through `serde_json`.
+
+### Breaking
+
+- Native injection, DLP, MCP, obfuscation, and PII evidence decisions can change because matching
+  relationships, Unicode-confusable handling, and post-prediction evidence filtering were updated.
+- Compatible mmBERT NTDB packages now use 254 content tokens per runtime chunk instead of 256.
+
 ## [0.1.3] - 2026-08-11
 
 ### Added

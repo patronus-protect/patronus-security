@@ -35,6 +35,7 @@ allow = [
 exceptions = [
     { allow = ["GPL-3.0-only"], crate = "patronus-ark" },
     { allow = ["GPL-3.0-only"], crate = "patronus-ark-python" },
+    { allow = ["GPL-3.0-only"], crate = "ark-api" },
 ]
 
 [bans]

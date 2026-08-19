@@ -1,7 +1,8 @@
 [workspace]
 members = [
     "rust",
-    "python"
+    "python",
+    "ark-api"
 ]
 resolver = "2"
 

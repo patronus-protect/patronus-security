@@ -20,6 +20,8 @@ pub(crate) struct SelectedL3Chunk {
     pub(crate) source_order: usize,
     pub(crate) embedding: Vec<f32>,
     pub(crate) embedding_space: String,
+    pub(crate) token_ids: Vec<u32>,
+    pub(crate) tokenizer_family: String,
 }
 
 #[derive(Debug, Clone)]
@@ -58,6 +60,8 @@ pub(crate) fn selected_l3_chunks(
                 source_order,
                 embedding: Vec::new(),
                 embedding_space: String::new(),
+                token_ids: chunk.token_ids,
+                tokenizer_family: chunk.tokenizer_family,
             })
             .collect();
     }
@@ -102,6 +106,8 @@ pub(crate) fn selected_l3_chunks(
                     source_order: index,
                     embedding: Vec::new(),
                     embedding_space: String::new(),
+                    token_ids: chunks[index].token_ids.clone(),
+                    tokenizer_family: chunks[index].tokenizer_family.clone(),
                 });
             }
         }
@@ -120,6 +126,8 @@ pub(crate) fn selected_l3_chunks(
                 source_order,
                 embedding: Vec::new(),
                 embedding_space: String::new(),
+                token_ids: chunk.token_ids,
+                tokenizer_family: chunk.tokenizer_family,
             })
             .collect();
     }
@@ -682,6 +690,8 @@ mod tests {
                 start_byte: index * 100,
                 end_byte: (index + 1) * 100,
                 text: index.to_string(),
+                token_ids: Vec::new(),
+                tokenizer_family: String::new(),
             })
             .collect::<Vec<_>>();
         let candidates = vec![candidate(0, 100, 0.6, 0.5), candidate(300, 400, 0.99, 0.5)];
@@ -702,6 +712,8 @@ mod tests {
                 start_byte: index * 100,
                 end_byte: (index + 1) * 100,
                 text: index.to_string(),
+                token_ids: Vec::new(),
+                tokenizer_family: String::new(),
             })
             .collect::<Vec<_>>();
         let candidates = vec![
@@ -722,6 +734,8 @@ mod tests {
                 start_byte: index * 100,
                 end_byte: (index + 1) * 100,
                 text: index.to_string(),
+                token_ids: Vec::new(),
+                tokenizer_family: String::new(),
             })
             .collect::<Vec<_>>();
         let candidates = vec![
@@ -759,6 +773,8 @@ mod tests {
             source_order,
             embedding,
             embedding_space: "test-space".to_string(),
+            token_ids: Vec::new(),
+            tokenizer_family: String::new(),
         }
     }
 
