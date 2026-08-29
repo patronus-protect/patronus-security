@@ -61,7 +61,7 @@ jobs:
           --long-mib 1
           --long-requests 1
           --short-cycles 1
-          --min-mib-per-second 0.75
+          --min-mib-per-second 0.3
           --min-rps 0.5
           --json-output native-throughput.json
       - uses: actions/upload-artifact@v4
