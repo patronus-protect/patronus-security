@@ -4,7 +4,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use patronus_ark::{
     assets::{
         category_assets, dedicated_l3_asset, dynamic_pii_assets_present, ntdb_l2_package_assets,
-        required_assets_present, DEDICATED_L3_ASSETS, DYNAMIC_PII_ASSET, UNIFIED_L3_ASSET,
+        ntdb_l2_package_assets_present, required_assets_present, DEDICATED_L3_ASSETS,
+        DYNAMIC_PII_ASSET, UNIFIED_L3_ASSET,
     },
     SecurityCategory, SecurityLevel,
 };
@@ -41,6 +42,9 @@ fn dynamic_pii_bundle_is_complete_and_revision_pinned() {
         .contains(&"model_int4_embeddings_int8.onnx"));
     assert!(DYNAMIC_PII_ASSET
         .files
+        .contains(&"onnx/fp16/model_fp16.onnx"));
+    assert!(DYNAMIC_PII_ASSET
+        .files
         .contains(&"quantization_manifest.json"));
     assert!(DYNAMIC_PII_ASSET.files.contains(&"spm.model"));
     assert!(DYNAMIC_PII_ASSET.files.contains(&"tokenizer.json"));
@@ -70,20 +74,23 @@ fn unified_l3_bundle_and_dedicated_models_are_revision_pinned() {
     );
     assert_eq!(
         UNIFIED_L3_ASSET.revision,
-        "5711c4169442da12f0f4ec20e32f90d940684d20"
+        "30ea449339d1075a31fcffa9199ebee4f2cfaf9a"
     );
     assert!(UNIFIED_L3_ASSET
         .files
         .contains(&"onnx/int8_int4_embeddings/model.onnx"));
+    assert!(UNIFIED_L3_ASSET
+        .files
+        .contains(&"onnx/onnx_fp16/model_fp16.onnx"));
     assert_eq!(DEDICATED_L3_ASSETS.len(), 7);
     for (category, revision) in [
         (
             SecurityCategory::Injection,
-            "e2002adb623ce644ecc8283ee0699377548541fa",
+            "142fadc5474163d4c483cb761d5a6b02e3aa1741",
         ),
         (
             SecurityCategory::SensitiveDocument,
-            "8596617186b7d14e8d3492214bda292f5e72456d",
+            "c038771b10b00b8da67d31e2b0280f85e13b808c",
         ),
         (
             SecurityCategory::ToolClass,
@@ -103,7 +110,7 @@ fn unified_l3_bundle_and_dedicated_models_are_revision_pinned() {
         ),
         (
             SecurityCategory::Threat,
-            "20a2553e8baeb29bc0a5150f20d7ae0d9af89e49",
+            "f186c09846c325256a262babcd8558d4e5f93dc9",
         ),
     ] {
         let asset = dedicated_l3_asset(category).expect("dedicated L3 asset");
@@ -111,6 +118,14 @@ fn unified_l3_bundle_and_dedicated_models_are_revision_pinned() {
         assert!(asset
             .files
             .contains(&"onnx/int8_int4_embeddings/model.onnx"));
+        if matches!(
+            category,
+            SecurityCategory::Injection
+                | SecurityCategory::SensitiveDocument
+                | SecurityCategory::Threat
+        ) {
+            assert!(asset.files.contains(&"onnx/onnx_fp16/model_fp16.onnx"));
+        }
     }
 }
 
@@ -143,9 +158,9 @@ fn classifier_assets_use_the_public_hub_repositories() {
         ),
         (
             SecurityCategory::Threat,
-            "patronus-studio/wolf-defender-threat-classifier-edge",
             "patronus-studio/wolf-defender-threat-classifier",
-            "20a2553e8baeb29bc0a5150f20d7ae0d9af89e49",
+            "patronus-studio/wolf-defender-threat-classifier",
+            "f186c09846c325256a262babcd8558d4e5f93dc9",
         ),
     ] {
         let l3 = dedicated_l3_asset(category).expect("dedicated L3 asset");
@@ -153,10 +168,40 @@ fn classifier_assets_use_the_public_hub_repositories() {
         assert_eq!(l3.revision, revision);
 
         let l2 = ntdb_l2_package_assets(category, SecurityLevel::L2);
-        assert_eq!(l2.len(), 1);
-        assert_eq!(l2[0].repo, l2_repo);
-        assert_eq!(l2[0].source_prefix, "l2");
+        assert_eq!(
+            l2.len(),
+            if category == SecurityCategory::ToolTags {
+                3
+            } else {
+                1
+            }
+        );
+        assert!(l2.iter().all(|asset| asset.repo == l2_repo));
+        assert!(l2
+            .iter()
+            .all(|asset| asset.source_prefix == "l2" || asset.source_prefix.starts_with("l2/")));
     }
+}
+
+#[test]
+fn migrated_l3_models_do_not_reference_removed_edge_repositories() {
+    let migrated = [
+        UNIFIED_L3_ASSET,
+        dedicated_l3_asset(SecurityCategory::Injection).unwrap(),
+        dedicated_l3_asset(SecurityCategory::SensitiveDocument).unwrap(),
+        dedicated_l3_asset(SecurityCategory::Threat).unwrap(),
+    ];
+
+    assert!(migrated.iter().all(|asset| !asset.repo.ends_with("-edge")));
+    assert_eq!(
+        migrated.map(|asset| asset.repo),
+        [
+            "patronus-studio/lion-warden-ai-security-classifier",
+            "patronus-studio/wolf-defender-prompt-injection-small",
+            "patronus-studio/orca-sonar-document-classifier",
+            "patronus-studio/wolf-defender-threat-classifier",
+        ]
+    );
 }
 
 #[test]
@@ -233,11 +278,6 @@ fn ntdb_l2_package_manifest_has_available_model_specs() {
             "l2_ntdb/tool_action_current",
         ),
         (
-            SecurityCategory::ToolTags,
-            "unified-v3-tool-tags",
-            "l2_ntdb/tool_tags_current",
-        ),
-        (
             SecurityCategory::Routing,
             "unified-v3-routing",
             "l2_ntdb/routing_current",
@@ -259,8 +299,64 @@ fn ntdb_l2_package_manifest_has_available_model_specs() {
             );
         }
     }
+    let tool_tags = ntdb_l2_package_assets(SecurityCategory::ToolTags, SecurityLevel::L2);
+    assert_eq!(tool_tags.len(), 3);
+    assert_eq!(
+        tool_tags
+            .iter()
+            .map(|asset| asset.model)
+            .collect::<Vec<_>>(),
+        vec![
+            "tool_tags_sink_external",
+            "tool_tags_source_sensitive",
+            "tool_tags_source_untrusted",
+        ]
+    );
+    assert!(tool_tags.iter().all(|asset| {
+        asset.repo == "patronus-studio/husky-nose-tool-security-properties-classifier"
+            && asset.revision == "66bb4bdd76f57aacba7a4e39e0368e35701b2244"
+    }));
     assert!(ntdb_l2_package_assets(SecurityCategory::Dlp, SecurityLevel::L2).is_empty());
     assert!(ntdb_l2_package_assets(SecurityCategory::Pii, SecurityLevel::L2).is_empty());
+}
+
+#[test]
+fn ntdb_l2_package_cache_requires_the_pinned_revision() {
+    let dir = temp_dir("ntdb_revision");
+    let asset = ntdb_l2_package_assets(SecurityCategory::Injection, SecurityLevel::L2)[0];
+    let package_dir = dir.join(asset.destination_path);
+    std::fs::create_dir_all(&package_dir).unwrap();
+    std::fs::create_dir_all(package_dir.join("minilm")).unwrap();
+    std::fs::write(
+        package_dir.join("manifest.json"),
+        r#"{
+            "format":"ntdb_model_package","version":2,
+            "runtime_contract":"raw_text_to_ntdb_outputs",
+            "task":{"type":"binary","labels":["benign","attack"]},
+            "chunk_size":1,"tokenizer_dir":"tokenizer",
+            "minilm":{"embedding_matrix_file":"embedding_matrix.f16","vocab_size":1,
+                "embedding_dim":1,"content_tokens_per_chunk":1,"tokenizer_family":"test"},
+            "runtime":{"shared_preprocessing":["tokenization"],"parallel_stages":[],
+                "ordering":"manifest_order"}
+        }"#,
+    )
+    .unwrap();
+    std::fs::write(package_dir.join("minilm/embedding_matrix.f16"), [0_u8; 2]).unwrap();
+
+    assert!(!ntdb_l2_package_assets_present(
+        SecurityCategory::Injection,
+        SecurityLevel::L2,
+        asset.model,
+        &dir,
+    ));
+    std::fs::write(package_dir.join(".patronus-revision"), asset.revision).unwrap();
+    assert!(ntdb_l2_package_assets_present(
+        SecurityCategory::Injection,
+        SecurityLevel::L2,
+        asset.model,
+        &dir,
+    ));
+    std::fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]
@@ -305,7 +401,7 @@ fn ntdb_l2_package_manifest_has_unique_destination_paths_per_category() {
                 "duplicate NTDB package destination for {category:?}: {}",
                 asset.destination_path
             );
-            assert_eq!(asset.source_prefix, "l2");
+            assert!(asset.source_prefix == "l2" || asset.source_prefix.starts_with("l2/"));
             assert!(asset.required);
         }
     }
@@ -391,7 +487,6 @@ mod asset_downloads {
         for (category, model) in [
             (SecurityCategory::ToolClass, "unified-v3-tool-class"),
             (SecurityCategory::ToolAction, "unified-v3-tool-action"),
-            (SecurityCategory::ToolTags, "unified-v3-tool-tags"),
             (SecurityCategory::Routing, "unified-v3-routing"),
             (SecurityCategory::Threat, "unified-v3-threat"),
         ] {
@@ -399,6 +494,11 @@ mod asset_downloads {
             assert_eq!(assets.len(), 1);
             assert_eq!(assets[0].model, model);
         }
+        let tool_tags = ntdb_l2_package_assets(SecurityCategory::ToolTags, SecurityLevel::L2);
+        assert_eq!(tool_tags.len(), 3);
+        assert!(tool_tags
+            .iter()
+            .all(|asset| asset.model.starts_with("tool_tags_")));
         assert!(ntdb_l2_package_assets(SecurityCategory::Dlp, SecurityLevel::L2).is_empty());
         assert!(ntdb_l2_package_assets(SecurityCategory::Pii, SecurityLevel::L2).is_empty());
     }

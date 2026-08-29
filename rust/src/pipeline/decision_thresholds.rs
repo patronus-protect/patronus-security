@@ -3,10 +3,20 @@ use std::{collections::HashMap, sync::OnceLock};
 
 use serde::Deserialize;
 
+use crate::ml::ntdb_executor::{
+    aggregate_probabilities, ByteSpan, JointV3CandidatePolicy, JointV3DecisionContext,
+    L2ChunkOutput,
+};
 use crate::{
     DecisionCandidate, DecisionEnvelope, DecisionProvenance, DecisionRecommendation,
     DecisionResult, DecisionTerminality, EvaluationResult, NtdbOperatingPoint, SecurityScanResult,
 };
+
+#[derive(Debug, Clone)]
+pub(crate) struct JointV3L3Chunk {
+    pub span: ByteSpan,
+    pub probabilities: Vec<f32>,
+}
 
 #[derive(Debug, Deserialize)]
 struct ThresholdAsset {
@@ -84,6 +94,9 @@ pub(crate) fn arbitrate_l2(
     l2_result: SecurityScanResult,
     point: NtdbOperatingPoint,
 ) -> SecurityScanResult {
+    if let Some(result) = arbitrate_joint_v3(pipeline, None, l2_result.clone(), &[], point) {
+        return result;
+    }
     let trace = arbitration_trace(pipeline, None, &l2_result, point);
     if let Some((class_name, confidence)) = accepted_l2_candidate(&trace) {
         let result = with_l2_final_result(l2_result, &class_name, confidence);
@@ -93,6 +106,232 @@ pub(crate) fn arbitrate_l2(
     let confidence = default_confidence(pipeline, &l2_result);
     let result = with_default_result(l2_result, pipeline, confidence);
     with_arbitration(result, LayerDecision::Default, Some(&trace))
+}
+
+/// Apply the Package-v4 document contract. L2-only and L3-only remain visible
+/// candidates, while the export's default Union view owns the final decision.
+pub(crate) fn arbitrate_joint_v3(
+    _pipeline: &str,
+    l3_result: Option<SecurityScanResult>,
+    l2_result: SecurityScanResult,
+    l3_chunks: &[JointV3L3Chunk],
+    point: NtdbOperatingPoint,
+) -> Option<SecurityScanResult> {
+    let l2_chunks = l2_result.internal_l2_chunk_outputs.clone();
+    let context = l2_chunks
+        .iter()
+        .find_map(|chunk| chunk.joint_v3_decision.clone())?;
+    let mut l2 = joint_v3_view(&context, &context.l2, &l2_chunks)?;
+    l2.candidate.source = "l2".to_string();
+    let mut candidates = vec![l2.candidate.clone()];
+    let mut l3 = (!l3_chunks.is_empty())
+        .then(|| joint_v3_l3_view(&context, &context.l3, l3_chunks))
+        .flatten();
+    if let Some(view) = &mut l3 {
+        view.candidate.source = "l3".to_string();
+    }
+    let rows = l2_chunks
+        .iter()
+        .map(|chunk| {
+            l3_chunks
+                .iter()
+                .find(|l3| l3.span == chunk.span)
+                .map(|l3| l3.probabilities.clone())
+                .unwrap_or_else(|| chunk.class_probabilities.clone())
+        })
+        .collect::<Vec<_>>();
+    let mut union = joint_v3_scores_view(&context, &context.union, &rows);
+    if let Some(view) = &mut union {
+        view.candidate.source = "union".to_string();
+    }
+    if let Some(view) = &l3 {
+        candidates.push(view.candidate.clone());
+    }
+    if let Some(view) = &union {
+        candidates.push(view.candidate.clone());
+    }
+    let trace = ArbitrationTrace {
+        candidates,
+        operating_point: point,
+    };
+
+    if let Some(view) = union.as_ref() {
+        let base = l3_result.unwrap_or(l2_result);
+        if view.candidate.accepted {
+            let mut result = with_arbitration(
+                apply_joint_v3_view(base, &context, view, false),
+                LayerDecision::Union,
+                Some(&trace),
+            );
+            attach_joint_v3_union_evidence(&mut result, &context, &l2_chunks, l3_chunks, view);
+            return Some(result);
+        }
+        let mut result = with_arbitration(
+            apply_joint_v3_view(base, &context, view, true),
+            LayerDecision::Default,
+            Some(&trace),
+        );
+        // v4's final document mode is Union. Keep that rejected Union as the
+        // decision candidate without changing v2's Default candidate priority.
+        if let Some(envelope) = &mut result.decision {
+            envelope.decision_candidate = Some(view.candidate.clone());
+            envelope.recommendation.acceptance_threshold =
+                Some(view.candidate.acceptance_threshold);
+        }
+        attach_joint_v3_union_evidence(&mut result, &context, &l2_chunks, l3_chunks, view);
+        return Some(result);
+    }
+
+    None
+}
+
+fn attach_joint_v3_union_evidence(
+    result: &mut SecurityScanResult,
+    context: &JointV3DecisionContext,
+    l2_chunks: &[L2ChunkOutput],
+    l3_chunks: &[JointV3L3Chunk],
+    view: &JointV3View,
+) {
+    let Some(class_index) = context
+        .labels
+        .iter()
+        .position(|label| label == &view.candidate.class_name)
+    else {
+        return;
+    };
+    let contributors = l2_chunks
+        .iter()
+        .enumerate()
+        .map(|(chunk_id, l2)| {
+            let l3 = l3_chunks.iter().find(|l3| l3.span == l2.span);
+            let probabilities = l3
+                .map(|chunk| &chunk.probabilities)
+                .unwrap_or(&l2.class_probabilities);
+            serde_json::json!({
+                "chunk_id": chunk_id,
+                "span": l2.span,
+                "source": if l3.is_some() { "l3" } else { "l2" },
+                "class_name": view.candidate.class_name,
+                "confidence": probabilities.get(class_index).copied().unwrap_or_default(),
+            })
+        })
+        .collect::<Vec<_>>();
+    let decisive_chunks = contributors
+        .iter()
+        .max_by(|left, right| {
+            left["confidence"]
+                .as_f64()
+                .unwrap_or_default()
+                .total_cmp(&right["confidence"].as_f64().unwrap_or_default())
+        })
+        .cloned()
+        .into_iter()
+        .collect::<Vec<_>>();
+    let evidence = serde_json::json!({
+        "stage": "union",
+        "aggregation": &context.union.aggregation,
+        "contributors": contributors,
+        "decisive_chunks": decisive_chunks,
+    });
+    if let Some(candidate) = result
+        .decision
+        .as_mut()
+        .and_then(|envelope| envelope.decision_candidate.as_mut())
+    {
+        candidate.chunk_evidence = Some(evidence);
+    }
+}
+
+struct JointV3View {
+    scores: Vec<f32>,
+    candidate: DecisionCandidate,
+}
+
+fn joint_v3_view(
+    context: &JointV3DecisionContext,
+    policy: &JointV3CandidatePolicy,
+    chunks: &[L2ChunkOutput],
+) -> Option<JointV3View> {
+    let rows = chunks
+        .iter()
+        .map(|chunk| chunk.class_probabilities.clone())
+        .collect::<Vec<_>>();
+    joint_v3_scores_view(context, policy, &rows)
+}
+
+fn joint_v3_l3_view(
+    context: &JointV3DecisionContext,
+    policy: &JointV3CandidatePolicy,
+    chunks: &[JointV3L3Chunk],
+) -> Option<JointV3View> {
+    let rows = chunks
+        .iter()
+        .map(|chunk| chunk.probabilities.clone())
+        .collect::<Vec<_>>();
+    joint_v3_scores_view(context, policy, &rows)
+}
+
+fn joint_v3_scores_view(
+    context: &JointV3DecisionContext,
+    policy: &JointV3CandidatePolicy,
+    rows: &[Vec<f32>],
+) -> Option<JointV3View> {
+    let scores = aggregate_probabilities(rows, &policy.aggregation).ok()?;
+    let (risk_index, risk_score) = scores
+        .iter()
+        .copied()
+        .enumerate()
+        .filter(|(index, _)| *index != context.default_class_index)
+        .max_by(|left, right| left.1.total_cmp(&right.1))?;
+    let default_score = *scores.get(context.default_class_index)?;
+    let risk_margin = risk_score - default_score;
+    Some(JointV3View {
+        scores,
+        candidate: DecisionCandidate {
+            source: String::new(),
+            class_name: context.labels.get(risk_index)?.clone(),
+            confidence: f64::from(risk_score),
+            acceptance_threshold: f64::from(policy.risk_margin_threshold),
+            accepted: risk_margin >= policy.risk_margin_threshold,
+            evidence: Some(HashMap::from([
+                ("risk_margin".to_string(), f64::from(risk_margin)),
+                ("default_confidence".to_string(), f64::from(default_score)),
+            ])),
+            chunk_evidence: None,
+        },
+    })
+}
+
+fn apply_joint_v3_view(
+    mut result: SecurityScanResult,
+    context: &JointV3DecisionContext,
+    view: &JointV3View,
+    use_default: bool,
+) -> SecurityScanResult {
+    let index = if use_default {
+        context.default_class_index
+    } else {
+        context
+            .labels
+            .iter()
+            .position(|label| label == &view.candidate.class_name)
+            .unwrap_or(context.default_class_index)
+    };
+    result.class_name = context.labels[index].clone();
+    result.confidence = f64::from(view.scores[index]).clamp(0.0, 1.0);
+    result.label_scores = context
+        .labels
+        .iter()
+        .zip(&view.scores)
+        .map(|(label, score)| crate::LabelScore {
+            label: label.clone(),
+            confidence: f64::from(*score),
+            matched: label == &result.class_name,
+        })
+        .collect();
+    update_final_layer_result(&mut result);
+    update_l3_pending_fallback(&mut result);
+    result
 }
 
 pub(crate) fn threshold_l2_result(
@@ -395,6 +634,7 @@ fn decision_candidate_for_source(
         acceptance_threshold,
         accepted: confidence >= acceptance_threshold,
         evidence,
+        chunk_evidence: None,
     })
 }
 
@@ -428,6 +668,7 @@ fn union_decision_candidate(
         acceptance_threshold: policy.threshold,
         accepted: confidence >= policy.threshold,
         evidence: Some(evidence),
+        chunk_evidence: None,
     })
 }
 
@@ -599,6 +840,7 @@ fn profile_key(point: NtdbOperatingPoint) -> &'static str {
         NtdbOperatingPoint::BestFprInF1 => "best_fpr",
         NtdbOperatingPoint::BestFnrInF1 => "best_fnr",
         NtdbOperatingPoint::BestPromote => "best_promote",
+        NtdbOperatingPoint::ArkApiShortInjectionUtility => "best_promote",
         NtdbOperatingPoint::BestLatencyInF1 => "best_latency_in_f1",
     }
 }
@@ -879,5 +1121,236 @@ mod tests {
             selected.layers[0].details.get("final_arbitration"),
             Some(&serde_json::json!("default"))
         );
+    }
+
+    fn v4_context(l2: f32, l3: f32, union: f32) -> std::sync::Arc<JointV3DecisionContext> {
+        std::sync::Arc::new(JointV3DecisionContext {
+            labels: vec!["benign".to_string(), "attack".to_string()],
+            default_class_index: 0,
+            l2: JointV3CandidatePolicy {
+                aggregation: "max".to_string(),
+                risk_margin_threshold: l2,
+            },
+            l3: JointV3CandidatePolicy {
+                aggregation: "max".to_string(),
+                risk_margin_threshold: l3,
+            },
+            union: JointV3CandidatePolicy {
+                aggregation: "mean".to_string(),
+                risk_margin_threshold: union,
+            },
+        })
+    }
+
+    fn v4_l2_result(
+        rows: &[(ByteSpan, Vec<f32>, bool)],
+        context: std::sync::Arc<JointV3DecisionContext>,
+    ) -> SecurityScanResult {
+        let mut scan = result("attack", 0.9, "L2");
+        scan.internal_l2_chunk_outputs = rows
+            .iter()
+            .map(|(span, probabilities, promoted)| L2ChunkOutput {
+                span: *span,
+                class_name: "attack".to_string(),
+                confidence: probabilities[1],
+                promoted: *promoted,
+                promote_score: Some(if *promoted { 0.9 } else { 0.1 }),
+                promote_threshold: Some(0.5),
+                source_pipeline: "injection".to_string(),
+                source_model: "injection".to_string(),
+                embedding: Vec::new(),
+                embedding_space: String::new(),
+                token_ids: Vec::new(),
+                tokenizer_family: "mmbert".to_string(),
+                class_probabilities: probabilities.clone(),
+                joint_v3_decision: Some(context.clone()),
+            })
+            .collect();
+        scan
+    }
+
+    #[test]
+    fn v4_union_is_final_while_all_document_candidates_remain_visible() {
+        let promoted = ByteSpan { start: 0, end: 10 };
+        let other = ByteSpan { start: 10, end: 20 };
+        let l2 = v4_l2_result(
+            &[
+                (promoted, vec![0.4, 0.6], true),
+                (other, vec![0.1, 0.9], false),
+            ],
+            v4_context(0.1, 0.1, 0.1),
+        );
+
+        let selected = arbitrate_joint_v3(
+            "injection",
+            Some(result("attack", 0.9, "L3")),
+            l2.clone(),
+            &[JointV3L3Chunk {
+                span: promoted,
+                probabilities: vec![0.1, 0.9],
+            }],
+            NtdbOperatingPoint::BestF1,
+        )
+        .unwrap();
+        let envelope = selected.decision.as_ref().unwrap();
+        assert_eq!(envelope.recommendation.final_arbitration, "union");
+        assert_eq!(
+            envelope.decision_candidate.as_ref().unwrap().source,
+            "union"
+        );
+        assert!(envelope
+            .candidates
+            .iter()
+            .any(|candidate| candidate.source == "l3" && candidate.accepted));
+        let chunk_evidence = selected
+            .decision
+            .as_ref()
+            .unwrap()
+            .decision_candidate
+            .as_ref()
+            .unwrap()
+            .chunk_evidence
+            .as_ref()
+            .unwrap();
+        assert_eq!(chunk_evidence["aggregation"], serde_json::json!("mean"));
+        assert_eq!(chunk_evidence["contributors"].as_array().unwrap().len(), 2);
+
+        let selected = arbitrate_joint_v3(
+            "injection",
+            Some(result("benign", 0.55, "L3")),
+            l2,
+            &[JointV3L3Chunk {
+                span: promoted,
+                probabilities: vec![0.55, 0.45],
+            }],
+            NtdbOperatingPoint::BestF1,
+        )
+        .unwrap();
+        assert_eq!(
+            selected
+                .decision
+                .as_ref()
+                .unwrap()
+                .recommendation
+                .final_arbitration,
+            "union"
+        );
+        assert_eq!(
+            selected
+                .decision
+                .as_ref()
+                .unwrap()
+                .decision_candidate
+                .as_ref()
+                .unwrap()
+                .source,
+            "union"
+        );
+    }
+
+    #[test]
+    fn v4_union_candidate_identifies_the_injection_chunk() {
+        let spans = [
+            ByteSpan { start: 0, end: 10 },
+            ByteSpan { start: 10, end: 20 },
+            ByteSpan { start: 20, end: 30 },
+            ByteSpan { start: 30, end: 40 },
+        ];
+        let l2 = v4_l2_result(
+            &[
+                (spans[0], vec![0.45, 0.55], false),
+                (spans[1], vec![0.45, 0.55], false),
+                (spans[2], vec![0.45, 0.55], false),
+                (spans[3], vec![0.45, 0.55], true),
+            ],
+            v4_context(0.1, 0.1, 0.1),
+        );
+        let selected = arbitrate_joint_v3(
+            "injection",
+            Some(result("attack", 0.99, "L3")),
+            l2,
+            &[JointV3L3Chunk {
+                span: spans[3],
+                probabilities: vec![0.01, 0.99],
+            }],
+            NtdbOperatingPoint::BestF1,
+        )
+        .unwrap();
+        let evidence = selected
+            .decision
+            .as_ref()
+            .and_then(|envelope| envelope.decision_candidate.as_ref())
+            .and_then(|candidate| candidate.chunk_evidence.as_ref())
+            .expect("union candidate should expose chunk evidence");
+        assert_eq!(evidence["decisive_chunks"][0]["chunk_id"], 3);
+        assert_eq!(evidence["decisive_chunks"][0]["source"], "l3");
+        assert_eq!(
+            evidence["decisive_chunks"][0]["span"],
+            serde_json::json!(spans[3])
+        );
+    }
+
+    #[test]
+    fn v4_rejected_union_returns_default_without_l2_override() {
+        let promoted = ByteSpan { start: 0, end: 10 };
+        let other = ByteSpan { start: 10, end: 20 };
+        let rows = [
+            (promoted, vec![0.9, 0.1], true),
+            (other, vec![0.1, 0.9], false),
+        ];
+        let selected = arbitrate_joint_v3(
+            "injection",
+            Some(result("benign", 0.9, "L3")),
+            v4_l2_result(&rows, v4_context(0.0, 0.1, 0.2)),
+            &[JointV3L3Chunk {
+                span: promoted,
+                probabilities: vec![0.9, 0.1],
+            }],
+            NtdbOperatingPoint::BestF1,
+        )
+        .unwrap();
+        let envelope = selected.decision.as_ref().unwrap();
+        assert_eq!(selected.class_name, "benign");
+        assert_eq!(envelope.recommendation.final_arbitration, "default");
+        assert_eq!(
+            envelope.decision_candidate.as_ref().unwrap().source,
+            "union"
+        );
+
+        let selected = arbitrate_joint_v3(
+            "injection",
+            Some(result("benign", 0.9, "L3")),
+            v4_l2_result(&rows, v4_context(0.1, 0.1, 0.2)),
+            &[JointV3L3Chunk {
+                span: promoted,
+                probabilities: vec![0.9, 0.1],
+            }],
+            NtdbOperatingPoint::BestF1,
+        )
+        .unwrap();
+        let envelope = selected.decision.unwrap();
+        assert_eq!(selected.class_name, "benign");
+        assert_eq!(envelope.recommendation.final_arbitration, "default");
+        assert_eq!(envelope.decision_candidate.unwrap().source, "union");
+        assert!(!envelope.recommendation.accepted);
+    }
+
+    #[test]
+    fn v4_without_promoted_chunks_still_uses_exported_default_union_mode() {
+        let selected = arbitrate_l2(
+            "injection",
+            v4_l2_result(
+                &[(ByteSpan { start: 0, end: 10 }, vec![0.2, 0.8], false)],
+                v4_context(0.3, 0.1, 0.1),
+            ),
+            NtdbOperatingPoint::BestF1,
+        );
+        let envelope = selected.decision.unwrap();
+        assert_eq!(envelope.recommendation.final_arbitration, "union");
+        assert_eq!(
+            envelope.decision_candidate.as_ref().unwrap().source,
+            "union"
+        );
+        assert!((envelope.decision_candidate.unwrap().acceptance_threshold - 0.1).abs() < 1e-6);
     }
 }

@@ -103,12 +103,58 @@ impl SecurityGateway {
         gates: Option<ScanGateMatrix>,
         ntdb_decision_threshold_point: Option<crate::NtdbOperatingPoint>,
     ) -> RequestId {
+        self.enqueue_categories_with_execution_options(
+            categories,
+            text,
+            metadata,
+            gates,
+            ntdb_decision_threshold_point,
+            false,
+        )
+    }
+
+    /// Submit an Ark API request with short-document Injection utility routing.
+    /// This profile is intentionally not used by library callers.
+    pub fn enqueue_ark_api_categories_with_options(
+        &self,
+        categories: Vec<SecurityCategory>,
+        text: impl Into<String>,
+        metadata: serde_json::Value,
+        gates: Option<ScanGateMatrix>,
+        ntdb_decision_threshold_point: Option<crate::NtdbOperatingPoint>,
+    ) -> RequestId {
+        self.enqueue_categories_with_execution_options(
+            categories,
+            text,
+            metadata,
+            gates,
+            ntdb_decision_threshold_point,
+            true,
+        )
+    }
+
+    fn enqueue_categories_with_execution_options(
+        &self,
+        categories: Vec<SecurityCategory>,
+        text: impl Into<String>,
+        metadata: serde_json::Value,
+        gates: Option<ScanGateMatrix>,
+        ntdb_decision_threshold_point: Option<crate::NtdbOperatingPoint>,
+        ark_api_short_injection_utility: bool,
+    ) -> RequestId {
         let text = Arc::<str>::from(text.into());
         let inputs = categories
             .into_iter()
             .map(|category| ExternalL1Input::from_shared_text(category, Arc::clone(&text)))
             .collect();
-        self.enqueue_work(inputs, metadata, gates, ntdb_decision_threshold_point, None)
+        self.enqueue_work(
+            inputs,
+            metadata,
+            gates,
+            ntdb_decision_threshold_point,
+            ark_api_short_injection_utility,
+            None,
+        )
     }
 
     /// Submit one category scan to the background worker.
@@ -117,7 +163,7 @@ impl SecurityGateway {
         input: ExternalL1Input,
         gates: Option<ScanGateMatrix>,
     ) -> RequestId {
-        self.enqueue_work(vec![input], serde_json::json!({}), gates, None, None)
+        self.enqueue_work(vec![input], serde_json::json!({}), gates, None, false, None)
     }
 
     fn enqueue_work(
@@ -126,6 +172,7 @@ impl SecurityGateway {
         metadata: serde_json::Value,
         gates: Option<ScanGateMatrix>,
         ntdb_decision_threshold_point: Option<crate::NtdbOperatingPoint>,
+        ark_api_short_injection_utility: bool,
         #[cfg_attr(not(feature = "test-util"), allow(unused_variables))] delay_ms: Option<u64>,
     ) -> RequestId {
         let request_id = self.next_request_id();
@@ -135,6 +182,10 @@ impl SecurityGateway {
         }
         if let Some(point) = ntdb_decision_threshold_point {
             execution.set_ntdb_decision_threshold_point(point);
+        }
+        if ark_api_short_injection_utility {
+            execution
+                .set_ntdb_operating_point(crate::NtdbOperatingPoint::ArkApiShortInjectionUtility);
         }
         self.requests
             .state
@@ -680,6 +731,7 @@ impl SecurityGateway {
             serde_json::json!({}),
             None,
             None,
+            false,
             Some(delay_ms),
         )
     }
@@ -1377,6 +1429,8 @@ mod tests {
             embedding_space: String::new(),
             token_ids: Vec::new(),
             tokenizer_family: String::new(),
+            class_probabilities: Vec::new(),
+            joint_v3_decision: None,
         }
     }
 }

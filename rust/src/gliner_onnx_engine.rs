@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Entity-only inference for classic GLiNER span-level ONNX models.
 
-#[allow(deprecated)]
+use half::f16;
 use ort::{
-    execution_providers::CPUExecutionProvider,
-    session::{builder::GraphOptimizationLevel, Session},
+    session::Session,
     value::{DynValue, Tensor},
 };
 use regex::Regex;
@@ -146,19 +145,18 @@ impl GlinerEngine {
 
     pub fn from_path(path: impl AsRef<Path>) -> EngineResult<Self> {
         let path = path.as_ref();
-        let (bundle, model) = validated_bundle(path)?;
-        let model_path = path.join(&bundle.model_file);
+        let (bundle, model, model_file) = validated_bundle(path)?;
+        let model_path = path.join(model_file);
         let tokenizer = SentencePieceProcessor::open(path.join("spm.model")).map_err(|error| {
             ArkEngineError::Tokenizer(format!("failed to load spm.model: {error}"))
         })?;
-        let session = Session::builder()
-            .map_err(onnx_error)?
-            .with_optimization_level(GraphOptimizationLevel::Level3)
-            .map_err(onnx_error)?
-            .with_execution_providers([CPUExecutionProvider::default()
-                .with_arena_allocator(false)
-                .build()])
-            .map_err(onnx_error)?
+        let (session_builder, _) = crate::ml::onnx::configured_session_builder(
+            crate::ExecutionBackend::Auto,
+            Some(path),
+            crate::OnnxRuntimeOptions::default(),
+        )
+        .map_err(|error| ArkEngineError::Onnx(error.to_string()))?;
+        let session = session_builder
             .with_memory_pattern(false)
             .map_err(onnx_error)?
             .with_prepacking(false)
@@ -243,7 +241,15 @@ impl GlinerEngine {
         let logits = outputs
             .get("logits")
             .ok_or_else(|| ArkEngineError::Inference("missing logits output".to_string()))?;
-        let (shape, logits) = logits.try_extract_tensor::<f32>().map_err(onnx_error)?;
+        let (shape, logits) = if let Ok((shape, logits)) = logits.try_extract_tensor::<f32>() {
+            (shape.as_ref().to_vec(), logits.to_vec())
+        } else {
+            let (shape, logits) = logits.try_extract_tensor::<f16>().map_err(onnx_error)?;
+            (
+                shape.as_ref().to_vec(),
+                logits.iter().map(|value| value.to_f32()).collect(),
+            )
+        };
         let expected_shape = [1, prepared.text_length, self.max_width, labels.len()];
         let actual_shape = shape
             .iter()
@@ -265,7 +271,7 @@ impl GlinerEngine {
             text,
             &labels,
             &prepared.words,
-            logits,
+            &logits,
             self.max_width,
             threshold,
         );
@@ -386,12 +392,17 @@ impl GlinerEngine {
     }
 }
 
-fn validated_bundle(path: &Path) -> EngineResult<(BundleConfig, ModelConfig)> {
+fn validated_bundle(path: &Path) -> EngineResult<(BundleConfig, ModelConfig, PathBuf)> {
     let bundle: BundleConfig = read_json(&path.join("gliner_onnx_config.json"))?;
     let model: ModelConfig = read_json(&path.join("gliner_config.json"))?;
     let quantization: QuantizationManifest = read_json(&path.join("quantization_manifest.json"))?;
-    validate_bundle(&bundle, &model, &quantization)?;
-    let model_path = path.join(&bundle.model_file);
+    let model_file = if crate::assets::prefer_fp16_l3() {
+        PathBuf::from("onnx/fp16/model_fp16.onnx")
+    } else {
+        bundle.model_file.clone()
+    };
+    validate_bundle(&bundle, &model, &quantization, &model_file)?;
+    let model_path = path.join(&model_file);
     if !model_path.is_file() {
         return Err(ArkEngineError::MissingAsset(format!(
             "missing GLiNER ONNX model: {}",
@@ -405,7 +416,7 @@ fn validated_bundle(path: &Path) -> EngineResult<(BundleConfig, ModelConfig)> {
             tokenizer_path.display()
         )));
     }
-    Ok((bundle, model))
+    Ok((bundle, model, model_file))
 }
 
 fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> EngineResult<T> {
@@ -423,6 +434,7 @@ fn validate_bundle(
     bundle: &BundleConfig,
     model: &ModelConfig,
     quantization: &QuantizationManifest,
+    model_file: &Path,
 ) -> EngineResult<()> {
     if bundle.max_len == 0 || bundle.max_width == 0 || model.max_types == 0 {
         return Err(ArkEngineError::InvalidBundle(
@@ -439,16 +451,16 @@ fn validate_bundle(
             "only classic whitespace span-level GLiNER bundles are supported".to_string(),
         ));
     }
-    if bundle.model_file != quantization.model_file
-        || quantization.precision.word_embeddings != "uint4"
-        || quantization.precision.matmul_weights != "qint8"
+    if !crate::assets::prefer_fp16_l3()
+        && (bundle.model_file != quantization.model_file
+            || quantization.precision.word_embeddings != "uint4"
+            || quantization.precision.matmul_weights != "qint8")
     {
         return Err(ArkEngineError::InvalidBundle(
             "GLiNER quantization manifest does not match the ONNX bundle".to_string(),
         ));
     }
-    if bundle
-        .model_file
+    if model_file
         .components()
         .any(|component| !matches!(component, Component::Normal(_)))
     {

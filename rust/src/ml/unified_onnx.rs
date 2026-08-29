@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
+use half::f16;
 use ort::{session::Session, value::Tensor};
 
 use crate::{ExecutionBackend, LabelScore, OnnxRuntimeOptions};
@@ -13,6 +14,7 @@ use super::onnx::{
 
 pub const UNIFIED_MODEL: &str = "unified-multitask-model-augmented-v3";
 pub const UNIFIED_ONNX_PATH: &str = "onnx/int8_int4_embeddings/model.onnx";
+pub const UNIFIED_FP16_ONNX_PATH: &str = "onnx/onnx_fp16/model_fp16.onnx";
 pub const UNIFIED_MAX_LEN: usize = 256;
 
 const HEADS: &[HeadSpec] = &[
@@ -28,6 +30,8 @@ const HEADS: &[HeadSpec] = &[
             "source_code",
             "marketing",
             "other",
+            "education",
+            "medical",
         ],
     ),
     HeadSpec::softmax(
@@ -172,7 +176,7 @@ impl LazyUnifiedOnnxClassifier {
     pub fn from_dir(dir: impl AsRef<Path>) -> Result<Self, Box<dyn std::error::Error>> {
         let dir = dir.as_ref();
         for path in [
-            UNIFIED_ONNX_PATH,
+            selected_unified_onnx_path(),
             "onnx/quantization_manifest.json",
             "tokenizer_config.json",
             "config.json",
@@ -275,6 +279,10 @@ impl LazyUnifiedOnnxClassifier {
         options: OnnxRuntimeOptions,
     ) -> Result<(), Box<dyn std::error::Error>> {
         self.ensure_loaded(backend, options)?;
+        self.loaded
+            .as_mut()
+            .ok_or("unified L3 model is not loaded")?
+            .infer("Patronus Ark unified L3 runtime warmup.")?;
         self.last_used = Some(Instant::now());
         Ok(())
     }
@@ -380,12 +388,17 @@ fn validate_bundle_contract(dir: &Path) -> Result<(), Box<dyn std::error::Error>
             .into());
         }
     }
+    let (variant, expected_path) = if crate::assets::prefer_fp16_l3() {
+        ("fp16", UNIFIED_FP16_ONNX_PATH)
+    } else {
+        ("int8_int4_embeddings", UNIFIED_ONNX_PATH)
+    };
     let variant_path = quantization
-        .pointer("/variants/int8_int4_embeddings/path")
+        .pointer(&format!("/variants/{variant}/path"))
         .and_then(serde_json::Value::as_str);
-    if variant_path != Some(UNIFIED_ONNX_PATH) {
+    if variant_path != Some(expected_path) {
         return Err(format!(
-            "unified quantization manifest points at {variant_path:?}, expected {UNIFIED_ONNX_PATH}"
+            "unified quantization manifest points at {variant_path:?}, expected {expected_path}"
         )
         .into());
     }
@@ -411,7 +424,7 @@ impl UnifiedOnnxClassifier {
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let tokenizer = RuntimeTokenizer::load(dir, "tokenizer.json")?;
         let (mut builder, _) = configured_session_builder(backend, Some(dir), options)?;
-        let session = builder.commit_from_file(dir.join(UNIFIED_ONNX_PATH))?;
+        let session = builder.commit_from_file(dir.join(selected_unified_onnx_path()))?;
         let inputs = session_input_names(&session);
         if inputs != ["input_ids", "attention_mask"] {
             return Err(format!("unexpected unified L3 inputs: {inputs:?}").into());
@@ -484,12 +497,20 @@ impl UnifiedOnnxClassifier {
             let value = outputs
                 .get(head.output)
                 .ok_or_else(|| format!("unified L3 output '{}' is missing", head.output))?;
-            let (shape, values) = value.try_extract_tensor::<f32>()?;
+            let (shape, values) = if let Ok((shape, values)) = value.try_extract_tensor::<f32>() {
+                (shape.as_ref().to_vec(), values.to_vec())
+            } else {
+                let (shape, values) = value.try_extract_tensor::<f16>()?;
+                (
+                    shape.as_ref().to_vec(),
+                    values.iter().map(|value| value.to_f32()).collect(),
+                )
+            };
             let width = match head.kind {
                 HeadKind::Binary => 1,
                 _ => head.labels.len(),
             };
-            if shape.as_ref() != [batch as i64, width as i64] || values.len() != batch * width {
+            if shape.as_slice() != [batch as i64, width as i64] || values.len() != batch * width {
                 return Err(format!(
                     "unified L3 output '{}' has shape {shape:?}, expected [{batch}, {width}]",
                     head.output
@@ -534,12 +555,20 @@ impl UnifiedOnnxClassifier {
             let value = outputs
                 .get(head.output)
                 .ok_or_else(|| format!("unified L3 output '{}' is missing", head.output))?;
-            let (shape, values) = value.try_extract_tensor::<f32>()?;
+            let (shape, values) = if let Ok((shape, values)) = value.try_extract_tensor::<f32>() {
+                (shape.as_ref().to_vec(), values.to_vec())
+            } else {
+                let (shape, values) = value.try_extract_tensor::<f16>()?;
+                (
+                    shape.as_ref().to_vec(),
+                    values.iter().map(|value| value.to_f32()).collect(),
+                )
+            };
             let width = match head.kind {
                 HeadKind::Binary => 1,
                 _ => head.labels.len(),
             };
-            if shape.as_ref() != [batch as i64, width as i64] || values.len() != batch * width {
+            if shape.as_slice() != [batch as i64, width as i64] || values.len() != batch * width {
                 return Err(format!(
                     "unified L3 output '{}' has shape {shape:?}, expected [{batch}, {width}]",
                     head.output
@@ -565,6 +594,14 @@ impl UnifiedOnnxClassifier {
         token_chunks(text, content_tokens, overlap_tokens, |value| {
             self.tokenizer.token_count(value, false)
         })
+    }
+}
+
+fn selected_unified_onnx_path() -> &'static str {
+    if crate::assets::prefer_fp16_l3() {
+        UNIFIED_FP16_ONNX_PATH
+    } else {
+        UNIFIED_ONNX_PATH
     }
 }
 

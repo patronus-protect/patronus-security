@@ -11,8 +11,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - run: cargo fmt --check
       - run: cargo test -p patronus-ark
+      - run: cargo test -p ark-api
+      - run: python scripts/generate_docs.py --check
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check licenses
@@ -29,3 +34,38 @@ jobs:
       - run: .venv/bin/python -m pip install maturin
       - run: .venv/bin/python -m maturin develop --manifest-path python/Cargo.toml
       - run: .venv/bin/python -m unittest discover -s python/tests
+
+  native-throughput:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/patronus_ark
+          key: ark-models-${{ runner.os }}-${{ hashFiles('rust/src/assets/specs.rs') }}
+      - run: python -m venv .build-venv
+      - run: .build-venv/bin/python -m pip install maturin
+      - run: .build-venv/bin/python -m maturin build --release --manifest-path python/Cargo.toml --out dist
+      - run: python -m venv .perf-venv
+      - run: .perf-venv/bin/python -m pip install dist/*.whl
+      - name: Full gated unified native throughput regression (without GLiNER)
+        run: >-
+          .perf-venv/bin/python scripts/ark_api_throughput_benchmark.py
+          --download-files
+          --long-mib 1
+          --long-requests 1
+          --short-cycles 1
+          --min-mib-per-second 0.3
+          --min-rps 0.5
+          --json-output native-throughput.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-throughput
+          path: native-throughput.json

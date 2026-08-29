@@ -52,6 +52,8 @@ mod ntdb_decision {
             l3_candidate_spans: Vec::new(),
             l3_candidates: Vec::new(),
             l2_chunk_outputs: Vec::new(),
+            chunk_class_probabilities: Vec::new(),
+            joint_v3_decision: None,
         }
     }
 
@@ -102,6 +104,8 @@ mod ntdb_decision {
             l3_candidate_spans: Vec::new(),
             l3_candidates: Vec::new(),
             l2_chunk_outputs: Vec::new(),
+            chunk_class_probabilities: Vec::new(),
+            joint_v3_decision: None,
         };
 
         let decision = NtdbDecision::from_score_output("sensitive".to_string(), output).unwrap();

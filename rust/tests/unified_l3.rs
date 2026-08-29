@@ -335,7 +335,7 @@ fn real_pinned_bundle_loads_and_returns_all_heads() {
     assert_eq!(outputs.len(), 1);
     for (head, label_count) in [
         ("injection", 2),
-        ("sensitive_document", 7),
+        ("sensitive_document", 9),
         ("tool_class", 14),
         ("tool_action", 6),
         ("tool_tags", 3),

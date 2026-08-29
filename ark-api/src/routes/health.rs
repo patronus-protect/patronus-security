@@ -23,5 +23,14 @@ pub async fn readyz(State(state): State<AppState>) -> (StatusCode, Json<serde_js
     } else {
         StatusCode::SERVICE_UNAVAILABLE
     };
-    (status, Json(json!({ "ready": ready })))
+    (
+        status,
+        Json(json!({
+            "ready": ready,
+            "onnx": {
+                "available_providers": patronus_ark::ml::onnx::available_execution_providers(),
+                "active_providers": patronus_ark::ml::onnx::active_execution_providers(),
+            }
+        })),
+    )
 }

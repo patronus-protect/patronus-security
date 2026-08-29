@@ -1,6 +1,6 @@
 [package]
 name = "patronus-ark"
-version = "0.1.4"
+version = "0.1.5"
 edition = "2021"
 authors = ["Casdo Labs GmbH <team@patronus.studio>"]
 description = "Hybrid Rust security scanners for prompt injection, DLP, PII, and agentic tool risks."
@@ -21,9 +21,8 @@ aho-corasick = "1.1"
 rayon = "1.10"
 dirs = "5.0"
 ureq = { version = "2.10", features = ["json"] }
-ort = { version = "2.0.0-rc.12", default-features = false, features = ["std", "ndarray", "tracing", "download-binaries", "tls-rustls", "copy-dylibs", "api-24", "half"] }
+ort = { version = "2.0.0-rc.13", default-features = false, features = ["std", "ndarray", "tracing", "download-binaries", "tls-rustls", "copy-dylibs", "api-24", "half"] }
 tokenizers = { version = "0.23.1", default-features = false, features = ["onig"] }
-kitoken = { version = "=0.11.0", default-features = false, features = ["std", "serialization", "normalization", "regex-perf", "multiversion", "convert-tokenizers"] }
 sentencepiece-rust = "0.1.1"
 half = "2.1"
 blake3 = "1.5"
@@ -78,12 +77,8 @@ name = "ntdb_memory_smoke"
 path = "dev/ntdb_memory_smoke.rs"
 
 [[example]]
-name = "ntdb_tokenizer_parity"
-path = "dev/ntdb_tokenizer_parity.rs"
-
-[[example]]
-name = "tokenizer_to_kit"
-path = "dev/tokenizer_to_kit.rs"
+name = "ntdb_joint_v3_cache_eval"
+path = "dev/ntdb_joint_v3_cache_eval.rs"
 
 [[example]]
 name = "wolf_memory_smoke"

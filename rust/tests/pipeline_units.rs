@@ -627,6 +627,8 @@ mod ntdb_l2_results {
                     embedding_space: String::new(),
                     token_ids: Vec::new(),
                     tokenizer_family: String::new(),
+                    class_probabilities: Vec::new(),
+                    joint_v3_decision: None,
                 },
                 L2ChunkOutput {
                     span: ByteSpan {
@@ -644,6 +646,8 @@ mod ntdb_l2_results {
                     embedding_space: String::new(),
                     token_ids: Vec::new(),
                     tokenizer_family: String::new(),
+                    class_probabilities: Vec::new(),
+                    joint_v3_decision: None,
                 },
             ],
         };

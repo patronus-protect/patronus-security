@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-//! Per-head and per-aggregator ONNX runtimes for an NTDB package.
+//! Deprecated Package-v2 per-head and per-aggregator ONNX runtime retained for
+//! compatibility with the currently pinned L2 packages.
 
 use std::{collections::HashMap, fs, path::Path};
 
@@ -436,6 +437,8 @@ impl AggregatorRuntime {
                 l3_candidate_spans: Vec::new(),
                 l3_candidates: Vec::new(),
                 l2_chunk_outputs: Vec::new(),
+                chunk_class_probabilities: Vec::new(),
+                joint_v3_decision: None,
             });
         }
 
@@ -500,6 +503,8 @@ impl AggregatorRuntime {
             l3_candidate_spans: Vec::new(),
             l3_candidates: Vec::new(),
             l2_chunk_outputs: Vec::new(),
+            chunk_class_probabilities: Vec::new(),
+            joint_v3_decision: None,
         })
     }
 
@@ -683,7 +688,7 @@ fn token_arrays(chunks: &[TokenChunk], chunk_width: usize) -> (Vec<i64>, Vec<i64
     (token_ids, token_lengths, max_len)
 }
 
-fn load_single_thread_session(path: impl AsRef<Path>) -> NtdbResult<Session> {
+pub(super) fn load_single_thread_session(path: impl AsRef<Path>) -> NtdbResult<Session> {
     let path = path.as_ref();
     let builder = Session::builder()
         .map_err(|err| ntdb_error(format!("failed to create ORT session builder: {err}")))?;

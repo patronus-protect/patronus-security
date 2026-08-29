@@ -193,9 +193,9 @@ def ntdb_package_table(packages: list[NtdbPackage]) -> list[str]:
     lines = [
         "## NTDB L2 Packages",
         "",
-        "NTDB v2 L2 packages are manifest-first and revision-pinned: the runtime downloads `manifest.json` and every file it references from the immutable Hugging Face commit listed below. Sizes therefore depend on the published package contents at that revision.",
+        "NTDB L2 packages are manifest-first and revision-pinned: the runtime downloads `manifest.json` and every runtime file it references from the immutable Hugging Face commit listed below. The current official packages use Package v4 with mmBERT and the Joint-v3 actionable-benefit promoter; the deprecated Package-v2 runtime remains available for older local overrides.",
         "",
-        "For supported Granite/ModernBERT packages, the Security Lib generates a compact `tokenizer.kit` locally after the verified asset download. Existing official caches are migrated during warmup, while local environment overrides are left untouched. The original `tokenizer.json` remains the canonical fallback. Generated files are written atomically under a cross-process lock and invalidated by source hash, compact hash, converter version, and format version.",
+        "For mmBERT packages, the Security Lib generates `tokenizer.mmbpe` locally after the verified asset download. The former `.kit` runtime is no longer supported. The original `tokenizer.json` remains the canonical fallback.",
         "",
         "| Category | Model | Repository | Revision | Source prefix | Cache path |",
         "| --- | --- | --- | --- | --- | --- |",
@@ -240,7 +240,7 @@ def generate_assets_doc(assets: list[Asset], snapshot: dict) -> str:
         "- Failed downloads for required assets return an error from `prepare_assets()` and therefore from compatibility `warmup()`.",
         "- Missing optional assets do not block asset preparation.",
         "- Optional assets are skipped by default during downloads. Set `PATRONUS_DOWNLOAD_OPTIONAL_ASSETS=1` to download optional full ONNX files and sidecar data.",
-        "- Required L3 assets prefer fp16 ONNX files where available.",
+        "- Set `PATRONUS_L3_PRECISION=fp16` to select pinned FP16 ONNX files where available; Linux `x86_64` production deployments use this validated mode, including Dynamic PII/GLiNER.",
         "- PII is native L1-only and has no model assets.",
         "- `dynamic-pii` is L3-only and requires the revision-pinned `gliner_small-v2.5-edge` bundle below the regular `model_dir` asset root.",
         "- L3 ONNX sessions are lazy-loaded on first L3 inference and are evicted after `PATRONUS_L3_TTL_SECS` seconds of idleness. The default TTL is `300` seconds.",
@@ -248,9 +248,9 @@ def generate_assets_doc(assets: list[Asset], snapshot: dict) -> str:
         "",
         "## L3 Strategy",
         "",
-        "`dedicated` loads the configured per-pipeline L3 bundles. `multi` loads only the revision-pinned `patronus-studio/lion-warden-ai-security-classifier` classifier bundle at revision `5711c4169442da12f0f4ec20e32f90d940684d20`; GLiNER remains separate in both strategies.",
+        "`dedicated` loads the configured per-pipeline L3 bundles. `multi` loads only the revision-pinned `patronus-studio/lion-warden-ai-security-classifier` classifier bundle at revision `30ea449339d1075a31fcffa9199ebee4f2cfaf9a`; GLiNER remains separate in both strategies.",
         "",
-        "The shared ONNX artifact is `onnx/int8_int4_embeddings/model.onnx`. See `docs/unified-multitask-l3-plan.md` for its seven-head tensor contract and the request-local worker coalescing contract.",
+        "The default shared ONNX artifact is `onnx/int8_int4_embeddings/model.onnx`; set `PATRONUS_L3_PRECISION=fp16` to select `onnx/onnx_fp16/model_fp16.onnx`. Dynamic PII selects `onnx/fp16/model_fp16.onnx` from its separate GLiNER bundle. Linux `x86_64` production deployments use FP16 for validated inference parity. See `docs/unified-multitask-l3-plan.md` for the seven-head tensor contract and the request-local worker coalescing contract.",
         "",
     ]
     lines.extend(ntdb_package_table(parse_ntdb_packages()))

@@ -28,6 +28,7 @@ use super::{
 #[cfg(feature = "test-util")]
 use super::{FairSchedulerState, RequestRegistry};
 use crate::pipeline::decision_thresholds::arbitrate_l3_l2;
+use crate::pipeline::decision_thresholds::{arbitrate_joint_v3, JointV3L3Chunk};
 use crate::pipeline::l3_engine::{execute_l3_plan, L3ExecutionAdapter, L3ResolvedKind};
 use crate::pipeline::l3_schedule::SelectedL3Chunk;
 use crate::pipeline::strategy::{
@@ -58,6 +59,14 @@ pub(super) struct UnifiedRunResult {
     clustering: L3ClusteringStrategy,
     physical_job_id: u64,
     chunk_trace: Option<Vec<serde_json::Value>>,
+    chunk_scores_by_head: HashMap<
+        String,
+        Vec<(
+            usize,
+            crate::ml::ntdb_executor::ByteSpan,
+            Vec<crate::LabelScore>,
+        )>,
+    >,
 }
 
 #[derive(Clone)]
@@ -158,7 +167,18 @@ pub(super) fn enqueue(worker: &L3Worker, spec: L3JobSpec) {
 
 fn subscriber_spec(mut spec: L3JobSpec) -> L3JobSpec {
     spec.l3_candidates.clear();
-    spec.l2_chunk_outputs = Vec::new().into();
+    spec.l2_chunk_outputs = spec
+        .l2_chunk_outputs
+        .iter()
+        .filter(|chunk| chunk.joint_v3_decision.is_some())
+        .cloned()
+        .map(|mut chunk| {
+            chunk.embedding.clear();
+            chunk.token_ids.clear();
+            chunk
+        })
+        .collect::<Vec<_>>()
+        .into();
     spec
 }
 
@@ -350,10 +370,14 @@ fn run_unified_model_job(
         let request_stop = adapter.request_stop;
         drop(adapter);
         if request_stop {
+            // A request-wide decision on the final chunk of this head is not
+            // `summary.stopped_early`, but it still suppresses later heads.
+            head_early_exits.insert(head.clone());
             break;
         }
     }
 
+    let chunk_scores_by_head = unified_chunk_scores(&chunks, &outputs);
     Ok(UnifiedRunResult {
         output: aggregate_unified_outputs(outputs, Some(job.execution.l3_policy()))?,
         duration_ms: started.elapsed().as_secs_f64() * 1_000.0,
@@ -371,6 +395,7 @@ fn run_unified_model_job(
         clustering: selection_clustering,
         physical_job_id: job.job_id,
         chunk_trace,
+        chunk_scores_by_head,
     })
 }
 
@@ -575,10 +600,11 @@ fn infer_unified_exact(
 
     let namespace = CacheNamespace::from_model_sha(CACHE_SCHEMA_VERSION, UNIFIED_L3_ASSET.revision);
     let key = CacheKey::for_chunk(namespace, chunk.text.as_bytes());
-    if let Some(matched) = similarity_cache.find_best_for_head(
+    if let Some(matched) = similarity_cache.find_best_for_head_and_producer(
         &chunk.embedding_space,
         &chunk.embedding,
         requested_head,
+        UNIFIED_L3_ASSET.revision,
     ) {
         if matched.propagation_similarity > 0.985 {
             if let Some(decision) = matched
@@ -662,8 +688,12 @@ fn historical_unified_non_safe(
     chunk: &SelectedL3Chunk,
     head: &str,
 ) -> bool {
-    let Some(matched) = cache.find_best_for_head(&chunk.embedding_space, &chunk.embedding, head)
-    else {
+    let Some(matched) = cache.find_best_for_head_and_producer(
+        &chunk.embedding_space,
+        &chunk.embedding,
+        head,
+        UNIFIED_L3_ASSET.revision,
+    ) else {
         return false;
     };
     matched
@@ -813,6 +843,46 @@ fn aggregate_unified_outputs(
         heads.insert(head, selected);
     }
     Ok(UnifiedModelOutput { heads })
+}
+
+fn unified_chunk_scores(
+    chunks: &[SelectedL3Chunk],
+    outputs: &[UnifiedChunkOutput],
+) -> HashMap<
+    String,
+    Vec<(
+        usize,
+        crate::ml::ntdb_executor::ByteSpan,
+        Vec<crate::LabelScore>,
+    )>,
+> {
+    let mut scores = HashMap::<
+        String,
+        Vec<(
+            usize,
+            crate::ml::ntdb_executor::ByteSpan,
+            Vec<crate::LabelScore>,
+        )>,
+    >::new();
+    for output in outputs {
+        let Some(chunk) = chunks.get(output.chunk_index) else {
+            continue;
+        };
+        for head in &output.allowed_heads {
+            let Some(head_output) = output.output.heads.get(head) else {
+                continue;
+            };
+            scores.entry(head.clone()).or_default().push((
+                chunk.source_order,
+                crate::ml::ntdb_executor::ByteSpan {
+                    start: chunk.start_byte,
+                    end: chunk.end_byte,
+                },
+                head_output.label_scores.clone(),
+            ));
+        }
+    }
+    scores
 }
 
 fn unified_head_aggregation(head: &str) -> Option<ChunkAggregation> {
@@ -1041,6 +1111,7 @@ pub fn unified_metadata_details_for_test(
         clustering,
         physical_job_id: 5,
         chunk_trace: None,
+        chunk_scores_by_head: HashMap::new(),
     };
     let result = materialize_unified_result(&subscriber, &run);
     result
@@ -1134,6 +1205,8 @@ pub fn unified_coalescing_snapshot(categories: &[&str]) -> UnifiedCoalescingSnap
             embedding_space: String::new(),
             token_ids: vec![1, 2, 3],
             tokenizer_family: "mmbert".to_string(),
+            class_probabilities: Vec::new(),
+            joint_v3_decision: None,
         })
         .collect::<Vec<_>>();
     let request_text = Arc::<str>::from("x".repeat(categories.len() * 100 + 80));
@@ -1248,17 +1321,24 @@ pub(super) fn finish_run(
     };
 
     if let Some(result) = completed {
-        worker
-            .unified_cache
-            .lock()
-            .expect("unified cache mutex poisoned")
-            .insert(
-                cache_key,
-                UnifiedCacheEntry {
-                    result: result.clone(),
-                    expires_at: Instant::now() + Duration::from_secs(60 * 60),
-                },
-            );
+        if unified_result_covers_heads(
+            &result,
+            subscribers
+                .iter()
+                .map(|subscriber| subscriber.category.as_str()),
+        ) {
+            worker
+                .unified_cache
+                .lock()
+                .expect("unified cache mutex poisoned")
+                .insert(
+                    cache_key,
+                    UnifiedCacheEntry {
+                        result: result.clone(),
+                        expires_at: Instant::now() + Duration::from_secs(60 * 60),
+                    },
+                );
+        }
         for (subscriber, output) in materialize_completed_unified_subscribers(subscribers, &result)
         {
             finish_job(
@@ -1281,6 +1361,15 @@ pub(super) fn finish_run(
     }
 }
 
+fn unified_result_covers_heads<'a>(
+    result: &UnifiedRunResult,
+    heads: impl IntoIterator<Item = &'a str>,
+) -> bool {
+    heads
+        .into_iter()
+        .all(|head| result.output.heads.contains_key(head))
+}
+
 fn materialize_completed_unified_subscribers(
     mut subscribers: Vec<L3JobSpec>,
     run: &UnifiedRunResult,
@@ -1289,11 +1378,23 @@ fn materialize_completed_unified_subscribers(
     let mut request_wide_stop: Option<(usize, String)> = None;
     let mut outputs = Vec::with_capacity(subscribers.len());
     for subscriber in subscribers {
-        let output = match &request_wide_stop {
-            Some((stop_priority, reason)) if subscriber.priority > *stop_priority => {
-                materialize_unified_request_wide_skip(&subscriber, reason)
+        let missing_after_physical_early_exit =
+            !run.output.heads.contains_key(&subscriber.category)
+                && !run.head_early_exits.is_empty();
+        let output = if missing_after_physical_early_exit {
+            let mut heads = run.head_early_exits.iter().cloned().collect::<Vec<_>>();
+            heads.sort();
+            materialize_unified_request_wide_skip(
+                &subscriber,
+                &format!("physical early exit: {}", heads.join(",")),
+            )
+        } else {
+            match &request_wide_stop {
+                Some((stop_priority, reason)) if subscriber.priority >= *stop_priority => {
+                    materialize_unified_request_wide_skip(&subscriber, reason)
+                }
+                _ => materialize_unified_result(&subscriber, run),
             }
-            _ => materialize_unified_result(&subscriber, run),
         };
         if request_wide_stop.is_none() {
             if let Some(reason) = request_wide_early_exit(&output) {
@@ -1457,12 +1558,49 @@ fn materialize_unified_result(
         })
         .collect();
     result.duration_ms = result.layers.iter().map(|layer| layer.duration_ms).sum();
-    let mut result = arbitrate_l3_l2(
-        head,
-        Some(result),
-        subscriber.fallback.clone(),
-        subscriber.execution.ntdb_decision_threshold_point(),
-    );
+    let point = subscriber.execution.ntdb_decision_threshold_point();
+    let context = subscriber
+        .l2_chunk_outputs
+        .iter()
+        .find_map(|chunk| chunk.joint_v3_decision.clone());
+    let joint_chunks = context
+        .as_ref()
+        .map(|context| {
+            run.chunk_scores_by_head
+                .get(head)
+                .into_iter()
+                .flatten()
+                .filter_map(|(_, span, scores)| {
+                    let probabilities = context
+                        .labels
+                        .iter()
+                        .map(|label| {
+                            scores
+                                .iter()
+                                .find(|score| public_class_name(head, &score.label) == label)
+                                .map(|score| score.confidence as f32)
+                        })
+                        .collect::<Option<Vec<_>>>()?;
+                    Some(JointV3L3Chunk {
+                        span: *span,
+                        probabilities,
+                    })
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let mut result = if context.is_some() {
+        arbitrate_joint_v3(
+            head,
+            Some(result.clone()),
+            subscriber.fallback.clone(),
+            &joint_chunks,
+            point,
+        )
+        .unwrap_or_else(|| arbitrate_l3_l2(head, Some(result), subscriber.fallback.clone(), point))
+    } else {
+        arbitrate_l3_l2(head, Some(result), subscriber.fallback.clone(), point)
+    };
     result.duration_ms = result.layers.iter().map(|layer| layer.duration_ms).sum();
     result
 }
@@ -1773,11 +1911,27 @@ mod tests {
             clustering: L3ClusteringStrategy::RankOnly,
             physical_job_id: 7,
             chunk_trace: None,
+            chunk_scores_by_head: HashMap::new(),
         };
         let subscribers = vec![
             test_subscriber(2, "threat", 2),
             test_subscriber(1, "tool_class", 8),
         ];
+
+        assert!(unified_result_covers_heads(
+            &run,
+            subscribers
+                .iter()
+                .map(|subscriber| subscriber.category.as_str()),
+        ));
+        let mut partial_run = run.clone();
+        partial_run.output.heads.remove("tool_class");
+        assert!(!unified_result_covers_heads(
+            &partial_run,
+            subscribers
+                .iter()
+                .map(|subscriber| subscriber.category.as_str()),
+        ));
 
         let outputs = materialize_completed_unified_subscribers(subscribers, &run);
 
@@ -1793,6 +1947,55 @@ mod tests {
                     .get("skip_reason")
                     .and_then(serde_json::Value::as_str)
                     == Some("request_wide_early_exit")
+        }));
+    }
+
+    #[test]
+    fn unified_request_wide_early_exit_skips_same_priority_missing_head() {
+        let run = UnifiedRunResult {
+            output: UnifiedModelOutput {
+                heads: HashMap::from([("injection".to_string(), head_output("injection", 0.98))]),
+            },
+            duration_ms: 12.0,
+            queue_wait_ms: 1.0,
+            chunk_count: 2,
+            inferred_chunks: 1,
+            propagated_chunks: 0,
+            planned_l3_chunks: 2,
+            resolved_chunks: 1,
+            total_effective_chunks: 2,
+            head_early_exits: HashSet::from(["injection".to_string()]),
+            resolved_chunks_by_head: HashMap::from([("injection".to_string(), 1)]),
+            total_chunks_by_head: HashMap::from([("injection".to_string(), 2)]),
+            cache_hits: 0,
+            clustering: L3ClusteringStrategy::RankOnly,
+            physical_job_id: 7,
+            chunk_trace: None,
+            chunk_scores_by_head: HashMap::new(),
+        };
+        let subscribers = vec![
+            test_subscriber(2, "injection", 2),
+            test_subscriber(1, "threat", 2),
+        ];
+
+        let outputs = materialize_completed_unified_subscribers(subscribers, &run);
+        let threat = &outputs[0].1;
+
+        assert_eq!(threat.level, "L2");
+        assert!(threat.layers.iter().any(|layer| {
+            layer.layer_type == "l3_skipped"
+                && layer
+                    .details
+                    .get("skip_reason")
+                    .and_then(serde_json::Value::as_str)
+                    == Some("request_wide_early_exit")
+        }));
+        assert!(threat.layers.iter().all(|layer| {
+            layer
+                .details
+                .get("error")
+                .and_then(serde_json::Value::as_str)
+                != Some("unified L3 result is missing head 'threat'")
         }));
     }
 
@@ -1822,6 +2025,8 @@ mod tests {
             embedding_space: "test-space".to_string(),
             token_ids: Vec::new(),
             tokenizer_family: String::new(),
+            class_probabilities: Vec::new(),
+            joint_v3_decision: None,
         }]
         .into();
 

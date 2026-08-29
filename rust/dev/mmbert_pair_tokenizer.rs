@@ -1,5 +1,4 @@
 use aho_corasick::{AhoCorasick, AhoCorasickBuilder, MatchKind};
-use kitoken::Kitoken;
 use serde::Deserialize;
 use std::{
     cmp::Ordering,
@@ -474,31 +473,6 @@ fn benchmark_compact(binary: &Path, dataset_dir: &Path) -> Result<(), Box<dyn st
     Ok(())
 }
 
-fn benchmark_kit(binary: &Path, dataset_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    let started = Instant::now();
-    let tokenizer = Kitoken::from_file(binary).map_err(io::Error::other)?;
-    let load_ms = started.elapsed().as_secs_f64() * 1000.0;
-    let load_peak_mb = peak_rss_mb();
-    let texts = load_texts(dataset_dir)?;
-    let started = Instant::now();
-    let mut tokens = 0usize;
-    let mut checksum = 0u64;
-    for text in &texts {
-        let ids = tokenizer.encode(text, true).map_err(io::Error::other)?;
-        tokens += ids.len();
-        checksum = ids.iter().fold(checksum, |hash, id| {
-            hash.wrapping_mul(31).wrapping_add(*id as u64)
-        });
-    }
-    println!(
-        "runtime=kit texts={} tokens={tokens} checksum={checksum} load_ms={load_ms:.2} encode_ms={:.2} load_peak_mb={load_peak_mb:.3} encode_peak_mb={:.3}",
-        texts.len(),
-        started.elapsed().as_secs_f64() * 1000.0,
-        peak_rss_mb()
-    );
-    Ok(())
-}
-
 fn benchmark_reference(
     tokenizer_json: &Path,
     dataset_dir: &Path,
@@ -632,12 +606,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         [_, command, binary, dataset_dir] if command == "benchmark-compact" => {
             benchmark_compact(Path::new(binary), Path::new(dataset_dir))
         }
-        [_, command, binary, dataset_dir] if command == "benchmark-kit" => {
-            benchmark_kit(Path::new(binary), Path::new(dataset_dir))
-        }
         [_, command, tokenizer_json, dataset_dir] if command == "benchmark-reference" => {
             benchmark_reference(Path::new(tokenizer_json), Path::new(dataset_dir))
         }
-        _ => Err("usage: mmbert_pair_tokenizer convert <tokenizer.json> <tokenizer.mmbpe> | parity <tokenizer.json> <tokenizer.mmbpe> <dataset-dir> | benchmark-compact <tokenizer.mmbpe> <dataset-dir> | benchmark-kit <tokenizer.kit> <dataset-dir> | benchmark-reference <tokenizer.json> <dataset-dir>".into()),
+        _ => Err("usage: mmbert_pair_tokenizer convert <tokenizer.json> <tokenizer.mmbpe> | parity <tokenizer.json> <tokenizer.mmbpe> <dataset-dir> | benchmark-compact <tokenizer.mmbpe> <dataset-dir> | benchmark-reference <tokenizer.json> <dataset-dir>".into()),
     }
 }

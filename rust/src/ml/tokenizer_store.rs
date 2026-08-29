@@ -5,7 +5,6 @@ use std::{
     sync::{Arc, Mutex, OnceLock},
 };
 
-use kitoken::Kitoken;
 use tokenizers::Tokenizer;
 
 use super::mmbert_tokenizer::MmbertPairTokenizer;
@@ -20,7 +19,6 @@ pub(crate) fn global_tokenizer_store() -> &'static TokenizerStore {
 pub(crate) struct TokenizerStore {
     mmbert_cache: Mutex<HashMap<PathBuf, Arc<MmbertPairTokenizer>>>,
     huggingface_cache: Mutex<HashMap<PathBuf, Arc<Tokenizer>>>,
-    kitoken_cache: Mutex<HashMap<PathBuf, Arc<Kitoken>>>,
 }
 
 impl TokenizerStore {
@@ -58,26 +56,6 @@ impl TokenizerStore {
         let _ = tok.with_truncation(None);
         tok.with_padding(None);
         let tok = Arc::new(tok);
-        cache.insert(path, Arc::clone(&tok));
-        Ok(tok)
-    }
-
-    pub(crate) fn load_kitoken(
-        &self,
-        path: impl AsRef<Path>,
-    ) -> Result<Arc<Kitoken>, Box<dyn std::error::Error>> {
-        let path = canonical_or_owned(path.as_ref());
-        let mut cache = self
-            .kitoken_cache
-            .lock()
-            .unwrap_or_else(|err| err.into_inner());
-        if let Some(tok) = cache.get(&path) {
-            return Ok(Arc::clone(tok));
-        }
-        let tok = Arc::new(
-            Kitoken::from_file(&path)
-                .map_err(|err| format!("failed to load kitoken {}: {err}", path.display()))?,
-        );
         cache.insert(path, Arc::clone(&tok));
         Ok(tok)
     }

@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-only
-//! NTDB v2 L2 model configuration and result mapping for the gateway.
+//! NTDB L2 model configuration and result mapping for the gateway.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::{
-    ml::ntdb_executor::{manifest::PackageManifest, L2ChunkOutput, NtdbDecision, NtdbPackageSpec},
+    ml::ntdb_executor::{
+        manifest::{parse_package_manifest, PackageManifest},
+        L2ChunkOutput, NtdbDecision, NtdbPackageSpec,
+    },
     pipeline::decision_thresholds::{arbitrate_l2, arbitration_name, threshold_l2_result},
     pipeline::l3_pending_layer,
     EvaluationResult, LabelScore, LayerResult, ScanExecution, SecurityCategory, SecurityLevel,
@@ -19,6 +22,7 @@ pub struct NtdbL2ModelConfig {
     pub category: SecurityCategory,
     pub model_id: &'static str,
     pub public_model: &'static str,
+    pub asset_model: &'static str,
     pub env_key: &'static str,
     pub package_name: &'static str,
     pub has_l3: bool,
@@ -40,6 +44,7 @@ pub fn ntdb_l2_model_configs_for_category(
                     category,
                     model_id: "injection",
                     public_model: "wolf-defender-small",
+                    asset_model: "wolf-defender-small",
                     env_key: "PATRONUS_NTDB_INJECTION_DIR",
                     package_name: "injection_current",
                     has_l3: true,
@@ -56,6 +61,7 @@ pub fn ntdb_l2_model_configs_for_category(
                     category,
                     model_id: "sensitive_document",
                     public_model: "orca-sonar-document-classifier",
+                    asset_model: "orca-sonar-document-classifier",
                     env_key: "PATRONUS_NTDB_SENSITIVE_DOCUMENTS_DIR",
                     package_name: "sensitive_document_current",
                     has_l3: true,
@@ -78,13 +84,39 @@ pub fn ntdb_l2_model_configs_for_category(
             "PATRONUS_NTDB_TOOL_ACTION_DIR",
             "tool_action_current",
         ),
-        SecurityCategory::ToolTags => model_config(
-            execution,
+        SecurityCategory::ToolTags => [
+            (
+                "tool_tags_sink_external",
+                "PATRONUS_NTDB_TOOL_TAGS_SINK_EXTERNAL_DIR",
+                "tool_tags_sink_external_current",
+            ),
+            (
+                "tool_tags_source_sensitive",
+                "PATRONUS_NTDB_TOOL_TAGS_SOURCE_SENSITIVE_DIR",
+                "tool_tags_source_sensitive_current",
+            ),
+            (
+                "tool_tags_source_untrusted",
+                "PATRONUS_NTDB_TOOL_TAGS_SOURCE_UNTRUSTED_DIR",
+                "tool_tags_source_untrusted_current",
+            ),
+        ]
+        .into_iter()
+        .filter(|(model_id, _, _)| {
+            execution.allows_model("tool_tags")
+                && execution.allows_model("unified-v3-tool-tags")
+                && execution.allows_model(model_id)
+        })
+        .map(|(model_id, env_key, package_name)| NtdbL2ModelConfig {
             category,
-            "unified-v3-tool-tags",
-            "PATRONUS_NTDB_TOOL_TAGS_DIR",
-            "tool_tags_current",
-        ),
+            model_id,
+            public_model: "unified-v3-tool-tags",
+            asset_model: model_id,
+            env_key,
+            package_name,
+            has_l3: true,
+        })
+        .collect(),
         SecurityCategory::Routing => model_config(
             execution,
             category,
@@ -117,6 +149,7 @@ fn model_config(
         category,
         model_id: category.as_str(),
         public_model,
+        asset_model: public_model,
         env_key,
         package_name,
         has_l3: true,
@@ -294,19 +327,14 @@ pub fn ntdb_l2_scan_result(
     execution: &ScanExecution,
     duration_ms: f64,
 ) -> SecurityScanResult {
+    let source_pipeline = ntdb_l2_source_pipeline(config, decision);
     let allow_l3 = config.has_l3
         && (execution.l3_strategy() == crate::L3Strategy::Dedicated
             || execution.allows_model(crate::ml::unified_onnx::UNIFIED_MODEL));
-    let (result, layers) = ntdb_l2_result_parts(
-        decision,
-        execution,
-        duration_ms,
-        allow_l3,
-        config.category.as_str(),
-    );
+    let (result, layers) =
+        ntdb_l2_result_parts(decision, execution, duration_ms, allow_l3, &source_pipeline);
     let mut scan = scan_result(config.category, config.public_model, result, layers);
-    scan.internal_l2_chunk_outputs =
-        l2_chunk_outputs_with_source(decision, config.category.as_str());
+    scan.internal_l2_chunk_outputs = l2_chunk_outputs_with_source(decision, &source_pipeline);
     scan.label_scores = decision
         .labels
         .iter()
@@ -315,12 +343,15 @@ pub fn ntdb_l2_scan_result(
         .map(|(label, confidence)| LabelScore {
             label: label.clone(),
             confidence: f64::from(confidence.clamp(0.0, 1.0)),
-            matched: label == &decision.fallback_label,
+            matched: decision
+                .fallback_label
+                .split(',')
+                .any(|active| active == label),
         })
         .collect();
     let has_l3_pending = crate::pipeline::has_l3_pending(&scan);
     scan = arbitrate_l2(
-        config.category.as_str(),
+        &source_pipeline,
         scan,
         execution.ntdb_decision_threshold_point(),
     );
@@ -328,6 +359,24 @@ pub fn ntdb_l2_scan_result(
         scan.decision = None;
     }
     scan
+}
+
+fn ntdb_l2_source_pipeline(config: NtdbL2ModelConfig, decision: &NtdbDecision) -> String {
+    if config.category == SecurityCategory::ToolTags {
+        if matches!(
+            decision.model_id.as_str(),
+            "tool_tags_sink_external" | "tool_tags_source_sensitive" | "tool_tags_source_untrusted"
+        ) {
+            return decision.model_id.clone();
+        }
+        if matches!(
+            decision.aggregator_id.as_str(),
+            "sink_external" | "source_sensitive" | "source_untrusted"
+        ) {
+            return format!("tool_tags_{}", decision.aggregator_id);
+        }
+    }
+    config.category.as_str().to_string()
 }
 
 fn l2_chunk_outputs_with_source(
@@ -357,6 +406,8 @@ fn public_l2_chunk_outputs(outputs: &[L2ChunkOutput], source_pipeline: &str) -> 
             embedding_space: String::new(),
             token_ids: Vec::new(),
             tokenizer_family: String::new(),
+            class_probabilities: Vec::new(),
+            joint_v3_decision: None,
         })
         .collect()
 }
@@ -368,18 +419,17 @@ pub(super) fn validate_ntdb_l2_package(
     let manifest_path = package_dir.join("manifest.json");
     if !manifest_path.exists() {
         return Err(format!(
-            "missing NTDB v2 L2 export for {}/{} at {}",
+            "missing NTDB L2 export for {}/{} at {}",
             config.category.as_str(),
             config.public_model,
             manifest_path.display()
         )
         .into());
     }
-    let manifest: PackageManifest =
-        serde_json::from_str(&std::fs::read_to_string(&manifest_path)?)?;
+    let manifest = parse_package_manifest(&std::fs::read_to_string(&manifest_path)?)?;
     manifest.validate().map_err(|err| {
         format!(
-            "invalid NTDB v2 L2 export for {}/{}: {err}",
+            "invalid NTDB L2 export for {}/{}: {err}",
             config.category.as_str(),
             config.public_model
         )
@@ -394,6 +444,47 @@ mod tests {
         ml::ntdb_executor::{ByteSpan, NtdbDecision},
         NtdbOperatingPoint,
     };
+
+    #[test]
+    fn tool_tags_uses_each_property_aggregators_threshold_pipeline() {
+        let decision = NtdbDecision {
+            model_id: "tool_tags".to_string(),
+            aggregator_id: "source_untrusted".to_string(),
+            task: "multiclass".to_string(),
+            labels: vec!["absent".to_string(), "present".to_string()],
+            fallback_label: "present".to_string(),
+            fallback_confidence: 0.95,
+            route_to_l3: false,
+            promote_score: None,
+            promote_threshold: None,
+            class_scores: vec![0.05, 0.95],
+            class_logits: Vec::new(),
+            chunks: 1,
+            chunk_promote_scores: Vec::new(),
+            l3_candidate_spans: Vec::new(),
+            l3_candidates: Vec::new(),
+            l2_chunk_outputs: Vec::new(),
+        };
+        let config = NtdbL2ModelConfig {
+            category: SecurityCategory::ToolTags,
+            model_id: "tool_tags",
+            public_model: "unified-v3-tool-tags",
+            asset_model: "unified-v3-tool-tags",
+            env_key: "TEST",
+            package_name: "test",
+            has_l3: true,
+        };
+
+        let result = ntdb_l2_scan_result(
+            config,
+            &decision,
+            &ScanExecution::new(SecurityLevel::L2),
+            1.0,
+        );
+
+        assert_eq!(result.class_name, "present");
+        assert!((result.confidence - 0.95).abs() < 1e-6);
+    }
 
     #[test]
     fn promoted_l2_fallback_still_obeys_decision_thresholds() {
@@ -472,6 +563,7 @@ mod tests {
                 category: SecurityCategory::Threat,
                 model_id: "threat",
                 public_model: "unified-v3-threat",
+                asset_model: "unified-v3-threat",
                 env_key: "TEST",
                 package_name: "test",
                 has_l3: true,
@@ -519,6 +611,8 @@ mod tests {
                 embedding_space: "minilm-test".to_string(),
                 token_ids: Vec::new(),
                 tokenizer_family: String::new(),
+                class_probabilities: Vec::new(),
+                joint_v3_decision: None,
             }],
         };
 
@@ -527,6 +621,7 @@ mod tests {
                 category: SecurityCategory::Threat,
                 model_id: "threat",
                 public_model: "unified-v3-threat",
+                asset_model: "unified-v3-threat",
                 env_key: "TEST",
                 package_name: "test",
                 has_l3: true,
@@ -585,6 +680,7 @@ mod tests {
                 category: SecurityCategory::Threat,
                 model_id: "threat",
                 public_model: "unified-v3-threat",
+                asset_model: "unified-v3-threat",
                 env_key: "TEST",
                 package_name: "test",
                 has_l3: true,

@@ -40,7 +40,7 @@ use crate::cache::{
 };
 use crate::ml::onnx::RawClassifierOutput;
 use crate::pipeline::decision_cache::DecisionCache;
-use crate::pipeline::decision_thresholds::arbitrate_l3_l2;
+use crate::pipeline::decision_thresholds::{arbitrate_joint_v3, arbitrate_l3_l2, JointV3L3Chunk};
 use crate::pipeline::strategy::{aggregate_decision_index, ChunkDecision, HeadDecisionState};
 use crate::pipeline::ChunkAggregation;
 
@@ -428,6 +428,10 @@ fn run_model_job(
     let job_started = Instant::now();
     let l3_policy = job.execution.l3_policy();
     let pipeline_policy = l3_policy.pipeline_policy(&job.category, &job.model);
+    let joint_v3 = job
+        .l2_chunk_outputs
+        .iter()
+        .any(|chunk| chunk.joint_v3_decision.is_some());
     let mut strategy = l3_strategy(&job);
     if let Some(aggregation) = pipeline_policy.aggregation.clone() {
         strategy.aggregation = aggregation.into();
@@ -440,6 +444,7 @@ fn run_model_job(
         l3_safe_class(&job),
     );
     let mut chunk_outputs = Vec::new();
+    let mut joint_v3_l3_chunks = Vec::new();
     let total_chunks = chunks.len();
     let mut chunk_trace = l3_chunk_trace_enabled().then(Vec::new);
     let decision = HeadDecisionState::new(
@@ -485,6 +490,7 @@ fn run_model_job(
         worker_state: &worker_state,
         chunks: &chunks,
         chunk_outputs: &mut chunk_outputs,
+        joint_v3_l3_chunks: &mut joint_v3_l3_chunks,
         chunk_trace: &mut chunk_trace,
         decision,
         aggregation: strategy.aggregation.clone(),
@@ -551,12 +557,19 @@ fn run_model_job(
         l3_result.duration_ms = l3_result.layers.iter().map(|layer| layer.duration_ms).sum();
         l3_result
     });
-    let mut result = arbitrate_l3_l2(
-        &job.category,
-        l3_result,
-        job.fallback,
-        job.execution.ntdb_decision_threshold_point(),
-    );
+    let point = job.execution.ntdb_decision_threshold_point();
+    let mut result = if joint_v3 {
+        arbitrate_joint_v3(
+            &job.category,
+            l3_result.clone(),
+            job.fallback.clone(),
+            &joint_v3_l3_chunks,
+            point,
+        )
+        .unwrap_or_else(|| arbitrate_l3_l2(&job.category, l3_result, job.fallback, point))
+    } else {
+        arbitrate_l3_l2(&job.category, l3_result, job.fallback, point)
+    };
     result.duration_ms = result.layers.iter().map(|layer| layer.duration_ms).sum();
     Ok(result)
 }
@@ -570,6 +583,7 @@ struct DedicatedExecutionAdapter<'a> {
     worker_state: &'a Arc<L3WorkerState>,
     chunks: &'a [crate::pipeline::l3_schedule::SelectedL3Chunk],
     chunk_outputs: &'a mut Vec<(EvaluationResult, Vec<LayerResult>)>,
+    joint_v3_l3_chunks: &'a mut Vec<JointV3L3Chunk>,
     chunk_trace: &'a mut Option<Vec<serde_json::Value>>,
     decision: HeadDecisionState,
     aggregation: ChunkAggregation,
@@ -640,6 +654,7 @@ impl L3ExecutionAdapter for DedicatedExecutionAdapter<'_> {
     }
 
     fn observe(&mut self, chunk_index: usize, output: &Self::Output, kind: L3ResolvedKind) -> bool {
+        let output = output.clone();
         let propagated = kind == L3ResolvedKind::Propagated;
         if propagated {
             self.propagated_chunks += 1;
@@ -653,6 +668,16 @@ impl L3ExecutionAdapter for DedicatedExecutionAdapter<'_> {
             propagated,
         );
         self.chunk_outputs.push(output.clone());
+        if let Some(probabilities) = dedicated_probabilities(&output.1) {
+            let chunk = &self.chunks[chunk_index];
+            self.joint_v3_l3_chunks.push(JointV3L3Chunk {
+                span: crate::ml::ntdb_executor::ByteSpan {
+                    start: chunk.start_byte,
+                    end: chunk.end_byte,
+                },
+                probabilities,
+            });
+        }
         let stop = self.decision.head_is_stable();
         publish_l3_progress(
             self.worker_state,
@@ -693,6 +718,12 @@ impl L3ExecutionAdapter for DedicatedExecutionAdapter<'_> {
         );
         stop
     }
+}
+
+fn dedicated_probabilities(layers: &[LayerResult]) -> Option<Vec<f32>> {
+    layers.iter().find_map(|layer| {
+        serde_json::from_value(layer.details.get("class_probabilities")?.clone()).ok()
+    })
 }
 
 fn l3_chunk_trace_enabled() -> bool {
@@ -1035,18 +1066,24 @@ fn infer_l3_chunk(
         let mut model = model
             .lock()
             .map_err(|err| format!("L3 model mutex poisoned: {err}"))?;
-        let result = model
-            .infer(
+        let raw = model
+            .infer_raw(
                 &chunk.text,
                 job.execution.backend(),
                 job.execution.onnx_runtime_options(),
             )
             .map_err(|err| err.to_string())?;
+        let result = model.decode_raw(&raw);
+        let probabilities = model.decode_probabilities(&raw);
         let mut layer = l3_metadata_layer(
             &result.class_name,
             &job.model,
             result.confidence,
             elapsed_ms(started),
+        );
+        layer.details.insert(
+            "class_probabilities".to_string(),
+            serde_json::json!(probabilities),
         );
         layer.details.insert(
             "model_name".to_string(),
@@ -1304,11 +1341,16 @@ fn finish_dedicated_output(
             .lock()
             .map_err(|err| format!("L3 model mutex poisoned: {err}"))?;
         let result = model.decode_raw(&raw);
+        let probabilities = model.decode_probabilities(&raw);
         let mut layer = l3_metadata_layer(
             &result.class_name,
             &job.model,
             result.confidence,
             elapsed_ms(started),
+        );
+        layer.details.insert(
+            "class_probabilities".to_string(),
+            serde_json::json!(probabilities),
         );
         layer.details.insert(
             "model_name".to_string(),
@@ -1682,6 +1724,7 @@ mod tests {
             unified_cache_key: None,
             degraded_factor: 0.75,
             l3_candidates: Vec::new(),
+            l2_chunk_outputs: Vec::new().into(),
             dynamic_pii_config: None,
             dynamic_pii_activated_rules: Vec::new(),
             test_delay_ms: None,

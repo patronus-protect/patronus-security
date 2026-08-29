@@ -13,20 +13,27 @@ auth:
       # `Authorization: Bearer <token>`. Never store the raw token here.
       key_hash: "sha256:0000000000000000000000000000000000000000000000000000000000000000"
       # Omit `categories` to allow every category listed under `pipeline.categories`.
-      categories: ["injection", "dlp", "pii"]
+      categories: ["injection", "dlp", "threat", "pii", "dynamic-pii"]
       # Optional per-key gate override. Falls back to `pipeline.gates` when
       # omitted. Same shape as `pipeline.gates` below.
       # gates:
       #   l3: false
 
 pipeline:
-  categories: ["injection", "dlp", "pii"]
-  max_level: "L2"
+  categories: ["injection", "dlp", "threat", "pii", "dynamic-pii"]
+  max_level: "L3"
   model_dir: "/data/models"
   # Assets are baked into the image at build time (see Dockerfile); leave
   # this false in production so a misconfigured deployment fails fast
   # instead of silently downloading models at request time.
   download_files: false
+
+  # Optional ONNX Runtime CPU tuning. Defaults are 1/1/false, which avoid
+  # oversubscription when several API containers share one VPS.
+  onnx_runtime:
+    intra_threads: 1
+    inter_threads: 1
+    spinning: false
 
   # Default execution gates for every scan (overridable per API key above).
   # Mirrors `patronus_ark::ScanGateMatrix`: `l1`/`l2`/`l3` are top-level

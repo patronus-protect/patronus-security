@@ -283,6 +283,9 @@ pub struct DecisionCandidate {
     pub acceptance_threshold: f64,
     pub accepted: bool,
     pub evidence: Option<HashMap<String, f64>>,
+    /// Chunk-level evidence for the single final document decision.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chunk_evidence: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -396,6 +399,9 @@ impl std::str::FromStr for OnnxBatchMode {
 pub enum NtdbOperatingPoint {
     BestF1,
     BestPromote,
+    /// Internal Ark API routing profile: use utility promotion only for an
+    /// Injection document with at most two normal chunks.
+    ArkApiShortInjectionUtility,
     BestFprInF1,
     BestFnrInF1,
     BestLatencyInF1,
@@ -407,6 +413,7 @@ impl NtdbOperatingPoint {
         match self {
             Self::BestF1 => "best_f1",
             Self::BestPromote => "best_promote",
+            Self::ArkApiShortInjectionUtility => "ark_api_short_injection_utility",
             Self::BestFprInF1 => "best_fpr_in_f1",
             Self::BestFnrInF1 => "best_fnr_in_f1",
             Self::BestLatencyInF1 => "best_latency_in_f1",

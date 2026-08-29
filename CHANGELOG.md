@@ -7,6 +7,138 @@ All notable changes to this project are documented here. The format is based on
 This project is **pre-1.0**: any change to detection thresholds, the asset manifest, or public
 result shapes may be breaking for downstream users, and is called out explicitly below.
 
+## [Unreleased]
+
+## [0.1.5] - 2026-08-29
+
+### Added
+
+- Added NTDB Package-v4/mmBERT loading for the exported
+  `raw_text_to_joint_v3_chunk_promoter_union_v1` contract: the neural stack and LightGBM promoter
+  score each chunk independently, only promoted chunks run through L3, and document decisions use
+  the export's L2-only, L3-only, and Union aggregation modes and thresholds. Manifest/model
+  feature dimensions are validated at load time. Package-v2 runtime types remain available but
+  are deprecated.
+- Added cache-backed Package-v4 parity evaluation for L2 probabilities, per-chunk promoter masks,
+  and final document decisions, including multiclass and binary validation sets.
+- Added pinned FP16 L3 selection via `PATRONUS_L3_PRECISION=fp16` for Injection, Threat,
+  Sensitive Document, and the Lion Warden unified model.
+- Added pinned FP16 Dynamic-PII/GLiNER selection. The image warmup now selects
+  `onnx/fp16/model_fp16.onnx` from the current revision of the Edge bundle when
+  `PATRONUS_L3_PRECISION=fp16` is set.
+- Added request-local Ark configuration to the existing multipart `POST /v1/scan` endpoint. A
+  request can override categories, maximum level, execution gates, metadata, and the NTDB
+  operating point without restarting the API; omitted values retain the server/API-key defaults,
+  and category overrides cannot exceed the worker or API-key scope. Existing text and multi-file
+  uploads keep their original jobs contract.
+- Added `decision.decision_candidate.chunk_evidence` for Package-v4 Union decisions. It records
+  the aggregation method, every contributing L2/L3 chunk, and the decisive chunk(s), so clients
+  can attribute the final document verdict without reconstructing it from layer diagnostics.
+- Added `ark-api` YAML support for API-key default categories, Dynamic PII/GLiNER configuration,
+  and the complete L3 scheduler policy (including per-pipeline overrides). Request-local gate
+  policies use the same validated policy shape; invalid conditional gates and invalid scheduler
+  bounds are rejected at configuration load time.
+- Added native and HTTP throughput regression tools for the production-style gated
+  injection/DLP/threat profile using unified L3. The native benchmark runs one Ark with parallel
+  requests for at least 60 seconds, reports progress while consuming events, and uses a mixed
+  workload averaging 100 KiB per request (96 KiB median) with repeated and varied content, small
+  2–26 KiB requests, and 1 MiB spikes. It reports MiB/s, RPS, and latency percentiles and verifies
+  completed requests, executed pipelines, levels, and the L3 model; Dynamic PII/GLiNER remains
+  excluded because it requires a separate representative request-size profile.
+- Added a CI throughput job that builds and installs a fresh release wheel, caches downloaded model
+  assets, runs the gated unified benchmark without GLiNER, and publishes its JSON report.
+- Added validated `pipeline.onnx_runtime` CPU session settings to `ark-api`. Intra-op/inter-op
+  thread counts and spinning are applied before startup warmup, so every ONNX session uses the
+  deployment's bounded thread policy; zero thread counts and unknown fields are rejected.
+- Added explicit category and NTDB operating-point controls to the HTTP throughput benchmark so
+  full injection/DLP/threat, no-threat, and `best_promote` runs record the configuration they test.
+
+### Changed
+
+- Re-pinned the Injection Package-v4/L3 bundle to Wolf Defender Small v2 and the three Tool Tags
+  Package-v4 bundles to the current Husky Nose revision. Both model families now use the same
+  immutable upstream revision for every runtime asset they supply.
+- Pinned all nine published Package-v4/mmBERT L2 bundles (Injection, Sensitive Document, Tool
+  Class, Tool Action, the three split Tool Tags, Routing, and Threat) to their immutable Hugging
+  Face revisions. The unified L3 strategy uses the pinned public Lion Warden bundle, including
+  FP16 selection; the former `-edge` repositories are no longer referenced.
+- Changed Package-v4 routing to promote exclusively per chunk. `best_promote` uses the exported
+  25% calibration operating point, while `best_f1` and `best_latency_in_f1` use the exported
+  utility operating point. Post-L3 benefit and document-decider state are no longer part of the
+  runtime contract; promoted chunks replace their L2 probabilities with L3 probabilities and
+  non-promoted chunks retain L2 for export-defined Union aggregation.
+- Changed Joint-v3 ONNX execution to the export's exact per-chunk tensor contract across Injection,
+  Threat, Sensitive Document, Routing, Tool Class, Tool Action, and the split Tool Tags pipelines.
+  Independent chunks remain parallelizable without document padding or attention-mask changes.
+- Preserved the existing L3 strategy engine for Package-v4 promotions, including request-wide
+  Early Exit, Representatives, Verify Representative, clustering, Exact Cache, and similarity
+  propagation. Package-v4 changes which chunks are promoted, not how L3 schedules them.
+- Changed Package-v4 final arbitration to use the export's default Union view while retaining
+  L2-only, L3-only, and Union decision candidates for policy inspection. A rejected Union candidate
+  returns the default class and is not overridden by an accepted L2-only candidate. Package-v2
+  keeps its existing `decision_thresholds.json` arbitration unchanged.
+- Changed the `ark-api` deployment to use the shared Unified L3 classifier for regular model heads
+  and the separate Dynamic PII/GLiNER runtime. The Docker build bakes both asset bundles, and the
+  reference build configuration now enables the production Injection/DLP/PII/Sensitive Document/
+  Threat/Routing/Dynamic PII profile at L3 with one request worker per container.
+- Changed `ark-api` scan input handling to accept both `text` and `content` multipart fields;
+  request-local configuration is resolved once and snapshotted into each text or file job.
+- Changed completed `ark-api` SSE request retention from five minutes to one minute.
+
+- Optimized the CPU inference setup by updating the default ONNX Runtime Rust bindings to `ort`
+  `2.0.0-rc.13` / ONNX Runtime 1.28 and making execution-provider selection feature-aware:
+  accelerator builds prefer their configured provider and fall back to CPU, while CPU-only builds
+  select the optimized CPU execution path directly instead of probing unavailable accelerators.
+- Changed unified-L3 warmup to execute a real inference after loading the session, so Docker build
+  warmup prepares both the embedded model assets and the runtime's first-inference path.
+- Extended API readiness output with the available and actually active ONNX execution providers.
+
+### Removed
+
+- Removed NTDB `.kit` tokenizer loading and generation. Official Package-v4 models use the
+  mmBERT-specific `.mmbpe` runtime, with `tokenizer.json` as the fallback.
+
+### Fixed
+
+- Fixed public gateway job polling to retain worker `evidence_spans` for every category. Native
+  PII/DLP and Dynamic-PII consumers now receive labels, matched text, score, and byte/character
+  offsets needed for redaction alongside classifier `decision_evidence`.
+- Fixed x86_64 CPU inference parity for the verified German greeting and Dynamic-PII person-span
+  cases by using the pinned FP16 ONNX graphs in production. On x86_64 deployments, build and run
+  the API with `PATRONUS_L3_PRECISION=fp16`; the default quantized graphs remain suitable only
+  where their output has been validated for the target runtime.
+- Fixed Dynamic PII asset selection so a pinned FP16 GLiNER model is downloaded, baked, and loaded
+  as one coherent bundle instead of validating it against the quantized model manifest.
+
+- Updated Lion Warden, Wolf Defender Injection, Wolf Defender Threat, and Orca Sonar L3 assets
+  to their public non-`-edge` Hugging Face repositories and current immutable revisions. FP16
+  selection now uses the repositories' `onnx/onnx_fp16/model_fp16.onnx` layout, and Lion
+  Warden's Sensitive Document head accepts its new `education` and `medical` classes.
+- Fixed automatic Package-v4 model updates so the downloader parses freshly fetched manifests
+  and the warmup validator through the Package-v4-aware parser before resolving or loading their
+  runtime artifacts, including exported non-finite report-only metric values.
+- Fixed warmup revision enforcement for official L2 packages: an existing manifest no longer
+  suppresses an update when its `.patronus-revision` marker is absent or stale, or when its shared
+  embedding matrix does not match the pinned manifest dimensions. Explicit local package
+  overrides remain untouched.
+- Fixed shared-embedder cache migration across encoder generations: embedding matrices with a
+  mismatched manifest size are no longer reused, and asset downloads replace hard links or
+  symlinks atomically instead of truncating another package's shared cache inode.
+- Fixed an `ark-api` event-delivery race: scans that emit before the HTTP handler registers their
+  request buffer now create that buffer in the dispatcher, preserving the event history for the
+  subsequent SSE subscriber.
+- Clarified that the built-in benchmark corpus contains synthetic historical regression fixtures,
+  not the model-release validation splits; its F1 values are therefore not release-validation
+  metrics.
+
+- Prevented CPU-only builds from attempting to register an accelerator execution provider that was
+  not compiled into the binary.
+
+### Breaking
+
+- Completed `ark-api` scan event streams are retained for one minute instead of five. Clients must
+  begin consuming `GET /v1/scan/{request_id}/events` within that shorter window.
+
 ## [0.1.4] - 2026-08-18
 
 ### Added

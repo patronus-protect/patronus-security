@@ -141,6 +141,7 @@ struct L3WorkerJob {
     unified_cache_key: Option<String>,
     degraded_factor: f64,
     l3_candidates: Vec<L3Candidate>,
+    l2_chunk_outputs: Arc<[L2ChunkOutput]>,
     dynamic_pii_config: Option<DynamicPiiConfig>,
     dynamic_pii_activated_rules: Vec<usize>,
     sequence: u64,
@@ -452,6 +453,7 @@ impl L3Worker {
             unified_cache_key,
             degraded_factor: spec.degraded_factor,
             l3_candidates: spec.l3_candidates,
+            l2_chunk_outputs: spec.l2_chunk_outputs,
             dynamic_pii_config: spec.dynamic_pii_config,
             dynamic_pii_activated_rules: spec.dynamic_pii_activated_rules,
             sequence: spec.job_id,
@@ -566,6 +568,7 @@ impl L3Worker {
                 unified_cache_key: None,
                 degraded_factor: spec.degraded_factor,
                 l3_candidates: spec.l3_candidates,
+                l2_chunk_outputs: spec.l2_chunk_outputs,
                 dynamic_pii_config: spec.dynamic_pii_config,
                 dynamic_pii_activated_rules: spec.dynamic_pii_activated_rules,
                 sequence: spec.job_id,
@@ -1673,6 +1676,8 @@ mod tests {
             embedding_space: String::new(),
             token_ids: Vec::new(),
             tokenizer_family: String::new(),
+            class_probabilities: Vec::new(),
+            joint_v3_decision: None,
         }
     }
 
@@ -1746,6 +1751,7 @@ mod tests {
             unified_cache_key: None,
             degraded_factor: 0.75,
             l3_candidates: Vec::new(),
+            l2_chunk_outputs: Vec::new().into(),
             dynamic_pii_config: None,
             dynamic_pii_activated_rules: Vec::new(),
             sequence,

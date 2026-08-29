@@ -24,7 +24,8 @@ venv/
 *.dylib
 *.pyd
 # run_local_benchmark() output; per-device, never committed
-benchmark/
+benchmark/**/*
+benchmarks/**/*
 
 # Local planning notes stay out of the public repo
 OPEN_TODO.md

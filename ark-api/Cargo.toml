@@ -1,6 +1,6 @@
 [package]
 name = "ark-api"
-version = "0.1.0"
+version = "0.1.5"
 edition = "2021"
 license = "GPL-3.0-only"
 publish = false
@@ -25,3 +25,9 @@ clap = { version = "4", features = ["derive"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 futures = "0.3"
+redis = { version = "0.27", features = ["tokio-comp"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+uuid = { version = "1", features = ["v4"] }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }

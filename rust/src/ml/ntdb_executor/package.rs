@@ -16,7 +16,8 @@ use super::{
         local_text_heuristics, shared_global_text_heuristics_from_token_stats,
         SharedGlobalTextHeuristics, TokenIdStats,
     },
-    manifest::PackageManifest,
+    joint_v3_runtime::JointV3Runtime,
+    manifest::{parse_package_manifest, PackageManifest},
     ntdb_error,
     runtime::{AggregatorRuntime, HeadRuntime},
     tokenizer::RuntimeTokenizer,
@@ -42,6 +43,10 @@ pub struct ScoreOutput {
     pub l3_candidate_spans: Vec<ByteSpan>,
     pub l3_candidates: Vec<L3Candidate>,
     pub l2_chunk_outputs: Vec<L2ChunkOutput>,
+    #[serde(skip)]
+    pub chunk_class_probabilities: Vec<Vec<f32>>,
+    #[serde(skip)]
+    pub joint_v3_decision: Option<Arc<JointV3DecisionContext>>,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
@@ -85,6 +90,25 @@ pub struct L2ChunkOutput {
     pub token_ids: Vec<u32>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub tokenizer_family: String,
+    #[serde(skip)]
+    pub class_probabilities: Vec<f32>,
+    #[serde(skip)]
+    pub joint_v3_decision: Option<Arc<JointV3DecisionContext>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct JointV3DecisionContext {
+    pub labels: Vec<String>,
+    pub default_class_index: usize,
+    pub l2: JointV3CandidatePolicy,
+    pub l3: JointV3CandidatePolicy,
+    pub union: JointV3CandidatePolicy,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct JointV3CandidatePolicy {
+    pub aggregation: String,
+    pub risk_margin_threshold: f32,
 }
 
 #[derive(Debug, Serialize)]
@@ -114,6 +138,7 @@ pub struct NtdbPackage {
     encoder: Arc<StaticEncoder>,
     heads: Vec<HeadRuntime>,
     aggregators: Vec<AggregatorRuntime>,
+    joint_v3: Option<JointV3Runtime>,
 }
 
 pub struct NtdbMultiPackage {
@@ -155,7 +180,7 @@ impl NtdbPackage {
         encoders: &mut StaticEncoderStore,
     ) -> NtdbResult<Self> {
         let package_dir = package_dir.as_ref().to_path_buf();
-        let mut manifest: PackageManifest = serde_json::from_str(
+        let mut manifest: PackageManifest = parse_package_manifest(
             &fs::read_to_string(package_dir.join("manifest.json")).map_err(|err| {
                 ntdb_error(format!(
                     "failed to read NTDB manifest {}: {err}",
@@ -181,16 +206,29 @@ impl NtdbPackage {
             ));
         }
 
-        let heads = manifest
-            .heads
-            .iter()
-            .map(|head| HeadRuntime::load(&package_dir, head))
-            .collect::<NtdbResult<Vec<_>>>()?;
-        let aggregators = manifest
-            .aggregators
-            .iter()
-            .map(|aggregator| AggregatorRuntime::load(&package_dir, aggregator))
-            .collect::<NtdbResult<Vec<_>>>()?;
+        let heads = if manifest.version == 2 {
+            manifest
+                .heads
+                .iter()
+                .map(|head| HeadRuntime::load(&package_dir, head))
+                .collect::<NtdbResult<Vec<_>>>()?
+        } else {
+            Vec::new()
+        };
+        let aggregators = if manifest.version == 2 {
+            manifest
+                .aggregators
+                .iter()
+                .map(|aggregator| AggregatorRuntime::load(&package_dir, aggregator))
+                .collect::<NtdbResult<Vec<_>>>()?
+        } else {
+            Vec::new()
+        };
+        let joint_v3 = manifest
+            .joint_v3
+            .as_ref()
+            .map(|joint| JointV3Runtime::load(&package_dir, joint))
+            .transpose()?;
 
         Ok(Self {
             manifest,
@@ -198,6 +236,7 @@ impl NtdbPackage {
             encoder,
             heads,
             aggregators,
+            joint_v3,
         })
     }
 
@@ -214,6 +253,19 @@ impl NtdbPackage {
             "ntdb_score_prepared",
             format!("model_id={model_id} chunks={chunk_count} embedding_dim={embedding_dim}"),
         );
+
+        if let Some(joint_v3) = &mut self.joint_v3 {
+            let mut output = joint_v3.score(&self.manifest.task, prepared, operating_point)?;
+            populate_joint_v3_chunks(
+                model_id,
+                &self.manifest,
+                prepared,
+                &mut output,
+                embedding_dim,
+            );
+            metrics.checkpoint("after_joint_v3", format!("model_id={model_id}"));
+            return Ok(vec![output]);
+        }
 
         let per_head = self
             .heads
@@ -326,6 +378,30 @@ impl NtdbPackage {
             .collect();
         metrics.checkpoint("after_aggregators", "");
         outputs
+    }
+
+    fn score_prepared_batch(
+        &mut self,
+        model_id: &str,
+        _texts: &[String],
+        prepared: &[PreparedDocument],
+        operating_point: NtdbOperatingPoint,
+    ) -> NtdbResult<Vec<Vec<ScoreOutput>>> {
+        let joint_v3 = self
+            .joint_v3
+            .as_mut()
+            .ok_or_else(|| ntdb_error("batched scoring requires an NTDB package v4 model"))?;
+        let mut outputs = joint_v3.score_batch(&self.manifest.task, prepared, operating_point)?;
+        for (document, output) in prepared.iter().zip(&mut outputs) {
+            populate_joint_v3_chunks(
+                model_id,
+                &self.manifest,
+                document,
+                output,
+                self.manifest.minilm.embedding_dim,
+            );
+        }
+        Ok(outputs.into_iter().map(|output| vec![output]).collect())
     }
 
     fn preparation_key(&self) -> PreparationKey {
@@ -505,6 +581,9 @@ impl NtdbMultiPackage {
             .iter()
             .find(|entry| entry.id == model_id)
             .map(|entry| {
+                if entry.package.joint_v3.is_some() {
+                    return vec!["joint_v3".to_string()];
+                }
                 entry
                     .package
                     .aggregators
@@ -541,6 +620,31 @@ impl NtdbMultiPackage {
                 })
             })
             .collect()
+    }
+
+    pub fn score_all_models_batch(
+        &mut self,
+        texts: &[String],
+        operating_point: NtdbOperatingPoint,
+    ) -> NtdbResult<Vec<Vec<MultiScoreOutput>>> {
+        let mut result = (0..texts.len()).map(|_| Vec::new()).collect::<Vec<_>>();
+        for entry in &mut self.packages {
+            let prepared = texts
+                .iter()
+                .map(|text| entry.package.prepare_document(text))
+                .collect::<NtdbResult<Vec<_>>>()?;
+            let outputs =
+                entry
+                    .package
+                    .score_prepared_batch(&entry.id, texts, &prepared, operating_point)?;
+            for (target, outputs) in result.iter_mut().zip(outputs) {
+                target.push(MultiScoreOutput {
+                    model_id: entry.id.clone(),
+                    outputs,
+                });
+            }
+        }
+        Ok(result)
     }
 
     pub fn score_models<I, S>(
@@ -636,6 +740,107 @@ impl NtdbMultiPackage {
         }
         Ok(prepared)
     }
+}
+
+fn populate_joint_v3_chunks(
+    model_id: &str,
+    manifest: &PackageManifest,
+    prepared: &PreparedDocument,
+    output: &mut ScoreOutput,
+    embedding_dim: usize,
+) {
+    let threshold = output.promote_threshold.unwrap_or(f32::INFINITY);
+    let scores = &output.chunk_promote_scores;
+    let promoted = scores
+        .iter()
+        .enumerate()
+        .filter_map(|(index, score)| {
+            score
+                .filter(|score| *score >= threshold)
+                .map(|score| (index, score))
+        })
+        .collect::<Vec<_>>();
+    output.l3_candidate_spans = promoted
+        .iter()
+        .map(|(index, _)| prepared.chunks[*index].byte_span)
+        .collect();
+    output.l3_candidates = promoted
+        .iter()
+        .map(|(index, score)| L3Candidate {
+            span: prepared.chunks[*index].byte_span,
+            promote_score: *score,
+            promote_threshold: threshold,
+            source_pipeline: String::new(),
+            source_model: model_id.to_string(),
+            l2_class: output.predicted_label.clone(),
+        })
+        .collect();
+    let chunk_class_probabilities = std::mem::take(&mut output.chunk_class_probabilities);
+    let joint_v3_decision = output.joint_v3_decision.clone();
+    output.l2_chunk_outputs = prepared
+        .chunks
+        .iter()
+        .enumerate()
+        .map(|(index, chunk)| {
+            let mut embedding = prepared.raw_embeddings
+                [index * embedding_dim..(index + 1) * embedding_dim]
+                .to_vec();
+            normalize_embedding(&mut embedding);
+            let score = scores.get(index).copied().flatten();
+            let class_probabilities = chunk_class_probabilities
+                .get(index)
+                .cloned()
+                .unwrap_or_default();
+            let (class_name, confidence) = class_probabilities
+                .iter()
+                .enumerate()
+                .max_by(|left, right| left.1.total_cmp(right.1))
+                .map(|(selected, confidence)| {
+                    (
+                        output
+                            .labels
+                            .get(selected)
+                            .cloned()
+                            .unwrap_or_else(|| selected.to_string()),
+                        *confidence,
+                    )
+                })
+                .unwrap_or_else(|| {
+                    (
+                        output.predicted_label.clone(),
+                        output
+                            .class_scores
+                            .get(output.predicted_index)
+                            .copied()
+                            .unwrap_or_default(),
+                    )
+                });
+            L2ChunkOutput {
+                span: chunk.byte_span,
+                class_name,
+                confidence,
+                promoted: score.is_some_and(|score| score >= threshold),
+                promote_score: score,
+                promote_threshold: Some(threshold),
+                source_pipeline: String::new(),
+                source_model: model_id.to_string(),
+                embedding,
+                embedding_space: manifest
+                    .minilm
+                    .shared_embedder_identity()
+                    .unwrap_or("unknown-l2-encoder")
+                    .to_string(),
+                token_ids: chunk.token_ids.clone(),
+                tokenizer_family: manifest
+                    .minilm
+                    .tokenizer_family
+                    .clone()
+                    .unwrap_or_else(|| "mmbert".to_string()),
+                class_probabilities,
+                joint_v3_decision: joint_v3_decision.clone(),
+            }
+        })
+        .collect();
 }
 
 fn chunk_promotions(
@@ -773,6 +978,8 @@ fn l2_chunk_output(
         embedding_space: embedding_space.to_string(),
         token_ids,
         tokenizer_family,
+        class_probabilities: Vec::new(),
+        joint_v3_decision: None,
     }
 }
 
