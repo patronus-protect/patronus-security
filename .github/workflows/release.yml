@@ -77,10 +77,10 @@ jobs:
 
           path = Path("rust/Cargo.toml")
           text = path.read_text()
-          old = 'ort = { version = "2.0.0-rc.12", default-features = false, features = ["std", "ndarray", "tracing", "download-binaries", "tls-rustls", "copy-dylibs", "api-24", "half"] }'
+          old = 'ort = { version = "2.0.0-rc.13", default-features = false, features = ["std", "ndarray", "tracing", "download-binaries", "tls-rustls", "copy-dylibs", "api-24", "half"] }'
           new = 'ort = { version = "=2.0.0-rc.10", default-features = false, features = ["std", "ndarray", "tracing", "download-binaries", "copy-dylibs", "half"] }'
           if old not in text:
-              raise SystemExit("expected ort rc12 dependency line not found")
+              raise SystemExit("expected ort rc13 dependency line not found")
           path.write_text(text.replace(old, new))
           PY
           cargo update -p ort --precise 2.0.0-rc.10

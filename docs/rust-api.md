@@ -848,6 +848,9 @@ pub struct DecisionCandidate {
     pub acceptance_threshold: f64,
     pub accepted: bool,
     pub evidence: Option<HashMap<String, f64>>,
+    /// Chunk-level evidence for the single final document decision.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chunk_evidence: Option<serde_json::Value>,
 }
 ```
 
@@ -1542,7 +1545,7 @@ pub struct NtdbL2PackageAssetSpec {
 }
 ```
 
-A manifest-first NTDB v2 L2 package declared for Hugging Face download.
+A manifest-first NTDB L2 package declared for Hugging Face download.
 
 ```rust
 pub struct PipelineModelAssetSpec {
@@ -1578,7 +1581,7 @@ pub fn ntdb_l2_package_assets(
 ) -> Vec<NtdbL2PackageAssetSpec>;
 ```
 
-Return NTDB v2 L2 package entries needed for a category up to `max_level`.
+Return NTDB L2 package entries needed for a category up to `max_level`.
 
 ```rust
 pub fn ntdb_l2_package_asset(
@@ -1588,7 +1591,18 @@ pub fn ntdb_l2_package_asset(
 ) -> Option<NtdbL2PackageAssetSpec>;
 ```
 
-Return the NTDB v2 L2 package entry for a public model name.
+Return the NTDB L2 package entry for a public model name.
+
+```rust
+pub fn ntdb_l2_package_assets_present(
+    category: SecurityCategory,
+    max_level: SecurityLevel,
+    model: &str,
+    target_dir: &Path,
+) -> bool;
+```
+
+Check whether an official NTDB L2 package cache matches its pinned revision.
 
 ```rust
 pub fn required_assets_present(
@@ -1670,7 +1684,7 @@ pub fn download_ntdb_l2_package(
 ) -> Result<PathBuf, Box<dyn std::error::Error>>;
 ```
 
-Download a missing NTDB v2 L2 package from Hugging Face into `target_dir`.
+Download a missing NTDB L2 package from Hugging Face into `target_dir`.
 
 The package is downloaded manifest-first: `manifest.json` is fetched from
 the package prefix, then runtime files referenced by that manifest are

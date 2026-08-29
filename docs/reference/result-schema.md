@@ -110,7 +110,7 @@ classifier-looking scores.
     ],
     "terminality": {"completion": "complete", "degraded": False, "degradation_reason": None},
     "provenance": {
-        "ark_version": "0.1.4",
+        "ark_version": "0.1.5",
         "schema_version": "ark.decision.v1",
         "model": "unified-v3-threat",
     },
@@ -198,6 +198,10 @@ clustering enabled it groups near-duplicate windows, infers only cluster represe
 propagates their verdict to the rest (see
 [L3 worker policy](configuration.md#l3-worker-policy)). An empty or unusable candidate list
 deliberately falls back to full-text L3.
+
+For Package-v4 Union decisions, the final `decision_candidate` may contain `chunk_evidence` with
+the aggregation method and the contributing document chunks. This provenance never changes the
+scan verdict.
 
 ### `progress`
 

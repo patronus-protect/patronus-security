@@ -11,7 +11,7 @@ use axum::middleware;
 use axum::routing::{get, post};
 use axum::Router;
 use clap::Parser;
-use patronus_ark::{ExactCacheConfig, PersistentCacheConfig, SecurityGateway};
+use patronus_ark::{ExactCacheConfig, L3Strategy, PersistentCacheConfig, SecurityGateway};
 use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::trace::TraceLayer;
 
@@ -60,6 +60,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         None,
         cache_config,
     )?;
+    // The deployment image intentionally carries one shared classifier for
+    // regular L3 heads, plus the separate Dynamic-PII GLiNER runtime.
+    gateway.set_l3_strategy(L3Strategy::Multi);
+    // One request worker feeds the single serial Unified-L3 worker. Horizontal
+    // API capacity comes from multiple containers, not an in-container backlog.
+    gateway.set_queue_worker_count(1);
+    gateway.set_onnx_runtime_options(config.onnx_runtime);
+    if let Some(dynamic_pii) = config.dynamic_pii.clone() {
+        gateway
+            .set_dynamic_pii_config(dynamic_pii)
+            .map_err(|err| format!("pipeline.dynamic_pii: {err}"))?;
+    }
     gateway.warmup()?;
 
     if args.warmup_only {

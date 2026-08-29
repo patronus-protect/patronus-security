@@ -265,6 +265,10 @@ impl SecurityGateway {
                 let missing_files = assets::DYNAMIC_PII_ASSET
                     .files
                     .iter()
+                    .filter(|file| {
+                        assets::selected_pipeline_model_files(assets::DYNAMIC_PII_ASSET)
+                            .contains(file)
+                    })
                     .filter(|file| !bundle_dir.join(file).is_file())
                     .copied()
                     .collect::<Vec<_>>();
@@ -298,10 +302,17 @@ impl SecurityGateway {
             for config in configs {
                 let env_override = std::env::var_os(config.env_key).is_some();
                 let package_dir = ntdb_l2_package_dir(config, &category_dir);
-                if !env_override && !package_dir.join("manifest.json").exists() {
+                let official_package_current = env_override
+                    || assets::ntdb_l2_package_assets_present(
+                        *category,
+                        self.max_level,
+                        config.asset_model,
+                        &category_dir,
+                    );
+                if !official_package_current {
                     if allow_download && self.should_download_assets_for(*category) {
                         log::info!(
-                            "{}/{} NTDB v2 L2 package missing; downloading package",
+                            "{}/{} NTDB L2 package missing; downloading package",
                             category.as_str(),
                             config.public_model
                         );
@@ -309,7 +320,7 @@ impl SecurityGateway {
                             assets::download_ntdb_l2_package_with_progress(
                                 *category,
                                 self.max_level,
-                                config.public_model,
+                                config.asset_model,
                                 &category_dir,
                                 progress,
                             )?;
@@ -317,13 +328,13 @@ impl SecurityGateway {
                             assets::download_ntdb_l2_package(
                                 *category,
                                 self.max_level,
-                                config.public_model,
+                                config.asset_model,
                                 &category_dir,
                             )?;
                         }
                     } else {
                         return Err(format!(
-                            "missing {} L2 package at {}; downloads disabled",
+                            "missing {} L2 package at {}, or cached revision is outdated; downloads disabled",
                             config.public_model,
                             package_dir.display()
                         )
@@ -468,7 +479,7 @@ impl SecurityGateway {
                     category_dir,
                     manifest.task.labels.clone(),
                     config.public_model,
-                    &["prompts/onnx/int8_int4_embeddings/model.onnx"],
+                    sensitive_l3_onnx_paths(),
                     "prompts/tokenizer.json",
                     256,
                     asset.revision,
@@ -484,7 +495,7 @@ impl SecurityGateway {
                     category_dir,
                     manifest.task.labels.clone(),
                     config.public_model,
-                    &["l3/onnx/int8_int4_embeddings/model.onnx"],
+                    dedicated_l3_onnx_paths(),
                     "l3/tokenizer.json",
                     256,
                     asset.revision,
@@ -576,11 +587,39 @@ fn ntdb_injection_l3_worker_model(
         category_dir,
         labels,
         "wolf-defender-small",
-        &["l3/onnx/int8_int4_embeddings/model.onnx"],
+        dedicated_l3_onnx_paths(),
         "l3/tokenizer.json",
         256,
         model_sha,
     )
+}
+
+fn dedicated_l3_onnx_paths() -> &'static [&'static str] {
+    if assets::prefer_fp16_l3() {
+        &[
+            "l3/onnx/onnx_fp16/model_fp16.onnx",
+            "l3/onnx/int8_int4_embeddings/model.onnx",
+        ]
+    } else {
+        &[
+            "l3/onnx/int8_int4_embeddings/model.onnx",
+            "l3/onnx/onnx_fp16/model_fp16.onnx",
+        ]
+    }
+}
+
+fn sensitive_l3_onnx_paths() -> &'static [&'static str] {
+    if assets::prefer_fp16_l3() {
+        &[
+            "prompts/onnx/onnx_fp16/model_fp16.onnx",
+            "prompts/onnx/int8_int4_embeddings/model.onnx",
+        ]
+    } else {
+        &[
+            "prompts/onnx/int8_int4_embeddings/model.onnx",
+            "prompts/onnx/onnx_fp16/model_fp16.onnx",
+        ]
+    }
 }
 
 fn revision_pinned_l3_asset(

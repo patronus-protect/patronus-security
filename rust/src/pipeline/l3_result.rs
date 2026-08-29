@@ -213,6 +213,7 @@ mod tests {
                     acceptance_threshold: 0.86471,
                     accepted: true,
                     evidence: None,
+                    chunk_evidence: None,
                 }),
                 recommendation: DecisionRecommendation {
                     accepted: true,

@@ -25,5 +25,3 @@ arguments.
 | `ntdb_memory_smoke` | Process RSS smoke for the NTDB L2 executor |
 | `wolf_memory_smoke` | Process RSS smoke for Wolf Defender L3 |
 | `mmbert_pair_tokenizer` | mmBERT `.mmbpe` vs HuggingFace parity check |
-| `ntdb_tokenizer_parity` | NTDB `.kit` vs HuggingFace parity check |
-| `tokenizer_to_kit` | Convert a HuggingFace tokenizer to the compact `.kit` format |

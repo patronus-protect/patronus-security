@@ -28,7 +28,7 @@ Category assets are stored below that root, for example `injection/`, `sensitive
 - Failed downloads for required assets return an error from `prepare_assets()` and therefore from compatibility `warmup()`.
 - Missing optional assets do not block asset preparation.
 - Optional assets are skipped by default during downloads. Set `PATRONUS_DOWNLOAD_OPTIONAL_ASSETS=1` to download optional full ONNX files and sidecar data.
-- Required L3 assets prefer fp16 ONNX files where available.
+- Set `PATRONUS_L3_PRECISION=fp16` to select pinned FP16 ONNX files where available; Linux `x86_64` production deployments use this validated mode, including Dynamic PII/GLiNER.
 - PII is native L1-only and has no model assets.
 - `dynamic-pii` is L3-only and requires the revision-pinned `gliner_small-v2.5-edge` bundle below the regular `model_dir` asset root.
 - L3 ONNX sessions are lazy-loaded on first L3 inference and are evicted after `PATRONUS_L3_TTL_SECS` seconds of idleness. The default TTL is `300` seconds.
@@ -36,25 +36,27 @@ Category assets are stored below that root, for example `injection/`, `sensitive
 
 ## L3 Strategy
 
-`dedicated` loads the configured per-pipeline L3 bundles. `multi` loads only the revision-pinned `patronus-studio/lion-warden-ai-security-classifier` classifier bundle at revision `5711c4169442da12f0f4ec20e32f90d940684d20`; GLiNER remains separate in both strategies.
+`dedicated` loads the configured per-pipeline L3 bundles. `multi` loads only the revision-pinned `patronus-studio/lion-warden-ai-security-classifier` classifier bundle at revision `30ea449339d1075a31fcffa9199ebee4f2cfaf9a`; GLiNER remains separate in both strategies.
 
-The shared ONNX artifact is `onnx/int8_int4_embeddings/model.onnx`. See `docs/unified-multitask-l3-plan.md` for its seven-head tensor contract and the request-local worker coalescing contract.
+The default shared ONNX artifact is `onnx/int8_int4_embeddings/model.onnx`; set `PATRONUS_L3_PRECISION=fp16` to select `onnx/onnx_fp16/model_fp16.onnx`. Dynamic PII selects `onnx/fp16/model_fp16.onnx` from its separate GLiNER bundle. Linux `x86_64` production deployments use FP16 for validated inference parity. See `docs/unified-multitask-l3-plan.md` for the seven-head tensor contract and the request-local worker coalescing contract.
 
 ## NTDB L2 Packages
 
-NTDB v2 L2 packages are manifest-first and revision-pinned: the runtime downloads `manifest.json` and every file it references from the immutable Hugging Face commit listed below. Sizes therefore depend on the published package contents at that revision.
+NTDB L2 packages are manifest-first and revision-pinned: the runtime downloads `manifest.json` and every runtime file it references from the immutable Hugging Face commit listed below. The current official packages use Package v4 with mmBERT and the Joint-v3 actionable-benefit promoter; the deprecated Package-v2 runtime remains available for older local overrides.
 
-For supported Granite/ModernBERT packages, the Security Lib generates a compact `tokenizer.kit` locally after the verified asset download. Existing official caches are migrated during warmup, while local environment overrides are left untouched. The original `tokenizer.json` remains the canonical fallback. Generated files are written atomically under a cross-process lock and invalidated by source hash, compact hash, converter version, and format version.
+For mmBERT packages, the Security Lib generates `tokenizer.mmbpe` locally after the verified asset download. The former `.kit` runtime is no longer supported. The original `tokenizer.json` remains the canonical fallback.
 
 | Category | Model | Repository | Revision | Source prefix | Cache path |
 | --- | --- | --- | --- | --- | --- |
-| Injection | `wolf-defender-small` | `patronus-studio/wolf-defender-prompt-injection-small` | `eff31df5c97ca127b7b55da255a160f88a625c97` | `l2` | `l2_ntdb/injection_current` |
-| SensitiveDocument | `orca-sonar-document-classifier` | `patronus-studio/orca-sonar-document-classifier` | `64360dd35400f32a11df17e337de4f648d17656d` | `l2` | `l2_ntdb/sensitive_document_current` |
-| ToolClass | `unified-v3-tool-class` | `patronus-studio/husky-sight-tool-type-classifier` | `e5dac8417697c725edf3c676410a4dd8187bb69d` | `l2` | `l2_ntdb/tool_class_current` |
-| ToolAction | `unified-v3-tool-action` | `patronus-studio/husky-paw-tool-action-classifier` | `f3ace2a7d0b8d10f6e4d40611521e895e2689e13` | `l2` | `l2_ntdb/tool_action_current` |
-| ToolTags | `unified-v3-tool-tags` | `patronus-studio/husky-nose-tool-security-properties-classifier` | `448a1332cdb3f14a7c3473561b2cfbca0fd17562` | `l2` | `l2_ntdb/tool_tags_current` |
-| Routing | `unified-v3-routing` | `patronus-studio/panther-read-intent-classifier` | `17de8464180c5227802ac44512dd7b039ff45abe` | `l2` | `l2_ntdb/routing_current` |
-| Threat | `unified-v3-threat` | `patronus-studio/wolf-defender-threat-classifier` | `54a862f9367fec529c90e8af237083dc11b2cd74` | `l2` | `l2_ntdb/threat_current` |
+| Injection | `wolf-defender-small` | `patronus-studio/wolf-defender-prompt-injection-small` | `142fadc5474163d4c483cb761d5a6b02e3aa1741` | `l2` | `l2_ntdb/injection_current` |
+| SensitiveDocument | `orca-sonar-document-classifier` | `patronus-studio/orca-sonar-document-classifier` | `dd51a00ec62b99eb0efc77300679676508f8e583` | `l2` | `l2_ntdb/sensitive_document_current` |
+| ToolClass | `unified-v3-tool-class` | `patronus-studio/husky-sight-tool-type-classifier` | `286be0dae164ac189bb79cfcb4f60cedd81aaa58` | `l2` | `l2_ntdb/tool_class_current` |
+| ToolAction | `unified-v3-tool-action` | `patronus-studio/husky-paw-tool-action-classifier` | `54a95e983d0df6d13ceb2ce675bde7200238170b` | `l2` | `l2_ntdb/tool_action_current` |
+| ToolTags | `tool_tags_sink_external` | `patronus-studio/husky-nose-tool-security-properties-classifier` | `66bb4bdd76f57aacba7a4e39e0368e35701b2244` | `l2/sink_external` | `l2_ntdb/tool_tags_sink_external_current` |
+| ToolTags | `tool_tags_source_sensitive` | `patronus-studio/husky-nose-tool-security-properties-classifier` | `66bb4bdd76f57aacba7a4e39e0368e35701b2244` | `l2/source_sensitive` | `l2_ntdb/tool_tags_source_sensitive_current` |
+| ToolTags | `tool_tags_source_untrusted` | `patronus-studio/husky-nose-tool-security-properties-classifier` | `66bb4bdd76f57aacba7a4e39e0368e35701b2244` | `l2/source_untrusted` | `l2_ntdb/tool_tags_source_untrusted_current` |
+| Routing | `unified-v3-routing` | `patronus-studio/panther-read-intent-classifier` | `3e997999c05a3a8be8ea6b3e23dd97126ca10d70` | `l2` | `l2_ntdb/routing_current` |
+| Threat | `unified-v3-threat` | `patronus-studio/wolf-defender-threat-classifier` | `ef87add2834a1a257754fbf9d7ba69df48aea733` | `l2` | `l2_ntdb/threat_current` |
 
 ## Download Size Snapshot
 
@@ -64,11 +66,11 @@ The sizes below show required cold-cache downloads for the selected maximum leve
 
 | Category | L1 required | L2 required | L3 required | Repositories |
 | --- | ---: | ---: | ---: | --- |
-| `injection` | 0 B | 0 B | unknown | patronus-studio/wolf-defender-prompt-injection-small-edge |
+| `injection` | 0 B | 0 B | unknown | patronus-studio/wolf-defender-prompt-injection-small |
 | `dlp` | 0 B | 0 B | 0 B | none |
 | `pii` | 0 B | 0 B | 0 B | none |
 | `dynamic-pii` | 0 B | 0 B | unknown | patronus-studio/gliner_small-v2.5-edge |
-| `sensitive_document` | 0 B | 0 B | unknown | patronus-studio/orca-sonar-document-classifier-edge |
+| `sensitive_document` | 0 B | 0 B | unknown | patronus-studio/orca-sonar-document-classifier |
 | `tool_class` | 0 B | 0 B | 0 B | none |
 | `tool_action` | 0 B | 0 B | 0 B | none |
 | `tool_tags` | 0 B | 0 B | 0 B | none |
@@ -79,17 +81,18 @@ The sizes below show required cold-cache downloads for the selected maximum leve
 
 | Category | Level | Required | Source | Cache path | Size |
 | --- | --- | --- | --- | --- | ---: |
-| `injection` | `L3` | yes | `patronus-studio/wolf-defender-prompt-injection-small-edge/config.json` | `injection/l3/config.json` | unknown |
-| `injection` | `L3` | yes | `patronus-studio/wolf-defender-prompt-injection-small-edge/tokenizer.json` | `injection/l3/tokenizer.json` | unknown |
-| `injection` | `L3` | optional | `patronus-studio/wolf-defender-prompt-injection-small-edge/tokenizer_config.json` | `injection/l3/tokenizer_config.json` | unknown |
-| `injection` | `L3` | yes | `patronus-studio/wolf-defender-prompt-injection-small-edge/onnx/int8_int4_embeddings/model.onnx` | `injection/l3/onnx/int8_int4_embeddings/model.onnx` | unknown |
-| `sensitive_document` | `L3` | yes | `patronus-studio/orca-sonar-document-classifier-edge/config.json` | `sensitive_document/prompts/config.json` | unknown |
-| `sensitive_document` | `L3` | yes | `patronus-studio/orca-sonar-document-classifier-edge/tokenizer.json` | `sensitive_document/prompts/tokenizer.json` | unknown |
-| `sensitive_document` | `L3` | optional | `patronus-studio/orca-sonar-document-classifier-edge/tokenizer_config.json` | `sensitive_document/prompts/tokenizer_config.json` | unknown |
-| `sensitive_document` | `L3` | yes | `patronus-studio/orca-sonar-document-classifier-edge/onnx/int8_int4_embeddings/model.onnx` | `sensitive_document/prompts/onnx/int8_int4_embeddings/model.onnx` | unknown |
+| `injection` | `L3` | yes | `patronus-studio/wolf-defender-prompt-injection-small/config.json` | `injection/l3/config.json` | 1.9 KiB |
+| `injection` | `L3` | yes | `patronus-studio/wolf-defender-prompt-injection-small/tokenizer.json` | `injection/l3/tokenizer.json` | 32.8 MiB |
+| `injection` | `L3` | optional | `patronus-studio/wolf-defender-prompt-injection-small/tokenizer_config.json` | `injection/l3/tokenizer_config.json` | 0.5 KiB |
+| `injection` | `L3` | yes | `patronus-studio/wolf-defender-prompt-injection-small/onnx/int8_int4_embeddings/model.onnx` | `injection/l3/onnx/int8_int4_embeddings/model.onnx` | unknown |
+| `sensitive_document` | `L3` | yes | `patronus-studio/orca-sonar-document-classifier/config.json` | `sensitive_document/prompts/config.json` | unknown |
+| `sensitive_document` | `L3` | yes | `patronus-studio/orca-sonar-document-classifier/tokenizer.json` | `sensitive_document/prompts/tokenizer.json` | 32.8 MiB |
+| `sensitive_document` | `L3` | optional | `patronus-studio/orca-sonar-document-classifier/tokenizer_config.json` | `sensitive_document/prompts/tokenizer_config.json` | 0.6 KiB |
+| `sensitive_document` | `L3` | yes | `patronus-studio/orca-sonar-document-classifier/onnx/int8_int4_embeddings/model.onnx` | `sensitive_document/prompts/onnx/int8_int4_embeddings/model.onnx` | unknown |
 | `dynamic-pii` | `L3` | yes | `patronus-studio/gliner_small-v2.5-edge/gliner_config.json` | `dynamic_pii/gliner_small_v2_5/gliner_config.json` | unknown |
 | `dynamic-pii` | `L3` | yes | `patronus-studio/gliner_small-v2.5-edge/gliner_onnx_config.json` | `dynamic_pii/gliner_small_v2_5/gliner_onnx_config.json` | unknown |
 | `dynamic-pii` | `L3` | yes | `patronus-studio/gliner_small-v2.5-edge/model_int4_embeddings_int8.onnx` | `dynamic_pii/gliner_small_v2_5/model_int4_embeddings_int8.onnx` | unknown |
+| `dynamic-pii` | `L3` | yes | `patronus-studio/gliner_small-v2.5-edge/onnx/fp16/model_fp16.onnx` | `dynamic_pii/gliner_small_v2_5/onnx/fp16/model_fp16.onnx` | unknown |
 | `dynamic-pii` | `L3` | yes | `patronus-studio/gliner_small-v2.5-edge/quantization_manifest.json` | `dynamic_pii/gliner_small_v2_5/quantization_manifest.json` | unknown |
 | `dynamic-pii` | `L3` | yes | `patronus-studio/gliner_small-v2.5-edge/special_tokens_map.json` | `dynamic_pii/gliner_small_v2_5/special_tokens_map.json` | unknown |
 | `dynamic-pii` | `L3` | yes | `patronus-studio/gliner_small-v2.5-edge/spm.model` | `dynamic_pii/gliner_small_v2_5/spm.model` | unknown |

@@ -7,6 +7,7 @@ use crate::NtdbOperatingPoint;
 mod decision;
 mod encoder;
 mod heuristics;
+mod joint_v3_runtime;
 mod lightgbm;
 pub mod manifest;
 mod package;
@@ -14,10 +15,12 @@ mod runtime;
 pub(crate) mod tokenizer;
 
 pub use decision::NtdbDecision;
+pub(crate) use joint_v3_runtime::aggregate_probabilities;
 pub use package::{
     ByteSpan, L2ChunkOutput, L3Candidate, MultiScoreOutput, NtdbMultiPackage, NtdbPackageSpec,
     ScoreOutput,
 };
+pub(crate) use package::{JointV3CandidatePolicy, JointV3DecisionContext};
 
 /// Internal items re-exported for the integration test suite. Not public API.
 #[cfg(feature = "test-util")]
@@ -91,6 +94,20 @@ impl NtdbExecutor {
     ) -> NtdbResult<Vec<NtdbDecision>> {
         let outputs = self.packages.score_all_models(text, operating_point)?;
         decisions_from_multi_outputs(outputs)
+    }
+
+    /// Scores multiple texts while preserving each package's runtime contract.
+    /// Package-v4 executes every prepared chunk as an independent neural row.
+    pub fn score_all_batch(
+        &mut self,
+        texts: &[String],
+        operating_point: NtdbOperatingPoint,
+    ) -> NtdbResult<Vec<Vec<NtdbDecision>>> {
+        self.packages
+            .score_all_models_batch(texts, operating_point)?
+            .into_iter()
+            .map(decisions_from_multi_outputs)
+            .collect()
     }
 
     pub fn score_models<I, S>(

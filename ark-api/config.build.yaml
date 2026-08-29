@@ -10,7 +10,9 @@ auth:
       key_hash: "sha256:3d46dab01df11228e2ccf88613ed995487c65cba309568731273f0988e5416b1"
 
 pipeline:
-  categories: ["injection", "dlp", "pii"]
-  max_level: "L2"
+  # L3 classifier categories share the unified model at runtime. Dynamic PII
+  # keeps its separate GLiNER bundle. Both are baked into the final image.
+  categories: ["injection", "dlp", "pii", "sensitive_document", "threat", "routing", "dynamic-pii"]
+  max_level: "L3"
   model_dir: "/data/models"
   download_files: true

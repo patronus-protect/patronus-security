@@ -12,7 +12,7 @@ const EVENT_CHANNEL_CAPACITY: usize = 64;
 /// that only starts polling `/v1/scan/{id}/events` after completion (a very
 /// fast L1-only scan can finish before the client issues its second
 /// request) still sees the full event history instead of a 404.
-const FINISHED_RETENTION: Duration = Duration::from_secs(5 * 60);
+const FINISHED_RETENTION: Duration = Duration::from_secs(60);
 const SWEEP_INTERVAL: Duration = Duration::from_secs(30);
 
 struct RequestChannel {
@@ -53,14 +53,15 @@ impl AppState {
         state
     }
 
-    /// Register a request's event buffer before enqueueing it with the
-    /// gateway, so the dispatcher always has somewhere to record events even
-    /// if no client has subscribed yet.
+    /// Ensure a request event buffer exists. The dispatcher also creates the
+    /// buffer on first event, covering fast scans that finish before the HTTP
+    /// handler returns from enqueueing.
     pub fn register(&self, request_id: RequestId) {
         self.channels
             .lock()
             .expect("channel registry mutex poisoned")
-            .insert(request_id, RequestChannel::new());
+            .entry(request_id)
+            .or_insert_with(RequestChannel::new);
     }
 
     /// Subscribe to the event stream for a request registered via
@@ -98,12 +99,13 @@ impl AppState {
             let is_terminal = matches!(event, QueuedSecurityEvent::Finished { .. });
 
             let mut channels = channels.lock().expect("channel registry mutex poisoned");
-            if let Some(channel) = channels.get_mut(&request_id) {
-                channel.buffer.push(event.clone());
-                let _ = channel.sender.send(event);
-                if is_terminal {
-                    channel.finished_at = Some(Instant::now());
-                }
+            let channel = channels
+                .entry(request_id)
+                .or_insert_with(RequestChannel::new);
+            channel.buffer.push(event.clone());
+            let _ = channel.sender.send(event);
+            if is_terminal {
+                channel.finished_at = Some(Instant::now());
             }
         });
     }

@@ -1,8 +1,10 @@
 # Benchmark data
 
-Evaluation fixtures for the local benchmark (`python -m patronus_ark.benchmark`).
-These files exist to measure classifier accuracy and latency. They are **not**
-training data and are not shipped as part of the compiled extension.
+Synthetic, historical regression fixtures for the local benchmark
+(`python -m patronus_ark.benchmark`). These files exist to measure classifier behavior and
+latency across Ark revisions. They are **not** model-release validation splits, their F1 values
+must not be reported as release-validation metrics, and they are not shipped as part of the
+compiled extension.
 
 ## Contents
 

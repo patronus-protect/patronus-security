@@ -54,12 +54,10 @@ do not change the NTDB promote-router threshold that decides which chunks are se
 
 ### Compact tokenizers
 
-For supported packages, asset preparation converts the downloaded Hugging Face
-`tokenizer.json` **once** into a compact generated tokenizer beside the source JSON:
-`tokenizer.kit` for supported Granite/ModernBERT shared embedders and `tokenizer.mmbpe` for
-compatible mmBERT byte-fallback BPE tokenizers. NTDB packages linked to a shared embedder reuse
-the generated shared artifact. Dedicated and unified L3 bundles can also generate `.mmbpe` during
-verified downloads or cached warmup.
+For compatible mmBERT byte-fallback BPE packages, asset preparation converts the downloaded
+Hugging Face `tokenizer.json` **once** into `tokenizer.mmbpe`. NTDB packages linked to a shared
+embedder reuse the generated shared artifact. Dedicated and unified L3 bundles can also generate
+`.mmbpe` during verified downloads or cached warmup. The former `.kit` format is unsupported.
 
 The source JSON remains canonical and is used automatically if conversion, validation, or compact
 loading fails. Source/content hashes, format versions, and converter versions invalidate stale
@@ -68,17 +66,18 @@ generated files; local model overrides are never rewritten. Details are in
 
 ## ONNX transformers — the L3 format
 
-L3 models are full transformers (the ModernBERT / mmBERT family) exported to ONNX and quantized
-to a single combined INT8-weight / INT4-embedding variant (`int8_int4_embeddings` — the only L3
-ONNX file each repo ships to the runtime). Which L3 models a gateway holds is
+L3 models are full transformers (the ModernBERT / mmBERT family) exported to ONNX. Ark uses the
+combined INT8-weight / INT4-embedding variant by default; Injection, Threat, Sensitive Document,
+Lion Warden, and the separate Dynamic-PII GLiNER model also support a pinned FP16 variant when
+`PATRONUS_L3_PRECISION=fp16`. Linux `x86_64` production deployments must use FP16 for validated
+cross-architecture inference parity. Which L3 models a gateway holds is
 determined by configuration — the [L3 strategy](#dedicated-vs-unified-l3) and the configured
 categories — and those models are kept **resident in RAM**, subject to an idle-TTL policy
 (`PATRONUS_L3_TTL_SECS`, default 300 s) that evicts a session after a period of no use and
 re-materializes it on the next promotion. Budget memory for the L3 models you enable. They are
 executed by the L3 background worker. Only required assets are downloaded by default;
 `PATRONUS_DOWNLOAD_OPTIONAL_ASSETS=1` additionally fetches non-required files (currently
-`tokenizer_config.json` for the legacy L3 manifest) — there is no separate full-precision ONNX
-asset today.
+`tokenizer_config.json` for the legacy L3 manifest).
 
 ## The model families
 

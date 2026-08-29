@@ -2,9 +2,10 @@
 """Local benchmark for a configured `SecurityGateway`.
 
 Runs every benchmark phase once with dedicated L3 models and once with the
-unified multi-head L3 model against sample data shipped with the package
-(`patronus_ark/benchmark_data/*.jsonl`, copied from the Patronus
-validation splits). Strategy-specific files are written below
+unified multi-head L3 model against synthetic, historical regression fixtures shipped with the
+package (`patronus_ark/benchmark_data/*.jsonl`). These fixtures are not the model-release
+validation splits and their F1 values must not be reported as release-validation metrics.
+Strategy-specific files are written below
 `output_dir/dedicated` and `output_dir/multi`:
 
 - `benign_result.json` — 100 benign prompts through the joint `scan_all`

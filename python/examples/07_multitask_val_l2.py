@@ -63,7 +63,6 @@ TOOL_TAG_NAMES = {
     "source_untrusted": "tool.source:untrusted",
 }
 
-
 def l2_layer(result: dict) -> dict | None:
     return next(
         (layer for layer in result["layers"] if layer["layer_type"] == "ntdb_l2"),

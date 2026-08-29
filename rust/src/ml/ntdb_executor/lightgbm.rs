@@ -3,13 +3,14 @@ use std::{fs, path::Path};
 
 use super::{ntdb_error, NtdbResult};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LightGbmModel {
     trees: Vec<Tree>,
     num_class: usize,
+    feature_count: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Tree {
     split_feature: Vec<usize>,
     threshold: Vec<f64>,
@@ -31,6 +32,11 @@ impl LightGbmModel {
             .unwrap_or("1")
             .parse::<usize>()
             .map_err(|err| ntdb_error(format!("invalid LightGBM num_class: {err}")))?;
+        let feature_count = get_value(&text, "max_feature_idx")
+            .ok_or_else(|| ntdb_error("LightGBM model is missing max_feature_idx"))?
+            .parse::<usize>()
+            .map_err(|err| ntdb_error(format!("invalid LightGBM max_feature_idx: {err}")))?
+            .saturating_add(1);
         if num_class == 0 {
             return Err(ntdb_error("LightGBM num_class must be positive"));
         }
@@ -50,7 +56,15 @@ impl LightGbmModel {
         if trees.is_empty() {
             return Err(ntdb_error("LightGBM model has no trees"));
         }
-        Ok(Self { trees, num_class })
+        Ok(Self {
+            trees,
+            num_class,
+            feature_count,
+        })
+    }
+
+    pub fn feature_count(&self) -> usize {
+        self.feature_count
     }
 
     pub fn predict_probability(&self, features: &[f32]) -> f32 {

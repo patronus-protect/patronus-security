@@ -29,20 +29,19 @@ to add categories to. See [NTDB format](models-and-ntdb.md).
 
 ### Quantized ONNX at L3
 
-L3 transformers ship as a single combined INT8-weight / INT4-embedding ONNX variant, so a model
-bundle is a few hundred MB on disk and a few hundred MB resident — small enough to run several
-classifiers on a laptop. (`PATRONUS_DOWNLOAD_OPTIONAL_ASSETS=1` only adds non-required files such
-as `tokenizer_config.json`; there is no separate full-precision ONNX asset.)
+L3 transformers use the combined INT8-weight / INT4-embedding ONNX variant by default, so a model
+bundle is a few hundred MB on disk and resident. Injection, Threat, Sensitive Document, Lion
+Warden, and the separate Dynamic-PII GLiNER model can select their pinned FP16 graph with
+`PATRONUS_L3_PRECISION=fp16`; asset warmup downloads only the selected graph. For Linux `x86_64`
+production, FP16 is the validated choice: use it even though its larger graph can add CPU latency.
 
 ### Compact tokenizers
 
-The L2 Granite embedder's tokenizer is converted once, on first use, into a compact `.kit` file
-in the shared encoder cache (hash- and version-invalidated, with the source JSON as fallback),
-which cuts load time and memory. A separate `.mmbpe` compact format exists for mmBERT-style
-(Wolf) tokenizers. It is generated locally during verified asset downloads and cached warmup when
+Compatible mmBERT-style tokenizers are converted once, on first use, into a compact `.mmbpe`
+file. It is generated locally during verified asset downloads and cached warmup when
 the tokenizer JSON has the supported byte-fallback BPE shape. The generated file stores explicit
 merge-pair identity, is hash- and version-invalidated, and keeps the canonical Hugging Face
-`tokenizer.json` as fallback.
+`tokenizer.json` as fallback. The former `.kit` format is unsupported.
 
 ### L3 sessions: built on first use, then RAM-resident
 

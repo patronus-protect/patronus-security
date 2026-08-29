@@ -6,6 +6,15 @@ use super::{ntdb_error, NtdbResult};
 
 const NTDB_L2_CONTENT_TOKENS_PER_CHUNK: usize = 254;
 
+pub fn parse_package_manifest(json: &str) -> serde_json::Result<PackageManifest> {
+    serde_json::from_str(
+        &json
+            .replace(": Infinity", ": null")
+            .replace(": -Infinity", ": null")
+            .replace(": NaN", ": null"),
+    )
+}
+
 #[derive(Debug, Deserialize)]
 pub struct PackageManifest {
     pub format: String,
@@ -16,14 +25,22 @@ pub struct PackageManifest {
     pub chunk_size: usize,
     pub tokenizer_dir: String,
     pub minilm: MiniLmManifest,
+    #[serde(default)]
     pub feature_contract: FeatureContract,
     pub runtime: RuntimeContract,
+    #[serde(default)]
     pub heads: Vec<HeadManifest>,
+    #[serde(default)]
     pub aggregators: Vec<AggregatorManifest>,
+    #[serde(default)]
+    pub joint_v3: Option<JointV3Manifest>,
 }
 
 impl PackageManifest {
     pub fn normalize_runtime_defaults(&mut self) {
+        if self.version == 4 {
+            return;
+        }
         let target_size = if self.minilm.is_l3_tokenizer_compatible() {
             NTDB_L2_CONTENT_TOKENS_PER_CHUNK
         } else {
@@ -34,11 +51,14 @@ impl PackageManifest {
     }
 
     pub fn validate(&self) -> NtdbResult<()> {
-        if self.format != "ntdb_model_package" || self.version != 2 {
+        if self.format != "ntdb_model_package" || !matches!(self.version, 2 | 4) {
             return Err(ntdb_error(format!(
                 "unsupported NTDB package format {} v{}",
                 self.format, self.version
             )));
+        }
+        if self.version == 4 {
+            return self.validate_joint_v3();
         }
         if self.heads.is_empty() {
             return Err(ntdb_error("NTDB package must contain at least one head"));
@@ -64,6 +84,72 @@ impl PackageManifest {
             .any(|stage| stage == "tokenization")
         {
             return Err(ntdb_error("NTDB package must declare shared tokenization"));
+        }
+        Ok(())
+    }
+
+    fn validate_joint_v3(&self) -> NtdbResult<()> {
+        let joint = self
+            .joint_v3
+            .as_ref()
+            .ok_or_else(|| ntdb_error("NTDB package v4 is missing joint_v3"))?;
+        if self.runtime_contract != "raw_text_to_joint_v3_chunk_promoter_union_v1" {
+            return Err(ntdb_error(format!(
+                "unsupported NTDB package v4 runtime contract: {}",
+                self.runtime_contract
+            )));
+        }
+        if self.task.labels.is_empty() {
+            return Err(ntdb_error("NTDB package task labels must not be empty"));
+        }
+        if self.chunk_size != self.minilm.content_tokens_per_chunk {
+            return Err(ntdb_error(format!(
+                "NTDB chunk_size mismatch: manifest {} vs encoder {}",
+                self.chunk_size, self.minilm.content_tokens_per_chunk
+            )));
+        }
+        if !self
+            .runtime
+            .shared_preprocessing
+            .iter()
+            .any(|stage| stage == "tokenization")
+        {
+            return Err(ntdb_error("NTDB package must declare shared tokenization"));
+        }
+        if joint.heads.is_empty()
+            || joint.neural_stack.head_order.len() != joint.heads.len()
+            || joint.neural_stack.head_order.len() != joint.neural_stack.head_class_counts.len()
+        {
+            return Err(ntdb_error(
+                "NTDB package v4 neural head order does not match its heads",
+            ));
+        }
+        if joint.neural_stack.promoter_feature_dim != joint.promoter.feature_dim {
+            return Err(ntdb_error(
+                "NTDB package v4 promoter feature dimensions are inconsistent",
+            ));
+        }
+        if joint.document_decision.score != "best_non_default_class_score_minus_default_class_score"
+            || joint.document_decision.comparison != ">= threshold means non-default risk class"
+            || joint.document_decision.default_mode != "union_l2_l3"
+        {
+            return Err(ntdb_error(
+                "NTDB package v4 document decision contract is unsupported",
+            ));
+        }
+        for mode in ["l2_only", "l3_only", "union_l2_l3"] {
+            if !joint.document_decision.modes.contains_key(mode) {
+                return Err(ntdb_error(format!(
+                    "NTDB package v4 is missing document mode {mode}"
+                )));
+            }
+        }
+        for head_id in &joint.neural_stack.head_order {
+            if !joint.heads.iter().any(|head| &head.id == head_id) {
+                return Err(ntdb_error(format!(
+                    "NTDB package v4 neural stack references missing head {head_id}"
+                )));
+            }
         }
         Ok(())
     }
@@ -105,18 +191,92 @@ pub struct TaskManifest {
     #[serde(rename = "type")]
     pub kind: String,
     pub labels: Vec<String>,
+    #[serde(default)]
+    pub no_risk_class: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 pub struct FeatureContract {
     pub local_feature_order: Vec<String>,
     pub global_feature_order: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
+pub struct JointV3Manifest {
+    pub neural_stack: JointV3NeuralStackManifest,
+    pub heads: Vec<JointV3HeadManifest>,
+    pub promoter: JointV3PromoterManifest,
+    pub document_decision: JointV3DocumentDecisionManifest,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct JointV3NeuralStackManifest {
+    pub onnx: String,
+    pub input_names: Vec<String>,
+    pub head_order: Vec<String>,
+    pub head_class_counts: Vec<usize>,
+    pub promoter_feature_dim: usize,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct JointV3HeadManifest {
+    pub id: String,
+    pub frozen_lightgbm: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct JointV3PromoterManifest {
+    pub scope: String,
+    pub implementation: String,
+    pub feature_dim: usize,
+    pub models: HashMap<String, serde_json::Value>,
+    pub operating_points: HashMap<String, JointV3PromoterOperatingPoint>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct JointV3PromoterOperatingPoint {
+    pub gate: String,
+    #[serde(alias = "promoter_threshold")]
+    pub promote_threshold: f32,
+    pub aggregation: String,
+    pub document_risk_margin_threshold: f32,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct JointV3DocumentDecisionManifest {
+    pub score: String,
+    pub comparison: String,
+    pub default_mode: String,
+    pub default_operating_point: String,
+    pub modes: HashMap<String, JointV3DocumentModeManifest>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct JointV3DocumentModeManifest {
+    pub aggregation: String,
+    pub operating_points: HashMap<String, JointV3DocumentOperatingPointManifest>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct JointV3DocumentOperatingPointManifest {
+    #[serde(alias = "document_risk_margin_threshold")]
+    pub threshold: f32,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct JointV3GateManifest {
+    pub lightgbm_model: Option<String>,
+    pub metadata: String,
+    pub n_features: usize,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct RuntimeContract {
+    #[serde(default)]
     pub shared_preprocessing: Vec<String>,
+    #[serde(default)]
     pub parallel_stages: Vec<String>,
+    #[serde(default)]
     pub ordering: String,
 }
 

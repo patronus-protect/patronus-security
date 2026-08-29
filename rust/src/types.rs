@@ -283,6 +283,9 @@ pub struct DecisionCandidate {
     pub acceptance_threshold: f64,
     pub accepted: bool,
     pub evidence: Option<HashMap<String, f64>>,
+    /// Chunk-level evidence for the single final document decision.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chunk_evidence: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

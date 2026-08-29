@@ -8,11 +8,20 @@ on:
     paths:
       - "docs/**"
       - "mkdocs.yml"
+      - "CHANGELOG.md"
+      - "ark-api/README.md"
+      - "rust/src/assets/specs.rs"
+      - "scripts/generate_docs.py"
       - ".github/workflows/docs.yml"
   pull_request:
     paths:
       - "docs/**"
       - "mkdocs.yml"
+      - "CHANGELOG.md"
+      - "ark-api/README.md"
+      - "rust/src/assets/specs.rs"
+      - "scripts/generate_docs.py"
+      - ".github/workflows/docs.yml"
   workflow_dispatch:
 
 permissions:

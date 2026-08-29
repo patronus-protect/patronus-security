@@ -93,6 +93,12 @@ SCENARIOS: dict[str, Scenario] = {
         max_level="l3",
         execution_gates={"levels": {"l1": True, "l2": True, "l3": False}},
     ),
+    "all_pipelines_unified_dynamic_pii": Scenario(
+        name="all_pipelines_unified_dynamic_pii",
+        categories=PRODUCT_CATEGORIES,
+        max_level="l3",
+        execution_gates={"levels": {"l1": True, "l2": True, "l3": True}},
+    ),
 }
 
 
@@ -315,6 +321,11 @@ def run_child(args: argparse.Namespace) -> int:
             model_dir=None if args.model_dir is None else str(args.model_dir),
             download_files=args.download_files,
             execution_gates=scenario.execution_gates,
+            l3_strategy=(
+                "multi"
+                if args.child_case == "all_pipelines_unified_dynamic_pii"
+                else "dedicated"
+            ),
             dynamic_pii_config=dynamic_pii_config,
             cache_storage_location=None
             if args.cache_storage_location is None
