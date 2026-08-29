@@ -117,10 +117,8 @@ impl JointV3Runtime {
         chunks: Vec<JointPrediction>,
         operating_point: NtdbOperatingPoint,
     ) -> NtdbResult<ScoreOutput> {
-        // A document with at most two chunks has little L3 cost but can hide a
-        // complete override in otherwise benign context. Use the manifest's
-        // utility promoter even when the caller requested best_promote.
-        let operating_point = short_document_operating_point(operating_point, chunks.len());
+        let operating_point =
+            short_injection_operating_point(&task.kind, operating_point, chunks.len());
         let chunk_routing = chunks
             .iter()
             .map(|chunk| {
@@ -345,15 +343,45 @@ impl JointV3Runtime {
     }
 }
 
-fn short_document_operating_point(
+fn short_injection_operating_point(
+    task_kind: &str,
     operating_point: NtdbOperatingPoint,
     chunk_count: usize,
 ) -> NtdbOperatingPoint {
-    if operating_point == NtdbOperatingPoint::BestPromote && chunk_count <= 2 {
-        // JointV3PromoterRuntime maps non-BestPromote points to utility_promote.
-        NtdbOperatingPoint::BestF1
-    } else {
-        operating_point
+    if operating_point == NtdbOperatingPoint::ArkApiShortInjectionUtility {
+        if task_kind == "injection" && chunk_count <= 2 {
+            // JointV3PromoterRuntime maps BestF1 to the manifest's utility promoter.
+            return NtdbOperatingPoint::BestF1;
+        }
+        return NtdbOperatingPoint::BestPromote;
+    }
+    operating_point
+}
+
+#[cfg(test)]
+mod tests {
+    use super::short_injection_operating_point;
+    use crate::NtdbOperatingPoint;
+
+    #[test]
+    fn ark_api_utility_profile_is_limited_to_short_injection_documents() {
+        let profile = NtdbOperatingPoint::ArkApiShortInjectionUtility;
+        assert_eq!(
+            short_injection_operating_point("injection", profile, 2),
+            NtdbOperatingPoint::BestF1
+        );
+        assert_eq!(
+            short_injection_operating_point("injection", profile, 3),
+            NtdbOperatingPoint::BestPromote
+        );
+        assert_eq!(
+            short_injection_operating_point("threat", profile, 1),
+            NtdbOperatingPoint::BestPromote
+        );
+        assert_eq!(
+            short_injection_operating_point("injection", NtdbOperatingPoint::BestPromote, 1),
+            NtdbOperatingPoint::BestPromote
+        );
     }
 }
 
@@ -473,7 +501,10 @@ impl JointV3PromoterRuntime {
     }
 
     fn policy(&self, operating_point: NtdbOperatingPoint) -> &ActionablePolicy {
-        if operating_point == NtdbOperatingPoint::BestPromote {
+        if matches!(
+            operating_point,
+            NtdbOperatingPoint::BestPromote | NtdbOperatingPoint::ArkApiShortInjectionUtility
+        ) {
             &self.best_promote
         } else {
             &self.utility

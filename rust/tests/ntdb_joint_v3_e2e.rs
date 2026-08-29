@@ -56,7 +56,11 @@ fn injection_curl_text_uses_utility_promote_for_a_short_document() {
     let mut executor = NtdbExecutor::load([("injection_current".to_string(), path)]).unwrap();
 
     let requested_best_promote = executor
-        .score_models(["injection_current"], text, NtdbOperatingPoint::BestPromote)
+        .score_models(
+            ["injection_current"],
+            text,
+            NtdbOperatingPoint::ArkApiShortInjectionUtility,
+        )
         .unwrap()
         .remove(0);
     let utility_promote = executor
@@ -67,7 +71,7 @@ fn injection_curl_text_uses_utility_promote_for_a_short_document() {
     assert!(requested_best_promote.chunks <= 2);
     assert_eq!(
         requested_best_promote.promote_threshold, utility_promote.promote_threshold,
-        "a short request must use utility_promote even when the API requested best_promote"
+        "a short Ark API injection request must use utility_promote"
     );
     assert_eq!(
         requested_best_promote.route_to_l3,

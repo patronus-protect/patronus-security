@@ -840,6 +840,7 @@ fn profile_key(point: NtdbOperatingPoint) -> &'static str {
         NtdbOperatingPoint::BestFprInF1 => "best_fpr",
         NtdbOperatingPoint::BestFnrInF1 => "best_fnr",
         NtdbOperatingPoint::BestPromote => "best_promote",
+        NtdbOperatingPoint::ArkApiShortInjectionUtility => "best_promote",
         NtdbOperatingPoint::BestLatencyInF1 => "best_latency_in_f1",
     }
 }

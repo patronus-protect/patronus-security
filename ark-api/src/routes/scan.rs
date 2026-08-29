@@ -215,7 +215,7 @@ pub async fn submit_scan(
     };
     let mut jobs = Vec::with_capacity(inputs.len());
     for (source, content) in inputs {
-        let request_id = state.gateway.enqueue_categories_with_options(
+        let request_id = state.gateway.enqueue_ark_api_categories_with_options(
             resolved.categories.clone(),
             content,
             resolved.metadata.clone(),
