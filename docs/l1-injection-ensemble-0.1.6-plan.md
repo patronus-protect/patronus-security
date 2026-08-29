@@ -13,8 +13,11 @@ Current feature-branch progress:
 - The follow-up open-source scan and its four high-precision relationship
   families are implemented; see
   [`research/injection-pattern-sources-0.1.6.md`](research/injection-pattern-sources-0.1.6.md).
-- Implementation steps 2–10, beginning with the ensemble candidate/feature
-  contract, are not yet implemented.
+- The rule-backed foundation of implementation step 2 is complete:
+  `L1Candidate` groups overlapping registered signals into deterministic
+  regions and represents each signal as a provenance-bearing `rule_match`
+  feature. Structural, similarity, and OOD feature producers are not wired yet.
+- Implementation steps 3–10 are not yet implemented.
 
 The initial scope is **prompt injection only**.  It must not silently change
 the behaviour of DLP, PII, dynamic PII, routing, or sensitive-document
@@ -212,10 +215,11 @@ its quality gates are done.
    return exact spans. Every imported or Ark-specific rule needs a positive and
    a nearby benign counterexample. This step must not add ensemble routing or
    suspicion windows yet.
-2. Introduce the common L1 candidate and feature contract. Existing heuristic
+2. **In progress on the feature branch:** introduce the common L1 candidate and feature contract. Existing heuristic
    matches, structural signals, similarity features and benign-OOD features
    must be able to contribute to the same candidate representation with spans,
-   explanations and provenance.
+   explanations and provenance. The contract and registered-rule features are
+   implemented; the remaining feature producers follow in later steps.
 3. Add the static attack/benign prototype index without changing or mixing it
    with the historical runtime similarity cache. Similarity must be able to
    strengthen an existing candidate or provide evidence for a candidate region;

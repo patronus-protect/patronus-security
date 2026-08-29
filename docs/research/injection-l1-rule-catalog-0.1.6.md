@@ -20,6 +20,7 @@ not import their runtimes, confidence thresholds, or final-decision policies.
 | Source-derived P0 relationships | Done: 4 |
 | Total registered native producers/rules | 35 |
 | Common `InjectionSignal` evidence contract | Done |
+| Rule-backed `L1Candidate` contract | Done; no score or action yet |
 | Additional open-source pattern scan | Done; composition candidates documented separately |
 | Ensemble scoring and suspicion-window routing | Not started; later implementation steps |
 
@@ -28,6 +29,11 @@ compatibility. They are no longer evidence-opaque: every positive result now
 maps to the common registry and signal contract. The additional data-driven
 catalog remains a separate execution producer, but its output uses the same
 contract rather than a parallel evidence format.
+
+Every positive registered signal is also represented as a `rule_match` feature
+inside `layers[].details.l1_candidates`. Overlapping signal spans form one
+candidate; separated passages remain separate. Candidates intentionally omit
+ensemble score, action, promotion, and window fields at this stage.
 
 ## Pinned references
 

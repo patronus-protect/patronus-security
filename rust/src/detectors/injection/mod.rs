@@ -2,6 +2,7 @@
 pub mod agentic_control_abuse;
 pub mod authority_escalation;
 pub mod binary_smuggling;
+pub(crate) mod candidate;
 pub mod covert_instruction;
 pub mod cross_tool_instruction;
 pub mod encoded_instruction;

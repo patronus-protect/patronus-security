@@ -174,6 +174,44 @@ Source-derived rules also expose `references` for secondary pinned sources, whil
 `source_revision`, `source_license`, `upstream_id`, and `adaptation` identify the primary origin
 and Ark-specific narrowing.
 
+Positive registered injection findings additionally expose `layers[].details.l1_candidates`.
+Each candidate has a deterministic ID derived from its original-document byte span, byte and
+character offsets, contributing rule IDs and families, maximum severity, and typed features:
+
+```json
+{
+  "candidate_id": "injection:l1:18:57",
+  "category": "injection",
+  "start_byte": 18,
+  "end_byte": 57,
+  "start_char": 18,
+  "end_char": 57,
+  "rule_ids": ["ark.injection.override.hierarchy"],
+  "families": ["instruction_override"],
+  "max_severity": "critical",
+  "features": [
+    {
+      "feature_id": "rule:ark.injection.override.hierarchy:18:57",
+      "kind": "rule_match",
+      "value": 1.0,
+      "explanation": "Invalidates or replaces a prior instruction hierarchy",
+      "start_byte": 18,
+      "end_byte": 57,
+      "span_precision": "clause",
+      "provenance": {
+        "rule_id": "ark.injection.override.hierarchy",
+        "source": "ark-native",
+        "source_revision": "71ff48e513ffee7810b29704e4cd9d4715aeaebd"
+      }
+    }
+  ]
+}
+```
+
+`L1Candidate` is evidence, not a decision. It currently has no `score` or `action`. A later
+ensemble decision may reference its precise span for a direct block, or derive a separate padded
+suspicion window for L2/L3 without replacing the candidate evidence span.
+
 ## Async queue events
 
 `consume_next_event(timeout)` returns one event dict at a time (or `None` on timeout).

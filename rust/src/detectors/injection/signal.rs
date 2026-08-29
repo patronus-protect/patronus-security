@@ -5,6 +5,7 @@ use std::sync::OnceLock;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
+use super::candidate::candidates_from_signals;
 use crate::detectors::NativeDetection;
 use crate::{EvaluationResult, EvidenceSpan};
 
@@ -94,6 +95,7 @@ pub(crate) fn detection_from_signals(
     signals: Vec<InjectionSignal>,
     registry_id: Option<&str>,
 ) -> NativeDetection {
+    let candidates = candidates_from_signals(text, &signals);
     let evidence_spans = signals
         .iter()
         .map(|signal| EvidenceSpan {
@@ -114,6 +116,10 @@ pub(crate) fn detection_from_signals(
         details.insert(
             "matched_rules".to_string(),
             Value::Array(signals.iter().map(signal_json).collect()),
+        );
+        details.insert(
+            "l1_candidates".to_string(),
+            serde_json::to_value(candidates).expect("L1 candidates must serialize"),
         );
     }
     NativeDetection {

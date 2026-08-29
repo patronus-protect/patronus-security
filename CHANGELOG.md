@@ -25,6 +25,10 @@ result shapes may be breaking for downstream users, and is called out explicitly
   replacement actions. Each finding retains its pinned Pipelock or PromptInject source and any
   secondary Garak reference. Labeled ROT13 and URL-safe Base64 payloads are decoded before the
   existing injection-signal evaluation.
+- Added the injection `L1Candidate` contract. Positive rule signals become auditable `rule_match`
+  features; overlapping spans form one deterministic candidate and separated regions remain
+  separate. Candidates expose spans, rule IDs, families, severity, explanations, and provenance,
+  but deliberately carry no ensemble score or routing/block action yet.
 
 ## [0.1.5] - 2026-08-29
 

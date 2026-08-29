@@ -81,6 +81,17 @@ class NativeScannerTests(unittest.TestCase):
             ],
             "clause",
         )
+        candidate = native["layers"][0]["details"]["l1_candidates"][0]
+        self.assertEqual(
+            candidate["candidate_id"],
+            f"injection:l1:{candidate['start_byte']}:{candidate['end_byte']}",
+        )
+        self.assertIn(
+            "ark.injection.leak.hidden_instructions", candidate["rule_ids"]
+        )
+        self.assertEqual(candidate["features"][0]["kind"], "rule_match")
+        self.assertNotIn("score", candidate)
+        self.assertNotIn("action", candidate)
 
     def test_injection_rule_catalog_exposes_pinned_rule_evidence(self):
         scanner = SecurityGateway(
@@ -144,6 +155,17 @@ class NativeScannerTests(unittest.TestCase):
                 == "8ed1543b985a5722adb659584182faf6f7907d4e"
                 for reference in rule["references"]
             )
+        )
+        candidate = next(
+            candidate
+            for candidate in catalog["layers"][0]["details"]["l1_candidates"]
+            if "ark.injection.obfuscation.decode_then_execute"
+            in candidate["rule_ids"]
+        )
+        self.assertEqual(candidate["max_severity"], "high")
+        self.assertEqual(
+            candidate["features"][0]["provenance"]["upstream_id"],
+            "pipelock:Encoded Payload",
         )
 
     def test_scan_categories_combines_requested_native_categories(self):

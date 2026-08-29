@@ -164,6 +164,27 @@ fn catalog_evidence_preserves_unicode_offsets_and_source_revision() {
             && rule["start_byte"] == span.start_byte
             && rule["end_byte"] == span.end_byte
     }));
+    let candidate = details["l1_candidates"]
+        .as_array()
+        .expect("l1_candidates must be an array")
+        .iter()
+        .find(|candidate| {
+            candidate["rule_ids"].as_array().is_some_and(|ids| {
+                ids.iter()
+                    .any(|id| id == "ark.injection.leak.dump_system_prompt")
+            })
+        })
+        .expect("candidate must reference the matched rule");
+    assert_eq!(
+        candidate["candidate_id"],
+        format!("injection:l1:{}:{}", span.start_byte, span.end_byte)
+    );
+    assert_eq!(candidate["start_byte"], span.start_byte);
+    assert_eq!(candidate["end_byte"], span.end_byte);
+    assert_eq!(candidate["start_char"], span.start_char);
+    assert_eq!(candidate["end_char"], span.end_char);
+    assert!(candidate.get("score").is_none());
+    assert!(candidate.get("action").is_none());
 }
 
 #[test]
@@ -281,6 +302,15 @@ fn every_existing_native_injection_detector_emits_registered_signal_evidence() {
             rule["rule_id"] == expected_rule_id
                 && matches!(rule["span_precision"].as_str(), Some("clause" | "window"))
         }));
+        let candidates = result.layers[0].details["l1_candidates"]
+            .as_array()
+            .expect("native l1_candidates must be an array");
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0]["start_byte"], span.start_byte);
+        assert_eq!(candidates[0]["end_byte"], span.end_byte);
+        assert!(candidates[0]["rule_ids"]
+            .as_array()
+            .is_some_and(|ids| ids.iter().any(|id| id == expected_rule_id)));
     }
 }
 
@@ -332,6 +362,24 @@ fn source_derived_p0_relationships_emit_pinned_provenance() {
             matched["source_revision"].as_str(),
             Some(PIPELOCK_REVISION | "2928a719d5de62d3766226f1b44c51d9570bc530")
         ));
+        let candidate = result.layers[0].details["l1_candidates"]
+            .as_array()
+            .expect("source-derived l1_candidates must be an array")
+            .iter()
+            .find(|candidate| {
+                candidate["rule_ids"]
+                    .as_array()
+                    .is_some_and(|ids| ids.iter().any(|id| id == expected_rule_id))
+            })
+            .expect("source-derived candidate must reference the rule");
+        assert!(candidate["features"]
+            .as_array()
+            .expect("candidate features must be an array")
+            .iter()
+            .any(|feature| {
+                feature["kind"] == "rule_match"
+                    && feature["provenance"]["upstream_id"] == expected_upstream_id
+            }));
         if expected_rule_id == "ark.injection.obfuscation.decode_then_execute" {
             assert!(matched["references"]
                 .as_array()
