@@ -517,7 +517,7 @@ pub(super) fn instruction_override_request_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(
-            r"\b(?:(?:ignore|disregard|forget|abandon)[ \t]+(?:(?:all|any)[ \t]+)?(?:previous|prior|above|earlier)[ \t]+(?:instructions?|rules?|guidelines?|directives?|constraints?|polic(?:y|ies)|guardrails?|prompts?)|(?:treat|consider|regard|reinterpret|downgrade)[ \t]+(?:the[ \t]+)?(?:(?:previous|prior|earlier)[ \t]+)?(?:instructions?|rules?|guidelines?|directives?|constraints?|polic(?:y|ies)|guardrails?|prompts?)[ \t]+as[ \t]+(?:obsolete|void|invalid|superseded|overridden|cancelled|historical|outdated|deprecated|optional|non-binding|advisory)|(?:set|put|cast|push|throw)[ \t]+(?:the[ \t]+)?(?:previous|prior|earlier)[ \t]+(?:instructions?|rules?|guidelines?|directives?|constraints?|polic(?:y|ies)|guardrails?|prompts?)[ \t]+(?:aside|away))\b",
+            r"\b(?:(?:ignore|disregard|forget|abandon)[ \t]+(?:(?:all|any|your)[ \t]+)?(?:previous|prior|above|earlier)[ \t]+(?:instructions?|rules?|guidelines?|directives?|constraints?|polic(?:y|ies)|guardrails?|prompts?)|(?:treat|consider|regard|reinterpret|downgrade)[ \t]+(?:the[ \t]+)?(?:(?:previous|prior|earlier)[ \t]+)?(?:instructions?|rules?|guidelines?|directives?|constraints?|polic(?:y|ies)|guardrails?|prompts?)[ \t]+as[ \t]+(?:obsolete|void|invalid|superseded|overridden|cancelled|historical|outdated|deprecated|optional|non-binding|advisory)|(?:set|put|cast|push|throw)[ \t]+(?:the[ \t]+)?(?:previous|prior|earlier)[ \t]+(?:instructions?|rules?|guidelines?|directives?|constraints?|polic(?:y|ies)|guardrails?|prompts?)[ \t]+(?:aside|away))\b",
         )
         .unwrap()
     })
@@ -564,7 +564,7 @@ pub(super) fn jailbreak_named_mode_re() -> &'static Regex {
 pub(super) fn jailbreak_dan_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
-        Regex::new(r"\b(?:you[ \t]+are[ \t]+now|act[ \t]+as|enable|activate)[ \t]+dan\b").unwrap()
+        Regex::new(r"\b(?:you[ \t]+are[ \t]+now[ \t]+(?:a|an)|you[ \t]+are[ \t]+now|act[ \t]+as|enable|activate)[ \t]+dan\b").unwrap()
     })
 }
 

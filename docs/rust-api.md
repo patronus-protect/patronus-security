@@ -373,6 +373,20 @@ pub fn enqueue_categories_with_options(
 Submit selected categories with request-local execution options.
 
 ```rust
+pub fn enqueue_ark_api_categories_with_options(
+    &self,
+    categories: Vec<SecurityCategory>,
+    text: impl Into<String>,
+    metadata: serde_json::Value,
+    gates: Option<ScanGateMatrix>,
+    ntdb_decision_threshold_point: Option<crate::NtdbOperatingPoint>,
+) -> RequestId;
+```
+
+Submit an Ark API request with short-document Injection utility routing.
+This profile is intentionally not used by library callers.
+
+```rust
 pub fn enqueue_input(
     &self,
     input: ExternalL1Input,
@@ -937,6 +951,9 @@ Return the canonical snake_case mode string.
 pub enum NtdbOperatingPoint {
     BestF1,
     BestPromote,
+    /// Internal Ark API routing profile: use utility promotion only for an
+    /// Injection document with at most two normal chunks.
+    ArkApiShortInjectionUtility,
     BestFprInF1,
     BestFnrInF1,
     BestLatencyInF1,
