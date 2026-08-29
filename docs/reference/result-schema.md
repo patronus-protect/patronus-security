@@ -46,7 +46,7 @@ blocking `scan_*` helpers return — is a **dictionary describing one category's
 | `model` | str | The producing scanner, e.g. `native:dlp`, `external:<id>`, or a model id. |
 | `duration_ms` | float | Wall-clock time spent producing this result. |
 | `decision` | dict | Structured classifier decision envelope for terminal model-backed classifier results. Python omits this key when no authoritative classifier decision exists; Rust exposes `SecurityScanResult.decision: Option<DecisionEnvelope>`. |
-| `evidence_spans` | list | Exact matched spans (PII/DLP/dynamic-pii); empty for safe/model-only results. |
+| `evidence_spans` | list | Exact matched spans from span-producing native scanners and dynamic PII; empty for safe/model-only results. |
 | `label_scores` | list | Per-label scores for multi-label heads (e.g. `tool_tags`); each entry is `{label, confidence, matched}`. Empty for single-label results. |
 | `layers` | list | Per-layer breakdown of everything that ran for this category. |
 
@@ -153,8 +153,8 @@ unrelated sources or model versions without their matching thresholds.
 
 ### Evidence spans
 
-Native PII and DLP findings, and `dynamic-pii` entities, populate `evidence_spans` with exact
-offsets:
+Native PII and DLP findings, registered native injection findings, and `dynamic-pii` entities
+populate `evidence_spans` with offsets:
 
 ```python
 for span in result["evidence_spans"]:
@@ -164,6 +164,15 @@ for span in result["evidence_spans"]:
 Each span carries the matched `label`, the matched `text`, a `score`, and both **byte** and
 **character** offsets (`start_byte`/`end_byte`/`start_char`/`end_char`). Safe native results
 leave `evidence_spans` empty.
+
+For registered native injection findings, the span label is the stable Ark rule ID. The
+corresponding layer `details` contain an ordered `matched_rules` list with the Ark ID, optional
+upstream ID, family, severity, description, source revision, byte offsets, and `span_precision`.
+Data-driven regex rules use `exact`; procedural detectors currently use a localized `clause` or
+bounded `window`. A provenance weight, when present, is metadata and not an Ark decision threshold.
+Source-derived rules also expose `references` for secondary pinned sources, while `source`,
+`source_revision`, `source_license`, `upstream_id`, and `adaptation` identify the primary origin
+and Ark-specific narrowing.
 
 ## Async queue events
 

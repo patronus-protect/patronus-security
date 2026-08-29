@@ -285,10 +285,9 @@ pub(super) fn base64_decode_text(fragment: &str) -> Option<String> {
     if fragment.len() < 12 || fragment.len() % 4 != 0 {
         return None;
     }
-    if !fragment
-        .bytes()
-        .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'/' | b'='))
-    {
+    if !fragment.bytes().all(|byte| {
+        byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'/' | b'-' | b'_' | b'=')
+    }) {
         return None;
     }
 
@@ -323,11 +322,21 @@ pub(super) fn base64_value(byte: u8) -> Option<u8> {
         b'A'..=b'Z' => Some(byte - b'A'),
         b'a'..=b'z' => Some(byte - b'a' + 26),
         b'0'..=b'9' => Some(byte - b'0' + 52),
-        b'+' => Some(62),
-        b'/' => Some(63),
+        b'+' | b'-' => Some(62),
+        b'/' | b'_' => Some(63),
         b'=' => Some(0),
         _ => None,
     }
+}
+
+pub(super) fn rot13_decode_text(text: &str) -> String {
+    text.chars()
+        .map(|character| match character {
+            'a'..='m' | 'A'..='M' => char::from_u32(character as u32 + 13).unwrap(),
+            'n'..='z' | 'N'..='Z' => char::from_u32(character as u32 - 13).unwrap(),
+            _ => character,
+        })
+        .collect()
 }
 
 pub(super) fn hex_byte(high: u8, low: u8) -> Option<u8> {

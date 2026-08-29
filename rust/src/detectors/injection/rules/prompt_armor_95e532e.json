@@ -1,0 +1,127 @@
+{
+  "schema_version": 1,
+  "catalog_id": "prompt-armor-selected-95e532e",
+  "source": "https://github.com/prompt-armor/prompt-armor",
+  "source_revision": "95e532e275280488b3abacb519f8b14ae17a9dcb",
+  "license": "Apache-2.0",
+  "rules": [
+    {
+      "id": "ark.injection.override.do_not_follow_prior",
+      "upstream_id": "PI-004",
+      "family": "instruction_override",
+      "severity": "high",
+      "upstream_weight": 0.88,
+      "description": "Explicitly refuses the prior instruction hierarchy",
+      "pattern": "do\\s+not\\s+follow\\s+(any|your|the)\\s+(previous|prior|original|above)\\s+(instructions?|rules?|guidelines?)"
+    },
+    {
+      "id": "ark.injection.override.follow_instead",
+      "upstream_id": "PI-008",
+      "family": "instruction_override",
+      "severity": "high",
+      "upstream_weight": 0.80,
+      "description": "Redirects execution to replacement instructions",
+      "pattern": "instead\\s*,?\\s+(do|follow|obey|execute|respond)\\s+(the\\s+following|these|this)"
+    },
+    {
+      "id": "ark.injection.override.redefine_goal",
+      "upstream_id": "PI-009",
+      "family": "instruction_override",
+      "severity": "high",
+      "upstream_weight": 0.85,
+      "description": "Claims a replacement task, purpose, or goal",
+      "pattern": "your\\s+(actual|real|true|new)\\s+(instructions?|purpose|task|goal)\\s+(is|are)"
+    },
+    {
+      "id": "ark.injection.override.forget_context",
+      "upstream_id": "PI-011",
+      "family": "instruction_override",
+      "severity": "high",
+      "upstream_weight": 0.85,
+      "description": "Commands the model to discard all preceding context",
+      "pattern": "forget\\s+(everything|all\\s+(of\\s+)?(that|this))\\s+(before|above|prior)"
+    },
+    {
+      "id": "ark.injection.identity.no_longer_ai",
+      "upstream_id": "ID-003",
+      "family": "jailbreak_framing",
+      "severity": "high",
+      "upstream_weight": 0.88,
+      "description": "Replaces the assistant identity to escape its constraints",
+      "adaptation": "Removed the bare a/an alternatives, which matched benign phrases such as 'You are no longer a beginner'.",
+      "pattern": "you\\s+are\\s+no\\s+longer\\s+(claude|gpt|chatgpt|an?\\s+(ai|assistant))\\b"
+    },
+    {
+      "id": "ark.injection.leak.dump_system_prompt",
+      "upstream_id": "SL-002",
+      "family": "instruction_leak",
+      "severity": "critical",
+      "upstream_weight": 0.92,
+      "description": "Requests a complete dump of hidden or system instructions",
+      "pattern": "(paste|copy|echo|dump)\\s+(the\\s+)?(entire|full|complete|whole)\\s+(system|initial|original|hidden)\\s+(prompt|message|instructions?)"
+    },
+    {
+      "id": "ark.injection.leak.prior_configuration",
+      "upstream_id": "SL-003",
+      "family": "instruction_leak",
+      "severity": "high",
+      "upstream_weight": 0.72,
+      "description": "Asks what hidden configuration or instructions preceded the input",
+      "pattern": "what\\s+(were|was)\\s+(you|your)\\s+(told|instructed|programmed|configured|given)\\s+(to\\s+do|before)"
+    },
+    {
+      "id": "ark.injection.leak.repeat_context",
+      "upstream_id": "SL-004",
+      "family": "instruction_leak",
+      "severity": "high",
+      "upstream_weight": 0.85,
+      "description": "Requests verbatim disclosure of preceding context",
+      "pattern": "repeat\\s+(everything|all|the\\s+text)\\s+(above|before|from\\s+the\\s+beginning)"
+    },
+    {
+      "id": "ark.injection.boundary.end_system_prompt",
+      "upstream_id": "IB-004",
+      "family": "instruction_boundary",
+      "severity": "high",
+      "upstream_weight": 0.80,
+      "description": "Declares an artificial end to the trusted instruction block",
+      "pattern": "(end|stop|terminate|exit)\\s+(of\\s+)?(system|initial|original)\\s+(prompt|message|instructions?)"
+    },
+    {
+      "id": "ark.injection.exfil.markdown_image",
+      "upstream_id": "DE-003",
+      "family": "cross_tool_instruction",
+      "severity": "critical",
+      "upstream_weight": 0.90,
+      "description": "Uses a remote Markdown image query to exfiltrate protected data",
+      "pattern": "!\\[[^\\]]*\\]\\(https?://[^)]*?\\?[^)]*=(\\{|%7B|\\$|data|secret|password|key|token|api)"
+    },
+    {
+      "id": "ark.injection.override.es",
+      "upstream_id": "ML-ES-001",
+      "family": "instruction_override",
+      "severity": "high",
+      "upstream_weight": 0.88,
+      "description": "Spanish instruction override",
+      "pattern": "(olvida|ignora|desecha|descarta)\\s+((todo|todas?|los?|las?|tus?|sus?|mis?)\\s+){0,5}(instrucci(ón|ones)|reglas?|órdenes?|orden|mensajes?|directrices?|anterior(es)?|previo?s?)"
+    },
+    {
+      "id": "ark.injection.override.fr",
+      "upstream_id": "ML-FR-001",
+      "family": "instruction_override",
+      "severity": "high",
+      "upstream_weight": 0.88,
+      "description": "French instruction override",
+      "pattern": "(oublie[zs]?|ignore[zs]?|ne\\s+tien[s]?\\s+pas\\s+compte)\\s+(de\\s+)?((tout|toutes?|les?|tes|mes|vos)\\s+){0,5}(instructions?|consignes?|règles?|ordres?|directives?|messages?|précédent(e|es|s)?)"
+    },
+    {
+      "id": "ark.injection.override.pt",
+      "upstream_id": "ML-PT-001",
+      "family": "instruction_override",
+      "severity": "high",
+      "upstream_weight": 0.88,
+      "description": "Portuguese instruction override",
+      "pattern": "(esqueça|ignore|descarte|desconsidere)\\s+((tudo|todas?|os?|as?|seus?|suas?|minhas?|meus?)\\s+){0,5}(instruç(ão|ões)|regras?|comandos?|mensage(m|ns)|diretrizes?|orientações?|anterior(es)?|prévi[oa]s?)"
+    }
+  ]
+}

@@ -42,3 +42,50 @@ pipelock `enterprise/` directory (Elastic License 2.0) is included.
 
 Licensed under the Apache License, Version 2.0. You may obtain a copy of the
 License at http://www.apache.org/licenses/LICENSE-2.0
+
+-------------------------------------------------------------------------------
+3. Prompt-injection rule catalog
+   (rust/src/detectors/injection/rules/prompt_armor_95e532e.json)
+-------------------------------------------------------------------------------
+Selected prompt-injection rules are adapted from Prompt Armor at revision
+95e532e275280488b3abacb519f8b14ae17a9dcb. Ark retains the upstream rule IDs,
+records local mapping IDs, and modifies selected expressions to reduce false
+positives. Prompt Armor's runtime and scoring thresholds are not included.
+
+    Prompt Armor — Apache License 2.0
+    https://github.com/prompt-armor/prompt-armor
+
+Licensed under the Apache License, Version 2.0. You may obtain a copy of the
+License at http://www.apache.org/licenses/LICENSE-2.0
+
+-------------------------------------------------------------------------------
+4. Source-derived prompt-injection relationships
+   (rust/src/detectors/injection/rules/source_derived_p0_0_1_6.json,
+    rust/src/threat/obfuscation.rs)
+-------------------------------------------------------------------------------
+High-precision relationship rules are adapted from the pinned Apache-2.0 core
+of pipelock and the MIT-licensed PromptInject attack construction axes. The
+bounded ROT13 and URL-safe Base64 variations follow NVIDIA Garak's pinned
+Apache-2.0 encoding probes. Ark records the exact source revision, upstream
+rule or probe ID, and every local adaptation in rule evidence.
+
+    pipelock — Apache License 2.0
+    Copyright (c) 2026 Joshua Waldrep
+    Revision b4104d5af05b2d861ee6cff43e8d099dbc141c82
+    https://github.com/luckyPipewrench/pipelock
+
+    PromptInject — MIT License
+    Copyright (c) 2020 Agency Enterprise, LLC
+    Revision 2928a719d5de62d3766226f1b44c51d9570bc530
+    https://github.com/agencyenterprise/PromptInject
+
+    NVIDIA Garak — Apache License 2.0
+    Copyright (c) 2023 Leon Derczynski
+    Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES
+    Revision 8ed1543b985a5722adb659584182faf6f7907d4e
+    https://github.com/NVIDIA/garak
+
+Apache-2.0 components are licensed under the Apache License, Version 2.0. You
+may obtain a copy at http://www.apache.org/licenses/LICENSE-2.0. PromptInject is
+used under the MIT License; its copyright and permission notice are retained
+here.

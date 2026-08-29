@@ -4,9 +4,9 @@ use std::collections::HashSet;
 
 use super::obfuscation::{
     base64_decode_text, contains_zero_width, continuous_hex_decode, is_token_boundary,
-    percent_decode_lossy, push_variant, remove_zero_width, slash_hex_decode_lossy,
-    slash_unicode_decode_lossy, split_fragments, token_contains_unicode_confusable,
-    unicode_confusable_skeleton,
+    percent_decode_lossy, push_variant, remove_zero_width, rot13_decode_text,
+    slash_hex_decode_lossy, slash_unicode_decode_lossy, split_fragments,
+    token_contains_unicode_confusable, unicode_confusable_skeleton,
 };
 use super::patterns::*;
 use super::util::{contains_injection_signal, contains_sensitive_term, text_windows};
@@ -343,6 +343,9 @@ pub(crate) fn analysis_variants(text: &str) -> Vec<String> {
             &mut seen,
             &mut variants,
         );
+    }
+    if no_zero_width.to_ascii_lowercase().contains("rot13") {
+        push_variant(rot13_decode_text(&no_zero_width), &mut seen, &mut variants);
     }
 
     let mut decoded_fragments = 0;

@@ -5,6 +5,7 @@ pub mod mcp;
 pub mod pii;
 
 use regex::{Regex, RegexSet};
+use std::collections::HashMap;
 
 use crate::{EvaluationResult, EvidenceSpan};
 
@@ -13,6 +14,7 @@ pub(crate) type NativeMatchValidator = fn(&str) -> bool;
 pub(crate) struct NativeDetection {
     pub result: EvaluationResult,
     pub evidence_spans: Vec<EvidenceSpan>,
+    pub details: HashMap<String, serde_json::Value>,
 }
 
 /// Shared detection contract for native regex scanners that return exact evidence.
@@ -28,6 +30,7 @@ pub(crate) trait NativeRegexDetector {
             return NativeDetection {
                 result: safe_result(),
                 evidence_spans: Vec::new(),
+                details: HashMap::new(),
             };
         }
 
@@ -55,6 +58,7 @@ pub(crate) trait NativeRegexDetector {
             return NativeDetection {
                 result: safe_result(),
                 evidence_spans: Vec::new(),
+                details: HashMap::new(),
             };
         };
         let mut non_overlapping_spans = Vec::with_capacity(evidence_spans.len());
@@ -75,6 +79,7 @@ pub(crate) trait NativeRegexDetector {
                 level: "L1".to_string(),
             },
             evidence_spans: non_overlapping_spans,
+            details: HashMap::new(),
         }
     }
 }

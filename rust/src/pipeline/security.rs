@@ -18,12 +18,12 @@ use crate::{
             agentic_control_abuse, authority_escalation, binary_smuggling, covert_instruction,
             cross_tool_instruction, encoded_instruction, guardrail_tamper, hidden_html_instruction,
             instruction_boundary, instruction_leak, instruction_override, jailbreak_framing,
-            multi_turn_escalation, output_manipulation, tool_call_injection,
+            multi_turn_escalation, output_manipulation, rule_catalog, signal, tool_call_injection,
             tool_output_instruction, unicode_confusable, zero_width_obfuscation,
         },
         mcp::{mcp_policy, mcp_runtime_risk},
         pii::pii,
-        NativeRegexDetector,
+        NativeDetection, NativeRegexDetector,
     },
     diagnostics::PhaseMetricScope,
     ml::ntdb_executor::NtdbExecutor,
@@ -120,6 +120,7 @@ pub struct SecurityGatewayCore {
         Option<hidden_html_instruction::HiddenHtmlInstructionPipeline>,
     unicode_confusable_pipeline: Option<unicode_confusable::UnicodeConfusablePipeline>,
     zero_width_obfuscation_pipeline: Option<zero_width_obfuscation::ZeroWidthObfuscationPipeline>,
+    injection_rule_catalog_pipeline: Option<rule_catalog::InjectionRuleCatalogPipeline>,
     instruction_override_pipeline: Option<instruction_override::InstructionOverridePipeline>,
     jailbreak_framing_pipeline: Option<jailbreak_framing::JailbreakFramingPipeline>,
     covert_instruction_pipeline: Option<covert_instruction::CovertInstructionPipeline>,
@@ -234,9 +235,21 @@ fn timed_native_regex_scan_result<T: NativeRegexDetector>(
     detector: &T,
     text: &str,
 ) -> SecurityScanResult {
+    timed_native_detection_scan_result(category, model, text, || detector.detect(text))
+}
+
+fn timed_native_detection_scan_result<F>(
+    category: SecurityCategory,
+    model: impl Into<String>,
+    text: &str,
+    detect: F,
+) -> SecurityScanResult
+where
+    F: FnOnce() -> NativeDetection,
+{
     let model = model.into();
     let started = Instant::now();
-    match catch_unwind(AssertUnwindSafe(|| detector.detect(text))) {
+    match catch_unwind(AssertUnwindSafe(detect)) {
         Ok(detection) => {
             let mut result = l1_scan_result_with_duration(
                 category,
@@ -246,10 +259,31 @@ fn timed_native_regex_scan_result<T: NativeRegexDetector>(
                 started.elapsed().as_secs_f64() * 1000.0,
             );
             result.evidence_spans = filter_evidence(category, text, detection.evidence_spans);
+            result.layers[0].details = detection.details;
             result
         }
         Err(payload) => scanner_error_scan_result(category, model, panic_message(payload)),
     }
+}
+
+fn timed_native_injection_scan_result<F>(
+    category: SecurityCategory,
+    model: impl Into<String>,
+    text: &str,
+    evaluate: F,
+) -> SecurityScanResult
+where
+    F: Fn(&str) -> EvaluationResult,
+{
+    let model = model.into();
+    timed_native_detection_scan_result(category, model.clone(), text, || {
+        let result = evaluate(text);
+        if result.class_name == "safe" {
+            return signal::detection_from_signals(result, text, Vec::new(), None);
+        }
+        let signals = signal::native_signals(&model, text, &evaluate);
+        signal::detection_from_signals(result, text, signals, Some(signal::native_registry_id()))
+    })
 }
 
 fn scanner_error_scan_result(
@@ -405,6 +439,7 @@ impl SecurityGateway {
             hidden_html_instruction_pipeline: None,
             unicode_confusable_pipeline: None,
             zero_width_obfuscation_pipeline: None,
+            injection_rule_catalog_pipeline: None,
             instruction_override_pipeline: None,
             jailbreak_framing_pipeline: None,
             covert_instruction_pipeline: None,
@@ -441,6 +476,8 @@ impl SecurityGateway {
                         Some(unicode_confusable::UnicodeConfusablePipeline::new());
                     core.zero_width_obfuscation_pipeline =
                         Some(zero_width_obfuscation::ZeroWidthObfuscationPipeline::new());
+                    core.injection_rule_catalog_pipeline =
+                        Some(rule_catalog::InjectionRuleCatalogPipeline::new());
                     core.agentic_control_abuse_pipeline =
                         Some(agentic_control_abuse::AgenticControlAbusePipeline::new());
                     core.binary_smuggling_pipeline =
@@ -767,66 +804,108 @@ impl SecurityGateway {
                 }
             };
         }
+        macro_rules! push_native_injection {
+            ($pipeline:expr, $model:literal) => {
+                if self.level_enabled(&execution, SecurityLevel::L1)
+                    && self.model_enabled(&execution, $model)
+                {
+                    if let Some(ref pipe) = $pipeline {
+                        results.push(run_measured_l1_detector(
+                            category,
+                            $model,
+                            text.len(),
+                            || {
+                                timed_native_injection_scan_result(
+                                    category,
+                                    $model,
+                                    text,
+                                    |candidate| pipe.evaluate(candidate),
+                                )
+                            },
+                        ));
+                    }
+                }
+            };
+        }
 
         match category {
             SecurityCategory::Injection => {
-                push_native!(
+                if self.level_enabled(execution, SecurityLevel::L1)
+                    && self.model_enabled(execution, "native:injection_rule_catalog")
+                {
+                    if let Some(ref catalog) = self.injection_rule_catalog_pipeline {
+                        results.push(run_measured_l1_detector(
+                            category,
+                            "native:injection_rule_catalog",
+                            text.len(),
+                            || {
+                                timed_native_detection_scan_result(
+                                    category,
+                                    "native:injection_rule_catalog",
+                                    text,
+                                    || catalog.detect(text),
+                                )
+                            },
+                        ));
+                    }
+                }
+                push_native_injection!(
                     self.cross_tool_instruction_pipeline,
                     "native:cross_tool_instruction"
                 );
-                push_native!(self.instruction_leak_pipeline, "native:instruction_leak");
-                push_native!(
+                push_native_injection!(self.instruction_leak_pipeline, "native:instruction_leak");
+                push_native_injection!(
                     self.encoded_instruction_pipeline,
                     "native:encoded_instruction"
                 );
-                push_native!(
+                push_native_injection!(
                     self.multi_turn_escalation_pipeline,
                     "native:multi_turn_escalation"
                 );
-                push_native!(self.guardrail_tamper_pipeline, "native:guardrail_tamper");
-                push_native!(
+                push_native_injection!(self.guardrail_tamper_pipeline, "native:guardrail_tamper");
+                push_native_injection!(
                     self.tool_output_instruction_pipeline,
                     "native:tool_output_instruction"
                 );
-                push_native!(
+                push_native_injection!(
                     self.hidden_html_instruction_pipeline,
                     "native:hidden_html_instruction"
                 );
-                push_native!(
+                push_native_injection!(
                     self.unicode_confusable_pipeline,
                     "native:unicode_confusable"
                 );
-                push_native!(
+                push_native_injection!(
                     self.zero_width_obfuscation_pipeline,
                     "native:zero_width_obfuscation"
                 );
-                push_native!(
+                push_native_injection!(
                     self.agentic_control_abuse_pipeline,
                     "native:agentic_control_abuse"
                 );
-                push_native!(self.binary_smuggling_pipeline, "native:binary_smuggling");
-                push_native!(
+                push_native_injection!(self.binary_smuggling_pipeline, "native:binary_smuggling");
+                push_native_injection!(
                     self.instruction_override_pipeline,
                     "native:instruction_override"
                 );
-                push_native!(self.jailbreak_framing_pipeline, "native:jailbreak_framing");
-                push_native!(
+                push_native_injection!(self.jailbreak_framing_pipeline, "native:jailbreak_framing");
+                push_native_injection!(
                     self.covert_instruction_pipeline,
                     "native:covert_instruction"
                 );
-                push_native!(
+                push_native_injection!(
                     self.instruction_boundary_pipeline,
                     "native:instruction_boundary"
                 );
-                push_native!(
+                push_native_injection!(
                     self.authority_escalation_pipeline,
                     "native:authority_escalation"
                 );
-                push_native!(
+                push_native_injection!(
                     self.tool_call_injection_pipeline,
                     "native:tool_call_injection"
                 );
-                push_native!(
+                push_native_injection!(
                     self.output_manipulation_pipeline,
                     "native:output_manipulation"
                 );

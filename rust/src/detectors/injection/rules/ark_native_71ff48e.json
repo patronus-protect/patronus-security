@@ -1,0 +1,152 @@
+{
+  "schema_version": 1,
+  "registry_id": "ark-native-injection-71ff48e",
+  "source": "ark-native",
+  "source_revision": "71ff48e513ffee7810b29704e4cd9d4715aeaebd",
+  "rules": [
+    {
+      "model": "native:cross_tool_instruction",
+      "id": "ark.injection.cross_tool.override_action",
+      "family": "cross_tool_instruction",
+      "severity": "high",
+      "description": "Overrides trusted instructions to force another tool or action",
+      "source_file": "rust/src/threat/detection.rs"
+    },
+    {
+      "model": "native:instruction_leak",
+      "id": "ark.injection.leak.hidden_instructions",
+      "family": "instruction_leak",
+      "severity": "critical",
+      "description": "Requests hidden, system, developer, or initial instructions",
+      "source_file": "rust/src/threat/detection.rs"
+    },
+    {
+      "model": "native:encoded_instruction",
+      "id": "ark.injection.obfuscation.encoded_instruction",
+      "family": "encoded_instruction",
+      "severity": "high",
+      "description": "Requests execution of encoded instructions or contains a decoded injection signal",
+      "source_file": "rust/src/threat/detection.rs"
+    },
+    {
+      "model": "native:multi_turn_escalation",
+      "id": "ark.injection.escalation.multi_turn",
+      "family": "multi_turn_escalation",
+      "severity": "high",
+      "description": "Claims prior agreement or authorization to bypass a control",
+      "source_file": "rust/src/threat/detection.rs"
+    },
+    {
+      "model": "native:guardrail_tamper",
+      "id": "ark.injection.guardrail.tamper",
+      "family": "guardrail_tamper",
+      "severity": "critical",
+      "description": "Disables, bypasses, or suppresses a security control",
+      "source_file": "rust/src/threat/detection.rs"
+    },
+    {
+      "model": "native:tool_output_instruction",
+      "id": "ark.injection.tool_output.override",
+      "family": "tool_output_instruction",
+      "severity": "critical",
+      "description": "Embeds an instruction override in untrusted tool output",
+      "source_file": "rust/src/threat/detection.rs"
+    },
+    {
+      "model": "native:hidden_html_instruction",
+      "id": "ark.injection.obfuscation.hidden_html",
+      "family": "hidden_html_instruction",
+      "severity": "high",
+      "description": "Hides an instruction inside HTML comments or non-visible markup",
+      "source_file": "rust/src/threat/detection.rs"
+    },
+    {
+      "model": "native:unicode_confusable",
+      "id": "ark.injection.obfuscation.unicode_confusable",
+      "family": "unicode_confusable",
+      "severity": "high",
+      "description": "Uses Unicode confusables to conceal an injection signal",
+      "source_file": "rust/src/threat/detection.rs"
+    },
+    {
+      "model": "native:zero_width_obfuscation",
+      "id": "ark.injection.obfuscation.zero_width",
+      "family": "zero_width_obfuscation",
+      "severity": "high",
+      "description": "Uses zero-width characters to conceal an injection signal",
+      "source_file": "rust/src/threat/detection.rs"
+    },
+    {
+      "model": "native:agentic_control_abuse",
+      "id": "ark.injection.agentic.control_abuse",
+      "family": "agentic_control_abuse",
+      "severity": "critical",
+      "description": "Manipulates delegation, identity, authorization, or autonomous control surfaces",
+      "source_file": "rust/src/threat/detection.rs"
+    },
+    {
+      "model": "native:binary_smuggling",
+      "id": "ark.injection.obfuscation.binary_smuggling",
+      "family": "binary_smuggling",
+      "severity": "high",
+      "description": "Smuggles an instruction in a binary or metadata payload",
+      "source_file": "rust/src/threat/detection.rs"
+    },
+    {
+      "model": "native:instruction_override",
+      "id": "ark.injection.override.hierarchy",
+      "family": "instruction_override",
+      "severity": "critical",
+      "description": "Invalidates or replaces a prior instruction hierarchy",
+      "source_file": "rust/src/threat/detection.rs"
+    },
+    {
+      "model": "native:jailbreak_framing",
+      "id": "ark.injection.jailbreak.framing",
+      "family": "jailbreak_framing",
+      "severity": "high",
+      "description": "Uses role play, unrestricted personas, or named modes to bypass constraints",
+      "source_file": "rust/src/threat/detection.rs"
+    },
+    {
+      "model": "native:covert_instruction",
+      "id": "ark.injection.covert.execution",
+      "family": "covert_instruction",
+      "severity": "high",
+      "description": "Requests secret or undisclosed execution",
+      "source_file": "rust/src/threat/detection.rs"
+    },
+    {
+      "model": "native:instruction_boundary",
+      "id": "ark.injection.boundary.delimiter",
+      "family": "instruction_boundary",
+      "severity": "high",
+      "description": "Injects model delimiters or a fake system instruction boundary",
+      "source_file": "rust/src/threat/detection.rs"
+    },
+    {
+      "model": "native:authority_escalation",
+      "id": "ark.injection.authority.escalation",
+      "family": "authority_escalation",
+      "severity": "high",
+      "description": "Claims elevated authority or access to redirect behavior",
+      "source_file": "rust/src/threat/detection.rs"
+    },
+    {
+      "model": "native:tool_call_injection",
+      "id": "ark.injection.tool_call.injected",
+      "family": "tool_call_injection",
+      "severity": "critical",
+      "description": "Forces an immediate tool invocation or injects a serialized tool call",
+      "source_file": "rust/src/threat/detection.rs"
+    },
+    {
+      "model": "native:output_manipulation",
+      "id": "ark.injection.output.forced_marker",
+      "family": "output_manipulation",
+      "severity": "high",
+      "description": "Forces disclosure markers, fixed output, or known jailbreak dividers",
+      "source_file": "rust/src/threat/detection.rs"
+    }
+  ]
+}

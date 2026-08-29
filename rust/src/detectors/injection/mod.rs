@@ -13,6 +13,8 @@ pub mod instruction_override;
 pub mod jailbreak_framing;
 pub mod multi_turn_escalation;
 pub mod output_manipulation;
+pub mod rule_catalog;
+pub(crate) mod signal;
 pub mod tool_call_injection;
 pub mod tool_output_instruction;
 pub mod unicode_confusable;

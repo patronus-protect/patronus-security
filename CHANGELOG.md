@@ -9,6 +9,23 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ## [Unreleased]
 
+### Added
+
+- Added a version-pinned native injection rule catalog derived from selected Prompt Armor rules.
+  Catalog findings expose stable Ark/upstream rule IDs, exact byte and character spans, source
+  revision, licence, family, severity, and descriptions. The first catalog closes high-specificity
+  override, instruction-leak, boundary, Markdown exfiltration, and ES/FR/PT gaps without importing
+  Prompt Armor's runtime or thresholds.
+- Registered all 18 existing native injection detectors in the same `InjectionSignal` evidence
+  contract. Positive findings now expose stable Ark rule IDs, source revision, family, severity,
+  explanations, localized candidate spans, and explicit clause/window span precision while
+  retaining the existing separately gateable scanner model names.
+- Added four source-derived, high-precision injection relationships for sensitive-path exfiltration,
+  authority-issued replacement instructions, decode-then-execute directives, and delimited
+  replacement actions. Each finding retains its pinned Pipelock or PromptInject source and any
+  secondary Garak reference. Labeled ROT13 and URL-safe Base64 payloads are decoded before the
+  existing injection-signal evaluation.
+
 ## [0.1.5] - 2026-08-29
 
 ### Added
