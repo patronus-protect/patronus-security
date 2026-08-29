@@ -29,6 +29,17 @@ pub(crate) struct InjectionSignal {
     pub start_byte: usize,
     pub end_byte: usize,
     pub span_precision: &'static str,
+    pub feature_kind: &'static str,
+    pub components: Vec<InjectionSignalComponent>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct InjectionSignalComponent {
+    pub component_id: &'static str,
+    pub explanation: &'static str,
+    pub start_byte: usize,
+    pub end_byte: usize,
+    pub span_precision: &'static str,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -85,6 +96,8 @@ where
             start_byte,
             end_byte,
             span_precision,
+            feature_kind: "rule_match",
+            components: Vec::new(),
         })
         .collect()
 }
@@ -196,7 +209,7 @@ where
     matches
 }
 
-fn candidate_clauses(text: &str) -> Vec<(usize, usize)> {
+pub(crate) fn candidate_clauses(text: &str) -> Vec<(usize, usize)> {
     let mut spans = Vec::new();
     let mut start = 0;
     for (index, character) in text.char_indices() {

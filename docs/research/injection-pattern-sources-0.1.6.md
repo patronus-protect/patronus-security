@@ -112,8 +112,16 @@ positives in security documentation.
 ## Coverage and implementation order
 
 The original baseline was 31 registered rules: 18 existing Ark producers plus
-13 selected Prompt Armor relationships. The four implemented P0 relationships
-raise the registered total to 35.
+13 selected Prompt Armor relationships. A German multilingual-override mapping
+and the four implemented P0 relationships raise the catalog/native rule total
+to 36. The first structural relationship producer raises the complete
+registered Injection-L1 producer/rule inventory to 37.
+
+Every new semantic relationship has an Ark-authored German lexical adaptation,
+derived from and attributed to the same pinned source relationship. These
+adaptations are identified as translations in provenance and are covered by
+German positives plus nearby German hard negatives. The Markdown-image
+relationship is syntax-based and therefore language-neutral.
 
 The implemented P0 relationship catalog follows this order:
 

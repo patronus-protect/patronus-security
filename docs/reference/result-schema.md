@@ -169,7 +169,8 @@ For registered native injection findings, the span label is the stable Ark rule 
 corresponding layer `details` contain an ordered `matched_rules` list with the Ark ID, optional
 upstream ID, family, severity, description, source revision, byte offsets, and `span_precision`.
 Data-driven regex rules use `exact`; procedural detectors currently use a localized `clause` or
-bounded `window`. A provenance weight, when present, is metadata and not an Ark decision threshold.
+bounded `window`, and a relationship assembled from independently matched components uses
+`composed`. A provenance weight, when present, is metadata and not an Ark decision threshold.
 Source-derived rules also expose `references` for secondary pinned sources, while `source`,
 `source_revision`, `source_license`, `upstream_id`, and `adaptation` identify the primary origin
 and Ark-specific narrowing.
@@ -207,6 +208,14 @@ character offsets, contributing rule IDs and families, maximum severity, and typ
   ]
 }
 ```
+
+The separately gateable `native:injection_structural` producer uses the same
+candidate contract. It may create a candidate without a flat catalog match.
+Its relationship ID remains in `rule_ids`, while `features[].kind` is
+`structural`; each feature has the exact span of one required component, such
+as a context override, instruction-hierarchy reference, disclosure action, or
+sensitive instruction object. The candidate span is the smallest
+original-document region containing all required components.
 
 `L1Candidate` is evidence, not a decision. It currently has no `score` or `action`. A later
 ensemble decision may reference its precise span for a direct block, or derive a separate padded

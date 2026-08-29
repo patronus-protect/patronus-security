@@ -7,16 +7,21 @@ This document is the implementation target for Ark 0.1.6.
 Current feature-branch progress:
 
 - Implementation step 1 is complete: all 18 existing native injection
-  detectors, 13 selected Prompt Armor gap rules, and four source-derived P0
+  detectors, 14 selected/adapted Prompt Armor gap rules, and four source-derived P0
   relationships emit the common registered signal evidence with stable IDs,
-  pinned provenance, and localized spans.
+  pinned provenance, and localized spans. Every new relationship has German
+  runtime coverage and a nearby German benign counterexample.
 - The follow-up open-source scan and its four high-precision relationship
   families are implemented; see
   [`research/injection-pattern-sources-0.1.6.md`](research/injection-pattern-sources-0.1.6.md).
-- The rule-backed foundation of implementation step 2 is complete:
+- The rule-backed foundation and first structural producer of implementation
+  step 2 are complete:
   `L1Candidate` groups overlapping registered signals into deterministic
   regions and represents each signal as a provenance-bearing `rule_match`
-  feature. Structural, similarity, and OOD feature producers are not wired yet.
+  feature. `native:injection_structural` independently recognizes the bounded
+  override + hierarchy reference + disclosure action + sensitive instruction
+  object relationship in English and German and exposes the four exact
+  `structural` component features. Similarity and OOD producers are not wired yet.
 - Implementation steps 3–10 are not yet implemented.
 
 The initial scope is **prompt injection only**.  It must not silently change
@@ -218,8 +223,9 @@ its quality gates are done.
 2. **In progress on the feature branch:** introduce the common L1 candidate and feature contract. Existing heuristic
    matches, structural signals, similarity features and benign-OOD features
    must be able to contribute to the same candidate representation with spans,
-   explanations and provenance. The contract and registered-rule features are
-   implemented; the remaining feature producers follow in later steps.
+   explanations and provenance. The contract, registered-rule features, and
+   first independently candidate-producing structural relationship are
+   implemented; similarity and benign-OOD follow in later steps.
 3. Add the static attack/benign prototype index without changing or mixing it
    with the historical runtime similarity cache. Similarity must be able to
    strengthen an existing candidate or provide evidence for a candidate region;

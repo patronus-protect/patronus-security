@@ -16,11 +16,12 @@ not import their runtimes, confidence thresholds, or final-decision policies.
 | --- | --- |
 | Existing Ark Injection-L1 producers registered | Done: 18/18 |
 | Existing positive findings with stable IDs and candidate spans | Done: 18/18 |
-| Selected Prompt Armor gap rules | Done: 13 |
+| Selected/adapted Prompt Armor gap rules | Done: 14 |
 | Source-derived P0 relationships | Done: 4 |
-| Total registered native producers/rules | 35 |
+| Structural relationship producers | Done: 1 |
+| Total registered native producers/rules | 37 |
 | Common `InjectionSignal` evidence contract | Done |
-| Rule-backed `L1Candidate` contract | Done; no score or action yet |
+| Rule/structural `L1Candidate` contract | Done; no score or action yet |
 | Additional open-source pattern scan | Done; composition candidates documented separately |
 | Ensemble scoring and suspicion-window routing | Not started; later implementation steps |
 
@@ -30,10 +31,18 @@ maps to the common registry and signal contract. The additional data-driven
 catalog remains a separate execution producer, but its output uses the same
 contract rather than a parallel evidence format.
 
-Every positive registered signal is also represented as a `rule_match` feature
+Every positive registered rule signal is also represented as a `rule_match` feature
 inside `layers[].details.l1_candidates`. Overlapping signal spans form one
 candidate; separated passages remain separate. Candidates intentionally omit
 ensemble score, action, promotion, and window fields at this stage.
+
+The separately gateable `native:injection_structural` producer can create a
+candidate without a flat catalog-regex match. Its first high-specificity
+relationship requires a context override, prior-instruction hierarchy
+reference, disclosure action, and sensitive instruction object in one clause.
+The resulting candidate contains four exact `structural` features with shared
+pinned provenance. Each component alone, and nearby benign combinations, stay
+safe in this producer.
 
 ## Pinned references
 
@@ -62,7 +71,7 @@ upstream catalog changes.
 
 ## Selected catalog delta
 
-The catalog adds 13 high-specificity rules:
+The catalog adds 14 high-specificity rules:
 
 - four instruction-override relationships;
 - one identity override;
@@ -70,7 +79,14 @@ The catalog adds 13 high-specificity rules:
 - one artificial instruction-boundary marker;
 - one Markdown-image exfiltration pattern;
 - one instruction-override relationship each for Spanish, French, and
-  Portuguese.
+  Portuguese;
+- one German adaptation of the pinned multilingual override relationship.
+
+All English Prompt Armor relationships and all four source-derived P0
+relationships include German lexical adaptations under their existing stable
+relationship IDs. The German adaptations retain the original pinned source and
+carry an explicit Ark adaptation note; they are not represented as upstream
+German source material. Markdown-image exfiltration syntax is language-neutral.
 
 Each match records:
 
@@ -126,6 +142,10 @@ adaptation in rule evidence.
 - exclusion of low-specificity educational and arbitrary-Base64 signals.
 - registry coverage, IDs, source revision, metadata, and localized evidence for
   all 18 existing native Injection-L1 detectors.
+- a German positive and a nearby German benign case for every new semantic
+  relationship;
+- structural Candidate creation in English and German, four component spans,
+  source provenance, and coverage beyond the flat catalog regexes.
 
 ## Remaining heuristic gaps
 

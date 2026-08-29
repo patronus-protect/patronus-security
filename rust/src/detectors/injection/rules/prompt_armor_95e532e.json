@@ -12,7 +12,8 @@
       "severity": "high",
       "upstream_weight": 0.88,
       "description": "Explicitly refuses the prior instruction hierarchy",
-      "pattern": "do\\s+not\\s+follow\\s+(any|your|the)\\s+(previous|prior|original|above)\\s+(instructions?|rules?|guidelines?)"
+      "adaptation": "Adds a semantically equivalent German relationship while preserving the upstream requirement for an explicit refusal of prior instructions.",
+      "pattern": "(?:do\\s+not\\s+follow\\s+(?:any|your|the)\\s+(?:previous|prior|original|above)\\s+(?:instructions?|rules?|guidelines?)|(?:folge|befolge|beachte)\\s+nicht\\s+(?:(?:deine|die|alle)\\s+)?(?:vorherigen|früheren|bisherigen|ursprünglichen)\\s+(?:anweisungen|regeln|richtlinien)|(?:folge|befolge|beachte)\\s+(?:(?:deine|die|alle)\\s+)?(?:vorherigen|früheren|bisherigen|ursprünglichen)\\s+(?:anweisungen|regeln|richtlinien)\\s+nicht)"
     },
     {
       "id": "ark.injection.override.follow_instead",
@@ -21,7 +22,8 @@
       "severity": "high",
       "upstream_weight": 0.80,
       "description": "Redirects execution to replacement instructions",
-      "pattern": "instead\\s*,?\\s+(do|follow|obey|execute|respond)\\s+(the\\s+following|these|this)"
+      "adaptation": "Adds a German stattdessen-plus-replacement-instruction variant of the pinned relationship.",
+      "pattern": "(?:instead\\s*,?\\s+(?:do|follow|obey|execute|respond)\\s+(?:the\\s+following|these|this)|(?:befolge|beachte|führe|tu)\\s+stattdessen\\s+(?:die\\s+folgenden|diese|dies))"
     },
     {
       "id": "ark.injection.override.redefine_goal",
@@ -30,7 +32,8 @@
       "severity": "high",
       "upstream_weight": 0.85,
       "description": "Claims a replacement task, purpose, or goal",
-      "pattern": "your\\s+(actual|real|true|new)\\s+(instructions?|purpose|task|goal)\\s+(is|are)"
+      "adaptation": "Adds the direct German deine wahre/eigentliche Aufgabe relationship.",
+      "pattern": "(?:your\\s+(?:actual|real|true|new)\\s+(?:instructions?|purpose|task|goal)\\s+(?:is|are)|deine\\s+(?:eigentliche|wahre|wirkliche|neue)\\s+(?:anweisungen?|aufgabe|zweck|ziel)\\s+(?:ist|sind))"
     },
     {
       "id": "ark.injection.override.forget_context",
@@ -39,7 +42,8 @@
       "severity": "high",
       "upstream_weight": 0.85,
       "description": "Commands the model to discard all preceding context",
-      "pattern": "forget\\s+(everything|all\\s+(of\\s+)?(that|this))\\s+(before|above|prior)"
+      "adaptation": "Adds a bounded German vergiss-alles-before-context variant.",
+      "pattern": "(?:forget\\s+(?:everything|all\\s+(?:of\\s+)?(?:that|this))\\s+(?:before|above|prior)|vergiss\\s+(?:alles|all\\s+das)\\s+(?:vor|oberhalb|zuvor))"
     },
     {
       "id": "ark.injection.identity.no_longer_ai",
@@ -48,8 +52,8 @@
       "severity": "high",
       "upstream_weight": 0.88,
       "description": "Replaces the assistant identity to escape its constraints",
-      "adaptation": "Removed the bare a/an alternatives, which matched benign phrases such as 'You are no longer a beginner'.",
-      "pattern": "you\\s+are\\s+no\\s+longer\\s+(claude|gpt|chatgpt|an?\\s+(ai|assistant))\\b"
+      "adaptation": "Removed the bare a/an alternatives, which matched benign phrases such as 'You are no longer a beginner', and adds only explicit German AI/assistant identity targets.",
+      "pattern": "(?:you\\s+are\\s+no\\s+longer\\s+(?:claude|gpt|chatgpt|an?\\s+(?:ai|assistant))|du\\s+bist\\s+(?:keine?\\s+(?:ki|ai|assistenz|assistent)\\s+mehr|nicht\\s+länger\\s+(?:eine?\\s+)?(?:ki|ai|assistenz|assistent)))\\b"
     },
     {
       "id": "ark.injection.leak.dump_system_prompt",
@@ -58,7 +62,8 @@
       "severity": "critical",
       "upstream_weight": 0.92,
       "description": "Requests a complete dump of hidden or system instructions",
-      "pattern": "(paste|copy|echo|dump)\\s+(the\\s+)?(entire|full|complete|whole)\\s+(system|initial|original|hidden)\\s+(prompt|message|instructions?)"
+      "adaptation": "Adds German complete-dump verbs and explicit hidden/system instruction objects.",
+      "pattern": "(?:(?:paste|copy|echo|dump)\\s+(?:the\\s+)?(?:entire|full|complete|whole)\\s+(?:system|initial|original|hidden)\\s+(?:prompt|message|instructions?)|(?:kopiere|wiederhole|zeige|enthülle|offenbare|gib)\\s+(?:mir\\s+)?(?:den|die|das)?\\s*(?:gesamten|vollständigen|kompletten|ganzen)\\s+(?:versteckten?\\s+)?(?:system\\s*prompt|systemnachricht|systemanweisungen?|anweisungen?)(?:\\s+aus)?)"
     },
     {
       "id": "ark.injection.leak.prior_configuration",
@@ -67,7 +72,8 @@
       "severity": "high",
       "upstream_weight": 0.72,
       "description": "Asks what hidden configuration or instructions preceded the input",
-      "pattern": "what\\s+(were|was)\\s+(you|your)\\s+(told|instructed|programmed|configured|given)\\s+(to\\s+do|before)"
+      "adaptation": "Adds direct German questions about instructions or configuration received before the current input.",
+      "pattern": "(?:what\\s+(?:were|was)\\s+(?:you|your)\\s+(?:told|instructed|programmed|configured|given)\\s+(?:to\\s+do|before)|(?:was\\s+wurde\\s+dir|wozu\\s+wurdest\\s+du)\\s+(?:vorher|zuvor)?\\s*(?:gesagt|aufgetragen|angewiesen|programmiert|konfiguriert|gegeben)?)"
     },
     {
       "id": "ark.injection.leak.repeat_context",
@@ -76,7 +82,8 @@
       "severity": "high",
       "upstream_weight": 0.85,
       "description": "Requests verbatim disclosure of preceding context",
-      "pattern": "repeat\\s+(everything|all|the\\s+text)\\s+(above|before|from\\s+the\\s+beginning)"
+      "adaptation": "Adds German verbatim-context repetition variants.",
+      "pattern": "(?:repeat\\s+(?:everything|all|the\\s+text)\\s+(?:above|before|from\\s+the\\s+beginning)|wiederhole\\s+(?:alles|den\\s+gesamten\\s+text)\\s+(?:oben|vorher|von\\s+anfang\\s+an))"
     },
     {
       "id": "ark.injection.boundary.end_system_prompt",
@@ -85,7 +92,8 @@
       "severity": "high",
       "upstream_weight": 0.80,
       "description": "Declares an artificial end to the trusted instruction block",
-      "pattern": "(end|stop|terminate|exit)\\s+(of\\s+)?(system|initial|original)\\s+(prompt|message|instructions?)"
+      "adaptation": "Adds explicit German end-of-system-instruction boundary declarations.",
+      "pattern": "(?:(?:end|stop|terminate|exit)\\s+(?:of\\s+)?(?:system|initial|original)\\s+(?:prompt|message|instructions?)|(?:ende|stopp|abschluss)\\s+(?:des|der|vom)?\\s*(?:system\\s*prompt|systemnachricht|systemanweisungen?|ursprünglichen\\s+anweisungen?))"
     },
     {
       "id": "ark.injection.exfil.markdown_image",
@@ -122,6 +130,16 @@
       "upstream_weight": 0.88,
       "description": "Portuguese instruction override",
       "pattern": "(esqueça|ignore|descarte|desconsidere)\\s+((tudo|todas?|os?|as?|seus?|suas?|minhas?|meus?)\\s+){0,5}(instruç(ão|ões)|regras?|comandos?|mensage(m|ns)|diretrizes?|orientações?|anterior(es)?|prévi[oa]s?)"
+    },
+    {
+      "id": "ark.injection.override.de",
+      "upstream_id": "ML-DE-ARK-001",
+      "family": "instruction_override",
+      "severity": "high",
+      "upstream_weight": 0.88,
+      "description": "German instruction override",
+      "adaptation": "Ark German translation of Prompt Armor's pinned multilingual instruction-override relationship; requires an override verb and an instruction-hierarchy object.",
+      "pattern": "(?:vergiss|ignoriere|missachte|verwirf|verwerfe)\\s+(?:(?:alles|alle|die|deine|sämtliche)\\s+){0,4}(?:anweisungen?|instruktionen?|regeln?|befehle?|direktiven?|richtlinien?|nachrichten?|vorherigen?|früheren?|bisherigen?)"
     }
   ]
 }

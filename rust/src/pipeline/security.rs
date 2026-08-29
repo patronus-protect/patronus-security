@@ -18,8 +18,9 @@ use crate::{
             agentic_control_abuse, authority_escalation, binary_smuggling, covert_instruction,
             cross_tool_instruction, encoded_instruction, guardrail_tamper, hidden_html_instruction,
             instruction_boundary, instruction_leak, instruction_override, jailbreak_framing,
-            multi_turn_escalation, output_manipulation, rule_catalog, signal, tool_call_injection,
-            tool_output_instruction, unicode_confusable, zero_width_obfuscation,
+            multi_turn_escalation, output_manipulation, rule_catalog, signal, structural,
+            tool_call_injection, tool_output_instruction, unicode_confusable,
+            zero_width_obfuscation,
         },
         mcp::{mcp_policy, mcp_runtime_risk},
         pii::pii,
@@ -121,6 +122,7 @@ pub struct SecurityGatewayCore {
     unicode_confusable_pipeline: Option<unicode_confusable::UnicodeConfusablePipeline>,
     zero_width_obfuscation_pipeline: Option<zero_width_obfuscation::ZeroWidthObfuscationPipeline>,
     injection_rule_catalog_pipeline: Option<rule_catalog::InjectionRuleCatalogPipeline>,
+    injection_structural_pipeline: Option<structural::InjectionStructuralPipeline>,
     instruction_override_pipeline: Option<instruction_override::InstructionOverridePipeline>,
     jailbreak_framing_pipeline: Option<jailbreak_framing::JailbreakFramingPipeline>,
     covert_instruction_pipeline: Option<covert_instruction::CovertInstructionPipeline>,
@@ -440,6 +442,7 @@ impl SecurityGateway {
             unicode_confusable_pipeline: None,
             zero_width_obfuscation_pipeline: None,
             injection_rule_catalog_pipeline: None,
+            injection_structural_pipeline: None,
             instruction_override_pipeline: None,
             jailbreak_framing_pipeline: None,
             covert_instruction_pipeline: None,
@@ -478,6 +481,8 @@ impl SecurityGateway {
                         Some(zero_width_obfuscation::ZeroWidthObfuscationPipeline::new());
                     core.injection_rule_catalog_pipeline =
                         Some(rule_catalog::InjectionRuleCatalogPipeline::new());
+                    core.injection_structural_pipeline =
+                        Some(structural::InjectionStructuralPipeline::new());
                     core.agentic_control_abuse_pipeline =
                         Some(agentic_control_abuse::AgenticControlAbusePipeline::new());
                     core.binary_smuggling_pipeline =
@@ -844,6 +849,25 @@ impl SecurityGateway {
                                     "native:injection_rule_catalog",
                                     text,
                                     || catalog.detect(text),
+                                )
+                            },
+                        ));
+                    }
+                }
+                if self.level_enabled(execution, SecurityLevel::L1)
+                    && self.model_enabled(execution, "native:injection_structural")
+                {
+                    if let Some(ref structural) = self.injection_structural_pipeline {
+                        results.push(run_measured_l1_detector(
+                            category,
+                            "native:injection_structural",
+                            text.len(),
+                            || {
+                                timed_native_detection_scan_result(
+                                    category,
+                                    "native:injection_structural",
+                                    text,
+                                    || structural.detect(text),
                                 )
                             },
                         ));

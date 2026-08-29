@@ -29,6 +29,11 @@ result shapes may be breaking for downstream users, and is called out explicitly
   features; overlapping spans form one deterministic candidate and separated regions remain
   separate. Candidates expose spans, rule IDs, families, severity, explanations, and provenance,
   but deliberately carry no ensemble score or routing/block action yet.
+- Added a native structural injection producer for override-plus-sensitive-disclosure
+  relationships. It can create a candidate independently of the flat rule catalog and decomposes
+  the decisive region into exact context-override, hierarchy-reference, disclosure-action, and
+  sensitive-object features. Added German adaptations and nearby benign counterexamples for every
+  new 0.1.6 catalog relationship; language-neutral Markdown exfiltration syntax is shared.
 
 ## [0.1.5] - 2026-08-29
 

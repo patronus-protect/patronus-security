@@ -92,7 +92,7 @@ fn candidate_from_group(text: &str, signals: &[&InjectionSignal]) -> L1Candidate
         .expect("candidate group must not be empty");
     let features = signals
         .iter()
-        .map(|signal| feature_from_signal(text, signal))
+        .flat_map(|signal| features_from_signal(text, signal))
         .collect();
 
     L1Candidate {
@@ -109,13 +109,38 @@ fn candidate_from_group(text: &str, signals: &[&InjectionSignal]) -> L1Candidate
     }
 }
 
-fn feature_from_signal(text: &str, signal: &InjectionSignal) -> L1Feature {
-    L1Feature {
+fn features_from_signal(text: &str, signal: &InjectionSignal) -> Vec<L1Feature> {
+    if !signal.components.is_empty() {
+        return signal
+            .components
+            .iter()
+            .map(|component| L1Feature {
+                feature_id: format!(
+                    "structural:{}:{}:{}:{}",
+                    signal.rule_id,
+                    component.component_id,
+                    component.start_byte,
+                    component.end_byte
+                ),
+                kind: "structural",
+                value: 1.0,
+                explanation: component.explanation.to_string(),
+                start_byte: component.start_byte,
+                end_byte: component.end_byte,
+                start_char: text[..component.start_byte].chars().count(),
+                end_char: text[..component.end_byte].chars().count(),
+                span_precision: component.span_precision,
+                provenance: provenance_from_signal(signal),
+            })
+            .collect();
+    }
+
+    vec![L1Feature {
         feature_id: format!(
             "rule:{}:{}:{}",
             signal.rule_id, signal.start_byte, signal.end_byte
         ),
-        kind: "rule_match",
+        kind: signal.feature_kind,
         value: 1.0,
         explanation: signal.description.clone(),
         start_byte: signal.start_byte,
@@ -123,16 +148,20 @@ fn feature_from_signal(text: &str, signal: &InjectionSignal) -> L1Feature {
         start_char: text[..signal.start_byte].chars().count(),
         end_char: text[..signal.end_byte].chars().count(),
         span_precision: signal.span_precision,
-        provenance: L1FeatureProvenance {
-            rule_id: signal.rule_id.clone(),
-            upstream_id: signal.upstream_id.clone(),
-            source: signal.source.clone(),
-            source_revision: signal.source_revision.clone(),
-            source_license: signal.source_license.clone(),
-            source_file: signal.source_file.clone(),
-            adaptation: signal.adaptation.clone(),
-            references: signal.references.clone(),
-        },
+        provenance: provenance_from_signal(signal),
+    }]
+}
+
+fn provenance_from_signal(signal: &InjectionSignal) -> L1FeatureProvenance {
+    L1FeatureProvenance {
+        rule_id: signal.rule_id.clone(),
+        upstream_id: signal.upstream_id.clone(),
+        source: signal.source.clone(),
+        source_revision: signal.source_revision.clone(),
+        source_license: signal.source_license.clone(),
+        source_file: signal.source_file.clone(),
+        adaptation: signal.adaptation.clone(),
+        references: signal.references.clone(),
     }
 }
 
@@ -178,6 +207,8 @@ mod tests {
             start_byte: start,
             end_byte: end,
             span_precision: "exact",
+            feature_kind: "rule_match",
+            components: Vec::new(),
         }
     }
 

@@ -152,6 +152,8 @@ impl InjectionRuleCatalogPipeline {
                 start_byte: *start,
                 end_byte: *end,
                 span_precision: "exact",
+                feature_kind: "rule_match",
+                components: Vec::new(),
             })
             .collect::<Vec<_>>();
         signals.dedup_by(|left, right| {
