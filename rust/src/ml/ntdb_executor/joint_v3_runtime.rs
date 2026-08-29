@@ -117,6 +117,10 @@ impl JointV3Runtime {
         chunks: Vec<JointPrediction>,
         operating_point: NtdbOperatingPoint,
     ) -> NtdbResult<ScoreOutput> {
+        // A document with at most two chunks has little L3 cost but can hide a
+        // complete override in otherwise benign context. Use the manifest's
+        // utility promoter even when the caller requested best_promote.
+        let operating_point = short_document_operating_point(operating_point, chunks.len());
         let chunk_routing = chunks
             .iter()
             .map(|chunk| {
@@ -338,6 +342,18 @@ impl JointV3Runtime {
             l3,
             union,
         })
+    }
+}
+
+fn short_document_operating_point(
+    operating_point: NtdbOperatingPoint,
+    chunk_count: usize,
+) -> NtdbOperatingPoint {
+    if operating_point == NtdbOperatingPoint::BestPromote && chunk_count <= 2 {
+        // JointV3PromoterRuntime maps non-BestPromote points to utility_promote.
+        NtdbOperatingPoint::BestF1
+    } else {
+        operating_point
     }
 }
 

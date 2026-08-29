@@ -92,6 +92,24 @@ impl HistoricalSimilarityCache {
         )
     }
 
+    pub(crate) fn find_best_for_head_and_producer(
+        &self,
+        vector_space: &str,
+        embedding: &[f32],
+        logical_head: &str,
+        producer_model_sha: &str,
+    ) -> Option<SimilarityMatch> {
+        self.find(
+            vector_space,
+            embedding,
+            |record| {
+                record.producer_model_sha == producer_model_sha
+                    && decode_decision(&record.heads, logical_head).is_some()
+            },
+            Some(logical_head),
+        )
+    }
+
     fn find(
         &self,
         vector_space: &str,
@@ -509,6 +527,39 @@ mod tests {
         assert!(cache
             .find_best("other-encoder", &[1.0, 0.0], None)
             .is_none());
+    }
+
+    #[test]
+    fn active_similarity_cache_never_propagates_another_model_revision() {
+        let coordinator =
+            Arc::new(CacheCoordinator::from_config(ExactCacheConfig::default()).unwrap());
+        let cache = HistoricalSimilarityCache::new(coordinator);
+        let embedding = [1.0, 0.0];
+        cache.remember(
+            "unified-embedding-space",
+            &embedding,
+            "unified-old-revision",
+            vec![decision_output("injection", "attack", 0.9908)],
+        );
+        cache.remember(
+            "unified-embedding-space",
+            &embedding,
+            "unified-current-revision",
+            vec![decision_output("injection", "benign", 0.6895)],
+        );
+
+        for _ in 0..5 {
+            let matched = cache
+                .find_best_for_head_and_producer(
+                    "unified-embedding-space",
+                    &embedding,
+                    "injection",
+                    "unified-current-revision",
+                )
+                .expect("current revision must remain available in the active cache");
+            assert_eq!(matched.producer_model_sha, "unified-current-revision");
+            assert_eq!(matched.decision.unwrap().class_name, "benign");
+        }
     }
 
     #[test]

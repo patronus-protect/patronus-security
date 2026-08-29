@@ -600,10 +600,11 @@ fn infer_unified_exact(
 
     let namespace = CacheNamespace::from_model_sha(CACHE_SCHEMA_VERSION, UNIFIED_L3_ASSET.revision);
     let key = CacheKey::for_chunk(namespace, chunk.text.as_bytes());
-    if let Some(matched) = similarity_cache.find_best_for_head(
+    if let Some(matched) = similarity_cache.find_best_for_head_and_producer(
         &chunk.embedding_space,
         &chunk.embedding,
         requested_head,
+        UNIFIED_L3_ASSET.revision,
     ) {
         if matched.propagation_similarity > 0.985 {
             if let Some(decision) = matched
@@ -687,8 +688,12 @@ fn historical_unified_non_safe(
     chunk: &SelectedL3Chunk,
     head: &str,
 ) -> bool {
-    let Some(matched) = cache.find_best_for_head(&chunk.embedding_space, &chunk.embedding, head)
-    else {
+    let Some(matched) = cache.find_best_for_head_and_producer(
+        &chunk.embedding_space,
+        &chunk.embedding,
+        head,
+        UNIFIED_L3_ASSET.revision,
+    ) else {
         return false;
     };
     matched
