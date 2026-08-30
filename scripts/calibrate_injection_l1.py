@@ -461,11 +461,20 @@ def validate_artifact(artifact: dict) -> None:
         )
 
 
-def validate_release_manifest(manifest: dict, artifact_path: Path, artifact: dict) -> None:
+def validate_release_manifest(
+    manifest: dict,
+    artifact_path: Path,
+    artifact: dict,
+    *,
+    require_holdout_locked: bool,
+) -> None:
     require(manifest.get("schema_version") == SCHEMA_VERSION, "release manifest schema")
     require(manifest.get("feature_order") == FEATURE_ORDER, "release feature order")
     holdout = manifest.get("holdout")
-    require(isinstance(holdout, dict) and holdout.get("accessed") is False, "release manifest holdout state")
+    require(isinstance(holdout, dict), "release manifest holdout state")
+    require(isinstance(holdout.get("accessed"), bool), "release manifest holdout access flag")
+    if require_holdout_locked:
+        require(holdout["accessed"] is False, "release manifest holdout is already accessed")
     gates = manifest.get("release_gates")
     require(isinstance(gates, dict), "missing release gates")
     require(float(gates.get("development_candidate_precision_min", 0.0)) > 0.0, "precision gate disabled")
@@ -514,7 +523,7 @@ def development_gate_report(artifact: dict, manifest: dict) -> dict:
         "passed": all(check["passed"] for check in checks.values()),
         "checks": checks,
         "external_release_suites": manifest.get("external_release_suites", []),
-        "holdout_accessed": False,
+        "holdout_accessed": manifest["holdout"]["accessed"],
     }
 
 
@@ -948,7 +957,9 @@ def cmd_validate(args: argparse.Namespace) -> None:
     artifact = json.loads(args.artifact.read_text(encoding="utf-8"))
     release_manifest = json.loads(args.release_manifest.read_text(encoding="utf-8"))
     validate_artifact(artifact)
-    validate_release_manifest(release_manifest, args.artifact, artifact)
+    validate_release_manifest(
+        release_manifest, args.artifact, artifact, require_holdout_locked=False
+    )
     report = development_gate_report(artifact, release_manifest)
     if args.output:
         args.output.write_text(
@@ -971,7 +982,9 @@ def cmd_final_eval(args: argparse.Namespace) -> None:
     artifact = json.loads(args.artifact.read_text(encoding="utf-8"))
     release_manifest = json.loads(args.release_manifest.read_text(encoding="utf-8"))
     validate_artifact(artifact)
-    validate_release_manifest(release_manifest, args.artifact, artifact)
+    validate_release_manifest(
+        release_manifest, args.artifact, artifact, require_holdout_locked=True
+    )
     artifact_sha256 = sha256_file(args.artifact)
     if artifact_sha256 != args.expected_artifact_sha256:
         raise SystemExit("frozen artifact digest mismatch")

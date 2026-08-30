@@ -1,4 +1,6 @@
 import importlib.util
+import hashlib
+import json
 import math
 import sys
 import tempfile
@@ -196,6 +198,41 @@ class CalibrationToolTests(unittest.TestCase):
                     "sources": [],
                 }
             )
+
+    def test_archived_release_manifest_validates_but_cannot_repeat_final_eval(self):
+        with tempfile.TemporaryDirectory() as directory:
+            artifact_path = Path(directory) / "artifact.json"
+            artifact = {"feature_order": MODULE.FEATURE_ORDER}
+            artifact_path.write_text(json.dumps(artifact), encoding="utf-8")
+            manifest = {
+                "schema_version": MODULE.SCHEMA_VERSION,
+                "feature_order": MODULE.FEATURE_ORDER,
+                "holdout": {"accessed": True},
+                "release_gates": {
+                    "development_candidate_precision_min": 0.99,
+                    "development_document_false_positive_rate_max": 0.001,
+                    "hard_benign_accepted_false_positives_max": 0,
+                    "holdout_accepted_false_positives_max": 0,
+                },
+                "artifacts": {
+                    "runtime_scorer_sha256": hashlib.sha256(
+                        artifact_path.read_bytes()
+                    ).hexdigest()
+                },
+            }
+            MODULE.validate_release_manifest(
+                manifest,
+                artifact_path,
+                artifact,
+                require_holdout_locked=False,
+            )
+            with self.assertRaises(ValueError):
+                MODULE.validate_release_manifest(
+                    manifest,
+                    artifact_path,
+                    artifact,
+                    require_holdout_locked=True,
+                )
 
     def test_non_rule_feature_is_not_counted_as_rule_match(self):
         item = candidate(0, 4, "high", "producer-a", kind="metadata")

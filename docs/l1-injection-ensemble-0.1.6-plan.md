@@ -56,7 +56,7 @@ Hard-Benign calibration split and the full Hard-Benign development-validation sp
 candidate labels must reproduce locally when their span is rescanned; a document label is never
 blindly copied to every candidate.
 
-The final Hard-Benign holdout stays closed until the scorer, tests and release gates are frozen.
+The final Hard-Benign holdout stayed closed until the scorer, tests and release gates were frozen.
 The calibration artifact records the feature order, coefficients, threshold, input hashes and
 tool provenance. The detailed method and the distinction between candidate metrics and
 end-to-end document coverage are reported in
@@ -75,8 +75,8 @@ end-to-end document coverage are reported in
    private routing state or adding L2 model logic to L1.
 6. Update Rust, Python and schema contracts for the single-result model and `source: "l1"`.
 7. Run independent architecture, calibration and false-positive reviews; remove obsolete code.
-8. Freeze the scorer and execute the final holdout once. Release only when precision, FPR,
-   language, family, regression and latency gates pass.
+8. Freeze the scorer and execute the final holdout once. Completed against commit `fd42762` with
+   zero accepted false positives across 3,576 Hard-Benign documents.
 
 ## Release gates
 

@@ -72,10 +72,11 @@
   "holdout": {
     "name": "hard_benign_full_holdout",
     "file": "hard_benign_full_holdout.csv",
-    "accessed": false,
+    "accessed": true,
     "expected_documents": 3576,
-    "sha256": null,
-    "unlock": "final-eval requires --allow-holdout and is run once after the runtime scorer is frozen"
+    "sha256": "bb09053c677ad28802d286ca117db3280c647188f786e992ef532590a227152a",
+    "accepted_false_positives": 0,
+    "report": "docs/research/injection-l1-final-holdout-0.1.6.json"
   },
   "release_gates": {
     "scope": "executable development gates",
@@ -105,8 +106,9 @@
     },
     {
       "name": "frozen_hard_benign_holdout",
-      "status": "run_once_after_reviews_and_runtime_freeze",
-      "coverage": ["hard_benign_full_holdout"]
+      "status": "passed",
+      "coverage": ["hard_benign_full_holdout"],
+      "report": "docs/research/injection-l1-final-holdout-0.1.6.json"
     }
   ],
   "train_validation_text_overlap_audit": {

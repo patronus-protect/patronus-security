@@ -1,6 +1,6 @@
 # Injection L1 calibration 0.1.6
 
-Status: development calibration complete; final hard-benign holdout locked.
+Status: development calibration and the frozen final hard-benign holdout are complete.
 
 ## Goal
 
@@ -70,14 +70,22 @@ The development gates are executable and nonzero: candidate precision must be at
   --release-manifest docs/research/injection-l1-calibration-0.1.6-manifest.json
 ```
 
-Three separate suites are release requirements. The first two passed on the frozen branch; the
-holdout remains pending until the pre-holdout commit:
+Three separate suites are release requirements. All three passed; the holdout was executed once
+against pre-holdout commit `fd42762`:
 
 - Language/family regression tests, including `every_new_catalog_relationship_has_german_coverage`, `injection_l1_covers_every_legacy_pi_pattern_family`, and `accepted_english_and_german_embedded_attacks_use_l1_decision_source`.
 - The public-gateway latency suite in `scripts/benchmark_injection_l1.py`, covering benign and
   embedded-attack inputs at 1, 10, and 100 KiB and reporting milliseconds, median, and p95. The
   frozen results are in `injection-l1-latency-0.1.6.md`.
-- A single frozen evaluation of `hard_benign_full_holdout` after code, scorer, manifests, and the other suites are frozen.
+- A single frozen evaluation of `hard_benign_full_holdout` after code, scorer, manifests, and the
+  other suites were frozen. All 3,576 documents were scanned; six produced rejected candidates
+  and zero produced an accepted false positive. The archived report is
+  `injection-l1-final-holdout-0.1.6.json`.
+
+The archived runtime metadata reports `repository_dirty: true` because unrelated concurrent
+worktree edits were present outside the Injection-L1 change set. The evaluated Injection-L1 Rust
+sources matched commit `fd42762`, and the embedded scorer matched the independently verified
+artifact SHA-256 recorded in the report.
 
 ## Reproduction
 
@@ -96,7 +104,8 @@ Use the project virtual environment:
   --report /tmp/injection_l1_fit_report.json
 ```
 
-The final holdout is not part of this workflow. After the runtime implementation and scorer artifact are frozen, independently record the expected holdout digest and run `final-eval` exactly once with the explicit `--allow-holdout` flag:
+The final holdout is not part of the normal development workflow. It was run once after the
+runtime implementation and scorer artifact were frozen, using the explicit input contract below:
 
 ```bash
 .venv/bin/python scripts/calibrate_injection_l1.py final-eval \
@@ -104,9 +113,9 @@ The final holdout is not part of this workflow. After the runtime implementation
   --artifact rust/src/detectors/injection/rules/l1_scorer_0_1_6.json \
   --release-manifest docs/research/injection-l1-calibration-0.1.6-manifest.json \
   --expected-artifact-sha256 88a57b166d1963f578fb8a3bf0caa9e40cfa0d2bd38b70200121b8fe21501380 \
-  --expected-holdout-sha256 <frozen-lowercase-sha256> \
+  --expected-holdout-sha256 bb09053c677ad28802d286ca117db3280c647188f786e992ef532590a227152a \
   --expected-holdout-documents 3576 \
-  --output /new/path/injection-l1-final-holdout-report.json \
+  --output docs/research/injection-l1-final-holdout-0.1.6.json \
   --allow-holdout
 ```
 
