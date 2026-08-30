@@ -1,37 +1,40 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use serde::Serialize;
+use std::collections::BTreeMap;
+
+use serde::{Deserialize, Serialize};
 
 use super::signal::{InjectionReference, InjectionSignal};
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub(crate) struct L1Candidate {
     pub candidate_id: String,
-    pub category: &'static str,
+    pub category: String,
     pub start_byte: usize,
     pub end_byte: usize,
     pub start_char: usize,
     pub end_char: usize,
     pub rule_ids: Vec<String>,
+    pub rule_severities: BTreeMap<String, String>,
     pub families: Vec<String>,
     pub max_severity: String,
     pub features: Vec<L1Feature>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub(crate) struct L1Feature {
     pub feature_id: String,
-    pub kind: &'static str,
+    pub kind: String,
     pub value: f64,
     pub explanation: String,
     pub start_byte: usize,
     pub end_byte: usize,
     pub start_char: usize,
     pub end_char: usize,
-    pub span_precision: &'static str,
+    pub span_precision: String,
     pub provenance: L1FeatureProvenance,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub(crate) struct L1FeatureProvenance {
     pub rule_id: String,
     pub upstream_id: Option<String>,
@@ -80,9 +83,11 @@ fn candidate_from_group(text: &str, signals: &[&InjectionSignal]) -> L1Candidate
         .max()
         .expect("candidate group must not be empty");
     let mut rule_ids = Vec::new();
+    let mut rule_severities = BTreeMap::new();
     let mut families = Vec::new();
     for signal in signals {
         push_unique(&mut rule_ids, &signal.rule_id);
+        rule_severities.insert(signal.rule_id.clone(), signal.severity.clone());
         push_unique(&mut families, &signal.family);
     }
     let max_severity = signals
@@ -97,12 +102,13 @@ fn candidate_from_group(text: &str, signals: &[&InjectionSignal]) -> L1Candidate
 
     L1Candidate {
         candidate_id: format!("injection:l1:{start_byte}:{end_byte}"),
-        category: "injection",
+        category: "injection".to_string(),
         start_byte,
         end_byte,
         start_char: text[..start_byte].chars().count(),
         end_char: text[..end_byte].chars().count(),
         rule_ids,
+        rule_severities,
         families,
         max_severity,
         features,
@@ -122,14 +128,14 @@ fn features_from_signal(text: &str, signal: &InjectionSignal) -> Vec<L1Feature> 
                     component.start_byte,
                     component.end_byte
                 ),
-                kind: "structural",
+                kind: "structural".to_string(),
                 value: 1.0,
                 explanation: component.explanation.to_string(),
                 start_byte: component.start_byte,
                 end_byte: component.end_byte,
                 start_char: text[..component.start_byte].chars().count(),
                 end_char: text[..component.end_byte].chars().count(),
-                span_precision: component.span_precision,
+                span_precision: component.span_precision.to_string(),
                 provenance: provenance_from_signal(signal),
             })
             .collect();
@@ -140,14 +146,14 @@ fn features_from_signal(text: &str, signal: &InjectionSignal) -> Vec<L1Feature> 
             "rule:{}:{}:{}",
             signal.rule_id, signal.start_byte, signal.end_byte
         ),
-        kind: signal.feature_kind,
+        kind: signal.feature_kind.to_string(),
         value: 1.0,
         explanation: signal.description.clone(),
         start_byte: signal.start_byte,
         end_byte: signal.end_byte,
         start_char: text[..signal.start_byte].chars().count(),
         end_char: text[..signal.end_byte].chars().count(),
-        span_precision: signal.span_precision,
+        span_precision: signal.span_precision.to_string(),
         provenance: provenance_from_signal(signal),
     }]
 }

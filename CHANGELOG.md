@@ -26,14 +26,35 @@ result shapes may be breaking for downstream users, and is called out explicitly
   secondary Garak reference. Labeled ROT13 and URL-safe Base64 payloads are decoded before the
   existing injection-signal evaluation.
 - Added the injection `L1Candidate` contract. Positive rule signals become auditable `rule_match`
-  features; overlapping spans form one deterministic candidate and separated regions remain
-  separate. Candidates expose spans, rule IDs, families, severity, explanations, and provenance,
-  but deliberately carry no ensemble score or routing/block action yet.
+  features; overlapping or directly touching spans form one deterministic candidate and separated
+  regions remain separate. Candidates expose spans, rule IDs, families, severity, explanations,
+  provenance and the versioned calibrated L1 score.
 - Added a native structural injection producer for override-plus-sensitive-disclosure
   relationships. It can create a candidate independently of the flat rule catalog and decomposes
   the decisive region into exact context-override, hierarchy-reference, disclosure-action, and
   sensitive-object features. Added German adaptations and nearby benign counterexamples for every
   new 0.1.6 catalog relationship; language-neutral Markdown exfiltration syntax is shared.
+- Added a precision-first, monotone Injection L1 scorer calibrated on deterministic
+  `injection_current` samples and the complete Hard-Benign development splits. Its artifact,
+  dataset hashes, feature order, threshold, candidate/document metrics and reproducible tooling
+  are versioned in the repository; the final holdout remains a separate release gate.
+
+### Changed
+
+- Changed native Injection L1 to publish one `native:injection_l1` aggregate instead of separate
+  public results for every heuristic. The former detector model gates still control their internal
+  producers. Accepted candidates expose evidence spans and `decision.final_result.source: "l1"`;
+  rejected candidates keep their score and evidence without creating a finding and can be used by
+  explicitly configured conditional L2/L3 gates. Registered external L1 detectors and DLP are
+  unchanged.
+
+### Breaking
+
+- Native Injection consumers that selected models such as `native:instruction_override` or
+  `native:injection_rule_catalog` from public scan results must migrate to
+  `native:injection_l1` and inspect `layers[].details.l1_candidates[].producers`, rule provenance,
+  and the typed decision candidates. This intentional pre-1.0 result-shape change ships with
+  0.1.6.
 
 ## [0.1.5] - 2026-08-29
 

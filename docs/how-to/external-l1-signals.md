@@ -4,8 +4,10 @@
 company-specific secret pattern or an allow-list check — without forking the library.
 
 This is a **Rust** extension point: implement the `ExternalL1Detector` trait and register it
-with the gateway. Your detector runs alongside the native L1 detectors and appears in results
-under the model name `external:<id>`.
+with the gateway. Your detector runs alongside the native L1 stage and appears as its own,
+unchanged result under the model name `external:<id>`. Injection's built-in heuristics are
+aggregated separately as `native:injection_l1`; external detectors are not folded into that
+calibrated native score.
 
 ## Implement the trait
 
@@ -55,7 +57,7 @@ matter) — see the [Rust API reference](../rust-api.md). The input carries the 
 
 Register your detector on the gateway — `register_external_l1` takes `&self`, so you can call it
 any time before the scans that should use it, not only at construction. It then runs on every scan
-of that category, and its verdict is combined into the category result just like a native detector.
+of that category and continues to publish its own result.
 
 ## Control it per request
 

@@ -6,13 +6,19 @@ catalogues them by family. The source lives under
 [`rust/src/detectors/`](https://github.com/patronus-protect/patronus-security/tree/main/rust/src/detectors)
 and [`rust/src/threat/`](https://github.com/patronus-protect/patronus-security/tree/main/rust/src/threat).
 
-Each detector returns a `class_name` (its own name when it fires, otherwise `safe`), a
-confidence, and — for PII/DLP — `evidence_spans` with exact byte/character offsets.
+PII and DLP detectors return their own public results. Injection heuristics instead contribute
+signals to one scored `native:injection_l1` result; this prevents a single broad regex from
+becoming an independent verdict.
 
 ## Injection
 
-Eighteen detectors target prompt-injection and jailbreak techniques. They split into three
-groups: **instruction manipulation**, **obfuscation/smuggling**, and **agentic/tool abuse**.
+The native Injection stack combines a pinned rule catalog, a structural relationship producer,
+and eighteen legacy heuristic producers. They split into three groups: **instruction
+manipulation**, **obfuscation/smuggling**, and **agentic/tool abuse**.
+
+Overlapping signals are merged into candidates and scored by the versioned L1 scorer. Only an
+accepted candidate creates public evidence spans and a non-safe result. Rejected candidates retain
+their score and evidence in the typed decision contract without becoming findings.
 
 ### Instruction manipulation
 
@@ -95,12 +101,14 @@ using model keys such as `native:mcp_runtime_risk`.
 ## Enabling and disabling detectors
 
 All native detectors run when their category and level are enabled. To disable a specific
-detector without changing `max_level`, use an execution gate with its `native:<name>` key:
+detector without changing `max_level`, use an execution gate with its `native:<name>` key. For
+Injection, `native:injection_l1` disables the complete native stack; the former model keys such as
+`native:instruction_override` still disable only that internal producer:
 
 ```python
 scanner.set_execution_gates({
     "levels": {"l1": True, "l2": False, "l3": False},
-    "models": {"native:mcp_runtime_risk": False},
+    "models": {"native:instruction_override": False},
 })
 ```
 

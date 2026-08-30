@@ -159,3 +159,31 @@ adaptation in rule evidence.
   under one stable rule ID. They are now usable ensemble signals, but can be
   split into finer IDs later when evaluation shows that the sub-signals need
   different weights or explanations.
+
+## Targeted v4.1 dataset audit
+
+A bounded rule-gap audit used the local `injection_current` v4.1 inputs rather
+than treating the full document-labelled corpus as span-labelled rule truth.
+The review covered a deterministic seed-42 sample of 3,000 positive rows from
+`validation.csv`, plus all 2,572 `hard_benign_full_calibration.csv` and all
+2,523 `hard_benign_full_validation.csv` rows. The hard-benign holdout was not
+read or used for tuning.
+
+The only promoted gap is the idiomatic German context reset `Vergiss alles
+davor.` It appears in three positive validation rows (`8214`, `11865`, and
+`16818`) and was missed because the existing Prompt Armor `PI-011` adaptation
+covered `vor` and `zuvor`, but not `davor`. Neither `vergiss` nor `alles davor`
+occurs in either reviewed hard-benign split. The production relationship still
+requires the imperative `vergiss` plus the complete-context object `alles`;
+the nearby benign third-person sentence `Sie vergisst alles davor, sobald der
+Vorhang aufgeht.` remains safe in regression coverage.
+
+Broader dataset phrases were deliberately not promoted. For example,
+hard-benign research documents
+`hbb1:hard_neg_injection:ee0a24d0aa6f71d5` (calibration) and
+`hbb1:hard_neg_injection:6aaf866f9bbf976c` (validation) legitimately discuss
+jailbreaks that bypass safety mechanisms or filters. Bare guardrail-bypass,
+refusal, disclaimer, policy, or restriction keywords would therefore create
+the exact documentation false positives this L1 release is intended to avoid.
+Those ambiguous cases remain inputs for calibrated candidate scoring and L2,
+not new standalone rules.

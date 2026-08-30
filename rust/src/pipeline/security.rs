@@ -36,6 +36,7 @@ use crate::{
     SecurityLevelReadiness, SecurityRuntimeReadiness, SecurityScanResult,
 };
 
+mod injection_l1;
 mod ntdb_l2;
 mod request_queue;
 mod warmup;
@@ -810,12 +811,13 @@ impl SecurityGateway {
             };
         }
         macro_rules! push_native_injection {
-            ($pipeline:expr, $model:literal) => {
+            ($target:expr, $pipeline:expr, $model:literal) => {
                 if self.level_enabled(&execution, SecurityLevel::L1)
+                    && self.model_enabled(&execution, "native:injection_l1")
                     && self.model_enabled(&execution, $model)
                 {
                     if let Some(ref pipe) = $pipeline {
-                        results.push(run_measured_l1_detector(
+                        $target.push(run_measured_l1_detector(
                             category,
                             $model,
                             text.len(),
@@ -835,11 +837,13 @@ impl SecurityGateway {
 
         match category {
             SecurityCategory::Injection => {
+                let mut native_results = Vec::new();
                 if self.level_enabled(execution, SecurityLevel::L1)
+                    && self.model_enabled(execution, "native:injection_l1")
                     && self.model_enabled(execution, "native:injection_rule_catalog")
                 {
                     if let Some(ref catalog) = self.injection_rule_catalog_pipeline {
-                        results.push(run_measured_l1_detector(
+                        native_results.push(run_measured_l1_detector(
                             category,
                             "native:injection_rule_catalog",
                             text.len(),
@@ -855,10 +859,11 @@ impl SecurityGateway {
                     }
                 }
                 if self.level_enabled(execution, SecurityLevel::L1)
+                    && self.model_enabled(execution, "native:injection_l1")
                     && self.model_enabled(execution, "native:injection_structural")
                 {
                     if let Some(ref structural) = self.injection_structural_pipeline {
-                        results.push(run_measured_l1_detector(
+                        native_results.push(run_measured_l1_detector(
                             category,
                             "native:injection_structural",
                             text.len(),
@@ -874,65 +879,98 @@ impl SecurityGateway {
                     }
                 }
                 push_native_injection!(
+                    native_results,
                     self.cross_tool_instruction_pipeline,
                     "native:cross_tool_instruction"
                 );
-                push_native_injection!(self.instruction_leak_pipeline, "native:instruction_leak");
                 push_native_injection!(
+                    native_results,
+                    self.instruction_leak_pipeline,
+                    "native:instruction_leak"
+                );
+                push_native_injection!(
+                    native_results,
                     self.encoded_instruction_pipeline,
                     "native:encoded_instruction"
                 );
                 push_native_injection!(
+                    native_results,
                     self.multi_turn_escalation_pipeline,
                     "native:multi_turn_escalation"
                 );
-                push_native_injection!(self.guardrail_tamper_pipeline, "native:guardrail_tamper");
                 push_native_injection!(
+                    native_results,
+                    self.guardrail_tamper_pipeline,
+                    "native:guardrail_tamper"
+                );
+                push_native_injection!(
+                    native_results,
                     self.tool_output_instruction_pipeline,
                     "native:tool_output_instruction"
                 );
                 push_native_injection!(
+                    native_results,
                     self.hidden_html_instruction_pipeline,
                     "native:hidden_html_instruction"
                 );
                 push_native_injection!(
+                    native_results,
                     self.unicode_confusable_pipeline,
                     "native:unicode_confusable"
                 );
                 push_native_injection!(
+                    native_results,
                     self.zero_width_obfuscation_pipeline,
                     "native:zero_width_obfuscation"
                 );
                 push_native_injection!(
+                    native_results,
                     self.agentic_control_abuse_pipeline,
                     "native:agentic_control_abuse"
                 );
-                push_native_injection!(self.binary_smuggling_pipeline, "native:binary_smuggling");
                 push_native_injection!(
+                    native_results,
+                    self.binary_smuggling_pipeline,
+                    "native:binary_smuggling"
+                );
+                push_native_injection!(
+                    native_results,
                     self.instruction_override_pipeline,
                     "native:instruction_override"
                 );
-                push_native_injection!(self.jailbreak_framing_pipeline, "native:jailbreak_framing");
                 push_native_injection!(
+                    native_results,
+                    self.jailbreak_framing_pipeline,
+                    "native:jailbreak_framing"
+                );
+                push_native_injection!(
+                    native_results,
                     self.covert_instruction_pipeline,
                     "native:covert_instruction"
                 );
                 push_native_injection!(
+                    native_results,
                     self.instruction_boundary_pipeline,
                     "native:instruction_boundary"
                 );
                 push_native_injection!(
+                    native_results,
                     self.authority_escalation_pipeline,
                     "native:authority_escalation"
                 );
                 push_native_injection!(
+                    native_results,
                     self.tool_call_injection_pipeline,
                     "native:tool_call_injection"
                 );
                 push_native_injection!(
+                    native_results,
                     self.output_manipulation_pipeline,
                     "native:output_manipulation"
                 );
+                if !native_results.is_empty() {
+                    results.push(injection_l1::aggregate(text, native_results));
+                }
             }
             SecurityCategory::Dlp => {
                 if self.level_enabled(&execution, SecurityLevel::L1)

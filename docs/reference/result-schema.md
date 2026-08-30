@@ -121,9 +121,9 @@ classifier-looking scores.
 | --- | --- | --- |
 | `schema_version` | str | Decision-envelope schema version. Currently `ark.decision.v1`. |
 | `final_result` | dict | The final Ark verdict after threshold arbitration: `{class_name, confidence, source}`. |
-| `decision_candidate` | dict \| null | Canonical policy input. It is the winning accepted candidate when `final_arbitration` is `l2`, `l3`, or `union`; for `default`, it is the highest-priority rejected candidate in `l3`, `union`, `l2` order. `None` when no valid classifier candidate exists. |
+| `decision_candidate` | dict \| null | Canonical policy input. It is the selected accepted or rejected candidate from L1/L2/L3/Union arbitration. `None` when no valid candidate exists. |
 | `recommendation` | dict | Ark's calibrated default recommendation. `accepted` is false only for `final_arbitration: "default"`. |
-| `candidates` | list | All typed L2, L3, and Union candidates available to arbitration. |
+| `candidates` | list | All typed L1, L2, L3, and Union candidates available to arbitration. |
 | `terminality` | dict | Completion state for the result: `completion`, `degraded`, and optional `degradation_reason`. |
 | `provenance` | dict | Minimal source provenance: `ark_version`, `schema_version`, and `model`. |
 
@@ -131,7 +131,7 @@ Candidate entries have this shape:
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `source` | str | `l2`, `l3`, or `union`. `final_result.source` may also be `default`. |
+| `source` | str | `l1`, `l2`, `l3`, or `union`. `final_result.source` may also be `default`. |
 | `class_name` | str | Candidate class before downstream Patronus policy. |
 | `confidence` | float | Candidate confidence from that source. |
 | `acceptance_threshold` | float | Ark's calibrated acceptance threshold for this candidate's source/class/operating point. |
@@ -175,9 +175,10 @@ Source-derived rules also expose `references` for secondary pinned sources, whil
 `source_revision`, `source_license`, `upstream_id`, and `adaptation` identify the primary origin
 and Ark-specific narrowing.
 
-Positive registered injection findings additionally expose `layers[].details.l1_candidates`.
-Each candidate has a deterministic ID derived from its original-document byte span, byte and
-character offsets, contributing rule IDs and families, maximum severity, and typed features:
+The aggregated native Injection result exposes `layers[].details.l1_candidates` for accepted and
+rejected candidates. Each candidate has a deterministic ID derived from its original-document
+byte span, byte and character offsets, contributing producers, rule IDs and families, maximum
+severity, calibrated score, threshold, acceptance result, and typed features:
 
 ```json
 {
@@ -188,8 +189,14 @@ character offsets, contributing rule IDs and families, maximum severity, and typ
   "start_char": 18,
   "end_char": 57,
   "rule_ids": ["ark.injection.override.hierarchy"],
+  "rule_severities": {"ark.injection.override.hierarchy": "critical"},
   "families": ["instruction_override"],
   "max_severity": "critical",
+  "producers": ["native:instruction_override"],
+  "score": 0.91,
+  "acceptance_threshold": 0.85,
+  "accepted": true,
+  "score_version": "injection-l1-0.1.6",
   "features": [
     {
       "feature_id": "rule:ark.injection.override.hierarchy:18:57",
@@ -209,17 +216,19 @@ character offsets, contributing rule IDs and families, maximum severity, and typ
 }
 ```
 
-The separately gateable `native:injection_structural` producer uses the same
-candidate contract. It may create a candidate without a flat catalog match.
+The separately gateable internal `native:injection_structural` producer uses the same candidate
+contract. It may create a candidate without a flat catalog match.
 Its relationship ID remains in `rule_ids`, while `features[].kind` is
 `structural`; each feature has the exact span of one required component, such
 as a context override, instruction-hierarchy reference, disclosure action, or
 sensitive instruction object. The candidate span is the smallest
 original-document region containing all required components.
 
-`L1Candidate` is evidence, not a decision. It currently has no `score` or `action`. A later
-ensemble decision may reference its precise span for a direct block, or derive a separate padded
-suspicion window for L2/L3 without replacing the candidate evidence span.
+The `native:injection_l1` aggregate scores each merged candidate. Accepted candidates create
+public finding spans and use `source: "l1"`; rejected candidates remain visible in
+`decision.candidates` with `accepted: false` while the top-level result stays safe. Individual
+native Injection producer verdicts are no longer returned as separate public results. Registered
+external L1 detectors remain separate and unchanged.
 
 ## Async queue events
 

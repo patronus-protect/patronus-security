@@ -42,8 +42,8 @@
       "severity": "high",
       "upstream_weight": 0.85,
       "description": "Commands the model to discard all preceding context",
-      "adaptation": "Adds a bounded German vergiss-alles-before-context variant.",
-      "pattern": "(?:forget\\s+(?:everything|all\\s+(?:of\\s+)?(?:that|this))\\s+(?:before|above|prior)|vergiss\\s+(?:alles|all\\s+das)\\s+(?:vor|oberhalb|zuvor))"
+      "adaptation": "Adds bounded German vergiss-alles-before-context variants, including the idiomatic davor form confirmed in injection_current validation.",
+      "pattern": "(?:forget\\s+(?:everything|all\\s+(?:of\\s+)?(?:that|this))\\s+(?:before|above|prior)|vergiss\\s+(?:alles|all\\s+das)\\s+(?:vor|davor|oberhalb|zuvor))"
     },
     {
       "id": "ark.injection.identity.no_longer_ai",

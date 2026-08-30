@@ -1,0 +1,422 @@
+{
+  "acceptance_threshold": 0.844886,
+  "calibration": {
+    "coefficient_constraints": "evidence counts nonnegative; span_length_log1p nonpositive",
+    "development_validation_document_metrics": {
+      "accepted_negative_documents": 0,
+      "accepted_positive_documents": 37,
+      "document_false_positive_rate": 0.0,
+      "end_to_end_document_recall": 0.00925,
+      "negative_documents": 10523,
+      "negative_documents_with_any_candidate": 40,
+      "positive_candidate_coverage": 0.0435,
+      "positive_documents": 4000,
+      "positive_documents_with_any_candidate": 174,
+      "positive_documents_with_strong_candidate": 126,
+      "zero_observed_fp_upper_95_rule_of_three": 0.00028508980328803573
+    },
+    "development_validation_metrics": {
+      "candidate_count": 417,
+      "f1": 0.8057324840764332,
+      "false_positive_rate": 0.0,
+      "fn": 122,
+      "fp": 0,
+      "negative_candidates": 42,
+      "positive_candidates": 375,
+      "precision": 1.0,
+      "recall": 0.6746666666666666,
+      "score_quantiles": {
+        "0": {
+          "0.0": 0.0022362631753517544,
+          "0.5": 0.0749073911552778,
+          "0.9": 0.7327435242622143,
+          "0.99": 0.8332691381380272,
+          "1.0": 0.8448756274254595
+        },
+        "1": {
+          "0.0": 0.030642954428622252,
+          "0.5": 0.8706599931067049,
+          "0.9": 0.8706599931067049,
+          "0.99": 0.9984973814463338,
+          "1.0": 0.9999994081150961
+        }
+      },
+      "threshold": 0.844886,
+      "tn": 42,
+      "tp": 253
+    },
+    "fit_diagnostics": {
+      "converged": true,
+      "feature_mean": [
+        0.8236331569664903,
+        0.24691358024691357,
+        0.0,
+        0.0,
+        0.11992945326278659,
+        0.9470899470899471,
+        1.0670194003527338,
+        0.014109347442680775,
+        1.0405643738977073,
+        1.0670194003527338,
+        0.12345679012345678,
+        0.003527336860670194,
+        4.092127494494181
+      ],
+      "feature_scale": [
+        0.40360657082764817,
+        0.4851082149231724,
+        1.0,
+        1.0,
+        0.33556080406420385,
+        0.3573681437199623,
+        0.28929538795686977,
+        0.23714619137878945,
+        0.21441450321593358,
+        0.2953288986093064,
+        0.33951418941954503,
+        0.05928654784469736,
+        0.9045555698288317
+      ],
+      "final_max_step": 9.970900259961835e-09,
+      "final_projected_gradient_l2": 9.06572070329273e-10,
+      "final_raw_gradient_l2": 0.07215504321378323,
+      "iterations": 634,
+      "objective": 0.38190993395955875
+    },
+    "fit_document_metrics": {
+      "accepted_negative_documents": 0,
+      "accepted_positive_documents": 60,
+      "document_false_positive_rate": 0.0,
+      "end_to_end_document_recall": 0.0075,
+      "negative_documents": 22572,
+      "negative_documents_with_any_candidate": 67,
+      "positive_candidate_coverage": 0.040375,
+      "positive_documents": 8000,
+      "positive_documents_with_any_candidate": 323,
+      "positive_documents_with_strong_candidate": 225,
+      "zero_observed_fp_upper_95_rule_of_three": 0.00013290802764486976
+    },
+    "fit_metrics": {
+      "candidate_count": 567,
+      "f1": 0.7357512953367875,
+      "false_positive_rate": 0.0,
+      "fn": 204,
+      "fp": 0,
+      "negative_candidates": 79,
+      "positive_candidates": 488,
+      "precision": 1.0,
+      "recall": 0.5819672131147541,
+      "score_quantiles": {
+        "0": {
+          "0.0": 0.0018490565787027782,
+          "0.5": 0.053640556959210266,
+          "0.9": 0.7480323790104665,
+          "0.99": 0.8274827913584418,
+          "1.0": 0.843486351705308
+        },
+        "1": {
+          "0.0": 0.09822832863777257,
+          "0.5": 0.8706599931067049,
+          "0.9": 0.8766863027909201,
+          "0.99": 0.9992478901050399,
+          "1.0": 0.9999999331268048
+        }
+      },
+      "threshold": 0.844886,
+      "tn": 79,
+      "tp": 284
+    },
+    "holdout_evaluated": false,
+    "method": "candidate_level_l2_regularized_logistic_plus_zero_observed_fp_threshold",
+    "priority": "minimize_false_positives",
+    "ridge": 1.0,
+    "source_metrics": {
+      "hard_benign_full_calibration": {
+        "accepted_candidates": 0,
+        "accepted_document_rate": 0.0,
+        "accepted_documents": 0,
+        "candidate_records": 2,
+        "documents": 2572,
+        "documents_with_candidates": 2,
+        "label": 0,
+        "role": "fit_negative"
+      },
+      "hard_benign_full_validation": {
+        "accepted_candidates": 0,
+        "accepted_document_rate": 0.0,
+        "accepted_documents": 0,
+        "candidate_records": 4,
+        "documents": 2523,
+        "documents_with_candidates": 4,
+        "label": 0,
+        "role": "validation_negative"
+      },
+      "injection_train": {
+        "accepted_candidates": 284,
+        "accepted_document_rate": 0.0075,
+        "accepted_documents": 60,
+        "candidate_records": 488,
+        "documents": 8000,
+        "documents_with_candidates": 323,
+        "label": 1,
+        "role": "fit_positive"
+      },
+      "injection_train_benign": {
+        "accepted_candidates": 0,
+        "accepted_document_rate": 0.0,
+        "accepted_documents": 0,
+        "candidate_records": 77,
+        "documents": 20000,
+        "documents_with_candidates": 65,
+        "label": 0,
+        "role": "fit_negative"
+      },
+      "injection_validation": {
+        "accepted_candidates": 253,
+        "accepted_document_rate": 0.00925,
+        "accepted_documents": 37,
+        "candidate_records": 375,
+        "documents": 4000,
+        "documents_with_candidates": 174,
+        "label": 1,
+        "role": "validation_positive"
+      },
+      "injection_validation_benign": {
+        "accepted_candidates": 0,
+        "accepted_document_rate": 0.0,
+        "accepted_documents": 0,
+        "candidate_records": 38,
+        "documents": 8000,
+        "documents_with_candidates": 36,
+        "label": 0,
+        "role": "validation_negative"
+      }
+    },
+    "target_observed_candidate_fpr": 0.0,
+    "threshold_selection": {
+      "development_validation_is_threshold_tuning_data": true,
+      "maximum_observed_negative_score": 0.8448756274254595,
+      "minimum_safety_margin": 9.999999999999999e-06,
+      "quantized_threshold": 0.844886,
+      "safety_quanta": 10,
+      "score_quantum": 1e-06,
+      "selected_on": "fit negatives plus development-validation negatives"
+    }
+  },
+  "coefficients": [
+    3.4692780062813187,
+    0.0,
+    0.0,
+    0.0,
+    0.009892676826145749,
+    0.0,
+    0.0,
+    0.19495565647655888,
+    6.686375445933772,
+    0.0,
+    0.03344049933873502,
+    0.7798226259062355,
+    -1.1315790360104747
+  ],
+  "feature_order": [
+    "critical_rule_count",
+    "high_rule_count",
+    "medium_rule_count",
+    "low_rule_count",
+    "exact_rule_count",
+    "clause_window_rule_count",
+    "rule_match_count",
+    "structural_feature_count",
+    "family_count",
+    "producer_count",
+    "source_derived_rule_count",
+    "has_rule_and_structural",
+    "span_length_log1p"
+  ],
+  "golden_cases": [
+    {
+      "expected_accepted": false,
+      "expected_score": 0.8448756274254595,
+      "features": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0,
+        1.0,
+        0.0,
+        0.0,
+        3.713572066704308
+      ],
+      "name": "observed_top_negative"
+    },
+    {
+      "expected_accepted": false,
+      "expected_score": 0.8448849999999999,
+      "features": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0,
+        1.0,
+        0.0,
+        0.0,
+        3.713508867457637
+      ],
+      "name": "one_quantum_below_threshold"
+    },
+    {
+      "expected_accepted": true,
+      "expected_score": 0.8448870000000002,
+      "features": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0,
+        1.0,
+        0.0,
+        0.0,
+        3.713495381059032
+      ],
+      "name": "one_quantum_above_threshold"
+    },
+    {
+      "expected_accepted": true,
+      "expected_score": 0.8558136742935855,
+      "features": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0,
+        1.0,
+        0.0,
+        0.0,
+        3.6375861597263857
+      ],
+      "name": "observed_lowest_accepted_positive"
+    }
+  ],
+  "intercept": -4.25849092164518,
+  "model_id": "ark-injection-l1-logistic-0.1.6",
+  "provenance": {
+    "candidate_dataset_sha256": "9c9aa6225a82950048e5df35fd705a84e5e4ec9f2dd7077719a5fd553c24dc46",
+    "candidate_manifest_sha256": "b11e9b000ef49c89963ff19cd4bad7b80f324a76259035a903d97155ed54fc98",
+    "positive_selection": "candidate must reproduce a rule in isolation and have critical, source-derived, multi-producer, or rule+structural corroboration",
+    "runtime_versions": {
+      "ark_package_version": "0.1.5",
+      "numpy_version": "2.4.6",
+      "python_version": "3.11.15",
+      "repository_dirty": true,
+      "repository_revision": "a9fdfd40868213955c07d9f2020acd832836d9fe",
+      "scanner_model": "native:injection_l1",
+      "tool_version": "injection-l1-calibration-0.1.6"
+    },
+    "seed": 42,
+    "sources": [
+      {
+        "candidate_records": 488,
+        "documents_selected": 8000,
+        "documents_with_candidates": 323,
+        "duplicate_documents_by_text_hash": 0,
+        "name": "injection_train",
+        "path": "train.csv",
+        "rejected_weak_positive_candidates": 116,
+        "role": "fit_positive",
+        "sha256": "6752b2d6c70b58c0a2eae8c905edac19de9d40997bdcb69de80b27e77cf2b1f4",
+        "unique_text_hashes": 8000
+      },
+      {
+        "candidate_records": 77,
+        "documents_selected": 20000,
+        "documents_with_candidates": 65,
+        "duplicate_documents_by_text_hash": 0,
+        "name": "injection_train_benign",
+        "path": "train.csv",
+        "rejected_weak_positive_candidates": 0,
+        "role": "fit_negative",
+        "sha256": "6752b2d6c70b58c0a2eae8c905edac19de9d40997bdcb69de80b27e77cf2b1f4",
+        "unique_text_hashes": 20000
+      },
+      {
+        "candidate_records": 2,
+        "documents_selected": 2572,
+        "documents_with_candidates": 2,
+        "duplicate_documents_by_text_hash": 0,
+        "name": "hard_benign_full_calibration",
+        "path": "hard_benign_full_calibration.csv",
+        "rejected_weak_positive_candidates": 0,
+        "role": "fit_negative",
+        "sha256": "153de9e6a98135b6519dc9f061a78aa148f6a2c35416217d1fe8e49f814d952b",
+        "unique_text_hashes": 2572
+      },
+      {
+        "candidate_records": 375,
+        "documents_selected": 4000,
+        "documents_with_candidates": 174,
+        "duplicate_documents_by_text_hash": 0,
+        "name": "injection_validation",
+        "path": "validation.csv",
+        "rejected_weak_positive_candidates": 65,
+        "role": "validation_positive",
+        "sha256": "d2529ab094bb8fb5d9ab900c8f5a4b604d265382f1688159a2cc874ea075e845",
+        "unique_text_hashes": 4000
+      },
+      {
+        "candidate_records": 38,
+        "documents_selected": 8000,
+        "documents_with_candidates": 36,
+        "duplicate_documents_by_text_hash": 0,
+        "name": "injection_validation_benign",
+        "path": "validation.csv",
+        "rejected_weak_positive_candidates": 0,
+        "role": "validation_negative",
+        "sha256": "d2529ab094bb8fb5d9ab900c8f5a4b604d265382f1688159a2cc874ea075e845",
+        "unique_text_hashes": 8000
+      },
+      {
+        "candidate_records": 4,
+        "documents_selected": 2523,
+        "documents_with_candidates": 4,
+        "duplicate_documents_by_text_hash": 0,
+        "name": "hard_benign_full_validation",
+        "path": "hard_benign_full_validation.csv",
+        "rejected_weak_positive_candidates": 0,
+        "role": "validation_negative",
+        "sha256": "42212c627a5bc6529a2a1dcc2456d11f8f377e28789497b5e096d21f6d4b0b85",
+        "unique_text_hashes": 2523
+      }
+    ],
+    "tool_version": "injection-l1-calibration-0.1.6",
+    "train_validation_text_overlap_audit": {
+      "fit_unique_text_hashes": 30572,
+      "normalization": "CRLF-to-LF plus outer whitespace trim then SHA-256",
+      "overlap_count": 0,
+      "overlap_hashes": [],
+      "validation_unique_text_hashes": 14523
+    }
+  },
+  "reports": [
+    "docs/research/injection-l1-calibration-0.1.6.md"
+  ],
+  "schema_version": 1,
+  "score_version": "injection-l1-0.1.6"
+}
