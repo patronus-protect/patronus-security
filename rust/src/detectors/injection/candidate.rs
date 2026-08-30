@@ -17,6 +17,8 @@ pub(crate) struct L1Candidate {
     pub rule_severities: BTreeMap<String, String>,
     pub families: Vec<String>,
     pub max_severity: String,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub candidate_only: bool,
     pub features: Vec<L1Feature>,
 }
 
@@ -37,6 +39,8 @@ pub(crate) struct L1Feature {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub(crate) struct L1FeatureProvenance {
     pub rule_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub family: Option<String>,
     pub upstream_id: Option<String>,
     pub source: String,
     pub source_revision: String,
@@ -44,6 +48,10 @@ pub(crate) struct L1FeatureProvenance {
     pub source_file: Option<String>,
     pub adaptation: Option<String>,
     pub references: Vec<InjectionReference>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evidence_tier: Option<String>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub candidate_only: bool,
 }
 
 pub(crate) fn candidates_from_signals(text: &str, signals: &[InjectionSignal]) -> Vec<L1Candidate> {
@@ -51,24 +59,83 @@ pub(crate) fn candidates_from_signals(text: &str, signals: &[InjectionSignal]) -
         return Vec::new();
     }
 
-    let mut ordered = signals.iter().collect::<Vec<_>>();
-    ordered.sort_by_key(|signal| (signal.start_byte, signal.end_byte, signal.rule_id.as_str()));
+    let mut eligible = signals
+        .iter()
+        .filter(|signal| !signal.candidate_only)
+        .collect::<Vec<_>>();
+    let mut candidate_only = signals
+        .iter()
+        .filter(|signal| signal.candidate_only)
+        .collect::<Vec<_>>();
+    let compare = |left: &&InjectionSignal, right: &&InjectionSignal| {
+        (left.start_byte, left.end_byte, left.rule_id.as_str()).cmp(&(
+            right.start_byte,
+            right.end_byte,
+            right.rule_id.as_str(),
+        ))
+    };
+    eligible.sort_by(compare);
+    candidate_only.sort_by(compare);
 
-    let mut candidates = Vec::new();
-    let mut group = vec![ordered[0]];
-    let mut group_end = ordered[0].end_byte;
-    for signal in ordered.into_iter().skip(1) {
-        if signal.start_byte <= group_end {
-            group_end = group_end.max(signal.end_byte);
+    let mut groups: Vec<Vec<&InjectionSignal>> = Vec::new();
+    for signal in eligible {
+        if let Some(group) = groups.last_mut() {
+            let acceptance_end = group
+                .iter()
+                .filter(|member| !member.candidate_only)
+                .map(|member| member.end_byte)
+                .max()
+                .expect("eligible group must contain acceptance evidence");
+            if signal.start_byte <= acceptance_end {
+                group.push(signal);
+                continue;
+            }
+        }
+        groups.push(vec![signal]);
+    }
+
+    let mut unattached = Vec::new();
+    for signal in candidate_only {
+        if let Some(group) = groups.iter_mut().find(|group| {
+            acceptance_bounds_for_signals(group)
+                .is_some_and(|(start, end)| signal.start_byte <= end && start <= signal.end_byte)
+        }) {
             group.push(signal);
         } else {
-            candidates.push(candidate_from_group(text, &group));
-            group = vec![signal];
-            group_end = signal.end_byte;
+            unattached.push(signal);
         }
     }
-    candidates.push(candidate_from_group(text, &group));
+
+    for signal in unattached {
+        if let Some(group) = groups.last_mut().filter(|group| {
+            group.iter().all(|member| member.candidate_only)
+                && signal.start_byte
+                    <= group
+                        .iter()
+                        .map(|member| member.end_byte)
+                        .max()
+                        .expect("candidate-only group must not be empty")
+        }) {
+            group.push(signal);
+        } else {
+            groups.push(vec![signal]);
+        }
+    }
+    let mut candidates = groups
+        .iter()
+        .map(|group| candidate_from_group(text, group))
+        .collect::<Vec<_>>();
+    candidates.sort_by_key(|candidate| (candidate.start_byte, candidate.end_byte));
     candidates
+}
+
+fn acceptance_bounds_for_signals(signals: &[&InjectionSignal]) -> Option<(usize, usize)> {
+    let mut eligible = signals.iter().filter(|signal| !signal.candidate_only);
+    let first = eligible.next()?;
+    Some(eligible.fold(
+        (first.start_byte, first.end_byte),
+        |(start, end), signal| (start.min(signal.start_byte), end.max(signal.end_byte)),
+    ))
 }
 
 fn candidate_from_group(text: &str, signals: &[&InjectionSignal]) -> L1Candidate {
@@ -99,6 +166,7 @@ fn candidate_from_group(text: &str, signals: &[&InjectionSignal]) -> L1Candidate
         .iter()
         .flat_map(|signal| features_from_signal(text, signal))
         .collect();
+    let candidate_only = signals.iter().all(|signal| signal.candidate_only);
 
     L1Candidate {
         candidate_id: format!("injection:l1:{start_byte}:{end_byte}"),
@@ -111,6 +179,7 @@ fn candidate_from_group(text: &str, signals: &[&InjectionSignal]) -> L1Candidate
         rule_severities,
         families,
         max_severity,
+        candidate_only,
         features,
     }
 }
@@ -161,6 +230,7 @@ fn features_from_signal(text: &str, signal: &InjectionSignal) -> Vec<L1Feature> 
 fn provenance_from_signal(signal: &InjectionSignal) -> L1FeatureProvenance {
     L1FeatureProvenance {
         rule_id: signal.rule_id.clone(),
+        family: Some(signal.family.clone()),
         upstream_id: signal.upstream_id.clone(),
         source: signal.source.clone(),
         source_revision: signal.source_revision.clone(),
@@ -168,7 +238,13 @@ fn provenance_from_signal(signal: &InjectionSignal) -> L1FeatureProvenance {
         source_file: signal.source_file.clone(),
         adaptation: signal.adaptation.clone(),
         references: signal.references.clone(),
+        evidence_tier: signal.evidence_tier.clone(),
+        candidate_only: signal.candidate_only,
     }
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 fn push_unique(values: &mut Vec<String>, value: &str) {
@@ -208,6 +284,8 @@ mod tests {
             source_license: None,
             source_file: None,
             provenance_weight: None,
+            evidence_tier: None,
+            candidate_only: false,
             adaptation: None,
             references: Vec::new(),
             start_byte: start,
@@ -250,5 +328,72 @@ mod tests {
         assert_eq!(candidates.len(), 2);
         assert_eq!(candidates[0].candidate_id, "injection:l1:1:4");
         assert_eq!(candidates[1].candidate_id, "injection:l1:10:14");
+    }
+
+    #[test]
+    fn audited_evidence_tier_is_visible_only_when_explicitly_set() {
+        let text = "0123456789";
+        let plain = candidate_from_group(text, &[&signal("plain", "override", "high", 0, 4)]);
+        let plain_json = serde_json::to_value(&plain).unwrap();
+        assert!(plain_json["features"][0]["provenance"]
+            .get("evidence_tier")
+            .is_none());
+
+        let mut audited_signal = signal("audited", "override", "high", 0, 4);
+        audited_signal.evidence_tier = Some("audited_high_precision".to_string());
+        let audited = candidate_from_group(text, &[&audited_signal]);
+        let audited_json = serde_json::to_value(&audited).unwrap();
+        assert_eq!(
+            audited_json["features"][0]["provenance"]["evidence_tier"],
+            "audited_high_precision"
+        );
+    }
+
+    #[test]
+    fn candidate_only_is_visible_only_when_true_and_family_is_preserved() {
+        let text = "0123456789";
+        let plain = candidate_from_group(text, &[&signal("plain", "override", "high", 0, 4)]);
+        let plain_provenance = &serde_json::to_value(&plain).unwrap()["features"][0]["provenance"];
+        assert!(plain_provenance.get("candidate_only").is_none());
+        assert_eq!(plain_provenance["family"], "override");
+
+        let mut candidate_signal = signal("candidate", "lexicon", "high", 0, 4);
+        candidate_signal.candidate_only = true;
+        let candidate = candidate_from_group(text, &[&candidate_signal]);
+        assert!(candidate.candidate_only);
+        assert_eq!(
+            serde_json::to_value(&candidate).unwrap()["candidate_only"],
+            true
+        );
+        assert_eq!(
+            serde_json::to_value(candidate).unwrap()["features"][0]["provenance"]["candidate_only"],
+            true
+        );
+    }
+
+    #[test]
+    fn candidate_only_signal_does_not_bridge_separate_acceptance_candidates() {
+        let text = "0123456789abcdefghij";
+        let left = signal("left", "override", "high", 0, 4);
+        let right = signal("right", "leak", "high", 10, 14);
+        let mut bridge = signal("bridge", "lexicon", "critical", 3, 11);
+        bridge.candidate_only = true;
+
+        let candidates = candidates_from_signals(text, &[left, bridge, right]);
+
+        assert_eq!(candidates.len(), 2);
+        assert_eq!(candidates[0].start_byte, 0);
+        assert_eq!(candidates[0].end_byte, 11);
+        assert_eq!(candidates[1].start_byte, 10);
+        assert_eq!(candidates[1].end_byte, 14);
+        assert!(!candidates[0].candidate_only);
+        assert_eq!(
+            candidates[0]
+                .features
+                .iter()
+                .filter(|feature| !feature.provenance.candidate_only)
+                .count(),
+            1
+        );
     }
 }

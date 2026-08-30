@@ -17,6 +17,7 @@
     "family_count",
     "producer_count",
     "source_derived_rule_count",
+    "audited_evidence_rule_count",
     "has_rule_and_structural",
     "span_length_log1p"
   ],
@@ -76,6 +77,8 @@
     "expected_documents": 3576,
     "sha256": "bb09053c677ad28802d286ca117db3280c647188f786e992ef532590a227152a",
     "accepted_false_positives": 0,
+    "evaluated_runtime_scorer_sha256": "88a57b166d1963f578fb8a3bf0caa9e40cfa0d2bd38b70200121b8fe21501380",
+    "current_runtime_applicability": "historical baseline only; the audited-evidence augmentation was not evaluated on this consumed holdout",
     "report": "docs/research/injection-l1-final-holdout-0.1.6.json"
   },
   "release_gates": {
@@ -106,7 +109,7 @@
     },
     {
       "name": "frozen_hard_benign_holdout",
-      "status": "passed",
+      "status": "historical_baseline_passed",
       "coverage": ["hard_benign_full_holdout"],
       "report": "docs/research/injection-l1-final-holdout-0.1.6.json"
     }
@@ -119,7 +122,7 @@
   },
   "artifacts": {
     "runtime_scorer": "rust/src/detectors/injection/rules/l1_scorer_0_1_6.json",
-    "runtime_scorer_sha256": "88a57b166d1963f578fb8a3bf0caa9e40cfa0d2bd38b70200121b8fe21501380",
+    "runtime_scorer_sha256": "32384d69ffa16849a35d5fae01e3b83f3c1d60cd3a89578e6b61c5e8c2c17168",
     "report": "docs/research/injection-l1-calibration-0.1.6.md",
     "tool": "scripts/calibrate_injection_l1.py"
   }

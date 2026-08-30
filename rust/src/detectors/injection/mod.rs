@@ -18,6 +18,7 @@ pub mod rule_catalog;
 pub(crate) mod scorer;
 pub(crate) mod signal;
 pub mod structural;
+mod token_relations;
 pub mod tool_call_injection;
 pub mod tool_output_instruction;
 pub mod unicode_confusable;

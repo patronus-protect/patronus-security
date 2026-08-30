@@ -24,6 +24,8 @@ pub(crate) struct InjectionSignal {
     pub source_license: Option<String>,
     pub source_file: Option<String>,
     pub provenance_weight: Option<f64>,
+    pub evidence_tier: Option<String>,
+    pub candidate_only: bool,
     pub adaptation: Option<String>,
     pub references: Vec<InjectionReference>,
     pub start_byte: usize,
@@ -91,6 +93,8 @@ where
             source_license: None,
             source_file: Some(definition.source_file.clone()),
             provenance_weight: None,
+            evidence_tier: None,
+            candidate_only: false,
             adaptation: None,
             references: Vec::new(),
             start_byte,
@@ -167,7 +171,7 @@ fn native_registry() -> &'static NativeRegistry {
 }
 
 fn signal_json(signal: &InjectionSignal) -> Value {
-    json!({
+    let mut value = json!({
         "rule_id": signal.rule_id,
         "upstream_id": signal.upstream_id,
         "family": signal.family,
@@ -183,7 +187,14 @@ fn signal_json(signal: &InjectionSignal) -> Value {
         "start_byte": signal.start_byte,
         "end_byte": signal.end_byte,
         "span_precision": signal.span_precision,
-    })
+    });
+    if let Some(evidence_tier) = &signal.evidence_tier {
+        value["evidence_tier"] = json!(evidence_tier);
+    }
+    if signal.candidate_only {
+        value["candidate_only"] = json!(true);
+    }
+    value
 }
 
 fn localized_matches<F>(text: &str, evaluate: F) -> Vec<(usize, usize, &'static str)>

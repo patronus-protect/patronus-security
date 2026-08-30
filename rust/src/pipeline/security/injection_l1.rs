@@ -60,10 +60,6 @@ pub(super) fn aggregate(
         .collect::<Vec<_>>();
     let all_producers_failed =
         !producer_results.is_empty() && producer_errors.len() == producer_results.len();
-    let source_spans = producer_results
-        .iter()
-        .flat_map(|result| result.evidence_spans.iter().cloned())
-        .collect::<Vec<_>>();
     let candidates = producer_results
         .iter()
         .flat_map(candidates_from_result)
@@ -71,19 +67,21 @@ pub(super) fn aggregate(
     let config = scorer_config();
     let scored = merge_candidates(text, candidates)
         .into_iter()
-        .map(|(candidate, producers, class_name)| {
-            let score = score_candidate(&candidate, producers.len());
-            ScoredL1Candidate {
-                candidate,
-                producers,
-                class_name,
-                score: score.score,
-                acceptance_threshold: config.acceptance_threshold,
-                accepted: score.accepted,
-                scoring_features: score.features.into_iter().collect(),
-                score_version: config.score_version.clone(),
-            }
-        })
+        .map(
+            |(candidate, producers, eligible_producer_count, class_name)| {
+                let score = score_candidate(&candidate, eligible_producer_count);
+                ScoredL1Candidate {
+                    candidate,
+                    producers,
+                    class_name,
+                    score: score.score,
+                    acceptance_threshold: config.acceptance_threshold,
+                    accepted: score.accepted,
+                    scoring_features: score.features.into_iter().collect(),
+                    score_version: config.score_version.clone(),
+                }
+            },
+        )
         .collect::<Vec<_>>();
     let selected_index = scored
         .iter()
@@ -174,7 +172,7 @@ pub(super) fn aggregate(
             model: MODEL.to_string(),
         },
     };
-    let evidence_spans = accepted_spans(&scored, &source_spans);
+    let evidence_spans = accepted_spans(text, &scored);
     let label_scores = label_scores(&scored, selected_index, accepted);
 
     SecurityScanResult {
@@ -209,7 +207,7 @@ fn candidates_from_result(result: &SecurityScanResult) -> Vec<ProducerCandidate>
 fn merge_candidates(
     text: &str,
     mut candidates: Vec<ProducerCandidate>,
-) -> Vec<(L1Candidate, Vec<String>, String)> {
+) -> Vec<(L1Candidate, Vec<String>, usize, String)> {
     candidates.sort_by(|left, right| {
         (
             left.candidate.start_byte,
@@ -222,28 +220,95 @@ fn merge_candidates(
                 &right.producer,
             ))
     });
+    let (mut eligible, candidate_only): (Vec<_>, Vec<_>) = candidates
+        .into_iter()
+        .partition(|entry| acceptance_bounds(&entry.candidate).is_some());
+    eligible.sort_by_key(|entry| {
+        acceptance_bounds(&entry.candidate).expect("eligible candidate must have acceptance bounds")
+    });
     let mut groups: Vec<Vec<ProducerCandidate>> = Vec::new();
-    for candidate in candidates {
+    for candidate in eligible {
         if let Some(group) = groups.last_mut() {
             let group_end = group
                 .iter()
-                .map(|entry| entry.candidate.end_byte)
+                .filter_map(|entry| acceptance_bounds(&entry.candidate).map(|(_, end)| end))
                 .max()
-                .expect("candidate group must not be empty");
-            if candidate.candidate.start_byte <= group_end {
+                .expect("eligible candidate group must contain acceptance evidence");
+            let candidate_start = acceptance_bounds(&candidate.candidate)
+                .expect("eligible candidate must have acceptance bounds")
+                .0;
+            if candidate_start <= group_end {
                 group.push(candidate);
                 continue;
             }
         }
         groups.push(vec![candidate]);
     }
+    let mut unattached = Vec::new();
+    for candidate in candidate_only {
+        if let Some(group) = groups.iter_mut().find(|group| {
+            acceptance_bounds_for_group(group).is_some_and(|(start, end)| {
+                candidate.candidate.start_byte <= end && start <= candidate.candidate.end_byte
+            })
+        }) {
+            group.push(candidate);
+        } else {
+            unattached.push(candidate);
+        }
+    }
+    for candidate in unattached {
+        if let Some(group) = groups.last_mut().filter(|group| {
+            acceptance_bounds_for_group(group).is_none()
+                && candidate.candidate.start_byte
+                    <= group
+                        .iter()
+                        .map(|entry| entry.candidate.end_byte)
+                        .max()
+                        .expect("candidate-only group must not be empty")
+        }) {
+            group.push(candidate);
+        } else {
+            groups.push(vec![candidate]);
+        }
+    }
+    groups.sort_by_key(|group| {
+        group
+            .iter()
+            .map(|entry| entry.candidate.start_byte)
+            .min()
+            .unwrap_or(usize::MAX)
+    });
     groups
         .into_iter()
         .map(|group| merge_group(text, group))
         .collect()
 }
 
-fn merge_group(text: &str, group: Vec<ProducerCandidate>) -> (L1Candidate, Vec<String>, String) {
+fn acceptance_bounds(candidate: &L1Candidate) -> Option<(usize, usize)> {
+    let mut features = candidate
+        .features
+        .iter()
+        .filter(|feature| !feature.provenance.candidate_only);
+    let first = features.next()?;
+    Some(features.fold(
+        (first.start_byte, first.end_byte),
+        |(start, end), feature| (start.min(feature.start_byte), end.max(feature.end_byte)),
+    ))
+}
+
+fn acceptance_bounds_for_group(group: &[ProducerCandidate]) -> Option<(usize, usize)> {
+    group
+        .iter()
+        .filter_map(|entry| acceptance_bounds(&entry.candidate))
+        .reduce(|(left_start, left_end), (right_start, right_end)| {
+            (left_start.min(right_start), left_end.max(right_end))
+        })
+}
+
+fn merge_group(
+    text: &str,
+    group: Vec<ProducerCandidate>,
+) -> (L1Candidate, Vec<String>, usize, String) {
     let start_byte = group
         .iter()
         .map(|entry| entry.candidate.start_byte)
@@ -260,6 +325,18 @@ fn merge_group(text: &str, group: Vec<ProducerCandidate>) -> (L1Candidate, Vec<S
         .collect::<Vec<_>>();
     producers.sort();
     producers.dedup();
+    let eligible_producer_count = group
+        .iter()
+        .filter(|entry| {
+            entry
+                .candidate
+                .features
+                .iter()
+                .any(|feature| !feature.provenance.candidate_only)
+        })
+        .map(|entry| entry.producer.as_str())
+        .collect::<std::collections::HashSet<_>>()
+        .len();
     let mut rule_ids = group
         .iter()
         .flat_map(|entry| entry.candidate.rule_ids.iter().cloned())
@@ -302,26 +379,31 @@ fn merge_group(text: &str, group: Vec<ProducerCandidate>) -> (L1Candidate, Vec<S
         ))
     });
     features.dedup_by(|left, right| left.feature_id == right.feature_id);
-    let class_name = group
+    let candidate_only = features
         .iter()
-        .max_by(|left, right| {
-            severity_rank(&left.candidate.max_severity)
-                .cmp(&severity_rank(&right.candidate.max_severity))
-                .then_with(|| {
-                    right
-                        .candidate
-                        .end_byte
-                        .saturating_sub(right.candidate.start_byte)
-                        .cmp(
-                            &left
-                                .candidate
-                                .end_byte
-                                .saturating_sub(left.candidate.start_byte),
-                        )
-                })
+        .all(|feature| feature.provenance.candidate_only);
+    let class_name = features
+        .iter()
+        .filter(|feature| !feature.provenance.candidate_only)
+        .filter_map(|feature| {
+            feature.provenance.family.as_ref().map(|family| {
+                let severity = rule_severities
+                    .get(&feature.provenance.rule_id)
+                    .map(String::as_str)
+                    .unwrap_or("low");
+                (severity_rank(severity), &feature.provenance.rule_id, family)
+            })
         })
-        .and_then(|entry| entry.candidate.families.first())
-        .cloned()
+        .max_by(|left, right| (left.0, left.1).cmp(&(right.0, right.1)))
+        .map(|(_, _, family)| family.clone())
+        .or_else(|| {
+            group
+                .iter()
+                .filter(|entry| acceptance_bounds(&entry.candidate).is_some())
+                .max_by_key(|entry| severity_rank(&entry.candidate.max_severity))
+                .and_then(|entry| entry.candidate.families.first())
+                .cloned()
+        })
         .unwrap_or_else(|| "injection".to_string());
     (
         L1Candidate {
@@ -335,9 +417,11 @@ fn merge_group(text: &str, group: Vec<ProducerCandidate>) -> (L1Candidate, Vec<S
             rule_severities,
             families,
             max_severity,
+            candidate_only,
             features,
         },
         producers,
+        eligible_producer_count,
         class_name,
     )
 }
@@ -356,41 +440,32 @@ fn decision_candidate(candidate: &ScoredL1Candidate) -> DecisionCandidate {
     }
 }
 
-fn accepted_spans(
-    candidates: &[ScoredL1Candidate],
-    source_spans: &[EvidenceSpan],
-) -> Vec<EvidenceSpan> {
-    let mut spans = source_spans
+fn accepted_spans(text: &str, candidates: &[ScoredL1Candidate]) -> Vec<EvidenceSpan> {
+    let mut spans = candidates
         .iter()
-        .filter(|span| {
-            candidates.iter().any(|candidate| {
-                candidate.accepted
-                    && span.start_byte < candidate.candidate.end_byte
-                    && candidate.candidate.start_byte < span.end_byte
-            })
+        .filter(|candidate| candidate.accepted)
+        .flat_map(|candidate| {
+            candidate
+                .candidate
+                .features
+                .iter()
+                .filter(|feature| !feature.provenance.candidate_only)
+                .map(|feature| EvidenceSpan {
+                    label: feature.provenance.rule_id.clone(),
+                    text: text[feature.start_byte..feature.end_byte].to_string(),
+                    score: candidate.score,
+                    start_byte: feature.start_byte,
+                    end_byte: feature.end_byte,
+                    start_char: text[..feature.start_byte].chars().count(),
+                    end_char: text[..feature.end_byte].chars().count(),
+                })
+                .collect::<Vec<_>>()
         })
-        .cloned()
         .collect::<Vec<_>>();
-    for span in &mut spans {
-        if let Some(score) = candidates
-            .iter()
-            .filter(|candidate| {
-                candidate.accepted
-                    && span.start_byte < candidate.candidate.end_byte
-                    && candidate.candidate.start_byte < span.end_byte
-            })
-            .map(|candidate| candidate.score)
-            .max_by(f64::total_cmp)
-        {
-            span.score = score;
-        }
-    }
     spans.sort_by(|left, right| {
-        (left.start_byte, left.end_byte, &left.label).cmp(&(
-            right.start_byte,
-            right.end_byte,
-            &right.label,
-        ))
+        (left.start_byte, left.end_byte, &left.label)
+            .cmp(&(right.start_byte, right.end_byte, &right.label))
+            .then_with(|| right.score.total_cmp(&left.score))
     });
     spans.dedup_by(|left, right| {
         left.start_byte == right.start_byte
@@ -463,6 +538,51 @@ mod tests {
             label_scores: Vec::new(),
             decision: None,
         }
+    }
+
+    fn scored_candidate_fixture(
+        rule_id: &str,
+        family: &str,
+        start: usize,
+        end: usize,
+        candidate_only: bool,
+    ) -> serde_json::Value {
+        serde_json::json!([{
+            "candidate_id": format!("injection:l1:{start}:{end}"),
+            "category": "injection",
+            "start_byte": start,
+            "end_byte": end,
+            "start_char": start,
+            "end_char": end,
+            "rule_ids": [rule_id],
+            "rule_severities": {(rule_id): "critical"},
+            "families": [family],
+            "max_severity": "critical",
+            "candidate_only": candidate_only,
+            "features": [{
+                "feature_id": format!("rule:{rule_id}:{start}:{end}"),
+                "kind": "rule_match",
+                "value": 1.0,
+                "explanation": "test",
+                "start_byte": start,
+                "end_byte": end,
+                "start_char": start,
+                "end_char": end,
+                "span_precision": "exact",
+                "provenance": {
+                    "rule_id": rule_id,
+                    "family": family,
+                    "upstream_id": null,
+                    "source": if candidate_only { "prompt-armor" } else { "ark-native" },
+                    "source_revision": "test",
+                    "source_license": null,
+                    "source_file": null,
+                    "adaptation": null,
+                    "references": [],
+                    "candidate_only": candidate_only
+                }
+            }]
+        }])
     }
 
     #[test]
@@ -541,6 +661,233 @@ mod tests {
     }
 
     #[test]
+    fn candidate_only_overlap_preserves_native_decision_and_does_not_leak_span() {
+        let text = "012345678901234567890123456789";
+        let mut native = producer(
+            "native:guardrail",
+            scored_candidate_fixture("native.guardrail", "guardrail_tamper", 0, 20, false),
+        );
+        native.evidence_spans.push(EvidenceSpan {
+            label: "native.guardrail".to_string(),
+            text: text[0..20].to_string(),
+            score: 1.0,
+            start_byte: 0,
+            end_byte: 20,
+            start_char: 0,
+            end_char: 20,
+        });
+        let native_only = aggregate(text, vec![native.clone()]);
+
+        let mut catalog = producer(
+            "native:catalog",
+            scored_candidate_fixture("catalog.alias", "jailbreak", 5, 30, true),
+        );
+        catalog.evidence_spans.push(EvidenceSpan {
+            label: "catalog.alias".to_string(),
+            text: text[5..30].to_string(),
+            score: 1.0,
+            start_byte: 5,
+            end_byte: 30,
+            start_char: 5,
+            end_char: 30,
+        });
+        let mixed = aggregate(text, vec![native, catalog]);
+
+        let native_candidate = &native_only.layers[0].details["l1_candidates"][0];
+        let mixed_candidate = &mixed.layers[0].details["l1_candidates"][0];
+        assert_eq!(mixed_candidate["score"], native_candidate["score"]);
+        assert_eq!(
+            mixed_candidate["scoring_features"],
+            native_candidate["scoring_features"]
+        );
+        assert_eq!(mixed_candidate["accepted"], native_candidate["accepted"]);
+        assert_eq!(
+            mixed_candidate["class_name"],
+            native_candidate["class_name"]
+        );
+        assert_eq!(mixed_candidate["producers"].as_array().unwrap().len(), 2);
+        assert!(mixed
+            .evidence_spans
+            .iter()
+            .any(|span| span.label == "native.guardrail"));
+        assert!(!mixed
+            .evidence_spans
+            .iter()
+            .any(|span| span.label == "catalog.alias"));
+    }
+
+    #[test]
+    fn candidate_only_span_with_same_canonical_rule_does_not_leak() {
+        let text = "012345678901234567890123456789";
+        let mut eligible = producer(
+            "native:eligible",
+            scored_candidate_fixture("canonical.same", "instruction_leak", 5, 20, false),
+        );
+        eligible.evidence_spans.push(EvidenceSpan {
+            label: "canonical.same".to_string(),
+            text: text[5..20].to_string(),
+            score: 1.0,
+            start_byte: 5,
+            end_byte: 20,
+            start_char: 5,
+            end_char: 20,
+        });
+        let mut coverage = producer(
+            "native:coverage",
+            scored_candidate_fixture("canonical.same", "instruction_leak", 0, 15, true),
+        );
+        coverage.evidence_spans.push(EvidenceSpan {
+            label: "canonical.same".to_string(),
+            text: text[0..15].to_string(),
+            score: 1.0,
+            start_byte: 0,
+            end_byte: 15,
+            start_char: 0,
+            end_char: 15,
+        });
+
+        let result = aggregate(text, vec![eligible, coverage]);
+
+        assert_eq!(result.evidence_spans.len(), 1);
+        assert_eq!(result.evidence_spans[0].start_byte, 5);
+        assert_eq!(result.evidence_spans[0].end_byte, 20);
+        assert_eq!(result.evidence_spans[0].text, text[5..20]);
+    }
+
+    #[test]
+    fn candidate_only_alone_is_visible_but_scores_zero() {
+        let text = "01234567890123456789";
+        let result = aggregate(
+            text,
+            vec![producer(
+                "native:catalog",
+                scored_candidate_fixture("catalog.only", "jailbreak", 0, 20, true),
+            )],
+        );
+        let candidate = &result.layers[0].details["l1_candidates"][0];
+        assert_eq!(candidate["candidate_only"], true);
+        assert_eq!(candidate["score"], 0.0);
+        assert_eq!(candidate["accepted"], false);
+        assert!(candidate["scoring_features"]
+            .as_object()
+            .unwrap()
+            .values()
+            .all(|value| value == 0.0));
+        assert_eq!(result.class_name, "safe");
+        assert!(result.decision.as_ref().unwrap().candidates.len() == 1);
+    }
+
+    #[test]
+    fn prompt_armor_candidate_only_rules_ea003_and_jb007_score_zero() {
+        let gateway = SecurityGateway::with_max_level(
+            vec![SecurityCategory::Injection],
+            SecurityLevel::L1,
+            None,
+            false,
+        );
+        for (text, upstream_id) in [
+            ("abcdefghijklmnopqrst", "EA-003"),
+            ("hypothetically", "JB-007"),
+        ] {
+            let results = gateway.scan_category(SecurityCategory::Injection, text);
+            let result = results
+                .iter()
+                .find(|result| result.model == MODEL)
+                .expect("aggregated native L1 result must be present");
+            let candidate = result.layers[0].details["l1_candidates"]
+                .as_array()
+                .and_then(|candidates| {
+                    candidates.iter().find(|candidate| {
+                        candidate["features"].as_array().is_some_and(|features| {
+                            features.iter().any(|feature| {
+                                let provenance = &feature["provenance"];
+                                provenance["upstream_id"] == upstream_id
+                                    || provenance["references"].as_array().is_some_and(
+                                        |references| {
+                                            references.iter().any(|reference| {
+                                                reference["upstream_id"] == upstream_id
+                                            })
+                                        },
+                                    )
+                            })
+                        })
+                    })
+                })
+                .unwrap_or_else(|| panic!("missing candidate for {upstream_id}: {result:?}"));
+
+            assert_eq!(candidate["candidate_only"], true, "{upstream_id}");
+            assert_eq!(candidate["score"], 0.0, "{upstream_id}");
+            assert_eq!(candidate["accepted"], false, "{upstream_id}");
+            assert!(candidate["scoring_features"]
+                .as_object()
+                .unwrap()
+                .values()
+                .all(|value| value == 0.0));
+            assert_eq!(result.class_name, "safe", "{upstream_id}");
+        }
+    }
+
+    #[test]
+    fn candidate_only_bridge_does_not_merge_separate_acceptance_candidates() {
+        let text = "01234567890123456789";
+        let result = aggregate(
+            text,
+            vec![
+                producer(
+                    "native:left",
+                    scored_candidate_fixture("eligible.left", "override", 0, 4, false),
+                ),
+                producer(
+                    "native:catalog",
+                    scored_candidate_fixture("candidate.bridge", "lexicon", 3, 11, true),
+                ),
+                producer(
+                    "native:right",
+                    scored_candidate_fixture("eligible.right", "leak", 10, 14, false),
+                ),
+            ],
+        );
+        let candidates = result.layers[0].details["l1_candidates"]
+            .as_array()
+            .unwrap();
+        assert_eq!(candidates.len(), 2);
+        assert_eq!(candidates[0]["start_byte"], 0);
+        assert_eq!(candidates[0]["end_byte"], 11);
+        assert_eq!(candidates[1]["start_byte"], 10);
+        assert_eq!(candidates[1]["end_byte"], 14);
+    }
+
+    #[test]
+    fn candidate_only_outer_prefix_does_not_reverse_eligible_merge_order() {
+        let text = "0123456789012345678901234567890123456789";
+        let earlier = scored_candidate_fixture("eligible.earlier", "override", 10, 20, false);
+        let mut later = scored_candidate_fixture("eligible.later", "leak", 30, 40, false);
+        let coverage = scored_candidate_fixture("coverage.prefix", "lexicon", 0, 35, true);
+        later[0]["candidate_id"] = serde_json::json!("injection:l1:0:40");
+        later[0]["start_byte"] = serde_json::json!(0);
+        later[0]["start_char"] = serde_json::json!(0);
+        later[0]["features"]
+            .as_array_mut()
+            .unwrap()
+            .push(coverage[0]["features"][0].clone());
+
+        let candidates = vec![
+            producer("native:earlier", earlier),
+            producer("native:later", later),
+        ]
+        .iter()
+        .flat_map(candidates_from_result)
+        .collect::<Vec<_>>();
+        let mut acceptance_spans = merge_candidates(text, candidates)
+            .iter()
+            .map(|(candidate, _, _, _)| acceptance_bounds(candidate).unwrap())
+            .collect::<Vec<_>>();
+        acceptance_spans.sort_unstable();
+
+        assert_eq!(acceptance_spans, vec![(10, 20), (30, 40)]);
+    }
+
+    #[test]
     fn duplicate_rule_severity_merge_is_order_independent_and_keeps_highest() {
         fn duplicate(rule_severity: &str, start: usize, end: usize) -> serde_json::Value {
             serde_json::json!([{
@@ -573,7 +920,7 @@ mod tests {
                 .iter()
                 .flat_map(candidates_from_result)
                 .collect::<Vec<_>>();
-            let (candidate, _, _) = merge_candidates(text, candidates).remove(0);
+            let (candidate, _, _, _) = merge_candidates(text, candidates).remove(0);
             assert_eq!(candidate.rule_severities["rule.same"], "critical");
             assert_eq!(candidate.max_severity, "critical");
         }

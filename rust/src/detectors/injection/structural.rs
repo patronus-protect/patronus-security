@@ -73,6 +73,8 @@ impl InjectionStructuralPipeline {
                     source_license: Some("mixed-reference".to_string()),
                     source_file: Some("rust/src/detectors/injection/structural.rs".to_string()),
                     provenance_weight: None,
+                    evidence_tier: None,
+                    candidate_only: false,
                     adaptation: Some("Requires all four bounded structural components in one clause; supports source-derived English and German lexical variations.".to_string()),
                     references: structural_references(),
                     start_byte,
