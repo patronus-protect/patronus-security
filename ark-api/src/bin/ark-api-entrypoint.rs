@@ -3,6 +3,7 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::time::Instant;
 
 use axum::body::Bytes;
 use axum::extract::{Path, State};
@@ -72,7 +73,7 @@ struct WorkerConfig {
 #[derive(Clone)]
 struct AppState {
     client: reqwest::Client,
-    redis_url: String,
+    redis: redis::aio::MultiplexedConnection,
     worker_token: String,
     workers: Vec<WorkerConfig>,
     worker_cursor: Arc<AtomicUsize>,
@@ -133,17 +134,13 @@ async fn save_job(state: &AppState, job: &Job) -> Result<(), redis::RedisError> 
     } else {
         ACTIVE_TTL_SECS
     };
-    let mut connection = redis::Client::open(state.redis_url.as_str())?
-        .get_multiplexed_async_connection()
-        .await?;
+    let mut connection = state.redis.clone();
     let payload = serde_json::to_string(job).expect("job serialization must succeed");
     connection.set_ex(job_key(&job.job_id), payload, ttl).await
 }
 
 async fn load_job(state: &AppState, job_id: &str) -> Result<Option<Job>, redis::RedisError> {
-    let mut connection = redis::Client::open(state.redis_url.as_str())?
-        .get_multiplexed_async_connection()
-        .await?;
+    let mut connection = state.redis.clone();
     let payload: Option<String> = connection.get(job_key(job_id)).await?;
     Ok(payload.and_then(|value| serde_json::from_str(&value).ok()))
 }
@@ -170,6 +167,7 @@ fn final_decision(job: &Job) -> String {
 }
 
 async fn collect_events(state: AppState, job_id: String, worker: WorkerConfig, request_id: String) {
+    let started = Instant::now();
     let url = format!(
         "{}/v1/scan/{request_id}/events",
         worker.url.trim_end_matches('/')
@@ -192,8 +190,11 @@ async fn collect_events(state: AppState, job_id: String, worker: WorkerConfig, r
         }
     };
 
+    tracing::info!(job_id, worker = %worker.name, worker_events_connected_ms = started.elapsed().as_secs_f64() * 1_000.0, "worker event stream connected");
+
     let mut pending = String::new();
     let mut stream = response.bytes_stream();
+    let mut event_count = 0usize;
     while let Some(chunk) = stream.next().await {
         let Ok(chunk) = chunk else { break };
         pending.push_str(&String::from_utf8_lossy(&chunk));
@@ -208,6 +209,7 @@ async fn collect_events(state: AppState, job_id: String, worker: WorkerConfig, r
             let (Some(event), Some(data)) = (event, data) else {
                 continue;
             };
+            event_count += 1;
             let Ok(Some(mut job)) = load_job(&state, &job_id).await else {
                 return;
             };
@@ -219,6 +221,16 @@ async fn collect_events(state: AppState, job_id: String, worker: WorkerConfig, r
                 }
                 "result" => {
                     if let Some(category) = data.get("category").and_then(Value::as_str) {
+                        tracing::info!(
+                            job_id,
+                            worker = %worker.name,
+                            category,
+                            level = data.get("level").and_then(|value| value.as_str()).unwrap_or("unknown"),
+                            model = data.get("model").and_then(|value| value.as_str()).unwrap_or("unknown"),
+                            reported_duration_ms = data.get("duration_ms").and_then(|value| value.as_f64()).unwrap_or_default(),
+                            event_elapsed_ms = started.elapsed().as_secs_f64() * 1_000.0,
+                            "worker result received"
+                        );
                         let replace = job
                             .categories
                             .get(category)
@@ -246,6 +258,7 @@ async fn collect_events(state: AppState, job_id: String, worker: WorkerConfig, r
                 return;
             }
             if event == "finished" {
+                tracing::info!(job_id, worker = %worker.name, worker_events_finished_ms = started.elapsed().as_secs_f64() * 1_000.0, event_count, "worker event stream finished");
                 return;
             }
         }
@@ -353,6 +366,7 @@ async fn submit_scan(
     let worker = state.workers
         [state.worker_cursor.fetch_add(1, Ordering::Relaxed) % state.workers.len()]
     .clone();
+    let upstream_started = Instant::now();
     let mut request = state
         .client
         .post(format!("{}/v1/scan", worker.url.trim_end_matches('/')))
@@ -396,6 +410,7 @@ async fn submit_scan(
             continue;
         };
         let job_id = format!("job_{}", Uuid::new_v4().simple());
+        tracing::info!(job_id, worker = %worker.name, worker_submit_ms = upstream_started.elapsed().as_secs_f64() * 1_000.0, "worker accepted scan");
         let job = Job {
             job_id: job_id.clone(),
             source: worker_job
@@ -470,9 +485,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("gateway.workers must not be empty".into());
     }
     let bind: SocketAddr = config.server.bind.parse()?;
+    let redis = redis::Client::open(config.gateway.redis_url.as_str())?
+        .get_multiplexed_async_connection()
+        .await?;
     let state = Arc::new(AppState {
         client: reqwest::Client::new(),
-        redis_url: config.gateway.redis_url,
+        redis,
         worker_token: config.gateway.worker_token,
         workers: config.gateway.workers,
         worker_cursor: Arc::new(AtomicUsize::new(0)),
