@@ -27,17 +27,22 @@ ENTITY_MAP = {
     "phone_number": "pii.phone",
     "ip": "pii.ip_address",
     "ip_address": "pii.ip_address",
+    "ipv4": "pii.ip_address",
+    "ipv6": "pii.ip_address",
     "iban": "pii.iban",
     "bic": "pii.swift_bic",
     "swift": "pii.swift_bic",
     "swift_code": "pii.swift_bic",
     "credit_card": "pii.credit_card.pan",
     "credit_card_number": "pii.credit_card.pan",
+    "credit_card_security_code": "pii.credit_card.cvv",
     "date_of_birth": "pii.date_of_birth",
     "dob": "pii.date_of_birth",
     "employee_id": "pii.employee_id",
     "employee_identifier": "pii.employee_id",
     "customer_id": "pii.customer_id",
+    "bank_routing_number": "pii.financial_account_number",
+    "bban": "pii.financial_account_number",
     "patient_id": "pii.patient_id",
     "medical_record_number": "pii.patient_id",
     "student_id": "pii.student_id",
@@ -46,6 +51,7 @@ ENTITY_MAP = {
     "applicant_identifier": "pii.applicant_id",
     "username": "pii.username",
     "user_name": "pii.username",
+    "ssn": "pii.us.social_security_number",
     "person": "entity.person_name",
     "name": "entity.person_name",
     "givenname": "entity.person_name",
@@ -74,6 +80,9 @@ ARK_OUTPUT_MAP = {
     "IBAN": "pii.iban",
     "SWIFT_CODE": "pii.swift_bic",
     "CREDITCARD": "pii.credit_card.pan",
+    "CREDITCARD_CVV": "pii.credit_card.cvv",
+    "FINANCIAL_ACCOUNT_NUMBER": "pii.financial_account_number",
+    "SSN": "pii.us.social_security_number",
     "DOB": "pii.date_of_birth",
     "EMPLOYEE_ID": "pii.employee_id",
     "CUSTOMER_ID": "pii.customer_id",
@@ -130,8 +139,13 @@ def normalize_row(row: dict[str, Any], corpus: dict[str, Any]) -> dict[str, Any]
         if start < 0 or end <= start or end > len(text):
             raise ValueError(f"span outside text for {row.get('id', '<no id>')}: {span!r}")
         entities.append({"entity_type": entity_type, "start": start, "end": end})
+    identifier = str(row.get("id", row.get("document_id", ""))) or None
+    group_id = row.get("group_id", identifier or "<no-id>")
+    if not isinstance(group_id, str) or not group_id:
+        raise ValueError("row group_id must be a non-empty string")
     return {
-        "id": str(row.get("id", row.get("document_id", ""))) or None,
+        "id": identifier,
+        "group_id": group_id,
         "corpus": corpus["id"],
         "language": str(row.get("language", corpus.get("default_language", "und"))),
         "text": text,
@@ -221,6 +235,74 @@ def read_jsonl(path: Path) -> Iterable[dict[str, Any]]:
                 raise ValueError(f"{path}:{line_number}: invalid JSON") from exc
 
 
+GRETEL_LANGUAGE_CODES = {
+    "Dutch": "nl",
+    "English": "en",
+    "France": "fr",
+    "German": "de",
+    "Italian": "it",
+    "Spanish": "es",
+}
+
+
+def normalize_gretel_row(
+    row: dict[str, Any], corpus: dict[str, Any], source_id: str
+) -> dict[str, Any]:
+    """Normalize Gretel's JSON-encoded ``pii_spans`` Parquet column."""
+    spans = row.get("pii_spans")
+    if not isinstance(spans, str):
+        raise ValueError("Gretel row requires JSON-string pii_spans")
+    try:
+        parsed_spans = json.loads(spans)
+    except json.JSONDecodeError as exc:
+        raise ValueError("Gretel pii_spans must be valid JSON") from exc
+    if not isinstance(parsed_spans, list):
+        raise ValueError("Gretel pii_spans must decode to a list")
+    language = row.get("language")
+    if not isinstance(language, str) or language not in GRETEL_LANGUAGE_CODES:
+        raise ValueError(f"unsupported Gretel language {language!r}")
+    return normalize_row(
+        {
+            "id": source_id,
+            "group_id": row.get("expanded_type", source_id),
+            "language": GRETEL_LANGUAGE_CODES[language],
+            "text": row.get("generated_text"),
+            "entities": parsed_spans,
+        },
+        corpus,
+    )
+
+
+def normalize_gretel_parquet_directory(input_path: Path, corpus: dict[str, Any]) -> list[dict[str, Any]]:
+    """Read the explicitly pinned Gretel test Parquet shards from a directory.
+
+    PyArrow is deliberately optional: the package itself remains free of a
+    heavyweight dataset dependency, while a local corpus ingest gets a clear
+    install error instead of silently accepting a different export format.
+    """
+    try:
+        import pyarrow.parquet as pq
+    except ImportError as exc:  # pragma: no cover - environment dependent
+        raise ValueError("Gretel Parquet ingest requires optional dependency pyarrow") from exc
+    verified_files = corpus.get("verified_files")
+    if not isinstance(verified_files, list) or not verified_files:
+        raise ValueError("Gretel corpus requires non-empty verified_files")
+    rows = []
+    for entry in verified_files:
+        filename = entry.get("path") if isinstance(entry, dict) else None
+        if not isinstance(filename, str):
+            raise ValueError("Gretel verified_files entries require path")
+        shard = input_path / filename
+        if not shard.is_file():
+            raise ValueError(f"missing Gretel Parquet shard {shard}")
+        table = pq.read_table(
+            shard, columns=["language", "expanded_type", "generated_text", "pii_spans"]
+        )
+        for row_number, row in enumerate(table.to_pylist()):
+            rows.append(normalize_gretel_row(row, corpus, f"{filename}:{row_number}"))
+    return rows
+
+
 def normalize_file(
     input_path: Path,
     corpus_id: str,
@@ -232,14 +314,27 @@ def normalize_file(
         raise ValueError(f"unknown corpus {corpus_id!r}")
     corpus = corpora[corpus_id]
     if verify_source:
-        expected = corpus.get("verified_sha256")
-        if not isinstance(expected, str):
-            raise ValueError(f"corpus {corpus_id!r} has no verified_sha256")
-        actual = hashlib.sha256(input_path.read_bytes()).hexdigest()
-        if actual != expected:
-            raise ValueError(
-                f"source SHA-256 mismatch for {corpus_id!r}: expected {expected}, got {actual}"
-            )
+        verified_files = corpus.get("verified_files")
+        if verified_files is not None:
+            if not input_path.is_dir():
+                raise ValueError(f"corpus {corpus_id!r} requires an input directory")
+            for entry in verified_files:
+                if not isinstance(entry, dict) or not isinstance(entry.get("path"), str) or not isinstance(entry.get("sha256"), str):
+                    raise ValueError(f"corpus {corpus_id!r} has invalid verified_files")
+                actual = hashlib.sha256((input_path / entry["path"]).read_bytes()).hexdigest()
+                if actual != entry["sha256"]:
+                    raise ValueError(
+                        f"source SHA-256 mismatch for {entry['path']!r}: expected {entry['sha256']}, got {actual}"
+                    )
+        else:
+            expected = corpus.get("verified_sha256")
+            if not isinstance(expected, str):
+                raise ValueError(f"corpus {corpus_id!r} has no verified_sha256")
+            actual = hashlib.sha256(input_path.read_bytes()).hexdigest()
+            if actual != expected:
+                raise ValueError(
+                    f"source SHA-256 mismatch for {corpus_id!r}: expected {expected}, got {actual}"
+                )
     adapter = corpus.get("adapter")
     if adapter == "offset_jsonl_v1":
         rows = [normalize_row(row, corpus) for row in read_jsonl(input_path)]
@@ -250,12 +345,96 @@ def normalize_file(
         if not isinstance(payload, list):
             raise ValueError("TAB input must be a JSON document list")
         rows = [normalize_tab_document(row, corpus) for row in payload]
+    elif adapter == "gretel_parquet_v1":
+        if not input_path.is_dir():
+            raise ValueError("Gretel Parquet input must be a directory")
+        rows = normalize_gretel_parquet_directory(input_path, corpus)
     else:
         raise ValueError(f"unsupported adapter {adapter!r}")
     ids = [row["id"] for row in rows]
     if None in ids or len(set(ids)) != len(ids):
         raise ValueError("external source rows require unique id or document_id values")
     return rows
+
+
+def capped_selection_manifest(
+    rows: Iterable[dict[str, Any]],
+    corpus_id: str,
+    revision: str,
+    seed: str,
+    cap: int = 250,
+) -> dict[str, Any]:
+    """Create a text-free, group-atomic cap manifest for one normalized corpus.
+
+    A group is never split for one metric ID. Gretel rows carry their upstream
+    ``expanded_type`` as ``group_id``; all other adapters default to a document
+    group. The manifest is selection metadata, not a filtered Gold JSONL: an
+    evaluator must apply its listed entity keys to both Gold and predictions.
+    """
+    if not revision:
+        raise ValueError("selection revision must be non-empty")
+    if not seed:
+        raise ValueError("selection seed must be non-empty")
+    if cap < 1:
+        raise ValueError("selection cap must be positive")
+    by_metric: dict[str, dict[str, list[dict[str, Any]]]] = defaultdict(lambda: defaultdict(list))
+    for row in rows:
+        if row.get("corpus") != corpus_id:
+            raise ValueError(f"selection row is not in corpus {corpus_id!r}")
+        identifier = row.get("id")
+        group_id = row.get("group_id", identifier)
+        if not isinstance(identifier, str) or not identifier:
+            raise ValueError("selection rows require non-empty id")
+        if not isinstance(group_id, str) or not group_id:
+            raise ValueError("selection rows require non-empty group_id")
+        entities = row.get("entities")
+        if not isinstance(entities, list):
+            raise ValueError("selection rows require entities list")
+        for entity in entities:
+            label, start, end = _key(entity)
+            by_metric[label][group_id].append(
+                {"id": identifier, "group_id": group_id, "start": start, "end": end}
+            )
+
+    selections = []
+    for metric_id in sorted(by_metric):
+        groups = by_metric[metric_id]
+        selected: list[dict[str, Any]] = []
+        for group_id in sorted(
+            groups,
+            key=lambda value: (
+                hashlib.sha256(
+                    f"{revision}:{seed}:{corpus_id}:{metric_id}:{value}".encode("utf-8")
+                ).hexdigest(),
+                value,
+            ),
+        ):
+            group_spans = sorted(groups[group_id], key=lambda item: (item["id"], item["start"], item["end"]))
+            if len(selected) + len(group_spans) <= cap:
+                selected.extend(group_spans)
+        selections.append(
+            {
+                "metric_id": metric_id,
+                "available_span_count": sum(len(spans) for spans in groups.values()),
+                "selected_span_count": len(selected),
+                "selected_document_ids": sorted({span["id"] for span in selected}),
+                "selected_spans": selected,
+            }
+        )
+    return {
+        "schema": "ark-external-pii-capped-selection-v1",
+        "corpus": corpus_id,
+        "revision": revision,
+        "seed": seed,
+        "cap_per_corpus_metric_id": cap,
+        "grouping": "row.group_id; Gretel expanded_type, otherwise document id",
+        "selections": selections,
+    }
+
+
+def write_capped_selection_manifest(path: Path, manifest: dict[str, Any]) -> None:
+    """Write selection metadata without duplicating external source text."""
+    path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def _key(entity: dict[str, Any]) -> tuple[str, int, int]:
@@ -290,7 +469,7 @@ def exact_span_metrics(rows: Iterable[dict[str, Any]]) -> dict[str, Any]:
         matches = gold & predicted
         dimensions = [("overall",), ("corpus", row["corpus"]), ("language", row["corpus"], row["language"])]
         labels = {entity_type for entity_type, _, _ in gold | predicted}
-        for scope, prefix in (("native_pii", "pii."), ("semantic_entity", "entity.")):
+        for scope, prefix in (("native_pii", "pii."), ("native_dlp", "dlp."), ("semantic_entity", "entity.")):
             if any(label.startswith(prefix) for label in labels):
                 dimensions.extend([
                     ("scope", scope),
@@ -302,7 +481,7 @@ def exact_span_metrics(rows: Iterable[dict[str, Any]]) -> dict[str, Any]:
         for dimension in dimensions:
             bucket = totals[dimension]
             if dimension[0].endswith("scope"):
-                prefix = "pii." if dimension[-1] == "native_pii" else "entity."
+                prefix = {"native_pii": "pii.", "native_dlp": "dlp.", "semantic_entity": "entity."}[dimension[-1]]
                 expected = {item for item in gold if item[0].startswith(prefix)}
                 actual = {item for item in predicted if item[0].startswith(prefix)}
                 bucket["gold"] += len(expected)
@@ -439,6 +618,12 @@ def main() -> None:
         action="store_true",
         help="require the input SHA-256 pinned in the corpus manifest",
     )
+    select = commands.add_parser("select", help="write a text-free capped selection manifest")
+    select.add_argument("--corpus", required=True)
+    select.add_argument("--input", type=Path, required=True, help="normalized Gold JSONL")
+    select.add_argument("--output", type=Path, required=True)
+    select.add_argument("--seed", default="ark-external-pii-cap-v1")
+    select.add_argument("--cap", type=int, default=250)
     evaluate = commands.add_parser("evaluate", help="score normalized JSONL with predicted_entities")
     evaluate.add_argument("--input", type=Path, required=True, help="normalized JSONL")
     evaluate.add_argument("--predictions", type=Path, help="Ark result JSONL with ids and evidence_spans")
@@ -448,6 +633,17 @@ def main() -> None:
         _write_jsonl(
             args.output,
             normalize_file(args.input, args.corpus, verify_source=args.verify_source),
+        )
+    elif args.command == "select":
+        corpus = load_manifest().get(args.corpus)
+        if corpus is None:
+            parser.error(f"unknown corpus {args.corpus!r}")
+        revision = corpus.get("revision")
+        if not isinstance(revision, str) or not revision:
+            parser.error(f"corpus {args.corpus!r} has no pinned revision")
+        write_capped_selection_manifest(
+            args.output,
+            capped_selection_manifest(read_jsonl(args.input), args.corpus, revision, args.seed, args.cap),
         )
     else:
         rows = read_jsonl(args.input)

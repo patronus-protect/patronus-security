@@ -69,6 +69,35 @@ class ExternalPiiEvalTests(unittest.TestCase):
                 corpus,
             )
 
+    def test_gretel_row_parses_json_spans_and_normalizes_language(self):
+        corpus = external_pii_eval.load_manifest()["gretel-synthetic-pii-finance"]
+        row = external_pii_eval.normalize_gretel_row(
+            {
+                "language": "German",
+                "expanded_type": "Bank transfer template",
+                "generated_text": "IBAN: DE89370400440532013000",
+                "pii_spans": '[{"label": "iban", "start": 6, "end": 28}]',
+            },
+            corpus,
+            "German_test-00000-of-00001.parquet:0",
+        )
+        self.assertEqual(row["language"], "de")
+        self.assertEqual(row["group_id"], "Bank transfer template")
+        self.assertEqual(row["entities"], [{"entity_type": "pii.iban", "start": 6, "end": 28}])
+
+    def test_gretel_row_rejects_invalid_offset_and_unknown_language(self):
+        corpus = external_pii_eval.load_manifest()["gretel-synthetic-pii-finance"]
+        with self.assertRaisesRegex(ValueError, "outside text"):
+            external_pii_eval.normalize_gretel_row(
+                {"language": "English", "generated_text": "Ada", "pii_spans": '[{"label": "email", "start": 0, "end": 4}]'},
+                corpus,
+                "test:0",
+            )
+        with self.assertRaisesRegex(ValueError, "unsupported Gretel language"):
+            external_pii_eval.normalize_gretel_row(
+                {"language": "Klingon", "generated_text": "Ada", "pii_spans": "[]"}, corpus, "test:0"
+            )
+
     def test_manifest_label_map_is_case_insensitive(self):
         corpus = {
             "id": "custom",
@@ -122,6 +151,49 @@ class ExternalPiiEvalTests(unittest.TestCase):
         self.assertEqual(
             rows[0]["predicted_entities"],
             [{"entity_type": "pii.email", "start": 8, "end": 20}],
+        )
+
+    def test_dlp_spans_have_their_own_metric_scope(self):
+        rows = [{
+            "corpus": "gretel", "language": "en",
+            "entities": [{"entity_type": "dlp.api_key", "start": 0, "end": 8}],
+            "predicted_entities": [{"entity_type": "dlp.api_key", "start": 0, "end": 8}],
+        }]
+        report = external_pii_eval.exact_span_metrics(rows)
+        self.assertEqual(report["per_scope"]["native_dlp"]["f1"], 1.0)
+
+    def test_capped_selection_is_deterministic_group_atomic_and_text_free(self):
+        rows = [
+            {
+                "id": "document-a", "group_id": "template-a", "corpus": "fixture", "language": "en", "text": "ignored",
+                "entities": [
+                    {"entity_type": "pii.email", "start": 0, "end": 1},
+                    {"entity_type": "pii.email", "start": 2, "end": 3},
+                ],
+            },
+            {
+                "id": "document-b", "group_id": "template-b", "corpus": "fixture", "language": "en", "text": "ignored",
+                "entities": [{"entity_type": "pii.email", "start": 0, "end": 1}],
+            },
+            {
+                "id": "document-c", "group_id": "template-c", "corpus": "fixture", "language": "en", "text": "ignored",
+                "entities": [{"entity_type": "pii.phone", "start": 0, "end": 1}],
+            },
+        ]
+        first = external_pii_eval.capped_selection_manifest(rows, "fixture", "revision-1", "seed-1", cap=2)
+        second = external_pii_eval.capped_selection_manifest(list(reversed(rows)), "fixture", "revision-1", "seed-1", cap=2)
+        self.assertEqual(first, second)
+        self.assertNotIn("ignored", json.dumps(first))
+        email = next(item for item in first["selections"] if item["metric_id"] == "pii.email")
+        self.assertLessEqual(email["selected_span_count"], 2)
+        selected_by_group = {}
+        for span in email["selected_spans"]:
+            selected_by_group[span["group_id"]] = selected_by_group.get(span["group_id"], 0) + 1
+        self.assertEqual(selected_by_group.get("template-a", 0), 2 if "template-a" in selected_by_group else 0)
+
+    def test_ssn_runtime_label_uses_the_canonical_metric_id(self):
+        self.assertEqual(
+            external_pii_eval.ARK_OUTPUT_MAP["SSN"], "pii.us.social_security_number"
         )
 
     def test_cli_normalize_writes_jsonl(self):

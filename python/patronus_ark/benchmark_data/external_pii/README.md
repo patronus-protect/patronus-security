@@ -34,6 +34,30 @@ nimmt gemäß Manifest nur `DIRECT`/`QUASI`, nicht `NO_MASK`, in das
 privacy-orientierte Gold auf. OpenPII ist synthetisch; TAB besteht aus realen,
 manuell annotierten englischen ECHR-Fällen.
 
+Gretel wird aus dem `data/`-Ordner des gepinnten Hugging-Face-Snapshots
+normalisiert. Der Adapter erwartet alle sechs gepinnten Test-Parquet-Dateien
+und prüft jede einzeln. Dafür ist nur für diesen lokalen Ingest `pyarrow`
+erforderlich:
+
+```bash
+cd python
+../.venv/bin/python -m patronus_ark.external_pii_eval normalize \
+  --corpus gretel-synthetic-pii-finance \
+  --input /absolute/path/gretel-snapshot/data \
+  --verify-source --output /private/tmp/gretel.ark.jsonl
+../.venv/bin/python -m patronus_ark.external_pii_eval select \
+  --corpus gretel-synthetic-pii-finance --input /private/tmp/gretel.ark.jsonl \
+  --cap 250 --output /private/tmp/gretel.selection.json
+```
+
+Gretel ist Apache-2.0-lizenziert und vollständig synthetisch. Seine
+Annotationen wurden automatisiert erzeugt und nur stichprobenartig geprüft;
+es ist damit Format-/Boundary-Gold, kein Ersatz für TAB als reales Gold.
+`select` schreibt kein Rohtext-Duplikat: das Manifest enthält nur Corpus,
+Revision, Seed, Template-/Dokumentgruppe, Dokument-ID und ausgewählte
+Offset-Spans. Gretel nutzt `expanded_type` als Templategruppe; andere Adapter
+verwenden eine Dokumentgruppe.
+
 Die Prediction-Datei muss jeden Gold-`id` exakt einmal enthalten. Nicht
 gemappte Upstream-Labels werden vor dem Vergleich bewusst ausgeschlossen; die
 verwendete Label- und Lizenzzuordnung bleibt im Manifest nachvollziehbar.
