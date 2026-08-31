@@ -20,6 +20,36 @@ compiled extension.
 | `dynamic_pii.jsonl` | 133 | Dynamic PII entity spans |
 | `dynamic_pii_threshold_sweep.jsonl` | 85 | Threshold calibration |
 | `education_pii_threshold_sweep.jsonl` | 50 | Education-context threshold calibration |
+| `pii_l1.jsonl` | 140 | Native PII L1 exact-span capability goldens and hard negatives |
+| `dlp_l1.jsonl` | 115 | Native DLP L1 exact-span capability goldens and hard negatives |
+
+## Native L1 golden-set contract
+
+`pii_l1.jsonl` covers all 28 currently emitted PII L1 labels with three
+positive variants and two hard negatives per label. `dlp_l1.jsonl` applies the
+same 3+2 structure to all 23 currently emitted DLP L1 labels. The cases are
+balanced across German and English where the identifier is not intrinsically
+country-specific.
+
+Every row declares `case_type`, `target_label`, `language`, `span_unit`, and
+`provenance`. Positive rows contain one exact expected entity. `start` and
+`end` are zero-based Python Unicode-code-point offsets and form a half-open
+`[start, end)` interval; they are deliberately not UTF-8 byte offsets. Hard
+negative rows contain no entities and explain the excluded lookalike in
+`negative_reason`.
+
+The generator is deterministic:
+
+```shell
+.venv/bin/python python/patronus_ark/benchmark_data/generate_l1_goldens.py
+```
+
+Most cases are hand-authored with invented values. A small subset is derived
+from `dynamic_pii.jsonl` and identifies the source row in
+`provenance.source_fixture_id`. This links the native regression set to the
+existing NER fixture without pretending that synthetic data is an external
+release-validation corpus. No text from `sensitive_current`, `v4.1`, or other
+sensitive-document stores is copied into these redistributable fixtures.
 
 ## Provenance
 

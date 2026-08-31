@@ -31,7 +31,7 @@ Category assets are stored below that root, for example `injection/`, `sensitive
 - Set `PATRONUS_L3_PRECISION=fp16` to select pinned FP16 ONNX files where available; Linux `x86_64` production deployments use this validated mode, including Dynamic PII/GLiNER.
 - PII is native L1-only and has no model assets.
 - `dynamic-pii` is L3-only and requires the revision-pinned `gliner_small-v2.5-edge` bundle below the regular `model_dir` asset root.
-- L3 ONNX sessions are lazy-loaded on first L3 inference and are evicted after `PATRONUS_L3_TTL_SECS` seconds of idleness. The default TTL is `300` seconds.
+- L3 ONNX sessions are lazy-loaded on first L3 inference and are evicted after `PATRONUS_L3_TTL_SECS` seconds of idleness. The default TTL is `300` seconds; set `-1` to keep loaded sessions resident.
 - Set `HF_TOKEN` when a model repository requires authenticated or rate-limited Hugging Face access.
 
 ## L3 Strategy

@@ -30,9 +30,12 @@ would only return redundant or worse information, so that call can be skipped. T
 offloads L3: most traffic is resolved by the cheap non-transformer block, and the expensive
 transformer runs only where it actually adds signal.
 
-All L2 packages in a process **share a single static encoder instance**. Embedding is done once
-per token lookup, so running seven L2 categories costs barely more than running one — which is
-what makes L2 fast enough to sit on the request path.
+The current official L2 and L3 packages share the same mmBERT tokenizer contract, vocabulary, and
+embedding space. Within L2, packages also reuse a single static encoder instance. Embedding is done
+once per token lookup, so running seven L2 categories costs barely more than running one — which is
+what makes L2 fast enough to sit on the request path. On promotion, compatible L2 chunks retain
+their token IDs and pass them to L3; promotion does not introduce a separate mmBERT tokenization
+step.
 
 ### Final-decision threshold profiles
 
@@ -56,8 +59,10 @@ do not change the NTDB promote-router threshold that decides which chunks are se
 
 For compatible mmBERT byte-fallback BPE packages, asset preparation converts the downloaded
 Hugging Face `tokenizer.json` **once** into `tokenizer.mmbpe`. NTDB packages linked to a shared
-embedder reuse the generated shared artifact. Dedicated and unified L3 bundles can also generate
-`.mmbpe` during verified downloads or cached warmup. The former `.kit` format is unsupported.
+embedder reuse the generated shared artifact. The asset path verifies that L3-compatible official
+L2 packages use the same canonical tokenizer as the unified L3 bundle. Dedicated and unified L3
+bundles can also generate `.mmbpe` during verified downloads or cached warmup. The former `.kit`
+format is unsupported.
 
 The source JSON remains canonical and is used automatically if conversion, validation, or compact
 loading fails. Source/content hashes, format versions, and converter versions invalidate stale
@@ -74,7 +79,7 @@ cross-architecture inference parity. Which L3 models a gateway holds is
 determined by configuration — the [L3 strategy](#dedicated-vs-unified-l3) and the configured
 categories — and those models are kept **resident in RAM**, subject to an idle-TTL policy
 (`PATRONUS_L3_TTL_SECS`, default 300 s) that evicts a session after a period of no use and
-re-materializes it on the next promotion. Budget memory for the L3 models you enable. They are
+re-materializes it on the next promotion; `-1` disables eviction. Budget memory for the L3 models you enable. They are
 executed by the L3 background worker. Only required assets are downloaded by default;
 `PATRONUS_DOWNLOAD_OPTIONAL_ASSETS=1` additionally fetches non-required files (currently
 `tokenizer_config.json` for the legacy L3 manifest).

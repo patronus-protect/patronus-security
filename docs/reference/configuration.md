@@ -75,12 +75,17 @@ Unspecified gates stay enabled; `max_level` remains the hard upper bound.
 scanner.set_execution_gates({
     "levels": {"l1": True, "l2": False, "l3": False},
     "models": {"native:mcp_runtime_risk": False, "external:internal_token": False},
+    "rules": {"pii_email": False, "dlp_password_assignment": False},
 })
 ```
 
 - `levels` — per-level on/off (`l1`, `l2`, `l3`).
 - `models` — per-detector on/off, keyed by public model name: `native:<name>` for native
   detectors, `external:<id>` for [external L1 detectors](../how-to/external-l1-signals.md).
+- `rules` — per-L1-rule on/off. Missing IDs remain enabled. PII patterns use stable `pii_*`
+  IDs. DLP patterns use `dlp_*` IDs; its separate heuristics are `dlp_sensitive_material`,
+  `dlp_secret_transfer`, `dlp_mcp_runtime_risk`, `dlp_mcp_policy`, and
+  `dlp_destructive_operation`. Injection uses the `ark.injection.*` IDs returned in evidence.
 - `conditional` — conditional gates (see [below](#conditional-gates)).
 - `l3` — optional worker policy (see [below](#l3-worker-policy)).
 
@@ -90,7 +95,8 @@ the gateway defaults. In Rust, build a `ScanGateMatrix`:
 ```rust
 scanner.set_execution_gates(
     ScanGateMatrix::levels(true, false, false)
-        .with_model("native:mcp_runtime_risk", false),
+        .with_model("native:mcp_runtime_risk", false)
+        .with_rule("pii_email", false),
 );
 ```
 
@@ -346,8 +352,9 @@ after the remaining chunks finish.
 | `HF_TOKEN` | — | Authenticated / rate-limited Hugging Face access for asset downloads. Falls back to `HUGGINGFACE_HUB_TOKEN`, then `HUGGING_FACE_HUB_TOKEN`, then the cached `huggingface-cli login` token file. |
 | `HF_HOME` | HF default | Hugging Face cache location. |
 | `PATRONUS_DOWNLOAD_OPTIONAL_ASSETS` | unset | `1` also downloads non-required asset files (currently `tokenizer_config.json` for the legacy L3 manifest). |
-| `PATRONUS_L3_TTL_SECS` | `300` | Idle seconds before an L3 session is evicted. |
+| `PATRONUS_L3_TTL_SECS` | `300` | Idle seconds before an L3 session is evicted; `-1` keeps loaded sessions resident. The Ark API container sets `-1`. |
 | `PATRONUS_L3_TRACE_CHUNKS` | unset | `1` logs per-chunk L3 execution traces (diagnostic). |
+| `PATRONUS_L3_TIMING` | unset | When set, logs Unified-L3 tokenization, ONNX session-run, and output-decoding timings. |
 | `PATRONUS_NTDB_INJECTION_DIR` | — | Local NTDB override for `injection`. |
 | `PATRONUS_NTDB_ROUTING_DIR` | — | Local NTDB override for `routing`. |
 | `PATRONUS_NTDB_SENSITIVE_DOCUMENTS_DIR` | — | Local NTDB override for `sensitive_document`. |

@@ -23,9 +23,11 @@ uncertain minority. This is the single most important performance property of th
 
 ### Static-embedding L2
 
-L2 uses a **static token-embedding encoder** shared across all categories in a process — no
-per-token attention pass. One encoder serves seven categories, so L2 is cheap to run and cheap
-to add categories to. See [NTDB format](models-and-ntdb.md).
+L2 uses the shared mmBERT tokenizer and a **static token-embedding encoder** across all categories
+in a process — no per-token attention pass. The official L3 models are aligned to the same
+tokenizer and embedding space, and compatible promotions reuse L2's token IDs. One L2 encoder
+serves seven categories, so L2 is cheap to run and cheap to add categories to without paying for a
+second tokenization step at promotion. See [NTDB format](models-and-ntdb.md).
 
 ### Quantized ONNX at L3
 
@@ -46,7 +48,8 @@ merge-pair identity, is hash- and version-invalidated, and keeps the canonical H
 ### L3 sessions: built on first use, then RAM-resident
 
 An L3 ONNX session is built the first time a scan reaches that model, then held **resident in
-RAM** and evicted only after a long idle TTL (`PATRONUS_L3_TTL_SECS`, default 300 s). Models are
+RAM** and evicted only after an idle TTL (`PATRONUS_L3_TTL_SECS`, default 300 s; `-1` disables
+eviction). Models are
 never hot-swapped per request, so you do not pay repeated load/unload costs under steady
 traffic — but budget memory for the L3 models your configuration enables, since a hot model
 stays resident. (The one exception is `dynamic-pii`: its GLiNER session is warmed eagerly during

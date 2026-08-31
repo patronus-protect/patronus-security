@@ -1039,6 +1039,9 @@ pub struct ScanGateMatrix {
     /// Optional per-model or per-native-scanner overrides keyed by result model
     /// names such as `native:mcp_runtime_risk` or `unified-v3-tool-action`.
     pub models: HashMap<String, bool>,
+    /// Optional per-rule overrides keyed by stable public rule id. Missing
+    /// entries are enabled.
+    pub rules: HashMap<String, bool>,
     /// Request-context and prior-result conditions applied before L2 or L3.
     pub conditional: Vec<ConditionalPipelineGate>,
     /// L3 worker scheduling policy.
@@ -1294,6 +1297,18 @@ pub fn with_model(mut self, model: impl Into<String>, enabled: bool) -> Self;
 Builder-style model/native scanner gate setter.
 
 ```rust
+pub fn set_rule(&mut self, rule_id: impl Into<String>, enabled: bool);
+```
+
+Set one stable rule-id gate.
+
+```rust
+pub fn with_rule(mut self, rule_id: impl Into<String>, enabled: bool) -> Self;
+```
+
+Builder-style stable rule-id gate setter.
+
+```rust
 pub fn set_conditional(&mut self, gates: Vec<ConditionalPipelineGate>) -> Result<(), String>;
 ```
 
@@ -1311,6 +1326,12 @@ pub fn allows_model(&self, model: &str) -> bool;
 ```
 
 Return whether the model/native scanner is allowed by this matrix.
+
+```rust
+pub fn allows_rule(&self, rule_id: &str) -> bool;
+```
+
+Return whether a stable rule id is allowed by this matrix.
 
 ```rust
 pub fn set_l3_policy(&mut self, policy: L3SchedulerPolicy);
@@ -1418,6 +1439,12 @@ pub fn allows_model(&self, model: &str) -> bool;
 ```
 
 Return whether a model/native scanner is enabled for this execution.
+
+```rust
+pub fn allows_rule(&self, rule_id: &str) -> bool;
+```
+
+Return whether a stable rule id is enabled for this execution.
 
 ```rust
 pub fn gates(&self) -> &ScanGateMatrix;

@@ -98,12 +98,13 @@ Each category runs up to three layers, escalating only when needed:
 | Layer | What it is | Cost | Availability |
 | --- | --- | --- | --- |
 | **L1** | Native rule-based detectors | microseconds | always, no assets |
-| **L2** | NTDB model packages (shared static encoder + lightweight ONNX heads) | milliseconds | when assets are cached |
-| **L3** | Full ONNX transformers, run by a background worker | tens of ms | when assets are cached |
+| **L2** | NTDB packages (shared mmBERT tokenizer/static embedder + lightweight ONNX heads) | milliseconds | when assets are cached |
+| **L3** | Full ONNX transformers aligned with L2's tokenizer and embeddings, run by a background worker | tens of ms | when assets are cached |
 
 L2 packages carry a trained promote-router that decides when a case actually needs L3, so most
 traffic never touches a transformer. When a scan is promoted, the queue publishes the L2 fallback
-first and the final L3 result later; L3 errors and timeouts degrade back to L2.
+first and the final L3 result later. Compatible L2 chunks pass their existing mmBERT token IDs to
+L3 instead of being tokenized again; L3 errors and timeouts degrade back to L2.
 
 Read more: [Architecture](https://patronus-protect.github.io/patronus-security/concepts/architecture/) ·
 [Layered scanning](https://patronus-protect.github.io/patronus-security/concepts/layered-scanning/) ·

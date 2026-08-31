@@ -56,7 +56,7 @@ their score and evidence in the typed decision contract without becoming finding
 The [`rust/src/threat/`](https://github.com/patronus-protect/patronus-security/tree/main/rust/src/threat)
 module provides shared pattern- and obfuscation-detection primitives used internally by several
 injection and DLP detectors. The `threat` *category* itself has **no native L1 stage** — it starts
-at NTDB L2 (see [Categories](categories.md#model-backed-l2--l3)).
+at NTDB L2 (see [Categories](categories.md#model-backed-l2-l3)).
 
 `instruction_override` includes common German imperative variants such as attempts to forget,
 ignore, disregard, override, skip, or discard prior instructions, while contextless everyday
@@ -68,22 +68,27 @@ Data-loss-prevention detectors flag content that leaks or destroys data:
 
 | Detector | Catches |
 | --- | --- |
-| `dlp` | Regex bank for leaked secrets/credentials — API keys, cloud keys, private keys, JWTs, webhook secrets, and similar — reported with exact evidence spans. |
+| `dlp` | Regex bank for leaked secrets/credentials, business-record identifiers, internal metrics, source code, SQL, dumps, and system logs, reported with exact evidence spans. |
 | `secret_transfer` | Secrets and credentials being read or moved (API keys, private keys, tokens, `.env`). |
 | `destructive_operation` | Destructive commands/operations (mass delete, disable protections, wipe). |
 | `sensitive_material` | Transfer of sensitive material beyond a trust boundary. |
 
 Only the `dlp` regex detector populates `evidence_spans` with the exact matched offsets;
 `secret_transfer`, `destructive_operation`, and `sensitive_material` are boolean heuristics and
-return no spans.
+return no spans. The regex detector also exposes localized lexical or structural
+`details.l1_anchors` for credential, authentication, business-record, metric, source/config,
+database/dump, and log/stacktrace context. These anchors do not block by themselves.
 
 ## PII
 
 The `pii` category is native-only and uses **format validators** rather than a model:
-deterministic identifiers such as email, IP, IBAN, SWIFT/BIC, phone, and credit-card numbers
-are recognized and structurally validated (e.g. checksum/format checks) before being reported,
-which keeps false positives low. Matches are returned as `evidence_spans`. For open-vocabulary
-entity extraction (names, organizations, locations, …) use the model-backed
+deterministic identifiers such as email, IP, IBAN, SWIFT/BIC, phone, payment-card data,
+government/insurance identifiers, and anchor-bound employee, customer, patient, student,
+applicant, account, username, and birth-date values are validated before being reported. Matches
+are returned as exact `evidence_spans`. Localized `details.l1_anchors` cover person, role, contact,
+address, birth, identifier, account, payment, financial, government, vehicle, medical,
+special-category, and employment/compensation context without inventing a finding. For
+open-vocabulary entity extraction (names, organizations, locations, …) use the model-backed
 [`dynamic-pii`](categories.md#transformer-only-l3) category instead.
 
 ## MCP (Model Context Protocol)

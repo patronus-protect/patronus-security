@@ -19,8 +19,10 @@ Args:
         `download_files` is true.
     execution_gates: Optional scan execution matrix. Use
         `{"levels": {"l1": True, "l2": False, "l3": False},
-        "models": {"native:mcp_runtime_risk": False}}` to disable
-        levels or model/native scanner areas for subsequent scan calls.
+        "models": {"native:mcp_runtime_risk": False},
+        "rules": {"pii_email": False}}` to disable levels,
+        model/native scanner areas, or individual L1 rules for subsequent
+        scan calls.
         New classifier pipelines can be gated independently through
         `models`, for example `{"models": {"tool_action": False}}`.
     onnx_batch_mode: `lazy_batches` keeps per-text ONNX execution;

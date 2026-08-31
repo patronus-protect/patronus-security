@@ -35,12 +35,13 @@ Each category is scanned by up to three layers, escalating only when needed:
 | Layer | What it is | Cost | Always available |
 | --- | --- | --- | --- |
 | **L1** | Native rule-based detectors | microseconds | yes, no assets |
-| **L2** | NTDB model packages (shared static encoder + ONNX heads) | milliseconds | when assets cached |
-| **L3** | Full ONNX transformer models, RAM-resident per config, run by a background worker | tens of ms | when assets cached |
+| **L2** | NTDB packages (shared mmBERT tokenizer/static embedder + ONNX heads) | milliseconds | when assets cached |
+| **L3** | Full ONNX transformers aligned with L2's tokenizer and embeddings, run by a background worker | tens of ms | when assets cached |
 
 L1 runs on every request. L2 refines the verdict. L2 can *promote* an uncertain scan to L3,
-where a full transformer makes the final call. Most traffic never reaches L3, so you get
-real detection without paying the transformer cost on every request. See
+where a full transformer makes the final call using the compatible token IDs already produced by
+L2. Most traffic never reaches L3, so you get real detection without paying the transformer cost
+on every request or repeating promotion-time tokenization. See
 [Layered scanning](concepts/layered-scanning.md) for the full escalation model.
 
 ## Find your way around

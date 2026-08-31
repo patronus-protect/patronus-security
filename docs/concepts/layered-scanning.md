@@ -18,10 +18,11 @@ L1 is the floor of every scan. See [Native detectors](detectors.md) for the full
 
 ### L2 — NTDB model packages
 
-Lightweight text classifiers in the Patronus **NTDB** format: a static token-embedding
-encoder plus small ONNX heads and aggregators, packaged with a `manifest.json`. All L2
-packages in a process **share one static encoder**, so adding categories is cheap. L2 answers
-in **milliseconds** and refines the L1 verdict with a learned classifier.
+Lightweight text classifiers in the Patronus **NTDB** format: the shared mmBERT tokenizer and
+static embedder plus small ONNX heads and aggregators, packaged with a `manifest.json`. The
+official L2 packages share this representation with compatible L3 models as well as with one
+another, so adding categories is cheap and promotion does not start from raw text again. L2
+answers in **milliseconds** and refines the L1 verdict with a learned classifier.
 
 L2 promotion is decided by the NTDB package's promote-router. Separately, classifier verdicts
 use a configurable final-decision threshold profile — see
@@ -34,6 +35,12 @@ are the most accurate and the most expensive. Which L3 models a gateway holds is
 configuration; they are kept **resident in RAM** (idle-TTL evicted) and executed by a
 **background worker**, not on the request path. L3 answers in **tens of milliseconds** and
 makes the final call for cases L2 could not resolve confidently.
+
+For the current official mmBERT packages, L3 consumes the compatible token IDs already produced
+for the selected L2 chunks. It therefore continues in the same tokenizer and embedding space;
+there is no separate mmBERT tokenization step merely because a scan was promoted. Incompatible
+local packages and windows that cannot be handed off safely fall back to L3's own tokenizer-bounded
+planning.
 
 ## Escalation: how a scan moves up
 
@@ -87,9 +94,10 @@ See [Categories](categories.md) for each category's layer support.
 
 ## Long text and windowing
 
-The L3 worker splits long inputs into **tokenizer-bounded windows**, aggregates the per-window
-outputs into one result, and keeps memory bounded so an attack buried deep in a long document is
-still caught. With representative **clustering** enabled (off by default) it groups near-duplicate
+The L3 worker reuses compatible tokenized L2 windows and otherwise splits long inputs into
+**tokenizer-bounded windows**. It aggregates the per-window outputs into one result and keeps memory
+bounded so an attack buried deep in a long document is still caught. With representative
+**clustering** enabled (off by default) it groups near-duplicate
 windows by similarity, runs only cluster representatives, and propagates their verdict to the
 rest, so most windows never reach the model; **early exit** stops a head once its aggregate can no
 longer change. Aggregation strategy, clustering, and early exit are tunable per pipeline — see the

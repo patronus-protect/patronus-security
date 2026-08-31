@@ -11,6 +11,13 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Added native PII and DLP L1 capabilities with validated exact spans, German and English
+  anchor-bound identifiers, written birth dates, source/config/SQL/log detection, and non-blocking
+  localized `layers[].details.l1_anchors` context facts. Added deterministic capability goldens,
+  hard negatives, validators, and 100 KiB latency/evaluation tools.
+- Added stable per-rule execution gates through Rust, Python, and Ark API configuration. Missing
+  rule IDs remain enabled; PII/DLP patterns use `pii_*`/`dlp_*` IDs and Injection uses its existing
+  `ark.injection.*` IDs.
 - Added a version-pinned native injection rule catalog derived from selected Prompt Armor rules.
   Catalog findings expose stable Ark/upstream rule IDs, exact byte and character spans, source
   revision, licence, family, severity, and descriptions. The first catalog closes high-specificity
@@ -41,6 +48,13 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Changed
 
+- Added `PATRONUS_L3_TTL_SECS=-1` to keep loaded L3 and Dynamic-PII ONNX sessions resident.
+  The Ark API image and reference Compose deployment now use this setting to avoid the model
+  reload latency spike on the first promoted request after an idle period.
+- Changed the reference and OVH Ark API deployment to two FP16 workers limited to 2.5 CPUs each.
+  On the canonical cold-cache HTTP benchmark this improved throughput from 6.761 to 7.728
+  requests/s and reduced p50 latency from 440 ms to 168 ms versus three two-CPU workers. The
+  Dockerfile now builds both API binaries explicitly and defaults its baked L3 assets to FP16.
 - Changed native Injection L1 to publish one `native:injection_l1` aggregate instead of separate
   public results for every heuristic. The former detector model gates still control their internal
   producers. Accepted candidates expose evidence spans and `decision.final_result.source: "l1"`;
@@ -50,6 +64,9 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Breaking
 
+- `ScanGateMatrix` has a new public `rules` field, and native PII/DLP layer `details` can now
+  contain `l1_anchors`. External Rust struct literals and consumers that assumed empty native
+  details must account for these intentional pre-1.0 additions.
 - Native Injection consumers that selected models such as `native:instruction_override` or
   `native:injection_rule_catalog` from public scan results must migrate to
   `native:injection_l1` and inspect `layers[].details.l1_candidates[].producers`, rule provenance,

@@ -39,7 +39,8 @@ request waiting on L3. Correlate each event by `request_id`; exactly one termina
 With `max_level = L3`, an NTDB L2 classifier can promote a scan to the full ONNX
 transformer. The queue first publishes the L2 fallback result, then the final L3
 result — both under the same `request_id`. Configured L3 models are held resident
-in RAM and evicted only after the idle TTL (`PATRONUS_L3_TTL_SECS`).
+in RAM and evicted only after the idle TTL (`PATRONUS_L3_TTL_SECS`); set it to `-1` to keep
+loaded sessions resident.
 
 ## 04 — Execution gates
 

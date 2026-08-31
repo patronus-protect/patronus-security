@@ -63,7 +63,7 @@ Each element of `layers` records one layer's output:
 | `matched` | bool | Whether this layer produced a positive match. |
 | `duration_ms` | float | Wall-clock time spent in this layer. |
 | `thresholds` | dict | Thresholds applied at this layer (operating point, etc.). |
-| `details` | dict | Layer-specific extra detail. NTDB L2 layers add L3 promotion context; L3 layers add chunk execution metadata. The stable policy contract is `decision`, not free-form `details`. |
+| `details` | dict | Layer-specific extra detail. Native PII/DLP layers can expose non-blocking `l1_anchors`; NTDB L2 layers add L3 promotion context; L3 layers add chunk execution metadata. The stable policy contract is `decision`, not free-form `details`. |
 
 ### Decision envelope
 
@@ -164,6 +164,26 @@ for span in result["evidence_spans"]:
 Each span carries the matched `label`, the matched `text`, a `score`, and both **byte** and
 **character** offsets (`start_byte`/`end_byte`/`start_char`/`end_char`). Safe native results
 leave `evidence_spans` empty.
+
+Native PII and DLP layers can additionally expose localized context facts under
+`details.l1_anchors`. Anchors are not findings and do not make a safe result block:
+
+```json
+{
+  "kind": "anchor",
+  "anchor_kind": "lexical",
+  "category": "date_of_birth",
+  "strength": "strong",
+  "text": "Geburtsdatum",
+  "start_byte": 18,
+  "end_byte": 30,
+  "start_char": 18,
+  "end_char": 30
+}
+```
+
+Consumers must base immediate findings on `evidence_spans` and the result decision, not on an
+anchor alone. Anchor metadata is contextual evidence for later routing or model fusion.
 
 For registered native injection findings, the span label is the stable Ark rule ID. The
 corresponding layer `details` contain an ordered `matched_rules` list with the Ark ID, optional

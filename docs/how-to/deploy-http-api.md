@@ -19,9 +19,11 @@ service, any number of thin HTTP clients in front of it, each authenticated with
 ```bash
 cd ark-api
 cp config.example.yaml config.yaml
-# generate a real key hash:
-printf '%s' '<your-secret-token>' | sha256sum
-# paste the digest into config.yaml's auth.keys[].key_hash, then:
+# hash a private gateway-to-worker token and paste its digest into config.yaml:
+printf '%s' '<internal-worker-token>' | sha256sum
+cp entrypoint.example.yaml entrypoint.yaml
+# put the raw internal token in entrypoint.yaml's gateway.worker_token and
+# add the hash of a separate public client token under auth.keys, then:
 docker compose build
 docker compose up -d
 ```
@@ -31,18 +33,24 @@ never needs network access or `pipeline.download_files: true`. On Linux `x86_64`
 FP16 graphs for production parity:
 
 ```bash
-docker build --build-arg L3_PRECISION=fp16 -f ark-api/Dockerfile -t ark-api:fp16 .
+docker build -f Dockerfile -t ark-api:fp16 ..
 ```
 
-Keep `PATRONUS_L3_PRECISION=fp16` in the runtime environment as well. This selects FP16 for the
-regular L3 classifiers and for the separate Dynamic-PII GLiNER model. It uses more model memory
-and can cost CPU latency, but is the validated x86_64 configuration; evaluate other architectures
-on their target runtime before choosing a graph.
+FP16 is the Dockerfile default; keep `PATRONUS_L3_PRECISION=fp16` in the runtime environment as
+well. This selects FP16 for the regular L3 classifiers and for the separate Dynamic-PII GLiNER
+model. The container and reference Compose deployment also set `PATRONUS_L3_TTL_SECS=-1`, which
+keeps loaded L3 sessions resident and avoids an idle-reload latency spike. Override the TTL with a
+non-negative number of seconds only on memory-constrained hosts. FP16 uses more model memory and
+can cost CPU latency, but is the validated x86_64 configuration; evaluate other architectures on
+their target runtime before choosing a graph.
 
 ## Configuration
 
-Everything is one YAML file, mounted into the container at `/etc/ark-api/config.yaml` — no
-environment variables to wire up.
+The workers read `config.yaml`; the public gateway reads `entrypoint.yaml`. Compose mounts both
+files and pins `PATRONUS_L3_PRECISION=fp16` for the workers. Keep the raw internal worker token
+only in `entrypoint.yaml`; put its digest in the worker config. Worker `key_hash` values may use
+the `sha256:` prefix shown below. Gateway `auth.keys[].key_hash` values must currently be the bare
+64-character hex digest, as shown in `entrypoint.example.yaml`.
 
 ```yaml
 server:
@@ -52,7 +60,7 @@ server:
 auth:
   keys:
     - name: "slack-workspace-acme"
-      key_hash: "sha256:<sha256 of the raw bearer token>"
+      key_hash: "sha256:<sha256 of the raw internal worker token>"
       categories: ["injection", "dlp", "pii"]   # omit to allow every pipeline.categories entry
 
 pipeline:
@@ -97,7 +105,11 @@ pipeline:
 `when` supports `all` / `any` / `not` trees of `metadata` (request-context) and `result`
 (prior L1/L2 verdict) predicates — see [`GateExpression`](../rust-api.md) for the full shape.
 
-## API
+## Direct worker API
+
+The reference Compose deployment does not publish a worker port. Clients use the public gateway
+contract below. These endpoints describe a worker run directly for development or an intentionally
+single-worker deployment.
 
 Every endpoint except `/healthz` and `/readyz` requires `Authorization: Bearer <token>` matching a
 `key_hash` in the config.
@@ -128,6 +140,13 @@ For a public deployment, place `ark-api-entrypoint` in front of one or more work
 Redis. Clients call only the gateway. It round-robins requests to workers, persists a global
 `job_id`, and aggregates the highest authoritative result per category. The worker-local
 `request_id` and worker SSE stream stay internal.
+
+The reference Compose deployment uses two FP16 workers with independent cache volumes and a
+2.5-CPU quota per worker. This leaves one vCPU of a six-vCPU host for Redis, the gateway, the
+reverse proxy, and the operating system. With the canonical HTTP benchmark and cold caches on the
+production OVH host, two workers at 2.5 CPUs delivered 7.728 requests/s and 168 ms p50 latency;
+three workers at 2 CPUs delivered 6.761 requests/s and 440 ms p50 latency. Keep the two-worker
+topology unless a benchmark on the actual target host supports a different allocation.
 
 `POST /v1/scan` returns a global job handle:
 
