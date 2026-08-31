@@ -3,6 +3,9 @@
 This is the one reporting contract for native PII-L1, native DLP-L1, GLiNER,
 and a later L1+GLiNER fusion. It deliberately does not implement fusion.
 
+The first measured baseline using this contract is
+[`pii-dlp-measured-baseline-0.1.6.md`](pii-dlp-measured-baseline-0.1.6.md).
+
 ## What counts as Gold
 
 | Evidence tier | May report recall / exact spans? | Current source |
