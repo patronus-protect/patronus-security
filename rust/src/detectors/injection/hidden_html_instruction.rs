@@ -4,6 +4,12 @@ use crate::EvaluationResult;
 
 pub struct HiddenHtmlInstructionPipeline;
 
+impl Default for HiddenHtmlInstructionPipeline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl HiddenHtmlInstructionPipeline {
     pub fn new() -> Self {
         Self

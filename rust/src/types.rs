@@ -582,6 +582,9 @@ pub struct ScanGateMatrix {
     /// Optional per-model or per-native-scanner overrides keyed by result model
     /// names such as `native:mcp_runtime_risk` or `unified-v3-tool-action`.
     pub models: HashMap<String, bool>,
+    /// Optional per-rule overrides keyed by stable public rule id. Missing
+    /// entries are enabled.
+    pub rules: HashMap<String, bool>,
     /// Request-context and prior-result conditions applied before L2 or L3.
     pub conditional: Vec<ConditionalPipelineGate>,
     /// L3 worker scheduling policy.
@@ -916,6 +919,7 @@ impl ScanGateMatrix {
             l2: None,
             l3: None,
             models: HashMap::new(),
+            rules: HashMap::new(),
             conditional: Vec::new(),
             l3_policy: L3SchedulerPolicy::default(),
         }
@@ -928,6 +932,7 @@ impl ScanGateMatrix {
             l2: Some(l2),
             l3: Some(l3),
             models: HashMap::new(),
+            rules: HashMap::new(),
             conditional: Vec::new(),
             l3_policy: L3SchedulerPolicy::default(),
         }
@@ -953,6 +958,17 @@ impl ScanGateMatrix {
         self
     }
 
+    /// Set one stable rule-id gate.
+    pub fn set_rule(&mut self, rule_id: impl Into<String>, enabled: bool) {
+        self.rules.insert(rule_id.into(), enabled);
+    }
+
+    /// Builder-style stable rule-id gate setter.
+    pub fn with_rule(mut self, rule_id: impl Into<String>, enabled: bool) -> Self {
+        self.set_rule(rule_id, enabled);
+        self
+    }
+
     /// Replace request-context and prior-result gates.
     pub fn set_conditional(&mut self, gates: Vec<ConditionalPipelineGate>) -> Result<(), String> {
         for gate in &gates {
@@ -975,6 +991,11 @@ impl ScanGateMatrix {
     /// Return whether the model/native scanner is allowed by this matrix.
     pub fn allows_model(&self, model: &str) -> bool {
         self.models.get(model).copied().unwrap_or(true)
+    }
+
+    /// Return whether a stable rule id is allowed by this matrix.
+    pub fn allows_rule(&self, rule_id: &str) -> bool {
+        self.rules.get(rule_id).copied().unwrap_or(true)
     }
 
     /// Replace the L3 worker scheduling policy.
@@ -1196,6 +1217,11 @@ impl ScanExecution {
         self.gates.allows_model(model)
     }
 
+    /// Return whether a stable rule id is enabled for this execution.
+    pub fn allows_rule(&self, rule_id: &str) -> bool {
+        self.gates.allows_rule(rule_id)
+    }
+
     /// Return the matrix backing this execution.
     pub fn gates(&self) -> &ScanGateMatrix {
         &self.gates
@@ -1336,8 +1362,10 @@ mod tests {
 
     #[test]
     fn l3_pipeline_policy_overrides_request_defaults_by_category() {
-        let mut policy = L3SchedulerPolicy::default();
-        policy.clustering = L3ClusteringStrategy::RankOnly;
+        let mut policy = L3SchedulerPolicy {
+            clustering: L3ClusteringStrategy::RankOnly,
+            ..L3SchedulerPolicy::default()
+        };
         policy.pipelines.insert(
             "injection".to_string(),
             L3PipelinePolicy {

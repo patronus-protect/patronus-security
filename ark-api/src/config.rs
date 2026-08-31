@@ -129,6 +129,8 @@ pub(crate) struct RawGates {
     #[serde(default)]
     models: HashMap<String, bool>,
     #[serde(default)]
+    rules: HashMap<String, bool>,
+    #[serde(default)]
     conditional: Vec<ConditionalPipelineGate>,
     #[serde(default)]
     policy: Option<RawL3Policy>,
@@ -165,6 +167,7 @@ impl RawGates {
             l2,
             l3,
             models,
+            rules,
             conditional,
             policy: raw_policy,
         } = self;
@@ -222,6 +225,7 @@ impl RawGates {
             l2,
             l3,
             models,
+            rules,
             conditional,
             l3_policy: policy,
         })
@@ -433,7 +437,7 @@ pub(crate) fn parse_categories(values: &[String]) -> Result<Vec<SecurityCategory
 
 #[cfg(test)]
 mod tests {
-    use super::RawOnnxRuntime;
+    use super::{RawGates, RawOnnxRuntime};
 
     #[test]
     fn onnx_runtime_config_accepts_bounded_threads() {
@@ -451,5 +455,16 @@ mod tests {
         let raw: RawOnnxRuntime = serde_yaml::from_str("intra_threads: 0\n").unwrap();
 
         assert!(raw.into_options().is_err());
+    }
+
+    #[test]
+    fn rule_gates_parse_from_yaml_and_default_to_enabled() {
+        let raw: RawGates =
+            serde_yaml::from_str("rules:\n  pii_email: false\n  dlp_openai_key: true\n").unwrap();
+        let gates = raw.into_gate_matrix().unwrap();
+
+        assert!(!gates.allows_rule("pii_email"));
+        assert!(gates.allows_rule("dlp_openai_key"));
+        assert!(gates.allows_rule("ark.injection.override.discard_prior"));
     }
 }

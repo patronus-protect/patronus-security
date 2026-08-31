@@ -403,6 +403,39 @@ mod tests {
     }
 
     #[test]
+    fn rule_gates_are_resolved_for_defaults_and_request_overrides() {
+        let (mut config, key) = config_and_key();
+        config
+            .default_gates
+            .set_rule("ark.injection.override.discard_prior", false);
+
+        let defaults = resolve_request_config(&config, &key, None).unwrap();
+        assert!(!defaults
+            .gates
+            .allows_rule("ark.injection.override.discard_prior"));
+        assert!(defaults.gates.allows_rule("pii_email"));
+
+        let request: RequestScanConfig = serde_json::from_value(json!({
+            "categories": ["injection"],
+            "gates": {
+                "rules": {
+                    "ark.injection.override.discard_prior": true,
+                    "ark.injection.exfil.external_sink": false
+                }
+            }
+        }))
+        .unwrap();
+        let overridden = resolve_request_config(&config, &key, Some(request)).unwrap();
+
+        assert!(overridden
+            .gates
+            .allows_rule("ark.injection.override.discard_prior"));
+        assert!(!overridden
+            .gates
+            .allows_rule("ark.injection.exfil.external_sink"));
+    }
+
+    #[test]
     fn request_config_cannot_expand_api_key_categories() {
         let (mut config, key) = config_and_key();
         config.categories.push(SecurityCategory::Dlp);

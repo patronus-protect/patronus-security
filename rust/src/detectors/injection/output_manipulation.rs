@@ -4,6 +4,12 @@ use crate::EvaluationResult;
 
 pub struct OutputManipulationPipeline;
 
+impl Default for OutputManipulationPipeline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl OutputManipulationPipeline {
     pub fn new() -> Self {
         Self

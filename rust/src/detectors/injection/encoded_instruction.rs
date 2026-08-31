@@ -6,6 +6,12 @@ use crate::EvaluationResult;
 
 pub struct EncodedInstructionPipeline;
 
+impl Default for EncodedInstructionPipeline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl EncodedInstructionPipeline {
     pub fn new() -> Self {
         Self

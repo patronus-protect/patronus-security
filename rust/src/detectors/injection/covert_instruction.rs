@@ -4,6 +4,12 @@ use crate::EvaluationResult;
 
 pub struct CovertInstructionPipeline;
 
+impl Default for CovertInstructionPipeline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CovertInstructionPipeline {
     pub fn new() -> Self {
         Self

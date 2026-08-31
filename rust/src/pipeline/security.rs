@@ -237,8 +237,11 @@ fn timed_native_regex_scan_result<T: NativeRegexDetector>(
     model: impl Into<String>,
     detector: &T,
     text: &str,
+    execution: &ScanExecution,
 ) -> SecurityScanResult {
-    timed_native_detection_scan_result(category, model, text, || detector.detect(text))
+    timed_native_detection_scan_result(category, model, text, || {
+        detector.detect_with_rule_filter(text, |rule_id| execution.allows_rule(rule_id))
+    })
 }
 
 fn timed_native_detection_scan_result<F>(
@@ -791,9 +794,10 @@ impl SecurityGateway {
         let text = input.text.as_ref();
         let mut results = Vec::new();
         macro_rules! push_native {
-            ($pipeline:expr, $model:literal) => {
+            ($pipeline:expr, $model:literal, $rule:literal) => {
                 if self.level_enabled(&execution, SecurityLevel::L1)
                     && self.model_enabled(&execution, $model)
+                    && execution.allows_rule($rule)
                 {
                     if let Some(ref pipe) = $pipeline {
                         results.push(run_measured_l1_detector(
@@ -815,6 +819,7 @@ impl SecurityGateway {
                 if self.level_enabled(&execution, SecurityLevel::L1)
                     && self.model_enabled(&execution, "native:injection_l1")
                     && self.model_enabled(&execution, $model)
+                    && execution.allows_rule(signal::native_rule_id($model))
                 {
                     if let Some(ref pipe) = $pipeline {
                         $target.push(run_measured_l1_detector(
@@ -852,7 +857,11 @@ impl SecurityGateway {
                                     category,
                                     "native:injection_rule_catalog",
                                     text,
-                                    || catalog.detect(text),
+                                    || {
+                                        catalog.detect_with_rule_filter(text, |rule_id| {
+                                            execution.allows_rule(rule_id)
+                                        })
+                                    },
                                 )
                             },
                         ));
@@ -861,6 +870,8 @@ impl SecurityGateway {
                 if self.level_enabled(execution, SecurityLevel::L1)
                     && self.model_enabled(execution, "native:injection_l1")
                     && self.model_enabled(execution, "native:injection_structural")
+                    && execution
+                        .allows_rule("ark.injection.structure.override_sensitive_disclosure")
                 {
                     if let Some(ref structural) = self.injection_structural_pipeline {
                         native_results.push(run_measured_l1_detector(
@@ -973,40 +984,70 @@ impl SecurityGateway {
                 }
             }
             SecurityCategory::Dlp => {
-                if self.level_enabled(&execution, SecurityLevel::L1)
-                    && self.model_enabled(&execution, "native:dlp")
+                if self.level_enabled(execution, SecurityLevel::L1)
+                    && self.model_enabled(execution, "native:dlp")
                 {
                     if let Some(ref native) = self.dlp_pipeline {
                         results.push(run_measured_l1_detector(
                             category,
                             "native:dlp",
                             text.len(),
-                            || timed_native_regex_scan_result(category, "native:dlp", native, text),
+                            || {
+                                timed_native_regex_scan_result(
+                                    category,
+                                    "native:dlp",
+                                    native,
+                                    text,
+                                    execution,
+                                )
+                            },
                         ));
                     }
                 }
                 push_native!(
                     self.sensitive_material_pipeline,
-                    "native:sensitive_material"
+                    "native:sensitive_material",
+                    "dlp_sensitive_material"
                 );
-                push_native!(self.secret_transfer_pipeline, "native:secret_transfer");
-                push_native!(self.mcp_runtime_risk_pipeline, "native:mcp_runtime_risk");
-                push_native!(self.mcp_policy_pipeline, "native:mcp_policy");
+                push_native!(
+                    self.secret_transfer_pipeline,
+                    "native:secret_transfer",
+                    "dlp_secret_transfer"
+                );
+                push_native!(
+                    self.mcp_runtime_risk_pipeline,
+                    "native:mcp_runtime_risk",
+                    "dlp_mcp_runtime_risk"
+                );
+                push_native!(
+                    self.mcp_policy_pipeline,
+                    "native:mcp_policy",
+                    "dlp_mcp_policy"
+                );
                 push_native!(
                     self.destructive_operation_pipeline,
-                    "native:destructive_operation"
+                    "native:destructive_operation",
+                    "dlp_destructive_operation"
                 );
             }
             SecurityCategory::Pii => {
-                let native_enabled = self.level_enabled(&execution, SecurityLevel::L1)
-                    && self.model_enabled(&execution, "native:pii");
+                let native_enabled = self.level_enabled(execution, SecurityLevel::L1)
+                    && self.model_enabled(execution, "native:pii");
                 if native_enabled {
                     if let Some(ref native) = self.pii_pipeline {
                         results.push(run_measured_l1_detector(
                             category,
                             "native:pii",
                             text.len(),
-                            || timed_native_regex_scan_result(category, "native:pii", native, text),
+                            || {
+                                timed_native_regex_scan_result(
+                                    category,
+                                    "native:pii",
+                                    native,
+                                    text,
+                                    execution,
+                                )
+                            },
                         ));
                     }
                 }
@@ -1167,10 +1208,9 @@ impl SecurityGateway {
                     text,
                     execution.ntdb_operating_point(),
                 ),
-                Err(err) => Err(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("NTDB executor mutex poisoned: {err}"),
-                ))
+                Err(err) => Err(Box::new(std::io::Error::other(format!(
+                    "NTDB executor mutex poisoned: {err}"
+                )))
                     as Box<dyn std::error::Error + Send + Sync>),
             };
             metrics.checkpoint(

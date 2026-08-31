@@ -30,7 +30,7 @@ pub fn luhn(s: &str) -> bool {
         .filter_map(|c| c.to_digit(10))
         .collect();
 
-    if digits.len() < 13 || digits.len() > 19 {
+    if digits.len() < 12 || digits.len() > 19 || digits.iter().all(|digit| *digit == digits[0]) {
         return false;
     }
 
@@ -53,6 +53,232 @@ pub fn luhn(s: &str) -> bool {
         .sum();
 
     sum % 10 == 0
+}
+
+pub fn phone(s: &str) -> bool {
+    let digits = s
+        .chars()
+        .filter(|ch| ch.is_ascii_digit())
+        .collect::<Vec<_>>();
+    (7..=15).contains(&digits.len()) && !digits.iter().all(|digit| *digit == digits[0])
+}
+
+pub fn mac_address(s: &str) -> bool {
+    let separator = if s.contains(':') {
+        ':'
+    } else if s.contains('-') {
+        '-'
+    } else {
+        return false;
+    };
+    let parts = s.split(separator).collect::<Vec<_>>();
+    parts.len() == 6
+        && parts
+            .iter()
+            .all(|part| part.len() == 2 && part.chars().all(|ch| ch.is_ascii_hexdigit()))
+        && !parts.iter().all(|part| *part == "00")
+}
+
+pub fn cvv(s: &str) -> bool {
+    matches!(s.len(), 3 | 4) && s.chars().all(|ch| ch.is_ascii_digit())
+}
+
+pub fn card_expiry(s: &str) -> bool {
+    let Some((month, year)) = s.split_once(['/', '-']) else {
+        return false;
+    };
+    month
+        .parse::<u8>()
+        .is_ok_and(|month| (1..=12).contains(&month))
+        && matches!(year.len(), 2 | 4)
+        && year.chars().all(|ch| ch.is_ascii_digit())
+}
+
+pub fn bic(s: &str) -> bool {
+    matches!(s.len(), 8 | 11)
+        && s[..4].chars().all(|ch| ch.is_ascii_alphabetic())
+        && s[4..6].chars().all(|ch| ch.is_ascii_alphabetic())
+        && s[6..].chars().all(|ch| ch.is_ascii_alphanumeric())
+}
+
+pub fn bounded_identifier(s: &str) -> bool {
+    (3..=32).contains(&s.len())
+        && s.chars().any(|ch| ch.is_ascii_digit())
+        && s.chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | '_' | '/' | '-'))
+        && !s.chars().all(|ch| ch == '0')
+}
+
+pub fn username(s: &str) -> bool {
+    (2..=64).contains(&s.len())
+        && s.chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | '_' | '@' | '-'))
+        && !matches!(
+            s.to_ascii_lowercase().as_str(),
+            "admin" | "root" | "user" | "username"
+        )
+}
+
+pub fn calendar_date(s: &str) -> bool {
+    let parts = s.split(['.', '/', '-']).collect::<Vec<_>>();
+    if parts.len() != 3 {
+        return false;
+    }
+    let (Ok(day), Ok(month), Ok(year)) = (
+        parts[0].parse::<u8>(),
+        parts[1].parse::<u8>(),
+        parts[2].parse::<u16>(),
+    ) else {
+        return false;
+    };
+    let year = if parts[2].len() == 2 {
+        1900 + year
+    } else {
+        year
+    };
+    valid_date(day, month, year)
+}
+
+pub fn written_calendar_date(s: &str) -> bool {
+    let normalized = s.to_lowercase().replace([',', '.'], " ");
+    let parts = normalized.split_whitespace().collect::<Vec<_>>();
+    if parts.len() != 3 {
+        return false;
+    }
+
+    let parse_day = |part: &str| {
+        part.trim_end_matches(|ch: char| ch.is_ascii_alphabetic())
+            .parse::<u8>()
+            .ok()
+    };
+    let parse_month = |part: &str| match part {
+        "januar" | "january" => Some(1),
+        "februar" | "february" => Some(2),
+        "märz" | "maerz" | "march" => Some(3),
+        "april" => Some(4),
+        "mai" | "may" => Some(5),
+        "juni" | "june" => Some(6),
+        "juli" | "july" => Some(7),
+        "august" => Some(8),
+        "september" => Some(9),
+        "oktober" | "october" => Some(10),
+        "november" => Some(11),
+        "dezember" | "december" => Some(12),
+        _ => None,
+    };
+
+    let parsed = if let (Some(day), Some(month), Ok(year)) = (
+        parse_day(parts[0]),
+        parse_month(parts[1]),
+        parts[2].parse::<u16>(),
+    ) {
+        Some((day, month, year))
+    } else if let (Some(month), Some(day), Ok(year)) = (
+        parse_month(parts[0]),
+        parse_day(parts[1]),
+        parts[2].parse::<u16>(),
+    ) {
+        Some((day, month, year))
+    } else {
+        None
+    };
+
+    parsed.is_some_and(|(day, month, year)| valid_date(day, month, year))
+}
+
+fn valid_date(day: u8, month: u8, year: u16) -> bool {
+    if !(1900..=2100).contains(&year) || !(1..=12).contains(&month) {
+        return false;
+    }
+    let leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    let max_day = match month {
+        2 if leap => 29,
+        2 => 28,
+        4 | 6 | 9 | 11 => 30,
+        _ => 31,
+    };
+    (1..=max_day).contains(&day)
+}
+
+pub fn de_tax_number(s: &str) -> bool {
+    let digits = s
+        .chars()
+        .filter(|ch| ch.is_ascii_digit())
+        .collect::<Vec<_>>();
+    (10..=13).contains(&digits.len()) && !digits.iter().all(|digit| *digit == digits[0])
+}
+
+pub fn de_social_security_number(s: &str) -> bool {
+    let normalized = s
+        .chars()
+        .filter(|ch| !ch.is_whitespace())
+        .collect::<String>();
+    normalized.len() == 12
+        && normalized[..8].chars().all(|ch| ch.is_ascii_digit())
+        && normalized[8..9].chars().all(|ch| ch.is_ascii_alphabetic())
+        && normalized[9..].chars().all(|ch| ch.is_ascii_digit())
+}
+
+pub fn de_health_insurance_number(s: &str) -> bool {
+    s.len() == 10
+        && s[..1].chars().all(|ch| ch.is_ascii_alphabetic())
+        && s[1..].chars().all(|ch| ch.is_ascii_digit())
+        && !s[1..].chars().all(|ch| ch == '0')
+}
+
+pub fn lanr(s: &str) -> bool {
+    s.len() == 9 && s.chars().all(|ch| ch.is_ascii_digit()) && !s.chars().all(|ch| ch == '0')
+}
+
+pub fn de_document_number(s: &str) -> bool {
+    const ALPHABET: &str = "0123456789CFGHJKLMNPRTVWXYZ";
+    s.len() == 9
+        && s.chars()
+            .all(|ch| ALPHABET.contains(ch.to_ascii_uppercase()))
+}
+
+pub fn de_driver_license_number(s: &str) -> bool {
+    s.len() == 11 && s.chars().all(|ch| ch.is_ascii_alphanumeric())
+}
+
+pub fn us_ssn(s: &str) -> bool {
+    let digits = s
+        .chars()
+        .filter(|ch| ch.is_ascii_digit())
+        .collect::<String>();
+    if digits.len() != 9 {
+        return false;
+    }
+    let area = &digits[..3];
+    let group = &digits[3..5];
+    let serial = &digits[5..];
+    area != "000"
+        && area != "666"
+        && !area.starts_with('9')
+        && group != "00"
+        && serial != "0000"
+        && digits != "078051120"
+        && digits != "219099999"
+}
+
+pub fn uk_nino(s: &str) -> bool {
+    let normalized = s.replace(' ', "").to_ascii_uppercase();
+    if normalized.len() != 9 {
+        return false;
+    }
+    let bytes = normalized.as_bytes();
+    let first = bytes[0] as char;
+    let second = bytes[1] as char;
+    first.is_ascii_alphabetic()
+        && second.is_ascii_alphabetic()
+        && !matches!(first, 'D' | 'F' | 'I' | 'Q' | 'U' | 'V')
+        && !matches!(second, 'D' | 'F' | 'I' | 'O' | 'Q' | 'U' | 'V')
+        && !matches!(
+            &normalized[..2],
+            "BG" | "GB" | "KN" | "NK" | "NT" | "TN" | "ZZ"
+        )
+        && normalized[2..8].chars().all(|ch| ch.is_ascii_digit())
+        && matches!(bytes[8] as char, 'A' | 'B' | 'C' | 'D')
 }
 
 /// ISO 13616 Mod-97 check — IBAN validation.

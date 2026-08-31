@@ -4,6 +4,12 @@ use crate::EvaluationResult;
 
 pub struct MultiTurnEscalationPipeline;
 
+impl Default for MultiTurnEscalationPipeline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MultiTurnEscalationPipeline {
     pub fn new() -> Self {
         Self

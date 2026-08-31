@@ -4,6 +4,12 @@ use crate::EvaluationResult;
 
 pub struct ToolCallInjectionPipeline;
 
+impl Default for ToolCallInjectionPipeline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ToolCallInjectionPipeline {
     pub fn new() -> Self {
         Self

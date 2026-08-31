@@ -4,6 +4,12 @@ use crate::EvaluationResult;
 
 pub struct SensitiveMaterialPipeline;
 
+impl Default for SensitiveMaterialPipeline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SensitiveMaterialPipeline {
     pub fn new() -> Self {
         Self

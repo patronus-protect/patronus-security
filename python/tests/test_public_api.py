@@ -478,6 +478,23 @@ class PublicApiTests(unittest.TestCase):
             any(result["model"] == "native:mcp_runtime_risk" for result in results)
         )
 
+    def test_execution_gates_can_disable_one_native_rule(self):
+        scanner = SecurityGateway(
+            categories=["pii"],
+            max_level="l1",
+            download_files=False,
+            execution_gates={"rules": {"pii_email": False}},
+        )
+
+        results = scanner.scan_all(
+            "Kontakt: ada@example.com; IBAN DE89370400440532013000"
+        )
+        native = next(result for result in results if result["model"] == "native:pii")
+        labels = {span["label"] for span in native["evidence_spans"]}
+
+        self.assertNotIn("EMAIL", labels)
+        self.assertIn("IBAN", labels)
+
     def test_set_execution_gates_can_disable_all_levels(self):
         scanner = SecurityGateway(categories=["dlp"], max_level="l2", download_files=False)
         scanner.warmup()
@@ -508,7 +525,9 @@ class PublicApiTests(unittest.TestCase):
         invalid_gates = [
             {"levels": []},
             {"models": []},
+            {"rules": []},
             {"levels": {"l1": "yes"}},
+            {"rules": {"pii_email": "no"}},
             {"levels": {"l4": True}},
             {"l3": "yes"},
             {"l3": {"enabled": "yes"}},

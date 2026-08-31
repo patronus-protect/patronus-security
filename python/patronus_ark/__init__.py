@@ -112,9 +112,10 @@ def _execution_gates_json(execution_gates):
     if not isinstance(execution_gates, dict):
         raise ValueError("execution_gates must be a dict")
 
-    normalized = {"levels": {}, "models": {}}
+    normalized = {"levels": {}, "models": {}, "rules": {}}
     levels = execution_gates.get("levels", {})
     models = execution_gates.get("models", execution_gates.get("model_areas", {}))
+    rules = execution_gates.get("rules", {})
     l3_policy = execution_gates.get("l3")
     conditional = execution_gates.get("conditional")
 
@@ -122,8 +123,11 @@ def _execution_gates_json(execution_gates):
         raise ValueError("execution_gates['levels'] must be a dict")
     if not isinstance(models, dict):
         raise ValueError("execution_gates['models'] must be a dict")
+    if not isinstance(rules, dict):
+        raise ValueError("execution_gates['rules'] must be a dict")
     levels = dict(levels)
     models = dict(models)
+    rules = dict(rules)
 
     for key, value in execution_gates.items():
         lowered = str(key).lower()
@@ -138,6 +142,10 @@ def _execution_gates_json(execution_gates):
         if not isinstance(value, bool):
             raise ValueError(f"execution_gates model {key!r} must be a bool")
         normalized["models"][str(key)] = value
+    for key, value in rules.items():
+        if not isinstance(value, bool):
+            raise ValueError(f"execution_gates rule {key!r} must be a bool")
+        normalized["rules"][str(key)] = value
     if l3_policy is not None and not isinstance(l3_policy, bool):
         if not isinstance(l3_policy, dict):
             raise ValueError("execution_gates['l3'] must be a dict or bool")
@@ -200,8 +208,10 @@ class SecurityGateway:
             `download_files` is true.
         execution_gates: Optional scan execution matrix. Use
             `{"levels": {"l1": True, "l2": False, "l3": False},
-            "models": {"native:mcp_runtime_risk": False}}` to disable
-            levels or model/native scanner areas for subsequent scan calls.
+            "models": {"native:mcp_runtime_risk": False},
+            "rules": {"pii_email": False}}` to disable levels,
+            model/native scanner areas, or individual L1 rules for subsequent
+            scan calls.
             New classifier pipelines can be gated independently through
             `models`, for example `{"models": {"tool_action": False}}`.
         onnx_batch_mode: `lazy_batches` keeps per-text ONNX execution;

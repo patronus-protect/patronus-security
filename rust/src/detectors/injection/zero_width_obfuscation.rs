@@ -4,6 +4,12 @@ use crate::EvaluationResult;
 
 pub struct ZeroWidthObfuscationPipeline;
 
+impl Default for ZeroWidthObfuscationPipeline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ZeroWidthObfuscationPipeline {
     pub fn new() -> Self {
         Self

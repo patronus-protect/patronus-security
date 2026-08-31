@@ -4,6 +4,12 @@ use crate::EvaluationResult;
 
 pub struct InstructionLeakPipeline;
 
+impl Default for InstructionLeakPipeline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl InstructionLeakPipeline {
     pub fn new() -> Self {
         Self

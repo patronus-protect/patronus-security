@@ -146,11 +146,27 @@ impl InjectionRuleCatalogPipeline {
         Self { catalogs }
     }
 
+    #[cfg(test)]
     pub(crate) fn detect(&self, text: &str) -> NativeDetection {
-        self.detect_with_p0_direct_scan(text, true)
+        self.detect_with_rule_filter(text, |_| true)
     }
 
-    fn detect_with_p0_direct_scan(&self, text: &str, direct_p0_scan: bool) -> NativeDetection {
+    pub(crate) fn detect_with_rule_filter<F>(&self, text: &str, allows_rule: F) -> NativeDetection
+    where
+        F: Fn(&str) -> bool,
+    {
+        self.detect_with_p0_direct_scan(text, true, allows_rule)
+    }
+
+    fn detect_with_p0_direct_scan<F>(
+        &self,
+        text: &str,
+        direct_p0_scan: bool,
+        allows_rule: F,
+    ) -> NativeDetection
+    where
+        F: Fn(&str) -> bool,
+    {
         let mut matches = Vec::new();
         for compiled in &self.catalogs {
             if direct_p0_scan && compiled.catalog.catalog_id == DIRECT_REGEX_SCAN_CATALOG_ID {
@@ -171,6 +187,9 @@ impl InjectionRuleCatalogPipeline {
                 }
             }
         }
+        matches.retain(|(_, rule, _, _)| {
+            allows_rule(rule.canonical_id.as_deref().unwrap_or(&rule.id))
+        });
         if matches.is_empty() {
             return safe_detection();
         }
@@ -473,8 +492,8 @@ mod tests {
     }
 
     fn assert_detection_parity(text: &str) -> NativeDetection {
-        let optimized = pipeline().detect_with_p0_direct_scan(text, true);
-        let serial_prefilter = pipeline().detect_with_p0_direct_scan(text, false);
+        let optimized = pipeline().detect_with_p0_direct_scan(text, true, |_| true);
+        let serial_prefilter = pipeline().detect_with_p0_direct_scan(text, false, |_| true);
         assert_eq!(
             optimized.result.class_name,
             serial_prefilter.result.class_name

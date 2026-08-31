@@ -107,13 +107,13 @@ class NativeScannerTests(unittest.TestCase):
         candidate = next(
             candidate
             for candidate in aggregate["layers"][0]["details"]["l1_candidates"]
-            if "ark.injection.leak.dump_system_prompt" in candidate["rule_ids"]
+            if "ark.injection.leak.system_instructions" in candidate["rule_ids"]
         )
         feature = next(
             feature
             for feature in candidate["features"]
             if feature["provenance"]["rule_id"]
-            == "ark.injection.leak.dump_system_prompt"
+            == "ark.injection.leak.system_instructions"
         )
         self.assertEqual(
             feature["provenance"]["source_revision"],

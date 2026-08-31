@@ -4,6 +4,12 @@ use crate::EvaluationResult;
 
 pub struct BinarySmugglingPipeline;
 
+impl Default for BinarySmugglingPipeline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BinarySmugglingPipeline {
     pub fn new() -> Self {
         Self

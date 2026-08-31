@@ -4,6 +4,12 @@ use crate::EvaluationResult;
 
 pub struct InstructionBoundaryPipeline;
 
+impl Default for InstructionBoundaryPipeline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl InstructionBoundaryPipeline {
     pub fn new() -> Self {
         Self

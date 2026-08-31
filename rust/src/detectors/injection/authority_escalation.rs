@@ -4,6 +4,12 @@ use crate::EvaluationResult;
 
 pub struct AuthorityEscalationPipeline;
 
+impl Default for AuthorityEscalationPipeline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AuthorityEscalationPipeline {
     pub fn new() -> Self {
         Self

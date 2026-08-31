@@ -4,6 +4,12 @@ use crate::EvaluationResult;
 
 pub struct UnicodeConfusablePipeline;
 
+impl Default for UnicodeConfusablePipeline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl UnicodeConfusablePipeline {
     pub fn new() -> Self {
         Self

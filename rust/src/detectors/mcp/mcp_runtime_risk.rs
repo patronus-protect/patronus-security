@@ -4,6 +4,12 @@ use crate::EvaluationResult;
 
 pub struct McpRuntimeRiskPipeline;
 
+impl Default for McpRuntimeRiskPipeline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl McpRuntimeRiskPipeline {
     pub fn new() -> Self {
         Self

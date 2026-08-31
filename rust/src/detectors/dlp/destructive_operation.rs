@@ -4,6 +4,12 @@ use crate::EvaluationResult;
 
 pub struct DestructiveOperationPipeline;
 
+impl Default for DestructiveOperationPipeline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DestructiveOperationPipeline {
     pub fn new() -> Self {
         Self

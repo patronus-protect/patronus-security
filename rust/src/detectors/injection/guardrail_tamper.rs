@@ -4,6 +4,12 @@ use crate::EvaluationResult;
 
 pub struct GuardrailTamperPipeline;
 
+impl Default for GuardrailTamperPipeline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GuardrailTamperPipeline {
     pub fn new() -> Self {
         Self

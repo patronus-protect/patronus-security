@@ -4,6 +4,12 @@ use crate::EvaluationResult;
 
 pub struct CrossToolInstructionPipeline;
 
+impl Default for CrossToolInstructionPipeline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CrossToolInstructionPipeline {
     pub fn new() -> Self {
         Self

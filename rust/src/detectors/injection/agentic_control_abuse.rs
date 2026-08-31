@@ -4,6 +4,12 @@ use crate::EvaluationResult;
 
 pub struct AgenticControlAbusePipeline;
 
+impl Default for AgenticControlAbusePipeline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AgenticControlAbusePipeline {
     pub fn new() -> Self {
         Self

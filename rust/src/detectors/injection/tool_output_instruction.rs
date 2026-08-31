@@ -4,6 +4,12 @@ use crate::EvaluationResult;
 
 pub struct ToolOutputInstructionPipeline;
 
+impl Default for ToolOutputInstructionPipeline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ToolOutputInstructionPipeline {
     pub fn new() -> Self {
         Self

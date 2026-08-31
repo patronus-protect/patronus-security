@@ -4,6 +4,12 @@ use crate::EvaluationResult;
 
 pub struct JailbreakFramingPipeline;
 
+impl Default for JailbreakFramingPipeline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl JailbreakFramingPipeline {
     pub fn new() -> Self {
         Self

@@ -150,6 +150,15 @@ pub(crate) fn native_registry_id() -> &'static str {
     &native_registry().registry_id
 }
 
+pub(crate) fn native_rule_id(model: &str) -> &'static str {
+    native_registry()
+        .rules
+        .iter()
+        .find(|definition| definition.model == model)
+        .map(|definition| definition.id.as_str())
+        .unwrap_or_else(|| panic!("missing injection registry entry for {model}"))
+}
+
 fn native_registry() -> &'static NativeRegistry {
     static REGISTRY: OnceLock<NativeRegistry> = OnceLock::new();
     REGISTRY.get_or_init(|| {

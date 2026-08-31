@@ -424,6 +424,19 @@ fn parse_execution_gates_json(value: Option<&str>) -> PyResult<Option<ScanGateMa
             gates.set_model(model, enabled);
         }
     }
+    if let Some(rules) = object.get("rules") {
+        let rules = rules.as_object().ok_or_else(|| {
+            pyo3::exceptions::PyValueError::new_err("execution_gates.rules must be an object")
+        })?;
+        for (rule, enabled) in rules {
+            let enabled = enabled.as_bool().ok_or_else(|| {
+                pyo3::exceptions::PyValueError::new_err(format!(
+                    "execution_gates.rules.{rule} must be a boolean"
+                ))
+            })?;
+            gates.set_rule(rule, enabled);
+        }
+    }
     if let Some(conditional) = object.get("conditional") {
         let conditional =
             serde_json::from_value::<Vec<ConditionalPipelineGate>>(conditional.clone())

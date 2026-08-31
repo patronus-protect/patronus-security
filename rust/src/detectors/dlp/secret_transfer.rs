@@ -4,6 +4,12 @@ use crate::EvaluationResult;
 
 pub struct SecretTransferPipeline;
 
+impl Default for SecretTransferPipeline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SecretTransferPipeline {
     pub fn new() -> Self {
         Self

@@ -4,6 +4,12 @@ use crate::EvaluationResult;
 
 pub struct InstructionOverridePipeline;
 
+impl Default for InstructionOverridePipeline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl InstructionOverridePipeline {
     pub fn new() -> Self {
         Self
