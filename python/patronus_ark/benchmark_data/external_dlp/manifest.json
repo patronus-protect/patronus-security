@@ -1,0 +1,57 @@
+{
+  "schema": "ark-external-dlp-manifest-v1",
+  "corpora": [
+    {
+      "id": "gitleaks-go-source-v8",
+      "admission_status": "admitted",
+      "adapter": "git_tree_content_v1",
+      "source": "https://github.com/gitleaks/gitleaks",
+      "revision": "b58d3f102cf3a2c84cb7f923d05c25c9b1aed84b",
+      "license": "MIT",
+      "license_file_sha256": "e3884b252b3bfc045e55be43a34d1e80da070bc6f804ac95bf4660e97d62ebc6",
+      "raw_data_distribution": "not bundled; local git checkout only",
+      "role": "derived document-level source-code benchmark, not an exact-span or upstream secret annotation",
+      "positive": {
+        "entity_type": "dlp.content.source_code",
+        "extensions": [".go"],
+        "document_rule": "whole UTF-8 file is a positive source-code document; it produces no exact span Gold",
+        "expected_documents": 214,
+        "target_cap": 250
+      },
+      "negative": {
+        "extensions": [".md"],
+        "entity_type": "dlp.content.source_code",
+        "document_rule": "non-code document negative; report document false positives separately",
+        "expected_minimum_documents": 10
+      },
+      "verification": "git rev-parse HEAD must equal revision; LICENSE SHA-256 must equal license_file_sha256; source selection is sorted relative path.",
+      "leakage_limit": "This repository implements secret-detection rules and tests. It is acceptable only for document-type behavior, never as neutral code or secret-recall evidence."
+    },
+    {
+      "id": "schemapile-perm-sql-v1",
+      "admission_status": "admitted",
+      "adapter": "tar_sql_statement_v1",
+      "source": "https://zenodo.org/records/10931803/files/schemapile-perm-sqlfiles.tar.gz?download=1",
+      "source_repository": "https://github.com/amsterdata/schemapile",
+      "source_revision": "4ab6f0448858d33d07125d6923a3337e8c77a304",
+      "license": "SchemaPile-Perm: files selected from 193 permissive licenses (MIT/Apache-2.0/BSD/CC0 etc.)",
+      "verified_sha256": "48924077bd97a1f6811d9f90a92cac2175451958fcab4b62067d72888b31ec68",
+      "published_md5": "35e5296aced1bbb2a60f3f37912bf6a3",
+      "raw_data_distribution": "not bundled; local archive only",
+      "role": "derived exact SQL-statement content Gold, not an upstream DLP annotation",
+      "positive": {
+        "entity_type": "dlp.content.sql",
+        "span_rule": "lexically terminated semicolon statement, excluding delimiter whitespace; exact character offsets in its source SQL file",
+        "target_cap": 250,
+        "selection": "archive member name order, then statement offset order"
+      },
+      "negative": {
+        "corpus": "gitleaks-go-source-v8",
+        "rule": "all 214 Go documents are SQL-negative documents; report SQL false positives separately"
+      },
+      "verification": "SHA-256 and the publisher-provided MD5 must match before extracting. The archive must contain only UTF-8 .sql members selected by the adapter.",
+      "caveat": "SchemaPile-Perm reports permissive repository-license filtering using GitHub metadata. Preserve source provenance and do not use it where an individual-repository license audit is required."
+    }
+  ],
+  "excluded_note": "ProwlBench is intentionally outside this manifest and target coverage because of its noncommercial license. SecretBench requires controlled access/DPA; CodeSearchNet has per-row upstream licenses; LogHub states research/academic use; sql-create-context lacks sufficient commercial provenance. None is an admitted Golden source."
+}

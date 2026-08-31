@@ -41,5 +41,6 @@ module-name = "patronus_ark._patronus_ark"
 include = [
     { path = "patronus_ark/benchmark_data/*.jsonl", format = ["sdist", "wheel"] },
     { path = "patronus_ark/benchmark_data/external_pii/**", format = ["sdist", "wheel"] },
+    { path = "patronus_ark/benchmark_data/external_dlp/**", format = ["sdist", "wheel"] },
 ]
 exclude = [{ path = "patronus_ark/__pycache__/**", format = ["sdist", "wheel"] }]
