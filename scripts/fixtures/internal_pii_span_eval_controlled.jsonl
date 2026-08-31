@@ -1,0 +1,3 @@
+{"annotation_kind":"verified_span","corpus":"controlled_repo_fixture","document_sha256":"0000000000000000000000000000000000000000000000000000000000000001","entities":[{"end":24,"label":"EMAIL","start":8}],"id":"controlled-en-email","language":"en"}
+{"annotation_kind":"verified_span","corpus":"controlled_repo_fixture","document_sha256":"0000000000000000000000000000000000000000000000000000000000000002","entities":[{"end":31,"label":"STUDENT_ID","start":23}],"id":"controlled-de-student","language":"de"}
+{"annotation_kind":"verified_no_pii","corpus":"deidentified_hard_negative","document_sha256":"0000000000000000000000000000000000000000000000000000000000000003","entities":[],"id":"controlled-deidentified-negative","language":"en"}

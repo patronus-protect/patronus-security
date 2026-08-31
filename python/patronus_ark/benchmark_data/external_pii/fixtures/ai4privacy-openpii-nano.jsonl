@@ -1,0 +1,2 @@
+{"uid":"openpii-fixture-001","language":"en","source_text":"Email ada@example.test and call +1 415 555 0100.","privacy_mask":[{"label":"EMAIL","start":6,"end":22,"value":"ada@example.test"},{"label":"TELEPHONENUM","start":32,"end":47,"value":"+1 415 555 0100"}]}
+{"uid":"openpii-fixture-002","language":"de","source_text":"IBAN: DE89370400440532013000.","privacy_mask":[{"label":"IBAN","start":6,"end":28,"value":"DE89370400440532013000"}]}

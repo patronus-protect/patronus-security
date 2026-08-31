@@ -13,6 +13,11 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Added local-only external PII corpus normalization and exact-span evaluation contracts, plus a
+  text-free, hash-bound workflow for human-verified internal PII annotations. Checked-in fixtures
+  validate schemas and metrics only; no external or private raw corpus is distributed. Pinned
+  OpenPII-Nano and TAB adapters establish the first reproducible external gold inventory and an
+  OpenPII native-L1 baseline split by language, scope, and entity.
 - Added native PII and DLP L1 capabilities with validated exact spans, German and English
   anchor-bound identifiers, written birth dates, source/config/SQL/log detection, and non-blocking
   localized `layers[].details.l1_anchors` context facts. Added deterministic capability goldens,
@@ -50,6 +55,10 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Changed
 
+- Dynamic PII now keeps overlapping hypotheses with different labels, reports all detected entity
+  types through evidence and label scores, uses additive context-label bundles, and provides
+  canonical `education` and `medical` mappings. Cross-text entity-cache matches no longer become
+  live evidence; exact context-bound chunk caching remains enabled.
 - Added `PATRONUS_L3_TTL_SECS=-1` to keep loaded L3 and Dynamic-PII ONNX sessions resident.
   The Ark API image and reference Compose deployment now use this setting to avoid the model
   reload latency spike on the first promoted request after an idle period.
@@ -66,6 +75,9 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Breaking
 
+- Dynamic PII first-entity previews are now emitted as non-authoritative `provisional` events
+  instead of result-shaped events. Consumers must wait for the final `result` before acting. The
+  obsolete `entity_cache_hit`/`entity_cache_hits` diagnostics were removed with cross-text reuse.
 - `ScanGateMatrix` has a new public `rules` field, and native PII/DLP layer `details` can now
   contain `l1_anchors`. External Rust struct literals and consumers that assumed empty native
   details must account for these intentional pre-1.0 additions.

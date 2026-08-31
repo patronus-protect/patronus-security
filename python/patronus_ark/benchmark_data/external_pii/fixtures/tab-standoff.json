@@ -1,0 +1,21 @@
+[
+  {
+    "doc_id": "tab-fixture-001",
+    "text": "Ada Example met Example Corp in Berlin on 1 May 2025.",
+    "annotations": {
+      "annotator1": {
+        "entity_mentions": [
+          {"entity_type": "PERSON", "start_offset": 0, "end_offset": 11, "span_text": "Ada Example", "identifier_type": "DIRECT"},
+          {"entity_type": "ORG", "start_offset": 16, "end_offset": 28, "span_text": "Example Corp", "identifier_type": "QUASI"},
+          {"entity_type": "LOC", "start_offset": 32, "end_offset": 38, "span_text": "Berlin", "identifier_type": "NO_MASK"},
+          {"entity_type": "DATETIME", "start_offset": 42, "end_offset": 52, "span_text": "1 May 2025", "identifier_type": "QUASI"}
+        ]
+      },
+      "annotator2": {
+        "entity_mentions": [
+          {"entity_type": "PERSON", "start_offset": 0, "end_offset": 11, "span_text": "Ada Example", "identifier_type": "DIRECT"}
+        ]
+      }
+    }
+  }
+]

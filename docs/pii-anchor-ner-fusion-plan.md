@@ -1,6 +1,6 @@
 # PII-L1 auf vorhandener Injection-Mechanik: Entity-Liste, Goldens und Umsetzung
 
-Status: Architektur-, Referenz- und Implementierungsstand, 2026-08-31. PII-L1 und DLP-L1 sind als getrennte Domains implementiert; Dynamic PII/GLiNER-Fusion und externe Corpus-Benchmarkläufe bleiben nachgelagert. Website-Schutzregeln sind weiterhin nur eine Produktgruppierung und steuern nicht die Detector-Architektur.
+Status: Architektur-, Referenz- und Implementierungsstand, 2026-08-31. PII-L1 und DLP-L1 sind als getrennte Domains implementiert; die externe Corpus-Evaluation ist mit OpenPII Nano und TAB reproduzierbar begonnen. Dynamic PII/GLiNER-Fusion bleibt nachgelagert. Website-Schutzregeln sind weiterhin nur eine Produktgruppierung und steuern nicht die Detector-Architektur.
 
 ## 0. Implementierungsstand
 
@@ -20,7 +20,7 @@ Noch nicht als abgeschlossen zu behaupten sind:
 - regel-ID-genaue Golden-Abdeckung aller derzeit 36 PII- und 59 DLP-Patterns sowie der fünf
   separaten DLP-Heuristiken; die eingecheckten 255 Fälle decken die 28/23 Output-Labels als
   Capability-Regression ab, nicht jede alternative Provider-/Formatregel;
-- externe Corpus-Adapter und gemessene Exact-Span-Metriken für OpenPII, CodE, n2c2, TAB, Gretel und BigCode;
+- weitere freigegebene Corpus-Adapter und gemessene Exact-Span-Metriken über OpenPII Nano und den TAB-Ingest hinaus, insbesondere für CodE, n2c2, Gretel und BigCode sowie GLiNER auf TAB;
 - vollständige landesspezifische Checksummen für jede deutsche Dokument-/Versicherungskennung;
 - regionbasierter Telefonnummern-Parse auf dem Niveau von libphonenumber;
 - die eigentliche Confidence-Fusion zwischen `l1_anchors` und GLiNER-Spans.
@@ -182,20 +182,18 @@ Relevante Dateien:
 
 `rust/src/dynamic_pii.rs` unterstützt Basislabels, label-spezifische Schwellen, `Always`/`IfResultIn`/`IfNoResult`, bedingte Labels, maximal 30 mögliche Labels und request-lokale Auflösung einer globalen Konfiguration.
 
-Verifizierte Ist-Brüche:
+Stand nach der Runtime-Bereinigung:
 
-- Ohne explizite API-YAML fällt Produktion auf `organization`, `location`, `date` zurück (`ark-api/src/config.rs`, `rust/src/dynamic_pii.rs`).
-- `python/patronus_ark/gliner_category_map.py` ist Referenz-/Benchmarkcode; es verdrahtet seine Bundles nicht automatisch in den Rust-Runtime.
-- Map und Fixtures verwenden `school`, das Unified-Modell liefert inzwischen `education` und `medical`.
-- Ein `medical`-Bundle fehlt.
-- Das Default-Bundle fragt `person`, `first_name` und `last_name` zugleich ab; das globale labelübergreifende Overlap-Merge verwirft konkurrierende/nested Spans vor einer fachlichen Fusion.
-- Das Overlap-Merge arbeitet pro Chunk bereits vor dem Callback und danach nochmals dokumentweit. Spät gelieferte L1-Evidenz kann verlorene GLiNER-Hypothesen nicht zurückholen.
-- Der Entity-Cache kann einen früher erkannten normalisierten Spanstext in anderem Kontext erneut als Entity liefern. Anchor-Boosts und Negative Evidence dürfen daher nie aus dem ursprünglichen Cache-Kontext übernommen werden; jeder Cache-Treffer muss im aktuellen Text neu fusioniert werden.
-- Der First-Entity-Callback kann einen Span vor globalem Merge und vollständigem Post-Processing publizieren. Solche Frühergebnisse dürfen künftig nur `provisional`, nie bereits autoritative Actionable Findings sein.
-- Der vorhandene Conditional-Label-Resolver sieht nur `pipeline -> result class`, keine L1-Entity, Anchor-ID, Value-Spans, Validatorergebnisse oder PII-Candidates. Für die gewünschte Fusion reicht der bestehende Vertrag daher nicht.
-- Das native PII-Ergebnis verwendet als Klasse den ersten erkannten Entity-Typ. Bei mehreren PII-Typen gehen damit weitere Typen als Gate-Signal verloren, obwohl Evidence-Spans vorhanden sind.
-- `labels_for_contexts` im Python-Mapping bildet die Schnittmenge mehrerer Kontexte. Für Schutzlogik kann beispielsweise Dokument- plus Tool-Kontext dadurch ein leeres Bundle erzeugen. Kontextvorschläge müssen positiv vereinigt und anschließend priorisiert/begrenzt werden.
-- Ein Kommentar nennt Ai4Privacy „real corpus“, obwohl die Dataset Card die Daten als synthetisch beschreibt.
+- Ohne explizite API-YAML verwendet die Rust-Runtime das kleine Core-Bundle `organization`, `date`, `person`, `city`, `country`. Es fragt `person` nicht gleichzeitig mit `first_name`/`last_name` ab. Der globale Threshold bleibt mangels gemeinsamen Holdouts unverändert bei `0.5`.
+- `python/patronus_ark/gliner_category_map.py` bleibt Referenz-/Benchmarkcode; es verdrahtet seine Bundles nicht automatisch in die Rust-Runtime.
+- `education` ist die kanonische Dokumentklasse, `school` bleibt Kompatibilitätsalias, und ein eigenes `medical`-Bundle ist vorhanden.
+- Overlap-Merges deduplizieren nur noch konkurrierende Spans desselben Labels. Überlappende Hypothesen verschiedener Labels bleiben bis zu einer späteren entity-aware Fusion erhalten.
+- Der kontextfreie Cross-Text-Entity-Cache speist keine Live-Evidenz mehr. Nur exakt text-, label- und thresholdgebundene Chunk-Candidates werden wiederverwendet.
+- Der First-Entity-Callback publiziert ausschließlich ein nicht autoritatives `provisional`-Event. Das vollständige Resultat bleibt maßgeblich.
+- Mehrere erkannte Entity-Typen bleiben in `evidence_spans`, `label_scores` und `details.entity_types` erhalten; der kompatible skalare Result-Wert lautet `entities`.
+- Mehrere Dokument-/Tool-Kontexte bilden im Python-Mapping eine geordnete Union statt einer Intersection.
+- Der vorhandene Conditional-Label-Resolver sieht weiterhin nur `pipeline -> result class`, keine L1-Entity, Anchor-ID, Value-Spans, Validatorergebnisse oder PII-Candidates. Für die gewünschte Fusion reicht der bestehende Vertrag daher noch nicht.
+- AI4Privacy bleibt korrekt als synthetische Quelle dokumentiert, nicht als reales Corpus.
 
 Die vorhandenen Messungen zeigen außerdem: `country` ist brauchbar; `city` hat begrenzten Recall; `date_of_birth`, `first_name` und `last_name` erreichen hohe Precision nur mit sehr niedrigem Recall. `national_id_number`, `postal_code`, `state_or_region` und `password` sind bewusst unmapped. `passport_number`, `street_address`, `username` und `driver_license_number` regressieren auf breiteren Daten. Kleine Einzel-Label-Sweeps sind daher kein Produktionsbeleg für kombinierte Bundles.
 
@@ -292,7 +290,7 @@ IP und MAC werden wie bei Presidio/Google technisch erkannt. Ob eine Server-, pr
 | `pii.us.social_security_number` | SSN/Social Security Number | Area-/Group-/Serialregeln | bekannte ungültige/Testbereiche; Presidio/Google |
 | `pii.uk.national_insurance_number` | NINO/National Insurance Number | Präfix-/Suffixregeln | Produktcodes; Presidio/Google |
 
-Presidios deutsche Recognizer für Steuer-ID, Steuernummer, Pass, Ausweis, Sozial-/Krankenversicherung, Kfz, Handelsregister, PLZ, LANR, BSNR, USt-ID und Führerschein waren Referenzen bei der Auswahl. Für diesen Scope übernommen werden aber nur die oben namentlich aufgeführten PII-Capabilities. Steuernummer, Handelsregister, USt-ID, LANR und BSNR werden nicht als zusätzliche PII-Identifier offen gelassen.
+Presidios deutsche Recognizer für Steuer-ID, Steuernummer, Pass, Ausweis, Sozial-/Krankenversicherung, Kfz, Handelsregister, PLZ, LANR, BSNR, USt-ID und Führerschein waren Referenzen bei der Auswahl. Die Zuordnung ist dabei explizit: Steuernummer und LANR sind PII-Capabilities; USt-ID, Handelsregisternummer und BSNR sind DLP-Capabilities, weil sie regelmäßig Organisation beziehungsweise Betriebsstätte statt einer natürlichen Person identifizieren. Keine davon bleibt als unbenannter Sammel-Identifier offen.
 
 ### 7.3 DLP-L1: Secrets und Credentials
 
@@ -361,13 +359,13 @@ Hard-Negatives sichern die Abgrenzung zu gleichlautender Prosa.
 
 Der gemeinsame `NativeRegexDetector` trägt Pattern, optionalen Value-Capture, Validator, exakte Offsets, Details und Overlap-Verhalten. PII gibt typisierte lexikalische Anchor-Facts aus. Verbleibende Lücken:
 
-- die erste Entity wird alleiniger `class_name`; weitere Typen leben in den Evidence-Spans;
-- Overlaps werden weiterhin früh und reihenfolgeabhängig entfernt;
 - PII-Anchors besitzen Kategorie und Stärke, aber noch keine kalibrierte richtungsabhängige Proximity-/Relationsauswertung mit Dynamic PII;
 - DLP besitzt feldgebundene und strukturelle Anchors, gibt sie aber noch nicht als separates Anchor-Inventar aus;
 - Telefon hat keinen echten Regionenvalidator; JWT und Crypto-Keys sind überwiegend Shape-basiert;
 - landesspezifische Checksummen fehlen für einen Teil der Dokument-/Versicherungskennungen;
-- die neuen 255 Capability-Goldens decken Regeln und harte Negative ab, externe Corpus-Holdouts und Cross-Domain-Fehlermatrizen bleiben ausstehend.
+- die neuen 255 Capability-Goldens decken Regeln und harte Negative ab; OpenPII Nano liefert einen ersten externen nativen PII-Baseline-Lauf, während GLiNER-/TAB-Metriken, weitere Corpus-Holdouts und Cross-Domain-Fehlermatrizen ausstehen.
+
+Bereits bereinigt sind die GLiNER-Ausgabe und das frühe Streaming: alle erkannten Typen werden als `label_scores` und `entity_types` ausgegeben, überlappende Hypothesen verschiedener Labels bleiben erhalten, und der erste Entity-Preview ist ausdrücklich `Provisional`. Die frühere textübergreifende Entity-Wiederverwendung wurde entfernt; der sichere Chunk-Cache bleibt bestehen.
 
 Lokale Belege: `rust/src/detectors/pii/pii.rs`, `rust/src/detectors/pii/validators.rs`, `rust/src/detectors/dlp/dlp.rs`, `rust/src/detectors/mod.rs`, `rust/src/post_prediction.rs` und `rust/tests/native_detectors.rs`.
 
@@ -706,18 +704,23 @@ Berichtet werden Exact-Span Precision/Recall/F1 pro Entity und Corpus sowie die 
 2. **Erledigt:** direkte und Anchor-gebundene PII-Regeln, DLP-Regeln, Validatoren und exakte Spans implementieren.
 3. **Erledigt:** granulare Capability-, Negative-, Offset-, Overlap- und bestehende Injection-Goldens grün halten.
 4. **Erledigt:** lokale span-genaue `pii_l1`-/`dlp_l1`-Capability-Sets mit 255 Fällen, Generator, Schematests und End-to-End-Rust-Evaluator anlegen.
-5. **Als Nächstes:** externe Dataset-Adapter anlegen und vorhandene Corpus-Spans auf stabile Ark-IDs mappen.
-6. **Als Nächstes:** `v4.1_run` und `sensitive_current` als Hard-Negative-/Dokumentquelle auswerten; nur manuell oder kontrolliert annotierte Spans als PII-Gold verwenden.
-7. **Danach:** Exact-Span Precision/Recall/F1 pro Entity und Corpus messen und nur anhand realer Fehler Regeln nachschärfen.
+5. **Begonnen:** `python/patronus_ark/external_pii_eval.py` normalisiert OpenPII-JSONL,
+   TAB-Standoff und kontrollierte Offset-JSONL-Exporte auf stabile Ark-IDs und misst
+   Exact-Span-Metriken getrennt nach Corpus, Sprache, Scope und Entity. Das
+   Quellenmanifest und bewusst winzige Schema-Fixtures liegen unter
+   `python/patronus_ark/benchmark_data/external_pii/`; externe Rohdaten bleiben
+   außerhalb des Repositories und werden über Revision plus SHA-256 verifiziert.
+6. **Begonnen:** `scripts/evaluate_internal_pii_spans.py` erstellt textfreie, deterministische Review-Manifeste und wertet kontrollierte, hashgebundene `verified_span`-/`verified_no_pii`-Sidecars aus. `v4.1_run` und `sensitive_current` bleiben Hard-Negative-/Dokumentquellen; nur manuell oder kontrolliert annotierte Spans werden PII-Gold. Es liegen daraus noch keine echten Corpus-Metriken vor.
+7. **Begonnen:** Der gepinnte OpenPII-Nano-Train-Split und der reale TAB-Testsplit sind erfolgreich ingestiert. OpenPII liefert 900 Dokumente/4.222 gemappte Spans, TAB 127 Dokumente/5.516 `DIRECT`-/`QUASI`-Spans. Die erste native OpenPII-Messung im corpusgedeckten `pii.*`-Scope erreicht über 1.046 Goldspans Precision 0,7568, Recall 0,6099 und F1 0,6755; DE F1 0,7227, EN F1 0,7197. Details und Grenzen stehen in `docs/research/pii-external-baseline-0.1.6.md`. GLiNER/TAB und weitere Corpora bleiben als nächste Vergleichsläufe offen; Regeln werden nur anhand nachvollziehbarer Fehler nachgeschärft.
 8. **Danach:** `l1_anchors` mit Dynamic PII/GLiNER fusionieren und Boosts/Gates auf dem Holdout kalibrieren.
 
-## 21. Vor der externen Benchmark- und GLiNER-Phase zu entscheiden
+## 21. Offene Entscheidungen für weitere Corpus- und GLiNER-Läufe
 
 - Länderumfang für Telefon-, Ausweis-, Steuer- und Versicherungsvalidatoren;
 - welche externen Corpora sofort lokal verfügbar und lizenzrechtlich nutzbar sind;
 - welche realen base-v4.1-Dokumente als normale PII-Testbeispiele annotiert werden;
 - interne Aufbewahrung, Zugriff und Pseudonymisierung realer sensitive Goldens;
-- TAB-/OpenPII-Ingestion, CodE-Nutzung und German-Legal-Lizenzklärung;
+- CodE-Nutzung und German-Legal-Lizenzklärung; OpenPII Nano und TAB sind bereits gepinnt ingestiert;
 - Verzicht auf alte AI4Privacy 300K/400K oder separate schriftliche Freigabe;
 - klinische Zugänge für spätere externe Evaluation.
 
@@ -798,4 +801,4 @@ Lokale Daten-Evidenz:
 
 ## 23. Nächster Schritt
 
-Die lokale L1-Basis ist implementiert und durch Capability-Goldens abgesichert. Der nächste fachliche Schritt ist nicht das Ergänzen beliebiger weiterer Regexe, sondern die Adapterung externer PII-/DLP-Corpora sowie die kontrollierte Annotation repräsentativer `sensitive_current`-/v4.1-Beispiele. Erst auf diesem Holdout werden Anchor-Proximity, Kombinationen und GLiNER-Boosts kalibriert. Injection bleibt dabei unverändert; seine bestehenden Tests müssen vor und nach jeder gemeinsamen Mechanikänderung grün sein.
+Die lokale L1-Basis ist implementiert und durch Capability-Goldens abgesichert; OpenPII Nano und TAB bilden den ersten reproduzierbaren externen Bestand. Als Nächstes folgen ein fest konfigurierter GLiNER-Baseline-Lauf auf den semantischen OpenPII-/TAB-Spans, weitere lizenzierte PII-/DLP-Corpora sowie kontrollierte Spanannotation repräsentativer `sensitive_current`-/v4.1-Beispiele. Erst wenn diese Vergleichsbasis belastbar ist, werden Anchor-Proximity, Kombinationen, Gates und GLiNER-Boosts implementiert und auf getrennten Development-/Holdout-Splits kalibriert. Injections bestehende Tests müssen vor und nach jeder gemeinsamen Mechanikänderung grün bleiben.

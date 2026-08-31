@@ -1,0 +1,64 @@
+{
+  "schema": "ark-external-pii-manifest-v1",
+  "corpora": [
+    {
+      "id": "ai4privacy-openpii-nano-1k",
+      "adapter": "openpii_jsonl_v1",
+      "default_language": "und",
+      "license": "CC-BY-4.0",
+      "distribution": "not bundled; local path only",
+      "role": "synthetic format and boundary benchmark",
+      "source": "https://huggingface.co/datasets/ai4privacy/openpii-masking-nano-1k",
+      "revision": "421ebabbfdd9cc55c1a936fdc8f51cb384a6d0a1",
+      "verified_file": "data/train.jsonl",
+      "verified_sha256": "223b10df760833ff050fbd246c79e30060d536413b013a74708da6f6b62feba9",
+      "label_map": {
+        "GIVENNAME": "entity.person_name",
+        "SURNAME": "entity.person_name",
+        "EMAIL": "pii.email",
+        "TELEPHONENUM": "pii.phone",
+        "IBAN": "pii.iban",
+        "CREDITCARDNUMBER": "pii.credit_card.pan",
+        "DATE": "entity.date",
+        "CITY": "entity.location",
+        "STREET": "entity.street_address",
+        "PASSPORTNUM": "entity.passport_number",
+        "DRIVERLICENSENUM": "entity.driver_license_number"
+      }
+    },
+    {
+      "id": "tab",
+      "adapter": "tab_standoff_v1",
+      "default_language": "en",
+      "license": "MIT (verify repository revision before ingest)",
+      "distribution": "not bundled; local path only",
+      "role": "real-text semantic PII holdout",
+      "source": "https://github.com/NorskRegnesentral/text-anonymization-benchmark",
+      "revision": "558e09e26d6b36f5f78440074e6a233946d98bd9",
+      "verified_file": "echr_test.json",
+      "verified_sha256": "cd0f0f15f84a8739654c7cf30c6be8ce27b051ef73974d39d792a0cb8c846379",
+      "identifier_types": ["DIRECT", "QUASI"],
+      "label_map": {
+        "PERSON": "entity.person_name",
+        "ORG": "entity.organization",
+        "LOC": "entity.location",
+        "DATETIME": "entity.date"
+      }
+    },
+    {
+      "id": "gretel-synthetic-pii-finance",
+      "adapter": "offset_jsonl_v1",
+      "default_language": "und",
+      "license": "Apache-2.0 (label and overlap audit required before benchmark admission)",
+      "distribution": "not bundled; local path only",
+      "role": "finance and XML anchor evaluation after audit",
+      "source": "See docs/pii-anchor-ner-fusion-plan.md section 15.",
+      "label_map": {
+        "EMAIL": "pii.email",
+        "PHONE": "pii.phone",
+        "IBAN": "pii.iban",
+        "BIC": "pii.swift_bic"
+      }
+    }
+  ]
+}
