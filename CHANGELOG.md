@@ -16,8 +16,14 @@ result shapes may be breaking for downstream users, and is called out explicitly
 - Added local-only external PII corpus normalization and exact-span evaluation contracts, plus a
   text-free, hash-bound workflow for human-verified internal PII annotations. Checked-in fixtures
   validate schemas and metrics only; no external or private raw corpus is distributed. Pinned
-  OpenPII-Nano and TAB adapters establish the first reproducible external gold inventory and an
-  OpenPII native-L1 baseline split by language, scope, and entity.
+  OpenPII-Nano, TAB, and Apache-2.0 Gretel Finance adapters establish a reproducible external gold
+  inventory and an OpenPII native-L1 baseline split by language, scope, and entity. Deterministic,
+  group-atomic selection manifests cap reports at 250 spans per corpus and metric class.
+- Added a text-free local PII/DLP pre-annotation inventory builder for `v4.1` and related controlled
+  corpora. Machine findings and Anchor-only hard-negative candidates are HMAC-bound and remain
+  explicitly non-Gold until human review. Added derived, permissively sourced DLP document/content
+  adapters for Go source documents and SQL statement boundaries without treating them as secret
+  annotations or already measured end-to-end span scores.
 - Added native PII and DLP L1 capabilities with validated exact spans, German and English
   anchor-bound identifiers, written birth dates, source/config/SQL/log detection, and non-blocking
   localized `layers[].details.l1_anchors` context facts. Added deterministic capability goldens,

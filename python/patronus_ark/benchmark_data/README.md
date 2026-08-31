@@ -51,6 +51,12 @@ existing NER fixture without pretending that synthetic data is an external
 release-validation corpus. No text from `sensitive_current`, `v4.1`, or other
 sensitive-document stores is copied into these redistributable fixtures.
 
+The controlled local-corpus candidate workflow is documented separately in
+[`docs/research/local-pii-dlp-preannotation.md`](../../../docs/research/local-pii-dlp-preannotation.md).
+Its Ark findings and Anchor-selected negatives are explicitly pre-annotations,
+not additions to these Golden Sets until human review and adjudication are
+complete.
+
 ## Provenance
 
 Most records are synthetic: written or generated for this project, using

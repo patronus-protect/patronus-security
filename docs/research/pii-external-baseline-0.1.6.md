@@ -62,3 +62,12 @@ coverage and are split by corpus, language, scope, and entity.
 
 Internal `sensitive_current`/v4.1 data still has no human-verified PII span
 sidecar. It therefore contributes no metric to this report.
+
+## Subsequent Golden expansion
+
+After this first baseline, the pinned Apache-2.0 Gretel Finance test shards
+added 5,141 synthetic documents and 19 mapped Ark metric classes. A separate
+local pre-annotation run also produced a text-free review pool, but no local
+candidate is counted as Gold before human adjudication. The current class
+matrix, 250-span selection contract and fair L1/GLiNER/future-fusion scopes are
+maintained in `docs/research/pii-dlp-benchmark-contract-0.1.6.md`.

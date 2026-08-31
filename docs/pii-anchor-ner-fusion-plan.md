@@ -704,15 +704,16 @@ Berichtet werden Exact-Span Precision/Recall/F1 pro Entity und Corpus sowie die 
 2. **Erledigt:** direkte und Anchor-gebundene PII-Regeln, DLP-Regeln, Validatoren und exakte Spans implementieren.
 3. **Erledigt:** granulare Capability-, Negative-, Offset-, Overlap- und bestehende Injection-Goldens grün halten.
 4. **Erledigt:** lokale span-genaue `pii_l1`-/`dlp_l1`-Capability-Sets mit 255 Fällen, Generator, Schematests und End-to-End-Rust-Evaluator anlegen.
-5. **Begonnen:** `python/patronus_ark/external_pii_eval.py` normalisiert OpenPII-JSONL,
-   TAB-Standoff und kontrollierte Offset-JSONL-Exporte auf stabile Ark-IDs und misst
+5. **Erledigt (erste externe DLP-Content-Quellen):** `python/patronus_ark/benchmark_data/external_dlp/` pinnt Gitleaks (MIT, Commit und Lizenz-SHA) und normalisiert 214 Go-Dateien als deterministische positive `dlp.content.source_code`-Dokumente; 13 Markdown-Dateien derselben Revision bilden die getrennte Document-FPR-Kontrolle. Es entstehen bewusst keine Whole-File-Exact-Spans und keine Span-F1-Behauptung. SchemaPile-Perm ergänzt 250 deterministisch ausgewählte, semikolonbeendete SQL-**Quellgrenzen**; das ist abgeleitetes Content-Gold, keine menschliche DLP-Annotation und noch kein gemeldeter End-to-End-Span-Score. Wegen der enthaltenen Secret-Regeln und Testwerte ist Gitleaks außerdem keine neutrale Secret-Recall-Evidenz. ProwlBench ist bewusst außerhalb des Manifests und der Zielabdeckung. Externe Secret-, Log-, Dump- sowie Business-Identifier-Goldens bleiben offen.
+6. **Begonnen:** `python/patronus_ark/external_pii_eval.py` normalisiert OpenPII-JSONL,
+   TAB-Standoff, die sechs gepinnten Gretel-Testshards und kontrollierte Offset-JSONL-Exporte auf stabile Ark-IDs und misst
    Exact-Span-Metriken getrennt nach Corpus, Sprache, Scope und Entity. Das
    Quellenmanifest und bewusst winzige Schema-Fixtures liegen unter
    `python/patronus_ark/benchmark_data/external_pii/`; externe Rohdaten bleiben
-   außerhalb des Repositories und werden über Revision plus SHA-256 verifiziert.
-6. **Begonnen:** `scripts/evaluate_internal_pii_spans.py` erstellt textfreie, deterministische Review-Manifeste und wertet kontrollierte, hashgebundene `verified_span`-/`verified_no_pii`-Sidecars aus. `v4.1_run` und `sensitive_current` bleiben Hard-Negative-/Dokumentquellen; nur manuell oder kontrolliert annotierte Spans werden PII-Gold. Es liegen daraus noch keine echten Corpus-Metriken vor.
-7. **Begonnen:** Der gepinnte OpenPII-Nano-Train-Split und der reale TAB-Testsplit sind erfolgreich ingestiert. OpenPII liefert 900 Dokumente/4.222 gemappte Spans, TAB 127 Dokumente/5.516 `DIRECT`-/`QUASI`-Spans. Die erste native OpenPII-Messung im corpusgedeckten `pii.*`-Scope erreicht über 1.046 Goldspans Precision 0,7568, Recall 0,6099 und F1 0,6755; DE F1 0,7227, EN F1 0,7197. Details und Grenzen stehen in `docs/research/pii-external-baseline-0.1.6.md`. GLiNER/TAB und weitere Corpora bleiben als nächste Vergleichsläufe offen; Regeln werden nur anhand nachvollziehbarer Fehler nachgeschärft.
-8. **Danach:** `l1_anchors` mit Dynamic PII/GLiNER fusionieren und Boosts/Gates auf dem Holdout kalibrieren.
+   außerhalb des Repositories und werden über Revision plus SHA-256 verifiziert. Ein textfreies Auswahlmanifest cappt reproduzierbar und template-/dokumentgruppenatomar auf höchstens 250 Spans je Corpus und Metrikklasse.
+7. **Begonnen:** `scripts/evaluate_internal_pii_spans.py` wertet kontrollierte, hashgebundene `verified_span`-/`verified_no_pii`-Sidecars aus. `scripts/build_local_l1_preannotation.py` hat aus 5.938 repräsentativ gescannten lokalen Dokumenten 4.274 eindeutige L1-Span-Kandidaten und 2.034 Anchor-only-Reviewkandidaten erzeugt. Diese bleiben bis zur menschlichen Prüfung ausdrücklich kein Gold.
+8. **Begonnen:** OpenPII Nano liefert 900 Dokumente/4.222 gemappte Spans, TAB 127 Dokumente/5.516 `DIRECT`-/`QUASI`-Spans und Gretel 5.141 synthetische Finanzdokumente mit 19 gemappten Ark-Metrikklassen. Die erste native OpenPII-Messung im corpusgedeckten `pii.*`-Scope erreicht über 1.046 Goldspans Precision 0,7568, Recall 0,6099 und F1 0,6755; DE F1 0,7227, EN F1 0,7197. Der gemeinsame Vertrag und die Klassenmatrix stehen in `docs/research/pii-dlp-benchmark-contract-0.1.6.md`. GLiNER-/Fusion-Läufe bleiben offen; Regeln werden nur anhand nachvollziehbarer Fehler nachgeschärft.
+9. **Danach:** `l1_anchors` mit Dynamic PII/GLiNER fusionieren und Boosts/Gates auf dem Holdout kalibrieren.
 
 ## 21. Offene Entscheidungen für weitere Corpus- und GLiNER-Läufe
 
