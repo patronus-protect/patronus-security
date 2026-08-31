@@ -91,7 +91,9 @@ fn is_local_path_span(text: &str, span: &EvidenceSpan) -> bool {
     let after = &text[span.end_byte.min(text.len())..];
     let path_start = before
         .rfind(|ch: char| ch.is_whitespace() || matches!(ch, '"' | '\'' | '(' | '[' | '{'))
-        .map_or(0, |index| index + 1);
+        .map_or(0, |index| {
+            index + text[index..].chars().next().map_or(0, char::len_utf8)
+        });
     let prefix = &text[path_start..span.start_byte.min(text.len())];
     let suffix_end = after
         .find(|ch: char| ch.is_whitespace() || matches!(ch, '"' | '\'' | ')' | ']' | '}'))
@@ -194,6 +196,18 @@ mod tests {
             }
         ));
         assert!(filter_evidence(SecurityCategory::Pii, path, vec![span]).is_empty());
+    }
+
+    #[test]
+    fn local_path_filter_preserves_unicode_whitespace_boundaries() {
+        let text = "Alex\u{202f}Vithurjan works here";
+        let start = "Alex\u{202f}".len();
+
+        assert!(LocalPathPersonHook.retain(
+            SecurityCategory::DynamicPii,
+            text,
+            &person("Vithurjan", start),
+        ));
     }
 
     #[test]
