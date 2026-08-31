@@ -66,19 +66,19 @@ def dynamic_pii_examples(scanner: SecurityGateway) -> None:
     print("\n1. fresh PII")
     scan_events(scanner, "Customer Alexandr Stone opened an account.")
 
-    print("2. same PII span, different surrounding text")
-    span_hit = scan_events(scanner, "Please contact Alexandr Stone about the renewal.")
+    print("2. first entity preview is provisional")
+    preview_events = scan_events(scanner, "Please contact Alexandr Stone about the renewal.")
     early = next(
         event["result"]
-        for event in span_hit
-        if event["event_type"] == "result"
+        for event in preview_events
+        if event["event_type"] == "provisional"
         and any(
             details.get("partial_result") for details in result_details(event["result"])
         )
     )
     early_details = result_details(early)[0]
-    assert early_details["entity_cache_hit"] is True
-    print("   entity_cache_hit =", early_details["entity_cache_hit"])
+    assert early_details["provisional"] is True
+    print("   provisional =", early_details["provisional"])
 
     print("3. exact same text")
     exact_hit = scan_events(scanner, "Please contact Alexandr Stone about the renewal.")

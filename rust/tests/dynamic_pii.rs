@@ -13,10 +13,10 @@ use patronus_ark::{
 };
 
 #[test]
-fn default_labels_exclude_native_l1_identifiers() {
+fn default_labels_are_a_small_core_bundle() {
     assert_eq!(
         DynamicPiiConfig::default().labels,
-        ["organization", "location", "date"].map(String::from)
+        ["organization", "date", "person", "city", "country"].map(String::from)
     );
 }
 

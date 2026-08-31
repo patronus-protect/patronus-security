@@ -211,7 +211,9 @@ fn merge_flat_entities(mut candidates: Vec<Entity>) -> Vec<Entity> {
     let mut entities = Vec::new();
     for candidate in candidates {
         let overlaps = entities.iter().any(|selected: &Entity| {
-            candidate.start_byte < selected.end_byte && candidate.end_byte > selected.start_byte
+            candidate.label == selected.label
+                && candidate.start_byte < selected.end_byte
+                && candidate.end_byte > selected.start_byte
         });
         if !overlaps {
             entities.push(candidate);

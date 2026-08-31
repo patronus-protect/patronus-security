@@ -301,7 +301,7 @@ The `dynamic-pii` pipeline is configured with a dict (constructor `dynamic_pii_c
 
 ```python
 dynamic_pii_config = {
-    "labels": ["organization", "location", "date"],
+    "labels": ["organization", "date", "person", "city", "country"],
     "threshold": 0.5,
     "label_thresholds": {"organization": 0.6},
     "execution_gate": {
@@ -340,10 +340,10 @@ Only labels with measured exact-span F1 ≥ 0.6 are mapped; deterministic identi
 IBAN, SWIFT/BIC, phone, card) stay native L1 heuristics. See
 [`gliner_category_map.py`](https://github.com/patronus-protect/patronus-security/blob/main/python/patronus_ark/gliner_category_map.py).
 
-The first detected Dynamic PII entity—whether from the persistent entity cache or fresh
-inference—is emitted immediately as a partial `result` queue event. It contains
-`details.partial_result = true` and one evidence span. The authoritative complete result follows
-after the remaining chunks finish.
+The first detected Dynamic PII entity is emitted immediately as a `provisional` queue event. It
+contains `details.partial_result = true`, `details.provisional = true`, and one evidence span. The
+authoritative complete result follows after the remaining chunks finish. Dynamic PII reuses only
+exact, context-bound chunk candidates; cross-text entity-cache matches do not become evidence.
 
 ## Environment variables
 

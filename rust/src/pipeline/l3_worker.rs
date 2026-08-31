@@ -6,7 +6,6 @@ use std::time::{Duration, Instant};
 
 use crate::cache::{
     CacheCoordinator, CacheError, ExactCacheConfig, HistoricalSimilarityCache, PiiChunkCache,
-    PiiEntityCache,
 };
 use crate::ml::dynamic_pii::DynamicPiiRuntime;
 use crate::ml::ntdb_executor::{L2ChunkOutput, L3Candidate};
@@ -107,7 +106,6 @@ struct L3WorkerState {
     unified_cache: Mutex<HashMap<String, unified::UnifiedCacheEntry>>,
     chunk_cache: Arc<DecisionCache>,
     exact_cache: Arc<CacheCoordinator>,
-    pii_entity_cache: Arc<PiiEntityCache>,
     pii_chunk_cache: Arc<PiiChunkCache>,
     similarity_cache: Arc<HistoricalSimilarityCache>,
     requests: Arc<RequestRegistry>,
@@ -184,7 +182,6 @@ impl L3Worker {
         cache_config: ExactCacheConfig,
     ) -> Result<Self, CacheError> {
         let exact_cache = Arc::new(CacheCoordinator::from_config(cache_config)?);
-        let pii_entity_cache = Arc::new(PiiEntityCache::new(Arc::clone(&exact_cache)));
         let pii_chunk_cache = Arc::new(PiiChunkCache::new(Arc::clone(&exact_cache)));
         let similarity_cache = Arc::new(HistoricalSimilarityCache::new(Arc::clone(&exact_cache)));
         let state = Arc::new(L3WorkerState {
@@ -198,7 +195,6 @@ impl L3Worker {
             unified_cache: Mutex::new(HashMap::new()),
             chunk_cache: Arc::new(DecisionCache::default()),
             exact_cache,
-            pii_entity_cache,
             pii_chunk_cache,
             similarity_cache,
             requests,
@@ -1110,8 +1106,9 @@ fn publish_provisional(
     }
 }
 
-/// Publishes an early result-shaped event without marking a scanner job
-/// complete. Used by Dynamic PII so UI consumers can react to the first entity.
+/// Publishes a provisional early result without marking a scanner job complete.
+/// Dynamic PII uses this for a first-entity preview; consumers must wait for the
+/// final result before treating it as an authoritative scan outcome.
 fn publish_result_preview(
     worker: &L3WorkerState,
     request_id: RequestId,
@@ -1130,7 +1127,7 @@ fn publish_result_preview(
     {
         registry
             .ready
-            .push_back(QueuedSecurityEvent::Result(QueuedSecurityScanResult {
+            .push_back(QueuedSecurityEvent::Provisional(QueuedSecurityScanResult {
                 request_id,
                 result,
             }));
@@ -1307,7 +1304,7 @@ mod tests {
     }
 
     #[test]
-    fn partial_result_event_does_not_complete_or_count_the_request() {
+    fn preview_event_is_provisional_and_does_not_complete_the_request() {
         let requests = Arc::new(RequestRegistry::default());
         requests
             .state
@@ -1331,9 +1328,6 @@ mod tests {
                 exact_cache: Arc::new(
                     CacheCoordinator::from_config(ExactCacheConfig::default()).unwrap(),
                 ),
-                pii_entity_cache: Arc::new(PiiEntityCache::new(Arc::new(
-                    CacheCoordinator::from_config(ExactCacheConfig::default()).unwrap(),
-                ))),
                 pii_chunk_cache: Arc::new(PiiChunkCache::new(Arc::new(
                     CacheCoordinator::from_config(ExactCacheConfig::default()).unwrap(),
                 ))),
@@ -1347,12 +1341,12 @@ mod tests {
             result,
         );
 
-        // The preview is externally a Result event, but request accounting
-        // remains untouched until the final L3 job finishes.
+        // The preview is explicitly provisional; request accounting remains
+        // untouched until the final L3 job finishes.
         let state = requests.state.lock().unwrap();
         assert!(matches!(
             state.ready.front(),
-            Some(QueuedSecurityEvent::Result(_))
+            Some(QueuedSecurityEvent::Provisional(_))
         ));
         assert_eq!(state.requests["rq-pii"].usable_results, 0);
         assert!(state.requests["rq-pii"].completion.is_none());
@@ -1377,7 +1371,7 @@ mod tests {
         );
 
         let state = requests.state.lock().unwrap();
-        let Some(QueuedSecurityEvent::Result(queued)) = state.ready.front() else {
+        let Some(QueuedSecurityEvent::Provisional(queued)) = state.ready.front() else {
             panic!("expected result preview event");
         };
         assert!(queued.result.decision.is_none());
@@ -1595,9 +1589,6 @@ mod tests {
             exact_cache: Arc::new(
                 CacheCoordinator::from_config(ExactCacheConfig::default()).unwrap(),
             ),
-            pii_entity_cache: Arc::new(PiiEntityCache::new(Arc::new(
-                CacheCoordinator::from_config(ExactCacheConfig::default()).unwrap(),
-            ))),
             pii_chunk_cache: Arc::new(PiiChunkCache::new(Arc::new(
                 CacheCoordinator::from_config(ExactCacheConfig::default()).unwrap(),
             ))),

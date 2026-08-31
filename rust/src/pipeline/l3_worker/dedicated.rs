@@ -22,8 +22,8 @@ use crate::post_prediction::{filter_evidence, LocalPathPersonHook, PostPredictio
 #[cfg(test)]
 use crate::ScanExecution;
 use crate::{
-    EvaluationResult, L3ClusteringStrategy, L3ProgressMode, LayerResult, QueuedSecurityProgress,
-    RequestId, SecurityCategory, SecurityLevel, SecurityScanResult,
+    EvaluationResult, L3ClusteringStrategy, L3ProgressMode, LabelScore, LayerResult,
+    QueuedSecurityProgress, RequestId, SecurityCategory, SecurityLevel, SecurityScanResult,
 };
 
 use super::super::long_text::aggregate_chunk_outputs;
@@ -36,7 +36,7 @@ use super::{
 };
 use crate::cache::{
     decision_output, merge_pii_spans, CacheCoordinator, CacheKey, CacheNamespace, CacheSource,
-    CachedHeadOutput, HistoricalSimilarityCache, PiiEntityCache, SimilarityMatch,
+    CachedHeadOutput, HistoricalSimilarityCache, SimilarityMatch,
 };
 use crate::ml::onnx::RawClassifierOutput;
 use crate::pipeline::decision_cache::DecisionCache;
@@ -83,11 +83,10 @@ pub(super) fn execute(
                 return (job.job_id, job.request_id, result);
             }
         };
-        let entity_cache = Arc::clone(&state.pii_entity_cache);
         let pii_chunk_cache = Arc::clone(&state.pii_chunk_cache);
         let event_state = Arc::clone(state);
         let completion = RunCompletion::from_job(&job);
-        let output = run_dynamic_pii_job(job, model, entity_cache, pii_chunk_cache, event_state);
+        let output = run_dynamic_pii_job(job, model, pii_chunk_cache, event_state);
         return finish_run_result(completion, output);
     }
 
@@ -130,7 +129,6 @@ pub(super) fn execute(
 fn run_dynamic_pii_job(
     job: L3WorkerJob,
     runtime: DynamicPiiHandle,
-    entity_cache: Arc<PiiEntityCache>,
     chunk_cache: Arc<crate::cache::PiiChunkCache>,
     worker_state: Arc<L3WorkerState>,
 ) -> Result<SecurityScanResult, String> {
@@ -139,17 +137,7 @@ fn run_dynamic_pii_job(
         .dynamic_pii_config
         .as_ref()
         .ok_or_else(|| "dynamic-pii job is missing its configuration".to_string())?;
-    let cached_spans = filter_evidence(
-        SecurityCategory::DynamicPii,
-        text,
-        entity_cache.find(crate::assets::DYNAMIC_PII_ASSET.revision, text, config),
-    );
-    let cache_hits = cached_spans.len();
     let first_published = Arc::new(std::sync::atomic::AtomicBool::new(false));
-    if let Some(span) = cached_spans.first() {
-        publish_first_pii_result(&worker_state, &job, span.clone(), true);
-        first_published.store(true, std::sync::atomic::Ordering::Release);
-    }
     let callback_state = Arc::clone(&worker_state);
     let callback_job = job.clone();
     let callback_published = Arc::clone(&first_published);
@@ -169,19 +157,14 @@ fn run_dynamic_pii_job(
                 )
                 .is_ok()
             {
-                publish_first_pii_result(&callback_state, &callback_job, span.clone(), false);
+                publish_first_pii_result(&callback_state, &callback_job, span.clone());
             }
         })
         .map_err(|error| error.to_string())?;
-    output.evidence_spans.extend(cached_spans);
     output.evidence_spans = filter_evidence(
         SecurityCategory::DynamicPii,
         text,
         merge_pii_spans(output.evidence_spans),
-    );
-    entity_cache.remember(
-        crate::assets::DYNAMIC_PII_ASSET.revision,
-        &output.evidence_spans,
     );
     let confidence = output
         .evidence_spans
@@ -190,6 +173,26 @@ fn run_dynamic_pii_job(
         .max_by(f64::total_cmp)
         .unwrap_or(0.0);
     let has_entities = !output.evidence_spans.is_empty();
+    let mut entity_scores = HashMap::<String, f64>::new();
+    for span in &output.evidence_spans {
+        entity_scores
+            .entry(span.label.clone())
+            .and_modify(|score| *score = score.max(span.score))
+            .or_insert(span.score);
+    }
+    let mut label_scores = entity_scores
+        .into_iter()
+        .map(|(label, confidence)| LabelScore {
+            label,
+            confidence,
+            matched: true,
+        })
+        .collect::<Vec<_>>();
+    label_scores.sort_by(|left, right| left.label.cmp(&right.label));
+    let entity_types = label_scores
+        .iter()
+        .map(|score| score.label.clone())
+        .collect::<Vec<_>>();
     let class_name = if has_entities {
         "entities"
     } else {
@@ -223,10 +226,7 @@ fn run_dynamic_pii_job(
                 "entity_count".to_string(),
                 serde_json::json!(output.evidence_spans.len()),
             ),
-            (
-                "entity_cache_hits".to_string(),
-                serde_json::json!(cache_hits),
-            ),
+            ("entity_types".to_string(), serde_json::json!(entity_types)),
             (
                 "chunk_cache_hits".to_string(),
                 serde_json::json!(output.chunk_cache_hits),
@@ -255,15 +255,11 @@ fn run_dynamic_pii_job(
     result.duration_ms = output.duration_ms;
     result.layers = vec![layer];
     result.evidence_spans = output.evidence_spans;
+    result.label_scores = label_scores;
     Ok(result)
 }
 
-fn publish_first_pii_result(
-    worker: &L3WorkerState,
-    job: &L3WorkerJob,
-    span: crate::EvidenceSpan,
-    cache_hit: bool,
-) {
+fn publish_first_pii_result(worker: &L3WorkerState, job: &L3WorkerJob, span: crate::EvidenceSpan) {
     let confidence = span.score;
     let layer = LayerResult {
         level: SecurityLevel::L3.as_str().to_string(),
@@ -275,8 +271,8 @@ fn publish_first_pii_result(
         thresholds: HashMap::new(),
         details: HashMap::from([
             ("partial_result".to_string(), serde_json::json!(true)),
+            ("provisional".to_string(), serde_json::json!(true)),
             ("first_entity".to_string(), serde_json::json!(true)),
-            ("entity_cache_hit".to_string(), serde_json::json!(cache_hit)),
             ("job_id".to_string(), serde_json::json!(job.job_id)),
         ]),
     };

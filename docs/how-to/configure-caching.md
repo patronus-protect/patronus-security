@@ -53,7 +53,7 @@ Customer Alexandr Stone opened an account.
 ```
 
 GLiNER finds the `person` span. The raw chunk candidates enter the exact chunk
-cache and `alexandr stone + person` enters the entity-span cache.
+cache, scoped to the text, active labels, and inference threshold.
 
 ### 2. Same PII span in different text
 
@@ -61,14 +61,14 @@ cache and `alexandr stone + person` enters the entity-span cache.
 Please contact Alexandr Stone about the renewal.
 ```
 
-The chunk is new, but the normalized span is known. The early partial result
-therefore contains:
+The chunk is new, so GLiNER evaluates it in its current label context. The
+first entity may be published as a provisional preview:
 
 ```json
-{"partial_result": true, "entity_cache_hit": true}
+{"partial_result": true, "provisional": true}
 ```
 
-Offsets are calculated against the new text.
+The final result remains authoritative.
 
 ### 3. Exact same text
 
@@ -254,18 +254,16 @@ vectors are averaged by byte overlap and normalized.
 
 ## Dynamic PII and early result events
 
-Dynamic PII has two reuse levels:
+Dynamic PII reuses exact raw candidate chunks only:
 
 1. An exact chunk hit reuses raw GLiNER candidates.
-2. The entity cache finds a known normalized cleartext span in different
-   surrounding text and recalculates byte/character offsets.
 
-As soon as the first entity is available—from either cache or fresh
-inference—the queue publishes a `result` event containing:
+As soon as the first entity is available, the queue publishes a `provisional`
+event containing:
 
 ```json
 {
-  "event_type": "result",
+  "event_type": "provisional",
   "result": {
     "class_name": "entities",
     "layers": [{
@@ -273,7 +271,7 @@ inference—the queue publishes a `result` event containing:
       "details": {
         "partial_result": true,
         "first_entity": true,
-        "entity_cache_hit": true
+        "provisional": true
       }
     }]
   }
@@ -295,7 +293,8 @@ Classifier L3 layers expose fields such as:
 - `source_model_sha`
 - `cache_authoritative`
 
-Dynamic PII final layers expose `chunk_cache_hits` and `entity_cache_hits`.
+Dynamic PII final layers expose `chunk_cache_hits`; cross-text entity-cache
+reuse is intentionally disabled so stale context cannot become evidence.
 
 ## Expected local storage latency
 

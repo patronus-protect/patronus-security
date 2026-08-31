@@ -80,7 +80,10 @@ pub struct DynamicPiiConfig {
 impl Default for DynamicPiiConfig {
     fn default() -> Self {
         Self {
-            labels: ["organization", "location", "date"]
+            // Keep the always-on bundle small and semantic. In particular, do
+            // not submit `person` together with its `first_name`/`last_name`
+            // children: GLiNER makes those labels compete for the same span.
+            labels: ["organization", "date", "person", "city", "country"]
                 .map(String::from)
                 .to_vec(),
             threshold: 0.5,
@@ -404,6 +407,19 @@ mod tests {
             config.canonical_label_for("passport number"),
             Some("passport_number")
         );
+    }
+
+    #[test]
+    fn default_core_bundle_avoids_competing_person_name_labels() {
+        let config = DynamicPiiConfig::default().validated().unwrap();
+
+        assert_eq!(
+            config.labels,
+            ["organization", "date", "person", "city", "country"].map(String::from)
+        );
+        assert!(!config.labels.iter().any(|label| label == "first_name"));
+        assert!(!config.labels.iter().any(|label| label == "last_name"));
+        assert_eq!(config.threshold, 0.5);
     }
 
     #[test]

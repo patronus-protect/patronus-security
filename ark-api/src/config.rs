@@ -61,7 +61,7 @@ struct RawPipeline {
     #[serde(default)]
     gates: Option<RawGates>,
     /// Overrides the `dynamic-pii` (GLiNER) pipeline's config — library
-    /// default only recognizes `organization`/`location`/`date`. Deserializes
+    /// default uses its small core label bundle. Deserializes
     /// straight into `patronus_ark::DynamicPiiConfig`, which already derives
     /// Deserialize with `#[serde(default, deny_unknown_fields)]`, so any
     /// field omitted here (chunk sizing, timeouts, ...) keeps the library
@@ -279,7 +279,7 @@ pub struct Config {
     pub cache_dir: Option<PathBuf>,
     /// Gates applied when the authenticated key has no override.
     pub default_gates: ScanGateMatrix,
-    /// `None` keeps the library default (labels: organization/location/date only).
+    /// `None` keeps the library's core Dynamic-PII bundle.
     pub dynamic_pii: Option<DynamicPiiConfig>,
     pub onnx_runtime: OnnxRuntimeOptions,
 }

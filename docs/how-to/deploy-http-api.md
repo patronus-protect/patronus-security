@@ -188,7 +188,9 @@ redaction policy:
 ```yaml
 pipeline:
   dynamic_pii:
-    labels: ["organization", "location", "date", "person"]
+    # The default already includes this core bundle. Add context-specific
+    # labels only when the surrounding classifier result supports them.
+    labels: ["organization", "date", "person", "city", "country"]
     label_thresholds:
       person: 0.8
 ```

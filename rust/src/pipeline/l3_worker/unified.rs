@@ -1155,12 +1155,6 @@ pub fn unified_coalescing_snapshot(categories: &[&str]) -> UnifiedCoalescingSnap
                 )
                 .expect("memory-only exact cache must initialize"),
             ),
-            pii_entity_cache: Arc::new(crate::cache::PiiEntityCache::new(Arc::new(
-                crate::cache::CacheCoordinator::from_config(
-                    crate::cache::ExactCacheConfig::default(),
-                )
-                .expect("memory-only PII cache must initialize"),
-            ))),
             pii_chunk_cache: Arc::new(crate::cache::PiiChunkCache::new(Arc::new(
                 crate::cache::CacheCoordinator::from_config(
                     crate::cache::ExactCacheConfig::default(),
