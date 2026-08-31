@@ -9,6 +9,8 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-08-31
+
 ### Added
 
 - Added native PII and DLP L1 capabilities with validated exact spans, German and English

@@ -110,7 +110,7 @@ classifier-looking scores.
     ],
     "terminality": {"completion": "complete", "degraded": False, "degradation_reason": None},
     "provenance": {
-        "ark_version": "0.1.5",
+        "ark_version": "0.1.6",
         "schema_version": "ark.decision.v1",
         "model": "unified-v3-threat",
     },
