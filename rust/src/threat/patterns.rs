@@ -368,7 +368,7 @@ pub(super) fn covert_instruction_patterns() -> &'static GroupedPatterns {
 pub(super) fn instruction_boundary_ac() -> &'static AhoCorasick {
     static AC: OnceLock<AhoCorasick> = OnceLock::new();
     AC.get_or_init(|| {
-        AhoCorasick::new(&[
+        AhoCorasick::new([
             "<|endoftext|>",
             "<|im_start|>",
             "<|im_end|>",
@@ -417,7 +417,7 @@ pub(super) fn output_manipulation_patterns() -> &'static GroupedPatterns {
 pub(super) fn instruction_leak_question_ac() -> &'static AhoCorasick {
     static AC: OnceLock<AhoCorasick> = OnceLock::new();
     AC.get_or_init(|| {
-        AhoCorasick::new(&[
+        AhoCorasick::new([
             "what are your system prompt",
             "what is your system prompt",
             "what are your instructions",
@@ -435,7 +435,7 @@ pub(super) fn instruction_leak_question_ac() -> &'static AhoCorasick {
 pub(super) fn cross_tool_direct_ac() -> &'static AhoCorasick {
     static AC: OnceLock<AhoCorasick> = OnceLock::new();
     AC.get_or_init(|| {
-        AhoCorasick::new(&[
+        AhoCorasick::new([
             "higher priority than the user",
             "when another tool is requested",
         ])
@@ -738,7 +738,7 @@ pub(super) fn guardrail_tamper_passive_request_re() -> &'static Regex {
 pub(super) fn destructive_ac() -> &'static AhoCorasick {
     static AC: OnceLock<AhoCorasick> = OnceLock::new();
     AC.get_or_init(|| {
-        AhoCorasick::new(&[
+        AhoCorasick::new([
             "rm -rf",
             "mkfs.",
             " dd if=",
@@ -760,7 +760,7 @@ pub(super) fn destructive_ac() -> &'static AhoCorasick {
 pub(super) fn agentic_abuse_ac() -> &'static AhoCorasick {
     static AC: OnceLock<AhoCorasick> = OnceLock::new();
     AC.get_or_init(|| {
-        AhoCorasick::new(&[
+        AhoCorasick::new([
             "chemical formula",
             "precise formula",
             "sarin",
@@ -819,13 +819,13 @@ pub(super) fn agentic_abuse_ac() -> &'static AhoCorasick {
 
 pub(super) fn binary_smuggling_ac() -> &'static AhoCorasick {
     static AC: OnceLock<AhoCorasick> = OnceLock::new();
-    AC.get_or_init(|| AhoCorasick::new(&["metadata", "transaction", "payload"]).unwrap())
+    AC.get_or_init(|| AhoCorasick::new(["metadata", "transaction", "payload"]).unwrap())
 }
 
 pub(super) fn sensitive_term_ac() -> &'static AhoCorasick {
     static AC: OnceLock<AhoCorasick> = OnceLock::new();
     AC.get_or_init(|| {
-        AhoCorasick::new(&[
+        AhoCorasick::new([
             "system prompt",
             "developer message",
             "developer instructions",

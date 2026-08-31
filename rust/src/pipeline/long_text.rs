@@ -174,6 +174,7 @@ fn select_chunk_output<'a>(
     Some((index, &chunk_outputs[index]))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn summary_layer(
     level: &str,
     result: &EvaluationResult,

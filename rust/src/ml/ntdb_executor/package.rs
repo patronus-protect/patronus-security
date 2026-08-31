@@ -270,7 +270,7 @@ impl NtdbPackage {
         let per_head = self
             .heads
             .par_iter_mut()
-            .map(|head| head.score(&prepared, chunk_count, embedding_dim))
+            .map(|head| head.score(prepared, chunk_count, embedding_dim))
             .collect::<NtdbResult<Vec<_>>>()?;
         metrics.checkpoint("after_heads", "");
         let mut feature_by_name: HashMap<String, Vec<f32>> = HashMap::new();
@@ -334,7 +334,7 @@ impl NtdbPackage {
                     &self.manifest.task.kind,
                     &self.manifest.task.labels,
                     text,
-                    &prepared,
+                    prepared,
                     &feature_by_name,
                     operating_point,
                 )?;
@@ -352,7 +352,7 @@ impl NtdbPackage {
                         &self.manifest.task.kind,
                         &self.manifest.task.labels,
                         text,
-                        &prepared,
+                        prepared,
                         &feature_by_name,
                         embedding_dim,
                         self.manifest
@@ -725,7 +725,7 @@ impl NtdbMultiPackage {
         for entry in self
             .packages
             .iter()
-            .filter(|entry| requested.map_or(true, |requested| requested.contains(&entry.id)))
+            .filter(|entry| requested.is_none_or(|requested| requested.contains(&entry.id)))
         {
             let key = entry.package.preparation_key();
             if prepared.contains_key(&key) {
@@ -843,6 +843,9 @@ fn populate_joint_v3_chunks(
         .collect();
 }
 
+type ChunkPromotionOutput = (Vec<Option<f32>>, Vec<L3Candidate>, Vec<L2ChunkOutput>);
+
+#[allow(clippy::too_many_arguments)]
 fn chunk_promotions(
     aggregator: &mut AggregatorRuntime,
     task: &str,
@@ -855,7 +858,7 @@ fn chunk_promotions(
     is_l3_tokenizer_compatible: bool,
     tokenizer_family: Option<&str>,
     operating_point: NtdbOperatingPoint,
-) -> NtdbResult<(Vec<Option<f32>>, Vec<L3Candidate>, Vec<L2ChunkOutput>)> {
+) -> NtdbResult<ChunkPromotionOutput> {
     let mut scores = Vec::with_capacity(prepared.chunks.len());
     let mut thresholds = Vec::with_capacity(prepared.chunks.len());
     let mut chunk_outputs = Vec::with_capacity(prepared.chunks.len());
@@ -917,6 +920,7 @@ fn chunk_promotions(
     Ok((scores, candidates, chunk_outputs))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn l2_chunk_output(
     span: ByteSpan,
     task: &str,

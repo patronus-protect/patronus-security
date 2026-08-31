@@ -832,6 +832,7 @@ fn coverage(resolved_chunks: usize, total_chunks: usize) -> f64 {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn publish_l3_progress(
     worker_state: &L3WorkerState,
     job: &L3WorkerJob,
@@ -913,7 +914,7 @@ fn publish_l3_provisional(
 }
 
 fn annotate_l3_execution(
-    layers: &mut Vec<LayerResult>,
+    layers: &mut [LayerResult],
     metadata: EarlyExitMetadata,
     clustering: L3ClusteringStrategy,
 ) {

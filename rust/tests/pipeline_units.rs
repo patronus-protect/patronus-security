@@ -915,8 +915,10 @@ mod ntdb_l2_results {
             .iter()
             .any(|layer| layer.layer_type == "l3_pending"));
 
-        let mut policy = L3SchedulerPolicy::default();
-        policy.enabled = false;
+        let policy = L3SchedulerPolicy {
+            enabled: false,
+            ..L3SchedulerPolicy::default()
+        };
         let mut gates = ScanGateMatrix::all_enabled();
         gates.set_l3_policy(policy);
         let mut scheduler_disabled = ScanExecution::with_gates(SecurityLevel::L3, gates);

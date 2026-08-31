@@ -414,6 +414,7 @@ impl L3Worker {
         self.state.available.notify_one();
     }
 
+    #[allow(clippy::result_large_err)]
     fn build_physical_job(
         &self,
         spec: L3JobSpec,

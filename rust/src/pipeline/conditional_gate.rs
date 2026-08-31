@@ -88,11 +88,11 @@ fn expression_matches(
         }
         GateExpression::Result(condition) => results.iter().any(|result| {
             result.pipeline == condition.pipeline
-                && condition
-                    .classes
-                    .is_empty()
-                    .then_some(true)
-                    .unwrap_or_else(|| condition.classes.contains(&result.class_name))
+                && if condition.classes.is_empty() {
+                    true
+                } else {
+                    condition.classes.contains(&result.class_name)
+                }
                 && condition
                     .min_confidence
                     .is_none_or(|minimum| result.confidence >= minimum)

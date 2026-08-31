@@ -458,19 +458,18 @@ impl AggregatorRuntime {
         );
         let mut class_scores = scores.to_vec();
         let mut class_logits = logits.to_vec();
-        if labels.len() > class_scores.len() {
-            if labels
+        if labels.len() > class_scores.len()
+            && labels
                 .get(class_scores.len())
                 .is_some_and(|label| label == "promote")
-            {
-                let Some((promote_score, promote_logit)) = promote else {
-                    return Err(ntdb_error(
-                        "NTDB document class output missing promote score",
-                    ));
-                };
-                class_scores.push(promote_score);
-                class_logits.push(promote_logit);
-            }
+        {
+            let Some((promote_score, promote_logit)) = promote else {
+                return Err(ntdb_error(
+                    "NTDB document class output missing promote score",
+                ));
+            };
+            class_scores.push(promote_score);
+            class_logits.push(promote_logit);
         }
         if class_scores.len() < labels.len() || class_logits.len() < labels.len() {
             return Err(ntdb_error("NTDB document class output is too small"));

@@ -358,33 +358,6 @@ fn short_injection_operating_point(
     operating_point
 }
 
-#[cfg(test)]
-mod tests {
-    use super::short_injection_operating_point;
-    use crate::NtdbOperatingPoint;
-
-    #[test]
-    fn ark_api_utility_profile_is_limited_to_short_injection_documents() {
-        let profile = NtdbOperatingPoint::ArkApiShortInjectionUtility;
-        assert_eq!(
-            short_injection_operating_point("injection", profile, 2),
-            NtdbOperatingPoint::BestF1
-        );
-        assert_eq!(
-            short_injection_operating_point("injection", profile, 3),
-            NtdbOperatingPoint::BestPromote
-        );
-        assert_eq!(
-            short_injection_operating_point("threat", profile, 1),
-            NtdbOperatingPoint::BestPromote
-        );
-        assert_eq!(
-            short_injection_operating_point("injection", NtdbOperatingPoint::BestPromote, 1),
-            NtdbOperatingPoint::BestPromote
-        );
-    }
-}
-
 fn document_policy(
     decision: &super::manifest::JointV3DocumentDecisionManifest,
     mode: &str,
@@ -632,4 +605,31 @@ fn argmax(values: &[f32]) -> NtdbResult<usize> {
         .max_by(|left, right| left.1.total_cmp(&right.1))
         .map(|(index, _)| index)
         .ok_or_else(|| ntdb_error("NTDB package v4 produced no class scores"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::short_injection_operating_point;
+    use crate::NtdbOperatingPoint;
+
+    #[test]
+    fn ark_api_utility_profile_is_limited_to_short_injection_documents() {
+        let profile = NtdbOperatingPoint::ArkApiShortInjectionUtility;
+        assert_eq!(
+            short_injection_operating_point("injection", profile, 2),
+            NtdbOperatingPoint::BestF1
+        );
+        assert_eq!(
+            short_injection_operating_point("injection", profile, 3),
+            NtdbOperatingPoint::BestPromote
+        );
+        assert_eq!(
+            short_injection_operating_point("threat", profile, 1),
+            NtdbOperatingPoint::BestPromote
+        );
+        assert_eq!(
+            short_injection_operating_point("injection", NtdbOperatingPoint::BestPromote, 1),
+            NtdbOperatingPoint::BestPromote
+        );
+    }
 }

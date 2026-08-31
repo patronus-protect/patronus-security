@@ -35,6 +35,7 @@ use crate::pipeline::strategy::{
     aggregate_decision_index, ChunkAggregation, ChunkDecision, HeadDecisionState, PipelineStrategy,
 };
 
+#[allow(clippy::large_enum_variant)]
 pub(super) enum UnifiedRunState {
     Running { subscribers: Vec<L3JobSpec> },
     Completed(UnifiedRunResult),
@@ -238,6 +239,7 @@ pub(super) fn execute(state: &L3WorkerState, job: L3WorkerJob) -> UnifiedRunOutc
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 pub(super) enum UnifiedRunOutcome {
     Completed(UnifiedRunResult),
     Failed(UnifiedRunFailure),
@@ -2209,8 +2211,10 @@ mod tests {
 
     #[test]
     fn unified_key_includes_l3_policy_and_candidate_threshold() {
-        let mut rank_policy = crate::L3SchedulerPolicy::default();
-        rank_policy.clustering = L3ClusteringStrategy::RankOnly;
+        let rank_policy = crate::L3SchedulerPolicy {
+            clustering: L3ClusteringStrategy::RankOnly,
+            ..crate::L3SchedulerPolicy::default()
+        };
         let mut representative_policy = rank_policy.clone();
         representative_policy.clustering = L3ClusteringStrategy::Representative;
         let candidate = crate::ml::ntdb_executor::L3Candidate {

@@ -112,6 +112,11 @@ impl StaticEncoderStore {
     pub fn len(&self) -> usize {
         self.encoders.len()
     }
+
+    #[cfg(feature = "test-util")]
+    pub fn is_empty(&self) -> bool {
+        self.encoders.is_empty()
+    }
 }
 
 fn encoder_identity(embedding_path: &Path, manifest: &MiniLmManifest) -> String {
@@ -172,6 +177,37 @@ fn read_embedding_matrix(
     }
 }
 
+fn f16_to_f32(h: u16) -> f32 {
+    let sign = (h & 0x8000) as u32;
+    let exponent = (h & 0x7C00) as u32;
+    let fraction = (h & 0x03FF) as u32;
+
+    let f_bits = if exponent == 0 {
+        if fraction == 0 {
+            sign << 16
+        } else {
+            let mut m = fraction;
+            let mut e = 0;
+            while (m & 0x0400) == 0 {
+                m <<= 1;
+                e += 1;
+            }
+            let new_exponent = 127 - 15 - e + 1;
+            let new_fraction = (m & 0x03FF) << 13;
+            (sign << 16) | (new_exponent << 23) | new_fraction
+        }
+    } else if exponent == 0x7C00 {
+        let new_exponent = 0xFF << 23;
+        let new_fraction = if fraction == 0 { 0 } else { fraction << 13 };
+        (sign << 16) | new_exponent | new_fraction
+    } else {
+        let new_exponent = (exponent >> 10) + 127 - 15;
+        let new_fraction = fraction << 13;
+        (sign << 16) | (new_exponent << 23) | new_fraction
+    };
+    f32::from_bits(f_bits)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{read_embedding_matrix, StaticEncoder};
@@ -225,35 +261,4 @@ mod tests {
 
         assert_eq!(target, [3.5, 5.0]);
     }
-}
-
-fn f16_to_f32(h: u16) -> f32 {
-    let sign = (h & 0x8000) as u32;
-    let exponent = (h & 0x7C00) as u32;
-    let fraction = (h & 0x03FF) as u32;
-
-    let f_bits = if exponent == 0 {
-        if fraction == 0 {
-            sign << 16
-        } else {
-            let mut m = fraction;
-            let mut e = 0;
-            while (m & 0x0400) == 0 {
-                m <<= 1;
-                e += 1;
-            }
-            let new_exponent = 127 - 15 - e + 1;
-            let new_fraction = (m & 0x03FF) << 13;
-            (sign << 16) | (new_exponent << 23) | new_fraction
-        }
-    } else if exponent == 0x7C00 {
-        let new_exponent = 0xFF << 23;
-        let new_fraction = if fraction == 0 { 0 } else { fraction << 13 };
-        (sign << 16) | new_exponent | new_fraction
-    } else {
-        let new_exponent = (exponent >> 10) + 127 - 15;
-        let new_fraction = fraction << 13;
-        (sign << 16) | (new_exponent << 23) | new_fraction
-    };
-    f32::from_bits(f_bits)
 }

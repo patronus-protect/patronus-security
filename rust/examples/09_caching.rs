@@ -252,8 +252,10 @@ fn new_scanner(
     scanner.set_l3_strategy(strategy);
     if strategy == L3Strategy::Multi {
         let mut gates = ScanGateMatrix::all_enabled();
-        let mut policy = L3SchedulerPolicy::default();
-        policy.priority = vec!["sensitive_document".to_string(), "injection".to_string()];
+        let policy = L3SchedulerPolicy {
+            priority: vec!["sensitive_document".to_string(), "injection".to_string()],
+            ..L3SchedulerPolicy::default()
+        };
         gates.set_l3_policy(policy);
         scanner.set_execution_gates(gates);
     }

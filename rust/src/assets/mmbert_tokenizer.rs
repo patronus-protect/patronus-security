@@ -51,6 +51,8 @@ struct BpeJson {
     merges: Vec<[String; 2]>,
 }
 
+type TokenizerConverter = fn(&Path, &Path) -> Result<(), Box<dyn std::error::Error>>;
+
 pub(super) fn ensure_mmbert_compact_tokenizer(
     source_model: &str,
     tokenizer_json: &Path,
@@ -61,7 +63,7 @@ pub(super) fn ensure_mmbert_compact_tokenizer(
 pub(super) fn ensure_mmbert_compact_tokenizer_with(
     source_model: &str,
     tokenizer_json: &Path,
-    converter: fn(&Path, &Path) -> Result<(), Box<dyn std::error::Error>>,
+    converter: TokenizerConverter,
 ) -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
     log::debug!(
         "checking compact mmBERT tokenizer support; source_model={}; tokenizer_json={}; tokenizer_json_exists={}",

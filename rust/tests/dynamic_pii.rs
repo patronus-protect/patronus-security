@@ -22,33 +22,46 @@ fn default_labels_exclude_native_l1_identifiers() {
 
 #[test]
 fn config_deduplicates_labels_and_validates_limits() {
-    let mut config = DynamicPiiConfig::default();
-    config.labels = ["person", "location", "person"].map(String::from).to_vec();
+    let config = DynamicPiiConfig {
+        labels: ["person", "location", "person"].map(String::from).to_vec(),
+        ..DynamicPiiConfig::default()
+    };
     assert_eq!(
         config.validated().unwrap().labels,
         ["person", "location"].map(String::from)
     );
 
-    let mut config = DynamicPiiConfig::default();
-    config.chunk_overlap_words = config.chunk_size_words;
+    let defaults = DynamicPiiConfig::default();
+    let config = DynamicPiiConfig {
+        chunk_overlap_words: defaults.chunk_size_words,
+        ..defaults
+    };
     assert!(config.validated().is_err());
 
-    let mut config = DynamicPiiConfig::default();
-    config.threshold = f32::NAN;
+    let config = DynamicPiiConfig {
+        threshold: f32::NAN,
+        ..DynamicPiiConfig::default()
+    };
     assert!(config.validated().is_err());
 
-    let mut config = DynamicPiiConfig::default();
-    config.label_thresholds = HashMap::from([("unknown".to_string(), 0.5)]);
+    let config = DynamicPiiConfig {
+        label_thresholds: HashMap::from([("unknown".to_string(), 0.5)]),
+        ..DynamicPiiConfig::default()
+    };
     assert!(config.validated().is_err());
 
-    let mut config = DynamicPiiConfig::default();
-    config.labels = (0..31).map(|index| format!("label-{index}")).collect();
+    let config = DynamicPiiConfig {
+        labels: (0..31).map(|index| format!("label-{index}")).collect(),
+        ..DynamicPiiConfig::default()
+    };
     assert!(config.validated().is_err());
 
-    let mut config = DynamicPiiConfig::default();
-    config.labels = ["medical_condition", "medical condition"]
-        .map(String::from)
-        .to_vec();
+    let config = DynamicPiiConfig {
+        labels: ["medical_condition", "medical condition"]
+            .map(String::from)
+            .to_vec(),
+        ..DynamicPiiConfig::default()
+    };
     assert!(config.validated().is_err());
 }
 

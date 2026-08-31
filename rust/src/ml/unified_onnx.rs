@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
 use half::f16;
@@ -89,6 +90,11 @@ const HEADS: &[HeadSpec] = &[
         ],
     ),
 ];
+
+fn l3_timing_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| std::env::var_os("PATRONUS_L3_TIMING").is_some())
+}
 
 #[derive(Clone, Copy)]
 enum HeadKind {
@@ -536,16 +542,19 @@ impl UnifiedOnnxClassifier {
         let batch = texts.len();
         let mut input_ids = Vec::with_capacity(batch * UNIFIED_MAX_LEN);
         let mut attention_mask = Vec::with_capacity(batch * UNIFIED_MAX_LEN);
+        let started = Instant::now();
         for text in texts {
             let (ids, mask, _) = self.tokenizer.encode_inputs(text, UNIFIED_MAX_LEN)?;
             input_ids.extend(ids);
             attention_mask.extend(mask);
         }
+        let tokenized_at = Instant::now();
         let shape = [batch, UNIFIED_MAX_LEN];
         let outputs = self.session.run(ort::inputs![
             "input_ids" => Tensor::from_array((shape, input_ids))?,
             "attention_mask" => Tensor::from_array((shape, attention_mask))?,
         ])?;
+        let inferred_at = Instant::now();
         let mut results = (0..batch)
             .map(|_| UnifiedRawModelOutput {
                 heads: HashMap::new(),
@@ -580,6 +589,16 @@ impl UnifiedOnnxClassifier {
                     .heads
                     .insert(head.id.to_string(), row.to_vec());
             }
+        }
+        if l3_timing_enabled() {
+            log::info!(
+                "unified_l3_timing batch={} sequence_tokens={} tokenize_ms={:.3} session_run_ms={:.3} decode_ms={:.3}",
+                batch,
+                UNIFIED_MAX_LEN,
+                tokenized_at.duration_since(started).as_secs_f64() * 1_000.0,
+                inferred_at.duration_since(tokenized_at).as_secs_f64() * 1_000.0,
+                Instant::now().duration_since(inferred_at).as_secs_f64() * 1_000.0,
+            );
         }
         Ok(results)
     }

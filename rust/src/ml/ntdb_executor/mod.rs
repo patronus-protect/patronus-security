@@ -39,10 +39,7 @@ pub mod test_util {
 pub type NtdbResult<T> = Result<T, Box<dyn Error + Send + Sync>>;
 
 pub(crate) fn ntdb_error(message: impl Into<String>) -> Box<dyn Error + Send + Sync> {
-    Box::new(std::io::Error::new(
-        std::io::ErrorKind::Other,
-        message.into(),
-    ))
+    Box::new(std::io::Error::other(message.into()))
 }
 
 pub struct NtdbExecutor {

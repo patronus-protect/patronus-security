@@ -39,6 +39,7 @@ use super::tokenizer_store::global_tokenizer_store;
 const DEFAULT_MAX_LEN: usize = 256;
 const DEFAULT_L3_TTL_SECS: u64 = 300;
 static ACTIVE_EXECUTION_PROVIDERS: OnceLock<Mutex<BTreeSet<String>>> = OnceLock::new();
+type EncodedInputs = (Vec<i64>, Vec<i64>, Vec<i64>);
 
 fn record_active_provider(provider: &str) {
     ACTIVE_EXECUTION_PROVIDERS
@@ -518,7 +519,7 @@ impl RuntimeTokenizer {
         &self,
         text: &str,
         max_len: usize,
-    ) -> Result<(Vec<i64>, Vec<i64>, Vec<i64>), Box<dyn std::error::Error>> {
+    ) -> Result<EncodedInputs, Box<dyn std::error::Error>> {
         let (mut input_ids, mut attention_mask) = match self {
             Self::HuggingFace(tokenizer) => {
                 let encoding = tokenizer
@@ -551,11 +552,21 @@ impl RuntimeTokenizer {
 }
 
 pub(crate) fn l3_ttl() -> Duration {
-    let secs = std::env::var("PATRONUS_L3_TTL_SECS")
-        .ok()
-        .and_then(|value| value.parse::<u64>().ok())
-        .unwrap_or(DEFAULT_L3_TTL_SECS);
-    Duration::from_secs(secs)
+    l3_ttl_from_value(std::env::var("PATRONUS_L3_TTL_SECS").ok().as_deref())
+}
+
+fn l3_ttl_from_value(value: Option<&str>) -> Duration {
+    match value {
+        // API deployments with sufficient RAM keep sessions resident.  A
+        // Duration::MAX TTL is preferable to a magic large finite value: the
+        // eviction comparison can never become true during process lifetime.
+        Some("-1") => Duration::MAX,
+        Some(value) => value
+            .parse::<u64>()
+            .map(Duration::from_secs)
+            .unwrap_or_else(|_| Duration::from_secs(DEFAULT_L3_TTL_SECS)),
+        None => Duration::from_secs(DEFAULT_L3_TTL_SECS),
+    }
 }
 
 impl OnnxTextClassifier {
@@ -576,6 +587,7 @@ impl OnnxTextClassifier {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn from_dir_with_paths<P: AsRef<Path>>(
         dir: P,
         class_names: Vec<String>,
@@ -784,10 +796,7 @@ impl OnnxTextClassifier {
         self.tokenizer.token_count(text, add_special_tokens)
     }
 
-    fn encode_inputs(
-        &self,
-        text: &str,
-    ) -> Result<(Vec<i64>, Vec<i64>, Vec<i64>), Box<dyn std::error::Error>> {
+    fn encode_inputs(&self, text: &str) -> Result<EncodedInputs, Box<dyn std::error::Error>> {
         self.tokenizer.encode_inputs(text, self.max_len)
     }
 
@@ -938,9 +947,7 @@ fn execution_provider_plan(
     }
 
     let Some(provider) = provider else {
-        return Err(format!(
-            "ONNX GPU backend is not available on this platform; enable and select one of: coreml, cuda, directml, tensorrt"
-        )
+        return Err("ONNX GPU backend is not available on this platform; enable and select one of: coreml, cuda, directml, tensorrt".to_string()
         .into());
     };
 
@@ -1128,8 +1135,18 @@ fn softmax(logits: &[f32]) -> Vec<f32> {
 
 #[cfg(test)]
 mod tests {
-    use super::{token_chunks, truncate_and_pad, LazyOnnxTextClassifier};
+    use super::{l3_ttl_from_value, token_chunks, truncate_and_pad, LazyOnnxTextClassifier};
     use crate::{ExecutionBackend, OnnxRuntimeOptions};
+    use std::time::Duration;
+
+    #[test]
+    fn l3_ttl_supports_resident_sessions_and_preserves_fallbacks() {
+        assert_eq!(l3_ttl_from_value(Some("-1")), Duration::MAX);
+        assert_eq!(l3_ttl_from_value(Some("900")), Duration::from_secs(900));
+        assert_eq!(l3_ttl_from_value(Some("0")), Duration::ZERO);
+        assert_eq!(l3_ttl_from_value(Some("invalid")), Duration::from_secs(300));
+        assert_eq!(l3_ttl_from_value(None), Duration::from_secs(300));
+    }
 
     #[test]
     fn tokenizer_inputs_use_fixed_right_padding_and_truncation() {
