@@ -9,7 +9,7 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ## [Unreleased]
 
-## [0.1.6] - 2026-08-31
+## [0.1.6] - 2026-09-02
 
 ### Added
 
@@ -28,6 +28,11 @@ result shapes may be breaking for downstream users, and is called out explicitly
   anchor-bound identifiers, written birth dates, source/config/SQL/log detection, and non-blocking
   localized `layers[].details.l1_anchors` context facts. Added deterministic capability goldens,
   hard negatives, validators, and 100 KiB latency/evaluation tools.
+- Added an implementation-blind bilingual demo benchmark covering 87 customer, personnel, and
+  source-code documents with 204 expected PII/DLP/semantic spans and 19 hard negatives. Its
+  augmented employee-identifier forms extend L1 with `PersNr`, employee/personnel number,
+  staff-code, snake-case, OCR-field, and structured `EMP-*` variants while preserving existing
+  customer, student, tax, and unanchored build-ID negatives.
 - Added stable per-rule execution gates through Rust, Python, and Ark API configuration. Missing
   rule IDs remain enabled; PII/DLP patterns use `pii_*`/`dlp_*` IDs and Injection uses its existing
   `ark.injection.*` IDs.
@@ -61,6 +66,14 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Changed
 
+- Dynamic PII conditional labels now run as separate GLiNER inference groups scoped to chunks
+  carrying the matching final source-pipeline class. Base labels stay stable, duplicate labels are
+  removed from conditional calls, final L3 source classes supersede provisional L1/L2 classes,
+  and duplicate entity spans keep the highest score across inference groups.
+- The reference Ark API DLP profile now enables credentials, secrets, authentication material,
+  and sensitive-transfer context by default while gating broader business identifiers, metrics,
+  source/SQL/dump/log content, MCP/runtime policy, and destructive operations behind explicit
+  model/rule opt-ins.
 - Dynamic PII now keeps overlapping hypotheses with different labels, reports all detected entity
   types through evidence and label scores, uses additive context-label bundles, and provides
   canonical `education` and `medical` mappings. Cross-text entity-cache matches no longer become

@@ -13,6 +13,7 @@ use crate::ml::onnx::{LazyOnnxTextClassifier, TokenTextChunk};
 use crate::ml::unified_onnx::{LazyUnifiedOnnxClassifier, UNIFIED_MODEL};
 use crate::pipeline::l3_schedule::{attach_l2_embeddings, selected_l3_chunks, SelectedL3Chunk};
 use crate::{
+    dynamic_pii::{DynamicPiiInferenceGroup, DynamicPiiSourceChunk, DynamicPiiTextRange},
     DynamicPiiConfig, L3Strategy, QueuedSecurityEvent, QueuedSecurityProgress,
     QueuedSecurityScanResult, RequestId, ScanExecution, SecurityFailure, SecurityFailureKind,
     SecurityFailureStage, SecurityLevel, SecurityRequestCompletion, SecurityScanResult,
@@ -70,6 +71,7 @@ pub(crate) struct RequestState {
     pub pending_l3_job_ids: HashSet<u64>,
     pub pending_l3_job_categories: HashMap<u64, String>,
     pub gate_results: HashMap<String, Vec<String>>,
+    pub gate_chunk_results: HashMap<String, Vec<DynamicPiiSourceChunk>>,
     pub pending_dynamic_pii: Option<PendingDynamicPii>,
     pub usable_results: usize,
     pub failures: Vec<SecurityFailure>,
@@ -82,6 +84,7 @@ impl RequestState {
             pending_l3_job_ids: HashSet::new(),
             pending_l3_job_categories: HashMap::new(),
             gate_results: HashMap::new(),
+            gate_chunk_results: HashMap::new(),
             pending_dynamic_pii: None,
             usable_results: 0,
             failures: Vec::new(),
@@ -141,6 +144,7 @@ struct L3WorkerJob {
     l3_candidates: Vec<L3Candidate>,
     l2_chunk_outputs: Arc<[L2ChunkOutput]>,
     dynamic_pii_config: Option<DynamicPiiConfig>,
+    dynamic_pii_inference_groups: Vec<DynamicPiiInferenceGroup>,
     dynamic_pii_activated_rules: Vec<usize>,
     sequence: u64,
     #[cfg(feature = "test-util")]
@@ -169,6 +173,7 @@ pub(crate) struct L3JobSpec {
     pub l3_candidates: Vec<L3Candidate>,
     pub l2_chunk_outputs: Arc<[L2ChunkOutput]>,
     pub dynamic_pii_config: Option<DynamicPiiConfig>,
+    pub dynamic_pii_inference_groups: Vec<DynamicPiiInferenceGroup>,
     pub dynamic_pii_activated_rules: Vec<usize>,
 }
 
@@ -452,6 +457,7 @@ impl L3Worker {
             l3_candidates: spec.l3_candidates,
             l2_chunk_outputs: spec.l2_chunk_outputs,
             dynamic_pii_config: spec.dynamic_pii_config,
+            dynamic_pii_inference_groups: spec.dynamic_pii_inference_groups,
             dynamic_pii_activated_rules: spec.dynamic_pii_activated_rules,
             sequence: spec.job_id,
             #[cfg(feature = "test-util")]
@@ -567,6 +573,7 @@ impl L3Worker {
                 l3_candidates: spec.l3_candidates,
                 l2_chunk_outputs: spec.l2_chunk_outputs,
                 dynamic_pii_config: spec.dynamic_pii_config,
+                dynamic_pii_inference_groups: spec.dynamic_pii_inference_groups,
                 dynamic_pii_activated_rules: spec.dynamic_pii_activated_rules,
                 sequence: spec.job_id,
                 test_delay_ms: Some(delay_ms),
@@ -932,11 +939,19 @@ fn finish_job(
             }
             None => {
                 state.usable_results += 1;
+                // L3 is authoritative for this pipeline: replace provisional
+                // L1/L2 classes instead of keeping stale alternatives alive.
                 state
                     .gate_results
-                    .entry(result.category.clone())
-                    .or_default()
-                    .push(result.class_name.clone());
+                    .insert(result.category.clone(), vec![result.class_name.clone()]);
+                let chunks = dynamic_pii_source_chunks(&result);
+                if !chunks.is_empty() {
+                    state
+                        .gate_chunk_results
+                        .insert(result.category.clone(), chunks);
+                } else {
+                    state.gate_chunk_results.remove(&result.category);
+                }
                 true
             }
         }
@@ -963,6 +978,88 @@ fn finish_job(
         .expect("request registry mutex poisoned");
     finish_request_if_ready(&mut registry, &request_id);
     worker.requests.available.notify_all();
+}
+
+fn dynamic_pii_source_chunks(result: &SecurityScanResult) -> Vec<DynamicPiiSourceChunk> {
+    result
+        .internal_l2_chunk_outputs
+        .iter()
+        .filter(|output| {
+            output
+                .source_pipeline
+                .split(',')
+                .map(str::trim)
+                .any(|pipeline| pipeline == result.category)
+        })
+        .map(|output| DynamicPiiSourceChunk {
+            class_name: output.class_name.clone(),
+            range: DynamicPiiTextRange {
+                start_byte: output.span.start,
+                end_byte: output.span.end,
+            },
+        })
+        .collect()
+}
+
+fn final_l3_chunk_outputs(
+    l2_outputs: &[L2ChunkOutput],
+    pipeline: &str,
+    model: &str,
+    l3_outputs: &[(crate::ml::ntdb_executor::ByteSpan, String, f32)],
+) -> Vec<L2ChunkOutput> {
+    let mut outputs = l2_outputs
+        .iter()
+        .filter(|output| {
+            output
+                .source_pipeline
+                .split(',')
+                .map(str::trim)
+                .any(|source| source == pipeline)
+        })
+        .cloned()
+        .map(|mut output| {
+            output.embedding.clear();
+            output.embedding_space.clear();
+            output.token_ids.clear();
+            output.tokenizer_family.clear();
+            output.class_probabilities.clear();
+            output.joint_v3_decision = None;
+            output
+        })
+        .collect::<Vec<_>>();
+    for (span, class_name, confidence) in l3_outputs {
+        let mut replaced = false;
+        for output in outputs
+            .iter_mut()
+            .filter(|output| output.span.start < span.end && output.span.end > span.start)
+        {
+            output.class_name = class_name.clone();
+            output.confidence = *confidence;
+            output.source_model = model.to_string();
+            replaced = true;
+        }
+        if !replaced {
+            outputs.push(L2ChunkOutput {
+                span: *span,
+                class_name: class_name.clone(),
+                confidence: *confidence,
+                promoted: true,
+                promote_score: None,
+                promote_threshold: None,
+                source_pipeline: pipeline.to_string(),
+                source_model: model.to_string(),
+                embedding: Vec::new(),
+                embedding_space: String::new(),
+                token_ids: Vec::new(),
+                tokenizer_family: String::new(),
+                class_probabilities: Vec::new(),
+                joint_v3_decision: None,
+            });
+        }
+    }
+    outputs.sort_by_key(|output| (output.span.start, output.span.end));
+    outputs.dedup_by(|left, right| left.span == right.span);
+    outputs
 }
 
 pub(super) fn request_wide_early_exit(result: &SecurityScanResult) -> Option<String> {
@@ -1148,6 +1245,19 @@ fn resolve_dynamic_pii(worker: &Arc<L3WorkerState>, request_id: &str) {
         if request.pending_dynamic_pii.is_none() {
             return;
         }
+        let config = request
+            .pending_dynamic_pii
+            .as_ref()
+            .and_then(|pending| pending.job.dynamic_pii_config.as_ref())
+            .expect("pending dynamic-pii job is missing config");
+        let dependencies = config.dependency_pipelines();
+        if request
+            .pending_l3_job_categories
+            .values()
+            .any(|pipeline| dependencies.contains(pipeline.as_str()))
+        {
+            return;
+        }
         let request = registry
             .requests
             .get_mut(request_id)
@@ -1161,9 +1271,9 @@ fn resolve_dynamic_pii(worker: &Arc<L3WorkerState>, request_id: &str) {
             .dynamic_pii_config
             .as_ref()
             .expect("pending dynamic-pii job is missing config");
-        match config.resolve(&request.gate_results) {
+        match config.resolve(&request.gate_results, &request.gate_chunk_results) {
             Some(resolution) => {
-                pending.job.dynamic_pii_config = Some(resolution.config);
+                pending.job.dynamic_pii_inference_groups = resolution.inference_groups;
                 pending.job.dynamic_pii_activated_rules = resolution.activated_conditional_rules;
                 Some(pending.job)
             }
@@ -1300,6 +1410,103 @@ mod tests {
         assert_eq!(
             request_wide_early_exit(&result),
             Some("injection:attack:0.9400".to_string())
+        );
+    }
+
+    #[test]
+    fn dynamic_pii_waits_for_final_l3_gate_and_discards_provisional_hr() {
+        let requests = Arc::new(RequestRegistry::default());
+        let worker = Arc::new(test_worker_state(Arc::clone(&requests)));
+        let source_job_id = 1;
+        let dynamic_job_id = 2;
+        let mut dynamic = test_l3_spec(
+            "rq-final-gate",
+            "dynamic-pii",
+            dynamic_job_id,
+            ScanExecution::new(SecurityLevel::L3),
+        );
+        dynamic.text = Arc::<str>::from("Hey");
+        dynamic.dynamic_pii_config = Some(
+            DynamicPiiConfig {
+                labels: vec!["person".to_string()],
+                conditional_labels: vec![crate::DynamicPiiConditionalLabels {
+                    labels: ["person", "employee_id"].map(String::from).to_vec(),
+                    when: crate::DynamicPiiResultCondition {
+                        pipeline: "sensitive_document".to_string(),
+                        results: vec!["hr".to_string()],
+                    },
+                }],
+                ..DynamicPiiConfig::default()
+            }
+            .validated()
+            .unwrap(),
+        );
+        let provisional_range = DynamicPiiTextRange {
+            start_byte: 0,
+            end_byte: 3,
+        };
+        requests.state.lock().unwrap().requests.insert(
+            "rq-final-gate".to_string(),
+            RequestState {
+                pending_l3_job_ids: HashSet::from([source_job_id, dynamic_job_id]),
+                pending_l3_job_categories: HashMap::from([(
+                    source_job_id,
+                    "sensitive_document".to_string(),
+                )]),
+                gate_results: HashMap::from([(
+                    "sensitive_document".to_string(),
+                    vec!["hr".to_string()],
+                )]),
+                gate_chunk_results: HashMap::from([(
+                    "sensitive_document".to_string(),
+                    vec![DynamicPiiSourceChunk {
+                        class_name: "hr".to_string(),
+                        range: provisional_range,
+                    }],
+                )]),
+                pending_dynamic_pii: Some(PendingDynamicPii { job: dynamic }),
+                usable_results: 1,
+                failures: Vec::new(),
+                completion: None,
+            },
+        );
+
+        resolve_dynamic_pii(&worker, "rq-final-gate");
+        assert!(worker.jobs.lock().unwrap().is_empty());
+        assert!(requests.state.lock().unwrap().requests["rq-final-gate"]
+            .pending_dynamic_pii
+            .is_some());
+
+        let mut final_result = test_result("sensitive_document", "other", 0.94, "L3");
+        final_result.internal_l2_chunk_outputs =
+            vec![test_l2_chunk_output(0, 3, "sensitive_document", true)];
+        final_result.internal_l2_chunk_outputs[0].class_name = "other".to_string();
+        finish_job(
+            &worker,
+            source_job_id,
+            "rq-final-gate".to_string(),
+            final_result,
+        );
+
+        let registry = requests.state.lock().unwrap();
+        let state = &registry.requests["rq-final-gate"];
+        assert_eq!(state.gate_results["sensitive_document"], ["other"]);
+        assert_eq!(
+            state.gate_chunk_results["sensitive_document"],
+            vec![DynamicPiiSourceChunk {
+                class_name: "other".to_string(),
+                range: provisional_range,
+            }]
+        );
+        assert!(state.pending_dynamic_pii.is_none());
+        drop(registry);
+        let jobs = worker.jobs.lock().unwrap();
+        assert_eq!(jobs.len(), 1);
+        assert_eq!(jobs[0].dynamic_pii_activated_rules, Vec::<usize>::new());
+        assert_eq!(jobs[0].dynamic_pii_inference_groups.len(), 1);
+        assert_eq!(
+            jobs[0].dynamic_pii_inference_groups[0].config.labels,
+            ["person"]
         );
     }
 
@@ -1522,6 +1729,7 @@ mod tests {
                     (2, "threat".to_string()),
                 ]),
                 gate_results: HashMap::new(),
+                gate_chunk_results: HashMap::new(),
                 pending_dynamic_pii: None,
                 usable_results: 1,
                 failures: Vec::new(),
@@ -1630,6 +1838,7 @@ mod tests {
             l3_candidates: vec![test_l3_candidate(0, 4, category)],
             l2_chunk_outputs: vec![test_l2_chunk_output(0, 4, category, true)].into(),
             dynamic_pii_config: None,
+            dynamic_pii_inference_groups: Vec::new(),
             dynamic_pii_activated_rules: Vec::new(),
         }
     }
@@ -1745,6 +1954,7 @@ mod tests {
             l3_candidates: Vec::new(),
             l2_chunk_outputs: Vec::new().into(),
             dynamic_pii_config: None,
+            dynamic_pii_inference_groups: Vec::new(),
             dynamic_pii_activated_rules: Vec::new(),
             sequence,
             #[cfg(feature = "test-util")]

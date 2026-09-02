@@ -86,6 +86,8 @@ scanner.set_execution_gates({
   IDs. DLP patterns use `dlp_*` IDs; its separate heuristics are `dlp_sensitive_material`,
   `dlp_secret_transfer`, `dlp_mcp_runtime_risk`, `dlp_mcp_policy`, and
   `dlp_destructive_operation`. Injection uses the `ark.injection.*` IDs returned in evidence.
+  See the complete [L1 rule catalog](l1-rule-catalog.md) for every accepted ID and the Ark API
+  default state of DLP rules.
 - `conditional` — conditional gates (see [below](#conditional-gates)).
 - `l3` — optional worker policy (see [below](#l3-worker-policy)).
 
@@ -99,6 +101,26 @@ scanner.set_execution_gates(
         .with_rule("pii_email", false),
 );
 ```
+
+The Python/Rust request shape uses `levels` plus the separate L3 worker-policy object under `l3`.
+Ark API YAML mirrors the Rust matrix more directly: its level switches are top-level `l1`, `l2`,
+and `l3`, while the worker policy is named `policy`. For example:
+
+```yaml
+gates:
+  l1: true
+  l2: false
+  l3: false
+  rules:
+    pii_employee_id: true
+    dlp_sql_statement: false
+  models:
+    native:mcp_runtime_risk: false
+```
+
+The reference Ark API configuration is intentionally credentials-only for DLP L1: key, token,
+password, hash, and private-key rules remain enabled, while business identifiers, metrics, source,
+SQL, dump, log, MCP/runtime, and destructive-operation families require an explicit profile.
 
 ### L3 worker policy
 
@@ -328,7 +350,7 @@ dynamic_pii_config = {
 | `labels` | GLiNER entity labels to extract. |
 | `threshold` / `label_thresholds` | Global and per-label score thresholds. |
 | `execution_gate` | When the pipeline runs (`always`, `if_result_in`, `if_no_result`). |
-| `conditional_labels` | Extra labels enabled only when a source pipeline returns given results. |
+| `conditional_labels` | Extra label groups run separately, and only on chunks whose final source-pipeline result matches. Labels already present in `labels` are removed from the extra call. |
 | `chunk_size_words` / `chunk_overlap_words` | Windowing for long text. |
 | `max_text_bytes` | Hard input size limit. |
 | `timeout_ms` | Minimum inference timeout for the pipeline. |
@@ -336,14 +358,21 @@ dynamic_pii_config = {
 | `timeout_per_chunk_ms` | Inference budget contributed by each planned chunk. |
 | `max_timeout_ms` | Upper bound for the adaptive inference timeout. |
 
-Only labels with measured exact-span F1 ≥ 0.6 are mapped; deterministic identifiers (email, IP,
-IBAN, SWIFT/BIC, phone, card) stay native L1 heuristics. See
+Configured GLiNER labels are subject to the model and threshold you choose; this API makes no
+cross-domain quality guarantee. Deterministic identifiers (email, IP, IBAN, SWIFT/BIC, phone,
+card) stay native L1 heuristics. See
 [`gliner_category_map.py`](https://github.com/patronus-protect/patronus-security/blob/main/python/patronus_ark/gliner_category_map.py).
 
 The first detected Dynamic PII entity is emitted immediately as a `provisional` queue event. It
 contains `details.partial_result = true`, `details.provisional = true`, and one evidence span. The
 authoritative complete result follows after the remaining chunks finish. Dynamic PII reuses only
 exact, context-bound chunk candidates; cross-text entity-cache matches do not become evidence.
+
+The base `labels` are always inferred as one stable label group across the complete input. Each
+matching `conditional_labels` entry is a separate GLiNER call scoped to the chunks carrying that
+source pipeline's terminal class. Dynamic PII waits for a referenced source pipeline to finish
+(including an L2 result that does not promote), so an interim L2 class cannot activate a
+contextual label group that the final source result rejects.
 
 ## Environment variables
 

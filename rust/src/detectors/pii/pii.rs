@@ -75,6 +75,13 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
         captured_value: false,
     },
     PiiPattern {
+        name: "pii_phone_de_national_context",
+        pattern: r"(?i)\b(?:telefon(?:[-_ ]?(?:nummer|nr))?|tel(?:efon)?[-_ ]?nr\.?|tel\.?|festnetz(?:[-_ ]?(?:nummer|nr))?|mobil(?:telefon|funk)?(?:[-_ ]?(?:nummer|nr))?|handy(?:[-_ ]?(?:nummer|nr))?|fax(?:[-_ ]?(?:nummer|nr))?)[ \t]*[:#=\-]?[ \t]*(?P<value>0(?:[ \t()./\-]*\d){6,14})\b",
+        entity_group: "PHONE",
+        validator: Some(validators::phone),
+        captured_value: true,
+    },
+    PiiPattern {
         name: "pii_phone_us",
         pattern: r"\b(?:\+1[\s\-]?)?\(?\d{3}\)?[\s\-\.]?\d{3}[\s\-\.]?\d{4}\b",
         entity_group: "PHONE",
@@ -87,6 +94,23 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
         pattern: r"(?i)\b(?:[0-9a-f]{2}:){5}[0-9a-f]{2}\b|\b(?:[0-9a-f]{2}-){5}[0-9a-f]{2}\b",
         entity_group: "MAC_ADDRESS",
         validator: Some(validators::mac_address),
+        captured_value: false,
+    },
+    // ── IBAN ─────────────────────────────────────────────────────────────────
+    // Keep validated IBANs ahead of the broader numeric card candidate so the
+    // shared overlap resolver retains the more specific identifier.
+    PiiPattern {
+        name: "pii_iban_de",
+        pattern: r"\bDE\d{2}[\s]?\d{4}[\s]?\d{4}[\s]?\d{4}[\s]?\d{4}[\s]?\d{2}\b",
+        entity_group: "IBAN",
+        validator: Some(validators::mod97),
+        captured_value: false,
+    },
+    PiiPattern {
+        name: "pii_iban_generic",
+        pattern: r"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b",
+        entity_group: "IBAN",
+        validator: Some(validators::mod97),
         captured_value: false,
     },
     // ── Kreditkarte ──────────────────────────────────────────────────────────
@@ -111,21 +135,6 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
         validator: Some(validators::card_expiry),
         captured_value: true,
     },
-    // ── IBAN ─────────────────────────────────────────────────────────────────
-    PiiPattern {
-        name: "pii_iban_de",
-        pattern: r"\bDE\d{2}[\s]?\d{4}[\s]?\d{4}[\s]?\d{4}[\s]?\d{4}[\s]?\d{2}\b",
-        entity_group: "IBAN",
-        validator: Some(validators::mod97),
-        captured_value: false,
-    },
-    PiiPattern {
-        name: "pii_iban_generic",
-        pattern: r"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b",
-        entity_group: "IBAN",
-        validator: Some(validators::mod97),
-        captured_value: false,
-    },
     // ── SWIFT / BIC ─────────────────────────────────────────────────────────
     PiiPattern {
         name: "pii_swift_bic_context",
@@ -137,10 +146,24 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     // ── Anchor-gebundene Personenkennungen ─────────────────────────────────
     PiiPattern {
         name: "pii_employee_id",
-        pattern: r"(?i)\b(?:personalnummer|mitarbeiter(?:nummer|[-_ ]?id)|employee[ \t]+id|personnel[ \t]+number)\b[ \t]*(?:is[ \t]*)?[:#=\-]?[ \t]*(?P<value>[A-Z0-9](?:[A-Z0-9._/-]{1,30}[A-Z0-9])?)\b",
+        pattern: r"(?i)\b(?:personalnummer|pers(?:onal)?[ \t]*nr\.?|mitarbeiter(?:nummer|[-_ ]?id)|employee(?:[ \t_-]+)(?:id|number)|personnel[ \t]+(?:id|number)|staff[ \t]+(?:id|code|number)|kennung)\b[ \t]*(?:is[ \t]*)?[:#=\-]?[ \t]*(?P<value>[A-Z0-9](?:[A-Z0-9._/-]{1,30}[A-Z0-9])?)\b",
         entity_group: "EMPLOYEE_ID",
-        validator: Some(validators::bounded_identifier),
+        validator: Some(validators::bounded_employee_identifier),
         captured_value: true,
+    },
+    PiiPattern {
+        name: "pii_employee_id_ocr_field",
+        pattern: r"(?m)(?:^|[\n|])[ \t]*ID[ \t]*[:#=\-]?[ \t]*(?P<value>[A-Z]{1,8}[ \t]{1,3}\d{2,20})\b",
+        entity_group: "EMPLOYEE_ID",
+        validator: Some(validators::bounded_employee_identifier),
+        captured_value: true,
+    },
+    PiiPattern {
+        name: "pii_employee_id_prefixed",
+        pattern: r"(?i)\bEMP[-_/][A-Z0-9]+[-_/][A-Z0-9](?:[A-Z0-9._/-]{1,24}[A-Z0-9])?\b",
+        entity_group: "EMPLOYEE_ID",
+        validator: Some(validators::bounded_employee_identifier),
+        captured_value: false,
     },
     PiiPattern {
         name: "pii_customer_id",

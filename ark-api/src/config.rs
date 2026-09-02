@@ -437,7 +437,13 @@ pub(crate) fn parse_categories(values: &[String]) -> Result<Vec<SecurityCategory
 
 #[cfg(test)]
 mod tests {
-    use super::{RawGates, RawOnnxRuntime};
+    use std::path::Path;
+
+    use patronus_ark::{
+        detectors::dlp::dlp::DLP_PATTERNS, SecurityCategory, SecurityGateway, SecurityLevel,
+    };
+
+    use super::{Config, RawGates, RawOnnxRuntime};
 
     #[test]
     fn onnx_runtime_config_accepts_bounded_threads() {
@@ -466,5 +472,64 @@ mod tests {
         assert!(!gates.allows_rule("pii_email"));
         assert!(gates.allows_rule("dlp_openai_key"));
         assert!(gates.allows_rule("ark.injection.override.discard_prior"));
+    }
+
+    #[test]
+    fn example_config_defaults_dlp_l1_to_credentials_and_secrets() {
+        let config = Config::load(Path::new(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/config.example.yaml"
+        )))
+        .unwrap();
+        let credential_groups = [
+            "API_KEY",
+            "CLOUD_KEY",
+            "CREDENTIAL",
+            "CRYPTO_KEY",
+            "PASSWORD_HASH",
+            "PAYMENT_KEY",
+            "PRIVATE_KEY",
+            "SECRET_TOKEN",
+        ];
+
+        for pattern in DLP_PATTERNS {
+            assert_eq!(
+                config.default_gates.allows_rule(pattern.name),
+                credential_groups.contains(&pattern.entity_group),
+                "unexpected default DLP gate for {} ({})",
+                pattern.name,
+                pattern.entity_group
+            );
+        }
+
+        assert!(config.default_gates.allows_rule("dlp_sensitive_material"));
+        assert!(config.default_gates.allows_rule("dlp_secret_transfer"));
+        assert!(!config.default_gates.allows_model("native:mcp_runtime_risk"));
+        assert!(!config.default_gates.allows_model("native:mcp_policy"));
+        assert!(!config
+            .default_gates
+            .allows_model("native:destructive_operation"));
+
+        let gateway = SecurityGateway::with_max_level(
+            vec![SecurityCategory::Dlp],
+            SecurityLevel::L1,
+            None,
+            false,
+        );
+        gateway.set_execution_gates(config.default_gates);
+        let results = gateway.scan_all(
+            "password = CorrectHorseBatteryStaple\n\
+             SELECT * FROM customer;\n\
+             Gehalt 74.500 EUR\n\
+             Fallnummer: FALL-2026-4711",
+        );
+        let labels = results
+            .iter()
+            .flat_map(|result| result.evidence_spans.iter())
+            .map(|span| span.label.as_str())
+            .collect::<Vec<_>>();
+
+        assert!(labels.contains(&"CREDENTIAL"));
+        assert!(!labels.iter().any(|label| label.starts_with("dlp.")));
     }
 }

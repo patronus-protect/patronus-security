@@ -6,6 +6,7 @@ use std::thread;
 use std::time::Duration;
 
 use crate::diagnostics::PhaseMetricScope;
+use crate::dynamic_pii::{DynamicPiiSourceChunk, DynamicPiiTextRange};
 use crate::ml::ntdb_executor::L3Candidate;
 use crate::pipeline::{
     failure_from_scan_result, finish_request_if_ready, has_l3_pending, priority_index, ttl_ms,
@@ -327,6 +328,7 @@ impl SecurityGateway {
             ),
         );
         conditional_results.extend(l2_results.iter().filter_map(gate_result));
+        let gate_chunk_results = dynamic_pii_source_chunks(&l2_results);
         let l3_execution = crate::pipeline::conditional_gate::apply_l3_policy_overrides(
             &execution,
             &metadata,
@@ -386,6 +388,7 @@ impl SecurityGateway {
             state.pending_l3_job_ids = pending_l3_job_ids;
             state.pending_l3_job_categories = pending_l3_job_categories;
             state.gate_results = gate_results;
+            state.gate_chunk_results = gate_chunk_results;
             state.pending_dynamic_pii = pending_dynamic_pii;
             state.usable_results += l2_results.len();
             state.failures.extend(l2_failures);
@@ -646,6 +649,7 @@ impl SecurityGateway {
                 l3_candidates: l3_candidates(result),
                 l2_chunk_outputs: take_internal_l2_chunk_outputs(result),
                 dynamic_pii_config: None,
+                dynamic_pii_inference_groups: Vec::new(),
                 dynamic_pii_activated_rules: Vec::new(),
             });
         }
@@ -716,6 +720,7 @@ impl SecurityGateway {
                 l3_candidates: Vec::new(),
                 l2_chunk_outputs: Vec::new().into(),
                 dynamic_pii_config: Some(config),
+                dynamic_pii_inference_groups: Vec::new(),
                 dynamic_pii_activated_rules: Vec::new(),
             },
         })
@@ -776,6 +781,7 @@ impl SecurityGateway {
                 l3_candidates: Vec::new(),
                 l2_chunk_outputs: Vec::new().into(),
                 dynamic_pii_config: None,
+                dynamic_pii_inference_groups: Vec::new(),
                 dynamic_pii_activated_rules: Vec::new(),
             },
             delay_ms,
@@ -808,6 +814,7 @@ impl SecurityGateway {
                     l3_candidates: Vec::new(),
                     l2_chunk_outputs: Vec::new().into(),
                     dynamic_pii_config: None,
+                    dynamic_pii_inference_groups: Vec::new(),
                     dynamic_pii_activated_rules: Vec::new(),
                 },
                 *delay_ms,
@@ -857,6 +864,7 @@ impl SecurityGateway {
                     l3_candidates: Vec::new(),
                     l2_chunk_outputs: Vec::new().into(),
                     dynamic_pii_config: None,
+                    dynamic_pii_inference_groups: Vec::new(),
                     dynamic_pii_activated_rules: Vec::new(),
                 },
                 *delay_ms,
@@ -885,6 +893,7 @@ impl SecurityGateway {
                 (tool_job_id, "tool_class".to_string()),
             ]),
             gate_results: HashMap::new(),
+            gate_chunk_results: HashMap::new(),
             pending_dynamic_pii: None,
             usable_results: 2,
             failures: Vec::new(),
@@ -927,6 +936,7 @@ impl SecurityGateway {
                     l3_candidates: Vec::new(),
                     l2_chunk_outputs: Vec::new().into(),
                     dynamic_pii_config: None,
+                    dynamic_pii_inference_groups: Vec::new(),
                     dynamic_pii_activated_rules: Vec::new(),
                 },
                 5,
@@ -947,6 +957,7 @@ impl SecurityGateway {
                     l3_candidates: Vec::new(),
                     l2_chunk_outputs: Vec::new().into(),
                     dynamic_pii_config: None,
+                    dynamic_pii_inference_groups: Vec::new(),
                     dynamic_pii_activated_rules: Vec::new(),
                 },
                 5,
@@ -1000,12 +1011,14 @@ impl SecurityGateway {
             l3_candidates: Vec::new(),
             l2_chunk_outputs: Vec::new().into(),
             dynamic_pii_config: None,
+            dynamic_pii_inference_groups: Vec::new(),
             dynamic_pii_activated_rules: Vec::new(),
         };
         let state = RequestState {
             pending_l3_job_ids: HashSet::from([source_job_id, dynamic.job.job_id]),
             pending_l3_job_categories: HashMap::from([(source_job_id, "injection".to_string())]),
             gate_results: HashMap::new(),
+            gate_chunk_results: HashMap::new(),
             pending_dynamic_pii: Some(dynamic),
             usable_results: 1,
             failures: Vec::new(),
@@ -1049,6 +1062,7 @@ impl SecurityGateway {
             pending_l3_job_ids: HashSet::from([job_id]),
             pending_l3_job_categories: HashMap::from([(job_id, category.to_string())]),
             gate_results: HashMap::new(),
+            gate_chunk_results: HashMap::new(),
             pending_dynamic_pii: None,
             usable_results: 1,
             failures: Vec::new(),
@@ -1177,6 +1191,28 @@ fn gate_result(result: &SecurityScanResult) -> Option<GateResult> {
         confidence: result.confidence,
         level: result.level.parse().ok()?,
     })
+}
+
+fn dynamic_pii_source_chunks(
+    results: &[SecurityScanResult],
+) -> HashMap<String, Vec<DynamicPiiSourceChunk>> {
+    let mut chunks = HashMap::<String, Vec<DynamicPiiSourceChunk>>::new();
+    for output in results
+        .iter()
+        .flat_map(|result| result.internal_l2_chunk_outputs.iter())
+    {
+        chunks
+            .entry(output.source_pipeline.clone())
+            .or_default()
+            .push(DynamicPiiSourceChunk {
+                class_name: output.class_name.clone(),
+                range: DynamicPiiTextRange {
+                    start_byte: output.span.start,
+                    end_byte: output.span.end,
+                },
+            });
+    }
+    chunks
 }
 
 fn rejected_l1_candidate_gate_results(results: &[SecurityScanResult]) -> Vec<GateResult> {

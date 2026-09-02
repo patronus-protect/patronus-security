@@ -24,8 +24,9 @@ pub(crate) fn looks_like_cross_tool_instruction(text: &str) -> bool {
 
 pub(crate) fn looks_like_cross_tool_instruction_lower(lower: &str) -> bool {
     cross_tool_direct_ac().is_match(lower)
-        || text_windows(lower, THREAT_SIGNAL_WINDOW_BYTES)
-            .any(|window| cross_tool_request_re().is_match(window))
+        || text_windows(lower, THREAT_SIGNAL_WINDOW_BYTES).any(|window| {
+            cross_tool_request_re().is_match(window) || cross_tool_request_de_re().is_match(window)
+        })
 }
 
 pub(crate) fn looks_like_instruction_leak_request_lower(lower: &str) -> bool {
@@ -46,6 +47,7 @@ pub(crate) fn looks_like_secret_transfer_lower(lower: &str) -> bool {
     text_windows(lower, THREAT_SIGNAL_WINDOW_BYTES).any(|window| {
         secret_exfiltration_request_re().is_match(window)
             || secret_transfer_request_re().is_match(window)
+            || secret_transfer_request_de_re().is_match(window)
     })
 }
 
@@ -53,12 +55,15 @@ pub(crate) fn looks_like_sensitive_material_request_lower(lower: &str) -> bool {
     text_windows(lower, THREAT_SIGNAL_WINDOW_BYTES).any(|window| {
         sensitive_material_request_re().is_match(window)
             || sensitive_material_passive_request_re().is_match(window)
+            || sensitive_material_request_de_re().is_match(window)
     })
 }
 
 pub(crate) fn looks_like_encoded_instruction_request_lower(lower: &str) -> bool {
     text_windows(lower, THREAT_SIGNAL_WINDOW_BYTES).any(|window| {
-        encoded_instruction_request_re().is_match(window) || encoded_execution_re().is_match(window)
+        encoded_instruction_request_re().is_match(window)
+            || encoded_execution_re().is_match(window)
+            || encoded_instruction_request_de_re().is_match(window)
     })
 }
 
@@ -119,7 +124,10 @@ pub(crate) fn looks_like_instruction_boundary(text: &str) -> bool {
             line.trim_start()
                 .strip_prefix("system")
                 .and_then(|suffix| suffix.trim_start().strip_prefix(':'))
-                .is_some_and(|instruction| system_boundary_instruction_re().is_match(instruction))
+                .is_some_and(|instruction| {
+                    system_boundary_instruction_re().is_match(instruction)
+                        || system_boundary_instruction_de_re().is_match(instruction)
+                })
         })
 }
 
@@ -140,7 +148,8 @@ pub(crate) fn looks_like_output_manipulation(text: &str) -> bool {
     let forced_output = text_windows(&lower, THREAT_SIGNAL_WINDOW_BYTES).any(|window| {
         let flags = output_manipulation_patterns().flags(window);
         has_all(flags, OM_FORCE | OM_MARKER | OM_SEQUENCE)
-            && output_disclosure_re().is_match(window)
+            && (output_disclosure_re().is_match(window)
+                || output_disclosure_de_re().is_match(window))
     });
     forced_output
         || text_windows(text, THREAT_SIGNAL_WINDOW_BYTES)
@@ -166,23 +175,30 @@ fn is_pliny_divider(token: &str) -> bool {
 }
 
 pub(crate) fn looks_like_multi_turn_escalation_lower(lower: &str) -> bool {
-    text_windows(lower, THREAT_SIGNAL_WINDOW_BYTES)
-        .any(|window| multi_turn_escalation_request_re().is_match(window))
+    text_windows(lower, THREAT_SIGNAL_WINDOW_BYTES).any(|window| {
+        multi_turn_escalation_request_re().is_match(window)
+            || multi_turn_escalation_request_de_re().is_match(window)
+    })
 }
 
 pub(crate) fn looks_like_guardrail_tamper_lower(lower: &str) -> bool {
     text_windows(lower, THREAT_SIGNAL_WINDOW_BYTES).any(|window| {
         guardrail_tamper_request_re().is_match(window)
             || guardrail_tamper_passive_request_re().is_match(window)
+            || guardrail_tamper_request_de_re().is_match(window)
+            || guardrail_tamper_passive_request_de_re().is_match(window)
     })
 }
 
 pub(crate) fn looks_like_destructive_operation_lower(lower: &str) -> bool {
-    destructive_ac().is_match(lower)
+    destructive_ac().is_match(lower) || destructive_operation_de_re().is_match(lower)
 }
 
 pub(crate) fn looks_like_agentic_control_abuse_lower(lower: &str) -> bool {
     text_windows(lower, THREAT_SIGNAL_WINDOW_BYTES).any(|window| {
+        if agentic_control_abuse_de_re().is_match(window) {
+            return true;
+        }
         let mut matched = [false; 51];
         for mat in agentic_abuse_ac().find_overlapping_iter(window) {
             matched[mat.pattern().as_usize()] = true;
@@ -239,8 +255,10 @@ pub(crate) fn looks_like_binary_smuggling_lower(lower: &str) -> bool {
 }
 
 pub(crate) fn looks_like_tool_output_instruction_lower(lower: &str) -> bool {
-    text_windows(lower, THREAT_SIGNAL_WINDOW_BYTES)
-        .any(|window| tool_output_instruction_re().is_match(window))
+    text_windows(lower, THREAT_SIGNAL_WINDOW_BYTES).any(|window| {
+        tool_output_instruction_re().is_match(window)
+            || tool_output_instruction_de_re().is_match(window)
+    })
 }
 
 pub(crate) fn is_template_env_copy(lower: &str) -> bool {

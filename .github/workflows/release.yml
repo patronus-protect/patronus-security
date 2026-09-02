@@ -27,7 +27,9 @@ jobs:
         with:
           python-version: "3.12"
       - run: cargo fmt --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test -p patronus-ark
+      - run: cargo test -p ark-api
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check licenses

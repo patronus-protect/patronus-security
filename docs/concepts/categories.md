@@ -9,8 +9,8 @@ specific set of layers — some are native-only, some are model-backed, one is t
 | Category | Question it answers | L1 | L2 | L3 model |
 | --- | --- | :---: | :---: | --- |
 | `injection` | Is this a prompt-injection / jailbreak attempt? | ✅ | ✅ | Wolf Defender (small) or unified Lion Warden |
-| `dlp` | Does this leak secrets or trigger a destructive/sensitive operation? | ✅ | — | — |
-| `pii` | Does this contain format-validated PII (email, IBAN, card, …)? | ✅ | — | — |
+| `dlp` | Does this contain credentials, sensitive business identifiers/content, or a risky data operation? | ✅ | — | — |
+| `pii` | Does this contain validated or anchor-bound personal identifiers? | ✅ | — | — |
 | `dynamic-pii` | Which named entities (GLiNER labels) appear, with exact spans? | — | — | GLiNER small v2.5 (edge) |
 | `sensitive_document` | What document class is this (legal, HR, finance, source code, …)? | — | ✅ | Orca Sonar |
 | `tool_class` | Which kind of tool does this call/operate (file, db, api, shell, …)? | — | ✅ | Husky Sight |
@@ -29,9 +29,13 @@ See [Models & the NTDB format](models-and-ntdb.md).
 ### Native-only (L1)
 
 `dlp` and `pii` are resolved entirely by native Rust detectors. They **never download model
-assets** and are always available offline. `pii` uses format validators (checksum/structure
-verification for cards, IBANs, etc.); `dlp` matches secrets, destructive operations, and
-sensitive-material transfers. Both populate `evidence_spans` with exact offsets. See
+assets** and are always available offline. `pii` combines checksum/structure validators with
+field anchors for contact, payment, government, account, and person identifiers. `dlp` detects
+credentials and secrets as well as gateable business identifiers, internal metrics, source code,
+SQL, dumps, logs, and risky operations. PII and regex-based DLP findings populate
+`evidence_spans` with exact offsets; native DLP heuristics can flag a category without a span.
+Both can publish localized, non-finding `l1_anchors`. The Ark API reference profile enables only
+credential/secret DLP rules by default; other DLP families are opt-in through rule gates. See
 [Native detectors](detectors.md).
 
 ### Native + model-backed (L1 → L2 → L3)
@@ -49,8 +53,10 @@ L1 stage; if their assets are not cached they simply do not produce a model verd
 ### Transformer-only (L3)
 
 `dynamic-pii` is an L3-only GLiNER pipeline with its own labels, thresholds, chunking, text
-limit, and timeout. It enqueues directly to the L3 worker and publishes only its completed
-entity result — there is no lower-layer fallback. See the
+limit, and timeout. It enqueues directly to the L3 worker and has no lower-layer fallback. It can
+emit non-authoritative provisional entity previews before the authoritative completed result.
+Conditional label groups can be gated by final source-pipeline results and scoped to matching
+source chunks. See the
 [dynamic PII how-to context in the tutorials](../USAGE.md) and the
 [configuration reference](../reference/configuration.md#dynamic-pii).
 

@@ -68,7 +68,7 @@ See [Categories](categories.md) for the per-category layer map.
 
 | Layer | Implementation | Loaded | Latency class |
 | --- | --- | --- | --- |
-| **L1** | Native Rust detectors in `detectors/` and `threat/` | always | microseconds |
+| **L1** | Native Rust detectors in `detectors/` and `threat/` | no assets; gate-controlled | input-dependent |
 | **L2** | NTDB packages using the shared mmBERT tokenizer and static embedder | on warmup (if cached) | milliseconds |
 | **L3** | Full ONNX transformers aligned with L2's tokenizer and embeddings | RAM-resident per config, idle-TTL evicted | tens of milliseconds |
 
@@ -184,7 +184,7 @@ deployments — see [Offline & air-gapped scanning](../how-to/offline-airgapped.
 
 - **On-device first.** No scan content leaves the machine. The only network activity is the
   optional, one-time asset download from Hugging Face.
-- **Pay for detection only when needed.** L1 resolves most traffic in microseconds; the
+- **Pay for detection only when needed.** Native L1 avoids model inference; the
   transformer runs only for the uncertain minority that L2 promotes.
 - **Rust core, thin bindings.** All logic lives once in Rust; Python (and any future binding)
   is a wrapper, so behavior cannot drift between languages.

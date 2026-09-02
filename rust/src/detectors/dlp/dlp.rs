@@ -63,7 +63,7 @@ static DLP_ANCHOR_PATTERNS: &[DlpAnchorPattern] = &[
         category: "internal_business_metric",
         strength: "medium",
         anchor_kind: "lexical",
-        pattern: r"(?i)\b(?:ebitda[ _-]?marge|ebit[ _-]?marge|rohertragsmarge|deckungsbeitrag|bruttomarge|nettomarge|gross[ _-]?margin|net[ _-]?margin|contribution[ _-]?margin|annual[ _-]?recurring[ _-]?revenue|monthly[ _-]?recurring[ _-]?revenue|arr|mrr|cash[ _-]?burn|burn[ _-]?rate|runway|umsatzplanung|umsatzprognose|revenue[ _-]?forecast|sales[ _-]?forecast|budgetplanung|planwert|istwert|forecast)\b",
+        pattern: r"(?i)\b(?:gehalt|jahresgehalt|bruttogehalt|grundgehalt|salary|annual[ _-]?salary|base[ _-]?salary|ebitda[ _-]?marge|ebit[ _-]?marge|rohertragsmarge|deckungsbeitrag|bruttomarge|nettomarge|gross[ _-]?margin|net[ _-]?margin|contribution[ _-]?margin|annual[ _-]?recurring[ _-]?revenue|monthly[ _-]?recurring[ _-]?revenue|arr|mrr|cash[ _-]?burn|burn[ _-]?rate|runway|umsatzplanung|umsatzprognose|revenue[ _-]?forecast|sales[ _-]?forecast|budgetplanung|planwert|istwert|forecast)\b",
     },
     DlpAnchorPattern {
         category: "internal_business_metric",
@@ -451,7 +451,7 @@ pub static DLP_PATTERNS: &[DlpPattern] = &[
     // ── Confidential business content ───────────────────────────────────────
     DlpPattern {
         name: "dlp_internal_business_metric",
-        pattern: r"(?i)\b(?:EBITDA[ -]?Marge|EBIT[ -]?Marge|Rohertragsmarge|Deckungsbeitrag|Marge|Umsatz|Rohertrag|EBITDA|EBIT|Forecast)\b(?:\s+(?:liegt|beträgt|ist|bei|von|neu|Plan))?\s*(?::|=)?\s*(?:bei\s+|von\s+)?([+\-]?\d+(?:[.\s]\d{3})*(?:,\d+)?\s*(?:%|Prozent|EUR|Euro|€|CHF|USD|Mio\.?\s*(?:EUR|Euro|€)?|TEUR))",
+        pattern: r"(?i)\b(?:Jahresgehalt|Bruttogehalt|Grundgehalt|Gehalt|Annual[ -]?Salary|Base[ -]?Salary|Salary|EBITDA[ -]?Marge|EBIT[ -]?Marge|Rohertragsmarge|Deckungsbeitrag|Marge|Umsatz|Rohertrag|EBITDA|EBIT|Forecast)\b(?:\s+(?:liegt|beträgt|ist|bei|von|neu|Plan))?\s*(?::|=)?\s*(?:bei\s+|von\s+)?([+\-]?\d+(?:[.\s]\d{3})*(?:,\d+)?\s*(?:%|Prozent|EUR|Euro|€|CHF|USD|Mio\.?\s*(?:EUR|Euro|€)?|TEUR))",
         entity_group: "dlp.internal.business_metric",
         validator: None,
         span_group: None,
@@ -487,7 +487,7 @@ pub static DLP_PATTERNS: &[DlpPattern] = &[
     },
     DlpPattern {
         name: "dlp_source_code_declaration",
-        pattern: r"(?m)^[ \t]*(?:pub\s+)?(?:async\s+)?(?:fn|def|function|class|interface|struct|enum)\s+[A-Za-z_][A-Za-z0-9_]*(?:\s*[<(][^\n]*[>)]\s*)?\s*(?:\{|:)[ \t]*$",
+        pattern: r"(?ms:^[ \t]*package[ \t]+[A-Za-z_][A-Za-z0-9_]*[ \t]*\r?\n(?:[^\r\n]*\r?\n){0,16}?[ \t]*(?:import(?:[ \t]+|[ \t]*\()|func[ \t]+|type[ \t]+|var[ \t]+|const[ \t]+)[^\r\n]*)|(?m:^[ \t]*(?:pub\s+)?(?:async\s+)?(?:fn|def|function|class|interface|struct|enum)\s+[A-Za-z_][A-Za-z0-9_]*(?:\s*[<(][^\n]*[>)]\s*)?\s*(?:\{|:)[ \t]*$)",
         entity_group: "dlp.content.source_code",
         validator: None,
         span_group: None,
@@ -501,10 +501,10 @@ pub static DLP_PATTERNS: &[DlpPattern] = &[
     },
     DlpPattern {
         name: "dlp_sql_statement",
-        pattern: r"(?im)^[ \t]*(?:SELECT\b[^;\n]*\bFROM\b[^;\n]*|UPDATE\b[^;\n]*\bSET\b[^;\n]*|DELETE\s+FROM\b[^;\n]*);[ \t]*$",
+        pattern: r"(?ims)^[ \t\r\n]*((?:(?:--[^\r\n]*(?:\r?\n|$)|/\*.*?\*/[ \t]*(?:\r?\n|$))(?:[ \t]*\r?\n)*)*(?:CREATE|ALTER|INSERT|DROP|SET|USE|COMMIT|SELECT|UPDATE|DELETE|TRUNCATE|GRANT|REVOKE|REPLACE|MERGE|CALL|BEGIN)\b(?:[^;\r\n]*\r?\n){0,64}[^;\r\n]*;)[ \t]*$",
         entity_group: "dlp.content.sql",
-        validator: None,
-        span_group: None,
+        validator: Some(is_structured_sql_statement),
+        span_group: Some(1),
     },
     DlpPattern {
         name: "dlp_sql_multiline_statement",
@@ -597,6 +597,97 @@ fn is_non_placeholder_source_assignment(candidate: &str) -> bool {
 
 fn is_identifier_value(candidate: &str) -> bool {
     candidate.chars().any(|ch| ch.is_ascii_digit())
+}
+
+fn is_structured_sql_statement(candidate: &str) -> bool {
+    if candidate.len() > 8192 {
+        return false;
+    }
+    let mut statement = candidate.trim_start();
+    loop {
+        if let Some(comment) = statement.strip_prefix("--") {
+            let Some(newline) = comment.find('\n') else {
+                return false;
+            };
+            statement = comment[newline + 1..].trim_start();
+        } else if let Some(comment) = statement.strip_prefix("/*") {
+            let Some(end) = comment.find("*/") else {
+                return false;
+            };
+            statement = comment[end + 2..].trim_start();
+        } else {
+            break;
+        }
+    }
+
+    let normalized = statement
+        .trim_end()
+        .strip_suffix(';')
+        .unwrap_or(statement)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_ascii_uppercase();
+    let contains_token = |token: &str| normalized.contains(&format!(" {token} "));
+
+    [
+        "CREATE DATABASE ",
+        "CREATE SCHEMA ",
+        "CREATE TABLE ",
+        "CREATE VIEW ",
+        "CREATE INDEX ",
+        "CREATE UNIQUE INDEX ",
+        "CREATE SEQUENCE ",
+        "CREATE TRIGGER ",
+        "CREATE FUNCTION ",
+        "CREATE PROCEDURE ",
+        "CREATE TYPE ",
+        "CREATE ROLE ",
+        "CREATE USER ",
+        "CREATE OR REPLACE VIEW ",
+        "CREATE OR REPLACE FUNCTION ",
+        "CREATE OR REPLACE PROCEDURE ",
+        "ALTER DATABASE ",
+        "ALTER SCHEMA ",
+        "ALTER TABLE ",
+        "ALTER VIEW ",
+        "ALTER INDEX ",
+        "ALTER SEQUENCE ",
+        "ALTER TYPE ",
+        "ALTER ROLE ",
+        "ALTER USER ",
+        "DROP DATABASE ",
+        "DROP SCHEMA ",
+        "DROP TABLE ",
+        "DROP VIEW ",
+        "DROP INDEX ",
+        "DROP SEQUENCE ",
+        "DROP TRIGGER ",
+        "DROP FUNCTION ",
+        "DROP PROCEDURE ",
+        "DROP TYPE ",
+        "DROP ROLE ",
+        "DROP USER ",
+        "INSERT INTO ",
+        "DELETE FROM ",
+        "REPLACE INTO ",
+        "MERGE INTO ",
+    ]
+    .iter()
+    .any(|prefix| normalized.starts_with(prefix))
+        || (normalized.starts_with("SELECT ") && contains_token("FROM"))
+        || (normalized.starts_with("UPDATE ") && contains_token("SET"))
+        || (normalized.starts_with("SET ") && normalized.contains('='))
+        || matches!(
+            normalized.as_str(),
+            "COMMIT" | "COMMIT WORK" | "BEGIN" | "BEGIN WORK" | "BEGIN TRANSACTION"
+        )
+        || normalized.starts_with("TRUNCATE TABLE ")
+        || (normalized.starts_with("GRANT ") && contains_token("TO"))
+        || (normalized.starts_with("REVOKE ") && contains_token("FROM"))
+        || (normalized.starts_with("CALL ")
+            && normalized.contains('(')
+            && normalized.ends_with(')'))
 }
 
 pub struct DlpPipeline {

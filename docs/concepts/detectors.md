@@ -1,8 +1,9 @@
 # Native detectors (L1)
 
 Native detectors are the rule-based Rust checks that make up **L1**. They need no model
-assets, run in microseconds, and are always available — including fully offline. This page
-catalogues them by family. The source lives under
+assets and are available fully offline. Their runtime scales with the input and enabled rule
+inventory: short inputs are cheap, while sufficiently large inputs can take milliseconds rather
+than microseconds. This page catalogues the detectors by family. The source lives under
 [`rust/src/detectors/`](https://github.com/patronus-protect/patronus-security/tree/main/rust/src/detectors)
 and [`rust/src/threat/`](https://github.com/patronus-protect/patronus-security/tree/main/rust/src/threat).
 
@@ -64,7 +65,9 @@ uses of those verbs remain safe.
 
 ## DLP
 
-Data-loss-prevention detectors flag content that leaks or destroys data:
+Data-loss-prevention detectors report credential material, sensitive technical or business
+content, and risky data-handling operations. Ark emits findings; enforcement remains the
+caller's responsibility.
 
 | Detector | Catches |
 | --- | --- |
@@ -72,49 +75,52 @@ Data-loss-prevention detectors flag content that leaks or destroys data:
 | `secret_transfer` | Secrets and credentials being read or moved (API keys, private keys, tokens, `.env`). |
 | `destructive_operation` | Destructive commands/operations (mass delete, disable protections, wipe). |
 | `sensitive_material` | Transfer of sensitive material beyond a trust boundary. |
+| `mcp_policy` | A fixed built-in set of MCP tool-policy patterns, including destructive shell operations and credential-file reads. |
+| `mcp_runtime_risk` | Risk indicators in an MCP tool invocation. |
 
 Only the `dlp` regex detector populates `evidence_spans` with the exact matched offsets;
-`secret_transfer`, `destructive_operation`, and `sensitive_material` are boolean heuristics and
-return no spans. The regex detector also exposes localized lexical or structural
+the other five producers are boolean heuristics and return no spans. The regex detector also
+exposes localized lexical or structural
 `details.l1_anchors` for credential, authentication, business-record, metric, source/config,
 database/dump, and log/stacktrace context. These anchors do not block by themselves.
 
+The Rust/Python library leaves all DLP rules eligible unless execution gates disable them. The
+Ark API example/default profile is intentionally narrower: it enables the credential- and
+secret-oriented regex rules plus `secret_transfer` and `sensitive_material`, while business
+records, source code, SQL, logs, metrics, destructive operations, and MCP-specific producers are
+opt-in. See [Configuration → execution gates](../reference/configuration.md#execution-gates).
+
 ## PII
 
-The `pii` category is native-only and uses **format validators** rather than a model:
-deterministic identifiers such as email, IP, IBAN, SWIFT/BIC, phone, payment-card data,
-government/insurance identifiers, and anchor-bound employee, customer, patient, student,
-applicant, account, username, and birth-date values are validated before being reported. Matches
-are returned as exact `evidence_spans`. Localized `details.l1_anchors` cover person, role, contact,
+The `pii` category has a native-only L1 detector. It combines regex candidates, optional format
+validators, and anchor-bound rules rather than running a model: deterministic identifiers such as
+email, IP, IBAN, SWIFT/BIC, phone, payment-card data, government/insurance identifiers, and
+anchor-bound employee, customer, patient, student, applicant, account, username, and birth-date
+values can be reported. Matches are returned as exact `evidence_spans`. Localized
+`details.l1_anchors` cover person, role, contact,
 address, birth, identifier, account, payment, financial, government, vehicle, medical,
 special-category, and employment/compensation context without inventing a finding. For
 open-vocabulary entity extraction (names, organizations, locations, …) use the model-backed
 [`dynamic-pii`](categories.md#transformer-only-l3) category instead.
 
-## MCP (Model Context Protocol)
-
-Two native detectors evaluate agentic tool use against MCP policy:
-
-| Detector | Catches |
-| --- | --- |
-| `mcp_policy` | Matches against a fixed built-in set of MCP tool-policy rules (e.g. destructive shell ops, credential-file reads) and returns the fired rule name. The internal per-rule severity is not surfaced in the result. |
-| `mcp_runtime_risk` | Runtime risk in an MCP tool invocation. |
-
-These can be toggled per request via [execution gates](../reference/configuration.md#execution-gates)
-using model keys such as `native:mcp_runtime_risk`.
-
 ## Enabling and disabling detectors
 
-All native detectors run when their category and level are enabled. To disable a specific
-detector without changing `max_level`, use an execution gate with its `native:<name>` key. For
-Injection, `native:injection_l1` disables the complete native stack; the former model keys such as
-`native:instruction_override` still disable only that internal producer:
+Native detectors are eligible when their category and L1 are enabled; model and rule gates can
+narrow that set. To disable a complete detector without changing `max_level`, use an execution
+gate with its `native:<name>` key. To
+disable one stable PII, DLP, or Injection L1 rule while keeping its siblings, use `rules`. Missing
+rule IDs remain enabled. For Injection, `native:injection_l1` disables the complete native stack;
+the former model keys such as `native:instruction_override` still disable only that internal
+producer:
 
 ```python
 scanner.set_execution_gates({
     "levels": {"l1": True, "l2": False, "l3": False},
     "models": {"native:instruction_override": False},
+    "rules": {"pii_employee_id": False, "dlp_sql_statement": False},
 })
 ```
 
 See [Configuration → execution gates](../reference/configuration.md#execution-gates).
+The complete set of accepted PII, DLP, DLP-heuristic, and Injection rule IDs is listed in the
+[L1 rule catalog](../reference/l1-rule-catalog.md).

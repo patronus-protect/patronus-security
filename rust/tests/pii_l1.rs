@@ -52,6 +52,31 @@ pii_golden!(
     "EMPLOYEE_ID",
     "Employee ID EMP-2042"
 );
+
+#[test]
+fn detects_demo_employee_identifier_variants_with_exact_boundaries() {
+    for (text, expected) in [
+        ("PersNr: P-778301", "P-778301"),
+        ("ID\tHR  55019", "HR  55019"),
+        ("Kennung: EMP_00917", "EMP_00917"),
+        ("Simon Vale (EMP-SYN-8820)", "EMP-SYN-8820"),
+        ("employee number EMP-SYN-3361", "EMP-SYN-3361"),
+        ("Henry Cole, EMP-SYN-9014", "EMP-SYN-9014"),
+        ("Personnel ID EMP-SYN-4557", "EMP-SYN-4557"),
+        ("staff code EMP-SYN-6189", "EMP-SYN-6189"),
+        ("ID: EMP-SYN-1026", "EMP-SYN-1026"),
+        ("employee_id = 'EMP-SYN-2048'", "EMP-SYN-2048"),
+    ] {
+        let result = pii_result(text);
+        let spans = result
+            .evidence_spans
+            .iter()
+            .filter(|span| span.label == "EMPLOYEE_ID")
+            .collect::<Vec<_>>();
+        assert_eq!(spans.len(), 1, "unexpected spans for {text:?}");
+        assert_eq!(spans[0].text, expected);
+    }
+}
 pii_golden!(detects_customer_id, "CUSTOMER_ID", "Kundennummer: KD-88231");
 pii_golden!(
     detects_english_customer_id,
@@ -199,6 +224,8 @@ fn rejects_invalid_values_and_identifiers_without_the_right_anchor() {
         "Steuer-ID: 86095742718",
         "SSN: 000-12-3456",
         "NINO: BG123456A",
+        "Tel. 0000 000000",
+        "Telefon: 0171",
         "Build: EMP-4711",
         "Rechnungsnummer: KD-88231",
         "Ticket: PAT-2048",
@@ -278,6 +305,37 @@ fn direct_and_contextual_findings_keep_exact_value_boundaries() {
         assert_eq!(span.text, expected);
         assert_eq!(&text[span.start_byte..span.end_byte], expected);
     }
+}
+
+#[test]
+fn detects_contextual_german_national_phones_with_exact_boundaries() {
+    for (text, expected) in [
+        (
+            "Frau Meier, Tel. 0171 2233445. Offene Rechnung.",
+            "0171 2233445",
+        ),
+        ("Personalnummer 88231, Tel. 0941 5567890.", "0941 5567890"),
+    ] {
+        let result = pii_result(text);
+        let span = result
+            .evidence_spans
+            .iter()
+            .find(|span| span.label == "PHONE")
+            .unwrap_or_else(|| panic!("missing PHONE span for {text:?}"));
+        assert_eq!(span.text, expected);
+        assert_eq!(&text[span.start_byte..span.end_byte], expected);
+    }
+}
+
+#[test]
+fn valid_iban_wins_over_an_overlapping_card_candidate() {
+    let text = "Konto DE44 5001 0517 5407 3249 31.";
+    let result = pii_result(text);
+
+    assert_eq!(result.class_name, "IBAN");
+    assert_eq!(result.evidence_spans.len(), 1);
+    assert_eq!(result.evidence_spans[0].label, "IBAN");
+    assert_eq!(result.evidence_spans[0].text, "DE44 5001 0517 5407 3249 31");
 }
 
 #[test]

@@ -44,6 +44,11 @@ All endpoints except `/healthz` and `/readyz` require
   `dlp_secret_transfer`, `dlp_mcp_runtime_risk`, `dlp_mcp_policy`, and
   `dlp_destructive_operation`. Injection IDs are the `ark.injection.*` IDs
   returned in evidence spans and candidate metadata.
+  In the checked-in `config.example.yaml`, DLP L1 defaults to credential, key,
+  token, password, hash, private-key, and sensitive-transfer detection. Business
+  identifiers, internal metrics, source/SQL/dump/log content, MCP/runtime risk,
+  and destructive operations require explicit `gates.rules`/`gates.models`
+  opt-ins. PII and Injection rules remain enabled unless configured otherwise.
   Returns `202` with `{"jobs": [{"job_id", "source", "status_url"}, ...]}`.
 - `GET /v1/scan/{job_id}` — durable job status plus accumulated progress,
   compact category results, `decision_evidence`, and the overall decision.

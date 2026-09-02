@@ -35,6 +35,14 @@ use crate::pipeline::strategy::{
     aggregate_decision_index, ChunkAggregation, ChunkDecision, HeadDecisionState, PipelineStrategy,
 };
 
+type UnifiedChunkScore = (
+    usize,
+    crate::ml::ntdb_executor::ByteSpan,
+    String,
+    Vec<crate::LabelScore>,
+);
+type UnifiedChunkScoresByHead = HashMap<String, Vec<UnifiedChunkScore>>;
+
 #[allow(clippy::large_enum_variant)]
 pub(super) enum UnifiedRunState {
     Running { subscribers: Vec<L3JobSpec> },
@@ -60,14 +68,7 @@ pub(super) struct UnifiedRunResult {
     clustering: L3ClusteringStrategy,
     physical_job_id: u64,
     chunk_trace: Option<Vec<serde_json::Value>>,
-    chunk_scores_by_head: HashMap<
-        String,
-        Vec<(
-            usize,
-            crate::ml::ntdb_executor::ByteSpan,
-            Vec<crate::LabelScore>,
-        )>,
-    >,
+    chunk_scores_by_head: UnifiedChunkScoresByHead,
 }
 
 #[derive(Clone)]
@@ -171,7 +172,6 @@ fn subscriber_spec(mut spec: L3JobSpec) -> L3JobSpec {
     spec.l2_chunk_outputs = spec
         .l2_chunk_outputs
         .iter()
-        .filter(|chunk| chunk.joint_v3_decision.is_some())
         .cloned()
         .map(|mut chunk| {
             chunk.embedding.clear();
@@ -850,22 +850,8 @@ fn aggregate_unified_outputs(
 fn unified_chunk_scores(
     chunks: &[SelectedL3Chunk],
     outputs: &[UnifiedChunkOutput],
-) -> HashMap<
-    String,
-    Vec<(
-        usize,
-        crate::ml::ntdb_executor::ByteSpan,
-        Vec<crate::LabelScore>,
-    )>,
-> {
-    let mut scores = HashMap::<
-        String,
-        Vec<(
-            usize,
-            crate::ml::ntdb_executor::ByteSpan,
-            Vec<crate::LabelScore>,
-        )>,
-    >::new();
+) -> UnifiedChunkScoresByHead {
+    let mut scores = UnifiedChunkScoresByHead::new();
     for output in outputs {
         let Some(chunk) = chunks.get(output.chunk_index) else {
             continue;
@@ -880,6 +866,7 @@ fn unified_chunk_scores(
                     start: chunk.start_byte,
                     end: chunk.end_byte,
                 },
+                head_output.class_name.clone(),
                 head_output.label_scores.clone(),
             ));
         }
@@ -1085,6 +1072,7 @@ pub fn unified_metadata_details_for_test(
         l3_candidates: Vec::new(),
         l2_chunk_outputs: Vec::new().into(),
         dynamic_pii_config: None,
+        dynamic_pii_inference_groups: Vec::new(),
         dynamic_pii_activated_rules: Vec::new(),
     };
     let run = UnifiedRunResult {
@@ -1238,6 +1226,7 @@ pub fn unified_coalescing_snapshot(categories: &[&str]) -> UnifiedCoalescingSnap
                 l3_candidates: request_candidates.clone(),
                 l2_chunk_outputs: request_l2_chunk_outputs.clone().into(),
                 dynamic_pii_config: None,
+                dynamic_pii_inference_groups: Vec::new(),
                 dynamic_pii_activated_rules: Vec::new(),
             },
         );
@@ -1566,7 +1555,7 @@ fn materialize_unified_result(
                 .get(head)
                 .into_iter()
                 .flatten()
-                .filter_map(|(_, span, scores)| {
+                .filter_map(|(_, span, _, scores)| {
                     let probabilities = context
                         .labels
                         .iter()
@@ -1597,8 +1586,37 @@ fn materialize_unified_result(
     } else {
         arbitrate_l3_l2(head, Some(result), subscriber.fallback.clone(), point)
     };
+    result.internal_l2_chunk_outputs = final_chunk_outputs(subscriber, run, head);
     result.duration_ms = result.layers.iter().map(|layer| layer.duration_ms).sum();
     result
+}
+
+fn final_chunk_outputs(
+    subscriber: &L3JobSpec,
+    run: &UnifiedRunResult,
+    head: &str,
+) -> Vec<crate::ml::ntdb_executor::L2ChunkOutput> {
+    let l3_outputs = run
+        .chunk_scores_by_head
+        .get(head)
+        .into_iter()
+        .flatten()
+        .map(|(_, span, class_name, scores)| {
+            let public_class = public_class_name(head, class_name);
+            let confidence = scores
+                .iter()
+                .find(|score| public_class_name(head, &score.label) == public_class)
+                .map(|score| score.confidence as f32)
+                .unwrap_or(0.0);
+            (*span, public_class.to_string(), confidence)
+        })
+        .collect::<Vec<_>>();
+    super::final_l3_chunk_outputs(
+        &subscriber.l2_chunk_outputs,
+        head,
+        UNIFIED_MODEL,
+        &l3_outputs,
+    )
 }
 
 fn coverage(resolved_chunks: usize, total_effective_chunks: usize) -> f64 {
@@ -2030,9 +2048,103 @@ mod tests {
 
         assert!(Arc::ptr_eq(&subscriber.text, &shared_text));
         assert!(subscriber.l3_candidates.is_empty());
-        assert!(subscriber.l2_chunk_outputs.is_empty());
+        assert_eq!(subscriber.l2_chunk_outputs.len(), 1);
+        assert!(subscriber.l2_chunk_outputs[0].embedding.is_empty());
+        assert!(subscriber.l2_chunk_outputs[0].token_ids.is_empty());
         assert_eq!(subscriber.category, "threat");
         assert_eq!(subscriber.priority, 2);
+    }
+
+    #[test]
+    fn final_l3_chunk_class_replaces_only_overlapping_l2_source_chunks() {
+        let mut subscriber = test_subscriber(1, "sensitive_document", 2);
+        subscriber.l2_chunk_outputs = vec![
+            crate::ml::ntdb_executor::L2ChunkOutput {
+                span: ByteSpan { start: 0, end: 10 },
+                class_name: "hr".to_string(),
+                confidence: 0.91,
+                promoted: true,
+                promote_score: Some(0.8),
+                promote_threshold: Some(0.7),
+                source_pipeline: "sensitive_document".to_string(),
+                source_model: "sensitive-document-l2".to_string(),
+                embedding: Vec::new(),
+                embedding_space: String::new(),
+                token_ids: Vec::new(),
+                tokenizer_family: String::new(),
+                class_probabilities: Vec::new(),
+                joint_v3_decision: None,
+            },
+            crate::ml::ntdb_executor::L2ChunkOutput {
+                span: ByteSpan { start: 10, end: 20 },
+                class_name: "finance".to_string(),
+                confidence: 0.88,
+                promoted: false,
+                promote_score: Some(0.1),
+                promote_threshold: Some(0.7),
+                source_pipeline: "sensitive_document".to_string(),
+                source_model: "sensitive-document-l2".to_string(),
+                embedding: Vec::new(),
+                embedding_space: String::new(),
+                token_ids: Vec::new(),
+                tokenizer_family: String::new(),
+                class_probabilities: Vec::new(),
+                joint_v3_decision: None,
+            },
+        ]
+        .into();
+        let run = UnifiedRunResult {
+            output: UnifiedModelOutput {
+                heads: HashMap::from([(
+                    "sensitive_document".to_string(),
+                    UnifiedHeadOutput {
+                        class_name: "other".to_string(),
+                        confidence: 0.94,
+                        label_scores: vec![crate::LabelScore {
+                            label: "other".to_string(),
+                            confidence: 0.94,
+                            matched: true,
+                        }],
+                    },
+                )]),
+            },
+            duration_ms: 1.0,
+            queue_wait_ms: 0.0,
+            chunk_count: 2,
+            inferred_chunks: 1,
+            propagated_chunks: 0,
+            planned_l3_chunks: 1,
+            resolved_chunks: 1,
+            total_effective_chunks: 1,
+            head_early_exits: HashSet::new(),
+            resolved_chunks_by_head: HashMap::from([("sensitive_document".to_string(), 1)]),
+            total_chunks_by_head: HashMap::from([("sensitive_document".to_string(), 1)]),
+            cache_hits: 0,
+            clustering: L3ClusteringStrategy::Disabled,
+            physical_job_id: 1,
+            chunk_trace: None,
+            chunk_scores_by_head: HashMap::from([(
+                "sensitive_document".to_string(),
+                vec![(
+                    0,
+                    ByteSpan { start: 0, end: 10 },
+                    "other".to_string(),
+                    vec![crate::LabelScore {
+                        label: "other".to_string(),
+                        confidence: 0.94,
+                        matched: true,
+                    }],
+                )],
+            )]),
+        };
+
+        let chunks = final_chunk_outputs(&subscriber, &run, "sensitive_document");
+
+        assert_eq!(chunks.len(), 2);
+        assert_eq!(chunks[0].class_name, "other");
+        assert_eq!(chunks[0].source_model, UNIFIED_MODEL);
+        assert_eq!(chunks[1].class_name, "finance");
+        assert_eq!(chunks[1].source_model, "sensitive-document-l2");
     }
 
     fn test_subscriber(job_id: u64, category: &str, priority: usize) -> L3JobSpec {
@@ -2084,6 +2196,7 @@ mod tests {
             l3_candidates: Vec::new(),
             l2_chunk_outputs: Vec::new().into(),
             dynamic_pii_config: None,
+            dynamic_pii_inference_groups: Vec::new(),
             dynamic_pii_activated_rules: Vec::new(),
         }
     }

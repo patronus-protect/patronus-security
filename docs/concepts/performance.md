@@ -3,8 +3,7 @@
 Patronus Ark is built to sit in the request path on ordinary hardware — a laptop CPU, no
 GPU required. This page explains the design levers that make that possible. For step-by-step
 tuning, see [Tune performance & memory](../how-to/tune-performance.md); for the full
-measurements and rationale, see
-[`OPTIMISATIONS.md`](https://github.com/patronus-protect/patronus-security/blob/main/OPTIMISATIONS.md).
+measurement workflow, see [Run the local benchmark](../how-to/run-local-benchmark.md).
 
 ## Where the time goes
 
@@ -12,7 +11,7 @@ The layered design means cost is proportional to how far a scan escalates:
 
 | Layer | Typical latency (batch 1) | Runs on |
 | --- | --- | --- |
-| L1 native | microseconds | every request |
+| L1 native | input-dependent; large PII/DLP inputs can take milliseconds | enabled categories with native detectors |
 | L2 NTDB | ~1 ms | when configured & cached |
 | L3 transformer | tens of ms | only promoted requests |
 

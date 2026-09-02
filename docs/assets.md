@@ -38,7 +38,7 @@ Category assets are stored below that root, for example `injection/`, `sensitive
 
 `dedicated` loads the configured per-pipeline L3 bundles. `multi` loads only the revision-pinned `patronus-studio/lion-warden-ai-security-classifier` classifier bundle at revision `30ea449339d1075a31fcffa9199ebee4f2cfaf9a`; GLiNER remains separate in both strategies.
 
-The default shared ONNX artifact is `onnx/int8_int4_embeddings/model.onnx`; set `PATRONUS_L3_PRECISION=fp16` to select `onnx/onnx_fp16/model_fp16.onnx`. Dynamic PII selects `onnx/fp16/model_fp16.onnx` from its separate GLiNER bundle. Linux `x86_64` production deployments use FP16 for validated inference parity. See `docs/unified-multitask-l3-plan.md` for the seven-head tensor contract and the request-local worker coalescing contract.
+The default shared ONNX artifact is `onnx/int8_int4_embeddings/model.onnx`; set `PATRONUS_L3_PRECISION=fp16` to select `onnx/onnx_fp16/model_fp16.onnx`. Dynamic PII selects `onnx/fp16/model_fp16.onnx` from its separate GLiNER bundle. Linux `x86_64` production deployments use FP16 for validated inference parity. See [Models & the NTDB format](concepts/models-and-ntdb.md) for the current tensor and runtime contracts.
 
 ## NTDB L2 Packages
 

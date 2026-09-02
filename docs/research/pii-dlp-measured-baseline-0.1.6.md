@@ -1,6 +1,6 @@
 # PII/DLP measured baseline 0.1.6
 
-Measured on 2026-08-31 at commit `6b5af93` plus the Unicode boundary fix
+Measured on 2026-08-31 from the 0.1.6 branch, including the PII/DLP repairs
 documented below. Hardware: Apple M1 (8 cores, 16 GB), macOS 14.8.7. Native
 100-KiB latency uses an optimized release build. GLiNER runs only on the real
 document sizes selected by the Goldens; it is **not** run on a synthetic
@@ -12,7 +12,7 @@ product grouping and do not define the detector architecture.
 
 ## Demo contract
 
-The exact texts currently shown by the demo produce the following results.
+The three PII/DLP texts currently shown by the demo produce the following results.
 `Yes` means that an evidence span with the expected class is present; a safe
 result or a wrong class is not counted as success.
 
@@ -20,24 +20,24 @@ result or a wrong class is not counted as success.
 |---|---|---|---|
 | Kundendaten | person name | GLiNER `person`: `Frau Meier`, 0.936 | yes |
 | Kundendaten | e-mail | PII-L1 `EMAIL` | yes |
-| Kundendaten | telephone | no `PHONE` span | **no** |
-| Kundendaten | IBAN | value emitted as `CREDITCARD`, not `IBAN` | **wrong class** |
+| Kundendaten | telephone | PII-L1 `PHONE` | yes |
+| Kundendaten | IBAN | PII-L1 `IBAN`, without overlapping `CREDITCARD` | yes |
 | Kundendaten | internal margin | DLP-L1 `dlp.internal.business_metric` | yes |
 | Personalakte | person name | `Herrn Bergmann` emitted as `organization`, 0.903 | **wrong class** |
 | Personalakte | employee number | PII-L1 `EMPLOYEE_ID` | yes |
 | Personalakte | e-mail | PII-L1 `EMAIL` | yes |
-| Personalakte | telephone | no `PHONE` span | **no** |
-| Personalakte | salary | no internal-metric span | **no** |
+| Personalakte | telephone | PII-L1 `PHONE` | yes |
+| Personalakte | salary | DLP-L1 `dlp.internal.business_metric` | yes |
 | Personalakte | contribution margin | DLP-L1 `dlp.internal.business_metric` | yes |
 | Quellcode | source statement | DLP-L1 `dlp.content.source_code` | yes |
 | Quellcode | Stripe live key | DLP-L1 `PAYMENT_KEY` | yes |
 | Quellcode | SQL statement | DLP-L1 `dlp.content.sql` | yes |
 | Quellcode | assigned password | DLP-L1 `CREDENTIAL` | yes |
-| Prompt Injection | block | L1 returns `safe`, confidence 0.242 | **no** |
 
-The demo is therefore a useful acceptance fixture, but it is not fully met by
-0.1.6. In particular, the isolated examples working for code and SQL must not
-be confused with broad corpus quality below.
+The PII/DLP part of the demo is therefore met except for the semantic
+`Herrn Bergmann` label competition. Prompt Injection is intentionally outside
+this PII/DLP task. Findings are detector output; Ark does not prescribe an
+enforcement action here.
 
 ## Admitted Golden inventory
 
@@ -65,7 +65,7 @@ Exact character-span metrics on the capped synthetic Gretel test split:
 | IBAN | 175 | 1.000 | 0.714 | **0.833** |
 | E-mail | 250 | 0.731 | 0.804 | **0.766** |
 | PAN | 138 | 0.912 | 0.449 | 0.602 |
-| Phone | 250 | 0.607 | 0.556 | 0.580 |
+| Phone | 250 | 0.610 | 0.564 | 0.586 |
 | US SSN | 135 | 1.000 | 0.370 | 0.541 |
 | Date of birth | 243 | 0.989 | 0.366 | 0.535 |
 | BIC/SWIFT | 209 | 0.947 | 0.340 | 0.500 |
@@ -89,7 +89,7 @@ Gretel is the source with a controlled DE/EN split. Selected exact-span recall:
 | Metric | DE Gold | DE recall | EN Gold | EN recall |
 |---|---:|---:|---:|---:|
 | E-mail | 19 | 0.947 | 156 | 0.801 |
-| Phone | 21 | 0.476 | 129 | 0.434 |
+| Phone | 21 | 0.571 | 129 | 0.434 |
 | IP address | 15 | 1.000 | 123 | 0.992 |
 | IBAN | 19 | 0.316 | 69 | 0.971 |
 | BIC/SWIFT | 22 | 0.182 | 112 | 0.366 |
@@ -162,40 +162,70 @@ from 0.032 to 0.072, but neither is strong enough to present as stable alone.
 No `L1 + GLiNER boost` number exists yet because the fusion/boost rule has not
 been implemented and frozen. Reporting a union would be misleading.
 
+The separate
+[`gliner-chunk-semantics-0.1.6.md`](gliner-chunk-semantics-0.1.6.md)
+experiment also rejects using arbitrary GLiNER span presence as a chunk-level
+semantic claim. A future context output needs its own Goldens and contract.
+
 ## DLP derived-content tasks
 
 These are deliberately weaker forms of Gold than human span annotation:
 
 | Task | Result |
 |---|---|
-| Gitleaks Go source-code document recall | 60/214 = **28.0%** |
+| Gitleaks Go source-code document recall | 213/214 = **99.5%** |
 | Gitleaks Markdown control document FPR | 3/13 = **23.1%** |
-| SchemaPile exact SQL-boundary recall | 3/250 = **1.2%** |
-| SchemaPile overlap recall | 15/250 = **6.0%** |
+| SchemaPile exact SQL-boundary recall | 198/250 = **79.2%** |
+| SchemaPile overlap recall | 198/250 = **79.2%** |
 
 SchemaPile precision is not reported: the cap stops after 250 statements and
 therefore does not fully annotate every scanned source file. Predictions after
-the selected boundary would otherwise be counted as false positives. The demo
-code/SQL examples pass, but broad code/SQL content detection is not yet stable.
+the selected boundary would otherwise be counted as false positives. The
+known misses include empty `;` pseudo-statements admitted by the derived Gold
+lexer and `LOCK`/`UNLOCK` statements intentionally kept as Anchor context.
+The unchanged three Markdown positives contain code-heavy repository
+documentation; no new control document became positive. Requiring Go
+structure near `package` and validating SQL structure removes the reproduced
+prose false positives at the cost of one source document and one SQL span.
 
 ## Native L1 latency at exactly 100 KiB
 
-Release build, one unmeasured warm-up, then 10 benign or 5 signal-dense
-iterations. Signal-dense text intentionally repeats e-mail, phone, IBAN,
-source, SQL, credential, and injection phrases; it is a stress case, not a
-natural-language distribution.
+The checked-in native release benchmark performs 100 warm-up calls and 200
+measured calls for each exact 100-KiB payload. `Match` contains one finding at
+the end of the document; it is not a signal-dense stress case.
 
-| Categories | Benign median / P95 | Signal-dense median / P95 | Dense evidence spans |
-|---|---:|---:|---:|
-| PII | 13.3 / 15.9 ms | 31.2 / 33.0 ms | 794 |
-| DLP | 13.4 / 17.0 ms | 72.7 / 82.4 ms | 1,191 |
-| Injection | 54.6 / 140.6 ms | 1,398.1 / 1,640.9 ms | 3,169 |
-| PII + DLP + Injection | 29.6 / 182.7 ms | 1,549.8 / 1,715.8 ms | 5,154 |
+| Path | Benign P50 / P95 | One-match P50 / P95 |
+|---|---:|---:|
+| PII detector | 7.30 / 7.64 ms | 7.05 / 7.57 ms |
+| DLP detector | 5.62 / 5.84 ms | 6.17 / 7.18 ms |
+| PII public gateway | 9.99 / 11.99 ms | 7.68 / 9.14 ms |
+| DLP public gateway | 7.01 / 10.67 ms | 8.93 / 12.56 ms |
 
-The combined benign P95 has one 182.7-ms outlier in ten iterations; use a
-larger isolated run before treating it as an SLO. Injection's dense latency is
-primarily proportional to thousands of emitted candidate spans and needs its
-own output-cap/aggregation profile if adversarial 100-KiB inputs are in scope.
+An adversarial 100-KiB payload made only of unterminated `SELECT ... FROM ...`
+lines remains `safe` and took 140 ms in a release regression test. The SQL
+candidate is capped at 65 semicolon-free lines, so this case is bounded but
+materially slower than ordinary benign text. These host-specific figures are
+regression evidence, not a production SLO.
+
+Reproduce the table with:
+
+```bash
+cargo run --release -p patronus-ark --example 11_l1_pii_dlp_latency
+```
+
+## Current keep / evaluate / reject snapshot
+
+- **Keep in L1:** validated deterministic identifiers such as IBAN, e-mail,
+  IP address and context-bound phones; salary/business metrics; structurally
+  validated source and SQL findings. Their limits remain visible in the
+  per-class and derived-content measurements above.
+- **Evaluate as GLiNER plus L1 context:** semantic entities where L1 cannot
+  validate the value itself, notably person names and the measured
+  driver-license gap. Any boost or label gate still needs a frozen paired
+  Golden and an ablation against GLiNER-only and L1-only.
+- **Reject for now:** treating arbitrary `academic_grade` span presence as a
+  chunk-level semantic finding. The exploratory presence result is promising,
+  but exact spans and hard negatives are not yet strong enough for runtime use.
 
 ## Runtime defect found by the Goldens
 

@@ -514,7 +514,7 @@ pub struct DynamicPiiConditionalLabels {
 }
 ```
 
-Labels activated when another pipeline returns a configured result.
+Extra label group activated on chunks with a matching final source result.
 
 ```rust
 pub struct DynamicPiiConfig {
@@ -549,6 +549,14 @@ pub struct DynamicPiiConfig {
 ```
 
 Pipeline-specific configuration for the L3-only `dynamic-pii` scanner.
+
+`labels` form the stable base GLiNER group for the full input. Conditional
+labels are never concatenated with that group: every matching rule runs its
+extra labels separately and only on chunks whose final source-pipeline class
+matches. Base labels repeated by a conditional rule are removed from its
+extra call. Dynamic PII waits for referenced source pipelines to reach a
+terminal result (including L2 results that do not promote), instead of
+resolving against an interim L2 class.
 
 ```rust
 pub fn validated(mut self) -> Result<Self, String>;

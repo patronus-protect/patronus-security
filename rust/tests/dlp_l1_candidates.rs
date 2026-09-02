@@ -1,6 +1,12 @@
-use std::collections::BTreeSet;
+use std::{
+    collections::BTreeSet,
+    time::{Duration, Instant},
+};
 
-use patronus_ark::{SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult};
+use patronus_ark::{
+    detectors::dlp::dlp::DlpPipeline, SecurityCategory, SecurityGateway, SecurityLevel,
+    SecurityScanResult,
+};
 
 fn scan(text: &str) -> SecurityScanResult {
     let mut scanner = SecurityGateway::with_max_level(
@@ -446,6 +452,8 @@ fn business_metrics_require_anchor_value_relationship_and_keep_context() {
     for text in [
         "Marge liegt bei 38 %",
         "Deckungsbeitrag 22 %",
+        "Gehalt 74.500 EUR",
+        "Annual salary: 120,000 USD",
         "EBITDA-Marge: 6,1 Prozent",
         "Forecast 40,8 Mio. EUR",
     ] {
@@ -459,6 +467,54 @@ fn business_metrics_require_anchor_value_relationship_and_keep_context() {
     ] {
         assert!(scan(safe).evidence_spans.is_empty(), "{safe}");
     }
+}
+
+#[test]
+fn source_and_sql_rules_cover_structural_external_golden_shapes() {
+    let go_source = "package detect\n\nimport \"fmt\"";
+    assert_span(&scan(go_source), "dlp.content.source_code", go_source);
+
+    let create = concat!(
+        "-- Table structure for table `customer`\n",
+        "CREATE TABLE IF NOT EXISTS `customer` (\n",
+        "  `id` bigint NOT NULL,\n",
+        "  PRIMARY KEY (`id`)\n",
+        ");"
+    );
+    assert_span(&scan(create), "dlp.content.sql", create);
+
+    let alter = "ALTER TABLE customer\n  ADD COLUMN active boolean NOT NULL;";
+    assert_span(&scan(alter), "dlp.content.sql", alter);
+
+    for prose in [
+        "The package main will arrive tomorrow.",
+        "package delivery/details",
+        "package delivery",
+        "package details",
+        "Please create a table for the report.",
+        "ALTER the schedule after lunch;",
+        "Set expectations before lunch;",
+        "Begin the migration tomorrow;",
+        "Commit changes before release;",
+        "Use caution;",
+        "Call Alice;",
+    ] {
+        assert!(scan(prose).evidence_spans.is_empty(), "{prose}");
+    }
+}
+
+#[test]
+fn unterminated_select_lines_have_bounded_runtime_and_emit_no_sql() {
+    const SIZE: usize = 100 * 1024;
+    let line = "SELECT customer_id FROM customer_records\n";
+    let text = line.repeat(SIZE.div_ceil(line.len()));
+    let text = &text[..SIZE];
+    let pipeline = DlpPipeline::new();
+    let started = Instant::now();
+    let result = pipeline.evaluate(text);
+
+    assert_eq!(result.class_name, "safe");
+    assert!(started.elapsed() < Duration::from_secs(2));
 }
 
 #[test]

@@ -53,14 +53,38 @@ pipeline:
     l2: true
     l3: true
     models:
-      # Disable one specific native scanner while leaving its category on.
+      # DLP defaults to credentials, secrets, and authentication material.
+      # Broader MCP/runtime and destructive-operation findings remain
+      # available for explicit profiles, but are not part of default DLP-L1.
       native:mcp_runtime_risk: false
+      native:mcp_policy: false
+      native:destructive_operation: false
     rules:
-      # Missing rule IDs remain enabled. The same map is accepted in the
-      # request-local multipart `config` JSON and is snapshotted into its job.
-      pii_email: false
-      dlp_password_assignment: false
-      ark.injection.override.discard_prior: false
+      # Missing rule IDs remain enabled. Credential/key/password rules are
+      # therefore active. Disable the broader DLP families in the default
+      # profile; callers can explicitly opt into them with their own gates.
+      dlp_de_vat_id: false
+      dlp_de_commercial_register_number: false
+      dlp_de_facility_number_bsnr: false
+      dlp_record_case_id: false
+      dlp_record_contract_id: false
+      dlp_record_claim_id: false
+      dlp_record_order_id: false
+      dlp_record_invoice_id: false
+      dlp_project_id: false
+      dlp_organization_id: false
+      dlp_internal_business_metric: false
+      dlp_database_dump_insert: false
+      dlp_source_code_fence: false
+      dlp_source_code_statement: false
+      dlp_source_code_python_rust_assignment: false
+      dlp_source_code_declaration: false
+      dlp_source_code_import: false
+      dlp_sql_statement: false
+      dlp_sql_multiline_statement: false
+      dlp_database_dump_header: false
+      dlp_stacktrace_block: false
+      dlp_structured_system_log: false
     conditional:
       # Only run the (expensive) L3 injection classifier once L1 already
       # flagged something suspicious for this request.

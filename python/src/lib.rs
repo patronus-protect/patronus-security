@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+#![allow(clippy::useless_conversion)] // PyO3-generated wrappers convert PyErr into PyErr.
 use patronus_ark::{
     normalize_text as rust_normalize_text, CacheEncryptionConfig, CacheWriteMode,
     ConditionalPipelineGate, DynamicPiiConfig, EvidenceSpan, ExactCacheConfig, ExecutionBackend,
@@ -28,6 +29,7 @@ struct SecurityGateway {
 #[pymethods]
 impl SecurityGateway {
     #[new]
+    #[allow(clippy::too_many_arguments)] // Public Python constructor signature.
     #[pyo3(signature = (categories, max_level="l2", model_dir=None, download_files=true, download_categories=None, execution_gates_json=None, onnx_batch_mode="backend_default", execution_backend="auto", ntdb_operating_point="best_f1", l3_strategy="dedicated", dynamic_pii_config_json=None, cache_storage_location=None, cache_encryption_key_hex=None, cache_entry_ttl_seconds=2_592_000, cache_memory_max_entries=100_000, cache_memory_max_bytes=134_217_728))]
     fn new(
         categories: Vec<String>,

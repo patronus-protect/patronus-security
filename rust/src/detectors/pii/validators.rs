@@ -109,6 +109,14 @@ pub fn bounded_identifier(s: &str) -> bool {
         && !s.chars().all(|ch| ch == '0')
 }
 
+pub fn bounded_employee_identifier(s: &str) -> bool {
+    let compact = s
+        .chars()
+        .filter(|ch| !ch.is_whitespace())
+        .collect::<String>();
+    bounded_identifier(&compact)
+}
+
 pub fn username(s: &str) -> bool {
     (2..=64).contains(&s.len())
         && s.chars()

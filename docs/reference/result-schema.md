@@ -153,8 +153,9 @@ unrelated sources or model versions without their matching thresholds.
 
 ### Evidence spans
 
-Native PII and DLP findings, registered native injection findings, and `dynamic-pii` entities
-populate `evidence_spans` with offsets:
+Native PII findings, regex-based DLP findings, registered native injection findings, and
+`dynamic-pii` entities populate `evidence_spans` with offsets. Other native DLP producers can
+return a category finding without a span:
 
 ```python
 for span in result["evidence_spans"]:
@@ -184,6 +185,11 @@ Native PII and DLP layers can additionally expose localized context facts under
 
 Consumers must base immediate findings on `evidence_spans` and the result decision, not on an
 anchor alone. Anchor metadata is contextual evidence for later routing or model fusion.
+
+Dynamic PII L3 layers expose `details.inference_groups`. Each entry identifies a stable base or
+conditional GLiNER call, its labels, the conditional rule index, and optional byte ranges inherited
+from matching final source-pipeline chunks. This is diagnostic provenance; the public findings
+remain the merged `evidence_spans`, with the highest-scoring exact duplicate retained.
 
 For registered native injection findings, the span label is the stable Ark rule ID. The
 corresponding layer `details` contain an ordered `matched_rules` list with the Ark ID, optional

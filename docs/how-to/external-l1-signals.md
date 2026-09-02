@@ -78,4 +78,6 @@ scanner.set_execution_gates(
 - **No:** learned/statistical classification — that is what L2/L3 models are for. If you need a
   trained classifier, train an NTDB/ONNX model rather than an L1 heuristic.
 
-External L1 detectors keep L1's guarantees: no assets, microsecond latency, always available.
+External L1 detectors keep L1's asset and availability properties: no model assets and available
+offline. Their latency is defined by the supplied detector, so enforce any request-time budget in
+that detector or at the integration boundary.

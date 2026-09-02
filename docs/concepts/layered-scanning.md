@@ -9,12 +9,14 @@ the layers combine into a single verdict.
 
 ### L1 — native detectors
 
-Rule-based Rust detectors that need **no model assets** and run in **microseconds**. They are
-always available, even fully offline. L1 covers deterministic and pattern-based risks:
+Rule-based Rust detectors that need **no model assets** and are available fully offline. Runtime
+depends on input size and enabled rules; large inputs take milliseconds. L1 covers deterministic
+and pattern-based risks:
 prompt-injection phrasings, obfuscation tricks, secrets and destructive-operation patterns
 (DLP), format-validated PII (email, IBAN, credit card, …), and MCP tool-policy checks.
 
-L1 is the floor of every scan. See [Native detectors](detectors.md) for the full catalogue.
+L1 runs for categories that implement native detectors when its execution gate is enabled. See
+[Native detectors](detectors.md) for the full catalogue.
 
 ### L2 — NTDB model packages
 
@@ -87,8 +89,8 @@ individual levels or specific detectors *below* the ceiling, per request, withou
 ## Special pipelines
 
 - **L1-only categories** (e.g. `pii`) never load models and never promote.
-- **L3-only pipelines** (`dynamic-pii`) enqueue directly to the worker and publish only their
-  completed result — there is no L1/L2 stage to fall back to.
+- **L3-only pipelines** (`dynamic-pii`) enqueue directly to the worker and have no L1/L2 fallback.
+  They can emit a non-authoritative first-entity preview before their completed result.
 
 See [Categories](categories.md) for each category's layer support.
 

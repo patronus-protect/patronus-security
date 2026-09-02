@@ -49,4 +49,16 @@ mod tests {
         assert_eq!(spans[0].label, "person");
         assert_eq!(spans[1].label, "legal_party");
     }
+
+    #[test]
+    fn merging_keeps_highest_scoring_duplicate_across_inference_groups() {
+        let spans = merge_pii_spans(vec![
+            span("person", "Alexandr Stone", 0.72),
+            span("person", "Alexandr Stone", 0.91),
+        ]);
+
+        assert_eq!(spans.len(), 1);
+        assert_eq!(spans[0].label, "person");
+        assert_eq!(spans[0].score, 0.91);
+    }
 }
