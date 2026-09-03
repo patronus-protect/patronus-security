@@ -39,3 +39,7 @@ site/
 # Local Ark API deployment secrets generated from the tracked examples.
 /ark-api/config.yaml
 /ark-api/entrypoint.yaml
+/ark-api/deploy/.env
+/ark-api/deploy/worker.yaml
+/ark-api/deploy/entrypoint.yaml
+/ark-api/deploy/*.key

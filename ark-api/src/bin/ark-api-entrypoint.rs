@@ -491,6 +491,7 @@ async fn readyz(State(state): State<Arc<AppState>>) -> StatusCode {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
+        .json()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
     let config: RawConfig = serde_yaml::from_reader(std::fs::File::open(Args::parse().config)?)?;

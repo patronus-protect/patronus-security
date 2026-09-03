@@ -5,7 +5,7 @@
 ARG L3_PRECISION=fp16
 
 # ---- builder ---------------------------------------------------------------
-FROM rust:1.89-trixie AS builder
+FROM rust:1.98-trixie AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential cmake pkg-config protobuf-compiler libssl-dev \
@@ -17,7 +17,7 @@ COPY rust ./rust
 COPY python ./python
 COPY ark-api ./ark-api
 
-RUN cargo build --release -p ark-api --bins
+RUN cargo build --locked --release -p ark-api --bins
 
 # ---- asset warmup -----------------------------------------------------------
 # Bakes model assets into the image so the runtime container never needs
@@ -53,6 +53,8 @@ RUN mkdir -p /data/cache /etc/ark-api \
     && chown -R arkapi:arkapi /data /etc/ark-api
 
 USER arkapi
+RUN /usr/local/bin/ark-api --help >/dev/null \
+    && /usr/local/bin/ark-api-entrypoint --help >/dev/null
 EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/ark-api"]
 CMD ["--config", "/etc/ark-api/config.yaml"]

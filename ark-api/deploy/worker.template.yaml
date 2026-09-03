@@ -1,0 +1,23 @@
+server:
+  bind: "0.0.0.0:8080"
+  max_upload_mb: 25
+auth:
+  keys:
+    - name: gateway-internal
+      key_hash: "sha256:__WORKER_HASH__"
+      categories: [injection, dlp, threat, pii, dynamic-pii]
+pipeline:
+  categories: [injection, dlp, threat, pii, dynamic-pii]
+  max_level: L3
+  model_dir: /data/models
+  download_files: false
+  onnx_runtime:
+    intra_threads: 1
+    inter_threads: 1
+    spinning: false
+  gates:
+    explain: false
+    l1: true
+    l2: true
+    l3: true
+# Deliberately use the in-memory default cache: no scan data on host disk.

@@ -1,0 +1,100 @@
+name: patronus-ark
+
+x-service: &service
+  restart: unless-stopped
+  init: true
+  security_opt: [no-new-privileges:true]
+  cap_drop: [ALL]
+  read_only: true
+  tmpfs: ["/tmp:size=128m,mode=1777"]
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+x-worker: &worker
+  <<: *service
+  image: ${ARK_IMAGE:?Use the published ARK image digest}
+  cpus: 2.5
+  mem_limit: 4g
+  memswap_limit: 4g
+  pids_limit: 256
+  networks: [workers]
+  environment:
+    RUST_LOG: info
+    TOKIO_WORKER_THREADS: "2"
+    PATRONUS_L3_PRECISION: fp16
+    PATRONUS_L3_TTL_SECS: "-1"
+  volumes:
+    - ./worker.yaml:/etc/ark-api/config.yaml:ro
+  healthcheck:
+    test: [CMD, wget, -qO-, http://127.0.0.1:8080/readyz]
+    interval: 15s
+    timeout: 5s
+    retries: 4
+    start_period: 300s
+
+services:
+  worker-1:
+    <<: *worker
+  worker-2:
+    <<: *worker
+  worker-3:
+    <<: *worker
+  redis:
+    <<: *service
+    image: ${REDIS_IMAGE:?Use the published Redis image digest}
+    user: redis
+    command: [redis-server, --save, "", --appendonly, "no", --maxmemory, 192mb, --maxmemory-policy, noeviction]
+    mem_limit: 256m
+    memswap_limit: 256m
+    pids_limit: 64
+    networks: [store]
+    # Jobs expire in 90 seconds; in-flight worker jobs cannot survive a reboot.
+    # Keep result evidence in memory only instead of persisting user data.
+    tmpfs: ["/tmp:size=16m,mode=1777", "/data:size=16m,mode=1777"]
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+  entrypoint:
+    <<: *service
+    image: ${ARK_IMAGE:?Use the published ARK image digest}
+    entrypoint: [/usr/local/bin/ark-api-entrypoint]
+    command: [--config, /etc/ark-api/entrypoint.yaml]
+    mem_limit: 512m
+    memswap_limit: 512m
+    pids_limit: 128
+    environment:
+      RUST_LOG: info
+      TOKIO_WORKER_THREADS: "2"
+    ports:
+      - "${CUBE_IP:?Set the private Cube IP}:8080:8080"
+      - "127.0.0.1:8080:8080"
+    networks: [edge, workers, store]
+    volumes:
+      - ./entrypoint.yaml:/etc/ark-api/entrypoint.yaml:ro
+    depends_on:
+      worker-1: {condition: service_healthy}
+      worker-2: {condition: service_healthy}
+      worker-3: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          wget -qO- http://127.0.0.1:8080/readyz &&
+          wget -qO- http://worker-1:8080/readyz &&
+          wget -qO- http://worker-2:8080/readyz &&
+          wget -qO- http://worker-3:8080/readyz
+      interval: 15s
+      timeout: 10s
+      retries: 4
+      start_period: 30s
+
+networks:
+  edge: {}
+  workers: {internal: true}
+  store: {internal: true}

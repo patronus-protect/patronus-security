@@ -1,0 +1,124 @@
+name: ARK API image
+
+on:
+  pull_request:
+    paths: ["ark-api/**", "rust/**", "Cargo.*", ".dockerignore", ".github/workflows/ark-api-image.yml", "scripts/tests/test_cube_deploy.py"]
+  push:
+    branches: [main, codex/ionos-ark-api-0.1.6]
+    paths: ["ark-api/**", "rust/**", "Cargo.*", ".dockerignore", ".github/workflows/ark-api-image.yml", "scripts/tests/test_cube_deploy.py"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ark-api-image-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.98.0
+        with:
+          components: rustfmt
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: |
+          python -m venv .venv
+          .venv/bin/pip install pytest pyyaml
+          .venv/bin/python -m pytest scripts/tests/test_cube_deploy.py -q
+          bash -n ark-api/deploy/bootstrap.sh
+          shellcheck ark-api/deploy/bootstrap.sh
+          cargo fmt --check
+          cargo test --locked -p ark-api
+      - name: Validate Compose without starting services
+        env:
+          ARK_IMAGE: ghcr.io/patronus-protect/ark-api:validation
+          REDIS_IMAGE: redis:7.4-alpine
+          CUBE_IP: 10.20.0.11
+        run: docker compose -f ark-api/deploy/compose.yaml config --quiet
+
+  publish:
+    if: github.event_name != 'pull_request'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check release version
+        run: |
+          python3 - <<'PY'
+          import tomllib
+          for path in ('rust/Cargo.toml', 'ark-api/Cargo.toml', 'python/Cargo.toml'):
+              with open(path, 'rb') as handle:
+                  assert tomllib.load(handle)['package']['version'] == '0.1.6', path
+          PY
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        id: build
+        with:
+          context: .
+          file: ark-api/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/patronus-protect/ark-api:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/patronus-protect/patronus-security
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=0.1.6
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Package the downloadable Cube bootstrap
+        env:
+          ARK_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          docker pull redis:7.4-alpine
+          export REDIS_IMAGE
+          REDIS_IMAGE=$(docker image inspect --format '{{index .RepoDigests 0}}' redis:7.4-alpine)
+          mkdir -p cube-release
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          commit = os.environ['GITHUB_SHA']
+          image = 'ghcr.io/patronus-protect/ark-api@' + os.environ['ARK_DIGEST']
+          redis = os.environ['REDIS_IMAGE']
+          root = Path('cube-release')
+          script = Path('ark-api/deploy/bootstrap.sh').read_text()
+          for marker, value in {'__RELEASE_COMMIT__': commit, '__ARK_IMAGE__': image, '__REDIS_IMAGE__': redis}.items():
+              script = script.replace(marker, value)
+          (root / 'bootstrap.sh').write_text(script)
+          (root / 'deployment.json').write_text(json.dumps({'ark_version': '0.1.6', 'commit': commit, 'image': image, 'redis_image': redis}, indent=2) + '\n')
+          (root / 'SHA256SUMS').write_text(''.join(f'{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\n' for p in sorted(root.iterdir())))
+          PY
+      - name: Publish versioned deployment assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="ark-api-0.1.6-${GITHUB_SHA:0:12}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo 'Release already exists; refusing to replace immutable deployment assets.' >&2
+            exit 1
+          fi
+          gh release create "$tag" cube-release/* --target "$GITHUB_SHA" \
+            --title "ARK API 0.1.6 (${GITHUB_SHA:0:12})" --prerelease \
+            --notes 'Cube 1 deployment candidate. Bootstrap requires network and application reboot acceptance; this release does not imply production acceptance.'
+          cat cube-release/deployment.json >> "$GITHUB_STEP_SUMMARY"
+          printf '\nBootstrap: https://github.com/patronus-protect/patronus-security/releases/download/%s/bootstrap.sh\n' "$tag" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cube-bootstrap-${{ github.sha }}
+          path: cube-release/

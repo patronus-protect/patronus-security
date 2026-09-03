@@ -1,0 +1,14 @@
+server:
+  bind: "0.0.0.0:8080"
+auth:
+  keys:
+    - name: public-client
+      key_hash: "__PUBLIC_HASH__"
+gateway:
+  redis_url: "redis://redis:6379/0"
+  worker_token: "__WORKER_TOKEN__"
+  retention_secs: 90
+  workers:
+    - {name: worker-1, url: "http://worker-1:8080"}
+    - {name: worker-2, url: "http://worker-2:8080"}
+    - {name: worker-3, url: "http://worker-3:8080"}
