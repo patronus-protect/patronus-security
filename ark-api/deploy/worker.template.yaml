@@ -5,9 +5,11 @@ auth:
   keys:
     - name: gateway-internal
       key_hash: "sha256:__WORKER_HASH__"
-      categories: [injection, dlp, threat, pii, dynamic-pii]
+      categories: [injection, dlp, threat, pii, dynamic-pii, sensitive_document, routing, tool_class, tool_action, tool_tags]
+      default_categories: [injection, dlp, threat, pii]
 pipeline:
-  categories: [injection, dlp, threat, pii, dynamic-pii]
+  # Availability/warmup is independent of the default inference selection above.
+  categories: [injection, dlp, threat, pii, dynamic-pii, sensitive_document, routing, tool_class, tool_action, tool_tags]
   max_level: L3
   model_dir: /data/models
   download_files: false
@@ -20,4 +22,13 @@ pipeline:
     l1: true
     l2: true
     l3: true
+    conditional:
+      - level: L3
+        pipeline: threat
+        # Constant false using the existing gate language: a field cannot
+        # simultaneously exist and not exist. Threat L1/L2 stay enabled.
+        when:
+          all:
+            - metadata: {path: threat_l3, exists: true}
+            - metadata: {path: threat_l3, exists: false}
 # Deliberately use the in-memory default cache: no scan data on host disk.

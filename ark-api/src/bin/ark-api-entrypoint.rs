@@ -1,9 +1,15 @@
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
+
+#[path = "entrypoint/timings.rs"]
+mod timings;
+#[path = "entrypoint/worker_pool.rs"]
+mod worker_pool;
+use timings::JobTimings;
+use worker_pool::{WorkerLease, WorkerPool};
 
 use axum::body::Bytes;
 use axum::extract::{Path, State};
@@ -58,6 +64,12 @@ struct GatewayConfig {
     workers: Vec<WorkerConfig>,
     #[serde(default = "default_retention_secs")]
     retention_secs: u64,
+    #[serde(default = "default_max_waiting")]
+    max_waiting_requests: usize,
+}
+
+fn default_max_waiting() -> usize {
+    64
 }
 
 fn default_retention_secs() -> u64 {
@@ -75,8 +87,7 @@ struct AppState {
     client: reqwest::Client,
     redis: redis::aio::ConnectionManager,
     worker_token: String,
-    workers: Vec<WorkerConfig>,
-    worker_cursor: Arc<AtomicUsize>,
+    worker_pool: Arc<WorkerPool>,
     key_hashes: Vec<String>,
     retention_secs: u64,
 }
@@ -96,6 +107,8 @@ struct Job {
     completion: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     decision: Option<String>,
+    #[serde(default)]
+    timings: JobTimings,
 }
 
 fn job_key(job_id: &str) -> String {
@@ -166,7 +179,53 @@ fn final_decision(job: &Job) -> String {
     if has_risk { "block" } else { "allow" }.to_string()
 }
 
-async fn collect_events(state: AppState, job_id: String, worker: WorkerConfig, request_id: String) {
+async fn collect_events(
+    state: AppState,
+    job_id: String,
+    lease: Arc<WorkerLease>,
+    request_id: String,
+    submitted: Instant,
+    dispatched: Instant,
+) {
+    let completed = tokio::time::timeout(
+        Duration::from_secs(ACTIVE_TTL_SECS - 10),
+        collect_events_inner(
+            &state,
+            &job_id,
+            &lease.worker,
+            &request_id,
+            submitted,
+            dispatched,
+        ),
+    )
+    .await
+    .unwrap_or(false);
+    if completed {
+        lease.finished();
+    } else {
+        lease.quarantine();
+        tracing::error!(job_id, worker = %lease.worker.name, "worker completion unknown; worker quarantined until entrypoint restart");
+        if let Ok(Some(mut job)) = load_job(&state, &job_id).await {
+            job.status = "failed".into();
+            job.completion = Some(json!({"state":"failed", "failures":[{
+                "stage":"entrypoint", "kind":"worker_stream_interrupted",
+                "message":"Worker did not report completion", "retryable":true
+            }]}));
+            job.decision = Some("review".into());
+            let _ = save_job(&state, &job).await;
+        }
+    }
+    // The shared lease stays held until every job from this submission finishes.
+}
+
+async fn collect_events_inner(
+    state: &AppState,
+    job_id: &str,
+    worker: &WorkerConfig,
+    request_id: &str,
+    submitted: Instant,
+    dispatched: Instant,
+) -> bool {
     let started = Instant::now();
     let url = format!(
         "{}/v1/scan/{request_id}/events",
@@ -182,11 +241,11 @@ async fn collect_events(state: AppState, job_id: String, worker: WorkerConfig, r
         Ok(response) if response.status().is_success() => response,
         Ok(response) => {
             tracing::warn!(job_id, status = %response.status(), "worker event stream rejected");
-            return;
+            return false;
         }
         Err(error) => {
             tracing::warn!(job_id, %error, "worker event stream failed");
-            return;
+            return false;
         }
     };
 
@@ -210,9 +269,12 @@ async fn collect_events(state: AppState, job_id: String, worker: WorkerConfig, r
                 continue;
             };
             event_count += 1;
-            let Ok(Some(mut job)) = load_job(&state, &job_id).await else {
-                return;
+            let Ok(Some(mut job)) = load_job(state, job_id).await else {
+                return false;
             };
+            if matches!(event, "result" | "provisional") {
+                job.timings.observe(&data);
+            }
             match event {
                 "progress" => {
                     if let Some(category) = data.get("category").and_then(Value::as_str) {
@@ -251,18 +313,21 @@ async fn collect_events(state: AppState, job_id: String, worker: WorkerConfig, r
                         "completed".to_string()
                     };
                     job.decision = Some(final_decision(&job));
+                    job.timings.worker_ms = Some(dispatched.elapsed().as_secs_f64() * 1000.0);
+                    job.timings.total_ms = Some(submitted.elapsed().as_secs_f64() * 1000.0);
                 }
                 _ => {}
             }
-            if save_job(&state, &job).await.is_err() {
-                return;
+            if save_job(state, &job).await.is_err() {
+                return false;
             }
             if event == "finished" {
                 tracing::info!(job_id, worker = %worker.name, worker_events_finished_ms = started.elapsed().as_secs_f64() * 1_000.0, event_count, "worker event stream finished");
-                return;
+                return true;
             }
         }
     }
+    false
 }
 
 fn level_rank(result: &Value) -> u8 {
@@ -310,6 +375,7 @@ fn compact_result(result: &Value) -> Value {
         "confidence": result.get("confidence"),
         "level": result.get("level"),
         "model": result.get("model"),
+        "duration_ms": result.get("duration_ms"),
         "accepted": result.pointer("/decision/recommendation/accepted").and_then(Value::as_bool).unwrap_or(false),
         "final_result": result.pointer("/decision/final_result"),
         "decision_evidence": decision_evidence,
@@ -363,9 +429,24 @@ async fn submit_scan(
     if !authenticated(&state, &headers) {
         return unauthorized();
     }
-    let worker = state.workers
-        [state.worker_cursor.fetch_add(1, Ordering::Relaxed) % state.workers.len()]
-    .clone();
+    let submitted = Instant::now();
+    let lease = match tokio::time::timeout(Duration::from_secs(15), state.worker_pool.acquire())
+        .await
+    {
+        Ok(Ok(lease)) => lease,
+        Ok(Err(error)) => {
+            return (StatusCode::TOO_MANY_REQUESTS, Json(json!({"error":error}))).into_response()
+        }
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"error":"no worker became available within 15 seconds"})),
+            )
+                .into_response()
+        }
+    };
+    let worker = &lease.worker;
+    let queue_wait_ms = submitted.elapsed().as_secs_f64() * 1000.0;
     let upstream_started = Instant::now();
     let mut request = state
         .client
@@ -375,30 +456,57 @@ async fn submit_scan(
     if let Some(content_type) = headers.get(header::CONTENT_TYPE) {
         request = request.header(header::CONTENT_TYPE, content_type);
     }
-    let response = match request.send().await {
+    lease.start_dispatch();
+    let response = match request.timeout(Duration::from_secs(10)).send().await {
         Ok(response) => response,
         Err(_) => {
+            lease.quarantine();
             return (
                 StatusCode::BAD_GATEWAY,
                 Json(json!({"error":"worker unavailable"})),
             )
-                .into_response()
+                .into_response();
         }
     };
     let status = response.status();
+    if !status.is_success() {
+        // Multipart/body-limit rejections can be plain text, not JSON. The
+        // rejected request did not occupy this worker and must not quarantine it.
+        lease.finished();
+        let payload = response.json::<Value>().await.unwrap_or_else(
+            |_| json!({"error":format!("worker rejected request with HTTP {}", status.as_u16())}),
+        );
+        return (status, Json(payload)).into_response();
+    }
     let payload: Value = match response.json().await {
         Ok(payload) => payload,
         Err(_) => {
+            lease.quarantine();
             return (
                 StatusCode::BAD_GATEWAY,
                 Json(json!({"error":"invalid worker response"})),
             )
-                .into_response()
+                .into_response();
         }
     };
-    if !status.is_success() {
-        return (status, Json(payload)).into_response();
+    if payload
+        .get("jobs")
+        .and_then(Value::as_array)
+        .is_none_or(|jobs| {
+            jobs.is_empty()
+                || jobs
+                    .iter()
+                    .any(|job| job.get("request_id").and_then(Value::as_str).is_none())
+        })
+    {
+        lease.quarantine();
+        return (
+            StatusCode::BAD_GATEWAY,
+            Json(json!({"error":"invalid worker job response"})),
+        )
+            .into_response();
     }
+    lease.accepted(payload["jobs"].as_array().expect("validated jobs").len());
     let mut jobs = Vec::new();
     for worker_job in payload
         .get("jobs")
@@ -425,8 +533,14 @@ async fn submit_scan(
             categories: HashMap::new(),
             completion: None,
             decision: None,
+            timings: JobTimings {
+                queue_wait_ms,
+                worker_submit_ms: upstream_started.elapsed().as_secs_f64() * 1000.0,
+                ..Default::default()
+            },
         };
         if save_job(&state, &job).await.is_err() {
+            lease.quarantine();
             return (
                 StatusCode::SERVICE_UNAVAILABLE,
                 Json(json!({"error":"job store unavailable"})),
@@ -436,8 +550,10 @@ async fn submit_scan(
         tokio::spawn(collect_events(
             (*state).clone(),
             job_id.clone(),
-            worker.clone(),
+            lease.clone(),
             worker_request_id.to_string(),
+            submitted,
+            upstream_started,
         ));
         jobs.push(json!({
             "job_id": job_id,
@@ -498,6 +614,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if config.gateway.workers.is_empty() {
         return Err("gateway.workers must not be empty".into());
     }
+    if config.gateway.max_waiting_requests > 1024 {
+        return Err("gateway.max_waiting_requests must not exceed 1024".into());
+    }
     let bind: SocketAddr = config.server.bind.parse()?;
     let redis = redis::Client::open(config.gateway.redis_url.as_str())?
         .get_connection_manager()
@@ -506,8 +625,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         client: reqwest::Client::new(),
         redis,
         worker_token: config.gateway.worker_token,
-        workers: config.gateway.workers,
-        worker_cursor: Arc::new(AtomicUsize::new(0)),
+        worker_pool: WorkerPool::new(config.gateway.workers, config.gateway.max_waiting_requests),
         key_hashes: config
             .auth
             .keys
@@ -585,8 +703,7 @@ mod tests {
             client: reqwest::Client::new(),
             redis: client.get_connection_manager().await.unwrap(),
             worker_token: String::new(),
-            workers: Vec::new(),
-            worker_cursor: Arc::new(AtomicUsize::new(0)),
+            worker_pool: WorkerPool::new(Vec::new(), 0),
             key_hashes: Vec::new(),
             retention_secs: 90,
         });
@@ -622,6 +739,7 @@ mod tests {
             categories,
             completion: Some(json!({"state": "complete"})),
             decision: None,
+            timings: JobTimings::default(),
         }
     }
 

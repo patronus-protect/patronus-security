@@ -2,10 +2,10 @@ name: ARK API image
 
 on:
   pull_request:
-    paths: ["ark-api/**", "rust/**", "Cargo.*", ".dockerignore", ".github/workflows/ark-api-image.yml", "scripts/tests/test_cube_deploy.py"]
+    paths: ["ark-api/**", "rust/**", "Cargo.*", ".dockerignore", ".github/workflows/ark-api-image.yml", "scripts/tests/test_cube_deploy.py", "scripts/tests/test_entrypoint_runtime.py", "scripts/ark_api_entrypoint_benchmark.py"]
   push:
     branches: [main, codex/ionos-ark-api-0.1.6]
-    paths: ["ark-api/**", "rust/**", "Cargo.*", ".dockerignore", ".github/workflows/ark-api-image.yml", "scripts/tests/test_cube_deploy.py"]
+    paths: ["ark-api/**", "rust/**", "Cargo.*", ".dockerignore", ".github/workflows/ark-api-image.yml", "scripts/tests/test_cube_deploy.py", "scripts/tests/test_entrypoint_runtime.py", "scripts/ark_api_entrypoint_benchmark.py"]
   workflow_dispatch:
 
 permissions:
@@ -30,11 +30,12 @@ jobs:
       - run: |
           python -m venv .venv
           .venv/bin/pip install pytest pyyaml
-          .venv/bin/python -m pytest scripts/tests/test_cube_deploy.py -q
           bash -n ark-api/deploy/bootstrap.sh
           shellcheck ark-api/deploy/bootstrap.sh
           cargo fmt --check
           cargo test --locked -p ark-api
+          cargo build --locked -p ark-api --bin ark-api-entrypoint
+          .venv/bin/python -m pytest scripts/tests/test_cube_deploy.py scripts/tests/test_entrypoint_runtime.py -q
       - name: Validate Compose without starting services
         env:
           ARK_IMAGE: ghcr.io/patronus-protect/ark-api:validation
