@@ -5,17 +5,29 @@ The suite has Rust unit/integration tests and Python binding tests. CI runs both
 
 ## Pre-release checks
 
-Run all three before merging or releasing — these mirror CI:
+Use the repository-pinned Rust toolchain and a fresh Python 3.12 virtual environment
+for CI parity. Install `requirements-test.txt`: the script tests need NumPy even
+though the published Ark wheel has no Python runtime dependencies.
+
+Run these before merging or releasing — these mirror the correctness jobs in CI:
 
 ```bash
-# 1. Formatting
+.venv/bin/python -m pip install -r requirements-test.txt
+.venv/bin/python -m maturin develop --manifest-path python/Cargo.toml
+
+# Formatting and lint (Rust 1.98.0)
 cargo fmt --check
+cargo clippy --workspace --all-targets -- -D warnings
 
-# 2. Rust unit + integration tests
+# Rust unit + integration tests
 cargo test -p patronus-ark
+cargo test -p ark-api
 
-# 3. Python binding tests (after `maturin develop`)
+# Python binding and benchmark-script tests
 .venv/bin/python -m unittest discover -s python/tests
+.venv/bin/python -m pytest scripts/tests -q
+.venv/bin/python scripts/generate_docs.py --check
+cargo deny check licenses
 ```
 
 ## What the tests cover
@@ -41,6 +53,21 @@ cargo test -p patronus-ark
 | `test_native_scanners.py` | Native scanning through the bindings. |
 | `test_benchmark_data.py` | Integrity of the shipped benchmark validation samples. |
 
+## Token pipeline (no inference)
+
+`cargo test -p patronus-ark --lib token_pipeline_e2e` exercises compact tokenization,
+v4 L2-output materialization, promotion, duplicate-head handoff, and L3 input
+assembly without loading either model. `cargo test -p patronus-ark --lib ml::tokenizer`
+also checks input byte limits, exactly-once window encoding, true source offsets,
+BOS/EOS, padding, and rejection instead of truncation or Hugging Face fallback.
+These tests use the small checked-in compact fixture and run in normal CI.
+
+The ignored `mmbert_mmbpe_matches_huggingface_ids_and_special_tokens` test additionally
+compares the real compact artifact's IDs and source offsets with its conversion
+source, then verifies token-only L3 input assembly. Set `PATRONUS_TEST_MMBERT_TOKENIZER_JSON`
+and `PATRONUS_TEST_MMBERT_TOKENIZER_MMBPE` to the pinned local tokenizer artifacts
+and run that test with `-- --ignored`. It performs no model inference.
+
 ## Network-dependent tests
 
 `hf_e2e.rs` and anything that exercises L2/L3 needs model assets. Provide `HF_TOKEN` if the
@@ -52,6 +79,11 @@ The [local benchmark](../how-to/run-local-benchmark.md) measures accuracy, laten
 false-positive rate on the shipped samples. It is a measurement tool, not a pass/fail test —
 use it to validate performance changes, not as part of the PR gate. Do **not** commit benchmark
 output (it is machine-specific and git-ignored).
+
+Separately, CI's `native-throughput` job installs a fresh release wheel and runs
+`scripts/ark_api_throughput_benchmark.py` against the real L1/L2/unified-L3 profile,
+without GLiNER. Its 0.3 MiB/s and 0.5 requests/s limits are pass/fail gates; a local
+macOS result does not prove that the Linux runner passes them.
 
 ## Adding tests
 

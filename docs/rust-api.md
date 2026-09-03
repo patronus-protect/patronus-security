@@ -485,6 +485,7 @@ An application-provided L1 heuristic attached to one security category.
 ```rust
 pub enum DynamicPiiExecutionGate {
     /// Run whenever the category and L3 model are enabled.
+    #[default]
     Always,
     /// Run when a source pipeline returns one of the configured results.
     IfResultIn {
@@ -941,6 +942,7 @@ Return the canonical uppercase level string.
 ```rust
 pub enum OnnxBatchMode {
     /// Keep the existing lazy per-text ONNX execution path.
+    #[default]
     LazyBatches,
     /// Execute all L3 fallback texts as one ONNX tensor batch where possible.
     TensorBatch,
@@ -958,6 +960,7 @@ Return the canonical snake_case mode string.
 ```rust
 pub enum NtdbOperatingPoint {
     BestF1,
+    #[default]
     BestPromote,
     /// Internal Ark API routing profile: use utility promotion only for an
     /// Injection document with at most two normal chunks.
@@ -979,6 +982,7 @@ Return the manifest key for this operating point.
 ```rust
 pub enum ExecutionBackend {
     /// Keep conservative CPU defaults unless a caller overrides execution mode.
+    #[default]
     Auto,
     /// CPU execution: prefer lazy L3 execution and low concurrency.
     Cpu,
@@ -1000,6 +1004,7 @@ Runtime backend profile used to choose default L3 execution behavior.
 ```rust
 pub enum L3Strategy {
     /// Each promoted pipeline executes its own L3 model.
+    #[default]
     Dedicated,
     /// Promoted classifier pipelines share one request-local multi-head model run.
     Multi,
@@ -1752,4 +1757,4 @@ pub fn ntdb_l2_package_manifest_files(
 ) -> Result<Vec<String>, Box<dyn std::error::Error>>;
 ```
 
-Return all runtime files referenced by an NTDB v2 package manifest.
+Return all runtime files referenced by an NTDB v4 package manifest.

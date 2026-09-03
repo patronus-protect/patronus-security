@@ -36,6 +36,7 @@
     },
     {
       "id": "ark.injection.override.authority_issued_replacement",
+      "required_literals_any": ["system", "developer", "admin", "entwickler"],
       "upstream_id": "pipelock:New Instructions",
       "family": "instruction_override",
       "severity": "critical",

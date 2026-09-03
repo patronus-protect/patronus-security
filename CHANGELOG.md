@@ -9,6 +9,13 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ## [Unreleased]
 
+- Classifier tokenization now requires NTDB v4 and compact mmBERT. Disjoint 128-KiB
+  UTF-8 windows are tokenized once into shared 254-content-token chunks; L3 reuses
+  those IDs with BOS/EOS and padding to 256 positions. Removed v2 execution,
+  Hugging Face runtime fallbacks, and L3 re-tokenization. Chunk offsets track the
+  source text and exact caches key token IDs. Existing v4 exports declaring 256
+  content tokens now use the 254-token runtime budget; this changes L2 chunk boundaries.
+
 ## [0.1.6] - 2026-09-02
 
 ### Added
@@ -75,6 +82,11 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Changed
 
+- Injection L1 catalogs now scan their compiled regexes directly, removing the costly
+  aggregate-regex prefilter while preserving findings, source-bound components, and provenance.
+- Four expensive Injection context rules now skip impossible inputs using required-literal
+  checks without Unicode word boundaries. Final matching retains Unicode case folding,
+  word boundaries, captures, and original source offsets.
 - Dynamic PII conditional labels now run as separate GLiNER inference groups scoped to chunks
   carrying the matching final source-pipeline class. Base labels stay stable, duplicate labels are
   removed from conditional calls, final L3 source classes supersede provisional L1/L2 classes,

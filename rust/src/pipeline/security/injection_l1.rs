@@ -879,7 +879,7 @@ mod tests {
             .unwrap()
             .push(coverage[0]["features"][0].clone());
 
-        let candidates = vec![
+        let candidates = [
             producer("native:earlier", earlier),
             producer("native:later", later),
         ]

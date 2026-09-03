@@ -49,7 +49,7 @@ impl StaticEncoder {
             EmbeddingMatrix::F16(values) => {
                 for (target, bytes) in target
                     .iter_mut()
-                    .zip(values[start * 2..end * 2].chunks_exact(2))
+                    .zip(values[start * 2..end * 2].as_chunks::<2>().0)
                 {
                     *target += f16_to_f32(u16::from_le_bytes([bytes[0], bytes[1]]));
                 }
@@ -57,7 +57,7 @@ impl StaticEncoder {
             EmbeddingMatrix::F32(values) => {
                 for (target, bytes) in target
                     .iter_mut()
-                    .zip(values[start * 4..end * 4].chunks_exact(4))
+                    .zip(values[start * 4..end * 4].as_chunks::<4>().0)
                 {
                     *target += f32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
                 }

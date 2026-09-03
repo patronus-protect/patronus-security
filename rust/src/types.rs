@@ -357,10 +357,11 @@ impl std::str::FromStr for SecurityLevel {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 /// How model pipelines execute ONNX L3 fallback batches.
 pub enum OnnxBatchMode {
     /// Keep the existing lazy per-text ONNX execution path.
+    #[default]
     LazyBatches,
     /// Execute all L3 fallback texts as one ONNX tensor batch where possible.
     TensorBatch,
@@ -376,12 +377,6 @@ impl OnnxBatchMode {
     }
 }
 
-impl Default for OnnxBatchMode {
-    fn default() -> Self {
-        Self::LazyBatches
-    }
-}
-
 impl std::str::FromStr for OnnxBatchMode {
     type Err = String;
 
@@ -394,10 +389,11 @@ impl std::str::FromStr for OnnxBatchMode {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 /// Calibrated NTDB operating point selected from each package manifest.
 pub enum NtdbOperatingPoint {
     BestF1,
+    #[default]
     BestPromote,
     /// Internal Ark API routing profile: use utility promotion only for an
     /// Injection document with at most two normal chunks.
@@ -421,12 +417,6 @@ impl NtdbOperatingPoint {
     }
 }
 
-impl Default for NtdbOperatingPoint {
-    fn default() -> Self {
-        Self::BestPromote
-    }
-}
-
 impl std::str::FromStr for NtdbOperatingPoint {
     type Err = String;
 
@@ -442,10 +432,11 @@ impl std::str::FromStr for NtdbOperatingPoint {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 /// Runtime backend profile used to choose default L3 execution behavior.
 pub enum ExecutionBackend {
     /// Keep conservative CPU defaults unless a caller overrides execution mode.
+    #[default]
     Auto,
     /// CPU execution: prefer lazy L3 execution and low concurrency.
     Cpu,
@@ -461,10 +452,11 @@ pub enum ExecutionBackend {
     TensorRt,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 /// Physical L3 classifier topology.
 pub enum L3Strategy {
     /// Each promoted pipeline executes its own L3 model.
+    #[default]
     Dedicated,
     /// Promoted classifier pipelines share one request-local multi-head model run.
     Multi,
@@ -476,12 +468,6 @@ impl L3Strategy {
             Self::Dedicated => "dedicated",
             Self::Multi => "multi",
         }
-    }
-}
-
-impl Default for L3Strategy {
-    fn default() -> Self {
-        Self::Dedicated
     }
 }
 
@@ -509,12 +495,6 @@ impl ExecutionBackend {
             ExecutionBackend::DirectMl => "directml",
             ExecutionBackend::TensorRt => "tensorrt",
         }
-    }
-}
-
-impl Default for ExecutionBackend {
-    fn default() -> Self {
-        Self::Auto
     }
 }
 

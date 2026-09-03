@@ -2,6 +2,7 @@ import json
 import threading
 import unittest
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from patronus_ark import benchmark
@@ -571,8 +572,19 @@ class BenchmarkDataTests(unittest.TestCase):
             def consume_next_event(self, timeout=None):
                 return self.ready.pop(0) if self.ready else None
 
+        # Check the pacing algorithm, not whether the host schedules a 100 ms
+        # sleep accurately while other CI jobs are running.
+        clock = SimpleNamespace(now=1.0)
+
+        def advance(seconds):
+            clock.now += seconds
+
         with patch.object(
             benchmark, "_load_scenario_texts", return_value={"paced": ["text"]}
+        ), patch.object(
+            benchmark,
+            "time",
+            SimpleNamespace(perf_counter=lambda: clock.now, sleep=advance),
         ):
             result = benchmark._run_load(
                 FakeGateway(), requests_per_scenario=3, target_rps=10.0

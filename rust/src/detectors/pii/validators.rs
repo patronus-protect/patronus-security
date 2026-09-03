@@ -52,7 +52,7 @@ pub fn luhn(s: &str) -> bool {
         })
         .sum();
 
-    sum % 10 == 0
+    sum.is_multiple_of(10)
 }
 
 pub fn phone(s: &str) -> bool {
@@ -199,7 +199,7 @@ fn valid_date(day: u8, month: u8, year: u16) -> bool {
     if !(1900..=2100).contains(&year) || !(1..=12).contains(&month) {
         return false;
     }
-    let leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    let leap = year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400));
     let max_day = match month {
         2 if leap => 29,
         2 => 28,

@@ -12,19 +12,12 @@ use serde::{Deserialize, Serialize};
 
 use super::{
     encoder::{StaticEncoder, StaticEncoderStore},
-    heuristics::{
-        local_text_heuristics, shared_global_text_heuristics_from_token_stats,
-        SharedGlobalTextHeuristics, TokenIdStats,
-    },
     joint_v3_runtime::JointV3Runtime,
     manifest::{parse_package_manifest, PackageManifest},
-    ntdb_error,
-    runtime::{AggregatorRuntime, HeadRuntime},
-    tokenizer::RuntimeTokenizer,
-    NtdbResult,
+    ntdb_error, NtdbResult,
 };
 
-const LOCAL_FEATURE_COUNT: usize = 11;
+use crate::ml::tokenizer::{RuntimeTokenizer, TokenChunk, TOKENIZER_FAMILY};
 
 #[derive(Debug, Serialize)]
 pub struct ScoreOutput {
@@ -136,9 +129,7 @@ pub struct NtdbPackage {
     manifest: PackageManifest,
     tokenizer: RuntimeTokenizer,
     encoder: Arc<StaticEncoder>,
-    heads: Vec<HeadRuntime>,
-    aggregators: Vec<AggregatorRuntime>,
-    joint_v3: Option<JointV3Runtime>,
+    joint_v3: JointV3Runtime,
 }
 
 pub struct NtdbMultiPackage {
@@ -151,27 +142,13 @@ struct NamedPackage {
 }
 
 pub(super) struct PreparedDocument {
-    pub(super) chunks: Vec<TokenChunk>,
-    pub(super) chunk_width: usize,
+    pub(super) chunks: Arc<Vec<TokenChunk>>,
     pub(super) raw_embeddings: Vec<f32>,
-    pub(super) local_features: Vec<f32>,
-    pub(super) global_text_features: SharedGlobalTextHeuristics,
-}
-
-pub(super) struct TokenChunk {
-    pub(super) token_ids: Vec<u32>,
-    pub(super) byte_span: ByteSpan,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct PreparationKey {
-    tokenizer_dir: String,
-    tokenizer_family: Option<String>,
-    vocab_size: usize,
-    embedding_dim: usize,
-    content_tokens_per_chunk: usize,
     encoder_ptr: usize,
-    local_feature_order: Vec<String>,
 }
 
 impl NtdbPackage {
@@ -189,8 +166,8 @@ impl NtdbPackage {
             })?,
         )
         .map_err(|err| ntdb_error(format!("failed to parse NTDB manifest: {err}")))?;
-        manifest.normalize_runtime_defaults();
         manifest.validate()?;
+        manifest.normalize_runtime_defaults();
 
         let tokenizer = RuntimeTokenizer::load(package_dir.join(&manifest.tokenizer_dir))?;
 
@@ -206,36 +183,18 @@ impl NtdbPackage {
             ));
         }
 
-        let heads = if manifest.version == 2 {
+        let joint_v3 = JointV3Runtime::load(
+            &package_dir,
             manifest
-                .heads
-                .iter()
-                .map(|head| HeadRuntime::load(&package_dir, head))
-                .collect::<NtdbResult<Vec<_>>>()?
-        } else {
-            Vec::new()
-        };
-        let aggregators = if manifest.version == 2 {
-            manifest
-                .aggregators
-                .iter()
-                .map(|aggregator| AggregatorRuntime::load(&package_dir, aggregator))
-                .collect::<NtdbResult<Vec<_>>>()?
-        } else {
-            Vec::new()
-        };
-        let joint_v3 = manifest
-            .joint_v3
-            .as_ref()
-            .map(|joint| JointV3Runtime::load(&package_dir, joint))
-            .transpose()?;
+                .joint_v3
+                .as_ref()
+                .ok_or_else(|| ntdb_error("NTDB v4 joint_v3 is required"))?,
+        )?;
 
         Ok(Self {
             manifest,
             tokenizer,
             encoder,
-            heads,
-            aggregators,
             joint_v3,
         })
     }
@@ -243,155 +202,31 @@ impl NtdbPackage {
     fn score_prepared(
         &mut self,
         model_id: &str,
-        text: &str,
         prepared: &PreparedDocument,
         operating_point: NtdbOperatingPoint,
     ) -> NtdbResult<Vec<ScoreOutput>> {
-        let chunk_count = prepared.chunks.len();
-        let embedding_dim = self.manifest.minilm.embedding_dim;
-        let mut metrics = PhaseMetricScope::new(
-            "ntdb_score_prepared",
-            format!("model_id={model_id} chunks={chunk_count} embedding_dim={embedding_dim}"),
+        let mut output = self
+            .joint_v3
+            .score(&self.manifest.task, prepared, operating_point)?;
+        populate_joint_v3_chunks(
+            model_id,
+            &self.manifest,
+            prepared,
+            &mut output,
+            self.manifest.minilm.embedding_dim,
         );
-
-        if let Some(joint_v3) = &mut self.joint_v3 {
-            let mut output = joint_v3.score(&self.manifest.task, prepared, operating_point)?;
-            populate_joint_v3_chunks(
-                model_id,
-                &self.manifest,
-                prepared,
-                &mut output,
-                embedding_dim,
-            );
-            metrics.checkpoint("after_joint_v3", format!("model_id={model_id}"));
-            return Ok(vec![output]);
-        }
-
-        let per_head = self
-            .heads
-            .par_iter_mut()
-            .map(|head| head.score(prepared, chunk_count, embedding_dim))
-            .collect::<NtdbResult<Vec<_>>>()?;
-        metrics.checkpoint("after_heads", "");
-        let mut feature_by_name: HashMap<String, Vec<f32>> = HashMap::new();
-        for (head, scores) in self.heads.iter().zip(per_head.into_iter()) {
-            let names = head.output_feature_names();
-            if scores.len() != chunk_count || scores.first().map_or(0, Vec::len) != names.len() {
-                return Err(ntdb_error(format!(
-                    "NTDB head {} produced a shape that does not match its manifest",
-                    head.id
-                )));
-            }
-            for (feature_index, name) in names.into_iter().enumerate() {
-                feature_by_name.insert(
-                    name,
-                    scores
-                        .iter()
-                        .map(|row| row[feature_index])
-                        .collect::<Vec<_>>(),
-                );
-            }
-        }
-        metrics.checkpoint(
-            "after_head_features",
-            format!("features={}", feature_by_name.len()),
-        );
-        for chunk_index in 0..chunk_count {
-            for (local_index, name) in self
-                .manifest
-                .feature_contract
-                .local_feature_order
-                .iter()
-                .enumerate()
-            {
-                if local_index >= LOCAL_FEATURE_COUNT {
-                    return Err(ntdb_error(format!(
-                        "NTDB local feature index {local_index} exceeds runtime feature count"
-                    )));
-                }
-                feature_by_name
-                    .entry(name.clone())
-                    .or_insert_with(|| vec![0.0; chunk_count])[chunk_index] =
-                    prepared.local_features[chunk_index * LOCAL_FEATURE_COUNT + local_index];
-            }
-        }
-        metrics.checkpoint(
-            "after_local_features",
-            format!("features={}", feature_by_name.len()),
-        );
-        let outputs = self
-            .aggregators
-            .par_iter_mut()
-            .map(|aggregator| {
-                let aggregator_id = aggregator.id().to_string();
-                let mut aggregator_metrics = PhaseMetricScope::new(
-                    "ntdb_aggregator_score",
-                    format!(
-                        "model_id={model_id} aggregator_id={aggregator_id} chunks={chunk_count}"
-                    ),
-                );
-                let mut output = aggregator.score(
-                    &self.manifest.task.kind,
-                    &self.manifest.task.labels,
-                    text,
-                    prepared,
-                    &feature_by_name,
-                    operating_point,
-                )?;
-                aggregator_metrics.checkpoint(
-                    "after_score",
-                    format!("model_id={model_id} aggregator_id={aggregator_id}"),
-                );
-                if output
-                    .promote_score
-                    .zip(output.promote_threshold)
-                    .is_some_and(|(score, threshold)| score >= threshold)
-                {
-                    let (scores, candidates, chunk_outputs) = chunk_promotions(
-                        aggregator,
-                        &self.manifest.task.kind,
-                        &self.manifest.task.labels,
-                        text,
-                        prepared,
-                        &feature_by_name,
-                        embedding_dim,
-                        self.manifest
-                            .minilm
-                            .shared_embedder_identity()
-                            .unwrap_or("unknown-l2-encoder"),
-                        self.manifest.minilm.is_l3_tokenizer_compatible(),
-                        self.manifest.minilm.tokenizer_family.as_deref(),
-                        operating_point,
-                    )?;
-                    output.chunk_promote_scores = scores;
-                    output.l3_candidate_spans =
-                        candidates.iter().map(|candidate| candidate.span).collect();
-                    output.l3_candidates = candidates;
-                    output.l2_chunk_outputs = chunk_outputs;
-                    aggregator_metrics.checkpoint(
-                        "after_chunk_promotions",
-                        format!("model_id={model_id} aggregator_id={aggregator_id}"),
-                    );
-                }
-                Ok(output)
-            })
-            .collect();
-        metrics.checkpoint("after_aggregators", "");
-        outputs
+        Ok(vec![output])
     }
 
     fn score_prepared_batch(
         &mut self,
         model_id: &str,
-        _texts: &[String],
-        prepared: &[PreparedDocument],
+        prepared: &[Arc<PreparedDocument>],
         operating_point: NtdbOperatingPoint,
     ) -> NtdbResult<Vec<Vec<ScoreOutput>>> {
-        let joint_v3 = self
-            .joint_v3
-            .as_mut()
-            .ok_or_else(|| ntdb_error("batched scoring requires an NTDB package v4 model"))?;
-        let mut outputs = joint_v3.score_batch(&self.manifest.task, prepared, operating_point)?;
+        let mut outputs =
+            self.joint_v3
+                .score_batch(&self.manifest.task, prepared, operating_point)?;
         for (document, output) in prepared.iter().zip(&mut outputs) {
             populate_joint_v3_chunks(
                 model_id,
@@ -406,67 +241,15 @@ impl NtdbPackage {
 
     fn preparation_key(&self) -> PreparationKey {
         PreparationKey {
-            tokenizer_dir: self.manifest.tokenizer_dir.clone(),
-            tokenizer_family: self.manifest.minilm.tokenizer_family.clone(),
-            vocab_size: self.manifest.minilm.vocab_size,
-            embedding_dim: self.manifest.minilm.embedding_dim,
-            content_tokens_per_chunk: self.manifest.minilm.content_tokens_per_chunk,
             encoder_ptr: Arc::as_ptr(&self.encoder) as usize,
-            local_feature_order: self.manifest.feature_contract.local_feature_order.clone(),
         }
     }
 
-    fn prepare_document(&self, text: &str) -> NtdbResult<PreparedDocument> {
-        let mut metrics = PhaseMetricScope::new(
-            "ntdb_prepare_document",
-            format!("text_bytes={}", text.len()),
-        );
-        let chunks = self
-            .tokenizer
-            .encode_token_chunks(text, self.manifest.minilm.content_tokens_per_chunk)?
-            .into_iter()
-            .map(|chunk| TokenChunk {
-                token_ids: chunk.ids,
-                byte_span: ByteSpan {
-                    start: chunk.byte_span.0,
-                    end: chunk.byte_span.1,
-                },
-            })
-            .collect::<Vec<_>>();
-        let mut token_stats = TokenIdStats::default();
-        for chunk in &chunks {
-            token_stats.observe_all(&chunk.token_ids);
-        }
-        metrics.checkpoint(
-            "after_tokenize",
-            format!(
-                "doc_tokens={} chunks={}",
-                chunks
-                    .iter()
-                    .map(|chunk| chunk.token_ids.len())
-                    .sum::<usize>(),
-                chunks.len()
-            ),
-        );
-        let global_text_features =
-            shared_global_text_heuristics_from_token_stats(text, token_stats);
-        metrics.checkpoint("after_global_text_features", "");
+    fn prepare_document(&self, chunks: Arc<Vec<TokenChunk>>) -> NtdbResult<PreparedDocument> {
         let raw_embeddings = self.embed_chunks(&chunks)?;
-        metrics.checkpoint(
-            "after_embeddings",
-            format!("embedding_values={}", raw_embeddings.len()),
-        );
-        let local_features = self.local_features(text, &chunks)?;
-        metrics.checkpoint(
-            "after_local_features",
-            format!("feature_values={}", local_features.len()),
-        );
         Ok(PreparedDocument {
             chunks,
-            chunk_width: self.manifest.minilm.content_tokens_per_chunk,
             raw_embeddings,
-            local_features,
-            global_text_features,
         })
     }
 
@@ -501,17 +284,6 @@ impl NtdbPackage {
                 Ok(())
             })?;
         metrics.checkpoint("after_fill", "");
-        Ok(output)
-    }
-
-    fn local_features(&self, text: &str, chunks: &[TokenChunk]) -> NtdbResult<Vec<f32>> {
-        let mut output = Vec::with_capacity(chunks.len() * LOCAL_FEATURE_COUNT);
-        for chunk in chunks {
-            let chunk_text = text
-                .get(chunk.byte_span.start..chunk.byte_span.end)
-                .unwrap_or_default();
-            output.extend_from_slice(&local_text_heuristics(chunk_text, &chunk.token_ids));
-        }
         Ok(output)
     }
 }
@@ -549,6 +321,15 @@ impl NtdbMultiPackage {
                 })
             })
             .collect::<NtdbResult<Vec<_>>>()?;
+        let fingerprint = packages[0].package.tokenizer.0.fingerprint;
+        if packages
+            .iter()
+            .any(|entry| entry.package.tokenizer.0.fingerprint != fingerprint)
+        {
+            return Err(ntdb_error(
+                "NTDB v4 packages must share the same compact mmBERT tokenizer",
+            ));
+        }
         Ok(Self { packages })
     }
 
@@ -580,17 +361,7 @@ impl NtdbMultiPackage {
         self.packages
             .iter()
             .find(|entry| entry.id == model_id)
-            .map(|entry| {
-                if entry.package.joint_v3.is_some() {
-                    return vec!["joint_v3".to_string()];
-                }
-                entry
-                    .package
-                    .aggregators
-                    .iter()
-                    .map(|aggregator| aggregator.id.clone())
-                    .collect()
-            })
+            .map(|_| vec!["joint_v3".to_string()])
     }
 
     pub fn score_all_models(
@@ -613,7 +384,6 @@ impl NtdbMultiPackage {
                     model_id: entry.id.clone(),
                     outputs: entry.package.score_prepared(
                         &entry.id,
-                        text,
                         prepared.as_ref(),
                         operating_point,
                     )?,
@@ -627,16 +397,21 @@ impl NtdbMultiPackage {
         texts: &[String],
         operating_point: NtdbOperatingPoint,
     ) -> NtdbResult<Vec<Vec<MultiScoreOutput>>> {
+        let prepared = texts
+            .iter()
+            .map(|text| self.shared_prepared_documents(text, None))
+            .collect::<NtdbResult<Vec<_>>>()?;
         let mut result = (0..texts.len()).map(|_| Vec::new()).collect::<Vec<_>>();
         for entry in &mut self.packages {
-            let prepared = texts
+            let key = entry.package.preparation_key();
+            let documents = prepared
                 .iter()
-                .map(|text| entry.package.prepare_document(text))
-                .collect::<NtdbResult<Vec<_>>>()?;
+                .map(|items| Arc::clone(&items[&key]))
+                .collect::<Vec<_>>();
             let outputs =
                 entry
                     .package
-                    .score_prepared_batch(&entry.id, texts, &prepared, operating_point)?;
+                    .score_prepared_batch(&entry.id, &documents, operating_point)?;
             for (target, outputs) in result.iter_mut().zip(outputs) {
                 target.push(MultiScoreOutput {
                     model_id: entry.id.clone(),
@@ -705,7 +480,6 @@ impl NtdbMultiPackage {
                     model_id: entry.id.clone(),
                     outputs: entry.package.score_prepared(
                         &entry.id,
-                        text,
                         prepared.as_ref(),
                         operating_point,
                     )?,
@@ -722,6 +496,14 @@ impl NtdbMultiPackage {
         requested: Option<&HashSet<String>>,
     ) -> NtdbResult<HashMap<PreparationKey, Arc<PreparedDocument>>> {
         let mut prepared = HashMap::new();
+        let Some(first) = self
+            .packages
+            .iter()
+            .find(|entry| requested.is_none_or(|ids| ids.contains(&entry.id)))
+        else {
+            return Ok(prepared);
+        };
+        let chunks = Arc::new(first.package.tokenizer.token_chunks(text));
         for entry in self
             .packages
             .iter()
@@ -735,7 +517,10 @@ impl NtdbMultiPackage {
                 "ntdb_shared_prepare",
                 format!("model_id={} text_bytes={}", entry.id, text.len()),
             );
-            prepared.insert(key, Arc::new(entry.package.prepare_document(text)?));
+            prepared.insert(
+                key,
+                Arc::new(entry.package.prepare_document(Arc::clone(&chunks))?),
+            );
             metrics.checkpoint("after_prepare_document", format!("model_id={}", entry.id));
         }
         Ok(prepared)
@@ -762,12 +547,12 @@ fn populate_joint_v3_chunks(
         .collect::<Vec<_>>();
     output.l3_candidate_spans = promoted
         .iter()
-        .map(|(index, _)| prepared.chunks[*index].byte_span)
+        .map(|(index, _)| chunk_span(&prepared.chunks[*index]))
         .collect();
     output.l3_candidates = promoted
         .iter()
         .map(|(index, score)| L3Candidate {
-            span: prepared.chunks[*index].byte_span,
+            span: chunk_span(&prepared.chunks[*index]),
             promote_score: *score,
             promote_threshold: threshold,
             source_pipeline: String::new(),
@@ -816,7 +601,7 @@ fn populate_joint_v3_chunks(
                     )
                 });
             L2ChunkOutput {
-                span: chunk.byte_span,
+                span: chunk_span(chunk),
                 class_name,
                 confidence,
                 promoted: score.is_some_and(|score| score >= threshold),
@@ -831,11 +616,7 @@ fn populate_joint_v3_chunks(
                     .unwrap_or("unknown-l2-encoder")
                     .to_string(),
                 token_ids: chunk.token_ids.clone(),
-                tokenizer_family: manifest
-                    .minilm
-                    .tokenizer_family
-                    .clone()
-                    .unwrap_or_else(|| "mmbert".to_string()),
+                tokenizer_family: TOKENIZER_FAMILY.to_string(),
                 class_probabilities,
                 joint_v3_decision: joint_v3_decision.clone(),
             }
@@ -843,147 +624,10 @@ fn populate_joint_v3_chunks(
         .collect();
 }
 
-type ChunkPromotionOutput = (Vec<Option<f32>>, Vec<L3Candidate>, Vec<L2ChunkOutput>);
-
-#[allow(clippy::too_many_arguments)]
-fn chunk_promotions(
-    aggregator: &mut AggregatorRuntime,
-    task: &str,
-    labels: &[String],
-    text: &str,
-    prepared: &PreparedDocument,
-    feature_by_name: &HashMap<String, Vec<f32>>,
-    embedding_dim: usize,
-    embedding_space: &str,
-    is_l3_tokenizer_compatible: bool,
-    tokenizer_family: Option<&str>,
-    operating_point: NtdbOperatingPoint,
-) -> NtdbResult<ChunkPromotionOutput> {
-    let mut scores = Vec::with_capacity(prepared.chunks.len());
-    let mut thresholds = Vec::with_capacity(prepared.chunks.len());
-    let mut chunk_outputs = Vec::with_capacity(prepared.chunks.len());
-    for (index, chunk) in prepared.chunks.iter().enumerate() {
-        let chunk_prepared = PreparedDocument {
-            chunks: vec![TokenChunk {
-                token_ids: chunk.token_ids.clone(),
-                byte_span: chunk.byte_span,
-            }],
-            chunk_width: prepared.chunk_width,
-            raw_embeddings: prepared.raw_embeddings
-                [index * embedding_dim..(index + 1) * embedding_dim]
-                .to_vec(),
-            local_features: prepared.local_features
-                [index * LOCAL_FEATURE_COUNT..(index + 1) * LOCAL_FEATURE_COUNT]
-                .to_vec(),
-            global_text_features: prepared.global_text_features,
-        };
-        let chunk_features = feature_by_name
-            .iter()
-            .map(|(name, values)| (name.clone(), vec![values[index]]))
-            .collect::<HashMap<_, _>>();
-        let chunk_text = text
-            .get(chunk.byte_span.start..chunk.byte_span.end)
-            .unwrap_or(text);
-        let output = aggregator.score(
-            task,
-            labels,
-            chunk_text,
-            &chunk_prepared,
-            &chunk_features,
-            operating_point,
-        )?;
-        scores.push(output.promote_score);
-        thresholds.push(output.promote_threshold);
-        let mut embedding =
-            prepared.raw_embeddings[index * embedding_dim..(index + 1) * embedding_dim].to_vec();
-        normalize_embedding(&mut embedding);
-        let (token_ids, tok_family) = if is_l3_tokenizer_compatible {
-            (
-                chunk.token_ids.clone(),
-                tokenizer_family.unwrap_or("mmbert").to_string(),
-            )
-        } else {
-            (Vec::new(), String::new())
-        };
-        chunk_outputs.push(l2_chunk_output(
-            chunk.byte_span,
-            task,
-            labels,
-            &output,
-            embedding,
-            embedding_space,
-            token_ids,
-            tok_family,
-        ));
-    }
-    let candidates = promoted_chunk_candidates(&prepared.chunks, &scores, &thresholds);
-    Ok((scores, candidates, chunk_outputs))
-}
-
-#[allow(clippy::too_many_arguments)]
-fn l2_chunk_output(
-    span: ByteSpan,
-    task: &str,
-    labels: &[String],
-    output: &ScoreOutput,
-    embedding: Vec<f32>,
-    embedding_space: &str,
-    token_ids: Vec<u32>,
-    tokenizer_family: String,
-) -> L2ChunkOutput {
-    let (class_name, confidence) = if task == "binary_promote"
-        || (label_index(labels, "benign").is_some()
-            && label_index(labels, "attack").is_some()
-            && label_index(labels, "promote").is_some())
-    {
-        let attack_index = label_index(labels, "attack").unwrap_or(1);
-        let attack_score = output
-            .class_scores
-            .get(attack_index)
-            .copied()
-            .unwrap_or_default();
-        let threshold = output.attack_threshold.unwrap_or(0.5);
-        if attack_score >= threshold {
-            ("attack".to_string(), attack_score)
-        } else {
-            ("benign".to_string(), 1.0 - attack_score)
-        }
-    } else {
-        let predicted_index = if output.predicted_label == "promote" {
-            best_non_promote_index(labels, &output.class_scores).unwrap_or(output.predicted_index)
-        } else {
-            output.predicted_index
-        };
-        let class_name = labels
-            .get(predicted_index)
-            .cloned()
-            .unwrap_or_else(|| output.predicted_label.clone());
-        let confidence = output
-            .class_scores
-            .get(predicted_index)
-            .copied()
-            .unwrap_or(output.promote_score.unwrap_or_default());
-        (class_name, confidence)
-    };
-
-    L2ChunkOutput {
-        span,
-        class_name,
-        confidence: confidence.clamp(0.0, 1.0),
-        promoted: output
-            .promote_score
-            .zip(output.promote_threshold)
-            .is_some_and(|(score, threshold)| score >= threshold),
-        promote_score: output.promote_score,
-        promote_threshold: output.promote_threshold,
-        source_pipeline: String::new(),
-        source_model: String::new(),
-        embedding,
-        embedding_space: embedding_space.to_string(),
-        token_ids,
-        tokenizer_family,
-        class_probabilities: Vec::new(),
-        joint_v3_decision: None,
+fn chunk_span(chunk: &TokenChunk) -> ByteSpan {
+    ByteSpan {
+        start: chunk.byte_span.0,
+        end: chunk.byte_span.1,
     }
 }
 
@@ -1001,85 +645,46 @@ fn normalize_embedding(embedding: &mut [f32]) {
     }
 }
 
-fn label_index(labels: &[String], needle: &str) -> Option<usize> {
-    labels.iter().position(|label| label == needle)
-}
-
-fn best_non_promote_index(labels: &[String], scores: &[f32]) -> Option<usize> {
-    scores
-        .iter()
-        .copied()
-        .enumerate()
-        .filter(|(index, _)| labels.get(*index).is_some_and(|label| label != "promote"))
-        .max_by(|left, right| left.1.total_cmp(&right.1))
-        .map(|(index, _)| index)
-}
-
-fn promoted_chunk_candidates(
-    chunks: &[TokenChunk],
-    scores: &[Option<f32>],
-    thresholds: &[Option<f32>],
-) -> Vec<L3Candidate> {
-    chunks
-        .iter()
-        .zip(scores)
-        .zip(thresholds)
-        .filter_map(|((chunk, score), threshold)| {
-            let (score, threshold) = score.zip(*threshold)?;
-            (score >= threshold).then_some(L3Candidate {
-                span: chunk.byte_span,
-                promote_score: score,
-                promote_threshold: threshold,
-                source_pipeline: String::new(),
-                source_model: String::new(),
-                l2_class: String::new(),
-            })
-        })
-        .collect()
-}
-
+/// Exercise the production token-to-L2-output materialization with supplied
+/// promotion scores, without loading either L2 or L3 inference sessions.
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn per_chunk_promote_selects_only_scores_at_or_above_threshold() {
-        let chunks = vec![
-            TokenChunk {
-                token_ids: vec![1],
-                byte_span: ByteSpan { start: 0, end: 100 },
-            },
-            TokenChunk {
-                token_ids: vec![2],
-                byte_span: ByteSpan {
-                    start: 100,
-                    end: 200,
-                },
-            },
-            TokenChunk {
-                token_ids: vec![3],
-                byte_span: ByteSpan {
-                    start: 200,
-                    end: 300,
-                },
-            },
-        ];
-
-        let candidates = promoted_chunk_candidates(
-            &chunks,
-            &[Some(0.2), Some(0.95), Some(0.8)],
-            &[Some(0.8), Some(0.8), Some(0.8)],
-        );
-
-        assert_eq!(candidates.len(), 2);
-        assert_eq!(
-            (candidates[0].span.start, candidates[0].span.end),
-            (100, 200)
-        );
-        assert_eq!(
-            (candidates[1].span.start, candidates[1].span.end),
-            (200, 300)
-        );
-        assert_eq!(candidates[0].promote_score, 0.95);
-    }
+pub(crate) fn token_outputs_for_test(chunks: Vec<TokenChunk>, promote: &[bool]) -> ScoreOutput {
+    let mut manifest =
+        parse_package_manifest(include_str!("../../../tests/fixtures/ntdb_v4.json")).unwrap();
+    manifest.validate().unwrap();
+    manifest.normalize_runtime_defaults();
+    let prepared = PreparedDocument {
+        raw_embeddings: vec![0.0; chunks.len() * manifest.minilm.embedding_dim],
+        chunks: Arc::new(chunks),
+    };
+    let mut output = ScoreOutput {
+        aggregator_id: "joint_v3".to_string(),
+        task: "binary".to_string(),
+        labels: vec!["benign".to_string(), "attack".to_string()],
+        predicted_label: "attack".to_string(),
+        predicted_index: 1,
+        class_scores: vec![0.1, 0.9],
+        class_logits: Vec::new(),
+        chunks: prepared.chunks.len(),
+        attack_threshold: None,
+        promote_score: Some(0.9),
+        promote_threshold: Some(0.5),
+        chunk_promote_scores: promote
+            .iter()
+            .map(|promote| Some(if *promote { 0.9 } else { 0.1 }))
+            .collect(),
+        l3_candidate_spans: Vec::new(),
+        l3_candidates: Vec::new(),
+        l2_chunk_outputs: Vec::new(),
+        chunk_class_probabilities: vec![vec![0.1, 0.9]; prepared.chunks.len()],
+        joint_v3_decision: None,
+    };
+    populate_joint_v3_chunks(
+        "injection_current",
+        &manifest,
+        &prepared,
+        &mut output,
+        manifest.minilm.embedding_dim,
+    );
+    output
 }

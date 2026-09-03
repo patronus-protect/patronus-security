@@ -5,7 +5,7 @@ for how the code is organized.
 
 ## Prerequisites
 
-- Rust stable toolchain
+- Rust 1.98.0 (selected automatically by `rust-toolchain.toml`, matching CI)
 - Python 3.11 or newer
 - [maturin](https://www.maturin.rs/)
 
@@ -16,10 +16,10 @@ git clone https://github.com/patronus-protect/patronus-security
 cd patronus-ark
 
 python -m venv .venv
-.venv/bin/python -m pip install maturin
+.venv/bin/python -m pip install -r requirements-test.txt
 
 # Build the Rust core and install the Python extension into the venv
-maturin develop --manifest-path python/Cargo.toml
+.venv/bin/python -m maturin develop --manifest-path python/Cargo.toml
 ```
 
 `maturin develop` rebuilds the Rust extension and reinstalls the `patronus_ark` module.
@@ -47,8 +47,8 @@ Re-run it after changing Rust code that the Python bindings touch.
    ```bash
    python scripts/generate_docs.py
    ```
-   The release pipeline verifies these are current (`generate_docs.py --check` in
-   `release.yml`); the regular push/PR CI does not, so regenerate and commit them yourself.
+   Both regular push/PR CI and the release pipeline verify these are current
+   (`generate_docs.py --check`), so regenerate and commit them with the source change.
 4. Run all [checks](testing.md#pre-release-checks) before merging.
 
 ## Change expectations

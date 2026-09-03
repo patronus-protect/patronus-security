@@ -6,13 +6,11 @@ use crate::NtdbOperatingPoint;
 
 mod decision;
 mod encoder;
-mod heuristics;
 mod joint_v3_runtime;
 mod lightgbm;
 pub mod manifest;
 mod package;
-mod runtime;
-pub(crate) mod tokenizer;
+mod session;
 
 pub use decision::NtdbDecision;
 pub(crate) use joint_v3_runtime::aggregate_probabilities;
@@ -27,13 +25,10 @@ pub(crate) use package::{JointV3CandidatePolicy, JointV3DecisionContext};
 #[doc(hidden)]
 pub mod test_util {
     pub use super::encoder::StaticEncoderStore;
-    pub use super::heuristics::{
-        global_text_heuristics, local_text_heuristics,
-        shared_global_text_heuristics_from_token_stats, TokenIdStats,
-    };
     pub use super::lightgbm::Tree;
-    pub use super::runtime::unit_left_dot;
-    pub use super::tokenizer::RuntimeTokenizer;
+    pub use crate::ml::tokenizer::{
+        RuntimeTokenizer, TokenChunk, CONTENT_TOKENS, MODEL_TOKENS, TEXT_WINDOW_BYTES,
+    };
 }
 
 pub type NtdbResult<T> = Result<T, Box<dyn Error + Send + Sync>>;
@@ -136,3 +131,6 @@ fn decisions_from_multi_outputs(outputs: Vec<MultiScoreOutput>) -> NtdbResult<Ve
         })
         .collect()
 }
+
+#[cfg(test)]
+pub(crate) use package::token_outputs_for_test;

@@ -69,10 +69,6 @@ name = "local_l1_l2_gliner_benchmark"
 path = "dev/local_l1_l2_gliner_benchmark.rs"
 
 [[example]]
-name = "mmbert_pair_tokenizer"
-path = "dev/mmbert_pair_tokenizer.rs"
-
-[[example]]
 name = "ntdb_memory_smoke"
 path = "dev/ntdb_memory_smoke.rs"
 

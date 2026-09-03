@@ -38,11 +38,9 @@ configuration; they are kept **resident in RAM** (idle-TTL evicted) and executed
 **background worker**, not on the request path. L3 answers in **tens of milliseconds** and
 makes the final call for cases L2 could not resolve confidently.
 
-For the current official mmBERT packages, L3 consumes the compatible token IDs already produced
-for the selected L2 chunks. It therefore continues in the same tokenizer and embedding space;
-there is no separate mmBERT tokenization step merely because a scan was promoted. Incompatible
-local packages and windows that cannot be handed off safely fall back to L3's own tokenizer-bounded
-planning.
+L3 consumes the exact token IDs of the promoted L2 chunks. Both layers use the
+same 254-content-token chunks, with BOS/EOS and padding added for the 256-position
+L3 input. Invalid chunks report an error; there is no tokenization fallback.
 
 ## Escalation: how a scan moves up
 
@@ -96,9 +94,10 @@ See [Categories](categories.md) for each category's layer support.
 
 ## Long text and windowing
 
-The L3 worker reuses compatible tokenized L2 windows and otherwise splits long inputs into
-**tokenizer-bounded windows**. It aggregates the per-window outputs into one result and keeps memory
-bounded so an attack buried deep in a long document is still caught. With representative
+Text is split into disjoint UTF-8 windows of at most 128 KiB, each tokenized once
+by compact mmBERT. L2 forms chunks of at most 254 content tokens; L3 reuses them
+unchanged. Tokenizer input memory is bounded per window; retained chunks and results
+still grow with document length. With representative
 **clustering** enabled (off by default) it groups near-duplicate
 windows by similarity, runs only cluster representatives, and propagates their verdict to the
 rest, so most windows never reach the model; **early exit** stops a head once its aggregate can no

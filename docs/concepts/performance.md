@@ -42,7 +42,8 @@ Compatible mmBERT-style tokenizers are converted once, on first use, into a comp
 file. It is generated locally during verified asset downloads and cached warmup when
 the tokenizer JSON has the supported byte-fallback BPE shape. The generated file stores explicit
 merge-pair identity, is hash- and version-invalidated, and keeps the canonical Hugging Face
-`tokenizer.json` as fallback. The former `.kit` format is unsupported.
+`tokenizer.json` as the conversion source. Runtime classification requires `.mmbpe`;
+there is no Hugging Face fallback. The former `.kit` format is unsupported.
 
 ### L3 sessions: built on first use, then RAM-resident
 
@@ -62,8 +63,10 @@ the request path so a slow transformer never blocks a fast L1/L2 answer.
 
 ### Long-text windowing
 
-Long inputs are split into tokenizer-bounded windows and aggregated, so memory stays bounded
-regardless of input length while still catching attacks buried deep in a document. With
+Long inputs are split into disjoint UTF-8 windows of at most 128 KiB before
+tokenization. Each window is tokenized once into chunks of at most 254 content
+tokens. L3 adds BOS/EOS and padding to 256 positions, reusing the exact L2 IDs.
+The tokenizer input is bounded; retained chunks and results grow with document length. With
 representative clustering enabled (off by default) near-duplicate windows are grouped by
 similarity and only cluster representatives run — the rest inherit the representative's verdict —
 which cuts physical inferences per request on top of the memory bound. See the

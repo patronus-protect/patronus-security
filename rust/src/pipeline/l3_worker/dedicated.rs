@@ -32,7 +32,7 @@ use super::super::{
 };
 use super::{
     elapsed_ms, publish_progress, publish_provisional, DynamicPiiHandle, L3ModelHandle,
-    L3WorkerInput, L3WorkerJob, L3WorkerState, L3_DIRECT_CONTENT_TOKEN_LIMIT,
+    L3WorkerInput, L3WorkerJob, L3WorkerState,
 };
 use crate::cache::{
     decision_output, merge_pii_spans, CacheCoordinator, CacheKey, CacheNamespace, CacheSource,
@@ -1095,7 +1095,13 @@ fn infer_l3_chunk(
         model.model_name().to_string()
     };
 
-    if let Some((result, mut layers)) = chunk_cache.get(&namespace, &chunk.text, &job.execution) {
+    chunk.validate_token_input()?;
+    let token_cache_key = blake3::hash(&crate::ml::tokenizer::token_key(&chunk.token_ids))
+        .to_hex()
+        .to_string();
+    if let Some((result, mut layers)) =
+        chunk_cache.get(&namespace, &token_cache_key, &job.execution)
+    {
         decorate_l3_layers(
             &mut layers,
             job,
@@ -1112,8 +1118,8 @@ fn infer_l3_chunk(
             .lock()
             .map_err(|err| format!("L3 model mutex poisoned: {err}"))?;
         let raw = model
-            .infer_raw(
-                &chunk.text,
+            .infer_token_ids_raw(
+                &chunk.token_ids,
                 job.execution.backend(),
                 job.execution.onnx_runtime_options(),
             )
@@ -1154,7 +1160,13 @@ fn infer_l3_chunk(
         (result, vec![layer])
     };
 
-    chunk_cache.insert(&namespace, &chunk.text, &job.execution, &result, &layers);
+    chunk_cache.insert(
+        &namespace,
+        &token_cache_key,
+        &job.execution,
+        &result,
+        &layers,
+    );
     decorate_l3_layers(
         &mut layers,
         job,
@@ -1174,11 +1186,15 @@ fn infer_l3_chunk_exact(
     chunk: &crate::pipeline::l3_schedule::SelectedL3Chunk,
     queue_wait_ms: f64,
 ) -> Result<(EvaluationResult, Vec<LayerResult>), String> {
-    const CACHE_SCHEMA_VERSION: u32 = 1;
+    chunk.validate_token_input()?;
+    const CACHE_SCHEMA_VERSION: u32 = 2;
     const CLASSIFICATION_HEAD: &str = "classification";
 
     let namespace = CacheNamespace::from_model_sha(CACHE_SCHEMA_VERSION, model_sha);
-    let key = CacheKey::for_chunk(namespace, chunk.text.as_bytes());
+    let key = CacheKey::for_chunk(
+        namespace,
+        &crate::ml::tokenizer::token_key(&chunk.token_ids),
+    );
     let started = Instant::now();
     if let Some(lookup) = exact_cache.lookup_exact(&key) {
         remember_dedicated_similarity(
@@ -1233,30 +1249,15 @@ fn infer_l3_chunk_exact(
 
     let lookup = exact_cache
         .get_or_compute_heads(key, || {
-            let raw = if !chunk.token_ids.is_empty()
-                && chunk.tokenizer_family.eq_ignore_ascii_case("mmbert")
-                && chunk.token_ids.len() <= L3_DIRECT_CONTENT_TOKEN_LIMIT
-            {
-                model
-                    .lock()
-                    .map_err(|err| format!("L3 model mutex poisoned: {err}"))?
-                    .infer_token_ids_raw(
-                        &chunk.token_ids,
-                        job.execution.backend(),
-                        job.execution.onnx_runtime_options(),
-                    )
-                    .map_err(|err| err.to_string())?
-            } else {
-                model
-                    .lock()
-                    .map_err(|err| format!("L3 model mutex poisoned: {err}"))?
-                    .infer_raw(
-                        &chunk.text,
-                        job.execution.backend(),
-                        job.execution.onnx_runtime_options(),
-                    )
-                    .map_err(|err| err.to_string())?
-            };
+            let raw = model
+                .lock()
+                .map_err(|err| format!("L3 model mutex poisoned: {err}"))?
+                .infer_token_ids_raw(
+                    &chunk.token_ids,
+                    job.execution.backend(),
+                    job.execution.onnx_runtime_options(),
+                )
+                .map_err(|err| err.to_string())?;
             Ok::<_, String>(vec![CachedHeadOutput {
                 head: CLASSIFICATION_HEAD.to_string(),
                 logits: raw.logits,

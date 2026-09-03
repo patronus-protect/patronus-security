@@ -87,6 +87,7 @@
     },
     {
       "id": "ark.injection.override.hierarchy_then_direct_action",
+      "required_literals_any": ["instruction", "prompt", "rule", "context", "directive", "constraint", "polic", "guardrail", "guideline", "limit", "anweisung", "regel", "kontext", "direktive", "beschränkung", "richtlinie", "leitplanke", "grenze"],
       "upstream_id": "pipelock:Prompt Injection+direct action",
       "family": "instruction_override",
       "severity": "high",
@@ -117,6 +118,7 @@
     },
     {
       "id": "ark.injection.leak.system_prompt_extraction",
+      "required_literals_any": ["instruction", "prompt", "message", "rule", "directive", "anweisung", "nachricht", "regel", "direktive"],
       "upstream_id": "pipelock:System Prompt Extraction",
       "family": "instruction_leak",
       "severity": "high",
@@ -138,6 +140,7 @@
     },
     {
       "id": "ark.injection.authority.fake_system_asset_transfer",
+      "required_literals_any": ["system", "admin", "kernel", "daemon", "security", "maintenance"],
       "upstream_id": "pipelock:System Override+critical asset action",
       "family": "authority_escalation",
       "severity": "critical",

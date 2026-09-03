@@ -23,6 +23,14 @@ The native Injection stack combines a pinned rule catalog, a structural relation
 and eighteen evidence-producing native rule families. They split into three groups: **instruction
 manipulation**, **obfuscation/smuggling**, and **agentic/tool abuse**.
 
+All four rule catalogs use individual compiled regexes to produce captures and exact
+source spans. Four expensive context rules first check `required_literals_any`: at least
+one listed literal must be present before running that rule's complete regex. These
+boundary-free literal checks preserve Unicode case folding; the complete regex still
+determines word boundaries, captures, and evidence on the original text. The lists must
+cover every alternative of their rule and are not additional detection signals.
+There is no aggregate-regex prefilter in the production L1 path.
+
 Overlapping signals are merged into candidates and scored by the versioned L1 scorer. Only an
 accepted candidate creates public evidence spans and a non-safe result. Rejected candidates retain
 their score and evidence in the typed decision contract without becoming findings.

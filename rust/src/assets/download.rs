@@ -144,6 +144,9 @@ pub fn ntdb_l2_package_assets_present(
         else {
             return false;
         };
+        if manifest.validate().is_err() {
+            return false;
+        }
         let matrix = package_dir
             .join("minilm")
             .join(&manifest.minilm.embedding_matrix_file);
@@ -690,7 +693,7 @@ fn link_compact_tokenizer(
     link_shared_embedder_file(shared_compact_path, &package_compact_path)
 }
 
-/// Return all runtime files referenced by an NTDB v2 package manifest.
+/// Return all runtime files referenced by an NTDB v4 package manifest.
 pub fn ntdb_l2_package_manifest_files(
     manifest_json: &str,
 ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
@@ -718,43 +721,19 @@ fn ntdb_l2_package_manifest_files_from_manifest(
         &format!("minilm/{}", manifest.minilm.embedding_matrix_file),
     )?;
 
-    if manifest.version == 4 {
-        let joint = manifest
-            .joint_v3
-            .as_ref()
-            .ok_or("NTDB package v4 is missing joint_v3")?;
-        push_manifest_file(&mut files, &mut seen, &joint.neural_stack.onnx)?;
-        for head in &joint.heads {
-            push_manifest_file(&mut files, &mut seen, &head.frozen_lightgbm)?;
-        }
-        for gate in joint.promoter.models.values() {
-            collect_json_path_values(gate, "lightgbm_model", &mut files, &mut seen)?;
-            collect_json_path_values(gate, "metadata", &mut files, &mut seen)?;
-        }
-        files.sort();
-        return Ok(files);
+    manifest.validate().map_err(|error| error.to_string())?;
+    let joint = manifest
+        .joint_v3
+        .as_ref()
+        .ok_or("NTDB v4 joint_v3 is required")?;
+    push_manifest_file(&mut files, &mut seen, &joint.neural_stack.onnx)?;
+    for head in &joint.heads {
+        push_manifest_file(&mut files, &mut seen, &head.frozen_lightgbm)?;
     }
-
-    for head in &manifest.heads {
-        for component in &head.static_components {
-            push_manifest_file(&mut files, &mut seen, &component.path)?;
-        }
-        for classifier in &head.classifiers {
-            collect_json_path_values(classifier, "path", &mut files, &mut seen)?;
-        }
-        if let Some(path) = &head.projection_onnx {
-            push_manifest_file(&mut files, &mut seen, path)?;
-        }
-        push_manifest_file(&mut files, &mut seen, &head.ntdb_head_onnx)?;
+    for gate in joint.promoter.models.values() {
+        collect_json_path_values(gate, "lightgbm_model", &mut files, &mut seen)?;
+        collect_json_path_values(gate, "metadata", &mut files, &mut seen)?;
     }
-
-    for aggregator in &manifest.aggregators {
-        push_manifest_file(&mut files, &mut seen, &aggregator.onnx)?;
-        if let Some(router) = &aggregator.promote_router {
-            push_manifest_file(&mut files, &mut seen, &router.onnx)?;
-        }
-    }
-
     files.sort();
     Ok(files)
 }
@@ -1042,7 +1021,7 @@ fn download_shared_embedder_file(
         &source_path,
         &file.shared_file,
         asset.required,
-        "NTDB v2 shared L2 embedder file",
+        "NTDB v4 shared L2 embedder file",
     )?;
     link_shared_embedder_file(&file.shared_file, &file.package_file)
 }
@@ -1338,65 +1317,14 @@ mod tests {
     }
 
     fn manifest_json(identity: &str) -> String {
-        format!(
-            r#"{{
-                "format": "ntdb_model_package",
-                "version": 2,
-                "runtime_contract": "raw_text_to_ntdb_outputs",
-                "task": {{"type": "binary", "labels": ["benign", "attack"]}},
-                "chunk_size": 2,
-                "tokenizer_dir": "tokenizer",
-                "minilm": {{
-                    "embedding_matrix_file": "embedding_matrix.f16",
-                    "vocab_size": 1,
-                    "embedding_dim": 1,
-                    "content_tokens_per_chunk": 2,
-                    "source_model_path": "{identity}",
-                    "model": "ibm-granite/granite-embedding-97m-multilingual-r2",
-                    "tokenizer_family": "ModernBERT"
-                }},
-                "feature_contract": {{
-                    "local_feature_order": [],
-                    "global_feature_order": []
-                }},
-                "runtime": {{
-                    "shared_preprocessing": ["tokenization"],
-                    "parallel_stages": [],
-                    "ordering": "manifest_order"
-                }},
-                "heads": [{{
-                    "id": "h",
-                    "type": "binary",
-                    "task": {{"type": "binary", "labels": ["other", "target"]}},
-                    "classifiers": [],
-                    "feature_order": [],
-                    "static_dir": "heads/h",
-                    "static_components": [],
-                    "projection_onnx": null,
-                    "ntdb_head_onnx": "heads/h/ntdb_head.onnx",
-                    "model_type": "sequential_ntdb",
-                    "reliability": {{
-                        "enabled": false,
-                        "hidden_dim": 0,
-                        "execution": "inside_onnx_model"
-                    }}
-                }}],
-                "aggregators": [{{
-                    "id": "main",
-                    "type": "binary_sequential_aggregator",
-                    "task": {{"type": "binary", "labels": ["benign", "attack"]}},
-                    "onnx": "aggregators/main/aggregator.onnx",
-                    "model_type": "sequential_ntdb",
-                    "input_feature_order": [],
-                    "global_feature_order": [],
-                    "reliability": {{
-                        "enabled": false,
-                        "hidden_dim": 0,
-                        "execution": "inside_onnx_model"
-                    }}
-                }}]
-            }}"#
-        )
+        let mut manifest: serde_json::Value =
+            serde_json::from_str(include_str!("../../tests/fixtures/ntdb_v4.json")).unwrap();
+        manifest["minilm"]["source_model_path"] = serde_json::json!(identity);
+        manifest["minilm"]["model"] =
+            serde_json::json!("ibm-granite/granite-embedding-97m-multilingual-r2");
+        manifest["minilm"]["vocab_size"] = serde_json::json!(1);
+        manifest["minilm"]["embedding_dim"] = serde_json::json!(1);
+        manifest.to_string()
     }
 
     #[test]

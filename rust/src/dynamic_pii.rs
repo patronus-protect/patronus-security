@@ -7,11 +7,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::SecurityCategory;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 /// Request-local condition controlling whether `dynamic-pii` runs.
 pub enum DynamicPiiExecutionGate {
     /// Run whenever the category and L3 model are enabled.
+    #[default]
     Always,
     /// Run when a source pipeline returns one of the configured results.
     IfResultIn {
@@ -20,12 +21,6 @@ pub enum DynamicPiiExecutionGate {
     },
     /// Run only after a source pipeline finishes without a usable result.
     IfNoResult { pipeline: String },
-}
-
-impl Default for DynamicPiiExecutionGate {
-    fn default() -> Self {
-        Self::Always
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

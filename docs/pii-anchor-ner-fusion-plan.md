@@ -11,7 +11,7 @@ Umgesetzt sind:
 - sieben sichtbare DLP-Anchor-Familien (`credentials_secrets`, `auth_header_cookie`, `business_record_identifier`, `internal_business_metric`, `source_code_config`, `sql_database_dump`, `system_log_stacktrace`) mit 13 getrennten lexikalischen/strukturellen Regexen und rund 260 DE/EN-Alternativen;
 - DLP-L1 für Provider-Secrets, generische Credentials, Private Keys, Tokens, Connection Strings, deutsche Business-/Record-Identifier, interne Kennzahlen, Source Code, SQL, Dumps und Systemlogs;
 - Value-only-Capture-Spans, UTF-8-sichere Byte-/Char-Offsets und koexistierende DLP-Spans für beispielsweise Source Code plus enthaltenes Secret;
-- direkte Ausführung der einmal kompilierten Einzelregexe für PII/DLP. Der Injection-eigene `RegexSet`-Prefilter bleibt ausschließlich in seinem bereits bewährten Rule Catalog; er wird nicht als gemeinsame PII/DLP-Abstraktion verwendet;
+- direkte Ausführung der einmal kompilierten Einzelregexe für PII/DLP und alle Injection-Regelkataloge, ohne vorgeschalteten Sammelregex-Scan;
 - 52 PII-Tests und 49 DLP-Tests mit namentlichen Capability-, Validator-, Negative-, Span-, Overlap-, Anchor- und Sammelregressionen; außerdem die bestehenden Native- und vollständigen Injection-Source-/Catalog-Goldens;
 - zwei neue reproduzierbare L1-Golden-Sets mit 255 Fällen: 140 PII-Fälle für alle 28 Labels und 115 DLP-Fälle für alle 23 Labels, jeweils drei Positive plus zwei harte Negative je Label.
 
@@ -164,7 +164,7 @@ Ein Finding enthält den erkannten PII-Wert und dessen Start/Ende. Anchors und V
 
 ### Injection L1
 
-Injection besitzt bereits Rule Catalog, RegexSet-Prefilter, exakte Lokalisierung, `ordered_relation`, strukturelle Komposition, UTF-8-sichere Offsets, Clause-/Window-Segmentierung, Features, Provenance, Candidate-Gruppierung und einen kalibrierten Scorer. `candidate_only` bleibt sichtbar, beeinflusst aber weder Acceptance noch Scoring und darf akzeptierte Candidates nicht verbinden. Öffentlich entsteht genau ein `native:injection_l1`-Resultat.
+Injection besitzt bereits Rule Catalog mit direkten Einzelregex-Scans, exakte Lokalisierung, `ordered_relation`, strukturelle Komposition, UTF-8-sichere Offsets, Clause-/Window-Segmentierung, Features, Provenance, Candidate-Gruppierung und einen kalibrierten Scorer. `candidate_only` bleibt sichtbar, beeinflusst aber weder Acceptance noch Scoring und darf akzeptierte Candidates nicht verbinden. Öffentlich entsteht genau ein `native:injection_l1`-Resultat.
 
 Relevante Dateien:
 

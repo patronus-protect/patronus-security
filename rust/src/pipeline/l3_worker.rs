@@ -39,8 +39,7 @@ pub use unified::{
 type L3ModelHandle = Arc<Mutex<LazyOnnxTextClassifier>>;
 type DynamicPiiHandle = Arc<Mutex<DynamicPiiRuntime>>;
 type UnifiedModelHandle = Arc<Mutex<LazyUnifiedOnnxClassifier>>;
-const L3_OVERLAP_TOKENS: usize = 32;
-pub(super) const L3_DIRECT_CONTENT_TOKEN_LIMIT: usize = 254;
+pub(super) const L3_DIRECT_CONTENT_TOKEN_LIMIT: usize = crate::ml::tokenizer::CONTENT_TOKENS;
 const L3_IDLE_SWEEP_INTERVAL: Duration = Duration::from_secs(30);
 /// Minimum L3 confidence for an `injection`/`threat` positive to stop the whole request.
 const REQUEST_WIDE_EARLY_EXIT_CONFIDENCE: f64 = 0.93;
@@ -474,10 +473,7 @@ impl L3Worker {
     }
 
     fn plan_chunks_for_spec(&self, spec: &L3JobSpec) -> Result<Vec<SelectedL3Chunk>, String> {
-        let token_chunks = match token_chunks_from_l2_outputs(spec)? {
-            Some(chunks) => chunks,
-            None => self.token_chunks_from_model(spec)?,
-        };
+        let token_chunks = token_chunks_from_l2_outputs(spec)?;
         let clustering = if spec.execution.l3_strategy() == L3Strategy::Multi {
             unified::selection_clustering_for_spec(spec)
         } else {
@@ -487,51 +483,11 @@ impl L3Worker {
                 .clustering
         };
         let mut chunks = selected_l3_chunks(token_chunks, &spec.l3_candidates, clustering);
+        if chunks.is_empty() {
+            return Err("L3 candidates do not contain any prepared L2 chunk".to_string());
+        }
         attach_l2_embeddings(&mut chunks, &spec.l2_chunk_outputs);
         Ok(chunks)
-    }
-
-    fn token_chunks_from_model(&self, spec: &L3JobSpec) -> Result<Vec<TokenTextChunk>, String> {
-        if spec.execution.l3_strategy() == L3Strategy::Multi {
-            let model = self
-                .state
-                .unified_model
-                .lock()
-                .expect("unified model registry mutex poisoned")
-                .clone()
-                .ok_or_else(|| "unified L3 model is not registered".to_string())?;
-            let chunks = model
-                .lock()
-                .map_err(|error| format!("unified L3 model mutex poisoned: {error}"))?
-                .token_chunks(
-                    &spec.text,
-                    L3_OVERLAP_TOKENS,
-                    spec.execution.backend(),
-                    spec.execution.onnx_runtime_options(),
-                )
-                .map_err(|error| error.to_string())?;
-            Ok(chunks)
-        } else {
-            let model = self
-                .state
-                .models
-                .lock()
-                .expect("l3 model registry mutex poisoned")
-                .get(&spec.model)
-                .cloned()
-                .ok_or_else(|| format!("L3 model '{}' is not registered", spec.model))?;
-            let chunks = model
-                .lock()
-                .map_err(|error| format!("L3 model mutex poisoned: {error}"))?
-                .token_chunks(
-                    &spec.text,
-                    L3_OVERLAP_TOKENS,
-                    spec.execution.backend(),
-                    spec.execution.onnx_runtime_options(),
-                )
-                .map_err(|error| error.to_string())?;
-            Ok(chunks)
-        }
     }
 
     pub(crate) fn resolve_dynamic_pii(&self, request_id: &str) {
@@ -590,6 +546,8 @@ fn worker_loop(state: Arc<L3WorkerState>) {
         sweep_expired_models(&state);
         let workload = job.category.clone();
         let configured_cost_ms = job.estimated_cost_ms;
+        #[cfg(feature = "test-util")]
+        let simulated_cost_ms = job.test_delay_ms.map(|delay| delay as f64);
         let started = Instant::now();
         if job.execution.l3_strategy() == L3Strategy::Multi && job.dynamic_pii_config.is_none() {
             let run_key = unified::run_key_for_job(&job);
@@ -605,12 +563,12 @@ fn worker_loop(state: Arc<L3WorkerState>) {
             continue;
         }
         let (job_id, request_id, result) = dedicated::execute(&state, job);
-        observe_cost(
-            &state,
-            &workload,
-            configured_cost_ms,
-            started.elapsed().as_secs_f64() * 1_000.0,
-        );
+        let actual_cost_ms = started.elapsed().as_secs_f64() * 1_000.0;
+        // Synthetic delay jobs model a known service cost. OS scheduling jitter
+        // must not change the fairness policy exercised by those tests.
+        #[cfg(feature = "test-util")]
+        let actual_cost_ms = simulated_cost_ms.unwrap_or(actual_cost_ms);
+        observe_cost(&state, &workload, configured_cost_ms, actual_cost_ms);
         finish_job(&state, job_id, request_id, result);
     }
 }
@@ -724,9 +682,9 @@ fn scheduling_values(spec: &L3JobSpec) -> (u64, u64, u64) {
     )
 }
 
-fn token_chunks_from_l2_outputs(spec: &L3JobSpec) -> Result<Option<Vec<TokenTextChunk>>, String> {
+fn token_chunks_from_l2_outputs(spec: &L3JobSpec) -> Result<Vec<TokenTextChunk>, String> {
     if spec.l2_chunk_outputs.is_empty() {
-        return Ok(None);
+        return Err("L3 requires prepared NTDB v4 token chunks".to_string());
     }
 
     let mut outputs = spec.l2_chunk_outputs.to_vec();
@@ -740,14 +698,23 @@ fn token_chunks_from_l2_outputs(spec: &L3JobSpec) -> Result<Option<Vec<TokenText
         while group_end < outputs.len() && outputs[group_end].span == span {
             group_end += 1;
         }
-        let Some(output) = outputs[index..group_end]
-            .iter()
-            .find(|output| direct_l3_token_handoff_usable(output))
-        else {
-            // Re-plan the complete document with the L3 tokenizer. Its model-backed
-            // chunker applies the configured overlap and cannot truncate an L2 span.
-            return Ok(None);
-        };
+        let output = &outputs[index];
+        for duplicate in &outputs[index..group_end] {
+            if !direct_l3_token_handoff_usable(duplicate) {
+                return Err(format!(
+                    "invalid mmBERT L2 chunk at {}..{}: {} content tokens",
+                    span.start,
+                    span.end,
+                    duplicate.token_ids.len()
+                ));
+            }
+            if duplicate.token_ids != output.token_ids {
+                return Err(format!(
+                    "conflicting L2 token IDs at {}..{}",
+                    span.start, span.end
+                ));
+            }
+        }
         let text = spec.text.get(span.start..span.end).ok_or_else(|| {
             format!(
                 "L2 chunk span {}..{} is not a valid source text range",
@@ -763,11 +730,11 @@ fn token_chunks_from_l2_outputs(spec: &L3JobSpec) -> Result<Option<Vec<TokenText
         });
         index = group_end;
     }
-    Ok(Some(chunks))
+    Ok(chunks)
 }
 
 fn direct_l3_token_handoff_usable(output: &L2ChunkOutput) -> bool {
-    !output.token_ids.is_empty()
+    (!output.token_ids.is_empty() || output.span.start == output.span.end)
         && output.token_ids.len() <= L3_DIRECT_CONTENT_TOKEN_LIMIT
         && output.tokenizer_family.eq_ignore_ascii_case("mmbert")
 }
@@ -1673,6 +1640,116 @@ mod tests {
     }
 
     #[test]
+    fn token_pipeline_e2e_preserves_v4_chunks_through_promotion_and_l3_inputs() {
+        use crate::ml::{
+            ntdb_executor::token_outputs_for_test,
+            tokenizer::{fixture_tokenizer, CONTENT_TOKENS, MODEL_TOKENS, TEXT_WINDOW_BYTES},
+        };
+        let tokenizer = fixture_tokenizer();
+        let mut cases = [0, 1, 253, 254, 255, 256, 257, 508, 509]
+            .into_iter()
+            .map(|count| " a".repeat(count))
+            .collect::<Vec<_>>();
+        cases.extend([
+            "é🙂界 a   <mask>a".repeat(100),
+            " a".repeat(TEXT_WINDOW_BYTES + 1),
+            "   ".to_string(),
+        ]);
+        for text in cases {
+            tokenizer.0.encoded_windows.lock().unwrap().clear();
+            let l2_chunks = tokenizer.token_chunks(&text);
+            let promote = vec![true; l2_chunks.len()];
+            let l2 = token_outputs_for_test(l2_chunks.clone(), &promote);
+            let mut spec = test_l3_spec(
+                "token-e2e",
+                "injection",
+                1,
+                ScanExecution::new(SecurityLevel::L3),
+            );
+            spec.text = Arc::from(text.as_str());
+            spec.l3_candidates = l2.l3_candidates;
+            // Multi-head requests may carry the same L2 chunk more than once.
+            spec.l2_chunk_outputs = l2
+                .l2_chunk_outputs
+                .iter()
+                .cloned()
+                .chain(l2.l2_chunk_outputs.iter().cloned())
+                .collect::<Vec<_>>()
+                .into();
+            let worker = L3Worker {
+                state: Arc::new(test_worker_state(Arc::new(RequestRegistry::default()))),
+            };
+            let job = worker.build_physical_job(spec, None, None).unwrap();
+            let L3WorkerInput::PlannedChunks(mut l3_chunks) = job.input else {
+                panic!("expected planned tokens");
+            };
+            l3_chunks.sort_by_key(|chunk| chunk.source_order);
+            assert_eq!(l3_chunks.len(), l2_chunks.len());
+            for (l2, l3) in l2_chunks.iter().zip(l3_chunks) {
+                assert_eq!(l3.token_ids, l2.token_ids);
+                assert_eq!((l3.start_byte, l3.end_byte), l2.byte_span);
+                assert_eq!(l3.text, text[l2.byte_span.0..l2.byte_span.1]);
+                assert!(l3.token_ids.len() <= CONTENT_TOKENS);
+                let (ids, mask, _) = tokenizer.inputs(&l3.token_ids).unwrap();
+                assert_eq!(ids.len(), MODEL_TOKENS);
+                assert_eq!(ids[0], 1);
+                assert_eq!(ids[l2.token_ids.len() + 1], 2);
+                assert_eq!(
+                    &ids[1..l2.token_ids.len() + 1],
+                    l2.token_ids
+                        .iter()
+                        .copied()
+                        .map(i64::from)
+                        .collect::<Vec<_>>()
+                );
+                assert_eq!(mask.iter().sum::<i64>() as usize, l2.token_ids.len() + 2);
+            }
+            let calls = tokenizer.0.encoded_windows.lock().unwrap();
+            assert_eq!(calls.iter().sum::<usize>(), text.len());
+            assert!(calls.iter().all(|bytes| *bytes <= TEXT_WINDOW_BYTES));
+        }
+    }
+
+    #[test]
+    fn token_pipeline_e2e_promotes_only_the_original_selected_chunk() {
+        use crate::ml::{ntdb_executor::token_outputs_for_test, tokenizer::fixture_tokenizer};
+        let tokenizer = fixture_tokenizer();
+        for text in [" a".repeat(254 * 3), "🙂".repeat(200)] {
+            tokenizer.0.encoded_windows.lock().unwrap().clear();
+            let chunks = tokenizer.token_chunks(&text);
+            let l2 = token_outputs_for_test(
+                chunks.clone(),
+                &(0..chunks.len())
+                    .map(|index| index == 1)
+                    .collect::<Vec<_>>(),
+            );
+            let mut spec = test_l3_spec(
+                "selected-token-e2e",
+                "injection",
+                1,
+                ScanExecution::new(SecurityLevel::L3),
+            );
+            spec.text = Arc::from(text);
+            spec.l3_candidates = l2.l3_candidates;
+            spec.l2_chunk_outputs = l2.l2_chunk_outputs.into();
+            let worker = L3Worker {
+                state: Arc::new(test_worker_state(Arc::new(RequestRegistry::default()))),
+            };
+            let job = worker.build_physical_job(spec, None, None).unwrap();
+            let L3WorkerInput::PlannedChunks(selected) = job.input else {
+                panic!("expected token chunks");
+            };
+            assert_eq!(selected.len(), 1);
+            assert_eq!(selected[0].token_ids, chunks[1].token_ids);
+            assert_eq!(
+                (selected[0].start_byte, selected[0].end_byte),
+                chunks[1].byte_span
+            );
+            assert_eq!(tokenizer.0.encoded_windows.lock().unwrap().len(), 1);
+        }
+    }
+
+    #[test]
     fn physical_l3_job_uses_l2_chunk_spans_without_full_text_tokenization() {
         let worker = L3Worker {
             state: Arc::new(test_worker_state(Arc::new(RequestRegistry::default()))),
@@ -1705,7 +1782,7 @@ mod tests {
     }
 
     #[test]
-    fn invalid_l2_token_handoff_forces_model_backed_rechunking() {
+    fn invalid_l2_token_handoff_is_rejected_without_retokenizing() {
         for (token_ids, tokenizer_family) in [
             (Vec::new(), "mmbert"),
             (vec![1; L3_DIRECT_CONTENT_TOKEN_LIMIT + 1], "mmbert"),
@@ -1722,12 +1799,41 @@ mod tests {
             output.tokenizer_family = tokenizer_family.to_string();
             spec.l2_chunk_outputs = vec![output].into();
 
-            assert!(token_chunks_from_l2_outputs(&spec).unwrap().is_none());
+            assert!(token_chunks_from_l2_outputs(&spec).is_err());
         }
     }
 
     #[test]
-    fn valid_duplicate_l2_handoff_is_preferred_over_incompatible_output() {
+    fn malformed_token_handoffs_report_errors_without_model_loading() {
+        let mut spec = test_l3_spec(
+            "malformed-token-e2e",
+            "injection",
+            1,
+            ScanExecution::new(SecurityLevel::L3),
+        );
+        assert!(token_chunks_from_l2_outputs(&spec).is_err());
+        spec.text = Arc::from("é🙂");
+        for (start, end) in [(1, 2), (0, 99), (4, 2)] {
+            let mut output = test_l2_chunk_output(start, end, "injection", true);
+            output.token_ids = vec![1];
+            output.tokenizer_family = "mmbert".to_string();
+            spec.l2_chunk_outputs = vec![output].into();
+            assert!(token_chunks_from_l2_outputs(&spec).is_err());
+        }
+        let mut first = test_l2_chunk_output(0, 2, "injection", true);
+        first.token_ids = vec![1];
+        first.tokenizer_family = "mmbert".to_string();
+        let mut conflicting = first.clone();
+        conflicting.token_ids = vec![2];
+        spec.l2_chunk_outputs = vec![first, conflicting].into();
+        assert!(token_chunks_from_l2_outputs(&spec)
+            .err()
+            .unwrap()
+            .contains("conflicting L2 token IDs"));
+    }
+
+    #[test]
+    fn incompatible_duplicate_l2_handoff_is_rejected() {
         let mut spec = test_l3_spec(
             "rq-compatible-handoff",
             "threat",
@@ -1740,13 +1846,7 @@ mod tests {
         compatible.tokenizer_family = "mmbert".to_string();
         spec.l2_chunk_outputs = vec![incompatible, compatible].into();
 
-        let chunks = token_chunks_from_l2_outputs(&spec)
-            .unwrap()
-            .expect("a compatible output exists for the span");
-
-        assert_eq!(chunks.len(), 1);
-        assert_eq!(chunks[0].token_ids, [7, 8]);
-        assert_eq!(chunks[0].tokenizer_family, "mmbert");
+        assert!(token_chunks_from_l2_outputs(&spec).is_err());
     }
 
     #[test]

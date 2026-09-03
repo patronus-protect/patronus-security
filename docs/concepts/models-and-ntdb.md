@@ -6,36 +6,20 @@ assets are organized.
 
 ## NTDB — the L2 format
 
-**NTDB** stands for **Non Transformer Decision Block**. It is a small purpose-built network
-architecture that bundles several *non-transformer* classifiers so they can be used together —
-and, crucially, so they can answer as many requests as possible **without** invoking an L3
-transformer. An NTDB package contains:
+**NTDB** stands for **Non Transformer Decision Block**. Ark loads v4 packages with a
+shared compact mmBERT tokenizer, a static token-embedding matrix, frozen LightGBM
+heads, a joint neural stack, and a per-chunk promoter. Version 2 packages are unsupported.
 
-- a **static token-embedding encoder** — no attention, no per-token transformer pass (this is
-  the "non-transformer" part);
-- one or more **heads**. Each head runs a small ONNX network over the encoder's features to
-  produce its score, optionally enriched by zero or more auxiliary non-transformer feature
-  producers (gradient-boosted trees, logistic regression, centroid-cosine, a 1-D text CNN)
-  whose outputs feed in as extra features;
-- a trained **aggregator** that combines the heads' outputs with local and global heuristic
-  features into the final L2 verdict;
-- optionally, a trained **promote-router** that decides, per chunk, whether the case should be
-  escalated to L3; when a package omits it, the aggregator's own promote output is used instead;
-- a `manifest.json` with `format: ntdb_model_package` (version 2) describing operating points
-  and metadata.
+Text is split into disjoint UTF-8 windows of at most 128 KiB before tokenization.
+Each window is tokenized once. The resulting IDs and source offsets form chunks
+of at most 254 content tokens. All L2 packages in a request share these chunks;
+batch requests also prepare each document once across packages.
 
-The aggregator is the point of the design. Rather than picking one classifier, it *learns*
-when which features are more reliable — and the promote decision learns when an L3 transformer
-would only return redundant or worse information, so that call can be skipped. This is how NTDB
-offloads L3: most traffic is resolved by the cheap non-transformer block, and the expensive
-transformer runs only where it actually adds signal.
-
-The current official L2 and L3 packages share the same mmBERT tokenizer contract, vocabulary, and
-embedding space. Within L2, packages also reuse a single static encoder instance. Embedding is done
-once per token lookup, so running seven L2 categories costs barely more than running one — which is
-what makes L2 fast enough to sit on the request path. On promotion, compatible L2 chunks retain
-their token IDs and pass them to L3; promotion does not introduce a separate mmBERT tokenization
-step.
+Promotion passes the same chunk and token IDs to L3. Its model input is BOS, up to
+254 content IDs, EOS, and right padding to 256 positions. L3 does not tokenize or
+re-chunk promoted text. Invalid handoffs report an error. L2 vectors are reused
+for similarity and clustering; the L3 transformer consumes token IDs, not pooled
+L2 vectors. Exact chunk caches key the actual token IDs.
 
 ### Final-decision threshold profiles
 
@@ -64,8 +48,8 @@ L2 packages use the same canonical tokenizer as the unified L3 bundle. Dedicated
 bundles can also generate `.mmbpe` during verified downloads or cached warmup. The former `.kit`
 format is unsupported.
 
-The source JSON remains canonical and is used automatically if conversion, validation, or compact
-loading fails. Source/content hashes, format versions, and converter versions invalidate stale
+The source JSON is used only to generate the compact artifact. Classifier runtime
+loading requires a valid `.mmbpe` file and never falls back to Hugging Face tokenization. Source/content hashes, format versions, and converter versions invalidate stale
 generated files; local model overrides are never rewritten. Details are in
 [Performance & memory](performance.md).
 

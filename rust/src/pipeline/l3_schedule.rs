@@ -24,6 +24,18 @@ pub(crate) struct SelectedL3Chunk {
     pub(crate) tokenizer_family: String,
 }
 
+impl SelectedL3Chunk {
+    pub(crate) fn validate_token_input(&self) -> Result<(), String> {
+        if self.tokenizer_family != crate::ml::tokenizer::TOKENIZER_FAMILY
+            || self.token_ids.len() > crate::ml::tokenizer::CONTENT_TOKENS
+            || (self.token_ids.is_empty() && !self.text.is_empty())
+        {
+            return Err("L3 requires a canonical mmBERT token chunk".to_string());
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct L3ChunkCluster {
     pub(crate) representative: usize,
@@ -92,7 +104,7 @@ pub(crate) fn selected_l3_chunks(
     for candidate in ranked {
         let priority = candidate_priority(&candidate);
         for (index, chunk) in chunks.iter().enumerate() {
-            if candidate.span.start < chunk.end_byte && candidate.span.end > chunk.start_byte {
+            if candidate.span.start <= chunk.start_byte && candidate.span.end >= chunk.end_byte {
                 if selected_indices.contains(&index) {
                     continue;
                 }
@@ -113,25 +125,6 @@ pub(crate) fn selected_l3_chunks(
         }
     }
 
-    if selected.is_empty() {
-        selected = chunks
-            .into_iter()
-            .enumerate()
-            .map(|(source_order, chunk)| SelectedL3Chunk {
-                text: chunk.text,
-                start_byte: chunk.start_byte,
-                end_byte: chunk.end_byte,
-                priority: 0.0,
-                head_priority: 1,
-                source_order,
-                embedding: Vec::new(),
-                embedding_space: String::new(),
-                token_ids: chunk.token_ids,
-                tokenizer_family: chunk.tokenizer_family,
-            })
-            .collect();
-    }
-
     match clustering {
         L3ClusteringStrategy::Disabled => {
             selected.sort_by_key(|chunk| chunk.source_order);
@@ -150,48 +143,18 @@ pub(crate) fn selected_l3_chunks(
     selected
 }
 
-/// Projects the already-computed L2 vectors onto the selected L3 windows.
-/// Multiple overlapping L2 chunks in the same vector space are averaged by
-/// byte overlap and normalized; no text is tokenized again.
+/// Reuse the vector of the exact L2 chunk; L3 never re-chunks the text.
 pub(crate) fn attach_l2_embeddings(chunks: &mut [SelectedL3Chunk], l2_outputs: &[L2ChunkOutput]) {
     for chunk in chunks {
-        let mut by_space = std::collections::HashMap::<String, (Vec<f64>, usize)>::new();
-        for output in l2_outputs {
-            if output.embedding.is_empty() || output.embedding_space.is_empty() {
-                continue;
-            }
-            let overlap_start = chunk.start_byte.max(output.span.start);
-            let overlap_end = chunk.end_byte.min(output.span.end);
-            let weight = overlap_end.saturating_sub(overlap_start);
-            if weight == 0 {
-                continue;
-            }
-            let entry = by_space
-                .entry(output.embedding_space.clone())
-                .or_insert_with(|| (vec![0.0; output.embedding.len()], 0));
-            if entry.0.len() != output.embedding.len() {
-                continue;
-            }
-            for (target, value) in entry.0.iter_mut().zip(&output.embedding) {
-                *target += f64::from(*value) * weight as f64;
-            }
-            entry.1 += weight;
+        if let Some(output) = l2_outputs.iter().find(|output| {
+            output.span.start == chunk.start_byte
+                && output.span.end == chunk.end_byte
+                && !output.embedding.is_empty()
+                && !output.embedding_space.is_empty()
+        }) {
+            chunk.embedding.clone_from(&output.embedding);
+            chunk.embedding_space.clone_from(&output.embedding_space);
         }
-        let Some((space, (values, _))) = by_space
-            .into_iter()
-            .max_by_key(|(_, (_, total_weight))| *total_weight)
-        else {
-            continue;
-        };
-        let norm = values.iter().map(|value| value * value).sum::<f64>().sqrt();
-        if norm <= f64::EPSILON {
-            continue;
-        }
-        chunk.embedding = values
-            .into_iter()
-            .map(|value| (value / norm) as f32)
-            .collect();
-        chunk.embedding_space = space;
     }
 }
 

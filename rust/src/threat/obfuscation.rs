@@ -234,7 +234,7 @@ pub(super) fn split_fragments(text: &str) -> impl Iterator<Item = &str> {
 }
 
 pub(super) fn continuous_hex_decode(fragment: &str) -> Option<String> {
-    if fragment.len() % 2 != 0
+    if !fragment.len().is_multiple_of(2)
         || fragment.len() < 8
         || !fragment.bytes().all(|byte| byte.is_ascii_hexdigit())
     {
@@ -256,7 +256,7 @@ pub(super) fn continuous_hex_decode(fragment: &str) -> Option<String> {
 }
 
 pub(super) fn base64_decode_text(fragment: &str) -> Option<String> {
-    if fragment.len() < 12 || fragment.len() % 4 != 0 {
+    if fragment.len() < 12 || !fragment.len().is_multiple_of(4) {
         return None;
     }
     if !fragment.bytes().all(|byte| {

@@ -23,7 +23,7 @@ use super::super::l3_routing::{priority_index, ttl_ms};
 use super::super::{degraded_error_result, degraded_timeout_result, l3_metadata_layer};
 use super::{
     elapsed_ms, finish_job, request_wide_early_exit, L3JobSpec, L3Worker, L3WorkerInput,
-    L3WorkerJob, L3WorkerState, UnifiedModelHandle, L3_DIRECT_CONTENT_TOKEN_LIMIT,
+    L3WorkerJob, L3WorkerState, UnifiedModelHandle,
 };
 #[cfg(feature = "test-util")]
 use super::{FairSchedulerState, RequestRegistry};
@@ -598,10 +598,14 @@ fn infer_unified_exact(
     backend: crate::ExecutionBackend,
     onnx_runtime_options: crate::OnnxRuntimeOptions,
 ) -> Result<(UnifiedModelOutput, bool, bool), String> {
-    const CACHE_SCHEMA_VERSION: u32 = 1;
+    chunk.validate_token_input()?;
+    const CACHE_SCHEMA_VERSION: u32 = 2;
 
     let namespace = CacheNamespace::from_model_sha(CACHE_SCHEMA_VERSION, UNIFIED_L3_ASSET.revision);
-    let key = CacheKey::for_chunk(namespace, chunk.text.as_bytes());
+    let key = CacheKey::for_chunk(
+        namespace,
+        &crate::ml::tokenizer::token_key(&chunk.token_ids),
+    );
     if let Some(matched) = similarity_cache.find_best_for_head_and_producer(
         &chunk.embedding_space,
         &chunk.embedding,
@@ -638,22 +642,11 @@ fn infer_unified_exact(
     }
     let lookup = exact_cache
         .get_or_compute_heads(key, || {
-            let raw = if !chunk.token_ids.is_empty()
-                && chunk.tokenizer_family.eq_ignore_ascii_case("mmbert")
-                && chunk.token_ids.len() <= L3_DIRECT_CONTENT_TOKEN_LIMIT
-            {
-                model
-                    .lock()
-                    .map_err(|error| format!("unified L3 model mutex poisoned: {error}"))?
-                    .infer_token_ids_raw(&chunk.token_ids, backend, onnx_runtime_options)
-                    .map_err(|error| error.to_string())?
-            } else {
-                model
-                    .lock()
-                    .map_err(|error| format!("unified L3 model mutex poisoned: {error}"))?
-                    .infer_raw(&chunk.text, backend, onnx_runtime_options)
-                    .map_err(|error| error.to_string())?
-            };
+            let raw = model
+                .lock()
+                .map_err(|error| format!("unified L3 model mutex poisoned: {error}"))?
+                .infer_token_ids_raw(&chunk.token_ids, backend, onnx_runtime_options)
+                .map_err(|error| error.to_string())?;
             Ok::<_, String>(
                 raw.heads
                     .into_iter()

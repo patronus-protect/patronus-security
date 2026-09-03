@@ -327,20 +327,11 @@ fn ntdb_l2_package_cache_requires_the_pinned_revision() {
     let package_dir = dir.join(asset.destination_path);
     std::fs::create_dir_all(&package_dir).unwrap();
     std::fs::create_dir_all(package_dir.join("minilm")).unwrap();
-    std::fs::write(
-        package_dir.join("manifest.json"),
-        r#"{
-            "format":"ntdb_model_package","version":2,
-            "runtime_contract":"raw_text_to_ntdb_outputs",
-            "task":{"type":"binary","labels":["benign","attack"]},
-            "chunk_size":1,"tokenizer_dir":"tokenizer",
-            "minilm":{"embedding_matrix_file":"embedding_matrix.f16","vocab_size":1,
-                "embedding_dim":1,"content_tokens_per_chunk":1,"tokenizer_family":"test"},
-            "runtime":{"shared_preprocessing":["tokenization"],"parallel_stages":[],
-                "ordering":"manifest_order"}
-        }"#,
-    )
-    .unwrap();
+    let mut manifest: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/ntdb_v4.json")).unwrap();
+    manifest["minilm"]["vocab_size"] = serde_json::json!(1);
+    manifest["minilm"]["embedding_dim"] = serde_json::json!(1);
+    std::fs::write(package_dir.join("manifest.json"), manifest.to_string()).unwrap();
     std::fs::write(package_dir.join("minilm/embedding_matrix.f16"), [0_u8; 2]).unwrap();
 
     assert!(!ntdb_l2_package_assets_present(
@@ -583,149 +574,20 @@ mod asset_downloads {
 
     #[test]
     fn ntdb_manifest_files_include_runtime_references() {
-        let manifest = r#"{
-            "format": "ntdb_model_package",
-            "version": 2,
-            "runtime_contract": "raw_text_to_ntdb_outputs",
-            "task": {"type": "binary", "labels": ["benign", "attack"]},
-            "chunk_size": 2,
-            "tokenizer_dir": "tokenizer",
-            "minilm": {
-                "embedding_matrix_file": "embedding_matrix.f16",
-                "vocab_size": 1,
-                "embedding_dim": 1,
-                "content_tokens_per_chunk": 2
-            },
-            "feature_contract": {
-                "local_feature_order": [],
-                "global_feature_order": []
-            },
-            "runtime": {
-                "shared_preprocessing": ["tokenization"],
-                "parallel_stages": [],
-                "ordering": "manifest_order"
-            },
-            "heads": [{
-                "id": "h",
-                "type": "binary",
-                "task": {"type": "binary", "labels": ["other", "target"]},
-                "classifiers": [{"type": "custom", "path": "heads/h/custom.json"}],
-                "feature_order": [],
-                "static_dir": "heads/h",
-                "static_components": [
-                    {"type": "lightgbm", "path": "heads/h/lightgbm_model.txt"}
-                ],
-                "projection_onnx": "heads/h/projection.onnx",
-                "ntdb_head_onnx": "heads/h/ntdb_head.onnx",
-                "model_type": "sequential_ntdb",
-                "reliability": {
-                    "enabled": false,
-                    "hidden_dim": 0,
-                    "execution": "inside_onnx_model"
-                }
-            }],
-            "aggregators": [{
-                "id": "main",
-                "type": "binary_sequential_aggregator",
-                "task": {"type": "binary", "labels": ["benign", "attack"]},
-                "onnx": "aggregators/main/aggregator.onnx",
-                "model_type": "sequential_ntdb",
-                "input_feature_order": [],
-                "global_feature_order": [],
-                "reliability": {
-                    "enabled": false,
-                    "hidden_dim": 0,
-                    "execution": "inside_onnx_model"
-                },
-                "promote_router": {
-                    "type": "layered_promote_router",
-                    "onnx": "aggregators/main/promote_router.onnx",
-                    "model_type": "sequential_ntdb",
-                    "input_feature_order": [],
-                    "global_feature_order": [],
-                    "reliability": {
-                        "enabled": false,
-                        "hidden_dim": 0,
-                        "execution": "inside_onnx_model"
-                    }
-                }
-            }]
-        }"#;
-
+        let manifest = include_str!("fixtures/ntdb_v4.json");
         let files = ntdb_l2_package_manifest_files(manifest).unwrap();
-        assert_eq!(
-            files,
-            vec![
-                "aggregators/main/aggregator.onnx",
-                "aggregators/main/promote_router.onnx",
-                "heads/h/custom.json",
-                "heads/h/lightgbm_model.txt",
-                "heads/h/ntdb_head.onnx",
-                "heads/h/projection.onnx",
-                "minilm/embedding_matrix.f16",
-                "tokenizer/tokenizer.json"
-            ]
-        );
+        assert!(files.contains(&"neural/joint_v3_neural_stack.onnx".to_string()));
+        assert!(files.contains(&"minilm/embedding_matrix.f16".to_string()));
+        assert!(files.contains(&"tokenizer/tokenizer.json".to_string()));
+        assert!(files.iter().any(|file| file.ends_with(".txt")));
+        assert!(!files.iter().any(|file| file.starts_with("aggregators/")));
     }
 
     #[test]
     fn ntdb_manifest_files_reject_parent_paths() {
-        let manifest = r#"{
-            "format": "ntdb_model_package",
-            "version": 2,
-            "runtime_contract": "raw_text_to_ntdb_outputs",
-            "task": {"type": "binary", "labels": ["benign", "attack"]},
-            "chunk_size": 2,
-            "tokenizer_dir": "../tokenizer",
-            "minilm": {
-                "embedding_matrix_file": "embedding_matrix.f16",
-                "vocab_size": 1,
-                "embedding_dim": 1,
-                "content_tokens_per_chunk": 2
-            },
-            "feature_contract": {
-                "local_feature_order": [],
-                "global_feature_order": []
-            },
-            "runtime": {
-                "shared_preprocessing": ["tokenization"],
-                "parallel_stages": [],
-                "ordering": "manifest_order"
-            },
-            "heads": [{
-                "id": "h",
-                "type": "binary",
-                "task": {"type": "binary", "labels": ["other", "target"]},
-                "classifiers": [],
-                "feature_order": [],
-                "static_dir": "heads/h",
-                "static_components": [],
-                "projection_onnx": null,
-                "ntdb_head_onnx": "heads/h/ntdb_head.onnx",
-                "model_type": "sequential_ntdb",
-                "reliability": {
-                    "enabled": false,
-                    "hidden_dim": 0,
-                    "execution": "inside_onnx_model"
-                }
-            }],
-            "aggregators": [{
-                "id": "main",
-                "type": "binary_sequential_aggregator",
-                "task": {"type": "binary", "labels": ["benign", "attack"]},
-                "onnx": "aggregators/main/aggregator.onnx",
-                "model_type": "sequential_ntdb",
-                "input_feature_order": [],
-                "global_feature_order": [],
-                "reliability": {
-                    "enabled": false,
-                    "hidden_dim": 0,
-                    "execution": "inside_onnx_model"
-                }
-            }]
-        }"#;
-
-        let err = ntdb_l2_package_manifest_files(manifest).unwrap_err();
+        let manifest =
+            include_str!("fixtures/ntdb_v4.json").replace("\"tokenizer\"", "\"../tokenizer\"");
+        let err = ntdb_l2_package_manifest_files(&manifest).unwrap_err();
         assert!(err.to_string().contains("invalid NTDB manifest file path"));
     }
 }
