@@ -28,7 +28,9 @@ redis_mode() { if [[ -f $DEPLOY_DIR/redis-mode ]]; then cat "$DEPLOY_DIR/redis-m
 validate_cube_ip() {
     [[ $CUBE_IP =~ ^10\.20\.0\.([0-9]{1,3})$ ]] || die 'Cube IP must be an IPv4 host in 10.20.0.0/24.'
     local octet=${BASH_REMATCH[1]}
-    [[ $octet == "$((10#$octet))" ]] && (( 10#$octet >= 2 && 10#$octet <= 254 )) || die 'Cube IP must be a host address from .2 to .254, excluding the NAT gateway.'
+    local numeric_octet=$((10#$octet))
+    [[ $octet == "$numeric_octet" ]] || die 'Cube IP must not contain a zero-padded host octet.'
+    (( numeric_octet >= 2 && numeric_octet <= 254 )) || die 'Cube IP must be a host address from .2 to .254, excluding the NAT gateway.'
 }
 
 host_check() {
