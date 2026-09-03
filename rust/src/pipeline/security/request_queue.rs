@@ -6,6 +6,7 @@ use std::thread;
 use std::time::Duration;
 
 use crate::diagnostics::PhaseMetricScope;
+use crate::dynamic_pii::{DynamicPiiSourceChunk, DynamicPiiTextRange};
 use crate::ml::ntdb_executor::L3Candidate;
 use crate::pipeline::{
     failure_from_scan_result, finish_request_if_ready, has_l3_pending, priority_index, ttl_ms,
@@ -302,6 +303,7 @@ impl SecurityGateway {
             .iter()
             .filter_map(gate_result)
             .collect::<Vec<_>>();
+        conditional_results.extend(rejected_l1_candidate_gate_results(&l1_results));
         metrics.checkpoint("before_l2", format!("request_id={request_id}"));
         let raw_l2 = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             self.scan_l2_inputs(&inputs, &execution, &metadata, &conditional_results)
@@ -326,6 +328,7 @@ impl SecurityGateway {
             ),
         );
         conditional_results.extend(l2_results.iter().filter_map(gate_result));
+        let gate_chunk_results = dynamic_pii_source_chunks(&l2_results);
         let l3_execution = crate::pipeline::conditional_gate::apply_l3_policy_overrides(
             &execution,
             &metadata,
@@ -385,6 +388,7 @@ impl SecurityGateway {
             state.pending_l3_job_ids = pending_l3_job_ids;
             state.pending_l3_job_categories = pending_l3_job_categories;
             state.gate_results = gate_results;
+            state.gate_chunk_results = gate_chunk_results;
             state.pending_dynamic_pii = pending_dynamic_pii;
             state.usable_results += l2_results.len();
             state.failures.extend(l2_failures);
@@ -645,6 +649,7 @@ impl SecurityGateway {
                 l3_candidates: l3_candidates(result),
                 l2_chunk_outputs: take_internal_l2_chunk_outputs(result),
                 dynamic_pii_config: None,
+                dynamic_pii_inference_groups: Vec::new(),
                 dynamic_pii_activated_rules: Vec::new(),
             });
         }
@@ -715,6 +720,7 @@ impl SecurityGateway {
                 l3_candidates: Vec::new(),
                 l2_chunk_outputs: Vec::new().into(),
                 dynamic_pii_config: Some(config),
+                dynamic_pii_inference_groups: Vec::new(),
                 dynamic_pii_activated_rules: Vec::new(),
             },
         })
@@ -775,6 +781,7 @@ impl SecurityGateway {
                 l3_candidates: Vec::new(),
                 l2_chunk_outputs: Vec::new().into(),
                 dynamic_pii_config: None,
+                dynamic_pii_inference_groups: Vec::new(),
                 dynamic_pii_activated_rules: Vec::new(),
             },
             delay_ms,
@@ -807,6 +814,7 @@ impl SecurityGateway {
                     l3_candidates: Vec::new(),
                     l2_chunk_outputs: Vec::new().into(),
                     dynamic_pii_config: None,
+                    dynamic_pii_inference_groups: Vec::new(),
                     dynamic_pii_activated_rules: Vec::new(),
                 },
                 *delay_ms,
@@ -856,6 +864,7 @@ impl SecurityGateway {
                     l3_candidates: Vec::new(),
                     l2_chunk_outputs: Vec::new().into(),
                     dynamic_pii_config: None,
+                    dynamic_pii_inference_groups: Vec::new(),
                     dynamic_pii_activated_rules: Vec::new(),
                 },
                 *delay_ms,
@@ -884,6 +893,7 @@ impl SecurityGateway {
                 (tool_job_id, "tool_class".to_string()),
             ]),
             gate_results: HashMap::new(),
+            gate_chunk_results: HashMap::new(),
             pending_dynamic_pii: None,
             usable_results: 2,
             failures: Vec::new(),
@@ -926,6 +936,7 @@ impl SecurityGateway {
                     l3_candidates: Vec::new(),
                     l2_chunk_outputs: Vec::new().into(),
                     dynamic_pii_config: None,
+                    dynamic_pii_inference_groups: Vec::new(),
                     dynamic_pii_activated_rules: Vec::new(),
                 },
                 5,
@@ -946,6 +957,7 @@ impl SecurityGateway {
                     l3_candidates: Vec::new(),
                     l2_chunk_outputs: Vec::new().into(),
                     dynamic_pii_config: None,
+                    dynamic_pii_inference_groups: Vec::new(),
                     dynamic_pii_activated_rules: Vec::new(),
                 },
                 5,
@@ -999,12 +1011,14 @@ impl SecurityGateway {
             l3_candidates: Vec::new(),
             l2_chunk_outputs: Vec::new().into(),
             dynamic_pii_config: None,
+            dynamic_pii_inference_groups: Vec::new(),
             dynamic_pii_activated_rules: Vec::new(),
         };
         let state = RequestState {
             pending_l3_job_ids: HashSet::from([source_job_id, dynamic.job.job_id]),
             pending_l3_job_categories: HashMap::from([(source_job_id, "injection".to_string())]),
             gate_results: HashMap::new(),
+            gate_chunk_results: HashMap::new(),
             pending_dynamic_pii: Some(dynamic),
             usable_results: 1,
             failures: Vec::new(),
@@ -1048,6 +1062,7 @@ impl SecurityGateway {
             pending_l3_job_ids: HashSet::from([job_id]),
             pending_l3_job_categories: HashMap::from([(job_id, category.to_string())]),
             gate_results: HashMap::new(),
+            gate_chunk_results: HashMap::new(),
             pending_dynamic_pii: None,
             usable_results: 1,
             failures: Vec::new(),
@@ -1125,12 +1140,48 @@ fn split_results(
     let mut results = Vec::new();
     let mut failures = Vec::new();
     for result in raw_results {
+        let producer_failures = injection_l1_producer_failures(&result);
+        if !producer_failures.is_empty() {
+            failures.extend(producer_failures);
+            if result.class_name != "error" {
+                results.push(result);
+            }
+            continue;
+        }
         match failure_from_scan_result(&result) {
             Some(failure) => failures.push(failure),
             None => results.push(result),
         }
     }
     (results, failures)
+}
+
+fn injection_l1_producer_failures(result: &SecurityScanResult) -> Vec<SecurityFailure> {
+    if result.model != "native:injection_l1" {
+        return Vec::new();
+    }
+    result
+        .layers
+        .iter()
+        .filter_map(|layer| layer.details.get("producer_errors"))
+        .filter_map(serde_json::Value::as_array)
+        .flatten()
+        .map(|error| SecurityFailure {
+            stage: SecurityFailureStage::Scanner,
+            level: Some(SecurityLevel::L1),
+            detector_id: error
+                .get("model")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string),
+            kind: SecurityFailureKind::Internal,
+            retryable: false,
+            message: error
+                .get("error")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("native Injection L1 producer failed")
+                .to_string(),
+        })
+        .collect()
 }
 
 fn gate_result(result: &SecurityScanResult) -> Option<GateResult> {
@@ -1140,6 +1191,44 @@ fn gate_result(result: &SecurityScanResult) -> Option<GateResult> {
         confidence: result.confidence,
         level: result.level.parse().ok()?,
     })
+}
+
+fn dynamic_pii_source_chunks(
+    results: &[SecurityScanResult],
+) -> HashMap<String, Vec<DynamicPiiSourceChunk>> {
+    let mut chunks = HashMap::<String, Vec<DynamicPiiSourceChunk>>::new();
+    for output in results
+        .iter()
+        .flat_map(|result| result.internal_l2_chunk_outputs.iter())
+    {
+        chunks
+            .entry(output.source_pipeline.clone())
+            .or_default()
+            .push(DynamicPiiSourceChunk {
+                class_name: output.class_name.clone(),
+                range: DynamicPiiTextRange {
+                    start_byte: output.span.start,
+                    end_byte: output.span.end,
+                },
+            });
+    }
+    chunks
+}
+
+fn rejected_l1_candidate_gate_results(results: &[SecurityScanResult]) -> Vec<GateResult> {
+    results
+        .iter()
+        .filter(|result| result.model == "native:injection_l1")
+        .filter_map(|result| result.decision.as_ref())
+        .flat_map(|decision| decision.candidates.iter())
+        .filter(|candidate| candidate.source == "l1" && !candidate.accepted)
+        .map(|candidate| GateResult {
+            pipeline: "native:injection_l1".to_string(),
+            class_name: candidate.class_name.clone(),
+            confidence: candidate.confidence,
+            level: SecurityLevel::L1,
+        })
+        .collect()
 }
 
 fn l3_candidates(result: &SecurityScanResult) -> Vec<L3Candidate> {
@@ -1206,6 +1295,127 @@ fn merge_csvish_field(left: &str, right: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rejected_l1_candidate_is_available_to_conditional_l2_gates_only_internally() {
+        let mut result = SecurityScanResult {
+            category: "injection".to_string(),
+            class_name: "safe".to_string(),
+            confidence: 0.3,
+            level: "L1".to_string(),
+            model: "native:injection_l1".to_string(),
+            duration_ms: 0.1,
+            layers: Vec::new(),
+            internal_l2_chunk_outputs: Vec::new(),
+            evidence_spans: Vec::new(),
+            label_scores: Vec::new(),
+            decision: None,
+        };
+        let candidate = crate::DecisionCandidate {
+            source: "l1".to_string(),
+            class_name: "instruction_override".to_string(),
+            confidence: 0.7,
+            acceptance_threshold: 0.9,
+            accepted: false,
+            evidence: None,
+            chunk_evidence: None,
+        };
+        result.decision = Some(crate::DecisionEnvelope {
+            schema_version: "ark.decision.v1".to_string(),
+            final_result: crate::DecisionResult {
+                class_name: "safe".to_string(),
+                confidence: 0.3,
+                source: "default".to_string(),
+            },
+            decision_candidate: Some(candidate.clone()),
+            recommendation: crate::DecisionRecommendation {
+                accepted: false,
+                final_arbitration: "default".to_string(),
+                operating_point: "test".to_string(),
+                acceptance_threshold: Some(0.9),
+            },
+            candidates: vec![candidate],
+            terminality: crate::DecisionTerminality {
+                completion: "complete".to_string(),
+                degraded: false,
+                degradation_reason: None,
+            },
+            provenance: crate::DecisionProvenance {
+                ark_version: "test".to_string(),
+                schema_version: "ark.decision.v1".to_string(),
+                model: "native:injection_l1".to_string(),
+            },
+        });
+        let candidate_results = rejected_l1_candidate_gate_results(&[result]);
+        assert_eq!(candidate_results.len(), 1);
+
+        let mut gates = ScanGateMatrix::all_enabled();
+        gates
+            .set_conditional(vec![crate::ConditionalPipelineGate {
+                level: SecurityLevel::L2,
+                pipeline: Some("injection".to_string()),
+                when: crate::GateExpression::Result(crate::ResultCondition {
+                    pipeline: "native:injection_l1".to_string(),
+                    classes: vec!["instruction_override".to_string()],
+                    min_confidence: Some(0.6),
+                }),
+                l3_policy: None,
+            }])
+            .unwrap();
+        let execution = ScanExecution::with_gates(SecurityLevel::L2, gates);
+        assert!(crate::pipeline::conditional_gate::pipeline_allowed(
+            &execution,
+            SecurityLevel::L2,
+            "injection",
+            &serde_json::Value::Null,
+            &candidate_results,
+        ));
+        assert!(!crate::pipeline::conditional_gate::pipeline_allowed(
+            &execution,
+            SecurityLevel::L2,
+            "injection",
+            &serde_json::Value::Null,
+            &[],
+        ));
+    }
+
+    #[test]
+    fn producer_errors_preserve_mixed_degraded_and_all_failed_semantics() {
+        let safe = super::super::scan_result(
+            SecurityCategory::Injection,
+            "native:safe_producer",
+            crate::EvaluationResult {
+                class_name: "safe".to_string(),
+                confidence: 1.0,
+                level: "L1".to_string(),
+            },
+            Vec::new(),
+        );
+        let failed = super::super::scanner_error_scan_result(
+            SecurityCategory::Injection,
+            "native:failed_producer",
+            "producer panic".to_string(),
+        );
+        let mixed = super::super::injection_l1::aggregate("", vec![safe, failed.clone()]);
+        let (results, failures) = split_results(vec![mixed]);
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].class_name, "safe");
+        assert!(results[0]
+            .decision
+            .as_ref()
+            .is_some_and(|decision| decision.terminality.degraded));
+        assert_eq!(failures.len(), 1);
+        assert_eq!(
+            failures[0].detector_id.as_deref(),
+            Some("native:failed_producer")
+        );
+        assert_eq!(failures[0].message, "producer panic");
+
+        let all_failed = super::super::injection_l1::aggregate("", vec![failed]);
+        let (results, failures) = split_results(vec![all_failed]);
+        assert!(results.is_empty());
+        assert_eq!(failures.len(), 1);
+    }
 
     #[test]
     fn extracts_scored_ntdb_l3_candidates() {

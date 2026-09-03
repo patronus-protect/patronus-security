@@ -20,7 +20,7 @@ use super::{
     manifest::{JointV3Manifest, TaskManifest},
     ntdb_error,
     package::{JointV3CandidatePolicy, JointV3DecisionContext, PreparedDocument, ScoreOutput},
-    runtime::load_single_thread_session,
+    session::load_single_thread_session,
     NtdbResult,
 };
 
@@ -174,7 +174,7 @@ impl JointV3Runtime {
     pub(super) fn score_batch(
         &mut self,
         task: &TaskManifest,
-        prepared: &[PreparedDocument],
+        prepared: &[std::sync::Arc<PreparedDocument>],
         operating_point: NtdbOperatingPoint,
     ) -> NtdbResult<Vec<ScoreOutput>> {
         if prepared.is_empty() {
@@ -235,7 +235,9 @@ impl JointV3Runtime {
             .par_iter()
             .map(|head| {
                 let mut values = Vec::with_capacity(chunk_count * head.class_count);
-                for (chunk_index, embedding) in raw_embeddings.chunks_exact(384).enumerate() {
+                for (chunk_index, embedding) in
+                    raw_embeddings.as_chunks::<384>().0.iter().enumerate()
+                {
                     if !mask[chunk_index] {
                         values.extend(std::iter::repeat_n(0.0, head.class_count));
                         continue;
@@ -356,33 +358,6 @@ fn short_injection_operating_point(
         return NtdbOperatingPoint::BestPromote;
     }
     operating_point
-}
-
-#[cfg(test)]
-mod tests {
-    use super::short_injection_operating_point;
-    use crate::NtdbOperatingPoint;
-
-    #[test]
-    fn ark_api_utility_profile_is_limited_to_short_injection_documents() {
-        let profile = NtdbOperatingPoint::ArkApiShortInjectionUtility;
-        assert_eq!(
-            short_injection_operating_point("injection", profile, 2),
-            NtdbOperatingPoint::BestF1
-        );
-        assert_eq!(
-            short_injection_operating_point("injection", profile, 3),
-            NtdbOperatingPoint::BestPromote
-        );
-        assert_eq!(
-            short_injection_operating_point("threat", profile, 1),
-            NtdbOperatingPoint::BestPromote
-        );
-        assert_eq!(
-            short_injection_operating_point("injection", NtdbOperatingPoint::BestPromote, 1),
-            NtdbOperatingPoint::BestPromote
-        );
-    }
 }
 
 fn document_policy(
@@ -632,4 +607,31 @@ fn argmax(values: &[f32]) -> NtdbResult<usize> {
         .max_by(|left, right| left.1.total_cmp(&right.1))
         .map(|(index, _)| index)
         .ok_or_else(|| ntdb_error("NTDB package v4 produced no class scores"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::short_injection_operating_point;
+    use crate::NtdbOperatingPoint;
+
+    #[test]
+    fn ark_api_utility_profile_is_limited_to_short_injection_documents() {
+        let profile = NtdbOperatingPoint::ArkApiShortInjectionUtility;
+        assert_eq!(
+            short_injection_operating_point("injection", profile, 2),
+            NtdbOperatingPoint::BestF1
+        );
+        assert_eq!(
+            short_injection_operating_point("injection", profile, 3),
+            NtdbOperatingPoint::BestPromote
+        );
+        assert_eq!(
+            short_injection_operating_point("threat", profile, 1),
+            NtdbOperatingPoint::BestPromote
+        );
+        assert_eq!(
+            short_injection_operating_point("injection", NtdbOperatingPoint::BestPromote, 1),
+            NtdbOperatingPoint::BestPromote
+        );
+    }
 }

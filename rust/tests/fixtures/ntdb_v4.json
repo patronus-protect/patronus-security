@@ -1,0 +1,152 @@
+{
+  "format": "ntdb_model_package",
+  "version": 4,
+  "runtime_contract": "raw_text_to_joint_v3_chunk_promoter_union_v1",
+  "task": {
+    "type": "binary",
+    "labels": [
+      "benign",
+      "attack"
+    ],
+    "no_risk_class": null
+  },
+  "chunk_size": 256,
+  "tokenizer_dir": "tokenizer",
+  "minilm": {
+    "embedding_matrix_file": "embedding_matrix.f16",
+    "vocab_size": 256000,
+    "embedding_dim": 384,
+    "content_tokens_per_chunk": 256,
+    "source_model_path": "jhu-clsp/mmBERT-small",
+    "model": "jhu-clsp/mmBERT-small",
+    "tokenizer_family": "mmBERT"
+  },
+  "runtime": {
+    "shared_preprocessing": [
+      "tokenization",
+      "one_chunk_l2_inference"
+    ],
+    "ordering": "l2_per_chunk_then_frozen_lightgbm_promoter_then_selected_l3_replacement_then_document_aggregation_then_document_threshold",
+    "l3_requirement": "only promoted chunks are sent to L3",
+    "union_definition": "non-promoted chunks retain L2 probabilities; promoted chunks use L3 probabilities",
+    "benefit": "not_used"
+  },
+  "joint_v3": {
+    "neural_stack": {
+      "onnx": "neural/joint_v3_neural_stack.onnx",
+      "input_names": [
+        "raw_embeddings",
+        "attention_mask",
+        "patronus_lgb_probabilities",
+        "jayavibhav_lgb_probabilities",
+        "nn_l3_surrogate_lgb_probabilities"
+      ],
+      "head_order": [
+        "patronus",
+        "jayavibhav",
+        "nn_l3_surrogate"
+      ],
+      "head_class_counts": [
+        2,
+        2,
+        2
+      ],
+      "promoter_feature_dim": 1886
+    },
+    "heads": [
+      {
+        "id": "patronus",
+        "frozen_lightgbm": "heads/patronus/lightgbm_model.txt"
+      },
+      {
+        "id": "jayavibhav",
+        "frozen_lightgbm": "heads/jayavibhav/lightgbm_model.txt"
+      },
+      {
+        "id": "nn_l3_surrogate",
+        "frozen_lightgbm": "heads/nn_l3_surrogate/lightgbm_model.txt"
+      }
+    ],
+    "promoter": {
+      "scope": "per_chunk",
+      "implementation": "LightGBM",
+      "feature_dim": 1886,
+      "models": {
+        "disagreement_gate": {
+          "lightgbm_model": "models/disagreement_gate.txt",
+          "metadata": "models/disagreement_gate.metadata.json",
+          "n_features": 1886
+        },
+        "pre_l3_benefit_gate": {
+          "lightgbm_model": "models/pre_l3_benefit_gate.txt",
+          "metadata": "models/pre_l3_benefit_gate.metadata.json",
+          "n_features": 1886
+        }
+      },
+      "operating_points": {
+        "best_promote": {
+          "gate": "factorized_actionable",
+          "promoter_threshold": 0.002003035042434931,
+          "aggregation": "max",
+          "document_risk_margin_threshold": -0.02028369903564453
+        },
+        "utility_promote": {
+          "gate": "factorized_actionable",
+          "promoter_threshold": 3.5878382237031155e-05,
+          "aggregation": "max",
+          "document_risk_margin_threshold": -0.01278078556060791
+        }
+      }
+    },
+    "document_decision": {
+      "score": "best_non_default_class_score_minus_default_class_score",
+      "comparison": ">= threshold means non-default risk class",
+      "default_mode": "union_l2_l3",
+      "default_operating_point": "best_f1",
+      "modes": {
+        "l2_only": {
+          "aggregation": "max",
+          "operating_points": {
+            "best_f1": {
+              "threshold": 0.31323274970054626
+            },
+            "best_fpr_in_f1": {
+              "threshold": 0.8451165556907654
+            },
+            "best_fnr_in_f1": {
+              "threshold": -0.11175557971000671
+            }
+          }
+        },
+        "l3_only": {
+          "aggregation": "max",
+          "operating_points": {
+            "best_f1": {
+              "threshold": -0.012616092804819345
+            },
+            "best_fpr_in_f1": {
+              "threshold": 0.8384023904800415
+            },
+            "best_fnr_in_f1": {
+              "threshold": -0.3637101650238037
+            }
+          }
+        },
+        "union_l2_l3": {
+          "aggregation": "max",
+          "operating_points": {
+            "best_f1": {
+              "threshold": -0.02028369903564453
+            },
+            "best_fpr_in_f1": {
+              "threshold": 0.7388052940368652
+            },
+            "best_fnr_in_f1": {
+              "threshold": -0.3637101650238037
+            }
+          }
+        }
+      }
+    }
+  }
+}

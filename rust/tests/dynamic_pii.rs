@@ -13,42 +13,55 @@ use patronus_ark::{
 };
 
 #[test]
-fn default_labels_exclude_native_l1_identifiers() {
+fn default_labels_are_a_small_core_bundle() {
     assert_eq!(
         DynamicPiiConfig::default().labels,
-        ["organization", "location", "date"].map(String::from)
+        ["organization", "date", "person", "city", "country"].map(String::from)
     );
 }
 
 #[test]
 fn config_deduplicates_labels_and_validates_limits() {
-    let mut config = DynamicPiiConfig::default();
-    config.labels = ["person", "location", "person"].map(String::from).to_vec();
+    let config = DynamicPiiConfig {
+        labels: ["person", "location", "person"].map(String::from).to_vec(),
+        ..DynamicPiiConfig::default()
+    };
     assert_eq!(
         config.validated().unwrap().labels,
         ["person", "location"].map(String::from)
     );
 
-    let mut config = DynamicPiiConfig::default();
-    config.chunk_overlap_words = config.chunk_size_words;
+    let defaults = DynamicPiiConfig::default();
+    let config = DynamicPiiConfig {
+        chunk_overlap_words: defaults.chunk_size_words,
+        ..defaults
+    };
     assert!(config.validated().is_err());
 
-    let mut config = DynamicPiiConfig::default();
-    config.threshold = f32::NAN;
+    let config = DynamicPiiConfig {
+        threshold: f32::NAN,
+        ..DynamicPiiConfig::default()
+    };
     assert!(config.validated().is_err());
 
-    let mut config = DynamicPiiConfig::default();
-    config.label_thresholds = HashMap::from([("unknown".to_string(), 0.5)]);
+    let config = DynamicPiiConfig {
+        label_thresholds: HashMap::from([("unknown".to_string(), 0.5)]),
+        ..DynamicPiiConfig::default()
+    };
     assert!(config.validated().is_err());
 
-    let mut config = DynamicPiiConfig::default();
-    config.labels = (0..31).map(|index| format!("label-{index}")).collect();
+    let config = DynamicPiiConfig {
+        labels: (0..31).map(|index| format!("label-{index}")).collect(),
+        ..DynamicPiiConfig::default()
+    };
     assert!(config.validated().is_err());
 
-    let mut config = DynamicPiiConfig::default();
-    config.labels = ["medical_condition", "medical condition"]
-        .map(String::from)
-        .to_vec();
+    let config = DynamicPiiConfig {
+        labels: ["medical_condition", "medical condition"]
+            .map(String::from)
+            .to_vec(),
+        ..DynamicPiiConfig::default()
+    };
     assert!(config.validated().is_err());
 }
 
@@ -188,7 +201,7 @@ fn execution_gates_skip_or_enqueue_dynamic_pii_deterministically() {
 }
 
 #[test]
-fn dynamic_pii_gate_resolves_without_waiting_for_l3_source_result() {
+fn dynamic_pii_gate_waits_for_authoritative_l3_source_result() {
     let gateway = SecurityGateway::with_max_level(
         vec![SecurityCategory::Injection, SecurityCategory::DynamicPii],
         SecurityLevel::L3,
@@ -210,7 +223,7 @@ fn dynamic_pii_gate_resolves_without_waiting_for_l3_source_result() {
     );
     assert!(matches!(
         completion_for(&gateway, &request_id),
-        SecurityRequestCompletion::Complete
+        SecurityRequestCompletion::Degraded { .. }
     ));
     assert!(started.elapsed() >= Duration::from_millis(100));
 }
@@ -369,12 +382,84 @@ fn local_edge_bundle_runs_through_gateway_and_l3_worker() {
         .expect("conditional dynamic-pii result must be present");
     assert_eq!(
         dynamic.layers[0].details.get("labels"),
-        Some(&serde_json::json!(["person", "organization", "location"]))
+        Some(&serde_json::json!(["person"]))
     );
     assert_eq!(
         dynamic.layers[0].details.get("activated_conditional_rules"),
         Some(&serde_json::json!([0]))
     );
+    let groups = dynamic.layers[0].details["inference_groups"]
+        .as_array()
+        .unwrap();
+    assert_eq!(groups[0]["labels"], serde_json::json!(["person"]));
+    assert_eq!(
+        groups[1]["labels"],
+        serde_json::json!(["organization", "location"])
+    );
+    drop(gateway);
+    std::fs::remove_dir_all(model_dir).unwrap();
+}
+
+#[test]
+#[cfg(unix)]
+#[ignore = "requires PATRONUS_TEST_GLINER_DIR"]
+fn hey_person_score_uses_the_stable_base_only_label_group() {
+    let bundle_source = std::env::var("PATRONUS_TEST_GLINER_DIR")
+        .expect("PATRONUS_TEST_GLINER_DIR must point to the Edge bundle");
+    let suffix = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let model_dir = std::env::temp_dir().join(format!(
+        "patronus_dynamic_pii_hey_test_{}_{}",
+        std::process::id(),
+        suffix
+    ));
+    let bundle_dir = model_dir.join(DYNAMIC_PII_ASSET.destination_path);
+    std::fs::create_dir_all(bundle_dir.parent().unwrap()).unwrap();
+    symlink(bundle_source, &bundle_dir).unwrap();
+    let mut gateway = SecurityGateway::with_max_level(
+        vec![SecurityCategory::Dlp, SecurityCategory::DynamicPii],
+        SecurityLevel::L3,
+        Some(model_dir.clone()),
+        false,
+    );
+    gateway
+        .set_dynamic_pii_config(DynamicPiiConfig {
+            labels: vec!["person".to_string()],
+            label_thresholds: HashMap::from([("person".to_string(), 0.8)]),
+            conditional_labels: vec![DynamicPiiConditionalLabels {
+                // Production profiles repeat base labels in their contextual
+                // bundles. The resolver must subtract `person` here.
+                labels: ["person", "street_address"].map(String::from).to_vec(),
+                when: DynamicPiiResultCondition {
+                    pipeline: "dlp".to_string(),
+                    results: vec!["safe".to_string()],
+                },
+            }],
+            ..DynamicPiiConfig::default()
+        })
+        .unwrap();
+    gateway.warmup().unwrap();
+
+    let results = gateway.scan_categories(
+        &[SecurityCategory::Dlp, SecurityCategory::DynamicPii],
+        "Hey",
+    );
+    let dynamic = results
+        .iter()
+        .find(|result| result.category == "dynamic-pii")
+        .expect("dynamic-pii result must be present");
+    assert!(dynamic
+        .evidence_spans
+        .iter()
+        .all(|span| span.label != "person"));
+    let groups = dynamic.layers[0].details["inference_groups"]
+        .as_array()
+        .unwrap();
+    assert_eq!(groups[0]["labels"], serde_json::json!(["person"]));
+    assert_eq!(groups[1]["labels"], serde_json::json!(["street_address"]));
+
     drop(gateway);
     std::fs::remove_dir_all(model_dir).unwrap();
 }

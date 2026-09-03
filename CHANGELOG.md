@@ -9,6 +9,124 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ## [Unreleased]
 
+- Classifier tokenization now requires NTDB v4 and compact mmBERT. Disjoint 128-KiB
+  UTF-8 windows are tokenized once into shared 254-content-token chunks; L3 reuses
+  those IDs with BOS/EOS and padding to 256 positions. Removed v2 execution,
+  Hugging Face runtime fallbacks, and L3 re-tokenization. Chunk offsets track the
+  source text and exact caches key token IDs. Existing v4 exports declaring 256
+  content tokens now use the 254-token runtime budget; this changes L2 chunk boundaries.
+
+## [0.1.6] - 2026-09-02
+
+### Added
+
+- Added local-only external PII corpus normalization and exact-span evaluation contracts, plus a
+  text-free, hash-bound workflow for human-verified internal PII annotations. Checked-in fixtures
+  validate schemas and metrics only; no external or private raw corpus is distributed. Pinned
+  OpenPII-Nano, TAB, and Apache-2.0 Gretel Finance adapters establish a reproducible external gold
+  inventory and an OpenPII native-L1 baseline split by language, scope, and entity. Deterministic,
+  group-atomic selection manifests cap reports at 250 spans per corpus and metric class.
+- Added a text-free local PII/DLP pre-annotation inventory builder for `v4.1` and related controlled
+  corpora. Machine findings and Anchor-only hard-negative candidates are HMAC-bound and remain
+  explicitly non-Gold until human review. Added derived, permissively sourced DLP document/content
+  adapters for Go source documents and SQL statement boundaries without treating them as secret
+  annotations or already measured end-to-end span scores.
+- Added native PII and DLP L1 capabilities with validated exact spans, German and English
+  anchor-bound identifiers, written birth dates, source/config/SQL/log detection, and non-blocking
+  localized `layers[].details.l1_anchors` context facts. Added deterministic capability goldens,
+  hard negatives, validators, and 100 KiB latency/evaluation tools.
+- Added an implementation-blind bilingual demo benchmark covering 87 customer, personnel, and
+  source-code documents with 204 expected PII/DLP/semantic spans and 19 hard negatives. Its
+  augmented employee-identifier forms extend L1 with `PersNr`, employee/personnel number,
+  staff-code, snake-case, OCR-field, and structured `EMP-*` variants while preserving existing
+  customer, student, tax, and unanchored build-ID negatives.
+- Added stable per-rule execution gates through Rust, Python, and Ark API configuration. Missing
+  rule IDs inherit shared defaults; PII/DLP patterns use `pii_*`/`dlp_*` IDs and Injection uses its existing
+  `ark.injection.*` IDs.
+- Added a version-pinned native injection rule catalog derived from selected Prompt Armor rules.
+  Catalog findings expose stable Ark/upstream rule IDs, exact byte and character spans, source
+  revision, licence, family, severity, and descriptions. The first catalog closes high-specificity
+  override, instruction-leak, boundary, Markdown exfiltration, and ES/FR/PT gaps without importing
+  Prompt Armor's runtime or thresholds.
+- Replaced the legacy Boolean L1 recognition/localization path with direct source-bound
+  components for all 18 native Injection families and the five DLP operation/MCP producers.
+  Regex, lexical, ordered-token and structural rules share the evidence contract; public
+  classifications are projections of those matches. PII/DLP findings retain anchor/value
+  components, and MCP retains tool/argument evidence. Existing rule/model gate IDs are preserved.
+- Added complete bilingual reachability fixtures for all 39 PII and 59 DLP regex rules, native
+  Injection families and MCP policy entries. Filled German/English gaps in contextual government
+  identifiers, credential fields, jailbreak modes and agentic relations. Technical formats remain
+  language-neutral. Normalized UTF-8 offsets map back to source; decoded containers are marked
+  explicitly when exact decoded-character mapping is unavailable.
+- Preserve overlapping PII findings across different labels; deduplicate overlaps only within
+  the same label. Optional `explain` gates bounded diagnostic context anchors, not detection
+  or the source-bound components of matched rules.
+- Added four source-derived, high-precision injection relationships for sensitive-path exfiltration,
+  authority-issued replacement instructions, decode-then-execute directives, and delimited
+  replacement actions. Each finding retains its pinned Pipelock or PromptInject source and any
+  secondary Garak reference. Labeled ROT13 and URL-safe Base64 payloads are decoded before the
+  existing injection-signal evaluation.
+- Added the injection `L1Candidate` contract. Positive rule signals become auditable `rule_match`
+  features; overlapping or directly touching spans form one deterministic candidate and separated
+  regions remain separate. Candidates expose spans, rule IDs, families, severity, explanations,
+  provenance and the versioned calibrated L1 score.
+- Added a native structural injection producer for override-plus-sensitive-disclosure
+  relationships. It can create a candidate independently of the flat rule catalog and decomposes
+  the decisive region into exact context-override, hierarchy-reference, disclosure-action, and
+  sensitive-object features. Added German adaptations and nearby benign counterexamples for every
+  new 0.1.6 catalog relationship; language-neutral Markdown exfiltration syntax is shared.
+- Added a precision-first, monotone Injection L1 scorer calibrated on deterministic
+  `injection_current` samples and the complete Hard-Benign development splits. Its artifact,
+  dataset hashes, feature order, threshold, candidate/document metrics and reproducible tooling
+  are versioned in the repository; the final holdout remains a separate release gate.
+
+### Changed
+
+- Injection L1 catalogs now scan their compiled regexes directly, removing the costly
+  aggregate-regex prefilter while preserving findings, source-bound components, and provenance.
+- Four expensive Injection context rules now skip impossible inputs using required-literal
+  checks without Unicode word boundaries. Final matching retains Unicode case folding,
+  word boundaries, captures, and original source offsets.
+- Dynamic PII conditional labels now run as separate GLiNER inference groups scoped to chunks
+  carrying the matching final source-pipeline class. Base labels stay stable, duplicate labels are
+  removed from conditional calls, final L3 source classes supersede provisional L1/L2 classes,
+  and duplicate entity spans keep the highest score across inference groups.
+- The shared Rust/Python/Ark API DLP profile now enables credentials, secrets, authentication material,
+  and sensitive-transfer context by default while gating broader business identifiers, metrics,
+  source/SQL/dump/log content, MCP/runtime policy, and destructive operations behind explicit
+  model/rule opt-ins.
+- Dynamic PII now keeps overlapping hypotheses with different labels, reports all detected entity
+  types through evidence and label scores, uses additive context-label bundles, and provides
+  canonical `education` and `medical` mappings. Cross-text entity-cache matches no longer become
+  live evidence; exact context-bound chunk caching remains enabled.
+- Added `PATRONUS_L3_TTL_SECS=-1` to keep loaded L3 and Dynamic-PII ONNX sessions resident.
+  The Ark API image and reference Compose deployment now use this setting to avoid the model
+  reload latency spike on the first promoted request after an idle period.
+- Changed the reference and OVH Ark API deployment to two FP16 workers limited to 2.5 CPUs each.
+  On the canonical cold-cache HTTP benchmark this improved throughput from 6.761 to 7.728
+  requests/s and reduced p50 latency from 440 ms to 168 ms versus three two-CPU workers. The
+  Dockerfile now builds both API binaries explicitly and defaults its baked L3 assets to FP16.
+- Changed native Injection L1 to publish one `native:injection_l1` aggregate instead of separate
+  public results for every heuristic. The former detector model gates still control their internal
+  producers. Accepted candidates expose evidence spans and `decision.final_result.source: "l1"`;
+  rejected candidates keep their score and evidence without creating a finding and can be used by
+  explicitly configured conditional L2/L3 gates. Registered external L1 detectors and DLP are
+  unchanged.
+
+### Breaking
+
+- Dynamic PII first-entity previews are now emitted as non-authoritative `provisional` events
+  instead of result-shaped events. Consumers must wait for the final `result` before acting. The
+  obsolete `entity_cache_hit`/`entity_cache_hits` diagnostics were removed with cross-text reuse.
+- `ScanGateMatrix` has a new public `rules` field, and native PII/DLP layer `details` can now
+  contain `l1_anchors`. External Rust struct literals and consumers that assumed empty native
+  details must account for these intentional pre-1.0 additions.
+- Native Injection consumers that selected models such as `native:instruction_override` or
+  `native:injection_rule_catalog` from public scan results must migrate to
+  `native:injection_l1` and inspect `layers[].details.l1_candidates[].producers`, rule provenance,
+  and the typed decision candidates. This intentional pre-1.0 result-shape change ships with
+  0.1.6.
+
 ## [0.1.5] - 2026-08-29
 
 ### Added

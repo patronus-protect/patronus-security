@@ -9,19 +9,22 @@ the layers combine into a single verdict.
 
 ### L1 — native detectors
 
-Rule-based Rust detectors that need **no model assets** and run in **microseconds**. They are
-always available, even fully offline. L1 covers deterministic and pattern-based risks:
+Rule-based Rust detectors that need **no model assets** and are available fully offline. Runtime
+depends on input size and enabled rules; large inputs take milliseconds. L1 covers deterministic
+and pattern-based risks:
 prompt-injection phrasings, obfuscation tricks, secrets and destructive-operation patterns
 (DLP), format-validated PII (email, IBAN, credit card, …), and MCP tool-policy checks.
 
-L1 is the floor of every scan. See [Native detectors](detectors.md) for the full catalogue.
+L1 runs for categories that implement native detectors when its execution gate is enabled. See
+[Native detectors](detectors.md) for the full catalogue.
 
 ### L2 — NTDB model packages
 
-Lightweight text classifiers in the Patronus **NTDB** format: a static token-embedding
-encoder plus small ONNX heads and aggregators, packaged with a `manifest.json`. All L2
-packages in a process **share one static encoder**, so adding categories is cheap. L2 answers
-in **milliseconds** and refines the L1 verdict with a learned classifier.
+Lightweight text classifiers in the Patronus **NTDB** format: the shared mmBERT tokenizer and
+static embedder plus small ONNX heads and aggregators, packaged with a `manifest.json`. The
+official L2 packages share this representation with compatible L3 models as well as with one
+another, so adding categories is cheap and promotion does not start from raw text again. L2
+answers in **milliseconds** and refines the L1 verdict with a learned classifier.
 
 L2 promotion is decided by the NTDB package's promote-router. Separately, classifier verdicts
 use a configurable final-decision threshold profile — see
@@ -34,6 +37,10 @@ are the most accurate and the most expensive. Which L3 models a gateway holds is
 configuration; they are kept **resident in RAM** (idle-TTL evicted) and executed by a
 **background worker**, not on the request path. L3 answers in **tens of milliseconds** and
 makes the final call for cases L2 could not resolve confidently.
+
+L3 consumes the exact token IDs of the promoted L2 chunks. Both layers use the
+same 254-content-token chunks, with BOS/EOS and padding added for the 256-position
+L3 input. Invalid chunks report an error; there is no tokenization fallback.
 
 ## Escalation: how a scan moves up
 
@@ -80,16 +87,18 @@ individual levels or specific detectors *below* the ceiling, per request, withou
 ## Special pipelines
 
 - **L1-only categories** (e.g. `pii`) never load models and never promote.
-- **L3-only pipelines** (`dynamic-pii`) enqueue directly to the worker and publish only their
-  completed result — there is no L1/L2 stage to fall back to.
+- **L3-only pipelines** (`dynamic-pii`) enqueue directly to the worker and have no L1/L2 fallback.
+  They can emit a non-authoritative first-entity preview before their completed result.
 
 See [Categories](categories.md) for each category's layer support.
 
 ## Long text and windowing
 
-The L3 worker splits long inputs into **tokenizer-bounded windows**, aggregates the per-window
-outputs into one result, and keeps memory bounded so an attack buried deep in a long document is
-still caught. With representative **clustering** enabled (off by default) it groups near-duplicate
+Text is split into disjoint UTF-8 windows of at most 128 KiB, each tokenized once
+by compact mmBERT. L2 forms chunks of at most 254 content tokens; L3 reuses them
+unchanged. Tokenizer input memory is bounded per window; retained chunks and results
+still grow with document length. With representative
+**clustering** enabled (off by default) it groups near-duplicate
 windows by similarity, runs only cluster representatives, and propagates their verdict to the
 rest, so most windows never reach the model; **early exit** stops a head once its aggregate can no
 longer change. Aggregation strategy, clustering, and early exit are tunable per pipeline — see the

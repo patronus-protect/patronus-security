@@ -61,7 +61,7 @@ struct RawPipeline {
     #[serde(default)]
     gates: Option<RawGates>,
     /// Overrides the `dynamic-pii` (GLiNER) pipeline's config — library
-    /// default only recognizes `organization`/`location`/`date`. Deserializes
+    /// default uses its small core label bundle. Deserializes
     /// straight into `patronus_ark::DynamicPiiConfig`, which already derives
     /// Deserialize with `#[serde(default, deny_unknown_fields)]`, so any
     /// field omitted here (chunk sizing, timeouts, ...) keeps the library
@@ -121,6 +121,8 @@ impl RawOnnxRuntime {
 #[serde(deny_unknown_fields)]
 pub(crate) struct RawGates {
     #[serde(default)]
+    explain: bool,
+    #[serde(default)]
     l1: Option<bool>,
     #[serde(default)]
     l2: Option<bool>,
@@ -128,6 +130,8 @@ pub(crate) struct RawGates {
     l3: Option<bool>,
     #[serde(default)]
     models: HashMap<String, bool>,
+    #[serde(default)]
+    rules: HashMap<String, bool>,
     #[serde(default)]
     conditional: Vec<ConditionalPipelineGate>,
     #[serde(default)]
@@ -161,10 +165,12 @@ impl RawGates {
             gate.validate().map_err(ConfigError::Invalid)?;
         }
         let RawGates {
+            explain,
             l1,
             l2,
             l3,
             models,
+            rules,
             conditional,
             policy: raw_policy,
         } = self;
@@ -218,10 +224,12 @@ impl RawGates {
         }
         validate_l3_policy(&policy)?;
         Ok(ScanGateMatrix {
+            explain,
             l1,
             l2,
             l3,
             models,
+            rules,
             conditional,
             l3_policy: policy,
         })
@@ -275,7 +283,7 @@ pub struct Config {
     pub cache_dir: Option<PathBuf>,
     /// Gates applied when the authenticated key has no override.
     pub default_gates: ScanGateMatrix,
-    /// `None` keeps the library default (labels: organization/location/date only).
+    /// `None` keeps the library's core Dynamic-PII bundle.
     pub dynamic_pii: Option<DynamicPiiConfig>,
     pub onnx_runtime: OnnxRuntimeOptions,
 }
@@ -433,7 +441,21 @@ pub(crate) fn parse_categories(values: &[String]) -> Result<Vec<SecurityCategory
 
 #[cfg(test)]
 mod tests {
-    use super::RawOnnxRuntime;
+    use std::path::Path;
+
+    use patronus_ark::{
+        detectors::dlp::dlp::DLP_PATTERNS, SecurityCategory, SecurityGateway, SecurityLevel,
+    };
+
+    use super::{Config, RawGates, RawOnnxRuntime};
+
+    #[test]
+    fn explain_is_explicit_and_disabled_by_default() {
+        assert!(!RawGates::default().into_gate_matrix().unwrap().explain);
+        let raw: RawGates = serde_yaml::from_str("explain: true").unwrap();
+        assert!(raw.into_gate_matrix().unwrap().explain);
+        assert!(serde_yaml::from_str::<RawGates>("explain: verbose").is_err());
+    }
 
     #[test]
     fn onnx_runtime_config_accepts_bounded_threads() {
@@ -451,5 +473,75 @@ mod tests {
         let raw: RawOnnxRuntime = serde_yaml::from_str("intra_threads: 0\n").unwrap();
 
         assert!(raw.into_options().is_err());
+    }
+
+    #[test]
+    fn rule_gates_parse_from_yaml_and_default_to_enabled() {
+        let raw: RawGates =
+            serde_yaml::from_str("rules:\n  pii_email: false\n  dlp_openai_key: true\n").unwrap();
+        let gates = raw.into_gate_matrix().unwrap();
+
+        assert!(!gates.allows_rule("pii_email"));
+        assert!(gates.allows_rule("dlp_openai_key"));
+        assert!(gates.allows_rule("ark.injection.override.discard_prior"));
+    }
+
+    #[test]
+    fn example_config_defaults_dlp_l1_to_credentials_and_secrets() {
+        let config = Config::load(Path::new(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/config.example.yaml"
+        )))
+        .unwrap();
+        let credential_groups = [
+            "API_KEY",
+            "CLOUD_KEY",
+            "CREDENTIAL",
+            "CRYPTO_KEY",
+            "PASSWORD_HASH",
+            "PAYMENT_KEY",
+            "PRIVATE_KEY",
+            "SECRET_TOKEN",
+        ];
+
+        for pattern in DLP_PATTERNS {
+            assert_eq!(
+                config.default_gates.allows_rule(pattern.name),
+                credential_groups.contains(&pattern.entity_group),
+                "unexpected default DLP gate for {} ({})",
+                pattern.name,
+                pattern.entity_group
+            );
+        }
+
+        assert!(config.default_gates.allows_rule("dlp_sensitive_material"));
+        assert!(config.default_gates.allows_rule("dlp_secret_transfer"));
+        assert!(!config.default_gates.allows_rule("dlp_mcp_runtime_risk"));
+        assert!(!config.default_gates.allows_rule("dlp_mcp_policy"));
+        assert!(!config
+            .default_gates
+            .allows_rule("dlp_destructive_operation"));
+
+        let gateway = SecurityGateway::with_max_level(
+            vec![SecurityCategory::Dlp],
+            SecurityLevel::L1,
+            None,
+            false,
+        );
+        gateway.set_execution_gates(config.default_gates);
+        let results = gateway.scan_all(
+            "password = CorrectHorseBatteryStaple\n\
+             SELECT * FROM customer;\n\
+             Gehalt 74.500 EUR\n\
+             Fallnummer: FALL-2026-4711",
+        );
+        let labels = results
+            .iter()
+            .flat_map(|result| result.evidence_spans.iter())
+            .map(|span| span.label.as_str())
+            .collect::<Vec<_>>();
+
+        assert!(labels.contains(&"CREDENTIAL"));
+        assert!(!labels.iter().any(|label| label.starts_with("dlp.")));
     }
 }

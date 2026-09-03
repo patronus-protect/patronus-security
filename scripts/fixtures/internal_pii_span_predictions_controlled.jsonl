@@ -1,0 +1,3 @@
+{"entities":[{"end":24,"label":"EMAIL","start":8}],"id":"controlled-en-email"}
+{"entities":[{"end":31,"label":"STUDENT_ID","start":23}],"id":"controlled-de-student"}
+{"entities":[{"end":10,"label":"EMAIL","start":2}],"id":"controlled-deidentified-negative"}

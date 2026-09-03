@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+#![allow(clippy::useless_conversion)] // PyO3-generated wrappers convert PyErr into PyErr.
 use patronus_ark::{
     normalize_text as rust_normalize_text, CacheEncryptionConfig, CacheWriteMode,
     ConditionalPipelineGate, DynamicPiiConfig, EvidenceSpan, ExactCacheConfig, ExecutionBackend,
@@ -28,6 +29,7 @@ struct SecurityGateway {
 #[pymethods]
 impl SecurityGateway {
     #[new]
+    #[allow(clippy::too_many_arguments)] // Public Python constructor signature.
     #[pyo3(signature = (categories, max_level="l2", model_dir=None, download_files=true, download_categories=None, execution_gates_json=None, onnx_batch_mode="backend_default", execution_backend="auto", ntdb_operating_point="best_f1", l3_strategy="dedicated", dynamic_pii_config_json=None, cache_storage_location=None, cache_encryption_key_hex=None, cache_entry_ttl_seconds=2_592_000, cache_memory_max_entries=100_000, cache_memory_max_bytes=134_217_728))]
     fn new(
         categories: Vec<String>,
@@ -135,10 +137,7 @@ impl SecurityGateway {
 
     #[pyo3(signature = (execution_gates_json=None))]
     fn set_execution_gates(&mut self, execution_gates_json: Option<&str>) -> PyResult<()> {
-        let gates = match parse_execution_gates_json(execution_gates_json)? {
-            Some(gates) => gates,
-            None => ScanGateMatrix::all_enabled(),
-        };
+        let gates = parse_execution_gates_json(execution_gates_json)?.unwrap_or_default();
         self.inner.set_execution_gates(gates);
         Ok(())
     }
@@ -321,7 +320,7 @@ fn parse_cache_encryption_key_hex(value: Option<&str>) -> PyResult<Option<CacheE
         ));
     }
     let mut key = [0u8; 32];
-    for (index, chunk) in value.as_bytes().chunks_exact(2).enumerate() {
+    for (index, chunk) in value.as_bytes().as_chunks::<2>().0.iter().enumerate() {
         let high = hex_nibble(chunk[0])?;
         let low = hex_nibble(chunk[1])?;
         key[index] = (high << 4) | low;
@@ -394,7 +393,12 @@ fn parse_execution_gates_json(value: Option<&str>) -> PyResult<Option<ScanGateMa
         pyo3::exceptions::PyValueError::new_err("execution_gates must be a JSON object")
     })?;
 
-    let mut gates = ScanGateMatrix::all_enabled();
+    let mut gates = ScanGateMatrix::default();
+    if let Some(explain) = object.get("explain") {
+        gates.explain = explain.as_bool().ok_or_else(|| {
+            pyo3::exceptions::PyValueError::new_err("execution_gates.explain must be a boolean")
+        })?;
+    }
     if let Some(levels) = object.get("levels") {
         let levels = levels.as_object().ok_or_else(|| {
             pyo3::exceptions::PyValueError::new_err("execution_gates.levels must be an object")
@@ -422,6 +426,19 @@ fn parse_execution_gates_json(value: Option<&str>) -> PyResult<Option<ScanGateMa
                 ))
             })?;
             gates.set_model(model, enabled);
+        }
+    }
+    if let Some(rules) = object.get("rules") {
+        let rules = rules.as_object().ok_or_else(|| {
+            pyo3::exceptions::PyValueError::new_err("execution_gates.rules must be an object")
+        })?;
+        for (rule, enabled) in rules {
+            let enabled = enabled.as_bool().ok_or_else(|| {
+                pyo3::exceptions::PyValueError::new_err(format!(
+                    "execution_gates.rules.{rule} must be a boolean"
+                ))
+            })?;
+            gates.set_rule(rule, enabled);
         }
     }
     if let Some(conditional) = object.get("conditional") {

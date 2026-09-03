@@ -335,9 +335,6 @@ GLINER_CATEGORY_MAP = {
             "organization",
             "date",
             "person",
-            "first_name",
-            "last_name",
-            "date_of_birth",
             "city",
             "country",
         ),
@@ -391,12 +388,27 @@ GLINER_CATEGORY_MAP = {
             "political_affiliation",
         ),
         "marketing": ("product", "brand", "campaign"),
+        "education": (
+            "student_identifier",
+            "applicant_identifier",
+            "research_participant_identifier",
+            "parent_or_guardian",
+            "degree_program",
+        ),
+        # Compatibility alias for historical benchmark rows. The current
+        # sensitive-document head emits `education`.
         "school": (
             "student_identifier",
             "applicant_identifier",
             "research_participant_identifier",
             "parent_or_guardian",
             "degree_program",
+        ),
+        "medical": (
+            "medical_record_number",
+            "health_insurance_number",
+            "medical_condition",
+            "medication",
         ),
         "other": (
             "person",
@@ -509,12 +521,12 @@ def labels_for_classification(category, class_name):
 
 
 def labels_for_contexts(*classifications):
-    """Return labels supported by every supplied ``(category, class)`` context."""
+    """Return the ordered union for all supplied ``(category, class)`` contexts."""
     if not classifications:
         return ()
     context_labels = [set(labels_for_classification(*item)) for item in classifications]
     return tuple(
         label
         for label in GLINER_LABELS
-        if all(label in labels for labels in context_labels)
+        if any(label in labels for labels in context_labels)
     )

@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use super::{ntdb_error, NtdbResult};
 
-const NTDB_L2_CONTENT_TOKENS_PER_CHUNK: usize = 254;
+use crate::ml::tokenizer::CONTENT_TOKENS;
 
 pub fn parse_package_manifest(json: &str) -> serde_json::Result<PackageManifest> {
     serde_json::from_str(
@@ -25,67 +25,33 @@ pub struct PackageManifest {
     pub chunk_size: usize,
     pub tokenizer_dir: String,
     pub minilm: MiniLmManifest,
-    #[serde(default)]
-    pub feature_contract: FeatureContract,
     pub runtime: RuntimeContract,
-    #[serde(default)]
-    pub heads: Vec<HeadManifest>,
-    #[serde(default)]
-    pub aggregators: Vec<AggregatorManifest>,
     #[serde(default)]
     pub joint_v3: Option<JointV3Manifest>,
 }
 
 impl PackageManifest {
     pub fn normalize_runtime_defaults(&mut self) {
-        if self.version == 4 {
-            return;
-        }
-        let target_size = if self.minilm.is_l3_tokenizer_compatible() {
-            NTDB_L2_CONTENT_TOKENS_PER_CHUNK
-        } else {
-            256
-        };
-        self.chunk_size = target_size;
-        self.minilm.content_tokens_per_chunk = target_size;
+        self.chunk_size = CONTENT_TOKENS;
+        self.minilm.content_tokens_per_chunk = CONTENT_TOKENS;
     }
 
     pub fn validate(&self) -> NtdbResult<()> {
-        if self.format != "ntdb_model_package" || !matches!(self.version, 2 | 4) {
+        if self.format != "ntdb_model_package" || self.version != 4 {
             return Err(ntdb_error(format!(
-                "unsupported NTDB package format {} v{}",
+                "only NTDB package v4 is supported, got {} v{}",
                 self.format, self.version
             )));
         }
-        if self.version == 4 {
-            return self.validate_joint_v3();
+        if !self.minilm.is_l3_tokenizer_compatible() {
+            return Err(ntdb_error("NTDB v4 requires the compact mmBERT tokenizer"));
         }
-        if self.heads.is_empty() {
-            return Err(ntdb_error("NTDB package must contain at least one head"));
+        // Existing v4 exports describe 256 content tokens. Runtime preparation
+        // consistently reserves the two model positions for BOS/EOS.
+        if ![CONTENT_TOKENS, 256].contains(&self.chunk_size) {
+            return Err(ntdb_error("unsupported NTDB v4 chunk size"));
         }
-        if self.aggregators.is_empty() {
-            return Err(ntdb_error(
-                "NTDB package must contain at least one aggregator",
-            ));
-        }
-        if self.task.labels.is_empty() {
-            return Err(ntdb_error("NTDB package task labels must not be empty"));
-        }
-        if self.chunk_size != self.minilm.content_tokens_per_chunk {
-            return Err(ntdb_error(format!(
-                "NTDB chunk_size mismatch: manifest {} vs minilm {}",
-                self.chunk_size, self.minilm.content_tokens_per_chunk
-            )));
-        }
-        if !self
-            .runtime
-            .shared_preprocessing
-            .iter()
-            .any(|stage| stage == "tokenization")
-        {
-            return Err(ntdb_error("NTDB package must declare shared tokenization"));
-        }
-        Ok(())
+        self.validate_joint_v3()
     }
 
     fn validate_joint_v3(&self) -> NtdbResult<()> {
@@ -164,15 +130,10 @@ pub struct MiniLmManifest {
     pub source_model_path: Option<String>,
     pub model: Option<String>,
     pub tokenizer_family: Option<String>,
-    #[serde(alias = "compat_l3_tokenizer")]
-    pub compab_l3_tokenizer: Option<bool>,
 }
 
 impl MiniLmManifest {
     pub fn is_l3_tokenizer_compatible(&self) -> bool {
-        if let Some(compat) = self.compab_l3_tokenizer {
-            return compat;
-        }
         self.tokenizer_family
             .as_deref()
             .is_some_and(|family| family.eq_ignore_ascii_case("mmbert"))
@@ -193,12 +154,6 @@ pub struct TaskManifest {
     pub labels: Vec<String>,
     #[serde(default)]
     pub no_risk_class: Option<String>,
-}
-
-#[derive(Debug, Default, Deserialize)]
-pub struct FeatureContract {
-    pub local_feature_order: Vec<String>,
-    pub global_feature_order: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -280,300 +235,39 @@ pub struct RuntimeContract {
     pub ordering: String,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct HeadManifest {
-    pub id: String,
-    #[serde(rename = "type")]
-    pub kind: String,
-    pub task: TaskManifest,
-    pub classifiers: Vec<serde_json::Value>,
-    pub feature_order: Vec<String>,
-    pub static_dir: String,
-    pub static_components: Vec<StaticComponentManifest>,
-    pub projection_onnx: Option<String>,
-    pub ntdb_head_onnx: String,
-    pub model_type: String,
-    pub reliability: ReliabilityManifest,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct StaticComponentManifest {
-    #[serde(rename = "type")]
-    pub kind: String,
-    pub path: String,
-    pub labels: Option<Vec<String>>,
-    pub input_names: Option<Vec<String>>,
-    pub output_names: Option<Vec<String>>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct AggregatorManifest {
-    pub id: String,
-    #[serde(rename = "type")]
-    pub kind: String,
-    pub task: TaskManifest,
-    pub onnx: String,
-    pub model_type: String,
-    pub input_feature_order: Vec<String>,
-    pub global_feature_order: Vec<String>,
-    pub reliability: ReliabilityManifest,
-    pub metric_sweep: Option<MetricSweepManifest>,
-    pub promote_router: Option<PromoteRouterManifest>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct PromoteRouterManifest {
-    #[serde(rename = "type")]
-    pub kind: String,
-    pub onnx: String,
-    pub model_type: String,
-    pub input_feature_order: Vec<String>,
-    pub global_feature_order: Vec<String>,
-    pub reliability: ReliabilityManifest,
-    pub metric_sweep: Option<MetricSweepManifest>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct ReliabilityManifest {
-    pub enabled: bool,
-    pub hidden_dim: usize,
-    pub execution: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct MetricSweepManifest {
-    pub source: String,
-    pub f1_window: Option<f32>,
-    pub points: HashMap<String, OperatingPointManifest>,
-    #[serde(default, skip_deserializing)]
-    pub sweep: Vec<serde_json::Value>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct OperatingPointManifest {
-    pub threshold: Option<f32>,
-    pub metrics: serde_json::Value,
-    pub attack_threshold: Option<f32>,
-    pub promote_threshold: Option<f32>,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn ntdb_l2_manifests_use_canonical_256_token_chunks_at_runtime() {
-        let mut manifest: PackageManifest = serde_json::from_str(
-            r#"{
-                "format": "ntdb_model_package",
-                "version": 2,
-                "runtime_contract": "raw_text_to_ntdb_outputs",
-                "task": {"type": "binary", "labels": ["benign", "attack"]},
-                "chunk_size": 384,
-                "tokenizer_dir": "tokenizer",
-                "minilm": {
-                    "embedding_matrix_file": "embedding_matrix.f16",
-                    "vocab_size": 180000,
-                    "embedding_dim": 384,
-                    "content_tokens_per_chunk": 384,
-                    "source_model_path": "ntdb/artifacts/granite_embedding_97m_multilingual_r2",
-                    "model": "ibm-granite/granite-embedding-97m-multilingual-r2",
-                    "tokenizer_family": "ModernBERT"
-                },
-                "feature_contract": {
-                    "local_feature_order": [],
-                    "global_feature_order": []
-                },
-                "runtime": {
-                    "shared_preprocessing": ["tokenization"],
-                    "parallel_stages": [],
-                    "ordering": "manifest_order"
-                },
-                "heads": [{
-                    "id": "h",
-                    "type": "binary",
-                    "task": {"type": "binary", "labels": ["benign", "attack"]},
-                    "classifiers": [],
-                    "feature_order": [],
-                    "static_dir": "heads/h",
-                    "static_components": [],
-                    "projection_onnx": null,
-                    "ntdb_head_onnx": "heads/h/ntdb_head.onnx",
-                    "model_type": "sequential_ntdb",
-                    "reliability": {
-                        "enabled": false,
-                        "hidden_dim": 0,
-                        "execution": "inside_onnx_model"
-                    }
-                }],
-                "aggregators": [{
-                    "id": "a",
-                    "type": "binary",
-                    "task": {"type": "binary", "labels": ["benign", "attack"]},
-                    "onnx": "aggregators/a.onnx",
-                    "model_type": "sequential_ntdb",
-                    "input_feature_order": [],
-                    "global_feature_order": [],
-                    "reliability": {
-                        "enabled": false,
-                        "hidden_dim": 0,
-                        "execution": "inside_onnx_model"
-                    },
-                    "metric_sweep": null,
-                    "promote_router": null
-                }]
-            }"#,
-        )
-        .unwrap();
-
-        manifest.normalize_runtime_defaults();
-
-        assert_eq!(manifest.chunk_size, 256);
-        assert_eq!(manifest.minilm.content_tokens_per_chunk, 256);
-        manifest.validate().unwrap();
-    }
-
-    #[test]
-    fn runtime_normalization_overrides_declared_chunk_size() {
-        let mut manifest: PackageManifest = serde_json::from_str(
-            r#"{
-                "format": "ntdb_model_package",
-                "version": 2,
-                "runtime_contract": "raw_text_to_ntdb_outputs",
-                "task": {"type": "binary", "labels": ["benign", "attack"]},
-                "chunk_size": 2,
-                "tokenizer_dir": "tokenizer",
-                "minilm": {
-                    "embedding_matrix_file": "embedding_matrix.f16",
-                    "vocab_size": 1,
-                    "embedding_dim": 1,
-                    "content_tokens_per_chunk": 2,
-                    "source_model_path": "test-embedder",
-                    "model": null,
-                    "tokenizer_family": null
-                },
-                "feature_contract": {
-                    "local_feature_order": [],
-                    "global_feature_order": []
-                },
-                "runtime": {
-                    "shared_preprocessing": ["tokenization"],
-                    "parallel_stages": [],
-                    "ordering": "manifest_order"
-                },
-                "heads": [{
-                    "id": "h",
-                    "type": "binary",
-                    "task": {"type": "binary", "labels": ["benign", "attack"]},
-                    "classifiers": [],
-                    "feature_order": [],
-                    "static_dir": "heads/h",
-                    "static_components": [],
-                    "projection_onnx": null,
-                    "ntdb_head_onnx": "heads/h/ntdb_head.onnx",
-                    "model_type": "sequential_ntdb",
-                    "reliability": {
-                        "enabled": false,
-                        "hidden_dim": 0,
-                        "execution": "inside_onnx_model"
-                    }
-                }],
-                "aggregators": [{
-                    "id": "a",
-                    "type": "binary",
-                    "task": {"type": "binary", "labels": ["benign", "attack"]},
-                    "onnx": "aggregators/a.onnx",
-                    "model_type": "sequential_ntdb",
-                    "input_feature_order": [],
-                    "global_feature_order": [],
-                    "reliability": {
-                        "enabled": false,
-                        "hidden_dim": 0,
-                        "execution": "inside_onnx_model"
-                    },
-                    "metric_sweep": null,
-                    "promote_router": null
-                }]
-            }"#,
-        )
-        .unwrap();
-
-        manifest.normalize_runtime_defaults();
-
-        assert_eq!(manifest.chunk_size, 256);
-        assert_eq!(manifest.minilm.content_tokens_per_chunk, 256);
-        manifest.validate().unwrap();
-    }
-
-    #[test]
-    fn mmbert_manifest_normalizes_to_254_content_tokens_at_runtime() {
-        let mut manifest: PackageManifest = serde_json::from_str(
-            r#"{
-                "format": "ntdb_model_package",
-                "version": 2,
-                "runtime_contract": "raw_text_to_ntdb_outputs",
-                "task": {"type": "binary", "labels": ["benign", "attack"]},
-                "chunk_size": 256,
-                "tokenizer_dir": "tokenizer",
-                "minilm": {
-                    "embedding_matrix_file": "embedding_matrix.f16",
-                    "vocab_size": 100,
-                    "embedding_dim": 64,
-                    "content_tokens_per_chunk": 256,
-                    "source_model_path": "test-embedder",
-                    "model": null,
-                    "tokenizer_family": "mmbert"
-                },
-                "feature_contract": {
-                    "local_feature_order": [],
-                    "global_feature_order": []
-                },
-                "runtime": {
-                    "shared_preprocessing": ["tokenization"],
-                    "parallel_stages": [],
-                    "ordering": "manifest_order"
-                },
-                "heads": [{
-                    "id": "h",
-                    "type": "binary",
-                    "task": {"type": "binary", "labels": ["benign", "attack"]},
-                    "classifiers": [],
-                    "feature_order": [],
-                    "static_dir": "heads/h",
-                    "static_components": [],
-                    "projection_onnx": null,
-                    "ntdb_head_onnx": "heads/h/ntdb_head.onnx",
-                    "model_type": "sequential_ntdb",
-                    "reliability": {
-                        "enabled": false,
-                        "hidden_dim": 0,
-                        "execution": "inside_onnx_model"
-                    }
-                }],
-                "aggregators": [{
-                    "id": "a",
-                    "type": "binary",
-                    "task": {"type": "binary", "labels": ["benign", "attack"]},
-                    "onnx": "aggregators/a.onnx",
-                    "model_type": "sequential_ntdb",
-                    "input_feature_order": [],
-                    "global_feature_order": [],
-                    "reliability": {
-                        "enabled": false,
-                        "hidden_dim": 0,
-                        "execution": "inside_onnx_model"
-                    },
-                    "metric_sweep": null,
-                    "promote_router": null
-                }]
-            }"#,
-        )
-        .unwrap();
-
-        manifest.normalize_runtime_defaults();
-
-        assert_eq!(manifest.chunk_size, 254);
-        assert_eq!(manifest.minilm.content_tokens_per_chunk, 254);
-        manifest.validate().unwrap();
+    fn v4_exports_use_one_runtime_budget_and_v2_is_rejected() {
+        let fixture = include_str!("../../../tests/fixtures/ntdb_v4.json");
+        for exported in [254, 256] {
+            let mut manifest = parse_package_manifest(fixture).unwrap();
+            manifest.chunk_size = exported;
+            manifest.minilm.content_tokens_per_chunk = exported;
+            manifest.validate().unwrap();
+            manifest.normalize_runtime_defaults();
+            assert_eq!(manifest.chunk_size, CONTENT_TOKENS);
+            assert_eq!(manifest.minilm.content_tokens_per_chunk, CONTENT_TOKENS);
+            manifest.validate().unwrap();
+        }
+        let mut manifest = parse_package_manifest(fixture).unwrap();
+        manifest.version = 2;
+        assert!(manifest
+            .validate()
+            .unwrap_err()
+            .to_string()
+            .contains("only NTDB package v4"));
+        manifest.version = 4;
+        manifest.minilm.tokenizer_family = Some("ModernBERT".to_string());
+        assert!(manifest.validate().is_err());
+        manifest.minilm.tokenizer_family = Some("mmbert".to_string());
+        manifest.chunk_size = 255;
+        manifest.minilm.content_tokens_per_chunk = 255;
+        assert!(manifest.validate().is_err());
+        manifest.chunk_size = 254;
+        manifest.minilm.content_tokens_per_chunk = 256;
+        assert!(manifest.validate().is_err());
     }
 }

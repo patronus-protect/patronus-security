@@ -22,8 +22,8 @@ use crate::post_prediction::{filter_evidence, LocalPathPersonHook, PostPredictio
 #[cfg(test)]
 use crate::ScanExecution;
 use crate::{
-    EvaluationResult, L3ClusteringStrategy, L3ProgressMode, LayerResult, QueuedSecurityProgress,
-    RequestId, SecurityCategory, SecurityLevel, SecurityScanResult,
+    EvaluationResult, L3ClusteringStrategy, L3ProgressMode, LabelScore, LayerResult,
+    QueuedSecurityProgress, RequestId, SecurityCategory, SecurityLevel, SecurityScanResult,
 };
 
 use super::super::long_text::aggregate_chunk_outputs;
@@ -32,11 +32,11 @@ use super::super::{
 };
 use super::{
     elapsed_ms, publish_progress, publish_provisional, DynamicPiiHandle, L3ModelHandle,
-    L3WorkerInput, L3WorkerJob, L3WorkerState, L3_DIRECT_CONTENT_TOKEN_LIMIT,
+    L3WorkerInput, L3WorkerJob, L3WorkerState,
 };
 use crate::cache::{
     decision_output, merge_pii_spans, CacheCoordinator, CacheKey, CacheNamespace, CacheSource,
-    CachedHeadOutput, HistoricalSimilarityCache, PiiEntityCache, SimilarityMatch,
+    CachedHeadOutput, HistoricalSimilarityCache, SimilarityMatch,
 };
 use crate::ml::onnx::RawClassifierOutput;
 use crate::pipeline::decision_cache::DecisionCache;
@@ -83,11 +83,10 @@ pub(super) fn execute(
                 return (job.job_id, job.request_id, result);
             }
         };
-        let entity_cache = Arc::clone(&state.pii_entity_cache);
         let pii_chunk_cache = Arc::clone(&state.pii_chunk_cache);
         let event_state = Arc::clone(state);
         let completion = RunCompletion::from_job(&job);
-        let output = run_dynamic_pii_job(job, model, entity_cache, pii_chunk_cache, event_state);
+        let output = run_dynamic_pii_job(job, model, pii_chunk_cache, event_state);
         return finish_run_result(completion, output);
     }
 
@@ -130,7 +129,6 @@ pub(super) fn execute(
 fn run_dynamic_pii_job(
     job: L3WorkerJob,
     runtime: DynamicPiiHandle,
-    entity_cache: Arc<PiiEntityCache>,
     chunk_cache: Arc<crate::cache::PiiChunkCache>,
     worker_state: Arc<L3WorkerState>,
 ) -> Result<SecurityScanResult, String> {
@@ -139,49 +137,43 @@ fn run_dynamic_pii_job(
         .dynamic_pii_config
         .as_ref()
         .ok_or_else(|| "dynamic-pii job is missing its configuration".to_string())?;
-    let cached_spans = filter_evidence(
-        SecurityCategory::DynamicPii,
-        text,
-        entity_cache.find(crate::assets::DYNAMIC_PII_ASSET.revision, text, config),
-    );
-    let cache_hits = cached_spans.len();
-    let first_published = Arc::new(std::sync::atomic::AtomicBool::new(false));
-    if let Some(span) = cached_spans.first() {
-        publish_first_pii_result(&worker_state, &job, span.clone(), true);
-        first_published.store(true, std::sync::atomic::Ordering::Release);
+    if job.dynamic_pii_inference_groups.is_empty() {
+        return Err("dynamic-pii job has no resolved inference groups".to_string());
     }
+    let first_published = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let callback_state = Arc::clone(&worker_state);
     let callback_job = job.clone();
     let callback_published = Arc::clone(&first_published);
     let mut output = runtime
         .lock()
         .map_err(|error| format!("dynamic-pii runtime mutex poisoned: {error}"))?
-        .infer_with_callback(text, config, chunk_cache, move |span| {
-            if !LocalPathPersonHook.retain(SecurityCategory::DynamicPii, text, span) {
-                return;
-            }
-            if callback_published
-                .compare_exchange(
-                    false,
-                    true,
-                    std::sync::atomic::Ordering::AcqRel,
-                    std::sync::atomic::Ordering::Acquire,
-                )
-                .is_ok()
-            {
-                publish_first_pii_result(&callback_state, &callback_job, span.clone(), false);
-            }
-        })
+        .infer_grouped_with_callback(
+            text,
+            config,
+            &job.dynamic_pii_inference_groups,
+            chunk_cache,
+            move |span| {
+                if !LocalPathPersonHook.retain(SecurityCategory::DynamicPii, text, span) {
+                    return;
+                }
+                if callback_published
+                    .compare_exchange(
+                        false,
+                        true,
+                        std::sync::atomic::Ordering::AcqRel,
+                        std::sync::atomic::Ordering::Acquire,
+                    )
+                    .is_ok()
+                {
+                    publish_first_pii_result(&callback_state, &callback_job, span.clone());
+                }
+            },
+        )
         .map_err(|error| error.to_string())?;
-    output.evidence_spans.extend(cached_spans);
     output.evidence_spans = filter_evidence(
         SecurityCategory::DynamicPii,
         text,
         merge_pii_spans(output.evidence_spans),
-    );
-    entity_cache.remember(
-        crate::assets::DYNAMIC_PII_ASSET.revision,
-        &output.evidence_spans,
     );
     let confidence = output
         .evidence_spans
@@ -190,11 +182,48 @@ fn run_dynamic_pii_job(
         .max_by(f64::total_cmp)
         .unwrap_or(0.0);
     let has_entities = !output.evidence_spans.is_empty();
+    let mut entity_scores = HashMap::<String, f64>::new();
+    for span in &output.evidence_spans {
+        entity_scores
+            .entry(span.label.clone())
+            .and_modify(|score| *score = score.max(span.score))
+            .or_insert(span.score);
+    }
+    let mut label_scores = entity_scores
+        .into_iter()
+        .map(|(label, confidence)| LabelScore {
+            label,
+            confidence,
+            matched: true,
+        })
+        .collect::<Vec<_>>();
+    label_scores.sort_by(|left, right| left.label.cmp(&right.label));
+    let entity_types = label_scores
+        .iter()
+        .map(|score| score.label.clone())
+        .collect::<Vec<_>>();
     let class_name = if has_entities {
         "entities"
     } else {
         "no_entities"
     };
+    let inference_groups = job
+        .dynamic_pii_inference_groups
+        .iter()
+        .map(|group| {
+            serde_json::json!({
+                "kind": if group.rule_index.is_some() { "conditional" } else { "base" },
+                "rule_index": group.rule_index,
+                "labels": group.config.labels,
+                "ranges": group.ranges.as_ref().map(|ranges| {
+                    ranges.iter().map(|range| serde_json::json!({
+                        "start_byte": range.start_byte,
+                        "end_byte": range.end_byte,
+                    })).collect::<Vec<_>>()
+                }),
+            })
+        })
+        .collect::<Vec<_>>();
     let layer = LayerResult {
         level: SecurityLevel::L3.as_str().to_string(),
         layer_type: "dynamic_pii".to_string(),
@@ -212,6 +241,10 @@ fn run_dynamic_pii_job(
             ),
             ("labels".to_string(), serde_json::json!(config.labels)),
             (
+                "inference_groups".to_string(),
+                serde_json::json!(inference_groups),
+            ),
+            (
                 "execution_gate".to_string(),
                 serde_json::json!(config.execution_gate),
             ),
@@ -223,10 +256,7 @@ fn run_dynamic_pii_job(
                 "entity_count".to_string(),
                 serde_json::json!(output.evidence_spans.len()),
             ),
-            (
-                "entity_cache_hits".to_string(),
-                serde_json::json!(cache_hits),
-            ),
+            ("entity_types".to_string(), serde_json::json!(entity_types)),
             (
                 "chunk_cache_hits".to_string(),
                 serde_json::json!(output.chunk_cache_hits),
@@ -242,7 +272,7 @@ fn run_dynamic_pii_job(
             ),
             (
                 "planned_chunk_count".to_string(),
-                serde_json::json!(config.planned_chunk_count(text)),
+                serde_json::json!(output.inference_calls),
             ),
             ("priority".to_string(), serde_json::json!(job.priority)),
             ("job_id".to_string(), serde_json::json!(job.job_id)),
@@ -255,15 +285,11 @@ fn run_dynamic_pii_job(
     result.duration_ms = output.duration_ms;
     result.layers = vec![layer];
     result.evidence_spans = output.evidence_spans;
+    result.label_scores = label_scores;
     Ok(result)
 }
 
-fn publish_first_pii_result(
-    worker: &L3WorkerState,
-    job: &L3WorkerJob,
-    span: crate::EvidenceSpan,
-    cache_hit: bool,
-) {
+fn publish_first_pii_result(worker: &L3WorkerState, job: &L3WorkerJob, span: crate::EvidenceSpan) {
     let confidence = span.score;
     let layer = LayerResult {
         level: SecurityLevel::L3.as_str().to_string(),
@@ -275,8 +301,8 @@ fn publish_first_pii_result(
         thresholds: HashMap::new(),
         details: HashMap::from([
             ("partial_result".to_string(), serde_json::json!(true)),
+            ("provisional".to_string(), serde_json::json!(true)),
             ("first_entity".to_string(), serde_json::json!(true)),
-            ("entity_cache_hit".to_string(), serde_json::json!(cache_hit)),
             ("job_id".to_string(), serde_json::json!(job.job_id)),
         ]),
     };
@@ -445,6 +471,7 @@ fn run_model_job(
     );
     let mut chunk_outputs = Vec::new();
     let mut joint_v3_l3_chunks = Vec::new();
+    let mut resolved_l3_chunks = Vec::new();
     let total_chunks = chunks.len();
     let mut chunk_trace = l3_chunk_trace_enabled().then(Vec::new);
     let decision = HeadDecisionState::new(
@@ -491,6 +518,7 @@ fn run_model_job(
         chunks: &chunks,
         chunk_outputs: &mut chunk_outputs,
         joint_v3_l3_chunks: &mut joint_v3_l3_chunks,
+        resolved_l3_chunks: &mut resolved_l3_chunks,
         chunk_trace: &mut chunk_trace,
         decision,
         aggregation: strategy.aggregation.clone(),
@@ -558,6 +586,12 @@ fn run_model_job(
         l3_result
     });
     let point = job.execution.ntdb_decision_threshold_point();
+    let final_chunk_outputs = super::final_l3_chunk_outputs(
+        &job.l2_chunk_outputs,
+        &job.category,
+        &job.model,
+        &resolved_l3_chunks,
+    );
     let mut result = if joint_v3 {
         arbitrate_joint_v3(
             &job.category,
@@ -570,6 +604,7 @@ fn run_model_job(
     } else {
         arbitrate_l3_l2(&job.category, l3_result, job.fallback, point)
     };
+    result.internal_l2_chunk_outputs = final_chunk_outputs;
     result.duration_ms = result.layers.iter().map(|layer| layer.duration_ms).sum();
     Ok(result)
 }
@@ -584,6 +619,7 @@ struct DedicatedExecutionAdapter<'a> {
     chunks: &'a [crate::pipeline::l3_schedule::SelectedL3Chunk],
     chunk_outputs: &'a mut Vec<(EvaluationResult, Vec<LayerResult>)>,
     joint_v3_l3_chunks: &'a mut Vec<JointV3L3Chunk>,
+    resolved_l3_chunks: &'a mut Vec<(crate::ml::ntdb_executor::ByteSpan, String, f32)>,
     chunk_trace: &'a mut Option<Vec<serde_json::Value>>,
     decision: HeadDecisionState,
     aggregation: ChunkAggregation,
@@ -668,8 +704,16 @@ impl L3ExecutionAdapter for DedicatedExecutionAdapter<'_> {
             propagated,
         );
         self.chunk_outputs.push(output.clone());
+        let chunk = &self.chunks[chunk_index];
+        self.resolved_l3_chunks.push((
+            crate::ml::ntdb_executor::ByteSpan {
+                start: chunk.start_byte,
+                end: chunk.end_byte,
+            },
+            output.0.class_name.clone(),
+            output.0.confidence as f32,
+        ));
         if let Some(probabilities) = dedicated_probabilities(&output.1) {
-            let chunk = &self.chunks[chunk_index];
             self.joint_v3_l3_chunks.push(JointV3L3Chunk {
                 span: crate::ml::ntdb_executor::ByteSpan {
                     start: chunk.start_byte,
@@ -832,6 +876,7 @@ fn coverage(resolved_chunks: usize, total_chunks: usize) -> f64 {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn publish_l3_progress(
     worker_state: &L3WorkerState,
     job: &L3WorkerJob,
@@ -913,7 +958,7 @@ fn publish_l3_provisional(
 }
 
 fn annotate_l3_execution(
-    layers: &mut Vec<LayerResult>,
+    layers: &mut [LayerResult],
     metadata: EarlyExitMetadata,
     clustering: L3ClusteringStrategy,
 ) {
@@ -1050,7 +1095,13 @@ fn infer_l3_chunk(
         model.model_name().to_string()
     };
 
-    if let Some((result, mut layers)) = chunk_cache.get(&namespace, &chunk.text, &job.execution) {
+    chunk.validate_token_input()?;
+    let token_cache_key = blake3::hash(&crate::ml::tokenizer::token_key(&chunk.token_ids))
+        .to_hex()
+        .to_string();
+    if let Some((result, mut layers)) =
+        chunk_cache.get(&namespace, &token_cache_key, &job.execution)
+    {
         decorate_l3_layers(
             &mut layers,
             job,
@@ -1067,8 +1118,8 @@ fn infer_l3_chunk(
             .lock()
             .map_err(|err| format!("L3 model mutex poisoned: {err}"))?;
         let raw = model
-            .infer_raw(
-                &chunk.text,
+            .infer_token_ids_raw(
+                &chunk.token_ids,
                 job.execution.backend(),
                 job.execution.onnx_runtime_options(),
             )
@@ -1109,7 +1160,13 @@ fn infer_l3_chunk(
         (result, vec![layer])
     };
 
-    chunk_cache.insert(&namespace, &chunk.text, &job.execution, &result, &layers);
+    chunk_cache.insert(
+        &namespace,
+        &token_cache_key,
+        &job.execution,
+        &result,
+        &layers,
+    );
     decorate_l3_layers(
         &mut layers,
         job,
@@ -1129,11 +1186,15 @@ fn infer_l3_chunk_exact(
     chunk: &crate::pipeline::l3_schedule::SelectedL3Chunk,
     queue_wait_ms: f64,
 ) -> Result<(EvaluationResult, Vec<LayerResult>), String> {
-    const CACHE_SCHEMA_VERSION: u32 = 1;
+    chunk.validate_token_input()?;
+    const CACHE_SCHEMA_VERSION: u32 = 2;
     const CLASSIFICATION_HEAD: &str = "classification";
 
     let namespace = CacheNamespace::from_model_sha(CACHE_SCHEMA_VERSION, model_sha);
-    let key = CacheKey::for_chunk(namespace, chunk.text.as_bytes());
+    let key = CacheKey::for_chunk(
+        namespace,
+        &crate::ml::tokenizer::token_key(&chunk.token_ids),
+    );
     let started = Instant::now();
     if let Some(lookup) = exact_cache.lookup_exact(&key) {
         remember_dedicated_similarity(
@@ -1188,30 +1249,15 @@ fn infer_l3_chunk_exact(
 
     let lookup = exact_cache
         .get_or_compute_heads(key, || {
-            let raw = if !chunk.token_ids.is_empty()
-                && chunk.tokenizer_family.eq_ignore_ascii_case("mmbert")
-                && chunk.token_ids.len() <= L3_DIRECT_CONTENT_TOKEN_LIMIT
-            {
-                model
-                    .lock()
-                    .map_err(|err| format!("L3 model mutex poisoned: {err}"))?
-                    .infer_token_ids_raw(
-                        &chunk.token_ids,
-                        job.execution.backend(),
-                        job.execution.onnx_runtime_options(),
-                    )
-                    .map_err(|err| err.to_string())?
-            } else {
-                model
-                    .lock()
-                    .map_err(|err| format!("L3 model mutex poisoned: {err}"))?
-                    .infer_raw(
-                        &chunk.text,
-                        job.execution.backend(),
-                        job.execution.onnx_runtime_options(),
-                    )
-                    .map_err(|err| err.to_string())?
-            };
+            let raw = model
+                .lock()
+                .map_err(|err| format!("L3 model mutex poisoned: {err}"))?
+                .infer_token_ids_raw(
+                    &chunk.token_ids,
+                    job.execution.backend(),
+                    job.execution.onnx_runtime_options(),
+                )
+                .map_err(|err| err.to_string())?;
             Ok::<_, String>(vec![CachedHeadOutput {
                 head: CLASSIFICATION_HEAD.to_string(),
                 logits: raw.logits,
@@ -1726,6 +1772,7 @@ mod tests {
             l3_candidates: Vec::new(),
             l2_chunk_outputs: Vec::new().into(),
             dynamic_pii_config: None,
+            dynamic_pii_inference_groups: Vec::new(),
             dynamic_pii_activated_rules: Vec::new(),
             test_delay_ms: None,
         };

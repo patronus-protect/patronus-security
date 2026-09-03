@@ -6,7 +6,6 @@ use std::time::{Duration, Instant};
 
 use crate::cache::{
     CacheCoordinator, CacheError, ExactCacheConfig, HistoricalSimilarityCache, PiiChunkCache,
-    PiiEntityCache,
 };
 use crate::ml::dynamic_pii::DynamicPiiRuntime;
 use crate::ml::ntdb_executor::{L2ChunkOutput, L3Candidate};
@@ -14,6 +13,7 @@ use crate::ml::onnx::{LazyOnnxTextClassifier, TokenTextChunk};
 use crate::ml::unified_onnx::{LazyUnifiedOnnxClassifier, UNIFIED_MODEL};
 use crate::pipeline::l3_schedule::{attach_l2_embeddings, selected_l3_chunks, SelectedL3Chunk};
 use crate::{
+    dynamic_pii::{DynamicPiiInferenceGroup, DynamicPiiSourceChunk, DynamicPiiTextRange},
     DynamicPiiConfig, L3Strategy, QueuedSecurityEvent, QueuedSecurityProgress,
     QueuedSecurityScanResult, RequestId, ScanExecution, SecurityFailure, SecurityFailureKind,
     SecurityFailureStage, SecurityLevel, SecurityRequestCompletion, SecurityScanResult,
@@ -39,8 +39,7 @@ pub use unified::{
 type L3ModelHandle = Arc<Mutex<LazyOnnxTextClassifier>>;
 type DynamicPiiHandle = Arc<Mutex<DynamicPiiRuntime>>;
 type UnifiedModelHandle = Arc<Mutex<LazyUnifiedOnnxClassifier>>;
-const L3_OVERLAP_TOKENS: usize = 32;
-pub(super) const L3_DIRECT_CONTENT_TOKEN_LIMIT: usize = 254;
+pub(super) const L3_DIRECT_CONTENT_TOKEN_LIMIT: usize = crate::ml::tokenizer::CONTENT_TOKENS;
 const L3_IDLE_SWEEP_INTERVAL: Duration = Duration::from_secs(30);
 /// Minimum L3 confidence for an `injection`/`threat` positive to stop the whole request.
 const REQUEST_WIDE_EARLY_EXIT_CONFIDENCE: f64 = 0.93;
@@ -71,6 +70,7 @@ pub(crate) struct RequestState {
     pub pending_l3_job_ids: HashSet<u64>,
     pub pending_l3_job_categories: HashMap<u64, String>,
     pub gate_results: HashMap<String, Vec<String>>,
+    pub gate_chunk_results: HashMap<String, Vec<DynamicPiiSourceChunk>>,
     pub pending_dynamic_pii: Option<PendingDynamicPii>,
     pub usable_results: usize,
     pub failures: Vec<SecurityFailure>,
@@ -83,6 +83,7 @@ impl RequestState {
             pending_l3_job_ids: HashSet::new(),
             pending_l3_job_categories: HashMap::new(),
             gate_results: HashMap::new(),
+            gate_chunk_results: HashMap::new(),
             pending_dynamic_pii: None,
             usable_results: 0,
             failures: Vec::new(),
@@ -107,7 +108,6 @@ struct L3WorkerState {
     unified_cache: Mutex<HashMap<String, unified::UnifiedCacheEntry>>,
     chunk_cache: Arc<DecisionCache>,
     exact_cache: Arc<CacheCoordinator>,
-    pii_entity_cache: Arc<PiiEntityCache>,
     pii_chunk_cache: Arc<PiiChunkCache>,
     similarity_cache: Arc<HistoricalSimilarityCache>,
     requests: Arc<RequestRegistry>,
@@ -143,6 +143,7 @@ struct L3WorkerJob {
     l3_candidates: Vec<L3Candidate>,
     l2_chunk_outputs: Arc<[L2ChunkOutput]>,
     dynamic_pii_config: Option<DynamicPiiConfig>,
+    dynamic_pii_inference_groups: Vec<DynamicPiiInferenceGroup>,
     dynamic_pii_activated_rules: Vec<usize>,
     sequence: u64,
     #[cfg(feature = "test-util")]
@@ -171,6 +172,7 @@ pub(crate) struct L3JobSpec {
     pub l3_candidates: Vec<L3Candidate>,
     pub l2_chunk_outputs: Arc<[L2ChunkOutput]>,
     pub dynamic_pii_config: Option<DynamicPiiConfig>,
+    pub dynamic_pii_inference_groups: Vec<DynamicPiiInferenceGroup>,
     pub dynamic_pii_activated_rules: Vec<usize>,
 }
 
@@ -184,7 +186,6 @@ impl L3Worker {
         cache_config: ExactCacheConfig,
     ) -> Result<Self, CacheError> {
         let exact_cache = Arc::new(CacheCoordinator::from_config(cache_config)?);
-        let pii_entity_cache = Arc::new(PiiEntityCache::new(Arc::clone(&exact_cache)));
         let pii_chunk_cache = Arc::new(PiiChunkCache::new(Arc::clone(&exact_cache)));
         let similarity_cache = Arc::new(HistoricalSimilarityCache::new(Arc::clone(&exact_cache)));
         let state = Arc::new(L3WorkerState {
@@ -198,7 +199,6 @@ impl L3Worker {
             unified_cache: Mutex::new(HashMap::new()),
             chunk_cache: Arc::new(DecisionCache::default()),
             exact_cache,
-            pii_entity_cache,
             pii_chunk_cache,
             similarity_cache,
             requests,
@@ -414,6 +414,7 @@ impl L3Worker {
         self.state.available.notify_one();
     }
 
+    #[allow(clippy::result_large_err)]
     fn build_physical_job(
         &self,
         spec: L3JobSpec,
@@ -455,6 +456,7 @@ impl L3Worker {
             l3_candidates: spec.l3_candidates,
             l2_chunk_outputs: spec.l2_chunk_outputs,
             dynamic_pii_config: spec.dynamic_pii_config,
+            dynamic_pii_inference_groups: spec.dynamic_pii_inference_groups,
             dynamic_pii_activated_rules: spec.dynamic_pii_activated_rules,
             sequence: spec.job_id,
             #[cfg(feature = "test-util")]
@@ -471,10 +473,7 @@ impl L3Worker {
     }
 
     fn plan_chunks_for_spec(&self, spec: &L3JobSpec) -> Result<Vec<SelectedL3Chunk>, String> {
-        let token_chunks = match token_chunks_from_l2_outputs(spec)? {
-            Some(chunks) => chunks,
-            None => self.token_chunks_from_model(spec)?,
-        };
+        let token_chunks = token_chunks_from_l2_outputs(spec)?;
         let clustering = if spec.execution.l3_strategy() == L3Strategy::Multi {
             unified::selection_clustering_for_spec(spec)
         } else {
@@ -484,51 +483,11 @@ impl L3Worker {
                 .clustering
         };
         let mut chunks = selected_l3_chunks(token_chunks, &spec.l3_candidates, clustering);
+        if chunks.is_empty() {
+            return Err("L3 candidates do not contain any prepared L2 chunk".to_string());
+        }
         attach_l2_embeddings(&mut chunks, &spec.l2_chunk_outputs);
         Ok(chunks)
-    }
-
-    fn token_chunks_from_model(&self, spec: &L3JobSpec) -> Result<Vec<TokenTextChunk>, String> {
-        if spec.execution.l3_strategy() == L3Strategy::Multi {
-            let model = self
-                .state
-                .unified_model
-                .lock()
-                .expect("unified model registry mutex poisoned")
-                .clone()
-                .ok_or_else(|| "unified L3 model is not registered".to_string())?;
-            let chunks = model
-                .lock()
-                .map_err(|error| format!("unified L3 model mutex poisoned: {error}"))?
-                .token_chunks(
-                    &spec.text,
-                    L3_OVERLAP_TOKENS,
-                    spec.execution.backend(),
-                    spec.execution.onnx_runtime_options(),
-                )
-                .map_err(|error| error.to_string())?;
-            Ok(chunks)
-        } else {
-            let model = self
-                .state
-                .models
-                .lock()
-                .expect("l3 model registry mutex poisoned")
-                .get(&spec.model)
-                .cloned()
-                .ok_or_else(|| format!("L3 model '{}' is not registered", spec.model))?;
-            let chunks = model
-                .lock()
-                .map_err(|error| format!("L3 model mutex poisoned: {error}"))?
-                .token_chunks(
-                    &spec.text,
-                    L3_OVERLAP_TOKENS,
-                    spec.execution.backend(),
-                    spec.execution.onnx_runtime_options(),
-                )
-                .map_err(|error| error.to_string())?;
-            Ok(chunks)
-        }
     }
 
     pub(crate) fn resolve_dynamic_pii(&self, request_id: &str) {
@@ -570,6 +529,7 @@ impl L3Worker {
                 l3_candidates: spec.l3_candidates,
                 l2_chunk_outputs: spec.l2_chunk_outputs,
                 dynamic_pii_config: spec.dynamic_pii_config,
+                dynamic_pii_inference_groups: spec.dynamic_pii_inference_groups,
                 dynamic_pii_activated_rules: spec.dynamic_pii_activated_rules,
                 sequence: spec.job_id,
                 test_delay_ms: Some(delay_ms),
@@ -586,6 +546,8 @@ fn worker_loop(state: Arc<L3WorkerState>) {
         sweep_expired_models(&state);
         let workload = job.category.clone();
         let configured_cost_ms = job.estimated_cost_ms;
+        #[cfg(feature = "test-util")]
+        let simulated_cost_ms = job.test_delay_ms.map(|delay| delay as f64);
         let started = Instant::now();
         if job.execution.l3_strategy() == L3Strategy::Multi && job.dynamic_pii_config.is_none() {
             let run_key = unified::run_key_for_job(&job);
@@ -601,12 +563,12 @@ fn worker_loop(state: Arc<L3WorkerState>) {
             continue;
         }
         let (job_id, request_id, result) = dedicated::execute(&state, job);
-        observe_cost(
-            &state,
-            &workload,
-            configured_cost_ms,
-            started.elapsed().as_secs_f64() * 1_000.0,
-        );
+        let actual_cost_ms = started.elapsed().as_secs_f64() * 1_000.0;
+        // Synthetic delay jobs model a known service cost. OS scheduling jitter
+        // must not change the fairness policy exercised by those tests.
+        #[cfg(feature = "test-util")]
+        let actual_cost_ms = simulated_cost_ms.unwrap_or(actual_cost_ms);
+        observe_cost(&state, &workload, configured_cost_ms, actual_cost_ms);
         finish_job(&state, job_id, request_id, result);
     }
 }
@@ -720,9 +682,9 @@ fn scheduling_values(spec: &L3JobSpec) -> (u64, u64, u64) {
     )
 }
 
-fn token_chunks_from_l2_outputs(spec: &L3JobSpec) -> Result<Option<Vec<TokenTextChunk>>, String> {
+fn token_chunks_from_l2_outputs(spec: &L3JobSpec) -> Result<Vec<TokenTextChunk>, String> {
     if spec.l2_chunk_outputs.is_empty() {
-        return Ok(None);
+        return Err("L3 requires prepared NTDB v4 token chunks".to_string());
     }
 
     let mut outputs = spec.l2_chunk_outputs.to_vec();
@@ -736,14 +698,23 @@ fn token_chunks_from_l2_outputs(spec: &L3JobSpec) -> Result<Option<Vec<TokenText
         while group_end < outputs.len() && outputs[group_end].span == span {
             group_end += 1;
         }
-        let Some(output) = outputs[index..group_end]
-            .iter()
-            .find(|output| direct_l3_token_handoff_usable(output))
-        else {
-            // Re-plan the complete document with the L3 tokenizer. Its model-backed
-            // chunker applies the configured overlap and cannot truncate an L2 span.
-            return Ok(None);
-        };
+        let output = &outputs[index];
+        for duplicate in &outputs[index..group_end] {
+            if !direct_l3_token_handoff_usable(duplicate) {
+                return Err(format!(
+                    "invalid mmBERT L2 chunk at {}..{}: {} content tokens",
+                    span.start,
+                    span.end,
+                    duplicate.token_ids.len()
+                ));
+            }
+            if duplicate.token_ids != output.token_ids {
+                return Err(format!(
+                    "conflicting L2 token IDs at {}..{}",
+                    span.start, span.end
+                ));
+            }
+        }
         let text = spec.text.get(span.start..span.end).ok_or_else(|| {
             format!(
                 "L2 chunk span {}..{} is not a valid source text range",
@@ -759,11 +730,11 @@ fn token_chunks_from_l2_outputs(spec: &L3JobSpec) -> Result<Option<Vec<TokenText
         });
         index = group_end;
     }
-    Ok(Some(chunks))
+    Ok(chunks)
 }
 
 fn direct_l3_token_handoff_usable(output: &L2ChunkOutput) -> bool {
-    !output.token_ids.is_empty()
+    (!output.token_ids.is_empty() || output.span.start == output.span.end)
         && output.token_ids.len() <= L3_DIRECT_CONTENT_TOKEN_LIMIT
         && output.tokenizer_family.eq_ignore_ascii_case("mmbert")
 }
@@ -935,11 +906,19 @@ fn finish_job(
             }
             None => {
                 state.usable_results += 1;
+                // L3 is authoritative for this pipeline: replace provisional
+                // L1/L2 classes instead of keeping stale alternatives alive.
                 state
                     .gate_results
-                    .entry(result.category.clone())
-                    .or_default()
-                    .push(result.class_name.clone());
+                    .insert(result.category.clone(), vec![result.class_name.clone()]);
+                let chunks = dynamic_pii_source_chunks(&result);
+                if !chunks.is_empty() {
+                    state
+                        .gate_chunk_results
+                        .insert(result.category.clone(), chunks);
+                } else {
+                    state.gate_chunk_results.remove(&result.category);
+                }
                 true
             }
         }
@@ -966,6 +945,124 @@ fn finish_job(
         .expect("request registry mutex poisoned");
     finish_request_if_ready(&mut registry, &request_id);
     worker.requests.available.notify_all();
+}
+
+fn dynamic_pii_source_chunks(result: &SecurityScanResult) -> Vec<DynamicPiiSourceChunk> {
+    result
+        .internal_l2_chunk_outputs
+        .iter()
+        .filter(|output| {
+            output
+                .source_pipeline
+                .split(',')
+                .map(str::trim)
+                .any(|pipeline| pipeline == result.category)
+        })
+        .map(|output| DynamicPiiSourceChunk {
+            class_name: output.class_name.clone(),
+            range: DynamicPiiTextRange {
+                start_byte: output.span.start,
+                end_byte: output.span.end,
+            },
+        })
+        .collect()
+}
+
+fn final_l3_chunk_outputs(
+    l2_outputs: &[L2ChunkOutput],
+    pipeline: &str,
+    model: &str,
+    l3_outputs: &[(crate::ml::ntdb_executor::ByteSpan, String, f32)],
+) -> Vec<L2ChunkOutput> {
+    // L3 windows may overlap and disagree. Keep their exact ranges and remove
+    // only their covered regions from L2; processing order must not erase labels.
+    let mut covered = l3_outputs
+        .iter()
+        .map(|(span, _, _)| *span)
+        .collect::<Vec<_>>();
+    covered.sort_by_key(|span| (span.start, span.end));
+    let mut coverage = Vec::<crate::ml::ntdb_executor::ByteSpan>::new();
+    for span in covered {
+        if let Some(previous) = coverage
+            .last_mut()
+            .filter(|previous| span.start <= previous.end)
+        {
+            previous.end = previous.end.max(span.end);
+        } else {
+            coverage.push(span);
+        }
+    }
+    let mut outputs = l2_outputs
+        .iter()
+        .filter(|output| {
+            output
+                .source_pipeline
+                .split(',')
+                .map(str::trim)
+                .any(|source| source == pipeline)
+        })
+        .flat_map(|output| {
+            let mut remainder = Vec::new();
+            let mut cursor = output.span.start;
+            for span in &coverage {
+                if span.end <= cursor {
+                    continue;
+                }
+                if span.start >= output.span.end {
+                    break;
+                }
+                if cursor < span.start {
+                    let mut part = output.clone();
+                    part.span = crate::ml::ntdb_executor::ByteSpan {
+                        start: cursor,
+                        end: span.start,
+                    };
+                    remainder.push(part);
+                }
+                cursor = cursor.max(span.end);
+            }
+            if cursor < output.span.end {
+                let mut part = output.clone();
+                part.span.start = cursor;
+                remainder.push(part);
+            }
+            remainder
+        })
+        .map(|mut output| {
+            output.embedding.clear();
+            output.embedding_space.clear();
+            output.token_ids.clear();
+            output.tokenizer_family.clear();
+            output.class_probabilities.clear();
+            output.joint_v3_decision = None;
+            output
+        })
+        .collect::<Vec<_>>();
+    for (span, class_name, confidence) in l3_outputs {
+        outputs.push(L2ChunkOutput {
+            span: *span,
+            class_name: class_name.clone(),
+            confidence: *confidence,
+            promoted: true,
+            promote_score: None,
+            promote_threshold: None,
+            source_pipeline: pipeline.to_string(),
+            source_model: model.to_string(),
+            embedding: Vec::new(),
+            embedding_space: String::new(),
+            token_ids: Vec::new(),
+            tokenizer_family: String::new(),
+            class_probabilities: Vec::new(),
+            joint_v3_decision: None,
+        });
+    }
+    outputs.sort_by(|left, right| {
+        (left.span.start, left.span.end, &left.class_name)
+            .cmp(&(right.span.start, right.span.end, &right.class_name))
+            .then_with(|| right.confidence.total_cmp(&left.confidence))
+    });
+    outputs.dedup_by(|left, right| left.span == right.span && left.class_name == right.class_name);
+    outputs
 }
 
 pub(super) fn request_wide_early_exit(result: &SecurityScanResult) -> Option<String> {
@@ -1109,8 +1206,9 @@ fn publish_provisional(
     }
 }
 
-/// Publishes an early result-shaped event without marking a scanner job
-/// complete. Used by Dynamic PII so UI consumers can react to the first entity.
+/// Publishes a provisional early result without marking a scanner job complete.
+/// Dynamic PII uses this for a first-entity preview; consumers must wait for the
+/// final result before treating it as an authoritative scan outcome.
 fn publish_result_preview(
     worker: &L3WorkerState,
     request_id: RequestId,
@@ -1129,7 +1227,7 @@ fn publish_result_preview(
     {
         registry
             .ready
-            .push_back(QueuedSecurityEvent::Result(QueuedSecurityScanResult {
+            .push_back(QueuedSecurityEvent::Provisional(QueuedSecurityScanResult {
                 request_id,
                 result,
             }));
@@ -1150,6 +1248,19 @@ fn resolve_dynamic_pii(worker: &Arc<L3WorkerState>, request_id: &str) {
         if request.pending_dynamic_pii.is_none() {
             return;
         }
+        let config = request
+            .pending_dynamic_pii
+            .as_ref()
+            .and_then(|pending| pending.job.dynamic_pii_config.as_ref())
+            .expect("pending dynamic-pii job is missing config");
+        let dependencies = config.dependency_pipelines();
+        if request
+            .pending_l3_job_categories
+            .values()
+            .any(|pipeline| dependencies.contains(pipeline.as_str()))
+        {
+            return;
+        }
         let request = registry
             .requests
             .get_mut(request_id)
@@ -1163,9 +1274,9 @@ fn resolve_dynamic_pii(worker: &Arc<L3WorkerState>, request_id: &str) {
             .dynamic_pii_config
             .as_ref()
             .expect("pending dynamic-pii job is missing config");
-        match config.resolve(&request.gate_results) {
+        match config.resolve(&request.gate_results, &request.gate_chunk_results) {
             Some(resolution) => {
-                pending.job.dynamic_pii_config = Some(resolution.config);
+                pending.job.dynamic_pii_inference_groups = resolution.inference_groups;
                 pending.job.dynamic_pii_activated_rules = resolution.activated_conditional_rules;
                 Some(pending.job)
             }
@@ -1306,7 +1417,104 @@ mod tests {
     }
 
     #[test]
-    fn partial_result_event_does_not_complete_or_count_the_request() {
+    fn dynamic_pii_waits_for_final_l3_gate_and_discards_provisional_hr() {
+        let requests = Arc::new(RequestRegistry::default());
+        let worker = Arc::new(test_worker_state(Arc::clone(&requests)));
+        let source_job_id = 1;
+        let dynamic_job_id = 2;
+        let mut dynamic = test_l3_spec(
+            "rq-final-gate",
+            "dynamic-pii",
+            dynamic_job_id,
+            ScanExecution::new(SecurityLevel::L3),
+        );
+        dynamic.text = Arc::<str>::from("Hey");
+        dynamic.dynamic_pii_config = Some(
+            DynamicPiiConfig {
+                labels: vec!["person".to_string()],
+                conditional_labels: vec![crate::DynamicPiiConditionalLabels {
+                    labels: ["person", "employee_id"].map(String::from).to_vec(),
+                    when: crate::DynamicPiiResultCondition {
+                        pipeline: "sensitive_document".to_string(),
+                        results: vec!["hr".to_string()],
+                    },
+                }],
+                ..DynamicPiiConfig::default()
+            }
+            .validated()
+            .unwrap(),
+        );
+        let provisional_range = DynamicPiiTextRange {
+            start_byte: 0,
+            end_byte: 3,
+        };
+        requests.state.lock().unwrap().requests.insert(
+            "rq-final-gate".to_string(),
+            RequestState {
+                pending_l3_job_ids: HashSet::from([source_job_id, dynamic_job_id]),
+                pending_l3_job_categories: HashMap::from([(
+                    source_job_id,
+                    "sensitive_document".to_string(),
+                )]),
+                gate_results: HashMap::from([(
+                    "sensitive_document".to_string(),
+                    vec!["hr".to_string()],
+                )]),
+                gate_chunk_results: HashMap::from([(
+                    "sensitive_document".to_string(),
+                    vec![DynamicPiiSourceChunk {
+                        class_name: "hr".to_string(),
+                        range: provisional_range,
+                    }],
+                )]),
+                pending_dynamic_pii: Some(PendingDynamicPii { job: dynamic }),
+                usable_results: 1,
+                failures: Vec::new(),
+                completion: None,
+            },
+        );
+
+        resolve_dynamic_pii(&worker, "rq-final-gate");
+        assert!(worker.jobs.lock().unwrap().is_empty());
+        assert!(requests.state.lock().unwrap().requests["rq-final-gate"]
+            .pending_dynamic_pii
+            .is_some());
+
+        let mut final_result = test_result("sensitive_document", "other", 0.94, "L3");
+        final_result.internal_l2_chunk_outputs =
+            vec![test_l2_chunk_output(0, 3, "sensitive_document", true)];
+        final_result.internal_l2_chunk_outputs[0].class_name = "other".to_string();
+        finish_job(
+            &worker,
+            source_job_id,
+            "rq-final-gate".to_string(),
+            final_result,
+        );
+
+        let registry = requests.state.lock().unwrap();
+        let state = &registry.requests["rq-final-gate"];
+        assert_eq!(state.gate_results["sensitive_document"], ["other"]);
+        assert_eq!(
+            state.gate_chunk_results["sensitive_document"],
+            vec![DynamicPiiSourceChunk {
+                class_name: "other".to_string(),
+                range: provisional_range,
+            }]
+        );
+        assert!(state.pending_dynamic_pii.is_none());
+        drop(registry);
+        let jobs = worker.jobs.lock().unwrap();
+        assert_eq!(jobs.len(), 1);
+        assert_eq!(jobs[0].dynamic_pii_activated_rules, Vec::<usize>::new());
+        assert_eq!(jobs[0].dynamic_pii_inference_groups.len(), 1);
+        assert_eq!(
+            jobs[0].dynamic_pii_inference_groups[0].config.labels,
+            ["person"]
+        );
+    }
+
+    #[test]
+    fn preview_event_is_provisional_and_does_not_complete_the_request() {
         let requests = Arc::new(RequestRegistry::default());
         requests
             .state
@@ -1330,9 +1538,6 @@ mod tests {
                 exact_cache: Arc::new(
                     CacheCoordinator::from_config(ExactCacheConfig::default()).unwrap(),
                 ),
-                pii_entity_cache: Arc::new(PiiEntityCache::new(Arc::new(
-                    CacheCoordinator::from_config(ExactCacheConfig::default()).unwrap(),
-                ))),
                 pii_chunk_cache: Arc::new(PiiChunkCache::new(Arc::new(
                     CacheCoordinator::from_config(ExactCacheConfig::default()).unwrap(),
                 ))),
@@ -1346,12 +1551,12 @@ mod tests {
             result,
         );
 
-        // The preview is externally a Result event, but request accounting
-        // remains untouched until the final L3 job finishes.
+        // The preview is explicitly provisional; request accounting remains
+        // untouched until the final L3 job finishes.
         let state = requests.state.lock().unwrap();
         assert!(matches!(
             state.ready.front(),
-            Some(QueuedSecurityEvent::Result(_))
+            Some(QueuedSecurityEvent::Provisional(_))
         ));
         assert_eq!(state.requests["rq-pii"].usable_results, 0);
         assert!(state.requests["rq-pii"].completion.is_none());
@@ -1376,7 +1581,7 @@ mod tests {
         );
 
         let state = requests.state.lock().unwrap();
-        let Some(QueuedSecurityEvent::Result(queued)) = state.ready.front() else {
+        let Some(QueuedSecurityEvent::Provisional(queued)) = state.ready.front() else {
             panic!("expected result preview event");
         };
         assert!(queued.result.decision.is_none());
@@ -1435,6 +1640,116 @@ mod tests {
     }
 
     #[test]
+    fn token_pipeline_e2e_preserves_v4_chunks_through_promotion_and_l3_inputs() {
+        use crate::ml::{
+            ntdb_executor::token_outputs_for_test,
+            tokenizer::{fixture_tokenizer, CONTENT_TOKENS, MODEL_TOKENS, TEXT_WINDOW_BYTES},
+        };
+        let tokenizer = fixture_tokenizer();
+        let mut cases = [0, 1, 253, 254, 255, 256, 257, 508, 509]
+            .into_iter()
+            .map(|count| " a".repeat(count))
+            .collect::<Vec<_>>();
+        cases.extend([
+            "é🙂界 a   <mask>a".repeat(100),
+            " a".repeat(TEXT_WINDOW_BYTES + 1),
+            "   ".to_string(),
+        ]);
+        for text in cases {
+            tokenizer.0.encoded_windows.lock().unwrap().clear();
+            let l2_chunks = tokenizer.token_chunks(&text);
+            let promote = vec![true; l2_chunks.len()];
+            let l2 = token_outputs_for_test(l2_chunks.clone(), &promote);
+            let mut spec = test_l3_spec(
+                "token-e2e",
+                "injection",
+                1,
+                ScanExecution::new(SecurityLevel::L3),
+            );
+            spec.text = Arc::from(text.as_str());
+            spec.l3_candidates = l2.l3_candidates;
+            // Multi-head requests may carry the same L2 chunk more than once.
+            spec.l2_chunk_outputs = l2
+                .l2_chunk_outputs
+                .iter()
+                .cloned()
+                .chain(l2.l2_chunk_outputs.iter().cloned())
+                .collect::<Vec<_>>()
+                .into();
+            let worker = L3Worker {
+                state: Arc::new(test_worker_state(Arc::new(RequestRegistry::default()))),
+            };
+            let job = worker.build_physical_job(spec, None, None).unwrap();
+            let L3WorkerInput::PlannedChunks(mut l3_chunks) = job.input else {
+                panic!("expected planned tokens");
+            };
+            l3_chunks.sort_by_key(|chunk| chunk.source_order);
+            assert_eq!(l3_chunks.len(), l2_chunks.len());
+            for (l2, l3) in l2_chunks.iter().zip(l3_chunks) {
+                assert_eq!(l3.token_ids, l2.token_ids);
+                assert_eq!((l3.start_byte, l3.end_byte), l2.byte_span);
+                assert_eq!(l3.text, text[l2.byte_span.0..l2.byte_span.1]);
+                assert!(l3.token_ids.len() <= CONTENT_TOKENS);
+                let (ids, mask, _) = tokenizer.inputs(&l3.token_ids).unwrap();
+                assert_eq!(ids.len(), MODEL_TOKENS);
+                assert_eq!(ids[0], 1);
+                assert_eq!(ids[l2.token_ids.len() + 1], 2);
+                assert_eq!(
+                    &ids[1..l2.token_ids.len() + 1],
+                    l2.token_ids
+                        .iter()
+                        .copied()
+                        .map(i64::from)
+                        .collect::<Vec<_>>()
+                );
+                assert_eq!(mask.iter().sum::<i64>() as usize, l2.token_ids.len() + 2);
+            }
+            let calls = tokenizer.0.encoded_windows.lock().unwrap();
+            assert_eq!(calls.iter().sum::<usize>(), text.len());
+            assert!(calls.iter().all(|bytes| *bytes <= TEXT_WINDOW_BYTES));
+        }
+    }
+
+    #[test]
+    fn token_pipeline_e2e_promotes_only_the_original_selected_chunk() {
+        use crate::ml::{ntdb_executor::token_outputs_for_test, tokenizer::fixture_tokenizer};
+        let tokenizer = fixture_tokenizer();
+        for text in [" a".repeat(254 * 3), "🙂".repeat(200)] {
+            tokenizer.0.encoded_windows.lock().unwrap().clear();
+            let chunks = tokenizer.token_chunks(&text);
+            let l2 = token_outputs_for_test(
+                chunks.clone(),
+                &(0..chunks.len())
+                    .map(|index| index == 1)
+                    .collect::<Vec<_>>(),
+            );
+            let mut spec = test_l3_spec(
+                "selected-token-e2e",
+                "injection",
+                1,
+                ScanExecution::new(SecurityLevel::L3),
+            );
+            spec.text = Arc::from(text);
+            spec.l3_candidates = l2.l3_candidates;
+            spec.l2_chunk_outputs = l2.l2_chunk_outputs.into();
+            let worker = L3Worker {
+                state: Arc::new(test_worker_state(Arc::new(RequestRegistry::default()))),
+            };
+            let job = worker.build_physical_job(spec, None, None).unwrap();
+            let L3WorkerInput::PlannedChunks(selected) = job.input else {
+                panic!("expected token chunks");
+            };
+            assert_eq!(selected.len(), 1);
+            assert_eq!(selected[0].token_ids, chunks[1].token_ids);
+            assert_eq!(
+                (selected[0].start_byte, selected[0].end_byte),
+                chunks[1].byte_span
+            );
+            assert_eq!(tokenizer.0.encoded_windows.lock().unwrap().len(), 1);
+        }
+    }
+
+    #[test]
     fn physical_l3_job_uses_l2_chunk_spans_without_full_text_tokenization() {
         let worker = L3Worker {
             state: Arc::new(test_worker_state(Arc::new(RequestRegistry::default()))),
@@ -1467,7 +1782,7 @@ mod tests {
     }
 
     #[test]
-    fn invalid_l2_token_handoff_forces_model_backed_rechunking() {
+    fn invalid_l2_token_handoff_is_rejected_without_retokenizing() {
         for (token_ids, tokenizer_family) in [
             (Vec::new(), "mmbert"),
             (vec![1; L3_DIRECT_CONTENT_TOKEN_LIMIT + 1], "mmbert"),
@@ -1484,12 +1799,41 @@ mod tests {
             output.tokenizer_family = tokenizer_family.to_string();
             spec.l2_chunk_outputs = vec![output].into();
 
-            assert!(token_chunks_from_l2_outputs(&spec).unwrap().is_none());
+            assert!(token_chunks_from_l2_outputs(&spec).is_err());
         }
     }
 
     #[test]
-    fn valid_duplicate_l2_handoff_is_preferred_over_incompatible_output() {
+    fn malformed_token_handoffs_report_errors_without_model_loading() {
+        let mut spec = test_l3_spec(
+            "malformed-token-e2e",
+            "injection",
+            1,
+            ScanExecution::new(SecurityLevel::L3),
+        );
+        assert!(token_chunks_from_l2_outputs(&spec).is_err());
+        spec.text = Arc::from("é🙂");
+        for (start, end) in [(1, 2), (0, 99), (4, 2)] {
+            let mut output = test_l2_chunk_output(start, end, "injection", true);
+            output.token_ids = vec![1];
+            output.tokenizer_family = "mmbert".to_string();
+            spec.l2_chunk_outputs = vec![output].into();
+            assert!(token_chunks_from_l2_outputs(&spec).is_err());
+        }
+        let mut first = test_l2_chunk_output(0, 2, "injection", true);
+        first.token_ids = vec![1];
+        first.tokenizer_family = "mmbert".to_string();
+        let mut conflicting = first.clone();
+        conflicting.token_ids = vec![2];
+        spec.l2_chunk_outputs = vec![first, conflicting].into();
+        assert!(token_chunks_from_l2_outputs(&spec)
+            .err()
+            .unwrap()
+            .contains("conflicting L2 token IDs"));
+    }
+
+    #[test]
+    fn incompatible_duplicate_l2_handoff_is_rejected() {
         let mut spec = test_l3_spec(
             "rq-compatible-handoff",
             "threat",
@@ -1502,13 +1846,7 @@ mod tests {
         compatible.tokenizer_family = "mmbert".to_string();
         spec.l2_chunk_outputs = vec![incompatible, compatible].into();
 
-        let chunks = token_chunks_from_l2_outputs(&spec)
-            .unwrap()
-            .expect("a compatible output exists for the span");
-
-        assert_eq!(chunks.len(), 1);
-        assert_eq!(chunks[0].token_ids, [7, 8]);
-        assert_eq!(chunks[0].tokenizer_family, "mmbert");
+        assert!(token_chunks_from_l2_outputs(&spec).is_err());
     }
 
     #[test]
@@ -1527,6 +1865,7 @@ mod tests {
                     (2, "threat".to_string()),
                 ]),
                 gate_results: HashMap::new(),
+                gate_chunk_results: HashMap::new(),
                 pending_dynamic_pii: None,
                 usable_results: 1,
                 failures: Vec::new(),
@@ -1594,9 +1933,6 @@ mod tests {
             exact_cache: Arc::new(
                 CacheCoordinator::from_config(ExactCacheConfig::default()).unwrap(),
             ),
-            pii_entity_cache: Arc::new(PiiEntityCache::new(Arc::new(
-                CacheCoordinator::from_config(ExactCacheConfig::default()).unwrap(),
-            ))),
             pii_chunk_cache: Arc::new(PiiChunkCache::new(Arc::new(
                 CacheCoordinator::from_config(ExactCacheConfig::default()).unwrap(),
             ))),
@@ -1638,6 +1974,7 @@ mod tests {
             l3_candidates: vec![test_l3_candidate(0, 4, category)],
             l2_chunk_outputs: vec![test_l2_chunk_output(0, 4, category, true)].into(),
             dynamic_pii_config: None,
+            dynamic_pii_inference_groups: Vec::new(),
             dynamic_pii_activated_rules: Vec::new(),
         }
     }
@@ -1655,6 +1992,57 @@ mod tests {
             source_model: source_pipeline.to_string(),
             l2_class: "attack".to_string(),
         }
+    }
+
+    #[test]
+    fn final_l3_ranges_preserve_overlapping_labels_and_l2_remainders() {
+        use crate::ml::ntdb_executor::ByteSpan;
+        let l2 = [
+            test_l2_chunk_output(0, 120, "sensitive_document", true),
+            test_l2_chunk_output(0, 120, "injection", true),
+        ];
+        let mut l3 = vec![
+            (ByteSpan { start: 20, end: 70 }, "hr".to_string(), 0.8),
+            (
+                ByteSpan {
+                    start: 60,
+                    end: 100,
+                },
+                "other".to_string(),
+                0.9,
+            ),
+            (ByteSpan { start: 20, end: 70 }, "hr".to_string(), 0.95),
+            (ByteSpan { start: 20, end: 70 }, "finance".to_string(), 0.85),
+        ];
+        let summarize = |outputs: Vec<L2ChunkOutput>| {
+            outputs
+                .into_iter()
+                .map(|output| {
+                    (
+                        output.span.start,
+                        output.span.end,
+                        output.class_name,
+                        output.confidence,
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+        let actual = summarize(final_l3_chunk_outputs(&l2, "sensitive_document", "l3", &l3));
+        l3.reverse();
+        assert_eq!(
+            actual,
+            summarize(final_l3_chunk_outputs(&l2, "sensitive_document", "l3", &l3))
+        );
+        assert_eq!(
+            actual,
+            vec![
+                (0, 20, "attack".into(), 0.9),
+                (20, 70, "finance".into(), 0.85),
+                (20, 70, "hr".into(), 0.95),
+                (60, 100, "other".into(), 0.9),
+                (100, 120, "attack".into(), 0.9),
+            ]
+        );
     }
 
     fn test_l2_chunk_output(
@@ -1753,6 +2141,7 @@ mod tests {
             l3_candidates: Vec::new(),
             l2_chunk_outputs: Vec::new().into(),
             dynamic_pii_config: None,
+            dynamic_pii_inference_groups: Vec::new(),
             dynamic_pii_activated_rules: Vec::new(),
             sequence,
             #[cfg(feature = "test-util")]

@@ -1,26 +1,25 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::threat::looks_like_tool_output_instruction_lower;
 use crate::EvaluationResult;
 
 pub struct ToolOutputInstructionPipeline;
+
+impl Default for ToolOutputInstructionPipeline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl ToolOutputInstructionPipeline {
     pub fn new() -> Self {
         Self
     }
 
+    pub(crate) fn detect(&self, text: &str) -> crate::detectors::NativeDetection {
+        super::signal::native_detection("tool_output_instruction", text)
+    }
+
     pub fn evaluate(&self, text: &str) -> EvaluationResult {
-        let is_violation = looks_like_tool_output_instruction_lower(&text.to_lowercase());
-        let class_name = if is_violation {
-            "tool_output_instruction"
-        } else {
-            "safe"
-        };
-        EvaluationResult {
-            class_name: class_name.to_string(),
-            confidence: 1.0,
-            level: "L1".to_string(),
-        }
+        self.detect(text).result
     }
 
     pub fn evaluate_batch(&self, texts: &[String]) -> Vec<EvaluationResult> {

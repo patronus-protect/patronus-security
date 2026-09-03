@@ -16,12 +16,17 @@ impl GroupedPatterns {
         }
     }
 
-    pub(super) fn flags(&self, text: &str) -> u64 {
+    pub(super) fn matches(&self, text: &str) -> Vec<(u64, usize, usize)> {
         self.matcher
             .find_overlapping_iter(text)
-            .fold(0, |flags, found| {
-                flags | self.groups[found.pattern().as_usize()]
+            .map(|found| {
+                (
+                    self.groups[found.pattern().as_usize()],
+                    found.start(),
+                    found.end(),
+                )
             })
+            .collect()
     }
 }
 
@@ -368,7 +373,7 @@ pub(super) fn covert_instruction_patterns() -> &'static GroupedPatterns {
 pub(super) fn instruction_boundary_ac() -> &'static AhoCorasick {
     static AC: OnceLock<AhoCorasick> = OnceLock::new();
     AC.get_or_init(|| {
-        AhoCorasick::new(&[
+        AhoCorasick::new([
             "<|endoftext|>",
             "<|im_start|>",
             "<|im_end|>",
@@ -399,17 +404,30 @@ pub(super) fn output_manipulation_patterns() -> &'static GroupedPatterns {
             ("first write", OM_FORCE),
             ("first print", OM_FORCE),
             ("first say", OM_FORCE),
+            ("antworte mit", OM_FORCE),
+            ("schreibe zuerst", OM_FORCE),
+            ("drucke zuerst", OM_FORCE),
+            ("sage zuerst", OM_FORCE),
             ("filtered", OM_MARKER),
             ("error", OM_MARKER),
             ("blocked", OM_MARKER),
             ("refused", OM_MARKER),
             ("declined", OM_MARKER),
             ("censored", OM_MARKER),
+            ("gefiltert", OM_MARKER),
+            ("fehler", OM_MARKER),
+            ("blockiert", OM_MARKER),
+            ("abgelehnt", OM_MARKER),
+            ("zensiert", OM_MARKER),
             (" then", OM_SEQUENCE),
             ("followed by", OM_SEQUENCE),
             ("and then", OM_SEQUENCE),
             ("after that", OM_SEQUENCE),
             ("after which", OM_SEQUENCE),
+            (" danach", OM_SEQUENCE),
+            ("anschließend", OM_SEQUENCE),
+            ("anschliessend", OM_SEQUENCE),
+            ("und dann", OM_SEQUENCE),
         ])
     })
 }
@@ -417,7 +435,7 @@ pub(super) fn output_manipulation_patterns() -> &'static GroupedPatterns {
 pub(super) fn instruction_leak_question_ac() -> &'static AhoCorasick {
     static AC: OnceLock<AhoCorasick> = OnceLock::new();
     AC.get_or_init(|| {
-        AhoCorasick::new(&[
+        AhoCorasick::new([
             "what are your system prompt",
             "what is your system prompt",
             "what are your instructions",
@@ -435,9 +453,11 @@ pub(super) fn instruction_leak_question_ac() -> &'static AhoCorasick {
 pub(super) fn cross_tool_direct_ac() -> &'static AhoCorasick {
     static AC: OnceLock<AhoCorasick> = OnceLock::new();
     AC.get_or_init(|| {
-        AhoCorasick::new(&[
+        AhoCorasick::new([
             "higher priority than the user",
             "when another tool is requested",
+            "höhere priorität als der benutzer",
+            "wenn ein anderes tool angefordert wird",
         ])
         .unwrap()
     })
@@ -447,7 +467,17 @@ pub(super) fn cross_tool_request_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(
-            r"\b(?:ignore[ \t]+the[ \t]+user|ignore[ \t]+prior[ \t]+instructions)\b[^.!?;\n]{0,48}\b(?:call|invoke|use)\b[ \t]+(?:the[ \t]+)?(?:[a-z0-9_-]+[ \t]+)?(?:tool|function|api|endpoint|command)\b",
+            r"\b(?P<anchor_5>ignore[ \t]+the[ \t]+user|ignore[ \t]+prior[ \t]+instructions)\b[^.!?;\n]{0,48}\b(?P<anchor_4>call|invoke|use)\b[ \t]+(?P<anchor_3>the[ \t]+)?(?P<anchor_2>[a-z0-9_-]+[ \t]+)?(?P<anchor_1>tool|function|api|endpoint|command)\b",
+        )
+        .unwrap()
+    })
+}
+
+pub(super) fn cross_tool_request_de_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(
+            r"\b(?P<anchor_6>ignoriere|missachte)[ \t]+(?P<anchor_5>den[ \t]+benutzer|vorherige[ \t]+anweisungen)\b[^.!?;\n]{0,48}\b(?P<anchor_4>rufe|verwende|nutze)[ \t]+(?P<anchor_3>das[ \t]+)?(?P<anchor_2>[a-z0-9_-]+[ \t]+)?(?P<anchor_1>tool|werkzeug|funktion|api|endpunkt|befehl)\b",
         )
         .unwrap()
     })
@@ -457,7 +487,7 @@ pub(super) fn instruction_leak_request_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(
-            r"\b(?:show|reveal|print|display|dump|expose|leak|repeat)\b(?:[ \t]+(?:me|us|the|your|our|hidden|internal|initial)){0,4}[ \t]+(?:your[ \t]+system[ \t]+prompt|the[ \t]+system[ \t]+prompt|developer[ \t]+message|developer[ \t]+instructions|hidden[ \t]+instructions?|internal[ \t]+instructions?|initial[ \t]+prompt)\b",
+            r"\b(?P<anchor_3>show|reveal|print|display|dump|expose|leak|repeat)\b(?:[ \t]+(?P<anchor_2>me|us|the|your|our|hidden|internal|initial)){0,4}[ \t]+(?P<anchor_1>your[ \t]+system[ \t]+prompt|the[ \t]+system[ \t]+prompt|developer[ \t]+message|developer[ \t]+instructions|hidden[ \t]+instructions?|internal[ \t]+instructions?|initial[ \t]+prompt)\b",
         )
         .unwrap()
     })
@@ -467,7 +497,7 @@ pub(super) fn instruction_leak_request_de_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(
-            r"\b(?:wiederhole|zeig|zeige|gib[ \t]+aus|nenne|enthülle|offenbare)\b(?:[ \t]+(?:mir|uns|bitte|deine|deinen|die|den)){0,4}[ \t]+(?:systemanweisung|systemprompt|system-prompt|anweisungen|regeln|direktiven)\b",
+            r"\b(?P<anchor_3>wiederhole|zeig|zeige|gib[ \t]+aus|nenne|enthülle|offenbare)\b(?:[ \t]+(?P<anchor_2>mir|uns|bitte|deine|deinen|die|den)){0,4}[ \t]+(?P<anchor_1>systemanweisung|systemprompt|system-prompt|anweisungen|regeln|direktiven)\b",
         )
         .unwrap()
     })
@@ -477,7 +507,7 @@ pub(super) fn secret_exfiltration_request_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(
-            r"\bexfiltrate\b[^.!?;\n]{0,32}(?:\b(?:api[ \t]+keys?|access[ \t]+tokens?|auth[ \t]+tokens?|bearer[ \t]+tokens?|refresh[ \t]+tokens?|secret[ \t]+tokens?|private[ \t]+keys?|passwords?|credentials?)\b|\.env\b)",
+            r"\b(?P<action>exfiltrate|exfiltriere|exfiltrier)\b[^.!?;\n]{0,32}(?:\b(?P<anchor_1>api[ \t]+keys?|access[ \t]+tokens?|auth[ \t]+tokens?|bearer[ \t]+tokens?|refresh[ \t]+tokens?|secret[ \t]+tokens?|private[ \t]+keys?|passwords?|credentials?|passwörter|passwoerter|zugangsdaten)\b|\.env\b)",
         )
         .unwrap()
     })
@@ -487,7 +517,17 @@ pub(super) fn secret_transfer_request_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(
-            r"\b(?:send|upload|post|email|forward|leak|share|paste|copy)\b(?:[ \t]+(?:the|a|an|my|your|our|their|this|that|all|actual|raw)){0,4}[ \t]+(?:\b(?:api[ \t]+keys?|access[ \t]+tokens?|auth[ \t]+tokens?|bearer[ \t]+tokens?|refresh[ \t]+tokens?|secret[ \t]+tokens?|private[ \t]+keys?|passwords?|credentials?)\b|\.env\b)[^.!?;\n]{0,64}\b(?:to|into|onto|via|at)\b[ \t]+(?:attacker|external|pastebin|https?://[^ \t]+|[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})",
+            r"\b(?P<anchor_5>send|upload|post|email|forward|leak|share|paste|copy)\b(?:[ \t]+(?P<anchor_4>the|a|an|my|your|our|their|this|that|all|actual|raw)){0,4}[ \t]+(?:\b(?P<anchor_3>api[ \t]+keys?|access[ \t]+tokens?|auth[ \t]+tokens?|bearer[ \t]+tokens?|refresh[ \t]+tokens?|secret[ \t]+tokens?|private[ \t]+keys?|passwords?|credentials?)\b|\.env\b)[^.!?;\n]{0,64}\b(?P<anchor_2>to|into|onto|via|at)\b[ \t]+(?P<anchor_1>attacker|external|pastebin|https?://[^ \t]+|[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})",
+        )
+        .unwrap()
+    })
+}
+
+pub(super) fn secret_transfer_request_de_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(
+            r"\b(?P<anchor_5>sende|schicke|lade[ \t]+hoch|veröffentliche|teile)\b(?:[ \t]+(?P<anchor_4>die|den|das|alle|meine|deine|unsere|rohen|echten)){0,4}[ \t]+(?:api[ \t]+keys?|zugangstokens?|auth(?P<anchor_3>entifizierungs)?tokens?|private[ \t]+schlüssel|private[ \t]+schluessel|passwörter|passwoerter|passworte|zugangsdaten|\.env\b)[^.!?;\n]{0,64}\b(?P<anchor_2>an|zu|über|ueber|via)\b[ \t]+(?P<anchor_1>angreifer|extern|pastebin|https?://[^ \t]+|[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})",
         )
         .unwrap()
     })
@@ -497,7 +537,7 @@ pub(super) fn encoded_instruction_request_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(
-            r"\bdecode\b(?:[ \t]+(?:this|the|following|from)){0,3}[ \t]+(?:base64|rot13|escaped[ \t]+text)\b[^.!?;\n]{0,24}\b(?:instruction|instructions|prompt|system[ \t]+message)\b",
+            r"\bdecode\b(?:[ \t]+(?P<anchor_3>this|the|following|from)){0,3}[ \t]+(?P<anchor_2>base64|rot13|escaped[ \t]+text)\b[^.!?;\n]{0,24}\b(?P<anchor_1>instruction|instructions|prompt|system[ \t]+message)\b",
         )
         .unwrap()
     })
@@ -507,7 +547,17 @@ pub(super) fn encoded_execution_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(
-            r"(?:\bdecode\b[^.!?;\n]{0,32}\bfrom[ \t]+base64\b[^.!?;\n]{0,32}\bexecute\b|\bbase64\b[ \t]+(?:-d|--decode)\b[^\n]{0,96}\|[ \t]*(?:sh|bash)\b|\beval[ \t]*\([ \t]*atob[ \t]*\()",
+            r"(?:\bdecode\b[^.!?;\n]{0,32}\bfrom[ \t]+base64\b[^.!?;\n]{0,32}\bexecute\b|\bbase64\b[ \t]+(?P<anchor_2>-d|--decode)\b[^\n]{0,96}\|[ \t]*(?P<anchor_1>sh|bash)\b|\beval[ \t]*\([ \t]*atob[ \t]*\()",
+        )
+        .unwrap()
+    })
+}
+
+pub(super) fn encoded_instruction_request_de_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(
+            r"\b(?P<anchor_8>dekodiere|entschlüssle|entschluessle)\b(?:[ \t]+(?P<anchor_7>diesen|den|folgenden|aus)){0,3}[ \t]+(?P<anchor_6>base64|rot13|maskierten[ \t]+text)\b[^.!?;\n]{0,24}\b(?:anweisung(?P<anchor_5>en)?|instruktion(?P<anchor_4>en)?|prompt|systemnachricht)\b|\b(?P<anchor_3>dekodiere|entschlüssle|entschluessle)\b[^.!?;\n]{0,32}\bbase64\b[^.!?;\n]{0,32}\b(?P<anchor_2>führe|fuehre)(?P<anchor_1>[ \t]+sie)?[ \t]+aus\b",
         )
         .unwrap()
     })
@@ -517,7 +567,7 @@ pub(super) fn instruction_override_request_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(
-            r"\b(?:(?:ignore|disregard|forget|abandon)[ \t]+(?:(?:all|any|your)[ \t]+)?(?:previous|prior|above|earlier)[ \t]+(?:instructions?|rules?|guidelines?|directives?|constraints?|polic(?:y|ies)|guardrails?|prompts?)|(?:treat|consider|regard|reinterpret|downgrade)[ \t]+(?:the[ \t]+)?(?:(?:previous|prior|earlier)[ \t]+)?(?:instructions?|rules?|guidelines?|directives?|constraints?|polic(?:y|ies)|guardrails?|prompts?)[ \t]+as[ \t]+(?:obsolete|void|invalid|superseded|overridden|cancelled|historical|outdated|deprecated|optional|non-binding|advisory)|(?:set|put|cast|push|throw)[ \t]+(?:the[ \t]+)?(?:previous|prior|earlier)[ \t]+(?:instructions?|rules?|guidelines?|directives?|constraints?|polic(?:y|ies)|guardrails?|prompts?)[ \t]+(?:aside|away))\b",
+            r"\b(?:(?P<anchor_14>ignore|disregard|forget|abandon)[ \t]+(?:(?P<anchor_13>all|any|your)[ \t]+)?(?P<anchor_12>previous|prior|above|earlier)[ \t]+(?:instructions?|rules?|guidelines?|directives?|constraints?|polic(?P<anchor_11>y|ies)|guardrails?|prompts?)|(?P<anchor_10>treat|consider|regard|reinterpret|downgrade)[ \t]+(?P<anchor_9>the[ \t]+)?(?:(?P<anchor_8>previous|prior|earlier)[ \t]+)?(?:instructions?|rules?|guidelines?|directives?|constraints?|polic(?P<anchor_7>y|ies)|guardrails?|prompts?)[ \t]+as[ \t]+(?P<anchor_6>obsolete|void|invalid|superseded|overridden|cancelled|historical|outdated|deprecated|optional|non-binding|advisory)|(?P<anchor_5>set|put|cast|push|throw)[ \t]+(?P<anchor_4>the[ \t]+)?(?P<anchor_3>previous|prior|earlier)[ \t]+(?:instructions?|rules?|guidelines?|directives?|constraints?|polic(?P<anchor_2>y|ies)|guardrails?|prompts?)[ \t]+(?P<anchor_1>aside|away))\b",
         )
         .unwrap()
     })
@@ -527,7 +577,7 @@ pub(super) fn instruction_override_request_de_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(
-            r"\b(?:(?:ignorier\w*|missacht\w*|überschreib\w*|ueberschreib\w*|verwerf\w*|vergiss\w*|vergess\w*|verwirf\w*|übergeh\w*|uebergeh\w*)[ \t]+(?:(?:(?:alle|die|deine?)[ \t]+)(?:(?:vorherigen?|bisherigen?|vorigen?|alten?|früheren?|frueheren?|obigen?|obenstehenden?)[ \t]+)?|(?:vorherigen?|bisherigen?|vorigen?|alten?|früheren?|frueheren?|obigen?|obenstehenden?)[ \t]+)(?:(?:(?:system|entwickler)-?)?anweisung(?:en)?|instruktion(?:en)?|regeln?|richtlini(?:e|en)|vorgaben?|direktiven?|einschränkung(?:en)?|einschraenkung(?:en)?|system-?prompts?)|(?:behandle|betrachte|werte)[^.!?;\n]{0,48}\b(?:anweisung(?:en)?|regeln?|vorgaben?)[ \t]+als[ \t]+(?:ungültig|veraltet|nichtig|überholt|aufgehoben)|(?:lege|stelle|schiebe)[^.!?;\n]{0,48}\b(?:anweisung(?:en)?|regeln?|vorgaben?)[ \t]+beiseite)\b",
+            r"\b(?:(?P<anchor_15>ignorier\w*|missacht\w*|überschreib\w*|ueberschreib\w*|verwerf\w*|vergiss\w*|vergess\w*|verwirf\w*|übergeh\w*|uebergeh\w*)[ \t]+(?:(?:(?P<anchor_14>alle|die|deine?)[ \t]+)(?:(?P<anchor_13>vorherigen?|bisherigen?|vorigen?|alten?|früheren?|frueheren?|obigen?|obenstehenden?)[ \t]+)?|(?P<anchor_12>vorherigen?|bisherigen?|vorigen?|alten?|früheren?|frueheren?|obigen?|obenstehenden?)[ \t]+)(?:(?:(?P<anchor_11>system|entwickler)-?)?anweisung(?P<anchor_10>en)?|instruktion(?P<anchor_9>en)?|regeln?|richtlini(?P<anchor_8>e|en)|vorgaben?|direktiven?|einschränkung(?P<anchor_7>en)?|einschraenkung(?P<anchor_6>en)?|system-?prompts?)|(?P<anchor_5>behandle|betrachte|werte)[^.!?;\n]{0,48}\b(?:anweisung(?P<anchor_4>en)?|regeln?|vorgaben?)[ \t]+als[ \t]+(?P<anchor_3>ungültig|veraltet|nichtig|überholt|aufgehoben)|(?P<anchor_2>lege|stelle|schiebe)[^.!?;\n]{0,48}\b(?:anweisung(?P<anchor_1>en)?|regeln?|vorgaben?)[ \t]+beiseite)\b",
         )
         .unwrap()
     })
@@ -537,7 +587,7 @@ pub(super) fn instruction_override_behavior_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(
-            r"\b(?:from[ \t]+now[ \t]+on[ \t]+you[ \t]+(?:will|must|should|shall)|(?:use|follow|obey)[ \t]+(?:these[ \t]+)?(?:new|updated|revised)[ \t]+(?:instructions|directives|rules)|prioritize[ \t]+(?:the[ \t]+)?(?:latest|current|user)[ \t]+(?:request|message|input))\b",
+            r"\b(?:from[ \t]+now[ \t]+on[ \t]+you[ \t]+(?P<anchor_8>will|must|should|shall)|(?P<anchor_7>use|follow|obey)[ \t]+(?P<anchor_6>these[ \t]+)?(?P<anchor_5>new|updated|revised)[ \t]+(?P<anchor_4>instructions|directives|rules)|prioritize[ \t]+(?P<anchor_3>the[ \t]+)?(?P<anchor_2>latest|current|user)[ \t]+(?P<anchor_1>request|message|input))\b",
         )
         .unwrap()
     })
@@ -547,7 +597,7 @@ pub(super) fn instruction_override_behavior_de_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(
-            r"\b(?:(?:ab[ \t]+jetzt|von[ \t]+nun[ \t]+an|von[ \t]+jetzt[ \t]+an)[ \t]+(?:musst|sollst|wirst)[ \t]+du|hier[ \t]+sind[ \t]+(?:neue|aktualisierte|überarbeitete)[ \t]+(?:anweisungen|instruktionen|regeln|vorgaben)|dein[ \t]+(?:eigentliches|neues|wahres)[ \t]+(?:auftrag|ziel|aufgabe|zweck)[ \t]+(?:ist|lautet|wird)|achtung[ \t]+neue[ \t]+(?:aufgabe|anweisung))\b",
+            r"\b(?:(?P<anchor_8>ab[ \t]+jetzt|von[ \t]+nun[ \t]+an|von[ \t]+jetzt[ \t]+an)[ \t]+(?P<anchor_7>musst|sollst|wirst)[ \t]+du|hier[ \t]+sind[ \t]+(?P<anchor_6>neue|aktualisierte|überarbeitete)[ \t]+(?P<anchor_5>anweisungen|instruktionen|regeln|vorgaben)|dein[ \t]+(?P<anchor_4>eigentliches|neues|wahres)[ \t]+(?P<anchor_3>auftrag|ziel|aufgabe|zweck)[ \t]+(?P<anchor_2>ist|lautet|wird)|achtung[ \t]+neue[ \t]+(?P<anchor_1>aufgabe|anweisung))\b",
         )
         .unwrap()
     })
@@ -556,7 +606,7 @@ pub(super) fn instruction_override_behavior_de_re() -> &'static Regex {
 pub(super) fn jailbreak_named_mode_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
-        Regex::new(r"\b(?:enable|activate|enter|switch[ \t]+to)[ \t]+(?:developer|sudo|unrestricted)[ \t]+mode\b")
+        Regex::new(r"\b(?P<anchor_4>enable|activate|enter|switch[ \t]+to|aktiviere|aktivier|wechsle[ \t]+in)[ \t]+(?P<anchor_3>den[ \t]+)?(?P<anchor_2>developer|entwickler|sudo|unrestricted|uneingeschränkten|uneingeschraenkten)[ \t-]*(?P<anchor_1>mode|modus)\b")
             .unwrap()
     })
 }
@@ -564,7 +614,7 @@ pub(super) fn jailbreak_named_mode_re() -> &'static Regex {
 pub(super) fn jailbreak_dan_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
-        Regex::new(r"\b(?:you[ \t]+are[ \t]+now[ \t]+(?:a|an)|you[ \t]+are[ \t]+now|act[ \t]+as|enable|activate)[ \t]+dan\b").unwrap()
+        Regex::new(r"\b(?:you[ \t]+are[ \t]+now[ \t]+(?P<anchor_1>a|an)|you[ \t]+are[ \t]+now|act[ \t]+as|enable|activate|du[ \t]+bist[ \t]+jetzt|agiere[ \t]+als|aktiviere)[ \t]+dan\b").unwrap()
     })
 }
 
@@ -572,7 +622,7 @@ pub(super) fn covert_instruction_request_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(
-            r"\b(?:secretly|covertly|without[ \t]+the[ \t]+user[ \t]+(?:knowing|noticing))[ \t]+(?:execute|run|call|invoke|send|fetch|curl|wget|download|upload|post)\b",
+            r"\b(?:secretly|covertly|without[ \t]+the[ \t]+user[ \t]+(?P<anchor_2>knowing|noticing))[ \t]+(?P<anchor_1>execute|run|call|invoke|send|fetch|curl|wget|download|upload|post)\b",
         )
         .unwrap()
     })
@@ -582,7 +632,7 @@ pub(super) fn covert_instruction_request_de_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(
-            r"\b(?:(?:heimlich|verdeckt|unbemerkt)[ \t]+(?:ausführen|ausfuehren|senden|aufrufen|starten|hochladen)|(?:führe|fuehre|sende|rufe|starte)[^.!?;\n]{0,24}\b(?:heimlich|verdeckt|unbemerkt)\b)",
+            r"\b(?:(?P<anchor_4>heimlich|verdeckt|unbemerkt)[ \t]+(?P<anchor_3>ausführen|ausfuehren|senden|aufrufen|starten|hochladen)|(?P<anchor_2>führe|fuehre|sende|rufe|starte)[^.!?;\n]{0,24}\b(?P<anchor_1>heimlich|verdeckt|unbemerkt)\b)",
         )
         .unwrap()
     })
@@ -592,7 +642,17 @@ pub(super) fn system_boundary_instruction_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(
-            r"^[ \t]*(?:follow|ignore|disregard|forget|execute|run|call|invoke|use|reveal|print|show|do[ \t]+not|you[ \t]+are|you[ \t]+must|you[ \t]+should)\b",
+            r"^[ \t]*(?P<anchor_1>follow|ignore|disregard|forget|execute|run|call|invoke|use|reveal|print|show|do[ \t]+not|you[ \t]+are|you[ \t]+must|you[ \t]+should)\b",
+        )
+        .unwrap()
+    })
+}
+
+pub(super) fn system_boundary_instruction_de_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(
+            r"^[ \t]*(?P<anchor_1>befolge|ignoriere|missachte|vergiss|führe|fuehre|starte|rufe|verwende|enthülle|enthuelle|drucke|zeige|gib[ \t]+nicht|du[ \t]+bist|du[ \t]+musst|du[ \t]+sollst)\b",
         )
         .unwrap()
     })
@@ -602,7 +662,7 @@ pub(super) fn authority_escalation_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(
-            r"\byou[ \t]+(?:now[ \t]+)?have[ \t]+(?:full[ \t]+)?(?:admin|root|system|superuser|elevated)[ \t]+(?:access|privileges?|permissions?|rights)\b",
+            r"\byou[ \t]+(?P<anchor_4>now[ \t]+)?have[ \t]+(?P<anchor_3>full[ \t]+)?(?P<anchor_2>admin|root|system|superuser|elevated)[ \t]+(?P<anchor_1>access|privileges?|permissions?|rights)\b",
         )
         .unwrap()
     })
@@ -612,7 +672,7 @@ pub(super) fn authority_escalation_de_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(
-            r"\bdu[ \t]+hast[ \t]+(?:jetzt[ \t]+)?(?:vollen[ \t]+|vollständigen[ \t]+)?(?:admin|root|system)[- \t]+(?:zugriff|rechte|berechtigungen)\b",
+            r"\bdu[ \t]+hast[ \t]+(?P<anchor_4>jetzt[ \t]+)?(?P<anchor_3>vollen[ \t]+|vollständigen[ \t]+)?(?P<anchor_2>admin|root|system)[- \t]+(?P<anchor_1>zugriff|rechte|berechtigungen)\b",
         )
         .unwrap()
     })
@@ -622,7 +682,7 @@ pub(super) fn tool_call_injection_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(
-            r"\byou[ \t]+must[ \t]+(?:immediately[ \t]+)?(?:call|execute|run|invoke|use)[ \t]+(?:the[ \t]+)?(?:[a-z0-9_-]+[ \t]+)?(?:function|tool|command|api|endpoint)\b",
+            r"\byou[ \t]+must[ \t]+(?P<anchor_5>immediately[ \t]+)?(?P<anchor_4>call|execute|run|invoke|use)[ \t]+(?P<anchor_3>the[ \t]+)?(?P<anchor_2>[a-z0-9_-]+[ \t]+)?(?P<anchor_1>function|tool|command|api|endpoint)\b",
         )
         .unwrap()
     })
@@ -632,7 +692,7 @@ pub(super) fn tool_call_injection_de_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(
-            r"\b(?:(?:du[ \t]+musst[ \t]+(?:sofort[ \t]+)?)(?:(?:ruf\w*|führe|fuehre|verwende|starte)[ \t]+(?:das[ \t]+)?(?:[a-z0-9_-]+[ \t]+)?(?:funktion|tool|werkzeug|kommando|befehl|api)|(?:das[ \t]+)?(?:funktion|tool|werkzeug|kommando|befehl|api)[ \t]+(?:aufrufen|ausführen|ausfuehren|verwenden|starten))|(?:ruf\w*|führe|fuehre)[ \t]+(?:das[ \t]+)?(?:funktion|tool|werkzeug|kommando|befehl|api)\b)",
+            r"\b(?:(?:du[ \t]+musst[ \t]+(?P<anchor_11>sofort[ \t]+)?)(?:(?P<anchor_10>ruf\w*|führe|fuehre|verwende|starte)[ \t]+(?P<anchor_9>das[ \t]+)?(?P<anchor_8>[a-z0-9_-]+[ \t]+)?(?P<anchor_7>funktion|tool|werkzeug|kommando|befehl|api)|(?P<anchor_6>das[ \t]+)?(?P<anchor_5>funktion|tool|werkzeug|kommando|befehl|api)[ \t]+(?P<anchor_4>aufrufen|ausführen|ausfuehren|verwenden|starten))|(?P<anchor_3>ruf\w*|führe|fuehre)[ \t]+(?P<anchor_2>das[ \t]+)?(?P<anchor_1>funktion|tool|werkzeug|kommando|befehl|api)\b)",
         )
         .unwrap()
     })
@@ -642,7 +702,17 @@ pub(super) fn output_disclosure_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(
-            r"\b(?:then|followed[ \t]+by|and[ \t]+then|after[ \t]+that|after[ \t]+which)\b[^.!?;\n]{0,32}\b(?:reveal|show|provide|print|output|answer|continue[ \t]+with)\b",
+            r"\b(?P<anchor_2>then|followed[ \t]+by|and[ \t]+then|after[ \t]+that|after[ \t]+which)\b[^.!?;\n]{0,32}\b(?P<anchor_1>reveal|show|provide|print|output|answer|continue[ \t]+with)\b",
+        )
+        .unwrap()
+    })
+}
+
+pub(super) fn output_disclosure_de_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(
+            r"\b(?P<anchor_2>danach|anschließend|anschliessend|und[ \t]+dann)\b[^.!?;\n]{0,32}\b(?P<anchor_1>enthülle|enthuelle|zeige|gib[ \t]+aus|drucke|beantworte)\b",
         )
         .unwrap()
     })
@@ -652,7 +722,17 @@ pub(super) fn multi_turn_escalation_request_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(
-            r"\b(?:as[ \t]+i[ \t]+mentioned[ \t]+before|as[ \t]+discussed[ \t]+earlier|you[ \t]+agreed[ \t]+to)[ \t,:-]{1,8}(?:bypass|override|ignore|disable)[ \t]+(?:the[ \t]+)?(?:restrictions|policy|rules|guardrails?)\b",
+            r"\b(?P<anchor_4>as[ \t]+i[ \t]+mentioned[ \t]+before|as[ \t]+discussed[ \t]+earlier|you[ \t]+agreed[ \t]+to)[ \t,:-]{1,8}(?P<anchor_3>bypass|override|ignore|disable)[ \t]+(?P<anchor_2>the[ \t]+)?(?P<anchor_1>restrictions|policy|rules|guardrails?)\b",
+        )
+        .unwrap()
+    })
+}
+
+pub(super) fn multi_turn_escalation_request_de_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(
+            r"\b(?P<anchor_4>wie[ \t]+zuvor[ \t]+erwähnt|wie[ \t]+bereits[ \t]+besprochen|du[ \t]+hast[ \t]+zugestimmt)\b[ \t,:-]{1,8}(?P<anchor_3>umgehe|überschreibe|ueberschreibe|ignoriere|deaktiviere)[ \t]+(?P<anchor_2>die[ \t]+)?(?P<anchor_1>einschränkungen|einschraenkungen|richtlinie|richtlinien|regeln|schutzmechanismen)\b",
         )
         .unwrap()
     })
@@ -661,7 +741,7 @@ pub(super) fn multi_turn_escalation_request_re() -> &'static Regex {
 pub(super) fn binary_smuggling_intent_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
-        Regex::new(r"\b(?:decode|execute|hidden|embedded|instruction|command)\b").unwrap()
+            Regex::new(r"\b(?P<anchor_1>decode|execute|hidden|embedded|instruction|command|dekodiere|entschlüssle|entschluessle|führe[ \t]+aus|fuehre[ \t]+aus|versteckt|eingebettet|anweisung|befehl)\b").unwrap()
     })
 }
 
@@ -669,7 +749,17 @@ pub(super) fn tool_output_instruction_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(
-            r"\b(?:tool[ \t]+output|tool[ \t]+returned|tool[ \t]+result|result[ \t]+says)\b(?:[ \t]+says)?[ \t]*[:=-]?[ \t]*(?:ignore\b|call\b|invoke\b|send_email\b|use[ \t]+another[ \t]+tool\b)",
+            r"\b(?P<anchor_3>tool[ \t]+output|tool[ \t]+returned|tool[ \t]+result|result[ \t]+says)\b(?P<anchor_2>[ \t]+says)?[ \t]*[:=-]?[ \t]*(?P<anchor_1>ignore\b|call\b|invoke\b|send_email\b|use[ \t]+another[ \t]+tool\b)",
+        )
+        .unwrap()
+    })
+}
+
+pub(super) fn tool_output_instruction_de_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(
+            r"\b(?P<anchor_3>tool[ \t-]+ausgabe|tool[ \t-]+antwort|tool[ \t-]+ergebnis|werkzeugausgabe|ergebnis[ \t]+besagt)\b(?P<anchor_2>[ \t]+besagt)?[ \t]*[:=-]?[ \t]*(?:ignoriere\b|rufe\b|verwende\b|sende(?P<anchor_1>_email)?\b)",
         )
         .unwrap()
     })
@@ -679,7 +769,7 @@ pub(super) fn mcp_runtime_command_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(
-            r#"(?:"command"|"args"|stdio)[^\n]{0,160}(?:sh[ \t]+-c|-[l]?c\b|curl[ \t]+|wget[ \t]+|\|[ \t]*(?:sh|bash)\b|python[ \t]+-c|node[ \t]+-e)"#,
+            r#"(?P<anchor_2>"command"|"args"|stdio)[^\n]{0,160}(?:sh[ \t]+-c|-[l]?c\b|curl[ \t]+|wget[ \t]+|\|[ \t]*(?P<anchor_1>sh|bash)\b|python[ \t]+-c|node[ \t]+-e)"#,
         )
         .unwrap()
     })
@@ -689,7 +779,7 @@ pub(super) fn mcp_runtime_secret_env_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(
-            r#""env"[^\n]{0,160}(?:api_?key|token|secret|password|private_?key|credential)[ \t]*[:=]"#,
+            r#""env"[^\n]{0,160}(?P<anchor_1>api_?key|token|secret|password|passwort|kennwort|private_?key|credential)[ \t]*[:=]"#,
         )
         .unwrap()
     })
@@ -699,7 +789,7 @@ pub(super) fn sensitive_material_request_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(
-            r"\b(?:read|find|show|dump|retrieve|collect|print)\b(?:[ \t]+(?:me|us|the|a|an|all|any|my|your|our|their|actual|real|raw|stored|available|current|aws)){0,4}[ \t]+(?:\.env\b|\.ssh/id_[a-z0-9_-]*|\.aws/credentials\b|api[ \t]+keys?\b|private[ \t]+keys?\b|passwords?\b|credentials?\b|secret[ \t]+tokens?\b)",
+            r"\b(?P<anchor_3>read|find|show|dump|retrieve|collect|print)\b(?:[ \t]+(?P<anchor_2>me|us|the|a|an|all|any|my|your|our|their|actual|real|raw|stored|available|current|aws)){0,4}[ \t]+(?:(?P<env>\.env)(?:[ \t,;:!?]|\.(?:[ \t]|$)|$)|(?P<anchor_1>\.ssh/id_[a-z0-9_-]*|\.aws/credentials\b|api[ \t]+keys?\b|private[ \t]+keys?\b|passwords?\b|credentials?\b|secret[ \t]+tokens?\b))",
         )
         .unwrap()
     })
@@ -709,7 +799,17 @@ pub(super) fn sensitive_material_passive_request_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(
-            r"\b(?:\.env\b|\.ssh/id_[a-z0-9_-]*|\.aws/credentials\b|api[ \t]+keys?\b|private[ \t]+keys?\b|passwords?\b|credentials?\b|secret[ \t]+tokens?\b)(?:[ \t]+(?:file|files|value|values|contents?)){0,3}[ \t]+(?:must|should|needs?[ \t]+to|has[ \t]+to|can[ \t]+be|please[ \t]+be)[ \t]+(?:be[ \t]+)?(?:read|found|shown|dumped|retrieved|collected|printed)\b",
+            r"\b(?P<anchor_5>\.env\b|\.ssh/id_[a-z0-9_-]*|\.aws/credentials\b|api[ \t]+keys?\b|private[ \t]+keys?\b|passwords?\b|credentials?\b|secret[ \t]+tokens?\b)(?:[ \t]+(?P<anchor_4>file|files|value|values|contents?)){0,3}[ \t]+(?P<anchor_3>must|should|needs?[ \t]+to|has[ \t]+to|can[ \t]+be|please[ \t]+be)[ \t]+(?P<anchor_2>be[ \t]+)?(?P<anchor_1>read|found|shown|dumped|retrieved|collected|printed)\b|\b(?P<target_de>passwörter|passwoerter|zugangsdaten|private[ \t]+schl(?:ü|ue)ssel|api[ \t-]+(?:keys?|schl(?:ü|ue)ssel))\b[ \t]+(?P<obligation_de>müssen|muessen|sollen|sind)[ \t]+(?P<action_de>gelesen|gefunden|gezeigt|ausgegeben|abgerufen|gesammelt|gedruckt)(?:[ \t]+werden)?\b",
+        )
+        .unwrap()
+    })
+}
+
+pub(super) fn sensitive_material_request_de_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(
+            r"\b(?P<anchor_3>lies|finde|zeige|drucke|hole|sammle)\b(?:[ \t]+(?P<anchor_2>mir|uns|die|den|das|alle|meine|deine|unsere|echten|rohen|gespeicherten)){0,4}[ \t]+(?:(?P<env>\.env)(?:[ \t,;:!?]|\.(?:[ \t]|$)|$)|(?P<target>\.ssh/id_[a-z0-9_-]*|\.aws/credentials\b|api[ \t]+keys?\b|private[ \t]+schlüssel\b|private[ \t]+schluessel\b|passwörter\b|passwoerter\b|zugangsdaten\b|geheime[ \t]+tokens?\b))",
         )
         .unwrap()
     })
@@ -719,7 +819,7 @@ pub(super) fn guardrail_tamper_request_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(
-            r"\b(?:disable|bypass|turn[ \t]+off|skip|remove|ignore)\b(?:[ \t]+(?:the|all|any|our|your|their|existing|built-in|default)){0,3}[ \t]+(?:guardrails?|safety[ \t]+checks?|security[ \t]+checks?|policy[ \t]+checks?|content[ \t]+filters?|safety[ \t]+filters?|safety[ \t]+rules?|security[ \t]+audits?|audit(?:[ \t]+logging)?|security[ \t]+monitoring|monitoring(?:[ \t]+controls?)?)\b",
+            r"\b(?P<anchor_4>disable|bypass|turn[ \t]+off|skip|remove|ignore)\b(?:[ \t]+(?P<anchor_3>the|all|any|our|your|their|existing|built-in|default)){0,3}[ \t]+(?:guardrails?|safety[ \t]+checks?|security[ \t]+checks?|policy[ \t]+checks?|content[ \t]+filters?|safety[ \t]+filters?|safety[ \t]+rules?|security[ \t]+audits?|audit(?P<anchor_2>[ \t]+logging)?|security[ \t]+monitoring|monitoring(?P<anchor_1>[ \t]+controls?)?)\b",
         )
         .unwrap()
     })
@@ -729,7 +829,27 @@ pub(super) fn guardrail_tamper_passive_request_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(
-            r"\b(?:guardrails?|safety[ \t]+checks?|security[ \t]+checks?|policy[ \t]+checks?|content[ \t]+filters?|safety[ \t]+filters?|safety[ \t]+rules?|security[ \t]+audits?|audit(?:[ \t]+logging)?|security[ \t]+monitoring|monitoring(?:[ \t]+controls?)?)[ \t]+(?:must|should|needs?[ \t]+to|has[ \t]+to|can[ \t]+be|please[ \t]+be)[ \t]+(?:be[ \t]+)?(?:disabled|bypassed|turned[ \t]+off|skipped|removed|ignored)\b",
+            r"\b(?:guardrails?|safety[ \t]+checks?|security[ \t]+checks?|policy[ \t]+checks?|content[ \t]+filters?|safety[ \t]+filters?|safety[ \t]+rules?|security[ \t]+audits?|audit(?P<anchor_5>[ \t]+logging)?|security[ \t]+monitoring|monitoring(?P<anchor_4>[ \t]+controls?)?)[ \t]+(?P<anchor_3>must|should|needs?[ \t]+to|has[ \t]+to|can[ \t]+be|please[ \t]+be)[ \t]+(?P<anchor_2>be[ \t]+)?(?P<anchor_1>disabled|bypassed|turned[ \t]+off|skipped|removed|ignored)\b",
+        )
+        .unwrap()
+    })
+}
+
+pub(super) fn guardrail_tamper_request_de_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(
+            r"\b(?P<anchor_3>deaktiviere|umgehe|schalte[ \t]+aus|überspringe|ueberspringe|entferne|ignoriere)\b(?:[ \t]+(?P<anchor_2>die|alle|unsere|deine|bestehenden|integrierten|standard)){0,3}[ \t]+(?P<anchor_1>schutzmechanismen|sicherheitsprüfungen|sicherheitspruefungen|richtlinienprüfungen|richtlinienpruefungen|inhaltsfilter|sicherheitsfilter|sicherheitsregeln|sicherheitsaudits|prüfprotokollierung|pruefprotokollierung|sicherheitsüberwachung|sicherheitsueberwachung)\b",
+        )
+        .unwrap()
+    })
+}
+
+pub(super) fn guardrail_tamper_passive_request_de_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(
+            r"\b(?P<anchor_3>schutzmechanismen|sicherheitsprüfungen|sicherheitspruefungen|richtlinienprüfungen|richtlinienpruefungen|inhaltsfilter|sicherheitsfilter|sicherheitsregeln|sicherheitsaudits|prüfprotokollierung|pruefprotokollierung|sicherheitsüberwachung|sicherheitsueberwachung)\b[ \t]+(?P<anchor_2>müssen|muessen|sollen|sind|bitte)[ \t]+(?P<anchor_1>deaktiviert|umgangen|ausgeschaltet|übersprungen|uebersprungen|entfernt|ignoriert)\b",
         )
         .unwrap()
     })
@@ -738,7 +858,7 @@ pub(super) fn guardrail_tamper_passive_request_re() -> &'static Regex {
 pub(super) fn destructive_ac() -> &'static AhoCorasick {
     static AC: OnceLock<AhoCorasick> = OnceLock::new();
     AC.get_or_init(|| {
-        AhoCorasick::new(&[
+        AhoCorasick::new([
             "rm -rf",
             "mkfs.",
             " dd if=",
@@ -750,6 +870,10 @@ pub(super) fn destructive_ac() -> &'static AhoCorasick {
             "wipe the logs",
             "wipe all recent audit events",
             "clear the security log",
+            "lösche die protokolle",
+            "loesche die protokolle",
+            "lösche alle aktuellen audit-ereignisse",
+            "leere das sicherheitsprotokoll",
             "history -c",
             "shred ",
         ])
@@ -757,10 +881,30 @@ pub(super) fn destructive_ac() -> &'static AhoCorasick {
     })
 }
 
+pub(super) fn destructive_operation_de_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(
+            r"\b(?P<anchor_3>lösche|loesche|vernichte|bereinige)\b(?:[ \t]+(?P<anchor_2>alle|die|sämtliche|saemtliche)){0,2}[ \t]+(?P<anchor_1>sicherheitsprotokolle|audit-protokolle|prüfprotokolle|pruefprotokolle)\b",
+        )
+        .unwrap()
+    })
+}
+
+pub(super) fn agentic_control_abuse_de_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(
+            r"\b(?P<anchor_4>übergib|uebergib|leite[ \t]+weiter)\b[^.!?;\n]{0,32}\b(?P<anchor_3>rohe[ \t]+eingaben|raw[ \t]+input)\b[^.!?;\n]{0,32}\b(?:an[ \t]+(?P<anchor_2>einen[ \t]+)?unteragenten|sub-agent)\b[^.!?;\n]{0,32}\b(?P<anchor_1>passthrough|durchleitung)\b",
+        )
+        .unwrap()
+    })
+}
+
 pub(super) fn agentic_abuse_ac() -> &'static AhoCorasick {
     static AC: OnceLock<AhoCorasick> = OnceLock::new();
     AC.get_or_init(|| {
-        AhoCorasick::new(&[
+        AhoCorasick::new([
             "chemical formula",
             "precise formula",
             "sarin",
@@ -812,6 +956,58 @@ pub(super) fn agentic_abuse_ac() -> &'static AhoCorasick {
             "bypass",
             "http://",
             "https://", // 47..51
+            // German alternatives retain the corresponding English anchor index.
+            "chemische formel",
+            "präzise formel",
+            "sarin",
+            "nervengift",
+            "chemische waffe",
+            "subprocess.popen",
+            "shell=true",
+            "curl http://",
+            "curl https://",
+            "wget http://",
+            "wget https://",
+            "speicheraktualisierung",
+            "systemzustand geändert",
+            "administrator",
+            "root-überschreibung",
+            "rohe eingaben übergeben",
+            "unteragent",
+            "durchleitung",
+            "durchleitung: wahr",
+            "rohe eingaben",
+            "registriere_mcp",
+            "registriere mcp",
+            "sig_sync",
+            "schwarm-überschreibung",
+            "geheime vereinbarung",
+            "nachricht verschlüsselt",
+            "belegprüfung umgehen",
+            "manuelle rückerstattung",
+            "autorisierung",
+            "deaktiviere die mehrfaktor-authentifizierung",
+            "deaktiviere mfa",
+            "mehrfaktor vorübergehend deaktivieren",
+            "passwort-zurücksetzungslink",
+            "konto",
+            "geschäftsführer",
+            "alternative e-mail",
+            "[verifiziert:",
+            "verifiziert:",
+            "immer erlauben",
+            "externe api",
+            "verifiziere deine identität",
+            "sicherer link",
+            "anmeldung",
+            "authentifizierung",
+            "unbegrenzt",
+            "menschliche freigabe umgehen",
+            "alle zukünftigen schritte",
+            "überschreiben",
+            "umgehen",
+            "http://",
+            "https://",
         ])
         .unwrap()
     })
@@ -819,13 +1015,23 @@ pub(super) fn agentic_abuse_ac() -> &'static AhoCorasick {
 
 pub(super) fn binary_smuggling_ac() -> &'static AhoCorasick {
     static AC: OnceLock<AhoCorasick> = OnceLock::new();
-    AC.get_or_init(|| AhoCorasick::new(&["metadata", "transaction", "payload"]).unwrap())
+    AC.get_or_init(|| {
+        AhoCorasick::new([
+            "metadata",
+            "transaction",
+            "payload",
+            "metadaten",
+            "transaktion",
+            "nutzlast",
+        ])
+        .unwrap()
+    })
 }
 
 pub(super) fn sensitive_term_ac() -> &'static AhoCorasick {
     static AC: OnceLock<AhoCorasick> = OnceLock::new();
     AC.get_or_init(|| {
-        AhoCorasick::new(&[
+        AhoCorasick::new([
             "system prompt",
             "developer message",
             "developer instructions",
@@ -843,6 +1049,17 @@ pub(super) fn sensitive_term_ac() -> &'static AhoCorasick {
             "crontab",
             "systemctl",
             "launchctl",
+            "systemprompt",
+            "systemanweisung",
+            "entwicklernachricht",
+            "entwickleranweisung",
+            "versteckte anweisung",
+            "api-schlüssel",
+            "api-schluessel",
+            "geheimnis",
+            "passwort",
+            "kennwort",
+            "zugangsdaten",
         ])
         .unwrap()
     })
@@ -857,7 +1074,7 @@ pub(super) fn hidden_style_open_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(
-            r#"(?is)<[a-zA-Z][a-zA-Z0-9]*[^>]+style\s*=\s*["'][^"']*(?:display\s*:\s*none|visibility\s*:\s*hidden|font-size\s*:\s*0(?:px)?|color\s*:\s*(?:white|#fff{1,3}|transparent|rgba\s*\([^)]*,\s*0(?:\.0*)?\s*\)))[^"']*["'][^>]*>"#,
+            r#"(?is)<[a-zA-Z][a-zA-Z0-9]*[^>]+style\s*=\s*["'][^"']*(?:display\s*:\s*none|visibility\s*:\s*hidden|font-size\s*:\s*0(?P<anchor_2>px)?|color\s*:\s*(?:white|#fff{1,3}|transparent|rgba\s*\([^)]*,\s*0(?P<anchor_1>\.0*)?\s*\)))[^"']*["'][^>]*>"#,
         )
         .expect("valid hidden style regex")
     })
@@ -875,7 +1092,7 @@ pub(super) fn injection_signal_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
         Regex::new(
-            r"(?i)ignore\s+(all\s+)?(any\s+)?(previous\s+)?instructions|disregard\s+(?:all\s+)?(?:previous\s+)?(?:instructions|rules)|forget\s+(?:everything|all\s+previous|your\s+instructions)|new\s+(?:primary\s+)?instruction|(?:reveal|print|show|output)\s+(?:your\s+)?(?:system\s+prompt|api\s+key|secret|token)|you\s+are\s+now\s+(?:a\s+)?(?:different|new)|act\s+as\s+if\s+(?:you|your)|exfiltrat(?:e|ion)|fetch\s+https?://|send\s+(?:a\s+)?(?:get|post|http)\s+request",
+            r"(?i)ignore\s+(all\s+)?(any\s+)?(previous\s+)?instructions|disregard\s+(?P<anchor_24>all\s+)?(?P<anchor_23>previous\s+)?(?P<anchor_22>instructions|rules)|forget\s+(?P<anchor_21>everything|all\s+previous|your\s+instructions)|new\s+(?P<anchor_20>primary\s+)?instruction|(?P<anchor_19>reveal|print|show|output)\s+(?P<anchor_18>your\s+)?(?P<anchor_17>system\s+prompt|api\s+key|secret|token)|you\s+are\s+now\s+(?P<anchor_16>a\s+)?(?P<anchor_15>different|new)|act\s+as\s+if\s+(?P<anchor_14>you|your)|exfiltrat(?P<anchor_13>e|ion)|fetch\s+https?://|send\s+(?P<anchor_12>a\s+)?(?P<anchor_11>get|post|http)\s+request|ignorier\w*\s+(?P<anchor_10>alle\s+)?(?P<anchor_9>vorherigen?\s+)?anweisungen|missacht\w*\s+(?P<anchor_8>alle\s+)?(?P<anchor_7>vorherigen?\s+)?(?P<anchor_6>anweisungen|regeln)|vergiss\s+(?P<anchor_5>alles|deine\s+anweisungen)|neue\s+(?P<anchor_4>primäre\s+|primaere\s+)?anweisung|(?P<anchor_3>enthülle|enthuelle|drucke|zeige|gib\s+aus)\s+(?P<anchor_2>deinen?\s+)?(?P<anchor_1>system\s*-?prompt|api\s*-?key|geheimnis|token)",
         )
         .expect("valid injection signal regex")
     })

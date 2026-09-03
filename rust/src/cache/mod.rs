@@ -21,7 +21,7 @@ pub(crate) use crypto::CacheCrypto;
 pub use memory::MemoryCacheConfig;
 pub(crate) use memory::MemoryCacheStore;
 pub(crate) use pii_chunk::PiiChunkCache;
-pub(crate) use pii_entity::{merge_pii_spans, PiiEntityCache};
+pub(crate) use pii_entity::merge_pii_spans;
 pub(crate) use redb::RedbCacheStore;
 pub(crate) use similarity::{
     cosine_similarity, decision_output, HistoricalSimilarityCache, SimilarityDecision,

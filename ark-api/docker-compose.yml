@@ -1,17 +1,21 @@
-# Self-hosted reference deployment. Run from the repo root:
+# Self-hosted two-worker reference deployment. Run from the repo root:
 #   docker compose -f ark-api/docker-compose.yml build
 #   docker compose -f ark-api/docker-compose.yml up -d
 services:
-  ark-api:
+  ark-api-1:
     build:
       context: ..
       dockerfile: ark-api/Dockerfile
     image: ark-api:local
-    ports:
-      - "8080:8080"
+    cpus: 2.5
+    environment:
+      PATRONUS_L3_PRECISION: fp16
+      PATRONUS_L3_TTL_SECS: "-1"
+    expose:
+      - "8080"
     volumes:
       - ./config.yaml:/etc/ark-api/config.yaml:ro
-      - ark-cache:/data/cache
+      - ark-cache-1:/data/cache
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
@@ -19,5 +23,59 @@ services:
       timeout: 5s
       retries: 3
 
+  ark-api-2:
+    image: ark-api:local
+    cpus: 2.5
+    environment:
+      PATRONUS_L3_PRECISION: fp16
+      PATRONUS_L3_TTL_SECS: "-1"
+    expose:
+      - "8080"
+    volumes:
+      - ./config.yaml:/etc/ark-api/config.yaml:ro
+      - ark-cache-2:/data/cache
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  entrypoint:
+    image: ark-api:local
+    entrypoint: ["/usr/local/bin/ark-api-entrypoint"]
+    command: ["--config", "/etc/ark-api/entrypoint.yaml"]
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./entrypoint.yaml:/etc/ark-api/entrypoint.yaml:ro
+    restart: unless-stopped
+    depends_on:
+      ark-api-1:
+        condition: service_healthy
+      ark-api-2:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
 volumes:
-  ark-cache:
+  ark-cache-1:
+  ark-cache-2:
+  redis-data:

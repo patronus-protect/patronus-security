@@ -8,8 +8,8 @@ prompts, tool calls, tool outputs, and documents — and classifies the security
 **locally**, without sending anything to a cloud service.
 
 The library is written in Rust for a small, fast core and ships first-class Python
-bindings (PyO3/maturin). Everything runs on the endpoint: most traffic is resolved in
-microseconds by native rules, and only genuinely uncertain cases reach a transformer model.
+bindings (PyO3/maturin). Everything runs on the endpoint: native rules avoid model inference,
+and only promoted model-backed cases reach a transformer model.
 
 ```python
 from patronus_ark import SecurityGateway
@@ -34,13 +34,15 @@ Each category is scanned by up to three layers, escalating only when needed:
 
 | Layer | What it is | Cost | Always available |
 | --- | --- | --- | --- |
-| **L1** | Native rule-based detectors | microseconds | yes, no assets |
-| **L2** | NTDB model packages (shared static encoder + ONNX heads) | milliseconds | when assets cached |
-| **L3** | Full ONNX transformer models, RAM-resident per config, run by a background worker | tens of ms | when assets cached |
+| **L1** | Native rule-based detectors | input-dependent | yes, no assets |
+| **L2** | NTDB packages (shared mmBERT tokenizer/static embedder + ONNX heads) | milliseconds | when assets cached |
+| **L3** | Full ONNX transformers aligned with L2's tokenizer and embeddings, run by a background worker | tens of ms | when assets cached |
 
-L1 runs on every request. L2 refines the verdict. L2 can *promote* an uncertain scan to L3,
-where a full transformer makes the final call. Most traffic never reaches L3, so you get
-real detection without paying the transformer cost on every request. See
+L1 runs only for categories with native detectors and when its execution gate is enabled. Native
+`pii` and `dlp` finish at L1. Model-backed categories start or continue at L2, which can *promote*
+selected chunks to L3. A full transformer then makes the final call using compatible token IDs
+already produced by L2. Most traffic never reaches L3, so model-backed detection avoids paying the
+transformer cost on every request or repeating promotion-time tokenization. See
 [Layered scanning](concepts/layered-scanning.md) for the full escalation model.
 
 ## Find your way around

@@ -261,12 +261,21 @@ fn candidate_spans_reduce_dedicated_l3_chunks() {
         &chunks,
         &[ByteSpan {
             start: 400,
-            end: 500,
+            end: 656,
         }],
     );
 
     assert!(selected.len() < full.len());
-    assert_eq!(selected, ["1", "2"]);
+    assert_eq!(selected, ["2"]);
+    // A partial span is not a canonical chunk and must never expand to all text.
+    assert!(selected_l3_chunks_for_test(
+        &chunks,
+        &[ByteSpan {
+            start: 401,
+            end: 500
+        }]
+    )
+    .is_empty());
 }
 
 #[test]

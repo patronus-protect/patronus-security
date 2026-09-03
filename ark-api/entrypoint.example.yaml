@@ -1,0 +1,22 @@
+# Copy to entrypoint.yaml. Keep the raw internal worker token in this local
+# deployment secret only; config.yaml contains its SHA-256 digest.
+
+server:
+  bind: "0.0.0.0:8080"
+
+auth:
+  keys:
+    - name: "public-client"
+      # Bare 64-character SHA-256 hex digest of the public Bearer token. Do not
+      # add the optional `sha256:` prefix accepted by the worker config parser.
+      key_hash: "0000000000000000000000000000000000000000000000000000000000000000"
+
+gateway:
+  redis_url: "redis://redis:6379/0"
+  worker_token: "replace-with-the-internal-worker-token"
+  retention_secs: 90
+  workers:
+    - name: "ark-api-1"
+      url: "http://ark-api-1:8080"
+    - name: "ark-api-2"
+      url: "http://ark-api-2:8080"

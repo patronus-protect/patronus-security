@@ -35,3 +35,7 @@ benchmark_todo.md
 # Stray compiled tokenizer artifact accidentally emitted at repo root
 /config
 site/
+
+# Local Ark API deployment secrets generated from the tracked examples.
+/ark-api/config.yaml
+/ark-api/entrypoint.yaml

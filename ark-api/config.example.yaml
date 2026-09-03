@@ -1,6 +1,8 @@
-# Copy to config.yaml, generate a real key with:
-#   printf '%s' "<your-secret-token>" | sha256sum
+# Copy to config.yaml, generate the internal gateway-to-worker key with:
+#   printf '%s' "<internal-worker-token>" | sha256sum
 # and mount this file into the container at /etc/ark-api/config.yaml.
+# The reference Compose deployment also sets PATRONUS_L3_TTL_SECS=-1 so
+# loaded L3 sessions remain resident for stable request latency.
 
 server:
   bind: "0.0.0.0:8080"
@@ -8,11 +10,11 @@ server:
 
 auth:
   keys:
-    - name: "slack-workspace-acme"
+    - name: "gateway-internal"
       # sha256 hex digest of the raw bearer token clients send as
-      # `Authorization: Bearer <token>`. Never store the raw token here.
+      # `gateway.worker_token`. Never store the raw token in this file.
       key_hash: "sha256:0000000000000000000000000000000000000000000000000000000000000000"
-      # Omit `categories` to allow every category listed under `pipeline.categories`.
+      # The gateway must be able to forward every configured category.
       categories: ["injection", "dlp", "threat", "pii", "dynamic-pii"]
       # Optional per-key gate override. Falls back to `pipeline.gates` when
       # omitted. Same shape as `pipeline.gates` below.
@@ -39,18 +41,20 @@ pipeline:
   # Mirrors `patronus_ark::ScanGateMatrix`: `l1`/`l2`/`l3` are top-level
   # on/off switches (omit for "enabled"), `models` disables individual
   # native scanners or models by their result `model` name (e.g.
-  # `native:mcp_runtime_risk`), and `conditional` is the deep gate logic —
+  # `native:mcp_runtime_risk`), `rules` enables/disables one stable L1 rule
+  # without disabling sibling rules in the same scanner, and `conditional` is
+  # the deep gate logic —
   # arbitrary `all`/`any`/`not` trees of `metadata`/`result` predicates that
   # enable or disable an L2/L3 pipeline based on request metadata or an
   # already-completed L1/L2 result, optionally overriding that pipeline's L3
   # execution policy when the condition matches.
   gates:
+    explain: false # Opt in to bounded PII/DLP context metadata.
     l1: true
     l2: true
     l3: true
-    models:
-      # Disable one specific native scanner while leaving its category on.
-      native:mcp_runtime_risk: false
+    # Shared Rust/Python/API defaults enable credentials/secrets-only DLP.
+    # Broader families are opt-in, e.g. rules: {dlp_sql_statement: true}.
     conditional:
       # Only run the (expensive) L3 injection classifier once L1 already
       # flagged something suspicious for this request.

@@ -485,6 +485,7 @@ An application-provided L1 heuristic attached to one security category.
 ```rust
 pub enum DynamicPiiExecutionGate {
     /// Run whenever the category and L3 model are enabled.
+    #[default]
     Always,
     /// Run when a source pipeline returns one of the configured results.
     IfResultIn {
@@ -514,7 +515,7 @@ pub struct DynamicPiiConditionalLabels {
 }
 ```
 
-Labels activated when another pipeline returns a configured result.
+Extra label group activated on chunks with a matching final source result.
 
 ```rust
 pub struct DynamicPiiConfig {
@@ -549,6 +550,14 @@ pub struct DynamicPiiConfig {
 ```
 
 Pipeline-specific configuration for the L3-only `dynamic-pii` scanner.
+
+`labels` form the stable base GLiNER group for the full input. Conditional
+labels are never concatenated with that group: every matching rule runs its
+extra labels separately and only on chunks whose final source-pipeline class
+matches. Base labels repeated by a conditional rule are removed from its
+extra call. Dynamic PII waits for referenced source pipelines to reach a
+terminal result (including L2 results that do not promote), instead of
+resolving against an interim L2 class.
 
 ```rust
 pub fn validated(mut self) -> Result<Self, String>;
@@ -933,6 +942,7 @@ Return the canonical uppercase level string.
 ```rust
 pub enum OnnxBatchMode {
     /// Keep the existing lazy per-text ONNX execution path.
+    #[default]
     LazyBatches,
     /// Execute all L3 fallback texts as one ONNX tensor batch where possible.
     TensorBatch,
@@ -950,6 +960,7 @@ Return the canonical snake_case mode string.
 ```rust
 pub enum NtdbOperatingPoint {
     BestF1,
+    #[default]
     BestPromote,
     /// Internal Ark API routing profile: use utility promotion only for an
     /// Injection document with at most two normal chunks.
@@ -971,6 +982,7 @@ Return the manifest key for this operating point.
 ```rust
 pub enum ExecutionBackend {
     /// Keep conservative CPU defaults unless a caller overrides execution mode.
+    #[default]
     Auto,
     /// CPU execution: prefer lazy L3 execution and low concurrency.
     Cpu,
@@ -992,6 +1004,7 @@ Runtime backend profile used to choose default L3 execution behavior.
 ```rust
 pub enum L3Strategy {
     /// Each promoted pipeline executes its own L3 model.
+    #[default]
     Dedicated,
     /// Promoted classifier pipelines share one request-local multi-head model run.
     Multi,
@@ -1030,6 +1043,8 @@ No public documentation is available yet.
 
 ```rust
 pub struct ScanGateMatrix {
+    /// Include bounded diagnostic anchor metadata. Disabled by default.
+    pub explain: bool,
     /// Optional L1 override. `None` means enabled.
     pub l1: Option<bool>,
     /// Optional L2 override. `None` means enabled.
@@ -1039,6 +1054,9 @@ pub struct ScanGateMatrix {
     /// Optional per-model or per-native-scanner overrides keyed by result model
     /// names such as `native:mcp_runtime_risk` or `unified-v3-tool-action`.
     pub models: HashMap<String, bool>,
+    /// Optional per-rule overrides keyed by stable public rule id. Missing
+    /// entries inherit the shared rule defaults.
+    pub rules: HashMap<String, bool>,
     /// Request-context and prior-result conditions applied before L2 or L3.
     pub conditional: Vec<ConditionalPipelineGate>,
     /// L3 worker scheduling policy.
@@ -1048,7 +1066,9 @@ pub struct ScanGateMatrix {
 
 Caller-controlled execution gates for one scanner execution profile.
 
-Unspecified gates default to enabled. `max_level` is still enforced by
+Unspecified rules use the shared credentials/secrets-only DLP default;
+other execution gates default to enabled. Diagnostic `explain` is opt-in.
+`max_level` is still enforced by
 `ScanExecution`, so a gate can only further restrict the configured scanner.
 
 ```rust
@@ -1267,7 +1287,7 @@ Resolve request-wide defaults and a category/model override.
 pub fn all_enabled() -> Self;
 ```
 
-Create a matrix where every level and model is enabled by default.
+Explicitly enable all native rules, including opt-in DLP content families.
 
 ```rust
 pub fn levels(l1: bool, l2: bool, l3: bool) -> Self;
@@ -1294,6 +1314,18 @@ pub fn with_model(mut self, model: impl Into<String>, enabled: bool) -> Self;
 Builder-style model/native scanner gate setter.
 
 ```rust
+pub fn set_rule(&mut self, rule_id: impl Into<String>, enabled: bool);
+```
+
+Set one stable rule-id gate.
+
+```rust
+pub fn with_rule(mut self, rule_id: impl Into<String>, enabled: bool) -> Self;
+```
+
+Builder-style stable rule-id gate setter.
+
+```rust
 pub fn set_conditional(&mut self, gates: Vec<ConditionalPipelineGate>) -> Result<(), String>;
 ```
 
@@ -1311,6 +1343,12 @@ pub fn allows_model(&self, model: &str) -> bool;
 ```
 
 Return whether the model/native scanner is allowed by this matrix.
+
+```rust
+pub fn allows_rule(&self, rule_id: &str) -> bool;
+```
+
+Return whether a stable rule id is allowed by this matrix.
 
 ```rust
 pub fn set_l3_policy(&mut self, policy: L3SchedulerPolicy);
@@ -1344,7 +1382,7 @@ Effective execution state consumed by scan methods and model pipelines.
 pub fn new(max_level: SecurityLevel) -> Self;
 ```
 
-Create an execution with every gate enabled up to `max_level`.
+Create an execution with shared rule defaults up to `max_level`.
 
 ```rust
 pub fn with_gates(max_level: SecurityLevel, gates: ScanGateMatrix) -> Self;
@@ -1418,6 +1456,12 @@ pub fn allows_model(&self, model: &str) -> bool;
 ```
 
 Return whether a model/native scanner is enabled for this execution.
+
+```rust
+pub fn allows_rule(&self, rule_id: &str) -> bool;
+```
+
+Return whether a stable rule id is enabled for this execution.
 
 ```rust
 pub fn gates(&self) -> &ScanGateMatrix;
@@ -1713,4 +1757,4 @@ pub fn ntdb_l2_package_manifest_files(
 ) -> Result<Vec<String>, Box<dyn std::error::Error>>;
 ```
 
-Return all runtime files referenced by an NTDB v2 package manifest.
+Return all runtime files referenced by an NTDB v4 package manifest.

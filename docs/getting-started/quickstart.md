@@ -145,7 +145,7 @@ Raise `max_level` to `"l3"` and enable downloads to let uncertain scans reach a 
 transformer. Which L3 models exist is decided by your configuration — the
 [L3 strategy](../reference/configuration.md#l3-strategy) and the configured categories — and
 those models are held **resident in RAM**, governed by an idle-TTL policy
-(`PATRONUS_L3_TTL_SECS`, default 300 s). Budget memory for the L3 models you enable; see
+(`PATRONUS_L3_TTL_SECS`, default 300 s; `-1` keeps loaded sessions resident). Budget memory for the L3 models you enable; see
 [Layered scanning](../concepts/layered-scanning.md) for when L2 promotes to L3.
 
 === "Python"

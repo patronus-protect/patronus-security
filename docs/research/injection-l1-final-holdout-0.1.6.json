@@ -1,0 +1,81 @@
+{
+  "artifact_sha256": "88a57b166d1963f578fb8a3bf0caa9e40cfa0d2bd38b70200121b8fe21501380",
+  "holdout_accessed": true,
+  "holdout_sha256": "bb09053c677ad28802d286ca117db3280c647188f786e992ef532590a227152a",
+  "input_contract": {
+    "expected_artifact_sha256": "88a57b166d1963f578fb8a3bf0caa9e40cfa0d2bd38b70200121b8fe21501380",
+    "expected_holdout_documents": 3576,
+    "expected_holdout_sha256": "bb09053c677ad28802d286ca117db3280c647188f786e992ef532590a227152a",
+    "release_manifest_sha256": "d7f685f24e4b050d634b53ce8b462f8c859d886c303ec5f4a853811057dbb041"
+  },
+  "limitations": [
+    "candidate metrics are correlated because one document may produce multiple candidates",
+    "a zero observed false-positive count does not prove zero production false-positive rate",
+    "this report covers only the frozen hard-benign holdout and not language, family, or latency gates"
+  ],
+  "metrics": {
+    "candidate_count": 6,
+    "f1": 0.0,
+    "false_positive_rate": 0.0,
+    "fn": 0,
+    "fp": 0,
+    "negative_candidates": 6,
+    "positive_candidates": 0,
+    "precision": 1.0,
+    "recall": 0.0,
+    "score_quantiles": {
+      "0": {
+        "0.0": 0.009627278291943434,
+        "0.5": 0.2028396375639293,
+        "0.9": 0.5456065706085698,
+        "0.99": 0.5488437027094969,
+        "1.0": 0.5492033840540443
+      }
+    },
+    "threshold": 0.844886,
+    "tn": 6,
+    "tp": 0
+  },
+  "model_id": "ark-injection-l1-logistic-0.1.6",
+  "release_gate": {
+    "name": "holdout_accepted_false_positives",
+    "passed": true,
+    "required_max": 0,
+    "value": 0
+  },
+  "runtime_versions": {
+    "ark_package_version": "0.1.5",
+    "numpy_version": "2.4.6",
+    "python_version": "3.11.15",
+    "repository_dirty": true,
+    "repository_revision": "fd427626e6025659a92a1e5c771b0272c2cec936",
+    "scanner_model": "native:injection_l1",
+    "tool_version": "injection-l1-calibration-0.1.6"
+  },
+  "schema_version": 1,
+  "score_version": "injection-l1-0.1.6",
+  "source": {
+    "candidate_records": 6,
+    "documents_selected": 3576,
+    "documents_with_candidates": 6,
+    "duplicate_documents_by_text_hash": 0,
+    "name": "hard_benign_full_holdout",
+    "path": "hard_benign_full_holdout.csv",
+    "rejected_weak_positive_candidates": 0,
+    "role": "final_negative",
+    "sha256": "bb09053c677ad28802d286ca117db3280c647188f786e992ef532590a227152a",
+    "unique_text_hashes": 3576
+  },
+  "source_metrics": {
+    "hard_benign_full_holdout": {
+      "accepted_candidates": 0,
+      "accepted_document_rate": 0.0,
+      "accepted_documents": 0,
+      "candidate_records": 6,
+      "documents": 3576,
+      "documents_with_candidates": 6,
+      "label": 0,
+      "role": "final_negative"
+    }
+  }
+}

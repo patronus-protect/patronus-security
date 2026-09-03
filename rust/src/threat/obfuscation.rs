@@ -1,15 +1,4 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use std::collections::HashSet;
-
-pub(super) fn push_variant(text: String, seen: &mut HashSet<String>, variants: &mut Vec<String>) {
-    if text.is_empty() || text.len() > 8192 {
-        return;
-    }
-    if seen.insert(text.clone()) {
-        variants.push(text);
-    }
-}
-
 pub(super) fn is_token_boundary(ch: char) -> bool {
     ch.is_whitespace()
         || matches!(
@@ -42,13 +31,7 @@ pub(super) fn token_contains_unicode_confusable(token: &str) -> bool {
     has_ascii_letter && has_confusable
 }
 
-pub(super) fn unicode_confusable_skeleton(text: &str) -> String {
-    text.chars()
-        .map(|ch| confusable_ascii(ch).unwrap_or(ch))
-        .collect()
-}
-
-fn confusable_ascii(ch: char) -> Option<char> {
+pub(super) fn confusable_ascii(ch: char) -> Option<char> {
     let cp = ch as u32;
     if (0xFF21..=0xFF3A).contains(&cp) {
         return char::from_u32(b'A' as u32 + cp - 0xFF21);
@@ -176,15 +159,6 @@ pub(super) fn remove_zero_width(text: &str) -> String {
         .collect()
 }
 
-pub(super) fn contains_zero_width(text: &str) -> bool {
-    text.chars().any(|ch| {
-        matches!(
-            ch,
-            '\u{200b}' | '\u{200c}' | '\u{200d}' | '\u{2060}' | '\u{feff}'
-        )
-    })
-}
-
 pub(super) fn percent_decode_lossy(text: &str) -> String {
     let bytes = text.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
@@ -260,7 +234,7 @@ pub(super) fn split_fragments(text: &str) -> impl Iterator<Item = &str> {
 }
 
 pub(super) fn continuous_hex_decode(fragment: &str) -> Option<String> {
-    if fragment.len() % 2 != 0
+    if !fragment.len().is_multiple_of(2)
         || fragment.len() < 8
         || !fragment.bytes().all(|byte| byte.is_ascii_hexdigit())
     {
@@ -282,13 +256,12 @@ pub(super) fn continuous_hex_decode(fragment: &str) -> Option<String> {
 }
 
 pub(super) fn base64_decode_text(fragment: &str) -> Option<String> {
-    if fragment.len() < 12 || fragment.len() % 4 != 0 {
+    if fragment.len() < 12 || !fragment.len().is_multiple_of(4) {
         return None;
     }
-    if !fragment
-        .bytes()
-        .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'/' | b'='))
-    {
+    if !fragment.bytes().all(|byte| {
+        byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'/' | b'-' | b'_' | b'=')
+    }) {
         return None;
     }
 
@@ -323,11 +296,21 @@ pub(super) fn base64_value(byte: u8) -> Option<u8> {
         b'A'..=b'Z' => Some(byte - b'A'),
         b'a'..=b'z' => Some(byte - b'a' + 26),
         b'0'..=b'9' => Some(byte - b'0' + 52),
-        b'+' => Some(62),
-        b'/' => Some(63),
+        b'+' | b'-' => Some(62),
+        b'/' | b'_' => Some(63),
         b'=' => Some(0),
         _ => None,
     }
+}
+
+pub(super) fn rot13_decode_text(text: &str) -> String {
+    text.chars()
+        .map(|character| match character {
+            'a'..='m' | 'A'..='M' => char::from_u32(character as u32 + 13).unwrap(),
+            'n'..='z' | 'N'..='Z' => char::from_u32(character as u32 - 13).unwrap(),
+            _ => character,
+        })
+        .collect()
 }
 
 pub(super) fn hex_byte(high: u8, low: u8) -> Option<u8> {

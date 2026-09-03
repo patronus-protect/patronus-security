@@ -1,6 +1,6 @@
 [package]
 name = "patronus-ark"
-version = "0.1.5"
+version = "0.1.6"
 edition = "2021"
 authors = ["Casdo Labs GmbH <team@patronus.studio>"]
 description = "Hybrid Rust security scanners for prompt injection, DLP, PII, and agentic tool risks."
@@ -67,10 +67,6 @@ path = "dev/injection_pair_gliner_benchmark.rs"
 [[example]]
 name = "local_l1_l2_gliner_benchmark"
 path = "dev/local_l1_l2_gliner_benchmark.rs"
-
-[[example]]
-name = "mmbert_pair_tokenizer"
-path = "dev/mmbert_pair_tokenizer.rs"
 
 [[example]]
 name = "ntdb_memory_smoke"

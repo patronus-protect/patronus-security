@@ -71,10 +71,10 @@ pub(crate) fn arbitrate_l3_l2(
 ) -> SecurityScanResult {
     let trace = arbitration_trace(pipeline, l3_result.as_ref(), &l2_result, point);
     if let Some(l3_result) = l3_result.as_ref() {
-        if accepts_result(pipeline, &l3_result, point) {
+        if accepts_result(pipeline, l3_result, point) {
             return with_arbitration(l3_result.clone(), LayerDecision::L3, Some(&trace));
         }
-        if let Some(result) = union_result(pipeline, &l3_result, &l2_result, point) {
+        if let Some(result) = union_result(pipeline, l3_result, &l2_result, point) {
             return with_arbitration(result, LayerDecision::Union, Some(&trace));
         }
     }

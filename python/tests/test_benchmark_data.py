@@ -2,6 +2,7 @@ import json
 import threading
 import unittest
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from patronus_ark import benchmark
@@ -70,13 +71,17 @@ class BenchmarkDataTests(unittest.TestCase):
                 self.assertLessEqual(len(labels), 30)
                 self.assertTrue(set(labels) <= set(GLINER_LABELS))
 
-    def test_school_class_uses_measured_education_labels_and_thresholds(self):
+    def test_education_class_uses_measured_education_labels_and_thresholds(self):
         school_labels = (
             "student_identifier",
             "applicant_identifier",
             "research_participant_identifier",
             "parent_or_guardian",
             "degree_program",
+        )
+        self.assertEqual(
+            labels_for_classification("sensitive_document", "education"),
+            school_labels,
         )
         self.assertEqual(
             labels_for_classification("sensitive_document", "school"),
@@ -93,23 +98,33 @@ class BenchmarkDataTests(unittest.TestCase):
             },
         )
 
-    def test_gliner_double_context_keeps_only_jointly_measured_labels(self):
+    def test_gliner_double_context_uses_the_additive_measured_union(self):
         self.assertEqual(
             labels_for_contexts(
                 ("sensitive_document", "legal"),
                 ("tool_class", "file"),
             ),
             (
+                "city",
+                "country",
+                "date_of_birth",
                 "contract",
+                "case_number",
+                "law_or_regulation",
+                "court",
+                "person",
                 "legal_party",
                 "street_address",
+                "username",
                 "passport_number",
                 "driver_license_number",
                 "medical_record_number",
+                "health_insurance_number",
                 "medical_condition",
                 "medication",
                 "religion",
                 "sexual_orientation",
+                "disability",
                 "political_affiliation",
             ),
         )
@@ -118,7 +133,30 @@ class BenchmarkDataTests(unittest.TestCase):
                 ("sensitive_document", "finance"),
                 ("tool_class", "web"),
             ),
-            (),
+            (
+                "city",
+                "country",
+                "accounting_period",
+                "law_or_regulation",
+                "court",
+                "product",
+                "brand",
+                "campaign",
+                "person",
+                "legal_party",
+                "street_address",
+            ),
+        )
+
+    def test_medical_class_has_its_own_measured_bundle(self):
+        self.assertEqual(
+            labels_for_classification("sensitive_document", "medical"),
+            (
+                "medical_record_number",
+                "health_insurance_number",
+                "medical_condition",
+                "medication",
+            ),
         )
 
     def test_dynamic_pii_fixture_covers_every_mapped_label(self):
@@ -534,8 +572,19 @@ class BenchmarkDataTests(unittest.TestCase):
             def consume_next_event(self, timeout=None):
                 return self.ready.pop(0) if self.ready else None
 
+        # Check the pacing algorithm, not whether the host schedules a 100 ms
+        # sleep accurately while other CI jobs are running.
+        clock = SimpleNamespace(now=1.0)
+
+        def advance(seconds):
+            clock.now += seconds
+
         with patch.object(
             benchmark, "_load_scenario_texts", return_value={"paced": ["text"]}
+        ), patch.object(
+            benchmark,
+            "time",
+            SimpleNamespace(perf_counter=lambda: clock.now, sleep=advance),
         ):
             result = benchmark._run_load(
                 FakeGateway(), requests_per_scenario=3, target_rps=10.0

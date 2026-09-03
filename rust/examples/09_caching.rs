@@ -69,7 +69,7 @@ fn results(
     events
         .iter()
         .filter_map(|event| match event {
-            QueuedSecurityEvent::Result(queued)
+            QueuedSecurityEvent::Result(queued) | QueuedSecurityEvent::Provisional(queued)
                 if queued.result.category == category && is_partial(&queued.result) == partial =>
             {
                 Some(queued.result.clone())
@@ -94,20 +94,23 @@ fn dynamic_pii_examples(scanner: &SecurityGateway) {
             .collect::<Vec<_>>()
     );
 
-    println!("2. same PII span, different surrounding text");
-    let span_hit = scan_events(scanner, "Please contact Alexandr Stone about the renewal.");
-    let early = results(&span_hit, "dynamic-pii", true)
+    println!("2. first entity preview is provisional");
+    let preview_events = scan_events(scanner, "Please contact Alexandr Stone about the renewal.");
+    assert!(preview_events
+        .iter()
+        .any(|event| matches!(event, QueuedSecurityEvent::Provisional(_))));
+    let early = results(&preview_events, "dynamic-pii", true)
         .pop()
-        .expect("known entity must publish an early partial result");
-    let entity_cache_hit = early.layers.iter().any(|layer| {
+        .expect("first entity must publish a provisional partial result");
+    let provisional = early.layers.iter().any(|layer| {
         layer
             .details
-            .get("entity_cache_hit")
+            .get("provisional")
             .and_then(serde_json::Value::as_bool)
             == Some(true)
     });
-    assert!(entity_cache_hit);
-    println!("   entity_cache_hit = {entity_cache_hit}");
+    assert!(provisional);
+    println!("   provisional = {provisional}");
 
     println!("3. exact same text");
     let exact_hit = scan_events(scanner, "Please contact Alexandr Stone about the renewal.");
@@ -252,8 +255,10 @@ fn new_scanner(
     scanner.set_l3_strategy(strategy);
     if strategy == L3Strategy::Multi {
         let mut gates = ScanGateMatrix::all_enabled();
-        let mut policy = L3SchedulerPolicy::default();
-        policy.priority = vec!["sensitive_document".to_string(), "injection".to_string()];
+        let policy = L3SchedulerPolicy {
+            priority: vec!["sensitive_document".to_string(), "injection".to_string()],
+            ..L3SchedulerPolicy::default()
+        };
         gates.set_l3_policy(policy);
         scanner.set_execution_gates(gates);
     }

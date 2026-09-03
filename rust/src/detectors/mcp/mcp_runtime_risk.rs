@@ -1,26 +1,30 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::threat::looks_like_mcp_runtime_risk_lower;
 use crate::EvaluationResult;
 
 pub struct McpRuntimeRiskPipeline;
+
+impl Default for McpRuntimeRiskPipeline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl McpRuntimeRiskPipeline {
     pub fn new() -> Self {
         Self
     }
 
+    pub(crate) fn detect(&self, text: &str) -> crate::detectors::NativeDetection {
+        crate::detectors::evidence::detection_from_matches(
+            text,
+            "dlp_mcp_runtime_risk",
+            "mcp_runtime_risk",
+            crate::threat::native_matches("mcp_runtime_risk", text),
+        )
+    }
+
     pub fn evaluate(&self, text: &str) -> EvaluationResult {
-        let is_violation = looks_like_mcp_runtime_risk_lower(&text.to_lowercase());
-        let class_name = if is_violation {
-            "mcp_runtime_risk"
-        } else {
-            "safe"
-        };
-        EvaluationResult {
-            class_name: class_name.to_string(),
-            confidence: 1.0,
-            level: "L1".to_string(),
-        }
+        self.detect(text).result
     }
 
     pub fn evaluate_batch(&self, texts: &[String]) -> Vec<EvaluationResult> {

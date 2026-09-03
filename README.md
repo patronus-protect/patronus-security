@@ -29,16 +29,16 @@ sending anything to a cloud service.
 
 ## Features
 
-- **Layered scanning** — native rules resolve most traffic in microseconds; only genuinely
-  uncertain cases are promoted to a transformer.
+- **Layered scanning** — native L1 rules provide immediate findings and context; model-backed
+  categories use NTDB L2 to select the chunks that genuinely need a transformer.
 - **Ten categories** — prompt injection, DLP, PII, dynamic PII (GLiNER spans), sensitive
   documents, the agentic tool trio (class/action/tags), routing intent, and threat type.
 - **Rust core, first-class Python** — one crate (`patronus-ark`) plus `abi3-py311` wheels
   (import `patronus_ark`); no Rust toolchain needed to use the Python package.
 - **Asynchronous by default** — `enqueue()` returns immediately, results stream back through one
   shared queue, and promoted L3 work never blocks ready L1/L2 results.
-- **Execution gates** — turn levels and individual scanners on or off per request, conditional on
-  free-form metadata or earlier results.
+- **Execution gates** — turn levels, individual scanners, and stable L1 rule IDs on or off per
+  request; L2/L3 and extra GLiNER label groups can depend on metadata or earlier final results.
 - **Offline-capable** — split asset sync from runtime start for air-gapped deployments; native L1
   needs no downloads at all.
 - **Built-in benchmark** — every gateway can measure itself on the validation samples shipped with
@@ -93,17 +93,37 @@ A synchronous `scan_all()` is available in both languages for simple, single-tex
 
 ## How scanning works
 
-Each category runs up to three layers, escalating only when needed:
+Categories use the layers that fit their detector contract:
 
 | Layer | What it is | Cost | Availability |
 | --- | --- | --- | --- |
-| **L1** | Native rule-based detectors | microseconds | always, no assets |
-| **L2** | NTDB model packages (shared static encoder + lightweight ONNX heads) | milliseconds | when assets are cached |
-| **L3** | Full ONNX transformers, run by a background worker | tens of ms | when assets are cached |
+| **L1** | Native rule-based detectors | input-dependent | no assets; gate-controlled |
+| **L2** | NTDB packages (shared mmBERT tokenizer/static embedder + lightweight ONNX heads) | milliseconds | when assets are cached |
+| **L3** | Full ONNX transformers aligned with L2's tokenizer and embeddings, run by a background worker | tens of ms | when assets are cached |
 
 L2 packages carry a trained promote-router that decides when a case actually needs L3, so most
 traffic never touches a transformer. When a scan is promoted, the queue publishes the L2 fallback
-first and the final L3 result later; L3 errors and timeouts degrade back to L2.
+first and the final L3 result later. Compatible L2 chunks pass their existing mmBERT token IDs to
+L3 instead of being tokenized again; L3 errors and timeouts degrade back to L2.
+
+Native-only `pii` and `dlp` do not escalate. PII L1 validates deterministic identifiers and
+anchor-bound values such as contact, payment, government, account, and employee identifiers. DLP
+L1 covers credentials and secrets plus opt-in business identifiers, internal metrics, source code,
+SQL, dumps, and logs. All built-in L1 matchers produce source-bound components before a result;
+PII and DLP findings return evidence spans, including native operation and MCP rules. Both can expose non-finding
+`l1_anchors` as structured context when `execution_gates.explain` is enabled. `dynamic-pii` is the complementary GLiNER L3 pipeline for semantic entities
+such as people, organizations, and locations.
+
+Stable rule gates can disable one native rule without disabling its siblings:
+
+```python
+scanner.set_execution_gates({
+    "rules": {"pii_employee_id": False, "dlp_sql_statement": False},
+})
+```
+
+Rust, Python, and the Ark API share credential/secret-only DLP rule defaults;
+broader DLP families are available through an explicit `gates.rules` profile.
 
 Read more: [Architecture](https://patronus-protect.github.io/patronus-security/concepts/architecture/) ·
 [Layered scanning](https://patronus-protect.github.io/patronus-security/concepts/layered-scanning/) ·

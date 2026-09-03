@@ -3,6 +3,7 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::time::Instant;
 
 use axum::body::Bytes;
 use axum::extract::{Path, State};
@@ -72,7 +73,7 @@ struct WorkerConfig {
 #[derive(Clone)]
 struct AppState {
     client: reqwest::Client,
-    redis_url: String,
+    redis: redis::aio::ConnectionManager,
     worker_token: String,
     workers: Vec<WorkerConfig>,
     worker_cursor: Arc<AtomicUsize>,
@@ -133,17 +134,13 @@ async fn save_job(state: &AppState, job: &Job) -> Result<(), redis::RedisError> 
     } else {
         ACTIVE_TTL_SECS
     };
-    let mut connection = redis::Client::open(state.redis_url.as_str())?
-        .get_multiplexed_async_connection()
-        .await?;
+    let mut connection = state.redis.clone();
     let payload = serde_json::to_string(job).expect("job serialization must succeed");
     connection.set_ex(job_key(&job.job_id), payload, ttl).await
 }
 
 async fn load_job(state: &AppState, job_id: &str) -> Result<Option<Job>, redis::RedisError> {
-    let mut connection = redis::Client::open(state.redis_url.as_str())?
-        .get_multiplexed_async_connection()
-        .await?;
+    let mut connection = state.redis.clone();
     let payload: Option<String> = connection.get(job_key(job_id)).await?;
     Ok(payload.and_then(|value| serde_json::from_str(&value).ok()))
 }
@@ -170,6 +167,7 @@ fn final_decision(job: &Job) -> String {
 }
 
 async fn collect_events(state: AppState, job_id: String, worker: WorkerConfig, request_id: String) {
+    let started = Instant::now();
     let url = format!(
         "{}/v1/scan/{request_id}/events",
         worker.url.trim_end_matches('/')
@@ -192,8 +190,11 @@ async fn collect_events(state: AppState, job_id: String, worker: WorkerConfig, r
         }
     };
 
+    tracing::info!(job_id, worker = %worker.name, worker_events_connected_ms = started.elapsed().as_secs_f64() * 1_000.0, "worker event stream connected");
+
     let mut pending = String::new();
     let mut stream = response.bytes_stream();
+    let mut event_count = 0usize;
     while let Some(chunk) = stream.next().await {
         let Ok(chunk) = chunk else { break };
         pending.push_str(&String::from_utf8_lossy(&chunk));
@@ -208,6 +209,7 @@ async fn collect_events(state: AppState, job_id: String, worker: WorkerConfig, r
             let (Some(event), Some(data)) = (event, data) else {
                 continue;
             };
+            event_count += 1;
             let Ok(Some(mut job)) = load_job(&state, &job_id).await else {
                 return;
             };
@@ -219,6 +221,16 @@ async fn collect_events(state: AppState, job_id: String, worker: WorkerConfig, r
                 }
                 "result" => {
                     if let Some(category) = data.get("category").and_then(Value::as_str) {
+                        tracing::info!(
+                            job_id,
+                            worker = %worker.name,
+                            category,
+                            level = data.get("level").and_then(|value| value.as_str()).unwrap_or("unknown"),
+                            model = data.get("model").and_then(|value| value.as_str()).unwrap_or("unknown"),
+                            reported_duration_ms = data.get("duration_ms").and_then(|value| value.as_f64()).unwrap_or_default(),
+                            event_elapsed_ms = started.elapsed().as_secs_f64() * 1_000.0,
+                            "worker result received"
+                        );
                         let replace = job
                             .categories
                             .get(category)
@@ -246,6 +258,7 @@ async fn collect_events(state: AppState, job_id: String, worker: WorkerConfig, r
                 return;
             }
             if event == "finished" {
+                tracing::info!(job_id, worker = %worker.name, worker_events_finished_ms = started.elapsed().as_secs_f64() * 1_000.0, event_count, "worker event stream finished");
                 return;
             }
         }
@@ -353,6 +366,7 @@ async fn submit_scan(
     let worker = state.workers
         [state.worker_cursor.fetch_add(1, Ordering::Relaxed) % state.workers.len()]
     .clone();
+    let upstream_started = Instant::now();
     let mut request = state
         .client
         .post(format!("{}/v1/scan", worker.url.trim_end_matches('/')))
@@ -396,6 +410,7 @@ async fn submit_scan(
             continue;
         };
         let job_id = format!("job_{}", Uuid::new_v4().simple());
+        tracing::info!(job_id, worker = %worker.name, worker_submit_ms = upstream_started.elapsed().as_secs_f64() * 1_000.0, "worker accepted scan");
         let job = Job {
             job_id: job_id.clone(),
             source: worker_job
@@ -460,6 +475,19 @@ async fn healthz() -> StatusCode {
     StatusCode::OK
 }
 
+async fn readyz(State(state): State<Arc<AppState>>) -> StatusCode {
+    let mut connection = state.redis.clone();
+    match tokio::time::timeout(
+        std::time::Duration::from_secs(1),
+        redis::cmd("PING").query_async::<String>(&mut connection),
+    )
+    .await
+    {
+        Ok(Ok(pong)) if pong == "PONG" => StatusCode::OK,
+        _ => StatusCode::SERVICE_UNAVAILABLE,
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
@@ -470,9 +498,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("gateway.workers must not be empty".into());
     }
     let bind: SocketAddr = config.server.bind.parse()?;
+    let redis = redis::Client::open(config.gateway.redis_url.as_str())?
+        .get_connection_manager()
+        .await?;
     let state = Arc::new(AppState {
         client: reqwest::Client::new(),
-        redis_url: config.gateway.redis_url,
+        redis,
         worker_token: config.gateway.worker_token,
         workers: config.gateway.workers,
         worker_cursor: Arc::new(AtomicUsize::new(0)),
@@ -486,7 +517,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
     let app = Router::new()
         .route("/healthz", get(healthz))
-        .route("/readyz", get(healthz))
+        .route("/readyz", get(readyz))
         .route("/v1/scan", post(submit_scan))
         .route("/v1/scan/:job_id", get(get_scan))
         .with_state(state);
@@ -498,6 +529,86 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn redis_disconnect_changes_readiness_and_recovers_job_storage() {
+        use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+        use tokio::net::TcpListener;
+
+        // Minimal RESP peer: terminate the first PING, then serve the reconnect.
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let mut payload = Vec::new();
+            for connection_index in 0..2 {
+                let (stream, _) = listener.accept().await.unwrap();
+                let mut stream = BufReader::new(stream);
+                loop {
+                    let mut line = String::new();
+                    if stream.read_line(&mut line).await.unwrap() == 0 {
+                        break;
+                    }
+                    let count: usize = line.trim().strip_prefix('*').unwrap().parse().unwrap();
+                    let mut args = Vec::new();
+                    for _ in 0..count {
+                        line.clear();
+                        stream.read_line(&mut line).await.unwrap();
+                        let len: usize = line.trim().strip_prefix('$').unwrap().parse().unwrap();
+                        let mut value = vec![0; len + 2];
+                        stream.read_exact(&mut value).await.unwrap();
+                        value.truncate(len);
+                        args.push(value);
+                    }
+                    let response = match args[0].as_slice() {
+                        b"CLIENT" => b"+OK\r\n".to_vec(),
+                        b"PING" if connection_index == 0 => break,
+                        b"PING" => b"+PONG\r\n".to_vec(),
+                        b"SETEX" => {
+                            payload = args[3].clone();
+                            b"+OK\r\n".to_vec()
+                        }
+                        b"GET" => format!(
+                            "${}\r\n{}\r\n",
+                            payload.len(),
+                            String::from_utf8_lossy(&payload)
+                        )
+                        .into_bytes(),
+                        command => panic!("unexpected Redis command: {command:?}"),
+                    };
+                    stream.get_mut().write_all(&response).await.unwrap();
+                }
+            }
+        });
+        let client = redis::Client::open(format!("redis://{address}/")).unwrap();
+        let state = Arc::new(AppState {
+            client: reqwest::Client::new(),
+            redis: client.get_connection_manager().await.unwrap(),
+            worker_token: String::new(),
+            workers: Vec::new(),
+            worker_cursor: Arc::new(AtomicUsize::new(0)),
+            key_hashes: Vec::new(),
+            retention_secs: 90,
+        });
+        assert_eq!(
+            readyz(State(Arc::clone(&state))).await,
+            StatusCode::SERVICE_UNAVAILABLE
+        );
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            while readyz(State(Arc::clone(&state))).await != StatusCode::OK {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("Redis connection must recover");
+        let job = completed_job(HashMap::new());
+        save_job(&state, &job).await.unwrap();
+        let restored = load_job(&state, &job.job_id).await.unwrap().unwrap();
+        assert_eq!(
+            serde_json::to_value(&restored).unwrap(),
+            serde_json::to_value(&job).unwrap()
+        );
+        server.abort();
+    }
 
     fn completed_job(categories: HashMap<String, Value>) -> Job {
         Job {

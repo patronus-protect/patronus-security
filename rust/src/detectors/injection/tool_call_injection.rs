@@ -1,26 +1,25 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::threat::looks_like_tool_call_injection_lower;
 use crate::EvaluationResult;
 
 pub struct ToolCallInjectionPipeline;
+
+impl Default for ToolCallInjectionPipeline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl ToolCallInjectionPipeline {
     pub fn new() -> Self {
         Self
     }
 
+    pub(crate) fn detect(&self, text: &str) -> crate::detectors::NativeDetection {
+        super::signal::native_detection("tool_call_injection", text)
+    }
+
     pub fn evaluate(&self, text: &str) -> EvaluationResult {
-        let matched = looks_like_tool_call_injection_lower(&text.to_lowercase());
-        EvaluationResult {
-            class_name: if matched {
-                "tool_call_injection"
-            } else {
-                "safe"
-            }
-            .to_string(),
-            confidence: 1.0,
-            level: "L1".to_string(),
-        }
+        self.detect(text).result
     }
 
     pub fn evaluate_batch(&self, texts: &[String]) -> Vec<EvaluationResult> {

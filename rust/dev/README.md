@@ -24,4 +24,3 @@ arguments.
 | `injection_gliner_memory_smoke` | Process RSS smoke for injection + GLiNER |
 | `ntdb_memory_smoke` | Process RSS smoke for the NTDB L2 executor |
 | `wolf_memory_smoke` | Process RSS smoke for Wolf Defender L3 |
-| `mmbert_pair_tokenizer` | mmBERT `.mmbpe` vs HuggingFace parity check |

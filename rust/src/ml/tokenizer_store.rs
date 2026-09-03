@@ -5,8 +5,6 @@ use std::{
     sync::{Arc, Mutex, OnceLock},
 };
 
-use tokenizers::Tokenizer;
-
 use super::mmbert_tokenizer::MmbertPairTokenizer;
 
 static GLOBAL_TOKENIZER_STORE: OnceLock<TokenizerStore> = OnceLock::new();
@@ -18,7 +16,6 @@ pub(crate) fn global_tokenizer_store() -> &'static TokenizerStore {
 #[derive(Default)]
 pub(crate) struct TokenizerStore {
     mmbert_cache: Mutex<HashMap<PathBuf, Arc<MmbertPairTokenizer>>>,
-    huggingface_cache: Mutex<HashMap<PathBuf, Arc<Tokenizer>>>,
 }
 
 impl TokenizerStore {
@@ -35,27 +32,6 @@ impl TokenizerStore {
             return Ok(Arc::clone(tok));
         }
         let tok = Arc::new(MmbertPairTokenizer::from_file(&path)?);
-        cache.insert(path, Arc::clone(&tok));
-        Ok(tok)
-    }
-
-    pub(crate) fn load_huggingface(
-        &self,
-        path: impl AsRef<Path>,
-    ) -> Result<Arc<Tokenizer>, Box<dyn std::error::Error>> {
-        let path = canonical_or_owned(path.as_ref());
-        let mut cache = self
-            .huggingface_cache
-            .lock()
-            .unwrap_or_else(|err| err.into_inner());
-        if let Some(tok) = cache.get(&path) {
-            return Ok(Arc::clone(tok));
-        }
-        let mut tok = Tokenizer::from_file(&path)
-            .map_err(|err| format!("failed to load tokenizer {}: {err}", path.display()))?;
-        let _ = tok.with_truncation(None);
-        tok.with_padding(None);
-        let tok = Arc::new(tok);
         cache.insert(path, Arc::clone(&tok));
         Ok(tok)
     }

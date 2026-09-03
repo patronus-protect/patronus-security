@@ -85,10 +85,12 @@ scanner.set_onnx_batch_mode("tensor_batch")   # vs. "lazy_batches"
 
 ## Manage L3 session lifetime
 
-L3 sessions are held resident in RAM and evict after an idle TTL. Raise it for bursty traffic to avoid
-reload cost, or lower it to reclaim memory sooner:
+L3 sessions evict after an idle TTL by default. Keep them resident for latency-sensitive services,
+raise the TTL for bursty traffic, or lower it to reclaim memory sooner:
 
 ```bash
+export PATRONUS_L3_TTL_SECS=-1  # never evict loaded sessions
+# or use a finite idle timeout:
 export PATRONUS_L3_TTL_SECS=600
 ```
 

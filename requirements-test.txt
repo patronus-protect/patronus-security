@@ -1,0 +1,4 @@
+# CI and local Python test tooling; not runtime dependencies of the wheel.
+maturin>=1.5,<2
+numpy>=2,<3
+pytest>=8,<10

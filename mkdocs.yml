@@ -77,8 +77,9 @@ plugins:
 
 # Internal planning / evaluation notes kept in the repo but not published on the site.
 exclude_docs: |
+  research/**
+  *-plan.md
   gliner-education-evaluation.md
-  unified-multitask-l3-plan.md
   asset-size-snapshot.json
 
 nav:
@@ -108,6 +109,7 @@ nav:
       - Performance & memory: concepts/performance.md
   - Reference:
       - Configuration: reference/configuration.md
+      - L1 rule catalog: reference/l1-rule-catalog.md
       - Result schema: reference/result-schema.md
       - Python API: python-api.md
       - Rust API: rust-api.md

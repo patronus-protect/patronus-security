@@ -24,8 +24,8 @@ flowchart TB
         GW["SecurityGateway<br/>(orchestrator + request registry)"]
         GW --> PIPE["Per-category Pipelines"]
         PIPE --> L1["L1 · native detectors<br/>(injection / dlp / pii / mcp)"]
-        PIPE --> L2["L2 · NTDB executor<br/>(shared static encoder + ONNX heads)"]
-        PIPE -.promote.-> WORKER["L3 background worker<br/>(cost-scheduled queue)"]
+        PIPE --> L2["L2 · NTDB executor<br/>(shared tokenizer + static embedder + ONNX heads)"]
+        L2 -.promote + token IDs.-> WORKER["L3 background worker<br/>(cost-scheduled queue)"]
         WORKER --> L3["L3 · full ONNX transformers<br/>(RAM-resident, TTL-evicted)"]
         WORKER -.check.-> CACHE["Model-output cache<br/>(logits · similarity · PII)"]
         GW --> ASSETS["Asset manager<br/>(download · verify · cache)"]
@@ -68,9 +68,13 @@ See [Categories](categories.md) for the per-category layer map.
 
 | Layer | Implementation | Loaded | Latency class |
 | --- | --- | --- | --- |
-| **L1** | Native Rust detectors in `detectors/` and `threat/` | always | microseconds |
-| **L2** | NTDB model packages executed by a shared static-embedding encoder | on warmup (if cached) | milliseconds |
-| **L3** | Full ONNX transformer sessions | RAM-resident per config, idle-TTL evicted | tens of milliseconds |
+| **L1** | Native Rust detectors in `detectors/` and `threat/` | no assets; gate-controlled | input-dependent |
+| **L2** | NTDB packages using the shared mmBERT tokenizer and static embedder | on warmup (if cached) | milliseconds |
+| **L3** | Full ONNX transformers aligned with L2's tokenizer and embeddings | RAM-resident per config, idle-TTL evicted | tens of milliseconds |
+
+The current official L2 and L3 packages use the same mmBERT tokenization contract and embedding
+space. L2 performs the cheap static-embedding path; when it promotes compatible chunks, their
+token IDs are handed directly to the full L3 transformer rather than computed a second time.
 
 L1 and L2 run on a **pool of gateway workers** (up to 4 threads, sized to available cores). L3
 runs in a **single separate background worker** so a heavy transformer never blocks a fast
@@ -95,7 +99,7 @@ L3 is expensive, so it is decoupled from the request path:
 - With progress reporting enabled the worker streams non-terminal **`progress`** / **`provisional`**
   events as chunks resolve (dedicated strategy only).
 - L3 errors and timeouts **degrade back to the L2 result** where a fallback exists.
-- Sessions are evicted only after a long idle TTL (`PATRONUS_L3_TTL_SECS`, default 300 s);
+- Sessions are evicted after the idle TTL (`PATRONUS_L3_TTL_SECS`, default 300 s; `-1` disables eviction);
   the worker never hot-swaps models per request.
 
 The worker can run **one dedicated model per category** or **one coalesced multi-head model**
@@ -152,8 +156,8 @@ sequenceDiagram
     L2-->>GW: L2 verdict (+ promote?)
     alt L2 promotes to L3
         GW->>Q: publish L2 fallback (result event)
-        GW->>W: enqueue L3 job
-        W->>W: schedule by cost, window long text
+        GW->>W: enqueue L3 job + compatible L2 token IDs
+        W->>W: schedule by cost, reuse tokens / window when needed
         W-->>Q: publish final L3 result event
     else no promotion
         GW->>Q: publish L2 result event
@@ -180,7 +184,7 @@ deployments — see [Offline & air-gapped scanning](../how-to/offline-airgapped.
 
 - **On-device first.** No scan content leaves the machine. The only network activity is the
   optional, one-time asset download from Hugging Face.
-- **Pay for detection only when needed.** L1 resolves most traffic in microseconds; the
+- **Pay for detection only when needed.** Native L1 avoids model inference; the
   transformer runs only for the uncertain minority that L2 promotes.
 - **Rust core, thin bindings.** All logic lives once in Rust; Python (and any future binding)
   is a wrapper, so behavior cannot drift between languages.

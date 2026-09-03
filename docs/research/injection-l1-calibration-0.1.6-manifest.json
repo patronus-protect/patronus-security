@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "calibration_id": "ark-injection-l1-0.1.6",
+  "tool_version": "injection-l1-calibration-0.1.6",
+  "seed": 42,
+  "objective": "candidate-level precision-first Injection L1 scoring",
+  "threshold_selection": "Fit negatives and development-validation negatives are both threshold-tuning data; neither is a final holdout.",
+  "feature_order": [
+    "critical_rule_count",
+    "high_rule_count",
+    "medium_rule_count",
+    "low_rule_count",
+    "exact_rule_count",
+    "clause_window_rule_count",
+    "rule_match_count",
+    "structural_feature_count",
+    "family_count",
+    "producer_count",
+    "source_derived_rule_count",
+    "audited_evidence_rule_count",
+    "has_rule_and_structural",
+    "span_length_log1p"
+  ],
+  "coefficient_constraints": {
+    "evidence_counts": "nonnegative",
+    "span_length_log1p": "nonpositive"
+  },
+  "positive_selection": "A candidate must reproduce at least one rule when scanned in isolation and have critical, source-derived, multi-producer, or rule-plus-structural corroboration.",
+  "sources": [
+    {
+      "name": "injection_train",
+      "file": "train.csv",
+      "role": "fit_positive",
+      "selected_documents": 8000,
+      "sha256": "6752b2d6c70b58c0a2eae8c905edac19de9d40997bdcb69de80b27e77cf2b1f4"
+    },
+    {
+      "name": "injection_train_benign",
+      "file": "train.csv",
+      "role": "fit_negative",
+      "selected_documents": 20000,
+      "sha256": "6752b2d6c70b58c0a2eae8c905edac19de9d40997bdcb69de80b27e77cf2b1f4"
+    },
+    {
+      "name": "hard_benign_full_calibration",
+      "file": "hard_benign_full_calibration.csv",
+      "role": "fit_negative",
+      "selected_documents": 2572,
+      "sha256": "153de9e6a98135b6519dc9f061a78aa148f6a2c35416217d1fe8e49f814d952b"
+    },
+    {
+      "name": "injection_validation",
+      "file": "validation.csv",
+      "role": "development_validation_positive",
+      "selected_documents": 4000,
+      "sha256": "d2529ab094bb8fb5d9ab900c8f5a4b604d265382f1688159a2cc874ea075e845"
+    },
+    {
+      "name": "injection_validation_benign",
+      "file": "validation.csv",
+      "role": "development_validation_negative",
+      "selected_documents": 8000,
+      "sha256": "d2529ab094bb8fb5d9ab900c8f5a4b604d265382f1688159a2cc874ea075e845"
+    },
+    {
+      "name": "hard_benign_full_validation",
+      "file": "hard_benign_full_validation.csv",
+      "role": "development_validation_negative",
+      "selected_documents": 2523,
+      "sha256": "42212c627a5bc6529a2a1dcc2456d11f8f377e28789497b5e096d21f6d4b0b85"
+    }
+  ],
+  "holdout": {
+    "name": "hard_benign_full_holdout",
+    "file": "hard_benign_full_holdout.csv",
+    "accessed": true,
+    "expected_documents": 3576,
+    "sha256": "bb09053c677ad28802d286ca117db3280c647188f786e992ef532590a227152a",
+    "accepted_false_positives": 0,
+    "evaluated_runtime_scorer_sha256": "88a57b166d1963f578fb8a3bf0caa9e40cfa0d2bd38b70200121b8fe21501380",
+    "current_runtime_applicability": "historical baseline only; the audited-evidence augmentation was not evaluated on this consumed holdout",
+    "report": "docs/research/injection-l1-final-holdout-0.1.6.json"
+  },
+  "release_gates": {
+    "scope": "executable development gates",
+    "development_candidate_precision_min": 0.995,
+    "development_document_false_positive_rate_max": 0.0005,
+    "hard_benign_accepted_false_positives_max": 0,
+    "holdout_accepted_false_positives_max": 0
+  },
+  "external_release_suites": [
+    {
+      "name": "language_and_family_regressions",
+      "status": "passed",
+      "coverage": ["English", "German", "every enabled Injection L1 family"],
+      "tests": [
+        "every_new_catalog_relationship_has_german_coverage",
+        "injection_l1_covers_every_legacy_pi_pattern_family",
+        "accepted_english_and_german_embedded_attacks_use_l1_decision_source"
+      ]
+    },
+    {
+      "name": "release_latency",
+      "status": "passed",
+      "coverage": ["1 KiB", "10 KiB", "100 KiB", "positive embedded attack"],
+      "runner": "scripts/benchmark_injection_l1.py",
+      "reported_statistics": ["milliseconds", "median", "p95"],
+      "report": "docs/research/injection-l1-latency-0.1.6.md"
+    },
+    {
+      "name": "frozen_hard_benign_holdout",
+      "status": "historical_baseline_passed",
+      "coverage": ["hard_benign_full_holdout"],
+      "report": "docs/research/injection-l1-final-holdout-0.1.6.json"
+    }
+  ],
+  "train_validation_text_overlap_audit": {
+    "normalization": "CRLF-to-LF plus outer whitespace trim then SHA-256",
+    "fit_unique_text_hashes": 30572,
+    "validation_unique_text_hashes": 14523,
+    "overlap_count": 0
+  },
+  "artifacts": {
+    "runtime_scorer": "rust/src/detectors/injection/rules/l1_scorer_0_1_6.json",
+    "runtime_scorer_sha256": "32384d69ffa16849a35d5fae01e3b83f3c1d60cd3a89578e6b61c5e8c2c17168",
+    "report": "docs/research/injection-l1-calibration-0.1.6.md",
+    "tool": "scripts/calibrate_injection_l1.py"
+  }
+}

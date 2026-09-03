@@ -34,16 +34,12 @@ mod ntdb_decision {
     fn binary_output() -> ScoreOutput {
         ScoreOutput {
             aggregator_id: "router".to_string(),
-            task: "binary_promote".to_string(),
-            labels: vec![
-                "benign".to_string(),
-                "attack".to_string(),
-                "promote".to_string(),
-            ],
-            predicted_label: "promote".to_string(),
-            predicted_index: 2,
-            class_scores: vec![0.1, 0.9, 0.8],
-            class_logits: vec![0.0, 2.0, 1.0],
+            task: "binary".to_string(),
+            labels: vec!["benign".to_string(), "attack".to_string()],
+            predicted_label: "attack".to_string(),
+            predicted_index: 1,
+            class_scores: vec![0.1, 0.9],
+            class_logits: vec![0.0, 2.0],
             chunks: 2,
             attack_threshold: Some(0.5),
             promote_score: Some(0.8),
@@ -58,7 +54,7 @@ mod ntdb_decision {
     }
 
     #[test]
-    fn binary_promote_routes_l3_without_exposing_promote_label() {
+    fn v4_binary_promotion_is_separate_from_classification() {
         let decision =
             NtdbDecision::from_score_output("injection".to_string(), binary_output()).unwrap();
 
@@ -68,34 +64,24 @@ mod ntdb_decision {
     }
 
     #[test]
-    fn binary_task_with_promote_label_uses_attack_threshold() {
+    fn v4_promotion_below_threshold_keeps_l2_decision() {
         let mut output = binary_output();
-        output.task = "binary".to_string();
-        output.predicted_label = "promote".to_string();
-        output.predicted_index = 2;
-
+        output.promote_score = Some(0.1);
         let decision = NtdbDecision::from_score_output("injection".to_string(), output).unwrap();
-
-        assert_eq!(decision.task, "binary");
         assert_eq!(decision.fallback_label, "attack");
-        assert_ne!(decision.fallback_label, "promote");
-        assert!(decision.route_to_l3);
+        assert!(!decision.route_to_l3);
     }
 
     #[test]
-    fn multiclass_promote_uses_real_class_as_fallback() {
+    fn v4_multiclass_promotion_keeps_classification() {
         let output = ScoreOutput {
             aggregator_id: "aggregator".to_string(),
             task: "multiclass".to_string(),
-            labels: vec![
-                "finance".to_string(),
-                "legal".to_string(),
-                "promote".to_string(),
-            ],
-            predicted_label: "promote".to_string(),
-            predicted_index: 2,
-            class_scores: vec![0.7, 0.2, 0.9],
-            class_logits: vec![1.0, 0.0, 2.0],
+            labels: vec!["finance".to_string(), "legal".to_string()],
+            predicted_label: "finance".to_string(),
+            predicted_index: 0,
+            class_scores: vec![0.7, 0.3],
+            class_logits: vec![1.0, 0.0],
             chunks: 1,
             attack_threshold: None,
             promote_score: Some(0.9),
@@ -112,26 +98,6 @@ mod ntdb_decision {
 
         assert_eq!(decision.fallback_label, "finance");
         assert!(decision.route_to_l3);
-    }
-}
-
-mod ntdb_heuristics {
-    use patronus_ark::ml::ntdb_executor::test_util::{
-        global_text_heuristics, local_text_heuristics,
-        shared_global_text_heuristics_from_token_stats, TokenIdStats,
-    };
-
-    #[test]
-    fn heuristic_shapes_match_router_contract() {
-        let mut token_stats = TokenIdStats::default();
-        token_stats.observe_all(&[100, 200, 300]);
-        let shared = shared_global_text_heuristics_from_token_stats("ABC{}", token_stats);
-
-        assert_eq!(local_text_heuristics("ABC{}", &[100, 200, 300]).len(), 11);
-        assert_eq!(
-            global_text_heuristics(shared, 1, 0.1, 0.2, 0.3, 0.4, 0.8).len(),
-            18
-        );
     }
 }
 
@@ -173,7 +139,6 @@ mod ntdb_encoder {
             source_model_path: Some("same-minilm".to_string()),
             model: None,
             tokenizer_family: None,
-            compab_l3_tokenizer: None,
         };
 
         let mut store = StaticEncoderStore::default();
@@ -200,7 +165,6 @@ mod ntdb_encoder {
             source_model_path: None,
             model: Some("ibm-granite/granite-embedding-97m-multilingual-r2".to_string()),
             tokenizer_family: None,
-            compab_l3_tokenizer: None,
         };
 
         let mut store = StaticEncoderStore::default();
@@ -237,16 +201,7 @@ is_linear=0
 }
 
 mod ntdb_package {
-    use patronus_ark::ml::ntdb_executor::test_util::unit_left_dot;
     use patronus_ark::ml::ntdb_executor::{NtdbMultiPackage, NtdbPackageSpec};
-
-    #[test]
-    fn centroid_feature_matches_python_contract() {
-        let chunk = [3.0_f32, 4.0];
-        let raw_centroid = [0.2_f32, 0.1];
-
-        assert!((unit_left_dot(&chunk, &raw_centroid) - 0.2).abs() < 1e-6);
-    }
 
     #[test]
     fn multi_loader_rejects_empty_specs() {
@@ -261,99 +216,5 @@ mod ntdb_package {
         ]);
 
         assert!(result.is_err());
-    }
-}
-
-mod tokenizer_parity_and_compat {
-    use patronus_ark::ml::ntdb_executor::manifest::MiniLmManifest;
-    use patronus_ark::ml::ntdb_executor::test_util::RuntimeTokenizer;
-    use std::fs;
-
-    #[test]
-    fn manifest_evaluates_compat_l3_tokenizer_and_family() {
-        let manifest_mmbert: MiniLmManifest = serde_json::from_str(
-            r#"{
-                "embedding_matrix_file": "matrix.f16",
-                "vocab_size": 100,
-                "embedding_dim": 64,
-                "content_tokens_per_chunk": 256,
-                "tokenizer_family": "mmbert"
-            }"#,
-        )
-        .unwrap();
-        assert!(manifest_mmbert.is_l3_tokenizer_compatible());
-
-        let manifest_flag: MiniLmManifest = serde_json::from_str(
-            r#"{
-                "embedding_matrix_file": "matrix.f16",
-                "vocab_size": 100,
-                "embedding_dim": 64,
-                "content_tokens_per_chunk": 256,
-                "compat_l3_tokenizer": true
-            }"#,
-        )
-        .unwrap();
-        assert!(manifest_flag.is_l3_tokenizer_compatible());
-
-        let manifest_legacy_name: MiniLmManifest = serde_json::from_str(
-            r#"{
-                "embedding_matrix_file": "matrix.f16",
-                "vocab_size": 100,
-                "embedding_dim": 64,
-                "content_tokens_per_chunk": 256,
-                "compab_l3_tokenizer": true
-            }"#,
-        )
-        .unwrap();
-        assert!(manifest_legacy_name.is_l3_tokenizer_compatible());
-
-        let manifest_incompatible: MiniLmManifest = serde_json::from_str(
-            r#"{
-                "embedding_matrix_file": "matrix.f16",
-                "vocab_size": 100,
-                "embedding_dim": 64,
-                "content_tokens_per_chunk": 256,
-                "tokenizer_family": "modernbert",
-                "compat_l3_tokenizer": false
-            }"#,
-        )
-        .unwrap();
-        assert!(!manifest_incompatible.is_l3_tokenizer_compatible());
-
-        let manifest_explicit_false_with_mmbert: MiniLmManifest = serde_json::from_str(
-            r#"{
-                "embedding_matrix_file": "matrix.f16",
-                "vocab_size": 100,
-                "embedding_dim": 64,
-                "content_tokens_per_chunk": 254,
-                "tokenizer_family": "mmbert",
-                "compat_l3_tokenizer": false
-            }"#,
-        )
-        .unwrap();
-        assert!(!manifest_explicit_false_with_mmbert.is_l3_tokenizer_compatible());
-    }
-
-    #[test]
-    fn tokenizer_store_shares_arc_across_calls() {
-        let dir = std::env::temp_dir().join(format!("patronus-tok-store-{}", std::process::id()));
-        fs::create_dir_all(&dir).unwrap();
-        fs::write(
-            dir.join("tokenizer.json"),
-            r#"{"version":"1.0","truncation":null,"padding":null,"added_tokens":[],"normalizer":null,"pre_tokenizer":null,"post_processor":null,"decoder":null,"model":{"type":"BPE","dropout":null,"unk_token":null,"continuing_subword_prefix":null,"end_of_word_suffix":null,"fuse_unk":null,"byte_fallback":false,"vocab":{"[PAD]":0,"hello":1},"merges":[]}}"#,
-        )
-        .unwrap();
-
-        let tok1 = RuntimeTokenizer::load(&dir).unwrap();
-        let tok2 = RuntimeTokenizer::load(&dir).unwrap();
-
-        match (tok1, tok2) {
-            (RuntimeTokenizer::HuggingFace(a), RuntimeTokenizer::HuggingFace(b)) => {
-                assert!(std::sync::Arc::ptr_eq(&a, &b));
-            }
-            _ => panic!("expected HuggingFace tokenizer"),
-        }
-
-        let _ = fs::remove_dir_all(dir);
     }
 }

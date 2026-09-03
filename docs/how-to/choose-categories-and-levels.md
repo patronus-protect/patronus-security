@@ -22,7 +22,7 @@ for what each one classifies and which layers back it.
 
 | `max_level` | Use when |
 | --- | --- |
-| `l1` | You want microsecond, always-offline, rule-based coverage only. |
+| `l1` | You want asset-free, always-offline, rule-based coverage only. Runtime still depends on input size and enabled rules. |
 | `l2` | You want learned classification but never the transformer cost. Great default for high-throughput paths. |
 | `l3` | You want maximum accuracy and can afford occasional transformer inference on promoted requests. |
 

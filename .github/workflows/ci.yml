@@ -10,11 +10,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.98.0
+        with:
+          components: clippy, rustfmt
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - run: cargo fmt --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test -p patronus-ark
       - run: cargo test -p ark-api
       - run: python scripts/generate_docs.py --check
@@ -26,21 +29,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.98.0
+        with:
+          components: clippy, rustfmt
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - run: python -m venv .venv
-      - run: .venv/bin/python -m pip install maturin
+      - run: .venv/bin/python -m pip install -r requirements-test.txt
       - run: .venv/bin/python -m maturin develop --manifest-path python/Cargo.toml
+        env:
+          VIRTUAL_ENV: ${{ github.workspace }}/.venv
       - run: .venv/bin/python -m unittest discover -s python/tests
+      - run: .venv/bin/python -m pytest scripts/tests -q
 
   native-throughput:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.98.0
+        with:
+          components: clippy, rustfmt
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -51,7 +61,7 @@ jobs:
           key: ark-models-${{ runner.os }}-${{ hashFiles('rust/src/assets/specs.rs') }}
       - run: python -m venv .build-venv
       - run: .build-venv/bin/python -m pip install maturin
-      - run: .build-venv/bin/python -m maturin build --release --manifest-path python/Cargo.toml --out dist
+      - run: .build-venv/bin/python -m maturin build --release --manifest-path python/Cargo.toml --interpreter .build-venv/bin/python --out dist
       - run: python -m venv .perf-venv
       - run: .perf-venv/bin/python -m pip install dist/*.whl
       - name: Full gated unified native throughput regression (without GLiNER)

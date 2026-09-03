@@ -46,7 +46,7 @@ blocking `scan_*` helpers return — is a **dictionary describing one category's
 | `model` | str | The producing scanner, e.g. `native:dlp`, `external:<id>`, or a model id. |
 | `duration_ms` | float | Wall-clock time spent producing this result. |
 | `decision` | dict | Structured classifier decision envelope for terminal model-backed classifier results. Python omits this key when no authoritative classifier decision exists; Rust exposes `SecurityScanResult.decision: Option<DecisionEnvelope>`. |
-| `evidence_spans` | list | Exact matched spans (PII/DLP/dynamic-pii); empty for safe/model-only results. |
+| `evidence_spans` | list | Exact matched spans from span-producing native scanners and dynamic PII; empty for safe/model-only results. |
 | `label_scores` | list | Per-label scores for multi-label heads (e.g. `tool_tags`); each entry is `{label, confidence, matched}`. Empty for single-label results. |
 | `layers` | list | Per-layer breakdown of everything that ran for this category. |
 
@@ -63,7 +63,7 @@ Each element of `layers` records one layer's output:
 | `matched` | bool | Whether this layer produced a positive match. |
 | `duration_ms` | float | Wall-clock time spent in this layer. |
 | `thresholds` | dict | Thresholds applied at this layer (operating point, etc.). |
-| `details` | dict | Layer-specific extra detail. NTDB L2 layers add L3 promotion context; L3 layers add chunk execution metadata. The stable policy contract is `decision`, not free-form `details`. |
+| `details` | dict | Layer-specific extra detail. Native PII/DLP layers can expose non-blocking `l1_anchors`; NTDB L2 layers add L3 promotion context; L3 layers add chunk execution metadata. The stable policy contract is `decision`, not free-form `details`. |
 
 ### Decision envelope
 
@@ -110,7 +110,7 @@ classifier-looking scores.
     ],
     "terminality": {"completion": "complete", "degraded": False, "degradation_reason": None},
     "provenance": {
-        "ark_version": "0.1.5",
+        "ark_version": "0.1.6",
         "schema_version": "ark.decision.v1",
         "model": "unified-v3-threat",
     },
@@ -121,9 +121,9 @@ classifier-looking scores.
 | --- | --- | --- |
 | `schema_version` | str | Decision-envelope schema version. Currently `ark.decision.v1`. |
 | `final_result` | dict | The final Ark verdict after threshold arbitration: `{class_name, confidence, source}`. |
-| `decision_candidate` | dict \| null | Canonical policy input. It is the winning accepted candidate when `final_arbitration` is `l2`, `l3`, or `union`; for `default`, it is the highest-priority rejected candidate in `l3`, `union`, `l2` order. `None` when no valid classifier candidate exists. |
+| `decision_candidate` | dict \| null | Canonical policy input. It is the selected accepted or rejected candidate from L1/L2/L3/Union arbitration. `None` when no valid candidate exists. |
 | `recommendation` | dict | Ark's calibrated default recommendation. `accepted` is false only for `final_arbitration: "default"`. |
-| `candidates` | list | All typed L2, L3, and Union candidates available to arbitration. |
+| `candidates` | list | All typed L1, L2, L3, and Union candidates available to arbitration. |
 | `terminality` | dict | Completion state for the result: `completion`, `degraded`, and optional `degradation_reason`. |
 | `provenance` | dict | Minimal source provenance: `ark_version`, `schema_version`, and `model`. |
 
@@ -131,7 +131,7 @@ Candidate entries have this shape:
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `source` | str | `l2`, `l3`, or `union`. `final_result.source` may also be `default`. |
+| `source` | str | `l1`, `l2`, `l3`, or `union`. `final_result.source` may also be `default`. |
 | `class_name` | str | Candidate class before downstream Patronus policy. |
 | `confidence` | float | Candidate confidence from that source. |
 | `acceptance_threshold` | float | Ark's calibrated acceptance threshold for this candidate's source/class/operating point. |
@@ -151,10 +151,25 @@ Candidate confidences are calibrated for Ark's bundled threshold profiles. Treat
 context of their `category`, `source`, `model`, and `operating_point`; do not compare scores across
 unrelated sources or model versions without their matching thresholds.
 
+### Native L1 components
+
+Built-in L1 matchers emit components directly from regex captures, lexical/structural
+relationships, or decoded payloads. PII and DLP expose them under
+`layers[].details.matched_rules[].components`, alongside the rule ID and finding range.
+Components include `component_id`, `explanation`, `start_byte`, `end_byte`, and
+`span_precision`. Contextual identifiers retain an anchor prefix/suffix and the validated
+value. Injection's candidate features retain a complete `rule_match` plus its `anchor`
+components; structural producer features retain their `structural` kind. Anchor decomposition
+does not multiply the completed rule's scoring weight.
+
+`exact` refers to original-text offsets, including mapped Unicode normalization.
+`transformed_source` identifies the source container of a decoded payload when a narrower
+character mapping is unavailable; the explanation identifies the decoded match.
+
 ### Evidence spans
 
-Native PII and DLP findings, and `dynamic-pii` entities, populate `evidence_spans` with exact
-offsets:
+Native PII, all built-in DLP producers, accepted native Injection findings, and
+`dynamic-pii` entities populate `evidence_spans` with original-text offsets:
 
 ```python
 for span in result["evidence_spans"]:
@@ -164,6 +179,106 @@ for span in result["evidence_spans"]:
 Each span carries the matched `label`, the matched `text`, a `score`, and both **byte** and
 **character** offsets (`start_byte`/`end_byte`/`start_char`/`end_char`). Safe native results
 leave `evidence_spans` empty.
+
+PII spans with different labels may overlap: each matching class is retained, including a
+numeric IBAN substring that also passes the credit-card validator. The primary `class_name`
+does not enumerate every match; consume `evidence_spans` for all detected classes. Overlapping
+matches within the same PII label are deduplicated.
+
+Native PII and DLP scans do not compute or return the separate diagnostic context anchors by default.
+Enable diagnostic context explicitly with Rust `ScanGateMatrix.explain = true`, Python
+`execution_gates={"explain": True}`, or worker API `gates: {explain: true}`. Explained layers
+can expose context under `details.l1_anchors`; these anchors are not findings:
+
+```json
+{
+  "kind": "anchor",
+  "anchor_kind": "lexical",
+  "category": "date_of_birth",
+  "strength": "strong",
+  "text": "Geburtsdatum",
+  "start_byte": 18,
+  "end_byte": 30,
+  "start_char": 18,
+  "end_char": 30
+}
+```
+
+Consumers must base immediate findings on `evidence_spans` and the result decision, not on an
+anchor alone. Anchor metadata is diagnostic only and does not affect detection. Each native
+layer includes at most 12 anchors within a 4-KiB serialized metadata budget; omitted anchors
+set `details.l1_anchors_truncated` to `true`. Match text is previewed at most 96 UTF-8 bytes;
+`text_truncated: true` marks a shortened preview, while all offsets still cover the full match.
+
+Dynamic PII L3 layers expose `details.inference_groups`. Each entry identifies a stable base or
+conditional GLiNER call, its labels, the conditional rule index, and optional byte ranges inherited
+from matching final source-pipeline chunks. This is diagnostic provenance; the public findings
+remain the merged `evidence_spans`, with the highest-scoring exact duplicate retained.
+
+For registered native injection findings, the span label is the stable Ark rule ID. The
+corresponding layer `details` contain an ordered `matched_rules` list with the Ark ID, optional
+upstream ID, family, severity, description, source revision, byte offsets, and `span_precision`.
+Data-driven regex rules use `exact`; procedural detectors currently use a localized `clause` or
+bounded `window`, and a relationship assembled from independently matched components uses
+`composed`. A provenance weight, when present, is metadata and not an Ark decision threshold.
+Source-derived rules also expose `references` for secondary pinned sources, while `source`,
+`source_revision`, `source_license`, `upstream_id`, and `adaptation` identify the primary origin
+and Ark-specific narrowing.
+
+The aggregated native Injection result exposes `layers[].details.l1_candidates` for accepted and
+rejected candidates. Each candidate has a deterministic ID derived from its original-document
+byte span, byte and character offsets, contributing producers, rule IDs and families, maximum
+severity, calibrated score, threshold, acceptance result, and typed features:
+
+```json
+{
+  "candidate_id": "injection:l1:18:57",
+  "category": "injection",
+  "start_byte": 18,
+  "end_byte": 57,
+  "start_char": 18,
+  "end_char": 57,
+  "rule_ids": ["ark.injection.override.hierarchy"],
+  "rule_severities": {"ark.injection.override.hierarchy": "critical"},
+  "families": ["instruction_override"],
+  "max_severity": "critical",
+  "producers": ["native:instruction_override"],
+  "score": 0.91,
+  "acceptance_threshold": 0.85,
+  "accepted": true,
+  "score_version": "injection-l1-0.1.6",
+  "features": [
+    {
+      "feature_id": "rule:ark.injection.override.hierarchy:18:57",
+      "kind": "rule_match",
+      "value": 1.0,
+      "explanation": "Invalidates or replaces a prior instruction hierarchy",
+      "start_byte": 18,
+      "end_byte": 57,
+      "span_precision": "clause",
+      "provenance": {
+        "rule_id": "ark.injection.override.hierarchy",
+        "source": "ark-native",
+        "source_revision": "71ff48e513ffee7810b29704e4cd9d4715aeaebd"
+      }
+    }
+  ]
+}
+```
+
+The separately gateable internal `native:injection_structural` producer uses the same candidate
+contract. It may create a candidate without a flat catalog match.
+Its relationship ID remains in `rule_ids`, while `features[].kind` is
+`structural`; each feature has the exact span of one required component, such
+as a context override, instruction-hierarchy reference, disclosure action, or
+sensitive instruction object. The candidate span is the smallest
+original-document region containing all required components.
+
+The `native:injection_l1` aggregate scores each merged candidate. Accepted candidates create
+public finding spans and use `source: "l1"`; rejected candidates remain visible in
+`decision.candidates` with `accepted: false` while the top-level result stays safe. Individual
+native Injection producer verdicts are no longer returned as separate public results. Registered
+external L1 detectors remain separate and unchanged.
 
 ## Async queue events
 

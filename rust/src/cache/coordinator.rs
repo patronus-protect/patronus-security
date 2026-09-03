@@ -301,9 +301,11 @@ impl CacheCoordinator {
     }
 }
 
+type PersistentStoreHandle = (Arc<dyn ExactCacheStore>, Option<Arc<WriteBehindStats>>);
+
 fn open_persistent_store(
     config: &super::PersistentCacheConfig,
-) -> Result<(Arc<dyn ExactCacheStore>, Option<Arc<WriteBehindStats>>), CacheError> {
+) -> Result<PersistentStoreHandle, CacheError> {
     let redb: Arc<dyn ExactCacheStore> =
         RedbCacheStore::open_shared(&config.storage_location, config.encryption.clone())?;
     Ok(match config.write_mode {

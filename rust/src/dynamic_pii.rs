@@ -7,11 +7,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::SecurityCategory;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 /// Request-local condition controlling whether `dynamic-pii` runs.
 pub enum DynamicPiiExecutionGate {
     /// Run whenever the category and L3 model are enabled.
+    #[default]
     Always,
     /// Run when a source pipeline returns one of the configured results.
     IfResultIn {
@@ -20,12 +21,6 @@ pub enum DynamicPiiExecutionGate {
     },
     /// Run only after a source pipeline finishes without a usable result.
     IfNoResult { pipeline: String },
-}
-
-impl Default for DynamicPiiExecutionGate {
-    fn default() -> Self {
-        Self::Always
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -38,7 +33,7 @@ pub struct DynamicPiiResultCondition {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-/// Labels activated when another pipeline returns a configured result.
+/// Extra label group activated on chunks with a matching final source result.
 pub struct DynamicPiiConditionalLabels {
     pub labels: Vec<String>,
     pub when: DynamicPiiResultCondition,
@@ -47,6 +42,14 @@ pub struct DynamicPiiConditionalLabels {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 /// Pipeline-specific configuration for the L3-only `dynamic-pii` scanner.
+///
+/// `labels` form the stable base GLiNER group for the full input. Conditional
+/// labels are never concatenated with that group: every matching rule runs its
+/// extra labels separately and only on chunks whose final source-pipeline class
+/// matches. Base labels repeated by a conditional rule are removed from its
+/// extra call. Dynamic PII waits for referenced source pipelines to reach a
+/// terminal result (including L2 results that do not promote), instead of
+/// resolving against an interim L2 class.
 pub struct DynamicPiiConfig {
     /// Canonical entity labels; GLiNER receives underscores as spaces in this order.
     pub labels: Vec<String>,
@@ -80,7 +83,10 @@ pub struct DynamicPiiConfig {
 impl Default for DynamicPiiConfig {
     fn default() -> Self {
         Self {
-            labels: ["organization", "location", "date"]
+            // Keep the always-on bundle small and semantic. In particular, do
+            // not submit `person` together with its `first_name`/`last_name`
+            // children: GLiNER makes those labels compete for the same span.
+            labels: ["organization", "date", "person", "city", "country"]
                 .map(String::from)
                 .to_vec(),
             threshold: 0.5,
@@ -174,35 +180,92 @@ impl DynamicPiiConfig {
     pub(crate) fn resolve(
         &self,
         pipeline_results: &HashMap<String, Vec<String>>,
+        pipeline_chunks: &HashMap<String, Vec<DynamicPiiSourceChunk>>,
     ) -> Option<DynamicPiiResolution> {
         if !execution_gate_matches(&self.execution_gate, pipeline_results) {
             return None;
         }
-        let mut labels = self.labels.clone();
-        let mut seen = labels.iter().cloned().collect::<HashSet<_>>();
+        let mut inference_groups = Vec::new();
+        if !self.labels.is_empty() {
+            inference_groups.push(DynamicPiiInferenceGroup {
+                rule_index: None,
+                config: self.inference_group_config(self.labels.clone()),
+                ranges: None,
+            });
+        }
         let mut activated_conditional_rules = Vec::new();
         for (index, rule) in self.conditional_labels.iter().enumerate() {
-            if result_condition_matches(&rule.when, pipeline_results) {
-                activated_conditional_rules.push(index);
-                for label in &rule.labels {
-                    if seen.insert(label.clone()) {
-                        labels.push(label.clone());
-                    }
-                }
+            let ranges = matching_chunk_ranges(&rule.when, pipeline_chunks);
+            let scope = match ranges {
+                Some(ranges) if ranges.is_empty() => continue,
+                Some(ranges) => Some(ranges),
+                None if result_condition_matches(&rule.when, pipeline_results) => None,
+                None => continue,
+            };
+            activated_conditional_rules.push(index);
+            let labels = self.conditional_extra_labels(rule);
+            if labels.is_empty() {
+                continue;
             }
+            inference_groups.push(DynamicPiiInferenceGroup {
+                rule_index: Some(index),
+                config: self.inference_group_config(labels),
+                ranges: scope,
+            });
         }
-        if labels.is_empty() {
+        if inference_groups.is_empty() {
             return None;
         }
+        Some(DynamicPiiResolution {
+            inference_groups,
+            activated_conditional_rules,
+        })
+    }
+
+    pub(crate) fn dependency_pipelines(&self) -> HashSet<&str> {
+        let mut pipelines = HashSet::new();
+        match &self.execution_gate {
+            DynamicPiiExecutionGate::Always => {}
+            DynamicPiiExecutionGate::IfResultIn { pipeline, .. }
+            | DynamicPiiExecutionGate::IfNoResult { pipeline } => {
+                pipelines.insert(pipeline.as_str());
+            }
+        }
+        for rule in &self.conditional_labels {
+            pipelines.insert(rule.when.pipeline.as_str());
+        }
+        pipelines
+    }
+
+    pub(crate) fn warmup_group_configs(&self) -> Vec<DynamicPiiConfig> {
+        let mut configs = Vec::new();
+        if !self.labels.is_empty() {
+            configs.push(self.inference_group_config(self.labels.clone()));
+        }
+        configs.extend(self.conditional_labels.iter().filter_map(|rule| {
+            let labels = self.conditional_extra_labels(rule);
+            (!labels.is_empty()).then(|| self.inference_group_config(labels))
+        }));
+        configs
+    }
+
+    fn conditional_extra_labels(&self, rule: &DynamicPiiConditionalLabels) -> Vec<String> {
+        rule.labels
+            .iter()
+            .filter(|label| !self.labels.contains(label))
+            .cloned()
+            .collect()
+    }
+
+    fn inference_group_config(&self, labels: Vec<String>) -> DynamicPiiConfig {
         let mut config = self.clone();
         config.labels = labels;
+        config.conditional_labels.clear();
+        config.execution_gate = DynamicPiiExecutionGate::Always;
         config
             .label_thresholds
             .retain(|label, _| config.labels.contains(label));
-        Some(DynamicPiiResolution {
-            config,
-            activated_conditional_rules,
-        })
+        config
     }
 
     fn possible_labels(&self) -> Vec<String> {
@@ -218,13 +281,6 @@ impl DynamicPiiConfig {
             }
         }
         labels
-    }
-
-    pub(crate) fn possible_inference_labels(&self) -> Vec<String> {
-        self.possible_labels()
-            .iter()
-            .map(|label| gliner_inference_label(label))
-            .collect()
     }
 
     pub(crate) fn inference_threshold(&self) -> f32 {
@@ -283,8 +339,29 @@ fn gliner_inference_label(label: &str) -> String {
 }
 
 pub(crate) struct DynamicPiiResolution {
-    pub config: DynamicPiiConfig,
+    pub inference_groups: Vec<DynamicPiiInferenceGroup>,
     pub activated_conditional_rules: Vec<usize>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct DynamicPiiInferenceGroup {
+    pub rule_index: Option<usize>,
+    pub config: DynamicPiiConfig,
+    /// `None` scans the complete input; conditional groups carry exact final
+    /// source-classification ranges.
+    pub ranges: Option<Vec<DynamicPiiTextRange>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct DynamicPiiTextRange {
+    pub start_byte: usize,
+    pub end_byte: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct DynamicPiiSourceChunk {
+    pub class_name: String,
+    pub range: DynamicPiiTextRange,
 }
 
 fn normalize_execution_gate(gate: &mut DynamicPiiExecutionGate) -> Result<(), String> {
@@ -357,6 +434,30 @@ fn result_condition_matches(
         .is_some_and(|actual| actual.iter().any(|value| condition.results.contains(value)))
 }
 
+fn matching_chunk_ranges(
+    condition: &DynamicPiiResultCondition,
+    pipeline_chunks: &HashMap<String, Vec<DynamicPiiSourceChunk>>,
+) -> Option<Vec<DynamicPiiTextRange>> {
+    let chunks = pipeline_chunks.get(&condition.pipeline)?;
+    let mut ranges = chunks
+        .iter()
+        .filter(|chunk| condition.results.contains(&chunk.class_name))
+        .map(|chunk| chunk.range)
+        .collect::<Vec<_>>();
+    ranges.sort_by_key(|range| (range.start_byte, range.end_byte));
+    let mut merged = Vec::<DynamicPiiTextRange>::new();
+    for range in ranges {
+        if let Some(previous) = merged.last_mut() {
+            if range.start_byte <= previous.end_byte {
+                previous.end_byte = previous.end_byte.max(range.end_byte);
+                continue;
+            }
+        }
+        merged.push(range);
+    }
+    Some(merged)
+}
+
 fn validate_threshold(name: &str, threshold: f32) -> Result<(), String> {
     if threshold.is_finite() && (0.0..=1.0).contains(&threshold) {
         Ok(())
@@ -379,7 +480,12 @@ pub struct EvidenceSpan {
 
 #[cfg(test)]
 mod tests {
-    use super::DynamicPiiConfig;
+    use std::collections::HashMap;
+
+    use super::{
+        DynamicPiiConditionalLabels, DynamicPiiConfig, DynamicPiiResultCondition,
+        DynamicPiiSourceChunk, DynamicPiiTextRange,
+    };
 
     #[test]
     fn snake_case_labels_use_natural_language_for_inference() {
@@ -404,6 +510,19 @@ mod tests {
             config.canonical_label_for("passport number"),
             Some("passport_number")
         );
+    }
+
+    #[test]
+    fn default_core_bundle_avoids_competing_person_name_labels() {
+        let config = DynamicPiiConfig::default().validated().unwrap();
+
+        assert_eq!(
+            config.labels,
+            ["organization", "date", "person", "city", "country"].map(String::from)
+        );
+        assert!(!config.labels.iter().any(|label| label == "first_name"));
+        assert!(!config.labels.iter().any(|label| label == "last_name"));
+        assert_eq!(config.threshold, 0.5);
     }
 
     #[test]
@@ -432,6 +551,125 @@ mod tests {
                 "one two three four five six seven eight nine ten eleven twelve thirteen"
             ),
             2_000
+        );
+    }
+
+    #[test]
+    fn base_labels_stay_stable_when_a_conditional_group_activates() {
+        let config = DynamicPiiConfig {
+            labels: vec!["person".to_string()],
+            conditional_labels: vec![DynamicPiiConditionalLabels {
+                labels: ["person", "employee_id", "salary"]
+                    .map(String::from)
+                    .to_vec(),
+                when: DynamicPiiResultCondition {
+                    pipeline: "sensitive_document".to_string(),
+                    results: vec!["hr".to_string()],
+                },
+            }],
+            ..DynamicPiiConfig::default()
+        }
+        .validated()
+        .unwrap();
+        let other = config
+            .resolve(
+                &HashMap::from([("sensitive_document".to_string(), vec!["other".to_string()])]),
+                &HashMap::new(),
+            )
+            .unwrap();
+        let hr = config
+            .resolve(
+                &HashMap::from([("sensitive_document".to_string(), vec!["hr".to_string()])]),
+                &HashMap::new(),
+            )
+            .unwrap();
+
+        assert_eq!(other.inference_groups.len(), 1);
+        assert_eq!(other.inference_groups[0].config.labels, ["person"]);
+        assert_eq!(hr.inference_groups[0].config.labels, ["person"]);
+        assert_eq!(
+            hr.inference_groups[1].config.labels,
+            ["employee_id", "salary"]
+        );
+        assert!(hr
+            .inference_groups
+            .iter()
+            .all(|group| group.config.labels != ["person", "employee_id", "salary"]));
+    }
+
+    #[test]
+    fn conditional_groups_use_only_chunks_with_the_final_matching_class() {
+        let config = DynamicPiiConfig {
+            labels: vec!["person".to_string()],
+            conditional_labels: vec![
+                DynamicPiiConditionalLabels {
+                    labels: vec!["employee_id".to_string()],
+                    when: DynamicPiiResultCondition {
+                        pipeline: "sensitive_document".to_string(),
+                        results: vec!["hr".to_string()],
+                    },
+                },
+                DynamicPiiConditionalLabels {
+                    labels: vec!["medical_condition".to_string()],
+                    when: DynamicPiiResultCondition {
+                        pipeline: "sensitive_document".to_string(),
+                        results: vec!["other".to_string()],
+                    },
+                },
+            ],
+            ..DynamicPiiConfig::default()
+        }
+        .validated()
+        .unwrap();
+        let source_chunks = HashMap::from([(
+            "sensitive_document".to_string(),
+            vec![
+                DynamicPiiSourceChunk {
+                    class_name: "other".to_string(),
+                    range: DynamicPiiTextRange {
+                        start_byte: 0,
+                        end_byte: 10,
+                    },
+                },
+                DynamicPiiSourceChunk {
+                    class_name: "hr".to_string(),
+                    range: DynamicPiiTextRange {
+                        start_byte: 10,
+                        end_byte: 20,
+                    },
+                },
+            ],
+        )]);
+
+        let resolution = config
+            .resolve(
+                &HashMap::from([("sensitive_document".to_string(), vec!["other".to_string()])]),
+                &source_chunks,
+            )
+            .unwrap();
+
+        assert_eq!(resolution.activated_conditional_rules, [0, 1]);
+        assert_eq!(
+            resolution.inference_groups[1].config.labels,
+            ["employee_id"]
+        );
+        assert_eq!(
+            resolution.inference_groups[1].ranges,
+            Some(vec![DynamicPiiTextRange {
+                start_byte: 10,
+                end_byte: 20,
+            }])
+        );
+        assert_eq!(
+            resolution.inference_groups[2].config.labels,
+            ["medical_condition"]
+        );
+        assert_eq!(
+            resolution.inference_groups[2].ranges,
+            Some(vec![DynamicPiiTextRange {
+                start_byte: 0,
+                end_byte: 10,
+            }])
         );
     }
 }

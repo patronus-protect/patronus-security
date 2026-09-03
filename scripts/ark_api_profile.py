@@ -9,6 +9,7 @@ CATEGORIES = [
 ]
 
 MODEL_GATES = {
+    "native:injection_rule_catalog": True,
     "native:instruction_leak": True,
     "native:encoded_instruction": True,
     "native:multi_turn_escalation": True,

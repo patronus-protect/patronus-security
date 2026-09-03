@@ -1,7 +1,7 @@
 use patronus_ark::{L3Strategy, SecurityCategory, SecurityGateway, SecurityLevel};
 use serde_json::json;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const SHORT_ITERS: usize = 20;
@@ -172,7 +172,7 @@ fn json_report(stats: &[CaseStats], asset_dir: &PathBuf, warmup_seconds: f64) ->
     .unwrap()
 }
 
-fn markdown_report(stats: &[CaseStats], asset_dir: &PathBuf, warmup_seconds: f64) -> String {
+fn markdown_report(stats: &[CaseStats], asset_dir: &Path, warmup_seconds: f64) -> String {
     let mut out = String::new();
     out.push_str("# Standalone All-Categories Benchmark\n\n");
     out.push_str("- Library: `patronus-ark` Rust core\n");

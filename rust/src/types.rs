@@ -357,10 +357,11 @@ impl std::str::FromStr for SecurityLevel {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 /// How model pipelines execute ONNX L3 fallback batches.
 pub enum OnnxBatchMode {
     /// Keep the existing lazy per-text ONNX execution path.
+    #[default]
     LazyBatches,
     /// Execute all L3 fallback texts as one ONNX tensor batch where possible.
     TensorBatch,
@@ -376,12 +377,6 @@ impl OnnxBatchMode {
     }
 }
 
-impl Default for OnnxBatchMode {
-    fn default() -> Self {
-        Self::LazyBatches
-    }
-}
-
 impl std::str::FromStr for OnnxBatchMode {
     type Err = String;
 
@@ -394,10 +389,11 @@ impl std::str::FromStr for OnnxBatchMode {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 /// Calibrated NTDB operating point selected from each package manifest.
 pub enum NtdbOperatingPoint {
     BestF1,
+    #[default]
     BestPromote,
     /// Internal Ark API routing profile: use utility promotion only for an
     /// Injection document with at most two normal chunks.
@@ -421,12 +417,6 @@ impl NtdbOperatingPoint {
     }
 }
 
-impl Default for NtdbOperatingPoint {
-    fn default() -> Self {
-        Self::BestPromote
-    }
-}
-
 impl std::str::FromStr for NtdbOperatingPoint {
     type Err = String;
 
@@ -442,10 +432,11 @@ impl std::str::FromStr for NtdbOperatingPoint {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 /// Runtime backend profile used to choose default L3 execution behavior.
 pub enum ExecutionBackend {
     /// Keep conservative CPU defaults unless a caller overrides execution mode.
+    #[default]
     Auto,
     /// CPU execution: prefer lazy L3 execution and low concurrency.
     Cpu,
@@ -461,10 +452,11 @@ pub enum ExecutionBackend {
     TensorRt,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 /// Physical L3 classifier topology.
 pub enum L3Strategy {
     /// Each promoted pipeline executes its own L3 model.
+    #[default]
     Dedicated,
     /// Promoted classifier pipelines share one request-local multi-head model run.
     Multi,
@@ -476,12 +468,6 @@ impl L3Strategy {
             Self::Dedicated => "dedicated",
             Self::Multi => "multi",
         }
-    }
-}
-
-impl Default for L3Strategy {
-    fn default() -> Self {
-        Self::Dedicated
     }
 }
 
@@ -509,12 +495,6 @@ impl ExecutionBackend {
             ExecutionBackend::DirectMl => "directml",
             ExecutionBackend::TensorRt => "tensorrt",
         }
-    }
-}
-
-impl Default for ExecutionBackend {
-    fn default() -> Self {
-        Self::Auto
     }
 }
 
@@ -567,12 +547,16 @@ impl Default for OnnxRuntimeOptions {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 /// Caller-controlled execution gates for one scanner execution profile.
 ///
-/// Unspecified gates default to enabled. `max_level` is still enforced by
+/// Unspecified rules use the shared credentials/secrets-only DLP default;
+/// other execution gates default to enabled. Diagnostic `explain` is opt-in.
+/// `max_level` is still enforced by
 /// `ScanExecution`, so a gate can only further restrict the configured scanner.
 pub struct ScanGateMatrix {
+    /// Include bounded diagnostic anchor metadata. Disabled by default.
+    pub explain: bool,
     /// Optional L1 override. `None` means enabled.
     pub l1: Option<bool>,
     /// Optional L2 override. `None` means enabled.
@@ -582,6 +566,9 @@ pub struct ScanGateMatrix {
     /// Optional per-model or per-native-scanner overrides keyed by result model
     /// names such as `native:mcp_runtime_risk` or `unified-v3-tool-action`.
     pub models: HashMap<String, bool>,
+    /// Optional per-rule overrides keyed by stable public rule id. Missing
+    /// entries inherit the shared rule defaults.
+    pub rules: HashMap<String, bool>,
     /// Request-context and prior-result conditions applied before L2 or L3.
     pub conditional: Vec<ConditionalPipelineGate>,
     /// L3 worker scheduling policy.
@@ -902,32 +889,32 @@ impl L3SchedulerPolicy {
     }
 }
 
-impl Default for ScanGateMatrix {
-    fn default() -> Self {
-        Self::all_enabled()
-    }
-}
-
 impl ScanGateMatrix {
-    /// Create a matrix where every level and model is enabled by default.
+    /// Explicitly enable all native rules, including opt-in DLP content families.
     pub fn all_enabled() -> Self {
-        Self {
-            l1: None,
-            l2: None,
-            l3: None,
-            models: HashMap::new(),
-            conditional: Vec::new(),
-            l3_policy: L3SchedulerPolicy::default(),
+        let mut gates = Self::default();
+        for pattern in crate::detectors::dlp::dlp::DLP_PATTERNS {
+            gates.set_rule(pattern.name, true);
         }
+        for id in [
+            "dlp_mcp_runtime_risk",
+            "dlp_mcp_policy",
+            "dlp_destructive_operation",
+        ] {
+            gates.set_rule(id, true);
+        }
+        gates
     }
 
     /// Create a matrix with explicit level gates.
     pub fn levels(l1: bool, l2: bool, l3: bool) -> Self {
         Self {
+            explain: false,
             l1: Some(l1),
             l2: Some(l2),
             l3: Some(l3),
             models: HashMap::new(),
+            rules: HashMap::new(),
             conditional: Vec::new(),
             l3_policy: L3SchedulerPolicy::default(),
         }
@@ -953,6 +940,17 @@ impl ScanGateMatrix {
         self
     }
 
+    /// Set one stable rule-id gate.
+    pub fn set_rule(&mut self, rule_id: impl Into<String>, enabled: bool) {
+        self.rules.insert(rule_id.into(), enabled);
+    }
+
+    /// Builder-style stable rule-id gate setter.
+    pub fn with_rule(mut self, rule_id: impl Into<String>, enabled: bool) -> Self {
+        self.set_rule(rule_id, enabled);
+        self
+    }
+
     /// Replace request-context and prior-result gates.
     pub fn set_conditional(&mut self, gates: Vec<ConditionalPipelineGate>) -> Result<(), String> {
         for gate in &gates {
@@ -975,6 +973,14 @@ impl ScanGateMatrix {
     /// Return whether the model/native scanner is allowed by this matrix.
     pub fn allows_model(&self, model: &str) -> bool {
         self.models.get(model).copied().unwrap_or(true)
+    }
+
+    /// Return whether a stable rule id is allowed by this matrix.
+    pub fn allows_rule(&self, rule_id: &str) -> bool {
+        self.rules
+            .get(rule_id)
+            .copied()
+            .unwrap_or_else(|| crate::detectors::dlp::dlp::default_rule_enabled(rule_id))
     }
 
     /// Replace the L3 worker scheduling policy.
@@ -1101,11 +1107,11 @@ pub struct ScanExecution {
 }
 
 impl ScanExecution {
-    /// Create an execution with every gate enabled up to `max_level`.
+    /// Create an execution with shared rule defaults up to `max_level`.
     pub fn new(max_level: SecurityLevel) -> Self {
         Self {
             max_level,
-            gates: ScanGateMatrix::all_enabled(),
+            gates: ScanGateMatrix::default(),
             backend: ExecutionBackend::default(),
             onnx_runtime_options: OnnxRuntimeOptions::default(),
             onnx_batch_mode: OnnxBatchMode::LazyBatches,
@@ -1194,6 +1200,11 @@ impl ScanExecution {
     /// Return whether a model/native scanner is enabled for this execution.
     pub fn allows_model(&self, model: &str) -> bool {
         self.gates.allows_model(model)
+    }
+
+    /// Return whether a stable rule id is enabled for this execution.
+    pub fn allows_rule(&self, rule_id: &str) -> bool {
+        self.gates.allows_rule(rule_id)
     }
 
     /// Return the matrix backing this execution.
@@ -1336,8 +1347,10 @@ mod tests {
 
     #[test]
     fn l3_pipeline_policy_overrides_request_defaults_by_category() {
-        let mut policy = L3SchedulerPolicy::default();
-        policy.clustering = L3ClusteringStrategy::RankOnly;
+        let mut policy = L3SchedulerPolicy {
+            clustering: L3ClusteringStrategy::RankOnly,
+            ..L3SchedulerPolicy::default()
+        };
         policy.pipelines.insert(
             "injection".to_string(),
             L3PipelinePolicy {

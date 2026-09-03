@@ -3,19 +3,18 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
+use super::tokenizer::RuntimeTokenizer;
 use half::f16;
 use ort::{session::Session, value::Tensor};
 
 use crate::{ExecutionBackend, LabelScore, OnnxRuntimeOptions};
 
-use super::onnx::{
-    configured_session_builder, l3_ttl, token_chunks, RuntimeTokenizer, TokenTextChunk,
-};
+use super::onnx::{configured_session_builder, l3_ttl};
 
 pub const UNIFIED_MODEL: &str = "unified-multitask-model-augmented-v3";
 pub const UNIFIED_ONNX_PATH: &str = "onnx/int8_int4_embeddings/model.onnx";
 pub const UNIFIED_FP16_ONNX_PATH: &str = "onnx/onnx_fp16/model_fp16.onnx";
-pub const UNIFIED_MAX_LEN: usize = 256;
+pub const UNIFIED_MAX_LEN: usize = crate::ml::tokenizer::MODEL_TOKENS;
 
 const HEADS: &[HeadSpec] = &[
     HeadSpec::binary("injection", "injection_logits", &["benign", "injection"]),
@@ -239,23 +238,6 @@ impl LazyUnifiedOnnxClassifier {
         Ok(outputs)
     }
 
-    pub(crate) fn infer_raw(
-        &mut self,
-        text: &str,
-        backend: ExecutionBackend,
-        options: OnnxRuntimeOptions,
-    ) -> Result<UnifiedRawModelOutput, Box<dyn std::error::Error>> {
-        self.evict_expired();
-        self.ensure_loaded(backend, options)?;
-        let output = self
-            .loaded
-            .as_mut()
-            .ok_or("unified L3 model is not loaded")?
-            .infer_raw(text)?;
-        self.last_used = Some(Instant::now());
-        Ok(output)
-    }
-
     pub(crate) fn infer_token_ids_raw(
         &mut self,
         token_ids: &[u32],
@@ -292,24 +274,6 @@ impl LazyUnifiedOnnxClassifier {
         output: &UnifiedRawModelOutput,
     ) -> Result<UnifiedModelOutput, Box<dyn std::error::Error>> {
         decode_raw_output(output)
-    }
-
-    pub(crate) fn token_chunks(
-        &mut self,
-        text: &str,
-        overlap_tokens: usize,
-        backend: ExecutionBackend,
-        options: OnnxRuntimeOptions,
-    ) -> Result<Vec<TokenTextChunk>, Box<dyn std::error::Error>> {
-        self.evict_expired();
-        self.ensure_loaded(backend, options)?;
-        let chunks = self
-            .loaded
-            .as_ref()
-            .ok_or("unified L3 model is not loaded")?
-            .token_chunks(text, overlap_tokens)?;
-        self.last_used = Some(Instant::now());
-        Ok(chunks)
     }
 
     pub fn evict_expired(&mut self) {
@@ -422,7 +386,7 @@ impl UnifiedOnnxClassifier {
         backend: ExecutionBackend,
         options: OnnxRuntimeOptions,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        let tokenizer = RuntimeTokenizer::load(dir, "tokenizer.json")?;
+        let tokenizer = RuntimeTokenizer::load(dir)?;
         let (mut builder, _) = configured_session_builder(backend, Some(dir), options)?;
         let session = builder.commit_from_file(dir.join(selected_unified_onnx_path()))?;
         let inputs = session_input_names(&session);
@@ -448,15 +412,6 @@ impl UnifiedOnnxClassifier {
             .collect()
     }
 
-    fn infer_raw(
-        &mut self,
-        text: &str,
-    ) -> Result<UnifiedRawModelOutput, Box<dyn std::error::Error>> {
-        self.infer_batch_raw(&[text.to_string()])?
-            .pop()
-            .ok_or_else(|| "unified L3 returned no raw output".into())
-    }
-
     pub(crate) fn infer_token_ids_raw(
         &mut self,
         token_ids: &[u32],
@@ -477,9 +432,7 @@ impl UnifiedOnnxClassifier {
         let mut input_ids = Vec::with_capacity(batch * UNIFIED_MAX_LEN);
         let mut attention_mask = Vec::with_capacity(batch * UNIFIED_MAX_LEN);
         for tokens in batch_token_ids {
-            let (ids, mask, _) = self
-                .tokenizer
-                .encode_inputs_from_token_ids(tokens, UNIFIED_MAX_LEN);
+            let (ids, mask, _) = self.tokenizer.inputs(tokens)?;
             input_ids.extend(ids);
             attention_mask.extend(mask);
         }
@@ -530,70 +483,12 @@ impl UnifiedOnnxClassifier {
         &mut self,
         texts: &[String],
     ) -> Result<Vec<UnifiedRawModelOutput>, Box<dyn std::error::Error>> {
-        if texts.is_empty() {
-            return Ok(Vec::new());
-        }
-        let batch = texts.len();
-        let mut input_ids = Vec::with_capacity(batch * UNIFIED_MAX_LEN);
-        let mut attention_mask = Vec::with_capacity(batch * UNIFIED_MAX_LEN);
-        for text in texts {
-            let (ids, mask, _) = self.tokenizer.encode_inputs(text, UNIFIED_MAX_LEN)?;
-            input_ids.extend(ids);
-            attention_mask.extend(mask);
-        }
-        let shape = [batch, UNIFIED_MAX_LEN];
-        let outputs = self.session.run(ort::inputs![
-            "input_ids" => Tensor::from_array((shape, input_ids))?,
-            "attention_mask" => Tensor::from_array((shape, attention_mask))?,
-        ])?;
-        let mut results = (0..batch)
-            .map(|_| UnifiedRawModelOutput {
-                heads: HashMap::new(),
-            })
-            .collect::<Vec<_>>();
-        for head in HEADS {
-            let value = outputs
-                .get(head.output)
-                .ok_or_else(|| format!("unified L3 output '{}' is missing", head.output))?;
-            let (shape, values) = if let Ok((shape, values)) = value.try_extract_tensor::<f32>() {
-                (shape.as_ref().to_vec(), values.to_vec())
-            } else {
-                let (shape, values) = value.try_extract_tensor::<f16>()?;
-                (
-                    shape.as_ref().to_vec(),
-                    values.iter().map(|value| value.to_f32()).collect(),
-                )
-            };
-            let width = match head.kind {
-                HeadKind::Binary => 1,
-                _ => head.labels.len(),
-            };
-            if shape.as_slice() != [batch as i64, width as i64] || values.len() != batch * width {
-                return Err(format!(
-                    "unified L3 output '{}' has shape {shape:?}, expected [{batch}, {width}]",
-                    head.output
-                )
-                .into());
-            }
-            for (index, row) in values.chunks(width).enumerate() {
-                results[index]
-                    .heads
-                    .insert(head.id.to_string(), row.to_vec());
-            }
-        }
-        Ok(results)
-    }
-
-    fn token_chunks(
-        &self,
-        text: &str,
-        overlap_tokens: usize,
-    ) -> Result<Vec<TokenTextChunk>, Box<dyn std::error::Error>> {
-        let special_tokens = self.tokenizer.token_count("", true)?;
-        let content_tokens = UNIFIED_MAX_LEN.saturating_sub(special_tokens).max(1);
-        token_chunks(text, content_tokens, overlap_tokens, |value| {
-            self.tokenizer.token_count(value, false)
-        })
+        let ids = texts
+            .iter()
+            .map(|text| self.tokenizer.single_chunk_ids(text))
+            .collect::<Result<Vec<_>, _>>()?;
+        let slices = ids.iter().map(Vec::as_slice).collect::<Vec<_>>();
+        self.infer_token_ids_batch_raw(&slices)
     }
 }
 

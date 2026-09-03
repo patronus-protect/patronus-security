@@ -144,13 +144,43 @@ pub fn ntdb_l2_package_assets_present(
         else {
             return false;
         };
+        if manifest.validate().is_err() {
+            return false;
+        }
         let matrix = package_dir
             .join("minilm")
             .join(&manifest.minilm.embedding_matrix_file);
         let elements = manifest.minilm.vocab_size as u64 * manifest.minilm.embedding_dim as u64;
         fs::metadata(matrix)
             .is_ok_and(|metadata| metadata.len() == elements * 2 || metadata.len() == elements * 4)
+            && l3_compatible_tokenizer_matches_unified(&manifest, &package_dir, target_dir)
     })
+}
+
+fn l3_compatible_tokenizer_matches_unified(
+    manifest: &PackageManifest,
+    package_dir: &Path,
+    category_dir: &Path,
+) -> bool {
+    if !manifest.minilm.is_l3_tokenizer_compatible() {
+        return true;
+    }
+    let model_root = category_dir.parent().unwrap_or(category_dir);
+    let unified_tokenizer = model_root
+        .join(UNIFIED_L3_ASSET.destination_path)
+        .join("tokenizer.json");
+    if !unified_tokenizer.is_file() {
+        return true;
+    }
+    let Ok(relative_tokenizer) = normalize_manifest_file_path(&format!(
+        "{}/tokenizer.json",
+        manifest.tokenizer_dir.trim_end_matches('/')
+    )) else {
+        return false;
+    };
+    let package_tokenizer = package_dir.join(relative_tokenizer);
+    package_tokenizer.is_file()
+        && same_cached_file(&package_tokenizer, &unified_tokenizer).unwrap_or(false)
 }
 
 /// Check whether all required assets for a category are present in `target_dir`.
@@ -508,7 +538,7 @@ fn download_ntdb_l2_package_asset_inner(
     let manifest_files = ntdb_l2_package_manifest_files_from_manifest(&manifest)?;
     let mut jobs = Vec::new();
     for file in &shared_embedder_files {
-        if shared_embedder_file_is_valid(&manifest, file)? {
+        if !shared_embedder_refresh_required(revision_matches, &manifest, file, target_dir)? {
             link_shared_embedder_file(&file.shared_file, &file.package_file)?;
         } else {
             jobs.push(NtdbDownloadJob::Shared(file.clone()));
@@ -518,7 +548,7 @@ fn download_ntdb_l2_package_asset_inner(
         if shared_relative_paths.contains(relative_path) {
             continue;
         }
-        let dest_file = package_dir.join(&relative_path);
+        let dest_file = package_dir.join(relative_path);
         if revision_matches && dest_file.exists() {
             continue;
         }
@@ -611,7 +641,8 @@ pub(crate) fn prepare_cached_ntdb_l2_compact_tokenizer(
         return Ok(());
     };
     if prepared_shared_tokenizers.contains(&tokenizer_file.shared_file) {
-        for extension in ["mmbpe"] {
+        {
+            let extension = "mmbpe";
             let shared_compact_path = tokenizer_file
                 .shared_file
                 .with_file_name(format!("tokenizer.{extension}"));
@@ -659,10 +690,10 @@ fn link_compact_tokenizer(
     if shared_compact_path == package_compact_path {
         return Ok(());
     }
-    link_shared_embedder_file(&shared_compact_path, &package_compact_path)
+    link_shared_embedder_file(shared_compact_path, &package_compact_path)
 }
 
-/// Return all runtime files referenced by an NTDB v2 package manifest.
+/// Return all runtime files referenced by an NTDB v4 package manifest.
 pub fn ntdb_l2_package_manifest_files(
     manifest_json: &str,
 ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
@@ -690,43 +721,19 @@ fn ntdb_l2_package_manifest_files_from_manifest(
         &format!("minilm/{}", manifest.minilm.embedding_matrix_file),
     )?;
 
-    if manifest.version == 4 {
-        let joint = manifest
-            .joint_v3
-            .as_ref()
-            .ok_or("NTDB package v4 is missing joint_v3")?;
-        push_manifest_file(&mut files, &mut seen, &joint.neural_stack.onnx)?;
-        for head in &joint.heads {
-            push_manifest_file(&mut files, &mut seen, &head.frozen_lightgbm)?;
-        }
-        for gate in joint.promoter.models.values() {
-            collect_json_path_values(gate, "lightgbm_model", &mut files, &mut seen)?;
-            collect_json_path_values(gate, "metadata", &mut files, &mut seen)?;
-        }
-        files.sort();
-        return Ok(files);
+    manifest.validate().map_err(|error| error.to_string())?;
+    let joint = manifest
+        .joint_v3
+        .as_ref()
+        .ok_or("NTDB v4 joint_v3 is required")?;
+    push_manifest_file(&mut files, &mut seen, &joint.neural_stack.onnx)?;
+    for head in &joint.heads {
+        push_manifest_file(&mut files, &mut seen, &head.frozen_lightgbm)?;
     }
-
-    for head in &manifest.heads {
-        for component in &head.static_components {
-            push_manifest_file(&mut files, &mut seen, &component.path)?;
-        }
-        for classifier in &head.classifiers {
-            collect_json_path_values(classifier, "path", &mut files, &mut seen)?;
-        }
-        if let Some(path) = &head.projection_onnx {
-            push_manifest_file(&mut files, &mut seen, path)?;
-        }
-        push_manifest_file(&mut files, &mut seen, &head.ntdb_head_onnx)?;
+    for gate in joint.promoter.models.values() {
+        collect_json_path_values(gate, "lightgbm_model", &mut files, &mut seen)?;
+        collect_json_path_values(gate, "metadata", &mut files, &mut seen)?;
     }
-
-    for aggregator in &manifest.aggregators {
-        push_manifest_file(&mut files, &mut seen, &aggregator.onnx)?;
-        if let Some(router) = &aggregator.promote_router {
-            push_manifest_file(&mut files, &mut seen, &router.onnx)?;
-        }
-    }
-
     files.sort();
     Ok(files)
 }
@@ -905,6 +912,33 @@ fn shared_embedder_file_is_valid(
     Ok(len == elements * 2 || len == elements * 4)
 }
 
+fn shared_embedder_refresh_required(
+    package_revision_matches: bool,
+    manifest: &PackageManifest,
+    file: &SharedEmbedderFile,
+    category_dir: &Path,
+) -> Result<bool, Box<dyn std::error::Error>> {
+    if !package_revision_matches || !shared_embedder_file_is_valid(manifest, file)? {
+        return Ok(true);
+    }
+    if !manifest.minilm.is_l3_tokenizer_compatible()
+        || Path::new(&file.relative_path)
+            .file_name()
+            .and_then(|name| name.to_str())
+            != Some("tokenizer.json")
+    {
+        return Ok(false);
+    }
+    let model_root = category_dir.parent().unwrap_or(category_dir);
+    let unified_tokenizer = model_root
+        .join(UNIFIED_L3_ASSET.destination_path)
+        .join("tokenizer.json");
+    if !unified_tokenizer.is_file() {
+        return Ok(false);
+    }
+    Ok(!same_cached_file(&file.shared_file, &unified_tokenizer)?)
+}
+
 fn shared_embedder_candidate_is_valid(
     manifest: &PackageManifest,
     file: &SharedEmbedderFile,
@@ -987,7 +1021,7 @@ fn download_shared_embedder_file(
         &source_path,
         &file.shared_file,
         asset.required,
-        "NTDB v2 shared L2 embedder file",
+        "NTDB v4 shared L2 embedder file",
     )?;
     link_shared_embedder_file(&file.shared_file, &file.package_file)
 }
@@ -1283,65 +1317,14 @@ mod tests {
     }
 
     fn manifest_json(identity: &str) -> String {
-        format!(
-            r#"{{
-                "format": "ntdb_model_package",
-                "version": 2,
-                "runtime_contract": "raw_text_to_ntdb_outputs",
-                "task": {{"type": "binary", "labels": ["benign", "attack"]}},
-                "chunk_size": 2,
-                "tokenizer_dir": "tokenizer",
-                "minilm": {{
-                    "embedding_matrix_file": "embedding_matrix.f16",
-                    "vocab_size": 1,
-                    "embedding_dim": 1,
-                    "content_tokens_per_chunk": 2,
-                    "source_model_path": "{identity}",
-                    "model": "ibm-granite/granite-embedding-97m-multilingual-r2",
-                    "tokenizer_family": "ModernBERT"
-                }},
-                "feature_contract": {{
-                    "local_feature_order": [],
-                    "global_feature_order": []
-                }},
-                "runtime": {{
-                    "shared_preprocessing": ["tokenization"],
-                    "parallel_stages": [],
-                    "ordering": "manifest_order"
-                }},
-                "heads": [{{
-                    "id": "h",
-                    "type": "binary",
-                    "task": {{"type": "binary", "labels": ["other", "target"]}},
-                    "classifiers": [],
-                    "feature_order": [],
-                    "static_dir": "heads/h",
-                    "static_components": [],
-                    "projection_onnx": null,
-                    "ntdb_head_onnx": "heads/h/ntdb_head.onnx",
-                    "model_type": "sequential_ntdb",
-                    "reliability": {{
-                        "enabled": false,
-                        "hidden_dim": 0,
-                        "execution": "inside_onnx_model"
-                    }}
-                }}],
-                "aggregators": [{{
-                    "id": "main",
-                    "type": "binary_sequential_aggregator",
-                    "task": {{"type": "binary", "labels": ["benign", "attack"]}},
-                    "onnx": "aggregators/main/aggregator.onnx",
-                    "model_type": "sequential_ntdb",
-                    "input_feature_order": [],
-                    "global_feature_order": [],
-                    "reliability": {{
-                        "enabled": false,
-                        "hidden_dim": 0,
-                        "execution": "inside_onnx_model"
-                    }}
-                }}]
-            }}"#
-        )
+        let mut manifest: serde_json::Value =
+            serde_json::from_str(include_str!("../../tests/fixtures/ntdb_v4.json")).unwrap();
+        manifest["minilm"]["source_model_path"] = serde_json::json!(identity);
+        manifest["minilm"]["model"] =
+            serde_json::json!("ibm-granite/granite-embedding-97m-multilingual-r2");
+        manifest["minilm"]["vocab_size"] = serde_json::json!(1);
+        manifest["minilm"]["embedding_dim"] = serde_json::json!(1);
+        manifest.to_string()
     }
 
     #[test]
@@ -1421,6 +1404,133 @@ mod tests {
             files[0].package_file,
             package_dir.join("tokenizer/tokenizer.json")
         );
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn ntdb_l2_revision_change_refreshes_an_existing_shared_tokenizer() {
+        let root = temp_dir("shared_revision_refresh");
+        let category_dir = root.join("injection");
+        let package_dir = category_dir.join("l2_ntdb/injection_current");
+        let mut manifest: PackageManifest =
+            serde_json::from_str(&manifest_json("jhu-clsp/mmBERT-small")).unwrap();
+        manifest.minilm.tokenizer_family = Some("mmBERT".to_string());
+        let tokenizer = ntdb_l2_shared_embedder_files(&manifest, &category_dir, &package_dir)
+            .unwrap()
+            .into_iter()
+            .find(|file| file.relative_path.ends_with("/tokenizer.json"))
+            .unwrap();
+        fs::create_dir_all(tokenizer.shared_file.parent().unwrap()).unwrap();
+        fs::write(
+            &tokenizer.shared_file,
+            b"stale tokenizer from previous revision",
+        )
+        .unwrap();
+
+        assert!(
+            shared_embedder_refresh_required(false, &manifest, &tokenizer, &category_dir,).unwrap()
+        );
+        assert!(
+            !shared_embedder_refresh_required(true, &manifest, &tokenizer, &category_dir,).unwrap()
+        );
+
+        let unified_tokenizer = root
+            .join(UNIFIED_L3_ASSET.destination_path)
+            .join("tokenizer.json");
+        fs::create_dir_all(unified_tokenizer.parent().unwrap()).unwrap();
+        fs::write(&unified_tokenizer, b"current shared tokenizer").unwrap();
+        assert!(
+            shared_embedder_refresh_required(true, &manifest, &tokenizer, &category_dir,).unwrap()
+        );
+        fs::copy(&unified_tokenizer, &tokenizer.shared_file).unwrap();
+        assert!(
+            !shared_embedder_refresh_required(true, &manifest, &tokenizer, &category_dir,).unwrap()
+        );
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn root_level_shared_tokenizer_is_checked_for_refresh() {
+        let root = temp_dir("root_shared_tokenizer_refresh");
+        let category_dir = root.join("injection");
+        let package_dir = category_dir.join("l2_ntdb/injection_current");
+        let mut manifest: PackageManifest =
+            serde_json::from_str(&manifest_json("jhu-clsp/mmBERT-small")).unwrap();
+        manifest.minilm.tokenizer_family = Some("mmBERT".to_string());
+        manifest.tokenizer_dir = ".".to_string();
+        let tokenizer = ntdb_l2_shared_embedder_files(&manifest, &category_dir, &package_dir)
+            .unwrap()
+            .into_iter()
+            .find(|file| file.relative_path == "tokenizer.json")
+            .unwrap();
+        fs::create_dir_all(tokenizer.shared_file.parent().unwrap()).unwrap();
+        fs::write(&tokenizer.shared_file, b"stale tokenizer").unwrap();
+        let unified_tokenizer = root
+            .join(UNIFIED_L3_ASSET.destination_path)
+            .join("tokenizer.json");
+        fs::create_dir_all(unified_tokenizer.parent().unwrap()).unwrap();
+        fs::write(&unified_tokenizer, b"current tokenizer").unwrap();
+
+        assert!(
+            shared_embedder_refresh_required(true, &manifest, &tokenizer, &category_dir).unwrap()
+        );
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn current_l2_revision_is_not_ready_when_its_shared_tokenizer_is_stale() {
+        let root = temp_dir("stale_shared_tokenizer_presence");
+        let category_dir = root.join("injection");
+        let asset = ntdb_l2_package_asset(
+            SecurityCategory::Injection,
+            SecurityLevel::L3,
+            "wolf-defender-small",
+        )
+        .unwrap();
+        let package_dir = category_dir.join(asset.destination_path);
+        fs::create_dir_all(package_dir.join("tokenizer")).unwrap();
+        fs::create_dir_all(package_dir.join("minilm")).unwrap();
+        fs::write(
+            package_dir.join("manifest.json"),
+            manifest_json("jhu-clsp/mmBERT-small").replace(
+                "\"tokenizer_family\": \"ModernBERT\"",
+                "\"tokenizer_family\": \"mmBERT\"",
+            ),
+        )
+        .unwrap();
+        fs::write(package_dir.join(".patronus-revision"), asset.revision).unwrap();
+        fs::write(package_dir.join("minilm/embedding_matrix.f16"), [0_u8; 2]).unwrap();
+        fs::write(
+            package_dir.join("tokenizer/tokenizer.json"),
+            b"stale tokenizer",
+        )
+        .unwrap();
+        let unified_tokenizer = root
+            .join(UNIFIED_L3_ASSET.destination_path)
+            .join("tokenizer.json");
+        fs::create_dir_all(unified_tokenizer.parent().unwrap()).unwrap();
+        fs::write(&unified_tokenizer, b"current tokenizer").unwrap();
+
+        assert!(!ntdb_l2_package_assets_present(
+            SecurityCategory::Injection,
+            SecurityLevel::L3,
+            "wolf-defender-small",
+            &category_dir,
+        ));
+        fs::copy(
+            &unified_tokenizer,
+            package_dir.join("tokenizer/tokenizer.json"),
+        )
+        .unwrap();
+        assert!(ntdb_l2_package_assets_present(
+            SecurityCategory::Injection,
+            SecurityLevel::L3,
+            "wolf-defender-small",
+            &category_dir,
+        ));
 
         fs::remove_dir_all(root).unwrap();
     }

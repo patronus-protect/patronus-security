@@ -48,7 +48,7 @@ Change behavior on a live gateway (Python names; Rust has equivalents):
 
 | Setter | Values | Effect |
 | --- | --- | --- |
-| `set_execution_gates(dict \| None)` | see [below](#execution-gates) | Enable/disable levels and detectors; `None` resets to all-enabled. |
+| `set_execution_gates(dict \| None)` | see [below](#execution-gates) | Enable/disable levels and detectors; `None` resets to shared defaults. |
 | `set_l3_strategy(str)` | `dedicated`, `multi` | Switch the [L3 strategy](#l3-strategy). |
 | `set_ntdb_operating_point(str)` | see [below](#ntdb-operating-point) | Pick the final-decision threshold profile. |
 | `set_onnx_batch_mode(str)` | `lazy_batches`, `tensor_batch` | How L3 fallback batches execute. |
@@ -69,19 +69,30 @@ Change behavior on a live gateway (Python names; Rust has equivalents):
 ## Execution gates
 
 Gates decide which levels and which model/native scanners are active for subsequent scans.
-Unspecified gates stay enabled; `max_level` remains the hard upper bound.
+Unspecified rules inherit shared defaults: credential/secret DLP rules are enabled, broader DLP
+rules are opt-in. Other gates stay enabled; `max_level` remains the hard upper bound.
 
 ```python
 scanner.set_execution_gates({
     "levels": {"l1": True, "l2": False, "l3": False},
     "models": {"native:mcp_runtime_risk": False, "external:internal_token": False},
+    "rules": {"pii_email": False, "dlp_password_assignment": False},
 })
 ```
 
 - `levels` — per-level on/off (`l1`, `l2`, `l3`).
 - `models` — per-detector on/off, keyed by public model name: `native:<name>` for native
   detectors, `external:<id>` for [external L1 detectors](../how-to/external-l1-signals.md).
+- `rules` — per-L1-rule on/off. Missing IDs inherit shared defaults. PII patterns use stable `pii_*`
+  IDs. DLP patterns use `dlp_*` IDs; its separate heuristics are `dlp_sensitive_material`,
+  `dlp_secret_transfer`, `dlp_mcp_runtime_risk`, `dlp_mcp_policy`, and
+  `dlp_destructive_operation`. Injection uses the `ark.injection.*` IDs returned in evidence.
+  See the complete [L1 rule catalog](l1-rule-catalog.md) for every accepted ID and the shared
+  default state of DLP rules.
 - `conditional` — conditional gates (see [below](#conditional-gates)).
+- `explain` — opt into bounded PII/DLP diagnostic context anchors (default `false`);
+  [matched rule components and evidence spans](result-schema.md#native-l1-components) remain
+  available without it. This flag does not change detection or conditional routing.
 - `l3` — optional worker policy (see [below](#l3-worker-policy)).
 
 Per-request gates passed to `enqueue()` are **snapshotted** at enqueue time and do not change
@@ -90,9 +101,35 @@ the gateway defaults. In Rust, build a `ScanGateMatrix`:
 ```rust
 scanner.set_execution_gates(
     ScanGateMatrix::levels(true, false, false)
-        .with_model("native:mcp_runtime_risk", false),
+        .with_model("native:mcp_runtime_risk", false)
+        .with_rule("pii_email", false),
 );
 ```
+
+The Python/Rust request shape uses `levels` plus the separate L3 worker-policy object under `l3`.
+Ark API YAML mirrors the Rust matrix more directly: its level switches are top-level `l1`, `l2`,
+and `l3`, while the worker policy is named `policy`. For example:
+
+```yaml
+gates:
+  l1: true
+  l2: false
+  l3: false
+  rules:
+    pii_employee_id: true
+    dlp_sql_statement: false
+  models:
+    native:mcp_runtime_risk: false
+```
+
+Rust, Python, and the Ark API share credentials-only defaults for DLP L1: key, token,
+password, hash, and private-key rules remain enabled, while business identifiers, metrics, source,
+SQL, dump, log, MCP/runtime, and destructive-operation families require an explicit profile.
+
+To opt into SQL, use `{"rules": {"dlp_sql_statement": true, "dlp_sql_multiline_statement": true}}`.
+The same rule-level opt-in applies to `dlp_mcp_policy`, `dlp_mcp_runtime_risk`, and
+`dlp_destructive_operation`; no additional model override is needed unless you disabled that model.
+Rust callers can explicitly opt into every rule with `ScanGateMatrix::all_enabled()`.
 
 ### L3 worker policy
 
@@ -295,7 +332,7 @@ The `dynamic-pii` pipeline is configured with a dict (constructor `dynamic_pii_c
 
 ```python
 dynamic_pii_config = {
-    "labels": ["organization", "location", "date"],
+    "labels": ["organization", "date", "person", "city", "country"],
     "threshold": 0.5,
     "label_thresholds": {"organization": 0.6},
     "execution_gate": {
@@ -322,7 +359,7 @@ dynamic_pii_config = {
 | `labels` | GLiNER entity labels to extract. |
 | `threshold` / `label_thresholds` | Global and per-label score thresholds. |
 | `execution_gate` | When the pipeline runs (`always`, `if_result_in`, `if_no_result`). |
-| `conditional_labels` | Extra labels enabled only when a source pipeline returns given results. |
+| `conditional_labels` | Extra label groups run separately, and only on chunks whose final source-pipeline result matches. Labels already present in `labels` are removed from the extra call. |
 | `chunk_size_words` / `chunk_overlap_words` | Windowing for long text. |
 | `max_text_bytes` | Hard input size limit. |
 | `timeout_ms` | Minimum inference timeout for the pipeline. |
@@ -330,14 +367,21 @@ dynamic_pii_config = {
 | `timeout_per_chunk_ms` | Inference budget contributed by each planned chunk. |
 | `max_timeout_ms` | Upper bound for the adaptive inference timeout. |
 
-Only labels with measured exact-span F1 ≥ 0.6 are mapped; deterministic identifiers (email, IP,
-IBAN, SWIFT/BIC, phone, card) stay native L1 heuristics. See
+Configured GLiNER labels are subject to the model and threshold you choose; this API makes no
+cross-domain quality guarantee. Deterministic identifiers (email, IP, IBAN, SWIFT/BIC, phone,
+card) stay native L1 heuristics. See
 [`gliner_category_map.py`](https://github.com/patronus-protect/patronus-security/blob/main/python/patronus_ark/gliner_category_map.py).
 
-The first detected Dynamic PII entity—whether from the persistent entity cache or fresh
-inference—is emitted immediately as a partial `result` queue event. It contains
-`details.partial_result = true` and one evidence span. The authoritative complete result follows
-after the remaining chunks finish.
+The first detected Dynamic PII entity is emitted immediately as a `provisional` queue event. It
+contains `details.partial_result = true`, `details.provisional = true`, and one evidence span. The
+authoritative complete result follows after the remaining chunks finish. Dynamic PII reuses only
+exact, context-bound chunk candidates; cross-text entity-cache matches do not become evidence.
+
+The base `labels` are always inferred as one stable label group across the complete input. Each
+matching `conditional_labels` entry is a separate GLiNER call scoped to the chunks carrying that
+source pipeline's terminal class. Dynamic PII waits for a referenced source pipeline to finish
+(including an L2 result that does not promote), so an interim L2 class cannot activate a
+contextual label group that the final source result rejects.
 
 ## Environment variables
 
@@ -346,8 +390,9 @@ after the remaining chunks finish.
 | `HF_TOKEN` | — | Authenticated / rate-limited Hugging Face access for asset downloads. Falls back to `HUGGINGFACE_HUB_TOKEN`, then `HUGGING_FACE_HUB_TOKEN`, then the cached `huggingface-cli login` token file. |
 | `HF_HOME` | HF default | Hugging Face cache location. |
 | `PATRONUS_DOWNLOAD_OPTIONAL_ASSETS` | unset | `1` also downloads non-required asset files (currently `tokenizer_config.json` for the legacy L3 manifest). |
-| `PATRONUS_L3_TTL_SECS` | `300` | Idle seconds before an L3 session is evicted. |
+| `PATRONUS_L3_TTL_SECS` | `300` | Idle seconds before an L3 session is evicted; `-1` keeps loaded sessions resident. The Ark API container sets `-1`. |
 | `PATRONUS_L3_TRACE_CHUNKS` | unset | `1` logs per-chunk L3 execution traces (diagnostic). |
+| `PATRONUS_L3_TIMING` | unset | When set, logs Unified-L3 tokenization, ONNX session-run, and output-decoding timings. |
 | `PATRONUS_NTDB_INJECTION_DIR` | — | Local NTDB override for `injection`. |
 | `PATRONUS_NTDB_ROUTING_DIR` | — | Local NTDB override for `routing`. |
 | `PATRONUS_NTDB_SENSITIVE_DOCUMENTS_DIR` | — | Local NTDB override for `sensitive_document`. |

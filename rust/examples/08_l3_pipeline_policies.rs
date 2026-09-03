@@ -60,10 +60,7 @@ fn main() {
         Some(gates),
     );
 
-    loop {
-        let Some(event) = scanner.consume_next_event(Some(Duration::from_secs(30))) else {
-            break;
-        };
+    while let Some(event) = scanner.consume_next_event(Some(Duration::from_secs(30))) {
         match event {
             QueuedSecurityEvent::Result(result) if result.request_id == request_id => {
                 println!(

@@ -31,12 +31,10 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
-use tokenizers::Tokenizer;
 
-use super::mmbert_tokenizer::MmbertPairTokenizer;
-use super::tokenizer_store::global_tokenizer_store;
+use super::tokenizer::{RuntimeTokenizer, MODEL_TOKENS};
 
-const DEFAULT_MAX_LEN: usize = 256;
+const DEFAULT_MAX_LEN: usize = MODEL_TOKENS;
 const DEFAULT_L3_TTL_SECS: u64 = 300;
 static ACTIVE_EXECUTION_PROVIDERS: OnceLock<Mutex<BTreeSet<String>>> = OnceLock::new();
 
@@ -244,20 +242,6 @@ impl LazyOnnxTextClassifier {
         Ok(results)
     }
 
-    pub(crate) fn infer_raw(
-        &mut self,
-        text: &str,
-        backend: ExecutionBackend,
-        options: OnnxRuntimeOptions,
-    ) -> Result<RawClassifierOutput, Box<dyn std::error::Error>> {
-        self.evict_expired();
-        self.ensure_loaded(backend, options)?;
-        let model = self.loaded.as_mut().ok_or("L3 ONNX model is not loaded")?;
-        let result = model.infer_raw(text)?;
-        self.last_used = Some(Instant::now());
-        Ok(result)
-    }
-
     pub(crate) fn infer_token_ids_raw(
         &mut self,
         token_ids: &[u32],
@@ -309,19 +293,6 @@ impl LazyOnnxTextClassifier {
 
     pub(crate) fn model_sha(&self) -> Option<&str> {
         self.model_sha.as_deref()
-    }
-
-    pub(crate) fn token_chunks(
-        &mut self,
-        text: &str,
-        overlap_tokens: usize,
-        backend: ExecutionBackend,
-        options: OnnxRuntimeOptions,
-    ) -> Result<Vec<TokenTextChunk>, Box<dyn std::error::Error>> {
-        self.evict_expired();
-        self.ensure_loaded(backend, options)?;
-        let model = self.loaded.as_ref().ok_or("L3 ONNX model is not loaded")?;
-        model.token_chunks(text, overlap_tokens)
     }
 
     pub fn model_name(&self) -> &str {
@@ -416,146 +387,22 @@ pub struct OnnxTextClassifier {
     execution_provider: String,
 }
 
-#[derive(Clone)]
-pub(crate) enum RuntimeTokenizer {
-    HuggingFace(std::sync::Arc<Tokenizer>),
-    MmbertPair(std::sync::Arc<MmbertPairTokenizer>),
-}
-
-impl RuntimeTokenizer {
-    pub(crate) fn load(
-        dir: &Path,
-        tokenizer_path: &str,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
-        let store = global_tokenizer_store();
-        let tokenizer_file = dir.join(tokenizer_path);
-        let compact_tokenizer_file = tokenizer_file.with_extension("mmbpe");
-        if compact_tokenizer_file.is_file() {
-            match store.load_mmbert(&compact_tokenizer_file) {
-                Ok(tok) => return Ok(Self::MmbertPair(tok)),
-                Err(err) => {
-                    log::warn!(
-                        "failed to load compact mmBPE tokenizer {:?}; falling back to {:?}: {err}",
-                        compact_tokenizer_file,
-                        tokenizer_file
-                    );
-                }
-            }
-        }
-        Ok(Self::HuggingFace(store.load_huggingface(&tokenizer_file)?))
-    }
-
-    pub(crate) fn encode_inputs_from_token_ids(
-        &self,
-        token_ids: &[u32],
-        max_len: usize,
-    ) -> (Vec<i64>, Vec<i64>, Vec<i64>) {
-        match self {
-            Self::MmbertPair(tok) => {
-                let mut input_ids = Vec::with_capacity(max_len);
-                input_ids.push(tok.bos() as i64);
-                let content_limit = max_len.saturating_sub(2);
-                let content_len = token_ids.len().min(content_limit);
-                input_ids.extend(token_ids[..content_len].iter().map(|&id| id as i64));
-                input_ids.push(tok.eos() as i64);
-                let mut attention_mask = vec![1_i64; input_ids.len()];
-                truncate_and_pad(&mut input_ids, max_len, 0);
-                truncate_and_pad(&mut attention_mask, max_len, 0);
-                let token_type_ids = vec![0_i64; max_len];
-                (input_ids, attention_mask, token_type_ids)
-            }
-            Self::HuggingFace(tok) => {
-                let bos_id = tok
-                    .token_to_id("<bos>")
-                    .or_else(|| tok.token_to_id("<s>"))
-                    .or_else(|| tok.token_to_id("[CLS]"));
-                let eos_id = tok
-                    .token_to_id("<eos>")
-                    .or_else(|| tok.token_to_id("</s>"))
-                    .or_else(|| tok.token_to_id("[SEP]"));
-                let special_count = bos_id.is_some() as usize + eos_id.is_some() as usize;
-                let content_limit = max_len.saturating_sub(special_count);
-                let content_len = token_ids.len().min(content_limit);
-                let mut input_ids = Vec::with_capacity(max_len);
-                if let Some(bos) = bos_id {
-                    input_ids.push(bos as i64);
-                }
-                input_ids.extend(token_ids[..content_len].iter().map(|&id| id as i64));
-                if let Some(eos) = eos_id {
-                    input_ids.push(eos as i64);
-                }
-                let mut attention_mask = vec![1_i64; input_ids.len()];
-                truncate_and_pad(&mut input_ids, max_len, 0);
-                truncate_and_pad(&mut attention_mask, max_len, 0);
-                let token_type_ids = vec![0_i64; max_len];
-                (input_ids, attention_mask, token_type_ids)
-            }
-        }
-    }
-
-    pub(crate) fn token_count(
-        &self,
-        text: &str,
-        add_special_tokens: bool,
-    ) -> Result<usize, Box<dyn std::error::Error>> {
-        match self {
-            Self::HuggingFace(tokenizer) => tokenizer
-                .encode(text, add_special_tokens)
-                .map(|encoding| encoding.len())
-                .map_err(|err| format!("failed to tokenize input: {err}").into()),
-            Self::MmbertPair(tokenizer) => {
-                let with_special = tokenizer.encode(text).len();
-                Ok(if add_special_tokens {
-                    with_special
-                } else {
-                    with_special.saturating_sub(2)
-                })
-            }
-        }
-    }
-
-    pub(crate) fn encode_inputs(
-        &self,
-        text: &str,
-        max_len: usize,
-    ) -> Result<(Vec<i64>, Vec<i64>, Vec<i64>), Box<dyn std::error::Error>> {
-        let (mut input_ids, mut attention_mask) = match self {
-            Self::HuggingFace(tokenizer) => {
-                let encoding = tokenizer
-                    .encode(text, true)
-                    .map_err(|err| format!("failed to tokenize input: {}", err))?;
-                (
-                    encoding.get_ids().iter().map(|id| *id as i64).collect(),
-                    encoding
-                        .get_attention_mask()
-                        .iter()
-                        .map(|mask| *mask as i64)
-                        .collect(),
-                )
-            }
-            Self::MmbertPair(tokenizer) => {
-                let input_ids = tokenizer
-                    .encode(text)
-                    .into_iter()
-                    .map(i64::from)
-                    .collect::<Vec<_>>();
-                let attention_mask = vec![1; input_ids.len()];
-                (input_ids, attention_mask)
-            }
-        };
-        truncate_and_pad(&mut input_ids, max_len, 0);
-        truncate_and_pad(&mut attention_mask, max_len, 0);
-        let token_type_ids = vec![0_i64; max_len];
-        Ok((input_ids, attention_mask, token_type_ids))
-    }
-}
-
 pub(crate) fn l3_ttl() -> Duration {
-    let secs = std::env::var("PATRONUS_L3_TTL_SECS")
-        .ok()
-        .and_then(|value| value.parse::<u64>().ok())
-        .unwrap_or(DEFAULT_L3_TTL_SECS);
-    Duration::from_secs(secs)
+    l3_ttl_from_value(std::env::var("PATRONUS_L3_TTL_SECS").ok().as_deref())
+}
+
+fn l3_ttl_from_value(value: Option<&str>) -> Duration {
+    match value {
+        // API deployments with sufficient RAM keep sessions resident.  A
+        // Duration::MAX TTL is preferable to a magic large finite value: the
+        // eviction comparison can never become true during process lifetime.
+        Some("-1") => Duration::MAX,
+        Some(value) => value
+            .parse::<u64>()
+            .map(Duration::from_secs)
+            .unwrap_or_else(|_| Duration::from_secs(DEFAULT_L3_TTL_SECS)),
+        None => Duration::from_secs(DEFAULT_L3_TTL_SECS),
+    }
 }
 
 impl OnnxTextClassifier {
@@ -576,6 +423,7 @@ impl OnnxTextClassifier {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn from_dir_with_paths<P: AsRef<Path>>(
         dir: P,
         class_names: Vec<String>,
@@ -601,7 +449,12 @@ impl OnnxTextClassifier {
             return Ok(None);
         };
 
-        let tokenizer = RuntimeTokenizer::load(dir, tokenizer_path)?;
+        if max_len != MODEL_TOKENS {
+            return Err("classifier sequence length must be 256".into());
+        }
+        let tokenizer_dir = dir.join(tokenizer_path);
+        let tokenizer =
+            RuntimeTokenizer::load(tokenizer_dir.parent().ok_or("invalid tokenizer path")?)?;
         let (mut session_builder, execution_provider) =
             configured_session_builder(backend, Some(dir), options)?;
         let session = session_builder.commit_from_file(&model_path)?;
@@ -636,15 +489,6 @@ impl OnnxTextClassifier {
             .collect())
     }
 
-    pub(crate) fn infer_raw(
-        &mut self,
-        text: &str,
-    ) -> Result<RawClassifierOutput, Box<dyn std::error::Error>> {
-        self.infer_batch_raw(&[text.to_string()])?
-            .pop()
-            .ok_or_else(|| "ONNX batch returned no raw output".into())
-    }
-
     pub(crate) fn infer_token_ids_raw(
         &mut self,
         token_ids: &[u32],
@@ -668,9 +512,7 @@ impl OnnxTextClassifier {
         let mut token_type_ids_all = Vec::with_capacity(batch_size * self.max_len);
 
         for tokens in token_ids_batch {
-            let (input_ids, attention_mask, token_type_ids) = self
-                .tokenizer
-                .encode_inputs_from_token_ids(tokens, self.max_len);
+            let (input_ids, attention_mask, token_type_ids) = self.tokenizer.inputs(tokens)?;
             input_ids_all.extend(input_ids);
             attention_mask_all.extend(attention_mask);
             token_type_ids_all.extend(token_type_ids);
@@ -714,81 +556,12 @@ impl OnnxTextClassifier {
         &mut self,
         texts: &[String],
     ) -> Result<Vec<RawClassifierOutput>, Box<dyn std::error::Error>> {
-        if texts.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        let batch_size = texts.len();
-        let mut input_ids_all = Vec::with_capacity(batch_size * self.max_len);
-        let mut attention_mask_all = Vec::with_capacity(batch_size * self.max_len);
-        let mut token_type_ids_all = Vec::with_capacity(batch_size * self.max_len);
-
-        for text in texts {
-            let (input_ids, attention_mask, token_type_ids) = self.encode_inputs(text)?;
-            input_ids_all.extend(input_ids);
-            attention_mask_all.extend(attention_mask);
-            token_type_ids_all.extend(token_type_ids);
-        }
-
-        let shape = vec![batch_size, self.max_len];
-        let mut inputs = Vec::with_capacity(self.input_names.len().max(1));
-        if self.input_names.is_empty() {
-            inputs.push((
-                "input_ids".to_string(),
-                Tensor::from_array((shape.clone(), input_ids_all.clone()))?,
-            ));
-        } else {
-            for name in &self.input_names {
-                let lower = name.to_lowercase();
-                let values = if lower.contains("attention") {
-                    attention_mask_all.clone()
-                } else if lower.contains("token_type")
-                    || lower.contains("token_type_ids")
-                    || lower.contains("segment")
-                {
-                    token_type_ids_all.clone()
-                } else {
-                    input_ids_all.clone()
-                };
-                inputs.push((name.clone(), Tensor::from_array((shape.clone(), values))?));
-            }
-        }
-
-        let logits = {
-            let outputs = self.session.run(inputs)?;
-            first_logits_batch(&outputs, self.class_names.len(), batch_size)?
-        };
-        Ok(logits
-            .into_iter()
-            .map(|logits| RawClassifierOutput { logits })
-            .collect())
-    }
-
-    fn token_chunks(
-        &self,
-        text: &str,
-        overlap_tokens: usize,
-    ) -> Result<Vec<TokenTextChunk>, Box<dyn std::error::Error>> {
-        let special_tokens = self.token_count("", true)?;
-        let content_tokens = self.max_len.saturating_sub(special_tokens).max(1);
-        token_chunks(text, content_tokens, overlap_tokens, |value| {
-            self.token_count(value, false)
-        })
-    }
-
-    fn token_count(
-        &self,
-        text: &str,
-        add_special_tokens: bool,
-    ) -> Result<usize, Box<dyn std::error::Error>> {
-        self.tokenizer.token_count(text, add_special_tokens)
-    }
-
-    fn encode_inputs(
-        &self,
-        text: &str,
-    ) -> Result<(Vec<i64>, Vec<i64>, Vec<i64>), Box<dyn std::error::Error>> {
-        self.tokenizer.encode_inputs(text, self.max_len)
+        let ids = texts
+            .iter()
+            .map(|text| self.tokenizer.single_chunk_ids(text))
+            .collect::<Result<Vec<_>, _>>()?;
+        let slices = ids.iter().map(Vec::as_slice).collect::<Vec<_>>();
+        self.infer_token_ids_batch_raw(&slices)
     }
 
     pub fn model_name(&self) -> &str {
@@ -806,75 +579,6 @@ impl OnnxTextClassifier {
     pub fn execution_provider(&self) -> &str {
         &self.execution_provider
     }
-}
-
-pub(crate) fn token_chunks<F>(
-    text: &str,
-    max_tokens: usize,
-    overlap_tokens: usize,
-    mut token_count: F,
-) -> Result<Vec<TokenTextChunk>, Box<dyn std::error::Error>>
-where
-    F: FnMut(&str) -> Result<usize, Box<dyn std::error::Error>>,
-{
-    if text.is_empty() {
-        return Ok(vec![TokenTextChunk {
-            start_byte: 0,
-            end_byte: 0,
-            text: String::new(),
-            token_ids: Vec::new(),
-            tokenizer_family: String::new(),
-        }]);
-    }
-    let boundaries = text
-        .char_indices()
-        .map(|(index, _)| index)
-        .chain(std::iter::once(text.len()))
-        .collect::<Vec<_>>();
-    let mut chunks = Vec::new();
-    let mut start_index = 0usize;
-
-    while start_index + 1 < boundaries.len() {
-        let start = boundaries[start_index];
-        let mut low = start_index + 1;
-        let mut high = boundaries.len() - 1;
-        let mut end_index = low;
-        while low <= high {
-            let middle = low + (high - low) / 2;
-            if token_count(&text[start..boundaries[middle]])? <= max_tokens {
-                end_index = middle;
-                low = middle + 1;
-            } else {
-                high = middle.saturating_sub(1);
-            }
-        }
-        let end = boundaries[end_index];
-        chunks.push(TokenTextChunk {
-            start_byte: start,
-            end_byte: end,
-            text: text[start..end].to_string(),
-            token_ids: Vec::new(),
-            tokenizer_family: String::new(),
-        });
-        if end == text.len() {
-            break;
-        }
-
-        let mut low = start_index + 1;
-        let mut high = end_index;
-        let mut next_start = end_index;
-        while low <= high {
-            let middle = low + (high - low) / 2;
-            if token_count(&text[boundaries[middle]..end])? <= overlap_tokens {
-                next_start = middle;
-                high = middle.saturating_sub(1);
-            } else {
-                low = middle + 1;
-            }
-        }
-        start_index = next_start.max(start_index + 1);
-    }
-    Ok(chunks)
 }
 
 pub(crate) fn configured_session_builder(
@@ -938,9 +642,7 @@ fn execution_provider_plan(
     }
 
     let Some(provider) = provider else {
-        return Err(format!(
-            "ONNX GPU backend is not available on this platform; enable and select one of: coreml, cuda, directml, tensorrt"
-        )
+        return Err("ONNX GPU backend is not available on this platform; enable and select one of: coreml, cuda, directml, tensorrt".to_string()
         .into());
     };
 
@@ -1045,13 +747,6 @@ fn session_input_names(session: &Session) -> Vec<String> {
         .collect()
 }
 
-fn truncate_and_pad(values: &mut Vec<i64>, max_len: usize, pad: i64) {
-    values.truncate(max_len);
-    if values.len() < max_len {
-        values.resize(max_len, pad);
-    }
-}
-
 fn first_logits_batch<'run>(
     outputs: &ort::session::SessionOutputs<'run>,
     expected_classes: usize,
@@ -1128,55 +823,17 @@ fn softmax(logits: &[f32]) -> Vec<f32> {
 
 #[cfg(test)]
 mod tests {
-    use super::{token_chunks, truncate_and_pad, LazyOnnxTextClassifier};
+    use super::{l3_ttl_from_value, LazyOnnxTextClassifier};
     use crate::{ExecutionBackend, OnnxRuntimeOptions};
+    use std::time::Duration;
 
     #[test]
-    fn tokenizer_inputs_use_fixed_right_padding_and_truncation() {
-        let mut short = vec![1, 2, 3];
-        truncate_and_pad(&mut short, 5, 0);
-        assert_eq!(short, [1, 2, 3, 0, 0]);
-
-        let mut long = vec![1, 2, 3, 4, 5, 6];
-        truncate_and_pad(&mut long, 4, 0);
-        assert_eq!(long, [1, 2, 3, 4]);
-    }
-
-    #[test]
-    fn hf_encode_inputs_from_token_ids_adds_special_tokens_and_pads() {
-        let tok = super::RuntimeTokenizer::HuggingFace(std::sync::Arc::new(
-            tokenizers::Tokenizer::from_bytes(
-                r#"{"version":"1.0","truncation":null,"padding":null,"added_tokens":[],"normalizer":null,"pre_tokenizer":null,"post_processor":null,"decoder":null,"model":{"type":"BPE","dropout":null,"unk_token":null,"continuing_subword_prefix":null,"end_of_word_suffix":null,"fuse_unk":null,"byte_fallback":false,"vocab":{"<bos>":0,"<eos>":1,"hello":2},"merges":[]}}"#.as_bytes(),
-            )
-            .unwrap(),
-        ));
-        let (ids, mask, token_type) = tok.encode_inputs_from_token_ids(&[2], 5);
-        assert_eq!(ids, vec![0, 2, 1, 0, 0]);
-        assert_eq!(mask, vec![1, 1, 1, 0, 0]);
-        assert_eq!(token_type, vec![0, 0, 0, 0, 0]);
-
-        let (ids, mask, token_type) = tok.encode_inputs_from_token_ids(&[2, 2, 2, 2, 2], 4);
-        assert_eq!(ids, vec![0, 2, 2, 1]);
-        assert_eq!(mask, vec![1, 1, 1, 1]);
-        assert_eq!(token_type, vec![0, 0, 0, 0]);
-    }
-
-    #[test]
-    fn token_chunks_respect_budget_overlap_and_utf8_boundaries() {
-        let chunks = token_chunks("abcdefghijklm🦀nopqrstuvwxyz", 10, 3, |value| {
-            Ok(value.chars().count())
-        })
-        .unwrap();
-
-        assert!(chunks.iter().all(|chunk| chunk.text.chars().count() <= 10));
-        assert!(chunks.windows(2).all(|pair| {
-            let mut suffix = pair[0].text.chars().rev().take(3).collect::<Vec<_>>();
-            suffix.reverse();
-            suffix == pair[1].text.chars().take(3).collect::<Vec<_>>()
-        }));
-        assert!(chunks.iter().all(|chunk| {
-            chunk.text == "abcdefghijklm🦀nopqrstuvwxyz"[chunk.start_byte..chunk.end_byte]
-        }));
+    fn l3_ttl_supports_resident_sessions_and_preserves_fallbacks() {
+        assert_eq!(l3_ttl_from_value(Some("-1")), Duration::MAX);
+        assert_eq!(l3_ttl_from_value(Some("900")), Duration::from_secs(900));
+        assert_eq!(l3_ttl_from_value(Some("0")), Duration::ZERO);
+        assert_eq!(l3_ttl_from_value(Some("invalid")), Duration::from_secs(300));
+        assert_eq!(l3_ttl_from_value(None), Duration::from_secs(300));
     }
 
     #[test]
