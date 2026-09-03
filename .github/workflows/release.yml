@@ -23,6 +23,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.98.0
+        with:
+          components: clippy, rustfmt
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -67,6 +69,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.98.0
+        with:
+          components: clippy, rustfmt
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -108,6 +112,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.98.0
+        with:
+          components: clippy, rustfmt
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -155,6 +161,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.98.0
+        with:
+          components: clippy, rustfmt
       - run: cargo publish -p patronus-ark
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}

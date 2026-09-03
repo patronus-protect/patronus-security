@@ -11,6 +11,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.98.0
+        with:
+          components: clippy, rustfmt
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -28,12 +30,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.98.0
+        with:
+          components: clippy, rustfmt
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - run: python -m venv .venv
       - run: .venv/bin/python -m pip install -r requirements-test.txt
       - run: .venv/bin/python -m maturin develop --manifest-path python/Cargo.toml
+        env:
+          VIRTUAL_ENV: ${{ github.workspace }}/.venv
       - run: .venv/bin/python -m unittest discover -s python/tests
       - run: .venv/bin/python -m pytest scripts/tests -q
 
@@ -43,6 +49,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.98.0
+        with:
+          components: clippy, rustfmt
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
