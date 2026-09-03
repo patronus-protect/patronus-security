@@ -2,10 +2,10 @@ name: ARK API image
 
 on:
   pull_request:
-    paths: ["ark-api/**", "rust/**", "Cargo.*", ".dockerignore", ".github/workflows/ark-api-image.yml", "scripts/tests/test_cube_deploy.py", "scripts/tests/test_entrypoint_runtime.py", "scripts/ark_api_entrypoint_benchmark.py"]
+    paths: ["ark-api/**", "rust/**", "Cargo.*", ".dockerignore", ".github/workflows/ark-api-image.yml", "scripts/tests/test_cube*.py", "scripts/tests/test_entrypoint_runtime.py", "scripts/tests/entrypoint_peers.py", "scripts/ark_api_entrypoint_benchmark.py"]
   push:
     branches: [main, codex/ionos-ark-api-0.1.6]
-    paths: ["ark-api/**", "rust/**", "Cargo.*", ".dockerignore", ".github/workflows/ark-api-image.yml", "scripts/tests/test_cube_deploy.py", "scripts/tests/test_entrypoint_runtime.py", "scripts/ark_api_entrypoint_benchmark.py"]
+    paths: ["ark-api/**", "rust/**", "Cargo.*", ".dockerignore", ".github/workflows/ark-api-image.yml", "scripts/tests/test_cube*.py", "scripts/tests/test_entrypoint_runtime.py", "scripts/tests/entrypoint_peers.py", "scripts/ark_api_entrypoint_benchmark.py"]
   workflow_dispatch:
 
 permissions:
@@ -35,13 +35,15 @@ jobs:
           cargo fmt --check
           cargo test --locked -p ark-api
           cargo build --locked -p ark-api --bin ark-api-entrypoint
-          .venv/bin/python -m pytest scripts/tests/test_cube_deploy.py scripts/tests/test_entrypoint_runtime.py -q
+          .venv/bin/python -m pytest scripts/tests/test_cube*.py scripts/tests/test_entrypoint_runtime.py -q
       - name: Validate Compose without starting services
         env:
           ARK_IMAGE: ghcr.io/patronus-protect/ark-api:validation
           REDIS_IMAGE: redis:7.4-alpine
           CUBE_IP: 10.20.0.11
-        run: docker compose -f ark-api/deploy/compose.yaml config --quiet
+        run: |
+          docker compose -f ark-api/deploy/compose.yaml config --quiet
+          docker compose -f ark-api/deploy/compose.yaml --profile local-redis config --quiet
 
   publish:
     if: github.event_name != 'pull_request'
@@ -116,7 +118,7 @@ jobs:
           fi
           gh release create "$tag" cube-release/* --target "$GITHUB_SHA" \
             --title "ARK API 0.1.6 (${GITHUB_SHA:0:12})" --prerelease \
-            --notes 'Cube 1 deployment candidate. Bootstrap requires network and application reboot acceptance; this release does not imply production acceptance.'
+            --notes 'Cube deployment candidate. Bootstrap requires network and application reboot acceptance; this release does not imply production acceptance.'
           cat cube-release/deployment.json >> "$GITHUB_STEP_SUMMARY"
           printf '\nBootstrap: https://github.com/patronus-protect/patronus-security/releases/download/%s/bootstrap.sh\n' "$tag" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4

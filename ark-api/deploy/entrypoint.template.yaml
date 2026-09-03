@@ -5,7 +5,7 @@ auth:
     - name: public-client
       key_hash: "__PUBLIC_HASH__"
 gateway:
-  redis_url: "redis://redis:6379/0"
+  redis_url: __REDIS_URL_JSON__
   worker_token: "__WORKER_TOKEN__"
   retention_secs: 90
   max_waiting_requests: 64

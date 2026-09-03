@@ -3,6 +3,7 @@ mod config;
 mod dto;
 mod routes;
 mod state;
+mod worker_admission;
 
 use std::path::PathBuf;
 
@@ -85,7 +86,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let state = AppState::new(config, gateway);
 
     let protected = Router::new()
-        .route("/v1/scan", post(routes::scan::submit_scan))
+        .route(
+            "/v1/scan",
+            post(routes::scan::submit_scan).layer(middleware::from_fn_with_state(
+                state.clone(),
+                worker_admission::track_submission,
+            )),
+        )
+        .route("/internal/status", get(routes::health::worker_status))
+        .route("/internal/recover", post(routes::health::recover_worker))
         .route(
             "/v1/scan/:request_id/events",
             get(routes::scan::scan_events),

@@ -43,3 +43,4 @@ site/
 /ark-api/deploy/worker.yaml
 /ark-api/deploy/entrypoint.yaml
 /ark-api/deploy/*.key
+/ark-api/deploy/*.pem

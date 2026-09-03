@@ -12,14 +12,70 @@ import math
 from pathlib import Path
 import statistics
 import sys
+import threading
 import time
+import urllib.error
 import urllib.parse
+import urllib.request
 
 from ark_api_http_benchmark import multipart
 from ark_api_throughput_benchmark import THROUGHPUT_CATEGORIES, timing_summary, validation_case_texts
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ark-api" / "deploy"))
-from smoke import check_result, http
+from smoke import check_result
+
+
+_transport = threading.local()
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
+def http(url, path, key=None, data=None, content_type=None):
+    # Building an opener creates a TLS context, even for HTTP. Reuse it per
+    # thread and initialize it before measuring; never use ambient proxies.
+    if not hasattr(_transport, "opener"):
+        _transport.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
+    headers = {}
+    if key:
+        headers["Authorization"] = f"Bearer {key}"
+    if content_type:
+        headers["Content-Type"] = content_type
+    request = urllib.request.Request(url + path, data=data, headers=headers)
+    try:
+        response = _transport.opener.open(request, timeout=20)
+    except urllib.error.HTTPError as error:
+        response = error
+    with response:
+        raw = response.read(2 * 1024 * 1024 + 1)
+        if len(raw) > 2 * 1024 * 1024:
+            raise RuntimeError("Unexpectedly large API response")
+        return response.code, json.loads(raw) if raw else None
+
+
+def run_cases(url, key, cases, concurrency):
+    ready = threading.Barrier(concurrency + 1, timeout=60)
+
+    def prepare():
+        try:
+            if http(url, "/readyz")[0] != 200:
+                raise RuntimeError("Entrypoint is not ready")
+            ready.wait()
+        except Exception:
+            ready.abort()
+            raise
+
+    with ThreadPoolExecutor(max_workers=concurrency) as pool:
+        prepared = [pool.submit(prepare) for _ in range(concurrency)]
+        ready.wait()
+        for future in prepared:
+            future.result()
+        started = time.monotonic()
+        rows = list(pool.map(lambda case: scan(url, key, case), cases))
+        elapsed = time.monotonic() - started
+    return rows, elapsed
 
 
 def scan(url, key, case):
@@ -32,8 +88,12 @@ def scan(url, key, case):
     row = {"case": name, "bytes": len(content.encode()),
            "sha256": hashlib.sha256(content.encode()).hexdigest()}
     started = time.monotonic()
+    poll_count = 0
+    poll_http_ms = 0.0
+    poll_sleep_ms = 0.0
     try:
         status, payload = http(url, "/v1/scan", key, body, f"multipart/form-data; boundary={boundary}")
+        row["submit_http_ms"] = (time.monotonic() - started) * 1000
         if status != 202 or len(payload.get("jobs", [])) != 1:
             raise RuntimeError(f"submit HTTP {status}")
         job = payload["jobs"][0]
@@ -41,7 +101,10 @@ def scan(url, key, case):
         if job.get("status_url") != "/v1/scan/" + row["job_id"]:
             raise RuntimeError("invalid status URL")
         while time.monotonic() - started < 120:
+            poll_started = time.monotonic()
             status, result = http(url, job["status_url"], key)
+            poll_http_ms += (time.monotonic() - poll_started) * 1000
+            poll_count += 1
             if status != 200:
                 raise RuntimeError(f"poll HTTP {status}")
             if result.get("status") in {"completed", "failed"}:
@@ -59,13 +122,15 @@ def scan(url, key, case):
                                field: value.get(field) for field in ("class_name", "level", "model")
                            } for category, value in result["categories"].items()})
                 break
+            sleep_started = time.monotonic()
             time.sleep(0.01)
+            poll_sleep_ms += (time.monotonic() - sleep_started) * 1000
         else:
             raise TimeoutError("job exceeded 120 seconds")
     except Exception as error:
         row.update(passed=False, error=f"{type(error).__name__}: {error}")
     row["client_total_ms"] = (time.monotonic() - started) * 1000
-    print(json.dumps({k: row[k] for k in ("case", "passed", "client_total_ms")}), flush=True)
+    row.update(poll_count=poll_count, poll_http_ms=poll_http_ms, poll_sleep_ms=poll_sleep_ms)
     return row
 
 
@@ -88,10 +153,7 @@ def main():
     assert len(cases) == 42 and len({text for _, text in cases}) == 42
     assert http(url, "/readyz")[0] == 200
     timestamp = datetime.now(timezone.utc).isoformat()
-    started = time.monotonic()
-    with ThreadPoolExecutor(max_workers=args.concurrency) as pool:
-        rows = list(pool.map(lambda case: scan(url, key, case), cases))
-    elapsed = time.monotonic() - started
+    rows, elapsed = run_cases(url, key, cases, args.concurrency)
     completed = [r for r in rows if r["passed"]]
     sizes = [r["bytes"] for r in rows]
     report = {
@@ -100,22 +162,31 @@ def main():
         "categories": THROUGHPUT_CATEGORIES, "threat_max_level": "L2", "dynamic_pii": False,
         "requests": len(rows), "completed": len(completed), "errors": len(rows) - len(completed),
         "client_concurrency": args.concurrency, "passes": 1,
-        "cache": "deployed in-memory cache; per-request hit flags included",
+        "cache": "Existing deployed caches retained. l2_cache_hit=true means all observed L2 heads cached; false means at least one head scored, and may include partial model cache hits.",
         "bytes": {"total": sum(sizes), "mean": statistics.mean(sizes),
                   "median": statistics.median(sizes), "min": min(sizes), "max": max(sizes)},
         "duration_s": elapsed, "completed_rps": len(completed) / elapsed,
+        "completed_mib_s": sum(r["bytes"] for r in completed) / (1024 * 1024) / elapsed,
         "latency_ms": {
-            "l2": timing_summary([r["timings"]["l2_ms"] for r in completed if r["timings"].get("l2_ms") is not None]),
+            "l2_uncached": timing_summary([r["timings"]["l2_ms"] for r in completed if r["timings"].get("l2_ms") is not None and r["timings"].get("l2_cache_hit") is False]),
+            "l2_cached": timing_summary([r["timings"]["l2_ms"] for r in completed if r["timings"].get("l2_ms") is not None and r["timings"].get("l2_cache_hit") is True]),
             "worker_total": timing_summary([r["timings"]["worker_ms"] for r in completed]),
             "entrypoint_total": timing_summary([r["timings"]["total_ms"] for r in completed]),
             "queue_wait": timing_summary([r["timings"]["queue_wait_ms"] for r in completed]),
             "client_total": timing_summary([r["client_total_ms"] for r in completed]),
+            "client_minus_entrypoint": timing_summary([r["client_total_ms"] - r["timings"]["total_ms"] for r in completed]),
+            "submit_http": timing_summary([r["submit_http_ms"] for r in completed]),
+            "poll_http_sum": timing_summary([r["poll_http_ms"] for r in completed]),
+            "poll_sleep_sum": timing_summary([r["poll_sleep_ms"] for r in completed]),
         },
         "timing_definitions": {
-            "l2": "Shared NTDB L2 scoring duration, counted once across heads; excludes L1/L3 and HTTP; cache flagged separately",
+            "l2_uncached": "Shared NTDB L2 scoring duration when at least one head scored without cache; counted once across heads; excludes L1/L3 and HTTP",
+            "l2_cached": "Cache lookup duration; not model inference",
             "worker_total": "Entrypoint dispatch through worker finished event, excluding admission wait",
             "entrypoint_total": "Entrypoint admission through finished event, including wait for free worker",
             "client_total": "Client POST through final status retrieval, including transport and 10ms polling",
+            "client_minus_entrypoint": "Per-request client time minus server total; not subtraction of unrelated percentiles",
+            "measurement_window": "First scan submission through last result; excludes per-thread HTTP client initialization, readiness and output; no inference warmup",
         },
         "l2_cache_hits": sum(r["timings"].get("l2_cache_hit") is True for r in completed),
         "l2_measurements": sum(r["timings"].get("l2_ms") is not None for r in completed),

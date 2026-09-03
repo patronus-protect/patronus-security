@@ -44,6 +44,7 @@ services:
     <<: *worker
   redis:
     <<: *service
+    profiles: [local-redis]
     image: ${REDIS_IMAGE:?Use the published Redis image digest}
     user: redis
     command: [redis-server, --save, "", --appendonly, "no", --maxmemory, 192mb, --maxmemory-policy, noeviction]
@@ -80,15 +81,10 @@ services:
       worker-1: {condition: service_healthy}
       worker-2: {condition: service_healthy}
       worker-3: {condition: service_healthy}
-      redis: {condition: service_healthy}
+      redis: {condition: service_healthy, required: false}
     healthcheck:
-      test:
-        - CMD-SHELL
-        - >-
-          wget -qO- http://127.0.0.1:8080/readyz &&
-          wget -qO- http://worker-1:8080/readyz &&
-          wget -qO- http://worker-2:8080/readyz &&
-          wget -qO- http://worker-3:8080/readyz
+      # Entrypoint readiness checks Redis and at least one usable worker.
+      test: [CMD, wget, -qO-, http://127.0.0.1:8080/readyz]
       interval: 15s
       timeout: 10s
       retries: 4

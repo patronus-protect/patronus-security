@@ -13,10 +13,23 @@ STATE_DIR=/var/lib/patronus-cube
 CUBE_IP=10.20.0.11
 NIC=ens6
 GATEWAY=10.20.0.1
+ENTRYPOINT_KEY_FILE=
+REDIS_URL_FILE=
 
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 boot_id() { cat /proc/sys/kernel/random/boot_id; }
-compose() { docker compose --project-directory "$DEPLOY_DIR" -f "$DEPLOY_DIR/compose.yaml" "$@"; }
+compose() {
+    local profiles=
+    [[ $(redis_mode) != local ]] || profiles=local-redis
+    COMPOSE_PROFILES=$profiles docker compose --project-directory "$DEPLOY_DIR" -f "$DEPLOY_DIR/compose.yaml" "$@"
+}
+redis_mode() { if [[ -f $DEPLOY_DIR/redis-mode ]]; then cat "$DEPLOY_DIR/redis-mode"; else printf 'local\n'; fi; }
+
+validate_cube_ip() {
+    [[ $CUBE_IP =~ ^10\.20\.0\.([0-9]{1,3})$ ]] || die 'Cube IP must be an IPv4 host in 10.20.0.0/24.'
+    local octet=${BASH_REMATCH[1]}
+    [[ $octet == "$((10#$octet))" ]] && (( 10#$octet >= 2 && 10#$octet <= 254 )) || die 'Cube IP must be a host address from .2 to .254, excluding the NAT gateway.'
+}
 
 host_check() {
     [[ $EUID == 0 ]] || die 'Run with sudo/root.'
@@ -24,8 +37,13 @@ host_check() {
     . /etc/os-release
     [[ $ID == ubuntu && $VERSION_ID == 24.04 ]] || die 'Requires Ubuntu 24.04.'
     [[ $(uname -m) == x86_64 ]] || die 'This release requires x86_64.'
-    ip -4 -o address show dev "$NIC" | grep -Fq " $CUBE_IP/24 " || die 'Phase 1 is restricted to Cube 1 (10.20.0.11/24 on ens6).'
+    ip -4 -o address show dev "$NIC" | grep -Fq " $CUBE_IP/24 " || die "Expected $CUBE_IP/24 on $NIC; check --cube-ip and the provisioned private NIC."
     install -d -m 0700 "$STATE_DIR" "$DEPLOY_DIR"
+    if [[ -f $STATE_DIR/cube-ip ]]; then
+        [[ $(cat "$STATE_DIR/cube-ip") == "$CUBE_IP" ]] || die 'Cube IP differs from the saved bootstrap state.'
+    else
+        printf '%s\n' "$CUBE_IP" > "$STATE_DIR/cube-ip"
+    fi
 }
 
 network_check() {
@@ -79,7 +97,7 @@ EOF
         resolvectl domain "$NIC" '~.'
         resolvectl flush-caches
         network_check
-        printf 'Network configuration saved. Reboot Cube 1, then run this script with deploy.\n'
+        printf 'Network configuration saved. Reboot %s, then run this script with deploy --cube-ip %s.\n' "$CUBE_IP" "$CUBE_IP"
     else
         # No route or DNS repair here: this must prove reboot persistence.
         network_check
@@ -114,6 +132,10 @@ EOF
     fi
     command -v python3 >/dev/null || die 'Install python3 before continuing.'
     docker compose version
+    local compose_version
+    compose_version=$(docker compose version --short)
+    [[ $compose_version =~ ^v?([0-9]+)\.([0-9]+)\.([0-9]+) ]] || die 'Cannot determine Docker Compose version.'
+    (( BASH_REMATCH[1] > 2 || (BASH_REMATCH[1] == 2 && BASH_REMATCH[2] >= 20) )) || die 'Docker Compose 2.20 or newer is required for optional local Redis.'
     install -d -m 0755 /etc/systemd/system/docker.service.d
     cat > /etc/systemd/system/docker.service.d/60-patronus-network.conf <<'EOF'
 [Unit]
@@ -131,56 +153,27 @@ fetch_config() {
     [[ $REDIS_IMAGE =~ ^redis@sha256:[0-9a-f]{64}$ ]] || die 'Redis must be pinned to a digest.'
     local file staging
     staging=$(mktemp -d "$DEPLOY_DIR/.download.XXXXXX")
-    for file in compose.yaml worker.template.yaml entrypoint.template.yaml smoke.py; do
+    for file in compose.yaml worker.template.yaml entrypoint.template.yaml smoke.py bootstrap_config.py; do
         curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 \
             --connect-timeout 10 --max-time 120 \
             "https://raw.githubusercontent.com/patronus-protect/patronus-security/$RELEASE_COMMIT/ark-api/deploy/$file" \
             -o "$staging/$file"
     done
-    for file in compose.yaml worker.template.yaml entrypoint.template.yaml smoke.py; do
+    for file in compose.yaml worker.template.yaml entrypoint.template.yaml smoke.py bootstrap_config.py; do
         install -m 0600 "$staging/$file" "$DEPLOY_DIR/$file"
     done
     rm -r "$staging"
 }
 
 configure_secrets() {
-    # Values never pass through command arguments, stdout, or environment.
-    python3 - "$DEPLOY_DIR" <<'PY'
-import hashlib
-import os
-from pathlib import Path
-import secrets
-import sys
-
-root = Path(sys.argv[1])
-def token(name):
-    path = root / name
-    if not path.exists():
-        with path.open('x') as handle:
-            handle.write(secrets.token_hex(32) + '\n')
-    path.chmod(0o600)
-    value = path.read_text().strip()
-    if len(value) != 64 or any(c not in '0123456789abcdef' for c in value):
-        raise SystemExit(f'Invalid existing secret file: {name}')
-    return value
-
-public = token('public-api.key')
-worker = token('worker.key')
-replacements = {
-    '__PUBLIC_HASH__': hashlib.sha256(public.encode()).hexdigest(),
-    '__WORKER_HASH__': hashlib.sha256(worker.encode()).hexdigest(),
-    '__WORKER_TOKEN__': worker,
-}
-for name in ('worker', 'entrypoint'):
-    contents = (root / f'{name}.template.yaml').read_text()
-    for key, value in replacements.items():
-        contents = contents.replace(key, value)
-    path = root / f'{name}.yaml'
-    path.write_text(contents)
-    os.chown(path, 10001, 10001)
-    path.chmod(0o400)
-PY
-    printf 'ARK_IMAGE=%s\nREDIS_IMAGE=%s\nCUBE_IP=%s\n' "$ARK_IMAGE" "$REDIS_IMAGE" "$CUBE_IP" > "$DEPLOY_DIR/.env"
+    # Only paths pass through arguments; credential values stay in private files.
+    local args=()
+    [[ -z $ENTRYPOINT_KEY_FILE ]] || args+=(--entrypoint-key-file "$ENTRYPOINT_KEY_FILE")
+    [[ -z $REDIS_URL_FILE ]] || args+=(--redis-url-file "$REDIS_URL_FILE")
+    python3 "$DEPLOY_DIR/bootstrap_config.py" "$DEPLOY_DIR" "${args[@]}"
+    local profiles=
+    [[ $(redis_mode) != local ]] || profiles=local-redis
+    printf 'ARK_IMAGE=%s\nREDIS_IMAGE=%s\nCUBE_IP=%s\nCOMPOSE_PROFILES=%s\n' "$ARK_IMAGE" "$REDIS_IMAGE" "$CUBE_IP" "$profiles" > "$DEPLOY_DIR/.env"
 }
 
 stack_check() {
@@ -189,12 +182,15 @@ stack_check() {
 import json, sys
 text = sys.stdin.read().strip()
 rows = json.loads(text) if text.startswith("[") else [json.loads(line) for line in text.splitlines()]
-expected = {"entrypoint", "worker-1", "worker-2", "worker-3", "redis"}
+expected = {"entrypoint", "worker-1", "worker-2", "worker-3"}
+if sys.argv[1] == "local": expected.add("redis")
 assert {row["Service"] for row in rows} == expected, "Missing or unexpected services"
 assert all(row["State"] == "running" and row.get("Health") == "healthy" for row in rows), "Unhealthy services"
-'
+' "$(redis_mode)"
     local service id
-    for service in entrypoint worker-1 worker-2 worker-3 redis; do
+    local services=(entrypoint worker-1 worker-2 worker-3)
+    [[ $(redis_mode) != local ]] || services+=(redis)
+    for service in "${services[@]}"; do
         id=$(compose ps -q "$service")
         docker inspect "$id" | python3 -c '
 import json, sys
@@ -211,9 +207,9 @@ if service != "entrypoint":
     assert not ports, "Internal port exposed"
 else:
     assert set(ports) == {"8080/tcp"}
-    assert {(p["HostIp"], p["HostPort"]) for p in ports["8080/tcp"]} == {("127.0.0.1", "8080"), ("10.20.0.11", "8080")}
+    assert {(p["HostIp"], p["HostPort"]) for p in ports["8080/tcp"]} == {("127.0.0.1", "8080"), (sys.argv[2], "8080")}
 print(service, "healthy; CPU quota:", host["NanoCpus"], "memory limit:", host["Memory"])
-' "$service"
+' "$service" "$CUBE_IP"
     done
     local ids=()
     mapfile -t ids < <(compose ps -q)
@@ -230,20 +226,27 @@ deploy() {
     # Authenticate beforehand with sudo docker login ghcr.io --password-stdin
     # if this package is private; anonymous pulls are preferred for public images.
     docker pull "$ARK_IMAGE"
-    docker pull "$REDIS_IMAGE"
     [[ $(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' "$ARK_IMAGE") == 0.1.6 ]] || die 'Expected ARK 0.1.6.'
     [[ $(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$ARK_IMAGE") == "$RELEASE_COMMIT" ]] || die 'Image/config revision mismatch.'
     configure_secrets
+    if [[ $(redis_mode) == local ]]; then docker pull "$REDIS_IMAGE"; fi
     compose config --quiet
-    compose up -d --no-build --wait --wait-timeout 600
+    # Configuration files are replaced atomically. Existing bind mounts still see
+    # their old inodes, so even a same-image deployment must recreate containers.
+    compose up -d --no-build --force-recreate --wait --wait-timeout 600
+    # Keep the previous local store until the new external-store entrypoint is ready.
+    if [[ $(redis_mode) == external ]]; then
+        compose --profile local-redis rm --stop --force redis
+    fi
     stack_check
     printf '%s\n' "$RELEASE_COMMIT" > "$STATE_DIR/deployed-commit"
     boot_id > "$STATE_DIR/deployment-boot-before"
-    printf 'Local checks passed. Reboot Cube 1, then run verify. API key: %s/public-api.key (root-only).\n' "$DEPLOY_DIR"
+    printf 'Local checks passed. Reboot %s, then run verify --cube-ip %s. API key: %s/public-api.key (root-only).\n' "$CUBE_IP" "$CUBE_IP" "$DEPLOY_DIR"
 }
 
 verify() {
     [[ -f $STATE_DIR/deployment-boot-before ]] || die 'Deploy and pass local tests first.'
+    [[ $(cat "$STATE_DIR/deployed-commit") == "$RELEASE_COMMIT" ]] || die 'Use the bootstrap release that matches the deployed image/config revision.'
     [[ $(cat "$STATE_DIR/deployment-boot-before") != "$(boot_id)" ]] || die 'A second reboot is required after deployment.'
     network_check
     systemctl is-active --quiet docker
@@ -254,19 +257,40 @@ verify() {
 import json, sys
 s = sys.stdin.read().strip()
 rows = json.loads(s) if s.startswith("[") else [json.loads(line) for line in s.splitlines()]
-sys.exit(0 if len(rows) == 5 and all(r.get("Health") == "healthy" for r in rows) else 1)
-'; then break; fi
+expected = 5 if sys.argv[1] == "local" else 4
+sys.exit(0 if len(rows) == expected and all(r.get("Health") == "healthy" for r in rows) else 1)
+' "$(redis_mode)"; then break; fi
         sleep 5
     done
     stack_check
     boot_id > "$STATE_DIR/verified-boot"
-    printf 'Cube 1 reboot acceptance passed. Next: external NLB test, then independent security review.\n'
+    printf 'Cube %s reboot acceptance passed. Next: external ALB test, then independent security review.\n' "$CUBE_IP"
 }
 
-case "${1:-help}" in
-    network) host_check; network_setup ;;
-    deploy) host_check; deploy ;;
-    verify) host_check; verify ;;
-    help|--help|-h) printf 'Usage: sudo bash bootstrap.sh {network|deploy|verify}\nTwo reboots are mandatory: after network and after deploy. Phase 1: Cube 1 only.\n' ;;
+phase=${1:-help}
+[[ $# == 0 ]] || shift
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --cube-ip|--entrypoint-key-file|--redis-url-file)
+            [[ $# -ge 2 && -n $2 ]] || die "Missing value for $1."
+            case "$1" in
+                --cube-ip) CUBE_IP=$2 ;;
+                --entrypoint-key-file) ENTRYPOINT_KEY_FILE=$2 ;;
+                --redis-url-file) REDIS_URL_FILE=$2 ;;
+            esac
+            shift 2 ;;
+        *) die "Unknown option: $1" ;;
+    esac
+done
+case "$phase" in
+    network) validate_cube_ip; host_check; network_setup ;;
+    deploy) validate_cube_ip; host_check; deploy ;;
+    verify) validate_cube_ip; host_check; verify ;;
+    help|--help|-h) printf '%s\n' \
+        'Usage: sudo bash bootstrap.sh {network|deploy|verify} [--cube-ip 10.20.0.11]' \
+        'Deploy options: --entrypoint-key-file /root/shared.key --redis-url-file /root/redis.url' \
+        'Key file: 64 lowercase hex characters. Redis URL: redis[s]://user:password@private-host:port/0.' \
+        'Input files must be root-owned and readable only by root. Omitted inputs reuse saved configuration.' \
+        'Two reboots are mandatory: after network and after deploy. NIC ens6, /24, gateway 10.20.0.1.' ;;
     *) die 'Expected network, deploy, or verify.' ;;
 esac

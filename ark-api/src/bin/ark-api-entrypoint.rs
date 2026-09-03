@@ -27,6 +27,29 @@ use subtle::ConstantTimeEq;
 use uuid::Uuid;
 
 const ACTIVE_TTL_SECS: u64 = 10 * 60;
+const REDIS_OPERATION_TIMEOUT: Duration = Duration::from_secs(2);
+
+async fn redis_deadline<T>(
+    operation: impl std::future::Future<Output = redis::RedisResult<T>>,
+) -> redis::RedisResult<T> {
+    tokio::time::timeout(REDIS_OPERATION_TIMEOUT, operation)
+        .await
+        .map_err(|_| {
+            redis::RedisError::from(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                "Redis operation deadline exceeded",
+            ))
+        })?
+}
+
+async fn connect_redis(url: &str) -> redis::RedisResult<redis::aio::ConnectionManager> {
+    let config = redis::aio::ConnectionManagerConfig::new()
+        .set_connection_timeout(Duration::from_secs(1))
+        .set_response_timeout(Duration::from_secs(1))
+        .set_number_of_retries(2)
+        .set_max_delay(100);
+    redis_deadline(redis::Client::open(url)?.get_connection_manager_with_config(config)).await
+}
 
 #[derive(Parser)]
 #[command(name = "ark-api-entrypoint")]
@@ -149,12 +172,12 @@ async fn save_job(state: &AppState, job: &Job) -> Result<(), redis::RedisError> 
     };
     let mut connection = state.redis.clone();
     let payload = serde_json::to_string(job).expect("job serialization must succeed");
-    connection.set_ex(job_key(&job.job_id), payload, ttl).await
+    redis_deadline(connection.set_ex(job_key(&job.job_id), payload, ttl)).await
 }
 
 async fn load_job(state: &AppState, job_id: &str) -> Result<Option<Job>, redis::RedisError> {
     let mut connection = state.redis.clone();
-    let payload: Option<String> = connection.get(job_key(job_id)).await?;
+    let payload: Option<String> = redis_deadline(connection.get(job_key(job_id))).await?;
     Ok(payload.and_then(|value| serde_json::from_str(&value).ok()))
 }
 
@@ -204,7 +227,9 @@ async fn collect_events(
         lease.finished();
     } else {
         lease.quarantine();
-        tracing::error!(job_id, worker = %lease.worker.name, "worker completion unknown; worker quarantined until entrypoint restart");
+        tracing::error!(job_id, worker = %lease.worker.name, "worker completion unknown; worker quarantined until idle fence");
+        // Quarantine immediately; Redis cleanup must not hold this worker lease.
+        drop(lease);
         if let Ok(Some(mut job)) = load_job(&state, &job_id).await {
             job.status = "failed".into();
             job.completion = Some(json!({"state":"failed", "failures":[{
@@ -452,6 +477,8 @@ async fn submit_scan(
         .client
         .post(format!("{}/v1/scan", worker.url.trim_end_matches('/')))
         .bearer_auth(&state.worker_token)
+        .header("x-ark-worker-instance", &lease.instance_id)
+        .header("x-ark-worker-epoch", lease.epoch.to_string())
         .body(body);
     if let Some(content_type) = headers.get(header::CONTENT_TYPE) {
         request = request.header(header::CONTENT_TYPE, content_type);
@@ -472,7 +499,11 @@ async fn submit_scan(
     if !status.is_success() {
         // Multipart/body-limit rejections can be plain text, not JSON. The
         // rejected request did not occupy this worker and must not quarantine it.
-        lease.finished();
+        if status == StatusCode::CONFLICT || status.is_server_error() {
+            lease.quarantine();
+        } else {
+            lease.finished();
+        }
         let payload = response.json::<Value>().await.unwrap_or_else(
             |_| json!({"error":format!("worker rejected request with HTTP {}", status.as_u16())}),
         );
@@ -599,7 +630,7 @@ async fn readyz(State(state): State<Arc<AppState>>) -> StatusCode {
     )
     .await
     {
-        Ok(Ok(pong)) if pong == "PONG" => StatusCode::OK,
+        Ok(Ok(pong)) if pong == "PONG" && state.worker_pool.ready() => StatusCode::OK,
         _ => StatusCode::SERVICE_UNAVAILABLE,
     }
 }
@@ -614,15 +645,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if config.gateway.workers.is_empty() {
         return Err("gateway.workers must not be empty".into());
     }
+    let mut names = std::collections::HashSet::new();
+    let mut urls = std::collections::HashSet::new();
+    for worker in &config.gateway.workers {
+        if worker.name.is_empty()
+            || !names.insert(&worker.name)
+            || !urls.insert(worker.url.trim_end_matches('/'))
+        {
+            return Err("gateway.workers must have distinct names and URLs".into());
+        }
+    }
     if config.gateway.max_waiting_requests > 1024 {
         return Err("gateway.max_waiting_requests must not exceed 1024".into());
     }
     let bind: SocketAddr = config.server.bind.parse()?;
-    let redis = redis::Client::open(config.gateway.redis_url.as_str())?
-        .get_connection_manager()
-        .await?;
+    let redis = connect_redis(config.gateway.redis_url.as_str()).await?;
     let state = Arc::new(AppState {
-        client: reqwest::Client::new(),
+        client: reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .build()?,
         redis,
         worker_token: config.gateway.worker_token,
         worker_pool: WorkerPool::new(config.gateway.workers, config.gateway.max_waiting_requests),
@@ -634,6 +675,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .collect(),
         retention_secs: config.gateway.retention_secs,
     });
+    state
+        .worker_pool
+        .spawn_monitor(state.client.clone(), state.worker_token.clone());
     let app = Router::new()
         .route("/healthz", get(healthz))
         .route("/readyz", get(readyz))
@@ -703,7 +747,7 @@ mod tests {
             client: reqwest::Client::new(),
             redis: client.get_connection_manager().await.unwrap(),
             worker_token: String::new(),
-            worker_pool: WorkerPool::new(Vec::new(), 0),
+            worker_pool: WorkerPool::healthy_test_pool(),
             key_hashes: Vec::new(),
             retention_secs: 90,
         });
@@ -725,6 +769,91 @@ mod tests {
             serde_json::to_value(&restored).unwrap(),
             serde_json::to_value(&job).unwrap()
         );
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn connected_but_silent_redis_bounds_reads_writes_and_initial_connect() {
+        use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+        use tokio::net::TcpListener;
+
+        // Complete the Redis handshake, then keep TCP open without answering
+        // actual commands. A healthy socket must not imply a healthy store.
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let mut peers = tokio::task::JoinSet::new();
+            loop {
+                let (stream, _) = listener.accept().await.unwrap();
+                peers.spawn(async move {
+                    let mut stream = BufReader::new(stream);
+                    loop {
+                        let mut line = String::new();
+                        if stream.read_line(&mut line).await.unwrap() == 0 {
+                            break;
+                        }
+                        let count: usize = line.trim().strip_prefix('*').unwrap().parse().unwrap();
+                        let mut args = Vec::new();
+                        for _ in 0..count {
+                            line.clear();
+                            stream.read_line(&mut line).await.unwrap();
+                            let len: usize =
+                                line.trim().strip_prefix('$').unwrap().parse().unwrap();
+                            let mut value = vec![0; len + 2];
+                            stream.read_exact(&mut value).await.unwrap();
+                            value.truncate(len);
+                            args.push(value);
+                        }
+                        if args[0].as_slice() == b"CLIENT" {
+                            stream.get_mut().write_all(b"+OK\r\n").await.unwrap();
+                        }
+                    }
+                });
+            }
+        });
+        let redis = connect_redis(&format!("redis://{address}/")).await.unwrap();
+        let state = Arc::new(AppState {
+            client: reqwest::Client::new(),
+            redis,
+            worker_token: String::new(),
+            worker_pool: WorkerPool::healthy_test_pool(),
+            key_hashes: Vec::new(),
+            retention_secs: 90,
+        });
+        let job = completed_job(HashMap::new());
+        let began = Instant::now();
+        let (saved, loaded, readiness) = tokio::time::timeout(Duration::from_secs(3), async {
+            tokio::join!(
+                save_job(&state, &job),
+                load_job(&state, &job.job_id),
+                readyz(State(state.clone()))
+            )
+        })
+        .await
+        .expect("silent Redis must not retain HTTP or collector tasks");
+        assert!(saved.unwrap_err().is_timeout());
+        assert!(loaded.err().expect("read must fail").is_timeout());
+        assert_eq!(readiness, StatusCode::SERVICE_UNAVAILABLE);
+        assert!(began.elapsed() < Duration::from_secs(3));
+        server.abort();
+        let _ = server.await;
+
+        // A peer can also accept TCP but never complete the CLIENT handshake.
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let mut streams = Vec::new();
+            loop {
+                streams.push(listener.accept().await.unwrap().0);
+            }
+        });
+        let connected = tokio::time::timeout(
+            Duration::from_secs(3),
+            connect_redis(&format!("redis://{address}/")),
+        )
+        .await
+        .expect("initial Redis handshake/retries must have a deadline");
+        assert!(connected.is_err());
         server.abort();
     }
 

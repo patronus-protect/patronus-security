@@ -6,6 +6,7 @@ use patronus_ark::{QueuedSecurityEvent, RequestId, SecurityGateway};
 use tokio::sync::broadcast;
 
 use crate::config::Config;
+use crate::worker_admission::Admission;
 
 const EVENT_CHANNEL_CAPACITY: usize = 64;
 /// How long a finished request's event buffer is kept around so a client
@@ -39,6 +40,7 @@ pub struct AppState {
     pub config: Arc<Config>,
     pub gateway: Arc<SecurityGateway>,
     channels: Arc<Mutex<HashMap<RequestId, RequestChannel>>>,
+    pub admission: Arc<Mutex<Admission>>,
 }
 
 impl AppState {
@@ -47,10 +49,22 @@ impl AppState {
             config: Arc::new(config),
             gateway: Arc::new(gateway),
             channels: Arc::new(Mutex::new(HashMap::new())),
+            admission: Arc::new(Mutex::new(Admission::default())),
         };
         state.spawn_dispatcher();
         state.spawn_sweeper();
         state
+    }
+
+    /// Call while holding admission: active submissions cover the interval
+    /// before enqueue/register, and channels cover all work after registration.
+    pub fn active_jobs(&self) -> usize {
+        self.channels
+            .lock()
+            .expect("channel registry mutex poisoned")
+            .values()
+            .filter(|channel| channel.finished_at.is_none())
+            .count()
     }
 
     /// Ensure a request event buffer exists. The dispatcher also creates the
