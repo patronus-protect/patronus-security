@@ -1007,6 +1007,24 @@ fn final_l3_chunk_outputs(
     model: &str,
     l3_outputs: &[(crate::ml::ntdb_executor::ByteSpan, String, f32)],
 ) -> Vec<L2ChunkOutput> {
+    // L3 windows may overlap and disagree. Keep their exact ranges and remove
+    // only their covered regions from L2; processing order must not erase labels.
+    let mut covered = l3_outputs
+        .iter()
+        .map(|(span, _, _)| *span)
+        .collect::<Vec<_>>();
+    covered.sort_by_key(|span| (span.start, span.end));
+    let mut coverage = Vec::<crate::ml::ntdb_executor::ByteSpan>::new();
+    for span in covered {
+        if let Some(previous) = coverage
+            .last_mut()
+            .filter(|previous| span.start <= previous.end)
+        {
+            previous.end = previous.end.max(span.end);
+        } else {
+            coverage.push(span);
+        }
+    }
     let mut outputs = l2_outputs
         .iter()
         .filter(|output| {
@@ -1016,7 +1034,33 @@ fn final_l3_chunk_outputs(
                 .map(str::trim)
                 .any(|source| source == pipeline)
         })
-        .cloned()
+        .flat_map(|output| {
+            let mut remainder = Vec::new();
+            let mut cursor = output.span.start;
+            for span in &coverage {
+                if span.end <= cursor {
+                    continue;
+                }
+                if span.start >= output.span.end {
+                    break;
+                }
+                if cursor < span.start {
+                    let mut part = output.clone();
+                    part.span = crate::ml::ntdb_executor::ByteSpan {
+                        start: cursor,
+                        end: span.start,
+                    };
+                    remainder.push(part);
+                }
+                cursor = cursor.max(span.end);
+            }
+            if cursor < output.span.end {
+                let mut part = output.clone();
+                part.span.start = cursor;
+                remainder.push(part);
+            }
+            remainder
+        })
         .map(|mut output| {
             output.embedding.clear();
             output.embedding_space.clear();
@@ -1028,37 +1072,29 @@ fn final_l3_chunk_outputs(
         })
         .collect::<Vec<_>>();
     for (span, class_name, confidence) in l3_outputs {
-        let mut replaced = false;
-        for output in outputs
-            .iter_mut()
-            .filter(|output| output.span.start < span.end && output.span.end > span.start)
-        {
-            output.class_name = class_name.clone();
-            output.confidence = *confidence;
-            output.source_model = model.to_string();
-            replaced = true;
-        }
-        if !replaced {
-            outputs.push(L2ChunkOutput {
-                span: *span,
-                class_name: class_name.clone(),
-                confidence: *confidence,
-                promoted: true,
-                promote_score: None,
-                promote_threshold: None,
-                source_pipeline: pipeline.to_string(),
-                source_model: model.to_string(),
-                embedding: Vec::new(),
-                embedding_space: String::new(),
-                token_ids: Vec::new(),
-                tokenizer_family: String::new(),
-                class_probabilities: Vec::new(),
-                joint_v3_decision: None,
-            });
-        }
+        outputs.push(L2ChunkOutput {
+            span: *span,
+            class_name: class_name.clone(),
+            confidence: *confidence,
+            promoted: true,
+            promote_score: None,
+            promote_threshold: None,
+            source_pipeline: pipeline.to_string(),
+            source_model: model.to_string(),
+            embedding: Vec::new(),
+            embedding_space: String::new(),
+            token_ids: Vec::new(),
+            tokenizer_family: String::new(),
+            class_probabilities: Vec::new(),
+            joint_v3_decision: None,
+        });
     }
-    outputs.sort_by_key(|output| (output.span.start, output.span.end));
-    outputs.dedup_by(|left, right| left.span == right.span);
+    outputs.sort_by(|left, right| {
+        (left.span.start, left.span.end, &left.class_name)
+            .cmp(&(right.span.start, right.span.end, &right.class_name))
+            .then_with(|| right.confidence.total_cmp(&left.confidence))
+    });
+    outputs.dedup_by(|left, right| left.span == right.span && left.class_name == right.class_name);
     outputs
 }
 
@@ -1856,6 +1892,57 @@ mod tests {
             source_model: source_pipeline.to_string(),
             l2_class: "attack".to_string(),
         }
+    }
+
+    #[test]
+    fn final_l3_ranges_preserve_overlapping_labels_and_l2_remainders() {
+        use crate::ml::ntdb_executor::ByteSpan;
+        let l2 = [
+            test_l2_chunk_output(0, 120, "sensitive_document", true),
+            test_l2_chunk_output(0, 120, "injection", true),
+        ];
+        let mut l3 = vec![
+            (ByteSpan { start: 20, end: 70 }, "hr".to_string(), 0.8),
+            (
+                ByteSpan {
+                    start: 60,
+                    end: 100,
+                },
+                "other".to_string(),
+                0.9,
+            ),
+            (ByteSpan { start: 20, end: 70 }, "hr".to_string(), 0.95),
+            (ByteSpan { start: 20, end: 70 }, "finance".to_string(), 0.85),
+        ];
+        let summarize = |outputs: Vec<L2ChunkOutput>| {
+            outputs
+                .into_iter()
+                .map(|output| {
+                    (
+                        output.span.start,
+                        output.span.end,
+                        output.class_name,
+                        output.confidence,
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+        let actual = summarize(final_l3_chunk_outputs(&l2, "sensitive_document", "l3", &l3));
+        l3.reverse();
+        assert_eq!(
+            actual,
+            summarize(final_l3_chunk_outputs(&l2, "sensitive_document", "l3", &l3))
+        );
+        assert_eq!(
+            actual,
+            vec![
+                (0, 20, "attack".into(), 0.9),
+                (20, 70, "finance".into(), 0.85),
+                (20, 70, "hr".into(), 0.95),
+                (60, 100, "other".into(), 0.9),
+                (100, 120, "attack".into(), 0.9),
+            ]
+        );
     }
 
     fn test_l2_chunk_output(

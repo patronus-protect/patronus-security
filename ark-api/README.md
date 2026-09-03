@@ -38,23 +38,24 @@ All endpoints except `/healthz` and `/readyz` require
   contains JSON with `categories`, `max_level`, `gates`, `metadata`, and an
   optional request-local `ntdb_operating_point` and is
   snapshotted into every queued job. Missing config uses the existing defaults.
-  `gates.rules` is a map from stable L1 rule IDs to booleans; absent IDs are
-  enabled. PII IDs are the `pii_*` names in `PII_PATTERNS`, DLP IDs are the
+  `gates.rules` is a map from stable L1 rule IDs to booleans; absent IDs inherit
+  shared Rust/Python/API defaults. PII IDs are the `pii_*` names in `PII_PATTERNS`, DLP IDs are the
   `dlp_*` names in `DLP_PATTERNS` plus `dlp_sensitive_material`,
   `dlp_secret_transfer`, `dlp_mcp_runtime_risk`, `dlp_mcp_policy`, and
   `dlp_destructive_operation`. Injection IDs are the `ark.injection.*` IDs
   returned in evidence spans and candidate metadata.
-  In the checked-in `config.example.yaml`, DLP L1 defaults to credential, key,
+  Across Rust, Python, and the API, DLP L1 defaults to credential, key,
   token, password, hash, private-key, and sensitive-transfer detection. Business
   identifiers, internal metrics, source/SQL/dump/log content, MCP/runtime risk,
-  and destructive operations require explicit `gates.rules`/`gates.models`
+  and destructive operations require explicit `gates.rules`
   opt-ins. PII and Injection rules remain enabled unless configured otherwise.
   Returns `202` with `{"jobs": [{"job_id", "source", "status_url"}, ...]}`.
 - `GET /v1/scan/{job_id}` — durable job status plus accumulated progress,
   compact category results, `decision_evidence`, and the overall decision.
 - `GET /healthz` — liveness, no auth.
-- `GET /readyz` — gateway readiness. Worker readiness is checked separately by
-  the Compose health checks before the gateway starts.
+- `GET /readyz` — gateway readiness, including a Redis PING (503 on failure or a
+  one-second timeout). Redis connections reconnect automatically. Worker readiness
+  is checked separately by the Compose health checks before the gateway starts.
 
 When `ark-api` is run directly instead of through the reference gateway,
 `POST /v1/scan` returns worker-local `request_id` values and

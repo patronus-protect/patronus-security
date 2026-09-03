@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::threat::looks_like_covert_instruction_lower;
 use crate::EvaluationResult;
 
 pub struct CovertInstructionPipeline;
@@ -15,18 +14,12 @@ impl CovertInstructionPipeline {
         Self
     }
 
+    pub(crate) fn detect(&self, text: &str) -> crate::detectors::NativeDetection {
+        super::signal::native_detection("covert_instruction", text)
+    }
+
     pub fn evaluate(&self, text: &str) -> EvaluationResult {
-        let matched = looks_like_covert_instruction_lower(&text.to_lowercase());
-        EvaluationResult {
-            class_name: if matched {
-                "covert_instruction"
-            } else {
-                "safe"
-            }
-            .to_string(),
-            confidence: 1.0,
-            level: "L1".to_string(),
-        }
+        self.detect(text).result
     }
 
     pub fn evaluate_batch(&self, texts: &[String]) -> Vec<EvaluationResult> {

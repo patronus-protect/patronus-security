@@ -4,7 +4,22 @@ use patronus_ark::detectors::pii::{pii::PiiPipeline, validators};
 use patronus_ark::{SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult};
 
 fn pii_result(text: &str) -> SecurityScanResult {
-    SecurityGateway::with_max_level(vec![SecurityCategory::Pii], SecurityLevel::L1, None, false)
+    pii_result_with_explain(text, false)
+}
+
+fn pii_result_with_explain(text: &str, explain: bool) -> SecurityScanResult {
+    let scanner = SecurityGateway::with_max_level(
+        vec![SecurityCategory::Pii],
+        SecurityLevel::L1,
+        None,
+        false,
+    );
+    let gates = patronus_ark::ScanGateMatrix {
+        explain,
+        ..Default::default()
+    };
+    scanner.set_execution_gates(gates);
+    scanner
         .scan_category(SecurityCategory::Pii, text)
         .into_iter()
         .find(|result| result.model == "native:pii")
@@ -328,20 +343,31 @@ fn detects_contextual_german_national_phones_with_exact_boundaries() {
 }
 
 #[test]
-fn valid_iban_wins_over_an_overlapping_card_candidate() {
-    let text = "Konto DE44 5001 0517 5407 3249 31.";
-    let result = pii_result(text);
-
-    assert_eq!(result.class_name, "IBAN");
-    assert_eq!(result.evidence_spans.len(), 1);
-    assert_eq!(result.evidence_spans[0].label, "IBAN");
-    assert_eq!(result.evidence_spans[0].text, "DE44 5001 0517 5407 3249 31");
+fn valid_iban_and_overlapping_card_candidate_keep_both_labels() {
+    for text in [
+        "Grüße – Konto DE44 5001 0517 5407 3249 31.",
+        "Account DE44 5001 0517 5407 3249 31.",
+    ] {
+        let result = pii_result(text);
+        assert_eq!(result.class_name, "IBAN");
+        assert_eq!(result.evidence_spans.len(), 2);
+        for (span, (label, value)) in result.evidence_spans.iter().zip([
+            ("IBAN", "DE44 5001 0517 5407 3249 31"),
+            ("CREDITCARD", "5001 0517 5407 3249 31"),
+        ]) {
+            assert_eq!(span.label, label);
+            assert_eq!(span.text, value);
+            assert_eq!(&text[span.start_byte..span.end_byte], value);
+            assert_eq!(span.start_char, text[..span.start_byte].chars().count());
+            assert_eq!(span.end_char, text[..span.end_byte].chars().count());
+        }
+    }
 }
 
 #[test]
 fn contextual_fields_are_exposed_as_anchor_facts_without_fake_findings() {
     let text = "Name: Ada; Anschrift: Berlin; Diagnose: vertraulich; Religion: keine Angabe; Gehalt: offen";
-    let result = pii_result(text);
+    let result = pii_result_with_explain(text, true);
 
     assert_eq!(result.class_name, "safe");
     assert!(result.evidence_spans.is_empty());
@@ -379,7 +405,7 @@ fn contextual_fields_are_exposed_as_anchor_facts_without_fake_findings() {
 #[test]
 fn reference_derived_anchor_families_are_exposed_without_findings() {
     let text = "Patientenname; Mobilnummer; Rechnungsadresse; geboren am; MRN; Steuer-ID; Patientenakte; Payroll";
-    let result = pii_result(text);
+    let result = pii_result_with_explain(text, true);
 
     assert_eq!(result.class_name, "safe");
     let categories = result.layers[0].details["l1_anchors"]
@@ -444,7 +470,7 @@ fn german_and_english_anchor_variants_have_exact_metadata() {
     for (variant, expected_category, expected_strength) in cases {
         let text = format!("Präfix – {variant} – suffix");
         let expected_start = text.find(variant).unwrap();
-        let result = pii_result(&text);
+        let result = pii_result_with_explain(&text, true);
 
         assert_eq!(
             result.class_name, "safe",
@@ -491,7 +517,7 @@ fn anchor_lookalikes_remain_safe_without_anchor_facts() {
         "Die Diagnosesoftware wurde aktualisiert.",
         "Das Gehaltsband wurde veröffentlicht.",
     ] {
-        let result = pii_result(text);
+        let result = pii_result_with_explain(text, true);
         assert_eq!(
             result.class_name, "safe",
             "lookalike became finding: {text}"
@@ -505,4 +531,41 @@ fn anchor_lookalikes_remain_safe_without_anchor_facts() {
             "lookalike became anchor: {text}"
         );
     }
+}
+
+#[test]
+fn numeric_customer_id_and_phone_keep_both_labels() {
+    let text = "Kundennummer: 1234567890";
+    let result = pii_result(text);
+    for label in ["PHONE", "CUSTOMER_ID"] {
+        let span = result
+            .evidence_spans
+            .iter()
+            .find(|span| span.label == label)
+            .unwrap();
+        assert_eq!(span.text, "1234567890");
+        assert_eq!(&text[span.start_byte..span.end_byte], span.text);
+    }
+}
+
+#[test]
+fn unicode_bic_lookalikes_do_not_panic_or_validate() {
+    for bic in ["ABCKDſ12", "ABCDKſ12", "ÄBCDDEFF"] {
+        assert!(!validators::bic(bic));
+        assert!(!pii_result(&format!("SWIFT: {bic}"))
+            .evidence_spans
+            .iter()
+            .any(|span| span.label == "BIC"));
+    }
+    assert!(validators::bic("DEUTDEFF"));
+}
+
+#[test]
+fn ordinary_pii_scan_keeps_findings_without_context_metadata() {
+    let result = pii_result("Name: Ada; E-Mail: ada@example.com");
+    assert!(result
+        .evidence_spans
+        .iter()
+        .any(|span| span.label == "EMAIL"));
+    assert!(!result.layers[0].details.contains_key("l1_anchors"));
 }

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from collections import defaultdict
 from pathlib import Path
 from typing import Iterable
@@ -68,6 +69,10 @@ def measure(gitleaks_rows: list[dict], schemapile_rows: list[dict]) -> dict:
     from patronus_ark import SecurityGateway
 
     gateway = SecurityGateway(categories=["dlp"], max_level="l1", download_files=False)
+    source = (Path(__file__).resolve().parents[1] / "rust/src/detectors/dlp/dlp.rs").read_text()
+    gateway.set_execution_gates({"rules": {
+        rule_id: True for rule_id in re.findall(r'name: "(dlp_[^"]+)"', source)
+    }})
     detected_source_ids = set()
     for row in gitleaks_rows:
         results = gateway.scan_category("dlp", row["text"])

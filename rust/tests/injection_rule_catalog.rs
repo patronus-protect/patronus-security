@@ -50,13 +50,17 @@ fn rule_feature<'a>(result: &'a SecurityScanResult, rule_id: &str) -> &'a serde_
 }
 
 fn injection_results(text: &str) -> Vec<SecurityScanResult> {
-    SecurityGateway::with_max_level(
-        vec![SecurityCategory::Injection],
-        SecurityLevel::L1,
-        None,
-        false,
-    )
-    .scan_category(SecurityCategory::Injection, text)
+    static GATEWAY: std::sync::OnceLock<SecurityGateway> = std::sync::OnceLock::new();
+    GATEWAY
+        .get_or_init(|| {
+            SecurityGateway::with_max_level(
+                vec![SecurityCategory::Injection],
+                SecurityLevel::L1,
+                None,
+                false,
+            )
+        })
+        .scan_category(SecurityCategory::Injection, text)
 }
 
 #[test]
@@ -471,7 +475,7 @@ fn every_existing_native_injection_detector_emits_registered_signal_evidence() {
         assert!(!text[start..end].is_empty());
         assert!(matches!(
             feature["span_precision"].as_str(),
-            Some("clause" | "window" | "document")
+            Some("exact" | "transformed_source")
         ));
         assert_eq!(feature["provenance"]["source"], "ark-native");
         assert!(candidate["scoring_features"].is_object());

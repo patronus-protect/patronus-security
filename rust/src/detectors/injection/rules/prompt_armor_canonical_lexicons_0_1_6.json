@@ -14,7 +14,7 @@
       "upstream_weight": 0.7,
       "candidate_only": true,
       "description": "EN/DE prior-instruction discard lexicon",
-      "pattern": "(?:(?:ignore|disregard|forget|abandon|ignoriere|missachte|vergiss|verwirf)\\s+(?:(?:all|your|the|alle|deine|die)\\s+)?(?:previous|prior|earlier|above|vorherigen?|früheren?|bisherigen?|obigen?)\\s+(?:instructions?|prompts?|rules?|directives?|anweisungen?|instruktionen?|regeln?|direktiven?)|(?:do\\s+not\\s+follow|folge\\s+nicht|befolge\\s+nicht|beachte\\s+nicht)\\s+(?:(?:any|your|the|alle|deine|die)\\s+)?(?:previous|prior|original|above|vorherigen?|früheren?|bisherigen?|ursprünglichen?|obigen?)\\s+(?:instructions?|rules?|guidelines?|anweisungen?|regeln?|richtlinien?))"
+      "pattern": "(?:(?P<anchor_8>ignore|disregard|forget|abandon|ignoriere|missachte|vergiss|verwirf)\\s+(?:(?P<anchor_7>all|your|the|alle|deine|die)\\s+)?(?P<anchor_6>previous|prior|earlier|above|vorherigen?|früheren?|bisherigen?|obigen?)\\s+(?P<anchor_5>instructions?|prompts?|rules?|directives?|anweisungen?|instruktionen?|regeln?|direktiven?)|(?P<anchor_4>do\\s+not\\s+follow|folge\\s+nicht|befolge\\s+nicht|beachte\\s+nicht)\\s+(?:(?P<anchor_3>any|your|the|alle|deine|die)\\s+)?(?P<anchor_2>previous|prior|original|above|vorherigen?|früheren?|bisherigen?|ursprünglichen?|obigen?)\\s+(?P<anchor_1>instructions?|rules?|guidelines?|anweisungen?|regeln?|richtlinien?))"
     },
     {
       "id": "ark.lexicon.override.obfuscated_discard",
@@ -25,7 +25,7 @@
       "upstream_weight": 0.7,
       "candidate_only": true,
       "description": "EN/DE indirect reference to prior user instructions",
-      "pattern": "(?:ig[nm]ore\\s+what\\s+i\\s+said\\s+before|ignoriere\\s+was\\s+ich\\s+(?:vorher|zuvor)\\s+gesagt\\s+habe)"
+      "pattern": "(?:ig[nm]ore\\s+what\\s+i\\s+said\\s+before|ignoriere\\s+was\\s+ich\\s+(?P<anchor_1>vorher|zuvor)\\s+gesagt\\s+habe)"
     },
     {
       "id": "ark.lexicon.override.replacement_directive",
@@ -36,7 +36,7 @@
       "upstream_weight": 0.7,
       "candidate_only": true,
       "description": "EN/DE replacement task or directive declaration",
-      "pattern": "(?:(?:new|next)\\s+(?:instructions?|task)\\s*[:;]|(?:neue|nächste)\\s+(?:anweisungen?|aufgabe)\\s*[:;]|instead\\s*,?\\s+(?:do|follow|obey|execute|respond)\\s+(?:the\\s+following|these|this)|(?:befolge|beachte|führe|tu)\\s+stattdessen\\s+(?:die\\s+folgenden|diese|dies))"
+      "pattern": "(?:(?P<anchor_8>new|next)\\s+(?P<anchor_7>instructions?|task)\\s*[:;]|(?P<anchor_6>neue|nächste)\\s+(?P<anchor_5>anweisungen?|aufgabe)\\s*[:;]|instead\\s*,?\\s+(?P<anchor_4>do|follow|obey|execute|respond)\\s+(?P<anchor_3>the\\s+following|these|this)|(?P<anchor_2>befolge|beachte|führe|tu)\\s+stattdessen\\s+(?P<anchor_1>die\\s+folgenden|diese|dies))"
     },
     {
       "id": "ark.lexicon.boundary.fake_system",
@@ -47,7 +47,7 @@
       "upstream_weight": 0.7,
       "candidate_only": true,
       "description": "Language-neutral fake role delimiter with EN/DE end marker",
-      "pattern": "(?:<\\|?(?:system|im_start|im_end|endoftext)\\|?>|\\[/?(?:system|instructions?|anweisungen?|INST)\\]|###\\s*(?:system|instructions?|anweisungen?)\\s*###?|(?:end|ende)\\s+(?:of\\s+|der\\s+)?(?:system|initial|ursprünglichen?)\\s*(?:prompt|instructions?|anweisungen?))"
+      "pattern": "(?:<\\|?(?P<anchor_7>system|im_start|im_end|endoftext)\\|?>|\\[/?(?P<anchor_6>system|instructions?|anweisungen?|INST)\\]|###\\s*(?P<anchor_5>system|instructions?|anweisungen?)\\s*###?|(?P<anchor_4>end|ende)\\s+(?P<anchor_3>of\\s+|der\\s+)?(?P<anchor_2>system|initial|ursprünglichen?)\\s*(?P<anchor_1>prompt|instructions?|anweisungen?))"
     },
     {
       "id": "ark.lexicon.obfuscation.steganographic",
@@ -58,7 +58,7 @@
       "upstream_weight": 0.7,
       "candidate_only": true,
       "description": "EN/DE acrostic instruction",
-      "pattern": "(?:each\\s+(?:first|initial)\\s+letter\\s+spell|jeder\\s+(?:erste\\s+|anfangs)buchstabe\\s+(?:ergibt|bildet))"
+      "pattern": "(?:each\\s+(?P<anchor_3>first|initial)\\s+letter\\s+spell|jeder\\s+(?P<anchor_2>erste\\s+|anfangs)buchstabe\\s+(?P<anchor_1>ergibt|bildet))"
     },
     {
       "id": "ark.lexicon.obfuscation.decode_request",
@@ -69,7 +69,7 @@
       "upstream_weight": 0.7,
       "candidate_only": true,
       "description": "EN/DE named-code decoding request",
-      "pattern": "(?:morse|braille|binary|hex|base64|rot13|binär)\\s*(?:code\\s+)?(?:say|mean|translate|spell|decode|sagt|bedeutet|übersetze|buchstabiere|dekodiere)"
+      "pattern": "(?P<anchor_3>morse|braille|binary|hex|base64|rot13|binär)\\s*(?P<anchor_2>code\\s+)?(?P<anchor_1>say|mean|translate|spell|decode|sagt|bedeutet|übersetze|buchstabiere|dekodiere)"
     },
     {
       "id": "ark.lexicon.jailbreak.game_framing",
@@ -80,7 +80,7 @@
       "upstream_weight": 0.55,
       "candidate_only": true,
       "description": "EN/DE game framing",
-      "pattern": "(?:let(?:'s|\\s+us)\\s+play\\s+a\\s+game|lass\\s+uns\\s+ein\\s+spiel\\s+spielen)"
+      "pattern": "(?:let(?P<anchor_1>'s|\\s+us)\\s+play\\s+a\\s+game|lass\\s+uns\\s+ein\\s+spiel\\s+spielen)"
     },
     {
       "id": "ark.lexicon.jailbreak.named_mode",
@@ -91,7 +91,7 @@
       "upstream_weight": 0.7,
       "candidate_only": true,
       "description": "EN/DE named jailbreak mode activation",
-      "pattern": "(?:(?:you\\s+are|du\\s+bist)\\s+(?:now\\s+|jetzt\\s+)?(?:DAN|STAN|DUDE|AIM|KEVIN|MONGO|OPPO)|(?:DAN|jailbreak)\\s*(?:mode|modus)?\\s*(?:enabled|activated|aktiviert)?)"
+      "pattern": "(?:(?P<anchor_6>you\\s+are|du\\s+bist)\\s+(?P<anchor_5>now\\s+|jetzt\\s+)?(?P<anchor_4>DAN|STAN|DUDE|AIM|KEVIN|MONGO|OPPO)|(?P<anchor_3>DAN|jailbreak)\\s*(?P<anchor_2>mode|modus)?\\s*(?P<anchor_1>enabled|activated|aktiviert)?)"
     },
     {
       "id": "ark.lexicon.jailbreak.remove_constraints",
@@ -102,7 +102,7 @@
       "upstream_weight": 0.7,
       "candidate_only": true,
       "description": "EN/DE removal of behavioral constraints",
-      "pattern": "(?:without|no|bypass|disable|ohne|keine|umgehe|deaktiviere)\\s+(?:any\\s+|all\\s+)?(?:restrictions?|limitations?|filters?|safeguards?|guardrails?|constraints?|einschränkungen?|beschränkungen?|filter|sicherheitsregeln?)"
+      "pattern": "(?P<anchor_3>without|no|bypass|disable|ohne|keine|umgehe|deaktiviere)\\s+(?P<anchor_2>any\\s+|all\\s+)?(?P<anchor_1>restrictions?|limitations?|filters?|safeguards?|guardrails?|constraints?|einschränkungen?|beschränkungen?|filter|sicherheitsregeln?)"
     },
     {
       "id": "ark.lexicon.jailbreak.dual_response",
@@ -113,7 +113,7 @@
       "upstream_weight": 0.7,
       "candidate_only": true,
       "description": "EN/DE dual-response mode",
-      "pattern": "(?:two|2|dual|split|zwei|geteilte)\\s+(?:responses?|answers?|outputs?|personalities?|antworten?|ausgaben?|persönlichkeiten?)\\s*(?:mode|modus)?"
+      "pattern": "(?P<anchor_3>two|2|dual|split|zwei|geteilte)\\s+(?P<anchor_2>responses?|answers?|outputs?|personalities?|antworten?|ausgaben?|persönlichkeiten?)\\s*(?P<anchor_1>mode|modus)?"
     },
     {
       "id": "ark.lexicon.identity.reassign",
@@ -124,7 +124,7 @@
       "upstream_weight": 0.7,
       "candidate_only": true,
       "description": "EN/DE assistant identity reassignment",
-      "pattern": "(?:(?:you\\s+are|du\\s+bist)\\s+(?:now|jetzt|nun|ab\\s+sofort)\\s+(?:a|an|the|ein|eine|der|die|das)\\s+(?:new|different|special|neuer|neue|anderer|andere|besonderer|besondere))"
+      "pattern": "(?:(?P<anchor_4>you\\s+are|du\\s+bist)\\s+(?P<anchor_3>now|jetzt|nun|ab\\s+sofort)\\s+(?P<anchor_2>a|an|the|ein|eine|der|die|das)\\s+(?P<anchor_1>new|different|special|neuer|neue|anderer|andere|besonderer|besondere))"
     },
     {
       "id": "ark.lexicon.leak.system_instructions",
@@ -135,7 +135,7 @@
       "upstream_weight": 0.7,
       "candidate_only": true,
       "description": "EN/DE system-instruction disclosure request",
-      "pattern": "(?:show|reveal|repeat|print|zeige|enthülle|wiederhole|drucke)\\s+(?:me\\s+|mir\\s+)?(?:your|the|deinen?|den|die)\\s*(?:system\\s*prompt|system\\s+instructions?|systemanweisungen?|versteckten?\\s+anweisungen?)"
+      "pattern": "(?P<anchor_4>show|reveal|repeat|print|zeige|enthülle|wiederhole|drucke)\\s+(?P<anchor_3>me\\s+|mir\\s+)?(?P<anchor_2>your|the|deinen?|den|die)\\s*(?P<anchor_1>system\\s*prompt|system\\s+instructions?|systemanweisungen?|versteckten?\\s+anweisungen?)"
     },
     {
       "id": "ark.lexicon.exfil.external_sink",
@@ -146,7 +146,7 @@
       "upstream_weight": 0.7,
       "candidate_only": true,
       "description": "EN/DE external network transfer directive",
-      "pattern": "(?:send|forward|email|transmit|post|upload|transfer|sende|übermittle|maile|poste|lade\\s+hoch|übertrage)\\s+[^.!?\\n]{1,40}\\s+(?:to|an|zu)\\s+(?:https?://[^\\s]+|[^\\s@]+@[^\\s@]+\\.[^\\s]+)"
+      "pattern": "(?P<anchor_3>send|forward|email|transmit|post|upload|transfer|sende|übermittle|maile|poste|lade\\s+hoch|übertrage)\\s+[^.!?\\n]{1,40}\\s+(?P<anchor_2>to|an|zu)\\s+(?P<anchor_1>https?://[^\\s]+|[^\\s@]+@[^\\s@]+\\.[^\\s]+)"
     },
     {
       "id": "ark.lexicon.authority.claim",
@@ -157,7 +157,7 @@
       "upstream_weight": 0.7,
       "candidate_only": true,
       "description": "EN/DE claimed authority",
-      "pattern": "(?:(?:i\\s+am|i'm|ich\\s+bin)\\s+(?:your|the|a|dein|der|ein)\\s+(?:developer|creator|admin|administrator|owner|manager|supervisor|entwickler|administrator|besitzer|manager|vorgesetzter))"
+      "pattern": "(?:(?P<anchor_3>i\\s+am|i'm|ich\\s+bin)\\s+(?P<anchor_2>your|the|a|dein|der|ein)\\s+(?P<anchor_1>developer|creator|admin|administrator|owner|manager|supervisor|entwickler|administrator|besitzer|manager|vorgesetzter))"
     }
   ]
 }

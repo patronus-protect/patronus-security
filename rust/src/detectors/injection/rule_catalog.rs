@@ -7,6 +7,7 @@ use serde_json::json;
 
 use super::signal::{detection_from_signals, InjectionReference, InjectionSignal};
 use super::token_relations::{OrderedRelationDefinition, OrderedTokenRelation};
+use crate::detectors::evidence::L1Match;
 use crate::detectors::NativeDetection;
 use crate::EvaluationResult;
 
@@ -30,7 +31,7 @@ const CATALOG_JSONS: [(&str, &str); 4] = [
 ];
 const DIRECT_REGEX_SCAN_CATALOG_ID: &str = "source-derived-p0-0.1.6";
 
-type CatalogMatch<'a> = (&'a CompiledCatalog, &'a RuleDefinition, usize, usize);
+type CatalogMatch<'a> = (&'a CompiledCatalog, &'a RuleDefinition, L1Match);
 
 #[derive(Debug, Deserialize)]
 struct RuleCatalog {
@@ -182,22 +183,23 @@ impl InjectionRuleCatalogPipeline {
             }
             for (rule_index, relation) in &compiled.ordered_relations {
                 let rule = &compiled.catalog.rules[*rule_index];
-                for (start, end) in relation.find_iter(text) {
-                    matches.push((compiled, rule, start, end));
+                for matched in relation.find_iter(text) {
+                    matches.push((compiled, rule, matched));
                 }
             }
         }
-        matches.retain(|(_, rule, _, _)| {
-            allows_rule(rule.canonical_id.as_deref().unwrap_or(&rule.id))
-        });
+        matches
+            .retain(|(_, rule, _)| allows_rule(rule.canonical_id.as_deref().unwrap_or(&rule.id)));
         if matches.is_empty() {
             return safe_detection();
         }
-        matches.sort_by_key(|(_, rule, start, end)| (*start, *end, rule.id.as_str()));
+        matches.sort_by_key(|(_, rule, matched)| {
+            (matched.range().start, matched.range().end, rule.id.as_str())
+        });
 
         let mut signals = matches
             .iter()
-            .map(|(compiled, rule, start, end)| InjectionSignal {
+            .map(|(compiled, rule, matched)| InjectionSignal {
                 rule_id: rule.canonical_id.clone().unwrap_or_else(|| rule.id.clone()),
                 upstream_id: Some(rule.upstream_id.clone()),
                 family: rule.family.clone(),
@@ -226,11 +228,11 @@ impl InjectionRuleCatalogPipeline {
                 candidate_only: rule.candidate_only,
                 adaptation: rule.adaptation.clone(),
                 references: rule.references.clone(),
-                start_byte: *start,
-                end_byte: *end,
+                start_byte: matched.range().start,
+                end_byte: matched.range().end,
                 span_precision: "exact",
                 feature_kind: "rule_match",
-                components: Vec::new(),
+                components: matched.components.clone(),
             })
             .collect::<Vec<_>>();
         signals.sort_by(|left, right| {
@@ -254,12 +256,12 @@ impl InjectionRuleCatalogPipeline {
         }
         let decisive = matches
             .iter()
-            .max_by(|(_, left, _, _), (_, right, _, _)| {
+            .max_by(|(_, left, _), (_, right, _)| {
                 severity_rank(&left.severity)
                     .cmp(&severity_rank(&right.severity))
                     .then_with(|| left.upstream_weight.total_cmp(&right.upstream_weight))
             })
-            .map(|(compiled, rule, _, _)| (*compiled, *rule))
+            .map(|(compiled, rule, _)| (*compiled, *rule))
             .expect("matched catalog must contain a decisive rule");
         let mut detection = detection_from_signals(
             EvaluationResult {
@@ -273,7 +275,7 @@ impl InjectionRuleCatalogPipeline {
         );
         let catalog_ids = matches
             .iter()
-            .map(|(compiled, _, _, _)| compiled.catalog.catalog_id.as_str())
+            .map(|(compiled, _, _)| compiled.catalog.catalog_id.as_str())
             .collect::<HashSet<_>>();
         let mut catalog_ids = catalog_ids.into_iter().collect::<Vec<_>>();
         catalog_ids.sort_unstable();
@@ -324,7 +326,8 @@ fn push_regex_matches<'a>(
     text: &str,
 ) {
     let rule = &compiled.catalog.rules[rule_index];
-    for matched in regex.find_iter(text) {
+    for captures in regex.captures_iter(text) {
+        let matched = captures.get(0).unwrap();
         if rule.excluded_match_terms.iter().any(|term| {
             matched
                 .as_str()
@@ -334,11 +337,24 @@ fn push_regex_matches<'a>(
         }) {
             continue;
         }
-        matches.push((compiled, rule, matched.start(), matched.end()));
+        matches.push((
+            compiled,
+            rule,
+            L1Match::from_captures(regex, &captures, None),
+        ));
     }
 }
 
 fn merge_upstream_provenance(target: &mut InjectionSignal, source: &InjectionSignal) {
+    for component in &source.components {
+        if !target.components.iter().any(|existing| {
+            existing.component_id == component.component_id
+                && existing.start_byte == component.start_byte
+                && existing.end_byte == component.end_byte
+        }) {
+            target.components.push(component.clone());
+        }
+    }
     target.candidate_only &= source.candidate_only;
     if target.evidence_tier.is_none() && source.evidence_tier.is_some() {
         target.evidence_tier = source.evidence_tier.clone();
@@ -597,6 +613,7 @@ mod tests {
             .flat_map(|candidate| candidate["features"].as_array().into_iter().flatten())
             .filter(|feature| {
                 feature["provenance"]["rule_id"] == "ark.injection.override.discard_prior"
+                    && feature["kind"] == "rule_match"
                     && feature["start_byte"] == 0
                     && feature["end_byte"] == text.len()
             })

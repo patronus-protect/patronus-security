@@ -182,7 +182,7 @@
       "upstream_weight": 0.95,
       "candidate_only": true,
       "description": "Known jailbreak persona names",
-      "pattern": "you\\s+are\\s+(now\\s+)?(?:DAN|STAN|DUDE|AIM|KEVIN|MONGO|OPPO)"
+      "pattern": "you\\s+are\\s+(now\\s+)?(?P<anchor_1>DAN|STAN|DUDE|AIM|KEVIN|MONGO|OPPO)"
     },
     {
       "id": "prompt-armor.jb-002",
@@ -314,7 +314,7 @@
       "upstream_weight": 0.6,
       "candidate_only": true,
       "description": "Rename the AI",
-      "pattern": "(?:your|the)\\s+name\\s+is\\s+(?:now\\s+)?[A-Za-z][A-Za-z0-9_-]{1,31}",
+      "pattern": "(?P<anchor_2>your|the)\\s+name\\s+is\\s+(?P<anchor_1>now\\s+)?[A-Za-z][A-Za-z0-9_-]{1,31}",
       "excluded_match_terms": [
         "claude",
         "gpt",

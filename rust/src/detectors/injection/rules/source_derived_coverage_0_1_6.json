@@ -67,7 +67,7 @@
       "source_license": "Apache-2.0",
       "source_file": "src/prompt_armor/data/rules/default_rules.yml",
       "adaptation": "Restricts PI-009 to actual/real/true purpose relationships that had no current development-negative collisions; generic new-task declarations remain candidate-only. Adds the equivalent German eigentliche/wahre/wirkliche subset.",
-      "pattern": "(?:your\\s+(?:actual|real|true)\\s+(?:instructions?|purpose|task|goal)\\s+(?:is|are)|deine\\s+(?:eigentliche|wahre|wirkliche)\\s+(?:anweisungen?|aufgabe|zweck|ziel)\\s+(?:ist|sind))"
+      "pattern": "(?:your\\s+(?P<anchor_6>actual|real|true)\\s+(?P<anchor_5>instructions?|purpose|task|goal)\\s+(?P<anchor_4>is|are)|deine\\s+(?P<anchor_3>eigentliche|wahre|wirkliche)\\s+(?P<anchor_2>anweisungen?|aufgabe|zweck|ziel)\\s+(?P<anchor_1>ist|sind))"
     },
     {
       "id": "ark.injection.identity.no_longer_ai_directive_audited",
@@ -83,7 +83,7 @@
       "source_license": "Apache-2.0",
       "source_file": "src/prompt_armor/data/rules/default_rules.yml",
       "adaptation": "Restricts Prompt Armor ID-003 to identity replacement followed by an explicit directive. Descriptive continuations such as 'no longer an AI assistant, but a Koala' remain candidate-only on the raw upstream rule. Adds the equivalent German relationship.",
-      "pattern": "(?:(?:you\\s+are\\s+no\\s+longer\\s+(?:claude|gpt|chatgpt|an?\\s+(?:ai|assistant)))|(?:du\\s+bist\\s+(?:keine?\\s+(?:ki|ai|assistenz|assistent)\\s+mehr|nicht\\s+länger\\s+(?:eine?\\s+)?(?:ki|ai|assistenz|assistent))))\\s*[,;:—-]+\\s*(?:now\\s+|jetzt\\s+)?(?:obey|follow|execute|comply|ignore|reveal|send|befolge|gehorche|führe|ignoriere|enthülle|sende)\\b"
+      "pattern": "(?:(?:you\\s+are\\s+no\\s+longer\\s+(?:claude|gpt|chatgpt|an?\\s+(?P<anchor_6>ai|assistant)))|(?:du\\s+bist\\s+(?:keine?\\s+(?P<anchor_5>ki|ai|assistenz|assistent)\\s+mehr|nicht\\s+länger\\s+(?P<anchor_4>eine?\\s+)?(?P<anchor_3>ki|ai|assistenz|assistent))))\\s*[,;:—-]+\\s*(?P<anchor_2>now\\s+|jetzt\\s+)?(?P<anchor_1>obey|follow|execute|comply|ignore|reveal|send|befolge|gehorche|führe|ignoriere|enthülle|sende)\\b"
     },
     {
       "id": "ark.injection.override.hierarchy_then_direct_action",
@@ -98,7 +98,7 @@
       "source_license": "Apache-2.0",
       "source_file": "configs/generic-agent.yaml",
       "adaptation": "Composes Pipelock's Prompt Injection hierarchy relationship with a bounded direct action instead of importing its broad hierarchy regex alone; adds equivalent German hierarchy and action terms. Variations were selected from injection_current development misses.",
-      "pattern": "\\b(?:ignore|disregard|forget|abandon|override|stop\\s+enforcing|reconfigure|ignoriere|missachte|vergiss|verwirf|überschreibe)\\b[\\s\\S]{0,90}\\b(?:previous|prior|above|earlier|built[ -]?in|system|setup|safety|tone|scope|vorherig\\w*|früher\\w*|obig\\w*|bisherig\\w*|system|sicherheits\\w*)\\b[\\s\\S]{0,42}\\b(?:instructions?|prompts?|rules?|context|directives?|constraints?|polic(?:y|ies)|guardrails?|guidelines?|limits?|anweisungen?|prompts?|regeln?|kontext|direktiven?|beschränkungen?|richtlinien?|leitplanken?|grenzen?|sicherheits(?:regeln|richtlinien|leitplanken|grenzen))\\b[\\s\\S]{0,80}(?:[;,]|\\band\\b|\\bund\\b)\\s*(?:please\\s+|bitte\\s+)?\\b(?:say|print|output|produce|give\\s+me|reveal|send|execute|run|call|invoke|transfer|write|sage|drucke|gib\\s+mir|enthülle|sende|führe|rufe|überweise|schreibe)\\b"
+      "pattern": "\\b(?P<anchor_7>ignore|disregard|forget|abandon|override|stop\\s+enforcing|reconfigure|ignoriere|missachte|vergiss|verwirf|überschreibe)\\b[\\s\\S]{0,90}\\b(?P<anchor_6>previous|prior|above|earlier|built[ -]?in|system|setup|safety|tone|scope|vorherig\\w*|früher\\w*|obig\\w*|bisherig\\w*|system|sicherheits\\w*)\\b[\\s\\S]{0,42}\\b(?:instructions?|prompts?|rules?|context|directives?|constraints?|polic(?P<anchor_5>y|ies)|guardrails?|guidelines?|limits?|anweisungen?|prompts?|regeln?|kontext|direktiven?|beschränkungen?|richtlinien?|leitplanken?|grenzen?|sicherheits(?P<anchor_4>regeln|richtlinien|leitplanken|grenzen))\\b[\\s\\S]{0,80}(?P<anchor_3>[;,]|\\band\\b|\\bund\\b)\\s*(?P<anchor_2>please\\s+|bitte\\s+)?\\b(?P<anchor_1>say|print|output|produce|give\\s+me|reveal|send|execute|run|call|invoke|transfer|write|sage|drucke|gib\\s+mir|enthülle|sende|führe|rufe|überweise|schreibe)\\b"
     },
     {
       "id": "ark.injection.output.ignore_then_fixed_output",
@@ -113,7 +113,7 @@
       "source_license": "MIT",
       "source_file": "promptinject/prompt_data.py",
       "adaptation": "Preserves PromptInject's ignore-previous-and-following plus just-say/print composition, extends only equivalent output verbs, and adds a German translation of the same relationship.",
-      "pattern": "\\b(?:ignore|disregard|forget|abandon|ignoriere|missachte|vergiss|verwirf)\\b[\\s\\S]{0,70}\\b(?:previous|prior|above|earlier|following|vorherig\\w*|früher\\w*|obig\\w*|folgend\\w*)\\b[\\s\\S]{0,45}\\b(?:instructions?|prompts?|rules?|directives?|anweisungen?|prompts?|regeln?|direktiven?)\\b[\\s\\S]{0,100}(?:\\b(?:only|just|nur|ausschließlich)\\b[\\s\\S]{0,20}\\b(?:say|print|output|respond|reply|write|sage|drucke|gib|antworte|schreibe)\\b|\\b(?:say|print|output|respond|reply|write|sage|drucke|gib|antworte|schreibe)\\b[\\s\\S]{0,12}\\b(?:only|just|nur|ausschließlich)\\b)"
+      "pattern": "\\b(?P<anchor_7>ignore|disregard|forget|abandon|ignoriere|missachte|vergiss|verwirf)\\b[\\s\\S]{0,70}\\b(?P<anchor_6>previous|prior|above|earlier|following|vorherig\\w*|früher\\w*|obig\\w*|folgend\\w*)\\b[\\s\\S]{0,45}\\b(?P<anchor_5>instructions?|prompts?|rules?|directives?|anweisungen?|prompts?|regeln?|direktiven?)\\b[\\s\\S]{0,100}(?:\\b(?P<anchor_4>only|just|nur|ausschließlich)\\b[\\s\\S]{0,20}\\b(?P<anchor_3>say|print|output|respond|reply|write|sage|drucke|gib|antworte|schreibe)\\b|\\b(?P<anchor_2>say|print|output|respond|reply|write|sage|drucke|gib|antworte|schreibe)\\b[\\s\\S]{0,12}\\b(?P<anchor_1>only|just|nur|ausschließlich)\\b)"
     },
     {
       "id": "ark.injection.leak.system_prompt_extraction",
@@ -134,7 +134,7 @@
           "upstream_id": "prompt_leaking_attacks"
         }
       ],
-      "pattern": "(?:\\b(?:repeat|output|show|tell|reveal|disclose|expose|dump|divulge)\\b[\\s\\S]{0,28}\\b(?:me\\s+)?(?:all\\s+)?(?:your|the)\\s+(?:(?:entire|full|complete|previous|prior|initial|original|hidden|secret|internal)\\s+(?:system\\s*)?(?:instructions?|prompt|message|rules?|directives?)|system\\s+(?:prompt|instructions?)|hidden\\s+instructions?|initial\\s+instructions?)\\b|\\b(?:wiederhole|gib|zeige|sage|enthülle|offenbare|offenlege)\\b[\\s\\S]{0,28}\\b(?:mir\\s+)?(?:alle\\s+)?(?:deine|die)\\s+(?:(?:gesamten?|vollständigen?|kompletten?|vorherigen?|früheren?|ursprünglichen?|versteckten?|geheimen?|internen?)\\s+(?:system\\s*)?(?:anweisungen?|prompt|nachricht|regeln?|direktiven?)|system\\s*(?:prompt|anweisungen?))\\b|\\bwhat\\s+(?:is|are)\\s+your\\s+system\\s+(?:prompt|instructions?)\\b|\\bwas\\s+(?:ist|sind)\\s+(?:dein|deine)\\s+system\\s*(?:prompt|anweisungen?)\\b)"
+      "pattern": "(?:\\b(?P<anchor_21>repeat|output|show|tell|reveal|disclose|expose|dump|divulge)\\b[\\s\\S]{0,28}\\b(?P<anchor_20>me\\s+)?(?P<anchor_19>all\\s+)?(?P<anchor_18>your|the)\\s+(?:(?P<anchor_17>entire|full|complete|previous|prior|initial|original|hidden|secret|internal)\\s+(?P<anchor_16>system\\s*)?(?P<anchor_15>instructions?|prompt|message|rules?|directives?)|system\\s+(?P<anchor_14>prompt|instructions?)|hidden\\s+instructions?|initial\\s+instructions?)\\b|\\b(?P<anchor_13>wiederhole|gib|zeige|sage|enthülle|offenbare|offenlege)\\b[\\s\\S]{0,28}\\b(?P<anchor_12>mir\\s+)?(?P<anchor_11>alle\\s+)?(?P<anchor_10>deine|die)\\s+(?:(?P<anchor_9>gesamten?|vollständigen?|kompletten?|vorherigen?|früheren?|ursprünglichen?|versteckten?|geheimen?|internen?)\\s+(?P<anchor_8>system\\s*)?(?P<anchor_7>anweisungen?|prompt|nachricht|regeln?|direktiven?)|system\\s*(?P<anchor_6>prompt|anweisungen?))\\b|\\bwhat\\s+(?P<anchor_5>is|are)\\s+your\\s+system\\s+(?P<anchor_4>prompt|instructions?)\\b|\\bwas\\s+(?P<anchor_3>ist|sind)\\s+(?P<anchor_2>dein|deine)\\s+system\\s*(?P<anchor_1>prompt|anweisungen?)\\b)"
     },
     {
       "id": "ark.injection.authority.fake_system_asset_transfer",
@@ -149,7 +149,7 @@
       "source_license": "Apache-2.0",
       "source_file": "configs/generic-agent.yaml",
       "adaptation": "Composes Pipelock's System Override authority marker with a bounded high-risk transfer action and concrete crypto asset or wallet identifier. English and German action variants were selected from injection_current development misses; generic authority prose and generic transfers remain insufficient.",
-      "pattern": "(?:^|[\\r\\n])\\s*(?:\\[(?:system|admin|administrator|kernel|daemon|systemwarnung|administratorbefehl)[^\\]\\r\\n]{0,80}\\]|(?:system|admin|administrator|kernel|daemon|security|maintenance|systemwarnung|administratorbefehl)[^.!?\\r\\n]{0,80}\\b(?:command|directive|process|protocol|exception|override|restart|warning|action|befehl|direktive|prozess|protokoll|ausnahme|neustart|warnung|aktion))[\\s\\S]{0,240}\\b(?:transfer|move|send|relocat\\w*|dispatch|deposit|approve|überweise|verschiebe|sende|verlagere|genehmige)\\b[\\s\\S]{0,140}(?:\\b(?:btc|eth|sol|aave|matic|usdt|usdc|dai|link|uni|op|arb|wbtc)\\b|\\b0x[0-9a-f]{16,}\\b|\\bbc1q[0-9a-z]{16,}\\b|<attacker\\s+addr>)"
+      "pattern": "(?P<anchor_6>^|[\\r\\n])\\s*(?:\\[(?P<anchor_5>system|admin|administrator|kernel|daemon|systemwarnung|administratorbefehl)[^\\]\\r\\n]{0,80}\\]|(?P<anchor_4>system|admin|administrator|kernel|daemon|security|maintenance|systemwarnung|administratorbefehl)[^.!?\\r\\n]{0,80}\\b(?P<anchor_3>command|directive|process|protocol|exception|override|restart|warning|action|befehl|direktive|prozess|protokoll|ausnahme|neustart|warnung|aktion))[\\s\\S]{0,240}\\b(?P<anchor_2>transfer|move|send|relocat\\w*|dispatch|deposit|approve|überweise|verschiebe|sende|verlagere|genehmige)\\b[\\s\\S]{0,140}(?:\\b(?P<anchor_1>btc|eth|sol|aave|matic|usdt|usdc|dai|link|uni|op|arb|wbtc)\\b|\\b0x[0-9a-f]{16,}\\b|\\bbc1q[0-9a-z]{16,}\\b|<attacker\\s+addr>)"
     },
     {
       "id": "ark.injection.translation.de.do_not_follow_prior",
@@ -165,7 +165,7 @@
       "source_license": "Apache-2.0",
       "source_file": "src/prompt_armor/data/rules/default_rules.yml",
       "adaptation": "Faithful German lexical translation of Prompt Armor PI-004 with the same bounded instruction-hierarchy relationship.",
-      "pattern": "(?:folge|befolge|beachte)\\s+nicht\\s+(?:(?:deine|die|alle)\\s+)?(?:vorherigen|früheren|bisherigen|ursprünglichen|obigen)\\s+(?:anweisungen|regeln|richtlinien)"
+      "pattern": "(?P<anchor_4>folge|befolge|beachte)\\s+nicht\\s+(?:(?P<anchor_3>deine|die|alle)\\s+)?(?P<anchor_2>vorherigen|früheren|bisherigen|ursprünglichen|obigen)\\s+(?P<anchor_1>anweisungen|regeln|richtlinien)"
     },
     {
       "id": "ark.injection.translation.de.follow_instead",
@@ -181,7 +181,7 @@
       "source_license": "Apache-2.0",
       "source_file": "src/prompt_armor/data/rules/default_rules.yml",
       "adaptation": "Faithful German lexical translation of Prompt Armor PI-008.",
-      "pattern": "(?:befolge|beachte|führe|tu)\\s+stattdessen\\s+(?:die\\s+folgenden|diese|dies)"
+      "pattern": "(?P<anchor_2>befolge|beachte|führe|tu)\\s+stattdessen\\s+(?P<anchor_1>die\\s+folgenden|diese|dies)"
     },
     {
       "id": "ark.injection.translation.de.forget_context",
@@ -197,7 +197,7 @@
       "source_license": "Apache-2.0",
       "source_file": "src/prompt_armor/data/rules/default_rules.yml",
       "adaptation": "Faithful German lexical translation of Prompt Armor PI-011.",
-      "pattern": "vergiss\\s+(?:alles|all\\s+das)\\s+(?:vor|davor|oberhalb|zuvor)"
+      "pattern": "vergiss\\s+(?P<anchor_2>alles|all\\s+das)\\s+(?P<anchor_1>vor|davor|oberhalb|zuvor)"
     },
     {
       "id": "ark.injection.translation.de.dump_system_prompt",
@@ -213,7 +213,7 @@
       "source_license": "Apache-2.0",
       "source_file": "src/prompt_armor/data/rules/default_rules.yml",
       "adaptation": "Faithful German lexical translation of Prompt Armor SL-002.",
-      "pattern": "(?:kopiere|wiederhole|zeige|enthülle|offenbare|gib)\\s+(?:mir\\s+)?(?:den|die|das)?\\s*(?:gesamten|vollständigen|kompletten|ganzen)\\s+(?:versteckten?\\s+)?(?:system\\s*prompt|systemnachricht|systemanweisungen?|anweisungen?)(?:\\s+aus)?"
+      "pattern": "(?P<anchor_7>kopiere|wiederhole|zeige|enthülle|offenbare|gib)\\s+(?P<anchor_6>mir\\s+)?(?P<anchor_5>den|die|das)?\\s*(?P<anchor_4>gesamten|vollständigen|kompletten|ganzen)\\s+(?P<anchor_3>versteckten?\\s+)?(?P<anchor_2>system\\s*prompt|systemnachricht|systemanweisungen?|anweisungen?)(?P<anchor_1>\\s+aus)?"
     },
     {
       "id": "ark.injection.translation.de.prior_configuration",
@@ -229,7 +229,7 @@
       "source_license": "Apache-2.0",
       "source_file": "src/prompt_armor/data/rules/default_rules.yml",
       "adaptation": "Faithful German lexical translation of Prompt Armor SL-003.",
-      "pattern": "(?:was\\s+wurde\\s+dir|wozu\\s+wurdest\\s+du)\\s+(?:vorher|zuvor)?\\s*(?:gesagt|aufgetragen|angewiesen|programmiert|konfiguriert|gegeben)"
+      "pattern": "(?P<anchor_3>was\\s+wurde\\s+dir|wozu\\s+wurdest\\s+du)\\s+(?P<anchor_2>vorher|zuvor)?\\s*(?P<anchor_1>gesagt|aufgetragen|angewiesen|programmiert|konfiguriert|gegeben)"
     },
     {
       "id": "ark.injection.translation.de.repeat_context",
@@ -245,7 +245,7 @@
       "source_license": "Apache-2.0",
       "source_file": "src/prompt_armor/data/rules/default_rules.yml",
       "adaptation": "Faithful German lexical translation of Prompt Armor SL-004.",
-      "pattern": "wiederhole\\s+(?:alles|den\\s+gesamten\\s+text)\\s+(?:oben|vorher|von\\s+anfang\\s+an)"
+      "pattern": "wiederhole\\s+(?P<anchor_2>alles|den\\s+gesamten\\s+text)\\s+(?P<anchor_1>oben|vorher|von\\s+anfang\\s+an)"
     },
     {
       "id": "ark.injection.translation.de.end_system_prompt",
@@ -261,7 +261,7 @@
       "source_license": "Apache-2.0",
       "source_file": "src/prompt_armor/data/rules/default_rules.yml",
       "adaptation": "Faithful German lexical translation of Prompt Armor IB-004.",
-      "pattern": "(?:ende|stopp|abschluss)\\s+(?:des|der|vom)?\\s*(?:system\\s*prompt|systemnachricht|systemanweisungen?|ursprünglichen\\s+anweisungen?)"
+      "pattern": "(?P<anchor_3>ende|stopp|abschluss)\\s+(?P<anchor_2>des|der|vom)?\\s*(?P<anchor_1>system\\s*prompt|systemnachricht|systemanweisungen?|ursprünglichen\\s+anweisungen?)"
     }
   ]
 }

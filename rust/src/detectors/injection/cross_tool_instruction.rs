@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::threat::looks_like_cross_tool_instruction;
 use crate::EvaluationResult;
 
 pub struct CrossToolInstructionPipeline;
@@ -15,18 +14,12 @@ impl CrossToolInstructionPipeline {
         Self
     }
 
+    pub(crate) fn detect(&self, text: &str) -> crate::detectors::NativeDetection {
+        super::signal::native_detection("cross_tool_instruction", text)
+    }
+
     pub fn evaluate(&self, text: &str) -> EvaluationResult {
-        let is_violation = looks_like_cross_tool_instruction(text);
-        let class_name = if is_violation {
-            "cross_tool_instruction"
-        } else {
-            "safe"
-        };
-        EvaluationResult {
-            class_name: class_name.to_string(),
-            confidence: 1.0,
-            level: "L1".to_string(),
-        }
+        self.detect(text).result
     }
 
     pub fn evaluate_batch(&self, texts: &[String]) -> Vec<EvaluationResult> {

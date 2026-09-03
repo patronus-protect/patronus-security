@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use crate::detectors::evidence::{L1Component, L1Match};
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -81,7 +82,7 @@ impl OrderedTokenRelation {
         }
     }
 
-    pub(crate) fn find_iter(&self, text: &str) -> Vec<(usize, usize)> {
+    pub(crate) fn find_iter(&self, text: &str) -> Vec<L1Match> {
         let tokens = tokenize(text);
         let mut matches = Vec::new();
         for start_index in 0..tokens.len() {
@@ -90,19 +91,10 @@ impl OrderedTokenRelation {
             {
                 continue;
             }
-            let mut ends = Vec::new();
-            self.match_slots(&tokens, 0, start_index, &mut ends);
-            for end_index in ends {
-                if end_index > start_index {
-                    matches.push((
-                        tokens[start_index].start_byte,
-                        tokens[end_index - 1].end_byte,
-                    ));
-                }
-            }
+            self.match_slots(&tokens, 0, start_index, Vec::new(), &mut matches);
         }
-        matches.sort_unstable();
-        matches.dedup();
+        matches.sort_by_key(|m| (m.range().start, m.range().end));
+        matches.dedup_by(|a, b| a.range() == b.range());
         matches
     }
 
@@ -111,26 +103,29 @@ impl OrderedTokenRelation {
         tokens: &[Token],
         slot_index: usize,
         cursor: usize,
-        ends: &mut Vec<usize>,
+        components: Vec<L1Component>,
+        matches: &mut Vec<L1Match>,
     ) {
         if slot_index == self.slots.len() {
-            ends.push(cursor);
+            if !components.is_empty() {
+                matches.push(L1Match::new(components));
+            }
             return;
         }
         let slot = &self.slots[slot_index];
-        let mut cursors = vec![cursor];
+        let mut cursors = vec![(cursor, components.clone())];
         if slot.min_repeats == 0 {
-            self.match_slots(tokens, slot_index + 1, cursor, ends);
+            self.match_slots(tokens, slot_index + 1, cursor, components, matches);
         }
         for repetition in 1..=slot.max_repeats {
             let mut next_cursors = Vec::new();
-            for current in cursors {
+            for (current, path) in cursors {
                 if current >= tokens.len() {
                     continue;
                 }
                 let last_start = current
                     .saturating_add(slot.max_gap_tokens)
-                    .min(tokens.len().saturating_sub(1));
+                    .min(tokens.len() - 1);
                 for candidate_start in current..=last_start {
                     if tokens[current..=candidate_start]
                         .iter()
@@ -140,19 +135,22 @@ impl OrderedTokenRelation {
                     }
                     for alternative in &slot.alternatives {
                         if phrase_matches(tokens, candidate_start, alternative) {
-                            next_cursors.push(candidate_start + alternative.len());
+                            let end = candidate_start + alternative.len();
+                            let mut next_path = path.clone();
+                            next_path.push(L1Component::new(
+                                format!("slot_{slot_index}"),
+                                tokens[candidate_start].start_byte..tokens[end - 1].end_byte,
+                            ));
+                            next_cursors.push((end, next_path));
                         }
                     }
                 }
             }
-            next_cursors.sort_unstable();
-            next_cursors.dedup();
-            if next_cursors.is_empty() {
-                return;
-            }
+            next_cursors.sort_by_key(|(end, _)| *end);
+            next_cursors.dedup_by_key(|(end, _)| *end);
             if repetition >= slot.min_repeats {
-                for next in &next_cursors {
-                    self.match_slots(tokens, slot_index + 1, *next, ends);
+                for (next, path) in &next_cursors {
+                    self.match_slots(tokens, slot_index + 1, *next, path.clone(), matches);
                 }
             }
             cursors = next_cursors;

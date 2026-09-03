@@ -2,16 +2,20 @@
 use patronus_ark::{SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult};
 
 fn native_l1(text: &str) -> SecurityScanResult {
-    SecurityGateway::with_max_level(
-        vec![SecurityCategory::Injection],
-        SecurityLevel::L1,
-        None,
-        false,
-    )
-    .scan_category(SecurityCategory::Injection, text)
-    .into_iter()
-    .find(|result| result.model == "native:injection_l1")
-    .expect("aggregated native Injection L1 result")
+    static GATEWAY: std::sync::OnceLock<SecurityGateway> = std::sync::OnceLock::new();
+    GATEWAY
+        .get_or_init(|| {
+            SecurityGateway::with_max_level(
+                vec![SecurityCategory::Injection],
+                SecurityLevel::L1,
+                None,
+                false,
+            )
+        })
+        .scan_category(SecurityCategory::Injection, text)
+        .into_iter()
+        .find(|result| result.model == "native:injection_l1")
+        .expect("aggregated native Injection L1 result")
 }
 
 fn has_audited_feature(result: &SecurityScanResult) -> bool {

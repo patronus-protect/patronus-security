@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -177,6 +178,11 @@ def measure_l1(rows: list[dict]) -> dict:
     from patronus_ark import SecurityGateway
 
     gateway = SecurityGateway(categories=["pii", "dlp"], max_level="l1", download_files=False)
+    # This benchmark measures the full detector inventory, not the default profile.
+    source = (ROOT / "rust/src/detectors/dlp/dlp.rs").read_text()
+    gateway.set_execution_gates({"rules": {
+        rule_id: True for rule_id in re.findall(r'name: "(dlp_[^"]+)"', source)
+    }})
     predictions = collect_predictions(gateway, rows, ("pii", "dlp"))
     return score_with_slices(rows, {"pii", "dlp"}, predictions)
 

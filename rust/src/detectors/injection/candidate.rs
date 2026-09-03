@@ -186,18 +186,28 @@ fn candidate_from_group(text: &str, signals: &[&InjectionSignal]) -> L1Candidate
 
 fn features_from_signal(text: &str, signal: &InjectionSignal) -> Vec<L1Feature> {
     if !signal.components.is_empty() {
-        return signal
+        let mut features = signal
             .components
             .iter()
             .map(|component| L1Feature {
                 feature_id: format!(
-                    "structural:{}:{}:{}:{}",
+                    "{}:{}:{}:{}:{}",
+                    if signal.feature_kind == "structural" {
+                        "structural"
+                    } else {
+                        "rule_component"
+                    },
                     signal.rule_id,
                     component.component_id,
                     component.start_byte,
                     component.end_byte
                 ),
-                kind: "structural".to_string(),
+                kind: if signal.feature_kind == "structural" {
+                    "structural"
+                } else {
+                    "anchor"
+                }
+                .to_string(),
                 value: 1.0,
                 explanation: component.explanation.to_string(),
                 start_byte: component.start_byte,
@@ -207,10 +217,17 @@ fn features_from_signal(text: &str, signal: &InjectionSignal) -> Vec<L1Feature> 
                 span_precision: component.span_precision.to_string(),
                 provenance: provenance_from_signal(signal),
             })
-            .collect();
+            .collect::<Vec<_>>();
+        if signal.feature_kind == "rule_match" {
+            features.insert(0, rule_feature(text, signal));
+        }
+        return features;
     }
+    vec![rule_feature(text, signal)]
+}
 
-    vec![L1Feature {
+fn rule_feature(text: &str, signal: &InjectionSignal) -> L1Feature {
+    L1Feature {
         feature_id: format!(
             "rule:{}:{}:{}",
             signal.rule_id, signal.start_byte, signal.end_byte
@@ -224,7 +241,7 @@ fn features_from_signal(text: &str, signal: &InjectionSignal) -> Vec<L1Feature> 
         end_char: text[..signal.end_byte].chars().count(),
         span_precision: signal.span_precision.to_string(),
         provenance: provenance_from_signal(signal),
-    }]
+    }
 }
 
 fn provenance_from_signal(signal: &InjectionSignal) -> L1FeatureProvenance {

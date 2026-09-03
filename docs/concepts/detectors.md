@@ -7,14 +7,20 @@ than microseconds. This page catalogues the detectors by family. The source live
 [`rust/src/detectors/`](https://github.com/patronus-protect/patronus-security/tree/main/rust/src/detectors)
 and [`rust/src/threat/`](https://github.com/patronus-protect/patronus-security/tree/main/rust/src/threat).
 
-PII and DLP detectors return their own public results. Injection heuristics instead contribute
-signals to one scored `native:injection_l1` result; this prevents a single broad regex from
-becoming an independent verdict.
+All built-in L1 rules produce source-bound evidence first. Regex captures, lexical matches,
+ordered token relations, structural matches, and decoded payloads use the shared component
+contract: rule identity, matched components, and original-text byte offsets. Validators check
+candidate values before a finding is emitted. There is no Boolean detector followed by a
+localization adapter.
+
+PII and DLP project this evidence into their public results. Injection combines it into scored
+candidates for one `native:injection_l1` result. A complete relationship contributes one rule
+vote; its individual anchors do not become extra independent votes.
 
 ## Injection
 
 The native Injection stack combines a pinned rule catalog, a structural relationship producer,
-and eighteen legacy heuristic producers. They split into three groups: **instruction
+and eighteen evidence-producing native rule families. They split into three groups: **instruction
 manipulation**, **obfuscation/smuggling**, and **agentic/tool abuse**.
 
 Overlapping signals are merged into candidates and scored by the versioned L1 scorer. Only an
@@ -72,20 +78,18 @@ caller's responsibility.
 | Detector | Catches |
 | --- | --- |
 | `dlp` | Regex bank for leaked secrets/credentials, business-record identifiers, internal metrics, source code, SQL, dumps, and system logs, reported with exact evidence spans. |
-| `secret_transfer` | Secrets and credentials being read or moved (API keys, private keys, tokens, `.env`). |
+| `secret_transfer` | Requests to transfer secrets to external sinks, or explicit exfiltration. |
 | `destructive_operation` | Destructive commands/operations (mass delete, disable protections, wipe). |
-| `sensitive_material` | Transfer of sensitive material beyond a trust boundary. |
+| `sensitive_material` | Requests to read or disclose credential material, including sensitive files. |
 | `mcp_policy` | A fixed built-in set of MCP tool-policy patterns, including destructive shell operations and credential-file reads. |
 | `mcp_runtime_risk` | Risk indicators in an MCP tool invocation. |
 
-Only the `dlp` regex detector populates `evidence_spans` with the exact matched offsets;
-the other five producers are boolean heuristics and return no spans. The regex detector also
-exposes localized lexical or structural
+All six producers populate `evidence_spans` from their matched source components. MCP policy
+matches retain both the tool field and the matching argument. With `explain: true`, the regex detector also exposes
 `details.l1_anchors` for credential, authentication, business-record, metric, source/config,
-database/dump, and log/stacktrace context. These anchors do not block by themselves.
+database/dump, and log/stacktrace context. These context-only anchors are not findings; Ark does not enforce blocking.
 
-The Rust/Python library leaves all DLP rules eligible unless execution gates disable them. The
-Ark API example/default profile is intentionally narrower: it enables the credential- and
+Rust, Python, and the Ark API share the same DLP default profile: it enables the credential- and
 secret-oriented regex rules plus `secret_transfer` and `sensitive_material`, while business
 records, source code, SQL, logs, metrics, destructive operations, and MCP-specific producers are
 opt-in. See [Configuration → execution gates](../reference/configuration.md#execution-gates).
@@ -96,12 +100,29 @@ The `pii` category has a native-only L1 detector. It combines regex candidates, 
 validators, and anchor-bound rules rather than running a model: deterministic identifiers such as
 email, IP, IBAN, SWIFT/BIC, phone, payment-card data, government/insurance identifiers, and
 anchor-bound employee, customer, patient, student, applicant, account, username, and birth-date
-values can be reported. Matches are returned as exact `evidence_spans`. Localized
+values can be reported. Matches are returned as exact `evidence_spans`, retaining overlapping
+matches across different labels. With `explain: true`, localized
 `details.l1_anchors` cover person, role, contact,
 address, birth, identifier, account, payment, financial, government, vehicle, medical,
 special-category, and employment/compensation context without inventing a finding. For
 open-vocabulary entity extraction (names, organizations, locations, …) use the model-backed
 [`dynamic-pii`](categories.md#transformer-only-l3) category instead.
+
+## Language and evidence guarantees
+
+Natural-language relationships and contextual identifiers support English and German.
+Technical syntax (API-key prefixes, shell commands, SQL, JSON field names, PEM markers) is
+language-neutral and is not translated. A German document can contain the same technical token
+as an English document. This is pattern coverage, not a promise to understand every paraphrase.
+
+The checked-in bilingual inventory tests require a DE/EN fixture for every PII and DLP regex
+rule, every native Injection family, and all MCP policy entries. They check reachability and
+source offsets. Existing source goldens and near-negative tests remain separate regression checks.
+
+Exact original-text ranges are retained through lowercase, Unicode-confusable and zero-width
+normalization. For decoded payloads whose character positions cannot be mapped exactly, the
+component identifies the original encoded container as `transformed_source`; it never claims
+that decoded offsets are original-text offsets.
 
 ## Enabling and disabling detectors
 
@@ -109,7 +130,7 @@ Native detectors are eligible when their category and L1 are enabled; model and 
 narrow that set. To disable a complete detector without changing `max_level`, use an execution
 gate with its `native:<name>` key. To
 disable one stable PII, DLP, or Injection L1 rule while keeping its siblings, use `rules`. Missing
-rule IDs remain enabled. For Injection, `native:injection_l1` disables the complete native stack;
+rule IDs inherit the shared defaults. For Injection, `native:injection_l1` disables the complete native stack;
 the former model keys such as `native:instruction_override` still disable only that internal
 producer:
 
@@ -122,5 +143,5 @@ scanner.set_execution_gates({
 ```
 
 See [Configuration → execution gates](../reference/configuration.md#execution-gates).
-The complete set of accepted PII, DLP, DLP-heuristic, and Injection rule IDs is listed in the
+The complete set of accepted PII, DLP, DLP-relationship, and Injection rule IDs is listed in the
 [L1 rule catalog](../reference/l1-rule-catalog.md).

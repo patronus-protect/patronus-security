@@ -48,7 +48,7 @@ Change behavior on a live gateway (Python names; Rust has equivalents):
 
 | Setter | Values | Effect |
 | --- | --- | --- |
-| `set_execution_gates(dict \| None)` | see [below](#execution-gates) | Enable/disable levels and detectors; `None` resets to all-enabled. |
+| `set_execution_gates(dict \| None)` | see [below](#execution-gates) | Enable/disable levels and detectors; `None` resets to shared defaults. |
 | `set_l3_strategy(str)` | `dedicated`, `multi` | Switch the [L3 strategy](#l3-strategy). |
 | `set_ntdb_operating_point(str)` | see [below](#ntdb-operating-point) | Pick the final-decision threshold profile. |
 | `set_onnx_batch_mode(str)` | `lazy_batches`, `tensor_batch` | How L3 fallback batches execute. |
@@ -69,7 +69,8 @@ Change behavior on a live gateway (Python names; Rust has equivalents):
 ## Execution gates
 
 Gates decide which levels and which model/native scanners are active for subsequent scans.
-Unspecified gates stay enabled; `max_level` remains the hard upper bound.
+Unspecified rules inherit shared defaults: credential/secret DLP rules are enabled, broader DLP
+rules are opt-in. Other gates stay enabled; `max_level` remains the hard upper bound.
 
 ```python
 scanner.set_execution_gates({
@@ -82,13 +83,16 @@ scanner.set_execution_gates({
 - `levels` — per-level on/off (`l1`, `l2`, `l3`).
 - `models` — per-detector on/off, keyed by public model name: `native:<name>` for native
   detectors, `external:<id>` for [external L1 detectors](../how-to/external-l1-signals.md).
-- `rules` — per-L1-rule on/off. Missing IDs remain enabled. PII patterns use stable `pii_*`
+- `rules` — per-L1-rule on/off. Missing IDs inherit shared defaults. PII patterns use stable `pii_*`
   IDs. DLP patterns use `dlp_*` IDs; its separate heuristics are `dlp_sensitive_material`,
   `dlp_secret_transfer`, `dlp_mcp_runtime_risk`, `dlp_mcp_policy`, and
   `dlp_destructive_operation`. Injection uses the `ark.injection.*` IDs returned in evidence.
-  See the complete [L1 rule catalog](l1-rule-catalog.md) for every accepted ID and the Ark API
+  See the complete [L1 rule catalog](l1-rule-catalog.md) for every accepted ID and the shared
   default state of DLP rules.
 - `conditional` — conditional gates (see [below](#conditional-gates)).
+- `explain` — opt into bounded PII/DLP diagnostic context anchors (default `false`);
+  [matched rule components and evidence spans](result-schema.md#native-l1-components) remain
+  available without it. This flag does not change detection or conditional routing.
 - `l3` — optional worker policy (see [below](#l3-worker-policy)).
 
 Per-request gates passed to `enqueue()` are **snapshotted** at enqueue time and do not change
@@ -118,9 +122,14 @@ gates:
     native:mcp_runtime_risk: false
 ```
 
-The reference Ark API configuration is intentionally credentials-only for DLP L1: key, token,
+Rust, Python, and the Ark API share credentials-only defaults for DLP L1: key, token,
 password, hash, and private-key rules remain enabled, while business identifiers, metrics, source,
 SQL, dump, log, MCP/runtime, and destructive-operation families require an explicit profile.
+
+To opt into SQL, use `{"rules": {"dlp_sql_statement": true, "dlp_sql_multiline_statement": true}}`.
+The same rule-level opt-in applies to `dlp_mcp_policy`, `dlp_mcp_runtime_risk`, and
+`dlp_destructive_operation`; no additional model override is needed unless you disabled that model.
+Rust callers can explicitly opt into every rule with `ScanGateMatrix::all_enabled()`.
 
 ### L3 worker policy
 

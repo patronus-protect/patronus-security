@@ -762,6 +762,9 @@ def _native_l1_gates(only_model=None):
     gates = {"levels": {"l2": False, "l3": False}}
     if only_model is not None:
         gates["models"] = {model: model == only_model for model in DLP_NATIVE_MODELS}
+        # Isolated producer benchmarks explicitly opt into non-default heuristics.
+        if only_model in {"native:mcp_policy", "native:mcp_runtime_risk", "native:destructive_operation"}:
+            gates["rules"] = {"dlp_" + only_model.removeprefix("native:"): True}
     return gates
 
 

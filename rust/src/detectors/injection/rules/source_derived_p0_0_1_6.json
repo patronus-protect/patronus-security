@@ -17,7 +17,7 @@
       "source_license": "Apache-2.0",
       "source_file": "configs/generic-agent.yaml",
       "adaptation": "Retains Pipelock's read-verb, sensitive-path, and sink relationship while removing source-only path matches and requiring a downstream content or destination object; adds equivalent German read and transfer verbs.",
-      "pattern": "\\b(?:read|get|fetch|retrieve|cat|copy|extract|open|include|lies|lese|hole|lade|kopiere|extrahiere|öffne)\\b(?:[^.!?\\n]|\\.[^\\s]){0,80}(?:\\.ssh[/\\\\](?:id_rsa|id_ed25519)|\\.aws[/\\\\]credentials|\\.env\\b|\\.npmrc\\b|\\.pypirc\\b|\\.netrc\\b|\\bkubeconfig\\b|/etc/(?:passwd|shadow)\\b)(?:[^.!?\\n]|\\.[^\\s]){0,160}\\b(?:send|forward|transmit|share|email|exfiltrat\\w*|leak|paste|return|dump|print|output|upload|post|submit|sende|übermittle|teile|maile|leake|kopiere|gib|drucke|lade\\s+hoch)\\b(?:[^.!?\\n]|\\.[^\\s]){0,80}(?:\\b(?:it|them|contents?|file|data|keys?|values?|secrets?|sie|ihn|inhalt|inhalte|datei|daten|schlüssel|werte|geheimnisse?)\\b|https?://|\\S+@\\S+|\\b(?:reply|response|message|answer|chat|request|antwort|nachricht|anfrage)\\b)"
+      "pattern": "\\b(?P<anchor_9>read|get|fetch|retrieve|cat|copy|extract|open|include|lies|lese|hole|lade|kopiere|extrahiere|öffne)\\b(?P<anchor_8>[^.!?\\n]|\\.[^\\s]){0,80}(?:\\.ssh[/\\\\](?P<anchor_7>id_rsa|id_ed25519)|\\.aws[/\\\\]credentials|\\.env\\b|\\.npmrc\\b|\\.pypirc\\b|\\.netrc\\b|\\bkubeconfig\\b|/etc/(?P<anchor_6>passwd|shadow)\\b)(?P<anchor_5>[^.!?\\n]|\\.[^\\s]){0,160}\\b(?P<anchor_4>send|forward|transmit|share|email|exfiltrat\\w*|leak|paste|return|dump|print|output|upload|post|submit|sende|übermittle|teile|maile|leake|kopiere|gib|drucke|lade\\s+hoch)\\b(?P<anchor_3>[^.!?\\n]|\\.[^\\s]){0,80}(?:\\b(?P<anchor_2>it|them|contents?|file|data|keys?|values?|secrets?|sie|ihn|inhalt|inhalte|datei|daten|schlüssel|werte|geheimnisse?)\\b|https?://|\\S+@\\S+|\\b(?P<anchor_1>reply|response|message|answer|chat|request|antwort|nachricht|anfrage)\\b)"
     },
     {
       "id": "ark.injection.exfil.sensitive_path_external_sink_audited",
@@ -32,7 +32,7 @@
       "source_license": "Apache-2.0",
       "source_file": "configs/generic-agent.yaml",
       "adaptation": "Restricts the broader Credential Path Directive to a sensitive path plus an explicit HTTP(S) or email destination. Local paste, display, print, reply, and generic output variants remain on the non-audited parent rule. Adds equivalent German read and transfer verbs.",
-      "pattern": "\\b(?:read|get|fetch|retrieve|cat|copy|extract|open|include|lies|lese|hole|lade|kopiere|extrahiere|öffne)\\b(?:[^.!?\\n]|\\.[^\\s]){0,80}(?:\\.ssh[/\\\\](?:id_rsa|id_ed25519)|\\.aws[/\\\\]credentials|\\.env\\b|\\.npmrc\\b|\\.pypirc\\b|\\.netrc\\b|\\bkubeconfig\\b|/etc/(?:passwd|shadow)\\b)(?:[^.!?\\n]|\\.[^\\s]){0,160}\\b(?:send|forward|transmit|share|email|exfiltrat\\w*|upload|post|submit|sende|übermittle|teile|maile|lade\\s+hoch)\\b(?:[^.!?\\n]|\\.[^\\s]){0,100}(?:https?://[^\\s]+|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,})"
+      "pattern": "\\b(?P<anchor_8>read|get|fetch|retrieve|cat|copy|extract|open|include|lies|lese|hole|lade|kopiere|extrahiere|öffne)\\b(?P<anchor_7>[^.!?\\n]|\\.[^\\s]){0,80}(?:\\.ssh[/\\\\](?P<anchor_6>id_rsa|id_ed25519)|\\.aws[/\\\\]credentials|\\.env\\b|\\.npmrc\\b|\\.pypirc\\b|\\.netrc\\b|\\bkubeconfig\\b|/etc/(?P<anchor_5>passwd|shadow)\\b)(?P<anchor_4>[^.!?\\n]|\\.[^\\s]){0,160}\\b(?P<anchor_3>send|forward|transmit|share|email|exfiltrat\\w*|upload|post|submit|sende|übermittle|teile|maile|lade\\s+hoch)\\b(?P<anchor_2>[^.!?\\n]|\\.[^\\s]){0,100}(?P<anchor_1>https?://[^\\s]+|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,})"
     },
     {
       "id": "ark.injection.override.authority_issued_replacement",
@@ -47,7 +47,7 @@
       "source_license": "Apache-2.0",
       "source_file": "configs/generic-agent.yaml",
       "adaptation": "Narrows Pipelock's alternatives to require all three components: an authority, a new/updated/revised instruction object, and an imperative action within a bounded span; adds equivalent German authority, transition, instruction-object, and action terms.",
-      "pattern": "(?:\\b(?:system|developer|administrator|admin|entwickler)\\s*(?:message|prompt|instruction|directive|nachricht|anweisung|direktive)?(?:\\s*[.!?:,;>=—-]+|[ \\t]*[\\r\\n])[\\s\\W]*(?:new|updated|revised|neu(?:e|en|er)?|aktualisiert(?:e|en|er)?|überarbeitet(?:e|en|er)?)\\s+(?:instructions?|directives?|rules?|prompt|anweisungen?|direktiven?|regeln?|systemprompt)\\b[\\s\\S]{0,120}\\b(?:obey|execute|run|follow|comply|delete|override|replace|supersede|ignore|disregard|forget|abandon|send|upload|post|transmit|forward|email|befolge|gehorche|führe|lösche|überschreibe|ersetze|ignoriere|missachte|vergiss|sende|übermittle|maile|lade)\\b|\\b(?:new|updated|revised|neu(?:e|en|er)?|aktualisiert(?:e|en|er)?|überarbeitet(?:e|en|er)?)\\s+(?:instructions?|directives?|rules?|prompt|anweisungen?|direktiven?|regeln?|systemprompt)\\b[\\s\\S]{0,80}\\b(?:issued\\s+)?(?:from|by|von|vom|durch)\\s+(?:the|dem|der)?\\s*(?:system|developer|administrator|admin|entwickler)\\b[\\s\\S]{0,120}\\b(?:obey|execute|run|follow|comply|delete|override|replace|supersede|ignore|disregard|forget|abandon|send|upload|post|transmit|forward|email|befolge|gehorche|führe|lösche|überschreibe|ersetze|ignoriere|missachte|vergiss|sende|übermittle|maile|lade)\\b)"
+      "pattern": "(?:\\b(?P<anchor_17>system|developer|administrator|admin|entwickler)\\s*(?P<anchor_16>message|prompt|instruction|directive|nachricht|anweisung|direktive)?(?P<anchor_15>\\s*[.!?:,;>=—-]+|[ \\t]*[\\r\\n])[\\s\\W]*(?:new|updated|revised|neu(?P<anchor_14>e|en|er)?|aktualisiert(?P<anchor_13>e|en|er)?|überarbeitet(?P<anchor_12>e|en|er)?)\\s+(?P<anchor_11>instructions?|directives?|rules?|prompt|anweisungen?|direktiven?|regeln?|systemprompt)\\b[\\s\\S]{0,120}\\b(?P<anchor_10>obey|execute|run|follow|comply|delete|override|replace|supersede|ignore|disregard|forget|abandon|send|upload|post|transmit|forward|email|befolge|gehorche|führe|lösche|überschreibe|ersetze|ignoriere|missachte|vergiss|sende|übermittle|maile|lade)\\b|\\b(?:new|updated|revised|neu(?P<anchor_9>e|en|er)?|aktualisiert(?P<anchor_8>e|en|er)?|überarbeitet(?P<anchor_7>e|en|er)?)\\s+(?P<anchor_6>instructions?|directives?|rules?|prompt|anweisungen?|direktiven?|regeln?|systemprompt)\\b[\\s\\S]{0,80}\\b(?P<anchor_5>issued\\s+)?(?P<anchor_4>from|by|von|vom|durch)\\s+(?P<anchor_3>the|dem|der)?\\s*(?P<anchor_2>system|developer|administrator|admin|entwickler)\\b[\\s\\S]{0,120}\\b(?P<anchor_1>obey|execute|run|follow|comply|delete|override|replace|supersede|ignore|disregard|forget|abandon|send|upload|post|transmit|forward|email|befolge|gehorche|führe|lösche|überschreibe|ersetze|ignoriere|missachte|vergiss|sende|übermittle|maile|lade)\\b)"
     },
     {
       "id": "ark.injection.obfuscation.decode_then_execute",
@@ -69,7 +69,7 @@
           "upstream_id": "encoding.InjectBase64|InjectBase16|InjectBase32|InjectAscii85|InjectHex|InjectUU|InjectROT13|InjectBase2048"
         }
       ],
-      "pattern": "\\b(?:decode|dekodiere|dekodieren|entschlüssele|entschlüsseln)\\b[\\s\\S]{0,40}\\b(?:base64|base16|hex|base32|ascii85|base85|uuencode|rot13|base2048)\\b[\\s\\S]{0,48}\\b(?:execute|run|follow|obey|eval|ausführen|führe|befolge|gehorche|evaluiere)\\b"
+      "pattern": "\\b(?P<anchor_3>decode|dekodiere|dekodieren|entschlüssele|entschlüsseln)\\b[\\s\\S]{0,40}\\b(?P<anchor_2>base64|base16|hex|base32|ascii85|base85|uuencode|rot13|base2048)\\b[\\s\\S]{0,48}\\b(?P<anchor_1>execute|run|follow|obey|eval|ausführen|führe|befolge|gehorche|evaluiere)\\b"
     },
     {
       "id": "ark.injection.boundary.delimited_replacement_action",
@@ -91,7 +91,7 @@
           "upstream_id": "pipelock:Instruction Boundary"
         }
       ],
-      "pattern": "(?:^|[\\r\\n])\\s*(?:={3,}|-{3,}|>{3,}|\\*{3,})\\s*(?:system|developer|admin|instructions?|entwickler|anweisungen?)?\\s*(?:={3,}|-{3,}|>{3,}|\\*{3,})?[\\r\\n]+[\\s\\S]{0,80}\\b(?:ignore|disregard|forget|abandon|instead|new\\s+task|stop\\s+everything|ignoriere|missachte|vergiss|verwirf|stattdessen|neue\\s+aufgabe|stoppe\\s+alles)\\b[\\s\\S]{0,80}\\b(?:say|print|output|execute|run|follow|obey|send|upload|post|invoke|call|sage|drucke|gib|führe|befolge|gehorche|sende|lade|rufe)\\b"
+      "pattern": "(?P<anchor_6>^|[\\r\\n])\\s*(?P<anchor_5>={3,}|-{3,}|>{3,}|\\*{3,})\\s*(?P<anchor_4>system|developer|admin|instructions?|entwickler|anweisungen?)?\\s*(?P<anchor_3>={3,}|-{3,}|>{3,}|\\*{3,})?[\\r\\n]+[\\s\\S]{0,80}\\b(?P<anchor_2>ignore|disregard|forget|abandon|instead|new\\s+task|stop\\s+everything|ignoriere|missachte|vergiss|verwirf|stattdessen|neue\\s+aufgabe|stoppe\\s+alles)\\b[\\s\\S]{0,80}\\b(?P<anchor_1>say|print|output|execute|run|follow|obey|send|upload|post|invoke|call|sage|drucke|gib|führe|befolge|gehorche|sende|lade|rufe)\\b"
     }
   ]
 }

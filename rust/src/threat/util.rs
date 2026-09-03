@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use super::patterns::{injection_signal_re, sensitive_term_ac};
 
 pub(super) fn text_windows(text: &str, window_bytes: usize) -> impl Iterator<Item = &str> {
     text.split('\n').flat_map(move |paragraph| {
@@ -26,12 +25,4 @@ pub(super) fn text_windows(text: &str, window_bytes: usize) -> impl Iterator<Ite
         }
         windows
     })
-}
-
-pub(super) fn contains_injection_signal(text: &str) -> bool {
-    injection_signal_re().is_match(text)
-}
-
-pub(super) fn contains_sensitive_term(lower: &str) -> bool {
-    sensitive_term_ac().is_match(lower)
 }

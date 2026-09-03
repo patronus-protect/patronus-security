@@ -121,6 +121,8 @@ impl RawOnnxRuntime {
 #[serde(deny_unknown_fields)]
 pub(crate) struct RawGates {
     #[serde(default)]
+    explain: bool,
+    #[serde(default)]
     l1: Option<bool>,
     #[serde(default)]
     l2: Option<bool>,
@@ -163,6 +165,7 @@ impl RawGates {
             gate.validate().map_err(ConfigError::Invalid)?;
         }
         let RawGates {
+            explain,
             l1,
             l2,
             l3,
@@ -221,6 +224,7 @@ impl RawGates {
         }
         validate_l3_policy(&policy)?;
         Ok(ScanGateMatrix {
+            explain,
             l1,
             l2,
             l3,
@@ -446,6 +450,14 @@ mod tests {
     use super::{Config, RawGates, RawOnnxRuntime};
 
     #[test]
+    fn explain_is_explicit_and_disabled_by_default() {
+        assert!(!RawGates::default().into_gate_matrix().unwrap().explain);
+        let raw: RawGates = serde_yaml::from_str("explain: true").unwrap();
+        assert!(raw.into_gate_matrix().unwrap().explain);
+        assert!(serde_yaml::from_str::<RawGates>("explain: verbose").is_err());
+    }
+
+    #[test]
     fn onnx_runtime_config_accepts_bounded_threads() {
         let raw: RawOnnxRuntime =
             serde_yaml::from_str("intra_threads: 2\ninter_threads: 1\nspinning: false\n").unwrap();
@@ -504,11 +516,11 @@ mod tests {
 
         assert!(config.default_gates.allows_rule("dlp_sensitive_material"));
         assert!(config.default_gates.allows_rule("dlp_secret_transfer"));
-        assert!(!config.default_gates.allows_model("native:mcp_runtime_risk"));
-        assert!(!config.default_gates.allows_model("native:mcp_policy"));
+        assert!(!config.default_gates.allows_rule("dlp_mcp_runtime_risk"));
+        assert!(!config.default_gates.allows_rule("dlp_mcp_policy"));
         assert!(!config
             .default_gates
-            .allows_model("native:destructive_operation"));
+            .allows_rule("dlp_destructive_operation"));
 
         let gateway = SecurityGateway::with_max_level(
             vec![SecurityCategory::Dlp],

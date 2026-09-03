@@ -33,8 +33,9 @@ assets** and are always available offline. `pii` combines checksum/structure val
 field anchors for contact, payment, government, account, and person identifiers. `dlp` detects
 credentials and secrets as well as gateable business identifiers, internal metrics, source code,
 SQL, dumps, logs, and risky operations. PII and regex-based DLP findings populate
-`evidence_spans` with exact offsets; native DLP heuristics can flag a category without a span.
-Both can publish localized, non-finding `l1_anchors`. The Ark API reference profile enables only
+`evidence_spans` with original-text offsets; native DLP operation and MCP rules also retain
+source-bound components and finding spans.
+Both can publish localized, non-finding `l1_anchors` with `explain: true`. The shared Rust/Python/API default enables only
 credential/secret DLP rules by default; other DLP families are opt-in through rule gates. See
 [Native detectors](detectors.md).
 

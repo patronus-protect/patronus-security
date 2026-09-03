@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
+mod anchors;
 pub mod dlp;
+pub(crate) mod evidence;
 pub mod injection;
 pub mod mcp;
 pub mod pii;
@@ -34,6 +36,7 @@ pub(crate) trait NativeRegexDetector {
     fn details(&self, _text: &str) -> HashMap<String, serde_json::Value> {
         HashMap::new()
     }
+    fn finalize_spans(&self, _spans: &mut Vec<EvidenceSpan>) {}
 
     fn detect(&self, text: &str) -> NativeDetection {
         self.detect_with_rule_filter(text, |_| true)
@@ -43,17 +46,46 @@ pub(crate) trait NativeRegexDetector {
     where
         F: Fn(&str) -> bool,
     {
-        let details = self.details(text);
+        self.detect_with_options(text, allows_rule, false)
+    }
+
+    fn detect_with_options<F>(&self, text: &str, allows_rule: F, explain: bool) -> NativeDetection
+    where
+        F: Fn(&str) -> bool,
+    {
+        let mut details = if explain {
+            self.details(text)
+        } else {
+            HashMap::new()
+        };
+        let mut matched_rules = Vec::new();
         let mut class_name = None;
         let mut evidence_spans = Vec::new();
         for (index, regex) in self.regexes().iter().enumerate() {
             if !allows_rule(self.rule_ids()[index]) {
                 continue;
             }
-            let mut push_match = |matched: regex::Match<'_>| {
-                if self.validators()[index].is_some_and(|validator| !validator(matched.as_str())) {
-                    return;
+            let value_group = self
+                .capture_groups()
+                .and_then(|groups| groups.get(index))
+                .copied()
+                .flatten();
+            for captures in regex.captures_iter(text) {
+                let Some(matched) = captures.get(value_group.unwrap_or(0)) else {
+                    continue;
+                };
+                if matched.is_empty()
+                    || self.validators()[index]
+                        .is_some_and(|validator| !validator(matched.as_str()))
+                {
+                    continue;
                 }
+                let evidence = evidence::L1Match::from_captures(regex, &captures, value_group);
+                matched_rules.push(serde_json::json!({
+                    "rule_id": self.rule_ids()[index],
+                    "start_byte": matched.start(), "end_byte": matched.end(),
+                    "components": evidence.components,
+                }));
                 class_name.get_or_insert(self.entity_groups()[index]);
                 evidence_spans.push(EvidenceSpan {
                     label: self.entity_groups()[index].to_string(),
@@ -64,25 +96,12 @@ pub(crate) trait NativeRegexDetector {
                     start_char: 0,
                     end_char: 0,
                 });
-            };
-            if let Some(group) = self
-                .capture_groups()
-                .and_then(|groups| groups.get(index))
-                .copied()
-                .flatten()
-            {
-                for captures in regex.captures_iter(text) {
-                    if let Some(matched) = captures.get(group) {
-                        push_match(matched);
-                    }
-                }
-            } else {
-                for matched in regex.find_iter(text) {
-                    push_match(matched);
-                }
             }
         }
 
+        if !matched_rules.is_empty() {
+            details.insert("matched_rules".into(), serde_json::json!(matched_rules));
+        }
         let Some(class_name) = class_name else {
             return NativeDetection {
                 result: safe_result(),
@@ -92,22 +111,26 @@ pub(crate) trait NativeRegexDetector {
         };
         let preserve_cross_label_overlaps = self.preserve_cross_label_overlaps();
         let mut non_overlapping_spans = Vec::with_capacity(evidence_spans.len());
+        let mut intervals = HashMap::<String, std::collections::BTreeMap<usize, usize>>::new();
         for span in evidence_spans {
-            let overlaps_existing = non_overlapping_spans.iter().any(|existing: &EvidenceSpan| {
-                span.start_byte < existing.end_byte
-                    && existing.start_byte < span.end_byte
-                    && (!preserve_cross_label_overlaps || span.label == existing.label)
-            });
+            let group = if preserve_cross_label_overlaps {
+                span.label.clone()
+            } else {
+                String::new()
+            };
+            let intervals = intervals.entry(group).or_default();
+            let overlaps_existing = intervals
+                .range(..span.end_byte)
+                .next_back()
+                .is_some_and(|(_, &end)| end > span.start_byte);
             if !overlaps_existing {
+                intervals.insert(span.start_byte, span.end_byte);
                 non_overlapping_spans.push(span);
             }
         }
+        self.finalize_spans(&mut non_overlapping_spans);
         non_overlapping_spans.sort_by_key(|span| (span.start_byte, span.end_byte));
-        if preserve_cross_label_overlaps {
-            populate_overlapping_char_offsets(text, &mut non_overlapping_spans);
-        } else {
-            populate_char_offsets(text, &mut non_overlapping_spans);
-        }
+        populate_char_offsets(text, &mut non_overlapping_spans);
         NativeDetection {
             result: EvaluationResult {
                 class_name: class_name.to_string(),
@@ -121,21 +144,13 @@ pub(crate) trait NativeRegexDetector {
 }
 
 fn populate_char_offsets(text: &str, spans: &mut [EvidenceSpan]) {
-    let mut byte_cursor = 0;
-    let mut char_cursor = 0;
-    for span in spans {
-        char_cursor += text[byte_cursor..span.start_byte].chars().count();
-        span.start_char = char_cursor;
-        char_cursor += text[span.start_byte..span.end_byte].chars().count();
-        span.end_char = char_cursor;
-        byte_cursor = span.end_byte;
-    }
-}
-
-fn populate_overlapping_char_offsets(text: &str, spans: &mut [EvidenceSpan]) {
-    for span in spans {
-        span.start_char = text[..span.start_byte].chars().count();
-        span.end_char = text[..span.end_byte].chars().count();
+    let ranges = spans
+        .iter()
+        .map(|span| (span.start_byte, span.end_byte))
+        .collect::<Vec<_>>();
+    for (span, (start, end)) in spans.iter_mut().zip(evidence::char_offsets(text, &ranges)) {
+        span.start_char = start;
+        span.end_char = end;
     }
 }
 

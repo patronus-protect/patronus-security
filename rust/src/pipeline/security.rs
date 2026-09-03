@@ -209,29 +209,6 @@ fn l1_scan_result_with_duration(
     scan_result(category, model, result, vec![layer])
 }
 
-fn timed_into_scan_result<F>(
-    category: SecurityCategory,
-    model: impl Into<String>,
-    layer_type: &str,
-    evaluate: F,
-) -> SecurityScanResult
-where
-    F: FnOnce() -> EvaluationResult,
-{
-    let model = model.into();
-    let started = Instant::now();
-    match catch_unwind(AssertUnwindSafe(evaluate)) {
-        Ok(output) => l1_scan_result_with_duration(
-            category,
-            model,
-            layer_type,
-            output,
-            started.elapsed().as_secs_f64() * 1000.0,
-        ),
-        Err(payload) => scanner_error_scan_result(category, model, panic_message(payload)),
-    }
-}
-
 fn timed_native_regex_scan_result<T: NativeRegexDetector>(
     category: SecurityCategory,
     model: impl Into<String>,
@@ -240,7 +217,11 @@ fn timed_native_regex_scan_result<T: NativeRegexDetector>(
     execution: &ScanExecution,
 ) -> SecurityScanResult {
     timed_native_detection_scan_result(category, model, text, || {
-        detector.detect_with_rule_filter(text, |rule_id| execution.allows_rule(rule_id))
+        detector.detect_with_options(
+            text,
+            |rule_id| execution.allows_rule(rule_id),
+            execution.gates().explain,
+        )
     })
 }
 
@@ -270,26 +251,6 @@ where
         }
         Err(payload) => scanner_error_scan_result(category, model, panic_message(payload)),
     }
-}
-
-fn timed_native_injection_scan_result<F>(
-    category: SecurityCategory,
-    model: impl Into<String>,
-    text: &str,
-    evaluate: F,
-) -> SecurityScanResult
-where
-    F: Fn(&str) -> EvaluationResult,
-{
-    let model = model.into();
-    timed_native_detection_scan_result(category, model.clone(), text, || {
-        let result = evaluate(text);
-        if result.class_name == "safe" {
-            return signal::detection_from_signals(result, text, Vec::new(), None);
-        }
-        let signals = signal::native_signals(&model, text, &evaluate);
-        signal::detection_from_signals(result, text, signals, Some(signal::native_registry_id()))
-    })
 }
 
 fn scanner_error_scan_result(
@@ -805,8 +766,8 @@ impl SecurityGateway {
                             $model,
                             text.len(),
                             || {
-                                timed_into_scan_result(category, $model, "native", || {
-                                    pipe.evaluate(text)
+                                timed_native_detection_scan_result(category, $model, text, || {
+                                    pipe.detect(text)
                                 })
                             },
                         ));
@@ -827,12 +788,9 @@ impl SecurityGateway {
                             $model,
                             text.len(),
                             || {
-                                timed_native_injection_scan_result(
-                                    category,
-                                    $model,
-                                    text,
-                                    |candidate| pipe.evaluate(candidate),
-                                )
+                                timed_native_detection_scan_result(category, $model, text, || {
+                                    pipe.detect(text)
+                                })
                             },
                         ));
                     }

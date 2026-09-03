@@ -113,6 +113,10 @@ def _execution_gates_json(execution_gates):
         raise ValueError("execution_gates must be a dict")
 
     normalized = {"levels": {}, "models": {}, "rules": {}}
+    if "explain" in execution_gates:
+        if not isinstance(execution_gates["explain"], bool):
+            raise ValueError("execution_gates['explain'] must be a bool")
+        normalized["explain"] = execution_gates["explain"]
     levels = execution_gates.get("levels", {})
     models = execution_gates.get("models", execution_gates.get("model_areas", {}))
     rules = execution_gates.get("rules", {})
@@ -369,7 +373,7 @@ class SecurityGateway:
     def set_execution_gates(self, execution_gates: dict | None):
         """Replace the gate matrix used by subsequent scan calls.
 
-        Pass `None` to reset to the default all-enabled matrix. The matrix
+        Pass `None` to reset to shared defaults (credentials/secrets-only DLP). The matrix
         accepts `levels` and `models` dictionaries; model keys match result
         `model` values such as `native:mcp_runtime_risk`.
         """
@@ -525,7 +529,7 @@ class SecurityGateway:
 
         Note: the classifier and native L1 phases temporarily replace the
         execution gate matrix to isolate individual scanners and reset it to
-        the default all-enabled matrix afterwards.
+        the shared default matrix afterwards.
         """
         from . import benchmark
 

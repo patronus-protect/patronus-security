@@ -458,7 +458,8 @@ def main() -> int:
         try:
             if not hasattr(gateways, "value"):
                 gateways.value = SecurityGateway(
-                    categories=["pii", "dlp"], max_level="l1", download_files=False
+                    categories=["pii", "dlp"], max_level="l1", download_files=False,
+                    execution_gates={"explain": True}
                 )
             return gateways.value.scan_categories(["pii", "dlp"], text)
         except Exception as exc:

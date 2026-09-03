@@ -137,10 +137,7 @@ impl SecurityGateway {
 
     #[pyo3(signature = (execution_gates_json=None))]
     fn set_execution_gates(&mut self, execution_gates_json: Option<&str>) -> PyResult<()> {
-        let gates = match parse_execution_gates_json(execution_gates_json)? {
-            Some(gates) => gates,
-            None => ScanGateMatrix::all_enabled(),
-        };
+        let gates = parse_execution_gates_json(execution_gates_json)?.unwrap_or_default();
         self.inner.set_execution_gates(gates);
         Ok(())
     }
@@ -396,7 +393,12 @@ fn parse_execution_gates_json(value: Option<&str>) -> PyResult<Option<ScanGateMa
         pyo3::exceptions::PyValueError::new_err("execution_gates must be a JSON object")
     })?;
 
-    let mut gates = ScanGateMatrix::all_enabled();
+    let mut gates = ScanGateMatrix::default();
+    if let Some(explain) = object.get("explain") {
+        gates.explain = explain.as_bool().ok_or_else(|| {
+            pyo3::exceptions::PyValueError::new_err("execution_gates.explain must be a boolean")
+        })?;
+    }
     if let Some(levels) = object.get("levels") {
         let levels = levels.as_object().ok_or_else(|| {
             pyo3::exceptions::PyValueError::new_err("execution_gates.levels must be an object")

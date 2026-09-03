@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use crate::threat::looks_like_secret_transfer_lower;
 use crate::EvaluationResult;
 
 pub struct SecretTransferPipeline;
@@ -15,18 +14,17 @@ impl SecretTransferPipeline {
         Self
     }
 
+    pub(crate) fn detect(&self, text: &str) -> crate::detectors::NativeDetection {
+        crate::detectors::evidence::detection_from_matches(
+            text,
+            "dlp_secret_transfer",
+            "secret_transfer",
+            crate::threat::native_matches("secret_transfer", text),
+        )
+    }
+
     pub fn evaluate(&self, text: &str) -> EvaluationResult {
-        let is_violation = looks_like_secret_transfer_lower(&text.to_lowercase());
-        let class_name = if is_violation {
-            "secret_transfer"
-        } else {
-            "safe"
-        };
-        EvaluationResult {
-            class_name: class_name.to_string(),
-            confidence: 1.0,
-            level: "L1".to_string(),
-        }
+        self.detect(text).result
     }
 
     pub fn evaluate_batch(&self, texts: &[String]) -> Vec<EvaluationResult> {

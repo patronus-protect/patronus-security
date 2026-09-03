@@ -1,15 +1,4 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use std::collections::HashSet;
-
-pub(super) fn push_variant(text: String, seen: &mut HashSet<String>, variants: &mut Vec<String>) {
-    if text.is_empty() || text.len() > 8192 {
-        return;
-    }
-    if seen.insert(text.clone()) {
-        variants.push(text);
-    }
-}
-
 pub(super) fn is_token_boundary(ch: char) -> bool {
     ch.is_whitespace()
         || matches!(
@@ -42,13 +31,7 @@ pub(super) fn token_contains_unicode_confusable(token: &str) -> bool {
     has_ascii_letter && has_confusable
 }
 
-pub(super) fn unicode_confusable_skeleton(text: &str) -> String {
-    text.chars()
-        .map(|ch| confusable_ascii(ch).unwrap_or(ch))
-        .collect()
-}
-
-fn confusable_ascii(ch: char) -> Option<char> {
+pub(super) fn confusable_ascii(ch: char) -> Option<char> {
     let cp = ch as u32;
     if (0xFF21..=0xFF3A).contains(&cp) {
         return char::from_u32(b'A' as u32 + cp - 0xFF21);
@@ -174,15 +157,6 @@ pub(super) fn remove_zero_width(text: &str) -> String {
             )
         })
         .collect()
-}
-
-pub(super) fn contains_zero_width(text: &str) -> bool {
-    text.chars().any(|ch| {
-        matches!(
-            ch,
-            '\u{200b}' | '\u{200c}' | '\u{200d}' | '\u{2060}' | '\u{feff}'
-        )
-    })
 }
 
 pub(super) fn percent_decode_lossy(text: &str) -> String {

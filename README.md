@@ -109,9 +109,9 @@ L3 instead of being tokenized again; L3 errors and timeouts degrade back to L2.
 Native-only `pii` and `dlp` do not escalate. PII L1 validates deterministic identifiers and
 anchor-bound values such as contact, payment, government, account, and employee identifiers. DLP
 L1 covers credentials and secrets plus opt-in business identifiers, internal metrics, source code,
-SQL, dumps, and logs. PII and regex-based DLP findings return exact evidence spans; native DLP
-heuristics can instead return a category finding without a span. Both can expose non-finding
-`l1_anchors` as structured context. `dynamic-pii` is the complementary GLiNER L3 pipeline for semantic entities
+SQL, dumps, and logs. All built-in L1 matchers produce source-bound components before a result;
+PII and DLP findings return evidence spans, including native operation and MCP rules. Both can expose non-finding
+`l1_anchors` as structured context when `execution_gates.explain` is enabled. `dynamic-pii` is the complementary GLiNER L3 pipeline for semantic entities
 such as people, organizations, and locations.
 
 Stable rule gates can disable one native rule without disabling its siblings:
@@ -122,7 +122,7 @@ scanner.set_execution_gates({
 })
 ```
 
-The Ark API reference profile intentionally enables only credential/secret DLP rules by default;
+Rust, Python, and the Ark API share credential/secret-only DLP rule defaults;
 broader DLP families are available through an explicit `gates.rules` profile.
 
 Read more: [Architecture](https://patronus-protect.github.io/patronus-security/concepts/architecture/) ·

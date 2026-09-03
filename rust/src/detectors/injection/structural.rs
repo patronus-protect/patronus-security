@@ -46,8 +46,8 @@ impl InjectionStructuralPipeline {
                     .map(|component| {
                         component.regex.find(clause).map(|matched| {
                             InjectionSignalComponent {
-                                component_id: component.definition.id,
-                                explanation: component.definition.explanation,
+                                component_id: component.definition.id.into(),
+                                explanation: component.definition.explanation.into(),
                                 start_byte: clause_start + matched.start(),
                                 end_byte: clause_start + matched.end(),
                                 span_precision: "exact",

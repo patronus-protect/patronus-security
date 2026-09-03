@@ -567,12 +567,16 @@ impl Default for OnnxRuntimeOptions {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 /// Caller-controlled execution gates for one scanner execution profile.
 ///
-/// Unspecified gates default to enabled. `max_level` is still enforced by
+/// Unspecified rules use the shared credentials/secrets-only DLP default;
+/// other execution gates default to enabled. Diagnostic `explain` is opt-in.
+/// `max_level` is still enforced by
 /// `ScanExecution`, so a gate can only further restrict the configured scanner.
 pub struct ScanGateMatrix {
+    /// Include bounded diagnostic anchor metadata. Disabled by default.
+    pub explain: bool,
     /// Optional L1 override. `None` means enabled.
     pub l1: Option<bool>,
     /// Optional L2 override. `None` means enabled.
@@ -583,7 +587,7 @@ pub struct ScanGateMatrix {
     /// names such as `native:mcp_runtime_risk` or `unified-v3-tool-action`.
     pub models: HashMap<String, bool>,
     /// Optional per-rule overrides keyed by stable public rule id. Missing
-    /// entries are enabled.
+    /// entries inherit the shared rule defaults.
     pub rules: HashMap<String, bool>,
     /// Request-context and prior-result conditions applied before L2 or L3.
     pub conditional: Vec<ConditionalPipelineGate>,
@@ -905,29 +909,27 @@ impl L3SchedulerPolicy {
     }
 }
 
-impl Default for ScanGateMatrix {
-    fn default() -> Self {
-        Self::all_enabled()
-    }
-}
-
 impl ScanGateMatrix {
-    /// Create a matrix where every level and model is enabled by default.
+    /// Explicitly enable all native rules, including opt-in DLP content families.
     pub fn all_enabled() -> Self {
-        Self {
-            l1: None,
-            l2: None,
-            l3: None,
-            models: HashMap::new(),
-            rules: HashMap::new(),
-            conditional: Vec::new(),
-            l3_policy: L3SchedulerPolicy::default(),
+        let mut gates = Self::default();
+        for pattern in crate::detectors::dlp::dlp::DLP_PATTERNS {
+            gates.set_rule(pattern.name, true);
         }
+        for id in [
+            "dlp_mcp_runtime_risk",
+            "dlp_mcp_policy",
+            "dlp_destructive_operation",
+        ] {
+            gates.set_rule(id, true);
+        }
+        gates
     }
 
     /// Create a matrix with explicit level gates.
     pub fn levels(l1: bool, l2: bool, l3: bool) -> Self {
         Self {
+            explain: false,
             l1: Some(l1),
             l2: Some(l2),
             l3: Some(l3),
@@ -995,7 +997,10 @@ impl ScanGateMatrix {
 
     /// Return whether a stable rule id is allowed by this matrix.
     pub fn allows_rule(&self, rule_id: &str) -> bool {
-        self.rules.get(rule_id).copied().unwrap_or(true)
+        self.rules
+            .get(rule_id)
+            .copied()
+            .unwrap_or_else(|| crate::detectors::dlp::dlp::default_rule_enabled(rule_id))
     }
 
     /// Replace the L3 worker scheduling policy.
@@ -1122,11 +1127,11 @@ pub struct ScanExecution {
 }
 
 impl ScanExecution {
-    /// Create an execution with every gate enabled up to `max_level`.
+    /// Create an execution with shared rule defaults up to `max_level`.
     pub fn new(max_level: SecurityLevel) -> Self {
         Self {
             max_level,
-            gates: ScanGateMatrix::all_enabled(),
+            gates: ScanGateMatrix::default(),
             backend: ExecutionBackend::default(),
             onnx_runtime_options: OnnxRuntimeOptions::default(),
             onnx_batch_mode: OnnxBatchMode::LazyBatches,

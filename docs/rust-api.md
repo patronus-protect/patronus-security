@@ -1038,6 +1038,8 @@ No public documentation is available yet.
 
 ```rust
 pub struct ScanGateMatrix {
+    /// Include bounded diagnostic anchor metadata. Disabled by default.
+    pub explain: bool,
     /// Optional L1 override. `None` means enabled.
     pub l1: Option<bool>,
     /// Optional L2 override. `None` means enabled.
@@ -1048,7 +1050,7 @@ pub struct ScanGateMatrix {
     /// names such as `native:mcp_runtime_risk` or `unified-v3-tool-action`.
     pub models: HashMap<String, bool>,
     /// Optional per-rule overrides keyed by stable public rule id. Missing
-    /// entries are enabled.
+    /// entries inherit the shared rule defaults.
     pub rules: HashMap<String, bool>,
     /// Request-context and prior-result conditions applied before L2 or L3.
     pub conditional: Vec<ConditionalPipelineGate>,
@@ -1059,7 +1061,9 @@ pub struct ScanGateMatrix {
 
 Caller-controlled execution gates for one scanner execution profile.
 
-Unspecified gates default to enabled. `max_level` is still enforced by
+Unspecified rules use the shared credentials/secrets-only DLP default;
+other execution gates default to enabled. Diagnostic `explain` is opt-in.
+`max_level` is still enforced by
 `ScanExecution`, so a gate can only further restrict the configured scanner.
 
 ```rust
@@ -1278,7 +1282,7 @@ Resolve request-wide defaults and a category/model override.
 pub fn all_enabled() -> Self;
 ```
 
-Create a matrix where every level and model is enabled by default.
+Explicitly enable all native rules, including opt-in DLP content families.
 
 ```rust
 pub fn levels(l1: bool, l2: bool, l3: bool) -> Self;
@@ -1373,7 +1377,7 @@ Effective execution state consumed by scan methods and model pipelines.
 pub fn new(max_level: SecurityLevel) -> Self;
 ```
 
-Create an execution with every gate enabled up to `max_level`.
+Create an execution with shared rule defaults up to `max_level`.
 
 ```rust
 pub fn with_gates(max_level: SecurityLevel, gates: ScanGateMatrix) -> Self;

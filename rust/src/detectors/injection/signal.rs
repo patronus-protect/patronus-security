@@ -10,7 +10,7 @@ use crate::detectors::NativeDetection;
 use crate::{EvaluationResult, EvidenceSpan};
 
 const ARK_NATIVE_REGISTRY_JSON: &str = include_str!("rules/ark_native_71ff48e.json");
-const SIGNAL_WINDOW_BYTES: usize = 512;
+use crate::detectors::evidence::{L1Component, L1Match};
 
 #[derive(Debug, Clone)]
 pub(crate) struct InjectionSignal {
@@ -35,14 +35,7 @@ pub(crate) struct InjectionSignal {
     pub components: Vec<InjectionSignalComponent>,
 }
 
-#[derive(Debug, Clone)]
-pub(crate) struct InjectionSignalComponent {
-    pub component_id: &'static str,
-    pub explanation: &'static str,
-    pub start_byte: usize,
-    pub end_byte: usize,
-    pub span_precision: &'static str,
-}
+pub(crate) type InjectionSignalComponent = L1Component;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub(crate) struct InjectionReference {
@@ -70,38 +63,58 @@ struct NativeRuleDefinition {
     source_file: String,
 }
 
-pub(crate) fn native_signals<F>(model: &str, text: &str, evaluate: F) -> Vec<InjectionSignal>
-where
-    F: Fn(&str) -> EvaluationResult,
-{
+pub(crate) fn native_detection(family: &str, text: &str) -> NativeDetection {
+    let matches = crate::threat::native_matches(family, text);
+    let result = EvaluationResult {
+        class_name: if matches.is_empty() { "safe" } else { family }.into(),
+        confidence: 1.0,
+        level: "L1".into(),
+    };
+    let signals = native_signals(&format!("native:{family}"), matches);
+    detection_from_signals(result, text, signals, Some(native_registry_id()))
+}
+
+pub(crate) fn native_signals(model: &str, matches: Vec<L1Match>) -> Vec<InjectionSignal> {
     let registry = native_registry();
     let definition = registry
         .rules
         .iter()
         .find(|definition| definition.model == model)
         .unwrap_or_else(|| panic!("missing injection registry entry for {model}"));
-    localized_matches(text, evaluate)
+    matches
         .into_iter()
-        .map(|(start_byte, end_byte, span_precision)| InjectionSignal {
-            rule_id: definition.id.clone(),
-            upstream_id: None,
-            family: definition.family.clone(),
-            severity: definition.severity.clone(),
-            description: definition.description.clone(),
-            source: registry.source.clone(),
-            source_revision: registry.source_revision.clone(),
-            source_license: None,
-            source_file: Some(definition.source_file.clone()),
-            provenance_weight: None,
-            evidence_tier: None,
-            candidate_only: false,
-            adaptation: None,
-            references: Vec::new(),
-            start_byte,
-            end_byte,
-            span_precision,
-            feature_kind: "rule_match",
-            components: Vec::new(),
+        .map(|matched| {
+            let range = matched.range();
+            let span_precision = if matched
+                .components
+                .iter()
+                .any(|c| c.span_precision == "transformed_source")
+            {
+                "transformed_source"
+            } else {
+                "exact"
+            };
+            InjectionSignal {
+                rule_id: definition.id.clone(),
+                upstream_id: None,
+                family: definition.family.clone(),
+                severity: definition.severity.clone(),
+                description: definition.description.clone(),
+                source: registry.source.clone(),
+                source_revision: registry.source_revision.clone(),
+                source_license: None,
+                source_file: Some(definition.source_file.clone()),
+                provenance_weight: None,
+                evidence_tier: None,
+                candidate_only: false,
+                adaptation: None,
+                references: Vec::new(),
+                start_byte: range.start,
+                end_byte: range.end,
+                span_precision,
+                feature_kind: "rule_match",
+                components: matched.components,
+            }
         })
         .collect()
 }
@@ -206,29 +219,6 @@ fn signal_json(signal: &InjectionSignal) -> Value {
     value
 }
 
-fn localized_matches<F>(text: &str, evaluate: F) -> Vec<(usize, usize, &'static str)>
-where
-    F: Fn(&str) -> EvaluationResult,
-{
-    let mut matches = candidate_clauses(text)
-        .into_iter()
-        .filter(|(start, end)| evaluate(&text[*start..*end]).class_name != "safe")
-        .map(|(start, end)| (start, end, "clause"))
-        .collect::<Vec<_>>();
-    if matches.is_empty() {
-        matches = candidate_windows(text, SIGNAL_WINDOW_BYTES)
-            .into_iter()
-            .filter(|(start, end)| evaluate(&text[*start..*end]).class_name != "safe")
-            .map(|(start, end)| (start, end, "window"))
-            .collect();
-    }
-    if matches.is_empty() && evaluate(text).class_name != "safe" {
-        matches.push((0, text.len(), "document"));
-    }
-    matches.dedup_by_key(|(start, end, _)| (*start, *end));
-    matches
-}
-
 pub(crate) fn candidate_clauses(text: &str) -> Vec<(usize, usize)> {
     let mut spans = Vec::new();
     let mut start = 0;
@@ -240,29 +230,6 @@ pub(crate) fn candidate_clauses(text: &str) -> Vec<(usize, usize)> {
     }
     push_trimmed_span(text, start, text.len(), &mut spans);
     spans
-}
-
-fn candidate_windows(text: &str, window_bytes: usize) -> Vec<(usize, usize)> {
-    if text.is_empty() {
-        return Vec::new();
-    }
-    let mut windows = Vec::new();
-    let mut start = 0;
-    while start < text.len() {
-        let mut end = (start + window_bytes).min(text.len());
-        while !text.is_char_boundary(end) {
-            end -= 1;
-        }
-        push_trimmed_span(text, start, end, &mut windows);
-        if end == text.len() {
-            break;
-        }
-        start = end.saturating_sub(window_bytes / 3);
-        while !text.is_char_boundary(start) {
-            start += 1;
-        }
-    }
-    windows
 }
 
 fn push_trimmed_span(text: &str, start: usize, end: usize, spans: &mut Vec<(usize, usize)>) {

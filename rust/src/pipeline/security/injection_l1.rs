@@ -372,11 +372,19 @@ fn merge_group(
         .flat_map(|entry| entry.candidate.features.iter().cloned())
         .collect::<Vec<_>>();
     features.sort_by(|left, right| {
-        (left.start_byte, left.end_byte, &left.feature_id).cmp(&(
-            right.start_byte,
-            right.end_byte,
-            &right.feature_id,
-        ))
+        // Keep completed rule/structural evidence before the newly exposed parts.
+        (
+            left.kind == "anchor",
+            left.start_byte,
+            left.end_byte,
+            &left.feature_id,
+        )
+            .cmp(&(
+                right.kind == "anchor",
+                right.start_byte,
+                right.end_byte,
+                &right.feature_id,
+            ))
     });
     features.dedup_by(|left, right| left.feature_id == right.feature_id);
     let candidate_only = features

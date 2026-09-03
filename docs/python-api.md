@@ -105,7 +105,7 @@ Scan text with every category configured on this gateway.
 
 Replace the gate matrix used by subsequent scan calls.
 
-Pass `None` to reset to the default all-enabled matrix. The matrix
+Pass `None` to reset to shared defaults (credentials/secrets-only DLP). The matrix
 accepts `levels` and `models` dictionaries; model keys match result
 `model` values such as `native:mcp_runtime_risk`.
 
@@ -203,4 +203,4 @@ scenario runs only when `max_level` is `l3`. Call `warmup()` first.
 
 Note: the classifier and native L1 phases temporarily replace the
 execution gate matrix to isolate individual scanners and reset it to
-the default all-enabled matrix afterwards.
+the shared default matrix afterwards.

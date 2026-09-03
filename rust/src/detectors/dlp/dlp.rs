@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use crate::detectors::anchors::{self, AnchorPattern};
 use crate::{
     detectors::{NativeMatchValidator, NativeRegexDetector},
     post_prediction::is_real_secret_assignment,
@@ -19,89 +20,111 @@ pub struct DlpPattern {
     pub span_group: Option<usize>,
 }
 
-/// Context facts for downstream DLP analysis. Anchors describe nearby content
-/// but never become findings by themselves.
-struct DlpAnchorPattern {
-    category: &'static str,
-    strength: &'static str,
-    anchor_kind: &'static str,
-    pattern: &'static str,
+/// Shared DLP rule defaults for Rust, Python, and HTTP gateway execution.
+pub(crate) fn default_rule_enabled(rule_id: &str) -> bool {
+    if !rule_id.starts_with("dlp_") {
+        return true;
+    }
+    if matches!(
+        rule_id,
+        "dlp_mcp_runtime_risk" | "dlp_mcp_policy" | "dlp_destructive_operation"
+    ) {
+        return false;
+    }
+    DLP_PATTERNS
+        .iter()
+        .find(|pattern| pattern.name == rule_id)
+        .is_none_or(|pattern| {
+            matches!(
+                pattern.entity_group,
+                "API_KEY"
+                    | "CLOUD_KEY"
+                    | "CREDENTIAL"
+                    | "CRYPTO_KEY"
+                    | "PASSWORD_HASH"
+                    | "PAYMENT_KEY"
+                    | "PRIVATE_KEY"
+                    | "SECRET_TOKEN"
+            )
+        })
 }
 
-static DLP_ANCHOR_PATTERNS: &[DlpAnchorPattern] = &[
-    DlpAnchorPattern {
+/// Context facts for downstream DLP analysis. Anchors describe nearby content
+/// but never become findings by themselves.
+static DLP_ANCHOR_PATTERNS: &[AnchorPattern] = &[
+    AnchorPattern {
         category: "credentials_secrets",
         strength: "strong",
         anchor_kind: "lexical",
         pattern: r"(?i)\b(?:passwort|kennwort|zugangsdaten|anmeldedaten|api[ _-]?(?:key|schl(?:ü|ue)ssel)|zugangs[ _-]?schl(?:ü|ue)ssel|access[ _-]?key|secret[ _-]?access[ _-]?key|access[ _-]?token|refresh[ _-]?token|auth(?:entication|orization)?[ _-]?token|client[ _-]?secret|client[ _-]?credentials|service[ _-]?account[ _-]?key|encryption[ _-]?key|master[ _-]?key|signing[ _-]?key|private[ _-]?key|secret[ _-]?key|shared[ _-]?secret|webhook[ _-]?secret|database[ _-]?password|connection[ _-]?string|database[ _-]?url|jdbc[ _-]?url|mongodb[ _-]?uri|credentials?|login[ _-]?credentials?|password|passwd|password[ _-]?hash)\b",
     },
-    DlpAnchorPattern {
+    AnchorPattern {
         category: "credentials_secrets",
         strength: "weak",
         anchor_kind: "lexical",
         pattern: r"(?i)\b(?:token|secret|schl(?:ü|ue)ssel|credential|login|pwd)\b",
     },
-    DlpAnchorPattern {
+    AnchorPattern {
         category: "credentials_secrets",
         strength: "strong",
         anchor_kind: "structural",
         pattern: r"(?m)\b(?:AWS_SECRET_ACCESS_KEY|OPENAI_API_KEY|ANTHROPIC_API_KEY|GOOGLE_API_KEY|GITHUB_TOKEN|GITLAB_TOKEN|NPM_TOKEN|SLACK_TOKEN|DB_PASSWORD|DATABASE_URL|WEBHOOK_SECRET|SIGNING_KEY|SESSION_SECRET|PRIVATE_KEY|SECRET_KEY)\b",
     },
-    DlpAnchorPattern {
+    AnchorPattern {
         category: "auth_header_cookie",
         strength: "strong",
         anchor_kind: "lexical",
         pattern: r"(?i)\b(?:authorization|proxy-authorization|bearer[ 	]+token|basic[ 	]+auth(?:entication)?|x-api-key|cookie|set-cookie|session[ _-]?(?:id|token)|jsessionid|phpsessid|auth[ _-]?cookie|csrf[ _-]?token|xsrf[ _-]?token|x-csrf-token|x-xsrf-token|signed[ _-]?url|x-amz-signature|x-goog-signature)\b",
     },
-    DlpAnchorPattern {
+    AnchorPattern {
         category: "business_record_identifier",
         strength: "strong",
         anchor_kind: "lexical",
         pattern: r"(?i)\b(?:ust[.-]?(?:idnr|id|ident(?:ifikationsnummer)?)|umsatzsteuer(?:-identifikationsnummer)?|mehrwertsteuer[ _-]?id|vat[ _-]?(?:id|number)|handelsregister(?:nummer|eintrag)|register(?:nummer|zeichen)|hr[ab]|gnr|vereinsregister(?:nummer)?|partnerschaftsregister(?:nummer)?|bsnr|betriebsstättennummer|betriebsstaettennummer|praxisnummer|aktenzeichen|geschäftszeichen|geschaeftszeichen|fallnummer|fall[ _-]?id|vorgangsnummer|vorgangs[ _-]?id|case[ _-]?(?:id|number|reference)|file[ _-]?number|vertragsnummer|vertrags[ _-]?id|contract[ _-]?(?:id|number|reference)|policynummer|policy[ _-]?number|schadennummer|leistungsfallnummer|claim[ _-]?(?:id|number|reference)|bestellnummer|auftragsnummer|order[ _-]?(?:id|number|reference)|purchase[ _-]?order|rechnungsnummer|rechnungs[ _-]?id|invoice[ _-]?(?:id|number|reference)|belegnummer|projekt(?:nummer|[ _-]?id)|project[ _-]?(?:id|number|code)|organisations[ _-]?id|unternehmens[ _-]?(?:id|kennung)|firmenkennung|mandanten[ _-]?(?:id|nummer)|tenant[ _-]?(?:id|number)|organization[ _-]?(?:id|number)|company[ _-]?(?:id|number))\b",
     },
-    DlpAnchorPattern {
+    AnchorPattern {
         category: "internal_business_metric",
         strength: "medium",
         anchor_kind: "lexical",
         pattern: r"(?i)\b(?:gehalt|jahresgehalt|bruttogehalt|grundgehalt|salary|annual[ _-]?salary|base[ _-]?salary|ebitda[ _-]?marge|ebit[ _-]?marge|rohertragsmarge|deckungsbeitrag|bruttomarge|nettomarge|gross[ _-]?margin|net[ _-]?margin|contribution[ _-]?margin|annual[ _-]?recurring[ _-]?revenue|monthly[ _-]?recurring[ _-]?revenue|arr|mrr|cash[ _-]?burn|burn[ _-]?rate|runway|umsatzplanung|umsatzprognose|revenue[ _-]?forecast|sales[ _-]?forecast|budgetplanung|planwert|istwert|forecast)\b",
     },
-    DlpAnchorPattern {
+    AnchorPattern {
         category: "internal_business_metric",
         strength: "weak",
         anchor_kind: "lexical",
         pattern: r"(?i)\b(?:marge|umsatz|rohertrag|ebitda|ebit|revenue|margin|budget|target|actuals?)\b",
     },
-    DlpAnchorPattern {
+    AnchorPattern {
         category: "source_code_config",
         strength: "strong",
         anchor_kind: "structural",
         pattern: r"(?m)^[ \t]*(?:```[A-Za-z0-9_+.-]*|#!\s*/(?:usr/)?bin/(?:env[ \t]+)?(?:bash|sh|zsh|python|ruby|node)|(?:pub[ \t]+)?(?:async[ \t]+)?(?:fn|def|function|class|interface|struct|enum)[ \t]+[A-Za-z_][A-Za-z0-9_]*|(?:from[ \t]+[A-Za-z_][A-Za-z0-9_.]*[ \t]+import|import[ \t]+[A-Za-z_$]|use[ \t]+[A-Za-z_]|package[ \t]+[A-Za-z_]|using[ \t]+[A-Za-z_.]+;)|(?:const|let|var)[ \t]+[A-Za-z_$][A-Za-z0-9_$]*[ \t]*(?::[^=\n]+)?=|\$env:[A-Za-z_][A-Za-z0-9_]*|Import-Module\b|apiVersion:[ \t]*[^\n]+|kind:[ \t]*(?:Deployment|StatefulSet|DaemonSet|Service|Secret|ConfigMap)\b|FROM[ \t]+[A-Za-z0-9._/-]+(?::[A-Za-z0-9._-]+)?$|(?:RUN|COPY|ADD|ENTRYPOINT|CMD)[ \t]+[^\n]+)$",
     },
-    DlpAnchorPattern {
+    AnchorPattern {
         category: "source_code_config",
         strength: "medium",
         anchor_kind: "lexical",
         pattern: r"(?i)\b(?:source[ 	]+code|quellcode|codebase|repository|repo|configuration[ 	]+file|config[ 	]+file|konfigurationsdatei|dockerfile|docker[ 	]+compose|kubernetes[ 	]+manifest|helm[ 	]+chart|terraform[ 	]+state)\b",
     },
-    DlpAnchorPattern {
+    AnchorPattern {
         category: "sql_database_dump",
         strength: "strong",
         anchor_kind: "structural",
         pattern: r"(?im)^[ \t]*(?:--[ \t]*(?:PostgreSQL|MySQL|MariaDB|SQLite)[ \t]+database[ \t]+dump|(?:SELECT\b[^;\n]*\bFROM\b|UPDATE\b[^;\n]*\bSET\b|INSERT[ \t]+INTO\b[^;\n]*\bVALUES\b|DELETE[ \t]+FROM\b)|CREATE[ \t]+TABLE\b|COPY[ \t]+[^\n]+[ \t]+FROM[ \t]+stdin|LOCK[ \t]+TABLES\b|PRAGMA[ \t]+foreign_keys\b|pg_dump\b|mysqldump\b)",
     },
-    DlpAnchorPattern {
+    AnchorPattern {
         category: "sql_database_dump",
         strength: "medium",
         anchor_kind: "lexical",
         pattern: r"(?i)\b(?:database[ 	]+dump|datenbank[ 	]*(?:dump|export|sicherung)|sql[ 	]+dump|schema[ 	]+dump|table[ 	]+dump|backup[ 	]+file)\b",
     },
-    DlpAnchorPattern {
+    AnchorPattern {
         category: "system_log_stacktrace",
         strength: "strong",
         anchor_kind: "structural",
-        pattern: r"(?im)^(?:Traceback \(most recent call last\):|thread '[^']+' panicked at|panic: [^\n]+|goroutine[ \t]+\d+[ \t]+\[[^\]]+\]:|Caused by:[ \t]+[^\n]+|[ \t]+at[ \t]+[A-Za-z0-9_.$<>]+\([^\n]+:\d+\)|\d{4}-\d{2}-\d{2}[T ][0-9:.+\-Z]+[ \t]+(?:ERROR|FATAL|CRITICAL)[ \t]+)",
+        pattern: r"(?im)^(?:Traceback \(most recent call last\):|thread '[^']+' panicked at|panic: [^\n]+|goroutine[ \t]+\d+[ \t]+\[[^\]]+\]:|Caused by:[ \t]+[^\n]+|[ \t]+at[ \t]+[A-Za-z0-9_.$<>]+\([^\n]+:\d+\)|\d{4}-\d{2}-\d{2}[T ][0-9:.+\-Z]+[ \t]+(?:ERROR|FATAL|CRITICAL|FEHLER|KRITISCH)[ \t]+)",
     },
-    DlpAnchorPattern {
+    AnchorPattern {
         category: "system_log_stacktrace",
         strength: "medium",
         anchor_kind: "lexical",
@@ -272,7 +295,7 @@ pub static DLP_PATTERNS: &[DlpPattern] = &[
     },
     DlpPattern {
         name: "dlp_btc_wif",
-        pattern: r"(?:5[1-9A-HJ-NP-Za-km-z]{50}|[KL][1-9A-HJ-NP-Za-km-z]{51})",
+        pattern: r"(?P<anchor_1>5[1-9A-HJ-NP-Za-km-z]{50}|[KL][1-9A-HJ-NP-Za-km-z]{51})",
         entity_group: "CRYPTO_KEY",
         validator: None,
         span_group: None,
@@ -280,35 +303,35 @@ pub static DLP_PATTERNS: &[DlpPattern] = &[
     // ── Generische Credential-Patterns ───────────────────────────────────────
     DlpPattern {
         name: "dlp_private_key_block",
-        pattern: r"(?s)-----BEGIN\s+(?:RSA\s+|EC\s+|DSA\s+|OPENSSH\s+)?PRIVATE\s+KEY-----.*?-----END\s+(?:RSA\s+|EC\s+|DSA\s+|OPENSSH\s+)?PRIVATE\s+KEY-----",
+        pattern: r"(?s)-----BEGIN\s+(?P<anchor_2>RSA\s+|EC\s+|DSA\s+|OPENSSH\s+)?PRIVATE\s+KEY-----.*?-----END\s+(?P<anchor_1>RSA\s+|EC\s+|DSA\s+|OPENSSH\s+)?PRIVATE\s+KEY-----",
         entity_group: "PRIVATE_KEY",
         validator: None,
         span_group: None,
     },
     DlpPattern {
         name: "dlp_private_key_header",
-        pattern: r"-----BEGIN\s+(?:RSA\s+|EC\s+|DSA\s+|OPENSSH\s+)?PRIVATE\s+KEY-----",
+        pattern: r"-----BEGIN\s+(?P<anchor_1>RSA\s+|EC\s+|DSA\s+|OPENSSH\s+)?PRIVATE\s+KEY-----",
         entity_group: "PRIVATE_KEY",
         validator: None,
         span_group: None,
     },
     DlpPattern {
         name: "dlp_jwt_token",
-        pattern: r"(?:ey[a-zA-Z0-9_\-=]{10,}\.){2}[a-zA-Z0-9_\-=]{10,}",
+        pattern: r"(?P<anchor_1>ey[a-zA-Z0-9_\-=]{10,}\.){2}[a-zA-Z0-9_\-=]{10,}",
         entity_group: "SECRET_TOKEN",
         validator: None,
         span_group: None,
     },
     DlpPattern {
         name: "dlp_credential_in_url",
-        pattern: r#"(?i)[?&](?:password|passwd|secret|token|apikey|api_key|api-key)=([^\\\s&"'\]},]{4,})"#,
+        pattern: r#"(?i)[?&](?:password|passwd|passwort|kennwort|secret|geheimnis|token|apikey|api_key|api-key)=([^\\\s&"'\]},]{4,})"#,
         entity_group: "CREDENTIAL",
         validator: Some(is_unredacted_url_credential),
         span_group: Some(1),
     },
     DlpPattern {
         name: "dlp_env_var_secret",
-        pattern: r"(?-i:[A-Z][A-Z0-9]*[_\-](?:SECRET(?:[_\-]ACCESS)?[_\-]?KEY|SECRET|PASSWORD|PASSWD|TOKEN|API[_\-]?KEY))\s*=\s*([^\s]{8,})",
+        pattern: r"(?-i:[A-Z][A-Z0-9]*[_\-](?:SECRET(?:[_\-]ACCESS)?[_\-]?KEY|SECRET|PASSWORD|PASSWD|PASSWORT|KENNWORT|GEHEIMNIS|TOKEN|API[_\-]?KEY))\s*=\s*([^\s]{8,})",
         entity_group: "CREDENTIAL",
         validator: Some(is_secret_value),
         span_group: Some(1),
@@ -323,7 +346,7 @@ pub static DLP_PATTERNS: &[DlpPattern] = &[
     },
     DlpPattern {
         name: "dlp_generic_credential_assignment",
-        pattern: r#"(?i)\b(?:api[ _-]?key|access[ _-]?token|refresh[ _-]?token|auth[ _-]?token|client[ _-]?secret|encryption[ _-]?key|master[ _-]?key|secret|token)\b\s*(?:=|:|\bis\b|\bist\b|\blautet\b)\s*["']?([^\s"';,}\]]{8,150})"#,
+        pattern: r#"(?i)\b(?:api[ _-]?key|access[ _-]?token|refresh[ _-]?token|auth[ _-]?token|client[ _-]?secret|encryption[ _-]?key|master[ _-]?key|api[ _-]?schl(?:ü|ue)ssel|zugangstoken|geheimnis|verschl(?:ü|ue)sselungsschl(?:ü|ue)ssel|secret|token)\b\s*(?:=|:|\bis\b|\bist\b|\blautet\b)\s*["']?([^\s"';,}\]]{8,150})"#,
         entity_group: "CREDENTIAL",
         validator: Some(is_secret_value),
         span_group: Some(1),
@@ -394,7 +417,7 @@ pub static DLP_PATTERNS: &[DlpPattern] = &[
     },
     DlpPattern {
         name: "dlp_de_facility_number_bsnr",
-        pattern: r"(?i)\b(?:BSNR|Betriebsstättennummer)\b\s*(?::|=|lautet)?\s*(\d{9})\b",
+        pattern: r"(?i)\b(?:BSNR|Betriebsst(?:ä|ae)ttennummer|(?:medical[ \t]+)?facility[ \t]+number)\b\s*(?::|=|lautet)?\s*(\d{9})\b",
         entity_group: "dlp.de.facility_number_bsnr",
         validator: None,
         span_group: Some(1),
@@ -451,7 +474,7 @@ pub static DLP_PATTERNS: &[DlpPattern] = &[
     // ── Confidential business content ───────────────────────────────────────
     DlpPattern {
         name: "dlp_internal_business_metric",
-        pattern: r"(?i)\b(?:Jahresgehalt|Bruttogehalt|Grundgehalt|Gehalt|Annual[ -]?Salary|Base[ -]?Salary|Salary|EBITDA[ -]?Marge|EBIT[ -]?Marge|Rohertragsmarge|Deckungsbeitrag|Marge|Umsatz|Rohertrag|EBITDA|EBIT|Forecast)\b(?:\s+(?:liegt|beträgt|ist|bei|von|neu|Plan))?\s*(?::|=)?\s*(?:bei\s+|von\s+)?([+\-]?\d+(?:[.\s]\d{3})*(?:,\d+)?\s*(?:%|Prozent|EUR|Euro|€|CHF|USD|Mio\.?\s*(?:EUR|Euro|€)?|TEUR))",
+        pattern: r"(?i)\b(?P<anchor_7>Jahresgehalt|Bruttogehalt|Grundgehalt|Gehalt|Annual[ -]?Salary|Base[ -]?Salary|Salary|EBITDA[ -]?Marge|EBIT[ -]?Marge|Rohertragsmarge|Deckungsbeitrag|Marge|Umsatz|Rohertrag|EBITDA|EBIT|Revenue|Gross[ -]?Margin|Net[ -]?Margin|Forecast)\b(?:\s+(?P<anchor_6>is|at|liegt|beträgt|ist|bei|von|neu|Plan))?\s*(?P<anchor_5>:|=)?\s*(?P<anchor_4>bei\s+|von\s+)?([+\-]?\d+(?P<anchor_3>[.\s]\d{3})*(?P<anchor_2>,\d+)?\s*(?:%|percent|Prozent|EUR|Euro|€|CHF|USD|Mio\.?\s*(?P<anchor_1>EUR|Euro|€)?|TEUR))",
         entity_group: "dlp.internal.business_metric",
         validator: None,
         span_group: None,
@@ -466,35 +489,35 @@ pub static DLP_PATTERNS: &[DlpPattern] = &[
     },
     DlpPattern {
         name: "dlp_source_code_fence",
-        pattern: r"(?s)```(?:[A-Za-z0-9_+.-]+)?[ \t]*\n.*?\n```",
+        pattern: r"(?s)```(?P<anchor_1>[A-Za-z0-9_+.-]+)?[ \t]*\n.*?\n```",
         entity_group: "dlp.content.source_code",
         validator: None,
         span_group: None,
     },
     DlpPattern {
         name: "dlp_source_code_statement",
-        pattern: r"(?m)^[ \t]*(?:const|let|var)\s+[A-Za-z_$][A-Za-z0-9_$]*(?:\s*:\s*[A-Za-z_$][A-Za-z0-9_$<>,.\[\] |]*)?\s*=\s*(?:new\s+)?[^;\n]{2,};[ \t]*$",
+        pattern: r"(?m)^[ \t]*(?P<anchor_3>const|let|var)\s+[A-Za-z_$][A-Za-z0-9_$]*(?P<anchor_2>\s*:\s*[A-Za-z_$][A-Za-z0-9_$<>,.\[\] |]*)?\s*=\s*(?P<anchor_1>new\s+)?[^;\n]{2,};[ \t]*$",
         entity_group: "dlp.content.source_code",
         validator: None,
         span_group: None,
     },
     DlpPattern {
         name: "dlp_source_code_python_rust_assignment",
-        pattern: r#"(?m)^[ \t]*(?:(?:let(?:\s+mut)?|static|final)\s+)?[A-Za-z_][A-Za-z0-9_]*(?:\s*:\s*[A-Za-z_][A-Za-z0-9_<>,.\[\] ]*)?\s*=\s*(?:[A-Za-z_][A-Za-z0-9_.]*\s*\([^\n]*\)|[\[{][^\n]*[\]}]|[rubf]?['"][^\n'"]+['"]|\d+)[ \t]*;?[ \t]*$"#,
+        pattern: r#"(?m)^[ \t]*(?:(?:let(?P<anchor_3>\s+mut)?|static|final)\s+)?[A-Za-z_][A-Za-z0-9_]*(?P<anchor_2>\s*:\s*[A-Za-z_][A-Za-z0-9_<>,.\[\] ]*)?\s*=\s*(?P<anchor_1>[A-Za-z_][A-Za-z0-9_.]*\s*\([^\n]*\)|[\[{][^\n]*[\]}]|[rubf]?['"][^\n'"]+['"]|\d+)[ \t]*;?[ \t]*$"#,
         entity_group: "dlp.content.source_code",
         validator: Some(is_non_placeholder_source_assignment),
         span_group: None,
     },
     DlpPattern {
         name: "dlp_source_code_declaration",
-        pattern: r"(?ms:^[ \t]*package[ \t]+[A-Za-z_][A-Za-z0-9_]*[ \t]*\r?\n(?:[^\r\n]*\r?\n){0,16}?[ \t]*(?:import(?:[ \t]+|[ \t]*\()|func[ \t]+|type[ \t]+|var[ \t]+|const[ \t]+)[^\r\n]*)|(?m:^[ \t]*(?:pub\s+)?(?:async\s+)?(?:fn|def|function|class|interface|struct|enum)\s+[A-Za-z_][A-Za-z0-9_]*(?:\s*[<(][^\n]*[>)]\s*)?\s*(?:\{|:)[ \t]*$)",
+        pattern: r"(?ms:^[ \t]*package[ \t]+[A-Za-z_][A-Za-z0-9_]*[ \t]*\r?\n(?P<anchor_7>[^\r\n]*\r?\n){0,16}?[ \t]*(?:import(?P<anchor_6>[ \t]+|[ \t]*\()|func[ \t]+|type[ \t]+|var[ \t]+|const[ \t]+)[^\r\n]*)|(?m:^[ \t]*(?P<anchor_5>pub\s+)?(?P<anchor_4>async\s+)?(?P<anchor_3>fn|def|function|class|interface|struct|enum)\s+[A-Za-z_][A-Za-z0-9_]*(?P<anchor_2>\s*[<(][^\n]*[>)]\s*)?\s*(?P<anchor_1>\{|:)[ \t]*$)",
         entity_group: "dlp.content.source_code",
         validator: None,
         span_group: None,
     },
     DlpPattern {
         name: "dlp_source_code_import",
-        pattern: r"(?m)^[ \t]*(?:from\s+[A-Za-z_][A-Za-z0-9_.]*\s+import\s+[^\n]+|import\s+(?:[A-Za-z_$][A-Za-z0-9_$.]*(?:\s+from\s+)?[^\n;]*)|use\s+[A-Za-z_][A-Za-z0-9_:{}*, ]*);?[ \t]*$",
+        pattern: r"(?m)^[ \t]*(?:from\s+[A-Za-z_][A-Za-z0-9_.]*\s+import\s+[^\n]+|import\s+(?:[A-Za-z_$][A-Za-z0-9_$.]*(?P<anchor_1>\s+from\s+)?[^\n;]*)|use\s+[A-Za-z_][A-Za-z0-9_:{}*, ]*);?[ \t]*$",
         entity_group: "dlp.content.source_code",
         validator: None,
         span_group: None,
@@ -508,28 +531,28 @@ pub static DLP_PATTERNS: &[DlpPattern] = &[
     },
     DlpPattern {
         name: "dlp_sql_multiline_statement",
-        pattern: r"(?is)\b(?:SELECT\b.*?\bFROM\b|UPDATE\b.*?\bSET\b|INSERT\s+INTO\b.*?\bVALUES\b|DELETE\s+FROM\b).*?;",
+        pattern: r"(?is)\b(?P<anchor_1>SELECT\b.*?\bFROM\b|UPDATE\b.*?\bSET\b|INSERT\s+INTO\b.*?\bVALUES\b|DELETE\s+FROM\b).*?;",
         entity_group: "dlp.content.sql",
         validator: None,
         span_group: None,
     },
     DlpPattern {
         name: "dlp_database_dump_header",
-        pattern: r"(?im)^(?:--\s*(?:PostgreSQL|MySQL|MariaDB|SQLite)\s+database\s+dump|PRAGMA\s+foreign_keys\s*=\s*[^;\n]+;?|CREATE\s+TABLE\s+[^\n(]+\s*\([^;]+\);)",
+        pattern: r"(?im)^(?:--\s*(?P<anchor_1>PostgreSQL|MySQL|MariaDB|SQLite)\s+database\s+dump|PRAGMA\s+foreign_keys\s*=\s*[^;\n]+;?|CREATE\s+TABLE\s+[^\n(]+\s*\([^;]+\);)",
         entity_group: "dlp.content.database_dump",
         validator: None,
         span_group: None,
     },
     DlpPattern {
         name: "dlp_stacktrace_block",
-        pattern: r"(?im)^(?:Traceback \(most recent call last\):|[^\n]*(?:Error|Exception|FATAL)[^\n]*)\n(?:[ \t]+(?:File |at |\.\.\.)[^\n]*\n?){1,20}",
+        pattern: r"(?im)^(?:Traceback \(most recent call last\):|[^\n]*(?P<anchor_2>Error|Exception|FATAL|Fehler|Ausnahme)[^\n]*)\n(?:[ \t]+(?P<anchor_1>File |at |\.\.\.)[^\n]*\n?){1,20}",
         entity_group: "dlp.content.system_log",
         validator: None,
         span_group: None,
     },
     DlpPattern {
         name: "dlp_structured_system_log",
-        pattern: r"(?im)^\d{4}-\d{2}-\d{2}[T ][0-9:.+\-Z]+[ \t]+(?:ERROR|FATAL|CRITICAL)[ \t]+[^\n]+(?:\n\d{4}-\d{2}-\d{2}[T ][0-9:.+\-Z]+[ \t]+(?:ERROR|FATAL|CRITICAL)[ \t]+[^\n]+){0,20}",
+        pattern: r"(?im)^\d{4}-\d{2}-\d{2}[T ][0-9:.+\-Z]+[ \t]+(?P<anchor_2>ERROR|FATAL|CRITICAL|FEHLER|KRITISCH)[ \t]+[^\n]+(?:\n\d{4}-\d{2}-\d{2}[T ][0-9:.+\-Z]+[ \t]+(?P<anchor_1>ERROR|FATAL|CRITICAL|FEHLER|KRITISCH)[ \t]+[^\n]+){0,20}",
         entity_group: "dlp.content.system_log",
         validator: None,
         span_group: None,
@@ -555,15 +578,8 @@ fn is_secret_value(candidate: &str) -> bool {
         .chars()
         .next()
         .is_some_and(|first| value.chars().any(|character| character != first));
-    let has_known_provider_prefix = [
-        "sk-proj-", "ghp_", "sk_live_", "sk_test_", "rk_live_", "rk_test_",
-    ]
-    .iter()
-    .any(|prefix| value.starts_with(prefix));
-
     value.len() >= 4
         && has_multiple_characters
-        && !has_known_provider_prefix
         && !references_secret_storage
         && !matches!(
             value.as_str(),
@@ -771,41 +787,33 @@ impl NativeRegexDetector for DlpPipeline {
         true
     }
 
-    fn details(&self, text: &str) -> std::collections::HashMap<String, serde_json::Value> {
-        let mut anchors = self
-            .anchor_regexes
+    fn finalize_spans(&self, spans: &mut Vec<crate::EvidenceSpan>) {
+        let provider_spans = spans
             .iter()
-            .zip(DLP_ANCHOR_PATTERNS)
-            .flat_map(|(regex, definition)| {
-                regex.find_iter(text).map(move |matched| {
-                    serde_json::json!({
-                        "kind": "anchor",
-                        "anchor_kind": definition.anchor_kind,
-                        "category": definition.category,
-                        "strength": definition.strength,
-                        "text": matched.as_str(),
-                        "start_byte": matched.start(),
-                        "end_byte": matched.end(),
-                        "start_char": text[..matched.start()].chars().count(),
-                        "end_char": text[..matched.end()].chars().count(),
-                    })
-                })
+            .filter(|span| {
+                matches!(
+                    span.label.as_str(),
+                    "API_KEY" | "CLOUD_KEY" | "PAYMENT_KEY" | "CRYPTO_KEY" | "PRIVATE_KEY"
+                )
             })
-            .collect::<Vec<_>>();
-        anchors.sort_by_key(|anchor| {
-            (
-                anchor["start_byte"].as_u64().unwrap_or_default(),
-                anchor["end_byte"].as_u64().unwrap_or_default(),
-            )
+            .map(|span| (span.start_byte, span.end_byte))
+            .collect::<std::collections::HashSet<_>>();
+        let token_spans = spans
+            .iter()
+            .filter(|span| span.label == "SECRET_TOKEN")
+            .map(|span| (span.start_byte, span.end_byte))
+            .collect::<std::collections::HashSet<_>>();
+        spans.retain(|span| {
+            let range = (span.start_byte, span.end_byte);
+            match span.label.as_str() {
+                "CREDENTIAL" => !provider_spans.contains(&range) && !token_spans.contains(&range),
+                "SECRET_TOKEN" => !provider_spans.contains(&range),
+                _ => true,
+            }
         });
+    }
 
-        if anchors.is_empty() {
-            std::collections::HashMap::new()
-        } else {
-            std::collections::HashMap::from([(
-                "l1_anchors".to_string(),
-                serde_json::Value::Array(anchors),
-            )])
-        }
+    fn details(&self, text: &str) -> std::collections::HashMap<String, serde_json::Value> {
+        anchors::details(text, &self.anchor_regexes, DLP_ANCHOR_PATTERNS)
     }
 }

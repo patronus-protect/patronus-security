@@ -151,11 +151,25 @@ Candidate confidences are calibrated for Ark's bundled threshold profiles. Treat
 context of their `category`, `source`, `model`, and `operating_point`; do not compare scores across
 unrelated sources or model versions without their matching thresholds.
 
+### Native L1 components
+
+Built-in L1 matchers emit components directly from regex captures, lexical/structural
+relationships, or decoded payloads. PII and DLP expose them under
+`layers[].details.matched_rules[].components`, alongside the rule ID and finding range.
+Components include `component_id`, `explanation`, `start_byte`, `end_byte`, and
+`span_precision`. Contextual identifiers retain an anchor prefix/suffix and the validated
+value. Injection's candidate features retain a complete `rule_match` plus its `anchor`
+components; structural producer features retain their `structural` kind. Anchor decomposition
+does not multiply the completed rule's scoring weight.
+
+`exact` refers to original-text offsets, including mapped Unicode normalization.
+`transformed_source` identifies the source container of a decoded payload when a narrower
+character mapping is unavailable; the explanation identifies the decoded match.
+
 ### Evidence spans
 
-Native PII findings, regex-based DLP findings, registered native injection findings, and
-`dynamic-pii` entities populate `evidence_spans` with offsets. Other native DLP producers can
-return a category finding without a span:
+Native PII, all built-in DLP producers, accepted native Injection findings, and
+`dynamic-pii` entities populate `evidence_spans` with original-text offsets:
 
 ```python
 for span in result["evidence_spans"]:
@@ -166,8 +180,15 @@ Each span carries the matched `label`, the matched `text`, a `score`, and both *
 **character** offsets (`start_byte`/`end_byte`/`start_char`/`end_char`). Safe native results
 leave `evidence_spans` empty.
 
-Native PII and DLP layers can additionally expose localized context facts under
-`details.l1_anchors`. Anchors are not findings and do not make a safe result block:
+PII spans with different labels may overlap: each matching class is retained, including a
+numeric IBAN substring that also passes the credit-card validator. The primary `class_name`
+does not enumerate every match; consume `evidence_spans` for all detected classes. Overlapping
+matches within the same PII label are deduplicated.
+
+Native PII and DLP scans do not compute or return the separate diagnostic context anchors by default.
+Enable diagnostic context explicitly with Rust `ScanGateMatrix.explain = true`, Python
+`execution_gates={"explain": True}`, or worker API `gates: {explain: true}`. Explained layers
+can expose context under `details.l1_anchors`; these anchors are not findings:
 
 ```json
 {
@@ -184,7 +205,10 @@ Native PII and DLP layers can additionally expose localized context facts under
 ```
 
 Consumers must base immediate findings on `evidence_spans` and the result decision, not on an
-anchor alone. Anchor metadata is contextual evidence for later routing or model fusion.
+anchor alone. Anchor metadata is diagnostic only and does not affect detection. Each native
+layer includes at most 12 anchors within a 4-KiB serialized metadata budget; omitted anchors
+set `details.l1_anchors_truncated` to `true`. Match text is previewed at most 96 UTF-8 bytes;
+`text_truncated: true` marks a shortened preview, while all offsets still cover the full match.
 
 Dynamic PII L3 layers expose `details.inference_groups`. Each entry identifies a stable base or
 conditional GLiNER call, its labels, the conditional rule index, and optional byte ranges inherited

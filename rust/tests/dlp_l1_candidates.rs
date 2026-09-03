@@ -9,6 +9,10 @@ use patronus_ark::{
 };
 
 fn scan(text: &str) -> SecurityScanResult {
+    scan_with_explain(text, false)
+}
+
+fn scan_with_explain(text: &str, explain: bool) -> SecurityScanResult {
     let mut scanner = SecurityGateway::with_max_level(
         vec![SecurityCategory::Dlp],
         SecurityLevel::L1,
@@ -16,6 +20,9 @@ fn scan(text: &str) -> SecurityScanResult {
         false,
     );
     scanner.warmup().unwrap();
+    let mut gates = patronus_ark::ScanGateMatrix::all_enabled();
+    gates.explain = explain;
+    scanner.set_execution_gates(gates);
     scanner
         .scan_category(SecurityCategory::Dlp, text)
         .into_iter()
@@ -618,7 +625,7 @@ fn source_sql_and_dump_rules_cover_common_unfenced_structures() {
 #[test]
 fn dlp_anchor_only_fields_remain_safe_and_expose_exact_metadata() {
     let text = "Zugangsdaten; X-API-Key; Geschäftszeichen; Umsatzprognose; Quellcode; Datenbankexport; Fehlerprotokoll";
-    let result = scan(text);
+    let result = scan_with_explain(text, true);
 
     assert_eq!(result.class_name, "safe");
     assert!(result.evidence_spans.is_empty());
@@ -667,7 +674,7 @@ fn structural_dlp_markers_are_context_without_becoming_findings() {
         "LOCK TABLES customer READ;\n",
         "Stacktrace"
     );
-    let result = scan(text);
+    let result = scan_with_explain(text, true);
 
     assert_eq!(result.class_name, "safe");
     assert!(result.evidence_spans.is_empty());
@@ -701,11 +708,15 @@ fn german_and_english_dlp_anchor_variants_cover_existing_rule_contexts() {
         "Deckungsbeitrag; gross margin; recurring revenue; burn rate; ",
         "Konfigurationsdatei; Kubernetes manifest; database dump; Crash Log"
     );
-    let result = scan(text);
-
-    assert_eq!(result.class_name, "safe");
-    let categories = anchors(&result)
+    // Each variant is independently explainable; long combined inputs may be truncated.
+    let results = text
+        .split("; ")
+        .map(|part| scan_with_explain(part, true))
+        .collect::<Vec<_>>();
+    assert!(results.iter().all(|result| result.class_name == "safe"));
+    let categories = results
         .iter()
+        .flat_map(anchors)
         .map(|anchor| anchor["category"].as_str().unwrap())
         .collect::<BTreeSet<_>>();
     assert_eq!(
@@ -725,11 +736,63 @@ fn german_and_english_dlp_anchor_variants_cover_existing_rule_contexts() {
 #[test]
 fn broad_dlp_words_are_weak_context_not_findings() {
     let text = "Token Secret Schlüssel Login Marge Umsatz Revenue Budget Target Actual";
-    let result = scan(text);
+    let result = scan_with_explain(text, true);
 
     assert_eq!(result.class_name, "safe");
     assert!(result.evidence_spans.is_empty());
     for anchor in anchors(&result) {
         assert_eq!(anchor["strength"], "weak", "{anchor:#?}");
     }
+}
+
+#[test]
+fn dense_context_is_absent_by_default_and_bounded_when_explained() {
+    let text = "token ".repeat(64_000);
+    let result = scan(&text);
+    assert_eq!(result.class_name, "safe");
+    assert!(result.evidence_spans.is_empty());
+    assert!(!result.layers[0].details.contains_key("l1_anchors"));
+    assert!(serde_json::to_vec(&result.layers[0].details).unwrap().len() < 4096);
+    let explained = scan_with_explain(&text, true);
+    assert_eq!(explained.layers[0].details["l1_anchors_truncated"], true);
+    assert!(
+        serde_json::to_vec(&explained.layers[0].details)
+            .unwrap()
+            .len()
+            <= 4096
+    );
+}
+
+#[test]
+fn provider_prefix_does_not_suppress_a_real_password() {
+    assert_span(
+        &scan("password = ghp_shortButRealPassword"),
+        "CREDENTIAL",
+        "ghp_shortButRealPassword",
+    );
+    let token = "ghp_abcdefghijklmnopqrstuvwxyz0123456789";
+    let result = scan(&format!("password = {token}"));
+    assert_span(&result, "SECRET_TOKEN", token);
+    assert!(!result
+        .evidence_spans
+        .iter()
+        .any(|span| span.label == "CREDENTIAL" && span.text == token));
+    let scanner = SecurityGateway::with_max_level(
+        vec![SecurityCategory::Dlp],
+        SecurityLevel::L1,
+        None,
+        false,
+    );
+    let mut gates = patronus_ark::ScanGateMatrix::default();
+    gates.set_rule("dlp_github_token", false);
+    scanner.set_execution_gates(gates);
+    let results = scanner.scan_category(SecurityCategory::Dlp, &format!("password = {token}"));
+    assert_span(
+        results
+            .iter()
+            .find(|result| result.model == "native:dlp")
+            .unwrap(),
+        "CREDENTIAL",
+        token,
+    );
 }

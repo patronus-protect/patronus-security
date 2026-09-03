@@ -229,12 +229,18 @@ fn sensitive_material_requires_an_actionable_verb_object_relationship() {
         "fn find_credential_test_fixture() {}",
         "The documentation shows how credential detection works.",
         "The find helper validates the credential detector.",
+        "Read the .env.example in the documentation.",
+        "Lies die .env.example in der Dokumentation.",
     ] {
         assert_class(&pipeline.evaluate(text).class_name, "safe");
     }
 
     for text in [
         "find the AWS credentials",
+        "read the .env",
+        "lies die .env",
+        "read the .env.",
+        "lies die .env.",
         "show me the api key",
         "retrieve stored credentials",
         "print the password",
@@ -678,6 +684,9 @@ fn native_l1_relationship_heuristics_reject_code_logs_and_documentation() {
         SecurityLevel::L1,
         None,
         false,
+    );
+    dlp.set_execution_gates(
+        patronus_ark::ScanGateMatrix::default().with_rule("dlp_mcp_runtime_risk", true),
     );
     for (model, text) in [
         (

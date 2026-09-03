@@ -34,17 +34,26 @@ result shapes may be breaking for downstream users, and is called out explicitly
   staff-code, snake-case, OCR-field, and structured `EMP-*` variants while preserving existing
   customer, student, tax, and unanchored build-ID negatives.
 - Added stable per-rule execution gates through Rust, Python, and Ark API configuration. Missing
-  rule IDs remain enabled; PII/DLP patterns use `pii_*`/`dlp_*` IDs and Injection uses its existing
+  rule IDs inherit shared defaults; PII/DLP patterns use `pii_*`/`dlp_*` IDs and Injection uses its existing
   `ark.injection.*` IDs.
 - Added a version-pinned native injection rule catalog derived from selected Prompt Armor rules.
   Catalog findings expose stable Ark/upstream rule IDs, exact byte and character spans, source
   revision, licence, family, severity, and descriptions. The first catalog closes high-specificity
   override, instruction-leak, boundary, Markdown exfiltration, and ES/FR/PT gaps without importing
   Prompt Armor's runtime or thresholds.
-- Registered all 18 existing native injection detectors in the same `InjectionSignal` evidence
-  contract. Positive findings now expose stable Ark rule IDs, source revision, family, severity,
-  explanations, localized candidate spans, and explicit clause/window span precision while
-  retaining the existing separately gateable scanner model names.
+- Replaced the legacy Boolean L1 recognition/localization path with direct source-bound
+  components for all 18 native Injection families and the five DLP operation/MCP producers.
+  Regex, lexical, ordered-token and structural rules share the evidence contract; public
+  classifications are projections of those matches. PII/DLP findings retain anchor/value
+  components, and MCP retains tool/argument evidence. Existing rule/model gate IDs are preserved.
+- Added complete bilingual reachability fixtures for all 39 PII and 59 DLP regex rules, native
+  Injection families and MCP policy entries. Filled German/English gaps in contextual government
+  identifiers, credential fields, jailbreak modes and agentic relations. Technical formats remain
+  language-neutral. Normalized UTF-8 offsets map back to source; decoded containers are marked
+  explicitly when exact decoded-character mapping is unavailable.
+- Preserve overlapping PII findings across different labels; deduplicate overlaps only within
+  the same label. Optional `explain` gates bounded diagnostic context anchors, not detection
+  or the source-bound components of matched rules.
 - Added four source-derived, high-precision injection relationships for sensitive-path exfiltration,
   authority-issued replacement instructions, decode-then-execute directives, and delimited
   replacement actions. Each finding retains its pinned Pipelock or PromptInject source and any
@@ -70,7 +79,7 @@ result shapes may be breaking for downstream users, and is called out explicitly
   carrying the matching final source-pipeline class. Base labels stay stable, duplicate labels are
   removed from conditional calls, final L3 source classes supersede provisional L1/L2 classes,
   and duplicate entity spans keep the highest score across inference groups.
-- The reference Ark API DLP profile now enables credentials, secrets, authentication material,
+- The shared Rust/Python/Ark API DLP profile now enables credentials, secrets, authentication material,
   and sensitive-transfer context by default while gating broader business identifiers, metrics,
   source/SQL/dump/log content, MCP/runtime policy, and destructive operations behind explicit
   model/rule opt-ins.

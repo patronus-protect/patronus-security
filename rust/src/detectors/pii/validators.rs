@@ -95,7 +95,8 @@ pub fn card_expiry(s: &str) -> bool {
 }
 
 pub fn bic(s: &str) -> bool {
-    matches!(s.len(), 8 | 11)
+    s.is_ascii()
+        && matches!(s.len(), 8 | 11)
         && s[..4].chars().all(|ch| ch.is_ascii_alphabetic())
         && s[4..6].chars().all(|ch| ch.is_ascii_alphabetic())
         && s[6..].chars().all(|ch| ch.is_ascii_alphanumeric())

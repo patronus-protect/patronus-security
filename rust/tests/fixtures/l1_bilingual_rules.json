@@ -1,0 +1,688 @@
+[
+  {
+    "category": "pii",
+    "rule_id": "pii_email",
+    "de": "E-Mail: ada@example.com",
+    "en": "Email: ada@example.com",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_ipv4",
+    "de": "IP: 203.0.113.42",
+    "en": "IP: 203.0.113.42",
+    "language_neutral": true
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_ipv6_full",
+    "de": "Adresse: 2001:0db8:85a3:0000:0000:8a2e:0370:7334",
+    "en": "Address: 2001:0db8:85a3:0000:0000:8a2e:0370:7334",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_ipv6_compressed",
+    "de": "Adresse: 2001:db8::1",
+    "en": "Address: 2001:db8::1",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_ipv6_loopback",
+    "de": "Adresse: ::ffff:c000:0280",
+    "en": "Address: ::ffff:c000:0280",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_phone_international",
+    "de": "Telefon: +491701234567",
+    "en": "Phone: +491701234567",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_phone_de",
+    "de": "Telefon: +49 1701234567",
+    "en": "Phone: +49 1701234567",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_phone_de_national_context",
+    "de": "Telefon: 030 12345678",
+    "en": "Phone: 030 12345678",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_phone_us",
+    "de": "Telefon: 212-555-1234",
+    "en": "Phone: 212-555-1234",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_mac_address",
+    "de": "MAC: 02:42:ac:11:00:02",
+    "en": "MAC: 02:42:ac:11:00:02",
+    "language_neutral": true
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_iban_de",
+    "de": "IBAN: DE89370400440532013000",
+    "en": "IBAN: DE89370400440532013000",
+    "language_neutral": true
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_iban_generic",
+    "de": "IBAN: GB82WEST12345698765432",
+    "en": "IBAN: GB82WEST12345698765432",
+    "language_neutral": true
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_credit_card",
+    "de": "Karte: 4111 1111 1111 1111",
+    "en": "Card: 4111 1111 1111 1111",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_credit_card_cvv",
+    "de": "Kartenprüfnummer: 123",
+    "en": "Card verification code: 123",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_credit_card_expiry",
+    "de": "Ablaufdatum: 12/29",
+    "en": "Expiry: 12/29",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_swift_bic_context",
+    "de": "BIC: DEUTDEFF500",
+    "en": "BIC: DEUTDEFF500",
+    "language_neutral": true
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_employee_id",
+    "de": "Personalnummer: EMP-4711",
+    "en": "Employee ID: EMP-4711",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_employee_id_ocr_field",
+    "de": "ID: HR 55019",
+    "en": "ID: HR 55019",
+    "language_neutral": true
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_employee_id_prefixed",
+    "de": "Kennung EMP-SYN-2048",
+    "en": "Identifier EMP-SYN-2048",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_customer_id",
+    "de": "Kundennummer: KD-88231",
+    "en": "Customer ID: CUST-88231",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_patient_id",
+    "de": "Patientennummer: PAT-2048",
+    "en": "Patient ID: PAT-2048",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_student_id",
+    "de": "Matrikelnummer: STU-9911",
+    "en": "Student number: STU-9911",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_applicant_id",
+    "de": "Bewerbernummer: BEW-713",
+    "en": "Applicant number: APP-713",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_username",
+    "de": "Benutzername: ada.lovelace",
+    "en": "Username: ada.lovelace",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_date_of_birth",
+    "de": "Geburtsdatum: 14.03.1985",
+    "en": "Date of birth: 14/03/1985",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_date_of_birth_written_day_first",
+    "de": "Geburtsdatum: 14. März 1985",
+    "en": "Date of birth: 14 March 1985",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_date_of_birth_written_month_first",
+    "de": "Geburtsdatum: März 14, 1985",
+    "en": "Date of birth: March 14th, 1985",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_financial_account_number",
+    "de": "Kontonummer: ACC-44001234",
+    "en": "Account number: ACC-44001234",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_steuer_id_de",
+    "de": "Steuer-ID: 86095742719",
+    "en": "Tax identification number: 86095742719",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_steuernummer_de",
+    "de": "Steuernummer: 123/456/78901",
+    "en": "German tax number: 123/456/78901",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_rentenversicherung_de",
+    "de": "Rentenversicherungsnummer: 12123456A123",
+    "en": "German pension insurance number: 12123456A123",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_health_insurance_number_de",
+    "de": "Versichertennummer: A123456789",
+    "en": "Health insurance number: A123456789",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_physician_number_lanr_de",
+    "de": "Lebenslange Arztnummer: 123456789",
+    "en": "Physician number: 123456789",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_passport_number_de",
+    "de": "Passnummer: C01X00T47",
+    "en": "Passport number: C01X00T47",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_identity_card_number_de",
+    "de": "Personalausweisnummer: L01X00T47",
+    "en": "Identity card number: L01X00T47",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_driver_license_number_de",
+    "de": "Führerscheinnummer: B072RRE2A57",
+    "en": "Driver license number: B072RRE2A57",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_kfz_kennzeichen_de",
+    "de": "Kennzeichen: B-AB 1234E",
+    "en": "Vehicle registration: B-AB 1234E",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_ssn_us",
+    "de": "US-Sozialversicherungsnummer: 123-45-6789",
+    "en": "Social security number: 123-45-6789",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_ni_uk",
+    "de": "Britische Sozialversicherungsnummer: AB123456C",
+    "en": "National insurance number: AB123456C",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_anthropic_key",
+    "de": "sk-ant-abcDEfGhIJklMNopQRsT123456",
+    "en": "sk-ant-abcDEfGhIJklMNopQRsT123456",
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_openai_key",
+    "de": "sk-proj-abcDEfGhIJklMNopQRsT123456",
+    "en": "sk-proj-abcDEfGhIJklMNopQRsT123456",
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_openai_legacy",
+    "de": "sk-aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12",
+    "en": "sk-aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12",
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_openai_svc",
+    "de": "sk-svcacct-abcDEfGhIJklMNopQRsT123456",
+    "en": "sk-svcacct-abcDEfGhIJklMNopQRsT123456",
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_huggingface",
+    "de": "hf_aB12aB12aB12aB12aB12aB12",
+    "en": "hf_aB12aB12aB12aB12aB12aB12",
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_groq_key",
+    "de": "gsk_aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12",
+    "en": "gsk_aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12",
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_xai_key",
+    "de": "xai-aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12",
+    "en": "xai-aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12",
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_replicate",
+    "de": "r8_aB12aB12aB12aB12aB12aB12",
+    "en": "r8_aB12aB12aB12aB12aB12aB12",
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_aws_access_key",
+    "de": "AKIAIOSFODNN7EXAMPLE",
+    "en": "AKIAIOSFODNN7EXAMPLE",
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_aws_secret_key",
+    "de": "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+    "en": "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_google_api_key",
+    "de": "AIzaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "en": "AIzaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_google_oauth_token",
+    "de": "ya29.aB12aB12aB12aB12aB12aB12",
+    "en": "ya29.aB12aB12aB12aB12aB12aB12",
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_gcp_client_secret",
+    "de": "GOCSPX-aB12aB12aB12aB12aB12aB12aB12",
+    "en": "GOCSPX-aB12aB12aB12aB12aB12aB12aB12",
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_github_token",
+    "de": "ghp_aB12aB12aB12aB12aB12aB12aB12aB12",
+    "en": "ghp_aB12aB12aB12aB12aB12aB12aB12aB12",
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_github_pat",
+    "de": "github_pat_aB12aB12aB12aB12aB12aB12aB12aB12aB12",
+    "en": "github_pat_aB12aB12aB12aB12aB12aB12aB12aB12aB12",
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_gitlab_pat",
+    "de": "glpat-aB12aB12aB12aB12aB12",
+    "en": "glpat-aB12aB12aB12aB12aB12",
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_npm_token",
+    "de": "npm_aB12aB12aB12aB12aB12aB12aB12aB12aB12",
+    "en": "npm_aB12aB12aB12aB12aB12aB12aB12aB12aB12",
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_stripe_key",
+    "de": "sk_live_aB12aB12aB12aB12aB12",
+    "en": "sk_live_aB12aB12aB12aB12aB12",
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_stripe_webhook",
+    "de": "whsec_aB12aB12aB12aB12aB12",
+    "en": "whsec_aB12aB12aB12aB12aB12",
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_slack_token",
+    "de": "xoxb-aB12aB12aB12aB12aB12",
+    "en": "xoxb-aB12aB12aB12aB12aB12",
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_discord_token",
+    "de": "Maaaaaaaaaaaaaaaaaaaaaaa.aBc123.aaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "en": "Maaaaaaaaaaaaaaaaaaaaaaa.aBc123.aaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_eth_private_key",
+    "de": "0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "en": "0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_btc_wif",
+    "de": "5aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "en": "5aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_private_key_block",
+    "de": "-----BEGIN PRIVATE KEY-----\nQUJDREVGR0hJSktM\n-----END PRIVATE KEY-----",
+    "en": "-----BEGIN PRIVATE KEY-----\nQUJDREVGR0hJSktM\n-----END PRIVATE KEY-----",
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_private_key_header",
+    "de": "-----BEGIN PRIVATE KEY-----",
+    "en": "-----BEGIN PRIVATE KEY-----",
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_jwt_token",
+    "de": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijklmnop",
+    "en": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijklmnop",
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_credential_in_url",
+    "de": "https://example.test?passwort=actual-secret",
+    "en": "https://example.test?password=actual-secret",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_env_var_secret",
+    "de": "DB_PASSWORT=Kx7!pQ2#vL9@rT4$",
+    "en": "DB_PASSWORD=Kx7!pQ2#vL9@rT4$",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_password_assignment",
+    "de": "Passwort: Sommer2026!",
+    "en": "Password: Summer2026!",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_generic_credential_assignment",
+    "de": "API-Schlüssel: abcDEfGhIJkl123456",
+    "en": "API key: abcDEfGhIJkl123456",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_bearer_token",
+    "de": "Authorization: Bearer abcDEfGhIJkl123456",
+    "en": "Authorization: Bearer abcDEfGhIJkl123456",
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_basic_auth",
+    "de": "Authorization: Basic YWRhOnNlY3JldC04ODQy",
+    "en": "Authorization: Basic YWRhOnNlY3JldC04ODQy",
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_signed_url_signature",
+    "de": "https://example.test?X-Amz-Signature=0123456789abcdef0123456789abcdef",
+    "en": "https://example.test?X-Amz-Signature=0123456789abcdef0123456789abcdef",
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_session_cookie",
+    "de": "Cookie: sessionid=abcDEF0123456789xyz",
+    "en": "Cookie: sessionid=abcDEF0123456789xyz",
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_csrf_token",
+    "de": "X-CSRF-Token: abcDEF0123456789xyz",
+    "en": "X-CSRF-Token: abcDEF0123456789xyz",
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_password_hash",
+    "de": "Passwort-Hash: 0123456789abcdef0123456789abcdef",
+    "en": "Password hash: 0123456789abcdef0123456789abcdef",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_url_userinfo_password",
+    "de": "postgres://dbuser:s3cr3t-value@db.internal/app",
+    "en": "postgres://dbuser:s3cr3t-value@db.internal/app",
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_de_vat_id",
+    "de": "USt-IdNr: DE123456789",
+    "en": "VAT-ID: DE123456789",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_de_commercial_register_number",
+    "de": "Handelsregister: HRB 12345",
+    "en": "Commercial register: HRB 12345",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_de_facility_number_bsnr",
+    "de": "Betriebsstättennummer: 123456789",
+    "en": "Medical facility number: 123456789",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_record_case_id",
+    "de": "Fallnummer: CASE-2048",
+    "en": "Case ID: CASE-2048",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_record_contract_id",
+    "de": "Vertragsnummer: CTR-2048",
+    "en": "Contract ID: CTR-2048",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_record_claim_id",
+    "de": "Schadennummer: CLM-2048",
+    "en": "Claim ID: CLM-2048",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_record_order_id",
+    "de": "Bestellnummer: ORD-2048",
+    "en": "Order ID: ORD-2048",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_record_invoice_id",
+    "de": "Rechnungsnummer: INV-2048",
+    "en": "Invoice ID: INV-2048",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_project_id",
+    "de": "Projektnummer: PRJ-2048",
+    "en": "Project ID: PRJ-2048",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_organization_id",
+    "de": "Unternehmens-ID: ORG-2048",
+    "en": "Organization ID: ORG-2048",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_internal_business_metric",
+    "de": "Jahresgehalt: 85000 EUR",
+    "en": "Annual salary: 85000 EUR",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_database_dump_insert",
+    "de": "INSERT INTO kunden VALUES (1, 'Ada');",
+    "en": "INSERT INTO customers VALUES (1, 'Ada');",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_source_code_fence",
+    "de": "```python\nwert = 42\n```",
+    "en": "```python\nvalue = 42\n```",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_source_code_statement",
+    "de": "const wert = berechnen(42);",
+    "en": "const value = compute(42);",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_source_code_python_rust_assignment",
+    "de": "wert = berechnen(42)",
+    "en": "value = compute(42)",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_source_code_declaration",
+    "de": "def berechnen(wert):",
+    "en": "def compute(value):",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_source_code_import",
+    "de": "from projekt import berechnen",
+    "en": "from project import compute",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_sql_statement",
+    "de": "SELECT name FROM kunden;",
+    "en": "SELECT name FROM customers;",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_sql_multiline_statement",
+    "de": "SELECT name\nFROM kunden;",
+    "en": "SELECT name\nFROM customers;",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_database_dump_header",
+    "de": "-- PostgreSQL database dump",
+    "en": "-- PostgreSQL database dump",
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_stacktrace_block",
+    "de": "Fehler\n  File \"projekt.py\", line 7\n",
+    "en": "Error\n  File \"project.py\", line 7\n",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_structured_system_log",
+    "de": "2026-09-03T12:00:00 FEHLER Zugriff fehlgeschlagen",
+    "en": "2026-09-03T12:00:00 ERROR Access failed",
+    "language_neutral": false
+  }
+]
