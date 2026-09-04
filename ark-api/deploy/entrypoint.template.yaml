@@ -2,8 +2,7 @@ server:
   bind: "0.0.0.0:8080"
 auth:
   keys:
-    - name: public-client
-      key_hash: "__PUBLIC_HASH__"
+__PUBLIC_KEYS_YAML__
 gateway:
   redis_url: __REDIS_URL_JSON__
   worker_token: "__WORKER_TOKEN__"

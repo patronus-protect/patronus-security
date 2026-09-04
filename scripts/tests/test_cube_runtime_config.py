@@ -90,6 +90,31 @@ def test_external_redis_and_shared_key_keep_worker_credentials_cube_local(tmp_pa
     assert captured.err == ""
 
 
+def test_additional_entrypoint_key_renders_distinct_hashes_without_storing_raw_value(tmp_path, root_files):
+    root = cube_root(tmp_path / "cube")
+    primary = private_file(tmp_path / "primary.key", "ab" * 32)
+    additional = private_file(tmp_path / "additional.key", "cd" * 32)
+    config.configure(root, primary, additional_key_files=[additional])
+    rendered = yaml.safe_load((root / "entrypoint.yaml").read_text())
+    assert [item["name"] for item in rendered["auth"]["keys"]] == ["public-client-1", "public-client-2"]
+    assert [item["key_hash"] for item in rendered["auth"]["keys"]] == [
+        hashlib.sha256(("ab" * 32).encode()).hexdigest(),
+        hashlib.sha256(("cd" * 32).encode()).hexdigest(),
+    ]
+    assert (root / "public-api.key").read_text() == primary.read_text()
+    assert "cd" * 32 not in (root / "entrypoint.yaml").read_text()
+
+
+def test_duplicate_entrypoint_rotation_key_is_rejected_before_runtime_files_change(tmp_path, root_files):
+    root = cube_root(tmp_path / "cube")
+    primary = private_file(tmp_path / "primary.key", "ab" * 32)
+    duplicate = private_file(tmp_path / "duplicate.key", "ab" * 32)
+    before = {path.name: path.read_bytes() for path in root.iterdir()}
+    with pytest.raises(ValueError, match="distinct"):
+        config.configure(root, primary, additional_key_files=[duplicate])
+    assert {path.name: path.read_bytes() for path in root.iterdir()} == before
+
+
 def test_local_redis_compatibility(tmp_path, root_files):
     root = cube_root(tmp_path / "cube")
     config.configure(root)

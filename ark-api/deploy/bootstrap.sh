@@ -13,7 +13,7 @@ STATE_DIR=/var/lib/patronus-cube
 CUBE_IP=10.20.0.11
 NIC=ens6
 GATEWAY=10.20.0.1
-ENTRYPOINT_KEY_FILE=
+ENTRYPOINT_KEY_FILES=()
 REDIS_URL_FILE=
 
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
@@ -170,7 +170,13 @@ fetch_config() {
 configure_secrets() {
     # Only paths pass through arguments; credential values stay in private files.
     local args=()
-    [[ -z $ENTRYPOINT_KEY_FILE ]] || args+=(--entrypoint-key-file "$ENTRYPOINT_KEY_FILE")
+    if (( ${#ENTRYPOINT_KEY_FILES[@]} > 0 )); then
+        args+=(--entrypoint-key-file "${ENTRYPOINT_KEY_FILES[0]}")
+        local additional
+        for additional in "${ENTRYPOINT_KEY_FILES[@]:1}"; do
+            args+=(--additional-entrypoint-key-file "$additional")
+        done
+    fi
     [[ -z $REDIS_URL_FILE ]] || args+=(--redis-url-file "$REDIS_URL_FILE")
     python3 "$DEPLOY_DIR/bootstrap_config.py" "$DEPLOY_DIR" "${args[@]}"
     local profiles=
@@ -277,7 +283,7 @@ while [[ $# -gt 0 ]]; do
             [[ $# -ge 2 && -n $2 ]] || die "Missing value for $1."
             case "$1" in
                 --cube-ip) CUBE_IP=$2 ;;
-                --entrypoint-key-file) ENTRYPOINT_KEY_FILE=$2 ;;
+                --entrypoint-key-file) ENTRYPOINT_KEY_FILES+=("$2") ;;
                 --redis-url-file) REDIS_URL_FILE=$2 ;;
             esac
             shift 2 ;;
@@ -290,7 +296,7 @@ case "$phase" in
     verify) validate_cube_ip; host_check; verify ;;
     help|--help|-h) printf '%s\n' \
         'Usage: sudo bash bootstrap.sh {network|deploy|verify} [--cube-ip 10.20.0.11]' \
-        'Deploy options: --entrypoint-key-file /root/shared.key --redis-url-file /root/redis.url' \
+        'Deploy options: repeat --entrypoint-key-file for zero-downtime key rotation; --redis-url-file /root/redis.url' \
         'Key file: 64 lowercase hex characters. Redis URL: redis[s]://user:password@private-host:port/0.' \
         'Input files must be root-owned and readable only by root. Omitted inputs reuse saved configuration.' \
         'Two reboots are mandatory: after network and after deploy. NIC ens6, /24, gateway 10.20.0.1.' ;;
