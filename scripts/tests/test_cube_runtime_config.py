@@ -77,7 +77,7 @@ def test_external_redis_and_shared_key_keep_worker_credentials_cube_local(tmp_pa
         workers.append(rendered["gateway"]["worker_token"])
         assert (root / "public-api.key").read_text() == shared.read_text()
         assert (root / "redis-mode").read_text() == "external\n"
-        for name in ("public-api.key", "public-api-additional.keys", "worker.key", "redis.url", "redis-mode"):
+        for name in ("public-api.key", "public-api.keys", "worker.key", "redis.url", "redis-mode"):
             assert stat.S_IMODE((root / name).stat().st_mode) == 0o600
         assert stat.S_IMODE((root / "entrypoint.yaml").stat().st_mode) == 0o400
         first_worker = (root / "worker.key").read_text()
@@ -103,8 +103,8 @@ def test_additional_entrypoint_key_renders_distinct_hashes_without_storing_raw_v
     ]
     assert (root / "public-api.key").read_text() == primary.read_text()
     assert "cd" * 32 not in (root / "entrypoint.yaml").read_text()
-    assert (root / "public-api-additional.keys").read_text() == additional.read_text()
-    assert stat.S_IMODE((root / "public-api-additional.keys").stat().st_mode) == 0o600
+    assert (root / "public-api.keys").read_text() == primary.read_text() + additional.read_text()
+    assert stat.S_IMODE((root / "public-api.keys").stat().st_mode) == 0o600
 
     # A later deploy with omitted key arguments must preserve the overlap.
     config.configure(root)
@@ -127,7 +127,41 @@ def test_explicit_primary_key_without_additions_finishes_rotation(tmp_path, root
     assert [item["key_hash"] for item in rendered["auth"]["keys"]] == [
         hashlib.sha256(("cd" * 32).encode()).hexdigest(),
     ]
-    assert (root / "public-api-additional.keys").read_text() == ""
+    assert (root / "public-api.keys").read_text() == new.read_text()
+
+
+def test_interrupted_keyring_update_is_resumed_without_explicit_key_files(tmp_path, root_files, monkeypatch):
+    root = cube_root(tmp_path / "cube")
+    old = private_file(tmp_path / "old.key", "ab" * 32)
+    new = private_file(tmp_path / "new.key", "cd" * 32)
+    config.configure(root, old, additional_key_files=[new])
+    original_write = config.write_private
+
+    def interrupt_after_keyring(path, contents, owner=0, mode=0o600):
+        if path == root / "public-api.key":
+            raise OSError("simulated interruption")
+        original_write(path, contents, owner, mode)
+
+    monkeypatch.setattr(config, "write_private", interrupt_after_keyring)
+    with pytest.raises(OSError, match="simulated interruption"):
+        config.configure(root, new)
+    assert (root / "public-api.keys").read_text() == new.read_text()
+    assert (root / "public-api.key").read_text() == old.read_text()
+
+    monkeypatch.setattr(config, "write_private", original_write)
+    config.configure(root)
+    assert (root / "public-api.key").read_text() == new.read_text()
+    rendered = yaml.safe_load((root / "entrypoint.yaml").read_text())
+    assert len(rendered["auth"]["keys"]) == 1
+
+
+def test_entrypoint_keyring_has_a_bounded_size(tmp_path, root_files):
+    root = cube_root(tmp_path / "cube")
+    primary = private_file(tmp_path / "primary.key", "00" * 32)
+    additions = [private_file(tmp_path / f"key-{index}", f"{index:064x}") for index in range(1, 65)]
+    with pytest.raises(ValueError, match="At most 64"):
+        config.configure(root, primary, additional_key_files=additions)
+    assert not (root / "public-api.keys").exists()
 
 
 def test_duplicate_entrypoint_rotation_key_is_rejected_before_runtime_files_change(tmp_path, root_files):

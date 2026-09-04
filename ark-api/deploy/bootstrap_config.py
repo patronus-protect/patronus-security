@@ -29,8 +29,8 @@ def read_secret(path):
         raise ValueError("Secret input must be a root-owned, private regular file containing one nonempty line.") from None
 
 
-def read_additional_keys(path):
-    """Read the root-only persisted rotation overlap without following links."""
+def read_keyring(path):
+    """Read the atomic root-only Fleet keyring without following links."""
     try:
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         with os.fdopen(fd, "r") as handle:
@@ -42,11 +42,11 @@ def read_additional_keys(path):
         if len(contents) > 65536 or (contents and not contents.endswith("\n")):
             raise ValueError
         values = contents.splitlines()
-        if len(values) > 64 or any(not value for value in values):
+        if not values or len(values) > 64 or any(not value for value in values):
             raise ValueError
         return [validate_token(value) for value in values]
     except (OSError, UnicodeError, ValueError):
-        raise ValueError("Persisted rotation keys must be in a root-owned, private regular file.") from None
+        raise ValueError("The Fleet keyring must be a root-owned, private regular file.") from None
 
 
 def validate_token(value):
@@ -100,17 +100,19 @@ def write_private(path, contents, owner=0, mode=0o600):
 
 def configure(root, key_file=None, redis_file=None, additional_key_files=None):
     public_path, worker_path = root / "public-api.key", root / "worker.key"
-    additional_path, redis_path = root / "public-api-additional.keys", root / "redis.url"
-    public = validate_token(read_secret(key_file or public_path)) if key_file or public_path.exists() else secrets.token_hex(32)
-    if additional_key_files is None:
-        # Omitting every key argument reuses the saved overlap. Supplying a new
-        # primary alone explicitly finishes a rotation and clears old additions.
-        additional = [] if key_file is not None else (
-            read_additional_keys(additional_path) if additional_path.exists() else []
-        )
+    keyring_path, redis_path = root / "public-api.keys", root / "redis.url"
+    if key_file is None and additional_key_files is None and keyring_path.exists():
+        public_keys = read_keyring(keyring_path)
+        public, additional = public_keys[0], public_keys[1:]
     else:
-        additional = [validate_token(read_secret(path)) for path in additional_key_files]
-    public_keys = [public] + additional
+        public = validate_token(read_secret(key_file or public_path)) if key_file or public_path.exists() else secrets.token_hex(32)
+        # A supplied primary without additions explicitly finishes a rotation.
+        additional = [] if additional_key_files is None else [
+            validate_token(read_secret(path)) for path in additional_key_files
+        ]
+        public_keys = [public] + additional
+    if len(public_keys) > 64:
+        raise ValueError("At most 64 Entrypoint keys may be active.")
     if len(set(public_keys)) != len(public_keys):
         raise ValueError("Entrypoint key files must contain distinct values.")
     worker = validate_token(read_secret(worker_path)) if worker_path.exists() else secrets.token_hex(32)
@@ -133,8 +135,10 @@ def configure(root, key_file=None, redis_file=None, additional_key_files=None):
             contents = contents.replace(key, value)
         rendered[name] = contents
     # Validate all inputs and read templates before changing any runtime file.
+    # The complete keyring is the recovery source and therefore commits first.
+    # If a later write is interrupted, the next argumentless deploy resumes it.
+    write_private(keyring_path, "".join(value + "\n" for value in public_keys))
     write_private(public_path, public + "\n")
-    write_private(additional_path, "".join(value + "\n" for value in additional))
     write_private(worker_path, worker + "\n")
     if external:
         write_private(redis_path, redis_url + "\n")
