@@ -155,6 +155,31 @@ def test_interrupted_keyring_update_is_resumed_without_explicit_key_files(tmp_pa
     assert len(rendered["auth"]["keys"]) == 1
 
 
+def test_legacy_additional_file_migrates_without_dropping_rotation_overlap(tmp_path, root_files):
+    root = cube_root(tmp_path / "cube")
+    private_file(root / "public-api.key", "ab" * 32)
+    private_file(root / "public-api-additional.keys", "cd" * 32)
+
+    config.configure(root)
+
+    assert (root / "public-api.keys").read_text() == ("ab" * 32) + "\n" + ("cd" * 32) + "\n"
+    assert not (root / "public-api-additional.keys").exists()
+    rendered = yaml.safe_load((root / "entrypoint.yaml").read_text())
+    assert len(rendered["auth"]["keys"]) == 2
+
+
+def test_empty_legacy_additional_file_migrates_as_completed_rotation(tmp_path, root_files):
+    root = cube_root(tmp_path / "cube")
+    private_file(root / "public-api.key", "ab" * 32)
+    (root / "public-api-additional.keys").write_text("")
+    (root / "public-api-additional.keys").chmod(0o600)
+
+    config.configure(root)
+
+    assert (root / "public-api.keys").read_text() == ("ab" * 32) + "\n"
+    assert not (root / "public-api-additional.keys").exists()
+
+
 def test_entrypoint_keyring_has_a_bounded_size(tmp_path, root_files):
     root = cube_root(tmp_path / "cube")
     primary = private_file(tmp_path / "primary.key", "00" * 32)

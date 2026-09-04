@@ -29,7 +29,7 @@ def read_secret(path):
         raise ValueError("Secret input must be a root-owned, private regular file containing one nonempty line.") from None
 
 
-def read_keyring(path):
+def read_keyring(path, allow_empty=False):
     """Read the atomic root-only Fleet keyring without following links."""
     try:
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
@@ -42,7 +42,7 @@ def read_keyring(path):
         if len(contents) > 65536 or (contents and not contents.endswith("\n")):
             raise ValueError
         values = contents.splitlines()
-        if not values or len(values) > 64 or any(not value for value in values):
+        if (not values and not allow_empty) or len(values) > 64 or any(not value for value in values):
             raise ValueError
         return [validate_token(value) for value in values]
     except (OSError, UnicodeError, ValueError):
@@ -101,15 +101,19 @@ def write_private(path, contents, owner=0, mode=0o600):
 def configure(root, key_file=None, redis_file=None, additional_key_files=None):
     public_path, worker_path = root / "public-api.key", root / "worker.key"
     keyring_path, redis_path = root / "public-api.keys", root / "redis.url"
+    legacy_additional_path = root / "public-api-additional.keys"
     if key_file is None and additional_key_files is None and keyring_path.exists():
         public_keys = read_keyring(keyring_path)
         public, additional = public_keys[0], public_keys[1:]
     else:
         public = validate_token(read_secret(key_file or public_path)) if key_file or public_path.exists() else secrets.token_hex(32)
         # A supplied primary without additions explicitly finishes a rotation.
-        additional = [] if additional_key_files is None else [
-            validate_token(read_secret(path)) for path in additional_key_files
-        ]
+        if additional_key_files is None:
+            additional = read_keyring(legacy_additional_path, allow_empty=True) if (
+                key_file is None and legacy_additional_path.exists()
+            ) else []
+        else:
+            additional = [validate_token(read_secret(path)) for path in additional_key_files]
         public_keys = [public] + additional
     if len(public_keys) > 64:
         raise ValueError("At most 64 Entrypoint keys may be active.")
@@ -138,6 +142,9 @@ def configure(root, key_file=None, redis_file=None, additional_key_files=None):
     # The complete keyring is the recovery source and therefore commits first.
     # If a later write is interrupted, the next argumentless deploy resumes it.
     write_private(keyring_path, "".join(value + "\n" for value in public_keys))
+    # 475e634 briefly used a separate overlap file. The atomic keyring now owns
+    # that state, so remove the obsolete raw-secret copy after its commit.
+    legacy_additional_path.unlink(missing_ok=True)
     write_private(public_path, public + "\n")
     write_private(worker_path, worker + "\n")
     if external:
