@@ -29,6 +29,26 @@ def read_secret(path):
         raise ValueError("Secret input must be a root-owned, private regular file containing one nonempty line.") from None
 
 
+def read_additional_keys(path):
+    """Read the root-only persisted rotation overlap without following links."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(fd, "r") as handle:
+            info = os.fstat(handle.fileno())
+            if (not stat.S_ISREG(info.st_mode) or info.st_uid != 0
+                    or stat.S_IMODE(info.st_mode) & 0o077 or info.st_nlink != 1):
+                raise ValueError
+            contents = handle.read(65537)
+        if len(contents) > 65536 or (contents and not contents.endswith("\n")):
+            raise ValueError
+        values = contents.splitlines()
+        if len(values) > 64 or any(not value for value in values):
+            raise ValueError
+        return [validate_token(value) for value in values]
+    except (OSError, UnicodeError, ValueError):
+        raise ValueError("Persisted rotation keys must be in a root-owned, private regular file.") from None
+
+
 def validate_token(value):
     if not re.fullmatch(r"[0-9a-f]{64}", value):
         raise ValueError("API/worker keys must contain exactly 64 lowercase hexadecimal characters.")
@@ -80,9 +100,17 @@ def write_private(path, contents, owner=0, mode=0o600):
 
 def configure(root, key_file=None, redis_file=None, additional_key_files=None):
     public_path, worker_path = root / "public-api.key", root / "worker.key"
-    redis_path = root / "redis.url"
+    additional_path, redis_path = root / "public-api-additional.keys", root / "redis.url"
     public = validate_token(read_secret(key_file or public_path)) if key_file or public_path.exists() else secrets.token_hex(32)
-    public_keys = [public] + [validate_token(read_secret(path)) for path in (additional_key_files or [])]
+    if additional_key_files is None:
+        # Omitting every key argument reuses the saved overlap. Supplying a new
+        # primary alone explicitly finishes a rotation and clears old additions.
+        additional = [] if key_file is not None else (
+            read_additional_keys(additional_path) if additional_path.exists() else []
+        )
+    else:
+        additional = [validate_token(read_secret(path)) for path in additional_key_files]
+    public_keys = [public] + additional
     if len(set(public_keys)) != len(public_keys):
         raise ValueError("Entrypoint key files must contain distinct values.")
     worker = validate_token(read_secret(worker_path)) if worker_path.exists() else secrets.token_hex(32)
@@ -106,6 +134,7 @@ def configure(root, key_file=None, redis_file=None, additional_key_files=None):
         rendered[name] = contents
     # Validate all inputs and read templates before changing any runtime file.
     write_private(public_path, public + "\n")
+    write_private(additional_path, "".join(value + "\n" for value in additional))
     write_private(worker_path, worker + "\n")
     if external:
         write_private(redis_path, redis_url + "\n")
@@ -118,7 +147,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("directory", type=Path)
     parser.add_argument("--entrypoint-key-file", type=Path)
-    parser.add_argument("--additional-entrypoint-key-file", type=Path, action="append", default=[])
+    parser.add_argument("--additional-entrypoint-key-file", type=Path, action="append")
     parser.add_argument("--redis-url-file", type=Path)
     args = parser.parse_args()
     if os.geteuid() != 0:
