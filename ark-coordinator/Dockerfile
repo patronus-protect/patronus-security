@@ -7,16 +7,28 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
-COPY Cargo.lock ./Cargo.lock
+COPY Cargo.toml Cargo.lock ./
+COPY rust/Cargo.toml ./rust/Cargo.toml
+COPY python/Cargo.toml ./python/Cargo.toml
+COPY ark-api/Cargo.toml ./ark-api/Cargo.toml
 COPY ark-coordinator/Cargo.toml ./ark-coordinator/Cargo.toml
 COPY ark-coordinator/src ./ark-coordinator/src
 
-# Keep the repository lockfile while excluding unrelated workspace sources.
-RUN printf '%s\n' \
-    '[workspace]' \
-    'members = ["ark-coordinator"]' \
-    'resolver = "2"' \
-    > Cargo.toml
+# Cargo loads every workspace manifest before selecting the Coordinator package.
+# Empty targets satisfy manifest discovery without copying ARK or model sources.
+RUN mkdir -p ark-api/src python/src rust/src rust/dev \
+    && touch \
+        ark-api/src/main.rs \
+        python/src/lib.rs \
+        rust/src/lib.rs \
+        rust/dev/all_categories_benchmark.rs \
+        rust/dev/gliner_onnx_ner_benchmark.rs \
+        rust/dev/injection_gliner_memory_smoke.rs \
+        rust/dev/injection_pair_gliner_benchmark.rs \
+        rust/dev/local_l1_l2_gliner_benchmark.rs \
+        rust/dev/ntdb_memory_smoke.rs \
+        rust/dev/ntdb_joint_v3_cache_eval.rs \
+        rust/dev/wolf_memory_smoke.rs
 
 # Build only the model-free Cube proxy. The runtime contains no ARK models,
 # worker, or Cube entrypoint.
