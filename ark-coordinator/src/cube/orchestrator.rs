@@ -39,20 +39,16 @@ impl CubeOrchestrator {
         let health_pool = Arc::downgrade(&pool);
         let health_transport = transport.clone();
         tokio::spawn(async move {
-            loop {
-                if let Some(pool) = health_pool.upgrade() {
-                    let names = pool.members();
-                    let checks = names.into_iter().map(|cube| {
-                        let pool = pool.clone();
-                        let transport = health_transport.clone();
-                        async move {
-                            pool.health(&cube.name, transport.healthy(&cube.url).await);
-                        }
-                    });
-                    futures::future::join_all(checks).await;
-                } else {
-                    break;
-                }
+            while let Some(pool) = health_pool.upgrade() {
+                let names = pool.members();
+                let checks = names.into_iter().map(|cube| {
+                    let pool = pool.clone();
+                    let transport = health_transport.clone();
+                    async move {
+                        pool.health(&cube.name, transport.healthy(&cube.url).await);
+                    }
+                });
+                futures::future::join_all(checks).await;
                 tokio::time::sleep(Duration::from_secs(5)).await;
             }
         });
