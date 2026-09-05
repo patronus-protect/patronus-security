@@ -34,7 +34,8 @@ PY
 
 install_docker() {
     if ! command -v docker >/dev/null; then
-        # shellcheck disable=SC1091 -- file exists on supported Debian/Ubuntu hosts.
+        # The file exists on supported Debian/Ubuntu hosts.
+        # shellcheck disable=SC1091
         . /etc/os-release
         [[ $ID == ubuntu && $VERSION_ID == 24.04 ]] || die 'Automatic Docker installation requires Ubuntu 24.04.'
         apt-get update
