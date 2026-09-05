@@ -9,7 +9,7 @@ on:
       - ".github/workflows/ark-coordinator-image.yml"
       - "scripts/tests/test_coordinator_deploy.py"
   push:
-    branches: [main, codex/ionos-ark-api-0.1.6]
+    branches: [main, codex/ark-coordinator-cube-fleet]
     paths:
       - "ark-coordinator/**"
       - "Cargo.*"
