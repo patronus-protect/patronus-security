@@ -9,6 +9,8 @@
 !python/src/**
 !ark-api/
 !ark-api/**
+!ark-coordinator/
+!ark-coordinator/**
 !LICENSE
 !LICENSE-COMMERCIAL.md
 !NOTICE

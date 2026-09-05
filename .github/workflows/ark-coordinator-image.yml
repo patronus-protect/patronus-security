@@ -1,0 +1,136 @@
+name: ARK Coordinator image
+
+on:
+  pull_request:
+    paths:
+      - "ark-coordinator/**"
+      - "Cargo.*"
+      - ".dockerignore"
+      - ".github/workflows/ark-coordinator-image.yml"
+      - "scripts/tests/test_coordinator_deploy.py"
+  push:
+    branches: [main, codex/ionos-ark-api-0.1.6]
+    paths:
+      - "ark-coordinator/**"
+      - "Cargo.*"
+      - ".dockerignore"
+      - ".github/workflows/ark-coordinator-image.yml"
+      - "scripts/tests/test_coordinator_deploy.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ark-coordinator-image-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.98.0
+        with:
+          components: rustfmt, clippy
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: |
+          python -m venv .venv
+          .venv/bin/pip install pytest pyyaml
+          bash -n ark-coordinator/deploy/bootstrap.sh
+          shellcheck ark-coordinator/deploy/bootstrap.sh
+          cargo fmt --check --package ark-coordinator
+          cargo clippy --locked -p ark-coordinator --all-targets -- -D warnings
+          cargo test --locked -p ark-coordinator
+          if cargo tree --locked -p ark-coordinator | tail -n +2 | grep -Eq 'ark-api|ark-distributed-protocol|patronus-ark|onnxruntime|(^| )ort( |$)'; then
+            echo "Default Coordinator build contains ARK/model dependencies" >&2
+            exit 1
+          fi
+          .venv/bin/python -m pytest scripts/tests/test_coordinator_deploy.py -q
+      - name: Validate Compose without starting services
+        env:
+          COORDINATOR_IMAGE: ghcr.io/patronus-protect/ark-coordinator:validation
+          COORDINATOR_IP: 192.0.2.30
+        run: docker compose -f ark-coordinator/deploy/compose.yaml config --quiet
+
+  publish:
+    if: github.event_name != 'pull_request'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check release version
+        run: |
+          python3 - <<'PY'
+          import tomllib
+          with open('ark-coordinator/Cargo.toml', 'rb') as handle:
+              assert tomllib.load(handle)['package']['version'] == '0.1.6'
+          PY
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        id: build
+        with:
+          context: .
+          file: ark-coordinator/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/patronus-protect/ark-coordinator:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/patronus-protect/patronus-security
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=0.1.6
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Package immutable Coordinator bootstrap
+        env:
+          COORDINATOR_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p coordinator-release
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          commit = os.environ['GITHUB_SHA']
+          image = 'ghcr.io/patronus-protect/ark-coordinator@' + os.environ['COORDINATOR_DIGEST']
+          root = Path('coordinator-release')
+          script = Path('ark-coordinator/deploy/bootstrap.sh').read_text()
+          script = script.replace('__RELEASE_COMMIT__', commit).replace('__COORDINATOR_IMAGE__', image)
+          (root / 'bootstrap.sh').write_text(script)
+          (root / 'deployment.json').write_text(json.dumps({
+              'ark_version': '0.1.6', 'commit': commit, 'image': image
+          }, indent=2) + '\n')
+          (root / 'SHA256SUMS').write_text(''.join(
+              f'{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}\n'
+              for path in sorted(root.iterdir())
+          ))
+          PY
+      - name: Publish versioned deployment assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="ark-coordinator-0.1.6-${GITHUB_SHA:0:12}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo 'Release already exists; refusing to replace immutable deployment assets.' >&2
+            exit 1
+          fi
+          gh release create "$tag" coordinator-release/* --target "$GITHUB_SHA" \
+            --title "ARK Coordinator 0.1.6 (${GITHUB_SHA:0:12})" --prerelease \
+            --notes 'Model-free Cube coordinator deployment candidate. DCD and Control Plane routing remain separate operator steps.'
+          cat coordinator-release/deployment.json >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coordinator-bootstrap-${{ github.sha }}
+          path: coordinator-release/

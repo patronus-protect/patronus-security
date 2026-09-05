@@ -116,6 +116,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "ark-coordinator"
+version = "0.1.6"
+dependencies = [
+ "axum",
+ "clap",
+ "futures",
+ "redis",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sha2",
+ "subtle",
+ "tokio",
+ "tower",
+ "tower-http 0.5.2",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
 name = "arrayref"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"

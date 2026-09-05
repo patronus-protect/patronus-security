@@ -1,0 +1,19 @@
+server:
+  bind: 0.0.0.0:8090
+  max_upload_mb: 2
+
+auth:
+  keys:
+__API_KEYS_YAML__
+
+gateway:
+  redis_url_file: /run/ark-coordinator/redis.url
+  cube_token_file: /run/ark-coordinator/cube.token
+  redis_prefix: "ark:coordinator:v1:"
+  retention_secs: 900
+  max_waiting_requests: 64
+  chunk_bytes: 4096
+  chunks_per_batch: 4
+  parent_deadline_ms: 300000
+  cubes:
+__CUBES_YAML__
