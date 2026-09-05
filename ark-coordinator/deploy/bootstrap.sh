@@ -34,6 +34,7 @@ PY
 
 install_docker() {
     if ! command -v docker >/dev/null; then
+        # shellcheck source=/etc/os-release
         . /etc/os-release
         [[ $ID == ubuntu && $VERSION_ID == 24.04 ]] || die 'Automatic Docker installation requires Ubuntu 24.04.'
         apt-get update
