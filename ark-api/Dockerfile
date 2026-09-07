@@ -16,6 +16,8 @@ COPY Cargo.toml Cargo.lock ./
 COPY rust ./rust
 COPY python ./python
 COPY ark-api ./ark-api
+COPY ark-coordinator/Cargo.toml ./ark-coordinator/Cargo.toml
+RUN mkdir -p ark-coordinator/src && touch ark-coordinator/src/lib.rs
 
 RUN cargo build --locked --release -p ark-api --bins
 
