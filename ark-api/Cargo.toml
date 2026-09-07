@@ -11,6 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 patronus-ark = { path = "../rust" }
+ark-distributed-protocol = { path = "../ark-distributed-protocol" }
 axum = { version = "0.7", features = ["multipart"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "time"] }
 tokio-stream = { version = "0.1", features = ["sync"] }

@@ -191,16 +191,26 @@ impl ExactCacheStore for RedbCacheStore {
         let Some(value) = table.get(key.as_slice()).map_err(storage_error)? else {
             return Ok(None);
         };
-        let (_, expires_at_unix_ms) = self.exact_times(value.value())?;
-        if expires_at_unix_ms <= now_unix_ms {
-            drop(value);
-            drop(table);
-            drop(read);
-            remove_key(&database, &key)?;
-            return Ok(None);
+        let result = self.exact_times(value.value()).and_then(|(_, expires)| {
+            if expires <= now_unix_ms {
+                Ok(None)
+            } else {
+                self.decode_exact(&key, value.value()).map(Some)
+            }
+        });
+        match result {
+            Ok(Some(output)) => return Ok(Some(output)),
+            Err(CacheError::InvalidRecord(error)) => {
+                eprintln!("[Cache] Discarding unreadable derived model output: {error}");
+            }
+            Err(error) => return Err(error),
+            Ok(None) => {}
         }
-        let output = self.decode_exact(&key, value.value())?;
-        Ok(Some(output))
+        drop(value);
+        drop(table);
+        drop(read);
+        remove_key(&database, &key)?;
+        Ok(None)
     }
 
     fn put(&self, key: CacheKey, value: CachedModelOutput) -> Result<(), CacheError> {
@@ -252,7 +262,7 @@ impl ExactCacheStore for RedbCacheStore {
             let (id, value) = entry.map_err(storage_error)?;
             let (_, expires_at_unix_ms) = self.similarity_times(value.value())?;
             if expires_at_unix_ms <= now_unix_ms {
-                expired_similarity.push(self.decode_similarity(id.value(), value.value())?);
+                expired_similarity.push(id.value().to_vec());
             }
         }
         drop(similarity_table);
@@ -268,25 +278,7 @@ impl ExactCacheStore for RedbCacheStore {
                 table.remove(key.as_slice()).map_err(storage_error)?;
             }
         }
-        {
-            let mut records = write
-                .open_table(SIMILARITY_RECORDS)
-                .map_err(storage_error)?;
-            let mut buckets = write
-                .open_multimap_table(SIMILARITY_BUCKETS)
-                .map_err(storage_error)?;
-            for record in &expired_similarity {
-                records
-                    .remove(record.id.as_slice())
-                    .map_err(storage_error)?;
-                for bucket in &record.bucket_keys {
-                    let bucket = self.stored_similarity_bucket(bucket);
-                    buckets
-                        .remove(bucket.as_slice(), record.id.as_slice())
-                        .map_err(storage_error)?;
-                }
-            }
-        }
+        remove_similarity_records(&write, &expired_similarity)?;
         write.commit().map_err(storage_error)?;
         Ok(expired.len() + expired_similarity.len())
     }
@@ -315,7 +307,7 @@ impl ExactCacheStore for RedbCacheStore {
             let (id, value) = entry.map_err(storage_error)?;
             let (created_at_unix_ms, _) = self.similarity_times(value.value())?;
             if created_at_unix_ms < until_unix_ms {
-                stale_similarity.push(self.decode_similarity(id.value(), value.value())?);
+                stale_similarity.push(id.value().to_vec());
             }
         }
         drop(similarity_table);
@@ -331,25 +323,7 @@ impl ExactCacheStore for RedbCacheStore {
                 table.remove(key.as_slice()).map_err(storage_error)?;
             }
         }
-        {
-            let mut records = write
-                .open_table(SIMILARITY_RECORDS)
-                .map_err(storage_error)?;
-            let mut buckets = write
-                .open_multimap_table(SIMILARITY_BUCKETS)
-                .map_err(storage_error)?;
-            for record in &stale_similarity {
-                records
-                    .remove(record.id.as_slice())
-                    .map_err(storage_error)?;
-                for bucket in &record.bucket_keys {
-                    let bucket = self.stored_similarity_bucket(bucket);
-                    buckets
-                        .remove(bucket.as_slice(), record.id.as_slice())
-                        .map_err(storage_error)?;
-                }
-            }
-        }
+        remove_similarity_records(&write, &stale_similarity)?;
         write.commit().map_err(storage_error)?;
         Ok(stale.len() + stale_similarity.len())
     }
@@ -474,6 +448,43 @@ fn initialize_tables(database: &Database) -> Result<(), CacheError> {
         .open_multimap_table(SIMILARITY_BUCKETS)
         .map_err(storage_error)?;
     write.commit().map_err(storage_error)
+}
+
+// Retention must not decrypt a value to delete it. Its old encryption key may
+// no longer be available; existing bucket links already identify its indexes.
+fn remove_similarity_records(
+    write: &redb::WriteTransaction,
+    ids: &[Vec<u8>],
+) -> Result<(), CacheError> {
+    if ids.is_empty() {
+        return Ok(());
+    }
+    let ids = ids.iter().map(Vec::as_slice).collect::<HashSet<_>>();
+    let mut records = write
+        .open_table(SIMILARITY_RECORDS)
+        .map_err(storage_error)?;
+    let mut buckets = write
+        .open_multimap_table(SIMILARITY_BUCKETS)
+        .map_err(storage_error)?;
+    let mut links = Vec::new();
+    for entry in buckets.iter().map_err(storage_error)? {
+        let (bucket, values) = entry.map_err(storage_error)?;
+        for value in values {
+            let value = value.map_err(storage_error)?;
+            if ids.contains(value.value()) {
+                links.push((bucket.value().to_vec(), value.value().to_vec()));
+            }
+        }
+    }
+    for id in ids {
+        records.remove(id).map_err(storage_error)?;
+    }
+    for (bucket, id) in links {
+        buckets
+            .remove(bucket.as_slice(), id.as_slice())
+            .map_err(storage_error)?;
+    }
+    Ok(())
 }
 
 fn remove_key(database: &Database, key: &[u8]) -> Result<(), CacheError> {
@@ -1069,7 +1080,7 @@ mod tests {
     }
 
     #[test]
-    fn encrypted_record_rejects_wrong_key_after_reopen() {
+    fn encrypted_record_with_unavailable_key_is_evicted_and_recomputed() {
         let path = temp_path("encrypted-wrong-key");
         {
             let store =
@@ -1079,7 +1090,9 @@ mod tests {
 
         let reopened =
             RedbCacheStore::open_with_encryption(&path, Some(encryption_config(4))).unwrap();
-        assert!(reopened.get(&key("chunk"), 10).is_err());
+        assert!(reopened.get(&key("chunk"), 10).unwrap().is_none());
+        reopened.put(key("chunk"), output(100)).unwrap();
+        assert!(reopened.get(&key("chunk"), 10).unwrap().is_some());
         drop(reopened);
         fs::remove_file(path).unwrap();
     }
@@ -1129,6 +1142,51 @@ mod tests {
             1
         );
         drop(store);
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn retention_after_key_change_removes_old_records_and_their_bucket_links() {
+        let path = temp_path("retention-key-change");
+        let record = SimilarityStoreRecord {
+            id: [9; 32],
+            vector_space: "space".to_string(),
+            producer_model_sha: "model".to_string(),
+            embedding: vec![1.0, 0.0],
+            heads: vec![],
+            bucket_keys: vec![b"old-bucket".to_vec()],
+            created_at_unix_ms: 10,
+            expires_at_unix_ms: 100,
+        };
+        {
+            let store =
+                RedbCacheStore::open_with_encryption(&path, Some(encryption_config(1))).unwrap();
+            store.put(key("old"), output(100)).unwrap();
+            store.put_similarity(record.clone()).unwrap();
+        }
+        let store =
+            RedbCacheStore::open_with_encryption(&path, Some(encryption_config(2))).unwrap();
+        assert_eq!(store.remove_created_before(20).unwrap(), 2);
+        assert_eq!(store.remove_created_before(20).unwrap(), 0);
+        drop(store);
+        let reopened =
+            RedbCacheStore::open_with_encryption(&path, Some(encryption_config(1))).unwrap();
+        assert!(reopened
+            .similarity_candidates(&record.bucket_keys, 20, 10)
+            .unwrap()
+            .is_empty());
+        let database = reopened.database().unwrap();
+        let read = database.begin_read().unwrap();
+        assert!(read
+            .open_multimap_table(SIMILARITY_BUCKETS)
+            .unwrap()
+            .iter()
+            .unwrap()
+            .next()
+            .is_none());
+        drop(read);
+        drop(database);
+        drop(reopened);
         fs::remove_file(path).unwrap();
     }
 

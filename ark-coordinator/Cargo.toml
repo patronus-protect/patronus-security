@@ -1,0 +1,26 @@
+[package]
+name = "ark-coordinator"
+version = "0.1.6"
+edition = "2021"
+license = "GPL-3.0-only"
+publish = false
+
+[dependencies]
+axum = { version = "0.7", features = ["multipart"] }
+clap = { version = "4", features = ["derive"] }
+futures = "0.3"
+redis = { version = "0.27", features = ["tokio-rustls-comp", "tls-rustls-webpki-roots", "connection-manager"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+sha2 = "0.10"
+subtle = "2.5"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "sync", "time"] }
+tower-http = { version = "0.5", features = ["limit", "trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+uuid = { version = "1", features = ["v4"] }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }

@@ -44,3 +44,4 @@ site/
 /ark-api/deploy/entrypoint.yaml
 /ark-api/deploy/*.key
 /ark-api/deploy/*.pem
+.patronus-security-scanner/

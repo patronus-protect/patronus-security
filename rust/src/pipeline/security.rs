@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ops::{Deref, DerefMut};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::PathBuf;
@@ -27,7 +27,7 @@ use crate::{
         NativeDetection, NativeRegexDetector,
     },
     diagnostics::PhaseMetricScope,
-    ml::ntdb_executor::NtdbExecutor,
+    ml::ntdb_executor::{NtdbExecutor, NtdbModelChunkInferences, PreparedNtdbChunk},
     pipeline::{L3Worker, RequestRegistry},
     post_prediction::filter_evidence,
     DynamicPiiConfig, EvaluationResult, ExecutionBackend, ExternalL1Detector, ExternalL1Input,
@@ -47,6 +47,126 @@ pub use ntdb_l2::{ntdb_l2_enabled_for_category, ntdb_l2_model_config_for_id, Ntd
 pub use ntdb_l2::{ntdb_l2_model_configs_for_category, ntdb_l2_scan_result};
 
 const DEFAULT_QUEUE_WORKER_COUNT: usize = 2;
+
+fn distributed_unified_l3_fingerprint(base_dir: &std::path::Path) -> Result<String, String> {
+    use std::io::Read;
+
+    let asset = crate::assets::UNIFIED_L3_ASSET;
+    let bundle_dir = base_dir.join(asset.destination_path);
+    let mut files = crate::assets::selected_pipeline_model_files(asset)
+        .into_iter()
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    for generated in ["tokenizer.mmbpe", ".patronus-revision"] {
+        if bundle_dir.join(generated).is_file() {
+            files.push(generated.to_string());
+        }
+    }
+    files.sort();
+    files.dedup();
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(b"patronus-unified-l3-assets-v1\0");
+    for relative in files {
+        let path = bundle_dir.join(&relative);
+        let file = std::fs::File::open(&path).map_err(|error| {
+            format!("failed to fingerprint L3 asset {}: {error}", path.display())
+        })?;
+        hasher.update(&(relative.len() as u64).to_le_bytes());
+        hasher.update(relative.as_bytes());
+        let mut reader = std::io::BufReader::new(file);
+        let mut buffer = [0_u8; 64 * 1024];
+        loop {
+            let read = reader.read(&mut buffer).map_err(|error| {
+                format!("failed to fingerprint L3 asset {}: {error}", path.display())
+            })?;
+            if read == 0 {
+                break;
+            }
+            hasher.update(&buffer[..read]);
+        }
+    }
+    Ok(hasher.finalize().to_hex().to_string())
+}
+
+#[cfg(test)]
+mod distributed_fingerprint_tests {
+    use super::distributed_unified_l3_fingerprint;
+
+    #[test]
+    fn unified_l3_fingerprint_tracks_selected_file_contents() {
+        let root = std::env::temp_dir().join(format!(
+            "ark-l3-fingerprint-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let bundle = root.join(crate::assets::UNIFIED_L3_ASSET.destination_path);
+        let selected =
+            crate::assets::selected_pipeline_model_files(crate::assets::UNIFIED_L3_ASSET);
+        for relative in &selected {
+            let path = bundle.join(relative);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, format!("fixture:{relative}")).unwrap();
+        }
+        std::fs::write(bundle.join(".patronus-revision"), "revision-a").unwrap();
+        let before = distributed_unified_l3_fingerprint(&root).unwrap();
+        std::fs::write(bundle.join(selected[0]), "changed").unwrap();
+        let after = distributed_unified_l3_fingerprint(&root).unwrap();
+        assert_ne!(before, after);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod distributed_plan_tests {
+    use super::*;
+
+    #[test]
+    fn tool_tags_plan_preserves_all_canonical_model_bindings() {
+        let gateway = SecurityGateway::with_max_level(
+            vec![SecurityCategory::ToolTags],
+            SecurityLevel::L2,
+            None,
+            false,
+        );
+        let execution = ScanExecution::new(SecurityLevel::L2);
+        let pipelines = gateway.distributed_l2_pipelines(&[SecurityCategory::ToolTags], &execution);
+
+        assert_eq!(pipelines.len(), 3);
+        assert!(pipelines
+            .iter()
+            .all(|pipeline| pipeline.category == SecurityCategory::ToolTags));
+        assert_eq!(
+            pipelines
+                .iter()
+                .map(|pipeline| pipeline.model_id.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "tool_tags_sink_external",
+                "tool_tags_source_sensitive",
+                "tool_tags_source_untrusted",
+            ]
+        );
+    }
+
+    #[test]
+    fn distributed_l2_plan_marks_l3_as_deferred_for_central_aggregation() {
+        let gateway = SecurityGateway::with_max_level(
+            vec![SecurityCategory::Injection],
+            SecurityLevel::L3,
+            None,
+            false,
+        );
+        let execution = ScanExecution::new(SecurityLevel::L3);
+        let inputs = [ExternalL1Input::new(
+            SecurityCategory::Injection,
+            "ordinary prose",
+        )];
+
+        let plan = gateway.plan_distributed_l2(&inputs, &serde_json::json!({}), &execution);
+
+        assert!(plan.execution.defer_l3());
+    }
+}
 
 fn run_measured_l1_detector<F>(
     category: SecurityCategory,
@@ -80,6 +200,33 @@ pub struct SecurityGateway {
     queue_sender: OnceLock<mpsc::Sender<request_queue::QueueWork>>,
 }
 
+#[derive(Debug, Clone)]
+pub struct DistributedL2Plan {
+    pub l1_results: Vec<SecurityScanResult>,
+    pub l1_failures: Vec<SecurityFailure>,
+    pub categories: Vec<SecurityCategory>,
+    pub model_ids: Vec<String>,
+    pub pipelines: Vec<DistributedL2Pipeline>,
+    pub execution: ScanExecution,
+    pub gate_results: Vec<crate::GateResult>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DistributedL2Pipeline {
+    pub pipeline_id: String,
+    pub category: SecurityCategory,
+    pub model_id: String,
+    pub public_model: String,
+    pub has_l3: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct DistributedL3Plan {
+    pub categories: Vec<SecurityCategory>,
+    pub execution: ScanExecution,
+    pub gate_results: Vec<crate::GateResult>,
+}
+
 #[doc(hidden)]
 pub struct SecurityGatewayCore {
     /// Categories configured for `scan_all`.
@@ -101,6 +248,7 @@ pub struct SecurityGatewayCore {
     queue_worker_count: AtomicUsize,
 
     ntdb_executor: Option<Mutex<NtdbExecutor>>,
+    distributed_fingerprints: OnceLock<(String, String)>,
 
     // Instantiated native rule-based pipelines
     dlp_pipeline: Option<dlp::DlpPipeline>,
@@ -389,6 +537,7 @@ impl SecurityGateway {
             dynamic_pii_config: Mutex::new(DynamicPiiConfig::default()),
             queue_worker_count: AtomicUsize::new(DEFAULT_QUEUE_WORKER_COUNT),
             ntdb_executor: None,
+            distributed_fingerprints: OnceLock::new(),
             dlp_pipeline: None,
             pii_pipeline: None,
             cross_tool_instruction_pipeline: None,
@@ -704,6 +853,280 @@ impl SecurityGateway {
     /// Return the calibrated NTDB operating point used by subsequent scans.
     pub fn ntdb_operating_point(&self) -> NtdbOperatingPoint {
         self.scan_execution().ntdb_operating_point()
+    }
+
+    /// Runtime identities used to reject incompatible distributed batches.
+    pub fn distributed_ntdb_fingerprints(&self) -> Result<(String, String), String> {
+        if let Some(fingerprints) = self.distributed_fingerprints.get() {
+            return Ok(fingerprints.clone());
+        }
+        let executor = self
+            .ntdb_executor
+            .as_ref()
+            .ok_or_else(|| "NTDB L2 runtime is not initialized".to_string())?
+            .lock()
+            .map_err(|error| format!("NTDB executor mutex poisoned: {error}"))?;
+        let (tokenizer, ntdb_models) = executor
+            .distributed_fingerprints()
+            .map_err(|error| error.to_string())?;
+        let mut models = blake3::Hasher::new();
+        models.update(b"patronus-distributed-models-v1\0");
+        models.update(ntdb_models.as_bytes());
+        models.update(&[0]);
+        if self
+            .l3_worker
+            .has_model(crate::ml::unified_onnx::UNIFIED_MODEL)
+        {
+            let base_dir = self.model_base_dir().map_err(|error| error.to_string())?;
+            models.update(distributed_unified_l3_fingerprint(&base_dir)?.as_bytes());
+        } else {
+            models.update(b"unified-l3-not-loaded");
+        }
+        let fingerprints = (tokenizer, models.finalize().to_hex().to_string());
+        let _ = self.distributed_fingerprints.set(fingerprints.clone());
+        Ok(self
+            .distributed_fingerprints
+            .get()
+            .cloned()
+            .unwrap_or(fingerprints))
+    }
+
+    /// Tokenize a document once for distributed Package-v4 execution.
+    pub fn prepare_distributed_ntdb_chunks(
+        &self,
+        text: &str,
+    ) -> Result<Vec<PreparedNtdbChunk>, String> {
+        self.ntdb_executor
+            .as_ref()
+            .ok_or_else(|| "NTDB L2 runtime is not initialized".to_string())?
+            .lock()
+            .map_err(|error| format!("NTDB executor mutex poisoned: {error}"))?
+            .prepare_chunks(text)
+            .map_err(|error| error.to_string())
+    }
+
+    /// Infer independent, pre-tokenized NTDB chunks without L1 or document aggregation.
+    pub fn infer_distributed_ntdb_chunks(
+        &self,
+        model_ids: HashSet<String>,
+        chunks: &[PreparedNtdbChunk],
+        document_chunk_count: usize,
+        operating_point: NtdbOperatingPoint,
+    ) -> Result<Vec<NtdbModelChunkInferences>, String> {
+        self.ntdb_executor
+            .as_ref()
+            .ok_or_else(|| "NTDB L2 runtime is not initialized".to_string())?
+            .lock()
+            .map_err(|error| format!("NTDB executor mutex poisoned: {error}"))?
+            .infer_prepared_chunks_for_models(
+                model_ids,
+                chunks,
+                document_chunk_count,
+                operating_point,
+            )
+            .map_err(|error| error.to_string())
+    }
+
+    /// Run immediate unified L3 inference for promoted chunks without document aggregation.
+    pub fn infer_distributed_unified_l3_chunks(
+        &self,
+        chunks: &[crate::ml::ntdb_executor::NtdbChunkInference],
+        execution: &ScanExecution,
+    ) -> Result<Vec<crate::pipeline::DistributedL3ChunkInference>, String> {
+        self.l3_worker
+            .infer_distributed_unified_chunks(chunks, execution)
+    }
+
+    /// Aggregate all unified L3 chunk outputs with the normal final result mapping.
+    pub fn aggregate_distributed_unified_l3_chunks(
+        &self,
+        chunks: &[crate::pipeline::DistributedL3ChunkInference],
+        l2_fallbacks: &[SecurityScanResult],
+        execution: &ScanExecution,
+        duration_ms: f64,
+    ) -> Result<Vec<SecurityScanResult>, String> {
+        self.l3_worker.aggregate_distributed_unified_chunks(
+            chunks,
+            l2_fallbacks,
+            execution,
+            duration_ms,
+        )
+    }
+
+    /// Aggregate all worker L2 evidence and map it through the normal gateway thresholds.
+    pub fn aggregate_distributed_ntdb_chunks(
+        &self,
+        inferred: &[NtdbModelChunkInferences],
+        categories: &[SecurityCategory],
+        execution: &ScanExecution,
+        duration_ms: f64,
+    ) -> Result<Vec<SecurityScanResult>, String> {
+        let decisions = self
+            .ntdb_executor
+            .as_ref()
+            .ok_or_else(|| "NTDB L2 runtime is not initialized".to_string())?
+            .lock()
+            .map_err(|error| format!("NTDB executor mutex poisoned: {error}"))?
+            .aggregate_chunk_inferences(inferred, execution.ntdb_operating_point())
+            .map_err(|error| error.to_string())?;
+        let configs = categories
+            .iter()
+            .copied()
+            .flat_map(|category| ntdb_l2_model_configs_for_category(execution, category))
+            .collect::<Vec<_>>();
+        Ok(decisions
+            .iter()
+            .filter_map(|decision| {
+                configs
+                    .iter()
+                    .find(|config| config.model_id == decision.model_id)
+                    .map(|config| ntdb_l2_scan_result(*config, decision, execution, duration_ms))
+            })
+            .collect())
+    }
+
+    /// Execute only the normal L1 portion with the gateway's effective configuration.
+    pub fn distributed_execution(&self) -> ScanExecution {
+        self.scan_execution()
+    }
+
+    pub fn scan_distributed_l1(
+        &self,
+        inputs: &[ExternalL1Input],
+        execution: &ScanExecution,
+    ) -> Vec<SecurityScanResult> {
+        self.scan_l1_inputs(inputs, execution)
+    }
+
+    /// Resolve canonical distributed pipeline bindings without executing scanners.
+    pub fn distributed_l2_pipelines(
+        &self,
+        categories: &[SecurityCategory],
+        execution: &ScanExecution,
+    ) -> Vec<DistributedL2Pipeline> {
+        categories
+            .iter()
+            .flat_map(|category| ntdb_l2_model_configs_for_category(execution, *category))
+            .map(|config| DistributedL2Pipeline {
+                pipeline_id: config.model_id.to_string(),
+                category: config.category,
+                model_id: config.model_id.to_string(),
+                public_model: config.public_model.to_string(),
+                has_l3: config.has_l3,
+            })
+            .collect()
+    }
+
+    /// Run L1 and resolve the exact conditional-gate/model plan for distributed L2.
+    pub fn plan_distributed_l2(
+        &self,
+        inputs: &[ExternalL1Input],
+        metadata: &serde_json::Value,
+        execution: &ScanExecution,
+    ) -> DistributedL2Plan {
+        let (l1_results, l1_failures) =
+            request_queue::split_results(self.scan_l1_inputs(inputs, execution));
+        let mut gate_results = l1_results
+            .iter()
+            .filter_map(request_queue::gate_result)
+            .collect::<Vec<_>>();
+        gate_results.extend(request_queue::rejected_l1_candidate_gate_results(
+            &l1_results,
+        ));
+        let categories = inputs
+            .iter()
+            .filter(|input| {
+                crate::pipeline::conditional_gate::pipeline_allowed(
+                    &execution,
+                    SecurityLevel::L2,
+                    input.category.as_str(),
+                    metadata,
+                    &gate_results,
+                )
+            })
+            .map(|input| input.category)
+            .collect::<Vec<_>>();
+        let mut l2_execution = execution.clone();
+        let mut gates = l2_execution.gates().clone();
+        for category in &categories {
+            for config in ntdb_l2_model_configs_for_category(&l2_execution, *category) {
+                if ![config.model_id, config.public_model]
+                    .into_iter()
+                    .all(|model| {
+                        crate::pipeline::conditional_gate::pipeline_allowed(
+                            &execution,
+                            SecurityLevel::L2,
+                            model,
+                            metadata,
+                            &gate_results,
+                        )
+                    })
+                {
+                    gates.set_model(config.model_id, false);
+                    gates.set_model(config.public_model, false);
+                }
+            }
+        }
+        l2_execution.set_gates(gates);
+        if l2_execution.allows_level(SecurityLevel::L3) && l2_execution.l3_policy().enabled {
+            l2_execution.set_defer_l3(true);
+        }
+        let pipelines = self.distributed_l2_pipelines(&categories, &l2_execution);
+        let model_ids = pipelines
+            .iter()
+            .map(|pipeline| pipeline.model_id.clone())
+            .collect();
+        DistributedL2Plan {
+            l1_results,
+            l1_failures,
+            categories,
+            model_ids,
+            pipelines,
+            execution: l2_execution,
+            gate_results,
+        }
+    }
+
+    /// Resolve L3 policy overrides and eligibility after distributed L2 aggregation.
+    pub fn plan_distributed_l3(
+        &self,
+        l1_gate_results: &[crate::GateResult],
+        l2_results: &[SecurityScanResult],
+        metadata: &serde_json::Value,
+        execution: &ScanExecution,
+    ) -> DistributedL3Plan {
+        let mut gate_results = l1_gate_results.to_vec();
+        gate_results.extend(l2_results.iter().filter_map(request_queue::gate_result));
+        let execution = crate::pipeline::conditional_gate::apply_l3_policy_overrides(
+            execution,
+            metadata,
+            &gate_results,
+        );
+        let categories = l2_results
+            .iter()
+            .filter(|result| crate::pipeline::has_l3_pending(result))
+            .filter(|result| {
+                crate::pipeline::conditional_gate::pipeline_allowed(
+                    &execution,
+                    SecurityLevel::L3,
+                    &result.category,
+                    metadata,
+                    &gate_results,
+                ) && crate::pipeline::conditional_gate::pipeline_allowed(
+                    &execution,
+                    SecurityLevel::L3,
+                    &result.model,
+                    metadata,
+                    &gate_results,
+                )
+            })
+            .filter_map(|result| result.category.parse().ok())
+            .collect();
+        DistributedL3Plan {
+            categories,
+            execution,
+            gate_results,
+        }
     }
 
     /// Return the calibrated NTDB final-decision threshold set used by subsequent scans.

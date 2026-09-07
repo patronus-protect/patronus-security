@@ -87,6 +87,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let protected = Router::new()
         .route(
+            "/internal/v1/distributed/batches",
+            post(routes::distributed::infer_batch).layer(middleware::from_fn_with_state(
+                state.clone(),
+                worker_admission::track_submission,
+            )),
+        )
+        .route(
             "/v1/scan",
             post(routes::scan::submit_scan).layer(middleware::from_fn_with_state(
                 state.clone(),

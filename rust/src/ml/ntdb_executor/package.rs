@@ -14,7 +14,9 @@ use super::{
     encoder::{StaticEncoder, StaticEncoderStore},
     joint_v3_runtime::JointV3Runtime,
     manifest::{parse_package_manifest, PackageManifest},
-    ntdb_error, NtdbResult,
+    ntdb_error,
+    package_fingerprint::DeferredPackageFingerprint,
+    NtdbResult,
 };
 
 use crate::ml::tokenizer::{RuntimeTokenizer, TokenChunk, TOKENIZER_FAMILY};
@@ -89,6 +91,39 @@ pub struct L2ChunkOutput {
     pub joint_v3_decision: Option<Arc<JointV3DecisionContext>>,
 }
 
+/// A tokenizer-produced classifier chunk suitable for transport to an inference worker.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct PreparedNtdbChunk {
+    pub chunk_index: usize,
+    pub span: ByteSpan,
+    pub token_ids: Vec<u32>,
+}
+
+/// Package-v4 evidence for one chunk. This is deliberately not a document decision:
+/// callers may combine results from any number of worker batches before aggregation.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct NtdbChunkInference {
+    pub chunk_index: usize,
+    pub span: ByteSpan,
+    pub class_probabilities: Vec<f32>,
+    pub promote_score: f32,
+    pub promote_threshold: f32,
+    pub embedding: Vec<f32>,
+    pub embedding_space: String,
+    pub token_ids: Vec<u32>,
+    pub tokenizer_family: String,
+}
+
+/// Per-model chunk evidence returned by distributed L2 inference.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct NtdbModelChunkInferences {
+    pub model_id: String,
+    pub task: String,
+    pub labels: Vec<String>,
+    pub document_chunk_count: usize,
+    pub chunks: Vec<NtdbChunkInference>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct JointV3DecisionContext {
     pub labels: Vec<String>,
@@ -125,8 +160,17 @@ impl NtdbPackageSpec {
     }
 }
 
+struct PreparedNtdbPackage {
+    package_dir: PathBuf,
+    manifest: PackageManifest,
+    content_fingerprint: DeferredPackageFingerprint,
+    tokenizer: RuntimeTokenizer,
+    encoder: Arc<StaticEncoder>,
+}
+
 pub struct NtdbPackage {
     manifest: PackageManifest,
+    content_fingerprint: DeferredPackageFingerprint,
     tokenizer: RuntimeTokenizer,
     encoder: Arc<StaticEncoder>,
     joint_v3: JointV3Runtime,
@@ -151,25 +195,38 @@ struct PreparationKey {
     encoder_ptr: usize,
 }
 
-impl NtdbPackage {
-    pub fn load(
-        package_dir: impl AsRef<Path>,
-        encoders: &mut StaticEncoderStore,
-    ) -> NtdbResult<Self> {
+impl PreparedNtdbPackage {
+    fn load(package_dir: impl AsRef<Path>, encoders: &mut StaticEncoderStore) -> NtdbResult<Self> {
         let package_dir = package_dir.as_ref().to_path_buf();
-        let mut manifest: PackageManifest = parse_package_manifest(
-            &fs::read_to_string(package_dir.join("manifest.json")).map_err(|err| {
+        let details = format!(
+            "package={}",
+            package_dir
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+        );
+        let mut metrics = PhaseMetricScope::new("ntdb_package_startup", &details);
+        let manifest_json =
+            fs::read_to_string(package_dir.join("manifest.json")).map_err(|err| {
                 ntdb_error(format!(
                     "failed to read NTDB manifest {}: {err}",
                     package_dir.join("manifest.json").display()
                 ))
-            })?,
-        )
-        .map_err(|err| ntdb_error(format!("failed to parse NTDB manifest: {err}")))?;
+            })?;
+        let content_fingerprint = DeferredPackageFingerprint::new(
+            &package_dir,
+            &manifest_json,
+            crate::assets::ntdb_l2_package_manifest_files(&manifest_json)
+                .map_err(|error| ntdb_error(error.to_string()))?,
+        )?;
+        let mut manifest: PackageManifest = parse_package_manifest(&manifest_json)
+            .map_err(|err| ntdb_error(format!("failed to parse NTDB manifest: {err}")))?;
         manifest.validate()?;
         manifest.normalize_runtime_defaults();
+        metrics.checkpoint("manifest", &details);
 
         let tokenizer = RuntimeTokenizer::load(package_dir.join(&manifest.tokenizer_dir))?;
+        metrics.checkpoint("tokenizer", &details);
 
         let encoder = encoders.load_for_package(&package_dir, &manifest)?;
         if encoder.vocab_size() != manifest.minilm.vocab_size {
@@ -183,6 +240,28 @@ impl NtdbPackage {
             ));
         }
 
+        metrics.checkpoint("encoder", &details);
+        Ok(Self {
+            package_dir,
+            manifest,
+            content_fingerprint,
+            tokenizer,
+            encoder,
+        })
+    }
+}
+
+impl NtdbPackage {
+    fn from_prepared(prepared: PreparedNtdbPackage) -> NtdbResult<Self> {
+        let PreparedNtdbPackage {
+            package_dir,
+            manifest,
+            content_fingerprint,
+            tokenizer,
+            encoder,
+        } = prepared;
+        let details = format!("package_dir={}", package_dir.display());
+        let mut metrics = PhaseMetricScope::new("ntdb_package_model_startup", &details);
         let joint_v3 = JointV3Runtime::load(
             &package_dir,
             manifest
@@ -191,31 +270,71 @@ impl NtdbPackage {
                 .ok_or_else(|| ntdb_error("NTDB v4 joint_v3 is required"))?,
         )?;
 
+        metrics.checkpoint("joint_model", &details);
+        content_fingerprint.require_unchanged_assets()?;
         Ok(Self {
             manifest,
+            content_fingerprint,
             tokenizer,
             encoder,
             joint_v3,
         })
     }
 
-    fn score_prepared(
+    fn infer_prepared_chunks(
         &mut self,
-        model_id: &str,
         prepared: &PreparedDocument,
+        document_chunk_count: usize,
         operating_point: NtdbOperatingPoint,
-    ) -> NtdbResult<Vec<ScoreOutput>> {
-        let mut output = self
-            .joint_v3
-            .score(&self.manifest.task, prepared, operating_point)?;
-        populate_joint_v3_chunks(
-            model_id,
-            &self.manifest,
+    ) -> NtdbResult<Vec<NtdbChunkInference>> {
+        let predictions = self.joint_v3.infer_chunks(
+            &self.manifest.task,
             prepared,
-            &mut output,
-            self.manifest.minilm.embedding_dim,
-        );
-        Ok(vec![output])
+            document_chunk_count,
+            operating_point,
+        )?;
+        let embedding_dim = self.manifest.minilm.embedding_dim;
+        Ok(predictions
+            .into_iter()
+            .enumerate()
+            .map(|(index, prediction)| {
+                let mut embedding = prepared.raw_embeddings
+                    [index * embedding_dim..(index + 1) * embedding_dim]
+                    .to_vec();
+                normalize_embedding(&mut embedding);
+                NtdbChunkInference {
+                    chunk_index: index,
+                    span: chunk_span(&prepared.chunks[index]),
+                    class_probabilities: prediction.probabilities,
+                    promote_score: prediction.promote_score,
+                    promote_threshold: prediction.promote_threshold,
+                    embedding,
+                    embedding_space: self
+                        .manifest
+                        .minilm
+                        .shared_embedder_identity()
+                        .unwrap_or("unknown-l2-encoder")
+                        .to_string(),
+                    token_ids: prepared.chunks[index].token_ids.clone(),
+                    tokenizer_family: TOKENIZER_FAMILY.to_string(),
+                }
+            })
+            .collect())
+    }
+
+    fn aggregate_chunk_inferences(
+        &self,
+        model_id: &str,
+        chunks: &[NtdbChunkInference],
+        operating_point: NtdbOperatingPoint,
+    ) -> NtdbResult<ScoreOutput> {
+        let mut output = self.joint_v3.aggregate_chunk_inferences(
+            &self.manifest.task,
+            chunks,
+            operating_point,
+        )?;
+        populate_joint_v3_inferences(model_id, chunks, &mut output);
+        Ok(output)
     }
 
     fn score_prepared_batch(
@@ -311,16 +430,34 @@ impl NtdbMultiPackage {
                 )));
             }
         }
+        // Resolve shared encoders in specification order, retaining deterministic
+        // first-package selection and request-time preparation deduplication.
         let mut encoders = StaticEncoderStore::default();
-        let packages = specs
+        let prepared = specs
             .into_iter()
             .map(|spec| {
-                Ok(NamedPackage {
-                    id: spec.id,
-                    package: NtdbPackage::load(spec.package_dir, &mut encoders)?,
-                })
+                PreparedNtdbPackage::load(spec.package_dir, &mut encoders)
+                    .map(|package| (spec.id, package))
             })
             .collect::<NtdbResult<Vec<_>>>()?;
+        // Neural sessions and tree heads are independent. Bound concurrent model
+        // loading to two packages, including during a background L3 upgrade.
+        let loader = rayon::ThreadPoolBuilder::new()
+            .num_threads(2)
+            .thread_name(|index| format!("patronus-model-load-{index}"))
+            .build()
+            .map_err(|error| ntdb_error(error.to_string()))?;
+        let packages = loader.install(|| {
+            prepared
+                .into_par_iter()
+                .map(|(id, prepared)| {
+                    Ok(NamedPackage {
+                        id,
+                        package: NtdbPackage::from_prepared(prepared)?,
+                    })
+                })
+                .collect::<NtdbResult<Vec<_>>>()
+        })?;
         let fingerprint = packages[0].package.tokenizer.0.fingerprint;
         if packages
             .iter()
@@ -364,29 +501,181 @@ impl NtdbMultiPackage {
             .map(|_| vec!["joint_v3".to_string()])
     }
 
+    pub fn distributed_fingerprints(&self) -> NtdbResult<(String, String)> {
+        let tokenizer = self
+            .packages
+            .first()
+            .map(|entry| entry.package.tokenizer.0.fingerprint.to_hex().to_string())
+            .unwrap_or_default();
+        let mut models = self.packages.iter().collect::<Vec<_>>();
+        models.sort_unstable_by_key(|entry| entry.id.as_str());
+        let mut model_hasher = blake3::Hasher::new();
+        for model in models {
+            model_hasher.update(model.id.as_bytes());
+            model_hasher.update(&[0]);
+            model_hasher.update(model.package.content_fingerprint.get()?.as_bytes());
+            model_hasher.update(&[0]);
+        }
+        Ok((tokenizer, model_hasher.finalize().to_hex().to_string()))
+    }
+
     pub fn score_all_models(
         &mut self,
         text: &str,
         operating_point: NtdbOperatingPoint,
     ) -> NtdbResult<Vec<MultiScoreOutput>> {
-        let prepared = self.shared_prepared_documents(text, None)?;
+        let chunks = self.prepare_chunks(text)?;
+        let inferred = self.infer_prepared_chunks(&chunks, chunks.len(), operating_point)?;
+        self.aggregate_chunk_inferences(&inferred, operating_point)
+    }
+
+    pub fn prepare_chunks(&self, text: &str) -> NtdbResult<Vec<PreparedNtdbChunk>> {
+        let tokenizer = &self
+            .packages
+            .first()
+            .ok_or_else(|| ntdb_error("NTDB has no loaded package"))?
+            .package
+            .tokenizer;
+        Ok(tokenizer
+            .token_chunks(text)
+            .into_iter()
+            .enumerate()
+            .map(|(chunk_index, chunk)| PreparedNtdbChunk {
+                chunk_index,
+                span: chunk_span(&chunk),
+                token_ids: chunk.token_ids,
+            })
+            .collect())
+    }
+
+    pub fn infer_prepared_chunks(
+        &mut self,
+        chunks: &[PreparedNtdbChunk],
+        document_chunk_count: usize,
+        operating_point: NtdbOperatingPoint,
+    ) -> NtdbResult<Vec<NtdbModelChunkInferences>> {
+        self.infer_prepared_chunks_for_models(
+            self.packages.iter().map(|entry| entry.id.clone()).collect(),
+            chunks,
+            document_chunk_count,
+            operating_point,
+        )
+    }
+
+    pub fn infer_prepared_chunks_for_models(
+        &mut self,
+        model_ids: HashSet<String>,
+        chunks: &[PreparedNtdbChunk],
+        document_chunk_count: usize,
+        operating_point: NtdbOperatingPoint,
+    ) -> NtdbResult<Vec<NtdbModelChunkInferences>> {
+        if document_chunk_count < chunks.len() {
+            return Err(ntdb_error(
+                "document chunk count must cover every submitted chunk",
+            ));
+        }
+        if chunks
+            .iter()
+            .any(|chunk| chunk.token_ids.len() > crate::ml::tokenizer::CONTENT_TOKENS)
+        {
+            return Err(ntdb_error("prepared NTDB chunk exceeds the token limit"));
+        }
+        let chunk_indices = chunks
+            .iter()
+            .map(|chunk| chunk.chunk_index)
+            .collect::<Vec<_>>();
+        let chunks = Arc::new(
+            chunks
+                .iter()
+                .map(|chunk| TokenChunk {
+                    token_ids: chunk.token_ids.clone(),
+                    byte_span: (chunk.span.start, chunk.span.end),
+                })
+                .collect::<Vec<_>>(),
+        );
+        let mut prepared_by_encoder = HashMap::<PreparationKey, Arc<PreparedDocument>>::new();
+        for entry in self
+            .packages
+            .iter()
+            .filter(|entry| model_ids.contains(&entry.id))
+        {
+            let key = entry.package.preparation_key();
+            if prepared_by_encoder.contains_key(&key) {
+                continue;
+            }
+            prepared_by_encoder.insert(
+                key,
+                Arc::new(entry.package.prepare_document(Arc::clone(&chunks))?),
+            );
+        }
         self.packages
             .par_iter_mut()
+            .filter(|entry| model_ids.contains(&entry.id))
             .map(|entry| {
-                let key = entry.package.preparation_key();
-                let prepared = prepared.get(&key).ok_or_else(|| {
-                    ntdb_error(format!(
-                        "missing shared NTDB prepared document for model {}",
-                        entry.id
-                    ))
-                })?;
-                Ok(MultiScoreOutput {
+                let prepared = prepared_by_encoder
+                    .get(&entry.package.preparation_key())
+                    .ok_or_else(|| {
+                        ntdb_error(format!(
+                            "missing shared prepared chunks for model {}",
+                            entry.id
+                        ))
+                    })?;
+                let mut inferred = entry.package.infer_prepared_chunks(
+                    prepared,
+                    document_chunk_count,
+                    operating_point,
+                )?;
+                for (result, chunk_index) in inferred.iter_mut().zip(&chunk_indices) {
+                    result.chunk_index = *chunk_index;
+                }
+                Ok(NtdbModelChunkInferences {
                     model_id: entry.id.clone(),
-                    outputs: entry.package.score_prepared(
-                        &entry.id,
-                        prepared.as_ref(),
+                    task: entry.package.manifest.task.kind.clone(),
+                    labels: entry.package.manifest.task.labels.clone(),
+                    document_chunk_count,
+                    chunks: inferred,
+                })
+            })
+            .collect()
+    }
+
+    pub fn aggregate_chunk_inferences(
+        &self,
+        inferred: &[NtdbModelChunkInferences],
+        operating_point: NtdbOperatingPoint,
+    ) -> NtdbResult<Vec<MultiScoreOutput>> {
+        inferred
+            .iter()
+            .map(|model| {
+                let entry = self
+                    .packages
+                    .iter()
+                    .find(|entry| entry.id == model.model_id)
+                    .ok_or_else(|| {
+                        ntdb_error(format!("NTDB model package not loaded: {}", model.model_id))
+                    })?;
+                let mut chunks = model.chunks.clone();
+                chunks.sort_by_key(|chunk| chunk.chunk_index);
+                if chunks.len() != model.document_chunk_count
+                    || chunks
+                        .iter()
+                        .enumerate()
+                        .any(|(expected, chunk)| chunk.chunk_index != expected)
+                {
+                    return Err(ntdb_error(format!(
+                        "incomplete or duplicate NTDB chunks for model {}: expected {}, got {}",
+                        model.model_id,
+                        model.document_chunk_count,
+                        chunks.len()
+                    )));
+                }
+                Ok(MultiScoreOutput {
+                    model_id: model.model_id.clone(),
+                    outputs: vec![entry.package.aggregate_chunk_inferences(
+                        &model.model_id,
+                        &chunks,
                         operating_point,
-                    )?,
+                    )?],
                 })
             })
             .collect()
@@ -459,33 +748,18 @@ impl NtdbMultiPackage {
             )));
         }
 
-        let prepared = self.shared_prepared_documents(text, Some(&requested))?;
+        let chunks = self.prepare_chunks(text)?;
         metrics.checkpoint(
             "after_shared_prepare",
-            format!("prepared_docs={}", prepared.len()),
+            format!("prepared_chunks={}", chunks.len()),
         );
-        let outputs = self
-            .packages
-            .par_iter_mut()
-            .filter(|entry| requested.contains(&entry.id))
-            .map(|entry| {
-                let key = entry.package.preparation_key();
-                let prepared = prepared.get(&key).ok_or_else(|| {
-                    ntdb_error(format!(
-                        "missing shared NTDB prepared document for model {}",
-                        entry.id
-                    ))
-                })?;
-                Ok(MultiScoreOutput {
-                    model_id: entry.id.clone(),
-                    outputs: entry.package.score_prepared(
-                        &entry.id,
-                        prepared.as_ref(),
-                        operating_point,
-                    )?,
-                })
-            })
-            .collect();
+        let inferred = self.infer_prepared_chunks_for_models(
+            requested,
+            &chunks,
+            chunks.len(),
+            operating_point,
+        )?;
+        let outputs = self.aggregate_chunk_inferences(&inferred, operating_point);
         metrics.checkpoint("after_score_prepared", "");
         outputs
     }
@@ -525,6 +799,39 @@ impl NtdbMultiPackage {
         }
         Ok(prepared)
     }
+}
+
+#[cfg(test)]
+fn package_content_fingerprint(package_dir: &Path, manifest_json: &str) -> NtdbResult<String> {
+    use std::io::Read;
+
+    let mut files = crate::assets::ntdb_l2_package_manifest_files(manifest_json)
+        .map_err(|error| ntdb_error(format!("failed to enumerate NTDB package assets: {error}")))?;
+    files.sort();
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(b"patronus-ntdb-package-v1\0");
+    hasher.update(manifest_json.as_bytes());
+    for relative in files {
+        hasher.update(&(relative.len() as u64).to_le_bytes());
+        hasher.update(relative.as_bytes());
+        let path = package_dir.join(&relative);
+        let file = fs::File::open(&path).map_err(|error| {
+            ntdb_error(format!(
+                "failed to fingerprint NTDB asset {}: {error}",
+                path.display()
+            ))
+        })?;
+        let mut reader = std::io::BufReader::new(file);
+        let mut buffer = [0_u8; 64 * 1024];
+        loop {
+            let read = reader.read(&mut buffer)?;
+            if read == 0 {
+                break;
+            }
+            hasher.update(&buffer[..read]);
+        }
+    }
+    Ok(hasher.finalize().to_hex().to_string())
 }
 
 fn populate_joint_v3_chunks(
@@ -624,6 +931,77 @@ fn populate_joint_v3_chunks(
         .collect();
 }
 
+fn populate_joint_v3_inferences(
+    model_id: &str,
+    chunks: &[NtdbChunkInference],
+    output: &mut ScoreOutput,
+) {
+    output.l3_candidate_spans = chunks
+        .iter()
+        .filter(|chunk| chunk.promote_score >= chunk.promote_threshold)
+        .map(|chunk| chunk.span)
+        .collect();
+    output.l3_candidates = chunks
+        .iter()
+        .filter(|chunk| chunk.promote_score >= chunk.promote_threshold)
+        .map(|chunk| L3Candidate {
+            span: chunk.span,
+            promote_score: chunk.promote_score,
+            promote_threshold: chunk.promote_threshold,
+            source_pipeline: String::new(),
+            source_model: model_id.to_string(),
+            l2_class: output.predicted_label.clone(),
+        })
+        .collect();
+    let joint_v3_decision = output.joint_v3_decision.clone();
+    output.l2_chunk_outputs = chunks
+        .iter()
+        .map(|chunk| {
+            let (class_name, confidence) = chunk
+                .class_probabilities
+                .iter()
+                .enumerate()
+                .max_by(|left, right| left.1.total_cmp(right.1))
+                .map(|(selected, confidence)| {
+                    (
+                        output
+                            .labels
+                            .get(selected)
+                            .cloned()
+                            .unwrap_or_else(|| selected.to_string()),
+                        *confidence,
+                    )
+                })
+                .unwrap_or_else(|| {
+                    (
+                        output.predicted_label.clone(),
+                        output
+                            .class_scores
+                            .get(output.predicted_index)
+                            .copied()
+                            .unwrap_or_default(),
+                    )
+                });
+            L2ChunkOutput {
+                span: chunk.span,
+                class_name,
+                confidence,
+                promoted: chunk.promote_score >= chunk.promote_threshold,
+                promote_score: Some(chunk.promote_score),
+                promote_threshold: Some(chunk.promote_threshold),
+                source_pipeline: String::new(),
+                source_model: model_id.to_string(),
+                embedding: chunk.embedding.clone(),
+                embedding_space: chunk.embedding_space.clone(),
+                token_ids: chunk.token_ids.clone(),
+                tokenizer_family: chunk.tokenizer_family.clone(),
+                class_probabilities: chunk.class_probabilities.clone(),
+                joint_v3_decision: joint_v3_decision.clone(),
+            }
+        })
+        .collect();
+}
+
 fn chunk_span(chunk: &TokenChunk) -> ByteSpan {
     ByteSpan {
         start: chunk.byte_span.0,
@@ -687,4 +1065,39 @@ pub(crate) fn token_outputs_for_test(chunks: Vec<TokenChunk>, promote: &[bool]) 
         manifest.minilm.embedding_dim,
     );
     output
+}
+
+#[cfg(test)]
+mod deferred_fingerprint_tests {
+    use super::*;
+
+    fn fixture(name: &str) -> (PathBuf, &'static str) {
+        let root = std::env::temp_dir().join(format!(
+            "ark-deferred-fingerprint-{name}-{}",
+            std::process::id()
+        ));
+        let manifest = include_str!("../../../tests/fixtures/ntdb_v4.json");
+        for relative in crate::assets::ntdb_l2_package_manifest_files(manifest).unwrap() {
+            let path = root.join(relative);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, b"fixture model bytes").unwrap();
+        }
+        (root, manifest)
+    }
+
+    #[test]
+    fn deferred_identity_matches_existing_wire_digest() {
+        let (root, manifest) = fixture("wire");
+        let deferred = DeferredPackageFingerprint::new(
+            &root,
+            manifest,
+            crate::assets::ntdb_l2_package_manifest_files(manifest).unwrap(),
+        )
+        .unwrap();
+        let expected = package_content_fingerprint(&root, manifest).unwrap();
+        assert_eq!(deferred.get().unwrap(), expected);
+        assert_eq!(deferred.get().unwrap(), expected);
+        drop(deferred);
+        fs::remove_dir_all(root).unwrap();
+    }
 }

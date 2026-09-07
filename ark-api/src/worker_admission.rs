@@ -89,6 +89,62 @@ pub async fn track_submission(
 mod tests {
     use super::*;
 
+    #[tokio::test]
+    async fn inference_capacity_survives_http_cancellation_until_blocking_work_finishes() {
+        use patronus_ark::{ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel};
+        let categories = vec![SecurityCategory::Injection];
+        let state = AppState::new(
+            crate::config::Config {
+                bind: "127.0.0.1:0".parse().unwrap(),
+                max_upload_bytes: 1024,
+                keys: Vec::new(),
+                categories: categories.clone(),
+                max_level: SecurityLevel::L1,
+                model_dir: None,
+                download_files: false,
+                cache_dir: None,
+                default_gates: ScanGateMatrix::default(),
+                dynamic_pii: None,
+                onnx_runtime: Default::default(),
+            },
+            SecurityGateway::with_max_level(categories, SecurityLevel::L1, None, false),
+        );
+        let (permit, job) = state.try_begin_distributed_inference().unwrap();
+        assert_eq!(state.active_jobs(), 1);
+        let (started_tx, started) = tokio::sync::oneshot::channel();
+        let (release, released) = std::sync::mpsc::channel();
+        let (finished_tx, finished) = tokio::sync::oneshot::channel();
+        let http = tokio::spawn(async move {
+            tokio::task::spawn_blocking(move || {
+                started_tx.send(()).unwrap();
+                released.recv().unwrap();
+                drop(job);
+                drop(permit);
+                let _ = finished_tx.send(());
+            })
+            .await
+            .unwrap();
+        });
+        started.await.unwrap();
+        assert!(state.try_begin_distributed_inference().is_err());
+        http.abort();
+        let _ = http.await;
+        assert!(
+            state.try_begin_distributed_inference().is_err(),
+            "HTTP cancellation must not admit overlapping inference"
+        );
+        assert_eq!(state.active_jobs(), 1);
+        release.send(()).unwrap();
+        finished.await.unwrap();
+        assert_eq!(state.active_jobs(), 0);
+        drop(
+            state
+                .try_begin_distributed_inference()
+                .expect("finished work releases the slot"),
+        );
+        assert_eq!(state.active_jobs(), 0);
+    }
+
     #[test]
     fn epoch_and_instance_fence_delayed_submissions() {
         let mut admission = Admission::default();
@@ -161,6 +217,24 @@ mod tests {
         let instance = state.admission.lock().unwrap().instance_id.clone();
         let app = Router::new()
             .route(
+                "/internal/v1/distributed/batches",
+                post(|State(state): State<AppState>| async move {
+                    assert_eq!(
+                        state
+                            .admission
+                            .lock()
+                            .expect("admission mutex poisoned")
+                            .active_submissions,
+                        1
+                    );
+                    crate::routes::health::recover_worker(State(state)).await.0
+                })
+                .layer(axum::middleware::from_fn_with_state(
+                    state.clone(),
+                    track_submission,
+                )),
+            )
+            .route(
                 "/v1/scan",
                 post(|| async { StatusCode::ACCEPTED }).layer(
                     axum::middleware::from_fn_with_state(state.clone(), track_submission),
@@ -228,6 +302,20 @@ mod tests {
                 .status(),
             StatusCode::ACCEPTED
         );
+        assert_eq!(
+            app.clone()
+                .oneshot(request("/internal/v1/distributed/batches", "POST"))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::CONFLICT
+        );
+        assert_eq!(state.admission.lock().unwrap().active_submissions, 0);
+        let distributed_job = state.begin_distributed_job();
+        assert_eq!(state.active_jobs(), 1);
+        assert!(!state.admission.lock().unwrap().recover(state.active_jobs()));
+        drop(distributed_job);
+        assert_eq!(state.active_jobs(), 0);
         state.register("unfinished-inference".into());
         let busy = app
             .clone()

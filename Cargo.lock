@@ -94,6 +94,7 @@ dependencies = [
 name = "ark-api"
 version = "0.1.6"
 dependencies = [
+ "ark-distributed-protocol",
  "axum",
  "clap",
  "futures",
@@ -113,6 +114,38 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
+]
+
+[[package]]
+name = "ark-coordinator"
+version = "0.1.6"
+dependencies = [
+ "axum",
+ "clap",
+ "futures",
+ "redis",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sha2",
+ "subtle",
+ "tokio",
+ "tower",
+ "tower-http 0.5.2",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
+name = "ark-distributed-protocol"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror 1.0.69",
 ]
 
 [[package]]

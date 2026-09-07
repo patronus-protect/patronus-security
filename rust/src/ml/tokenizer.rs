@@ -48,24 +48,49 @@ impl RuntimeTokenizer {
     }
 
     /// Assemble model inputs without text access, tokenization, or truncation.
+    #[cfg(test)]
     pub fn inputs(&self, tokens: &[u32]) -> io::Result<EncodedInputs> {
-        if tokens.len() > CONTENT_TOKENS {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!(
-                    "chunk has {} content tokens; maximum is {CONTENT_TOKENS}",
-                    tokens.len()
-                ),
-            ));
+        self.batch_inputs(&[tokens], true, true)
+    }
+
+    pub(crate) fn batch_inputs(
+        &self,
+        chunks: &[&[u32]],
+        attention_mask: bool,
+        token_type_ids: bool,
+    ) -> io::Result<EncodedInputs> {
+        let total = chunks.len() * MODEL_TOKENS;
+        let mut ids = Vec::with_capacity(total);
+        let mut mask = Vec::with_capacity(if attention_mask { total } else { 0 });
+        for tokens in chunks {
+            if tokens.len() > CONTENT_TOKENS {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!(
+                        "chunk has {} content tokens; maximum is {CONTENT_TOKENS}",
+                        tokens.len()
+                    ),
+                ));
+            }
+            let start = ids.len();
+            ids.push(i64::from(self.0.bos()));
+            ids.extend(tokens.iter().copied().map(i64::from));
+            ids.push(i64::from(self.0.eos()));
+            if attention_mask {
+                mask.resize(ids.len(), 1);
+                mask.resize(start + MODEL_TOKENS, 0);
+            }
+            ids.resize(start + MODEL_TOKENS, 0);
         }
-        let mut ids = Vec::with_capacity(MODEL_TOKENS);
-        ids.push(i64::from(self.0.bos()));
-        ids.extend(tokens.iter().copied().map(i64::from));
-        ids.push(i64::from(self.0.eos()));
-        let mut mask = vec![1; ids.len()];
-        ids.resize(MODEL_TOKENS, 0);
-        mask.resize(MODEL_TOKENS, 0);
-        Ok((ids, mask, vec![0; MODEL_TOKENS]))
+        Ok((
+            ids,
+            mask,
+            if token_type_ids {
+                vec![0; total]
+            } else {
+                Vec::new()
+            },
+        ))
     }
 
     /// Convenience API for a single already-small text input. Long documents
@@ -212,6 +237,58 @@ mod tests {
         for count in [255, 256, 257] {
             assert!(tokenizer.inputs(&vec![400; count]).is_err());
         }
+    }
+
+    #[test]
+    fn batch_inputs_preserve_row_boundaries_and_optional_inputs() {
+        let tokenizer = fixture_tokenizer();
+        let full = vec![7; CONTENT_TOKENS];
+        let chunks: &[&[u32]] = &[&[7, 8], &[], &full];
+        let (ids, mask, types) = tokenizer.batch_inputs(chunks, true, true).unwrap();
+        assert_eq!(ids.len(), MODEL_TOKENS * 3);
+        assert_eq!(
+            &ids[..4],
+            &[
+                i64::from(tokenizer.0.bos()),
+                7,
+                8,
+                i64::from(tokenizer.0.eos())
+            ]
+        );
+        assert!(ids[4..MODEL_TOKENS].iter().all(|&id| id == 0));
+        assert_eq!(
+            &ids[MODEL_TOKENS..MODEL_TOKENS + 2],
+            &[i64::from(tokenizer.0.bos()), i64::from(tokenizer.0.eos())]
+        );
+        assert_eq!(&mask[..4], &[1; 4]);
+        assert!(mask[4..MODEL_TOKENS].iter().all(|&value| value == 0));
+        assert_eq!(&mask[MODEL_TOKENS..MODEL_TOKENS + 2], &[1; 2]);
+        assert!(mask[MODEL_TOKENS + 2..MODEL_TOKENS * 2]
+            .iter()
+            .all(|&value| value == 0));
+        assert!(mask[MODEL_TOKENS * 2..].iter().all(|&value| value == 1));
+        assert_eq!(types, vec![0; MODEL_TOKENS * 3]);
+        let (without_optional, mask, types) = tokenizer.batch_inputs(chunks, false, false).unwrap();
+        assert_eq!(without_optional, ids);
+        assert!(mask.is_empty());
+        assert!(types.is_empty());
+        assert_eq!(
+            tokenizer.batch_inputs(&[], true, true).unwrap(),
+            (vec![], vec![], vec![])
+        );
+    }
+
+    #[test]
+    fn batch_inputs_reject_oversized_later_chunk() {
+        let tokenizer = fixture_tokenizer();
+        let oversized = vec![7; CONTENT_TOKENS + 1];
+        assert_eq!(
+            tokenizer
+                .batch_inputs(&[&[7], &oversized], true, false)
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::InvalidInput
+        );
     }
 
     #[test]

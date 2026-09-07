@@ -38,7 +38,7 @@ pub(super) struct WorkerLease {
     pub epoch: u64,
     pool: Arc<WorkerPool>,
     slot: Option<OwnedSemaphorePermit>,
-    _admission: OwnedSemaphorePermit,
+    _admission: Arc<OwnedSemaphorePermit>,
     reusable: AtomicBool,
     unfinished: AtomicUsize,
 }
@@ -92,12 +92,23 @@ impl WorkerPool {
             .any(|worker| !state.quarantined.contains(&worker.name) && state.healthy(&worker.name))
     }
 
-    pub async fn acquire(self: &Arc<Self>) -> Result<Arc<WorkerLease>, &'static str> {
-        let admission = self
-            .admission
+    pub fn reserve(&self) -> Result<Arc<OwnedSemaphorePermit>, &'static str> {
+        self.admission
             .clone()
             .try_acquire_owned()
-            .map_err(|_| "worker queue full")?;
+            .map(Arc::new)
+            .map_err(|_| "worker queue full")
+    }
+
+    #[cfg(test)]
+    pub async fn acquire(self: &Arc<Self>) -> Result<Arc<WorkerLease>, &'static str> {
+        self.acquire_reserved(self.reserve()?).await
+    }
+
+    pub async fn acquire_reserved(
+        self: &Arc<Self>,
+        admission: Arc<OwnedSemaphorePermit>,
+    ) -> Result<Arc<WorkerLease>, &'static str> {
         loop {
             // Semaphore waiters are FIFO; the next completion supplies their worker.
             let slot = self

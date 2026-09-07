@@ -570,7 +570,9 @@ impl L3ExecutionAdapter for UnifiedExecutionAdapter<'_> {
             .observe(&head_output.class_name, head_output.confidence);
         let chunk_output = UnifiedChunkOutput {
             chunk_index: global_index,
-            output: output.clone(),
+            output: UnifiedModelOutput {
+                heads: HashMap::from([(self.head.to_string(), head_output.clone())]),
+            },
             allowed_heads: HashSet::from([self.head.to_string()]),
         };
         let propagated = kind == L3ResolvedKind::Propagated;
@@ -581,6 +583,7 @@ impl L3ExecutionAdapter for UnifiedExecutionAdapter<'_> {
             self.trace,
             &self.chunks[global_index],
             &chunk_output,
+            output,
             propagated,
         );
         self.outputs.push(chunk_output);
@@ -733,13 +736,14 @@ fn push_unified_chunk_trace(
     trace: &mut Option<Vec<serde_json::Value>>,
     chunk: &crate::pipeline::l3_schedule::SelectedL3Chunk,
     output: &UnifiedChunkOutput,
+    physical_output: &UnifiedModelOutput,
     propagated: bool,
 ) {
     let Some(trace) = trace else {
         return;
     };
     let mut heads = serde_json::Map::new();
-    for (head, head_output) in &output.output.heads {
+    for (head, head_output) in &physical_output.heads {
         heads.insert(
             head.clone(),
             serde_json::json!({
@@ -1584,6 +1588,121 @@ fn materialize_unified_result(
     result
 }
 
+pub(super) fn aggregate_distributed_results(
+    distributed: &[super::DistributedL3ChunkInference],
+    l2_fallbacks: &[SecurityScanResult],
+    execution: &crate::ScanExecution,
+    duration_ms: f64,
+) -> Result<Vec<SecurityScanResult>, String> {
+    let mut chunk_outputs = Vec::new();
+    for chunk in distributed {
+        let allowed_heads = l2_fallbacks
+            .iter()
+            .filter(|fallback| {
+                fallback.internal_l2_chunk_outputs.iter().any(|l2| {
+                    l2.promoted
+                        && l2.span == chunk.span
+                        && l2
+                            .source_pipeline
+                            .split(',')
+                            .map(str::trim)
+                            .any(|head| head == fallback.category)
+                })
+            })
+            .map(|fallback| fallback.category.clone())
+            .collect::<HashSet<_>>();
+        if !allowed_heads.is_empty() {
+            chunk_outputs.push(UnifiedChunkOutput {
+                chunk_index: chunk.chunk_index,
+                output: chunk.output.clone(),
+                allowed_heads,
+            });
+        }
+    }
+
+    let output = if chunk_outputs.is_empty() {
+        None
+    } else {
+        Some(aggregate_unified_outputs(
+            chunk_outputs.clone(),
+            Some(execution.l3_policy()),
+        )?)
+    };
+    let mut chunk_scores_by_head = UnifiedChunkScoresByHead::new();
+    for chunk in &chunk_outputs {
+        let span = distributed
+            .iter()
+            .find(|candidate| candidate.chunk_index == chunk.chunk_index)
+            .map(|candidate| candidate.span)
+            .ok_or_else(|| format!("missing distributed L3 chunk {}", chunk.chunk_index))?;
+        for head in &chunk.allowed_heads {
+            let Some(head_output) = chunk.output.heads.get(head) else {
+                continue;
+            };
+            chunk_scores_by_head.entry(head.clone()).or_default().push((
+                chunk.chunk_index,
+                span,
+                head_output.class_name.clone(),
+                head_output.label_scores.clone(),
+            ));
+        }
+    }
+
+    l2_fallbacks
+        .iter()
+        .filter(|fallback| crate::pipeline::has_l3_pending(fallback))
+        .map(|fallback| {
+            let Some(output) = &output else {
+                return Err(format!(
+                    "distributed unified L3 produced no promoted output for {}",
+                    fallback.category
+                ));
+            };
+            let head_chunks = chunk_scores_by_head
+                .get(&fallback.category)
+                .map_or(0, Vec::len);
+            let run = UnifiedRunResult {
+                output: output.clone(),
+                duration_ms,
+                queue_wait_ms: 0.0,
+                chunk_count: head_chunks,
+                inferred_chunks: head_chunks,
+                propagated_chunks: 0,
+                planned_l3_chunks: head_chunks,
+                resolved_chunks: head_chunks,
+                total_effective_chunks: head_chunks,
+                head_early_exits: HashSet::new(),
+                resolved_chunks_by_head: HashMap::from([(fallback.category.clone(), head_chunks)]),
+                total_chunks_by_head: HashMap::from([(fallback.category.clone(), head_chunks)]),
+                cache_hits: 0,
+                clustering: L3ClusteringStrategy::Disabled,
+                physical_job_id: 0,
+                chunk_trace: None,
+                chunk_scores_by_head: chunk_scores_by_head.clone(),
+            };
+            let subscriber = L3JobSpec {
+                job_id: 0,
+                request_id: "distributed".to_string(),
+                category: fallback.category.clone(),
+                model: UNIFIED_MODEL.to_string(),
+                text: Arc::from(""),
+                fallback: fallback.clone(),
+                priority: 0,
+                ttl_ms: 0,
+                inference_timeout_ms: 0,
+                execution: execution.clone(),
+                degraded_factor: 1.0,
+                l3_candidates: Vec::new(),
+                l2_chunk_outputs: Arc::from(fallback.internal_l2_chunk_outputs.clone()),
+                dynamic_pii_config: None,
+                dynamic_pii_inference_groups: Vec::new(),
+                dynamic_pii_activated_rules: Vec::new(),
+            };
+            Ok(materialize_unified_result(&subscriber, &run))
+        })
+        .collect()
+}
+
 fn final_chunk_outputs(
     subscriber: &L3JobSpec,
     run: &UnifiedRunResult,
@@ -2195,6 +2314,61 @@ mod tests {
     }
 
     #[test]
+    fn distributed_chunk_outputs_use_normal_unified_materialization() {
+        let mut fallback = test_subscriber(1, "injection", 0).fallback;
+        fallback.internal_l2_chunk_outputs = vec![crate::ml::ntdb_executor::L2ChunkOutput {
+            span: ByteSpan { start: 0, end: 10 },
+            class_name: "attack".to_string(),
+            confidence: 0.8,
+            promoted: true,
+            promote_score: Some(0.9),
+            promote_threshold: Some(0.7),
+            source_pipeline: "injection".to_string(),
+            source_model: "injection".to_string(),
+            embedding: Vec::new(),
+            embedding_space: String::new(),
+            token_ids: vec![1],
+            tokenizer_family: "mmbert".to_string(),
+            class_probabilities: Vec::new(),
+            joint_v3_decision: None,
+        }];
+        let chunks = vec![super::super::DistributedL3ChunkInference {
+            chunk_index: 0,
+            span: ByteSpan { start: 0, end: 10 },
+            output: UnifiedModelOutput {
+                heads: HashMap::from([(
+                    "injection".to_string(),
+                    UnifiedHeadOutput {
+                        class_name: "injection".to_string(),
+                        confidence: 0.99,
+                        label_scores: vec![crate::LabelScore {
+                            label: "injection".to_string(),
+                            confidence: 0.99,
+                            matched: true,
+                        }],
+                    },
+                )]),
+            },
+        }];
+
+        let results = aggregate_distributed_results(
+            &chunks,
+            &[fallback],
+            &ScanExecution::new(SecurityLevel::L3),
+            2.0,
+        )
+        .unwrap();
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].level, "L3");
+        assert_eq!(results[0].model, UNIFIED_MODEL);
+        assert!(results[0]
+            .layers
+            .iter()
+            .any(|layer| layer.layer_type == "unified_l3" || layer.level == "L3"));
+    }
+
+    #[test]
     fn unified_aggregation_ignores_non_promoted_l2_outputs() {
         let outputs = vec![observed_chunk(
             0,
@@ -2237,6 +2411,45 @@ mod tests {
             aggregate.heads.get("tool_class").unwrap().class_name,
             "file"
         );
+    }
+
+    #[test]
+    fn head_only_observations_preserve_aggregation_and_full_physical_trace() {
+        let full = observed_chunk(
+            0,
+            &["threat"],
+            &[
+                ("threat", head_output("benign", 0.8)),
+                ("tool_class", head_output("database", 0.99)),
+            ],
+        );
+        let mut compact = full.clone();
+        compact
+            .output
+            .heads
+            .retain(|head, _| compact.allowed_heads.contains(head));
+        assert_eq!(
+            aggregate_unified_outputs(vec![full.clone()], None).unwrap(),
+            aggregate_unified_outputs(vec![compact.clone()], None).unwrap()
+        );
+        let chunk = crate::pipeline::l3_schedule::SelectedL3Chunk {
+            text: "chunk".into(),
+            start_byte: 0,
+            end_byte: 5,
+            priority: 0.0,
+            head_priority: 1,
+            source_order: 0,
+            embedding: vec![],
+            embedding_space: String::new(),
+            token_ids: vec![],
+            tokenizer_family: String::new(),
+        };
+        let mut trace = Some(Vec::new());
+        push_unified_chunk_trace(&mut trace, &chunk, &compact, &full.output, false);
+        let trace = trace.unwrap();
+        assert_eq!(trace[0]["heads"]["tool_class"]["allowed"], false);
+        assert_eq!(trace[0]["heads"]["tool_class"]["confidence"], 0.99);
+        assert_eq!(trace[0]["heads"]["threat"]["allowed"], true);
     }
 
     #[test]

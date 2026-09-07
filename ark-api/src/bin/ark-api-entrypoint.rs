@@ -4,6 +4,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+#[path = "entrypoint/sse.rs"]
+mod sse;
 #[path = "entrypoint/timings.rs"]
 mod timings;
 #[path = "entrypoint/worker_pool.rs"]
@@ -12,11 +14,12 @@ use timings::JobTimings;
 use worker_pool::{WorkerLease, WorkerPool};
 
 use axum::body::Bytes;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Request, State};
 use axum::http::{header, HeaderMap, StatusCode};
+use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
-use axum::{Json, Router};
+use axum::{Extension, Json, Router};
 use clap::Parser;
 use futures::StreamExt;
 use redis::AsyncCommands;
@@ -204,17 +207,18 @@ fn final_decision(job: &Job) -> String {
 
 async fn collect_events(
     state: AppState,
-    job_id: String,
+    mut job: Job,
     lease: Arc<WorkerLease>,
     request_id: String,
     submitted: Instant,
     dispatched: Instant,
 ) {
+    let job_id = job.job_id.clone();
     let completed = tokio::time::timeout(
         Duration::from_secs(ACTIVE_TTL_SECS - 10),
         collect_events_inner(
             &state,
-            &job_id,
+            &mut job,
             &lease.worker,
             &request_id,
             submitted,
@@ -230,27 +234,26 @@ async fn collect_events(
         tracing::error!(job_id, worker = %lease.worker.name, "worker completion unknown; worker quarantined until idle fence");
         // Quarantine immediately; Redis cleanup must not hold this worker lease.
         drop(lease);
-        if let Ok(Some(mut job)) = load_job(&state, &job_id).await {
-            job.status = "failed".into();
-            job.completion = Some(json!({"state":"failed", "failures":[{
-                "stage":"entrypoint", "kind":"worker_stream_interrupted",
-                "message":"Worker did not report completion", "retryable":true
-            }]}));
-            job.decision = Some("review".into());
-            let _ = save_job(&state, &job).await;
-        }
+        job.status = "failed".into();
+        job.completion = Some(json!({"state":"failed", "failures":[{
+            "stage":"entrypoint", "kind":"worker_stream_interrupted",
+            "message":"Worker did not report completion", "retryable":true
+        }]}));
+        job.decision = Some("review".into());
+        let _ = save_job(&state, &job).await;
     }
     // The shared lease stays held until every job from this submission finishes.
 }
 
 async fn collect_events_inner(
     state: &AppState,
-    job_id: &str,
+    job: &mut Job,
     worker: &WorkerConfig,
     request_id: &str,
     submitted: Instant,
     dispatched: Instant,
 ) -> bool {
+    let job_id = job.job_id.clone();
     let started = Instant::now();
     let url = format!(
         "{}/v1/scan/{request_id}/events",
@@ -276,15 +279,28 @@ async fn collect_events_inner(
 
     tracing::info!(job_id, worker = %worker.name, worker_events_connected_ms = started.elapsed().as_secs_f64() * 1_000.0, "worker event stream connected");
 
-    let mut pending = String::new();
+    let mut frames = sse::Frames::default();
     let mut stream = response.bytes_stream();
     let mut event_count = 0usize;
-    while let Some(chunk) = stream.next().await {
+    let mut progress_dirty = false;
+    let mut progress_flush = tokio::time::interval(Duration::from_millis(100));
+    progress_flush.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    loop {
+        let chunk = tokio::select! {
+            chunk = stream.next() => match chunk {
+                Some(chunk) => chunk,
+                None => break,
+            },
+            _ = progress_flush.tick(), if progress_dirty => {
+                if save_job(state, job).await.is_err() {
+                    return false;
+                }
+                progress_dirty = false;
+                continue;
+            }
+        };
         let Ok(chunk) = chunk else { break };
-        pending.push_str(&String::from_utf8_lossy(&chunk));
-        while let Some(index) = pending.find("\n\n") {
-            let frame = pending[..index].to_string();
-            pending.drain(..index + 2);
+        for frame in frames.push(&chunk) {
             let event = frame.lines().find_map(|line| line.strip_prefix("event: "));
             let data = frame
                 .lines()
@@ -294,9 +310,6 @@ async fn collect_events_inner(
                 continue;
             };
             event_count += 1;
-            let Ok(Some(mut job)) = load_job(state, job_id).await else {
-                return false;
-            };
             if matches!(event, "result" | "provisional") {
                 job.timings.observe(&data);
             }
@@ -343,9 +356,14 @@ async fn collect_events_inner(
                 }
                 _ => {}
             }
-            if save_job(state, &job).await.is_err() {
+            if event == "progress" {
+                progress_dirty = true;
+                continue;
+            }
+            if save_job(state, job).await.is_err() {
                 return false;
             }
+            progress_dirty = false;
             if event == "finished" {
                 tracing::info!(job_id, worker = %worker.name, worker_events_finished_ms = started.elapsed().as_secs_f64() * 1_000.0, event_count, "worker event stream finished");
                 return true;
@@ -446,17 +464,36 @@ fn l2_chunk_evidence(result: &Value) -> Option<Value> {
     }))
 }
 
+async fn admit_scan(
+    State(state): State<Arc<AppState>>,
+    mut request: Request,
+    next: Next,
+) -> Response {
+    if !authenticated(&state, request.headers()) {
+        return unauthorized();
+    }
+    let admission = match state.worker_pool.reserve() {
+        Ok(admission) => admission,
+        Err(error) => {
+            return (StatusCode::TOO_MANY_REQUESTS, Json(json!({"error": error}))).into_response()
+        }
+    };
+    request.extensions_mut().insert(admission);
+    next.run(request).await
+}
+
 async fn submit_scan(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
+    Extension(admission): Extension<Arc<tokio::sync::OwnedSemaphorePermit>>,
     body: Bytes,
 ) -> Response {
-    if !authenticated(&state, &headers) {
-        return unauthorized();
-    }
     let submitted = Instant::now();
-    let lease = match tokio::time::timeout(Duration::from_secs(15), state.worker_pool.acquire())
-        .await
+    let lease = match tokio::time::timeout(
+        Duration::from_secs(15),
+        state.worker_pool.acquire_reserved(admission),
+    )
+    .await
     {
         Ok(Ok(lease)) => lease,
         Ok(Err(error)) => {
@@ -578,19 +615,19 @@ async fn submit_scan(
             )
                 .into_response();
         }
-        tokio::spawn(collect_events(
-            (*state).clone(),
-            job_id.clone(),
-            lease.clone(),
-            worker_request_id.to_string(),
-            submitted,
-            upstream_started,
-        ));
         jobs.push(json!({
             "job_id": job_id,
             "source": job.source,
             "status_url": format!("/v1/scan/{job_id}"),
         }));
+        tokio::spawn(collect_events(
+            (*state).clone(),
+            job,
+            lease.clone(),
+            worker_request_id.to_string(),
+            submitted,
+            upstream_started,
+        ));
     }
     (StatusCode::ACCEPTED, Json(json!({"jobs": jobs}))).into_response()
 }
@@ -681,7 +718,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Router::new()
         .route("/healthz", get(healthz))
         .route("/readyz", get(readyz))
-        .route("/v1/scan", post(submit_scan))
+        .route(
+            "/v1/scan",
+            post(submit_scan).layer(middleware::from_fn_with_state(state.clone(), admit_scan)),
+        )
         .route("/v1/scan/:job_id", get(get_scan))
         .with_state(state);
     let listener = tokio::net::TcpListener::bind(bind).await?;
@@ -692,6 +732,226 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    async fn recording_store() -> (
+        redis::aio::ConnectionManager,
+        Arc<std::sync::Mutex<Vec<Job>>>,
+        tokio::task::JoinHandle<()>,
+    ) {
+        use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let recorded = writes.clone();
+        let server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            let mut stream = BufReader::new(stream);
+            loop {
+                let mut line = String::new();
+                if stream.read_line(&mut line).await.unwrap() == 0 {
+                    break;
+                }
+                let count: usize = line.trim().strip_prefix('*').unwrap().parse().unwrap();
+                let mut args = Vec::new();
+                for _ in 0..count {
+                    line.clear();
+                    stream.read_line(&mut line).await.unwrap();
+                    let len: usize = line.trim().strip_prefix('$').unwrap().parse().unwrap();
+                    let mut value = vec![0; len + 2];
+                    stream.read_exact(&mut value).await.unwrap();
+                    value.truncate(len);
+                    args.push(value);
+                }
+                match args[0].as_slice() {
+                    b"CLIENT" => {}
+                    b"SETEX" => recorded
+                        .lock()
+                        .unwrap()
+                        .push(serde_json::from_slice(&args[3]).unwrap()),
+                    command => panic!("collector must never reload its job: {command:?}"),
+                }
+                stream.get_mut().write_all(b"+OK\r\n").await.unwrap();
+            }
+        });
+        let redis = connect_redis(&format!("redis://{address}/")).await.unwrap();
+        (redis, writes, server)
+    }
+
+    #[tokio::test]
+    async fn collector_coalesces_progress_without_reads_and_persists_terminal_states() {
+        let (redis, writes, store) = recording_store().await;
+        let frames = (0..100)
+            .map(|step| {
+                format!("event: progress\ndata: {{\"category\":\"injection\",\"step\":{step}}}\n\n")
+            })
+            .collect::<String>();
+        let complete = format!(
+            "{frames}event: finished\ndata: {{\"completion\":{{\"state\":\"complete\"}}}}\n\n"
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let app = Router::new()
+            .route(
+                "/v1/scan/complete/events",
+                get(move || {
+                    let complete = complete.clone();
+                    async move { complete }
+                }),
+            )
+            .route(
+                "/v1/scan/interrupted/events",
+                get(|| async {
+                    "event: progress\ndata: {\"category\":\"injection\",\"step\":7}\n\n"
+                }),
+            );
+        let worker_server = tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+        let state = AppState {
+            client: reqwest::Client::new(),
+            redis,
+            worker_token: String::new(),
+            worker_pool: WorkerPool::healthy_test_pool(),
+            key_hashes: Vec::new(),
+            retention_secs: 90,
+        };
+        let worker = WorkerConfig {
+            name: "test".into(),
+            url: format!("http://{address}"),
+        };
+        let mut job = completed_job(HashMap::new());
+        job.status = "running".into();
+        assert!(
+            collect_events_inner(
+                &state,
+                &mut job,
+                &worker,
+                "complete",
+                Instant::now(),
+                Instant::now()
+            )
+            .await
+        );
+        {
+            let writes = writes.lock().unwrap();
+            assert_eq!(
+                writes.len(),
+                1,
+                "progress burst should be covered by the terminal snapshot"
+            );
+            assert_eq!(writes[0].status, "completed");
+            assert_eq!(writes[0].progress["injection"]["step"], 99);
+        }
+        // An interrupted stream must persist failure from the local job as well.
+        let mut lease = state.worker_pool.acquire().await.unwrap();
+        Arc::get_mut(&mut lease).unwrap().worker = worker;
+        lease.start_dispatch();
+        collect_events(
+            state,
+            job,
+            lease,
+            "interrupted".into(),
+            Instant::now(),
+            Instant::now(),
+        )
+        .await;
+        let writes = writes.lock().unwrap();
+        let failed = writes.last().unwrap();
+        assert_eq!(failed.status, "failed");
+        assert_eq!(failed.decision.as_deref(), Some("review"));
+        assert_eq!(failed.progress["injection"]["step"], 7);
+        worker_server.abort();
+        store.abort();
+    }
+
+    #[tokio::test]
+    async fn admission_rejects_before_body_read_and_releases_failed_or_cancelled_uploads() {
+        use axum::body::Body;
+        use tower::ServiceExt;
+        let (redis, _, store) = recording_store().await;
+        let pool = WorkerPool::healthy_test_pool();
+        let state = Arc::new(AppState {
+            client: reqwest::Client::new(),
+            redis,
+            worker_token: String::new(),
+            worker_pool: pool.clone(),
+            key_hashes: vec![format!("{:x}", Sha256::digest(b"test-key"))],
+            retention_secs: 90,
+        });
+        let app = Router::new()
+            .route(
+                "/v1/scan",
+                post(submit_scan).layer(middleware::from_fn_with_state(state.clone(), admit_scan)),
+            )
+            .with_state(state);
+        let unread_body = || {
+            Body::from_stream(futures::stream::poll_fn(
+                |_| -> std::task::Poll<Option<Result<Bytes, std::io::Error>>> {
+                    panic!("rejected body must not be polled")
+                },
+            ))
+        };
+        let request = |body, authenticated| {
+            let mut request = Request::builder().uri("/v1/scan").method("POST");
+            if authenticated {
+                request = request.header(header::AUTHORIZATION, "Bearer test-key");
+            }
+            request.body(body).unwrap()
+        };
+        assert_eq!(
+            app.clone()
+                .oneshot(request(unread_body(), false))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::UNAUTHORIZED
+        );
+        let reserved = pool.reserve().unwrap();
+        assert_eq!(
+            app.clone()
+                .oneshot(request(unread_body(), true))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::TOO_MANY_REQUESTS
+        );
+        drop(reserved);
+        let broken = Body::from_stream(futures::stream::once(async {
+            Err::<Bytes, _>(std::io::Error::other("upload failed"))
+        }));
+        assert_eq!(
+            app.clone()
+                .oneshot(request(broken, true))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::BAD_REQUEST
+        );
+        drop(pool.reserve().expect("body failure must release admission"));
+        let (polled, started) = tokio::sync::oneshot::channel();
+        let mut polled = Some(polled);
+        let pending = Body::from_stream(futures::stream::poll_fn(
+            move |_| -> std::task::Poll<Option<Result<Bytes, std::io::Error>>> {
+                if let Some(polled) = polled.take() {
+                    let _ = polled.send(());
+                }
+                std::task::Poll::Pending
+            },
+        ));
+        let upload = tokio::spawn(app.oneshot(request(pending, true)));
+        started.await.unwrap();
+        assert!(
+            pool.reserve().is_err(),
+            "upload must hold admission before it gets a worker"
+        );
+        upload.abort();
+        let _ = upload.await;
+        drop(
+            pool.reserve()
+                .expect("cancelled upload must release admission"),
+        );
+        store.abort();
+    }
 
     #[tokio::test]
     async fn redis_disconnect_changes_readiness_and_recovers_job_storage() {
