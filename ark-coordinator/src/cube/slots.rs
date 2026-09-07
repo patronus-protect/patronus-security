@@ -1,5 +1,6 @@
 use crate::{config::Cube, fair_queue::Estimate};
 use std::{
+    collections::BTreeSet,
     sync::{Arc, Mutex},
     time::Instant,
 };
@@ -79,39 +80,47 @@ impl CubePool {
             let notified = self.wake.notified();
             tokio::pin!(notified);
             notified.as_mut().enable();
-            {
-                let mut state = self.state.lock().unwrap();
-                let count = state.members.len();
-                let selected = (0..count)
-                    .map(|n| (state.next + n) % count)
-                    .filter(|&i| {
-                        let m = &state.members[i];
-                        m.healthy && m.active < SLOTS_PER_CUBE
-                    })
-                    .min_by(|&a, &b| {
-                        let estimate = |i: usize| {
-                            let m = &state.members[i];
-                            (m.queued + work) / m.rate.ewma.min(m.rate.p50).max(1.0)
-                        };
-                        estimate(a).total_cmp(&estimate(b))
-                    });
-                if let Some(index) = selected {
-                    let m = &mut state.members[index];
-                    m.active += 1;
-                    m.queued += work;
-                    let cube = m.cube.clone();
-                    state.next = (index + 1) % count;
-                    return CubeLease {
-                        cube,
-                        pool: self.clone(),
-                        index,
-                        work,
-                        started: Instant::now(),
-                    };
-                }
+            if let Some(lease) = self.try_acquire(work, &BTreeSet::new()) {
+                return lease;
             }
             notified.await;
         }
+    }
+    pub fn try_acquire(
+        self: &Arc<Self>,
+        work: f64,
+        excluded: &BTreeSet<String>,
+    ) -> Option<CubeLease> {
+        let mut state = self.state.lock().unwrap();
+        let count = state.members.len();
+        let selected = (0..count)
+            .map(|n| (state.next + n) % count)
+            .filter(|&i| {
+                let m = &state.members[i];
+                m.healthy && m.active < SLOTS_PER_CUBE && !excluded.contains(&m.cube.name)
+            })
+            .min_by(|&a, &b| {
+                let estimate = |i: usize| {
+                    let m = &state.members[i];
+                    (m.queued + work) / m.rate.ewma.min(m.rate.p50).max(1.0)
+                };
+                estimate(a).total_cmp(&estimate(b))
+            });
+        if let Some(index) = selected {
+            let m = &mut state.members[index];
+            m.active += 1;
+            m.queued += work;
+            let cube = m.cube.clone();
+            state.next = (index + 1) % count;
+            return Some(CubeLease {
+                cube,
+                pool: self.clone(),
+                index,
+                work,
+                started: Instant::now(),
+            });
+        }
+        None
     }
     pub fn snapshot(&self) -> Vec<(String, usize)> {
         self.state

@@ -93,7 +93,7 @@ impl WorkerPool {
     }
 
     pub async fn acquire(self: &Arc<Self>) -> Result<Arc<WorkerLease>, &'static str> {
-        let admission = self
+        let mut admission = self
             .admission
             .clone()
             .try_acquire_owned()
@@ -106,28 +106,59 @@ impl WorkerPool {
                 .acquire_owned()
                 .await
                 .map_err(|_| "worker pool closed")?;
-            let mut state = self.state.lock().expect("worker state mutex poisoned");
-            let worker = state
-                .idle
-                .pop_front()
-                .expect("worker slot without idle worker");
-            if !state.healthy(&worker.name) {
-                state.quarantined.insert(worker.name.clone());
-                slot.forget();
-                continue;
+            match self.lease(slot, admission) {
+                Ok(lease) => return Ok(lease),
+                Err(returned) => admission = returned,
             }
-            let status = &state.status[&worker.name].0;
-            return Ok(Arc::new(WorkerLease {
-                instance_id: status.instance_id.clone(),
-                epoch: status.epoch,
-                worker,
-                pool: self.clone(),
-                slot: Some(slot),
-                _admission: admission,
-                reusable: AtomicBool::new(true),
-                unfinished: AtomicUsize::new(0),
-            }));
         }
+    }
+
+    pub fn try_acquire(self: &Arc<Self>) -> Result<Arc<WorkerLease>, &'static str> {
+        let mut admission = self
+            .admission
+            .clone()
+            .try_acquire_owned()
+            .map_err(|_| "worker_busy")?;
+        loop {
+            // The same semaphore reserves returned slots for existing FIFO waiters.
+            let slot = self
+                .slots
+                .clone()
+                .try_acquire_owned()
+                .map_err(|_| "worker_busy")?;
+            match self.lease(slot, admission) {
+                Ok(lease) => return Ok(lease),
+                Err(returned) => admission = returned,
+            }
+        }
+    }
+
+    fn lease(
+        self: &Arc<Self>,
+        slot: OwnedSemaphorePermit,
+        admission: OwnedSemaphorePermit,
+    ) -> Result<Arc<WorkerLease>, OwnedSemaphorePermit> {
+        let mut state = self.state.lock().expect("worker state mutex poisoned");
+        let worker = state
+            .idle
+            .pop_front()
+            .expect("worker slot without idle worker");
+        if !state.healthy(&worker.name) {
+            state.quarantined.insert(worker.name.clone());
+            slot.forget();
+            return Err(admission);
+        }
+        let status = &state.status[&worker.name].0;
+        Ok(Arc::new(WorkerLease {
+            instance_id: status.instance_id.clone(),
+            epoch: status.epoch,
+            worker,
+            pool: self.clone(),
+            slot: Some(slot),
+            _admission: admission,
+            reusable: AtomicBool::new(true),
+            unfinished: AtomicUsize::new(0),
+        }))
     }
 
     fn recovered(&self, worker: &WorkerConfig, status: WorkerStatus) {
@@ -293,6 +324,58 @@ mod tests {
             active_submissions: 0,
             active_jobs: 0,
         }
+    }
+
+    #[tokio::test]
+    async fn no_queue_reserves_idle_worker_and_busy_attempts_do_not_leak_admission() {
+        let pool = pool(1, 2);
+        let active = pool.try_acquire().unwrap();
+        assert_eq!(active.worker.name, "worker-1");
+        for _ in 0..3 {
+            assert!(matches!(pool.try_acquire(), Err("worker_busy")));
+            assert_eq!(pool.admission.available_permits(), 2);
+            assert_eq!(pool.slots.available_permits(), 0);
+        }
+        drop(active);
+        assert_eq!(pool.admission.available_permits(), 3);
+        assert_eq!(pool.slots.available_permits(), 1);
+        assert!(pool.try_acquire().is_ok());
+    }
+
+    #[tokio::test]
+    async fn no_queue_cannot_bypass_a_direct_fifo_waiter() {
+        let pool = pool(1, 2);
+        let active = pool.try_acquire().unwrap();
+        let direct = pool.acquire();
+        tokio::pin!(direct);
+        assert!(futures::poll!(&mut direct).is_pending());
+        drop(active);
+        // The released permit belongs to Direct even before its task wakes up.
+        assert!(matches!(pool.try_acquire(), Err("worker_busy")));
+        let direct = direct.await.unwrap();
+        assert_eq!(direct.worker.name, "worker-1");
+        drop(direct);
+        assert!(pool.try_acquire().is_ok());
+    }
+
+    #[tokio::test]
+    async fn no_queue_skips_stale_workers_and_returns_admission_when_none_remain() {
+        let pool = pool(2, 1);
+        pool.state
+            .lock()
+            .unwrap()
+            .status
+            .get_mut("worker-1")
+            .unwrap()
+            .1 = Instant::now() - Duration::from_secs(6);
+        let active = pool.try_acquire().unwrap();
+        assert_eq!(active.worker.name, "worker-2");
+        assert!(pool.state.lock().unwrap().quarantined.contains("worker-1"));
+        active.quarantine();
+        drop(active);
+        assert!(matches!(pool.try_acquire(), Err("worker_busy")));
+        assert_eq!(pool.admission.available_permits(), 3);
+        assert_eq!(pool.slots.available_permits(), 0);
     }
 
     #[tokio::test]

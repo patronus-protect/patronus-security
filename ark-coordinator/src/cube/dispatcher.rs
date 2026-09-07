@@ -16,6 +16,51 @@ pub struct CubeBatchResult {
     pub submit_ms: f64,
 }
 
+#[derive(Debug)]
+pub enum CubeDispatchError {
+    /// This exact response guarantees that the Cube has accepted no work.
+    WorkerBusy,
+    Failed(String),
+}
+impl From<String> for CubeDispatchError {
+    fn from(error: String) -> Self {
+        Self::Failed(error)
+    }
+}
+impl From<&str> for CubeDispatchError {
+    fn from(error: &str) -> Self {
+        Self::Failed(error.to_owned())
+    }
+}
+
+async fn is_pre_admission_busy(mut response: reqwest::Response) -> bool {
+    #[derive(serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct BusyResponse {
+        error: String,
+    }
+
+    if response
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.split(';').next())
+        .map(str::trim)
+        != Some("application/json")
+    {
+        return false;
+    }
+    let mut body = Vec::new();
+    loop {
+        match response.chunk().await {
+            Ok(Some(chunk)) if body.len() + chunk.len() <= 128 => body.extend_from_slice(&chunk),
+            Ok(None) => break,
+            _ => return false,
+        }
+    }
+    serde_json::from_slice::<BusyResponse>(&body).is_ok_and(|reply| reply.error == "worker_busy")
+}
+
 #[derive(Clone)]
 pub struct CubeTransport {
     client: Client,
@@ -60,7 +105,7 @@ impl CubeTransport {
         batch: &TextBatch,
         config: Option<&Value>,
         deadline: tokio::time::Instant,
-    ) -> Result<CubeBatchResult, String> {
+    ) -> Result<CubeBatchResult, CubeDispatchError> {
         // One absolute parent deadline bounds POST, response decoding and polls.
         // Cancelling a POST never causes a retry; the Cube retains ownership of
         // any already accepted work after this coordinator releases its lease.
@@ -74,7 +119,7 @@ impl CubeTransport {
         batch: &TextBatch,
         config: Option<&Value>,
         deadline: tokio::time::Instant,
-    ) -> Result<CubeBatchResult, String> {
+    ) -> Result<CubeBatchResult, CubeDispatchError> {
         let boundary = format!("ark-{}", uuid::Uuid::new_v4().simple());
         let mut body = Vec::new();
         if let Some(config) = config {
@@ -92,6 +137,7 @@ impl CubeTransport {
             .client
             .post(format!("{}/v1/scan", url.trim_end_matches('/')))
             .bearer_auth(self.token.as_ref())
+            .header("x-ark-dispatch-mode", "no-queue")
             .header(
                 "content-type",
                 format!("multipart/form-data; boundary={boundary}"),
@@ -100,8 +146,14 @@ impl CubeTransport {
             .send()
             .await
             .map_err(|_| "cube_submit_transport".to_owned())?;
-        if response.status() != reqwest::StatusCode::ACCEPTED {
-            return Err(format!("cube_submit_status_{}", response.status().as_u16()));
+        let status = response.status();
+        if status != reqwest::StatusCode::ACCEPTED {
+            if status == reqwest::StatusCode::TOO_MANY_REQUESTS
+                && is_pre_admission_busy(response).await
+            {
+                return Err(CubeDispatchError::WorkerBusy);
+            }
+            return Err(format!("cube_submit_status_{}", status.as_u16()).into());
         }
         let submit_ms = submit_started.elapsed().as_secs_f64() * 1000.0;
         let accepted: Value = response
@@ -153,7 +205,7 @@ impl CubeTransport {
                     continue;
                 }
                 if !status.is_success() {
-                    return Err(format!("cube_poll_status_{}", status.as_u16()));
+                    return Err(format!("cube_poll_status_{}", status.as_u16()).into());
                 }
                 let job = response
                     .json::<Value>()

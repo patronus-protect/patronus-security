@@ -12,7 +12,7 @@ use timings::JobTimings;
 use worker_pool::{WorkerLease, WorkerPool};
 
 use axum::body::Bytes;
-use axum::extract::{Path, State};
+use axum::extract::{FromRequest, Path, Request, State};
 use axum::http::{header, HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
@@ -446,28 +446,75 @@ fn l2_chunk_evidence(result: &Value) -> Option<Value> {
     }))
 }
 
-async fn submit_scan(
-    State(state): State<Arc<AppState>>,
-    headers: HeaderMap,
-    body: Bytes,
+async fn submit_scan(State(state): State<Arc<AppState>>, request: Request) -> Response {
+    submit_scan_with_body_timeout(state, request, Duration::from_secs(15)).await
+}
+
+async fn submit_scan_with_body_timeout(
+    state: Arc<AppState>,
+    request: Request,
+    body_timeout: Duration,
 ) -> Response {
-    if !authenticated(&state, &headers) {
+    let headers = request.headers().clone();
+    let reserved = if headers
+        .get("x-ark-dispatch-mode")
+        .is_some_and(|value| value == "no-queue")
+    {
+        if !authenticated(&state, &headers) {
+            return unauthorized();
+        }
+        match state.worker_pool.try_acquire() {
+            Ok(lease) => Some(lease),
+            Err(_) => {
+                return (
+                    StatusCode::TOO_MANY_REQUESTS,
+                    Json(json!({"error":"worker_busy"})),
+                )
+                    .into_response()
+            }
+        }
+    } else {
+        None
+    };
+    let body = if reserved.is_some() {
+        match tokio::time::timeout(body_timeout, Bytes::from_request(request, &state)).await {
+            Ok(body) => body,
+            Err(_) => {
+                return (
+                    StatusCode::REQUEST_TIMEOUT,
+                    Json(json!({"error":"request_body_timeout"})),
+                )
+                    .into_response()
+            }
+        }
+    } else {
+        Bytes::from_request(request, &state).await
+    };
+    let body = match body {
+        Ok(body) => body,
+        Err(error) => return error.into_response(),
+    };
+    if reserved.is_none() && !authenticated(&state, &headers) {
         return unauthorized();
     }
     let submitted = Instant::now();
-    let lease = match tokio::time::timeout(Duration::from_secs(15), state.worker_pool.acquire())
-        .await
-    {
-        Ok(Ok(lease)) => lease,
-        Ok(Err(error)) => {
-            return (StatusCode::TOO_MANY_REQUESTS, Json(json!({"error":error}))).into_response()
-        }
-        Err(_) => {
-            return (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(json!({"error":"no worker became available within 15 seconds"})),
-            )
-                .into_response()
+    let lease = match reserved {
+        Some(lease) => lease,
+        None => {
+            match tokio::time::timeout(Duration::from_secs(15), state.worker_pool.acquire()).await {
+                Ok(Ok(lease)) => lease,
+                Ok(Err(error)) => {
+                    return (StatusCode::TOO_MANY_REQUESTS, Json(json!({"error":error})))
+                        .into_response()
+                }
+                Err(_) => {
+                    return (
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        Json(json!({"error":"no worker became available within 15 seconds"})),
+                    )
+                        .into_response()
+                }
+            }
         }
     };
     let worker = &lease.worker;
@@ -692,6 +739,220 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::body::Body;
+    use tower::ServiceExt;
+
+    async fn submission_state() -> (Arc<AppState>, tokio::task::JoinHandle<()>) {
+        use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            let mut stream = BufReader::new(stream);
+            loop {
+                let mut line = String::new();
+                if stream.read_line(&mut line).await.unwrap() == 0 {
+                    break;
+                }
+                let count: usize = line.trim().strip_prefix('*').unwrap().parse().unwrap();
+                let mut args = Vec::new();
+                for _ in 0..count {
+                    line.clear();
+                    stream.read_line(&mut line).await.unwrap();
+                    let len: usize = line.trim().strip_prefix('$').unwrap().parse().unwrap();
+                    let mut value = vec![0; len + 2];
+                    stream.read_exact(&mut value).await.unwrap();
+                    value.truncate(len);
+                    args.push(value);
+                }
+                assert_eq!(
+                    args[0], b"CLIENT",
+                    "rejected submission must not create a job"
+                );
+                stream.get_mut().write_all(b"+OK\r\n").await.unwrap();
+            }
+        });
+        let state = Arc::new(AppState {
+            client: reqwest::Client::new(),
+            redis: connect_redis(&format!("redis://{address}/")).await.unwrap(),
+            worker_token: String::new(),
+            worker_pool: WorkerPool::healthy_test_pool(),
+            key_hashes: vec![format!("{:x}", Sha256::digest(b"fixture-key"))],
+            retention_secs: 90,
+        });
+        (state, server)
+    }
+
+    fn submission_router(state: Arc<AppState>) -> Router {
+        Router::new()
+            .route("/v1/scan", post(submit_scan))
+            .with_state(state)
+    }
+
+    fn no_queue_request(body: Body, token: &str) -> Request {
+        Request::builder()
+            .method("POST")
+            .uri("/v1/scan")
+            .header(header::AUTHORIZATION, format!("Bearer {token}"))
+            .header("x-ark-dispatch-mode", "no-queue")
+            .body(body)
+            .unwrap()
+    }
+
+    fn unread_body() -> Body {
+        Body::from_stream(futures::stream::poll_fn(
+            |_| -> std::task::Poll<Option<Result<Bytes, std::io::Error>>> {
+                panic!("rejected request body must not be read")
+            },
+        ))
+    }
+
+    #[tokio::test]
+    async fn no_queue_busy_rejects_before_body_read_with_exact_error() {
+        let (state, server) = submission_state().await;
+        let active = state.worker_pool.try_acquire().unwrap();
+        let response = submission_router(state.clone())
+            .oneshot(no_queue_request(unread_body(), "fixture-key"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(
+            axum::body::to_bytes(response.into_body(), 1024)
+                .await
+                .unwrap(),
+            br#"{"error":"worker_busy"}"#.as_slice()
+        );
+        drop(active);
+        assert!(state.worker_pool.try_acquire().is_ok());
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn no_queue_authentication_precedes_reservation_and_body_read() {
+        let (state, server) = submission_state().await;
+        for busy in [false, true] {
+            let active = busy.then(|| state.worker_pool.try_acquire().unwrap());
+            let response = submission_router(state.clone())
+                .oneshot(no_queue_request(unread_body(), "wrong-key"))
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+            drop(active);
+            assert!(state.worker_pool.try_acquire().is_ok());
+        }
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn no_queue_reserves_before_body_read_and_releases_on_body_error() {
+        let (state, server) = submission_state().await;
+        let pool = state.worker_pool.clone();
+        let body = Body::from_stream(futures::stream::poll_fn(move |_| {
+            assert!(
+                pool.try_acquire().is_err(),
+                "worker must already be reserved"
+            );
+            std::task::Poll::Ready(Some(Err::<Bytes, _>(std::io::Error::other("broken body"))))
+        }));
+        let response = submission_router(state.clone())
+            .oneshot(no_queue_request(body, "fixture-key"))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert!(state.worker_pool.try_acquire().is_ok());
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn no_queue_body_limit_and_cancelled_body_return_reserved_worker() {
+        let (state, server) = submission_state().await;
+        let response = submission_router(state.clone())
+            .oneshot(no_queue_request(
+                Body::from(vec![0; 2 * 1024 * 1024 + 1]),
+                "fixture-key",
+            ))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
+        assert!(state.worker_pool.try_acquire().is_ok());
+
+        let body = Body::from_stream(futures::stream::pending::<Result<Bytes, std::io::Error>>());
+        let mut request = Box::pin(
+            submission_router(state.clone()).oneshot(no_queue_request(body, "fixture-key")),
+        );
+        assert!(futures::poll!(&mut request).is_pending());
+        assert!(state.worker_pool.try_acquire().is_err());
+        drop(request);
+        assert!(state.worker_pool.try_acquire().is_ok());
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn no_queue_body_timeout_returns_reserved_worker_without_busy_retry() {
+        let (state, server) = submission_state().await;
+        let body = Body::from_stream(futures::stream::pending::<Result<Bytes, std::io::Error>>());
+        let response = tokio::time::timeout(
+            Duration::from_secs(1),
+            submit_scan_with_body_timeout(
+                state.clone(),
+                no_queue_request(body, "fixture-key"),
+                Duration::from_millis(10),
+            ),
+        )
+        .await
+        .expect("slow authenticated bodies must not hold a worker indefinitely");
+        assert_eq!(response.status(), StatusCode::REQUEST_TIMEOUT);
+        assert_eq!(
+            axum::body::to_bytes(response.into_body(), 1024)
+                .await
+                .unwrap(),
+            br#"{"error":"request_body_timeout"}"#.as_slice()
+        );
+        assert!(state.worker_pool.try_acquire().is_ok());
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn direct_submission_preserves_body_limit_before_authentication() {
+        let (state, server) = submission_state().await;
+        for mode in [None, Some("unknown")] {
+            let mut request = Request::builder().method("POST").uri("/v1/scan");
+            if let Some(mode) = mode {
+                request = request.header("x-ark-dispatch-mode", mode);
+            }
+            let response = submission_router(state.clone())
+                .oneshot(
+                    request
+                        .body(Body::from(vec![0; 2 * 1024 * 1024 + 1]))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
+            assert!(state.worker_pool.try_acquire().is_ok());
+        }
+        let body = Body::from_stream(futures::stream::once(async {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+            Ok::<_, std::io::Error>(Bytes::from_static(b"body"))
+        }));
+        let response = submit_scan_with_body_timeout(
+            state.clone(),
+            Request::builder()
+                .method("POST")
+                .uri("/v1/scan")
+                .body(body)
+                .unwrap(),
+            Duration::from_millis(1),
+        )
+        .await;
+        assert_eq!(
+            response.status(),
+            StatusCode::UNAUTHORIZED,
+            "Direct body reads must not inherit the no-queue deadline"
+        );
+        server.abort();
+    }
 
     #[tokio::test]
     async fn redis_disconnect_changes_readiness_and_recovers_job_storage() {
