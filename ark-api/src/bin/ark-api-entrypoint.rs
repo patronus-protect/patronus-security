@@ -632,6 +632,84 @@ async fn submit_scan(
     (StatusCode::ACCEPTED, Json(json!({"jobs": jobs}))).into_response()
 }
 
+async fn submit_scan_sync(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Extension(admission): Extension<Arc<tokio::sync::OwnedSemaphorePermit>>,
+    body: Bytes,
+) -> Response {
+    let lease = match tokio::time::timeout(
+        Duration::from_secs(15),
+        state.worker_pool.acquire_reserved(admission),
+    )
+    .await
+    {
+        Ok(Ok(lease)) => lease,
+        Ok(Err(error)) => {
+            return (StatusCode::TOO_MANY_REQUESTS, Json(json!({"error":error}))).into_response()
+        }
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"error":"no worker became available within 15 seconds"})),
+            )
+                .into_response()
+        }
+    };
+    let worker = &lease.worker;
+    let mut request = state
+        .client
+        .post(format!("{}/v1/scan/sync", worker.url.trim_end_matches('/')))
+        .bearer_auth(&state.worker_token)
+        .header("x-ark-worker-instance", &lease.instance_id)
+        .header("x-ark-worker-epoch", lease.epoch.to_string())
+        .body(body);
+    if let Some(content_type) = headers.get(header::CONTENT_TYPE) {
+        request = request.header(header::CONTENT_TYPE, content_type);
+    }
+    lease.start_dispatch();
+    let response = match request
+        .timeout(Duration::from_secs(ACTIVE_TTL_SECS - 10))
+        .send()
+        .await
+    {
+        Ok(response) => response,
+        Err(_) => {
+            lease.quarantine();
+            return (
+                StatusCode::BAD_GATEWAY,
+                Json(json!({"error":"worker unavailable"})),
+            )
+                .into_response();
+        }
+    };
+    let status = response.status();
+    let content_type = response.headers().get(header::CONTENT_TYPE).cloned();
+    let payload = match response.bytes().await {
+        Ok(payload) => payload,
+        Err(_) => {
+            lease.quarantine();
+            return (
+                StatusCode::BAD_GATEWAY,
+                Json(json!({"error":"invalid worker response"})),
+            )
+                .into_response();
+        }
+    };
+    if status.is_success() || (!status.is_server_error() && status != StatusCode::CONFLICT) {
+        lease.finished();
+    } else {
+        lease.quarantine();
+    }
+    let mut response = Response::builder().status(status);
+    if let Some(content_type) = content_type {
+        response = response.header(header::CONTENT_TYPE, content_type);
+    }
+    response
+        .body(axum::body::Body::from(payload))
+        .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response())
+}
+
 async fn get_scan(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
@@ -721,6 +799,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route(
             "/v1/scan",
             post(submit_scan).layer(middleware::from_fn_with_state(state.clone(), admit_scan)),
+        )
+        .route(
+            "/v1/scan/sync",
+            post(submit_scan_sync).layer(middleware::from_fn_with_state(state.clone(), admit_scan)),
         )
         .route("/v1/scan/:job_id", get(get_scan))
         .with_state(state);

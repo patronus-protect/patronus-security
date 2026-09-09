@@ -100,6 +100,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 worker_admission::track_submission,
             )),
         )
+        .route(
+            "/v1/scan/sync",
+            post(routes::scan::submit_scan_sync).layer(middleware::from_fn_with_state(
+                state.clone(),
+                worker_admission::track_submission,
+            )),
+        )
         .route("/internal/status", get(routes::health::worker_status))
         .route("/internal/recover", post(routes::health::recover_worker))
         .route(
