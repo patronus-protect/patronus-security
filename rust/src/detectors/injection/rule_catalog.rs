@@ -445,19 +445,20 @@ fn push_regex_matches<'a>(
     for captures in regex.captures_iter(text) {
         let matched = captures.get(0).unwrap();
         if rule.decoded_base64_instruction || rule.decoded_unicode_instruction {
-            let decoded = captures.name("encoded_payload")
-                .and_then(|payload| {
-                    if rule.decoded_base64_instruction {
-                        crate::threat::base64_decode_text(payload.as_str())
-                    } else {
-                        Some(crate::threat::slash_unicode_decode_lossy(payload.as_str()))
-                    }
-                });
+            let decoded = captures.name("encoded_payload").and_then(|payload| {
+                if rule.decoded_base64_instruction {
+                    crate::threat::base64_decode_text(payload.as_str())
+                } else {
+                    Some(crate::threat::slash_unicode_decode_lossy(payload.as_str()))
+                }
+            });
             if !decoded.is_some_and(|text| {
                 let prepared = crate::threat::NativeText::new(&text);
-                ["instruction_override", "instruction_leak"].iter().any(|family| {
-                    !crate::threat::native_matches_prepared(family, &prepared).is_empty()
-                })
+                ["instruction_override", "instruction_leak"]
+                    .iter()
+                    .any(|family| {
+                        !crate::threat::native_matches_prepared(family, &prepared).is_empty()
+                    })
             }) {
                 continue;
             }

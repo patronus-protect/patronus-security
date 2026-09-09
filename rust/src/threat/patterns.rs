@@ -539,7 +539,6 @@ pub(super) fn secret_exfiltration_request_re() -> &'static Regex {
     })
 }
 
-
 pub(super) fn generic_secret_exfiltration_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| Regex::new(
@@ -556,7 +555,6 @@ pub(super) fn secret_transfer_request_re() -> &'static Regex {
         .unwrap()
     })
 }
-
 
 // Destination-first handoffs refer back to the URL with "there"/"dort".
 pub(super) fn secret_transfer_handoff_re() -> &'static Regex {

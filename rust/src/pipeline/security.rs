@@ -1471,7 +1471,11 @@ impl SecurityGateway {
                                     category,
                                     "native:threat_l1",
                                     text,
-                                    || native.detect_prepared(prepared, |id| execution.allows_rule(id)),
+                                    || {
+                                        native.detect_prepared(prepared, |id| {
+                                            execution.allows_rule(id)
+                                        })
+                                    },
                                 )
                             },
                         ));

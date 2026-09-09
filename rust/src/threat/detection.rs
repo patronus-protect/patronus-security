@@ -124,7 +124,10 @@ pub(crate) fn native_matches_prepared(family: &str, prepared: &NativeText<'_>) -
             ),
         ],
         "secret_transfer" => vec![
-            (generic_secret_exfiltration_re(), "generic_secret_exfiltration_re"),
+            (
+                generic_secret_exfiltration_re(),
+                "generic_secret_exfiltration_re",
+            ),
             (
                 secret_exfiltration_request_re(),
                 "secret_exfiltration_request_re",

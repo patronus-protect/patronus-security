@@ -277,7 +277,7 @@ async fn collect_events_inner(
         }
     };
 
-    tracing::info!(job_id, worker = %worker.name, worker_events_connected_ms = started.elapsed().as_secs_f64() * 1_000.0, "worker event stream connected");
+    tracing::debug!(job_id, worker = %worker.name, worker_events_connected_ms = started.elapsed().as_secs_f64() * 1_000.0, "worker event stream connected");
 
     let mut frames = sse::Frames::default();
     let mut stream = response.bytes_stream();
@@ -321,7 +321,7 @@ async fn collect_events_inner(
                 }
                 "result" => {
                     if let Some(category) = data.get("category").and_then(Value::as_str) {
-                        tracing::info!(
+                        tracing::debug!(
                             job_id,
                             worker = %worker.name,
                             category,
@@ -365,7 +365,7 @@ async fn collect_events_inner(
             }
             progress_dirty = false;
             if event == "finished" {
-                tracing::info!(job_id, worker = %worker.name, worker_events_finished_ms = started.elapsed().as_secs_f64() * 1_000.0, event_count, "worker event stream finished");
+                tracing::debug!(job_id, worker = %worker.name, worker_events_finished_ms = started.elapsed().as_secs_f64() * 1_000.0, event_count, "worker event stream finished");
                 return true;
             }
         }
@@ -586,7 +586,7 @@ async fn submit_scan(
             continue;
         };
         let job_id = format!("job_{}", Uuid::new_v4().simple());
-        tracing::info!(job_id, worker = %worker.name, worker_submit_ms = upstream_started.elapsed().as_secs_f64() * 1_000.0, "worker accepted scan");
+        tracing::debug!(job_id, worker = %worker.name, worker_submit_ms = upstream_started.elapsed().as_secs_f64() * 1_000.0, "worker accepted scan");
         let job = Job {
             job_id: job_id.clone(),
             source: worker_job
