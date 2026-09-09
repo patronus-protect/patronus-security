@@ -6,6 +6,7 @@ use std::sync::OnceLock;
 pub(super) struct GroupedPatterns {
     matcher: AhoCorasick,
     groups: Vec<u64>,
+    anchor_gates: Vec<(u64, crate::detectors::anchor_gate::AnchorGate)>,
 }
 
 impl GroupedPatterns {
@@ -13,7 +14,32 @@ impl GroupedPatterns {
         Self {
             matcher: AhoCorasick::new(entries.iter().map(|(pattern, _)| *pattern)).unwrap(),
             groups: entries.iter().map(|(_, group)| *group).collect(),
+            anchor_gates: (0..64)
+                .map(|bit| 1u64 << bit)
+                .filter(|mask| entries.iter().any(|(_, groups)| groups & mask != 0))
+                .map(|mask| {
+                    (
+                        mask,
+                        crate::detectors::anchor_gate::AnchorGate::literals(
+                            entries
+                                .iter()
+                                .filter(|(_, groups)| groups & mask != 0)
+                                .map(|(word, _)| *word),
+                        ),
+                    )
+                })
+                .collect(),
         }
+    }
+
+    pub(super) fn allows(
+        &self,
+        mask: u64,
+        presence: &crate::detectors::lexical_anchors::AnchorPresence,
+    ) -> bool {
+        self.anchor_gates
+            .iter()
+            .any(|(bit, gate)| bit & mask != 0 && gate.allows(presence))
     }
 
     pub(super) fn matches(&self, text: &str) -> Vec<(u64, usize, usize)> {
@@ -513,6 +539,14 @@ pub(super) fn secret_exfiltration_request_re() -> &'static Regex {
     })
 }
 
+
+pub(super) fn generic_secret_exfiltration_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(
+        r"(?:^|[.!?;\n]\s*)(?:please\s+|bitte\s+)?(?P<action>exfiltrate|exfiltriere)\s+(?:(?:all|the|alle|die)\s+)?(?P<secret>secrets|geheimnisse)\b"
+    ).unwrap())
+}
+
 pub(super) fn secret_transfer_request_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
@@ -520,6 +554,17 @@ pub(super) fn secret_transfer_request_re() -> &'static Regex {
             r"\b(?P<anchor_5>send|upload|post|email|forward|leak|share|paste|copy)\b(?:[ \t]+(?P<anchor_4>the|a|an|my|your|our|their|this|that|all|actual|raw)){0,4}[ \t]+(?:\b(?P<anchor_3>api[ \t]+keys?|access[ \t]+tokens?|auth[ \t]+tokens?|bearer[ \t]+tokens?|refresh[ \t]+tokens?|secret[ \t]+tokens?|private[ \t]+keys?|passwords?|credentials?)\b|\.env\b)[^.!?;\n]{0,64}\b(?P<anchor_2>to|into|onto|via|at)\b[ \t]+(?P<anchor_1>attacker|external|pastebin|https?://[^ \t]+|[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})",
         )
         .unwrap()
+    })
+}
+
+
+// Destination-first handoffs refer back to the URL with "there"/"dort".
+pub(super) fn secret_transfer_handoff_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(
+            r"(?P<destination>https?://[^\s<>]+)[ \t]+(?:and|und)[ \t]+(?P<transfer_action>paste|copy|upload|send|kopiere|sende|übermittle|uebermittle)[ \t]+(?:(?:the|your|den|das|die|deinen|deine)[ \t]+)?(?P<secret>secret[ \t]+token|access[ \t]+token|api[ \t]+key|password|credential|geheimen[ \t]+token|zugangstoken|passwort|zugangsdaten)[ \t]+(?P<destination_reference>there|dort|dorthin)\b",
+        ).unwrap()
     })
 }
 
@@ -1096,4 +1141,74 @@ pub(super) fn injection_signal_re() -> &'static Regex {
         )
         .expect("valid injection signal regex")
     })
+}
+
+/// Compile necessary lexical gates once alongside the immutable native regexes.
+pub(super) fn regex_anchor_gate(
+    regex: &Regex,
+) -> &'static crate::detectors::anchor_gate::AnchorGate {
+    use crate::detectors::anchor_gate::AnchorGate;
+    static GATES: OnceLock<std::collections::HashMap<usize, AnchorGate>> = OnceLock::new();
+    static UNCONDITIONAL: AnchorGate = AnchorGate::Always;
+    GATES
+        .get_or_init(|| {
+            [
+                cross_tool_request_re(),
+                cross_tool_request_de_re(),
+                instruction_leak_request_re(),
+                instruction_leak_request_de_re(),
+                secret_exfiltration_request_re(),
+                secret_transfer_request_re(),
+                secret_transfer_request_de_re(),
+                encoded_instruction_request_re(),
+                encoded_execution_re(),
+                encoded_instruction_request_de_re(),
+                instruction_override_request_re(),
+                instruction_override_request_de_re(),
+                instruction_override_behavior_re(),
+                instruction_override_behavior_de_re(),
+                jailbreak_named_mode_re(),
+                jailbreak_dan_re(),
+                covert_instruction_request_re(),
+                covert_instruction_request_de_re(),
+                system_boundary_instruction_re(),
+                system_boundary_instruction_de_re(),
+                authority_escalation_re(),
+                authority_escalation_de_re(),
+                tool_call_injection_re(),
+                tool_call_injection_de_re(),
+                output_disclosure_re(),
+                output_disclosure_de_re(),
+                multi_turn_escalation_request_re(),
+                multi_turn_escalation_request_de_re(),
+                binary_smuggling_intent_re(),
+                tool_output_instruction_re(),
+                tool_output_instruction_de_re(),
+                mcp_runtime_command_re(),
+                mcp_runtime_secret_env_re(),
+                sensitive_material_request_re(),
+                sensitive_material_passive_request_re(),
+                sensitive_material_request_de_re(),
+                guardrail_tamper_request_re(),
+                guardrail_tamper_passive_request_re(),
+                guardrail_tamper_request_de_re(),
+                guardrail_tamper_passive_request_de_re(),
+                destructive_operation_de_re(),
+                agentic_control_abuse_de_re(),
+                html_comment_re(),
+                hidden_style_open_re(),
+                aria_hidden_open_re(),
+                injection_signal_re(),
+            ]
+            .into_iter()
+            .map(|regex| {
+                (
+                    regex as *const Regex as usize,
+                    AnchorGate::regex(regex.as_str(), false),
+                )
+            })
+            .collect()
+        })
+        .get(&(regex as *const Regex as usize))
+        .unwrap_or(&UNCONDITIONAL)
 }

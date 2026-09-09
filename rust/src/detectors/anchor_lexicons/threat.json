@@ -1,0 +1,746 @@
+[
+  {
+    "id": "threat.download_action",
+    "description": "Herunterladen oder Abrufen einer Ressource",
+    "en": [
+      "download",
+      "fetch",
+      "retrieve",
+      "download resource"
+    ],
+    "de": [
+      "lade",
+      "laden",
+      "hole",
+      "herunterladen",
+      "herunterlade",
+      "abrufen",
+      "abholen"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/threat/rules.json"
+    ]
+  },
+  {
+    "id": "threat.execution_action",
+    "description": "Ausführen oder Starten von Code und Programmen",
+    "en": [
+      "execute",
+      "run",
+      "launch",
+      "start",
+      "carry out"
+    ],
+    "de": [
+      "führe",
+      "fuehre",
+      "starte",
+      "ausführen",
+      "ausfuehren",
+      "auszuführen",
+      "starten",
+      "durchführen",
+      "durchfuehren",
+      "ausführen lassen",
+      "ausfuehren lassen"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/threat/rules.json"
+    ]
+  },
+  {
+    "id": "threat.access_action",
+    "description": "Lesen, Sammeln, Extrahieren oder Entwenden von Daten",
+    "en": [
+      "read",
+      "collect",
+      "harvest",
+      "dump",
+      "steal",
+      "extract",
+      "gather",
+      "retrieve",
+      "obtain",
+      "pilfer"
+    ],
+    "de": [
+      "lies",
+      "lese",
+      "sammle",
+      "extrahiere",
+      "stiehl",
+      "kopiere",
+      "auslesen",
+      "abrufen",
+      "zusammentragen",
+      "entwenden",
+      "stehlen"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/threat/rules.json"
+    ]
+  },
+  {
+    "id": "threat.transfer_action",
+    "description": "Senden, Hochladen oder Übertragen von Daten",
+    "en": [
+      "send",
+      "upload",
+      "post",
+      "transfer",
+      "transmit",
+      "forward",
+      "relay",
+      "dispatch"
+    ],
+    "de": [
+      "sende",
+      "lade",
+      "übertrage",
+      "uebertrage",
+      "schicke",
+      "versende",
+      "versenden",
+      "übermitteln",
+      "uebermitteln",
+      "weiterleiten",
+      "hochladen"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/threat/rules.json"
+    ]
+  },
+  {
+    "id": "threat.removal_action",
+    "description": "Entfernen oder Löschen von Schutz und Daten",
+    "en": [
+      "remove",
+      "delete",
+      "erase",
+      "wipe",
+      "purge"
+    ],
+    "de": [
+      "entferne",
+      "lösche",
+      "loesche",
+      "beseitige",
+      "tilge",
+      "vernichte",
+      "auslöschen",
+      "ausloeschen"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/threat/rules.json"
+    ]
+  },
+  {
+    "id": "threat.bypass_action",
+    "description": "Deaktivieren oder Umgehen einer Schutzmaßnahme",
+    "en": [
+      "disable",
+      "bypass",
+      "circumvent",
+      "deactivate",
+      "turn off"
+    ],
+    "de": [
+      "deaktiviere",
+      "umgehe",
+      "abschalten",
+      "aushebeln",
+      "ausschalten",
+      "deaktivieren",
+      "umgehen"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/threat/rules.json"
+    ]
+  },
+  {
+    "id": "threat.planning_action",
+    "description": "Planen oder Organisieren einer Handlung",
+    "en": [
+      "plan",
+      "organize",
+      "arrange",
+      "prepare",
+      "coordinate"
+    ],
+    "de": [
+      "plane",
+      "organisiere",
+      "vorbereiten",
+      "koordiniere",
+      "arrangiere"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/threat/rules.json"
+    ]
+  },
+  {
+    "id": "threat.secret_material",
+    "description": "Bezeichnungen für Zugangsdaten und geheimes Schlüsselmaterial ohne echte Geheimniswerte",
+    "en": [
+      "credentials",
+      "passwords",
+      "private keys",
+      "api keys",
+      "access tokens",
+      "credential",
+      "password",
+      "private key",
+      "api key",
+      "access token",
+      "login details",
+      "passphrase"
+    ],
+    "de": [
+      "zugangsdaten",
+      "passwörter",
+      "passwoerter",
+      "private schlüssel",
+      "private schluessel",
+      "api-schlüssel",
+      "zugriffstoken",
+      "passwort",
+      "kennwort",
+      "kennwörter",
+      "kennwoerter",
+      "anmeldedaten",
+      "privater schlüssel",
+      "privater schluessel",
+      "api-schluessel",
+      "zugangstoken",
+      "passphrase"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/threat/rules.json"
+    ]
+  },
+  {
+    "id": "threat.credential_file",
+    "description": "Feste Dateinamen und Pfade typischer Zugangsdatenquellen",
+    "en": [],
+    "de": [],
+    "shared": [
+      ".aws/credentials",
+      ".ssh/id_rsa",
+      ".ssh/id_ed25519",
+      ".kube/config",
+      ".npmrc",
+      ".netrc",
+      "/etc/shadow"
+    ],
+    "sources": [
+      "rust/src/detectors/threat/rules.json"
+    ]
+  },
+  {
+    "id": "threat.agent_config",
+    "description": "Feste Namen von Agentenanweisungen und Agentenkonfigurationen",
+    "en": [],
+    "de": [],
+    "shared": [
+      "skill.md",
+      "agents.md",
+      ".claude",
+      ".codex",
+      "mcp.json"
+    ],
+    "sources": [
+      "rust/src/detectors/threat/rules.json"
+    ]
+  },
+  {
+    "id": "threat.session_history",
+    "description": "Gesprächs-, Chat- oder Sitzungsverlauf als Datenquelle",
+    "en": [
+      "conversation history",
+      "session history",
+      "chat history",
+      "conversation log",
+      "chat log",
+      "conversation transcript"
+    ],
+    "de": [
+      "gesprächsverlauf",
+      "gespraechsverlauf",
+      "chatverlauf",
+      "sitzungsverlauf",
+      "dialogverlauf",
+      "unterhaltungsverlauf",
+      "chatprotokoll",
+      "gesprächsprotokoll",
+      "gespraechsprotokoll"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/threat/rules.json"
+    ]
+  },
+  {
+    "id": "threat.safety_guard",
+    "description": "Sicherheitsprüfungen und Schutzmechanismen eines Agenten",
+    "en": [
+      "safety checks",
+      "security checks",
+      "guardrails",
+      "safety check",
+      "security check",
+      "safeguard",
+      "protective measure"
+    ],
+    "de": [
+      "sicherheitsprüfungen",
+      "sicherheitspruefungen",
+      "schutzmechanismen",
+      "schutzmaßnahme",
+      "schutzmassnahme",
+      "schutzvorkehrung",
+      "sicherheitskontrolle"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/threat/rules.json"
+    ]
+  },
+  {
+    "id": "threat.security_verification",
+    "description": "Zertifikats-, Signatur- und Authentifizierungsprüfungen",
+    "en": [
+      "tls verification",
+      "certificate verification",
+      "authentication",
+      "signature verification",
+      "certificate validation",
+      "signature validation",
+      "identity authentication"
+    ],
+    "de": [
+      "zertifikatsprüfung",
+      "zertifikatspruefung",
+      "authentifizierung",
+      "signaturprüfung",
+      "signaturpruefung",
+      "zertifikatsvalidierung",
+      "signaturvalidierung",
+      "authentifikation"
+    ],
+    "shared": [
+      "sandbox"
+    ],
+    "sources": [
+      "rust/src/detectors/threat/rules.json"
+    ]
+  },
+  {
+    "id": "threat.absent_consent",
+    "description": "Ausdrücklich fehlende Zustimmung oder Erlaubnis",
+    "en": [
+      "without consent",
+      "without user consent",
+      "without approval",
+      "without user approval",
+      "without permission",
+      "without user permission",
+      "without authorization",
+      "without authorisation",
+      "without assent"
+    ],
+    "de": [
+      "ohne zustimmung",
+      "ohne genehmigung",
+      "ohne erlaubnis",
+      "ohne einwilligung",
+      "ohne einverständnis",
+      "ohne einverstaendnis",
+      "ohne autorisierung"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/threat/rules.json"
+    ]
+  },
+  {
+    "id": "threat.violent_target",
+    "description": "Gewaltangriff oder Mord als Handlungsziel",
+    "en": [
+      "violent attack",
+      "murder",
+      "violent assault",
+      "assassination"
+    ],
+    "de": [
+      "gewaltangriff",
+      "mord",
+      "gewalttätiger angriff",
+      "gewalttaetiger angriff",
+      "ermordung"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/threat/rules.json"
+    ]
+  },
+  {
+    "id": "threat.remote_destination",
+    "description": "Feste Protokollpräfixe entfernter Quellen oder Übertragungsziele ohne konkrete Adresse",
+    "en": [],
+    "de": [],
+    "shared": [
+      "http://",
+      "https://",
+      "s3://",
+      "gs://",
+      "az://"
+    ],
+    "sources": [
+      "rust/src/detectors/threat/rules.json"
+    ]
+  },
+  {
+    "id": "threat.network_client",
+    "description": "Befehle und API-Operationen zum Abrufen oder Übertragen von Netzwerkdaten",
+    "en": [],
+    "de": [],
+    "shared": [
+      "curl",
+      "wget",
+      "fetch",
+      "requests.get",
+      "requests.post",
+      "requests.put",
+      "requests.delete",
+      "urllib.request.urlopen"
+    ],
+    "sources": [
+      "rust/src/detectors/threat/rules.json"
+    ]
+  },
+  {
+    "id": "threat.cloud_transfer_client",
+    "description": "Feste Werkzeugnamen für Cloud-Dateiübertragungen",
+    "en": [],
+    "de": [],
+    "shared": [
+      "aws",
+      "gsutil",
+      "azcopy"
+    ],
+    "sources": [
+      "rust/src/detectors/threat/rules.json"
+    ]
+  },
+  {
+    "id": "threat.command_interpreter",
+    "description": "Shells und Programmlaufzeiten für die Ausführung von Nutzlasten",
+    "en": [],
+    "de": [],
+    "shared": [
+      "bash",
+      "sh",
+      "zsh",
+      "python",
+      "python3",
+      "node"
+    ],
+    "sources": [
+      "rust/src/detectors/threat/rules.json"
+    ]
+  },
+  {
+    "id": "threat.code_execution_operation",
+    "description": "Feste API-Operationen für dynamische Code- oder Prozessausführung",
+    "en": [],
+    "de": [],
+    "shared": [
+      "exec",
+      "eval",
+      "os.system",
+      "subprocess.run",
+      "subprocess.call",
+      "subprocess.popen"
+    ],
+    "sources": [
+      "rust/src/detectors/threat/rules.json"
+    ]
+  },
+  {
+    "id": "threat.payload_decoding",
+    "description": "Dekodierung oder Dekomprimierung einer kodierten Nutzlast",
+    "en": [],
+    "de": [],
+    "shared": [
+      "base64",
+      "b64decode",
+      "bytes.fromhex",
+      "marshal.loads",
+      "zlib.decompress",
+      "--decode"
+    ],
+    "sources": [
+      "rust/src/detectors/threat/rules.json"
+    ]
+  },
+  {
+    "id": "threat.file_read_operation",
+    "description": "Befehle zum Auslesen von Dateien",
+    "en": [],
+    "de": [],
+    "shared": [
+      "cat",
+      "get-content"
+    ],
+    "sources": [
+      "rust/src/detectors/threat/rules.json"
+    ]
+  },
+  {
+    "id": "threat.environment_source",
+    "description": "Befehle und API-Zugriff auf Umgebungsvariablen",
+    "en": [],
+    "de": [],
+    "shared": [
+      "env",
+      "printenv",
+      "os.environ"
+    ],
+    "sources": [
+      "rust/src/detectors/threat/rules.json"
+    ]
+  },
+  {
+    "id": "threat.request_payload_option",
+    "description": "Benannte Optionen zur Übertragung von HTTP-Nutzdaten",
+    "en": [],
+    "de": [],
+    "shared": [
+      "--data-binary",
+      "--data"
+    ],
+    "sources": [
+      "rust/src/detectors/threat/rules.json"
+    ]
+  },
+  {
+    "id": "threat.container_runtime",
+    "description": "Werkzeuge zum Erzeugen und Starten von Containern",
+    "en": [],
+    "de": [],
+    "shared": [
+      "docker",
+      "podman"
+    ],
+    "sources": [
+      "rust/src/detectors/threat/rules.json"
+    ]
+  },
+  {
+    "id": "threat.container_mount",
+    "description": "Benannte Optionen für Dateisystemeinbindungen in Container",
+    "en": [],
+    "de": [],
+    "shared": [
+      "--volume",
+      "--mount"
+    ],
+    "sources": [
+      "rust/src/detectors/threat/rules.json"
+    ]
+  },
+  {
+    "id": "threat.docker_socket_target",
+    "description": "Fester Pfad zur Docker-Verwaltungsschnittstelle des Hosts",
+    "en": [],
+    "de": [],
+    "shared": [
+      "/var/run/docker.sock"
+    ],
+    "sources": [
+      "rust/src/detectors/threat/rules.json"
+    ]
+  },
+  {
+    "id": "threat.container_privilege",
+    "description": "Feste Konfigurationsnamen und Optionen für erhöhte Containerrechte",
+    "en": [],
+    "de": [],
+    "shared": [
+      "--privileged",
+      "--cap-add",
+      "sys_admin",
+      "securitycontext",
+      "privileged"
+    ],
+    "sources": [
+      "rust/src/detectors/threat/rules.json"
+    ]
+  },
+  {
+    "id": "threat.persistence_scheduler",
+    "description": "Autostart und zeitgesteuerte oder dauerhafte Ausführung",
+    "en": [
+      "scheduled task",
+      "scheduled job",
+      "startup task"
+    ],
+    "de": [
+      "geplante aufgabe",
+      "autostart",
+      "zeitgesteuerte aufgabe",
+      "autostartaufgabe"
+    ],
+    "shared": [
+      "cron",
+      "crontab",
+      "systemd",
+      "launchctl"
+    ],
+    "sources": [
+      "rust/src/detectors/threat/rules.json"
+    ]
+  },
+  {
+    "id": "threat.deserialization_operation",
+    "description": "Feste API-Operationen zur Deserialisierung potenziell unvertrauenswürdiger Daten",
+    "en": [],
+    "de": [],
+    "shared": [
+      "pickle.load",
+      "pickle.loads",
+      "yaml.unsafe_load",
+      "marshal.load",
+      "unserialize"
+    ],
+    "sources": [
+      "rust/src/detectors/threat/rules.json"
+    ]
+  },
+  {
+    "id": "threat.request_input_source",
+    "description": "Feste Feldzugriffe auf externe HTTP-Anfragedaten",
+    "en": [],
+    "de": [],
+    "shared": [
+      "request.body",
+      "request.data",
+      "request.post",
+      "request.get",
+      "request.params",
+      "request.args",
+      "request.query",
+      "req.body",
+      "req.data",
+      "req.post",
+      "req.get",
+      "req.params",
+      "req.args",
+      "req.query",
+      "$_post",
+      "$_get",
+      "$_request"
+    ],
+    "sources": [
+      "rust/src/detectors/threat/rules.json"
+    ]
+  },
+  {
+    "id": "threat.generated_output_source",
+    "description": "Feste Bezeichner für Ausgaben und Antworten von Modellen, Agenten oder Werkzeugen",
+    "en": [],
+    "de": [],
+    "shared": [
+      "llm_output",
+      "llm_response",
+      "model_output",
+      "model_response",
+      "agent_output",
+      "agent_response",
+      "tool_output",
+      "tool_response",
+      "llm.output",
+      "llm.response",
+      "model.output",
+      "model.response",
+      "agent.output",
+      "agent.response",
+      "tool.output",
+      "tool.response"
+    ],
+    "sources": [
+      "rust/src/detectors/threat/rules.json"
+    ]
+  },
+  {
+    "id": "threat.metadata_service_target",
+    "description": "Fester Dienstname des Cloud-Metadatendienstes",
+    "en": [],
+    "de": [],
+    "shared": [
+      "metadata.google.internal"
+    ],
+    "sources": [
+      "rust/src/detectors/threat/mod.rs"
+    ]
+  },
+  {
+    "id": "threat.tls_verification_option",
+    "description": "Benannte Codeoption für Zertifikatsprüfung; der Wert muss gesondert geprüft werden",
+    "en": [],
+    "de": [],
+    "shared": [
+      "verify"
+    ],
+    "sources": [
+      "rust/src/detectors/threat/rules.json"
+    ]
+  },
+  {
+    "id": "threat.shell_execution_option",
+    "description": "Benannte Codeoption für Shell-Ausführung; der Wert muss gesondert geprüft werden",
+    "en": [],
+    "de": [],
+    "shared": [
+      "shell"
+    ],
+    "sources": [
+      "rust/src/detectors/threat/rules.json"
+    ]
+  },
+  {
+    "id": "threat.filesystem_destruction_operation",
+    "description": "Dateilöschbefehl und benannte Option zum Aufheben des Wurzelverzeichnisschutzes",
+    "en": [],
+    "de": [],
+    "shared": [
+      "rm",
+      "--no-preserve-root"
+    ],
+    "sources": [
+      "rust/src/detectors/threat/rules.json"
+    ]
+  },
+  {
+    "id": "threat.host_directory_target",
+    "description": "Feste zentrale Hostverzeichnisse als Löschziele",
+    "en": [],
+    "de": [],
+    "shared": [
+      "/etc",
+      "/home",
+      "/var"
+    ],
+    "sources": [
+      "rust/src/detectors/threat/rules.json"
+    ]
+  }
+]

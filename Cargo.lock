@@ -92,7 +92,7 @@ dependencies = [
 
 [[package]]
 name = "ark-api"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "ark-distributed-protocol",
  "axum",
@@ -118,7 +118,7 @@ dependencies = [
 
 [[package]]
 name = "ark-coordinator"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "axum",
  "clap",
@@ -140,7 +140,7 @@ dependencies = [
 
 [[package]]
 name = "ark-distributed-protocol"
-version = "0.1.0"
+version = "0.1.7"
 dependencies = [
  "serde",
  "serde_json",
@@ -1489,7 +1489,7 @@ checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
 
 [[package]]
 name = "patronus-ark"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "aho-corasick",
  "blake3",
@@ -1502,6 +1502,7 @@ dependencies = [
  "rayon",
  "redb",
  "regex",
+ "regex-syntax",
  "ring",
  "sentencepiece-rust",
  "serde",
@@ -1510,11 +1511,12 @@ dependencies = [
  "tokenizers",
  "unicode-normalization",
  "ureq 2.12.1",
+ "url",
 ]
 
 [[package]]
 name = "patronus-ark-python"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "patronus-ark",
  "pyo3",

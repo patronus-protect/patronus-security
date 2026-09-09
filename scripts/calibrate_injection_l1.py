@@ -51,6 +51,7 @@ FEATURE_ORDER = [
     "has_rule_and_structural",
     "span_length_log1p",
 ]
+RULE_FEATURE_IDS: list[str] = []
 DEFAULT_DATASET_SUBDIR = Path(
     "ntdb/artifacts/experiments/"
     "injection_v41_mmbert_static_no_post_l2_lgbm_seed42/data"
@@ -363,6 +364,11 @@ def feature_vector(candidate: dict) -> list[float]:
     if candidate_is_candidate_only(candidate):
         return [0.0] * len(FEATURE_ORDER)
 
+    if RULE_FEATURE_IDS and isinstance(candidate.get("scoring_features"), dict):
+        scoring = candidate["scoring_features"]
+        eligible = eligible_candidate_rule_ids(candidate)
+        if all(name.startswith("rule:") or name in scoring for name in FEATURE_ORDER):
+            return [float(name[5:] in eligible) if name.startswith("rule:") else float(scoring[name]) for name in FEATURE_ORDER]
     runtime_vector = runtime_scoring_vector(candidate)
     if runtime_vector is not None:
         return runtime_vector
@@ -433,6 +439,7 @@ def feature_vector(candidate: dict) -> list[float]:
         float(len(source_derived_rules)),
         float(len(audited_evidence_rules)),
         float(bool(rule_matches) and structural > 0),
+        *[float(rule_id in eligible_rule_ids) for rule_id in RULE_FEATURE_IDS],
         math.log1p(span_length),
     ]
 
@@ -462,7 +469,30 @@ def strong_positive(candidate: dict, isolated_rule_ids: set[str]) -> bool:
     )
 
 
-def scanner():
+class JsonlScanner:
+    """Use the explicitly selected Rust binary instead of an installed wheel."""
+    def __init__(self, binary: Path):
+        self.process = subprocess.Popen([str(binary.resolve())], stdin=subprocess.PIPE,
+                                        stdout=subprocess.PIPE, text=True)
+        import atexit
+        atexit.register(self.close)
+
+    def scan_category(self, category: str, text: str) -> list[dict]:
+        self.process.stdin.write(json.dumps({"category": category, "text": text}) + "\n")
+        self.process.stdin.flush()
+        line = self.process.stdout.readline()
+        require(bool(line), "Rust calibration scanner exited unexpectedly")
+        return json.loads(line)
+
+    def close(self) -> None:
+        if self.process.poll() is None:
+            self.process.stdin.close()
+            self.process.wait()
+
+
+def scanner(binary: Path | None = None):
+    if binary is not None:
+        return JsonlScanner(binary)
     from patronus_ark import SecurityGateway
 
     gateway = SecurityGateway(categories=["injection"], max_level="l1", download_files=False)
@@ -563,6 +593,10 @@ def validate_extraction_manifest(manifest: dict) -> None:
     sources = manifest.get("sources")
     require(isinstance(sources, list) and sources, "manifest sources must be non-empty")
     expected = {spec.name: spec for spec in DEVELOPMENT_SOURCES}
+    for source in manifest.get("regression_sources", []):
+        require(source["name"].startswith("regression:"), "invalid regression source")
+        require(source["role"] in ("fit_positive", "fit_negative"), "regressions are fit data only")
+        expected[source["name"]] = SourceSpec(source["name"], source["path"], source["role"], int(source["role"] == "fit_positive"))
     require(len(sources) == len(expected), "manifest source count mismatch")
     names: set[str] = set()
     for source in sources:
@@ -1206,11 +1240,12 @@ def threshold_tradeoffs(
 
 def cmd_extract(args: argparse.Namespace) -> None:
     dataset_dir = args.dataset_root / DEFAULT_DATASET_SUBDIR
-    gateway = scanner()
+    gateway = scanner(getattr(args, "scanner_binary", None))
     all_records: list[dict] = []
     sources = []
     role_hashes: dict[str, set[str]] = {"fit": set(), "validation": set()}
     for spec in DEVELOPMENT_SOURCES:
+        print(f"Extracting {spec.name}", flush=True)
         records, summary, text_hashes = extract_source(
             gateway, dataset_dir / spec.filename, spec
         )
@@ -1227,7 +1262,7 @@ def cmd_extract(args: argparse.Namespace) -> None:
         "feature_order": FEATURE_ORDER,
         "positive_selection": "candidate must reproduce a rule in isolation and have critical, source-derived, multi-producer, or rule+structural corroboration",
         "holdout_accessed": False,
-        "runtime_versions": runtime_versions(),
+        "runtime_versions": {**runtime_versions(), **({"scanner_binary_sha256": sha256_file(args.scanner_binary)} if getattr(args, "scanner_binary", None) else {})},
         "train_validation_text_overlap_audit": {
             "normalization": "CRLF-to-LF plus outer whitespace trim then SHA-256",
             "fit_unique_text_hashes": len(role_hashes["fit"]),
@@ -1245,11 +1280,72 @@ def cmd_extract(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_add_regressions(args: argparse.Namespace) -> None:
+    records = read_jsonl(args.candidates)
+    manifest = json.loads(args.manifest.read_text())
+    validate_extraction_manifest(manifest)
+    gateway = scanner(args.scanner_binary)
+    regression_sources = manifest.setdefault("regression_sources", [])
+    dataset_dir = args.dataset_root / DEFAULT_DATASET_SUBDIR
+    validation_hashes = {normalized_text_hash(row["text"]) for spec in DEVELOPMENT_SOURCES if spec.role.startswith("validation_")
+                         for row in read_selected_rows(dataset_dir / spec.filename, spec.label, spec.max_documents)}
+    regression_hashes = set()
+    try:
+        for path in args.fixtures:
+            rows = json.loads(path.read_text())
+            for label in [1, 0]:
+                texts = []
+                for row in rows:
+                    if "text" in row:
+                        if label: texts.append(row["text"])
+                    else:
+                        for language in ["en", "de"]:
+                            key = ("" if label else "negative_") + language
+                            if key in row: texts.append(row[key])
+                if not texts: continue
+                name = f"regression:{path.name}:{label}"
+                require(not any(s["name"] == name for s in manifest["sources"]), "duplicate regression source")
+                role = "fit_positive" if label else "fit_negative"
+                count = any_count = scoring_count = only_count = only_records = 0
+                for i, text in enumerate(texts):
+                    digest = normalized_text_hash(text)
+                    require(digest not in validation_hashes, "regression overlaps development validation")
+                    regression_hashes.add(digest)
+                    candidates = aggregate_candidates(gateway.scan_category("injection", text))
+                    eligible = [c for c in candidates if not candidate_is_candidate_only(c)]
+                    only = [c for c in candidates if candidate_is_candidate_only(c)]
+                    any_count += bool(candidates); scoring_count += bool(eligible); only_count += bool(only); only_records += len(only)
+                    for candidate in eligible:
+                        records.append(dict(schema_version=SCHEMA_VERSION, sample_id=f"{name}:{i}", source=name, role=role, label=label,
+                                            candidate=candidate, features=feature_vector(candidate)))
+                        count += 1
+                summary = dict(name=name, role=role, path=str(path), sha256=sha256_file(path), documents_selected=len(texts),
+                               documents_with_candidates=any_count, documents_with_scoring_candidates=scoring_count,
+                               documents_with_candidate_only_candidates=only_count, candidate_records=count,
+                               candidate_only_candidate_records=only_records, rejected_weak_positive_candidates=0)
+                manifest["sources"].append(summary); regression_sources.append(summary)
+        manifest["regression_validation_overlap_audit"] = {"regression_unique_texts": len(regression_hashes), "validation_unique_texts": len(validation_hashes), "overlap_count": 0}
+        manifest["regression_notice"] = "Explicit rule fixtures are training data; regression success is not independent validation."
+        validate_extraction_manifest(manifest); validate_candidate_records(records, manifest)
+        write_jsonl(args.output, records)
+        args.output_manifest.write_text(json.dumps(manifest, indent=2) + "\n")
+    finally:
+        if isinstance(gateway, JsonlScanner): gateway.close()
+
+
 def cmd_fit(args: argparse.Namespace) -> None:
     records = read_jsonl(args.candidates)
     source_manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
     validate_extraction_manifest(source_manifest)
     validate_candidate_records(records, source_manifest)
+    if getattr(args, "rule_features", False):
+        RULE_FEATURE_IDS[:] = sorted({rule for record in records if record["role"].startswith("fit_") for rule in eligible_candidate_rule_ids(record["candidate"])})
+        FEATURE_ORDER[-1:-1] = ["rule:" + rule for rule in RULE_FEATURE_IDS]
+        for record in records:
+            record["features"] = feature_vector(record["candidate"])
+        source_manifest["feature_order"] = FEATURE_ORDER.copy()
+        source_manifest["feature_extension"] = "Binary eligible rule identity, selected from fit provenance only"
+        validate_candidate_records(records, source_manifest)
     records = scoring_candidate_records(records)
     fit = [record for record in records if record["role"].startswith("fit_")]
     validation = [record for record in records if record["role"].startswith("validation_")]
@@ -1262,7 +1358,10 @@ def cmd_fit(args: argparse.Namespace) -> None:
     validation_values = scores(validation, coefficients, intercept)
     all_values = np.concatenate([fit_values, validation_values])
     all_records = fit + validation
-    threshold = conservative_threshold(all_records, all_values)
+    zero_fp_threshold = conservative_threshold(all_records, all_values)
+    threshold = getattr(args, "acceptance_threshold", None)
+    threshold = zero_fp_threshold if threshold is None else threshold
+    require(0 < threshold < 1, "acceptance threshold must be between zero and one")
     fit_metrics = metrics(fit, fit_values, threshold)
     validation_metrics = metrics(validation, validation_values, threshold)
     fit_document_metrics = document_metrics(
@@ -1285,8 +1384,8 @@ def cmd_fit(args: argparse.Namespace) -> None:
     )
     artifact = {
         "schema_version": SCHEMA_VERSION,
-        "model_id": "ark-injection-l1-logistic-0.1.6",
-        "score_version": "injection-l1-0.1.6",
+        "model_id": getattr(args, "model_id", "ark-injection-l1-logistic-0.1.6"),
+        "score_version": getattr(args, "score_version", "injection-l1-0.1.6"),
         "feature_order": FEATURE_ORDER,
         "coefficients": [float(value) for value in coefficients],
         "intercept": float(intercept),
@@ -1295,7 +1394,8 @@ def cmd_fit(args: argparse.Namespace) -> None:
             "method": "document_weighted_l2_regularized_logistic_plus_zero_observed_fp_threshold",
             "fit_weighting": "class-balanced candidate-bearing documents; max-scoring candidate defines document loss",
             "priority": "minimize_false_positives",
-            "target_observed_candidate_fpr": 0.0,
+            "target_observed_candidate_fpr": 0.0 if getattr(args, "acceptance_threshold", None) is None else None,
+            "zero_observed_fp_threshold": zero_fp_threshold,
             "threshold_selection": {
                 "selected_on": "fit negatives plus development-validation negatives",
                 "development_validation_is_threshold_tuning_data": True,
@@ -1332,7 +1432,8 @@ def cmd_fit(args: argparse.Namespace) -> None:
         "reports": ["docs/research/injection-l1-calibration-0.1.6.md"],
     }
     validate_artifact(artifact)
-    require(fit_metrics["fp"] == 0 and validation_metrics["fp"] == 0, "threshold admitted development false positive")
+    if getattr(args, "acceptance_threshold", None) is None:
+        require(fit_metrics["fp"] == 0 and validation_metrics["fp"] == 0, "threshold admitted development false positive")
     args.artifact.write_text(json.dumps(artifact, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     args.report.write_text(
         json.dumps(
@@ -1658,12 +1759,27 @@ def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
     subparsers = result.add_subparsers(dest="command", required=True)
     extract = subparsers.add_parser("extract")
+    extract.add_argument("--scanner-binary", type=Path, help="Current Rust l1_calibration executable")
     extract.add_argument("--dataset-root", type=Path, required=True)
     extract.add_argument("--output", type=Path, required=True)
     extract.add_argument("--manifest", type=Path, required=True)
     extract.set_defaults(func=cmd_extract)
 
+    regressions = subparsers.add_parser("add-regressions")
+    regressions.add_argument("--dataset-root", type=Path, required=True)
+    regressions.add_argument("--candidates", type=Path, required=True)
+    regressions.add_argument("--manifest", type=Path, required=True)
+    regressions.add_argument("--fixtures", type=Path, nargs="+", required=True)
+    regressions.add_argument("--scanner-binary", type=Path, required=True)
+    regressions.add_argument("--output", type=Path, required=True)
+    regressions.add_argument("--output-manifest", type=Path, required=True)
+    regressions.set_defaults(func=cmd_add_regressions)
+
     fit = subparsers.add_parser("fit")
+    fit.add_argument("--acceptance-threshold", type=float, help="Explicit development operating point; disables the zero-observed-FP requirement")
+    fit.add_argument("--rule-features", action="store_true", help="Add binary rule identity from fit candidate provenance")
+    fit.add_argument("--model-id", default="ark-injection-l1-logistic-0.1.6")
+    fit.add_argument("--score-version", default="injection-l1-0.1.6")
     fit.add_argument("--candidates", type=Path, required=True)
     fit.add_argument("--manifest", type=Path, required=True)
     fit.add_argument("--artifact", type=Path, required=True)

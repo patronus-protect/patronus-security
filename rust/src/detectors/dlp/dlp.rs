@@ -708,6 +708,7 @@ fn is_structured_sql_statement(candidate: &str) -> bool {
 
 pub struct DlpPipeline {
     regexes: Vec<Regex>,
+    anchor_gates: Vec<crate::detectors::anchor_gate::AnchorGate>,
     rule_ids: Vec<&'static str>,
     entity_groups: Vec<&'static str>,
     validators: Vec<Option<NativeMatchValidator>>,
@@ -724,6 +725,7 @@ impl Default for DlpPipeline {
 impl DlpPipeline {
     pub fn new() -> Self {
         let mut regexes = Vec::new();
+        let mut anchor_gates = Vec::new();
         let mut entity_groups = Vec::new();
         let mut rule_ids = Vec::new();
         let mut validators = Vec::new();
@@ -731,6 +733,9 @@ impl DlpPipeline {
 
         for p in DLP_PATTERNS {
             regexes.push(Regex::new(p.pattern).unwrap());
+            anchor_gates.push(crate::detectors::anchor_gate::AnchorGate::regex(
+                p.pattern, false,
+            ));
             entity_groups.push(p.entity_group);
             rule_ids.push(p.name);
             validators.push(p.validator);
@@ -744,6 +749,7 @@ impl DlpPipeline {
 
         DlpPipeline {
             regexes,
+            anchor_gates,
             rule_ids,
             entity_groups,
             validators,
@@ -763,6 +769,9 @@ impl DlpPipeline {
 }
 
 impl NativeRegexDetector for DlpPipeline {
+    fn anchor_gates(&self) -> &[crate::detectors::anchor_gate::AnchorGate] {
+        &self.anchor_gates
+    }
     fn regexes(&self) -> &[Regex] {
         &self.regexes
     }

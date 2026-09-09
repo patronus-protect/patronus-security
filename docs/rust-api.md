@@ -64,6 +64,42 @@ pub struct SecurityGateway {
 Main scanner gateway for native and model-backed security categories.
 
 ```rust
+pub struct DistributedL2Plan {
+    pub l1_results: Vec<SecurityScanResult>,
+    pub l1_failures: Vec<SecurityFailure>,
+    pub categories: Vec<SecurityCategory>,
+    pub model_ids: Vec<String>,
+    pub pipelines: Vec<DistributedL2Pipeline>,
+    pub execution: ScanExecution,
+    pub gate_results: Vec<crate::GateResult>,
+}
+```
+
+No public documentation is available yet.
+
+```rust
+pub struct DistributedL2Pipeline {
+    pub pipeline_id: String,
+    pub category: SecurityCategory,
+    pub model_id: String,
+    pub public_model: String,
+    pub has_l3: bool,
+}
+```
+
+No public documentation is available yet.
+
+```rust
+pub struct DistributedL3Plan {
+    pub categories: Vec<SecurityCategory>,
+    pub execution: ScanExecution,
+    pub gate_results: Vec<crate::GateResult>,
+}
+```
+
+No public documentation is available yet.
+
+```rust
 pub fn flush_cache(&self) -> Result<(), crate::CacheError>;
 ```
 
@@ -236,6 +272,116 @@ pub fn ntdb_operating_point(&self) -> NtdbOperatingPoint;
 ```
 
 Return the calibrated NTDB operating point used by subsequent scans.
+
+```rust
+pub fn distributed_ntdb_fingerprints(&self) -> Result<(String, String), String>;
+```
+
+Runtime identities used to reject incompatible distributed batches.
+
+```rust
+pub fn prepare_distributed_ntdb_chunks(
+    &self,
+    text: &str,
+) -> Result<Vec<PreparedNtdbChunk>, String>;
+```
+
+Tokenize a document once for distributed Package-v4 execution.
+
+```rust
+pub fn infer_distributed_ntdb_chunks(
+    &self,
+    model_ids: HashSet<String>,
+    chunks: &[PreparedNtdbChunk],
+    document_chunk_count: usize,
+    operating_point: NtdbOperatingPoint,
+) -> Result<Vec<NtdbModelChunkInferences>, String>;
+```
+
+Infer independent, pre-tokenized NTDB chunks without L1 or document aggregation.
+
+```rust
+pub fn infer_distributed_unified_l3_chunks(
+    &self,
+    chunks: &[crate::ml::ntdb_executor::NtdbChunkInference],
+    execution: &ScanExecution,
+) -> Result<Vec<crate::pipeline::DistributedL3ChunkInference>, String>;
+```
+
+Run immediate unified L3 inference for promoted chunks without document aggregation.
+
+```rust
+pub fn aggregate_distributed_unified_l3_chunks(
+    &self,
+    chunks: &[crate::pipeline::DistributedL3ChunkInference],
+    l2_fallbacks: &[SecurityScanResult],
+    execution: &ScanExecution,
+    duration_ms: f64,
+) -> Result<Vec<SecurityScanResult>, String>;
+```
+
+Aggregate all unified L3 chunk outputs with the normal final result mapping.
+
+```rust
+pub fn aggregate_distributed_ntdb_chunks(
+    &self,
+    inferred: &[NtdbModelChunkInferences],
+    categories: &[SecurityCategory],
+    execution: &ScanExecution,
+    duration_ms: f64,
+) -> Result<Vec<SecurityScanResult>, String>;
+```
+
+Aggregate all worker L2 evidence and map it through the normal gateway thresholds.
+
+```rust
+pub fn distributed_execution(&self) -> ScanExecution;
+```
+
+Execute only the normal L1 portion with the gateway's effective configuration.
+
+```rust
+pub fn scan_distributed_l1(
+    &self,
+    inputs: &[ExternalL1Input],
+    execution: &ScanExecution,
+) -> Vec<SecurityScanResult>;
+```
+
+No public documentation is available yet.
+
+```rust
+pub fn distributed_l2_pipelines(
+    &self,
+    categories: &[SecurityCategory],
+    execution: &ScanExecution,
+) -> Vec<DistributedL2Pipeline>;
+```
+
+Resolve canonical distributed pipeline bindings without executing scanners.
+
+```rust
+pub fn plan_distributed_l2(
+    &self,
+    inputs: &[ExternalL1Input],
+    metadata: &serde_json::Value,
+    execution: &ScanExecution,
+) -> DistributedL2Plan;
+```
+
+Run L1 and resolve the exact conditional-gate/model plan for distributed L2.
+
+```rust
+pub fn plan_distributed_l3(
+    &self,
+    l1_gate_results: &[crate::GateResult],
+    l2_results: &[SecurityScanResult],
+    metadata: &serde_json::Value,
+    execution: &ScanExecution,
+) -> DistributedL3Plan;
+```
+
+Resolve L3 policy overrides and eligibility after distributed L2 aggregation.
 
 ```rust
 pub fn ntdb_decision_threshold_point(&self) -> NtdbOperatingPoint;

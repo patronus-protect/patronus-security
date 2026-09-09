@@ -114,7 +114,7 @@ deploy() {
     fetch_assets
     configure
     docker pull "$COORDINATOR_IMAGE"
-    [[ $(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' "$COORDINATOR_IMAGE") == 0.1.6 ]] || die 'Expected Coordinator 0.1.6.'
+    [[ $(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' "$COORDINATOR_IMAGE") == 0.1.7 ]] || die 'Expected Coordinator 0.1.7.'
     [[ $(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$COORDINATOR_IMAGE") == "$RELEASE_COMMIT" ]] || die 'Image/config revision mismatch.'
     printf 'COORDINATOR_IMAGE=%s\nCOORDINATOR_IP=%s\n' "$COORDINATOR_IMAGE" "$COORDINATOR_IP" > "$DEPLOY_DIR/.env"
     chmod 0600 "$DEPLOY_DIR/.env"

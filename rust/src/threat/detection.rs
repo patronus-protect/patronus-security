@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! Native L1 rules produce source-bound components, never Boolean classifications.
 use super::{obfuscation::*, patterns::*, util::text_windows};
+use super::{prepared::WINDOW_BYTES, NativeText};
 use crate::detectors::evidence::{L1Component, L1Match, MatchText};
 use aho_corasick::AhoCorasick;
 use regex::Regex;
-const WINDOW_BYTES: usize = 512;
 
 fn regex_matches(view: &MatchText, regex: &Regex, role: &str) -> Vec<L1Match> {
     let mut found = Vec::new();
@@ -40,6 +40,19 @@ fn regex_matches(view: &MatchText, regex: &Regex, role: &str) -> Vec<L1Match> {
     }
     found
 }
+fn regex_matches_prepared(
+    view: &MatchText,
+    regex: &Regex,
+    role: &str,
+    prepared: &NativeText<'_>,
+) -> Vec<L1Match> {
+    let gate = regex_anchor_gate(regex);
+    if !gate.is_unconditional() && !gate.allows(prepared.anchors()) {
+        return Vec::new();
+    }
+    regex_matches(view, regex, role)
+}
+
 fn literals(view: &MatchText, matcher: &AhoCorasick, role: &str) -> Vec<L1Match> {
     matcher
         .find_overlapping_iter(&view.text)
@@ -48,15 +61,27 @@ fn literals(view: &MatchText, matcher: &AhoCorasick, role: &str) -> Vec<L1Match>
 }
 fn relations(
     view: &MatchText,
+    prepared: &NativeText<'_>,
     patterns: &GroupedPatterns,
     alternatives: &[&[u64]],
     role: &str,
 ) -> Vec<L1Match> {
+    let enabled: Vec<_> = alternatives
+        .iter()
+        .filter(|required| {
+            required
+                .iter()
+                .all(|&mask| patterns.allows(mask, prepared.anchors()))
+        })
+        .collect();
+    if enabled.is_empty() {
+        return Vec::new();
+    }
     let mut found = Vec::new();
     for window in text_windows(&view.text, WINDOW_BYTES) {
         let offset = window.as_ptr() as usize - view.text.as_ptr() as usize;
         let hits = patterns.matches(window);
-        for required in alternatives {
+        for required in &enabled {
             let components = required
                 .iter()
                 .enumerate()
@@ -75,8 +100,14 @@ fn relations(
     }
     found
 }
+#[cfg(test)]
 pub(crate) fn native_matches(family: &str, text: &str) -> Vec<L1Match> {
-    let view = MatchText::lower(text);
+    native_matches_prepared(family, &NativeText::new(text))
+}
+
+pub(crate) fn native_matches_prepared(family: &str, prepared: &NativeText<'_>) -> Vec<L1Match> {
+    let text = prepared.text();
+    let view = std::cell::LazyCell::new(|| prepared.lower());
     if family == "secret_transfer" && is_template_env_copy(&view.text) {
         return Vec::new();
     }
@@ -93,11 +124,13 @@ pub(crate) fn native_matches(family: &str, text: &str) -> Vec<L1Match> {
             ),
         ],
         "secret_transfer" => vec![
+            (generic_secret_exfiltration_re(), "generic_secret_exfiltration_re"),
             (
                 secret_exfiltration_request_re(),
                 "secret_exfiltration_request_re",
             ),
             (secret_transfer_request_re(), "secret_transfer_request_re"),
+            (secret_transfer_handoff_re(), "secret_transfer_handoff_re"),
             (
                 secret_transfer_request_de_re(),
                 "secret_transfer_request_de_re",
@@ -214,7 +247,7 @@ pub(crate) fn native_matches(family: &str, text: &str) -> Vec<L1Match> {
     };
     let mut matches = regexes
         .into_iter()
-        .flat_map(|(re, role)| regex_matches(&view, re, role))
+        .flat_map(|(re, role)| regex_matches_prepared(&view, re, role, prepared))
         .collect::<Vec<_>>();
     match family {
         "cross_tool_instruction" => matches.extend(literals(
@@ -229,6 +262,7 @@ pub(crate) fn native_matches(family: &str, text: &str) -> Vec<L1Match> {
         )),
         "instruction_override" => matches.extend(relations(
             &view,
+            prepared,
             instruction_override_patterns(),
             &[
                 &[
@@ -243,6 +277,7 @@ pub(crate) fn native_matches(family: &str, text: &str) -> Vec<L1Match> {
         )),
         "jailbreak_framing" => matches.extend(relations(
             &view,
+            prepared,
             jailbreak_framing_patterns(),
             &[
                 &[JF_ROLE_EN_PREFIX, JF_ROLE_EN_MODIFIER],
@@ -264,6 +299,7 @@ pub(crate) fn native_matches(family: &str, text: &str) -> Vec<L1Match> {
         )),
         "covert_instruction" => matches.extend(relations(
             &view,
+            prepared,
             covert_instruction_patterns(),
             &[&[CI_DIRECT_EN], &[CI_DIRECT_DE]],
             "covert_action",
@@ -291,6 +327,10 @@ pub(crate) fn native_matches(family: &str, text: &str) -> Vec<L1Match> {
                     system_boundary_instruction_re(),
                     system_boundary_instruction_de_re(),
                 ] {
+                    let gate = regex_anchor_gate(re);
+                    if !gate.is_unconditional() && !gate.allows(prepared.anchors()) {
+                        continue;
+                    }
                     for m in re.find_iter(instruction) {
                         matches.push(L1Match::new(vec![
                             view.component("system_boundary", base..offset),
@@ -302,26 +342,35 @@ pub(crate) fn native_matches(family: &str, text: &str) -> Vec<L1Match> {
         }
         "agentic_control_abuse" => matches.extend(agentic_matches(&view)),
         "output_manipulation" | "binary_smuggling" => {
-            for window in text_windows(text, WINDOW_BYTES) {
-                let offset = window.as_ptr() as usize - text.as_ptr() as usize;
-                let local = MatchText::lower(window);
-                let (anchors, actions) = if family == "output_manipulation" {
-                    (
-                        relations(
-                            &local,
-                            output_manipulation_patterns(),
-                            &[&[OM_FORCE, OM_MARKER, OM_SEQUENCE]],
-                            "forced_output",
-                        ),
-                        [output_disclosure_re(), output_disclosure_de_re()]
-                            .into_iter()
-                            .flat_map(|r| regex_matches(&local, r, "disclosure"))
-                            .collect::<Vec<_>>(),
+            for (range, local) in prepared.lower_windows() {
+                let offset = range.start;
+                let window = &text[range.clone()];
+                let anchors = if family == "output_manipulation" {
+                    relations(
+                        local,
+                        prepared,
+                        output_manipulation_patterns(),
+                        &[&[OM_FORCE, OM_MARKER, OM_SEQUENCE]],
+                        "forced_output",
                     )
                 } else {
-                    (
-                        literals(&local, binary_smuggling_ac(), "binary_container"),
-                        regex_matches(&local, binary_smuggling_intent_re(), "binary_intent"),
+                    literals(local, binary_smuggling_ac(), "binary_container")
+                };
+                // Actions only contribute through an anchor/action combination.
+                // Divider detection below remains independent of these anchors.
+                let actions = if anchors.is_empty() {
+                    Vec::new()
+                } else if family == "output_manipulation" {
+                    [output_disclosure_re(), output_disclosure_de_re()]
+                        .into_iter()
+                        .flat_map(|r| regex_matches_prepared(local, r, "disclosure", prepared))
+                        .collect::<Vec<_>>()
+                } else {
+                    regex_matches_prepared(
+                        local,
+                        binary_smuggling_intent_re(),
+                        "binary_intent",
+                        prepared,
                     )
                 };
                 for anchor in &anchors {
@@ -364,7 +413,7 @@ pub(crate) fn native_matches(family: &str, text: &str) -> Vec<L1Match> {
                 }
             }
         }
-        "encoded_instruction" => matches.extend(encoded_matches(text)),
+        "encoded_instruction" => matches.extend(encoded_matches(prepared)),
         "hidden_html_instruction" => matches.extend(hidden_html_matches(text)),
         "unicode_confusable" | "zero_width_obfuscation" => {
             for window in text_windows(text, WINDOW_BYTES) {
@@ -479,8 +528,22 @@ fn visible_character(c: char) -> Option<char> {
     .then_some(c)
 }
 
-fn encoded_matches(text: &str) -> Vec<L1Match> {
+fn encoded_matches(prepared: &NativeText<'_>) -> Vec<L1Match> {
+    let text = prepared.text();
     let mut matches = Vec::new();
+    for (start, decoded_view) in prepared.tags() {
+        let decoded = decoded_view.text();
+        let local = decoded_view.lower();
+        for evidence in regex_matches(local, injection_signal_re(), "decoded_instruction") {
+            let range = evidence.range();
+            matches.push(transformed_match(
+                "unicode_tags",
+                start + range.start * 4..start + range.end * 4,
+                decoded,
+                &evidence,
+            ));
+        }
+    }
     for window in text_windows(text, WINDOW_BYTES) {
         let start = window.as_ptr() as usize - text.as_ptr() as usize;
         let stripped = MatchText::mapped(window, visible_character, false);

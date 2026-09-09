@@ -24,6 +24,7 @@ use crate::{
         },
         mcp::{mcp_policy, mcp_runtime_risk},
         pii::pii,
+        threat::ThreatPipeline,
         NativeDetection, NativeRegexDetector,
     },
     diagnostics::PhaseMetricScope,
@@ -253,6 +254,7 @@ pub struct SecurityGatewayCore {
     // Instantiated native rule-based pipelines
     dlp_pipeline: Option<dlp::DlpPipeline>,
     pii_pipeline: Option<pii::PiiPipeline>,
+    threat_pipeline: Option<ThreatPipeline>,
     cross_tool_instruction_pipeline: Option<cross_tool_instruction::CrossToolInstructionPipeline>,
     instruction_leak_pipeline: Option<instruction_leak::InstructionLeakPipeline>,
     secret_transfer_pipeline: Option<secret_transfer::SecretTransferPipeline>,
@@ -361,12 +363,13 @@ fn timed_native_regex_scan_result<T: NativeRegexDetector>(
     category: SecurityCategory,
     model: impl Into<String>,
     detector: &T,
-    text: &str,
+    prepared: &crate::threat::NativeText<'_>,
     execution: &ScanExecution,
 ) -> SecurityScanResult {
+    let text = prepared.text();
     timed_native_detection_scan_result(category, model, text, || {
-        detector.detect_with_options(
-            text,
+        detector.detect_prepared_with_options(
+            prepared,
             |rule_id| execution.allows_rule(rule_id),
             execution.gates().explain,
         )
@@ -540,6 +543,7 @@ impl SecurityGateway {
             distributed_fingerprints: OnceLock::new(),
             dlp_pipeline: None,
             pii_pipeline: None,
+            threat_pipeline: None,
             cross_tool_instruction_pipeline: None,
             instruction_leak_pipeline: None,
             secret_transfer_pipeline: None,
@@ -628,6 +632,9 @@ impl SecurityGateway {
                     core.destructive_operation_pipeline =
                         Some(destructive_operation::DestructiveOperationPipeline::new());
                 }
+                SecurityCategory::Threat => {
+                    core.threat_pipeline = Some(ThreatPipeline::new());
+                }
                 SecurityCategory::Pii => {
                     core.pii_pipeline = Some(pii::PiiPipeline::new());
                 }
@@ -661,7 +668,10 @@ impl SecurityGateway {
         let has_l1_category = self.categories.iter().any(|category| {
             matches!(
                 category,
-                SecurityCategory::Injection | SecurityCategory::Dlp | SecurityCategory::Pii
+                SecurityCategory::Injection
+                    | SecurityCategory::Dlp
+                    | SecurityCategory::Pii
+                    | SecurityCategory::Threat
             ) || external_l1
                 .get(category)
                 .is_some_and(|detectors| !detectors.is_empty())
@@ -1037,7 +1047,7 @@ impl SecurityGateway {
             .iter()
             .filter(|input| {
                 crate::pipeline::conditional_gate::pipeline_allowed(
-                    &execution,
+                    execution,
                     SecurityLevel::L2,
                     input.category.as_str(),
                     metadata,
@@ -1054,7 +1064,7 @@ impl SecurityGateway {
                     .into_iter()
                     .all(|model| {
                         crate::pipeline::conditional_gate::pipeline_allowed(
-                            &execution,
+                            execution,
                             SecurityLevel::L2,
                             model,
                             metadata,
@@ -1169,10 +1179,24 @@ impl SecurityGateway {
         execution.allows_model(model)
     }
 
+    #[cfg(test)]
     fn scan_category_with_execution(
         &self,
         input: &ExternalL1Input,
         execution: &ScanExecution,
+    ) -> Vec<SecurityScanResult> {
+        self.scan_category_prepared(
+            input,
+            execution,
+            &crate::threat::NativeText::new(input.text.as_ref()),
+        )
+    }
+
+    fn scan_category_prepared(
+        &self,
+        input: &ExternalL1Input,
+        execution: &ScanExecution,
+        prepared: &crate::threat::NativeText<'_>,
     ) -> Vec<SecurityScanResult> {
         let category = input.category;
         let text = input.text.as_ref();
@@ -1190,7 +1214,7 @@ impl SecurityGateway {
                             text.len(),
                             || {
                                 timed_native_detection_scan_result(category, $model, text, || {
-                                    pipe.detect(text)
+                                    pipe.detect_prepared(prepared)
                                 })
                             },
                         ));
@@ -1212,7 +1236,7 @@ impl SecurityGateway {
                             text.len(),
                             || {
                                 timed_native_detection_scan_result(category, $model, text, || {
-                                    pipe.detect(text)
+                                    pipe.detect_prepared(prepared)
                                 })
                             },
                         ));
@@ -1239,7 +1263,7 @@ impl SecurityGateway {
                                     "native:injection_rule_catalog",
                                     text,
                                     || {
-                                        catalog.detect_with_rule_filter(text, |rule_id| {
+                                        catalog.detect_prepared(prepared, |rule_id| {
                                             execution.allows_rule(rule_id)
                                         })
                                     },
@@ -1264,7 +1288,7 @@ impl SecurityGateway {
                                     category,
                                     "native:injection_structural",
                                     text,
-                                    || structural.detect(text),
+                                    || structural.detect_prepared(prepared),
                                 )
                             },
                         ));
@@ -1378,7 +1402,7 @@ impl SecurityGateway {
                                     category,
                                     "native:dlp",
                                     native,
-                                    text,
+                                    prepared,
                                     execution,
                                 )
                             },
@@ -1425,8 +1449,29 @@ impl SecurityGateway {
                                     category,
                                     "native:pii",
                                     native,
-                                    text,
+                                    prepared,
                                     execution,
+                                )
+                            },
+                        ));
+                    }
+                }
+            }
+            SecurityCategory::Threat => {
+                if self.level_enabled(execution, SecurityLevel::L1)
+                    && self.model_enabled(execution, "native:threat_l1")
+                {
+                    if let Some(ref native) = self.threat_pipeline {
+                        results.push(run_measured_l1_detector(
+                            category,
+                            "native:threat_l1",
+                            text.len(),
+                            || {
+                                timed_native_detection_scan_result(
+                                    category,
+                                    "native:threat_l1",
+                                    text,
+                                    || native.detect_prepared(prepared, |id| execution.allows_rule(id)),
                                 )
                             },
                         ));
@@ -1438,8 +1483,7 @@ impl SecurityGateway {
             | SecurityCategory::ToolClass
             | SecurityCategory::ToolAction
             | SecurityCategory::ToolTags
-            | SecurityCategory::Routing
-            | SecurityCategory::Threat => {}
+            | SecurityCategory::Routing => {}
         }
 
         if self.level_enabled(execution, SecurityLevel::L1) {
@@ -1673,9 +1717,20 @@ impl SecurityGateway {
             execution.set_defer_l3(true);
         }
 
+        // Equal text supplied for different categories shares request-local views.
+        // Distinct external inputs retain independent preparation and offsets.
+        let mut prepared = HashMap::new();
+        for input in inputs {
+            let text = input.text.as_ref();
+            prepared
+                .entry(text)
+                .or_insert_with(|| crate::threat::NativeText::new(text));
+        }
         inputs
             .par_iter()
-            .map(|input| self.scan_category_with_execution(input, &execution))
+            .map(|input| {
+                self.scan_category_prepared(input, &execution, &prepared[input.text.as_ref()])
+            })
             .collect::<Vec<_>>()
             .into_iter()
             .flatten()

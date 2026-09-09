@@ -16,6 +16,8 @@ COPY Cargo.toml Cargo.lock ./
 COPY rust ./rust
 COPY python ./python
 COPY ark-api ./ark-api
+COPY ark-distributed-protocol ./ark-distributed-protocol
+COPY ark-coordinator ./ark-coordinator
 
 RUN cargo build --locked --release -p ark-api --bins
 

@@ -304,7 +304,7 @@ redis_mode() { printf 'external\n'; }
 docker() {
     if [[ $1 == pull ]]; then return; fi
     case "$4" in
-        *image.version*) printf '0.1.6\n' ;;
+        *image.version*) printf '0.1.7\n' ;;
         *image.revision*) printf '%s\n' "$RELEASE_COMMIT" ;;
         *) return 1 ;;
     esac

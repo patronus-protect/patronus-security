@@ -350,7 +350,7 @@ async fn collect_events_inner(
                     } else {
                         "completed".to_string()
                     };
-                    job.decision = Some(final_decision(&job));
+                    job.decision = Some(final_decision(job));
                     job.timings.worker_ms = Some(dispatched.elapsed().as_secs_f64() * 1000.0);
                     job.timings.total_ms = Some(submitted.elapsed().as_secs_f64() * 1000.0);
                 }

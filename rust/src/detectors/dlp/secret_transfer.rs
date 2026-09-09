@@ -15,11 +15,19 @@ impl SecretTransferPipeline {
     }
 
     pub(crate) fn detect(&self, text: &str) -> crate::detectors::NativeDetection {
+        self.detect_prepared(&crate::threat::NativeText::new(text))
+    }
+
+    pub(crate) fn detect_prepared(
+        &self,
+        prepared: &crate::threat::NativeText<'_>,
+    ) -> crate::detectors::NativeDetection {
+        let text = prepared.text();
         crate::detectors::evidence::detection_from_matches(
             text,
             "dlp_secret_transfer",
             "secret_transfer",
-            crate::threat::native_matches("secret_transfer", text),
+            crate::threat::native_matches_prepared("secret_transfer", prepared),
         )
     }
 

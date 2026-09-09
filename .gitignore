@@ -45,3 +45,4 @@ site/
 /ark-api/deploy/*.key
 /ark-api/deploy/*.pem
 .patronus-security-scanner/
+docs/research/

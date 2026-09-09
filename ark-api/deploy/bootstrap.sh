@@ -234,7 +234,7 @@ deploy() {
     # Authenticate beforehand with sudo docker login ghcr.io --password-stdin
     # if this package is private; anonymous pulls are preferred for public images.
     docker pull "$ARK_IMAGE"
-    [[ $(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' "$ARK_IMAGE") == 0.1.6 ]] || die 'Expected ARK 0.1.6.'
+    [[ $(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' "$ARK_IMAGE") == 0.1.7 ]] || die 'Expected ARK 0.1.7.'
     [[ $(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$ARK_IMAGE") == "$RELEASE_COMMIT" ]] || die 'Image/config revision mismatch.'
     configure_secrets
     if [[ $(redis_mode) == local ]]; then docker pull "$REDIS_IMAGE"; fi
