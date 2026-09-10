@@ -97,6 +97,13 @@ pub(crate) struct L3Worker {
     state: Arc<L3WorkerState>,
 }
 
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
+pub struct DistributedL3ChunkInference {
+    pub chunk_index: usize,
+    pub span: crate::ml::ntdb_executor::ByteSpan,
+    pub output: crate::ml::unified_onnx::UnifiedModelOutput,
+}
+
 struct L3WorkerState {
     jobs: Mutex<Vec<L3WorkerJob>>,
     scheduler: Mutex<FairSchedulerState>,
@@ -181,6 +188,77 @@ pub(crate) struct PendingDynamicPii {
 }
 
 impl L3Worker {
+    pub(crate) fn infer_distributed_unified_chunks(
+        &self,
+        chunks: &[crate::ml::ntdb_executor::NtdbChunkInference],
+        execution: &ScanExecution,
+    ) -> Result<Vec<DistributedL3ChunkInference>, String> {
+        if execution.l3_strategy() != L3Strategy::Multi {
+            return Err(
+                "distributed immediate L3 currently requires the unified multi strategy"
+                    .to_string(),
+            );
+        }
+        let model = self
+            .state
+            .unified_model
+            .lock()
+            .map_err(|error| format!("unified model registry mutex poisoned: {error}"))?
+            .clone()
+            .ok_or_else(|| "unified L3 model is not registered".to_string())?;
+        let mut promoted = std::collections::BTreeMap::new();
+        for chunk in chunks
+            .iter()
+            .filter(|chunk| chunk.promote_score >= chunk.promote_threshold)
+        {
+            if let Some(existing) = promoted.insert(chunk.chunk_index, chunk) {
+                if existing.span != chunk.span || existing.token_ids != chunk.token_ids {
+                    return Err(format!(
+                        "conflicting distributed L3 chunk {}",
+                        chunk.chunk_index
+                    ));
+                }
+            }
+        }
+        promoted
+            .into_values()
+            .map(|chunk| {
+                if chunk.tokenizer_family != crate::ml::tokenizer::TOKENIZER_FAMILY {
+                    return Err(format!(
+                        "unsupported distributed L3 tokenizer family: {}",
+                        chunk.tokenizer_family
+                    ));
+                }
+                let mut model = model
+                    .lock()
+                    .map_err(|error| format!("unified L3 model mutex poisoned: {error}"))?;
+                let raw = model
+                    .infer_token_ids_raw(
+                        &chunk.token_ids,
+                        execution.backend(),
+                        execution.onnx_runtime_options(),
+                    )
+                    .map_err(|error| error.to_string())?;
+                let output = model.decode_raw(&raw).map_err(|error| error.to_string())?;
+                Ok(DistributedL3ChunkInference {
+                    chunk_index: chunk.chunk_index,
+                    span: chunk.span,
+                    output,
+                })
+            })
+            .collect()
+    }
+
+    pub(crate) fn aggregate_distributed_unified_chunks(
+        &self,
+        chunks: &[DistributedL3ChunkInference],
+        l2_fallbacks: &[SecurityScanResult],
+        execution: &ScanExecution,
+        duration_ms: f64,
+    ) -> Result<Vec<SecurityScanResult>, String> {
+        unified::aggregate_distributed_results(chunks, l2_fallbacks, execution, duration_ms)
+    }
+
     pub(crate) fn start_with_cache(
         requests: Arc<RequestRegistry>,
         cache_config: ExactCacheConfig,

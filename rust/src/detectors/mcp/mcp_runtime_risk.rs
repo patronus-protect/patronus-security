@@ -15,11 +15,19 @@ impl McpRuntimeRiskPipeline {
     }
 
     pub(crate) fn detect(&self, text: &str) -> crate::detectors::NativeDetection {
+        self.detect_prepared(&crate::threat::NativeText::new(text))
+    }
+
+    pub(crate) fn detect_prepared(
+        &self,
+        prepared: &crate::threat::NativeText<'_>,
+    ) -> crate::detectors::NativeDetection {
+        let text = prepared.text();
         crate::detectors::evidence::detection_from_matches(
             text,
             "dlp_mcp_runtime_risk",
             "mcp_runtime_risk",
-            crate::threat::native_matches("mcp_runtime_risk", text),
+            crate::threat::native_matches_prepared("mcp_runtime_risk", prepared),
         )
     }
 

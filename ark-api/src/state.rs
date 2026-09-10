@@ -1,11 +1,13 @@
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use patronus_ark::{QueuedSecurityEvent, RequestId, SecurityGateway};
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, OwnedSemaphorePermit, Semaphore, TryAcquireError};
 
 use crate::config::Config;
+use crate::worker_admission::Admission;
 
 const EVENT_CHANNEL_CAPACITY: usize = 64;
 /// How long a finished request's event buffer is kept around so a client
@@ -18,7 +20,7 @@ const SWEEP_INTERVAL: Duration = Duration::from_secs(30);
 struct RequestChannel {
     /// Every event published for this request so far, replayed to any
     /// subscriber that joins late.
-    buffer: Vec<QueuedSecurityEvent>,
+    buffer: Vec<Arc<QueuedSecurityEvent>>,
     sender: broadcast::Sender<QueuedSecurityEvent>,
     finished_at: Option<Instant>,
 }
@@ -39,6 +41,19 @@ pub struct AppState {
     pub config: Arc<Config>,
     pub gateway: Arc<SecurityGateway>,
     channels: Arc<Mutex<HashMap<RequestId, RequestChannel>>>,
+    pub admission: Arc<Mutex<Admission>>,
+    distributed_jobs: Arc<AtomicUsize>,
+    // Match the single inference worker configured in main; the permit lives
+    // inside the blocking task so cancelling HTTP cannot admit overlapping work.
+    distributed_inference: Arc<Semaphore>,
+}
+
+pub struct DistributedJobGuard(Arc<AtomicUsize>);
+
+impl Drop for DistributedJobGuard {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::AcqRel);
+    }
 }
 
 impl AppState {
@@ -47,10 +62,40 @@ impl AppState {
             config: Arc::new(config),
             gateway: Arc::new(gateway),
             channels: Arc::new(Mutex::new(HashMap::new())),
+            admission: Arc::new(Mutex::new(Admission::default())),
+            distributed_jobs: Arc::new(AtomicUsize::new(0)),
+            distributed_inference: Arc::new(Semaphore::new(1)),
         };
         state.spawn_dispatcher();
         state.spawn_sweeper();
         state
+    }
+
+    /// Call while holding admission: active submissions cover the interval
+    /// before enqueue/register, and channels cover all work after registration.
+    pub fn active_jobs(&self) -> usize {
+        let queued = self
+            .channels
+            .lock()
+            .expect("channel registry mutex poisoned")
+            .values()
+            .filter(|channel| channel.finished_at.is_none())
+            .count();
+        queued.saturating_add(self.distributed_jobs.load(Ordering::Acquire))
+    }
+
+    /// Count worker inference independently of the HTTP future so client cancellation cannot
+    /// make recovery race a still-running blocking model invocation.
+    pub fn begin_distributed_job(&self) -> DistributedJobGuard {
+        self.distributed_jobs.fetch_add(1, Ordering::AcqRel);
+        DistributedJobGuard(Arc::clone(&self.distributed_jobs))
+    }
+
+    pub fn try_begin_distributed_inference(
+        &self,
+    ) -> Result<(OwnedSemaphorePermit, DistributedJobGuard), TryAcquireError> {
+        let permit = self.distributed_inference.clone().try_acquire_owned()?;
+        Ok((permit, self.begin_distributed_job()))
     }
 
     /// Ensure a request event buffer exists. The dispatcher also creates the
@@ -75,12 +120,18 @@ impl AppState {
         Vec<QueuedSecurityEvent>,
         broadcast::Receiver<QueuedSecurityEvent>,
     )> {
-        let channels = self
-            .channels
-            .lock()
-            .expect("channel registry mutex poisoned");
-        let channel = channels.get(request_id)?;
-        Some((channel.buffer.clone(), channel.sender.subscribe()))
+        let (buffer, receiver) = {
+            let channels = self
+                .channels
+                .lock()
+                .expect("channel registry mutex poisoned");
+            let channel = channels.get(request_id)?;
+            (channel.buffer.clone(), channel.sender.subscribe())
+        };
+        Some((
+            buffer.into_iter().map(|event| (*event).clone()).collect(),
+            receiver,
+        ))
     }
 
     /// Background thread that drains `SecurityGateway::consume_next_event`
@@ -97,12 +148,13 @@ impl AppState {
             };
             let request_id = event.request_id().to_string();
             let is_terminal = matches!(event, QueuedSecurityEvent::Finished { .. });
+            let buffered_event = Arc::new(event.clone());
 
             let mut channels = channels.lock().expect("channel registry mutex poisoned");
             let channel = channels
                 .entry(request_id)
                 .or_insert_with(RequestChannel::new);
-            channel.buffer.push(event.clone());
+            channel.buffer.push(buffered_event);
             let _ = channel.sender.send(event);
             if is_terminal {
                 channel.finished_at = Some(Instant::now());

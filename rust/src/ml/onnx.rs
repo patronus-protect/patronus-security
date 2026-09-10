@@ -507,36 +507,43 @@ impl OnnxTextClassifier {
         }
 
         let batch_size = token_ids_batch.len();
-        let mut input_ids_all = Vec::with_capacity(batch_size * self.max_len);
-        let mut attention_mask_all = Vec::with_capacity(batch_size * self.max_len);
-        let mut token_type_ids_all = Vec::with_capacity(batch_size * self.max_len);
-
-        for tokens in token_ids_batch {
-            let (input_ids, attention_mask, token_type_ids) = self.tokenizer.inputs(tokens)?;
-            input_ids_all.extend(input_ids);
-            attention_mask_all.extend(attention_mask);
-            token_type_ids_all.extend(token_type_ids);
-        }
+        let kinds = self
+            .input_names
+            .iter()
+            .map(|name| {
+                let lower = name.to_lowercase();
+                if lower.contains("attention") {
+                    1
+                } else if lower.contains("token_type") || lower.contains("segment") {
+                    2
+                } else {
+                    0
+                }
+            })
+            .collect::<Vec<_>>();
+        let (ids, mask, types) =
+            self.tokenizer
+                .batch_inputs(token_ids_batch, kinds.contains(&1), kinds.contains(&2))?;
+        let mut buffers = [ids, mask, types];
 
         let shape = vec![batch_size, self.max_len];
         let mut inputs = Vec::with_capacity(self.input_names.len().max(1));
         if self.input_names.is_empty() {
             inputs.push((
                 "input_ids".to_string(),
-                Tensor::from_array((shape.clone(), input_ids_all.clone()))?,
+                Tensor::from_array((shape.clone(), std::mem::take(&mut buffers[0])))?,
             ));
         } else {
-            for name in &self.input_names {
-                let lower = name.to_lowercase();
-                let values = if lower.contains("attention") {
-                    attention_mask_all.clone()
-                } else if lower.contains("token_type")
-                    || lower.contains("token_type_ids")
-                    || lower.contains("segment")
-                {
-                    token_type_ids_all.clone()
+            let mut remaining = [0usize; 3];
+            for &kind in &kinds {
+                remaining[kind] += 1;
+            }
+            for (name, kind) in self.input_names.iter().zip(kinds) {
+                remaining[kind] -= 1;
+                let values = if remaining[kind] == 0 {
+                    std::mem::take(&mut buffers[kind])
                 } else {
-                    input_ids_all.clone()
+                    buffers[kind].clone()
                 };
                 inputs.push((name.clone(), Tensor::from_array((shape.clone(), values))?));
             }

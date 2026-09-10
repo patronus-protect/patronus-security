@@ -403,6 +403,8 @@ static PII_ANCHOR_PATTERNS: &[AnchorPattern] = &[
 
 pub struct PiiPipeline {
     regexes: Vec<Regex>,
+    anchor_gates: Vec<crate::detectors::anchor_gate::AnchorGate>,
+    prefilters: Vec<Option<Regex>>,
     rule_ids: Vec<&'static str>,
     entity_groups: Vec<&'static str>,
     validators: Vec<Option<NativeMatchValidator>>,
@@ -419,6 +421,8 @@ impl Default for PiiPipeline {
 impl PiiPipeline {
     pub fn new() -> Self {
         let mut regexes = Vec::new();
+        let mut anchor_gates = Vec::new();
+        let mut prefilters = Vec::new();
         let mut entity_groups = Vec::new();
         let mut rule_ids = Vec::new();
         let mut validators = Vec::new();
@@ -426,6 +430,22 @@ impl PiiPipeline {
 
         for p in PII_PATTERNS {
             regexes.push(Regex::new(p.pattern).unwrap());
+            anchor_gates.push(crate::detectors::anchor_gate::AnchorGate::regex(
+                p.pattern, false,
+            ));
+            // Audited positive word-boundary assertions only. The relaxed search
+            // is a necessary condition; original captures and validators decide.
+            prefilters.push(
+                matches!(
+                    p.name,
+                    "pii_ipv4"
+                        | "pii_phone_us"
+                        | "pii_steuer_id_de"
+                        | "pii_steuernummer_de"
+                        | "pii_rentenversicherung_de"
+                )
+                .then(|| Regex::new(&p.pattern.replace(r"\b", "")).unwrap()),
+            );
             entity_groups.push(p.entity_group);
             rule_ids.push(p.name);
             validators.push(p.validator);
@@ -438,6 +458,8 @@ impl PiiPipeline {
             .collect();
         PiiPipeline {
             regexes,
+            anchor_gates,
+            prefilters,
             rule_ids,
             entity_groups,
             validators,
@@ -457,6 +479,12 @@ impl PiiPipeline {
 }
 
 impl NativeRegexDetector for PiiPipeline {
+    fn anchor_gates(&self) -> &[crate::detectors::anchor_gate::AnchorGate] {
+        &self.anchor_gates
+    }
+    fn prefilters(&self) -> Option<&[Option<Regex>]> {
+        Some(&self.prefilters)
+    }
     fn regexes(&self) -> &[Regex] {
         &self.regexes
     }
@@ -483,5 +511,49 @@ impl NativeRegexDetector for PiiPipeline {
 
     fn details(&self, text: &str) -> std::collections::HashMap<String, serde_json::Value> {
         anchors::details(text, &self.anchor_regexes, PII_ANCHOR_PATTERNS)
+    }
+}
+
+#[cfg(test)]
+mod prefilter_tests {
+    use super::*;
+    #[test]
+    fn pii_prefilters_preserve_bilingual_results_and_captures() {
+        let optimized = PiiPipeline::new();
+        let mut reference = PiiPipeline::new();
+        reference.prefilters.iter_mut().for_each(|p| *p = None);
+        let cases: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/l1_bilingual_rules.json"
+        ))
+        .unwrap();
+        for case in cases
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|c| c["category"] == "pii")
+        {
+            for language in ["de", "en"] {
+                for prefix in ["", "Grüße İ – ", "ö", "_"] {
+                    for suffix in ["", "ü", "."] {
+                        let text = format!("{prefix}{}{suffix}", case[language].as_str().unwrap());
+                        let a = optimized.detect(&text);
+                        let b = reference.detect(&text);
+                        assert_eq!(a.result.class_name, b.result.class_name, "{text}");
+                        assert_eq!(a.details, b.details, "{text}");
+                        assert_eq!(
+                            serde_json::to_value(&a.evidence_spans).unwrap(),
+                            serde_json::to_value(&b.evidence_spans).unwrap(),
+                            "{text}"
+                        );
+                        for (re, pre) in optimized.regexes.iter().zip(&optimized.prefilters) {
+                            if let Some(pre) = pre {
+                                assert_eq!(pre.as_str(), re.as_str().replace(r"\b", ""));
+                                assert!(!re.is_match(&text) || pre.is_match(&text), "{text}");
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }

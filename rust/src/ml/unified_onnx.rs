@@ -145,14 +145,14 @@ impl HeadSpec {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct UnifiedHeadOutput {
     pub class_name: String,
     pub confidence: f64,
     pub label_scores: Vec<LabelScore>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct UnifiedModelOutput {
     pub heads: HashMap<String, UnifiedHeadOutput>,
 }
@@ -429,13 +429,8 @@ impl UnifiedOnnxClassifier {
             return Ok(Vec::new());
         }
         let batch = batch_token_ids.len();
-        let mut input_ids = Vec::with_capacity(batch * UNIFIED_MAX_LEN);
-        let mut attention_mask = Vec::with_capacity(batch * UNIFIED_MAX_LEN);
-        for tokens in batch_token_ids {
-            let (ids, mask, _) = self.tokenizer.inputs(tokens)?;
-            input_ids.extend(ids);
-            attention_mask.extend(mask);
-        }
+        let (input_ids, attention_mask, _) =
+            self.tokenizer.batch_inputs(batch_token_ids, true, false)?;
         let shape = [batch, UNIFIED_MAX_LEN];
         let outputs = self.session.run(ort::inputs![
             "input_ids" => Tensor::from_array((shape, input_ids))?,

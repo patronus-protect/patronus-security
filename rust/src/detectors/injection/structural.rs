@@ -11,7 +11,7 @@ use crate::detectors::NativeDetection;
 use crate::EvaluationResult;
 
 const STRUCTURAL_REGISTRY_ID: &str = "ark-injection-structural-v1";
-const STRUCTURAL_SOURCE_REVISION: &str = "0.1.6";
+const STRUCTURAL_SOURCE_REVISION: &str = "0.1.7";
 
 struct ComponentDefinition {
     id: &'static str,
@@ -22,6 +22,7 @@ struct ComponentDefinition {
 struct CompiledComponent {
     definition: ComponentDefinition,
     regex: Regex,
+    anchor_gate: crate::detectors::anchor_gate::AnchorGate,
 }
 
 pub struct InjectionStructuralPipeline {
@@ -36,7 +37,19 @@ impl InjectionStructuralPipeline {
     }
 
     pub(crate) fn detect(&self, text: &str) -> NativeDetection {
-        let mut signals = candidate_clauses(text)
+        self.detect_prepared(&crate::threat::NativeText::new(text))
+    }
+
+    pub(crate) fn detect_prepared(
+        &self,
+        prepared: &crate::threat::NativeText<'_>,
+    ) -> NativeDetection {
+        let text = prepared.text();
+        let enabled = self.components.iter().all(|component| {
+            component.anchor_gate.is_unconditional()
+                || component.anchor_gate.allows(prepared.anchors())
+        });
+        let mut signals = (if enabled { candidate_clauses(text) } else { Vec::new() })
             .into_iter()
             .filter_map(|(clause_start, clause_end)| {
                 let clause = &text[clause_start..clause_end];
@@ -44,7 +57,10 @@ impl InjectionStructuralPipeline {
                     .components
                     .iter()
                     .map(|component| {
-                        component.regex.find(clause).map(|matched| {
+                        component.regex.find_iter(clause).find(|matched| {
+                            !matches!(component.definition.id, "context_override" | "disclosure_action")
+                                || !super::signal::negated_directive(clause, matched.start(), matched.end())
+                        }).map(|matched| {
                             InjectionSignalComponent {
                                 component_id: component.definition.id.into(),
                                 explanation: component.definition.explanation.into(),
@@ -115,26 +131,27 @@ fn structural_components() -> &'static [CompiledComponent] {
             ComponentDefinition {
                 id: "context_override",
                 explanation: "Discards or overrides the active instruction context",
-                pattern: r"\b(?:ignore|disregard|discard|forget|override|set\s+(?:the\s+)?(?:previous|prior|earlier|original)\s+(?:instructions?|directives?|rules?)\s+aside|ignoriere|missachte|verwirf|vergiss|überschreibe)\b",
+                pattern: r"\b(?:ignore|disregard|bypass|discard|forget|override|set\s+(?:the\s+)?(?:previous|prior|earlier|original)\s+(?:instructions?|directives?|rules?)\s+aside|ignoriere|missachte|umgehe|verwirf|vergiss|überschreibe)\b",
             },
             ComponentDefinition {
                 id: "instruction_hierarchy_reference",
                 explanation: "Refers to earlier instructions in the hierarchy",
-                pattern: r"\b(?:(?:previous|prior|earlier|original|above)\s+(?:instructions?|directives?|rules?|guidelines?)|(?:vorherigen?|früheren?|bisherigen?|ursprünglichen?|obigen?)\s+(?:anweisungen?|instruktionen?|direktiven?|regeln?|richtlinien?))\b",
+                pattern: r"\b(?:(?:previous|prior|earlier|original|above)\s+(?:security\s+)?(?:instructions?|directives?|rules?|guidelines?|polic(?:y|ies))|system\s+(?:instructions?|polic(?:y|ies)|rules?)|security\s+polic(?:y|ies)|(?:vorherigen?|früheren?|bisherigen?|ursprünglichen?|obigen?)\s+(?:anweisungen?|instruktionen?|direktiven?|regeln?|richtlinien?|Sicherheitsrichtlinien?)|Systemanweisungen?|Sicherheitsrichtlinien?)\b",
             },
             ComponentDefinition {
                 id: "disclosure_action",
                 explanation: "Requests disclosure or reproduction of protected instructions",
-                pattern: r"\b(?:reveal|disclose|expose|show|provide|print|output|repeat|dump|enthülle|offenbare|offenlege|zeige|nenne|verrate|wiederhole|drucke|gib)\b",
+                pattern: r"\b(?:reveal|disclose|expose|show|provide|print|send|output|repeat|dump|enthülle|offenbare|offenlege|zeige|nenne|verrate|wiederhole|drucke|sende|gib)\b",
             },
             ComponentDefinition {
                 id: "sensitive_instruction_object",
-                explanation: "Targets a system prompt or hidden instruction object",
-                pattern: r"\b(?:(?:(?:complete|entire|full|whole|hidden|concealed|internal|secret)\s+){0,3}(?:system\s*prompt|system\s+message|hidden\s+instructions?|system\s+instructions?)|(?:(?:vollständigen?|kompletten?|gesamten?|ganzen?|versteckten?|verborgenen?|internen?|geheimen?)\s+){0,3}(?:system\s*prompt|systemnachricht|systemanweisungen?|versteckte[nr]?\s+anweisungen?))\b",
+                explanation: "Targets privileged instructions, secrets, credentials, tokens, or keys",
+                pattern: r"\b(?:(?:(?:complete|entire|full|whole|hidden|concealed|internal|secret)\s+){0,3}(?:system\s*prompt|system\s+message|hidden\s+instructions?|system\s+instructions?)|(?:(?:vollständigen?|kompletten?|gesamten?|ganzen?|versteckten?|verborgenen?|internen?|geheimen?)\s+){0,3}(?:system\s*prompt|systemnachricht|systemanweisungen?|versteckte[nr]?\s+anweisungen?)|secrets?|credentials?|tokens?|keys?|Geheimnisse?|Zugangsdaten|Anmeldedaten|Token|Schlüssel)\b",
             },
         ]
         .into_iter()
         .map(|definition| CompiledComponent {
+            anchor_gate: crate::detectors::anchor_gate::AnchorGate::regex(definition.pattern, true),
             regex: RegexBuilder::new(definition.pattern)
                 .case_insensitive(true)
                 .build()

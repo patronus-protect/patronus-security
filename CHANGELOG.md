@@ -9,6 +9,74 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-09-08
+
+### Added
+
+- Restored CLI regression coverage for hidden system-prompt disclosure, supplied
+  Base64 instructions with verified decoded override/leakage signals, and destination-first
+  secret handoffs. Includes bilingual cases, benign controls, rule gates, and source offsets.
+- Restored governed prompt coverage for supplied encoded overrides, forged system personas,
+  prior bypass agreements, cross-tool redirects, and explicit secret exfiltration.
+
+- Added bilingual native Threat L1 rules with stable gates, source-bound action/target
+  evidence, bounded matching, and the existing Threat taxonomy. Coverage includes remote
+  and decoded execution, credential and session exfiltration, privilege and persistence
+  risks, unsafe deserialization, metadata SSRF, and selected code/configuration relationships.
+- Added DE/EN anti-refusal, policy-nullification, and memory-override Injection rules plus
+  bounded Unicode-tag decoding with original-source evidence. Existing Injection scorer
+  coefficients and operating point remain unchanged. New rules include positive, negative,
+  gate, and offset regression coverage.
+
+- Added a Redis-backed `ark-coordinator` service for Cube fleets, with bounded admission,
+  fair adaptive batching, three concurrent slots per Cube, parent deadlines, and document-wide
+  aggregation of category decisions and evidence offsets. Incomplete chunk/category coverage
+  yields a degraded result rather than an allow decision.
+- Added the versioned `ark-distributed-protocol` wire contract and authenticated worker batch
+  inference endpoint, with prepared token-ID inputs, tokenizer/model/config fingerprints,
+  per-chunk failures, and optional immediate unified L3 inference for promoted chunks.
+- Added digest-pinned API and coordinator image workflows, resumable Cube/coordinator bootstrap
+  scripts, private runtime configuration, deployment smoke checks, and an entrypoint benchmark.
+- Added shared external Redis configuration and persistent overlapping fleet API keys for
+  rotation, with atomic keyring recovery and migration of the interim key storage format.
+
+### Changed
+
+- Shared request-local lowercase/offset views, native windows and Unicode-tag decoding
+  across native L1 detectors, and tokenized ordered catalog relations once per input.
+  Added necessary-condition prefilters for four more Injection and five PII rules,
+  retaining original regex captures, Unicode boundaries, validators and scores.
+
+- Replaced the broad literal prefilter for system-prompt extraction with a necessary
+  relationship check, retaining the original Unicode-aware regex and exact captures.
+
+- Reduced native L1 text-preparation allocations for byte-length-preserving Unicode
+  lowercase mappings and skipped action regex scans when their required local anchors
+  are absent, preserving matching semantics and source evidence.
+
+- The entrypoint assigns requests to free healthy workers through a bounded waiting queue.
+  Worker status and admission epochs fence delayed submissions; interrupted jobs quarantine a
+  worker until an authenticated idle recovery check succeeds. Readiness now includes worker health.
+- Deferred distributed model fingerprint hashing until it is needed and bound fingerprints to
+  loaded asset files; local startup reuses compatible tokenizers and shared embeddings without
+  repeatedly hashing large assets. Unified L3 reuses prepared NTDB chunks and cached outputs.
+- Replaced sorting-based memory-cache eviction with constant-time recency updates and eviction.
+  Similarity candidate selection is bounded; encrypted derived outputs that can no longer be
+  read are discarded and recomputed, and retention cleanup removes their index links.
+
+### Fixed
+
+- Include the new workspace crates in the API Docker build and trigger image validation for
+  distributed-protocol changes, so Cargo can resolve the complete workspace in the container.
+- Added the coordinator and protocol test suites to CI and release validation, and build the
+  entrypoint binary required by the Python integration tests. Added license-check exceptions
+  for the two first-party GPL crates and resolved Clippy errors in distributed gate planning
+  and the entrypoint. Refreshed generated Rust API docs and deployment documentation for the
+  new worker scheduling behavior.
+- Aligned package versions, image labels, release metadata, and bootstrap image checks at 0.1.7.
+
+### Breaking
+
 - Classifier tokenization now requires NTDB v4 and compact mmBERT. Disjoint 128-KiB
   UTF-8 windows are tokenized once into shared 254-content-token chunks; L3 reuses
   those IDs with BOS/EOS and padding to 256 positions. Removed v2 execution,

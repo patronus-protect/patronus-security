@@ -313,7 +313,7 @@ pub struct DecisionProvenance {
     pub model: String,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 /// One scored label returned by a multi-label classifier head.
 pub struct LabelScore {
     pub label: String,
@@ -424,6 +424,7 @@ impl std::str::FromStr for NtdbOperatingPoint {
         match s.to_lowercase().replace('-', "_").as_str() {
             "best_f1" => Ok(Self::BestF1),
             "best_promote" => Ok(Self::BestPromote),
+            "ark_api_short_injection_utility" => Ok(Self::ArkApiShortInjectionUtility),
             "best_fpr_in_f1" => Ok(Self::BestFprInF1),
             "best_fnr_in_f1" => Ok(Self::BestFnrInF1),
             "best_latency_in_f1" => Ok(Self::BestLatencyInF1),

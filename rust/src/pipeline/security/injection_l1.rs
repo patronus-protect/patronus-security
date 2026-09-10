@@ -36,6 +36,7 @@ pub(super) fn aggregate(
     text: &str,
     producer_results: Vec<SecurityScanResult>,
 ) -> SecurityScanResult {
+    let mut metrics = crate::diagnostics::PhaseMetricScope::new("l1_aggregation_detail", "");
     let aggregation_started = Instant::now();
     let producer_duration_ms: f64 = producer_results
         .iter()
@@ -64,6 +65,7 @@ pub(super) fn aggregate(
         .iter()
         .flat_map(candidates_from_result)
         .collect::<Vec<_>>();
+    metrics.checkpoint("read_candidates", "");
     let config = scorer_config();
     let scored = merge_candidates(text, candidates)
         .into_iter()
@@ -101,6 +103,7 @@ pub(super) fn aggregate(
         None => ("safe".to_string(), 1.0),
     };
 
+    metrics.checkpoint("merge_score_select", "");
     let mut details = HashMap::from([
         (
             "l1_candidates".to_string(),
@@ -131,6 +134,7 @@ pub(super) fn aggregate(
             serde_json::json!(candidate.candidate.candidate_id),
         );
     }
+    metrics.checkpoint("serialize_details", "");
     let duration_ms = producer_duration_ms + aggregation_started.elapsed().as_secs_f64() * 1000.0;
     let layer = LayerResult {
         level: "L1".to_string(),
@@ -175,6 +179,7 @@ pub(super) fn aggregate(
     let evidence_spans = accepted_spans(text, &scored);
     let label_scores = label_scores(&scored, selected_index, accepted);
 
+    metrics.checkpoint("decision_evidence_labels", "");
     SecurityScanResult {
         category: "injection".to_string(),
         class_name,

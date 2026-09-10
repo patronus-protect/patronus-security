@@ -1,0 +1,14 @@
+server:
+  bind: "0.0.0.0:8080"
+auth:
+  keys:
+__PUBLIC_KEYS_YAML__
+gateway:
+  redis_url: __REDIS_URL_JSON__
+  worker_token: "__WORKER_TOKEN__"
+  retention_secs: 90
+  max_waiting_requests: 64
+  workers:
+    - {name: worker-1, url: "http://worker-1:8080"}
+    - {name: worker-2, url: "http://worker-2:8080"}
+    - {name: worker-3, url: "http://worker-3:8080"}

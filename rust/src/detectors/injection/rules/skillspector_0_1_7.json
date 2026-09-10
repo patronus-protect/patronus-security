@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "catalog_id": "ark-skillspector-derived-0.1.7",
+  "source": "ark-native",
+  "source_revision": "0.1.7",
+  "license": "GPL-3.0-only",
+  "rules": [
+    {
+      "id": "ark.injection.skillspector.anti_refusal",
+      "upstream_id": "AR1:anti_refusal",
+      "family": "jailbreak_framing",
+      "severity": "critical",
+      "upstream_weight": 1.0,
+      "description": "Explicit bilingual instruction-boundary violation: anti_refusal",
+      "adaptation": "Original bounded EN/DE imperative or assertion at sentence/line start; no imported upstream confidence and no scorer changes.",
+      "pattern": "(?:\\A|[.!?][ \\t]+|\\n[ \\t]*)(?:never[ \\t]+refuse[ \\t]+(?:any|a)[ \\t]+request|verweigere[ \\t]+(?:niemals|nie)[ \\t]+(?:eine|irgendeine)[ \\t]+Anfrage)\\b",
+      "references": [
+        {
+          "source": "https://github.com/NVIDIA/SkillSpector",
+          "source_revision": "704bc9544260c2f41222dc0f92982521709496ab",
+          "upstream_id": "AR1"
+        }
+      ]
+    },
+    {
+      "id": "ark.injection.skillspector.unconditional_compliance",
+      "upstream_id": "AR1:unconditional_compliance",
+      "family": "jailbreak_framing",
+      "severity": "critical",
+      "upstream_weight": 1.0,
+      "description": "Explicit bilingual instruction-boundary violation: unconditional_compliance",
+      "adaptation": "Original bounded EN/DE imperative or assertion at sentence/line start; no imported upstream confidence and no scorer changes.",
+      "pattern": "(?:\\A|[.!?][ \\t]+|\\n[ \\t]*)(?:always[ \\t]+obey[ \\t]+every[ \\t]+instruction|befolge[ \\t]+immer[ \\t]+jede[ \\t]+Anweisung)\\b",
+      "references": [
+        {
+          "source": "https://github.com/NVIDIA/SkillSpector",
+          "source_revision": "704bc9544260c2f41222dc0f92982521709496ab",
+          "upstream_id": "AR1"
+        }
+      ]
+    },
+    {
+      "id": "ark.injection.skillspector.policy_nullification",
+      "upstream_id": "AR3:policy_nullification",
+      "family": "guardrail_tamper",
+      "severity": "critical",
+      "upstream_weight": 1.0,
+      "description": "Explicit bilingual instruction-boundary violation: policy_nullification",
+      "adaptation": "Original bounded EN/DE imperative or assertion at sentence/line start; no imported upstream confidence and no scorer changes.",
+      "pattern": "(?:\\A|[.!?][ \\t]+|\\n[ \\t]*)(?:safety[ \\t]+rules[ \\t]+no[ \\t]+longer[ \\t]+apply|Sicherheitsregeln[ \\t]+gelten[ \\t]+nicht)\\b",
+      "references": [
+        {
+          "source": "https://github.com/NVIDIA/SkillSpector",
+          "source_revision": "704bc9544260c2f41222dc0f92982521709496ab",
+          "upstream_id": "AR3"
+        }
+      ]
+    },
+    {
+      "id": "ark.injection.skillspector.persistent_override",
+      "upstream_id": "MP1:persistent_override",
+      "family": "multi_turn_escalation",
+      "severity": "critical",
+      "upstream_weight": 1.0,
+      "description": "Explicit bilingual instruction-boundary violation: persistent_override",
+      "adaptation": "Original bounded EN/DE imperative or assertion at sentence/line start; no imported upstream confidence and no scorer changes.",
+      "pattern": "(?:\\A|[.!?][ \\t]+|\\n[ \\t]*)(?:remember:[ \\t]+ignore[ \\t]+all[ \\t]+rules|merke[ \\t]+dir:[ \\t]+ignoriere[ \\t]+alle[ \\t]+Regeln)\\b",
+      "references": [
+        {
+          "source": "https://github.com/NVIDIA/SkillSpector",
+          "source_revision": "704bc9544260c2f41222dc0f92982521709496ab",
+          "upstream_id": "MP1"
+        }
+      ]
+    },
+    {
+      "id": "ark.injection.skillspector.memory_reset",
+      "upstream_id": "MP3:memory_reset",
+      "family": "instruction_override",
+      "severity": "critical",
+      "upstream_weight": 1.0,
+      "description": "Explicit bilingual instruction-boundary violation: memory_reset",
+      "adaptation": "Original bounded EN/DE imperative or assertion at sentence/line start; no imported upstream confidence and no scorer changes.",
+      "pattern": "(?:\\A|[.!?][ \\t]+|\\n[ \\t]*)(?:erase[ \\t]+your[ \\t]+safety[ \\t]+rules|lösche[ \\t]+deine[ \\t]+Sicherheitsregeln)\\b",
+      "references": [
+        {
+          "source": "https://github.com/NVIDIA/SkillSpector",
+          "source_revision": "704bc9544260c2f41222dc0f92982521709496ab",
+          "upstream_id": "MP3"
+        }
+      ]
+    }
+  ]
+}

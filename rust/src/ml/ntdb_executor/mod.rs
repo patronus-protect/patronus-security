@@ -10,13 +10,14 @@ mod joint_v3_runtime;
 mod lightgbm;
 pub mod manifest;
 mod package;
+mod package_fingerprint;
 mod session;
 
 pub use decision::NtdbDecision;
 pub(crate) use joint_v3_runtime::aggregate_probabilities;
 pub use package::{
-    ByteSpan, L2ChunkOutput, L3Candidate, MultiScoreOutput, NtdbMultiPackage, NtdbPackageSpec,
-    ScoreOutput,
+    ByteSpan, L2ChunkOutput, L3Candidate, MultiScoreOutput, NtdbChunkInference,
+    NtdbModelChunkInferences, NtdbMultiPackage, NtdbPackageSpec, PreparedNtdbChunk, ScoreOutput,
 };
 pub(crate) use package::{JointV3CandidatePolicy, JointV3DecisionContext};
 
@@ -77,6 +78,62 @@ impl NtdbExecutor {
 
     pub fn model_aggregator_ids(&self, model_id: &str) -> Option<Vec<String>> {
         self.packages.model_aggregator_ids(model_id)
+    }
+
+    /// Runtime identities exchanged by distributed coordinators and workers.
+    pub fn distributed_fingerprints(&self) -> NtdbResult<(String, String)> {
+        self.packages.distributed_fingerprints()
+    }
+
+    /// Tokenize a document once into transport-safe Package-v4 chunks.
+    pub fn prepare_chunks(&self, text: &str) -> NtdbResult<Vec<PreparedNtdbChunk>> {
+        self.packages.prepare_chunks(text)
+    }
+
+    /// Infer independent chunk evidence without performing document aggregation.
+    /// `document_chunk_count` is the full document count, even when `chunks` is one worker batch.
+    pub fn infer_prepared_chunks(
+        &mut self,
+        chunks: &[PreparedNtdbChunk],
+        document_chunk_count: usize,
+        operating_point: NtdbOperatingPoint,
+    ) -> NtdbResult<Vec<NtdbModelChunkInferences>> {
+        self.packages
+            .infer_prepared_chunks(chunks, document_chunk_count, operating_point)
+    }
+
+    pub fn infer_prepared_chunks_for_models<I, S>(
+        &mut self,
+        model_ids: I,
+        chunks: &[PreparedNtdbChunk],
+        document_chunk_count: usize,
+        operating_point: NtdbOperatingPoint,
+    ) -> NtdbResult<Vec<NtdbModelChunkInferences>>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<str>,
+    {
+        self.packages.infer_prepared_chunks_for_models(
+            model_ids
+                .into_iter()
+                .map(|model| model.as_ref().to_string())
+                .collect(),
+            chunks,
+            document_chunk_count,
+            operating_point,
+        )
+    }
+
+    /// Aggregate all per-chunk evidence for a document using the existing Package-v4 policy.
+    pub fn aggregate_chunk_inferences(
+        &self,
+        inferred: &[NtdbModelChunkInferences],
+        operating_point: NtdbOperatingPoint,
+    ) -> NtdbResult<Vec<NtdbDecision>> {
+        decisions_from_multi_outputs(
+            self.packages
+                .aggregate_chunk_inferences(inferred, operating_point)?,
+        )
     }
 
     pub fn score_all(

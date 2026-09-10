@@ -63,8 +63,48 @@ struct NativeRuleDefinition {
     source_file: String,
 }
 
+#[cfg(test)]
 pub(crate) fn native_detection(family: &str, text: &str) -> NativeDetection {
-    let matches = crate::threat::native_matches(family, text);
+    native_detection_prepared(family, &crate::threat::NativeText::new(text))
+}
+
+pub(crate) fn native_detection_prepared(
+    family: &str,
+    prepared: &crate::threat::NativeText<'_>,
+) -> NativeDetection {
+    let text = prepared.text();
+    let mut matches = crate::threat::native_matches_prepared(family, prepared);
+    if family == "instruction_override" {
+        matches.retain(|matched| {
+            let start = matched.range().start;
+            let verb_end = start
+                + text[start..]
+                    .find(char::is_whitespace)
+                    .unwrap_or(text.len() - start);
+            !negated_directive(text, start, verb_end)
+        });
+    }
+    for (start, decoded) in prepared.tags() {
+        for matched in crate::threat::native_matches_prepared(family, decoded) {
+            let range = matched.range();
+            let components = matched
+                .components
+                .into_iter()
+                .map(|mut c| {
+                    c.start_byte = start + c.start_byte * 4;
+                    c.end_byte = start + c.end_byte * 4;
+                    c.span_precision = "transformed_source";
+                    c
+                })
+                .collect();
+            matches.push(L1Match::at(
+                start + range.start * 4..start + range.end * 4,
+                components,
+            ));
+        }
+    }
+    matches.sort_by_key(|m| (m.range().start, m.range().end));
+    matches.dedup_by_key(|m| (m.range().start, m.range().end));
     let result = EvaluationResult {
         class_name: if matches.is_empty() { "safe" } else { family }.into(),
         confidence: 1.0,
@@ -219,6 +259,29 @@ fn signal_json(signal: &InjectionSignal) -> Value {
     value
 }
 
+// Local imperative negation only. Signals remain present in the independent
+// Aho scan; this suppresses a negated action, not the surrounding document.
+pub(crate) fn negated_directive(text: &str, start: usize, end: usize) -> bool {
+    let mut words = text[..start].split_whitespace().rev();
+    let trim_quote = |c: char| matches!(c, '\"' | '\'' | '“' | '‘' | '(' | '[');
+    let previous = words.next().unwrap_or("").trim_start_matches(trim_quote);
+    let auxiliary = words.next().unwrap_or("").trim_start_matches(trim_quote);
+    let before = ["never", "don't", "don’t"]
+        .iter()
+        .any(|word| previous.eq_ignore_ascii_case(word))
+        || (previous.eq_ignore_ascii_case("not")
+            && ["do", "must", "should", "shall"]
+                .iter()
+                .any(|word| auxiliary.eq_ignore_ascii_case(word)));
+    let after = text[end..]
+        .trim_start()
+        .split_whitespace()
+        .next()
+        .unwrap_or("")
+        .to_lowercase();
+    before || matches!(after.as_str(), "nicht" | "keine" | "keinen" | "keinerlei")
+}
+
 pub(crate) fn candidate_clauses(text: &str) -> Vec<(usize, usize)> {
     let mut spans = Vec::new();
     let mut start = 0;
@@ -240,5 +303,40 @@ fn push_trimmed_span(text: &str, start: usize, end: usize, spans: &mut Vec<(usiz
     let trimmed_end = end.saturating_sub(trailing);
     if trimmed_start < trimmed_end {
         spans.push((trimmed_start, trimmed_end));
+    }
+}
+
+#[cfg(test)]
+mod prepared_tests {
+    use super::*;
+    #[test]
+    fn shared_views_match_fresh_views_for_all_bilingual_native_families() {
+        let cases: Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/l1_native_bilingual.json"
+        ))
+        .unwrap();
+        for language in ["de", "en"] {
+            let text = format!(
+                "Grüße İ –\n{}",
+                cases
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|c| c[language].as_str().unwrap())
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            );
+            let prepared = crate::threat::NativeText::new(&text);
+            for rule in &native_registry().rules {
+                let a = native_detection(&rule.family, &text);
+                let b = native_detection_prepared(&rule.family, &prepared);
+                assert_eq!(a.result.class_name, b.result.class_name);
+                assert_eq!(a.details, b.details);
+                assert_eq!(
+                    serde_json::to_value(&a.evidence_spans).unwrap(),
+                    serde_json::to_value(&b.evidence_spans).unwrap()
+                );
+            }
+        }
     }
 }

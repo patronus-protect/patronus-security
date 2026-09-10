@@ -129,7 +129,23 @@ impl MatchText {
                 ends: Vec::new(),
             };
         }
-        Self::mapped(original, Some, true)
+        // Most Unicode lowercase mappings preserve UTF-8 byte positions too.
+        // Build offset tables only if a character actually changes byte length.
+        // Keep per-character lowercasing (not str::to_lowercase, whose Greek
+        // sigma handling is contextual) identical to the mapped fallback.
+        let mut text = String::with_capacity(original.len());
+        for c in original.chars() {
+            let start = text.len();
+            text.extend(c.to_lowercase());
+            if text.len() - start != c.len_utf8() {
+                return Self::mapped(original, Some, true);
+            }
+        }
+        Self {
+            text,
+            starts: Vec::new(),
+            ends: Vec::new(),
+        }
     }
 
     pub fn mapped(original: &str, map: impl Fn(char) -> Option<char>, lowercase: bool) -> Self {
@@ -215,6 +231,32 @@ pub(crate) fn detection_from_matches(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn lowercase_fast_path_matches_mapped_reference() {
+        for original in [
+            "Öffentliche Grüße: FÜHRERSCHEIN und PASSWORD",
+            "English credentials: TOKEN and secret",
+            "ΕΛΛΗΝΙΚΟΣ Σ ΟΣ",
+            "İ PASSWORD",
+            "K TOKEN",
+            "ẞ secret",
+            "日本語 🔒",
+        ] {
+            let fast = MatchText::lower(original);
+            let reference = MatchText::mapped(original, Some, true);
+            assert_eq!(fast.text, reference.text);
+            for (start, c) in fast.text.char_indices() {
+                let end = start + c.len_utf8();
+                let actual = fast.component("test", start..end);
+                let expected = reference.component("test", start..end);
+                assert_eq!(actual.start_byte, expected.start_byte, "{original}");
+                assert_eq!(actual.end_byte, expected.end_byte, "{original}");
+            }
+        }
+        assert!(MatchText::lower("Grüße Ö Ä Ü").starts.is_empty());
+        assert!(!MatchText::lower("İ").starts.is_empty());
+    }
+
     #[test]
     fn expanding_lowercase_and_multibyte_prefix_keep_original_offsets() {
         let text = "İ – Grüße PASSWORD";

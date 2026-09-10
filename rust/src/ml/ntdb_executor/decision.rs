@@ -5,7 +5,7 @@ use super::{
     NtdbResult, ScoreOutput,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct NtdbDecision {
     pub model_id: String,
     pub aggregator_id: String,

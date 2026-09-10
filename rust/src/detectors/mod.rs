@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
+pub(crate) mod anchor_gate;
 mod anchors;
 pub mod dlp;
 pub(crate) mod evidence;
 pub mod injection;
+pub mod lexical_anchors;
 pub mod mcp;
 pub mod pii;
+pub mod threat;
 
 use regex::Regex;
 use std::collections::HashMap;
@@ -22,6 +25,12 @@ pub(crate) struct NativeDetection {
 /// Shared detection contract for native regex scanners that return exact evidence.
 pub(crate) trait NativeRegexDetector {
     fn regexes(&self) -> &[Regex];
+    fn anchor_gates(&self) -> &[anchor_gate::AnchorGate] {
+        &[]
+    }
+    fn prefilters(&self) -> Option<&[Option<Regex>]> {
+        None
+    }
     fn entity_groups(&self) -> &[&'static str];
     fn rule_ids(&self) -> &[&'static str] {
         self.entity_groups()
@@ -53,6 +62,23 @@ pub(crate) trait NativeRegexDetector {
     where
         F: Fn(&str) -> bool,
     {
+        self.detect_prepared_with_options(
+            &crate::threat::NativeText::new(text),
+            allows_rule,
+            explain,
+        )
+    }
+
+    fn detect_prepared_with_options<F>(
+        &self,
+        prepared: &crate::threat::NativeText<'_>,
+        allows_rule: F,
+        explain: bool,
+    ) -> NativeDetection
+    where
+        F: Fn(&str) -> bool,
+    {
+        let text = prepared.text();
         let mut details = if explain {
             self.details(text)
         } else {
@@ -63,6 +89,20 @@ pub(crate) trait NativeRegexDetector {
         let mut evidence_spans = Vec::new();
         for (index, regex) in self.regexes().iter().enumerate() {
             if !allows_rule(self.rule_ids()[index]) {
+                continue;
+            }
+            if self
+                .anchor_gates()
+                .get(index)
+                .is_some_and(|gate| !gate.is_unconditional() && !gate.allows(prepared.anchors()))
+            {
+                continue;
+            }
+            if self
+                .prefilters()
+                .and_then(|filters| filters[index].as_ref())
+                .is_some_and(|filter| !filter.is_match(text))
+            {
                 continue;
             }
             let value_group = self

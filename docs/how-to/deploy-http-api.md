@@ -137,7 +137,7 @@ curl -X POST http://localhost:8080/v1/scan \
 ### Public multi-worker gateway
 
 For a public deployment, place `ark-api-entrypoint` in front of one or more worker containers and
-Redis. Clients call only the gateway. It round-robins requests to workers, persists a global
+Redis. Clients call only the gateway. It assigns requests to the next available healthy worker, persists a global
 `job_id`, and aggregates the highest authoritative result per category. The worker-local
 `request_id` and worker SSE stream stay internal.
 
@@ -147,6 +147,18 @@ reverse proxy, and the operating system. With the canonical HTTP benchmark and c
 production OVH host, two workers at 2.5 CPUs delivered 7.728 requests/s and 168 ms p50 latency;
 three workers at 2 CPUs delivered 6.761 requests/s and 440 ms p50 latency. Keep the two-worker
 topology unless a benchmark on the actual target host supports a different allocation.
+
+The separate `ark-api/deploy` Cube configuration uses three workers and a bounded waiting queue.
+Worker leases remain occupied until their jobs finish; interrupted workers must pass an
+authenticated idle recovery check before receiving more work. Gateway readiness requires both
+Redis and a healthy worker. The resumable bootstrap supports a shared external Redis store and
+overlapping API keys during rotation; use the bootstrap and image from the same release commit.
+
+For a fleet of Cubes, `ark-coordinator` exposes the same multipart submission and polling
+contract. It splits UTF-8 text into batches, schedules three concurrent slots per Cube, and
+merges evidence back to original document offsets. Missing chunks, incomplete category coverage,
+or expired parent deadlines produce a degraded result and cannot produce an `allow` decision.
+Its configuration and deployment templates live in `ark-coordinator/`.
 
 `POST /v1/scan` returns a global job handle:
 

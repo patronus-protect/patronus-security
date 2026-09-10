@@ -15,7 +15,14 @@ impl MultiTurnEscalationPipeline {
     }
 
     pub(crate) fn detect(&self, text: &str) -> crate::detectors::NativeDetection {
-        super::signal::native_detection("multi_turn_escalation", text)
+        self.detect_prepared(&crate::threat::NativeText::new(text))
+    }
+
+    pub(crate) fn detect_prepared(
+        &self,
+        prepared: &crate::threat::NativeText<'_>,
+    ) -> crate::detectors::NativeDetection {
+        super::signal::native_detection_prepared("multi_turn_escalation", prepared)
     }
 
     pub fn evaluate(&self, text: &str) -> EvaluationResult {

@@ -15,7 +15,14 @@ impl CrossToolInstructionPipeline {
     }
 
     pub(crate) fn detect(&self, text: &str) -> crate::detectors::NativeDetection {
-        super::signal::native_detection("cross_tool_instruction", text)
+        self.detect_prepared(&crate::threat::NativeText::new(text))
+    }
+
+    pub(crate) fn detect_prepared(
+        &self,
+        prepared: &crate::threat::NativeText<'_>,
+    ) -> crate::detectors::NativeDetection {
+        super::signal::native_detection_prepared("cross_tool_instruction", prepared)
     }
 
     pub fn evaluate(&self, text: &str) -> EvaluationResult {

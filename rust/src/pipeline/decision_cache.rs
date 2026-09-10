@@ -8,6 +8,7 @@ use crate::{EvaluationResult, LayerResult, ScanExecution, SecurityLevel};
 
 const DEFAULT_MAX_ENTRIES: usize = 100_000;
 const DEFAULT_MAX_BYTES: usize = 128 * 1024 * 1024;
+const EXPIRY_SWEEP_INTERVAL: Duration = Duration::from_secs(60);
 
 #[derive(Debug, Clone, Copy)]
 pub struct DecisionCacheConfig {
@@ -56,11 +57,22 @@ struct DecisionCacheEntry {
     estimated_bytes: usize,
 }
 
-#[derive(Default)]
 struct DecisionCacheInner {
     entries: HashMap<DecisionCacheKey, DecisionCacheEntry>,
     used_bytes: usize,
     access_counter: u64,
+    next_expiry_sweep: Instant,
+}
+
+impl Default for DecisionCacheInner {
+    fn default() -> Self {
+        Self {
+            entries: HashMap::new(),
+            used_bytes: 0,
+            access_counter: 0,
+            next_expiry_sweep: Instant::now() + EXPIRY_SWEEP_INTERVAL,
+        }
+    }
 }
 
 #[derive(Default)]
@@ -143,7 +155,12 @@ impl DecisionCache {
                 estimated_bytes,
             },
         );
-        prune(&mut inner, self.config, now);
+        let over_capacity = inner.entries.len() > self.config.max_entries
+            || inner.used_bytes > self.config.max_bytes;
+        if over_capacity || now >= inner.next_expiry_sweep {
+            prune(&mut inner, self.config, now);
+            inner.next_expiry_sweep = now + EXPIRY_SWEEP_INTERVAL;
+        }
     }
 }
 

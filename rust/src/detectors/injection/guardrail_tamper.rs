@@ -15,7 +15,14 @@ impl GuardrailTamperPipeline {
     }
 
     pub(crate) fn detect(&self, text: &str) -> crate::detectors::NativeDetection {
-        super::signal::native_detection("guardrail_tamper", text)
+        self.detect_prepared(&crate::threat::NativeText::new(text))
+    }
+
+    pub(crate) fn detect_prepared(
+        &self,
+        prepared: &crate::threat::NativeText<'_>,
+    ) -> crate::detectors::NativeDetection {
+        super::signal::native_detection_prepared("guardrail_tamper", prepared)
     }
 
     pub fn evaluate(&self, text: &str) -> EvaluationResult {

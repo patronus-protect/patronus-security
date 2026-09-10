@@ -1,16 +1,25 @@
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
+
+#[path = "entrypoint/sse.rs"]
+mod sse;
+#[path = "entrypoint/timings.rs"]
+mod timings;
+#[path = "entrypoint/worker_pool.rs"]
+mod worker_pool;
+use timings::JobTimings;
+use worker_pool::{WorkerLease, WorkerPool};
 
 use axum::body::Bytes;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Request, State};
 use axum::http::{header, HeaderMap, StatusCode};
+use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
-use axum::{Json, Router};
+use axum::{Extension, Json, Router};
 use clap::Parser;
 use futures::StreamExt;
 use redis::AsyncCommands;
@@ -21,6 +30,29 @@ use subtle::ConstantTimeEq;
 use uuid::Uuid;
 
 const ACTIVE_TTL_SECS: u64 = 10 * 60;
+const REDIS_OPERATION_TIMEOUT: Duration = Duration::from_secs(2);
+
+async fn redis_deadline<T>(
+    operation: impl std::future::Future<Output = redis::RedisResult<T>>,
+) -> redis::RedisResult<T> {
+    tokio::time::timeout(REDIS_OPERATION_TIMEOUT, operation)
+        .await
+        .map_err(|_| {
+            redis::RedisError::from(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                "Redis operation deadline exceeded",
+            ))
+        })?
+}
+
+async fn connect_redis(url: &str) -> redis::RedisResult<redis::aio::ConnectionManager> {
+    let config = redis::aio::ConnectionManagerConfig::new()
+        .set_connection_timeout(Duration::from_secs(1))
+        .set_response_timeout(Duration::from_secs(1))
+        .set_number_of_retries(2)
+        .set_max_delay(100);
+    redis_deadline(redis::Client::open(url)?.get_connection_manager_with_config(config)).await
+}
 
 #[derive(Parser)]
 #[command(name = "ark-api-entrypoint")]
@@ -58,6 +90,12 @@ struct GatewayConfig {
     workers: Vec<WorkerConfig>,
     #[serde(default = "default_retention_secs")]
     retention_secs: u64,
+    #[serde(default = "default_max_waiting")]
+    max_waiting_requests: usize,
+}
+
+fn default_max_waiting() -> usize {
+    64
 }
 
 fn default_retention_secs() -> u64 {
@@ -75,8 +113,7 @@ struct AppState {
     client: reqwest::Client,
     redis: redis::aio::ConnectionManager,
     worker_token: String,
-    workers: Vec<WorkerConfig>,
-    worker_cursor: Arc<AtomicUsize>,
+    worker_pool: Arc<WorkerPool>,
     key_hashes: Vec<String>,
     retention_secs: u64,
 }
@@ -96,6 +133,8 @@ struct Job {
     completion: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     decision: Option<String>,
+    #[serde(default)]
+    timings: JobTimings,
 }
 
 fn job_key(job_id: &str) -> String {
@@ -136,12 +175,12 @@ async fn save_job(state: &AppState, job: &Job) -> Result<(), redis::RedisError> 
     };
     let mut connection = state.redis.clone();
     let payload = serde_json::to_string(job).expect("job serialization must succeed");
-    connection.set_ex(job_key(&job.job_id), payload, ttl).await
+    redis_deadline(connection.set_ex(job_key(&job.job_id), payload, ttl)).await
 }
 
 async fn load_job(state: &AppState, job_id: &str) -> Result<Option<Job>, redis::RedisError> {
     let mut connection = state.redis.clone();
-    let payload: Option<String> = connection.get(job_key(job_id)).await?;
+    let payload: Option<String> = redis_deadline(connection.get(job_key(job_id))).await?;
     Ok(payload.and_then(|value| serde_json::from_str(&value).ok()))
 }
 
@@ -166,7 +205,55 @@ fn final_decision(job: &Job) -> String {
     if has_risk { "block" } else { "allow" }.to_string()
 }
 
-async fn collect_events(state: AppState, job_id: String, worker: WorkerConfig, request_id: String) {
+async fn collect_events(
+    state: AppState,
+    mut job: Job,
+    lease: Arc<WorkerLease>,
+    request_id: String,
+    submitted: Instant,
+    dispatched: Instant,
+) {
+    let job_id = job.job_id.clone();
+    let completed = tokio::time::timeout(
+        Duration::from_secs(ACTIVE_TTL_SECS - 10),
+        collect_events_inner(
+            &state,
+            &mut job,
+            &lease.worker,
+            &request_id,
+            submitted,
+            dispatched,
+        ),
+    )
+    .await
+    .unwrap_or(false);
+    if completed {
+        lease.finished();
+    } else {
+        lease.quarantine();
+        tracing::error!(job_id, worker = %lease.worker.name, "worker completion unknown; worker quarantined until idle fence");
+        // Quarantine immediately; Redis cleanup must not hold this worker lease.
+        drop(lease);
+        job.status = "failed".into();
+        job.completion = Some(json!({"state":"failed", "failures":[{
+            "stage":"entrypoint", "kind":"worker_stream_interrupted",
+            "message":"Worker did not report completion", "retryable":true
+        }]}));
+        job.decision = Some("review".into());
+        let _ = save_job(&state, &job).await;
+    }
+    // The shared lease stays held until every job from this submission finishes.
+}
+
+async fn collect_events_inner(
+    state: &AppState,
+    job: &mut Job,
+    worker: &WorkerConfig,
+    request_id: &str,
+    submitted: Instant,
+    dispatched: Instant,
+) -> bool {
+    let job_id = job.job_id.clone();
     let started = Instant::now();
     let url = format!(
         "{}/v1/scan/{request_id}/events",
@@ -182,25 +269,38 @@ async fn collect_events(state: AppState, job_id: String, worker: WorkerConfig, r
         Ok(response) if response.status().is_success() => response,
         Ok(response) => {
             tracing::warn!(job_id, status = %response.status(), "worker event stream rejected");
-            return;
+            return false;
         }
         Err(error) => {
             tracing::warn!(job_id, %error, "worker event stream failed");
-            return;
+            return false;
         }
     };
 
-    tracing::info!(job_id, worker = %worker.name, worker_events_connected_ms = started.elapsed().as_secs_f64() * 1_000.0, "worker event stream connected");
+    tracing::debug!(job_id, worker = %worker.name, worker_events_connected_ms = started.elapsed().as_secs_f64() * 1_000.0, "worker event stream connected");
 
-    let mut pending = String::new();
+    let mut frames = sse::Frames::default();
     let mut stream = response.bytes_stream();
     let mut event_count = 0usize;
-    while let Some(chunk) = stream.next().await {
+    let mut progress_dirty = false;
+    let mut progress_flush = tokio::time::interval(Duration::from_millis(100));
+    progress_flush.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    loop {
+        let chunk = tokio::select! {
+            chunk = stream.next() => match chunk {
+                Some(chunk) => chunk,
+                None => break,
+            },
+            _ = progress_flush.tick(), if progress_dirty => {
+                if save_job(state, job).await.is_err() {
+                    return false;
+                }
+                progress_dirty = false;
+                continue;
+            }
+        };
         let Ok(chunk) = chunk else { break };
-        pending.push_str(&String::from_utf8_lossy(&chunk));
-        while let Some(index) = pending.find("\n\n") {
-            let frame = pending[..index].to_string();
-            pending.drain(..index + 2);
+        for frame in frames.push(&chunk) {
             let event = frame.lines().find_map(|line| line.strip_prefix("event: "));
             let data = frame
                 .lines()
@@ -210,9 +310,9 @@ async fn collect_events(state: AppState, job_id: String, worker: WorkerConfig, r
                 continue;
             };
             event_count += 1;
-            let Ok(Some(mut job)) = load_job(&state, &job_id).await else {
-                return;
-            };
+            if matches!(event, "result" | "provisional") {
+                job.timings.observe(&data);
+            }
             match event {
                 "progress" => {
                     if let Some(category) = data.get("category").and_then(Value::as_str) {
@@ -221,7 +321,7 @@ async fn collect_events(state: AppState, job_id: String, worker: WorkerConfig, r
                 }
                 "result" => {
                     if let Some(category) = data.get("category").and_then(Value::as_str) {
-                        tracing::info!(
+                        tracing::debug!(
                             job_id,
                             worker = %worker.name,
                             category,
@@ -250,19 +350,27 @@ async fn collect_events(state: AppState, job_id: String, worker: WorkerConfig, r
                     } else {
                         "completed".to_string()
                     };
-                    job.decision = Some(final_decision(&job));
+                    job.decision = Some(final_decision(job));
+                    job.timings.worker_ms = Some(dispatched.elapsed().as_secs_f64() * 1000.0);
+                    job.timings.total_ms = Some(submitted.elapsed().as_secs_f64() * 1000.0);
                 }
                 _ => {}
             }
-            if save_job(&state, &job).await.is_err() {
-                return;
+            if event == "progress" {
+                progress_dirty = true;
+                continue;
             }
+            if save_job(state, job).await.is_err() {
+                return false;
+            }
+            progress_dirty = false;
             if event == "finished" {
-                tracing::info!(job_id, worker = %worker.name, worker_events_finished_ms = started.elapsed().as_secs_f64() * 1_000.0, event_count, "worker event stream finished");
-                return;
+                tracing::debug!(job_id, worker = %worker.name, worker_events_finished_ms = started.elapsed().as_secs_f64() * 1_000.0, event_count, "worker event stream finished");
+                return true;
             }
         }
     }
+    false
 }
 
 fn level_rank(result: &Value) -> u8 {
@@ -310,6 +418,7 @@ fn compact_result(result: &Value) -> Value {
         "confidence": result.get("confidence"),
         "level": result.get("level"),
         "model": result.get("model"),
+        "duration_ms": result.get("duration_ms"),
         "accepted": result.pointer("/decision/recommendation/accepted").and_then(Value::as_bool).unwrap_or(false),
         "final_result": result.pointer("/decision/final_result"),
         "decision_evidence": decision_evidence,
@@ -355,50 +464,117 @@ fn l2_chunk_evidence(result: &Value) -> Option<Value> {
     }))
 }
 
+async fn admit_scan(
+    State(state): State<Arc<AppState>>,
+    mut request: Request,
+    next: Next,
+) -> Response {
+    if !authenticated(&state, request.headers()) {
+        return unauthorized();
+    }
+    let admission = match state.worker_pool.reserve() {
+        Ok(admission) => admission,
+        Err(error) => {
+            return (StatusCode::TOO_MANY_REQUESTS, Json(json!({"error": error}))).into_response()
+        }
+    };
+    request.extensions_mut().insert(admission);
+    next.run(request).await
+}
+
 async fn submit_scan(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
+    Extension(admission): Extension<Arc<tokio::sync::OwnedSemaphorePermit>>,
     body: Bytes,
 ) -> Response {
-    if !authenticated(&state, &headers) {
-        return unauthorized();
-    }
-    let worker = state.workers
-        [state.worker_cursor.fetch_add(1, Ordering::Relaxed) % state.workers.len()]
-    .clone();
+    let submitted = Instant::now();
+    let lease = match tokio::time::timeout(
+        Duration::from_secs(15),
+        state.worker_pool.acquire_reserved(admission),
+    )
+    .await
+    {
+        Ok(Ok(lease)) => lease,
+        Ok(Err(error)) => {
+            return (StatusCode::TOO_MANY_REQUESTS, Json(json!({"error":error}))).into_response()
+        }
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"error":"no worker became available within 15 seconds"})),
+            )
+                .into_response()
+        }
+    };
+    let worker = &lease.worker;
+    let queue_wait_ms = submitted.elapsed().as_secs_f64() * 1000.0;
     let upstream_started = Instant::now();
     let mut request = state
         .client
         .post(format!("{}/v1/scan", worker.url.trim_end_matches('/')))
         .bearer_auth(&state.worker_token)
+        .header("x-ark-worker-instance", &lease.instance_id)
+        .header("x-ark-worker-epoch", lease.epoch.to_string())
         .body(body);
     if let Some(content_type) = headers.get(header::CONTENT_TYPE) {
         request = request.header(header::CONTENT_TYPE, content_type);
     }
-    let response = match request.send().await {
+    lease.start_dispatch();
+    let response = match request.timeout(Duration::from_secs(10)).send().await {
         Ok(response) => response,
         Err(_) => {
+            lease.quarantine();
             return (
                 StatusCode::BAD_GATEWAY,
                 Json(json!({"error":"worker unavailable"})),
             )
-                .into_response()
+                .into_response();
         }
     };
     let status = response.status();
+    if !status.is_success() {
+        // Multipart/body-limit rejections can be plain text, not JSON. The
+        // rejected request did not occupy this worker and must not quarantine it.
+        if status == StatusCode::CONFLICT || status.is_server_error() {
+            lease.quarantine();
+        } else {
+            lease.finished();
+        }
+        let payload = response.json::<Value>().await.unwrap_or_else(
+            |_| json!({"error":format!("worker rejected request with HTTP {}", status.as_u16())}),
+        );
+        return (status, Json(payload)).into_response();
+    }
     let payload: Value = match response.json().await {
         Ok(payload) => payload,
         Err(_) => {
+            lease.quarantine();
             return (
                 StatusCode::BAD_GATEWAY,
                 Json(json!({"error":"invalid worker response"})),
             )
-                .into_response()
+                .into_response();
         }
     };
-    if !status.is_success() {
-        return (status, Json(payload)).into_response();
+    if payload
+        .get("jobs")
+        .and_then(Value::as_array)
+        .is_none_or(|jobs| {
+            jobs.is_empty()
+                || jobs
+                    .iter()
+                    .any(|job| job.get("request_id").and_then(Value::as_str).is_none())
+        })
+    {
+        lease.quarantine();
+        return (
+            StatusCode::BAD_GATEWAY,
+            Json(json!({"error":"invalid worker job response"})),
+        )
+            .into_response();
     }
+    lease.accepted(payload["jobs"].as_array().expect("validated jobs").len());
     let mut jobs = Vec::new();
     for worker_job in payload
         .get("jobs")
@@ -410,7 +586,7 @@ async fn submit_scan(
             continue;
         };
         let job_id = format!("job_{}", Uuid::new_v4().simple());
-        tracing::info!(job_id, worker = %worker.name, worker_submit_ms = upstream_started.elapsed().as_secs_f64() * 1_000.0, "worker accepted scan");
+        tracing::debug!(job_id, worker = %worker.name, worker_submit_ms = upstream_started.elapsed().as_secs_f64() * 1_000.0, "worker accepted scan");
         let job = Job {
             job_id: job_id.clone(),
             source: worker_job
@@ -425,27 +601,113 @@ async fn submit_scan(
             categories: HashMap::new(),
             completion: None,
             decision: None,
+            timings: JobTimings {
+                queue_wait_ms,
+                worker_submit_ms: upstream_started.elapsed().as_secs_f64() * 1000.0,
+                ..Default::default()
+            },
         };
         if save_job(&state, &job).await.is_err() {
+            lease.quarantine();
             return (
                 StatusCode::SERVICE_UNAVAILABLE,
                 Json(json!({"error":"job store unavailable"})),
             )
                 .into_response();
         }
-        tokio::spawn(collect_events(
-            (*state).clone(),
-            job_id.clone(),
-            worker.clone(),
-            worker_request_id.to_string(),
-        ));
         jobs.push(json!({
             "job_id": job_id,
             "source": job.source,
             "status_url": format!("/v1/scan/{job_id}"),
         }));
+        tokio::spawn(collect_events(
+            (*state).clone(),
+            job,
+            lease.clone(),
+            worker_request_id.to_string(),
+            submitted,
+            upstream_started,
+        ));
     }
     (StatusCode::ACCEPTED, Json(json!({"jobs": jobs}))).into_response()
+}
+
+async fn submit_scan_sync(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Extension(admission): Extension<Arc<tokio::sync::OwnedSemaphorePermit>>,
+    body: Bytes,
+) -> Response {
+    let lease = match tokio::time::timeout(
+        Duration::from_secs(15),
+        state.worker_pool.acquire_reserved(admission),
+    )
+    .await
+    {
+        Ok(Ok(lease)) => lease,
+        Ok(Err(error)) => {
+            return (StatusCode::TOO_MANY_REQUESTS, Json(json!({"error":error}))).into_response()
+        }
+        Err(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"error":"no worker became available within 15 seconds"})),
+            )
+                .into_response()
+        }
+    };
+    let worker = &lease.worker;
+    let mut request = state
+        .client
+        .post(format!("{}/v1/scan/sync", worker.url.trim_end_matches('/')))
+        .bearer_auth(&state.worker_token)
+        .header("x-ark-worker-instance", &lease.instance_id)
+        .header("x-ark-worker-epoch", lease.epoch.to_string())
+        .body(body);
+    if let Some(content_type) = headers.get(header::CONTENT_TYPE) {
+        request = request.header(header::CONTENT_TYPE, content_type);
+    }
+    lease.start_dispatch();
+    let response = match request
+        .timeout(Duration::from_secs(ACTIVE_TTL_SECS - 10))
+        .send()
+        .await
+    {
+        Ok(response) => response,
+        Err(_) => {
+            lease.quarantine();
+            return (
+                StatusCode::BAD_GATEWAY,
+                Json(json!({"error":"worker unavailable"})),
+            )
+                .into_response();
+        }
+    };
+    let status = response.status();
+    let content_type = response.headers().get(header::CONTENT_TYPE).cloned();
+    let payload = match response.bytes().await {
+        Ok(payload) => payload,
+        Err(_) => {
+            lease.quarantine();
+            return (
+                StatusCode::BAD_GATEWAY,
+                Json(json!({"error":"invalid worker response"})),
+            )
+                .into_response();
+        }
+    };
+    if status.is_success() || (!status.is_server_error() && status != StatusCode::CONFLICT) {
+        lease.finished();
+    } else {
+        lease.quarantine();
+    }
+    let mut response = Response::builder().status(status);
+    if let Some(content_type) = content_type {
+        response = response.header(header::CONTENT_TYPE, content_type);
+    }
+    response
+        .body(axum::body::Body::from(payload))
+        .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response())
 }
 
 async fn get_scan(
@@ -483,7 +745,7 @@ async fn readyz(State(state): State<Arc<AppState>>) -> StatusCode {
     )
     .await
     {
-        Ok(Ok(pong)) if pong == "PONG" => StatusCode::OK,
+        Ok(Ok(pong)) if pong == "PONG" && state.worker_pool.ready() => StatusCode::OK,
         _ => StatusCode::SERVICE_UNAVAILABLE,
     }
 }
@@ -491,22 +753,35 @@ async fn readyz(State(state): State<Arc<AppState>>) -> StatusCode {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
+        .json()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
     let config: RawConfig = serde_yaml::from_reader(std::fs::File::open(Args::parse().config)?)?;
     if config.gateway.workers.is_empty() {
         return Err("gateway.workers must not be empty".into());
     }
+    let mut names = std::collections::HashSet::new();
+    let mut urls = std::collections::HashSet::new();
+    for worker in &config.gateway.workers {
+        if worker.name.is_empty()
+            || !names.insert(&worker.name)
+            || !urls.insert(worker.url.trim_end_matches('/'))
+        {
+            return Err("gateway.workers must have distinct names and URLs".into());
+        }
+    }
+    if config.gateway.max_waiting_requests > 1024 {
+        return Err("gateway.max_waiting_requests must not exceed 1024".into());
+    }
     let bind: SocketAddr = config.server.bind.parse()?;
-    let redis = redis::Client::open(config.gateway.redis_url.as_str())?
-        .get_connection_manager()
-        .await?;
+    let redis = connect_redis(config.gateway.redis_url.as_str()).await?;
     let state = Arc::new(AppState {
-        client: reqwest::Client::new(),
+        client: reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .build()?,
         redis,
         worker_token: config.gateway.worker_token,
-        workers: config.gateway.workers,
-        worker_cursor: Arc::new(AtomicUsize::new(0)),
+        worker_pool: WorkerPool::new(config.gateway.workers, config.gateway.max_waiting_requests),
         key_hashes: config
             .auth
             .keys
@@ -515,10 +790,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .collect(),
         retention_secs: config.gateway.retention_secs,
     });
+    state
+        .worker_pool
+        .spawn_monitor(state.client.clone(), state.worker_token.clone());
     let app = Router::new()
         .route("/healthz", get(healthz))
         .route("/readyz", get(readyz))
-        .route("/v1/scan", post(submit_scan))
+        .route(
+            "/v1/scan",
+            post(submit_scan).layer(middleware::from_fn_with_state(state.clone(), admit_scan)),
+        )
+        .route(
+            "/v1/scan/sync",
+            post(submit_scan_sync).layer(middleware::from_fn_with_state(state.clone(), admit_scan)),
+        )
         .route("/v1/scan/:job_id", get(get_scan))
         .with_state(state);
     let listener = tokio::net::TcpListener::bind(bind).await?;
@@ -529,6 +814,226 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    async fn recording_store() -> (
+        redis::aio::ConnectionManager,
+        Arc<std::sync::Mutex<Vec<Job>>>,
+        tokio::task::JoinHandle<()>,
+    ) {
+        use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let recorded = writes.clone();
+        let server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            let mut stream = BufReader::new(stream);
+            loop {
+                let mut line = String::new();
+                if stream.read_line(&mut line).await.unwrap() == 0 {
+                    break;
+                }
+                let count: usize = line.trim().strip_prefix('*').unwrap().parse().unwrap();
+                let mut args = Vec::new();
+                for _ in 0..count {
+                    line.clear();
+                    stream.read_line(&mut line).await.unwrap();
+                    let len: usize = line.trim().strip_prefix('$').unwrap().parse().unwrap();
+                    let mut value = vec![0; len + 2];
+                    stream.read_exact(&mut value).await.unwrap();
+                    value.truncate(len);
+                    args.push(value);
+                }
+                match args[0].as_slice() {
+                    b"CLIENT" => {}
+                    b"SETEX" => recorded
+                        .lock()
+                        .unwrap()
+                        .push(serde_json::from_slice(&args[3]).unwrap()),
+                    command => panic!("collector must never reload its job: {command:?}"),
+                }
+                stream.get_mut().write_all(b"+OK\r\n").await.unwrap();
+            }
+        });
+        let redis = connect_redis(&format!("redis://{address}/")).await.unwrap();
+        (redis, writes, server)
+    }
+
+    #[tokio::test]
+    async fn collector_coalesces_progress_without_reads_and_persists_terminal_states() {
+        let (redis, writes, store) = recording_store().await;
+        let frames = (0..100)
+            .map(|step| {
+                format!("event: progress\ndata: {{\"category\":\"injection\",\"step\":{step}}}\n\n")
+            })
+            .collect::<String>();
+        let complete = format!(
+            "{frames}event: finished\ndata: {{\"completion\":{{\"state\":\"complete\"}}}}\n\n"
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let app = Router::new()
+            .route(
+                "/v1/scan/complete/events",
+                get(move || {
+                    let complete = complete.clone();
+                    async move { complete }
+                }),
+            )
+            .route(
+                "/v1/scan/interrupted/events",
+                get(|| async {
+                    "event: progress\ndata: {\"category\":\"injection\",\"step\":7}\n\n"
+                }),
+            );
+        let worker_server = tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+        let state = AppState {
+            client: reqwest::Client::new(),
+            redis,
+            worker_token: String::new(),
+            worker_pool: WorkerPool::healthy_test_pool(),
+            key_hashes: Vec::new(),
+            retention_secs: 90,
+        };
+        let worker = WorkerConfig {
+            name: "test".into(),
+            url: format!("http://{address}"),
+        };
+        let mut job = completed_job(HashMap::new());
+        job.status = "running".into();
+        assert!(
+            collect_events_inner(
+                &state,
+                &mut job,
+                &worker,
+                "complete",
+                Instant::now(),
+                Instant::now()
+            )
+            .await
+        );
+        {
+            let writes = writes.lock().unwrap();
+            assert_eq!(
+                writes.len(),
+                1,
+                "progress burst should be covered by the terminal snapshot"
+            );
+            assert_eq!(writes[0].status, "completed");
+            assert_eq!(writes[0].progress["injection"]["step"], 99);
+        }
+        // An interrupted stream must persist failure from the local job as well.
+        let mut lease = state.worker_pool.acquire().await.unwrap();
+        Arc::get_mut(&mut lease).unwrap().worker = worker;
+        lease.start_dispatch();
+        collect_events(
+            state,
+            job,
+            lease,
+            "interrupted".into(),
+            Instant::now(),
+            Instant::now(),
+        )
+        .await;
+        let writes = writes.lock().unwrap();
+        let failed = writes.last().unwrap();
+        assert_eq!(failed.status, "failed");
+        assert_eq!(failed.decision.as_deref(), Some("review"));
+        assert_eq!(failed.progress["injection"]["step"], 7);
+        worker_server.abort();
+        store.abort();
+    }
+
+    #[tokio::test]
+    async fn admission_rejects_before_body_read_and_releases_failed_or_cancelled_uploads() {
+        use axum::body::Body;
+        use tower::ServiceExt;
+        let (redis, _, store) = recording_store().await;
+        let pool = WorkerPool::healthy_test_pool();
+        let state = Arc::new(AppState {
+            client: reqwest::Client::new(),
+            redis,
+            worker_token: String::new(),
+            worker_pool: pool.clone(),
+            key_hashes: vec![format!("{:x}", Sha256::digest(b"test-key"))],
+            retention_secs: 90,
+        });
+        let app = Router::new()
+            .route(
+                "/v1/scan",
+                post(submit_scan).layer(middleware::from_fn_with_state(state.clone(), admit_scan)),
+            )
+            .with_state(state);
+        let unread_body = || {
+            Body::from_stream(futures::stream::poll_fn(
+                |_| -> std::task::Poll<Option<Result<Bytes, std::io::Error>>> {
+                    panic!("rejected body must not be polled")
+                },
+            ))
+        };
+        let request = |body, authenticated| {
+            let mut request = Request::builder().uri("/v1/scan").method("POST");
+            if authenticated {
+                request = request.header(header::AUTHORIZATION, "Bearer test-key");
+            }
+            request.body(body).unwrap()
+        };
+        assert_eq!(
+            app.clone()
+                .oneshot(request(unread_body(), false))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::UNAUTHORIZED
+        );
+        let reserved = pool.reserve().unwrap();
+        assert_eq!(
+            app.clone()
+                .oneshot(request(unread_body(), true))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::TOO_MANY_REQUESTS
+        );
+        drop(reserved);
+        let broken = Body::from_stream(futures::stream::once(async {
+            Err::<Bytes, _>(std::io::Error::other("upload failed"))
+        }));
+        assert_eq!(
+            app.clone()
+                .oneshot(request(broken, true))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::BAD_REQUEST
+        );
+        drop(pool.reserve().expect("body failure must release admission"));
+        let (polled, started) = tokio::sync::oneshot::channel();
+        let mut polled = Some(polled);
+        let pending = Body::from_stream(futures::stream::poll_fn(
+            move |_| -> std::task::Poll<Option<Result<Bytes, std::io::Error>>> {
+                if let Some(polled) = polled.take() {
+                    let _ = polled.send(());
+                }
+                std::task::Poll::Pending
+            },
+        ));
+        let upload = tokio::spawn(app.oneshot(request(pending, true)));
+        started.await.unwrap();
+        assert!(
+            pool.reserve().is_err(),
+            "upload must hold admission before it gets a worker"
+        );
+        upload.abort();
+        let _ = upload.await;
+        drop(
+            pool.reserve()
+                .expect("cancelled upload must release admission"),
+        );
+        store.abort();
+    }
 
     #[tokio::test]
     async fn redis_disconnect_changes_readiness_and_recovers_job_storage() {
@@ -584,8 +1089,7 @@ mod tests {
             client: reqwest::Client::new(),
             redis: client.get_connection_manager().await.unwrap(),
             worker_token: String::new(),
-            workers: Vec::new(),
-            worker_cursor: Arc::new(AtomicUsize::new(0)),
+            worker_pool: WorkerPool::healthy_test_pool(),
             key_hashes: Vec::new(),
             retention_secs: 90,
         });
@@ -610,6 +1114,91 @@ mod tests {
         server.abort();
     }
 
+    #[tokio::test]
+    async fn connected_but_silent_redis_bounds_reads_writes_and_initial_connect() {
+        use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+        use tokio::net::TcpListener;
+
+        // Complete the Redis handshake, then keep TCP open without answering
+        // actual commands. A healthy socket must not imply a healthy store.
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let mut peers = tokio::task::JoinSet::new();
+            loop {
+                let (stream, _) = listener.accept().await.unwrap();
+                peers.spawn(async move {
+                    let mut stream = BufReader::new(stream);
+                    loop {
+                        let mut line = String::new();
+                        if stream.read_line(&mut line).await.unwrap() == 0 {
+                            break;
+                        }
+                        let count: usize = line.trim().strip_prefix('*').unwrap().parse().unwrap();
+                        let mut args = Vec::new();
+                        for _ in 0..count {
+                            line.clear();
+                            stream.read_line(&mut line).await.unwrap();
+                            let len: usize =
+                                line.trim().strip_prefix('$').unwrap().parse().unwrap();
+                            let mut value = vec![0; len + 2];
+                            stream.read_exact(&mut value).await.unwrap();
+                            value.truncate(len);
+                            args.push(value);
+                        }
+                        if args[0].as_slice() == b"CLIENT" {
+                            stream.get_mut().write_all(b"+OK\r\n").await.unwrap();
+                        }
+                    }
+                });
+            }
+        });
+        let redis = connect_redis(&format!("redis://{address}/")).await.unwrap();
+        let state = Arc::new(AppState {
+            client: reqwest::Client::new(),
+            redis,
+            worker_token: String::new(),
+            worker_pool: WorkerPool::healthy_test_pool(),
+            key_hashes: Vec::new(),
+            retention_secs: 90,
+        });
+        let job = completed_job(HashMap::new());
+        let began = Instant::now();
+        let (saved, loaded, readiness) = tokio::time::timeout(Duration::from_secs(3), async {
+            tokio::join!(
+                save_job(&state, &job),
+                load_job(&state, &job.job_id),
+                readyz(State(state.clone()))
+            )
+        })
+        .await
+        .expect("silent Redis must not retain HTTP or collector tasks");
+        assert!(saved.unwrap_err().is_timeout());
+        assert!(loaded.err().expect("read must fail").is_timeout());
+        assert_eq!(readiness, StatusCode::SERVICE_UNAVAILABLE);
+        assert!(began.elapsed() < Duration::from_secs(3));
+        server.abort();
+        let _ = server.await;
+
+        // A peer can also accept TCP but never complete the CLIENT handshake.
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let mut streams = Vec::new();
+            loop {
+                streams.push(listener.accept().await.unwrap().0);
+            }
+        });
+        let connected = tokio::time::timeout(
+            Duration::from_secs(3),
+            connect_redis(&format!("redis://{address}/")),
+        )
+        .await
+        .expect("initial Redis handshake/retries must have a deadline");
+        assert!(connected.is_err());
+        server.abort();
+    }
+
     fn completed_job(categories: HashMap<String, Value>) -> Job {
         Job {
             job_id: "job_test".to_string(),
@@ -621,6 +1210,7 @@ mod tests {
             categories,
             completion: Some(json!({"state": "complete"})),
             decision: None,
+            timings: JobTimings::default(),
         }
     }
 

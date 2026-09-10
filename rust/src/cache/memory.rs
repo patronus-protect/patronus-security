@@ -21,7 +21,8 @@ impl Default for MemoryCacheConfig {
 
 struct Entry {
     output: CachedModelOutput,
-    last_access: u64,
+    previous: Option<CacheKey>,
+    next: Option<CacheKey>,
     estimated_bytes: usize,
 }
 
@@ -29,7 +30,54 @@ struct Entry {
 struct State {
     entries: HashMap<CacheKey, Entry>,
     used_bytes: usize,
-    access_counter: u64,
+    oldest: Option<CacheKey>,
+    newest: Option<CacheKey>,
+}
+
+impl State {
+    fn unlink(&mut self, key: CacheKey) {
+        let entry = &self.entries[&key];
+        let (previous, next) = (entry.previous, entry.next);
+        if let Some(previous) = previous {
+            self.entries.get_mut(&previous).unwrap().next = next;
+        } else {
+            self.oldest = next;
+        }
+        if let Some(next) = next {
+            self.entries.get_mut(&next).unwrap().previous = previous;
+        } else {
+            self.newest = previous;
+        }
+    }
+
+    fn touch(&mut self, key: CacheKey) {
+        if self.newest == Some(key) {
+            return;
+        }
+        self.unlink(key);
+        self.append(key);
+    }
+
+    fn append(&mut self, key: CacheKey) {
+        if let Some(newest) = self.newest {
+            self.entries.get_mut(&newest).unwrap().next = Some(key);
+        } else {
+            self.oldest = Some(key);
+        }
+        let entry = self.entries.get_mut(&key).unwrap();
+        entry.previous = self.newest;
+        entry.next = None;
+        self.newest = Some(key);
+    }
+
+    fn remove(&mut self, key: &CacheKey) {
+        if !self.entries.contains_key(key) {
+            return;
+        }
+        self.unlink(*key);
+        let entry = self.entries.remove(key).unwrap();
+        self.used_bytes = self.used_bytes.saturating_sub(entry.estimated_bytes);
+    }
 }
 
 pub(crate) struct MemoryCacheStore {
@@ -62,25 +110,21 @@ impl ExactCacheStore for MemoryCacheStore {
         now_unix_ms: u64,
     ) -> Result<Option<CachedModelOutput>, CacheError> {
         let mut state = self.state.lock().expect("cache mutex poisoned");
-        let next_access = state.access_counter.wrapping_add(1);
-        state.access_counter = next_access;
-
         if state
             .entries
             .get(key)
             .is_some_and(|entry| entry.output.is_expired(now_unix_ms))
         {
-            if let Some(expired) = state.entries.remove(key) {
-                state.used_bytes = state.used_bytes.saturating_sub(expired.estimated_bytes);
-            }
+            state.remove(key);
             return Ok(None);
         }
 
-        let Some(entry) = state.entries.get_mut(key) else {
+        let Some(entry) = state.entries.get(key) else {
             return Ok(None);
         };
-        entry.last_access = next_access;
-        Ok(Some(entry.output.clone()))
+        let output = entry.output.clone();
+        state.touch(*key);
+        Ok(Some(output))
     }
 
     fn put(&self, key: CacheKey, output: CachedModelOutput) -> Result<(), CacheError> {
@@ -93,20 +137,18 @@ impl ExactCacheStore for MemoryCacheStore {
         }
 
         let mut state = self.state.lock().expect("cache mutex poisoned");
-        let next_access = state.access_counter.wrapping_add(1);
-        state.access_counter = next_access;
-        if let Some(replaced) = state.entries.remove(&key) {
-            state.used_bytes = state.used_bytes.saturating_sub(replaced.estimated_bytes);
-        }
+        state.remove(&key);
         state.used_bytes = state.used_bytes.saturating_add(estimated_bytes);
         state.entries.insert(
             key,
             Entry {
                 output,
-                last_access: next_access,
+                previous: None,
+                next: None,
                 estimated_bytes,
             },
         );
+        state.append(key);
         prune(&mut state, self.config);
         Ok(())
     }
@@ -120,9 +162,7 @@ impl ExactCacheStore for MemoryCacheStore {
             .collect::<Vec<_>>();
         let removed = expired.len();
         for key in expired {
-            if let Some(entry) = state.entries.remove(&key) {
-                state.used_bytes = state.used_bytes.saturating_sub(entry.estimated_bytes);
-            }
+            state.remove(&key);
         }
         Ok(removed)
     }
@@ -138,33 +178,16 @@ impl ExactCacheStore for MemoryCacheStore {
             .collect::<Vec<_>>();
         let removed = stale.len();
         for key in stale {
-            if let Some(entry) = state.entries.remove(&key) {
-                state.used_bytes = state.used_bytes.saturating_sub(entry.estimated_bytes);
-            }
+            state.remove(&key);
         }
         Ok(removed)
     }
 }
 
 fn prune(state: &mut State, config: MemoryCacheConfig) {
-    if state.entries.len() <= config.max_entries && state.used_bytes <= config.max_bytes {
-        return;
-    }
-
-    let mut victims = state
-        .entries
-        .iter()
-        .map(|(key, entry)| (*key, entry.last_access))
-        .collect::<Vec<_>>();
-    victims.sort_by_key(|(_, last_access)| *last_access);
-
-    for (key, _) in victims {
-        if state.entries.len() <= config.max_entries && state.used_bytes <= config.max_bytes {
-            break;
-        }
-        if let Some(entry) = state.entries.remove(&key) {
-            state.used_bytes = state.used_bytes.saturating_sub(entry.estimated_bytes);
-        }
+    while state.entries.len() > config.max_entries || state.used_bytes > config.max_bytes {
+        let key = state.oldest.expect("nonempty cache has an oldest entry");
+        state.remove(&key);
     }
 }
 
@@ -253,5 +276,52 @@ mod tests {
         store.put(key("large"), output(100)).unwrap();
 
         assert_eq!(store.len(), 0);
+    }
+
+    #[test]
+    fn replacements_and_cleanup_preserve_recency_and_byte_accounting() {
+        let bytes = output(100).estimated_bytes();
+        let store = MemoryCacheStore::new(MemoryCacheConfig {
+            max_entries: 10,
+            max_bytes: bytes * 3,
+        });
+        store.put(key("first"), output(20)).unwrap();
+        store.put(key("second"), output(100)).unwrap();
+        store.put(key("third"), output(100)).unwrap();
+        store.put(key("second"), output(100)).unwrap();
+        assert_eq!(store.remove_expired(20).unwrap(), 1);
+        store.put(key("fourth"), output(100)).unwrap();
+        store.put(key("fifth"), output(100)).unwrap();
+        assert!(store.get(&key("third"), 20).unwrap().is_none());
+        assert!(store.get(&key("second"), 20).unwrap().is_some());
+        let state = store.state.lock().unwrap();
+        assert_eq!(state.used_bytes, bytes * 3);
+        assert_eq!(state.oldest, Some(key("fourth")));
+        assert_eq!(state.newest, Some(key("second")));
+    }
+
+    #[test]
+    fn byte_limit_can_evict_multiple_entries_and_empty_cache_can_be_reused() {
+        let small = output(100);
+        let bytes = small.estimated_bytes();
+        let mut large = small.clone();
+        large.heads[0].logits.resize(bytes / 4 + 4, 0.0);
+        let large_bytes = large.estimated_bytes();
+        assert!(large_bytes > bytes * 2);
+        let store = MemoryCacheStore::new(MemoryCacheConfig {
+            max_entries: 10,
+            max_bytes: large_bytes,
+        });
+        store.put(key("first"), small.clone()).unwrap();
+        store.put(key("second"), small.clone()).unwrap();
+        store.put(key("large"), large).unwrap();
+        assert_eq!(store.len(), 1);
+        assert_eq!(store.remove_expired(100).unwrap(), 1);
+        store.put(key("fresh"), small).unwrap();
+        assert!(store.get(&key("fresh"), 20).unwrap().is_some());
+        let state = store.state.lock().unwrap();
+        assert_eq!(state.oldest, Some(key("fresh")));
+        assert_eq!(state.newest, state.oldest);
+        assert_eq!(state.used_bytes, bytes);
     }
 }
