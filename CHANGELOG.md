@@ -73,6 +73,8 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Fixed
 
+- Build the Coordinator image against the complete workspace lockfile and validate the
+  Docker build on pull requests before publishing deployment artifacts.
 - Projected Unified tool-tag sigmoid outputs into independent binary property results,
   preserving property-specific chunk aggregation and joint L2/L3 decision context.
 - Include the new workspace crates in the API Docker build and trigger image validation for

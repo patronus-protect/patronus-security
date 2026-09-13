@@ -56,6 +56,10 @@ jobs:
           COORDINATOR_IP: 10.20.0.10
         run: docker compose -f ark-coordinator/deploy/compose.yaml config --quiet
 
+      - name: Build Coordinator image for pull requests
+        if: github.event_name == 'pull_request'
+        run: docker build --file ark-coordinator/Dockerfile --tag ark-coordinator:validation .
+
   publish:
     if: github.event_name != 'pull_request'
     needs: validate
