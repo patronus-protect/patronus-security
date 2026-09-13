@@ -3,7 +3,7 @@ import importlib.util
 import sys
 from pathlib import Path
 
-import numpy as np
+import math
 import pytest
 
 SCRIPTS = Path(__file__).resolve().parents[1]
@@ -19,7 +19,8 @@ def test_repeated_rule_matches_do_not_change_presence_features():
     findings = [candidate("a"), candidate("a", 30, 50), candidate("b", label="secrets_access")]
     vector = module.feature_vector(findings, ["a", "b", "c"])
     assert vector[:3] == [1, 1, 0]
-    assert vector[3:] == [np.log1p(2), np.log1p(20), 2]
+    # Match scalar libm: NumPy may round log1p differently across platforms.
+    assert vector[3:] == [math.log1p(2), math.log1p(20), 2]
     assert module.feature_vector(findings, ["a", "b", "c"]) == module.feature_vector([findings[0], findings[2]], ["a", "b", "c"])
     assert module.feature_vector([], ["a"]) == [0, 0, 0, 0]
 

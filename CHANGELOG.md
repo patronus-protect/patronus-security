@@ -9,6 +9,8 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-09-13
+
 ### Added
 
 - Added optional remote Unified L3 inference through a private Triton endpoint, with
@@ -16,16 +18,6 @@ result shapes may be breaking for downstream users, and is called out explicitly
 - Added bounded entrypoint overlap through `gateway.max_inflight_per_worker` (one by
   default, optionally two), allowing L1/L2 work while L3 is pending without releasing
   completion tracking or worker recovery fences. Documented controlled fleet benchmarks.
-
-### Fixed
-
-- Projected Unified tool-tag sigmoid outputs into independent binary property results,
-  preserving property-specific chunk aggregation and joint L2/L3 decision context.
-
-## [0.1.7] - 2026-09-13
-
-### Added
-
 - Restored CLI regression coverage for hidden system-prompt disclosure, supplied
   Base64 instructions with verified decoded override/leakage signals, and destination-first
   secret handoffs. Includes bilingual cases, benign controls, rule gates, and source offsets.
@@ -81,6 +73,8 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Fixed
 
+- Projected Unified tool-tag sigmoid outputs into independent binary property results,
+  preserving property-specific chunk aggregation and joint L2/L3 decision context.
 - Include the new workspace crates in the API Docker build and trigger image validation for
   distributed-protocol changes, so Cargo can resolve the complete workspace in the container.
 - Added the coordinator and protocol test suites to CI and release validation, and build the
@@ -92,6 +86,9 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Breaking
 
+- Unified L3 tool-tag outputs are now exposed as independent binary property results rather
+  than a mutually exclusive multiclass result. Consumers of tool-tag results must handle one
+  `present` or `absent` result per configured property and its property-specific L2/L3 context.
 - Classifier tokenization now requires NTDB v4 and compact mmBERT. Disjoint 128-KiB
   UTF-8 windows are tokenized once into shared 254-content-token chunks; L3 reuses
   those IDs with BOS/EOS and padding to 256 positions. Removed v2 execution,
