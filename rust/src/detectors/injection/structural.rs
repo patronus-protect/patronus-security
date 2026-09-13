@@ -36,6 +36,7 @@ impl InjectionStructuralPipeline {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn detect(&self, text: &str) -> NativeDetection {
         self.detect_prepared(&crate::threat::NativeText::new(text))
     }

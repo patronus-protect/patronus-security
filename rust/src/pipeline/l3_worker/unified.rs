@@ -104,6 +104,60 @@ pub(super) struct UnifiedCacheEntry {
     expires_at: Instant,
 }
 
+// L2 promotes each tool property independently; the model supplies one sigmoid
+// vector. Keep property identities through scheduling, aggregation and arbitration.
+const TOOL_TAG_PROPERTIES: &[(&str, &str)] = &[
+    ("tool_tags_source_sensitive", "source:sensitive"),
+    ("tool_tags_source_untrusted", "source:untrusted"),
+    ("tool_tags_sink_external", "sink:external"),
+];
+
+fn result_head(result: &SecurityScanResult) -> &str {
+    if result.category == "tool_tags" {
+        if let Some(head) = result.internal_l2_chunk_outputs.iter().find_map(|chunk| {
+            TOOL_TAG_PROPERTIES
+                .iter()
+                .find(|(head, _)| *head == chunk.source_pipeline)
+        }) {
+            return head.0;
+        }
+    }
+    &result.category
+}
+
+fn add_tool_property_heads(output: &mut UnifiedModelOutput) {
+    let Some(tags) = output.heads.get("tool_tags").cloned() else {
+        return;
+    };
+    for &(head, label) in TOOL_TAG_PROPERTIES {
+        let Some(score) = tags.label_scores.iter().find(|score| score.label == label) else {
+            continue;
+        };
+        output
+            .heads
+            .insert(head.to_string(), tool_property_output(score.confidence));
+    }
+}
+
+fn tool_property_output(present: f64) -> UnifiedHeadOutput {
+    UnifiedHeadOutput {
+        class_name: if present >= 0.5 { "present" } else { "absent" }.to_string(),
+        confidence: present.max(1.0 - present),
+        label_scores: vec![
+            crate::LabelScore {
+                label: "absent".to_string(),
+                confidence: 1.0 - present,
+                matched: present < 0.5,
+            },
+            crate::LabelScore {
+                label: "present".to_string(),
+                confidence: present,
+                matched: present >= 0.5,
+            },
+        ],
+    }
+}
+
 pub(super) fn enqueue(worker: &L3Worker, spec: L3JobSpec) {
     let run_key = unified_run_key(&spec);
     let cache_key = unified_cache_key(&spec);
@@ -630,10 +684,21 @@ fn infer_unified_exact(
                     UnifiedModelOutput {
                         heads: HashMap::from([(
                             requested_head.to_string(),
-                            UnifiedHeadOutput {
-                                class_name,
-                                confidence: decision.confidence,
-                                label_scores: Vec::new(),
+                            if TOOL_TAG_PROPERTIES
+                                .iter()
+                                .any(|(head, _)| *head == requested_head)
+                            {
+                                tool_property_output(if class_name == "present" {
+                                    decision.confidence
+                                } else {
+                                    1.0 - decision.confidence
+                                })
+                            } else {
+                                UnifiedHeadOutput {
+                                    class_name,
+                                    confidence: decision.confidence,
+                                    label_scores: Vec::new(),
+                                }
                             },
                         )]),
                     },
@@ -659,11 +724,12 @@ fn infer_unified_exact(
         })
         .map_err(|error| error.to_string())?;
     let raw = cached_unified_output(&lookup.output)?;
-    let output = model
+    let mut output = model
         .lock()
         .map_err(|error| format!("unified L3 model mutex poisoned: {error}"))?
         .decode_raw(&raw)
         .map_err(|error| error.to_string())?;
+    add_tool_property_heads(&mut output);
     let mut similarity_heads = lookup.output.heads.clone();
     similarity_heads.extend(output.heads.iter().map(|(head, output)| {
         decision_output(
@@ -890,6 +956,9 @@ fn unified_head_aggregation(head: &str) -> Option<ChunkAggregation> {
 fn unified_safe_class(head: &str) -> &'static str {
     match head {
         "injection" | "threat" => "benign",
+        "tool_tags_source_sensitive" | "tool_tags_source_untrusted" | "tool_tags_sink_external" => {
+            "absent"
+        }
         _ => "safe",
     }
 }
@@ -927,6 +996,22 @@ fn aggregate_unified_head_with_strategy(
     candidates: &[&UnifiedHeadOutput],
     configured: Option<&ChunkAggregation>,
 ) -> Option<UnifiedHeadOutput> {
+    if TOOL_TAG_PROPERTIES
+        .iter()
+        .any(|(property, _)| *property == head)
+    {
+        return candidates
+            .iter()
+            .filter_map(|output| {
+                let present = output
+                    .label_scores
+                    .iter()
+                    .find(|score| score.label == "present")?;
+                Some((present.confidence, *output))
+            })
+            .max_by(|left, right| left.0.total_cmp(&right.0))
+            .map(|(_, output)| output.clone());
+    }
     if head == "tool_tags" {
         let labels = candidates
             .first()?
@@ -1307,7 +1392,7 @@ pub(super) fn finish_run(
             &result,
             subscribers
                 .iter()
-                .map(|subscriber| subscriber.category.as_str()),
+                .map(|subscriber| result_head(&subscriber.fallback)),
         ) {
             worker
                 .unified_cache
@@ -1360,9 +1445,11 @@ fn materialize_completed_unified_subscribers(
     let mut request_wide_stop: Option<(usize, String)> = None;
     let mut outputs = Vec::with_capacity(subscribers.len());
     for subscriber in subscribers {
-        let missing_after_physical_early_exit =
-            !run.output.heads.contains_key(&subscriber.category)
-                && !run.head_early_exits.is_empty();
+        let missing_after_physical_early_exit = !run
+            .output
+            .heads
+            .contains_key(result_head(&subscriber.fallback))
+            && !run.head_early_exits.is_empty();
         let output = if missing_after_physical_early_exit {
             let mut heads = run.head_early_exits.iter().cloned().collect::<Vec<_>>();
             heads.sort();
@@ -1431,7 +1518,7 @@ fn materialize_unified_result(
     subscriber: &L3JobSpec,
     run: &UnifiedRunResult,
 ) -> SecurityScanResult {
-    let head = subscriber.category.as_str();
+    let head = result_head(&subscriber.fallback);
     let Some(output) = run.output.heads.get(head) else {
         return degraded_error_result(
             subscriber.fallback.clone(),
@@ -1544,6 +1631,13 @@ fn materialize_unified_result(
     let context = subscriber
         .l2_chunk_outputs
         .iter()
+        .filter(|chunk| {
+            chunk
+                .source_pipeline
+                .split(',')
+                .map(str::trim)
+                .any(|pipeline| pipeline == head)
+        })
         .find_map(|chunk| chunk.joint_v3_decision.clone());
     let joint_chunks = context
         .as_ref()
@@ -1606,15 +1700,17 @@ pub(super) fn aggregate_distributed_results(
                             .source_pipeline
                             .split(',')
                             .map(str::trim)
-                            .any(|head| head == fallback.category)
+                            .any(|head| head == result_head(fallback))
                 })
             })
-            .map(|fallback| fallback.category.clone())
+            .map(|fallback| result_head(fallback).to_string())
             .collect::<HashSet<_>>();
         if !allowed_heads.is_empty() {
+            let mut output = chunk.output.clone();
+            add_tool_property_heads(&mut output);
             chunk_outputs.push(UnifiedChunkOutput {
                 chunk_index: chunk.chunk_index,
-                output: chunk.output.clone(),
+                output,
                 allowed_heads,
             });
         }
@@ -1659,7 +1755,7 @@ pub(super) fn aggregate_distributed_results(
                 ));
             };
             let head_chunks = chunk_scores_by_head
-                .get(&fallback.category)
+                .get(result_head(fallback))
                 .map_or(0, Vec::len);
             let run = UnifiedRunResult {
                 output: output.clone(),
@@ -1672,8 +1768,14 @@ pub(super) fn aggregate_distributed_results(
                 resolved_chunks: head_chunks,
                 total_effective_chunks: head_chunks,
                 head_early_exits: HashSet::new(),
-                resolved_chunks_by_head: HashMap::from([(fallback.category.clone(), head_chunks)]),
-                total_chunks_by_head: HashMap::from([(fallback.category.clone(), head_chunks)]),
+                resolved_chunks_by_head: HashMap::from([(
+                    result_head(fallback).to_string(),
+                    head_chunks,
+                )]),
+                total_chunks_by_head: HashMap::from([(
+                    result_head(fallback).to_string(),
+                    head_chunks,
+                )]),
                 cache_hits: 0,
                 clustering: L3ClusteringStrategy::Disabled,
                 physical_job_id: 0,
@@ -2048,7 +2150,7 @@ mod tests {
             &run,
             subscribers
                 .iter()
-                .map(|subscriber| subscriber.category.as_str()),
+                .map(|subscriber| result_head(&subscriber.fallback)),
         ));
         let mut partial_run = run.clone();
         partial_run.output.heads.remove("tool_class");
@@ -2056,7 +2158,7 @@ mod tests {
             &partial_run,
             subscribers
                 .iter()
-                .map(|subscriber| subscriber.category.as_str()),
+                .map(|subscriber| result_head(&subscriber.fallback)),
         ));
 
         let outputs = materialize_completed_unified_subscribers(subscribers, &run);
@@ -2310,6 +2412,205 @@ mod tests {
             dynamic_pii_config: None,
             dynamic_pii_inference_groups: Vec::new(),
             dynamic_pii_activated_rules: Vec::new(),
+        }
+    }
+
+    fn tool_tag_output(probabilities: [f64; 3]) -> UnifiedModelOutput {
+        UnifiedModelOutput {
+            heads: HashMap::from([(
+                "tool_tags".to_string(),
+                UnifiedHeadOutput {
+                    class_name: "none".to_string(),
+                    confidence: 0.0,
+                    label_scores: TOOL_TAG_PROPERTIES
+                        .iter()
+                        .zip(probabilities)
+                        .map(|((_, label), confidence)| crate::LabelScore {
+                            label: (*label).to_string(),
+                            confidence,
+                            matched: confidence >= 0.5,
+                        })
+                        .collect(),
+                },
+            )]),
+        }
+    }
+
+    #[test]
+    fn tool_properties_preserve_independent_sigmoid_scores_and_max_aggregation() {
+        let mut first = tool_tag_output([0.01, 0.99, 0.2]);
+        let mut second = tool_tag_output([0.6, 0.1, 0.95]);
+        add_tool_property_heads(&mut first);
+        add_tool_property_heads(&mut second);
+        for (index, &(head, _)) in TOOL_TAG_PROPERTIES.iter().enumerate() {
+            let result = aggregate_unified_head_with_strategy(
+                head,
+                &[&first.heads[head], &second.heads[head]],
+                None,
+            )
+            .unwrap();
+            assert_eq!(result.class_name, "present");
+            assert_eq!(result.label_scores[1].confidence, [0.6, 0.99, 0.95][index]);
+            assert_eq!(
+                result.label_scores[0].confidence,
+                1.0 - result.label_scores[1].confidence
+            );
+        }
+    }
+
+    #[test]
+    fn tool_property_joint_context_is_selected_by_pipeline_not_chunk_order() {
+        use crate::ml::ntdb_executor::{
+            JointV3CandidatePolicy, JointV3DecisionContext, L2ChunkOutput,
+        };
+        let head = "tool_tags_source_sensitive";
+        let context = |threshold| JointV3DecisionContext {
+            labels: vec!["absent".to_string(), "present".to_string()],
+            default_class_index: 0,
+            l2: JointV3CandidatePolicy {
+                aggregation: "max".to_string(),
+                risk_margin_threshold: 1.0,
+            },
+            l3: JointV3CandidatePolicy {
+                aggregation: "max".to_string(),
+                risk_margin_threshold: threshold,
+            },
+            union: JointV3CandidatePolicy {
+                aggregation: "max".to_string(),
+                risk_margin_threshold: threshold,
+            },
+        };
+        let chunk = |pipeline: &str, threshold| L2ChunkOutput {
+            span: ByteSpan { start: 0, end: 10 },
+            class_name: "absent".to_string(),
+            confidence: 0.9,
+            promoted: true,
+            promote_score: Some(0.9),
+            promote_threshold: Some(0.1),
+            source_pipeline: pipeline.to_string(),
+            source_model: pipeline.to_string(),
+            embedding: Vec::new(),
+            embedding_space: String::new(),
+            token_ids: vec![1],
+            tokenizer_family: "mmbert".to_string(),
+            class_probabilities: vec![0.9, 0.1],
+            joint_v3_decision: Some(Arc::new(context(threshold))),
+        };
+        let own = chunk(head, 0.1);
+        let mut subscriber = test_subscriber(1, "tool_tags", 0);
+        subscriber.fallback.class_name = "absent".to_string();
+        subscriber.fallback.internal_l2_chunk_outputs = vec![own.clone()];
+        let mut unrelated = chunk("tool_tags_sink_external", 0.99);
+        let mut unrelated_context = context(0.99);
+        unrelated_context.labels.reverse();
+        unrelated_context.default_class_index = 1;
+        unrelated.joint_v3_decision = Some(Arc::new(unrelated_context));
+        subscriber.l2_chunk_outputs = vec![unrelated, own].into();
+        let output = tool_property_output(0.9);
+        let run = UnifiedRunResult {
+            output: UnifiedModelOutput {
+                heads: HashMap::from([(head.to_string(), output.clone())]),
+            },
+            duration_ms: 1.0,
+            queue_wait_ms: 0.0,
+            chunk_count: 1,
+            inferred_chunks: 1,
+            propagated_chunks: 0,
+            planned_l3_chunks: 1,
+            resolved_chunks: 1,
+            total_effective_chunks: 1,
+            head_early_exits: HashSet::new(),
+            resolved_chunks_by_head: HashMap::new(),
+            total_chunks_by_head: HashMap::new(),
+            cache_hits: 0,
+            clustering: L3ClusteringStrategy::Disabled,
+            physical_job_id: 1,
+            chunk_trace: None,
+            chunk_scores_by_head: HashMap::from([(
+                head.to_string(),
+                vec![(
+                    0,
+                    ByteSpan { start: 0, end: 10 },
+                    "present".to_string(),
+                    output.label_scores,
+                )],
+            )]),
+        };
+        let result = materialize_unified_result(&subscriber, &run);
+        assert_eq!(result.class_name, "present");
+        assert_eq!(result.level, "L3");
+    }
+
+    #[test]
+    fn tool_property_subscribers_receive_only_their_promoted_chunks() {
+        let fallbacks = TOOL_TAG_PROPERTIES
+            .iter()
+            .enumerate()
+            .map(|(index, &(head, _))| {
+                let mut fallback = test_subscriber(index as u64, "tool_tags", 0).fallback;
+                fallback.class_name = "absent".to_string();
+                fallback.internal_l2_chunk_outputs =
+                    vec![crate::ml::ntdb_executor::L2ChunkOutput {
+                        span: ByteSpan {
+                            start: index * 10,
+                            end: index * 10 + 10,
+                        },
+                        class_name: "absent".to_string(),
+                        confidence: 0.8,
+                        promoted: true,
+                        promote_score: Some(0.9),
+                        promote_threshold: Some(0.7),
+                        source_pipeline: head.to_string(),
+                        source_model: head.to_string(),
+                        embedding: Vec::new(),
+                        embedding_space: String::new(),
+                        token_ids: vec![1],
+                        tokenizer_family: "mmbert".to_string(),
+                        class_probabilities: Vec::new(),
+                        joint_v3_decision: None,
+                    }];
+                fallback
+            })
+            .collect::<Vec<_>>();
+        let chunks = (0..3)
+            .map(|index| super::super::DistributedL3ChunkInference {
+                chunk_index: index,
+                span: ByteSpan {
+                    start: index * 10,
+                    end: index * 10 + 10,
+                },
+                output: tool_tag_output(match index {
+                    0 => [0.99, 0.01, 0.01],
+                    1 => [0.99, 0.02, 0.99],
+                    _ => [0.01, 0.01, 0.98],
+                }),
+            })
+            .collect::<Vec<_>>();
+        let results = aggregate_distributed_results(
+            &chunks,
+            &fallbacks,
+            &ScanExecution::new(SecurityLevel::L3),
+            2.0,
+        )
+        .unwrap();
+        assert_eq!(results.len(), 3);
+        for (index, result) in results.iter().enumerate() {
+            assert_eq!(result.category, "tool_tags");
+            assert!(!result
+                .layers
+                .iter()
+                .any(|layer| layer.layer_type.starts_with("degraded")));
+            let layer = result
+                .layers
+                .iter()
+                .find(|layer| layer.level == "L3")
+                .unwrap();
+            assert_eq!(layer.details["head"], TOOL_TAG_PROPERTIES[index].0);
+            assert_eq!(result.class_name, ["present", "absent", "present"][index]);
+            assert_eq!(
+                result.internal_l2_chunk_outputs[0].source_pipeline,
+                TOOL_TAG_PROPERTIES[index].0
+            );
         }
     }
 

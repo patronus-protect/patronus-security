@@ -163,6 +163,7 @@ pub(crate) struct UnifiedRawModelOutput {
 }
 
 pub struct LazyUnifiedOnnxClassifier {
+    remote: Option<super::remote_unified::RemoteUnified>,
     dir: PathBuf,
     ttl: Duration,
     loaded: Option<UnifiedOnnxClassifier>,
@@ -194,7 +195,24 @@ impl LazyUnifiedOnnxClassifier {
             .into());
         }
         validate_bundle_contract(dir)?;
+        let remote = super::remote_unified::RemoteUnified::from_env(
+            dir,
+            HEADS
+                .iter()
+                .map(|head| {
+                    (
+                        head.id,
+                        head.output,
+                        match head.kind {
+                            HeadKind::Binary => 1,
+                            _ => head.labels.len(),
+                        },
+                    )
+                })
+                .collect(),
+        )?;
         Ok(Self {
+            remote,
             dir: dir.to_path_buf(),
             ttl: l3_ttl(),
             loaded: None,
@@ -210,6 +228,9 @@ impl LazyUnifiedOnnxClassifier {
         backend: ExecutionBackend,
         options: OnnxRuntimeOptions,
     ) -> Result<UnifiedModelOutput, Box<dyn std::error::Error>> {
+        if let Some(remote) = &self.remote {
+            return self.decode_raw(&remote.infer_text(text)?);
+        }
         self.evict_expired();
         self.ensure_loaded(backend, options)?;
         let output = self
@@ -227,6 +248,13 @@ impl LazyUnifiedOnnxClassifier {
         backend: ExecutionBackend,
         options: OnnxRuntimeOptions,
     ) -> Result<Vec<UnifiedModelOutput>, Box<dyn std::error::Error>> {
+        if let Some(remote) = &self.remote {
+            return remote
+                .infer_texts(texts)?
+                .iter()
+                .map(|raw| self.decode_raw(raw))
+                .collect();
+        }
         self.evict_expired();
         self.ensure_loaded(backend, options)?;
         let outputs = self
@@ -244,6 +272,9 @@ impl LazyUnifiedOnnxClassifier {
         backend: ExecutionBackend,
         options: OnnxRuntimeOptions,
     ) -> Result<UnifiedRawModelOutput, Box<dyn std::error::Error>> {
+        if let Some(remote) = &self.remote {
+            return remote.infer(token_ids);
+        }
         self.evict_expired();
         self.ensure_loaded(backend, options)?;
         let output = self
@@ -260,6 +291,9 @@ impl LazyUnifiedOnnxClassifier {
         backend: ExecutionBackend,
         options: OnnxRuntimeOptions,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        if let Some(remote) = &self.remote {
+            return remote.warmup();
+        }
         self.ensure_loaded(backend, options)?;
         self.loaded
             .as_mut()

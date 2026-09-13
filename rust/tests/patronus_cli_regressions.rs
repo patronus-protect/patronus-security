@@ -12,6 +12,17 @@ fn check(
     positives: &[&str],
     negatives: &[&str],
 ) {
+    let has_candidate_rule = |result: &patronus_ark::SecurityScanResult, rule: &str| {
+        result.layers[0].details["l1_candidates"]
+            .as_array()
+            .is_some_and(|candidates| {
+                candidates.iter().any(|candidate| {
+                    candidate["rule_ids"]
+                        .as_array()
+                        .is_some_and(|ids| ids.iter().any(|id| id.as_str() == Some(rule)))
+                })
+            })
+    };
     let gateway = SecurityGateway::with_max_level(vec![category], SecurityLevel::L1, None, false);
     for text in positives {
         gateway.set_execution_gates(ScanGateMatrix::all_enabled());
@@ -27,18 +38,14 @@ fn check(
             assert_eq!(text[..span.end_byte].chars().count(), span.end_char);
         }
         if category == SecurityCategory::Injection {
-            assert!(result.layers[0].details["l1_candidates"]
-                .to_string()
-                .contains(rule));
+            assert!(has_candidate_rule(result, rule));
         }
         let mut gates = ScanGateMatrix::all_enabled();
         gates.set_rule(rule, false);
         gateway.set_execution_gates(gates);
         let disabled = gateway.scan_category(category, text);
         if category == SecurityCategory::Injection {
-            assert!(!disabled[0].layers[0].details["l1_candidates"]
-                .to_string()
-                .contains(rule));
+            assert!(!has_candidate_rule(&disabled[0], rule));
         } else {
             assert!(!disabled.iter().any(|r| r.class_name == class));
         }

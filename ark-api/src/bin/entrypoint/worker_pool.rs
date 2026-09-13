@@ -21,12 +21,14 @@ struct PoolState {
     idle: VecDeque<WorkerConfig>,
     quarantined: HashSet<String>,
     status: HashMap<String, (WorkerStatus, Instant)>,
+    active: HashMap<String, usize>,
 }
 
-/// Idle workers are returned only after every upstream job finishes. Recovery
-/// requires an authenticated idle fence, not a successful liveness check.
+/// Each bounded slot is held until every upstream job finishes. Recovery
+/// requires all leases to drain and an authenticated idle fence.
 pub(super) struct WorkerPool {
     workers: Vec<WorkerConfig>,
+    max_inflight_per_worker: usize,
     state: Mutex<PoolState>,
     slots: Arc<Semaphore>,
     admission: Arc<Semaphore>,
@@ -52,16 +54,30 @@ impl PoolState {
 }
 
 impl WorkerPool {
+    #[cfg(test)]
     pub fn new(workers: Vec<WorkerConfig>, max_waiting: usize) -> Arc<Self> {
+        Self::with_capacity(workers, max_waiting, 1)
+    }
+
+    pub fn with_capacity(
+        workers: Vec<WorkerConfig>,
+        max_waiting: usize,
+        max_inflight_per_worker: usize,
+    ) -> Arc<Self> {
+        assert!((1..=2).contains(&max_inflight_per_worker));
         Arc::new(Self {
             slots: Arc::new(Semaphore::new(0)),
-            admission: Arc::new(Semaphore::new(workers.len() + max_waiting)),
+            admission: Arc::new(Semaphore::new(
+                workers.len() * max_inflight_per_worker + max_waiting,
+            )),
             state: Mutex::new(PoolState {
                 idle: VecDeque::new(),
                 quarantined: workers.iter().map(|worker| worker.name.clone()).collect(),
                 status: HashMap::new(),
+                active: HashMap::new(),
             }),
             workers,
+            max_inflight_per_worker,
         })
     }
 
@@ -122,11 +138,12 @@ impl WorkerPool {
                 .idle
                 .pop_front()
                 .expect("worker slot without idle worker");
-            if !state.healthy(&worker.name) {
+            if state.quarantined.contains(&worker.name) || !state.healthy(&worker.name) {
                 state.quarantined.insert(worker.name.clone());
                 slot.forget();
                 continue;
             }
+            *state.active.entry(worker.name.clone()).or_default() += 1;
             let status = &state.status[&worker.name].0;
             return Ok(Arc::new(WorkerLease {
                 instance_id: status.instance_id.clone(),
@@ -150,12 +167,19 @@ impl WorkerPool {
             return;
         }
         let mut state = self.state.lock().expect("worker state mutex poisoned");
+        if state.active.get(&worker.name).copied().unwrap_or(0) != 0
+            || state.idle.iter().any(|idle| idle.name == worker.name)
+        {
+            return;
+        }
         if state.quarantined.remove(&worker.name) {
             state
                 .status
                 .insert(worker.name.clone(), (status, Instant::now()));
-            state.idle.push_back(worker.clone());
-            self.slots.add_permits(1);
+            for _ in 0..self.max_inflight_per_worker {
+                state.idle.push_back(worker.clone());
+            }
+            self.slots.add_permits(self.max_inflight_per_worker);
             tracing::info!(worker = %worker.name, "worker admitted after idle fence");
         }
     }
@@ -173,15 +197,20 @@ impl WorkerPool {
         previous.ready = healthy;
         *checked = Instant::now();
         if !healthy {
-            // Reserve a free slot before removing an idle worker. Already-awoken
-            // acquirers still own their permits and will quarantine on inspection.
-            if let Some(index) = state.idle.iter().position(|idle| idle.name == worker.name) {
-                if let Ok(slot) = self.slots.clone().try_acquire_owned() {
-                    state.idle.remove(index);
-                    state.quarantined.insert(worker.name.clone());
-                    slot.forget();
-                }
-            }
+            self.quarantine_locked(&mut state, &worker.name);
+        }
+    }
+
+    fn quarantine_locked(&self, state: &mut PoolState, name: &str) {
+        state.quarantined.insert(name.to_owned());
+        // An awakened acquirer may already own a permit. Leave its entry in
+        // place: it will observe quarantine and consume the remaining slot.
+        while let Some(index) = state.idle.iter().position(|idle| idle.name == name) {
+            let Ok(slot) = self.slots.clone().try_acquire_owned() else {
+                break;
+            };
+            state.idle.remove(index);
+            slot.forget();
         }
     }
 
@@ -257,20 +286,27 @@ impl WorkerLease {
     }
     pub fn quarantine(&self) {
         self.reusable.store(false, Ordering::Relaxed);
+        let mut state = self.pool.state.lock().expect("worker state mutex poisoned");
+        self.pool.quarantine_locked(&mut state, &self.worker.name);
     }
 }
 
 impl Drop for WorkerLease {
     fn drop(&mut self) {
         let mut state = self.pool.state.lock().expect("worker state mutex poisoned");
-        if self.reusable.load(Ordering::Relaxed)
+        *state
+            .active
+            .get_mut(&self.worker.name)
+            .expect("active lease missing") -= 1;
+        if !state.quarantined.contains(&self.worker.name)
+            && self.reusable.load(Ordering::Relaxed)
             && self.unfinished.load(Ordering::Relaxed) == 0
             && state.healthy(&self.worker.name)
         {
             state.idle.push_back(self.worker.clone());
             // Return the permit only after publishing the idle worker.
         } else if let Some(slot) = self.slot.take() {
-            state.quarantined.insert(self.worker.name.clone());
+            self.pool.quarantine_locked(&mut state, &self.worker.name);
             slot.forget();
         }
     }
@@ -455,5 +491,103 @@ mod tests {
         drop(worker);
         assert_eq!(pool.slots.available_permits(), 0);
         assert!(pool.state.lock().unwrap().quarantined.contains("worker-1"));
+    }
+    #[tokio::test]
+    async fn overlap_is_bounded_and_waits_for_a_completed_slot() {
+        let worker = WorkerConfig {
+            name: "worker".into(),
+            url: "http://worker".into(),
+        };
+        let pool = WorkerPool::with_capacity(vec![worker.clone()], 1, 2);
+        pool.recovered(&worker, healthy_status());
+        let first = pool.acquire().await.unwrap();
+        first.start_dispatch();
+        let second = pool.acquire().await.unwrap();
+        second.start_dispatch();
+        let waiting_pool = pool.clone();
+        let third = tokio::spawn(async move { waiting_pool.acquire().await.unwrap() });
+        tokio::task::yield_now().await;
+        assert!(!third.is_finished());
+        assert!(matches!(pool.reserve(), Err("worker queue full")));
+        second.finished();
+        drop(second);
+        let third = tokio::time::timeout(Duration::from_secs(1), third)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(third.worker.name, first.worker.name);
+        first.finished();
+    }
+
+    #[tokio::test]
+    async fn overlapping_failure_quarantines_every_slot_until_all_leases_drain() {
+        let worker = WorkerConfig {
+            name: "worker".into(),
+            url: "http://worker".into(),
+        };
+        let pool = WorkerPool::with_capacity(vec![worker.clone()], 1, 2);
+        pool.recovered(&worker, healthy_status());
+        let first = pool.acquire().await.unwrap();
+        let second = pool.acquire().await.unwrap();
+        first.quarantine();
+        drop(first);
+        pool.recovered(&worker, healthy_status());
+        assert!(!pool.ready());
+        assert_eq!(pool.slots.available_permits(), 0);
+        drop(second);
+        let mut status = healthy_status();
+        status.epoch = 2;
+        pool.recovered(&worker, status.clone());
+        pool.recovered(&worker, status);
+        assert_eq!(pool.slots.available_permits(), 2);
+        assert_eq!(pool.acquire().await.unwrap().epoch, 2);
+    }
+
+    #[tokio::test]
+    async fn overlapping_cancellation_removes_unused_slots() {
+        let worker = WorkerConfig {
+            name: "worker".into(),
+            url: "http://worker".into(),
+        };
+        let pool = WorkerPool::with_capacity(vec![worker.clone()], 0, 2);
+        pool.recovered(&worker, healthy_status());
+        let first = pool.acquire().await.unwrap();
+        first.start_dispatch();
+        drop(first);
+        assert!(!pool.ready());
+        assert_eq!(pool.slots.available_permits(), 0);
+        assert!(pool.state.lock().unwrap().idle.is_empty());
+    }
+    #[tokio::test]
+    async fn quarantine_drains_slots_already_assigned_to_waiters() {
+        let worker = WorkerConfig {
+            name: "worker".into(),
+            url: "http://worker".into(),
+        };
+        let pool = WorkerPool::with_capacity(vec![worker.clone()], 1, 2);
+        pool.recovered(&worker, healthy_status());
+        let first = pool.acquire().await.unwrap();
+        let second = pool.acquire().await.unwrap();
+        let waiting_pool = pool.clone();
+        let waiter = tokio::spawn(async move { waiting_pool.acquire().await.unwrap() });
+        tokio::task::yield_now().await;
+        // On this single-thread runtime the waiter owns the released permit,
+        // but cannot inspect its idle entry until we yield again.
+        drop(second);
+        first.quarantine();
+        drop(first);
+        pool.recovered(&worker, healthy_status());
+        assert!(!pool.ready());
+        tokio::task::yield_now().await;
+        assert!(!waiter.is_finished());
+        assert!(pool.state.lock().unwrap().idle.is_empty());
+        let mut status = healthy_status();
+        status.epoch = 2;
+        pool.recovered(&worker, status);
+        let recovered = tokio::time::timeout(Duration::from_secs(1), waiter)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(recovered.epoch, 2);
     }
 }

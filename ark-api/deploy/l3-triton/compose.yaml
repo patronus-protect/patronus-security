@@ -1,0 +1,23 @@
+name: ark-l3
+services:
+  triton:
+    image: nvcr.io/nvidia/tritonserver@sha256:9185ba5b33d2c85c9204b208957b4bbfc6b2b89066efc9192e0f60c2ab58cec0
+    restart: unless-stopped
+    network_mode: host
+    gpus: all
+    shm_size: 1gb
+    command:
+      - tritonserver
+      - --model-repository=/models
+      - --http-address=${TRITON_BIND_ADDRESS:?set TRITON_BIND_ADDRESS to the WireGuard address}
+      - --http-port=8090
+      - --allow-grpc=false
+      - --metrics-address=127.0.0.1
+      - --metrics-port=8092
+      - --exit-on-error=true
+      - --strict-readiness=true
+    volumes:
+      - ./models:/models:ro
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}

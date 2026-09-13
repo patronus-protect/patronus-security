@@ -592,6 +592,7 @@ mod tests {
                     "source_file": null,
                     "adaptation": null,
                     "references": [],
+                    "evidence_tier": (!candidate_only).then_some("audited_high_precision"),
                     "candidate_only": candidate_only
                 }
             }]
@@ -678,10 +679,16 @@ mod tests {
         let text = "012345678901234567890123456789";
         let mut native = producer(
             "native:guardrail",
-            scored_candidate_fixture("native.guardrail", "guardrail_tamper", 0, 20, false),
+            scored_candidate_fixture(
+                "ark.injection.guardrail.tamper",
+                "guardrail_tamper",
+                0,
+                20,
+                false,
+            ),
         );
         native.evidence_spans.push(EvidenceSpan {
-            label: "native.guardrail".to_string(),
+            label: "ark.injection.guardrail.tamper".to_string(),
             text: text[0..20].to_string(),
             score: 1.0,
             start_byte: 0,
@@ -722,7 +729,7 @@ mod tests {
         assert!(mixed
             .evidence_spans
             .iter()
-            .any(|span| span.label == "native.guardrail"));
+            .any(|span| span.label == "ark.injection.guardrail.tamper"));
         assert!(!mixed
             .evidence_spans
             .iter()
@@ -734,10 +741,16 @@ mod tests {
         let text = "012345678901234567890123456789";
         let mut eligible = producer(
             "native:eligible",
-            scored_candidate_fixture("canonical.same", "instruction_leak", 5, 20, false),
+            scored_candidate_fixture(
+                "ark.injection.guardrail.tamper",
+                "guardrail_tamper",
+                5,
+                20,
+                false,
+            ),
         );
         eligible.evidence_spans.push(EvidenceSpan {
-            label: "canonical.same".to_string(),
+            label: "ark.injection.guardrail.tamper".to_string(),
             text: text[5..20].to_string(),
             score: 1.0,
             start_byte: 5,
@@ -747,10 +760,16 @@ mod tests {
         });
         let mut coverage = producer(
             "native:coverage",
-            scored_candidate_fixture("canonical.same", "instruction_leak", 0, 15, true),
+            scored_candidate_fixture(
+                "ark.injection.guardrail.tamper",
+                "guardrail_tamper",
+                0,
+                15,
+                true,
+            ),
         );
         coverage.evidence_spans.push(EvidenceSpan {
-            label: "canonical.same".to_string(),
+            label: "ark.injection.guardrail.tamper".to_string(),
             text: text[0..15].to_string(),
             score: 1.0,
             start_byte: 0,

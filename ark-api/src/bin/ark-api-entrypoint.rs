@@ -92,6 +92,13 @@ struct GatewayConfig {
     retention_secs: u64,
     #[serde(default = "default_max_waiting")]
     max_waiting_requests: usize,
+    // Bounds submissions; a multipart submission retains its slot until all jobs finish.
+    #[serde(default = "default_max_inflight_per_worker")]
+    max_inflight_per_worker: usize,
+}
+
+fn default_max_inflight_per_worker() -> usize {
+    1
 }
 
 fn default_max_waiting() -> usize {
@@ -773,6 +780,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if config.gateway.max_waiting_requests > 1024 {
         return Err("gateway.max_waiting_requests must not exceed 1024".into());
     }
+    if !(1..=2).contains(&config.gateway.max_inflight_per_worker) {
+        return Err("gateway.max_inflight_per_worker must be between 1 and 2".into());
+    }
     let bind: SocketAddr = config.server.bind.parse()?;
     let redis = connect_redis(config.gateway.redis_url.as_str()).await?;
     let state = Arc::new(AppState {
@@ -781,7 +791,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .build()?,
         redis,
         worker_token: config.gateway.worker_token,
-        worker_pool: WorkerPool::new(config.gateway.workers, config.gateway.max_waiting_requests),
+        worker_pool: WorkerPool::with_capacity(
+            config.gateway.workers,
+            config.gateway.max_waiting_requests,
+            config.gateway.max_inflight_per_worker,
+        ),
         key_hashes: config
             .auth
             .keys
@@ -926,7 +940,7 @@ mod tests {
         }
         // An interrupted stream must persist failure from the local job as well.
         let mut lease = state.worker_pool.acquire().await.unwrap();
-        Arc::get_mut(&mut lease).unwrap().worker = worker;
+        Arc::get_mut(&mut lease).unwrap().worker.url = worker.url;
         lease.start_dispatch();
         collect_events(
             state,

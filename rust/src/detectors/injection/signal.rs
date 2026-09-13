@@ -274,7 +274,6 @@ pub(crate) fn negated_directive(text: &str, start: usize, end: usize) -> bool {
                 .iter()
                 .any(|word| auxiliary.eq_ignore_ascii_case(word)));
     let after = text[end..]
-        .trim_start()
         .split_whitespace()
         .next()
         .unwrap_or("")

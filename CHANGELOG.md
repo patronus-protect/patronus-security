@@ -9,7 +9,20 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ## [Unreleased]
 
-## [0.1.7] - 2026-09-08
+### Added
+
+- Added optional remote Unified L3 inference through a private Triton endpoint, with
+  bounded HTTP requests, strict tensor validation, and pinned TensorRT deployment assets.
+- Added bounded entrypoint overlap through `gateway.max_inflight_per_worker` (one by
+  default, optionally two), allowing L1/L2 work while L3 is pending without releasing
+  completion tracking or worker recovery fences. Documented controlled fleet benchmarks.
+
+### Fixed
+
+- Projected Unified tool-tag sigmoid outputs into independent binary property results,
+  preserving property-specific chunk aggregation and joint L2/L3 decision context.
+
+## [0.1.7] - 2026-09-13
 
 ### Added
 
@@ -39,6 +52,8 @@ result shapes may be breaking for downstream users, and is called out explicitly
   scripts, private runtime configuration, deployment smoke checks, and an entrypoint benchmark.
 - Added shared external Redis configuration and persistent overlapping fleet API keys for
   rotation, with atomic keyring recovery and migration of the interim key storage format.
+- Added `POST /v1/scan/sync` to the worker and public multi-worker gateway for clients that
+  need final per-category results and completion metadata in a single authenticated response.
 
 ### Changed
 

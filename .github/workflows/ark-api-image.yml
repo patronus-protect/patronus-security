@@ -31,7 +31,9 @@ jobs:
           python -m venv .venv
           .venv/bin/pip install pytest pyyaml
           bash -n ark-api/deploy/bootstrap.sh
-          shellcheck ark-api/deploy/bootstrap.sh
+          bash -n ark-api/deploy/l3-triton/prepare.sh
+          shellcheck ark-api/deploy/bootstrap.sh ark-api/deploy/l3-triton/prepare.sh
+          .venv/bin/python -m py_compile ark-api/deploy/l3-triton/export_output.py ark-api/deploy/l3-triton/verify.py
           cargo fmt --check
           cargo test --locked -p ark-api
           cargo build --locked -p ark-api --bin ark-api-entrypoint

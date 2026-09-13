@@ -117,6 +117,9 @@ Every endpoint except `/healthz` and `/readyz` requires `Authorization: Bearer <
 - `POST /v1/scan` — `multipart/form-data` with an optional `text` field and/or one or more `files`
   fields. Each non-empty field becomes its own scan request. Returns `202` with
   `{"jobs": [{"request_id", "source"}, ...]}`.
+- `POST /v1/scan/sync` — accepts the same multipart body but waits for every submitted input to
+  finish. Returns `200` with each job's `request_id`, `source`, final `results`, and `completion`,
+  plus request-wide `total_ms`. Use the asynchronous endpoint for long-running or streaming work.
 - `GET /v1/scan/{request_id}/events` — Server-Sent Events stream for one request: `progress`,
   `provisional`, `result` (one per configured category), then a terminal `finished` event. Events
   are buffered for one minute after completion, so a client that only starts listening after a
@@ -180,6 +183,11 @@ byte span when Ark has an L2/L3 decision contributor. Every compact category res
 the worker's `evidence_spans` unchanged, including native PII/DLP and Dynamic-PII labels, matched
 text, score, and byte/character offsets for downstream redaction. Completed jobs are retained in Redis for
 `gateway.retention_secs` (90 seconds by default); running jobs have a 10-minute safety TTL.
+
+Clients that need one blocking response can instead call `POST /v1/scan/sync` with the same
+multipart fields. The gateway reserves a healthy worker for the request and returns the worker's
+final `200` response directly. It returns `429` when admission is full, `503` if no worker becomes
+available within 15 seconds, and `502` if the selected worker fails or returns an invalid response.
 
 Example with an explicit Dynamic-PII request configuration:
 

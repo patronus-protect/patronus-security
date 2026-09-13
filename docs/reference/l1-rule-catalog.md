@@ -128,7 +128,7 @@ These rules use the shared source-bound component contract and emit finding span
 | `dlp_mcp_policy` | `native:mcp_policy` | off |
 | `dlp_destructive_operation` | `native:destructive_operation` | off |
 
-## Injection rules (51)
+## Injection rules (57)
 
 Injection rule IDs gate versioned catalog entries, native evidence producers, and the structural producer. Several source rules can intentionally share one canonical ID; the table lists each effective gate once.
 
@@ -141,9 +141,12 @@ Injection rule IDs gate versioned catalog entries, native evidence producers, an
 | `ark.injection.boundary.delimited_replacement_action` | `instruction_boundary` | Uses a synthetic delimiter boundary before a replacement instruction and action | `source-derived-p0-0.1.6` |
 | `ark.injection.boundary.delimiter` | `instruction_boundary` | Native producer gate for native:instruction_boundary. | `ark-native-injection-71ff48e` |
 | `ark.injection.boundary.fake_system` | `instruction_boundary` | Fake system prompt injection | `prompt-armor-complete-95e532e` |
+| `ark.injection.boundary.persona_directive` | `instruction_boundary` | Forged system-role boundary followed by an unsafe persona directive | `source-derived-coverage-0.1.6` |
 | `ark.injection.covert.execution` | `covert_instruction` | Native producer gate for native:covert_instruction. | `ark-native-injection-71ff48e` |
 | `ark.injection.cross_tool.override_action` | `cross_tool_instruction` | Native producer gate for native:cross_tool_instruction. | `ark-native-injection-71ff48e` |
+| `ark.injection.cross_tool.override_then_call` | `cross_tool_instruction` | Overrides the user or prior instructions in order to invoke another tool | `source-derived-coverage-0.1.6` |
 | `ark.injection.escalation.multi_turn` | `multi_turn_escalation` | Native producer gate for native:multi_turn_escalation. | `ark-native-injection-71ff48e` |
+| `ark.injection.escalation.prior_bypass_agreement` | `multi_turn_escalation` | Claims prior agreement to bypass active safety restrictions | `source-derived-coverage-0.1.6` |
 | `ark.injection.exfil.external_sink` | `cross_tool_instruction` | Send data to external URL/email | `prompt-armor-complete-95e532e` |
 | `ark.injection.exfil.sensitive_path_external_sink_audited` | `cross_tool_instruction` | Reads a sensitive credential path and transfers it to an explicit external network destination | `source-derived-p0-0.1.6` |
 | `ark.injection.exfil.sensitive_path_to_sink` | `cross_tool_instruction` | Reads a sensitive credential path and directs its contents to an output or transfer sink | `source-derived-p0-0.1.6` |
@@ -160,9 +163,12 @@ Injection rule IDs gate versioned catalog entries, native evidence producers, an
 | `ark.injection.leak.system_instructions` | `instruction_leak` | Request to reveal system prompt | `prompt-armor-complete-95e532e` |
 | `ark.injection.leak.system_prompt_extraction` | `instruction_leak` | Directly requests disclosure of the assistant's system or initialization instructions | `source-derived-coverage-0.1.6` |
 | `ark.injection.obfuscation.binary_smuggling` | `binary_smuggling` | Native producer gate for native:binary_smuggling. | `ark-native-injection-71ff48e` |
+| `ark.injection.obfuscation.decode_for_instructions` | `encoded_instruction` | Directs decoding an opaque message specifically to obtain instructions | `source-derived-coverage-0.1.6` |
 | `ark.injection.obfuscation.decode_request` | `encoded_instruction` | Encoded message decode request | `prompt-armor-complete-95e532e` |
 | `ark.injection.obfuscation.decode_then_execute` | `encoded_instruction` | Directs the model to decode an encoded payload and execute or follow it | `source-derived-p0-0.1.6` |
 | `ark.injection.obfuscation.encoded_instruction` | `encoded_instruction` | Native producer gate for native:encoded_instruction. | `ark-native-injection-71ff48e` |
+| `ark.injection.obfuscation.encoded_instruction_payload` | `encoded_instruction` | Requests decoding of a supplied payload containing an instruction override or prompt disclosure | `source-derived-coverage-0.1.6` |
+| `ark.injection.obfuscation.escaped_instruction_payload` | `encoded_instruction` | Requests decoding a Unicode-escaped instruction override or prompt disclosure | `source-derived-coverage-0.1.6` |
 | `ark.injection.obfuscation.hidden_html` | `hidden_html_instruction` | Native producer gate for native:hidden_html_instruction. | `ark-native-injection-71ff48e` |
 | `ark.injection.obfuscation.steganographic` | `encoded_instruction` | Acrostic/steganographic instruction | `prompt-armor-complete-95e532e` |
 | `ark.injection.obfuscation.unicode_confusable` | `unicode_confusable` | Native producer gate for native:unicode_confusable. | `ark-native-injection-71ff48e` |
@@ -222,27 +228,3 @@ Enabled by default when Threat L1 is configured. Matches report risky operations
 | `ark.threat.unauthorized_autonomy` | `tool_abuse` | EA2, EA3 |
 | `ark.threat.harmful_intent` | `harmful_behavior` | P5 |
 | `ark.threat.secret_source_transfer` | `exfiltration_attempt` | E3, E5 |
-
-
-### CLI instruction and handoff regressions (0.1.7)
-
-`ark.injection.leak.own_prompt` includes clause-initial requests for hidden system
-prompts and developer instructions. `ark.injection.obfuscation.encoded_instruction_payload`
-requires a decode/process action and a bounded
-`encoded_payload` capture (with an optional explicit Base64 instruction header). Its `decoded_base64_instruction` condition additionally
-requires the decoded payload to match an existing native instruction-override or
-instruction-leak rule; ordinary encoded data is insufficient. Evidence offsets
-refer to the original encoded input. Global scorer coefficients and operating
-point are unchanged.
-
-The existing `dlp_secret_transfer` gate also covers destination-first handoffs:
-a URL followed by a transfer action, a secret target, and a reference back to that
-URL (`there`, `dort`, `dorthin`). This rule uses the existing DLP lexical anchors
-and emits `secret_transfer`, with separate source-bound components.
-
-The same decoded-content guard applies to supplied Unicode escapes through
-`decoded_unicode_instruction`. Additional bounded rules cover forged ChatML system
-personas, claimed prior agreements to bypass safety restrictions, decoding requests
-specifically to obtain instructions, and user overrides tied to another tool call.
-The secret-transfer detector also covers explicit exfiltration requests for generic
-secrets, without matching negated or preventative descriptions of that action.

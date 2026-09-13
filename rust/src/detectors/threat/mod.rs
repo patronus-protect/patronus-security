@@ -85,10 +85,6 @@ impl ThreatPipeline {
         Self
     }
 
-    pub(crate) fn detect(&self, text: &str, allows_rule: impl Fn(&str) -> bool) -> NativeDetection {
-        self.detect_prepared(&crate::threat::NativeText::new(text), allows_rule)
-    }
-
     pub(crate) fn detect_prepared(
         &self,
         prepared: &crate::threat::NativeText<'_>,

@@ -125,7 +125,7 @@ async fn parse_scan_request(
     state: &AppState,
     key: &crate::config::ApiKeyConfig,
     mut multipart: Multipart,
-) -> Result<(Vec<(String, String)>, ResolvedScanConfig), axum::response::Response> {
+) -> Result<(Vec<(String, String)>, ResolvedScanConfig), Box<axum::response::Response>> {
     let mut inputs = Vec::<(String, String)>::new();
     let mut request_config = None;
 
@@ -134,43 +134,50 @@ async fn parse_scan_request(
             Ok(Some(field)) => field,
             Ok(None) => break,
             Err(error) => {
-                return Err((
-                    StatusCode::BAD_REQUEST,
-                    Json(json!({ "error": format!("invalid multipart body: {error}") })),
-                )
-                    .into_response())
+                return Err(Box::new(
+                    (
+                        StatusCode::BAD_REQUEST,
+                        Json(json!({ "error": format!("invalid multipart body: {error}") })),
+                    )
+                        .into_response(),
+                ))
             }
         };
         let field_name = field.name().unwrap_or_default().to_string();
         let file_name = field.file_name().map(str::to_string);
-        let bytes =
-            match field.bytes().await {
-                Ok(bytes) => bytes,
-                Err(error) => return Err((
+        let bytes = match field.bytes().await {
+            Ok(bytes) => bytes,
+            Err(error) => return Err(Box::new(
+                (
                     StatusCode::BAD_REQUEST,
                     Json(
                         json!({ "error": format!("failed to read field '{field_name}': {error}") }),
                     ),
                 )
-                    .into_response()),
-            };
+                    .into_response(),
+            )),
+        };
 
         if field_name == "config" && file_name.is_none() {
             if request_config.is_some() {
-                return Err((
-                    StatusCode::BAD_REQUEST,
-                    Json(json!({ "error": "config field may only be provided once" })),
-                )
-                    .into_response());
+                return Err(Box::new(
+                    (
+                        StatusCode::BAD_REQUEST,
+                        Json(json!({ "error": "config field may only be provided once" })),
+                    )
+                        .into_response(),
+                ));
             }
             request_config = match serde_json::from_slice::<RequestScanConfig>(&bytes) {
                 Ok(config) => Some(config),
                 Err(error) => {
-                    return Err((
-                        StatusCode::UNPROCESSABLE_ENTITY,
-                        Json(json!({ "error": format!("invalid config JSON: {error}") })),
-                    )
-                        .into_response())
+                    return Err(Box::new(
+                        (
+                            StatusCode::UNPROCESSABLE_ENTITY,
+                            Json(json!({ "error": format!("invalid config JSON: {error}") })),
+                        )
+                            .into_response(),
+                    ))
                 }
             };
             continue;
@@ -179,7 +186,7 @@ async fn parse_scan_request(
         let text = match String::from_utf8(bytes.to_vec()) {
             Ok(text) => text,
             Err(_) => {
-                return Err((
+                return Err(Box::new((
                     StatusCode::UNPROCESSABLE_ENTITY,
                     Json(json!({
                         "error": format!(
@@ -187,7 +194,7 @@ async fn parse_scan_request(
                         )
                     })),
                 )
-                    .into_response())
+                    .into_response()))
             }
         };
         if !text.trim().is_empty() {
@@ -196,18 +203,22 @@ async fn parse_scan_request(
     }
 
     if inputs.is_empty() {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "error": "no non-empty 'text'/'content' field or files provided" })),
-        )
-            .into_response());
+        return Err(Box::new(
+            (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": "no non-empty 'text'/'content' field or files provided" })),
+            )
+                .into_response(),
+        ));
     }
     let resolved = resolve_request_config(&state.config, key, request_config).map_err(|error| {
-        (
-            StatusCode::UNPROCESSABLE_ENTITY,
-            Json(json!({ "error": error })),
+        Box::new(
+            (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                Json(json!({ "error": error })),
+            )
+                .into_response(),
         )
-            .into_response()
     })?;
     Ok((inputs, resolved))
 }
@@ -237,7 +248,7 @@ pub async fn submit_scan(
 ) -> axum::response::Response {
     let (inputs, resolved) = match parse_scan_request(&state, &key, multipart).await {
         Ok(parsed) => parsed,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let jobs = inputs
         .into_iter()
@@ -285,7 +296,7 @@ pub async fn submit_scan_sync(
     let started = std::time::Instant::now();
     let (inputs, resolved) = match parse_scan_request(&state, &key, multipart).await {
         Ok(parsed) => parsed,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
     let jobs = inputs
         .into_iter()
