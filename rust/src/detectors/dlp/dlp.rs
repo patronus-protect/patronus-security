@@ -796,7 +796,7 @@ impl NativeRegexDetector for DlpPipeline {
         true
     }
 
-    fn finalize_spans(&self, spans: &mut Vec<crate::EvidenceSpan>) {
+    fn finalize_spans(&self, _text: &str, spans: &mut Vec<crate::EvidenceSpan>) {
         let provider_spans = spans
             .iter()
             .filter(|span| {

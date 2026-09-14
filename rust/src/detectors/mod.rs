@@ -45,7 +45,7 @@ pub(crate) trait NativeRegexDetector {
     fn details(&self, _text: &str) -> HashMap<String, serde_json::Value> {
         HashMap::new()
     }
-    fn finalize_spans(&self, _spans: &mut Vec<EvidenceSpan>) {}
+    fn finalize_spans(&self, _text: &str, _spans: &mut Vec<EvidenceSpan>) {}
 
     fn detect(&self, text: &str) -> NativeDetection {
         self.detect_with_rule_filter(text, |_| true)
@@ -168,12 +168,27 @@ pub(crate) trait NativeRegexDetector {
                 non_overlapping_spans.push(span);
             }
         }
-        self.finalize_spans(&mut non_overlapping_spans);
+        self.finalize_spans(text, &mut non_overlapping_spans);
         non_overlapping_spans.sort_by_key(|span| (span.start_byte, span.end_byte));
+        if non_overlapping_spans.is_empty() {
+            return NativeDetection {
+                result: safe_result(),
+                evidence_spans: Vec::new(),
+                details,
+            };
+        }
+        let final_class_name = if non_overlapping_spans
+            .iter()
+            .any(|span| span.label == class_name)
+        {
+            class_name.to_string()
+        } else {
+            non_overlapping_spans[0].label.clone()
+        };
         populate_char_offsets(text, &mut non_overlapping_spans);
         NativeDetection {
             result: EvaluationResult {
-                class_name: class_name.to_string(),
+                class_name: final_class_name,
                 confidence: 1.0,
                 level: "L1".to_string(),
             },

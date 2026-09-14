@@ -73,6 +73,9 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Fixed
 
+- Reduced native PII L1 false positives by discarding sub-four-byte findings,
+  rejecting unformatted numeric IDs and Unix timestamps as phone numbers, and
+  accepting short CVV findings only alongside a Luhn-valid payment-card number.
 - Build the Coordinator image against the complete workspace lockfile and validate the
   Docker build on pull requests before publishing deployment artifacts.
 - Projected Unified tool-tag sigmoid outputs into independent binary property results,

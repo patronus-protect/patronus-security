@@ -49,7 +49,11 @@ pii_golden!(
     "CREDITCARD",
     "Karte: 4111 1111 1111 1111"
 );
-pii_golden!(detects_payment_card_cvv, "CREDITCARD_CVV", "CVV: 123");
+pii_golden!(
+    detects_payment_card_cvv_with_pan,
+    "CREDITCARD",
+    "Karte: 4111 1111 1111 1111, CVV: 123"
+);
 pii_golden!(
     detects_payment_card_expiry,
     "CREDITCARD_EXPIRY",
@@ -231,6 +235,9 @@ fn rejects_invalid_values_and_identifiers_without_the_right_anchor() {
     for text in [
         "Karte: 4111 1111 1111 1112",
         "CVV: 12",
+        "CVV: 123",
+        "Benutzername: xy",
+        "Build timestamp: 1726329600",
         "Ablaufdatum: 13/29",
         "MAC: 00:00:00:00:00:00",
         "Geburtsdatum: 31.02.2000",
@@ -261,6 +268,8 @@ fn rejects_invalid_values_and_identifiers_without_the_right_anchor() {
 #[test]
 fn validators_reject_malformed_or_reserved_values() {
     assert!(!validators::phone("+0000000"));
+    assert!(!validators::unanchored_phone("1726329600"));
+    assert!(validators::unanchored_phone("+49 171 1234567"));
     assert!(!validators::mac_address("00:00:00:00:00:00"));
     assert!(!validators::luhn("4111 1111 1111 1112"));
     assert!(!validators::cvv("12"));
@@ -307,7 +316,11 @@ fn anchor_bound_findings_emit_only_the_value_with_utf8_offsets() {
 fn direct_and_contextual_findings_keep_exact_value_boundaries() {
     for (text, label, expected) in [
         ("BIC code is DEUTDEFF500.", "SWIFT_CODE", "DEUTDEFF500"),
-        ("CVV: 123", "CREDITCARD_CVV", "123"),
+        (
+            "Karte: 4111 1111 1111 1111, CVV: 123",
+            "CREDITCARD_CVV",
+            "123",
+        ),
         ("Geburtsdatum: 29.02.2000", "DOB", "29.02.2000"),
         ("Kontakt: ada@example.com", "EMAIL", "ada@example.com"),
     ] {
@@ -534,18 +547,20 @@ fn anchor_lookalikes_remain_safe_without_anchor_facts() {
 }
 
 #[test]
-fn numeric_customer_id_and_phone_keep_both_labels() {
+fn numeric_customer_id_is_not_also_a_phone() {
     let text = "Kundennummer: 1234567890";
     let result = pii_result(text);
-    for label in ["PHONE", "CUSTOMER_ID"] {
-        let span = result
-            .evidence_spans
-            .iter()
-            .find(|span| span.label == label)
-            .unwrap();
-        assert_eq!(span.text, "1234567890");
-        assert_eq!(&text[span.start_byte..span.end_byte], span.text);
-    }
+    assert!(!result
+        .evidence_spans
+        .iter()
+        .any(|span| span.label == "PHONE"));
+    let span = result
+        .evidence_spans
+        .iter()
+        .find(|span| span.label == "CUSTOMER_ID")
+        .unwrap();
+    assert_eq!(span.text, "1234567890");
+    assert_eq!(&text[span.start_byte..span.end_byte], span.text);
 }
 
 #[test]

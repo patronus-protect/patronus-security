@@ -63,6 +63,16 @@ pub fn phone(s: &str) -> bool {
     (7..=15).contains(&digits.len()) && !digits.iter().all(|digit| *digit == digits[0])
 }
 
+/// Validate an unanchored phone candidate without treating bare numeric IDs or
+/// Unix timestamps as phone numbers.
+pub fn unanchored_phone(s: &str) -> bool {
+    phone(s)
+        && (s.starts_with('+')
+            || s.starts_with("00")
+            || s.chars()
+                .any(|ch| matches!(ch, ' ' | '-' | '.' | '/' | '(' | ')')))
+}
+
 pub fn mac_address(s: &str) -> bool {
     let separator = if s.contains(':') {
         ':'

@@ -65,14 +65,14 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
         name: "pii_phone_international",
         pattern: r"\+[1-9](?:[\s./()\-]*\d){6,14}\b",
         entity_group: "PHONE",
-        validator: Some(validators::phone),
+        validator: Some(validators::unanchored_phone),
         captured_value: false,
     },
     PiiPattern {
         name: "pii_phone_de",
         pattern: r"(?:\+49|0049)\s?[1-9][\d\s\-\/]{5,12}\d",
         entity_group: "PHONE",
-        validator: Some(validators::phone),
+        validator: Some(validators::unanchored_phone),
         captured_value: false,
     },
     PiiPattern {
@@ -86,7 +86,7 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
         name: "pii_phone_us",
         pattern: r"\b(?:\+1[\s\-]?)?\(?\d{3}\)?[\s\-\.]?\d{3}[\s\-\.]?\d{4}\b",
         entity_group: "PHONE",
-        validator: Some(validators::phone),
+        validator: Some(validators::unanchored_phone),
         captured_value: false,
     },
     // ── MAC-Adresse ─────────────────────────────────────────────────────────
@@ -507,6 +507,22 @@ impl NativeRegexDetector for PiiPipeline {
 
     fn preserve_cross_label_overlaps(&self) -> bool {
         true
+    }
+
+    fn finalize_spans(&self, text: &str, spans: &mut Vec<crate::EvidenceSpan>) {
+        let card_index = self
+            .rule_ids
+            .iter()
+            .position(|rule_id| *rule_id == "pii_credit_card")
+            .expect("PII credit-card rule must be present");
+        let has_payment_card = self.regexes[card_index]
+            .find_iter(text)
+            .any(|matched| validators::luhn(matched.as_str()));
+        spans.retain(|span| {
+            let coupled_cvv = span.label == "CREDITCARD_CVV" && has_payment_card;
+            (span.end_byte - span.start_byte >= 4 || coupled_cvv)
+                && (span.label != "CREDITCARD_CVV" || coupled_cvv)
+        });
     }
 
     fn details(&self, text: &str) -> std::collections::HashMap<String, serde_json::Value> {
