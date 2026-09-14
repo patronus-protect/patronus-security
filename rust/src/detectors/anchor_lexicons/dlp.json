@@ -1,0 +1,1901 @@
+[
+  {
+    "id": "dlp.password",
+    "description": "Passwörter und Kennwörter",
+    "en": [
+      "password",
+      "passphrase"
+    ],
+    "de": [
+      "passwort",
+      "passwörter",
+      "passwoerter",
+      "passworte",
+      "kennwort",
+      "kennwörter",
+      "kennwoerter",
+      "passphrase",
+      "passwortphrase"
+    ],
+    "shared": [
+      "passwd",
+      "pwd"
+    ],
+    "sources": [
+      "rust/src/detectors/dlp/dlp.rs",
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "dlp.credentials",
+    "description": "Anmelde- und Zugangsdaten",
+    "en": [
+      "credential",
+      "login credentials",
+      "login-credentials",
+      "login_credentials",
+      "logincredentials",
+      "client credentials",
+      "client-credentials",
+      "client_credentials",
+      "clientcredentials",
+      "login details",
+      "authentication credentials",
+      "sign-in details"
+    ],
+    "de": [
+      "zugangsdaten",
+      "anmeldedaten",
+      "anmeldeinformationen",
+      "authentifizierungsdaten",
+      "zugangsinformationen"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/dlp/dlp.rs",
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "dlp.api_key",
+    "description": "API-Zugangsschlüssel",
+    "en": [
+      "api key",
+      "api-key",
+      "api_key",
+      "apikey"
+    ],
+    "de": [
+      "api schlüssel",
+      "api-schlüssel",
+      "api_schlüssel",
+      "apischlüssel",
+      "api schluessel",
+      "api-schluessel",
+      "api_schluessel",
+      "apischluessel",
+      "api-zugangsschlüssel",
+      "api-zugangsschluessel"
+    ],
+    "shared": [
+      "x-api-key"
+    ],
+    "sources": [
+      "rust/src/detectors/dlp/dlp.rs",
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "dlp.access_key",
+    "description": "Zugangsschlüssel",
+    "en": [
+      "access key",
+      "access-key",
+      "access_key",
+      "accesskey",
+      "secret access key",
+      "secret-access-key",
+      "secret_access_key",
+      "secretaccesskey"
+    ],
+    "de": [
+      "zugangs schlüssel",
+      "zugangs-schlüssel",
+      "zugangs_schlüssel",
+      "zugangsschlüssel",
+      "zugangs schluessel",
+      "zugangs-schluessel",
+      "zugangs_schluessel",
+      "zugangsschluessel",
+      "zugriffsschlüssel",
+      "zugriffsschluessel"
+    ],
+    "shared": [
+      "SecretAccessKey"
+    ],
+    "sources": [
+      "rust/src/detectors/dlp/dlp.rs"
+    ]
+  },
+  {
+    "id": "dlp.access_token",
+    "description": "Zugangs- und Authentifizierungstoken",
+    "en": [
+      "access token",
+      "access-token",
+      "access_token",
+      "accesstoken",
+      "auth token",
+      "auth-token",
+      "auth_token",
+      "authtoken",
+      "authentication token",
+      "authentication-token",
+      "authentication_token",
+      "authenticationtoken",
+      "authorization token",
+      "authorization-token",
+      "authorization_token",
+      "authorizationtoken",
+      "authentication bearer token"
+    ],
+    "de": [
+      "zugangstoken",
+      "authtoken",
+      "authentifizierungstoken",
+      "autorisierungstoken",
+      "zugriffstoken",
+      "anmeldetoken"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/dlp/dlp.rs",
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "dlp.refresh_token",
+    "description": "Token zur Erneuerung einer Sitzung",
+    "en": [
+      "refresh token",
+      "refresh-token",
+      "refresh_token",
+      "refreshtoken"
+    ],
+    "de": [
+      "erneuerungstoken",
+      "aktualisierungstoken"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/dlp/dlp.rs"
+    ]
+  },
+  {
+    "id": "dlp.secret_token",
+    "description": "Geheime Token",
+    "en": [
+      "secret token",
+      "secret-token",
+      "secret_token",
+      "secrettoken"
+    ],
+    "de": [
+      "geheimes token",
+      "geheime token"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/dlp/dlp.rs",
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "dlp.client_secret",
+    "description": "Geheime Client-Zugangsdaten",
+    "en": [
+      "client secret",
+      "client-secret",
+      "client_secret",
+      "clientsecret",
+      "client shared secret"
+    ],
+    "de": [
+      "client-geheimnis",
+      "clientgeheimnis",
+      "geheimer clientschlüssel",
+      "geheimer clientschluessel"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/dlp/dlp.rs"
+    ]
+  },
+  {
+    "id": "dlp.service_account_key",
+    "description": "Schlüssel eines Dienstkontos",
+    "en": [
+      "service account key",
+      "service-account-key",
+      "service_account_key",
+      "serviceaccountkey"
+    ],
+    "de": [
+      "dienstkontoschlüssel",
+      "dienstkontoschluessel",
+      "dienstkonto-schlüssel",
+      "dienstkonto-schluessel"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/dlp/dlp.rs"
+    ]
+  },
+  {
+    "id": "dlp.encryption_key",
+    "description": "Verschlüsselungsschlüssel",
+    "en": [
+      "encryption key",
+      "encryption-key",
+      "encryption_key",
+      "encryptionkey",
+      "master key",
+      "master-key",
+      "master_key",
+      "masterkey",
+      "cipher key"
+    ],
+    "de": [
+      "verschlüsselungsschlüssel",
+      "verschluesselungsschluessel",
+      "hauptschlüssel",
+      "hauptschluessel",
+      "chiffrierschlüssel",
+      "chiffrierschluessel"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/dlp/dlp.rs"
+    ]
+  },
+  {
+    "id": "dlp.signing_key",
+    "description": "Signaturschlüssel",
+    "en": [
+      "signing key",
+      "signing-key",
+      "signing_key",
+      "signingkey",
+      "signature key"
+    ],
+    "de": [
+      "signaturschlüssel",
+      "signaturschluessel",
+      "signierschlüssel",
+      "signierschluessel",
+      "signierungsschlüssel",
+      "signierungsschluessel"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/dlp/dlp.rs"
+    ]
+  },
+  {
+    "id": "dlp.private_key",
+    "description": "Private kryptografische Schlüssel",
+    "en": [
+      "private key",
+      "private-key",
+      "private_key",
+      "privatekey",
+      "asymmetric private key"
+    ],
+    "de": [
+      "privater schlüssel",
+      "private schlüssel",
+      "privater schluessel",
+      "private schluessel",
+      "privates schlüsselmaterial",
+      "privates schluesselmaterial"
+    ],
+    "shared": [
+      "RSA PRIVATE KEY",
+      "EC PRIVATE KEY",
+      "DSA PRIVATE KEY",
+      "OPENSSH PRIVATE KEY"
+    ],
+    "sources": [
+      "rust/src/detectors/dlp/dlp.rs",
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "dlp.secret",
+    "description": "Geheimnisse und allgemeine Schlüsselfeldnamen",
+    "en": [
+      "secret key",
+      "secret-key",
+      "secret_key",
+      "secretkey",
+      "shared secret",
+      "shared-secret",
+      "shared_secret",
+      "sharedsecret",
+      "webhook secret",
+      "webhook-secret",
+      "webhook_secret",
+      "webhooksecret",
+      "session secret",
+      "session-secret",
+      "session_secret",
+      "sessionsecret",
+      "secret"
+    ],
+    "de": [
+      "geheimnis",
+      "geheimnisse",
+      "schlüssel",
+      "schluessel",
+      "geheimwert",
+      "geheimer schlüssel",
+      "geheimer schluessel"
+    ],
+    "shared": [
+      "token",
+      "login"
+    ],
+    "sources": [
+      "rust/src/detectors/dlp/dlp.rs",
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "dlp.secret_environment_labels",
+    "description": "Technische Umgebungsvariablen für Geheimnisse",
+    "en": [],
+    "de": [],
+    "shared": [
+      "AWS_SECRET_ACCESS_KEY",
+      "OPENAI_API_KEY",
+      "ANTHROPIC_API_KEY",
+      "GOOGLE_API_KEY",
+      "GITHUB_TOKEN",
+      "GITLAB_TOKEN",
+      "NPM_TOKEN",
+      "SLACK_TOKEN",
+      "DB_PASSWORD",
+      "DATABASE_URL",
+      "WEBHOOK_SECRET",
+      "SIGNING_KEY",
+      "SESSION_SECRET",
+      "PRIVATE_KEY",
+      "SECRET_KEY"
+    ],
+    "sources": [
+      "rust/src/detectors/dlp/dlp.rs",
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "dlp.database_connection",
+    "description": "Datenbank-Zugang und Verbindungsangaben",
+    "en": [
+      "database password",
+      "database-password",
+      "database_password",
+      "databasepassword",
+      "connection string",
+      "connection-string",
+      "connection_string",
+      "connectionstring",
+      "database url",
+      "database-url",
+      "database_url",
+      "databaseurl",
+      "jdbc url",
+      "jdbc-url",
+      "jdbc_url",
+      "jdbcurl",
+      "mongodb uri",
+      "mongodb-uri",
+      "mongodb_uri",
+      "mongodburi",
+      "database connection string",
+      "database credentials"
+    ],
+    "de": [
+      "datenbankpasswort",
+      "datenbankkennwort",
+      "verbindungszeichenfolge",
+      "datenbank-url",
+      "datenbankzugangsdaten",
+      "datenbankverbindung"
+    ],
+    "shared": [
+      "jdbc:"
+    ],
+    "sources": [
+      "rust/src/detectors/dlp/dlp.rs"
+    ]
+  },
+  {
+    "id": "dlp.password_hash",
+    "description": "Passwort-Hashwerte als Feldbezeichnungen",
+    "en": [
+      "password hash",
+      "password-hash",
+      "password_hash",
+      "passwordhash",
+      "hashed password"
+    ],
+    "de": [
+      "passwort hash",
+      "passwort-hash",
+      "passwort_hash",
+      "passworthash",
+      "kennwort hash",
+      "kennwort-hash",
+      "kennwort_hash",
+      "kennworthash",
+      "gehashtes passwort"
+    ],
+    "shared": [
+      "passwd hash",
+      "passwd-hash",
+      "passwd_hash",
+      "passwdhash"
+    ],
+    "sources": [
+      "rust/src/detectors/dlp/dlp.rs"
+    ]
+  },
+  {
+    "id": "dlp.authorization_header",
+    "description": "HTTP-Authentifizierung und Autorisierung",
+    "en": [
+      "authorization",
+      "basic authentication",
+      "basic auth",
+      "bearer token",
+      "http authentication"
+    ],
+    "de": [
+      "authentifizierung",
+      "autorisierung",
+      "bearer-token",
+      "http-authentifizierung"
+    ],
+    "shared": [
+      "proxy-authorization",
+      "bearer",
+      "basic"
+    ],
+    "sources": [
+      "rust/src/detectors/dlp/dlp.rs"
+    ]
+  },
+  {
+    "id": "dlp.session_cookie",
+    "description": "Sitzungskennungen und Cookies",
+    "en": [
+      "session id",
+      "session-id",
+      "session_id",
+      "sessionid",
+      "session token",
+      "session-token",
+      "session_token",
+      "sessiontoken",
+      "auth cookie",
+      "auth-cookie",
+      "auth_cookie",
+      "authcookie",
+      "session",
+      "session identifier",
+      "session cookie"
+    ],
+    "de": [
+      "sitzungskennung",
+      "sitzungstoken",
+      "authentifizierungscookie",
+      "sitzungs-id",
+      "sitzungscookie",
+      "sitzungsidentifikator"
+    ],
+    "shared": [
+      "cookie",
+      "set-cookie",
+      "jsessionid",
+      "phpsessid"
+    ],
+    "sources": [
+      "rust/src/detectors/dlp/dlp.rs"
+    ]
+  },
+  {
+    "id": "dlp.csrf_token",
+    "description": "CSRF- und XSRF-Token",
+    "en": [
+      "cross-site request forgery token",
+      "anti-csrf token",
+      "anti-forgery token"
+    ],
+    "de": [
+      "csrf-schutz-token",
+      "csrf-token"
+    ],
+    "shared": [
+      "csrf token",
+      "csrf-token",
+      "csrf_token",
+      "csrftoken",
+      "xsrf token",
+      "xsrf-token",
+      "xsrf_token",
+      "xsrftoken",
+      "x-csrf-token",
+      "x-xsrf-token"
+    ],
+    "sources": [
+      "rust/src/detectors/dlp/dlp.rs"
+    ]
+  },
+  {
+    "id": "dlp.signed_url",
+    "description": "Signierte URLs und Signaturfelder",
+    "en": [
+      "signed url",
+      "signed-url",
+      "signed_url",
+      "signedurl",
+      "presigned url",
+      "pre-signed url"
+    ],
+    "de": [
+      "signierte url",
+      "signatur",
+      "vorsignierte url",
+      "signierter link"
+    ],
+    "shared": [
+      "x-amz-signature",
+      "x-goog-signature",
+      "signature",
+      "sig"
+    ],
+    "sources": [
+      "rust/src/detectors/dlp/dlp.rs"
+    ]
+  },
+  {
+    "id": "dlp.vat_identifier",
+    "description": "Umsatzsteuerkennungen",
+    "en": [
+      "vat id",
+      "vat-id",
+      "vat_id",
+      "vatid",
+      "vat number",
+      "vat-number",
+      "vat_number",
+      "vatnumber",
+      "value added tax identification number",
+      "vat registration number"
+    ],
+    "de": [
+      "ust-idnr",
+      "ust.idnr",
+      "ustidnr",
+      "ust-id",
+      "ust.id",
+      "ustid",
+      "ust-ident",
+      "ust.ident",
+      "ustident",
+      "ust-identifikationsnummer",
+      "ust.identifikationsnummer",
+      "ustidentifikationsnummer",
+      "umsatzsteuer",
+      "umsatzsteuer-identifikationsnummer",
+      "mehrwertsteuer-id",
+      "mehrwertsteuer_id",
+      "mehrwertsteuer id",
+      "umsatzsteueridentifikationsnummer",
+      "umsatzsteuer-id"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/dlp/dlp.rs"
+    ]
+  },
+  {
+    "id": "dlp.commercial_register",
+    "description": "Registerkennungen von Unternehmen und Vereinen",
+    "en": [
+      "commercial register number",
+      "register entry",
+      "association register",
+      "partnership register",
+      "company registration number"
+    ],
+    "de": [
+      "handelsregister",
+      "registernummer",
+      "registerzeichen",
+      "vereinsregister",
+      "partnerschaftsregister",
+      "handelsregisternummer",
+      "handelsregistereintrag"
+    ],
+    "shared": [
+      "hra",
+      "hrb",
+      "gnr",
+      "vr",
+      "pr"
+    ],
+    "sources": [
+      "rust/src/detectors/dlp/dlp.rs"
+    ]
+  },
+  {
+    "id": "dlp.facility_number",
+    "description": "Kennungen medizinischer Betriebsstätten",
+    "en": [
+      "medical facility number",
+      "facility number",
+      "practice site number"
+    ],
+    "de": [
+      "betriebsstättennummer",
+      "betriebsstaettennummer",
+      "praxisnummer",
+      "betriebsstättenkennnummer",
+      "betriebsstaettenkennnummer"
+    ],
+    "shared": [
+      "bsnr"
+    ],
+    "sources": [
+      "rust/src/detectors/dlp/dlp.rs"
+    ]
+  },
+  {
+    "id": "dlp.case_identifier",
+    "description": "Akten- und Fallkennungen",
+    "en": [
+      "case id",
+      "case-id",
+      "case_id",
+      "caseid",
+      "case number",
+      "case-number",
+      "case_number",
+      "casenumber",
+      "case reference",
+      "case-reference",
+      "case_reference",
+      "casereference",
+      "file number",
+      "file-number",
+      "file_number",
+      "filenumber",
+      "docket number",
+      "case file number"
+    ],
+    "de": [
+      "aktenzeichen",
+      "geschäftszeichen",
+      "geschaeftszeichen",
+      "fallnummer",
+      "fall id",
+      "fall-id",
+      "fall_id",
+      "fallid",
+      "vorgangsnummer",
+      "vorgangs id",
+      "vorgangs-id",
+      "vorgangs_id",
+      "vorgangsid",
+      "aktennummer",
+      "fallkennung"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/dlp/dlp.rs"
+    ]
+  },
+  {
+    "id": "dlp.contract_identifier",
+    "description": "Vertrags- und Policenkennungen",
+    "en": [
+      "contract id",
+      "contract-id",
+      "contract_id",
+      "contractid",
+      "contract number",
+      "contract-number",
+      "contract_number",
+      "contractnumber",
+      "contract reference",
+      "contract-reference",
+      "contract_reference",
+      "contractreference",
+      "policy number",
+      "policy-number",
+      "policy_number",
+      "policynumber",
+      "agreement number",
+      "policy identifier"
+    ],
+    "de": [
+      "vertragsnummer",
+      "vertrags id",
+      "vertrags-id",
+      "vertrags_id",
+      "vertragsid",
+      "policynummer",
+      "vertragskennung",
+      "versicherungsscheinnummer"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/dlp/dlp.rs"
+    ]
+  },
+  {
+    "id": "dlp.claim_identifier",
+    "description": "Schadens- und Leistungsfallkennungen",
+    "en": [
+      "claim id",
+      "claim-id",
+      "claim_id",
+      "claimid",
+      "claim number",
+      "claim-number",
+      "claim_number",
+      "claimnumber",
+      "claim reference",
+      "claim-reference",
+      "claim_reference",
+      "claimreference",
+      "claim identifier"
+    ],
+    "de": [
+      "schadennummer",
+      "leistungsfallnummer",
+      "schadensnummer",
+      "schadenfallnummer"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/dlp/dlp.rs"
+    ]
+  },
+  {
+    "id": "dlp.order_identifier",
+    "description": "Bestell- und Auftragskennungen",
+    "en": [
+      "order id",
+      "order-id",
+      "order_id",
+      "orderid",
+      "order number",
+      "order-number",
+      "order_number",
+      "ordernumber",
+      "order reference",
+      "order-reference",
+      "order_reference",
+      "orderreference",
+      "purchase order",
+      "purchase-order",
+      "purchase_order",
+      "purchaseorder",
+      "purchase order number"
+    ],
+    "de": [
+      "bestellnummer",
+      "auftragsnummer",
+      "bestellkennung",
+      "auftragskennung"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/dlp/dlp.rs"
+    ]
+  },
+  {
+    "id": "dlp.invoice_identifier",
+    "description": "Rechnungs- und Belegkennungen",
+    "en": [
+      "invoice id",
+      "invoice-id",
+      "invoice_id",
+      "invoiceid",
+      "invoice number",
+      "invoice-number",
+      "invoice_number",
+      "invoicenumber",
+      "invoice reference",
+      "invoice-reference",
+      "invoice_reference",
+      "invoicereference",
+      "billing reference",
+      "invoice identifier"
+    ],
+    "de": [
+      "rechnungsnummer",
+      "rechnungs id",
+      "rechnungs-id",
+      "rechnungs_id",
+      "rechnungsid",
+      "belegnummer",
+      "rechnungskennung",
+      "belegkennung"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/dlp/dlp.rs"
+    ]
+  },
+  {
+    "id": "dlp.project_identifier",
+    "description": "Projektkennungen",
+    "en": [
+      "project id",
+      "project-id",
+      "project_id",
+      "projectid",
+      "project number",
+      "project-number",
+      "project_number",
+      "projectnumber",
+      "project code",
+      "project-code",
+      "project_code",
+      "projectcode",
+      "project reference"
+    ],
+    "de": [
+      "projekt id",
+      "projekt-id",
+      "projekt_id",
+      "projektid",
+      "projekt nummer",
+      "projekt-nummer",
+      "projekt_nummer",
+      "projektnummer",
+      "projektkennung",
+      "projektcode"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/dlp/dlp.rs"
+    ]
+  },
+  {
+    "id": "dlp.organization_identifier",
+    "description": "Organisations- und Mandantenkennungen",
+    "en": [
+      "tenant id",
+      "tenant-id",
+      "tenant_id",
+      "tenantid",
+      "tenant number",
+      "tenant-number",
+      "tenant_number",
+      "tenantnumber",
+      "organization id",
+      "organization-id",
+      "organization_id",
+      "organizationid",
+      "organization number",
+      "organization-number",
+      "organization_number",
+      "organizationnumber",
+      "company id",
+      "company-id",
+      "company_id",
+      "companyid",
+      "company number",
+      "company-number",
+      "company_number",
+      "companynumber",
+      "organization identifier",
+      "tenant identifier"
+    ],
+    "de": [
+      "organisations id",
+      "organisations-id",
+      "organisations_id",
+      "organisationsid",
+      "unternehmens id",
+      "unternehmens-id",
+      "unternehmens_id",
+      "unternehmensid",
+      "unternehmens kennung",
+      "unternehmens-kennung",
+      "unternehmens_kennung",
+      "unternehmenskennung",
+      "firmenkennung",
+      "mandanten id",
+      "mandanten-id",
+      "mandanten_id",
+      "mandantenid",
+      "mandanten nummer",
+      "mandanten-nummer",
+      "mandanten_nummer",
+      "mandantennummer",
+      "organisationskennung",
+      "mandantenkennung"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/dlp/dlp.rs"
+    ]
+  },
+  {
+    "id": "dlp.salary",
+    "description": "Gehaltsangaben",
+    "en": [
+      "salary",
+      "annual salary",
+      "annual-salary",
+      "annual_salary",
+      "annualsalary",
+      "base salary",
+      "base-salary",
+      "base_salary",
+      "basesalary",
+      "wage",
+      "pay",
+      "remuneration",
+      "compensation"
+    ],
+    "de": [
+      "gehalt",
+      "jahresgehalt",
+      "bruttogehalt",
+      "grundgehalt",
+      "arbeitsentgelt",
+      "lohn",
+      "vergütung",
+      "verguetung",
+      "bezüge",
+      "bezuege"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/dlp/dlp.rs"
+    ]
+  },
+  {
+    "id": "dlp.margin",
+    "description": "Unternehmensmargen und Deckungsbeiträge",
+    "en": [
+      "gross margin",
+      "gross-margin",
+      "gross_margin",
+      "grossmargin",
+      "net margin",
+      "net-margin",
+      "net_margin",
+      "netmargin",
+      "contribution margin",
+      "contribution-margin",
+      "contribution_margin",
+      "contributionmargin",
+      "margin",
+      "profit margin"
+    ],
+    "de": [
+      "marge",
+      "ebitda marge",
+      "ebitda-marge",
+      "ebitda_marge",
+      "ebitdamarge",
+      "ebit marge",
+      "ebit-marge",
+      "ebit_marge",
+      "ebitmarge",
+      "rohertragsmarge",
+      "deckungsbeitrag",
+      "bruttomarge",
+      "nettomarge",
+      "gewinnmarge",
+      "gewinnspanne",
+      "handelsspanne"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/dlp/dlp.rs"
+    ]
+  },
+  {
+    "id": "dlp.revenue",
+    "description": "Umsatz und wiederkehrende Erlöse",
+    "en": [
+      "annual recurring revenue",
+      "annual-recurring-revenue",
+      "annual_recurring_revenue",
+      "annualrecurringrevenue",
+      "monthly recurring revenue",
+      "monthly-recurring-revenue",
+      "monthly_recurring_revenue",
+      "monthlyrecurringrevenue",
+      "revenue",
+      "sales revenue",
+      "turnover"
+    ],
+    "de": [
+      "umsatz",
+      "rohertrag",
+      "erlös",
+      "erloes",
+      "umsatzerlöse",
+      "umsatzerloese"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/dlp/dlp.rs"
+    ]
+  },
+  {
+    "id": "dlp.financial_forecast",
+    "description": "Interne Planung und Liquiditätskennzahlen",
+    "en": [
+      "cash burn",
+      "cash-burn",
+      "cash_burn",
+      "cashburn",
+      "burn rate",
+      "burn-rate",
+      "burn_rate",
+      "burnrate",
+      "runway",
+      "revenue forecast",
+      "revenue-forecast",
+      "revenue_forecast",
+      "revenueforecast",
+      "sales forecast",
+      "sales-forecast",
+      "sales_forecast",
+      "salesforecast",
+      "forecast",
+      "target",
+      "actual",
+      "financial projection",
+      "revenue projection"
+    ],
+    "de": [
+      "umsatzplanung",
+      "umsatzprognose",
+      "budgetplanung",
+      "planwert",
+      "istwert",
+      "finanzprognose",
+      "finanzplanung",
+      "umsatzvorschau"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/dlp/dlp.rs"
+    ]
+  },
+  {
+    "id": "dlp.financial_abbreviations",
+    "description": "Betriebswirtschaftliche Kurzbezeichnungen",
+    "en": [],
+    "de": [],
+    "shared": [
+      "ebitda",
+      "ebit",
+      "arr",
+      "mrr",
+      "budget"
+    ],
+    "sources": [
+      "rust/src/detectors/dlp/dlp.rs"
+    ]
+  },
+  {
+    "id": "dlp.source_code",
+    "description": "Quellcode und Repositorien",
+    "en": [
+      "source code",
+      "codebase",
+      "program source",
+      "source text"
+    ],
+    "de": [
+      "quellcode",
+      "codebasis",
+      "quelltext",
+      "programmquelltext",
+      "programmcode"
+    ],
+    "shared": [
+      "repository",
+      "repo"
+    ],
+    "sources": [
+      "rust/src/detectors/dlp/dlp.rs"
+    ]
+  },
+  {
+    "id": "dlp.configuration",
+    "description": "Konfigurationsdateien und Infrastrukturdefinitionen",
+    "en": [
+      "configuration file",
+      "config file",
+      "configuration settings",
+      "configuration data"
+    ],
+    "de": [
+      "konfigurationsdatei",
+      "kubernetes-manifest",
+      "helm-chart",
+      "terraform-zustand",
+      "konfigurationsdaten",
+      "einstellungsdatei"
+    ],
+    "shared": [
+      "dockerfile",
+      "docker compose",
+      "docker-compose",
+      "kubernetes manifest",
+      "helm chart",
+      "terraform state",
+      "apiVersion",
+      "StatefulSet",
+      "DaemonSet",
+      "ConfigMap",
+      "Deployment",
+      "Import-Module",
+      "ENTRYPOINT",
+      "Secret",
+      "Service"
+    ],
+    "sources": [
+      "rust/src/detectors/dlp/dlp.rs"
+    ]
+  },
+  {
+    "id": "dlp.database_dump",
+    "description": "Datenbankexporte und Sicherungsdateien",
+    "en": [
+      "database dump",
+      "sql dump",
+      "schema dump",
+      "table dump",
+      "backup file",
+      "database export",
+      "database backup"
+    ],
+    "de": [
+      "datenbankdump",
+      "datenbank dump",
+      "datenbankexport",
+      "datenbank export",
+      "datenbanksicherung",
+      "datenbank sicherung",
+      "sicherungsdatei",
+      "datenbankabzug"
+    ],
+    "shared": [
+      "pg_dump",
+      "mysqldump",
+      "postgresql",
+      "mysql",
+      "mariadb",
+      "sqlite"
+    ],
+    "sources": [
+      "rust/src/detectors/dlp/dlp.rs"
+    ]
+  },
+  {
+    "id": "dlp.sql_operations",
+    "description": "SQL-Operationen und Datenbankobjekte",
+    "en": [
+      "database query",
+      "table creation",
+      "database deletion",
+      "sql query",
+      "database statement"
+    ],
+    "de": [
+      "datenbankabfrage",
+      "tabellenerstellung",
+      "datenbanklöschung",
+      "datenbankloeschung",
+      "sql-abfrage",
+      "datenbankanweisung"
+    ],
+    "shared": [
+      "SELECT",
+      "UPDATE",
+      "INSERT INTO",
+      "DELETE FROM",
+      "CREATE TABLE",
+      "CREATE DATABASE",
+      "CREATE SCHEMA",
+      "CREATE VIEW",
+      "CREATE INDEX",
+      "CREATE UNIQUE INDEX",
+      "CREATE SEQUENCE",
+      "CREATE TRIGGER",
+      "CREATE FUNCTION",
+      "CREATE PROCEDURE",
+      "CREATE TYPE",
+      "CREATE ROLE",
+      "CREATE USER",
+      "CREATE OR REPLACE",
+      "ALTER TABLE",
+      "ALTER DATABASE",
+      "ALTER SCHEMA",
+      "ALTER VIEW",
+      "ALTER INDEX",
+      "ALTER SEQUENCE",
+      "ALTER TYPE",
+      "ALTER ROLE",
+      "ALTER USER",
+      "DROP DATABASE",
+      "DROP TABLE",
+      "DROP SCHEMA",
+      "DROP VIEW",
+      "DROP INDEX",
+      "DROP SEQUENCE",
+      "DROP TRIGGER",
+      "DROP FUNCTION",
+      "DROP PROCEDURE",
+      "DROP TYPE",
+      "DROP ROLE",
+      "DROP USER",
+      "TRUNCATE TABLE",
+      "LOCK TABLES",
+      "PRAGMA",
+      "foreign_keys",
+      "REPLACE INTO",
+      "MERGE INTO",
+      "COMMIT",
+      "BEGIN TRANSACTION",
+      "GRANT",
+      "REVOKE",
+      "COMMIT WORK",
+      "BEGIN WORK",
+      "CALL"
+    ],
+    "sources": [
+      "rust/src/detectors/dlp/dlp.rs",
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "dlp.system_log",
+    "description": "Systemprotokolle und Fehlerberichte",
+    "en": [
+      "application log",
+      "server log",
+      "crash log",
+      "panic report",
+      "core dump",
+      "exception trace",
+      "system log",
+      "error log",
+      "failure report"
+    ],
+    "de": [
+      "fehlerprotokoll",
+      "systemprotokoll",
+      "absturzbericht",
+      "ausnahme",
+      "anwendungsprotokoll",
+      "fehlerbericht",
+      "absturzprotokoll"
+    ],
+    "shared": [
+      "stack trace",
+      "stacktrace",
+      "traceback",
+      "panicked at",
+      "panic",
+      "goroutine",
+      "caused by",
+      "exception",
+      "fatal",
+      "critical",
+      "error",
+      "fehler",
+      "kritisch"
+    ],
+    "sources": [
+      "rust/src/detectors/dlp/dlp.rs"
+    ]
+  },
+  {
+    "id": "dlp.transfer_action",
+    "description": "Übertragen und Offenlegen von Geheimnissen",
+    "en": [
+      "send",
+      "upload",
+      "post",
+      "email",
+      "forward",
+      "leak",
+      "share",
+      "paste",
+      "copy",
+      "exfiltrate",
+      "transmit",
+      "relay",
+      "disclose",
+      "divulge"
+    ],
+    "de": [
+      "sende",
+      "schicke",
+      "lade hoch",
+      "veröffentliche",
+      "veroeffentliche",
+      "teile",
+      "kopiere",
+      "weiterleiten",
+      "exfiltriere",
+      "exfiltrier",
+      "übermittle",
+      "uebermittle",
+      "übertrage",
+      "uebertrage",
+      "preisgeben",
+      "gib preis",
+      "verrate"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "dlp.external_destination",
+    "description": "Externe Empfänger einer Datenübertragung",
+    "en": [
+      "attacker",
+      "external",
+      "adversary",
+      "outside recipient",
+      "there"
+    ],
+    "de": [
+      "angreifer",
+      "extern",
+      "externer empfänger",
+      "externer empfaenger",
+      "dort",
+      "dorthin"
+    ],
+    "shared": [
+      "pastebin"
+    ],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "dlp.sensitive_read_action",
+    "description": "Lesen und Sammeln sensibler Inhalte",
+    "en": [
+      "read",
+      "find",
+      "show",
+      "dump",
+      "retrieve",
+      "collect",
+      "print",
+      "found",
+      "shown",
+      "retrieved",
+      "collected",
+      "printed",
+      "gather",
+      "extract",
+      "look up",
+      "display"
+    ],
+    "de": [
+      "lies",
+      "lese",
+      "finde",
+      "zeige",
+      "drucke",
+      "hole",
+      "sammle",
+      "gelesen",
+      "gefunden",
+      "gezeigt",
+      "ausgegeben",
+      "abgerufen",
+      "gesammelt",
+      "gedruckt",
+      "auslesen",
+      "abrufen",
+      "zusammentragen",
+      "extrahieren"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "dlp.credential_files",
+    "description": "Dateien mit Zugangsdaten",
+    "en": [
+      "credential file",
+      "private key file",
+      "environment file",
+      "credentials file",
+      "authentication file"
+    ],
+    "de": [
+      "zugangsdaten-datei",
+      "schlüsseldatei",
+      "schluesseldatei",
+      "umgebungsdatei",
+      "zugangsdatendatei",
+      "anmeldedatendatei"
+    ],
+    "shared": [
+      ".env",
+      ".ssh/id_",
+      ".ssh/authorized",
+      ".aws/credentials",
+      ".netrc",
+      "/etc/shadow"
+    ],
+    "sources": [
+      "rust/src/threat/patterns.rs",
+      "rust/src/detectors/mcp/mcp_policy.rs"
+    ]
+  },
+  {
+    "id": "dlp.destruction_action",
+    "description": "Löschen und Vernichten von Daten",
+    "en": [
+      "wipe",
+      "clear",
+      "delete",
+      "destroy",
+      "truncate",
+      "shred",
+      "erase",
+      "purge",
+      "obliterate"
+    ],
+    "de": [
+      "lösche",
+      "loesche",
+      "vernichte",
+      "bereinige",
+      "leere",
+      "löschen",
+      "loeschen",
+      "auslöschen",
+      "ausloeschen",
+      "tilgen",
+      "beseitigen"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs",
+      "rust/src/detectors/mcp/mcp_policy.rs"
+    ]
+  },
+  {
+    "id": "dlp.audit_logs",
+    "description": "Sicherheitsprotokolle und Audit-Ereignisse",
+    "en": [
+      "audit event",
+      "security log",
+      "audit log",
+      "logs",
+      "audit trail",
+      "security event log"
+    ],
+    "de": [
+      "protokolle",
+      "audit-ereignisse",
+      "sicherheitsprotokoll",
+      "audit-protokoll",
+      "prüfprotokoll",
+      "pruefprotokoll",
+      "sicherheitsereignisprotokoll",
+      "ereignisprotokoll"
+    ],
+    "shared": [
+      "/var/log/",
+      ".log",
+      ".audit",
+      ".jsonl",
+      "HISTFILE",
+      "wevtutil",
+      "clear-log"
+    ],
+    "sources": [
+      "rust/src/threat/patterns.rs",
+      "rust/src/detectors/mcp/mcp_policy.rs"
+    ]
+  },
+  {
+    "id": "dlp.filesystem_destruction",
+    "description": "Dateisystem- und Datenträgeroperationen",
+    "en": [
+      "recursive removal",
+      "disk wipe",
+      "filesystem format",
+      "drive wipe",
+      "format disk"
+    ],
+    "de": [
+      "rekursives löschen",
+      "rekursives loeschen",
+      "datenträger löschen",
+      "datentraeger loeschen",
+      "dateisystem formatieren",
+      "festplatte löschen",
+      "festplatte loeschen",
+      "datenträger formatieren",
+      "datentraeger formatieren"
+    ],
+    "shared": [
+      "rm",
+      "mkfs.",
+      "dd",
+      "fdisk",
+      "shred",
+      "truncate"
+    ],
+    "sources": [
+      "rust/src/threat/patterns.rs",
+      "rust/src/detectors/mcp/mcp_policy.rs"
+    ]
+  },
+  {
+    "id": "dlp.permissions_change",
+    "description": "Änderungen an Dateirechten und Eigentümern",
+    "en": [
+      "permission change",
+      "ownership change",
+      "change permissions",
+      "change ownership"
+    ],
+    "de": [
+      "berechtigungsänderung",
+      "berechtigungsaenderung",
+      "eigentümerwechsel",
+      "eigentuemerwechsel",
+      "zugriffsrechte ändern",
+      "zugriffsrechte aendern",
+      "besitzrechte ändern",
+      "besitzrechte aendern"
+    ],
+    "shared": [
+      "chmod",
+      "chown",
+      "--recursive",
+      "--force"
+    ],
+    "sources": [
+      "rust/src/detectors/mcp/mcp_policy.rs"
+    ]
+  },
+  {
+    "id": "dlp.git_operations",
+    "description": "Git-Operationen mit Datenverlustrisiko",
+    "en": [
+      "force push",
+      "hard reset",
+      "working tree cleanup",
+      "forced push"
+    ],
+    "de": [
+      "erzwungenes pushen",
+      "hartes zurücksetzen",
+      "hartes zuruecksetzen",
+      "arbeitsverzeichnis bereinigen",
+      "zwangsweises pushen",
+      "hart zurücksetzen",
+      "hart zuruecksetzen"
+    ],
+    "shared": [
+      "git push",
+      "git reset",
+      "git clean",
+      "push --force",
+      "reset --hard",
+      "clean -fd",
+      "push -f"
+    ],
+    "sources": [
+      "rust/src/threat/patterns.rs",
+      "rust/src/detectors/mcp/mcp_policy.rs"
+    ]
+  },
+  {
+    "id": "dlp.network_transfer",
+    "description": "Netzwerkübertragung und Upload-Optionen",
+    "en": [
+      "network upload",
+      "data transfer",
+      "file upload",
+      "network transmission"
+    ],
+    "de": [
+      "netzwerk-upload",
+      "datenübertragung",
+      "datenuebertragung",
+      "netzwerkübertragung",
+      "netzwerkuebertragung",
+      "datei hochladen"
+    ],
+    "shared": [
+      "curl",
+      "wget",
+      "--data",
+      "--upload-file",
+      "--post-data"
+    ],
+    "sources": [
+      "rust/src/threat/patterns.rs",
+      "rust/src/detectors/mcp/mcp_policy.rs"
+    ]
+  },
+  {
+    "id": "dlp.reverse_shell",
+    "description": "Rückverbindung über eine Shell",
+    "en": [
+      "reverse shell",
+      "named pipe",
+      "connect-back shell"
+    ],
+    "de": [
+      "rückverbindung",
+      "rueckverbindung",
+      "benannte pipe",
+      "reverse-shell",
+      "rückwärts-shell",
+      "rueckwaerts-shell"
+    ],
+    "shared": [
+      "/dev/tcp/",
+      "mkfifo",
+      "ncat",
+      "nc -e"
+    ],
+    "sources": [
+      "rust/src/detectors/mcp/mcp_policy.rs"
+    ]
+  },
+  {
+    "id": "dlp.package_installation",
+    "description": "Installation von Softwarepaketen",
+    "en": [
+      "package installation",
+      "install package",
+      "install software package"
+    ],
+    "de": [
+      "paketinstallation",
+      "paket installieren",
+      "softwarepaket installieren",
+      "softwarepaketinstallation"
+    ],
+    "shared": [
+      "pip install",
+      "npm install",
+      "gem install",
+      "cargo install",
+      "go install"
+    ],
+    "sources": [
+      "rust/src/detectors/mcp/mcp_policy.rs"
+    ]
+  },
+  {
+    "id": "dlp.encoded_execution",
+    "description": "Ausführung kodierter Befehle",
+    "en": [
+      "encoded command",
+      "decode command",
+      "encoded instruction"
+    ],
+    "de": [
+      "kodierter befehl",
+      "befehl dekodieren",
+      "kodierte anweisung",
+      "codierter befehl"
+    ],
+    "shared": [
+      "eval",
+      "base64",
+      "--decode",
+      "-encodedcommand",
+      "-enc"
+    ],
+    "sources": [
+      "rust/src/detectors/mcp/mcp_policy.rs"
+    ]
+  },
+  {
+    "id": "dlp.scheduled_persistence",
+    "description": "Persistenz durch Zeitplanung und Systemdienste",
+    "en": [
+      "scheduled task",
+      "service creation",
+      "startup task",
+      "startup job",
+      "scheduled job",
+      "autostart task"
+    ],
+    "de": [
+      "geplante aufgabe",
+      "dienst erstellen",
+      "autostart",
+      "zeitgesteuerte aufgabe",
+      "autostartaufgabe"
+    ],
+    "shared": [
+      "crontab",
+      "/etc/cron",
+      "/var/spool/cron",
+      "/etc/init.d/",
+      "/etc/systemd/",
+      "/lib/systemd/",
+      "LaunchDaemons",
+      "LaunchAgents",
+      "systemctl",
+      "schtasks",
+      "New-Service",
+      "sc create",
+      "sc.exe create",
+      "CurrentVersion\\Run",
+      "CurrentVersion\\RunOnce"
+    ],
+    "sources": [
+      "rust/src/detectors/mcp/mcp_policy.rs"
+    ]
+  },
+  {
+    "id": "dlp.shell_profiles",
+    "description": "Startprofile und Shell-Konfiguration",
+    "en": [
+      "shell profile",
+      "shell alias",
+      "shell startup file",
+      "shell configuration"
+    ],
+    "de": [
+      "shell-startprofil",
+      "shell-konfiguration",
+      "shellprofil",
+      "shell-startdatei"
+    ],
+    "shared": [
+      ".bashrc",
+      ".bash_profile",
+      ".profile",
+      ".zshrc",
+      ".zprofile",
+      ".zshenv",
+      ".bash_logout",
+      "/etc/profile",
+      "alias"
+    ],
+    "sources": [
+      "rust/src/detectors/mcp/mcp_policy.rs"
+    ]
+  },
+  {
+    "id": "dlp.detached_process",
+    "description": "Abgekoppelte Hintergrundprozesse",
+    "en": [
+      "detached process",
+      "background process",
+      "background job",
+      "detached job"
+    ],
+    "de": [
+      "abgekoppelter prozess",
+      "hintergrundprozess",
+      "hintergrundauftrag",
+      "entkoppelter prozess"
+    ],
+    "shared": [
+      "nohup",
+      "disown",
+      "setsid",
+      "screen",
+      "tmux",
+      "new-session"
+    ],
+    "sources": [
+      "rust/src/detectors/mcp/mcp_policy.rs"
+    ]
+  },
+  {
+    "id": "dlp.runtime_configuration",
+    "description": "MCP-Laufzeitfelder und Befehlsinterpreter",
+    "en": [
+      "runtime configuration",
+      "command execution",
+      "runtime settings",
+      "execute command"
+    ],
+    "de": [
+      "laufzeitkonfiguration",
+      "befehlsausführung",
+      "befehlsausfuehrung",
+      "laufzeiteinstellungen",
+      "befehl ausführen",
+      "befehl ausfuehren"
+    ],
+    "shared": [
+      "command",
+      "args",
+      "stdio",
+      "env",
+      "bash",
+      "shell",
+      "exec",
+      "run_command",
+      "execute",
+      "terminal",
+      "bash_exec",
+      "cmd",
+      "powershell",
+      "pwsh",
+      "python",
+      "node"
+    ],
+    "sources": [
+      "rust/src/threat/patterns.rs",
+      "rust/src/detectors/mcp/mcp_policy.rs"
+    ]
+  },
+  {
+    "id": "dlp.file_tools",
+    "description": "Werkzeuge zum Lesen und Ändern von Dateien",
+    "en": [
+      "file read",
+      "file write",
+      "file edit",
+      "file creation",
+      "read a file",
+      "write a file",
+      "edit a file"
+    ],
+    "de": [
+      "datei lesen",
+      "datei schreiben",
+      "datei bearbeiten",
+      "datei erstellen",
+      "dateizugriff",
+      "dateibearbeitung"
+    ],
+    "shared": [
+      "read_file",
+      "file_read",
+      "write_file",
+      "file_write",
+      "edit_file",
+      "create_file",
+      "modify_file",
+      "append_file"
+    ],
+    "sources": [
+      "rust/src/detectors/mcp/mcp_policy.rs"
+    ]
+  }
+]

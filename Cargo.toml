@@ -2,7 +2,9 @@
 members = [
     "rust",
     "python",
-    "ark-api"
+    "ark-api",
+    "ark-distributed-protocol",
+    "ark-coordinator"
 ]
 resolver = "2"
 

@@ -1,0 +1,2819 @@
+[
+  {
+    "id": "pii.full_name",
+    "description": "Vollständiger und amtlicher Personenname",
+    "en": [
+      "full name",
+      "full-name",
+      "full_name",
+      "legal name",
+      "legal-name",
+      "legal_name",
+      "name in full"
+    ],
+    "de": [
+      "vollständiger name",
+      "vollständiger-name",
+      "vollständiger_name",
+      "kompletter name",
+      "kompletter-name",
+      "kompletter_name",
+      "voller name",
+      "vollstaendiger name"
+    ],
+    "shared": [
+      "name"
+    ],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.first_name",
+    "description": "Vorname und Rufname",
+    "en": [
+      "first name",
+      "first-name",
+      "first_name",
+      "given name",
+      "given-name",
+      "given_name",
+      "preferred name",
+      "preferred-name",
+      "preferred_name",
+      "forename"
+    ],
+    "de": [
+      "vorname",
+      "vor name",
+      "vor-name",
+      "vor_name",
+      "rufname",
+      "ruf name",
+      "ruf-name",
+      "ruf_name"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.middle_name",
+    "description": "Zweiter Vorname",
+    "en": [
+      "middle name",
+      "middle-name",
+      "middle_name",
+      "second given name"
+    ],
+    "de": [
+      "zweiter vorname",
+      "zweiter-vorname",
+      "zweiter_vorname",
+      "weiterer vorname"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.last_name",
+    "description": "Nachname und Familienname",
+    "en": [
+      "last name",
+      "last-name",
+      "last_name",
+      "family name",
+      "family-name",
+      "family_name",
+      "surname"
+    ],
+    "de": [
+      "nachname",
+      "nach name",
+      "nach-name",
+      "nach_name",
+      "familienname",
+      "familien name",
+      "familien-name",
+      "familien_name",
+      "zuname"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.birth_name",
+    "description": "Geburtsname und früherer Familienname",
+    "en": [
+      "maiden name",
+      "maiden-name",
+      "maiden_name",
+      "birth name",
+      "birth-name",
+      "birth_name",
+      "surname at birth"
+    ],
+    "de": [
+      "geburtsname",
+      "geburts name",
+      "geburts-name",
+      "geburts_name",
+      "mädchenname",
+      "mädchen name",
+      "mädchen-name",
+      "mädchen_name",
+      "maedchenname",
+      "familienname bei geburt"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.patient_name",
+    "description": "Name einer Patientin oder eines Patienten",
+    "en": [
+      "patient name",
+      "patient-name",
+      "patient_name",
+      "name of patient"
+    ],
+    "de": [
+      "patientenname",
+      "patienten name",
+      "patienten-name",
+      "patienten_name",
+      "name des patienten",
+      "name der patientin"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.customer_name",
+    "description": "Name einer Kundin oder eines Kunden",
+    "en": [
+      "customer name",
+      "customer-name",
+      "customer_name",
+      "client name",
+      "client-name",
+      "client_name",
+      "name of customer",
+      "name of client"
+    ],
+    "de": [
+      "kundenname",
+      "kunden name",
+      "kunden-name",
+      "kunden_name",
+      "name des kunden",
+      "name der kundin"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.employee_name",
+    "description": "Name einer Mitarbeiterin oder eines Mitarbeiters",
+    "en": [
+      "employee name",
+      "employee-name",
+      "employee_name",
+      "staff member name"
+    ],
+    "de": [
+      "mitarbeitername",
+      "mitarbeiter name",
+      "mitarbeiter-name",
+      "mitarbeiter_name",
+      "name des mitarbeiters",
+      "name der mitarbeiterin"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.contact_person",
+    "description": "Ansprechperson",
+    "en": [
+      "contact person",
+      "contact-person",
+      "contact_person",
+      "point of contact",
+      "contact name"
+    ],
+    "de": [
+      "ansprechpartner",
+      "ansprechpartnerin",
+      "kontaktperson",
+      "kontaktpartner",
+      "ansprechperson"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.emergency_contact",
+    "description": "Notfallkontakt",
+    "en": [
+      "emergency contact",
+      "emergency-contact",
+      "emergency_contact",
+      "emergency contact person"
+    ],
+    "de": [
+      "notfallkontakt",
+      "notfallansprechpartner",
+      "notfallkontaktperson"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.account_holder",
+    "description": "Kontoinhaber",
+    "en": [
+      "account holder",
+      "account-holder",
+      "account_holder",
+      "account owner"
+    ],
+    "de": [
+      "kontoinhaber",
+      "kontoinhaberin",
+      "kontobesitzer",
+      "kontobesitzerin"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.insured_person",
+    "description": "Versicherte Person und Versicherungsnehmer",
+    "en": [
+      "policy holder",
+      "policy-holder",
+      "policy_holder",
+      "insured person",
+      "insured-person",
+      "insured_person",
+      "insured",
+      "policyholder",
+      "insured individual"
+    ],
+    "de": [
+      "versicherter",
+      "versicherte",
+      "versicherungsnehmer",
+      "versicherungsnehmerin",
+      "versicherte person"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.member",
+    "description": "Mitglied",
+    "en": [
+      "member"
+    ],
+    "de": [
+      "mitglied"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.patient",
+    "description": "Patient oder Patientin",
+    "en": [],
+    "de": [
+      "patientin"
+    ],
+    "shared": [
+      "patient"
+    ],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.applicant",
+    "description": "Bewerber und Kandidaten",
+    "en": [
+      "applicant",
+      "candidate",
+      "job applicant"
+    ],
+    "de": [
+      "bewerber",
+      "bewerberin",
+      "kandidat",
+      "kandidatin",
+      "stellenbewerber",
+      "stellenbewerberin"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.employee",
+    "description": "Beschäftigte Person",
+    "en": [
+      "employee",
+      "worker",
+      "staff member"
+    ],
+    "de": [
+      "beschäftigter",
+      "beschäftigte",
+      "beschaeftigter",
+      "beschaeftigte",
+      "arbeitnehmer",
+      "arbeitnehmerin",
+      "mitarbeiter",
+      "mitarbeiterin",
+      "angestellter",
+      "angestellte",
+      "belegschaftsmitglied"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.customer",
+    "description": "Kunde oder Mandant",
+    "en": [
+      "customer",
+      "client"
+    ],
+    "de": [
+      "kunde",
+      "kundin"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.email_address",
+    "description": "E-Mail-Adresse",
+    "en": [
+      "email address",
+      "email-address",
+      "email_address",
+      "email id",
+      "email-id",
+      "email_id",
+      "electronic mail address"
+    ],
+    "de": [
+      "emailadresse",
+      "e-mailadresse",
+      "e-mail-adresse",
+      "email adresse",
+      "email-adresse",
+      "email_adresse",
+      "mailadresse",
+      "mail adresse",
+      "mail-adresse",
+      "mail_adresse",
+      "elektronische postadresse"
+    ],
+    "shared": [
+      "email",
+      "e-mail",
+      "e_mail"
+    ],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.telephone",
+    "description": "Telefonnummer und Kontakttelefon",
+    "en": [
+      "phone",
+      "phone number",
+      "phone-number",
+      "phone_number",
+      "telephone",
+      "telephone number",
+      "telephone-number",
+      "telephone_number",
+      "contact number",
+      "contact-number",
+      "contact_number",
+      "home phone",
+      "home-phone",
+      "home_phone",
+      "work phone",
+      "work-phone",
+      "work_phone",
+      "telephone no",
+      "landline number"
+    ],
+    "de": [
+      "telefon",
+      "telefonnummer",
+      "telefon nummer",
+      "telefon-nummer",
+      "telefon_nummer",
+      "telefonnr",
+      "telefon nr",
+      "telefon-nr",
+      "telefon_nr",
+      "telnr",
+      "tel nr",
+      "tel-nr",
+      "tel_nr",
+      "tel.",
+      "festnetz",
+      "festnetznummer",
+      "festnetz nummer",
+      "festnetz-nummer",
+      "festnetz_nummer",
+      "kontaktnummer",
+      "kontakt nummer",
+      "kontakt-nummer",
+      "kontakt_nummer",
+      "rufnummer",
+      "fernsprechnummer"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.mobile_phone",
+    "description": "Mobiltelefonnummer",
+    "en": [
+      "mobile",
+      "mobile number",
+      "mobile-number",
+      "mobile_number",
+      "mobile phone",
+      "mobile-phone",
+      "mobile_phone",
+      "cell number",
+      "cell-number",
+      "cell_number",
+      "cell phone",
+      "cell-phone",
+      "cell_phone",
+      "cellular number",
+      "cellular-number",
+      "cellular_number",
+      "cellular phone",
+      "cellular-phone",
+      "cellular_phone",
+      "cellphone",
+      "cellular telephone"
+    ],
+    "de": [
+      "mobil",
+      "mobiltelefon",
+      "mobilfunk",
+      "mobilnummer",
+      "mobil nummer",
+      "mobil-nummer",
+      "mobil_nummer",
+      "mobilnr",
+      "mobil nr",
+      "mobil-nr",
+      "mobil_nr",
+      "handy",
+      "handynummer",
+      "handy nummer",
+      "handy-nummer",
+      "handy_nummer",
+      "handynr",
+      "handy nr",
+      "handy-nr",
+      "handy_nr",
+      "mobilrufnummer",
+      "mobilfunknummer"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.fax",
+    "description": "Faxnummer",
+    "en": [
+      "fax number",
+      "fax-number",
+      "fax_number",
+      "facsimile number"
+    ],
+    "de": [
+      "faxnummer",
+      "fax nummer",
+      "fax-nummer",
+      "fax_nummer",
+      "faxnr",
+      "fax nr",
+      "fax-nr",
+      "fax_nr",
+      "telefaxnummer"
+    ],
+    "shared": [
+      "fax"
+    ],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.telephone_extension",
+    "description": "Telefondurchwahl",
+    "en": [
+      "extension",
+      "extension number",
+      "direct dial number"
+    ],
+    "de": [
+      "durchwahl",
+      "nebenstellennummer",
+      "durchwahlnummer"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.postal_address",
+    "description": "Anschrift und Postadresse",
+    "en": [
+      "address",
+      "street address",
+      "street-address",
+      "street_address",
+      "physical address",
+      "physical-address",
+      "physical_address",
+      "postal address"
+    ],
+    "de": [
+      "anschrift",
+      "adresse",
+      "postalische anschrift"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.residential_address",
+    "description": "Wohnanschrift und Meldeadresse",
+    "en": [
+      "home address",
+      "home-address",
+      "home_address",
+      "residential address",
+      "residential-address",
+      "residential_address",
+      "permanent address",
+      "permanent-address",
+      "permanent_address",
+      "current address",
+      "current-address",
+      "current_address",
+      "domicile address"
+    ],
+    "de": [
+      "wohnanschrift",
+      "wohn anschrift",
+      "wohn-anschrift",
+      "wohn_anschrift",
+      "wohnadresse",
+      "wohn adresse",
+      "wohn-adresse",
+      "wohn_adresse",
+      "meldeanschrift",
+      "melde anschrift",
+      "melde-anschrift",
+      "melde_anschrift",
+      "meldeadresse",
+      "melde adresse",
+      "melde-adresse",
+      "melde_adresse",
+      "heimatadresse",
+      "heimat adresse",
+      "heimat-adresse",
+      "heimat_adresse",
+      "wohnsitzadresse",
+      "privatanschrift",
+      "privatadresse"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.mailing_address",
+    "description": "Postanschrift und Korrespondenzadresse",
+    "en": [
+      "mailing address",
+      "mailing-address",
+      "mailing_address",
+      "correspondence address",
+      "correspondence-address",
+      "correspondence_address",
+      "postal correspondence address"
+    ],
+    "de": [
+      "postanschrift",
+      "post anschrift",
+      "post-anschrift",
+      "post_anschrift",
+      "postadresse",
+      "post adresse",
+      "post-adresse",
+      "post_adresse",
+      "korrespondenzadresse",
+      "korrespondenz adresse",
+      "korrespondenz-adresse",
+      "korrespondenz_adresse",
+      "korrespondenzanschrift"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.billing_address",
+    "description": "Rechnungsadresse",
+    "en": [
+      "billing address",
+      "billing-address",
+      "billing_address",
+      "invoice address"
+    ],
+    "de": [
+      "rechnungsadresse",
+      "rechnungs adresse",
+      "rechnungs-adresse",
+      "rechnungs_adresse",
+      "rechnungsanschrift"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.delivery_address",
+    "description": "Lieferadresse und Zustelladresse",
+    "en": [
+      "shipping address",
+      "shipping-address",
+      "shipping_address",
+      "delivery address",
+      "delivery-address",
+      "delivery_address"
+    ],
+    "de": [
+      "lieferadresse",
+      "liefer adresse",
+      "liefer-adresse",
+      "liefer_adresse",
+      "zustelladresse",
+      "zustell adresse",
+      "zustell-adresse",
+      "zustell_adresse",
+      "lieferanschrift",
+      "zustellanschrift"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.business_address",
+    "description": "Geschäftsadresse",
+    "en": [
+      "business address",
+      "business-address",
+      "business_address",
+      "office address",
+      "work address"
+    ],
+    "de": [
+      "geschäftsadresse",
+      "geschäfts adresse",
+      "geschäfts-adresse",
+      "geschäfts_adresse",
+      "geschaeftsadresse",
+      "geschäftsanschrift",
+      "geschaeftsanschrift",
+      "firmenanschrift",
+      "firmenadresse"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.street",
+    "description": "Straßenbezeichnung",
+    "en": [
+      "street"
+    ],
+    "de": [
+      "straße",
+      "strasse",
+      "str."
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.house_number",
+    "description": "Hausnummer",
+    "en": [
+      "house number",
+      "house-number",
+      "house_number"
+    ],
+    "de": [
+      "hausnummer",
+      "haus nummer",
+      "haus-nummer",
+      "haus_nummer",
+      "hausnr",
+      "haus nr",
+      "haus-nr",
+      "haus_nr"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.postal_code",
+    "description": "Postleitzahl",
+    "en": [
+      "postal code",
+      "postal-code",
+      "postal_code",
+      "postcode",
+      "zip code",
+      "zip-code",
+      "zip_code",
+      "zip"
+    ],
+    "de": [
+      "postleitzahl",
+      "post leitzahl",
+      "post-leitzahl",
+      "post_leitzahl",
+      "plz",
+      "postleitziffer"
+    ],
+    "shared": [
+      "zip"
+    ],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.post_office_box",
+    "description": "Postfach",
+    "en": [
+      "po box",
+      "po-box",
+      "po_box",
+      "p.o. box",
+      "p.o.-box",
+      "p.o._box",
+      "p. o. box",
+      "p.-o.-box",
+      "p._o._box",
+      "p o box",
+      "p-o-box",
+      "p_o_box",
+      "post office box"
+    ],
+    "de": [
+      "postfach",
+      "postfachnummer"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.locality",
+    "description": "Wohnort und Ortschaft",
+    "en": [
+      "city",
+      "town",
+      "locality",
+      "place of residence"
+    ],
+    "de": [
+      "wohnort",
+      "ort"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.date_of_birth",
+    "description": "Geburtsdatum",
+    "en": [
+      "date of birth",
+      "date-of-birth",
+      "date_of_birth",
+      "birth date",
+      "birth-date",
+      "birth_date",
+      "birthdate",
+      "birthday",
+      "born",
+      "born on",
+      "born-on",
+      "born_on"
+    ],
+    "de": [
+      "geburtsdatum",
+      "geburts datum",
+      "geburts-datum",
+      "geburts_datum",
+      "gebdat",
+      "geb.dat",
+      "geb. dat",
+      "geb.-dat",
+      "geb._dat",
+      "geburtsdat",
+      "geburts.dat",
+      "geburts dat",
+      "geburts-dat",
+      "geburts_dat",
+      "geburtstag",
+      "geboren",
+      "geboren am",
+      "geboren-am",
+      "geboren_am"
+    ],
+    "shared": [
+      "dob",
+      "d.o.b.",
+      "d. o. b.",
+      "d.-o.-b.",
+      "d._o._b.",
+      "d o b",
+      "d-o-b",
+      "d_o_b"
+    ],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.employee_identifier",
+    "description": "Personalnummer und Mitarbeiterkennung",
+    "en": [
+      "employee id",
+      "employee-id",
+      "employee_id",
+      "employee number",
+      "employee-number",
+      "employee_number",
+      "employee no",
+      "employee-no",
+      "employee_no",
+      "personnel id",
+      "personnel-id",
+      "personnel_id",
+      "personnel number",
+      "personnel-number",
+      "personnel_number",
+      "personnel no",
+      "personnel-no",
+      "personnel_no",
+      "staff id",
+      "staff-id",
+      "staff_id",
+      "staff number",
+      "staff-number",
+      "staff_number",
+      "staff no",
+      "staff-no",
+      "staff_no",
+      "staff code",
+      "staff-code",
+      "staff_code",
+      "worker id",
+      "payroll number"
+    ],
+    "de": [
+      "personalnummer",
+      "personal nummer",
+      "personal-nummer",
+      "personal_nummer",
+      "personalnr",
+      "personal nr",
+      "personal-nr",
+      "personal_nr",
+      "persnr",
+      "pers nr",
+      "pers-nr",
+      "pers_nr",
+      "mitarbeiternummer",
+      "mitarbeiter nummer",
+      "mitarbeiter-nummer",
+      "mitarbeiter_nummer",
+      "mitarbeiternr",
+      "mitarbeiter nr",
+      "mitarbeiter-nr",
+      "mitarbeiter_nr",
+      "mitarbeiterid",
+      "mitarbeiter id",
+      "mitarbeiter-id",
+      "mitarbeiter_id",
+      "personalid",
+      "personal id",
+      "personal-id",
+      "personal_id",
+      "beschäftigtennummer",
+      "beschäftigten nummer",
+      "beschäftigten-nummer",
+      "beschäftigten_nummer",
+      "beschäftigtenid",
+      "beschäftigten id",
+      "beschäftigten-id",
+      "beschäftigten_id",
+      "beschaeftigtennummer",
+      "beschaeftigten id",
+      "beschaeftigten-id",
+      "beschaeftigten_id",
+      "personalkennung",
+      "mitarbeiterkennung"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.customer_identifier",
+    "description": "Kundenkennung und Debitorennummer",
+    "en": [
+      "customer id",
+      "customer-id",
+      "customer_id",
+      "customer number",
+      "customer-number",
+      "customer_number",
+      "customer no",
+      "customer-no",
+      "customer_no",
+      "client id",
+      "client-id",
+      "client_id",
+      "client number",
+      "client-number",
+      "client_number",
+      "client no",
+      "client-no",
+      "client_no",
+      "debtor id",
+      "debtor-id",
+      "debtor_id",
+      "debtor number",
+      "debtor-number",
+      "debtor_number",
+      "debtor no",
+      "debtor-no",
+      "debtor_no",
+      "client reference",
+      "customer reference"
+    ],
+    "de": [
+      "kundennummer",
+      "kunden nummer",
+      "kunden-nummer",
+      "kunden_nummer",
+      "kundnummer",
+      "kund nummer",
+      "kund-nummer",
+      "kund_nummer",
+      "kundennr",
+      "kunden nr",
+      "kunden-nr",
+      "kunden_nr",
+      "kundnr",
+      "kund nr",
+      "kund-nr",
+      "kund_nr",
+      "kundenid",
+      "kunden id",
+      "kunden-id",
+      "kunden_id",
+      "kundid",
+      "kund id",
+      "kund-id",
+      "kund_id",
+      "debitor",
+      "debitoren",
+      "debitorennummer",
+      "debitoren nummer",
+      "debitoren-nummer",
+      "debitoren_nummer",
+      "debitornummer",
+      "debitor nummer",
+      "debitor-nummer",
+      "debitor_nummer",
+      "debitorennr",
+      "debitoren nr",
+      "debitoren-nr",
+      "debitoren_nr",
+      "debitornr",
+      "debitor nr",
+      "debitor-nr",
+      "debitor_nr",
+      "debitorenid",
+      "debitoren id",
+      "debitoren-id",
+      "debitoren_id",
+      "debitorid",
+      "debitor id",
+      "debitor-id",
+      "debitor_id",
+      "kundenkennung",
+      "kundencode"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.patient_identifier",
+    "description": "Patientenkennung und Krankenaktennummer",
+    "en": [
+      "patient id",
+      "patient-id",
+      "patient_id",
+      "patient number",
+      "patient-number",
+      "patient_number",
+      "patient no",
+      "patient-no",
+      "patient_no",
+      "medical record number",
+      "medical-record-number",
+      "medical_record_number",
+      "medical record no",
+      "medical-record-no",
+      "medical_record_no",
+      "health record number",
+      "health-record-number",
+      "health_record_number",
+      "health record id",
+      "health-record-id",
+      "health_record_id",
+      "patient reference",
+      "patient identifier"
+    ],
+    "de": [
+      "patientennummer",
+      "patienten nummer",
+      "patienten-nummer",
+      "patienten_nummer",
+      "patientennr",
+      "patienten nr",
+      "patienten-nr",
+      "patienten_nr",
+      "patientenid",
+      "patienten id",
+      "patienten-id",
+      "patienten_id",
+      "krankenhausnummer",
+      "krankenhaus nummer",
+      "krankenhaus-nummer",
+      "krankenhaus_nummer",
+      "krankenhausid",
+      "krankenhaus id",
+      "krankenhaus-id",
+      "krankenhaus_id",
+      "patientenkennung"
+    ],
+    "shared": [
+      "mrn"
+    ],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.student_identifier",
+    "description": "Matrikelnummer und Schülerkennung",
+    "en": [
+      "student id",
+      "student-id",
+      "student_id",
+      "student number",
+      "student-number",
+      "student_number",
+      "student no",
+      "student-no",
+      "student_no",
+      "pupil id",
+      "pupil-id",
+      "pupil_id",
+      "pupil number",
+      "pupil-number",
+      "pupil_number",
+      "pupil no",
+      "pupil-no",
+      "pupil_no",
+      "enrollment number",
+      "enrolment number"
+    ],
+    "de": [
+      "matrikelnummer",
+      "matrikel nummer",
+      "matrikel-nummer",
+      "matrikel_nummer",
+      "matrikelnr",
+      "matrikel nr",
+      "matrikel-nr",
+      "matrikel_nr",
+      "immatrikulationsnummer",
+      "immatrikulations nummer",
+      "immatrikulations-nummer",
+      "immatrikulations_nummer",
+      "schülernummer",
+      "schüler nummer",
+      "schüler-nummer",
+      "schüler_nummer",
+      "schülernr",
+      "schüler nr",
+      "schüler-nr",
+      "schüler_nr",
+      "schülerid",
+      "schüler id",
+      "schüler-id",
+      "schüler_id",
+      "schuelernummer",
+      "schueler nummer",
+      "schueler-nummer",
+      "schueler_nummer",
+      "schuelernr",
+      "schueler nr",
+      "schueler-nr",
+      "schueler_nr",
+      "schuelerid",
+      "schueler id",
+      "schueler-id",
+      "schueler_id",
+      "studentid",
+      "studentenid",
+      "studenten id",
+      "studenten-id",
+      "studenten_id",
+      "studentnummer",
+      "student nummer",
+      "student-nummer",
+      "student_nummer",
+      "studentennummer",
+      "studenten nummer",
+      "studenten-nummer",
+      "studenten_nummer",
+      "studentnr",
+      "student nr",
+      "student-nr",
+      "student_nr",
+      "studentennr",
+      "studenten nr",
+      "studenten-nr",
+      "studenten_nr",
+      "studierendenkennung",
+      "studierendennummer"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.applicant_identifier",
+    "description": "Bewerberkennung und Bewerbungsnummer",
+    "en": [
+      "applicant id",
+      "applicant-id",
+      "applicant_id",
+      "applicant number",
+      "applicant-number",
+      "applicant_number",
+      "applicant no",
+      "applicant-no",
+      "applicant_no",
+      "application id",
+      "application-id",
+      "application_id",
+      "application number",
+      "application-number",
+      "application_number",
+      "application no",
+      "application-no",
+      "application_no",
+      "candidate id",
+      "candidate-id",
+      "candidate_id",
+      "candidate number",
+      "candidate-number",
+      "candidate_number",
+      "candidate no",
+      "candidate-no",
+      "candidate_no",
+      "candidate reference",
+      "application reference"
+    ],
+    "de": [
+      "bewerbernummer",
+      "bewerber nummer",
+      "bewerber-nummer",
+      "bewerber_nummer",
+      "bewerbernr",
+      "bewerber nr",
+      "bewerber-nr",
+      "bewerber_nr",
+      "bewerberid",
+      "bewerber id",
+      "bewerber-id",
+      "bewerber_id",
+      "kandidatennummer",
+      "kandidaten nummer",
+      "kandidaten-nummer",
+      "kandidaten_nummer",
+      "kandidatenid",
+      "kandidaten id",
+      "kandidaten-id",
+      "kandidaten_id",
+      "bewerbungsnummer",
+      "bewerberkennung"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.user_account",
+    "description": "Benutzername und Kontokennung",
+    "en": [
+      "username",
+      "user name",
+      "user-name",
+      "user_name",
+      "user id",
+      "user-id",
+      "user_id",
+      "login name",
+      "login-name",
+      "login_name",
+      "login id",
+      "login-id",
+      "login_id",
+      "account name",
+      "account-name",
+      "account_name",
+      "account id",
+      "account-id",
+      "account_id",
+      "user handle",
+      "screen name"
+    ],
+    "de": [
+      "benutzername",
+      "benutzer name",
+      "benutzer-name",
+      "benutzer_name",
+      "benutzer",
+      "benutzerkennung",
+      "benutzer kennung",
+      "benutzer-kennung",
+      "benutzer_kennung",
+      "benutzerkonto",
+      "benutzer konto",
+      "benutzer-konto",
+      "benutzer_konto",
+      "loginkennung",
+      "login kennung",
+      "login-kennung",
+      "login_kennung",
+      "kontoname",
+      "konto name",
+      "konto-name",
+      "konto_name",
+      "nutzername",
+      "nutzerkennung",
+      "anmeldename"
+    ],
+    "shared": [
+      "login"
+    ],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.identifier_label",
+    "description": "Allgemeine Kennung als Feldbezeichnung",
+    "en": [
+      "identifier",
+      "identification number",
+      "identifier code"
+    ],
+    "de": [
+      "kennung",
+      "identifikator",
+      "identifikationsnummer"
+    ],
+    "shared": [
+      "id"
+    ],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.card_verification",
+    "description": "Kartenprüfnummer und Sicherheitscode",
+    "en": [
+      "card verification value",
+      "card-verification-value",
+      "card_verification_value",
+      "card verification code",
+      "card-verification-code",
+      "card_verification_code",
+      "card security code",
+      "card-security-code",
+      "card_security_code",
+      "security code",
+      "security-code",
+      "security_code",
+      "card validation code"
+    ],
+    "de": [
+      "kartenprüfnummer",
+      "karten prüf nummer",
+      "karten-prüf-nummer",
+      "karten_prüf_nummer",
+      "kartenprüfziffer",
+      "karten prüf ziffer",
+      "karten-prüf-ziffer",
+      "karten_prüf_ziffer",
+      "kartenpruefnummer",
+      "kartenpruefziffer",
+      "prüfziffer",
+      "prüf ziffer",
+      "prüf-ziffer",
+      "prüf_ziffer",
+      "pruefziffer",
+      "sicherheitscode",
+      "sicherheits code",
+      "sicherheits-code",
+      "sicherheits_code",
+      "kartenprüfcode",
+      "kartenpruefcode"
+    ],
+    "shared": [
+      "cvv",
+      "cvv2",
+      "cvc",
+      "cvc2"
+    ],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.card_expiry",
+    "description": "Ablaufdatum einer Zahlungskarte",
+    "en": [
+      "expiry",
+      "expiry date",
+      "expiry-date",
+      "expiry_date",
+      "expiration",
+      "expiration date",
+      "expiration-date",
+      "expiration_date",
+      "expires",
+      "valid until",
+      "valid through"
+    ],
+    "de": [
+      "kartenablaufdatum",
+      "karten ablauf datum",
+      "karten-ablauf-datum",
+      "karten_ablauf_datum",
+      "ablaufdatum",
+      "ablauf datum",
+      "ablauf-datum",
+      "ablauf_datum",
+      "gültig bis",
+      "gültig-bis",
+      "gültig_bis",
+      "gueltig bis",
+      "gueltig-bis",
+      "gueltig_bis",
+      "verfallsdatum",
+      "gültigkeitsende",
+      "gueltigkeitsende"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.bank_identifier",
+    "description": "Bankkennung und Bankleitzahl",
+    "en": [
+      "routing number",
+      "routing-number",
+      "routing_number",
+      "bank code",
+      "sort code"
+    ],
+    "de": [
+      "bankleitzahl",
+      "blz",
+      "bankkennung"
+    ],
+    "shared": [
+      "bic",
+      "swift",
+      "swift code",
+      "swift-code",
+      "swift_code",
+      "swiftcode"
+    ],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.bank_account",
+    "description": "Bankkontonummer",
+    "en": [
+      "account number",
+      "account-number",
+      "account_number",
+      "bank account",
+      "bank-account",
+      "bank_account",
+      "bank account number",
+      "bank-account-number",
+      "bank_account_number",
+      "banking account"
+    ],
+    "de": [
+      "kontonummer",
+      "konto nummer",
+      "konto-nummer",
+      "konto_nummer",
+      "kontonr",
+      "konto nr",
+      "konto-nr",
+      "konto_nr",
+      "bankkonto",
+      "bankkonto nummer",
+      "bankkonto-nummer",
+      "bankkonto_nummer",
+      "bankkontonummer",
+      "bankkontonr",
+      "bankkonto nr",
+      "bankkonto-nr",
+      "bankkonto_nr",
+      "bankkontokennung"
+    ],
+    "shared": [
+      "iban"
+    ],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.brokerage_account",
+    "description": "Depotnummer",
+    "en": [
+      "brokerage account",
+      "brokerage-account",
+      "brokerage_account",
+      "brokerage account number",
+      "brokerage-account-number",
+      "brokerage_account_number",
+      "securities account",
+      "investment account"
+    ],
+    "de": [
+      "depotnummer",
+      "depot nummer",
+      "depot-nummer",
+      "depot_nummer",
+      "depotnr",
+      "depot nr",
+      "depot-nr",
+      "depot_nr",
+      "wertpapierdepot",
+      "depotkonto"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.tax_identifier",
+    "description": "Steueridentifikationsnummer",
+    "en": [
+      "tax identification number",
+      "tax-identification-number",
+      "tax_identification_number",
+      "tax id",
+      "tax-id",
+      "tax_id",
+      "german tax id",
+      "german-tax-id",
+      "german_tax_id",
+      "taxpayer identification number"
+    ],
+    "de": [
+      "steuerid",
+      "steuer id",
+      "steuer-id",
+      "steuer_id",
+      "steueridentifikationsnummer",
+      "steuer identifikations nummer",
+      "steuer-identifikations-nummer",
+      "steuer_identifikations_nummer",
+      "steuer identifikationsnummer",
+      "steuer-identifikationsnummer",
+      "steuer_identifikationsnummer",
+      "idnr",
+      "id nr",
+      "id-nr",
+      "id_nr",
+      "steuerliche identifikationsnummer"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.tax_number",
+    "description": "Steuernummer",
+    "en": [
+      "tax number",
+      "tax-number",
+      "tax_number",
+      "german tax number",
+      "german-tax-number",
+      "german_tax_number"
+    ],
+    "de": [
+      "steuernummer",
+      "steuer nummer",
+      "steuer-nummer",
+      "steuer_nummer",
+      "steuernr",
+      "steuer nr",
+      "steuer-nr",
+      "steuer_nr",
+      "stnr",
+      "st nr",
+      "st-nr",
+      "st_nr"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.social_insurance_number",
+    "description": "Sozialversicherungsnummer und Rentenversicherungsnummer",
+    "en": [
+      "pension insurance number",
+      "pension-insurance-number",
+      "pension_insurance_number",
+      "social security number",
+      "social-security-number",
+      "social_security_number",
+      "social security no",
+      "social-security-no",
+      "social_security_no",
+      "social insurance number"
+    ],
+    "de": [
+      "sozialversicherungsnummer",
+      "sozialversicherungs nummer",
+      "sozialversicherungs-nummer",
+      "sozialversicherungs_nummer",
+      "sozialversicherungsnr",
+      "sozialversicherungs nr",
+      "sozialversicherungs-nr",
+      "sozialversicherungs_nr",
+      "rentenversicherungsnummer",
+      "rentenversicherungs nummer",
+      "rentenversicherungs-nummer",
+      "rentenversicherungs_nummer",
+      "rentenversicherungsnr",
+      "rentenversicherungs nr",
+      "rentenversicherungs-nr",
+      "rentenversicherungs_nr",
+      "svnr",
+      "sv nr",
+      "sv-nr",
+      "sv_nr",
+      "rvnr",
+      "rv nr",
+      "rv-nr",
+      "rv_nr",
+      "sozialversicherungskennnummer",
+      "rentenversicherungskennnummer"
+    ],
+    "shared": [
+      "ssn"
+    ],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.national_insurance_number",
+    "description": "Britische Sozialversicherungsnummer",
+    "en": [
+      "national insurance number",
+      "national-insurance-number",
+      "national_insurance_number",
+      "national insurance no",
+      "national-insurance-no",
+      "national_insurance_no"
+    ],
+    "de": [
+      "britische sozialversicherungsnummer",
+      "britische-sozialversicherungsnummer",
+      "britische_sozialversicherungsnummer"
+    ],
+    "shared": [
+      "nino"
+    ],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.health_insurance_number",
+    "description": "Krankenversicherungsnummer",
+    "en": [
+      "health insurance number",
+      "health-insurance-number",
+      "health_insurance_number",
+      "health insurance id"
+    ],
+    "de": [
+      "versichertennummer",
+      "versicherten nummer",
+      "versicherten-nummer",
+      "versicherten_nummer",
+      "versichertennr",
+      "versicherten nr",
+      "versicherten-nr",
+      "versicherten_nr",
+      "krankenversicherungsnummer",
+      "krankenversicherungs nummer",
+      "krankenversicherungs-nummer",
+      "krankenversicherungs_nummer",
+      "krankenversicherungsnr",
+      "krankenversicherungs nr",
+      "krankenversicherungs-nr",
+      "krankenversicherungs_nr",
+      "kv nr",
+      "kv-nr",
+      "kv_nr",
+      "krankenversichertennummer"
+    ],
+    "shared": [
+      "kvnr"
+    ],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.physician_number",
+    "description": "Lebenslange Arztnummer",
+    "en": [
+      "lifelong physician number",
+      "lifelong-physician-number",
+      "lifelong_physician_number",
+      "physician number",
+      "physician-number",
+      "physician_number"
+    ],
+    "de": [
+      "lebenslange arztnummer",
+      "lebenslange-arztnummer",
+      "lebenslange_arztnummer",
+      "lebenslange arzt nummer",
+      "lebenslange-arzt-nummer",
+      "lebenslange_arzt_nummer",
+      "lebenslange arztnr",
+      "lebenslange-arztnr",
+      "lebenslange_arztnr",
+      "lebenslange arzt nr",
+      "lebenslange-arzt-nr",
+      "lebenslange_arzt_nr",
+      "arztnummer",
+      "arzt nummer",
+      "arzt-nummer",
+      "arzt_nummer",
+      "arztnr",
+      "arzt nr",
+      "arzt-nr",
+      "arzt_nr"
+    ],
+    "shared": [
+      "lanr"
+    ],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.passport",
+    "description": "Reisepass und Passnummer",
+    "en": [
+      "passport",
+      "passport number",
+      "passport-number",
+      "passport_number",
+      "passport no",
+      "passport-no",
+      "passport_no",
+      "travel passport"
+    ],
+    "de": [
+      "reisepass",
+      "reisepassnummer",
+      "reisepass nummer",
+      "reisepass-nummer",
+      "reisepass_nummer",
+      "reisepassnr",
+      "reisepass nr",
+      "reisepass-nr",
+      "reisepass_nr",
+      "passnummer",
+      "pass nummer",
+      "pass-nummer",
+      "pass_nummer",
+      "passnr",
+      "pass nr",
+      "pass-nr",
+      "pass_nr",
+      "passdokument"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.identity_card",
+    "description": "Personalausweis und Ausweisnummer",
+    "en": [
+      "identity card",
+      "identity-card",
+      "identity_card",
+      "identity card number",
+      "identity-card-number",
+      "identity_card_number",
+      "identity card no",
+      "identity-card-no",
+      "identity_card_no",
+      "id card number",
+      "id-card-number",
+      "id_card_number",
+      "id card no",
+      "id-card-no",
+      "id_card_no",
+      "identification card",
+      "id card"
+    ],
+    "de": [
+      "personalausweis",
+      "personalausweisnummer",
+      "personalausweis nummer",
+      "personalausweis-nummer",
+      "personalausweis_nummer",
+      "personalausweisnr",
+      "personalausweis nr",
+      "personalausweis-nr",
+      "personalausweis_nr",
+      "ausweisnummer",
+      "ausweis nummer",
+      "ausweis-nummer",
+      "ausweis_nummer",
+      "ausweisnr",
+      "ausweis nr",
+      "ausweis-nr",
+      "ausweis_nr",
+      "identitätskarte",
+      "identitaetskarte"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.driver_license",
+    "description": "Führerschein und Fahrerlaubnisnummer",
+    "en": [
+      "driver license",
+      "driver-license",
+      "driver_license",
+      "driver licence",
+      "driver-licence",
+      "driver_licence",
+      "drivers license",
+      "drivers-license",
+      "drivers_license",
+      "drivers licence",
+      "drivers-licence",
+      "drivers_licence",
+      "driver's license",
+      "driver's-license",
+      "driver's_license",
+      "driver's licence",
+      "driver's-licence",
+      "driver's_licence",
+      "driving licence",
+      "driving license"
+    ],
+    "de": [
+      "führerschein",
+      "fuehrerschein",
+      "führerscheinnummer",
+      "führerschein nummer",
+      "führerschein-nummer",
+      "führerschein_nummer",
+      "führerscheinnr",
+      "führerschein nr",
+      "führerschein-nr",
+      "führerschein_nr",
+      "fuehrerscheinnummer",
+      "fuehrerschein nummer",
+      "fuehrerschein-nummer",
+      "fuehrerschein_nummer",
+      "fuehrerscheinnr",
+      "fuehrerschein nr",
+      "fuehrerschein-nr",
+      "fuehrerschein_nr",
+      "fahrerlaubnis",
+      "fahrerlaubnisnummer",
+      "fahrerlaubnis nummer",
+      "fahrerlaubnis-nummer",
+      "fahrerlaubnis_nummer",
+      "fahrerlaubnisnr",
+      "fahrerlaubnis nr",
+      "fahrerlaubnis-nr",
+      "fahrerlaubnis_nr"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.vehicle_registration",
+    "description": "Fahrzeugkennzeichen",
+    "en": [
+      "vehicle registration",
+      "vehicle-registration",
+      "vehicle_registration",
+      "registration number",
+      "registration-number",
+      "registration_number",
+      "registration no",
+      "registration-no",
+      "registration_no",
+      "license plate",
+      "license-plate",
+      "license_plate",
+      "licence plate",
+      "licence-plate",
+      "licence_plate",
+      "number plate",
+      "number-plate",
+      "number_plate",
+      "vehicle registration mark"
+    ],
+    "de": [
+      "kfz",
+      "kennzeichen",
+      "kfz kennzeichen",
+      "kfz-kennzeichen",
+      "kfz_kennzeichen",
+      "kfzkennzeichen",
+      "kfznummer",
+      "kfz nummer",
+      "kfz-nummer",
+      "kfz_nummer",
+      "kraftfahrzeugkennzeichen",
+      "kraftfahrzeug kennzeichen",
+      "kraftfahrzeug-kennzeichen",
+      "kraftfahrzeug_kennzeichen",
+      "nummernschild",
+      "nummern schild",
+      "nummern-schild",
+      "nummern_schild",
+      "amtliches kennzeichen",
+      "amtliches-kennzeichen",
+      "amtliches_kennzeichen",
+      "autokennzeichen",
+      "zulassungskennzeichen"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.medical_record",
+    "description": "Patientenakte und medizinische Dokumentation",
+    "en": [
+      "patient record",
+      "patient-record",
+      "patient_record",
+      "medical record",
+      "medical-record",
+      "medical_record",
+      "health record",
+      "health-record",
+      "health_record",
+      "electronic health record",
+      "electronic-health-record",
+      "electronic_health_record",
+      "electronic medical record",
+      "electronic-medical-record",
+      "electronic_medical_record",
+      "clinical note",
+      "clinical-note",
+      "clinical_note",
+      "medical chart",
+      "patient chart"
+    ],
+    "de": [
+      "patientenakte",
+      "patienten akte",
+      "patienten-akte",
+      "patienten_akte",
+      "krankenakte",
+      "kranken akte",
+      "kranken-akte",
+      "kranken_akte",
+      "gesundheitsakte",
+      "gesundheits akte",
+      "gesundheits-akte",
+      "gesundheits_akte",
+      "elektronische patientenakte",
+      "elektronische-patientenakte",
+      "elektronische_patientenakte",
+      "arztbrief",
+      "arzt brief",
+      "arzt-brief",
+      "arzt_brief",
+      "behandlungsakte",
+      "krankendokumentation"
+    ],
+    "shared": [
+      "epa",
+      "ehr",
+      "emr"
+    ],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.medical_discharge",
+    "description": "Entlassungsbericht",
+    "en": [
+      "discharge summary",
+      "discharge-summary",
+      "discharge_summary",
+      "discharge report"
+    ],
+    "de": [
+      "entlassungsbrief",
+      "entlassungs brief",
+      "entlassungs-brief",
+      "entlassungs_brief",
+      "entlassungsbericht",
+      "entlassungs bericht",
+      "entlassungs-bericht",
+      "entlassungs_bericht",
+      "klinikentlassungsbericht"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.treatment",
+    "description": "Behandlung und Therapieplanung",
+    "en": [
+      "treatment",
+      "treatment plan",
+      "treatment-plan",
+      "treatment_plan",
+      "therapy",
+      "course of treatment",
+      "therapeutic plan"
+    ],
+    "de": [
+      "behandlung",
+      "behandlungsbericht",
+      "behandlungs bericht",
+      "behandlungs-bericht",
+      "behandlungs_bericht",
+      "behandlungsplan",
+      "behandlungs plan",
+      "behandlungs-plan",
+      "behandlungs_plan",
+      "therapie",
+      "therapieplan",
+      "heilbehandlung"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.prescription",
+    "description": "Medizinische Verschreibung",
+    "en": [
+      "prescription",
+      "medical prescription"
+    ],
+    "de": [
+      "verschreibung",
+      "verordnung",
+      "rezept",
+      "ärztliche verordnung",
+      "aerztliche verordnung"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.symptoms",
+    "description": "Krankheitssymptome",
+    "en": [
+      "symptom",
+      "symptoms",
+      "signs of illness"
+    ],
+    "de": [
+      "symptom",
+      "symptome",
+      "krankheitszeichen",
+      "krankheitssymptome"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.allergies",
+    "description": "Allergien und Unverträglichkeiten",
+    "en": [
+      "allergy",
+      "allergies"
+    ],
+    "de": [
+      "allergie",
+      "allergien"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.diagnosis",
+    "description": "Diagnose und Krankheitsklassifikation",
+    "en": [
+      "diagnosis",
+      "diagnoses",
+      "clinical diagnosis"
+    ],
+    "de": [
+      "diagnose",
+      "diagnosen",
+      "krankheitsdiagnose"
+    ],
+    "shared": [
+      "icd",
+      "icd-10",
+      "icd_10",
+      "icd 10"
+    ],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.medical_history",
+    "description": "Medizinische Vorgeschichte",
+    "en": [
+      "medical history",
+      "medical-history",
+      "medical_history",
+      "clinical history",
+      "past medical history"
+    ],
+    "de": [
+      "anamnese",
+      "krankengeschichte",
+      "krankheitsgeschichte",
+      "medizinische vorgeschichte"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.medication",
+    "description": "Medikamente und Medikation",
+    "en": [
+      "medication",
+      "medications",
+      "medicines"
+    ],
+    "de": [
+      "medikation",
+      "medikament",
+      "medikamente",
+      "arzneimittel",
+      "arznei"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.clinical_findings",
+    "description": "Befunde und Laborergebnisse",
+    "en": [
+      "lab result",
+      "lab-result",
+      "lab_result",
+      "lab results",
+      "lab-results",
+      "lab_results",
+      "lab report",
+      "lab-report",
+      "lab_report",
+      "lab reports",
+      "lab-reports",
+      "lab_reports",
+      "lab value",
+      "lab-value",
+      "lab_value",
+      "lab values",
+      "lab-values",
+      "lab_values",
+      "laboratory result",
+      "laboratory-result",
+      "laboratory_result",
+      "laboratory results",
+      "laboratory-results",
+      "laboratory_results",
+      "laboratory report",
+      "laboratory-report",
+      "laboratory_report",
+      "laboratory reports",
+      "laboratory-reports",
+      "laboratory_reports",
+      "laboratory value",
+      "laboratory-value",
+      "laboratory_value",
+      "laboratory values",
+      "laboratory-values",
+      "laboratory_values",
+      "clinical findings",
+      "test results"
+    ],
+    "de": [
+      "befund",
+      "befunde",
+      "laborwert",
+      "labor wert",
+      "labor-wert",
+      "labor_wert",
+      "laborwerte",
+      "labor werte",
+      "labor-werte",
+      "labor_werte",
+      "laborergebnis",
+      "labor ergebnis",
+      "labor-ergebnis",
+      "labor_ergebnis",
+      "laborergebnisse",
+      "labor ergebnisse",
+      "labor-ergebnisse",
+      "labor_ergebnisse",
+      "laborbefund",
+      "labor befund",
+      "labor-befund",
+      "labor_befund",
+      "laborbefunde",
+      "labor befunde",
+      "labor-befunde",
+      "labor_befunde",
+      "untersuchungsbefund",
+      "untersuchungsergebnis"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.health_condition",
+    "description": "Gesundheitszustand und Erkrankung",
+    "en": [
+      "health condition",
+      "health-condition",
+      "health_condition",
+      "disease",
+      "illness",
+      "ailment",
+      "medical condition"
+    ],
+    "de": [
+      "krankheit",
+      "erkrankung",
+      "gesundheitszustand",
+      "gesundheits zustand",
+      "gesundheits-zustand",
+      "gesundheits_zustand",
+      "leiden",
+      "gesundheitsverfassung"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.religious_belief",
+    "description": "Religion und Konfession",
+    "en": [
+      "religious belief",
+      "religious-belief",
+      "religious_belief",
+      "religious beliefs",
+      "religious-beliefs",
+      "religious_beliefs",
+      "religious affiliation",
+      "religious-affiliation",
+      "religious_affiliation",
+      "faith",
+      "religious denomination"
+    ],
+    "de": [
+      "religionszugehörigkeit",
+      "religions zugehörigkeit",
+      "religions-zugehörigkeit",
+      "religions_zugehörigkeit",
+      "religionszugehoerigkeit",
+      "glaubensrichtung",
+      "glaubens richtung",
+      "glaubens-richtung",
+      "glaubens_richtung",
+      "konfession",
+      "glaubensbekenntnis",
+      "religiöse überzeugung",
+      "religioese ueberzeugung"
+    ],
+    "shared": [
+      "religion"
+    ],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.philosophical_belief",
+    "description": "Weltanschauung",
+    "en": [
+      "philosophical belief",
+      "philosophical-belief",
+      "philosophical_belief",
+      "philosophical beliefs",
+      "philosophical-beliefs",
+      "philosophical_beliefs",
+      "worldview",
+      "world view"
+    ],
+    "de": [
+      "weltanschauung",
+      "weltanschauliche überzeugung",
+      "weltanschauliche ueberzeugung"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.political_belief",
+    "description": "Politische Meinung und Parteizugehörigkeit",
+    "en": [
+      "political opinion",
+      "political-opinion",
+      "political_opinion",
+      "political opinions",
+      "political-opinions",
+      "political_opinions",
+      "political affiliation",
+      "political-affiliation",
+      "political_affiliation",
+      "party membership",
+      "party-membership",
+      "party_membership",
+      "political views",
+      "political convictions"
+    ],
+    "de": [
+      "politische meinung",
+      "politische-meinung",
+      "politische_meinung",
+      "politische einstellung",
+      "politische-einstellung",
+      "politische_einstellung",
+      "parteizugehörigkeit",
+      "parteizugehoerigkeit",
+      "parteimitgliedschaft",
+      "partei mitgliedschaft",
+      "partei-mitgliedschaft",
+      "partei_mitgliedschaft",
+      "politische überzeugung",
+      "politische ueberzeugung",
+      "politische gesinnung"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.trade_union_membership",
+    "description": "Gewerkschaftsmitgliedschaft",
+    "en": [
+      "trade union",
+      "trade-union",
+      "trade_union",
+      "trade union membership",
+      "trade-union-membership",
+      "trade_union_membership",
+      "union membership",
+      "labor union membership",
+      "labour union membership"
+    ],
+    "de": [
+      "gewerkschaftszugehörigkeit",
+      "gewerkschafts zugehörigkeit",
+      "gewerkschafts-zugehörigkeit",
+      "gewerkschafts_zugehörigkeit",
+      "gewerkschaftszugehoerigkeit",
+      "gewerkschaftsmitgliedschaft",
+      "gewerkschafts mitgliedschaft",
+      "gewerkschafts-mitgliedschaft",
+      "gewerkschafts_mitgliedschaft",
+      "gewerkschaftsmitglied"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.disability",
+    "description": "Behinderung",
+    "en": [
+      "disability status",
+      "disability-status",
+      "disability_status",
+      "disability"
+    ],
+    "de": [
+      "behinderung",
+      "schwerbehinderung"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.sexual_orientation",
+    "description": "Sexuelle Orientierung",
+    "en": [
+      "sexual orientation",
+      "sexual-orientation",
+      "sexual_orientation"
+    ],
+    "de": [
+      "sexuelle orientierung",
+      "sexuelle-orientierung",
+      "sexuelle_orientierung"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.gender_identity",
+    "description": "Geschlechtliche und sexuelle Identität",
+    "en": [
+      "gender identity",
+      "gender-identity",
+      "gender_identity"
+    ],
+    "de": [
+      "sexuelle identität",
+      "sexuelle-identität",
+      "sexuelle_identität",
+      "sexuelle identitaet",
+      "sexuelle-identitaet",
+      "sexuelle_identitaet",
+      "geschlechtsidentität",
+      "geschlechts identität",
+      "geschlechts-identität",
+      "geschlechts_identität",
+      "geschlechtsidentitaet",
+      "geschlechtliche identität",
+      "geschlechtliche identitaet"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.ethnic_origin",
+    "description": "Ethnische Zugehörigkeit und Herkunft",
+    "en": [
+      "ethnic origin",
+      "ethnic-origin",
+      "ethnic_origin",
+      "racial origin",
+      "racial-origin",
+      "racial_origin",
+      "ethnicity",
+      "ethnic background"
+    ],
+    "de": [
+      "ethnische herkunft",
+      "ethnische-herkunft",
+      "ethnische_herkunft",
+      "ethnische zugehörigkeit",
+      "ethnische-zugehörigkeit",
+      "ethnische_zugehörigkeit",
+      "ethnische zugehoerigkeit",
+      "ethnische-zugehoerigkeit",
+      "ethnische_zugehoerigkeit",
+      "rassische herkunft",
+      "rassische-herkunft",
+      "rassische_herkunft",
+      "ethnizität",
+      "ethnizitaet",
+      "ethnische abstammung"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.genetic_data",
+    "description": "Genetische Daten",
+    "en": [
+      "genetic data",
+      "genetic-data",
+      "genetic_data",
+      "genetic information",
+      "genomic data"
+    ],
+    "de": [
+      "genetische daten",
+      "genetische-daten",
+      "genetische_daten",
+      "genetische informationen",
+      "genomdaten"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.biometric_data",
+    "description": "Biometrische Daten",
+    "en": [
+      "biometric data",
+      "biometric-data",
+      "biometric_data",
+      "biometric information",
+      "biometric identifiers"
+    ],
+    "de": [
+      "biometrische daten",
+      "biometrische-daten",
+      "biometrische_daten",
+      "biometrische informationen",
+      "biometrische merkmale"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.salary",
+    "description": "Gehalt und Entgelt",
+    "en": [
+      "salary",
+      "base salary",
+      "base-salary",
+      "base_salary",
+      "gross salary",
+      "gross-salary",
+      "gross_salary",
+      "net salary",
+      "net-salary",
+      "net_salary",
+      "annual salary",
+      "annual-salary",
+      "annual_salary",
+      "monthly salary",
+      "monthly-salary",
+      "monthly_salary",
+      "compensation",
+      "total compensation",
+      "total-compensation",
+      "total_compensation",
+      "remuneration",
+      "wage",
+      "wages",
+      "hourly rate",
+      "hourly-rate",
+      "hourly_rate",
+      "earnings",
+      "pay"
+    ],
+    "de": [
+      "gehalt",
+      "grundgehalt",
+      "grund gehalt",
+      "grund-gehalt",
+      "grund_gehalt",
+      "bruttogehalt",
+      "brutto gehalt",
+      "brutto-gehalt",
+      "brutto_gehalt",
+      "nettogehalt",
+      "netto gehalt",
+      "netto-gehalt",
+      "netto_gehalt",
+      "jahresgehalt",
+      "jahres gehalt",
+      "jahres-gehalt",
+      "jahres_gehalt",
+      "monatsgehalt",
+      "monats gehalt",
+      "monats-gehalt",
+      "monats_gehalt",
+      "vergütung",
+      "verguetung",
+      "gesamtvergütung",
+      "gesamt vergütung",
+      "gesamt-vergütung",
+      "gesamt_vergütung",
+      "gesamtverguetung",
+      "entgelt",
+      "bezüge",
+      "bezuege",
+      "besoldung",
+      "lohn",
+      "stundenlohn",
+      "stunden lohn",
+      "stunden-lohn",
+      "stunden_lohn",
+      "arbeitsentgelt",
+      "arbeitslohn"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.variable_compensation",
+    "description": "Bonus und Provision",
+    "en": [
+      "commission",
+      "target bonus",
+      "target-bonus",
+      "target_bonus",
+      "incentive pay",
+      "performance bonus"
+    ],
+    "de": [
+      "provision",
+      "prämie",
+      "praemie",
+      "zielbonus",
+      "ziel bonus",
+      "ziel-bonus",
+      "ziel_bonus",
+      "erfolgsprämie",
+      "erfolgspraemie",
+      "leistungsbonus"
+    ],
+    "shared": [
+      "bonus"
+    ],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.payroll",
+    "description": "Lohnabrechnung und Gehaltsnachweis",
+    "en": [
+      "payroll",
+      "payslip",
+      "pay slip",
+      "pay-slip",
+      "pay_slip",
+      "salary statement",
+      "salary-statement",
+      "salary_statement",
+      "pay grade",
+      "pay-grade",
+      "pay_grade",
+      "pay statement",
+      "earnings statement"
+    ],
+    "de": [
+      "lohnabrechnung",
+      "lohn abrechnung",
+      "lohn-abrechnung",
+      "lohn_abrechnung",
+      "gehaltsabrechnung",
+      "gehalts abrechnung",
+      "gehalts-abrechnung",
+      "gehalts_abrechnung",
+      "entgeltabrechnung",
+      "entgelt abrechnung",
+      "entgelt-abrechnung",
+      "entgelt_abrechnung",
+      "bezügeabrechnung",
+      "bezuegeabrechnung",
+      "verdienstabrechnung",
+      "gehaltsnachweis"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.equity_compensation",
+    "description": "Aktienbasierte Vergütung",
+    "en": [
+      "stock option",
+      "stock-option",
+      "stock_option",
+      "stock options",
+      "stock-options",
+      "stock_options",
+      "restricted stock unit",
+      "restricted-stock-unit",
+      "restricted_stock_unit",
+      "restricted stock units",
+      "restricted-stock-units",
+      "restricted_stock_units",
+      "share-based compensation",
+      "equity-based pay"
+    ],
+    "de": [
+      "aktienoption",
+      "aktienoptionen",
+      "aktienbasierte vergütung",
+      "aktienbasierte-vergütung",
+      "aktienbasierte_vergütung",
+      "anteilsbasierte vergütung",
+      "anteilsbasierte verguetung"
+    ],
+    "shared": [
+      "rsu"
+    ],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.personnel_file",
+    "description": "Personalakte",
+    "en": [
+      "personnel file",
+      "personnel-file",
+      "personnel_file",
+      "employee file",
+      "employee-file",
+      "employee_file",
+      "staff file",
+      "personnel record"
+    ],
+    "de": [
+      "personalakte",
+      "personal akte",
+      "personal-akte",
+      "personal_akte",
+      "mitarbeiterakte",
+      "personalunterlagen"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/pii.rs"
+    ]
+  }
+]

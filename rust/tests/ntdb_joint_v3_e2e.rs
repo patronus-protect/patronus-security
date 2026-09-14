@@ -38,6 +38,30 @@ fn score_fixture(name: &str, expected_classes: usize) {
     let utility = executor
         .score_models([name], &text, NtdbOperatingPoint::BestF1)
         .unwrap();
+    let chunks = executor.prepare_chunks(&text).unwrap();
+    let split_at = chunks.len().div_ceil(2);
+    let mut inferred = executor
+        .infer_prepared_chunks_for_models(
+            [name],
+            &chunks[..split_at],
+            chunks.len(),
+            NtdbOperatingPoint::BestPromote,
+        )
+        .unwrap();
+    let second = executor
+        .infer_prepared_chunks_for_models(
+            [name],
+            &chunks[split_at..],
+            chunks.len(),
+            NtdbOperatingPoint::BestPromote,
+        )
+        .unwrap();
+    inferred[0].chunks.extend(second[0].chunks.clone());
+    inferred[0].chunks.reverse();
+    let distributed = executor
+        .aggregate_chunk_inferences(&inferred, NtdbOperatingPoint::BestPromote)
+        .unwrap();
+    assert_eq!(best_promote, distributed);
     for decisions in [&best_promote, &utility] {
         assert_eq!(decisions.len(), 1);
         assert_eq!(decisions[0].labels.len(), expected_classes);
@@ -45,6 +69,38 @@ fn score_fixture(name: &str, expected_classes: usize) {
         assert!(decisions[0].promote_score.is_some());
         assert!(decisions[0].promote_threshold.is_some());
     }
+}
+
+fn assert_distributed_equivalence(
+    executor: &mut NtdbExecutor,
+    model: &str,
+    text: &str,
+    operating_point: NtdbOperatingPoint,
+) {
+    let local = executor
+        .score_models([model], text, operating_point)
+        .unwrap();
+    let chunks = executor.prepare_chunks(text).unwrap();
+    let split_at = chunks.len().div_ceil(2);
+    let mut batches = Vec::new();
+    for batch in [&chunks[..split_at], &chunks[split_at..]] {
+        if batch.is_empty() {
+            continue;
+        }
+        let mut inferred = executor
+            .infer_prepared_chunks_for_models([model], batch, chunks.len(), operating_point)
+            .unwrap();
+        if batches.is_empty() {
+            batches.push(inferred.remove(0));
+        } else {
+            batches[0].chunks.extend(inferred.remove(0).chunks);
+        }
+    }
+    batches[0].chunks.reverse();
+    let distributed = executor
+        .aggregate_chunk_inferences(&batches, operating_point)
+        .unwrap();
+    assert_eq!(local, distributed);
 }
 
 #[test]
@@ -80,6 +136,12 @@ fn injection_curl_text_uses_utility_promote_for_a_short_document() {
     assert!(
         requested_best_promote.route_to_l3,
         "the short contextual injection must be promoted to L3"
+    );
+    assert_distributed_equivalence(
+        &mut executor,
+        "injection_current",
+        text,
+        NtdbOperatingPoint::ArkApiShortInjectionUtility,
     );
 }
 

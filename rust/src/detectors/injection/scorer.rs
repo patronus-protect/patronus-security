@@ -6,7 +6,7 @@ use serde::Deserialize;
 
 use super::candidate::L1Candidate;
 
-const SCORER_JSON: &str = include_str!("rules/l1_scorer_0_1_6.json");
+const SCORER_JSON: &str = include_str!("rules/l1_scorer_0_1_7.json");
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct L1ScorerConfig {
@@ -150,26 +150,35 @@ fn score_feature_values(config: &L1ScorerConfig, values: &[f64]) -> f64 {
 }
 
 fn supported_feature(name: &str) -> bool {
-    matches!(
-        name,
-        "critical_rule_count"
-            | "high_rule_count"
-            | "medium_rule_count"
-            | "low_rule_count"
-            | "rule_match_count"
-            | "structural_feature_count"
-            | "family_count"
-            | "producer_count"
-            | "source_derived_rule_count"
-            | "has_rule_and_structural"
-            | "span_length_log1p"
-            | "exact_rule_count"
-            | "clause_window_rule_count"
-            | "audited_evidence_rule_count"
-    )
+    name.starts_with("rule:ark.injection.")
+        || matches!(
+            name,
+            "critical_rule_count"
+                | "high_rule_count"
+                | "medium_rule_count"
+                | "low_rule_count"
+                | "rule_match_count"
+                | "structural_feature_count"
+                | "family_count"
+                | "producer_count"
+                | "source_derived_rule_count"
+                | "has_rule_and_structural"
+                | "span_length_log1p"
+                | "exact_rule_count"
+                | "clause_window_rule_count"
+                | "audited_evidence_rule_count"
+        )
 }
 
 fn feature_value(name: &str, candidate: &L1Candidate, producer_count: usize) -> f64 {
+    if let Some(rule) = name.strip_prefix("rule:") {
+        return f64::from(
+            candidate
+                .features
+                .iter()
+                .any(|feature| acceptance_eligible(feature) && feature.provenance.rule_id == rule),
+        );
+    }
     match name {
         "critical_rule_count" => severity_count(candidate, "critical"),
         "high_rule_count" => severity_count(candidate, "high"),

@@ -15,11 +15,19 @@ impl DestructiveOperationPipeline {
     }
 
     pub(crate) fn detect(&self, text: &str) -> crate::detectors::NativeDetection {
+        self.detect_prepared(&crate::threat::NativeText::new(text))
+    }
+
+    pub(crate) fn detect_prepared(
+        &self,
+        prepared: &crate::threat::NativeText<'_>,
+    ) -> crate::detectors::NativeDetection {
+        let text = prepared.text();
         crate::detectors::evidence::detection_from_matches(
             text,
             "dlp_destructive_operation",
             "destructive_operation",
-            crate::threat::native_matches("destructive_operation", text),
+            crate::threat::native_matches_prepared("destructive_operation", prepared),
         )
     }
 

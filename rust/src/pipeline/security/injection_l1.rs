@@ -36,6 +36,7 @@ pub(super) fn aggregate(
     text: &str,
     producer_results: Vec<SecurityScanResult>,
 ) -> SecurityScanResult {
+    let mut metrics = crate::diagnostics::PhaseMetricScope::new("l1_aggregation_detail", "");
     let aggregation_started = Instant::now();
     let producer_duration_ms: f64 = producer_results
         .iter()
@@ -64,6 +65,7 @@ pub(super) fn aggregate(
         .iter()
         .flat_map(candidates_from_result)
         .collect::<Vec<_>>();
+    metrics.checkpoint("read_candidates", "");
     let config = scorer_config();
     let scored = merge_candidates(text, candidates)
         .into_iter()
@@ -101,6 +103,7 @@ pub(super) fn aggregate(
         None => ("safe".to_string(), 1.0),
     };
 
+    metrics.checkpoint("merge_score_select", "");
     let mut details = HashMap::from([
         (
             "l1_candidates".to_string(),
@@ -131,6 +134,7 @@ pub(super) fn aggregate(
             serde_json::json!(candidate.candidate.candidate_id),
         );
     }
+    metrics.checkpoint("serialize_details", "");
     let duration_ms = producer_duration_ms + aggregation_started.elapsed().as_secs_f64() * 1000.0;
     let layer = LayerResult {
         level: "L1".to_string(),
@@ -175,6 +179,7 @@ pub(super) fn aggregate(
     let evidence_spans = accepted_spans(text, &scored);
     let label_scores = label_scores(&scored, selected_index, accepted);
 
+    metrics.checkpoint("decision_evidence_labels", "");
     SecurityScanResult {
         category: "injection".to_string(),
         class_name,
@@ -587,6 +592,7 @@ mod tests {
                     "source_file": null,
                     "adaptation": null,
                     "references": [],
+                    "evidence_tier": (!candidate_only).then_some("audited_high_precision"),
                     "candidate_only": candidate_only
                 }
             }]
@@ -673,10 +679,16 @@ mod tests {
         let text = "012345678901234567890123456789";
         let mut native = producer(
             "native:guardrail",
-            scored_candidate_fixture("native.guardrail", "guardrail_tamper", 0, 20, false),
+            scored_candidate_fixture(
+                "ark.injection.guardrail.tamper",
+                "guardrail_tamper",
+                0,
+                20,
+                false,
+            ),
         );
         native.evidence_spans.push(EvidenceSpan {
-            label: "native.guardrail".to_string(),
+            label: "ark.injection.guardrail.tamper".to_string(),
             text: text[0..20].to_string(),
             score: 1.0,
             start_byte: 0,
@@ -717,7 +729,7 @@ mod tests {
         assert!(mixed
             .evidence_spans
             .iter()
-            .any(|span| span.label == "native.guardrail"));
+            .any(|span| span.label == "ark.injection.guardrail.tamper"));
         assert!(!mixed
             .evidence_spans
             .iter()
@@ -729,10 +741,16 @@ mod tests {
         let text = "012345678901234567890123456789";
         let mut eligible = producer(
             "native:eligible",
-            scored_candidate_fixture("canonical.same", "instruction_leak", 5, 20, false),
+            scored_candidate_fixture(
+                "ark.injection.guardrail.tamper",
+                "guardrail_tamper",
+                5,
+                20,
+                false,
+            ),
         );
         eligible.evidence_spans.push(EvidenceSpan {
-            label: "canonical.same".to_string(),
+            label: "ark.injection.guardrail.tamper".to_string(),
             text: text[5..20].to_string(),
             score: 1.0,
             start_byte: 5,
@@ -742,10 +760,16 @@ mod tests {
         });
         let mut coverage = producer(
             "native:coverage",
-            scored_candidate_fixture("canonical.same", "instruction_leak", 0, 15, true),
+            scored_candidate_fixture(
+                "ark.injection.guardrail.tamper",
+                "guardrail_tamper",
+                0,
+                15,
+                true,
+            ),
         );
         coverage.evidence_spans.push(EvidenceSpan {
-            label: "canonical.same".to_string(),
+            label: "ark.injection.guardrail.tamper".to_string(),
             text: text[0..15].to_string(),
             score: 1.0,
             start_byte: 0,

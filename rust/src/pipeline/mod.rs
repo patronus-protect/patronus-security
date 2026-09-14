@@ -18,7 +18,8 @@ pub use l3_result::{
     l3_metadata_layer, l3_pending_layer,
 };
 pub use l3_routing::{priority_index, ttl_ms};
-pub use security::SecurityGateway;
+pub use l3_worker::DistributedL3ChunkInference;
+pub use security::{DistributedL2Pipeline, DistributedL2Plan, DistributedL3Plan, SecurityGateway};
 
 pub(crate) use l3_result::mark_decision_degraded;
 pub(crate) use l3_worker::{

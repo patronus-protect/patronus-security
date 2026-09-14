@@ -32,6 +32,8 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test -p patronus-ark
       - run: cargo test -p ark-api
+      - run: cargo test -p ark-coordinator
+      - run: cargo test -p ark-distributed-protocol
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check licenses

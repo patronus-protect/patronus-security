@@ -39,7 +39,7 @@ struct CompiledSlot {
 }
 
 #[derive(Debug)]
-struct Token {
+pub(super) struct Token {
     lower: String,
     start_byte: usize,
     end_byte: usize,
@@ -82,8 +82,12 @@ impl OrderedTokenRelation {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn find_iter(&self, text: &str) -> Vec<L1Match> {
-        let tokens = tokenize(text);
+        self.find_with_tokens(text, &tokenize(text))
+    }
+
+    pub(super) fn find_with_tokens(&self, text: &str, tokens: &[Token]) -> Vec<L1Match> {
         let mut matches = Vec::new();
         for start_index in 0..tokens.len() {
             if self.sentence_or_line_start
@@ -91,7 +95,7 @@ impl OrderedTokenRelation {
             {
                 continue;
             }
-            self.match_slots(&tokens, 0, start_index, Vec::new(), &mut matches);
+            self.match_slots(tokens, 0, start_index, Vec::new(), &mut matches);
         }
         matches.sort_by_key(|m| (m.range().start, m.range().end));
         matches.dedup_by(|a, b| a.range() == b.range());
@@ -158,7 +162,7 @@ impl OrderedTokenRelation {
     }
 }
 
-fn tokenize(text: &str) -> Vec<Token> {
+pub(super) fn tokenize(text: &str) -> Vec<Token> {
     let mut tokens = Vec::new();
     let mut start = None;
     let mut previous_end = 0;

@@ -93,8 +93,8 @@
   {
     "category": "pii",
     "rule_id": "pii_credit_card_cvv",
-    "de": "Kartenprüfnummer: 123",
-    "en": "Card verification code: 123",
+    "de": "Kartennummer: 4111 1111 1111 1111, Kartenprüfnummer: 123",
+    "en": "Card number: 4111 1111 1111 1111, card verification code: 123",
     "language_neutral": false
   },
   {

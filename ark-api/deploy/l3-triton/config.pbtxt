@@ -1,0 +1,17 @@
+name: "lion_warden_30ea449339d1075a31fcffa9199ebee4f2cfaf9a_fp16_256"
+platform: "tensorrt_plan"
+max_batch_size: 16
+version_policy { specific { versions: [1] } }
+dynamic_batching {
+  preferred_batch_size: [16]
+  max_queue_delay_microseconds: 5000
+  default_queue_policy {
+    max_queue_size: 256
+    timeout_action: REJECT
+    default_timeout_microseconds: 250000
+  }
+}
+instance_group [{ count: 1 kind: KIND_GPU gpus: [0] }]
+
+# Tensor names, dtypes and shapes are derived from the TensorRT engine.
+# The engine profile fixes sequence length at 256 and batch size at 1..16.

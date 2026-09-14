@@ -1,0 +1,38 @@
+name: patronus-ark-coordinator
+
+services:
+  coordinator:
+    image: ${COORDINATOR_IMAGE:?Use the published Coordinator image digest}
+    restart: unless-stopped
+    stop_grace_period: 310s
+    init: true
+    user: "10001:10001"
+    read_only: true
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    cpus: 2
+    mem_limit: 1g
+    memswap_limit: 1g
+    pids_limit: 128
+    tmpfs: ["/tmp:size=32m,mode=1777"]
+    environment:
+      RUST_LOG: info
+      TOKIO_WORKER_THREADS: "2"
+    ports:
+      - "${COORDINATOR_IP:?Set the private Coordinator IP}:8090:8090"
+      - "127.0.0.1:8090:8090"
+    volumes:
+      - ./config.yaml:/etc/ark-coordinator/config.yaml:ro
+      - ./redis.url:/run/ark-coordinator/redis.url:ro
+      - ./cube.token:/run/ark-coordinator/cube.token:ro
+    healthcheck:
+      test: [CMD, wget, -qO-, http://127.0.0.1:8090/readyz]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

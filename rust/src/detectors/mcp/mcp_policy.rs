@@ -360,6 +360,13 @@ impl McpPolicyPipeline {
         }
     }
 
+    pub(crate) fn detect_prepared(
+        &self,
+        prepared: &crate::threat::NativeText<'_>,
+    ) -> NativeDetection {
+        self.detect(prepared.text())
+    }
+
     pub(crate) fn detect(&self, text: &str) -> NativeDetection {
         self.scanner.detect_text(text)
     }

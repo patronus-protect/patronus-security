@@ -1,0 +1,272 @@
+{
+  "schema_version": 1,
+  "source": "ark-native",
+  "reference_revision": "704bc9544260c2f41222dc0f92982521709496ab",
+  "rules": [
+    {
+      "id": "ark.threat.remote_execution",
+      "class_name": "tool_abuse",
+      "upstream_groups": [
+        "SC2",
+        "TM2"
+      ],
+      "pattern": "\\b(?P<download>curl|wget)\\b[^\\n|;]{0,240}\\|[ \\t]{0,16}(?P<execute>bash|sh|zsh|python3?|node)\\b"
+    },
+    {
+      "id": "ark.threat.remote_execution_instruction",
+      "class_name": "tool_abuse",
+      "upstream_groups": [
+        "SC2",
+        "TM2"
+      ],
+      "pattern": "\\b(?P<download>download|fetch|lade|hole)\\b[^\\n]{0,100}?(?P<source>(?:https?://|s3://|gs://|az://)[^\\s\"\\x27<>]{1,200})[^\\n]{0,80}?\\b(?P<execute>execute|run|führe|fuehre|starte)\\b"
+    },
+    {
+      "id": "ark.threat.decoded_execution",
+      "class_name": "tool_abuse",
+      "upstream_groups": [
+        "SC3"
+      ],
+      "pattern": "\\b(?P<execute>exec|eval)\\s{0,16}\\(\\s{0,16}(?P<decode>(?:base64\\.)?b64decode|bytes\\.fromhex|marshal\\.loads|zlib\\.decompress)\\s{0,16}\\("
+    },
+    {
+      "id": "ark.threat.decoded_shell_execution",
+      "class_name": "tool_abuse",
+      "upstream_groups": [
+        "SC3",
+        "TM2"
+      ],
+      "pattern": "\\b(?P<decode>base64[ \\t]{1,16}(?:--decode|-d))[^\\n|;]{0,100}\\|[ \\t]{0,16}(?P<execute>bash|sh|zsh|python3?|node)\\b"
+    },
+    {
+      "id": "ark.threat.credential_harvesting",
+      "class_name": "secrets_access",
+      "upstream_groups": [
+        "PE3",
+        "AS1",
+        "E3"
+      ],
+      "pattern": "\\b(?P<access>(?:read|collect|harvest|dump|steal|extract|lies|lese|sammle|extrahiere|stiehl|kopiere))\\b[^\\n.!?;]{0,100}?(?P<target>(?:credentials|passwords|private keys|API keys|access tokens|Zugangsdaten|Passwörter|Passwoerter|private Schlüssel|private Schluessel|API-Schlüssel|Zugriffstoken|~?/\\.(?:aws/credentials|ssh/id_rsa|kube/config|npmrc|netrc)|/etc/shadow))"
+    },
+    {
+      "id": "ark.threat.credential_file_access",
+      "class_name": "secrets_access",
+      "upstream_groups": [
+        "PE3",
+        "AS1"
+      ],
+      "pattern": "\\b(?P<access>cat|Get-Content)\\s{1,16}(?P<target>~?/\\.(?:aws/credentials|ssh/id_(?:rsa|ed25519)|kube/config|npmrc|netrc)|/etc/shadow)\\b"
+    },
+    {
+      "id": "ark.threat.secret_exfiltration",
+      "class_name": "exfiltration_attempt",
+      "upstream_groups": [
+        "E1",
+        "E3",
+        "E5"
+      ],
+      "pattern": "\\b(?P<transfer>(?:send|upload|post|transfer|sende|lade|übertrage|uebertrage|schicke))\\b[^\\n.!?;]{0,100}?(?P<secret>(?:credentials|passwords|private keys|API keys|access tokens|Zugangsdaten|Passwörter|Passwoerter|private Schlüssel|private Schluessel|API-Schlüssel|Zugriffstoken|~?/\\.(?:aws/credentials|ssh/id_rsa|kube/config|npmrc|netrc)|/etc/shadow))[^\\n]{0,100}?(?P<sink>(?:https?://|s3://|gs://|az://)[^\\s\"\\x27<>]{1,200})"
+    },
+    {
+      "id": "ark.threat.credential_file_upload",
+      "class_name": "exfiltration_attempt",
+      "upstream_groups": [
+        "E3",
+        "E5"
+      ],
+      "pattern": "\\b(?P<transfer>aws[ \\t]{1,16}s3[ \\t]{1,16}cp|gsutil[ \\t]{1,16}cp|azcopy[ \\t]{1,16}copy)\\s{1,16}(?P<secret>~?/\\.(?:aws/credentials|ssh/id_(?:rsa|ed25519)|kube/config)|/etc/shadow)\\s{1,16}(?P<sink>(?:s3|gs|https?)://[^\\s\"\\x27]{1,200})"
+    },
+    {
+      "id": "ark.threat.environment_exfiltration",
+      "class_name": "exfiltration_attempt",
+      "upstream_groups": [
+        "E2"
+      ],
+      "pattern": "\\b(?P<source>env|printenv)\\s{0,16}\\|\\s{0,16}(?P<sink>curl)\\b[^\\n]{0,150}?(?:--data-binary|--data|-d)[ \\t]{1,16}@-"
+    },
+    {
+      "id": "ark.threat.docker_socket",
+      "class_name": "tool_abuse",
+      "upstream_groups": [
+        "PE4"
+      ],
+      "pattern": "\\b(?P<runtime>docker|podman)\\s{1,16}(?:run|create)\\b[^\\n]{0,200}?(?P<mount>(?:-v|--volume(?:=|\\s)|--mount(?:=|\\s))[^\\n]{0,100}?/var/run/docker\\.sock)"
+    },
+    {
+      "id": "ark.threat.privileged_container",
+      "class_name": "tool_abuse",
+      "upstream_groups": [
+        "PE5",
+        "TM4"
+      ],
+      "pattern": "\\b(?P<runtime>docker|podman)\\s{1,16}(?:run|create)\\b[^\\n]{0,200}?(?P<privilege>--privileged(?:=true)?\\b|--cap-add(?:=|\\s{1,16})(?:SYS_ADMIN|ALL)\\b)"
+    },
+    {
+      "id": "ark.threat.host_root_mount",
+      "class_name": "tool_abuse",
+      "upstream_groups": [
+        "PE5"
+      ],
+      "pattern": "\\b(?P<runtime>docker|podman)\\s{1,16}(?:run|create)\\b[^\\n]{0,200}?(?P<mount>(?:-v\\s{1,16}|--volume(?:=|\\s{1,16}))/:[^\\s]{1,80})"
+    },
+    {
+      "id": "ark.threat.persistence_payload",
+      "class_name": "harmful_behavior",
+      "upstream_groups": [
+        "RA2"
+      ],
+      "pattern": "\\b(?P<persistence>cron(?:tab)?|systemd|launchctl|scheduled task|geplante Aufgabe|Autostart)\\b[^\\n]{0,140}?\\b(?P<download>download|fetch|lade(?:n)?|curl|wget)\\b[^\\n]{0,100}?\\b(?P<execute>execute|run|ausführen|ausfuehren|auszuführen|starten|bash|sh)\\b"
+    },
+    {
+      "id": "ark.threat.agent_guard_removal",
+      "class_name": "harmful_behavior",
+      "upstream_groups": [
+        "RA1",
+        "AS1"
+      ],
+      "pattern": "\\b(?P<action>remove|disable|delete|entferne|deaktiviere|lösche|loesche)\\b[^\\n.!?;]{0,100}?\\b(?P<guard>safety checks|security checks|guardrails|Sicherheitsprüfungen|Sicherheitspruefungen|Schutzmechanismen)\\b[^\\n.!?;]{0,100}?(?P<target>SKILL\\.md|AGENTS\\.md|\\.claude|\\.codex|mcp\\.json)"
+    },
+    {
+      "id": "ark.threat.security_disable",
+      "class_name": "tool_abuse",
+      "upstream_groups": [
+        "TM3",
+        "SC7"
+      ],
+      "pattern": "\\b(?P<action>disable|bypass|deaktiviere|umgehe)\\b[^\\n.!?;]{0,100}?\\b(?P<guard>TLS verification|certificate verification|authentication|signature verification|sandbox|Zertifikatsprüfung|Zertifikatspruefung|Authentifizierung|Signaturprüfung|Signaturpruefung)\\b"
+    },
+    {
+      "id": "ark.threat.untrusted_deserialization",
+      "class_name": "tool_abuse",
+      "upstream_groups": [
+        "DS1",
+        "DS2",
+        "DS3",
+        "AST10"
+      ],
+      "pattern": "\\b(?P<deserialize>pickle\\.loads?|yaml\\.unsafe_load|Marshal\\.load|unserialize)\\s{0,16}\\(\\s{0,16}(?P<source>(?:request|req)\\.(?:body|data|POST|GET|params)|\\$_(?:POST|GET|REQUEST)\\b)"
+    },
+    {
+      "id": "ark.threat.untrusted_output_execution",
+      "class_name": "tool_abuse",
+      "upstream_groups": [
+        "OH1",
+        "OH2"
+      ],
+      "pattern": "\\b(?P<execute>exec|eval|os\\.system)\\s{0,16}\\(\\s{0,16}(?P<source>(?:llm|model|agent|tool)_(?:output|response)|(?:llm|model|agent|tool)\\.(?:output|response))\\b"
+    },
+    {
+      "id": "ark.threat.ssrf_metadata",
+      "class_name": "secrets_access",
+      "upstream_groups": [
+        "SSRF1"
+      ],
+      "pattern": "\\b(?P<request>requests\\.get|fetch|urllib\\.request\\.urlopen|curl|wget)\\b[ \\t(\"\\x27]{1,8}(?P<url>https?://[^\\s\"\\x27)<>]{1,240})"
+    },
+    {
+      "id": "ark.threat.session_exfiltration",
+      "class_name": "exfiltration_attempt",
+      "upstream_groups": [
+        "E4",
+        "P3"
+      ],
+      "pattern": "\\b(?P<transfer>send|upload|sende|übertrage|uebertrage)\\b[^\\n.!?;]{0,60}?\\b(?P<source>conversation history|session history|chat history|Gesprächsverlauf|Gespraechsverlauf|Chatverlauf|Sitzungsverlauf)\\b[^\\n]{0,60}?(?P<sink>https?://[^\\s\"<>]{1,200})"
+    },
+    {
+      "id": "ark.threat.environment_post",
+      "class_name": "exfiltration_attempt",
+      "upstream_groups": [
+        "E2"
+      ],
+      "pattern": "\\b(?P<transfer>requests\\.post)\\s{0,16}\\([^\\n);]{0,180}?\\b(?:json|data)\\s{0,16}=\\s{0,16}(?P<source>(?:dict\\(\\s{0,16})?os\\.environ)\\b"
+    },
+    {
+      "id": "ark.threat.agent_config_exfiltration",
+      "class_name": "exfiltration_attempt",
+      "upstream_groups": [
+        "AS1",
+        "AS2",
+        "AS3"
+      ],
+      "pattern": "\\b(?P<transfer>upload|send|sende|übertrage|uebertrage)\\b[^\\n]{0,60}?(?P<source>mcp\\.json|\\.claude/[^\\s]{1,80}|\\.codex/[^\\s]{1,80}|SKILL\\.md)[^\\n]{0,60}?(?P<sink>https?://[^\\s\"<>]{1,200})"
+    },
+    {
+      "id": "ark.threat.kubernetes_privileged_json",
+      "class_name": "tool_abuse",
+      "upstream_groups": [
+        "TM4",
+        "PE5"
+      ],
+      "pattern": "(?P<context>\"securityContext\")\\s{0,16}:\\s{0,16}\\{\\s{0,16}(?P<privilege>\"privileged\"\\s{0,16}:\\s{0,16}true)\\s{0,16}[,}]"
+    },
+    {
+      "id": "ark.threat.kubernetes_privileged_yaml",
+      "class_name": "tool_abuse",
+      "upstream_groups": [
+        "TM4",
+        "PE5"
+      ],
+      "pattern": "(?m)^[ \\t]{0,16}(?P<context>securityContext):[ \\t]{0,16}\\r?\\n[ \\t]{1,16}(?P<privilege>privileged:[ \\t]{0,16}true)\\b"
+    },
+    {
+      "id": "ark.threat.unsafe_tls_code",
+      "class_name": "tool_abuse",
+      "upstream_groups": [
+        "TM3",
+        "SC7"
+      ],
+      "pattern": "\\b(?P<request>requests\\.(?:get|post|put|delete))\\s{0,16}\\([^\\n);]{0,200}?\\b(?P<disable>verify\\s{0,16}=\\s{0,16}False)\\b"
+    },
+    {
+      "id": "ark.threat.unsafe_shell_input",
+      "class_name": "tool_abuse",
+      "upstream_groups": [
+        "TM1"
+      ],
+      "pattern": "\\b(?P<execute>subprocess\\.(?:run|call|Popen))\\s{0,16}\\(\\s{0,16}(?P<source>(?:request|req)\\.(?:body|data|args|params))[^\\n);]{0,100}?(?P<shell>shell\\s{0,16}=\\s{0,16}True)\\b"
+    },
+    {
+      "id": "ark.threat.dynamic_ssrf",
+      "class_name": "tool_abuse",
+      "upstream_groups": [
+        "SSRF3",
+        "TT"
+      ],
+      "pattern": "\\b(?P<request>requests\\.get|fetch)\\s{0,16}\\(\\s{0,16}(?P<source>(?:request|req)\\.(?:args|query|params)\\s{0,16}\\[\\s{0,16}[\"\\x27](?:url|target)[\"\\x27]\\s{0,16}\\])"
+    },
+    {
+      "id": "ark.threat.root_destruction",
+      "class_name": "harmful_behavior",
+      "upstream_groups": [
+        "TM1"
+      ],
+      "pattern": "\\b(?P<delete>rm)[ \\t]{1,16}(?P<recursive>-[rf]{2,3})[ \\t]{1,16}(?P<target>/|/etc|/home|/var)(?:[ \\t]{0,16}(?:$|[;\\n])|[ \\t]{1,16}--no-preserve-root\\b)"
+    },
+    {
+      "id": "ark.threat.unauthorized_autonomy",
+      "class_name": "tool_abuse",
+      "upstream_groups": [
+        "EA2",
+        "EA3"
+      ],
+      "pattern": "\\b(?P<action>delete|transfer|execute|lösche|loesche|übertrage|uebertrage|starte)\\b[^\\n.!?;]{0,100}?\\b(?P<consent>without (?:user )?(?:consent|approval|permission)|ohne (?:Zustimmung|Genehmigung|Erlaubnis))\\b"
+    },
+    {
+      "id": "ark.threat.harmful_intent",
+      "class_name": "harmful_behavior",
+      "upstream_groups": [
+        "P5"
+      ],
+      "pattern": "\\b(?P<action>plan|organize|plane|organisiere)\\s{1,16}(?:an? |einen? )?(?P<target>violent attack|murder|Gewaltangriff|Mord)\\b"
+    },
+    {
+      "id": "ark.threat.secret_source_transfer",
+      "class_name": "exfiltration_attempt",
+      "upstream_groups": [
+        "E3",
+        "E5"
+      ],
+      "pattern": "\\b(?P<access>read|collect|lies|lese|sammle)\\s{1,16}(?P<source>~?/\\.(?:aws/credentials|ssh/id_(?:rsa|ed25519)|kube/config)|(?:the |die )?(?:credentials|passwords|Zugangsdaten|Passwörter))\\s{1,16}(?:and|und)\\s{1,16}(?P<transfer>upload|send|sende|übertrage|uebertrage)\\s{1,16}(?:its contents|their contents|them|deren Inhalt|den Inhalt|sie)\\s{1,16}(?:to|an|nach)\\s{1,16}(?P<sink>(?:https?|s3|gs)://[^\\s\"<>]{1,200})"
+    }
+  ]
+}

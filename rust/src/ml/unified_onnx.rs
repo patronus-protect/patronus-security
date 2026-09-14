@@ -145,14 +145,14 @@ impl HeadSpec {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct UnifiedHeadOutput {
     pub class_name: String,
     pub confidence: f64,
     pub label_scores: Vec<LabelScore>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub struct UnifiedModelOutput {
     pub heads: HashMap<String, UnifiedHeadOutput>,
 }
@@ -163,6 +163,7 @@ pub(crate) struct UnifiedRawModelOutput {
 }
 
 pub struct LazyUnifiedOnnxClassifier {
+    remote: Option<super::remote_unified::RemoteUnified>,
     dir: PathBuf,
     ttl: Duration,
     loaded: Option<UnifiedOnnxClassifier>,
@@ -194,7 +195,24 @@ impl LazyUnifiedOnnxClassifier {
             .into());
         }
         validate_bundle_contract(dir)?;
+        let remote = super::remote_unified::RemoteUnified::from_env(
+            dir,
+            HEADS
+                .iter()
+                .map(|head| {
+                    (
+                        head.id,
+                        head.output,
+                        match head.kind {
+                            HeadKind::Binary => 1,
+                            _ => head.labels.len(),
+                        },
+                    )
+                })
+                .collect(),
+        )?;
         Ok(Self {
+            remote,
             dir: dir.to_path_buf(),
             ttl: l3_ttl(),
             loaded: None,
@@ -210,6 +228,9 @@ impl LazyUnifiedOnnxClassifier {
         backend: ExecutionBackend,
         options: OnnxRuntimeOptions,
     ) -> Result<UnifiedModelOutput, Box<dyn std::error::Error>> {
+        if let Some(remote) = &self.remote {
+            return self.decode_raw(&remote.infer_text(text)?);
+        }
         self.evict_expired();
         self.ensure_loaded(backend, options)?;
         let output = self
@@ -227,6 +248,13 @@ impl LazyUnifiedOnnxClassifier {
         backend: ExecutionBackend,
         options: OnnxRuntimeOptions,
     ) -> Result<Vec<UnifiedModelOutput>, Box<dyn std::error::Error>> {
+        if let Some(remote) = &self.remote {
+            return remote
+                .infer_texts(texts)?
+                .iter()
+                .map(|raw| self.decode_raw(raw))
+                .collect();
+        }
         self.evict_expired();
         self.ensure_loaded(backend, options)?;
         let outputs = self
@@ -244,6 +272,9 @@ impl LazyUnifiedOnnxClassifier {
         backend: ExecutionBackend,
         options: OnnxRuntimeOptions,
     ) -> Result<UnifiedRawModelOutput, Box<dyn std::error::Error>> {
+        if let Some(remote) = &self.remote {
+            return remote.infer(token_ids);
+        }
         self.evict_expired();
         self.ensure_loaded(backend, options)?;
         let output = self
@@ -260,6 +291,9 @@ impl LazyUnifiedOnnxClassifier {
         backend: ExecutionBackend,
         options: OnnxRuntimeOptions,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        if let Some(remote) = &self.remote {
+            return remote.warmup();
+        }
         self.ensure_loaded(backend, options)?;
         self.loaded
             .as_mut()
@@ -429,13 +463,8 @@ impl UnifiedOnnxClassifier {
             return Ok(Vec::new());
         }
         let batch = batch_token_ids.len();
-        let mut input_ids = Vec::with_capacity(batch * UNIFIED_MAX_LEN);
-        let mut attention_mask = Vec::with_capacity(batch * UNIFIED_MAX_LEN);
-        for tokens in batch_token_ids {
-            let (ids, mask, _) = self.tokenizer.inputs(tokens)?;
-            input_ids.extend(ids);
-            attention_mask.extend(mask);
-        }
+        let (input_ids, attention_mask, _) =
+            self.tokenizer.batch_inputs(batch_token_ids, true, false)?;
         let shape = [batch, UNIFIED_MAX_LEN];
         let outputs = self.session.run(ort::inputs![
             "input_ids" => Tensor::from_array((shape, input_ids))?,

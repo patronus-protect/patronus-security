@@ -20,6 +20,8 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test -p patronus-ark
       - run: cargo test -p ark-api
+      - run: cargo test -p ark-coordinator
+      - run: cargo test -p ark-distributed-protocol
       - run: python scripts/generate_docs.py --check
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
@@ -41,6 +43,7 @@ jobs:
         env:
           VIRTUAL_ENV: ${{ github.workspace }}/.venv
       - run: .venv/bin/python -m unittest discover -s python/tests
+      - run: cargo build --locked -p ark-api --bin ark-api-entrypoint
       - run: .venv/bin/python -m pytest scripts/tests -q
 
   native-throughput:

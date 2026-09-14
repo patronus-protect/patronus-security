@@ -3,6 +3,7 @@ mod config;
 mod dto;
 mod routes;
 mod state;
+mod worker_admission;
 
 use std::path::PathBuf;
 
@@ -33,6 +34,7 @@ struct Args {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
+        .json()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
@@ -84,7 +86,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let state = AppState::new(config, gateway);
 
     let protected = Router::new()
-        .route("/v1/scan", post(routes::scan::submit_scan))
+        .route(
+            "/internal/v1/distributed/batches",
+            post(routes::distributed::infer_batch).layer(middleware::from_fn_with_state(
+                state.clone(),
+                worker_admission::track_submission,
+            )),
+        )
+        .route(
+            "/v1/scan",
+            post(routes::scan::submit_scan).layer(middleware::from_fn_with_state(
+                state.clone(),
+                worker_admission::track_submission,
+            )),
+        )
+        .route(
+            "/v1/scan/sync",
+            post(routes::scan::submit_scan_sync).layer(middleware::from_fn_with_state(
+                state.clone(),
+                worker_admission::track_submission,
+            )),
+        )
+        .route("/internal/status", get(routes::health::worker_status))
+        .route("/internal/recover", post(routes::health::recover_worker))
         .route(
             "/v1/scan/:request_id/events",
             get(routes::scan::scan_events),

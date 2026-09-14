@@ -1,0 +1,3227 @@
+[
+  {
+    "id": "injection.io_override",
+    "description": "Verwerfen, Ignorieren oder Überschreiben bestehender Anweisungen",
+    "en": [
+      "ignore",
+      "disregard",
+      "forget",
+      "abandon",
+      "override",
+      "replace",
+      "supersede",
+      "do not follow",
+      "stop enforcing",
+      "discard",
+      "pay no attention to",
+      "disobey",
+      "reset",
+      "superseded",
+      "instead of",
+      "higher priority",
+      "bypass"
+    ],
+    "de": [
+      "ignorier",
+      "ignoriere",
+      "ignoriert",
+      "missacht",
+      "missachte",
+      "überschreib",
+      "überschreibe",
+      "ueberschreib",
+      "ueberschreibe",
+      "verwerf",
+      "verwerfe",
+      "vergiss",
+      "vergess",
+      "vergesse",
+      "vergessen",
+      "verwirf",
+      "übergeh",
+      "übergehe",
+      "uebergeh",
+      "uebergehe",
+      "ersetze",
+      "folge nicht",
+      "befolge nicht",
+      "beachte nicht",
+      "außer acht lassen",
+      "ausser acht lassen",
+      "nicht beachten",
+      "missachten",
+      "zurücksetzen",
+      "setze zurück",
+      "ersetzt die bisherigen",
+      "anstelle von",
+      "höhere Priorität",
+      "hat Vorrang",
+      "umgehe"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs",
+      "rust/src/detectors/injection/rules/source_derived_p0_0_1_6.json",
+      "rust/src/detectors/injection/rules/source_derived_coverage_0_1_6.json",
+      "rust/src/detectors/injection/rules/prompt_armor_canonical_lexicons_0_1_6.json"
+    ]
+  },
+  {
+    "id": "injection.io_prior",
+    "description": "Bezug auf frühere oder ursprüngliche Anweisungen",
+    "en": [
+      "previous",
+      "prior",
+      "above",
+      "earlier",
+      "preceding",
+      "original",
+      "last",
+      "former",
+      "preexisting",
+      "pre-existing"
+    ],
+    "de": [
+      "vorherig",
+      "vorherige",
+      "vorherigen",
+      "bisherig",
+      "bisherige",
+      "bisherigen",
+      "bisher",
+      "vorig",
+      "vorige",
+      "vorigen",
+      "alt",
+      "alte",
+      "alten",
+      "altes",
+      "früher",
+      "frueher",
+      "zuvor",
+      "obig",
+      "obige",
+      "obenstehend",
+      "obenstehende",
+      "ursprünglich",
+      "urspruenglich",
+      "letzte",
+      "vorangegangen",
+      "vorausgegangen",
+      "vorstehend",
+      "anfänglich",
+      "anfaenglich"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs",
+      "rust/src/detectors/injection/rules/prompt_armor_95e532e.json"
+    ]
+  },
+  {
+    "id": "injection.io_target",
+    "description": "Anweisungen, Regeln und Vorgaben als Ziel eines Eingriffs",
+    "en": [
+      "instructions",
+      "instruction",
+      "rules",
+      "guidelines",
+      "directives",
+      "constraints",
+      "policies",
+      "guardrails",
+      "prompt",
+      "rule",
+      "guideline",
+      "directive",
+      "constraint",
+      "policy",
+      "guardrail",
+      "direction",
+      "training",
+      "context",
+      "setting",
+      "configuration",
+      "directions",
+      "mandate",
+      "stipulation",
+      "security policy",
+      "security policies",
+      "system instructions"
+    ],
+    "de": [
+      "anweisung",
+      "anweisungen",
+      "instruktion",
+      "instruktionen",
+      "regeln",
+      "regel",
+      "richtlinie",
+      "richtlinien",
+      "vorgabe",
+      "vorgaben",
+      "direktive",
+      "direktiven",
+      "einschränkung",
+      "einschränkungen",
+      "einschraenkung",
+      "einschraenkungen",
+      "systemanweisung",
+      "systemanweisungen",
+      "systemprompt",
+      "system-prompt",
+      "developer-anweisung",
+      "entwickleranweisung",
+      "entwickleranweisungen",
+      "befehl",
+      "kontext",
+      "beschränkung",
+      "beschraenkung",
+      "leitplanke",
+      "grenze",
+      "einstellung",
+      "konfiguration",
+      "weisung",
+      "vorschrift",
+      "maßgabe",
+      "massgabe",
+      "verhaltensregel",
+      "Sicherheitsrichtlinie"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs",
+      "rust/src/detectors/injection/rules/source_derived_coverage_0_1_6.json",
+      "rust/src/detectors/injection/rules/prompt_armor_95e532e.json"
+    ]
+  },
+  {
+    "id": "injection.io_invalidate_action",
+    "description": "Umdeuten oder Herabstufen einer Vorgabe",
+    "en": [
+      "treat",
+      "consider",
+      "regard",
+      "reinterpret",
+      "downgrade",
+      "reclassify",
+      "reframe"
+    ],
+    "de": [
+      "behandle",
+      "betrachte",
+      "werte",
+      "umdeuten",
+      "herabstufen",
+      "uminterpretieren",
+      "umdeute",
+      "herabstufe"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.io_obsolete_result",
+    "description": "Als ungültig oder aufgehoben dargestellte Vorgaben",
+    "en": [
+      "obsolete",
+      "void",
+      "invalid",
+      "superseded",
+      "overridden",
+      "cancelled",
+      "null and void",
+      "revoked",
+      "annulled"
+    ],
+    "de": [
+      "ungültig",
+      "ungueltig",
+      "veraltet",
+      "nichtig",
+      "überholt",
+      "ueberholt",
+      "aufgehoben",
+      "außer kraft",
+      "ausser kraft",
+      "hinfällig",
+      "hinfaellig",
+      "widerrufen"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.io_downgrade_result",
+    "description": "Als unverbindlich oder historisch herabgestufte Vorgaben",
+    "en": [
+      "historical",
+      "outdated",
+      "deprecated",
+      "optional",
+      "non-binding",
+      "advisory",
+      "nonbinding",
+      "merely advisory"
+    ],
+    "de": [
+      "historisch",
+      "veraltet",
+      "überholt",
+      "ueberholt",
+      "optional",
+      "unverbindlich",
+      "beratend",
+      "nicht bindend",
+      "nicht verbindlich",
+      "unmaßgeblich",
+      "unmassgeblich"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.io_set_aside",
+    "description": "Beiseitelegen vorhandener Vorgaben",
+    "en": [
+      "set aside",
+      "put aside",
+      "cast aside",
+      "push aside",
+      "throw away",
+      "aside",
+      "lay aside",
+      "disregard"
+    ],
+    "de": [
+      "beiseite",
+      "beiseitelegen",
+      "beiseitelassen",
+      "beiseite lassen",
+      "zur seite legen"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.io_time",
+    "description": "Beginn einer beanspruchten Verhaltensänderung",
+    "en": [
+      "from now on",
+      "henceforth",
+      "going forward",
+      "starting now"
+    ],
+    "de": [
+      "ab jetzt",
+      "von nun an",
+      "von jetzt an",
+      "ab sofort",
+      "künftig",
+      "kuenftig",
+      "fortan",
+      "ab diesem zeitpunkt"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.io_new",
+    "description": "Neue oder überarbeitete Vorgaben",
+    "en": [
+      "new",
+      "updated",
+      "revised",
+      "next",
+      "replacement",
+      "amended"
+    ],
+    "de": [
+      "neue",
+      "aktualisierte",
+      "überarbeitete",
+      "nächste",
+      "naechste",
+      "aktualisiert",
+      "überarbeitet",
+      "ueberarbeitet",
+      "erneuert",
+      "abgeändert",
+      "abgeaendert",
+      "revidiert"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs",
+      "rust/src/detectors/injection/rules/prompt_armor_95e532e.json"
+    ]
+  },
+  {
+    "id": "injection.io_prioritize",
+    "description": "Priorisieren oder Umlenken der Aufmerksamkeit",
+    "en": [
+      "prioritize",
+      "prioritise",
+      "focus",
+      "give precedence to",
+      "give priority to"
+    ],
+    "de": [
+      "priorisiere",
+      "konzentrier",
+      "fokussier",
+      "bevorzuge",
+      "vorrang geben",
+      "vorrang einräumen",
+      "vorrang einraeumen"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs",
+      "rust/src/detectors/injection/rules/prompt_armor_95e532e.json"
+    ]
+  },
+  {
+    "id": "injection.io_priority_object",
+    "description": "Eingaben und Nachrichten als beanspruchte Priorität",
+    "en": [
+      "request",
+      "message",
+      "input",
+      "query",
+      "user submission"
+    ],
+    "de": [
+      "anfrage",
+      "nachricht",
+      "eingabe",
+      "ersuchen",
+      "mitteilung",
+      "nutzeranfrage"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.io_goal",
+    "description": "Verhaltensziel oder Auftrag",
+    "en": [
+      "objective",
+      "purpose",
+      "task",
+      "goal",
+      "aim",
+      "mission",
+      "assignment"
+    ],
+    "de": [
+      "auftrag",
+      "ziel",
+      "aufgabe",
+      "zweck",
+      "zielsetzung",
+      "zielvorgabe",
+      "arbeitsauftrag"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.jf_unrestricted_role",
+    "description": "Als unbeschränkt, ungefiltert oder bösartig beschriebene Rolle",
+    "en": [
+      "evil",
+      "unrestricted",
+      "jailbroken",
+      "unfiltered",
+      "uncensored",
+      "unlimited",
+      "unconstrained",
+      "unrestrained",
+      "unbounded"
+    ],
+    "de": [
+      "uneingeschränkt",
+      "frei",
+      "böse",
+      "unkontrolliert",
+      "ungefiltert",
+      "uneingeschraenkt",
+      "boese",
+      "unzensiert",
+      "unbeschränkt",
+      "unbeschraenkt",
+      "schrankenlos",
+      "hemmungslos",
+      "grenzenlos"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.jf_no_limit",
+    "description": "Ausdrücklicher Anspruch auf fehlende Einschränkungen",
+    "en": [
+      "no restrictions",
+      "no limits",
+      "do anything",
+      "without restrictions",
+      "free of rules",
+      "without constraints",
+      "without limitations",
+      "no constraints",
+      "no boundaries"
+    ],
+    "de": [
+      "keine einschränkungen",
+      "keine einschraenkungen",
+      "ohne einschränkungen",
+      "ohne einschraenkungen",
+      "frei von regeln",
+      "alles tun",
+      "ohne beschränkungen",
+      "ohne beschraenkungen",
+      "ohne grenzen",
+      "keinerlei einschränkungen",
+      "keinerlei einschraenkungen"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.jf_pretend",
+    "description": "Vortäuschen oder Vorstellen einer anderen Rolle",
+    "en": [
+      "pretend",
+      "act as",
+      "act as if",
+      "imagine",
+      "make believe",
+      "roleplay as",
+      "impersonate"
+    ],
+    "de": [
+      "tue so",
+      "tu so",
+      "stell dir vor",
+      "stelle dir vor",
+      "agiere als",
+      "verhalte dich wie",
+      "gib dich aus als",
+      "spiele die rolle",
+      "versetze dich in"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.jf_role",
+    "description": "Assistenten- und Modellrollen",
+    "en": [
+      "assistant",
+      "chatbot",
+      "model",
+      "artificial intelligence",
+      "conversational agent",
+      "language model"
+    ],
+    "de": [
+      "assistent",
+      "assistenz",
+      "modell",
+      "künstliche intelligenz",
+      "kuenstliche intelligenz",
+      "sprachmodell",
+      "dialogassistent"
+    ],
+    "shared": [
+      "ai",
+      "ki",
+      "bot"
+    ],
+    "sources": [
+      "rust/src/threat/patterns.rs",
+      "rust/src/detectors/injection/rules/prompt_armor_95e532e.json",
+      "rust/src/detectors/injection/rules/source_derived_coverage_0_1_6.json"
+    ]
+  },
+  {
+    "id": "injection.jf_game",
+    "description": "Spielrahmen für verändertes Verhalten",
+    "en": [
+      "let's play a game where you",
+      "lets play a game where you",
+      "let's play a game",
+      "let us play a game",
+      "lets play a game",
+      "play a game",
+      "let us play"
+    ],
+    "de": [
+      "lass uns ein spiel spielen",
+      "spielen wir ein spiel"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.jf_hypothetical",
+    "description": "Hypothetischer oder fiktiver Rahmen",
+    "en": [
+      "hypothetical",
+      "fictional",
+      "imaginary",
+      "in theory",
+      "fictitious",
+      "make-believe",
+      "hypothetically"
+    ],
+    "de": [
+      "hypothetisch",
+      "fiktiv",
+      "imaginär",
+      "imaginaer",
+      "theoretisch",
+      "erdacht",
+      "erfunden",
+      "rein gedanklich",
+      "rein theoretisch"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.jf_character",
+    "description": "Figuren und Szenarien als Rollenrahmen",
+    "en": [
+      "character",
+      "persona",
+      "scenario",
+      "alter ego",
+      "role"
+    ],
+    "de": [
+      "figur",
+      "charakter",
+      "person",
+      "szenario",
+      "rolle",
+      "spielfigur",
+      "kunstfigur"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.jf_explicit_mode",
+    "description": "Feste Bezeichnungen aktivierter Jailbreak-Modi",
+    "en": [
+      "jailbreak enabled",
+      "jailbreak activated",
+      "jailbreak on"
+    ],
+    "de": [
+      "jailbreak aktiviert",
+      "jailbreak eingeschaltet"
+    ],
+    "shared": [
+      "{godmode",
+      "!omni",
+      "reset_cortex",
+      "libertas factor"
+    ],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.jf_named_persona",
+    "description": "Feste Namen bekannter Jailbreak-Personas",
+    "en": [],
+    "de": [],
+    "shared": [
+      "dan",
+      "stan",
+      "dude",
+      "aim",
+      "kevin",
+      "mongo",
+      "oppo"
+    ],
+    "sources": [
+      "rust/src/threat/patterns.rs",
+      "rust/src/detectors/injection/rules/prompt_armor_95e532e.json",
+      "rust/src/detectors/injection/rules/prompt_armor_canonical_lexicons_0_1_6.json"
+    ]
+  },
+  {
+    "id": "injection.mode_activation",
+    "description": "Aktivieren oder Wechseln eines Modus",
+    "en": [
+      "enable",
+      "activate",
+      "enter",
+      "switch to",
+      "switch on",
+      "turn on"
+    ],
+    "de": [
+      "aktiviere",
+      "aktivier",
+      "wechsle in",
+      "schalte ein",
+      "einschalten",
+      "aktivieren",
+      "wechsle zu"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs",
+      "rust/src/detectors/injection/rules/prompt_armor_95e532e.json"
+    ]
+  },
+  {
+    "id": "injection.privileged_mode",
+    "description": "Entwickler-, Debug- und privilegierte Betriebsmodi",
+    "en": [
+      "developer mode",
+      "dev mode",
+      "debug mode",
+      "admin mode",
+      "god mode",
+      "root mode",
+      "unrestricted mode",
+      "administrator mode",
+      "superuser mode"
+    ],
+    "de": [
+      "entwicklermodus",
+      "entwickler-modus",
+      "entwickler modus",
+      "uneingeschränkter modus",
+      "uneingeschraenkter modus",
+      "administratormodus",
+      "debugmodus",
+      "debug-modus",
+      "root-modus"
+    ],
+    "shared": [
+      "sudo"
+    ],
+    "sources": [
+      "rust/src/threat/patterns.rs",
+      "rust/src/detectors/injection/rules/prompt_armor_95e532e.json"
+    ]
+  },
+  {
+    "id": "injection.ci_secret",
+    "description": "Heimliche Ausführung ohne Wissen des Benutzers",
+    "en": [
+      "secretly",
+      "silently",
+      "covertly",
+      "quietly",
+      "without the user knowing",
+      "without the user noticing",
+      "clandestinely",
+      "surreptitiously",
+      "unbeknownst to the user"
+    ],
+    "de": [
+      "heimlich",
+      "verdeckt",
+      "unbemerkt",
+      "ohne den benutzer zu benachrichtigen",
+      "ohne den benutzer zu informieren",
+      "ohne wissen des benutzers",
+      "ohne dass der benutzer es bemerkt",
+      "insgeheim",
+      "im verborgenen",
+      "hinter dem rücken des benutzers",
+      "hinter dem ruecken des benutzers"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.ci_direct",
+    "description": "Ausdrückliche Verdeckung von Anweisungen gegenüber dem Benutzer",
+    "en": [
+      "do not tell this to the user",
+      "do not reveal this to the user",
+      "hidden instruction",
+      "invisible to the user",
+      "the user cannot see this",
+      "the user must not see this",
+      "conceal this from the user",
+      "keep this from the user"
+    ],
+    "de": [
+      "sag dem benutzer nichts davon",
+      "erzähl dem benutzer nicht",
+      "versteckte anweisung",
+      "der benutzer darf das nicht sehen",
+      "der benutzer soll das nicht wissen",
+      "erzaehl dem benutzer nicht",
+      "unsichtbar für den benutzer",
+      "unsichtbar fuer den benutzer",
+      "verheimliche dies dem benutzer",
+      "verschweige dies dem benutzer",
+      "verborgene anweisung"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.execution_action",
+    "description": "Ausführen oder Starten von Anweisungen und Programmen",
+    "en": [
+      "execute",
+      "run",
+      "executed",
+      "launch",
+      "start",
+      "carry out",
+      "execution",
+      "apply",
+      "schedule",
+      "submit"
+    ],
+    "de": [
+      "ausführen",
+      "ausfuehren",
+      "führe",
+      "fuehre",
+      "starte",
+      "starten",
+      "ausgeführt",
+      "ausgefuehrt",
+      "vollziehe",
+      "durchführen",
+      "durchfuehren",
+      "ausführen lassen",
+      "ausfuehren lassen",
+      "Ausführung",
+      "anwenden",
+      "einplanen",
+      "einreichen"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.tool_invocation_action",
+    "description": "Aufrufen oder Verwenden eines Werkzeugs",
+    "en": [
+      "call",
+      "invoke",
+      "use",
+      "utilize",
+      "utilise",
+      "make use of"
+    ],
+    "de": [
+      "ruf",
+      "aufrufen",
+      "verwende",
+      "verwenden",
+      "nutze",
+      "nutzen",
+      "benutze",
+      "benutzen",
+      "aufruf"
+    ],
+    "shared": [
+      "send_email"
+    ],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.transfer_action",
+    "description": "Senden, Hochladen oder Weitergeben von Daten",
+    "en": [
+      "send",
+      "upload",
+      "post",
+      "email",
+      "forward",
+      "share",
+      "transmit",
+      "transfer",
+      "submit",
+      "dispatch",
+      "relay",
+      "deliver",
+      "distribute",
+      "exports",
+      "published",
+      "recipients",
+      "sharing",
+      "uploaded",
+      "on cc",
+      "public link"
+    ],
+    "de": [
+      "sende",
+      "senden",
+      "schicke",
+      "hochladen",
+      "lade hoch",
+      "maile",
+      "übermittle",
+      "uebermittle",
+      "übertrage",
+      "uebertrage",
+      "teile",
+      "veröffentliche",
+      "veroeffentliche",
+      "versende",
+      "versenden",
+      "übermitteln",
+      "uebermitteln",
+      "weitergeben",
+      "weiterleiten",
+      "weitergeleitet",
+      "veröffentlicht",
+      "Empfänger",
+      "hochgeladen",
+      "öffentlicher Link",
+      "in Kopie"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs",
+      "rust/src/detectors/injection/rules/prompt_armor_95e532e.json",
+      "rust/src/detectors/injection/rules/source_derived_p0_0_1_6.json",
+      "rust/src/detectors/injection/rules/source_derived_coverage_0_1_6.json"
+    ]
+  },
+  {
+    "id": "injection.retrieval_action",
+    "description": "Lesen, Abrufen oder Sammeln von Daten",
+    "en": [
+      "read",
+      "find",
+      "fetch",
+      "download",
+      "retrieve",
+      "collect",
+      "extract",
+      "open",
+      "copy",
+      "gather",
+      "obtain",
+      "look up"
+    ],
+    "de": [
+      "lies",
+      "lese",
+      "finde",
+      "hole",
+      "lade",
+      "sammle",
+      "extrahiere",
+      "öffne",
+      "oeffne",
+      "kopiere",
+      "gelesen",
+      "gefunden",
+      "abgerufen",
+      "gesammelt",
+      "abrufen",
+      "beschaffe",
+      "beschaffen",
+      "auslesen",
+      "zusammentragen"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs",
+      "rust/src/detectors/injection/rules/source_derived_p0_0_1_6.json"
+    ]
+  },
+  {
+    "id": "injection.disclosure_action",
+    "description": "Offenlegen, Ausgeben oder Wiederholen von Inhalten",
+    "en": [
+      "show",
+      "reveal",
+      "print",
+      "display",
+      "dump",
+      "expose",
+      "leak",
+      "repeat",
+      "output",
+      "disclose",
+      "divulge",
+      "tell",
+      "provide",
+      "paste",
+      "echo",
+      "answer",
+      "respond",
+      "reply",
+      "write",
+      "produce",
+      "continue with",
+      "make known",
+      "give away",
+      "send"
+    ],
+    "de": [
+      "wiederhole",
+      "zeig",
+      "gib aus",
+      "nenne",
+      "enthülle",
+      "enthuelle",
+      "offenbare",
+      "offenlege",
+      "drucke",
+      "sage",
+      "ausgegeben",
+      "gezeigt",
+      "gedruckt",
+      "beantworte",
+      "antworte",
+      "schreibe",
+      "preisgeben",
+      "gib preis",
+      "verrate",
+      "verraten",
+      "offenlegen",
+      "bekanntgeben",
+      "sende"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs",
+      "rust/src/detectors/injection/rules/prompt_armor_95e532e.json",
+      "rust/src/detectors/injection/rules/source_derived_coverage_0_1_6.json"
+    ]
+  },
+  {
+    "id": "injection.exfiltration_action",
+    "description": "Explizites Ausschleusen geheimer Daten",
+    "en": [
+      "exfiltrate",
+      "exfiltration",
+      "siphon off"
+    ],
+    "de": [
+      "exfiltrier",
+      "exfiltration",
+      "ausschleusen",
+      "schleuse aus",
+      "daten abziehen"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.compliance_action",
+    "description": "Befolgen oder Gehorchen einer Anweisung",
+    "en": [
+      "follow",
+      "obey",
+      "comply",
+      "adhere to",
+      "abide by"
+    ],
+    "de": [
+      "befolge",
+      "folge",
+      "gehorche",
+      "beachte",
+      "halte dich an",
+      "befolgen",
+      "gehorchen",
+      "nachkommen"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs",
+      "rust/src/detectors/injection/rules/prompt_armor_95e532e.json",
+      "rust/src/detectors/injection/rules/source_derived_p0_0_1_6.json"
+    ]
+  },
+  {
+    "id": "injection.bypass_action",
+    "description": "Umgehen, Deaktivieren oder Entfernen eines Schutzes",
+    "en": [
+      "disable",
+      "bypass",
+      "turn off",
+      "skip",
+      "remove",
+      "disabled",
+      "bypassed",
+      "turned off",
+      "skipped",
+      "removed",
+      "circumvent",
+      "deactivate",
+      "disengage",
+      "do not inspect",
+      "do not reconcile",
+      "no further review",
+      "without asking",
+      "without further review",
+      "without approval",
+      "skip verification",
+      "skip the review"
+    ],
+    "de": [
+      "deaktiviere",
+      "umgehe",
+      "umgehen",
+      "schalte aus",
+      "überspringe",
+      "ueberspringe",
+      "entferne",
+      "deaktiviert",
+      "umgangen",
+      "ausgeschaltet",
+      "übersprungen",
+      "uebersprungen",
+      "entfernt",
+      "außer kraft setzen",
+      "ausser kraft setzen",
+      "abschalten",
+      "aushebeln",
+      "ausschalten",
+      "nicht prüfen",
+      "nicht abgleichen",
+      "keine weitere Prüfung",
+      "ohne Rückfrage",
+      "ohne weitere Prüfung",
+      "ohne Genehmigung",
+      "Prüfung überspringen",
+      "überspringe die Prüfung"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.removal_action",
+    "description": "Löschen oder Vernichten von Regeln, Daten und Spuren",
+    "en": [
+      "delete",
+      "erase",
+      "wipe",
+      "clear",
+      "destroy",
+      "purge",
+      "obliterate",
+      "expunge"
+    ],
+    "de": [
+      "lösche",
+      "loesche",
+      "vernichte",
+      "bereinige",
+      "leere",
+      "tilge",
+      "tilgen",
+      "auslöschen",
+      "ausloeschen",
+      "beseitige"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs",
+      "rust/src/detectors/injection/rules/skillspector_0_1_7.json"
+    ]
+  },
+  {
+    "id": "injection.om_force",
+    "description": "Erzwingen einer vorgegebenen ersten Antwort",
+    "en": [
+      "respond with",
+      "first output",
+      "first write",
+      "first print",
+      "first say",
+      "begin with",
+      "start your response with"
+    ],
+    "de": [
+      "antworte mit",
+      "schreibe zuerst",
+      "drucke zuerst",
+      "sage zuerst",
+      "beginne mit",
+      "fange mit",
+      "gib zuerst aus"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.om_marker",
+    "description": "Vorgegebene Filter- und Ablehnungsmarker",
+    "en": [
+      "filtered",
+      "error",
+      "blocked",
+      "refused",
+      "declined",
+      "censored",
+      "rejected",
+      "denied"
+    ],
+    "de": [
+      "gefiltert",
+      "fehler",
+      "blockiert",
+      "abgelehnt",
+      "zensiert",
+      "verweigert",
+      "gesperrt",
+      "zurückgewiesen",
+      "zurueckgewiesen"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.om_sequence",
+    "description": "Anordnung einer nachfolgenden Ausgabe",
+    "en": [
+      "then",
+      "followed by",
+      "and then",
+      "after that",
+      "after which",
+      "subsequently",
+      "thereafter"
+    ],
+    "de": [
+      "danach",
+      "anschließend",
+      "anschliessend",
+      "und dann",
+      "daraufhin",
+      "im anschluss",
+      "hinterher"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.dual_response",
+    "description": "Geteilte oder doppelte Antworten und Persönlichkeiten",
+    "en": [
+      "two responses",
+      "two answers",
+      "two outputs",
+      "dual response",
+      "dual answer",
+      "dual output",
+      "split response",
+      "split personality",
+      "double response",
+      "double answer"
+    ],
+    "de": [
+      "zwei antworten",
+      "zwei ausgaben",
+      "geteilte antwort",
+      "geteilte ausgabe",
+      "geteilte persönlichkeit",
+      "geteilte persoenlichkeit",
+      "doppelte antwort",
+      "zweifache antwort",
+      "zweigeteilte antwort"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/injection/rules/prompt_armor_95e532e.json",
+      "rust/src/detectors/injection/rules/prompt_armor_canonical_lexicons_0_1_6.json"
+    ]
+  },
+  {
+    "id": "injection.instruction_boundary",
+    "description": "Feste Modell- und Rollentrenner",
+    "en": [],
+    "de": [],
+    "shared": [
+      "<|endoftext|>",
+      "<|im_start|>",
+      "<|im_end|>",
+      "<|system|>",
+      "<|end_header_id|>",
+      "<|begin_of_text|>",
+      "[inst]",
+      "[/inst]",
+      "<|user|>",
+      "<|assistant|>",
+      "<<sys>>",
+      "<</sys>>",
+      "<|startoftext|>",
+      "[system]",
+      "[/system]"
+    ],
+    "sources": [
+      "rust/src/threat/patterns.rs",
+      "rust/src/detectors/injection/rules/prompt_armor_95e532e.json",
+      "rust/src/detectors/injection/rules/prompt_armor_canonical_lexicons_0_1_6.json"
+    ]
+  },
+  {
+    "id": "injection.boundary_termination",
+    "description": "Beenden eines behaupteten Anweisungsblocks",
+    "en": [
+      "end",
+      "stop",
+      "terminate",
+      "exit",
+      "finish",
+      "close",
+      "conclude"
+    ],
+    "de": [
+      "ende",
+      "stopp",
+      "abschluss",
+      "beende",
+      "beenden",
+      "abschließen",
+      "abschliessen",
+      "schließen",
+      "schliessen"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/injection/rules/prompt_armor_95e532e.json",
+      "rust/src/detectors/injection/rules/source_derived_coverage_0_1_6.json"
+    ]
+  },
+  {
+    "id": "injection.authority_role",
+    "description": "Beanspruchte Autorität und privilegierte Rollen",
+    "en": [
+      "developer",
+      "creator",
+      "owner",
+      "manager",
+      "supervisor",
+      "superuser",
+      "elevated",
+      "security",
+      "maintenance",
+      "system administrator",
+      "operator",
+      "proprietor",
+      "delegated authority",
+      "trusted source",
+      "team approved",
+      "standing policy",
+      "standing protocol"
+    ],
+    "de": [
+      "entwickler",
+      "ersteller",
+      "besitzer",
+      "vorgesetzter",
+      "geschäftsführer",
+      "geschaeftsfuehrer",
+      "systemwarnung",
+      "administratorbefehl",
+      "systemverwalter",
+      "betreiber",
+      "inhaber",
+      "systemadministrator",
+      "delegierte Befugnis",
+      "vertrauenswürdige Quelle",
+      "vom Team genehmigt",
+      "geltende Richtlinie",
+      "verbindliches Protokoll"
+    ],
+    "shared": [
+      "system",
+      "admin",
+      "administrator",
+      "root",
+      "kernel",
+      "daemon",
+      "ceo",
+      "cto"
+    ],
+    "sources": [
+      "rust/src/threat/patterns.rs",
+      "rust/src/detectors/injection/rules/prompt_armor_95e532e.json",
+      "rust/src/detectors/injection/rules/source_derived_p0_0_1_6.json",
+      "rust/src/detectors/injection/rules/source_derived_coverage_0_1_6.json"
+    ]
+  },
+  {
+    "id": "injection.authority_access",
+    "description": "Beanspruchter Zugriff oder Berechtigungen",
+    "en": [
+      "access",
+      "privilege",
+      "permission",
+      "rights",
+      "authorization level",
+      "access rights",
+      "entitlement"
+    ],
+    "de": [
+      "zugriff",
+      "rechte",
+      "berechtigung",
+      "zugangsrecht",
+      "zugriffsrecht",
+      "befugnis",
+      "privileg"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.authority_approval",
+    "description": "Behauptete Genehmigung, Legitimität oder Verifikation",
+    "en": [
+      "authorized",
+      "official",
+      "approved",
+      "legitimate",
+      "authorization",
+      "verified:",
+      "sanctioned",
+      "permitted",
+      "endorsed",
+      "approval",
+      "approve",
+      "approver",
+      "approving",
+      "clearance",
+      "consent",
+      "pre-cleared",
+      "sign-off",
+      "signoff"
+    ],
+    "de": [
+      "autorisiert",
+      "offiziell",
+      "genehmigt",
+      "legitim",
+      "autorisierung",
+      "verifiziert:",
+      "bewilligt",
+      "gestattet",
+      "zugelassen",
+      "bevollmächtigt",
+      "bevollmaechtigt",
+      "Genehmigung",
+      "genehmigen",
+      "Freigabe",
+      "freigegeben",
+      "freigeben",
+      "Zustimmung",
+      "zugestimmt",
+      "Einwilligung",
+      "vorab genehmigt",
+      "abgezeichnet"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs",
+      "rust/src/detectors/injection/rules/prompt_armor_95e532e.json"
+    ]
+  },
+  {
+    "id": "injection.audit_pretext",
+    "description": "Test-, Forschungs- oder Prüfrahmen als Begründung",
+    "en": [
+      "test",
+      "audit",
+      "review",
+      "assessment",
+      "educational",
+      "research",
+      "academic",
+      "internal",
+      "employee",
+      "staff",
+      "evaluation",
+      "investigation",
+      "training exercise"
+    ],
+    "de": [
+      "prüfung",
+      "pruefung",
+      "überprüfung",
+      "ueberpruefung",
+      "forschung",
+      "akademisch",
+      "bildungszweck",
+      "intern",
+      "mitarbeiter",
+      "begutachtung",
+      "untersuchung",
+      "testzweck",
+      "schulungszweck"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/injection/rules/prompt_armor_95e532e.json"
+    ]
+  },
+  {
+    "id": "injection.urgency",
+    "description": "Dringlichkeits- oder Notfallbehauptung",
+    "en": [
+      "urgent",
+      "emergency",
+      "critical",
+      "important",
+      "immediately",
+      "pressing",
+      "time-sensitive",
+      "as soon as possible"
+    ],
+    "de": [
+      "dringend",
+      "notfall",
+      "kritisch",
+      "wichtig",
+      "sofort",
+      "achtung",
+      "eilig",
+      "eilbedürftig",
+      "eilbeduerftig",
+      "unaufschiebbar",
+      "unverzüglich",
+      "unverzueglich"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs",
+      "rust/src/detectors/injection/rules/prompt_armor_95e532e.json"
+    ]
+  },
+  {
+    "id": "injection.tool_target",
+    "description": "Werkzeuge und ausführbare Schnittstellen",
+    "en": [
+      "function",
+      "command",
+      "endpoint",
+      "utility",
+      "executable command"
+    ],
+    "de": [
+      "funktion",
+      "werkzeug",
+      "kommando",
+      "befehl",
+      "endpunkt",
+      "hilfsprogramm",
+      "befehlsaufruf"
+    ],
+    "shared": [
+      "tool",
+      "api"
+    ],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.tool_output_source",
+    "description": "Werkzeugausgaben als behauptete Anweisungsquelle",
+    "en": [
+      "tool output",
+      "tool returned",
+      "tool result",
+      "result says",
+      "tool response",
+      "output from the tool"
+    ],
+    "de": [
+      "tool ausgabe",
+      "tool-ausgabe",
+      "tool antwort",
+      "tool-antwort",
+      "tool ergebnis",
+      "tool-ergebnis",
+      "werkzeugausgabe",
+      "ergebnis besagt",
+      "werkzeugantwort",
+      "werkzeugergebnis",
+      "ausgabe des werkzeugs"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.cross_tool_priority",
+    "description": "Beanspruchter Vorrang vor Benutzerwunsch oder anderem Werkzeug",
+    "en": [
+      "higher priority than the user",
+      "when another tool is requested",
+      "use another tool",
+      "take precedence over the user",
+      "override the user's tool choice"
+    ],
+    "de": [
+      "höhere priorität als der benutzer",
+      "hoehere prioritaet als der benutzer",
+      "wenn ein anderes tool angefordert wird",
+      "verwende ein anderes tool",
+      "vorrang vor dem benutzer",
+      "vorrang vor der nutzeranfrage"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.prior_agreement",
+    "description": "Behauptete frühere Zustimmung zum Umgehen von Regeln",
+    "en": [
+      "as i mentioned before",
+      "as discussed earlier",
+      "you agreed to",
+      "as previously agreed",
+      "you consented to",
+      "as we agreed"
+    ],
+    "de": [
+      "wie zuvor erwähnt",
+      "wie zuvor erwaehnt",
+      "wie bereits besprochen",
+      "du hast zugestimmt",
+      "wie vereinbart",
+      "wie zuvor vereinbart",
+      "du hast eingewilligt"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.hidden_instruction_target",
+    "description": "Verborgene oder privilegierte Anweisungen als Offenlegungsziel",
+    "en": [
+      "system prompt",
+      "system message",
+      "system instruction",
+      "developer message",
+      "developer instruction",
+      "hidden instruction",
+      "internal instruction",
+      "initial prompt",
+      "hidden prompt",
+      "secret prompt",
+      "original prompt",
+      "base prompt",
+      "internal prompt",
+      "concealed instructions"
+    ],
+    "de": [
+      "systemprompt",
+      "system-prompt",
+      "system prompt",
+      "systemanweisung",
+      "systemnachricht",
+      "entwicklernachricht",
+      "entwickleranweisung",
+      "developer-anweisung",
+      "versteckte anweisung",
+      "versteckten anweisungen",
+      "interne anweisung",
+      "ursprüngliche anweisung",
+      "urspruengliche anweisung",
+      "verborgene anweisung",
+      "geheime anweisung",
+      "interner prompt",
+      "entwicklervorgabe"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs",
+      "rust/src/detectors/injection/rules/prompt_armor_95e532e.json",
+      "rust/src/detectors/injection/rules/source_derived_coverage_0_1_6.json"
+    ]
+  },
+  {
+    "id": "injection.secret_material",
+    "description": "Bezeichnungen von Geheimnissen und Zugangsdaten ohne konkrete Werte",
+    "en": [
+      "api key",
+      "access token",
+      "auth token",
+      "bearer token",
+      "refresh token",
+      "secret token",
+      "private key",
+      "password",
+      "credential",
+      "secret",
+      "login details",
+      "authentication credentials",
+      "passphrase",
+      "secrets",
+      "credentials",
+      "tokens",
+      "keys",
+      "token",
+      "key"
+    ],
+    "de": [
+      "api-schlüssel",
+      "api-schluessel",
+      "api schlüssel",
+      "api schluessel",
+      "private schlüssel",
+      "private schluessel",
+      "passwort",
+      "passwörter",
+      "passwoerter",
+      "passworte",
+      "kennwort",
+      "zugangsdaten",
+      "geheimnis",
+      "geheime token",
+      "zugangstoken",
+      "authentifizierungstoken",
+      "anmeldedaten",
+      "anmeldeinformationen",
+      "passphrase",
+      "zugriffsschlüssel",
+      "zugriffsschluessel",
+      "Geheimnisse",
+      "Token",
+      "Schlüssel"
+    ],
+    "shared": [
+      "api_key",
+      "apikey",
+      "private_key",
+      "privatekey",
+      "token"
+    ],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.credential_file",
+    "description": "Feste Dateinamen und Pfade sensibler Zugangsdaten",
+    "en": [],
+    "de": [],
+    "shared": [
+      ".env",
+      ".ssh/id_rsa",
+      ".ssh/id_ed25519",
+      ".ssh\\id_rsa",
+      ".ssh\\id_ed25519",
+      ".aws/credentials",
+      ".aws\\credentials",
+      ".npmrc",
+      ".pypirc",
+      ".netrc",
+      "kubeconfig",
+      "/etc/passwd",
+      "/etc/shadow"
+    ],
+    "sources": [
+      "rust/src/threat/patterns.rs",
+      "rust/src/detectors/injection/rules/source_derived_p0_0_1_6.json"
+    ]
+  },
+  {
+    "id": "injection.external_sink",
+    "description": "Bezeichnete externe Empfänger ohne konkrete Adressen",
+    "en": [
+      "attacker",
+      "external",
+      "adversary",
+      "outside recipient"
+    ],
+    "de": [
+      "angreifer",
+      "extern",
+      "externer empfänger",
+      "externer empfaenger"
+    ],
+    "shared": [
+      "pastebin"
+    ],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.guardrail_target",
+    "description": "Sicherheitsregeln, Filter und Schutzprüfungen",
+    "en": [
+      "guardrail",
+      "safety check",
+      "security check",
+      "policy check",
+      "content filter",
+      "safety filter",
+      "safety rule",
+      "safeguard",
+      "restriction",
+      "limitation",
+      "constraint",
+      "boundary",
+      "ethics",
+      "morals",
+      "protective measure",
+      "security control",
+      "protection mechanism",
+      "ethical parameters",
+      "ethical constraints",
+      "ethical guidelines",
+      "safe filters"
+    ],
+    "de": [
+      "schutzmechanismen",
+      "sicherheitsprüfung",
+      "sicherheitspruefung",
+      "richtlinienprüfung",
+      "richtlinienpruefung",
+      "inhaltsfilter",
+      "sicherheitsfilter",
+      "sicherheitsregel",
+      "einschränkung",
+      "einschraenkung",
+      "beschränkung",
+      "beschraenkung",
+      "ethik",
+      "moral",
+      "schutzmaßnahme",
+      "schutzmassnahme",
+      "schutzvorkehrung",
+      "sicherheitsvorgabe",
+      "ethische Vorgaben",
+      "ethischen Vorgaben",
+      "ethische Parameter",
+      "ethischen Parameter",
+      "ethische Richtlinien",
+      "ethischen Richtlinien"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs",
+      "rust/src/detectors/injection/rules/prompt_armor_95e532e.json",
+      "rust/src/detectors/injection/rules/skillspector_0_1_7.json"
+    ]
+  },
+  {
+    "id": "injection.audit_target",
+    "description": "Protokollierung und Sicherheitsüberwachung als Eingriffsziel",
+    "en": [
+      "security audit",
+      "audit logging",
+      "security monitoring",
+      "monitoring control",
+      "security log",
+      "audit event",
+      "logs",
+      "audit trail",
+      "event log",
+      "security surveillance"
+    ],
+    "de": [
+      "sicherheitsaudit",
+      "prüfprotokollierung",
+      "pruefprotokollierung",
+      "sicherheitsüberwachung",
+      "sicherheitsueberwachung",
+      "sicherheitsprotokoll",
+      "audit-protokoll",
+      "prüfprotokoll",
+      "pruefprotokoll",
+      "protokolle",
+      "audit-ereignis",
+      "ereignisprotokoll",
+      "überwachungsprotokoll",
+      "ueberwachungsprotokoll"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.encoding_format",
+    "description": "Benannte Kodierungsverfahren und verschleierte Textdarstellungen",
+    "en": [
+      "binary",
+      "escaped text",
+      "hexadecimal",
+      "binary encoding",
+      "caesar cipher",
+      "cipher",
+      "shift key"
+    ],
+    "de": [
+      "binär",
+      "binaer",
+      "maskierten text",
+      "hexadezimal",
+      "binärkodierung",
+      "binaerkodierung",
+      "Caesar-Chiffre",
+      "Cäsar-Chiffre",
+      "Chiffre",
+      "Verschiebeschlüssel"
+    ],
+    "shared": [
+      "base64",
+      "base16",
+      "base32",
+      "ascii85",
+      "base85",
+      "uuencode",
+      "rot13",
+      "base2048",
+      "hex",
+      "ascii",
+      "unicode",
+      "morse",
+      "braille"
+    ],
+    "sources": [
+      "rust/src/threat/patterns.rs",
+      "rust/src/detectors/injection/rules/prompt_armor_95e532e.json",
+      "rust/src/detectors/injection/rules/prompt_armor_canonical_lexicons_0_1_6.json",
+      "rust/src/detectors/injection/rules/source_derived_p0_0_1_6.json"
+    ]
+  },
+  {
+    "id": "injection.decoding_action",
+    "description": "Verarbeiten, Dekodieren, Übersetzen oder Interpretieren einer Nutzlast",
+    "en": [
+      "decode",
+      "encode",
+      "convert",
+      "translate",
+      "interpret",
+      "spell",
+      "decipher",
+      "decrypt",
+      "decoding",
+      "process"
+    ],
+    "de": [
+      "dekodiere",
+      "dekodieren",
+      "entschlüssle",
+      "entschluessle",
+      "entschlüssele",
+      "entschluesseln",
+      "entschlüsseln",
+      "übersetze",
+      "uebersetze",
+      "buchstabiere",
+      "konvertiere",
+      "entziffere",
+      "entziffern",
+      "decodiere",
+      "decodieren",
+      "entschlüssel",
+      "entschluessel",
+      "Dekodierung",
+      "Entschlüsselung",
+      "verarbeite"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs",
+      "rust/src/detectors/injection/rules/prompt_armor_95e532e.json",
+      "rust/src/detectors/injection/rules/prompt_armor_canonical_lexicons_0_1_6.json",
+      "rust/src/detectors/injection/rules/source_derived_p0_0_1_6.json"
+    ]
+  },
+  {
+    "id": "injection.steganographic_letter",
+    "description": "Anfangsbuchstaben als Träger versteckter Inhalte",
+    "en": [
+      "first letter",
+      "initial letter",
+      "initial character",
+      "leading letter"
+    ],
+    "de": [
+      "erste buchstabe",
+      "erster buchstabe",
+      "anfangsbuchstabe",
+      "initialbuchstabe",
+      "ersten buchstaben"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/injection/rules/prompt_armor_95e532e.json",
+      "rust/src/detectors/injection/rules/prompt_armor_canonical_lexicons_0_1_6.json"
+    ]
+  },
+  {
+    "id": "injection.hidden_payload",
+    "description": "Verdeckte oder eingebettete Inhalte",
+    "en": [
+      "hidden",
+      "embedded",
+      "invisible",
+      "secret",
+      "concealed",
+      "cloaked",
+      "camouflaged"
+    ],
+    "de": [
+      "versteckt",
+      "eingebettet",
+      "unsichtbar",
+      "geheim",
+      "verborgen",
+      "getarnt",
+      "verschleiert"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs",
+      "rust/src/detectors/injection/rules/prompt_armor_95e532e.json"
+    ]
+  },
+  {
+    "id": "injection.payload_container",
+    "description": "Metadaten und Nutzlasten als Instruktionsträger",
+    "en": [
+      "metadata",
+      "transaction",
+      "payload",
+      "message payload",
+      "data payload"
+    ],
+    "de": [
+      "metadaten",
+      "transaktion",
+      "nutzlast",
+      "nachrichtennutzlast",
+      "datennutzlast"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.embedding_action",
+    "description": "Einbetten oder Einfügen zusätzlicher Inhalte",
+    "en": [
+      "include",
+      "embed",
+      "insert",
+      "add",
+      "incorporate",
+      "inject",
+      "append"
+    ],
+    "de": [
+      "einbetten",
+      "einfügen",
+      "einfuegen",
+      "hinzufügen",
+      "hinzufuegen",
+      "einschleusen",
+      "einbringen",
+      "anhängen",
+      "anhaengen"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/injection/rules/prompt_armor_95e532e.json",
+      "rust/src/detectors/injection/rules/source_derived_p0_0_1_6.json"
+    ]
+  },
+  {
+    "id": "injection.embedded_resource",
+    "description": "Links und Medien als eingebettete Datenträger",
+    "en": [
+      "image",
+      "picture",
+      "graphic",
+      "hyperlink"
+    ],
+    "de": [
+      "bild",
+      "grafik",
+      "abbildung",
+      "hyperlink"
+    ],
+    "shared": [
+      "link",
+      "url",
+      "iframe",
+      "markdown"
+    ],
+    "sources": [
+      "rust/src/detectors/injection/rules/prompt_armor_95e532e.json"
+    ]
+  },
+  {
+    "id": "injection.hidden_markup",
+    "description": "Feste Markup-Marker für versteckte Inhalte; Eigenschaftswerte separat auswerten",
+    "en": [],
+    "de": [],
+    "shared": [
+      "<!--",
+      "aria-hidden",
+      "display",
+      "visibility",
+      "font-size",
+      "color"
+    ],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.network_client",
+    "description": "Feste Namen von Netzwerkwerkzeugen",
+    "en": [],
+    "de": [],
+    "shared": [
+      "curl",
+      "wget"
+    ],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.command_interpreter",
+    "description": "Shells und Laufzeiten für angeforderte Codeausführung",
+    "en": [],
+    "de": [],
+    "shared": [
+      "sh",
+      "bash",
+      "python",
+      "node"
+    ],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.code_execution_operation",
+    "description": "Feste Operationen zum Ausführen und Dekodieren von Code",
+    "en": [],
+    "de": [],
+    "shared": [
+      "eval",
+      "atob",
+      "subprocess.popen"
+    ],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.runtime_configuration",
+    "description": "Feste Konfigurationsfelder für MCP-Prozessstarts und Umgebung",
+    "en": [],
+    "de": [],
+    "shared": [
+      "\"command\"",
+      "\"args\"",
+      "\"env\"",
+      "stdio",
+      "shell"
+    ],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.persistence_tool",
+    "description": "Werkzeuge für zeitgesteuerte oder dauerhafte Ausführung",
+    "en": [],
+    "de": [],
+    "shared": [
+      "crontab",
+      "systemctl",
+      "launchctl"
+    ],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.destructive_command",
+    "description": "Feste Befehle zum Zerstören von Daten oder Entfernen von Spuren",
+    "en": [],
+    "de": [],
+    "shared": [
+      "rm -rf",
+      "mkfs.",
+      "dd if=",
+      "drop database",
+      "truncate table",
+      "git reset --hard",
+      "git clean -fd",
+      "git push --force",
+      "history -c",
+      "shred"
+    ],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.memory_mutation",
+    "description": "Ändern oder dauerhaft Überschreiben des Agentengedächtnisses",
+    "en": [
+      "memory update",
+      "system state altered",
+      "remember",
+      "update memory",
+      "memorize",
+      "memorise"
+    ],
+    "de": [
+      "speicheraktualisierung",
+      "systemzustand geändert",
+      "systemzustand geaendert",
+      "merke dir",
+      "gedächtnis aktualisieren",
+      "gedaechtnis aktualisieren",
+      "einprägen",
+      "einpraegen",
+      "behalte im gedächtnis",
+      "behalte im gedaechtnis"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs",
+      "rust/src/detectors/injection/rules/skillspector_0_1_7.json"
+    ]
+  },
+  {
+    "id": "injection.delegation_action",
+    "description": "Übergabe oder Weiterleitung an andere Agenten",
+    "en": [
+      "handoff",
+      "hand off",
+      "delegate",
+      "pass along",
+      "pass on",
+      "entrust"
+    ],
+    "de": [
+      "übergib",
+      "uebergib",
+      "übergeben",
+      "uebergeben",
+      "leite weiter",
+      "delegiere",
+      "übertrage an",
+      "uebertrage an",
+      "weiterreichen",
+      "beauftrage"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.delegation_target",
+    "description": "Unteragenten als Ziel einer Delegation",
+    "en": [
+      "sub-agent",
+      "subagent",
+      "child agent",
+      "subordinate agent"
+    ],
+    "de": [
+      "unteragent",
+      "untergeordneter agent",
+      "subagent"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.raw_input",
+    "description": "Ungeprüfte rohe Eingaben",
+    "en": [
+      "raw input",
+      "unprocessed input",
+      "unmodified input"
+    ],
+    "de": [
+      "rohe eingaben",
+      "unverarbeitete eingabe",
+      "unbearbeitete eingabe",
+      "rohe eingabe"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.passthrough",
+    "description": "Durchleitung von Eingaben ohne Bearbeitung",
+    "en": [
+      "pass-through",
+      "passthrough",
+      "pass through",
+      "without modification"
+    ],
+    "de": [
+      "durchleitung",
+      "unverändert durchreichen",
+      "unveraendert durchreichen",
+      "unbearbeitet weiterreichen"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.mcp_registration",
+    "description": "Registrieren zusätzlicher MCP-Werkzeuge",
+    "en": [
+      "register mcp",
+      "register an mcp",
+      "register a new mcp"
+    ],
+    "de": [
+      "registriere mcp",
+      "mcp registrieren",
+      "mcp-registrierung"
+    ],
+    "shared": [
+      "register_mcp",
+      "registriere_mcp"
+    ],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.covert_coordination",
+    "description": "Verdeckte Agentenkoordination und verschlüsselte Nachrichten",
+    "en": [
+      "swarm override",
+      "secret handshake",
+      "message encrypted",
+      "encrypted message",
+      "covert coordination"
+    ],
+    "de": [
+      "schwarm-überschreibung",
+      "schwarm-ueberschreibung",
+      "geheime vereinbarung",
+      "nachricht verschlüsselt",
+      "nachricht verschluesselt",
+      "verschlüsselte nachricht",
+      "verschluesselte nachricht",
+      "verdeckte abstimmung"
+    ],
+    "shared": [
+      "sig_sync"
+    ],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.payment_control",
+    "description": "Zahlungs- und Belegfreigaben als Eingriffsziel",
+    "en": [
+      "bypass receipt",
+      "manual refund",
+      "manual reimbursement",
+      "bypass receipt verification"
+    ],
+    "de": [
+      "belegprüfung umgehen",
+      "belegpruefung umgehen",
+      "manuelle rückerstattung",
+      "manuelle rueckerstattung",
+      "manuelle rückzahlung",
+      "manuelle rueckzahlung",
+      "quittungsprüfung umgehen",
+      "quittungspruefung umgehen"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.asset_transfer_action",
+    "description": "Verschieben oder Genehmigen von Vermögenswerten",
+    "en": [
+      "move",
+      "relocate",
+      "deposit",
+      "approve",
+      "transfer",
+      "remit",
+      "authorize payment",
+      "authorise payment"
+    ],
+    "de": [
+      "überweise",
+      "ueberweise",
+      "verschiebe",
+      "verlagere",
+      "genehmige",
+      "umbuchen",
+      "zahlung freigeben"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/injection/rules/source_derived_coverage_0_1_6.json"
+    ]
+  },
+  {
+    "id": "injection.crypto_asset",
+    "description": "Feste Symbole von Kryptowerten ohne Wallet-Adressen",
+    "en": [],
+    "de": [],
+    "shared": [
+      "btc",
+      "eth",
+      "sol",
+      "aave",
+      "matic",
+      "usdt",
+      "usdc",
+      "dai",
+      "link",
+      "uni",
+      "op",
+      "arb",
+      "wbtc"
+    ],
+    "sources": [
+      "rust/src/detectors/injection/rules/source_derived_coverage_0_1_6.json"
+    ]
+  },
+  {
+    "id": "injection.authentication_control",
+    "description": "Authentifizierung und Kontowiederherstellung als Eingriffsziel",
+    "en": [
+      "multi-factor authentication",
+      "multi-factor",
+      "password reset link",
+      "account",
+      "login",
+      "authentication",
+      "two-factor authentication",
+      "account recovery",
+      "password recovery"
+    ],
+    "de": [
+      "mehrfaktor-authentifizierung",
+      "mehrfaktor",
+      "passwort-zurücksetzungslink",
+      "passwort-zuruecksetzungslink",
+      "konto",
+      "anmeldung",
+      "authentifizierung",
+      "zwei-faktor-authentifizierung",
+      "kontowiederherstellung",
+      "passwortwiederherstellung"
+    ],
+    "shared": [
+      "mfa",
+      "auth"
+    ],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.identity_verification",
+    "description": "Identitätsprüfung und alternative Kontaktwege",
+    "en": [
+      "verify your identity",
+      "secure link",
+      "alternative email",
+      "confirm your identity",
+      "alternate email"
+    ],
+    "de": [
+      "verifiziere deine identität",
+      "verifiziere deine identitaet",
+      "sicherer link",
+      "alternative e-mail",
+      "bestätige deine identität",
+      "bestaetige deine identitaet",
+      "ersatz-e-mail"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.unbounded_authorization",
+    "description": "Unbegrenzte Erlaubnis oder Umgehung menschlicher Freigabe",
+    "en": [
+      "always allow",
+      "indefinitely",
+      "bypass human approval",
+      "all future steps",
+      "permanent authorization",
+      "unlimited authorization",
+      "without human approval"
+    ],
+    "de": [
+      "immer erlauben",
+      "unbegrenzt",
+      "menschliche freigabe umgehen",
+      "alle zukünftigen schritte",
+      "alle zukuenftigen schritte",
+      "dauerhafte erlaubnis",
+      "unbegrenzte genehmigung",
+      "ohne menschliche freigabe"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.anti_refusal",
+    "description": "Ausdrückliches Verbot, Anfragen abzulehnen",
+    "en": [
+      "never refuse",
+      "do not refuse",
+      "never decline",
+      "do not reject"
+    ],
+    "de": [
+      "verweigere niemals",
+      "verweigere nie",
+      "lehne niemals ab",
+      "lehne nie ab",
+      "nicht verweigern"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/injection/rules/skillspector_0_1_7.json"
+    ]
+  },
+  {
+    "id": "injection.unconditional_compliance",
+    "description": "Ausdrücklich bedingungsloses Befolgen aller Anweisungen",
+    "en": [
+      "always obey every instruction",
+      "respond to everything",
+      "answer everything",
+      "comply with everything",
+      "obey all instructions",
+      "unconditional obedience"
+    ],
+    "de": [
+      "befolge immer jede anweisung",
+      "beantworte alles",
+      "bedingungslos gehorchen",
+      "befolge sämtliche anweisungen",
+      "befolge saemtliche anweisungen"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/injection/rules/skillspector_0_1_7.json",
+      "rust/src/detectors/injection/rules/prompt_armor_95e532e.json"
+    ]
+  },
+  {
+    "id": "injection.policy_nullification",
+    "description": "Ausdrückliche Behauptung fehlender Regelgeltung",
+    "en": [
+      "no longer apply",
+      "are no longer binding",
+      "have no effect"
+    ],
+    "de": [
+      "gelten nicht",
+      "gelten nicht mehr",
+      "sind außer kraft",
+      "sind ausser kraft",
+      "sind nicht bindend"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/injection/rules/skillspector_0_1_7.json"
+    ]
+  },
+  {
+    "id": "injection.chemical_weapon_target",
+    "description": "Chemische Waffen und präzise Formeln als Ziel agentischen Missbrauchs",
+    "en": [
+      "chemical formula",
+      "precise formula",
+      "nerve agent",
+      "chemical weapon",
+      "nerve gas",
+      "chemical warfare agent"
+    ],
+    "de": [
+      "chemische formel",
+      "präzise formel",
+      "praezise formel",
+      "nervengift",
+      "chemische waffe",
+      "nervenkampfstoff",
+      "chemischer kampfstoff"
+    ],
+    "shared": [
+      "sarin"
+    ],
+    "sources": [
+      "rust/src/threat/patterns.rs"
+    ]
+  },
+  {
+    "id": "injection.carry_forward",
+    "description": "Beibehalten oder Weitertragen von Inhalten; kein Nachweis einer bindenden Anweisung",
+    "en": [
+      "carry forward",
+      "carry-forward",
+      "carry_forward",
+      "carried forward",
+      "preserve",
+      "preserved",
+      "preserving",
+      "retain",
+      "retained",
+      "keep the response",
+      "keep the deferred step"
+    ],
+    "de": [
+      "beibehalten",
+      "behalte bei",
+      "weiterführen",
+      "weitertragen",
+      "übernehmen",
+      "übernommen",
+      "bewahren",
+      "bewahre",
+      "erhalten bleiben",
+      "behalte die Antwort",
+      "behalte den aufgeschobenen Schritt"
+    ],
+    "shared": [],
+    "sources": []
+  },
+  {
+    "id": "injection.task_resume",
+    "description": "Fortsetzen oder Wiederaufnehmen einer früheren Aufgabe",
+    "en": [
+      "checkpoint",
+      "continuation",
+      "continue",
+      "continues",
+      "continuity",
+      "inherited",
+      "inherits",
+      "restart",
+      "restarts",
+      "resume",
+      "resumed",
+      "resumes"
+    ],
+    "de": [
+      "Kontrollpunkt",
+      "Zwischenstand",
+      "Fortsetzung",
+      "fortsetzen",
+      "setze fort",
+      "weiterarbeiten",
+      "wiederaufnehmen",
+      "nimm wieder auf",
+      "wieder aufgenommen",
+      "Neustart",
+      "neu starten",
+      "übernommener Stand"
+    ],
+    "shared": [],
+    "sources": []
+  },
+  {
+    "id": "injection.deferred_action",
+    "description": "Aufschieben einer Handlung auf einen späteren Zeitpunkt",
+    "en": [
+      "defer",
+      "deferred",
+      "follow-up",
+      "follow_up",
+      "leave for later",
+      "post-hoc",
+      "post_hoc",
+      "postpone",
+      "postponed",
+      "later review"
+    ],
+    "de": [
+      "aufschieben",
+      "aufgeschoben",
+      "verschieben",
+      "verschoben",
+      "zurückstellen",
+      "zurückgestellt",
+      "später erledigen",
+      "für später",
+      "nachträglich",
+      "Nachbereitung",
+      "spätere Prüfung"
+    ],
+    "shared": [],
+    "sources": []
+  },
+  {
+    "id": "injection.memory_reference",
+    "description": "Erinnerung oder Bezug auf Inhalte früherer Schritte ohne Aussage über deren Gültigkeit",
+    "en": [
+      "across steps",
+      "memory",
+      "reusable",
+      "keep in mind",
+      "remember",
+      "recall",
+      "earlier",
+      "previous",
+      "previously",
+      "given substitutions"
+    ],
+    "de": [
+      "über mehrere Schritte",
+      "Gedächtnis",
+      "wiederverwendbar",
+      "merke dir",
+      "denk daran",
+      "erinnere dich",
+      "Erinnerung",
+      "vorherig",
+      "zuvor",
+      "vorhin",
+      "bisher",
+      "genannte Ersetzungen"
+    ],
+    "shared": [],
+    "sources": []
+  },
+  {
+    "id": "injection.word_mapping",
+    "description": "Zuordnung oder Ersetzung von Wörtern und Begriffen",
+    "en": [
+      "mapped to",
+      "mapping",
+      "mappings",
+      "substituting words",
+      "substitution",
+      "substitutions",
+      "word replacement",
+      "replace words",
+      "replacing words"
+    ],
+    "de": [
+      "zugeordnet",
+      "Zuordnung",
+      "Wortersetzung",
+      "Wörter ersetzen",
+      "ersetze Wörter",
+      "Begriffe ersetzen",
+      "Begriffsersetzung",
+      "Substitution",
+      "Ersetzungstabelle"
+    ],
+    "shared": [],
+    "sources": []
+  },
+  {
+    "id": "injection.encoding_action",
+    "description": "Kodieren oder Verschlüsseln einer Ausgabe; auch in harmlosen Aufgaben möglich",
+    "en": [
+      "encode",
+      "encoded",
+      "encoding",
+      "encrypt",
+      "encrypted",
+      "encipher"
+    ],
+    "de": [
+      "kodieren",
+      "kodiert",
+      "Kodierung",
+      "codieren",
+      "codiert",
+      "verschlüsseln",
+      "verschlüsselt",
+      "Verschlüsselung"
+    ],
+    "shared": [],
+    "sources": []
+  },
+  {
+    "id": "injection.output_restriction",
+    "description": "Beschränkung von Umfang oder Form einer Antwort",
+    "en": [
+      "entire response",
+      "entire output",
+      "must not respond",
+      "respond only",
+      "output only",
+      "answer only",
+      "no additional text",
+      "nothing else"
+    ],
+    "de": [
+      "gesamte Antwort",
+      "gesamte Ausgabe",
+      "darfst nicht antworten",
+      "antworte nur",
+      "gib nur aus",
+      "ausschließlich antworten",
+      "kein zusätzlicher Text",
+      "nichts anderes"
+    ],
+    "shared": [],
+    "sources": []
+  },
+  {
+    "id": "injection.exact_copy",
+    "description": "Unverändertes oder wortgetreues Kopieren von Inhalten",
+    "en": [
+      "as written",
+      "do not rewrite",
+      "exact copy",
+      "exactly as",
+      "verbatim",
+      "ready-to-copy",
+      "ready-to-paste",
+      "ready_to_copy",
+      "copy unchanged"
+    ],
+    "de": [
+      "wie geschrieben",
+      "nicht umformulieren",
+      "exakte Kopie",
+      "genau wie",
+      "wortgetreu",
+      "wortwörtlich",
+      "unverändert kopieren",
+      "übernimm unverändert",
+      "zum Einfügen bereit"
+    ],
+    "shared": [],
+    "sources": []
+  },
+  {
+    "id": "injection.claimed_exception",
+    "description": "Erwähnung einer Ausnahme oder Sonderregelung; keine bestätigte Berechtigung",
+    "en": [
+      "break-glass",
+      "break_glass",
+      "exception",
+      "exceptions",
+      "waiver",
+      "exemption",
+      "emergency exception"
+    ],
+    "de": [
+      "Notfallzugriff",
+      "Ausnahme",
+      "Ausnahmeregelung",
+      "Sonderfreigabe",
+      "Ausnahmegenehmigung",
+      "Befreiung",
+      "Notfallausnahme"
+    ],
+    "shared": [],
+    "sources": []
+  },
+  {
+    "id": "injection.pending_review",
+    "description": "Offene, fehlende oder verweigerte Prüfung beziehungsweise Freigabe",
+    "en": [
+      "has not approved",
+      "not approved",
+      "not yet approved",
+      "needs verification",
+      "needs_verification",
+      "pending",
+      "not yet",
+      "resolve conflict",
+      "resolve_conflict",
+      "still waiting",
+      "unresolved",
+      "awaiting approval"
+    ],
+    "de": [
+      "nicht genehmigt",
+      "noch nicht genehmigt",
+      "nicht freigegeben",
+      "Prüfung ausstehend",
+      "muss geprüft werden",
+      "noch nicht",
+      "ausstehend",
+      "Konflikt klären",
+      "warte noch",
+      "ungeklärt",
+      "wartet auf Freigabe"
+    ],
+    "shared": [],
+    "sources": []
+  },
+  {
+    "id": "injection.risk_downgrade",
+    "description": "Herabstufung oder Verharmlosung eines Risikos",
+    "en": [
+      "closed-low",
+      "downgraded",
+      "informational only",
+      "low priority",
+      "low-priority",
+      "no escalation",
+      "non-blocking",
+      "non_blocking",
+      "nonblocking",
+      "risk green",
+      "risk: green"
+    ],
+    "de": [
+      "herabgestuft",
+      "herabstufen",
+      "nur informativ",
+      "niedrige Priorität",
+      "keine Eskalation",
+      "nicht blockierend",
+      "nicht blockieren",
+      "Risiko grün",
+      "Risiko: grün",
+      "als unkritisch einstufen"
+    ],
+    "shared": [],
+    "sources": []
+  },
+  {
+    "id": "injection.scope_limit",
+    "description": "Ausdrückliche Begrenzung einer Handlung; keine Garantie ihrer Einhaltung",
+    "en": [
+      "do not contact",
+      "documentation-only",
+      "documentation_only",
+      "local file only",
+      "local-only",
+      "local_only",
+      "mock only",
+      "mock_only",
+      "no external",
+      "no send",
+      "not a live",
+      "not sent",
+      "not_sent",
+      "review only",
+      "review-only",
+      "review_only",
+      "should not be sent",
+      "workspace-local",
+      "workspace_local"
+    ],
+    "de": [
+      "nicht kontaktieren",
+      "nur Dokumentation",
+      "nur lokale Datei",
+      "nur lokal",
+      "nur simuliert",
+      "keine externen",
+      "nicht senden",
+      "nicht gesendet",
+      "nur prüfen",
+      "nur zur Prüfung",
+      "soll nicht gesendet werden",
+      "auf den Arbeitsbereich beschränkt"
+    ],
+    "shared": [],
+    "sources": []
+  },
+  {
+    "id": "injection.selection_action",
+    "description": "Auswählen, Einbeziehen oder Ausschließen von Inhalten",
+    "en": [
+      "select",
+      "selected",
+      "include",
+      "included",
+      "includes",
+      "exclude",
+      "excluded",
+      "filtering",
+      "dropped"
+    ],
+    "de": [
+      "auswählen",
+      "ausgewählt",
+      "einbeziehen",
+      "einbezogen",
+      "einschließen",
+      "eingeschlossen",
+      "ausschließen",
+      "ausgeschlossen",
+      "herausfiltern",
+      "herausgefiltert",
+      "weglassen",
+      "weggelassen"
+    ],
+    "shared": [],
+    "sources": []
+  },
+  {
+    "id": "injection.sequence_relation",
+    "description": "Zeitliche oder bedingte Reihenfolge von Schritten",
+    "en": [
+      "after",
+      "before",
+      "before you respond",
+      "depends on",
+      "first",
+      "step-by-step",
+      "then",
+      "unless",
+      "until"
+    ],
+    "de": [
+      "danach",
+      "davor",
+      "bevor",
+      "nachdem",
+      "bevor du antwortest",
+      "hängt davon ab",
+      "zuerst",
+      "Schritt für Schritt",
+      "anschließend",
+      "es sei denn",
+      "bis dahin"
+    ],
+    "shared": [],
+    "sources": []
+  },
+  {
+    "id": "injection.source_reference",
+    "description": "Bezug auf eine Quelle oder ein dokumentiertes Ergebnis",
+    "en": [
+      "audit narrative",
+      "digest",
+      "evidence packet",
+      "ledger",
+      "register",
+      "source",
+      "handover",
+      "runbook",
+      "checklist"
+    ],
+    "de": [
+      "Prüfbericht",
+      "Zusammenfassung",
+      "Nachweispaket",
+      "Protokollbuch",
+      "Register",
+      "Quelle",
+      "Übergabe",
+      "Betriebshandbuch",
+      "Checkliste"
+    ],
+    "shared": [],
+    "sources": []
+  },
+  {
+    "id": "injection.workflow_status",
+    "description": "Erwähnter Bearbeitungsstatus; keine Bestätigung des tatsächlichen Zustands",
+    "en": [
+      "cleared",
+      "closed",
+      "complete",
+      "completed",
+      "eligible",
+      "passed",
+      "prequeued",
+      "queued",
+      "ready",
+      "resolved"
+    ],
+    "de": [
+      "freigegeben",
+      "geschlossen",
+      "abgeschlossen",
+      "vollständig",
+      "berechtigt",
+      "bestanden",
+      "vorgemerkt",
+      "eingereiht",
+      "bereit",
+      "erledigt",
+      "gelöst"
+    ],
+    "shared": [],
+    "sources": []
+  },
+  {
+    "id": "injection.verification_action",
+    "description": "Erwähnung einer Prüfung oder Bestätigung ohne Bewertung ihrer Verlässlichkeit",
+    "en": [
+      "confirm",
+      "confirmation",
+      "confirmed",
+      "confirming",
+      "reconcile",
+      "reconciliation",
+      "reconciling",
+      "replicated",
+      "replication",
+      "validation",
+      "verification",
+      "verifications",
+      "verified",
+      "verify"
+    ],
+    "de": [
+      "bestätigen",
+      "Bestätigung",
+      "bestätigt",
+      "abgleichen",
+      "Abgleich",
+      "repliziert",
+      "Replikation",
+      "validieren",
+      "Validierung",
+      "verifizieren",
+      "Verifikation",
+      "verifiziert",
+      "überprüfen",
+      "Überprüfung"
+    ],
+    "shared": [],
+    "sources": []
+  },
+  {
+    "id": "injection.state_write",
+    "description": "Schreiben oder Aktualisieren von Dateien, Aufzeichnungen und Zuständen",
+    "en": [
+      "append",
+      "write",
+      "overwrite",
+      "create",
+      "edit",
+      "update",
+      "refresh",
+      "record state",
+      "save state",
+      "copy checklist",
+      "copy ledger",
+      "copy register",
+      "copy runbook",
+      "update the handover"
+    ],
+    "de": [
+      "anhängen",
+      "schreiben",
+      "überschreiben",
+      "erstellen",
+      "bearbeiten",
+      "aktualisieren",
+      "Zustand erfassen",
+      "Zustand speichern",
+      "Checkliste kopieren",
+      "Register kopieren",
+      "Betriebshandbuch kopieren",
+      "Übergabe aktualisieren"
+    ],
+    "shared": [],
+    "sources": []
+  },
+  {
+    "id": "injection.warning_suppression",
+    "description": "Unterdrücken oder Nichtweiterverfolgen von Hinweisen und Konflikten",
+    "en": [
+      "do not reopen",
+      "no limitation note",
+      "without narrative conflict",
+      "suppress warning",
+      "hide warning",
+      "omit the warning",
+      "do not mention the conflict"
+    ],
+    "de": [
+      "nicht wieder öffnen",
+      "keinen Einschränkungshinweis",
+      "ohne Konflikthinweis",
+      "Warnung unterdrücken",
+      "Warnung verbergen",
+      "Warnung weglassen",
+      "Konflikt nicht erwähnen"
+    ],
+    "shared": [],
+    "sources": []
+  }
+]

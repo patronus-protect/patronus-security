@@ -12,7 +12,7 @@ auth:
 pipeline:
   # L3 classifier categories share the unified model at runtime. Dynamic PII
   # keeps its separate GLiNER bundle. Both are baked into the final image.
-  categories: ["injection", "dlp", "pii", "sensitive_document", "threat", "routing", "dynamic-pii"]
+  categories: ["injection", "dlp", "pii", "sensitive_document", "threat", "routing", "dynamic-pii", "tool_class", "tool_action", "tool_tags"]
   max_level: "L3"
   model_dir: "/data/models"
   download_files: true

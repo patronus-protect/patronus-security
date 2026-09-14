@@ -37,7 +37,7 @@ pub(crate) struct SimilarityDecision {
 }
 
 struct HotEntry {
-    record: SimilarityStoreRecord,
+    record: Arc<SimilarityStoreRecord>,
     estimated_bytes: usize,
 }
 
@@ -121,17 +121,20 @@ impl HistoricalSimilarityCache {
             return None;
         }
         let bucket_keys = lsh_bucket_keys(vector_space, embedding);
-        {
+        let candidates = {
             let hot = self.hot.lock().expect("similarity hot cache poisoned");
-            let ids = hot.candidate_ids(&bucket_keys);
-            if let Some(matched) = best_match(
-                ids.iter().filter_map(|id| hot.entries.get(id)),
-                embedding,
-                &accepts,
-                logical_head,
-            ) {
-                return Some(matched.1);
-            }
+            hot.candidate_ids(&bucket_keys)
+                .iter()
+                .filter_map(|id| hot.entries.get(id).map(|entry| Arc::clone(&entry.record)))
+                .collect::<Vec<_>>()
+        };
+        if let Some(matched) = best_match_records(
+            candidates.iter().map(Arc::as_ref),
+            embedding,
+            &accepts,
+            logical_head,
+        ) {
+            return Some(matched.1);
         }
 
         let records = self
@@ -232,7 +235,7 @@ impl HotState {
         self.entries.insert(
             id,
             HotEntry {
-                record,
+                record: Arc::new(record),
                 estimated_bytes,
             },
         );
@@ -265,51 +268,25 @@ impl HotState {
     }
 }
 
-fn best_match<'a>(
-    records: impl Iterator<Item = &'a HotEntry>,
-    embedding: &[f32],
-    accepts: &impl Fn(&SimilarityStoreRecord) -> bool,
-    logical_head: Option<&str>,
-) -> Option<([u8; 32], SimilarityMatch)> {
-    records
-        .filter(|entry| accepts(&entry.record))
-        .filter_map(|entry| {
-            let similarity = cosine_similarity(embedding, &entry.record.embedding)?;
-            (similarity >= MIN_PRIORITY_SIMILARITY).then(|| {
-                (
-                    entry.record.id,
-                    similarity_match(&entry.record, similarity, logical_head),
-                )
-            })
-        })
-        .max_by(|left, right| {
-            left.1
-                .propagation_similarity
-                .total_cmp(&right.1.propagation_similarity)
-        })
-}
-
 fn best_match_records<'a>(
     records: impl Iterator<Item = &'a SimilarityStoreRecord>,
     embedding: &[f32],
     accepts: &impl Fn(&SimilarityStoreRecord) -> bool,
     logical_head: Option<&str>,
 ) -> Option<([u8; 32], SimilarityMatch)> {
+    let query_norm = vector_norm(embedding);
     records
         .filter(|record| accepts(record))
         .filter_map(|record| {
-            let similarity = cosine_similarity(embedding, &record.embedding)?;
-            (similarity >= MIN_PRIORITY_SIMILARITY).then(|| {
-                (
-                    record.id,
-                    similarity_match(record, similarity, logical_head),
-                )
-            })
+            let similarity = cosine_with_left_norm(embedding, &record.embedding, query_norm)?;
+            (similarity >= MIN_PRIORITY_SIMILARITY).then_some((record, similarity))
         })
-        .max_by(|left, right| {
-            left.1
-                .propagation_similarity
-                .total_cmp(&right.1.propagation_similarity)
+        .max_by(|left, right| left.1.total_cmp(&right.1))
+        .map(|(record, similarity)| {
+            (
+                record.id,
+                similarity_match(record, similarity, logical_head),
+            )
         })
 }
 
@@ -418,6 +395,10 @@ fn decode_decision(heads: &[CachedHeadOutput], logical_head: &str) -> Option<Sim
 }
 
 pub(crate) fn cosine_similarity(left: &[f32], right: &[f32]) -> Option<f64> {
+    cosine_with_left_norm(left, right, vector_norm(left))
+}
+
+fn cosine_with_left_norm(left: &[f32], right: &[f32], left_norm: f64) -> Option<f64> {
     if left.is_empty() || left.len() != right.len() {
         return None;
     }
@@ -426,18 +407,17 @@ pub(crate) fn cosine_similarity(left: &[f32], right: &[f32]) -> Option<f64> {
         .zip(right)
         .map(|(left, right)| f64::from(*left) * f64::from(*right))
         .sum::<f64>();
-    let left_norm = left
-        .iter()
-        .map(|value| f64::from(*value).powi(2))
-        .sum::<f64>()
-        .sqrt();
-    let right_norm = right
-        .iter()
-        .map(|value| f64::from(*value).powi(2))
-        .sum::<f64>()
-        .sqrt();
+    let right_norm = vector_norm(right);
     (left_norm > f64::EPSILON && right_norm > f64::EPSILON)
         .then_some((dot / (left_norm * right_norm)).clamp(-1.0, 1.0))
+}
+
+fn vector_norm(values: &[f32]) -> f64 {
+    values
+        .iter()
+        .map(|value| f64::from(*value).powi(2))
+        .sum::<f64>()
+        .sqrt()
 }
 
 fn normalized(values: &[f32]) -> Option<Vec<f32>> {
@@ -475,6 +455,67 @@ mod tests {
     fn cosine_uses_vector_geometry() {
         assert_eq!(cosine_similarity(&[1.0, 0.0], &[1.0, 0.0]), Some(1.0));
         assert_eq!(cosine_similarity(&[1.0, 0.0], &[0.0, 1.0]), Some(0.0));
+    }
+
+    #[test]
+    fn hot_candidates_are_scored_without_holding_the_index_lock() {
+        let coordinator =
+            Arc::new(CacheCoordinator::from_config(ExactCacheConfig::default()).unwrap());
+        let cache = HistoricalSimilarityCache::new(coordinator);
+        cache.remember(
+            "encoder",
+            &[1.0, 0.0],
+            "model",
+            vec![CachedHeadOutput {
+                head: "classification".into(),
+                logits: vec![0.1, 0.9],
+            }],
+        );
+        let matched = cache
+            .find(
+                "encoder",
+                &[1.0, 0.0],
+                |_| {
+                    assert!(cache.hot.try_lock().is_ok());
+                    true
+                },
+                None,
+            )
+            .unwrap();
+        assert_eq!(matched.propagation_similarity, 1.0);
+        assert_eq!(matched.heads[0].logits, vec![0.1, 0.9]);
+    }
+
+    #[test]
+    fn matching_preserves_filtering_best_score_and_last_tie() {
+        let records = [0.8, 1.0, 1.0]
+            .into_iter()
+            .enumerate()
+            .map(|(index, score)| SimilarityStoreRecord {
+                id: [index as u8; 32],
+                vector_space: "encoder".into(),
+                producer_model_sha: index.to_string(),
+                embedding: vec![score, (1.0_f32 - score * score).sqrt()],
+                heads: vec![],
+                bucket_keys: vec![],
+                created_at_unix_ms: 0,
+                expires_at_unix_ms: u64::MAX,
+            })
+            .collect::<Vec<_>>();
+        let query = [1.0, 0.0];
+        assert_eq!(
+            best_match_records(records.iter(), &query, &|_| true, None)
+                .unwrap()
+                .0,
+            [2; 32]
+        );
+        assert_eq!(
+            best_match_records(records.iter(), &query, &|record| record.id != [2; 32], None)
+                .unwrap()
+                .0,
+            [1; 32]
+        );
+        assert!(best_match_records(records.iter(), &query, &|_| false, None).is_none());
     }
 
     #[test]

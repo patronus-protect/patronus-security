@@ -1,6 +1,6 @@
 [package]
 name = "patronus-ark"
-version = "0.1.6"
+version = "0.1.7"
 edition = "2021"
 authors = ["Casdo Labs GmbH <team@patronus.studio>"]
 description = "Hybrid Rust security scanners for prompt injection, DLP, PII, and agentic tool risks."
@@ -17,9 +17,11 @@ log = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 regex = "1.10"
+regex-syntax = "0.8"
 aho-corasick = "1.1"
 rayon = "1.10"
 dirs = "5.0"
+url = "2"
 ureq = { version = "2.10", features = ["json"] }
 ort = { version = "2.0.0-rc.13", default-features = false, features = ["std", "ndarray", "tracing", "download-binaries", "tls-rustls", "copy-dylibs", "api-24", "half"] }
 tokenizers = { version = "0.23.1", default-features = false, features = ["onig"] }
@@ -79,3 +81,7 @@ path = "dev/ntdb_joint_v3_cache_eval.rs"
 [[example]]
 name = "wolf_memory_smoke"
 path = "dev/wolf_memory_smoke.rs"
+
+[[example]]
+name = "l1_calibration"
+path = "dev/l1_calibration.rs"

@@ -15,7 +15,14 @@ impl ZeroWidthObfuscationPipeline {
     }
 
     pub(crate) fn detect(&self, text: &str) -> crate::detectors::NativeDetection {
-        super::signal::native_detection("zero_width_obfuscation", text)
+        self.detect_prepared(&crate::threat::NativeText::new(text))
+    }
+
+    pub(crate) fn detect_prepared(
+        &self,
+        prepared: &crate::threat::NativeText<'_>,
+    ) -> crate::detectors::NativeDetection {
+        super::signal::native_detection_prepared("zero_width_obfuscation", prepared)
     }
 
     pub fn evaluate(&self, text: &str) -> EvaluationResult {

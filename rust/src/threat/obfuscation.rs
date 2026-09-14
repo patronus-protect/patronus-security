@@ -195,7 +195,7 @@ pub(super) fn slash_hex_decode_lossy(text: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-pub(super) fn slash_unicode_decode_lossy(text: &str) -> String {
+pub(crate) fn slash_unicode_decode_lossy(text: &str) -> String {
     let bytes = text.as_bytes();
     let mut out = String::with_capacity(text.len());
     let mut idx = 0;
@@ -255,7 +255,7 @@ pub(super) fn continuous_hex_decode(fragment: &str) -> Option<String> {
     }
 }
 
-pub(super) fn base64_decode_text(fragment: &str) -> Option<String> {
+pub(crate) fn base64_decode_text(fragment: &str) -> Option<String> {
     if fragment.len() < 12 || !fragment.len().is_multiple_of(4) {
         return None;
     }

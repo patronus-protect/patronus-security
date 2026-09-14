@@ -82,8 +82,14 @@ impl SecurityGateway {
     }
 
     fn warmup_from_local_assets_inner(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        let mut metrics = crate::diagnostics::PhaseMetricScope::new(
+            "security_local_startup",
+            format!("max_level={}", self.max_level.as_str()),
+        );
+        self.distributed_fingerprints.take();
         let base_dir = self.model_base_dir()?;
         let prepared = self.prepare_assets_inner(false, None)?;
+        metrics.checkpoint("asset_validation", "downloads=false");
         self.l3_worker
             .configure_strategy(self.scan_execution().l3_strategy());
 
@@ -100,6 +106,7 @@ impl SecurityGateway {
             configured_onnx_runtime
         );
 
+        metrics.checkpoint("onnx_runtime", "");
         let mut ntdb_specs = Vec::with_capacity(prepared.ntdb.len());
         for assets in prepared.ntdb {
             self.register_ntdb_l3_worker_model(
@@ -110,6 +117,7 @@ impl SecurityGateway {
             ntdb_specs.push(assets.spec);
         }
 
+        metrics.checkpoint("worker_registration", "");
         let execution = self.scan_execution();
         if execution.l3_strategy() == L3Strategy::Multi
             && execution.allows_level(SecurityLevel::L3)
@@ -124,6 +132,7 @@ impl SecurityGateway {
             let mut classifier = LazyUnifiedOnnxClassifier::from_dir(&bundle_dir)?;
             classifier.warmup_session(execution.backend(), execution.onnx_runtime_options())?;
             self.l3_worker.register_unified(classifier);
+            metrics.checkpoint("unified_l3", "");
             log::info!(
                 "unified multi-head L3 worker model warmed and registered from {}",
                 bundle_dir.display()
@@ -142,6 +151,7 @@ impl SecurityGateway {
             runtime.warmup(&self.dynamic_pii_config())?;
             self.l3_worker
                 .register_dynamic_pii(assets::DYNAMIC_PII_ASSET.model, runtime);
+            metrics.checkpoint("dynamic_pii_l3", "");
             log::info!(
                 "dynamic-pii L3 worker model registered from {}",
                 bundle_dir.display()
@@ -160,8 +170,17 @@ impl SecurityGateway {
                 started.elapsed().as_secs_f64() * 1000.0
             );
             self.ntdb_executor = Some(Mutex::new(executor));
+            metrics.checkpoint("l2_executor", "");
+            // L2 local inference does not need distributed export identities.
+            // Keep the L3 identity bound to the just-loaded background runtime.
+            if self.max_level >= SecurityLevel::L3 {
+                self.distributed_ntdb_fingerprints()
+                    .map_err(std::io::Error::other)?;
+                metrics.checkpoint("distributed_fingerprints", "");
+            }
         }
 
+        metrics.checkpoint("ready", "");
         Ok(())
     }
 
@@ -228,14 +247,14 @@ impl SecurityGateway {
                     .into());
                 }
             }
-            log::debug!(
-                "preparing cached unified L3 compact tokenizer; bundle_dir={}",
-                bundle_dir.display()
-            );
-            assets::prepare_cached_pipeline_model_compact_tokenizer(
-                assets::UNIFIED_L3_ASSET,
-                &base_dir,
-            );
+            // Runtime startup and readiness checks only consume prepared files.
+            // Converting/verifying the source tokenizer belongs to delivery.
+            if allow_download {
+                assets::prepare_cached_pipeline_model_compact_tokenizer(
+                    assets::UNIFIED_L3_ASSET,
+                    &base_dir,
+                );
+            }
         }
 
         for category in &self.categories {
@@ -385,7 +404,8 @@ impl SecurityGateway {
                     .into());
                 }
             }
-            if execution.l3_strategy() == L3Strategy::Dedicated
+            if allow_download
+                && execution.l3_strategy() == L3Strategy::Dedicated
                 && execution.allows_level(SecurityLevel::L3)
             {
                 if let Some(asset) = assets::dedicated_l3_asset(*category) {
@@ -447,7 +467,7 @@ impl SecurityGateway {
         }
     }
 
-    fn model_base_dir(&self) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    pub(super) fn model_base_dir(&self) -> Result<PathBuf, Box<dyn std::error::Error>> {
         match &self.model_dir {
             Some(path) => Ok(path.clone()),
             None => Ok(dirs::cache_dir()

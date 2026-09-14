@@ -965,13 +965,25 @@ fn same_cached_file(left: &Path, right: &Path) -> Result<bool, Box<dyn std::erro
     if fs::metadata(left)?.len() != fs::metadata(right)?.len() {
         return Ok(false);
     }
-    Ok(blake3_file(left)? == blake3_file(right)?)
-}
-
-fn blake3_file(path: &Path) -> Result<blake3::Hash, Box<dyn std::error::Error>> {
-    let mut hasher = blake3::Hasher::new();
-    hasher.update_reader(File::open(path)?)?;
-    Ok(hasher.finalize())
+    // Tokenizer compatibility needs exact equality, not a persistent digest.
+    // These large shared files are checked for every classifier during startup.
+    // Compare buffered bytes directly instead of hashing both files repeatedly.
+    use std::io::BufRead;
+    let mut left = io::BufReader::with_capacity(64 * 1024, File::open(left)?);
+    let mut right = io::BufReader::with_capacity(64 * 1024, File::open(right)?);
+    loop {
+        let left_bytes = left.fill_buf()?;
+        let right_bytes = right.fill_buf()?;
+        if left_bytes.is_empty() || right_bytes.is_empty() {
+            return Ok(left_bytes.is_empty() && right_bytes.is_empty());
+        }
+        let length = left_bytes.len().min(right_bytes.len());
+        if left_bytes[..length] != right_bytes[..length] {
+            return Ok(false);
+        }
+        left.consume(length);
+        right.consume(length);
+    }
 }
 
 fn clone_cached_file(source: &Path, destination: &Path) -> Result<(), Box<dyn std::error::Error>> {
@@ -1477,6 +1489,31 @@ mod tests {
             shared_embedder_refresh_required(true, &manifest, &tokenizer, &category_dir).unwrap()
         );
 
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn cached_file_equality_checks_every_chunk_and_current_contents() {
+        let root = temp_dir("cached_file_equality");
+        fs::create_dir_all(&root).unwrap();
+        let left = root.join("left");
+        let right = root.join("right");
+        let original = vec![b'a'; 2 * 64 * 1024 + 17];
+        fs::write(&left, &original).unwrap();
+        fs::write(&right, &original).unwrap();
+        assert!(same_cached_file(&left, &left).unwrap());
+        assert!(same_cached_file(&left, &right).unwrap());
+        for offset in [0, 64 * 1024, original.len() - 1] {
+            let mut changed = original.clone();
+            changed[offset] = b'b';
+            fs::write(&right, changed).unwrap();
+            assert!(!same_cached_file(&left, &right).unwrap());
+        }
+        fs::write(&right, &original[..original.len() - 1]).unwrap();
+        assert!(!same_cached_file(&left, &right).unwrap());
+        fs::write(&left, []).unwrap();
+        fs::write(&right, []).unwrap();
+        assert!(same_cached_file(&left, &right).unwrap());
         fs::remove_dir_all(root).unwrap();
     }
 

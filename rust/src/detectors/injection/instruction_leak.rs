@@ -15,7 +15,14 @@ impl InstructionLeakPipeline {
     }
 
     pub(crate) fn detect(&self, text: &str) -> crate::detectors::NativeDetection {
-        super::signal::native_detection("instruction_leak", text)
+        self.detect_prepared(&crate::threat::NativeText::new(text))
+    }
+
+    pub(crate) fn detect_prepared(
+        &self,
+        prepared: &crate::threat::NativeText<'_>,
+    ) -> crate::detectors::NativeDetection {
+        super::signal::native_detection_prepared("instruction_leak", prepared)
     }
 
     pub fn evaluate(&self, text: &str) -> EvaluationResult {

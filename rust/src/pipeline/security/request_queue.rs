@@ -1134,7 +1134,7 @@ fn is_partial_result(result: &SecurityScanResult) -> bool {
     })
 }
 
-fn split_results(
+pub(super) fn split_results(
     raw_results: Vec<SecurityScanResult>,
 ) -> (Vec<SecurityScanResult>, Vec<SecurityFailure>) {
     let mut results = Vec::new();
@@ -1184,7 +1184,7 @@ fn injection_l1_producer_failures(result: &SecurityScanResult) -> Vec<SecurityFa
         .collect()
 }
 
-fn gate_result(result: &SecurityScanResult) -> Option<GateResult> {
+pub(super) fn gate_result(result: &SecurityScanResult) -> Option<GateResult> {
     Some(GateResult {
         pipeline: result.category.clone(),
         class_name: result.class_name.clone(),
@@ -1215,7 +1215,9 @@ fn dynamic_pii_source_chunks(
     chunks
 }
 
-fn rejected_l1_candidate_gate_results(results: &[SecurityScanResult]) -> Vec<GateResult> {
+pub(super) fn rejected_l1_candidate_gate_results(
+    results: &[SecurityScanResult],
+) -> Vec<GateResult> {
     results
         .iter()
         .filter(|result| result.model == "native:injection_l1")

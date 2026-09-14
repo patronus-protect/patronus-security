@@ -19,7 +19,10 @@ use super::{
     lightgbm::LightGbmModel,
     manifest::{JointV3Manifest, TaskManifest},
     ntdb_error,
-    package::{JointV3CandidatePolicy, JointV3DecisionContext, PreparedDocument, ScoreOutput},
+    package::{
+        JointV3CandidatePolicy, JointV3DecisionContext, NtdbChunkInference, PreparedDocument,
+        ScoreOutput,
+    },
     session::load_single_thread_session,
     NtdbResult,
 };
@@ -52,6 +55,12 @@ struct ActionablePolicy {
     threshold: f32,
     aggregation: String,
     document_risk_margin_threshold: f32,
+}
+
+pub(super) struct JointChunkInference {
+    pub(super) probabilities: Vec<f32>,
+    pub(super) promote_score: f32,
+    pub(super) promote_threshold: f32,
 }
 
 struct JointPrediction {
@@ -101,14 +110,94 @@ impl JointV3Runtime {
         })
     }
 
-    pub(super) fn score(
+    pub(super) fn infer_chunks(
         &mut self,
         task: &TaskManifest,
         prepared: &PreparedDocument,
+        document_chunk_count: usize,
+        operating_point: NtdbOperatingPoint,
+    ) -> NtdbResult<Vec<JointChunkInference>> {
+        let predictions = self.predict(prepared, prepared.chunks.len(), 1)?;
+        let operating_point =
+            short_injection_operating_point(&task.kind, operating_point, document_chunk_count);
+        predictions
+            .into_iter()
+            .map(|prediction| {
+                let (promote_score, promote_threshold) = self.promoter.score(
+                    &prediction.probabilities,
+                    &prediction.promoter_features,
+                    operating_point,
+                )?;
+                Ok(JointChunkInference {
+                    probabilities: prediction.probabilities,
+                    promote_score,
+                    promote_threshold,
+                })
+            })
+            .collect()
+    }
+
+    pub(super) fn aggregate_chunk_inferences(
+        &self,
+        task: &TaskManifest,
+        chunks: &[NtdbChunkInference],
         operating_point: NtdbOperatingPoint,
     ) -> NtdbResult<ScoreOutput> {
-        let chunks = self.predict(prepared, prepared.chunks.len(), 1)?;
-        self.output_from_chunks(task, chunks, operating_point)
+        let chunks = chunks
+            .iter()
+            .map(|chunk| JointChunkInference {
+                probabilities: chunk.class_probabilities.clone(),
+                promote_score: chunk.promote_score,
+                promote_threshold: chunk.promote_threshold,
+            })
+            .collect::<Vec<_>>();
+        self.output_from_inferences(task, chunks, operating_point)
+    }
+
+    fn output_from_inferences(
+        &self,
+        task: &TaskManifest,
+        chunks: Vec<JointChunkInference>,
+        operating_point: NtdbOperatingPoint,
+    ) -> NtdbResult<ScoreOutput> {
+        let operating_point =
+            short_injection_operating_point(&task.kind, operating_point, chunks.len());
+        let promote_threshold = chunks
+            .first()
+            .map(|chunk| chunk.promote_threshold)
+            .unwrap_or(f32::INFINITY);
+        let promote_score = chunks
+            .iter()
+            .map(|chunk| chunk.promote_score)
+            .fold(f32::NEG_INFINITY, f32::max);
+        let context = Arc::new(self.decision_context(task, operating_point)?);
+        let chunk_count = chunks.len();
+        let (chunk_class_probabilities, chunk_promote_scores): (Vec<_>, Vec<_>) = chunks
+            .into_iter()
+            .map(|chunk| (chunk.probabilities, Some(chunk.promote_score)))
+            .unzip();
+        let class_scores =
+            aggregate_probabilities(&chunk_class_probabilities, &context.l2.aggregation)?;
+        let predicted_index = argmax(&class_scores)?;
+        Ok(ScoreOutput {
+            aggregator_id: "joint_v3".to_string(),
+            task: task.kind.clone(),
+            labels: task.labels.clone(),
+            predicted_label: task.labels[predicted_index].clone(),
+            predicted_index,
+            class_scores,
+            class_logits: Vec::new(),
+            chunks: chunk_count,
+            attack_threshold: self.attack_threshold,
+            promote_score: Some(promote_score),
+            promote_threshold: Some(promote_threshold),
+            chunk_promote_scores,
+            l3_candidate_spans: Vec::new(),
+            l3_candidates: Vec::new(),
+            l2_chunk_outputs: Vec::new(),
+            chunk_class_probabilities,
+            joint_v3_decision: Some(context),
+        })
     }
 
     fn output_from_chunks(
@@ -119,56 +208,22 @@ impl JointV3Runtime {
     ) -> NtdbResult<ScoreOutput> {
         let operating_point =
             short_injection_operating_point(&task.kind, operating_point, chunks.len());
-        let chunk_routing = chunks
-            .iter()
+        let inferences = chunks
+            .into_iter()
             .map(|chunk| {
-                let (score, threshold) = self.promoter.score(
+                let (promote_score, promote_threshold) = self.promoter.score(
                     &chunk.probabilities,
                     &chunk.promoter_features,
                     operating_point,
                 )?;
-                Ok((score, threshold))
+                Ok(JointChunkInference {
+                    probabilities: chunk.probabilities,
+                    promote_score,
+                    promote_threshold,
+                })
             })
             .collect::<NtdbResult<Vec<_>>>()?;
-        let promote_threshold = chunk_routing
-            .first()
-            .map(|(_, threshold)| *threshold)
-            .unwrap_or(f32::INFINITY);
-        let promote_score = chunk_routing
-            .iter()
-            .map(|(score, _)| *score)
-            .fold(f32::NEG_INFINITY, f32::max);
-        let context = Arc::new(self.decision_context(task, operating_point)?);
-        let chunk_class_probabilities = chunks
-            .iter()
-            .map(|chunk| chunk.probabilities.clone())
-            .collect::<Vec<_>>();
-        let class_scores =
-            aggregate_probabilities(&chunk_class_probabilities, &context.l2.aggregation)?;
-        let predicted_index = argmax(&class_scores)?;
-        let output = ScoreOutput {
-            aggregator_id: "joint_v3".to_string(),
-            task: task.kind.clone(),
-            labels: task.labels.clone(),
-            predicted_label: task.labels[predicted_index].clone(),
-            predicted_index,
-            class_scores,
-            class_logits: Vec::new(),
-            chunks: chunks.len(),
-            attack_threshold: self.attack_threshold,
-            promote_score: Some(promote_score),
-            promote_threshold: Some(promote_threshold),
-            chunk_promote_scores: chunk_routing
-                .iter()
-                .map(|(score, _)| Some(*score))
-                .collect(),
-            l3_candidate_spans: Vec::new(),
-            l3_candidates: Vec::new(),
-            l2_chunk_outputs: Vec::new(),
-            chunk_class_probabilities,
-            joint_v3_decision: Some(context),
-        };
-        Ok(output)
+        self.output_from_inferences(task, inferences, operating_point)
     }
 
     pub(super) fn score_batch(

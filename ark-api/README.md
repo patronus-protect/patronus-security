@@ -53,9 +53,9 @@ All endpoints except `/healthz` and `/readyz` require
 - `GET /v1/scan/{job_id}` — durable job status plus accumulated progress,
   compact category results, `decision_evidence`, and the overall decision.
 - `GET /healthz` — liveness, no auth.
-- `GET /readyz` — gateway readiness, including a Redis PING (503 on failure or a
-  one-second timeout). Redis connections reconnect automatically. Worker readiness
-  is checked separately by the Compose health checks before the gateway starts.
+- `GET /readyz` — gateway readiness requires Redis and at least one healthy worker.
+  Redis connections reconnect automatically; workers are monitored continuously and
+  interrupted workers must pass an authenticated idle recovery check before reuse.
 
 When `ark-api` is run directly instead of through the reference gateway,
 `POST /v1/scan` returns worker-local `request_id` values and

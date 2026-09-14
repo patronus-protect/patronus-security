@@ -193,8 +193,19 @@ impl SecurityGateway {
         text: &str,
     ) -> PyResult<Vec<PyEvaluationResult>> {
         let rust_categories = parse_categories(categories)?;
+        let profile = std::env::var_os("PATRONUS_PHASE_METRICS").is_some_and(|v| v == "1");
+        let started = std::time::Instant::now();
         let results = py.allow_threads(|| self.inner.scan_categories(&rust_categories, text));
-        Ok(results.into_iter().map(PyEvaluationResult::from).collect())
+        let scanned = std::time::Instant::now();
+        let results = results.into_iter().map(PyEvaluationResult::from).collect();
+        if profile {
+            eprintln!(
+                "L1_BINDING_PROFILE scan_ms={} result_conversion_ms={}",
+                scanned.duration_since(started).as_secs_f64() * 1000.0,
+                scanned.elapsed().as_secs_f64() * 1000.0
+            );
+        }
+        Ok(results)
     }
 
     #[pyo3(signature = (text, categories=None, execution_gates_json=None, metadata_json=None, ntdb_operating_point=None))]
