@@ -36,6 +36,14 @@ pub fn ntdb_l2_model_configs_for_category(
         return Vec::new();
     }
 
+    classifier_model_configs_for_category(execution, category)
+}
+
+/// Classifier identities are independent of whether the L2 stage is enabled.
+pub(super) fn classifier_model_configs_for_category(
+    execution: &ScanExecution,
+    category: SecurityCategory,
+) -> Vec<NtdbL2ModelConfig> {
     match category {
         SecurityCategory::Injection => {
             if execution.allows_model("injection") && execution.allows_model("wolf-defender-small")

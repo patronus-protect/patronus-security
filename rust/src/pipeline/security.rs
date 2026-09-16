@@ -37,6 +37,7 @@ use crate::{
     SecurityLevelReadiness, SecurityRuntimeReadiness, SecurityScanResult,
 };
 
+mod direct_l3;
 mod injection_l1;
 mod ntdb_l2;
 mod request_queue;
@@ -708,7 +709,15 @@ impl SecurityGateway {
             }
         };
 
-        let has_classifier_l3 = l2_configs
+        let l3_configs = self
+            .categories
+            .iter()
+            .copied()
+            .flat_map(|category| {
+                ntdb_l2::classifier_model_configs_for_category(&execution, category)
+            })
+            .collect::<Vec<_>>();
+        let has_classifier_l3 = l3_configs
             .iter()
             .any(|config| config.has_l3 && execution.allows_level(SecurityLevel::L3));
         let mut l3_models = match execution.l3_strategy() {
@@ -719,7 +728,7 @@ impl SecurityGateway {
                 vec![crate::ml::unified_onnx::UNIFIED_MODEL]
             }
             crate::L3Strategy::Multi => Vec::new(),
-            crate::L3Strategy::Dedicated => l2_configs
+            crate::L3Strategy::Dedicated => l3_configs
                 .iter()
                 .filter(|config| config.has_l3 && execution.allows_level(SecurityLevel::L3))
                 .map(|config| config.public_model)
@@ -1756,6 +1765,9 @@ impl SecurityGateway {
                 gate_results.len()
             ),
         );
+        if !execution.allows_level(SecurityLevel::L2) {
+            return self.direct_l3_results(inputs, execution, metadata, gate_results);
+        }
         let mut execution = execution.clone();
         if execution.allows_level(SecurityLevel::L3) && execution.l3_policy().enabled {
             execution.set_defer_l3(true);

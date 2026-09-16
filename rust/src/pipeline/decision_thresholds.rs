@@ -69,6 +69,42 @@ pub(crate) fn arbitrate_l3_l2(
     l2_result: SecurityScanResult,
     point: NtdbOperatingPoint,
 ) -> SecurityScanResult {
+    // A direct L3 placeholder is not an L2 observation and must never enter Union.
+    if l2_result.level == "L3" && !l2_result.layers.iter().any(|layer| layer.level == "L2") {
+        let Some(result) = l3_result else {
+            return crate::pipeline::degraded_error_result(
+                l2_result,
+                0.0,
+                0,
+                1.0,
+                "L3 produced no classifier output".to_string(),
+            );
+        };
+        let trace = ArbitrationTrace {
+            candidates: decision_candidate_for_source(
+                pipeline,
+                "L3",
+                "l3",
+                &result.class_name,
+                result.confidence,
+                point,
+                None,
+            )
+            .into_iter()
+            .collect(),
+            operating_point: point,
+        };
+        return if accepts_result(pipeline, &result, point) {
+            with_arbitration(result, LayerDecision::L3, Some(&trace))
+        } else {
+            let confidence = default_confidence(pipeline, &result);
+            with_arbitration(
+                with_default_result(result, pipeline, confidence),
+                LayerDecision::Default,
+                Some(&trace),
+            )
+        };
+    }
     let trace = arbitration_trace(pipeline, l3_result.as_ref(), &l2_result, point);
     if let Some(l3_result) = l3_result.as_ref() {
         if accepts_result(pipeline, l3_result, point) {
@@ -907,6 +943,30 @@ mod tests {
             selected.layers[0].details.get("final_arbitration"),
             Some(&serde_json::json!("l3"))
         );
+    }
+
+    #[test]
+    fn direct_l3_never_treats_pending_as_l2_evidence() {
+        for (class, confidence, expected) in [
+            ("benign", 0.99, "benign"),
+            ("attack", 0.70, "benign"),
+            ("attack", 0.99, "attack"),
+        ] {
+            let selected = arbitrate_l3_l2(
+                "injection",
+                Some(result(class, confidence, "L3")),
+                result("pending", 0.0, "L3"),
+                NtdbOperatingPoint::BestF1,
+            );
+            assert_eq!(selected.class_name, expected);
+            assert_eq!(selected.level, "L3");
+            assert!(selected
+                .decision
+                .unwrap()
+                .candidates
+                .iter()
+                .all(|candidate| candidate.source == "l3"));
+        }
     }
 
     #[test]

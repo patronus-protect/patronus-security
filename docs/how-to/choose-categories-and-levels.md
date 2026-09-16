@@ -99,3 +99,16 @@ specific detector below the ceiling, without rebuilding the gateway:
     // ... later ...
     scanner.set_execution_gates(ScanGateMatrix::all_enabled());   // reset
     ```
+
+### Running classifiers with L3 only
+
+With L2 disabled and L3 enabled, requested classifier categories are sent directly
+to L3; L2 promotion is not required. The canonical tokenizer splits the full input
+into 256-token model inputs (254 content tokens plus two special tokens). Model
+and L3 conditional gates still apply. L3 assets and the configured local or remote
+inference service must be ready. Native-only categories do not acquire an L3 model.
+Without L2 fallback results, a positive classifier may stop its own head early,
+but does not skip the other requested classifier heads.
+Dedicated L3 startup still requires its NTDB package metadata for label mappings;
+disabling L2 skips its inference, not that existing asset prerequisite. Unified
+L3-only startup does not require NTDB L2 packages.

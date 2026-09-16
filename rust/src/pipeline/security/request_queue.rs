@@ -1233,7 +1233,23 @@ pub(super) fn rejected_l1_candidate_gate_results(
         .collect()
 }
 
-fn l3_candidates(result: &SecurityScanResult) -> Vec<L3Candidate> {
+pub(super) fn l3_candidates(result: &SecurityScanResult) -> Vec<L3Candidate> {
+    if result.level == "L3" && has_l3_pending(result) {
+        // Direct L3 has no scored promotion, but the shared Unified run still
+        // needs an explicit head/span assignment before its category is replaced.
+        return result
+            .internal_l2_chunk_outputs
+            .iter()
+            .map(|chunk| L3Candidate {
+                span: chunk.span,
+                promote_score: 0.0,
+                promote_threshold: 0.0,
+                source_pipeline: chunk.source_pipeline.clone(),
+                source_model: chunk.source_model.clone(),
+                l2_class: String::new(),
+            })
+            .collect();
+    }
     result
         .layers
         .iter()
