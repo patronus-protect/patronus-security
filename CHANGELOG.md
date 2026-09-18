@@ -9,6 +9,13 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ## [Unreleased]
 
+### Fixed
+
+- Schedule classifier L3 inference directly when L2 is disabled, preparing canonical
+  256-token inputs without L2 scores. Preserve model gates and independent tool-tag
+  properties and conditional gates, exclude absent L2 evidence from final decisions,
+  and require L3 model readiness even when L1/L2 are disabled.
+
 ## [0.1.7] - 2026-09-13
 
 ### Added

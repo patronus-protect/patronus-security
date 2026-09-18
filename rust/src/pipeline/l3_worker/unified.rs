@@ -336,7 +336,13 @@ fn run_unified_model_job(
     let mut total_chunks_by_head = HashMap::new();
 
     for head in promoted_heads {
-        let policy = job.execution.l3_policy().pipeline_policy(&head, &head);
+        let mut policy = job.execution.l3_policy().pipeline_policy(&head, &head);
+        // Without L2 there is no classified fallback for the remaining heads.
+        if !job.execution.allows_level(SecurityLevel::L2)
+            && policy.early_exit == crate::L3PipelineEarlyExit::RequestWidePositive
+        {
+            policy.early_exit = crate::L3PipelineEarlyExit::HeadStable;
+        }
         let mut head_entries = head_plan
             .heads_by_chunk
             .iter()
@@ -1457,7 +1463,9 @@ fn materialize_completed_unified_subscribers(
             .heads
             .contains_key(result_head(&subscriber.fallback))
             && !run.head_early_exits.is_empty();
-        let output = if missing_after_physical_early_exit {
+        let output = if !subscriber.execution.allows_level(SecurityLevel::L2) {
+            materialize_unified_result(&subscriber, run)
+        } else if missing_after_physical_early_exit {
             let mut heads = run.head_early_exits.iter().cloned().collect::<Vec<_>>();
             heads.sort();
             materialize_unified_request_wide_skip(
@@ -2015,6 +2023,24 @@ mod tests {
                 .iter()
                 .map(|subscriber| result_head(&subscriber.fallback)),
         ));
+
+        let mut direct_subscribers = subscribers.clone();
+        for subscriber in &mut direct_subscribers {
+            subscriber
+                .execution
+                .set_gates(crate::ScanGateMatrix::levels(false, false, true));
+            subscriber.fallback.level = "L3".to_string();
+            subscriber.fallback.class_name = "pending".to_string();
+            subscriber.fallback.confidence = 0.0;
+        }
+        let direct_outputs = materialize_completed_unified_subscribers(direct_subscribers, &run);
+        assert_eq!(direct_outputs[1].1.level, "L3");
+        assert_eq!(direct_outputs[1].1.class_name, "database");
+        assert!(!direct_outputs[1]
+            .1
+            .layers
+            .iter()
+            .any(|layer| layer.layer_type == "l3_skipped"));
 
         let outputs = materialize_completed_unified_subscribers(subscribers, &run);
 

@@ -1169,7 +1169,7 @@ fn abort_queued_l3_jobs_for_request(worker: &Arc<L3WorkerState>, request_id: &st
         let mut aborted = Vec::new();
         let mut kept = Vec::with_capacity(jobs.len());
         for job in jobs.drain(..) {
-            if job.request_id == request_id {
+            if job.request_id == request_id && job.execution.allows_level(SecurityLevel::L2) {
                 aborted.push(job);
             } else {
                 kept.push(job);
