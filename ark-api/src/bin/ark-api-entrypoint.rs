@@ -146,12 +146,23 @@ struct Job {
     progress: HashMap<String, Value>,
     #[serde(default)]
     categories: HashMap<String, Value>,
+    #[serde(default)]
+    detectors: HashMap<String, Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     completion: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     decision: Option<String>,
     #[serde(default)]
     timings: JobTimings,
+}
+
+impl Job {
+    fn record_detector(&mut self, category: &str, model: &str) {
+        let models = self.detectors.entry(category.to_string()).or_default();
+        if !models.iter().any(|existing| existing == model) {
+            models.push(model.to_string());
+        }
+    }
 }
 
 fn job_key(job_id: &str) -> String {
@@ -365,6 +376,7 @@ async fn submit_scan(
             worker_request_id: worker_request_id.to_string(),
             progress: HashMap::new(),
             categories: HashMap::new(),
+            detectors: HashMap::new(),
             completion: None,
             decision: None,
             timings: JobTimings {
@@ -991,6 +1003,7 @@ mod tests {
             worker_request_id: "rq-test".to_string(),
             progress: HashMap::new(),
             categories,
+            detectors: HashMap::new(),
             completion: Some(json!({"state": "complete"})),
             decision: None,
             timings: JobTimings::default(),
@@ -1004,6 +1017,18 @@ mod tests {
         assert!(!job_owned_by(&job, "other-hash"));
         job.owner_key_hash.clear();
         assert!(!job_owned_by(&job, ""));
+    }
+
+    #[test]
+    fn job_response_lists_all_reported_detector_models() {
+        let mut job = completed_job(HashMap::new());
+        job.record_detector("dlp", "native:dlp");
+        job.record_detector("dlp", "native:secret_transfer");
+        let response = serde_json::to_value(job).unwrap();
+        assert_eq!(
+            response["detectors"]["dlp"],
+            json!(["native:dlp", "native:secret_transfer"])
+        );
     }
 
     #[test]

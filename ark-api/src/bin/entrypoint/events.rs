@@ -116,6 +116,9 @@ pub(super) async fn collect_events_inner(
                 }
                 "result" => {
                     if let Some(category) = data.get("category").and_then(Value::as_str) {
+                        if let Some(model) = data.get("model").and_then(Value::as_str) {
+                            job.record_detector(category, model);
+                        }
                         tracing::debug!(
                             job_id,
                             worker = %worker.name,
