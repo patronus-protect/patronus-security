@@ -12,12 +12,14 @@ use patronus_ark::{
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
-use tokio_stream::wrappers::BroadcastStream;
+use tokio_stream::wrappers::{errors::BroadcastStreamRecvError, BroadcastStream};
 
 use crate::auth::AuthenticatedKey;
 use crate::config::{parse_categories, RawGates};
 use crate::dto::{CompletionDto, QueuedScanResultDto};
 use crate::state::AppState;
+
+const MAX_SCAN_INPUTS: usize = 64;
 
 #[derive(Debug, Deserialize, Default)]
 #[serde(deny_unknown_fields)]
@@ -55,14 +57,10 @@ fn resolve_request_config(
         .clone()
         .or_else(|| key.allowed_categories.clone())
         .unwrap_or_else(|| config.categories.clone());
-    let Some(request) = request else {
-        return Ok(ResolvedScanConfig {
-            categories: defaults,
-            gates: config.gates_for(key),
-            metadata: empty_metadata(),
-            ntdb_operating_point: None,
-        });
-    };
+    let request = request.unwrap_or_else(|| RequestScanConfig {
+        metadata: empty_metadata(),
+        ..Default::default()
+    });
 
     if !request.metadata.is_object() {
         return Err("config.metadata must be a JSON object".to_string());
@@ -198,6 +196,15 @@ async fn parse_scan_request(
             }
         };
         if !text.trim().is_empty() {
+            if inputs.len() >= MAX_SCAN_INPUTS {
+                return Err(Box::new(
+                    (
+                        StatusCode::TOO_MANY_REQUESTS,
+                        Json(json!({ "error": "too many scan inputs" })),
+                    )
+                        .into_response(),
+                ));
+            }
             inputs.push((file_name.unwrap_or(field_name), text));
         }
     }
@@ -225,6 +232,7 @@ async fn parse_scan_request(
 
 fn enqueue_scan(
     state: &AppState,
+    owner_key_hash: &str,
     resolved: &ResolvedScanConfig,
     source: String,
     content: String,
@@ -236,7 +244,7 @@ fn enqueue_scan(
         Some(resolved.gates.clone()),
         resolved.ntdb_operating_point,
     );
-    state.register(request_id.clone());
+    state.register(request_id.clone(), owner_key_hash);
     (request_id, source)
 }
 
@@ -253,7 +261,8 @@ pub async fn submit_scan(
     let jobs = inputs
         .into_iter()
         .map(|(source, content)| {
-            let (request_id, source) = enqueue_scan(&state, &resolved, source, content);
+            let (request_id, source) =
+                enqueue_scan(&state, &key.key_hash, &resolved, source, content);
             json!({ "request_id": request_id, "source": source })
         })
         .collect::<Vec<_>>();
@@ -300,7 +309,7 @@ pub async fn submit_scan_sync(
     };
     let jobs = inputs
         .into_iter()
-        .map(|(source, content)| enqueue_scan(&state, &resolved, source, content))
+        .map(|(source, content)| enqueue_scan(&state, &key.key_hash, &resolved, source, content))
         .collect::<Vec<_>>();
     let completed = futures::future::join_all(jobs.into_iter().map(|(request_id, source)| {
         let state = state.clone();
@@ -340,9 +349,10 @@ pub async fn submit_scan_sync(
 
 pub async fn scan_events(
     State(state): State<AppState>,
+    Extension(AuthenticatedKey(key)): Extension<AuthenticatedKey>,
     Path(request_id): Path<String>,
 ) -> axum::response::Response {
-    let Some((buffered, receiver)) = state.subscribe(&request_id) else {
+    let Some((buffered, receiver)) = state.subscribe_for_key(&request_id, &key.key_hash) else {
         return (
             StatusCode::NOT_FOUND,
             Json(json!({ "error": "unknown or already-finished request_id" })),
@@ -355,17 +365,23 @@ pub async fn scan_events(
             .into_iter()
             .map(|event| Ok::<Event, Infallible>(to_sse_event(event))),
     );
-    let live = BroadcastStream::new(receiver).filter_map(|item| {
-        futures::future::ready(match item {
-            Ok(event) => Some(Ok::<Event, Infallible>(to_sse_event(event))),
-            Err(_lagged) => None,
-        })
-    });
+    let live =
+        BroadcastStream::new(receiver).map(|item| Ok::<Event, Infallible>(to_live_sse_event(item)));
     let stream = replay.chain(live);
 
     Sse::new(stream)
         .keep_alive(KeepAlive::new().interval(Duration::from_secs(15)))
         .into_response()
+}
+
+fn to_live_sse_event(item: Result<QueuedSecurityEvent, BroadcastStreamRecvError>) -> Event {
+    match item {
+        Ok(event) => to_sse_event(event),
+        Err(BroadcastStreamRecvError::Lagged(missed)) => Event::default()
+            .event("gap")
+            .json_data(json!({ "missed_events": missed }))
+            .unwrap_or_else(|_| Event::default().event("gap")),
+    }
 }
 
 fn to_sse_event(event: QueuedSecurityEvent) -> Event {
@@ -581,6 +597,16 @@ mod tests {
     }
 
     #[test]
+    fn request_without_config_rejects_default_outside_key_permissions() {
+        let (mut config, mut key) = config_and_key();
+        config.categories.push(SecurityCategory::Dlp);
+        key.default_categories = Some(vec![SecurityCategory::Dlp]);
+
+        let error = resolve_request_config(&config, &key, None).err().unwrap();
+        assert!(error.contains("not permitted"));
+    }
+
+    #[test]
     fn request_config_can_use_allowed_category_outside_default_set() {
         let (mut config, mut key) = config_and_key();
         config.categories.push(SecurityCategory::Pii);
@@ -685,5 +711,75 @@ mod tests {
         assert!(payload["jobs"][0]["request_id"].is_string());
         assert!(payload["jobs"][0]["completion"].is_object());
         assert!(payload["total_ms"].as_f64().is_some());
+    }
+
+    #[tokio::test]
+    async fn multipart_rejects_more_than_64_inputs_before_enqueue() {
+        let (mut config, mut key) = config_and_key();
+        key.key_hash = format!("{:x}", Sha256::digest(b"correct-secret"));
+        config.keys = vec![key];
+        let gateway = SecurityGateway::with_max_level(
+            config.categories.clone(),
+            SecurityLevel::L1,
+            None,
+            false,
+        );
+        let state = AppState::new(config, gateway);
+        let app = Router::new()
+            .route("/v1/scan", post(submit_scan))
+            .route_layer(middleware::from_fn_with_state(
+                state.clone(),
+                crate::auth::require_api_key,
+            ))
+            .with_state(state.clone());
+        let mut body = String::new();
+        for index in 0..=MAX_SCAN_INPUTS {
+            body.push_str(&format!(
+                "--boundary\r\nContent-Disposition: form-data; name=\"text-{index}\"\r\n\r\nx\r\n"
+            ));
+        }
+        body.push_str("--boundary--\r\n");
+        let response = app
+            .oneshot(
+                Request::post("/v1/scan")
+                    .header("authorization", "Bearer correct-secret")
+                    .header("content-type", "multipart/form-data; boundary=boundary")
+                    .body(Body::from(body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(state.active_jobs(), 0);
+    }
+
+    #[tokio::test]
+    async fn lagged_sse_receiver_reports_gap() {
+        let event = to_live_sse_event(Err(BroadcastStreamRecvError::Lagged(3)));
+        let response =
+            Sse::new(futures::stream::once(async { Ok::<_, Infallible>(event) })).into_response();
+        let body = to_bytes(response.into_body(), 1024).await.unwrap();
+        let body = std::str::from_utf8(&body).unwrap();
+        assert!(body.contains("event: gap"));
+        assert!(body.contains("\"missed_events\":3"));
+    }
+
+    #[test]
+    fn event_stream_is_bound_to_submitting_key() {
+        let (config, _) = config_and_key();
+        let gateway = SecurityGateway::with_max_level(
+            config.categories.clone(),
+            SecurityLevel::L1,
+            None,
+            false,
+        );
+        let state = AppState::new(config, gateway);
+        state.register("request-one".into(), "owner-hash");
+        assert!(state
+            .subscribe_for_key("request-one", "owner-hash")
+            .is_some());
+        assert!(state
+            .subscribe_for_key("request-one", "other-hash")
+            .is_none());
     }
 }

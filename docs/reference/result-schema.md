@@ -369,7 +369,7 @@ Each `failures` entry is a structured `SecurityFailure` dict:
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `stage` | str | `warmup`, `asset`, `scanner`, `inference`, `queue`, or `worker`. |
-| `kind` | str | `not_ready`, `missing_asset`, `integrity_failure`, `initialization_failure`, `inference_failure`, `timeout`, `worker_unavailable`, or `internal`. |
+| `kind` | str | `not_ready`, `missing_asset`, `integrity_failure`, `initialization_failure`, `inference_failure`, `timeout`, `queue_full`, `worker_unavailable`, or `internal`. |
 | `level` | str \| null | The level that failed (`L1`/`L2`/`L3`), if applicable. |
 | `detector_id` | str \| null | The specific detector or model that failed, if applicable. |
 | `retryable` | bool | Whether the failure is transient and could succeed on retry. |

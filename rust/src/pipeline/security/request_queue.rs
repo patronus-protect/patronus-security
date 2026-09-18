@@ -194,18 +194,24 @@ impl SecurityGateway {
             .expect("request registry mutex poisoned")
             .requests
             .insert(request_id.clone(), RequestState::running());
-        if self
-            .queue_sender()
-            .send(QueueWork {
-                request_id: request_id.clone(),
-                inputs,
-                execution,
-                metadata,
-                #[cfg(feature = "test-util")]
-                delay_ms,
-            })
-            .is_err()
-        {
+        let enqueue_result = self.queue_sender().try_send(QueueWork {
+            request_id: request_id.clone(),
+            inputs,
+            execution,
+            metadata,
+            #[cfg(feature = "test-util")]
+            delay_ms,
+        });
+        if let Err(error) = enqueue_result {
+            let (kind, message) = match error {
+                mpsc::TrySendError::Full(_) => {
+                    (SecurityFailureKind::QueueFull, "gateway queue is full")
+                }
+                mpsc::TrySendError::Disconnected(_) => (
+                    SecurityFailureKind::WorkerUnavailable,
+                    "gateway queue worker stopped",
+                ),
+            };
             let mut registry = self
                 .requests
                 .state
@@ -216,9 +222,9 @@ impl SecurityGateway {
                     stage: SecurityFailureStage::Queue,
                     level: None,
                     detector_id: None,
-                    kind: SecurityFailureKind::WorkerUnavailable,
+                    kind,
                     retryable: true,
-                    message: "gateway queue worker stopped".to_string(),
+                    message: message.to_string(),
                 });
             }
             finish_request_if_ready(&mut registry, &request_id);
@@ -227,9 +233,9 @@ impl SecurityGateway {
         request_id
     }
 
-    fn queue_sender(&self) -> &mpsc::Sender<QueueWork> {
+    fn queue_sender(&self) -> &mpsc::SyncSender<QueueWork> {
         self.queue_sender.get_or_init(|| {
-            let (sender, receiver) = mpsc::channel::<QueueWork>();
+            let (sender, receiver) = mpsc::sync_channel::<QueueWork>(256);
             let receiver = Arc::new(Mutex::new(receiver));
             let worker_count = self.core.queue_worker_count.load(Ordering::Relaxed).max(1);
             for _ in 0..worker_count {

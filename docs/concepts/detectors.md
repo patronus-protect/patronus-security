@@ -70,8 +70,9 @@ their score and evidence in the typed decision contract without becoming finding
 
 The [`rust/src/threat/`](https://github.com/patronus-protect/patronus-security/tree/main/rust/src/threat)
 module provides shared pattern- and obfuscation-detection primitives used internally by several
-injection and DLP detectors. The `threat` *category* itself has **no native L1 stage** — it starts
-at NTDB L2 (see [Categories](categories.md#model-backed-l2-l3)).
+injection and DLP detectors. The `threat` category also has a native L1 producer,
+[`native:threat_l1`](../reference/threat-l1.md), before its NTDB L2 stage (see
+[Categories](categories.md)).
 
 `instruction_override` includes common German imperative variants such as attempts to forget,
 ignore, disregard, override, skip, or discard prior instructions, while contextless everyday

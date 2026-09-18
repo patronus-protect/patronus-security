@@ -198,7 +198,7 @@ where
 /// Main scanner gateway for native and model-backed security categories.
 pub struct SecurityGateway {
     core: Arc<SecurityGatewayCore>,
-    queue_sender: OnceLock<mpsc::Sender<request_queue::QueueWork>>,
+    queue_sender: OnceLock<mpsc::SyncSender<request_queue::QueueWork>>,
 }
 
 #[derive(Debug, Clone)]

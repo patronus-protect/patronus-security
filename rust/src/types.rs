@@ -56,6 +56,7 @@ pub enum SecurityFailureKind {
     InitializationFailure,
     InferenceFailure,
     Timeout,
+    QueueFull,
     WorkerUnavailable,
     Internal,
 }
@@ -133,6 +134,7 @@ impl SecurityFailureKind {
             Self::InitializationFailure => "initialization_failure",
             Self::InferenceFailure => "inference_failure",
             Self::Timeout => "timeout",
+            Self::QueueFull => "queue_full",
             Self::WorkerUnavailable => "worker_unavailable",
             Self::Internal => "internal",
         }

@@ -316,7 +316,7 @@ mod tests {
         assert!(!state.admission.lock().unwrap().recover(state.active_jobs()));
         drop(distributed_job);
         assert_eq!(state.active_jobs(), 0);
-        state.register("unfinished-inference".into());
+        state.register("unfinished-inference".into(), "test-key-hash");
         let busy = app
             .clone()
             .oneshot(request("/internal/status", "GET"))

@@ -51,7 +51,8 @@ All endpoints except `/healthz` and `/readyz` require
   opt-ins. PII and Injection rules remain enabled unless configured otherwise.
   Returns `202` with `{"jobs": [{"job_id", "source", "status_url"}, ...]}`.
 - `GET /v1/scan/{job_id}` — durable job status plus accumulated progress,
-  compact category results, `decision_evidence`, and the overall decision.
+  compact category results, `decision_evidence`, and the overall decision. Only the API key that
+  submitted the job can retrieve it.
 - `GET /healthz` — liveness, no auth.
 - `GET /readyz` — gateway readiness requires Redis and at least one healthy worker.
   Redis connections reconnect automatically; workers are monitored continuously and

@@ -983,6 +983,32 @@ mod l3_worker_streaming {
     use crate::consume_for;
 
     #[test]
+    fn saturated_gateway_queue_reports_retryable_failure() {
+        let scanner = SecurityGateway::with_max_level(
+            vec![SecurityCategory::Dlp],
+            SecurityLevel::L1,
+            None,
+            false,
+        );
+        scanner.set_queue_worker_count(1);
+        for _ in 0..258 {
+            scanner.enqueue_test_work_delay_request(10_000);
+        }
+        let event = scanner
+            .consume_next_event(Some(Duration::from_millis(100)))
+            .unwrap();
+        let QueuedSecurityEvent::Finished { completion, .. } = event else {
+            panic!("full queue must emit a terminal event");
+        };
+        let SecurityRequestCompletion::Failed { failures } = completion else {
+            panic!("full queue must fail the request");
+        };
+        assert!(failures.iter().any(|failure| {
+            failure.kind == patronus_ark::SecurityFailureKind::QueueFull && failure.retryable
+        }));
+    }
+
+    #[test]
     fn enqueue_only_submits_work_to_the_gateway_worker() {
         let scanner = SecurityGateway::with_max_level(
             vec![SecurityCategory::Dlp],

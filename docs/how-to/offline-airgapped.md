@@ -26,9 +26,10 @@ while (event := scanner.consume_next_event(timeout=1.0)) is not None:
         break
 ```
 
-This gateway never touches the network and is always available. `pii` and `dlp` are fully
-covered here; `injection` gets its native L1 stage. `threat` (like `sensitive_document`, `tool_*`,
-and `routing`) is model-only and produces no verdict at `max_level="l1"`.
+This gateway never touches the network. `pii` and `dlp` are fully covered here;
+`injection` gets its native L1 stage. Add `threat` to `categories` for its native
+[`native:threat_l1`](../reference/threat-l1.md) stage. `sensitive_document`, `tool_*`,
+and `routing` are model-only and produce no verdict at `max_level="l1"`.
 
 ## Offline with pre-cached models (split lifecycle)
 
@@ -85,9 +86,11 @@ startup:
 print(scanner.runtime_readiness())
 ```
 
-If a required asset is missing, the affected category degrades to its best available lower
-layer (see [degradation contract](../concepts/layered-scanning.md#degradation-contract)) —
-decide whether that is acceptable for your risk posture.
+At startup, `warmup()` and `warmup_from_local_assets()` fail if a configured model
+asset is missing. Check readiness or pre-cache assets before starting the runtime.
+After successful startup, a model inference failure can degrade an affected scan to
+its best available lower layer (see the [degradation contract](../concepts/layered-scanning.md#degradation-contract)).
+Decide whether that runtime fallback is acceptable for your risk posture.
 
 ## Notes
 
