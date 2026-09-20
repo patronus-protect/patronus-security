@@ -915,12 +915,21 @@ impl SecurityGateway {
         &self,
         text: &str,
     ) -> Result<Vec<PreparedNtdbChunk>, String> {
+        self.prepare_distributed_ntdb_chunks_with_execution(text, &self.scan_execution())
+    }
+
+    /// Tokenize a document for distributed execution with request-local options.
+    pub fn prepare_distributed_ntdb_chunks_with_execution(
+        &self,
+        text: &str,
+        execution: &ScanExecution,
+    ) -> Result<Vec<PreparedNtdbChunk>, String> {
         self.ntdb_executor
             .as_ref()
             .ok_or_else(|| "NTDB L2 runtime is not initialized".to_string())?
             .lock()
             .map_err(|error| format!("NTDB executor mutex poisoned: {error}"))?
-            .prepare_chunks(text)
+            .prepare_chunks_with_overlap(text, execution.chunk_overlap_tokens())
             .map_err(|error| error.to_string())
     }
 
@@ -1641,10 +1650,11 @@ impl SecurityGateway {
                 format!("model_ids={}", model_ids.len()),
             );
             let decisions = match executor_mutex.lock() {
-                Ok(mut executor) => executor.score_models(
+                Ok(mut executor) => executor.score_models_with_overlap(
                     model_ids.iter().copied(),
                     text,
                     execution.ntdb_operating_point(),
+                    execution.chunk_overlap_tokens(),
                 ),
                 Err(err) => Err(Box::new(std::io::Error::other(format!(
                     "NTDB executor mutex poisoned: {err}"

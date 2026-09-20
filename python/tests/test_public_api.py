@@ -889,6 +889,17 @@ class PublicApiTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             scanner.enqueue("text", ntdb_operating_point="best_guess")
 
+    def test_enqueue_validates_request_local_chunk_overlap(self):
+        scanner = SecurityGateway(categories=["dlp"], max_level="l1", download_files=False)
+        request_id = scanner.enqueue("text", chunk_overlap_tokens=64)
+        events = list(scanner.consume_events(timeout=1))
+
+        self.assertEqual(events[-1]["request_id"], request_id)
+        with self.assertRaisesRegex(ValueError, "between 0 and 64"):
+            scanner.enqueue("text", chunk_overlap_tokens=65)
+        with self.assertRaisesRegex(ValueError, "between 0 and 64"):
+            scanner.enqueue("text", chunk_overlap_tokens=-1)
+
     def test_consume_events_times_out_when_shared_queue_is_empty(self):
         scanner = SecurityGateway(categories=["dlp"], max_level="l2", download_files=False)
 

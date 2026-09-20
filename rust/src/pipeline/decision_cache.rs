@@ -185,6 +185,7 @@ fn cache_key(namespace: &str, text: &str, execution: &ScanExecution) -> Decision
             .as_bytes(),
     );
     scope.update(execution.l3_strategy().as_str().as_bytes());
+    scope.update(&execution.chunk_overlap_tokens().to_le_bytes());
     DecisionCacheKey {
         scope_hash: *scope.finalize().as_bytes(),
         text_hash: *blake3::hash(text.as_bytes()).as_bytes(),
@@ -305,5 +306,22 @@ fn prune(inner: &mut DecisionCacheInner, config: DecisionCacheConfig, now: Insta
         if let Some(entry) = inner.entries.remove(&key) {
             inner.used_bytes = inner.used_bytes.saturating_sub(entry.estimated_bytes);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cache_key_separates_chunk_overlap() {
+        let baseline = ScanExecution::default();
+        let mut overlapped = baseline.clone();
+        overlapped.set_chunk_overlap_tokens(64).unwrap();
+
+        assert_ne!(
+            cache_key("injection", "same text", &baseline),
+            cache_key("injection", "same text", &overlapped)
+        );
     }
 }

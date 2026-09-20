@@ -87,7 +87,8 @@ impl SecurityGateway {
                 );
                 // Reuse the token handoff transport, without inventing L2 scores or embeddings.
                 result.internal_l2_chunk_outputs = tokenizer
-                    .token_chunks(&input.text)
+                    .token_chunks_with_overlap(&input.text, execution.chunk_overlap_tokens())
+                    .expect("ScanExecution contains a validated chunk overlap")
                     .into_iter()
                     .map(|chunk| L2ChunkOutput {
                         span: crate::ml::ntdb_executor::ByteSpan {
@@ -173,6 +174,30 @@ mod tests {
             assert!(chunk.class_probabilities.is_empty());
             assert!(chunk.embedding.is_empty());
             assert!(chunk.token_ids.len() <= 254);
+        }
+    }
+
+    #[test]
+    fn l3_only_uses_request_chunk_overlap() {
+        let gateway = gateway();
+        let text = "hello world ".repeat(800);
+        let inputs = vec![ExternalL1Input::new(
+            SecurityCategory::Injection,
+            text.as_str(),
+        )];
+        let mut execution = gateway.scan_execution();
+        execution.set_chunk_overlap_tokens(64).unwrap();
+
+        let results = gateway.scan_l2_inputs(&inputs, &execution, &serde_json::json!({}), &[]);
+        let actual = &results[0].internal_l2_chunk_outputs;
+        let expected = crate::ml::tokenizer::fixture_tokenizer()
+            .token_chunks_with_overlap(&text, 64)
+            .unwrap();
+
+        assert_eq!(actual.len(), expected.len());
+        for (actual, expected) in actual.iter().zip(expected) {
+            assert_eq!(actual.token_ids, expected.token_ids);
+            assert_eq!((actual.span.start, actual.span.end), expected.byte_span);
         }
     }
 

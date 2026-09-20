@@ -208,7 +208,8 @@ impl SecurityGateway {
         Ok(results)
     }
 
-    #[pyo3(signature = (text, categories=None, execution_gates_json=None, metadata_json=None, ntdb_operating_point=None))]
+    #[pyo3(signature = (text, categories=None, execution_gates_json=None, metadata_json=None, ntdb_operating_point=None, chunk_overlap_tokens=0))]
+    #[allow(clippy::too_many_arguments)]
     fn enqueue(
         &self,
         py: Python<'_>,
@@ -217,7 +218,10 @@ impl SecurityGateway {
         execution_gates_json: Option<&str>,
         metadata_json: Option<&str>,
         ntdb_operating_point: Option<&str>,
+        chunk_overlap_tokens: i64,
     ) -> PyResult<String> {
+        let chunk_overlap_tokens = patronus_ark::ChunkOverlapTokens::try_from(chunk_overlap_tokens)
+            .map_err(pyo3::exceptions::PyValueError::new_err)?;
         let gates = parse_execution_gates_json(execution_gates_json)?;
         let ntdb_operating_point = ntdb_operating_point
             .map(parse_ntdb_operating_point)
@@ -233,18 +237,24 @@ impl SecurityGateway {
             Some(categories) => {
                 let rust_categories = parse_categories(categories)?;
                 py.allow_threads(|| {
-                    self.inner.enqueue_categories_with_options(
+                    self.inner.enqueue_categories_with_chunk_overlap_options(
                         rust_categories,
                         text,
                         metadata,
                         gates,
                         ntdb_operating_point,
+                        chunk_overlap_tokens,
                     )
                 })
             }
             None => py.allow_threads(|| {
-                self.inner
-                    .enqueue_with_options(text, metadata, gates, ntdb_operating_point)
+                self.inner.enqueue_with_chunk_overlap_options(
+                    text,
+                    metadata,
+                    gates,
+                    ntdb_operating_point,
+                    chunk_overlap_tokens,
+                )
             }),
         };
         Ok(request_id)

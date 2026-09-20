@@ -445,6 +445,7 @@ class SecurityGateway:
         execution_gates: dict | None = None,
         metadata: dict | None = None,
         ntdb_operating_point: str | None = None,
+        chunk_overlap_tokens: int = 0,
     ) -> str:
         """Queue one scan request and return its request id.
 
@@ -455,6 +456,8 @@ class SecurityGateway:
         provided, applies only to this request. `ntdb_operating_point`, when
         provided, overrides the gateway final-decision threshold profile for this
         request and does not change L3 promotion.
+        `chunk_overlap_tokens` controls classifier chunk overlap for this request
+        and must be between 0 and 64.
         """
         if metadata is not None and not isinstance(metadata, dict):
             raise ValueError("metadata must be a dict")
@@ -464,6 +467,7 @@ class SecurityGateway:
             _execution_gates_json(execution_gates),
             None if metadata is None else json.dumps(metadata),
             ntdb_operating_point,
+            chunk_overlap_tokens,
         )
 
     def consume_events(self, timeout: float | None = None):

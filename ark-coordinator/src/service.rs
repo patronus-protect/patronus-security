@@ -345,13 +345,10 @@ async fn get_scan(
 }
 
 fn authenticated(state: &AppState, headers: &HeaderMap) -> Option<String> {
-    let Some(token) = headers
+    let token = headers
         .get(header::AUTHORIZATION)
         .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.strip_prefix("Bearer "))
-    else {
-        return None;
-    };
+        .and_then(|value| value.strip_prefix("Bearer "))?;
     let digest = format!("{:x}", Sha256::digest(token.as_bytes()));
     state.config.auth.keys.iter().find_map(|key| {
         bool::from(

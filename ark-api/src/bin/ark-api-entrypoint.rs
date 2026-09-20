@@ -12,9 +12,9 @@ mod sse;
 mod timings;
 #[path = "entrypoint/worker_pool.rs"]
 mod worker_pool;
+use events::collect_events;
 #[cfg(test)]
-use events::collect_events_inner;
-use events::{collect_events, compact_result};
+use events::{collect_events_inner, compact_result};
 use timings::JobTimings;
 use worker_pool::{WorkerLease, WorkerPool};
 
@@ -177,9 +177,7 @@ fn bearer(headers: &HeaderMap) -> Option<&str> {
 }
 
 fn authenticated(state: &AppState, headers: &HeaderMap) -> Option<String> {
-    let Some(token) = bearer(headers) else {
-        return None;
-    };
+    let token = bearer(headers)?;
     let digest = format!("{:x}", Sha256::digest(token.as_bytes()));
     state
         .key_hashes

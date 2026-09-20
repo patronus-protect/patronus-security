@@ -90,6 +90,14 @@ impl NtdbExecutor {
         self.packages.prepare_chunks(text)
     }
 
+    pub fn prepare_chunks_with_overlap(
+        &self,
+        text: &str,
+        overlap: usize,
+    ) -> NtdbResult<Vec<PreparedNtdbChunk>> {
+        self.packages.prepare_chunks_with_overlap(text, overlap)
+    }
+
     /// Infer independent chunk evidence without performing document aggregation.
     /// `document_chunk_count` is the full document count, even when `chunks` is one worker batch.
     pub fn infer_prepared_chunks(
@@ -172,6 +180,23 @@ impl NtdbExecutor {
         let outputs = self
             .packages
             .score_models(model_ids, text, operating_point)?;
+        decisions_from_multi_outputs(outputs)
+    }
+
+    pub fn score_models_with_overlap<I, S>(
+        &mut self,
+        model_ids: I,
+        text: &str,
+        operating_point: NtdbOperatingPoint,
+        overlap: usize,
+    ) -> NtdbResult<Vec<NtdbDecision>>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<str>,
+    {
+        let outputs =
+            self.packages
+                .score_models_with_overlap(model_ids, text, operating_point, overlap)?;
         decisions_from_multi_outputs(outputs)
     }
 }

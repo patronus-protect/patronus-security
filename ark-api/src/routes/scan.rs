@@ -34,6 +34,8 @@ pub struct RequestScanConfig {
     metadata: Value,
     #[serde(default)]
     ntdb_operating_point: Option<String>,
+    #[serde(default)]
+    chunk_overlap_tokens: Option<i64>,
 }
 
 fn empty_metadata() -> Value {
@@ -45,6 +47,7 @@ struct ResolvedScanConfig {
     gates: ScanGateMatrix,
     metadata: Value,
     ntdb_operating_point: Option<NtdbOperatingPoint>,
+    chunk_overlap_tokens: patronus_ark::ChunkOverlapTokens,
 }
 
 fn resolve_request_config(
@@ -110,11 +113,15 @@ fn resolve_request_config(
         .as_deref()
         .map(str::parse::<NtdbOperatingPoint>)
         .transpose()?;
+    let chunk_overlap_tokens =
+        patronus_ark::ChunkOverlapTokens::try_from(request.chunk_overlap_tokens.unwrap_or(0))
+            .map_err(|error| format!("config.{error}"))?;
     Ok(ResolvedScanConfig {
         categories,
         gates,
         metadata: request.metadata,
         ntdb_operating_point,
+        chunk_overlap_tokens,
     })
 }
 
@@ -237,13 +244,16 @@ fn enqueue_scan(
     source: String,
     content: String,
 ) -> (String, String) {
-    let request_id = state.gateway.enqueue_ark_api_categories_with_options(
-        resolved.categories.clone(),
-        content,
-        resolved.metadata.clone(),
-        Some(resolved.gates.clone()),
-        resolved.ntdb_operating_point,
-    );
+    let request_id = state
+        .gateway
+        .enqueue_ark_api_categories_with_chunk_overlap_options(
+            resolved.categories.clone(),
+            content,
+            resolved.metadata.clone(),
+            Some(resolved.gates.clone()),
+            resolved.ntdb_operating_point,
+            resolved.chunk_overlap_tokens,
+        );
     state.register(request_id.clone(), owner_key_hash);
     (request_id, source)
 }
@@ -258,14 +268,11 @@ pub async fn submit_scan(
         Ok(parsed) => parsed,
         Err(response) => return *response,
     };
-    let jobs = inputs
-        .into_iter()
-        .map(|(source, content)| {
-            let (request_id, source) =
-                enqueue_scan(&state, &key.key_hash, &resolved, source, content);
-            json!({ "request_id": request_id, "source": source })
-        })
-        .collect::<Vec<_>>();
+    let mut jobs = Vec::with_capacity(inputs.len());
+    for (source, content) in inputs {
+        let (request_id, source) = enqueue_scan(&state, &key.key_hash, &resolved, source, content);
+        jobs.push(json!({ "request_id": request_id, "source": source }));
+    }
     (StatusCode::ACCEPTED, Json(json!({ "jobs": jobs }))).into_response()
 }
 
@@ -525,6 +532,44 @@ mod tests {
         assert_eq!(
             resolved.ntdb_operating_point,
             Some(NtdbOperatingPoint::BestFprInF1)
+        );
+    }
+
+    #[test]
+    fn request_config_validates_chunk_overlap_tokens() {
+        let (config, key) = config_and_key();
+        for overlap in [0, 1, 64] {
+            let request: RequestScanConfig = serde_json::from_value(json!({
+                "categories": ["injection"],
+                "chunk_overlap_tokens": overlap
+            }))
+            .unwrap();
+            let resolved = resolve_request_config(&config, &key, Some(request)).unwrap();
+            assert_eq!(resolved.chunk_overlap_tokens.get(), overlap);
+        }
+
+        let request: RequestScanConfig = serde_json::from_value(json!({
+            "categories": ["injection"],
+            "chunk_overlap_tokens": 65
+        }))
+        .unwrap();
+        assert_eq!(
+            resolve_request_config(&config, &key, Some(request))
+                .err()
+                .unwrap(),
+            "config.chunk_overlap_tokens must be between 0 and 64"
+        );
+
+        let request: RequestScanConfig = serde_json::from_value(json!({
+            "categories": ["injection"],
+            "chunk_overlap_tokens": -1
+        }))
+        .unwrap();
+        assert_eq!(
+            resolve_request_config(&config, &key, Some(request))
+                .err()
+                .unwrap(),
+            "config.chunk_overlap_tokens must be between 0 and 64"
         );
     }
 

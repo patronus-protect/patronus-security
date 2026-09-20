@@ -35,8 +35,9 @@ All endpoints except `/healthz` and `/readyz` require
 
 - `POST /v1/scan` — `multipart/form-data` with an optional `text` or `content`
   field and/or one or more text-decodable files. An optional `config` field
-  contains JSON with `categories`, `max_level`, `gates`, `metadata`, and an
-  optional request-local `ntdb_operating_point` and is
+  contains JSON with `categories`, `max_level`, `gates`, `metadata`, an
+  optional request-local `ntdb_operating_point`, and `chunk_overlap_tokens`.
+  Chunk overlap defaults to `0` and accepts token counts from `0` through `64`. The config is
   snapshotted into every queued job. Missing config uses the existing defaults.
   `gates.rules` is a map from stable L1 rule IDs to booleans; absent IDs inherit
   shared Rust/Python/API defaults. PII IDs are the `pii_*` names in `PII_PATTERNS`, DLP IDs are the
