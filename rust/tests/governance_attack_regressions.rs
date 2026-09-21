@@ -10,8 +10,6 @@ struct Fixture {
 #[derive(Deserialize)]
 struct Case {
     id: String,
-    source_id: String,
-    source_file: String,
     text: String,
     expected_category: ExpectedCategory,
     rule_id: Option<String>,
@@ -50,10 +48,7 @@ fn governance_attack_goldens_preserve_terminal_and_nonterminal_taxonomy() {
             .into_iter()
             .find(|result| result.model == "native:injection_l1")
             .expect("aggregated native Injection L1 result");
-        let context = format!(
-            "{} from {} ({}) — {}",
-            case.id, case.source_id, case.source_file, case.rationale
-        );
+        let context = format!("{} — {}", case.id, case.rationale);
         match case.expected_category {
             ExpectedCategory::TerminalInjection => {
                 assert_ne!(

@@ -9,12 +9,20 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-09-21
+
+### Added
+
+- Added audited, high-precision Injection L1 governance rules and end-to-end regression
+  coverage for direct authority replacement, unrestricted modes, raw system-role boundaries,
+  privileged tool calls, administrator grants, and embedded new-task instructions.
+
 ### Fixed
 
-- Promote bounded governance attack relations to terminal Injection L1 decisions, including
-  cross-tool redirection, nested control tokens, agentic control abuse, and German policy
-  overrides. The original red-team payloads and nearby benign controls are versioned as a
-  machine-readable golden dataset.
+- Aligned PII L1 CVV goldens with the existing payment-card coupling requirement and replaced
+  the stale English tax-number hard negative with an anchorless control.
+- Preserve the calibrated Injection L1 threshold while promoting narrowly bounded governance
+  attacks and keeping nearby quoted, documentary, and negated forms nonterminal.
 
 ## [0.1.8] - 2026-09-20
 

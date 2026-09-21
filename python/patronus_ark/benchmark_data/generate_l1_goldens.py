@@ -117,9 +117,14 @@ PII_CASES = {
         n("CREDITCARD", "en", "Reference: 1111 1111 1111 1111", "repeated digits are excluded"),
     ],
     "CREDITCARD_CVV": [
-        p("CREDITCARD_CVV", "de", "CVV: ", "123"),
-        p("CREDITCARD_CVV", "en", "CVC2 is ", "884"),
-        p("CREDITCARD_CVV", "en", "Card verification code: ", "1234"),
+        p("CREDITCARD_CVV", "de", "Karte: 4111 1111 1111 1111, CVV: ", "123"),
+        p("CREDITCARD_CVV", "en", "Card 5555555555554444, CVC2 is ", "884"),
+        p(
+            "CREDITCARD_CVV",
+            "en",
+            "Card number 4111-1111-1111-1111; Card verification code: ",
+            "1234",
+        ),
         n("CREDITCARD_CVV", "de", "CVV: 12", "too short"),
         n("CREDITCARD_CVV", "en", "Security code: 123", "unsupported ambiguous anchor"),
     ],
@@ -212,7 +217,7 @@ PII_CASES = {
         p("TAX_NUMBER_DE", "de", "Steuer Nr. ", "12/345/67890"),
         p("TAX_NUMBER_DE", "en", "German Steuernummer: ", "1234/567/89012"),
         n("TAX_NUMBER_DE", "de", "Steuernummer: 000/000/00000", "all-zero value is excluded"),
-        n("TAX_NUMBER_DE", "en", "Tax number: 123/456/78901", "unsupported English-only anchor"),
+        n("TAX_NUMBER_DE", "en", "Reference: 123/456/78901", "missing tax-number anchor"),
     ],
     "SOCIALID": [
         p("SOCIALID", "de", "Sozialversicherungsnummer: ", "12123456A123"),
