@@ -403,6 +403,24 @@ impl RawConfig {
                 "pipeline.categories must not be empty".to_string(),
             ));
         }
+        for key in &keys {
+            if let Some(defaults) = &key.default_categories {
+                for category in defaults {
+                    if !categories.contains(category)
+                        || key
+                            .allowed_categories
+                            .as_ref()
+                            .is_some_and(|allowed| !allowed.contains(category))
+                    {
+                        return Err(ConfigError::Invalid(format!(
+                            "auth.keys[{}].default_categories contains unavailable category '{}'",
+                            key.name,
+                            category.as_str()
+                        )));
+                    }
+                }
+            }
+        }
         let max_level = SecurityLevel::from_str(&self.pipeline.max_level)
             .map_err(|err| ConfigError::Invalid(format!("pipeline.max_level: {err}")))?;
 
@@ -447,7 +465,21 @@ mod tests {
         detectors::dlp::dlp::DLP_PATTERNS, SecurityCategory, SecurityGateway, SecurityLevel,
     };
 
-    use super::{Config, RawGates, RawOnnxRuntime};
+    use super::{Config, RawConfig, RawGates, RawOnnxRuntime};
+
+    #[test]
+    fn rejects_key_defaults_outside_allowed_categories() {
+        let yaml = format!(
+            "server: {{bind: '127.0.0.1:0'}}\nauth:\n  keys:\n    - name: limited\n      key_hash: '{}'\n      categories: [injection]\n      default_categories: [dlp]\npipeline:\n  categories: [injection, dlp]\n  max_level: L1\n",
+            "0".repeat(64)
+        );
+        let raw: RawConfig = serde_yaml::from_str(&yaml).unwrap();
+        assert!(raw
+            .into_config()
+            .unwrap_err()
+            .to_string()
+            .contains("default_categories"));
+    }
 
     #[test]
     fn explain_is_explicit_and_disabled_by_default() {

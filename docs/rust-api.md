@@ -32,6 +32,7 @@ pub use dynamic_pii::{
     DynamicPiiResultCondition, EvidenceSpan,
 };
 pub use external_l1::{ExternalL1Detector, ExternalL1Input};
+pub use ml::tokenizer::{ChunkOverlapTokens, MAX_CHUNK_OVERLAP_TOKENS};
 pub use normalization::{canonical_security_text_v1, normalize_text, TextNormalizationConfig};
 pub use pipeline::{Pipeline, SecurityGateway};
 pub use post_prediction::{
@@ -57,7 +58,7 @@ pub use types::{
 ```rust
 pub struct SecurityGateway {
     core: Arc<SecurityGatewayCore>,
-    queue_sender: OnceLock<mpsc::Sender<request_queue::QueueWork>>,
+    queue_sender: OnceLock<mpsc::SyncSender<request_queue::QueueWork>>,
 }
 ```
 
@@ -289,6 +290,16 @@ pub fn prepare_distributed_ntdb_chunks(
 Tokenize a document once for distributed Package-v4 execution.
 
 ```rust
+pub fn prepare_distributed_ntdb_chunks_with_execution(
+    &self,
+    text: &str,
+    execution: &ScanExecution,
+) -> Result<Vec<PreparedNtdbChunk>, String>;
+```
+
+Tokenize a document for distributed execution with request-local options.
+
+```rust
 pub fn infer_distributed_ntdb_chunks(
     &self,
     model_ids: HashSet<String>,
@@ -482,6 +493,19 @@ pub fn enqueue_with_options(
 Submit a scan with request-local execution options.
 
 ```rust
+pub fn enqueue_with_chunk_overlap_options(
+    &self,
+    text: impl Into<String>,
+    metadata: serde_json::Value,
+    gates: Option<ScanGateMatrix>,
+    ntdb_decision_threshold_point: Option<crate::NtdbOperatingPoint>,
+    chunk_overlap_tokens: ChunkOverlapTokens,
+) -> RequestId;
+```
+
+Submit a scan with caller-provided request-local execution and chunking options.
+
+```rust
 pub fn enqueue_categories(
     &self,
     categories: Vec<SecurityCategory>,
@@ -519,6 +543,20 @@ pub fn enqueue_categories_with_options(
 Submit selected categories with request-local execution options.
 
 ```rust
+pub fn enqueue_categories_with_chunk_overlap_options(
+    &self,
+    categories: Vec<SecurityCategory>,
+    text: impl Into<String>,
+    metadata: serde_json::Value,
+    gates: Option<ScanGateMatrix>,
+    ntdb_decision_threshold_point: Option<crate::NtdbOperatingPoint>,
+    chunk_overlap_tokens: ChunkOverlapTokens,
+) -> RequestId;
+```
+
+Submit selected categories with request-local execution and chunking options.
+
+```rust
 pub fn enqueue_ark_api_categories_with_options(
     &self,
     categories: Vec<SecurityCategory>,
@@ -531,6 +569,20 @@ pub fn enqueue_ark_api_categories_with_options(
 
 Submit an Ark API request with short-document Injection utility routing.
 This profile is intentionally not used by library callers.
+
+```rust
+pub fn enqueue_ark_api_categories_with_chunk_overlap_options(
+    &self,
+    categories: Vec<SecurityCategory>,
+    text: impl Into<String>,
+    metadata: serde_json::Value,
+    gates: Option<ScanGateMatrix>,
+    ntdb_decision_threshold_point: Option<crate::NtdbOperatingPoint>,
+    chunk_overlap_tokens: ChunkOverlapTokens,
+) -> RequestId;
+```
+
+Submit an Ark API request with request-local classifier chunk overlap.
 
 ```rust
 pub fn enqueue_input(
@@ -791,6 +843,7 @@ pub enum SecurityFailureKind {
     InitializationFailure,
     InferenceFailure,
     Timeout,
+    QueueFull,
     WorkerUnavailable,
     Internal,
 }
@@ -1519,6 +1572,7 @@ pub struct ScanExecution {
     ntdb_decision_threshold_point: NtdbOperatingPoint,
     l3_strategy: L3Strategy,
     defer_l3: bool,
+    chunk_overlap_tokens: usize,
 }
 ```
 
@@ -1583,6 +1637,12 @@ pub fn set_defer_l3(&mut self, defer_l3: bool);
 ```
 
 Set whether L3 should be marked pending instead of executed immediately.
+
+```rust
+pub fn set_chunk_overlap_tokens(&mut self, overlap: usize) -> Result<(), String>;
+```
+
+Set the request-local overlap between adjacent classifier chunks.
 
 ```rust
 pub fn with_max_level(mut self, max_level: SecurityLevel) -> Self;
@@ -1656,6 +1716,12 @@ pub fn defer_l3(&self) -> bool;
 ```
 
 Return whether L3 should be centrally scheduled.
+
+```rust
+pub fn chunk_overlap_tokens(&self) -> usize;
+```
+
+Return the overlap between adjacent classifier chunks.
 
 ```rust
 pub fn l3_policy(&self) -> &L3SchedulerPolicy;

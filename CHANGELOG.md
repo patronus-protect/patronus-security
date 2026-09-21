@@ -9,6 +9,33 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-09-20
+
+### Added
+
+- Added request-local classifier chunk overlap through the Ark API and Python queue API.
+  `chunk_overlap_tokens` defaults to zero, is bounded to 64 tokens, and is applied consistently
+  to shared L2/L3 chunks and decision-cache identity.
+- Added direct L3 classifier execution when L2 is disabled, including canonical model inputs,
+  request-local gates, independent tool-tag properties, and calibrated final decisions without
+  fabricated L2 evidence.
+
+### Changed
+
+- Hardened Ark API and Coordinator request admission, ownership checks, event-stream access,
+  worker recovery fencing, and request-local configuration snapshots.
+- Split the Ark API entrypoint event handling, Unified L3 cache-key construction, and Python
+  benchmark reporting into focused reusable modules while preserving their public behavior.
+- Updated public documentation for category/level selection, offline requirements, deployment,
+  result schemas, and the current API defaults.
+
+### Fixed
+
+- Preserve detector result events in the Ark API entrypoint after the event-module extraction.
+- Require L3 model readiness when a request enables direct L3 while L1 and L2 are disabled.
+- Preserve the pre-0.1.8 chunking path exactly when `chunk_overlap_tokens` is omitted or zero,
+  including across internal 128-KiB tokenizer windows.
+
 ## [0.1.7] - 2026-09-13
 
 ### Added

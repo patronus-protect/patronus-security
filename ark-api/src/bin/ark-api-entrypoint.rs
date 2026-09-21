@@ -4,12 +4,17 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+#[path = "entrypoint/events.rs"]
+mod events;
 #[path = "entrypoint/sse.rs"]
 mod sse;
 #[path = "entrypoint/timings.rs"]
 mod timings;
 #[path = "entrypoint/worker_pool.rs"]
 mod worker_pool;
+use events::collect_events;
+#[cfg(test)]
+use events::{collect_events_inner, compact_result};
 use timings::JobTimings;
 use worker_pool::{WorkerLease, WorkerPool};
 
@@ -125,9 +130,14 @@ struct AppState {
     retention_secs: u64,
 }
 
+#[derive(Clone)]
+struct JobOwner(String);
+
 #[derive(Clone, Serialize, Deserialize)]
 struct Job {
     job_id: String,
+    #[serde(default)]
+    owner_key_hash: String,
     source: String,
     status: String,
     worker: String,
@@ -136,12 +146,23 @@ struct Job {
     progress: HashMap<String, Value>,
     #[serde(default)]
     categories: HashMap<String, Value>,
+    #[serde(default)]
+    detectors: HashMap<String, Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     completion: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     decision: Option<String>,
     #[serde(default)]
     timings: JobTimings,
+}
+
+impl Job {
+    fn record_detector(&mut self, category: &str, model: &str) {
+        let models = self.detectors.entry(category.to_string()).or_default();
+        if !models.iter().any(|existing| existing == model) {
+            models.push(model.to_string());
+        }
+    }
 }
 
 fn job_key(job_id: &str) -> String {
@@ -155,15 +176,14 @@ fn bearer(headers: &HeaderMap) -> Option<&str> {
         .and_then(|value| value.strip_prefix("Bearer "))
 }
 
-fn authenticated(state: &AppState, headers: &HeaderMap) -> bool {
-    let Some(token) = bearer(headers) else {
-        return false;
-    };
+fn authenticated(state: &AppState, headers: &HeaderMap) -> Option<String> {
+    let token = bearer(headers)?;
     let digest = format!("{:x}", Sha256::digest(token.as_bytes()));
     state
         .key_hashes
         .iter()
-        .any(|hash| hash.as_bytes().ct_eq(digest.as_bytes()).into())
+        .find(|hash| bool::from(hash.as_bytes().ct_eq(digest.as_bytes())))
+        .map(|_| digest)
 }
 
 fn unauthorized() -> Response {
@@ -212,263 +232,8 @@ fn final_decision(job: &Job) -> String {
     if has_risk { "block" } else { "allow" }.to_string()
 }
 
-async fn collect_events(
-    state: AppState,
-    mut job: Job,
-    lease: Arc<WorkerLease>,
-    request_id: String,
-    submitted: Instant,
-    dispatched: Instant,
-) {
-    let job_id = job.job_id.clone();
-    let completed = tokio::time::timeout(
-        Duration::from_secs(ACTIVE_TTL_SECS - 10),
-        collect_events_inner(
-            &state,
-            &mut job,
-            &lease.worker,
-            &request_id,
-            submitted,
-            dispatched,
-        ),
-    )
-    .await
-    .unwrap_or(false);
-    if completed {
-        lease.finished();
-    } else {
-        lease.quarantine();
-        tracing::error!(job_id, worker = %lease.worker.name, "worker completion unknown; worker quarantined until idle fence");
-        // Quarantine immediately; Redis cleanup must not hold this worker lease.
-        drop(lease);
-        job.status = "failed".into();
-        job.completion = Some(json!({"state":"failed", "failures":[{
-            "stage":"entrypoint", "kind":"worker_stream_interrupted",
-            "message":"Worker did not report completion", "retryable":true
-        }]}));
-        job.decision = Some("review".into());
-        let _ = save_job(&state, &job).await;
-    }
-    // The shared lease stays held until every job from this submission finishes.
-}
-
-async fn collect_events_inner(
-    state: &AppState,
-    job: &mut Job,
-    worker: &WorkerConfig,
-    request_id: &str,
-    submitted: Instant,
-    dispatched: Instant,
-) -> bool {
-    let job_id = job.job_id.clone();
-    let started = Instant::now();
-    let url = format!(
-        "{}/v1/scan/{request_id}/events",
-        worker.url.trim_end_matches('/')
-    );
-    let response = match state
-        .client
-        .get(url)
-        .bearer_auth(&state.worker_token)
-        .send()
-        .await
-    {
-        Ok(response) if response.status().is_success() => response,
-        Ok(response) => {
-            tracing::warn!(job_id, status = %response.status(), "worker event stream rejected");
-            return false;
-        }
-        Err(error) => {
-            tracing::warn!(job_id, %error, "worker event stream failed");
-            return false;
-        }
-    };
-
-    tracing::debug!(job_id, worker = %worker.name, worker_events_connected_ms = started.elapsed().as_secs_f64() * 1_000.0, "worker event stream connected");
-
-    let mut frames = sse::Frames::default();
-    let mut stream = response.bytes_stream();
-    let mut event_count = 0usize;
-    let mut progress_dirty = false;
-    let mut progress_flush = tokio::time::interval(Duration::from_millis(100));
-    progress_flush.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-    loop {
-        let chunk = tokio::select! {
-            chunk = stream.next() => match chunk {
-                Some(chunk) => chunk,
-                None => break,
-            },
-            _ = progress_flush.tick(), if progress_dirty => {
-                if save_job(state, job).await.is_err() {
-                    return false;
-                }
-                progress_dirty = false;
-                continue;
-            }
-        };
-        let Ok(chunk) = chunk else { break };
-        for frame in frames.push(&chunk) {
-            let event = frame.lines().find_map(|line| line.strip_prefix("event: "));
-            let data = frame
-                .lines()
-                .find_map(|line| line.strip_prefix("data: "))
-                .and_then(|data| serde_json::from_str::<Value>(data).ok());
-            let (Some(event), Some(data)) = (event, data) else {
-                continue;
-            };
-            event_count += 1;
-            if matches!(event, "result" | "provisional") {
-                job.timings.observe(&data);
-            }
-            match event {
-                "progress" => {
-                    if let Some(category) = data.get("category").and_then(Value::as_str) {
-                        job.progress.insert(category.to_string(), data);
-                    }
-                }
-                "result" => {
-                    if let Some(category) = data.get("category").and_then(Value::as_str) {
-                        tracing::debug!(
-                            job_id,
-                            worker = %worker.name,
-                            category,
-                            level = data.get("level").and_then(|value| value.as_str()).unwrap_or("unknown"),
-                            model = data.get("model").and_then(|value| value.as_str()).unwrap_or("unknown"),
-                            reported_duration_ms = data.get("duration_ms").and_then(|value| value.as_f64()).unwrap_or_default(),
-                            event_elapsed_ms = started.elapsed().as_secs_f64() * 1_000.0,
-                            "worker result received"
-                        );
-                        let replace = job
-                            .categories
-                            .get(category)
-                            .is_none_or(|previous| level_rank(&data) >= level_rank(previous));
-                        if replace {
-                            job.categories
-                                .insert(category.to_string(), compact_result(&data));
-                        }
-                    }
-                }
-                "finished" => {
-                    job.completion = data.get("completion").cloned();
-                    job.status = if data.pointer("/completion/state").and_then(Value::as_str)
-                        == Some("failed")
-                    {
-                        "failed".to_string()
-                    } else {
-                        "completed".to_string()
-                    };
-                    job.decision = Some(final_decision(job));
-                    job.timings.worker_ms = Some(dispatched.elapsed().as_secs_f64() * 1000.0);
-                    job.timings.total_ms = Some(submitted.elapsed().as_secs_f64() * 1000.0);
-                }
-                _ => {}
-            }
-            if event == "progress" {
-                progress_dirty = true;
-                continue;
-            }
-            if save_job(state, job).await.is_err() {
-                return false;
-            }
-            progress_dirty = false;
-            if event == "finished" {
-                tracing::debug!(job_id, worker = %worker.name, worker_events_finished_ms = started.elapsed().as_secs_f64() * 1_000.0, event_count, "worker event stream finished");
-                return true;
-            }
-        }
-    }
-    false
-}
-
-fn level_rank(result: &Value) -> u8 {
-    match result.get("level").and_then(Value::as_str) {
-        Some("L3") => 3,
-        Some("L2") => 2,
-        _ => 1,
-    }
-}
-
-fn compact_result(result: &Value) -> Value {
-    let decision_evidence = result
-        .get("decision_evidence")
-        .filter(|evidence| !evidence.is_null())
-        .cloned()
-        .or_else(|| {
-            result
-                .pointer("/decision/decision_evidence")
-                .filter(|evidence| !evidence.is_null())
-                .cloned()
-        })
-        .or_else(|| {
-            result
-                .pointer("/decision/decision_candidate/chunk_evidence")
-                .filter(|evidence| !evidence.is_null())
-                .cloned()
-        })
-        .or_else(|| {
-            result
-                .get("layers")
-                .and_then(Value::as_array)
-                .and_then(|layers| {
-                    layers.iter().rev().find_map(|layer| {
-                        layer
-                            .pointer("/details/decision_evidence")
-                            .filter(|evidence| !evidence.is_null())
-                            .cloned()
-                    })
-                })
-        })
-        .or_else(|| l2_chunk_evidence(result));
-    json!({
-        "category": result.get("category"),
-        "class_name": result.get("class_name"),
-        "confidence": result.get("confidence"),
-        "level": result.get("level"),
-        "model": result.get("model"),
-        "duration_ms": result.get("duration_ms"),
-        "accepted": result.pointer("/decision/recommendation/accepted").and_then(Value::as_bool).unwrap_or(false),
-        "final_result": result.pointer("/decision/final_result"),
-        "decision_evidence": decision_evidence,
-        "evidence_spans": result.get("evidence_spans").cloned().unwrap_or_else(|| json!([])),
-    })
-}
-
-fn l2_chunk_evidence(result: &Value) -> Option<Value> {
-    let class_name = result.get("class_name")?.as_str()?;
-    if matches!(class_name, "benign" | "safe") {
-        return None;
-    }
-    let chunks = result
-        .get("layers")?
-        .as_array()?
-        .iter()
-        .rev()
-        .find_map(|layer| layer.pointer("/details/l2_chunk_outputs")?.as_array())?;
-    let contributors = chunks
-        .iter()
-        .enumerate()
-        .filter(|(_, chunk)| chunk.get("class_name").and_then(Value::as_str) == Some(class_name))
-        .map(|(chunk_id, chunk)| {
-            json!({
-                "chunk_id": chunk_id,
-                "span": chunk.get("span"),
-                "source": "l2",
-                "class_name": class_name,
-                "confidence": chunk.get("confidence"),
-            })
-        })
-        .collect::<Vec<_>>();
-    let decisive_chunk = contributors.iter().max_by(|left, right| {
-        left.get("confidence")
-            .and_then(Value::as_f64)
-            .partial_cmp(&right.get("confidence").and_then(Value::as_f64))
-            .unwrap_or(std::cmp::Ordering::Equal)
-    })?;
-    Some(json!({
-        "stage": "l2",
-        "contributors": contributors,
-        "decisive_chunks": [decisive_chunk],
-    }))
+fn job_owned_by(job: &Job, owner: &str) -> bool {
+    !job.owner_key_hash.is_empty() && job.owner_key_hash == owner
 }
 
 async fn admit_scan(
@@ -476,9 +241,9 @@ async fn admit_scan(
     mut request: Request,
     next: Next,
 ) -> Response {
-    if !authenticated(&state, request.headers()) {
+    let Some(owner) = authenticated(&state, request.headers()) else {
         return unauthorized();
-    }
+    };
     let admission = match state.worker_pool.reserve() {
         Ok(admission) => admission,
         Err(error) => {
@@ -486,6 +251,7 @@ async fn admit_scan(
         }
     };
     request.extensions_mut().insert(admission);
+    request.extensions_mut().insert(JobOwner(owner));
     next.run(request).await
 }
 
@@ -493,6 +259,7 @@ async fn submit_scan(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
     Extension(admission): Extension<Arc<tokio::sync::OwnedSemaphorePermit>>,
+    Extension(JobOwner(owner)): Extension<JobOwner>,
     body: Bytes,
 ) -> Response {
     let submitted = Instant::now();
@@ -596,6 +363,7 @@ async fn submit_scan(
         tracing::debug!(job_id, worker = %worker.name, worker_submit_ms = upstream_started.elapsed().as_secs_f64() * 1_000.0, "worker accepted scan");
         let job = Job {
             job_id: job_id.clone(),
+            owner_key_hash: owner.clone(),
             source: worker_job
                 .get("source")
                 .and_then(Value::as_str)
@@ -606,6 +374,7 @@ async fn submit_scan(
             worker_request_id: worker_request_id.to_string(),
             progress: HashMap::new(),
             categories: HashMap::new(),
+            detectors: HashMap::new(),
             completion: None,
             decision: None,
             timings: JobTimings {
@@ -722,11 +491,20 @@ async fn get_scan(
     headers: HeaderMap,
     Path(job_id): Path<String>,
 ) -> Response {
-    if !authenticated(&state, &headers) {
+    let Some(owner) = authenticated(&state, &headers) else {
         return unauthorized();
-    }
+    };
     match load_job(&state, &job_id).await {
-        Ok(Some(job)) => Json(job).into_response(),
+        Ok(Some(job)) if job_owned_by(&job, &owner) => {
+            let mut response = serde_json::to_value(job).expect("job serialization must succeed");
+            response.as_object_mut().unwrap().remove("owner_key_hash");
+            Json(response).into_response()
+        }
+        Ok(Some(_)) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error":"unknown or expired job_id"})),
+        )
+            .into_response(),
         Ok(None) => (
             StatusCode::NOT_FOUND,
             Json(json!({"error":"unknown or expired job_id"})),
@@ -1216,16 +994,39 @@ mod tests {
     fn completed_job(categories: HashMap<String, Value>) -> Job {
         Job {
             job_id: "job_test".to_string(),
+            owner_key_hash: "owner-hash".to_string(),
             source: "text".to_string(),
             status: "completed".to_string(),
             worker: "ark-api-1".to_string(),
             worker_request_id: "rq-test".to_string(),
             progress: HashMap::new(),
             categories,
+            detectors: HashMap::new(),
             completion: Some(json!({"state": "complete"})),
             decision: None,
             timings: JobTimings::default(),
         }
+    }
+
+    #[test]
+    fn job_access_requires_its_creating_key() {
+        let mut job = completed_job(HashMap::new());
+        assert!(job_owned_by(&job, "owner-hash"));
+        assert!(!job_owned_by(&job, "other-hash"));
+        job.owner_key_hash.clear();
+        assert!(!job_owned_by(&job, ""));
+    }
+
+    #[test]
+    fn job_response_lists_all_reported_detector_models() {
+        let mut job = completed_job(HashMap::new());
+        job.record_detector("dlp", "native:dlp");
+        job.record_detector("dlp", "native:secret_transfer");
+        let response = serde_json::to_value(job).unwrap();
+        assert_eq!(
+            response["detectors"]["dlp"],
+            json!(["native:dlp", "native:secret_transfer"])
+        );
     }
 
     #[test]

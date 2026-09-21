@@ -115,15 +115,18 @@ Every endpoint except `/healthz` and `/readyz` requires `Authorization: Bearer <
 `key_hash` in the config.
 
 - `POST /v1/scan` — `multipart/form-data` with an optional `text` field and/or one or more `files`
-  fields. Each non-empty field becomes its own scan request. Returns `202` with
+  fields. Each non-empty field becomes its own scan request; at most 64 inputs are accepted per
+  submission. Returns `202` with
   `{"jobs": [{"request_id", "source"}, ...]}`.
 - `POST /v1/scan/sync` — accepts the same multipart body but waits for every submitted input to
   finish. Returns `200` with each job's `request_id`, `source`, final `results`, and `completion`,
   plus request-wide `total_ms`. Use the asynchronous endpoint for long-running or streaming work.
 - `GET /v1/scan/{request_id}/events` — Server-Sent Events stream for one request: `progress`,
   `provisional`, `result` (one per configured category), then a terminal `finished` event. Events
+  are available only to the API key that submitted the request. They
   are buffered for one minute after completion, so a client that only starts listening after a
-  fast scan finishes still sees the full history instead of a `404`.
+  fast scan finishes still sees the full history instead of a `404`. A `gap` event with
+  `missed_events` means the client fell behind; reconnect within that minute to replay the stream.
 - `GET /healthz` — liveness, no auth.
 - `GET /readyz` — `200` once the assets required by `pipeline.categories` are loaded, `503`
   otherwise.

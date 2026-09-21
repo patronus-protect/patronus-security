@@ -37,6 +37,7 @@ use crate::{
     SecurityLevelReadiness, SecurityRuntimeReadiness, SecurityScanResult,
 };
 
+mod direct_l3;
 mod injection_l1;
 mod ntdb_l2;
 mod request_queue;
@@ -198,7 +199,7 @@ where
 /// Main scanner gateway for native and model-backed security categories.
 pub struct SecurityGateway {
     core: Arc<SecurityGatewayCore>,
-    queue_sender: OnceLock<mpsc::Sender<request_queue::QueueWork>>,
+    queue_sender: OnceLock<mpsc::SyncSender<request_queue::QueueWork>>,
 }
 
 #[derive(Debug, Clone)]
@@ -708,7 +709,15 @@ impl SecurityGateway {
             }
         };
 
-        let has_classifier_l3 = l2_configs
+        let l3_configs = self
+            .categories
+            .iter()
+            .copied()
+            .flat_map(|category| {
+                ntdb_l2::classifier_model_configs_for_category(&execution, category)
+            })
+            .collect::<Vec<_>>();
+        let has_classifier_l3 = l3_configs
             .iter()
             .any(|config| config.has_l3 && execution.allows_level(SecurityLevel::L3));
         let mut l3_models = match execution.l3_strategy() {
@@ -719,7 +728,7 @@ impl SecurityGateway {
                 vec![crate::ml::unified_onnx::UNIFIED_MODEL]
             }
             crate::L3Strategy::Multi => Vec::new(),
-            crate::L3Strategy::Dedicated => l2_configs
+            crate::L3Strategy::Dedicated => l3_configs
                 .iter()
                 .filter(|config| config.has_l3 && execution.allows_level(SecurityLevel::L3))
                 .map(|config| config.public_model)
@@ -906,12 +915,21 @@ impl SecurityGateway {
         &self,
         text: &str,
     ) -> Result<Vec<PreparedNtdbChunk>, String> {
+        self.prepare_distributed_ntdb_chunks_with_execution(text, &self.scan_execution())
+    }
+
+    /// Tokenize a document for distributed execution with request-local options.
+    pub fn prepare_distributed_ntdb_chunks_with_execution(
+        &self,
+        text: &str,
+        execution: &ScanExecution,
+    ) -> Result<Vec<PreparedNtdbChunk>, String> {
         self.ntdb_executor
             .as_ref()
             .ok_or_else(|| "NTDB L2 runtime is not initialized".to_string())?
             .lock()
             .map_err(|error| format!("NTDB executor mutex poisoned: {error}"))?
-            .prepare_chunks(text)
+            .prepare_chunks_with_overlap(text, execution.chunk_overlap_tokens())
             .map_err(|error| error.to_string())
     }
 
@@ -1632,10 +1650,11 @@ impl SecurityGateway {
                 format!("model_ids={}", model_ids.len()),
             );
             let decisions = match executor_mutex.lock() {
-                Ok(mut executor) => executor.score_models(
+                Ok(mut executor) => executor.score_models_with_overlap(
                     model_ids.iter().copied(),
                     text,
                     execution.ntdb_operating_point(),
+                    execution.chunk_overlap_tokens(),
                 ),
                 Err(err) => Err(Box::new(std::io::Error::other(format!(
                     "NTDB executor mutex poisoned: {err}"
@@ -1756,6 +1775,9 @@ impl SecurityGateway {
                 gate_results.len()
             ),
         );
+        if !execution.allows_level(SecurityLevel::L2) {
+            return self.direct_l3_results(inputs, execution, metadata, gate_results);
+        }
         let mut execution = execution.clone();
         if execution.allows_level(SecurityLevel::L3) && execution.l3_policy().enabled {
             execution.set_defer_l3(true);

@@ -56,6 +56,7 @@ pub enum SecurityFailureKind {
     InitializationFailure,
     InferenceFailure,
     Timeout,
+    QueueFull,
     WorkerUnavailable,
     Internal,
 }
@@ -133,6 +134,7 @@ impl SecurityFailureKind {
             Self::InitializationFailure => "initialization_failure",
             Self::InferenceFailure => "inference_failure",
             Self::Timeout => "timeout",
+            Self::QueueFull => "queue_full",
             Self::WorkerUnavailable => "worker_unavailable",
             Self::Internal => "internal",
         }
@@ -1105,6 +1107,7 @@ pub struct ScanExecution {
     ntdb_decision_threshold_point: NtdbOperatingPoint,
     l3_strategy: L3Strategy,
     defer_l3: bool,
+    chunk_overlap_tokens: usize,
 }
 
 impl ScanExecution {
@@ -1120,6 +1123,7 @@ impl ScanExecution {
             ntdb_decision_threshold_point: NtdbOperatingPoint::BestF1,
             l3_strategy: L3Strategy::default(),
             defer_l3: false,
+            chunk_overlap_tokens: 0,
         }
     }
 
@@ -1135,6 +1139,7 @@ impl ScanExecution {
             ntdb_decision_threshold_point: NtdbOperatingPoint::BestF1,
             l3_strategy: L3Strategy::default(),
             defer_l3: false,
+            chunk_overlap_tokens: 0,
         }
     }
 
@@ -1184,6 +1189,19 @@ impl ScanExecution {
     /// Set whether L3 should be marked pending instead of executed immediately.
     pub fn set_defer_l3(&mut self, defer_l3: bool) {
         self.defer_l3 = defer_l3;
+    }
+
+    /// Set the request-local overlap between adjacent classifier chunks.
+    pub fn set_chunk_overlap_tokens(&mut self, overlap: usize) -> Result<(), String> {
+        self.set_validated_chunk_overlap_tokens(crate::ChunkOverlapTokens::try_from(overlap)?);
+        Ok(())
+    }
+
+    pub(crate) fn set_validated_chunk_overlap_tokens(
+        &mut self,
+        overlap: crate::ChunkOverlapTokens,
+    ) {
+        self.chunk_overlap_tokens = overlap.get();
     }
 
     /// Return a copy with a different max-level cap.
@@ -1246,6 +1264,11 @@ impl ScanExecution {
     /// Return whether L3 should be centrally scheduled.
     pub fn defer_l3(&self) -> bool {
         self.defer_l3
+    }
+
+    /// Return the overlap between adjacent classifier chunks.
+    pub fn chunk_overlap_tokens(&self) -> usize {
+        self.chunk_overlap_tokens
     }
 
     /// Return the L3 worker policy.

@@ -145,7 +145,7 @@ Scan text with a single category.
 
 Scan text with a caller-provided category subset.
 
-### `enqueue(text: str, categories: list[str] | None = None, execution_gates: dict | None = None, metadata: dict | None = None, ntdb_operating_point: str | None = None) -> str`
+### `enqueue(text: str, categories: list[str] | None = None, execution_gates: dict | None = None, metadata: dict | None = None, ntdb_operating_point: str | None = None, chunk_overlap_tokens: int = 0) -> str`
 
 Queue one scan request and return its request id.
 
@@ -156,6 +156,8 @@ queue. Every event includes its `request_id`. `execution_gates`, when
 provided, applies only to this request. `ntdb_operating_point`, when
 provided, overrides the gateway final-decision threshold profile for this
 request and does not change L3 promotion.
+`chunk_overlap_tokens` controls classifier chunk overlap for this request
+and must be between 0 and 64.
 
 ### `consume_events(timeout: float | None = None)`
 

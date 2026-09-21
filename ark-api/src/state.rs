@@ -23,6 +23,7 @@ struct RequestChannel {
     buffer: Vec<Arc<QueuedSecurityEvent>>,
     sender: broadcast::Sender<QueuedSecurityEvent>,
     finished_at: Option<Instant>,
+    owner_key_hash: Option<String>,
 }
 
 impl RequestChannel {
@@ -32,6 +33,7 @@ impl RequestChannel {
             buffer: Vec::new(),
             sender,
             finished_at: None,
+            owner_key_hash: None,
         }
     }
 }
@@ -101,12 +103,13 @@ impl AppState {
     /// Ensure a request event buffer exists. The dispatcher also creates the
     /// buffer on first event, covering fast scans that finish before the HTTP
     /// handler returns from enqueueing.
-    pub fn register(&self, request_id: RequestId) {
+    pub fn register(&self, request_id: RequestId, owner_key_hash: &str) {
         self.channels
             .lock()
             .expect("channel registry mutex poisoned")
             .entry(request_id)
-            .or_insert_with(RequestChannel::new);
+            .or_insert_with(RequestChannel::new)
+            .owner_key_hash = Some(owner_key_hash.to_owned());
     }
 
     /// Subscribe to the event stream for a request registered via
@@ -120,12 +123,38 @@ impl AppState {
         Vec<QueuedSecurityEvent>,
         broadcast::Receiver<QueuedSecurityEvent>,
     )> {
+        self.subscribe_with_owner(request_id, None)
+    }
+
+    pub fn subscribe_for_key(
+        &self,
+        request_id: &str,
+        owner_key_hash: &str,
+    ) -> Option<(
+        Vec<QueuedSecurityEvent>,
+        broadcast::Receiver<QueuedSecurityEvent>,
+    )> {
+        self.subscribe_with_owner(request_id, Some(owner_key_hash))
+    }
+
+    fn subscribe_with_owner(
+        &self,
+        request_id: &str,
+        owner_key_hash: Option<&str>,
+    ) -> Option<(
+        Vec<QueuedSecurityEvent>,
+        broadcast::Receiver<QueuedSecurityEvent>,
+    )> {
         let (buffer, receiver) = {
             let channels = self
                 .channels
                 .lock()
                 .expect("channel registry mutex poisoned");
             let channel = channels.get(request_id)?;
+            if owner_key_hash.is_some_and(|owner| channel.owner_key_hash.as_deref() != Some(owner))
+            {
+                return None;
+            }
             (channel.buffer.clone(), channel.sender.subscribe())
         };
         Some((

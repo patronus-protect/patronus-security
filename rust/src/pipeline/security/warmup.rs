@@ -123,7 +123,7 @@ impl SecurityGateway {
             && execution.allows_level(SecurityLevel::L3)
             && execution.allows_model(crate::ml::unified_onnx::UNIFIED_MODEL)
             && self.categories.iter().copied().any(|category| {
-                ntdb_l2_model_configs_for_category(&execution, category)
+                super::ntdb_l2::classifier_model_configs_for_category(&execution, category)
                     .iter()
                     .any(|config| config.has_l3)
             })
@@ -198,7 +198,7 @@ impl SecurityGateway {
         let unified_l3_allowed = execution.allows_level(SecurityLevel::L3);
         let unified_model_allowed = execution.allows_model(crate::ml::unified_onnx::UNIFIED_MODEL);
         let unified_category_has_l3 = self.categories.iter().copied().any(|category| {
-            ntdb_l2_model_configs_for_category(&execution, category)
+            super::ntdb_l2::classifier_model_configs_for_category(&execution, category)
                 .iter()
                 .any(|config| config.has_l3)
         });
@@ -313,7 +313,13 @@ impl SecurityGateway {
                 SecurityCategory::Dlp | SecurityCategory::Pii => continue,
                 SecurityCategory::DynamicPii => unreachable!("handled above"),
             };
-            let configs = ntdb_l2_model_configs_for_category(&execution, *category);
+            let configs = if execution.l3_strategy() == L3Strategy::Dedicated
+                && execution.allows_level(SecurityLevel::L3)
+            {
+                super::ntdb_l2::classifier_model_configs_for_category(&execution, *category)
+            } else {
+                ntdb_l2_model_configs_for_category(&execution, *category)
+            };
             if configs.is_empty() {
                 continue;
             }
@@ -438,13 +444,13 @@ impl SecurityGateway {
         let classifier_l3 = if execution.l3_strategy() == L3Strategy::Multi {
             execution.allows_model(crate::ml::unified_onnx::UNIFIED_MODEL)
                 && self.categories.iter().copied().any(|category| {
-                    ntdb_l2_model_configs_for_category(&execution, category)
+                    super::ntdb_l2::classifier_model_configs_for_category(&execution, category)
                         .iter()
                         .any(|config| config.has_l3)
                 })
         } else {
             self.categories.iter().copied().any(|category| {
-                ntdb_l2_model_configs_for_category(&execution, category)
+                super::ntdb_l2::classifier_model_configs_for_category(&execution, category)
                     .iter()
                     .any(|config| config.has_l3)
             })

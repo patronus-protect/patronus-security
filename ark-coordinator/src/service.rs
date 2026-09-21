@@ -43,6 +43,9 @@ struct ActiveScans {
 
 struct ActiveGuard(Arc<ActiveScans>);
 
+#[derive(Clone)]
+struct JobOwner(String);
+
 enum ParentPermit {
     Upload { _permit: Arc<OwnedSemaphorePermit> },
     Reserved { _permit: OwnedSemaphorePermit },
@@ -154,9 +157,9 @@ async fn admit_scan(
     mut request: axum::extract::Request,
     next: Next,
 ) -> Response {
-    if !authenticated(&state, request.headers()) {
+    let Some(owner) = authenticated(&state, request.headers()) else {
         return api_error(StatusCode::UNAUTHORIZED, "invalid api key");
-    }
+    };
     if !state.store.ready().await {
         return api_error(StatusCode::SERVICE_UNAVAILABLE, "job store unavailable");
     }
@@ -164,12 +167,14 @@ async fn admit_scan(
         return api_error(StatusCode::TOO_MANY_REQUESTS, "worker queue full");
     };
     request.extensions_mut().insert(Arc::new(permit));
+    request.extensions_mut().insert(JobOwner(owner));
     next.run(request).await
 }
 
 async fn submit_scan(
     State(state): State<AppState>,
     Extension(permit): Extension<Arc<OwnedSemaphorePermit>>,
+    Extension(JobOwner(owner)): Extension<JobOwner>,
     mut multipart: Multipart,
 ) -> Response {
     let mut inputs = Vec::new();
@@ -235,7 +240,7 @@ async fn submit_scan(
 
     let jobs = inputs
         .iter()
-        .map(|(source, _)| initial_job(new_job_id(), source))
+        .map(|(source, _)| initial_job(new_job_id(), source, &owner))
         .collect::<Vec<_>>();
     if state.store.save_many(&jobs).await.is_err() {
         return api_error(StatusCode::SERVICE_UNAVAILABLE, "job store unavailable");
@@ -255,6 +260,7 @@ async fn submit_scan(
     for (((source, text), job), task_permit) in inputs.into_iter().zip(jobs).zip(permits) {
         let task_state = state.clone();
         let task_config = request_config.clone();
+        let owner = owner.clone();
         let id = job["job_id"]
             .as_str()
             .expect("initial job has an id")
@@ -274,13 +280,14 @@ async fn submit_scan(
                 })
                 .await
             };
-            let completed = match scan {
+            let mut completed = match scan {
                 Ok(outcome) => {
                     tracing::info!(job_id = %id, metrics = %outcome.metrics, "coordinator scan finished");
                     outcome.job
                 }
                 Err(_) => failed_job(job),
             };
+            completed["owner_key_hash"] = json!(owner);
             if task_state.store.save(&completed).await.is_err() {
                 tracing::error!(job_id = %id, "failed to persist terminal coordinator job");
             }
@@ -318,35 +325,39 @@ async fn get_scan(
     headers: HeaderMap,
     Path(job_id): Path<String>,
 ) -> Response {
-    if !authenticated(&state, &headers) {
+    let Some(owner) = authenticated(&state, &headers) else {
         return api_error(StatusCode::UNAUTHORIZED, "invalid api key");
-    }
+    };
     if !valid_job_id(&job_id) {
         return api_error(StatusCode::NOT_FOUND, "unknown or expired job_id");
     }
     match state.store.load(&job_id).await {
-        Ok(Some(job)) => Json(job).into_response(),
+        Ok(Some(mut job))
+            if job.get("owner_key_hash").and_then(Value::as_str) == Some(owner.as_str()) =>
+        {
+            job.as_object_mut().unwrap().remove("owner_key_hash");
+            Json(job).into_response()
+        }
+        Ok(Some(_)) => api_error(StatusCode::NOT_FOUND, "unknown or expired job_id"),
         Ok(None) => api_error(StatusCode::NOT_FOUND, "unknown or expired job_id"),
         Err(_) => api_error(StatusCode::SERVICE_UNAVAILABLE, "job store unavailable"),
     }
 }
 
-fn authenticated(state: &AppState, headers: &HeaderMap) -> bool {
-    let Some(token) = headers
+fn authenticated(state: &AppState, headers: &HeaderMap) -> Option<String> {
+    let token = headers
         .get(header::AUTHORIZATION)
         .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.strip_prefix("Bearer "))
-    else {
-        return false;
-    };
+        .and_then(|value| value.strip_prefix("Bearer "))?;
     let digest = format!("{:x}", Sha256::digest(token.as_bytes()));
-    state.config.auth.keys.iter().any(|key| {
+    state.config.auth.keys.iter().find_map(|key| {
         bool::from(
             key.key_hash
                 .to_ascii_lowercase()
                 .as_bytes()
                 .ct_eq(digest.as_bytes()),
         )
+        .then(|| digest.clone())
     })
 }
 
@@ -362,9 +373,10 @@ fn valid_job_id(id: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
 }
 
-fn initial_job(id: String, source: &str) -> Value {
+fn initial_job(id: String, source: &str, owner: &str) -> Value {
     json!({
         "job_id": id,
+        "owner_key_hash": owner,
         "source": source,
         "status": "running",
         "worker": "coordinator",
@@ -653,7 +665,7 @@ mod tests {
 
     #[test]
     fn initial_job_matches_entrypoint_shape() {
-        let job = initial_job("job_123".into(), "input.txt");
+        let job = initial_job("job_123".into(), "input.txt", "owner-hash");
         assert_eq!(job["job_id"], "job_123");
         assert_eq!(job["source"], "input.txt");
         assert_eq!(job["status"], "running");
@@ -766,7 +778,13 @@ mod tests {
 
     #[tokio::test]
     async fn authenticated_router_persists_running_then_terminal_job() {
-        let (state, redis_writes, cube_posts, cube_release) = service_fixture(3).await;
+        let (mut state, redis_writes, cube_posts, cube_release) = service_fixture(3).await;
+        Arc::make_mut(&mut state.config)
+            .auth
+            .keys
+            .push(crate::config::CoordinatorApiKey {
+                key_hash: format!("{:x}", Sha256::digest(b"other-key")),
+            });
         let app = router(state.clone());
 
         let response = app
@@ -783,6 +801,20 @@ mod tests {
         let status_url = accepted["status_url"].as_str().unwrap();
         assert_eq!(accepted["source"], "input-0");
 
+        let other_key_request = Request::builder()
+            .uri(status_url)
+            .header(header::AUTHORIZATION, "Bearer other-key")
+            .body(Body::empty())
+            .unwrap();
+        assert_eq!(
+            app.clone()
+                .oneshot(other_key_request)
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::NOT_FOUND
+        );
+
         let get = |uri: &str| {
             Request::builder()
                 .uri(uri)
@@ -798,6 +830,7 @@ mod tests {
         assert_eq!(running["job_id"], job_id);
         assert_eq!(running["status"], "running");
         assert_eq!(running["worker"], "coordinator");
+        assert!(running.get("owner_key_hash").is_none());
 
         tokio::time::timeout(Duration::from_secs(1), async {
             while cube_posts.load(Ordering::SeqCst) == 0 {
@@ -828,6 +861,20 @@ mod tests {
         assert_eq!(terminal["worker_request_id"], job_id);
         assert_eq!(terminal["completion"]["state"], "complete");
         assert_eq!(terminal["decision"], "allow");
+        assert!(terminal.get("owner_key_hash").is_none());
+        let other_key_request = Request::builder()
+            .uri(status_url)
+            .header(header::AUTHORIZATION, "Bearer other-key")
+            .body(Body::empty())
+            .unwrap();
+        assert_eq!(
+            app.clone()
+                .oneshot(other_key_request)
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::NOT_FOUND
+        );
         assert_eq!(redis_writes.load(Ordering::SeqCst), 2);
         assert_eq!(cube_posts.load(Ordering::SeqCst), 1);
         state.wait_for_idle().await;

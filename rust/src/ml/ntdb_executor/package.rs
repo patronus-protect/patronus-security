@@ -530,6 +530,14 @@ impl NtdbMultiPackage {
     }
 
     pub fn prepare_chunks(&self, text: &str) -> NtdbResult<Vec<PreparedNtdbChunk>> {
+        self.prepare_chunks_with_overlap(text, 0)
+    }
+
+    pub fn prepare_chunks_with_overlap(
+        &self,
+        text: &str,
+        overlap: usize,
+    ) -> NtdbResult<Vec<PreparedNtdbChunk>> {
         let tokenizer = &self
             .packages
             .first()
@@ -537,7 +545,7 @@ impl NtdbMultiPackage {
             .package
             .tokenizer;
         Ok(tokenizer
-            .token_chunks(text)
+            .token_chunks_with_overlap(text, overlap)?
             .into_iter()
             .enumerate()
             .map(|(chunk_index, chunk)| PreparedNtdbChunk {
@@ -721,6 +729,20 @@ impl NtdbMultiPackage {
         I: IntoIterator<Item = S>,
         S: AsRef<str>,
     {
+        self.score_models_with_overlap(model_ids, text, operating_point, 0)
+    }
+
+    pub fn score_models_with_overlap<I, S>(
+        &mut self,
+        model_ids: I,
+        text: &str,
+        operating_point: NtdbOperatingPoint,
+        overlap: usize,
+    ) -> NtdbResult<Vec<MultiScoreOutput>>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<str>,
+    {
         let mut metrics =
             PhaseMetricScope::new("ntdb_score_models", format!("text_bytes={}", text.len()));
         let requested = model_ids
@@ -748,7 +770,7 @@ impl NtdbMultiPackage {
             )));
         }
 
-        let chunks = self.prepare_chunks(text)?;
+        let chunks = self.prepare_chunks_with_overlap(text, overlap)?;
         metrics.checkpoint(
             "after_shared_prepare",
             format!("prepared_chunks={}", chunks.len()),

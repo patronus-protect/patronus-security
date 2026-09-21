@@ -35,8 +35,9 @@ All endpoints except `/healthz` and `/readyz` require
 
 - `POST /v1/scan` — `multipart/form-data` with an optional `text` or `content`
   field and/or one or more text-decodable files. An optional `config` field
-  contains JSON with `categories`, `max_level`, `gates`, `metadata`, and an
-  optional request-local `ntdb_operating_point` and is
+  contains JSON with `categories`, `max_level`, `gates`, `metadata`, an
+  optional request-local `ntdb_operating_point`, and `chunk_overlap_tokens`.
+  Chunk overlap defaults to `0` and accepts token counts from `0` through `64`. The config is
   snapshotted into every queued job. Missing config uses the existing defaults.
   `gates.rules` is a map from stable L1 rule IDs to booleans; absent IDs inherit
   shared Rust/Python/API defaults. PII IDs are the `pii_*` names in `PII_PATTERNS`, DLP IDs are the
@@ -51,7 +52,8 @@ All endpoints except `/healthz` and `/readyz` require
   opt-ins. PII and Injection rules remain enabled unless configured otherwise.
   Returns `202` with `{"jobs": [{"job_id", "source", "status_url"}, ...]}`.
 - `GET /v1/scan/{job_id}` — durable job status plus accumulated progress,
-  compact category results, `decision_evidence`, and the overall decision.
+  compact category results, `decision_evidence`, and the overall decision. Only the API key that
+  submitted the job can retrieve it.
 - `GET /healthz` — liveness, no auth.
 - `GET /readyz` — gateway readiness requires Redis and at least one healthy worker.
   Redis connections reconnect automatically; workers are monitored continuously and
