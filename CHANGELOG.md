@@ -9,6 +9,13 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ## [Unreleased]
 
+### Fixed
+
+- Promote bounded governance attack relations to terminal Injection L1 decisions, including
+  cross-tool redirection, nested control tokens, agentic control abuse, and German policy
+  overrides. The original red-team payloads and nearby benign controls are versioned as a
+  machine-readable golden dataset.
+
 ## [0.1.8] - 2026-09-20
 
 ### Added

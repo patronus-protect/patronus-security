@@ -11,7 +11,7 @@ use crate::detectors::evidence::L1Match;
 use crate::detectors::NativeDetection;
 use crate::EvaluationResult;
 
-const CATALOG_JSONS: [(&str, &str); 5] = [
+const CATALOG_JSONS: [(&str, &str); 6] = [
     (
         "rust/src/detectors/injection/rules/skillspector_0_1_7.json",
         include_str!("rules/skillspector_0_1_7.json"),
@@ -31,6 +31,10 @@ const CATALOG_JSONS: [(&str, &str); 5] = [
     (
         "rust/src/detectors/injection/rules/prompt_armor_canonical_lexicons_0_1_6.json",
         include_str!("rules/prompt_armor_canonical_lexicons_0_1_6.json"),
+    ),
+    (
+        "rust/src/detectors/injection/rules/governance_attack_regressions_0_1_9.json",
+        include_str!("rules/governance_attack_regressions_0_1_9.json"),
     ),
 ];
 type CatalogMatch<'a> = (&'a CompiledCatalog, &'a RuleDefinition, L1Match);
