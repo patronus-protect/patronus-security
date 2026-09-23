@@ -584,3 +584,41 @@ fn ordinary_pii_scan_keeps_findings_without_context_metadata() {
         .any(|span| span.label == "EMAIL"));
     assert!(!result.layers[0].details.contains_key("l1_anchors"));
 }
+
+#[test]
+fn username_requires_an_explicit_assignment() {
+    for text in [
+        "Username: jdoe42",
+        "Benutzername: max.mustermann",
+        "login = jdoe42",
+        "The account name is jdoe42",
+        "Der Benutzer lautet jdoe42",
+    ] {
+        assert_eq!(
+            PiiPipeline::new().evaluate(text).class_name,
+            "USERNAME",
+            "{text}"
+        );
+    }
+}
+
+#[test]
+fn login_and_username_prose_is_not_an_account_name() {
+    for text in [
+        "using the API key or the CLI login token.",
+        "Paste the one-time login code below.",
+        "Open the login page to continue the login-flow.",
+        "The username field is case sensitive.",
+        "Username: required",
+        "The username is invalid.",
+        "Login: token",
+    ] {
+        assert_eq!(
+            PiiPipeline::new().evaluate(text).class_name,
+            "safe",
+            "{text}"
+        );
+    }
+    assert!(!validators::username("token"));
+    assert!(validators::username("jdoe42"));
+}

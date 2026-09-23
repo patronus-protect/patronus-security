@@ -136,7 +136,47 @@ pub fn username(s: &str) -> bool {
             s.to_ascii_lowercase().as_str(),
             "admin" | "root" | "user" | "username"
         )
+        && !PROSE_WORDS.contains(&s.to_ascii_lowercase().as_str())
 }
+
+/// Words that follow "login"/"username" in documentation and UI text, not account names.
+const PROSE_WORDS: &[&str] = &[
+    "available",
+    "button",
+    "case",
+    "code",
+    "credentials",
+    "empty",
+    "erforderlich",
+    "falsch",
+    "feld",
+    "field",
+    "flow",
+    "form",
+    "incorrect",
+    "invalid",
+    "leer",
+    "link",
+    "maske",
+    "missing",
+    "none",
+    "null",
+    "optional",
+    "page",
+    "password",
+    "prompt",
+    "required",
+    "screen",
+    "seite",
+    "session",
+    "taken",
+    "token",
+    "unbekannt",
+    "unknown",
+    "url",
+    "valid",
+    "wrong",
+];
 
 pub fn calendar_date(s: &str) -> bool {
     let parts = s.split(['.', '/', '-']).collect::<Vec<_>>();
