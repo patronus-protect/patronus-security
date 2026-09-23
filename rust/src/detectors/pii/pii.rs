@@ -196,7 +196,9 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     },
     PiiPattern {
         name: "pii_username",
-        pattern: r"(?i)\b(?:benutzername|benutzer|login|username|user[ \t]+name|account[ \t]+name)\b[ \t]*(?:is[ \t]*)?[:#=\-]?[ \t]*(?P<value>[A-Z0-9](?:[A-Z0-9._@-]{0,62}[A-Z0-9])?)\b",
+        // The value must follow an explicit assignment. Prose such as "CLI login
+        // token" or "login-flow" names a concept, not an account.
+        pattern: r"(?i)\b(?:benutzername|benutzer|login|username|user[ \t]+name|account[ \t]+name)(?:[ \t]*[:#=][ \t]*|[ \t]+(?:is|ist|lautet)[ \t]*:?[ \t]*)(?P<value>[A-Z0-9](?:[A-Z0-9._@-]{0,62}[A-Z0-9])?)\b",
         entity_group: "USERNAME",
         validator: Some(validators::username),
         captured_value: true,
