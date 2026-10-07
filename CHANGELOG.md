@@ -11,6 +11,7 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Fixed
 
+- Require bounded payment or employment context for ambiguous PII L1 expiry and employee-ID fields, and explicit bank-field syntax for SWIFT/BIC matches. **Detection change:** bare expiry dates, generic product IDs, and Swift-language prose no longer emit these PII findings.
 - PII L1 `pii_username` no longer treats the word after "login", "username" or "Benutzer" as an account name unless it follows an explicit assignment (`:`, `=`, `#`, "is", "ist", "lautet"). Prose such as "CLI login token" or "login-flow" and common UI words ("Username: required") are no longer PII findings. **Detection change:** unassigned forms such as "Login max.mustermann" are no longer L1 findings.
 
 ## [0.1.8] - 2026-09-20

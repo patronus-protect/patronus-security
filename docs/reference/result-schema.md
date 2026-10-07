@@ -185,6 +185,17 @@ numeric IBAN substring that also passes the credit-card validator. The primary `
 does not enumerate every match; consume `evidence_spans` for all detected classes. Overlapping
 matches within the same PII label are deduplicated.
 
+Ambiguous PII fields require additional context before they emit findings or
+`matched_rules`: card expiry dates need a payment-card marker or a Luhn-valid PAN
+within the preceding 128 bytes of the same clause. Sentence, newline, semicolon,
+and pipe boundaries stop that context. Generic `Kennung` and OCR `ID` fields need
+an `EMP`, `HR`, or `STAFF` prefix separated from the rest of the value, or local
+employment context. Explicit employee fields such as `Personalnummer` remain
+supported. SWIFT/BIC fields require `:`, `#`, or `=` assignment, or `SWIFT code is` /
+`BIC [code] is` followed by an uppercase code. Lowercase codes remain accepted in
+explicit assignments. Bare expiry dates, product IDs, and Swift-language prose
+are insufficient on their own.
+
 Native PII and DLP scans do not compute or return the separate diagnostic context anchors by default.
 Enable diagnostic context explicitly with Rust `ScanGateMatrix.explain = true`, Python
 `execution_gates={"explain": True}`, or worker API `gates: {explain: true}`. Explained layers

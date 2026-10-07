@@ -139,7 +139,8 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     // ── SWIFT / BIC ─────────────────────────────────────────────────────────
     PiiPattern {
         name: "pii_swift_bic_context",
-        pattern: r"(?i)\b(?:swift|bic)(?:[ \t]+code)?(?:[ \t]+is)?[ \t]*[:#=\-]?[ \t]*(?P<value>[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}(?:[A-Z0-9]{3})?)\b",
+        // "Swift supports ..." describes a programming language, not a bank field.
+        pattern: r"(?i)\b(?:(?:swift|bic)(?:[ \t]+code)?[ \t]*[:#=][ \t]*|(?:swift[ \t]+code|bic(?:[ \t]+code)?)[ \t]+is[ \t]+)(?P<value>[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}(?:[A-Z0-9]{3})?)\b",
         entity_group: "SWIFT_CODE",
         validator: Some(validators::bic),
         captured_value: true,
@@ -481,6 +482,50 @@ impl PiiPipeline {
 }
 
 impl NativeRegexDetector for PiiPipeline {
+    fn allows_match(&self, index: usize, text: &str, captures: &regex::Captures<'_>) -> bool {
+        match self.rule_ids[index] {
+            "pii_swift_bic_context" => {
+                let value = captures.name("value").unwrap();
+                let field = &text[captures.get(0).unwrap().start()..value.start()];
+                // Lowercase values remain valid in explicit assignments. In prose,
+                // require conventional uppercase codes, not "Swift code is powerful".
+                field.contains([':', '#', '='])
+                    || !value.as_str().bytes().any(|byte| byte.is_ascii_lowercase())
+            }
+            "pii_credit_card_expiry" => {
+                let card_index = self
+                    .rule_ids
+                    .iter()
+                    .position(|id| *id == "pii_credit_card")
+                    .expect("PII credit-card rule must be present");
+                super::context::payment_expiry(
+                    text,
+                    captures.get(0).unwrap().start(),
+                    &self.regexes[card_index],
+                )
+            }
+            "pii_employee_id" | "pii_employee_id_ocr_field" => {
+                let whole = captures.get(0).unwrap();
+                let generic_field = self.rule_ids[index] == "pii_employee_id_ocr_field"
+                    || whole.as_str().to_lowercase().starts_with("kennung");
+                // The OCR regex consumes a leading newline/pipe. That separator
+                // must remain a context boundary rather than exposing the prior field.
+                let field_start = whole.start()
+                    + whole
+                        .as_str()
+                        .find(|ch: char| !ch.is_whitespace() && ch != '|')
+                        .unwrap_or(0);
+                !generic_field
+                    || super::context::employee_identifier(
+                        text,
+                        field_start,
+                        captures.name("value").unwrap().as_str(),
+                    )
+            }
+            _ => true,
+        }
+    }
+
     fn anchor_gates(&self) -> &[crate::detectors::anchor_gate::AnchorGate] {
         &self.anchor_gates
     }
