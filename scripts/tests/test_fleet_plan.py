@@ -18,6 +18,7 @@ class FleetPlanningTests(unittest.TestCase):
     def setUp(self):
         self.config = {
             'datacenter_id': identity(99), 'minimum_cubes': 1,
+            'private_lan_id': 1, 'minimum_cores': 8, 'minimum_ram_mb': 16384,
             'protected_server_ids': [identity(98)],
             'slots': [{'name': f'cube-{i}', 'server_id': identity(i),
                        'private_ip': f'192.0.2.{i}'} for i in range(1, 4)],
@@ -25,6 +26,7 @@ class FleetPlanningTests(unittest.TestCase):
         self.inventory = {
             'datacenter_id': identity(99),
             'servers': [{'id': identity(i), 'name': f'cube-{i}', 'type': 'CUBE',
+                         'cores': 8, 'ram_mb': 16384,
                          'state': 'RUNNING', 'resource_state': 'AVAILABLE',
                          'nics': [{'lan': 1, 'ips': [f'192.0.2.{i}']}]}
                         for i in range(1, 4)],
@@ -45,6 +47,21 @@ class FleetPlanningTests(unittest.TestCase):
         self.inventory['servers'].pop()
         self.assertEqual(fleet.plan(self.config, self.inventory, 3)['actions'][2]['action'],
                          'create_and_verify')
+
+    def test_capacity_requires_sufficient_resources(self):
+        for field, value in [('cores', 4), ('ram_mb', 8192), ('cores', None)]:
+            inventory = copy.deepcopy(self.inventory)
+            inventory['servers'][0][field] = value
+            with self.assertRaises(ValueError):
+                fleet.plan(self.config, inventory, 2)
+
+    def test_address_ownership_is_scoped_to_expected_lan(self):
+        self.inventory['servers'].append({'id': identity(90),
+            'nics': [{'lan': 2, 'ips': ['192.0.2.1']}]})
+        self.assertEqual(fleet.plan(self.config, self.inventory, 2)['target_workers'], 6)
+        self.inventory['servers'][0]['nics'][0]['lan'] = 2
+        with self.assertRaises(ValueError):
+            fleet.plan(self.config, self.inventory, 2)
 
     def test_fail_closed_on_identity_or_capacity_changes(self):
         cases = [

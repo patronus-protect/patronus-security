@@ -101,6 +101,12 @@ def plan(config, inventory, target):
     if dc != resource_id(inventory["datacenter_id"]):
         raise ValueError("Inventory belongs to a different data center")
     minimum = config["minimum_cubes"]
+    lan = config["private_lan_id"]
+    minimum_cores = config["minimum_cores"]
+    minimum_ram = config["minimum_ram_mb"]
+    if any(type(value) is not int or value < 1
+           for value in (lan, minimum_cores, minimum_ram)):
+        raise ValueError("LAN and minimum resource constraints must be positive integers")
     slots = config["slots"]
     if type(minimum) is not int or minimum < 1:
         raise ValueError("minimum_cubes must be a positive integer")
@@ -130,12 +136,16 @@ def plan(config, inventory, target):
         row = servers.get(sid)
         if sid and row is None:
             raise ValueError("Managed server missing; reconcile inventory before planning")
-        owners = [s for s in servers.values() if any(address in n["ips"] for n in s["nics"])]
+        owners = [s for s in servers.values()
+                  if any(n.get("lan") == lan and address in n["ips"] for n in s["nics"])]
         if any(s["id"] != sid for s in owners):
             raise ValueError("Fleet address belongs to another server")
         if row:
             if row["type"] != "CUBE" or row["name"] != name or not owners:
                 raise ValueError("Managed Cube identity differs from the configured slot")
+            if (type(row.get("cores")) is not int or row["cores"] < minimum_cores or
+                    type(row.get("ram_mb")) is not int or row["ram_mb"] < minimum_ram):
+                raise ValueError("Managed Cube does not meet minimum resource constraints")
             if row["resource_state"] != "AVAILABLE":
                 raise ValueError("Managed Cube has a pending resource operation")
         if index < target:
