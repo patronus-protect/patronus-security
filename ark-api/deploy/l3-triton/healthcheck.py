@@ -3,6 +3,7 @@
 import argparse
 from datetime import datetime, timezone
 from email.message import EmailMessage
+from email.utils import getaddresses
 import fcntl
 import http.client
 import json
@@ -93,6 +94,10 @@ def advance(previous, ok, detail, now, threshold=3):
 
 def notify(config, event, state):
     mail = config['mail']
+    # A single recipient makes SMTP acceptance atomic for deduplication/retries.
+    recipients = getaddresses([mail['to']]) if isinstance(mail['to'], str) else []
+    if len(recipients) != 1 or not recipients[0][1]:
+        raise ValueError('Configure exactly one notification recipient')
     message = EmailMessage()
     message['From'] = mail['from']
     message['To'] = mail['to']
@@ -117,7 +122,7 @@ def notify(config, event, state):
             smtp.ehlo()
         if mail.get('username'):
             smtp.login(mail['username'], mail['password'])
-        refused = smtp.send_message(message)
+        refused = smtp.send_message(message, to_addrs=[recipients[0][1]])
         if refused:
             raise RuntimeError('SMTP recipient rejected')
 

@@ -89,7 +89,7 @@ email. Failed mail delivery is retried on subsequent checks.
 Install the script at `/opt/patronus/l3-healthcheck/healthcheck.py`, and install
 the supplied service and timer in `/etc/systemd/system/`. Create a root-owned,
 mode-0600 `/etc/ark-l3-healthcheck.json` containing `triton_url` and `model`.
-For email, add a `mail` object with `host`, `from`, `to`, and optionally
+For email, add a `mail` object with `host`, `from`, `to` (exactly one recipient), and optionally
 `username` and `password`. TLS defaults to `starttls` on port 587; `tls: "ssl"`
 defaults to port 465. `port` can override either default. Keep credentials out
 of the repository. systemd passes this configuration through `LoadCredential`.

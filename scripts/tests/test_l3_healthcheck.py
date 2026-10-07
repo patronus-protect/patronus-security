@@ -13,6 +13,13 @@ spec.loader.exec_module(monitor)
 
 
 class HealthcheckTests(unittest.TestCase):
+    def test_multiple_recipients_are_rejected_before_smtp_submission(self):
+        with patch.object(monitor.smtplib, 'SMTP') as smtp:
+            with self.assertRaises(ValueError):
+                monitor.notify({'mail': {'to': 'one@example.invalid, two@example.invalid'}},
+                               'DOWN', {})
+            smtp.assert_not_called()
+
     def fixture(self):
         return {'model_name': 'test', 'model_version': '1', 'outputs': [
             {'name': name, 'shape': [1, count], 'datatype': 'FP32', 'data': [0.] * count}
