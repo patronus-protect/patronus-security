@@ -97,6 +97,7 @@ nav:
       - Run the local benchmark: how-to/run-local-benchmark.md
       - Deploy the HTTP API (Docker): how-to/deploy-http-api.md
       - Deploy L3 over a private AWS network: how-to/aws-l3-network-deployment.md
+      - Plan an IONOS Cube fleet: how-to/ionos-fleet-planning.md
       - Configure caching: how-to/configure-caching.md
       - Normalize text before scanning: how-to/normalize-text-before-scanning.md
       - Add external L1 signals: how-to/external-l1-signals.md
