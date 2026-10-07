@@ -100,8 +100,8 @@
   {
     "category": "pii",
     "rule_id": "pii_credit_card_expiry",
-    "de": "Ablaufdatum: 12/29",
-    "en": "Expiry: 12/29",
+    "de": "Kreditkarte Ablaufdatum: 12/29",
+    "en": "Credit card Expiry: 12/29",
     "language_neutral": false
   },
   {

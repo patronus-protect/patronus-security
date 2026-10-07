@@ -124,9 +124,9 @@ PII_CASES = {
         n("CREDITCARD_CVV", "en", "Security code: 123", "unsupported ambiguous anchor"),
     ],
     "CREDITCARD_EXPIRY": [
-        p("CREDITCARD_EXPIRY", "de", "Ablaufdatum: ", "12/29"),
-        p("CREDITCARD_EXPIRY", "en", "Expiry date is ", "01-2030"),
-        p("CREDITCARD_EXPIRY", "de", "Gültig bis ", "7/2028"),
+        p("CREDITCARD_EXPIRY", "de", "Kreditkarte Ablaufdatum: ", "12/29"),
+        p("CREDITCARD_EXPIRY", "en", "Credit card expiry date is ", "01-2030"),
+        p("CREDITCARD_EXPIRY", "de", "Kreditkarte gültig bis ", "7/2028"),
         n("CREDITCARD_EXPIRY", "en", "Expiration: 13/29", "month exceeds 12"),
         n("CREDITCARD_EXPIRY", "de", "Zeitraum: 12/29", "date-like value lacks a card-expiry anchor"),
     ],
