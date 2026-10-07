@@ -77,3 +77,27 @@ worker image if it was overridden, and recreate workers incrementally.
 
 The [batching-delay study](../../../docs/benchmarks/l4-batching-latency.md)
 records the measured latency/throughput tradeoff behind the 5 ms default.
+
+## External inference monitoring
+
+Run `healthcheck.py` on a separate host with private access to Triton. It submits
+fresh synthetic tokens and validates all seven output tensors; a readiness HTTP
+200 alone cannot detect a failed GPU. The supplied systemd timer checks every
+minute. Three consecutive failures trigger one email, followed by one recovery
+email. Failed mail delivery is retried on subsequent checks.
+
+Install the script at `/opt/patronus/l3-healthcheck/healthcheck.py`, and install
+the supplied service and timer in `/etc/systemd/system/`. Create a root-owned,
+mode-0600 `/etc/ark-l3-healthcheck.json` containing `triton_url` and `model`.
+For email, add a `mail` object with `host`, `from`, `to`, and optionally
+`username` and `password`. TLS defaults to `starttls` on port 587; `tls: "ssl"`
+defaults to port 465. `port` can override either default. Keep credentials out
+of the repository. systemd passes this configuration through `LoadCredential`.
+
+Enable with `systemctl daemon-reload` and
+`systemctl enable --now ark-l3-healthcheck.timer`. Inspect
+`/var/lib/ark-l3-healthcheck/state.json` and the service journal. Without a mail
+configuration the inference check still runs, but `mail_configured` is false
+and no notification is delivered. Verify SMTP delivery before relying on alerts.
+This check covers the private inference path; it does not cover the public API,
+and cannot alert if its monitoring host itself is unavailable.
