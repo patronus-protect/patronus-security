@@ -47,6 +47,11 @@ pub(crate) trait NativeRegexDetector {
     }
     fn finalize_spans(&self, _text: &str, _spans: &mut Vec<EvidenceSpan>) {}
 
+    /// Reject contextually ambiguous matches before emitting evidence or rule details.
+    fn allows_match(&self, _index: usize, _text: &str, _captures: &regex::Captures<'_>) -> bool {
+        true
+    }
+
     fn detect(&self, text: &str) -> NativeDetection {
         self.detect_with_rule_filter(text, |_| true)
     }
@@ -117,6 +122,7 @@ pub(crate) trait NativeRegexDetector {
                 if matched.is_empty()
                     || self.validators()[index]
                         .is_some_and(|validator| !validator(matched.as_str()))
+                    || !self.allows_match(index, text, &captures)
                 {
                     continue;
                 }

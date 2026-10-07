@@ -26,6 +26,151 @@ fn pii_result_with_explain(text: &str, explain: bool) -> SecurityScanResult {
         .expect("native PII result must be present")
 }
 
+#[test]
+fn context_swift_prose_is_not_a_bank_identifier() {
+    for text in [
+        "Swift supports protocols and extensions.",
+        "SWIFT SUPPORTS PROTOCOLS AND EXTENSIONS.",
+        "Swift is powerful.",
+        "Swift code supports extensions.",
+        "Swift code is powerful.",
+    ] {
+        let result = pii_result_with_explain(text, true);
+        assert_eq!(result.class_name, "safe", "{text}");
+        assert!(result.evidence_spans.is_empty(), "{text}");
+        assert!(
+            !result.layers[0].details.contains_key("matched_rules"),
+            "{text}"
+        );
+    }
+}
+
+#[test]
+fn context_explicit_bank_fields_keep_exact_values() {
+    for text in [
+        "BIC: DEUTDEFF",
+        "SWIFT: DEUTDEFF",
+        "SWIFT code = DEUTDEFF",
+        "SWIFT code is DEUTDEFF",
+        "BIC code is DEUTDEFF",
+        "BIC: deutdeff",
+    ] {
+        let result = pii_result(text);
+        assert_eq!(result.class_name, "SWIFT_CODE", "{text}");
+        assert_eq!(result.evidence_spans.len(), 1, "{text}");
+        assert_eq!(
+            result.evidence_spans[0].text.to_ascii_uppercase(),
+            "DEUTDEFF"
+        );
+    }
+}
+
+#[test]
+fn context_non_payment_expiry_is_not_card_data() {
+    for text in [
+        "Lizenz gültig bis 12/2028.",
+        "Ablaufdatum: 12/2028 auf der Verpackung.",
+        "Expiry date is 12/2028.",
+        "Credit card accepted. License expiry: 12/2028.",
+        "Kreditkarte\nLizenz gültig bis 12/2028.",
+    ] {
+        let result = pii_result_with_explain(text, true);
+        assert_eq!(result.class_name, "safe", "{text}");
+        assert!(result.evidence_spans.is_empty(), "{text}");
+        assert!(
+            !result.layers[0].details.contains_key("matched_rules"),
+            "{text}"
+        );
+    }
+}
+
+#[test]
+fn context_payment_expiry_keeps_exact_value() {
+    for text in [
+        "Kreditkarte: Ablaufdatum: 12/2028",
+        "Credit card expiry date is 12/2028",
+        "Debit card expires 12/2028",
+        "VISA gültig bis 12/2028",
+        "Card expiry date is 12/2028",
+        "Karte gültig bis 12/2028",
+        "💳 Kreditkarte: Ablaufdatum: 12/2028",
+    ] {
+        let result = pii_result(text);
+        assert_eq!(result.class_name, "CREDITCARD_EXPIRY", "{text}");
+        assert_eq!(result.evidence_spans.len(), 1, "{text}");
+        assert_eq!(result.evidence_spans[0].text, "12/2028");
+        let span = &result.evidence_spans[0];
+        assert_eq!(&text[span.start_byte..span.end_byte], "12/2028");
+        assert_eq!(span.start_char, text[..span.start_byte].chars().count());
+    }
+}
+
+#[test]
+fn context_generic_ids_are_not_automatically_employee_ids() {
+    for text in [
+        "Die Kennung: build-2026 bezeichnet das Release.",
+        "ID: PART 42\nProduktkatalog",
+        "Kennung: HRWARE-2026",
+        "ID: EMPLOYER 42",
+        "Mitarbeiter. Kennung: build-2026",
+        "Kennung: build-2026",
+        "Mitarbeiter\nID: PART 42",
+        "Mitarbeiter|ID: PART 42",
+    ] {
+        let result = pii_result_with_explain(text, true);
+        assert_eq!(result.class_name, "safe", "{text}");
+        assert!(result.evidence_spans.is_empty(), "{text}");
+        assert!(
+            !result.layers[0].details.contains_key("matched_rules"),
+            "{text}"
+        );
+    }
+}
+
+#[test]
+fn context_expiry_can_use_a_nearby_valid_pan_but_not_a_distant_one() {
+    let pan = format!("4{}", "1".repeat(15));
+    for (separator, expect_expiry) in [(", ", true), (". ", false), ("\n", false)] {
+        let text = format!("{pan}{separator}Expiry: 12/2028");
+        let result = pii_result(&text);
+        assert!(result
+            .evidence_spans
+            .iter()
+            .any(|span| span.label == "CREDITCARD"));
+        assert_eq!(
+            result
+                .evidence_spans
+                .iter()
+                .any(|span| span.label == "CREDITCARD_EXPIRY"),
+            expect_expiry
+        );
+    }
+}
+
+#[test]
+fn context_is_bounded_and_unicode_safe() {
+    let text = format!("Kreditkarte {}x Ablaufdatum: 12/2028", "🙂".repeat(40));
+    let result = pii_result(&text);
+    assert_eq!(result.class_name, "safe");
+    assert!(result.evidence_spans.is_empty());
+}
+
+#[test]
+fn context_employee_ids_keep_explicit_and_prefixed_forms() {
+    for (text, value) in [
+        ("Kennung: EMP_4821", "EMP_4821"),
+        ("ID: HR 4821", "HR 4821"),
+        ("Personalnummer: A4821", "A4821"),
+        ("Mitarbeiter, Kennung: A4821", "A4821"),
+        ("Employee, Kennung: A4821", "A4821"),
+    ] {
+        let result = pii_result(text);
+        assert_eq!(result.class_name, "EMPLOYEE_ID", "{text}");
+        assert_eq!(result.evidence_spans.len(), 1, "{text}");
+        assert_eq!(result.evidence_spans[0].text, value);
+    }
+}
+
 macro_rules! pii_golden {
     ($name:ident, $label:literal, $text:literal) => {
         #[test]
@@ -57,7 +202,7 @@ pii_golden!(
 pii_golden!(
     detects_payment_card_expiry,
     "CREDITCARD_EXPIRY",
-    "Ablaufdatum: 12/29"
+    "Kreditkarte Ablaufdatum: 12/29"
 );
 pii_golden!(detects_iban, "IBAN", "IBAN: DE89370400440532013000");
 pii_golden!(detects_bic, "SWIFT_CODE", "BIC: DEUTDEFF500");
