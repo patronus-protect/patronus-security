@@ -1,0 +1,11 @@
+[Unit]
+Description=Check Ark GPU inference every minute
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=60s
+AccuracySec=1s
+Unit=ark-l3-healthcheck.service
+
+[Install]
+WantedBy=timers.target

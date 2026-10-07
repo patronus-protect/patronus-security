@@ -11,6 +11,7 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Add an external Triton watchdog that validates real GPU inference, with a hardened systemd timer and deduplicated TLS SMTP failure/recovery notifications. Credentials and deployment addresses remain in private host configuration.
 - Add read-only IONOS Cube inventory and fleet capacity planning with protected-resource checks, identity validation, and redirect-safe credential handling. Provisioning and deletion remain explicitly unsupported.
 
 ### Fixed

@@ -1,0 +1,20 @@
+[Unit]
+Description=Ark L3 real inference healthcheck
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+DynamicUser=yes
+StateDirectory=ark-l3-healthcheck
+StateDirectoryMode=0700
+LoadCredential=config:/etc/ark-l3-healthcheck.json
+ExecStart=/usr/bin/python3 /opt/patronus/l3-healthcheck/healthcheck.py --config %d/config --state /var/lib/ark-l3-healthcheck/state.json
+TimeoutStartSec=45
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+UMask=0077
+
