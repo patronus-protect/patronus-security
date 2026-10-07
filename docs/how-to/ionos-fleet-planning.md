@@ -21,6 +21,11 @@ python3 ark-api/deploy/fleet.py plan \
 The private JSON configuration contains:
 
 - `datacenter_id`: data center UUID.
+- `private_lan_id`: positive integer LAN ID used for private address ownership.
+  Addresses on unrelated isolated LANs do not claim a fleet slot.
+- `minimum_cores` and `minimum_ram_mb`: positive integer resource requirements
+  for each Cube, sized for all three workers plus host and entrypoint overhead.
+  Inventory must meet both constraints before capacity is reported.
 - `minimum_cubes`: minimum retained count, at least one, chosen from availability
   requirements and measured workload.
 - `protected_server_ids`: UUIDs of shared infrastructure such as coordinator,
