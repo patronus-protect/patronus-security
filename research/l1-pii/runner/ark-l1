@@ -458,6 +458,9 @@ def cmd_gate() -> int:
         lines.append(f"- ❌ branch does not build on its base {cur['base_sha'][:12]}")
         ok = False
     if ok:
+        # Writable sandbox paths must exist, or systemd silently leaves them read-only.
+        for d in (GATE_TARGET, GATE_HOME / "cargo", GATE_HOME / "cache", CACHE, TRANSFER):
+            d.mkdir(parents=True, exist_ok=True)
         tree = GATE_TREES / "current"
         shutil.rmtree(tree, ignore_errors=True)
         git("worktree", "prune")
