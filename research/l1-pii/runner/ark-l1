@@ -305,9 +305,11 @@ def cmd_publish() -> int:
     if task.get("type") == "triage":
         (STATE / f"triage-{task['week']}").write_text(dt.datetime.now(dt.timezone.utc).isoformat() + "\n")
     else:
-        mark_done(wt / BACKLOG, task["id"])
-        git("add", BACKLOG, cwd=wt)
-        git("commit", "--quiet", "-m", f"chore(l1): mark {task['id']} done", cwd=wt)
+        tasks = yaml.safe_load((wt / BACKLOG).read_text()).get("tasks", [])
+        if not any(t["id"] == task["id"] and t.get("status") == "done" for t in tasks):
+            mark_done(wt / BACKLOG, task["id"])
+            git("add", BACKLOG, cwd=wt)
+            git("commit", "--quiet", "-m", f"chore(l1): mark {task['id']} done", cwd=wt)
     git("push", "--quiet", "-u", "origin", cur["branch"], cwd=wt)
     report = (STATE / "gate-report.md").read_text() if (STATE / "gate-report.md").exists() else ""
     body = "\n".join([
