@@ -22,6 +22,8 @@ setup:  # einmalig, nicht vom Timer
 tasks:
   # ── E: Messinfrastruktur ──────────────────────────────────────────────
   - id: E01
+    status: done
+    status: done
     title: Presidio-Runner (default + tuned) → Vorhersagen im external_pii_eval-Format
     type: eval-infra
     deps: []
