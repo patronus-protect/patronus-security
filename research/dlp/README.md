@@ -116,8 +116,8 @@ Review-Pausen.
 - **Abhängigkeiten zwischen Programmen**: `ext_deps: [pii:K03]` heißt, dass die PII-Aufgabe auf
   `main` gemergt sein muss. Ein offener PR im Stack reicht nicht. So wird die Score-/Kontext-Engine
   nicht doppelt gebaut.
-- **Secret-sichere Goldens** (E02, Entscheidung nötig): Gültige Prüfsummen-Tokens im Repo würden
-  GitHub Push Protection und den eigenen Patronus-Hook auslösen. Vorschlag: Goldens speichern
+- **Secret-sichere Goldens** (E02, entschieden: Generator-Rezepte): Gültige Prüfsummen-Tokens im Repo würden
+  GitHub Push Protection und den eigenen Patronus-Hook auslösen. Deshalb speichern Goldens
   Generator-Rezepte (`{"gen": "github_pat_classic", "seed": 17}`) statt Klartextwerten und erzeugen
   die Werte erst zur Testzeit. Werte sind immer synthetisch. Echte, geleakte Secrets (z. B.
   SecretBench) werden nicht verwendet.

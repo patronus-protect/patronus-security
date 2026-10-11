@@ -53,8 +53,12 @@ tasks:
     title: Secret-sicheres Golden-Format (Generator-Rezepte statt Klartext, Materialisierung zur Testzeit)
     type: eval-infra
     deps: []
-    needs_decision: true   # Änderung am Golden-Schema dlp_l1.jsonl; bestehende 115 Fälle migrieren
-    accept: dlp_l1.jsonl enthält keine prüfsummengültigen Tokens; 13_l1_golden_eval materialisiert bitgleich; Doku im benchmark_data/README
+    decision: Generator-Rezepte (freigegeben 2026-10-11)   # Golden-Schema dlp_l1.jsonl; bestehende 115 Fälle migrieren
+    accept: >-
+      Secret-Werte in dlp_l1.jsonl nur als Rezept {"gen": "<generator>", "seed": <int>} plus Carrier-Template mit
+      Platzhalter, Spans relativ zum materialisierten Text; deterministische Materialisierung in Rust (Golden-Eval/Tests)
+      und Python (Generator) mit identischem Ergebnis (Kreuztest); dlp_l1.jsonl enthält keine prüfsummengültigen Tokens;
+      Migration der bestehenden 115 Fälle mit bitgleichem 13_l1_golden_eval-Ergebnis; Doku im benchmark_data/README
 
   - id: E03
     title: Synthetischer Secret-Generator (format- und prüfsummengültige Fake-Werte je Provider, deterministisch per Seed)
