@@ -22,7 +22,7 @@ die unten angehängte Aufgabe, keine weitere.
    `scripts/generate_docs.py`.
 4. Selbst prüfen (`CARGO_TARGET_DIR` ist gesetzt): `cargo fmt --all`,
    `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test -p patronus-ark`,
-   `cd rust && cargo run --example 13_l1_golden_eval`,
+   `cd rust && cargo run --example 13_l1_golden_eval -- pii`,
    Python-Tests wie in der CI (`.venv` im Worktree, `pip install -r requirements-test.txt`,
    `VIRTUAL_ENV=$PWD/.venv .venv/bin/python -m maturin develop --manifest-path python/Cargo.toml`,
    `.venv/bin/python -m unittest discover -s python/tests`),
