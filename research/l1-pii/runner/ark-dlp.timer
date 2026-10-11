@@ -1,0 +1,9 @@
+[Unit]
+Description=ARK L1-DLP runs at 21:00 and 02:00 Europe/Berlin (offset to L1-PII; shared run lock)
+
+[Timer]
+OnCalendar=*-*-* 21,02:00:00 Europe/Berlin
+Persistent=false
+
+[Install]
+WantedBy=timers.target

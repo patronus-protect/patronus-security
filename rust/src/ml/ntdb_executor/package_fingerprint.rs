@@ -288,6 +288,9 @@ mod tests {
         let fixture = Fixture::new("rewrite");
         let deferred = fixture.deferred();
         let mtime = fs::metadata(fixture.path()).unwrap().modified().unwrap();
+        // Same-length rewrites are only visible through ctime, whose resolution is a
+        // kernel tick on coarse-timestamp filesystems; step past it before rewriting.
+        std::thread::sleep(std::time::Duration::from_millis(50));
         fs::write(fixture.path(), b"modified bytes").unwrap();
         restore_mtime(&fixture.path(), mtime);
         assert!(deferred

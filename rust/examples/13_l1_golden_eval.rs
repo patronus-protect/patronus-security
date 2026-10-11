@@ -113,16 +113,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     gateway.warmup()?;
     let root = Path::new("../python/patronus_ark/benchmark_data");
-    evaluate(
-        &gateway,
-        &root.join("pii_l1.jsonl"),
-        SecurityCategory::Pii,
-        "native:pii",
-    )?;
-    evaluate(
-        &gateway,
-        &root.join("dlp_l1.jsonl"),
-        SecurityCategory::Dlp,
-        "native:dlp",
-    )
+    // Optional suite filter: `pii`, `dlp` or `all` (default).
+    let suite = std::env::args().nth(1).unwrap_or_else(|| "all".into());
+    if !matches!(suite.as_str(), "pii" | "dlp" | "all") {
+        return Err(format!("unknown suite {suite:?}; expected pii, dlp or all").into());
+    }
+    if suite != "dlp" {
+        evaluate(
+            &gateway,
+            &root.join("pii_l1.jsonl"),
+            SecurityCategory::Pii,
+            "native:pii",
+        )?;
+    }
+    if suite != "pii" {
+        evaluate(
+            &gateway,
+            &root.join("dlp_l1.jsonl"),
+            SecurityCategory::Dlp,
+            "native:dlp",
+        )?;
+    }
+    Ok(())
 }
