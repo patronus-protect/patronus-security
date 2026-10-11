@@ -153,7 +153,8 @@ def sandbox(cmd: list[str], cwd: Path, rw: list[Path], env: dict[str, str], *,
             ) -> subprocess.CompletedProcess:
     """Run cmd as the current user in a transient systemd unit without credentials."""
     exposed = {*rw, *readable}
-    hidden = [path for path in PRIVATE if path not in exposed]
+    # A private directory stays visible when a step exposes it or something below it.
+    hidden = [path for path in PRIVATE if not any(e == path or e.is_relative_to(path) for e in exposed)]
     props = [
         "NoNewPrivileges=yes", "ProtectSystem=strict", "ProtectHome=read-only", "PrivateTmp=yes",
         "ReadWritePaths=" + " ".join(f"-{path}" for path in rw),
