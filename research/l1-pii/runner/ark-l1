@@ -280,7 +280,8 @@ def cmd_gate() -> int:
         for name, cmd, cwd in gate_steps(wt):
             proc = subprocess.run(cmd, cwd=cwd, text=True, capture_output=True,
                                   env={**os.environ, "CARGO_TARGET_DIR": str(TARGET),
-                                       "VIRTUAL_ENV": str(GATE_VENV)})
+                                       "VIRTUAL_ENV": str(GATE_VENV),
+                                       "PATH": f"{CARGO.parent}:{os.environ.get('PATH', '')}"})
             if proc.returncode == 0:
                 tail = proc.stdout.strip().splitlines()[-15:] if name == "scoreboard" else []
                 lines.append(f"- ✅ {name}" + ("\n```\n" + "\n".join(tail) + "\n```" if tail else ""))
