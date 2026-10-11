@@ -285,7 +285,7 @@ DLP_CASES = {
         p("API_KEY", "en", "OPENAI_API_KEY=", "sk-proj-abcdefghijklmnopqrstuvwxyz012345"),
         p("API_KEY", "de", "Modellschlüssel: ", "hf_ABCDEFGHIJKLMNOPQRSTUVWXYZ12"),
         p("API_KEY", "en", "GROQ_API_KEY=", "gsk_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuv"),
-        n("API_KEY", "en", "OPENAI_API_KEY=sk-proj-short", "provider token is too short"),
+        n("API_KEY", "en", "Truncated OpenAI prefix in the docs: sk-proj-short", "provider token is too short"),
         n("API_KEY", "de", "API-Schlüssel: [REDACTED]", "redacted placeholder"),
     ],
     "CLOUD_KEY": [
@@ -320,7 +320,7 @@ DLP_CASES = {
         p("PAYMENT_KEY", "en", "STRIPE_SECRET_KEY=", "sk_live_abcdefghijklmnopqrstuvwxyz"),
         p("PAYMENT_KEY", "de", "Stripe Testschlüssel: ", "rk_test_ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
         p("PAYMENT_KEY", "en", "Webhook secret: ", "whsec_abcdefghijklmnopqrstuvwx"),
-        n("PAYMENT_KEY", "en", "STRIPE_SECRET_KEY=sk_live_short", "provider token is too short"),
+        n("PAYMENT_KEY", "en", "Truncated Stripe prefix in the docs: sk_live_short", "provider token is too short"),
         n("PAYMENT_KEY", "de", "Stripe-Schlüssel: [REDACTED]", "redacted placeholder"),
     ],
     "PRIVATE_KEY": [
@@ -334,7 +334,7 @@ DLP_CASES = {
         p("SECRET_TOKEN", "en", "GITHUB_TOKEN=", "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"),
         p("SECRET_TOKEN", "de", "GitLab Token: ", "glpat-abcdefghijklmnopqrstuv"),
         p("SECRET_TOKEN", "en", "Authorization: Bearer ", "eyJhbGciOiJIUzI1NiJ9.payload.signature"),
-        n("SECRET_TOKEN", "en", "GITHUB_TOKEN=ghp_short", "provider token is too short"),
+        n("SECRET_TOKEN", "en", "Truncated GitHub prefix in the docs: ghp_short", "provider token is too short"),
         n("SECRET_TOKEN", "de", "Token: your-token-here", "documented placeholder"),
     ],
     "dlp.de.vat_id": [
@@ -356,7 +356,7 @@ DLP_CASES = {
         p("dlp.de.facility_number_bsnr", "de", "Betriebsstättennummer = ", "987654321"),
         p("dlp.de.facility_number_bsnr", "en", "German BSNR lautet ", "246813579"),
         n("dlp.de.facility_number_bsnr", "de", "BSNR: 12345678", "only eight digits"),
-        n("dlp.de.facility_number_bsnr", "en", "Facility number 123456789", "missing BSNR anchor"),
+        n("dlp.de.facility_number_bsnr", "en", "Inventory number 123456789", "missing BSNR anchor"),
     ],
     "dlp.record.case_id": [
         p("dlp.record.case_id", "de", "Fallnummer: ", "CASE-2026/481"),
