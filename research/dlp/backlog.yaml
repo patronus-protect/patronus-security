@@ -24,14 +24,14 @@
 
 setup:  # manuell, nicht vom Schedule
   - id: S01
-    title: gitleaks, TruffleHog (unverändertes Binary, AGPL nur ausgeführt), detect-secrets, optional Kingfisher auf der VPS gepinnt installieren (~/ark-dlp/baselines)
-    status: manual
+    title: gitleaks, TruffleHog (unverändertes Binary, AGPL nur ausgeführt), detect-secrets, optional Kingfisher auf der VPS gepinnt installieren (~/ark-dlp/baselines, Versionen in VERSIONS: gitleaks 8.30.1, trufflehog 3.97.9, detect-secrets 1.5.0)
+    status: done
   - id: S02
     title: Runner (research/l1-pii/runner) um --program {pii,dlp} erweitern (Backlog, Prompt, Präfix dlp/, Label ark-dlp, Root ~/ark-dlp, Golden-Arg dlp, Scoreboard scripts/l1_dlp), ext_deps-Auflösung, gemeinsamer Lock über beide Programme
     status: done
   - id: S03
     title: ~/ark-dlp anlegen (holdout 700, data/dev, state); beide Holdouts in InaccessiblePaths beider Programme; Benign-Code-Korpus (Repo-Split) nur auf der VPS
-    status: manual
+    status: done
   - id: S04
     title: research/dlp + Runner auf main mergen, runner/install.sh auf der VPS ausführen (legt ~/ark-dlp, Label ark-dlp, ark-dlp.timer 21/02 Uhr an), Timer aktivieren
     status: manual
