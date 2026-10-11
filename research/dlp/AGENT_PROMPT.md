@@ -1,8 +1,8 @@
 # Agent-Prompt für geplante L1-DLP-Läufe
 
 `runner/run.sh --program dlp` stellt diesen Text dem Agenten voran und hängt die Aufgabe des Laufs an.
-Der Agent läuft auf der VPS in einer systemd-Sandbox: Schreibzugriff nur auf den Worktree,
-den Cargo-Cache und `~/.claude`; kein sudo, kein GitHub-Zugang, kein Holdout.
+Der Agent läuft auf der VPS in einer systemd-Sandbox in einem eigenen Klon: Schreibzugriff nur
+auf den Klon, den Cargo-Cache und `~/.claude`; kein sudo, kein GitHub-Zugang, kein Holdout.
 
 ---
 

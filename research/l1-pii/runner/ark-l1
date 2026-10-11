@@ -3,20 +3,28 @@
 
 Usage: ark-l1 [--program pii|dlp] SUBCOMMAND   (default: $ARK_L1_PROGRAM or pii)
 
-Programmes share the clone, the cargo target and the gate venv under ~/ark-l1; each keeps its
+Programmes share the clone, the cargo targets and the gate venv under ~/ark-l1; each keeps its
 own state, stack, worktrees, dev data and holdout (pii: ~/ark-l1, dlp: ~/ark-dlp).
 
+Isolation: the agent works in its own clone, never in a worktree of the shared repository.
+Everything that executes agent-controlled code or reads agent-controlled git metadata (gate steps,
+git status/bundle in the agent clone) runs in a systemd sandbox without credentials. Agent commits
+reach the trusted repository only as a bundle; publish builds the "done" commit with plumbing in
+the trusted repository and pushes from there.
+
 Subcommands:
-  next            restack the programme's open PRs, pick one task, create its worktree
+  next            restack the programme's open PRs, pick one task, create the agent clone
   env             print the current run as shell assignments
-  gate            run the independent checks on the current worktree
-  publish         mark the task done, push the branch, open a draft PR on the stack
+  ahead           print the number of commits in the agent clone (sandboxed)
+  gate            import the agent commits and run the independent checks (sandboxed)
+  publish         mark the task done, push the branch, open a draft PR on the stack (idempotent)
   block ID REASON skip a task until `unblock`; drops the current worktree
   abort           drop the current worktree without blocking the task
   unblock ID      make a blocked task selectable again
   status          print stack, blocked tasks and the next candidate
 
-Exit codes of `next`: 0 = task ready, 10 = nothing to do (reason on stdout).
+Exit codes of `next`: 0 = task ready, 10 = nothing to do (reason on stdout),
+11 = the previous run passed the gate but was not published yet (run `publish`).
 """
 
 from __future__ import annotations
@@ -26,8 +34,10 @@ import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import yaml
@@ -69,15 +79,21 @@ SHARED = Path(os.environ.get("ARK_L1_ROOT", Path.home() / "ark-l1"))
 # pii keeps the original layout; further programmes live next to it.
 ROOT = SHARED if PROGRAM == "pii" else SHARED.parent / P["dir"]
 REPO = SHARED / "repo"
-TARGET = SHARED / "target"
+TARGET = SHARED / "target"            # agent builds
+GATE_TARGET = SHARED / "target-gate"  # gate builds; never writable by the agent
 GATE_VENV = SHARED / "gate-venv"
-WORKTREES = ROOT / "worktrees"
+GATE_HOME = SHARED / "gate-home"      # CARGO_HOME and caches of the gate sandbox
+SECRETS = SHARED / "secrets.env"
+WORKTREES = ROOT / "worktrees"        # agent clones
+GATE_TREES = ROOT / "gate"            # trusted checkouts of the gated commit
+TRANSFER = ROOT / "transfer"          # bundles from the agent clone
 STATE = ROOT / "state"
 LOGS = ROOT / "logs"
 CACHE = ROOT / "cache"
 DEV_DATA = ROOT / "data" / "dev"
 HOLDOUT = ROOT / "holdout"
-CARGO = Path.home() / ".cargo" / "bin" / "cargo"
+HOME = Path.home()
+CARGO = HOME / ".cargo" / "bin" / "cargo"
 
 GH_REPO = "patronus-protect/patronus-security"
 LABEL = P["label"]
@@ -87,6 +103,18 @@ MAX_OPEN = 6
 NOTHING = 10
 
 CURRENT = STATE / "current.json"
+
+
+def program_root(name: str) -> Path:
+    return SHARED if name == "pii" else SHARED.parent / PROGRAMS[name]["dir"]
+
+
+# Hidden inside every sandbox unless a step explicitly exposes one of them.
+PRIVATE = [
+    SECRETS, HOME / ".config" / "gh", HOME / ".ssh", HOME / ".bash_history",
+    HOME / "patronus-research-scanner", HOME / "web-census", HOME / "repos",
+    *[program_root(n) / d for n in PROGRAMS for d in ("holdout", "state", "cache", "gate", "transfer")],
+]
 STACK = STATE / "stack.json"
 BLOCKED = STATE / "blocked.json"
 
@@ -103,8 +131,51 @@ def run(cmd: list[str], cwd: Path | None = None, check: bool = True, env: dict |
     return proc.stdout.strip()
 
 
+# Host-side git only touches the trusted repository and checkouts it created itself; these
+# flags keep it from running configured commands even so.
+GIT_SAFE = ["-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null"]
+
+
 def git(*args: str, cwd: Path = REPO, check: bool = True) -> str:
-    return run(["git", *args], cwd=cwd, check=check)
+    return run(["git", *GIT_SAFE, *args], cwd=cwd, check=check)
+
+
+def git_raw(*args: str, stdin: str | None = None, env: dict | None = None) -> str:
+    proc = subprocess.run(["git", *GIT_SAFE, *args], cwd=REPO, text=True, capture_output=True,
+                          input=stdin, env={**os.environ, **(env or {})})
+    if proc.returncode != 0:
+        raise RuntimeError(f"git {shlex.join(args)} failed ({proc.returncode}):\n{proc.stderr}")
+    return proc.stdout
+
+
+def sandbox(cmd: list[str], cwd: Path, rw: list[Path], env: dict[str, str], *,
+            network: bool = True, readable: tuple[Path, ...] = (), max_sec: int = 3600
+            ) -> subprocess.CompletedProcess:
+    """Run cmd as the current user in a transient systemd unit without credentials."""
+    exposed = {*rw, *readable}
+    hidden = [path for path in PRIVATE if path not in exposed]
+    props = [
+        "NoNewPrivileges=yes", "ProtectSystem=strict", "ProtectHome=read-only", "PrivateTmp=yes",
+        "ReadWritePaths=" + " ".join(f"-{path}" for path in rw),
+        "InaccessiblePaths=" + " ".join(f"-{path}" for path in hidden),
+        f"RuntimeMaxSec={max_sec}", "CPUQuota=500%", "MemoryMax=9G",
+    ]
+    if not network:
+        props.append("PrivateNetwork=yes")
+    full = ["sudo", "systemd-run", f"--uid={os.getuid()}", f"--gid={os.getgid()}", "--pipe",
+            "--wait", "--collect", "--quiet", f"--working-directory={cwd}"]
+    for prop in props:
+        full += ["-p", prop]
+    base = {"HOME": str(HOME), "PATH": f"{CARGO.parent}:/usr/local/bin:/usr/bin:/bin",
+            "RUSTUP_HOME": str(HOME / ".rustup"), "GIT_CONFIG_NOSYSTEM": "1"}
+    for key, value in {**base, **env}.items():
+        full += ["-E", f"{key}={value}"]
+    return subprocess.run(full + cmd, text=True, capture_output=True, stdin=subprocess.DEVNULL)
+
+
+def agent_git(wt: Path, *args: str) -> subprocess.CompletedProcess:
+    """git inside the agent clone reads agent-controlled config, so it only runs sandboxed."""
+    return sandbox(["git", *args], wt, [TRANSFER], {}, network=False, max_sec=300)
 
 
 def load(path: Path, default):
@@ -224,7 +295,11 @@ def pick(backlog: dict, blocked: dict) -> dict | None:
 
 
 def mark_done(path: Path, task_id: str) -> None:
-    lines = path.read_text().splitlines(keepends=True)
+    path.write_text(mark_done_text(path.read_text(), task_id))
+
+
+def mark_done_text(text: str, task_id: str) -> str:
+    lines = text.splitlines(keepends=True)
     for i, line in enumerate(lines):
         flow = re.match(rf"(\s*- \{{id: {re.escape(task_id)},.*)\}}(\s*)$", line)
         if flow:
@@ -235,18 +310,22 @@ def mark_done(path: Path, task_id: str) -> None:
             lines.insert(i + 1, f"{block.group(1)}  status: done\n")
             break
     else:
-        raise RuntimeError(f"task {task_id} not found in {path}")
-    path.write_text("".join(lines))
+        raise RuntimeError(f"task {task_id} not found in {BACKLOG}")
+    return "".join(lines)
 
 
 # ── subcommands ──────────────────────────────────────────────────────────
 
 
 def cmd_next() -> int:
-    for d in (WORKTREES, STATE, LOGS, TARGET, CACHE, DEV_DATA, HOLDOUT):
+    for d in (WORKTREES, GATE_TREES, TRANSFER, STATE, LOGS, TARGET, CACHE, DEV_DATA, HOLDOUT):
         d.mkdir(parents=True, exist_ok=True)
     if CURRENT.exists():
-        return nothing(f"STALE_RUN {load(CURRENT, {}).get('task_id')} (run `ark-l1 abort`)")
+        cur = load(CURRENT, {})
+        if cur.get("gated_commit"):
+            print(f"RESULT=RESUME_PUBLISH {cur.get('task_id')}")
+            return 11
+        return nothing(f"STALE_RUN {cur.get('task_id')} (run `ark-l1 abort`)")
     git("fetch", "--quiet", "--prune", "origin")
     git("checkout", "--quiet", "--detach", "origin/main")
     open_prs = prs("open")
@@ -268,7 +347,9 @@ def cmd_next() -> int:
     save(STATE / "counter.json", number)
     branch = f"{BRANCH_PREFIX}{number:03d}-{task['id'].lower()}"
     worktree = WORKTREES / branch.replace("/", "-")
-    git("worktree", "add", "--quiet", "-B", branch, str(worktree), top_sha)
+    shutil.rmtree(worktree, ignore_errors=True)
+    git("clone", "--quiet", "--shared", "--no-checkout", str(REPO), str(worktree))
+    git("checkout", "--quiet", "-B", branch, top_sha, cwd=worktree)
     current = {
         "task_id": task["id"], "task": task, "branch": branch, "base": top_name,
         "base_sha": top_sha, "worktree": str(worktree), "started": dt.datetime.now(dt.timezone.utc).isoformat(),
@@ -291,31 +372,67 @@ def cmd_env() -> int:
     return 0
 
 
-def gate_steps(wt: Path) -> list[tuple[str, list[str], Path]]:
+def gate_steps(wt: Path) -> list[tuple[str, list[str], dict]]:
+    """(name, command, sandbox options); every step runs sandboxed in the trusted checkout wt."""
     py = str(ROOT / P["eval_venv"] / "bin" / "python")
+    gpy = str(GATE_VENV / "bin" / "python")
+    build = {"rw": [wt, GATE_TARGET, GATE_HOME, GATE_VENV]}
     steps = [
-        ("fmt", [str(CARGO), "fmt", "--all", "--", "--check"], wt),
-        ("clippy", [str(CARGO), "clippy", "--workspace", "--all-targets", "--", "-D", "warnings"], wt),
-        ("test", [str(CARGO), "test", "-p", "patronus-ark"], wt),
-        ("golden", [str(CARGO), "run", "--quiet", "--example", "13_l1_golden_eval", "--", P["golden"]],
-         wt / "rust"),
-        ("python-ext", [str(GATE_VENV / "bin" / "python"), "-m", "maturin", "develop", "--quiet",
-                        "--manifest-path", "python/Cargo.toml"], wt),
-        ("python-tests", [str(GATE_VENV / "bin" / "python"), "-m", "unittest", "discover", "-s",
-                          "python/tests"], wt),
-        ("docs", ["python3", "scripts/generate_docs.py", "--check"], wt),
+        ("fmt", [str(CARGO), "fmt", "--all", "--", "--check"], build),
+        ("clippy", [str(CARGO), "clippy", "--workspace", "--all-targets", "--", "-D", "warnings"], build),
+        ("test", [str(CARGO), "test", "-p", "patronus-ark"], build),
+        ("golden", ["sh", "-c", f"cd rust && exec {CARGO} run --quiet --example 13_l1_golden_eval -- "
+                    + shlex.quote(P["golden"])], build),
+        ("python-ext", [gpy, "-m", "maturin", "develop", "--quiet", "--manifest-path", "python/Cargo.toml"],
+         build),
+        ("python-tests", [gpy, "-m", "unittest", "discover", "-s", "python/tests"], build),
+        ("docs", ["python3", "scripts/generate_docs.py", "--check"], build),
     ]
     prepare = wt / P["eval_dir"] / "prepare_corpora.py"
     if prepare.exists() and not (HOLDOUT / ".ready").exists():
+        # Downloads public corpora and freezes the split; no credentials in the sandbox.
         steps.append(("prepare-corpora", [py, str(prepare), "--dev-out", str(DEV_DATA),
-                                          "--holdout-out", str(HOLDOUT)], wt))
+                                          "--holdout-out", str(HOLDOUT)],
+                      {"rw": [wt, DEV_DATA, HOLDOUT, CACHE]}))
     scoreboard = wt / P["eval_dir"] / "scoreboard.py"
     if scoreboard.exists():
         cur = load(CURRENT, {})
+        # The only step that reads the holdout: no network, writes only to the private cache.
         steps.append(("scoreboard", [py, str(scoreboard), "gate", "--head", str(wt),
                                      "--base-sha", cur.get("base_sha", ""), "--dev", str(DEV_DATA),
-                                     "--holdout", str(HOLDOUT), "--cache", str(CACHE)], wt))
+                                     "--holdout", str(HOLDOUT), "--cache", str(CACHE)],
+                      {"rw": [CACHE], "readable": (HOLDOUT,), "network": False}))
     return steps
+
+
+def gate_env() -> dict[str, str]:
+    return {"CARGO_TARGET_DIR": str(GATE_TARGET), "CARGO_HOME": str(GATE_HOME / "cargo"),
+            "XDG_CACHE_HOME": str(GATE_HOME / "cache"), "VIRTUAL_ENV": str(GATE_VENV),
+            "PIP_NO_CACHE_DIR": "1"}
+
+
+def import_agent_commits(cur: dict) -> str | None:
+    """Bundle the agent branch inside the sandbox and fetch the bundle into the trusted repository."""
+    bundle = TRANSFER / "agent.bundle"
+    bundle.unlink(missing_ok=True)
+    proc = agent_git(Path(cur["worktree"]), "bundle", "create", "--quiet", str(bundle),
+                     f"{cur['base_sha']}..HEAD")
+    if proc.returncode != 0 or not bundle.exists():
+        return None
+    ref = f"refs/ark/{PROGRAM}/gate"
+    git("fetch", "--quiet", "--no-tags", str(bundle), f"+HEAD:{ref}")
+    bundle.unlink(missing_ok=True)
+    return sha(ref)
+
+
+def cmd_ahead() -> int:
+    cur = load(CURRENT, None)
+    if cur is None:
+        print(0)
+        return 1
+    proc = agent_git(Path(cur["worktree"]), "rev-list", "--count", f"{cur['base_sha']}..HEAD")
+    print(proc.stdout.strip() if proc.returncode == 0 else 0)
+    return 0
 
 
 def cmd_gate() -> int:
@@ -323,53 +440,81 @@ def cmd_gate() -> int:
     if cur is None:
         print("no current run")
         return 1
-    wt = Path(cur["worktree"])
     report = STATE / "gate-report.md"
     lines = [f"# Gate {cur['task_id']} ({cur['branch']})", ""]
     ok = True
-    dirty = git("status", "--porcelain", cwd=wt)
-    ahead = int(git("rev-list", "--count", f"{cur['base_sha']}..HEAD", cwd=wt))
+    status = agent_git(Path(cur["worktree"]), "status", "--porcelain")
+    dirty = status.stdout.strip() if status.returncode == 0 else f"git status failed: {status.stderr[-500:]}"
+    commit = import_agent_commits(cur)
     if dirty:
-        lines.append("- ❌ uncommitted changes:\n```\n" + dirty[:2000] + "\n```")
+        lines.append("- ❌ uncommitted changes (only committed work is gated):\n```\n" + dirty[:2000] + "\n```")
         ok = False
-    if ahead == 0:
+    if commit is None or commit == cur["base_sha"]:
         lines.append("- ❌ no commits on the branch")
         ok = False
+    elif subprocess.run(["git", *GIT_SAFE, "merge-base", "--is-ancestor", cur["base_sha"], commit],
+                        cwd=REPO).returncode != 0:
+        lines.append(f"- ❌ branch does not build on its base {cur['base_sha'][:12]}")
+        ok = False
     if ok:
-        for name, cmd, cwd in gate_steps(wt):
-            proc = subprocess.run(cmd, cwd=cwd, text=True, capture_output=True,
-                                  env={**os.environ, "CARGO_TARGET_DIR": str(TARGET),
-                                       "VIRTUAL_ENV": str(GATE_VENV),
-                                       "PATH": f"{CARGO.parent}:{os.environ.get('PATH', '')}"})
-            if proc.returncode == 0:
-                tail = proc.stdout.strip().splitlines()[-15:] if name == "scoreboard" else []
-                lines.append(f"- ✅ {name}" + ("\n```\n" + "\n".join(tail) + "\n```" if tail else ""))
-            else:
-                out = (proc.stdout + "\n" + proc.stderr).strip()
-                lines.append(f"- ❌ {name}: `{shlex.join(cmd)}`\n```\n{out[-6000:]}\n```")
-                ok = False
-                break
+        tree = GATE_TREES / "current"
+        shutil.rmtree(tree, ignore_errors=True)
+        git("worktree", "prune")
+        git("worktree", "add", "--quiet", "--detach", str(tree), commit)
+        try:
+            for name, cmd, opts in gate_steps(tree):
+                proc = sandbox(cmd, tree, opts["rw"], gate_env(), network=opts.get("network", True),
+                               readable=opts.get("readable", ()))
+                if proc.returncode == 0:
+                    tail = proc.stdout.strip().splitlines()[-15:] if name == "scoreboard" else []
+                    lines.append(f"- ✅ {name}" + ("\n```\n" + "\n".join(tail) + "\n```" if tail else ""))
+                else:
+                    # The scoreboard reads the holdout: report its exit code, never its output.
+                    out = "" if name == "scoreboard" else (proc.stdout + "\n" + proc.stderr).strip()[-6000:]
+                    lines.append(f"- ❌ {name} (exit {proc.returncode}): `{shlex.join(cmd)}`\n```\n{out}\n```")
+                    ok = False
+                    break
+        finally:
+            shutil.rmtree(tree, ignore_errors=True)
+            git("worktree", "prune", check=False)
+    if ok:
+        cur["gated_commit"] = commit
+        save(CURRENT, cur)
     report.write_text("\n".join(lines) + "\n")
     print(report.read_text())
     return 0 if ok else 1
 
 
+def done_commit(commit: str, task: dict) -> str:
+    """Commit the task's `status: done` on top of commit without any checkout."""
+    text = git_raw("show", f"{commit}:{BACKLOG}")
+    tasks = (yaml.safe_load(text) or {}).get("tasks", [])
+    if any(t["id"] == task["id"] and t.get("status") == "done" for t in tasks):
+        return commit
+    blob = git_raw("hash-object", "-w", "--stdin", stdin=mark_done_text(text, task["id"])).strip()
+    with tempfile.TemporaryDirectory() as tmp:
+        env = {"GIT_INDEX_FILE": str(Path(tmp) / "index")}
+        git_raw("read-tree", commit, env=env)
+        git_raw("update-index", "--cacheinfo", f"100644,{blob},{BACKLOG}", env=env)
+        tree = git_raw("write-tree", env=env).strip()
+    return git_raw("commit-tree", tree, "-p", commit, "-m",
+                   f"chore({PROGRAM}): mark {task['id']} done").strip()
+
+
 def cmd_publish() -> int:
     cur = load(CURRENT, None)
-    if cur is None:
-        print("no current run")
+    if cur is None or not cur.get("gated_commit"):
+        print("no gated run to publish")
         return 1
-    wt = Path(cur["worktree"])
     task = cur["task"]
     if task.get("type") == "triage":
         (STATE / f"triage-{task['week']}").write_text(dt.datetime.now(dt.timezone.utc).isoformat() + "\n")
+        head = cur["gated_commit"]
     else:
-        tasks = yaml.safe_load((wt / BACKLOG).read_text()).get("tasks", [])
-        if not any(t["id"] == task["id"] and t.get("status") == "done" for t in tasks):
-            mark_done(wt / BACKLOG, task["id"])
-            git("add", BACKLOG, cwd=wt)
-            git("commit", "--quiet", "-m", f"chore({PROGRAM}): mark {task['id']} done", cwd=wt)
-    git("push", "--quiet", "-u", "origin", cur["branch"], cwd=wt)
+        head = cur.get("publish_commit") or done_commit(cur["gated_commit"], task)
+    cur["publish_commit"] = head
+    save(CURRENT, cur)
+    git("push", "--quiet", "origin", f"+{head}:refs/heads/{cur['branch']}")
     report = (STATE / "gate-report.md").read_text() if (STATE / "gate-report.md").exists() else ""
     body = "\n".join([
         f"Scheduled {P['name']} run, backlog task **{task['id']}**: {task.get('title', '')}",
@@ -384,22 +529,28 @@ def cmd_publish() -> int:
         "",
         "🤖 Generated with [Claude Code](https://claude.com/claude-code)",
     ])
-    url = run(["gh", "pr", "create", "--repo", GH_REPO, "--draft", "--base", cur["base"],
-               "--head", cur["branch"], "--label", LABEL,
-               "--title", f"{P['title']} {task['id']}: {task.get('title', '')}"[:250], "--body", body])
+    existing = json.loads(run(["gh", "pr", "list", "--repo", GH_REPO, "--head", cur["branch"],
+                               "--state", "open", "--json", "url"]))
+    if existing:
+        url = existing[0]["url"]
+    else:
+        url = run(["gh", "pr", "create", "--repo", GH_REPO, "--draft", "--base", cur["base"],
+                   "--head", cur["branch"], "--label", LABEL,
+                   "--title", f"{P['title']} {task['id']}: {task.get('title', '')}"[:250], "--body", body])
     stack = load(STACK, {})
     stack[cur["branch"]] = {"base": cur["base"], "base_sha": cur["base_sha"]}
     save(STACK, stack)
-    drop_worktree(cur, delete_branch=False)
+    drop_worktree(cur)
     print(f"PR={url}")
     return 0
 
 
-def drop_worktree(cur: dict, delete_branch: bool) -> None:
-    git("worktree", "remove", "--force", cur["worktree"], check=False)
+def drop_worktree(cur: dict) -> None:
+    # Plain deletes: the host never runs git inside the agent clone.
+    shutil.rmtree(cur["worktree"], ignore_errors=True)
+    shutil.rmtree(GATE_TREES / "current", ignore_errors=True)
     git("worktree", "prune", check=False)
-    if delete_branch:
-        git("branch", "-D", cur["branch"], check=False)
+    git("update-ref", "-d", f"refs/ark/{PROGRAM}/gate", check=False)
     CURRENT.unlink(missing_ok=True)
 
 
@@ -409,7 +560,7 @@ def cmd_block(task_id: str, reason: str) -> int:
     blocked[task_id] = {"reason": reason, "at": dt.datetime.now(dt.timezone.utc).isoformat()}
     save(BLOCKED, blocked)
     if cur is not None and cur["task_id"] == task_id:
-        drop_worktree(cur, delete_branch=True)
+        drop_worktree(cur)
     print(f"BLOCKED={task_id}")
     return 0
 
@@ -417,7 +568,7 @@ def cmd_block(task_id: str, reason: str) -> int:
 def cmd_abort() -> int:
     cur = load(CURRENT, None)
     if cur is not None:
-        drop_worktree(cur, delete_branch=True)
+        drop_worktree(cur)
     print("ABORTED")
     return 0
 
@@ -452,7 +603,7 @@ def main(argv: list[str]) -> int:
     cmd, args = argv[0], argv[1:]
     table = {
         "next": cmd_next, "env": cmd_env, "gate": cmd_gate, "publish": cmd_publish,
-        "abort": cmd_abort, "status": cmd_status,
+        "abort": cmd_abort, "status": cmd_status, "ahead": cmd_ahead,
     }
     if cmd in table:
         return table[cmd]()

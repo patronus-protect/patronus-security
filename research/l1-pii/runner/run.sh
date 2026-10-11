@@ -27,7 +27,16 @@ flock -n 9 || { echo "another run is active"; exit 0; }
 find "$ROOT/logs" -name '*.log' -mtime +30 -delete
 
 echo "== ark-l1 $PROGRAM run $(date -u +%FT%TZ)"
-"${L1[@]}" next || exit 0
+"${L1[@]}" next
+rc=$?
+if [ "$rc" -eq 11 ]; then
+  # The previous run passed the gate but publishing failed: retry only that.
+  "${L1[@]}" publish && exit 0
+  echo "== publish failed again; the run stays pending"
+  exit 1
+fi
+[ "$rc" -eq 10 ] && exit 0
+[ "$rc" -eq 0 ] || exit 1
 eval "$("${L1[@]}" env)"
 
 feedback=""
@@ -51,8 +60,8 @@ $feedback"
     -p ProtectSystem=strict \
     -p ProtectHome=read-only \
     -p PrivateTmp=yes \
-    -p "ReadWritePaths=-$WORKTREE -$SHARED/repo/.git -$SHARED/target -$ROOT/cache -$HOME/.cargo -$HOME/.rustup -$HOME/.cache -$HOME/.claude -$HOME/.claude.json -$HOME/.local/state" \
-    -p "InaccessiblePaths=-$SHARED/holdout -$SHARED/secrets.env -$SHARED/state -$DLP_ROOT/holdout -$DLP_ROOT/state -$HOME/.config/gh -$HOME/.ssh -$HOME/.bash_history -$HOME/patronus-research-scanner -$HOME/web-census -$HOME/repos" \
+    -p "ReadWritePaths=-$WORKTREE -$SHARED/target-$HOME/.cargo -$HOME/.rustup -$HOME/.cache -$HOME/.claude -$HOME/.claude.json -$HOME/.local/state" \
+    -p "InaccessiblePaths=-$SHARED/holdout -$SHARED/secrets.env -$SHARED/state -$SHARED/cache -$SHARED/gate -$SHARED/transfer -$DLP_ROOT/holdout -$DLP_ROOT/state -$DLP_ROOT/cache -$DLP_ROOT/gate -$DLP_ROOT/transfer-$HOME/.config/gh -$HOME/.ssh -$HOME/.bash_history -$HOME/patronus-research-scanner -$HOME/web-census -$HOME/repos" \
     -p RuntimeMaxSec=5400 \
     -p CPUQuota=500% \
     -p MemoryMax=9G \
@@ -65,15 +74,16 @@ $feedback"
   agent_rc=$?
   echo "== agent exit $agent_rc"
 
-  if [ "$agent_rc" -ne 0 ] && [ "$(git -C "$WORKTREE" rev-list --count "$BASE_SHA..HEAD")" = "0" ]; then
+  if [ "$agent_rc" -ne 0 ] && [ "$("${L1[@]}" ahead)" = "0" ]; then
     echo "== agent failed without commits; aborting run, task stays selectable"
     "${L1[@]}" abort
     exit 1
   fi
 
   if "${L1[@]}" gate; then
-    "${L1[@]}" publish
-    exit 0
+    "${L1[@]}" publish && exit 0
+    echo "== publish failed; the next run retries it"
+    exit 1
   fi
   feedback="
 ## Gate-Ergebnis der vorherigen Runde (rot) — behebe genau das

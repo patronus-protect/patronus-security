@@ -46,10 +46,14 @@ die VPS selbst: `ark-l1.timer` startet täglich 07:00 und 15:00 (Europe/Berlin) 
 
 ```
 run.sh
-  ark-l1 next     → Stack restacken, eine Aufgabe wählen, Worktree l1/NNN-<id> auf der Stack-Spitze
-  claude -p       → in systemd-Sandbox (nur Worktree beschreibbar, kein sudo/GitHub/Holdout)
-  ark-l1 gate     → fmt/clippy/test, Golden-Eval, Python-Tests, Docs, Scoreboard (sobald E06 da ist)
-  grün: ark-l1 publish → Status done, push, Draft-PR mit Base = vorheriger l1/*-Branch, Label ark-l1
+  ark-l1 next     → Stack restacken, eine Aufgabe wählen, eigener Klon l1/NNN-<id> auf der Stack-Spitze
+  claude -p       → in systemd-Sandbox (nur Klon + Cargo-Target beschreibbar, kein sudo/GitHub/Holdout)
+  ark-l1 gate     → Agent-Commits als Bundle (sandboxed erzeugt) ins vertrauenswürdige Repo holen,
+                    frischer Checkout; fmt/clippy/test, Golden-Eval, Python-Tests, Docs in einer
+                    Sandbox ohne Credentials; Scoreboard (sobald E06 da ist) zusätzlich ohne Netz,
+                    als einziger Schritt mit Lesezugriff auf den Holdout
+  grün: ark-l1 publish → Status done per Plumbing, push aus dem vertrauenswürdigen Repo, Draft-PR
+                    (idempotent; schlägt es fehl, holt der nächste Lauf nur das Publish nach)
   rot:  Gate-Bericht zurück an den Agenten, max. 3 Runden, danach ark-l1 block
 ```
 
@@ -59,6 +63,10 @@ run.sh
 - **Stack:** Wird ein unterer PR gemergt, rebased `ark-l1 next` die übrigen Branches auf den neuen
   Parent und passt die PR-Basis an. Konflikt → Lauf endet (`REBASE_CONFLICT`). Ab 6 offenen PRs
   pausiert der Timer, bis gemergt wird.
+- **Isolation:** Der Host führt nie Code oder Git-Konfiguration des Agenten aus. Git-Befehle im
+  Agent-Klon (`status`, `bundle`, `rev-list`) laufen in der Sandbox; das gemeinsame `.git`, der
+  Gate-Target, das Gate-Venv und der Scoreboard-Cache sind für den Agenten nicht beschreibbar bzw.
+  unsichtbar. Der Runner läuft mit einem eigenen Venv (`~/ark-l1/runner-venv`, PyYAML gepinnt).
 - **Runner ist kopiert, nicht verlinkt:** `runner/install.sh` installiert nach `~/ark-l1/bin`. Agent-
   Branches können das Gate nicht ändern; neue Runner-Versionen nur nach Review per Hand installieren.
 - **Holdout** liegt unter `~/ark-l1/holdout`, für den Agenten per Sandbox unsichtbar.
