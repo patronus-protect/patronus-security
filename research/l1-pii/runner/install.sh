@@ -15,6 +15,6 @@ install -m 644 "$SRC/../AGENT_PROMPT.md" "$ROOT/bin/AGENT_PROMPT.md"
 sudo install -m 644 "$SRC/ark-l1.service" "$SRC/ark-l1.timer" /etc/systemd/system/
 sudo systemctl daemon-reload
 gh label create ark-l1 --repo patronus-protect/patronus-security --color 5319e7 \
-  --description "Scheduled L1-PII run" --force >/dev/null
+  --description "Scheduled L1-PII run" --force >/dev/null || echo "label not created (token lacks Issues permission); create it once by hand"
 [ -f "$ROOT/secrets.env" ] || echo "missing $ROOT/secrets.env (CLAUDE_CODE_OAUTH_TOKEN=...)"
 echo "installed; enable with: sudo systemctl enable --now ark-l1.timer"
