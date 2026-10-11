@@ -24,7 +24,7 @@
 
 setup:  # manuell, nicht vom Schedule
   - id: S01
-    title: gitleaks, TruffleHog (unverändertes Binary, AGPL nur ausgeführt), detect-secrets, optional Kingfisher auf der VPS gepinnt installieren (~/ark-dlp/baselines, Versionen in VERSIONS: gitleaks 8.30.1, trufflehog 3.97.9, detect-secrets 1.5.0)
+    title: gitleaks, TruffleHog (unverändertes Binary, AGPL nur ausgeführt), detect-secrets, optional Kingfisher auf der VPS gepinnt installieren (~/ark-dlp/baselines, Versionen in VERSIONS — gitleaks 8.30.1, trufflehog 3.97.9, detect-secrets 1.5.0)
     status: done
   - id: S02
     title: Runner (research/l1-pii/runner) um --program {pii,dlp} erweitern (Backlog, Prompt, Präfix dlp/, Label ark-dlp, Root ~/ark-dlp, Golden-Arg dlp, Scoreboard scripts/l1_dlp), ext_deps-Auflösung, gemeinsamer Lock über beide Programme
