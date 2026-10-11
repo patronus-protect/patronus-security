@@ -1,0 +1,405 @@
+#!/usr/bin/env python3
+"""Runner for the scheduled L1-PII programme (one backlog task per run).
+
+Subcommands:
+  next            restack open l1/* PRs, pick one task, create its worktree
+  env             print the current run as shell assignments
+  gate            run the independent checks on the current worktree
+  publish         mark the task done, push the branch, open a draft PR on the stack
+  block ID REASON skip a task until `unblock`; drops the current worktree
+  abort           drop the current worktree without blocking the task
+  unblock ID      make a blocked task selectable again
+  status          print stack, blocked tasks and the next candidate
+
+Exit codes of `next`: 0 = task ready, 10 = nothing to do (reason on stdout).
+"""
+
+from __future__ import annotations
+
+import datetime as dt
+import json
+import os
+import re
+import shlex
+import subprocess
+import sys
+from pathlib import Path
+
+import yaml
+
+ROOT = Path(os.environ.get("ARK_L1_ROOT", Path.home() / "ark-l1"))
+REPO = ROOT / "repo"
+WORKTREES = ROOT / "worktrees"
+STATE = ROOT / "state"
+LOGS = ROOT / "logs"
+TARGET = ROOT / "target"
+CACHE = ROOT / "cache"
+DEV_DATA = ROOT / "data" / "dev"
+HOLDOUT = ROOT / "holdout"
+GATE_VENV = ROOT / "gate-venv"
+CARGO = Path.home() / ".cargo" / "bin" / "cargo"
+
+GH_REPO = "patronus-protect/patronus-security"
+LABEL = "ark-l1"
+BRANCH_PREFIX = "l1/"
+BACKLOG = "research/l1-pii/backlog.yaml"
+MAX_OPEN = 6
+NOTHING = 10
+
+CURRENT = STATE / "current.json"
+STACK = STATE / "stack.json"
+BLOCKED = STATE / "blocked.json"
+
+
+# ── helpers ──────────────────────────────────────────────────────────────
+
+
+def run(cmd: list[str], cwd: Path | None = None, check: bool = True, env: dict | None = None) -> str:
+    proc = subprocess.run(
+        cmd, cwd=cwd, text=True, capture_output=True, env={**os.environ, **(env or {})}
+    )
+    if check and proc.returncode != 0:
+        raise RuntimeError(f"{shlex.join(cmd)} failed ({proc.returncode}):\n{proc.stdout}\n{proc.stderr}")
+    return proc.stdout.strip()
+
+
+def git(*args: str, cwd: Path = REPO, check: bool = True) -> str:
+    return run(["git", *args], cwd=cwd, check=check)
+
+
+def load(path: Path, default):
+    return json.loads(path.read_text()) if path.exists() else default
+
+
+def save(path: Path, data) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
+    tmp.replace(path)
+
+
+def branch_number(name: str) -> int:
+    m = re.match(rf"{re.escape(BRANCH_PREFIX)}(\d+)-", name)
+    return int(m.group(1)) if m else -1
+
+
+def prs(state: str) -> list[dict]:
+    out = run([
+        "gh", "pr", "list", "--repo", GH_REPO, "--label", LABEL, "--state", state, "--limit", "200",
+        "--json", "number,headRefName,baseRefName,headRefOid,state,url",
+    ])
+    return [p for p in json.loads(out) if p["headRefName"].startswith(BRANCH_PREFIX)]
+
+
+def sha(ref: str) -> str:
+    return git("rev-parse", ref)
+
+
+def nothing(reason: str) -> int:
+    print(f"RESULT={reason}")
+    return NOTHING
+
+
+# ── restack ──────────────────────────────────────────────────────────────
+
+
+def restack(open_prs: list[dict]) -> tuple[str, str] | None:
+    """Rebase open stack branches whose recorded parent moved. Returns (top_name, top_sha)."""
+    stack = load(STACK, {})
+    prev_name, prev_sha = "main", sha("origin/main")
+    for pr in sorted(open_prs, key=lambda p: branch_number(p["headRefName"])):
+        name = pr["headRefName"]
+        rec = stack.get(name)
+        head = pr["headRefOid"]
+        if rec is None:
+            print(f"WARN=unrecorded stack branch {name}; leaving it untouched")
+        elif not (prev_name == "main" and rec["base"] == "main") and rec["base_sha"] != prev_sha:
+            git("checkout", "--quiet", "--detach", head)
+            proc = subprocess.run(
+                ["git", "rebase", "--quiet", "--onto", prev_sha, rec["base_sha"]],
+                cwd=REPO, text=True, capture_output=True,
+            )
+            if proc.returncode != 0:
+                git("rebase", "--abort", check=False)
+                git("checkout", "--quiet", "--detach", "origin/main")
+                print(f"CONFLICT_BRANCH={name}")
+                return None
+            new_head = sha("HEAD")
+            git("push", "--quiet", f"--force-with-lease=refs/heads/{name}:{head}", "origin",
+                f"HEAD:refs/heads/{name}")
+            git("checkout", "--quiet", "--detach", "origin/main")
+            stack[name] = {"base": prev_name, "base_sha": prev_sha}
+            head = new_head
+            print(f"RESTACKED={name}")
+        if pr["baseRefName"] != prev_name:
+            run(["gh", "pr", "edit", str(pr["number"]), "--repo", GH_REPO, "--base", prev_name])
+        prev_name, prev_sha = name, head
+    for name in list(stack):
+        if name not in {p["headRefName"] for p in open_prs}:
+            del stack[name]
+    save(STACK, stack)
+    return prev_name, prev_sha
+
+
+# ── backlog ──────────────────────────────────────────────────────────────
+
+
+def backlog_at(rev: str) -> dict | None:
+    text = git("show", f"{rev}:{BACKLOG}", check=False)
+    return yaml.safe_load(text) if text else None
+
+
+def pick(backlog: dict, blocked: dict) -> dict | None:
+    tasks = backlog.get("tasks", [])
+    done = {t["id"] for t in tasks if t.get("status") == "done"}
+    today = dt.date.today()
+    week = f"{today.isocalendar().year}-W{today.isocalendar().week:02d}"
+    if today.weekday() == 0 and not (STATE / f"triage-{week}").exists() and done:
+        rec = next(r for r in backlog.get("recurring", []) if r["id"] == "TRIAGE")
+        return {**rec, "type": "triage", "week": week}
+    for t in tasks:
+        if t.get("status", "todo") != "todo" or t["id"] in blocked:
+            continue
+        if t.get("needs_decision"):
+            continue
+        if all(d in done for d in t.get("deps", [])):
+            return t
+    return None
+
+
+def mark_done(path: Path, task_id: str) -> None:
+    lines = path.read_text().splitlines(keepends=True)
+    for i, line in enumerate(lines):
+        flow = re.match(rf"(\s*- \{{id: {re.escape(task_id)},.*)\}}(\s*)$", line)
+        if flow:
+            lines[i] = f"{flow.group(1)}, status: done}}{flow.group(2)}"
+            break
+        block = re.match(rf"(\s*)- id: {re.escape(task_id)}\s*$", line)
+        if block:
+            lines.insert(i + 1, f"{block.group(1)}  status: done\n")
+            break
+    else:
+        raise RuntimeError(f"task {task_id} not found in {path}")
+    path.write_text("".join(lines))
+
+
+# ── subcommands ──────────────────────────────────────────────────────────
+
+
+def cmd_next() -> int:
+    for d in (WORKTREES, STATE, LOGS, TARGET, CACHE, DEV_DATA, HOLDOUT):
+        d.mkdir(parents=True, exist_ok=True)
+    if CURRENT.exists():
+        return nothing(f"STALE_RUN {load(CURRENT, {}).get('task_id')} (run `ark-l1 abort`)")
+    git("fetch", "--quiet", "--prune", "origin")
+    git("checkout", "--quiet", "--detach", "origin/main")
+    open_prs = prs("open")
+    top = restack(open_prs)
+    if top is None:
+        return nothing("REBASE_CONFLICT")
+    if len(open_prs) >= MAX_OPEN:
+        return nothing(f"PAUSED {len(open_prs)} open stack PRs (limit {MAX_OPEN})")
+    top_name, top_sha = top
+    backlog = backlog_at(top_sha)
+    if backlog is None:
+        return nothing(f"NO_BACKLOG on {top_name}")
+    task = pick(backlog, load(BLOCKED, {}))
+    if task is None:
+        return nothing("NOTHING_TO_DO")
+
+    used = [branch_number(p["headRefName"]) for p in prs("all")]
+    number = max([*used, load(STATE / "counter.json", 0)], default=0) + 1
+    save(STATE / "counter.json", number)
+    branch = f"{BRANCH_PREFIX}{number:03d}-{task['id'].lower()}"
+    worktree = WORKTREES / branch.replace("/", "-")
+    git("worktree", "add", "--quiet", "-B", branch, str(worktree), top_sha)
+    current = {
+        "task_id": task["id"], "task": task, "branch": branch, "base": top_name,
+        "base_sha": top_sha, "worktree": str(worktree), "started": dt.datetime.utcnow().isoformat() + "Z",
+    }
+    save(CURRENT, current)
+    print(f"TASK_ID={task['id']}\nBRANCH={branch}\nBASE={top_name}\nWORKTREE={worktree}")
+    return 0
+
+
+def cmd_env() -> int:
+    cur = load(CURRENT, None)
+    if cur is None:
+        return 1
+    for key in ("task_id", "branch", "base", "base_sha", "worktree"):
+        print(f"{key.upper()}={shlex.quote(cur[key])}")
+    print(f"TASK_YAML={shlex.quote(yaml.safe_dump(cur['task'], allow_unicode=True, sort_keys=False))}")
+    return 0
+
+
+def gate_steps(wt: Path) -> list[tuple[str, list[str], Path]]:
+    py = str(ROOT / "presidio-venv" / "bin" / "python")
+    steps = [
+        ("fmt", [str(CARGO), "fmt", "--all", "--", "--check"], wt),
+        ("clippy", [str(CARGO), "clippy", "--workspace", "--all-targets", "--", "-D", "warnings"], wt),
+        ("test", [str(CARGO), "test", "-p", "patronus-ark"], wt),
+        ("golden", [str(CARGO), "run", "--quiet", "--example", "13_l1_golden_eval"], wt / "rust"),
+        ("python-ext", [str(GATE_VENV / "bin" / "python"), "-m", "maturin", "develop", "--quiet",
+                        "--manifest-path", "python/Cargo.toml"], wt),
+        ("python-tests", [str(GATE_VENV / "bin" / "python"), "-m", "unittest", "discover", "-s",
+                          "python/tests"], wt),
+        ("docs", ["python3", "scripts/generate_docs.py", "--check"], wt),
+    ]
+    prepare = wt / "scripts" / "l1_presidio" / "prepare_corpora.py"
+    if prepare.exists() and not (HOLDOUT / ".ready").exists():
+        steps.append(("prepare-corpora", [py, str(prepare), "--dev-out", str(DEV_DATA),
+                                          "--holdout-out", str(HOLDOUT)], wt))
+    scoreboard = wt / "scripts" / "l1_presidio" / "scoreboard.py"
+    if scoreboard.exists():
+        cur = load(CURRENT, {})
+        steps.append(("scoreboard", [py, str(scoreboard), "gate", "--head", str(wt),
+                                     "--base-sha", cur.get("base_sha", ""), "--dev", str(DEV_DATA),
+                                     "--holdout", str(HOLDOUT), "--cache", str(CACHE)], wt))
+    return steps
+
+
+def cmd_gate() -> int:
+    cur = load(CURRENT, None)
+    if cur is None:
+        print("no current run")
+        return 1
+    wt = Path(cur["worktree"])
+    report = STATE / "gate-report.md"
+    lines = [f"# Gate {cur['task_id']} ({cur['branch']})", ""]
+    ok = True
+    dirty = git("status", "--porcelain", cwd=wt)
+    ahead = int(git("rev-list", "--count", f"{cur['base_sha']}..HEAD", cwd=wt))
+    if dirty:
+        lines.append("- ❌ uncommitted changes:\n```\n" + dirty[:2000] + "\n```")
+        ok = False
+    if ahead == 0:
+        lines.append("- ❌ no commits on the branch")
+        ok = False
+    if ok:
+        for name, cmd, cwd in gate_steps(wt):
+            proc = subprocess.run(cmd, cwd=cwd, text=True, capture_output=True,
+                                  env={**os.environ, "CARGO_TARGET_DIR": str(TARGET),
+                                       "VIRTUAL_ENV": str(GATE_VENV)})
+            if proc.returncode == 0:
+                tail = proc.stdout.strip().splitlines()[-15:] if name == "scoreboard" else []
+                lines.append(f"- ✅ {name}" + ("\n```\n" + "\n".join(tail) + "\n```" if tail else ""))
+            else:
+                out = (proc.stdout + "\n" + proc.stderr).strip()
+                lines.append(f"- ❌ {name}: `{shlex.join(cmd)}`\n```\n{out[-6000:]}\n```")
+                ok = False
+                break
+    report.write_text("\n".join(lines) + "\n")
+    print(report.read_text())
+    return 0 if ok else 1
+
+
+def cmd_publish() -> int:
+    cur = load(CURRENT, None)
+    if cur is None:
+        print("no current run")
+        return 1
+    wt = Path(cur["worktree"])
+    task = cur["task"]
+    if task.get("type") == "triage":
+        (STATE / f"triage-{task['week']}").write_text(dt.datetime.utcnow().isoformat() + "\n")
+    else:
+        mark_done(wt / BACKLOG, task["id"])
+        git("add", BACKLOG, cwd=wt)
+        git("commit", "--quiet", "-m", f"chore(l1): mark {task['id']} done", cwd=wt)
+    git("push", "--quiet", "-u", "origin", cur["branch"], cwd=wt)
+    report = (STATE / "gate-report.md").read_text() if (STATE / "gate-report.md").exists() else ""
+    body = "\n".join([
+        f"Scheduled L1-PII run, backlog task **{task['id']}**: {task.get('title', '')}",
+        "",
+        f"Stacked on `{cur['base']}`. One task per run; see `research/l1-pii/README.md`.",
+        "",
+        "```yaml",
+        yaml.safe_dump(task, allow_unicode=True, sort_keys=False).strip(),
+        "```",
+        "",
+        report,
+        "",
+        "🤖 Generated with [Claude Code](https://claude.com/claude-code)",
+    ])
+    url = run(["gh", "pr", "create", "--repo", GH_REPO, "--draft", "--base", cur["base"],
+               "--head", cur["branch"], "--label", LABEL,
+               "--title", f"L1 {task['id']}: {task.get('title', '')}"[:250], "--body", body])
+    stack = load(STACK, {})
+    stack[cur["branch"]] = {"base": cur["base"], "base_sha": cur["base_sha"]}
+    save(STACK, stack)
+    drop_worktree(cur, delete_branch=False)
+    print(f"PR={url}")
+    return 0
+
+
+def drop_worktree(cur: dict, delete_branch: bool) -> None:
+    git("worktree", "remove", "--force", cur["worktree"], check=False)
+    git("worktree", "prune", check=False)
+    if delete_branch:
+        git("branch", "-D", cur["branch"], check=False)
+    CURRENT.unlink(missing_ok=True)
+
+
+def cmd_block(task_id: str, reason: str) -> int:
+    blocked = load(BLOCKED, {})
+    cur = load(CURRENT, None)
+    blocked[task_id] = {"reason": reason, "at": dt.datetime.utcnow().isoformat() + "Z"}
+    save(BLOCKED, blocked)
+    if cur is not None and cur["task_id"] == task_id:
+        drop_worktree(cur, delete_branch=True)
+    print(f"BLOCKED={task_id}")
+    return 0
+
+
+def cmd_abort() -> int:
+    cur = load(CURRENT, None)
+    if cur is not None:
+        drop_worktree(cur, delete_branch=True)
+    print("ABORTED")
+    return 0
+
+
+def cmd_unblock(task_id: str) -> int:
+    blocked = load(BLOCKED, {})
+    blocked.pop(task_id, None)
+    save(BLOCKED, blocked)
+    print(f"UNBLOCKED={task_id}")
+    return 0
+
+
+def cmd_status() -> int:
+    git("fetch", "--quiet", "--prune", "origin")
+    open_prs = sorted(prs("open"), key=lambda p: branch_number(p["headRefName"]))
+    print("Stack (open):")
+    for p in open_prs:
+        print(f"  #{p['number']} {p['headRefName']} ← {p['baseRefName']}  {p['url']}")
+    print("Blocked:", json.dumps(load(BLOCKED, {}), indent=2, ensure_ascii=False))
+    print("Current:", load(CURRENT, None))
+    top = open_prs[-1]["headRefOid"] if open_prs else "origin/main"
+    backlog = backlog_at(top)
+    task = pick(backlog, load(BLOCKED, {})) if backlog else None
+    print("Next:", task and f"{task['id']} {task.get('title', '')}")
+    return 0
+
+
+def main(argv: list[str]) -> int:
+    if not argv:
+        print(__doc__)
+        return 2
+    cmd, args = argv[0], argv[1:]
+    table = {
+        "next": cmd_next, "env": cmd_env, "gate": cmd_gate, "publish": cmd_publish,
+        "abort": cmd_abort, "status": cmd_status,
+    }
+    if cmd in table:
+        return table[cmd]()
+    if cmd == "block" and len(args) >= 2:
+        return cmd_block(args[0], " ".join(args[1:]))
+    if cmd == "unblock" and len(args) == 1:
+        return cmd_unblock(args[0])
+    print(__doc__)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

@@ -1,0 +1,9 @@
+[Unit]
+Description=ARK L1-PII runs at 07:00 and 15:00 Europe/Berlin
+
+[Timer]
+OnCalendar=*-*-* 07,15:00:00 Europe/Berlin
+Persistent=false
+
+[Install]
+WantedBy=timers.target
