@@ -65,6 +65,10 @@ run.sh
 - **Beobachten:** `~/ark-l1/bin/ark-l1 status`, Logs unter `~/ark-l1/logs/`, PR-Mails von GitHub.
   `ark-l1 unblock <ID>` gibt blockierte Aufgaben frei.
 - Montags ist die erste Aufgabe `TRIAGE`: Scoreboard-Fehleranalyse → neue Backlog-Einträge.
+- **Weitere Programme:** Derselbe Runner fährt mit `--program dlp` das L1-DLP-Programm
+  ([`../dlp/README.md`](../dlp/README.md), Timer `ark-dlp.timer`, State unter `~/ark-dlp`). Beide
+  Programme teilen sich einen Lauf-Lock; ohne `--program` gilt `pii`. Backlog-Einträge können mit
+  `ext_deps: [<programm>:<id>]` auf Aufgaben warten, die im anderen Programm auf `main` erledigt sind.
 
 ## Reihenfolge
 

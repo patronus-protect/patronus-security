@@ -1,0 +1,13 @@
+[Unit]
+Description=ARK L1-DLP scheduled run (one backlog task)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=ubuntu
+Environment=HOME=/home/ubuntu
+ExecStart=/home/ubuntu/ark-l1/bin/run.sh --program dlp
+TimeoutStartSec=6h
+Nice=5

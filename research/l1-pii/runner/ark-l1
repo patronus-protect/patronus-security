@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
-"""Runner for the scheduled L1-PII programme (one backlog task per run).
+"""Runner for the scheduled L1 programmes (one backlog task per run).
+
+Usage: ark-l1 [--program pii|dlp] SUBCOMMAND   (default: $ARK_L1_PROGRAM or pii)
+
+Programmes share the clone, the cargo target and the gate venv under ~/ark-l1; each keeps its
+own state, stack, worktrees, dev data and holdout (pii: ~/ark-l1, dlp: ~/ark-dlp).
 
 Subcommands:
-  next            restack open l1/* PRs, pick one task, create its worktree
+  next            restack the programme's open PRs, pick one task, create its worktree
   env             print the current run as shell assignments
   gate            run the independent checks on the current worktree
   publish         mark the task done, push the branch, open a draft PR on the stack
@@ -27,22 +32,57 @@ from pathlib import Path
 
 import yaml
 
-ROOT = Path(os.environ.get("ARK_L1_ROOT", Path.home() / "ark-l1"))
-REPO = ROOT / "repo"
+PROGRAMS = {
+    "pii": {
+        "name": "L1-PII", "title": "L1", "label": "ark-l1", "prefix": "l1/", "dir": "ark-l1",
+        "backlog": "research/l1-pii/backlog.yaml", "readme": "research/l1-pii/README.md",
+        "prompt": "AGENT_PROMPT.md", "golden": "pii", "eval_dir": "scripts/l1_presidio",
+        "eval_venv": "presidio-venv",
+    },
+    "dlp": {
+        "name": "L1-DLP", "title": "DLP", "label": "ark-dlp", "prefix": "dlp/", "dir": "ark-dlp",
+        "backlog": "research/dlp/backlog.yaml", "readme": "research/dlp/README.md",
+        "prompt": "AGENT_PROMPT.dlp.md", "golden": "dlp", "eval_dir": "scripts/l1_dlp",
+        "eval_venv": "baselines-venv",
+    },
+}
+
+
+def take_program(argv: list[str]) -> str:
+    """Remove `--program NAME` from argv and return the programme name."""
+    name = os.environ.get("ARK_L1_PROGRAM", "pii")
+    if "--program" in argv:
+        i = argv.index("--program")
+        if i + 1 >= len(argv):
+            sys.exit("--program needs a value")
+        name = argv[i + 1]
+        del argv[i:i + 2]
+    if name not in PROGRAMS:
+        sys.exit(f"unknown programme {name!r}; expected one of {', '.join(PROGRAMS)}")
+    return name
+
+
+PROGRAM = take_program(sys.argv)
+P = PROGRAMS[PROGRAM]
+
+SHARED = Path(os.environ.get("ARK_L1_ROOT", Path.home() / "ark-l1"))
+# pii keeps the original layout; further programmes live next to it.
+ROOT = SHARED if PROGRAM == "pii" else SHARED.parent / P["dir"]
+REPO = SHARED / "repo"
+TARGET = SHARED / "target"
+GATE_VENV = SHARED / "gate-venv"
 WORKTREES = ROOT / "worktrees"
 STATE = ROOT / "state"
 LOGS = ROOT / "logs"
-TARGET = ROOT / "target"
 CACHE = ROOT / "cache"
 DEV_DATA = ROOT / "data" / "dev"
 HOLDOUT = ROOT / "holdout"
-GATE_VENV = ROOT / "gate-venv"
 CARGO = Path.home() / ".cargo" / "bin" / "cargo"
 
 GH_REPO = "patronus-protect/patronus-security"
-LABEL = "ark-l1"
-BRANCH_PREFIX = "l1/"
-BACKLOG = "research/l1-pii/backlog.yaml"
+LABEL = P["label"]
+BRANCH_PREFIX = P["prefix"]
+BACKLOG = P["backlog"]
 MAX_OPEN = 6
 NOTHING = 10
 
@@ -144,9 +184,23 @@ def restack(open_prs: list[dict]) -> tuple[str, str] | None:
 # ── backlog ──────────────────────────────────────────────────────────────
 
 
-def backlog_at(rev: str) -> dict | None:
-    text = git("show", f"{rev}:{BACKLOG}", check=False)
+def backlog_at(rev: str, path: str = BACKLOG) -> dict | None:
+    text = git("show", f"{rev}:{path}", check=False)
     return yaml.safe_load(text) if text else None
+
+
+MAIN_DONE: dict[str, set[str]] = {}
+
+
+def done_on_main(ref: str) -> bool:
+    """True when `program:ID` is done in that programme's backlog on origin/main."""
+    program, _, task_id = ref.partition(":")
+    if program not in PROGRAMS or not task_id:
+        raise RuntimeError(f"bad ext_deps entry {ref!r}; expected <program>:<id>")
+    if program not in MAIN_DONE:
+        backlog = backlog_at("origin/main", PROGRAMS[program]["backlog"]) or {}
+        MAIN_DONE[program] = {t["id"] for t in backlog.get("tasks", []) if t.get("status") == "done"}
+    return task_id in MAIN_DONE[program]
 
 
 def pick(backlog: dict, blocked: dict) -> dict | None:
@@ -162,7 +216,9 @@ def pick(backlog: dict, blocked: dict) -> dict | None:
             continue
         if t.get("needs_decision"):
             continue
-        if all(d in done for d in t.get("deps", [])):
+        if all(d in done for d in t.get("deps", [])) and all(
+            done_on_main(d) for d in t.get("ext_deps", [])
+        ):
             return t
     return None
 
@@ -228,17 +284,20 @@ def cmd_env() -> int:
         return 1
     for key in ("task_id", "branch", "base", "base_sha", "worktree"):
         print(f"{key.upper()}={shlex.quote(cur[key])}")
+    print(f"PROGRAM={PROGRAM}")
+    print(f"PROGRAM_ROOT={shlex.quote(str(ROOT))}")
+    print(f"PROMPT_FILE={P['prompt']}")
     print(f"TASK_YAML={shlex.quote(yaml.safe_dump(cur['task'], allow_unicode=True, sort_keys=False))}")
     return 0
 
 
 def gate_steps(wt: Path) -> list[tuple[str, list[str], Path]]:
-    py = str(ROOT / "presidio-venv" / "bin" / "python")
+    py = str(ROOT / P["eval_venv"] / "bin" / "python")
     steps = [
         ("fmt", [str(CARGO), "fmt", "--all", "--", "--check"], wt),
         ("clippy", [str(CARGO), "clippy", "--workspace", "--all-targets", "--", "-D", "warnings"], wt),
         ("test", [str(CARGO), "test", "-p", "patronus-ark"], wt),
-        ("golden", [str(CARGO), "run", "--quiet", "--example", "13_l1_golden_eval", "--", "pii"],
+        ("golden", [str(CARGO), "run", "--quiet", "--example", "13_l1_golden_eval", "--", P["golden"]],
          wt / "rust"),
         ("python-ext", [str(GATE_VENV / "bin" / "python"), "-m", "maturin", "develop", "--quiet",
                         "--manifest-path", "python/Cargo.toml"], wt),
@@ -246,11 +305,11 @@ def gate_steps(wt: Path) -> list[tuple[str, list[str], Path]]:
                           "python/tests"], wt),
         ("docs", ["python3", "scripts/generate_docs.py", "--check"], wt),
     ]
-    prepare = wt / "scripts" / "l1_presidio" / "prepare_corpora.py"
+    prepare = wt / P["eval_dir"] / "prepare_corpora.py"
     if prepare.exists() and not (HOLDOUT / ".ready").exists():
         steps.append(("prepare-corpora", [py, str(prepare), "--dev-out", str(DEV_DATA),
                                           "--holdout-out", str(HOLDOUT)], wt))
-    scoreboard = wt / "scripts" / "l1_presidio" / "scoreboard.py"
+    scoreboard = wt / P["eval_dir"] / "scoreboard.py"
     if scoreboard.exists():
         cur = load(CURRENT, {})
         steps.append(("scoreboard", [py, str(scoreboard), "gate", "--head", str(wt),
@@ -309,13 +368,13 @@ def cmd_publish() -> int:
         if not any(t["id"] == task["id"] and t.get("status") == "done" for t in tasks):
             mark_done(wt / BACKLOG, task["id"])
             git("add", BACKLOG, cwd=wt)
-            git("commit", "--quiet", "-m", f"chore(l1): mark {task['id']} done", cwd=wt)
+            git("commit", "--quiet", "-m", f"chore({PROGRAM}): mark {task['id']} done", cwd=wt)
     git("push", "--quiet", "-u", "origin", cur["branch"], cwd=wt)
     report = (STATE / "gate-report.md").read_text() if (STATE / "gate-report.md").exists() else ""
     body = "\n".join([
-        f"Scheduled L1-PII run, backlog task **{task['id']}**: {task.get('title', '')}",
+        f"Scheduled {P['name']} run, backlog task **{task['id']}**: {task.get('title', '')}",
         "",
-        f"Stacked on `{cur['base']}`. One task per run; see `research/l1-pii/README.md`.",
+        f"Stacked on `{cur['base']}`. One task per run; see `{P['readme']}`.",
         "",
         "```yaml",
         yaml.safe_dump(task, allow_unicode=True, sort_keys=False).strip(),
@@ -327,7 +386,7 @@ def cmd_publish() -> int:
     ])
     url = run(["gh", "pr", "create", "--repo", GH_REPO, "--draft", "--base", cur["base"],
                "--head", cur["branch"], "--label", LABEL,
-               "--title", f"L1 {task['id']}: {task.get('title', '')}"[:250], "--body", body])
+               "--title", f"{P['title']} {task['id']}: {task.get('title', '')}"[:250], "--body", body])
     stack = load(STACK, {})
     stack[cur["branch"]] = {"base": cur["base"], "base_sha": cur["base_sha"]}
     save(STACK, stack)
