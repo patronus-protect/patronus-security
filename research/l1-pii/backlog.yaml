@@ -97,8 +97,10 @@ tasks:
     title: Score-Modell (Basis je Regel + Validator-Stärke checksum/format/none + Kontext-Bonus) und Modi strict/balanced/recall
     type: engine
     deps: [K01, E11]
-    needs_decision: true   # Result-Schema-Änderung; strict bleibt Default und bitgleich
-    accept: strict = heutiges Verhalten; Schema in docs/reference/result-schema.md
+    decision: "2026-10-11 freigegeben: strict ist Default und bitgleich; balanced/recall nur per Opt-in"
+    accept: >-
+      strict = heutiges Verhalten (Default, Goldens und Scoreboard bitgleich); balanced/recall nur über
+      explizite Konfiguration; Score-Feld und Modi in docs/reference/result-schema.md
 
   - id: K03
     title: Kontext-Engine v2 (beidseitige Nähe, DE/EN-Lexikon aus pii.json, Gegen-Kontext wie Bestell-/Rechnungsnr.)
