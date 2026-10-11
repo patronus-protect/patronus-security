@@ -50,7 +50,7 @@ $feedback"
     -E CARGO_TARGET_DIR="$ROOT/target" \
     -E ARK_L1_DEV_DATA="$ROOT/data/dev" \
     -E DISABLE_AUTOUPDATER=1 \
-    claude -p "$prompt" --model "$MODEL" --dangerously-skip-permissions --max-turns 250
+    "$HOME/.local/bin/claude" -p "$prompt" --model "$MODEL" --dangerously-skip-permissions --max-turns 250
   agent_rc=$?
   echo "== agent exit $agent_rc"
 

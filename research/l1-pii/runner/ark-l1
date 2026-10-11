@@ -215,7 +215,7 @@ def cmd_next() -> int:
     git("worktree", "add", "--quiet", "-B", branch, str(worktree), top_sha)
     current = {
         "task_id": task["id"], "task": task, "branch": branch, "base": top_name,
-        "base_sha": top_sha, "worktree": str(worktree), "started": dt.datetime.utcnow().isoformat() + "Z",
+        "base_sha": top_sha, "worktree": str(worktree), "started": dt.datetime.now(dt.timezone.utc).isoformat(),
     }
     save(CURRENT, current)
     print(f"TASK_ID={task['id']}\nBRANCH={branch}\nBASE={top_name}\nWORKTREE={worktree}")
@@ -301,7 +301,7 @@ def cmd_publish() -> int:
     wt = Path(cur["worktree"])
     task = cur["task"]
     if task.get("type") == "triage":
-        (STATE / f"triage-{task['week']}").write_text(dt.datetime.utcnow().isoformat() + "\n")
+        (STATE / f"triage-{task['week']}").write_text(dt.datetime.now(dt.timezone.utc).isoformat() + "\n")
     else:
         mark_done(wt / BACKLOG, task["id"])
         git("add", BACKLOG, cwd=wt)
@@ -343,7 +343,7 @@ def drop_worktree(cur: dict, delete_branch: bool) -> None:
 def cmd_block(task_id: str, reason: str) -> int:
     blocked = load(BLOCKED, {})
     cur = load(CURRENT, None)
-    blocked[task_id] = {"reason": reason, "at": dt.datetime.utcnow().isoformat() + "Z"}
+    blocked[task_id] = {"reason": reason, "at": dt.datetime.now(dt.timezone.utc).isoformat()}
     save(BLOCKED, blocked)
     if cur is not None and cur["task_id"] == task_id:
         drop_worktree(cur, delete_branch=True)
