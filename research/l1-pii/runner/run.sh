@@ -38,6 +38,7 @@ $feedback"
     -p EnvironmentFile="$ROOT/secrets.env" \
     -p NoNewPrivileges=yes \
     -p ProtectSystem=strict \
+    -p ProtectHome=read-only \
     -p PrivateTmp=yes \
     -p "ReadWritePaths=-$WORKTREE -$ROOT/repo/.git -$ROOT/target -$ROOT/cache -$HOME/.cargo -$HOME/.rustup -$HOME/.cache -$HOME/.claude -$HOME/.claude.json -$HOME/.local/state" \
     -p "InaccessiblePaths=-$ROOT/holdout -$ROOT/secrets.env -$ROOT/state -$HOME/.config/gh -$HOME/.ssh -$HOME/.bash_history -$HOME/patronus-research-scanner -$HOME/web-census -$HOME/repos" \
