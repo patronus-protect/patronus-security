@@ -51,6 +51,7 @@ tasks:
     accept: research/dlp/entity_map.yaml mit Scopes (shared, ark_only, baseline_only, out_of_scope); Test, dass jede dlp_*-Regel gemappt ist
 
   - id: E02
+    status: done
     title: Secret-sicheres Golden-Format (Generator-Rezepte statt Klartext, Materialisierung zur Testzeit)
     type: eval-infra
     deps: []
