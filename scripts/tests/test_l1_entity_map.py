@@ -72,7 +72,7 @@ def test_checked_in_map_loads_and_uses_every_scope():
 
 def test_every_ark_label_of_the_pii_registry_is_mapped():
     labels = MODULE.ark_labels_from_source()
-    # 37 rules -> 30 labels at the time of E03; the set only grows from here.
+    # 39 rules -> 28 labels at the time of E03.
     assert {"EMAIL", "STEUERID", "NATIONALID", "LICENSEPLATE", "CREDITCARD_EXPIRY"} <= labels
     entity_map = MODULE.load()
     unmapped = sorted(label for label in labels if entity_map.ark_label(label) is None)
