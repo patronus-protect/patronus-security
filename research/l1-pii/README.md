@@ -81,5 +81,5 @@ run.sh
 ## Reihenfolge
 
 E (Messinfrastruktur) → K (Engine) → F (bestehende Regeln reparieren) → B (DACH/EU) → A
-(Presidio-Parität) → C (über Presidio hinaus) → H (Härtung, Abschluss). 79 Aufgaben, bei 2 Läufen/Tag
-≈ 6–7 Wochen inkl. Review-Pausen.
+(Presidio-Parität) → C (über Presidio hinaus) → H (Härtung, Abschluss). 92 Aufgaben (inkl. TRIAGE-Einträge Txx), bei 2 Läufen/Tag
+≈ 7–8 Wochen inkl. Review-Pausen.

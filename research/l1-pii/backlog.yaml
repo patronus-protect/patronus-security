@@ -54,6 +54,20 @@ tasks:
     deps: [E03]
     accept: Generator mit getrennten Seeds für dev/holdout, Spans in Code-Points, alle E03-Labels abgedeckt
 
+  - id: T01
+    title: Gold-Konvention für Platzhalter-Werte (RFC-2606/6761-Domains, .invalid, NANP 555-01xx/000) festlegen und Gold angleichen
+    type: eval-infra
+    deps: [E03]
+    needs_decision: true
+    source: TRIAGE 2026-W42 (research/l1-pii/triage/2026-W42.md, Bucket 5)
+    question: >-
+      Blind-Set EN wertet customer@example.com und +1 000-000-0000 als negativ, Blind-Set DE wertet
+      …@kundenbeispiel.invalid als positiv, l1_bilingual_rules.json nutzt ada@example.com als positiv.
+      Gelten reservierte Domains/Nummern als PII (Gold positiv) oder als Hard Negative?
+    accept: >-
+      Konvention in research/l1-pii/README.md; demo_pii_dlp*-, pii_l1- und E05-Gold danach einheitlich;
+      Detektoränderung (falls negativ) als eigene Folgeaufgabe, nicht hier
+
   - id: E06
     title: Scoreboard (exact + overlap P/R/F1, DE/EN, Hard-Negative-FP, Delta zur Base, Exit-Code bei Regression)
     type: eval-infra
@@ -82,11 +96,37 @@ tasks:
     type: eval-infra
     deps: [E09]
 
+  - id: T02
+    title: Gold-Hygiene - Nebenentitäten in pii_l1-Positiven annotieren, Gold-Werte prüfzifferbasierter Labels gegen die Validatoren testen
+    type: eval-infra
+    deps: [E10]
+    source: TRIAGE 2026-W42 (research/l1-pii/triage/2026-W42.md, Buckets 6 + 7)
+    accept: >-
+      generate_l1_goldens.py annotiert jede echte Entität im Text (z. B. PAN in CVV-Positiven, Telefon in
+      pii_l1-email-pos-01); Test, dass jeder Gold-Wert von IBAN/CREDITCARD/STEUERID/… den Validator
+      besteht; Luhn-ungültige credit_card-Werte in dynamic_pii.jsonl werden für L1-Auswertungen
+      ausgeschlossen oder als ungültig markiert; Validatoren bleiben unverändert
+
   - id: E11
     title: Baseline-Report ARK vs. Presidio + Fehler-Buckets
     type: report
     deps: [E06, E07]
     accept: research/l1-pii/scoreboard/baseline.md; Lücken als Kandidaten für TRIAGE
+
+  - id: T03
+    title: M3-Zählregel (prüfziffervalidierte Entitäten ARK vs. Presidio 2.2.364) + Zählskript
+    type: eval-infra
+    deps: [E03]
+    needs_decision: true
+    source: TRIAGE 2026-W42 (research/l1-pii/triage/2026-W42.md, Abschnitt Abdeckung)
+    question: >-
+      Presidio 2.2.364 hat 43 Pattern-Recognizer mit validate_result (≈ 40 Entitäten) → 3× ≈ 120;
+      der Backlog erreicht grob 60–80. Was zählt als Entität (USt-IdNr. je Land einzeln? Format-
+      validierung wie Kennzeichen?), gilt die Presidio-Version als gepinnt, und werden TH/NG/PH
+      nachgezogen oder wird das M3-Ziel angepasst?
+    accept: >-
+      Regel in research/l1-pii/README.md; scripts/l1_presidio/count_validated.py zählt aus
+      entity_map.yaml und der Presidio-Registry, mit Test
 
   # ── K: Engine ─────────────────────────────────────────────────────────
   - id: K01
@@ -129,11 +169,25 @@ tasks:
     type: engine
     deps: [K05]
 
+  - id: T07
+    title: "Strict: PAN-Teilspan innerhalb gültiger IBAN und FINANCIAL_ACCOUNT_NUMBER auf IBAN-Wert nicht ausgeben"
+    type: precision-fix
+    deps: [K02]
+    needs_decision: true
+    source: TRIAGE 2026-W42 (research/l1-pii/triage/2026-W42.md, Bucket 4)
+    question: >-
+      pii.rs behält Cross-Label-Overlaps bewusst ("Evidence retains both labels"), und K02 hält Strict
+      bitgleich. Soll Strict die Doppel-Labels unterdrücken, nur als Sekundär-Evidenz markieren
+      (Scoreboard wertet primär) oder bleibt das allein K07 (balanced/recall)?
+
   # ── F: Bestehende Regeln reparieren ───────────────────────────────────
+  - {id: T04, title: "US-Telefon: Span-Grenze bei Klammer-Vorwahl, (415) 555-2671 statt 415) 555-2671", type: fix, deps: [E06], source: "TRIAGE 2026-W42, Bucket 2"}
   - {id: F01, title: "Telefon regional über Crate phonenumber (DE/AT/CH/US/UK/FR/…), cargo-deny prüfen", type: recall-fix, deps: [K03]}
   - {id: F02, title: "Kreditkarte: IIN-Bereiche + Längen je Marke, kontextfrei in balanced", type: recall-fix, deps: [K05]}
+  - {id: T05, title: "IBAN gruppiert für alle Länder im Strict-Modus (Viererblöcke mit Buchstaben, z. B. GB82 WEST 1234 5698 7654 32), mod97 unverändert", type: recall-fix, deps: [E06], source: "TRIAGE 2026-W42, Bucket 1; M1-Risiko IBAN"}
   - {id: F03, title: "IBAN: Länderlängentabelle (SWIFT-Registry), gruppierte/kleingeschriebene Varianten, DE-Recall", type: recall-fix, deps: [K05]}
   - {id: F04, title: "BIC: ISO-3166-Prüfung, kontextarm bei nahem IBAN", type: recall-fix, deps: [F03]}
+  - {id: T06, title: "E-Mail: keine Treffer in URL-Userinfo (scheme://user:pass@host), Credentials bleiben DLP", type: precision-fix, deps: [E06], source: "TRIAGE 2026-W42, Bucket 3"}
   - {id: F05, title: "E-Mail: IANA-TLD-Liste, IDN, obfuskierte Varianten", type: precision-fix, deps: [K06]}
   - {id: F06, title: "Geburtsdatum: ausgeschriebene Monate, geb./born on, numerisch mit Kontext", type: recall-fix, deps: [K03]}
   - {id: F07, title: "US-SSN ohne Trennzeichen mit Kontext", type: recall-fix, deps: [K03]}
@@ -180,6 +234,12 @@ tasks:
   - {id: A12, title: "IT Codice Fiscale + Partita IVA", type: new-entity, deps: [K05]}
   - {id: A13, title: "PL PESEL, NIP, REGON", type: new-entity, deps: [K05]}
   - {id: A14, title: "KR RRN", type: new-entity, deps: [K05]}
+  - {id: T08, title: "UK Postcode + Fahrzeugkennzeichen (Format + Kontext)", type: new-entity, deps: [K03], source: "TRIAGE 2026-W42, Presidio-Parität"}
+  - {id: T09, title: "US MBI (Format + Kontext) + CA SIN (Luhn)", type: new-entity, deps: [K05], source: "TRIAGE 2026-W42, Presidio-Parität"}
+  - {id: T10, title: "IT Carta d'identità, Patente, Passaporto + ES Pasaporte (Format + Kontext)", type: new-entity, deps: [K03], source: "TRIAGE 2026-W42, Presidio-Parität"}
+  - {id: T11, title: "IN GSTIN (Prüfziffer) + Fahrzeugregistrierung", type: new-entity, deps: [K05], source: "TRIAGE 2026-W42, Presidio-Parität"}
+  - {id: T12, title: "KR BRN + FRN (Prüfziffer), Führerschein + Pass (Kontext)", type: new-entity, deps: [A14], source: "TRIAGE 2026-W42, Presidio-Parität"}
+  - {id: T13, title: "SE Organisationsnummer (Luhn), TR T.C. Kimlik No (Prüfziffer) + Kennzeichen, ZA ID (Luhn)", type: new-entity, deps: [B12], source: "TRIAGE 2026-W42, Presidio-Parität"}
   - {id: A15, title: "DATE_TIME generisch, nur im Modus recall", type: new-entity, deps: [K02, F06]}
 
   # ── C: Über Presidio hinaus ───────────────────────────────────────────
