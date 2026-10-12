@@ -35,6 +35,7 @@ tasks:
     deps: [E01]
 
   - id: E03
+    status: done
     title: Entity-Mapping ARK ↔ Presidio ↔ Korpora mit Scopes (shared, ark_only, presidio_only, semantic)
     type: eval-infra
     deps: [E01]
