@@ -6,8 +6,9 @@ use std::{
 };
 
 use patronus_ark::{
-    detectors::dlp::dlp::DLP_PATTERNS, ScanGateMatrix, SecurityCategory, SecurityGateway,
-    SecurityLevel,
+    detectors::dlp::dlp::DLP_PATTERNS,
+    golden_recipes::{materialize, GeneratorSet, SecretRecipe},
+    ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel,
 };
 use serde::Deserialize;
 
@@ -16,8 +17,27 @@ struct FixtureRow {
     id: String,
     case_type: String,
     target_label: String,
-    text: String,
+    /// Literal rows carry `text`; secret rows carry `template` + `secrets` recipes.
+    text: Option<String>,
+    template: Option<String>,
+    secrets: Option<Vec<SecretRecipe>>,
     entities: Vec<FixtureEntity>,
+}
+
+impl FixtureRow {
+    /// Secret values exist only in memory, materialized from their recipes.
+    fn materialized_text(
+        &self,
+        generators: &GeneratorSet,
+    ) -> Result<String, Box<dyn std::error::Error>> {
+        match (&self.text, &self.template, &self.secrets) {
+            (Some(text), None, None) => Ok(text.clone()),
+            (None, Some(template), Some(secrets)) => {
+                Ok(materialize(generators, template, secrets)?.0)
+            }
+            _ => Err(format!("{}: need either text or template + secrets", self.id).into()),
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -41,6 +61,7 @@ fn gates_for(target_label: &str) -> ScanGateMatrix {
 
 fn evaluate(
     gateway: &SecurityGateway,
+    generators: &GeneratorSet,
     path: &Path,
     category: SecurityCategory,
     model: &str,
@@ -62,8 +83,9 @@ fn evaluate(
             .map(|entity| (entity.start, entity.end, entity.label.clone()))
             .collect::<BTreeSet<_>>();
         gateway.set_execution_gates(gates_for(&row.target_label));
+        let text = row.materialized_text(generators)?;
         let result = gateway
-            .scan_category(category, &row.text)
+            .scan_category(category, &text)
             .into_iter()
             .find(|result| result.model == model)
             .expect("native L1 result must exist");
@@ -131,6 +153,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     gateway.warmup()?;
     let root = Path::new("../python/patronus_ark/benchmark_data");
+    let generators = GeneratorSet::load("../python/patronus_ark/dlp_synth/generators.json")?;
     // Optional suite filter: `pii`, `dlp` or `all` (default).
     let suite = std::env::args().nth(1).unwrap_or_else(|| "all".into());
     if !matches!(suite.as_str(), "pii" | "dlp" | "all") {
@@ -139,6 +162,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if suite != "dlp" {
         evaluate(
             &gateway,
+            &generators,
             &root.join("pii_l1.jsonl"),
             SecurityCategory::Pii,
             "native:pii",
@@ -147,6 +171,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if suite != "pii" {
         evaluate(
             &gateway,
+            &generators,
             &root.join("dlp_l1.jsonl"),
             SecurityCategory::Dlp,
             "native:dlp",

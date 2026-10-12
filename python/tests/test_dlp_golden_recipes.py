@@ -174,8 +174,11 @@ class DlpGoldenRecipeTests(unittest.TestCase):
                 continue
             text, spans = recipes.materialize(row["template"], row["secrets"])
             self.assertEqual(
-                hashlib.sha256(text.encode("utf-8")).hexdigest(), row["text_sha256"], row["id"]
+                hashlib.sha256(text.encode("utf-8")).hexdigest()[:24],
+                row["text_fingerprint"],
+                row["id"],
             )
+            self.assertEqual(recipes.fingerprint(text), row["text_fingerprint"], row["id"])
             self.assertEqual(recipes.materialize_row(row)["text"], text, row["id"])
             for entity in row["entities"]:
                 self.assertEqual(

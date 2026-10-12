@@ -38,11 +38,50 @@ Every row declares `case_type`, `target_label`, `language`, `span_unit`, and
 negative rows contain no entities and explain the excluded lookalike in
 `negative_reason`.
 
+### Secret-safe DLP rows (generator recipes)
+
+`dlp_l1.jsonl` never stores secret values in clear. Every positive row of the
+default-on secret groups (`API_KEY`, `CLOUD_KEY`, `CREDENTIAL`, `CRYPTO_KEY`,
+`PASSWORD_HASH`, `PAYMENT_KEY`, `PRIVATE_KEY`, `SECRET_TOKEN`) replaces `text`
+with a carrier `template` and a list of recipes:
+
+```json
+{"template": "GITHUB_TOKEN=<<secret:0>>",
+ "secrets": [{"gen": "github_pat_classic", "seed": 801}],
+ "text_fingerprint": "<first 24 hex digits of SHA-256 of the materialized text>",
+ "entities": [{"label": "SECRET_TOKEN", "start": 13, "end": 53, "secret": 0}]}
+```
+
+- `<<secret:N>>` is replaced by the value of `secrets[N]`; each index is used
+  exactly once. Entity `start`/`end` are code-point offsets in the
+  **materialized** text, and `secret` names the recipe the span covers.
+- Generators are defined once in
+  [`dlp_synth/generators.json`](../dlp_synth/generators.json): literal segments
+  plus fixed-length random segments over a named alphabet. Values are drawn
+  with SplitMix64 seeded by `seed` (`alphabet[next_u64() % len]` per
+  character), so every generator has a fixed length and the result is
+  deterministic.
+- Python (`patronus_ark.dlp_synth.recipes.materialize_row`) and Rust
+  (`patronus_ark::golden_recipes::materialize`, compiled with the `test-util`
+  feature for tests and `13_l1_golden_eval`) materialize the same text. The
+  Rust test `rust/tests/dlp_golden_recipes.rs` checks every row against
+  `text_fingerprint` recorded by the Python generator.
+- Generated values are synthetic and only format-shaped; they carry no valid
+  provider checksum. Tests reject checksum-valid GitHub/npm CRC32 and
+  Base58Check tokens in the file. They also require that neither
+  `dlp_l1.jsonl` nor `generators.json` triggers a default DLP L1 finding, so
+  push protection and pre-commit secret scanners stay quiet.
+- Hard negatives and non-secret rows (business identifiers, content classes)
+  remain literal `text`.
+
 The generator is deterministic:
 
 ```shell
 .venv/bin/python python/patronus_ark/benchmark_data/generate_l1_goldens.py
 ```
+
+It imports `patronus_ark.dlp_synth`, so run it from a virtualenv with the
+package installed (`maturin develop --manifest-path python/Cargo.toml`).
 
 Most cases are hand-authored with invented values. A small subset is derived
 from `dynamic_pii.jsonl` and identifies the source row in

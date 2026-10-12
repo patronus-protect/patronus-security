@@ -1,6 +1,7 @@
 //! Secret-safe DLP goldens: `dlp_l1.jsonl` stores secret values only as generator
 //! recipes. These tests pin the Rust materialization to the Python generator
-//! (SHA-256 of the materialized text recorded at generation time) and check that
+//! (96-bit SHA-256 fingerprint of the materialized text recorded at generation
+//! time) and check that
 //! the checked-in file itself carries no detectable secret.
 
 use std::path::{Path, PathBuf};
@@ -19,7 +20,7 @@ struct Row {
     text: Option<String>,
     template: Option<String>,
     secrets: Option<Vec<SecretRecipe>>,
-    text_sha256: Option<String>,
+    text_fingerprint: Option<String>,
     entities: Vec<Entity>,
 }
 
@@ -62,9 +63,9 @@ fn rows() -> Vec<Row> {
         .collect()
 }
 
-fn sha256_hex(text: &str) -> String {
-    ring::digest::digest(&ring::digest::SHA256, text.as_bytes())
-        .as_ref()
+/// First 24 hex digits of SHA-256, as recorded by `recipes.fingerprint`.
+fn fingerprint(text: &str) -> String {
+    ring::digest::digest(&ring::digest::SHA256, text.as_bytes()).as_ref()[..12]
         .iter()
         .map(|byte| format!("{byte:02x}"))
         .collect()
@@ -159,8 +160,8 @@ fn recipe_rows_materialize_identically_to_the_python_generator() {
         let (text, spans) = materialize(&generators, template, recipes)
             .unwrap_or_else(|error| panic!("{}: {error}", row.id));
         assert_eq!(
-            Some(sha256_hex(&text)),
-            row.text_sha256,
+            Some(fingerprint(&text)),
+            row.text_fingerprint,
             "{}: Rust and Python materialization differ",
             row.id
         );
@@ -169,25 +170,34 @@ fn recipe_rows_materialize_identically_to_the_python_generator() {
             assert_eq!((entity.start, entity.end), spans[index], "{}", row.id);
         }
     }
-    assert!(recipe_rows >= 24, "expected every secret positive as recipe");
+    assert!(
+        recipe_rows >= 24,
+        "expected every secret positive as recipe"
+    );
 }
 
 #[test]
-fn checked_in_golden_file_has_no_default_dlp_finding() {
+fn checked_in_goldens_and_generator_spec_have_no_default_dlp_finding() {
     let gateway = SecurityGateway::with_max_level(
         vec![SecurityCategory::Dlp],
         SecurityLevel::L1,
         None,
         false,
     );
+    let spec_path = repo_root().join("python/patronus_ark/dlp_synth/generators.json");
+    let spec = std::fs::read_to_string(&spec_path).unwrap();
     let raw = std::fs::read_to_string(golden_path()).unwrap();
-    for (number, line) in raw.lines().enumerate() {
+    for (number, line) in std::iter::once(spec.as_str())
+        .chain(raw.lines())
+        .enumerate()
+    {
         let spans = gateway
             .scan_category(SecurityCategory::Dlp, line)
             .into_iter()
             .flat_map(|result| result.evidence_spans)
             .map(|span| (span.label, span.start_char, span.end_char))
             .collect::<Vec<_>>();
-        assert!(spans.is_empty(), "line {}: {spans:?}", number + 1);
+        // Input 0 is the generator spec, input n is dlp_l1.jsonl line n.
+        assert!(spans.is_empty(), "input {number}: {spans:?}");
     }
 }
