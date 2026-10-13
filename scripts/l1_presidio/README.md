@@ -26,8 +26,9 @@ cd python && ../.venv/bin/python -m patronus_ark.external_pii_eval evaluate \
   per Wheel-URL und SHA-256). Weicht eine installierte Version ab, bricht der Runner mit Exit 2 ab.
 - Neben der Ausgabe entsteht `<output>.meta.json` mit SHA-256 von Profil, Eingabe und Ausgabe,
   Paketversionen und der Sprachzuordnung, ohne Zeitstempel. Zwei Läufe sind byte-identisch.
-- Presidio-Entitäten ohne Benchmark-ID heißen `presidio.<ENTITY>` und werden vom Evaluator
-  ignoriert. Die vollständige Zuordnung folgt in E03 (`research/l1-pii/entity_map.yaml`).
+- Presidio-Entitäten ohne Benchmark-ID in `PRESIDIO_OUTPUT_MAP` heißen `presidio.<ENTITY>` und
+  werden vom Evaluator ignoriert. Die vollständige Zuordnung steht in
+  `research/l1-pii/entity_map.yaml` (siehe unten).
 
 ## ARK im selben Format
 
@@ -47,5 +48,33 @@ cd python && ../.venv/bin/python -m patronus_ark.external_pii_eval evaluate \
 `<output>.meta.json` enthält SHA-256 von Eingabe, Ausgabe und nativem Modul (`build.native_sha256`)
 sowie die Paketversion, ohne Zeitstempel. Zwei Läufe auf demselben Build sind byte-identisch.
 
-Tests: `scripts/tests/test_l1_presidio_runner.py`, `scripts/tests/test_l1_ark_runner.py`. Die Tests gegen echtes Presidio laufen nur,
+## Entity-Mapping
+
+`research/l1-pii/entity_map.yaml` ordnet jede Benchmark-ID die ARK-Labels (`entity_group` in
+`pii.rs`), die Presidio-Entitäten der gepinnten Version und die Upstream-Labels der Korpora aus dem
+`external_pii`-Manifest zu, jeweils mit Scope:
+
+| Scope | Bedeutung |
+|---|---|
+| `shared` | ARK und Presidio per Muster; Grundlage für M1 und „keine Entität verliert“ |
+| `ark_only` | nur ARK (z. B. BIC, CVV, Mitarbeiter-ID) |
+| `presidio_only` | nur Presidio (z. B. URL, PESEL, USt-IdNr.); Kandidaten für A/C-Aufgaben |
+| `semantic` | NER-Entitäten (Person, Ort, Organisation, NRP, Datum, Adresse); kein L1-Scope |
+
+`entity_map.py` lädt und prüft die Datei:
+
+```bash
+python3 scripts/l1_presidio/entity_map.py check      # pii.rs, Manifest, ARK_OUTPUT_MAP, PRESIDIO_OUTPUT_MAP
+~/ark-l1/presidio-venv/bin/python scripts/l1_presidio/entity_map.py check --presidio   # + Presidio-Registry
+python3 scripts/l1_presidio/entity_map.py table      # Markdown-Übersicht
+```
+
+`check` endet mit Exit 1, wenn ein ARK-Label der Registry fehlt oder veraltet ist, ein Korpus-Label
+vom Manifest abweicht oder eine Runner-Map der Tabelle widerspricht. Die Runner-Maps dürfen
+Teilmengen bleiben, damit sich Vorhersagen bestehender Korpora nicht ändern; das Scoreboard (E06)
+soll die Scopes aus `entity_map.yaml` lesen. Neue ARK-Labels brauchen einen Eintrag, sonst ist
+`scripts/tests/test_l1_entity_map.py` rot.
+
+Tests: `scripts/tests/test_l1_presidio_runner.py`, `scripts/tests/test_l1_ark_runner.py`,
+`scripts/tests/test_l1_entity_map.py`. Die Tests gegen echtes Presidio laufen nur,
 wenn `presidio_analyzer` installiert ist (z. B. in `~/ark-l1/presidio-venv`).

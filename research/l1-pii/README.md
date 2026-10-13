@@ -29,6 +29,11 @@ SHA-gepinnt). Presidio läuft in zwei Profilen: `default` und `tuned` (spaCy `en
 
 PERSON/LOCATION/ORG/NRP sind kein L1-Scope; dort tritt L1 + `dynamic-pii` (GLiNER L3) an.
 
+Welche Entität zu welchem Kriterium zählt, legt [`entity_map.yaml`](entity_map.yaml) fest: jede
+Benchmark-ID mit ARK-Labels, Presidio-Entitäten, Korpus-Labels und Scope (`shared` → M1/„Immer“,
+`ark_only`, `presidio_only`, `semantic` → kein L1-Scope). Prüfung:
+`python3 scripts/l1_presidio/entity_map.py check`.
+
 ## Hebel
 
 1. Score-Stufen statt Feldnamenpflicht: prüfzifferstarke Werte ohne Kontext, formschwache nur mit

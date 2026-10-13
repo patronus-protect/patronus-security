@@ -1,0 +1,313 @@
+# Entity-Mapping ARK ↔ Presidio ↔ Korpora (L1-PII, Aufgabe E03).
+#
+# Jede Zeile ist eine Benchmark-ID (Vokabular von patronus_ark.external_pii_eval). Sie nennt
+# die ARK-Labels (entity_group in rust/src/detectors/pii/pii.rs), die Presidio-Entitäten der
+# gepinnten presidio_analyzer-Version und die Upstream-Labels der Korpora aus
+# python/patronus_ark/benchmark_data/external_pii/manifest.json (Vergleich ohne Groß-/Kleinschreibung).
+#
+# Scopes:
+#   shared         ARK und Presidio erkennen die Entität per Muster; zählt für M1 und „Immer“.
+#   ark_only       nur ARK; zählt für M2/M3, Presidio hat dort Recall 0.
+#   presidio_only  nur Presidio; Kandidaten für A/C-Aufgaben, ARK hat dort Recall 0.
+#   semantic       NER-Entitäten (PERSON, LOCATION, ORG, NRP, Datum, Adresse); kein L1-Scope,
+#                  dort treten L1 + dynamic-pii (L3) an. ARK-L1 meldet sie nie.
+#
+# Regeln (prüft scripts/l1_presidio/entity_map.py check, Test scripts/tests/test_l1_entity_map.py):
+#   - jedes ARK-Label der Registry genau einmal, keine Labels, die die Registry nicht kennt;
+#   - jede Presidio-Entität höchstens einmal (mit installiertem Presidio: genau die Registry);
+#   - jedes Korpus-Label genau so wie im Manifest;
+#   - ARK_OUTPUT_MAP (external_pii_eval) und PRESIDIO_OUTPUT_MAP (run_presidio.py) widersprechen
+#     der Tabelle nicht. Sie dürfen Teilmengen sein: dort fehlende Labels bleiben ark.<LABEL> bzw.
+#     presidio.<ENTITY> und werden erst gewertet, wenn ein Gold-Set die ID trägt.
+#
+# Granularität: Dokumentklassen (Pass, Führerschein, Ausweis, Kennzeichen) sind länderübergreifend
+# eine ID, wie im bestehenden Vokabular. Nationale Nummernsysteme mit eigener Prüfziffer bekommen
+# eine Länder-ID (pii.<land>.<name>). Das Mapping ist labelgenau: Meldet eine neue Regel ein
+# bestehendes ARK-Label für eine andere Entität (z. B. NATIONALID außerhalb UK), braucht sie ein
+# eigenes Label.
+
+schema: ark-l1-entity-map-v1
+presidio_version: 2.2.364
+
+entities:
+  # ── shared ─────────────────────────────────────────────────────────────
+  - id: pii.email
+    scope: shared
+    ark: [EMAIL]
+    presidio: [EMAIL_ADDRESS]
+    corpora:
+      ai4privacy-openpii-nano-1k: [EMAIL]
+      gretel-synthetic-pii-finance: [EMAIL]
+
+  - id: pii.phone
+    scope: shared
+    ark: [PHONE]
+    presidio: [PHONE_NUMBER]
+    corpora:
+      ai4privacy-openpii-nano-1k: [TELEPHONENUM]
+      gretel-synthetic-pii-finance: [phone_number]
+
+  - id: pii.ip_address
+    scope: shared
+    ark: [IP_ADDRESS]
+    presidio: [IP_ADDRESS]
+    corpora:
+      gretel-synthetic-pii-finance: [ipv4, ipv6]
+
+  - id: pii.mac_address
+    scope: shared
+    ark: [MAC_ADDRESS]
+    presidio: [MAC_ADDRESS]
+    corpora: {}
+
+  - id: pii.iban
+    scope: shared
+    ark: [IBAN]
+    presidio: [IBAN_CODE]
+    corpora:
+      ai4privacy-openpii-nano-1k: [IBAN]
+      gretel-synthetic-pii-finance: [IBAN]
+
+  - id: pii.credit_card.pan
+    scope: shared
+    ark: [CREDITCARD]
+    presidio: [CREDIT_CARD]
+    corpora:
+      ai4privacy-openpii-nano-1k: [CREDITCARDNUMBER]
+      gretel-synthetic-pii-finance: [credit_card_number]
+
+  - id: pii.financial_account_number
+    scope: shared
+    ark: [FINANCIAL_ACCOUNT_NUMBER]
+    presidio: [US_BANK_NUMBER, ABA_ROUTING_NUMBER]
+    corpora:
+      gretel-synthetic-pii-finance: [bban, bank_routing_number]
+
+  - id: pii.us.social_security_number
+    scope: shared
+    ark: [SSN]
+    presidio: [US_SSN]
+    corpora:
+      gretel-synthetic-pii-finance: [ssn]
+
+  - id: pii.uk.national_insurance_number
+    scope: shared
+    ark: [NATIONALID]
+    presidio: [UK_NINO]
+    corpora: {}
+
+  - id: pii.de.tax_id
+    scope: shared
+    ark: [STEUERID]
+    presidio: [DE_TAX_ID]
+    corpora: {}
+
+  - id: pii.de.tax_number
+    scope: shared
+    ark: [TAX_NUMBER_DE]
+    presidio: [DE_TAX_NUMBER]
+    corpora: {}
+
+  - id: pii.de.social_security_number
+    scope: shared
+    ark: [SOCIALID]
+    presidio: [DE_SOCIAL_SECURITY]
+    corpora: {}
+
+  - id: pii.de.health_insurance_number
+    scope: shared
+    ark: [HEALTH_INSURANCE_NUMBER]
+    presidio: [DE_HEALTH_INSURANCE]
+    corpora: {}
+
+  - id: pii.de.lanr
+    scope: shared
+    ark: [PHYSICIAN_NUMBER_LANR]
+    presidio: [DE_LANR]
+    corpora: {}
+
+  - id: entity.passport_number
+    scope: shared
+    ark: [PASSPORT_NUMBER]
+    presidio: [US_PASSPORT, UK_PASSPORT, DE_PASSPORT, ES_PASSPORT, IT_PASSPORT, IN_PASSPORT, KR_PASSPORT]
+    corpora:
+      ai4privacy-openpii-nano-1k: [PASSPORTNUM]
+      gretel-synthetic-pii-finance: [passport_number]
+
+  - id: pii.identity_card_number
+    scope: shared
+    ark: [IDENTITY_CARD_NUMBER]
+    presidio: [DE_ID_CARD, IT_IDENTITY_CARD]
+    corpora: {}
+
+  - id: entity.driver_license_number
+    scope: shared
+    ark: [DRIVER_LICENSE_NUMBER]
+    presidio: [US_DRIVER_LICENSE, UK_DRIVING_LICENCE, DE_FUEHRERSCHEIN, IT_DRIVER_LICENSE, KR_DRIVER_LICENSE]
+    corpora:
+      ai4privacy-openpii-nano-1k: [DRIVERLICENSENUM]
+      gretel-synthetic-pii-finance: [driver_license_number]
+
+  - id: pii.license_plate
+    scope: shared
+    ark: [LICENSEPLATE]
+    presidio: [DE_KFZ, UK_VEHICLE_REGISTRATION, IN_VEHICLE_REGISTRATION, NG_VEHICLE_REGISTRATION, TR_LICENSE_PLATE]
+    corpora: {}
+
+  # ── ark_only ───────────────────────────────────────────────────────────
+  - id: pii.swift_bic
+    scope: ark_only
+    ark: [SWIFT_CODE]
+    presidio: []
+    corpora:
+      gretel-synthetic-pii-finance: [swift_bic_code]
+
+  - id: pii.credit_card.cvv
+    scope: ark_only
+    ark: [CREDITCARD_CVV]
+    presidio: []
+    corpora:
+      gretel-synthetic-pii-finance: [credit_card_security_code]
+
+  - id: pii.credit_card.expiry
+    scope: ark_only
+    ark: [CREDITCARD_EXPIRY]
+    presidio: []
+    corpora: {}
+
+  - id: pii.date_of_birth
+    scope: ark_only
+    ark: [DOB]
+    presidio: []
+    corpora:
+      gretel-synthetic-pii-finance: [date_of_birth]
+
+  - id: pii.employee_id
+    scope: ark_only
+    ark: [EMPLOYEE_ID]
+    presidio: []
+    corpora:
+      gretel-synthetic-pii-finance: [employee_id]
+
+  - id: pii.customer_id
+    scope: ark_only
+    ark: [CUSTOMER_ID]
+    presidio: []
+    corpora:
+      gretel-synthetic-pii-finance: [customer_id]
+
+  - id: pii.patient_id
+    scope: ark_only
+    ark: [PATIENT_ID]
+    presidio: []
+    corpora: {}
+
+  - id: pii.student_id
+    scope: ark_only
+    ark: [STUDENT_ID]
+    presidio: []
+    corpora: {}
+
+  - id: pii.applicant_id
+    scope: ark_only
+    ark: [APPLICANT_ID]
+    presidio: []
+    corpora: {}
+
+  - id: pii.username
+    scope: ark_only
+    ark: [USERNAME]
+    presidio: []
+    corpora:
+      gretel-synthetic-pii-finance: [user_name]
+
+  # ── presidio_only ──────────────────────────────────────────────────────
+  - {id: pii.url, scope: presidio_only, ark: [], presidio: [URL], corpora: {}}
+  - {id: pii.crypto_wallet, scope: presidio_only, ark: [], presidio: [CRYPTO], corpora: {}}
+  - {id: pii.us.medical_license, scope: presidio_only, ark: [], presidio: [MEDICAL_LICENSE], corpora: {}}
+  - {id: pii.us.itin, scope: presidio_only, ark: [], presidio: [US_ITIN], corpora: {}}
+  - {id: pii.us.mbi, scope: presidio_only, ark: [], presidio: [US_MBI], corpora: {}}
+  - {id: pii.us.npi, scope: presidio_only, ark: [], presidio: [US_NPI], corpora: {}}
+  - {id: pii.uk.nhs_number, scope: presidio_only, ark: [], presidio: [UK_NHS], corpora: {}}
+  - {id: pii.uk.postcode, scope: presidio_only, ark: [], presidio: [UK_POSTCODE], corpora: {}}
+  - {id: pii.de.bsnr, scope: presidio_only, ark: [], presidio: [DE_BSNR], corpora: {}}
+  - {id: pii.de.commercial_register, scope: presidio_only, ark: [], presidio: [DE_HANDELSREGISTER], corpora: {}}
+  - {id: pii.de.postal_code, scope: presidio_only, ark: [], presidio: [DE_PLZ], corpora: {}}
+  - {id: pii.de.vat_id, scope: presidio_only, ark: [], presidio: [DE_VAT_ID], corpora: {}}
+  - {id: pii.es.nie, scope: presidio_only, ark: [], presidio: [ES_NIE], corpora: {}}
+  - {id: pii.es.nif, scope: presidio_only, ark: [], presidio: [ES_NIF], corpora: {}}
+  - {id: pii.it.fiscal_code, scope: presidio_only, ark: [], presidio: [IT_FISCAL_CODE], corpora: {}}
+  - {id: pii.it.vat_code, scope: presidio_only, ark: [], presidio: [IT_VAT_CODE], corpora: {}}
+  - {id: pii.fi.personal_identity_code, scope: presidio_only, ark: [], presidio: [FI_PERSONAL_IDENTITY_CODE], corpora: {}}
+  - {id: pii.pl.pesel, scope: presidio_only, ark: [], presidio: [PL_PESEL], corpora: {}}
+  - {id: pii.se.personnummer, scope: presidio_only, ark: [], presidio: [SE_PERSONNUMMER], corpora: {}}
+  - {id: pii.se.organisationsnummer, scope: presidio_only, ark: [], presidio: [SE_ORGANISATIONSNUMMER], corpora: {}}
+  - {id: pii.tr.national_id, scope: presidio_only, ark: [], presidio: [TR_NATIONAL_ID], corpora: {}}
+  - {id: pii.au.abn, scope: presidio_only, ark: [], presidio: [AU_ABN], corpora: {}}
+  - {id: pii.au.acn, scope: presidio_only, ark: [], presidio: [AU_ACN], corpora: {}}
+  - {id: pii.au.medicare, scope: presidio_only, ark: [], presidio: [AU_MEDICARE], corpora: {}}
+  - {id: pii.au.tfn, scope: presidio_only, ark: [], presidio: [AU_TFN], corpora: {}}
+  - {id: pii.ca.sin, scope: presidio_only, ark: [], presidio: [CA_SIN], corpora: {}}
+  - {id: pii.in.aadhaar, scope: presidio_only, ark: [], presidio: [IN_AADHAAR], corpora: {}}
+  - {id: pii.in.gstin, scope: presidio_only, ark: [], presidio: [IN_GSTIN], corpora: {}}
+  - {id: pii.in.pan, scope: presidio_only, ark: [], presidio: [IN_PAN], corpora: {}}
+  - {id: pii.in.voter_id, scope: presidio_only, ark: [], presidio: [IN_VOTER], corpora: {}}
+  - {id: pii.kr.brn, scope: presidio_only, ark: [], presidio: [KR_BRN], corpora: {}}
+  - {id: pii.kr.frn, scope: presidio_only, ark: [], presidio: [KR_FRN], corpora: {}}
+  - {id: pii.kr.rrn, scope: presidio_only, ark: [], presidio: [KR_RRN], corpora: {}}
+  - {id: pii.ng.nin, scope: presidio_only, ark: [], presidio: [NG_NIN], corpora: {}}
+  - {id: pii.ph.tin, scope: presidio_only, ark: [], presidio: [PH_TIN], corpora: {}}
+  - {id: pii.ph.umid, scope: presidio_only, ark: [], presidio: [PH_UMID], corpora: {}}
+  - {id: pii.sg.nric_fin, scope: presidio_only, ark: [], presidio: [SG_NRIC_FIN], corpora: {}}
+  - {id: pii.sg.uen, scope: presidio_only, ark: [], presidio: [SG_UEN], corpora: {}}
+  - {id: pii.th.tnin, scope: presidio_only, ark: [], presidio: [TH_TNIN], corpora: {}}
+  - {id: pii.za.id_number, scope: presidio_only, ark: [], presidio: [ZA_ID_NUMBER], corpora: {}}
+
+  # ── semantic ───────────────────────────────────────────────────────────
+  - id: entity.person_name
+    scope: semantic
+    ark: []
+    presidio: [PERSON]
+    corpora:
+      ai4privacy-openpii-nano-1k: [GIVENNAME, SURNAME]
+      gretel-synthetic-pii-finance: [name, first_name, last_name]
+      tab: [PERSON]
+
+  - id: entity.organization
+    scope: semantic
+    ark: []
+    presidio: [ORGANIZATION]
+    corpora:
+      gretel-synthetic-pii-finance: [company]
+      tab: [ORG]
+
+  - id: entity.location
+    scope: semantic
+    ark: []
+    presidio: [LOCATION]
+    corpora:
+      ai4privacy-openpii-nano-1k: [CITY]
+      tab: [LOC]
+
+  - id: entity.nrp
+    scope: semantic
+    ark: []
+    presidio: [NRP]
+    corpora: {}
+
+  - id: entity.date
+    scope: semantic
+    ark: []
+    presidio: [DATE_TIME]
+    corpora:
+      ai4privacy-openpii-nano-1k: [DATE]
+      gretel-synthetic-pii-finance: [date, date_time]
+      tab: [DATETIME]
+
+  - id: entity.street_address
+    scope: semantic
+    ark: []
+    presidio: []
+    corpora:
+      ai4privacy-openpii-nano-1k: [STREET]
+      gretel-synthetic-pii-finance: [street_address]
