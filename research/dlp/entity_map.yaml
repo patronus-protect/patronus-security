@@ -1,0 +1,665 @@
+# DLP-Taxonomie und Mapping ARK ↔ gitleaks ↔ TruffleHog ↔ detect-secrets ↔ Google Cloud DLP (E01).
+# Geprüft von rust/tests/dlp_entity_map.rs.
+#
+# Eine Entität ist ein Secret-Typ bzw. eine Content-/Dokumentklasse. Sie bündelt alle Regeln, die
+# denselben Wert treffen sollen; das Scoreboard (E10) bewertet Recall und Attribution je Entität.
+#
+# scope:
+#   shared         ARK und mindestens ein Baseline-Tool decken die Entität ab (Vergleich M1/M2).
+#   ark_only       nur ARK; Hebel gegenüber den Baselines (M3), kein Paarvergleich möglich.
+#   baseline_only  nur Baselines; Lücke in ARK, `backlog` nennt die Aufgabe, die sie schließt.
+#   out_of_scope   bewusst nicht im L1-DLP-Programm; `reason` begründet das.
+#
+# Felder: ark = dlp_*-Regel-IDs (jede genau einmal, `group` = deren entity_group);
+# gitleaks = Regel-IDs der Default-Config (jede genau einmal); trufflehog = DetectorType-Namen;
+# detect_secrets = Plugin-Klassen; google_dlp = Infotype-Namen. Mehrfachnennungen bei TruffleHog,
+# detect-secrets und Google DLP sind erlaubt, weil ein Detektor dort mehrere Entitäten abdeckt.
+#
+# TruffleHog: Das gepinnte Binary ist UPX-gepackt, sein Detektor-Inventar ist offline nicht
+# auslesbar. Die Namen folgen dem upstream-Enum `DetectorType` und decken nur ARK-nahe Typen ab;
+# E07 prüft sie gegen echte Ausgaben und ergänzt das Inventar.
+schema: ark-dlp-entity-map-v1
+
+baselines:
+  gitleaks:
+    version: "8.30.1"
+    source: Default-Config des gepinnten Binarys (~/ark-dlp/baselines/bin/gitleaks, Regel-IDs)
+    inventory: [
+      1password-secret-key, 1password-service-account-token, adafruit-api-key, adobe-client-id,
+      adobe-client-secret, age-secret-key, airtable-api-key, airtable-personnal-access-token,
+      algolia-api-key, alibaba-access-key-id, alibaba-secret-key, anthropic-admin-api-key,
+      anthropic-api-key, artifactory-api-key, artifactory-reference-token, asana-client-id,
+      asana-client-secret, atlassian-api-token, authress-service-client-access-key,
+      aws-access-token, aws-amazon-bedrock-api-key-long-lived,
+      aws-amazon-bedrock-api-key-short-lived, azure-ad-client-secret, beamer-api-token,
+      bitbucket-client-id, bitbucket-client-secret, bittrex-access-key, bittrex-secret-key,
+      cisco-meraki-api-key, clickhouse-cloud-api-secret-key, clojars-api-token,
+      cloudflare-api-key, cloudflare-global-api-key, cloudflare-origin-ca-key,
+      codecov-access-token, cohere-api-token, coinbase-access-token, confluent-access-token,
+      confluent-secret-key, contentful-delivery-api-token, curl-auth-header, curl-auth-user,
+      databricks-api-token, datadog-access-token, defined-networking-api-token,
+      digitalocean-access-token, digitalocean-pat, digitalocean-refresh-token,
+      discord-api-token, discord-client-id, discord-client-secret, doppler-api-token,
+      droneci-access-token, dropbox-api-token, dropbox-long-lived-api-token,
+      dropbox-short-lived-api-token, duffel-api-token, dynatrace-api-token, easypost-api-token,
+      easypost-test-api-token, etsy-access-token, facebook-access-token,
+      facebook-page-access-token, facebook-secret, fastly-api-token, finicity-api-token,
+      finicity-client-secret, finnhub-access-token, flickr-access-token,
+      flutterwave-encryption-key, flutterwave-public-key, flutterwave-secret-key,
+      flyio-access-token, frameio-api-token, freemius-secret-key, freshbooks-access-token,
+      gcp-api-key, generic-api-key, github-app-token, github-fine-grained-pat, github-oauth,
+      github-pat, github-refresh-token, gitlab-cicd-job-token, gitlab-deploy-token,
+      gitlab-feature-flag-client-token, gitlab-feed-token, gitlab-incoming-mail-token,
+      gitlab-kubernetes-agent-token, gitlab-oauth-app-secret, gitlab-pat, gitlab-pat-routable,
+      gitlab-ptt, gitlab-rrt, gitlab-runner-authentication-token,
+      gitlab-runner-authentication-token-routable, gitlab-scim-token, gitlab-session-cookie,
+      gitter-access-token, gocardless-api-token, grafana-api-key, grafana-cloud-api-token,
+      grafana-service-account-token, harness-api-key, hashicorp-tf-api-token,
+      hashicorp-tf-password, heroku-api-key, heroku-api-key-v2, hubspot-api-key,
+      huggingface-access-token, huggingface-organization-api-token, infracost-api-token,
+      intercom-api-key, intra42-client-secret, jfrog-api-key, jfrog-identity-token, jwt,
+      jwt-base64, kraken-access-token, kubernetes-secret-yaml, kucoin-access-token,
+      kucoin-secret-key, launchdarkly-access-token, linear-api-key, linear-client-secret,
+      linkedin-client-id, linkedin-client-secret, lob-api-key, lob-pub-api-key,
+      looker-client-id, looker-client-secret, mailchimp-api-key, mailgun-private-api-token,
+      mailgun-pub-key, mailgun-signing-key, mapbox-api-token, mattermost-access-token,
+      maxmind-license-key, messagebird-api-token, messagebird-client-id,
+      microsoft-teams-webhook, netlify-access-token, new-relic-browser-api-token,
+      new-relic-insert-key, new-relic-user-api-id, new-relic-user-api-key, notion-api-token,
+      npm-access-token, nuget-config-password, nytimes-access-token, octopus-deploy-api-key,
+      okta-access-token, openai-api-key, openshift-user-token, perplexity-api-key, pkcs12-file,
+      plaid-api-token, plaid-client-id, plaid-secret-key, planetscale-api-token,
+      planetscale-oauth-token, planetscale-password, postman-api-token, prefect-api-token,
+      private-key, privateai-api-token, pulumi-api-token, pypi-upload-token,
+      rapidapi-access-token, readme-api-token, rubygems-api-token, scalingo-api-token,
+      sendbird-access-id, sendbird-access-token, sendgrid-api-token, sendinblue-api-token,
+      sentry-access-token, sentry-org-token, sentry-user-token,
+      settlemint-application-access-token, settlemint-personal-access-token,
+      settlemint-service-access-token, shippo-api-token, shopify-access-token,
+      shopify-custom-access-token, shopify-private-app-access-token, shopify-shared-secret,
+      sidekiq-secret, sidekiq-sensitive-url, slack-app-token, slack-bot-token,
+      slack-config-access-token, slack-config-refresh-token, slack-legacy-bot-token,
+      slack-legacy-token, slack-legacy-workspace-token, slack-user-token, slack-webhook-url,
+      snyk-api-token, sonar-api-token, sourcegraph-access-token, square-access-token,
+      squarespace-access-token, stripe-access-token, sumologic-access-id,
+      sumologic-access-token, telegram-bot-api-token, travisci-access-token, twilio-api-key,
+      twitch-api-token, twitter-access-secret, twitter-access-token, twitter-api-key,
+      twitter-api-secret, twitter-bearer-token, typeform-api-token, vault-batch-token,
+      vault-service-token, yandex-access-token, yandex-api-key, yandex-aws-access-token,
+      zendesk-secret-key]
+  trufflehog:
+    version: "3.97.9"
+    source: DetectorType-Enum (proto/detectors.proto); nur ausgeführt, AGPL, kein Code im Repo
+  detect_secrets:
+    version: "1.5.0"
+    source: Plugin-Klassen in detect_secrets/plugins (Default-Plugins)
+    inventory: [ArtifactoryDetector, AWSKeyDetector, AzureStorageKeyDetector, BasicAuthDetector,
+      CloudantDetector, DiscordBotTokenDetector, GitHubTokenDetector, GitLabTokenDetector,
+      Base64HighEntropyString, HexHighEntropyString, IbmCloudIamDetector, IbmCosHmacDetector,
+      IPPublicDetector, JwtTokenDetector, KeywordDetector, MailchimpDetector, NpmDetector,
+      OpenAIDetector, PrivateKeyDetector, PypiTokenDetector, SendGridDetector, SlackDetector,
+      SoftlayerDetector, SquareOAuthDetector, StripeDetector, TelegramBotTokenDetector,
+      TwilioKeyDetector]
+  google_dlp:
+    version: infoTypes-Referenz (statisch, Stand 2026-10)
+    source: Credential-/Secret-Infotypes und DOCUMENT_TYPE/* der Cloud-DLP-Referenz; nur Coverage-Matrix
+    inventory: [AUTH_TOKEN, AWS_CREDENTIALS, AZURE_AUTH_TOKEN, BASIC_AUTH_HEADER, ENCRYPTION_KEY,
+      GCP_API_KEY, GCP_CREDENTIALS, HTTP_COOKIE, JSON_WEB_TOKEN, OAUTH_CLIENT_SECRET, PASSWORD,
+      SSL_CERTIFICATE, STORAGE_SIGNED_POLICY_DOCUMENT, STORAGE_SIGNED_URL, WEAK_PASSWORD_HASH,
+      XSRF_TOKEN, DOCUMENT_TYPE/R&D/SOURCE_CODE, DOCUMENT_TYPE/R&D/DATABASE_BACKUP,
+      DOCUMENT_TYPE/R&D/SYSTEM_LOG, DOCUMENT_TYPE/R&D/PATENT, DOCUMENT_TYPE/HR/RESUME,
+      DOCUMENT_TYPE/LEGAL/BRIEF, DOCUMENT_TYPE/LEGAL/COURT_ORDER, DOCUMENT_TYPE/LEGAL/PLEADING,
+      DOCUMENT_TYPE/LEGAL/LAW, DOCUMENT_TYPE/LEGAL/BLANK_FORM, DOCUMENT_TYPE/FINANCE/REGULATORY,
+      DOCUMENT_TYPE/FINANCE/SEC_FILING]
+
+# Gruppen = entity_group der Treffer. planned: Gruppe hat noch keine ARK-Regel (K09, M-Welle).
+taxonomy:
+  API_KEY: {family: provider_secret}
+  CLOUD_KEY: {family: provider_secret}
+  PAYMENT_KEY: {family: provider_secret}
+  SECRET_TOKEN: {family: provider_secret}
+  CREDENTIAL: {family: generic_credential}
+  PASSWORD_HASH: {family: generic_credential}
+  PRIVATE_KEY: {family: key_material}
+  CRYPTO_KEY: {family: key_material}
+  CONNECTION_STRING: {family: generic_credential, planned: true}
+  WEBHOOK_URL: {family: provider_secret, planned: true}
+  OTP_SECRET: {family: generic_credential, planned: true}
+  SEED_PHRASE: {family: key_material, planned: true}
+  dlp.de.vat_id: {family: business_identifier}
+  dlp.de.commercial_register_number: {family: business_identifier}
+  dlp.de.facility_number_bsnr: {family: business_identifier}
+  dlp.record.case_id: {family: business_identifier}
+  dlp.record.contract_id: {family: business_identifier}
+  dlp.record.claim_id: {family: business_identifier}
+  dlp.record.order_id: {family: business_identifier}
+  dlp.record.invoice_id: {family: business_identifier}
+  dlp.project_id: {family: business_identifier}
+  dlp.organization_id: {family: business_identifier}
+  dlp.internal.business_metric: {family: content_class}
+  dlp.content.source_code: {family: content_class}
+  dlp.content.sql: {family: content_class}
+  dlp.content.database_dump: {family: content_class}
+  dlp.content.system_log: {family: content_class}
+  dlp.document.legal_privileged: {family: document_class, planned: true}
+  dlp.document.hr: {family: document_class, planned: true}
+  dlp.document.rnd_ip: {family: document_class, planned: true}
+
+entities:
+  # ── shared: ARK + Baseline ──────────────────────────────────────────────
+  - id: llm.anthropic.api_key
+    scope: shared
+    group: API_KEY
+    ark: [dlp_anthropic_key]
+    gitleaks: [anthropic-api-key, anthropic-admin-api-key]
+    trufflehog: [Anthropic]
+    backlog: F06
+  - id: llm.openai.api_key
+    scope: shared
+    group: API_KEY
+    ark: [dlp_openai_key, dlp_openai_legacy, dlp_openai_svc]
+    gitleaks: [openai-api-key]
+    trufflehog: [OpenAI]
+    detect_secrets: [OpenAIDetector]
+    backlog: F06
+  - id: llm.huggingface.token
+    scope: shared
+    group: API_KEY
+    ark: [dlp_huggingface]
+    gitleaks: [huggingface-access-token, huggingface-organization-api-token]
+    trufflehog: [HuggingFace]
+  - id: llm.groq.api_key
+    scope: shared
+    group: API_KEY
+    ark: [dlp_groq_key]
+    trufflehog: [Groq]
+  - id: llm.replicate.api_token
+    scope: shared
+    group: API_KEY
+    ark: [dlp_replicate]
+    trufflehog: [Replicate]
+  - id: cloud.aws.access_key_id
+    scope: shared
+    group: CLOUD_KEY
+    ark: [dlp_aws_access_key]
+    gitleaks: [aws-access-token]
+    trufflehog: [AWS]
+    detect_secrets: [AWSKeyDetector]
+    google_dlp: [AWS_CREDENTIALS]
+    backlog: F05
+  - id: cloud.aws.secret_access_key
+    scope: shared
+    group: CLOUD_KEY
+    ark: [dlp_aws_secret_key]
+    trufflehog: [AWS]
+    detect_secrets: [AWSKeyDetector]
+    google_dlp: [AWS_CREDENTIALS]
+    backlog: F05
+  - id: cloud.gcp.api_key
+    scope: shared
+    group: CLOUD_KEY
+    ark: [dlp_google_api_key]
+    gitleaks: [gcp-api-key]
+    google_dlp: [GCP_API_KEY]
+  - id: cloud.gcp.oauth_access_token
+    scope: shared
+    group: CLOUD_KEY
+    ark: [dlp_google_oauth_token]
+    trufflehog: [GoogleOauth2]
+    google_dlp: [AUTH_TOKEN]
+  - id: cloud.gcp.oauth_client_secret
+    scope: shared
+    group: CLOUD_KEY
+    ark: [dlp_gcp_client_secret]
+    google_dlp: [OAUTH_CLIENT_SECRET]
+  - id: vcs.github.token
+    scope: shared
+    group: SECRET_TOKEN
+    ark: [dlp_github_token]
+    gitleaks: [github-pat, github-oauth, github-app-token, github-refresh-token]
+    trufflehog: [Github]
+    detect_secrets: [GitHubTokenDetector]
+    backlog: F03
+  - id: vcs.github.fine_grained_pat
+    scope: shared
+    group: SECRET_TOKEN
+    ark: [dlp_github_pat]
+    gitleaks: [github-fine-grained-pat]
+    trufflehog: [Github]
+    detect_secrets: [GitHubTokenDetector]
+    backlog: F03
+  - id: vcs.gitlab.pat
+    scope: shared
+    group: SECRET_TOKEN
+    ark: [dlp_gitlab_pat]
+    gitleaks: [gitlab-pat, gitlab-pat-routable]
+    trufflehog: [Gitlab]
+    detect_secrets: [GitLabTokenDetector]
+    backlog: F04
+  - id: registry.npm.access_token
+    scope: shared
+    group: SECRET_TOKEN
+    ark: [dlp_npm_token]
+    gitleaks: [npm-access-token]
+    trufflehog: [NpmToken]
+    detect_secrets: [NpmDetector]
+    backlog: F04
+  - id: payment.stripe.secret_key
+    scope: shared
+    group: PAYMENT_KEY
+    ark: [dlp_stripe_key]
+    gitleaks: [stripe-access-token]
+    trufflehog: [Stripe]
+    detect_secrets: [StripeDetector]
+    backlog: F10
+  - id: comm.slack.token
+    scope: shared
+    group: SECRET_TOKEN
+    ark: [dlp_slack_token]
+    gitleaks: [slack-bot-token, slack-user-token, slack-legacy-bot-token, slack-legacy-token,
+      slack-legacy-workspace-token]
+    trufflehog: [Slack]
+    detect_secrets: [SlackDetector]
+    backlog: F09
+  - id: comm.discord.bot_token
+    scope: shared
+    group: SECRET_TOKEN
+    ark: [dlp_discord_token]
+    trufflehog: [DiscordBotToken]
+    detect_secrets: [DiscordBotTokenDetector]
+    backlog: F09
+  - id: key.pem_private_key
+    scope: shared
+    group: PRIVATE_KEY
+    ark: [dlp_private_key_block, dlp_private_key_header]
+    gitleaks: [private-key]
+    trufflehog: [PrivateKey]
+    detect_secrets: [PrivateKeyDetector]
+    backlog: F08
+  - id: token.jwt
+    scope: shared
+    group: SECRET_TOKEN
+    ark: [dlp_jwt_token]
+    gitleaks: [jwt, jwt-base64]
+    trufflehog: [JWT]
+    detect_secrets: [JwtTokenDetector]
+    google_dlp: [JSON_WEB_TOKEN]
+    backlog: F07
+  - id: credential.secret_assignment
+    scope: shared
+    group: CREDENTIAL
+    ark: [dlp_env_var_secret, dlp_generic_credential_assignment]
+    gitleaks: [generic-api-key]
+    detect_secrets: [KeywordDetector]
+    backlog: F11
+  - id: credential.password_assignment
+    scope: shared
+    group: CREDENTIAL
+    ark: [dlp_password_assignment]
+    detect_secrets: [KeywordDetector]
+    google_dlp: [PASSWORD]
+    backlog: F11
+  - id: credential.http_bearer
+    scope: shared
+    group: SECRET_TOKEN
+    ark: [dlp_bearer_token]
+    gitleaks: [curl-auth-header]
+    google_dlp: [AUTH_TOKEN]
+    backlog: F13
+  - id: credential.http_basic_auth
+    scope: shared
+    group: CREDENTIAL
+    ark: [dlp_basic_auth]
+    google_dlp: [BASIC_AUTH_HEADER]
+    backlog: F13
+  - id: credential.url_userinfo
+    scope: shared
+    group: CREDENTIAL
+    ark: [dlp_url_userinfo_password]
+    trufflehog: [URI]
+    detect_secrets: [BasicAuthDetector]
+    backlog: G01
+  - id: credential.signed_url_signature
+    scope: shared
+    group: CREDENTIAL
+    ark: [dlp_signed_url_signature]
+    google_dlp: [STORAGE_SIGNED_URL, STORAGE_SIGNED_POLICY_DOCUMENT]
+    backlog: F12
+  - id: credential.session_cookie
+    scope: shared
+    group: CREDENTIAL
+    ark: [dlp_session_cookie]
+    google_dlp: [HTTP_COOKIE]
+    backlog: F13
+  - id: credential.csrf_token
+    scope: shared
+    group: SECRET_TOKEN
+    ark: [dlp_csrf_token]
+    google_dlp: [XSRF_TOKEN]
+    backlog: F13
+  - id: credential.password_hash
+    scope: shared
+    group: PASSWORD_HASH
+    ark: [dlp_password_hash]
+    google_dlp: [WEAK_PASSWORD_HASH]
+    backlog: F14
+  - id: content.source_code
+    scope: shared
+    group: dlp.content.source_code
+    ark: [dlp_source_code_fence, dlp_source_code_statement, dlp_source_code_python_rust_assignment,
+      dlp_source_code_declaration, dlp_source_code_import]
+    google_dlp: [DOCUMENT_TYPE/R&D/SOURCE_CODE]
+    backlog: M18
+  - id: content.database_dump
+    scope: shared
+    group: dlp.content.database_dump
+    ark: [dlp_database_dump_insert, dlp_database_dump_header]
+    google_dlp: [DOCUMENT_TYPE/R&D/DATABASE_BACKUP]
+    backlog: M20
+  - id: content.system_log
+    scope: shared
+    group: dlp.content.system_log
+    ark: [dlp_stacktrace_block, dlp_structured_system_log]
+    google_dlp: [DOCUMENT_TYPE/R&D/SYSTEM_LOG]
+    backlog: M19
+
+  # ── ark_only ────────────────────────────────────────────────────────────
+  - id: llm.xai.api_key
+    scope: ark_only
+    group: API_KEY
+    ark: [dlp_xai_key]
+    backlog: F06
+  - id: payment.stripe.webhook_secret
+    scope: ark_only
+    group: PAYMENT_KEY
+    ark: [dlp_stripe_webhook]
+    backlog: F10
+  - id: crypto.ethereum.private_key
+    scope: ark_only
+    group: CRYPTO_KEY
+    ark: [dlp_eth_private_key]
+    backlog: F01
+  - id: crypto.bitcoin.wif
+    scope: ark_only
+    group: CRYPTO_KEY
+    ark: [dlp_btc_wif]
+    backlog: F02
+  - id: credential.url_query_secret
+    scope: ark_only
+    group: CREDENTIAL
+    ark: [dlp_credential_in_url]
+    backlog: F12
+  - {id: identifier.de.vat_id, scope: ark_only, group: dlp.de.vat_id, ark: [dlp_de_vat_id], backlog: F15}
+  - {id: identifier.de.commercial_register, scope: ark_only, group: dlp.de.commercial_register_number,
+     ark: [dlp_de_commercial_register_number], backlog: F15}
+  - {id: identifier.de.bsnr, scope: ark_only, group: dlp.de.facility_number_bsnr,
+     ark: [dlp_de_facility_number_bsnr], backlog: F15}
+  - {id: identifier.record.case, scope: ark_only, group: dlp.record.case_id, ark: [dlp_record_case_id], backlog: F16}
+  - {id: identifier.record.contract, scope: ark_only, group: dlp.record.contract_id,
+     ark: [dlp_record_contract_id], backlog: F16}
+  - {id: identifier.record.claim, scope: ark_only, group: dlp.record.claim_id, ark: [dlp_record_claim_id], backlog: F16}
+  - {id: identifier.record.order, scope: ark_only, group: dlp.record.order_id, ark: [dlp_record_order_id], backlog: F16}
+  - {id: identifier.record.invoice, scope: ark_only, group: dlp.record.invoice_id,
+     ark: [dlp_record_invoice_id], backlog: F16}
+  - {id: identifier.project, scope: ark_only, group: dlp.project_id, ark: [dlp_project_id], backlog: F16}
+  - {id: identifier.organization, scope: ark_only, group: dlp.organization_id, ark: [dlp_organization_id], backlog: F16}
+  - {id: content.business_metric, scope: ark_only, group: dlp.internal.business_metric,
+     ark: [dlp_internal_business_metric], backlog: M21}
+  - id: content.sql
+    scope: ark_only
+    group: dlp.content.sql
+    ark: [dlp_sql_statement, dlp_sql_multiline_statement]
+    backlog: M20
+
+  # ── baseline_only: Lücken in ARK, je Paket ──────────────────────────────
+  # F04/F09/F13: Varianten bestehender Provider
+  - id: vcs.gitlab.other_tokens
+    scope: baseline_only
+    group: SECRET_TOKEN
+    gitleaks: [gitlab-cicd-job-token, gitlab-deploy-token, gitlab-feature-flag-client-token,
+      gitlab-feed-token, gitlab-incoming-mail-token, gitlab-kubernetes-agent-token,
+      gitlab-oauth-app-secret, gitlab-ptt, gitlab-rrt, gitlab-runner-authentication-token,
+      gitlab-runner-authentication-token-routable, gitlab-scim-token]
+    trufflehog: [Gitlab]
+    backlog: F04
+  - {id: vcs.gitlab.session_cookie, scope: baseline_only, group: CREDENTIAL, gitleaks: [gitlab-session-cookie], backlog: F13}
+  - id: comm.slack.app_config_token
+    scope: baseline_only
+    group: SECRET_TOKEN
+    gitleaks: [slack-app-token, slack-config-access-token, slack-config-refresh-token]
+    trufflehog: [Slack]
+    backlog: F09
+  # P01/P02: LLM/AI
+  - {id: llm.cohere.api_key, scope: baseline_only, group: API_KEY, gitleaks: [cohere-api-token], backlog: P01}
+  - {id: llm.perplexity.api_key, scope: baseline_only, group: API_KEY, gitleaks: [perplexity-api-key], backlog: P01}
+  - {id: llm.privateai.api_key, scope: baseline_only, group: API_KEY, gitleaks: [privateai-api-token], backlog: P02}
+  # P03: Hyperscaler
+  - id: cloud.aws.bedrock_api_key
+    scope: baseline_only
+    group: CLOUD_KEY
+    gitleaks: [aws-amazon-bedrock-api-key-long-lived, aws-amazon-bedrock-api-key-short-lived]
+    backlog: P03
+  - {id: cloud.alibaba.access_key, scope: baseline_only, group: CLOUD_KEY,
+     gitleaks: [alibaba-access-key-id, alibaba-secret-key], backlog: P03}
+  - {id: cloud.azure.entra_client_secret, scope: baseline_only, group: CLOUD_KEY,
+     gitleaks: [azure-ad-client-secret], google_dlp: [AZURE_AUTH_TOKEN], backlog: P03}
+  - {id: cloud.azure.storage_account_key, scope: baseline_only, group: CLOUD_KEY,
+     detect_secrets: [AzureStorageKeyDetector], backlog: P03}
+  - {id: cloud.gcp.service_account_key, scope: baseline_only, group: CLOUD_KEY,
+     trufflehog: [GCP], google_dlp: [GCP_CREDENTIALS], backlog: P03}
+  - {id: cloud.ibm.credentials, scope: baseline_only, group: CLOUD_KEY,
+     detect_secrets: [IbmCloudIamDetector, IbmCosHmacDetector, SoftlayerDetector], backlog: P03}
+  - {id: cloud.yandex.credentials, scope: baseline_only, group: CLOUD_KEY,
+     gitleaks: [yandex-access-token, yandex-api-key, yandex-aws-access-token], backlog: P03}
+  # P04: EU-Cloud
+  - {id: cloud.scalingo.api_token, scope: baseline_only, group: CLOUD_KEY, gitleaks: [scalingo-api-token], backlog: P04}
+  # P05: DevOps/Registries
+  - {id: registry.jfrog.artifactory, scope: baseline_only, group: SECRET_TOKEN,
+     gitleaks: [artifactory-api-key, artifactory-reference-token, jfrog-api-key, jfrog-identity-token],
+     detect_secrets: [ArtifactoryDetector], backlog: P05}
+  - {id: registry.pypi.upload_token, scope: baseline_only, group: SECRET_TOKEN,
+     gitleaks: [pypi-upload-token], detect_secrets: [PypiTokenDetector], backlog: P05}
+  - {id: registry.rubygems.api_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [rubygems-api-token], backlog: P05}
+  - {id: registry.clojars.api_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [clojars-api-token], backlog: P05}
+  - {id: devops.terraform_cloud.token, scope: baseline_only, group: SECRET_TOKEN,
+     gitleaks: [hashicorp-tf-api-token, hashicorp-tf-password], backlog: P05}
+  - {id: devops.pulumi.api_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [pulumi-api-token], backlog: P05}
+  - {id: devops.vault.token, scope: baseline_only, group: SECRET_TOKEN,
+     gitleaks: [vault-batch-token, vault-service-token], backlog: P05}
+  - {id: devops.doppler.api_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [doppler-api-token], backlog: P05}
+  - {id: devops.prefect.api_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [prefect-api-token], backlog: P05}
+  - {id: devops.infracost.api_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [infracost-api-token], backlog: P05}
+  - {id: devops.octopus_deploy.api_key, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [octopus-deploy-api-key], backlog: P05}
+  - {id: devops.harness.api_key, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [harness-api-key], backlog: P05}
+  - {id: devops.snyk.api_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [snyk-api-token], backlog: P05}
+  - {id: devops.sonar.api_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [sonar-api-token], backlog: P05}
+  - {id: devops.codecov.access_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [codecov-access-token], backlog: P05}
+  - {id: devops.sourcegraph.access_token, scope: baseline_only, group: SECRET_TOKEN,
+     gitleaks: [sourcegraph-access-token], backlog: P05}
+  # P06: CI/Hosting
+  - {id: vcs.bitbucket.client_secret, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [bitbucket-client-secret], backlog: P06}
+  - {id: ci.droneci.access_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [droneci-access-token], backlog: P06}
+  - {id: ci.travisci.access_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [travisci-access-token], backlog: P06}
+  - {id: hosting.flyio.access_token, scope: baseline_only, group: CLOUD_KEY, gitleaks: [flyio-access-token], backlog: P06}
+  - {id: hosting.netlify.access_token, scope: baseline_only, group: CLOUD_KEY, gitleaks: [netlify-access-token], backlog: P06}
+  - {id: hosting.heroku.api_key, scope: baseline_only, group: CLOUD_KEY,
+     gitleaks: [heroku-api-key, heroku-api-key-v2], backlog: P06}
+  - {id: hosting.cloudflare.api_key, scope: baseline_only, group: CLOUD_KEY,
+     gitleaks: [cloudflare-api-key, cloudflare-global-api-key, cloudflare-origin-ca-key], backlog: P06}
+  - {id: hosting.digitalocean.token, scope: baseline_only, group: CLOUD_KEY,
+     gitleaks: [digitalocean-access-token, digitalocean-pat, digitalocean-refresh-token], backlog: P06}
+  - {id: hosting.openshift.user_token, scope: baseline_only, group: CLOUD_KEY, gitleaks: [openshift-user-token], backlog: P06}
+  - {id: hosting.defined_networking.api_token, scope: baseline_only, group: CLOUD_KEY,
+     gitleaks: [defined-networking-api-token], backlog: P06}
+  - {id: hosting.fastly.api_token, scope: baseline_only, group: CLOUD_KEY, gitleaks: [fastly-api-token], backlog: P06}
+  - {id: hosting.settlemint.access_token, scope: baseline_only, group: CLOUD_KEY,
+     gitleaks: [settlemint-application-access-token, settlemint-personal-access-token,
+       settlemint-service-access-token], backlog: P06}
+  # P07: Observability
+  - {id: observability.datadog.access_token, scope: baseline_only, group: API_KEY, gitleaks: [datadog-access-token], backlog: P07}
+  - {id: observability.newrelic.key, scope: baseline_only, group: API_KEY,
+     gitleaks: [new-relic-insert-key, new-relic-user-api-key], backlog: P07}
+  - {id: observability.sentry.token, scope: baseline_only, group: API_KEY,
+     gitleaks: [sentry-access-token, sentry-org-token, sentry-user-token], backlog: P07}
+  - {id: observability.grafana.token, scope: baseline_only, group: API_KEY,
+     gitleaks: [grafana-api-key, grafana-cloud-api-token, grafana-service-account-token], backlog: P07}
+  - {id: observability.dynatrace.api_token, scope: baseline_only, group: API_KEY, gitleaks: [dynatrace-api-token], backlog: P07}
+  - {id: observability.sumologic.access_token, scope: baseline_only, group: API_KEY, gitleaks: [sumologic-access-token], backlog: P07}
+  # P08: Kommunikation/Webhooks
+  - {id: comm.webhook_url, scope: baseline_only, group: WEBHOOK_URL,
+     gitleaks: [slack-webhook-url, microsoft-teams-webhook], backlog: P08}
+  - {id: comm.discord.api_credentials, scope: baseline_only, group: API_KEY,
+     gitleaks: [discord-api-token, discord-client-secret], backlog: P08}
+  - {id: comm.telegram.bot_token, scope: baseline_only, group: SECRET_TOKEN,
+     gitleaks: [telegram-bot-api-token], detect_secrets: [TelegramBotTokenDetector], backlog: P08}
+  - {id: comm.twilio.api_key, scope: baseline_only, group: API_KEY,
+     gitleaks: [twilio-api-key], detect_secrets: [TwilioKeyDetector], backlog: P08}
+  - {id: comm.sendgrid.api_key, scope: baseline_only, group: API_KEY,
+     gitleaks: [sendgrid-api-token], detect_secrets: [SendGridDetector], backlog: P08}
+  - {id: comm.brevo.api_key, scope: baseline_only, group: API_KEY, gitleaks: [sendinblue-api-token], backlog: P08}
+  - {id: comm.mailgun.key, scope: baseline_only, group: API_KEY,
+     gitleaks: [mailgun-private-api-token, mailgun-signing-key], backlog: P08}
+  - {id: comm.mailchimp.api_key, scope: baseline_only, group: API_KEY,
+     gitleaks: [mailchimp-api-key], detect_secrets: [MailchimpDetector], backlog: P08}
+  - {id: comm.messagebird.api_token, scope: baseline_only, group: API_KEY, gitleaks: [messagebird-api-token], backlog: P08}
+  - {id: comm.mattermost.access_token, scope: baseline_only, group: API_KEY, gitleaks: [mattermost-access-token], backlog: P08}
+  - {id: comm.sendbird.access_token, scope: baseline_only, group: API_KEY, gitleaks: [sendbird-access-token], backlog: P08}
+  - {id: comm.gitter.access_token, scope: baseline_only, group: API_KEY, gitleaks: [gitter-access-token], backlog: P08}
+  # P09: Payment/Commerce
+  - {id: payment.square.access_token, scope: baseline_only, group: PAYMENT_KEY,
+     gitleaks: [square-access-token], detect_secrets: [SquareOAuthDetector], backlog: P09}
+  - {id: payment.shopify.token, scope: baseline_only, group: PAYMENT_KEY,
+     gitleaks: [shopify-access-token, shopify-custom-access-token, shopify-private-app-access-token,
+       shopify-shared-secret], backlog: P09}
+  - {id: payment.coinbase.access_token, scope: baseline_only, group: PAYMENT_KEY, gitleaks: [coinbase-access-token], backlog: P09}
+  - {id: payment.plaid.secret, scope: baseline_only, group: PAYMENT_KEY,
+     gitleaks: [plaid-api-token, plaid-secret-key], backlog: P09}
+  - {id: payment.gocardless.api_token, scope: baseline_only, group: PAYMENT_KEY, gitleaks: [gocardless-api-token], backlog: P09}
+  - {id: payment.flutterwave.secret, scope: baseline_only, group: PAYMENT_KEY,
+     gitleaks: [flutterwave-secret-key, flutterwave-encryption-key], backlog: P09}
+  - {id: payment.finicity.secret, scope: baseline_only, group: PAYMENT_KEY,
+     gitleaks: [finicity-api-token, finicity-client-secret], backlog: P09}
+  - {id: payment.crypto_exchange.secret, scope: baseline_only, group: PAYMENT_KEY,
+     gitleaks: [kraken-access-token, kucoin-access-token, kucoin-secret-key, bittrex-access-key,
+       bittrex-secret-key], backlog: P09}
+  - {id: payment.freemius.secret_key, scope: baseline_only, group: PAYMENT_KEY, gitleaks: [freemius-secret-key], backlog: P09}
+  - {id: commerce.shipping.api_token, scope: baseline_only, group: API_KEY,
+     gitleaks: [duffel-api-token, easypost-api-token, shippo-api-token, lob-api-key], backlog: P09}
+  # P10: Produktivität/SaaS
+  - {id: saas.atlassian.api_token, scope: baseline_only, group: API_KEY, gitleaks: [atlassian-api-token], backlog: P10}
+  - {id: saas.notion.api_token, scope: baseline_only, group: API_KEY, gitleaks: [notion-api-token], backlog: P10}
+  - {id: saas.linear.secret, scope: baseline_only, group: API_KEY,
+     gitleaks: [linear-api-key, linear-client-secret], backlog: P10}
+  - {id: saas.airtable.token, scope: baseline_only, group: API_KEY,
+     gitleaks: [airtable-api-key, airtable-personnal-access-token], backlog: P10}
+  - {id: saas.asana.client_secret, scope: baseline_only, group: API_KEY, gitleaks: [asana-client-secret], backlog: P10}
+  - {id: saas.hubspot.api_key, scope: baseline_only, group: API_KEY, gitleaks: [hubspot-api-key], backlog: P10}
+  - {id: saas.zendesk.secret_key, scope: baseline_only, group: API_KEY, gitleaks: [zendesk-secret-key], backlog: P10}
+  - {id: saas.intercom.api_key, scope: baseline_only, group: API_KEY, gitleaks: [intercom-api-key], backlog: P10}
+  - {id: saas.postman.api_token, scope: baseline_only, group: API_KEY, gitleaks: [postman-api-token], backlog: P10}
+  - {id: saas.mapbox.secret_token, scope: baseline_only, group: API_KEY, gitleaks: [mapbox-api-token], backlog: P10}
+  - {id: saas.launchdarkly.access_token, scope: baseline_only, group: API_KEY, gitleaks: [launchdarkly-access-token], backlog: P10}
+  - {id: saas.typeform.api_token, scope: baseline_only, group: API_KEY, gitleaks: [typeform-api-token], backlog: P10}
+  - {id: saas.contentful.delivery_token, scope: baseline_only, group: API_KEY,
+     gitleaks: [contentful-delivery-api-token], backlog: P10}
+  - {id: saas.dropbox.api_token, scope: baseline_only, group: API_KEY,
+     gitleaks: [dropbox-api-token, dropbox-long-lived-api-token, dropbox-short-lived-api-token], backlog: P10}
+  - {id: saas.adobe.client_secret, scope: baseline_only, group: API_KEY, gitleaks: [adobe-client-secret], backlog: P10}
+  - {id: saas.facebook.secret, scope: baseline_only, group: API_KEY,
+     gitleaks: [facebook-access-token, facebook-page-access-token, facebook-secret], backlog: P10}
+  - {id: saas.twitter.secret, scope: baseline_only, group: API_KEY,
+     gitleaks: [twitter-access-secret, twitter-access-token, twitter-api-key, twitter-api-secret,
+       twitter-bearer-token], backlog: P10}
+  - {id: saas.linkedin.client_secret, scope: baseline_only, group: API_KEY, gitleaks: [linkedin-client-secret], backlog: P10}
+  - {id: saas.looker.client_secret, scope: baseline_only, group: API_KEY, gitleaks: [looker-client-secret], backlog: P10}
+  - {id: saas.twitch.api_token, scope: baseline_only, group: API_KEY, gitleaks: [twitch-api-token], backlog: P10}
+  - {id: saas.etsy.access_token, scope: baseline_only, group: API_KEY, gitleaks: [etsy-access-token], backlog: P10}
+  - {id: saas.freshbooks.access_token, scope: baseline_only, group: API_KEY, gitleaks: [freshbooks-access-token], backlog: P10}
+  - {id: saas.squarespace.access_token, scope: baseline_only, group: API_KEY, gitleaks: [squarespace-access-token], backlog: P10}
+  - {id: saas.misc.api_token, scope: baseline_only, group: API_KEY,
+     gitleaks: [adafruit-api-key, beamer-api-token, cisco-meraki-api-key, finnhub-access-token,
+       flickr-access-token, frameio-api-token, intra42-client-secret, maxmind-license-key,
+       nytimes-access-token, rapidapi-access-token, readme-api-token], backlog: P10}
+  - {id: saas.sidekiq.credentials, scope: baseline_only, group: CREDENTIAL,
+     gitleaks: [sidekiq-secret, sidekiq-sensitive-url], backlog: P10}
+  # P11: Identity/Auth
+  - {id: identity.okta.access_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [okta-access-token], backlog: P11}
+  - {id: identity.authress.access_key, scope: baseline_only, group: SECRET_TOKEN,
+     gitleaks: [authress-service-client-access-key], backlog: P11}
+  - {id: identity.onepassword.secret, scope: baseline_only, group: SECRET_TOKEN,
+     gitleaks: [1password-secret-key, 1password-service-account-token], backlog: P11}
+  - {id: key.age_secret_key, scope: baseline_only, group: PRIVATE_KEY, gitleaks: [age-secret-key], backlog: P11}
+  # P12: Daten/DB-Plattformen
+  - {id: data.databricks.api_token, scope: baseline_only, group: API_KEY, gitleaks: [databricks-api-token], backlog: P12}
+  - {id: data.planetscale.secret, scope: baseline_only, group: API_KEY,
+     gitleaks: [planetscale-api-token, planetscale-oauth-token, planetscale-password], backlog: P12}
+  - {id: data.confluent.secret, scope: baseline_only, group: API_KEY,
+     gitleaks: [confluent-access-token, confluent-secret-key], backlog: P12}
+  - {id: data.algolia.api_key, scope: baseline_only, group: API_KEY, gitleaks: [algolia-api-key], backlog: P12}
+  - {id: data.clickhouse.api_secret, scope: baseline_only, group: API_KEY,
+     gitleaks: [clickhouse-cloud-api-secret-key], backlog: P12}
+  - {id: data.cloudant.credentials, scope: baseline_only, group: API_KEY, detect_secrets: [CloudantDetector], backlog: P12}
+  # G: generische Credentials
+  - {id: credential.cli_password, scope: baseline_only, group: CREDENTIAL, gitleaks: [curl-auth-user], backlog: G03}
+  - {id: credential.file.nuget_config, scope: baseline_only, group: CREDENTIAL, gitleaks: [nuget-config-password], backlog: G04}
+  - {id: credential.kubernetes_secret, scope: baseline_only, group: CREDENTIAL, gitleaks: [kubernetes-secret-yaml], backlog: G05}
+  - {id: credential.high_entropy_string, scope: baseline_only, group: CREDENTIAL,
+     detect_secrets: [Base64HighEntropyString, HexHighEntropyString], backlog: G12}
+  # C: Schlüsselmaterial
+  - {id: key.pkcs12_file, scope: baseline_only, group: PRIVATE_KEY, gitleaks: [pkcs12-file], backlog: C05}
+  - {id: key.symmetric_key, scope: baseline_only, group: CRYPTO_KEY, google_dlp: [ENCRYPTION_KEY], backlog: C08}
+  # M: Dokumentklassen
+  - {id: document.legal_privileged, scope: baseline_only, group: dlp.document.legal_privileged,
+     google_dlp: [DOCUMENT_TYPE/LEGAL/BRIEF, DOCUMENT_TYPE/LEGAL/COURT_ORDER, DOCUMENT_TYPE/LEGAL/PLEADING],
+     backlog: M05}
+  - {id: document.hr, scope: baseline_only, group: dlp.document.hr, google_dlp: [DOCUMENT_TYPE/HR/RESUME], backlog: M06}
+  - {id: document.rnd_ip, scope: baseline_only, group: dlp.document.rnd_ip, google_dlp: [DOCUMENT_TYPE/R&D/PATENT], backlog: M17}
+
+  # ── out_of_scope ────────────────────────────────────────────────────────
+  - id: action.sensitive_material
+    scope: out_of_scope
+    ark: [dlp_sensitive_material]
+    reason: Aktions-DLP (Anfrage nach sensiblem Material, Threat-Matches), kein Secret-Wert; siehe README „Abgrenzung“.
+  - id: action.secret_transfer
+    scope: out_of_scope
+    ark: [dlp_secret_transfer]
+    reason: Aktions-DLP (Übertragung von Secrets), gehört nicht zu diesem Programm.
+  - id: action.destructive_operation
+    scope: out_of_scope
+    ark: [dlp_destructive_operation]
+    reason: Aktions-DLP (destruktive Operationen), gehört nicht zu diesem Programm.
+  - id: action.mcp_runtime_risk
+    scope: out_of_scope
+    ark: [dlp_mcp_runtime_risk]
+    reason: MCP-Laufzeitrisiko (Agenten-Policy), kein Secret- oder Dokumentwert.
+  - id: action.mcp_policy
+    scope: out_of_scope
+    ark: [dlp_mcp_policy]
+    reason: MCP-Policy-Verstoß (Agenten-Policy), kein Secret- oder Dokumentwert.
+  - id: public.client_identifier
+    scope: out_of_scope
+    gitleaks: [adobe-client-id, asana-client-id, bitbucket-client-id, discord-client-id, linkedin-client-id,
+      looker-client-id, messagebird-client-id, plaid-client-id, sendbird-access-id, sumologic-access-id,
+      new-relic-user-api-id]
+    reason: Öffentliche Client-/Account-IDs sind kein Secret; ARK nutzt sie höchstens als Paar-Kontext für das zugehörige Secret.
+  - id: public.publishable_key
+    scope: out_of_scope
+    gitleaks: [flutterwave-public-key, lob-pub-api-key, mailgun-pub-key, new-relic-browser-api-token]
+    reason: Publishable/Browser-Keys sind zur Veröffentlichung bestimmt und zählen als Hard Negative (wie Stripe pk_, F10).
+  - id: public.test_key
+    scope: out_of_scope
+    gitleaks: [easypost-test-api-token]
+    reason: Test-/Sandbox-Schlüssel sind Hard Negatives bzw. severity test (K06), keine eigene Entität.
+  - id: public.ssl_certificate
+    scope: out_of_scope
+    google_dlp: [SSL_CERTIFICATE]
+    reason: Zertifikate sind öffentlich; nur der private Schlüssel ist ein Secret (key.pem_private_key).
+  - id: public.ip_address
+    scope: out_of_scope
+    detect_secrets: [IPPublicDetector]
+    reason: IP-Adressen gehören zu PII bzw. Infrastruktur-Topologie (M14), nicht zu Secrets.
+  - id: public.legal_finance_document
+    scope: out_of_scope
+    google_dlp: [DOCUMENT_TYPE/LEGAL/LAW, DOCUMENT_TYPE/LEGAL/BLANK_FORM, DOCUMENT_TYPE/FINANCE/REGULATORY,
+      DOCUMENT_TYPE/FINANCE/SEC_FILING]
+    reason: Gesetze, Leerformulare und Pflichtveröffentlichungen sind öffentlich und damit keine DLP-Klasse.

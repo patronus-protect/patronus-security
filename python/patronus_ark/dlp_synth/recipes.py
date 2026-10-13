@@ -1,0 +1,349 @@
+# SPDX-License-Identifier: GPL-3.0-only
+"""Deterministic materialization of secret-safe golden recipes.
+
+Goldens store secret values as ``{"gen": "<generator>", "seed": <int>}`` recipes and a
+carrier ``template`` with ``<<secret:N>>`` placeholders. The generator spec lives in
+``generators.json`` and is shared with the Rust materializer
+(``patronus_ark::golden_recipes``), so both produce byte-identical text:
+
+* PRNG: SplitMix64 seeded with the recipe seed (unsigned 64 bit).
+* Alphabets are lists of string chunks, concatenated in order.
+* Segments are emitted in order:
+
+  - ``{"lit": s}`` copies ``s``.
+  - ``{"alphabet": a, "len": n}`` draws ``n`` characters, each
+    ``alphabet[next_u64() % len(alphabet)]``.
+  - ``{"checksum": kind}`` appends a check value computed over the text emitted since
+    the most recent literal segment: ``crc32_base62`` (CRC-32/ISO-HDLC as 6 base62
+    digits ``0-9A-Za-z``, zero-padded; GitHub/npm token layout) or
+    ``iso7064_mod11_10`` (one check digit; German USt-IdNr.).
+  - ``{"encode": enc, "bytes": [parts], "wrap"?: n}`` builds a byte string from parts
+    (``{"hex": s}``, ``{"utf8": s}`` with ASCII ``s``, ``{"random": n}`` drawing
+    ``next_u64() % 256`` per byte, ``{"alphabet": a, "len": n}`` as above) and encodes it
+    as ``hex``, ``base64`` (padded), ``base64_unpadded``, ``base64url`` (unpadded),
+    ``bcrypt64`` (OpenBSD radix-64, unpadded) or ``base58check`` (double SHA-256).
+    ``wrap`` inserts a newline every ``n`` characters (base64 only, PEM bodies).
+
+Base58Check generators start with constant bytes so their length stays fixed. Every
+generator therefore has one length, which ``generator_length`` reports.
+
+Values are synthetic. Generators listed as ``shape_only`` in ``rules.json`` predate E03
+and carry no valid checksum or structure; all others are format-, structure- and
+checksum-valid fakes (``dlp_synth.checks`` verifies them independently).
+"""
+
+from __future__ import annotations
+
+import base64
+import copy
+import hashlib
+import json
+import math
+import re
+import zlib
+from functools import lru_cache
+from pathlib import Path
+
+
+GENERATORS_PATH = Path(__file__).resolve().parent / "generators.json"
+PLACEHOLDER_RE = re.compile(r"<<secret:(0|[1-9][0-9]*)>>")
+_MASK = (1 << 64) - 1
+BASE62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+CHECKSUM_LENGTHS = {"crc32_base62": 6, "iso7064_mod11_10": 1}
+ENCODINGS = {"hex", "base64", "base64_unpadded", "base64url", "bcrypt64", "base58check"}
+_BCRYPT64 = str.maketrans(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",
+    "./ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789",
+)
+
+
+class RecipeError(ValueError):
+    """Raised for unknown generators, malformed recipes, or invalid templates."""
+
+
+class SplitMix64:
+    def __init__(self, seed: int) -> None:
+        if type(seed) is not int or not 0 <= seed <= _MASK:
+            raise RecipeError(f"seed must be an unsigned 64-bit integer, got {seed!r}")
+        self._state = seed
+
+    def next_u64(self) -> int:
+        self._state = (self._state + 0x9E3779B97F4A7C15) & _MASK
+        z = self._state
+        z = ((z ^ (z >> 30)) * 0xBF58476D1CE4E5B9) & _MASK
+        z = ((z ^ (z >> 27)) * 0x94D049BB133111EB) & _MASK
+        return z ^ (z >> 31)
+
+
+def _valid_count(value) -> bool:
+    return type(value) is int and value > 0
+
+
+def _valid_part(part, alphabets: dict) -> bool:
+    if not isinstance(part, dict):
+        return False
+    if set(part) == {"hex"}:
+        try:
+            bytes.fromhex(part["hex"])
+        except (TypeError, ValueError):
+            return False
+        return bool(part["hex"])
+    if set(part) == {"utf8"}:
+        return isinstance(part["utf8"], str) and bool(part["utf8"]) and part["utf8"].isascii()
+    if set(part) == {"random"}:
+        return _valid_count(part["random"])
+    return set(part) == {"alphabet", "len"} and part["alphabet"] in alphabets and _valid_count(part["len"])
+
+
+def _valid_segment(segment, alphabets: dict) -> bool:
+    if not isinstance(segment, dict):
+        return False
+    keys = set(segment)
+    if keys == {"lit"}:
+        return isinstance(segment["lit"], str) and bool(segment["lit"]) and segment["lit"].isascii()
+    if keys == {"alphabet", "len"}:
+        return segment["alphabet"] in alphabets and _valid_count(segment["len"])
+    if keys == {"checksum"}:
+        return segment["checksum"] in CHECKSUM_LENGTHS
+    if keys in ({"encode", "bytes"}, {"encode", "bytes", "wrap"}):
+        parts = segment["bytes"]
+        if segment["encode"] not in ENCODINGS or not isinstance(parts, list) or not parts:
+            return False
+        if "wrap" in segment and (segment["encode"] != "base64" or not _valid_count(segment["wrap"])):
+            return False
+        if not all(_valid_part(part, alphabets) for part in parts):
+            return False
+        # Base58Check needs a constant non-zero lead byte for a fixed length.
+        return segment["encode"] != "base58check" or (
+            "hex" in parts[0] and bytes.fromhex(parts[0]["hex"])[0] != 0
+        )
+    return False
+
+
+@lru_cache(maxsize=1)
+def _spec() -> dict:
+    spec = json.loads(GENERATORS_PATH.read_text(encoding="utf-8"))
+    if spec.get("version") != 2 or spec.get("prng") != "splitmix64":
+        raise RecipeError("unsupported generator spec")
+    for name, generator in spec["generators"].items():
+        for segment in generator["segments"]:
+            if not _valid_segment(segment, spec["alphabets"]):
+                raise RecipeError(f"{name}: invalid segment {segment!r}")
+    alphabets = {}
+    for name, chunks in spec["alphabets"].items():
+        if not isinstance(chunks, list) or not all(isinstance(chunk, str) for chunk in chunks):
+            raise RecipeError(f"alphabet {name} must be a list of strings")
+        alphabet = "".join(chunks)
+        if not alphabet or not alphabet.isascii() or len(set(alphabet)) != len(alphabet):
+            raise RecipeError(f"alphabet {name} must be non-empty, ASCII and duplicate-free")
+        alphabets[name] = alphabet
+    spec["alphabets"] = alphabets
+    return spec
+
+
+def load_generators() -> dict:
+    return copy.deepcopy(_spec()["generators"])
+
+
+def load_alphabets() -> dict:
+    return dict(_spec()["alphabets"])
+
+
+def _generator(name: str) -> dict:
+    try:
+        return _spec()["generators"][name]
+    except KeyError:
+        raise RecipeError(f"unknown generator {name!r}") from None
+
+
+def _byte_length(parts: list[dict]) -> int:
+    total = 0
+    for part in parts:
+        if "hex" in part:
+            total += len(part["hex"]) // 2
+        elif "utf8" in part:
+            total += len(part["utf8"])
+        elif "random" in part:
+            total += part["random"]
+        else:
+            total += part["len"]
+    return total
+
+
+def _encoded_length(segment: dict) -> int:
+    size = _byte_length(segment["bytes"])
+    encoding = segment["encode"]
+    if encoding == "hex":
+        return 2 * size
+    if encoding == "base64":
+        length = 4 * math.ceil(size / 3)
+        return length + (length - 1) // segment["wrap"] if "wrap" in segment else length
+    if encoding == "base58check":
+        # Constant leading bytes keep the value in one base58 digit range.
+        return math.ceil((size + 4) * 8 / math.log2(58))
+    return math.ceil(size * 4 / 3)
+
+
+def _segment_length(segment: dict) -> int:
+    if "lit" in segment:
+        return len(segment["lit"])
+    if "alphabet" in segment:
+        return segment["len"]
+    if "checksum" in segment:
+        return CHECKSUM_LENGTHS[segment["checksum"]]
+    return _encoded_length(segment)
+
+
+def generator_length(name: str) -> int:
+    return sum(_segment_length(segment) for segment in _generator(name)["segments"])
+
+
+def is_random(name: str) -> bool:
+    return any(
+        "alphabet" in segment
+        or any("random" in part or "alphabet" in part for part in segment.get("bytes", []))
+        for segment in _generator(name)["segments"]
+    )
+
+
+def crc32_base62(text: str) -> str:
+    checksum = zlib.crc32(text.encode("ascii"))
+    digits = ""
+    while checksum:
+        checksum, remainder = divmod(checksum, 62)
+        digits = BASE62[remainder] + digits
+    return digits.rjust(6, "0")
+
+
+def iso7064_mod11_10(digits: str) -> str:
+    product = 10
+    for digit in digits:
+        total = (int(digit) + product) % 10 or 10
+        product = 2 * total % 11
+    return str((11 - product) % 10)
+
+
+def base58check(payload: bytes) -> str:
+    raw = payload + hashlib.sha256(hashlib.sha256(payload).digest()).digest()[:4]
+    number = int.from_bytes(raw, "big")
+    encoded = ""
+    while number:
+        number, remainder = divmod(number, 58)
+        encoded = BASE58[remainder] + encoded
+    return "1" * (len(raw) - len(raw.lstrip(b"\0"))) + encoded
+
+
+def _draw(rng: SplitMix64, alphabet: str, count: int) -> str:
+    return "".join(alphabet[rng.next_u64() % len(alphabet)] for _ in range(count))
+
+
+def _encode(segment: dict, rng: SplitMix64, alphabets: dict) -> str:
+    raw = bytearray()
+    for part in segment["bytes"]:
+        if "hex" in part:
+            raw += bytes.fromhex(part["hex"])
+        elif "utf8" in part:
+            raw += part["utf8"].encode("ascii")
+        elif "random" in part:
+            raw += bytes(rng.next_u64() % 256 for _ in range(part["random"]))
+        else:
+            raw += _draw(rng, alphabets[part["alphabet"]], part["len"]).encode("ascii")
+    raw = bytes(raw)
+    encoding = segment["encode"]
+    if encoding == "hex":
+        return raw.hex()
+    if encoding == "base58check":
+        return base58check(raw)
+    if encoding == "base64url":
+        return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+    encoded = base64.b64encode(raw).decode("ascii")
+    if encoding == "base64_unpadded":
+        return encoded.rstrip("=")
+    if encoding == "bcrypt64":
+        return encoded.rstrip("=").translate(_BCRYPT64)
+    wrap = segment.get("wrap")
+    if wrap:
+        encoded = "\n".join(encoded[start : start + wrap] for start in range(0, len(encoded), wrap))
+    return encoded
+
+
+def generate_segments(name: str, seed: int) -> list[str]:
+    """Return the generated value split by segment (``"".join`` gives ``generate``)."""
+    generator = _generator(name)
+    alphabets = _spec()["alphabets"]
+    rng = SplitMix64(seed)
+    parts: list[str] = []
+    since_literal = ""
+    for segment in generator["segments"]:
+        if "lit" in segment:
+            part = segment["lit"]
+        elif "alphabet" in segment:
+            part = _draw(rng, alphabets[segment["alphabet"]], segment["len"])
+        elif "checksum" in segment:
+            if segment["checksum"] == "crc32_base62":
+                part = crc32_base62(since_literal)
+            else:
+                part = iso7064_mod11_10(since_literal)
+        else:
+            part = _encode(segment, rng, alphabets)
+        since_literal = "" if "lit" in segment else since_literal + part
+        parts.append(part)
+    return parts
+
+
+def generate(name: str, seed: int) -> str:
+    return "".join(generate_segments(name, seed))
+
+
+def materialize(template: str, secrets: list[dict]) -> tuple[str, list[tuple[int, int]]]:
+    """Return the materialized text and the code-point span of each secret, by index."""
+    for secret in secrets:
+        if not isinstance(secret, dict) or set(secret) != {"gen", "seed"}:
+            raise RecipeError(f"recipe must be exactly {{gen, seed}}, got {secret!r}")
+    matches = list(PLACEHOLDER_RE.finditer(template))
+    indices = [int(match.group(1)) for match in matches]
+    if sorted(indices) != list(range(len(secrets))) or template.count("<<secret:") != len(matches):
+        raise RecipeError(
+            f"template must use each of {len(secrets)} placeholders exactly once: {template!r}"
+        )
+    text = []
+    spans: list[tuple[int, int] | None] = [None] * len(secrets)
+    length = 0
+    cursor = 0
+    for match, index in zip(matches, indices):
+        text.append(template[cursor : match.start()])
+        length += match.start() - cursor
+        value = generate(secrets[index]["gen"], secrets[index]["seed"])
+        spans[index] = (length, length + len(value))
+        text.append(value)
+        length += len(value)
+        cursor = match.end()
+    text.append(template[cursor:])
+    return "".join(text), spans
+
+
+def fingerprint(text: str) -> str:
+    """First 24 hex digits (96 bit) of SHA-256 over UTF-8 ``text``.
+
+    Short on purpose: a full 64-hex digest is itself a lookalike for hex/Base58 key
+    rules, and the checked-in goldens must stay free of DLP findings.
+    """
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:24]
+
+
+def materialize_row(row: dict) -> dict:
+    """Return a copy of a golden row with ``text`` and entity ``text`` materialized.
+
+    Rows without a ``template`` are literal and returned unchanged (as a copy).
+    """
+    materialized = copy.deepcopy(row)
+    if "template" not in row:
+        return materialized
+    text, _ = materialize(row["template"], row["secrets"])
+    del materialized["template"], materialized["secrets"]
+    materialized.pop("text_fingerprint", None)
+    materialized["text"] = text
+    for entity in materialized["entities"]:
+        entity["text"] = text[entity["start"] : entity["end"]]
+    return materialized

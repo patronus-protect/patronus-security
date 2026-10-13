@@ -48,21 +48,23 @@ def read_redis_url(path: Path) -> str:
     return validate_redis_url(path.read_text().strip())
 
 
-def read_cube_origins(path: Path) -> list[str]:
+def read_cube_origins(path: Path, expected_count: int = 12) -> list[str]:
     stat = path.stat()
     if stat.st_uid != 0 or stat.st_mode & 0o077:
         raise ValueError("Cube origins file must be root-owned and mode 0600 or stricter")
-    return validate_cube_origins(path.read_text().splitlines())
+    return validate_cube_origins(path.read_text().splitlines(), expected_count)
 
 
-def validate_cube_origins(lines: list[str]) -> list[str]:
+def validate_cube_origins(lines: list[str], expected_count: int = 12) -> list[str]:
     origins = [
         line.strip().rstrip("/")
         for line in lines
         if line.strip() and not line.lstrip().startswith("#")
     ]
-    if len(origins) != 12 or len(set(origins)) != 12:
-        raise ValueError("Cube origins file must contain exactly 12 unique origins")
+    if type(expected_count) is not int or expected_count < 1:
+        raise ValueError("Cube count must be a positive integer")
+    if len(origins) != expected_count or len(set(origins)) != expected_count:
+        raise ValueError(f"Cube origins file must contain exactly {expected_count} unique origins")
     for origin in origins:
         parsed = urlsplit(origin)
         try:
@@ -113,13 +115,14 @@ def render(
     cube_key_file: Path,
     redis_url_file: Path,
     cube_origins_file: Path,
+    cube_count: int = 12,
 ) -> None:
     api_keys = [read_secret(path) for path in api_key_files]
     if not api_keys or len(set(api_keys)) != len(api_keys):
         raise ValueError("API key inputs must be present and distinct")
     cube_key = read_secret(cube_key_file)
     redis_url = read_redis_url(redis_url_file)
-    cubes_yaml = render_cubes(read_cube_origins(cube_origins_file))
+    cubes_yaml = render_cubes(read_cube_origins(cube_origins_file, cube_count))
     key_yaml = "\n".join(
         f'    - key_hash: "{hashlib.sha256(key.encode()).hexdigest()}"'
         for key in api_keys
@@ -142,6 +145,7 @@ def main() -> None:
     parser.add_argument("--cube-key-file", type=Path, required=True)
     parser.add_argument("--redis-url-file", type=Path, required=True)
     parser.add_argument("--cube-origins-file", type=Path, required=True)
+    parser.add_argument("--cube-count", type=int, default=12)
     args = parser.parse_args()
     if os.geteuid() != 0:
         parser.exit(1, "Run as root.\n")
@@ -152,6 +156,7 @@ def main() -> None:
             args.cube_key_file,
             args.redis_url_file,
             args.cube_origins_file,
+            args.cube_count,
         )
     except (OSError, ValueError):
         parser.exit(1, "Invalid private Coordinator configuration; inspect root-only input files.\n")
