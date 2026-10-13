@@ -1,0 +1,9 @@
+# Presidio exactly as shipped: `AnalyzerEngine()` with the defaults of the pinned
+# presidio_analyzer (spaCy en_core_web_lg, predefined English recognizers, lemma
+# context enhancer, score threshold 0). Presidio's default engine only supports English,
+# so every row is analyzed as `en`, which is what an out-of-the-box user gets.
+name: default
+languages: [en]
+fallback_language: en
+score_threshold: 0.0
+presidio: null

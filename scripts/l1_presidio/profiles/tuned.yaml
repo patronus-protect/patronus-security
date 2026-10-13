@@ -1,0 +1,128 @@
+# Strongest fair Presidio baseline for EN + DE without training: large spaCy models
+# for both languages, all German recognizers of the pinned presidio_analyzer, German
+# context words for the generic recognizers, DACH phone regions, a lemma context
+# enhancer that also looks behind the value, and a 0.4 cut-off so weak patterns
+# (scores below 0.4 without context, e.g. US_BANK_NUMBER 0.05) only count with context.
+# Rows in other languages are analyzed as English.
+name: tuned
+languages: [en, de]
+fallback_language: en
+score_threshold: 0.4
+context_enhancer:
+  # LemmaContextAwareEnhancer arguments; Presidio's defaults except the suffix window,
+  # which catches "4111 ... (Kreditkarte)" and German trailing labels.
+  context_similarity_factor: 0.35
+  min_score_with_context_similarity: 0.4
+  context_prefix_count: 5
+  context_suffix_count: 2
+presidio:
+  nlp_configuration:
+    nlp_engine_name: spacy
+    models:
+      - {lang_code: en, model_name: en_core_web_lg}
+      - {lang_code: de, model_name: de_core_news_lg}
+    ner_model_configuration:
+      model_to_presidio_entity_mapping:
+        PER: PERSON
+        PERSON: PERSON
+        NORP: NRP
+        FAC: LOCATION
+        LOC: LOCATION
+        GPE: LOCATION
+        LOCATION: LOCATION
+        ORG: ORGANIZATION
+        ORGANIZATION: ORGANIZATION
+        DATE: DATE_TIME
+        TIME: DATE_TIME
+      low_confidence_score_multiplier: 0.4
+      low_score_entity_names: [ORG, ORGANIZATION]
+      labels_to_ignore:
+        - CARDINAL
+        - EVENT
+        - LANGUAGE
+        - LAW
+        - MISC
+        - MONEY
+        - ORDINAL
+        - PERCENT
+        - PRODUCT
+        - QUANTITY
+        - WORK_OF_ART
+  recognizer_registry:
+    global_regex_flags: 26
+    recognizers:
+      # Generic recognizers run for both languages. An empty per-language entry keeps
+      # Presidio's English context words; `de` gets German ones.
+      - name: CreditCardRecognizer
+        type: predefined
+        supported_languages:
+          - language: en
+          - language: de
+            context: [kreditkarte, karte, kartennummer, visa, mastercard, amex, maestro, girocard]
+      - name: EmailRecognizer
+        type: predefined
+        supported_languages:
+          - language: en
+          - language: de
+            context: [email, e-mail, mail, adresse]
+      - name: IbanRecognizer
+        type: predefined
+        supported_languages:
+          - language: en
+          - language: de
+            context: [iban, konto, kontonummer, bankverbindung, überweisung]
+      - name: IpRecognizer
+        type: predefined
+        supported_languages:
+          - language: en
+          - language: de
+            context: [ip, ipv4, ipv6, adresse, server]
+      - name: PhoneRecognizer
+        type: predefined
+        supported_regions: [DE, AT, CH, US, GB, FR, NL, IT, ES, CA]
+        supported_languages:
+          - language: en
+          - language: de
+            context: [telefon, tel, telefonnummer, rufnummer, handy, mobil, mobilnummer, fax, anrufen]
+      - name: DateRecognizer
+        type: predefined
+        supported_languages:
+          - language: en
+          - language: de
+            context: [datum, geburtsdatum, geboren, geb]
+      - name: UrlRecognizer
+        type: predefined
+      - name: CryptoRecognizer
+        type: predefined
+      - name: MacAddressRecognizer
+        type: predefined
+      - name: MedicalLicenseRecognizer
+        type: predefined
+        supported_languages: [en]
+      # English-language national IDs (US/UK); the off-by-default UK ones are enabled.
+      - {name: UsSsnRecognizer, type: predefined, supported_languages: [en]}
+      - {name: UsItinRecognizer, type: predefined, supported_languages: [en]}
+      - {name: UsPassportRecognizer, type: predefined, supported_languages: [en]}
+      - {name: UsLicenseRecognizer, type: predefined, supported_languages: [en]}
+      - {name: UsBankRecognizer, type: predefined, supported_languages: [en]}
+      - {name: NhsRecognizer, type: predefined, supported_languages: [en]}
+      - {name: UkNinoRecognizer, type: predefined, supported_languages: [en]}
+      - {name: UkPassportRecognizer, type: predefined, supported_languages: [en]}
+      - {name: UkDrivingLicenceRecognizer, type: predefined, supported_languages: [en]}
+      # German recognizers of the pinned presidio_analyzer.
+      - {name: DeTaxIdRecognizer, type: predefined, supported_languages: [de]}
+      - {name: DeTaxNumberRecognizer, type: predefined, supported_languages: [de]}
+      - {name: DeVatIdRecognizer, type: predefined, supported_languages: [de]}
+      - {name: DeIdCardRecognizer, type: predefined, supported_languages: [de]}
+      - {name: DePassportRecognizer, type: predefined, supported_languages: [de]}
+      - {name: DeFuehrerscheinRecognizer, type: predefined, supported_languages: [de]}
+      - {name: DeSocialSecurityRecognizer, type: predefined, supported_languages: [de]}
+      - {name: DeHealthInsuranceRecognizer, type: predefined, supported_languages: [de]}
+      - {name: DeLanrRecognizer, type: predefined, supported_languages: [de]}
+      - {name: DeBsnrRecognizer, type: predefined, supported_languages: [de]}
+      - {name: DeHandelsregisterRecognizer, type: predefined, supported_languages: [de]}
+      - {name: DeKfzRecognizer, type: predefined, supported_languages: [de]}
+      - {name: DePlzRecognizer, type: predefined, supported_languages: [de]}
+      # spaCy NER (PERSON/LOCATION/ORGANIZATION/DATE_TIME/NRP) for both languages.
+      - name: SpacyRecognizer
+        type: predefined
