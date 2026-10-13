@@ -560,7 +560,10 @@ print(json.dumps({"public_key":public}))
     state['peer_add_in_progress'] = True
     save(state)
     params = {'public_key': state['peer_public_key'], 'address': state['vpn_address'],
-              'name': state['name'], 'expected_peers': cloud.PROFILE['expected_current_cubes']}
+              'name': state['name'],
+              # The GPU keeps the Coordinator peer dynamically in the kernel;
+              # the persistent file contains only the existing worker peers.
+              'expected_peers': cloud.PROFILE['expected_current_cubes'] - 2}
     code = 'params=' + repr(params) + '\n' + '''import pathlib,subprocess,os,json
 p=pathlib.Path("/etc/wireguard/wg-ark.conf");text=p.read_text();blocks=text.split("[Peer]")
 matching=[b for b in blocks[1:] if any(line.strip()=="PublicKey = "+params["public_key"] for line in b.splitlines())]
@@ -793,7 +796,7 @@ while time.monotonic()<deadline:
  time.sleep(1)
 else:raise SystemExit('Cube did not drain before timeout')
 '''
-    result = json.loads(cloud.remote(code, state['server_id'], timeout + 30))
+    result = json.loads(test_remote(state, code, timeout + 30))
     state['drain'] = result
     save(state)
     return result
@@ -811,9 +814,14 @@ def scale_down():
 
     def patch_targets(group_id, expected, desired):
         current = api.get('/targetgroups/' + group_id)['properties']['targets']
-        if current == desired:
+        def same_targets(left, right):
+            key = lambda item: (item.get('ip'), item.get('port'))
+            return len(left) == len(right) and {key(item) for item in left} == {key(item) for item in right} and all(
+                next(item for item in left if key(item) == key(target)) == target
+                for target in right)
+        if same_targets(current, desired):
             return
-        if current != expected:
+        if not same_targets(current, expected):
             raise RuntimeError('Target group changed concurrently; refusing to overwrite it')
         mutate(state, 'PATCH', '/targetgroups/' + group_id, {'targets': desired})
         wait_operations(state)
@@ -857,12 +865,26 @@ def scale_down():
         if 'drain' not in state:
             state['drain'] = drain_cube(state)
         baseline = state['baseline_target_groups'][cube_group]['targets']
+        current = api.get('/targetgroups/' + cube_group)['properties']['targets']
+        target = [item for item in current if item.get('ip') == state['private_ip']]
+        if len(target) != 1 or not target[0].get('maintenanceEnabled'):
+            raise RuntimeError('Drained Cube is not in maintenance; refusing to restore routing')
+        state['direct_dispatch_targets'] = current
+        save(state)
         patch_targets(cube_group, state['direct_dispatch_targets'], baseline)
         state['phase'] = 'cube_target_removed'
         save(state)
 
     if state['phase'] == 'cube_target_removed':
         baseline = state['baseline_target_groups'][coordinator_group]['targets']
+        current = api.get('/targetgroups/' + coordinator_group)['properties']['targets']
+        original = [item for item in current if item.get('port') == 8090]
+        sidecar = [item for item in current if item.get('port') == 8091]
+        if len(original) != 1 or len(sidecar) != 1:
+            raise RuntimeError('Expected original and replacement Coordinator targets during restore')
+        state['coordinator_dispatch_targets'] = [dict(original[0], maintenanceEnabled=False)] + [
+            dict(item, maintenanceEnabled=True) for item in sidecar]
+        save(state)
         patch_targets(coordinator_group, state['coordinator_dispatch_targets'], baseline)
         state['alb_route_restored'] = https_alb_probe()
         state['phase'] = 'routing_restored'
@@ -967,7 +989,7 @@ def register():
     wait_operations(state)
     state['coordinator_group_added'] = True
     save(state)
-    params = {'ip': coord_ip, 'cube_ip': state['private_ip'], 'name': state['sidecar_name'], 'image': COORDINATOR_DIGEST, 'expected_origins': cloud.PROFILE['expected_current_cubes'], 'cube_name': state['name']}
+    params = {'ip': coord_ip, 'cube_ip': state['private_ip'], 'name': state['sidecar_name'], 'image': COORDINATOR_DIGEST, 'expected_origins': cloud.PROFILE['expected_current_cubes'] - 1, 'cube_name': state['name']}
     code = 'params=' + repr(params) + '\n' + '''import pathlib,json,yaml,subprocess,urllib.request,time,os
 p=pathlib.Path("/opt/patronus/ark-coordinator")
 c=yaml.safe_load((p/"config.yaml").read_text());assert len(c["gateway"]["cubes"])==params["expected_origins"]

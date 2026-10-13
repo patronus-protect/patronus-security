@@ -9,6 +9,18 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ## [Unreleased]
 
+### Fixed
+
+- Make IONOS fleet scale-down and round-trip recovery handle nested NIC inventory, provider
+  target reordering, and the dynamically managed Coordinator WireGuard peer.
+- Resume fleet changes safely after a provider accepted a target update before the local journal
+  advanced, and use the test Cube's verified SSH host-key alias during drain.
+
+### Added
+
+- Validate live IONOS scale-down from 12 to 8 Cubes and an end-to-end 8-to-9-to-8 Cube lifecycle,
+  including worker setup, Coordinator/ALB routing, GPU inference, async scans, drain, and API removal.
+
 ### Added
 
 - Add an external Triton watchdog that validates real GPU inference, with a hardened systemd timer and deduplicated TLS SMTP failure/recovery notifications. Credentials and deployment addresses remain in private host configuration.

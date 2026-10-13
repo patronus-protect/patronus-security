@@ -46,8 +46,23 @@ def api_mutation(api, method, path, payload=None):
     return result
 
 
+def targets_equal(left, right):
+    """Compare provider target lists independent of IONOS response ordering."""
+    key = lambda row: (row.get("ip"), row.get("port"))
+    return len(left) == len(right) and {key(row) for row in left} == {key(row) for row in right} and all(
+        {k: v for k, v in next(item for item in left if key(item) == key(expected)).items()} == expected
+        for expected in right)
+
+
 def private_ip(row, lan):
-    matches = [ip for nic in row["nics"] if nic["lan"] == lan for ip in nic["ips"]]
+    # IONOS inventory rows embed NIC properties under entities.nics.items;
+    # normalize them in fleet.Ionos.inventory(), but tolerate raw API rows too.
+    nics = row.get("nics")
+    if nics is None:
+        nics = [nic.get("properties", nic) for nic in
+                row.get("entities", {}).get("nics", {}).get("items", [])]
+    matches = [ip for nic in nics if nic.get("lan") == lan
+               for ip in nic.get("ips", [])]
     if len(matches) != 1:
         raise RuntimeError("Cube does not have exactly one address on the configured private LAN")
     return str(ipaddress.IPv4Address(matches[0]))
@@ -352,11 +367,16 @@ def apply(profile, target):
     if state["phase"] == "sidecar_ready":
         cube_group = state["cube_group_id"]
         current = api.get("/targetgroups/" + cube_group)["properties"]["targets"]
-        retired_ips = {item["private_ip"] for item in state["retired"]}
+        retired_ips = {private_ip(item, profile["private_lan_id"])
+                       for item in state["retired"]}
         desired = [dict(row, maintenanceEnabled=True) if row["ip"] in retired_ips else row for row in state["baseline_cube_targets"]]
         if current == state["baseline_cube_targets"]:
             api.patch_target_group(cube_group, current, desired)
-        elif current != desired:
+        elif current != desired and not (
+                len(current) == len(desired)
+                and {row["ip"] for row in current} == {row["ip"] for row in desired}
+                and all(row.get("maintenanceEnabled") == (row["ip"] in retired_ips)
+                        for row in current)):
             raise RuntimeError("Cube target group changed concurrently")
         current_coord = api.get("/targetgroups/" + state["coordinator_group_id"])["properties"]["targets"]
         side_target = dict(state["baseline_coordinator_targets"][0], port=SIDE_CAR_PORT,
@@ -364,7 +384,12 @@ def apply(profile, target):
         desired_coord = [dict(state["baseline_coordinator_targets"][0], maintenanceEnabled=True), side_target]
         if current_coord == state["baseline_coordinator_targets"]:
             api.patch_target_group(state["coordinator_group_id"], current_coord, desired_coord)
-        elif current_coord != desired_coord:
+        elif current_coord != desired_coord and not (
+                len(current_coord) == 2
+                and any(row.get("port") == SIDE_CAR_PORT and row.get("ip") == side_target["ip"]
+                        for row in current_coord)
+                and any(row.get("port") == 8090 and row.get("maintenanceEnabled")
+                        for row in current_coord)):
             raise RuntimeError("Coordinator target group changed concurrently")
         state["sidecar_target"] = side_target
         state["maintenance_cube_targets"] = desired
@@ -392,9 +417,9 @@ def apply(profile, target):
         sidecar = dict(state["sidecar_target"], maintenanceEnabled=True)
         desired = [active, sidecar]
         current = api.get("/targetgroups/" + state["coordinator_group_id"])["properties"]["targets"]
-        if current == state["routed_coordinator_targets"]:
+        if targets_equal(current, state["routed_coordinator_targets"]):
             api.patch_target_group(state["coordinator_group_id"], current, desired)
-        elif current != desired:
+        elif not targets_equal(current, desired):
             raise RuntimeError("Coordinator target group changed during handover")
         state["official_route_targets"] = desired
         state["official_https_probe"] = roundtrip.https_alb_probe()
@@ -405,7 +430,9 @@ def apply(profile, target):
         state["phase"] = "peers_removed"; save(state)
     if state["phase"] == "peers_removed":
         current = api.get("/targetgroups/" + state["cube_group_id"])["properties"]["targets"]
-        keep_targets = [row for row in current if row["ip"] not in {x["private_ip"] for x in state["retired"]}]
+        retired_ips = {private_ip(item, profile["private_lan_id"])
+                       for item in state["retired"]}
+        keep_targets = [row for row in current if row["ip"] not in retired_ips]
         if current != keep_targets:
             if current != state["maintenance_cube_targets"]:
                 raise RuntimeError("Cube target group changed before target removal")
@@ -428,9 +455,9 @@ def apply(profile, target):
         state["retained_result_after_delete"] = result
         current = api.get("/targetgroups/" + state["coordinator_group_id"])["properties"]["targets"]
         original = dict(state["baseline_coordinator_targets"][0], maintenanceEnabled=False)
-        if current == state["official_route_targets"]:
+        if targets_equal(current, state["official_route_targets"]):
             api.patch_target_group(state["coordinator_group_id"], current, [original])
-        elif current != [original]:
+        elif not targets_equal(current, [original]):
             raise RuntimeError("Coordinator targets changed before sidecar cleanup")
         name = state["sidecar_name"]
         config_file = state["sidecar_config_file"]
