@@ -1,0 +1,215 @@
+{
+  "version": 1,
+  "note": "Maps every dlp_* rule in DLP_PATTERNS to the generators whose values it must find. Each probe is a minimal carrier; the rule alone must report exactly the <<secret:0>> span. shape_only generators predate E03 and are format-shaped without a valid checksum or structure; they stay for the E02 goldens. Content rules have no secret value and are covered by carrier templates (E04).",
+  "rules": {
+    "dlp_anthropic_key": {
+      "generators": ["anthropic_api_key", "anthropic_admin_key"],
+      "probes": ["ANTHROPIC_API_KEY=<<secret:0>>", "Der Schlüssel <<secret:0>> gehört zum Team-Workspace."]
+    },
+    "dlp_openai_key": {
+      "generators": ["openai_project_api_key"],
+      "shape_only": ["openai_project_key"],
+      "probes": ["export OPENAI_API_KEY='<<secret:0>>'", "client = OpenAI(api_key='<<secret:0>>')"]
+    },
+    "dlp_openai_legacy": {
+      "generators": ["openai_legacy_key"],
+      "probes": ["openai.api_key = \"<<secret:0>>\"", "Alter Key im Ticket: <<secret:0>>"]
+    },
+    "dlp_openai_svc": {
+      "generators": ["openai_service_account_key"],
+      "probes": ["OPENAI_API_KEY=<<secret:0>>", "service account key <<secret:0>> was rotated"]
+    },
+    "dlp_huggingface": {
+      "generators": ["huggingface_token"],
+      "probes": ["HF_TOKEN=<<secret:0>>", "huggingface-cli login --token <<secret:0>>"]
+    },
+    "dlp_groq_key": {
+      "generators": ["groq_key"],
+      "probes": ["GROQ_API_KEY=<<secret:0>>", "{\"groq\": {\"api_key\": \"<<secret:0>>\"}}"]
+    },
+    "dlp_xai_key": {
+      "generators": ["xai_api_key"],
+      "probes": ["XAI_API_KEY=<<secret:0>>", "Grok-Zugang: <<secret:0>>"]
+    },
+    "dlp_replicate": {
+      "generators": ["replicate_api_token"],
+      "probes": ["REPLICATE_API_TOKEN=<<secret:0>>", "replicate token: <<secret:0>>"]
+    },
+    "dlp_aws_access_key": {
+      "generators": ["aws_access_key_id", "aws_session_access_key_id"],
+      "probes": ["aws_access_key_id = <<secret:0>>", "Die Access Key ID lautet <<secret:0>>."]
+    },
+    "dlp_aws_secret_key": {
+      "generators": ["aws_secret_access_key"],
+      "probes": ["aws_secret_access_key = <<secret:0>>", "{\"SecretAccessKey\": \"<<secret:0>>\"}"]
+    },
+    "dlp_google_api_key": {
+      "generators": ["google_api_key"],
+      "probes": ["GOOGLE_API_KEY=<<secret:0>>", "https://maps.googleapis.com/maps/api/geocode/json?key=<<secret:0>>"]
+    },
+    "dlp_google_oauth_token": {
+      "generators": ["google_oauth_access_token"],
+      "probes": ["Authorization: Bearer <<secret:0>>", "access_token: <<secret:0>>"]
+    },
+    "dlp_gcp_client_secret": {
+      "generators": ["gcp_oauth_client_secret"],
+      "probes": ["{\"installed\": {\"client_secret\": \"<<secret:0>>\"}}", "GOOGLE_CLIENT_SECRET=<<secret:0>>"]
+    },
+    "dlp_github_token": {
+      "generators": ["github_ghp_token", "github_gho_token", "github_ghu_token", "github_ghs_token", "github_ghr_token"],
+      "shape_only": ["github_pat_classic"],
+      "probes": ["GITHUB_TOKEN=<<secret:0>>", "git clone https://x-access-token:<<secret:0>>@github.com/acme/app.git"]
+    },
+    "dlp_github_pat": {
+      "generators": ["github_fine_grained_pat"],
+      "probes": ["GH_TOKEN=<<secret:0>>", "Neuer Fine-grained Token: <<secret:0>>"]
+    },
+    "dlp_gitlab_pat": {
+      "generators": ["gitlab_pat"],
+      "probes": ["GITLAB_TOKEN=<<secret:0>>", "curl --header \"PRIVATE-TOKEN: <<secret:0>>\" https://gitlab.example.com/api/v4/projects"]
+    },
+    "dlp_npm_token": {
+      "generators": ["npm_access_token"],
+      "probes": ["//registry.npmjs.org/:_authToken=<<secret:0>>", "NPM_TOKEN=<<secret:0>>"]
+    },
+    "dlp_stripe_key": {
+      "generators": ["stripe_secret_live", "stripe_restricted_test", "stripe_secret_test_long"],
+      "probes": ["STRIPE_SECRET_KEY=<<secret:0>>", "Stripe.api_key = \"<<secret:0>>\""]
+    },
+    "dlp_stripe_webhook": {
+      "generators": ["stripe_webhook_secret"],
+      "probes": ["STRIPE_WEBHOOK_SECRET=<<secret:0>>", "endpoint_secret = '<<secret:0>>'"]
+    },
+    "dlp_slack_token": {
+      "generators": ["slack_bot_token", "slack_user_token"],
+      "probes": ["SLACK_BOT_TOKEN=<<secret:0>>", "Bitte den Slack-Token <<secret:0>> widerrufen."]
+    },
+    "dlp_discord_token": {
+      "generators": ["discord_bot_token"],
+      "probes": ["DISCORD_TOKEN=<<secret:0>>", "client.run('<<secret:0>>')"]
+    },
+    "dlp_eth_private_key": {
+      "generators": ["eth_private_key_hex"],
+      "probes": ["PRIVATE_KEY=<<secret:0>>", "wallet private key: <<secret:0>>"]
+    },
+    "dlp_btc_wif": {
+      "generators": ["btc_wif_mainnet_uncompressed", "btc_wif_mainnet_compressed"],
+      "shape_only": ["btc_wif_uncompressed"],
+      "probes": ["importprivkey <<secret:0>>", "WIF-Schlüssel der Cold Wallet: <<secret:0>>"]
+    },
+    "dlp_private_key_block": {
+      "generators": ["pem_pkcs8_ed25519_private_key", "pem_pkcs1_rsa_private_key", "pem_sec1_ec_private_key", "pem_dsa_private_key", "pem_openssh_ed25519_private_key"],
+      "shape_only": ["pem_pkcs8_private_key", "pem_rsa_private_key"],
+      "probes": ["key.pem:\n<<secret:0>>\n", "deploy_key: |\n<<secret:0>>"]
+    },
+    "dlp_private_key_header": {
+      "generators": ["pem_openssh_private_key_header"],
+      "probes": ["$ head -1 deploy/id_ed25519\n<<secret:0>>", "Die Datei beginnt mit <<secret:0>> und wurde eingecheckt."]
+    },
+    "dlp_jwt_token": {
+      "generators": ["jwt_signed_hs256", "jwt_signed_rs256"],
+      "shape_only": ["jwt_hs256"],
+      "probes": ["id_token=<<secret:0>>", "{\"session\": \"<<secret:0>>\"}"]
+    },
+    "dlp_credential_in_url": {
+      "generators": ["url_token", "generic_api_secret"],
+      "probes": ["GET https://api.example.com/v1/export?format=csv&api_key=<<secret:0>> HTTP/1.1", "Link: https://intranet.example.de/report?id=7&token=<<secret:0>>"]
+    },
+    "dlp_env_var_secret": {
+      "generators": ["password", "generic_api_secret", "url_token"],
+      "probes": ["DB_PASSWORD=<<secret:0>>", "  SERVICE_API_TOKEN = <<secret:0>>"]
+    },
+    "dlp_password_assignment": {
+      "generators": ["password", "url_userinfo_password"],
+      "probes": ["password: <<secret:0>>", "Das Passwort lautet <<secret:0>> (bitte nach dem ersten Login ändern)."]
+    },
+    "dlp_generic_credential_assignment": {
+      "generators": ["generic_api_secret", "url_token"],
+      "probes": ["client_secret: <<secret:0>>", "Der API-Schlüssel ist <<secret:0>>"]
+    },
+    "dlp_bearer_token": {
+      "generators": ["bearer_opaque_token"],
+      "probes": ["Authorization: Bearer <<secret:0>>", "curl -H 'Authorization: Bearer <<secret:0>>' https://api.example.com/v1/me"]
+    },
+    "dlp_basic_auth": {
+      "generators": ["http_basic_auth"],
+      "shape_only": ["http_basic_credentials"],
+      "probes": ["Authorization: Basic <<secret:0>>", "proxy_set_header Authorization: Basic <<secret:0>>;"]
+    },
+    "dlp_signed_url_signature": {
+      "generators": ["aws_sigv4_signature"],
+      "probes": ["https://bucket.s3.eu-central-1.amazonaws.com/report.pdf?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=900&X-Amz-Signature=<<secret:0>>", "Download-Link (15 min gültig): https://files.example.de/a.zip?Expires=1767225600&Signature=<<secret:0>>"]
+    },
+    "dlp_session_cookie": {
+      "generators": ["java_session_id", "php_session_id"],
+      "probes": ["Cookie: theme=dark; JSESSIONID=<<secret:0>>", "Set-Cookie: PHPSESSID=<<secret:0>>; path=/; HttpOnly"]
+    },
+    "dlp_csrf_token": {
+      "generators": ["csrf_token"],
+      "probes": ["X-CSRF-Token: <<secret:0>>", "username=ada&csrf_token=<<secret:0>>"]
+    },
+    "dlp_password_hash": {
+      "generators": ["bcrypt_2b_hash", "argon2id_phc_hash", "md5_hex", "sha256_hex"],
+      "shape_only": ["bcrypt_hash", "argon2id_hash"],
+      "probes": ["password_hash: <<secret:0>>", "Passwort-Hash = <<secret:0>>"]
+    },
+    "dlp_url_userinfo_password": {
+      "generators": ["url_userinfo_password"],
+      "probes": ["DATABASE_URL=postgres://app:<<secret:0>>@db", "Verbindung zur Reporting-DB: mysql://report:<<secret:0>>@db1"]
+    },
+    "dlp_de_vat_id": {
+      "generators": ["de_vat_id"],
+      "probes": ["USt-IdNr.: <<secret:0>>", "VAT ID: <<secret:0>>"]
+    },
+    "dlp_de_commercial_register_number": {
+      "generators": ["de_commercial_register_number"],
+      "probes": ["Registergericht: Amtsgericht München, <<secret:0>>", "Commercial register: <<secret:0>>"]
+    },
+    "dlp_de_facility_number_bsnr": {
+      "generators": ["de_bsnr"],
+      "probes": ["BSNR: <<secret:0>>", "Facility number <<secret:0>>"]
+    },
+    "dlp_record_case_id": {
+      "generators": ["record_reference"],
+      "probes": ["Aktenzeichen: <<secret:0>>", "Case ID: <<secret:0>>"]
+    },
+    "dlp_record_contract_id": {
+      "generators": ["record_reference"],
+      "probes": ["Vertragsnummer: <<secret:0>>", "Contract ID = <<secret:0>>"]
+    },
+    "dlp_record_claim_id": {
+      "generators": ["record_reference"],
+      "probes": ["Schadennummer: <<secret:0>>", "Claim ID: <<secret:0>>"]
+    },
+    "dlp_record_order_id": {
+      "generators": ["record_reference"],
+      "probes": ["Bestellnummer: <<secret:0>>", "Order ID: <<secret:0>>"]
+    },
+    "dlp_record_invoice_id": {
+      "generators": ["record_reference"],
+      "probes": ["Rechnungsnummer: <<secret:0>>", "Invoice ID: <<secret:0>>"]
+    },
+    "dlp_project_id": {
+      "generators": ["record_reference"],
+      "probes": ["Projekt-ID: <<secret:0>>", "Project ID: <<secret:0>>"]
+    },
+    "dlp_organization_id": {
+      "generators": ["record_reference"],
+      "probes": ["Mandanten-ID: <<secret:0>>", "Tenant ID: <<secret:0>>"]
+    }
+  },
+  "content_rules": {
+    "dlp_internal_business_metric": "business metric phrase, no secret value",
+    "dlp_database_dump_insert": "content class, E04 carrier templates",
+    "dlp_source_code_fence": "content class, E04 carrier templates",
+    "dlp_source_code_statement": "content class, E04 carrier templates",
+    "dlp_source_code_python_rust_assignment": "content class, E04 carrier templates",
+    "dlp_source_code_declaration": "content class, E04 carrier templates",
+    "dlp_source_code_import": "content class, E04 carrier templates",
+    "dlp_sql_statement": "content class, E04 carrier templates",
+    "dlp_sql_multiline_statement": "content class, E04 carrier templates",
+    "dlp_database_dump_header": "content class, E04 carrier templates",
+    "dlp_stacktrace_block": "content class, E04 carrier templates",
+    "dlp_structured_system_log": "content class, E04 carrier templates"
+  }
+}

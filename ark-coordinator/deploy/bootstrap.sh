@@ -14,6 +14,7 @@ API_KEY_FILES=()
 CUBE_KEY_FILE=
 REDIS_URL_FILE=
 CUBE_ORIGINS_FILE=
+CUBE_COUNT=12
 
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 compose() { docker compose --project-directory "$DEPLOY_DIR" -f "$DEPLOY_DIR/compose.yaml" "$@"; }
@@ -87,7 +88,7 @@ configure() {
     for key in "${API_KEY_FILES[@]}"; do args+=(--api-key-file "$key"); done
     python3 "$DEPLOY_DIR/render_config.py" "$DEPLOY_DIR" "${args[@]}" \
         --cube-key-file "$CUBE_KEY_FILE" --redis-url-file "$REDIS_URL_FILE" \
-        --cube-origins-file "$CUBE_ORIGINS_FILE"
+        --cube-origins-file "$CUBE_ORIGINS_FILE" --cube-count "$CUBE_COUNT"
 }
 
 stack_check() {
@@ -141,7 +142,7 @@ phase=${1:-help}
 [[ $# == 0 ]] || shift
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --coordinator-ip|--api-key-file|--cube-key-file|--redis-url-file|--cube-origins-file)
+        --coordinator-ip|--api-key-file|--cube-key-file|--redis-url-file|--cube-origins-file|--cube-count)
             [[ $# -ge 2 && -n $2 ]] || die "Missing value for $1."
             case "$1" in
                 --coordinator-ip) COORDINATOR_IP=$2 ;;
@@ -149,6 +150,7 @@ while [[ $# -gt 0 ]]; do
                 --cube-key-file) CUBE_KEY_FILE=$2 ;;
                 --redis-url-file) REDIS_URL_FILE=$2 ;;
                 --cube-origins-file) CUBE_ORIGINS_FILE=$2 ;;
+                --cube-count) CUBE_COUNT=$2 ;;
             esac
             shift 2 ;;
         *) die "Unknown option: $1" ;;
@@ -159,7 +161,7 @@ case "$phase" in
     deploy) validate_host; deploy ;;
     verify) validate_host; verify ;;
     help|--help|-h) printf '%s\n' \
-        'Usage: sudo bash bootstrap.sh deploy --coordinator-ip 10.20.0.X --api-key-file /root/origin.key --cube-key-file /root/cube.key --redis-url-file /root/redis.url --cube-origins-file /root/cube-origins.txt' \
+        'Usage: sudo bash bootstrap.sh deploy --coordinator-ip 10.20.0.X --api-key-file /root/origin.key --cube-key-file /root/cube.key --redis-url-file /root/redis.url --cube-origins-file /root/cube-origins.txt [--cube-count N]' \
         'Repeat --api-key-file during key rotation. Omit secret arguments on later unchanged deploys.' \
         'Input files must be root-owned, mode 0600 or stricter. Secret values are never printed.' \
         'Run verify with only --coordinator-ip after reboot or host maintenance.' ;;
