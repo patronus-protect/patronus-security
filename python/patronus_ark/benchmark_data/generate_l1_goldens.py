@@ -7,12 +7,18 @@ Run from the repository root with::
 The generated offsets are Python Unicode-code-point offsets and use half-open
 ``[start, end)`` intervals. All values are invented or copied from the existing
 synthetic ``dynamic_pii.jsonl`` fixture; no sensitive document content is used.
+
+DLP secret values are never written in clear: secret positives store a generator
+recipe and a carrier template (see ``patronus_ark.dlp_synth.recipes``); offsets refer
+to the materialized text, whose SHA-256 fingerprint is recorded for the Rust parity test.
 """
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
+
+from patronus_ark.dlp_synth import recipes
 
 
 DATA_DIR = Path(__file__).resolve().parent
@@ -70,6 +76,33 @@ def negative(label: str, language: str, text: str, reason: str) -> dict:
             "source": "hand-authored Ark L1 hard-negative regression",
         },
     }
+
+
+def secret_positive(
+    label: str, language: str, prefix: str, generator: str, seed: int, suffix: str = ""
+) -> dict:
+    template = f"{prefix}<<secret:0>>{suffix}"
+    secrets = [{"gen": generator, "seed": seed}]
+    text, spans = recipes.materialize(template, secrets)
+    start, end = spans[0]
+    return {
+        "language": language,
+        "case_type": "positive",
+        "target_label": label,
+        "template": template,
+        "secrets": secrets,
+        "text_fingerprint": recipes.fingerprint(text),
+        "entities": [{"label": label, "start": start, "end": end, "secret": 0}],
+        "span_unit": "unicode_code_point",
+        "provenance": {
+            "origin": "synthetic",
+            "source": "generator recipe (patronus_ark.dlp_synth), materialized at test time",
+        },
+    }
+
+
+def ps(label: str, language: str, prefix: str, generator: str, seed: int, suffix: str = "") -> dict:
+    return secret_positive(label, language, prefix, generator, seed, suffix)
 
 
 def p(label: str, language: str, prefix: str, value: str, suffix: str = "", **kwargs) -> dict:
@@ -282,58 +315,58 @@ PII_CASES = {
 
 DLP_CASES = {
     "API_KEY": [
-        p("API_KEY", "en", "OPENAI_API_KEY=", "sk-proj-abcdefghijklmnopqrstuvwxyz012345"),
-        p("API_KEY", "de", "Modellschlüssel: ", "hf_ABCDEFGHIJKLMNOPQRSTUVWXYZ12"),
-        p("API_KEY", "en", "GROQ_API_KEY=", "gsk_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuv"),
+        ps("API_KEY", "en", "OPENAI_API_KEY=", "openai_project_key", 101),
+        ps("API_KEY", "de", "Modellschlüssel: ", "huggingface_token", 102),
+        ps("API_KEY", "en", "GROQ_API_KEY=", "groq_key", 103),
         n("API_KEY", "en", "Truncated OpenAI prefix in the docs: sk-proj-short", "provider token is too short"),
         n("API_KEY", "de", "API-Schlüssel: [REDACTED]", "redacted placeholder"),
     ],
     "CLOUD_KEY": [
-        p("CLOUD_KEY", "en", "AWS_ACCESS_KEY_ID=", "AKIAIOSFODNN7EXAMPLE"),
-        p("CLOUD_KEY", "de", "Google API Key: ", "AIzaSyDUMMY1234567890abcdefghijklmnopqr"),
-        p("CLOUD_KEY", "en", "AWS_SECRET_ACCESS_KEY=", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"),
+        ps("CLOUD_KEY", "en", "AWS_ACCESS_KEY_ID=", "aws_access_key_id", 201),
+        ps("CLOUD_KEY", "de", "Google API Key: ", "google_api_key", 202),
+        ps("CLOUD_KEY", "en", "AWS_SECRET_ACCESS_KEY=", "aws_secret_access_key", 203),
         n("CLOUD_KEY", "en", "AWS_ACCESS_KEY_ID=AKIA123", "cloud key is too short"),
         n("CLOUD_KEY", "de", "AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}", "environment reference is not secret material"),
     ],
     "CREDENTIAL": [
-        p("CREDENTIAL", "de", "Passwort = ", "Sommer2026!"),
-        p("CREDENTIAL", "en", "https://example.test?token=", "actual-secret"),
-        p("CREDENTIAL", "en", "Authorization: Basic ", "YWRhOnNlY3JldC04ODQy"),
+        ps("CREDENTIAL", "de", "Passwort = ", "password", 301),
+        ps("CREDENTIAL", "en", "https://example.test?token=", "url_token", 302),
+        ps("CREDENTIAL", "en", "Authorization: Basic ", "http_basic_credentials", 303),
         n("CREDENTIAL", "de", "Passwort = ${PASSWORD}", "environment reference"),
         n("CREDENTIAL", "en", "token = [REDACTED]", "redacted placeholder"),
     ],
     "CRYPTO_KEY": [
-        p("CRYPTO_KEY", "en", "Ethereum private key: ", "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
-        p("CRYPTO_KEY", "de", "Wallet-Schlüssel: ", "5HueCGU8rMjxEXxiPuD5BDuRaKsz5on8CcuHNZ1rQdZQzQpWmZ1"),
-        p("CRYPTO_KEY", "en", "Signing scalar ", "0xabcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"),
+        ps("CRYPTO_KEY", "en", "Ethereum private key: ", "eth_private_key_hex", 401),
+        ps("CRYPTO_KEY", "de", "Wallet-Schlüssel: ", "btc_wif_uncompressed", 402),
+        ps("CRYPTO_KEY", "en", "Signing scalar ", "eth_private_key_hex", 403),
         n("CRYPTO_KEY", "en", "Ethereum address: 0x0123456789abcdef0123456789abcdef01234567", "address is not a private key"),
         n("CRYPTO_KEY", "de", "Wallet-Schlüssel: 0x1234", "value is too short"),
     ],
     "PASSWORD_HASH": [
-        p("PASSWORD_HASH", "en", "password_hash = ", "$2b$12$abcdefghijklmnopqrstuuVIXU7y0N7XmxmCN5QYGl1R9vO2"),
-        p("PASSWORD_HASH", "de", "Passwort-Hash: ", "$argon2id$v=19$m=65536,t=3,p=4$ZmFrZXNhbHQ$ZmFrZWhhc2h2YWx1ZQ"),
-        p("PASSWORD_HASH", "en", "passwd_hash = ", "0123456789abcdef0123456789abcdef"),
+        ps("PASSWORD_HASH", "en", "password_hash = ", "bcrypt_hash", 501),
+        ps("PASSWORD_HASH", "de", "Passwort-Hash: ", "argon2id_hash", 502),
+        ps("PASSWORD_HASH", "en", "passwd_hash = ", "md5_hex", 503),
         n("PASSWORD_HASH", "de", "Passwort-Hash: [REDACTED]", "redacted placeholder"),
         n("PASSWORD_HASH", "en", "checksum = 0123456789abcdef0123456789abcdef", "missing password-hash anchor"),
     ],
     "PAYMENT_KEY": [
-        p("PAYMENT_KEY", "en", "STRIPE_SECRET_KEY=", "sk_live_abcdefghijklmnopqrstuvwxyz"),
-        p("PAYMENT_KEY", "de", "Stripe Testschlüssel: ", "rk_test_ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
-        p("PAYMENT_KEY", "en", "Webhook secret: ", "whsec_abcdefghijklmnopqrstuvwx"),
+        ps("PAYMENT_KEY", "en", "STRIPE_SECRET_KEY=", "stripe_secret_live", 601),
+        ps("PAYMENT_KEY", "de", "Stripe Testschlüssel: ", "stripe_restricted_test", 602),
+        ps("PAYMENT_KEY", "en", "Webhook secret: ", "stripe_webhook_secret", 603),
         n("PAYMENT_KEY", "en", "Truncated Stripe prefix in the docs: sk_live_short", "provider token is too short"),
         n("PAYMENT_KEY", "de", "Stripe-Schlüssel: [REDACTED]", "redacted placeholder"),
     ],
     "PRIVATE_KEY": [
-        p("PRIVATE_KEY", "en", "", "-----BEGIN PRIVATE KEY-----\ncHJpdmF0ZS1rZXktbWF0ZXJpYWw=\n-----END PRIVATE KEY-----"),
-        p("PRIVATE_KEY", "de", "Schlüsseldatei:\n", "-----BEGIN OPENSSH PRIVATE KEY-----"),
-        p("PRIVATE_KEY", "en", "", "-----BEGIN RSA PRIVATE KEY-----\nZmFrZS1rZXktbWF0ZXJpYWw=\n-----END RSA PRIVATE KEY-----"),
+        ps("PRIVATE_KEY", "en", "", "pem_pkcs8_private_key", 701),
+        ps("PRIVATE_KEY", "de", "Schlüsseldatei:\n", "pem_openssh_private_key_header", 702),
+        ps("PRIVATE_KEY", "en", "", "pem_rsa_private_key", 703),
         n("PRIVATE_KEY", "en", "-----BEGIN PUBLIC KEY-----", "public key is not private material"),
         n("PRIVATE_KEY", "de", "BEGIN PRIVATE KEY", "PEM delimiters are incomplete"),
     ],
     "SECRET_TOKEN": [
-        p("SECRET_TOKEN", "en", "GITHUB_TOKEN=", "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"),
-        p("SECRET_TOKEN", "de", "GitLab Token: ", "glpat-abcdefghijklmnopqrstuv"),
-        p("SECRET_TOKEN", "en", "Authorization: Bearer ", "eyJhbGciOiJIUzI1NiJ9.payload.signature"),
+        ps("SECRET_TOKEN", "en", "GITHUB_TOKEN=", "github_pat_classic", 801),
+        ps("SECRET_TOKEN", "de", "GitLab Token: ", "gitlab_pat", 802),
+        ps("SECRET_TOKEN", "en", "Authorization: Bearer ", "jwt_hs256", 803),
         n("SECRET_TOKEN", "en", "Truncated GitHub prefix in the docs: ghp_short", "provider token is too short"),
         n("SECRET_TOKEN", "de", "Token: your-token-here", "documented placeholder"),
     ],

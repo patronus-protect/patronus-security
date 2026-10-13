@@ -12,6 +12,7 @@ result shapes may be breaking for downstream users, and is called out explicitly
 ### Added
 
 - Add an external Triton watchdog that validates real GPU inference, with a hardened systemd timer and deduplicated TLS SMTP failure/recovery notifications. Credentials and deployment addresses remain in private host configuration.
+- Store secret values in the DLP L1 goldens (`dlp_l1.jsonl`) only as generator recipes (`{"gen", "seed"}`) plus a `<<secret:N>>` carrier template. Python (`patronus_ark.dlp_synth.recipes`) and Rust (`patronus_ark::golden_recipes`, `test-util` only) materialize identical text from the shared `dlp_synth/generators.json` with SplitMix64, checked by a fingerprint parity test. The 24 secret positives are migrated with an unchanged `13_l1_golden_eval` result (69/69, 46/46), and the checked-in file no longer contains checksum-valid tokens or any default DLP finding. No detection change.
 - Add the DLP entity map (`research/dlp/entity_map.yaml`) that maps every `dlp_*` rule to gitleaks 8.30.1 rule IDs, TruffleHog detectors, detect-secrets 1.5.0 plugins and Google Cloud DLP infoTypes with `shared`/`ark_only`/`baseline_only`/`out_of_scope` scopes, enforced by a Rust test. No detection change.
 - Add read-only IONOS Cube inventory and fleet capacity planning with protected-resource checks, identity validation, and redirect-safe credential handling. Provisioning and deletion remain explicitly unsupported.
 
