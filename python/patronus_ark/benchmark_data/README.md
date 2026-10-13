@@ -56,23 +56,64 @@ with a carrier `template` and a list of recipes:
   exactly once. Entity `start`/`end` are code-point offsets in the
   **materialized** text, and `secret` names the recipe the span covers.
 - Generators are defined once in
-  [`dlp_synth/generators.json`](../dlp_synth/generators.json): literal segments
-  plus fixed-length random segments over a named alphabet. Values are drawn
-  with SplitMix64 seeded by `seed` (`alphabet[next_u64() % len]` per
-  character), so every generator has a fixed length and the result is
-  deterministic.
+  [`dlp_synth/generators.json`](../dlp_synth/generators.json): literal segments,
+  fixed-length random segments over a named alphabet, checksum segments
+  (`crc32_base62` for GitHub/npm tokens, `iso7064_mod11_10` for the USt-IdNr.)
+  and encoded segments that assemble bytes (hex constants, ASCII, random bytes)
+  and emit them as hex, base64 (PEM-wrapped), base64url, bcrypt radix-64 or
+  Base58Check. Values are drawn with SplitMix64 seeded by `seed`
+  (`alphabet[next_u64() % len]` per character, `next_u64() % 256` per byte),
+  so every generator has a fixed length and the result is deterministic.
+  `recipes.py` documents the segment format.
 - Python (`patronus_ark.dlp_synth.recipes.materialize_row`) and Rust
   (`patronus_ark::golden_recipes::materialize`, compiled with the `test-util`
   feature for tests and `13_l1_golden_eval`) materialize the same text. The
   Rust test `rust/tests/dlp_golden_recipes.rs` checks every row against
   `text_fingerprint` recorded by the Python generator.
-- Generated values are synthetic and only format-shaped; they carry no valid
-  provider checksum. Tests reject checksum-valid GitHub/npm CRC32 and
+- The goldens still use the E02 generators, which are only format-shaped and
+  carry no valid provider checksum. Tests reject checksum-valid GitHub/npm CRC32 and
   Base58Check tokens in the file. They also require that neither
   `dlp_l1.jsonl` nor `generators.json` triggers a default DLP L1 finding, so
   push protection and pre-commit secret scanners stay quiet.
 - Hard negatives and non-secret rows (business identifiers, content classes)
   remain literal `text`.
+
+### Synthetic secret generator (`dlp_synth`)
+
+[`dlp_synth/rules.json`](../dlp_synth/rules.json) maps every `dlp_*` rule in
+`DLP_PATTERNS` to the generators of the values it should find, plus two probe
+carriers (EN/DE, config/prose). Content rules (source code, SQL, logs, business
+metrics) have no secret value and are listed under `content_rules`; their
+carriers come with E04. Generators listed as `shape_only` are the E02 shapes
+without a valid checksum or structure. They stay because the goldens use them.
+Every other generator yields format-, structure- and checksum-valid fakes:
+
+- GitHub `gh[pousr]_` and npm tokens with the base62 CRC-32 suffix, Base58Check
+  WIF keys (mainnet, compressed and uncompressed), secp256k1-range Ethereum keys;
+- PEM private keys with parseable DER (PKCS#8 Ed25519, PKCS#1 RSA, SEC1 P-256,
+  DSA) and an `openssh-key-v1` Ed25519 body;
+- JWTs with JSON header and claims, RFC 7617 Basic credentials, bcrypt and
+  Argon2id PHC hashes in canonical radix-64, Discord bot tokens with a
+  base64url snowflake, and a USt-IdNr. with a valid ISO 7064 check digit;
+- the provider prefix, length and alphabet tables cited in each generator's
+  `source` (gitleaks rule ID, RFC or vendor format; `ark-rule:<id>` marks
+  shapes that only follow today's ARK regex and still need a format source).
+
+Keys and signatures are random bytes, never derived from or checked against a
+live account. `dlp_synth.checks` re-verifies every value offline with
+code that is independent of the encoders (`python/tests/test_dlp_synth.py`).
+The rule probes run in both test suites. Each rule runs alone and must report
+exactly the generated span (`python/tests/test_dlp_synth.py`,
+`rust/tests/dlp_synth_rules.rs`). Rust and Python output is pinned per generator
+in `rust/tests/fixtures/dlp_synth_vectors.json`.
+
+```python
+from patronus_ark.dlp_synth import recipes, rules
+
+value = recipes.generate("github_ghp_token", seed=17)          # in memory only
+for sample in rules.samples("dlp_btc_wif", range(4)):
+    sample.text, sample.span
+```
 
 The generator is deterministic:
 
