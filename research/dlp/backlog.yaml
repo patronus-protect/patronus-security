@@ -63,6 +63,7 @@ tasks:
       Migration der bestehenden 115 Fälle mit bitgleichem 13_l1_golden_eval-Ergebnis; Doku im benchmark_data/README
 
   - id: E03
+    status: done
     title: Synthetischer Secret-Generator (format- und prüfsummengültige Fake-Werte je Provider, deterministisch per Seed)
     type: eval-infra
     deps: [E01, E02]
