@@ -32,6 +32,9 @@ Stacked Draft-PR), Branch-Präfix `dlp/`. Agent-Prompt: [`AGENT_PROMPT.md`](AGEN
 | optional | Kingfisher (MongoDB) | Default | Apache-2.0; nur wenn der Aufwand gering bleibt |
 | Dokumentklassen/Infotypes | **Google Cloud DLP** `DOCUMENT_TYPE/*` + Credential-Infotypes, **Microsoft Purview** SITs | Coverage-Matrix (statisch); Messlauf nur nach Freigabe | Cloud, kostenpflichtig, Daten verlassen die VPS → `needs_decision` |
 
+Welche ARK-Regel welcher Baseline-Regel entspricht, steht in [`entity_map.yaml`](entity_map.yaml)
+(Scopes `shared`, `ark_only`, `baseline_only`, `out_of_scope`; Test `rust/tests/dlp_entity_map.rs`).
+
 TruffleHog-Verifikation (Live-Abfrage beim Provider) liegt nicht im L1-Scope: L1 arbeitet offline und
 ohne Netz. Darum wird TruffleHog fair ohne Verifikation verglichen. Den verifizierten Modus nennt
 das Scoreboard nur als Referenzzeile, und auch nur auf synthetischen Daten, wo er nichts verifizieren

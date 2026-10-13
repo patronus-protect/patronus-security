@@ -5,7 +5,10 @@ use std::{
     path::Path,
 };
 
-use patronus_ark::{SecurityCategory, SecurityGateway, SecurityLevel};
+use patronus_ark::{
+    detectors::dlp::dlp::DLP_PATTERNS, ScanGateMatrix, SecurityCategory, SecurityGateway,
+    SecurityLevel,
+};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -22,6 +25,18 @@ struct FixtureEntity {
     start: usize,
     end: usize,
     label: String,
+}
+
+/// Default-off DLP classes (business records, content) are reachability-tested
+/// with exactly their own rules opted in; every other row runs on the defaults.
+fn gates_for(target_label: &str) -> ScanGateMatrix {
+    let mut gates = ScanGateMatrix::default();
+    for pattern in DLP_PATTERNS {
+        if pattern.entity_group == target_label && !gates.allows_rule(pattern.name) {
+            gates.set_rule(pattern.name, true);
+        }
+    }
+    gates
 }
 
 fn evaluate(
@@ -46,6 +61,7 @@ fn evaluate(
             .filter(|entity| entity.label == row.target_label)
             .map(|entity| (entity.start, entity.end, entity.label.clone()))
             .collect::<BTreeSet<_>>();
+        gateway.set_execution_gates(gates_for(&row.target_label));
         let result = gateway
             .scan_category(category, &row.text)
             .into_iter()
@@ -88,6 +104,8 @@ fn evaluate(
             other => return Err(format!("unknown case_type {other:?} in {}", row.id).into()),
         }
     }
+
+    gateway.set_execution_gates(ScanGateMatrix::default());
 
     println!(
         "fixture={} rows={} positive_exact={}/{} hard_negative_rejected={}/{}",

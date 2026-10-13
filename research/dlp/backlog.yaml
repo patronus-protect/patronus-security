@@ -44,6 +44,7 @@ setup:  # manuell, nicht vom Schedule
 tasks:
   # ── E: Messinfrastruktur ──────────────────────────────────────────────
   - id: E01
+    status: done
     title: DLP-Taxonomie + Mapping ARK ↔ gitleaks-Regel-IDs ↔ TruffleHog-Detektoren ↔ detect-secrets-Plugins ↔ Google-DLP-Infotypes
     type: eval-infra
     deps: []
