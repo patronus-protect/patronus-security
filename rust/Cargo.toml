@@ -45,6 +45,7 @@ onnx-tensorrt = ["ort/tensorrt"]
 
 [dev-dependencies]
 patronus-ark = { path = ".", features = ["test-util"] }
+serde_yaml = "0.9"
 
 # Internal development, benchmark, and tokenizer-parity scripts.
 # These are NOT user-facing examples (those live in examples/0X_*). They are

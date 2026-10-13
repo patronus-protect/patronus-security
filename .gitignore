@@ -46,3 +46,6 @@ site/
 /ark-api/deploy/*.pem
 .patronus-security-scanner/
 docs/research/
+
+# Private cloud credentials and local fleet state.
+/.private/
