@@ -15,6 +15,9 @@ result shapes may be breaking for downstream users, and is called out explicitly
   target reordering, and the dynamically managed Coordinator WireGuard peer.
 - Resume fleet changes safely after a provider accepted a target update before the local journal
   advanced, and use the test Cube's verified SSH host-key alias during drain.
+- Persist the scale-up baseline before provisioning, reconcile accepted IONOS operations on resume,
+  and make Coordinator/ALB registration idempotent across interrupted substeps.
+- Replace deployment-specific names in the public IONOS profile example with explicit placeholders.
 
 ### Added
 

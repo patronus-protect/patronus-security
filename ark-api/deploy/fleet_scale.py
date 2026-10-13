@@ -334,6 +334,7 @@ def apply(profile, target):
     state = json.loads(STATE_FILE.read_text()) if STATE_FILE.exists() else initialize(profile, target)
     if state["target"] != target:
         raise RuntimeError("Journal target differs; reconcile or archive it before another scale")
+    ops.reconcile(api)
     if state["phase"] == "complete":
         print(json.dumps({"phase": "complete", "cubes": target}))
         return
@@ -433,8 +434,8 @@ def apply(profile, target):
         retired_ips = {private_ip(item, profile["private_lan_id"])
                        for item in state["retired"]}
         keep_targets = [row for row in current if row["ip"] not in retired_ips]
-        if current != keep_targets:
-            if current != state["maintenance_cube_targets"]:
+        if not fleet.targets_equal(current, keep_targets):
+            if not fleet.targets_equal(current, state["maintenance_cube_targets"]):
                 raise RuntimeError("Cube target group changed before target removal")
             api.patch_target_group(state["cube_group_id"], current, keep_targets)
         state["final_cube_targets"] = keep_targets

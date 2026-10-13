@@ -53,8 +53,9 @@ Refresh inventory before every plan; a local plan is not a mutation transaction.
 
 The profile shape is shown in
 [`ionos-fleet-profile.example.json`](ionos-fleet-profile.example.json). Copy it to
-the ignored `.private/` directory and fill in the Ark origin hostname and local
-SSH paths. The script discovers the data center, servers, image/template, NAT,
+the ignored `.private/` directory and fill in the IONOS resource names, LAN IDs,
+Ark origin hostname, and local SSH paths. The sample names and LAN IDs are
+placeholders. The script discovers the data center, servers, image/template, NAT,
 ALB, and target groups by their configured names through the IONOS API. The
 token remains in `.private/ionos-api-token.txt`; SSH private keys stay at their
 existing local paths.

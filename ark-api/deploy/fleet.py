@@ -26,6 +26,17 @@ def resource_id(value):
         raise ValueError("Resource IDs must be UUIDs") from exc
 
 
+def targets_equal(left, right):
+    """Compare IONOS target sets by endpoint, independent of response order."""
+    key = lambda item: (item.get("ip"), item.get("port"))
+    left_keys = [key(item) for item in left]
+    right_keys = [key(item) for item in right]
+    if len(left_keys) != len(right_keys) or len(set(left_keys)) != len(left_keys) or set(left_keys) != set(right_keys):
+        return False
+    indexed = {key(item): item for item in left}
+    return all(indexed[key(item)] == item for item in right)
+
+
 def read_token(path):
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     fd = os.open(path, flags)
@@ -81,6 +92,17 @@ class OperationJournal:
         self.data["operations"].append(item)
         self.save()
         return item
+
+    def reconcile(self, api):
+        """Finish accepted provider operations before a journaled workflow resumes."""
+        for item in self.data["operations"]:
+            if item["state"] == "accepted":
+                location = item.get("location")
+                if not location:
+                    raise RuntimeError("Accepted provider operation has no status URL")
+                api.wait_operation(location)
+            elif item["state"] in {"submitted", "uncertain"}:
+                raise RuntimeError("Journal has an unresolved operation; reconcile manually")
 
 
 class CoordinatorSSH:
@@ -328,7 +350,7 @@ class Ionos:
         result = self.request("PATCH", path, {"targets": targets})
         self.wait_operation(result["location"])
         actual = self.get(path)["properties"].get("targets", [])
-        if actual != targets:
+        if not targets_equal(actual, targets):
             raise RuntimeError("IONOS target group update did not converge")
 
     def delete_cube(self, datacenter, server_id, expected_name, protected_ids):

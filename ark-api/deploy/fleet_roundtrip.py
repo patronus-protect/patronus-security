@@ -59,15 +59,15 @@ def discover_profile(profile):
     if not profile.get('datacenter_id'):
         dcs = api.get('/datacenters?depth=1&limit=100')['items']
         profile['datacenter_id'] = unique_named(
-            dcs, profile.get('datacenter_name', 'ARK CPU Flotte'), 'data center')['id']
+            dcs, profile.get('datacenter_name', 'REPLACE-WITH-DATACENTER-NAME'), 'data center')['id']
     dc = cloud.fleet.resource_id(profile['datacenter_id'])
     dc_path = '/datacenters/' + dc
     servers = api.inventory(dc)['servers']
     if not profile.get('coordinator_server_id'):
-        row = unique_named(servers, profile.get('coordinator_name', 'ark-coordinator-01'), 'Coordinator')
+        row = unique_named(servers, profile.get('coordinator_name', 'REPLACE-WITH-COORDINATOR-NAME'), 'Coordinator')
         profile['coordinator_server_id'] = row['id']
     if not profile.get('runtime_source_server_id'):
-        row = unique_named(servers, profile.get('runtime_source_name', 'api-1'), 'runtime source Cube')
+        row = unique_named(servers, profile.get('runtime_source_name', 'REPLACE-WITH-RUNTIME-CUBE-NAME'), 'runtime source Cube')
         profile['runtime_source_server_id'] = row['id']
     source = api.get(dc_path + '/servers/' + cloud.fleet.resource_id(profile['runtime_source_server_id']) + '?depth=3')
     if not profile.get('template_id'):
@@ -84,17 +84,17 @@ def discover_profile(profile):
     tgs = api.get('/targetgroups?depth=1&limit=100')['items']
     if not profile.get('cube_target_group_id'):
         profile['cube_target_group_id'] = unique_named(
-            tgs, profile.get('cube_target_group_name', 'ark-cubes'), 'Cube target group')['id']
+            tgs, profile.get('cube_target_group_name', 'REPLACE-WITH-CUBE-TARGET-GROUP'), 'Cube target group')['id']
     if not profile.get('coordinator_target_group_id'):
         profile['coordinator_target_group_id'] = unique_named(
-            tgs, profile.get('coordinator_target_group_name', 'ark-coordinator'), 'Coordinator target group')['id']
+            tgs, profile.get('coordinator_target_group_name', 'REPLACE-WITH-COORDINATOR-TARGET-GROUP'), 'Coordinator target group')['id']
     if not profile.get('alb_id'):
         albs = api.get(dc_path + '/applicationloadbalancers?depth=1&limit=100')['items']
-        profile['alb_id'] = unique_named(albs, profile.get('alb_name', 'ark-alb'), 'ALB')['id']
+        profile['alb_id'] = unique_named(albs, profile.get('alb_name', 'REPLACE-WITH-ALB-NAME'), 'ALB')['id']
     if not profile.get('nat_gateway_id'):
         nats = api.get(dc_path + '/natgateways?depth=1&limit=100')['items']
         profile['nat_gateway_id'] = unique_named(
-            nats, profile.get('nat_gateway_name', 'ark-nat'), 'NAT gateway')['id']
+            nats, profile.get('nat_gateway_name', 'REPLACE-WITH-NAT-GATEWAY-NAME'), 'NAT gateway')['id']
     profile['token_file'] = str(token_file)
     profile['datacenter_id'] = dc
     return profile
@@ -188,6 +188,8 @@ def mutate(state, method, path, body=None):
             result = json.loads(payload) if payload else None
             if method == 'POST' and path == BASE + '/servers':
                 state['server_id'] = cloud.fleet.resource_id(result['id'])
+            if method == 'POST' and path == BASE + '/securitygroups' and isinstance(result, dict):
+                record['resource_id'] = cloud.fleet.resource_id(result['id'])
             save(state)
             return result
     except urllib.error.HTTPError as exc:
@@ -301,6 +303,7 @@ def create():
     name = prior['name'] if prior else cloud.PROFILE.get('new_cube_name', 'ark-cube-' + uuid.uuid4().hex[:8])
     state = {'name': name, 'private_ip': address, 'gateway_ip': gateway,
              'baseline_server_ids': [s['id'] for s in inventory['servers']],
+             'baseline_cube_count': current_count,
              'created_at': time.time(), 'phase': 'creating'}
     if prior:
         state['operations'] = prior.get('operations', [])
@@ -563,7 +566,7 @@ print(json.dumps({"public_key":public}))
               'name': state['name'],
               # The GPU keeps the Coordinator peer dynamically in the kernel;
               # the persistent file contains only the existing worker peers.
-              'expected_peers': cloud.PROFILE['expected_current_cubes'] - 2}
+              'expected_peers': state['baseline_cube_count'] - 1}
     code = 'params=' + repr(params) + '\n' + '''import pathlib,subprocess,os,json
 p=pathlib.Path("/etc/wireguard/wg-ark.conf");text=p.read_text();blocks=text.split("[Peer]")
 matching=[b for b in blocks[1:] if any(line.strip()=="PublicKey = "+params["public_key"] for line in b.splitlines())]
@@ -961,35 +964,63 @@ assert '{address}/32' not in p.read_text()
 
 def register():
     state = load()
-    if state['phase'] != 'verified':
+    if state['phase'] not in ('verified', 'registering'):
         raise RuntimeError('Complete the worker canary first')
+    state['phase'] = 'registering'
+    save(state)
+    wait_operations(state)
     api = cloud.api()
     coord = cloud.server(cloud.COORDINATOR)
     coord_ip = cloud.address(coord, PRIVATE_LAN)
-    original_groups = [g['id'] for g in coord['entities']['securitygroups']['items']]
+    live_groups = [g['id'] for g in coord['entities']['securitygroups']['items']]
+    if 'coordinator_original_groups' not in state:
+        state['coordinator_original_groups'] = live_groups
+    original_groups = state['coordinator_original_groups']
     alb = api.get(BASE + '/applicationloadbalancers/' + ALB_ID)
-    source_ips = [ip.split('/')[0] for ip in alb['properties']['lbPrivateIps']]
-    state['coordinator_original_groups'] = original_groups
+    source_ips = [ip.split('/')[0] for ip in
+                  (alb['properties'].get('lbPrivateIps') or alb['properties'].get('ips', []))]
+    if not source_ips:
+        raise RuntimeError('ALB exposes no source addresses for temporary Coordinator access')
+    state['alb_source_ips'] = source_ips
     state['coordinator_ip'] = coord_ip
     state['sidecar_name'] = 'ark-coordinator-fleet-' + state['server_id'][:8]
     save(state)
+    if not state.get('extra_group_id'):
+        prior_group = next((item for item in reversed(state.get('operations', []))
+                            if item.get('method') == 'POST'
+                            and item.get('path') == BASE + '/securitygroups'
+                            and item.get('resource_id')), None)
+        if prior_group:
+            state['extra_group_id'] = prior_group['resource_id']
+            save(state)
     if not state.get('extra_group_id'):
         result = mutate(state, 'POST', BASE + '/securitygroups', {'properties': {
             'name': state['name'] + '-coordinator', 'description': 'Temporary private ALB access for journaled Cube roundtrip'}})
         state['extra_group_id'] = result['id']
         save(state)
         wait_operations(state)
-        for ip in source_ips:
-            mutate(state, 'POST', BASE + '/securitygroups/' + state['extra_group_id'] + '/rules', {'properties': {
+    rules_path = BASE + '/securitygroups/' + state['extra_group_id'] + '/rules?depth=1'
+    for ip in source_ips:
+        rules = api.get(rules_path)['items']
+        exists = any(row.get('properties', {}).get('sourceIp') == ip
+                     and row.get('properties', {}).get('portRangeStart') == 8091
+                     and row.get('properties', {}).get('portRangeEnd') == 8091
+                     for row in rules)
+        if not exists:
+            mutate(state, 'POST', rules_path.split('?')[0], {'properties': {
                 'name': 'trial-alb-to-coordinator', 'protocol': 'TCP', 'sourceIp': ip,
                 'portRangeStart': 8091, 'portRangeEnd': 8091, 'type': 'INGRESS'}})
             wait_operations(state)
-    mutate(state, 'PUT', BASE + '/servers/' + cloud.COORDINATOR + '/securitygroups',
-           {'ids': original_groups + [state['extra_group_id']]})
-    wait_operations(state)
+    desired_groups = set(original_groups) | {state['extra_group_id']}
+    if set(live_groups) == set(original_groups):
+        mutate(state, 'PUT', BASE + '/servers/' + cloud.COORDINATOR + '/securitygroups',
+               {'ids': sorted(desired_groups)})
+        wait_operations(state)
+    elif set(live_groups) != desired_groups:
+        raise RuntimeError('Coordinator security groups changed during registration')
     state['coordinator_group_added'] = True
     save(state)
-    params = {'ip': coord_ip, 'cube_ip': state['private_ip'], 'name': state['sidecar_name'], 'image': COORDINATOR_DIGEST, 'expected_origins': cloud.PROFILE['expected_current_cubes'] - 1, 'cube_name': state['name']}
+    params = {'ip': coord_ip, 'cube_ip': state['private_ip'], 'name': state['sidecar_name'], 'image': COORDINATOR_DIGEST, 'expected_origins': state['baseline_cube_count'], 'cube_name': state['name']}
     code = 'params=' + repr(params) + '\n' + '''import pathlib,json,yaml,subprocess,urllib.request,time,os
 p=pathlib.Path("/opt/patronus/ark-coordinator")
 c=yaml.safe_load((p/"config.yaml").read_text());assert len(c["gateway"]["cubes"])==params["expected_origins"]
@@ -998,7 +1029,12 @@ f=p/"roundtrip-config.json";f.write_text(json.dumps(c));os.chown(f,10001,10001);
 old=json.loads(subprocess.check_output(["docker","inspect","patronus-ark-coordinator-coordinator-1"],text=True))[0]
 network=next(iter(old["NetworkSettings"]["Networks"]))
 args=["docker","run","-d","--name",params["name"],"--init","--restart","unless-stopped","--stop-timeout","310","--user","10001:10001","--read-only","--security-opt","no-new-privileges","--cap-drop","ALL","--cpus","2","--memory","1g","--memory-swap","1g","--pids-limit","128","--tmpfs","/tmp:size=32m,mode=1777","--network",network,"-e","RUST_LOG=info","-e","TOKIO_WORKER_THREADS=2","-p",params["ip"]+":8091:8090","-p","127.0.0.1:8091:8090","-v",str(f)+":/etc/ark-coordinator/config.yaml:ro","-v",str(p/"cube.token")+":/run/ark-coordinator/cube.token:ro","-v",str(p/"redis.url")+":/run/ark-coordinator/redis.url:ro",params["image"]]
-subprocess.run(args,check=True,stdout=subprocess.DEVNULL)
+existing=subprocess.run(["docker","inspect",params["name"]],capture_output=True,text=True)
+if existing.returncode==0:
+ found=json.loads(existing.stdout)[0]
+ assert found["Config"].get("Image")==params["image"] and found["State"]["Running"],"Existing sidecar does not match the journal"
+else:
+ subprocess.run(args,check=True,stdout=subprocess.DEVNULL)
 for _ in range(60):
  try:
   with urllib.request.urlopen("http://127.0.0.1:8091/readyz",timeout=3) as r:
@@ -1015,27 +1051,43 @@ print("Ready replacement Coordinator with", len(c["gateway"]["cubes"]), "Cubes; 
     save(state)
     cubes_id = CUBE_TARGET_GROUP
     coor_id = COORDINATOR_TARGET_GROUP
+    def same_targets(left, right):
+        key = lambda item: (item.get('ip'), item.get('port'))
+        return len(left) == len(right) and {key(item) for item in left} == {key(item) for item in right} and all(
+            next(item for item in left if key(item) == key(target)) == target for target in right)
     current = api.get('/targetgroups/' + cubes_id)['properties']['targets']
-    if current != state['baseline_target_groups'][cubes_id]['targets']:
-        raise RuntimeError('Cube targets changed concurrently')
     target = {'ip': state['private_ip'], 'port': 8080, 'weight': 1,
               'healthCheckEnabled': True, 'maintenanceEnabled': False, 'proxyProtocol': 'none'}
-    mutate(state, 'PATCH', '/targetgroups/' + cubes_id, {'targets': current + [target]})
-    wait_operations(state)
+    cube_targets = [item for item in current if item.get('ip') == state['private_ip']]
+    if not cube_targets:
+        if not same_targets(current, state['baseline_target_groups'][cubes_id]['targets']):
+            raise RuntimeError('Cube targets changed concurrently')
+        mutate(state, 'PATCH', '/targetgroups/' + cubes_id, {'targets': current + [target]})
+        wait_operations(state)
+    elif len(cube_targets) != 1 or cube_targets[0] != target:
+        raise RuntimeError('Test Cube target differs from the intended registration')
     state['cube_target_added'] = True
     save(state)
     current = api.get('/targetgroups/' + coor_id)['properties']['targets']
-    if current != state['baseline_target_groups'][coor_id]['targets']:
-        raise RuntimeError('Coordinator targets changed concurrently')
-    new = dict(current[0]);new.update(port=8091, healthCheckEnabled=False, maintenanceEnabled=False)
-    mutate(state, 'PATCH', '/targetgroups/' + coor_id, {'targets': current + [new]})
-    wait_operations(state)
+    baseline_coord = state['baseline_target_groups'][coor_id]['targets']
+    if not same_targets(current, baseline_coord + [dict(baseline_coord[0], port=8091,
+            healthCheckEnabled=False, maintenanceEnabled=False)]):
+        if not same_targets(current, baseline_coord):
+            raise RuntimeError('Coordinator targets changed concurrently')
+        new = dict(baseline_coord[0]);new.update(port=8091, healthCheckEnabled=False, maintenanceEnabled=False)
+        mutate(state, 'PATCH', '/targetgroups/' + coor_id, {'targets': current + [new]})
+        wait_operations(state)
+    else:
+        new = next(item for item in current if item.get('port') == 8091)
     state['coordinator_target_added'] = True
     save(state)
     # Both ready processes stay available during handover. Preserve accepted jobs.
-    old = [dict(target, maintenanceEnabled=True) for target in current]
-    mutate(state, 'PATCH', '/targetgroups/' + coor_id, {'targets': old + [new]})
-    wait_operations(state)
+    current = api.get('/targetgroups/' + coor_id)['properties']['targets']
+    old = [dict(item, maintenanceEnabled=True) if item.get('port') == 8090 else item for item in current]
+    desired_coord = old
+    if not same_targets(current, desired_coord):
+        mutate(state, 'PATCH', '/targetgroups/' + coor_id, {'targets': desired_coord})
+        wait_operations(state)
     state['registered'] = True
     state['phase'] = 'registered'
     state['post_registration_canary'] = coordinator_probe(state)
@@ -1093,7 +1145,7 @@ if __name__ == '__main__':
             if phase in ('created', 'installing', 'installed', 'network_preparing', 'network_ready', 'starting'):
                 setup()
             if load()['phase'] == 'running': canary()
-            if load()['phase'] == 'verified': register()
+            if load()['phase'] in ('verified', 'registering'): register()
             if load()['phase'] == 'registered': print('Fleet already expanded and registered.')
         elif args.phase == 'down':
             scale_down()
