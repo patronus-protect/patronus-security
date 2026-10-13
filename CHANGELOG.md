@@ -9,10 +9,30 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ## [Unreleased]
 
+### Fixed
+
+- Make IONOS fleet scale-down and round-trip recovery handle nested NIC inventory, provider
+  target reordering, and the dynamically managed Coordinator WireGuard peer.
+- Resume fleet changes safely after a provider accepted a target update before the local journal
+  advanced, and use the test Cube's verified SSH host-key alias during drain.
+- Persist the scale-up baseline before provisioning, reconcile accepted IONOS operations on resume,
+  and make Coordinator/ALB registration idempotent across interrupted substeps.
+- Replace deployment-specific names in the public IONOS profile example with explicit placeholders.
+
+### Added
+
+- Validate live IONOS scale-down from 12 to 8 Cubes and an end-to-end 8-to-9-to-8 Cube lifecycle,
+  including worker setup, Coordinator/ALB routing, GPU inference, async scans, drain, and API removal.
+
 ### Added
 
 - Add an external Triton watchdog that validates real GPU inference, with a hardened systemd timer and deduplicated TLS SMTP failure/recovery notifications. Credentials and deployment addresses remain in private host configuration.
 - Add a reproducible Microsoft Presidio baseline runner for the L1-PII evaluation (`scripts/l1_presidio/run_presidio.py`) with a pinned environment and `default`/`tuned` (EN + DE) profiles. It writes predictions in the `external_pii_eval` format. **Detection change:** none; this is evaluation tooling only.
+- Add journaled IONOS fleet reduction with target planning, Coordinator/ALB handover, worker drain, result-retention checks, exact WireGuard peer removal, and protected API deletion. Add a one-Cube roundtrip for provision/setup/routing and verified scale-down.
+- Keep the IONOS inventory and capacity planner read-only; use the dedicated fleet lifecycle commands for cloud mutations.
+- Store secret values in the DLP L1 goldens (`dlp_l1.jsonl`) only as generator recipes (`{"gen", "seed"}`) plus a `<<secret:N>>` carrier template. Python (`patronus_ark.dlp_synth.recipes`) and Rust (`patronus_ark::golden_recipes`, `test-util` only) materialize identical text from the shared `dlp_synth/generators.json` with SplitMix64, checked by a fingerprint parity test. The 24 secret positives are migrated with an unchanged `13_l1_golden_eval` result (69/69, 46/46), and the checked-in file no longer contains checksum-valid tokens or any default DLP finding. No detection change.
+- Add the synthetic DLP secret generator (`patronus_ark.dlp_synth`): deterministic, seedable generators for every secret and identifier `dlp_*` rule, including CRC-32-valid GitHub/npm tokens, Base58Check WIF keys, DER-parseable PEM keys (PKCS#8 Ed25519, PKCS#1, SEC1, DSA, OpenSSH), JSON-valid JWTs and ISO 7064-valid USt-IdNr. values. `dlp_synth/rules.json` maps each rule to its generators and probe carriers. Python and Rust (`golden_recipes`, `test-util` only) share the extended spec (version 2), and the output is pinned by fingerprint vectors. Tests check every value with independent offline structure checks and against its rule. No detection change.
+- Add the DLP entity map (`research/dlp/entity_map.yaml`) that maps every `dlp_*` rule to gitleaks 8.30.1 rule IDs, TruffleHog detectors, detect-secrets 1.5.0 plugins and Google Cloud DLP infoTypes with `shared`/`ark_only`/`baseline_only`/`out_of_scope` scopes, enforced by a Rust test. No detection change.
 - Add read-only IONOS Cube inventory and fleet capacity planning with protected-resource checks, identity validation, and redirect-safe credential handling. Provisioning and deletion remain explicitly unsupported.
 
 ### Fixed

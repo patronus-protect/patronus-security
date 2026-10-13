@@ -7,6 +7,9 @@ mod diagnostics;
 pub mod dynamic_pii;
 pub mod external_l1;
 pub mod gliner_onnx_engine;
+#[cfg(feature = "test-util")]
+#[doc(hidden)]
+pub mod golden_recipes;
 pub mod ml;
 pub mod normalization;
 pub mod pipeline;

@@ -44,12 +44,14 @@ setup:  # manuell, nicht vom Schedule
 tasks:
   # ── E: Messinfrastruktur ──────────────────────────────────────────────
   - id: E01
+    status: done
     title: DLP-Taxonomie + Mapping ARK ↔ gitleaks-Regel-IDs ↔ TruffleHog-Detektoren ↔ detect-secrets-Plugins ↔ Google-DLP-Infotypes
     type: eval-infra
     deps: []
     accept: research/dlp/entity_map.yaml mit Scopes (shared, ark_only, baseline_only, out_of_scope); Test, dass jede dlp_*-Regel gemappt ist
 
   - id: E02
+    status: done
     title: Secret-sicheres Golden-Format (Generator-Rezepte statt Klartext, Materialisierung zur Testzeit)
     type: eval-infra
     deps: []
@@ -61,6 +63,7 @@ tasks:
       Migration der bestehenden 115 Fälle mit bitgleichem 13_l1_golden_eval-Ergebnis; Doku im benchmark_data/README
 
   - id: E03
+    status: done
     title: Synthetischer Secret-Generator (format- und prüfsummengültige Fake-Werte je Provider, deterministisch per Seed)
     type: eval-infra
     deps: [E01, E02]
@@ -185,17 +188,22 @@ tasks:
     accept: docs/reference/result-schema.md und categories aktualisiert; alte Gruppen unverändert
 
   # ── F: Bestehende Regeln reparieren ───────────────────────────────────
+  # TRIAGE 2026-W42 (ohne Scoreboard: Dev-Probe auf 3,2 MB Repo-Code + technische Hard Negatives)
+  - {id: T01, title: "Token-Ränder für alle Präfix-Regeln: kein Treffer innerhalb von Bezeichnern, Hex-Läufen oder Base64-Blobs (Probe: dlp_btc_wif 10 FP in Cargo.lock-Prüfsummen und sha256-Digests; hf_/npm_/AKIA in CamelCase-Bezeichnern)", type: precision-fix, deps: [K01], accept: "Links-/Rechtsgrenze je Regel (kein [A-Za-z0-9_] davor/danach bzw. Provider-Alphabet), Hard Negatives Cargo.lock/go.sum/Docker-Digest/Bezeichner; Prüfsummen-Validierung bleibt bei F02–F05"}
   - {id: F01, title: "dlp_eth_private_key: nur mit Kontext (private key, privkey, mnemonic, wallet) statt jedem 0x-64-Hex (Tx-/Block-Hash-FP)", type: precision-fix, deps: [K03]}
   - {id: F02, title: "dlp_btc_wif: Base58Check + Versionsbyte (Main-/Testnet, compressed)", type: precision-fix, deps: [K03]}
   - {id: F03, title: "GitHub-Tokens (ghp/gho/ghu/ghs/ghr, github_pat_): exakte Längen + CRC32-Prüfsumme", type: precision-fix, deps: [K03]}
   - {id: F04, title: "npm-Token: Länge + CRC32-Prüfsumme; GitLab: alle dokumentierten Präfixe (Deploy, Runner, Trigger, Feed, OAuth …)", type: recall-fix, deps: [K03]}
   - {id: F05, title: "AWS Access Key ID: exakte 20 Zeichen, Base32-Alphabet, Präfixliste; AWS Secret Key über Struktur-Kontext (credentials-Datei, Terraform, CLI)", type: precision-fix, deps: [K03]}
   - {id: F06, title: "OpenAI (project/svcacct/admin/legacy) und Anthropic (api/admin): Formatmarker und Längen laut Doku; Validator vereinheitlichen", type: precision-fix, deps: [K03]}
+  - {id: T02, title: "Provider-Regeln ohne F-Aufgabe: HuggingFace (hf_, api_org_), Groq (gsk_), Replicate (r8_), Google API-Key (AIza, exakt 39), OAuth ya29., GCP GOCSPX-: Längen/Alphabet laut Quelle statt offenem {20,}", type: precision-fix, deps: [K03, T01], accept: "Formatquelle je Regel in rule_sources.yaml; entity_map-backlog für diese Entitäten auf T02 setzen"}
   - {id: F07, title: "JWT: Header base64url → JSON mit alg/typ; none-Alg kennzeichnen; Abgrenzung zu Supabase/Firebase-Service-JWTs", type: precision-fix, deps: [K03]}
   - {id: F08, title: "PEM-Blöcke: alle Typen (PKCS#8, ENCRYPTED, EC, DSA, OPENSSH, PGP PRIVATE KEY BLOCK, PuTTY PPK) + Body-Base64/DER-Prüfung; Header-only nur mit Body-Nähe", type: precision-fix, deps: [K03]}
   - {id: F09, title: "Slack (Bot/User/App/Config/Refresh) und Discord (Bot-Token: ID-Segment base64 → Snowflake-Ziffern)", type: precision-fix, deps: [K03]}
   - {id: F10, title: "Stripe: sk/rk live vs. test (severity), pk_ ausdrücklich negativ; Webhook-Secret-Länge", type: precision-fix, deps: [K02]}
   - {id: F11, title: "dlp_password_assignment/dlp_generic_credential_assignment: Passwort-Ähnlichkeit (Zeichenklassen, Wörterbuch DE/EN, Entropie) gegen Prosa-FP („Passwort ist falsch“)", type: precision-fix, deps: [K03]}
+  - {id: T03, title: "Generische Zuweisungen: Code-Ausdrücke als Wert ablehnen (Funktionsaufruf, Index/Member-Zugriff, Typannotation string/str/Option<…>/Arc<…>, Pfade, Format-Platzhalter %s, Shell-Variable als Schlüssel $PWD:) — Probe: 17 von 21 CREDENTIAL-Treffern in Repo-Code", type: precision-fix, deps: [F11], accept: "Hard Negatives in Rust/Python/TS/Go/Shell (token: Option<&str>, token = get_token(), password = os.environ[…], docker -v \"$PWD:/work\"); Prosa-FP bleibt F11"}
+  - {id: T04, title: "Quoted Values in dlp_password_assignment/dlp_generic_credential_assignment bis zum schließenden Quote erfassen (Leerzeichen, ; , } im Wert) — heute abgeschnitten (\"blue Kite …\" → blue) oder verpasst (Wert < 4 Zeichen vor ;)", type: recall-fix, deps: [T03], accept: "Exakte Spans für YAML/JSON/TOML/INI mit Quotes und Sonderzeichen; Interim bis K05, das die Extraktion strukturell übernimmt"}
   - {id: F12, title: "dlp_credential_in_url / dlp_signed_url_signature: Paginierungs-/Cursor-/CSRF-Parameter ausschließen, Signatur nur mit Signed-URL-Struktur (X-Amz-*, X-Goog-*, Azure sv/se/sp)", type: precision-fix, deps: [K02]}
   - {id: F13, title: "Bearer/Basic/Cookie/CSRF: Basic-Auth base64 → user:pass dekodieren; Bearer-Werte gegen JWT/Provider vor-attribuieren; Cookie-Namen erweitern (connect.sid, laravel_session, __Host-*)", type: recall-fix, deps: [K03]}
   - {id: F14, title: "Password-Hash: Anker-Pflicht lockern zugunsten Format-Erkennung ($2y$, $argon2id$, $6$, $5$, $1$, $apr1$, pbkdf2_sha256$, scrypt) mit Kontext", type: recall-fix, deps: [K04]}
