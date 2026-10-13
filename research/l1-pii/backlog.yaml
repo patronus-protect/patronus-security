@@ -29,6 +29,7 @@ tasks:
     accept: scripts/l1_presidio/run_presidio.py, gepinnte requirements, beide Profile reproduzierbar
 
   - id: E02
+    status: done
     title: ARK-Runner im selben Vorhersageformat (Python-Bindings), inkl. Score-Feld
     type: eval-infra
     deps: [E01]
