@@ -1,0 +1,21 @@
+{
+  "token_file": ".private/ionos-api-token.txt",
+  "datacenter_name": "ARK CPU Flotte",
+  "coordinator_name": "ark-coordinator-01",
+  "runtime_source_name": "api-1",
+  "cube_target_group_name": "ark-cubes",
+  "coordinator_target_group_name": "ark-coordinator",
+  "alb_name": "ark-alb",
+  "nat_gateway_name": "ark-nat",
+  "new_cube_name": "ark-cube-scale-test",
+  "private_lan_id": 3,
+  "public_lan_id": 7,
+  "ssh_public_key_file": ".ssh/id_ed25519.pub",
+  "origin_hostname": "REPLACE-WITH-ARK-ORIGIN-HOSTNAME",
+  "origin_ca_file": ".private/cloudflare-origin-ca.pem",
+  "l3": {
+    "identity_file": ".ssh/REPLACE-WITH-AWS-SSH-KEY.pem",
+    "known_hosts": ".private/aws-known-hosts",
+    "host_key_alias": "ark-aws-l3-verified"
+  }
+}
