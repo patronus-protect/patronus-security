@@ -8,19 +8,39 @@ carrier ``template`` with ``<<secret:N>>`` placeholders. The generator spec live
 
 * PRNG: SplitMix64 seeded with the recipe seed (unsigned 64 bit).
 * Alphabets are lists of string chunks, concatenated in order.
-* Segments are emitted in order. ``{"lit": s}`` copies ``s``; ``{"alphabet": a, "len": n}``
-  draws ``n`` characters, each ``alphabet[next_u64() % len(alphabet)]``.
+* Segments are emitted in order:
 
-Generated values are synthetic and format-shaped only; they carry no valid provider
-checksum. Checksum-valid fakes are E03 (``dlp_synth`` generators).
+  - ``{"lit": s}`` copies ``s``.
+  - ``{"alphabet": a, "len": n}`` draws ``n`` characters, each
+    ``alphabet[next_u64() % len(alphabet)]``.
+  - ``{"checksum": kind}`` appends a check value computed over the text emitted since
+    the most recent literal segment: ``crc32_base62`` (CRC-32/ISO-HDLC as 6 base62
+    digits ``0-9A-Za-z``, zero-padded; GitHub/npm token layout) or
+    ``iso7064_mod11_10`` (one check digit; German USt-IdNr.).
+  - ``{"encode": enc, "bytes": [parts], "wrap"?: n}`` builds a byte string from parts
+    (``{"hex": s}``, ``{"utf8": s}`` with ASCII ``s``, ``{"random": n}`` drawing
+    ``next_u64() % 256`` per byte, ``{"alphabet": a, "len": n}`` as above) and encodes it
+    as ``hex``, ``base64`` (padded), ``base64_unpadded``, ``base64url`` (unpadded),
+    ``bcrypt64`` (OpenBSD radix-64, unpadded) or ``base58check`` (double SHA-256).
+    ``wrap`` inserts a newline every ``n`` characters (base64 only, PEM bodies).
+
+Base58Check generators start with constant bytes so their length stays fixed. Every
+generator therefore has one length, which ``generator_length`` reports.
+
+Values are synthetic. Generators listed as ``shape_only`` in ``rules.json`` predate E03
+and carry no valid checksum or structure; all others are format-, structure- and
+checksum-valid fakes (``dlp_synth.checks`` verifies them independently).
 """
 
 from __future__ import annotations
 
+import base64
 import copy
 import hashlib
 import json
+import math
 import re
+import zlib
 from functools import lru_cache
 from pathlib import Path
 
@@ -28,6 +48,14 @@ from pathlib import Path
 GENERATORS_PATH = Path(__file__).resolve().parent / "generators.json"
 PLACEHOLDER_RE = re.compile(r"<<secret:(0|[1-9][0-9]*)>>")
 _MASK = (1 << 64) - 1
+BASE62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+CHECKSUM_LENGTHS = {"crc32_base62": 6, "iso7064_mod11_10": 1}
+ENCODINGS = {"hex", "base64", "base64_unpadded", "base64url", "bcrypt64", "base58check"}
+_BCRYPT64 = str.maketrans(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",
+    "./ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789",
+)
 
 
 class RecipeError(ValueError):
@@ -48,18 +76,60 @@ class SplitMix64:
         return z ^ (z >> 31)
 
 
+def _valid_count(value) -> bool:
+    return type(value) is int and value > 0
+
+
+def _valid_part(part, alphabets: dict) -> bool:
+    if not isinstance(part, dict):
+        return False
+    if set(part) == {"hex"}:
+        try:
+            bytes.fromhex(part["hex"])
+        except (TypeError, ValueError):
+            return False
+        return bool(part["hex"])
+    if set(part) == {"utf8"}:
+        return isinstance(part["utf8"], str) and bool(part["utf8"]) and part["utf8"].isascii()
+    if set(part) == {"random"}:
+        return _valid_count(part["random"])
+    return set(part) == {"alphabet", "len"} and part["alphabet"] in alphabets and _valid_count(part["len"])
+
+
+def _valid_segment(segment, alphabets: dict) -> bool:
+    if not isinstance(segment, dict):
+        return False
+    keys = set(segment)
+    if keys == {"lit"}:
+        return isinstance(segment["lit"], str) and bool(segment["lit"]) and segment["lit"].isascii()
+    if keys == {"alphabet", "len"}:
+        return segment["alphabet"] in alphabets and _valid_count(segment["len"])
+    if keys == {"checksum"}:
+        return segment["checksum"] in CHECKSUM_LENGTHS
+    if keys in ({"encode", "bytes"}, {"encode", "bytes", "wrap"}):
+        parts = segment["bytes"]
+        if segment["encode"] not in ENCODINGS or not isinstance(parts, list) or not parts:
+            return False
+        if "wrap" in segment and (segment["encode"] != "base64" or not _valid_count(segment["wrap"])):
+            return False
+        if not all(_valid_part(part, alphabets) for part in parts):
+            return False
+        # Base58Check needs a constant non-zero lead byte for a fixed length.
+        return segment["encode"] != "base58check" or (
+            "hex" in parts[0] and bytes.fromhex(parts[0]["hex"])[0] != 0
+        )
+    return False
+
+
 @lru_cache(maxsize=1)
 def _spec() -> dict:
     spec = json.loads(GENERATORS_PATH.read_text(encoding="utf-8"))
-    if spec.get("version") != 1 or spec.get("prng") != "splitmix64":
+    if spec.get("version") != 2 or spec.get("prng") != "splitmix64":
         raise RecipeError("unsupported generator spec")
     for name, generator in spec["generators"].items():
         for segment in generator["segments"]:
-            if "lit" in segment:
-                if set(segment) != {"lit"} or not segment["lit"].isascii():
-                    raise RecipeError(f"{name}: invalid literal segment")
-            elif set(segment) != {"alphabet", "len"} or segment["alphabet"] not in spec["alphabets"]:
-                raise RecipeError(f"{name}: invalid alphabet segment")
+            if not _valid_segment(segment, spec["alphabets"]):
+                raise RecipeError(f"{name}: invalid segment {segment!r}")
     alphabets = {}
     for name, chunks in spec["alphabets"].items():
         if not isinstance(chunks, list) or not all(isinstance(chunk, str) for chunk in chunks):
@@ -87,29 +157,143 @@ def _generator(name: str) -> dict:
         raise RecipeError(f"unknown generator {name!r}") from None
 
 
+def _byte_length(parts: list[dict]) -> int:
+    total = 0
+    for part in parts:
+        if "hex" in part:
+            total += len(part["hex"]) // 2
+        elif "utf8" in part:
+            total += len(part["utf8"])
+        elif "random" in part:
+            total += part["random"]
+        else:
+            total += part["len"]
+    return total
+
+
+def _encoded_length(segment: dict) -> int:
+    size = _byte_length(segment["bytes"])
+    encoding = segment["encode"]
+    if encoding == "hex":
+        return 2 * size
+    if encoding == "base64":
+        length = 4 * math.ceil(size / 3)
+        return length + (length - 1) // segment["wrap"] if "wrap" in segment else length
+    if encoding == "base58check":
+        # Constant leading bytes keep the value in one base58 digit range.
+        return math.ceil((size + 4) * 8 / math.log2(58))
+    return math.ceil(size * 4 / 3)
+
+
+def _segment_length(segment: dict) -> int:
+    if "lit" in segment:
+        return len(segment["lit"])
+    if "alphabet" in segment:
+        return segment["len"]
+    if "checksum" in segment:
+        return CHECKSUM_LENGTHS[segment["checksum"]]
+    return _encoded_length(segment)
+
+
 def generator_length(name: str) -> int:
-    return sum(
-        len(segment["lit"]) if "lit" in segment else segment["len"]
+    return sum(_segment_length(segment) for segment in _generator(name)["segments"])
+
+
+def is_random(name: str) -> bool:
+    return any(
+        "alphabet" in segment
+        or any("random" in part or "alphabet" in part for part in segment.get("bytes", []))
         for segment in _generator(name)["segments"]
     )
 
 
-def is_random(name: str) -> bool:
-    return any("alphabet" in segment for segment in _generator(name)["segments"])
+def crc32_base62(text: str) -> str:
+    checksum = zlib.crc32(text.encode("ascii"))
+    digits = ""
+    while checksum:
+        checksum, remainder = divmod(checksum, 62)
+        digits = BASE62[remainder] + digits
+    return digits.rjust(6, "0")
 
 
-def generate(name: str, seed: int) -> str:
+def iso7064_mod11_10(digits: str) -> str:
+    product = 10
+    for digit in digits:
+        total = (int(digit) + product) % 10 or 10
+        product = 2 * total % 11
+    return str((11 - product) % 10)
+
+
+def base58check(payload: bytes) -> str:
+    raw = payload + hashlib.sha256(hashlib.sha256(payload).digest()).digest()[:4]
+    number = int.from_bytes(raw, "big")
+    encoded = ""
+    while number:
+        number, remainder = divmod(number, 58)
+        encoded = BASE58[remainder] + encoded
+    return "1" * (len(raw) - len(raw.lstrip(b"\0"))) + encoded
+
+
+def _draw(rng: SplitMix64, alphabet: str, count: int) -> str:
+    return "".join(alphabet[rng.next_u64() % len(alphabet)] for _ in range(count))
+
+
+def _encode(segment: dict, rng: SplitMix64, alphabets: dict) -> str:
+    raw = bytearray()
+    for part in segment["bytes"]:
+        if "hex" in part:
+            raw += bytes.fromhex(part["hex"])
+        elif "utf8" in part:
+            raw += part["utf8"].encode("ascii")
+        elif "random" in part:
+            raw += bytes(rng.next_u64() % 256 for _ in range(part["random"]))
+        else:
+            raw += _draw(rng, alphabets[part["alphabet"]], part["len"]).encode("ascii")
+    raw = bytes(raw)
+    encoding = segment["encode"]
+    if encoding == "hex":
+        return raw.hex()
+    if encoding == "base58check":
+        return base58check(raw)
+    if encoding == "base64url":
+        return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+    encoded = base64.b64encode(raw).decode("ascii")
+    if encoding == "base64_unpadded":
+        return encoded.rstrip("=")
+    if encoding == "bcrypt64":
+        return encoded.rstrip("=").translate(_BCRYPT64)
+    wrap = segment.get("wrap")
+    if wrap:
+        encoded = "\n".join(encoded[start : start + wrap] for start in range(0, len(encoded), wrap))
+    return encoded
+
+
+def generate_segments(name: str, seed: int) -> list[str]:
+    """Return the generated value split by segment (``"".join`` gives ``generate``)."""
     generator = _generator(name)
     alphabets = _spec()["alphabets"]
     rng = SplitMix64(seed)
-    parts = []
+    parts: list[str] = []
+    since_literal = ""
     for segment in generator["segments"]:
         if "lit" in segment:
-            parts.append(segment["lit"])
+            part = segment["lit"]
+        elif "alphabet" in segment:
+            part = _draw(rng, alphabets[segment["alphabet"]], segment["len"])
+        elif "checksum" in segment:
+            if segment["checksum"] == "crc32_base62":
+                part = crc32_base62(since_literal)
+            else:
+                part = iso7064_mod11_10(since_literal)
         else:
-            alphabet = alphabets[segment["alphabet"]]
-            parts.extend(alphabet[rng.next_u64() % len(alphabet)] for _ in range(segment["len"]))
-    return "".join(parts)
+            part = _encode(segment, rng, alphabets)
+        since_literal = "" if "lit" in segment else since_literal + part
+        parts.append(part)
+    return parts
+
+
+def generate(name: str, seed: int) -> str:
+    return "".join(generate_segments(name, seed))
 
 
 def materialize(template: str, secrets: list[dict]) -> tuple[str, list[tuple[int, int]]]:

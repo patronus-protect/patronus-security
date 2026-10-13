@@ -100,18 +100,14 @@ class GeneratorTests(unittest.TestCase):
         generators = recipes.load_generators()
         alphabets = recipes.load_alphabets()
         for name, spec in generators.items():
-            value = recipes.generate(name, 11)
-            offset = 0
-            for segment in spec["segments"]:
+            parts = recipes.generate_segments(name, 11)
+            self.assertEqual(len(parts), len(spec["segments"]), name)
+            for segment, part in zip(spec["segments"], parts):
                 if "lit" in segment:
-                    self.assertEqual(value[offset : offset + len(segment["lit"])], segment["lit"], name)
-                    offset += len(segment["lit"])
-                else:
-                    alphabet = alphabets[segment["alphabet"]]
-                    chunk = value[offset : offset + segment["len"]]
-                    self.assertTrue(set(chunk) <= set(alphabet), name)
-                    offset += segment["len"]
-            self.assertEqual(offset, len(value), name)
+                    self.assertEqual(part, segment["lit"], name)
+                elif "alphabet" in segment:
+                    self.assertEqual(len(part), segment["len"], name)
+                    self.assertTrue(set(part) <= set(alphabets[segment["alphabet"]]), name)
 
 
 class MaterializeTests(unittest.TestCase):
