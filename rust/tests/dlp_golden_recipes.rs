@@ -184,10 +184,12 @@ fn checked_in_goldens_and_generator_spec_have_no_default_dlp_finding() {
         None,
         false,
     );
-    let spec_path = repo_root().join("python/patronus_ark/dlp_synth/generators.json");
-    let spec = std::fs::read_to_string(&spec_path).unwrap();
+    let synth = repo_root().join("python/patronus_ark/dlp_synth");
+    let spec = std::fs::read_to_string(synth.join("generators.json")).unwrap();
+    let rules = std::fs::read_to_string(synth.join("rules.json")).unwrap();
     let raw = std::fs::read_to_string(golden_path()).unwrap();
-    for (number, line) in std::iter::once(spec.as_str())
+    for (number, line) in [spec.as_str(), rules.as_str()]
+        .into_iter()
         .chain(raw.lines())
         .enumerate()
     {
@@ -197,7 +199,7 @@ fn checked_in_goldens_and_generator_spec_have_no_default_dlp_finding() {
             .flat_map(|result| result.evidence_spans)
             .map(|span| (span.label, span.start_char, span.end_char))
             .collect::<Vec<_>>();
-        // Input 0 is the generator spec, input n is dlp_l1.jsonl line n.
+        // Inputs 0 and 1 are generators.json and rules.json, input n is line n - 1.
         assert!(spans.is_empty(), "input {number}: {spans:?}");
     }
 }
