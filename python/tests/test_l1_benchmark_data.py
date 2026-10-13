@@ -4,6 +4,7 @@ import unittest
 from collections import Counter
 
 from patronus_ark import benchmark
+from patronus_ark.dlp_synth import recipes
 
 
 PII_LABELS = {
@@ -95,6 +96,7 @@ class L1BenchmarkDataTests(unittest.TestCase):
             rows = load(name)
             self.assertEqual(len({row["id"] for row in rows}), len(rows))
             for row in rows:
+                materialized = recipes.materialize_row(row)
                 self.assertEqual(row["suite"], name, row["id"])
                 self.assertIn(row["language"], {"de", "en"}, row["id"])
                 self.assertEqual(row["span_unit"], "unicode_code_point", row["id"])
@@ -104,8 +106,8 @@ class L1BenchmarkDataTests(unittest.TestCase):
                     entity = row["entities"][0]
                     self.assertEqual(entity["label"], row["target_label"], row["id"])
                     self.assertEqual(
-                        row["text"][entity["start"] : entity["end"]],
-                        entity["text"],
+                        materialized["text"][entity["start"] : entity["end"]],
+                        materialized["entities"][0]["text"],
                         row["id"],
                     )
                 else:
