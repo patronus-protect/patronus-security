@@ -145,6 +145,15 @@ tasks:
   - {id: F15, title: "Führerschein DE + US-Bundesstaaten mit Kontext", type: recall-fix, deps: [K03]}
   - {id: F16, title: "Kfz-Kennzeichen DE: gültige Unterscheidungszeichen-Liste", type: precision-fix, deps: [K02]}
   - {id: F17, title: "CVV/Ablaufdatum: Recall über Struktur, Kopplung an PAN beibehalten", type: recall-fix, deps: [K04, F02]}
+  - id: T01
+    title: "FP: reine Ziffern-IDs in URL-Pfaden (GitHub-Actions /actions/runs/<id>/job/<id>) als L1-PII erkannt"
+    type: precision-fix
+    deps: []
+    accept: >-
+      Beobachtet 2026-10-13 im Runtime-Hook bei `gh pr checks`: 12-stellige Job-ID am Ende einer
+      Actions-URL als pii/l1 (confidence 1) geschwärzt, gleich geformte IDs derselben Ausgabe nicht.
+      Zuerst auslösende Regel bestimmen; Hard Negatives für Ziffern-Segmente in URL-Pfaden (Actions-Runs/Jobs,
+      Issue-/PR-Nummern, numerische REST-IDs) DE + EN; Ziffernfolge ohne PII-Kontext in URL-Pfad → kein Treffer
 
   # ── B: DACH/EU-Tiefe ──────────────────────────────────────────────────
   - {id: B01, title: "USt-IdNr. Teil 1: DE, AT, CH, FR, NL, BE, IT, ES mit Prüfsummen", type: new-entity, deps: [K05]}
