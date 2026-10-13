@@ -51,6 +51,7 @@ tasks:
       schreibt DIR/.ready); das Gate führt es außerhalb der Sandbox aus, der Agent sieht nur dev
 
   - id: E05
+    status: done
     title: Synthetisches DE/EU-Goldset (Brief, Formular, Rechnung, Arztbrief, JSON, CSV, Ticket)
     type: eval-infra
     deps: [E03]
