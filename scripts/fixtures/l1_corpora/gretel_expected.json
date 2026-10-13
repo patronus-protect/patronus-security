@@ -1,0 +1,174 @@
+{
+ "gretel_v1_test.parquet": [
+  {
+   "document_type": "Wire Transfer Form",
+   "expanded_type": "Wire Transfer Form v0.0",
+   "language": "English",
+   "generated_text": "Send the payment to IBAN DE89370400440532013000 and confirm via ada@example.test.",
+   "pii_spans": "[{\"start\": 25, \"end\": 47, \"label\": \"IBAN\"}, {\"start\": 64, \"end\": 80, \"label\": \"EMAIL\"}]"
+  },
+  {
+   "document_type": "Customer Support Ticket",
+   "expanded_type": "Customer Support Ticket v0.1",
+   "language": "English",
+   "generated_text": "User jmueller reported a lockout; callback number +49 30 1234567.",
+   "pii_spans": "[{\"start\": 5, \"end\": 13, \"label\": \"user_name\"}, {\"start\": 50, \"end\": 64, \"label\": \"phone_number\"}]"
+  },
+  {
+   "document_type": "Loan Application",
+   "expanded_type": "Loan Application v0.2",
+   "language": "English",
+   "generated_text": "Applicant SSN 457-55-5462, contact support@bank.example, café account ok.",
+   "pii_spans": "[{\"start\": 14, \"end\": 25, \"label\": \"ssn\"}, {\"start\": 35, \"end\": 55, \"label\": \"EMAIL\"}]"
+  },
+  {
+   "document_type": "Überweisungsauftrag",
+   "expanded_type": "Überweisungsauftrag v0.3",
+   "language": "German",
+   "generated_text": "Bitte überweisen Sie auf IBAN DE89370400440532013000; Rückfragen an ada@example.test.",
+   "pii_spans": "[{\"start\": 30, \"end\": 52, \"label\": \"IBAN\"}, {\"start\": 68, \"end\": 84, \"label\": \"EMAIL\"}]"
+  },
+  {
+   "document_type": "Kundenanfrage",
+   "expanded_type": "Kundenanfrage v0.0",
+   "language": "German",
+   "generated_text": "Kundin erreichbar unter +49 30 1234567, Benutzer jmueller – danke!",
+   "pii_spans": "[{\"start\": 24, \"end\": 38, \"label\": \"phone_number\"}, {\"start\": 49, \"end\": 57, \"label\": \"user_name\"}]"
+  },
+  {
+   "document_type": "Kreditantrag",
+   "expanded_type": "Kreditantrag v0.1",
+   "language": "German",
+   "generated_text": "Antragsteller: Jörg Müller, Telefon (030) 765 4321, Grüße 😀.",
+   "pii_spans": "[{\"start\": 36, \"end\": 50, \"label\": \"phone_number\"}]"
+  },
+  {
+   "document_type": "Wire Transfer Form",
+   "expanded_type": "Wire Transfer Form v0.2",
+   "language": "English",
+   "generated_text": "Send the payment to IBAN DE89370400440532013000 and confirm via ada@example.test.",
+   "pii_spans": "[{\"start\": 25, \"end\": 47, \"label\": \"IBAN\"}, {\"start\": 64, \"end\": 80, \"label\": \"EMAIL\"}]"
+  },
+  {
+   "document_type": "Customer Support Ticket",
+   "expanded_type": "Customer Support Ticket v0.3",
+   "language": "English",
+   "generated_text": "User jmueller reported a lockout; callback number +49 30 1234567.",
+   "pii_spans": "[{\"start\": 5, \"end\": 13, \"label\": \"user_name\"}, {\"start\": 50, \"end\": 64, \"label\": \"phone_number\"}]"
+  },
+  {
+   "document_type": "Loan Application",
+   "expanded_type": "Loan Application v0.0",
+   "language": "English",
+   "generated_text": "Applicant SSN 457-55-5462, contact support@bank.example, café account ok.",
+   "pii_spans": "[{\"start\": 14, \"end\": 25, \"label\": \"ssn\"}, {\"start\": 35, \"end\": 55, \"label\": \"EMAIL\"}]"
+  },
+  {
+   "document_type": "Überweisungsauftrag",
+   "expanded_type": "Überweisungsauftrag v0.1",
+   "language": "German",
+   "generated_text": "Bitte überweisen Sie auf IBAN DE89370400440532013000; Rückfragen an ada@example.test.",
+   "pii_spans": "[{\"start\": 30, \"end\": 52, \"label\": \"IBAN\"}, {\"start\": 68, \"end\": 84, \"label\": \"EMAIL\"}]"
+  },
+  {
+   "document_type": "Kundenanfrage",
+   "expanded_type": "Kundenanfrage v0.2",
+   "language": "German",
+   "generated_text": "Kundin erreichbar unter +49 30 1234567, Benutzer jmueller – danke!",
+   "pii_spans": "[{\"start\": 24, \"end\": 38, \"label\": \"phone_number\"}, {\"start\": 49, \"end\": 57, \"label\": \"user_name\"}]"
+  },
+  {
+   "document_type": "Kreditantrag",
+   "expanded_type": "Kreditantrag v0.3",
+   "language": "German",
+   "generated_text": "Antragsteller: Jörg Müller, Telefon (030) 765 4321, Grüße 😀.",
+   "pii_spans": "[{\"start\": 36, \"end\": 50, \"label\": \"phone_number\"}]"
+  }
+ ],
+ "gretel_v2_test.parquet": [
+  {
+   "document_type": "Wire Transfer Form",
+   "expanded_type": "Wire Transfer Form v1.0",
+   "language": "English",
+   "generated_text": "Send the payment to IBAN GB82WEST12345698765432 and confirm via jo.mueller@example.test.",
+   "pii_spans": "[{\"start\": 25, \"end\": 47, \"label\": \"IBAN\"}, {\"start\": 64, \"end\": 87, \"label\": \"EMAIL\"}]"
+  },
+  {
+   "document_type": "Customer Support Ticket",
+   "expanded_type": "Customer Support Ticket v1.1",
+   "language": "English",
+   "generated_text": "User x9-admin reported a lockout; callback number (030) 765 4321.",
+   "pii_spans": "[{\"start\": 5, \"end\": 13, \"label\": \"user_name\"}, {\"start\": 50, \"end\": 64, \"label\": \"phone_number\"}]"
+  },
+  {
+   "document_type": "Loan Application",
+   "expanded_type": "Loan Application v1.2",
+   "language": "English",
+   "generated_text": "Applicant SSN 078-05-1120, contact ada@example.test, café account ok.",
+   "pii_spans": "[{\"start\": 14, \"end\": 25, \"label\": \"ssn\"}, {\"start\": 35, \"end\": 51, \"label\": \"EMAIL\"}]"
+  },
+  {
+   "document_type": null,
+   "expanded_type": "Überweisungsauftrag v1.3",
+   "language": "German",
+   "generated_text": "Bitte überweisen Sie auf IBAN GB82WEST12345698765432; Rückfragen an jo.mueller@example.test.",
+   "pii_spans": "[{\"start\": 30, \"end\": 52, \"label\": \"IBAN\"}, {\"start\": 68, \"end\": 91, \"label\": \"EMAIL\"}]"
+  },
+  {
+   "document_type": "Kundenanfrage",
+   "expanded_type": "Kundenanfrage v1.0",
+   "language": "German",
+   "generated_text": "Kundin erreichbar unter (030) 765 4321, Benutzer x9-admin – danke!",
+   "pii_spans": "[{\"start\": 24, \"end\": 38, \"label\": \"phone_number\"}, {\"start\": 49, \"end\": 57, \"label\": \"user_name\"}]"
+  },
+  {
+   "document_type": "Kreditantrag",
+   "expanded_type": "Kreditantrag v1.1",
+   "language": "German",
+   "generated_text": "Antragsteller: Jörg Müller, Telefon +1 415 555 0100, Grüße 😀.",
+   "pii_spans": "[{\"start\": 36, \"end\": 51, \"label\": \"phone_number\"}]"
+  },
+  {
+   "document_type": "Wire Transfer Form",
+   "expanded_type": "Wire Transfer Form v1.2",
+   "language": "English",
+   "generated_text": "Send the payment to IBAN GB82WEST12345698765432 and confirm via jo.mueller@example.test.",
+   "pii_spans": "[{\"start\": 25, \"end\": 47, \"label\": \"IBAN\"}, {\"start\": 64, \"end\": 87, \"label\": \"EMAIL\"}]"
+  },
+  {
+   "document_type": "Customer Support Ticket",
+   "expanded_type": "Customer Support Ticket v1.3",
+   "language": "English",
+   "generated_text": "User x9-admin reported a lockout; callback number (030) 765 4321.",
+   "pii_spans": "[{\"start\": 5, \"end\": 13, \"label\": \"user_name\"}, {\"start\": 50, \"end\": 64, \"label\": \"phone_number\"}]"
+  },
+  {
+   "document_type": "Loan Application",
+   "expanded_type": "Loan Application v1.0",
+   "language": "English",
+   "generated_text": "Applicant SSN 078-05-1120, contact ada@example.test, café account ok.",
+   "pii_spans": "[{\"start\": 14, \"end\": 25, \"label\": \"ssn\"}, {\"start\": 35, \"end\": 51, \"label\": \"EMAIL\"}]"
+  },
+  {
+   "document_type": "Überweisungsauftrag",
+   "expanded_type": "Überweisungsauftrag v1.1",
+   "language": "German",
+   "generated_text": "Bitte überweisen Sie auf IBAN GB82WEST12345698765432; Rückfragen an jo.mueller@example.test.",
+   "pii_spans": "[{\"start\": 30, \"end\": 52, \"label\": \"IBAN\"}, {\"start\": 68, \"end\": 91, \"label\": \"EMAIL\"}]"
+  },
+  {
+   "document_type": "Kundenanfrage",
+   "expanded_type": "Kundenanfrage v1.2",
+   "language": "German",
+   "generated_text": "Kundin erreichbar unter (030) 765 4321, Benutzer x9-admin – danke!",
+   "pii_spans": "[{\"start\": 24, \"end\": 38, \"label\": \"phone_number\"}, {\"start\": 49, \"end\": 57, \"label\": \"user_name\"}]"
+  },
+  {
+   "document_type": "Kreditantrag",
+   "expanded_type": "Kreditantrag v1.3",
+   "language": "German",
+   "generated_text": "Antragsteller: Jörg Müller, Telefon +1 415 555 0100, Grüße 😀.",
+   "pii_spans": "[{\"start\": 36, \"end\": 51, \"label\": \"phone_number\"}]"
+  }
+ ]
+}

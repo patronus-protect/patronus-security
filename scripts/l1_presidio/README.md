@@ -75,6 +75,33 @@ Teilmengen bleiben, damit sich Vorhersagen bestehender Korpora nicht ändern; da
 soll die Scopes aus `entity_map.yaml` lesen. Neue ARK-Labels brauchen einen Eintrag, sonst ist
 `scripts/tests/test_l1_entity_map.py` rot.
 
-Tests: `scripts/tests/test_l1_presidio_runner.py`, `scripts/tests/test_l1_ark_runner.py`,
+## Korpora und Dev/Holdout-Split
+
+`prepare_corpora.py` lädt Gretel Finance (alle sechs Test-Shards), OpenPII Nano und TAB (ECHR-Test)
+in den Revisionen des `external_pii`-Manifests, prüft jede Datei gegen ihr SHA-256, normalisiert mit
+`external_pii_eval` und teilt gruppenweise: Eine Gruppe (Gretel `expanded_type`, sonst das Dokument)
+geht in den Holdout, wenn `sha256(seed:corpus:group)` unter dem Anteil 0,6 liegt. Seed
+(`ark-l1-e04-split-v1`) und Anteil sind Konstanten; der Split hängt nur von den gepinnten Quellen ab.
+
+```bash
+python3 scripts/l1_presidio/prepare_corpora.py --dev-out DIR --holdout-out DIR   # [--sources DIR] [--offline]
+python3 scripts/l1_presidio/prepare_corpora.py --check DIR
+```
+
+Jedes Zielverzeichnis enthält `<corpus>.jsonl` (Eingabe für `run_presidio.py`, `run_ark.py` und
+`external_pii_eval evaluate`), `manifest.json` (Quellen mit URL und SHA-256, Zeilen, Gruppen,
+Sprachen, Entitäten, SHA-256 jeder Datei) und zuletzt `.ready` mit dem SHA-256 des Manifests. Ein
+Verzeichnis mit `.ready` ist eingefroren: Ein neuer Lauf muss es Byte für Byte reproduzieren, sonst
+schreibt er nichts und endet mit Exit 1 (`--force` ersetzt es). Rohdaten landen im Cache
+`--sources` (Standard `HOLDOUT/.sources`), nie im Dev-Verzeichnis; stdout nennt nur Dev-Zahlen.
+
+Das Gate führt den Lauf einmal außerhalb der Agent-Sandbox aus (`~/ark-l1/data/dev`,
+`~/ark-l1/holdout`); Agenten sehen nur Dev unter `$ARK_L1_DEV_DATA`. Nur Standardbibliothek:
+Die Gretel-Parquet-Dateien liest ein minimaler Reader im Skript (Snappy, Dictionary/Plain,
+Page v1/v2), weil das Presidio-Venv kein pyarrow hat. Er ist gegen pyarrow auf den gepinnten Shards
+geprüft (`ARK_L1_CORPUS_SOURCES=<--sources> pytest scripts/tests/test_l1_prepare_corpora.py`);
+die synthetischen Test-Shards erzeugt `scripts/fixtures/l1_corpora/make_gretel_fixture.py`.
+
+Tests: `scripts/tests/test_l1_prepare_corpora.py`, `scripts/tests/test_l1_presidio_runner.py`, `scripts/tests/test_l1_ark_runner.py`,
 `scripts/tests/test_l1_entity_map.py`. Die Tests gegen echtes Presidio laufen nur,
 wenn `presidio_analyzer` installiert ist (z. B. in `~/ark-l1/presidio-venv`).
