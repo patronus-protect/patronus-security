@@ -42,6 +42,7 @@ tasks:
     accept: research/l1-pii/entity_map.yaml, Test, dass jedes ARK-Label gemappt ist
 
   - id: E04
+    status: done
     title: Korpora laden + Dev/Holdout-Split einfrieren (Gretel Finance, OpenPII Nano, TAB)
     type: eval-infra
     deps: [E03]
