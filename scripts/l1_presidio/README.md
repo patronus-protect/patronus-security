@@ -102,6 +102,52 @@ Page v1/v2), weil das Presidio-Venv kein pyarrow hat. Er ist gegen pyarrow auf d
 geprüft (`ARK_L1_CORPUS_SOURCES=<--sources> pytest scripts/tests/test_l1_prepare_corpora.py`);
 die synthetischen Test-Shards erzeugt `scripts/fixtures/l1_corpora/make_gretel_fixture.py`.
 
-Tests: `scripts/tests/test_l1_prepare_corpora.py`, `scripts/tests/test_l1_presidio_runner.py`, `scripts/tests/test_l1_ark_runner.py`,
+## Synthetisches DE/EU-Goldset
+
+`synth_goldset.py` erzeugt ein synthetisches Goldset mit sieben Dokumenttypen (Brief, Formular,
+Rechnung, Arztbrief, JSON, CSV, Support-Ticket) auf Deutsch und Englisch. Es deckt jede Benchmark-ID
+aus `entity_map.yaml` ab, über alle vier Scopes (je Split und Sprache mindestens 5 Spans). Werte
+mit Prüfziffer sind gültig erzeugt: IBAN, Luhn, Steuer-ID, USt-IdNr., KVNR, RVNR, LANR,
+ICAO-Prüfziffer, Codice Fiscale, PESEL, Aadhaar und weitere. Keiner von ihnen fällt durch einen
+Presidio-Validator. Gedruckte Formen, die Presidios Regexe nicht kennen (Steuer-ID in Gruppen,
+RVNR mit Leerzeichen, `IT`-Präfix, Thai-ID mit Bindestrichen), sind Absicht. Positive meiden
+reservierte Platzhalter (RFC-2606/6761-Domains, NANP 555-01xx, Dokumentations-IPs), solange T01
+offen ist.
+
+```bash
+python3 scripts/l1_presidio/synth_goldset.py --dev-out DIR                       # öffentlicher Dev-Seed
+python3 scripts/l1_presidio/synth_goldset.py --dev-out DIR --holdout-out DIR     # [--holdout-seed-file F] [--force]
+python3 scripts/l1_presidio/synth_goldset.py --check DIR
+```
+
+Zeilen folgen dem `external_pii_eval`-Schema (`entities` mit `start`/`end` in Code-Points, Korpus
+`ark-synthetic-de-eu`, eine Gruppe je Dokument). Dazu kommen zwei Felder:
+
+- `doc_type`: der Dokumenttyp.
+- `hard_negatives`: Spans von Doppelgängern, die kein Detektor melden darf, z. B. Rechnungs-,
+  Bestell- und Ticketnummern, Beträge, ICD-10, PZN, Versionen, UUIDs, Commit-Hashes,
+  Gläubiger-IDs und Werte mit falscher Prüfziffer.
+
+Die Zeilen sind direkt Eingabe für `run_presidio.py`, `run_ark.py` und `external_pii_eval evaluate`.
+
+Dev und Holdout haben getrennte Seeds:
+
+- **Dev:** Der Seed `DEV_SEED` ist öffentlich.
+- **Holdout:** Der Seed ist geheim und steht in einer Datei (Standard `HOLDOUT/.seed`, Modus 0600).
+  Fehlt sie, wird sie beim ersten Lauf aus `secrets` angelegt. Das Holdout-Manifest nennt nur ihren
+  SHA-256.
+
+Die Erzeugung hängt nur von Seed, Split und `GENERATOR_VERSION` ab. Ein SHA-256-Zählerstrom ersetzt
+`random`, das Ergebnis hängt also nicht von der Python-Version ab. Der Test pinnt die Dev-Ausgabe je
+Generator-Version.
+
+Ausgabeverzeichnisse werden wie bei `prepare_corpora.py` eingefroren
+(`ark-synthetic-de-eu.jsonl`, `manifest.json`, `.ready`). Ein neuer Lauf muss sie Byte für Byte
+reproduzieren, sonst endet er mit Exit 1; `--force` ersetzt sie. Das Gate erzeugt beide Splits
+einmalig nach `~/ark-l1/data/dev/synthetic` und `~/ark-l1/holdout/synthetic`, solange dort noch kein
+`.ready` liegt. Später ändert ein Agent-Branch den eingefrorenen Holdout also nicht mehr. Ein neu
+eingefrorener Holdout nach einer Generator-Änderung ist ein bewusster Handgriff (`--force`).
+
+Tests: `scripts/tests/test_l1_synth_goldset.py`, `scripts/tests/test_l1_prepare_corpora.py`, `scripts/tests/test_l1_presidio_runner.py`, `scripts/tests/test_l1_ark_runner.py`,
 `scripts/tests/test_l1_entity_map.py`. Die Tests gegen echtes Presidio laufen nur,
 wenn `presidio_analyzer` installiert ist (z. B. in `~/ark-l1/presidio-venv`).
