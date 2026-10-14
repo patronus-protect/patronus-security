@@ -349,7 +349,8 @@ def test_prepare_writes_both_splits_with_manifest_license_and_sha256(tmp_path, f
 
     laws = json.loads((dev / "manifest.json").read_text())["sources"]
     [git_entry] = [entry for entry in laws if entry["type"] == "git"]
-    assert git_entry["commit"] == fixture_sources[0]["commit"] and git_entry["license_file"] == "LICENSE"
+    laws_source = next(source for source in fixture_sources if source["id"] == "laws-dev")
+    assert git_entry["commit"] == laws_source["commit"] and git_entry["license_file"] == "LICENSE"
     [law] = read_jsonl(dev / "laws-dev.jsonl")
     assert law["id"] == "laws-dev:a/bspg/index.md" and law["path"] == "a/bspg/index.md"
     assert law["text"].startswith("# Beispielgesetz (BspG)") and "layout:" not in law["text"]
@@ -471,8 +472,10 @@ def test_git_source_fetches_only_selected_blobs(tmp_path):
     assert manifest_entry["license_file"] == "LICENSE.md"
     git_dir = tmp_path / "cache" / "guides" / "files.git"
     big = run_git(upstream, "rev-parse", f"{commit}:assets/big0.txt")
-    missing = subprocess.run(["git", "--git-dir", str(git_dir), "cat-file", "-e", big], env=MODULE.GIT_ENV, capture_output=True)
-    assert missing.returncode != 0  # never downloaded
+    present = MODULE.git(["cat-file", "--batch-all-objects", "--batch-check=%(objectname)"], git_dir).decode().split()
+    assert big not in present and len(present) == 7  # commit, 3 trees, license and the two selected blobs
+    lazy = subprocess.run(["git", "--git-dir", str(git_dir), "cat-file", "-e", big], env=MODULE.GIT_ENV, capture_output=True)
+    assert lazy.returncode != 0  # no promisor remote left: missing blobs are never fetched lazily
 
 
 def test_mediawiki_revision_with_wrong_title_or_missing_revision_fails(tmp_path, wiki):

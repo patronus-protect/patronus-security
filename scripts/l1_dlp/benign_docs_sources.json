@@ -1,0 +1,1153 @@
+{
+  "schema": "ark-dlp-benign-docs-sources-v1",
+  "sources": [
+    {
+      "id": "dewiki-dev",
+      "type": "mediawiki",
+      "site": "https://de.wikipedia.org",
+      "license": "CC-BY-SA-4.0",
+      "lang": "de",
+      "genre": "prose",
+      "split": "dev",
+      "note": "Wikipedia-Artikel (Orte, Unternehmen, Geschichte, Wissenschaft, Arbeits-/Wirtschaftsrecht)",
+      "pages": [
+        {
+          "title": "Arbeitsrecht (Deutschland)",
+          "revid": 263316965
+        },
+        {
+          "title": "Bayer AG",
+          "revid": 271024872
+        },
+        {
+          "title": "Berliner Mauer",
+          "revid": 271026208
+        },
+        {
+          "title": "Betriebsrat",
+          "revid": 270851968
+        },
+        {
+          "title": "Bodensee",
+          "revid": 271291379
+        },
+        {
+          "title": "Bundesagentur für Arbeit",
+          "revid": 270542017
+        },
+        {
+          "title": "Bundestagswahl 2021",
+          "revid": 270812908
+        },
+        {
+          "title": "Bundesverfassungsgericht",
+          "revid": 271332005
+        },
+        {
+          "title": "Datenschutz-Grundverordnung",
+          "revid": 271202983
+        },
+        {
+          "title": "Deutsche Bahn",
+          "revid": 271331637
+        },
+        {
+          "title": "Deutsche Mark",
+          "revid": 271328028
+        },
+        {
+          "title": "Energiewende",
+          "revid": 271282895
+        },
+        {
+          "title": "Euro",
+          "revid": 271081299
+        },
+        {
+          "title": "Europäische Union",
+          "revid": 270598343
+        },
+        {
+          "title": "Fußball-Bundesliga",
+          "revid": 271209112
+        },
+        {
+          "title": "Hamburg",
+          "revid": 271329956
+        },
+        {
+          "title": "Inflation",
+          "revid": 271311843
+        },
+        {
+          "title": "Johann Wolfgang von Goethe",
+          "revid": 270326350
+        },
+        {
+          "title": "Kölner Dom",
+          "revid": 271200893
+        },
+        {
+          "title": "Ludwig van Beethoven",
+          "revid": 271266280
+        },
+        {
+          "title": "Lufthansa Group",
+          "revid": 270939710
+        },
+        {
+          "title": "Mittelstand",
+          "revid": 270888475
+        },
+        {
+          "title": "Oktoberfest",
+          "revid": 271138774
+        },
+        {
+          "title": "Photosynthese",
+          "revid": 268891481
+        },
+        {
+          "title": "Rhein",
+          "revid": 270983910
+        },
+        {
+          "title": "SAP",
+          "revid": 271145334
+        },
+        {
+          "title": "Schwarzwald",
+          "revid": 271103290
+        },
+        {
+          "title": "Siemens",
+          "revid": 270957926
+        },
+        {
+          "title": "Volkswagen",
+          "revid": 271180637
+        }
+      ],
+      "sha256": "3bf5d9f05ee5de74ca112432351182fd715396c40ec52d8ae38bfd074969fd54"
+    },
+    {
+      "id": "enwiki-dev",
+      "type": "mediawiki",
+      "site": "https://en.wikipedia.org",
+      "license": "CC-BY-SA-4.0",
+      "lang": "en",
+      "genre": "prose",
+      "split": "dev",
+      "note": "Wikipedia articles (places, companies, history, science, employment and business topics)",
+      "pages": [
+        {
+          "title": "Annual report",
+          "revid": 1369473190
+        },
+        {
+          "title": "Apple Inc.",
+          "revid": 1380049602
+        },
+        {
+          "title": "Boeing",
+          "revid": 1380078291
+        },
+        {
+          "title": "Climate change",
+          "revid": 1377826917
+        },
+        {
+          "title": "Coffee",
+          "revid": 1371799424
+        },
+        {
+          "title": "Employment contract",
+          "revid": 1364817621
+        },
+        {
+          "title": "European Union",
+          "revid": 1380130103
+        },
+        {
+          "title": "Federal Reserve",
+          "revid": 1379786656
+        },
+        {
+          "title": "General Data Protection Regulation",
+          "revid": 1370738186
+        },
+        {
+          "title": "Great Barrier Reef",
+          "revid": 1375964325
+        },
+        {
+          "title": "Human resources",
+          "revid": 1379784592
+        },
+        {
+          "title": "Industrial Revolution",
+          "revid": 1379294769
+        },
+        {
+          "title": "Inflation",
+          "revid": 1380085884
+        },
+        {
+          "title": "Insider trading",
+          "revid": 1375543267
+        },
+        {
+          "title": "Isaac Newton",
+          "revid": 1379624142
+        },
+        {
+          "title": "Jazz",
+          "revid": 1380237943
+        },
+        {
+          "title": "London",
+          "revid": 1379497099
+        },
+        {
+          "title": "Mergers and acquisitions",
+          "revid": 1380259479
+        },
+        {
+          "title": "Mount Everest",
+          "revid": 1376942985
+        },
+        {
+          "title": "Non-disclosure agreement",
+          "revid": 1369301162
+        },
+        {
+          "title": "Olympic Games",
+          "revid": 1379072110
+        },
+        {
+          "title": "Photosynthesis",
+          "revid": 1379238357
+        },
+        {
+          "title": "Premier League",
+          "revid": 1380219355
+        },
+        {
+          "title": "River Thames",
+          "revid": 1378323739
+        },
+        {
+          "title": "Supreme Court of the United States",
+          "revid": 1375273525
+        },
+        {
+          "title": "Toyota",
+          "revid": 1376566495
+        },
+        {
+          "title": "Trade union",
+          "revid": 1380215650
+        },
+        {
+          "title": "Walmart",
+          "revid": 1379369480
+        },
+        {
+          "title": "William Shakespeare",
+          "revid": 1379766519
+        },
+        {
+          "title": "World War I",
+          "revid": 1379529706
+        }
+      ],
+      "sha256": "fc9105861c0db8ec141c6acc491d2a0c1b70a27181321ee90b58181648e86cff"
+    },
+    {
+      "id": "gesetze-dev",
+      "type": "git",
+      "url": "https://github.com/bundestag/gesetze",
+      "commit": "77abca2ceea3b7b89ea70afb13b5dd55415eb124",
+      "license": "Unlicense",
+      "lang": "de",
+      "genre": "government",
+      "split": "dev",
+      "note": "Bundesgesetze als Markdown (amtliche Werke, § 5 UrhG gemeinfrei)",
+      "paths": [
+        "a/agg/index.md",
+        "a/arbzg/index.md",
+        "b/burlg/index.md",
+        "k/kschg/index.md",
+        "n/nachwg/index.md",
+        "t/tzbfg/index.md",
+        "b/bdsg_2018/index.md",
+        "i/ifg/index.md",
+        "v/vwvfg/index.md",
+        "a/awg_2013/index.md",
+        "u/uwg_2004/index.md",
+        "e/egovg/index.md",
+        "h/hgb/index.md",
+        "l/lksg/index.md",
+        "t/ttdsg/index.md"
+      ],
+      "sha256": "733f210659167e11eb7976b095bfe92cf269fd9a71910f97bcb2827629144565"
+    },
+    {
+      "id": "18f-guides-dev",
+      "type": "git",
+      "url": "https://github.com/18F/guides",
+      "commit": "debc24b34f23686194d9fe42e391859d569bd39a",
+      "license": "CC0-1.0",
+      "lang": "en",
+      "genre": "government",
+      "split": "dev",
+      "note": "18F/GSA guides (US federal work, CC0)",
+      "paths": [
+        "content/accessibility/*",
+        "content/agile/*",
+        "content/brand/*",
+        "content/derisking/*",
+        "content/derisking-government-tech/*",
+        "content/eng-hiring/*",
+        "content/engineering/*"
+      ],
+      "sha256": "c96305adafc30527858e6d9d22c956c876dc6fc35a818a095ce62566acd69ac2"
+    },
+    {
+      "id": "wmf-dev-de",
+      "type": "mediawiki",
+      "site": "https://foundation.wikimedia.org",
+      "license": "CC-BY-SA-4.0",
+      "lang": "de",
+      "genre": "corporate",
+      "split": "dev",
+      "note": "Wikimedia Foundation (Policies, Board), deutsche Übersetzungen",
+      "pages": [
+        {
+          "title": "Policy:Terms of Use/de",
+          "revid": 554847
+        },
+        {
+          "title": "Policy:Privacy policy/de",
+          "revid": 586889
+        },
+        {
+          "title": "Policy:Wikimedia Foundation Trademark Policy/Frequently asked questions/de",
+          "revid": 542374
+        },
+        {
+          "title": "Policy:Wikimedia Foundation Office Actions Policy/de",
+          "revid": 588169
+        },
+        {
+          "title": "Policy:Wikimedia Foundation Trademark Policy/de",
+          "revid": 590334
+        },
+        {
+          "title": "Policy:Privacy policy/Frequently asked questions/de",
+          "revid": 588008
+        },
+        {
+          "title": "Policy:Code of Conduct of the Wikimedia Foundation Board of Trustees/de",
+          "revid": 556093
+        },
+        {
+          "title": "Policy:Universal Code of Conduct/Enforcement guidelines/de",
+          "revid": 597191
+        },
+        {
+          "title": "Policy:Wikimedia Human Rights Policy/Frequently asked questions/de",
+          "revid": 478416
+        },
+        {
+          "title": "Policy:Donor privacy policy/de",
+          "revid": 555632
+        },
+        {
+          "title": "Policy:Wikimedia Foundation Event Ban Policy/Process/de",
+          "revid": 588132
+        },
+        {
+          "title": "Policy:Wikimedia Human Rights Policy/de",
+          "revid": 532549
+        },
+        {
+          "title": "Policy:Terms of Use/Frequently asked questions on paid contributions without disclosure/de",
+          "revid": 588102
+        },
+        {
+          "title": "Board meetings/de",
+          "revid": 571551
+        },
+        {
+          "title": "Policy:Wikimedia Access to Temporary Account IP Addresses Policy/de",
+          "revid": 568857
+        },
+        {
+          "title": "Policy:Wikimedia Foundation Non-Wiki Privacy Policy/de",
+          "revid": 555106
+        },
+        {
+          "title": "Policy:Wikimedia Foundation Open Access Policy/Frequently asked questions/de",
+          "revid": 555690
+        },
+        {
+          "title": "Policy:Wikimedia Foundation Access to Nonpublic Personal Data Policy/de",
+          "revid": 556425
+        },
+        {
+          "title": "Policy:Wikimedia Foundation Purchasing and Disbursement Process/de",
+          "revid": 532815
+        },
+        {
+          "title": "Policy:Wikimedia Foundation Combating Online Child Exploitation Policy/de",
+          "revid": 537981
+        },
+        {
+          "title": "Policy:Universal Code of Conduct/de",
+          "revid": 541417
+        },
+        {
+          "title": "Policy:Wikimedia Foundation Investment Policy/de",
+          "revid": 556630
+        },
+        {
+          "title": "Policy:Wikimedia Foundation Event Ban Policy/de",
+          "revid": 455675
+        },
+        {
+          "title": "Policy:Cookie statement/de",
+          "revid": 571543
+        },
+        {
+          "title": "Policy:Conflict of Interest Policy for Wikimedia Foundation Board Members, Officers, Executives, and Key Employees/de",
+          "revid": 454356
+        },
+        {
+          "title": "Policy:Wikimedia Foundation Trademark Policy/Purpose/de",
+          "revid": 542288
+        },
+        {
+          "title": "Policy:Wikimedia Foundation Whistleblower Policy/de",
+          "revid": 458330
+        },
+        {
+          "title": "Policy:Wikimedia Foundation Digital Millennium Copyright Act (\"DMCA\") Policy/de",
+          "revid": 554078
+        },
+        {
+          "title": "Board of Trustees/Recruiting Procedure for Board-Selected Trustees/de",
+          "revid": 543984
+        },
+        {
+          "title": "Policy:Wikimedia Foundation Board of Trustees Candidate Review Process/de",
+          "revid": 556171
+        }
+      ],
+      "sha256": "6426bdd0f3d873b9ec04d0969653fb517c50a5501b2068337f3b685ea212a788"
+    },
+    {
+      "id": "wmf-dev-en",
+      "type": "mediawiki",
+      "site": "https://foundation.wikimedia.org",
+      "license": "CC-BY-SA-4.0",
+      "lang": "en",
+      "genre": "corporate",
+      "split": "dev",
+      "note": "Wikimedia Foundation (Policies, Board), English originals",
+      "pages": [
+        {
+          "title": "Policy:Terms of Use",
+          "revid": 554823
+        },
+        {
+          "title": "Policy:Privacy policy",
+          "revid": 555910
+        },
+        {
+          "title": "Policy:Wikimedia Foundation Trademark Policy/Frequently asked questions",
+          "revid": 589487
+        },
+        {
+          "title": "Policy:Wikimedia Foundation Office Actions Policy",
+          "revid": 588164
+        },
+        {
+          "title": "Policy:Wikimedia Foundation Trademark Policy",
+          "revid": 592633
+        },
+        {
+          "title": "Policy:Privacy policy/Frequently asked questions",
+          "revid": 587956
+        },
+        {
+          "title": "Policy:Code of Conduct of the Wikimedia Foundation Board of Trustees",
+          "revid": 556090
+        },
+        {
+          "title": "Policy:Universal Code of Conduct/Enforcement guidelines",
+          "revid": 589377
+        },
+        {
+          "title": "Policy:Wikimedia Human Rights Policy/Frequently asked questions",
+          "revid": 478412
+        },
+        {
+          "title": "Policy:Donor privacy policy",
+          "revid": 554789
+        },
+        {
+          "title": "Policy:Wikimedia Foundation Event Ban Policy/Process",
+          "revid": 588070
+        },
+        {
+          "title": "Policy:Wikimedia Human Rights Policy",
+          "revid": 532546
+        },
+        {
+          "title": "Policy:Terms of Use/Frequently asked questions on paid contributions without disclosure",
+          "revid": 588098
+        },
+        {
+          "title": "Board meetings",
+          "revid": 593244
+        },
+        {
+          "title": "Policy:Wikimedia Access to Temporary Account IP Addresses Policy",
+          "revid": 568135
+        },
+        {
+          "title": "Policy:Wikimedia Foundation Non-Wiki Privacy Policy",
+          "revid": 555101
+        },
+        {
+          "title": "Policy:Wikimedia Foundation Open Access Policy/Frequently asked questions",
+          "revid": 556102
+        },
+        {
+          "title": "Policy:Wikimedia Foundation Access to Nonpublic Personal Data Policy",
+          "revid": 556416
+        },
+        {
+          "title": "Policy:Wikimedia Foundation Purchasing and Disbursement Process",
+          "revid": 587224
+        },
+        {
+          "title": "Policy:Wikimedia Foundation Combating Online Child Exploitation Policy",
+          "revid": 537576
+        },
+        {
+          "title": "Policy:Universal Code of Conduct",
+          "revid": 366681
+        },
+        {
+          "title": "Policy:Wikimedia Foundation Investment Policy",
+          "revid": 556570
+        },
+        {
+          "title": "Policy:Wikimedia Foundation Event Ban Policy",
+          "revid": 455660
+        },
+        {
+          "title": "Policy:Cookie statement",
+          "revid": 570736
+        },
+        {
+          "title": "Policy:Conflict of Interest Policy for Wikimedia Foundation Board Members, Officers, Executives, and Key Employees",
+          "revid": 454352
+        },
+        {
+          "title": "Policy:Wikimedia Foundation Trademark Policy/Purpose",
+          "revid": 542078
+        },
+        {
+          "title": "Policy:Wikimedia Foundation Whistleblower Policy",
+          "revid": 458327
+        },
+        {
+          "title": "Policy:Wikimedia Foundation Digital Millennium Copyright Act (\"DMCA\") Policy",
+          "revid": 554035
+        },
+        {
+          "title": "Board of Trustees/Recruiting Procedure for Board-Selected Trustees",
+          "revid": 554388
+        },
+        {
+          "title": "Policy:Wikimedia Foundation Board of Trustees Candidate Review Process",
+          "revid": 556169
+        }
+      ],
+      "sha256": "f3cccbe40cc7f37fc268eef51950bc3f70c830d4d1b8e1503128c8c71726727d"
+    },
+    {
+      "id": "dewiki-holdout",
+      "type": "mediawiki",
+      "site": "https://de.wikipedia.org",
+      "license": "CC-BY-SA-4.0",
+      "lang": "de",
+      "genre": "prose",
+      "split": "holdout",
+      "note": "Wikipedia-Artikel (Orte, Unternehmen, Geschichte, Wissenschaft, Arbeits-/Wirtschaftsrecht)",
+      "pages": [
+        {
+          "title": "Aktiengesellschaft (Deutschland)",
+          "revid": 270970519
+        },
+        {
+          "title": "Albert Einstein",
+          "revid": 271317561
+        },
+        {
+          "title": "Allianz SE",
+          "revid": 271201264
+        },
+        {
+          "title": "Alpen",
+          "revid": 271076478
+        },
+        {
+          "title": "BASF",
+          "revid": 271313168
+        },
+        {
+          "title": "Bier",
+          "revid": 270774507
+        },
+        {
+          "title": "Bilanz",
+          "revid": 261765346
+        },
+        {
+          "title": "Bundesrat (Deutschland)",
+          "revid": 271269379
+        },
+        {
+          "title": "Deutsche Telekom",
+          "revid": 271191512
+        },
+        {
+          "title": "Deutsche Wiedervereinigung",
+          "revid": 270387848
+        },
+        {
+          "title": "Dresden",
+          "revid": 270957374
+        },
+        {
+          "title": "Elbe",
+          "revid": 271331661
+        },
+        {
+          "title": "Elektromobilität",
+          "revid": 269617562
+        },
+        {
+          "title": "Exportkontrolle",
+          "revid": 269235536
+        },
+        {
+          "title": "Frauenkirche (Dresden)",
+          "revid": 270200870
+        },
+        {
+          "title": "Grundgesetz für die Bundesrepublik Deutschland",
+          "revid": 271085921
+        },
+        {
+          "title": "Handelsregister (Deutschland)",
+          "revid": 264408017
+        },
+        {
+          "title": "Hanse",
+          "revid": 270851692
+        },
+        {
+          "title": "Insolvenz",
+          "revid": 270632168
+        },
+        {
+          "title": "Leipzig",
+          "revid": 271039085
+        },
+        {
+          "title": "Max Planck",
+          "revid": 271263940
+        },
+        {
+          "title": "Mercedes-Benz Group",
+          "revid": 270616432
+        },
+        {
+          "title": "München",
+          "revid": 271220277
+        },
+        {
+          "title": "Robert Bosch GmbH",
+          "revid": 270136573
+        },
+        {
+          "title": "Thomas Mann",
+          "revid": 270851486
+        },
+        {
+          "title": "Weinbau in Deutschland",
+          "revid": 271138167
+        },
+        {
+          "title": "Weltgesundheitsorganisation",
+          "revid": 270602747
+        },
+        {
+          "title": "Zugspitze",
+          "revid": 271266791
+        }
+      ],
+      "sha256": "d0d7bd939f4353be64e6131972cda5a49bbd9cbcae9b1715df3c1406dfc023d6"
+    },
+    {
+      "id": "enwiki-holdout",
+      "type": "mediawiki",
+      "site": "https://en.wikipedia.org",
+      "license": "CC-BY-SA-4.0",
+      "lang": "en",
+      "genre": "prose",
+      "split": "holdout",
+      "note": "Wikipedia articles (places, companies, history, science, employment and business topics)",
+      "pages": [
+        {
+          "title": "Airbus",
+          "revid": 1380103475
+        },
+        {
+          "title": "Alphabet Inc.",
+          "revid": 1379909280
+        },
+        {
+          "title": "Amazon River",
+          "revid": 1379247795
+        },
+        {
+          "title": "Antarctica",
+          "revid": 1380119459
+        },
+        {
+          "title": "Balance sheet",
+          "revid": 1379358639
+        },
+        {
+          "title": "Chess",
+          "revid": 1379113904
+        },
+        {
+          "title": "Collective bargaining",
+          "revid": 1378067950
+        },
+        {
+          "title": "European Central Bank",
+          "revid": 1378380328
+        },
+        {
+          "title": "Export control",
+          "revid": 1368916980
+        },
+        {
+          "title": "FIFA World Cup",
+          "revid": 1379136112
+        },
+        {
+          "title": "Health Insurance Portability and Accountability Act",
+          "revid": 1379907226
+        },
+        {
+          "title": "Initial public offering",
+          "revid": 1379011934
+        },
+        {
+          "title": "International sanctions",
+          "revid": 1377133812
+        },
+        {
+          "title": "Jane Austen",
+          "revid": 1377221096
+        },
+        {
+          "title": "Library of Congress",
+          "revid": 1379621015
+        },
+        {
+          "title": "Marie Curie",
+          "revid": 1379969707
+        },
+        {
+          "title": "Minimum wage",
+          "revid": 1375992064
+        },
+        {
+          "title": "Nestlé",
+          "revid": 1379395166
+        },
+        {
+          "title": "Paris",
+          "revid": 1380227587
+        },
+        {
+          "title": "Plate tectonics",
+          "revid": 1376119468
+        },
+        {
+          "title": "Recession",
+          "revid": 1375842603
+        },
+        {
+          "title": "Renaissance",
+          "revid": 1379286815
+        },
+        {
+          "title": "Roman Empire",
+          "revid": 1380183566
+        },
+        {
+          "title": "Tea",
+          "revid": 1379637987
+        },
+        {
+          "title": "Unilever",
+          "revid": 1378806133
+        },
+        {
+          "title": "United Nations",
+          "revid": 1379966030
+        },
+        {
+          "title": "United States Congress",
+          "revid": 1379599281
+        },
+        {
+          "title": "United States Securities and Exchange Commission",
+          "revid": 1376245664
+        },
+        {
+          "title": "Volcano",
+          "revid": 1378168594
+        },
+        {
+          "title": "Wimbledon Championships",
+          "revid": 1376631466
+        }
+      ],
+      "sha256": "93b8feb67b8f7ff768ce97aba23714aae453df006a2eff2905bef297a7c70966"
+    },
+    {
+      "id": "gesetze-holdout",
+      "type": "git",
+      "url": "https://github.com/bundestag/gesetze",
+      "commit": "77abca2ceea3b7b89ea70afb13b5dd55415eb124",
+      "license": "Unlicense",
+      "lang": "de",
+      "genre": "government",
+      "split": "holdout",
+      "note": "Bundesgesetze als Markdown (amtliche Werke, § 5 UrhG gemeinfrei)",
+      "paths": [
+        "b/betrvg/index.md",
+        "e/entgfg/index.md",
+        "m/milog/index.md",
+        "g/gmbhg/index.md",
+        "g/geschgehg/index.md",
+        "b/bsig_2009/index.md",
+        "u/ustg_1980/index.md",
+        "a/arbschg/index.md",
+        "m/muschg_2018/index.md",
+        "g/gwg_2017/index.md",
+        "o/ozg/index.md",
+        "a/aktg/index.md",
+        "b/bbg_2009/index.md",
+        "t/tmg/index.md"
+      ],
+      "sha256": "6b74080b10225e6f6696ce98d77caa63207a53fbad25e01e8e89213bd7af14ce"
+    },
+    {
+      "id": "18f-guides-holdout",
+      "type": "git",
+      "url": "https://github.com/18F/guides",
+      "commit": "debc24b34f23686194d9fe42e391859d569bd39a",
+      "license": "CC0-1.0",
+      "lang": "en",
+      "genre": "government",
+      "split": "holdout",
+      "note": "18F/GSA guides (US federal work, CC0)",
+      "paths": [
+        "content/content-guide/*",
+        "content/methods/*",
+        "content/product/*",
+        "content/ux-guide/*"
+      ],
+      "sha256": "fabee9eedaa7591104597dbc29fbdb6d4401fa55cf9edce4e647f7ecb2d326d8"
+    },
+    {
+      "id": "wmf-holdout-de",
+      "type": "mediawiki",
+      "site": "https://foundation.wikimedia.org",
+      "license": "CC-BY-SA-4.0",
+      "lang": "de",
+      "genre": "corporate",
+      "split": "holdout",
+      "note": "Wikimedia Foundation (Legal, Minutes), deutsche Übersetzungen",
+      "pages": [
+        {
+          "title": "Legal:Visual identity guidelines/de",
+          "revid": 577211
+        },
+        {
+          "title": "Minutes:2009-08-25/de",
+          "revid": 531683
+        },
+        {
+          "title": "Legal:Wikimedia Foundation Bylaws/de",
+          "revid": 565007
+        },
+        {
+          "title": "Minutes:2009-04/de",
+          "revid": 555481
+        },
+        {
+          "title": "Minutes:2009-01-11/de",
+          "revid": 528327
+        },
+        {
+          "title": "Legal:Wikimedia General Contest Rules/de",
+          "revid": 568806
+        },
+        {
+          "title": "Legal:Wikimedia Foundation Requests for User Information Procedures and Guidelines/de",
+          "revid": 597181
+        },
+        {
+          "title": "Minutes:2011-10-07/de",
+          "revid": 563330
+        },
+        {
+          "title": "Legal:Wikimedia Foundation Applicant Privacy Policy/de",
+          "revid": 555751
+        },
+        {
+          "title": "Minutes:2011-08-03/de",
+          "revid": 546477
+        },
+        {
+          "title": "Legal:Sound of All Human Knowledge contest rules/de",
+          "revid": 556117
+        },
+        {
+          "title": "Minutes:2010-02-06/de",
+          "revid": 533580
+        },
+        {
+          "title": "Legal:Wikimedia Foundation Data Retention Guidelines/de",
+          "revid": 558078
+        },
+        {
+          "title": "Minutes:2009-11-15/de",
+          "revid": 532449
+        },
+        {
+          "title": "Minutes:2016-06/de",
+          "revid": 542132
+        },
+        {
+          "title": "Legal:Wikimedia Foundation Policy and Political Association Guideline/de",
+          "revid": 556372
+        },
+        {
+          "title": "Legal:Wikimedia trademarks/About the official marks/de",
+          "revid": 555665
+        },
+        {
+          "title": "Minutes:2011-03-25/de",
+          "revid": 545671
+        },
+        {
+          "title": "Minutes:2008-10-05/de",
+          "revid": 555253
+        },
+        {
+          "title": "Legal:Data Collection Guidelines/de",
+          "revid": 552236
+        },
+        {
+          "title": "Legal:Wikimedia Foundation European Union Compliance/Digital Services Act Article 40(4) Data Catalogue/de",
+          "revid": 572013
+        },
+        {
+          "title": "Minutes:2008-04-07/de",
+          "revid": 527225
+        },
+        {
+          "title": "Minutes:2010-04-17/de",
+          "revid": 535993
+        },
+        {
+          "title": "Minutes:2016-11-13/de",
+          "revid": 546907
+        },
+        {
+          "title": "Legal:Data publication guidelines/de",
+          "revid": 588156
+        },
+        {
+          "title": "Minutes:2006-11/de",
+          "revid": 557689
+        },
+        {
+          "title": "Legal:Wikimedia Foundation Legal Fees Assistance Program/de",
+          "revid": 565394
+        },
+        {
+          "title": "Minutes:2007-10-07/de",
+          "revid": 555566
+        },
+        {
+          "title": "Legal:Wikimedia Developer App Guidelines/de",
+          "revid": 555756
+        },
+        {
+          "title": "Legal:Wikimedia Foundation Confidentiality Agreement for Nonpublic Information/de",
+          "revid": 544640
+        }
+      ],
+      "sha256": "2afe78dbbe37098541e4e970465c22168db96df000f4cf4fb59c94fe494a696d"
+    },
+    {
+      "id": "wmf-holdout-en",
+      "type": "mediawiki",
+      "site": "https://foundation.wikimedia.org",
+      "license": "CC-BY-SA-4.0",
+      "lang": "en",
+      "genre": "corporate",
+      "split": "holdout",
+      "note": "Wikimedia Foundation (Legal, Minutes), English originals",
+      "pages": [
+        {
+          "title": "Legal:Visual identity guidelines",
+          "revid": 556639
+        },
+        {
+          "title": "Minutes:2009-08-25",
+          "revid": 438695
+        },
+        {
+          "title": "Legal:Wikimedia Foundation Bylaws",
+          "revid": 564999
+        },
+        {
+          "title": "Minutes:2009-04",
+          "revid": 555445
+        },
+        {
+          "title": "Minutes:2009-01-11",
+          "revid": 438476
+        },
+        {
+          "title": "Legal:Wikimedia General Contest Rules",
+          "revid": 539921
+        },
+        {
+          "title": "Legal:Wikimedia Foundation Requests for User Information Procedures and Guidelines",
+          "revid": 588012
+        },
+        {
+          "title": "Minutes:2011-10-07",
+          "revid": 557573
+        },
+        {
+          "title": "Legal:Wikimedia Foundation Applicant Privacy Policy",
+          "revid": 555731
+        },
+        {
+          "title": "Minutes:2011-08-03",
+          "revid": 541915
+        },
+        {
+          "title": "Legal:Sound of All Human Knowledge contest rules",
+          "revid": 556112
+        },
+        {
+          "title": "Minutes:2010-02-06",
+          "revid": 438815
+        },
+        {
+          "title": "Legal:Wikimedia Foundation Data Retention Guidelines",
+          "revid": 553598
+        },
+        {
+          "title": "Minutes:2009-11-15",
+          "revid": 439161
+        },
+        {
+          "title": "Minutes:2016-06",
+          "revid": 439039
+        },
+        {
+          "title": "Legal:Wikimedia Foundation Policy and Political Association Guideline",
+          "revid": 556360
+        },
+        {
+          "title": "Legal:Wikimedia trademarks/About the official marks",
+          "revid": 555662
+        },
+        {
+          "title": "Minutes:2011-03-25",
+          "revid": 541830
+        },
+        {
+          "title": "Minutes:2008-10-05",
+          "revid": 555245
+        },
+        {
+          "title": "Legal:Data Collection Guidelines",
+          "revid": 552233
+        },
+        {
+          "title": "Legal:Wikimedia Foundation European Union Compliance/Digital Services Act Article 40(4) Data Catalogue",
+          "revid": 566069
+        },
+        {
+          "title": "Minutes:2008-04-07",
+          "revid": 438095
+        },
+        {
+          "title": "Minutes:2010-04-17",
+          "revid": 439225
+        },
+        {
+          "title": "Minutes:2016-11-13",
+          "revid": 439101
+        },
+        {
+          "title": "Legal:Data publication guidelines",
+          "revid": 588140
+        },
+        {
+          "title": "Minutes:2006-11",
+          "revid": 587215
+        },
+        {
+          "title": "Legal:Wikimedia Foundation Legal Fees Assistance Program",
+          "revid": 565392
+        },
+        {
+          "title": "Minutes:2007-10-07",
+          "revid": 555565
+        },
+        {
+          "title": "Legal:Wikimedia Developer App Guidelines",
+          "revid": 555753
+        },
+        {
+          "title": "Legal:Wikimedia Foundation Confidentiality Agreement for Nonpublic Information",
+          "revid": 544627
+        }
+      ],
+      "sha256": "643cfeb3afd8ef312ddf5dc8c9db42d2a0a9236a15f57d93925624290f986355"
+    }
+  ]
+}
