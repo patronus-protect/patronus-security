@@ -61,7 +61,7 @@ tasks:
     title: Define the gold convention for placeholder values (RFC 2606/6761 domains, .invalid, NANP 555-01xx/000) and align gold
     type: eval-infra
     deps: [E03]
-    needs_decision: true
+    decision: "2026-10-14: reserved placeholder values (RFC 2606/6761 domains, .invalid, NANP 555-01xx/000) are PII, gold positive; no detector change needed"
     source: TRIAGE 2026-W42 (research/l1-pii/triage/2026-W42.md, bucket 5)
     question: >-
       The EN blind set treats customer@example.com and +1 000-000-0000 as negative, the DE blind set treats
@@ -133,7 +133,7 @@ tasks:
     title: M3 counting rule (checksum-validated entities ARK vs. Presidio 2.2.364) + counting script
     type: eval-infra
     deps: [E03]
-    needs_decision: true
+    decision: "2026-10-14: count only real check digits/checksums, each country separately, format-only validation does not count; Presidio pinned to 2.2.364; M3 target lowered to 2x (about 80 entities), update README accordingly"
     source: TRIAGE 2026-W42 (research/l1-pii/triage/2026-W42.md, section coverage)
     question: >-
       Presidio 2.2.364 has 43 pattern recognizers with validate_result (≈ 40 entities) → 3× ≈ 120;
@@ -189,7 +189,7 @@ tasks:
     title: "Strict: do not emit a PAN sub-span inside a valid IBAN or FINANCIAL_ACCOUNT_NUMBER on an IBAN value"
     type: precision-fix
     deps: [K02]
-    needs_decision: true
+    decision: "2026-10-14: strict keeps emitting both labels bit-identically, but the PAN sub-span inside a valid IBAN and FINANCIAL_ACCOUNT_NUMBER on an IBAN value are marked as secondary evidence; the scoreboard scores primary findings only"
     source: TRIAGE 2026-W42 (research/l1-pii/triage/2026-W42.md, bucket 4)
     question: >-
       pii.rs deliberately keeps cross-label overlaps ("Evidence retains both labels"), and K02 keeps strict
