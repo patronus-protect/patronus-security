@@ -77,6 +77,7 @@ tasks:
     accept: Template-Familien mit getrennten dev/holdout-Teilmengen; Spans in Code-Points; Hard-Negative-Varianten (Platzhalter, Env-Referenz, Doku-Beispielwert, Testschlüssel)
 
   - id: E05
+    status: done
     title: Benign-Code-Korpus (permissiv lizenzierte, gepinnte Repos ohne Secret-Scanner-Repos; Lockfiles, Minified JS, SVG/base64, Git-Logs)
     type: eval-infra
     deps: []
