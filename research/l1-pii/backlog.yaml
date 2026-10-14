@@ -110,10 +110,23 @@ tasks:
       validator; Luhn-invalid credit_card values in dynamic_pii.jsonl are excluded from L1 evaluations
       or marked invalid; validators stay unchanged
 
+  - id: E12
+    title: Presidio-favored gold sets (presidio-evaluator synthetic data, Presidio recognizer test cases) + scoring per source family
+    type: eval-infra
+    deps: [E06]
+    accept: >-
+      prepare_corpora.py adds a presidio_favored family with dev/holdout split and SHA-256 manifest: synthetic
+      sentences from microsoft/presidio-research (presidio-evaluator, MIT, pinned commit) and the positive/negative
+      examples of the presidio-analyzer recognizer tests (MIT, pinned to 2.2.364). Every gold source is tagged
+      ark_authored (pii_l1, l1_bilingual_rules, E05 synthetic), neutral (Gretel Finance, OpenPII Nano, TAB) or
+      presidio_favored; the scoreboard reports P/R/F1 per family. M1 must hold on neutral and on presidio_favored
+      separately; ark_authored results are reported but never decide a milestone. Fairness rule in
+      research/l1-pii/README.md
+
   - id: E11
     title: Baseline report ARK vs. Presidio + error buckets
     type: report
-    deps: [E06, E07]
+    deps: [E06, E07, E12]
     accept: research/l1-pii/scoreboard/baseline.md; gaps as candidates for TRIAGE
 
   - id: T03
@@ -204,6 +217,15 @@ tasks:
   - {id: F15, title: "Driver's licence DE + US states with context", type: recall-fix, deps: [K03]}
   - {id: F16, title: "Licence plate DE: valid list of district codes", type: precision-fix, deps: [K02]}
   - {id: F17, title: "CVV/expiry date: recall via structure, keep coupling to PAN", type: recall-fix, deps: [K04, F02]}
+  - id: T14
+    title: "FP: digit-only IDs in URL paths (GitHub Actions /actions/runs/<id>/job/<id>) detected as L1 PII"
+    type: precision-fix
+    deps: []
+    accept: >-
+      Observed 2026-10-13 in the runtime hook on `gh pr checks`: a 12-digit job ID at the end of an Actions URL was
+      redacted as pii/l1 (confidence 1), identically shaped IDs in the same output were not. First identify the
+      triggering rule; hard negatives for digit segments in URL paths (Actions runs/jobs, issue/PR numbers, numeric
+      REST IDs) DE + EN; a digit sequence without PII context in a URL path → no match
 
   # ── B: DACH/EU depth ──────────────────────────────────────────────────
   - {id: B01, title: "VAT ID part 1: DE, AT, CH, FR, NL, BE, IT, ES with checksums", type: new-entity, deps: [K05]}
