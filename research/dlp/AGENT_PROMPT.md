@@ -39,7 +39,7 @@ Aufgabe, keine weitere.
 5. Alles committen (Conventional Commits, Trailer
    `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`). Nicht pushen. Den Status in
    `backlog.yaml` nicht ändern; das macht der Runner.
-6. Antworte zum Schluss mit drei Zeilen: Aufgabe, was geändert wurde, was offen ist. Keine
+6. Antworte zum Schluss mit drei Zeilen: Aufgabe, was geändert wurde, was offen ist. Diese drei Zeilen und alle Commit-Messages auf Englisch (sie landen im PR). Keine
    Secret-Werte in der Antwort, auch keine synthetischen.
 
 Regeln:
