@@ -1,269 +1,269 @@
-# L1-PII-Backlog. Ein geplanter Lauf erledigt genau eine Aufgabe.
-# Auswahl (deterministisch, ark-l1 next): erste Aufgabe in Dateireihenfolge mit status: todo,
-# allen deps auf done und ohne offenes needs_decision.
-# status: fehlt = todo; done setzt der Runner beim Publizieren. Blockiert: ~/ark-l1/state/blocked.json
+# L1-PII backlog. One scheduled run completes exactly one task.
+# Selection (deterministic, ark-l1 next): first task in file order with status: todo,
+# all deps done and no open needs_decision.
+# status: missing = todo; the runner sets done when publishing. Blocked: ~/ark-l1/state/blocked.json
 #
-# Gemeinsame Akzeptanz (gilt für jede Aufgabe zusätzlich zu `accept`):
-#   tests_first:  Goldens über generate_l1_goldens.py (>= 5 Positive + 5 Hard Negatives je Sprache,
-#                 DE + EN, bei Landes-IDs zusätzlich Landessprache), Eintrag in
-#                 rust/tests/fixtures/l1_bilingual_rules.json, Rust-Unit-Tests inkl. Prüfziffer-Vektoren
-#                 (gültig/ungültig) — vor der Implementierung committet.
+# Shared acceptance (applies to every task in addition to `accept`):
+#   tests_first:  goldens via generate_l1_goldens.py (>= 5 positives + 5 hard negatives per language,
+#                 DE + EN, plus the national language for country IDs), entry in
+#                 rust/tests/fixtures/l1_bilingual_rules.json, Rust unit tests incl. checksum vectors
+#                 (valid/invalid) — committed before the implementation.
 #   gate:         cargo fmt --check, clippy -D warnings, cargo test -p patronus-ark,
-#                 13_l1_golden_eval grün, Scoreboard ohne Regression (> 0,5 pp F1 je Entität),
-#                 0 neue FP auf Hard Negatives, 100 KiB p95 höchstens +10 %.
-#   docs:         CHANGELOG „Detection change“, l1-rule-catalog via scripts/generate_docs.py.
-#   no_relax:     Validatoren nie lockern, um Recall zu kaufen; Recall kommt über Kontext/Struktur/Score.
+#                 13_l1_golden_eval green, scoreboard without regression (> 0.5 pp F1 per entity),
+#                 0 new FP on hard negatives, 100 KiB p95 at most +10 %.
+#   docs:         CHANGELOG "Detection change", l1-rule-catalog via scripts/generate_docs.py.
+#   no_relax:     never relax validators to buy recall; recall comes from context/structure/score.
 
-setup:  # einmalig, nicht vom Timer
-  - {id: S01, title: "VPS: Rust, Presidio + spaCy en/de lg, gh, Claude Code, Repo-Klon", status: done}
-  - {id: S02, title: "gh auth als ubuntu (Fine-grained-Token Contents + PRs)", status: done}
-  - {id: S03, title: "runner/install.sh, secrets.env mit CLAUDE_CODE_OAUTH_TOKEN, Timer aktivieren", status: manual}
+setup:  # one-off, not run by the timer
+  - {id: S01, title: "VPS: Rust, Presidio + spaCy en/de lg, gh, Claude Code, repo clone", status: done}
+  - {id: S02, title: "gh auth as ubuntu (fine-grained token Contents + PRs)", status: done}
+  - {id: S03, title: "runner/install.sh, secrets.env with CLAUDE_CODE_OAUTH_TOKEN, enable timer", status: manual}
 
 tasks:
-  # ── E: Messinfrastruktur ──────────────────────────────────────────────
+  # ── E: Measurement infrastructure ─────────────────────────────────────
   - id: E01
     status: done
-    title: Presidio-Runner (default + tuned) → Vorhersagen im external_pii_eval-Format
+    title: Presidio runner (default + tuned) → predictions in external_pii_eval format
     type: eval-infra
     deps: []
-    accept: scripts/l1_presidio/run_presidio.py, gepinnte requirements, beide Profile reproduzierbar
+    accept: scripts/l1_presidio/run_presidio.py, pinned requirements, both profiles reproducible
 
   - id: E02
     status: done
-    title: ARK-Runner im selben Vorhersageformat (Python-Bindings), inkl. Score-Feld
+    title: ARK runner in the same prediction format (Python bindings), incl. score field
     type: eval-infra
     deps: [E01]
 
   - id: E03
     status: done
-    title: Entity-Mapping ARK ↔ Presidio ↔ Korpora mit Scopes (shared, ark_only, presidio_only, semantic)
+    title: Entity mapping ARK ↔ Presidio ↔ corpora with scopes (shared, ark_only, presidio_only, semantic)
     type: eval-infra
     deps: [E01]
-    accept: research/l1-pii/entity_map.yaml, Test, dass jedes ARK-Label gemappt ist
+    accept: research/l1-pii/entity_map.yaml, test that every ARK label is mapped
 
   - id: E04
     status: done
-    title: Korpora laden + Dev/Holdout-Split einfrieren (Gretel Finance, OpenPII Nano, TAB)
+    title: Load corpora + freeze dev/holdout split (Gretel Finance, OpenPII Nano, TAB)
     type: eval-infra
     deps: [E03]
     accept: >-
-      scripts/l1_presidio/prepare_corpora.py --dev-out DIR --holdout-out DIR (Manifest mit SHA-256,
-      schreibt DIR/.ready); das Gate führt es außerhalb der Sandbox aus, der Agent sieht nur dev
+      scripts/l1_presidio/prepare_corpora.py --dev-out DIR --holdout-out DIR (manifest with SHA-256,
+      writes DIR/.ready); the gate runs it outside the sandbox, the agent only sees dev
 
   - id: E05
     status: done
-    title: Synthetisches DE/EU-Goldset (Brief, Formular, Rechnung, Arztbrief, JSON, CSV, Ticket)
+    title: Synthetic DE/EU gold set (letter, form, invoice, doctor's letter, JSON, CSV, ticket)
     type: eval-infra
     deps: [E03]
-    accept: Generator mit getrennten Seeds für dev/holdout, Spans in Code-Points, alle E03-Labels abgedeckt
+    accept: generator with separate seeds for dev/holdout, spans in code points, all E03 labels covered
 
   - id: T01
-    title: Gold-Konvention für Platzhalter-Werte (RFC-2606/6761-Domains, .invalid, NANP 555-01xx/000) festlegen und Gold angleichen
+    title: Define the gold convention for placeholder values (RFC 2606/6761 domains, .invalid, NANP 555-01xx/000) and align gold
     type: eval-infra
     deps: [E03]
     needs_decision: true
-    source: TRIAGE 2026-W42 (research/l1-pii/triage/2026-W42.md, Bucket 5)
+    source: TRIAGE 2026-W42 (research/l1-pii/triage/2026-W42.md, bucket 5)
     question: >-
-      Blind-Set EN wertet customer@example.com und +1 000-000-0000 als negativ, Blind-Set DE wertet
-      …@kundenbeispiel.invalid als positiv, l1_bilingual_rules.json nutzt ada@example.com als positiv.
-      Gelten reservierte Domains/Nummern als PII (Gold positiv) oder als Hard Negative?
+      The EN blind set treats customer@example.com and +1 000-000-0000 as negative, the DE blind set treats
+      …@kundenbeispiel.invalid as positive, l1_bilingual_rules.json uses ada@example.com as positive.
+      Do reserved domains/numbers count as PII (gold positive) or as hard negatives?
     accept: >-
-      Konvention in research/l1-pii/README.md; demo_pii_dlp*-, pii_l1- und E05-Gold danach einheitlich;
-      Detektoränderung (falls negativ) als eigene Folgeaufgabe, nicht hier
+      Convention in research/l1-pii/README.md; demo_pii_dlp*, pii_l1 and E05 gold consistent afterwards;
+      detector change (if negative) as a separate follow-up task, not here
 
   - id: E06
-    title: Scoreboard (exact + overlap P/R/F1, DE/EN, Hard-Negative-FP, Delta zur Base, Exit-Code bei Regression)
+    title: Scoreboard (exact + overlap P/R/F1, DE/EN, hard-negative FP, delta to base, exit code on regression)
     type: eval-infra
     deps: [E02, E04, E05]
     accept: >-
       scripts/l1_presidio/scoreboard.py gate --head WT --base-sha SHA --dev DIR --holdout DIR --cache DIR;
-      Exit 1 bei Regression, Zusammenfassung auf stdout; Base-Ergebnisse je SHA im Cache
+      exit 1 on regression, summary on stdout; base results per SHA in the cache
 
   - id: E07
-    title: Latenz-Benchmark ARK vs. Presidio (kurz/4 KiB/100 KiB) auf der VPS
+    title: Latency benchmark ARK vs. Presidio (short/4 KiB/100 KiB) on the VPS
     type: eval-infra
     deps: [E06]
 
   - id: E08
-    title: 12_l1_pii_fixture_eval auf Zeichen-Offsets umstellen
+    title: Switch 12_l1_pii_fixture_eval to character offsets
     type: fix
     deps: []
 
   - id: E09
-    title: 13_l1_golden_eval in CI aufnehmen
+    title: Add 13_l1_golden_eval to CI
     type: eval-infra
     deps: [E08]
 
   - id: E10
-    title: Golden-Schema v2 (N je Sprache, difficulty-Tags no_context/structured/obfuscated/ocr) + Abdeckung je rule_id
+    title: Golden schema v2 (N per language, difficulty tags no_context/structured/obfuscated/ocr) + coverage per rule_id
     type: eval-infra
     deps: [E09]
 
   - id: T02
-    title: Gold-Hygiene - Nebenentitäten in pii_l1-Positiven annotieren, Gold-Werte prüfzifferbasierter Labels gegen die Validatoren testen
+    title: Gold hygiene - annotate secondary entities in pii_l1 positives, test gold values of checksum-based labels against the validators
     type: eval-infra
     deps: [E10]
-    source: TRIAGE 2026-W42 (research/l1-pii/triage/2026-W42.md, Buckets 6 + 7)
+    source: TRIAGE 2026-W42 (research/l1-pii/triage/2026-W42.md, buckets 6 + 7)
     accept: >-
-      generate_l1_goldens.py annotiert jede echte Entität im Text (z. B. PAN in CVV-Positiven, Telefon in
-      pii_l1-email-pos-01); Test, dass jeder Gold-Wert von IBAN/CREDITCARD/STEUERID/… den Validator
-      besteht; Luhn-ungültige credit_card-Werte in dynamic_pii.jsonl werden für L1-Auswertungen
-      ausgeschlossen oder als ungültig markiert; Validatoren bleiben unverändert
+      generate_l1_goldens.py annotates every real entity in the text (e.g. PAN in CVV positives, phone in
+      pii_l1-email-pos-01); test that every gold value of IBAN/CREDITCARD/STEUERID/… passes the
+      validator; Luhn-invalid credit_card values in dynamic_pii.jsonl are excluded from L1 evaluations
+      or marked invalid; validators stay unchanged
 
   - id: E11
-    title: Baseline-Report ARK vs. Presidio + Fehler-Buckets
+    title: Baseline report ARK vs. Presidio + error buckets
     type: report
     deps: [E06, E07]
-    accept: research/l1-pii/scoreboard/baseline.md; Lücken als Kandidaten für TRIAGE
+    accept: research/l1-pii/scoreboard/baseline.md; gaps as candidates for TRIAGE
 
   - id: T03
-    title: M3-Zählregel (prüfziffervalidierte Entitäten ARK vs. Presidio 2.2.364) + Zählskript
+    title: M3 counting rule (checksum-validated entities ARK vs. Presidio 2.2.364) + counting script
     type: eval-infra
     deps: [E03]
     needs_decision: true
-    source: TRIAGE 2026-W42 (research/l1-pii/triage/2026-W42.md, Abschnitt Abdeckung)
+    source: TRIAGE 2026-W42 (research/l1-pii/triage/2026-W42.md, section coverage)
     question: >-
-      Presidio 2.2.364 hat 43 Pattern-Recognizer mit validate_result (≈ 40 Entitäten) → 3× ≈ 120;
-      der Backlog erreicht grob 60–80. Was zählt als Entität (USt-IdNr. je Land einzeln? Format-
-      validierung wie Kennzeichen?), gilt die Presidio-Version als gepinnt, und werden TH/NG/PH
-      nachgezogen oder wird das M3-Ziel angepasst?
+      Presidio 2.2.364 has 43 pattern recognizers with validate_result (≈ 40 entities) → 3× ≈ 120;
+      the backlog reaches roughly 60–80. What counts as an entity (VAT ID per country separately? format
+      validation such as licence plates?), is the Presidio version considered pinned, and do we add
+      TH/NG/PH or adjust the M3 target?
     accept: >-
-      Regel in research/l1-pii/README.md; scripts/l1_presidio/count_validated.py zählt aus
-      entity_map.yaml und der Presidio-Registry, mit Test
+      Rule in research/l1-pii/README.md; scripts/l1_presidio/count_validated.py counts from
+      entity_map.yaml and the Presidio registry, with a test
 
   # ── K: Engine ─────────────────────────────────────────────────────────
   - id: K01
-    title: pii.rs in Module aufteilen (core, de, intl, us, uk, eu, …) ohne Verhaltensänderung
+    title: Split pii.rs into modules (core, de, intl, us, uk, eu, …) without behaviour change
     type: refactor
     deps: [E10]
-    accept: Goldens und Scoreboard bitgleich
+    accept: goldens and scoreboard bit-identical
 
   - id: K02
-    title: Score-Modell (Basis je Regel + Validator-Stärke checksum/format/none + Kontext-Bonus) und Modi strict/balanced/recall
+    title: Score model (base per rule + validator strength checksum/format/none + context bonus) and modes strict/balanced/recall
     type: engine
     deps: [K01, E11]
-    decision: "2026-10-11 freigegeben: strict ist Default und bitgleich; balanced/recall nur per Opt-in"
+    decision: "2026-10-11 approved: strict is the default and bit-identical; balanced/recall opt-in only"
     accept: >-
-      strict = heutiges Verhalten (Default, Goldens und Scoreboard bitgleich); balanced/recall nur über
-      explizite Konfiguration; Score-Feld und Modi in docs/reference/result-schema.md
+      strict = current behaviour (default, goldens and scoreboard bit-identical); balanced/recall only via
+      explicit configuration; score field and modes in docs/reference/result-schema.md
 
   - id: K03
-    title: Kontext-Engine v2 (beidseitige Nähe, DE/EN-Lexikon aus pii.json, Gegen-Kontext wie Bestell-/Rechnungsnr.)
+    title: Context engine v2 (two-sided proximity, DE/EN lexicon from pii.json, counter-context such as order/invoice numbers)
     type: engine
     deps: [K02]
 
   - id: K04
-    title: Strukturbewusstsein (JSON-Keys, CSV-Header, Key-Value, Markdown/HTML-Tabellen als Kontext)
+    title: Structure awareness (JSON keys, CSV headers, key-value, Markdown/HTML tables as context)
     type: engine
     deps: [K03]
 
   - id: K05
-    title: Kontextfreie Ausgabe prüfzifferstarker Werte im Modus balanced
+    title: Context-free output of checksum-strong values in balanced mode
     type: engine
     deps: [K03]
 
   - id: K06
-    title: Obfuskation (at/ät/dot/punkt, gespreizte Ziffern, Vollbreite, Zero-Width) mit Offset-Rückabbildung
+    title: Obfuscation (at/ät/dot/punkt, spaced digits, full-width, zero-width) with offset back-mapping
     type: engine
     deps: [K03]
 
   - id: K07
-    title: Cross-Label-Overlap-Auflösung mit Prioritäten in balanced/recall (IBAN vs. PAN vs. Konto vs. Telefon)
+    title: Cross-label overlap resolution with priorities in balanced/recall (IBAN vs. PAN vs. account vs. phone)
     type: engine
     deps: [K05]
 
   - id: T07
-    title: "Strict: PAN-Teilspan innerhalb gültiger IBAN und FINANCIAL_ACCOUNT_NUMBER auf IBAN-Wert nicht ausgeben"
+    title: "Strict: do not emit a PAN sub-span inside a valid IBAN or FINANCIAL_ACCOUNT_NUMBER on an IBAN value"
     type: precision-fix
     deps: [K02]
     needs_decision: true
-    source: TRIAGE 2026-W42 (research/l1-pii/triage/2026-W42.md, Bucket 4)
+    source: TRIAGE 2026-W42 (research/l1-pii/triage/2026-W42.md, bucket 4)
     question: >-
-      pii.rs behält Cross-Label-Overlaps bewusst ("Evidence retains both labels"), und K02 hält Strict
-      bitgleich. Soll Strict die Doppel-Labels unterdrücken, nur als Sekundär-Evidenz markieren
-      (Scoreboard wertet primär) oder bleibt das allein K07 (balanced/recall)?
+      pii.rs deliberately keeps cross-label overlaps ("Evidence retains both labels"), and K02 keeps strict
+      bit-identical. Should strict suppress the double labels, only mark them as secondary evidence
+      (scoreboard scores primary), or is this left to K07 alone (balanced/recall)?
 
-  # ── F: Bestehende Regeln reparieren ───────────────────────────────────
-  - {id: T04, title: "US-Telefon: Span-Grenze bei Klammer-Vorwahl, (415) 555-2671 statt 415) 555-2671", type: fix, deps: [E06], source: "TRIAGE 2026-W42, Bucket 2"}
-  - {id: F01, title: "Telefon regional über Crate phonenumber (DE/AT/CH/US/UK/FR/…), cargo-deny prüfen", type: recall-fix, deps: [K03]}
-  - {id: F02, title: "Kreditkarte: IIN-Bereiche + Längen je Marke, kontextfrei in balanced", type: recall-fix, deps: [K05]}
-  - {id: T05, title: "IBAN gruppiert für alle Länder im Strict-Modus (Viererblöcke mit Buchstaben, z. B. GB82 WEST 1234 5698 7654 32), mod97 unverändert", type: recall-fix, deps: [E06], source: "TRIAGE 2026-W42, Bucket 1; M1-Risiko IBAN"}
-  - {id: F03, title: "IBAN: Länderlängentabelle (SWIFT-Registry), gruppierte/kleingeschriebene Varianten, DE-Recall", type: recall-fix, deps: [K05]}
-  - {id: F04, title: "BIC: ISO-3166-Prüfung, kontextarm bei nahem IBAN", type: recall-fix, deps: [F03]}
-  - {id: T06, title: "E-Mail: keine Treffer in URL-Userinfo (scheme://user:pass@host), Credentials bleiben DLP", type: precision-fix, deps: [E06], source: "TRIAGE 2026-W42, Bucket 3"}
-  - {id: F05, title: "E-Mail: IANA-TLD-Liste, IDN, obfuskierte Varianten", type: precision-fix, deps: [K06]}
-  - {id: F06, title: "Geburtsdatum: ausgeschriebene Monate, geb./born on, numerisch mit Kontext", type: recall-fix, deps: [K03]}
-  - {id: F07, title: "US-SSN ohne Trennzeichen mit Kontext", type: recall-fix, deps: [K03]}
-  - {id: F08, title: "Pass/Personalausweis DE: ICAO-9303-Prüfziffern (7-3-1), alte + neue Formate", type: precision-fix, deps: [K02]}
-  - {id: F09, title: "MRZ-Zeilen TD1/TD3 als eigene Entität", type: new-entity, deps: [F08]}
-  - {id: F10, title: "KVNR-Prüfziffer", type: precision-fix, deps: [K02]}
-  - {id: F11, title: "Rentenversicherungsnummer-Prüfziffer", type: precision-fix, deps: [K02]}
-  - {id: F12, title: "LANR-Prüfziffer + BSNR als neue Entität", type: precision-fix, deps: [K02]}
-  - {id: F13, title: "Steuernummer: Formate je Bundesland + 13-stelliges ELSTER-Format", type: precision-fix, deps: [K02]}
-  - {id: F14, title: "Username/Kunden-/Mitarbeiter-/Konto-IDs über Strukturkontext (Gretel-Recall)", type: recall-fix, deps: [K04]}
-  - {id: F15, title: "Führerschein DE + US-Bundesstaaten mit Kontext", type: recall-fix, deps: [K03]}
-  - {id: F16, title: "Kfz-Kennzeichen DE: gültige Unterscheidungszeichen-Liste", type: precision-fix, deps: [K02]}
-  - {id: F17, title: "CVV/Ablaufdatum: Recall über Struktur, Kopplung an PAN beibehalten", type: recall-fix, deps: [K04, F02]}
+  # ── F: Repair existing rules ──────────────────────────────────────────
+  - {id: T04, title: "US phone: span boundary for parenthesized area code, (415) 555-2671 instead of 415) 555-2671", type: fix, deps: [E06], source: "TRIAGE 2026-W42, bucket 2"}
+  - {id: F01, title: "Phone regional via the phonenumber crate (DE/AT/CH/US/UK/FR/…), check cargo-deny", type: recall-fix, deps: [K03]}
+  - {id: F02, title: "Credit card: IIN ranges + lengths per brand, context-free in balanced", type: recall-fix, deps: [K05]}
+  - {id: T05, title: "Grouped IBAN for all countries in strict mode (blocks of four with letters, e.g. GB82 WEST 1234 5698 7654 32), mod97 unchanged", type: recall-fix, deps: [E06], source: "TRIAGE 2026-W42, bucket 1; M1 risk IBAN"}
+  - {id: F03, title: "IBAN: per-country length table (SWIFT-Registry), grouped/lowercase variants, DE recall", type: recall-fix, deps: [K05]}
+  - {id: F04, title: "BIC: ISO 3166 check, low context when an IBAN is nearby", type: recall-fix, deps: [F03]}
+  - {id: T06, title: "Email: no matches in URL userinfo (scheme://user:pass@host), credentials stay DLP", type: precision-fix, deps: [E06], source: "TRIAGE 2026-W42, bucket 3"}
+  - {id: F05, title: "Email: IANA TLD list, IDN, obfuscated variants", type: precision-fix, deps: [K06]}
+  - {id: F06, title: "Date of birth: spelled-out months, geb./born on, numeric with context", type: recall-fix, deps: [K03]}
+  - {id: F07, title: "US SSN without separators with context", type: recall-fix, deps: [K03]}
+  - {id: F08, title: "Passport/ID card DE: ICAO 9303 check digits (7-3-1), old + new formats", type: precision-fix, deps: [K02]}
+  - {id: F09, title: "MRZ lines TD1/TD3 as a separate entity", type: new-entity, deps: [F08]}
+  - {id: F10, title: "KVNR check digit", type: precision-fix, deps: [K02]}
+  - {id: F11, title: "Pension insurance number (RVNR) check digit", type: precision-fix, deps: [K02]}
+  - {id: F12, title: "LANR check digit + BSNR as a new entity", type: precision-fix, deps: [K02]}
+  - {id: F13, title: "Tax number (Steuernummer): formats per federal state + 13-digit ELSTER format", type: precision-fix, deps: [K02]}
+  - {id: F14, title: "Username/customer/employee/account IDs via structural context (Gretel recall)", type: recall-fix, deps: [K04]}
+  - {id: F15, title: "Driver's licence DE + US states with context", type: recall-fix, deps: [K03]}
+  - {id: F16, title: "Licence plate DE: valid list of district codes", type: precision-fix, deps: [K02]}
+  - {id: F17, title: "CVV/expiry date: recall via structure, keep coupling to PAN", type: recall-fix, deps: [K04, F02]}
 
-  # ── B: DACH/EU-Tiefe ──────────────────────────────────────────────────
-  - {id: B01, title: "USt-IdNr. Teil 1: DE, AT, CH, FR, NL, BE, IT, ES mit Prüfsummen", type: new-entity, deps: [K05]}
-  - {id: B02, title: "USt-IdNr. Teil 2: übrige EU + XI, NO, GB", type: new-entity, deps: [B01]}
-  - {id: B03, title: "Handelsregisternummer HRA/HRB mit Amtsgericht-Kontext", type: new-entity, deps: [K03]}
-  - {id: B04, title: "DE-Postadresse: PLZ-Bereiche + Straße + Hausnummer (postal_address_de wiederbeleben)", type: new-entity, deps: [K04]}
-  - {id: B05, title: "DE Bankleitzahl + Kontonummer (Altformat) mit Kontext", type: new-entity, deps: [F03]}
-  - {id: B06, title: "AT Sozialversicherungsnummer (Prüfziffer)", type: new-entity, deps: [K05]}
-  - {id: B07, title: "CH AHV-Nummer (EAN-13)", type: new-entity, deps: [K05]}
-  - {id: B08, title: "AT/CH Pass- und ID-Nummern (Format + Kontext)", type: new-entity, deps: [F08]}
-  - {id: B09, title: "FR NIR (Mod 97) + SIREN/SIRET (Luhn)", type: new-entity, deps: [K05]}
-  - {id: B10, title: "NL BSN (11-Probe)", type: new-entity, deps: [K05]}
-  - {id: B11, title: "BE Nationalregisternummer", type: new-entity, deps: [K05]}
-  - {id: B12, title: "SE Personnummer (Luhn) + DK CPR", type: new-entity, deps: [K05]}
-  - {id: B13, title: "NO Fødselsnummer + FI HETU", type: new-entity, deps: [K05]}
+  # ── B: DACH/EU depth ──────────────────────────────────────────────────
+  - {id: B01, title: "VAT ID part 1: DE, AT, CH, FR, NL, BE, IT, ES with checksums", type: new-entity, deps: [K05]}
+  - {id: B02, title: "VAT ID part 2: remaining EU + XI, NO, GB", type: new-entity, deps: [B01]}
+  - {id: B03, title: "Commercial register number HRA/HRB with local court context", type: new-entity, deps: [K03]}
+  - {id: B04, title: "DE postal address: postcode ranges + street + house number (revive postal_address_de)", type: new-entity, deps: [K04]}
+  - {id: B05, title: "DE bank code + account number (legacy format) with context", type: new-entity, deps: [F03]}
+  - {id: B06, title: "AT social insurance number (check digit)", type: new-entity, deps: [K05]}
+  - {id: B07, title: "CH AHV number (EAN-13)", type: new-entity, deps: [K05]}
+  - {id: B08, title: "AT/CH passport and ID numbers (format + context)", type: new-entity, deps: [F08]}
+  - {id: B09, title: "FR NIR (mod 97) + SIREN/SIRET (Luhn)", type: new-entity, deps: [K05]}
+  - {id: B10, title: "NL BSN (11-proof)", type: new-entity, deps: [K05]}
+  - {id: B11, title: "BE national register number", type: new-entity, deps: [K05]}
+  - {id: B12, title: "SE personnummer (Luhn) + DK CPR", type: new-entity, deps: [K05]}
+  - {id: B13, title: "NO fødselsnummer + FI HETU", type: new-entity, deps: [K05]}
   - {id: B14, title: "PT NIF + IE PPSN", type: new-entity, deps: [K05]}
-  - {id: B15, title: "Kfz-Kennzeichen AT/CH/NL/FR mit Kontext", type: new-entity, deps: [F16]}
+  - {id: B15, title: "Licence plates AT/CH/NL/FR with context", type: new-entity, deps: [F16]}
 
-  # ── A: Presidio-Parität ───────────────────────────────────────────────
-  - {id: A01, title: "URL (mit/ohne Schema, TLD-validiert)", type: new-entity, deps: [F05]}
-  - {id: A02, title: "Krypto-Wallets: BTC Base58Check/Bech32(m), ETH EIP-55, LTC", type: new-entity, deps: [K05]}
+  # ── A: Presidio parity ────────────────────────────────────────────────
+  - {id: A01, title: "URL (with/without scheme, TLD-validated)", type: new-entity, deps: [F05]}
+  - {id: A02, title: "Crypto wallets: BTC Base58Check/Bech32(m), ETH EIP-55, LTC", type: new-entity, deps: [K05]}
   - {id: A03, title: "US ITIN", type: new-entity, deps: [K03]}
-  - {id: A04, title: "US Bankkonto (Kontext) + ABA-Routing-Nummer (Prüfsumme)", type: new-entity, deps: [K03]}
-  - {id: A05, title: "US Pass (Kontext)", type: new-entity, deps: [K03]}
-  - {id: A06, title: "Medizinische Lizenz: DEA (Prüfsumme) + NPI (Luhn mit 80840)", type: new-entity, deps: [K05]}
-  - {id: A07, title: "UK NHS-Nummer (Mod 11) + UK Pass/Führerschein", type: new-entity, deps: [K05]}
+  - {id: A04, title: "US bank account (context) + ABA routing number (checksum)", type: new-entity, deps: [K03]}
+  - {id: A05, title: "US passport (context)", type: new-entity, deps: [K03]}
+  - {id: A06, title: "Medical licence: DEA (checksum) + NPI (Luhn with 80840)", type: new-entity, deps: [K05]}
+  - {id: A07, title: "UK NHS number (mod 11) + UK passport/driving licence", type: new-entity, deps: [K05]}
   - {id: A08, title: "AU ABN, ACN, TFN, Medicare", type: new-entity, deps: [K05]}
-  - {id: A09, title: "IN Aadhaar (Verhoeff), PAN, Voter-ID, Pass", type: new-entity, deps: [K05]}
+  - {id: A09, title: "IN Aadhaar (Verhoeff), PAN, voter ID, passport", type: new-entity, deps: [K05]}
   - {id: A10, title: "SG NRIC/FIN + UEN", type: new-entity, deps: [K05]}
   - {id: A11, title: "ES NIF/NIE/CIF", type: new-entity, deps: [K05]}
   - {id: A12, title: "IT Codice Fiscale + Partita IVA", type: new-entity, deps: [K05]}
   - {id: A13, title: "PL PESEL, NIP, REGON", type: new-entity, deps: [K05]}
   - {id: A14, title: "KR RRN", type: new-entity, deps: [K05]}
-  - {id: T08, title: "UK Postcode + Fahrzeugkennzeichen (Format + Kontext)", type: new-entity, deps: [K03], source: "TRIAGE 2026-W42, Presidio-Parität"}
-  - {id: T09, title: "US MBI (Format + Kontext) + CA SIN (Luhn)", type: new-entity, deps: [K05], source: "TRIAGE 2026-W42, Presidio-Parität"}
-  - {id: T10, title: "IT Carta d'identità, Patente, Passaporto + ES Pasaporte (Format + Kontext)", type: new-entity, deps: [K03], source: "TRIAGE 2026-W42, Presidio-Parität"}
-  - {id: T11, title: "IN GSTIN (Prüfziffer) + Fahrzeugregistrierung", type: new-entity, deps: [K05], source: "TRIAGE 2026-W42, Presidio-Parität"}
-  - {id: T12, title: "KR BRN + FRN (Prüfziffer), Führerschein + Pass (Kontext)", type: new-entity, deps: [A14], source: "TRIAGE 2026-W42, Presidio-Parität"}
-  - {id: T13, title: "SE Organisationsnummer (Luhn), TR T.C. Kimlik No (Prüfziffer) + Kennzeichen, ZA ID (Luhn)", type: new-entity, deps: [B12], source: "TRIAGE 2026-W42, Presidio-Parität"}
-  - {id: A15, title: "DATE_TIME generisch, nur im Modus recall", type: new-entity, deps: [K02, F06]}
+  - {id: T08, title: "UK postcode + vehicle registration (format + context)", type: new-entity, deps: [K03], source: "TRIAGE 2026-W42, Presidio parity"}
+  - {id: T09, title: "US MBI (format + context) + CA SIN (Luhn)", type: new-entity, deps: [K05], source: "TRIAGE 2026-W42, Presidio parity"}
+  - {id: T10, title: "IT carta d'identità, patente, passaporto + ES pasaporte (format + context)", type: new-entity, deps: [K03], source: "TRIAGE 2026-W42, Presidio parity"}
+  - {id: T11, title: "IN GSTIN (check digit) + vehicle registration", type: new-entity, deps: [K05], source: "TRIAGE 2026-W42, Presidio parity"}
+  - {id: T12, title: "KR BRN + FRN (check digit), driving licence + passport (context)", type: new-entity, deps: [A14], source: "TRIAGE 2026-W42, Presidio parity"}
+  - {id: T13, title: "SE organisationsnummer (Luhn), TR T.C. Kimlik No (check digit) + licence plate, ZA ID (Luhn)", type: new-entity, deps: [B12], source: "TRIAGE 2026-W42, Presidio parity"}
+  - {id: A15, title: "Generic DATE_TIME, recall mode only", type: new-entity, deps: [K02, F06]}
 
-  # ── C: Über Presidio hinaus ───────────────────────────────────────────
+  # ── C: Beyond Presidio ────────────────────────────────────────────────
   - {id: C01, title: "IMEI (Luhn) + MEID", type: new-entity, deps: [K05]}
-  - {id: C02, title: "ICCID (Luhn) + IMSI (Kontext)", type: new-entity, deps: [C01]}
-  - {id: C03, title: "VIN (Prüfziffer NA, Format EU, Kontext)", type: new-entity, deps: [K05]}
-  - {id: C04, title: "ISIN (Luhn) + LEI (Mod 97)", type: new-entity, deps: [K05]}
-  - {id: C05, title: "Geokoordinaten dezimal + DMS mit Kontext", type: new-entity, deps: [K03]}
-  - {id: C06, title: "Social-Handles + Profil-URLs mit Kontext", type: new-entity, deps: [A01]}
-  - {id: C07, title: "PZN (Mod 11) + ICD-10 mit Kontext", type: new-entity, deps: [K03]}
-  - {id: C08, title: "Werbe-/Geräte-IDs (IDFA, GAID, Android-ID) mit Kontext", type: new-entity, deps: [K03]}
-  - {id: C09, title: "EHIC-Kartennummer mit Kontext", type: new-entity, deps: [F10]}
+  - {id: C02, title: "ICCID (Luhn) + IMSI (context)", type: new-entity, deps: [C01]}
+  - {id: C03, title: "VIN (check digit NA, format EU, context)", type: new-entity, deps: [K05]}
+  - {id: C04, title: "ISIN (Luhn) + LEI (mod 97)", type: new-entity, deps: [K05]}
+  - {id: C05, title: "Geo coordinates decimal + DMS with context", type: new-entity, deps: [K03]}
+  - {id: C06, title: "Social handles + profile URLs with context", type: new-entity, deps: [A01]}
+  - {id: C07, title: "PZN (mod 11) + ICD-10 with context", type: new-entity, deps: [K03]}
+  - {id: C08, title: "Advertising/device IDs (IDFA, GAID, Android ID) with context", type: new-entity, deps: [K03]}
+  - {id: C09, title: "EHIC card number with context", type: new-entity, deps: [F10]}
 
-  # ── H: Härtung und Abschluss ──────────────────────────────────────────
-  - {id: H01, title: "Hard-Negative-Mining: 500 technische Benign-Texte (Versionen, Hashes, Bestellnr., UUIDs, Timestamps)", type: precision-fix, deps: [A15, C09]}
-  - {id: H02, title: "Property-/Fuzz-Tests: kein Panic, gültige UTF-8-Offsets, strict bitgleich", type: test, deps: [H01]}
-  - {id: H03, title: "Latenz-Budget nach allen Regeln, AnchorGate-Abdeckung neuer Regeln", type: perf, deps: [H01]}
-  - {id: H04, title: "Doku: categories, rule catalog, result schema, choose-categories", type: docs, deps: [H03]}
-  - {id: H05, title: "Abschlussbericht M1–M4 auf Holdout", type: report, deps: [H04]}
+  # ── H: Hardening and wrap-up ──────────────────────────────────────────
+  - {id: H01, title: "Hard-negative mining: 500 technical benign texts (versions, hashes, order numbers, UUIDs, timestamps)", type: precision-fix, deps: [A15, C09]}
+  - {id: H02, title: "Property/fuzz tests: no panic, valid UTF-8 offsets, strict bit-identical", type: test, deps: [H01]}
+  - {id: H03, title: "Latency budget after all rules, AnchorGate coverage of new rules", type: perf, deps: [H01]}
+  - {id: H04, title: "Docs: categories, rule catalog, result schema, choose-categories", type: docs, deps: [H03]}
+  - {id: H05, title: "Final report M1–M4 on holdout", type: report, deps: [H04]}
 
 recurring:
   - id: TRIAGE
-    when: montags (ersetzt den ersten Lauf der Woche)
-    title: Scoreboard-Fehleranalyse → neue Aufgaben mit id Txx am passenden Platz einfügen, nichts implementieren
+    when: Mondays (replaces the first run of the week)
+    title: Scoreboard error analysis → insert new tasks with id Txx at the right place, implement nothing
