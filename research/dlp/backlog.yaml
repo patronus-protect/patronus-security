@@ -84,6 +84,7 @@ tasks:
     accept: Skript im Repo, Daten nur auf VPS; Repo-Split dev/holdout, Manifest mit SHA-256 und Lizenz je Repo; Metrik FP/MB
 
   - id: E06
+    status: done
     title: Benign-Dokumentkorpus DE/EN (Prosa, Behörden-/Unternehmenstexte gemeinfrei/CC) für Content- und Dokumentklassen
     type: eval-infra
     deps: []
