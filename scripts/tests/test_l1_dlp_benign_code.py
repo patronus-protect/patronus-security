@@ -97,7 +97,7 @@ def pinned_list(tmp_path: Path, repos: list[dict]) -> Path:
 
 
 def read_jsonl(path: Path) -> list[dict]:
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").split("\n") if line]
 
 
 # ── licenses, scanner exclusion, repository list ─────────────────────────────
@@ -340,7 +340,7 @@ def test_kind_budget_and_log_limits(tmp_path, monkeypatch):
     monkeypatch.setattr(MODULE, "LOG_MAX_BYTES", 700)
     data, entry = MODULE.build_repo(repo, tmp_path / "cache")
     assert 0 < entry["kinds"]["code"]["bytes"] <= 1000
-    log = [doc for doc in map(json.loads, data.decode().splitlines()) if doc["kind"] == "git_log"][0]["text"]
+    log = [doc for doc in map(json.loads, filter(None, data.decode().split("\n"))) if doc["kind"] == "git_log"][0]["text"]
     assert 0 < len(log.encode()) <= 700 and log.startswith(f"commit {commit}\n")
     full = MODULE.git(["log", "-n4", "--format=%H", commit], tmp_path / "cache" / "budget" / "log.git").decode().split()
     kept = re.findall(r"(?m)^commit ([0-9a-f]{40})$", log)
