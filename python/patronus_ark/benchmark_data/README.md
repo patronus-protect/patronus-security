@@ -38,6 +38,13 @@ Every row declares `case_type`, `target_label`, `language`, `span_unit`, and
 negative rows contain no entities and explain the excluded lookalike in
 `negative_reason`.
 
+Reserved placeholder values (RFC 2606/6761 domains such as `example.com` or
+`.invalid`, NANP `555-01xx` and `+1 000-000-0000`) are PII and gold positives in
+`pii_l1.jsonl` and the `demo_pii_dlp*` sets. Hard negatives exclude values by
+form only (obfuscated, masked, single-label host, invalid prefix), never because
+a name or number is reserved. The full convention is in
+[`research/l1-pii/README.md`](../../../research/l1-pii/README.md).
+
 ### Secret-safe DLP rows (generator recipes)
 
 `dlp_l1.jsonl` never stores secret values in clear. Every positive row of the

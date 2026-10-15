@@ -39,7 +39,8 @@ def test_blind_demo_golden_extensions_have_valid_unique_entity_spans():
         "personnel_record",
     }
     assert {row["language"] for row in rows} == {"de", "en"}
-    assert sum(row["case_type"] == "hard_negative" for row in rows) == 16
+    # T01: cu-07 (reserved placeholders) is a positive since the placeholder convention.
+    assert sum(row["case_type"] == "hard_negative" for row in rows) == 15
 
 
 def test_scoring_keeps_exact_and_overlap_separate():

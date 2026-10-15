@@ -31,8 +31,9 @@ sending anything to a cloud service.
 
 - **Layered scanning** — native L1 rules provide immediate findings and context; model-backed
   categories use NTDB L2 to select the chunks that genuinely need a transformer.
-- **Ten categories** — prompt injection, DLP, PII, dynamic PII (GLiNER spans), sensitive
-  documents, the agentic tool trio (class/action/tags), routing intent, and threat type.
+- **Eleven categories** — prompt injection, DLP, PII, dynamic PII (GLiNER spans), sensitive
+  documents, the agentic tool trio (class/action/tags), routing intent, threat type, and shell
+  command risk.
 - **Rust core, first-class Python** — one crate (`patronus-ark`) plus `abi3-py311` wheels
   (import `patronus_ark`); no Rust toolchain needed to use the Python package.
 - **Asynchronous by default** — `enqueue()` returns immediately, results stream back through one

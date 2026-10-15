@@ -111,8 +111,9 @@ mit Prüfziffer sind gültig erzeugt: IBAN, Luhn, Steuer-ID, USt-IdNr., KVNR, RV
 ICAO-Prüfziffer, Codice Fiscale, PESEL, Aadhaar und weitere. Keiner von ihnen fällt durch einen
 Presidio-Validator. Gedruckte Formen, die Presidios Regexe nicht kennen (Steuer-ID in Gruppen,
 RVNR mit Leerzeichen, `IT`-Präfix, Thai-ID mit Bindestrichen), sind Absicht. Positive meiden
-reservierte Platzhalter (RFC-2606/6761-Domains, NANP 555-01xx, Dokumentations-IPs), solange T01
-offen ist.
+reservierte Platzhalter (RFC-2606/6761-Domains, NANP 555-01xx, Dokumentations-IPs). Nach der
+Gold-Konvention aus T01 ([`research/l1-pii/README.md`](../../research/l1-pii/README.md)) wären sie
+positiv; das Goldset bleibt eingefroren und führt sie auch nicht als Hard Negative.
 
 ```bash
 python3 scripts/l1_presidio/synth_goldset.py --dev-out DIR                       # öffentlicher Dev-Seed

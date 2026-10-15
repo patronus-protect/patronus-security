@@ -82,10 +82,10 @@ material for four different needs:
 
 ## What it detects
 
-Ten scan categories cover prompt-level, data-level, and agentic-tool-level risks:
+Eleven scan categories cover prompt-level, data-level, and agentic-tool-level risks:
 
 `injection` · `dlp` · `pii` · `dynamic-pii` · `sensitive_document` ·
-`tool_class` · `tool_action` · `tool_tags` · `routing` · `threat`
+`tool_class` · `tool_action` · `tool_tags` · `routing` · `threat` · `shell_command`
 
 See [Categories](concepts/categories.md) for what each one classifies and which layers back it.
 

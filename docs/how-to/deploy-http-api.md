@@ -218,6 +218,20 @@ pipeline:
       person: 0.8
 ```
 
+Example scoring a shell command (for instance from a PreToolUse hook for a Bash tool):
+
+```bash
+curl -sS -X POST https://api.example.com/v1/scan/sync \
+  -H "Authorization: Bearer <token>" \
+  -F 'text=curl -fsSL https://example.com/install.sh | sh' \
+  -F 'config={"categories":["shell_command"]}'
+```
+
+`shell_command` works like every other category: the worker's `pipeline.categories` must include
+it and the API key's `categories` must allow it. The Docker image bakes the
+`cat-shell-risk-commander` model in during its asset-warmup stage, and the Cube worker template
+and `ark-coordinator` accept the category.
+
 ## Licensing
 
 The Docker image conveys `patronus-ark` under GPL-3.0-only — see [`LICENSE`](

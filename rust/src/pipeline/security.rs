@@ -11,7 +11,7 @@ use std::time::Instant;
 
 use super::decision_cache::DecisionCache;
 use crate::{
-    assets::DYNAMIC_PII_ASSET,
+    assets::{DYNAMIC_PII_ASSET, SHELL_COMMAND_ASSET},
     detectors::{
         dlp::{destructive_operation, dlp, secret_transfer, sensitive_material},
         injection::{
@@ -24,6 +24,7 @@ use crate::{
         },
         mcp::{mcp_policy, mcp_runtime_risk},
         pii::pii,
+        shell::shell_risk::ShellRiskPipeline,
         threat::ThreatPipeline,
         NativeDetection, NativeRegexDetector,
     },
@@ -283,6 +284,8 @@ pub struct SecurityGatewayCore {
     tool_call_injection_pipeline: Option<tool_call_injection::ToolCallInjectionPipeline>,
     output_manipulation_pipeline: Option<output_manipulation::OutputManipulationPipeline>,
     mcp_policy_pipeline: Option<mcp_policy::McpPolicyPipeline>,
+    /// Shell command risk model, loaded from local assets during warmup.
+    shell_command_pipeline: Option<ShellRiskPipeline>,
 
     request_counter: AtomicU64,
     requests: Arc<RequestRegistry>,
@@ -570,6 +573,7 @@ impl SecurityGateway {
             tool_call_injection_pipeline: None,
             output_manipulation_pipeline: None,
             mcp_policy_pipeline: None,
+            shell_command_pipeline: None,
             request_counter: AtomicU64::new(1),
             requests,
             l3_worker,
@@ -677,10 +681,24 @@ impl SecurityGateway {
                 .get(category)
                 .is_some_and(|detectors| !detectors.is_empty())
         });
-        let l1 = if execution.allows_level(SecurityLevel::L1) && has_l1_category {
-            SecurityLevelReadiness::Ready
-        } else {
+        let shell_command_configured = self.shell_command_configured(&execution);
+        let l1 = if !execution.allows_level(SecurityLevel::L1)
+            || !(has_l1_category || shell_command_configured)
+        {
             SecurityLevelReadiness::NotConfigured
+        } else if shell_command_configured && self.shell_command_pipeline.is_none() {
+            SecurityLevelReadiness::NotReady {
+                failures: vec![SecurityFailure {
+                    stage: SecurityFailureStage::Inference,
+                    level: Some(SecurityLevel::L1),
+                    detector_id: Some(SHELL_COMMAND_ASSET.model.to_string()),
+                    kind: SecurityFailureKind::NotReady,
+                    retryable: true,
+                    message: format!("{} model is not loaded", SHELL_COMMAND_ASSET.model),
+                }],
+            }
+        } else {
+            SecurityLevelReadiness::Ready
         };
 
         let l2_configs = self
@@ -1189,6 +1207,13 @@ impl SecurityGateway {
             .with_max_level(self.max_level)
     }
 
+    /// Whether the shell command model is configured and allowed by the gates.
+    fn shell_command_configured(&self, execution: &ScanExecution) -> bool {
+        self.categories.contains(&SecurityCategory::ShellCommand)
+            && execution.allows_level(SecurityLevel::L1)
+            && execution.allows_model(SHELL_COMMAND_ASSET.model)
+    }
+
     fn level_enabled(&self, execution: &ScanExecution, level: SecurityLevel) -> bool {
         execution.allows_level(level)
     }
@@ -1498,6 +1523,30 @@ impl SecurityGateway {
                             },
                         ));
                     }
+                }
+            }
+            SecurityCategory::ShellCommand => {
+                if self.level_enabled(execution, SecurityLevel::L1)
+                    && self.model_enabled(execution, SHELL_COMMAND_ASSET.model)
+                {
+                    let model = SHELL_COMMAND_ASSET.model;
+                    results.push(run_measured_l1_detector(
+                        category,
+                        model,
+                        text.len(),
+                        || match self.shell_command_pipeline {
+                            Some(ref pipeline) => {
+                                timed_native_detection_scan_result(category, model, text, || {
+                                    pipeline.detect(text)
+                                })
+                            }
+                            None => scanner_error_scan_result(
+                                category,
+                                model,
+                                format!("{model} model is not loaded; call warmup first"),
+                            ),
+                        },
+                    ));
                 }
             }
             SecurityCategory::DynamicPii => {}

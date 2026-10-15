@@ -40,7 +40,7 @@ work on its own background workers.
     ```
 
 `warmup()` verifies assets and initializes the pipelines, downloading any missing L2 packages
-on the first run. Native L1 always runs; `pii` and `dlp` are L1-only and never download.
+on the first run. Native L1 always runs; `pii` and `dlp` are L1-only and never download (`shell_command` is L1 but needs a small model file).
 
 !!! warning "Offline start needs pre-cached assets"
     With `download_files=false` and a model-backed level (`l2`/`l3`), `warmup()` **raises** if a
