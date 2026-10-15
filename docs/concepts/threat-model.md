@@ -26,7 +26,7 @@ Concretely, the library provides signals to:
 - classify **agentic tool use** so a policy engine can gate risky actions
   (`tool_class`, `tool_action`, `tool_tags`, `routing`);
 - score **shell commands and scripts** an agent is about to run (`shell_command`) — a text-only
-  risk signal that complements, not replaces, sandboxing and permissions.
+  risk signal.
 
 ## Trust boundaries
 

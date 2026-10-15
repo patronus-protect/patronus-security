@@ -141,7 +141,7 @@ def test_loaded_categories_are_separate_from_default_inference():
     build = yaml.safe_load((ROOT / "ark-api/config.build.yaml").read_text())
     key = worker["auth"]["keys"][0]
     all_categories = {"injection", "dlp", "pii", "threat", "dynamic-pii", "sensitive_document",
-                      "routing", "tool_class", "tool_action", "tool_tags"}
+                      "routing", "tool_class", "tool_action", "tool_tags", "shell_command"}
     assert set(worker["pipeline"]["categories"]) == all_categories
     assert set(build["pipeline"]["categories"]) == all_categories
     assert set(key["categories"]) == all_categories

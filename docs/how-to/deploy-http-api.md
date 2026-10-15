@@ -227,9 +227,10 @@ curl -sS -X POST https://api.example.com/v1/scan/sync \
   -F 'config={"categories":["shell_command"]}'
 ```
 
-The worker's `pipeline.categories` must include `shell_command` and the API key's `categories`
-must allow it. The worker needs the `cat-shell-risk-commander` model in `model_dir`; with
-`download_files: false`, pre-cache it or warmup fails.
+`shell_command` works like every other category: the worker's `pipeline.categories` must include
+it and the API key's `categories` must allow it. The Docker image bakes the
+`cat-shell-risk-commander` model in during its asset-warmup stage, and the Cube worker template
+and `ark-coordinator` accept the category.
 
 ## Licensing
 

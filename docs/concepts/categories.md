@@ -49,9 +49,8 @@ phase — so also in distributed mode and with `max_level="l1"` — but is the o
 needs a downloaded model file: `cat-shell-risk-commander`, a TF-IDF character n-gram logistic
 regression (`model.json`, ~2.5 MB, no ONNX/tokenizer). ARK also scores a comments-stripped
 variant and keeps the max, to resist comment padding. It is text-only: it neither executes nor
-parses commands, its labels are source-based risk labels, and it complements — not replaces —
-sandboxing and permissions. Validate the threshold on your own traffic (report/review first)
-before auto-blocking. See [Assets](../assets.md) and the
+parses commands. Like every category it is available through the library, the HTTP API and the
+Cube Coordinator. See [Assets](../assets.md) and the
 [result schema](../reference/result-schema.md).
 
 ### Native + model-backed (L1 → L2 → L3)
