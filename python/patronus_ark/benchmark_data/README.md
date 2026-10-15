@@ -122,7 +122,49 @@ for sample in rules.samples("dlp_btc_wif", range(4)):
     sample.text, sample.span
 ```
 
-The generator is deterministic:
+### Carrier templates (`dlp_synth.carriers`)
+
+`dlp_synth.carriers` embeds generated values in realistic documents for the DLP
+scoreboard (E10) and the frozen holdout (E09). The families live in
+[`dlp_synth/carrier_templates.py`](../dlp_synth/carrier_templates.py) and cover
+`.env`, YAML (incl. a Kubernetes Secret), JSON, TOML, HCL (Terraform, Nomad), XML
+(app.config, Maven), properties/INI, shell/CLI, Dockerfile, CI YAML (GitHub
+Actions, GitLab), Jupyter, text and JSONL logs, HTTP, code in Python, JavaScript,
+TypeScript, Go, Java, C#, Rust and Ruby, and DE/EN chat, tickets and mail.
+
+- Every family belongs to exactly one split. Dev and holdout share no family and
+  no template, and each split has every format (each code language counted
+  under `code`) in both DE and EN.
+- Each value rule of `rules.json` has a profile with its entity, group and key
+  name (`OPENAI_API_KEY`, `openaiApiKey`, `Openai-Api-Key` …), a DE/EN label and
+  an optional wrapper (`Bearer …`, `postgres://app:…@db…`, `JSESSIONID=…`).
+- Positives carry one entity whose `start`/`end` are code points in `text` and
+  cover only the value, without key, quotes or wrapper. `encoding` lists the
+  escapes applied to the value (`json`, `xml`, `indent` for YAML block scalars;
+  inner first), so a JSON-escaped PEM in a notebook decodes back to the
+  generator output.
+- Hard negatives are the same document without entities: `placeholder`,
+  `env_ref` (`${KEY}`, `os.environ[…]`, `${{ secrets.KEY }}`, Helm, Maven,
+  configparser …), `doc_example` and `test_key`. The last two keep the generator's
+  prefix and length but use `EXAMPLEKEY`/`TESTKEY` fill words and an invalid check
+  value, so CRC-32, Base58Check, ISO 7064, DER and JWT checks fail. Encoded values
+  keep their encoded shape and break only the checksum or decoded structure: WIF
+  keys still start with `5`/`K`/`L` and carry a wrong Base58Check value, JWT
+  segments still start with `eyJ` and decode to broken JSON, PEM bodies keep label
+  and line width with a broken DER/OpenSSH layout. They still match the rule
+  pattern, so only structural validation tells them from a real value.
+- Code and notebook families carry the document label `content.source_code`,
+  logs `content.system_log`.
+
+```shell
+cd python
+../.venv/bin/python -m patronus_ark.dlp_synth.carriers --split dev --seed 1 --out /tmp/dlp-carriers-dev.jsonl
+```
+
+Rows contain checksum-valid synthetic tokens. Write them outside the repository
+and never commit them. The holdout split is built only by E09 with a secret seed.
+
+The golden generator is deterministic:
 
 ```shell
 .venv/bin/python python/patronus_ark/benchmark_data/generate_l1_goldens.py

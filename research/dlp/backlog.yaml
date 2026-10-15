@@ -70,6 +70,7 @@ tasks:
     accept: python/patronus_ark/dlp_synth/ with generators for all current rules; unit tests that values pass the rule validators
 
   - id: E04
+    status: done
     title: Carrier templates (env, YAML, JSON, TOML, HCL, XML, properties, shell/CLI, Dockerfile, CI YAML, Jupyter, log, HTTP, code in 8 languages, DE/EN chat/ticket/mail)
     type: eval-infra
     deps: [E03]
