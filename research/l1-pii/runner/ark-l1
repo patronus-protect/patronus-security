@@ -401,7 +401,7 @@ def gate_steps(wt: Path) -> list[tuple[str, list[str], dict]]:
         # The secret holdout seed is created in HOLDOUT/synthetic/.seed.
         steps.append(("synthetic-goldset", [py, str(synth), "--dev-out", str(DEV_DATA / "synthetic"),
                                             "--holdout-out", str(HOLDOUT / "synthetic")],
-                      {"rw": [DEV_DATA, HOLDOUT], "network": False}))
+                      {"rw": [DEV_DATA, HOLDOUT], "readable": (wt,), "network": False}))
     scoreboard = wt / P["eval_dir"] / "scoreboard.py"
     if scoreboard.exists():
         cur = load(CURRENT, {})
