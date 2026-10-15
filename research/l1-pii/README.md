@@ -83,7 +83,7 @@ run.sh
   claude -p       → in systemd-Sandbox (nur Klon + Cargo-Target beschreibbar, kein sudo/GitHub/Holdout)
   ark-l1 gate     → Agent-Commits als Bundle (sandboxed erzeugt) ins vertrauenswürdige Repo holen,
                     frischer Checkout; fmt/clippy/test, Golden-Eval, Python-Tests, Docs in einer
-                    Sandbox ohne Credentials; Scoreboard (sobald E06 da ist) zusätzlich ohne Netz,
+                    Sandbox ohne Credentials; Scoreboard (scoreboard.py gate, E06) zusätzlich ohne Netz,
                     als einziger Schritt mit Lesezugriff auf den Holdout
   grün: ark-l1 publish → Status done per Plumbing, push aus dem vertrauenswürdigen Repo, Draft-PR
                     (idempotent; schlägt es fehl, holt der nächste Lauf nur das Publish nach)
@@ -108,6 +108,10 @@ run.sh
   Dazu kommt das synthetische DE/EU-Goldset aus `scripts/l1_presidio/synth_goldset.py` unter
   `…/synthetic/`: Dev mit öffentlichem Seed, Holdout mit geheimem Seed (`~/ark-l1/holdout/synthetic/.seed`),
   ebenfalls einmalig vom Gate erzeugt (Schritt `synthetic-goldset`, erst nach Neuinstallation des Runners).
+- **Scoreboard:** `scripts/l1_presidio/scoreboard.py gate` rechnet Head und Basis (exakt und
+  überlappend, je Entität, DE/EN, Hard-Negative-FP) auf Dev und Holdout; Exit 1 bei > 0,5 pp
+  F1-Verlust oder neuem Hard-Negative-Treffer. Lokal mit `--dev "$ARK_L1_DEV_DATA"` ohne
+  `--holdout`; Details in [`scripts/l1_presidio/README.md`](../../scripts/l1_presidio/README.md).
 - **Beobachten:** `~/ark-l1/bin/ark-l1 status`, Logs unter `~/ark-l1/logs/`, PR-Mails von GitHub.
   `ark-l1 unblock <ID>` gibt blockierte Aufgaben frei.
 - Montags ist die erste Aufgabe `TRIAGE`: Scoreboard-Fehleranalyse → neue Backlog-Einträge.
