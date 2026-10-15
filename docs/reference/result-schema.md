@@ -291,6 +291,26 @@ public finding spans and use `source: "l1"`; rejected candidates remain visible 
 native Injection producer verdicts are no longer returned as separate public results. Registered
 external L1 detectors remain separate and unchanged.
 
+### Shell command results
+
+`shell_command` returns one L1 result with `model: "cat-shell-risk-commander"` and `class_name`
+`shell_risk` or `safe`. Its `confidence` is `sigmoid(|decision_score − threshold|)` — the
+distance from the threshold squashed into `0.5`–`1.0`, **not** a calibrated probability.
+`layers[0].details` contains:
+
+| Field | Meaning |
+| --- | --- |
+| `model` | `cat-shell-risk-commander`. |
+| `decision_score` | Raw logit of the scored variant. |
+| `threshold` / `threshold_policy` | Decision threshold and its policy (default `external_commands_1pct_fpr`, ≈1.15). |
+| `variant` | `full` or `comments_stripped` — whichever scored higher. |
+| `full_score` | Logit of the unmodified input. |
+| `comments_stripped_score` | Logit with comments blanked; present only when comments were found. |
+
+Flagged results carry up to three `evidence_spans` with label `shell_risk` over the character
+n-gram regions that pushed the score up; `score` is that region's share of the positive
+contribution.
+
 ## Async queue events
 
 `consume_next_event(timeout)` returns one event dict at a time (or `None` on timeout).

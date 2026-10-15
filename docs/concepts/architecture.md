@@ -128,7 +128,7 @@ See [Configure caching](../how-to/configure-caching.md).
 
 ### The asset manager
 
-Native L1 needs no assets. L2/L3 scanners download **Patronus-owned model bundles** from the
+Native L1 needs no assets, except the small `shell_command` model file. L2/L3 scanners download **Patronus-owned model bundles** from the
 Hugging Face repositories listed in [`rust/src/assets/specs.rs`](https://github.com/patronus-protect/patronus-security/blob/main/rust/src/assets/specs.rs).
 The manager downloads on first use, verifies integrity by content/source hash, caches under
 the platform cache directory (or a custom `model_dir`), and converts tokenizers into a compact

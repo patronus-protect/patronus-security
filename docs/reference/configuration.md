@@ -10,7 +10,7 @@ Set at gateway construction:
 
 | Option | Type | Meaning | Rust |
 | --- | --- | --- | --- |
-| `categories` | list of category names | Which [categories](../concepts/categories.md) to scan. | constructor |
+| `categories` | list of category names | Which [categories](../concepts/categories.md) to scan (e.g. `"shell_command"`; `"shell-command"` is also accepted). | constructor |
 | `max_level` | `"l1"` \| `"l2"` \| `"l3"` | Hard ceiling on escalation (default `"l2"`). | constructor |
 | `download_files` | bool | Whether missing assets may be downloaded on warmup. | constructor |
 | `download_categories` | list | Restrict automatic downloads to these categories. | constructor |
@@ -83,6 +83,7 @@ scanner.set_execution_gates({
 - `levels` — per-level on/off (`l1`, `l2`, `l3`).
 - `models` — per-detector on/off, keyed by public model name: `native:<name>` for native
   detectors, `external:<id>` for [external L1 detectors](../how-to/external-l1-signals.md).
+  The `shell_command` detector is keyed by its model name: `{"cat-shell-risk-commander": false}`.
 - `rules` — per-L1-rule on/off. Missing IDs inherit shared defaults. PII patterns use stable `pii_*`
   IDs. DLP patterns use `dlp_*` IDs; its separate heuristics are `dlp_sensitive_material`,
   `dlp_secret_transfer`, `dlp_mcp_runtime_risk`, `dlp_mcp_policy`, and

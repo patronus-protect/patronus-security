@@ -48,6 +48,16 @@ A custom `model_dir` is convenient for shipping a pre-populated cache to another
 Required assets download during `warmup()` (or, in Rust, `prepare_assets()`); optional ones stay
 skipped unless the environment variable is set.
 
+### `shell_command` model
+
+`shell_command` is the one L1 category with a model file. `prepare_assets()` / `warmup()` fetch
+`patronus-studio/cat-shell-risk-commander` (Apache-2.0) at pinned revision
+`5f30ad137469fd3525fa7721824ac68675360d12` into
+`<model_dir>/shell_command/cat_shell_risk_commander/` (`manifest.json`, `model.json` ~2.5 MB,
+`LICENSE`, `.patronus-revision`). It honours `download_files` / `download_categories`; with
+downloads disabled and files missing, warmup fails with `missing shell_command assets ...
+downloads disabled`. At load, the SHA-256 of `model.json` is verified against `manifest.json`.
+
 ## Authenticated / rate-limited access
 
 Set `HF_TOKEN` when the Hugging Face repositories require authentication or you are being rate
@@ -78,5 +88,6 @@ are treated as canonical and are never rewritten by the asset manager.
 ## Inspect the cache
 
 `asset_readiness()` (Rust only) reports what is present locally **without** downloading or loading
-anything into memory; `runtime_readiness()` (both languages) reports initialized runtime state. Use
-these to verify a cache before going offline.
+anything into memory, per level `l1`/`l2`/`l3` (`l1` covers the `shell_command` model);
+`runtime_readiness()` (both languages) reports initialized runtime state. Use these to verify a
+cache before going offline.

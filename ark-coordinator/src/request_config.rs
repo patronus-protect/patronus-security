@@ -231,6 +231,8 @@ fn known_category(value: &str) -> bool {
             | "tool_tags"
             | "routing"
             | "threat"
+            | "shell_command"
+            | "shell-command"
     )
 }
 
@@ -421,6 +423,9 @@ mod tests {
         let unknown: RequestScanConfig =
             serde_json::from_value(serde_json::json!({"categories":["unknown"]})).unwrap();
         assert!(unknown.validate().is_err());
+        let shell: RequestScanConfig =
+            serde_json::from_value(serde_json::json!({"categories":["shell_command"]})).unwrap();
+        assert!(shell.validate().is_ok());
         let bad_policy: RequestScanConfig = serde_json::from_value(serde_json::json!({
             "gates":{"policy":{"degraded_factor":1.1}}
         }))

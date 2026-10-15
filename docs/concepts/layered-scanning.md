@@ -18,6 +18,10 @@ prompt-injection phrasings, obfuscation tricks, secrets and destructive-operatio
 L1 runs for categories that implement native detectors when its execution gate is enabled. See
 [Native detectors](detectors.md) for the full catalogue.
 
+One exception: `shell_command` runs natively in L1 but scores with a small downloaded model
+(`cat-shell-risk-commander`, ~2.5 MB `model.json`). Until it is loaded,
+`runtime_readiness().l1` reports NotReady. See [Categories](categories.md#model-backed-l1-shell_command).
+
 ### L2 — NTDB model packages
 
 Lightweight text classifiers in the Patronus **NTDB** format: the shared mmBERT tokenizer and

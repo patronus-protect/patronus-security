@@ -21,6 +21,14 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Add the `shell_command` category, backed by the revision-pinned
+  [`patronus-studio/cat-shell-risk-commander`](https://huggingface.co/patronus-studio/cat-shell-risk-commander)
+  model (Apache-2.0). It scores shell commands and scripts (POSIX, PowerShell, CMD) natively in the
+  L1 phase and returns `shell_risk`/`safe` with the decision score, threshold policy and evidence
+  spans. The model is downloaded and SHA-256-verified like the other assets, baked into the Docker
+  image, and the category is accepted by the library, `ark-api`, the Cube worker template and
+  `ark-coordinator`. **Asset manifest change:** new `shell_command/cat_shell_risk_commander` bundle.
+  **Detection change:** new category only; existing categories are unchanged.
 - Validate live IONOS scale-down from 12 to 8 Cubes and an end-to-end 8-to-9-to-8 Cube lifecycle,
   including worker setup, Coordinator/ALB routing, GPU inference, async scans, drain, and API removal.
 

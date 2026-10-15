@@ -78,6 +78,7 @@ executed by the L3 background worker. Only required assets are downloaded by def
 | **Husky** (Sight / Paw / Nose) | `tool_class` / `tool_action` / `tool_tags` | Agentic tool-type, operation, and data-flow properties. |
 | **Lion Warden** | multiple (unified) | Single multi-head model serving several categories from one inference. |
 | **GLiNER small v2.5 (edge)** | `dynamic-pii` | Open-vocabulary entity extraction with exact spans. |
+| **Cat Shell Risk Commander** | `shell_command` | L1 TF-IDF char n-gram logistic regression (`model.json`, Apache-2.0) scoring shell command/script risk. |
 
 All models are published under the [`patronus-studio`](https://huggingface.co/patronus-studio)
 Hugging Face organization and each carries its own model card with training data, benchmarks,
