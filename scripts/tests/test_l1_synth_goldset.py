@@ -347,7 +347,7 @@ def test_hard_negative_lookalikes_fail_their_checksums():
 
 
 def test_positives_avoid_reserved_placeholder_values():
-    """T01 has not decided on RFC 2606/6761 domains and NANP 555-01xx; keep E05 gold clear of them."""
+    """Placeholders would be gold positives (T01), but E05 is frozen: its positives keep avoiding them."""
     for email in values(dev_rows(), "pii.email"):
         assert not re.search(r"(?:^|[@.])(example\.(?:com|org|net)|[^@]*\.(?:invalid|test|example|localhost))$", email)
     for phone in values(dev_rows(), "pii.phone"):
@@ -356,6 +356,14 @@ def test_positives_avoid_reserved_placeholder_values():
     for address in values(dev_rows(), "pii.ip_address"):
         assert not address.startswith(("192.0.2.", "198.51.100.", "203.0.113.", "10.", "192.168.", "2001:db8"))
 
+
+
+def test_hard_negatives_never_hold_reserved_placeholder_values():
+    """T01: reserved placeholders are PII, so no hard-negative span may contain one."""
+    for row in dev_rows():
+        for item in row["hard_negatives"]:
+            value = row["text"][item["start"] : item["end"]]
+            assert not re.search(r"@|555[ -]?01\d\d|000[ -]?000[ -]?0000", value), (item["kind"], value)
 
 # ── cross-checks against Presidio and phonenumbers (optional) ────────────────
 

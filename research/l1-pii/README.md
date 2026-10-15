@@ -34,6 +34,34 @@ Benchmark-ID mit ARK-Labels, Presidio-Entitäten, Korpus-Labels und Scope (`shar
 `ark_only`, `presidio_only`, `semantic` → kein L1-Scope). Prüfung:
 `python3 scripts/l1_presidio/entity_map.py check`.
 
+## Gold-Konvention: Platzhalter-Werte
+
+Entschieden am 2026-10-14 (T01, TRIAGE 2026-W42 Bucket 5): Reservierte Platzhalter sind PII und im
+Gold **positiv**. Ein Text kann sie aus einer echten Vorlage, einem Test oder einem Leak übernommen
+haben; ein Scanner sieht ihnen das nicht an.
+
+- **E-Mail:** Adressen auf RFC-2606/6761-Namen (`example.com|net|org`, Subdomains davon, TLDs
+  `.example`, `.invalid`, `.test`, `.localhost` mit mindestens einem Label davor) → `EMAIL`.
+  Beispiele: `customer@example.com`, `mira.linden@kundenbeispiel.invalid`, `dev@app.localhost`.
+- **Telefon:** NANP-Fiktivnummern `NXX-555-01xx` und `+1 000-000-0000` → `PHONE`.
+- **Gegen-Kontext ändert das nicht:** „Template text“, „These are placeholders“ machen einen
+  formgültigen Platzhalter nicht zum Hard Negative.
+- **Die Form entscheidet weiterhin:** Hard Negatives bleiben Werte, die keine Werte des Labels sind:
+  verschleiert (`user [at] example [dot] com`, `name @ domain . test`), maskiert (`+49 (0) XXX XXXXXXX`),
+  Host ohne Domain-Suffix (`anna.beispiel@mailserver`), ungültige Ländervorwahl (`+00 0000000`).
+  Bei Kennungen mit Validator (SSN-Bereich `000`, NINO-Präfix `BG`, Steuernummer `000/000/00000`)
+  gilt, was der Herausgeber nie vergibt, weiter als negativ; Validatoren werden nicht gelockert.
+- **Dokumentations-IPs** (`203.0.113.0/24`, `2001:db8::/32`) sind in `pii_l1` und der Rule-Fixture
+  schon positiv und bleiben es.
+
+Stand der Goldsets: `pii_l1`, `l1_bilingual_rules.json` und `demo_pii_dlp*` folgen der Konvention
+(`cu-07` ist seit T01 positiv). Das synthetische E05-Goldset ist eingefroren und enthält keine
+Platzhalter, weder als Positive noch in Hard-Negative-Spans. Durchgesetzt wird das von
+`python/tests/test_l1_benchmark_data.py` (`PlaceholderGoldConventionTests`),
+`scripts/tests/test_l1_synth_goldset.py` und `rust/tests/pii_l1.rs`
+(`reserved_placeholder_values_are_gold_positives`). ARK meldet alle Platzhalter schon heute; eine
+spätere regionale Telefonprüfung (Hebel 4) darf `+1 000-000-0000` und `555-01xx` nicht verwerfen.
+
 ## Hebel
 
 1. Score-Stufen statt Feldnamenpflicht: prüfzifferstarke Werte ohne Kontext, formschwache nur mit

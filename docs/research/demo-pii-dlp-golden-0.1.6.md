@@ -28,6 +28,12 @@ die Dokumentformen und dienen bewusst auch zum Sichtbarmachen heutiger Lücken:
 - zusammen mit dem kuratierten Kern: 87 Dokumente, 204 erwartete Spans,
   42 deutsche und 45 englische Dokumente.
 
+Nachtrag 2026-10-15 (T01): Reservierte Platzhalter gelten als PII
+(Konvention in [`research/l1-pii/README.md`](../../research/l1-pii/README.md)).
+`cu-07` mit `customer@example.com` und `+1 000-000-0000` ist deshalb kein Hard
+Negative mehr, sondern trägt EMAIL und PHONE: im EN-Set neun Hard Negatives,
+insgesamt 206 erwartete Spans. Die Messwerte unten stammen vom Stand 0.1.6.
+
 Die Autoren dieser Erweiterungen kannten weder Ark-Regeln noch Regexe. Formal
 prüfbare Positivwerte (IBAN, Provider-Keys, bcrypt und PEM) wurden anschließend
 validiert. Freie Mitarbeiterkennungen wie `P-778301`, `EMP_00917` oder
