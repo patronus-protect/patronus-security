@@ -767,3 +767,60 @@ fn login_and_username_prose_is_not_an_account_name() {
     assert!(!validators::username("token"));
     assert!(validators::username("jdoe42"));
 }
+
+/// Gold convention T01 (research/l1-pii/README.md): reserved placeholder values are PII.
+/// RFC 2606/6761 domains and NANP 555-01xx/000 numbers stay exact-span positives.
+#[test]
+fn reserved_placeholder_values_are_gold_positives() {
+    for (text, label, value) in [
+        (
+            "Email the customer at customer@example.com today.",
+            "EMAIL",
+            "customer@example.com",
+        ),
+        ("Reply to ops@example.org", "EMAIL", "ops@example.org"),
+        (
+            "Contact: priya.nwosu@example.test",
+            "EMAIL",
+            "priya.nwosu@example.test",
+        ),
+        ("Mail: dev@app.localhost", "EMAIL", "dev@app.localhost"),
+        (
+            "E-Mail: mira.linden@kundenbeispiel.invalid",
+            "EMAIL",
+            "mira.linden@kundenbeispiel.invalid",
+        ),
+        (
+            "Kontakt: info@muster.example",
+            "EMAIL",
+            "info@muster.example",
+        ),
+        ("Call +1 000-000-0000 now.", "PHONE", "+1 000-000-0000"),
+        ("Phone: +1 202-555-0148", "PHONE", "+1 202-555-0148"),
+        ("Telefon: +1-415-555-0196", "PHONE", "+1-415-555-0196"),
+        ("Rückruf unter +1 303-555-0172", "PHONE", "+1 303-555-0172"),
+    ] {
+        let result = pii_result(text);
+        let spans: Vec<_> = result
+            .evidence_spans
+            .iter()
+            .map(|span| (span.label.as_str(), span.text.as_str()))
+            .collect();
+        assert_eq!(spans, vec![(label, value)], "{text}");
+    }
+}
+
+/// Reservation never decides the gold label; form does. A single-label host is no domain.
+#[test]
+fn single_label_hosts_are_not_email_addresses() {
+    for text in [
+        "E-Mail: anna.beispiel@mailserver",
+        "Write to admin@intranet",
+    ] {
+        assert_eq!(
+            PiiPipeline::new().evaluate(text).class_name,
+            "safe",
+            "{text}"
+        );
+    }
+}
