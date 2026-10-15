@@ -144,9 +144,15 @@ def test_parse_trufflehog_skips_log_lines_and_keeps_raw_v2(tmp_path):
 
 
 def test_parse_detect_secrets_worker_lines(tmp_path):
-    out = json.dumps({"path": "000002/config.yaml", "line": 3, "plugin": "KeywordDetector", "value": PASSWORD})
-    [item] = MODULE.parse_detect_secrets(out + "\n", tmp_path)
-    assert (item.doc, item.rule_id, item.line, item.secret) == (2, "KeywordDetector", 3, PASSWORD)
+    lines = [
+        json.dumps({"path": "000002/config.yaml", "line": 3, "plugin": "KeywordDetector",
+                    "start": 10, "end": 22, "normalization": ["relocated"]}),
+        json.dumps({"path": "000002/config.yaml", "line": 4, "plugin": "KeywordDetector",
+                    "start": None, "end": None, "normalization": []}),
+    ]
+    found, missing = MODULE.parse_detect_secrets("\n".join(lines) + "\n", tmp_path)
+    assert (found.doc, found.rule_id, found.line, found.secret) == (2, "KeywordDetector", 3, "")
+    assert found.located == (10, 22, ("relocated",)) and missing.located is None
 
 
 # ── Locating and value normalization ───────────────────────────────────────
@@ -346,3 +352,163 @@ def test_cli_rejects_unpinned_tools(tmp_path, capsys):
     assert code == 2
     assert "differ from the pins" in capsys.readouterr().err
     assert not (tmp_path / "o.jsonl").exists()
+
+
+# ── Review fixes: multi-part, normalized URIs, JDBC, no secrets in logs ─────
+
+# Shape-valid but obviously synthetic AWS pair (documentation-style EXAMPLE marker).
+AWS_ID = token("AKIA", "EXAMPLEQ7", 16)
+AWS_SECRET = token("", "fakeSecretKEY0+/", 40)
+
+
+def trufflehog_line(tmp_path: Path, detector: str, line: int = 1, doc: int = 0, **fields) -> str:
+    return json.dumps({
+        "SourceMetadata": {"Data": {"Filesystem": {"file": str(tmp_path / f"{doc:06d}" / ".env"), "line": line}}},
+        "DetectorName": detector, "DecoderName": "PLAIN", **fields,
+    })
+
+
+def aws_index():
+    return {
+        "gitleaks": {}, "detect-secrets": {},
+        "trufflehog": {
+            "AWS": (["cloud.aws.access_key_id", "cloud.aws.secret_access_key"], ["CLOUD_KEY"]),
+            "Postgres": (["credential.url_userinfo"], ["CREDENTIAL"]),
+            "JDBC": (["credential.url_userinfo"], ["CREDENTIAL"]),
+        },
+    }
+
+
+@pytest.mark.parametrize("with_parts", [True, False])
+def test_trufflehog_multipart_aws_emits_each_part_with_its_entity(tmp_path, with_parts):
+    text = f"AWS_ACCESS_KEY_ID={AWS_ID}\nAWS_SECRET_ACCESS_KEY={AWS_SECRET}\n"
+    fields = {"Raw": AWS_ID, "RawV2": AWS_ID + AWS_SECRET}
+    if with_parts:
+        fields["SecretParts"] = {"key": AWS_ID, "secret": AWS_SECRET, "account": "123456789012"}
+    findings = MODULE.parse_trufflehog(trufflehog_line(tmp_path, "AWS", **fields), tmp_path)
+    assert sorted((f.part, f.secret) for f in findings) == [
+        ("access_key_id", AWS_ID), ("secret_access_key", AWS_SECRET),
+    ]
+    [row], summary = MODULE.predict("trufflehog", [{"id": "a", "text": text}], findings, aws_index())
+    spans = {text[s["start_char"]:s["end_char"]]: s for s in row["evidence_spans"]}
+    assert set(spans) == {AWS_ID, AWS_SECRET}
+    assert spans[AWS_ID]["entities"] == ["cloud.aws.access_key_id"]
+    assert spans[AWS_SECRET]["entities"] == ["cloud.aws.secret_access_key"]
+    assert spans[AWS_SECRET]["label"] == "trufflehog.AWS.secret_access_key"
+    assert spans[AWS_ID]["groups"] == ["CLOUD_KEY"] and summary["unlocated"] == {}
+
+
+def test_trufflehog_single_value_results_are_not_split(tmp_path):
+    [item] = MODULE.parse_trufflehog(trufflehog_line(tmp_path, "Github", Raw=GH, RawV2=GH + "x"), tmp_path)
+    assert item.part is None and item.secret == GH and item.alternatives == (GH + "x",)
+
+
+@pytest.mark.parametrize(
+    "source, raw",
+    [
+        # probe shape from dlp_synth/rules.json: default port omitted in the source
+        ("DATABASE_URL=postgres://app:{pw}@db\n", "postgres://app:{pw}@db:5432"),
+        ("url = \"postgres://app:{pw}@db/reports\"\n", "postgresql://app:{pw}@db:5432/reports?sslmode=prefer"),
+    ],
+)
+def test_trufflehog_normalized_postgres_uri_locates_the_password(tmp_path, source, raw):
+    text = source.format(pw=PASSWORD)
+    raw = raw.format(pw=PASSWORD)
+    assert raw not in text
+    findings = MODULE.parse_trufflehog(trufflehog_line(tmp_path, "Postgres", Raw=raw, RawV2=raw), tmp_path)
+    [row], summary = MODULE.predict("trufflehog", [{"id": "a", "text": text}], findings, aws_index())
+    [span] = row["evidence_spans"]
+    assert text[span["start_char"]:span["end_char"]] == PASSWORD
+    assert span["normalization"] == ["uri_password"] and summary["unlocated"] == {}
+
+
+def test_trufflehog_password_secret_part_is_last_resort(tmp_path):
+    text = f"host=db user=app password={PASSWORD}\n"
+    findings = MODULE.parse_trufflehog(
+        trufflehog_line(tmp_path, "Postgres", Raw=f"postgres://app:{PASSWORD}@db:5432",
+                        SecretParts={"password": PASSWORD, "username": "app"}),
+        tmp_path,
+    )
+    [row], _ = MODULE.predict("trufflehog", [{"id": "a", "text": text}], findings, aws_index())
+    [span] = row["evidence_spans"]
+    assert text[span["start_char"]:span["end_char"]] == PASSWORD and span["normalization"] == ["secret_part"]
+
+
+@pytest.mark.parametrize(
+    "conn",
+    [
+        "jdbc:postgresql://app:{pw}@db:5432/app",
+        "jdbc:mysql://db:3306/app?user=app&password={pw}&useSSL=true",
+        "jdbc:sqlserver://db:1433;databaseName=app;user=sa;password={pw};encrypt=true",
+        "jdbc:oracle:thin:app/{pw}@db:1521/ORCL",
+    ],
+)
+def test_jdbc_values_are_normalized_to_the_password(tmp_path, conn):
+    conn = conn.format(pw=PASSWORD)
+    text = f"spring.datasource.url={conn}\n"
+    findings = MODULE.parse_trufflehog(trufflehog_line(tmp_path, "JDBC", Raw=conn), tmp_path)
+    [row], _ = MODULE.predict("trufflehog", [{"id": "a", "text": text}], findings, aws_index())
+    [span] = row["evidence_spans"]
+    assert text[span["start_char"]:span["end_char"]] == PASSWORD
+    assert "jdbc_password" in span["normalization"]
+
+
+def test_jdbc_without_password_keeps_the_located_span():
+    text = "url=jdbc:h2:mem:testdb\n"
+    start = text.index("jdbc")
+    new_start, new_end, steps = MODULE.refine(text, start, len(text) - 1, "trufflehog", "JDBC")
+    assert (new_start, new_end, steps) == (start, len(text) - 1, [])
+
+
+detect_secrets_available = importlib.util.find_spec("detect_secrets") is not None
+
+
+@pytest.mark.skipif(not detect_secrets_available, reason="detect-secrets not installed")
+def test_detect_secrets_worker_logs_spans_not_secrets(tmp_path, capsys):
+    rows = [{"id": "a", "text": f"password = \"{PASSWORD}\"\r\ngithub_token = \"{GH}\"\n", "format": "env"}]
+    MODULE.materialize(rows, tmp_path)
+    assert MODULE.detect_secrets_worker(tmp_path) == 0
+    captured = capsys.readouterr()
+    for secret in (PASSWORD, GH):
+        assert secret not in captured.out and secret not in captured.err
+    findings = MODULE.parse_detect_secrets(captured.out, tmp_path)
+    [row], summary = MODULE.predict("detect-secrets", rows, findings, entity_index())
+    values = {rows[0]["text"][s["start_char"]:s["end_char"]] for s in row["evidence_spans"]}
+    assert {PASSWORD, GH} <= values and summary["unlocated"] == {}
+
+
+@pytest.mark.skipif(not detect_secrets_available, reason="detect-secrets not installed")
+def test_detect_secrets_worker_version_message_has_no_pin_data(tmp_path, capsys, monkeypatch):
+    monkeypatch.setitem(MODULE.PINS["detect-secrets"], "version", "0.0.0-pin")
+    assert MODULE.detect_secrets_worker(tmp_path) == 2
+    err = capsys.readouterr().err
+    assert "is not the pinned release" in err and "0.0.0-pin" not in err
+
+
+def test_worker_records_mark_unlocatable_values():
+    text = f"a: {PASSWORD}\n"
+    records = MODULE.worker_records(text, [(1, "KeywordDetector", PASSWORD), (1, "Other", "not-in-text")], {})
+    assert records == [
+        {"line": 1, "plugin": "KeywordDetector", "start": 3, "end": 3 + len(PASSWORD), "normalization": []},
+        {"line": 1, "plugin": "Other", "start": None, "end": None, "normalization": []},
+    ]
+    assert PASSWORD not in json.dumps(records)
+
+
+def test_cli_run_logs_no_secret(tmp_path, capsys, monkeypatch):
+    rows = [{"id": "a", "text": f"AWS_SECRET_ACCESS_KEY={AWS_SECRET}\nDB=postgres://app:{PASSWORD}@db\n"}]
+    write_jsonl(tmp_path / "in.jsonl", rows)
+    monkeypatch.setattr(MODULE, "check_pins", lambda tools, *_: ({t: {"version": "x"} for t in tools}, []))
+    stdout = "\n".join([
+        trufflehog_line(tmp_path, "AWS", Raw=AWS_ID, RawV2=AWS_ID + AWS_SECRET),
+        trufflehog_line(tmp_path, "Postgres", line=2, Raw=f"postgres://app:{PASSWORD}@db:5432"),
+    ])
+    monkeypatch.setattr(MODULE, "scan_with_tool", lambda tool, rows, *_: MODULE.parse_trufflehog(stdout, tmp_path))
+    code = MODULE.main(["run", "--tool", "trufflehog", "--input", str(tmp_path / "in.jsonl"),
+                        "--output", str(tmp_path / "o.jsonl")])
+    assert code == 0
+    captured = capsys.readouterr()
+    written = (tmp_path / "o.jsonl").read_text() + (tmp_path / "o.meta.json").read_text()
+    for secret in (AWS_ID, AWS_SECRET, PASSWORD):
+        assert secret not in captured.out + captured.err and secret not in written
+    assert "1 unlocated" in captured.err  # the key id is not in this text

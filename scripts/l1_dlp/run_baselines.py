@@ -98,6 +98,29 @@ LEADING_TRIM = " \t\r\n\"'`=:"
 TRAILING_TRIM = " \t\r\n\"'`"
 URL_USERINFO = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://[^\s/@:]*:([^\s/@]+)@")
 PEM_HEADER = re.compile(r"-----BEGIN ([A-Z0-9 ]+)-----")
+# URI credentials inside a (possibly normalized) TruffleHog value; the host stops before a
+# port, so ``user:password@host`` can be searched in a source that omits the default port.
+URI_CREDENTIALS = re.compile(
+    r"(?P<scheme>[A-Za-z][A-Za-z0-9+.-]*)://(?P<user>[^\s/@:]*):(?P<password>[^\s/@]+)@(?P<host>[^\s/?#:;,@]+)"
+)
+# JDBC connection strings (pinned TruffleHog 3.97.9 ``jdbc`` detector): userinfo after a
+# nested scheme (``jdbc:postgresql://user:pw@host``), ``?password=``/``&password=`` query
+# parameters, ``;password=`` properties (SQL Server style) and Oracle ``thin:user/pw@``.
+JDBC_PASSWORD_PARAM = re.compile(r"[;?&]\s*password\s*=\s*([^;&\s\"'`]+)", re.IGNORECASE)
+JDBC_ORACLE = re.compile(r"jdbc:oracle:[A-Za-z0-9]+:@?[^\s/@:;]+/([^\s@;]+)@", re.IGNORECASE)
+# Multi-part TruffleHog secrets: ``Raw`` holds only the first part, the other parts are
+# entries of ``SecretParts`` and ``RawV2`` is their concatenation (dedup key). Each part is
+# classified by its shape and emitted as its own finding with its own entity.
+AWS_KEY_ID = re.compile(r"(?:A3T[A-Z0-9]|AKIA|ASIA|ABIA|ACCA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|APKA)[A-Z0-9]{16}")
+AWS_SECRET_KEY = re.compile(r"[A-Za-z0-9+/]{40}")
+TRUFFLEHOG_PARTS: dict[str, tuple[tuple[str, re.Pattern[str]], ...]] = {
+    "AWS": (("access_key_id", AWS_KEY_ID), ("secret_access_key", AWS_SECRET_KEY)),
+}
+# (tool, rule_id, part) -> the one entity of ``map_rule`` that part stands for.
+PART_ENTITIES = {
+    ("trufflehog", "AWS", "access_key_id"): "cloud.aws.access_key_id",
+    ("trufflehog", "AWS", "secret_access_key"): "cloud.aws.secret_access_key",
+}
 
 
 @dataclass
@@ -113,6 +136,12 @@ class Finding:
     match: str | None = None  # gitleaks: full rule match that contains ``secret``
     alternatives: tuple[str, ...] = ()
     extra: dict[str, str] = field(default_factory=dict)
+    # Last-resort needles (needle, value start, value end, step): the span is the value
+    # slice of an exact occurrence of the needle, e.g. ``user:password@host``.
+    fallbacks: tuple[tuple[str, int, int, str], ...] = ()
+    part: str | None = None  # multi-part secret: which part (selects the entity)
+    # Span already located by the producer (detect-secrets worker), or None.
+    located: tuple[int, int, tuple[str, ...]] | None = None
 
 
 def sha256_bytes(data: bytes) -> str:
@@ -246,7 +275,12 @@ def _gitleaks_decoder(tags: list[str]) -> dict[str, str]:
 
 
 def parse_trufflehog(stdout: str, root: Path) -> list[Finding]:
-    """TruffleHog JSON lines -> findings (``Raw``, then ``RawV2``; line only, no column)."""
+    """TruffleHog JSON lines -> findings (``Raw``, then ``RawV2``; line only, no column).
+
+    Multi-part results (``TRUFFLEHOG_PARTS``, e.g. AWS key id + secret key) become one
+    finding per part. Connection strings get ``user:password@host`` fallbacks, because
+    TruffleHog normalizes them (``Postgres`` adds the default port ``:5432``).
+    """
     findings = []
     for raw_line in stdout.splitlines():
         if not raw_line.strip():
@@ -256,30 +290,93 @@ def parse_trufflehog(stdout: str, root: Path) -> list[Finding]:
             continue  # log line
         meta = item.get("SourceMetadata", {}).get("Data", {}).get("Filesystem", {})
         doc, _ = document_index(meta["file"], root)
+        rule_id = str(item["DetectorName"])
         raw = str(item.get("Raw") or "")
         raw_v2 = str(item.get("RawV2") or "")
+        parts = item.get("SecretParts")
+        parts = {str(k): str(v) for k, v in parts.items() if v} if isinstance(parts, dict) else {}
+        line = int(meta.get("line") or 0)
+        extra = {"decoder": str(item.get("DecoderName") or "PLAIN")}
+        split = trufflehog_parts(rule_id, raw, raw_v2, parts)
+        if split:
+            findings.extend(
+                Finding(doc=doc, rule_id=rule_id, secret=value, line=line, extra=dict(extra), part=name)
+                for name, value in split
+            )
+            continue
         findings.append(
             Finding(
                 doc=doc,
-                rule_id=str(item["DetectorName"]),
+                rule_id=rule_id,
                 secret=raw,
-                line=int(meta.get("line") or 0),
+                line=line,
                 alternatives=(raw_v2,) if raw_v2 and raw_v2 != raw else (),
-                extra={"decoder": str(item.get("DecoderName") or "PLAIN")},
+                extra=extra,
+                fallbacks=uri_fallbacks((raw, raw_v2), parts),
             )
         )
     return findings
 
 
+def trufflehog_parts(rule_id: str, raw: str, raw_v2: str, parts: dict[str, str]) -> list[tuple[str, str]]:
+    """``[(part, value)]`` of a multi-part result; ``[]`` for single-value detectors.
+
+    Values come from ``SecretParts``; without it, ``RawV2 = Raw + rest`` is split. A part
+    is named by the first shape it matches; values matching no shape are not secrets
+    (account ids, ARNs …) and are dropped.
+    """
+    shapes = TRUFFLEHOG_PARTS.get(rule_id)
+    if not shapes:
+        return []
+    values = [parts[key] for key in sorted(parts)]
+    if not values and raw and raw_v2.startswith(raw) and len(raw_v2) > len(raw):
+        values = [raw, raw_v2[len(raw):]]
+    split = []
+    for value in dict.fromkeys(values):
+        name = next((name for name, shape in shapes if shape.fullmatch(value)), None)
+        if name is not None:
+            split.append((name, value))
+    return split
+
+
+def uri_fallbacks(values: Iterable[str], parts: dict[str, str]) -> tuple[tuple[str, int, int, str], ...]:
+    """Needles for a password whose reported URI is not literal source text.
+
+    For ``scheme://user:password@host[:port]…`` the needles are the URI up to the host
+    (no port), ``user:password@host`` and ``user:password@``; a ``SecretParts`` password
+    is the last resort. Each needle carries the password slice within it.
+    """
+    fallbacks: dict[tuple[str, int, int, str], None] = {}
+    for value in values:
+        match = URI_CREDENTIALS.search(value or "")
+        if not match:
+            continue
+        user, password, host = match["user"], match["password"], match["host"]
+        prefix = f"{match['scheme']}://"
+        for head, tail in ((prefix + user + ":", "@" + host), (user + ":", "@" + host), (user + ":", "@")):
+            fallbacks[(head + password + tail, len(head), len(head) + len(password), "uri_password")] = None
+    for key in sorted(parts):
+        if "password" in key.lower():
+            fallbacks[(parts[key], 0, len(parts[key]), "secret_part")] = None
+    return tuple(fallbacks)
+
+
 def parse_detect_secrets(stdout: str, root: Path) -> list[Finding]:
-    """Worker JSON lines -> findings (plugin class, value, line)."""
+    """Worker JSON lines -> findings (plugin class, line, span located by the worker).
+
+    The worker never prints the secret value, only its code-point span in the file (or
+    ``null`` when the value is not in the text); such findings count as ``unlocated``.
+    """
     findings = []
     for raw_line in stdout.splitlines():
         if raw_line.strip():
             item = json.loads(raw_line)
             doc = int(PurePosixPath(item["path"]).parts[0])
+            located = None
+            if item.get("start") is not None and item.get("end") is not None:
+                located = (int(item["start"]), int(item["end"]), tuple(item.get("normalization") or ()))
             findings.append(
-                Finding(doc=doc, rule_id=item["plugin"], secret=item["value"], line=int(item["line"]))
+                Finding(doc=doc, rule_id=item["plugin"], secret="", line=int(item["line"]), located=located)
             )
     return findings
 
@@ -392,7 +489,8 @@ def locate(text: str, finding: Finding, lines: Lines | None = None) -> tuple[int
     Preference: an occurrence starting on the reported lines (nearest to the column hint,
     else the first), then the first anywhere in the document (step ``relocated``). Exact
     text before whitespace-tolerant text (``whitespace``, e.g. re-wrapped PEM bodies),
-    ``Raw`` before ``RawV2`` (``raw_v2``).
+    ``Raw`` before ``RawV2`` (``raw_v2``), then the exact ``fallbacks`` narrowed to their
+    value slice (``uri_password``/``secret_part``).
     """
     lines = lines or Lines(text)
     window = None
@@ -426,6 +524,24 @@ def locate(text: str, finding: Finding, lines: Lines | None = None) -> tuple[int
             if picked:
                 (start, end), relocated = picked
                 return start, end, base_steps + steps + (["relocated"] if relocated else [])
+    for needle, value_start, value_end, step in finding.fallbacks:
+        picked = pick(_occurrences, needle) if needle and value_end > value_start else None
+        if picked:
+            (start, _), relocated = picked
+            return start + value_start, start + value_end, [step] + (["relocated"] if relocated else [])
+    return None
+
+
+def jdbc_password(value: str) -> tuple[int, int] | None:
+    """Password span within a JDBC connection string, or None if it carries none."""
+    offset = 5 if value[:5].lower() == "jdbc:" else 0
+    userinfo = URL_USERINFO.match(value, offset)
+    if userinfo:
+        return userinfo.start(1), userinfo.end(1)
+    for pattern in (JDBC_PASSWORD_PARAM, JDBC_ORACLE):
+        found = pattern.search(value)
+        if found:
+            return found.start(1), found.end(1)
     return None
 
 
@@ -448,9 +564,13 @@ def refine(text: str, start: int, end: int, tool: str, rule_id: str) -> tuple[in
             steps.append("regex_tail")
     value = text[start:end]
     userinfo = URL_USERINFO.match(value)
+    jdbc = value[:5].lower() == "jdbc:" or (tool, rule_id) == ("trufflehog", "JDBC")
     if userinfo:
         start, end = start + userinfo.start(1), start + userinfo.end(1)
         steps.append("url_password")
+    elif jdbc and (password := jdbc_password(value)) is not None:
+        start, end = start + password[0], start + password[1]
+        steps.append("jdbc_password")
     elif (tool, rule_id) in USERPASS_RULES and ":" in value:
         start += value.index(":") + 1
         steps.append("user_password")
@@ -560,7 +680,12 @@ def predict(
         stats["findings"][finding.rule_id] += 1
         if finding.doc not in lines:
             lines[finding.doc] = Lines(text)
-        located = locate(text, finding, lines[finding.doc])
+        if finding.located is not None:
+            start, end, pre_steps = finding.located
+            valid = 0 <= start < end <= len(text)
+            located = (start, end, list(pre_steps)) if valid else None
+        else:
+            located = locate(text, finding, lines[finding.doc])
         if located is None:
             reason = finding.extra.get("decoder", "PLAIN")
             stats["unlocated"][f"{finding.rule_id}:{reason}"] += 1
@@ -572,6 +697,12 @@ def predict(
             stats["unlocated"][f"{finding.rule_id}:empty"] += 1
             continue
         entities, groups = map_rule(index, tool, finding.rule_id)
+        label = f"{tool}.{finding.rule_id}"
+        if finding.part is not None:
+            label += f".{finding.part}"
+            entity = PART_ENTITIES.get((tool, finding.rule_id, finding.part))
+            if entity in entities:
+                entities = [entity]  # the parts of one detector share their group
         if not entities:
             stats["unmapped"][finding.rule_id] += 1
         for step in steps:
@@ -583,7 +714,7 @@ def predict(
                 "start_char": start,
                 "end_char": end,
                 "rule_id": finding.rule_id,
-                "label": f"{tool}.{finding.rule_id}",
+                "label": label,
                 "entities": entities,
                 "groups": groups,
                 "normalization": sorted(set(steps)),
@@ -651,7 +782,7 @@ def detect_secrets_worker(root: Path) -> int:
     from detect_secrets.settings import default_settings, get_plugins
 
     if VERSION != PINS["detect-secrets"]["version"]:
-        print(f"detect-secrets {VERSION} differs from pin {PINS['detect-secrets']['version']}", file=sys.stderr)
+        print(f"detect-secrets {VERSION} is not the pinned release", file=sys.stderr)
         return 2
     classes = get_mapping_from_secret_type_to_class()
     with default_settings() as settings:
@@ -660,18 +791,50 @@ def detect_secrets_worker(root: Path) -> int:
             return 2
         plugins = {type(plugin).__name__: plugin for plugin in get_plugins()}
         for path in sorted(p for p in root.rglob("*") if p.is_file()):
-            lines = path.read_text(encoding="utf-8", errors="replace").split("\n")
-            found = set()
-            for secret in scan_file(str(path)):
-                plugin = classes[secret.type].__name__
-                value = secret.secret_value or ""
-                line = lines[secret.line_number - 1] if 0 < secret.line_number <= len(lines) else ""
-                value = _full_regex_match(plugins.get(plugin), line, value)
-                found.add((secret.line_number, plugin, value))
+            # Same code points as the row text (materialize wrote it verbatim; no newline
+            # translation), so the offsets below index the row directly.
+            text = path.read_bytes().decode("utf-8", errors="replace")
+            records = worker_records(
+                text,
+                (
+                    (secret.line_number, classes[secret.type].__name__, secret.secret_value or "")
+                    for secret in scan_file(str(path))
+                ),
+                plugins,
+            )
             relative = str(PurePosixPath(*path.relative_to(root).parts))
-            for line_number, plugin, value in sorted(found):
-                print(json.dumps({"path": relative, "line": line_number, "plugin": plugin, "value": value}))
+            for record in records:
+                print(json.dumps({"path": relative, **record}, sort_keys=True))
     return 0
+
+
+def worker_records(
+    text: str, secrets: Iterable[tuple[int, str, str]], plugins: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Locate each ``(line, plugin, value)`` in ``text``; records carry spans, never values.
+
+    The worker's stdout is a log stream to the parent, so the value is reduced to its
+    code-point span here (``null`` when it is not in the text).
+    """
+    lines = text.split("\n")
+    index = Lines(text)
+    found: set[tuple[int, str, int | None, int | None, tuple[str, ...]]] = set()
+    for line_number, plugin, value in secrets:
+        line = lines[line_number - 1] if 0 < line_number <= len(lines) else ""
+        value = _full_regex_match(plugins.get(plugin), line, value)
+        located = locate(text, Finding(doc=0, rule_id=plugin, secret=value, line=line_number), index)
+        if located is None:
+            found.add((line_number, plugin, None, None, ()))
+        else:
+            found.add((line_number, plugin, located[0], located[1], tuple(located[2])))
+    def order(item: tuple[int, str, int | None, int | None, tuple[str, ...]]) -> tuple:
+        line_number, plugin, start, end, steps = item
+        return line_number, plugin, -1 if start is None else start, -1 if end is None else end, steps
+
+    return [
+        {"line": line_number, "plugin": plugin, "start": start, "end": end, "normalization": list(steps)}
+        for line_number, plugin, start, end, steps in sorted(found, key=order)
+    ]
 
 
 def _full_regex_match(plugin: Any, line: str, value: str) -> str:
