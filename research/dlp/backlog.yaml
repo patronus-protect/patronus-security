@@ -98,6 +98,7 @@ tasks:
     accept: scripts/l1_dlp/run_baselines.py, pinned versions, span normalization to the value span documented per tool
 
   - id: E08
+    status: done
     title: ARK runner in the same format (Python bindings), incl. rule_id, group, score
     type: eval-infra
     deps: [E07]
