@@ -224,8 +224,15 @@ def iso7064_mod11_10(digits: str) -> str:
     return str((11 - product) % 10)
 
 
+def base58check_sum(payload: bytes) -> bytes:
+    return hashlib.sha256(hashlib.sha256(payload).digest()).digest()[:4]
+
+
 def base58check(payload: bytes) -> str:
-    raw = payload + hashlib.sha256(hashlib.sha256(payload).digest()).digest()[:4]
+    return base58(payload + base58check_sum(payload))
+
+
+def base58(raw: bytes) -> str:
     number = int.from_bytes(raw, "big")
     encoded = ""
     while number:
@@ -249,8 +256,11 @@ def _encode(segment: dict, rng: SplitMix64, alphabets: dict) -> str:
             raw += bytes(rng.next_u64() % 256 for _ in range(part["random"]))
         else:
             raw += _draw(rng, alphabets[part["alphabet"]], part["len"]).encode("ascii")
-    raw = bytes(raw)
-    encoding = segment["encode"]
+    return encode_bytes(bytes(raw), segment["encode"], segment.get("wrap"))
+
+
+def encode_bytes(raw: bytes, encoding: str, wrap: int | None = None) -> str:
+    """Encode ``raw`` like an ``encode`` segment (``wrap`` only applies to ``base64``)."""
     if encoding == "hex":
         return raw.hex()
     if encoding == "base58check":
@@ -262,7 +272,6 @@ def _encode(segment: dict, rng: SplitMix64, alphabets: dict) -> str:
         return encoded.rstrip("=")
     if encoding == "bcrypt64":
         return encoded.rstrip("=").translate(_BCRYPT64)
-    wrap = segment.get("wrap")
     if wrap:
         encoded = "\n".join(encoded[start : start + wrap] for start in range(0, len(encoded), wrap))
     return encoded

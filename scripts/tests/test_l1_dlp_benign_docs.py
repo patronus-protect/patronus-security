@@ -559,6 +559,21 @@ def test_document_level_labels_flag_documents_without_spans():
     assert report["by_rule"]["dlp_hr_document"] == {"documents_flagged": 1, "flagged_rate": 0.3333, "fp": 0, "fp_per_mb": 0.0}
 
 
+def test_repeated_rows_for_a_document_do_not_inflate_per_rule_metrics():
+    row = {"id": "de-wiki:A", "evidence_spans": [
+        {"rule_id": "dlp_business_metric", "start_char": 0, "end_char": 10},
+        {"rule_id": "dlp_business_metric", "start_char": 20, "end_char": 30},
+    ], "document_labels": ["dlp_hr_document"]}  # fmt: skip
+    retry = {"id": "de-wiki:A", "evidence_spans": [{"rule_id": "dlp_business_metric", "start_char": 20, "end_char": 30}]}
+    labels_only = {"id": "de-wiki:A", "evidence_spans": [], "document_labels": ["dlp_hr_document"]}
+    report = MODULE.fp_report(DOCUMENTS, [row, row, retry, labels_only])
+    assert report["fp"] == 2 and report["documents_flagged"] == 1
+    assert report["by_rule"] == {
+        "dlp_business_metric": {"documents_flagged": 1, "flagged_rate": 0.3333, "fp": 2, "fp_per_mb": 2.0},
+        "dlp_hr_document": {"documents_flagged": 1, "flagged_rate": 0.3333, "fp": 0, "fp_per_mb": 0.0},
+    }
+
+
 def test_fp_report_without_predictions_is_zero_and_rejects_unknown_ids():
     report = MODULE.fp_report(DOCUMENTS, [])
     assert report["fp_per_mb"] == 0.0 and report["flagged_rate"] == 0.0 and report["by_rule"] == {}

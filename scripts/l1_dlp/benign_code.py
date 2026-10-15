@@ -109,10 +109,92 @@ GIT_CONFIG = (
 # ── repository list ──────────────────────────────────────────────────────────
 
 
+SPDX_TOKEN = re.compile(r"\s*(?:([()])|([A-Za-z0-9][A-Za-z0-9.+:-]*))")
+
+
+def _spdx_tokens(expression: str) -> list[str]:
+    tokens, pos = [], 0
+    while pos < len(expression):
+        match = SPDX_TOKEN.match(expression, pos)
+        if not match:
+            if expression[pos:].strip():
+                raise ValueError(f"invalid SPDX expression {expression!r}")
+            break
+        tokens.append(match.group(1) or match.group(2))
+        pos = match.end()
+    return tokens
+
+
+def spdx_choices(expression: str) -> list[frozenset[str]]:
+    """License sets a licensee can choose from (``WITH`` binds tighter than ``AND``, then ``OR``).
+
+    ``(MIT OR GPL-3.0-only) AND Zlib`` yields ``{MIT, Zlib}`` and ``{GPL-3.0-only, Zlib}``.
+    A ``WITH`` term stays one license (``Apache-2.0 WITH LLVM-exception``). Raises ``ValueError``
+    on a malformed expression.
+    """
+    tokens = _spdx_tokens(expression)
+    pos = 0
+
+    def peek() -> str | None:
+        return tokens[pos] if pos < len(tokens) else None
+
+    def take() -> str:
+        nonlocal pos
+        if pos >= len(tokens):
+            raise ValueError(f"incomplete SPDX expression {expression!r}")
+        pos += 1
+        return tokens[pos - 1]
+
+    def license_id() -> str:
+        token = take()
+        if token in ("(", ")", "AND", "OR", "WITH"):
+            raise ValueError(f"unexpected {token!r} in SPDX expression {expression!r}")
+        return token
+
+    def atom() -> list[frozenset[str]]:
+        if peek() == "(":
+            take()
+            choices = any_of()
+            if take() != ")":
+                raise ValueError(f"unbalanced parentheses in SPDX expression {expression!r}")
+            return choices
+        name = license_id()
+        if peek() == "WITH":
+            take()
+            name = f"{name} WITH {license_id()}"
+        return [frozenset({name})]
+
+    def all_of() -> list[frozenset[str]]:
+        choices = atom()
+        while peek() == "AND":
+            take()
+            right = atom()
+            choices = [left | other for left in choices for other in right]
+        return choices
+
+    def any_of() -> list[frozenset[str]]:
+        choices = all_of()
+        while peek() == "OR":
+            take()
+            choices = choices + all_of()
+        return choices
+
+    choices = any_of()
+    if pos != len(tokens):
+        raise ValueError(f"unexpected {tokens[pos]!r} in SPDX expression {expression!r}")
+    return choices
+
+
 def is_permissive(expression: str) -> bool:
-    """SPDX expression check: any ``OR`` alternative whose ``AND`` terms are all permissive."""
-    alternatives = [part.strip("() ") for part in expression.split(" OR ")]
-    return any(all(term.strip("() ") in PERMISSIVE_LICENSES for term in alt.split(" AND ")) for alt in alternatives)
+    """SPDX expression check: some ``OR`` choice consists only of permissive licenses.
+
+    Malformed expressions are not permissive; a ``WITH`` exception is never on the list.
+    """
+    try:
+        choices = spdx_choices(expression)
+    except ValueError:
+        return False
+    return any(choice <= PERMISSIVE_LICENSES for choice in choices)
 
 
 def is_scanner_repo(url: str, repo_id: str) -> bool:
@@ -165,8 +247,8 @@ def git(args: Iterable[str], git_dir: Path | None = None, stdin: bytes | None = 
     return result.stdout
 
 
-def _fetched(git_dir: Path, commit: str) -> bool:
-    return (git_dir / "ark-complete").is_file() and (git_dir / "ark-complete").read_text() == commit
+def _fetched(git_dir: Path, marker: str) -> bool:
+    return (git_dir / "ark-complete").is_file() and (git_dir / "ark-complete").read_text() == marker
 
 
 def fetch_repo(repo: dict[str, Any], cache: Path, offline: bool = False) -> tuple[Path, Path]:
@@ -175,7 +257,10 @@ def fetch_repo(repo: dict[str, Any], cache: Path, offline: bool = False) -> tupl
     dirs = {"files": root / "files.git", "log": root / "log.git"}
     options = {"files": ["--depth=1"], "log": [f"--depth={LOG_COMMITS + 1}", "--filter=blob:none"]}
     for name, git_dir in dirs.items():
-        if _fetched(git_dir, repo["commit"]):
+        # The marker records the fetch options too: a cache fetched with a smaller history
+        # depth would build a shorter git log than a fresh clone.
+        marker = " ".join([repo["commit"], *options[name]])
+        if _fetched(git_dir, marker):
             continue
         if offline:
             raise ValueError(f"{repo['id']}: {git_dir} is not cached (--offline)")
@@ -185,7 +270,7 @@ def fetch_repo(repo: dict[str, Any], cache: Path, offline: bool = False) -> tupl
         git(["init", "--quiet", "--bare", str(git_dir)])
         git(["fetch", "--quiet", "--no-tags", *options[name], repo["url"], repo["commit"]], git_dir)
         git(["cat-file", "-e", f"{repo['commit']}^{{commit}}"], git_dir)
-        (git_dir / "ark-complete").write_text(repo["commit"])
+        (git_dir / "ark-complete").write_text(marker)
     return dirs["files"], dirs["log"]
 
 
@@ -251,7 +336,7 @@ def excluded(path: str) -> bool:
     lower = name.lower()
     return (
         lower.endswith(EXCLUDED_SUFFIXES)
-        or name in EXCLUDED_NAMES
+        or lower in EXCLUDED_NAMES
         or lower.startswith(EXCLUDED_NAME_PREFIXES)
     )
 
@@ -554,19 +639,19 @@ def fp_per_mb(documents: dict[str, dict[str, Any]], predictions: Iterable[dict[s
     ``predictions`` rows carry ``id`` and ``evidence_spans`` (``start_char``, ``end_char`` and
     ``rule_id`` or ``label``). A span counts once per document even if several rules report it;
     the per-rule numbers count each rule separately and are normalized by the total bytes.
+    Repeated rows for one document are merged, so spans and rules are deduplicated per document.
     """
     spans: dict[str, set[tuple[int, int]]] = {}
-    rules: Counter[str] = Counter()
+    rule_spans: set[tuple[str, str, tuple[int, int]]] = set()
     for row in predictions:
         doc_id = row.get("id")
         if doc_id not in documents:
             raise ValueError(f"prediction for unknown document {doc_id!r}")
-        seen_rules = set()
         for span in row.get("evidence_spans") or []:
             key = (int(span["start_char"]), int(span["end_char"]))
             spans.setdefault(doc_id, set()).add(key)
-            seen_rules.add((str(span.get("rule_id") or span.get("label") or "unknown"), key))
-        rules.update(rule for rule, _ in seen_rules)
+            rule_spans.add((doc_id, str(span.get("rule_id") or span.get("label") or "unknown"), key))
+    rules: Counter[str] = Counter(rule for _, rule, _ in rule_spans)
     total_bytes = sum(doc["bytes"] for doc in documents.values())
     groups: dict[str, dict[str, Counter[str]]] = {"kind": {}, "repo": {}}
     for field, counters in groups.items():

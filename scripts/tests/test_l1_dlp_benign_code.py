@@ -112,6 +112,18 @@ def read_jsonl(path: Path) -> list[dict]:
         ("GPL-3.0-only OR MIT", True),
         ("MIT AND BSD-3-Clause", True),
         ("MIT AND GPL-3.0-only", False),
+        ("(MIT OR GPL-3.0-only) AND GPL-2.0-only", False),
+        ("GPL-2.0-only AND (MIT OR GPL-3.0-only)", False),
+        ("(MIT OR GPL-3.0-only) AND Zlib", True),
+        ("(GPL-3.0-only AND MIT) OR (ISC AND (BSD-2-Clause OR GPL-2.0-only))", True),
+        ("((MIT))", True),
+        ("MIT OR GPL-2.0-only AND GPL-3.0-only", True),
+        ("Apache-2.0 WITH LLVM-exception", False),
+        ("(MIT", False),
+        ("MIT)", False),
+        ("MIT AND", False),
+        ("MIT GPL-2.0-only", False),
+        ("()", False),
         ("GPL-3.0-only", False),
         ("AGPL-3.0-only", False),
         ("", False),
@@ -202,7 +214,8 @@ def test_classify(path, text, kind):
 @pytest.mark.parametrize(
     "path",
     ["keys/server.pem", "tls/ca.KEY", "certs/client.p12", ".env", ".env.production", "home/.npmrc", "ssh/id_rsa",
-     "ssh/id_ed25519.pub", "node_modules/x/index.js", "aws/credentials"],
+     "ssh/id_ed25519.pub", "node_modules/x/index.js", "aws/credentials", "config/Credentials", ".NPMRC",
+     "home/.Netrc", "ID_RSA"],
 )  # fmt: skip
 def test_key_material_and_credential_files_are_excluded(path):
     assert MODULE.excluded(path)
@@ -270,6 +283,24 @@ def test_rerun_is_byte_identical_and_offline(tmp_path, fixture_repos):
     other = tmp_path / "again"
     assert MODULE.prepare(other / "dev", other / "holdout", tmp_path / "fresh-cache", repos_path) == 0
     assert (other / "dev" / "manifest.json").read_bytes() == before["manifest.json"]
+
+
+def test_cache_is_refetched_when_the_log_depth_grows(tmp_path, monkeypatch):
+    files = {"LICENSE": "MIT License\n", "src/app.py": "print('hello')\n"}
+    source = tmp_path / "upstream" / "depth"
+    commit = make_repo(source, files, extra_commits=6)
+    repo = {"id": "depth", "url": source.as_uri(), "commit": commit, "license": "MIT", "split": "dev"}
+    cache = tmp_path / "cache"
+    monkeypatch.setattr(MODULE, "LOG_COMMITS", 2)
+    MODULE.build_repo(repo, cache)
+    monkeypatch.setattr(MODULE, "LOG_COMMITS", 5)
+    with pytest.raises(ValueError, match="not cached"):
+        MODULE.fetch_repo(repo, cache, offline=True)
+    reused, _ = MODULE.build_repo(repo, cache)
+    fresh, _ = MODULE.build_repo(repo, tmp_path / "fresh-cache")
+    assert reused == fresh
+    log = [doc for doc in map(json.loads, filter(None, fresh.decode().split("\n"))) if doc["kind"] == "git_log"][0]
+    assert len(re.findall(r"(?m)^commit [0-9a-f]{40}$", log["text"])) == 5
 
 
 def test_offline_without_cache_fails(tmp_path, fixture_repos):
@@ -379,6 +410,20 @@ def test_fp_per_mb_counts_distinct_spans_per_document():
     assert report["by_rule"] == {
         "dlp_generic_token": {"fp": 2, "fp_per_mb": 2.0},
         "dlp_npm_token": {"fp": 1, "fp_per_mb": 1.0},
+        "dlp_password_assignment": {"fp": 1, "fp_per_mb": 1.0},
+    }
+
+
+def test_fp_per_mb_merges_repeated_rows_for_one_document():
+    row = {"id": "a:x.py", "evidence_spans": [
+        {"rule_id": "dlp_generic_token", "start_char": 0, "end_char": 10},
+        {"rule_id": "dlp_password_assignment", "start_char": 0, "end_char": 10},
+    ]}  # fmt: skip
+    extra = {"id": "a:x.py", "evidence_spans": [{"rule_id": "dlp_generic_token", "start_char": 20, "end_char": 30}]}
+    report = MODULE.fp_per_mb(DOCUMENTS, [row, row, extra, row])
+    assert report["fp"] == 2 and report["by_kind"]["code"]["fp"] == 2
+    assert report["by_rule"] == {
+        "dlp_generic_token": {"fp": 2, "fp_per_mb": 2.0},
         "dlp_password_assignment": {"fp": 1, "fp_per_mb": 1.0},
     }
 

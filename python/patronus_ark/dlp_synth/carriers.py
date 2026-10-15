@@ -15,7 +15,8 @@ For each family and value rule (``rules.json``) a row is produced per variant:
 * hard negatives without entities: ``placeholder`` (``<your-…>``, ``changeme`` …),
   ``env_ref`` (``${KEY}``, ``os.environ[…]``, ``${{ secrets.KEY }}`` …), ``doc_example``
   and ``test_key`` (the generator shape filled with ``EXAMPLE``/``TEST`` words, checksums
-  zeroed, so structure and checksum checks fail).
+  zeroed; encoded values keep their encoded prefix and length and only break checksum or
+  decoded structure, so the rule pattern still matches while validation fails).
 
 Rows only exist in memory or in files written outside the repository; never commit
 them, they contain checksum-valid synthetic tokens.
@@ -24,6 +25,7 @@ them, they contain checksum-valid synthetic tokens.
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import re
@@ -163,9 +165,10 @@ def _fill(alphabet: str, length: int, variant: str) -> str:
 def hard_negative_value(generator: str, variant: str) -> str:
     """The generator shape with literals kept and random parts filled (doc example, test key).
 
-    Check values are zeros (ones if zeros happen to be valid) and encoded bytes become
-    fill words in the output alphabet, so checksum, Base58Check, DER and JWT checks fail
-    while prefix and length match.
+    Check values are zeros (ones if zeros happen to be valid). Encoded segments keep
+    their encoded prefix, alphabet and length and only break the checksum or decoded
+    structure (``_hard_negative_encoded``), so the value still matches the detector
+    pattern while checksum, Base58Check, DER, OpenSSH and JWT checks fail.
     """
     if variant not in FILL_WORDS:
         raise CarrierError(f"no fill words for variant {variant!r}")
@@ -192,16 +195,62 @@ def hard_negative_value(generator: str, variant: str) -> str:
             )
             parts.append(check if check != valid else "1" * len(check))
         else:
-            wrap = segment.get("wrap")
-            unwrapped = dict(segment)
-            unwrapped.pop("wrap", None)
-            length = recipes._encoded_length(unwrapped)
-            encoded = _fill(alphabets[ENCODED_ALPHABETS[segment["encode"]]], length, variant)
-            if wrap:
-                encoded = "\n".join(encoded[start : start + wrap] for start in range(0, len(encoded), wrap))
-            parts.append(encoded)
+            parts.append(_hard_negative_encoded(segment, alphabets, variant))
         since_literal += parts[-1]
     return "".join(parts)
+
+
+def _hard_negative_encoded(segment: dict, alphabets: dict, variant: str) -> str:
+    """An encoded segment that keeps its detector shape but fails decoding checks.
+
+    Segments of random bytes only have no structure to break; they become fill words in
+    the output alphabet, kept canonical (no stray trailing bits). Otherwise the byte string is built with constant parts kept,
+    alphabet parts filled from their alphabet and random bytes as fill-word bytes, then
+    encoded, so prefix (``5``/``K``/``L``, ``eyJ``, ``MI``, ``b3Bl``), alphabet and length
+    stay those of a real value. Only the checksum or decoded structure is broken:
+    Base58Check gets a wrong check value, binary layouts (leading hex part: DER) a wrong
+    outer tag, text layouts (JSON, ``user:password``, OpenSSH padding, snowflake digits)
+    an invalid last non-random byte.
+    """
+    encoding = segment["encode"]
+    parts = segment["bytes"]
+    if all("random" in part for part in parts):
+        unwrapped = dict(segment)
+        unwrapped.pop("wrap", None)
+        encoded = _fill(alphabets[ENCODED_ALPHABETS[encoding]], recipes._encoded_length(unwrapped), variant)
+        if encoding == "hex":
+            return encoded
+        # Decode leniently and re-encode, so the last character carries no stray bits
+        # and the segment stays canonical (only its last character may change).
+        if encoding == "bcrypt64":
+            encoded = encoded.translate({new: old for old, new in recipes._BCRYPT64.items()})
+        encoded = encoded.replace("-", "+").replace("_", "/")
+        raw = base64.b64decode(encoded + "=" * (-len(encoded) % 4))[: recipes._byte_length(parts)]
+        return recipes.encode_bytes(raw, encoding, segment.get("wrap"))
+    word = FILL_WORDS[variant][0].encode("ascii")
+    raw = bytearray()
+    last_constant = last_alphabet = None
+    for part in parts:
+        if "hex" in part:
+            raw += bytes.fromhex(part["hex"])
+            last_constant = len(raw) - 1
+        elif "utf8" in part:
+            raw += part["utf8"].encode("ascii")
+            last_constant = len(raw) - 1
+        elif "random" in part:
+            raw += (word * (part["random"] // len(word) + 1))[: part["random"]]
+        else:
+            raw += _fill(alphabets[part["alphabet"]], part["len"], variant).encode("ascii")
+            last_alphabet = len(raw) - 1
+    if encoding == "base58check":
+        check = recipes.base58check_sum(bytes(raw))
+        return recipes.base58(bytes(raw) + bytes(byte ^ 0xFF for byte in check))
+    if "hex" in parts[0]:
+        raw[0] ^= 0x01
+    else:
+        index = last_constant if last_constant is not None else last_alphabet
+        raw[index] = ord("?") if raw[index] == ord("!") else ord("!")
+    return recipes.encode_bytes(bytes(raw), encoding, segment.get("wrap"))
 
 
 def _derive(*parts: object) -> int:
