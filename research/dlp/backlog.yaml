@@ -91,6 +91,7 @@ tasks:
     accept: Manifest mit Lizenz + SHA-256, Split dev/holdout, nur auf VPS
 
   - id: E07
+    status: done
     title: Baseline-Runner gitleaks / TruffleHog (--no-verification) / detect-secrets → einheitliches Vorhersageformat
     type: eval-infra
     deps: [E01]
