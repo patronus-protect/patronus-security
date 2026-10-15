@@ -88,5 +88,6 @@ are treated as canonical and are never rewritten by the asset manager.
 ## Inspect the cache
 
 `asset_readiness()` (Rust only) reports what is present locally **without** downloading or loading
-anything into memory; `runtime_readiness()` (both languages) reports initialized runtime state. Use
-these to verify a cache before going offline.
+anything into memory, per level `l1`/`l2`/`l3` (`l1` covers the `shell_command` model);
+`runtime_readiness()` (both languages) reports initialized runtime state. Use these to verify a
+cache before going offline.

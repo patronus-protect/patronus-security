@@ -866,6 +866,7 @@ Readiness of the configured scanner runtime by security level.
 
 ```rust
 pub struct SecurityAssetReadiness {
+    pub l1: SecurityLevelReadiness,
     pub l2: SecurityLevelReadiness,
     pub l3: SecurityLevelReadiness,
 }
@@ -873,8 +874,9 @@ pub struct SecurityAssetReadiness {
 
 Readiness of model assets on disk before runtime warmup.
 
-L1 is intentionally absent because native L1 scanners require no model
-assets. Runtime readiness remains a separate contract.
+Native L1 rule scanners require no model assets, so `l1` is configured only
+for model-backed L1 categories such as `shell_command`. Runtime readiness
+remains a separate contract.
 
 ```rust
 pub struct SecurityAssetProgress {

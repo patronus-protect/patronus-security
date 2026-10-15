@@ -502,6 +502,7 @@ impl SecurityGateway {
                 || (self.categories.contains(&SecurityCategory::DynamicPii)
                     && execution.allows_model(assets::DYNAMIC_PII_ASSET.model)));
         SecurityAssetReadiness {
+            l1: configured_level_readiness(self.shell_command_configured(&execution)),
             l2: configured_level_readiness(l2_configured),
             l3: configured_level_readiness(l3_configured),
         }
@@ -510,6 +511,7 @@ impl SecurityGateway {
     fn failed_asset_readiness(&self, failure: SecurityFailure) -> SecurityAssetReadiness {
         let configured = self.configured_asset_readiness();
         SecurityAssetReadiness {
+            l1: failed_configured_level(configured.l1, failure.clone()),
             l2: failed_configured_level(configured.l2, failure.clone()),
             l3: failed_configured_level(configured.l3, failure),
         }

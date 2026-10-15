@@ -199,6 +199,28 @@ fn warmup_rejects_a_model_that_does_not_match_its_manifest() {
 }
 
 #[test]
+fn asset_readiness_reports_the_shell_command_bundle() {
+    let model_dir = temp_dir("readiness");
+    let gateway = SecurityGateway::with_max_level(
+        vec![SecurityCategory::ShellCommand],
+        SecurityLevel::L1,
+        Some(model_dir.clone()),
+        false,
+    );
+    let missing = gateway.asset_readiness();
+    let SecurityLevelReadiness::NotReady { failures } = &missing.l1 else {
+        panic!("missing bundle must make L1 assets not ready: {missing:?}");
+    };
+    assert!(failures[0].message.contains("missing shell_command assets"));
+    assert_eq!(missing.l2, SecurityLevelReadiness::NotConfigured);
+    assert_eq!(missing.l3, SecurityLevelReadiness::NotConfigured);
+
+    synthetic_bundle(&model_dir, None);
+    assert_eq!(gateway.asset_readiness().l1, SecurityLevelReadiness::Ready);
+    std::fs::remove_dir_all(model_dir).ok();
+}
+
+#[test]
 fn warmup_without_assets_and_downloads_disabled_fails() {
     let model_dir = temp_dir("missing");
     let mut gateway = SecurityGateway::with_max_level(
