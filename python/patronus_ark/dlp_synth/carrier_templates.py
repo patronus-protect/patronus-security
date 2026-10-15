@@ -276,6 +276,192 @@ FAMILIES = (
             """),
         ("<<value>>", "{{<<keyCamel>>}}"),
     ),
+    Family(
+        "env.worker_dotenv", "env", "en", "dev",
+        _t("""
+            # .env for the report worker (copied from .env.example)
+            WORKER_QUEUE=reports
+            WORKER_CONCURRENCY=4
+            <<KEY>>=<<value>>
+            SENTRY_ENVIRONMENT=staging
+            """),
+        ("<<value>>", "${<<KEY>>:?missing}"),
+    ),
+    Family(
+        "yaml.versand_de", "yaml", "de", "dev",
+        _t("""
+            # Einstellungen für den Versanddienst
+            dienst:
+              name: versand
+              port: 8090
+            anbindungen:
+              spedition:
+                basis_url: https://api.example.de/v1
+                <<keyCamel>>: "<<value>>"
+            """),
+        ('"<<value>>"', '"${<<KEY>>}"'),
+        ("json",), 0, True, CONFIG, (), "yaml",
+    ),
+    Family(
+        "json.lagerabgleich_de", "json", "de", "dev",
+        _t("""
+            {
+              "dienst": "lagerabgleich",
+              "umgebung": "produktion",
+              "zugang": {
+                "<<keyCamel>>": "<<value>>",
+                "anmerkung": "nur für den nächtlichen Lauf"
+              }
+            }
+            """),
+        ('"<<value>>"', '"${<<KEY>>}"'),
+        ("json",), 0, True, CONFIG, (), "json",
+    ),
+    Family(
+        "toml.reconciler", "toml", "en", "dev",
+        _t("""
+            # reconciler settings
+            [server]
+            listen = "0.0.0.0:7000"
+            threads = 8
+
+            [auth]
+            <<key>> = "<<value>>"
+            """),
+        ('"<<value>>"', '"${<<KEY>>}"'),
+        ("json",), 0, True, CONFIG, (), "toml",
+    ),
+    Family(
+        "hcl.objektspeicher_de", "hcl", "de", "dev",
+        _t("""
+            # Zugang für den Objektspeicher, wird in Q4 auf Vault umgestellt
+            provider "objektspeicher" {
+              region  = "eu-central-1"
+              <<key>> = "<<value>>"
+            }
+
+            resource "objektspeicher_bucket" "berichte" {
+              name = "berichte-prod"
+            }
+            """),
+        ('"<<value>>"', "var.<<key>>"),
+        ("json",), 0, True, INFRA,
+    ),
+    Family(
+        "xml.exporter_attribute", "xml", "en", "dev",
+        _t("""
+            <?xml version="1.0" encoding="utf-8"?>
+            <!-- connection settings for the report exporter -->
+            <exporter>
+              <endpoint url="https://reports.example.com/api" timeout="30" />
+              <credentials <<keyCamel>>="<<value>>" />
+            </exporter>
+            """),
+        ('"<<value>>"', '"${<<KEY>>}"'),
+        ("xml",), 0, False, CONFIG, (), "xml",
+    ),
+    Family(
+        "properties.lager_de", "properties", "de", "dev",
+        _t("""
+            # Anwendungseinstellungen Lagerverwaltung
+            spring.application.name=lagerverwaltung
+            server.port=8082
+            lager.standort=hamburg
+            lager.<<key-kebab>>=<<value>>
+            """),
+        ("<<value>>", "${<<KEY>>}"),
+        ("json",), 0, True,
+    ),
+    Family(
+        "shell.curl_header", "shell", "en", "dev",
+        _t("""
+            $ curl -sS https://api.example.com/v1/status \\
+            >   -H "Accept: application/json" \\
+            >   -H "<<Key-Header>>: <<value>>"
+            {"status":"ok","version":"3.4.0"}
+            """),
+        ('"<<Key-Header>>: <<value>>"', '"<<Key-Header>>: $<<KEY>>"'),
+        (), 0, False, INFRA,
+    ),
+    Family(
+        "dockerfile.runtime_de", "dockerfile", "de", "dev",
+        _t("""
+            # Laufzeit-Image für den Abgleichdienst
+            FROM eclipse-temurin:21-jre
+            WORKDIR /opt/abgleich
+            COPY target/abgleich.jar app.jar
+            ENV <<KEY>>="<<value>>"
+            ENTRYPOINT ["java", "-jar", "app.jar"]
+            """),
+        ('ENV <<KEY>>="<<value>>"', "ARG <<KEY>>\nENV <<KEY>>=${<<KEY>>}"),
+        (), 0, False, INFRA,
+    ),
+    Family(
+        "ci_yaml.nightly_export", "ci_yaml", "en", "dev",
+        _t("""
+            # nightly export job
+            name: nightly-export
+            on:
+              schedule:
+                - cron: "0 2 * * *"
+            jobs:
+              export:
+                runs-on: ubuntu-24.04
+                steps:
+                  - uses: actions/checkout@v4
+                  - run: ./scripts/export.sh
+                    env:
+                      <<KEY>>: "<<value>>"
+            """),
+        ('"<<value>>"', "${{ secrets.<<KEY>> }}"),
+        ("json",), 0, True, INFRA, (), "yaml",
+    ),
+    Family(
+        "jupyter.env_cell", "jupyter", "en", "dev",
+        _t(r"""
+            {
+             "cells": [
+              {
+               "cell_type": "code",
+               "execution_count": 2,
+               "metadata": {},
+               "outputs": [],
+               "source": [
+                "import os\n",
+                "os.environ[\"<<KEY>>\"] = \"<<value>>\"\n",
+                "client = ReportClient.from_env()"
+               ]
+              }
+             ],
+             "metadata": {"kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"}},
+             "nbformat": 4,
+             "nbformat_minor": 5
+            }
+            """),
+        (r"\"<<value>>\"", r"os.environ.get(\"VAULT_<<KEY>>\", \"\")"),
+        ("json", "json"), 0, True, CONFIG, CODE, "json",
+    ),
+    Family(
+        "log.abgleich_text_de", "log", "de", "dev",
+        _t("""
+            2026-09-14 08:12:03,441 INFO  [main] Abgleich gestartet (Version 2.8.1, Knoten lager-02)
+            2026-09-14 08:12:03,902 DEBUG [main] Konfiguration geladen: mandant=0042 <<key>>=<<value>> wiederholungen=3
+            2026-09-14 08:12:04,117 INFO  [main] Abgleich bereit nach 0,68 s
+            """),
+        ("<<value>>", "${<<KEY>>}"),
+        (), 0, False, PROSE, LOG,
+    ),
+    Family(
+        "http.lieferungen_de", "http", "de", "dev",
+        _t("""
+            GET /v1/lieferungen?status=offen HTTP/1.1
+            Host: api.example.de
+            Accept: application/json
+            Accept-Language: de-DE
+            <<Key-Header>>: <<value>>
+            """),
+        ("<<value>>", "{{<<keyCamel>>}}"),
+    ),
     _code(
         "code.python.client_de", "de", "dev", "python",
         '''
@@ -701,6 +887,186 @@ FAMILIES = (
             <<Key-Header>>: <<value>>
             """),
         ("<<value>>", "{{$processEnv <<KEY>>}}"),
+    ),
+    Family(
+        "env.systemd_de", "env", "de", "holdout",
+        _t("""
+            # /etc/abgleich/umgebung – vom systemd-Dienst geladen
+            DIENST_NAME=abgleich
+            DIENST_PORT=9100
+            <<KEY>>='<<value>>'
+            """),
+        ("'<<value>>'", '"$(cat /run/secrets/<<key>>)"'),
+    ),
+    Family(
+        "yaml.compose_override", "yaml", "en", "holdout",
+        _t("""
+            # docker-compose.override.yml
+            services:
+              worker:
+                image: registry.example.com/worker:1.9
+                environment:
+                  <<KEY>>: "<<value>>"
+                  LOG_LEVEL: info
+            """),
+        ('"<<value>>"', '"${<<KEY>>}"'),
+        ("json",), 0, True, CONFIG, (), "yaml",
+    ),
+    Family(
+        "json.vscode_launch", "json", "en", "holdout",
+        _t("""
+            {
+              "version": "0.2.0",
+              "configurations": [
+                {
+                  "name": "Debug worker",
+                  "type": "node",
+                  "request": "launch",
+                  "program": "${workspaceFolder}/src/worker.js",
+                  "env": { "<<KEY>>": "<<value>>" }
+                }
+              ]
+            }
+            """),
+        ('"<<value>>"', '"${env:<<KEY>>}"'),
+        ("json",), 0, True, CONFIG, (), "json",
+    ),
+    Family(
+        "toml.export_de", "toml", "de", "holdout",
+        _t("""
+            # Zugangsdaten für den Exportdienst (lokal)
+            [export]
+            ziel = "sftp://dateien.example.de/eingang"
+            intervall_minuten = 15
+
+            [export.zugang]
+            <<key>> = "<<value>>"
+            """),
+        ('"<<value>>"', '"${<<KEY>>}"'),
+        ("json",), 0, True, CONFIG, (), "toml",
+    ),
+    Family(
+        "hcl.terraform_variable", "hcl", "en", "holdout",
+        _t("""
+            variable "<<key>>" {
+              description = "Credential for the upstream API"
+              type        = string
+              sensitive   = true
+              default     = "<<value>>"
+            }
+            """),
+        ('default     = "<<value>>"', "# set via TF_VAR_<<key>>"),
+        ("json",), 0, True, INFRA,
+    ),
+    Family(
+        "xml.schnittstelle_de", "xml", "de", "holdout",
+        _t("""
+            <?xml version="1.0" encoding="UTF-8"?>
+            <!-- Verbindungsdaten für die Schnittstelle zum Lager -->
+            <Schnittstelle>
+              <Endpunkt>https://lager.example.de/api</Endpunkt>
+              <<<KeyPascal>>><<value>></<<KeyPascal>>>
+            </Schnittstelle>
+            """),
+        ("<<value>>", "${<<KEY>>}"),
+        ("xml",), 0, True, CONFIG, (), "xml",
+    ),
+    Family(
+        "properties.gradle", "properties", "en", "holdout",
+        _t("""
+            # gradle.properties
+            org.gradle.jvmargs=-Xmx2g
+            org.gradle.parallel=true
+            <<keyCamel>>=<<value>>
+            """),
+        ("<<value>>", "${<<KEY>>}"),
+    ),
+    Family(
+        "shell.cron_de", "shell", "de", "holdout",
+        _t("""
+            #!/bin/sh
+            # Nächtliche Sicherung, per cron um 02:30
+            set -eu
+            <<KEY>>="<<value>>" ./sicherung.sh --ziel /mnt/sicherung --behalten 14
+            """),
+        ('"<<value>>"', '"$(cat /run/secrets/<<key>>)"'),
+        (), 0, False, INFRA,
+    ),
+    Family(
+        "dockerfile.go_build", "dockerfile", "en", "holdout",
+        _t("""
+            # syntax=docker/dockerfile:1
+            FROM golang:1.23 AS build
+            WORKDIR /src
+            COPY . .
+            RUN <<KEY>>=<<value>> go build -o /out/api ./cmd/api
+            FROM gcr.io/distroless/base-debian12
+            COPY --from=build /out/api /api
+            """),
+        ("RUN <<KEY>>=<<value>> go build", "RUN --mount=type=secret,id=<<key-kebab>> go build"),
+        (), 0, False, INFRA,
+    ),
+    Family(
+        "ci_yaml.gitlab_de", "ci_yaml", "de", "holdout",
+        _t("""
+            # Nächtlicher Export der Stammdaten
+            stages: [export]
+            stammdaten_export:
+              stage: export
+              image: python:3.12-slim
+              variables:
+                <<KEY>>: "<<value>>"
+              script:
+                - python -m export --ziel s3://stammdaten
+              rules:
+                - if: '$CI_PIPELINE_SOURCE == "schedule"'
+            """),
+        ('"<<value>>"', '"${CI_SECRET_<<KEY>>}"'),
+        ("json",), 0, True, INFRA, (), "yaml",
+    ),
+    Family(
+        "jupyter.ausgabe_de", "jupyter", "de", "holdout",
+        _t(r"""
+            {
+             "cells": [
+              {
+               "cell_type": "code",
+               "execution_count": 7,
+               "metadata": {},
+               "outputs": [
+                {"name": "stdout", "output_type": "stream", "text": ["Verbindung wird aufgebaut …\n", "verwende <<key>>: <<value>>\n"]}
+               ],
+               "source": ["verbindung = verbinden(einstellungen)"]
+              }
+             ],
+             "metadata": {},
+             "nbformat": 4,
+             "nbformat_minor": 5
+            }
+            """),
+        ("<<key>>: <<value>>", "<<key>>: ${<<KEY>>}"),
+        ("json",), 0, True, CONFIG, CODE, "json",
+    ),
+    Family(
+        "log.syslog", "log", "en", "holdout",
+        _t("""
+            Sep 14 10:02:11 web-03 api[2211]: WARN upstream auth rejected, retrying (attempt 2)
+            Sep 14 10:02:11 web-03 api[2211]: DEBUG outgoing request headers: Accept=application/json <<Key-Header>>=<<value>>
+            """),
+        ("<<value>>", "${<<KEY>>}"),
+        (), 0, False, PROSE, LOG,
+    ),
+    Family(
+        "http.webhook_update", "http", "en", "holdout",
+        _t("""
+            PUT /api/v3/webhooks/42 HTTP/2
+            Host: hooks.example.com
+            Content-Type: application/json
+            <<Key-Header>>: <<value>>
+
+            {"url": "https://ci.example.com/hook", "active": true}
+            """),
+        ("<<value>>", "{{$dotenv <<KEY>>}}"),
     ),
     _code(
         "code.python.settings", "en", "holdout", "python",

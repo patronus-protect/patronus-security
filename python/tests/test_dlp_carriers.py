@@ -42,6 +42,25 @@ STRUCTURAL = {
     "btc_wif_mainnet_uncompressed": checks.is_valid_btc_wif,
     "de_vat_id": checks.is_valid_de_vat_id,
     "jwt_signed_hs256": lambda v: checks.jwt_parts(v) is not None,
+    "jwt_signed_rs256": lambda v: checks.jwt_parts(v) is not None,
+    "http_basic_auth": lambda v: checks.basic_auth_pair(v) is not None,
+    "pem_pkcs8_ed25519_private_key": lambda v: any(checks.is_valid_pkcs8_ed25519(b) for _, b in checks.pem_blocks(v)),
+    "pem_pkcs1_rsa_private_key": lambda v: any(checks.is_valid_pkcs1_rsa(b) for _, b in checks.pem_blocks(v)),
+    "pem_sec1_ec_private_key": lambda v: any(checks.is_valid_sec1_p256(b) for _, b in checks.pem_blocks(v)),
+    "pem_dsa_private_key": lambda v: any(checks.is_valid_dsa(b) for _, b in checks.pem_blocks(v)),
+    "pem_openssh_ed25519_private_key": lambda v: any(
+        checks.is_valid_openssh_ed25519(b) for _, b in checks.pem_blocks(v)
+    ),
+}
+# Value patterns of rules without a validator (mirrors rust/src/detectors/dlp/dlp.rs): a
+# doc-example or test-key value must still match them, so only structural validation
+# can tell it from a real value.
+SHAPE = {
+    "btc_wif_mainnet_compressed": r"[KL][1-9A-HJ-NP-Za-km-z]{51}",
+    "btc_wif_mainnet_uncompressed": r"5[1-9A-HJ-NP-Za-km-z]{50}",
+    "jwt_signed_hs256": r"(ey[a-zA-Z0-9_\-=]{10,}\.){2}[a-zA-Z0-9_\-=]{10,}",
+    "jwt_signed_rs256": r"(ey[a-zA-Z0-9_\-=]{10,}\.){2}[a-zA-Z0-9_\-=]{10,}",
+    "discord_bot_token": r"[MN][A-Za-z0-9]{23,}\.[A-Za-z0-9\-_]{6}\.[A-Za-z0-9\-_]{27,}",
 }
 
 
@@ -96,9 +115,9 @@ class FamilyTests(unittest.TestCase):
                 CODE_LANGUAGES,
                 split,
             )
-            for prose in ("chat", "ticket", "mail"):
-                languages = {f.language for f in carriers.families(split) if f.format == prose}
-                self.assertEqual(languages, {"de", "en"}, f"{split} {prose}")
+            for format in FORMATS:
+                languages = {f.language for f in carriers.families(split) if f.format == format}
+                self.assertEqual(languages, {"de", "en"}, f"{split} {format}")
 
     def test_dev_and_holdout_families_are_disjoint(self):
         dev, holdout = (carriers.families(split) for split in carriers.SPLITS)
@@ -280,6 +299,33 @@ class BuildTests(unittest.TestCase):
                 value = carriers.hard_negative_value(name, variant)
                 self.assertEqual(len(value), recipes.generator_length(name), f"{name} {variant}")
                 self.assertFalse(check(value), f"{name} {variant}")
+        for name, pattern in SHAPE.items():
+            for variant in ("doc_example", "test_key"):
+                self.assertRegex(carriers.hard_negative_value(name, variant), f"^{pattern}$", f"{name} {variant}")
+
+    def test_encoded_hard_negatives_only_break_checksum_or_structure(self):
+        for variant in ("doc_example", "test_key"):
+            # Base58Check: version byte and length intact, only the check value is wrong.
+            for name, size in (("btc_wif_mainnet_uncompressed", 37), ("btc_wif_mainnet_compressed", 38)):
+                value = carriers.hard_negative_value(name, variant)
+                self.assertIsNone(checks.base58check_decode(value), name)
+                number = 0
+                for character in value:
+                    number = number * 58 + checks.BASE58.index(character)
+                raw = number.to_bytes(size, "big")
+                self.assertEqual(raw[:2], b"\x80\x7e", name)
+                self.assertEqual(checks.base58check_decode(recipes.base58check(raw[:-4])), raw[:-4], name)
+            # JWT: every segment is canonical base64url, the header still reads as JSON
+            # up to its last byte, which is what breaks it.
+            for name in ("jwt_signed_hs256", "jwt_signed_rs256"):
+                segments = [checks.b64url_decode(part) for part in carriers.hard_negative_value(name, variant).split(".")]
+                self.assertTrue(all(segment is not None for segment in segments), name)
+                self.assertTrue(segments[0].startswith(b'{"alg":"'), name)
+                self.assertEqual(json.loads(segments[0][:-1] + b"}")["typ"], "JWT", name)
+            # PEM: label, line width and canonical base64 intact, DER/OpenSSH layout broken.
+            for name in [name for name in STRUCTURAL if name.startswith("pem_")]:
+                value = carriers.hard_negative_value(name, variant)
+                self.assertEqual(len(checks.pem_blocks(value)), 1, name)
         self.assertIn("EXAMPLE", carriers.hard_negative_value("aws_access_key_id", "doc_example"))
         self.assertTrue(carriers.hard_negative_value("github_ghp_token", "test_key").startswith("ghp_"))
         self.assertNotEqual(

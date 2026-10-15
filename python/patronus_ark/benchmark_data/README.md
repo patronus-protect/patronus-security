@@ -126,7 +126,8 @@ Actions, GitLab), Jupyter, text and JSONL logs, HTTP, code in Python, JavaScript
 TypeScript, Go, Java, C#, Rust and Ruby, and DE/EN chat, tickets and mail.
 
 - Every family belongs to exactly one split. Dev and holdout share no family and
-  no template, and each split has every format in both languages.
+  no template, and each split has every format (each code language counted
+  under `code`) in both DE and EN.
 - Each value rule of `rules.json` has a profile with its entity, group and key
   name (`OPENAI_API_KEY`, `openaiApiKey`, `Openai-Api-Key` …), a DE/EN label and
   an optional wrapper (`Bearer …`, `postgres://app:…@db…`, `JSESSIONID=…`).
@@ -139,7 +140,12 @@ TypeScript, Go, Java, C#, Rust and Ruby, and DE/EN chat, tickets and mail.
   `env_ref` (`${KEY}`, `os.environ[…]`, `${{ secrets.KEY }}`, Helm, Maven,
   configparser …), `doc_example` and `test_key`. The last two keep the generator's
   prefix and length but use `EXAMPLEKEY`/`TESTKEY` fill words and an invalid check
-  value, so CRC-32, Base58Check, ISO 7064, DER and JWT checks fail.
+  value, so CRC-32, Base58Check, ISO 7064, DER and JWT checks fail. Encoded values
+  keep their encoded shape and break only the checksum or decoded structure: WIF
+  keys still start with `5`/`K`/`L` and carry a wrong Base58Check value, JWT
+  segments still start with `eyJ` and decode to broken JSON, PEM bodies keep label
+  and line width with a broken DER/OpenSSH layout. They still match the rule
+  pattern, so only structural validation tells them from a real value.
 - Code and notebook families carry the document label `content.source_code`,
   logs `content.system_log`.
 
