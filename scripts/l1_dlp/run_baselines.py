@@ -591,14 +591,19 @@ def refine(text: str, start: int, end: int, tool: str, rule_id: str) -> tuple[in
 # ── Entity map ────────────────────────────────────────────────────────────
 
 
-def load_entity_index(path: Path = ENTITY_MAP_PATH) -> dict[str, dict[str, tuple[list[str], list[str]]]]:
-    """``{tool: {rule_id: (entity ids, groups)}}`` from entity_map.yaml (sorted, unique)."""
+def load_entity_index(
+    path: Path = ENTITY_MAP_PATH, fields: dict[str, str] = ENTITY_MAP_FIELDS
+) -> dict[str, dict[str, tuple[list[str], list[str]]]]:
+    """``{tool: {rule_id: (entity ids, groups)}}`` from entity_map.yaml (sorted, unique).
+
+    ``fields`` maps each tool to its entity field (``run_ark.py`` passes ``{"ark": "ark"}``).
+    """
     import yaml
 
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    index: dict[str, dict[str, tuple[set[str], set[str]]]] = {tool: {} for tool in TOOLS}
+    index: dict[str, dict[str, tuple[set[str], set[str]]]] = {tool: {} for tool in fields}
     for entity in data["entities"]:
-        for tool, key in ENTITY_MAP_FIELDS.items():
+        for tool, key in fields.items():
             for rule_id in entity.get(key) or []:
                 entities, groups = index[tool].setdefault(str(rule_id), (set(), set()))
                 entities.add(entity["id"])

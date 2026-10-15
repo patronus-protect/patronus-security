@@ -86,6 +86,51 @@ High-Entropy-Strings schließen `PHPSESSID=` ein.
 `--include-detectors` gegen das gepinnte Binary und die detect-secrets-Plugins gegen das Paket.
 Die gitleaks-IDs prüft `rust/tests/dlp_entity_map.rs` gegen das Inventar.
 
+## ARK-Runner im selben Format
+
+`run_ark.py` scannt dieselbe DLP-JSONL (`id`, `text`) über die Python-Bindings und schreibt
+Vorhersagen im Format von `run_baselines.py`. Ausgeführt wird er mit dem ARK-Venv
+(`maturin develop` in `.venv`), nicht mit dem Baseline-Venv.
+
+```bash
+.venv/bin/python scripts/l1_dlp/run_ark.py --input rows.jsonl --output ark.jsonl
+    # [--meta FILE] [--enable-rule dlp_sql_statement …]
+```
+
+**Engine.** `SecurityGateway(categories=["dlp"], max_level="l1", download_files=False)` im
+Default-Profil: Secret-Gruppen an, Content- und Dokumentklassen aus. `--enable-rule` schaltet
+einzelne `dlp_*`-Regeln zusätzlich ein (unbekannte Regeln brechen ab). Gemessen werden alle
+DLP-Produzenten der Kategorie (`native:dlp`, `sensitive_material`, `secret_transfer` …).
+
+**Ausgabe.** Je Eingabezeile eine Zeile in Eingabereihenfolge, ohne Secret-Text:
+
+```json
+{"id": "…", "tool": "ark", "evidence_spans": [{"start_char": 41, "end_char": 57,
+  "rule_id": "dlp_env_var_secret", "label": "ark.dlp_env_var_secret", "group": "CREDENTIAL",
+  "entities": ["credential.secret_assignment"], "groups": ["CREDENTIAL"], "score": 1.0,
+  "normalization": []}]}
+```
+
+Die Felder der Baselines sind gleich (`label` = `ark.<rule_id>`, `entities`/`groups` aus dem
+`ark`-Feld von `entity_map.yaml`). `normalization` ist immer leer, weil ARK-Spans schon
+Wert-Spans sind. Dazu kommen `group` (Entity-Gruppe der Engine, d. h. das Span-Label) und `score`
+(Span-Score der Engine, 6 Nachkommastellen). Gleicher Span und gleiche Regel erscheinen einmal
+mit dem besten Score.
+
+**`rule_id`.** Evidence-Spans der Bindings tragen nur die Gruppe. Die Regel steht in den
+`matched_rules` der Layer-Details desselben Scanner-Ergebnisses (Regel-ID und Byte-Bereich). Ein
+Span bekommt die Regel mit demselben Byte-Bereich; passen mehrere (Überlappungen über Gruppen
+hinweg oder von der Engine verworfene Treffer), gewinnt der erste Treffer, dessen Gruppe laut
+Entity-Map dem Span-Label entspricht. Die Engine behält je Gruppe ebenfalls den ersten Treffer in
+Regelreihenfolge. Ohne passende Gruppe gewinnt der erste Treffer. Ein Span ohne Treffer und ein
+Scanner-Fehler brechen den Lauf ab, statt leere Vorhersagen zu schreiben.
+
+**Metadaten.** `<output>.meta.json` enthält Schema, Engine-Profil (`enabled_rules`), SHA-256
+des nativen Moduls und die Paketversion, SHA-256 von `entity_map.yaml`, Eingabe und Ausgabe,
+und Zähler: Spans je Regel (`findings`) und Gruppe (`groups`), Regeln ohne Entität (`unmapped`)
+und Spans, deren Engine-Gruppe nicht zur Entity-Map passt (`group_mismatch`, `regel:gruppe`).
+Zeitstempel fehlen; zwei Läufe auf demselben Build sind byte-identisch.
+
 ## Benign-Code-Korpus (FP/MB)
 
 `benign_code.py` baut den Benign-Code-Korpus, auf dem das Scoreboard FP/MB misst. Quelle sind
