@@ -139,7 +139,10 @@ pub(super) fn classifier_model_configs_for_category(
             "PATRONUS_NTDB_THREAT_DIR",
             "threat_current",
         ),
-        SecurityCategory::Dlp | SecurityCategory::Pii | SecurityCategory::DynamicPii => Vec::new(),
+        SecurityCategory::Dlp
+        | SecurityCategory::Pii
+        | SecurityCategory::DynamicPii
+        | SecurityCategory::ShellCommand => Vec::new(),
     }
 }
 

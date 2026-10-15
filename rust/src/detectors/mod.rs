@@ -7,6 +7,7 @@ pub mod injection;
 pub mod lexical_anchors;
 pub mod mcp;
 pub mod pii;
+pub mod shell;
 pub mod threat;
 
 use regex::Regex;

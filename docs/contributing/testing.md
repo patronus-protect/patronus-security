@@ -42,6 +42,7 @@ cargo deny check licenses
 | `l3_scheduler.rs` | L3 worker scheduling, fairness, max-wait. |
 | `unified_l3.rs` | Unified multi-head L3 behavior. |
 | `dynamic_pii.rs` | GLiNER dynamic-PII pipeline. |
+| `shell_command.rs` | `shell_command` scoring parity with scikit-learn (fixtures from `scripts/generate_shell_command_parity_fixtures.py`). |
 | `assets_manifest.rs` | Asset manifest integrity. |
 | `hf_e2e.rs` | End-to-end with real Hugging Face assets (needs network / `HF_TOKEN`). |
 
@@ -72,6 +73,8 @@ and run that test with `-- --ignored`. It performs no model inference.
 
 `hf_e2e.rs` and anything that exercises L2/L3 needs model assets. Provide `HF_TOKEN` if the
 repositories require authentication. Tests that only exercise native L1 run fully offline.
+The real-download smoke test `hf_shell_command_download_warmup_smoke` (in `hf_e2e.rs`) runs only
+with `PATRONUS_RUN_HF_E2E=1`.
 
 ## Benchmarking (not a correctness gate)
 

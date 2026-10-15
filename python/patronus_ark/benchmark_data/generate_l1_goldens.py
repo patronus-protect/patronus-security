@@ -118,7 +118,7 @@ PII_CASES = {
         p("EMAIL", "en", "Contact support at +76-532-1520 or write to ", "john.doe@email.org", ".", source_fixture_id="base-0003"),
         p("EMAIL", "de", "E-Mail: ", "anna.beispiel@firma.de"),
         p("EMAIL", "en", "Reply to ", "ops+alerts@example.co.uk"),
-        n("EMAIL", "de", "E-Mail: anna.beispiel@localhost", "domain has no public-style suffix"),
+        n("EMAIL", "de", "E-Mail: anna.beispiel@mailserver", "single-label host has no domain suffix"),
         n("EMAIL", "en", "Write to user [at] example [dot] com.", "obfuscated address is not a direct identifier"),
     ],
     "IP_ADDRESS": [

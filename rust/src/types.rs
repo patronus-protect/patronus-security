@@ -71,10 +71,12 @@ pub struct SecurityRuntimeReadiness {
 
 /// Readiness of model assets on disk before runtime warmup.
 ///
-/// L1 is intentionally absent because native L1 scanners require no model
-/// assets. Runtime readiness remains a separate contract.
+/// Native L1 rule scanners require no model assets, so `l1` is configured only
+/// for model-backed L1 categories such as `shell_command`. Runtime readiness
+/// remains a separate contract.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SecurityAssetReadiness {
+    pub l1: SecurityLevelReadiness,
     pub l2: SecurityLevelReadiness,
     pub l3: SecurityLevelReadiness,
 }
@@ -1311,6 +1313,8 @@ pub enum SecurityCategory {
     Routing,
     /// Security threat classification.
     Threat,
+    /// Risk scoring for shell commands and scripts (POSIX, PowerShell, CMD).
+    ShellCommand,
 }
 
 impl SecurityCategory {
@@ -1327,6 +1331,7 @@ impl SecurityCategory {
             SecurityCategory::ToolTags => "tool_tags",
             SecurityCategory::Routing => "routing",
             SecurityCategory::Threat => "threat",
+            SecurityCategory::ShellCommand => "shell_command",
         }
     }
 
@@ -1360,6 +1365,7 @@ impl std::str::FromStr for SecurityCategory {
             "tool_tags" => Ok(SecurityCategory::ToolTags),
             "routing" => Ok(SecurityCategory::Routing),
             "threat" => Ok(SecurityCategory::Threat),
+            "shell_command" | "shell-command" => Ok(SecurityCategory::ShellCommand),
             _ => Err(format!("Unknown security category: {}", s)),
         }
     }

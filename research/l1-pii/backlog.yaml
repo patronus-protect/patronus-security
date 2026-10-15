@@ -58,6 +58,7 @@ tasks:
     accept: generator with separate seeds for dev/holdout, spans in code points, all E03 labels covered
 
   - id: T01
+    status: done
     title: Define the gold convention for placeholder values (RFC 2606/6761 domains, .invalid, NANP 555-01xx/000) and align gold
     type: eval-infra
     deps: [E03]

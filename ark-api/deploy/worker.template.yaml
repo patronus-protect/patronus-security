@@ -5,11 +5,11 @@ auth:
   keys:
     - name: gateway-internal
       key_hash: "sha256:__WORKER_HASH__"
-      categories: [injection, dlp, threat, pii, dynamic-pii, sensitive_document, routing, tool_class, tool_action, tool_tags]
+      categories: [injection, dlp, threat, pii, dynamic-pii, sensitive_document, routing, tool_class, tool_action, tool_tags, shell_command]
       default_categories: [injection, dlp, threat, pii]
 pipeline:
   # Availability/warmup is independent of the default inference selection above.
-  categories: [injection, dlp, threat, pii, dynamic-pii, sensitive_document, routing, tool_class, tool_action, tool_tags]
+  categories: [injection, dlp, threat, pii, dynamic-pii, sensitive_document, routing, tool_class, tool_action, tool_tags, shell_command]
   max_level: L3
   model_dir: /data/models
   download_files: false
