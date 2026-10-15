@@ -97,4 +97,7 @@ Decide whether that runtime fallback is acceptable for your risk posture.
 - `pii` never downloads; it is native L1-only.
 - `dynamic-pii` is L3-only and needs its GLiNER bundle present — there is no offline fallback
   for it.
+- `shell_command` runs in L1 but needs its `cat-shell-risk-commander` model (~2.5 MB) under
+  `<model_dir>/shell_command/cat_shell_risk_commander/`; sync it with the other assets. With
+  downloads disabled and the files missing, warmup fails.
 - Set `HF_TOKEN` during the asset-sync phase if the model repos require authentication.

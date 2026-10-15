@@ -1760,6 +1760,8 @@ pub enum SecurityCategory {
     Routing,
     /// Security threat classification.
     Threat,
+    /// Risk scoring for shell commands and scripts (POSIX, PowerShell, CMD).
+    ShellCommand,
 }
 ```
 
@@ -1903,6 +1905,20 @@ pub fn download_dynamic_pii_assets(
 ```
 
 Download the revision-pinned `dynamic-pii` GLiNER bundle.
+
+```rust
+pub fn shell_command_assets_present(target_dir: &Path) -> bool;
+```
+
+Check whether the complete revision-pinned `shell_command` model is cached.
+
+```rust
+pub fn download_shell_command_assets(
+    target_dir: &Path,
+) -> Result<PathBuf, Box<dyn std::error::Error>>;
+```
+
+Download the revision-pinned `shell_command` risk model bundle.
 
 ```rust
 pub fn unified_l3_assets_present(target_dir: &Path) -> bool;

@@ -18,7 +18,8 @@ use super::{
     mmbert_tokenizer::ensure_mmbert_compact_tokenizer,
     specs::{
         AssetSpec, NtdbL2PackageAssetSpec, PipelineModelAssetSpec, ASSET_MANIFEST,
-        DEDICATED_L3_ASSETS, DYNAMIC_PII_ASSET, NTDB_L2_PACKAGE_MANIFEST, UNIFIED_L3_ASSET,
+        DEDICATED_L3_ASSETS, DYNAMIC_PII_ASSET, NTDB_L2_PACKAGE_MANIFEST, SHELL_COMMAND_ASSET,
+        UNIFIED_L3_ASSET,
     },
 };
 
@@ -212,6 +213,25 @@ pub(crate) fn download_dynamic_pii_assets_with_progress(
     progress: &SecurityAssetProgressCallback,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     download_pipeline_model_assets(DYNAMIC_PII_ASSET, target_dir, Some(progress))
+}
+
+/// Check whether the complete revision-pinned `shell_command` model is cached.
+pub fn shell_command_assets_present(target_dir: &Path) -> bool {
+    pipeline_model_assets_present(SHELL_COMMAND_ASSET, target_dir)
+}
+
+/// Download the revision-pinned `shell_command` risk model bundle.
+pub fn download_shell_command_assets(
+    target_dir: &Path,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    download_pipeline_model_assets(SHELL_COMMAND_ASSET, target_dir, None)
+}
+
+pub(crate) fn download_shell_command_assets_with_progress(
+    target_dir: &Path,
+    progress: &SecurityAssetProgressCallback,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    download_pipeline_model_assets(SHELL_COMMAND_ASSET, target_dir, Some(progress))
 }
 
 /// Check whether the complete revision-pinned unified L3 model is cached.

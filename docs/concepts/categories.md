@@ -4,7 +4,7 @@ A **category** is one kind of security question Patronus Ark can answer about a 
 You choose the categories a gateway scans at construction time. Each category is backed by a
 specific set of layers — some are native-only, some are model-backed, one is transformer-only.
 
-## The ten categories
+## The eleven categories
 
 | Category | Question it answers | L1 | L2 | L3 model |
 | --- | --- | :---: | :---: | --- |
@@ -18,6 +18,7 @@ specific set of layers — some are native-only, some are model-backed, one is t
 | `tool_tags` | Data-flow properties (sensitive source, untrusted source, external sink)? | — | ✅ | Husky Nose |
 | `routing` | What is the operational intent of the request? | — | ✅ | Panther Read |
 | `threat` | What *type* of security threat is this? | Native rules | ✅ | Wolf Defender Threat |
+| `shell_command` | Is this shell command or script (POSIX/Bash, PowerShell, CMD) risky? | ✅ (model) | — | — |
 
 The models are documented on Hugging Face under the
 [`patronus-studio`](https://huggingface.co/patronus-studio) organization and mapped to
@@ -38,6 +39,20 @@ source-bound components and finding spans.
 Both can publish localized, non-finding `l1_anchors` with `explain: true`. The shared Rust/Python/API default enables only
 credential/secret DLP rules by default; other DLP families are opt-in through rule gates. See
 [Native detectors](detectors.md).
+
+### Model-backed L1 (`shell_command`)
+
+`shell_command` scores a shell command or full script (POSIX/Bash, PowerShell, Windows CMD) for
+risk. The **caller** declares that the input is a command by choosing this category (for example
+from a PreToolUse hook for a Bash tool); it is not meant for prose. It runs natively in the L1
+phase — so also in distributed mode and with `max_level="l1"` — but is the one L1 detector that
+needs a downloaded model file: `cat-shell-risk-commander`, a TF-IDF character n-gram logistic
+regression (`model.json`, ~2.5 MB, no ONNX/tokenizer). ARK also scores a comments-stripped
+variant and keeps the max, to resist comment padding. It is text-only: it neither executes nor
+parses commands, its labels are source-based risk labels, and it complements — not replaces —
+sandboxing and permissions. Validate the threshold on your own traffic (report/review first)
+before auto-blocking. See [Assets](../assets.md) and the
+[result schema](../reference/result-schema.md).
 
 ### Native + model-backed (L1 → L2 → L3)
 
@@ -81,6 +96,7 @@ at once. See [`l3_strategy`](../reference/configuration.md#l3-strategy) and
 
 Scan only what you need — every category adds work. A prompt firewall might run
 `["injection", "threat"]`; a DLP gateway `["dlp", "pii", "sensitive_document"]`; an agent
-guard `["injection", "tool_class", "tool_action", "tool_tags"]`. See
+guard `["injection", "tool_class", "tool_action", "tool_tags"]`; a Bash-tool hook
+`["shell_command"]`. See
 [Choose categories & levels](../how-to/choose-categories-and-levels.md) for guidance and the
 offline implications of each choice.

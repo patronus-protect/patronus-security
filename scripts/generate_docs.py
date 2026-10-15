@@ -42,6 +42,7 @@ CATEGORY_NAMES = {
     "ToolTags": "tool_tags",
     "Routing": "routing",
     "Threat": "threat",
+    "ShellCommand": "shell_command",
 }
 
 CATEGORY_ORDER = [
@@ -55,6 +56,7 @@ CATEGORY_ORDER = [
     "ToolTags",
     "Routing",
     "Threat",
+    "ShellCommand",
 ]
 
 
@@ -66,6 +68,9 @@ class Asset:
     source_path: str
     destination_path: str
     required: bool
+    # Pipeline model bundles are cached relative to the model root rather than
+    # below the category directory.
+    bundle: bool = False
 
 
 def parse_assets() -> list[Asset]:
@@ -86,22 +91,29 @@ def parse_assets() -> list[Asset]:
                 required=_field(block, "required") == "true",
             )
         )
-    dynamic_block = full_source.split("pub const DYNAMIC_PII_ASSET", 1)[1].split("};", 1)[0]
-    dynamic_repo = _field(dynamic_block, "repo").strip('"')
-    dynamic_destination = _field(dynamic_block, "destination_path").strip('"')
-    files_block = dynamic_block.split("files: &[", 1)[1].split("],", 1)[0]
-    for filename in re.findall(r'"([^"]+)"', files_block):
-        assets.append(
-            Asset(
-                category="DynamicPii",
-                level="L3",
-                repo=dynamic_repo,
-                source_path=filename,
-                destination_path=f"{dynamic_destination}/{filename}",
-                required=True,
-            )
-        )
+    for const_name, level in (("DYNAMIC_PII_ASSET", "L3"), ("SHELL_COMMAND_ASSET", "L1")):
+        assets.extend(_pipeline_bundle_assets(full_source, const_name, level))
     return assets
+
+
+def _pipeline_bundle_assets(full_source: str, const_name: str, level: str) -> list[Asset]:
+    block = full_source.split(f"pub const {const_name}", 1)[1].split("};", 1)[0]
+    category = _field(block, "category").replace("SecurityCategory::", "")
+    repo = _field(block, "repo").strip('"')
+    destination = _field(block, "destination_path").strip('"')
+    files_block = block.split("files: &[", 1)[1].split("],", 1)[0]
+    return [
+        Asset(
+            category=category,
+            level=level,
+            repo=repo,
+            source_path=filename,
+            destination_path=f"{destination}/{filename}",
+            required=True,
+            bundle=True,
+        )
+        for filename in re.findall(r'"([^"]+)"', files_block)
+    ]
 
 
 @dataclass(frozen=True)
@@ -455,7 +467,7 @@ def generate_assets_doc(assets: list[Asset], snapshot: dict) -> str:
     for asset in assets:
         required = "yes" if asset.required else "optional"
         source = f"`{asset.repo}/{asset.source_path}`"
-        cache_path = f"`{asset.destination_path}`" if asset.category == "DynamicPii" else f"`{CATEGORY_NAMES[asset.category]}/{asset.destination_path}`"
+        cache_path = f"`{asset.destination_path}`" if asset.bundle else f"`{CATEGORY_NAMES[asset.category]}/{asset.destination_path}`"
         lines.append(
             f"| `{CATEGORY_NAMES[asset.category]}` | `{asset.level}` | {required} | {source} | {cache_path} | {format_size(asset_size(asset, snapshot))} |"
         )

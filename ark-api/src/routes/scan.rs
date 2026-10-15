@@ -668,6 +668,87 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn sync_scan_scores_shell_commands() {
+        let model_dir = std::env::temp_dir().join(format!(
+            "ark_api_shell_command_{}_{}",
+            std::process::id(),
+            Instant::now().elapsed().as_nanos()
+        ));
+        let bundle = model_dir.join(patronus_ark::assets::SHELL_COMMAND_ASSET.destination_path);
+        std::fs::create_dir_all(&bundle).unwrap();
+        let model = std::fs::read(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../rust/tests/fixtures/shell_command_synthetic_model.json"),
+        )
+        .unwrap();
+        std::fs::write(
+            bundle.join("manifest.json"),
+            json!({"files": {"model.json": {"sha256": format!("{:x}", Sha256::digest(&model))}}})
+                .to_string(),
+        )
+        .unwrap();
+        std::fs::write(bundle.join("model.json"), model).unwrap();
+        std::fs::write(bundle.join("LICENSE"), "Apache-2.0").unwrap();
+        std::fs::write(
+            bundle.join(".patronus-revision"),
+            patronus_ark::assets::SHELL_COMMAND_ASSET.revision,
+        )
+        .unwrap();
+
+        let (mut config, mut key) = config_and_key();
+        config.categories = vec![SecurityCategory::ShellCommand];
+        key.allowed_categories = Some(config.categories.clone());
+        key.key_hash = format!("{:x}", Sha256::digest(b"correct-secret"));
+        config.keys = vec![key];
+        let mut gateway = SecurityGateway::with_max_level(
+            config.categories.clone(),
+            SecurityLevel::L1,
+            Some(model_dir.clone()),
+            false,
+        );
+        gateway.warmup().unwrap();
+        let state = AppState::new(config, gateway);
+        let app = Router::new()
+            .route("/v1/scan/sync", post(submit_scan_sync))
+            .route_layer(middleware::from_fn_with_state(
+                state.clone(),
+                crate::auth::require_api_key,
+            ))
+            .with_state(state);
+        let boundary = "ark-shell-boundary";
+        let body = format!(
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"config\"\r\n\r\n{{\"categories\":[\"shell_command\"]}}\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"text\"\r\n\r\nrm -rf ~/.ssh\r\n--{boundary}--\r\n"
+        );
+        let response = app
+            .oneshot(
+                Request::post("/v1/scan/sync")
+                    .header("authorization", "Bearer correct-secret")
+                    .header(
+                        "content-type",
+                        format!("multipart/form-data; boundary={boundary}"),
+                    )
+                    .body(Body::from(body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let response_body = to_bytes(response.into_body(), 64 * 1024).await.unwrap();
+        let payload: Value = serde_json::from_slice(&response_body).unwrap();
+        let result = &payload["jobs"][0]["results"][0];
+        assert_eq!(result["category"], "shell_command", "{payload}");
+        assert_eq!(result["model"], "cat-shell-risk-commander");
+        assert_eq!(result["level"], "L1");
+        assert!(matches!(
+            result["class_name"].as_str(),
+            Some("shell_risk" | "safe")
+        ));
+        assert!(result["layers"][0]["details"]["decision_score"].is_f64());
+        std::fs::remove_dir_all(model_dir).ok();
+    }
+
+    #[tokio::test]
     async fn multipart_file_upload_keeps_jobs_contract_and_applies_config() {
         let (mut config, mut key) = config_and_key();
         key.key_hash = format!("{:x}", Sha256::digest(b"correct-secret"));

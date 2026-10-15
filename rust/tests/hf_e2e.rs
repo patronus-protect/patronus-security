@@ -165,6 +165,49 @@ fn hf_short_german_greeting_is_not_an_injection() {
 }
 
 #[test]
+fn hf_shell_command_download_warmup_smoke() {
+    if std::env::var("PATRONUS_RUN_HF_E2E").as_deref() != Ok("1") {
+        eprintln!("skipping HF E2E; set PATRONUS_RUN_HF_E2E=1 to run");
+        return;
+    }
+
+    let dir = model_dir();
+    let mut scanner = SecurityGateway::with_max_level(
+        vec![SecurityCategory::ShellCommand],
+        SecurityLevel::L1,
+        Some(dir.clone()),
+        true,
+    );
+    scanner.warmup().unwrap();
+    let bundle = dir.join(patronus_ark::assets::SHELL_COMMAND_ASSET.destination_path);
+    for file in [
+        "manifest.json",
+        "model.json",
+        "LICENSE",
+        ".patronus-revision",
+    ] {
+        assert!(bundle.join(file).is_file(), "missing {file}");
+    }
+    assert_eq!(
+        scanner.runtime_readiness().l1,
+        SecurityLevelReadiness::Ready
+    );
+
+    let verdict = |text: &str| {
+        let results = scanner.scan_categories(&[SecurityCategory::ShellCommand], text);
+        assert_eq!(results.len(), 1, "{text:?}");
+        results[0].class_name.clone()
+    };
+    assert_eq!(verdict("git status --short"), "safe");
+    assert_eq!(verdict("rm -rf ~/.ssh && rm -rf ~/.aws"), "shell_risk");
+    assert_eq!(
+        verdict(&format!("rm -rf / # {}", "padding ".repeat(2048))),
+        "shell_risk",
+        "comment padding must not hide the command"
+    );
+}
+
+#[test]
 fn hf_product_asset_sync_progress_smoke() {
     if std::env::var("PATRONUS_RUN_HF_ASSET_SYNC_E2E").as_deref() != Ok("1") {
         eprintln!("skipping product asset-sync E2E; set PATRONUS_RUN_HF_ASSET_SYNC_E2E=1 to run");
@@ -183,6 +226,7 @@ fn hf_product_asset_sync_progress_smoke() {
         SecurityCategory::Routing,
         SecurityCategory::Threat,
         SecurityCategory::DynamicPii,
+        SecurityCategory::ShellCommand,
     ];
     let scanner =
         SecurityGateway::with_max_level(categories, SecurityLevel::L3, Some(dir.clone()), true);

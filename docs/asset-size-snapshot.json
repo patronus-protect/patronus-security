@@ -1,6 +1,15 @@
 {
   "generated_at": "2026-07-01T17:36:32+00:00",
   "repos": {
+    "patronus-studio/cat-shell-risk-commander": {
+      "files": {
+        "LICENSE": 11358,
+        "manifest.json": 1202,
+        "model.json": 2539702
+      },
+      "last_modified": "2026-10-13T14:20:21.000Z",
+      "sha": "5f30ad137469fd3525fa7721824ac68675360d12"
+    },
     "patronus-studio/orca-sonar-document-classifier": {
       "files": {
         "cascade/cascade_config.json": 42,
