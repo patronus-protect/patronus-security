@@ -84,6 +84,7 @@ tasks:
     accept: script in the repo, data only on the VPS; repo split dev/holdout, manifest with SHA-256 and license per repo; metric FP/MB
 
   - id: E06
+    status: done
     title: Benign document corpus DE/EN (prose, public-domain/CC government and corporate texts) for content and document classes
     type: eval-infra
     deps: []

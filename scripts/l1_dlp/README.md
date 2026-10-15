@@ -63,3 +63,72 @@ byte-identisch. Das Einfrieren unter `~/ark-dlp/holdout` im Gate übernimmt E09.
 mehrere Regeln ihn melden. Vorhersagen sind JSONL mit `id` und `evidence_spans` (`start_char`,
 `end_char`, `rule_id` oder `label`). Der Bericht nennt FP/MB gesamt, je `kind`, je Repository und
 je Regel. Die Zahlen je Regel sind auf die Gesamtbytes normiert.
+
+## Benign-Dokumentkorpus DE/EN (Content- und Dokumentklassen)
+
+`benign_docs.py` baut den Benign-Dokumentkorpus. Auf ihm misst das Scoreboard die FP der Content-
+und Dokumentklassen (Quellcode, SQL, Log, Business-Metrik, später HR, Recht, M&A, Exportkontrolle …)
+auf deutschen und englischen Texten. Alle Texte sind öffentlich, gemeinfrei oder CC-lizenziert und
+in [`benign_docs_sources.json`](benign_docs_sources.json) gepinnt. Die Daten liegen nur auf der
+VPS, nie im Repo.
+
+```bash
+python3 scripts/l1_dlp/benign_docs.py prepare --dev-out DIR --holdout-out DIR   # [--sources DIR] [--offline] [--force]
+python3 scripts/l1_dlp/benign_docs.py check DIR
+python3 scripts/l1_dlp/benign_docs.py fp-report --corpus DIR --predictions FILE  # [--output FILE]
+python3 scripts/l1_dlp/benign_docs.py pin --sources DIR [--write]                # nach Änderung an Liste/Limits
+```
+
+**Quellen.** Jede Quelle hat genau eine Sprache (`de`, `en`) und ein Genre:
+
+| Genre | DE | EN |
+|---|---|---|
+| `prose` | Wikipedia-Artikel (CC BY-SA 4.0) | Wikipedia-Artikel (CC BY-SA 4.0) |
+| `government` | Bundesgesetze aus `bundestag/gesetze` (Unlicense; amtliche Werke, § 5 UrhG) | 18F/GSA-Guides aus `18F/guides` (US-Bundeswerk, CC0) |
+| `corporate` | Wikimedia Foundation: Richtlinien, Satzung, Vorstandsprotokolle, deutsche Übersetzungen (CC BY-SA 4.0) | dieselben Seiten im englischen Original (CC BY-SA 4.0) |
+
+Die Artikel wurden bewusst gemischt: Orte, Geschichte und Wissenschaft, aber auch Unternehmen mit
+Umsatzzahlen und Arbeits-, Datenschutz- und Wirtschaftsthemen (Betriebsrat, DSGVO, Insiderhandel,
+Exportkontrolle). Gesetze und Richtlinien behandeln Arbeitsrecht, Datenschutz,
+Geschäftsgeheimnisse, Außenwirtschaft und Vertraulichkeit, sind aber öffentlich. Seiten über
+Passwörter oder Kryptografie mit Beispielwerten sind ausgeschlossen. Erlaubt sind nur CC0,
+CC BY und CC BY-SA (3.0/4.0) sowie die Unlicense, nicht NC oder ND.
+
+Zwei Quelltypen gibt es:
+
+- `git`: Repository, Commit und Pfad-Globs (`.md`, `.markdown`, `.txt`). Geholt werden nur Baum und
+  ausgewählte Blobs (`--filter=blob:none`, danach die Blobs gezielt), ohne Promisor-Remote, also
+  ohne spätere Nachladung. Im Wurzelverzeichnis muss eine Lizenzdatei liegen. Ein YAML-Front-Matter
+  am Anfang wird entfernt, sonst bleibt der Markdown-Text unverändert.
+- `mediawiki`: Site und Seiten mit Titel und Revisions-ID. Revisionen sind unveränderlich. Der Titel
+  jeder Revision wird über die API geprüft, der Wikitext über `index.php?action=raw&oldid=…` geholt
+  (User-Agent mit Kontakt, 1 s Abstand, Backoff bei 429/5xx) und deterministisch zu Fließtext
+  reduziert: Vorlagen, Tabellen, Einzelnachweise, Dateien, Kategorien, Kommentare und
+  Übersetzungsmarker fallen weg, Links behalten ihren Text.
+
+**Split nach Quelle.** Jede Quelle nennt ihren Split. Ein Repository darf mehrere Quellen mit
+getrennten Pfaden liefern (Gesetze und 18F-Guides teilen sich nach Gesetz bzw. Kapitel). Ein
+Dokument (Repo und Pfad oder Site und Titel) gehört zu genau einer Quelle. Derselbe Text darf nicht
+in beiden Splits stehen, und Dev und Holdout nutzen unterschiedliche Wikimedia-Seiten (Dev:
+Policies/Board, Holdout: Legal/Minutes), keine Übersetzungspaare über die Split-Grenze. Jeder
+Split muss alle sechs Kombinationen aus Sprache und Genre enthalten, sonst bricht `prepare` ab.
+
+**Dokumente.** Je Quelle entsteht `<quelle>.jsonl` mit Zeilen `id` (`<quelle>:<pfad|titel>`),
+`source`, `lang`, `genre`, `license`, `url` (Permalink auf Commit bzw. Revision), `path` oder
+`title` + `revid` und `text`. Dokumente unter 200 Zeichen oder über 1 MiB fallen weg. Je Quelle
+gilt ein Budget von 4 MiB, gewählt in der Reihenfolge `sha256(quelle:id)`.
+
+**Pins und Einfrieren.** Wie beim Benign-Code-Korpus: `sha256` je Quelle pinnt das JSONL, `pin
+--write` setzt es neu. Jedes Zielverzeichnis enthält die JSONL-Dateien, `manifest.json` (Typ,
+URL/Commit/Pfade bzw. Site und Seitenzahl, Lizenz, Lizenzdatei, Sprache, Genre, Split, SHA-256,
+Dokumente, Bytes; Summen je Sprache, Genre und Kombination; Limits) und zuletzt `.ready`. Die
+Caches liegen unter `--sources` (Standard `HOLDOUT/.sources/benign_docs`). stdout nennt nur
+Dev-Zahlen. Das Einfrieren unter `~/ark-dlp/holdout` im Gate übernimmt E09.
+
+**FP-Bericht.** Der Korpus gilt als frei von Secrets und vertraulichen Dokumenten. Jeder Span und
+jedes markierte Dokument ist ein FP. Vorhersagen sind JSONL mit `id`, `evidence_spans`
+(`start_char`, `end_char`, `rule_id` oder `label`) und optional `document_labels` für Klassen auf
+Dokumentebene. Ein Dokument gilt als markiert, wenn es einen Span oder ein Label hat. `fp-report`
+nennt FP/MB (Spans, je Dokument einmal) und `flagged_rate` (markierte Dokumente / Dokumente)
+gesamt, je Sprache, Genre, Quelle und Regel. Die Werte je Regel beziehen sich auf alle Bytes und
+Dokumente des Splits.
