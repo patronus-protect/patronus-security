@@ -651,26 +651,30 @@ def fp_report(documents: dict[str, dict[str, Any]], predictions: Iterable[dict[s
     ``predictions`` rows carry ``id``, ``evidence_spans`` (``start_char``, ``end_char`` and
     ``rule_id`` or ``label``) and optionally ``document_labels`` (document-level classes).
     A span counts once per document even if several rules report it; a document counts as
-    flagged if it has a span or a document label.
+    flagged if it has a span or a document label. Repeated rows for the same document
+    (concatenated detector outputs, retries) are merged: per rule, a span counts once per
+    document and a document counts once.
     """
     spans: dict[str, set[tuple[int, int]]] = {}
     flagged: set[str] = set()
-    rule_spans: Counter[str] = Counter()
-    rule_documents: Counter[str] = Counter()
+    rule_span_keys: set[tuple[str, str, tuple[int, int]]] = set()
+    rule_doc_keys: set[tuple[str, str]] = set()
     for row in predictions:
         doc_id = row.get("id")
         if doc_id not in documents:
             raise ValueError(f"prediction for unknown document {doc_id!r}")
-        seen_rules: set[tuple[str, tuple[int, int]]] = set()
+        rules: set[str] = {str(label) for label in row.get("document_labels") or []}
         for span in row.get("evidence_spans") or []:
             key = (int(span["start_char"]), int(span["end_char"]))
+            rule = str(span.get("rule_id") or span.get("label") or "unknown")
             spans.setdefault(doc_id, set()).add(key)
-            seen_rules.add((str(span.get("rule_id") or span.get("label") or "unknown"), key))
-        rule_spans.update(rule for rule, _ in seen_rules)
-        rules = {rule for rule, _ in seen_rules} | {str(label) for label in row.get("document_labels") or []}
-        rule_documents.update(rules)
+            rule_span_keys.add((rule, doc_id, key))
+            rules.add(rule)
+        rule_doc_keys.update((rule, doc_id) for rule in rules)
         if rules:
             flagged.add(doc_id)
+    rule_spans: Counter[str] = Counter(rule for rule, _, _ in rule_span_keys)
+    rule_documents: Counter[str] = Counter(rule for rule, _ in rule_doc_keys)
     total_bytes = sum(doc["bytes"] for doc in documents.values())
 
     def stats(members: list[str]) -> dict[str, Any]:
