@@ -30,7 +30,7 @@ die unten angehängte Aufgabe, keine weitere.
 5. Alles committen (Conventional Commits, Trailer
    `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`). Nicht pushen. Den Status in
    `backlog.yaml` nicht ändern; das macht der Runner.
-6. Antworte zum Schluss mit drei Zeilen: Aufgabe, was geändert wurde, was offen ist.
+6. Antworte zum Schluss mit drei Zeilen: Aufgabe, was geändert wurde, was offen ist. Diese drei Zeilen und alle Commit-Messages auf Englisch (sie landen im PR).
 
 Nach deinem Lauf prüft ein unabhängiges Gate (dieselben Checks plus Scoreboard auf einem verborgenen
 Holdout, keine Regression > 0,5 pp F1, keine neuen FP auf Hard Negatives). Ist es rot, bekommst du
