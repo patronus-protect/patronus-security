@@ -24,6 +24,7 @@ use super::ntdb_l2::{
     NtdbL2ModelConfig,
 };
 use super::SecurityGateway;
+use crate::detectors::shell::shell_risk::ShellRiskPipeline;
 
 struct PreparedNtdbAssets {
     config: NtdbL2ModelConfig,
@@ -119,6 +120,21 @@ impl SecurityGateway {
 
         metrics.checkpoint("worker_registration", "");
         let execution = self.scan_execution();
+        self.shell_command_pipeline = if self.shell_command_configured(&execution) {
+            let bundle_dir = base_dir.join(assets::SHELL_COMMAND_ASSET.destination_path);
+            let pipeline =
+                ShellRiskPipeline::from_bundle_dir(&bundle_dir).map_err(std::io::Error::other)?;
+            log::info!(
+                "shell_command model {} loaded from {}; threshold_policy={}",
+                assets::SHELL_COMMAND_ASSET.model,
+                bundle_dir.display(),
+                pipeline.threshold_policy()
+            );
+            metrics.checkpoint("shell_command_l1", "");
+            Some(pipeline)
+        } else {
+            None
+        };
         if execution.l3_strategy() == L3Strategy::Multi
             && execution.allows_level(SecurityLevel::L3)
             && execution.allows_model(crate::ml::unified_onnx::UNIFIED_MODEL)
@@ -258,6 +274,30 @@ impl SecurityGateway {
         }
 
         for category in &self.categories {
+            if *category == SecurityCategory::ShellCommand {
+                if !self.shell_command_configured(&execution) {
+                    continue;
+                }
+                if !assets::shell_command_assets_present(&base_dir) {
+                    let bundle_dir = base_dir.join(assets::SHELL_COMMAND_ASSET.destination_path);
+                    if allow_download && self.should_download_assets_for(*category) {
+                        if let Some(progress) = progress {
+                            assets::download_shell_command_assets_with_progress(
+                                &base_dir, progress,
+                            )?;
+                        } else {
+                            assets::download_shell_command_assets(&base_dir)?;
+                        }
+                    } else {
+                        return Err(format!(
+                            "missing shell_command assets at {}; downloads disabled",
+                            bundle_dir.display()
+                        )
+                        .into());
+                    }
+                }
+                continue;
+            }
             if *category == SecurityCategory::DynamicPii {
                 if self.max_level < SecurityLevel::L3
                     || !execution.allows_level(SecurityLevel::L3)
@@ -311,7 +351,9 @@ impl SecurityGateway {
                 SecurityCategory::Routing => base_dir.join("routing"),
                 SecurityCategory::Threat => base_dir.join("threat"),
                 SecurityCategory::Dlp | SecurityCategory::Pii => continue,
-                SecurityCategory::DynamicPii => unreachable!("handled above"),
+                SecurityCategory::DynamicPii | SecurityCategory::ShellCommand => {
+                    unreachable!("handled above")
+                }
             };
             let configs = if execution.l3_strategy() == L3Strategy::Dedicated
                 && execution.allows_level(SecurityLevel::L3)
@@ -460,6 +502,7 @@ impl SecurityGateway {
                 || (self.categories.contains(&SecurityCategory::DynamicPii)
                     && execution.allows_model(assets::DYNAMIC_PII_ASSET.model)));
         SecurityAssetReadiness {
+            l1: configured_level_readiness(self.shell_command_configured(&execution)),
             l2: configured_level_readiness(l2_configured),
             l3: configured_level_readiness(l3_configured),
         }
@@ -468,6 +511,7 @@ impl SecurityGateway {
     fn failed_asset_readiness(&self, failure: SecurityFailure) -> SecurityAssetReadiness {
         let configured = self.configured_asset_readiness();
         SecurityAssetReadiness {
+            l1: failed_configured_level(configured.l1, failure.clone()),
             l2: failed_configured_level(configured.l2, failure.clone()),
             l3: failed_configured_level(configured.l3, failure),
         }

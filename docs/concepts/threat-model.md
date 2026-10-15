@@ -24,7 +24,9 @@ Concretely, the library provides signals to:
 - detect **PII, secrets, and DLP-relevant content** leaving or entering the boundary
   (`pii`, `dynamic-pii`, `dlp`, `sensitive_document`);
 - classify **agentic tool use** so a policy engine can gate risky actions
-  (`tool_class`, `tool_action`, `tool_tags`, `routing`).
+  (`tool_class`, `tool_action`, `tool_tags`, `routing`);
+- score **shell commands and scripts** an agent is about to run (`shell_command`) — a text-only
+  risk signal.
 
 ## Trust boundaries
 

@@ -12,6 +12,7 @@ you scan what matters without paying for what you don't.
 | Open-vocabulary PII extraction | `dynamic-pii` (+ `pii` for validated identifiers) |
 | Agent tool-use guard | `injection`, `tool_class`, `tool_action`, `tool_tags` |
 | Request router | `routing` |
+| Shell / Bash tool guard (caller passes the command) | `shell_command` |
 
 Scan only what you will act on — each category adds work. See [Categories](../concepts/categories.md)
 for what each one classifies and which layers back it.
@@ -22,7 +23,7 @@ for what each one classifies and which layers back it.
 
 | `max_level` | Use when |
 | --- | --- |
-| `l1` | You want asset-free, always-offline, rule-based coverage only. Runtime still depends on input size and enabled rules. |
+| `l1` | You want asset-free, always-offline, rule-based coverage only (`shell_command` is the exception: its L1 detector needs a small model file). Runtime still depends on input size and enabled rules. |
 | `l2` | You want learned classification but never the transformer cost. Great default for high-throughput paths. |
 | `l3` | You want maximum accuracy and can afford occasional transformer inference on promoted requests. |
 
@@ -60,6 +61,8 @@ for what each one classifies and which layers back it.
 - `sensitive_document`, `tool_*`, `routing` → **model-only**; with no cached assets they produce
   no verdict.
 - `dynamic-pii` → **L3-only**; needs its GLiNER bundle or it cannot run.
+- `shell_command` → **L1 with a model file** (~2.5 MB); with downloads disabled and the model
+  missing, warmup fails.
 
 If you need guaranteed coverage in an air-gapped environment, prefer categories with a native
 L1 stage or pre-cache assets (see [Offline & air-gapped](offline-airgapped.md)).

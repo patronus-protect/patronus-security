@@ -77,6 +77,18 @@ pub const DYNAMIC_PII_ASSET: PipelineModelAssetSpec = PipelineModelAssetSpec {
     ],
 };
 
+/// `cat-shell-risk-commander`: a TF-IDF character n-gram logistic regression
+/// exported as JSON. It runs natively in the L1 phase, so the bundle carries no
+/// ONNX graph or tokenizer.
+pub const SHELL_COMMAND_ASSET: PipelineModelAssetSpec = PipelineModelAssetSpec {
+    category: SecurityCategory::ShellCommand,
+    model: "cat-shell-risk-commander",
+    repo: "patronus-studio/cat-shell-risk-commander",
+    revision: "5f30ad137469fd3525fa7721824ac68675360d12",
+    destination_path: "shell_command/cat_shell_risk_commander",
+    files: &["manifest.json", "model.json", "LICENSE"],
+};
+
 pub const UNIFIED_L3_ASSET: PipelineModelAssetSpec = PipelineModelAssetSpec {
     category: SecurityCategory::Injection,
     model: "unified-multitask-model-augmented-v3",

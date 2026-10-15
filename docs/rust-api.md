@@ -866,6 +866,7 @@ Readiness of the configured scanner runtime by security level.
 
 ```rust
 pub struct SecurityAssetReadiness {
+    pub l1: SecurityLevelReadiness,
     pub l2: SecurityLevelReadiness,
     pub l3: SecurityLevelReadiness,
 }
@@ -873,8 +874,9 @@ pub struct SecurityAssetReadiness {
 
 Readiness of model assets on disk before runtime warmup.
 
-L1 is intentionally absent because native L1 scanners require no model
-assets. Runtime readiness remains a separate contract.
+Native L1 rule scanners require no model assets, so `l1` is configured only
+for model-backed L1 categories such as `shell_command`. Runtime readiness
+remains a separate contract.
 
 ```rust
 pub struct SecurityAssetProgress {
@@ -1760,6 +1762,8 @@ pub enum SecurityCategory {
     Routing,
     /// Security threat classification.
     Threat,
+    /// Risk scoring for shell commands and scripts (POSIX, PowerShell, CMD).
+    ShellCommand,
 }
 ```
 
@@ -1903,6 +1907,20 @@ pub fn download_dynamic_pii_assets(
 ```
 
 Download the revision-pinned `dynamic-pii` GLiNER bundle.
+
+```rust
+pub fn shell_command_assets_present(target_dir: &Path) -> bool;
+```
+
+Check whether the complete revision-pinned `shell_command` model is cached.
+
+```rust
+pub fn download_shell_command_assets(
+    target_dir: &Path,
+) -> Result<PathBuf, Box<dyn std::error::Error>>;
+```
+
+Download the revision-pinned `shell_command` risk model bundle.
 
 ```rust
 pub fn unified_l3_assets_present(target_dir: &Path) -> bool;

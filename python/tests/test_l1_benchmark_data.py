@@ -1,4 +1,5 @@
 import json
+import re
 import runpy
 import unittest
 from collections import Counter
@@ -63,6 +64,28 @@ DLP_LABELS = {
     "dlp.record.invoice_id",
     "dlp.record.order_id",
 }
+
+
+# Gold convention T01 (research/l1-pii/README.md): well-formed values on reserved
+# placeholder domains (RFC 2606/6761) and NANP placeholder numbers are PII positives.
+PLACEHOLDER_EMAIL = re.compile(
+    r"(?<![\w.+-])[\w.+-]+@(?:[\w-]+\.)*"
+    r"(?:example\.(?:com|net|org)|[\w-]+\.(?:example|invalid|localhost|test))(?![\w-]|\.\w)"
+)
+PLACEHOLDER_PHONE = re.compile(
+    r"(?<![\w+])(?:\+1[ .-]?)?\(?[2-9]\d\d\)?[ .-]?555[ .-]?01\d\d(?!\d)"
+    r"|\+1[ .-]?\(?000\)?[ .-]?000[ .-]?0000(?!\d)"
+)
+PLACEHOLDER_LABELS = {"EMAIL", "PHONE"}
+DEMO_GOLDENS = ("demo_pii_dlp", "demo_pii_dlp_blind_de", "demo_pii_dlp_blind_en_tech")
+
+
+def placeholder_spans(text):
+    return [
+        (match.start(), match.end())
+        for pattern in (PLACEHOLDER_EMAIL, PLACEHOLDER_PHONE)
+        for match in pattern.finditer(text)
+    ]
 
 
 def load(name):
@@ -141,6 +164,69 @@ class L1BenchmarkDataTests(unittest.TestCase):
                 {entity["text"] for entity in dynamic_rows[source_id]["entities"]},
                 row["id"],
             )
+
+
+class PlaceholderGoldConventionTests(unittest.TestCase):
+    def test_patterns_cover_reserved_values_only(self):
+        for text in (
+            "customer@example.com",
+            "ops@mail.example.org",
+            "mira.linden@kundenbeispiel.invalid",
+            "priya.nwosu@example.test",
+            "info@muster.example",
+            "dev@app.localhost",
+            "+1 000-000-0000",
+            "+1 202-555-0148",
+            "+1-415-555-0196",
+            "(212) 555-0100",
+        ):
+            self.assertEqual(placeholder_spans(f"Kontakt: {text}."), [(9, 9 + len(text))], text)
+        for text in (
+            "anna.keller@example.de",
+            "ops+alerts@example.co.uk",
+            "anna.beispiel@localhost",
+            "user [at] example [dot] com",
+            "name @ domain . test",
+            "(415) 555-2671",
+            "030 555 01872",
+            "+00 0000000",
+        ):
+            self.assertEqual(placeholder_spans(f"Kontakt: {text}."), [], text)
+
+    def test_demo_goldens_label_placeholders_as_pii(self):
+        found = 0
+        for name in DEMO_GOLDENS:
+            for row in load(name):
+                gold = {
+                    (row["text"].find(entity["text"]), row["text"].find(entity["text"]) + len(entity["text"]))
+                    for entity in row["entities"]
+                    if entity["pipeline"] == "pii" and entity["label"] in PLACEHOLDER_LABELS
+                }
+                for span in placeholder_spans(row["text"]):
+                    found += 1
+                    self.assertNotEqual(row["case_type"], "hard_negative", row["id"])
+                    self.assertIn(span, gold, (row["id"], row["text"][span[0] : span[1]]))
+        self.assertGreaterEqual(found, 15)
+
+    def test_native_pii_goldens_label_placeholders_as_pii(self):
+        for row in load("pii_l1"):
+            gold = {
+                (entity["start"], entity["end"])
+                for entity in row["entities"]
+                if entity["label"] in PLACEHOLDER_LABELS
+            }
+            for span in placeholder_spans(row["text"]):
+                self.assertNotEqual(row["case_type"], "hard_negative", row["id"])
+                self.assertIn(span, gold, (row["id"], row["text"][span[0] : span[1]]))
+
+    def test_contact_hard_negatives_do_not_rely_on_reserved_names(self):
+        for name in ("pii_l1", *DEMO_GOLDENS):
+            for row in load(name):
+                if row["case_type"] != "hard_negative":
+                    continue
+                self.assertNotRegex(row["text"], r"@localhost\b", row["id"])
+                if row.get("target_label") in PLACEHOLDER_LABELS:
+                    self.assertNotRegex(row["negative_reason"], r"(?i)placeholder|reserved", row["id"])
 
 
 if __name__ == "__main__":
