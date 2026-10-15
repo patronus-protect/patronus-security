@@ -16,8 +16,9 @@
 # detect-secrets und Google DLP sind erlaubt, weil ein Detektor dort mehrere Entitäten abdeckt.
 #
 # TruffleHog: Das gepinnte Binary ist UPX-gepackt, sein Detektor-Inventar ist offline nicht
-# auslesbar. Die Namen folgen dem upstream-Enum `DetectorType` und decken nur ARK-nahe Typen ab;
-# E07 prüft sie gegen echte Ausgaben und ergänzt das Inventar.
+# auslesbar. Die Namen folgen dem upstream-Enum `DetectorType` und decken nur ARK-nahe Typen ab.
+# `scripts/l1_dlp/run_baselines.py check-entity-map` prüft sie gegen das Binary
+# (`--include-detectors`) und die detect-secrets-Plugins gegen das gepinnte Paket (E07).
 schema: ark-dlp-entity-map-v1
 
 baselines:
@@ -168,6 +169,12 @@ entities:
     ark: [dlp_huggingface]
     gitleaks: [huggingface-access-token, huggingface-organization-api-token]
     trufflehog: [HuggingFace]
+  - id: llm.xai.api_key
+    scope: shared
+    group: API_KEY
+    ark: [dlp_xai_key]
+    trufflehog: [XAI]
+    backlog: F06
   - id: llm.groq.api_key
     scope: shared
     group: API_KEY
@@ -316,7 +323,7 @@ entities:
     scope: shared
     group: CREDENTIAL
     ark: [dlp_url_userinfo_password]
-    trufflehog: [URI]
+    trufflehog: [URI, Postgres, MongoDB, Redis, FTP, RabbitMQ, JDBC]
     detect_secrets: [BasicAuthDetector]
     backlog: G01
   - id: credential.signed_url_signature
@@ -364,11 +371,6 @@ entities:
     backlog: M19
 
   # ── ark_only ────────────────────────────────────────────────────────────
-  - id: llm.xai.api_key
-    scope: ark_only
-    group: API_KEY
-    ark: [dlp_xai_key]
-    backlog: F06
   - id: payment.stripe.webhook_secret
     scope: ark_only
     group: PAYMENT_KEY

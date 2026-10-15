@@ -1,5 +1,91 @@
 # L1-DLP-Messwerkzeuge
 
+## Baseline-Runner gitleaks / TruffleHog / detect-secrets
+
+`run_baselines.py` lässt eine der drei Baselines über DLP-JSONL laufen (Goldens, Carrier-Zeilen,
+Benign-Code- oder Benign-Dokumentkorpus; Pflichtfelder `id` und `text`) und schreibt Vorhersagen
+in einem einheitlichen Format. Ausgeführt wird er mit `~/ark-dlp/baselines-venv` (PyYAML und
+detect-secrets).
+
+```bash
+PY=~/ark-dlp/baselines-venv/bin/python
+$PY scripts/l1_dlp/run_baselines.py versions            # Pins prüfen (Exit 2 bei Abweichung)
+$PY scripts/l1_dlp/run_baselines.py check-entity-map    # Namen in entity_map.yaml gegen die Tools
+$PY scripts/l1_dlp/run_baselines.py run --tool gitleaks|trufflehog|detect-secrets \
+    --input rows.jsonl --output preds.jsonl              # [--meta FILE] [--bin-dir DIR] [--detect-secrets-python PY]
+```
+
+**Gepinnte Versionen.** `PINS` im Skript: gitleaks 8.30.1 und TruffleHog 3.97.9 (Version und
+SHA-256 des Binarys unter `~/ark-dlp/baselines/bin`), detect-secrets 1.5.0 (Paketversion im
+Baseline-Venv). Die Versionen stimmen mit `research/dlp/entity_map.yaml` und
+`~/ark-dlp/baselines/VERSIONS` überein. Weicht ein Tool ab, bricht `run` mit Exit 2 ab, bevor es
+etwas schreibt. TruffleHog (AGPL) wird nur als unverändertes Binary ausgeführt.
+
+**Profil.** Jedes Tool läuft im Default-Profil, einmal über alle Zeilen:
+
+| Tool | Aufruf |
+|---|---|
+| gitleaks | `gitleaks dir ROOT --report-format json --report-path R --no-banner --no-color --exit-code 0` (Default-Config) |
+| TruffleHog | `trufflehog filesystem ROOT --json --no-verification --no-update --no-color`, alle Detektoren |
+| detect-secrets | `scan_file` je Datei mit `default_settings()`: alle Plugins, Default-Filter, ohne Verifikation (wie `detect-secrets scan --all-files`) |
+
+Die Tools laufen mit minimaler Umgebung (`PATH`, eigenes `HOME`, `LC_ALL`), also ohne
+`GITLEAKS_CONFIG`, Proxy oder Nutzer-Config. Netzwerk braucht keines. Jede Zeile `i` wird als
+`ROOT/<i:06d>/<name>` in UTF-8 geschrieben. Der Name kommt aus `path` (Benign-Korpora, nur
+relative Pfade ohne `..`), sonst aus dem Carrier-Feld `format` bzw. `code_language` (`.env`,
+`config.yaml`, `main.tf`, `main.go` …), sonst `document.txt`. Das ist wichtig, weil gitleaks
+Pfad-Allowlists und detect-secrets Dateityp-Filter und YAML/INI-Parser nach dem Namen wählen.
+
+**Ausgabe.** Je Eingabezeile eine Zeile in Eingabereihenfolge, ohne Secret-Text:
+
+```json
+{"id": "…", "tool": "trufflehog", "evidence_spans": [{"start_char": 41, "end_char": 57,
+  "rule_id": "Postgres", "label": "trufflehog.Postgres", "entities": ["credential.url_userinfo"],
+  "groups": ["CREDENTIAL"], "normalization": ["url_password"]}]}
+```
+
+`start_char`/`end_char` sind Code-Points im Text der Zeile. `rule_id` ist die native Kennung
+(gitleaks-`RuleID`, TruffleHog-`DetectorName`, detect-secrets-Plugin-Klasse). `entities` und
+`groups` kommen aus `entity_map.yaml`. Ein TruffleHog-Detektor oder detect-secrets-Plugin kann
+mehrere Entitäten haben, ein unbekannter Name hat `[]`. Gleicher Span und gleiche Regel
+erscheinen einmal. Das Format passt zu `fp-per-mb`/`fp-report` (`evidence_spans` mit
+`rule_id`). `<output>.meta.json` enthält Pins, installierte Versionen und Binary-SHA-256, den
+Aufruf, SHA-256 von `entity_map.yaml`, Eingabe und Ausgabe, und Zähler: Funde je Regel, nicht
+lokalisierbare Funde (`regel:decoder`), angewandte Normalisierungen und Regeln ohne Entität.
+Zeitstempel fehlen; zwei Läufe sind byte-identisch.
+
+**Span-Normalisierung auf den Wert.** Keines der Tools liefert Code-Point-Offsets. Der Runner
+sucht deshalb den gemeldeten Wert im Text und normalisiert den Span auf den Wert, wie ihn die
+ARK-Goldens annotieren (nur der Wert ohne Schlüsselnamen; bei Präfix-Tokens mit Präfix;
+URL-Userinfo nur das Passwort; PEM-Schlüssel als ganzer Block).
+
+| Tool | gemeldeter Wert | Position | Besonderheiten |
+|---|---|---|---|
+| gitleaks | `Secret` (Secret-Gruppe der Regel), gesucht innerhalb von `Match` | `StartLine`–`EndLine`, `StartColumn` als Hinweis | Spalten zählen UTF-8-Bytes und sind in 8.30.1 auf Zeile 1 um 1, sonst um 2 verschoben; gewählt wird das Vorkommen nächst der Spalte, in `Match` das letzte Vorkommen von `Secret`. Funde aus dekodiertem Text (Tag `decoded:base64`) sind nicht im Text und zählen als `unlocated`. `curl-auth-user` meldet `user:passwort` → Passwort (`user_password`). |
+| TruffleHog | `Raw`, sonst `RawV2` (`raw_v2`) | `line` (keine Spalte) | erstes Vorkommen ab der Zeile. TruffleHog meldet einen Wert je Chunk und Detektor einmal; der gewählte Decoder ist nicht deterministisch und steht deshalb nicht in der Ausgabe. Connection-Strings (`Postgres`, `URI`, `MongoDB` …) → Passwort (`url_password`). TruffleHog normalisiert URIs (`Postgres` ergänzt den Default-Port `:5432`); steht `Raw`/`RawV2` so nicht im Text, wird `user:passwort@host` ohne Port gesucht und auf das Passwort verengt (`uri_password`), zuletzt ein `password`-Eintrag aus `SecretParts` (`secret_part`). JDBC-Strings (`jdbc:postgresql://user:pw@…`, `?password=`, `;password=`, Oracle `thin:user/pw@`) → Passwort (`jdbc_password`). Mehrteilige Funde (`AWS`: `Raw` ist nur die Key-ID, `RawV2` die Verkettung) werden aus `SecretParts` (sonst `RawV2` minus `Raw`) in je einen Fund pro Teil zerlegt, mit eigenem Label (`trufflehog.AWS.access_key_id` / `.secret_access_key`) und nur der passenden Entität. Dekodierte Werte ohne Textvorkommen zählen als `unlocated`. |
+| detect-secrets | `secret_value` des Plugins | `line_number` | Plugins, deren Regex nur das Präfix fängt (`(ghp\|…)_…`, `glpat`), melden den ganzen Regex-Treffer. `PrivateKeyDetector` meldet den Header-Text → ganzer PEM-Block (`pem_block`) bzw. Header (`pem_header`). `JwtTokenDetector` endet wegen eines lazy Quantors vor der Signatur → bis zum Ende des Tokens (`regex_tail`). `BasicAuthDetector` meldet bereits das Passwort. Der Worker sucht den Wert selbst (gleiche Suche wie unten) und gibt nur Code-Point-Offsets aus, nie den Wert. |
+
+Für alle Tools gilt danach:
+
+1. **Suche** (`locate`): exakter Text auf den gemeldeten Zeilen, dann irgendwo im Dokument
+   (`relocated`), dann mit beliebigem Leerraum oder `\n`/`\r`/`\t`-Escapes zwischen den
+   Teilen (`whitespace`; umbrochene oder JSON-escapte PEM-Blöcke). Findet sich nichts, wird der
+   Fund nicht ausgegeben und in `unlocated` gezählt.
+2. **Trim** (`trim`): führende Leerzeichen, Anführungszeichen, `=` und `:` sowie nachgestellte
+   Leerzeichen und Anführungszeichen fallen weg, ebenso ein `\` vor einem Anführungszeichen
+   (escapte Strings in JSON/Notebooks). Base64-Padding (`=` am Ende) bleibt.
+3. **URL-Userinfo** (`url_password`): `schema://user:passwort@…` → nur das Passwort.
+4. **PEM** (`pem_block`/`pem_header`): Liegt der Span in einer `-----BEGIN …-----`-Zeile, wird
+   er bis zur passenden `-----END …-----`-Zeile erweitert, ohne END-Zeile auf den Header.
+
+Weitere Ungenauigkeiten der Tools bleiben stehen, damit Exact- und Overlap-Metrik sie
+unterscheiden. Beispiele: detect-secrets' OpenAI-Regex endet 20 Zeichen nach `T3BlbkFJ`, und
+High-Entropy-Strings schließen `PHPSESSID=` ein.
+
+**Entity-Map-Prüfung.** `check-entity-map` prüft die TruffleHog-Namen in `entity_map.yaml` mit
+`--include-detectors` gegen das gepinnte Binary und die detect-secrets-Plugins gegen das Paket.
+Die gitleaks-IDs prüft `rust/tests/dlp_entity_map.rs` gegen das Inventar.
+
 ## Benign-Code-Korpus (FP/MB)
 
 `benign_code.py` baut den Benign-Code-Korpus, auf dem das Scoreboard FP/MB misst. Quelle sind
