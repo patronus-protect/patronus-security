@@ -77,6 +77,7 @@ tasks:
     accept: template families with separate dev/holdout subsets; spans in code points; hard-negative variants (placeholder, env reference, docs example value, test key)
 
   - id: E05
+    status: done
     title: Benign code corpus (permissively licensed, pinned repos without secret-scanner repos; lockfiles, minified JS, SVG/base64, git logs)
     type: eval-infra
     deps: []

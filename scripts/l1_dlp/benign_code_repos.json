@@ -1,0 +1,134 @@
+{
+  "schema": "ark-dlp-benign-code-repos-v1",
+  "comment": "Pinned benign-code repositories for L1-DLP FP/MB (E05). Permissive licenses only, no secret-scanner repositories, split by repository. sha256 pins the corpus JSONL built by scripts/l1_dlp/benign_code.py; refresh with `benign_code.py pin --sources DIR --write` after changing a commit or the selection limits.",
+  "repos": [
+    {
+      "id": "bootstrap",
+      "url": "https://github.com/twbs/bootstrap",
+      "commit": "ebd627c654c49dbe929b11ebfe9b67e459e5d127",
+      "license": "MIT",
+      "split": "dev",
+      "sha256": "58bd467b89f21d41905114f6827684a26eda6fe2914644b9f163e2dfad91cb80"
+    },
+    {
+      "id": "swagger-ui",
+      "url": "https://github.com/swagger-api/swagger-ui",
+      "commit": "e89a91f13cdee432d97ca9d3d1ac1969ff797036",
+      "license": "Apache-2.0",
+      "split": "dev",
+      "sha256": "4c6b60e95feb2b9a90ea36d3fa2fa8c938e55ccfa01ef1388a7657382f9d1f0e"
+    },
+    {
+      "id": "ripgrep",
+      "url": "https://github.com/BurntSushi/ripgrep",
+      "commit": "3fce3b5bb0236da2df6d99672afb8a719642eca7",
+      "license": "Unlicense OR MIT",
+      "split": "dev",
+      "sha256": "c11344e1b1f0ddfb4dafa0d4c55bb33db41324186e3b6bafbc1cd6509f5d6aac"
+    },
+    {
+      "id": "cobra",
+      "url": "https://github.com/spf13/cobra",
+      "commit": "adbc8813901bba65827259daa8e22ff94ec1f30e",
+      "license": "Apache-2.0",
+      "split": "dev",
+      "sha256": "3117eaf2e73afb5d327bd6751ee764e667fbcdac53e97638065545367e635781"
+    },
+    {
+      "id": "poetry",
+      "url": "https://github.com/python-poetry/poetry",
+      "commit": "38a86661d2ae58694c76d0bb4e628e1400d6dc6f",
+      "license": "MIT",
+      "split": "dev",
+      "sha256": "080b276ead395b903646cf4208f8abdb2fcce6a5fc59e31bbeddb987ebb7f747"
+    },
+    {
+      "id": "composer",
+      "url": "https://github.com/composer/composer",
+      "commit": "43f74517021a59ed4054a801c1472ef66355c49a",
+      "license": "MIT",
+      "split": "dev",
+      "sha256": "50bb06ce01c80763f01dfc1e1d2283108d9018c63b081a3c051b3f08026317e4"
+    },
+    {
+      "id": "ipython",
+      "url": "https://github.com/ipython/ipython",
+      "commit": "4e690135c8743988b46c4268ea76a7dfd1c83efc",
+      "license": "BSD-3-Clause",
+      "split": "dev",
+      "sha256": "c0d52676386eda8e6eb855c066a17c581b449e89fd72c5fdbac1aa919a009f4e"
+    },
+    {
+      "id": "feather",
+      "url": "https://github.com/feathericons/feather",
+      "commit": "3dc050d97405062eba78aa57115c0a15c63abdaa",
+      "license": "MIT",
+      "split": "dev",
+      "sha256": "bba2def6e6b7f1dcb3d48b77d78159611805a5883369da42c88b8e737f820d1d"
+    },
+    {
+      "id": "chart.js",
+      "url": "https://github.com/chartjs/Chart.js",
+      "commit": "7169e65147a47f3720957a6f156a33c838ab9f57",
+      "license": "MIT",
+      "split": "holdout",
+      "sha256": "379a27daec19e389159dc19f1b4a7db76d412b03facb131f0c2e930e83a61bc1"
+    },
+    {
+      "id": "leaflet",
+      "url": "https://github.com/Leaflet/Leaflet",
+      "commit": "125bda1e24d74d6f06f4075b0dab7ac10f3b5c10",
+      "license": "BSD-2-Clause",
+      "split": "holdout",
+      "sha256": "63f0d667b6c0512fadbb123378707f6f6b4c56630f4b6ef07d4a4056df0af862"
+    },
+    {
+      "id": "bat",
+      "url": "https://github.com/sharkdp/bat",
+      "commit": "d9559c69f541873f8c47ac8ad81d985f4441edf6",
+      "license": "MIT OR Apache-2.0",
+      "split": "holdout",
+      "sha256": "b2b6f3fd99818acee2de71526992601f2cd4c4f31e5cdd76f41a9a858ef64872"
+    },
+    {
+      "id": "gin",
+      "url": "https://github.com/gin-gonic/gin",
+      "commit": "0f09c3a9b4626d9fe9979cf4d0521d6ae32ab646",
+      "license": "MIT",
+      "split": "holdout",
+      "sha256": "bf8488c5cb10b501cc4c206594b27d7b74e52eb632ba155ae98c13a1a5b32342"
+    },
+    {
+      "id": "flask",
+      "url": "https://github.com/pallets/flask",
+      "commit": "d086db856be187255b8ec61ef409357393020f32",
+      "license": "BSD-3-Clause",
+      "split": "holdout",
+      "sha256": "0f8be52244a9f9a43ed24f8afcb63a8d4010717ad86dd047d7117971a7354949"
+    },
+    {
+      "id": "tabler-icons",
+      "url": "https://github.com/tabler/tabler-icons",
+      "commit": "a4ce1404bc6d24d3c365afe7b258d6bf6f48d62d",
+      "license": "MIT",
+      "split": "holdout",
+      "sha256": "9b8cd11e3a7c7189efd29c65e5b7e7effd8d046c0e2f1074da87cdada82fe8b8"
+    },
+    {
+      "id": "jupyter-notebook",
+      "url": "https://github.com/jupyter/notebook",
+      "commit": "f9fcec5e26b15af9c1425ae7ab4858aa7e119533",
+      "license": "BSD-3-Clause",
+      "split": "holdout",
+      "sha256": "ae787315d554e7b3ff5d23111405cd1f4e543e9a48afeb6b72c95bf12f9a10ba"
+    },
+    {
+      "id": "highlight.js",
+      "url": "https://github.com/highlightjs/highlight.js",
+      "commit": "fc3f06392f189354eed922973635ab9e9268b983",
+      "license": "BSD-3-Clause",
+      "split": "holdout",
+      "sha256": "ff17b3b2bfad3fdcd38065437d0e51ec50ac50c1c5b53d107e5c7d0c7a1fb315"
+    }
+  ]
+}
