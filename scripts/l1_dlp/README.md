@@ -307,3 +307,92 @@ ihn (ohne Netz, Ausgabe nur Exit-Code). Die Agent-Sandbox sperrt `~/ark-dlp/hold
 `InaccessiblePaths` (`research/l1-pii/runner/run.sh`, `PRIVATE` in `ark-l1`). Neue Regeln oder
 Familien nach dem Einfrieren erscheinen erst nach einem bewussten `--force` des Betreibers im
 Holdout.
+
+## Scoreboard (Gate-Schritt `scoreboard`)
+
+`scoreboard.py` bewertet Vorhersagen im gemeinsamen Format auf den eingefrorenen Korpora und
+vergleicht im Gate den Head mit seiner Basis. Der Runner ruft es mit dem Baseline-Venv auf, ohne
+Netz, mit Lesezugriff auf Holdout und Checkout und Schreibzugriff nur auf den Cache:
+
+```bash
+PY=~/ark-dlp/baselines-venv/bin/python
+$PY scripts/l1_dlp/scoreboard.py gate --head WT --base-sha SHA --dev DIR --holdout DIR --cache DIR   # [--jobs N]
+$PY scripts/l1_dlp/scoreboard.py score --split DIR --predictions FILE    # [--extended-predictions FILE] [--output FILE]
+$PY scripts/l1_dlp/scoreboard.py compare --base REPORT --head REPORT     # [--tolerance-pp 0.5]
+```
+
+Exit-Codes: 0 = keine Regression, 1 = Regression, 2 = Fehler (Basis fehlt, Korpus verändert,
+Build oder Scan gescheitert). Lokal geht `gate` auch ohne `--holdout`, z. B. mit
+`--dev $ARK_L1_DEV_DATA --cache /tmp/sb`.
+
+**Builds.** `gate` baut Head- und Basis-Commit selbst: `git archive` des Commits nach
+`CACHE/scoreboard/src` (alle Dateien mit aktueller mtime, sonst hielte cargo alte Artefakte für
+aktuell), dann `cargo build --release --locked --offline -p patronus-ark-python` mit eigenem
+Target unter `CACHE/scoreboard/target`. Crate-Registry (`CARGO_HOME`) und ONNX-Runtime-Cache
+(`XDG_CACHE_HOME`) der vorherigen Gate-Schritte werden nur gelesen. `CARGO_NET_OFFLINE` wird
+dabei entfernt, weil `ort-sys` sonst seinen Binary-Cache ignoriert. Ein Build besteht aus dem
+Python-Paket des Commits, dem nativen Modul und seiner `entity_map.yaml` und liegt unter
+`CACHE/scoreboard/builds/<key>`. `key` ist SHA-256 über `git ls-tree` von `Cargo.toml`,
+`Cargo.lock`, `rust-toolchain.toml`, `rust/`, `python/` und `research/dlp/entity_map.yaml`.
+Ein Commit, der nur Backlog, Doku oder Skripte ändert, teilt also den Build seiner Basis. Behalten
+werden die acht zuletzt genutzten Builds.
+
+**Profile.** Jeder Build scannt jede Datei mit dem `run_ark.py` des Heads:
+
+| Profil | Regeln | Korpora | bewertet |
+|---|---|---|---|
+| `default` | Auslieferungszustand: nur Secret-Gruppen (`provider_secret`, `generic_credential`, `key_material`) | Carrier, Benign-Code, Benign-Dokumente | Secret-Gruppen, FP/MB |
+| `extended` | zusätzlich alle Opt-in-Regeln laut `taxonomy` der eigenen Entity-Map (Business-IDs, Content- und Dokumentklassen) | Carrier, Benign-Dokumente | Opt-in-Gruppen auf Spans, Content-Klassen je Dokument, FP der Opt-in-Regeln auf Benign-Dokumenten |
+
+Vorhersagen liegen unter `CACHE/scoreboard/predictions/<key>.jsonl`. Der Schlüssel enthält
+Build, SHA-256 von `run_ark.py`, `run_baselines.py` und `scoreboard.py`, die Regeln und die
+Eingabedatei. Ein Lauf auf demselben Build scannt nichts neu. Nach 14 Tagen ohne Nutzung werden
+Vorhersagen gelöscht.
+
+**Metriken je Split** (Bericht `score`, im Gate je Head und Basis):
+
+- `synthetic.groups` und `synthetic.overall`: exakte Spans auf den Wert (`start`/`end` der
+  Carrier-Entitäten) und Overlap, je `gold`, `predicted`, `precision`, `recall`, `f1`. Die Gruppe
+  einer Vorhersage ist bei ARK das Span-Label (`group`), bei Baselines `groups` aus der
+  Entity-Map (sonst `(unmapped)`). `overall` ist ungetypt: jeder Wert-Span zählt, egal mit
+  welcher Gruppe. Overlap-Precision zählt Vorhersagen, die irgendeinen Gold-Span schneiden,
+  Overlap-Recall Gold-Spans, die eine Vorhersage schneidet.
+- `synthetic.providers`: dieselben Werte je Entität (`llm.openai.api_key` …, Vorhersage über
+  `entities`), dazu `found` (Gold-Span exakt von irgendeiner Regel getroffen), `attributed`
+  (davon mit der richtigen Entität), `rule_attributed` (mit der Generator-Regel `rule_id`) und
+  `attribution`. `synthetic.attribution` fasst das über alle Provider zusammen.
+- `synthetic.hard_negatives`: Jeder Wert-Span auf einer Hard-Negative-Zeile ist ein FP, gesamt,
+  je Variante (`placeholder`, `env_ref`, `doc_example`, `test_key`) und Sprache, dazu die Liste
+  der FP-Spans (Zeilen-ID und Offsets, kein Text).
+- `synthetic.documents`: P/R/F1 je Content-Klasse auf Dokumentebene. Gold sind die
+  `content_labels` der Zeile, Vorhersage ist jede Klasse, deren Regel in der Zeile einen Span
+  meldet (Profil `extended`). Content-Spans zählen nie in den Span-Metriken.
+- `benign_code`: FP/MB wie `benign_code.py fp-per-mb` (Profil `default`).
+- `benign_docs.default`: FP-Bericht wie `benign_docs.py fp-report`; `benign_docs.extended`:
+  derselbe Bericht für die Opt-in-Spans, dazu `by_class` mit markierten Dokumenten je Klasse.
+
+`score` nimmt eine Vorhersagedatei für alle Komponenten eines Splits; Zeilen ohne Vorhersage
+gelten als leer, unbekannte IDs sind ein Fehler. So lassen sich auch die Ausgaben von
+`run_baselines.py` bewerten (Dateien je Komponente aneinanderhängen).
+
+**Regression.** `compare` prüft den Head gegen die Basis auf demselben Split. Eine Regression ist:
+
+| Check | Regel |
+|---|---|
+| `f1.exact:<gruppe>`, `f1.overlap:<gruppe>`, `…:overall` | F1 sinkt um mehr als 0,5 pp (nur Gruppen mit Gold-Spans) |
+| `f1.document:<klasse>` | Dokument-F1 einer Content-Klasse mit Gold sinkt um mehr als 0,5 pp |
+| `fp:benign_code`, `fp:benign_docs` | mehr FP als die Basis (Profil `default`; Bytes sind gleich, also FP/MB) |
+| `flagged:benign_docs:<klasse>` | mehr markierte Benign-Dokumente; nur Klassen, die die Basis schon hat |
+| `hard_negatives:new_fp` | ein FP-Span auf einem Hard Negative, der keinen FP-Span der Basis in derselben Zeile schneidet |
+
+Provider-Werte und Attribution werden berichtet, aber nicht gegated. Beide Seiten werden mit der
+Taxonomie des Heads bewertet; das `extended`-Profil nutzt die Opt-in-Regeln der jeweils eigenen
+Entity-Map. Latenz misst E11.
+
+**Ausgabe.** stdout nennt Head, Basis und Build-Schlüssel, die Dev-Tabelle (F1 je Gruppe und
+Content-Klasse, Attribution, geänderte Provider), Dev-FP und Dev-Regressionen. Für den Holdout
+steht dort nur `holdout: no regression` bzw. `holdout: regression`, und zuletzt
+`scoreboard: PASS|FAIL`. Bei Erfolg übernimmt der Runner die letzten 15 Zeilen in den Gate-Bericht,
+bei Misserfolg nur den Exit-Code. Die vollständigen Berichte beider Splits (Head, Basis, Checks)
+liegen unter `CACHE/scoreboard/reports/<head>-<basis>/{dev,holdout}.json` und verlassen die
+Sandbox nicht.
