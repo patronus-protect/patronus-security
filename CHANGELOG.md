@@ -18,6 +18,7 @@ result shapes may be breaking for downstream users, and is called out explicitly
 - Persist the scale-up baseline before provisioning, reconcile accepted IONOS operations on resume,
   and make Coordinator/ALB registration idempotent across interrupted substeps.
 - Replace deployment-specific names in the public IONOS profile example with explicit placeholders.
+- Score `rust/examples/12_l1_pii_fixture_eval.rs` on character offsets. It compared the UTF-8 byte offsets of `native:pii` spans with the code-point offsets of `dynamic_pii.jsonl`, so every span after a non-ASCII character counted as one FP and one FN. Gold spans outside the text now abort the run, and the example's unit tests run with `cargo test`. **Detection change:** none; this is evaluation tooling only.
 
 ### Added
 
