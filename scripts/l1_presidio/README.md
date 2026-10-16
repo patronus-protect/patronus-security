@@ -197,6 +197,39 @@ Im Gate (`ark-l1 gate`) läuft der Schritt mit dem Presidio-Venv, ohne Netz, mit
 Holdout und Checkout und Schreibzugriff nur auf den Cache; `VIRTUAL_ENV` zeigt auf das Gate-Venv,
 in das der Schritt `python-ext` den Head installiert hat.
 
-Tests: `scripts/tests/test_l1_scoreboard.py`, `scripts/tests/test_l1_synth_goldset.py`, `scripts/tests/test_l1_prepare_corpora.py`, `scripts/tests/test_l1_presidio_runner.py`, `scripts/tests/test_l1_ark_runner.py`,
+## Latenz
+
+`latency.py` misst ARK PII-L1 und Presidio auf derselben Maschine und denselben festen Eingaben:
+ein kurzer Satz sowie genau 4096 und genau 102400 UTF-8-Bytes Geschäftsprosa, je DE und EN, mit
+PII in zwei von drei Absätzen (`WORKLOAD_VERSION`, im Test per SHA-256 gepinnt). Jede Engine läuft
+in einem eigenen Prozess, ein Aufruf je Sample, nach Warmup:
+
+| Engine | Messung |
+|---|---|
+| `ark` | Python-Bindings (`SecurityGateway(categories=["pii"], max_level="l1")`) eines Release-Builds des Checkouts, den `run` selbst baut und per `PYTHONPATH` lädt; Debug-Builds (ELF `.debug_*`) brechen mit Exit 2 ab |
+| `ark-native` | Rust-Gateway über `rust/dev/l1_latency_workloads.rs` (`cargo build --release --example l1_latency_workloads`) |
+| `presidio-default`, `presidio-tuned` | `run_presidio.py`-Profile im Presidio-Venv, Pins wie dort geprüft |
+
+```bash
+VIRTUAL_ENV=$PWD/.venv python3 scripts/l1_presidio/latency.py run \
+  --presidio-python ~/ark-l1/presidio-venv/bin/python \
+  --output latency.json --markdown latency.md [--engines ark ark-native] [--check-m4]
+python3 scripts/l1_presidio/latency.py compare --base base.json --head head.json   # [--sizes …] [--tolerance-pct 10]
+```
+
+- **Samples:** 500 (kurz), 200 (4 KiB), 50 (100 KiB) je Sprache, `--samples-scale` skaliert. Nach
+  10 Samples endet eine Eingabe, sobald `--budget-s` (60 s) verbraucht ist; Presidio braucht für
+  100 KiB rund 10 s je Aufruf und kommt dort auf 10 Samples je Sprache.
+- **Ausgabe:** p50/p95/p99/Mittel/Max in ms je Eingabe und je Größe (DE + EN gepoolt), Init-Zeit,
+  Spans je Eingabe als Plausibilitätsprüfung, Maschine (CPU, nutzbare Kerne), Load vor/nach jeder
+  Engine, SHA-256 von Eingaben, nativem Modul bzw. Binary. `--markdown` schreibt die Tabellen.
+- **M4:** `m4` prüft jede ARK-Engine auf 100 KiB p95 ≤ 10 ms; `--check-m4` macht daraus Exit 1.
+- **Regression:** `compare` vergleicht zwei Berichte derselben Maschine und derselben Eingaben
+  (sonst Exit 2) und endet mit Exit 1, wenn das 100-KiB-p95 von `ark` um mehr als 10 % steigt
+  (gemeinsame Akzeptanz im Backlog). Im Gate ist der Schritt noch nicht verdrahtet.
+- Die L1-Pipeline hat keinen Ergebnis-Cache (nur L3), wiederholte Eingaben messen also den Scan.
+  Ergebnis auf der VPS: [`research/l1-pii/scoreboard/latency.md`](../../research/l1-pii/scoreboard/latency.md).
+
+Tests: `scripts/tests/test_l1_scoreboard.py`, `scripts/tests/test_l1_latency.py`, `scripts/tests/test_l1_synth_goldset.py`, `scripts/tests/test_l1_prepare_corpora.py`, `scripts/tests/test_l1_presidio_runner.py`, `scripts/tests/test_l1_ark_runner.py`,
 `scripts/tests/test_l1_entity_map.py`. Die Tests gegen echtes Presidio laufen nur,
 wenn `presidio_analyzer` installiert ist (z. B. in `~/ark-l1/presidio-venv`).

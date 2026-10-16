@@ -86,3 +86,7 @@ path = "dev/wolf_memory_smoke.rs"
 [[example]]
 name = "l1_calibration"
 path = "dev/l1_calibration.rs"
+
+[[example]]
+name = "l1_latency_workloads"
+path = "dev/l1_latency_workloads.rs"

@@ -1,0 +1,460 @@
+{
+  "engines": {
+    "ark": {
+      "info": {
+        "debug_build": false,
+        "native_sha256": "e66afe6b0c773f0b2a07167974dffa1d4882f1dd4e53a0e82afb05acfde96e24",
+        "python": "3.12.3"
+      },
+      "init_ms": 229.0,
+      "loadavg_1m": [
+        0.8,
+        0.83
+      ],
+      "results": {
+        "100kib-de": {
+          "max_ms": 91.8207,
+          "mean_ms": 67.2109,
+          "p50_ms": 64.5082,
+          "p95_ms": 80.0558,
+          "p99_ms": 91.8207,
+          "samples": 50,
+          "spans": 1075
+        },
+        "100kib-en": {
+          "max_ms": 32.067,
+          "mean_ms": 24.6998,
+          "p50_ms": 24.2214,
+          "p95_ms": 29.592,
+          "p99_ms": 32.067,
+          "samples": 50,
+          "spans": 831
+        },
+        "4kib-de": {
+          "max_ms": 3.2089,
+          "mean_ms": 2.3775,
+          "p50_ms": 2.3319,
+          "p95_ms": 2.7563,
+          "p99_ms": 3.1666,
+          "samples": 200,
+          "spans": 42
+        },
+        "4kib-en": {
+          "max_ms": 1.1861,
+          "mean_ms": 0.833,
+          "p50_ms": 0.8174,
+          "p95_ms": 0.9611,
+          "p99_ms": 1.0755,
+          "samples": 200,
+          "spans": 34
+        },
+        "short-de": {
+          "max_ms": 3.3335,
+          "mean_ms": 0.1773,
+          "p50_ms": 0.1643,
+          "p95_ms": 0.2413,
+          "p99_ms": 0.3253,
+          "samples": 500,
+          "spans": 2
+        },
+        "short-en": {
+          "max_ms": 4.0329,
+          "mean_ms": 0.1412,
+          "p50_ms": 0.125,
+          "p95_ms": 0.189,
+          "p99_ms": 0.2405,
+          "samples": 500,
+          "spans": 2
+        }
+      },
+      "sizes": {
+        "100kib": {
+          "max_ms": 91.8207,
+          "mean_ms": 45.9553,
+          "p50_ms": 32.067,
+          "p95_ms": 76.2347,
+          "p99_ms": 89.4965,
+          "samples": 100
+        },
+        "4kib": {
+          "max_ms": 3.2089,
+          "mean_ms": 1.6053,
+          "p50_ms": 1.1861,
+          "p95_ms": 2.6486,
+          "p99_ms": 2.967,
+          "samples": 400
+        },
+        "short": {
+          "max_ms": 4.0329,
+          "mean_ms": 0.1592,
+          "p50_ms": 0.1412,
+          "p95_ms": 0.2271,
+          "p99_ms": 0.2957,
+          "samples": 1000
+        }
+      }
+    },
+    "ark-native": {
+      "info": {
+        "binary_sha256": "2239204655f18e3abd5a9297e2bd2d03537b5a38c4e89a692fec17eba674dcd9"
+      },
+      "init_ms": 58.4,
+      "loadavg_1m": [
+        0.83,
+        0.76
+      ],
+      "results": {
+        "100kib-de": {
+          "max_ms": 89.9184,
+          "mean_ms": 63.8371,
+          "p50_ms": 62.405,
+          "p95_ms": 74.6325,
+          "p99_ms": 89.9184,
+          "samples": 50,
+          "spans": 1075
+        },
+        "100kib-en": {
+          "max_ms": 24.2845,
+          "mean_ms": 21.1594,
+          "p50_ms": 21.1459,
+          "p95_ms": 24.0122,
+          "p99_ms": 24.2845,
+          "samples": 50,
+          "spans": 831
+        },
+        "4kib-de": {
+          "max_ms": 3.3624,
+          "mean_ms": 2.244,
+          "p50_ms": 2.1936,
+          "p95_ms": 2.7334,
+          "p99_ms": 3.1279,
+          "samples": 200,
+          "spans": 42
+        },
+        "4kib-en": {
+          "max_ms": 0.954,
+          "mean_ms": 0.7113,
+          "p50_ms": 0.7,
+          "p95_ms": 0.8281,
+          "p99_ms": 0.9464,
+          "samples": 200,
+          "spans": 34
+        },
+        "short-de": {
+          "max_ms": 0.3002,
+          "mean_ms": 0.1033,
+          "p50_ms": 0.0961,
+          "p95_ms": 0.1501,
+          "p99_ms": 0.2019,
+          "samples": 500,
+          "spans": 2
+        },
+        "short-en": {
+          "max_ms": 0.4619,
+          "mean_ms": 0.1108,
+          "p50_ms": 0.0977,
+          "p95_ms": 0.1704,
+          "p99_ms": 0.2293,
+          "samples": 500,
+          "spans": 2
+        }
+      },
+      "sizes": {
+        "100kib": {
+          "max_ms": 89.9184,
+          "mean_ms": 42.4982,
+          "p50_ms": 24.2845,
+          "p95_ms": 67.7861,
+          "p99_ms": 77.6984,
+          "samples": 100
+        },
+        "4kib": {
+          "max_ms": 3.3624,
+          "mean_ms": 1.4777,
+          "p50_ms": 0.954,
+          "p95_ms": 2.4514,
+          "p99_ms": 3.0899,
+          "samples": 400
+        },
+        "short": {
+          "max_ms": 0.4619,
+          "mean_ms": 0.107,
+          "p50_ms": 0.0966,
+          "p95_ms": 0.1635,
+          "p99_ms": 0.2228,
+          "samples": 1000
+        }
+      }
+    },
+    "presidio-default": {
+      "info": {
+        "profile": "default",
+        "python": "3.12.3",
+        "score_threshold": 0.0,
+        "versions": {
+          "presidio-analyzer": "2.2.364",
+          "spacy": "3.8.16"
+        }
+      },
+      "init_ms": 3523.1,
+      "loadavg_1m": [
+        0.76,
+        1.0
+      ],
+      "results": {
+        "100kib-de": {
+          "max_ms": 9669.146,
+          "mean_ms": 9433.2019,
+          "p50_ms": 9406.86,
+          "p95_ms": 9669.146,
+          "p99_ms": 9669.146,
+          "samples": 10,
+          "spans": 3613
+        },
+        "100kib-en": {
+          "max_ms": 10527.4092,
+          "mean_ms": 10009.1038,
+          "p50_ms": 9914.8303,
+          "p95_ms": 10527.4092,
+          "p99_ms": 10527.4092,
+          "samples": 10,
+          "spans": 2907
+        },
+        "4kib-de": {
+          "max_ms": 206.2341,
+          "mean_ms": 156.2552,
+          "p50_ms": 154.2014,
+          "p95_ms": 172.7855,
+          "p99_ms": 182.2456,
+          "samples": 200,
+          "spans": 140
+        },
+        "4kib-en": {
+          "max_ms": 207.0208,
+          "mean_ms": 158.493,
+          "p50_ms": 156.5826,
+          "p95_ms": 173.5802,
+          "p99_ms": 189.1097,
+          "samples": 200,
+          "spans": 117
+        },
+        "short-de": {
+          "max_ms": 12.635,
+          "mean_ms": 9.6549,
+          "p50_ms": 9.4605,
+          "p95_ms": 11.2303,
+          "p99_ms": 12.1042,
+          "samples": 500,
+          "spans": 7
+        },
+        "short-en": {
+          "max_ms": 21.7457,
+          "mean_ms": 9.3854,
+          "p50_ms": 9.1998,
+          "p95_ms": 10.5493,
+          "p99_ms": 13.0642,
+          "samples": 500,
+          "spans": 5
+        }
+      },
+      "sizes": {
+        "100kib": {
+          "max_ms": 10527.4092,
+          "mean_ms": 9721.1528,
+          "p50_ms": 9633.3014,
+          "p95_ms": 10213.3911,
+          "p99_ms": 10527.4092,
+          "samples": 20
+        },
+        "4kib": {
+          "max_ms": 207.0208,
+          "mean_ms": 157.3741,
+          "p50_ms": 155.6464,
+          "p95_ms": 173.1166,
+          "p99_ms": 189.1097,
+          "samples": 400
+        },
+        "short": {
+          "max_ms": 21.7457,
+          "mean_ms": 9.5201,
+          "p50_ms": 9.3366,
+          "p95_ms": 10.8633,
+          "p99_ms": 12.2003,
+          "samples": 1000
+        }
+      }
+    },
+    "presidio-tuned": {
+      "info": {
+        "profile": "tuned",
+        "python": "3.12.3",
+        "score_threshold": 0.4,
+        "versions": {
+          "presidio-analyzer": "2.2.364",
+          "spacy": "3.8.16"
+        }
+      },
+      "init_ms": 6301.0,
+      "loadavg_1m": [
+        1.0,
+        1.08
+      ],
+      "results": {
+        "100kib-de": {
+          "max_ms": 7328.8661,
+          "mean_ms": 7178.958,
+          "p50_ms": 7172.3371,
+          "p95_ms": 7328.8661,
+          "p99_ms": 7328.8661,
+          "samples": 10,
+          "spans": 2051
+        },
+        "100kib-en": {
+          "max_ms": 10466.7791,
+          "mean_ms": 10250.9732,
+          "p50_ms": 10200.5367,
+          "p95_ms": 10466.7791,
+          "p99_ms": 10466.7791,
+          "samples": 10,
+          "spans": 2701
+        },
+        "4kib-de": {
+          "max_ms": 206.3146,
+          "mean_ms": 141.4153,
+          "p50_ms": 138.8575,
+          "p95_ms": 154.6823,
+          "p99_ms": 184.113,
+          "samples": 200,
+          "spans": 82
+        },
+        "4kib-en": {
+          "max_ms": 201.1433,
+          "mean_ms": 159.3688,
+          "p50_ms": 157.1709,
+          "p95_ms": 178.0016,
+          "p99_ms": 190.1537,
+          "samples": 200,
+          "spans": 109
+        },
+        "short-de": {
+          "max_ms": 17.0807,
+          "mean_ms": 10.1602,
+          "p50_ms": 9.9417,
+          "p95_ms": 11.7872,
+          "p99_ms": 13.0703,
+          "samples": 500,
+          "spans": 3
+        },
+        "short-en": {
+          "max_ms": 14.113,
+          "mean_ms": 9.9295,
+          "p50_ms": 9.7725,
+          "p95_ms": 11.5532,
+          "p99_ms": 13.3463,
+          "samples": 500,
+          "spans": 5
+        }
+      },
+      "sizes": {
+        "100kib": {
+          "max_ms": 10466.7791,
+          "mean_ms": 8714.9656,
+          "p50_ms": 7328.8661,
+          "p95_ms": 10456.7785,
+          "p99_ms": 10466.7791,
+          "samples": 20
+        },
+        "4kib": {
+          "max_ms": 206.3146,
+          "mean_ms": 150.392,
+          "p50_ms": 150.5091,
+          "p95_ms": 173.8133,
+          "p99_ms": 187.6572,
+          "samples": 400
+        },
+        "short": {
+          "max_ms": 17.0807,
+          "mean_ms": 10.0449,
+          "p50_ms": 9.8473,
+          "p95_ms": 11.733,
+          "p99_ms": 13.3463,
+          "samples": 1000
+        }
+      }
+    }
+  },
+  "m4": {
+    "engines": {
+      "ark": {
+        "p95_ms": 76.2347,
+        "pass": false
+      },
+      "ark-native": {
+        "p95_ms": 67.7861,
+        "pass": false
+      }
+    },
+    "limit_ms": 10.0,
+    "pass": false,
+    "size": "100kib"
+  },
+  "machine": {
+    "cpu": "Intel Core Processor (Haswell, no TSX)",
+    "cpus": 6,
+    "cpus_usable": 6,
+    "machine": "x86_64",
+    "system": "Linux"
+  },
+  "schema": "ark-l1-latency-v1",
+  "workload_version": "1",
+  "workloads": [
+    {
+      "bytes": 115,
+      "chars": 115,
+      "id": "short-de",
+      "language": "de",
+      "sha256": "a43a39337ec5cd4137ea231f353a83c401ad8ec01e9e04bcb26140fba3d0d40d",
+      "size": "short"
+    },
+    {
+      "bytes": 98,
+      "chars": 98,
+      "id": "short-en",
+      "language": "en",
+      "sha256": "4726adee1bf521310acb2b214447ed38b25d3d6ca6926c40347164de599c9d43",
+      "size": "short"
+    },
+    {
+      "bytes": 4096,
+      "chars": 4052,
+      "id": "4kib-de",
+      "language": "de",
+      "sha256": "e41e874311e67ac16cfcc380212f9fafe395069988f055eb674f5330805db82a",
+      "size": "4kib"
+    },
+    {
+      "bytes": 4096,
+      "chars": 4096,
+      "id": "4kib-en",
+      "language": "en",
+      "sha256": "b4a3e4e2947497f19587ba659c169ad256e17a8146cded6ddd246386ee6192aa",
+      "size": "4kib"
+    },
+    {
+      "bytes": 102400,
+      "chars": 101229,
+      "id": "100kib-de",
+      "language": "de",
+      "sha256": "ccd28ba12324610c5d31fac620575efb49a7706612fd02ba1eebbe9cf5ef4c83",
+      "size": "100kib"
+    },
+    {
+      "bytes": 102400,
+      "chars": 102400,
+      "id": "100kib-en",
+      "language": "en",
+      "sha256": "2914033c3906cc7e2663c7a3d4e90088490a86a32d480e6645d6986aa6ccd53c",
+      "size": "100kib"
+    }
+  ]
+}
