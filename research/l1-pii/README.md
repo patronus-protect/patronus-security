@@ -11,7 +11,7 @@ Stand: 2026-10-11. Aufgabenliste: [`backlog.yaml`](backlog.yaml). Agent-Prompt:
   BIC .50 · Pass .44 · Username .08 · Führerschein 0.
 - Fehlende Prüfziffern: KVNR, RVNR, Personalausweis/Pass (MRZ), LANR. Keine regionale Telefonprüfung.
 - Kein gemessener Presidio-Vergleich. `13_l1_golden_eval` läuft nicht in CI; `12_l1_pii_fixture_eval`
-  vergleicht Byte- mit Zeichen-Offsets.
+  verglich Byte- mit Zeichen-Offsets (seit E08 durchgehend Zeichen-Offsets).
 
 ## Definition „besser als Presidio“
 
