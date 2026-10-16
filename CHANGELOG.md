@@ -9,6 +9,22 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ## [Unreleased]
 
+## [0.1.10] - 2026-10-16
+
+### Added
+
+- Add the audited, high-precision Injection L1 governance rule catalog
+  (`rust/src/detectors/injection/rules/governance_attack_regressions_0_1_9.json`, 18 rules such as
+  `cross_tool_next_request`, `nested_system_override` and `german_policy_replacement`). It covers
+  tool-output next-request overrides, nested system delimiters, German and English policy
+  replacement, unrestricted modes, raw system-role boundaries, privileged tool calls,
+  administrator grants and embedded new-task instructions. The end-to-end regression test
+  `rust/tests/governance_attack_regressions.rs` pins every attack as terminal with its audited
+  rule id and keeps nearby quoted, documentary and negated forms nonterminal.
+  **Detection change:** Injection L1 now reaches a terminal `injection` decision for these
+  governance attacks; the calibrated Injection L1 threshold is unchanged and the existing
+  goldens and hard negatives are unaffected.
+
 ## [0.1.9] - 2026-10-16
 
 ### Added
