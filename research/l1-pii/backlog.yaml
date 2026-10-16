@@ -73,6 +73,7 @@ tasks:
       detector change (if negative) as a separate follow-up task, not here
 
   - id: E06
+    status: done
     title: Scoreboard (exact + overlap P/R/F1, DE/EN, hard-negative FP, delta to base, exit code on regression)
     type: eval-infra
     deps: [E02, E04, E05]
