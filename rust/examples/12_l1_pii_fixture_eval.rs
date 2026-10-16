@@ -145,7 +145,7 @@ fn predicted_spans(gateway: &SecurityGateway, text: &str) -> BTreeSet<Span> {
         .evidence_spans
         .into_iter()
         .filter(|span| ark_label_for_output(&span.label))
-        .map(|span| (span.start_byte, span.end_byte, span.label))
+        .map(|span| (span.start_char, span.end_char, span.label))
         .collect()
 }
 
@@ -251,8 +251,8 @@ mod tests {
 
     #[test]
     fn non_ascii_gold_row_scores_as_exact_match() {
-        let text = "Grüße aus München, schreiben Sie an jörg@example.com.";
-        let gold = char_span(text, "jörg@example.com", "EMAIL");
+        let text = "Grüße aus München, schreiben Sie an joerg@example.com.";
+        let gold = char_span(text, "joerg@example.com", "EMAIL");
         let fixture = row(text, &[(gold.0, gold.1, "email")]);
         let expected = expected_spans(&fixture).unwrap();
         assert_eq!(expected, BTreeSet::from([gold]));
