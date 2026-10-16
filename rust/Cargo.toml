@@ -47,6 +47,11 @@ onnx-tensorrt = ["ort/tensorrt"]
 patronus-ark = { path = ".", features = ["test-util"] }
 serde_yaml = "0.9"
 
+# Runs the evaluator's unit tests (span offsets) with `cargo test`.
+[[example]]
+name = "12_l1_pii_fixture_eval"
+test = true
+
 # Internal development, benchmark, and tokenizer-parity scripts.
 # These are NOT user-facing examples (those live in examples/0X_*). They are
 # kept under dev/ and registered with explicit paths so they keep compiling.
