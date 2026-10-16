@@ -104,6 +104,7 @@ tasks:
     deps: [E07]
 
   - id: E09
+    status: done
     title: Freeze the holdout (generator seed + holdout template families + benign holdout) under ~/ark-dlp/holdout
     type: eval-infra
     deps: [E04, E05, E06]
