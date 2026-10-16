@@ -9,15 +9,7 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ## [Unreleased]
 
-### Fixed
-
-- Make IONOS fleet scale-down and round-trip recovery handle nested NIC inventory, provider
-  target reordering, and the dynamically managed Coordinator WireGuard peer.
-- Resume fleet changes safely after a provider accepted a target update before the local journal
-  advanced, and use the test Cube's verified SSH host-key alias during drain.
-- Persist the scale-up baseline before provisioning, reconcile accepted IONOS operations on resume,
-  and make Coordinator/ALB registration idempotent across interrupted substeps.
-- Replace deployment-specific names in the public IONOS profile example with explicit placeholders.
+## [0.1.9] - 2026-10-16
 
 ### Added
 
@@ -31,9 +23,6 @@ result shapes may be breaking for downstream users, and is called out explicitly
   **Detection change:** new category only; existing categories are unchanged.
 - Validate live IONOS scale-down from 12 to 8 Cubes and an end-to-end 8-to-9-to-8 Cube lifecycle,
   including worker setup, Coordinator/ALB routing, GPU inference, async scans, drain, and API removal.
-
-### Added
-
 - Add an external Triton watchdog that validates real GPU inference, with a hardened systemd timer and deduplicated TLS SMTP failure/recovery notifications. Credentials and deployment addresses remain in private host configuration.
 - Add a reproducible Microsoft Presidio baseline runner for the L1-PII evaluation (`scripts/l1_presidio/run_presidio.py`) with a pinned environment and `default`/`tuned` (EN + DE) profiles. It writes predictions in the `external_pii_eval` format. **Detection change:** none; this is evaluation tooling only.
 - Add an Ark PII-L1 prediction runner (`scripts/l1_presidio/run_ark.py`) that scans normalized Gold JSONL through the Python bindings and writes the same prediction rows as the Presidio runner, including per-span `score` and the original Ark label, with a timestamp-free metadata sidecar pinned to the native build. **Detection change:** none; this is evaluation tooling only.
@@ -56,6 +45,13 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 - Require bounded payment or employment context for ambiguous PII L1 expiry and employee-ID fields, and explicit bank-field syntax for SWIFT/BIC matches. **Detection change:** bare expiry dates, generic product IDs, and Swift-language prose no longer emit these PII findings.
 - PII L1 `pii_username` no longer treats the word after "login", "username" or "Benutzer" as an account name unless it follows an explicit assignment (`:`, `=`, `#`, "is", "ist", "lautet"). Prose such as "CLI login token" or "login-flow" and common UI words ("Username: required") are no longer PII findings. **Detection change:** unassigned forms such as "Login max.mustermann" are no longer L1 findings.
+- Make IONOS fleet scale-down and round-trip recovery handle nested NIC inventory, provider
+  target reordering, and the dynamically managed Coordinator WireGuard peer.
+- Resume fleet changes safely after a provider accepted a target update before the local journal
+  advanced, and use the test Cube's verified SSH host-key alias during drain.
+- Persist the scale-up baseline before provisioning, reconcile accepted IONOS operations on resume,
+  and make Coordinator/ALB registration idempotent across interrupted substeps.
+- Replace deployment-specific names in the public IONOS profile example with explicit placeholders.
 
 ## [0.1.8] - 2026-09-20
 
