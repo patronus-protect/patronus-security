@@ -37,6 +37,7 @@ cargo deny check licenses
 | File | Focus |
 | --- | --- |
 | `native_detectors.rs` | Native L1 detector behavior. |
+| `governance_attack_regressions.rs` | Injection L1 governance attacks stay terminal with their audited rule; nearby benign forms stay nonterminal. |
 | `pipeline_units.rs`, `pipeline_routing.rs` | Pipeline composition and per-category routing. |
 | `ml_units.rs` | ML/ONNX units. |
 | `l3_scheduler.rs` | L3 worker scheduling, fairness, max-wait. |
