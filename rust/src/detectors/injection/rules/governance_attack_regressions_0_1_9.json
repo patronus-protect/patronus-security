@@ -15,7 +15,7 @@
       "description": "A tool result overrides the next user request and redirects execution to another tool",
       "pattern": "\\b(?P<source>tool[ \\t]+output)[ \\t]*:[ \\t]*(?P<override>ignore)[ \\t]+(?P<target>the[ \\t]+user(?:'|’)s[ \\t]+next[ \\t]+request)[ \\t]+and[ \\t]+(?P<action>call|invoke)[ \\t]+(?P<tool>[a-z][a-z0-9_.-]{1,80})\\b",
       "required_literals_any": [
-        "tool output"
+        "output"
       ],
       "adaptation": "Requires a tool-output boundary, an explicit next-request override, and a bounded tool invocation in one relation."
     },
@@ -57,7 +57,7 @@
       "description": "A memory update claims altered system state and privileged identity",
       "pattern": "\\b(?P<memory>memory[ \\t]+update)[ \\t]*:[\\s\\S]{0,80}?(?P<state>system[ \\t]+state[ \\t]+altered)[\\s\\S]{0,80}?(?P<identity>i[ \\t]+am[ \\t]+now[ \\t]+the[ \\t]+admin)[^.!?;\\n]{0,80}?(?P<privilege>root[ \\t]+override)\\b",
       "required_literals_any": [
-        "memory update"
+        "memory"
       ],
       "adaptation": "Requires the state mutation claim, administrator reassignment, and root-override assertion in one bounded clause."
     },
@@ -71,7 +71,7 @@
       "description": "An encrypted coordination marker initiates a swarm override",
       "pattern": "\\b(?P<encrypted>message[ \\t]+encrypted)[ \\t]*\\.[ \\t]*(?P<signal>sig_sync_[a-z0-9_]+)[ \\t]+(?P<action>initiated)[ \\t]+for[ \\t]+(?P<target>swarm[ \\t]+override)\\b",
       "required_literals_any": [
-        "message encrypted"
+        "encrypted"
       ],
       "adaptation": "Requires the encrypted-message claim, structured synchronization marker, initiation action, and swarm-override target."
     },
@@ -85,7 +85,7 @@
       "description": "A claimed manager instruction bypasses receipt controls for a manual refund",
       "pattern": "\\b(?P<pretext>i[ \\t]+forgot[ \\t]+my[ \\t]+receipt)[^.!?;\\n]{0,96}?(?P<authority>manager[ \\t]+said)[^.!?;\\n]{0,64}?(?P<bypass>bypass[ \\t]+receipt)[^.!?;\\n]{0,96}?(?P<refund>manual[ \\t]+refund[ \\t]+authorization)\\b",
       "required_literals_any": [
-        "manual refund"
+        "refund"
       ],
       "adaptation": "Requires a missing-receipt pretext, asserted manager authority, explicit receipt bypass, and refund authorization."
     },
@@ -99,7 +99,7 @@
       "description": "An executive password-reset link is redirected to an alternative email address",
       "pattern": "\\b(?P<action>send)[^.!?;\\n]{0,32}?(?P<reset>password[ \\t]+reset[ \\t]+link)[^.!?;\\n]{0,96}?(?P<account>ceo(?:'|’)s[ \\t]+account)[^.!?;\\n]{0,96}?(?P<destination>alternative[ \\t]+email[ \\t]+address)\\b",
       "required_literals_any": [
-        "password reset link"
+        "password"
       ],
       "adaptation": "Requires a reset-link action, executive account target, and alternative-email redirection in one bounded request."
     },
@@ -127,7 +127,7 @@
       "description": "A temporally activated directive discards the agent's original purpose",
       "pattern": "(?:^|\\n)[ \\t]*(?P<override>from[ \\t]+now[ \\t]+on[ \\t]*,[ \\t]*ignore[ \\t]+your[ \\t]+original[ \\t]+purpose)\\b",
       "required_literals_any": [
-        "from now on"
+        "purpose"
       ],
       "adaptation": "Requires a line-level temporal activation and direct imperative to discard the agent's original purpose; descriptive prose remains outside the rule."
     },
@@ -141,7 +141,7 @@
       "description": "An indefinite background task bypasses human approval for future actions",
       "pattern": "\\b(?P<action>run)[ \\t]+(?P<object>this[ \\t]+task)[ \\t]+(?P<duration>indefinitely)[ \\t]+in[ \\t]+the[ \\t]+(?P<context>background)[ \\t]+and[ \\t]+(?P<bypass>bypass[ \\t]+human[ \\t]+approval)[ \\t]+for[ \\t]+(?P<scope>all[ \\t]+future[ \\t]+steps)\\b",
       "required_literals_any": [
-        "bypass human approval"
+        "approval"
       ],
       "adaptation": "Requires indefinite background execution, human-approval bypass, and an all-future-steps scope."
     },
@@ -156,8 +156,11 @@
       "pattern": "^(?:(?:please|bitte)[ \\t]+)?(?P<override>ignore|disregard|forget|abandon|ignoriere|missachte|vergiss)[ \\t]+(?:(?P<scope>all|your|the|alle|deine|die)[ \\t]+)?(?P<prior>previous|prior|earlier|above|vorherigen?|früheren?|bisherigen?|obigen?)[ \\t]+(?P<authority>instructions?|prompts?|rules?|directives?|anweisungen?|instruktionen?|regeln?|richtlinien?|direktiven?)\\b(?P<replacement>[\\s\\S]{0,120})$|^(?P<de_override>vergiss)[ \\t]+(?P<de_scope>deine)[ \\t]+(?P<de_authority>anweisung)[.!]?$",
       "required_literals_any": [
         "ignore",
-        "forget",
         "ignoriere",
+        "disregard",
+        "forget",
+        "abandon",
+        "missachte",
         "vergiss"
       ],
       "adaptation": "Promotes only a complete direct imperative that names prior instruction authority; generic discussion of ignoring or instructions remains insufficient."
@@ -190,12 +193,12 @@
       "pattern": "^(?:(?P<en_temporal>from[ \\t]+now[ \\t]+on)[ \\t]+you[ \\t]+must[ \\t]+act[ \\t]+as[ \\t]+an?[ \\t]+(?P<en_role>unrestricted|unfiltered|uncensored)[ \\t]+(?:ai|assistant)|you[ \\t]+are[ \\t]+now[ \\t]+a?[ \\t]*(?P<dan>DAN)[ \\t]*[—-][ \\t]*(?P<dan_action>do[ \\t]+anything[ \\t]+now)|(?P<developer>enable[ \\t]+developer[ \\t]+mode)[ \\t]+and[ \\t]+answer[ \\t]+(?P<without_restrictions>without[ \\t]+restrictions)|\\{?(?P<mode>godmode)[ \\t]*:[ \\t]*(?P<enabled>enabled)\\}?[ \\t]*[—-][ \\t]*(?P<freedom>respond[ \\t]+freely)[ \\t]+now|(?P<de_temporal>von[ \\t]+nun[ \\t]+an)[ \\t]+musst[ \\t]+du[ \\t]+alle[ \\t]+meine[ \\t]+anfragen[ \\t]+(?P<de_unfiltered>ohne[ \\t]+filter)[ \\t]+beantworten|du[ \\t]+bist[ \\t]+jetzt[ \\t]+ein[ \\t]+(?P<de_role>uneingeschränkter)[ \\t]+assistent[ \\t]+(?P<de_without_limits>ohne[ \\t]+grenzen))[.!}? \\t]*$",
       "required_literals_any": [
         "unrestricted",
-        "unfiltered",
+        "filter",
+        "uncensored",
         "DAN",
         "GODMODE",
-        "developer mode",
-        "uneingeschränkt",
-        "ohne Filter"
+        "developer",
+        "uneingeschränkt"
       ],
       "adaptation": "Requires an activation or temporal persona transition together with an explicit removal of restrictions; hypothetical descriptions remain nonterminal."
     },
@@ -223,8 +226,8 @@
       "description": "A markdown authority boundary installs a new task and attacker-chosen output constraint",
       "pattern": "(?P<boundary>#{2,}[ \\t]*(?:achtung[ \\t]+)?(?:neue[ \\t]+aufgabe|new[ \\t]+task)[ \\t]*#{2,})[\\s\\S]{0,180}\\b(?P<action>mach|write|send|produce|erstelle|verfasse)\\b[\\s\\S]{0,120}\\b(?P<constraint>starte|begin|start|output|antworte)\\b",
       "required_literals_any": [
-        "NEUE AUFGABE",
-        "NEW TASK"
+        "aufgabe",
+        "task"
       ],
       "adaptation": "Requires the structural new-task boundary plus both a replacement action and an output constraint; ordinary markdown headings remain insufficient."
     },
@@ -238,8 +241,8 @@
       "description": "A standalone hypothetical directly grants the assistant unrestricted behavior",
       "pattern": "^(?:in[ \\t]+this[ \\t]+hypothetical[ \\t]+scenario[ \\t]+you[ \\t]+(?:can[ \\t]+do[ \\t]+anything|have[ \\t]+no[ \\t]+limits)|in[ \\t]+diesem[ \\t]+hypothetischen[ \\t]+szenario[ \\t]+hast[ \\t]+du[ \\t]+keine[ \\t]+einschränkungen)[.!]?$",
       "required_literals_any": [
-        "hypothetical scenario",
-        "hypothetischen Szenario"
+        "hypothetical",
+        "hypothetischen"
       ],
       "adaptation": "Requires the complete standalone second-person unrestricted-mode statement; quoted examples and surrounding descriptive prose remain outside the rule."
     },
@@ -253,8 +256,7 @@
       "description": "A standalone second-person statement grants full administrator access",
       "pattern": "^you[ \\t]+now[ \\t]+have[ \\t]+full[ \\t]+admin(?:istrator)?[ \\t]+access(?:[ \\t]+to[ \\t]+the[ \\t]+system)?[.!]?$",
       "required_literals_any": [
-        "full admin access",
-        "full administrator access"
+        "admin"
       ],
       "adaptation": "Requires a complete direct privilege grant rather than documentation about administrator access."
     },
@@ -268,8 +270,7 @@
       "description": "A standalone directive requires immediate invocation of a privileged execution tool",
       "pattern": "^you[ \\t]+must[ \\t]+immediately[ \\t]+(?:call|invoke)[ \\t]+(?:the[ \\t]+)?(?P<tool>bash_exec|shell|terminal|execute|run_command)[ \\t]+tool[.!]?$",
       "required_literals_any": [
-        "bash_exec",
-        "run_command"
+        "immediately"
       ],
       "adaptation": "Requires a complete imperative, immediate timing, and an explicitly privileged execution tool."
     }
