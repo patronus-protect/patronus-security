@@ -82,6 +82,7 @@ tasks:
       exit 1 on regression, summary on stdout; base results per SHA in the cache
 
   - id: E07
+    status: done
     title: Latency benchmark ARK vs. Presidio (short/4 KiB/100 KiB) on the VPS
     type: eval-infra
     deps: [E06]
