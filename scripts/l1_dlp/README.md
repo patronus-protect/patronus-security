@@ -384,15 +384,69 @@ gelten als leer, unbekannte IDs sind ein Fehler. So lassen sich auch die Ausgabe
 | `fp:benign_code`, `fp:benign_docs` | mehr FP als die Basis (Profil `default`; Bytes sind gleich, also FP/MB) |
 | `flagged:benign_docs:<klasse>` | mehr markierte Benign-Dokumente; nur Klassen, die die Basis schon hat |
 | `hard_negatives:new_fp` | ein FP-Span auf einem Hard Negative, der keinen FP-Span der Basis in derselben Zeile schneidet |
+| `latency:100k_p95_ms` | 100-KiB-p95 des Heads > 1,10 × Basis + 0,25 ms (nur Dev, siehe [Latenz](#latenz-und-durchsatz)) |
+| `latency:budget_100k_p95_ms` | Head über dem H03-Budget von 10 ms, obwohl die Basis darunter liegt |
 
 Provider-Werte und Attribution werden berichtet, aber nicht gegated. Beide Seiten werden mit der
 Taxonomie des Heads bewertet; das `extended`-Profil nutzt die Opt-in-Regeln der jeweils eigenen
-Entity-Map. Latenz misst E11.
+Entity-Map. Die Latenz-Checks misst `latency.py` nach allen Vorhersagen auf den Dev-Workloads
+(siehe unten); der Holdout spielt dafür keine Rolle.
 
 **Ausgabe.** stdout nennt Head, Basis und Build-Schlüssel, die Dev-Tabelle (F1 je Gruppe und
 Content-Klasse, Attribution, geänderte Provider), Dev-FP und Dev-Regressionen. Für den Holdout
 steht dort nur `holdout: no regression` bzw. `holdout: regression`, und zuletzt
-`scoreboard: PASS|FAIL`. Bei Erfolg übernimmt der Runner die letzten 15 Zeilen in den Gate-Bericht,
+`scoreboard: PASS|FAIL`. Vor dem Dev-Urteil steht eine Zeile `dev latency: 100 KiB p95 … ms`
+mit dem Durchsatz auf dem 10-MiB-Repo. Bei Erfolg übernimmt der Runner die letzten 15 Zeilen in den Gate-Bericht,
 bei Misserfolg nur den Exit-Code. Die vollständigen Berichte beider Splits (Head, Basis, Checks)
-liegen unter `CACHE/scoreboard/reports/<head>-<basis>/{dev,holdout}.json` und verlassen die
-Sandbox nicht.
+liegen unter `CACHE/scoreboard/reports/<head>-<basis>/{dev,holdout}.json`, die Latenzmessung in
+`latency.json`. Sie verlassen die Sandbox nicht.
+
+## Latenz und Durchsatz
+
+`latency.py` misst ARK gegen gitleaks, TruffleHog und detect-secrets auf vier Workloads und
+liefert die 100-KiB-Checks des Scoreboard-Gates.
+
+```bash
+.venv/bin/python scripts/l1_dlp/latency.py bench --dev $ARK_L1_DEV_DATA \
+    --detect-secrets-python ~/ark-dlp/baselines-venv/bin/python --output latency.json
+    # [--tools ark,gitleaks,trufflehog,detect-secrets] [--sizes short,4k,100k,repo] [--rounds 5]
+    # [--invocations 8] [--cpus 1] [--package BUILD/pkg] [--bin-dir DIR]
+```
+
+**Workloads.** Sie entstehen deterministisch aus einem eingefrorenen Dev-Split (Reihenfolge
+`sha256(id)`), nie aus dem Holdout:
+
+| Workload | Inhalt |
+|---|---|
+| `short` | 256 Carrier-Zeilen, wie sie sind (`.env`, YAML, CLI, Prosa …; Positive und Hard Negatives) |
+| `4k` | 64 Dokumente mit genau 4 096 Byte UTF-8 |
+| `100k` | 32 Dokumente mit genau 102 400 Byte UTF-8 |
+| `repo` | ein Repository mit genau 10 MiB: Benign-Code-Dateien mit ihrem Pfad, je 64 KiB eine Carrier-Datei |
+
+`4k` und `100k` bestehen aus 4-KiB-Blöcken, jeder mit einer Carrier-Zeile am Anfang und danach
+Benign-Code (`kind: code`). Ein angeschnittenes Zeichen wird zu Leerzeichen, die Bytegrößen bleiben
+exakt. Der Bericht nennt je Workload Dokumente, Bytes und einen Digest, nie Text.
+
+**Messung.** Alle Prozesse laufen auf denselben CPUs (`--cpus`, Standard 1: die letzte erlaubte
+CPU; `0` = ohne Pinning), auch Go-Tools mit eigener Parallelität.
+
+| Tool | gemessen | Felder |
+|---|---|---|
+| ARK | in einem Worker-Prozess mit dem Modul des Builds (`--package`, sonst das installierte): `SecurityGateway(categories=["dlp"], max_level="l1").scan_category("dlp", text)` im Default-Profil, nach einem Warm-up | `p50/p95/p99/mean/max_ms` je Dokument, `mib_per_s` (Median-Runde), `end_to_end_mib_per_s` (plus ein Prozessstart), `startup_ms` (Import + Regelkompilierung) |
+| gitleaks, TruffleHog | gepinntes Binary mit den Aufrufen von `run_baselines.py` (Default-Profil, TruffleHog `--no-verification`) | `startup_ms` (Median aus 3 Läufen auf einer leeren Datei), je Workload ein Lauf über alle Dokumente: `end_to_end_mib_per_s`, `mib_per_s` (abzüglich Start), `per_doc_ms`; dazu `invocation.p50/p95_ms`: ein Prozess je Dokument für die ersten `--invocations` Dokumente (inkl. Start) |
+| detect-secrets | `scan_file` mit `default_settings()` je Datei in einem Prozess des Baseline-Venv (wie `scan --all-files`, aber einprozessig) | wie oben, dazu `errors` |
+
+detect-secrets' CLI bricht den ganzen Scan ab, wenn ein Plugin auf einer Datei eine Ausnahme
+wirft (im Dev-Repo ein YAML-Datum, das es nicht parsen kann). Der Worker zählt solche Dateien in
+`errors` und scannt weiter. `mib_per_s` der Baselines ist eine Schätzung (Lauf minus Median-Start) und bei
+`short`/`4k`, wo der Start den Lauf dominiert, unzuverlässig; maßgeblich ist dort `end_to_end_mib_per_s`. Die Pins prüft `bench` wie `run_baselines.py versions`. stdout zeigt
+eine Markdown-Tabelle: Für ARK stehen dort die p50/p95 im Prozess, für die Baselines die p50/p95 je
+Aufruf.
+
+**Gate.** `scoreboard.py gate` ruft `gate_check` nach allen Vorhersagen auf. Teilen Head und Basis
+einen Build, misst es nichts. Sonst laufen zwei Worker (Basis und Head) auf derselben CPU. Die
+Runden wechseln sich ab (Basis, Head, Head, Basis …): `short` 2, `4k` 3, `100k` 16, `repo` 2.
+Gegated wird nur die 100-KiB-p95 (`TOLERANCE` 10 %, `SLACK_MS` 0,25 ms gegen Timer-Rauschen,
+`BUDGET_MS` 10 ms aus H03/M4). Das Budget greift erst, wenn die Basis es einhält. Fällt ein Check
+durch, misst `gate_check` ein zweites Mal. Er scheitert nur, wenn er in beiden Messungen
+durchfällt. Zwei identische Builds lagen auf der VPS in fünf Läufen zwischen −2,7 % und +7,0 %.
