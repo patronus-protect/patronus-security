@@ -115,6 +115,8 @@ run.sh
   ([`../dlp/README.md`](../dlp/README.md), Timer `ark-dlp.timer`, State unter `~/ark-dlp`). Beide
   Programme teilen sich einen Lauf-Lock; ohne `--program` gilt `pii`. Backlog-Einträge können mit
   `ext_deps: [<programm>:<id>]` auf Aufgaben warten, die im anderen Programm auf `main` erledigt sind.
+  Für DLP legt der Gate-Schritt `external-corpora` die externen Content-Goldens einmalig unter
+  `~/ark-dlp/data/dev/external` an (nur Dev, erst nach Neuinstallation des Runners).
 
 ## Reihenfolge
 

@@ -9,7 +9,7 @@ Ingest verifiziert. Aktive externe Abdeckung:
 | `dlp.content.sql` | SchemaPile-Perm, permissively licensed subset | derived source-statement boundaries, keine Upstream-DLP-Annotation | 250 | 214 Go-Dokumente nur für den getrennten SQL-Dokumenttest |
 
 Das ist abgeleitetes Content-Ground-Truth, keine menschlich annotierte
-Secret-Ground-Truth und noch keine gemessene End-to-End-Exact-Span-Metrik. Gitleaks implementiert selbst
+Secret-Ground-Truth. Gitleaks implementiert selbst
 Secret-Regeln und enthält Testwerte; daher ist es keine neutrale Codequelle
 und darf nie als Secret-Recall-Evidenz dienen. Für SQL existieren nun
 reproduzierbare Quellgrenzen; externe Secret-, Log-, Dump- sowie
@@ -21,14 +21,17 @@ die ersten 250 lexikalisch sauber begrenzten SQL-Statements in stabiler
 Archiv-/Offset-Reihenfolge. Das sind überprüfbare **Quellgrenzen** für den
 abgeleiteten Content-Typ, nicht menschliche DLP-Spanannotation. Insbesondere
 garantiert eine semikolonbeendete `CREATE`- oder Kommentar-Statementgrenze
-nicht, dass die aktuelle L1-SQL-Regel genau dieselbe Grenze emittiert. Ein
-end-to-end Exact-Span-Score für SchemaPile ist daher noch nicht berichtet;
-vorher muss ein Prediction-Attach/Scope-Vertrag festgelegt werden.
+nicht, dass die aktuelle L1-SQL-Regel genau dieselbe Grenze emittiert.
 
-```bash
-cd python
-../.venv/bin/python -c 'from pathlib import Path; from patronus_ark.external_dlp_eval import normalize_git_tree; print(len(normalize_git_tree(Path("/absolute/gitleaks"), "gitleaks-go-source-v8")))'
-```
+Wie Vorhersagen an Dokumentlabels hängen und welcher Teil einer Datei bewertet
+wird, legt der Vertrag
+[`dlp-external-content-contract-0.1.8.md`](../../../../docs/research/dlp-external-content-contract-0.1.8.md)
+fest. Ein Label braucht einen Evidenzspan im Scope. Der Scope einer SQL-Datei
+endet nach dem letzten ausgewählten Statement, deshalb lassen sich jetzt auch
+Precision und der Exact-Span-Score für SchemaPile berichten. Beide Quellen
+bilden die Komponente `external/` des Dev-Splits
+(`scripts/l1_dlp/external_content.py prepare`, nur Dev, nie Holdout). Das
+DLP-Scoreboard bewertet sie im Gate.
 
 ProwlBench ist wegen seiner noncommercial Lizenz bewusst nicht Teil dieses
 Manifests oder einer Zielabdeckung.
