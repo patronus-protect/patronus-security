@@ -17,9 +17,11 @@ FP/MB are scored on ``default``; opt-in groups and classes on ``extended``.
 
 ``gate`` builds the head and the base commit (release module of ``python/``, offline, in the
 cache), predicts with ``run_ark.py`` on dev and holdout and fails on a regression: > 0.5 pp
-F1 per group, untyped or per content class, more FP on a benign corpus, or a new FP on a
-hard negative. stdout carries dev numbers only; the holdout appears as a verdict, its report
-stays in the cache. Exit 0 = pass, 1 = regression, 2 = error.
+F1 per group, untyped or per content class, more FP on a benign corpus, a new FP on a
+hard negative, or a slower head (``latency.py``: 100 KiB p95 on the dev workloads more than
+10 % above the base, or above the H03 budget once the base is within it). stdout carries dev
+numbers only; the holdout appears as a verdict, its report stays in the cache. Exit 0 = pass,
+1 = regression, 2 = error.
 
     python3 scripts/l1_dlp/scoreboard.py gate --head WT --base-sha SHA --dev DIR --holdout DIR --cache DIR
     python3 scripts/l1_dlp/scoreboard.py score --split DIR --predictions FILE [--content-predictions FILE]
@@ -65,6 +67,7 @@ def _load_file(name: str, path: Path) -> ModuleType:
 CORPORA = _load_file("_ark_l1_dlp_prepare_corpora", HERE / "prepare_corpora.py")
 BENIGN_CODE = CORPORA.BENIGN_CODE
 BENIGN_DOCS = CORPORA.BENIGN_DOCS
+LATENCY = _load_file("_ark_l1_dlp_latency", HERE / "latency.py")
 
 REPORT_SCHEMA = "ark-dlp-scoreboard-v1"
 # Bump when prediction inputs change in a way the cache key does not see.
@@ -588,6 +591,11 @@ class Job(NamedTuple):
     path: Path
 
 
+def latency_check(builds: dict[str, Build], dev: Path, cache: Path) -> dict[str, Any]:
+    """Time head against base on the dev workloads (never the holdout)."""
+    return LATENCY.gate_check(builds["base"], builds["head"], dev, cache / "latency")
+
+
 def _predictor_sha() -> str:
     return sha256_bytes(b"".join(sha256_bytes((HERE / name).read_bytes()).encode() for name in PREDICTOR_FILES))
 
@@ -728,8 +736,10 @@ def gate(head_tree: Path, base_sha: str, dev: Path, holdout: Path | None, cache:
             planned[(split_name, name)] = plan_jobs(build, split, taxonomies[name], cache, input_shas)
     run_jobs([job for group in planned.values() for job in group], jobs)
     prune(cache, {build.key for build in builds.values()})
+    latency = latency_check(builds, dev, cache)  # after the predictions: nothing else runs
 
     report_dir = cache / "reports" / f"{head_commit[:12]}-{base_commit[:12]}"
+    _write_json(report_dir / "latency.json", latency)
     failed_any = False
     output: list[str] = [f"scoreboard: head {head_commit[:12]} (build {builds['head'].key[:12]}) vs base "
                          f"{base_commit[:12]} (build {builds['base'].key[:12]})"]
@@ -742,6 +752,8 @@ def gate(head_tree: Path, base_sha: str, dev: Path, holdout: Path | None, cache:
             reports[name]["opt_in_classes"] = list(taxonomies[name].opt_in_classes)
             reports[name]["build"] = {"commit": builds[name].commit, "key": builds[name].key}
         checks = compare(reports["base"], reports["head"])
+        if split_name == "dev":
+            checks += latency["checks"]
         failed = [check for check in checks if not check["ok"]]
         failed_any = failed_any or bool(failed)
         _write_json(report_dir / f"{split_name}.json",
@@ -749,6 +761,7 @@ def gate(head_tree: Path, base_sha: str, dev: Path, holdout: Path | None, cache:
                      "checks": checks, "tolerance_pp": TOLERANCE_PP})
         if split_name == "dev":
             output += summary_lines(reports["base"], reports["head"])
+            output += LATENCY.gate_lines(latency)
             output += verdict_lines("dev", reports["base"], reports["head"], checks)
         else:
             # The holdout leaves the sandbox only as a verdict.

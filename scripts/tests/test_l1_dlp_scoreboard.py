@@ -389,12 +389,29 @@ class FakeEngine:
         output.write_text("".join(json.dumps(row) + "\n" for row in rows))
 
 
-def run_gate(monkeypatch, capsys, tmp_path, splits, regress: str | None = None, holdout_only: bool = False):
+class FakeLatency:
+    """Stands in for latency_check: fixed 100 KiB p95 of base and head, records its calls."""
+
+    def __init__(self, base_ms: float = 5.0, head_ms: float = 5.0):
+        self.base_ms, self.head_ms, self.calls = base_ms, head_ms, []
+
+    def __call__(self, builds: dict, dev: Path, cache: Path) -> dict:
+        self.calls.append(dev)
+        side = {name: {"100k": {"p95_ms": ms}, "repo": {"mib_per_s": 6.0}}
+                for name, ms in (("base", self.base_ms), ("head", self.head_ms))}
+        return {"schema": MODULE.LATENCY.SCHEMA, "attempts": 1, **side,
+                "checks": MODULE.LATENCY.latency_checks(side["base"], side["head"])}
+
+
+def run_gate(monkeypatch, capsys, tmp_path, splits, regress: str | None = None, holdout_only: bool = False,
+             latency: FakeLatency | None = None):
     repo = tmp_path / "repo"
     base, head, _ = make_repo(repo)
     engine = FakeEngine(repo, head, regress)
     monkeypatch.setattr(MODULE, "ensure_build", engine.ensure_build)
     monkeypatch.setattr(MODULE, "predict_file", engine.predict_file)
+    engine.latency = latency or FakeLatency()
+    monkeypatch.setattr(MODULE, "latency_check", engine.latency)
     dev, holdout = splits
     subprocess.run(["git", "checkout", "--quiet", head], cwd=repo, check=True)
     if holdout_only:  # the regression only shows on the holdout
@@ -414,7 +431,10 @@ def test_gate_passes_without_regression_and_reports_dev_only(monkeypatch, capsys
     assert holdout_lines and all(not any(ch.isdigit() for ch in line.replace("holdout", "")) for line in holdout_lines)
     assert "h-openai" not in out
     reports = list((tmp_path / "cache" / "scoreboard" / "reports").rglob("*.json"))
-    assert {path.name for path in reports} == {"dev.json", "holdout.json"}
+    assert {path.name for path in reports} == {"dev.json", "holdout.json", "latency.json"}
+    # Latency is timed once, on the dev workloads only, and reported for dev.
+    assert engine.latency.calls == [splits[0]]
+    assert "dev latency: 100 KiB p95 5.00 → 5.00 ms" in out
     # Default and extended profile per build and file; extended only on carriers and benign docs.
     profiles = {(name, bool(rules)) for _, name, rules in engine.calls}
     assert ("alpha.jsonl", True) not in profiles and ("carriers.jsonl", True) in profiles
@@ -439,6 +459,21 @@ def test_gate_fails_on_a_recall_regression(monkeypatch, capsys, tmp_path, splits
     assert code == 1 and "f1.exact:API_KEY" in out
 
 
+def test_gate_fails_on_a_slower_head_and_names_the_latency_check(monkeypatch, capsys, tmp_path, splits):
+    code, out, _ = run_gate(monkeypatch, capsys, tmp_path, splits, latency=FakeLatency(5.0, 6.0))
+    assert code == 1
+    assert "dev: REGRESSION latency:100k_p95_ms: 5.0 → 6.0" in out and "holdout: no regression" in out
+    report = json.loads(next((tmp_path / "cache" / "scoreboard" / "reports").rglob("dev.json")).read_text())
+    assert [check["check"] for check in report["checks"] if not check["ok"]] == ["latency:100k_p95_ms"]
+    holdout = json.loads(next((tmp_path / "cache" / "scoreboard" / "reports").rglob("holdout.json")).read_text())
+    assert not any(check["check"].startswith("latency:") for check in holdout["checks"])
+
+
+def test_gate_fails_when_the_head_leaves_the_latency_budget(monkeypatch, capsys, tmp_path, splits):
+    code, out, _ = run_gate(monkeypatch, capsys, tmp_path, splits, latency=FakeLatency(9.5, 10.3))
+    assert code == 1 and "latency:budget_100k_p95_ms" in out and "latency:100k_p95_ms" not in out
+
+
 def test_gate_reuses_cached_predictions(monkeypatch, capsys, tmp_path, splits):
     code, _, engine = run_gate(monkeypatch, capsys, tmp_path, splits)
     assert code == 0 and engine.calls
@@ -446,6 +481,7 @@ def test_gate_reuses_cached_predictions(monkeypatch, capsys, tmp_path, splits):
     repo = tmp_path / "repo"
     second = FakeEngine(repo, engine.head)
     monkeypatch.setattr(MODULE, "predict_file", second.predict_file)
+    monkeypatch.setattr(MODULE, "latency_check", FakeLatency())
     dev, holdout = splits
     assert MODULE.main(["gate", "--head", str(repo), "--base-sha", run_gate.base, "--dev", str(dev),
                         "--holdout", str(holdout), "--cache", str(tmp_path / "cache")]) == 0
@@ -463,6 +499,8 @@ def test_same_build_for_head_and_base_scans_once(monkeypatch, capsys, tmp_path, 
                         "--cache", str(tmp_path / "cache")]) == 0
     # carriers and benign docs in both profiles, benign code in the default profile only
     assert len(engine.calls) == 5
+    # one build: the real latency check measures nothing
+    assert "dev latency: not measured (head and base share one build)" in capsys.readouterr().out
 
 
 def test_prune_keeps_recent_and_current_builds_and_fresh_predictions(tmp_path):
