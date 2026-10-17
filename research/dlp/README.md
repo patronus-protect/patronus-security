@@ -17,7 +17,9 @@ Stacked Draft-PR), Branch-Präfix `dlp/`. Agent-Prompt: [`AGENT_PROMPT.md`](AGEN
   (`sig=`) und `dlp_credential_in_url` (`token=`) treffen auch Paginierungs- und CSRF-Parameter.
   `dlp_password_assignment` nimmt in Prosa beliebige Wörter („Passwort ist falsch“).
 - Gemessen ist bisher nur Content: 214 Go-Dokumente aus gitleaks (Dokumentlabel) und 250
-  SQL-Statements aus SchemaPile. Für Secrets gibt es **keine** externe Span-Ground-Truth. Die
+  SQL-Statements aus SchemaPile. Beide liegen als Dev-Komponente `external/` im Scoreboard
+  (E12; Attach/Scope-Vertrag in
+  [`docs/research/dlp-external-content-contract-0.1.8.md`](../../docs/research/dlp-external-content-contract-0.1.8.md)). Für Secrets gibt es **keine** externe Span-Ground-Truth. Die
   Fixtures von gitleaks und detect-secrets sind Erwartungswerte der Scanner selbst; TruffleHog steht
   unter AGPL (`benchmark_data/external_dlp/README.md`).
 - Die Goldens (`dlp_l1.jsonl`, 115 Fälle) sind reine Erreichbarkeitstests mit 2–3 Positiven je Regel.

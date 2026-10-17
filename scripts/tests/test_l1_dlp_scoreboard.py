@@ -560,3 +560,135 @@ def test_loads_without_native_module_or_yaml_free_imports():
             "m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m); "
             "assert 'patronus_ark' not in sys.modules")
     subprocess.run([sys.executable, "-c", code, str(SCRIPT)], check=True)
+
+
+# ── external content goldens (dev only) ──────────────────────────────────────
+
+EXTERNAL = MODULE.EXTERNAL
+
+
+def external_rows() -> list[dict]:
+    """gitleaks-like Go/Markdown documents and one SchemaPile-like SQL file with two statements."""
+    def row(row_id, corpus, kind, labels, judged, span_judged=(), scope_end=200, entities=()):
+        return {"id": row_id, "corpus": corpus, "path": row_id.split(":")[-1], "kind": kind, "text": "y" * 200,
+                "document_labels": labels, "judged": judged, "span_judged": list(span_judged),
+                "scope": [0, scope_end], "entities": [
+                    {"start": s, "end": e, "entity": "content.sql", "label": "dlp.content.sql"} for s, e in entities]}
+
+    go = ["content.source_code", "content.sql"]
+    return [
+        row(f"{EXTERNAL.GITLEAKS}:main.go", EXTERNAL.GITLEAKS, "go", ["content.source_code"], go),
+        row(f"{EXTERNAL.GITLEAKS}:README.md", EXTERNAL.GITLEAKS, "markdown", [], ["content.source_code"]),
+        row(f"{EXTERNAL.SCHEMAPILE}:a.sql", EXTERNAL.SCHEMAPILE, "sql", ["content.sql"], ["content.sql"],
+            ["content.sql"], 120, [(0, 50), (51, 120)]),
+    ]
+
+
+def write_external(directory: Path, rows: list[dict] | None = None) -> Path:
+    rows = external_rows() if rows is None else rows
+    files = {}
+    corpora = []
+    for corpus_id, name in EXTERNAL.FILES.items():
+        data = "".join(json.dumps(row, sort_keys=True) + "\n" for row in rows if row["corpus"] == corpus_id).encode()
+        files[name] = data
+        corpora.append({"id": corpus_id, "file": name, "sha256": sha256(data)})
+    manifest = json.dumps({"schema": EXTERNAL.SCHEMA, "split": "dev", "corpora": corpora}).encode()
+    files["manifest.json"] = manifest
+    files[".ready"] = f"{sha256(manifest)}  manifest.json\n".encode()
+    MODULE.BENIGN_CODE._write(directory / "external", files)
+    assert EXTERNAL.check(directory / "external") == []
+    return directory
+
+
+def sql_predictions(spans: list[tuple[int, int]], go_source: bool = True) -> list[dict]:
+    return [
+        {"id": f"{EXTERNAL.GITLEAKS}:main.go",
+         "evidence_spans": [ark(0, 9, ("dlp_source_code_declaration", "dlp.content.source_code",
+                                       ["content.source_code"]))] if go_source else []},
+        {"id": f"{EXTERNAL.SCHEMAPILE}:a.sql", "evidence_spans": [ark(s, e, SQL) for s, e in spans]},
+    ]
+
+
+def test_external_component_is_loaded_on_dev_and_refused_on_the_holdout(splits):
+    dev, holdout = splits
+    assert MODULE.load_split(dev).external is None
+    split = MODULE.load_split(write_external(dev))
+    assert len(split.external) == 3 and all("text" not in row for row in split.external)
+    assert [path.name for path in split.files["external"]] == ["gitleaks-go.jsonl", "schemapile-sql.jsonl"]
+    # The top-level manifest of an already frozen dev split stays valid.
+    assert CORPORA.check(dev) == []
+    with pytest.raises(ValueError, match="dev only"):
+        MODULE.load_split(write_external(holdout))
+
+
+def test_external_goldens_are_scored_from_the_extended_run(splits):
+    dev, _ = splits
+    split = MODULE.load_split(write_external(dev))
+    # Second statement missed, one span after the scope end: ignored.
+    report = MODULE.score_split(split, base_predictions(), TAXONOMY, sql_predictions([(0, 50), (130, 150)]))
+    external = report["external"]
+    assert external["spans"]["content.sql"]["exact"]["recall"] == 0.5
+    assert external["spans"]["content.sql"]["exact"]["precision"] == 1.0
+    assert external["spans"]["content.sql"]["out_of_scope"] == 1
+    assert external["documents"]["content.source_code"]["f1"] == 1.0
+    assert external["documents"]["content.sql"]["f1"] == 1.0
+    # Without an extended run there is nothing to score; a split without the component reports None.
+    assert MODULE.score_split(split, base_predictions(), TAXONOMY)["external"] is None
+
+
+def test_external_f1_losses_are_regressions():
+    def report(spans, go_source=True):
+        rows = [dict(row, bytes=200) for row in external_rows()]
+        return dict(split_report(), external=EXTERNAL.score(rows, sql_predictions(spans, go_source)))
+
+    base = report([(0, 50), (51, 120)])
+    checks = MODULE.compare(base, base)
+    names = {check["check"] for check in checks}
+    assert {"f1.external.document:content.source_code", "f1.external.document:content.sql",
+            "f1.external.exact:content.sql", "f1.external.overlap:content.sql"} <= names
+    assert failed(checks) == []
+    assert failed(MODULE.compare(base, report([(0, 50), (52, 120)]))) == ["f1.external.exact:content.sql"]
+    assert failed(MODULE.compare(base, report([(0, 50), (51, 120)], go_source=False))) == [
+        "f1.external.document:content.source_code"]
+    # Reports without the component (older base, or no external/ on the split) add no checks.
+    assert not any(check["check"].startswith("f1.external") for check in MODULE.compare(split_report(), split_report()))
+
+
+class ExternalEngine(FakeEngine):
+    """FakeEngine that also predicts the external Gold in the extended profile; the head can miss a statement."""
+
+    def predict_file(self, build, source, rules, output):
+        if not source.name.startswith(("gitleaks", "schemapile")):
+            return super().predict_file(build, source, rules, output)
+        self.calls.append((build.commit, source.name, tuple(rules)))
+        drop = build.commit == self.head and self.regress == "external"
+        rows = []
+        for line in source.read_text().splitlines():
+            row = json.loads(line)
+            entities = row["entities"][1:] if drop else row["entities"]
+            rows.append({"id": row["id"], "evidence_spans": [
+                {"start_char": e["start"], "end_char": e["end"], "rule_id": "dlp_sql_statement",
+                 "group": "dlp.content.sql", "entities": ["content.sql"]} for e in entities]})
+        output.write_text("".join(json.dumps(row) + "\n" for row in rows))
+
+
+def test_gate_scores_external_goldens_on_dev_in_the_extended_profile(monkeypatch, capsys, tmp_path, splits):
+    dev, holdout = splits
+    write_external(dev)
+    repo = tmp_path / "repo"
+    base, head, _ = make_repo(repo)
+    for regress, expected in ((None, 0), ("external", 1)):
+        engine = ExternalEngine(repo, head, regress)
+        monkeypatch.setattr(MODULE, "ensure_build", engine.ensure_build)
+        monkeypatch.setattr(MODULE, "predict_file", engine.predict_file)
+        monkeypatch.setattr(MODULE, "latency_check", FakeLatency())
+        subprocess.run(["git", "checkout", "--quiet", head], cwd=repo, check=True)
+        code = MODULE.main(["gate", "--head", str(repo), "--base-sha", base, "--dev", str(dev),
+                            "--holdout", str(holdout), "--cache", str(tmp_path / f"cache-{regress}")])
+        out = capsys.readouterr().out
+        assert code == expected
+        external_calls = {(name, bool(rules)) for _, name, rules in engine.calls if name.endswith("sql.jsonl")}
+        assert external_calls == {("schemapile-sql.jsonl", True)}
+        assert "external span content.sql" in out
+        if regress:
+            assert "dev: REGRESSION f1.external.exact:content.sql" in out and "holdout: no regression" in out

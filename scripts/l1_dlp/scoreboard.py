@@ -9,7 +9,11 @@ Metrics per split (``prepare_corpora.py`` layout: ``synthetic/``, ``benign_code/
   group, untyped over all groups and per provider (entity id), provider attribution, FP per
   hard-negative variant and language;
 - content and document classes: P/R/F1 per class on document level (``content_labels``);
-- FP/MB on the benign-code corpus, FP/MB and flagged documents on the benign documents.
+- FP/MB on the benign-code corpus, FP/MB and flagged documents on the benign documents;
+- dev only, if ``external/`` exists (``external_content.py``): document P/R/F1 per content class
+  on gitleaks Go/Markdown and SchemaPile SQL files, exact and overlap P/R/F1 of the SchemaPile
+  SQL statement spans, under the attach/scope contract of
+  ``docs/research/dlp-external-content-contract-0.1.8.md``.
 
 Two ARK profiles: ``default`` (what ships: secret groups only) and ``extended`` (plus every
 opt-in rule, i.e. business identifiers, content and document classes). Secret groups and
@@ -17,7 +21,7 @@ FP/MB are scored on ``default``; opt-in groups and classes on ``extended``.
 
 ``gate`` builds the head and the base commit (release module of ``python/``, offline, in the
 cache), predicts with ``run_ark.py`` on dev and holdout and fails on a regression: > 0.5 pp
-F1 per group, untyped or per content class, more FP on a benign corpus, a new FP on a
+F1 per group, untyped, per content class or on the external content goldens, more FP on a benign corpus, a new FP on a
 hard negative, or a slower head (``latency.py``: 100 KiB p95 on the dev workloads more than
 10 % above the base, or above the H03 budget once the base is within it). stdout carries dev
 numbers only; the holdout appears as a verdict, its report stays in the cache. Exit 0 = pass,
@@ -68,6 +72,7 @@ CORPORA = _load_file("_ark_l1_dlp_prepare_corpora", HERE / "prepare_corpora.py")
 BENIGN_CODE = CORPORA.BENIGN_CODE
 BENIGN_DOCS = CORPORA.BENIGN_DOCS
 LATENCY = _load_file("_ark_l1_dlp_latency", HERE / "latency.py")
+EXTERNAL = _load_file("_ark_l1_dlp_external_content", HERE / "external_content.py")
 
 REPORT_SCHEMA = "ark-dlp-scoreboard-v1"
 # Bump when prediction inputs change in a way the cache key does not see.
@@ -83,7 +88,12 @@ BUILD_PATHS = ("Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "rust", "pytho
 PREDICTOR_FILES = ("run_ark.py", "run_baselines.py", "scoreboard.py")
 PROFILES = ("default", "extended")
 # Component files scanned per profile; FP/MB on benign code is measured on what ships.
-PROFILE_COMPONENTS = {"default": ("synthetic", "benign_code", "benign_docs"), "extended": ("synthetic", "benign_docs")}
+# The external content goldens (dev only, optional) hold content classes only.
+PROFILE_COMPONENTS = {
+    "default": ("synthetic", "benign_code", "benign_docs"),
+    "extended": ("synthetic", "benign_docs", "external"),
+}
+EXTERNAL_DIR = "external"
 NATIVE_LIB = "lib_patronus_ark.so"
 NATIVE_MODULE = "_patronus_ark.abi3.so"
 JOBS = 4
@@ -353,6 +363,7 @@ class Split(NamedTuple):
     code: dict[str, dict[str, Any]]
     docs: dict[str, dict[str, Any]]
     sha256: str
+    external: list[dict[str, Any]] | None = None  # dev only: external content goldens
 
 
 def load_split(directory: Path) -> Split:
@@ -373,6 +384,13 @@ def load_split(directory: Path) -> Split:
         row.pop("text", None)
         for entity in row.get("entities") or []:
             entity.pop("text", None)
+    external = None
+    if (directory / EXTERNAL_DIR).exists():
+        # Not pinned by the top manifest: added to frozen dev splits later, with its own .ready.
+        if manifest.get("split") != "dev":
+            raise ValueError(f"{directory / EXTERNAL_DIR}: external content goldens are dev only, never holdout")
+        external = EXTERNAL.load(directory / EXTERNAL_DIR)
+        files[EXTERNAL_DIR] = EXTERNAL.files(directory / EXTERNAL_DIR)
     return Split(
         directory=directory,
         name=str(manifest.get("split", directory.name)),
@@ -381,6 +399,7 @@ def load_split(directory: Path) -> Split:
         code=BENIGN_CODE.load_corpus(directory / "benign_code"),
         docs=BENIGN_DOCS.load_corpus(directory / "benign_docs"),
         sha256=sha256_bytes(manifest_bytes),
+        external=external,
     )
 
 
@@ -393,11 +412,13 @@ def score_split(
     """Report of one tool on one split; prediction rows of all components may be mixed."""
     parts: dict[str, dict[str, list[dict[str, Any]]]] = {profile: defaultdict(list) for profile in PROFILES}
     carrier_ids = {row["id"] for row in split.carriers}
+    external_ids = {row["id"] for row in split.external or []}
     for profile, rows in (("default", predictions), ("extended", extended_predictions or [])):
         for row in rows:
             row_id = row.get("id")
             component = ("synthetic" if row_id in carrier_ids else "benign_code" if row_id in split.code
-                         else "benign_docs" if row_id in split.docs else None)
+                         else "benign_docs" if row_id in split.docs
+                         else EXTERNAL_DIR if row_id in external_ids else None)
             if component is None:
                 raise ValueError(f"prediction for unknown row {row_id!r}")
             parts[profile][component].append(row)
@@ -413,6 +434,10 @@ def score_split(
         "benign_code": BENIGN_CODE.fp_per_mb(split.code, parts["default"]["benign_code"]),
         "benign_docs": score_benign_docs(
             split.docs, parts["default"]["benign_docs"], taxonomy, None if extended is None else extended["benign_docs"]
+        ),
+        # Content classes only, so only the extended run counts.
+        "external": None if split.external is None or extended is None else EXTERNAL.score(
+            split.external, extended[EXTERNAL_DIR], taxonomy.content_classes
         ),
     }
 
@@ -458,6 +483,18 @@ def compare(base: dict[str, Any], head: dict[str, Any], tolerance_pp: float = TO
             continue  # a new class has no base; its benign-document FP are reported only
         b = b_flagged.get(label, {}).get("documents_flagged", 0)
         checks.append(_check(f"flagged:benign_docs:{label}", b, h["documents_flagged"], h["documents_flagged"] <= b))
+    b_ext, h_ext = base.get("external") or {}, head.get("external") or {}
+    for label, h in sorted((h_ext.get("documents") or {}).items()):
+        if h["gold"]:
+            b = (b_ext.get("documents") or {}).get(label)
+            checks.append(_f1_check(f"f1.external.document:{label}", b["f1"] if b else 0.0, h["f1"], h["gold"],
+                                    tolerance_pp))
+    for label, h in sorted((h_ext.get("spans") or {}).items()):
+        for kind in ("exact", "overlap"):
+            if h["gold"]:
+                b = (b_ext.get("spans") or {}).get(label)
+                checks.append(_f1_check(f"f1.external.{kind}:{label}", b[kind]["f1"] if b else 0.0, h[kind]["f1"],
+                                        h["gold"], tolerance_pp))
     old = {tuple(key) for key in b_syn["hard_negatives"]["spans"]}
     new = [key for key in h_syn["hard_negatives"]["spans"] if not _overlapping([tuple(key)], old)]
     checks.append(_check("hard_negatives:new_fp", len(old), len(h_syn["hard_negatives"]["spans"]), not new,
@@ -606,7 +643,7 @@ def plan_jobs(build: Build, split: Split, taxonomy: Taxonomy, cache: Path, input
     for profile in PROFILES:
         rules = list(taxonomy.opt_in_rules) if profile == "extended" else []
         for component in PROFILE_COMPONENTS[profile]:
-            for source in split.files[component]:
+            for source in split.files.get(component, []):
                 key = sha256_bytes(json.dumps(
                     [PREDICTION_VERSION, build.key, predictor, rules, input_shas[source]]).encode())
                 jobs.append(Job(build, component, source, profile, rules, key, cache / "predictions" / f"{key}.jsonl"))
@@ -676,6 +713,16 @@ def summary_lines(base: dict[str, Any], head: dict[str, Any]) -> list[str]:
         if h["gold"]:
             b = base["synthetic"]["documents"].get(label, {"f1": 0.0})
             lines.append(f"{'doc ' + label:<36} {h['gold']:>5}  {_pct(b['f1'])} → {_pct(h['f1'])}")
+    b_ext, h_ext = base.get("external") or {}, head.get("external") or {}
+    for label, h in (h_ext.get("documents") or {}).items():
+        if h["gold"]:
+            b = (b_ext.get("documents") or {}).get(label, {"f1": 0.0})
+            lines.append(f"{'external doc ' + label:<36} {h['gold']:>5}  {_pct(b['f1'])} → {_pct(h['f1'])}")
+    for label, h in (h_ext.get("spans") or {}).items():
+        if h["gold"]:
+            b = (b_ext.get("spans") or {}).get(label) or {"exact": {"f1": 0.0}, "overlap": {"f1": 0.0}}
+            lines.append(f"{'external span ' + label:<36} {h['gold']:>5}  {_pct(b['exact']['f1'])} → "
+                         f"{_pct(h['exact']['f1'])}        {_pct(b['overlap']['f1'])} → {_pct(h['overlap']['f1'])}")
     b_att, h_att = base["synthetic"]["attribution"], head["synthetic"]["attribution"]
     lines.append(f"attribution: {_pct(b_att['rate'])} → {_pct(h_att['rate'])} % of exactly found values")
     changed = [
