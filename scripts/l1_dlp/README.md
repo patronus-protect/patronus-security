@@ -308,6 +308,41 @@ ihn (ohne Netz, Ausgabe nur Exit-Code). Die Agent-Sandbox sperrt `~/ark-dlp/hold
 Familien nach dem Einfrieren erscheinen erst nach einem bewussten `--force` des Betreibers im
 Holdout.
 
+## Externe Content-Goldens (nur Dev)
+
+`external_content.py` baut aus den zugelassenen externen Quellen
+(`python/patronus_ark/benchmark_data/external_dlp/manifest.json`) die Komponente `external/` des
+Dev-Splits und bewertet Vorhersagen darauf. Wie Vorhersagen an Dokumentlabels hängen und welcher
+Teil einer Datei zählt, legt
+[`docs/research/dlp-external-content-contract-0.1.8.md`](../../docs/research/dlp-external-content-contract-0.1.8.md)
+fest.
+
+```bash
+python3 scripts/l1_dlp/external_content.py prepare --out ~/ark-dlp/data/dev/external \
+    --sources ~/ark-dlp/cache/external_sources          # [--offline] [--force]
+python3 scripts/l1_dlp/external_content.py check DIR
+python3 scripts/l1_dlp/external_content.py score --corpus DIR --predictions FILE   # [--output FILE]
+```
+
+| Datei | Zeilen | Gold |
+|---|---|---|
+| `gitleaks-go.jsonl` | 214 `.go`- und 13 `.md`-Dateien von gitleaks (MIT, gepinnter Commit) | `.go`: Dokumentlabel `content.source_code`, SQL-negativ; `.md`: Source-Code-negativ |
+| `schemapile-sql.jsonl` | 10 SQL-Dateien aus SchemaPile-Perm (Archiv per SHA-256 und MD5 gepinnt) | `content.sql` je Datei, die ersten 250 Statements als exakte Evidenzspans |
+
+Jede Zeile ist eine ganze Datei mit `document_labels`, `judged` (Klassen mit vollständigen
+Dokumentlabels), `span_judged` (Klassen mit vollständigen Spans), `scope` (bewerteter Bereich,
+bei der SQL-Datei, in der die Obergrenze greift, bis zum Ende des letzten ausgewählten Statements)
+und `entities`. Ein Dokument bekommt ein Label nur über einen Evidenzspan dieser Klasse im Scope.
+Spans hinter dem Scope zählen als `out_of_scope`, Spans nicht bewerteter Klassen als `unjudged`.
+`PINNED_SHA256` pinnt beide JSONL. Ein abweichender Build wird nicht geschrieben, ein
+eingefrorenes Verzeichnis (`.ready`) nur mit `--force` ersetzt.
+
+Die Komponente gehört nur zum Dev-Split. Der Runner legt sie einmal an (Gate-Schritt
+`external-corpora`, solange `~/ark-dlp/data/dev/external/.ready` fehlt, mit Netz). Das
+Top-Manifest von `prepare_corpora.py` nennt sie nicht, darum bleibt ein schon eingefrorener
+Dev-Split gültig. gitleaks enthält Secret-Regeln und Testwerte und ist deshalb kein neutraler
+Code und kein Secret-Gold. Im Holdout lehnt das Scoreboard die Komponente ab.
+
 ## Scoreboard (Gate-Schritt `scoreboard`)
 
 `scoreboard.py` bewertet Vorhersagen im gemeinsamen Format auf den eingefrorenen Korpora und
@@ -342,7 +377,7 @@ werden die acht zuletzt genutzten Builds.
 | Profil | Regeln | Korpora | bewertet |
 |---|---|---|---|
 | `default` | Auslieferungszustand: nur Secret-Gruppen (`provider_secret`, `generic_credential`, `key_material`) | Carrier, Benign-Code, Benign-Dokumente | Secret-Gruppen, FP/MB |
-| `extended` | zusätzlich alle Opt-in-Regeln laut `taxonomy` der eigenen Entity-Map (Business-IDs, Content- und Dokumentklassen) | Carrier, Benign-Dokumente | Opt-in-Gruppen auf Spans, Content-Klassen je Dokument, FP der Opt-in-Regeln auf Benign-Dokumenten |
+| `extended` | zusätzlich alle Opt-in-Regeln laut `taxonomy` der eigenen Entity-Map (Business-IDs, Content- und Dokumentklassen) | Carrier, Benign-Dokumente, externe Content-Goldens (nur Dev) | Opt-in-Gruppen auf Spans, Content-Klassen je Dokument, FP der Opt-in-Regeln auf Benign-Dokumenten |
 
 Vorhersagen liegen unter `CACHE/scoreboard/predictions/<key>.jsonl`. Der Schlüssel enthält
 Build, SHA-256 von `run_ark.py`, `run_baselines.py` und `scoreboard.py`, die Regeln und die
@@ -370,6 +405,10 @@ Vorhersagen gelöscht.
 - `benign_code`: FP/MB wie `benign_code.py fp-per-mb` (Profil `default`).
 - `benign_docs.default`: FP-Bericht wie `benign_docs.py fp-report`; `benign_docs.extended`:
   derselbe Bericht für die Opt-in-Spans, dazu `by_class` mit markierten Dokumenten je Klasse.
+- `external` (nur Dev, wenn `external/` existiert, sonst `null`): Bericht von
+  `external_content.py score` auf dem `extended`-Lauf: Dokument-P/R/F1 je Content-Klasse gesamt
+  und je Korpus, exakte und Overlap-P/R/F1 der SchemaPile-Statements, `out_of_scope`,
+  `unjudged` und `labels_without_evidence`.
 
 `score` nimmt eine Vorhersagedatei für alle Komponenten eines Splits; Zeilen ohne Vorhersage
 gelten als leer, unbekannte IDs sind ein Fehler. So lassen sich auch die Ausgaben von
@@ -381,6 +420,7 @@ gelten als leer, unbekannte IDs sind ein Fehler. So lassen sich auch die Ausgabe
 |---|---|
 | `f1.exact:<gruppe>`, `f1.overlap:<gruppe>`, `…:overall` | F1 sinkt um mehr als 0,5 pp (nur Gruppen mit Gold-Spans) |
 | `f1.document:<klasse>` | Dokument-F1 einer Content-Klasse mit Gold sinkt um mehr als 0,5 pp |
+| `f1.external.document:<klasse>`, `f1.external.exact:content.sql`, `f1.external.overlap:content.sql` | Dokument- bzw. Span-F1 auf den externen Content-Goldens sinkt um mehr als 0,5 pp (nur Dev) |
 | `fp:benign_code`, `fp:benign_docs` | mehr FP als die Basis (Profil `default`; Bytes sind gleich, also FP/MB) |
 | `flagged:benign_docs:<klasse>` | mehr markierte Benign-Dokumente; nur Klassen, die die Basis schon hat |
 | `hard_negatives:new_fp` | ein FP-Span auf einem Hard Negative, der keinen FP-Span der Basis in derselben Zeile schneidet |

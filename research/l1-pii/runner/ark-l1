@@ -402,6 +402,12 @@ def gate_steps(wt: Path) -> list[tuple[str, list[str], dict]]:
         steps.append(("synthetic-goldset", [py, str(synth), "--dev-out", str(DEV_DATA / "synthetic"),
                                             "--holdout-out", str(HOLDOUT / "synthetic")],
                       {"rw": [DEV_DATA, HOLDOUT], "readable": (wt,), "network": False}))
+    external = wt / P["eval_dir"] / "external_content.py"
+    if external.exists() and not (DEV_DATA / "external" / ".ready").exists():
+        # Dev only (gitleaks Go, SchemaPile SQL): public sources, never part of the holdout.
+        steps.append(("external-corpora", [py, str(external), "prepare", "--out", str(DEV_DATA / "external"),
+                                           "--sources", str(CACHE / "external_sources")],
+                      {"rw": [wt, DEV_DATA, CACHE]}))
     scoreboard = wt / P["eval_dir"] / "scoreboard.py"
     if scoreboard.exists():
         cur = load(CURRENT, {})

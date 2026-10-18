@@ -48,7 +48,7 @@ never padded. DE/EN figures are only available for Gretel; TAB is EN.
 | `entity.passport_number` | `PASSPORT_NUMBER` / PII-L1 | Gretel; OpenPII synthetic | 137 G; 124 O | 137 holdout; 250 dev | 12 / 76 G | 4 | below target on final; L1 |
 | `entity.driver_license_number` | `DRIVER_LICENSE_NUMBER` / PII-L1 | Gretel; OpenPII synthetic | 123 G; 177 O | 123 holdout; 250 dev | 9 / 68 G | — | below target on final; L1 |
 | `dlp.content.source_code` | `dlp.content.source_code` / DLP-L1 | Gitleaks derived document labels | 214 docs | 214 docs | n/a / code | 2,729 | document task only |
-| `dlp.content.sql` | `dlp.content.sql` / DLP-L1 | SchemaPile derived source-statement spans | 250 | 250 | n/a / SQL | 48 | boundary candidate; no score yet |
+| `dlp.content.sql` | `dlp.content.sql` / DLP-L1 | SchemaPile derived source-statement spans | 250 | 250 | n/a / SQL | 48 | exact-span score in the DLP scoreboard ([contract](dlp-external-content-contract-0.1.8.md)) |
 
 All local counts are unreviewed machine candidates from the documented sample,
 not Gold. A dash means no count was published, not a verified zero. Secrets,

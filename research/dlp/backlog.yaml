@@ -124,6 +124,7 @@ tasks:
     deps: [E10]
 
   - id: E12
+    status: done
     title: Integrate external content goldens (gitleaks Go, SchemaPile) into the scoreboard + prediction attach/scope contract for document labels
     type: eval-infra
     deps: [E10]
