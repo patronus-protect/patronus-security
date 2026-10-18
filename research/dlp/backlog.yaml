@@ -111,6 +111,7 @@ tasks:
     accept: scripts/l1_dlp/prepare_corpora.py --dev-out DIR --holdout-out DIR (runner calls it in the gate, writes holdout/.ready); manifest with SHA-256; agent sandbox has no access
 
   - id: E10
+    status: done
     title: DLP scoreboard (exact + overlap P/R/F1 per group and provider, attribution, FP/MB, document level for content, delta to base, exit code on regression)
     type: eval-infra
     deps: [E08, E09]
