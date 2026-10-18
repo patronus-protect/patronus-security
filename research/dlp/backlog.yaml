@@ -118,6 +118,7 @@ tasks:
     accept: scripts/l1_dlp/scoreboard.py gate --head WT --base-sha SHA --dev DIR --holdout DIR --cache DIR (interface like scripts/l1_presidio), exit != 0 on regression
 
   - id: E11
+    status: done
     title: Latency and throughput benchmark ARK vs. gitleaks/TruffleHog/detect-secrets (short / 4 KiB / 100 KiB / 10 MiB repo)
     type: eval-infra
     deps: [E10]
