@@ -7,7 +7,10 @@
 use std::path::{Path, PathBuf};
 
 use patronus_ark::{
-    golden_recipes::{materialize, GeneratorSet, RecipeError, SecretRecipe, SplitMix64},
+    golden_recipes::{
+        materialize, materialize_fragments, transform, Fragment, GeneratorSet, RecipeError,
+        SecretRecipe, SplitMix64,
+    },
     SecurityCategory, SecurityGateway, SecurityLevel,
 };
 use serde::Deserialize;
@@ -29,6 +32,8 @@ struct Entity {
     start: usize,
     end: usize,
     secret: Option<usize>,
+    part: Option<usize>,
+    encoding: Option<Vec<String>>,
 }
 
 const SECRET_GROUPS: &[&str] = &[
@@ -143,6 +148,111 @@ fn materialize_reports_code_point_spans_and_rejects_bad_templates() {
 }
 
 #[test]
+fn transforms_match_the_python_vectors() {
+    // Same vectors as python/tests/test_dlp_golden_recipes.py.
+    let value = "a/b c+d:\"e\"\\\n\t\u{1}~";
+    assert_eq!(
+        transform(value, "base64").unwrap(),
+        "YS9iIGMrZDoiZSJcCgkBfg=="
+    );
+    assert_eq!(
+        transform(value, "hex").unwrap(),
+        "612f6220632b643a2265225c0a09017e"
+    );
+    assert_eq!(
+        transform(value, "url").unwrap(),
+        "a%2Fb%20c%2Bd%3A%22e%22%5C%0A%09%01~"
+    );
+    assert_eq!(
+        transform(value, "json").unwrap(),
+        "a/b c+d:\\\"e\\\"\\\\\\n\\t\\u0001~"
+    );
+    assert_eq!(transform("\u{8}\u{c}\r", "json").unwrap(), "\\b\\f\\r");
+    assert!(transform(value, "rot13").is_err());
+}
+
+#[test]
+fn encoded_and_split_placeholders_yield_fragments() {
+    let generators = generators();
+    let token = generators.generate("github_ghp_token", 3).unwrap();
+    let (text, fragments) = materialize_fragments(
+        &generators,
+        "tok: <<secret:0|base64>>!",
+        &[SecretRecipe::new("github_ghp_token", 3)],
+    )
+    .unwrap();
+    let encoded = transform(&token, "base64").unwrap();
+    assert_eq!(text, format!("tok: {encoded}!"));
+    assert_eq!(
+        fragments,
+        [Fragment {
+            secret: 0,
+            part: 0,
+            start: 5,
+            end: 5 + encoded.len(),
+            encoding: Some("base64".into()),
+        }]
+    );
+
+    let recipes = vec![
+        SecretRecipe::new("aws_access_key_id", 4),
+        SecretRecipe::new("gitlab_pat", 5),
+    ];
+    let first = generators.generate("aws_access_key_id", 4).unwrap();
+    let second = generators.generate("gitlab_pat", 5).unwrap();
+    let template = "k = \"<<secret:0[0:4]>>\" + \"ä<<secret:1>>\" + \"<<secret:0[4:20]>>\"";
+    let (text, fragments) = materialize_fragments(&generators, template, &recipes).unwrap();
+    assert_eq!(
+        text,
+        format!(
+            "k = \"{}\" + \"ä{second}\" + \"{}\"",
+            &first[..4],
+            &first[4..]
+        )
+    );
+    let chars = text.chars().collect::<Vec<_>>();
+    let slice = |fragment: &Fragment| {
+        chars[fragment.start..fragment.end]
+            .iter()
+            .collect::<String>()
+    };
+    assert_eq!(
+        fragments
+            .iter()
+            .map(|fragment| (fragment.secret, fragment.part))
+            .collect::<Vec<_>>(),
+        [(0, 0), (1, 0), (0, 1)]
+    );
+    assert_eq!(slice(&fragments[0]) + &slice(&fragments[2]), first);
+    assert_eq!(slice(&fragments[1]), second);
+    assert!(materialize(&generators, template, &recipes).is_err());
+
+    let one = [SecretRecipe::new("aws_access_key_id", 1)];
+    for template in [
+        "<<secret:0|rot13>>",
+        "<<secret:0|>>",
+        "<<secret:0|BASE64>>",
+        "<<secret:0|json>>",
+        "<<secret:0[0:20]>>",
+        "<<secret:0[0:4]>><<secret:0[5:20]>>",
+        "<<secret:0[0:4]>><<secret:0[3:20]>>",
+        "<<secret:0[4:20]>><<secret:0[0:4]>>",
+        "<<secret:0[0:4]>><<secret:0[4:19]>>",
+        "<<secret:0[0:4]>><<secret:0[4:21]>>",
+        "<<secret:0[0:4]>><<secret:0>>",
+        "<<secret:0[0:4]>><<secret:0[4:20]|hex>>",
+        "<<secret:0[00:4]>><<secret:0[4:20]>>",
+        "<<secret:0[0:0]>><<secret:0[0:20]>>",
+        "<<secret:0|hex>> <<secret:0|hex>>",
+    ] {
+        assert!(
+            materialize_fragments(&generators, template, &one).is_err(),
+            "{template}"
+        );
+    }
+}
+
+#[test]
 fn recipe_rows_materialize_identically_to_the_python_generator() {
     let generators = generators();
     let mut recipe_rows = 0;
@@ -157,7 +267,7 @@ fn recipe_rows_materialize_identically_to_the_python_generator() {
         assert!(row.text.is_none(), "{}", row.id);
         recipe_rows += 1;
         let recipes = row.secrets.as_deref().expect("recipe rows list secrets");
-        let (text, spans) = materialize(&generators, template, recipes)
+        let (text, fragments) = materialize_fragments(&generators, template, recipes)
             .unwrap_or_else(|error| panic!("{}: {error}", row.id));
         assert_eq!(
             Some(fingerprint(&text)),
@@ -165,9 +275,24 @@ fn recipe_rows_materialize_identically_to_the_python_generator() {
             "{}: Rust and Python materialization differ",
             row.id
         );
-        for entity in &row.entities {
-            let index = entity.secret.expect("recipe entities point to a secret");
-            assert_eq!((entity.start, entity.end), spans[index], "{}", row.id);
+        assert_eq!(row.entities.len(), fragments.len(), "{}", row.id);
+        for (entity, fragment) in row.entities.iter().zip(&fragments) {
+            let split = fragments
+                .iter()
+                .any(|other| other.secret == fragment.secret && other.part > 0);
+            assert_eq!(
+                (entity.start, entity.end, entity.secret),
+                (fragment.start, fragment.end, Some(fragment.secret)),
+                "{}",
+                row.id
+            );
+            assert_eq!(entity.part, split.then_some(fragment.part), "{}", row.id);
+            assert_eq!(
+                entity.encoding,
+                fragment.encoding.clone().map(|encoding| vec![encoding]),
+                "{}",
+                row.id
+            );
         }
     }
     assert!(

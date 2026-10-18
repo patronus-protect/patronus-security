@@ -24,6 +24,20 @@ carrier ``template`` with ``<<secret:N>>`` placeholders. The generator spec live
     ``bcrypt64`` (OpenBSD radix-64, unpadded) or ``base58check`` (double SHA-256).
     ``wrap`` inserts a newline every ``n`` characters (base64 only, PEM bodies).
 
+Placeholders (golden schema v2, E13) may transform the value they insert:
+
+* ``<<secret:N>>`` inserts the value of ``secrets[N]`` once.
+* ``<<secret:N|enc>>`` inserts it once, transport-encoded with ``enc``: ``base64``
+  (padded, over UTF-8), ``hex`` (lower case, over UTF-8), ``url`` (RFC 3986 percent
+  encoding of everything except unreserved characters, upper-case hex) or ``json``
+  (JSON string escaping without quotes: ``\\"``, ``\\\\``, ``\\n``, ``\\r``,
+  ``\\t``, ``\\b``, ``\\f``, other control characters as ``\\u00XX``). The encoding
+  must change the value, otherwise the row would not test an encoded secret.
+* ``<<secret:N[a:b]>>`` inserts the code points ``a`` to ``b`` (half-open) of the value.
+  A split secret uses only slices, at least two, in template order, and they cover the
+  value exactly: the first starts at 0, each next one where the previous ended, the
+  last ends at the value length.
+
 Base58Check generators start with constant bytes so their length stays fixed. Every
 generator therefore has one length, which ``generator_length`` reports.
 
@@ -46,7 +60,14 @@ from pathlib import Path
 
 
 GENERATORS_PATH = Path(__file__).resolve().parent / "generators.json"
-PLACEHOLDER_RE = re.compile(r"<<secret:(0|[1-9][0-9]*)>>")
+PLACEHOLDER_RE = re.compile(
+    r"<<secret:(0|[1-9][0-9]*)(?:\|([a-z0-9]+)|\[(0|[1-9][0-9]*):([1-9][0-9]*)\])?>>"
+)
+TRANSFORMS = ("base64", "hex", "url", "json")
+_URL_UNRESERVED = frozenset(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
+)
+_JSON_ESCAPES = {'"': '\\"', "\\": "\\\\", "\n": "\\n", "\r": "\\r", "\t": "\\t", "\b": "\\b", "\f": "\\f"}
 _MASK = (1 << 64) - 1
 BASE62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
@@ -305,31 +326,104 @@ def generate(name: str, seed: int) -> str:
     return "".join(generate_segments(name, seed))
 
 
-def materialize(template: str, secrets: list[dict]) -> tuple[str, list[tuple[int, int]]]:
-    """Return the materialized text and the code-point span of each secret, by index."""
+def transform(value: str, encoding: str) -> str:
+    """Encode ``value`` like a ``<<secret:N|encoding>>`` placeholder."""
+    raw = value.encode("utf-8")
+    if encoding == "base64":
+        return base64.b64encode(raw).decode("ascii")
+    if encoding == "hex":
+        return raw.hex()
+    if encoding == "url":
+        return "".join(
+            chr(byte) if chr(byte) in _URL_UNRESERVED else f"%{byte:02X}" for byte in raw
+        )
+    if encoding == "json":
+        return "".join(
+            _JSON_ESCAPES.get(char) or (f"\\u{ord(char):04x}" if ord(char) < 0x20 else char)
+            for char in value
+        )
+    raise RecipeError(f"unknown placeholder encoding {encoding!r}")
+
+
+def materialize_fragments(template: str, secrets: list[dict]) -> tuple[str, list[dict]]:
+    """Return the materialized text and every inserted fragment, in text order.
+
+    A fragment is ``{"secret": N, "part": k, "start": s, "end": e, "encoding": enc}``:
+    ``part`` counts the fragments of secret ``N`` (always 0 unless it is split),
+    ``start``/``end`` are code points in the text and ``encoding`` is the placeholder
+    encoding or None.
+    """
     for secret in secrets:
         if not isinstance(secret, dict) or set(secret) != {"gen", "seed"}:
             raise RecipeError(f"recipe must be exactly {{gen, seed}}, got {secret!r}")
     matches = list(PLACEHOLDER_RE.finditer(template))
-    indices = [int(match.group(1)) for match in matches]
-    if sorted(indices) != list(range(len(secrets))) or template.count("<<secret:") != len(matches):
-        raise RecipeError(
-            f"template must use each of {len(secrets)} placeholders exactly once: {template!r}"
-        )
-    text = []
-    spans: list[tuple[int, int] | None] = [None] * len(secrets)
+    if not matches or template.count("<<secret:") != len(matches):
+        raise RecipeError(f"template has malformed or no placeholders: {template!r}")
+    values: dict[int, str] = {}
+    placements: dict[int, list[re.Match]] = {}
+    for match in matches:
+        index = int(match.group(1))
+        if index >= len(secrets):
+            raise RecipeError(f"placeholder {index} has no recipe in {template!r}")
+        placements.setdefault(index, []).append(match)
+    if sorted(placements) != list(range(len(secrets))):
+        raise RecipeError(f"template must use each of {len(secrets)} secrets: {template!r}")
+    for index, uses in placements.items():
+        value = values[index] = generate(secrets[index]["gen"], secrets[index]["seed"])
+        slices = [(int(use.group(3)), int(use.group(4))) for use in uses if use.group(3) is not None]
+        if not slices:
+            if len(uses) != 1:
+                raise RecipeError(f"secret {index} used more than once in {template!r}")
+            continue
+        bounds = [0, *(end for _, end in slices)]
+        if (
+            len(slices) != len(uses)
+            or len(slices) < 2
+            or [start for start, _ in slices] != bounds[:-1]
+            or any(start >= end for start, end in slices)
+            or bounds[-1] != len(value)
+        ):
+            raise RecipeError(f"slices of secret {index} must split it in order: {template!r}")
+    text: list[str] = []
+    fragments: list[dict] = []
+    parts = dict.fromkeys(placements, 0)
     length = 0
     cursor = 0
-    for match, index in zip(matches, indices):
+    for match in matches:
+        index = int(match.group(1))
         text.append(template[cursor : match.start()])
         length += match.start() - cursor
-        value = generate(secrets[index]["gen"], secrets[index]["seed"])
-        spans[index] = (length, length + len(value))
+        value, encoding = values[index], match.group(2)
+        if match.group(3) is not None:
+            value = value[int(match.group(3)) : int(match.group(4))]
+        elif encoding is not None:
+            encoded = transform(value, encoding)
+            if encoded == value:
+                raise RecipeError(f"encoding {encoding!r} leaves secret {index} unchanged")
+            value = encoded
+        fragments.append(
+            {"secret": index, "part": parts[index], "start": length, "end": length + len(value), "encoding": encoding}
+        )
+        parts[index] += 1
         text.append(value)
         length += len(value)
         cursor = match.end()
     text.append(template[cursor:])
-    return "".join(text), spans
+    return "".join(text), fragments
+
+
+def materialize(template: str, secrets: list[dict]) -> tuple[str, list[tuple[int, int]]]:
+    """Return the materialized text and the code-point span of each secret, by index.
+
+    Split secrets have no single span; use ``materialize_fragments`` for them.
+    """
+    text, fragments = materialize_fragments(template, secrets)
+    if any(fragment["part"] for fragment in fragments):
+        raise RecipeError(f"template splits a secret, use materialize_fragments: {template!r}")
+    spans = [(0, 0)] * len(secrets)
+    for fragment in fragments:
+        spans[fragment["secret"]] = (fragment["start"], fragment["end"])
+    return text, spans
 
 
 def fingerprint(text: str) -> str:
@@ -349,7 +443,7 @@ def materialize_row(row: dict) -> dict:
     materialized = copy.deepcopy(row)
     if "template" not in row:
         return materialized
-    text, _ = materialize(row["template"], row["secrets"])
+    text, _ = materialize_fragments(row["template"], row["secrets"])
     del materialized["template"], materialized["secrets"]
     materialized.pop("text_fingerprint", None)
     materialized["text"] = text

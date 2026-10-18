@@ -131,6 +131,7 @@ tasks:
     accept: contract in docs/research (document label + evidence span), exact-span score reported for SchemaPile
 
   - id: E13
+    status: done
     title: Golden schema v2 for DLP (N per language, difficulty tags carrier/no_context/encoded/split/prose) + coverage per rule_id
     type: eval-infra
     deps: [E02]

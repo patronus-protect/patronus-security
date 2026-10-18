@@ -11,7 +11,9 @@
 //! text since the last literal, and encoded segments that build bytes from
 //! hex/ASCII/random/alphabet parts and emit them as hex, base64 (padded,
 //! optionally wrapped), unpadded base64, base64url, bcrypt radix-64 or
-//! Base58Check. The Python module documents the format. Not public API.
+//! Base58Check. Placeholders may encode (`<<secret:N|base64>>`, `hex`, `url`,
+//! `json`) or split (`<<secret:N[a:b]>>`) the value they insert (golden schema
+//! v2). The Python module documents the format. Not public API.
 
 use std::{collections::BTreeMap, fmt, path::Path};
 
@@ -482,58 +484,211 @@ impl GeneratorSet {
 const PLACEHOLDER_OPEN: &str = "<<secret:";
 const PLACEHOLDER_CLOSE: &str = ">>";
 
+/// One inserted placeholder: code points `start..end` of the text hold part
+/// `part` of secret `secret` (0 unless the secret is split), encoded with
+/// `encoding` if the placeholder names one.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Fragment {
+    pub secret: usize,
+    pub part: usize,
+    pub start: usize,
+    pub end: usize,
+    pub encoding: Option<String>,
+}
+
+enum Placement {
+    Whole(Option<String>),
+    Slice(usize, usize),
+}
+
+/// Canonical non-negative decimal (no sign, no leading zeros).
+fn parse_index(digits: &str) -> Option<usize> {
+    let canonical = !digits.is_empty()
+        && digits.bytes().all(|byte| byte.is_ascii_digit())
+        && (digits == "0" || !digits.starts_with('0'));
+    digits.parse().ok().filter(|_| canonical)
+}
+
+fn parse_placeholder(body: &str) -> Option<(usize, Placement)> {
+    if let Some((index, encoding)) = body.split_once('|') {
+        let valid = !encoding.is_empty()
+            && encoding
+                .bytes()
+                .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit());
+        if !valid {
+            return None;
+        }
+        return Some((parse_index(index)?, Placement::Whole(Some(encoding.into()))));
+    }
+    if let Some((index, range)) = body.split_once('[') {
+        let (start, end) = range.strip_suffix(']')?.split_once(':')?;
+        let placement = Placement::Slice(parse_index(start)?, parse_index(end)?);
+        return Some((parse_index(index)?, placement));
+    }
+    Some((parse_index(body)?, Placement::Whole(None)))
+}
+
+/// Encode `value` like a `<<secret:N|encoding>>` placeholder.
+pub fn transform(value: &str, encoding: &str) -> Result<String, RecipeError> {
+    let raw = value.as_bytes();
+    Ok(match encoding {
+        "base64" => radix64(raw, BASE64, true),
+        "hex" => raw.iter().map(|byte| format!("{byte:02x}")).collect(),
+        "url" => raw
+            .iter()
+            .map(|&byte| match byte {
+                b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
+                    char::from(byte).to_string()
+                }
+                _ => format!("%{byte:02X}"),
+            })
+            .collect(),
+        "json" => value
+            .chars()
+            .map(|character| match character {
+                '"' => "\\\"".into(),
+                '\\' => "\\\\".into(),
+                '\n' => "\\n".into(),
+                '\r' => "\\r".into(),
+                '\t' => "\\t".into(),
+                '\u{8}' => "\\b".into(),
+                '\u{c}' => "\\f".into(),
+                control if u32::from(control) < 0x20 => {
+                    format!("\\u{:04x}", u32::from(control))
+                }
+                other => other.to_string(),
+            })
+            .collect(),
+        other => {
+            return Err(RecipeError::Template(format!(
+                "unknown placeholder encoding {other:?}"
+            )))
+        }
+    })
+}
+
+/// Materialize `template`, returning the text and every inserted fragment in
+/// text order, with half-open Unicode-code-point offsets.
+pub fn materialize_fragments(
+    generators: &GeneratorSet,
+    template: &str,
+    secrets: &[SecretRecipe],
+) -> Result<(String, Vec<Fragment>), RecipeError> {
+    let bad = |message: String| RecipeError::Template(format!("{message} in {template:?}"));
+    let mut pieces = Vec::new();
+    let mut rest = template;
+    while let Some(open) = rest.find(PLACEHOLDER_OPEN) {
+        let (before, after) = rest.split_at(open);
+        let after = &after[PLACEHOLDER_OPEN.len()..];
+        let close = after
+            .find(PLACEHOLDER_CLOSE)
+            .ok_or_else(|| bad("unterminated placeholder".into()))?;
+        let (index, placement) = parse_placeholder(&after[..close])
+            .filter(|(index, _)| *index < secrets.len())
+            .ok_or_else(|| bad(format!("bad placeholder {:?}", &after[..close])))?;
+        pieces.push((before, index, placement));
+        rest = &after[close + PLACEHOLDER_CLOSE.len()..];
+    }
+    if pieces.is_empty() {
+        return Err(bad("no placeholder".into()));
+    }
+    let mut values = Vec::with_capacity(secrets.len());
+    for (index, recipe) in secrets.iter().enumerate() {
+        let value = generators.generate(&recipe.gen, recipe.seed)?;
+        let uses = pieces
+            .iter()
+            .filter(|(_, used, _)| *used == index)
+            .map(|(_, _, placement)| placement)
+            .collect::<Vec<_>>();
+        let slices = uses
+            .iter()
+            .filter_map(|placement| match placement {
+                Placement::Slice(start, end) => Some((*start, *end)),
+                Placement::Whole(_) => None,
+            })
+            .collect::<Vec<_>>();
+        let valid = if slices.is_empty() {
+            uses.len() == 1
+        } else {
+            let mut cursor = 0;
+            let ordered = slices.iter().all(|&(start, end)| {
+                let next = start == cursor && start < end;
+                cursor = end;
+                next
+            });
+            slices.len() == uses.len()
+                && slices.len() >= 2
+                && ordered
+                && cursor == value.chars().count()
+        };
+        if !valid {
+            return Err(bad(format!(
+                "secret {index} must be used once or split in order"
+            )));
+        }
+        values.push(value);
+    }
+    let mut text = String::with_capacity(template.len());
+    let mut fragments = Vec::with_capacity(pieces.len());
+    let mut parts = vec![0; secrets.len()];
+    let mut chars = 0;
+    for (before, index, placement) in pieces {
+        text.push_str(before);
+        chars += before.chars().count();
+        let value = &values[index];
+        let (inserted, encoding) = match placement {
+            Placement::Slice(start, end) => (
+                value
+                    .chars()
+                    .skip(start)
+                    .take(end - start)
+                    .collect::<String>(),
+                None,
+            ),
+            Placement::Whole(None) => (value.clone(), None),
+            Placement::Whole(Some(encoding)) => {
+                let encoded = transform(value, &encoding)?;
+                if &encoded == value {
+                    return Err(bad(format!(
+                        "encoding {encoding:?} leaves secret {index} unchanged"
+                    )));
+                }
+                (encoded, Some(encoding))
+            }
+        };
+        let length = inserted.chars().count();
+        fragments.push(Fragment {
+            secret: index,
+            part: parts[index],
+            start: chars,
+            end: chars + length,
+            encoding,
+        });
+        parts[index] += 1;
+        text.push_str(&inserted);
+        chars += length;
+    }
+    text.push_str(rest);
+    Ok((text, fragments))
+}
+
 /// Materialize `template`, returning the text and each secret's half-open
-/// Unicode-code-point span, indexed like `secrets`.
+/// Unicode-code-point span, indexed like `secrets`. Split secrets have no single
+/// span; use [`materialize_fragments`] for them.
 pub fn materialize(
     generators: &GeneratorSet,
     template: &str,
     secrets: &[SecretRecipe],
 ) -> Result<(String, Vec<(usize, usize)>), RecipeError> {
-    let mut text = String::with_capacity(template.len());
-    let mut spans: Vec<Option<(usize, usize)>> = vec![None; secrets.len()];
-    let mut chars = 0;
-    let mut rest = template;
-    while let Some(open) = rest.find(PLACEHOLDER_OPEN) {
-        let (before, after) = rest.split_at(open);
-        text.push_str(before);
-        chars += before.chars().count();
-        let after = &after[PLACEHOLDER_OPEN.len()..];
-        let close = after.find(PLACEHOLDER_CLOSE).ok_or_else(|| {
-            RecipeError::Template(format!("unterminated placeholder in {template:?}"))
-        })?;
-        let digits = &after[..close];
-        let canonical = !digits.is_empty()
-            && digits.bytes().all(|byte| byte.is_ascii_digit())
-            && (digits == "0" || !digits.starts_with('0'));
-        let index = digits
-            .parse::<usize>()
-            .ok()
-            .filter(|index| canonical && *index < secrets.len())
-            .ok_or_else(|| {
-                RecipeError::Template(format!("bad placeholder {digits:?} in {template:?}"))
-            })?;
-        if spans[index].is_some() {
-            return Err(RecipeError::Template(format!(
-                "placeholder {index} used twice in {template:?}"
-            )));
-        }
-        let recipe = &secrets[index];
-        let value = generators.generate(&recipe.gen, recipe.seed)?;
-        let length = value.chars().count();
-        spans[index] = Some((chars, chars + length));
-        text.push_str(&value);
-        chars += length;
-        rest = &after[close + PLACEHOLDER_CLOSE.len()..];
-    }
-    text.push_str(rest);
-    let spans = spans
-        .into_iter()
-        .collect::<Option<Vec<_>>>()
-        .ok_or_else(|| RecipeError::Template(format!("unused secret in {template:?}")))?;
-    if spans.is_empty() {
+    let (text, fragments) = materialize_fragments(generators, template, secrets)?;
+    if fragments.iter().any(|fragment| fragment.part > 0) {
         return Err(RecipeError::Template(format!(
-            "template has no placeholder: {template:?}"
+            "template splits a secret, use materialize_fragments: {template:?}"
         )));
+    }
+    let mut spans = vec![(0, 0); secrets.len()];
+    for fragment in fragments {
+        spans[fragment.secret] = (fragment.start, fragment.end);
     }
     Ok((text, spans))
 }

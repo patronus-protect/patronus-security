@@ -21,18 +21,19 @@ compiled extension.
 | `dynamic_pii_threshold_sweep.jsonl` | 85 | Threshold calibration |
 | `education_pii_threshold_sweep.jsonl` | 50 | Education-context threshold calibration |
 | `pii_l1.jsonl` | 140 | Native PII L1 exact-span capability goldens and hard negatives |
-| `dlp_l1.jsonl` | 115 | Native DLP L1 exact-span capability goldens and hard negatives |
+| `dlp_l1.jsonl` | 537 | Native DLP L1 exact-span goldens, hard negatives and known gaps (schema v2) |
 
 ## Native L1 golden-set contract
 
 `pii_l1.jsonl` covers all 28 currently emitted PII L1 labels with three
-positive variants and two hard negatives per label. `dlp_l1.jsonl` applies the
-same 3+2 structure to all 23 currently emitted DLP L1 labels. The cases are
+positive variants and two hard negatives per label. `dlp_l1.jsonl` covers all
+23 currently emitted DLP L1 labels with golden schema v2 (below). The cases are
 balanced across German and English where the identifier is not intrinsically
 country-specific.
 
 Every row declares `case_type`, `target_label`, `language`, `span_unit`, and
-`provenance`. Positive rows contain one exact expected entity. `start` and
+`provenance`. Positive rows contain one exact expected entity (a split DLP
+secret has one entity per fragment). `start` and
 `end` are zero-based Python Unicode-code-point offsets and form a half-open
 `[start, end)` interval; they are deliberately not UTF-8 byte offsets. Hard
 negative rows contain no entities and explain the excluded lookalike in
@@ -44,6 +45,47 @@ Reserved placeholder values (RFC 2606/6761 domains such as `example.com` or
 form only (obfuscated, masked, single-label host, invalid prefix), never because
 a name or number is reserved. The full convention is in
 [`research/l1-pii/README.md`](../../../research/l1-pii/README.md).
+
+### DLP golden schema v2
+
+Every `dlp_l1.jsonl` row starts with these fields:
+
+```json
+{"id": "dlp_l1-cloud-key-pos-06", "suite": "dlp_l1", "schema_version": 2,
+ "language": "de", "case_type": "positive", "target_label": "CLOUD_KEY",
+ "rule_id": "dlp_aws_access_key", "carrier": "ini", "tags": ["carrier"],
+ "known_gap": false, ...}
+```
+
+- `rule_id` is the `dlp_*` rule of `DLP_PATTERNS` the row exercises. For a
+  positive it belongs to `target_label`, and `13_l1_golden_eval` requires that
+  this rule reported every gold span (`matched_rules` of the scan result). For a
+  hard negative it is the rule the lookalike aims at; no DLP rule may report
+  anything in the text.
+- `carrier` is the document that holds the value: `line` (a single
+  `label: value` probe), `env`, `yaml`, `json`, `toml`, `ini`, `xml`, `code`,
+  `log`, `cli`, `http`, `csv`, `sql`, `markdown` or `prose` (chat, ticket, mail).
+- `tags` are the difficulty tags, in this order: `carrier` (any carrier except
+  `line` and `prose`), `no_context` (no key name or label names the value),
+  `encoded` (the value appears base64-, hex-, URL- or JSON-encoded; the entity
+  lists the `encoding` and its span covers the encoded text), `split` (the value
+  is cut into fragments; one entity per fragment with its `part` number) and
+  `prose` (carrier `prose`). Only `no_context` is set by hand; the generator
+  derives the others.
+- `known_gap: true` marks a positive the detector misses today. The eval runs
+  it and prints it in the coverage report, but does not gate on it. It fails
+  when a known gap starts passing, so the task that closes it flips the flag.
+  Hard negatives are never known gaps: a lookalike the detector reports today
+  cannot be a checked-in literal, because the file must stay free of findings.
+- Each label has at least 5 gated positives and 5 hard negatives per language
+  (DE and EN). Each rule has a gated positive in both languages and a hard
+  negative. `python/tests/test_dlp_golden_schema.py` and
+  `rust/tests/dlp_golden_schema.rs` check this statically; `13_l1_golden_eval`
+  checks it on the scan results and prints the coverage per `rule_id` and per tag.
+
+```shell
+cd rust && cargo run --example 13_l1_golden_eval -- dlp
+```
 
 ### Secret-safe DLP rows (generator recipes)
 
@@ -62,6 +104,14 @@ with a carrier `template` and a list of recipes:
 - `<<secret:N>>` is replaced by the value of `secrets[N]`; each index is used
   exactly once. Entity `start`/`end` are code-point offsets in the
   **materialized** text, and `secret` names the recipe the span covers.
+- `<<secret:N|enc>>` inserts the value encoded with `base64`, `hex`, `url`
+  (RFC 3986 percent encoding) or `json` (string escaping); the encoding must
+  change the value. `<<secret:N[a:b]>>` inserts code points `a` to `b` of the
+  value; a split secret uses only slices, at least two, and they cover the value
+  in template order.
+- In the checked-in file the placeholder colon is written as the JSON escape
+  `\u003a` (`<<secret\u003a0>>`). Otherwise a placeholder followed by more text
+  in the raw line reads as `secret: <value>` to generic credential scanners.
 - Generators are defined once in
   [`dlp_synth/generators.json`](../dlp_synth/generators.json): literal segments,
   fixed-length random segments over a named alphabet, checksum segments
@@ -72,14 +122,16 @@ with a carrier `template` and a list of recipes:
   (`alphabet[next_u64() % len]` per character, `next_u64() % 256` per byte),
   so every generator has a fixed length and the result is deterministic.
   `recipes.py` documents the segment format.
-- Python (`patronus_ark.dlp_synth.recipes.materialize_row`) and Rust
-  (`patronus_ark::golden_recipes::materialize`, compiled with the `test-util`
+- Python (`patronus_ark.dlp_synth.recipes.materialize_row`,
+  `materialize_fragments`) and Rust (`patronus_ark::golden_recipes::materialize`,
+  `materialize_fragments`, compiled with the `test-util`
   feature for tests and `13_l1_golden_eval`) materialize the same text. The
   Rust test `rust/tests/dlp_golden_recipes.rs` checks every row against
   `text_fingerprint` recorded by the Python generator.
-- The goldens still use the E02 generators, which are only format-shaped and
-  carry no valid provider checksum. Tests reject checksum-valid GitHub/npm CRC32 and
-  Base58Check tokens in the file. They also require that neither
+- The 24 E02 rows keep their format-shaped generators; the v2 rows use the
+  checksum-valid E03 generators, which exist only in memory at test time. Tests
+  reject checksum-valid GitHub/npm CRC32 and Base58Check tokens in the file.
+  They also require that neither
   `dlp_l1.jsonl` nor `generators.json` triggers a default DLP L1 finding, so
   push protection and pre-commit secret scanners stay quiet.
 - Hard negatives and non-secret rows (business identifiers, content classes)
