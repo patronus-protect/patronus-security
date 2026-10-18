@@ -187,7 +187,7 @@ Ein Verzeichnis mit `.ready` ist eingefroren (wie in `scripts/l1_presidio/prepar
 Git-Caches liegen unter `--sources` (Standard `HOLDOUT/.sources/benign_code`), nie im
 Dev-Verzeichnis. stdout nennt nur Dev-Zahlen. Git läuft ohne System- und Nutzer-Config, mit festem
 Log-Format und ohne Mailmap und Umbenennungserkennung. Ein zweiter Lauf aus frischen Klonen ist
-byte-identisch. Das Einfrieren unter `~/ark-dlp/holdout` im Gate übernimmt E09.
+byte-identisch. Im Gate friert `prepare_corpora.py` den Korpus unter `~/ark-dlp/holdout` ein.
 
 **Metrik FP/MB.** Der Korpus gilt als secret-frei, deshalb ist jeder gemeldete Span ein FP.
 `FP/MB = FP / (UTF-8-Bytes des Texts / 1 000 000)`. Ein Span zählt pro Dokument einmal, auch wenn
@@ -254,7 +254,7 @@ gilt ein Budget von 4 MiB, gewählt in der Reihenfolge `sha256(quelle:id)`.
 URL/Commit/Pfade bzw. Site und Seitenzahl, Lizenz, Lizenzdatei, Sprache, Genre, Split, SHA-256,
 Dokumente, Bytes; Summen je Sprache, Genre und Kombination; Limits) und zuletzt `.ready`. Die
 Caches liegen unter `--sources` (Standard `HOLDOUT/.sources/benign_docs`). stdout nennt nur
-Dev-Zahlen. Das Einfrieren unter `~/ark-dlp/holdout` im Gate übernimmt E09.
+Dev-Zahlen. Im Gate friert `prepare_corpora.py` den Korpus unter `~/ark-dlp/holdout` ein.
 
 **FP-Bericht.** Der Korpus gilt als frei von Secrets und vertraulichen Dokumenten. Jeder Span und
 jedes markierte Dokument ist ein FP. Vorhersagen sind JSONL mit `id`, `evidence_spans`
@@ -263,3 +263,47 @@ Dokumentebene. Ein Dokument gilt als markiert, wenn es einen Span oder ein Label
 nennt FP/MB (Spans, je Dokument einmal) und `flagged_rate` (markierte Dokumente / Dokumente)
 gesamt, je Sprache, Genre, Quelle und Regel. Die Werte je Regel beziehen sich auf alle Bytes und
 Dokumente des Splits.
+
+## Holdout einfrieren (Gate-Schritt `prepare-corpora`)
+
+`prepare_corpora.py` baut alle Messkorpora für Dev und Holdout und friert sie ein. Der Runner ruft
+das Skript im Gate auf, solange `~/ark-dlp/holdout/.ready` fehlt, und zwar mit dem Baseline-Venv
+(nur Standardbibliothek und git, ohne natives Modul):
+
+```bash
+python3 scripts/l1_dlp/prepare_corpora.py --dev-out ~/ark-dlp/data/dev --holdout-out ~/ark-dlp/holdout
+    # [--sources DIR] [--holdout-seed-file FILE] [--code-repos FILE] [--doc-sources FILE] [--offline] [--force]
+python3 scripts/l1_dlp/prepare_corpora.py --check DIR
+```
+
+Jedes Zielverzeichnis bekommt drei Komponenten:
+
+| Verzeichnis | Inhalt | Split |
+|---|---|---|
+| `benign_code/` | Benign-Code-Korpus (`benign_code.py prepare`) | nach Repository |
+| `benign_docs/` | Benign-Dokumentkorpus DE/EN (`benign_docs.py prepare`) | nach Quelle |
+| `synthetic/` | `carriers.jsonl`: Carrier-Zeilen aus `patronus_ark.dlp_synth.carriers` (Positive + Hard Negatives) | nach Template-Familie und Seed |
+
+**Generator-Seed.** Dev nutzt den öffentlichen Seed `DEV_SEED` und nur die Dev-Familien. Der
+Holdout nutzt nur die Holdout-Familien und einen geheimen Seed. Das Skript legt ihn beim ersten
+Lauf als `HOLDOUT/.seed` an (Modus 0600, 32 Zufallsbytes hex); der 64-Bit-Carrier-Seed ist
+SHA-256 des Tokens (erste 8 Bytes). Das Holdout-Manifest nennt nur `seed_sha256`, stdout nur
+Dev-Zahlen. Ein kurzer Seed oder einer, der den Dev-Seed ergibt, bricht ab. Die Fixtures von
+gitleaks und detect-secrets gehören nie zum Holdout.
+
+**Manifest und Einfrieren.** Jede Komponente hat ihr eigenes `manifest.json` mit SHA-256 und
+`.ready`. Das `manifest.json` des Zielverzeichnisses pinnt je Komponente Schema, SHA-256 des
+Komponenten-Manifests und SHA-256 jeder JSONL. `synthetic/manifest.json` pinnt zusätzlich die
+SHA-256 der Generator-Dateien (`carrier_templates.py`, `generators.json`, `rules.json` …), die
+Familien und Zähler je Variante, Sprache, Format und Regel. Das oberste `.ready` (SHA-256 des
+Manifests) entsteht zuletzt, nach allen Komponenten. Scheitert eine Komponente, fehlt es, und das
+Gate versucht es beim nächsten Mal erneut. Ein Verzeichnis mit `.ready` ist eingefroren: Ein
+weiterer Lauf muss es byte-identisch reproduzieren, sonst schreibt er nichts und endet mit Exit 1.
+`--force` ersetzt es und nutzt die vorhandene Seed-Datei weiter. Die Caches liegen unter
+`--sources` (Standard `HOLDOUT/.sources`), Seed und Caches dürfen nicht im Dev-Verzeichnis liegen.
+
+**Zugriff.** Nur dieser Gate-Schritt schreibt den Holdout, und nur der Scoreboard-Schritt liest
+ihn (ohne Netz, Ausgabe nur Exit-Code). Die Agent-Sandbox sperrt `~/ark-dlp/holdout` per
+`InaccessiblePaths` (`research/l1-pii/runner/run.sh`, `PRIVATE` in `ark-l1`). Neue Regeln oder
+Familien nach dem Einfrieren erscheinen erst nach einem bewussten `--force` des Betreibers im
+Holdout.
