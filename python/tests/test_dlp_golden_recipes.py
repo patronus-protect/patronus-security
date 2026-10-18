@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import json
 import re
@@ -140,6 +141,67 @@ class MaterializeTests(unittest.TestCase):
                 recipes.materialize(template, secrets)
 
 
+class PlaceholderTransformTests(unittest.TestCase):
+    def test_transform_vectors(self):
+        # Fixed vectors, shared with rust/tests/dlp_golden_recipes.rs.
+        value = 'a/b c+d:"e"\\\n\t\x01~'
+        self.assertEqual(recipes.transform(value, "base64"), "YS9iIGMrZDoiZSJcCgkBfg==")
+        self.assertEqual(recipes.transform(value, "hex"), "612f6220632b643a2265225c0a09017e")
+        self.assertEqual(recipes.transform(value, "url"), "a%2Fb%20c%2Bd%3A%22e%22%5C%0A%09%01~")
+        self.assertEqual(recipes.transform(value, "json"), 'a/b c+d:\\"e\\"\\\\\\n\\t\\u0001~')
+        self.assertEqual(recipes.transform("\b\f\r", "json"), "\\b\\f\\r")
+        self.assertEqual(json.loads(f'"{recipes.transform(value, "json")}"'), value)
+        self.assertEqual(recipes.TRANSFORMS, ("base64", "hex", "url", "json"))
+        with self.assertRaises(recipes.RecipeError):
+            recipes.transform(value, "rot13")
+
+    def test_encoded_placeholder_spans_cover_the_encoded_value(self):
+        secrets = [{"gen": "github_ghp_token", "seed": 3}]
+        value = recipes.generate("github_ghp_token", 3)
+        text, fragments = recipes.materialize_fragments("tok: <<secret:0|base64>>!", secrets)
+        encoded = base64.b64encode(value.encode()).decode()
+        self.assertEqual(text, f"tok: {encoded}!")
+        self.assertEqual(
+            fragments, [{"secret": 0, "part": 0, "start": 5, "end": 5 + len(encoded), "encoding": "base64"}]
+        )
+        self.assertEqual(recipes.materialize("tok: <<secret:0|base64>>!", secrets), (text, [(5, 5 + len(encoded))]))
+
+    def test_split_placeholders_yield_one_fragment_per_part(self):
+        secrets = [{"gen": "aws_access_key_id", "seed": 4}, {"gen": "gitlab_pat", "seed": 5}]
+        first = recipes.generate("aws_access_key_id", 4)
+        second = recipes.generate("gitlab_pat", 5)
+        template = 'k = "<<secret:0[0:4]>>" + "ä<<secret:1>>" + "<<secret:0[4:20]>>"'
+        text, fragments = recipes.materialize_fragments(template, secrets)
+        self.assertEqual(text, f'k = "{first[:4]}" + "ä{second}" + "{first[4:]}"')
+        self.assertEqual([(f["secret"], f["part"]) for f in fragments], [(0, 0), (1, 0), (0, 1)])
+        self.assertEqual("".join(text[f["start"] : f["end"]] for f in fragments if f["secret"] == 0), first)
+        self.assertEqual(text[fragments[1]["start"] : fragments[1]["end"]], second)
+        with self.assertRaises(recipes.RecipeError):
+            recipes.materialize(template, secrets)
+
+    def test_invalid_transforms_and_splits_are_rejected(self):
+        one = [{"gen": "aws_access_key_id", "seed": 1}]
+        for template in (
+            "<<secret:0|rot13>>",
+            "<<secret:0|>>",
+            "<<secret:0|BASE64>>",
+            "<<secret:0|json>>",  # JSON escaping leaves an AKIA key unchanged
+            "<<secret:0[0:20]>>",  # a split needs at least two parts
+            "<<secret:0[0:4]>><<secret:0[5:20]>>",  # gap
+            "<<secret:0[0:4]>><<secret:0[3:20]>>",  # overlap
+            "<<secret:0[4:20]>><<secret:0[0:4]>>",  # out of order
+            "<<secret:0[0:4]>><<secret:0[4:19]>>",  # does not reach the end
+            "<<secret:0[0:4]>><<secret:0[4:21]>>",  # past the end
+            "<<secret:0[0:4]>><<secret:0>>",  # slice and whole value
+            "<<secret:0[0:4]>><<secret:0[4:20]|hex>>",
+            "<<secret:0[00:4]>><<secret:0[4:20]>>",
+            "<<secret:0[0:0]>><<secret:0[0:20]>>",
+            "<<secret:0|hex>> <<secret:0|hex>>",
+        ):
+            with self.assertRaises(recipes.RecipeError, msg=template):
+                recipes.materialize_fragments(template, one)
+
+
 class DlpGoldenRecipeTests(unittest.TestCase):
     def test_secret_values_are_stored_only_as_recipes(self):
         rows = load_dlp_rows()
@@ -168,7 +230,7 @@ class DlpGoldenRecipeTests(unittest.TestCase):
         for row in load_dlp_rows():
             if "template" not in row:
                 continue
-            text, spans = recipes.materialize(row["template"], row["secrets"])
+            text, fragments = recipes.materialize_fragments(row["template"], row["secrets"])
             self.assertEqual(
                 hashlib.sha256(text.encode("utf-8")).hexdigest()[:24],
                 row["text_fingerprint"],
@@ -176,10 +238,26 @@ class DlpGoldenRecipeTests(unittest.TestCase):
             )
             self.assertEqual(recipes.fingerprint(text), row["text_fingerprint"], row["id"])
             self.assertEqual(recipes.materialize_row(row)["text"], text, row["id"])
-            for entity in row["entities"]:
+            # One entity per fragment: `part` only on split secrets, `encoding` only on
+            # encoded ones, and the encoded span decodes back to the generator value.
+            self.assertEqual(len(row["entities"]), len(fragments), row["id"])
+            split = {fragment["secret"] for fragment in fragments if fragment["part"]}
+            for entity, fragment in zip(row["entities"], fragments):
                 self.assertEqual(
-                    (entity["start"], entity["end"]), spans[entity["secret"]], row["id"]
+                    (entity["start"], entity["end"], entity["secret"]),
+                    (fragment["start"], fragment["end"], fragment["secret"]),
+                    row["id"],
                 )
+                self.assertEqual(entity.get("part"), fragment["part"] if fragment["secret"] in split else None, row["id"])
+                encoding = [fragment["encoding"]] if fragment["encoding"] else None
+                self.assertEqual(entity.get("encoding"), encoding, row["id"])
+                if encoding:
+                    secret = row["secrets"][fragment["secret"]]
+                    self.assertEqual(
+                        recipes.transform(recipes.generate(secret["gen"], secret["seed"]), encoding[0]),
+                        text[entity["start"] : entity["end"]],
+                        row["id"],
+                    )
 
     def test_materialize_row_passes_literal_rows_through(self):
         row = next(row for row in load_dlp_rows() if "text" in row)

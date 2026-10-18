@@ -105,14 +105,29 @@ class L1BenchmarkDataTests(unittest.TestCase):
             expected = namespace["flatten"](name, namespace[cases_name])
             self.assertEqual(load(name), expected, name)
 
-    def test_every_native_label_has_three_positives_and_two_hard_negatives(self):
-        for name, labels in (("pii_l1", PII_LABELS), ("dlp_l1", DLP_LABELS)):
-            rows = load(name)
-            self.assertEqual({row["target_label"] for row in rows}, labels)
-            counts = Counter((row["target_label"], row["case_type"]) for row in rows)
-            for label in labels:
-                self.assertEqual(counts[(label, "positive")], 3, (name, label))
-                self.assertEqual(counts[(label, "hard_negative")], 2, (name, label))
+    def test_every_native_pii_label_has_three_positives_and_two_hard_negatives(self):
+        rows = load("pii_l1")
+        self.assertEqual({row["target_label"] for row in rows}, PII_LABELS)
+        counts = Counter((row["target_label"], row["case_type"]) for row in rows)
+        for label in PII_LABELS:
+            self.assertEqual(counts[(label, "positive")], 3, label)
+            self.assertEqual(counts[(label, "hard_negative")], 2, label)
+
+    def test_every_native_dlp_label_has_n_gated_cases_per_language(self):
+        # Golden schema v2 (E13): known gaps are reported, not gated, so they do not count.
+        rows = load("dlp_l1")
+        self.assertEqual({row["target_label"] for row in rows}, DLP_LABELS)
+        counts = Counter(
+            (row["target_label"], row["language"], row["case_type"])
+            for row in rows
+            if not row["known_gap"]
+        )
+        for label in DLP_LABELS:
+            for language in ("de", "en"):
+                for case_type in ("positive", "hard_negative"):
+                    self.assertGreaterEqual(
+                        counts[(label, language, case_type)], 5, (label, language, case_type)
+                    )
 
     def test_ids_schema_and_unicode_character_spans_are_exact(self):
         for name in ("pii_l1", "dlp_l1"):
@@ -125,14 +140,18 @@ class L1BenchmarkDataTests(unittest.TestCase):
                 self.assertEqual(row["span_unit"], "unicode_code_point", row["id"])
                 self.assertIn(row["provenance"]["origin"], {"synthetic", "derived_existing_fixture"})
                 if row["case_type"] == "positive":
-                    self.assertEqual(len(row["entities"]), 1, row["id"])
-                    entity = row["entities"][0]
-                    self.assertEqual(entity["label"], row["target_label"], row["id"])
-                    self.assertEqual(
-                        materialized["text"][entity["start"] : entity["end"]],
-                        materialized["entities"][0]["text"],
-                        row["id"],
-                    )
+                    # A split secret has one entity per fragment; everything else has one.
+                    if "template" in row:
+                        self.assertGreaterEqual(len(row["entities"]), 1, row["id"])
+                    else:
+                        self.assertEqual(len(row["entities"]), 1, row["id"])
+                    for entity, materialized_entity in zip(row["entities"], materialized["entities"]):
+                        self.assertEqual(entity["label"], row["target_label"], row["id"])
+                        self.assertEqual(
+                            materialized["text"][entity["start"] : entity["end"]],
+                            materialized_entity["text"],
+                            row["id"],
+                        )
                 else:
                     self.assertEqual(row["case_type"], "hard_negative", row["id"])
                     self.assertEqual(row["entities"], [], row["id"])
@@ -141,7 +160,7 @@ class L1BenchmarkDataTests(unittest.TestCase):
     def test_language_distribution_is_broad(self):
         expected = {
             "pii_l1": {"de": 74, "en": 66},
-            "dlp_l1": {"de": 57, "en": 58},
+            "dlp_l1": {"de": 265, "en": 272},
         }
         for name, distribution in expected.items():
             self.assertEqual(Counter(row["language"] for row in load(name)), distribution)
