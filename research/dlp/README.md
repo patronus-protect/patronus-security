@@ -22,7 +22,12 @@ Stacked Draft-PR), Branch-Präfix `dlp/`. Agent-Prompt: [`AGENT_PROMPT.md`](AGEN
   [`docs/research/dlp-external-content-contract-0.1.8.md`](../../docs/research/dlp-external-content-contract-0.1.8.md)). Für Secrets gibt es **keine** externe Span-Ground-Truth. Die
   Fixtures von gitleaks und detect-secrets sind Erwartungswerte der Scanner selbst; TruffleHog steht
   unter AGPL (`benchmark_data/external_dlp/README.md`).
-- Die Goldens (`dlp_l1.jsonl`, 115 Fälle) sind reine Erreichbarkeitstests mit 2–3 Positiven je Regel.
+- Die Goldens (`dlp_l1.jsonl`) folgen seit E13 dem Golden-Schema v2: 537 Fälle, je Label und Sprache
+  mindestens 5 Positive und 5 harte Negative, jede der 59 Regeln mit einem Positiv in DE und EN. Jede
+  Zeile nennt `rule_id`, Carrier und Schwierigkeits-Tags (`carrier`, `no_context`, `encoded`, `split`,
+  `prose`). 27 Positive sind als `known_gap` markiert (u. a. alle geteilten und 9 von 12 kodierten Secrets);
+  `13_l1_golden_eval` meldet die Abdeckung je `rule_id` und Tag
+  ([Schema](../../python/patronus_ark/benchmark_data/README.md#dlp-golden-schema-v2)).
 
 ## Vergleichsbasis
 
