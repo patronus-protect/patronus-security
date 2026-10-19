@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import importlib.util
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -280,6 +281,66 @@ def test_ark_labels_are_parsed_from_the_rust_registry(tmp_path):
         encoding="utf-8",
     )
     assert MODULE.ark_labels_from_source(source) == {"EMAIL", "PHONE"}
+
+
+def _generate_docs():
+    return MODULE._load_file("_ark_generate_docs", ROOT / "scripts" / "generate_docs.py")
+
+
+def _write_split_registry(root: Path, registry: str) -> Path:
+    (root / "common.rs").write_text(
+        "use super::{pii::PiiPattern, validators};\n\n"
+        "pub(super) const EMAIL: PiiPattern = PiiPattern {\n"
+        '    name: "pii_email",\n    pattern: r"x@y",\n    entity_group: "EMAIL",\n'
+        "    validator: None,\n    captured_value: false,\n};\n\n"
+        "pub(super) const IPV4: PiiPattern = PiiPattern {\n"
+        '    name: "pii_ipv4",\n    pattern: r"\\d+",\n    entity_group: "IP_ADDRESS",\n'
+        "    validator: Some(validators::ip_address),\n    captured_value: false,\n};\n",
+        encoding="utf-8",
+    )
+    (root / "de.rs").write_text(
+        "use super::{pii::PiiPattern, validators};\n\n"
+        "pub(super) const PHONE: PiiPattern = PiiPattern {\n"
+        '    name: "pii_phone_de",\n    pattern: r"\\+49",\n    entity_group: "PHONE",\n'
+        "    validator: Some(validators::unanchored_phone),\n    captured_value: false,\n};\n",
+        encoding="utf-8",
+    )
+    source = root / "pii.rs"
+    source.write_text(registry, encoding="utf-8")
+    return source
+
+
+def test_module_split_registry_is_resolved_in_registry_order(tmp_path):
+    source = _write_split_registry(
+        tmp_path,
+        "use super::{common, de};\n\n"
+        "pub static PII_PATTERNS: &[PiiPattern] = &[\n"
+        "    common::EMAIL,\n    de::PHONE,\n    common::IPV4,\n];\n",
+    )
+    rules = _generate_docs().parse_native_patterns(source, "PiiPattern")
+    assert [(rule["id"], rule["entity_group"], rule["validator"]) for rule in rules] == [
+        ("pii_email", "EMAIL", None),
+        ("pii_phone_de", "PHONE", "unanchored_phone"),
+        ("pii_ipv4", "IP_ADDRESS", "ip_address"),
+    ]
+    assert MODULE.ark_labels_from_source(source) == {"EMAIL", "PHONE", "IP_ADDRESS"}
+
+
+def test_module_split_registry_rejects_unknown_references(tmp_path):
+    source = _write_split_registry(
+        tmp_path,
+        "pub static PII_PATTERNS: &[PiiPattern] = &[\n    common::EMAIL,\n    de::MISSING,\n];\n",
+    )
+    with pytest.raises(ValueError, match="de::MISSING"):
+        _generate_docs().parse_native_patterns(source, "PiiPattern")
+
+
+def test_checked_in_registry_order_matches_the_rust_order_test():
+    rust_test = (ROOT / "rust" / "tests" / "pii_registry_order.rs").read_text(encoding="utf-8")
+    expected = re.findall(r'\("(pii_\w+)", "(\w+)"\)', rust_test)
+    rules = _generate_docs().parse_native_patterns(MODULE.PII_SOURCE_PATH, "PiiPattern")
+    assert [(rule["id"], rule["entity_group"]) for rule in rules] == expected
+    assert len(expected) == 39
 
 
 def test_cli_check_succeeds_and_fails(tmp_path):
