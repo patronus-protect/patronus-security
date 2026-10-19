@@ -276,7 +276,13 @@ def restack(open_prs: list[dict]) -> tuple[tuple[str, str], dict | None]:
             head = new_head
             print(f"RESTACKED={name}")
         if pr["baseRefName"] != prev_name:
-            run(["gh", "pr", "edit", str(pr["number"]), "--repo", GH_REPO, "--base", prev_name])
+            try:
+                run(["gh", "pr", "edit", str(pr["number"]), "--repo", GH_REPO, "--base", prev_name])
+            except RuntimeError as err:
+                # GitHub refuses base changes on PRs that are part of a native stack. The branch is
+                # already rebased; a stale PR base must not abort every following run.
+                print(f"WARN=base of #{pr['number']} not changed to {prev_name}: "
+                      f"{str(err).strip().splitlines()[-1]}")
         prev_name, prev_sha = name, head
     for name in list(stack):
         if name not in {p["headRefName"] for p in open_prs}:
