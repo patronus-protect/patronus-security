@@ -33,6 +33,25 @@ result shapes may be breaking for downstream users, and is called out explicitly
 ### Fixed
 
 - Score `rust/examples/12_l1_pii_fixture_eval.rs` on character offsets. It compared the UTF-8 byte offsets of `native:pii` spans with the code-point offsets of `dynamic_pii.jsonl`, so every span after a non-ASCII character counted as one FP and one FN. Gold spans outside the text now abort the run, and the example's unit tests run with `cargo test`. **Detection change:** none; this is evaluation tooling only.
+- DLP secret rules no longer report documented example and test values (T06). A shared check next
+  to `is_secret_value` rejects values with a marker word: `EXAMPLE`, `SAMPLE`, `BEISPIEL` or
+  `MUSTER` anywhere, `TEST`/`TESTKEY`, `FAKE` or `DUMMY` as a whole word or repeated, so a short
+  marker inside random base62 does not count and the Stripe mode `sk_test_` is no marker. Values
+  mostly made of repeated chunks, sequential runs (`1234567890abcdef`) or same-character runs are
+  rejected for fixed-format provider, key, hash, JWT, signed-URL and session-ID rules, and for
+  generic password/credential assignments only with explicit example context (example, sample,
+  dummy, fixture, Beispiel, Muster … in the line or the three lines above; host names such as
+  `example.com` do not count). PEM rules check the key body. Weak but real credentials
+  (`password=abcabcabcabc`, a token with a `1234567890abcdef` run, a provider token with one
+  repeated chunk) stay findings; new `weak` generators in `dlp_synth/rules.json` pin them, and
+  per-provider DE/EN hard negatives were added to `dlp_l1.jsonl`. Their provider-format values are
+  generator recipes with a new `fill` word (`patronus_ark.dlp_synth.recipes`,
+  `patronus_ark::golden_recipes`), and the provider values of `l1_bilingual_rules.json` and the
+  tests are assembled at test time, so no commit adds a token in an exact provider format.
+  **Detection change:** on the dev carrier split, hard-negative FP on `doc_example`/`test_key` rows
+  fall from 3 590 to 220 (−93.9 %) with unchanged positives; documented vendor examples such as
+  the AWS documentation access key ID (`AKIA…EXAMPLE`) are no longer findings. Test fixtures that
+  used fill values (`aB12aB12…`, `abcDEfGh…`) now use random values.
 - `scripts/l1_dlp/run_baselines.py run --tool detect-secrets` no longer aborts the whole run when
   a plugin raises on one file (a YAML date the detect-secrets YAML transformer cannot parse in the
   benign-code dev split). That file is listed under `errors` in `<output>.meta.json` (row `id`,

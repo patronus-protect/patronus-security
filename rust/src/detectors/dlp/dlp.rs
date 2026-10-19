@@ -6,6 +6,8 @@ use crate::{
 };
 use regex::Regex;
 
+use super::rules::{self, ExampleCheck};
+
 /// A single DLP heuristic pattern (credentials / secrets).
 #[derive(Clone, Copy)]
 pub struct DlpPattern {
@@ -142,6 +144,7 @@ pub struct DlpPipeline {
     entity_groups: Vec<&'static str>,
     validators: Vec<Option<NativeMatchValidator>>,
     span_groups: Vec<Option<usize>>,
+    example_checks: Vec<ExampleCheck>,
     anchor_regexes: Vec<Regex>,
 }
 
@@ -159,6 +162,7 @@ impl DlpPipeline {
         let mut rule_ids = Vec::new();
         let mut validators = Vec::new();
         let mut span_groups = Vec::new();
+        let mut example_checks = Vec::new();
 
         for p in DLP_PATTERNS {
             regexes.push(Regex::new(p.pattern).unwrap());
@@ -169,6 +173,7 @@ impl DlpPipeline {
             rule_ids.push(p.name);
             validators.push(p.validator);
             span_groups.push(p.span_group);
+            example_checks.push(rules::example_check(p.name));
         }
 
         let anchor_regexes = DLP_ANCHOR_PATTERNS
@@ -183,6 +188,7 @@ impl DlpPipeline {
             entity_groups,
             validators,
             span_groups,
+            example_checks,
             anchor_regexes,
         }
     }
@@ -223,6 +229,18 @@ impl NativeRegexDetector for DlpPipeline {
 
     fn preserve_cross_label_overlaps(&self) -> bool {
         true
+    }
+
+    /// Drops documented example and test values of secret rules (T06).
+    fn allows_match(&self, index: usize, text: &str, captures: &regex::Captures<'_>) -> bool {
+        let check = self.example_checks[index];
+        if check == ExampleCheck::Off {
+            return true;
+        }
+        let Some(value) = captures.get(self.span_groups[index].unwrap_or(0)) else {
+            return true;
+        };
+        !rules::is_example_match(check, self.rule_ids[index], text, value.range())
     }
 
     fn finalize_spans(&self, _text: &str, spans: &mut Vec<crate::EvidenceSpan>) {
