@@ -136,6 +136,10 @@ tasks:
     type: eval-infra
     deps: [E02]
 
+  # TRIAGE 2026-W43 (dev scoreboard e3ee3c9, default profile: exact F1 35.0, P 23.2, R 71.4; 4011 FP on
+  # 7012 hard-negative rows; benign code 10.17 FP/MB vs. gitleaks 0.21 / TruffleHog 1.43)
+  - {id: T05, title: "run_baselines.py: detect-secrets aborts the whole benign-code run when one plugin raises on a file (ValueError from a YAML date in the dev split), so E14 has no detect-secrets FP/MB; catch per file like latency.py and count errors in the meta", type: eval-infra, deps: [E07], accept: "Test with a file that makes a plugin raise: run finishes, the file is listed under errors in <output>.meta.json, other files keep their findings; benign-code dev run completes"}
+
   - id: E14
     title: Baseline report ARK vs. gitleaks/TruffleHog/detect-secrets + static coverage matrix vs. Google DLP / Purview + error buckets
     type: report
@@ -148,6 +152,13 @@ tasks:
     type: refactor
     deps: [E13]
     accept: goldens and scoreboard bit-identical
+
+  # TRIAGE 2026-W43: largest error bucket. 3734 of 4011 hard-negative FP are doc_example/test_key values
+  # (EXAMPLE…/TESTKEY… markers, repeated chunks, 000000 tails); every provider rule fires on all 80.
+  # TruffleHog filters these (API_KEY P 99.7 vs. ARK 33.3). Slice of K06 pulled forward; K06 keeps the
+  # vendor-documented example allowlist, severity test and the template syntaxes beyond T07.
+  - {id: T06, title: "Example/test value check for every secret rule (provider and generic): marker words (EXAMPLE, SAMPLE, TEST/TESTKEY, DUMMY, FAKE, BEISPIEL, MUSTER), repeated chunks, sequential runs (1234567890abcdef…), long zero/same-character runs", type: precision-fix, deps: [K01], accept: "Shared helper next to is_secret_value with unit tests (marker in random base62 must not trigger by chance: require a whole marker word or repetition); hard negatives per provider DE/EN; no golden positive lost; dev hard-negative FP doc_example/test_key down by >= 90 %"}
+  - {id: T07, title: "Placeholder/reference values in value-capturing rules (env_var_secret, generic/password assignment, credential_in_url, signed_url_signature, url_userinfo_password, csrf, bearer): SCREAMING_SNAKE/kebab placeholders DE/EN (YOUR_…_HERE, BITTE_AENDERN, HIER_…_EINTRAGEN, TODO, CHANGEME, YOUR-API-TOKEN), $VAR, {{var}}, var.x, os.environ[…], ENV.fetch(…), os.Getenv/System.getenv/Environment.GetEnvironmentVariable, process.env.X", type: precision-fix, deps: [K01], accept: "277 dev FP on placeholder/env_ref rows as hard negatives (Ruby/Python/Go/C#/HCL/Handlebars/shell); general code expressions stay with T03"}
 
   - id: K02
     title: Rule metadata v2 (provider, validator_strength checksum/structure/format/none, keywords for prefilter, min_entropy, source_ref, severity live/test)
@@ -214,11 +225,16 @@ tasks:
   - {id: F11, title: "dlp_password_assignment/dlp_generic_credential_assignment: password likeness (character classes, DE/EN dictionary, entropy) against prose FP (\"Passwort ist falsch\")", type: precision-fix, deps: [K03]}
   - {id: T03, title: "Generic assignments: reject code expressions as values (function call, index/member access, type annotation string/str/Option<…>/Arc<…>, paths, format placeholder %s, shell variable as key $PWD:) — probe: 17 of 21 CREDENTIAL matches in repo code", type: precision-fix, deps: [F11], accept: "Hard negatives in Rust/Python/TS/Go/Shell (token: Option<&str>, token = get_token(), password = os.environ[…], docker -v \"$PWD:/work\"); prose FP stays with F11"}
   - {id: T04, title: "Capture quoted values in dlp_password_assignment/dlp_generic_credential_assignment up to the closing quote (spaces, ; , } in the value) — today truncated (\"blue Kite …\" → blue) or missed (value < 4 characters before ;)", type: recall-fix, deps: [T03], accept: "Exact spans for YAML/JSON/TOML/INI with quotes and special characters; interim until K05 takes over extraction structurally"}
+  - {id: T08, title: "dlp_env_var_secret: value without surrounding quotes and trailing ;/, (today the span includes the quote: 120 extra spans on dev positives, 20 shell export '…' FN), also KEY: \"value\" (YAML/compose env), and reject code constants (DATA_API_KEY = '.data-api', AUTH_FLOW_PASSWORD = \"password\")", type: precision-fix, deps: [T04], accept: "Exact spans in env/shell/Dockerfile/code/YAML carriers; benign-code FP of the rule (30 on dev) as hard negatives"}
+  - {id: T09, title: "Key shapes in key-anchored rules (password/generic assignment, csrf, password_hash, aws_secret_key): quoted keys (\"client_secret\": …, 'password' => …), prefixed/compound keys (db_password, service_secret, Aws-Secret-Access-Key:), camelCase (dbPassword, clientSecret, passwordHash, awsSecretAccessKey), typed declarations (const X: &str = …, : string = …), escaped quotes in JSON strings/notebooks (\\\"…\\\"), XML key=\"…\" value=\"…\" — 87 dev FN", type: recall-fix, deps: [T04], accept: "Goldens per key shape in JSON/YAML/TOML/XML/TS/Rust/Jupyter; benign-code FP not higher (T03 rejections stay); interim until K05/G02"}
+  - {id: T10, title: "dlp_url_userinfo_password: password likeness from F11 for userinfo (test credentials user:pass, user:secret, till:test, masked ***), and token-in-username forms (https://<token>:x-oauth-basic@, x-token-auth:<token>@) attribute the token, not the pseudo-password — 23 FP on dev benign code", type: precision-fix, deps: [F11], accept: "Hard negatives from test-suite URL patterns; token-in-username as positive with the token span"}
   - {id: F12, title: "dlp_credential_in_url / dlp_signed_url_signature: exclude pagination/cursor/CSRF parameters, signature only with signed-URL structure (X-Amz-*, X-Goog-*, Azure sv/se/sp)", type: precision-fix, deps: [K02]}
   - {id: F13, title: "Bearer/Basic/Cookie/CSRF: decode Basic auth base64 → user:pass; pre-attribute bearer values against JWT/provider; extend cookie names (connect.sid, laravel_session, __Host-*)", type: recall-fix, deps: [K03]}
+  - {id: T11, title: "Bearer/Basic/session cookie outside a literal HTTP header line: authorization/proxy_authorization keys in env/JSON/YAML/TOML/code (AUTHORIZATION=Bearer …, \"authorization\": \"Bearer …\", proxyAuthorization), standalone Bearer/Basic values with DE/EN context in tickets/mails/logs, JSESSIONID=/PHPSESSID=/… values without Cookie: — 111 of 120 dev FN", type: recall-fix, deps: [F13], accept: "Basic only when the base64 decodes to user:pass (F13), bearer with entropy/JWT/provider check; dev benign-code FP not higher (swagger-ui tests: Bearer abc123.xyz.789, Bearer secret_token as hard negatives)"}
   - {id: F14, title: "Password hash: relax the anchor requirement in favour of format detection ($2y$, $argon2id$, $6$, $5$, $1$, $apr1$, pbkdf2_sha256$, scrypt) with context", type: recall-fix, deps: [K04]}
   - {id: F15, title: "Clarify DLP vs. PII ownership for VAT ID, commercial register, BSNR and resolve double labels", type: engine, deps: [K08], needs_decision: true}
   - {id: F16, title: "Business/record IDs and business_metric: counter-context (example, template, sample), table headers as anchors", type: precision-fix, deps: [K05]}
+  - {id: T12, title: "Business/record IDs (opt-in): key-name anchors in config/code (order_id/orderId, vat_id/vatId, bsnr, case_id …) and the label in parentheses in prose (\"(Bestellnummer)\", \"(USt-IdNr.)\") — extended profile recall 4/32 per class on dev", type: recall-fix, deps: [F16, F15], accept: "Extended-profile goldens per class DE/EN; benign-docs flagged not higher"}
 
   # ── P: Provider secrets ───────────────────────────────────────────────
   - {id: P01, title: "LLM/AI I: Google Gemini/AI Studio, Mistral, Cohere, Perplexity, DeepSeek, OpenRouter, Together, Fireworks", type: new-entity, deps: [F06]}
@@ -286,6 +302,7 @@ tasks:
   - {id: M16, title: "Export control: export list (AL numbers), ECCN, ITAR/EAR, dual-use regulation identifiers with context", type: new-entity, deps: [M01]}
   - {id: M17, title: "R&D/IP: invention disclosure (Erfindungsmeldung), patent draft before filing, formulations/specifications with confidentiality marker", type: new-entity, deps: [M01]}
   - {id: M18, title: "Extend source code detection: Java, C#, C/C++, Go, PHP, Ruby, Kotlin, Swift, Shell, PowerShell, HCL, CI YAML; Jupyter notebooks", type: recall-fix, deps: [E12]}
+  - {id: T13, title: "dlp_structured_system_log (opt-in): only matches ERROR/FATAL lines with dot milliseconds, so 0 of 456 dev log carriers get content.system_log; accept runs of >= N timestamped lines of any level (INFO/DEBUG/WARN), log4j comma milliseconds, thread/logger columns", type: recall-fix, deps: [E12], accept: "Document F1 content.system_log on dev carriers; benign docs/code flagged not higher; M19 keeps new formats (JSON, syslog, access logs, stack traces)"}
   - {id: M19, title: "Extend logs: JSON logs, syslog, access logs with auth parameters, Kubernetes events, Java/Go/.NET/Node stack traces", type: recall-fix, deps: [E12]}
   - {id: M20, title: "Extend database dumps: pg_dump COPY blocks, mysqldump headers, MongoDB exports (JSON Lines with _id/$oid), Redis/RDB hints", type: recall-fix, deps: [E12]}
   - {id: M21, title: "Extend business metrics: pipeline, CAC/LTV, churn, valuation, burn/runway, budget vs. actual in table form", type: recall-fix, deps: [F16, K05]}
