@@ -234,6 +234,16 @@ def restack(open_prs: list[dict]) -> tuple[tuple[str, str], dict | None]:
         elif (pr.get("mergeable") == "CONFLICTING" if prev_name == "main" and rec["base"] == "main"
               else rec["base_sha"] != prev_sha):
             # The bottom branch stays on its main commit until GitHub reports a conflict with main.
+            if subprocess.run(["git", *GIT_SAFE, "merge-base", "--is-ancestor", prev_sha, head],
+                              cwd=REPO).returncode == 0:
+                # Rebased outside the runner (by hand or by a report run): only record the new base;
+                # replaying from the stale base would duplicate the parent's commits.
+                stack[name] = {"base": prev_name, "base_sha": prev_sha}
+                print(f"RECORDED={name} already on {prev_name}")
+                if pr["baseRefName"] != prev_name:
+                    run(["gh", "pr", "edit", str(pr["number"]), "--repo", GH_REPO, "--base", prev_name])
+                prev_name, prev_sha = name, head
+                continue
             git("checkout", "--quiet", "--detach", head)
             proc = subprocess.run(
                 ["git", *GIT_SAFE, "rebase", "--quiet", "--onto", prev_sha, rec["base_sha"]],
@@ -247,8 +257,21 @@ def restack(open_prs: list[dict]) -> tuple[tuple[str, str], dict | None]:
                             "onto_name": prev_name, "onto": prev_sha}
                 break
             new_head = sha("HEAD")
-            git("push", "--quiet", f"--force-with-lease=refs/heads/{name}:{head}", "origin",
-                f"HEAD:refs/heads/{name}")
+            try:
+                git("push", "--quiet", f"--force-with-lease=refs/heads/{name}:{head}", "origin",
+                    f"HEAD:refs/heads/{name}")
+            except RuntimeError as err:
+                # E.g. a branch that touches .github/workflows and a token without `workflow` scope.
+                # Keep the rebase for a push from outside; once the branch is there, the next run
+                # only records it (see above).
+                ref = f"refs/ark/{PROGRAM}/restack/{name}"
+                git("update-ref", ref, new_head)
+                git("checkout", "--quiet", "--detach", "origin/main")
+                reason = next((line.strip() for line in str(err).splitlines() if "rejected" in line),
+                              str(err).strip().splitlines()[-1])
+                print(f"RESTACK_PUSH_ERROR={name}: {reason}\nRESTACK_REF={ref} {new_head} lease={head}")
+                conflict = {"branch": name, "push_error": reason}
+                break
             git("checkout", "--quiet", "--detach", "origin/main")
             stack[name] = {"base": prev_name, "base_sha": prev_sha}
             head = new_head
@@ -364,6 +387,8 @@ def cmd_next() -> int:
     open_prs = prs("open")
     top, conflict = restack(open_prs)
     if conflict is not None:
+        if conflict.get("push_error"):
+            return nothing(f"RESTACK_PUSH_ERROR {conflict['branch']} (push the RESTACK_REF from outside)")
         if f"RESTACK:{conflict['branch']}" in load(BLOCKED, {}):
             return nothing(f"REBASE_CONFLICT {conflict['branch']} (agent failed; resolve by hand, then unblock)")
         return start_restack(conflict)

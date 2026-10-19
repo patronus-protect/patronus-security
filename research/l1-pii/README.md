@@ -100,6 +100,10 @@ run.sh
   des Laufs (`RESTACK:<branch>`, Prompt `runner/AGENT_PROMPT.restack.md`): Der Agent löst die
   Konflikte, das Gate prüft wie sonst, `publish` pusht mit Lease auf den alten Head. Nach drei roten
   Runden bleibt der Stack mit `REBASE_CONFLICT` stehen, bis ein Mensch löst und `unblock` aufruft.
+  Sitzt ein Branch schon auf seinem neuen Parent (von außen rebased), trägt `next` nur die neue Basis
+  ein. Lehnt GitHub den Restack-Push ab (Branch ändert `.github/workflows`, Token ohne `workflow`-Scope),
+  meldet der Lauf `RESTACK_PUSH_ERROR` und hebt den Rebase unter `RESTACK_REF` auf; nach einem Push von
+  außen (mit Lease) geht der Stack im nächsten Lauf weiter.
   Ab 15 offenen PRs pausiert der Timer, bis gemergt wird; Restack-Läufe laufen trotzdem.
 - **Isolation:** Der Host führt nie Code oder Git-Konfiguration des Agenten aus. Git-Befehle im
   Agent-Klon (`status`, `bundle`, `rev-list`) laufen in der Sandbox; das gemeinsame `.git`, der
