@@ -5,7 +5,10 @@ use patronus_ark::{
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel,
 };
 use serde::Deserialize;
-use std::{collections::BTreeSet, path::Path};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    path::Path,
+};
 
 #[derive(Deserialize)]
 struct Case {
@@ -17,6 +20,10 @@ struct Case {
     /// `de`/`en`), materialized here so the fixture holds no plaintext token.
     #[serde(default)]
     secrets: Vec<SecretRecipe>,
+    /// Lookalikes per language (T07: placeholders and environment/template
+    /// references) that no DLP rule may report.
+    #[serde(default)]
+    hard_negatives: BTreeMap<String, Vec<String>>,
     language_neutral: bool,
 }
 
@@ -105,4 +112,57 @@ fn every_pii_and_dlp_rule_is_reachable_with_bilingual_source_evidence() {
         }
     }
     assert!(missing.is_empty(), "unreachable rules: {missing:#?}");
+}
+
+#[test]
+fn dlp_hard_negatives_are_silent_in_de_and_en() {
+    let cases: Vec<Case> =
+        serde_json::from_str(include_str!("fixtures/l1_bilingual_rules.json")).unwrap();
+    let gateway = SecurityGateway::with_max_level(
+        vec![SecurityCategory::Dlp],
+        SecurityLevel::L1,
+        None,
+        false,
+    );
+    let mut reported = Vec::new();
+    let mut rules = 0;
+    for case in cases.iter().filter(|case| !case.hard_negatives.is_empty()) {
+        assert_eq!(case.category, "dlp", "{}", case.rule_id);
+        for language in ["de", "en"] {
+            let texts = case
+                .hard_negatives
+                .get(language)
+                .map_or(&[][..], Vec::as_slice);
+            assert!(
+                !texts.is_empty(),
+                "{}: no {language} hard negative",
+                case.rule_id
+            );
+        }
+        assert_eq!(case.hard_negatives.len(), 2, "{}: only de/en", case.rule_id);
+        rules += 1;
+        for (language, text) in case
+            .hard_negatives
+            .iter()
+            .flat_map(|(language, texts)| texts.iter().map(move |text| (language, text)))
+        {
+            let spans = gateway
+                .scan_category(SecurityCategory::Dlp, text)
+                .into_iter()
+                .flat_map(|result| result.evidence_spans)
+                .map(|span| span.text)
+                .collect::<Vec<_>>();
+            if !spans.is_empty() {
+                reported.push(format!(
+                    "{} ({language}): {text:?} -> {spans:?}",
+                    case.rule_id
+                ));
+            }
+        }
+    }
+    assert!(rules >= 8, "T07 hard negatives missing");
+    assert!(
+        reported.is_empty(),
+        "hard negatives reported: {reported:#?}"
+    );
 }
