@@ -490,6 +490,25 @@ mod tests {
     }
 
     #[test]
+    fn pii_mode_is_strict_by_default_and_explicitly_configurable() {
+        use patronus_ark::PiiMode;
+        assert_eq!(
+            RawGates::default().into_gate_matrix().unwrap().pii_mode,
+            PiiMode::Strict
+        );
+        for (yaml, mode) in [
+            ("pii_mode: strict", PiiMode::Strict),
+            ("pii_mode: balanced", PiiMode::Balanced),
+            ("pii_mode: recall", PiiMode::Recall),
+        ] {
+            let raw: RawGates = serde_yaml::from_str(yaml).unwrap();
+            assert_eq!(raw.into_gate_matrix().unwrap().pii_mode, mode);
+        }
+        assert!(serde_yaml::from_str::<RawGates>("pii_mode: fast").is_err());
+        assert!(serde_yaml::from_str::<RawGates>("pii_mode: Balanced").is_err());
+    }
+
+    #[test]
     fn onnx_runtime_config_accepts_bounded_threads() {
         let raw: RawOnnxRuntime =
             serde_yaml::from_str("intra_threads: 2\ninter_threads: 1\nspinning: false\n").unwrap();
