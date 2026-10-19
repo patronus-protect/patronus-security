@@ -136,6 +136,7 @@ tasks:
       the row, and gold values failing the entity's validator; gate metrics change only as decided; tests
 
   - id: E12
+    status: done
     title: Presidio-favored gold sets (presidio-evaluator synthetic data, Presidio recognizer test cases) + scoring per source family
     type: eval-infra
     deps: [E06]
