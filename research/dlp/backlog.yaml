@@ -138,7 +138,7 @@ tasks:
 
   # TRIAGE 2026-W43 (dev scoreboard e3ee3c9, default profile: exact F1 35.0, P 23.2, R 71.4; 4011 FP on
   # 7012 hard-negative rows; benign code 10.17 FP/MB vs. gitleaks 0.21 / TruffleHog 1.43)
-  - {id: T05, title: "run_baselines.py: detect-secrets aborts the whole benign-code run when one plugin raises on a file (ValueError from a YAML date in the dev split), so E14 has no detect-secrets FP/MB; catch per file like latency.py and count errors in the meta", type: eval-infra, deps: [E07], accept: "Test with a file that makes a plugin raise: run finishes, the file is listed under errors in <output>.meta.json, other files keep their findings; benign-code dev run completes"}
+  - {id: T05, title: "run_baselines.py: detect-secrets aborts the whole benign-code run when one plugin raises on a file (ValueError from a YAML date in the dev split), so E14 has no detect-secrets FP/MB; catch per file like latency.py and count errors in the meta", type: eval-infra, deps: [E07], accept: "Test with a file that makes a plugin raise: run finishes, the file is listed under errors in <output>.meta.json, other files keep their findings; benign-code dev run completes", status: done}
 
   - id: E14
     title: Baseline report ARK vs. gitleaks/TruffleHog/detect-secrets + static coverage matrix vs. Google DLP / Purview + error buckets
