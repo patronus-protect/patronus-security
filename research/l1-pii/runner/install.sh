@@ -24,6 +24,7 @@ sed "1s|.*|#!$ROOT/runner-venv/bin/python|" "$SRC/ark-l1" > "$ROOT/bin/ark-l1"
 chmod 755 "$ROOT/bin/ark-l1"
 install -m 644 "$SRC/../AGENT_PROMPT.md" "$ROOT/bin/AGENT_PROMPT.md"
 install -m 644 "$SRC/../../dlp/AGENT_PROMPT.md" "$ROOT/bin/AGENT_PROMPT.dlp.md"
+install -m 644 "$SRC/AGENT_PROMPT.restack.md" "$ROOT/bin/AGENT_PROMPT.restack.md"
 sudo install -m 644 "$SRC/ark-l1.service" "$SRC/ark-l1.timer" "$SRC/ark-dlp.service" "$SRC/ark-dlp.timer" \
   /etc/systemd/system/
 sudo systemctl daemon-reload

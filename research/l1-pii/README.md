@@ -75,7 +75,8 @@ spätere regionale Telefonprüfung (Hebel 4) darf `+1 000-000-0000` und `555-01x
 ## Ausführung: systemd-Timer auf der VPS → Stacked Branch
 
 Eine Claude-Cloud-Routine kommt nicht auf die VPS (Port 22 aus der Cloud gesperrt). Deshalb plant
-die VPS selbst: `ark-l1.timer` startet täglich 07:00 und 15:00 (Europe/Berlin) `runner/run.sh`.
+die VPS selbst: `ark-l1.timer` startet stündlich zur vollen Stunde `runner/run.sh`, `ark-dlp.timer`
+zur halben Stunde `runner/run.sh --program dlp`. Beide teilen ein Lock; ist es belegt, entfällt der Lauf.
 
 ```
 run.sh
@@ -94,8 +95,12 @@ run.sh
   sind, die nicht blockiert ist und kein `needs_decision: true` trägt.
 - **Testbereich zuerst** (siehe `AGENT_PROMPT.md`), danach Implementierung.
 - **Stack:** Wird ein unterer PR gemergt, rebased `ark-l1 next` die übrigen Branches auf den neuen
-  Parent und passt die PR-Basis an. Konflikt → Lauf endet (`REBASE_CONFLICT`). Ab 6 offenen PRs
-  pausiert der Timer, bis gemergt wird.
+  Parent und passt die PR-Basis an; der unterste Branch wird auf `main` rebased, sobald GitHub einen
+  Konflikt mit `main` meldet. Lässt sich ein Rebase nicht konfliktfrei anwenden, wird er zur Aufgabe
+  des Laufs (`RESTACK:<branch>`, Prompt `runner/AGENT_PROMPT.restack.md`): Der Agent löst die
+  Konflikte, das Gate prüft wie sonst, `publish` pusht mit Lease auf den alten Head. Nach drei roten
+  Runden bleibt der Stack mit `REBASE_CONFLICT` stehen, bis ein Mensch löst und `unblock` aufruft.
+  Ab 15 offenen PRs pausiert der Timer, bis gemergt wird; Restack-Läufe laufen trotzdem.
 - **Isolation:** Der Host führt nie Code oder Git-Konfiguration des Agenten aus. Git-Befehle im
   Agent-Klon (`status`, `bundle`, `rev-list`) laufen in der Sandbox; das gemeinsame `.git`, der
   Gate-Target, das Gate-Venv und der Scoreboard-Cache sind für den Agenten nicht beschreibbar bzw.

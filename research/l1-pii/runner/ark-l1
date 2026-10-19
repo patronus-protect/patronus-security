@@ -13,7 +13,9 @@ reach the trusted repository only as a bundle; publish builds the "done" commit 
 the trusted repository and pushes from there.
 
 Subcommands:
-  next            restack the programme's open PRs, pick one task, create the agent clone
+  next            restack the programme's open PRs, pick one task, create the agent clone; a rebase
+                  that does not apply cleanly becomes the run's task (RESTACK:<branch>), resolved
+                  by the agent, gated like any task and force-pushed with a lease by `publish`
   env             print the current run as shell assignments
   ahead           print the number of commits in the agent clone (sandboxed)
   gate            import the agent commits and run the independent checks (sandboxed)
@@ -99,7 +101,7 @@ GH_REPO = "patronus-protect/patronus-security"
 LABEL = P["label"]
 BRANCH_PREFIX = P["prefix"]
 BACKLOG = P["backlog"]
-MAX_OPEN = 6
+MAX_OPEN = 15
 NOTHING = 10
 
 CURRENT = STATE / "current.json"
@@ -198,7 +200,7 @@ def branch_number(name: str) -> int:
 def prs(state: str) -> list[dict]:
     out = run([
         "gh", "pr", "list", "--repo", GH_REPO, "--label", LABEL, "--state", state, "--limit", "200",
-        "--json", "number,headRefName,baseRefName,headRefOid,state,url",
+        "--json", "number,headRefName,baseRefName,headRefOid,state,url,mergeable",
     ])
     return [p for p in json.loads(out) if p["headRefName"].startswith(BRANCH_PREFIX)]
 
@@ -215,27 +217,35 @@ def nothing(reason: str) -> int:
 # ── restack ──────────────────────────────────────────────────────────────
 
 
-def restack(open_prs: list[dict]) -> tuple[str, str] | None:
-    """Rebase open stack branches whose recorded parent moved. Returns (top_name, top_sha)."""
+def restack(open_prs: list[dict]) -> tuple[tuple[str, str], dict | None]:
+    """Rebase open stack branches whose recorded parent moved.
+
+    Returns ((top_name, top_sha), conflict); conflict describes the first branch whose rebase did
+    not apply cleanly (the branches above it stay untouched until it is resolved)."""
     stack = load(STACK, {})
     prev_name, prev_sha = "main", sha("origin/main")
+    conflict = None
     for pr in sorted(open_prs, key=lambda p: branch_number(p["headRefName"])):
         name = pr["headRefName"]
         rec = stack.get(name)
         head = pr["headRefOid"]
         if rec is None:
             print(f"WARN=unrecorded stack branch {name}; leaving it untouched")
-        elif not (prev_name == "main" and rec["base"] == "main") and rec["base_sha"] != prev_sha:
+        elif (pr.get("mergeable") == "CONFLICTING" if prev_name == "main" and rec["base"] == "main"
+              else rec["base_sha"] != prev_sha):
+            # The bottom branch stays on its main commit until GitHub reports a conflict with main.
             git("checkout", "--quiet", "--detach", head)
             proc = subprocess.run(
-                ["git", "rebase", "--quiet", "--onto", prev_sha, rec["base_sha"]],
+                ["git", *GIT_SAFE, "rebase", "--quiet", "--onto", prev_sha, rec["base_sha"]],
                 cwd=REPO, text=True, capture_output=True,
             )
             if proc.returncode != 0:
                 git("rebase", "--abort", check=False)
                 git("checkout", "--quiet", "--detach", "origin/main")
                 print(f"CONFLICT_BRANCH={name}")
-                return None
+                conflict = {"branch": name, "pr": pr["url"], "old_head": head, "old_base": rec["base_sha"],
+                            "onto_name": prev_name, "onto": prev_sha}
+                break
             new_head = sha("HEAD")
             git("push", "--quiet", f"--force-with-lease=refs/heads/{name}:{head}", "origin",
                 f"HEAD:refs/heads/{name}")
@@ -250,7 +260,29 @@ def restack(open_prs: list[dict]) -> tuple[str, str] | None:
         if name not in {p["headRefName"] for p in open_prs}:
             del stack[name]
     save(STACK, stack)
-    return prev_name, prev_sha
+    return (prev_name, prev_sha), conflict
+
+
+def start_restack(conflict: dict) -> int:
+    """Hand a conflicting rebase to the agent: same sandbox, gate and rounds as a backlog task."""
+    branch = conflict["branch"]
+    task = {"id": f"RESTACK:{branch}", "type": "restack",
+            "title": f"Rebase {branch} onto {conflict['onto_name']} and resolve the conflicts",
+            "branch": branch, "pr": conflict["pr"], "onto": conflict["onto"],
+            "onto_name": conflict["onto_name"], "old_base": conflict["old_base"],
+            "old_head": conflict["old_head"]}
+    worktree = WORKTREES / ("restack-" + branch.replace("/", "-"))
+    shutil.rmtree(worktree, ignore_errors=True)
+    git("clone", "--quiet", "--shared", "--no-checkout", str(REPO), str(worktree))
+    git("checkout", "--quiet", "-B", branch, conflict["old_head"], cwd=worktree)
+    current = {
+        "task_id": task["id"], "task": task, "branch": branch, "base": conflict["onto_name"],
+        "base_sha": conflict["onto"], "worktree": str(worktree),
+        "started": dt.datetime.now(dt.timezone.utc).isoformat(),
+    }
+    save(CURRENT, current)
+    print(f"TASK_ID={task['id']}\nBRANCH={branch}\nBASE={conflict['onto_name']}\nWORKTREE={worktree}")
+    return 0
 
 
 # ── backlog ──────────────────────────────────────────────────────────────
@@ -330,9 +362,11 @@ def cmd_next() -> int:
     git("fetch", "--quiet", "--prune", "origin")
     git("checkout", "--quiet", "--detach", "origin/main")
     open_prs = prs("open")
-    top = restack(open_prs)
-    if top is None:
-        return nothing("REBASE_CONFLICT")
+    top, conflict = restack(open_prs)
+    if conflict is not None:
+        if f"RESTACK:{conflict['branch']}" in load(BLOCKED, {}):
+            return nothing(f"REBASE_CONFLICT {conflict['branch']} (agent failed; resolve by hand, then unblock)")
+        return start_restack(conflict)
     if len(open_prs) >= MAX_OPEN:
         return nothing(f"PAUSED {len(open_prs)} open stack PRs (limit {MAX_OPEN})")
     top_name, top_sha = top
@@ -368,7 +402,8 @@ def cmd_env() -> int:
         print(f"{key.upper()}={shlex.quote(cur[key])}")
     print(f"PROGRAM={PROGRAM}")
     print(f"PROGRAM_ROOT={shlex.quote(str(ROOT))}")
-    print(f"PROMPT_FILE={P['prompt']}")
+    restack_run = cur["task"].get("type") == "restack"
+    print(f"PROMPT_FILE={'AGENT_PROMPT.restack.md' if restack_run else P['prompt']}")
     print(f"TASK_YAML={shlex.quote(yaml.safe_dump(cur['task'], allow_unicode=True, sort_keys=False))}")
     return 0
 
@@ -524,6 +559,8 @@ def cmd_publish() -> int:
         print("no gated run to publish")
         return 1
     task = cur["task"]
+    if task.get("type") == "restack":
+        return publish_restack(cur)
     if task.get("type") == "triage":
         (STATE / f"triage-{task['week']}").write_text(dt.datetime.now(dt.timezone.utc).isoformat() + "\n")
         head = cur["gated_commit"]
@@ -559,6 +596,22 @@ def cmd_publish() -> int:
     save(STACK, stack)
     drop_worktree(cur)
     print(f"PR={url}")
+    return 0
+
+
+def publish_restack(cur: dict) -> int:
+    """Replace the conflicting branch with the gated rebase; the next `next` restacks the branches above."""
+    task, branch, head = cur["task"], cur["branch"], cur["gated_commit"]
+    remote = git("ls-remote", "origin", f"refs/heads/{branch}").split()
+    if not remote or remote[0] != head:
+        # Lease on the head the rebase started from: a push by someone else in between wins.
+        git("push", "--quiet", f"--force-with-lease=refs/heads/{branch}:{task['old_head']}", "origin",
+            f"{head}:refs/heads/{branch}")
+    stack = load(STACK, {})
+    stack[branch] = {"base": task["onto_name"], "base_sha": task["onto"]}
+    save(STACK, stack)
+    drop_worktree(cur)
+    print(f"RESTACKED={branch}\nPR={task['pr']}")
     return 0
 
 
