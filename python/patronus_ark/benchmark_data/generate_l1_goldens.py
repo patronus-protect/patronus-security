@@ -159,9 +159,29 @@ def p(
     tags: tuple[str, ...] = (),
     gap: bool = False,
     source_fixture_id: str | None = None,
+    also: tuple[tuple[str, str], ...] = (),
 ) -> dict:
-    """Positive: `value` is the one gold span, `rule` must report it."""
+    """Positive: `value` is the gold span `rule` must report.
+
+    `also` annotates every other real entity in the text as `(label, value)` (T02), e.g.
+    the card number next to a CVV. The value must occur exactly once outside the target.
+    """
     row = positive(label, language, prefix, value, suffix, source_fixture_id=source_fixture_id)
+    text, target = row["text"], row["entities"][0]
+    for other_label, other_value in also:
+        starts = [
+            start
+            for start in range(len(text))
+            if text.startswith(other_value, start)
+            and (start + len(other_value) <= target["start"] or start >= target["end"])
+        ]
+        if len(starts) != 1:
+            raise ValueError(f"{other_value!r} must occur once outside the target in {text!r}")
+        start = starts[0]
+        row["entities"].append(
+            {"label": other_label, "text": other_value, "start": start, "end": start + len(other_value)}
+        )
+    row["entities"].sort(key=lambda entity: entity["start"])
     return pii_row(row, rule, carrier, tags, gap)
 
 
@@ -181,7 +201,7 @@ def n(
 
 PII_CASES = {
     "EMAIL": [
-        p("EMAIL", "en", "pii_email", "Contact support at +76-532-1520 or write to ", "john.doe@email.org", ".", carrier="prose", source_fixture_id="base-0003"),
+        p("EMAIL", "en", "pii_email", "Contact support at +76-532-1520 or write to ", "john.doe@email.org", ".", carrier="prose", source_fixture_id="base-0003", also=(("PHONE", "+76-532-1520"),)),
         p("EMAIL", "de", "pii_email", "E-Mail: ", "anna.beispiel@firma.de"),
         p("EMAIL", "en", "pii_email", "Reply to ", "ops+alerts@example.co.uk"),
         n("EMAIL", "de", "pii_email", "E-Mail: anna.beispiel@mailserver", "single-label host has no domain suffix"),
@@ -322,23 +342,23 @@ PII_CASES = {
         n("CREDITCARD", "en", "pii_credit_card", "Card: XXXX-XXXX-XXXX-1881", "masked card number", tags=("obfuscated",)),
     ],
     "CREDITCARD_CVV": [
-        p("CREDITCARD_CVV", "de", "pii_credit_card_cvv", "Karte 4111 1111 1111 1111, CVV: ", "123"),
-        p("CREDITCARD_CVV", "en", "pii_credit_card_cvv", "Card 5555 5555 5555 4444, CVC2 is ", "884"),
-        p("CREDITCARD_CVV", "en", "pii_credit_card_cvv", "Amex 3782 822463 10005. Card verification code: ", "1234"),
+        p("CREDITCARD_CVV", "de", "pii_credit_card_cvv", "Karte 4111 1111 1111 1111, CVV: ", "123", also=(("CREDITCARD", "4111 1111 1111 1111"),)),
+        p("CREDITCARD_CVV", "en", "pii_credit_card_cvv", "Card 5555 5555 5555 4444, CVC2 is ", "884", also=(("CREDITCARD", "5555 5555 5555 4444"),)),
+        p("CREDITCARD_CVV", "en", "pii_credit_card_cvv", "Amex 3782 822463 10005. Card verification code: ", "1234", also=(("CREDITCARD", "3782 822463 10005"),)),
         n("CREDITCARD_CVV", "de", "pii_credit_card_cvv", "CVV: 12", "too short"),
         n("CREDITCARD_CVV", "en", "pii_credit_card_cvv", "Security code: 123", "unsupported ambiguous anchor"),
-        p("CREDITCARD_CVV", "de", "pii_credit_card_cvv", "Karte 4012 8888 8888 1881, Kartenprüfnummer ", "321"),
-        p("CREDITCARD_CVV", "de", "pii_credit_card_cvv", "Karte: 5200 8282 8282 8210\nCVC: ", "456", "\nInhaber: M. Kaya", carrier="kv"),
-        p("CREDITCARD_CVV", "de", "pii_credit_card_cvv", "Die Karte 4111 1111 1111 1111 hat den Sicherheitscode ", "642", ".", carrier="prose"),
-        p("CREDITCARD_CVV", "de", "pii_credit_card_cvv", "Kreditkarte 5555 5555 5555 4444 – CVV2: ", "071"),
-        p("CREDITCARD_CVV", "de", "pii_credit_card_cvv", "Karte 4000 0000 0000 0002 | Kartenprüfziffer:", "815", tags=("ocr",)),
-        p("CREDITCARD_CVV", "de", "pii_credit_card_cvv", '{"karte": "4000000000000002", "cvv": "', "903", '"}', carrier="json", gap=True),
-        p("CREDITCARD_CVV", "de", "pii_credit_card_cvv", "Karte 4111 1111 1111 1111 / ", "737", "", tags=("no_context",), gap=True),
-        p("CREDITCARD_CVV", "en", "pii_credit_card_cvv", "Card 4000 0000 0000 0002, CVV ", "318"),
-        p("CREDITCARD_CVV", "en", "pii_credit_card_cvv", "Visa 4012888888881881 / CVC: ", "552"),
-        p("CREDITCARD_CVV", "en", "pii_credit_card_cvv", "card:\n  number: 4111 1111 1111 1111\n  cvv: ", "903", "\n", carrier="yaml"),
-        p("CREDITCARD_CVV", "en", "pii_credit_card_cvv", "The card 5200 8282 8282 8210 has the card verification value ", "274", ".", carrier="prose"),
-        p("CREDITCARD_CVV", "en", "pii_credit_card_cvv", "| Card | CVV |\n|---|---|\n| 4111 1111 1111 1111 | ", "246", " |", carrier="table", gap=True),
+        p("CREDITCARD_CVV", "de", "pii_credit_card_cvv", "Karte 4012 8888 8888 1881, Kartenprüfnummer ", "321", also=(("CREDITCARD", "4012 8888 8888 1881"),)),
+        p("CREDITCARD_CVV", "de", "pii_credit_card_cvv", "Karte: 5200 8282 8282 8210\nCVC: ", "456", "\nInhaber: M. Kaya", carrier="kv", also=(("CREDITCARD", "5200 8282 8282 8210"),)),
+        p("CREDITCARD_CVV", "de", "pii_credit_card_cvv", "Die Karte 4111 1111 1111 1111 hat den Sicherheitscode ", "642", ".", carrier="prose", also=(("CREDITCARD", "4111 1111 1111 1111"),)),
+        p("CREDITCARD_CVV", "de", "pii_credit_card_cvv", "Kreditkarte 5555 5555 5555 4444 – CVV2: ", "071", also=(("CREDITCARD", "5555 5555 5555 4444"),)),
+        p("CREDITCARD_CVV", "de", "pii_credit_card_cvv", "Karte 4000 0000 0000 0002 | Kartenprüfziffer:", "815", tags=("ocr",), also=(("CREDITCARD", "4000 0000 0000 0002"),)),
+        p("CREDITCARD_CVV", "de", "pii_credit_card_cvv", '{"karte": "4000000000000002", "cvv": "', "903", '"}', carrier="json", gap=True, also=(("CREDITCARD", "4000000000000002"),)),
+        p("CREDITCARD_CVV", "de", "pii_credit_card_cvv", "Karte 4111 1111 1111 1111 / ", "737", "", tags=("no_context",), gap=True, also=(("CREDITCARD", "4111 1111 1111 1111"),)),
+        p("CREDITCARD_CVV", "en", "pii_credit_card_cvv", "Card 4000 0000 0000 0002, CVV ", "318", also=(("CREDITCARD", "4000 0000 0000 0002"),)),
+        p("CREDITCARD_CVV", "en", "pii_credit_card_cvv", "Visa 4012888888881881 / CVC: ", "552", also=(("CREDITCARD", "4012888888881881"),)),
+        p("CREDITCARD_CVV", "en", "pii_credit_card_cvv", "card:\n  number: 4111 1111 1111 1111\n  cvv: ", "903", "\n", carrier="yaml", also=(("CREDITCARD", "4111 1111 1111 1111"),)),
+        p("CREDITCARD_CVV", "en", "pii_credit_card_cvv", "The card 5200 8282 8282 8210 has the card verification value ", "274", ".", carrier="prose", also=(("CREDITCARD", "5200 8282 8282 8210"),)),
+        p("CREDITCARD_CVV", "en", "pii_credit_card_cvv", "| Card | CVV |\n|---|---|\n| 4111 1111 1111 1111 | ", "246", " |", carrier="table", gap=True, also=(("CREDITCARD", "4111 1111 1111 1111"),)),
         n("CREDITCARD_CVV", "de", "pii_credit_card_cvv", "CVV: 123 – eine Kartennummer fehlt.", "CVV without a payment card in the text"),
         n("CREDITCARD_CVV", "de", "pii_credit_card_cvv", "Sicherheitscode: ***", "masked value", tags=("obfuscated",)),
         n("CREDITCARD_CVV", "de", "pii_credit_card_cvv", "Karte 4111 1111 1111 1112, CVV 123", "card fails Luhn, so the CVV has no payment card"),
@@ -356,17 +376,17 @@ PII_CASES = {
         n("CREDITCARD_EXPIRY", "de", "pii_credit_card_expiry", "Zeitraum: 12/29", "date-like value lacks a card-expiry anchor"),
         p("CREDITCARD_EXPIRY", "de", "pii_credit_card_expiry", "Visa, Ablaufdatum: ", "03/27"),
         p("CREDITCARD_EXPIRY", "de", "pii_credit_card_expiry", "Die Debitkarte ist gültig bis ", "11/2026", ".", carrier="prose"),
-        p("CREDITCARD_EXPIRY", "de", "pii_credit_card_expiry", "Karte 4111 1111 1111 1111, gültig bis ", "09/28"),
+        p("CREDITCARD_EXPIRY", "de", "pii_credit_card_expiry", "Karte 4111 1111 1111 1111, gültig bis ", "09/28", also=(("CREDITCARD", "4111 1111 1111 1111"),)),
         p("CREDITCARD_EXPIRY", "de", "pii_credit_card_expiry", "Mastercard ablaufdatum=", "05/2031", carrier="kv"),
         p("CREDITCARD_EXPIRY", "de", "pii_credit_card_expiry", "Kreditkarte | Ablaufdatum:", "08/29", tags=("ocr",), gap=True),
-        p("CREDITCARD_EXPIRY", "de", "pii_credit_card_expiry", '{"karte": "4111111111111111", "ablaufdatum": "', "12/29", '"}', carrier="json", gap=True),
+        p("CREDITCARD_EXPIRY", "de", "pii_credit_card_expiry", '{"karte": "4111111111111111", "ablaufdatum": "', "12/29", '"}', carrier="json", gap=True, also=(("CREDITCARD", "4111111111111111"),)),
         p("CREDITCARD_EXPIRY", "en", "pii_credit_card_expiry", "Mastercard expires ", "04/27"),
-        p("CREDITCARD_EXPIRY", "en", "pii_credit_card_expiry", "Card 4012 8888 8888 1881, expiry: ", "10/2029"),
+        p("CREDITCARD_EXPIRY", "en", "pii_credit_card_expiry", "Card 4012 8888 8888 1881, expiry: ", "10/2029", also=(("CREDITCARD", "4012 8888 8888 1881"),)),
         p("CREDITCARD_EXPIRY", "en", "pii_credit_card_expiry", "My Amex expires on ", "06/28", ".", carrier="prose", gap=True),
         p("CREDITCARD_EXPIRY", "en", "pii_credit_card_expiry", "Your payment card expiration date is ", "2/2030", ".", carrier="prose"),
         p("CREDITCARD_EXPIRY", "en", "pii_credit_card_expiry", "Visa expiration=", "12-28", carrier="kv"),
         p("CREDITCARD_EXPIRY", "en", "pii_credit_card_expiry", "Debit card, expires:", "01/31", tags=("ocr",)),
-        p("CREDITCARD_EXPIRY", "en", "pii_credit_card_expiry", "card:\n  number: 4111 1111 1111 1111\n  expiry: ", "12/29", "\n", carrier="yaml", gap=True),
+        p("CREDITCARD_EXPIRY", "en", "pii_credit_card_expiry", "card:\n  number: 4111 1111 1111 1111\n  expiry: ", "12/29", "\n", carrier="yaml", gap=True, also=(("CREDITCARD", "4111 1111 1111 1111"),)),
         n("CREDITCARD_EXPIRY", "de", "pii_credit_card_expiry", "Angebot gültig bis 12/29.", "offer validity without a card", carrier="prose"),
         n("CREDITCARD_EXPIRY", "de", "pii_credit_card_expiry", "Kreditkarte Ablaufdatum: 00/29", "month zero"),
         n("CREDITCARD_EXPIRY", "de", "pii_credit_card_expiry", "Lizenz Ablaufdatum: 06/27", "licence expiry, not a card"),
@@ -412,7 +432,7 @@ PII_CASES = {
         p("SWIFT_CODE", "de", "pii_swift_bic_context", "BIC = ", "MARKDEF1100"),
         n("SWIFT_CODE", "en", "pii_swift_bic_context", "SWIFT: DEUTD3", "invalid BIC length"),
         n("SWIFT_CODE", "de", "pii_swift_bic_context", "Bankcode DEUTDEFF500", "missing BIC or SWIFT anchor"),
-        p("SWIFT_CODE", "de", "pii_swift_bic_context", "IBAN: DE89370400440532013000\nBIC: ", "COBADEFFXXX", "\nBank: Commerzbank", carrier="kv"),
+        p("SWIFT_CODE", "de", "pii_swift_bic_context", "IBAN: DE89370400440532013000\nBIC: ", "COBADEFFXXX", "\nBank: Commerzbank", carrier="kv", also=(("IBAN", "DE89370400440532013000"),)),
         p("SWIFT_CODE", "de", "pii_swift_bic_context", "bank:\n  bic: ", "BYLADEM1001", "\n", carrier="yaml"),
         p("SWIFT_CODE", "de", "pii_swift_bic_context", "BIC:", "GENODEF1M04", "  Verwendungszweck: Miete", tags=("ocr",)),
         p("SWIFT_CODE", "de", "pii_swift_bic_context", "Swift: ", "INGDDEFFXXX"),

@@ -295,4 +295,48 @@ mod tests {
         }
         assert!(non_ascii > 0, "fixture must keep non-ASCII rows");
     }
+
+    #[test]
+    fn expected_spans_skip_gold_marked_checksum_invalid() {
+        let fixture: FixtureRow = serde_json::from_str(
+            r#"{"text": "Card 4111 1111 1111 1112 or 4111 1111 1111 1111", "entities": [
+                {"start": 5, "end": 24, "label": "credit_card", "checksum_valid": false},
+                {"start": 28, "end": 47, "label": "credit_card"}]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            expected_spans(&fixture).unwrap(),
+            BTreeSet::from([span(28, 47, "CREDITCARD")])
+        );
+    }
+
+    /// T02: the fixture also feeds L3 NER, so Luhn-invalid card numbers stay in it but
+    /// carry `"checksum_valid": false`; a mark on a valid number would hide a real FN.
+    #[test]
+    fn bundled_fixture_marks_exactly_the_luhn_invalid_cards() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../python/patronus_ark/benchmark_data/dynamic_pii.jsonl"
+        );
+        let content = std::fs::read_to_string(path).expect("fixture");
+        let mut cards = 0;
+        for line in content.lines() {
+            let row: serde_json::Value = serde_json::from_str(line).expect("fixture row");
+            for entity in row["entities"].as_array().expect("entities") {
+                if entity["label"] != "credit_card" {
+                    continue;
+                }
+                cards += 1;
+                let value = entity["text"].as_str().expect("entity text");
+                let marked_invalid = entity["checksum_valid"] == false;
+                assert_eq!(
+                    marked_invalid,
+                    !patronus_ark::detectors::pii::validators::luhn(value),
+                    "{} {value}",
+                    row["id"]
+                );
+            }
+        }
+        assert!(cards > 0, "fixture must keep credit_card spans");
+    }
 }
