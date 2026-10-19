@@ -8,6 +8,7 @@ mod credentials;
 mod crypto;
 mod hashes;
 mod identifiers;
+mod placeholders;
 mod providers;
 
 use super::dlp::DlpPattern;
@@ -60,6 +61,18 @@ pub(crate) fn example_check(rule_id: &str) -> ExampleCheck {
         ExampleCheck::Off
     }
 }
+
+/// Whether the placeholder/reference check (T07) applies to a rule: the
+/// value-capturing credential rules (assignments, URL parameters and userinfo,
+/// signatures, auth headers, cookies, CSRF tokens).
+pub(crate) fn placeholder_check(rule_id: &str) -> bool {
+    credentials::RULES
+        .iter()
+        .chain(credentials::URL_USERINFO_RULES)
+        .any(|rule| rule.name == rule_id && rule.span_group.is_some())
+}
+
+pub(crate) use placeholders::is_placeholder_match;
 
 /// T06: whether the value `range` of `text` that `rule_id` matched is a
 /// documented example or test value. PEM rules check the key body without the

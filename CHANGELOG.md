@@ -52,6 +52,25 @@ result shapes may be breaking for downstream users, and is called out explicitly
   fall from 3 590 to 220 (−93.9 %) with unchanged positives; documented vendor examples such as
   the AWS documentation access key ID (`AKIA…EXAMPLE`) are no longer findings. Test fixtures that
   used fill values (`aB12aB12…`, `abcDEfGh…`) now use random values.
+- Value-capturing DLP credential rules (`dlp_env_var_secret`, password and generic credential
+  assignments, `dlp_credential_in_url`, `dlp_signed_url_signature`, `dlp_url_userinfo_password`,
+  `dlp_csrf_token`, `dlp_bearer_token`, Basic auth and session cookies) no longer report
+  placeholders or references (T07). Placeholders are `<…>`/`&lt;…&gt;`, masks (`********`,
+  `xxxx-xxxx`), `TODO`, `CHANGEME`, `REPLACE_ME`, `BITTE_AENDERN` and all-upper or all-lower word
+  sequences with a placeholder word (`YOUR_…_HERE`, `HIER_…_EINTRAGEN`, `YOUR-API-TOKEN`,
+  `dein-api-token`, `INSERT_…`). References are `$VAR` (a `$` word with digits and without `_`,
+  such as a password, stays a finding), `${…}`, `$(…)`, `${{ … }}`, `%VAR%`, `{{var}}`, `{%…`,
+  `#{…}`, Terraform `var.`/`local.`/`data.`/`module.`, and environment accessors (`os.environ[…]`,
+  `os.getenv`/`os.Getenv`, `System.getenv`, `Environment.GetEnvironmentVariable`, `ENV.fetch`/
+  `ENV[…]`, `process.env`, `import.meta.env`, `env::var`, `env!`, `getenv`, `env(…)`). The check
+  reads the text after the value, so captures cut at `(`, `[` or `}` are recognised, and it stops
+  at quotes and escape backslashes (JSON-escaped notebooks). Real values next to references and
+  placeholder-like real passwords (SCREAMING_SNAKE without a placeholder word, mixed case such as
+  `YourDog2026!`) stay findings; two new `weak` generators pin them, and DE/EN hard negatives were
+  added to `dlp_l1.jsonl` and `l1_bilingual_rules.json`. General code expressions as values stay
+  with T03. **Detection change:** on the dev carrier split, hard-negative FP on `placeholder`/
+  `env_ref` rows fall from 277 to 0 with unchanged positives (exact TP 1 183); benign-code dev FP
+  fall from 372 to 367 (`your-client-secret-if-required`, `YOUR-API-TOKEN`), benign docs unchanged.
 - `scripts/l1_dlp/run_baselines.py run --tool detect-secrets` no longer aborts the whole run when
   a plugin raises on one file (a YAML date the detect-secrets YAML transformer cannot parse in the
   benign-code dev split). That file is listed under `errors` in `<output>.meta.json` (row `id`,
