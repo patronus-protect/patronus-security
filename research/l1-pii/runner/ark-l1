@@ -454,6 +454,15 @@ def gate_steps(wt: Path) -> list[tuple[str, list[str], dict]]:
         steps.append(("prepare-corpora", [py, str(prepare), "--dev-out", str(DEV_DATA),
                                           "--holdout-out", str(HOLDOUT)],
                       {"rw": [wt, DEV_DATA, HOLDOUT, CACHE]}))
+    favored = HOLDOUT / "presidio_favored"
+    # Second source family (E12), frozen once like the neutral split; raw sources stay in the holdout.
+    # Only scripts that know --family (not the DLP program's, not branches before E12) get the step.
+    if prepare.exists() and "presidio_favored" in prepare.read_text(encoding="utf-8") \
+            and not (favored / ".ready").exists():
+        steps.append(("presidio-favored-corpora", [py, str(prepare), "--family", "presidio_favored",
+                                                   "--dev-out", str(DEV_DATA / "presidio_favored"),
+                                                   "--holdout-out", str(favored)],
+                      {"rw": [wt, DEV_DATA, HOLDOUT, CACHE]}))
     synth = wt / P["eval_dir"] / "synth_goldset.py"
     if synth.exists() and not (HOLDOUT / "synthetic" / ".ready").exists():
         # Once, like prepare-corpora: afterwards agent branches never get write access to the holdout.

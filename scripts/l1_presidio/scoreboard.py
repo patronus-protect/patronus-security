@@ -10,14 +10,15 @@
 
 Exit code 0 = no regression, 1 = regression, 2 = usage or infrastructure error. A
 regression is any F1 loss above the tolerance (default 0.5 pp; exact or overlap) of an
-entity, of all L1 entities together or of DE/EN, in any split, or any new prediction
-on a hard-negative span. The summary goes to stdout; for the holdout it only names
-aggregates and regressions, never row ids or text.
+entity, of all L1 entities together, of a source family or of DE/EN, in any split, or any
+new prediction on a hard-negative span. The summary goes to stdout; for the holdout it
+only names aggregates and regressions, never row ids or text.
 
 Scoring follows ``research/l1-pii/entity_map.yaml``: semantic entities are not L1
 scope; a corpus listed in the map is scored only on the ids it annotates, a corpus
-without map entry (the synthetic DE/EU set) on every L1 id. Exact = same id, start
-and end; overlap = a gold span counts as found if a prediction of the same id
+without map entry (the synthetic DE/EU set) on every L1 id, and a row with
+``scored_entities`` (a Presidio recognizer test case) only on those ids. Exact = same
+id, start and end; overlap = a gold span counts as found if a prediction of the same id
 overlaps it, a prediction counts as correct if it overlaps gold of the same id.
 
 Predictions come from ``run_ark.py`` of the respective commit. The head runs with
@@ -32,6 +33,12 @@ whose source equals the previously gated head, is never rebuilt. Results land in
 ``score`` scores one prediction file (Ark or Presidio format) without git:
 
     scoreboard.py score --gold gold.jsonl --predictions predictions.jsonl
+
+Every bucket also exists per source family (``family/<family>``, ``family_entity/...``;
+families from ``source_families`` in the entity map). ``m1`` checks milestone M1 per family
+from Ark and Presidio predictions stored under the gold file names:
+
+    scoreboard.py m1 --gold DIR --ark ARK_DIR --presidio PRESIDIO_DIR [--language en] [--check]
 """
 
 from __future__ import annotations
@@ -213,15 +220,26 @@ def score_rows(
         rows += 1
         row_id, corpus = row["id"], str(row.get("corpus", ""))
         where = f"{dataset}:{row_id}"
+        family = emap.family(corpus)
+        if family is None:
+            raise ScoreboardError(f"{where}: corpus {corpus!r} has no source family in entity_map.yaml")
         allowed = scored_ids(emap, corpus)
+        if "scored_entities" in row:
+            # Rows that assert on some ids only (Presidio recognizer test cases).
+            scored = row["scored_entities"]
+            if not isinstance(scored, list) or not all(isinstance(item, str) for item in scored):
+                raise ScoreboardError(f"{where}: scored_entities must be a list of ids")
+            allowed = allowed & set(scored)
         gold = {_span(e, e.get("entity_type", e.get("label")), where) for e in row.get("entities", [])}
         gold = {item for item in gold if item[0] in allowed}
         predicted_all = {_span(s, resolve_label(s, emap), where) for s in predictions[row_id]}
         predicted = {item for item in predicted_all if item[0] in allowed}
         for hn in row.get("hard_negatives", []) or []:
             _, start, end = _span(hn, None, where)
+            # A hard negative with entity_type only forbids that id (a recognizer's negative case).
+            forbidden = {hn["entity_type"]} if isinstance(hn.get("entity_type"), str) else l1
             for item in predicted_all:
-                if item[0] in l1 and item[1] < end and start < item[2]:
+                if item[0] in forbidden and item[1] < end and start < item[2]:
                     hard_negative_fp.add((dataset, row_id, item[0], item[1], item[2]))
         language = language_bucket(row.get("language"))
         for label in {item[0] for item in gold | predicted}:
@@ -241,6 +259,10 @@ def score_rows(
                 f"scope/{scopes[label]}",
                 f"entity/{label}",
                 f"language_entity/{language}/{label}",
+                f"family/{family}",
+                f"family_language/{family}/{language}",
+                f"family_entity/{family}/{label}",
+                f"family_language_entity/{family}/{language}/{label}",
             ):
                 for field, value in counts.items():
                     buckets[bucket][field] += value
@@ -287,7 +309,11 @@ def metrics(counts: dict[str, int]) -> dict[str, dict[str, float]]:
 def gated_buckets(base: dict[str, Any], head: dict[str, Any]) -> list[str]:
     keys = base["buckets"].keys() | head["buckets"].keys()
     return sorted(
-        key for key in keys if key == "all" or key in {f"language/{lang}" for lang in LANGUAGES} or key.startswith("entity/")
+        key
+        for key in keys
+        if key == "all"
+        or key in {f"language/{lang}" for lang in LANGUAGES}
+        or key.startswith(("entity/", "family/"))
     )
 
 
@@ -536,6 +562,22 @@ def entity_table(base: dict[str, Any], head: dict[str, Any]) -> list[str]:
     return lines
 
 
+def family_lines(split: str, base: dict[str, Any], head: dict[str, Any]) -> list[str]:
+    """F1 per source family of one split (all L1 ids and EN), Δ vs base."""
+    lines = []
+    for family in entity_map_module.FAMILIES:
+        key = f"family/{family}"
+        if key not in head["buckets"] and key not in base["buckets"]:
+            continue
+        parts = [f"  {split} {family:<16}"]
+        for bucket, name in ((key, "L1"), (f"family_language/{family}/en", "en")):
+            (be, bo), (he, ho) = f1_pair(base["buckets"].get(bucket, empty_counts())), f1_pair(head["buckets"].get(bucket, empty_counts()))
+            parts.append(f"{name} F1 {pct(he).strip()}/{pct(ho).strip()} ({signed((he - be) * 100)}/{signed((ho - bo) * 100)})")
+        note = "" if family in entity_map_module.MILESTONE_FAMILIES else " (reported, decides no milestone)"
+        lines.append(" | ".join(parts) + note)
+    return lines
+
+
 def split_line(split: str, base: dict[str, Any], head: dict[str, Any], new_fp: int) -> str:
     parts = [f"{split:<8} rows {head['rows']:>5}"]
     for key, name in (("all", "L1"), *((f"language/{lang}", lang) for lang in LANGUAGES)):
@@ -561,6 +603,7 @@ def summary(head: Side, base: Side, results: dict[str, Any], tolerance_pp: float
     for split, result in results.items():
         verdict = result["compare"]
         lines.append(split_line(split, result["base"], result["head"], len(verdict["new_hard_negative_fp"])))
+        lines += family_lines(split, result["base"], result["head"])
         for item in verdict["regressions"]:
             problems.append(
                 f"  {split} {item['bucket']} {item['metric']} F1 {pct(item['base_f1']).strip()} -> "
@@ -637,6 +680,71 @@ def score_file(gold: Path, predictions: Path, emap: Any = None) -> tuple[list[st
     return lines, result
 
 
+# ── M1 per source family ─────────────────────────────────────────────────
+
+
+def score_directory(gold_root: Path, predictions_root: Path, emap: Any) -> dict[str, Any]:
+    """Merged result of every frozen gold file below gold_root against predictions_root/<same name>."""
+    parts = []
+    for dataset in discover("gold", gold_root):
+        predictions = predictions_root / dataset.name
+        if not predictions.is_file():
+            raise ScoreboardError(f"no predictions {predictions} for {dataset.name}")
+        parts.append(score_rows(read_jsonl(dataset.path), read_jsonl(predictions), emap, dataset.name))
+    return merge(parts)
+
+
+def m1_report(ark: dict[str, Any], presidio: dict[str, Any], emap: Any, language: str = "en",
+              metric: str = "exact") -> dict[str, Any]:
+    """M1 per source family: every shared id with gold in the family needs F1(Ark) >= F1(Presidio).
+
+    A family holds only if it has at least one such id; M1 is met only if every milestone family
+    (neutral, presidio_favored) holds on its own. ark_authored is reported and decides nothing."""
+    families = {}
+    for family in entity_map_module.FAMILIES:
+        entities = {}
+        for entity_id in sorted(emap.ids("shared")):
+            key = (f"family_entity/{family}/{entity_id}" if language == "all"
+                   else f"family_language_entity/{family}/{language}/{entity_id}")
+            ark_counts = ark["buckets"].get(key, empty_counts())
+            presidio_counts = presidio["buckets"].get(key, empty_counts())
+            gold = max(ark_counts["gold"], presidio_counts["gold"])
+            if not gold:
+                continue
+            ark_f1 = metrics(ark_counts)[metric]["f1"]
+            presidio_f1 = metrics(presidio_counts)[metric]["f1"]
+            entities[entity_id] = {"gold": gold, "ark_f1": ark_f1, "presidio_f1": presidio_f1,
+                                   "holds": ark_f1 >= presidio_f1 - 1e-12}
+        families[family] = {
+            "decides": family in entity_map_module.MILESTONE_FAMILIES,
+            "holds": bool(entities) and all(item["holds"] for item in entities.values()),
+            "entities": entities,
+        }
+    met = all(families[family]["holds"] for family in entity_map_module.MILESTONE_FAMILIES)
+    return {"language": language, "metric": metric, "met": met, "families": families}
+
+
+def m1_lines(report: dict[str, Any]) -> list[str]:
+    lines = [f"{SCHEMA} M1 ({report['language']}, {report['metric']} F1 in %, Ark vs Presidio):"]
+    for family, result in report["families"].items():
+        entities = result["entities"]
+        verdict = ("HOLDS" if result["holds"] else "NOT MET") if entities else "NO DATA"
+        held = sum(item["holds"] for item in entities.values())
+        note = "" if result["decides"] else " (reported, decides no milestone)"
+        lines.append(f"{family}: {verdict}, {held}/{len(entities)} shared ids{note}")
+        for entity_id, item in entities.items():
+            lines.append(
+                f"  {entity_id:<36} gold {item['gold']:>5}  Ark {pct(item['ark_f1'])}  "
+                f"Presidio {pct(item['presidio_f1'])}  {'ok' if item['holds'] else 'below'}"
+            )
+    deciding = ", ".join(
+        f"{family} {'holds' if result['holds'] else 'not met'}"
+        for family, result in report["families"].items() if result["decides"]
+    )
+    lines.append(f"M1: {'MET' if report['met'] else 'NOT MET'} ({deciding})")
+    return lines
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -654,8 +762,24 @@ def main(argv: list[str] | None = None) -> int:
     score_parser.add_argument("--gold", type=Path, required=True)
     score_parser.add_argument("--predictions", type=Path, required=True)
     score_parser.add_argument("--json", type=Path, help="also write bucket counts as JSON")
+    m1_parser = commands.add_parser("m1", help="M1 per source family: Ark vs Presidio on the shared ids")
+    m1_parser.add_argument("--gold", type=Path, required=True, help="gold directory (frozen dirs with .ready)")
+    m1_parser.add_argument("--ark", type=Path, required=True, help="Ark predictions, same relative file names")
+    m1_parser.add_argument("--presidio", type=Path, required=True, help="Presidio predictions, same relative file names")
+    m1_parser.add_argument("--language", choices=(*LANGUAGES, "all"), default="en", help="M1 is EN parity (default en)")
+    m1_parser.add_argument("--metric", choices=METRICS, default="exact")
+    m1_parser.add_argument("--check", action="store_true", help="exit 1 if M1 is not met")
+    m1_parser.add_argument("--json", type=Path, help="also write the report as JSON")
     args = parser.parse_args(argv)
     try:
+        if args.command == "m1":
+            emap = entity_map_module.load()
+            report = m1_report(score_directory(args.gold, args.ark, emap), score_directory(args.gold, args.presidio, emap),
+                               emap, args.language, args.metric)
+            print("\n".join(m1_lines(report)))
+            if args.json:
+                args.json.write_text(json.dumps(report, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+            return 1 if args.check and not report["met"] else 0
         if args.command == "score":
             lines, result = score_file(args.gold, args.predictions)
             print("\n".join(lines))

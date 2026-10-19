@@ -30,6 +30,34 @@ SHA-gepinnt). Presidio läuft in zwei Profilen: `default` und `tuned` (spaCy `en
 
 PERSON/LOCATION/ORG/NRP sind kein L1-Scope; dort tritt L1 + `dynamic-pii` (GLiNER L3) an.
 
+## Fairness-Regel: Quellfamilien
+
+Festgelegt mit E12. Gold, das ARK selbst geschrieben hat, begünstigt ARK; Gold aus Presidios eigenem
+Werkzeug begünstigt Presidio. Deshalb trägt jede Gold-Quelle genau eine Familie
+(`source_families` in [`entity_map.yaml`](entity_map.yaml), geprüft von `entity_map.py check`):
+
+| Familie | Quellen | Rolle |
+|---|---|---|
+| `ark_authored` | `pii_l1`, `l1_bilingual_rules`, synthetisches E05-Goldset | wird berichtet, entscheidet **nie** einen Meilenstein |
+| `neutral` | Gretel Finance, OpenPII Nano, TAB | entscheidet |
+| `presidio_favored` | presidio-evaluator `synth_dataset_v2.json` (presidio-research, MIT, Commit `7f568b6`), Positiv-/Negativfälle der presidio-analyzer-Recognizer-Tests (MIT, Release 2.2.364) | entscheidet |
+
+- **M1 gilt nur, wenn es auf `neutral` und auf `presidio_favored` je für sich hält:** auf jeder der
+  beiden Familien je gemeinsamer Pattern-Entität mit Gold in der Familie F1(ARK) ≥ F1(Presidio tuned),
+  exakte Spans, englische Zeilen. Ein Vorsprung auf der einen Familie gleicht keinen Rückstand auf der
+  anderen aus; eine Familie ohne Gold für gemeinsame Entitäten erfüllt M1 nicht. Prüfung:
+  `scoreboard.py m1` (siehe [`scripts/l1_presidio/README.md`](../../scripts/l1_presidio/README.md)).
+- Für M2–M4 und „Immer“ gilt dieselbe Trennung: Ergebnisse auf `ark_authored` stehen im Bericht,
+  zählen aber für kein Kriterium.
+- Das Gate (`scoreboard.py gate`) rechnet Regressionen weiter auf allen Familien, zusätzlich je
+  Familie gesamt; eine Verschlechterung auf `ark_authored` ist also weiterhin rot.
+- Presidio-Gold wird nicht nachkorrigiert: Werte, die ein ARK-Validator ablehnt, bleiben Gold. Die
+  Recognizer-Tests werden mit `ast` gelesen, nie ausgeführt. Übernommen werden nur Fälle gegen den
+  Standard-Recognizer der Datei (Ausnahme: `PhoneRecognizer` mit zusätzlichen Regionen JP/CN) mit
+  literalem Text und erwarteter Anzahl bzw. Spans; ein Fall ohne Spans nur, wenn der Text der blanke
+  Wert ist. Ein Negativfall wird ein Hard Negative über den ganzen Text, aber nur für die Entität des
+  Recognizers (`scored_entities`); andere Treffer im selben Text zählen dort weder als TP noch als FP.
+
 Welche Entität zu welchem Kriterium zählt, legt [`entity_map.yaml`](entity_map.yaml) fest: jede
 Benchmark-ID mit ARK-Labels, Presidio-Entitäten, Korpus-Labels und Scope (`shared` → M1/„Immer“,
 `ark_only`, `presidio_only`, `semantic` → kein L1-Scope). Prüfung:
@@ -145,11 +173,14 @@ run.sh
 - **Holdout** liegt unter `~/ark-l1/holdout`, für den Agenten per Sandbox unsichtbar. Erzeugt wird er
   zusammen mit Dev (`~/ark-l1/data/dev`) einmalig von `scripts/l1_presidio/prepare_corpora.py`
   (Gretel Finance, OpenPII Nano, TAB; gruppenweiser Split, 60 % Holdout, SHA-256-Manifest, `.ready`).
+  Die Familie `presidio_favored` (E12) friert derselbe Skript mit `--family presidio_favored` getrennt
+  nach `…/presidio_favored/` ein (Gate-Schritt `presidio-favored-corpora`, einmalig, erst nach
+  Neuinstallation des Runners); Gruppen sind presidio-evaluator-Templates bzw. Testtexte.
   Dazu kommt das synthetische DE/EU-Goldset aus `scripts/l1_presidio/synth_goldset.py` unter
   `…/synthetic/`: Dev mit öffentlichem Seed, Holdout mit geheimem Seed (`~/ark-l1/holdout/synthetic/.seed`),
   ebenfalls einmalig vom Gate erzeugt (Schritt `synthetic-goldset`, erst nach Neuinstallation des Runners).
 - **Scoreboard:** `scripts/l1_presidio/scoreboard.py gate` rechnet Head und Basis (exakt und
-  überlappend, je Entität, DE/EN, Hard-Negative-FP) auf Dev und Holdout; Exit 1 bei > 0,5 pp
+  überlappend, je Entität, DE/EN, je Quellfamilie, Hard-Negative-FP) auf Dev und Holdout; Exit 1 bei > 0,5 pp
   F1-Verlust oder neuem Hard-Negative-Treffer. Lokal mit `--dev "$ARK_L1_DEV_DATA"` ohne
   `--holdout`; Details in [`scripts/l1_presidio/README.md`](../../scripts/l1_presidio/README.md).
 - **Beobachten:** `~/ark-l1/bin/ark-l1 status`, Logs unter `~/ark-l1/logs/`, PR-Mails von GitHub.
