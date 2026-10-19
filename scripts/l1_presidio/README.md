@@ -72,7 +72,7 @@ python3 scripts/l1_presidio/entity_map.py table      # Markdown-Übersicht
 `check` endet mit Exit 1, wenn ein ARK-Label der Registry fehlt oder veraltet ist, ein Korpus-Label
 vom Manifest abweicht oder eine Runner-Map der Tabelle widerspricht. Die Runner-Maps dürfen
 Teilmengen bleiben, damit sich Vorhersagen bestehender Korpora nicht ändern; das Scoreboard (E06)
-soll die Scopes aus `entity_map.yaml` lesen. Neue ARK-Labels brauchen einen Eintrag, sonst ist
+liest die Scopes aus `entity_map.yaml`. Neue ARK-Labels brauchen einen Eintrag, sonst ist
 `scripts/tests/test_l1_entity_map.py` rot.
 
 ## Korpora und Dev/Holdout-Split
@@ -149,6 +149,54 @@ einmalig nach `~/ark-l1/data/dev/synthetic` und `~/ark-l1/holdout/synthetic`, so
 `.ready` liegt. Später ändert ein Agent-Branch den eingefrorenen Holdout also nicht mehr. Ein neu
 eingefrorener Holdout nach einer Generator-Änderung ist ein bewusster Handgriff (`--force`).
 
-Tests: `scripts/tests/test_l1_synth_goldset.py`, `scripts/tests/test_l1_prepare_corpora.py`, `scripts/tests/test_l1_presidio_runner.py`, `scripts/tests/test_l1_ark_runner.py`,
+## Scoreboard
+
+`scoreboard.py gate` vergleicht den ARK-Build eines Checkouts mit seinem Basis-Commit auf allen
+eingefrorenen Goldsets (Verzeichnisse mit `.ready`: `DIR/*.jsonl`, `DIR/synthetic/*.jsonl`):
+
+```bash
+VIRTUAL_ENV=$PWD/.venv python3 scripts/l1_presidio/scoreboard.py gate \
+  --head . --base-sha origin/main --dev "$ARK_L1_DEV_DATA" --cache /tmp/scoreboard-cache
+# Gate: zusätzlich --holdout ~/ark-l1/holdout, Cache ~/ark-l1/cache
+python3 scripts/l1_presidio/scoreboard.py score --gold gold.jsonl --predictions presidio-tuned.jsonl
+```
+
+- **Metriken:** P/R/F1 exakt (gleiche ID, Start, Ende) und überlappend (Gold-Span gefunden, wenn
+  eine Vorhersage derselben ID ihn überlappt; Vorhersage korrekt, wenn sie Gold derselben ID
+  überlappt), je Entität, über alle L1-IDs, je Sprache (`de`, `en`, `other`), Korpus und Scope.
+- **Scope:** aus `entity_map.yaml`. `semantic` zählt nicht. Ein Korpus mit Eintrag in der Map wird
+  nur auf den IDs gewertet, die er annotiert (Gretel kennt keine Steuer-ID); Korpora ohne Eintrag
+  (das synthetische DE/EU-Set) auf allen L1-IDs. ARK-Spans werden über `ark_label` gemappt,
+  Presidio-Spans über `presidio_entity`; `ark.<LABEL>` aus `run_ark.py` zählt also mit.
+- **Hard Negatives:** jede L1-Vorhersage, die einen `hard_negatives`-Span überlappt.
+- **Regression (Exit 1):** F1-Verlust > 0,5 pp (`--tolerance-pp`), exakt oder überlappend, für eine
+  Entität, alle L1-IDs zusammen, `de` oder `en`, in Dev oder Holdout; oder ein neuer Treffer auf
+  einem Hard Negative (gleiche Zeile, ID und Offsets wie in der Basis zählen nicht). Exit 2 =
+  Eingabe- oder Infrastrukturfehler (unbekannter Commit, Build fehlgeschlagen, Vorhersagen passen
+  nicht zum Gold).
+- **Ausgabe:** stdout endet mit einer Zeile je Split (F1 exakt/überlappend gesamt, DE, EN, Δ zur
+  Basis, Hard-Negative-FP), den Regressionen und `RESULT: PASS|REGRESSION`. Eine Tabelle je
+  Entität gibt es nur für Dev; vom Holdout erscheinen nur Aggregate und Regressionen, nie
+  Zeilen-IDs oder Text. `--json` schreibt den vollständigen Bericht (mit Holdout-Zeilen-IDs).
+- **Head:** `run_ark.py` des Checkouts mit `--ark-python` (Standard `$VIRTUAL_ENV/bin/python`).
+  Der Interpreter muss `patronus_ark` aus `HEAD/python` importieren (`maturin develop`), sonst
+  Exit 2. Nach Rust-Änderungen also erst neu bauen.
+- **Basis:** `git archive` des Commits, `cargo build --offline --locked --lib` des Python-Crates
+  in den Cache (`CACHE/scoreboard/target`, inkrementell), Paket samt nativem Modul unter
+  `CACHE/scoreboard/builds/<key>/`, Lauf mit `PYTHONPATH` auf diese Stufe. Geprüft wird, dass
+  `run_ark.py` genau dieses Modul geladen hat.
+- **Cache:** Vorhersagen liegen unter `CACHE/scoreboard/predictions/<source-key>/<sha256 der
+  Eingabe>.jsonl`. Der Source-Key hasht die Git-Objekte von `Cargo.toml`, `Cargo.lock`,
+  `rust-toolchain.toml`, `rust/`, `python/` und `run_ark.py`. Die Basis eines Stack-Laufs (der
+  Done-Commit des vorigen Laufs) hat denselben Key wie der zuvor gegatete Head und wird nicht neu
+  gebaut; ändert ein Lauf nur Skripte oder Doku, sind Head und Basis identisch. Ergebnisse je
+  Commit: `CACHE/scoreboard/results/<sha>.json`. Ein Head mit uncommitteten Änderungen an diesen
+  Pfaden wird gerechnet, aber nicht gecacht.
+
+Im Gate (`ark-l1 gate`) läuft der Schritt mit dem Presidio-Venv, ohne Netz, mit Lesezugriff auf
+Holdout und Checkout und Schreibzugriff nur auf den Cache; `VIRTUAL_ENV` zeigt auf das Gate-Venv,
+in das der Schritt `python-ext` den Head installiert hat.
+
+Tests: `scripts/tests/test_l1_scoreboard.py`, `scripts/tests/test_l1_synth_goldset.py`, `scripts/tests/test_l1_prepare_corpora.py`, `scripts/tests/test_l1_presidio_runner.py`, `scripts/tests/test_l1_ark_runner.py`,
 `scripts/tests/test_l1_entity_map.py`. Die Tests gegen echtes Presidio laufen nur,
 wenn `presidio_analyzer` installiert ist (z. B. in `~/ark-l1/presidio-venv`).
