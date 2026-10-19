@@ -20,6 +20,14 @@ struct FixtureEntity {
     start: usize,
     end: usize,
     label: String,
+    /// `false` marks a checksum-invalid gold value (T02): it stays in the fixture for the
+    /// L3 NER, but no L1 validator may accept it, so the L1 evaluation skips it.
+    #[serde(default = "checksum_valid_default")]
+    checksum_valid: bool,
+}
+
+fn checksum_valid_default() -> bool {
+    true
 }
 
 fn ark_label(label: &str) -> Option<&'static str> {
@@ -117,7 +125,8 @@ type Span = (usize, usize, String);
 /// Fixture spans count Unicode code points (Python `str` indices), not UTF-8 bytes.
 const SPAN_UNIT: &str = "char";
 
-/// Gold spans of one row mapped to ARK labels; rejects spans outside the text.
+/// Gold spans of one row mapped to ARK labels, without spans marked checksum-invalid;
+/// rejects spans outside the text.
 fn expected_spans(row: &FixtureRow) -> Result<BTreeSet<Span>, String> {
     let text_chars = row.text.chars().count();
     let mut spans = BTreeSet::new();
@@ -127,6 +136,9 @@ fn expected_spans(row: &FixtureRow) -> Result<BTreeSet<Span>, String> {
                 "{} span {}..{} outside text of {text_chars} chars",
                 entity.label, entity.start, entity.end
             ));
+        }
+        if !entity.checksum_valid {
+            continue;
         }
         if let Some(label) = ark_label(&entity.label) {
             spans.insert((entity.start, entity.end, label.to_string()));
@@ -204,6 +216,7 @@ mod tests {
                     start,
                     end,
                     label: label.to_string(),
+                    checksum_valid: true,
                 })
                 .collect(),
         }

@@ -63,6 +63,18 @@ Platzhalter, weder als Positive noch in Hard-Negative-Spans. Durchgesetzt wird d
 (`reserved_placeholder_values_are_gold_positives`). ARK meldet alle Platzhalter schon heute; eine
 spätere regionale Telefonprüfung (Hebel 4) darf `+1 000-000-0000` und `555-01xx` nicht verwerfen.
 
+## Gold-Hygiene: Nebenentitäten und Prüfziffern
+
+Seit T02 (TRIAGE 2026-W42, Buckets 6 + 7) annotiert ein Positiv in `pii_l1` jede echte Entität im
+Text, nicht nur den Ziel-Span (Generator: `also=(Label, Wert)`), z. B. die PAN neben CVV oder
+Ablaufdatum. Gewertet wird weiter nur das Ziel-Label. `rust/tests/pii_gold_hygiene.rs` prüft, dass
+jeder Gold-Wert einen Validator seines Labels besteht (Known Gaps nur bei Luhn, MOD-97 und
+Steuer-ID, nach Rückbau der Obfuskation) und dass jeder weitere L1-Treffer auf einem Positiv Gold
+ist oder als Detektor-FP gelistet ist (PAN in IBAN, Telefonziffern mit gültiger Luhn-Summe, IBAN
+zusätzlich als FINANCIAL_ACCOUNT_NUMBER; T07). Die sieben Luhn-ungültigen `credit_card`-Werte in
+`dynamic_pii.jsonl` bleiben für L3 im Fixture, tragen `"checksum_valid": false` und zählen in
+`12_l1_pii_fixture_eval` nicht. Validatoren bleiben unverändert.
+
 ## Capability-Goldens: Schema v2
 
 Seit E10 folgt `pii_l1.jsonl` dem Golden-Schema v2 (Format in
