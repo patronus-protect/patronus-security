@@ -37,7 +37,9 @@ max_level="l1")`, ohne Downloads) über dasselbe Gold-JSONL laufen. Zeilen trage
 `id`, `language` und `evidence_spans`; jeder Span hat `label` (Benchmark-ID), `ark_label`,
 `start_char`/`end_char` in Code-Points und `score` (Span-Score der Engine). Meldet mehr als eine
 Regel denselben Span, bleibt er einmal mit dem höchsten Score. ARK-Labels ohne Benchmark-ID heißen
-`ark.<LABEL>` und werden nicht gewertet.
+`ark.<LABEL>` und werden nicht gewertet. Standard ist der PII-Modus `strict` (jeder Span 1.0);
+`--pii-mode balanced|recall` liefert die Modell-Scores (K02) und trägt den Modus als
+`engine.pii_mode` in die Metadaten ein. Das Gate rechnet weiter mit `strict`.
 
 ```bash
 .venv/bin/python scripts/l1_presidio/run_ark.py --input /tmp/gold.jsonl --output /tmp/ark.jsonl

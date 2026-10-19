@@ -15,7 +15,7 @@ use patronus_ark::{
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
 
-fn pii_result(text: &str, gates: Option<ScanGateMatrix>) -> SecurityScanResult {
+fn scanner(gates: Option<ScanGateMatrix>) -> SecurityGateway {
     let scanner = SecurityGateway::with_max_level(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
@@ -26,10 +26,18 @@ fn pii_result(text: &str, gates: Option<ScanGateMatrix>) -> SecurityScanResult {
         scanner.set_execution_gates(gates);
     }
     scanner
+}
+
+fn scan(scanner: &SecurityGateway, text: &str) -> SecurityScanResult {
+    scanner
         .scan_category(SecurityCategory::Pii, text)
         .into_iter()
         .find(|result| result.model == "native:pii")
         .expect("native PII result must be present")
+}
+
+fn pii_result(text: &str, gates: Option<ScanGateMatrix>) -> SecurityScanResult {
+    scan(&scanner(gates), text)
 }
 
 fn with_mode(mode: PiiMode) -> Option<ScanGateMatrix> {
@@ -58,10 +66,8 @@ fn comparable(result: &SecurityScanResult) -> serde_json::Value {
 
 fn corpus() -> Vec<String> {
     let mut texts = Vec::new();
-    let fixture: serde_json::Value = serde_json::from_str(include_str!(
-        "fixtures/l1_bilingual_rules.json"
-    ))
-    .unwrap();
+    let fixture: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/l1_bilingual_rules.json")).unwrap();
     for case in fixture.as_array().unwrap() {
         if case["category"] == "pii" {
             for language in ["de", "en"] {
@@ -130,9 +136,11 @@ fn mode_thresholds_order_strict_balanced_recall() {
 
 #[test]
 fn strict_explicit_and_default_are_bit_identical_on_every_golden() {
+    let default_scanner = scanner(None);
+    let strict_scanner = scanner(with_mode(PiiMode::Strict));
     for text in corpus() {
-        let default = pii_result(&text, None);
-        let strict = pii_result(&text, with_mode(PiiMode::Strict));
+        let default = scan(&default_scanner, &text);
+        let strict = scan(&strict_scanner, &text);
         assert_eq!(comparable(&default), comparable(&strict), "{text}");
         assert_eq!(default.confidence, 1.0, "{text}");
         for span in &default.evidence_spans {
@@ -150,10 +158,12 @@ fn strict_explicit_and_default_are_bit_identical_on_every_golden() {
 fn balanced_and_recall_keep_the_strict_spans_and_report_model_scores() {
     // K02 adds no candidates: every rule scores at least the balanced threshold,
     // so both opt-in modes return the strict spans with their model scores.
+    let strict_scanner = scanner(None);
     for mode in [PiiMode::Balanced, PiiMode::Recall] {
+        let scored_scanner = scanner(with_mode(mode));
         for text in corpus() {
-            let strict = pii_result(&text, None);
-            let scored = pii_result(&text, with_mode(mode));
+            let strict = scan(&strict_scanner, &text);
+            let scored = scan(&scored_scanner, &text);
             assert_eq!(spans(&strict), spans(&scored), "{mode:?}: {text}");
             assert_eq!(strict.class_name, scored.class_name, "{mode:?}: {text}");
             let rules = scored.layers[0]
@@ -186,10 +196,23 @@ fn balanced_and_recall_keep_the_strict_spans_and_report_model_scores() {
                 .evidence_spans
                 .iter()
                 .map(|span| span.score)
-                .fold(None, |best: Option<f64>, score| {
-                    Some(best.map_or(score, |best| best.max(score)))
-                });
-            assert_eq!(scored.confidence, best.unwrap_or(1.0), "{mode:?}: {text}");
+                .reduce(f64::max);
+            match best {
+                Some(best) => assert_eq!(scored.confidence, best, "{mode:?}: {text}"),
+                None if scored.class_name == "safe" => {
+                    assert_eq!(scored.confidence, 1.0, "{mode:?}: {text}")
+                }
+                // Post-prediction hooks (e.g. link-local addresses) removed every
+                // span; the confidence stays with the finding that set class_name.
+                None => assert!(
+                    scored.confidence >= mode.min_score().unwrap() && scored.confidence <= 1.0,
+                    "{mode:?}: {text}"
+                ),
+            }
+            assert_eq!(
+                scored.layers[0].confidence, scored.confidence,
+                "{mode:?}: {text}"
+            );
         }
     }
 }
@@ -311,7 +334,10 @@ fn checksum_vectors_decide_emission_in_every_mode() {
             );
             let rejected = pii_result(invalid, with_mode(mode));
             assert!(
-                rejected.evidence_spans.iter().all(|span| span.label != label),
+                rejected
+                    .evidence_spans
+                    .iter()
+                    .all(|span| span.label != label),
                 "{mode:?}: {invalid}"
             );
         }

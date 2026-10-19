@@ -75,11 +75,32 @@ pub(crate) trait NativeRegexDetector {
         )
     }
 
+    /// Score of an accepted match in a scored mode. Unscored detection keeps `1.0`.
+    fn match_score(&self, _index: usize, _text: &str, _captures: &regex::Captures<'_>) -> f64 {
+        1.0
+    }
+
     fn detect_prepared_with_options<F>(
         &self,
         prepared: &crate::threat::NativeText<'_>,
         allows_rule: F,
         explain: bool,
+    ) -> NativeDetection
+    where
+        F: Fn(&str) -> bool,
+    {
+        self.detect_prepared_scored(prepared, allows_rule, explain, None)
+    }
+
+    /// `min_score: None` is the unscored contract: every finding scores `1.0`.
+    /// With `Some(threshold)`, findings carry `match_score`, matches below the
+    /// threshold are dropped, and `matched_rules` entries record the score.
+    fn detect_prepared_scored<F>(
+        &self,
+        prepared: &crate::threat::NativeText<'_>,
+        allows_rule: F,
+        explain: bool,
+        min_score: Option<f64>,
     ) -> NativeDetection
     where
         F: Fn(&str) -> bool,
@@ -127,17 +148,31 @@ pub(crate) trait NativeRegexDetector {
                 {
                     continue;
                 }
+                let score = match min_score {
+                    None => 1.0,
+                    Some(threshold) => {
+                        let score = self.match_score(index, text, &captures);
+                        if score < threshold {
+                            continue;
+                        }
+                        score
+                    }
+                };
                 let evidence = evidence::L1Match::from_captures(regex, &captures, value_group);
-                matched_rules.push(serde_json::json!({
+                let mut rule = serde_json::json!({
                     "rule_id": self.rule_ids()[index],
                     "start_byte": matched.start(), "end_byte": matched.end(),
                     "components": evidence.components,
-                }));
+                });
+                if min_score.is_some() {
+                    rule["score"] = serde_json::json!(score);
+                }
+                matched_rules.push(rule);
                 class_name.get_or_insert(self.entity_groups()[index]);
                 evidence_spans.push(EvidenceSpan {
                     label: self.entity_groups()[index].to_string(),
                     text: matched.as_str().to_string(),
-                    score: 1.0,
+                    score,
                     start_byte: matched.start(),
                     end_byte: matched.end(),
                     start_char: 0,
@@ -193,10 +228,15 @@ pub(crate) trait NativeRegexDetector {
             non_overlapping_spans[0].label.clone()
         };
         populate_char_offsets(text, &mut non_overlapping_spans);
+        // Unscored findings all score 1.0, so this stays 1.0 without a mode.
+        let confidence = non_overlapping_spans
+            .iter()
+            .map(|span| span.score)
+            .fold(0.0, f64::max);
         NativeDetection {
             result: EvaluationResult {
                 class_name: final_class_name,
-                confidence: 1.0,
+                confidence,
                 level: "L1".to_string(),
             },
             evidence_spans: non_overlapping_spans,
