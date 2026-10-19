@@ -146,14 +146,17 @@ def scored_ids(emap: Any, corpus: str) -> set[str]:
 
 
 def resolve_label(span: dict[str, Any], emap: Any) -> str | None:
-    """Benchmark id of a predicted span (Ark ``ark_label``, Presidio ``presidio_entity`` or ``label``)."""
-    label = span.get("label")
-    if isinstance(label, str) and label in emap.entities:
-        return label
+    """Benchmark id of a predicted span (Ark ``ark_label``, Presidio ``presidio_entity`` or ``label``).
+
+    Native labels win over an embedded ``label``: a base commit's run_ark.py precomputed ``label``
+    with its own output map, and the current entity map must decide how its ``ark_label`` counts."""
     if isinstance(span.get("ark_label"), str):
         return emap.ark_label(span["ark_label"])
     if isinstance(span.get("presidio_entity"), str):
         return emap.presidio_entity(span["presidio_entity"])
+    label = span.get("label")
+    if isinstance(label, str) and label in emap.entities:
+        return label
     return None
 
 
@@ -417,8 +420,12 @@ def run_predictions(build: ArkBuild, input_path: Path, output_path: Path) -> Non
         cwd="/", env={**os.environ, **build.env}, text=True, capture_output=True,
     )
     if proc.returncode != 0:
-        # The input may be holdout data: report the runner's last words, not the row.
-        raise ScoreboardError(f"run_ark.py failed (exit {proc.returncode}): {proc.stderr.strip()[-300:]}")
+        # The input may be holdout data and runner errors can name rows: keep stderr next to the
+        # prediction file in the private cache and report only the exit code.
+        stderr = output_path.with_name(output_path.name + ".stderr")
+        stderr.parent.mkdir(parents=True, exist_ok=True)
+        stderr.write_text(proc.stderr, encoding="utf-8")
+        raise ScoreboardError(f"run_ark.py failed (exit {proc.returncode}); stderr in {stderr}")
     if build.native is not None:
         native = json.loads(meta.read_text(encoding="utf-8")).get("build", {}).get("native_sha256")
         if native != sha256_file(build.native):
