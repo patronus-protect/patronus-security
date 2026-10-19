@@ -11,7 +11,7 @@ mod identifiers;
 mod placeholders;
 mod providers;
 
-use super::dlp::DlpPattern;
+use super::dlp::{DlpPattern, RuleMeta, ValidatorStrength};
 use std::{borrow::Cow, ops::Range};
 
 const PARTS: &[&[DlpPattern]] = &[
@@ -126,6 +126,7 @@ const fn concat<const N: usize>(parts: &[&[DlpPattern]]) -> [DlpPattern; N] {
         entity_group: "",
         validator: None,
         span_group: None,
+        meta: RuleMeta::new(ValidatorStrength::None, "", &[]),
     };
     let mut rules = [EMPTY; N];
     let mut index = 0;

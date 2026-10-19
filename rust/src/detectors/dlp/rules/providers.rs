@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! Provider-bound secret formats (LLM, cloud, source control, payment, chat).
-use crate::{detectors::dlp::dlp::DlpPattern, post_prediction::is_real_secret_assignment};
+use crate::{
+    detectors::dlp::dlp::{DlpPattern, RuleMeta, ValidatorStrength},
+    post_prediction::is_real_secret_assignment,
+};
 
 pub(super) const RULES: &[DlpPattern] = &[
     // ── AI / LLM API Keys ────────────────────────────────────────────────────
@@ -10,6 +13,13 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "API_KEY",
         validator: Some(is_real_secret_assignment),
         span_group: None,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:anthropic-api-key",
+            &["sk-ant-"],
+        )
+        .with_provider("anthropic")
+        .with_min_entropy(3.0),
     },
     DlpPattern {
         name: "dlp_openai_key",
@@ -17,6 +27,13 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "API_KEY",
         validator: None,
         span_group: None,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:openai-api-key",
+            &["sk-proj-"],
+        )
+        .with_provider("openai")
+        .with_min_entropy(3.0),
     },
     DlpPattern {
         name: "dlp_openai_legacy",
@@ -24,6 +41,13 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "API_KEY",
         validator: None,
         span_group: None,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:openai-api-key",
+            &["sk-"],
+        )
+        .with_provider("openai")
+        .with_min_entropy(3.0),
     },
     DlpPattern {
         name: "dlp_openai_svc",
@@ -31,6 +55,13 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "API_KEY",
         validator: None,
         span_group: None,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:openai-api-key",
+            &["sk-svcacct-"],
+        )
+        .with_provider("openai")
+        .with_min_entropy(3.0),
     },
     DlpPattern {
         name: "dlp_huggingface",
@@ -38,6 +69,13 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "API_KEY",
         validator: None,
         span_group: None,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:huggingface-access-token",
+            &["hf_"],
+        )
+        .with_provider("huggingface")
+        .with_min_entropy(3.0),
     },
     DlpPattern {
         name: "dlp_groq_key",
@@ -45,6 +83,9 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "API_KEY",
         validator: None,
         span_group: None,
+        meta: RuleMeta::new(ValidatorStrength::Format, "ark", &["gsk_"])
+            .with_provider("groq")
+            .with_min_entropy(3.0),
     },
     DlpPattern {
         name: "dlp_xai_key",
@@ -52,6 +93,9 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "API_KEY",
         validator: None,
         span_group: None,
+        meta: RuleMeta::new(ValidatorStrength::Format, "ark", &["xai-"])
+            .with_provider("xai")
+            .with_min_entropy(3.0),
     },
     DlpPattern {
         name: "dlp_replicate",
@@ -59,6 +103,9 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "API_KEY",
         validator: None,
         span_group: None,
+        meta: RuleMeta::new(ValidatorStrength::Format, "ark", &["r8_"])
+            .with_provider("replicate")
+            .with_min_entropy(3.0),
     },
     // ── Cloud Provider Keys ──────────────────────────────────────────────────
     DlpPattern {
@@ -67,6 +114,15 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "CLOUD_KEY",
         validator: None,
         span_group: None,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:aws-access-token",
+            &[
+                "akia", "a3t", "agpa", "aida", "aroa", "aipa", "anpa", "anva", "asia",
+            ],
+        )
+        .with_provider("aws")
+        .with_min_entropy(3.0),
     },
     DlpPattern {
         name: "dlp_aws_secret_key",
@@ -74,6 +130,13 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "CLOUD_KEY",
         validator: None,
         span_group: Some(1),
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html",
+            &["aws_secret_access_key", "secretaccesskey"],
+        )
+        .with_provider("aws")
+        .with_min_entropy(3.0),
     },
     DlpPattern {
         name: "dlp_google_api_key",
@@ -81,6 +144,9 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "CLOUD_KEY",
         validator: None,
         span_group: None,
+        meta: RuleMeta::new(ValidatorStrength::Format, "gitleaks:gcp-api-key", &["aiza"])
+            .with_provider("google")
+            .with_min_entropy(3.0),
     },
     DlpPattern {
         name: "dlp_google_oauth_token",
@@ -88,6 +154,9 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "CLOUD_KEY",
         validator: None,
         span_group: None,
+        meta: RuleMeta::new(ValidatorStrength::Format, "ark", &["ya29."])
+            .with_provider("google")
+            .with_min_entropy(3.0),
     },
     DlpPattern {
         name: "dlp_gcp_client_secret",
@@ -95,6 +164,9 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "CLOUD_KEY",
         validator: None,
         span_group: None,
+        meta: RuleMeta::new(ValidatorStrength::Format, "ark", &["gocspx-"])
+            .with_provider("google")
+            .with_min_entropy(3.0),
     },
     // ── Source Control / Dev Tools ───────────────────────────────────────────
     DlpPattern {
@@ -103,6 +175,13 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "SECRET_TOKEN",
         validator: None,
         span_group: None,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:github-pat",
+            &["ghp_", "gho_", "ghu_", "ghs_", "ghr_"],
+        )
+        .with_provider("github")
+        .with_min_entropy(3.0),
     },
     DlpPattern {
         name: "dlp_github_pat",
@@ -110,6 +189,13 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "SECRET_TOKEN",
         validator: None,
         span_group: None,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:github-fine-grained-pat",
+            &["github_pat_"],
+        )
+        .with_provider("github")
+        .with_min_entropy(3.0),
     },
     DlpPattern {
         name: "dlp_gitlab_pat",
@@ -117,6 +203,13 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "SECRET_TOKEN",
         validator: None,
         span_group: None,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:gitlab-pat",
+            &["glpat-"],
+        )
+        .with_provider("gitlab")
+        .with_min_entropy(3.0),
     },
     DlpPattern {
         name: "dlp_npm_token",
@@ -124,6 +217,13 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "SECRET_TOKEN",
         validator: None,
         span_group: None,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:npm-access-token",
+            &["npm_"],
+        )
+        .with_provider("npm")
+        .with_min_entropy(3.0),
     },
     // ── Payment ───────────────────────────────────────────────────────────────
     DlpPattern {
@@ -132,6 +232,14 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "PAYMENT_KEY",
         validator: None,
         span_group: None,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:stripe-access-token",
+            &["k_live", "k-live", "k_test", "k-test"],
+        )
+        .with_provider("stripe")
+        .with_min_entropy(3.0)
+        .with_test_prefixes(&["sk_test", "sk-test", "rk_test", "rk-test"]),
     },
     DlpPattern {
         name: "dlp_stripe_webhook",
@@ -139,6 +247,13 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "PAYMENT_KEY",
         validator: None,
         span_group: None,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://docs.stripe.com/webhooks",
+            &["whsec_"],
+        )
+        .with_provider("stripe")
+        .with_min_entropy(3.0),
     },
     // ── Communication ────────────────────────────────────────────────────────
     DlpPattern {
@@ -147,6 +262,13 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "SECRET_TOKEN",
         validator: None,
         span_group: None,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://api.slack.com/authentication/token-types",
+            &["xoxb-", "xoxp-", "xoxr-", "xoxa-", "xoxs-"],
+        )
+        .with_provider("slack")
+        .with_min_entropy(3.0),
     },
     DlpPattern {
         name: "dlp_discord_token",
@@ -154,5 +276,8 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "SECRET_TOKEN",
         validator: None,
         span_group: None,
+        meta: RuleMeta::new(ValidatorStrength::Format, "ark", &[])
+            .with_provider("discord")
+            .with_min_entropy(3.0),
     },
 ];

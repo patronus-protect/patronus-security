@@ -48,6 +48,16 @@ pub(crate) trait NativeRegexDetector {
     }
     fn finalize_spans(&self, _text: &str, _spans: &mut Vec<EvidenceSpan>) {}
 
+    /// Rule metadata added to the `matched_rules` entry of a match of rule
+    /// `index` with value `value`.
+    fn match_details(
+        &self,
+        _index: usize,
+        _value: &str,
+    ) -> serde_json::Map<String, serde_json::Value> {
+        serde_json::Map::new()
+    }
+
     /// Reject contextually ambiguous matches before emitting evidence or rule details.
     fn allows_match(&self, _index: usize, _text: &str, _captures: &regex::Captures<'_>) -> bool {
         true
@@ -128,11 +138,15 @@ pub(crate) trait NativeRegexDetector {
                     continue;
                 }
                 let evidence = evidence::L1Match::from_captures(regex, &captures, value_group);
-                matched_rules.push(serde_json::json!({
+                let mut rule = serde_json::json!({
                     "rule_id": self.rule_ids()[index],
                     "start_byte": matched.start(), "end_byte": matched.end(),
                     "components": evidence.components,
-                }));
+                });
+                if let Some(rule) = rule.as_object_mut() {
+                    rule.extend(self.match_details(index, matched.as_str()));
+                }
+                matched_rules.push(rule);
                 class_name.get_or_insert(self.entity_groups()[index]);
                 evidence_spans.push(EvidenceSpan {
                     label: self.entity_groups()[index].to_string(),

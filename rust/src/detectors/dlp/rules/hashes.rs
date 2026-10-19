@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! Password hashes.
 use super::credentials::is_secret_value;
-use crate::detectors::dlp::dlp::DlpPattern;
+use crate::detectors::dlp::dlp::{DlpPattern, RuleMeta, ValidatorStrength};
 
 pub(super) const RULES: &[DlpPattern] = &[DlpPattern {
     name: "dlp_password_hash",
@@ -9,4 +9,5 @@ pub(super) const RULES: &[DlpPattern] = &[DlpPattern {
     entity_group: "PASSWORD_HASH",
     validator: Some(is_secret_value),
     span_group: Some(1),
+    meta: RuleMeta::new(ValidatorStrength::Format, "ark", &["passw"]),
 }];

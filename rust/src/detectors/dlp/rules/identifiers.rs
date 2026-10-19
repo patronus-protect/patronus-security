@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! German and business record identifiers (anchor-bound, default off).
-use crate::detectors::dlp::dlp::DlpPattern;
+use crate::detectors::dlp::dlp::{DlpPattern, RuleMeta, ValidatorStrength};
 
 pub(super) const RULES: &[DlpPattern] = &[
     // ── German and business identifiers (anchor-bound) ─────────────────────
@@ -10,6 +10,11 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.de.vat_id",
         validator: None,
         span_group: Some(1),
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "ark",
+            &["ust", "umsatzsteuer", "vat"],
+        ),
     },
     DlpPattern {
         name: "dlp_de_commercial_register_number",
@@ -17,6 +22,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.de.commercial_register_number",
         validator: Some(is_identifier_value),
         span_group: Some(1),
+        meta: RuleMeta::new(ValidatorStrength::Format, "ark", &["hr", "vr", "pr", "gnr"]),
     },
     DlpPattern {
         name: "dlp_de_facility_number_bsnr",
@@ -24,6 +30,11 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.de.facility_number_bsnr",
         validator: None,
         span_group: Some(1),
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "ark",
+            &["bsnr", "betriebsst", "facility"],
+        ),
     },
     DlpPattern {
         name: "dlp_record_case_id",
@@ -31,6 +42,11 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.record.case_id",
         validator: Some(is_identifier_value),
         span_group: Some(1),
+        meta: RuleMeta::new(
+            ValidatorStrength::None,
+            "ark",
+            &["aktenzeichen", "fallnummer", "case", "vorgangsnummer"],
+        ),
     },
     DlpPattern {
         name: "dlp_record_contract_id",
@@ -38,6 +54,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.record.contract_id",
         validator: Some(is_identifier_value),
         span_group: Some(1),
+        meta: RuleMeta::new(ValidatorStrength::None, "ark", &["vertrags", "contract"]),
     },
     DlpPattern {
         name: "dlp_record_claim_id",
@@ -45,6 +62,11 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.record.claim_id",
         validator: Some(is_identifier_value),
         span_group: Some(1),
+        meta: RuleMeta::new(
+            ValidatorStrength::None,
+            "ark",
+            &["schadennummer", "leistungsfallnummer", "claim"],
+        ),
     },
     DlpPattern {
         name: "dlp_record_order_id",
@@ -52,6 +74,11 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.record.order_id",
         validator: Some(is_identifier_value),
         span_group: Some(1),
+        meta: RuleMeta::new(
+            ValidatorStrength::None,
+            "ark",
+            &["bestellnummer", "auftragsnummer", "order"],
+        ),
     },
     DlpPattern {
         name: "dlp_record_invoice_id",
@@ -59,6 +86,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.record.invoice_id",
         validator: Some(is_identifier_value),
         span_group: Some(1),
+        meta: RuleMeta::new(ValidatorStrength::None, "ark", &["rechnungs", "invoice"]),
     },
     DlpPattern {
         name: "dlp_project_id",
@@ -66,6 +94,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.project_id",
         validator: Some(is_identifier_value),
         span_group: Some(1),
+        meta: RuleMeta::new(ValidatorStrength::None, "ark", &["projekt", "project"]),
     },
     DlpPattern {
         name: "dlp_organization_id",
@@ -73,6 +102,17 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.organization_id",
         validator: Some(is_identifier_value),
         span_group: Some(1),
+        meta: RuleMeta::new(
+            ValidatorStrength::None,
+            "ark",
+            &[
+                "organisations",
+                "unternehmens",
+                "mandanten",
+                "tenant",
+                "organization",
+            ],
+        ),
     },
 ];
 

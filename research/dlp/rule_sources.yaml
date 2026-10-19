@@ -1,0 +1,134 @@
+# Formatquellen der DLP-Regeln (K02). Geprüft von rust/tests/dlp_rule_metadata.rs.
+#
+# Aufgeführt ist jede Regel mit Provider oder externer Formatquelle; `source_ref` ist identisch mit
+# `RuleMeta::source_ref` der Regel und erscheint im Rule-Catalog und in `matched_rules`.
+#
+# source_ref:
+#   gitleaks:<rule-id>  Regel der gepinnten gitleaks-Default-Config (MIT, Inventar in entity_map.yaml)
+#   https://…           Hersteller-Doku oder Spezifikation
+#   ark                 keine belegbare Formatquelle; `pending` nennt die Aufgabe, die Format und
+#                       Quelle festlegt. Neue Provider-Regeln brauchen eine Quelle (backlog `sources`).
+#
+# Kontextregeln ohne Provider (Zuweisungen, Header, Identifier, Content) haben `source_ref: ark`
+# und stehen nicht in dieser Datei.
+schema: ark-dlp-rule-sources-v1
+
+rules:
+  # ── LLM ──────────────────────────────────────────────────────────────────
+  dlp_anthropic_key:
+    provider: anthropic
+    source_ref: gitleaks:anthropic-api-key
+    format: "sk-ant- prefix, base64url body"
+  dlp_openai_key:
+    provider: openai
+    source_ref: gitleaks:openai-api-key
+    format: "sk-proj- prefix, base64url body"
+  dlp_openai_legacy:
+    provider: openai
+    source_ref: gitleaks:openai-api-key
+    format: "sk- prefix, 48 base62 characters"
+  dlp_openai_svc:
+    provider: openai
+    source_ref: gitleaks:openai-api-key
+    format: "sk-svcacct- prefix, base64url body"
+  dlp_huggingface:
+    provider: huggingface
+    source_ref: gitleaks:huggingface-access-token
+    format: "hf_ prefix, base62 body"
+  dlp_groq_key:
+    provider: groq
+    source_ref: ark
+    format: "gsk_ prefix, at least 48 base62 characters"
+    pending: T02
+  dlp_xai_key:
+    provider: xai
+    source_ref: ark
+    format: "xai- prefix, at least 80 base64url characters"
+    pending: F06
+  dlp_replicate:
+    provider: replicate
+    source_ref: ark
+    format: "r8_ prefix, base62 body"
+    pending: T02
+
+  # ── Cloud ────────────────────────────────────────────────────────────────
+  dlp_aws_access_key:
+    provider: aws
+    source_ref: gitleaks:aws-access-token
+    format: "unique-ID prefix (AKIA, ASIA, AGPA …), 16+ upper-case alphanumerics"
+  dlp_aws_secret_key:
+    provider: aws
+    source_ref: https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html
+    format: "40 base64 characters after aws_secret_access_key/SecretAccessKey"
+  dlp_google_api_key:
+    provider: google
+    source_ref: gitleaks:gcp-api-key
+    format: "AIza prefix, 35 base64url characters"
+  dlp_google_oauth_token:
+    provider: google
+    source_ref: ark
+    format: "ya29. prefix, base64url body"
+    pending: T02
+  dlp_gcp_client_secret:
+    provider: google
+    source_ref: ark
+    format: "GOCSPX- prefix, base64url body"
+    pending: T02
+
+  # ── Source control and registries ────────────────────────────────────────
+  dlp_github_token:
+    provider: github
+    source_ref: gitleaks:github-pat
+    format: "ghp_/gho_/ghu_/ghs_/ghr_ prefix, 36 base62 characters (30 random + CRC32, F03)"
+  dlp_github_pat:
+    provider: github
+    source_ref: gitleaks:github-fine-grained-pat
+    format: "github_pat_ prefix, base62 and underscore body"
+  dlp_gitlab_pat:
+    provider: gitlab
+    source_ref: gitleaks:gitlab-pat
+    format: "glpat- prefix, base64url body"
+  dlp_npm_token:
+    provider: npm
+    source_ref: gitleaks:npm-access-token
+    format: "npm_ prefix, 36 base62 characters"
+
+  # ── Payment ──────────────────────────────────────────────────────────────
+  dlp_stripe_key:
+    provider: stripe
+    source_ref: gitleaks:stripe-access-token
+    format: "sk_/rk_ prefix with live or test mode, base62 body; test mode is severity test"
+  dlp_stripe_webhook:
+    provider: stripe
+    source_ref: https://docs.stripe.com/webhooks
+    format: "whsec_ prefix, base64url body"
+
+  # ── Communication ────────────────────────────────────────────────────────
+  dlp_slack_token:
+    provider: slack
+    source_ref: https://api.slack.com/authentication/token-types
+    format: "xoxb-/xoxp-/xoxr-/xoxa-/xoxs- prefix, digit and alphanumeric segments"
+  dlp_discord_token:
+    provider: discord
+    source_ref: ark
+    format: "three dot-separated base64url segments, first segment starts with M or N"
+    pending: F09
+
+  # ── Key material ─────────────────────────────────────────────────────────
+  dlp_eth_private_key:
+    provider: ethereum
+    source_ref: https://ethereum.org/en/developers/docs/accounts/
+    format: "0x and 64 hex digits (32-byte secp256k1 private key)"
+  dlp_btc_wif:
+    provider: bitcoin
+    source_ref: https://en.bitcoin.it/wiki/Wallet_import_format
+    format: "Base58 WIF, 51 characters starting with 5 or 52 starting with K/L"
+  dlp_private_key_block:
+    source_ref: gitleaks:private-key
+    format: "PEM armor BEGIN/END … PRIVATE KEY with body"
+  dlp_private_key_header:
+    source_ref: gitleaks:private-key
+    format: "PEM armor BEGIN … PRIVATE KEY"
+  dlp_jwt_token:
+    source_ref: gitleaks:jwt
+    format: "three base64url segments, header and payload start with ey"

@@ -13,7 +13,7 @@ use std::{
 use patronus_ark::{
     detectors::dlp::dlp::{Severity, ValidatorStrength, DLP_PATTERNS},
     golden_recipes::{materialize_fragments, GeneratorSet, SecretRecipe, SplitMix64},
-    SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
+    ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
 use regex::Regex;
 use serde::Deserialize;
@@ -95,7 +95,11 @@ fn every_rule_declares_metadata() {
             );
         }
         if let Some(bits) = meta.min_entropy {
-            assert!(bits > 0.0 && bits <= 6.0, "{}: min_entropy {bits}", rule.name);
+            assert!(
+                bits > 0.0 && bits <= 6.0,
+                "{}: min_entropy {bits}",
+                rule.name
+            );
             assert!(
                 SECRET_GROUPS.contains(&rule.entity_group),
                 "{}: min_entropy only for secret rules",
@@ -141,23 +145,33 @@ fn provider_rules_name_their_provider() {
 }
 
 #[test]
-fn keywords_are_lowercase_literals_of_the_pattern() {
+fn keywords_are_lowercase_and_minimal() {
     for rule in DLP_PATTERNS {
         let keywords = rule.meta.keywords;
         if KEYWORDLESS_RULES.contains(&rule.name) {
             assert!(keywords.is_empty(), "{}: listed as keywordless", rule.name);
             continue;
         }
-        assert!(!keywords.is_empty(), "{}: keywords for the prefilter", rule.name);
+        assert!(
+            !keywords.is_empty(),
+            "{}: keywords for the prefilter",
+            rule.name
+        );
         let unique: BTreeSet<_> = keywords.iter().collect();
-        assert_eq!(unique.len(), keywords.len(), "{}: duplicate keyword", rule.name);
-        let pattern = rule.pattern.to_lowercase().replace('\\', "");
+        assert_eq!(
+            unique.len(),
+            keywords.len(),
+            "{}: duplicate keyword",
+            rule.name
+        );
         for keyword in keywords {
             assert!(!keyword.is_empty(), "{}: empty keyword", rule.name);
             assert_eq!(*keyword, keyword.to_lowercase(), "{}: {keyword}", rule.name);
             assert!(
-                pattern.contains(keyword),
-                "{}: keyword {keyword:?} is not in the pattern",
+                !keywords
+                    .iter()
+                    .any(|other| other != keyword && keyword.contains(other)),
+                "{}: keyword {keyword:?} is covered by a shorter one",
                 rule.name
             );
         }
@@ -221,7 +235,11 @@ fn every_golden_match_contains_a_keyword() {
     }
     for rule in DLP_PATTERNS {
         if !rule.meta.keywords.is_empty() {
-            assert!(checked.contains_key(rule.name), "{}: no golden match", rule.name);
+            assert!(
+                checked.contains_key(rule.name),
+                "{}: no golden match",
+                rule.name
+            );
         }
     }
 }
@@ -285,7 +303,11 @@ fn rule_sources_match_the_rule_metadata() {
         let meta = &rule.meta;
         let source_ref = meta.source_ref;
         if let Some(id) = source_ref.strip_prefix("gitleaks:") {
-            assert!(gitleaks.contains(&id.to_owned()), "{}: {source_ref}", rule.name);
+            assert!(
+                gitleaks.contains(&id.to_owned()),
+                "{}: {source_ref}",
+                rule.name
+            );
         } else {
             assert!(
                 source_ref == "ark" || source_ref.starts_with("https://"),
@@ -312,7 +334,10 @@ fn rule_sources_match_the_rule_metadata() {
         }
     }
     let listed: BTreeSet<_> = sources.rules.keys().map(String::as_str).collect();
-    assert_eq!(listed, expected, "rule_sources.yaml lists exactly the sourced rules");
+    assert_eq!(
+        listed, expected,
+        "rule_sources.yaml lists exactly the sourced rules"
+    );
 }
 
 #[test]
@@ -325,20 +350,43 @@ fn matched_rules_report_metadata() {
     assert_eq!(rule["source_ref"], "gitleaks:github-pat");
     assert_eq!(rule["severity"], "live");
 
-    let rule = matched_rule("Das Passwort lautet Kx9vQ2mLp7Rt", "dlp_password_assignment")
-        .expect("password must match");
+    let rule = matched_rule(
+        "Das Passwort lautet Kx9vQ2mLp7Rt",
+        "dlp_password_assignment",
+    )
+    .expect("password must match");
     assert!(rule.get("provider").is_none(), "{rule}");
     assert_eq!(rule["validator_strength"], "none");
     assert_eq!(rule["source_ref"], "ark");
     assert_eq!(rule["severity"], "live");
 
-    let rule = matched_rule(
-        "Fehlerprotokoll:\nTraceback (most recent call last):\n  File \"app.py\", line 3\n",
-        "dlp_stacktrace_block",
-    )
-    .expect("stack trace must match");
+    // Content classes are off by default; enable them for this check.
+    let gateway = SecurityGateway::with_max_level(
+        vec![SecurityCategory::Dlp],
+        SecurityLevel::L1,
+        None,
+        false,
+    );
+    gateway.set_execution_gates(ScanGateMatrix::all_enabled());
+    let text = "Fehlerprotokoll:\nTraceback (most recent call last):\n  File \"app.py\", line 3\n";
+    let result = gateway
+        .scan_category(SecurityCategory::Dlp, text)
+        .into_iter()
+        .find(|result| result.model == "native:dlp")
+        .unwrap();
+    let rule = result.layers[0].details["matched_rules"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|rule| rule["rule_id"] == "dlp_stacktrace_block")
+        .cloned()
+        .expect("stack trace must match");
     assert_eq!(rule["validator_strength"], "format");
-    assert!(rule.get("severity").is_none(), "content rules have no severity: {rule}");
+    assert_eq!(rule["source_ref"], "ark");
+    assert!(
+        rule.get("severity").is_none(),
+        "content rules have no severity: {rule}"
+    );
 }
 
 #[test]
@@ -361,14 +409,26 @@ fn severity_follows_test_prefixes() {
         .find(|rule| rule.name == "dlp_stripe_key")
         .unwrap();
     let body = random_body(5, BASE62, 24);
-    assert_eq!(stripe.meta.severity(&["sk_test_", &body].concat()), Severity::Test);
-    assert_eq!(stripe.meta.severity(&["rk-test-", &body].concat()), Severity::Test);
-    assert_eq!(stripe.meta.severity(&["sk_live_", &body].concat()), Severity::Live);
+    assert_eq!(
+        stripe.meta.severity(&["sk_test_", &body].concat()),
+        Severity::Test
+    );
+    assert_eq!(
+        stripe.meta.severity(&["rk-test-", &body].concat()),
+        Severity::Test
+    );
+    assert_eq!(
+        stripe.meta.severity(&["sk_live_", &body].concat()),
+        Severity::Live
+    );
     let github = DLP_PATTERNS
         .iter()
         .find(|rule| rule.name == "dlp_github_token")
         .unwrap();
-    assert_eq!(github.meta.severity(&["ghp_test", &body].concat()), Severity::Live);
+    assert_eq!(
+        github.meta.severity(&["ghp_test", &body].concat()),
+        Severity::Live
+    );
 }
 
 /// A provider-shaped value drawn from a handful of characters has too little

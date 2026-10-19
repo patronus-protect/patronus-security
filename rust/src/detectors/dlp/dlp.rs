@@ -20,7 +20,156 @@ pub struct DlpPattern {
     pub validator: Option<fn(&str) -> bool>,
     /// Optional capture group containing only the actionable value.
     pub span_group: Option<usize>,
+    /// Rule metadata v2: provider, validator strength, keywords, entropy floor,
+    /// format source and live/test severity.
+    pub meta: RuleMeta,
 }
+
+/// How strongly a rule confirms the matched value beyond the keyword context.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ValidatorStrength {
+    /// A check digit or checksum (CRC32, Base58Check, Bech32) is verified.
+    Checksum,
+    /// The decoded or parsed structure is verified (JWT header, DER, SQL).
+    Structure,
+    /// Fixed prefix, alphabet, length or syntax shape only.
+    Format,
+    /// Keyword or context anchor only; the value shape is free.
+    None,
+}
+
+impl ValidatorStrength {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Checksum => "checksum",
+            Self::Structure => "structure",
+            Self::Format => "format",
+            Self::None => "none",
+        }
+    }
+}
+
+/// Whether a secret is a live credential or a provider test/sandbox credential.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Severity {
+    Live,
+    Test,
+}
+
+impl Severity {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Live => "live",
+            Self::Test => "test",
+        }
+    }
+}
+
+/// Rule metadata v2 (K02). Matches report `provider`, `validator_strength`,
+/// `source_ref` and, for secret rules, `severity` in `matched_rules`.
+#[derive(Clone, Copy, Debug)]
+pub struct RuleMeta {
+    /// Provider slug for provider-bound formats (`github`, `stripe` …).
+    pub provider: Option<&'static str>,
+    pub validator_strength: ValidatorStrength,
+    /// Lowercase literals of which every match contains at least one (ASCII
+    /// case-insensitive); the prefilter keywords. Empty only for rules without
+    /// a literal.
+    pub keywords: &'static [&'static str],
+    /// Minimum Shannon entropy of the value in bits per character; lower
+    /// values are dropped.
+    pub min_entropy: Option<f64>,
+    /// Format source: `gitleaks:<rule-id>`, a vendor/spec `https://` URL, or
+    /// `ark` for in-house context rules (`research/dlp/rule_sources.yaml`).
+    pub source_ref: &'static str,
+    /// Value prefixes of provider test/sandbox credentials (severity `test`).
+    pub test_prefixes: &'static [&'static str],
+}
+
+impl RuleMeta {
+    pub const fn new(
+        validator_strength: ValidatorStrength,
+        source_ref: &'static str,
+        keywords: &'static [&'static str],
+    ) -> Self {
+        Self {
+            provider: None,
+            validator_strength,
+            keywords,
+            min_entropy: None,
+            source_ref,
+            test_prefixes: &[],
+        }
+    }
+
+    pub const fn with_provider(self, provider: &'static str) -> Self {
+        Self {
+            provider: Some(provider),
+            ..self
+        }
+    }
+
+    pub const fn with_min_entropy(self, bits: f64) -> Self {
+        Self {
+            min_entropy: Some(bits),
+            ..self
+        }
+    }
+
+    pub const fn with_test_prefixes(self, test_prefixes: &'static [&'static str]) -> Self {
+        Self {
+            test_prefixes,
+            ..self
+        }
+    }
+
+    /// Severity of a matched secret `value`.
+    pub fn severity(&self, value: &str) -> Severity {
+        if self
+            .test_prefixes
+            .iter()
+            .any(|prefix| value.starts_with(prefix))
+        {
+            Severity::Test
+        } else {
+            Severity::Live
+        }
+    }
+
+    /// Whether `value` reaches the rule's entropy floor.
+    pub(crate) fn has_min_entropy(&self, value: &str) -> bool {
+        self.min_entropy
+            .is_none_or(|bits| shannon_entropy(value) >= bits)
+    }
+}
+
+/// Shannon entropy of `value` in bits per character.
+fn shannon_entropy(value: &str) -> f64 {
+    let mut counts = std::collections::HashMap::<char, usize>::new();
+    for ch in value.chars() {
+        *counts.entry(ch).or_default() += 1;
+    }
+    let length = value.chars().count() as f64;
+    counts
+        .values()
+        .map(|&count| {
+            let probability = count as f64 / length;
+            -probability * probability.log2()
+        })
+        .sum()
+}
+
+/// Entity groups of credential/secret rules: on by default, with severity.
+pub(crate) const SECRET_GROUPS: &[&str] = &[
+    "API_KEY",
+    "CLOUD_KEY",
+    "CREDENTIAL",
+    "CRYPTO_KEY",
+    "PASSWORD_HASH",
+    "PAYMENT_KEY",
+    "PRIVATE_KEY",
+    "SECRET_TOKEN",
+];
 
 /// Shared DLP rule defaults for Rust, Python, and HTTP gateway execution.
 pub(crate) fn default_rule_enabled(rule_id: &str) -> bool {
@@ -36,19 +185,7 @@ pub(crate) fn default_rule_enabled(rule_id: &str) -> bool {
     DLP_PATTERNS
         .iter()
         .find(|pattern| pattern.name == rule_id)
-        .is_none_or(|pattern| {
-            matches!(
-                pattern.entity_group,
-                "API_KEY"
-                    | "CLOUD_KEY"
-                    | "CREDENTIAL"
-                    | "CRYPTO_KEY"
-                    | "PASSWORD_HASH"
-                    | "PAYMENT_KEY"
-                    | "PRIVATE_KEY"
-                    | "SECRET_TOKEN"
-            )
-        })
+        .is_none_or(|pattern| SECRET_GROUPS.contains(&pattern.entity_group))
 }
 
 /// Context facts for downstream DLP analysis. Anchors describe nearby content
@@ -146,6 +283,7 @@ pub struct DlpPipeline {
     span_groups: Vec<Option<usize>>,
     example_checks: Vec<ExampleCheck>,
     placeholder_checks: Vec<bool>,
+    metas: Vec<RuleMeta>,
     anchor_regexes: Vec<Regex>,
 }
 
@@ -165,6 +303,7 @@ impl DlpPipeline {
         let mut span_groups = Vec::new();
         let mut example_checks = Vec::new();
         let mut placeholder_checks = Vec::new();
+        let mut metas = Vec::new();
 
         for p in DLP_PATTERNS {
             regexes.push(Regex::new(p.pattern).unwrap());
@@ -177,6 +316,7 @@ impl DlpPipeline {
             span_groups.push(p.span_group);
             example_checks.push(rules::example_check(p.name));
             placeholder_checks.push(rules::placeholder_check(p.name));
+            metas.push(p.meta);
         }
 
         let anchor_regexes = DLP_ANCHOR_PATTERNS
@@ -193,6 +333,7 @@ impl DlpPipeline {
             span_groups,
             example_checks,
             placeholder_checks,
+            metas,
             anchor_regexes,
         }
     }
@@ -235,18 +376,23 @@ impl NativeRegexDetector for DlpPipeline {
         true
     }
 
-    /// Drops documented example and test values of secret rules (T06) and
-    /// placeholders and environment/template references in the value of
-    /// value-capturing credential rules (T07).
+    /// Drops values below the rule's entropy floor (K02), documented example
+    /// and test values of secret rules (T06) and placeholders and
+    /// environment/template references in the value of value-capturing
+    /// credential rules (T07).
     fn allows_match(&self, index: usize, text: &str, captures: &regex::Captures<'_>) -> bool {
         let check = self.example_checks[index];
         let placeholder_check = self.placeholder_checks[index];
-        if check == ExampleCheck::Off && !placeholder_check {
+        let meta = &self.metas[index];
+        if check == ExampleCheck::Off && !placeholder_check && meta.min_entropy.is_none() {
             return true;
         }
         let Some(value) = captures.get(self.span_groups[index].unwrap_or(0)) else {
             return true;
         };
+        if !meta.has_min_entropy(value.as_str()) {
+            return false;
+        }
         if placeholder_check && rules::is_placeholder_match(text, value.range()) {
             return false;
         }
@@ -277,6 +423,27 @@ impl NativeRegexDetector for DlpPipeline {
                 _ => true,
             }
         });
+    }
+
+    fn match_details(
+        &self,
+        index: usize,
+        value: &str,
+    ) -> serde_json::Map<String, serde_json::Value> {
+        let meta = &self.metas[index];
+        let mut details = serde_json::Map::new();
+        if let Some(provider) = meta.provider {
+            details.insert("provider".into(), provider.into());
+        }
+        details.insert(
+            "validator_strength".into(),
+            meta.validator_strength.as_str().into(),
+        );
+        details.insert("source_ref".into(), meta.source_ref.into());
+        if SECRET_GROUPS.contains(&self.entity_groups[index]) {
+            details.insert("severity".into(), meta.severity(value).as_str().into());
+        }
+        details
     }
 
     fn details(&self, text: &str) -> std::collections::HashMap<String, serde_json::Value> {

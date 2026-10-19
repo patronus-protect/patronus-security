@@ -58,67 +58,69 @@ Every credential/secret rule drops documented example and test values: a marker 
 
 Value-capturing credential rules (assignments, URL parameters and userinfo, signatures, auth headers, cookies, CSRF tokens) also drop placeholders (`<…>`, masks, `TODO`, `CHANGEME`, `REPLACE_ME`, `BITTE_AENDERN`, all-upper or all-lower word sequences such as `YOUR_…_HERE`, `HIER_…_EINTRAGEN`, `YOUR-API-TOKEN`) and references (`$VAR`, `${…}`, `%VAR%`, `{{var}}`, Terraform `var.x`, `os.environ[…]`, `os.Getenv`, `System.getenv`, `Environment.GetEnvironmentVariable`, `ENV.fetch`, `process.env.X` and similar environment accessors).
 
-| Rule ID | Result entity group | Extra validator | Default |
-| --- | --- | --- | --- |
-| `dlp_anthropic_key` | `API_KEY` | yes | on |
-| `dlp_openai_key` | `API_KEY` | no | on |
-| `dlp_openai_legacy` | `API_KEY` | no | on |
-| `dlp_openai_svc` | `API_KEY` | no | on |
-| `dlp_huggingface` | `API_KEY` | no | on |
-| `dlp_groq_key` | `API_KEY` | no | on |
-| `dlp_xai_key` | `API_KEY` | no | on |
-| `dlp_replicate` | `API_KEY` | no | on |
-| `dlp_aws_access_key` | `CLOUD_KEY` | no | on |
-| `dlp_aws_secret_key` | `CLOUD_KEY` | no | on |
-| `dlp_google_api_key` | `CLOUD_KEY` | no | on |
-| `dlp_google_oauth_token` | `CLOUD_KEY` | no | on |
-| `dlp_gcp_client_secret` | `CLOUD_KEY` | no | on |
-| `dlp_github_token` | `SECRET_TOKEN` | no | on |
-| `dlp_github_pat` | `SECRET_TOKEN` | no | on |
-| `dlp_gitlab_pat` | `SECRET_TOKEN` | no | on |
-| `dlp_npm_token` | `SECRET_TOKEN` | no | on |
-| `dlp_stripe_key` | `PAYMENT_KEY` | no | on |
-| `dlp_stripe_webhook` | `PAYMENT_KEY` | no | on |
-| `dlp_slack_token` | `SECRET_TOKEN` | no | on |
-| `dlp_discord_token` | `SECRET_TOKEN` | no | on |
-| `dlp_eth_private_key` | `CRYPTO_KEY` | no | on |
-| `dlp_btc_wif` | `CRYPTO_KEY` | no | on |
-| `dlp_private_key_block` | `PRIVATE_KEY` | no | on |
-| `dlp_private_key_header` | `PRIVATE_KEY` | no | on |
-| `dlp_jwt_token` | `SECRET_TOKEN` | no | on |
-| `dlp_credential_in_url` | `CREDENTIAL` | yes | on |
-| `dlp_env_var_secret` | `CREDENTIAL` | yes | on |
-| `dlp_password_assignment` | `CREDENTIAL` | yes | on |
-| `dlp_generic_credential_assignment` | `CREDENTIAL` | yes | on |
-| `dlp_bearer_token` | `SECRET_TOKEN` | yes | on |
-| `dlp_basic_auth` | `CREDENTIAL` | yes | on |
-| `dlp_signed_url_signature` | `CREDENTIAL` | yes | on |
-| `dlp_session_cookie` | `CREDENTIAL` | yes | on |
-| `dlp_csrf_token` | `SECRET_TOKEN` | yes | on |
-| `dlp_password_hash` | `PASSWORD_HASH` | yes | on |
-| `dlp_url_userinfo_password` | `CREDENTIAL` | yes | on |
-| `dlp_de_vat_id` | `dlp.de.vat_id` | no | off |
-| `dlp_de_commercial_register_number` | `dlp.de.commercial_register_number` | yes | off |
-| `dlp_de_facility_number_bsnr` | `dlp.de.facility_number_bsnr` | no | off |
-| `dlp_record_case_id` | `dlp.record.case_id` | yes | off |
-| `dlp_record_contract_id` | `dlp.record.contract_id` | yes | off |
-| `dlp_record_claim_id` | `dlp.record.claim_id` | yes | off |
-| `dlp_record_order_id` | `dlp.record.order_id` | yes | off |
-| `dlp_record_invoice_id` | `dlp.record.invoice_id` | yes | off |
-| `dlp_project_id` | `dlp.project_id` | yes | off |
-| `dlp_organization_id` | `dlp.organization_id` | yes | off |
-| `dlp_internal_business_metric` | `dlp.internal.business_metric` | no | off |
-| `dlp_database_dump_insert` | `dlp.content.database_dump` | no | off |
-| `dlp_source_code_fence` | `dlp.content.source_code` | no | off |
-| `dlp_source_code_statement` | `dlp.content.source_code` | no | off |
-| `dlp_source_code_python_rust_assignment` | `dlp.content.source_code` | yes | off |
-| `dlp_source_code_declaration` | `dlp.content.source_code` | no | off |
-| `dlp_source_code_import` | `dlp.content.source_code` | no | off |
-| `dlp_sql_statement` | `dlp.content.sql` | yes | off |
-| `dlp_sql_multiline_statement` | `dlp.content.sql` | no | off |
-| `dlp_database_dump_header` | `dlp.content.database_dump` | no | off |
-| `dlp_stacktrace_block` | `dlp.content.system_log` | no | off |
-| `dlp_structured_system_log` | `dlp.content.system_log` | no | off |
+Each rule carries metadata v2, and every entry of `matched_rules` in the layer details reports it: `provider` for provider-bound formats, `validator_strength` (`checksum`: check digits verified; `structure`: decoded or parsed structure verified; `format`: fixed prefix, alphabet, length or syntax shape; `none`: keyword or context only), `source_ref` (`gitleaks:<rule-id>`, vendor or specification URL, or `ark` for in-house rules; see `research/dlp/rule_sources.yaml`) and, for credential/secret rules, `severity` (`test` for provider test/sandbox credentials such as Stripe `sk_test_`, otherwise `live`). Provider, key and JWT rules drop values whose Shannon entropy is below 3.0 bits per character.
+
+| Rule ID | Result entity group | Provider | Validator | Source | Extra validator | Default |
+| --- | --- | --- | --- | --- | --- | --- |
+| `dlp_anthropic_key` | `API_KEY` | `anthropic` | `format` | `gitleaks:anthropic-api-key` | yes | on |
+| `dlp_openai_key` | `API_KEY` | `openai` | `format` | `gitleaks:openai-api-key` | no | on |
+| `dlp_openai_legacy` | `API_KEY` | `openai` | `format` | `gitleaks:openai-api-key` | no | on |
+| `dlp_openai_svc` | `API_KEY` | `openai` | `format` | `gitleaks:openai-api-key` | no | on |
+| `dlp_huggingface` | `API_KEY` | `huggingface` | `format` | `gitleaks:huggingface-access-token` | no | on |
+| `dlp_groq_key` | `API_KEY` | `groq` | `format` | `ark` | no | on |
+| `dlp_xai_key` | `API_KEY` | `xai` | `format` | `ark` | no | on |
+| `dlp_replicate` | `API_KEY` | `replicate` | `format` | `ark` | no | on |
+| `dlp_aws_access_key` | `CLOUD_KEY` | `aws` | `format` | `gitleaks:aws-access-token` | no | on |
+| `dlp_aws_secret_key` | `CLOUD_KEY` | `aws` | `format` | [docs.aws.amazon.com](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html) | no | on |
+| `dlp_google_api_key` | `CLOUD_KEY` | `google` | `format` | `gitleaks:gcp-api-key` | no | on |
+| `dlp_google_oauth_token` | `CLOUD_KEY` | `google` | `format` | `ark` | no | on |
+| `dlp_gcp_client_secret` | `CLOUD_KEY` | `google` | `format` | `ark` | no | on |
+| `dlp_github_token` | `SECRET_TOKEN` | `github` | `format` | `gitleaks:github-pat` | no | on |
+| `dlp_github_pat` | `SECRET_TOKEN` | `github` | `format` | `gitleaks:github-fine-grained-pat` | no | on |
+| `dlp_gitlab_pat` | `SECRET_TOKEN` | `gitlab` | `format` | `gitleaks:gitlab-pat` | no | on |
+| `dlp_npm_token` | `SECRET_TOKEN` | `npm` | `format` | `gitleaks:npm-access-token` | no | on |
+| `dlp_stripe_key` | `PAYMENT_KEY` | `stripe` | `format` | `gitleaks:stripe-access-token` | no | on |
+| `dlp_stripe_webhook` | `PAYMENT_KEY` | `stripe` | `format` | [docs.stripe.com](https://docs.stripe.com/webhooks) | no | on |
+| `dlp_slack_token` | `SECRET_TOKEN` | `slack` | `format` | [api.slack.com](https://api.slack.com/authentication/token-types) | no | on |
+| `dlp_discord_token` | `SECRET_TOKEN` | `discord` | `format` | `ark` | no | on |
+| `dlp_eth_private_key` | `CRYPTO_KEY` | `ethereum` | `format` | [ethereum.org](https://ethereum.org/en/developers/docs/accounts/) | no | on |
+| `dlp_btc_wif` | `CRYPTO_KEY` | `bitcoin` | `format` | [en.bitcoin.it](https://en.bitcoin.it/wiki/Wallet_import_format) | no | on |
+| `dlp_private_key_block` | `PRIVATE_KEY` | – | `format` | `gitleaks:private-key` | no | on |
+| `dlp_private_key_header` | `PRIVATE_KEY` | – | `format` | `gitleaks:private-key` | no | on |
+| `dlp_jwt_token` | `SECRET_TOKEN` | – | `format` | `gitleaks:jwt` | no | on |
+| `dlp_credential_in_url` | `CREDENTIAL` | – | `none` | `ark` | yes | on |
+| `dlp_env_var_secret` | `CREDENTIAL` | – | `none` | `ark` | yes | on |
+| `dlp_password_assignment` | `CREDENTIAL` | – | `none` | `ark` | yes | on |
+| `dlp_generic_credential_assignment` | `CREDENTIAL` | – | `none` | `ark` | yes | on |
+| `dlp_bearer_token` | `SECRET_TOKEN` | – | `none` | `ark` | yes | on |
+| `dlp_basic_auth` | `CREDENTIAL` | – | `none` | `ark` | yes | on |
+| `dlp_signed_url_signature` | `CREDENTIAL` | – | `none` | `ark` | yes | on |
+| `dlp_session_cookie` | `CREDENTIAL` | – | `none` | `ark` | yes | on |
+| `dlp_csrf_token` | `SECRET_TOKEN` | – | `none` | `ark` | yes | on |
+| `dlp_password_hash` | `PASSWORD_HASH` | – | `format` | `ark` | yes | on |
+| `dlp_url_userinfo_password` | `CREDENTIAL` | – | `none` | `ark` | yes | on |
+| `dlp_de_vat_id` | `dlp.de.vat_id` | – | `format` | `ark` | no | off |
+| `dlp_de_commercial_register_number` | `dlp.de.commercial_register_number` | – | `format` | `ark` | yes | off |
+| `dlp_de_facility_number_bsnr` | `dlp.de.facility_number_bsnr` | – | `format` | `ark` | no | off |
+| `dlp_record_case_id` | `dlp.record.case_id` | – | `none` | `ark` | yes | off |
+| `dlp_record_contract_id` | `dlp.record.contract_id` | – | `none` | `ark` | yes | off |
+| `dlp_record_claim_id` | `dlp.record.claim_id` | – | `none` | `ark` | yes | off |
+| `dlp_record_order_id` | `dlp.record.order_id` | – | `none` | `ark` | yes | off |
+| `dlp_record_invoice_id` | `dlp.record.invoice_id` | – | `none` | `ark` | yes | off |
+| `dlp_project_id` | `dlp.project_id` | – | `none` | `ark` | yes | off |
+| `dlp_organization_id` | `dlp.organization_id` | – | `none` | `ark` | yes | off |
+| `dlp_internal_business_metric` | `dlp.internal.business_metric` | – | `format` | `ark` | no | off |
+| `dlp_database_dump_insert` | `dlp.content.database_dump` | – | `format` | `ark` | no | off |
+| `dlp_source_code_fence` | `dlp.content.source_code` | – | `format` | `ark` | no | off |
+| `dlp_source_code_statement` | `dlp.content.source_code` | – | `format` | `ark` | no | off |
+| `dlp_source_code_python_rust_assignment` | `dlp.content.source_code` | – | `format` | `ark` | yes | off |
+| `dlp_source_code_declaration` | `dlp.content.source_code` | – | `format` | `ark` | no | off |
+| `dlp_source_code_import` | `dlp.content.source_code` | – | `format` | `ark` | no | off |
+| `dlp_sql_statement` | `dlp.content.sql` | – | `structure` | `ark` | yes | off |
+| `dlp_sql_multiline_statement` | `dlp.content.sql` | – | `format` | `ark` | no | off |
+| `dlp_database_dump_header` | `dlp.content.database_dump` | – | `format` | `ark` | no | off |
+| `dlp_stacktrace_block` | `dlp.content.system_log` | – | `format` | `ark` | no | off |
+| `dlp_structured_system_log` | `dlp.content.system_log` | – | `format` | `ark` | no | off |
 
 ## DLP relationship rules (5)
 

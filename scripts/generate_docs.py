@@ -168,13 +168,20 @@ def parse_native_patterns(
         name = re.search(r'\bname:\s*"([^"]+)"', block)
         entity_group = re.search(r'\bentity_group:\s*"([^"]+)"', block)
         if name and entity_group:
-            patterns.append(
-                {
-                    "id": name.group(1),
-                    "entity_group": entity_group.group(1),
-                    "validated": "None" not in _field(block, "validator"),
-                }
-            )
+            pattern = {
+                "id": name.group(1),
+                "entity_group": entity_group.group(1),
+                "validated": "None" not in _field(block, "validator"),
+            }
+            meta = re.search(r'\bmeta:\s*RuleMeta::new\(\s*ValidatorStrength::(\w+),\s*"([^"]+)"', block)
+            if meta:
+                provider = re.search(r'\.with_provider\(\s*"([^"]+)"\s*\)', block)
+                pattern.update(
+                    validator_strength=meta.group(1).lower(),
+                    source_ref=meta.group(2),
+                    provider=provider.group(1) if provider else None,
+                )
+            patterns.append(pattern)
     return patterns
 
 
@@ -187,7 +194,16 @@ def parse_dlp_patterns() -> list[dict[str, str]]:
     patterns = []
     for module, registry in re.findall(r"(\w+)::(\w+)", parts.group(1)):
         patterns.extend(parse_native_patterns(rules_dir / f"{module}.rs", "DlpPattern", registry))
+    for pattern in patterns:
+        if "validator_strength" not in pattern:
+            raise ValueError(f"Missing RuleMeta for {pattern['id']}")
     return patterns
+
+
+def _source_ref_cell(source_ref: str) -> str:
+    if source_ref.startswith("https://"):
+        return f"[{source_ref.removeprefix('https://').split('/')[0]}]({source_ref})"
+    return f"`{source_ref}`"
 
 
 def generate_l1_rule_catalog_doc() -> str:
@@ -259,12 +275,15 @@ def generate_l1_rule_catalog_doc() -> str:
         "",
         "Value-capturing credential rules (assignments, URL parameters and userinfo, signatures, auth headers, cookies, CSRF tokens) also drop placeholders (`<…>`, masks, `TODO`, `CHANGEME`, `REPLACE_ME`, `BITTE_AENDERN`, all-upper or all-lower word sequences such as `YOUR_…_HERE`, `HIER_…_EINTRAGEN`, `YOUR-API-TOKEN`) and references (`$VAR`, `${…}`, `%VAR%`, `{{var}}`, Terraform `var.x`, `os.environ[…]`, `os.Getenv`, `System.getenv`, `Environment.GetEnvironmentVariable`, `ENV.fetch`, `process.env.X` and similar environment accessors).",
         "",
-        "| Rule ID | Result entity group | Extra validator | Default |",
-        "| --- | --- | --- | --- |",
+        "Each rule carries metadata v2, and every entry of `matched_rules` in the layer details reports it: `provider` for provider-bound formats, `validator_strength` (`checksum`: check digits verified; `structure`: decoded or parsed structure verified; `format`: fixed prefix, alphabet, length or syntax shape; `none`: keyword or context only), `source_ref` (`gitleaks:<rule-id>`, vendor or specification URL, or `ark` for in-house rules; see `research/dlp/rule_sources.yaml`) and, for credential/secret rules, `severity` (`test` for provider test/sandbox credentials such as Stripe `sk_test_`, otherwise `live`). Provider, key and JWT rules drop values whose Shannon entropy is below 3.0 bits per character.",
+        "",
+        "| Rule ID | Result entity group | Provider | Validator | Source | Extra validator | Default |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
     ])
     for rule in dlp:
+        provider = f"`{rule['provider']}`" if rule["provider"] else "–"
         lines.append(
-            f"| `{rule['id']}` | `{rule['entity_group']}` | {'yes' if rule['validated'] else 'no'} | {'on' if rule['entity_group'] in credential_groups else 'off'} |"
+            f"| `{rule['id']}` | `{rule['entity_group']}` | {provider} | `{rule['validator_strength']}` | {_source_ref_cell(rule['source_ref'])} | {'yes' if rule['validated'] else 'no'} | {'on' if rule['entity_group'] in credential_groups else 'off'} |"
         )
 
     lines.extend([
