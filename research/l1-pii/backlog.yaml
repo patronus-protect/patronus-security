@@ -190,6 +190,7 @@ tasks:
 
   # ── K: Engine ─────────────────────────────────────────────────────────
   - id: K01
+    status: done
     title: Split pii.rs into modules (core, de, intl, us, uk, eu, …) without behaviour change
     type: refactor
     deps: [E10]
