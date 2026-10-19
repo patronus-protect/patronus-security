@@ -12,6 +12,12 @@ result shapes may be breaking for downstream users, and is called out explicitly
 ### Fixed
 
 - Score `rust/examples/12_l1_pii_fixture_eval.rs` on character offsets. It compared the UTF-8 byte offsets of `native:pii` spans with the code-point offsets of `dynamic_pii.jsonl`, so every span after a non-ASCII character counted as one FP and one FN. Gold spans outside the text now abort the run, and the example's unit tests run with `cargo test`. **Detection change:** none; this is evaluation tooling only.
+- `scripts/l1_dlp/run_baselines.py run --tool detect-secrets` no longer aborts the whole run when
+  a plugin raises on one file (a YAML date the detect-secrets YAML transformer cannot parse in the
+  benign-code dev split). That file is listed under `errors` in `<output>.meta.json` (row `id`,
+  file name, exception class only) with no spans, and every other file keeps its findings, as in
+  `latency.py`. The metadata of all three tools now carries `errors`, and the summary line counts
+  them. **Detection change:** none; this is evaluation tooling only.
 
 ## [0.1.10] - 2026-10-16
 

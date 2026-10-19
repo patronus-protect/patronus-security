@@ -13,7 +13,8 @@ Each output row carries ``id`` and ``evidence_spans`` with code-point
 ``rule_id`` (the tool's own rule, detector or plugin), ``label`` (``<tool>.<rule_id>``),
 and ``entities``/``groups`` from ``research/dlp/entity_map.yaml``. No secret text is
 written. ``<output>.meta.json`` records version, binary SHA-256, entity-map and I/O
-digests and counts of unlocated findings, without timestamps; reruns are byte-identical.
+digests, counts of unlocated findings and the files a tool failed on (``errors``: a
+detect-secrets plugin raised; the scan goes on), without timestamps; reruns are byte-identical.
 
     python3 scripts/l1_dlp/run_baselines.py versions
     python3 scripts/l1_dlp/run_baselines.py check-entity-map
@@ -142,6 +143,14 @@ class Finding:
     part: str | None = None  # multi-part secret: which part (selects the entity)
     # Span already located by the producer (detect-secrets worker), or None.
     located: tuple[int, int, tuple[str, ...]] | None = None
+
+
+@dataclass(frozen=True)
+class ScanError:
+    """A document the tool failed on (exception class only; messages may quote the text)."""
+
+    doc: int
+    error: str
 
 
 def sha256_bytes(data: bytes) -> str:
@@ -361,30 +370,35 @@ def uri_fallbacks(values: Iterable[str], parts: dict[str, str]) -> tuple[tuple[s
     return tuple(fallbacks)
 
 
-def parse_detect_secrets(stdout: str, root: Path) -> list[Finding]:
-    """Worker JSON lines -> findings (plugin class, line, span located by the worker).
+def parse_detect_secrets(stdout: str, root: Path) -> tuple[list[Finding], list[ScanError]]:
+    """Worker JSON lines -> findings (plugin class, line, span located by the worker) and errors.
 
     The worker never prints the secret value, only its code-point span in the file (or
     ``null`` when the value is not in the text); such findings count as ``unlocated``.
+    A line with ``error`` names a file a plugin raised on.
     """
     findings = []
+    errors = []
     for raw_line in stdout.splitlines():
         if raw_line.strip():
             item = json.loads(raw_line)
             doc = int(PurePosixPath(item["path"]).parts[0])
+            if "error" in item:
+                errors.append(ScanError(doc=doc, error=str(item["error"])))
+                continue
             located = None
             if item.get("start") is not None and item.get("end") is not None:
                 located = (int(item["start"]), int(item["end"]), tuple(item.get("normalization") or ()))
             findings.append(
                 Finding(doc=doc, rule_id=item["plugin"], secret="", line=int(item["line"]), located=located)
             )
-    return findings
+    return findings, errors
 
 
 def scan_with_tool(
     tool: str, rows: list[dict[str, Any]], bin_dir: Path, detect_secrets_python: Path
-) -> list[Finding]:
-    """Materialize ``rows`` and run the pinned tool once over all of them."""
+) -> tuple[list[Finding], list[ScanError]]:
+    """Materialize ``rows`` and run the pinned tool once over all of them; findings and errors."""
     texts = [row["text"] for row in rows]
     with tempfile.TemporaryDirectory(prefix="ark-dlp-baseline-") as tmp:
         work = Path(tmp)
@@ -406,8 +420,8 @@ def scan_with_tool(
         result = subprocess.run(command, cwd=work, env=env, capture_output=True, text=True, check=False)
         _check(tool, result)
         if tool == "gitleaks":
-            return parse_gitleaks(json.loads(report.read_text(encoding="utf-8") or "[]"), root, texts)
-        return parse_trufflehog(result.stdout, root)
+            return parse_gitleaks(json.loads(report.read_text(encoding="utf-8") or "[]"), root, texts), []
+        return parse_trufflehog(result.stdout, root), []
 
 
 def _check(tool: str, result: subprocess.CompletedProcess) -> None:
@@ -741,14 +755,14 @@ def run(
     input_path: Path,
     output_path: Path,
     meta_path: Path,
-    scan: Callable[[str, list[dict[str, Any]]], list[Finding]],
+    scan: Callable[[str, list[dict[str, Any]]], tuple[list[Finding], list[ScanError]]],
     installed: dict[str, str],
     entity_map_path: Path = ENTITY_MAP_PATH,
 ) -> dict[str, Any]:
     """Write predictions plus a timestamp-free metadata sidecar; return the metadata."""
     source = input_path.read_bytes()
     rows = read_rows(input_path)
-    findings = scan(tool, rows) if rows else []
+    findings, errors = scan(tool, rows) if rows else ([], [])
     predictions, summary = predict(tool, rows, findings, load_entity_index(entity_map_path))
     encoded = "".join(
         json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in predictions
@@ -761,6 +775,11 @@ def run(
         "installed": installed,
         "command": COMMANDS.get(tool, ["detect_secrets.core.scan.scan_file", "default_settings()"]),
         "entity_map_sha256": sha256_bytes(entity_map_path.read_bytes()),
+        # Files the tool failed on; their rows have no spans (the CLI would have aborted).
+        "errors": [
+            {"id": rows[e.doc]["id"], "file": document_filename(rows[e.doc]), "error": e.error}
+            for e in sorted(errors, key=lambda e: (e.doc, e.error))
+        ],
         "input_sha256": sha256_bytes(source),
         "output_sha256": sha256_bytes(encoded),
         "rows": len(predictions),
@@ -780,6 +799,7 @@ def detect_secrets_worker(root: Path) -> int:
     Equivalent to ``detect-secrets scan --all-files`` per file, but keeps the plain
     value the plugin reported. Regex plugins that capture only the token prefix
     (``(ghp|…)_…``, ``glpat``) report the whole match instead, so the value is the token.
+    Unlike the CLI, a file a plugin raises on does not abort the scan (``worker_lines``).
     """
     from detect_secrets.__version__ import VERSION
     from detect_secrets.core.plugins.util import get_mapping_from_secret_type_to_class
@@ -795,22 +815,40 @@ def detect_secrets_worker(root: Path) -> int:
             print("detect-secrets verification must stay off", file=sys.stderr)
             return 2
         plugins = {type(plugin).__name__: plugin for plugin in get_plugins()}
-        for path in sorted(p for p in root.rglob("*") if p.is_file()):
-            # Same code points as the row text (materialize wrote it verbatim; no newline
-            # translation), so the offsets below index the row directly.
-            text = path.read_bytes().decode("utf-8", errors="replace")
-            records = worker_records(
-                text,
-                (
-                    (secret.line_number, classes[secret.type].__name__, secret.secret_value or "")
-                    for secret in scan_file(str(path))
-                ),
-                plugins,
-            )
-            relative = str(PurePosixPath(*path.relative_to(root).parts))
-            for record in records:
-                print(json.dumps({"path": relative, **record}, sort_keys=True))
+
+        def secrets(path: Path) -> list[tuple[int, str, str]]:
+            return [
+                (secret.line_number, classes[secret.type].__name__, secret.secret_value or "")
+                for secret in scan_file(str(path))
+            ]
+
+        for line in worker_lines(root, secrets, plugins):
+            print(line)
     return 0
+
+
+def worker_lines(
+    root: Path, scan: Callable[[Path], list[tuple[int, str, str]]], plugins: dict[str, Any]
+) -> Iterator[str]:
+    """JSON lines for every file under ``root``: one per located secret, one per failed file.
+
+    The detect-secrets CLI aborts the whole scan when a plugin raises on one file (a YAML
+    date its transformer cannot parse); here that file yields ``{"path", "error"}`` with the
+    exception class only (the message may quote the text), its partial findings are dropped
+    and the scan goes on, as in ``latency.py``.
+    """
+    for path in sorted(p for p in root.rglob("*") if p.is_file()):
+        relative = str(PurePosixPath(*path.relative_to(root).parts))
+        try:
+            secrets = scan(path)
+        except Exception as exc:  # noqa: BLE001 - listed in the meta, like a file the CLI fails on
+            yield json.dumps({"path": relative, "error": type(exc).__name__}, sort_keys=True)
+            continue
+        # Same code points as the row text (materialize wrote it verbatim; no newline
+        # translation), so the offsets below index the row directly.
+        text = path.read_bytes().decode("utf-8", errors="replace")
+        for record in worker_records(text, secrets, plugins):
+            yield json.dumps({"path": relative, **record}, sort_keys=True)
 
 
 def worker_records(
@@ -906,7 +944,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     print(
         f"{args.tool}: {meta['rows']} rows, {meta['spans']} spans, "
-        f"{sum(meta['unlocated'].values())} unlocated -> {args.output} (sha256 {meta['output_sha256'][:12]})",
+        f"{sum(meta['unlocated'].values())} unlocated, {len(meta['errors'])} errors -> {args.output} (sha256 {meta['output_sha256'][:12]})",
         file=sys.stderr,
     )
     return 0

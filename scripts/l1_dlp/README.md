@@ -51,8 +51,13 @@ mehrere Entitäten haben, ein unbekannter Name hat `[]`. Gleicher Span und gleic
 erscheinen einmal. Das Format passt zu `fp-per-mb`/`fp-report` (`evidence_spans` mit
 `rule_id`). `<output>.meta.json` enthält Pins, installierte Versionen und Binary-SHA-256, den
 Aufruf, SHA-256 von `entity_map.yaml`, Eingabe und Ausgabe, und Zähler: Funde je Regel, nicht
-lokalisierbare Funde (`regel:decoder`), angewandte Normalisierungen und Regeln ohne Entität.
-Zeitstempel fehlen; zwei Läufe sind byte-identisch.
+lokalisierbare Funde (`regel:decoder`), angewandte Normalisierungen und Regeln ohne Entität,
+dazu `errors`: Dateien, an denen das Tool gescheitert ist (`id`, Dateiname, nur die
+Ausnahmeklasse). detect-secrets' CLI bricht den ganzen Scan ab, wenn ein Plugin auf einer Datei
+eine Ausnahme wirft (im Benign-Code-Dev-Split ein YAML-Datum, das der YAML-Transformer nicht
+parsen kann); der Worker listet die Datei dort, verwirft ihre Teilfunde und scannt weiter wie
+`latency.py`. Die Zeile bleibt in der Ausgabe, ohne Spans. Zeitstempel fehlen; zwei Läufe sind
+byte-identisch.
 
 **Span-Normalisierung auf den Wert.** Keines der Tools liefert Code-Point-Offsets. Der Runner
 sucht deshalb den gemeldeten Wert im Text und normalisiert den Span auf den Wert, wie ihn die
