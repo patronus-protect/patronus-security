@@ -231,29 +231,28 @@ def restack(open_prs: list[dict]) -> tuple[tuple[str, str], dict | None]:
         head = pr["headRefOid"]
         if rec is None:
             print(f"WARN=unrecorded stack branch {name}; leaving it untouched")
+        elif (rec["base"] != prev_name or rec["base_sha"] != prev_sha) and subprocess.run(
+                ["git", *GIT_SAFE, "merge-base", "--is-ancestor", prev_sha, head], cwd=REPO).returncode == 0:
+            # Rebased outside the runner (by hand or by a report run), the bottom branch included:
+            # only record the new base; replaying from the stale base would duplicate the parent's commits.
+            stack[name] = {"base": prev_name, "base_sha": prev_sha}
+            print(f"RECORDED={name} already on {prev_name}")
         elif (pr.get("mergeable") == "CONFLICTING" if prev_name == "main" and rec["base"] == "main"
               else rec["base_sha"] != prev_sha):
-            # The bottom branch stays on its main commit until GitHub reports a conflict with main.
-            if subprocess.run(["git", *GIT_SAFE, "merge-base", "--is-ancestor", prev_sha, head],
-                              cwd=REPO).returncode == 0:
-                # Rebased outside the runner (by hand or by a report run): only record the new base;
-                # replaying from the stale base would duplicate the parent's commits.
-                stack[name] = {"base": prev_name, "base_sha": prev_sha}
-                print(f"RECORDED={name} already on {prev_name}")
-                if pr["baseRefName"] != prev_name:
-                    run(["gh", "pr", "edit", str(pr["number"]), "--repo", GH_REPO, "--base", prev_name])
-                prev_name, prev_sha = name, head
-                continue
+            # The bottom branch stays on its main commit until GitHub reports a conflict with main;
+            # its old base is where it forks from main, whatever stack.json still says.
+            old_base = (git("merge-base", head, prev_sha) if prev_name == "main" and rec["base"] == "main"
+                        else rec["base_sha"])
             git("checkout", "--quiet", "--detach", head)
             proc = subprocess.run(
-                ["git", *GIT_SAFE, "rebase", "--quiet", "--onto", prev_sha, rec["base_sha"]],
+                ["git", *GIT_SAFE, "rebase", "--quiet", "--onto", prev_sha, old_base],
                 cwd=REPO, text=True, capture_output=True,
             )
             if proc.returncode != 0:
                 git("rebase", "--abort", check=False)
                 git("checkout", "--quiet", "--detach", "origin/main")
                 print(f"CONFLICT_BRANCH={name}")
-                conflict = {"branch": name, "pr": pr["url"], "old_head": head, "old_base": rec["base_sha"],
+                conflict = {"branch": name, "pr": pr["url"], "old_head": head, "old_base": old_base,
                             "onto_name": prev_name, "onto": prev_sha}
                 break
             new_head = sha("HEAD")
