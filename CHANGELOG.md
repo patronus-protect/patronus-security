@@ -19,6 +19,17 @@ result shapes may be breaking for downstream users, and is called out explicitly
   latency comparison, a static coverage matrix against Google Cloud DLP and Microsoft Purview and
   TRIAGE candidates. **Detection change:** none; this is evaluation tooling and a report only.
 
+### Changed
+
+- The DLP rules moved out of `rust/src/detectors/dlp/dlp.rs` into family modules under
+  `rust/src/detectors/dlp/rules/` (`providers`, `crypto`, `credentials`, `hashes`, `identifiers`,
+  `content`), each with its own validators. `DLP_PATTERNS` keeps its path and type and
+  concatenates the families in the previous rule order. That order is pinned in
+  `rust/tests/dlp_rule_registry.rs` because the first matching rule sets the result class.
+  `scripts/generate_docs.py` and `scripts/measure_demo_pii_dlp.py` now read the rule modules.
+  **Detection change:** none. Goldens, the golden eval and the full DLP output on the dev split
+  are bit-identical.
+
 ### Fixed
 
 - Score `rust/examples/12_l1_pii_fixture_eval.rs` on character offsets. It compared the UTF-8 byte offsets of `native:pii` spans with the code-point offsets of `dynamic_pii.jsonl`, so every span after a non-ASCII character counted as one FP and one FN. Gold spans outside the text now abort the run, and the example's unit tests run with `cargo test`. **Detection change:** none; this is evaluation tooling only.

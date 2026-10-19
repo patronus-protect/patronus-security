@@ -151,16 +151,20 @@ def _field(block: str, name: str) -> str:
     return match.group(1).strip()
 
 
-def parse_native_patterns(path: Path, struct_name: str) -> list[dict[str, str]]:
+def parse_native_patterns(
+    path: Path, struct_name: str, registry: str = r"\w+"
+) -> list[dict[str, str]]:
     source = path.read_text()
     static_start = re.search(
-        rf"pub static \w+:\s*&\[{struct_name}\]\s*=\s*&\[", source
+        rf"pub(?:\(\w+\))? (?:static|const) {registry}:\s*&\[{struct_name}\]\s*=\s*&\[",
+        source,
     )
     if not static_start:
         raise ValueError(f"Missing static {struct_name} registry in {path}")
     source = source[static_start.end():]
+    source = source[:re.search(r"^\}?\];", source, flags=re.M).end()]
     patterns = []
-    for block in re.findall(rf"\b{struct_name}\s*\{{(.*?)\n\s*\}},", source, flags=re.S):
+    for block in re.findall(rf"\b{struct_name}\s*\{{(.*?)\n\s*\}}(?:,|\];)", source, flags=re.S):
         name = re.search(r'\bname:\s*"([^"]+)"', block)
         entity_group = re.search(r'\bentity_group:\s*"([^"]+)"', block)
         if name and entity_group:
@@ -174,9 +178,21 @@ def parse_native_patterns(path: Path, struct_name: str) -> list[dict[str, str]]:
     return patterns
 
 
+def parse_dlp_patterns() -> list[dict[str, str]]:
+    """DLP rules from the family modules, in the registry order of `rules/mod.rs`."""
+    rules_dir = ROOT / "rust/src/detectors/dlp/rules"
+    parts = re.search(r"const PARTS:[^=]*=\s*&\[(.*?)\];", (rules_dir / "mod.rs").read_text(), re.S)
+    if not parts:
+        raise ValueError(f"Missing DLP rule registry in {rules_dir / 'mod.rs'}")
+    patterns = []
+    for module, registry in re.findall(r"(\w+)::(\w+)", parts.group(1)):
+        patterns.extend(parse_native_patterns(rules_dir / f"{module}.rs", "DlpPattern", registry))
+    return patterns
+
+
 def generate_l1_rule_catalog_doc() -> str:
     pii = parse_native_patterns(ROOT / "rust/src/detectors/pii/pii.rs", "PiiPattern")
-    dlp = parse_native_patterns(ROOT / "rust/src/detectors/dlp/dlp.rs", "DlpPattern")
+    dlp = parse_dlp_patterns()
     credential_groups = {
         "API_KEY", "CLOUD_KEY", "CREDENTIAL", "CRYPTO_KEY", "PASSWORD_HASH",
         "PAYMENT_KEY", "PRIVATE_KEY", "SECRET_TOKEN",
