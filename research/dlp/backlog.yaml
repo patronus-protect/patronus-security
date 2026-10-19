@@ -157,7 +157,7 @@ tasks:
   # (EXAMPLE…/TESTKEY… markers, repeated chunks, 000000 tails); every provider rule fires on all 80.
   # TruffleHog filters these (API_KEY P 99.7 vs. ARK 33.3). Slice of K06 pulled forward; K06 keeps the
   # vendor-documented example allowlist, severity test and the template syntaxes beyond T07.
-  - {id: T06, title: "Example/test value check for every secret rule (provider and generic): marker words (EXAMPLE, SAMPLE, TEST/TESTKEY, DUMMY, FAKE, BEISPIEL, MUSTER), repeated chunks, sequential runs (1234567890abcdef…), long zero/same-character runs", type: precision-fix, deps: [K01], accept: "Shared helper next to is_secret_value with unit tests (marker in random base62 must not trigger by chance: require a whole marker word or repetition); hard negatives per provider DE/EN; no golden positive lost; dev hard-negative FP doc_example/test_key down by >= 90 %"}
+  - {id: T06, title: "Example/test value check for secret rules: marker words (EXAMPLE, SAMPLE, TEST/TESTKEY, DUMMY, FAKE, BEISPIEL, MUSTER) as whole words for every rule; repeated chunks, sequential runs (1234567890abcdef…) and long zero/same-character runs only for fixed-format provider tokens or with explicit example/test context (docs, sample, fixture), never on their own for generic password/credential assignments", type: precision-fix, deps: [K01], accept: "Shared helper next to is_secret_value with unit tests (marker in random base62 must not trigger by chance: require a whole marker word or repetition); hard negatives per provider DE/EN; positive goldens for weak but real credentials stay detected (password=abcabcabcabc, generic token with a 1234567890abcdef run, provider token with a repeated chunk outside example context); no golden positive lost; dev hard-negative FP doc_example/test_key down by >= 90 %"}
   - {id: T07, title: "Placeholder/reference values in value-capturing rules (env_var_secret, generic/password assignment, credential_in_url, signed_url_signature, url_userinfo_password, csrf, bearer): SCREAMING_SNAKE/kebab placeholders DE/EN (YOUR_…_HERE, BITTE_AENDERN, HIER_…_EINTRAGEN, TODO, CHANGEME, YOUR-API-TOKEN), $VAR, {{var}}, var.x, os.environ[…], ENV.fetch(…), os.Getenv/System.getenv/Environment.GetEnvironmentVariable, process.env.X", type: precision-fix, deps: [K01], accept: "277 dev FP on placeholder/env_ref rows as hard negatives (Ruby/Python/Go/C#/HCL/Handlebars/shell); general code expressions stay with T03"}
 
   - id: K02
@@ -205,7 +205,7 @@ tasks:
     title: Taxonomy v2 (new groups CONNECTION_STRING, WEBHOOK_URL, AUTH_URL, OTP_SECRET, SEED_PHRASE; provider attribute in details)
     type: engine
     deps: [K02]
-    needs_decision: true   # result schema, PlaceholderEncoder, default profiles
+    decision: no new groups; the new kinds stay in existing groups with a subtype in details (approved 2026-10-19)
     accept: docs/reference/result-schema.md and categories updated; old groups unchanged
 
   # ── F: Repair existing rules ──────────────────────────────────────────
@@ -232,7 +232,7 @@ tasks:
   - {id: F13, title: "Bearer/Basic/Cookie/CSRF: decode Basic auth base64 → user:pass; pre-attribute bearer values against JWT/provider; extend cookie names (connect.sid, laravel_session, __Host-*)", type: recall-fix, deps: [K03]}
   - {id: T11, title: "Bearer/Basic/session cookie outside a literal HTTP header line: authorization/proxy_authorization keys in env/JSON/YAML/TOML/code (AUTHORIZATION=Bearer …, \"authorization\": \"Bearer …\", proxyAuthorization), standalone Bearer/Basic values with DE/EN context in tickets/mails/logs, JSESSIONID=/PHPSESSID=/… values without Cookie: — 111 of 120 dev FN", type: recall-fix, deps: [F13], accept: "Basic only when the base64 decodes to user:pass (F13), bearer with entropy/JWT/provider check; dev benign-code FP not higher (swagger-ui tests: Bearer abc123.xyz.789, Bearer secret_token as hard negatives)"}
   - {id: F14, title: "Password hash: relax the anchor requirement in favour of format detection ($2y$, $argon2id$, $6$, $5$, $1$, $apr1$, pbkdf2_sha256$, scrypt) with context", type: recall-fix, deps: [K04]}
-  - {id: F15, title: "Clarify DLP vs. PII ownership for VAT ID, commercial register, BSNR and resolve double labels", type: engine, deps: [K08], needs_decision: true}
+  - {id: F15, title: "Clarify DLP vs. PII ownership for VAT ID, commercial register, BSNR and resolve double labels", type: engine, deps: [K08], decision: "PII owns VAT ID, commercial register and BSNR; DLP does not emit them, T12 covers only DLP-owned classes (approved 2026-10-19)"}
   - {id: F16, title: "Business/record IDs and business_metric: counter-context (example, template, sample), table headers as anchors", type: precision-fix, deps: [K05]}
   - {id: T12, title: "Business/record IDs (opt-in): key-name anchors in config/code (order_id/orderId, vat_id/vatId, bsnr, case_id …) and the label in parentheses in prose (\"(Bestellnummer)\", \"(USt-IdNr.)\") — extended profile recall 4/32 per class on dev", type: recall-fix, deps: [F16, F15], accept: "Extended-profile goldens per class DE/EN; benign-docs flagged not higher"}
 
@@ -307,7 +307,7 @@ tasks:
   - {id: M20, title: "Extend database dumps: pg_dump COPY blocks, mysqldump headers, MongoDB exports (JSON Lines with _id/$oid), Redis/RDB hints", type: recall-fix, deps: [E12]}
   - {id: M21, title: "Extend business metrics: pipeline, CAC/LTV, churn, valuation, burn/runway, budget vs. actual in table form", type: recall-fix, deps: [F16, K05]}
   - {id: M22, title: "Customer/supplier contracts as a class (contracting parties + remuneration + term + confidentiality clause)", type: new-entity, deps: [M01]}
-  - {id: M23, title: "Define the default profile for content/document classes (which classes are on by default)", type: engine, deps: [M22], needs_decision: true}
+  - {id: M23, title: "Define the default profile for content/document classes (which classes are on by default)", type: engine, deps: [M22], decision: "classification markings (M02/M03) on by default, all other content/document classes opt-in (approved 2026-10-19)"}
 
   # ── H: Hardening and wrap-up ──────────────────────────────────────────
   - {id: H01, title: "Hard-negative mining: 1,000 technical benign snippets (hashes, UUIDs, digests, lockfile integrity, commit SHAs, test vectors, docs example keys)", type: precision-fix, deps: [M23, D05, C08, G14]}
