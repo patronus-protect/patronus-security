@@ -99,7 +99,7 @@ GH_REPO = "patronus-protect/patronus-security"
 LABEL = P["label"]
 BRANCH_PREFIX = P["prefix"]
 BACKLOG = P["backlog"]
-MAX_OPEN = 6
+MAX_OPEN = 15
 NOTHING = 10
 
 CURRENT = STATE / "current.json"

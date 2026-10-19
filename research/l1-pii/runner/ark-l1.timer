@@ -1,8 +1,8 @@
 [Unit]
-Description=ARK L1-PII runs at 07:00 and 15:00 Europe/Berlin
+Description=ARK L1-PII runs hourly at :00 (shared run lock with L1-DLP; a busy lock skips the run)
 
 [Timer]
-OnCalendar=*-*-* 07,15:00:00 Europe/Berlin
+OnCalendar=*-*-* *:00:00
 Persistent=false
 
 [Install]

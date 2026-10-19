@@ -75,7 +75,9 @@ spätere regionale Telefonprüfung (Hebel 4) darf `+1 000-000-0000` und `555-01x
 ## Ausführung: systemd-Timer auf der VPS → Stacked Branch
 
 Eine Claude-Cloud-Routine kommt nicht auf die VPS (Port 22 aus der Cloud gesperrt). Deshalb plant
-die VPS selbst: `ark-l1.timer` startet täglich 07:00 und 15:00 (Europe/Berlin) `runner/run.sh`.
+die VPS selbst: `ark-l1.timer` startet stündlich zur vollen Stunde `runner/run.sh`, `ark-dlp.timer`
+zur halben Stunde `runner/run.sh --program dlp`. Beide teilen ein Lock; ist es belegt, entfällt der Lauf.
+Ab 15 offenen Stack-PRs pro Programm pausiert der Runner (`MAX_OPEN`).
 
 ```
 run.sh
