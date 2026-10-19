@@ -115,6 +115,24 @@ tasks:
       validator; Luhn-invalid credit_card values in dynamic_pii.jsonl are excluded from L1 evaluations
       or marked invalid; validators stay unchanged
 
+  - id: T16
+    title: Report gold gaps of the neutral corpora separately (duplicate values, checksum-invalid gold) without editing the corpora
+    type: eval-infra
+    deps: [E06]
+    needs_decision: true
+    source: "TRIAGE 2026-W43 (research/l1-pii/triage/2026-W43.md, buckets 13 + 14)"
+    question: >-
+      Gretel annotates only one copy of `[x@y.com](mailto:x@y.com)` (117 Ark email FP on dev), leaves many
+      personal and role addresses, fax numbers and `Account Number: 123456789` unannotated, and 14/70 IBAN and
+      21/53 PAN gold values fail mod97/Luhn (Nano: 65/82 PAN). Ark and Presidio pay for this alike, but it
+      dominates small F1 margins (Gretel email: Ark 52.2 vs tuned 51.3). Should the scoreboard (a) keep
+      scoring as is and only report these buckets, (b) not count a prediction as FP when its value equals an
+      annotated gold value of the same id in the same row, and/or (c) exclude checksum-invalid gold of
+      checksum-validated ids from recall for both engines? The frozen corpora stay unchanged in every option.
+    accept: >-
+      scoreboard.py reports per corpus and entity: predictions equal to an annotated gold value elsewhere in
+      the row, and gold values failing the entity's validator; gate metrics change only as decided; tests
+
   - id: E12
     title: Presidio-favored gold sets (presidio-evaluator synthetic data, Presidio recognizer test cases) + scoring per source family
     type: eval-infra
@@ -148,6 +166,22 @@ tasks:
     accept: >-
       Rule in research/l1-pii/README.md; scripts/l1_presidio/count_validated.py counts from
       entity_map.yaml and the Presidio registry, with a test
+
+  - id: T15
+    title: Define which Ark mode is scored for M1-M3 (strict default vs. balanced) and score both modes
+    type: eval-infra
+    deps: [E06, K02]
+    needs_decision: true
+    source: "TRIAGE 2026-W43 (research/l1-pii/triage/2026-W43.md, section mode)"
+    question: >-
+      K02 keeps strict as the bit-identical default; balanced/recall are opt-in. Presidio tuned emits
+      context-free patterns and raises them by context (threshold 0.4). The largest M1 gaps on neutral dev
+      corpora (US SSN Gretel 45.6 vs 66.7, passport Nano 3.7 vs 29.4, driver's licence 0 vs 6) only close with
+      context-weighted or context-free findings. Are M1-M3 measured on the default (strict) build, on
+      balanced, or on the better of both per entity? Does the gate guard both modes?
+    accept: >-
+      Rule in research/l1-pii/README.md; scoreboard.py gate scores the decided modes for head and base
+      (strict always), report per mode; tests
 
   # ── K: Engine ─────────────────────────────────────────────────────────
   - id: K01
@@ -201,19 +235,111 @@ tasks:
       bit-identical. Should strict suppress the double labels, only mark them as secondary evidence
       (scoreboard scores primary), or is this left to K07 alone (balanced/recall)?
 
+  - id: T26
+    title: Field-name lexicon FR/ES/IT/NL for the existing anchor rules (DOB, customer/employee ID, account number, CVV, SSN, passport, username)
+    type: recall-fix
+    deps: [K03]
+    source: "TRIAGE 2026-W43 (research/l1-pii/triage/2026-W43.md, bucket 12)"
+    accept: >-
+      Gretel dev has 660 FR/ES/IT/NL rows with 280 Ark FN, many behind field names such as Fecha de
+      Nacimiento, Data di Nascita, date de naissance, klantnummer, bankrekeningnummer, code de sécurité.
+      Lexicon entries in the K03 lexicon, goldens per language (>= 5 positives + 5 hard negatives each for
+      FR, ES, IT, NL), validators unchanged
+
   # ── F: Repair existing rules ──────────────────────────────────────────
   - {id: T04, title: "US phone: span boundary for parenthesized area code, (415) 555-2671 instead of 415) 555-2671", type: fix, deps: [E06], source: "TRIAGE 2026-W42, bucket 2"}
+  - id: T17
+    title: "Phone precision in strict: no matches inside EDI/X12/SWIFT MT elements, zero-padded IDs, 6-4 digit groups"
+    type: precision-fix
+    deps: [E06]
+    source: "TRIAGE 2026-W43 (research/l1-pii/triage/2026-W43.md, buckets 1 + 2)"
+    accept: >-
+      Hard negatives DE + EN: EDIFACT elements (`UNB+UNOC:3+520173321::2`, `NAD+BY+987654321`, `DTM+137:2022…`),
+      X12 (`ST*850*0000012345~`), SWIFT MT (`:62F:/0000001234/`), zero-padded IDs, SE/FI personal numbers
+      `712390-9678`; pii_phone_international does not start inside an alphanumeric or `:`-delimited run,
+      pii_phone_us requires a separator pattern a real NANP number uses (3-3-4), not 6-4. Positives with
+      `+49 …`, `+1 …` and placeholder numbers (T01) stay; Gretel dev: ≥ 100 of 161 phone FP gone
+  - id: T18
+    title: "Phone span boundaries: no line break inside a number, NANP trunk prefix 1- (1-800-123-4567), 00 international prefix"
+    type: fix
+    deps: [T04]
+    source: "TRIAGE 2026-W43 (research/l1-pii/triage/2026-W43.md, bucket 3)"
+    accept: >-
+      `+1-123-456-7890\n\n2` ends before the line break (pii_phone_international uses `\s`); `1-800-123-4567`
+      and `1 (800) 123-4567` include the trunk prefix; `0049 …`/`001 …` keep the prefix; no new matches elsewhere
   - {id: F01, title: "Phone regional via the phonenumber crate (DE/AT/CH/US/UK/FR/…), check cargo-deny", type: recall-fix, deps: [K03]}
+  - id: T19
+    title: "Credit card precision in strict: IIN ranges + lengths per brand, no PAN after `+`, in date-time stamps or token segments"
+    type: precision-fix
+    deps: [E06]
+    source: "TRIAGE 2026-W43 (research/l1-pii/triage/2026-W43.md, bucket 4; strict part of F02 pulled forward)"
+    accept: >-
+      Hard negatives DE + EN: `+44 20 1234 5678`, `+49 123 456 7890` (no PAN sub-span), `202201010800`,
+      `20220314-123456`, `xoxb-…-485275870833-…`, ZA ID numbers and KR RRN that pass Luhn; IIN/length table
+      with tests per brand; every Luhn-valid PAN gold value in pii_l1, the rule fixture and the dev corpora
+      stays found; Luhn unchanged
   - {id: F02, title: "Credit card: IIN ranges + lengths per brand, context-free in balanced", type: recall-fix, deps: [K05]}
   - {id: T05, title: "Grouped IBAN for all countries in strict mode (blocks of four with letters, e.g. GB82 WEST 1234 5698 7654 32), mod97 unchanged", type: recall-fix, deps: [E06], source: "TRIAGE 2026-W42, bucket 1; M1 risk IBAN"}
+  - id: T21
+    title: "IBAN length per country in strict (SWIFT IBAN registry), SEPA creditor IDs (DE98ZZZ09999999999) are no IBAN"
+    type: precision-fix
+    deps: [T05]
+    source: "TRIAGE 2026-W43 (research/l1-pii/triage/2026-W43.md, bucket 6; strict part of F03 pulled forward)"
+    accept: >-
+      Both Ark hard-negative FP on the synthetic dev set are creditor IDs (`DE30ZZZ56545348553` passes mod97);
+      length table from the SWIFT IBAN registry with a test per country, creditor IDs as hard negatives DE + EN;
+      mod97 unchanged, no IBAN gold value lost
   - {id: F03, title: "IBAN: per-country length table (SWIFT-Registry), grouped/lowercase variants, DE recall", type: recall-fix, deps: [K05]}
   - {id: F04, title: "BIC: ISO 3166 check, low context when an IBAN is nearby", type: recall-fix, deps: [F03]}
   - {id: T06, title: "Email: no matches in URL userinfo (scheme://user:pass@host), credentials stay DLP", type: precision-fix, deps: [E06], source: "TRIAGE 2026-W42, bucket 3"}
+  - id: T20
+    title: "IPv6: no compressed IPv6 inside colon-delimited SWIFT MT / EDIFACT tag chains (:60F::61F:, LIN+1::1:550)"
+    type: precision-fix
+    deps: [E06]
+    source: "TRIAGE 2026-W43 (research/l1-pii/triage/2026-W43.md, bucket 5; M1 risk IP)"
+    accept: >-
+      Hard negatives DE + EN for the 9 Gretel dev shapes (`:28C::52D:`, `:60F::61F::62F:`, `380:21:3::90`,
+      `::EA:20`); a compressed IPv6 directly preceded or followed by a further `:`-group is no match;
+      `2001:db8::1`, `fe80::1%eth0`, `::1` and full IPv6 stay found
+  - id: T23
+    title: "Email: Unicode local parts (RFC 6531) and apostrophes, e.g. moeleprêtr@outlook.com, o'neil@example.com"
+    type: recall-fix
+    deps: [E06]
+    source: "TRIAGE 2026-W43 (research/l1-pii/triage/2026-W43.md, bucket 9; M1 risk email on OpenPII Nano)"
+    accept: >-
+      Nano dev: the 6 Unicode/apostrophe addresses Presidio finds are found; offsets in code points; hard
+      negatives for obfuscated addresses (T01 convention) and for `'@` in prose/code stay negative
   - {id: F05, title: "Email: IANA TLD list, IDN, obfuscated variants", type: precision-fix, deps: [K06]}
+  - id: T22
+    title: "Date of birth in strict: ISO 8601 (1988-05-19) and ordinal dates (18th December 1983) after an existing DOB field name"
+    type: recall-fix
+    deps: [E06]
+    source: "TRIAGE 2026-W43 (research/l1-pii/triage/2026-W43.md, bucket 8)"
+    accept: >-
+      `date of birth: 1926-01-20`, `DateOfBirth=1951-09-12`, `Geburtsdatum: 1985-01-16`, `Date of Birth:
+      18th December 1983`; calendar validation unchanged; ISO dates without a DOB field name (invoice dates,
+      timestamps) stay negative; geb./born on remain F06
   - {id: F06, title: "Date of birth: spelled-out months, geb./born on, numeric with context", type: recall-fix, deps: [K03]}
   - {id: F07, title: "US SSN without separators with context", type: recall-fix, deps: [K03]}
+  - id: T25
+    title: "US SSN AAA-GG-SSSS with proximity and structural context (Social Security Number (SSN) …, ssn=, \"ssn\":, <SSN>)"
+    type: recall-fix
+    deps: [K04]
+    source: "TRIAGE 2026-W43 (research/l1-pii/triage/2026-W43.md, bucket 11; largest M1 gap: Gretel SSN Ark 45.6 vs tuned 66.7)"
+    accept: >-
+      SSA range validator unchanged; Gretel dev SSN F1 ≥ Presidio tuned; hard negatives for dashed
+      3-2-4 values without SSN context (order, reference and part numbers) stay negative in strict
   - {id: F08, title: "Passport/ID card DE: ICAO 9303 check digits (7-3-1), old + new formats", type: precision-fix, deps: [K02]}
   - {id: F09, title: "MRZ lines TD1/TD3 as a separate entity", type: new-entity, deps: [F08]}
+  - id: T24
+    title: "Passport numbers outside DE after an explicit passport field name (passport number/no., Reisepass, pasaporte, passeport, passaporto, paspoort)"
+    type: recall-fix
+    deps: [F08]
+    source: "TRIAGE 2026-W43 (research/l1-pii/triage/2026-W43.md, bucket 10; M1 risk passport on OpenPII Nano: Ark 3.7 vs tuned 29.4)"
+    accept: >-
+      42 of 83 passport FN on Gretel + Nano dev have a passport field name within 45 characters; format-only
+      rule for 6-9 alphanumerics with at least 5 digits; values in DE passport form that fail the ICAO 9303
+      check stay negative (no_relax); per-country formats with check digits stay in A05/B08
   - {id: F10, title: "KVNR check digit", type: precision-fix, deps: [K02]}
   - {id: F11, title: "Pension insurance number (RVNR) check digit", type: precision-fix, deps: [K02]}
   - {id: F12, title: "LANR check digit + BSNR as a new entity", type: precision-fix, deps: [K02]}
