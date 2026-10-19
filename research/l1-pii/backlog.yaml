@@ -94,6 +94,7 @@ tasks:
     deps: []
 
   - id: E09
+    status: done
     title: Add 13_l1_golden_eval to CI
     type: eval-infra
     deps: [E08]

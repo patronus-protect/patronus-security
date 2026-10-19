@@ -19,6 +19,9 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test -p patronus-ark
+      - name: L1 golden evaluation (pii_l1 + dlp_l1)
+        run: cargo run --locked --example 13_l1_golden_eval -- all
+        working-directory: rust
       - run: cargo test -p ark-api
       - run: cargo test -p ark-coordinator
       - run: cargo test -p ark-distributed-protocol
