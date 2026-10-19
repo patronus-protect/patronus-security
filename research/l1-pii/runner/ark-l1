@@ -231,24 +231,46 @@ def restack(open_prs: list[dict]) -> tuple[tuple[str, str], dict | None]:
         head = pr["headRefOid"]
         if rec is None:
             print(f"WARN=unrecorded stack branch {name}; leaving it untouched")
+        elif (rec["base"] != prev_name or rec["base_sha"] != prev_sha) and subprocess.run(
+                ["git", *GIT_SAFE, "merge-base", "--is-ancestor", prev_sha, head], cwd=REPO).returncode == 0:
+            # Rebased outside the runner (by hand or by a report run), the bottom branch included:
+            # only record the new base; replaying from the stale base would duplicate the parent's commits.
+            stack[name] = {"base": prev_name, "base_sha": prev_sha}
+            print(f"RECORDED={name} already on {prev_name}")
         elif (pr.get("mergeable") == "CONFLICTING" if prev_name == "main" and rec["base"] == "main"
               else rec["base_sha"] != prev_sha):
-            # The bottom branch stays on its main commit until GitHub reports a conflict with main.
+            # The bottom branch stays on its main commit until GitHub reports a conflict with main;
+            # its old base is where it forks from main, whatever stack.json still says.
+            old_base = (git("merge-base", head, prev_sha) if prev_name == "main" and rec["base"] == "main"
+                        else rec["base_sha"])
             git("checkout", "--quiet", "--detach", head)
             proc = subprocess.run(
-                ["git", *GIT_SAFE, "rebase", "--quiet", "--onto", prev_sha, rec["base_sha"]],
+                ["git", *GIT_SAFE, "rebase", "--quiet", "--onto", prev_sha, old_base],
                 cwd=REPO, text=True, capture_output=True,
             )
             if proc.returncode != 0:
                 git("rebase", "--abort", check=False)
                 git("checkout", "--quiet", "--detach", "origin/main")
                 print(f"CONFLICT_BRANCH={name}")
-                conflict = {"branch": name, "pr": pr["url"], "old_head": head, "old_base": rec["base_sha"],
+                conflict = {"branch": name, "pr": pr["url"], "old_head": head, "old_base": old_base,
                             "onto_name": prev_name, "onto": prev_sha}
                 break
             new_head = sha("HEAD")
-            git("push", "--quiet", f"--force-with-lease=refs/heads/{name}:{head}", "origin",
-                f"HEAD:refs/heads/{name}")
+            try:
+                git("push", "--quiet", f"--force-with-lease=refs/heads/{name}:{head}", "origin",
+                    f"HEAD:refs/heads/{name}")
+            except RuntimeError as err:
+                # E.g. a branch that touches .github/workflows and a token without `workflow` scope.
+                # Keep the rebase for a push from outside; once the branch is there, the next run
+                # only records it (see above).
+                ref = f"refs/ark/{PROGRAM}/restack/{name}"
+                git("update-ref", ref, new_head)
+                git("checkout", "--quiet", "--detach", "origin/main")
+                reason = next((line.strip() for line in str(err).splitlines() if "rejected" in line),
+                              str(err).strip().splitlines()[-1])
+                print(f"RESTACK_PUSH_ERROR={name}: {reason}\nRESTACK_REF={ref} {new_head} lease={head}")
+                conflict = {"branch": name, "push_error": reason}
+                break
             git("checkout", "--quiet", "--detach", "origin/main")
             stack[name] = {"base": prev_name, "base_sha": prev_sha}
             head = new_head
@@ -364,6 +386,8 @@ def cmd_next() -> int:
     open_prs = prs("open")
     top, conflict = restack(open_prs)
     if conflict is not None:
+        if conflict.get("push_error"):
+            return nothing(f"RESTACK_PUSH_ERROR {conflict['branch']} (push the RESTACK_REF from outside)")
         if f"RESTACK:{conflict['branch']}" in load(BLOCKED, {}):
             return nothing(f"REBASE_CONFLICT {conflict['branch']} (agent failed; resolve by hand, then unblock)")
         return start_restack(conflict)
