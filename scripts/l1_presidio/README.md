@@ -254,6 +254,27 @@ und es mindestens eine gibt; `M1: MET` nur, wenn `neutral` und `presidio_favored
 halten. `ark_authored` wird gedruckt, entscheidet aber nicht. `--check` endet mit Exit 1, wenn M1
 nicht erfüllt ist; fehlende Vorhersagedateien sind Exit 2.
 
+### Baseline-Bericht
+
+`report` rechnet beliebig viele Engines auf denselben Gold-Dateien und schreibt Markdown-Tabellen
+nach stdout (Grundlage von [`research/l1-pii/scoreboard/baseline.md`](../../research/l1-pii/scoreboard/baseline.md), E11):
+
+```bash
+python3 scripts/l1_presidio/scoreboard.py report --gold DEV \
+  --engine ark=/tmp/ark --engine presidio-default=/tmp/presidio-default \
+  --engine presidio-tuned=/tmp/presidio-tuned   # [--json F]
+```
+
+- je Quellfamilie und Engine: Zeilen, Gold, Vorhersagen, exakt P/R/F1, überlappend F1, EN- und
+  DE-F1, Hard-Negative-Treffer (der Familie ihrer Zeile zugeordnet);
+- je Korpus exakt P/R/F1 je Engine, je Familie und Entität mit Gold exakt F1 je Engine, jeweils
+  bestes F1 fett;
+- M1 der ersten Engine (ARK) gegen jede weitere: je Familie gehaltene gemeinsame IDs und die
+  Entitäten darunter.
+
+Die erste Engine ist immer ARK; mindestens zwei Engines, eindeutige Namen, fehlende
+Vorhersagedateien sind Exit 2.
+
 Im Gate (`ark-l1 gate`) läuft der Schritt mit dem Presidio-Venv, ohne Netz, mit Lesezugriff auf
 Holdout und Checkout und Schreibzugriff nur auf den Cache; `VIRTUAL_ENV` zeigt auf das Gate-Venv,
 in das der Schritt `python-ext` den Head installiert hat.
