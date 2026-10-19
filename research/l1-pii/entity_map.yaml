@@ -351,3 +351,83 @@ entities:
       ai4privacy-openpii-nano-1k: [STREET]
       gretel-synthetic-pii-finance: [street_address]
       presidio-evaluator-synth-v2: [STREET_ADDRESS]
+
+# ── M3: prüfziffervalidierte Entitäten (Zählregel T03, research/l1-pii/README.md) ──
+# Gezählt wird je Benchmark-ID und Land eine Einheit, wenn mindestens ein Validator eine echte
+# Prüfziffer bzw. Prüfsumme rechnet. null = nur Format/Plausibilität (Länge, Alphabet, Bereich,
+# Datum, Bezirkstabelle) und zählt nicht. Das Land kommt aus der ID (pii.<land>.*) oder aus
+# `country`; ohne beides gilt die Einheit als international (IBAN, PAN, Krypto) und zählt einmal.
+# Prüft und zählt: scripts/l1_presidio/count_validated.py (Test scripts/tests/test_l1_count_validated.py).
+checksums:
+  # Validator-Funktion in rust/src/detectors/pii/validators.rs, wie in PII_PATTERNS eingetragen.
+  # Jeder dort verwendete Validator steht hier, auch die reinen Formatprüfungen.
+  ark:
+    luhn: {algorithm: Luhn}
+    mod97: {algorithm: ISO 7064 MOD 97-10}
+    steuer_id: {algorithm: "ISO 7064 MOD 11,10"}
+    ip_address: null
+    unanchored_phone: null
+    phone: null
+    mac_address: null
+    cvv: null
+    card_expiry: null
+    bic: null
+    bounded_employee_identifier: null
+    bounded_identifier: null
+    username: null
+    calendar_date: null
+    written_calendar_date: null
+    de_tax_number: null                 # Länge 10–13, nicht alle Ziffern gleich
+    de_social_security_number: null     # Form 8 Ziffern + Buchstabe + 3 Ziffern, keine Prüfziffer
+    de_health_insurance_number: null    # Form Buchstabe + 9 Ziffern, keine Prüfziffer
+    lanr: null                          # 9 Ziffern, keine Prüfziffer
+    de_document_number: null            # ICAO-Alphabet, keine 7-3-1-Prüfziffer
+    de_driver_license_number: null
+    us_ssn: null                        # Bereichsprüfung
+    uk_nino: null                       # Präfix-/Suffixprüfung
+  # Pattern-Recognizer mit validate_result in presidio_analyzer 2.2.364 (43 Stück, mit Presidio
+  # vollständig geprüft von `count_validated.py check --presidio`).
+  presidio:
+    ABA_ROUTING_NUMBER: {algorithm: ABA 3-7-1 mod 10, country: us}
+    AU_ABN: {algorithm: gewichtet mod 89}
+    AU_ACN: {algorithm: gewichtet mod 10}
+    AU_MEDICARE: {algorithm: gewichtet 1-3-7-9 mod 10}
+    AU_TFN: {algorithm: gewichtet mod 11}
+    CREDIT_CARD: {algorithm: Luhn}
+    CRYPTO: {algorithm: Base58Check / Bech32}
+    DE_HEALTH_INSURANCE: {algorithm: gewichtet 1-2 mod 10}
+    DE_ID_CARD: {algorithm: ICAO 9303 7-3-1, country: de}
+    DE_LANR: {algorithm: gewichtet 4-9 mod 10}
+    DE_PASSPORT: {algorithm: ICAO 9303 7-3-1, country: de}
+    DE_SOCIAL_SECURITY: {algorithm: "VKVV § 4"}
+    DE_TAX_ID: {algorithm: "ISO 7064 MOD 11,10"}
+    DE_VAT_ID: {algorithm: "ISO 7064 MOD 11,10"}
+    ES_NIE: {algorithm: Kontrollbuchstabe mod 23}
+    ES_NIF: {algorithm: Kontrollbuchstabe mod 23}
+    FI_PERSONAL_IDENTITY_CODE: {algorithm: Kontrollzeichen mod 31}
+    IBAN_CODE: {algorithm: ISO 7064 MOD 97-10}
+    IN_AADHAAR: {algorithm: Verhoeff}
+    IT_FISCAL_CODE: {algorithm: Kontrollbuchstabe mod 26}
+    IT_VAT_CODE: {algorithm: Luhn}
+    KR_BRN: {algorithm: gewichtet mod 10}
+    KR_FRN: {algorithm: gewichtet mod 11}
+    KR_RRN: {algorithm: gewichtet mod 11}
+    MEDICAL_LICENSE: {algorithm: DEA-Prüfziffer}
+    NG_NIN: {algorithm: Verhoeff}
+    PL_PESEL: {algorithm: gewichtet 1-3-7-9 mod 10}
+    SE_ORGANISATIONSNUMMER: {algorithm: Luhn}
+    SE_PERSONNUMMER: {algorithm: Luhn}
+    SG_UEN: {algorithm: Prüfbuchstabe mod 11}
+    TH_TNIN: {algorithm: gewichtet mod 11}
+    TR_NATIONAL_ID: {algorithm: zwei Prüfziffern mod 10}
+    UK_NHS: {algorithm: gewichtet mod 11}
+    US_NPI: {algorithm: Luhn mit Präfix 80840}
+    ZA_ID_NUMBER: {algorithm: Luhn}
+    DE_BSNR: null                  # nur Länge und 000000000
+    EMAIL_ADDRESS: null            # Domain über tldextract
+    IN_GSTIN: null                 # Form; das Prüfzeichen wird nicht gerechnet
+    IN_VEHICLE_REGISTRATION: null  # Bezirkstabelle
+    KR_DRIVER_LICENSE: null        # Regionscode
+    TR_LICENSE_PLATE: null         # Provinzcode 01–81
+    UK_DRIVING_LICENCE: null       # Namensteil
+    UK_VEHICLE_REGISTRATION: null  # Altersbezeichner

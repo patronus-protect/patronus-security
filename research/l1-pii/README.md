@@ -25,7 +25,7 @@ SHA-gepinnt). Presidio läuft in zwei Profilen: `default` und `tuned` (spaCy `en
 |---|---|
 | M1 Parität EN | Je gemeinsamer Pattern-Entität: F1(ARK) ≥ F1(Presidio tuned) |
 | M2 DE/EU | Macro-F1 ≥ Presidio tuned + 15 pp |
-| M3 Breite | ≥ 3× so viele prüfziffervalidierte Entitäten wie Presidio |
+| M3 Breite | ≥ 2× so viele prüfziffervalidierte Entitäten wie Presidio 2.2.364 (Zählregel unten: 35 → ≥ 70) |
 | M4 Latenz | 100 KiB p95 ≤ 10 ms; Presidio auf derselben Maschine gemessen |
 | Immer | FP auf Hard Negatives ≤ Presidio; keine Entität verliert > 0,5 pp F1 |
 
@@ -63,6 +63,37 @@ Welche Entität zu welchem Kriterium zählt, legt [`entity_map.yaml`](entity_map
 Benchmark-ID mit ARK-Labels, Presidio-Entitäten, Korpus-Labels und Scope (`shared` → M1/„Immer“,
 `ark_only`, `presidio_only`, `semantic` → kein L1-Scope). Prüfung:
 `python3 scripts/l1_presidio/entity_map.py check`.
+
+## Zählregel M3: prüfziffervalidierte Entitäten
+
+Entschieden am 2026-10-14 (T03, TRIAGE 2026-W42, Abschnitt Abdeckung). Das Ziel war 3× (≈ 120);
+der Backlog kommt auf 60–80, deshalb gilt **2×**.
+
+- **Einheit:** eine Benchmark-ID aus [`entity_map.yaml`](entity_map.yaml) je Land. Nationale
+  Nummernsysteme zählen je Land einzeln (USt-IdNr. DE und IT sind zwei, Reisepass DE und UK auch);
+  internationale Systeme (IBAN, Kartennummer, Krypto-Adresse) zählen einmal. Mehrere Regeln oder
+  Recognizer derselben Einheit zählen einmal.
+- **Nur echte Prüfziffern/Prüfsummen:** Luhn, ISO 7064, gewichtete Summen, Verhoeff,
+  Kontrollbuchstaben, Base58Check. Reine Formprüfung zählt nicht: Länge, Alphabet, Präfix- oder
+  Bereichsprüfung, Datum, Bezirks-/Provinztabellen, Domain-Lookup (z. B. Kennzeichen,
+  Führerschein UK, GSTIN ohne Prüfzeichen, BSNR, SSN-Bereiche).
+- **Presidio ist auf 2.2.364 gepinnt.** Gezählt werden die Pattern-Recognizer mit
+  `validate_result`: 43, davon rechnen 35 eine Prüfziffer. M3 verlangt damit ≥ 70 ARK-Einheiten
+  (die Entscheidung schätzte ≈ 80). Eine neue Presidio-Version ändert das Ziel erst, wenn der
+  Pin bewusst angehoben wird.
+- **Gleiche Regel für beide Seiten:** ARK wird je Validator-Funktion der `PII_PATTERNS`-Registry
+  eingestuft, Presidio je Entität. Die Einstufung steht unter `checksums` in `entity_map.yaml`;
+  `null` heißt „nur Format“.
+- **Zählen:** `python3 scripts/l1_presidio/count_validated.py count` (Markdown, `--json`).
+  `check` endet mit Exit 1, wenn ein Validator der Registry nicht eingestuft ist, eine Einstufung
+  ungenutzt bleibt, ein Label oder eine Entität nicht in der Map steht oder ein Land der ID
+  widerspricht; mit `--presidio` (im Presidio-Venv) zusätzlich, wenn die installierte Version vom
+  Pin abweicht oder die `validate_result`-Recognizer nicht genau den eingestuften entsprechen.
+  Eine Aufgabe, die einen Validator hinzufügt, stuft ihn dort ein, sonst ist
+  `scripts/tests/test_l1_count_validated.py` rot.
+
+Stand T03: ARK 3 (PAN/Luhn, IBAN/MOD 97-10, Steuer-ID), Presidio 35, beide gemeinsam 3. Die
+DE-Validatoren für RVNR, KVNR, LANR, Pass/Ausweis prüfen heute nur die Form (siehe Ausgangslage).
 
 ## Gold-Konvention: Platzhalter-Werte
 
