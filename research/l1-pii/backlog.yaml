@@ -88,6 +88,7 @@ tasks:
     deps: [E06]
 
   - id: E08
+    status: done
     title: Switch 12_l1_pii_fixture_eval to character offsets
     type: fix
     deps: []
