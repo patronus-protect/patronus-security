@@ -70,7 +70,11 @@ spätere regionale Telefonprüfung (Hebel 4) darf `+1 000-000-0000` und `555-01x
 3. Prüfziffern, die Presidio nicht hat (DACH/EU).
 4. Regionale Telefonnummern über das Crate `phonenumber`.
 5. Obfuskation über Normalisierung mit Offset-Rückabbildung.
-6. Latenz: Rust ≈ 6 ms / 100 KiB.
+6. Latenz: gemessen mit `scripts/l1_presidio/latency.py` (E07, Ergebnis in
+   [`scoreboard/latency.md`](scoreboard/latency.md)). Auf der VPS (2026-10-16, PII in zwei von drei
+   Absätzen) liegt 100 KiB p95 bei 76 ms (Python-Bindings) bzw. 68 ms (nativ), DE ≈ 80 ms, EN
+   ≈ 30 ms; Presidio braucht 10–10,5 s (≈ 135×). M4 ist damit offen; die Bindings kosten wenig,
+   die Zeit liegt in den Regeln (DE-Regeln ≈ 2,7× EN).
 
 ## Ausführung: systemd-Timer auf der VPS → Stacked Branch
 
