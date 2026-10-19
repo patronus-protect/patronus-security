@@ -56,6 +56,8 @@ Rust, Python, and the Ark API enable only credential/secret entity groups by def
 
 Every credential/secret rule drops documented example and test values: a marker word (`EXAMPLE`, `SAMPLE`, `BEISPIEL` or `MUSTER` at the start or end of a word, not inside one such as `resampler`; `TEST`/`TESTKEY`, `FAKE` or `DUMMY` as a whole word; any marker repeated). Values mostly made of repeated chunks or same-character runs are dropped for fixed-format provider, key, hash, JWT, signed-URL and session-ID rules, also when a generic rule captures such a provider-shaped value. Values that need a single sequential run (`AKIA1234567890ABCDEF`) to count as low-variety, and low-variety values of generic credential assignments, are dropped only when the same or one of the three lines above calls the value an example, sample, dummy, fixture or documentation value (DE/EN).
 
+Value-capturing credential rules (assignments, URL parameters and userinfo, signatures, auth headers, cookies, CSRF tokens) also drop placeholders (`<…>`, masks, `TODO`, `CHANGEME`, `REPLACE_ME`, `BITTE_AENDERN`, all-upper or all-lower word sequences such as `YOUR_…_HERE`, `HIER_…_EINTRAGEN`, `YOUR-API-TOKEN`) and references (`$VAR`, `${…}`, `%VAR%`, `{{var}}`, Terraform `var.x`, `os.environ[…]`, `os.Getenv`, `System.getenv`, `Environment.GetEnvironmentVariable`, `ENV.fetch`, `process.env.X` and similar environment accessors).
+
 | Rule ID | Result entity group | Extra validator | Default |
 | --- | --- | --- | --- |
 | `dlp_anthropic_key` | `API_KEY` | yes | on |

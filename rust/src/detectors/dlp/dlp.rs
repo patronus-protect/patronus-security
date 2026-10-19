@@ -146,6 +146,7 @@ pub struct DlpPipeline {
     validators: Vec<Option<NativeMatchValidator>>,
     span_groups: Vec<Option<usize>>,
     example_checks: Vec<ExampleCheck>,
+    placeholder_checks: Vec<bool>,
     anchor_regexes: Vec<Regex>,
 }
 
@@ -164,6 +165,7 @@ impl DlpPipeline {
         let mut validators = Vec::new();
         let mut span_groups = Vec::new();
         let mut example_checks = Vec::new();
+        let mut placeholder_checks = Vec::new();
 
         for p in DLP_PATTERNS {
             regexes.push(Regex::new(p.pattern).unwrap());
@@ -175,6 +177,7 @@ impl DlpPipeline {
             validators.push(p.validator);
             span_groups.push(p.span_group);
             example_checks.push(rules::example_check(p.name));
+            placeholder_checks.push(rules::placeholder_check(p.name));
         }
 
         let anchor_regexes = DLP_ANCHOR_PATTERNS
@@ -190,6 +193,7 @@ impl DlpPipeline {
             validators,
             span_groups,
             example_checks,
+            placeholder_checks,
             anchor_regexes,
         }
     }
@@ -270,15 +274,21 @@ impl NativeRegexDetector for DlpPipeline {
         true
     }
 
-    /// Drops documented example and test values of secret rules (T06).
+    /// Drops documented example and test values of secret rules (T06) and
+    /// placeholders and environment/template references in the value of
+    /// value-capturing credential rules (T07).
     fn allows_match(&self, index: usize, text: &str, captures: &regex::Captures<'_>) -> bool {
         let check = self.example_checks[index];
-        if check == ExampleCheck::Off {
+        let placeholder_check = self.placeholder_checks[index];
+        if check == ExampleCheck::Off && !placeholder_check {
             return true;
         }
         let Some(value) = captures.get(self.span_groups[index].unwrap_or(0)) else {
             return true;
         };
+        if placeholder_check && rules::is_placeholder_match(text, value.range()) {
+            return false;
+        }
         let rule_id = self.rule_ids[index];
         if rules::is_example_match(check, rule_id, text, value.range()) {
             return false;
