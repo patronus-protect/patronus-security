@@ -63,6 +63,20 @@ Platzhalter, weder als Positive noch in Hard-Negative-Spans. Durchgesetzt wird d
 (`reserved_placeholder_values_are_gold_positives`). ARK meldet alle Platzhalter schon heute; eine
 spätere regionale Telefonprüfung (Hebel 4) darf `+1 000-000-0000` und `555-01xx` nicht verwerfen.
 
+## Capability-Goldens: Schema v2
+
+Seit E10 folgt `pii_l1.jsonl` dem Golden-Schema v2 (Format in
+[`benchmark_data/README.md`](../../python/patronus_ark/benchmark_data/README.md)): jede Zeile nennt
+die `pii_*`-Regel (`rule_id`), den Carrier (`line`, `prose`, `json`, `yaml`, `xml`, `csv`, `kv`,
+`table`), Schwierigkeits-Tags (`no_context`, `structured`, `obfuscated`, `ocr`) und `known_gap`.
+Je Label und Sprache (DE/EN) gibt es mindestens 5 gegatete Positive und 5 Hard Negatives, jede der
+37 Regeln hat ein gegatetes Positiv in beiden Sprachen und ein Hard Negative. `13_l1_golden_eval`
+verlangt, dass die deklarierte Regel den Gold-Span meldet, und druckt die Abdeckung je `rule_id`
+(DE | EN) sowie je Tag und Sprache. Bekannte Lücken (Stand E10: 89, v. a. JSON-/CSV-/Tabellen-Keys,
+deutsches „ist“/„lautet“ nach dem Feldnamen, Zero-Width-/Full-Width-Zeichen) laufen mit, gaten aber
+nicht; schließt eine Aufgabe (K04, K05, K06 …) eine Lücke, schlägt die Eval fehl, bis die Aufgabe
+`known_gap` auf `false` setzt.
+
 ## Hebel
 
 1. Score-Stufen statt Feldnamenpflicht: prüfzifferstarke Werte ohne Kontext, formschwache nur mit
