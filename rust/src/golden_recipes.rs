@@ -13,7 +13,9 @@
 //! optionally wrapped), unpadded base64, base64url, bcrypt radix-64 or
 //! Base58Check. Placeholders may encode (`<<secret:N|base64>>`, `hex`, `url`,
 //! `json`) or split (`<<secret:N[a:b]>>`) the value they insert (golden schema
-//! v2). The Python module documents the format. Not public API.
+//! v2). A recipe with `fill` yields the documented example/test variant of the
+//! generator's shape for hard negatives (T06). The Python module documents the
+//! format. Not public API.
 
 use std::{collections::BTreeMap, fmt, path::Path};
 
@@ -63,6 +65,9 @@ impl std::error::Error for RecipeError {}
 pub struct SecretRecipe {
     pub gen: String,
     pub seed: u64,
+    /// Example/test fill word (`EXAMPLEKEY`, `deadbeef` …) of a hard negative.
+    #[serde(default)]
+    pub fill: Option<String>,
 }
 
 impl SecretRecipe {
@@ -70,6 +75,15 @@ impl SecretRecipe {
         Self {
             gen: gen.to_owned(),
             seed,
+            fill: None,
+        }
+    }
+
+    /// The example/test variant of `gen` filled with `fill`.
+    pub fn filled(gen: &str, seed: u64, fill: &str) -> Self {
+        Self {
+            fill: Some(fill.to_owned()),
+            ..Self::new(gen, seed)
         }
     }
 }
@@ -164,6 +178,22 @@ const ENCODINGS: &[&str] = &[
     "bcrypt64",
     "base58check",
 ];
+
+/// Output alphabet of an encoding that a fill word may repeat over (T06).
+fn encoded_alphabet(encoding: &str) -> Option<&'static [u8]> {
+    match encoding {
+        "hex" => Some(b"0123456789abcdef"),
+        "base64" | "base64_unpadded" => Some(BASE64),
+        "base64url" => Some(BASE64URL),
+        "bcrypt64" => Some(BCRYPT64),
+        _ => None,
+    }
+}
+
+/// `word` repeated to `length` characters.
+fn repeat_word(word: &str, length: usize) -> String {
+    word.chars().cycle().take(length).collect()
+}
 
 fn checksum_length(kind: &str) -> Option<usize> {
     match kind {
@@ -436,14 +466,18 @@ impl GeneratorSet {
                 }
             }
         }
+        Self::encode_raw(encoded, &raw)
+    }
+
+    fn encode_raw(encoded: &Encoded, raw: &[u8]) -> String {
         match encoded.encode.as_str() {
             "hex" => raw.iter().map(|byte| format!("{byte:02x}")).collect(),
-            "base58check" => base58check(&raw),
-            "base64url" => radix64(&raw, BASE64URL, false),
-            "base64_unpadded" => radix64(&raw, BASE64, false),
-            "bcrypt64" => radix64(&raw, BCRYPT64, false),
+            "base58check" => base58check(raw),
+            "base64url" => radix64(raw, BASE64URL, false),
+            "base64_unpadded" => radix64(raw, BASE64, false),
+            "bcrypt64" => radix64(raw, BCRYPT64, false),
             _ => {
-                let base64 = radix64(&raw, BASE64, true);
+                let base64 = radix64(raw, BASE64, true);
                 match encoded.wrap {
                     Some(width) => wrap_lines(&base64, width),
                     None => base64,
@@ -452,9 +486,93 @@ impl GeneratorSet {
         }
     }
 
+    fn fits(&self, word: &str, alphabet: &str) -> bool {
+        let alphabet = &self.alphabets[alphabet];
+        word.chars().all(|character| alphabet.contains(&character))
+    }
+
+    /// An encoded segment of a fill recipe and whether the fill word went into it.
+    fn encode_filled(
+        &self,
+        encoded: &Encoded,
+        rng: &mut SplitMix64,
+        fill: &str,
+    ) -> Result<(String, bool), RecipeError> {
+        if encoded.encode == "base58check" {
+            return Err(RecipeError::Template(
+                "a fill recipe cannot use Base58Check segments (the check value stays valid)"
+                    .into(),
+            ));
+        }
+        let all_random = encoded
+            .bytes
+            .iter()
+            .all(|part| matches!(part, BytePart::RandomBytes(_)));
+        let fits_output = encoded_alphabet(&encoded.encode)
+            .is_some_and(|alphabet| fill.bytes().all(|byte| alphabet.contains(&byte)));
+        if all_random && fits_output {
+            let shape = Self::encode_raw(encoded, &vec![0; encoded.byte_length()]);
+            let mut characters = fill.chars().cycle();
+            let value = shape
+                .chars()
+                .map(|character| match character {
+                    '=' | '\n' => character,
+                    _ => characters.next().expect("cycle of a non-empty word"),
+                })
+                .collect();
+            return Ok((value, true));
+        }
+        let mut raw = Vec::with_capacity(encoded.byte_length());
+        let mut filled = false;
+        for part in &encoded.bytes {
+            match part {
+                BytePart::Hex(HexPart { hex }) => {
+                    raw.extend(decode_hex(hex).expect("validated hex part"));
+                }
+                BytePart::Utf8(Utf8Part { utf8 }) => raw.extend_from_slice(utf8.as_bytes()),
+                BytePart::RandomBytes(RandomBytes { random }) => {
+                    raw.extend_from_slice(repeat_word(fill, *random).as_bytes());
+                    filled = true;
+                }
+                BytePart::Chars(Random { alphabet, len }) if self.fits(fill, alphabet) => {
+                    raw.extend_from_slice(repeat_word(fill, *len).as_bytes());
+                    filled = true;
+                }
+                BytePart::Chars(Random { alphabet, len }) => {
+                    let mut chars = String::new();
+                    self.draw(rng, alphabet, *len, &mut chars);
+                    raw.extend_from_slice(chars.as_bytes());
+                }
+            }
+        }
+        Ok((Self::encode_raw(encoded, &raw), filled))
+    }
+
     pub fn generate(&self, name: &str, seed: u64) -> Result<String, RecipeError> {
+        self.generate_filled(name, seed, None)
+    }
+
+    /// Generate `name`, or with `fill` its documented example/test variant:
+    /// literals kept, alphabet segments and parts that hold every character of
+    /// `fill` repeat it, the others are drawn, check values are zeros (ones if
+    /// zeros are valid) and random-only encoded segments repeat `fill` over
+    /// their output alphabet (padding and line breaks kept) or encode its bytes.
+    pub fn generate_filled(
+        &self,
+        name: &str,
+        seed: u64,
+        fill: Option<&str>,
+    ) -> Result<String, RecipeError> {
+        if let Some(word) = fill {
+            if word.is_empty() || !word.bytes().all(|byte| byte.is_ascii_alphanumeric()) {
+                return Err(RecipeError::Template(format!(
+                    "fill must be a non-empty ASCII alphanumeric word, got {word:?}"
+                )));
+            }
+        }
         let mut rng = SplitMix64::new(seed);
         let mut value = String::new();
+        let mut filled = false;
         // Checksums cover the text emitted since the most recent literal.
         let mut since_literal = String::new();
         for segment in &self.generator(name)?.segments {
@@ -465,17 +583,44 @@ impl GeneratorSet {
                     since_literal.clear();
                     continue;
                 }
-                Segment::Random(Random { alphabet, len }) => {
-                    self.draw(&mut rng, alphabet, *len, &mut part);
-                }
-                Segment::Checksum(Checksum { checksum }) => match checksum.as_str() {
-                    "crc32_base62" => part = crc32_base62(&since_literal),
-                    _ => part = iso7064_mod11_10(&since_literal)?,
+                Segment::Random(Random { alphabet, len }) => match fill {
+                    Some(word) if self.fits(word, alphabet) => {
+                        part = repeat_word(word, *len);
+                        filled = true;
+                    }
+                    _ => self.draw(&mut rng, alphabet, *len, &mut part),
                 },
-                Segment::Encoded(encoded) => part = self.encode(encoded, &mut rng),
+                Segment::Checksum(Checksum { checksum }) => {
+                    match checksum.as_str() {
+                        "crc32_base62" => part = crc32_base62(&since_literal),
+                        _ => part = iso7064_mod11_10(&since_literal)?,
+                    }
+                    if fill.is_some() {
+                        let zeros = "0".repeat(part.len());
+                        part = if zeros == part {
+                            "1".repeat(part.len())
+                        } else {
+                            zeros
+                        };
+                    }
+                }
+                Segment::Encoded(encoded) => match fill {
+                    Some(word) => {
+                        let (encoded, filled_segment) =
+                            self.encode_filled(encoded, &mut rng, word)?;
+                        part = encoded;
+                        filled |= filled_segment;
+                    }
+                    None => part = self.encode(encoded, &mut rng),
+                },
             }
             value.push_str(&part);
             since_literal.push_str(&part);
+        }
+        if let Some(word) = fill.filter(|_| !filled) {
+            return Err(RecipeError::Template(format!(
+                "fill {word:?} fits no segment of {name}"
+            )));
         }
         Ok(value)
     }
@@ -594,7 +739,7 @@ pub fn materialize_fragments(
     }
     let mut values = Vec::with_capacity(secrets.len());
     for (index, recipe) in secrets.iter().enumerate() {
-        let value = generators.generate(&recipe.gen, recipe.seed)?;
+        let value = generators.generate_filled(&recipe.gen, recipe.seed, recipe.fill.as_deref())?;
         let uses = pieces
             .iter()
             .filter(|(_, used, _)| *used == index)

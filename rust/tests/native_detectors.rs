@@ -57,7 +57,12 @@ fn dlp_native_detects_secret_patterns_and_safe_text() {
 
     assert_class(
         &pipe
-            .evaluate("OPENAI_API_KEY=sk-proj-abcdefghijklmnopqrstuvwxyz012345")
+            .evaluate(concat!(
+                "OPENAI_API_KEY=",
+                "sk-proj-",
+                "q7mzk2xv9pwd",
+                "4hrt8nyc3bja6ufs0ge1"
+            ))
             .class_name,
         "API_KEY",
     );
@@ -315,7 +320,7 @@ fn injection_heuristics_detect_positive_and_safe_examples() {
             "zero_width_obfuscation",
         ),
         (
-            "metadata payload contains hidden instruction 0123456789abcdef0123456789abcdef0123456789abcdef",
+            "metadata payload contains hidden instruction 0123456789abcdef9f3a1c7e4b20d86f5ea9c3172b4d08e6",
             Box::new(|text| BinarySmugglingPipeline::new().evaluate(text).class_name),
             "binary_smuggling",
         ),
@@ -376,7 +381,7 @@ fn german_native_l1_relationships_cover_public_attack_phrasing() {
             "hidden_html_instruction",
         ),
         (
-            "metadata payload enthält versteckte Anweisung 0123456789abcdef0123456789abcdef0123456789abcdef",
+            "metadata payload enthält versteckte Anweisung 0123456789abcdef9f3a1c7e4b20d86f5ea9c3172b4d08e6",
             Box::new(|text| BinarySmugglingPipeline::new().evaluate(text).class_name),
             "binary_smuggling",
         ),
@@ -668,7 +673,7 @@ fn native_l1_relationship_heuristics_reject_code_logs_and_documentation() {
         ),
         (
             "native:binary_smuggling",
-            "metadata checksum 0123456789abcdef0123456789abcdef0123456789abcdef",
+            "metadata checksum 0123456789abcdef9f3a1c7e4b20d86f5ea9c3172b4d08e6",
         ),
     ] {
         let results = injection.scan_category(SecurityCategory::Injection, text);

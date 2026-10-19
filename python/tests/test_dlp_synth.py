@@ -207,7 +207,8 @@ class GeneratorSpecTests(unittest.TestCase):
         for rule_id, entry in rules.load_rule_map().items():
             self.assertFalse(set(entry["generators"]) & set(entry.get("shape_only", [])), rule_id)
             self.assertGreaterEqual(len(entry["probes"]), 2, rule_id)
-            referenced.update(entry["generators"], entry.get("shape_only", []))
+            self.assertFalse(set(entry["generators"]) & set(entry.get("weak", [])), rule_id)
+            referenced.update(entry["generators"], entry.get("shape_only", []), entry.get("weak", []))
         self.assertEqual(referenced, set(recipes.load_generators()))
 
     def test_every_valid_generator_has_an_independent_check(self):

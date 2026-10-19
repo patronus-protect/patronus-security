@@ -135,7 +135,9 @@ Review-Pausen.
   GitHub Push Protection und den eigenen Patronus-Hook auslösen. Deshalb speichern Goldens
   Generator-Rezepte (`{"gen": "github_pat_classic", "seed": 17}`) statt Klartextwerten und erzeugen
   die Werte erst zur Testzeit. Werte sind immer synthetisch. Echte, geleakte Secrets (z. B.
-  SecretBench) werden nicht verwendet.
+  SecretBench) werden nicht verwendet. Hard Negatives mit Beispiel-/Testwerten im Provider-Format
+  speichern die `fill`-Variante des Rezepts (`{"gen": …, "seed": 0, "fill": "EXAMPLEKEY"}`, T06);
+  Tests setzen Provider-Werte zur Testzeit aus Stücken zusammen (`concat!`/`format!`/`"".join`).
 - **Holdout**: Der Generator nutzt einen getrennten Seed **und** getrennte Carrier-Template-Familien
   für Dev und Holdout. Der Benign-Code-Korpus wird nach Repository gesplittet. Die Fixtures von
   gitleaks und detect-secrets sind nur Dev-Smoke-Tests und nie Teil des Holdouts.

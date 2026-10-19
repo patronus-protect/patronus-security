@@ -41,6 +41,17 @@ Placeholders (golden schema v2, E13) may transform the value they insert:
 Base58Check generators start with constant bytes so their length stays fixed. Every
 generator therefore has one length, which ``generator_length`` reports.
 
+A recipe may add ``"fill": word`` (T06): the documented example or test variant of the
+generator's shape for hard negatives (``EXAMPLEKEY``, ``TESTKEY``, ``deadbeef``,
+``1234567890`` …). Literals stay; every alphabet segment or part whose alphabet holds all
+characters of ``word`` repeats ``word`` to its length (restarting per segment), the others
+are drawn as usual; check values are zeros (ones if zeros happen to be valid). An encoded
+segment of random bytes only repeats ``word`` over its encoded characters (padding and line
+breaks kept) if its output alphabet holds ``word``; otherwise random bytes become the bytes
+of ``word`` repeated before encoding. Base58Check segments reject a fill (the check value
+would be valid), and a fill that fits no segment is an error. The value keeps the length
+and prefix of the generator, so the rule pattern still matches.
+
 Values are synthetic. Generators listed as ``shape_only`` in ``rules.json`` predate E03
 and carry no valid checksum or structure; all others are format-, structure- and
 checksum-valid fakes (``dlp_synth.checks`` verifies them independently).
@@ -77,6 +88,14 @@ _BCRYPT64 = str.maketrans(
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",
     "./ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789",
 )
+# Output alphabets of the encodings that a fill word may repeat over (T06).
+_ENCODED_ALPHABETS = {
+    "hex": "0123456789abcdef",
+    "base64": "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",
+    "base64_unpadded": "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",
+    "base64url": "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_",
+    "bcrypt64": "./ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789",
+}
 
 
 class RecipeError(ValueError):
@@ -298,32 +317,91 @@ def encode_bytes(raw: bytes, encoding: str, wrap: int | None = None) -> str:
     return encoded
 
 
-def generate_segments(name: str, seed: int) -> list[str]:
-    """Return the generated value split by segment (``"".join`` gives ``generate``)."""
+def _repeat(word: str, length: int) -> str:
+    return (word * (length // len(word) + 1))[:length]
+
+
+def _fits(word: str, alphabet: str) -> bool:
+    return set(word) <= set(alphabet)
+
+
+def _encode_filled(segment: dict, rng: SplitMix64, alphabets: dict, fill: str) -> tuple[str, bool]:
+    """An encoded segment of a ``fill`` recipe and whether the fill word went into it."""
+    encoding = segment["encode"]
+    parts = segment["bytes"]
+    if encoding == "base58check":
+        raise RecipeError("a fill recipe cannot use Base58Check segments (the check value stays valid)")
+    if all("random" in part for part in parts) and _fits(fill, _ENCODED_ALPHABETS[encoding]):
+        shape = encode_bytes(bytes(_byte_length(parts)), encoding, segment.get("wrap"))
+        characters = iter(_repeat(fill, len(shape)))
+        return "".join(char if char in "=\n" else next(characters) for char in shape), True
+    raw = bytearray()
+    filled = False
+    for part in parts:
+        if "hex" in part:
+            raw += bytes.fromhex(part["hex"])
+        elif "utf8" in part:
+            raw += part["utf8"].encode("ascii")
+        elif "random" in part:
+            raw += _repeat(fill, part["random"]).encode("ascii")
+            filled = True
+        elif _fits(fill, alphabets[part["alphabet"]]):
+            raw += _repeat(fill, part["len"]).encode("ascii")
+            filled = True
+        else:
+            raw += _draw(rng, alphabets[part["alphabet"]], part["len"]).encode("ascii")
+    return encode_bytes(bytes(raw), encoding, segment.get("wrap")), filled
+
+
+def _valid_fill(fill) -> bool:
+    return isinstance(fill, str) and bool(fill) and fill.isascii() and fill.isalnum()
+
+
+def generate_segments(name: str, seed: int, fill: str | None = None) -> list[str]:
+    """Return the generated value split by segment (``"".join`` gives ``generate``).
+
+    ``fill`` yields the example/test variant described in the module docstring.
+    """
+    if fill is not None and not _valid_fill(fill):
+        raise RecipeError(f"fill must be a non-empty ASCII alphanumeric word, got {fill!r}")
     generator = _generator(name)
     alphabets = _spec()["alphabets"]
     rng = SplitMix64(seed)
     parts: list[str] = []
     since_literal = ""
+    filled = False
     for segment in generator["segments"]:
         if "lit" in segment:
             part = segment["lit"]
         elif "alphabet" in segment:
-            part = _draw(rng, alphabets[segment["alphabet"]], segment["len"])
+            alphabet = alphabets[segment["alphabet"]]
+            if fill is not None and _fits(fill, alphabet):
+                part = _repeat(fill, segment["len"])
+                filled = True
+            else:
+                part = _draw(rng, alphabet, segment["len"])
         elif "checksum" in segment:
             if segment["checksum"] == "crc32_base62":
                 part = crc32_base62(since_literal)
             else:
                 part = iso7064_mod11_10(since_literal)
+            if fill is not None:
+                zeros = "0" * len(part)
+                part = zeros if zeros != part else "1" * len(part)
+        elif fill is not None:
+            part, filled_segment = _encode_filled(segment, rng, alphabets, fill)
+            filled = filled or filled_segment
         else:
             part = _encode(segment, rng, alphabets)
         since_literal = "" if "lit" in segment else since_literal + part
         parts.append(part)
+    if fill is not None and not filled:
+        raise RecipeError(f"fill {fill!r} fits no segment of {name}")
     return parts
 
 
-def generate(name: str, seed: int) -> str:
-    return "".join(generate_segments(name, seed))
+def generate(name: str, seed: int, fill: str | None = None) -> str:
+    return "".join(generate_segments(name, seed, fill))
 
 
 def transform(value: str, encoding: str) -> str:
@@ -354,8 +432,8 @@ def materialize_fragments(template: str, secrets: list[dict]) -> tuple[str, list
     encoding or None.
     """
     for secret in secrets:
-        if not isinstance(secret, dict) or set(secret) != {"gen", "seed"}:
-            raise RecipeError(f"recipe must be exactly {{gen, seed}}, got {secret!r}")
+        if not isinstance(secret, dict) or set(secret) - {"fill"} != {"gen", "seed"}:
+            raise RecipeError(f"recipe must be {{gen, seed}} plus an optional fill, got {secret!r}")
     matches = list(PLACEHOLDER_RE.finditer(template))
     if not matches or template.count("<<secret:") != len(matches):
         raise RecipeError(f"template has malformed or no placeholders: {template!r}")
@@ -369,7 +447,8 @@ def materialize_fragments(template: str, secrets: list[dict]) -> tuple[str, list
     if sorted(placements) != list(range(len(secrets))):
         raise RecipeError(f"template must use each of {len(secrets)} secrets: {template!r}")
     for index, uses in placements.items():
-        value = values[index] = generate(secrets[index]["gen"], secrets[index]["seed"])
+        recipe = secrets[index]
+        value = values[index] = generate(recipe["gen"], recipe["seed"], recipe.get("fill"))
         slices = [(int(use.group(3)), int(use.group(4))) for use in uses if use.group(3) is not None]
         if not slices:
             if len(uses) != 1:

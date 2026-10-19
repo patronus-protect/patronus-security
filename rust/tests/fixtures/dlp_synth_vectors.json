@@ -76,6 +76,9 @@
     "stripe_webhook_secret": "d62f9df6cdd62713fb9bc6b8",
     "url_token": "1923cd09b42787eca99d5eaa",
     "url_userinfo_password": "9866d3fbb4f688d8b8407466",
+    "weak_repeated_chunk_github_token": "e7e58004442988204756ee44",
+    "weak_repeated_password": "a23c03747a8afdf90930361a",
+    "weak_sequential_run_token": "aa73daf8851d389d620eab8e",
     "xai_api_key": "11bbff1e2d3cef4627e18fb3"
   }
 }

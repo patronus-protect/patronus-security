@@ -147,6 +147,99 @@ fn materialize_reports_code_point_spans_and_rejects_bad_templates() {
     }
 }
 
+/// Fingerprints of fill recipes (T06), shared with
+/// python/tests/test_dlp_golden_recipes.py.
+const FILL_VECTORS: &[(&str, u64, &str, &str)] = &[
+    (
+        "discord_bot_token",
+        3,
+        "BEISPIEL",
+        "d11dbcce9d135339073d4b7b",
+    ),
+    ("jwt_signed_hs256", 4, "TEST", "b4882c1e8ceb557640c94fe5"),
+    (
+        "slack_user_token",
+        5,
+        "1234567890",
+        "675ae1cdc899798059fe00cd",
+    ),
+    (
+        "pem_pkcs8_ed25519_private_key",
+        6,
+        "EXAMPLEKEY",
+        "bc01d602c9960964878238e1",
+    ),
+    (
+        "github_ghp_token",
+        7,
+        "EXAMPLEKEY",
+        "44968e27b5851e702074d3da",
+    ),
+    (
+        "bearer_opaque_token",
+        8,
+        "DUMMY",
+        "732f853eb396c222a69bfb5c",
+    ),
+];
+
+#[test]
+fn fill_recipes_match_the_python_vectors_and_keep_the_shape() {
+    let generators = generators();
+    for (name, seed, fill, expected) in FILL_VECTORS {
+        let value = generators
+            .generate_filled(name, *seed, Some(fill))
+            .unwrap_or_else(|error| panic!("{name}: {error}"));
+        assert_eq!(fingerprint(&value), *expected, "{name}");
+    }
+    // Values are assembled here from the word; the checksum is zeroed.
+    let word = "EXAMPLEKEY";
+    let value = generators
+        .generate_filled("github_ghp_token", 7, Some(word))
+        .unwrap();
+    assert_eq!(value, format!("ghp_{}000000", &word.repeat(3)[..30]));
+    let signature = generators
+        .generate_filled("jwt_signed_hs256", 4, Some("TEST"))
+        .unwrap();
+    assert_eq!(
+        signature.rsplit('.').next().unwrap(),
+        &"TEST".repeat(11)[..43]
+    );
+    for name in generators.names() {
+        for fill in ["EXAMPLEKEY", "deadbeef", "1234567890"] {
+            let Ok(value) = generators.generate_filled(name, 3, Some(fill)) else {
+                continue;
+            };
+            assert_eq!(value.len(), generators.length(name).unwrap(), "{name}");
+        }
+    }
+    for (name, fill) in [
+        ("github_ghp_token", ""),
+        ("github_ghp_token", "EXAMPLE KEY"),
+        ("github_ghp_token", "BEISPIEL-1"),
+        ("github_ghp_token", "Müster"),
+        ("md5_hex", "TESTKEY"),
+        ("btc_wif_mainnet_compressed", "EXAMPLEKEY"),
+    ] {
+        assert!(
+            generators.generate_filled(name, 1, Some(fill)).is_err(),
+            "{name} {fill:?}"
+        );
+    }
+    let (text, spans) = materialize(
+        &generators,
+        "k=<<secret:0>>",
+        &[SecretRecipe::filled("gitlab_pat", 1, "TEST")],
+    )
+    .unwrap();
+    assert_eq!(
+        &text[spans[0].0..spans[0].1],
+        generators
+            .generate_filled("gitlab_pat", 1, Some("TEST"))
+            .unwrap()
+    );
+}
+
 #[test]
 fn transforms_match_the_python_vectors() {
     // Same vectors as python/tests/test_dlp_golden_recipes.py.
@@ -273,6 +366,21 @@ fn recipe_rows_materialize_identically_to_the_python_generator() {
             Some(fingerprint(&text)),
             row.text_fingerprint,
             "{}: Rust and Python materialization differ",
+            row.id
+        );
+        if row.case_type == "hard_negative" {
+            // T06: example/test values in a provider format are fill recipes.
+            assert!(row.entities.is_empty(), "{}", row.id);
+            assert!(
+                recipes.iter().all(|recipe| recipe.fill.is_some()),
+                "{}: hard negatives use fill recipes",
+                row.id
+            );
+            continue;
+        }
+        assert!(
+            recipes.iter().all(|recipe| recipe.fill.is_none()),
+            "{}",
             row.id
         );
         assert_eq!(row.entities.len(), fragments.len(), "{}", row.id);

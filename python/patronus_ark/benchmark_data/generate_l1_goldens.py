@@ -11,6 +11,8 @@ synthetic ``dynamic_pii.jsonl`` fixture; no sensitive document content is used.
 DLP secret values are never written in clear: secret positives store a generator
 recipe and a carrier template (see ``patronus_ark.dlp_synth.recipes``); offsets refer
 to the materialized text, whose SHA-256 fingerprint is recorded for the Rust parity test.
+Hard negatives with a documented example or test value in a provider format store the
+generator's ``fill`` variant the same way (T06).
 """
 
 from __future__ import annotations
@@ -394,6 +396,39 @@ def dp(
 ) -> dict:
     """Literal positive for the default-off identifier and content classes."""
     return dlp_row(positive(label, language, prefix, value, suffix), rule, carrier, tags, gap)
+
+
+def dx(
+    label: str,
+    language: str,
+    rule: str,
+    template: str,
+    generator: str,
+    fill: str,
+    reason: str,
+    *,
+    carrier: str = "line",
+    tags: tuple[str, ...] = (),
+) -> dict:
+    """Hard negative with an example/test value in a provider format: the `fill` recipe."""
+    secrets = [{"gen": generator, "seed": 0, "fill": fill}]
+    text, _ = recipes.materialize(template, secrets)
+    row = {
+        "language": language,
+        "case_type": "hard_negative",
+        "target_label": label,
+        "template": template,
+        "secrets": secrets,
+        "text_fingerprint": recipes.fingerprint(text),
+        "entities": [],
+        "span_unit": "unicode_code_point",
+        "negative_reason": reason,
+        "provenance": {
+            "origin": "synthetic",
+            "source": "generator recipe with example/test fill (patronus_ark.dlp_synth), materialized at test time",
+        },
+    }
+    return dlp_row(row, rule, carrier, tags, False)
 
 
 def dn(
@@ -2231,6 +2266,350 @@ DLP_CASES = {
     ],
 }
 
+
+# T06: documented example and test values per provider (marker words, repeated chunks,
+# sequential and zero runs) are hard negatives; weak but real credentials stay positives.
+# Provider-format values are `fill` recipes (generator shape filled with the word, check
+# values zeroed), so the file holds no token in the exact provider format.
+# Appended per label so the ids of the earlier rows stay stable.
+DLP_T06_CASES = {
+    "API_KEY": [
+        dx(
+            "API_KEY", "de", "dlp_anthropic_key",
+            "# Beispiel aus der README, kein echter Schlüssel\nANTHROPIC_API_KEY=<<secret:0>>\n",
+            "anthropic_api_key", "EXAMPLEKEY", "documented example value (EXAMPLE marker)", carrier="env",
+        ),
+        dx(
+            "API_KEY", "en", "dlp_anthropic_key",
+            "anthropic:\n  model: claude\n  api_key: <<secret:0>>\n",
+            "anthropic_api_key", "TESTKEY", "test key (TESTKEY fill)", carrier="yaml",
+        ),
+        dx(
+            "API_KEY", "de", "dlp_openai_key",
+            "Kopiere .env.beispiel nach .env:\nOPENAI_API_KEY=<<secret:0>>\n",
+            "openai_project_key", "BEISPIEL", "documented example value (BEISPIEL marker)", carrier="env",
+        ),
+        dx(
+            "API_KEY", "en", "dlp_openai_key",
+            "client = OpenAI(api_key=\"<<secret:0>>\")\n",
+            "openai_project_key", "DUMMY", "dummy value in a unit test", carrier="code",
+        ),
+        dx(
+            "API_KEY", "de", "dlp_openai_legacy",
+            "openai.api_key = \"<<secret:0>>\"  # Musterwert\n",
+            "openai_legacy_key", "MUSTER", "documented example value (MUSTER marker)", carrier="code",
+        ),
+        dx(
+            "API_KEY", "en", "dlp_openai_legacy",
+            "OPENAI_API_KEY=<<secret:0>>\n",
+            "openai_legacy_key", "FAKE", "fake value (repeated FAKE marker)", carrier="env",
+        ),
+        dx(
+            "API_KEY", "de", "dlp_openai_svc",
+            "Service-Account (Beispiel): <<secret:0>>",
+            "openai_service_account_key", "SAMPLE", "documented example value (SAMPLE marker)", carrier="prose",
+        ),
+        dx(
+            "API_KEY", "en", "dlp_openai_svc",
+            "{\"openai\": {\"service_account_key\": \"<<secret:0>>\"}}",
+            "openai_service_account_key", "TESTKEY", "test key (TESTKEY fill)", carrier="json",
+        ),
+        dx(
+            "API_KEY", "de", "dlp_huggingface",
+            "$ huggingface-cli login --token <<secret:0>>\n",
+            "huggingface_token", "example", "documented example value (example marker)", carrier="cli",
+        ),
+        dx(
+            "API_KEY", "en", "dlp_huggingface",
+            "HF_TOKEN=<<secret:0>>\n",
+            "huggingface_token", "test", "test value (repeated test marker)", carrier="env",
+        ),
+        dx(
+            "API_KEY", "de", "dlp_groq_key",
+            "[groq]\nschluessel = \"<<secret:0>>\"\n",
+            "groq_key", "BEISPIELKEY", "documented example value (BEISPIEL marker)", carrier="toml",
+        ),
+        dx(
+            "API_KEY", "en", "dlp_groq_key",
+            "2026-10-19T08:00:00Z INFO using fixture key <<secret:0>>",
+            "groq_key", "TESTKEY", "test key (TESTKEY fill)", carrier="log",
+        ),
+        dx(
+            "API_KEY", "de", "dlp_xai_key",
+            "XAI_API_KEY=<<secret:0>>\n",
+            "xai_api_key", "MUSTERKEY", "documented example value (MUSTER marker)", carrier="env",
+        ),
+        dx(
+            "API_KEY", "en", "dlp_xai_key",
+            "Replace the sample key <<secret:0>> with your own.",
+            "xai_api_key", "EXAMPLE", "documented example value (EXAMPLE marker)", carrier="prose",
+        ),
+        dx(
+            "API_KEY", "de", "dlp_replicate",
+            "replicate:\n  zugang: <<secret:0>>\n",
+            "replicate_api_token", "DUMMY", "dummy value (repeated DUMMY marker)", carrier="yaml",
+        ),
+        dx(
+            "API_KEY", "en", "dlp_replicate",
+            "export REPLICATE_API_TOKEN=<<secret:0>>\n",
+            "replicate_api_token", "test", "test value (repeated test marker)", carrier="cli",
+        ),
+    ],
+    "CLOUD_KEY": [
+        dx(
+            "CLOUD_KEY", "de", "dlp_aws_access_key",
+            "Beispielwert aus der AWS-Doku: <<secret:0>>",
+            "aws_access_key_id", "EXAMPLE", "documented example value (EXAMPLE marker)", carrier="prose",
+        ),
+        dx(
+            "CLOUD_KEY", "en", "dlp_aws_access_key",
+            "[default]\naws_access_key_id = <<secret:0>>\n",
+            "aws_session_access_key_id", "TESTKEY", "test key (TESTKEY fill)", carrier="ini",
+        ),
+        dx(
+            "CLOUD_KEY", "de", "dlp_aws_secret_key",
+            "aws_secret_access_key = <<secret:0>>\n",
+            "aws_secret_access_key", "EXAMPLEKEY", "documented example value (EXAMPLEKEY fill)", carrier="ini",
+        ),
+        dx(
+            "CLOUD_KEY", "en", "dlp_aws_secret_key",
+            "AWS_SECRET_ACCESS_KEY=<<secret:0>>\n",
+            "aws_secret_access_key", "TESTKEY", "test key (TESTKEY fill)", carrier="env",
+        ),
+        dx(
+            "CLOUD_KEY", "de", "dlp_google_api_key",
+            "<meta name=\"maps-key\" content=\"<<secret:0>>\">",
+            "google_api_key", "BEISPIEL", "documented example value (BEISPIEL marker)", carrier="xml",
+        ),
+        dx(
+            "CLOUD_KEY", "en", "dlp_google_api_key",
+            "GOOGLE_MAPS_API_KEY=<<secret:0>>\n",
+            "google_api_key", "DUMMYKEY", "dummy value (repeated DUMMY marker)", carrier="env",
+        ),
+        dx(
+            "CLOUD_KEY", "de", "dlp_google_oauth_token",
+            "Authorization-Beispiel: <<secret:0>>",
+            "google_oauth_access_token", "EXAMPLE", "documented example value (EXAMPLE marker)", carrier="prose",
+        ),
+        dx(
+            "CLOUD_KEY", "en", "dlp_google_oauth_token",
+            "{\"access_token\": \"<<secret:0>>\", \"expires_in\": 3599}",
+            "google_oauth_access_token", "test", "test value (repeated test marker)", carrier="json",
+        ),
+        dx(
+            "CLOUD_KEY", "de", "dlp_gcp_client_secret",
+            "GOOGLE_CLIENT_SECRET=<<secret:0>>\n",
+            "gcp_oauth_client_secret", "MUSTER", "documented example value (MUSTER marker)", carrier="env",
+        ),
+        dx(
+            "CLOUD_KEY", "en", "dlp_gcp_client_secret",
+            "oauth:\n  client_secret: <<secret:0>>\n",
+            "gcp_oauth_client_secret", "SAMPLE", "documented example value (SAMPLE marker)", carrier="yaml",
+        ),
+    ],
+    "CREDENTIAL": [
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "# Beispielwerte aus der Doku, nicht produktiv\ndb:\n  passwort: abcabcabcabc\n",
+            "repeated chunk in explicit example context", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "Example from the docs:\napi_key = 1234567890abcdef1234567890abcdef\n",
+            "sequential run in explicit example context", carrier="ini",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "client_secret = \"beispiel-geheimnis-2026\"\n",
+            "documented example value (Beispiel marker)", carrier="toml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "password: dummy_password_42\n",
+            "dummy value (DUMMY marker word)", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "SERVICE_TOKEN=test-token-nur-fuer-ci\n",
+            "test value (TEST marker word)", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_credential_in_url",
+            "curl \"https://api.example.com/v1/export?format=csv&api_key=SAMPLEKEY4711\"",
+            "documented example value (SAMPLE marker)", carrier="cli",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "Zugang zum Staging-Server\nBenutzer: deploy\nPasswort: <<secret:0>>\n",
+            "weak_repeated_password", 6001, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "[database]\nhost = db.internal\npassword = <<secret:0>>\n",
+            "weak_repeated_password", 6002, carrier="ini",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "zahlungsdienst:\n  client_secret: <<secret:0>>\n",
+            "weak_sequential_run_token", 6003, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "billing = BillingClient()\ntoken = \"<<secret:0>>\"\nbilling.connect(token)\n",
+            "weak_sequential_run_token", 6004, carrier="code",
+        ),
+    ],
+    "CRYPTO_KEY": [
+        dx(
+            "CRYPTO_KEY", "de", "dlp_eth_private_key",
+            "WALLET_PRIVATE_KEY=<<secret:0>>\n",
+            "eth_private_key_hex", "deadbeef", "repeated chunk (deadbeef fill)", carrier="env",
+        ),
+        dx(
+            "CRYPTO_KEY", "en", "dlp_eth_private_key",
+            "const signer = new Wallet(\"<<secret:0>>\");\n",
+            "eth_private_key_hex", "1234567890", "sequential run (1234567890 fill)", carrier="code",
+        ),
+        dx(
+            "CRYPTO_KEY", "de", "dlp_btc_wif",
+            "Beispiel-WIF aus dem Tutorial: <<secret:0>>",
+            "btc_wif_uncompressed", "EXAMPLEKEY", "documented example value (EXAMPLE marker)", carrier="prose",
+        ),
+        dx(
+            "CRYPTO_KEY", "en", "dlp_btc_wif",
+            "wallet:\n  wif: <<secret:0>>\n",
+            "btc_wif_uncompressed", "TESTKEY", "test key (TESTKEY fill)", carrier="yaml",
+        ),
+    ],
+    "PASSWORD_HASH": [
+        dx(
+            "PASSWORD_HASH", "de", "dlp_password_hash",
+            "Passwort-Hash: <<secret:0>>",
+            "md5_hex", "deadbeef", "repeated chunk (deadbeef fill)", carrier="prose",
+        ),
+        dx(
+            "PASSWORD_HASH", "en", "dlp_password_hash",
+            "password_hash: \"<<secret:0>>\"\n",
+            "bcrypt_hash", "EXAMPLEKEY", "documented example value (EXAMPLE marker)", carrier="yaml",
+        ),
+    ],
+    "PAYMENT_KEY": [
+        dx(
+            "PAYMENT_KEY", "de", "dlp_stripe_key",
+            "STRIPE_SECRET_KEY=<<secret:0>>\n",
+            "stripe_secret_live", "BEISPIEL", "documented example value (BEISPIEL marker)", carrier="env",
+        ),
+        dx(
+            "PAYMENT_KEY", "en", "dlp_stripe_key",
+            "stripe.api_key = \"<<secret:0>>\"\n",
+            "stripe_restricted_test", "TESTKEY", "test key (TESTKEY fill)", carrier="code",
+        ),
+        dx(
+            "PAYMENT_KEY", "de", "dlp_stripe_webhook",
+            "webhook:\n  geheimnis: <<secret:0>>\n",
+            "stripe_webhook_secret", "example", "documented example value (example marker)", carrier="yaml",
+        ),
+        dx(
+            "PAYMENT_KEY", "en", "dlp_stripe_webhook",
+            "STRIPE_WEBHOOK_SECRET=<<secret:0>>\n",
+            "stripe_webhook_secret", "DUMMY", "dummy value (repeated DUMMY marker)", carrier="env",
+        ),
+    ],
+    "SECRET_TOKEN": [
+        dx(
+            "SECRET_TOKEN", "de", "dlp_github_token",
+            "GITHUB_TOKEN=<<secret:0>>\n",
+            "github_ghp_token", "EXAMPLEKEY", "documented example value (EXAMPLE marker, zero checksum)", carrier="env",
+        ),
+        dx(
+            "SECRET_TOKEN", "en", "dlp_github_token",
+            "git clone https://x-access-token:<<secret:0>>@github.com/acme/app.git",
+            "github_gho_token", "TESTKEY", "test key (TESTKEY fill, zero checksum)", carrier="cli",
+        ),
+        dx(
+            "SECRET_TOKEN", "de", "dlp_github_pat",
+            "Beispiel: <<secret:0>>",
+            "github_fine_grained_pat", "BEISPIEL", "documented example value (BEISPIEL marker)", carrier="prose",
+        ),
+        dx(
+            "SECRET_TOKEN", "en", "dlp_github_pat",
+            "GH_TOKEN=<<secret:0>>\n",
+            "github_fine_grained_pat", "SAMPLE", "documented example value (SAMPLE marker)", carrier="env",
+        ),
+        dx(
+            "SECRET_TOKEN", "de", "dlp_gitlab_pat",
+            "gitlab:\n  token: <<secret:0>>\n",
+            "gitlab_pat", "MUSTER", "documented example value (MUSTER marker)", carrier="yaml",
+        ),
+        dx(
+            "SECRET_TOKEN", "en", "dlp_gitlab_pat",
+            "GITLAB_TOKEN=<<secret:0>>\n",
+            "gitlab_pat", "TESTKEY", "test key (TESTKEY fill)", carrier="env",
+        ),
+        dx(
+            "SECRET_TOKEN", "de", "dlp_npm_token",
+            "//registry.npmjs.org/:_authToken=<<secret:0>>",
+            "npm_access_token", "EXAMPLE", "documented example value (EXAMPLE marker, zero checksum)", carrier="ini",
+        ),
+        dx(
+            "SECRET_TOKEN", "en", "dlp_npm_token",
+            "NPM_TOKEN=<<secret:0>>\n",
+            "npm_access_token", "test", "test value (repeated test marker, zero checksum)", carrier="env",
+        ),
+        dx(
+            "SECRET_TOKEN", "de", "dlp_slack_token",
+            "SLACK_TOKEN=<<secret:0>>\n",
+            "slack_bot_token", "BEISPIEL", "documented example value (BEISPIEL marker)", carrier="env",
+        ),
+        dx(
+            "SECRET_TOKEN", "en", "dlp_slack_token",
+            "slack:\n  user_token: <<secret:0>>\n",
+            "slack_user_token", "1234567890", "sequential run (1234567890 fill)", carrier="yaml",
+        ),
+        dx(
+            "SECRET_TOKEN", "de", "dlp_discord_token",
+            "DISCORD_BOT_TOKEN=<<secret:0>>\n",
+            "discord_bot_token", "BEISPIEL", "documented example value (BEISPIEL marker)", carrier="env",
+        ),
+        dx(
+            "SECRET_TOKEN", "en", "dlp_discord_token",
+            "client.login(\"<<secret:0>>\")\n",
+            "discord_bot_token", "FAKE", "fake value (repeated FAKE marker)", carrier="code",
+        ),
+        dx(
+            "SECRET_TOKEN", "de", "dlp_jwt_token",
+            "id_token: <<secret:0>>\n",
+            "jwt_signed_hs256", "BEISPIEL", "documented example value (BEISPIEL marker)", carrier="yaml",
+        ),
+        dx(
+            "SECRET_TOKEN", "en", "dlp_jwt_token",
+            "ID_TOKEN=<<secret:0>>\n",
+            "jwt_signed_hs256", "TEST", "test value (repeated TEST marker)", carrier="env",
+        ),
+        dn(
+            "SECRET_TOKEN", "de", "dlp_bearer_token",
+            "Authorization: Bearer BEISPIEL-TOKEN-4711",
+            "documented example value (Beispiel marker)", carrier="http",
+        ),
+        dn(
+            "SECRET_TOKEN", "en", "dlp_csrf_token",
+            "X-CSRF-Token: example-csrf-token-4711",
+            "documented example value (example marker)", carrier="http",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_github_token",
+            "# CI-Zugang des Release-Jobs\nGITHUB_TOKEN=<<secret:0>>\n",
+            "weak_repeated_chunk_github_token", 6005, carrier="env",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_github_token",
+            "git clone https://x-access-token:<<secret:0>>@github.com/acme/app.git",
+            "weak_repeated_chunk_github_token", 6006, carrier="cli",
+        ),
+    ],
+}
+for _label, _rows in DLP_T06_CASES.items():
+    DLP_CASES[_label].extend(_rows)
 
 def flatten(suite: str, cases: dict[str, list[dict]]) -> list[dict]:
     rows = []

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "note": "Maps every dlp_* rule in DLP_PATTERNS to the generators whose values it must find. Each probe is a minimal carrier; the rule alone must report exactly the <<secret:0>> span. shape_only generators predate E03 and are format-shaped without a valid checksum or structure; they stay for the E02 goldens. Content rules have no secret value and are covered by carrier templates (E04).",
+  "note": "Maps every dlp_* rule in DLP_PATTERNS to the generators whose values it must find. Each probe is a minimal carrier; the rule alone must report exactly the <<secret:0>> span. shape_only generators predate E03 and are format-shaped without a valid checksum or structure; they stay for the E02 goldens. weak generators (T06) are low-variety but real values (repeated chunk, sequential run) the rule must keep reporting outside example context; carriers do not use them. Content rules have no secret value and are covered by carrier templates (E04).",
   "rules": {
     "dlp_anthropic_key": {
       "generators": ["anthropic_api_key", "anthropic_admin_key"],
@@ -58,6 +58,7 @@
     "dlp_github_token": {
       "generators": ["github_ghp_token", "github_gho_token", "github_ghu_token", "github_ghs_token", "github_ghr_token"],
       "shape_only": ["github_pat_classic"],
+      "weak": ["weak_repeated_chunk_github_token"],
       "probes": ["GITHUB_TOKEN=<<secret:0>>", "git clone https://x-access-token:<<secret:0>>@github.com/acme/app.git"]
     },
     "dlp_github_pat": {
@@ -121,10 +122,12 @@
     },
     "dlp_password_assignment": {
       "generators": ["password", "url_userinfo_password"],
+      "weak": ["weak_repeated_password"],
       "probes": ["password: <<secret:0>>", "Das Passwort lautet <<secret:0>> (bitte nach dem ersten Login ändern)."]
     },
     "dlp_generic_credential_assignment": {
       "generators": ["generic_api_secret", "url_token"],
+      "weak": ["weak_sequential_run_token"],
       "probes": ["client_secret: <<secret:0>>", "Der API-Schlüssel ist <<secret:0>>"]
     },
     "dlp_bearer_token": {
