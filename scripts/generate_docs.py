@@ -152,6 +152,11 @@ def _field(block: str, name: str) -> str:
 
 
 def parse_native_patterns(path: Path, struct_name: str) -> list[dict[str, str]]:
+    """Rules of the static `struct_name` registry in `path`, in registry order.
+
+    Entries are inline struct literals or `module::CONST` references to
+    `const CONST: Struct = Struct { ... };` items in the sibling `module.rs`.
+    """
     source = path.read_text()
     static_start = re.search(
         rf"pub static \w+:\s*&\[{struct_name}\]\s*=\s*&\[", source
@@ -159,8 +164,20 @@ def parse_native_patterns(path: Path, struct_name: str) -> list[dict[str, str]]:
     if not static_start:
         raise ValueError(f"Missing static {struct_name} registry in {path}")
     source = source[static_start.end():]
+    registry = source.split("\n];", 1)[0]
+    reference = r"^\s*(\w+)::(\w+),\s*$"
+    if re.search(reference, registry, flags=re.M):
+        blocks = []
+        entry = rf"\b{struct_name}\s*\{{(.*?)\n\s*\}},|{reference}"
+        for match in re.finditer(entry, registry, flags=re.S | re.M):
+            if match.group(1) is not None:
+                blocks.append(match.group(1))
+            else:
+                blocks.append(_native_pattern_const(path.parent, struct_name, *match.group(2, 3)))
+    else:
+        blocks = re.findall(rf"\b{struct_name}\s*\{{(.*?)\n\s*\}},", source, flags=re.S)
     patterns = []
-    for block in re.findall(rf"\b{struct_name}\s*\{{(.*?)\n\s*\}},", source, flags=re.S):
+    for block in blocks:
         name = re.search(r'\bname:\s*"([^"]+)"', block)
         entity_group = re.search(r'\bentity_group:\s*"([^"]+)"', block)
         if name and entity_group:
@@ -174,6 +191,19 @@ def parse_native_patterns(path: Path, struct_name: str) -> list[dict[str, str]]:
                 }
             )
     return patterns
+
+
+def _native_pattern_const(directory: Path, struct_name: str, module: str, const: str) -> str:
+    path = directory / f"{module}.rs"
+    source = path.read_text() if path.is_file() else ""
+    match = re.search(
+        rf"\bconst {const}:\s*{struct_name}\s*=\s*{struct_name}\s*\{{(.*?)\n\}};",
+        source,
+        flags=re.S,
+    )
+    if not match:
+        raise ValueError(f"Missing {struct_name} {module}::{const} in {path}")
+    return match.group(1)
 
 
 def generate_l1_rule_catalog_doc() -> str:
