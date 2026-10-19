@@ -9,6 +9,16 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ## [Unreleased]
 
+### Added
+
+- `scripts/l1_dlp/baseline_report.py` scores ARK, gitleaks, TruffleHog and detect-secrets on one
+  frozen DLP split with the scoreboard metrics and prints the tables of the new E14 baseline report
+  `research/dlp/scoreboard/baseline.md` (untyped and per-group P/R/F1, hard-negative FP per
+  variant, FP/MB, recall per secret entity) plus ARK error buckets per rule (hard-negative FP,
+  missed and boundary gold spans, benign-code FP). The report adds the dev measurements, the
+  latency comparison, a static coverage matrix against Google Cloud DLP and Microsoft Purview and
+  TRIAGE candidates. **Detection change:** none; this is evaluation tooling and a report only.
+
 ### Fixed
 
 - Score `rust/examples/12_l1_pii_fixture_eval.rs` on character offsets. It compared the UTF-8 byte offsets of `native:pii` spans with the code-point offsets of `dynamic_pii.jsonl`, so every span after a non-ASCII character counted as one FP and one FN. Gold spans outside the text now abort the run, and the example's unit tests run with `cargo test`. **Detection change:** none; this is evaluation tooling only.

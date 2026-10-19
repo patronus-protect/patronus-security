@@ -495,3 +495,29 @@ Gegated wird nur die 100-KiB-p95 (`TOLERANCE` 10 %, `SLACK_MS` 0,25 ms gegen Tim
 `BUDGET_MS` 10 ms aus H03/M4). Das Budget greift erst, wenn die Basis es einhält. Fällt ein Check
 durch, misst `gate_check` ein zweites Mal. Er scheitert nur, wenn er in beiden Messungen
 durchfällt. Zwei identische Builds lagen auf der VPS in fünf Läufen zwischen −2,7 % und +7,0 %.
+
+## Baseline-Bericht (E14)
+
+`baseline_report.py` bewertet ARK und die drei Baselines mit `scoreboard.score_split` auf einem
+eingefrorenen Split und gibt die gemessenen Tabellen von
+[`research/dlp/scoreboard/baseline.md`](../../research/dlp/scoreboard/baseline.md) als Markdown
+aus. Die Vorhersagen erzeugen vorher `run_ark.py` (ARK-Venv) und `run_baselines.py`
+(Baseline-Venv), je Tool und Komponente eine Datei:
+
+```bash
+PRED=/tmp/e14/out   # <tool>.<component>.jsonl, tool ∈ ark|gitleaks|trufflehog|detect-secrets,
+                    # component ∈ synthetic|benign_code|benign_docs; ARK opt-in-Lauf als
+                    # ark.extended.<component>.jsonl (synthetic|benign_docs|external)
+~/ark-dlp/baselines-venv/bin/python scripts/l1_dlp/baseline_report.py \
+    --dev $ARK_L1_DEV_DATA --predictions $PRED --output-dir /tmp/e14/reports > tables.md
+```
+
+Ausgabe: Gesamtwerte (ungetypt, Hard-Negative-FP, FP/MB auf Benign-Code und -Dokumenten), F1 je
+Secret-Gruppe, Hard Negatives je Variante, Recall je Secret-Entität (exakt, in Klammern Overlap),
+die Opt-in-Gruppen des ARK-`extended`-Laufs und die Fehler-Buckets von ARK: Hard-Negative-FP je
+Regel und Variante, verfehlte Gold-Spans je Regel und Carrier-Format, Grenzfehler, zusätzliche
+Spans auf Positiv-Zeilen und Benign-Code-FP je Regel. Gold-Spans der Opt-in-Gruppen zählen in den
+Buckets nicht, weil der Default-Lauf diese Regeln aus hat. `--output-dir` schreibt die
+Score-Berichte `<tool>.json` und `ark.buckets.json`. Alles enthält nur Offsets, Zähler und
+Regel-IDs, keinen Text. Fehlt ein Tool, wird es übersprungen; ohne Vorhersagen endet der Lauf mit
+Exit 2.
