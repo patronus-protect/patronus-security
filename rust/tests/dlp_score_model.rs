@@ -181,7 +181,8 @@ fn corpus() -> Vec<String> {
     let mut texts = Vec::new();
     for case in fixture().iter().filter(|case| case.category == "dlp") {
         let mut templates = vec![case.de.clone(), case.en.clone()];
-        templates.extend(case.hard_negatives.values().flatten().cloned());
+        // Hard negatives are plain text, also in cases with secret recipes.
+        texts.extend(case.hard_negatives.values().flatten().cloned());
         if let Some(probes) = &case.balanced {
             templates.extend([probes.context.de.clone(), probes.context.en.clone()]);
             if let Some(counter) = &probes.counter {

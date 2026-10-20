@@ -732,6 +732,14 @@
         "seed": 1
       }
     ],
+    "hard_negatives": {
+      "de": [
+        "Build-Kennung: MYRJFGhlQIRiO4MPhCMrAyf.0SRujI.TBwmnR0ccPQ79D2HW0AbZHZnaHRQ"
+      ],
+      "en": [
+        "Build id: NBMorWnINgBVuZyA1GR6NJd.pSWU9i.Dy9gh0hIHF1eXIGTK9Xq519CNEZf"
+      ]
+    },
     "language_neutral": true
   },
   {
@@ -768,6 +776,14 @@
         "seed": 1
       }
     ],
+    "hard_negatives": {
+      "de": [
+        "Prüfsumme (Base58): 5qcCPMN3pG57Z4BT11TcwWcm8SfgVVSQuSSDV1qMW4K6cepkSv"
+      ],
+      "en": [
+        "Checksum (Base58): LRQepRFaLzK7d6Gmy6odtC6XBTgAWxjZQ3fDyvLSLTngoPjXqr"
+      ]
+    },
     "language_neutral": true,
     "balanced": {
       "context": {
