@@ -232,6 +232,25 @@ instead of proximity: a key of the label scores +25 (`anchor` is the lexicon ent
 rule takes its required context from it. A number inside a longer value (`Phone: (987)
 012-3456`) is not the value its key names.
 
+**Obfuscation (K06).** Values hidden behind characters that leave them readable are found in a
+normalized view of the text and reported with their original span (byte and character offsets
+of the text as sent, including the hidden characters). In every mode, including `strict`, the
+scanner removes zero-width characters (U+200B–U+200D, U+2060, U+FEFF, soft hyphen) between two
+characters of a value, maps full-width forms to ASCII (`０３０ １２３４５６７８`, `ada.wong＠northwind.com`;
+a run counts if it contains a full-width letter or digit, or is a full-width separator between
+ASCII letters or digits) and undoes defanged separators between ASCII letters or digits
+(`203[.]0[.]113[.]5`, `ops(@)example{.}com`, `[:]`). Zero-width joiners in emoji and lone
+full-width punctuation in CJK text stay. In `recall` only, the scanner also undoes spelled-out
+e-mail separators (`ada [at] northwind [dot] com`, `max punkt mustermann ät firma punkt de`,
+`info @ firma . de`; without brackets or `@` the local part needs `.`, `_`, `-`, a digit or a dot
+word and the domain a common top-level domain, so `docs at example dot com` stays prose) and
+numbers spaced character by character (`D E 8 9 3 7 …`, at least eight characters, six of them
+digits); such findings score 10 points less than the plain form. `strict` and `balanced` keep
+these forms negative (gold convention T01). Rules and validators run on the normalized value, so
+a wrong check digit stays unreported. A finding that needed normalization replaces a same-label
+finding it contains and yields to any other; its `matched_rules` entry carries original offsets
+and `obfuscation` (`zero_width`, `full_width`, `defanged`, `spelled_out`, `spaced_digits`).
+
 For example, a Steuer-ID after its field name scores `1.0`, an IBAN without a field name `0.90`
 (`1.0` right after the word `IBAN`), a licence plate after `Kennzeichen:` `0.65`, and a card
 number after `Bestellnummer` `0.45`, below the `balanced` threshold. The [L1 rule catalog](l1-rule-catalog.md) lists

@@ -26,6 +26,10 @@ pub const PROXIMITY_CONTEXT_POINTS: [(usize, u8); 3] = [(16, 25), (32, 20), (48,
 /// support term of its label.
 pub const COUNTER_CONTEXT_POINTS: u8 = 30;
 
+/// Penalty for a finding that only the `recall` normalization reveals: a
+/// spelled-out e-mail address or digits spaced one by one (K06).
+pub const SPELLED_OUT_PENALTY_POINTS: u8 = 10;
+
 /// Context of one finding, as the context engine sees it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Context {
