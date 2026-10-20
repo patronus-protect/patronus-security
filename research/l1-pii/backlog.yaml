@@ -100,11 +100,13 @@ tasks:
     deps: [E08]
 
   - id: E10
+    status: done
     title: Golden schema v2 (N per language, difficulty tags no_context/structured/obfuscated/ocr) + coverage per rule_id
     type: eval-infra
     deps: [E09]
 
   - id: T02
+    status: done
     title: Gold hygiene - annotate secondary entities in pii_l1 positives, test gold values of checksum-based labels against the validators
     type: eval-infra
     deps: [E10]
@@ -134,6 +136,7 @@ tasks:
       the row, and gold values failing the entity's validator; gate metrics change only as decided; tests
 
   - id: E12
+    status: done
     title: Presidio-favored gold sets (presidio-evaluator synthetic data, Presidio recognizer test cases) + scoring per source family
     type: eval-infra
     deps: [E06]
@@ -147,12 +150,14 @@ tasks:
       research/l1-pii/README.md
 
   - id: E11
+    status: done
     title: Baseline report ARK vs. Presidio + error buckets
     type: report
     deps: [E06, E07, E12]
     accept: research/l1-pii/scoreboard/baseline.md; gaps as candidates for TRIAGE
 
   - id: T03
+    status: done
     title: M3 counting rule (checksum-validated entities ARK vs. Presidio 2.2.364) + counting script
     type: eval-infra
     deps: [E03]
@@ -185,12 +190,14 @@ tasks:
 
   # ── K: Engine ─────────────────────────────────────────────────────────
   - id: K01
+    status: done
     title: Split pii.rs into modules (core, de, intl, us, uk, eu, …) without behaviour change
     type: refactor
     deps: [E10]
     accept: goldens and scoreboard bit-identical
 
   - id: K02
+    status: done
     title: Score model (base per rule + validator strength checksum/format/none + context bonus) and modes strict/balanced/recall
     type: engine
     deps: [K01, E11]
@@ -200,21 +207,25 @@ tasks:
       explicit configuration; score field and modes in docs/reference/result-schema.md
 
   - id: K03
+    status: done
     title: Context engine v2 (two-sided proximity, DE/EN lexicon from pii.json, counter-context such as order/invoice numbers)
     type: engine
     deps: [K02]
 
   - id: K04
+    status: done
     title: Structure awareness (JSON keys, CSV headers, key-value, Markdown/HTML tables as context)
     type: engine
     deps: [K03]
 
   - id: K05
+    status: done
     title: Context-free output of checksum-strong values in balanced mode
     type: engine
     deps: [K03]
 
   - id: K06
+    status: done
     title: Obfuscation (at/ät/dot/punkt, spaced digits, full-width, zero-width) with offset back-mapping
     type: engine
     deps: [K03]

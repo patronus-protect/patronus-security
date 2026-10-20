@@ -420,6 +420,15 @@ fn parse_execution_gates_json(value: Option<&str>) -> PyResult<Option<ScanGateMa
             pyo3::exceptions::PyValueError::new_err("execution_gates.explain must be a boolean")
         })?;
     }
+    if let Some(mode) = object.get("pii_mode") {
+        gates.pii_mode = mode
+            .as_str()
+            .ok_or_else(|| {
+                pyo3::exceptions::PyValueError::new_err("execution_gates.pii_mode must be a string")
+            })?
+            .parse()
+            .map_err(pyo3::exceptions::PyValueError::new_err)?;
+    }
     if let Some(levels) = object.get("levels") {
         let levels = levels.as_object().ok_or_else(|| {
             pyo3::exceptions::PyValueError::new_err("execution_gates.levels must be an object")

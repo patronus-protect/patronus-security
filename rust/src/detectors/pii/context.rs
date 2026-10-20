@@ -1,10 +1,507 @@
 // SPDX-License-Identifier: GPL-3.0-only
-//! Local context for PII fields whose names also occur in ordinary documents.
-use std::sync::LazyLock;
+//! Local context for PII values.
+//!
+//! The context engine (K03) looks at both sides of a value for the terms of a
+//! DE/EN lexicon: support terms of the value's label and counter-context terms
+//! for numbers that are not PII (order, invoice, tracking, ticket, reference,
+//! serial numbers). Both come from `anchor_lexicons/pii.json`; this module only
+//! maps lexicon IDs to labels. The nearest term decides; see [`proximity`].
+//! [`evidence`] also names the deciding term for `matched_rules[].context`.
+//! Structure (K04): a JSON key, CSV or table header, XML element or `key: value`
+//! line that is a term of the lexicon is a field name of the value it holds; see
+//! [`key_evidence`]. It outranks proximity: the key names the value, nearby words
+//! may name its neighbours.
+//! The older helpers below gate single rules on the preceding clause.
+use std::{collections::HashMap, ops::Range, sync::LazyLock};
 
 use regex::Regex;
 
-use super::validators;
+use super::{score::Context, validators};
+use crate::detectors::lexical_anchors::LexicalAnchorScanner;
+use crate::detectors::structure::{normalize_key, Field, Fields};
+
+/// Support lexicon IDs of `pii.json` per PII label.
+pub static SUPPORT_LEXICON: &[(&str, &[&str])] = &[
+    (
+        "PHONE",
+        &[
+            "pii.telephone",
+            "pii.mobile_phone",
+            "pii.fax",
+            "pii.telephone_extension",
+            "pii.phone_reachability",
+        ],
+    ),
+    ("EMAIL", &["pii.email_address"]),
+    ("IP_ADDRESS", &["pii.network_address"]),
+    ("MAC_ADDRESS", &["pii.hardware_address"]),
+    ("IBAN", &["pii.bank_account"]),
+    ("CREDITCARD", &["pii.payment_card"]),
+    ("CREDITCARD_CVV", &["pii.card_verification"]),
+    ("CREDITCARD_EXPIRY", &["pii.card_expiry"]),
+    ("SWIFT_CODE", &["pii.bank_identifier"]),
+    ("EMPLOYEE_ID", &["pii.employee_identifier"]),
+    ("CUSTOMER_ID", &["pii.customer_identifier"]),
+    ("PATIENT_ID", &["pii.patient_identifier"]),
+    ("STUDENT_ID", &["pii.student_identifier"]),
+    ("APPLICANT_ID", &["pii.applicant_identifier"]),
+    ("USERNAME", &["pii.user_account"]),
+    ("DOB", &["pii.date_of_birth"]),
+    (
+        "FINANCIAL_ACCOUNT_NUMBER",
+        &["pii.bank_account", "pii.brokerage_account"],
+    ),
+    ("STEUERID", &["pii.tax_identifier"]),
+    ("TAX_NUMBER_DE", &["pii.tax_number"]),
+    ("SOCIALID", &["pii.social_insurance_number"]),
+    ("HEALTH_INSURANCE_NUMBER", &["pii.health_insurance_number"]),
+    ("PHYSICIAN_NUMBER_LANR", &["pii.physician_number"]),
+    ("PASSPORT_NUMBER", &["pii.passport"]),
+    ("IDENTITY_CARD_NUMBER", &["pii.identity_card"]),
+    ("DRIVER_LICENSE_NUMBER", &["pii.driver_license"]),
+    ("LICENSEPLATE", &["pii.vehicle_registration"]),
+    ("SSN", &["pii.social_insurance_number"]),
+    ("NATIONALID", &["pii.national_insurance_number"]),
+];
+
+/// Counter-context lexicon IDs of `pii.json`: numbers that are not PII.
+pub static COUNTER_LEXICON: &[&str] = &[
+    "pii.order_number",
+    "pii.invoice_number",
+    "pii.shipment_number",
+    "pii.ticket_number",
+    "pii.reference_number",
+    "pii.product_number",
+];
+
+/// Characters between a term and the value: before it (field names, "erreichbar
+/// unter") and after it ("(Handy)", "erreichbar").
+pub const BEFORE_WINDOW: usize = 48;
+pub const AFTER_WINDOW: usize = 32;
+
+struct Lexicon {
+    support: HashMap<&'static str, Regex>,
+    counter: Regex,
+    /// Whole-term matchers per lexicon ID, to name the ID of a found term.
+    ids: HashMap<&'static str, Regex>,
+    /// Characters of the longest term.
+    longest: usize,
+}
+
+fn lexicon_words(ids: &[&str]) -> Vec<&'static str> {
+    let definitions = LexicalAnchorScanner::shared().definitions();
+    ids.iter()
+        .flat_map(|id| {
+            let definition = definitions
+                .iter()
+                .find(|definition| definition.id == *id)
+                .unwrap_or_else(|| panic!("unknown PII lexicon id {id}"));
+            definition
+                .en
+                .iter()
+                .chain(&definition.de)
+                .chain(&definition.shared)
+                .map(String::as_str)
+        })
+        .collect()
+}
+
+/// Case-insensitive alternation of every word of the lexicon IDs, longest first.
+fn lexicon_regex(ids: &[&str]) -> Regex {
+    Regex::new(&format!("(?i)(?:{})", lexicon_alternation(ids))).unwrap()
+}
+
+fn lexicon_alternation(ids: &[&str]) -> String {
+    let mut words: Vec<_> = lexicon_words(ids).into_iter().map(regex::escape).collect();
+    words.sort_by(|a, b| b.len().cmp(&a.len()).then_with(|| a.cmp(b)));
+    words.dedup();
+    words.join("|")
+}
+
+static LEXICON: LazyLock<Lexicon> = LazyLock::new(|| Lexicon {
+    support: SUPPORT_LEXICON
+        .iter()
+        .map(|(label, ids)| (*label, lexicon_regex(ids)))
+        .collect(),
+    counter: lexicon_regex(COUNTER_LEXICON),
+    ids: SUPPORT_LEXICON
+        .iter()
+        .flat_map(|(_, ids)| ids.iter())
+        .chain(COUNTER_LEXICON)
+        .map(|id| {
+            let words = lexicon_alternation(&[id]);
+            (*id, Regex::new(&format!("(?i)^(?:{words})$")).unwrap())
+        })
+        .collect(),
+    longest: SUPPORT_LEXICON
+        .iter()
+        .flat_map(|(_, ids)| lexicon_words(ids))
+        .chain(lexicon_words(COUNTER_LEXICON))
+        .map(|word| word.chars().count())
+        .max()
+        .unwrap_or(0),
+});
+
+/// Gap in characters between a term and the value, if the term may describe
+/// the value. A term never reaches across a line break or past a digit (the
+/// value of another field). After the value, the term must also not be the
+/// field name of the next value ("…, Telefon: …"): the gap holds no list or
+/// field separator and the term is not followed by `:`, `=`, `#` or a digit.
+fn term_gap(text: &str, term: (usize, usize), value: (usize, usize)) -> Option<usize> {
+    let word = |ch: Option<char>| ch.is_some_and(char::is_alphanumeric);
+    let term_text = &text[term.0..term.1];
+    // Whole words only where the term starts or ends with a letter or digit.
+    if (word(term_text.chars().next()) && word(text[..term.0].chars().next_back()))
+        || (word(term_text.chars().next_back()) && word(text[term.1..].chars().next()))
+    {
+        return None;
+    }
+    let (gap, window, after) = if term.1 <= value.0 {
+        (&text[term.1..value.0], BEFORE_WINDOW, false)
+    } else if term.0 >= value.1 {
+        (&text[value.1..term.0], AFTER_WINDOW, true)
+    } else {
+        return None;
+    };
+    if gap
+        .chars()
+        .any(|ch| ch == '\n' || ch == '\r' || ch.is_ascii_digit() || matches!(ch, ';' | '|'))
+    {
+        return None;
+    }
+    if after {
+        let next = text[term.1..]
+            .trim_start_matches([' ', '\t'])
+            .chars()
+            .next();
+        if gap.chars().any(|ch| matches!(ch, ',' | ':' | '=' | '#'))
+            || next.is_some_and(|ch| matches!(ch, ':' | '=' | '#') || ch.is_ascii_digit())
+        {
+            return None;
+        }
+    }
+    let gap = gap.chars().count();
+    (gap <= window).then_some(gap)
+}
+
+/// Byte range around `value` that holds every term whose gap fits the windows:
+/// the window plus the longest term on each side, never past a line break.
+fn region(text: &str, value: (usize, usize), longest: usize) -> (usize, usize) {
+    let start = text[..value.0]
+        .char_indices()
+        .rev()
+        .take(BEFORE_WINDOW + longest)
+        .take_while(|(_, ch)| !matches!(ch, '\n' | '\r'))
+        .last()
+        .map_or(value.0, |(index, _)| index);
+    let end = text[value.1..]
+        .char_indices()
+        .take(AFTER_WINDOW + longest)
+        .take_while(|(_, ch)| !matches!(ch, '\n' | '\r'))
+        .last()
+        .map_or(value.1, |(index, ch)| value.1 + index + ch.len_utf8());
+    (start, end)
+}
+
+/// Which side of the value a context term stands on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Side {
+    Before,
+    After,
+    /// The term is the structural key of the value (K04).
+    Key,
+}
+
+impl Side {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Before => "before",
+            Self::After => "after",
+            Self::Key => "key",
+        }
+    }
+}
+
+/// Context of one value and the term that decided it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Evidence {
+    pub context: Context,
+    /// Lexicon ID of the deciding term, or `field` for a field name the rule
+    /// binds itself.
+    pub anchor: Option<&'static str>,
+    pub side: Option<Side>,
+    /// Characters between the deciding term and the value.
+    pub distance: Option<usize>,
+}
+
+impl Evidence {
+    /// A value the rule binds to its own field name.
+    pub fn field() -> Self {
+        Self {
+            context: Context::Field,
+            anchor: Some("field"),
+            ..Self::none()
+        }
+    }
+
+    /// A value bound to a field name: right before it, or as its structural key
+    /// (K04) when `structural`.
+    pub fn field_at(structural: bool) -> Self {
+        Self {
+            side: structural.then_some(Side::Key),
+            ..Self::field()
+        }
+    }
+
+    const fn none() -> Self {
+        Self {
+            context: Context::None,
+            anchor: None,
+            side: None,
+            distance: None,
+        }
+    }
+
+    /// Context points the score adds.
+    pub fn bonus(&self) -> u8 {
+        u8::try_from(self.context.points().max(0)).unwrap_or(u8::MAX)
+    }
+
+    /// Counter-context points the score subtracts.
+    pub fn penalty(&self) -> u8 {
+        u8::try_from((-self.context.points()).max(0)).unwrap_or(u8::MAX)
+    }
+
+    /// `matched_rules[].context` of a finding in a scored mode.
+    pub fn to_json(&self) -> serde_json::Value {
+        let mut value = serde_json::json!({"bonus": self.bonus(), "penalty": self.penalty()});
+        if let Some(anchor) = self.anchor {
+            value["anchor"] = anchor.into();
+        }
+        if let Some(side) = self.side {
+            value["side"] = side.as_str().into();
+        }
+        if let Some(distance) = self.distance {
+            value["distance"] = distance.into();
+        }
+        value
+    }
+}
+
+/// A term that may describe the value: its byte range, side and gap.
+#[derive(Clone, Copy)]
+struct Term {
+    range: (usize, usize),
+    side: Side,
+    gap: usize,
+}
+
+/// Nearest term of `regex` within `region` on either side of `value`.
+fn nearest(
+    text: &str,
+    regex: &Regex,
+    region: (usize, usize),
+    value: (usize, usize),
+) -> Option<Term> {
+    regex
+        .find_iter(&text[region.0..region.1])
+        .filter_map(|term| {
+            let range = (region.0 + term.start(), region.0 + term.end());
+            let side = if range.1 <= value.0 {
+                Side::Before
+            } else {
+                Side::After
+            };
+            term_gap(text, range, value).map(|gap| Term { range, side, gap })
+        })
+        .min_by_key(|term| term.gap)
+}
+
+/// Two-sided proximity context of the value at `value` (byte range) for
+/// `label`. The nearest support term gives [`Context::Support`] unless a
+/// counter-context term is strictly nearer, which gives [`Context::Counter`].
+pub fn proximity(text: &str, value: (usize, usize), label: &str) -> Context {
+    evidence(text, value, label).context
+}
+
+/// [`proximity`] with the lexicon ID, side and distance of the deciding term.
+pub fn evidence(text: &str, value: (usize, usize), label: &str) -> Evidence {
+    proximity_with(text, value, label, true)
+}
+
+/// Whether the context supports `label` at `value`; skips the counter search
+/// when there is no support term at all.
+pub(super) fn supports(text: &str, value: (usize, usize), label: &str) -> bool {
+    proximity_with(text, value, label, false).context.supports()
+}
+
+fn proximity_with(
+    text: &str,
+    value: (usize, usize),
+    label: &str,
+    always_counter: bool,
+) -> Evidence {
+    let lexicon = &*LEXICON;
+    let region = region(text, value, lexicon.longest);
+    let support = lexicon
+        .support
+        .get(label)
+        .and_then(|regex| nearest(text, regex, region, value));
+    if support.is_none() && !always_counter {
+        return Evidence::none();
+    }
+    let counter = nearest(text, &lexicon.counter, region, value);
+    let (context, term, ids) = match (support, counter) {
+        (Some(support), Some(counter)) if counter.gap < support.gap => {
+            (Context::Counter, counter, COUNTER_LEXICON)
+        }
+        (Some(support), _) => (
+            Context::Support { gap: support.gap },
+            support,
+            support_ids(label),
+        ),
+        (None, Some(counter)) => (Context::Counter, counter, COUNTER_LEXICON),
+        (None, None) => return Evidence::none(),
+    };
+    let found = &text[term.range.0..term.range.1];
+    Evidence {
+        context,
+        anchor: ids
+            .iter()
+            .copied()
+            .find(|id| lexicon.ids[id].is_match(found)),
+        side: Some(term.side),
+        distance: Some(term.gap),
+    }
+}
+
+fn support_ids(label: &str) -> &'static [&'static str] {
+    SUPPORT_LEXICON
+        .iter()
+        .find(|(known, _)| *known == label)
+        .map_or(&[], |(_, ids)| ids)
+}
+
+/// Lexicon terms that are no structural key of a label although they support it
+/// in prose: an `iban` key holds an IBAN, which `pii_iban_*` reports, not a
+/// second finding as account number.
+const KEY_EXCLUSIONS: &[(&str, &str)] = &[("FINANCIAL_ACCOUNT_NUMBER", "iban")];
+
+/// Words a key may append to a lexicon term: `passport no`, `ni number`.
+const KEY_SUFFIXES: &[&str] = &[" no", " nr", " number", " nummer"];
+
+/// A lexicon term as a structural key: a support term of `label`, or a
+/// counter-context term (`label: None`).
+#[derive(Debug, Clone, Copy)]
+pub(super) struct KeyTerm {
+    label: Option<&'static str>,
+    id: &'static str,
+}
+
+/// Normalized lexicon terms (see [`normalize_key`]) and what they name.
+static KEYS: LazyLock<HashMap<String, Vec<KeyTerm>>> = LazyLock::new(|| {
+    let mut keys: HashMap<String, Vec<KeyTerm>> = HashMap::new();
+    let support = SUPPORT_LEXICON
+        .iter()
+        .flat_map(|(label, ids)| ids.iter().map(|id| (Some(*label), *id)));
+    let counter = COUNTER_LEXICON.iter().map(|id| (None, *id));
+    for (label, id) in support.chain(counter) {
+        for word in lexicon_words(&[id]) {
+            if label.is_some_and(|label| KEY_EXCLUSIONS.contains(&(label, word))) {
+                continue;
+            }
+            let terms = keys.entry(normalize_key(word)).or_default();
+            if !terms
+                .iter()
+                .any(|term| term.label == label && term.id == id)
+            {
+                terms.push(KeyTerm { label, id });
+            }
+        }
+    }
+    keys
+});
+
+/// What the normalized key `name` names: its lexicon terms, else those of the
+/// key without a generic suffix such as `no` or `nummer`.
+fn key_terms(name: &str) -> &'static [KeyTerm] {
+    let keys = &*KEYS;
+    keys.get(name)
+        .or_else(|| {
+            KEY_SUFFIXES
+                .iter()
+                .find_map(|suffix| keys.get(name.strip_suffix(suffix)?))
+        })
+        .map_or(&[], Vec::as_slice)
+}
+
+/// Context that the key of `field` gives a value of `label`: the field context
+/// of a support term, else a counter term, else `None` (the key names nothing or
+/// another label). The most specific name with lexicon terms decides.
+/// `terms` gives the lexicon terms of a name index.
+fn key_evidence(
+    terms: impl Fn(usize) -> &'static [KeyTerm],
+    field: &Field,
+    label: &str,
+) -> Option<Evidence> {
+    let terms = field
+        .names
+        .iter()
+        .map(|&name| terms(name))
+        .find(|terms| !terms.is_empty())?;
+    let (context, term) = match terms.iter().find(|term| term.label == Some(label)) {
+        Some(term) => (Context::Field, term),
+        None => (
+            Context::Counter,
+            terms.iter().find(|term| term.label.is_none())?,
+        ),
+    };
+    Some(Evidence {
+        context,
+        anchor: Some(term.id),
+        side: Some(Side::Key),
+        distance: None,
+    })
+}
+
+/// Structural context (K04) of the value at `value` (byte range) for `label`:
+/// [`Context::Field`] if a key of the label names exactly this value,
+/// [`Context::Counter`] for a counter-context key, `None` without such a key.
+/// Parses the structure of `text` on every call; detection caches it per text.
+pub fn key_context(text: &str, value: (usize, usize), label: &str) -> Option<Context> {
+    structure_evidence(&Fields::parse(text), value.0..value.1, label)
+        .map(|evidence| evidence.context)
+}
+
+/// Structural context of the value at `value`: the key of a field whose value
+/// it is, if that key names `label` or counter-context.
+pub(super) fn structure_evidence(
+    fields: &Fields,
+    value: Range<usize>,
+    label: &str,
+) -> Option<Evidence> {
+    fields
+        .at(value)
+        .find_map(|field| key_evidence(|name| key_terms(&fields.names()[name]), field, label))
+}
+
+/// Whether the value at `value` (byte range) stands alone rather than continuing
+/// a number: no `+` right before it, no `-`, `/`, `.` or `,` joining it to a digit
+/// on either side, and no digit group one space away (`+49 30 123 456 789`). A
+/// context-free value (K05) has no field name that delimits it.
+pub(super) fn stands_alone(text: &str, value: Range<usize>) -> bool {
+    let joins = |ch: char| matches!(ch, '-' | '/' | '.' | ',');
+    let mut before = text[..value.start].chars().rev();
+    let mut after = text[value.end..].chars();
+    let (prev, prev2) = (before.next(), before.next());
+    let (next, next2) = (after.next(), after.next());
+    let digit = |ch: Option<char>| ch.is_some_and(|ch| ch.is_ascii_digit());
+    !(prev == Some('+')
+        || (prev.is_some_and(joins) && digit(prev2))
+        || (next.is_some_and(joins) && digit(next2))
+        || (prev == Some(' ') && digit(prev2))
+        || (next == Some(' ') && digit(next2)))
+}
 
 // Context must precede the field in the same clause. A card or employee mention
 // elsewhere in a document must not turn unrelated dates or product IDs into PII.

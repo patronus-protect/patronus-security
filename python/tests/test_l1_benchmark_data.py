@@ -105,13 +105,21 @@ class L1BenchmarkDataTests(unittest.TestCase):
             expected = namespace["flatten"](name, namespace[cases_name])
             self.assertEqual(load(name), expected, name)
 
-    def test_every_native_pii_label_has_three_positives_and_two_hard_negatives(self):
+    def test_every_native_pii_label_has_n_gated_cases_per_language(self):
+        # Golden schema v2 (E10): known gaps are reported, not gated, so they do not count.
         rows = load("pii_l1")
         self.assertEqual({row["target_label"] for row in rows}, PII_LABELS)
-        counts = Counter((row["target_label"], row["case_type"]) for row in rows)
+        counts = Counter(
+            (row["target_label"], row["language"], row["case_type"])
+            for row in rows
+            if not row["known_gap"]
+        )
         for label in PII_LABELS:
-            self.assertEqual(counts[(label, "positive")], 3, label)
-            self.assertEqual(counts[(label, "hard_negative")], 2, label)
+            for language in ("de", "en"):
+                for case_type in ("positive", "hard_negative"):
+                    self.assertGreaterEqual(
+                        counts[(label, language, case_type)], 5, (label, language, case_type)
+                    )
 
     def test_every_native_dlp_label_has_n_gated_cases_per_language(self):
         # Golden schema v2 (E13): known gaps are reported, not gated, so they do not count.
@@ -140,13 +148,17 @@ class L1BenchmarkDataTests(unittest.TestCase):
                 self.assertEqual(row["span_unit"], "unicode_code_point", row["id"])
                 self.assertIn(row["provenance"]["origin"], {"synthetic", "derived_existing_fixture"})
                 if row["case_type"] == "positive":
-                    # A split secret has one entity per fragment; everything else has one.
+                    # A split secret has one entity per fragment; everything else has one
+                    # target entity plus every other real entity in the text (T02).
+                    targets = [e for e in row["entities"] if e["label"] == row["target_label"]]
                     if "template" in row:
-                        self.assertGreaterEqual(len(row["entities"]), 1, row["id"])
+                        self.assertEqual(targets, row["entities"], row["id"])
+                        self.assertGreaterEqual(len(targets), 1, row["id"])
                     else:
-                        self.assertEqual(len(row["entities"]), 1, row["id"])
+                        self.assertEqual(len(targets), 1, row["id"])
+                    starts = [entity["start"] for entity in row["entities"]]
+                    self.assertEqual(starts, sorted(starts), row["id"])
                     for entity, materialized_entity in zip(row["entities"], materialized["entities"]):
-                        self.assertEqual(entity["label"], row["target_label"], row["id"])
                         self.assertEqual(
                             materialized["text"][entity["start"] : entity["end"]],
                             materialized_entity["text"],
@@ -159,7 +171,7 @@ class L1BenchmarkDataTests(unittest.TestCase):
 
     def test_language_distribution_is_broad(self):
         expected = {
-            "pii_l1": {"de": 74, "en": 66},
+            "pii_l1": {"de": 444, "en": 425},
             "dlp_l1": {"de": 265, "en": 272},
         }
         for name, distribution in expected.items():
@@ -177,12 +189,69 @@ class L1BenchmarkDataTests(unittest.TestCase):
         for row in derived:
             source_id = row["provenance"]["source_fixture_id"]
             self.assertIn(source_id, dynamic_rows, row["id"])
-            expected_value = row["entities"][0]["text"]
+            expected_value = next(
+                entity["text"] for entity in row["entities"] if entity["label"] == row["target_label"]
+            )
             self.assertIn(
                 expected_value,
                 {entity["text"] for entity in dynamic_rows[source_id]["entities"]},
                 row["id"],
             )
+
+
+class SecondaryEntityGoldTests(unittest.TestCase):
+    """T02: a positive annotates every real entity in its text, not only the target."""
+
+    def test_card_numbers_next_to_cvv_and_expiry_are_gold(self):
+        card = re.compile(r"(?<!\d)\d{4}(?: ?\d{4,6}){2,3}(?!\d)|(?<!\d)\d{15,16}(?!\d)")
+        annotated = 0
+        for row in load("pii_l1"):
+            if row["case_type"] != "positive" or row["target_label"] not in {
+                "CREDITCARD_CVV",
+                "CREDITCARD_EXPIRY",
+            }:
+                continue
+            gold = {(e["start"], e["end"]) for e in row["entities"] if e["label"] == "CREDITCARD"}
+            for match in card.finditer(row["text"]):
+                self.assertIn(match.span(), gold, (row["id"], match.group()))
+                annotated += 1
+        self.assertGreaterEqual(annotated, 19)
+
+    def test_known_secondary_entities_are_annotated(self):
+        rows = {row["id"]: row for row in load("pii_l1")}
+        for row_id, label, value in (
+            ("pii_l1-email-pos-01", "PHONE", "+76-532-1520"),
+            ("pii_l1-swift-code-pos-06", "IBAN", "DE89370400440532013000"),
+        ):
+            self.assertIn(
+                (label, value),
+                {(entity["label"], entity["text"]) for entity in rows[row_id]["entities"]},
+                row_id,
+            )
+
+    def test_generator_rejects_ambiguous_secondary_values(self):
+        namespace = runpy.run_path(str(benchmark.DATA_DIR / "generate_l1_goldens.py"))
+        p = namespace["p"]
+        with self.assertRaises(ValueError):
+            p("CREDITCARD_CVV", "en", "pii_credit_card_cvv", "Card 4111 1111 1111 1111, CVV ", "123", also=(("CREDITCARD", "4012 8888 8888 1881"),))
+        with self.assertRaises(ValueError):
+            p("CREDITCARD_CVV", "en", "pii_credit_card_cvv", "4111 1111 1111 1111 or 4111 1111 1111 1111, CVV ", "123", also=(("CREDITCARD", "4111 1111 1111 1111"),))
+
+
+class DynamicPiiChecksumGoldTests(unittest.TestCase):
+    def test_only_checksum_invalid_card_numbers_are_marked(self):
+        # Luhn validity of each marked value is checked against the Rust validator in
+        # rust/examples/12_l1_pii_fixture_eval.rs; the L1 evaluation skips marked spans.
+        marked = [
+            entity
+            for row in load("dynamic_pii")
+            for entity in row["entities"]
+            if "checksum_valid" in entity
+        ]
+        self.assertEqual(len(marked), 7)
+        for entity in marked:
+            self.assertEqual(entity["label"], "credit_card")
+            self.assertIs(entity["checksum_valid"], False)
 
 
 class PlaceholderGoldConventionTests(unittest.TestCase):

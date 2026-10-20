@@ -152,6 +152,11 @@ def _field(block: str, name: str) -> str:
 
 
 def parse_native_patterns(path: Path, struct_name: str) -> list[dict[str, str]]:
+    """Rules of the static `struct_name` registry in `path`, in registry order.
+
+    Entries are inline struct literals or `module::CONST` references to
+    `const CONST: Struct = Struct { ... };` items in the sibling `module.rs`.
+    """
     source = path.read_text()
     static_start = re.search(
         rf"pub static \w+:\s*&\[{struct_name}\]\s*=\s*&\[", source
@@ -159,23 +164,152 @@ def parse_native_patterns(path: Path, struct_name: str) -> list[dict[str, str]]:
     if not static_start:
         raise ValueError(f"Missing static {struct_name} registry in {path}")
     source = source[static_start.end():]
+    registry = source.split("\n];", 1)[0]
+    reference = r"^\s*(\w+)::(\w+),\s*$"
+    if re.search(reference, registry, flags=re.M):
+        blocks = []
+        entry = rf"\b{struct_name}\s*\{{(.*?)\n\s*\}},|{reference}"
+        for match in re.finditer(entry, registry, flags=re.S | re.M):
+            if match.group(1) is not None:
+                blocks.append(match.group(1))
+            else:
+                blocks.append(_native_pattern_const(path.parent, struct_name, *match.group(2, 3)))
+    else:
+        blocks = re.findall(rf"\b{struct_name}\s*\{{(.*?)\n\s*\}},", source, flags=re.S)
     patterns = []
-    for block in re.findall(rf"\b{struct_name}\s*\{{(.*?)\n\s*\}},", source, flags=re.S):
+    for block in blocks:
         name = re.search(r'\bname:\s*"([^"]+)"', block)
         entity_group = re.search(r'\bentity_group:\s*"([^"]+)"', block)
         if name and entity_group:
+            validator = re.search(r"Some\((?:\w+::)*(\w+)\)", _field(block, "validator"))
+            strength = re.search(r"\bstrength:\s*(?:\w+::)*(\w+),", block)
+            base_score = re.search(r"\bbase_score:\s*(\d+),", block)
             patterns.append(
                 {
                     "id": name.group(1),
                     "entity_group": entity_group.group(1),
-                    "validated": "None" not in _field(block, "validator"),
+                    "validated": validator is not None,
+                    "validator": validator.group(1) if validator else None,
+                    "strength": strength.group(1).lower() if strength else None,
+                    "base_score": int(base_score.group(1)) if base_score else None,
+                    "field_context": re.search(r"\bcaptured_value:\s*true\b", block) is not None,
+                    "requires_context": re.search(r"\brequires_context:\s*true\b", block) is not None,
+                    "scored_only": re.search(r"\bscored_only:\s*true\b", block) is not None,
                 }
             )
     return patterns
 
 
+def _native_pattern_const(directory: Path, struct_name: str, module: str, const: str) -> str:
+    path = directory / f"{module}.rs"
+    source = path.read_text() if path.is_file() else ""
+    match = re.search(
+        rf"\bconst {const}:\s*{struct_name}\s*=\s*{struct_name}\s*\{{(.*?)\n\}};",
+        source,
+        flags=re.S,
+    )
+    if not match:
+        raise ValueError(f"Missing {struct_name} {module}::{const} in {path}")
+    return match.group(1)
+
+
+def pii_score_points(path: Path = ROOT / "rust/src/detectors/pii/score.rs") -> tuple[dict[str, int], int, list[int], int]:
+    """Validator strength, field bonus, proximity tiers and counter-context penalty of the PII score model."""
+    source = path.read_text()
+    body = re.search(r"pub const fn points\(self\) -> u8 \{(.*?)\n    \}", source, flags=re.S)
+    context = re.search(r"pub const FIELD_CONTEXT_POINTS: u8 = (\d+);", source)
+    proximity = re.search(r"pub const PROXIMITY_CONTEXT_POINTS: \[\(usize, u8\); \d+\] = \[(.*?)\];", source)
+    counter = re.search(r"pub const COUNTER_CONTEXT_POINTS: u8 = (\d+);", source)
+    if not body or not context or not proximity or not counter:
+        raise ValueError(f"Missing PII score points in {path}")
+    strength = {name.lower(): int(points) for name, points in re.findall(r"Self::(\w+) => (\d+),", body.group(1))}
+    tiers = [int(points) for _, points in re.findall(r"\((\d+), (\d+)\)", proximity.group(1))]
+    return strength, int(context.group(1)), tiers, int(counter.group(1))
+
+
+def pii_spelled_out_penalty(path: Path = ROOT / "rust/src/detectors/pii/score.rs") -> int:
+    """Points a finding loses when only the `recall` obfuscation normalization reveals it (K06)."""
+    match = re.search(r"pub const SPELLED_OUT_PENALTY_POINTS: u8 = (\d+);", path.read_text())
+    if not match:
+        raise ValueError(f"Missing SPELLED_OUT_PENALTY_POINTS in {path}")
+    return int(match.group(1))
+
+
+PII_LEXICON_PATH = ROOT / "rust/src/detectors/anchor_lexicons/pii.json"
+PII_CONTEXT_PATH = ROOT / "rust/src/detectors/pii/context.rs"
+
+
+def pii_context_lexicon(path: Path = PII_CONTEXT_PATH) -> tuple[dict[str, list[str]], list[str]]:
+    """Support lexicon ids per PII label and the counter-context ids of the PII context engine."""
+    source = path.read_text()
+    support = re.search(r"pub static SUPPORT_LEXICON: .*? = &\[(.*?)\n\];", source, flags=re.S)
+    counter = re.search(r"pub static COUNTER_LEXICON: &\[&str\] = &\[(.*?)\];", source, flags=re.S)
+    if not support or not counter:
+        raise ValueError(f"Missing PII context lexicon in {path}")
+    labels = {
+        label: re.findall(r'"(pii\.\w+)"', ids)
+        for label, ids in re.findall(r'\(\s*"(\w+)",\s*&\[(.*?)\],?\s*\)', support.group(1), flags=re.S)
+    }
+    return labels, re.findall(r'"(pii\.\w+)"', counter.group(1))
+
+
+def pii_context_lexicon_lines(labels: list[str], path: Path = PII_LEXICON_PATH) -> list[str]:
+    """Catalog section: support lexicon ids per PII label and the counter-context terms."""
+    entries = {entry["id"]: entry for entry in json.loads(path.read_text())}
+    support, counter = pii_context_lexicon()
+    lines = [
+        "",
+        "### PII context lexicon",
+        "",
+        "The context engine reads these DE/EN entries of `rust/src/detectors/anchor_lexicons/pii.json`; "
+        "`rust/src/detectors/pii/context.rs` maps them to labels. Support terms of a label count for "
+        "rules without a field name of their own, a counter-context term counts for every label when it "
+        "is nearer than every support term. As a structural key (a JSON key, CSV or table header, XML "
+        "element), a term of either kind names the value it holds; keys are compared lowercased, with "
+        "`_`, `-`, `.` and camelCase boundaries as spaces, optionally followed by `no`, `nr`, `number` "
+        "or `nummer`. The key `iban` names no account number.",
+        "",
+        "| Result entity group | Support anchors |",
+        "| --- | --- |",
+    ]
+    for label in labels:
+        anchors = ", ".join(f"`{anchor}`" for anchor in support.get(label, [])) or "—"
+        lines.append(f"| `{label}` | {anchors} |")
+    lines.extend(["", "| Counter-context anchor | DE | EN |", "| --- | --- | --- |"])
+    for anchor in counter:
+        entry = entries[anchor]
+        de = ", ".join(f"`{word}`" for word in entry["de"] + entry["shared"])
+        en = ", ".join(f"`{word}`" for word in entry["en"] + entry["shared"])
+        lines.append(f"| `{anchor}` | {de} | {en} |")
+    return lines
+
+
+def pii_rule_score(rule: dict, strength_points: dict[str, int], context_points: int) -> float:
+    points = rule["base_score"] + strength_points[rule["strength"]]
+    points += context_points if rule["field_context"] else 0
+    return min(points, 100) / 100
+
+
+def pii_rule_context(rule: dict) -> str:
+    if rule["field_context"]:
+        return "field or key"
+    if rule["scored_only"]:
+        return "key or proximity, `balanced`/`recall` only"
+    return "key or proximity (required)" if rule["requires_context"] else "key or proximity"
+
+
+def pii_rule_score_range(rule: dict, strength_points: dict[str, int], context_points: int, tiers: list[int]) -> str:
+    """Score without and with the best proximity context; context-bound rules need the weakest tier."""
+    if rule["field_context"]:
+        return f"{pii_rule_score(rule, strength_points, context_points):.2f}"
+    points = rule["base_score"] + strength_points[rule["strength"]]
+    low = points + min(tiers) if rule["requires_context"] else points
+    return f"{min(low, 100) / 100:.2f}–{min(points + max(tiers), 100) / 100:.2f}"
+
+
 def generate_l1_rule_catalog_doc() -> str:
     pii = parse_native_patterns(ROOT / "rust/src/detectors/pii/pii.rs", "PiiPattern")
+    strength_points, context_points, proximity_tiers, counter_points = pii_score_points()
     dlp = parse_native_patterns(ROOT / "rust/src/detectors/dlp/dlp.rs", "DlpPattern")
     credential_groups = {
         "API_KEY", "CLOUD_KEY", "CREDENTIAL", "CRYPTO_KEY", "PASSWORD_HASH",
@@ -225,13 +359,38 @@ def generate_l1_rule_catalog_doc() -> str:
         "",
         "All PII rules are eligible by default when PII L1 is enabled.",
         "",
-        "| Rule ID | Result entity group | Extra validator |",
-        "| --- | --- | --- |",
+        "In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `recall` "
+        "a finding scores the rule base plus the validator strength "
+        f"(checksum {strength_points['checksum']}, format {strength_points['format']}, none {strength_points['none']}) "
+        f"plus its context, capped at 100 and divided by 100: {context_points} when the rule binds the value "
+        f"to a field name, otherwise {'/'.join(str(points) for points in proximity_tiers)} for a support term "
+        f"of the label near the value and -{counter_points} when a counter-context term is nearer "
+        "(see [PII score and modes](result-schema.md#pii-score-and-modes), "
+        "[PII context lexicon](#pii-context-lexicon)). "
+        "Rules marked `proximity (required)` report only with a support term, in every mode. "
+        "Rules marked `balanced`/`recall` only (K05) report a checksum value without a field name "
+        "and never run in `strict`; the value must stand alone, not inside a longer number. "
+        "Structure (K04): a JSON key, a `key: value`/`key=value` line, an XML element or attribute, a CSV "
+        "header or a Markdown/HTML table header that a `field` rule accepts as its field name binds the value "
+        "it holds to the rule in every mode, if the value matches the rule's value form in full; for the "
+        "other rules a key of the label (or a counter-context key) that names exactly the value is its context "
+        f"(+{context_points} or -{counter_points}) instead of proximity. "
+        "Obfuscation (K06): every rule also sees values behind zero-width characters, full-width forms "
+        "and defanged separators (`[.]`, `(@)`) in every mode, and in `recall` also spelled-out e-mail "
+        "separators (`[at]`, `ät`, `dot`, `punkt`) and numbers spaced character by character "
+        f"(-{pii_spelled_out_penalty()}); the span is the original text and the validator decides on the "
+        "normalized value.",
+        "",
+        "| Rule ID | Result entity group | Extra validator | Validator strength | Base | Context | Score (`balanced`/`recall`) |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
     ]
     for rule in pii:
         lines.append(
-            f"| `{rule['id']}` | `{rule['entity_group']}` | {'yes' if rule['validated'] else 'no'} |"
+            f"| `{rule['id']}` | `{rule['entity_group']}` | {'yes' if rule['validated'] else 'no'} "
+            f"| {rule['strength']} | {rule['base_score']} | {pii_rule_context(rule)} "
+            f"| {pii_rule_score_range(rule, strength_points, context_points, proximity_tiers)} |"
         )
+    lines.extend(pii_context_lexicon_lines(list(dict.fromkeys(rule["entity_group"] for rule in pii))))
 
     lines.extend([
         "",

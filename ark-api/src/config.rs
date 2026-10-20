@@ -6,8 +6,8 @@ use std::str::FromStr;
 
 use patronus_ark::{
     ConditionalPipelineGate, DynamicPiiConfig, L3ClusteringStrategy, L3EarlyExitMode,
-    L3PipelinePolicy, L3ProgressMode, L3SchedulerPolicy, OnnxRuntimeOptions, ScanGateMatrix,
-    SecurityCategory, SecurityLevel,
+    L3PipelinePolicy, L3ProgressMode, L3SchedulerPolicy, OnnxRuntimeOptions, PiiMode,
+    ScanGateMatrix, SecurityCategory, SecurityLevel,
 };
 use serde::Deserialize;
 
@@ -123,6 +123,8 @@ pub(crate) struct RawGates {
     #[serde(default)]
     explain: bool,
     #[serde(default)]
+    pii_mode: PiiMode,
+    #[serde(default)]
     l1: Option<bool>,
     #[serde(default)]
     l2: Option<bool>,
@@ -166,6 +168,7 @@ impl RawGates {
         }
         let RawGates {
             explain,
+            pii_mode,
             l1,
             l2,
             l3,
@@ -225,6 +228,7 @@ impl RawGates {
         validate_l3_policy(&policy)?;
         Ok(ScanGateMatrix {
             explain,
+            pii_mode,
             l1,
             l2,
             l3,
@@ -487,6 +491,25 @@ mod tests {
         let raw: RawGates = serde_yaml::from_str("explain: true").unwrap();
         assert!(raw.into_gate_matrix().unwrap().explain);
         assert!(serde_yaml::from_str::<RawGates>("explain: verbose").is_err());
+    }
+
+    #[test]
+    fn pii_mode_is_strict_by_default_and_explicitly_configurable() {
+        use patronus_ark::PiiMode;
+        assert_eq!(
+            RawGates::default().into_gate_matrix().unwrap().pii_mode,
+            PiiMode::Strict
+        );
+        for (yaml, mode) in [
+            ("pii_mode: strict", PiiMode::Strict),
+            ("pii_mode: balanced", PiiMode::Balanced),
+            ("pii_mode: recall", PiiMode::Recall),
+        ] {
+            let raw: RawGates = serde_yaml::from_str(yaml).unwrap();
+            assert_eq!(raw.into_gate_matrix().unwrap().pii_mode, mode);
+        }
+        assert!(serde_yaml::from_str::<RawGates>("pii_mode: fast").is_err());
+        assert!(serde_yaml::from_str::<RawGates>("pii_mode: Balanced").is_err());
     }
 
     #[test]
