@@ -17,6 +17,9 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   [`rule_sources.yaml`](rule_sources.yaml).
 - Validatoren sind schwach: `is_secret_value` prüft nur Länge, Platzhalter und Env-Referenzen.
   Prüfsummen fehlen ganz: GitHub/npm CRC32, Base58Check (WIF), JWT-Struktur und PEM/DER.
+  Seit K03 liegen die Bausteine dafür in `rust/src/detectors/validators/` (CRC32-Base62,
+  Base58Check, Bech32/Bech32m, Base64/DER, JWT-Header, Entropie, Zeichenklassen; auch für PII);
+  angebunden werden sie regelweise in F01–F09.
 - Bekannte Präzisionslücken: `dlp_eth_private_key` trifft jeden 0x-64-Hex-Wert, also auch Tx- und
   Block-Hashes. `dlp_btc_wif` validiert die Prüfsumme nicht. `dlp_signed_url_signature`
   (`sig=`) und `dlp_credential_in_url` (`token=`) treffen auch Paginierungs- und CSRF-Parameter.

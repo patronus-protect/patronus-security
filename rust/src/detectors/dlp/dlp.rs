@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::detectors::anchors::{self, AnchorPattern};
+use crate::detectors::validators;
 use crate::{
     detectors::{NativeMatchValidator, NativeRegexDetector},
     EvaluationResult,
@@ -140,24 +141,8 @@ impl RuleMeta {
     /// Whether `value` reaches the rule's entropy floor.
     pub(crate) fn has_min_entropy(&self, value: &str) -> bool {
         self.min_entropy
-            .is_none_or(|bits| shannon_entropy(value) >= bits)
+            .is_none_or(|bits| validators::shannon_entropy(value) >= bits)
     }
-}
-
-/// Shannon entropy of `value` in bits per character.
-fn shannon_entropy(value: &str) -> f64 {
-    let mut counts = std::collections::HashMap::<char, usize>::new();
-    for ch in value.chars() {
-        *counts.entry(ch).or_default() += 1;
-    }
-    let length = value.chars().count() as f64;
-    counts
-        .values()
-        .map(|&count| {
-            let probability = count as f64 / length;
-            -probability * probability.log2()
-        })
-        .sum()
 }
 
 /// Entity groups of credential/secret rules: on by default, with severity.
