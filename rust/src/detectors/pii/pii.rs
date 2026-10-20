@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::{
-    detectors::{NativeDetection, NativeMatchValidator, NativeRegexDetector},
+    detectors::{MatchScore, NativeDetection, NativeMatchValidator, NativeRegexDetector},
     EvaluationResult,
 };
 
+use super::context::Evidence;
 use super::context_anchors::PII_ANCHOR_PATTERNS;
-use super::score::{self, Context, PiiMode, ValidatorStrength};
+use super::score::{self, PiiMode, ValidatorStrength};
 use super::{common, context, de, identifiers, intl, uk, us, validators};
 use crate::detectors::anchors;
 use regex::Regex;
@@ -169,13 +170,13 @@ impl PiiPipeline {
     }
 
     /// Context of a match: the field the rule binds, else two-sided proximity.
-    fn context(&self, index: usize, text: &str, captures: &regex::Captures<'_>) -> Context {
+    fn context(&self, index: usize, text: &str, captures: &regex::Captures<'_>) -> Evidence {
         let pattern = &PII_PATTERNS[index];
         if pattern.captured_value {
-            return Context::Field;
+            return Evidence::field();
         }
         let value = captures.get(0).unwrap();
-        context::proximity(text, (value.start(), value.end()), pattern.entity_group)
+        context::evidence(text, (value.start(), value.end()), pattern.entity_group)
     }
 }
 
@@ -262,8 +263,12 @@ impl NativeRegexDetector for PiiPipeline {
         true
     }
 
-    fn match_score(&self, index: usize, text: &str, captures: &regex::Captures<'_>) -> f64 {
-        score::score(&PII_PATTERNS[index], self.context(index, text, captures))
+    fn match_score(&self, index: usize, text: &str, captures: &regex::Captures<'_>) -> MatchScore {
+        let evidence = self.context(index, text, captures);
+        MatchScore {
+            score: score::score(&PII_PATTERNS[index], evidence.context),
+            context: Some(evidence.to_json()),
+        }
     }
 
     fn finalize_spans(&self, text: &str, spans: &mut Vec<crate::EvidenceSpan>) {

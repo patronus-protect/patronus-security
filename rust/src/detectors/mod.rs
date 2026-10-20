@@ -17,6 +17,13 @@ use crate::{EvaluationResult, EvidenceSpan};
 
 pub(crate) type NativeMatchValidator = fn(&str) -> bool;
 
+/// Score of an accepted match in a scored mode, with the context that explains it.
+pub(crate) struct MatchScore {
+    pub score: f64,
+    /// Added to the `matched_rules` entry as `context`.
+    pub context: Option<serde_json::Value>,
+}
+
 pub(crate) struct NativeDetection {
     pub result: EvaluationResult,
     pub evidence_spans: Vec<EvidenceSpan>,
@@ -76,8 +83,16 @@ pub(crate) trait NativeRegexDetector {
     }
 
     /// Score of an accepted match in a scored mode. Unscored detection keeps `1.0`.
-    fn match_score(&self, _index: usize, _text: &str, _captures: &regex::Captures<'_>) -> f64 {
-        1.0
+    fn match_score(
+        &self,
+        _index: usize,
+        _text: &str,
+        _captures: &regex::Captures<'_>,
+    ) -> MatchScore {
+        MatchScore {
+            score: 1.0,
+            context: None,
+        }
     }
 
     fn detect_prepared_with_options<F>(
@@ -94,7 +109,8 @@ pub(crate) trait NativeRegexDetector {
 
     /// `min_score: None` is the unscored contract: every finding scores `1.0`.
     /// With `Some(threshold)`, findings carry `match_score`, matches below the
-    /// threshold are dropped, and `matched_rules` entries record the score.
+    /// threshold are dropped, and `matched_rules` entries record the score and
+    /// its context.
     fn detect_prepared_scored<F>(
         &self,
         prepared: &crate::threat::NativeText<'_>,
@@ -148,14 +164,14 @@ pub(crate) trait NativeRegexDetector {
                 {
                     continue;
                 }
-                let score = match min_score {
-                    None => 1.0,
+                let (score, context) = match min_score {
+                    None => (1.0, None),
                     Some(threshold) => {
-                        let score = self.match_score(index, text, &captures);
-                        if score < threshold {
+                        let scored = self.match_score(index, text, &captures);
+                        if scored.score < threshold {
                             continue;
                         }
-                        score
+                        (scored.score, scored.context)
                     }
                 };
                 let evidence = evidence::L1Match::from_captures(regex, &captures, value_group);
@@ -166,6 +182,9 @@ pub(crate) trait NativeRegexDetector {
                 });
                 if min_score.is_some() {
                     rule["score"] = serde_json::json!(score);
+                }
+                if let Some(context) = context {
+                    rule["context"] = context;
                 }
                 matched_rules.push(rule);
                 class_name.get_or_insert(self.entity_groups()[index]);
