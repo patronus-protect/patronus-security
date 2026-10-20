@@ -80,20 +80,24 @@ spätere regionale Telefonprüfung (Hebel 4) darf `+1 000-000-0000` und `555-01x
 ## Ausführung: systemd-Timer auf der VPS → Stacked Branch
 
 Eine Claude-Cloud-Routine kommt nicht auf die VPS (Port 22 aus der Cloud gesperrt). Deshalb plant
-die VPS selbst: `ark-l1.timer` startet stündlich zur vollen Stunde `runner/run.sh`, `ark-dlp.timer`
-zur halben Stunde `runner/run.sh --program dlp`. Beide teilen ein Lock; ist es belegt, entfällt der Lauf.
+die VPS selbst, und nur die VPS: `ark-l1.timer` startet alle 2 Stunden zu geraden Stunden `runner/run.sh`,
+`ark-dlp.timer` zu ungeraden Stunden `runner/run.sh --program dlp`. Beide teilen ein Lock; ist es belegt,
+entfällt der Lauf.
 
 ```
 run.sh
   ark-l1 next     → Stack restacken, eine Aufgabe wählen, eigener Klon l1/NNN-<id> auf der Stack-Spitze
   claude -p       → in systemd-Sandbox (nur Klon + Cargo-Target beschreibbar, kein sudo/GitHub/Holdout)
   ark-l1 gate     → Agent-Commits als Bundle (sandboxed erzeugt) ins vertrauenswürdige Repo holen,
-                    frischer Checkout; fmt/clippy/test, Golden-Eval, Python-Tests, Docs in einer
-                    Sandbox ohne Credentials; Scoreboard (scoreboard.py gate, E06) zusätzlich ohne Netz,
-                    als einziger Schritt mit Lesezugriff auf den Holdout
-  grün: ark-l1 publish → Status done per Plumbing, push aus dem vertrauenswürdigen Repo, Draft-PR
-                    (idempotent; schlägt es fehl, holt der nächste Lauf nur das Publish nach)
-  rot:  Gate-Bericht zurück an den Agenten, max. 3 Runden, danach ark-l1 block
+                    frischer Checkout; dieselben Schritte wie .github/workflows/ci.yml (fmt/clippy/test,
+                    Golden-Eval, Python-Tests, pytest scripts/tests, Docs) in einer Sandbox ohne
+                    Credentials; Scoreboard (scoreboard.py gate, E06) zusätzlich ohne Netz, als einziger
+                    Schritt mit Lesezugriff auf den Holdout, rot bei jeder Regression
+  ark-l1 ci       → Status done per Plumbing, Branch pushen (noch ohne PR), auf die GitHub-CI warten
+  grün: ark-l1 publish → PR öffnen, fertig zum Review (kein Draft); ohne grüne CI auf genau diesem
+                    Commit verweigert publish (idempotent; der nächste Lauf holt CI/Publish nach)
+  rot:  Gate- bzw. CI-Bericht zurück an den Agenten, max. 3 Runden, danach ark-l1 block
+                    (ein Branch ohne PR wird dabei gelöscht)
 ```
 
 - **Ein Lauf = eine Aufgabe.** Gewählt wird die erste Aufgabe ohne `status`, deren `deps` erledigt

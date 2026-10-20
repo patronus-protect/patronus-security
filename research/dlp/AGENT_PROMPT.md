@@ -34,7 +34,8 @@ Aufgabe, keine weitere.
    `cd rust && cargo run --example 13_l1_golden_eval -- dlp`,
    Python-Tests wie in der CI (`.venv` im Worktree, `pip install -r requirements-test.txt`,
    `VIRTUAL_ENV=$PWD/.venv .venv/bin/python -m maturin develop --manifest-path python/Cargo.toml`,
-   `.venv/bin/python -m unittest discover -s python/tests`),
+   `.venv/bin/python -m unittest discover -s python/tests`,
+   `cargo build --locked -p ark-api --bin ark-api-entrypoint`, `.venv/bin/python -m pytest scripts/tests -q`),
    `python3 scripts/generate_docs.py --check`. Dev-Daten liegen unter `$ARK_L1_DEV_DATA`.
 5. Alles committen (Conventional Commits, Trailer
    `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`). Nicht pushen. Den Status in
@@ -47,6 +48,10 @@ Regeln:
   echte, geleakte oder live-gültige Secrets verwenden, suchen oder erzeugen; keine Klartext-Tokens mit
   gültiger Prüfsumme committen (ab E02 speichern Goldens Generator-Rezepte).
 - Keine Netzwerkzugriffe im Detektor, keine Live-Verifikation von Secrets bei Providern.
+
+Abgegeben wird nur fertige Arbeit: Der PR muss mergebar sein, ohne Verschlechterung an
+irgendeiner Stelle. Nach dem Gate muss zusätzlich die GitHub-CI auf dem Branch grün sein, sonst
+gibt es keinen PR und du bekommst das CI-Log.
 
 Nach deinem Lauf prüft ein unabhängiges Gate (dieselben Checks plus DLP-Scoreboard auf einem
 verborgenen Holdout: keine Regression > 0,5 pp F1, FP/MB auf Benign-Code nicht höher, keine neuen FP
