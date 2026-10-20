@@ -326,6 +326,28 @@ def test_module_split_registry_is_resolved_in_registry_order(tmp_path):
     assert MODULE.ark_labels_from_source(source) == {"EMAIL", "PHONE", "IP_ADDRESS"}
 
 
+def test_registry_parse_reports_score_model_fields():
+    # K02: base points and validator strength per rule feed the rule catalog.
+    rules = _generate_docs().parse_native_patterns(MODULE.PII_SOURCE_PATH, "PiiPattern")
+    by_id = {rule["id"]: rule for rule in rules}
+    assert by_id["pii_credit_card"]["strength"] == "checksum"
+    assert by_id["pii_ipv4"]["strength"] == "format"
+    assert by_id["pii_email"]["strength"] == "none"
+    for rule in rules:
+        assert rule["strength"] in {"checksum", "format", "none"}, rule
+        assert isinstance(rule["base_score"], int) and 1 <= rule["base_score"] <= 100, rule
+        assert (rule["strength"] == "none") == (rule["validator"] is None), rule
+
+
+def test_registry_parse_tolerates_rules_without_score_fields(tmp_path):
+    source = _write_split_registry(
+        tmp_path,
+        "pub static PII_PATTERNS: &[PiiPattern] = &[\n    common::EMAIL,\n];\n",
+    )
+    [rule] = _generate_docs().parse_native_patterns(source, "PiiPattern")
+    assert rule["strength"] is None and rule["base_score"] is None
+
+
 def test_module_split_registry_rejects_unknown_references(tmp_path):
     source = _write_split_registry(
         tmp_path,

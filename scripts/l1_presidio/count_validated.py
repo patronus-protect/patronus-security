@@ -58,6 +58,7 @@ class ArkRule(NamedTuple):
     name: str
     label: str
     validator: str | None
+    strength: str | None = None  # score-model strength of the rule (K02), None = not declared
 
 
 class Unit(NamedTuple):
@@ -116,7 +117,7 @@ def ark_rules_from_source(path: Path = ENTITY_MAP_MODULE.PII_SOURCE_PATH) -> lis
     """Rule name, label and validator function of every ``PII_PATTERNS`` entry."""
     generate_docs = ENTITY_MAP_MODULE._load_file("_ark_generate_docs", ROOT / "scripts" / "generate_docs.py")
     return [
-        ArkRule(pattern["id"], pattern["entity_group"], pattern["validator"])
+        ArkRule(pattern["id"], pattern["entity_group"], pattern["validator"], pattern["strength"])
         for pattern in generate_docs.parse_native_patterns(path, "PiiPattern")
     ]
 
@@ -158,6 +159,24 @@ def _unit(entity_id: str, rule: Rule) -> tuple[Unit, str | None]:
     return Unit(entity_id, country or rule.country), None
 
 
+def _strength_problem(ark_rule: ArkRule, rules: ChecksumRules) -> str | None:
+    """The score model's validator strength must follow the checksum classification."""
+    if ark_rule.strength is None:
+        return None
+    if ark_rule.validator is None:
+        expected = "none"
+    elif ark_rule.validator not in rules.ark:
+        return None  # reported as unclassified
+    else:
+        expected = "format" if rules.ark[ark_rule.validator] is None else "checksum"
+    if ark_rule.strength == expected:
+        return None
+    return (
+        f"ARK rule {ark_rule.name} declares strength {ark_rule.strength}, "
+        f"but validator {ark_rule.validator} is classified as {expected}"
+    )
+
+
 def _evaluate(
     entity_map: ENTITY_MAP_MODULE.EntityMap, rules: ChecksumRules, ark_rules: Iterable[ArkRule]
 ) -> tuple[Counts, list[str]]:
@@ -165,6 +184,9 @@ def _evaluate(
     ark: dict[Unit, list[str]] = {}
     used = set()
     for ark_rule in ark_rules:
+        problem = _strength_problem(ark_rule, rules)
+        if problem:
+            problems.append(problem)
         if ark_rule.validator is None:
             continue
         used.add(ark_rule.validator)

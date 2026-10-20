@@ -185,6 +185,37 @@ numeric IBAN substring that also passes the credit-card validator. The primary `
 does not enumerate every match; consume `evidence_spans` for all detected classes. Overlapping
 matches within the same PII label are deduplicated.
 
+### PII score and modes
+
+The PII `score` depends on the PII mode, an opt-in execution gate (Rust
+`ScanGateMatrix.pii_mode`, Python `execution_gates={"pii_mode": "balanced"}`, Ark API
+`gates: {pii_mode: balanced}`). Unknown mode names are rejected.
+
+| Mode | `evidence_spans[].score` | Threshold | `confidence` |
+| --- | --- | --- | --- |
+| `strict` (default) | always `1.0` | none: the rules decide | `1.0` |
+| `balanced` | model score | findings below `0.50` are dropped | highest span score |
+| `recall` | model score | findings below `0.30` are dropped | highest span score |
+
+The model score of a finding is the sum of three parts, capped at 100 and divided by 100:
+
+- **Base** (1–100 points) of the rule: how specific its pattern is on its own.
+- **Validator strength**: `checksum` +35 (Luhn, ISO 7064 MOD 97-10, Steuer-ID check digit),
+  `format` +15 (length, alphabet, ranges, dates, prefixes), `none` +0 (no validator).
+- **Context bonus**: +25 when the rule binds the value to a field name such as `IBAN:` or
+  `Steuer-ID`.
+
+For example, a Steuer-ID after its field name scores `1.0`, an IBAN without a field name `0.90`, a
+licence plate after `Kennzeichen:` `0.65`. The [L1 rule catalog](l1-rule-catalog.md) lists
+strength, base and score per rule. In `balanced` and `recall`, every `details.matched_rules`
+entry also carries the `score` of its finding; `strict` results are unchanged and carry no
+such field.
+
+Every current rule scores at least `0.50`, so `balanced` and `recall` return the same spans as
+`strict` and differ only in `score` and `confidence`. Validators decide in every mode: a value with
+a wrong check digit is never reported. Scores are rule-based evidence strengths, not calibrated
+probabilities; do not compare them with model confidences of other layers.
+
 Ambiguous PII fields require additional context before they emit findings or
 `matched_rules`: card expiry dates need a payment-card marker or a Luhn-valid PAN
 within the preceding 128 bytes of the same clause. Sentence, newline, semicolon,

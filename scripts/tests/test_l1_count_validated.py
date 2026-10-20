@@ -180,9 +180,20 @@ def test_checked_in_ark_count():
 
 def test_ark_rules_are_read_from_the_pii_registry():
     rules = {rule.name: rule for rule in MODULE.ark_rules_from_source()}
-    assert rules["pii_credit_card"] == ArkRule("pii_credit_card", "CREDITCARD", "luhn")
+    assert rules["pii_credit_card"] == ArkRule("pii_credit_card", "CREDITCARD", "luhn", "checksum")
     assert rules["pii_steuer_id_de"].validator == "steuer_id"
     assert rules["pii_kfz_kennzeichen_de"].validator is None
+
+
+def test_ark_rules_carry_the_score_model_strength():
+    # K02: the score model weighs `strength` of every registry entry; it must agree with checksums.ark.
+    rules = {rule.name: rule for rule in MODULE.ark_rules_from_source()}
+    assert rules["pii_iban_de"].strength == "checksum"
+    assert rules["pii_steuer_id_de"].strength == "checksum"
+    assert rules["pii_swift_bic_context"].strength == "format"
+    assert rules["pii_passport_number_de"].strength == "format"
+    assert rules["pii_kfz_kennzeichen_de"].strength == "none"
+    assert {rule.strength for rule in rules.values()} == {"checksum", "format", "none"}
 
 
 # ── problems ─────────────────────────────────────────────────────────────────
@@ -195,6 +206,25 @@ def test_unclassified_and_unused_ark_validators_are_problems():
     assert any("new_check" in problem and "not classified" in problem for problem in problems)
     problems = MODULE.check(entity_map, rules, ark_rules=MINIMAL_ARK_RULES[:3])
     assert any("de_document_number" in problem and "not used" in problem for problem in problems)
+
+
+def test_score_strength_contradicting_the_classification_is_a_problem():
+    entity_map, rules = load_minimal()
+    consistent = [
+        ArkRule("pii_iban_de", "IBAN", "mod97", "checksum"),
+        ArkRule("pii_swift_bic_context", "SWIFT_CODE", "bic", "format"),
+        ArkRule("pii_passport_number_de", "PASSPORT_NUMBER", "de_document_number", "checksum"),
+        ArkRule("pii_plain", "SWIFT_CODE", None, "none"),
+    ]
+    assert MODULE.check(entity_map, rules, ark_rules=consistent) == []
+    for broken in (
+        ArkRule("pii_iban_de", "IBAN", "mod97", "format"),
+        ArkRule("pii_swift_bic_context", "SWIFT_CODE", "bic", "checksum"),
+        ArkRule("pii_plain", "SWIFT_CODE", None, "format"),
+        ArkRule("pii_swift_bic_context", "SWIFT_CODE", "bic", "none"),
+    ):
+        problems = MODULE.check(entity_map, rules, ark_rules=consistent + [broken])
+        assert any(broken.name in problem and "strength" in problem for problem in problems), broken
 
 
 def test_unmapped_labels_and_entities_are_problems():
