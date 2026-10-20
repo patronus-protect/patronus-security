@@ -362,7 +362,7 @@ pub(crate) fn populate_char_offsets(text: &str, spans: &mut [EvidenceSpan]) {
     }
 }
 
-fn safe_result() -> EvaluationResult {
+pub(crate) fn safe_result() -> EvaluationResult {
     EvaluationResult {
         class_name: "safe".to_string(),
         confidence: 1.0,

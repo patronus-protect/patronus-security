@@ -258,6 +258,14 @@ def pii_score_points(path: Path = ROOT / "rust/src/detectors/pii/score.rs") -> t
     return strength, int(context.group(1)), tiers, int(counter.group(1))
 
 
+def pii_competing_labels(path: Path = ROOT / "rust/src/detectors/pii/overlap.rs") -> list[str]:
+    """Labels whose overlapping findings `balanced` and `recall` resolve to one (K07)."""
+    match = re.search(r"pub const COMPETING_LABELS: \[&str; \d+\] = \[(.*?)\];", path.read_text(), re.S)
+    if not match:
+        raise ValueError(f"Missing COMPETING_LABELS in {path}")
+    return re.findall(r'"([A-Z_]+)"', match.group(1))
+
+
 def pii_spelled_out_penalty(path: Path = ROOT / "rust/src/detectors/pii/score.rs") -> int:
     """Points a finding loses when only the `recall` obfuscation normalization reveals it (K06)."""
     match = re.search(r"pub const SPELLED_OUT_PENALTY_POINTS: u8 = (\d+);", path.read_text())
@@ -410,7 +418,12 @@ def generate_l1_rule_catalog_doc() -> str:
         "and defanged separators (`[.]`, `(@)`) in every mode, and in `recall` also spelled-out e-mail "
         "separators (`[at]`, `ät`, `dot`, `punkt`) and numbers spaced character by character "
         f"(-{pii_spelled_out_penalty()}); the span is the original text and the validator decides on the "
-        "normalized value.",
+        "normalized value. "
+        "Overlaps (K07): in `balanced` and `recall` overlapping findings of two different labels among "
+        f"{', '.join(f'`{label}`' for label in pii_competing_labels())} resolve to one: an IBAN wins, then the "
+        "longer value, context that supports its own label, a checksum, the higher score, the earlier rule; a "
+        "finding inside a printed IBAN form (`DE64 7172 …`) yields even when its check digits fail. "
+        "`strict` keeps both labels.",
         "",
         "| Rule ID | Result entity group | Extra validator | Validator strength | Base | Context | Score (`balanced`/`recall`) |",
         "| --- | --- | --- | --- | --- | --- | --- |",

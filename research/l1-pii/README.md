@@ -193,6 +193,18 @@ gesperrte Nummern (`D E 8 9 …`). Die Gold-Konvention T01 gilt damit für `stri
 unverändert; `recall` darf ausgeschriebene Adressen melden. Validatoren entscheiden auf dem
 normalisierten Wert. DLP D04 kann dieselbe Sicht nutzen.
 
+## Label-Überlappungen (K07)
+
+`rust/src/detectors/pii/overlap.rs`: In `balanced` und `recall` ergibt ein Wert ein Label unter den
+konkurrierenden Nummern-Labels (`COMPETING_LABELS`: IBAN, Karte, Kontonummer, Steuer-ID, Telefon).
+Von zwei überlappenden Funden verschiedener Labels gewinnt nach dem ersten Kriterium, das sich
+unterscheidet: IBAN, längerer Wert (Luhn-gültige Teilspanne einer IBAN oder einer `+49`-Nummer),
+Kontext des eigenen Labels (Feldname, Strukturschlüssel, Support-Begriff in der Nähe), Prüfziffer,
+höherer Score, frühere Regel. Ein Fund in einer gedruckten IBAN-Form (`DE64 7172 …`) weicht auch dann,
+wenn deren Prüfziffer fehlschlägt. Der Verlierer verlässt `evidence_spans`, sein `matched_rules`-Eintrag
+nennt `overlap` (`reason`, `yields_to`). `strict` behält beide Labels (Entscheidung T07); andere Labels
+(EMAIL und USERNAME auf einem Wert) behalten ihre Überlappung. Validatoren unverändert.
+
 ## Hebel
 
 1. Score-Stufen statt Feldnamenpflicht: prüfzifferstarke Werte ohne Kontext, formschwache nur mit
