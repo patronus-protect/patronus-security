@@ -237,6 +237,7 @@ tasks:
     deps: [K05]
 
   - id: T07
+    status: done
     title: "Strict: do not emit a PAN sub-span inside a valid IBAN or FINANCIAL_ACCOUNT_NUMBER on an IBAN value"
     type: precision-fix
     deps: [K02]
