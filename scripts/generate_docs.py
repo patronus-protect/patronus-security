@@ -255,7 +255,10 @@ def pii_context_lexicon_lines(labels: list[str], path: Path = PII_LEXICON_PATH) 
         "The context engine reads these DE/EN entries of `rust/src/detectors/anchor_lexicons/pii.json`; "
         "`rust/src/detectors/pii/context.rs` maps them to labels. Support terms of a label count for "
         "rules without a field name of their own, a counter-context term counts for every label when it "
-        "is nearer than every support term.",
+        "is nearer than every support term. As a structural key (a JSON key, CSV or table header, XML "
+        "element), a term of either kind names the value it holds; keys are compared lowercased, with "
+        "`_`, `-`, `.` and camelCase boundaries as spaces, optionally followed by `no`, `nr`, `number` "
+        "or `nummer`. The key `iban` names no account number.",
         "",
         "| Result entity group | Support anchors |",
         "| --- | --- |",
@@ -280,8 +283,8 @@ def pii_rule_score(rule: dict, strength_points: dict[str, int], context_points: 
 
 def pii_rule_context(rule: dict) -> str:
     if rule["field_context"]:
-        return "field"
-    return "proximity (required)" if rule["requires_context"] else "proximity"
+        return "field or key"
+    return "key or proximity (required)" if rule["requires_context"] else "key or proximity"
 
 
 def pii_rule_score_range(rule: dict, strength_points: dict[str, int], context_points: int, tiers: list[int]) -> str:
@@ -353,7 +356,12 @@ def generate_l1_rule_catalog_doc() -> str:
         f"of the label near the value and -{counter_points} when a counter-context term is nearer "
         "(see [PII score and modes](result-schema.md#pii-score-and-modes), "
         "[PII context lexicon](#pii-context-lexicon)). "
-        "Rules marked `proximity (required)` report only with a support term, in every mode.",
+        "Rules marked `proximity (required)` report only with a support term, in every mode. "
+        "Structure (K04): a JSON key, a `key: value`/`key=value` line, an XML element or attribute, a CSV "
+        "header or a Markdown/HTML table header that a `field` rule accepts as its field name binds the value "
+        "it holds to the rule in every mode, if the value matches the rule's value form in full; for the "
+        "other rules a key of the label (or a counter-context key) that names exactly the value is its context "
+        f"(+{context_points} or -{counter_points}) instead of proximity.",
         "",
         "| Rule ID | Result entity group | Extra validator | Validator strength | Base | Context | Score (`balanced`/`recall`) |",
         "| --- | --- | --- | --- | --- | --- | --- |",

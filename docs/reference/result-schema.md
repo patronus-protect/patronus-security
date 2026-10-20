@@ -215,13 +215,30 @@ The model score of a finding is the sum of three parts, capped at 100 and divide
   because then it names the next value. The
   [L1 rule catalog](l1-rule-catalog.md#pii-context-lexicon) lists the lexicon entries per label.
 
+**Structure (K04).** A key names the value it holds like a field name right before it: a JSON
+or Python-dict key (`"kundennummer": "KD-1"`, `customerId`), a `key: value` or `key=value` line
+(YAML, INI, forms), an XML element or attribute (`<bic>…</bic>`, `<customer id="…"/>`, qualified by
+the parent element), a CSV header (`;`, `,`, tab or `|` separated, two or more lines with the same
+number of cells) and the header row or key cell of a Markdown or HTML table. Keys are compared
+lowercased with `_`, `-`, `.` and camelCase boundaries as spaces. In every mode, including
+`strict`, a key binds the value to a rule that names a field (`captured_value`) only if that
+rule accepts the key as its own field name and the value matches its value form in full; the
+validator and the rule's extra checks decide as for a regex match, so `Arztnummer`, `Kennung`
+or an `order_id` column bind nothing. Such a finding's `matched_rules` entry carries
+`structure` (`json`, `kv`, `xml`, `csv` or `table`) and the components `structure_key` and
+`value`. For rules without a field name, a key that names exactly the value is its context
+instead of proximity: a key of the label scores +25 (`anchor` is the lexicon entry, `side` is
+`key`), a counter-context key such as a `Bestellnummer` column subtracts 30, and a context-bound
+rule takes its required context from it. A number inside a longer value (`Phone: (987)
+012-3456`) is not the value its key names.
+
 For example, a Steuer-ID after its field name scores `1.0`, an IBAN without a field name `0.90`
 (`1.0` right after the word `IBAN`), a licence plate after `Kennzeichen:` `0.65`, and a card
 number after `Bestellnummer` `0.45`, below the `balanced` threshold. The [L1 rule catalog](l1-rule-catalog.md) lists
 strength, base and score per rule. In `balanced` and `recall`, every `details.matched_rules`
 entry also carries the `score` of its finding and its `context`: `bonus` and `penalty` points
 and, when a term decided them, its lexicon `anchor` (`field` for a field name bound by the
-rule), `side` (`before`/`after`) and `distance` in characters. `strict` results are unchanged
+rule), `side` (`before`/`after`, `key` for a structural key) and `distance` in characters. `strict` results are unchanged
 and carry neither field.
 
 Every rule that does not require context scores at least `0.50` without it, so `balanced` and

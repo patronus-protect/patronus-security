@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::{
-    detectors::{MatchScore, NativeDetection, NativeMatchValidator, NativeRegexDetector},
+    detectors::{
+        MatchScore, NativeDetection, NativeMatchValidator, NativeRegexDetector, StructuredValue,
+    },
     EvaluationResult,
 };
 
@@ -86,6 +88,8 @@ pub struct PiiPipeline {
     entity_groups: Vec<&'static str>,
     validators: Vec<Option<NativeMatchValidator>>,
     capture_groups: Vec<Option<usize>>,
+    structured_regexes: Vec<Option<Regex>>,
+    structured_keys: Vec<Option<Regex>>,
     anchor_regexes: Vec<Regex>,
 }
 
@@ -104,6 +108,8 @@ impl PiiPipeline {
         let mut rule_ids = Vec::new();
         let mut validators = Vec::new();
         let mut capture_groups = Vec::new();
+        let mut structured_regexes = Vec::new();
+        let mut structured_keys = Vec::new();
 
         for p in PII_PATTERNS {
             regexes.push(Regex::new(p.pattern).unwrap());
@@ -127,6 +133,10 @@ impl PiiPipeline {
             rule_ids.push(p.name);
             validators.push(p.validator);
             capture_groups.push(p.captured_value.then_some(1));
+            let structured = p.captured_value.then(|| structured_regexes_of(p.pattern));
+            let (value, key) = structured.unzip();
+            structured_regexes.push(value);
+            structured_keys.push(key);
         }
 
         let anchor_regexes = PII_ANCHOR_PATTERNS
@@ -141,6 +151,8 @@ impl PiiPipeline {
             entity_groups,
             validators,
             capture_groups,
+            structured_regexes,
+            structured_keys,
             anchor_regexes,
         }
     }
@@ -169,34 +181,150 @@ impl PiiPipeline {
         self.detect_prepared_scored(prepared, allows_rule, explain, mode.min_score())
     }
 
-    /// Context of a match: the field the rule binds, else two-sided proximity.
-    fn context(&self, index: usize, text: &str, captures: &regex::Captures<'_>) -> Evidence {
+    /// Context of a match: the field the rule binds (its own field name or a
+    /// structural key), else the structural key of the value, else two-sided
+    /// proximity.
+    fn context(
+        &self,
+        index: usize,
+        prepared: &crate::threat::NativeText<'_>,
+        captures: &regex::Captures<'_>,
+    ) -> Evidence {
         let pattern = &PII_PATTERNS[index];
+        let text = prepared.text();
+        let value = captures.get(usize::from(pattern.captured_value)).unwrap();
+        let structure =
+            context::structure_evidence(prepared.structure(), value.range(), pattern.entity_group);
         if pattern.captured_value {
-            return Evidence::field();
+            // A regex match includes its field name; a structural match is the value
+            // alone, and its key is the field.
+            let structural = captures.get(0).unwrap().start() == value.start();
+            return structure
+                .filter(|evidence| structural && evidence.context.supports())
+                .unwrap_or_else(|| Evidence::field_at(structural));
         }
-        let value = captures.get(0).unwrap();
-        context::evidence(text, (value.start(), value.end()), pattern.entity_group)
+        structure.unwrap_or_else(|| {
+            context::evidence(text, (value.start(), value.end()), pattern.entity_group)
+        })
+    }
+}
+
+/// Whether the field part `key` of a rule accepts the normalized structural key
+/// `name` (`customer id`), or the key without spaces for compounds that the rule
+/// names in one word (`matrikelNummer`, `kunden_nummer`).
+fn key_accepts(key: &Regex, name: &str) -> bool {
+    key.is_match(&format!("{name}: "))
+        || (name.contains(' ') && key.is_match(&format!("{}: ", name.replace(' ', ""))))
+}
+
+/// Structural regexes of a field-bound rule (K04): the value regex
+/// `(?P<value>…)\z` that a structural value must match in full, with the rule's
+/// leading flags, and the key regex: the rule's field part before the value,
+/// which must accept `"{key}: "` for a normalized key. A key thus binds a rule
+/// only if the rule accepts it as field name; the wider lexicon only scores.
+fn structured_regexes_of(pattern: &str) -> (Regex, Regex) {
+    let flags = pattern
+        .strip_prefix("(?")
+        .and_then(|rest| rest.split_once(')'))
+        .filter(|(flags, _)| flags.bytes().all(|byte| byte.is_ascii_alphabetic()))
+        .map_or(String::new(), |(flags, _)| format!("(?{flags})"));
+    let start = pattern
+        .find("(?P<value>")
+        .expect("field-bound PII rules capture a named value");
+    let (mut depth, mut escaped, mut class) = (0usize, false, false);
+    let mut end = None;
+    for (offset, byte) in pattern.as_bytes()[start..].iter().enumerate() {
+        match byte {
+            _ if escaped => escaped = false,
+            b'\\' => escaped = true,
+            b'[' if !class => class = true,
+            b']' if class => class = false,
+            b'(' if !class => depth += 1,
+            b')' if !class => {
+                depth -= 1;
+                if depth == 0 {
+                    end = Some(start + offset + 1);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let value = &pattern[start..end.expect("balanced value group")];
+    (
+        Regex::new(&format!("{flags}{value}\\z")).unwrap(),
+        Regex::new(&format!("\\A(?:{})\\z", &pattern[..start])).unwrap(),
+    )
+}
+
+impl PiiPipeline {
+    /// Key of the structural field that holds exactly `value` and binds rule `index`.
+    fn structural_key(
+        &self,
+        index: usize,
+        prepared: &crate::threat::NativeText<'_>,
+        value: std::ops::Range<usize>,
+    ) -> Option<std::ops::Range<usize>> {
+        let key = self.structured_keys[index].as_ref()?;
+        let fields = prepared.structure();
+        fields
+            .at(value)
+            .find(|field| {
+                field
+                    .names
+                    .iter()
+                    .any(|&name| key_accepts(key, &fields.names()[name]))
+            })
+            .map(|field| field.key.clone())
     }
 }
 
 impl NativeRegexDetector for PiiPipeline {
-    fn allows_match(&self, index: usize, text: &str, captures: &regex::Captures<'_>) -> bool {
+    fn allows_match(
+        &self,
+        index: usize,
+        prepared: &crate::threat::NativeText<'_>,
+        captures: &regex::Captures<'_>,
+    ) -> bool {
         let pattern = &PII_PATTERNS[index];
+        let text = prepared.text();
         if pattern.requires_context {
-            // Context-bound rules emit the whole match; it is the value.
+            // Context-bound rules emit the whole match; it is the value. A
+            // structural key decides before proximity.
             let value = captures.get(0).unwrap();
-            if !context::supports(text, (value.start(), value.end()), pattern.entity_group) {
+            let supported = context::structure_evidence(
+                prepared.structure(),
+                value.range(),
+                pattern.entity_group,
+            )
+            .map_or_else(
+                || context::supports(text, (value.start(), value.end()), pattern.entity_group),
+                |evidence| evidence.context.supports(),
+            );
+            if !supported {
                 return false;
             }
         }
+        // The field name of a field-bound match: before the value in the match, or
+        // the structural key that bound it (K04).
+        let field = pattern.captured_value.then(|| {
+            let (whole, value) = (captures.get(0).unwrap(), captures.name("value").unwrap());
+            if whole.start() < value.start() {
+                whole.start()..value.start()
+            } else {
+                self.structural_key(index, prepared, value.range())
+                    .unwrap_or(value.start()..value.start())
+            }
+        });
         match self.rule_ids[index] {
             "pii_swift_bic_context" => {
                 let value = captures.name("value").unwrap();
-                let field = &text[captures.get(0).unwrap().start()..value.start()];
-                // Lowercase values remain valid in explicit assignments. In prose,
-                // require conventional uppercase codes, not "Swift code is powerful".
-                field.contains([':', '#', '='])
+                let structural = captures.get(0).unwrap().start() == value.start();
+                // Lowercase values remain valid in explicit assignments (and as
+                // structural values). In prose, require conventional uppercase
+                // codes, not "Swift code is powerful".
+                structural
+                    || text[field.unwrap()].contains([':', '#', '='])
                     || !value.as_str().bytes().any(|byte| byte.is_ascii_lowercase())
             }
             "pii_credit_card_expiry" => {
@@ -212,14 +340,14 @@ impl NativeRegexDetector for PiiPipeline {
                 )
             }
             "pii_employee_id" | "pii_employee_id_ocr_field" => {
-                let whole = captures.get(0).unwrap();
+                let field = field.unwrap();
+                let field_text = &text[field.clone()];
                 let generic_field = self.rule_ids[index] == "pii_employee_id_ocr_field"
-                    || whole.as_str().to_lowercase().starts_with("kennung");
+                    || field_text.to_lowercase().starts_with("kennung");
                 // The OCR regex consumes a leading newline/pipe. That separator
                 // must remain a context boundary rather than exposing the prior field.
-                let field_start = whole.start()
-                    + whole
-                        .as_str()
+                let field_start = field.start
+                    + field_text
                         .find(|ch: char| !ch.is_whitespace() && ch != '|')
                         .unwrap_or(0);
                 !generic_field
@@ -259,12 +387,49 @@ impl NativeRegexDetector for PiiPipeline {
         Some(&self.capture_groups)
     }
 
+    fn structured_regexes(&self) -> Option<&[Option<Regex>]> {
+        Some(&self.structured_regexes)
+    }
+
+    fn structured_values(
+        &self,
+        index: usize,
+        prepared: &crate::threat::NativeText<'_>,
+    ) -> Vec<StructuredValue> {
+        let fields = prepared.structure();
+        if fields.is_empty() {
+            return Vec::new();
+        }
+        let Some(key) = &self.structured_keys[index] else {
+            return Vec::new();
+        };
+        let names: Vec<bool> = fields
+            .names()
+            .iter()
+            .map(|name| key_accepts(key, name))
+            .collect();
+        fields
+            .iter()
+            .filter(|field| field.names.iter().any(|&name| names[name]))
+            .map(|field| StructuredValue {
+                key: field.key.clone(),
+                value: field.value.clone(),
+                carrier: field.carrier.as_str(),
+            })
+            .collect()
+    }
+
     fn preserve_cross_label_overlaps(&self) -> bool {
         true
     }
 
-    fn match_score(&self, index: usize, text: &str, captures: &regex::Captures<'_>) -> MatchScore {
-        let evidence = self.context(index, text, captures);
+    fn match_score(
+        &self,
+        index: usize,
+        prepared: &crate::threat::NativeText<'_>,
+        captures: &regex::Captures<'_>,
+    ) -> MatchScore {
+        let evidence = self.context(index, prepared, captures);
         MatchScore {
             score: score::score(&PII_PATTERNS[index], evidence.context),
             context: Some(evidence.to_json()),
