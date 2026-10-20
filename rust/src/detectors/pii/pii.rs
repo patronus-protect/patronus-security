@@ -5,8 +5,8 @@ use crate::{
 };
 
 use super::context_anchors::PII_ANCHOR_PATTERNS;
-use super::score::{self, PiiMode, ValidatorStrength};
-use super::{common, de, identifiers, intl, uk, us, validators};
+use super::score::{self, Context, PiiMode, ValidatorStrength};
+use super::{common, context, de, identifiers, intl, uk, us, validators};
 use crate::detectors::anchors;
 use regex::Regex;
 
@@ -26,6 +26,9 @@ pub struct PiiPattern {
     pub base_score: u8,
     /// For anchor-bound patterns, emit only the named `value` capture.
     pub captured_value: bool,
+    /// Emit only when the context engine finds a support term of the label near
+    /// the value and no nearer counter-context term, in every mode (K03).
+    pub requires_context: bool,
 }
 
 /// All PII rules in evaluation order. The rules live in regional modules; the
@@ -40,6 +43,7 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     common::PHONE_INTERNATIONAL,
     de::PHONE,
     de::PHONE_NATIONAL_CONTEXT,
+    de::PHONE_NATIONAL_PROXIMITY,
     us::PHONE,
     common::MAC_ADDRESS,
     intl::IBAN_DE,
@@ -81,7 +85,6 @@ pub struct PiiPipeline {
     entity_groups: Vec<&'static str>,
     validators: Vec<Option<NativeMatchValidator>>,
     capture_groups: Vec<Option<usize>>,
-    scores: Vec<f64>,
     anchor_regexes: Vec<Regex>,
 }
 
@@ -100,7 +103,6 @@ impl PiiPipeline {
         let mut rule_ids = Vec::new();
         let mut validators = Vec::new();
         let mut capture_groups = Vec::new();
-        let mut scores = Vec::new();
 
         for p in PII_PATTERNS {
             regexes.push(Regex::new(p.pattern).unwrap());
@@ -124,7 +126,6 @@ impl PiiPipeline {
             rule_ids.push(p.name);
             validators.push(p.validator);
             capture_groups.push(p.captured_value.then_some(1));
-            scores.push(score::rule_score(p));
         }
 
         let anchor_regexes = PII_ANCHOR_PATTERNS
@@ -139,7 +140,6 @@ impl PiiPipeline {
             entity_groups,
             validators,
             capture_groups,
-            scores,
             anchor_regexes,
         }
     }
@@ -167,10 +167,28 @@ impl PiiPipeline {
     {
         self.detect_prepared_scored(prepared, allows_rule, explain, mode.min_score())
     }
+
+    /// Context of a match: the field the rule binds, else two-sided proximity.
+    fn context(&self, index: usize, text: &str, captures: &regex::Captures<'_>) -> Context {
+        let pattern = &PII_PATTERNS[index];
+        if pattern.captured_value {
+            return Context::Field;
+        }
+        let value = captures.get(0).unwrap();
+        context::proximity(text, (value.start(), value.end()), pattern.entity_group)
+    }
 }
 
 impl NativeRegexDetector for PiiPipeline {
     fn allows_match(&self, index: usize, text: &str, captures: &regex::Captures<'_>) -> bool {
+        let pattern = &PII_PATTERNS[index];
+        if pattern.requires_context {
+            // Context-bound rules emit the whole match; it is the value.
+            let value = captures.get(0).unwrap();
+            if !context::supports(text, (value.start(), value.end()), pattern.entity_group) {
+                return false;
+            }
+        }
         match self.rule_ids[index] {
             "pii_swift_bic_context" => {
                 let value = captures.name("value").unwrap();
@@ -186,7 +204,7 @@ impl NativeRegexDetector for PiiPipeline {
                     .iter()
                     .position(|id| *id == "pii_credit_card")
                     .expect("PII credit-card rule must be present");
-                super::context::payment_expiry(
+                context::payment_expiry(
                     text,
                     captures.get(0).unwrap().start(),
                     &self.regexes[card_index],
@@ -204,7 +222,7 @@ impl NativeRegexDetector for PiiPipeline {
                         .find(|ch: char| !ch.is_whitespace() && ch != '|')
                         .unwrap_or(0);
                 !generic_field
-                    || super::context::employee_identifier(
+                    || context::employee_identifier(
                         text,
                         field_start,
                         captures.name("value").unwrap().as_str(),
@@ -244,8 +262,8 @@ impl NativeRegexDetector for PiiPipeline {
         true
     }
 
-    fn match_score(&self, index: usize, _text: &str, _captures: &regex::Captures<'_>) -> f64 {
-        self.scores[index]
+    fn match_score(&self, index: usize, text: &str, captures: &regex::Captures<'_>) -> f64 {
+        score::score(&PII_PATTERNS[index], self.context(index, text, captures))
     }
 
     fn finalize_spans(&self, text: &str, spans: &mut Vec<crate::EvidenceSpan>) {

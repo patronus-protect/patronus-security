@@ -6,7 +6,10 @@ use std::{
 };
 
 use patronus_ark::{
-    detectors::{dlp::dlp::DLP_PATTERNS, pii::pii::PII_PATTERNS},
+    detectors::{
+        dlp::dlp::DLP_PATTERNS,
+        pii::{pii::PII_PATTERNS, score::PiiMode},
+    },
     golden_recipes::{materialize_fragments, GeneratorSet, SecretRecipe},
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
@@ -25,6 +28,9 @@ struct FixtureRow {
     tags: Vec<String>,
     #[serde(default)]
     known_gap: bool,
+    /// PII rows for the opt-in modes (K03 context engine) name the mode they run in.
+    #[serde(default)]
+    pii_mode: PiiMode,
     /// Literal rows carry `text`; secret rows carry `template` + `secrets` recipes.
     text: Option<String>,
     template: Option<String>,
@@ -56,9 +62,13 @@ struct FixtureEntity {
 }
 
 /// Default-off DLP classes (business records, content) are reachability-tested
-/// with exactly their own rules opted in; every other row runs on the defaults.
-fn gates_for(target_label: &str) -> ScanGateMatrix {
-    let mut gates = ScanGateMatrix::default();
+/// with exactly their own rules opted in; every other row runs on the defaults,
+/// in the PII mode the row names (default `strict`).
+fn gates_for(target_label: &str, pii_mode: PiiMode) -> ScanGateMatrix {
+    let mut gates = ScanGateMatrix {
+        pii_mode,
+        ..ScanGateMatrix::default()
+    };
     for pattern in DLP_PATTERNS {
         if pattern.entity_group == target_label && !gates.allows_rule(pattern.name) {
             gates.set_rule(pattern.name, true);
@@ -181,7 +191,7 @@ fn evaluate(
             .filter(|entity| entity.label == row.target_label)
             .map(|entity| (entity.start, entity.end, entity.label.clone()))
             .collect::<BTreeSet<_>>();
-        gateway.set_execution_gates(gates_for(&row.target_label));
+        gateway.set_execution_gates(gates_for(&row.target_label, row.pii_mode));
         let text = row.materialized_text(generators)?;
         let result = gateway
             .scan_category(category, &text)

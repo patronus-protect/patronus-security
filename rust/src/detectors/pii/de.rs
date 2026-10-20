@@ -12,6 +12,7 @@ pub(super) const PHONE: PiiPattern = PiiPattern {
     strength: ValidatorStrength::Format,
     base_score: 45,
     captured_value: false,
+    requires_context: false,
 };
 
 pub(super) const PHONE_NATIONAL_CONTEXT: PiiPattern = PiiPattern {
@@ -22,6 +23,21 @@ pub(super) const PHONE_NATIONAL_CONTEXT: PiiPattern = PiiPattern {
     strength: ValidatorStrength::Format,
     base_score: 30,
     captured_value: true,
+    requires_context: false,
+};
+
+// A national number without a field name right before it: "ist unter 0176 90817263
+// erreichbar", "Rückruf bitte unter (030) 1234567", "0151 2345678 (Handy)". The
+// context engine requires a phone term of the lexicon on either side.
+pub(super) const PHONE_NATIONAL_PROXIMITY: PiiPattern = PiiPattern {
+    name: "pii_phone_de_national_proximity",
+    pattern: r"(?:\(0[1-9][0-9]{1,4}\)|(?-u:\b)0[1-9][0-9]{1,4})(?:[ \t]?[/\-][ \t]?|[ \t])?[0-9](?:[ \t\-]?[0-9]){3,9}(?-u:\b)",
+    entity_group: "PHONE",
+    validator: Some(validators::phone),
+    strength: ValidatorStrength::Format,
+    base_score: 20,
+    captured_value: false,
+    requires_context: true,
 };
 
 // ── Deutsche Steuer-IDs ──────────────────────────────────────────────────
@@ -33,6 +49,7 @@ pub(super) const STEUER_ID: PiiPattern = PiiPattern {
     strength: ValidatorStrength::Checksum,
     base_score: 40,
     captured_value: true,
+    requires_context: false,
 };
 
 pub(super) const STEUERNUMMER: PiiPattern = PiiPattern {
@@ -43,6 +60,7 @@ pub(super) const STEUERNUMMER: PiiPattern = PiiPattern {
     strength: ValidatorStrength::Format,
     base_score: 35,
     captured_value: true,
+    requires_context: false,
 };
 
 // ── Deutsche Ausweise / Sozialversicherung ───────────────────────────────
@@ -54,6 +72,7 @@ pub(super) const RENTENVERSICHERUNG: PiiPattern = PiiPattern {
     strength: ValidatorStrength::Format,
     base_score: 50,
     captured_value: true,
+    requires_context: false,
 };
 
 pub(super) const HEALTH_INSURANCE_NUMBER: PiiPattern = PiiPattern {
@@ -64,6 +83,7 @@ pub(super) const HEALTH_INSURANCE_NUMBER: PiiPattern = PiiPattern {
     strength: ValidatorStrength::Format,
     base_score: 45,
     captured_value: true,
+    requires_context: false,
 };
 
 pub(super) const PHYSICIAN_NUMBER_LANR: PiiPattern = PiiPattern {
@@ -74,6 +94,7 @@ pub(super) const PHYSICIAN_NUMBER_LANR: PiiPattern = PiiPattern {
     strength: ValidatorStrength::Format,
     base_score: 30,
     captured_value: true,
+    requires_context: false,
 };
 
 pub(super) const PASSPORT_NUMBER: PiiPattern = PiiPattern {
@@ -84,6 +105,7 @@ pub(super) const PASSPORT_NUMBER: PiiPattern = PiiPattern {
     strength: ValidatorStrength::Format,
     base_score: 40,
     captured_value: true,
+    requires_context: false,
 };
 
 pub(super) const IDENTITY_CARD_NUMBER: PiiPattern = PiiPattern {
@@ -94,6 +116,7 @@ pub(super) const IDENTITY_CARD_NUMBER: PiiPattern = PiiPattern {
     strength: ValidatorStrength::Format,
     base_score: 40,
     captured_value: true,
+    requires_context: false,
 };
 
 pub(super) const DRIVER_LICENSE_NUMBER: PiiPattern = PiiPattern {
@@ -104,6 +127,7 @@ pub(super) const DRIVER_LICENSE_NUMBER: PiiPattern = PiiPattern {
     strength: ValidatorStrength::Format,
     base_score: 35,
     captured_value: true,
+    requires_context: false,
 };
 
 pub(super) const KFZ_KENNZEICHEN: PiiPattern = PiiPattern {
@@ -114,4 +138,5 @@ pub(super) const KFZ_KENNZEICHEN: PiiPattern = PiiPattern {
     strength: ValidatorStrength::None,
     base_score: 40,
     captured_value: true,
+    requires_context: false,
 };

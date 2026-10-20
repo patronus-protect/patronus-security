@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 mod common;
-mod context;
+pub mod context;
 mod context_anchors;
 mod de;
 mod identifiers;

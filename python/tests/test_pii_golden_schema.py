@@ -13,6 +13,8 @@ CARRIERS = {"line", "prose", "json", "yaml", "xml", "csv", "kv", "table"}
 STRUCTURED_CARRIERS = {"json", "yaml", "xml", "csv", "kv", "table"}
 LANGUAGES = ("de", "en")
 MIN_PER_LANGUAGE = 5
+# Opt-in PII modes a row may name (K03); rows without `pii_mode` run in `strict`.
+SCORED_MODES = ("balanced", "recall")
 V2_FIELDS = (
     "id", "suite", "schema_version", "language", "case_type", "target_label", "rule_id",
     "carrier", "tags", "known_gap",
@@ -41,6 +43,7 @@ class PiiGoldenSchemaV2Tests(unittest.TestCase):
         self.assertEqual(set(namespace["PII_CARRIERS"]), CARRIERS)
         self.assertEqual(set(namespace["PII_STRUCTURED_CARRIERS"]), STRUCTURED_CARRIERS)
         self.assertEqual(namespace["PII_MIN_PER_LANGUAGE"], MIN_PER_LANGUAGE)
+        self.assertEqual(namespace["PII_MODES"], ("strict", *SCORED_MODES))
 
     def test_every_row_carries_the_v2_fields_first(self):
         known_rules = all_rule_ids()
@@ -53,6 +56,21 @@ class PiiGoldenSchemaV2Tests(unittest.TestCase):
             self.assertIs(type(row["known_gap"]), bool, row["id"])
             self.assertEqual(row["tags"], [tag for tag in TAGS if tag in row["tags"]], row["id"])
             self.assertEqual(len(set(row["tags"])), len(row["tags"]), row["id"])
+
+    def test_pii_mode_follows_known_gap_and_names_a_scored_mode(self):
+        rows = load_rows()
+        for row in rows:
+            if "pii_mode" in row:
+                self.assertEqual(tuple(row).index("pii_mode"), len(V2_FIELDS), row["id"])
+                self.assertIn(row["pii_mode"], SCORED_MODES, row["id"])
+                self.assertFalse(row["known_gap"], row["id"])
+        # K03: the context engine has gated positives and hard negatives per language in balanced.
+        counts = Counter(
+            (row["language"], row["case_type"]) for row in rows if row.get("pii_mode") == "balanced"
+        )
+        for language in LANGUAGES:
+            for case_type in ("positive", "hard_negative"):
+                self.assertGreaterEqual(counts[(language, case_type)], MIN_PER_LANGUAGE, (language, case_type))
 
     def test_only_positives_can_be_known_gaps(self):
         for row in load_rows():

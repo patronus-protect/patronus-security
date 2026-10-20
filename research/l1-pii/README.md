@@ -148,6 +148,20 @@ verlangt, dass die deklarierte Regel den Gold-Span meldet, und druckt die Abdeck
 deutsches „ist“/„lautet“ nach dem Feldnamen, Zero-Width-/Full-Width-Zeichen) laufen mit, gaten aber
 nicht; schließt eine Aufgabe (K04, K05, K06 …) eine Lücke, schlägt die Eval fehl, bis die Aufgabe
 `known_gap` auf `false` setzt.
+Seit K03 kann eine Zeile `pii_mode` (`balanced`/`recall`) nennen; die Eval scannt sie in diesem
+Modus. So prüfen die Goldens die Kontext-Engine, deren Scores und Gegen-Kontext nur dort wirken.
+
+## Kontext-Engine (K03)
+
+Support- und Gegen-Kontext-Begriffe stehen im DE/EN-Lexikon `rust/src/detectors/anchor_lexicons/pii.json`;
+`rust/src/detectors/pii/context.rs` ordnet die Lexikon-IDs den Labels zu (neue Sprachen wie in T26
+kommen als Einträge dort hinzu). Gesucht wird beidseitig auf derselben Zeile, der nächste Begriff
+entscheidet: Support gibt +25/+20/+15 (bis 16/32/48 Zeichen davor, 32 danach), ein echt näherer
+Gegen-Kontext-Begriff (Bestell-, Rechnungs-, Sendungs-, Ticket-, Referenz-, Seriennummer) −30.
+Feldgebundene Regeln behalten +25. Regeln mit `requires_context: true` melden nur mit Support, in
+jedem Modus; die erste ist `pii_phone_de_national_proximity`. Spätere „mit Kontext“-Aufgaben (F06,
+F07, F15, A03–A05, T08, T10, C05, C07, C08) setzen darauf auf. `strict` bleibt für alle übrigen
+Regeln unverändert.
 
 ## Hebel
 

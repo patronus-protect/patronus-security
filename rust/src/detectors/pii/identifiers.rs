@@ -12,6 +12,7 @@ pub(super) const EMPLOYEE_ID: PiiPattern = PiiPattern {
     strength: ValidatorStrength::Format,
     base_score: 30,
     captured_value: true,
+    requires_context: false,
 };
 
 pub(super) const EMPLOYEE_ID_OCR_FIELD: PiiPattern = PiiPattern {
@@ -22,6 +23,7 @@ pub(super) const EMPLOYEE_ID_OCR_FIELD: PiiPattern = PiiPattern {
     strength: ValidatorStrength::Format,
     base_score: 25,
     captured_value: true,
+    requires_context: false,
 };
 
 pub(super) const EMPLOYEE_ID_PREFIXED: PiiPattern = PiiPattern {
@@ -32,6 +34,7 @@ pub(super) const EMPLOYEE_ID_PREFIXED: PiiPattern = PiiPattern {
     strength: ValidatorStrength::Format,
     base_score: 45,
     captured_value: false,
+    requires_context: false,
 };
 
 pub(super) const CUSTOMER_ID: PiiPattern = PiiPattern {
@@ -42,6 +45,7 @@ pub(super) const CUSTOMER_ID: PiiPattern = PiiPattern {
     strength: ValidatorStrength::Format,
     base_score: 30,
     captured_value: true,
+    requires_context: false,
 };
 
 pub(super) const PATIENT_ID: PiiPattern = PiiPattern {
@@ -52,6 +56,7 @@ pub(super) const PATIENT_ID: PiiPattern = PiiPattern {
     strength: ValidatorStrength::Format,
     base_score: 30,
     captured_value: true,
+    requires_context: false,
 };
 
 pub(super) const STUDENT_ID: PiiPattern = PiiPattern {
@@ -62,6 +67,7 @@ pub(super) const STUDENT_ID: PiiPattern = PiiPattern {
     strength: ValidatorStrength::Format,
     base_score: 30,
     captured_value: true,
+    requires_context: false,
 };
 
 pub(super) const APPLICANT_ID: PiiPattern = PiiPattern {
@@ -72,6 +78,7 @@ pub(super) const APPLICANT_ID: PiiPattern = PiiPattern {
     strength: ValidatorStrength::Format,
     base_score: 30,
     captured_value: true,
+    requires_context: false,
 };
 
 pub(super) const USERNAME: PiiPattern = PiiPattern {
@@ -84,6 +91,7 @@ pub(super) const USERNAME: PiiPattern = PiiPattern {
     strength: ValidatorStrength::Format,
     base_score: 30,
     captured_value: true,
+    requires_context: false,
 };
 
 pub(super) const DATE_OF_BIRTH: PiiPattern = PiiPattern {
@@ -94,6 +102,7 @@ pub(super) const DATE_OF_BIRTH: PiiPattern = PiiPattern {
     strength: ValidatorStrength::Format,
     base_score: 40,
     captured_value: true,
+    requires_context: false,
 };
 
 pub(super) const DATE_OF_BIRTH_WRITTEN_DAY_FIRST: PiiPattern = PiiPattern {
@@ -104,6 +113,7 @@ pub(super) const DATE_OF_BIRTH_WRITTEN_DAY_FIRST: PiiPattern = PiiPattern {
     strength: ValidatorStrength::Format,
     base_score: 45,
     captured_value: true,
+    requires_context: false,
 };
 
 pub(super) const DATE_OF_BIRTH_WRITTEN_MONTH_FIRST: PiiPattern = PiiPattern {
@@ -114,6 +124,7 @@ pub(super) const DATE_OF_BIRTH_WRITTEN_MONTH_FIRST: PiiPattern = PiiPattern {
     strength: ValidatorStrength::Format,
     base_score: 45,
     captured_value: true,
+    requires_context: false,
 };
 
 pub(super) const FINANCIAL_ACCOUNT_NUMBER: PiiPattern = PiiPattern {
@@ -124,4 +135,5 @@ pub(super) const FINANCIAL_ACCOUNT_NUMBER: PiiPattern = PiiPattern {
     strength: ValidatorStrength::Format,
     base_score: 30,
     captured_value: true,
+    requires_context: false,
 };

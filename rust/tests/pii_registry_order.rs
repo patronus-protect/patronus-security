@@ -15,6 +15,7 @@ const EXPECTED_ORDER: &[(&str, &str)] = &[
     ("pii_phone_international", "PHONE"),
     ("pii_phone_de", "PHONE"),
     ("pii_phone_de_national_context", "PHONE"),
+    ("pii_phone_de_national_proximity", "PHONE"),
     ("pii_phone_us", "PHONE"),
     ("pii_mac_address", "MAC_ADDRESS"),
     ("pii_iban_de", "IBAN"),
