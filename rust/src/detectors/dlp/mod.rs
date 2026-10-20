@@ -2,5 +2,6 @@
 pub mod destructive_operation;
 #[allow(clippy::module_inception)]
 pub mod dlp;
+mod rules;
 pub mod secret_transfer;
 pub mod sensitive_material;

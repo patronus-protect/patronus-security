@@ -149,6 +149,7 @@ tasks:
 
   # ── K: Engine ─────────────────────────────────────────────────────────
   - id: K01
+    status: done
     title: Split dlp.rs into modules (secrets/providers, credentials, hashes, crypto, identifiers, content) without behaviour change
     type: refactor
     deps: [E13]

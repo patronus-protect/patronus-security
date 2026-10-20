@@ -6,8 +6,10 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
 
 ## Ausgangslage
 
-- `rust/src/detectors/dlp/dlp.rs`: 59 Regex-Regeln, davon ca. 25 providergebundene Secret-Regeln (LLM,
-  AWS/GCP, GitHub/GitLab/npm, Stripe, Slack, Discord, ETH/BTC, PEM). Dazu kommen generische Zuweisungen
+- `rust/src/detectors/dlp/rules/` (seit K01 nach Familien getrennt: `providers`, `crypto`,
+  `credentials`, `hashes`, `identifiers`, `content`; Registry-Reihenfolge in `rules/mod.rs`):
+  59 Regex-Regeln, davon ca. 25 providergebundene Secret-Regeln (LLM, AWS/GCP, GitHub/GitLab/npm,
+  Stripe, Slack, Discord, ETH/BTC, PEM). Dazu kommen generische Zuweisungen
   (Passwort, Token, Bearer/Basic, Cookie, URL-Userinfo), Business-/Record-IDs und Content-Klassen
   (Quellcode, SQL, Dump, Log/Stacktrace, Business-Metrik). Jeder Treffer hat `score: 1.0`.
 - Validatoren sind schwach: `is_secret_value` prüft nur Länge, Platzhalter und Env-Referenzen.

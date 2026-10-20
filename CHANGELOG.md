@@ -33,6 +33,17 @@ result shapes may be breaking for downstream users, and is called out explicitly
 - Split the PII L1 rules out of `rust/src/detectors/pii/pii.rs` into regional modules (K01): `common` (e-mail, IP, MAC, international phone), `intl` (IBAN, card number, CVV, expiry, SWIFT/BIC), `identifiers` (field-bound employee, customer, patient, student and applicant IDs, username, date of birth, account number), `de`, `us` and `uk`; the Dynamic-PII field anchors move to `context_anchors.rs`. Each rule is a `const` in its module, and `pii.rs` keeps `PiiPattern`, the pipeline and the `PII_PATTERNS` registry, which lists the 39 rules in the previous order because the first match sets `class_name` and wins same-label overlaps. `rust/tests/pii_registry_order.rs` pins that order, and `parse_native_patterns` in `scripts/generate_docs.py` (used by the rule catalog, `entity_map.py` and `count_validated.py`) resolves `module::CONST` entries. Rule ids, patterns, validators, goldens, `13_l1_golden_eval`, the generated docs and the ARK predictions on every dev corpus are bit-identical. **Detection change:** none; this is a refactor only.
 - Move the PII L1 goldens (`pii_l1.jsonl`) to golden schema v2. Every row names the `pii_*` rule it exercises (`rule_id`), its carrier document (`carrier`: `line`, `prose`, `json`, `yaml`, `xml`, `csv`, `kv`, `table`), difficulty tags (`no_context`, `structured`, `obfuscated`, `ocr`) and whether it is a `known_gap`, a positive the detector misses today. The set grows from 140 to 713 rows: at least 5 gated positives and 5 hard negatives per label and language (DE/EN), every one of the 37 `pii_*` rules with a gated positive in both languages and a hard negative, and 89 known gaps (quoted JSON keys, CSV headers, table and XML cells, German `ist`/`lautet` after the field name, zero-width and full-width characters, parenthesised US area codes). The 140 existing rows keep their ids, text and spans. `13_l1_golden_eval` now checks PII coverage against `PII_PATTERNS`: it requires that the declared rule reported each gold span, prints coverage per `rule_id` (DE | EN) and per tag and language, and fails if a PII rule loses its last passing positive in a language or a known gap starts passing. `python/tests/test_pii_golden_schema.py` and `rust/tests/pii_golden_schema.rs` check the schema statically. **Detection change:** none; this is evaluation tooling only.
 
+### Changed
+
+- The DLP rules moved out of `rust/src/detectors/dlp/dlp.rs` into family modules under
+  `rust/src/detectors/dlp/rules/` (`providers`, `crypto`, `credentials`, `hashes`, `identifiers`,
+  `content`), each with its own validators. `DLP_PATTERNS` keeps its path and type and
+  concatenates the families in the previous rule order. That order is pinned in
+  `rust/tests/dlp_rule_registry.rs` because the first matching rule sets the result class.
+  `scripts/generate_docs.py` and `scripts/measure_demo_pii_dlp.py` now read the rule modules.
+  **Detection change:** none. Goldens, the golden eval and the full DLP output on the dev split
+  are bit-identical.
+
 ### Fixed
 
 - Keep each rule's own score in `matched_rules` for PII findings behind an undone obfuscation (K06). A full-width bare German IBAN reported `pii_iban_generic` with the 0.90 of `pii_iban_de` instead of its own 0.80; the recall-only penalty now applies to each rule's own score. Detection change: `matched_rules[].score` only, evidence spans and verdicts are unchanged.

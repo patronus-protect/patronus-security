@@ -151,7 +151,9 @@ def _field(block: str, name: str) -> str:
     return match.group(1).strip()
 
 
-def parse_native_patterns(path: Path, struct_name: str) -> list[dict[str, str]]:
+def parse_native_patterns(
+    path: Path, struct_name: str, registry: str = r"\w+"
+) -> list[dict[str, str]]:
     """Rules of the static `struct_name` registry in `path`, in registry order.
 
     Entries are inline struct literals or `module::CONST` references to
@@ -159,23 +161,24 @@ def parse_native_patterns(path: Path, struct_name: str) -> list[dict[str, str]]:
     """
     source = path.read_text()
     static_start = re.search(
-        rf"pub static \w+:\s*&\[{struct_name}\]\s*=\s*&\[", source
+        rf"pub(?:\(\w+\))? (?:static|const) {registry}:\s*&\[{struct_name}\]\s*=\s*&\[",
+        source,
     )
     if not static_start:
         raise ValueError(f"Missing static {struct_name} registry in {path}")
     source = source[static_start.end():]
-    registry = source.split("\n];", 1)[0]
+    body = source[:re.search(r"^\}?\];", source, flags=re.M).end()]
     reference = r"^\s*(\w+)::(\w+),\s*$"
-    if re.search(reference, registry, flags=re.M):
+    if re.search(reference, body, flags=re.M):
         blocks = []
         entry = rf"\b{struct_name}\s*\{{(.*?)\n\s*\}},|{reference}"
-        for match in re.finditer(entry, registry, flags=re.S | re.M):
+        for match in re.finditer(entry, body, flags=re.S | re.M):
             if match.group(1) is not None:
                 blocks.append(match.group(1))
             else:
                 blocks.append(_native_pattern_const(path.parent, struct_name, *match.group(2, 3)))
     else:
-        blocks = re.findall(rf"\b{struct_name}\s*\{{(.*?)\n\s*\}},", source, flags=re.S)
+        blocks = re.findall(rf"\b{struct_name}\s*\{{(.*?)\n\s*\}}(?:,|\];)", body, flags=re.S)
     patterns = []
     for block in blocks:
         name = re.search(r'\bname:\s*"([^"]+)"', block)
@@ -197,6 +200,18 @@ def parse_native_patterns(path: Path, struct_name: str) -> list[dict[str, str]]:
                     "scored_only": re.search(r"\bscored_only:\s*true\b", block) is not None,
                 }
             )
+    return patterns
+
+
+def parse_dlp_patterns() -> list[dict[str, str]]:
+    """DLP rules from the family modules, in the registry order of `rules/mod.rs`."""
+    rules_dir = ROOT / "rust/src/detectors/dlp/rules"
+    parts = re.search(r"const PARTS:[^=]*=\s*&\[(.*?)\];", (rules_dir / "mod.rs").read_text(), re.S)
+    if not parts:
+        raise ValueError(f"Missing DLP rule registry in {rules_dir / 'mod.rs'}")
+    patterns = []
+    for module, registry in re.findall(r"(\w+)::(\w+)", parts.group(1)):
+        patterns.extend(parse_native_patterns(rules_dir / f"{module}.rs", "DlpPattern", registry))
     return patterns
 
 
@@ -310,7 +325,7 @@ def pii_rule_score_range(rule: dict, strength_points: dict[str, int], context_po
 def generate_l1_rule_catalog_doc() -> str:
     pii = parse_native_patterns(ROOT / "rust/src/detectors/pii/pii.rs", "PiiPattern")
     strength_points, context_points, proximity_tiers, counter_points = pii_score_points()
-    dlp = parse_native_patterns(ROOT / "rust/src/detectors/dlp/dlp.rs", "DlpPattern")
+    dlp = parse_dlp_patterns()
     credential_groups = {
         "API_KEY", "CLOUD_KEY", "CREDENTIAL", "CRYPTO_KEY", "PASSWORD_HASH",
         "PAYMENT_KEY", "PRIVATE_KEY", "SECRET_TOKEN",
