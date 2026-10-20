@@ -4,14 +4,34 @@
     "rule_id": "pii_email",
     "de": "E-Mail: ada@example.com",
     "en": "Email: ada@example.com",
-    "language_neutral": false
+    "language_neutral": false,
+    "balanced": {
+      "context": {
+        "de": "Kontakt per E-Mail an ada@example.com",
+        "en": "Contact by email at ada@example.com"
+      }
+    },
+    "obfuscated": {
+      "de": "E-Mail: lena.vogt＠beispiel.de",
+      "en": "Email: ada.wong@north​wind.com"
+    }
   },
   {
     "category": "pii",
     "rule_id": "pii_ipv4",
     "de": "IP: 203.0.113.42",
     "en": "IP: 203.0.113.42",
-    "language_neutral": true
+    "language_neutral": true,
+    "balanced": {
+      "context": {
+        "de": "Quelle laut IP-Adresse 203.0.113.42",
+        "en": "Logged IP address 203.0.113.42"
+      }
+    },
+    "obfuscated": {
+      "de": "Angreifer-IP: 198[.]51[.]100[.]23",
+      "en": "Source IP: １９２．０．２．１４"
+    }
   },
   {
     "category": "pii",
@@ -39,20 +59,55 @@
     "rule_id": "pii_phone_international",
     "de": "Telefon: +491701234567",
     "en": "Phone: +491701234567",
-    "language_neutral": false
+    "language_neutral": false,
+    "balanced": {
+      "context": {
+        "de": "Erreichbar unter +44 20 7946 0958",
+        "en": "Reachable at +44 20 7946 0958"
+      },
+      "counter": {
+        "de": "Rechnungsnummer: +44 20 7946 0958",
+        "en": "Invoice number: +44 20 7946 0958"
+      }
+    },
+    "obfuscated": {
+      "de": "Telefon: +49​170​1234567",
+      "en": "Mobile: ＋４４ ７７００ ９００１２３"
+    }
   },
   {
     "category": "pii",
     "rule_id": "pii_phone_de",
     "de": "Telefon: +49 1701234567",
     "en": "Phone: +49 1701234567",
-    "language_neutral": false
+    "language_neutral": false,
+    "balanced": {
+      "context": {
+        "de": "+49 170 1234567 (Handy)",
+        "en": "+49 170 1234567 (mobile)"
+      },
+      "counter": {
+        "de": "Auftragsnummer +49 170 1234567",
+        "en": "Order ID +49 170 1234567"
+      }
+    }
   },
   {
     "category": "pii",
     "rule_id": "pii_phone_de_national_context",
     "de": "Telefon: 030 12345678",
     "en": "Phone: 030 12345678",
+    "language_neutral": false,
+    "structure": {
+      "de": "{\"telefon\": \"030 98765432\"}",
+      "en": "{\"phone_number\": \"030 98765432\"}"
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_phone_de_national_proximity",
+    "de": "Frau Weber ist unter 0176 90817263 erreichbar.",
+    "en": "You can reach Mr. Weber at 0176 90817263 (mobile).",
     "language_neutral": false
   },
   {
@@ -60,42 +115,90 @@
     "rule_id": "pii_phone_us",
     "de": "Telefon: 212-555-1234",
     "en": "Phone: 212-555-1234",
-    "language_neutral": false
+    "language_neutral": false,
+    "balanced": {
+      "context": {
+        "de": "212-736-4410 (Festnetz)",
+        "en": "212-736-4410 (work phone)"
+      },
+      "counter": {
+        "de": "Bestellnummer 202-604-7110",
+        "en": "Order number 202-604-7110"
+      }
+    }
   },
   {
     "category": "pii",
     "rule_id": "pii_mac_address",
     "de": "MAC: 02:42:ac:11:00:02",
     "en": "MAC: 02:42:ac:11:00:02",
-    "language_neutral": true
+    "language_neutral": true,
+    "balanced": {
+      "context": {
+        "de": "MAC-Adresse 02:42:ac:11:00:02",
+        "en": "MAC address 02:42:ac:11:00:02"
+      }
+    },
+    "obfuscated": {
+      "de": "MAC: ０２:４２:ａｃ:１１:００:０２",
+      "en": "MAC: 02​:42​:ac​:11​:00​:02"
+    }
   },
   {
     "category": "pii",
     "rule_id": "pii_iban_de",
     "de": "IBAN: DE89370400440532013000",
     "en": "IBAN: DE89370400440532013000",
-    "language_neutral": true
+    "language_neutral": true,
+    "obfuscated": {
+      "de": "IBAN: DE89​3704​0044​0532​0130​00",
+      "en": "IBAN: ＤＥ８９３７０４００４４０５３２０１３０００"
+    }
   },
   {
     "category": "pii",
     "rule_id": "pii_iban_generic",
     "de": "IBAN: GB82WEST12345698765432",
     "en": "IBAN: GB82WEST12345698765432",
-    "language_neutral": true
+    "language_neutral": true,
+    "balanced": {
+      "context": {
+        "de": "Bankkonto GB82WEST12345698765432",
+        "en": "Bank account GB82WEST12345698765432"
+      }
+    }
   },
   {
     "category": "pii",
     "rule_id": "pii_credit_card",
     "de": "Karte: 4111 1111 1111 1111",
     "en": "Card: 4111 1111 1111 1111",
-    "language_neutral": false
+    "language_neutral": false,
+    "balanced": {
+      "context": {
+        "de": "Kreditkarte 4111 1111 1111 1111",
+        "en": "Credit card 4111 1111 1111 1111"
+      },
+      "counter": {
+        "de": "Bestellnummer 4532 0151 1283 0366",
+        "en": "Order number 4532 0151 1283 0366"
+      }
+    },
+    "obfuscated": {
+      "de": "Karte: ４１１１ １１１１ １１１１ １１１１",
+      "en": "Card: 5555​5555​5555​4444"
+    }
   },
   {
     "category": "pii",
     "rule_id": "pii_credit_card_cvv",
     "de": "Kartennummer: 4111 1111 1111 1111, Kartenprüfnummer: 123",
     "en": "Card number: 4111 1111 1111 1111, card verification code: 123",
-    "language_neutral": false
+    "language_neutral": false,
+    "structure": {
+      "de": "| Karte | CVV |\n|---|---|\n| 4111 1111 1111 1111 | 737 |",
+      "en": "| Card | CVV |\n|---|---|\n| 4111 1111 1111 1111 | 246 |"
+    }
   },
   {
     "category": "pii",
@@ -109,14 +212,22 @@
     "rule_id": "pii_swift_bic_context",
     "de": "BIC: DEUTDEFF500",
     "en": "BIC: DEUTDEFF500",
-    "language_neutral": true
+    "language_neutral": true,
+    "structure": {
+      "de": "{\"bic\": \"DEUTDEFF500\"}",
+      "en": "<bank><bic>BARCGB22</bic></bank>"
+    }
   },
   {
     "category": "pii",
     "rule_id": "pii_employee_id",
     "de": "Personalnummer: EMP-4711",
     "en": "Employee ID: EMP-4711",
-    "language_neutral": false
+    "language_neutral": false,
+    "structure": {
+      "de": "<mitarbeiter><personalnummer>PN-77120</personalnummer></mitarbeiter>",
+      "en": "employee_id,name\nE-40512,Maya Patel"
+    }
   },
   {
     "category": "pii",
@@ -137,42 +248,66 @@
     "rule_id": "pii_customer_id",
     "de": "Kundennummer: KD-88231",
     "en": "Customer ID: CUST-88231",
-    "language_neutral": false
+    "language_neutral": false,
+    "structure": {
+      "de": "Name;Kundennummer\nJana Roth;KD-55120",
+      "en": "{\"customerId\": \"CUS-88412\"}"
+    }
   },
   {
     "category": "pii",
     "rule_id": "pii_patient_id",
     "de": "Patientennummer: PAT-2048",
     "en": "Patient ID: PAT-2048",
-    "language_neutral": false
+    "language_neutral": false,
+    "structure": {
+      "de": "| Patientennummer | Station |\n|---|---|\n| PAT-20931 | 4B |",
+      "en": "| MRN | Ward |\n|---|---|\n| MRN-981134 | 7 |"
+    }
   },
   {
     "category": "pii",
     "rule_id": "pii_student_id",
     "de": "Matrikelnummer: STU-9911",
     "en": "Student number: STU-9911",
-    "language_neutral": false
+    "language_neutral": false,
+    "structure": {
+      "de": "Name;Matrikelnummer\nLea Brandt;4718205",
+      "en": "<student><student_id>STU-9912</student_id></student>"
+    }
   },
   {
     "category": "pii",
     "rule_id": "pii_applicant_id",
     "de": "Bewerbernummer: BEW-713",
     "en": "Applicant number: APP-713",
-    "language_neutral": false
+    "language_neutral": false,
+    "structure": {
+      "de": "{\"bewerbernummer\": \"BEW-5520\"}",
+      "en": "| Applicant ID | Role |\n|---|---|\n| APP-30418 | Analyst |"
+    }
   },
   {
     "category": "pii",
     "rule_id": "pii_username",
     "de": "Benutzername: ada.lovelace",
     "en": "Username: ada.lovelace",
-    "language_neutral": false
+    "language_neutral": false,
+    "structure": {
+      "de": "{\"benutzername\": \"p.lang\"}",
+      "en": "user_name\tteam\nm.chen\tplatform"
+    }
   },
   {
     "category": "pii",
     "rule_id": "pii_date_of_birth",
     "de": "Geburtsdatum: 14.03.1985",
     "en": "Date of birth: 14/03/1985",
-    "language_neutral": false
+    "language_neutral": false,
+    "structure": {
+      "de": "Name;Geburtsdatum\nJana Roth;14.03.1987",
+      "en": "{\"date_of_birth\": \"02/11/1990\"}"
+    }
   },
   {
     "category": "pii",
@@ -193,14 +328,40 @@
     "rule_id": "pii_financial_account_number",
     "de": "Kontonummer: ACC-44001234",
     "en": "Account number: ACC-44001234",
-    "language_neutral": false
+    "language_neutral": false,
+    "structure": {
+      "de": "{\"kontonummer\": \"KTO-30202\"}",
+      "en": "[payout]\naccount_number = ACC-55120"
+    }
   },
   {
     "category": "pii",
     "rule_id": "pii_steuer_id_de",
     "de": "Steuer-ID: 86095742719",
     "en": "Tax identification number: 86095742719",
-    "language_neutral": false
+    "language_neutral": false,
+    "structure": {
+      "de": "{\"steuer_id\": \"82736451927\"}",
+      "en": "<taxpayer><taxId>31415926539</taxId></taxpayer>"
+    },
+    "obfuscated": {
+      "de": "Steuer-ID: ８６０９５７４２７１９",
+      "en": "Tax identification number: 86095​742719"
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_steuer_id_de_context_free",
+    "de": "Für die Lohnabrechnung brauche ich noch 47426548904.",
+    "en": "Please add 74265832011 to the payroll file.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Ihre Steuer-ID ist 39662845670.",
+        "en": "29046789957 is the German tax ID on file."
+      }
+    }
   },
   {
     "category": "pii",
@@ -221,7 +382,11 @@
     "rule_id": "pii_health_insurance_number_de",
     "de": "Versichertennummer: A123456789",
     "en": "Health insurance number: A123456789",
-    "language_neutral": false
+    "language_neutral": false,
+    "structure": {
+      "de": "<table><tr><th>Versichertennummer</th><td>M345678912</td></tr></table>",
+      "en": "<insured kvnr=\"E912345679\"/>"
+    }
   },
   {
     "category": "pii",
@@ -235,7 +400,11 @@
     "rule_id": "pii_passport_number_de",
     "de": "Passnummer: C01X00T47",
     "en": "Passport number: C01X00T47",
-    "language_neutral": false
+    "language_neutral": false,
+    "structure": {
+      "de": "{\"passnummer\": \"C4J7K9L2N\"}",
+      "en": "<traveler passportNumber=\"C01X00T47\"/>"
+    }
   },
   {
     "category": "pii",
@@ -263,7 +432,15 @@
     "rule_id": "pii_ssn_us",
     "de": "US-Sozialversicherungsnummer: 123-45-6789",
     "en": "Social security number: 123-45-6789",
-    "language_neutral": false
+    "language_neutral": false,
+    "structure": {
+      "de": "{\"ssn\": \"456-78-9013\"}",
+      "en": "<table><tr><th>SSN</th><td>536-90-4399</td></tr></table>"
+    },
+    "obfuscated": {
+      "de": "US-Sozialversicherungsnummer: ５３２-８７-１０９４",
+      "en": "Social security number: 532​-87​-1094"
+    }
   },
   {
     "category": "pii",

@@ -6,16 +6,34 @@ pub(crate) mod evidence;
 pub mod injection;
 pub mod lexical_anchors;
 pub mod mcp;
+pub(crate) mod obfuscation;
 pub mod pii;
 pub mod shell;
+pub(crate) mod structure;
 pub mod threat;
 
 use regex::Regex;
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::Range};
 
 use crate::{EvaluationResult, EvidenceSpan};
 
 pub(crate) type NativeMatchValidator = fn(&str) -> bool;
+
+/// A value that the document structure binds to a rule (K04).
+pub(crate) struct StructuredValue {
+    /// Byte range of the key that names the value.
+    pub key: Range<usize>,
+    pub value: Range<usize>,
+    /// `json`, `kv`, `xml`, `csv` or `table`.
+    pub carrier: &'static str,
+}
+
+/// Score of an accepted match in a scored mode, with the context that explains it.
+pub(crate) struct MatchScore {
+    pub score: f64,
+    /// Added to the `matched_rules` entry as `context`.
+    pub context: Option<serde_json::Value>,
+}
 
 pub(crate) struct NativeDetection {
     pub result: EvaluationResult,
@@ -49,8 +67,30 @@ pub(crate) trait NativeRegexDetector {
     fn finalize_spans(&self, _text: &str, _spans: &mut Vec<EvidenceSpan>) {}
 
     /// Reject contextually ambiguous matches before emitting evidence or rule details.
-    fn allows_match(&self, _index: usize, _text: &str, _captures: &regex::Captures<'_>) -> bool {
+    fn allows_match(
+        &self,
+        _index: usize,
+        _prepared: &crate::threat::NativeText<'_>,
+        _captures: &regex::Captures<'_>,
+    ) -> bool {
         true
+    }
+
+    /// Value regexes per rule, `(?P<value>…)\z`, for the values that the document
+    /// structure binds to the rule (K04). `None` for a rule without structural values.
+    fn structured_regexes(&self) -> Option<&[Option<Regex>]> {
+        None
+    }
+
+    /// The structural fields bound to rule `index`. A
+    /// value counts only if the rule's value regex matches it in full; the validator
+    /// and [`Self::allows_match`] decide as for a regex match.
+    fn structured_values(
+        &self,
+        _index: usize,
+        _prepared: &crate::threat::NativeText<'_>,
+    ) -> Vec<StructuredValue> {
+        Vec::new()
     }
 
     fn detect(&self, text: &str) -> NativeDetection {
@@ -75,11 +115,41 @@ pub(crate) trait NativeRegexDetector {
         )
     }
 
+    /// Score of an accepted match in a scored mode. Unscored detection keeps `1.0`.
+    fn match_score(
+        &self,
+        _index: usize,
+        _prepared: &crate::threat::NativeText<'_>,
+        _captures: &regex::Captures<'_>,
+    ) -> MatchScore {
+        MatchScore {
+            score: 1.0,
+            context: None,
+        }
+    }
+
     fn detect_prepared_with_options<F>(
         &self,
         prepared: &crate::threat::NativeText<'_>,
         allows_rule: F,
         explain: bool,
+    ) -> NativeDetection
+    where
+        F: Fn(&str) -> bool,
+    {
+        self.detect_prepared_scored(prepared, allows_rule, explain, None)
+    }
+
+    /// `min_score: None` is the unscored contract: every finding scores `1.0`.
+    /// With `Some(threshold)`, findings carry `match_score`, matches below the
+    /// threshold are dropped, and `matched_rules` entries record the score and
+    /// its context.
+    fn detect_prepared_scored<F>(
+        &self,
+        prepared: &crate::threat::NativeText<'_>,
+        allows_rule: F,
+        explain: bool,
+        min_score: Option<f64>,
     ) -> NativeDetection
     where
         F: Fn(&str) -> bool,
@@ -97,18 +167,19 @@ pub(crate) trait NativeRegexDetector {
             if !allows_rule(self.rule_ids()[index]) {
                 continue;
             }
-            if self
-                .anchor_gates()
-                .get(index)
-                .is_some_and(|gate| !gate.is_unconditional() && !gate.allows(prepared.anchors()))
-            {
-                continue;
-            }
-            if self
-                .prefilters()
-                .and_then(|filters| filters[index].as_ref())
-                .is_some_and(|filter| !filter.is_match(text))
-            {
+            let gated =
+                self.anchor_gates().get(index).is_some_and(|gate| {
+                    !gate.is_unconditional() && !gate.allows(prepared.anchors())
+                }) || self
+                    .prefilters()
+                    .and_then(|filters| filters[index].as_ref())
+                    .is_some_and(|filter| !filter.is_match(text));
+            // Structural values carry their key outside the regex, so the anchor
+            // gate and prefilter of the regex do not apply to them.
+            let structured = self
+                .structured_regexes()
+                .and_then(|regexes| regexes[index].as_ref());
+            if gated && structured.is_none() {
                 continue;
             }
             let value_group = self
@@ -116,28 +187,85 @@ pub(crate) trait NativeRegexDetector {
                 .and_then(|groups| groups.get(index))
                 .copied()
                 .flatten();
-            for captures in regex.captures_iter(text) {
+            let regex_matches: Vec<_> = if gated {
+                Vec::new()
+            } else {
+                regex.captures_iter(text).collect()
+            };
+            let regex_values: Vec<_> = regex_matches
+                .iter()
+                .filter_map(|captures| captures.get(value_group.unwrap_or(0)))
+                .map(|matched| matched.range())
+                .collect();
+            // A key names its whole value, so structural values come first and keep
+            // their span against a shorter regex match of the same rule. A value the
+            // regex finds as well keeps the regex evidence (its field name).
+            let structural_matches = structured.into_iter().flat_map(|value_regex| {
+                self.structured_values(index, prepared)
+                    .into_iter()
+                    .filter(|structured| !regex_values.contains(&structured.value))
+                    .filter_map(move |structured| {
+                        let value = structured.value.clone();
+                        let captures = value_regex.captures_at(&text[..value.end], value.start)?;
+                        (captures.get(0)?.start() == value.start)
+                            .then_some((captures, Some(structured)))
+                    })
+            });
+            let candidates = structural_matches
+                .collect::<Vec<_>>()
+                .into_iter()
+                .chain(regex_matches.into_iter().map(|captures| (captures, None)));
+            for (captures, structured) in candidates {
                 let Some(matched) = captures.get(value_group.unwrap_or(0)) else {
                     continue;
                 };
                 if matched.is_empty()
                     || self.validators()[index]
                         .is_some_and(|validator| !validator(matched.as_str()))
-                    || !self.allows_match(index, text, &captures)
+                    || !self.allows_match(index, prepared, &captures)
                 {
                     continue;
                 }
-                let evidence = evidence::L1Match::from_captures(regex, &captures, value_group);
-                matched_rules.push(serde_json::json!({
+                let (score, context) = match min_score {
+                    None => (1.0, None),
+                    Some(threshold) => {
+                        let scored = self.match_score(index, prepared, &captures);
+                        if scored.score < threshold {
+                            continue;
+                        }
+                        (scored.score, scored.context)
+                    }
+                };
+                let evidence = match &structured {
+                    None => evidence::L1Match::from_captures(regex, &captures, value_group),
+                    Some(structured) => evidence::L1Match::at(
+                        matched.range(),
+                        vec![
+                            evidence::L1Component::new("structure_key", structured.key.clone()),
+                            evidence::L1Component::new("value", matched.range()),
+                        ],
+                    ),
+                };
+                let mut rule = serde_json::json!({
                     "rule_id": self.rule_ids()[index],
                     "start_byte": matched.start(), "end_byte": matched.end(),
                     "components": evidence.components,
-                }));
+                });
+                if let Some(structured) = &structured {
+                    rule["structure"] = structured.carrier.into();
+                }
+                if min_score.is_some() {
+                    rule["score"] = serde_json::json!(score);
+                }
+                if let Some(context) = context {
+                    rule["context"] = context;
+                }
+                matched_rules.push(rule);
                 class_name.get_or_insert(self.entity_groups()[index]);
                 evidence_spans.push(EvidenceSpan {
                     label: self.entity_groups()[index].to_string(),
                     text: matched.as_str().to_string(),
-                    score: 1.0,
+                    score,
                     start_byte: matched.start(),
                     end_byte: matched.end(),
                     start_char: 0,
@@ -193,10 +321,15 @@ pub(crate) trait NativeRegexDetector {
             non_overlapping_spans[0].label.clone()
         };
         populate_char_offsets(text, &mut non_overlapping_spans);
+        // Unscored findings all score 1.0, so this stays 1.0 without a mode.
+        let confidence = non_overlapping_spans
+            .iter()
+            .map(|span| span.score)
+            .fold(0.0, f64::max);
         NativeDetection {
             result: EvaluationResult {
                 class_name: final_class_name,
-                confidence: 1.0,
+                confidence,
                 level: "L1".to_string(),
             },
             evidence_spans: non_overlapping_spans,
@@ -205,7 +338,7 @@ pub(crate) trait NativeRegexDetector {
     }
 }
 
-fn populate_char_offsets(text: &str, spans: &mut [EvidenceSpan]) {
+pub(crate) fn populate_char_offsets(text: &str, spans: &mut [EvidenceSpan]) {
     let ranges = spans
         .iter()
         .map(|span| (span.start_byte, span.end_byte))
