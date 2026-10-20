@@ -306,9 +306,11 @@ def test_cli_count_json_and_check(tmp_path):
     assert payload["presidio"]["count"] == 35
     assert payload["ark"]["count"] == 3
     assert payload["m3"] == {"factor": 2, "target": 70, "met": False}
-    assert {"entity_id": "pii.de.tax_id", "country": "de", "sources": ["pii_steuer_id_de: steuer_id"]} in payload[
-        "ark"
-    ]["units"]
+    assert {
+        "entity_id": "pii.de.tax_id",
+        "country": "de",
+        "sources": ["pii_steuer_id_de: steuer_id", "pii_steuer_id_de_context_free: steuer_id_issued"],
+    } in payload["ark"]["units"]
 
     result = subprocess.run([sys.executable, str(SCRIPT), "check"], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr

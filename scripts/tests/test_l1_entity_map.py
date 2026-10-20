@@ -362,7 +362,7 @@ def test_checked_in_registry_order_matches_the_rust_order_test():
     expected = re.findall(r'\("(pii_\w+)", "(\w+)"\)', rust_test)
     rules = _generate_docs().parse_native_patterns(MODULE.PII_SOURCE_PATH, "PiiPattern")
     assert [(rule["id"], rule["entity_group"]) for rule in rules] == expected
-    assert len(expected) == 40
+    assert len(expected) == 41
 
 
 def test_cli_check_succeeds_and_fails(tmp_path):
