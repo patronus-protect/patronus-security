@@ -118,7 +118,9 @@ pub(crate) fn is_placeholder_value(value: &str) -> bool {
     let value = value
         .find(['"', '\'', '`', '\\'])
         .map_or(value, |end| &value[..end])
-        .trim_end_matches([';', ',', '.', ':']);
+        // Terminators and closing delimiters of call-style carriers such as
+        // `Client(api_key=YOUR_API_KEY_HERE)` that the capture includes.
+        .trim_end_matches([';', ',', '.', ':', ')', ']', '}']);
     if value.is_empty() {
         return false;
     }
@@ -321,6 +323,44 @@ mod tests {
             "datastore4711Kq",
         ] {
             assert!(!is_reference(head), "{head}");
+        }
+    }
+
+    #[test]
+    fn closing_delimiters_of_call_carriers_are_trimmed() {
+        for (text, value) in [
+            (
+                "client = Client(api_key=YOUR_API_KEY_HERE)",
+                "YOUR_API_KEY_HERE)",
+            ),
+            ("db = connect(password=$DB_PASSWORD)", "$DB_PASSWORD)"),
+            ("cfg = {password: $DB_PASSWORD}", "$DB_PASSWORD}"),
+            ("args[password=REPLACE_ME]", "REPLACE_ME]"),
+            ("connect(password=$DB_PASSWORD));", "$DB_PASSWORD));"),
+        ] {
+            let start = text.find(value).unwrap();
+            assert!(
+                is_placeholder_match(text, start..start + value.len()),
+                "{text}"
+            );
+        }
+        for (text, value) in [
+            ("conn = connect(password=Kx7pQ2vL9rT4)", "Kx7pQ2vL9rT4)"),
+            (
+                "client = Client(api_key=f4fcba1c3696bf9b564c7dac9b0062f5097331f9)",
+                "f4fcba1c3696bf9b564c7dac9b0062f5097331f9)",
+            ),
+            ("connect(password=$ecret2026)", "$ecret2026)"),
+            (
+                "connect(password=ORANGE_KQZTRWX_4711)",
+                "ORANGE_KQZTRWX_4711)",
+            ),
+        ] {
+            let start = text.find(value).unwrap();
+            assert!(
+                !is_placeholder_match(text, start..start + value.len()),
+                "{text}"
+            );
         }
     }
 
