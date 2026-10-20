@@ -225,6 +225,7 @@ tasks:
     deps: [K03]
 
   - id: K06
+    status: done
     title: Obfuscation (at/ät/dot/punkt, spaced digits, full-width, zero-width) with offset back-mapping
     type: engine
     deps: [K03]
