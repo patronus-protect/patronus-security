@@ -20,7 +20,7 @@ compiled extension.
 | `dynamic_pii.jsonl` | 133 | Dynamic PII entity spans |
 | `dynamic_pii_threshold_sweep.jsonl` | 85 | Threshold calibration |
 | `education_pii_threshold_sweep.jsonl` | 50 | Education-context threshold calibration |
-| `pii_l1.jsonl` | 757 | Native PII L1 exact-span goldens, hard negatives and known gaps (schema v2) |
+| `pii_l1.jsonl` | 789 | Native PII L1 exact-span goldens, hard negatives and known gaps (schema v2) |
 | `dlp_l1.jsonl` | 537 | Native DLP L1 exact-span goldens, hard negatives and known gaps (schema v2) |
 
 ## Native L1 golden-set contract

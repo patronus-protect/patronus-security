@@ -184,6 +184,9 @@ fn balanced_and_recall_keep_the_strict_spans_unless_counter_context_outranks() {
         for text in corpus() {
             let strict = scan(&strict_scanner, &text);
             let scored = scan(&scored_scanner, &text);
+            if spans(&scored) == spans(&strict) {
+                assert_eq!(strict.class_name, scored.class_name, "{mode:?}: {text}");
+            }
             let rules = scored.layers[0]
                 .details
                 .get("matched_rules")
@@ -225,13 +228,17 @@ fn balanced_and_recall_keep_the_strict_spans_unless_counter_context_outranks() {
                     span.score >= mode.min_score().unwrap() && span.score <= 1.0,
                     "{mode:?}: {text}: {span:?}"
                 );
-                // The span carries the score of the rule that emitted it.
+                // The span carries the score of the rule that emitted it, and the
+                // rule's context explains that score.
                 assert!(
                     rules.iter().any(|rule| {
+                        let points = |key: &str| rule["context"][key].as_u64().unwrap() as u8;
                         rule["start_byte"] == span.start_byte
                             && rule["end_byte"] == span.end_byte
                             && rule["score"] == span.score
                             && expected_score(&text, rule).0 == span.score
+                            && i16::from(points("bonus")) - i16::from(points("penalty"))
+                                == expected_score(&text, rule).1.points()
                     }),
                     "{mode:?}: {text}: {span:?} not in {rules:?}"
                 );
@@ -283,6 +290,20 @@ fn score_is_base_plus_validator_strength_plus_field_context() {
             "{}",
             pattern.name
         );
+        assert_eq!(
+            score::rule_score(pattern),
+            score::model_score(pattern, context, 0),
+            "{}",
+            pattern.name
+        );
+        // The context bonus is capped at the field bonus; the penalty floors at 0.
+        assert_eq!(
+            score::model_score(pattern, 100, 0),
+            score::model_score(pattern, score::FIELD_CONTEXT_POINTS, 0),
+            "{}",
+            pattern.name
+        );
+        assert_eq!(score::model_score(pattern, 0, 200), 0.0, "{}", pattern.name);
         assert!(
             (1..=100).contains(&pattern.base_score),
             "{}: base {}",
@@ -411,6 +432,21 @@ fn balanced_scores_rank_checksum_values_above_format_values() {
     assert!(score_of("STEUERID") > score_of("LICENSEPLATE"));
     assert!(score_of("IBAN") > score_of("PHONE"));
     assert_eq!(result.confidence, 1.0);
+
+    // Without field names the checksum value still outranks the format value.
+    let bare = pii_result(
+        "DE89370400440532013000 und +1 415 555 0101",
+        with_mode(PiiMode::Balanced),
+    );
+    let bare_score = |label: &str| {
+        bare.evidence_spans
+            .iter()
+            .find(|span| span.label == label)
+            .unwrap_or_else(|| panic!("{label} missing: {:?}", bare.evidence_spans))
+            .score
+    };
+    assert_eq!(bare_score("IBAN"), 0.9);
+    assert_eq!(bare_score("PHONE"), 0.55);
 
     let strict = pii_result(text, None);
     assert!(strict.evidence_spans.iter().all(|span| span.score == 1.0));

@@ -4,14 +4,26 @@
     "rule_id": "pii_email",
     "de": "E-Mail: ada@example.com",
     "en": "Email: ada@example.com",
-    "language_neutral": false
+    "language_neutral": false,
+    "balanced": {
+      "context": {
+        "de": "Kontakt per E-Mail an ada@example.com",
+        "en": "Contact by email at ada@example.com"
+      }
+    }
   },
   {
     "category": "pii",
     "rule_id": "pii_ipv4",
     "de": "IP: 203.0.113.42",
     "en": "IP: 203.0.113.42",
-    "language_neutral": true
+    "language_neutral": true,
+    "balanced": {
+      "context": {
+        "de": "Quelle laut IP-Adresse 203.0.113.42",
+        "en": "Logged IP address 203.0.113.42"
+      }
+    }
   },
   {
     "category": "pii",
@@ -39,14 +51,34 @@
     "rule_id": "pii_phone_international",
     "de": "Telefon: +491701234567",
     "en": "Phone: +491701234567",
-    "language_neutral": false
+    "language_neutral": false,
+    "balanced": {
+      "context": {
+        "de": "Erreichbar unter +44 20 7946 0958",
+        "en": "Reachable at +44 20 7946 0958"
+      },
+      "counter": {
+        "de": "Rechnungsnummer: +44 20 7946 0958",
+        "en": "Invoice number: +44 20 7946 0958"
+      }
+    }
   },
   {
     "category": "pii",
     "rule_id": "pii_phone_de",
     "de": "Telefon: +49 1701234567",
     "en": "Phone: +49 1701234567",
-    "language_neutral": false
+    "language_neutral": false,
+    "balanced": {
+      "context": {
+        "de": "+49 170 1234567 (Handy)",
+        "en": "+49 170 1234567 (mobile)"
+      },
+      "counter": {
+        "de": "Auftragsnummer +49 170 1234567",
+        "en": "Order ID +49 170 1234567"
+      }
+    }
   },
   {
     "category": "pii",
@@ -67,14 +99,30 @@
     "rule_id": "pii_phone_us",
     "de": "Telefon: 212-555-1234",
     "en": "Phone: 212-555-1234",
-    "language_neutral": false
+    "language_neutral": false,
+    "balanced": {
+      "context": {
+        "de": "212-736-4410 (Festnetz)",
+        "en": "212-736-4410 (work phone)"
+      },
+      "counter": {
+        "de": "Bestellnummer 202-604-7110",
+        "en": "Order number 202-604-7110"
+      }
+    }
   },
   {
     "category": "pii",
     "rule_id": "pii_mac_address",
     "de": "MAC: 02:42:ac:11:00:02",
     "en": "MAC: 02:42:ac:11:00:02",
-    "language_neutral": true
+    "language_neutral": true,
+    "balanced": {
+      "context": {
+        "de": "MAC-Adresse 02:42:ac:11:00:02",
+        "en": "MAC address 02:42:ac:11:00:02"
+      }
+    }
   },
   {
     "category": "pii",
@@ -88,14 +136,30 @@
     "rule_id": "pii_iban_generic",
     "de": "IBAN: GB82WEST12345698765432",
     "en": "IBAN: GB82WEST12345698765432",
-    "language_neutral": true
+    "language_neutral": true,
+    "balanced": {
+      "context": {
+        "de": "Bankkonto GB82WEST12345698765432",
+        "en": "Bank account GB82WEST12345698765432"
+      }
+    }
   },
   {
     "category": "pii",
     "rule_id": "pii_credit_card",
     "de": "Karte: 4111 1111 1111 1111",
     "en": "Card: 4111 1111 1111 1111",
-    "language_neutral": false
+    "language_neutral": false,
+    "balanced": {
+      "context": {
+        "de": "Kreditkarte 4111 1111 1111 1111",
+        "en": "Credit card 4111 1111 1111 1111"
+      },
+      "counter": {
+        "de": "Bestellnummer 4532 0151 1283 0366",
+        "en": "Order number 4532 0151 1283 0366"
+      }
+    }
   },
   {
     "category": "pii",
