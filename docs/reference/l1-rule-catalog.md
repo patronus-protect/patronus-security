@@ -140,7 +140,7 @@ In the default `strict` DLP mode every finding scores `1.0`. In `balanced` and `
 | `dlp_slack_token` | `SECRET_TOKEN` | `slack` | `format` | [api.slack.com](https://api.slack.com/authentication/token-types) | no | on | 55 | proximity | 0.70–0.95 |
 | `dlp_discord_token` | `SECRET_TOKEN` | `discord` | `format` | `ark` | no | on | 35 | proximity | 0.50–0.75 |
 | `dlp_eth_private_key` | `CRYPTO_KEY` | `ethereum` | `format` | [ethereum.org](https://ethereum.org/en/developers/docs/accounts/) | no | on | 25 | proximity | 0.40–0.65 |
-| `dlp_btc_wif` | `CRYPTO_KEY` | `bitcoin` | `format` | [en.bitcoin.it](https://en.bitcoin.it/wiki/Wallet_import_format) | no | on | 30 | proximity | 0.45–0.70 |
+| `dlp_btc_wif` | `CRYPTO_KEY` | `bitcoin` | `format` | [en.bitcoin.it](https://en.bitcoin.it/wiki/Wallet_import_format) | yes | on | 30 | proximity | 0.45–0.70 |
 | `dlp_private_key_block` | `PRIVATE_KEY` | – | `format` | `gitleaks:private-key` | no | on | 70 | proximity | 0.85–1.00 |
 | `dlp_private_key_header` | `PRIVATE_KEY` | – | `format` | `gitleaks:private-key` | no | on | 50 | proximity | 0.65–0.90 |
 | `dlp_jwt_token` | `SECRET_TOKEN` | – | `format` | `gitleaks:jwt` | no | on | 45 | proximity | 0.60–0.85 |
