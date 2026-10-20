@@ -105,6 +105,37 @@ class PublicApiTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             scanner.set_execution_gates({"explain": "yes"})
 
+    def test_pii_mode_is_strict_by_default_and_opt_in(self):
+        scanner = SecurityGateway(categories=["pii"], max_level="l1", download_files=False)
+        text = "Steuer-ID: 86095742719, Kennzeichen: B-AB 1234"
+
+        def native():
+            return next(result for result in scanner.scan_categories(["pii"], text)
+                        if result["model"] == "native:pii")
+
+        strict = native()
+        self.assertEqual({span["score"] for span in strict["evidence_spans"]}, {1.0})
+        self.assertEqual(strict["confidence"], 1.0)
+        scanner.set_execution_gates({"pii_mode": "strict"})
+        self.assertEqual(native()["evidence_spans"], strict["evidence_spans"])
+
+        for mode in ("balanced", "recall"):
+            scanner.set_execution_gates({"pii_mode": mode})
+            scored = native()
+            scores = {span["label"]: span["score"] for span in scored["evidence_spans"]}
+            self.assertEqual(scores, {"STEUERID": 1.0, "LICENSEPLATE": 0.65})
+            self.assertEqual(
+                [(s["label"], s["start_char"], s["end_char"]) for s in scored["evidence_spans"]],
+                [(s["label"], s["start_char"], s["end_char"]) for s in strict["evidence_spans"]],
+            )
+            self.assertEqual(scored["confidence"], 1.0)
+
+        scanner.set_execution_gates(None)
+        self.assertEqual(native()["evidence_spans"], strict["evidence_spans"])
+        for invalid in ("fast", "Strict", 1, True, None):
+            with self.assertRaises(ValueError):
+                scanner.set_execution_gates({"pii_mode": invalid})
+
     def test_normalize_text_is_public_pure_text_api(self):
         text = "  &amp;#x69;gnor\u200be\u00a0\u202e Ρrеνіоus  "
 

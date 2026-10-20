@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use patronus_ark::{
-    detectors::{dlp::dlp::DLP_PATTERNS, pii::pii::PII_PATTERNS},
+    detectors::{
+        dlp::dlp::DLP_PATTERNS,
+        pii::{pii::PII_PATTERNS, score::PiiMode},
+    },
     golden_recipes::{materialize, GeneratorSet, SecretRecipe},
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel,
 };
@@ -18,6 +21,9 @@ struct Case {
     #[serde(default)]
     secrets: Vec<SecretRecipe>,
     language_neutral: bool,
+    /// PII mode of the scan; rules that only report in a scored mode (K05) name it.
+    #[serde(default)]
+    pii_mode: PiiMode,
 }
 
 impl Case {
@@ -55,7 +61,6 @@ fn every_pii_and_dlp_rule_is_reachable_with_bilingual_source_evidence() {
         None,
         false,
     );
-    gateway.set_execution_gates(ScanGateMatrix::all_enabled());
     let generators = GeneratorSet::load(
         Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../python/patronus_ark/dlp_synth/generators.json"),
@@ -63,6 +68,10 @@ fn every_pii_and_dlp_rule_is_reachable_with_bilingual_source_evidence() {
     .expect("generator spec must load");
     let mut missing = Vec::new();
     for case in cases {
+        gateway.set_execution_gates(ScanGateMatrix {
+            pii_mode: case.pii_mode,
+            ..ScanGateMatrix::all_enabled()
+        });
         assert!(
             case.language_neutral || case.de != case.en,
             "translate {}",

@@ -185,6 +185,95 @@ numeric IBAN substring that also passes the credit-card validator. The primary `
 does not enumerate every match; consume `evidence_spans` for all detected classes. Overlapping
 matches within the same PII label are deduplicated.
 
+### PII score and modes
+
+The PII `score` depends on the PII mode, an opt-in execution gate (Rust
+`ScanGateMatrix.pii_mode`, Python `execution_gates={"pii_mode": "balanced"}`, Ark API
+`gates: {pii_mode: balanced}`). Unknown mode names are rejected.
+
+| Mode | `evidence_spans[].score` | Threshold | `confidence` |
+| --- | --- | --- | --- |
+| `strict` (default) | always `1.0` | none: the rules decide | `1.0` |
+| `balanced` | model score | findings below `0.50` are dropped | highest span score |
+| `recall` | model score | findings below `0.30` are dropped | highest span score |
+
+The model score of a finding is the sum of three parts, capped at 100 and divided by 100:
+
+- **Base** (1–100 points) of the rule: how specific its pattern is on its own.
+- **Validator strength**: `checksum` +35 (Luhn, ISO 7064 MOD 97-10, Steuer-ID check digit),
+  `format` +15 (length, alphabet, ranges, dates, prefixes), `none` +0 (no validator).
+- **Context**: +25 when the rule binds the value to a field name such as `IBAN:` or
+  `Steuer-ID`. Otherwise the context engine looks at both sides of the value, on the same line,
+  for a term of the DE/EN lexicon in `rust/src/detectors/anchor_lexicons/pii.json` that belongs
+  to the label (`Telefon`, `erreichbar`, `call me at`, `Kreditkarte`, `IBAN`, `client IP` …):
+  +25 up to 16 characters away, +20 up to 32, +15 up to 48 before or 32 after the value.
+  A counter-context term (order, invoice, tracking, ticket, reference or serial number:
+  `Bestellnummer`, `Rechnungsnummer`, `Sendungsnummer`, `invoice no`, `transaction ID` …) that
+  is strictly nearer than every support term subtracts 30 instead. A term does not count across
+  a line break, a digit (the value of another field) or `;`/`|`; after the value it also does
+  not count behind `,`, `:`, `=` or `#`, or when it is followed by `:`, `=`, `#` or a digit,
+  because then it names the next value. The
+  [L1 rule catalog](l1-rule-catalog.md#pii-context-lexicon) lists the lexicon entries per label.
+
+**Structure (K04).** A key names the value it holds like a field name right before it: a JSON
+or Python-dict key (`"kundennummer": "KD-1"`, `customerId`), a `key: value` or `key=value` line
+(YAML, INI, forms), an XML element or attribute (`<bic>…</bic>`, `<customer id="…"/>`, qualified by
+the parent element), a CSV header (`;`, `,`, tab or `|` separated, two or more lines with the same
+number of cells) and the header row or key cell of a Markdown or HTML table. Keys are compared
+lowercased with `_`, `-`, `.` and camelCase boundaries as spaces. In every mode, including
+`strict`, a key binds the value to a rule that names a field (`captured_value`) only if that
+rule accepts the key as its own field name and the value matches its value form in full; the
+validator and the rule's extra checks decide as for a regex match, so `Arztnummer`, `Kennung`
+or an `order_id` column bind nothing. Such a finding's `matched_rules` entry carries
+`structure` (`json`, `kv`, `xml`, `csv` or `table`) and the components `structure_key` and
+`value`. For rules without a field name, a key that names exactly the value is its context
+instead of proximity: a key of the label scores +25 (`anchor` is the lexicon entry, `side` is
+`key`), a counter-context key such as a `Bestellnummer` column subtracts 30, and a context-bound
+rule takes its required context from it. A number inside a longer value (`Phone: (987)
+012-3456`) is not the value its key names.
+
+**Obfuscation (K06).** Values hidden behind characters that leave them readable are found in a
+normalized view of the text and reported with their original span (byte and character offsets
+of the text as sent, including the hidden characters). In every mode, including `strict`, the
+scanner removes zero-width characters (U+200B–U+200D, U+2060, U+FEFF, soft hyphen) between two
+characters of a value, maps full-width forms to ASCII (`０３０ １２３４５６７８`, `ada.wong＠northwind.com`;
+a run counts if it contains a full-width letter or digit, or is a full-width separator between
+ASCII letters or digits) and undoes defanged separators between ASCII letters or digits
+(`203[.]0[.]113[.]5`, `ops(@)example{.}com`, `[:]`). Zero-width joiners in emoji and lone
+full-width punctuation in CJK text stay. In `recall` only, the scanner also undoes spelled-out
+e-mail separators (`ada [at] northwind [dot] com`, `max punkt mustermann ät firma punkt de`,
+`info @ firma . de`; without brackets or `@` the local part needs `.`, `_`, `-`, a digit or a dot
+word and the domain a common top-level domain, so `docs at example dot com` stays prose) and
+numbers spaced character by character (`D E 8 9 3 7 …`, at least eight characters, six of them
+digits); such findings score 10 points less than the plain form. `strict` and `balanced` keep
+these forms negative (gold convention T01). Rules and validators run on the normalized value, so
+a wrong check digit stays unreported. A finding that needed normalization replaces a same-label
+finding it contains and yields to any other; its `matched_rules` entry carries original offsets
+and `obfuscation` (`zero_width`, `full_width`, `defanged`, `spelled_out`, `spaced_digits`).
+
+For example, a Steuer-ID after its field name scores `1.0`, an IBAN without a field name `0.90`
+(`1.0` right after the word `IBAN`), a licence plate after `Kennzeichen:` `0.65`, and a card
+number after `Bestellnummer` `0.45`, below the `balanced` threshold. The [L1 rule catalog](l1-rule-catalog.md) lists
+strength, base and score per rule. In `balanced` and `recall`, every `details.matched_rules`
+entry also carries the `score` of its finding and its `context`: `bonus` and `penalty` points
+and, when a term decided them, its lexicon `anchor` (`field` for a field name bound by the
+rule), `side` (`before`/`after`, `key` for a structural key) and `distance` in characters. `strict` results are unchanged
+and carry neither field.
+
+Every rule that does not require context scores at least `0.50` without it, so `balanced` and
+`recall` return the `strict` spans except those a nearer counter-context term pushes below their
+threshold. They also report checksum-strong values without a field name (K05): IBAN and card
+numbers as in `strict`, and scored-only rules add the bare form of values that `strict` reports
+only after their field name. The first is `pii_steuer_id_de_context_free`: 11 digits or
+`86 095 742 719` that pass the check digit and the digit distribution of issued Steuer-IDs (one
+digit twice or three times, never three in a row), standing alone rather than inside a longer
+number, range or decimal. It scores `0.55` bare, `0.80` after `Steuer-ID ist`, and `0.25` behind
+a nearer counter-context term (`Rechnungsnummer 86095742719`), below both thresholds. A context-bound rule (`pii_phone_de_national_proximity`: a national number such as
+`ist unter 0176 90817263 erreichbar`) reports only with a support term and no nearer counter term,
+in every mode including `strict`, and then scores at least `0.50`. Validators decide in every
+mode: a value with a wrong check digit is never reported. Scores are rule-based evidence strengths, not calibrated
+probabilities; do not compare them with model confidences of other layers.
+
 Ambiguous PII fields require additional context before they emit findings or
 `matched_rules`: card expiry dates need a payment-card marker or a Luhn-valid PAN
 within the preceding 128 bytes of the same clause. Sentence, newline, semicolon,

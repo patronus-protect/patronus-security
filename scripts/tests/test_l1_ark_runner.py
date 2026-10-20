@@ -265,3 +265,60 @@ def test_cli_writes_predictions_and_default_sidecar(tmp_path):
     assert MODULE.main(["--input", str(source), "--output", str(out)]) == 0
     assert json.loads(out.read_text(encoding="utf-8"))["evidence_spans"][0]["label"] == "pii.email"
     assert json.loads((tmp_path / "ark.meta.json").read_text(encoding="utf-8"))["rows"] == 1
+
+
+def test_run_records_an_explicit_pii_mode_and_keeps_strict_metadata(tmp_path):
+    source = tmp_path / "gold.jsonl"
+    write_jsonl(source, gold_rows())
+    metas = {}
+    for mode in ("strict", "balanced"):
+        meta = MODULE.run(
+            input_path=source,
+            output_path=tmp_path / f"{mode}.jsonl",
+            meta_path=tmp_path / f"{mode}.meta.json",
+            gateway=FakeGateway(fake_spans()),
+            build={"native_sha256": "0" * 64},
+            pii_mode=mode,
+        )
+        metas[mode] = meta
+    # strict is the default: its metadata stays as before K02.
+    assert metas["strict"]["engine"] == {"categories": ["pii"], "max_level": "l1"}
+    assert metas["balanced"]["engine"] == {"categories": ["pii"], "max_level": "l1", "pii_mode": "balanced"}
+    with pytest.raises(ValueError, match="pii_mode"):
+        MODULE.run(
+            input_path=source,
+            output_path=tmp_path / "x.jsonl",
+            meta_path=tmp_path / "x.meta.json",
+            gateway=FakeGateway(fake_spans()),
+            build={"native_sha256": "0" * 64},
+            pii_mode="fast",
+        )
+    with pytest.raises(SystemExit):
+        MODULE.main(["--input", str(source), "--output", str(tmp_path / "y.jsonl"), "--pii-mode", "fast"])
+
+
+@pytest.mark.skipif(not native_available(), reason="patronus_ark native binding is not built")
+def test_real_ark_binding_scores_spans_in_opt_in_modes(tmp_path):
+    source = tmp_path / "gold.jsonl"
+    write_jsonl(
+        source,
+        [
+            {"id": "de", "language": "de", "text": "DE89370400440532013000, Kennzeichen: B-AB 1234"},
+            {"id": "context", "language": "de", "text": "IBAN DE89370400440532013000"},
+            {"id": "counter", "language": "de", "text": "Bestellnummer 4111 1111 1111 1111"},
+        ],
+    )
+    scores = {}
+    for mode in ("strict", "balanced", "recall"):
+        out = tmp_path / f"{mode}.jsonl"
+        assert MODULE.main(["--input", str(source), "--output", str(out), "--pii-mode", mode]) == 0
+        rows = [json.loads(line) for line in out.read_text(encoding="utf-8").splitlines()]
+        scores[mode] = {row["id"]: {item["ark_label"]: item["score"] for item in row["evidence_spans"]} for row in rows}
+    assert scores["strict"] == {
+        "de": {"IBAN": 1.0, "LICENSEPLATE": 1.0},
+        "context": {"IBAN": 1.0},
+        "counter": {"CREDITCARD": 1.0},
+    }
+    # K03: the field name before the IBAN lifts it, the order number drops the card number.
+    assert scores["balanced"] == {"de": {"IBAN": 0.9, "LICENSEPLATE": 0.65}, "context": {"IBAN": 1.0}, "counter": {}}
+    assert scores["recall"] == {**scores["balanced"], "counter": {"CREDITCARD": 0.45}}

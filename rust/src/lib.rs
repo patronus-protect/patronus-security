@@ -21,6 +21,7 @@ pub use cache::{
     CacheEncryptionConfig, CacheError, CacheWriteMode, ExactCacheConfig, MemoryCacheConfig,
     PersistentCacheConfig, WriteBehindConfig,
 };
+pub use detectors::pii::score::PiiMode;
 pub use dynamic_pii::{
     DynamicPiiConditionalLabels, DynamicPiiConfig, DynamicPiiExecutionGate,
     DynamicPiiResultCondition, EvidenceSpan,

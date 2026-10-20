@@ -271,7 +271,13 @@ impl NativeRegexDetector for DlpPipeline {
     }
 
     /// Drops documented example and test values of secret rules (T06).
-    fn allows_match(&self, index: usize, text: &str, captures: &regex::Captures<'_>) -> bool {
+    fn allows_match(
+        &self,
+        index: usize,
+        prepared: &crate::threat::NativeText<'_>,
+        captures: &regex::Captures<'_>,
+    ) -> bool {
+        let text = prepared.text();
         let check = self.example_checks[index];
         if check == ExampleCheck::Off {
             return true;
