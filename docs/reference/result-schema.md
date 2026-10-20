@@ -404,6 +404,39 @@ public finding spans and use `source: "l1"`; rejected candidates remain visible 
 native Injection producer verdicts are no longer returned as separate public results. Registered
 external L1 detectors remain separate and unchanged.
 
+### DLP taxonomy
+
+DLP findings use the `entity_group` of their rule as the span `label` and the result
+`class_name`. Taxonomy v2 (K09) keeps these groups unchanged: the credential/secret groups
+`API_KEY`, `CLOUD_KEY`, `PAYMENT_KEY`, `SECRET_TOKEN`, `CREDENTIAL`, `PASSWORD_HASH`,
+`PRIVATE_KEY` and `CRYPTO_KEY` (on by default), plus the opt-in identifier and content groups
+(`dlp.de.*`, `dlp.record.*`, `dlp.project_id`, `dlp.organization_id`,
+`dlp.internal.business_metric`, `dlp.content.*`). Every `matched_rules` entry of a
+credential/secret rule names what the value is within its group as `subtype`, next to
+`provider` (provider-bound formats only), `validator_strength`, `source_ref` and `severity`;
+identifier and content rules carry no `subtype`.
+
+| `subtype` | Groups | Values |
+| --- | --- | --- |
+| `api_key` | `API_KEY`, `CLOUD_KEY`, `PAYMENT_KEY` | Provider-issued API or access keys (LLM keys, AWS access key ID, Google API key, Stripe key). |
+| `access_token` | `SECRET_TOKEN`, `CLOUD_KEY` | OAuth, personal, bot and bearer tokens, JWTs (GitHub, GitLab, npm, Slack, Discord, Google OAuth). |
+| `secret_key` | `API_KEY`, `CLOUD_KEY`, `PAYMENT_KEY` | The secret half of a key pair or client credential, signing secrets (AWS secret access key, GCP client secret, Stripe webhook secret). |
+| `private_key` | `PRIVATE_KEY`, `CRYPTO_KEY` | PEM private keys, wallet keys (Ethereum, Bitcoin WIF). |
+| `seed_phrase` | `CRYPTO_KEY` | Mnemonic wallet seeds (planned). |
+| `password` | `CREDENTIAL` | Passwords in assignments and prose, URL userinfo, Basic auth. |
+| `password_hash` | `PASSWORD_HASH` | Password hashes. |
+| `generic_secret` | `CREDENTIAL` | Any value under a secret-like key or variable name. |
+| `session_token` | `SECRET_TOKEN`, `CREDENTIAL` | Session IDs in cookies, CSRF tokens. |
+| `signature` | `CREDENTIAL` | Signatures of signed URLs. |
+| `connection_string` | `CREDENTIAL` | Database and service connection strings with credentials (planned). |
+| `auth_url` | `CREDENTIAL` | Credentials carried in a URL: token, password and API key parameters; reset and magic links, OAuth redirects (planned). |
+| `webhook_url` | `SECRET_TOKEN` | Incoming webhook URLs that authorize by themselves (planned). |
+| `otp_secret` | `CREDENTIAL` | TOTP/HOTP seeds, `otpauth://` URIs, recovery codes (planned). |
+
+Subtypes marked planned have no rule yet; new rules for them report the listed group, so
+group filters and gates written for the existing groups keep covering them. The
+[L1 rule catalog](l1-rule-catalog.md#dlp-regex-rules-59) lists the subtype of every rule.
+
 ### DLP score and modes
 
 The DLP `score` of the `native:dlp` producer depends on the DLP mode, an opt-in execution gate

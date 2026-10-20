@@ -11,6 +11,19 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Add DLP taxonomy v2 (K09). The entity groups stay unchanged; every credential/secret rule
+  names a subtype within its group (`RuleMeta::subtype`,
+  `patronus_ark::detectors::dlp::dlp::SecretSubtype`), and each of its `matched_rules` entries
+  reports it as `subtype` next to `provider`: `api_key`, `access_token`, `secret_key`,
+  `private_key`, `password`, `password_hash`, `generic_secret`, `session_token`, `signature` and
+  `auth_url` (`dlp_credential_in_url`). Connection strings, webhook URLs, OTP secrets and seed
+  phrases become the subtypes `connection_string` (`CREDENTIAL`), `webhook_url`
+  (`SECRET_TOKEN`), `otp_secret` (`CREDENTIAL`) and `seed_phrase` (`CRYPTO_KEY`) for the rules of
+  G01, P08, G08 and C01 instead of new groups. `research/dlp/entity_map.yaml` drops the planned
+  groups `CONNECTION_STRING`, `WEBHOOK_URL`, `OTP_SECRET` and `SEED_PHRASE` and lists the subtypes;
+  the gitleaks webhook rules map to `SECRET_TOKEN`. The result schema documents the taxonomy and
+  the L1 rule catalog shows the subtype per rule. **Detection change:** none; spans, labels and
+  scores are unchanged, `matched_rules` entries gain the `subtype` field.
 - Add overlap resolution for DLP secret findings and DLP vs. PII double labels (K08). Overlapping
   credential/secret spans keep one span: a span that only adds quotes or a trailing `;`/`,` to a
   tighter span of the same tier gives way to it; a fixed-format match strictly inside a longer

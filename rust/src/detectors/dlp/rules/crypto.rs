@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! Key material: wallet keys and PEM private keys.
 use crate::detectors::dlp::{
-    dlp::{DlpPattern, RuleMeta, ValidatorStrength},
+    dlp::{DlpPattern, RuleMeta, SecretSubtype, ValidatorStrength},
     prefilter::ValueClass,
 };
 use crate::detectors::validators::base58check_decode;
@@ -41,7 +41,8 @@ pub(super) const RULES: &[DlpPattern] = &[
             &["0x"],
         )
         .with_provider("ethereum")
-        .with_min_entropy(3.0),
+        .with_min_entropy(3.0)
+        .with_subtype(SecretSubtype::PrivateKey),
     },
     DlpPattern {
         name: "dlp_btc_wif",
@@ -59,7 +60,8 @@ pub(super) const RULES: &[DlpPattern] = &[
         )
         .with_provider("bitcoin")
         .with_min_entropy(3.0)
-        .with_value_run(ValueClass::Base58, 51),
+        .with_value_run(ValueClass::Base58, 51)
+        .with_subtype(SecretSubtype::PrivateKey),
     },
     // ── Private key material ─────────────────────────────────────────────────
     DlpPattern {
@@ -73,7 +75,8 @@ pub(super) const RULES: &[DlpPattern] = &[
             ValidatorStrength::Format,
             "gitleaks:private-key",
             &["-----begin"],
-        ),
+        )
+        .with_subtype(SecretSubtype::PrivateKey),
     },
     DlpPattern {
         name: "dlp_private_key_header",
@@ -86,6 +89,7 @@ pub(super) const RULES: &[DlpPattern] = &[
             ValidatorStrength::Format,
             "gitleaks:private-key",
             &["-----begin"],
-        ),
+        )
+        .with_subtype(SecretSubtype::PrivateKey),
     },
 ];

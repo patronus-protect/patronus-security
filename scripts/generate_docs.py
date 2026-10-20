@@ -202,10 +202,12 @@ def parse_native_patterns(
             meta = re.search(r'\bmeta:\s*RuleMeta::new\(\s*ValidatorStrength::(\w+),\s*"([^"]+)"', block)
             if meta:
                 provider = re.search(r'\.with_provider\(\s*"([^"]+)"\s*\)', block)
+                subtype = re.search(r"\.with_subtype\(\s*SecretSubtype::(\w+)\s*\)", block)
                 pattern.update(
                     validator_strength=meta.group(1).lower(),
                     source_ref=meta.group(2),
                     provider=provider.group(1) if provider else None,
+                    subtype=re.sub(r"(?<!^)(?=[A-Z])", "_", subtype.group(1)).lower() if subtype else None,
                 )
             patterns.append(pattern)
     return patterns
@@ -476,7 +478,7 @@ def generate_l1_rule_catalog_doc() -> str:
         "",
         "Every credential/secret rule also drops the vendor-documented example values of `research/dlp/documented_values.yaml` (stored as SHA-256 of the normalized value) and JWTs with the documented example claims of jwt.io and RFC 7519; publicly known test keys listed there (Hardhat/Anvil default accounts) stay findings with `severity` `test`.",
         "",
-        "Each rule carries metadata v2, and every entry of `matched_rules` in the layer details reports it: `provider` for provider-bound formats, `validator_strength` (`checksum`: check digits verified; `structure`: decoded or parsed structure verified; `format`: fixed prefix, alphabet, length or syntax shape; `none`: keyword or context only), `source_ref` (`gitleaks:<rule-id>`, vendor or specification URL, or `ark` for in-house rules; see `research/dlp/rule_sources.yaml`) and, for credential/secret rules, `severity` (`test` for provider test/sandbox credentials such as Stripe `sk_test_`, otherwise `live`). Provider, key and JWT rules drop values whose Shannon entropy is below 3.0 bits per character.",
+        "Each rule carries metadata v2, and every entry of `matched_rules` in the layer details reports it: `provider` for provider-bound formats, `validator_strength` (`checksum`: check digits verified; `structure`: decoded or parsed structure verified; `format`: fixed prefix, alphabet, length or syntax shape; `none`: keyword or context only), `source_ref` (`gitleaks:<rule-id>`, vendor or specification URL, or `ark` for in-house rules; see `research/dlp/rule_sources.yaml`) and, for credential/secret rules, `severity` (`test` for provider test/sandbox credentials such as Stripe `sk_test_`, otherwise `live`) and `subtype` (taxonomy v2, K09: what the value is within its group, see [DLP taxonomy](result-schema.md#dlp-taxonomy)). Provider, key and JWT rules drop values whose Shannon entropy is below 3.0 bits per character.",
         "",
         "Before any regex runs, one Aho-Corasick pass finds the prefilter keywords of all rules (ASCII case-insensitive); a rule whose keywords are absent is skipped. The two rules without a literal have a structural prefilter instead: `dlp_discord_token` needs a run of 24 alphanumerics, `dlp_btc_wif` a run of 51 Base58 characters. Where every match starts a bounded number of bytes before a keyword (for example `dlp_generic_credential_assignment`), the rule is only tried at those positions, in text order. Every gate is proven from the rule's regex, so the findings are the same as a full scan; a text with LONG S or KELVIN SIGN, which case-insensitive rules match for `s` and `k`, runs every rule on the whole text (K07, `rust/tests/dlp_rule_prefilter.rs`).",
         "",
@@ -494,15 +496,16 @@ def generate_l1_rule_catalog_doc() -> str:
         "threshold (see [DLP score and modes](result-schema.md#dlp-score-and-modes)). The score column "
         "shows the score without counter-context.",
         "",
-        "| Rule ID | Result entity group | Provider | Validator | Source | Extra validator | Default | Base | Context | Score (`balanced`/`recall`) |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+        "| Rule ID | Result entity group | Subtype | Provider | Validator | Source | Extra validator | Default | Base | Context | Score (`balanced`/`recall`) |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ])
     for rule in dlp:
         provider = f"`{rule['provider']}`" if rule["provider"] else "–"
+        subtype = f"`{rule['subtype']}`" if rule["subtype"] else "–"
         context = dlp_rule_context(rule, credential_groups)
         score_range = dlp_rule_score_range(rule, context, dlp_points, context_points)
         lines.append(
-            f"| `{rule['id']}` | `{rule['entity_group']}` | {provider} | `{rule['validator_strength']}` | {_source_ref_cell(rule['source_ref'])} | {'yes' if rule['validated'] else 'no'} | {'on' if rule['entity_group'] in credential_groups else 'off'} | {rule['base_score']} | {context} | {score_range} |"
+            f"| `{rule['id']}` | `{rule['entity_group']}` | {subtype} | {provider} | `{rule['validator_strength']}` | {_source_ref_cell(rule['source_ref'])} | {'yes' if rule['validated'] else 'no'} | {'on' if rule['entity_group'] in credential_groups else 'off'} | {rule['base_score']} | {context} | {score_range} |"
         )
 
     lines.extend([

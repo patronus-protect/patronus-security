@@ -74,8 +74,101 @@ impl Severity {
     }
 }
 
+/// Taxonomy v2 (K09): what a credential/secret value is, within its entity
+/// group. Matches of secret rules report it as `subtype` in `matched_rules`;
+/// the entity groups and span labels stay as they are.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SecretSubtype {
+    /// Provider-issued API or access key.
+    ApiKey,
+    /// OAuth, personal, bot or bearer access token, JWT.
+    AccessToken,
+    /// Secret half of a key pair or client credential, signing secret.
+    SecretKey,
+    /// Asymmetric private key or wallet key.
+    PrivateKey,
+    /// Mnemonic wallet seed (BIP39, C01).
+    SeedPhrase,
+    /// Password chosen by a person or system.
+    Password,
+    PasswordHash,
+    /// Any value under a secret-like key or variable name.
+    GenericSecret,
+    /// Session ID or CSRF token.
+    SessionToken,
+    /// Signature of a signed URL.
+    Signature,
+    /// Database or service connection string with credentials (G01).
+    ConnectionString,
+    /// URL whose query or fragment carries a credential: token parameters,
+    /// reset and magic links, OAuth redirects (G09).
+    AuthUrl,
+    /// Incoming webhook URL that authorizes by itself (P08).
+    WebhookUrl,
+    /// TOTP/HOTP seed, otpauth URI, recovery codes (G08).
+    OtpSecret,
+}
+
+impl SecretSubtype {
+    pub const ALL: &'static [Self] = &[
+        Self::ApiKey,
+        Self::AccessToken,
+        Self::SecretKey,
+        Self::PrivateKey,
+        Self::SeedPhrase,
+        Self::Password,
+        Self::PasswordHash,
+        Self::GenericSecret,
+        Self::SessionToken,
+        Self::Signature,
+        Self::ConnectionString,
+        Self::AuthUrl,
+        Self::WebhookUrl,
+        Self::OtpSecret,
+    ];
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::ApiKey => "api_key",
+            Self::AccessToken => "access_token",
+            Self::SecretKey => "secret_key",
+            Self::PrivateKey => "private_key",
+            Self::SeedPhrase => "seed_phrase",
+            Self::Password => "password",
+            Self::PasswordHash => "password_hash",
+            Self::GenericSecret => "generic_secret",
+            Self::SessionToken => "session_token",
+            Self::Signature => "signature",
+            Self::ConnectionString => "connection_string",
+            Self::AuthUrl => "auth_url",
+            Self::WebhookUrl => "webhook_url",
+            Self::OtpSecret => "otp_secret",
+        }
+    }
+
+    /// The existing entity groups a rule of this subtype may report.
+    pub const fn groups(self) -> &'static [&'static str] {
+        match self {
+            Self::ApiKey | Self::SecretKey => &["API_KEY", "CLOUD_KEY", "PAYMENT_KEY"],
+            Self::AccessToken => &["SECRET_TOKEN", "CLOUD_KEY"],
+            Self::PrivateKey => &["PRIVATE_KEY", "CRYPTO_KEY"],
+            Self::SeedPhrase => &["CRYPTO_KEY"],
+            Self::PasswordHash => &["PASSWORD_HASH"],
+            Self::SessionToken => &["SECRET_TOKEN", "CREDENTIAL"],
+            Self::WebhookUrl => &["SECRET_TOKEN"],
+            Self::Password
+            | Self::GenericSecret
+            | Self::Signature
+            | Self::ConnectionString
+            | Self::AuthUrl
+            | Self::OtpSecret => &["CREDENTIAL"],
+        }
+    }
+}
+
 /// Rule metadata v2 (K02). Matches report `provider`, `validator_strength`,
-/// `source_ref` and, for secret rules, `severity` in `matched_rules`.
+/// `source_ref` and, for secret rules, `severity` and `subtype` (K09) in
+/// `matched_rules`.
 #[derive(Clone, Copy, Debug)]
 pub struct RuleMeta {
     /// Provider slug for provider-bound formats (`github`, `stripe` …).
@@ -96,6 +189,9 @@ pub struct RuleMeta {
     /// Structural prefilter of a rule without keywords (K07): a run of value
     /// characters that every match contains.
     pub value_run: Option<ValueRun>,
+    /// Taxonomy v2 subtype of a secret rule (K09); `None` for identifier and
+    /// content rules.
+    pub subtype: Option<SecretSubtype>,
 }
 
 impl RuleMeta {
@@ -112,6 +208,14 @@ impl RuleMeta {
             source_ref,
             test_prefixes: &[],
             value_run: None,
+            subtype: None,
+        }
+    }
+
+    pub const fn with_subtype(self, subtype: SecretSubtype) -> Self {
+        Self {
+            subtype: Some(subtype),
+            ..self
         }
     }
 
@@ -614,6 +718,9 @@ impl NativeRegexDetector for DlpPipeline {
                 meta.severity(value)
             };
             details.insert("severity".into(), severity.as_str().into());
+        }
+        if let Some(subtype) = meta.subtype {
+            details.insert("subtype".into(), subtype.as_str().into());
         }
         details
     }

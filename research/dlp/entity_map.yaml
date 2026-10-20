@@ -123,10 +123,6 @@ taxonomy:
   PASSWORD_HASH: {family: generic_credential}
   PRIVATE_KEY: {family: key_material}
   CRYPTO_KEY: {family: key_material}
-  CONNECTION_STRING: {family: generic_credential, planned: true}
-  WEBHOOK_URL: {family: provider_secret, planned: true}
-  OTP_SECRET: {family: generic_credential, planned: true}
-  SEED_PHRASE: {family: key_material, planned: true}
   dlp.de.vat_id: {family: business_identifier}
   dlp.de.commercial_register_number: {family: business_identifier}
   dlp.de.facility_number_bsnr: {family: business_identifier}
@@ -145,6 +141,28 @@ taxonomy:
   dlp.document.legal_privileged: {family: document_class, planned: true}
   dlp.document.hr: {family: document_class, planned: true}
   dlp.document.rnd_ip: {family: document_class, planned: true}
+
+# Taxonomie v2 (K09): Untertypen der Secret-Gruppen. Neue Arten (Connection-String, Webhook-URL,
+# Auth-URL, OTP-Secret, Seed-Phrase) sind keine eigenen Gruppen, sondern Untertypen bestehender
+# Gruppen; Treffer melden sie als `subtype` in `matched_rules`, Spans behalten das Gruppenlabel.
+# groups = Gruppen, in denen der Untertyp vorkommen darf (= SecretSubtype::groups in dlp.rs);
+# planned = noch keine Regel mit diesem Untertyp. Eine Entität darf `subtype` nennen; dann tragen
+# alle ihre ARK-Regeln diesen Untertyp.
+subtypes:
+  api_key: {groups: [API_KEY, CLOUD_KEY, PAYMENT_KEY]}
+  access_token: {groups: [SECRET_TOKEN, CLOUD_KEY]}
+  secret_key: {groups: [API_KEY, CLOUD_KEY, PAYMENT_KEY]}
+  private_key: {groups: [PRIVATE_KEY, CRYPTO_KEY]}
+  seed_phrase: {groups: [CRYPTO_KEY], planned: true}  # C01
+  password: {groups: [CREDENTIAL]}
+  password_hash: {groups: [PASSWORD_HASH]}
+  generic_secret: {groups: [CREDENTIAL]}
+  session_token: {groups: [SECRET_TOKEN, CREDENTIAL]}
+  signature: {groups: [CREDENTIAL]}
+  connection_string: {groups: [CREDENTIAL], planned: true}  # G01
+  auth_url: {groups: [CREDENTIAL]}  # dlp_credential_in_url; G09
+  webhook_url: {groups: [SECRET_TOKEN], planned: true}  # P08
+  otp_secret: {groups: [CREDENTIAL], planned: true}  # G08
 
 entities:
   # ── shared: ARK + Baseline ──────────────────────────────────────────────
@@ -389,6 +407,7 @@ entities:
   - id: credential.url_query_secret
     scope: ark_only
     group: CREDENTIAL
+    subtype: auth_url
     ark: [dlp_credential_in_url]
     backlog: F12
   - {id: identifier.de.vat_id, scope: ark_only, group: dlp.de.vat_id, ark: [dlp_de_vat_id], backlog: F15}
@@ -508,7 +527,7 @@ entities:
   - {id: observability.dynatrace.api_token, scope: baseline_only, group: API_KEY, gitleaks: [dynatrace-api-token], backlog: P07}
   - {id: observability.sumologic.access_token, scope: baseline_only, group: API_KEY, gitleaks: [sumologic-access-token], backlog: P07}
   # P08: Kommunikation/Webhooks
-  - {id: comm.webhook_url, scope: baseline_only, group: WEBHOOK_URL,
+  - {id: comm.webhook_url, scope: baseline_only, group: SECRET_TOKEN, subtype: webhook_url,
      gitleaks: [slack-webhook-url, microsoft-teams-webhook], backlog: P08}
   - {id: comm.discord.api_credentials, scope: baseline_only, group: API_KEY,
      gitleaks: [discord-api-token, discord-client-secret], backlog: P08}
