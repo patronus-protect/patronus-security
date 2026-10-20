@@ -300,14 +300,25 @@ def test_run_records_an_explicit_pii_mode_and_keeps_strict_metadata(tmp_path):
 @pytest.mark.skipif(not native_available(), reason="patronus_ark native binding is not built")
 def test_real_ark_binding_scores_spans_in_opt_in_modes(tmp_path):
     source = tmp_path / "gold.jsonl"
-    write_jsonl(source, [{"id": "de", "language": "de", "text": "IBAN DE89370400440532013000, Kennzeichen: B-AB 1234"}])
+    write_jsonl(
+        source,
+        [
+            {"id": "de", "language": "de", "text": "DE89370400440532013000, Kennzeichen: B-AB 1234"},
+            {"id": "context", "language": "de", "text": "IBAN DE89370400440532013000"},
+            {"id": "counter", "language": "de", "text": "Bestellnummer 4111 1111 1111 1111"},
+        ],
+    )
     scores = {}
     for mode in ("strict", "balanced", "recall"):
         out = tmp_path / f"{mode}.jsonl"
         assert MODULE.main(["--input", str(source), "--output", str(out), "--pii-mode", mode]) == 0
-        row = json.loads(out.read_text(encoding="utf-8"))
-        scores[mode] = {item["ark_label"]: item["score"] for item in row["evidence_spans"]}
-    assert scores["strict"] == {"IBAN": 1.0, "LICENSEPLATE": 1.0}
-    # IBAN 0.90 plus 25 for the "IBAN" term right before it (K03 context engine).
-    assert scores["balanced"] == {"IBAN": 1.0, "LICENSEPLATE": 0.65}
-    assert scores["recall"] == scores["balanced"]
+        rows = [json.loads(line) for line in out.read_text(encoding="utf-8").splitlines()]
+        scores[mode] = {row["id"]: {item["ark_label"]: item["score"] for item in row["evidence_spans"]} for row in rows}
+    assert scores["strict"] == {
+        "de": {"IBAN": 1.0, "LICENSEPLATE": 1.0},
+        "context": {"IBAN": 1.0},
+        "counter": {"CREDITCARD": 1.0},
+    }
+    # K03: the field name before the IBAN lifts it, the order number drops the card number.
+    assert scores["balanced"] == {"de": {"IBAN": 0.9, "LICENSEPLATE": 0.65}, "context": {"IBAN": 1.0}, "counter": {}}
+    assert scores["recall"] == {**scores["balanced"], "counter": {"CREDITCARD": 0.45}}

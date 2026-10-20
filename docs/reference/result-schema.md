@@ -212,14 +212,17 @@ The model score of a finding is the sum of three parts, capped at 100 and divide
   is strictly nearer than every support term subtracts 30 instead. A term does not count across
   a line break, a digit (the value of another field) or `;`/`|`; after the value it also does
   not count behind `,`, `:`, `=` or `#`, or when it is followed by `:`, `=`, `#` or a digit,
-  because then it names the next value.
+  because then it names the next value. The
+  [L1 rule catalog](l1-rule-catalog.md#pii-context-lexicon) lists the lexicon entries per label.
 
 For example, a Steuer-ID after its field name scores `1.0`, an IBAN without a field name `0.90`
 (`1.0` right after the word `IBAN`), a licence plate after `Kennzeichen:` `0.65`, and a card
 number after `Bestellnummer` `0.45`, below the `balanced` threshold. The [L1 rule catalog](l1-rule-catalog.md) lists
 strength, base and score per rule. In `balanced` and `recall`, every `details.matched_rules`
-entry also carries the `score` of its finding; `strict` results are unchanged and carry no
-such field.
+entry also carries the `score` of its finding and its `context`: `bonus` and `penalty` points
+and, when a term decided them, its lexicon `anchor` (`field` for a field name bound by the
+rule), `side` (`before`/`after`) and `distance` in characters. `strict` results are unchanged
+and carry neither field.
 
 Every rule that does not require context scores at least `0.50` without it, so `balanced` and
 `recall` return the `strict` spans except those a nearer counter-context term pushes below their
