@@ -900,11 +900,13 @@
     "hard_negatives": {
       "de": [
         "API-Schl\u00fcssel: HIER_API_SCHLUESSEL_EINTRAGEN",
-        "client_secret = Environment.GetEnvironmentVariable(\"CLIENT_SECRET\")"
+        "client_secret = Environment.GetEnvironmentVariable(\"CLIENT_SECRET\")",
+        "git remote set-url origin https://token:@bitbucket.org/acme/lager.git"
       ],
       "en": [
         "API key: YOUR-API-TOKEN",
-        "client_secret: %CLIENT_SECRET%"
+        "client_secret: %CLIENT_SECRET%",
+        "git remote set-url origin https://token:@bitbucket.org/acme/warehouse.git"
       ]
     },
     "language_neutral": false
@@ -987,12 +989,14 @@
     "hard_negatives": {
       "de": [
         "postgres://dbuser:BITTE_AENDERN@db.internal/app",
-        "postgresql://lager:%(passwort)s@db.intern/lager"
+        "postgresql://lager:%(passwort)s@db.intern/lager",
+        "DATABASE_URL=postgres://lager@db.intern:5432/lager"
       ],
       "en": [
         "postgres://dbuser:TODO@db.internal/app",
         "mysql://report:$DB_PASSWORD@db1/app",
-        "https://x-token-auth:my-access-token@bitbucket.org/acme/repo.git"
+        "https://x-token-auth:my-access-token@bitbucket.org/acme/repo.git",
+        "DATABASE_URL=postgres://warehouse@db.internal:5432/warehouse"
       ]
     },
     "language_neutral": true
