@@ -39,6 +39,12 @@ families from ``source_families`` in the entity map). ``m1`` checks milestone M1
 from Ark and Presidio predictions stored under the gold file names:
 
     scoreboard.py m1 --gold DIR --ark ARK_DIR --presidio PRESIDIO_DIR [--language en] [--check]
+
+``report`` renders the Markdown baseline (research/l1-pii/scoreboard/baseline.md): P/R/F1 per
+source family, corpus and entity for Ark and each Presidio profile, hard-negative FP per
+family, M1 of the first engine against each other one:
+
+    scoreboard.py report --gold DIR --engine ark=DIR --engine presidio-default=DIR --engine presidio-tuned=DIR
 """
 
 from __future__ import annotations
@@ -745,6 +751,151 @@ def m1_lines(report: dict[str, Any]) -> list[str]:
     return lines
 
 
+# ── baseline report ──────────────────────────────────────────────────────
+
+
+def baseline_report(gold_root: Path, engines: dict[str, Path], emap: Any) -> dict[str, Any]:
+    """Every engine's merged result on every frozen gold file, hard-negative FP per family, M1 vs the first engine.
+
+    ``engines`` maps a name to a prediction directory with the gold file names; the first engine
+    (Ark) is compared with each of the others (Presidio profiles) for M1."""
+    if len(engines) < 2:
+        raise ScoreboardError("report needs at least two engines (Ark first, then the Presidio profiles)")
+    datasets = discover("gold", gold_root)
+    gold = {dataset.name: read_jsonl(dataset.path) for dataset in datasets}
+    row_family = {(name, row["id"]): emap.family(str(row.get("corpus", ""))) for name, rows in gold.items() for row in rows}
+    results: dict[str, Any] = {}
+    hard_negative_fp: dict[str, dict[str, int]] = {}
+    for engine, root in engines.items():
+        parts = []
+        for name, rows in gold.items():
+            predictions = root / name
+            if not predictions.is_file():
+                raise ScoreboardError(f"{engine}: no predictions {predictions} for {name}")
+            parts.append(score_rows(rows, read_jsonl(predictions), emap, name))
+        results[engine] = merge(parts)
+        per_family: dict[str, int] = defaultdict(int)
+        for name, row_id, *_ in results[engine]["hard_negative_fp"]:
+            per_family[row_family[(name, row_id)]] += 1
+        hard_negative_fp[engine] = dict(sorted(per_family.items()))
+    corpus_rows: dict[str, int] = defaultdict(int)
+    for rows in gold.values():
+        for row in rows:
+            corpus_rows[str(row.get("corpus", ""))] += 1
+    family_rows: dict[str, int] = defaultdict(int)
+    for family in row_family.values():
+        family_rows[family] += 1
+    first, *others = engines
+    return {
+        "schema": SCHEMA,
+        "datasets": {dataset.name: dataset.sha256 for dataset in datasets},
+        "corpora": {corpus: emap.family(corpus) for corpus in sorted(corpus_rows)},
+        "corpus_rows": dict(sorted(corpus_rows.items())),
+        "family_rows": dict(sorted(family_rows.items())),
+        "scopes": {entity_id: emap.entities[entity_id].scope for entity_id in sorted(l1_ids(emap))},
+        "engines": results,
+        "hard_negative_fp": hard_negative_fp,
+        "m1": {other: m1_report(results[first], results[other], emap) for other in others},
+    }
+
+
+def _cell(value: float) -> str:
+    return pct(value).strip()
+
+
+def _family_cell(family: str) -> str:
+    return family if family in entity_map_module.MILESTONE_FAMILIES else f"{family} ¹"
+
+
+def report_lines(report: dict[str, Any]) -> list[str]:
+    """Markdown tables of a baseline report: per family, per corpus, per entity, M1."""
+    engines = report["engines"]
+    names = list(engines)
+    families = [f for f in entity_map_module.FAMILIES if any(f"family/{f}" in r["buckets"] for r in engines.values())]
+    lines = [
+        "## Overall per source family",
+        "",
+        "| Family | Engine | Rows | Gold | Pred | Exact P | Exact R | Exact F1 | Overlap F1 | EN F1 | DE F1 | HN-FP |",
+        "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+    ]
+    for family in families:
+        for engine in names:
+            buckets = engines[engine]["buckets"]
+            counts = buckets.get(f"family/{family}", empty_counts())
+            m = metrics(counts)
+            languages = []
+            for language in LANGUAGES:
+                key = f"family_language/{family}/{language}"
+                languages.append(_cell(metrics(buckets[key])["exact"]["f1"]) if key in buckets else "–")
+            lines.append(
+                f"| {_family_cell(family)} | {engine} | {report['family_rows'][family]} | {counts['gold']} | "
+                f"{counts['predicted']} | {_cell(m['exact']['precision'])} | {_cell(m['exact']['recall'])} | "
+                f"{_cell(m['exact']['f1'])} | {_cell(m['overlap']['f1'])} | {languages[1]} | {languages[0]} | "
+                f"{report['hard_negative_fp'][engine].get(family, 0)} |"
+            )
+    lines += ["", "¹ ark_authored is reported and decides no milestone.", ""]
+
+    lines += [
+        "## Per corpus (exact P / R / F1)",
+        "",
+        "| Corpus | Family | Rows | Gold | " + " | ".join(names) + " |",
+        "|---|---|---:|---:|" + "---|" * len(names),
+    ]
+    for corpus, family in report["corpora"].items():
+        key = f"corpus/{corpus}"
+        counts = {engine: engines[engine]["buckets"].get(key, empty_counts()) for engine in names}
+        f1 = {engine: metrics(c)["exact"]["f1"] for engine, c in counts.items()}
+        best = max(f1.values())
+        cells = []
+        for engine in names:
+            m = metrics(counts[engine])["exact"]
+            value = _cell(m["f1"])
+            cells.append(f"{_cell(m['precision'])} / {_cell(m['recall'])} / "
+                         + (f"**{value}**" if best > 0 and f1[engine] == best else value))
+        gold = max(c["gold"] for c in counts.values())
+        lines.append(f"| {corpus} | {family} | {report['corpus_rows'][corpus]} | {gold} | " + " | ".join(cells) + " |")
+    lines.append("")
+
+    lines += [
+        "## Per entity (exact F1, best in bold)",
+        "",
+        "| Family | Entity | Scope | Gold | " + " | ".join(names) + " |",
+        "|---|---|---|---:|" + "---:|" * len(names),
+    ]
+    for family in families:
+        prefix = f"family_entity/{family}/"
+        ids = sorted({key[len(prefix):] for r in engines.values() for key in r["buckets"] if key.startswith(prefix)})
+        for entity_id in ids:
+            counts = {engine: engines[engine]["buckets"].get(prefix + entity_id, empty_counts()) for engine in names}
+            gold = max(c["gold"] for c in counts.values())
+            if not gold:
+                continue
+            f1 = {engine: metrics(c)["exact"]["f1"] for engine, c in counts.items()}
+            best = max(f1.values())
+            cells = [f"**{_cell(f1[e])}**" if best > 0 and f1[e] == best else _cell(f1[e]) for e in names]
+            lines.append(f"| {family} | {entity_id} | {report['scopes'][entity_id]} | {gold} | " + " | ".join(cells) + " |")
+    lines.append("")
+
+    # Milestone families first; ark_authored is shown last and decides nothing.
+    m1_families = [*entity_map_module.MILESTONE_FAMILIES,
+                   *(f for f in entity_map_module.FAMILIES if f not in entity_map_module.MILESTONE_FAMILIES)]
+    lines += [
+        f"## M1 ({names[0]} vs each profile; EN rows, exact F1, shared ids with gold)",
+        "",
+        "| Profile | M1 | " + " | ".join(_family_cell(f) for f in m1_families) + " |",
+        "|---|---|" + "---|" * len(m1_families),
+    ]
+    for other, m1 in report["m1"].items():
+        cells = []
+        for family in m1_families:
+            entities = m1["families"][family]["entities"]
+            below = [entity_id for entity_id, item in entities.items() if not item["holds"]]
+            cell = f"{len(entities) - len(below)}/{len(entities)}" if entities else "no data"
+            cells.append(cell + (f" (below: {', '.join(below)})" if below else ""))
+        lines.append(f"| {other} | {'MET' if m1['met'] else 'NOT MET'} | " + " | ".join(cells) + " |")
+    return lines
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -770,8 +921,26 @@ def main(argv: list[str] | None = None) -> int:
     m1_parser.add_argument("--metric", choices=METRICS, default="exact")
     m1_parser.add_argument("--check", action="store_true", help="exit 1 if M1 is not met")
     m1_parser.add_argument("--json", type=Path, help="also write the report as JSON")
+    report_parser = commands.add_parser("report", help="Markdown baseline: Ark vs Presidio profiles per family, corpus, entity, M1")
+    report_parser.add_argument("--gold", type=Path, required=True, help="gold directory (frozen dirs with .ready)")
+    report_parser.add_argument("--engine", action="append", required=True, metavar="NAME=DIR",
+                               help="predictions with the gold file names; Ark first, then the Presidio profiles")
+    report_parser.add_argument("--json", type=Path, help="also write the report as JSON")
     args = parser.parse_args(argv)
     try:
+        if args.command == "report":
+            engines: dict[str, Path] = {}
+            for item in args.engine:
+                name, sep, directory = item.partition("=")
+                if not sep or not name or not directory or name in engines:
+                    raise ScoreboardError(f"--engine {item!r}: expected a unique NAME=DIR")
+                engines[name] = Path(directory)
+            emap = entity_map_module.load()
+            report = baseline_report(args.gold, engines, emap)
+            print("\n".join(report_lines(report)))
+            if args.json:
+                args.json.write_text(json.dumps(report, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+            return 0
         if args.command == "m1":
             emap = entity_map_module.load()
             report = m1_report(score_directory(args.gold, args.ark, emap), score_directory(args.gold, args.presidio, emap),

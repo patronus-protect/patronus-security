@@ -150,6 +150,7 @@ tasks:
       research/l1-pii/README.md
 
   - id: E11
+    status: done
     title: Baseline report ARK vs. Presidio + error buckets
     type: report
     deps: [E06, E07, E12]
