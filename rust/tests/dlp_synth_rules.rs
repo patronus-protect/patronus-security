@@ -33,6 +33,9 @@ struct RuleEntry {
     generators: Vec<String>,
     #[serde(default)]
     shape_only: Vec<String>,
+    /// Low-variety but real values (T06) the rule must keep reporting.
+    #[serde(default)]
+    weak: Vec<String>,
     probes: Vec<String>,
 }
 
@@ -90,7 +93,12 @@ fn every_dlp_pattern_has_generators_or_is_a_content_rule() {
             .unwrap_or_else(|| panic!("{rule}: no generator in rules.json"));
         assert!(!entry.generators.is_empty(), "{rule}");
         assert!(entry.probes.len() >= 2, "{rule}: need at least two probes");
-        for name in entry.generators.iter().chain(&entry.shape_only) {
+        for name in entry
+            .generators
+            .iter()
+            .chain(&entry.shape_only)
+            .chain(&entry.weak)
+        {
             assert!(known.contains(name.as_str()), "{rule}: unknown {name}");
             referenced.insert(name.as_str());
         }
@@ -167,7 +175,7 @@ fn each_rule_reports_exactly_its_generated_values() {
             gates.set_rule(pattern.name, pattern.name == rule);
         }
         gateway.set_execution_gates(gates);
-        for name in &entry.generators {
+        for name in entry.generators.iter().chain(&entry.weak) {
             for probe in &entry.probes {
                 for seed in 0..32 {
                     let recipes = [SecretRecipe::new(name, seed)];

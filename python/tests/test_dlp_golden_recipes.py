@@ -141,6 +141,77 @@ class MaterializeTests(unittest.TestCase):
                 recipes.materialize(template, secrets)
 
 
+# Fingerprints of fill recipes (T06), shared with rust/tests/dlp_golden_recipes.rs.
+FILL_VECTORS = (
+    ("discord_bot_token", 3, "BEISPIEL", "d11dbcce9d135339073d4b7b"),
+    ("jwt_signed_hs256", 4, "TEST", "b4882c1e8ceb557640c94fe5"),
+    ("slack_user_token", 5, "1234567890", "675ae1cdc899798059fe00cd"),
+    ("pem_pkcs8_ed25519_private_key", 6, "EXAMPLEKEY", "bc01d602c9960964878238e1"),
+    ("github_ghp_token", 7, "EXAMPLEKEY", "44968e27b5851e702074d3da"),
+    ("bearer_opaque_token", 8, "DUMMY", "732f853eb396c222a69bfb5c"),
+)
+
+
+class FillRecipeTests(unittest.TestCase):
+    """The example/test variant of a generator (``"fill"``, T06)."""
+
+    def test_fill_keeps_literals_and_length_and_repeats_the_word(self):
+        word = "EXAMPLEKEY"
+        value = recipes.generate("github_ghp_token", 7, word)
+        # Values are assembled here from the word; the checksum is zeroed.
+        self.assertEqual(value, "ghp_" + (word * 3)[:30] + "0" * 6)
+        self.assertEqual(recipes.generate("github_ghp_token", 8, word), value)
+        value = recipes.generate("anthropic_api_key", 1, word)
+        self.assertEqual(value, "sk-ant-api03-" + (word * 10)[:93] + "AA")
+        for name in recipes.load_generators():
+            for fill in ("EXAMPLEKEY", "deadbeef", "1234567890"):
+                try:
+                    value = recipes.generate(name, 3, fill)
+                except recipes.RecipeError:
+                    continue
+                self.assertEqual(len(value), recipes.generator_length(name), (name, fill))
+                self.assertEqual(value, recipes.generate(name, 3, fill), (name, fill))
+
+    def test_segments_without_the_word_are_drawn_and_encoded_segments_repeat_it(self):
+        # Slack: digit segments take the sequential fill, the one-digit leads 1-9 are drawn.
+        value = recipes.generate("slack_user_token", 5, "1234567890")
+        self.assertTrue(value.startswith("xoxp-"), value)
+        self.assertTrue(value.endswith("-" + ("1234567890" * 4)[:32]), value)
+        # Random-only base64url segments repeat the word over the encoded characters.
+        signature = recipes.generate("jwt_signed_hs256", 4, "TEST").rsplit(".", 1)[1]
+        self.assertEqual(signature, ("TEST" * 11)[:43])
+        # Mixed segments encode the word bytes: the PEM body keeps its DER prefix and width.
+        body = recipes.generate("pem_pkcs8_ed25519_private_key", 6, "EXAMPLEKEY").split("\n")[1]
+        self.assertEqual(base64.b64decode(body)[16:], (b"EXAMPLEKEY" * 4)[:32])
+
+    def test_zero_checksums_turn_to_ones_when_zeros_would_be_valid(self):
+        for seed in range(4):
+            value = recipes.generate("npm_access_token", seed, "test")
+            self.assertEqual(value[-6:], "000000")
+            self.assertNotEqual(recipes.crc32_base62(value[4:-6]), value[-6:])
+
+    def test_fill_vectors_are_pinned(self):
+        for name, seed, fill, fingerprint in FILL_VECTORS:
+            self.assertEqual(recipes.fingerprint(recipes.generate(name, seed, fill)), fingerprint, name)
+
+    def test_invalid_fills_are_rejected(self):
+        for name, fill in (
+            ("github_ghp_token", ""),
+            ("github_ghp_token", "EXAMPLE KEY"),
+            ("github_ghp_token", "BEISPIEL-1"),
+            ("github_ghp_token", "Müster"),
+            ("github_ghp_token", 5),
+            ("md5_hex", "TESTKEY"),  # fits no segment: the value would stay random
+            ("btc_wif_mainnet_compressed", "EXAMPLEKEY"),  # Base58Check stays valid
+        ):
+            with self.assertRaises(recipes.RecipeError, msg=(name, fill)):
+                recipes.generate(name, 1, fill)
+        with self.assertRaises(recipes.RecipeError):
+            recipes.materialize("<<secret:0>>", [{"gen": "gitlab_pat", "seed": 1, "fill": "TEST", "x": 1}])
+        text, spans = recipes.materialize("k=<<secret:0>>", [{"gen": "gitlab_pat", "seed": 1, "fill": "TEST"}])
+        self.assertEqual(text[spans[0][0] : spans[0][1]], recipes.generate("gitlab_pat", 1, "TEST"))
+
+
 class PlaceholderTransformTests(unittest.TestCase):
     def test_transform_vectors(self):
         # Fixed vectors, shared with rust/tests/dlp_golden_recipes.rs.
@@ -214,17 +285,21 @@ class DlpGoldenRecipeTests(unittest.TestCase):
             if "template" in row:
                 self.assertNotIn("text", row, row["id"])
                 self.assertTrue(row["secrets"], row["id"])
+                # Positives hold real-shaped recipes; hard negatives only fill variants.
+                keys = {"gen", "seed"} if row["case_type"] == "positive" else {"gen", "seed", "fill"}
                 for secret in row["secrets"]:
-                    self.assertEqual(set(secret), {"gen", "seed"}, row["id"])
+                    self.assertEqual(set(secret), keys, row["id"])
             else:
                 self.assertNotIn("secrets", row, row["id"])
         self.assertEqual(
-            sum("template" in row for row in rows),
+            sum("template" in row and row["case_type"] == "positive" for row in rows),
             sum(
                 row["target_label"] in SECRET_GROUPS and row["case_type"] == "positive"
                 for row in rows
             ),
         )
+        # T06: provider-format example/test values of hard negatives are fill recipes.
+        self.assertGreaterEqual(sum("template" in row and row["case_type"] == "hard_negative" for row in rows), 50)
 
     def test_recipe_rows_materialize_to_the_recorded_text_and_spans(self):
         for row in load_dlp_rows():
@@ -238,6 +313,9 @@ class DlpGoldenRecipeTests(unittest.TestCase):
             )
             self.assertEqual(recipes.fingerprint(text), row["text_fingerprint"], row["id"])
             self.assertEqual(recipes.materialize_row(row)["text"], text, row["id"])
+            if row["case_type"] == "hard_negative":
+                self.assertEqual(row["entities"], [], row["id"])
+                continue
             # One entity per fragment: `part` only on split secrets, `encoding` only on
             # encoded ones, and the encoded span decodes back to the generator value.
             self.assertEqual(len(row["entities"]), len(fragments), row["id"])

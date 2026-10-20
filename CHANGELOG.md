@@ -49,6 +49,28 @@ result shapes may be breaking for downstream users, and is called out explicitly
 - Keep each rule's own score in `matched_rules` for PII findings behind an undone obfuscation (K06). A full-width bare German IBAN reported `pii_iban_generic` with the 0.90 of `pii_iban_de` instead of its own 0.80; the recall-only penalty now applies to each rule's own score. Detection change: `matched_rules[].score` only, evidence spans and verdicts are unchanged.
 - Annotate every real entity in the PII L1 golden positives and check gold values against the validators (T02). Positives in `pii_l1.jsonl` now also carry the card number next to a CVV (15 rows) or a card expiry (4 rows), the phone number in `pii_l1-email-pos-01` and the IBAN in `pii_l1-swift-code-pos-06`; `generate_l1_goldens.py` takes them as `also=(label, value)`. `rust/tests/pii_gold_hygiene.rs` requires that every gold value passes a validator of its label (known gaps only for `CREDITCARD`, `IBAN`, `STEUERID`) and that every other L1 finding on a positive is gold or a listed detector FP. The seven Luhn-invalid `credit_card` values in `dynamic_pii.jsonl` are marked `"checksum_valid": false` and no longer count as L1 gold in `12_l1_pii_fixture_eval` (now 69 TP, 0 FP, 2 FN); the L3 NER still sees them. Validators are unchanged. **Detection change:** none; this is evaluation tooling and gold data only.
 - Score `rust/examples/12_l1_pii_fixture_eval.rs` on character offsets. It compared the UTF-8 byte offsets of `native:pii` spans with the code-point offsets of `dynamic_pii.jsonl`, so every span after a non-ASCII character counted as one FP and one FN. Gold spans outside the text now abort the run, and the example's unit tests run with `cargo test`. **Detection change:** none; this is evaluation tooling only.
+- DLP secret rules no longer report documented example and test values (T06). A shared check next
+  to `is_secret_value` rejects values with a marker word: `EXAMPLE`, `SAMPLE`, `BEISPIEL` or
+  `MUSTER` at the start or end of a word (not inside one, e.g. `resampler`), `TEST`/`TESTKEY`,
+  `FAKE` or `DUMMY` as a whole word, or any marker repeated, so a marker inside random base62 does
+  not count and the Stripe mode `sk_test_` is no marker. Values mostly made of repeated chunks or
+  same-character runs are rejected for fixed-format provider, key, hash, JWT, signed-URL and
+  session-ID rules, also when a generic rule (`dlp_env_var_secret`, assignments, URLs) captures
+  the provider-shaped value. Values that count as low-variety only through a single sequential run
+  (`AKIA1234567890ABCDEF`, hand-typed demo keys) and low-variety generic password/credential
+  assignments are rejected only with explicit example context (example, sample,
+  dummy, fixture, Beispiel, Muster … in the line or the three lines above; host names such as
+  `example.com` do not count). PEM rules check the key body. Weak but real credentials
+  (`password=abcabcabcabc`, a token with a `1234567890abcdef` run, a provider token with one
+  repeated chunk) stay findings; new `weak` generators in `dlp_synth/rules.json` pin them, and
+  per-provider DE/EN hard negatives were added to `dlp_l1.jsonl`. Their provider-format values are
+  generator recipes with a new `fill` word (`patronus_ark.dlp_synth.recipes`,
+  `patronus_ark::golden_recipes`), and the provider values of `l1_bilingual_rules.json` and the
+  tests are assembled at test time, so no commit adds a token in an exact provider format.
+  **Detection change:** on the dev carrier split, hard-negative FP on `doc_example`/`test_key` rows
+  fall from 3 590 to 220 (−93.9 %) with unchanged positives; documented vendor examples such as
+  the AWS documentation access key ID (`AKIA…EXAMPLE`) are no longer findings. Test fixtures that
+  used fill values (`aB12aB12…`, `abcDEfGh…`) now use random values.
 - `scripts/l1_dlp/run_baselines.py run --tool detect-secrets` no longer aborts the whole run when
   a plugin raises on one file (a YAML date the detect-secrets YAML transformer cannot parse in the
   benign-code dev split). That file is listed under `errors` in `<output>.meta.json` (row `id`,

@@ -4,10 +4,11 @@ use patronus_ark::{
         dlp::dlp::DLP_PATTERNS,
         pii::{pii::PII_PATTERNS, score::PiiMode},
     },
+    golden_recipes::{materialize, GeneratorSet, SecretRecipe},
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel,
 };
 use serde::Deserialize;
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, path::Path};
 
 #[derive(Deserialize)]
 struct Case {
@@ -15,10 +16,28 @@ struct Case {
     rule_id: String,
     de: String,
     en: String,
+    /// Provider-format DLP values are generator recipes (`<<secret:0>>` in
+    /// `de`/`en`), materialized here so the fixture holds no plaintext token.
+    #[serde(default)]
+    secrets: Vec<SecretRecipe>,
     language_neutral: bool,
     /// PII mode of the scan; rules that only report in a scored mode (K05) name it.
     #[serde(default)]
     pii_mode: PiiMode,
+}
+
+impl Case {
+    fn texts(&self, generators: &GeneratorSet) -> [(&'static str, String); 2] {
+        let text = |template: &str| {
+            if self.secrets.is_empty() {
+                return template.to_owned();
+            }
+            materialize(generators, template, &self.secrets)
+                .unwrap_or_else(|error| panic!("{}: {error}", self.rule_id))
+                .0
+        };
+        [("de", text(&self.de)), ("en", text(&self.en))]
+    }
 }
 
 #[test]
@@ -42,6 +61,11 @@ fn every_pii_and_dlp_rule_is_reachable_with_bilingual_source_evidence() {
         None,
         false,
     );
+    let generators = GeneratorSet::load(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../python/patronus_ark/dlp_synth/generators.json"),
+    )
+    .expect("generator spec must load");
     let mut missing = Vec::new();
     for case in cases {
         gateway.set_execution_gates(ScanGateMatrix {
@@ -53,7 +77,8 @@ fn every_pii_and_dlp_rule_is_reachable_with_bilingual_source_evidence() {
             "translate {}",
             case.rule_id
         );
-        for (language, text) in [("de", &case.de), ("en", &case.en)] {
+        for (language, text) in case.texts(&generators) {
+            let text = &text;
             let category = if case.category == "pii" {
                 SecurityCategory::Pii
             } else {

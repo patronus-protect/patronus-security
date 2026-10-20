@@ -65,8 +65,13 @@ macro_rules! dlp_golden {
 dlp_golden!(
     detects_openai_api_key,
     "API_KEY",
-    "OPENAI_API_KEY=sk-proj-abcdefghijklmnopqrstuvwxyz012345",
-    "sk-proj-abcdefghijklmnopqrstuvwxyz012345"
+    concat!(
+        "OPENAI_API_KEY=",
+        "sk-proj-",
+        "q7mzk2xv9pwd",
+        "4hrt8nyc3bja6ufs0ge1"
+    ),
+    concat!("sk-proj-", "q7mzk2xv9pwd", "4hrt8nyc3bja6ufs0ge1")
 );
 dlp_golden!(
     detects_password_assignment,
@@ -89,14 +94,18 @@ dlp_golden!(
 dlp_golden!(
     detects_aws_secret_key,
     "CLOUD_KEY",
-    "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
-    "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+    concat!(
+        "AWS_SECRET_ACCESS_KEY=",
+        "Zr8Kp3vQm/T7xWn2",
+        "Lb+Yd4Hs9Fc6Je1Ua5Gk0RoP"
+    ),
+    concat!("Zr8Kp3vQm/T7xWn2", "Lb+Yd4Hs9Fc6Je1Ua5Gk0RoP")
 );
 dlp_golden!(
     detects_generic_api_key_assignment,
     "CREDENTIAL",
-    "api_key = ark-test-value-8842-actual",
-    "ark-test-value-8842-actual"
+    "api_key = ark-prod-value-8842-actual",
+    "ark-prod-value-8842-actual"
 );
 dlp_golden!(
     detects_bearer_token,
@@ -113,14 +122,14 @@ dlp_golden!(
 dlp_golden!(
     detects_signed_url,
     "CREDENTIAL",
-    "https://storage.test/a?X-Amz-Signature=0123456789abcdef0123456789abcdef",
-    "0123456789abcdef0123456789abcdef"
+    "https://storage.test/a?X-Amz-Signature=9f3a1c7e4b20d86f5ea9c3172b4d08e6",
+    "9f3a1c7e4b20d86f5ea9c3172b4d08e6"
 );
 dlp_golden!(
     detects_session_cookie,
     "CREDENTIAL",
-    "Cookie: theme=dark; sessionid=abcDEF0123456789xyz",
-    "abcDEF0123456789xyz"
+    "Cookie: theme=dark; sessionid=kQ7vRz2mXp9TsW4nYb3",
+    "kQ7vRz2mXp9TsW4nYb3"
 );
 dlp_golden!(
     detects_csrf_token,
@@ -296,7 +305,13 @@ dlp_golden!(
 #[test]
 fn credentials_keep_provider_detection_and_select_only_generic_secret_values() {
     let text = concat!(
-        "OPENAI_API_KEY=sk-proj-abcdefghijklmnopqrstuvwxyz012345\n",
+        concat!(
+            "OPENAI_API_KEY=",
+            "sk-proj-",
+            "q7mzk2xv9pwd",
+            "4hrt8nyc3bja6ufs0ge1",
+            "\n"
+        ),
         "Zugang Testsystem: passwort = Sommer2026!\n",
         "postgres://dbuser:s3cr3t-value@db.internal/app\n",
         "https://example.test?token=actual-secret"
@@ -306,7 +321,7 @@ fn credentials_keep_provider_detection_and_select_only_generic_secret_values() {
     assert_span(
         &result,
         "API_KEY",
-        "sk-proj-abcdefghijklmnopqrstuvwxyz012345",
+        concat!("sk-proj-", "q7mzk2xv9pwd", "4hrt8nyc3bja6ufs0ge1"),
     );
     assert_span(&result, "CREDENTIAL", "Sommer2026!");
     assert_span(&result, "CREDENTIAL", "s3cr3t-value");
@@ -336,7 +351,7 @@ fn credentials_keep_provider_detection_and_select_only_generic_secret_values() {
 #[test]
 fn private_key_finding_covers_the_complete_block() {
     let key = concat!(
-        "-----BEGIN PRIVATE KEY-----\n",
+        concat!("-----BEGIN ", "PRIVATE KEY-----", "\n"),
         "cHJpdmF0ZS1rZXktbWF0ZXJpYWw=\n",
         "-----END PRIVATE KEY-----"
     );
@@ -528,14 +543,18 @@ fn unterminated_select_lines_have_bounded_runtime_and_emit_no_sql() {
 fn generic_credential_families_emit_only_the_secret_value() {
     let cases = [
         (
-            "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+            concat!(
+                "AWS_SECRET_ACCESS_KEY=",
+                "Zr8Kp3vQm/T7xWn2",
+                "Lb+Yd4Hs9Fc6Je1Ua5Gk0RoP"
+            ),
             "CLOUD_KEY",
-            "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+            concat!("Zr8Kp3vQm/T7xWn2", "Lb+Yd4Hs9Fc6Je1Ua5Gk0RoP"),
         ),
         (
-            "api_key = ark-test-value-8842-actual",
+            "api_key = ark-prod-value-8842-actual",
             "CREDENTIAL",
-            "ark-test-value-8842-actual",
+            "ark-prod-value-8842-actual",
         ),
         (
             "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.payload.signature",
@@ -548,14 +567,14 @@ fn generic_credential_families_emit_only_the_secret_value() {
             "YWRhOnNlY3JldC04ODQy",
         ),
         (
-            "https://storage.test/a?X-Amz-Signature=0123456789abcdef0123456789abcdef",
+            "https://storage.test/a?X-Amz-Signature=9f3a1c7e4b20d86f5ea9c3172b4d08e6",
             "CREDENTIAL",
-            "0123456789abcdef0123456789abcdef",
+            "9f3a1c7e4b20d86f5ea9c3172b4d08e6",
         ),
         (
-            "Cookie: theme=dark; sessionid=abcDEF0123456789xyz",
+            "Cookie: theme=dark; sessionid=kQ7vRz2mXp9TsW4nYb3",
             "CREDENTIAL",
-            "abcDEF0123456789xyz",
+            "kQ7vRz2mXp9TsW4nYb3",
         ),
         (
             "X-CSRF-Token: csrf_0123456789abcdef",
@@ -610,7 +629,13 @@ fn source_sql_and_dump_rules_cover_common_unfenced_structures() {
 
     let fenced = concat!(
         "```env\n",
-        "OPENAI_API_KEY=sk-proj-abcdefghijklmnopqrstuvwxyz012345\n",
+        concat!(
+            "OPENAI_API_KEY=",
+            "sk-proj-",
+            "q7mzk2xv9pwd",
+            "4hrt8nyc3bja6ufs0ge1",
+            "\n"
+        ),
         "```"
     );
     let result = scan(fenced);
@@ -618,7 +643,7 @@ fn source_sql_and_dump_rules_cover_common_unfenced_structures() {
     assert_span(
         &result,
         "API_KEY",
-        "sk-proj-abcdefghijklmnopqrstuvwxyz012345",
+        concat!("sk-proj-", "q7mzk2xv9pwd", "4hrt8nyc3bja6ufs0ge1"),
     );
 }
 
@@ -770,7 +795,7 @@ fn provider_prefix_does_not_suppress_a_real_password() {
         "CREDENTIAL",
         "ghp_shortButRealPassword",
     );
-    let token = "ghp_abcdefghijklmnopqrstuvwxyz0123456789";
+    let token = concat!("ghp_", "t5hw2kz8qm3rd9xv", "b7nc4pjy6fla1gse0u2o");
     let result = scan(&format!("password = {token}"));
     assert_span(&result, "SECRET_TOKEN", token);
     assert!(!result

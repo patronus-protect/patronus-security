@@ -21,7 +21,7 @@ compiled extension.
 | `dynamic_pii_threshold_sweep.jsonl` | 85 | Threshold calibration |
 | `education_pii_threshold_sweep.jsonl` | 50 | Education-context threshold calibration |
 | `pii_l1.jsonl` | 789 | Native PII L1 exact-span goldens, hard negatives and known gaps (schema v2) |
-| `dlp_l1.jsonl` | 537 | Native DLP L1 exact-span goldens, hard negatives and known gaps (schema v2) |
+| `dlp_l1.jsonl` | 601 | Native DLP L1 exact-span goldens, hard negatives and known gaps (schema v2) |
 
 ## Native L1 golden-set contract
 
@@ -195,8 +195,17 @@ with a carrier `template` and a list of recipes:
   They also require that neither
   `dlp_l1.jsonl` nor `generators.json` triggers a default DLP L1 finding, so
   push protection and pre-commit secret scanners stay quiet.
-- Hard negatives and non-secret rows (business identifiers, content classes)
-  remain literal `text`.
+- A hard negative whose lookalike is a documented example or test value in a
+  provider format (T06) is a recipe too, with a `fill` word:
+  `{"gen": "github_ghp_token", "seed": 0, "fill": "EXAMPLEKEY"}` keeps the
+  generator's literals and length, repeats the word (`EXAMPLEKEY`, `TESTKEY`,
+  `deadbeef`, `1234567890` …) in every alphabet segment that holds its
+  characters, draws the other segments and zeroes check values. Random-only
+  encoded segments repeat the word over their encoded characters, other encoded
+  segments encode its bytes; Base58Check segments reject a fill. The row has no
+  entities, and `text_fingerprint` pins it like a positive.
+- All other hard negatives and non-secret rows (business identifiers, content
+  classes) remain literal `text`.
 
 ### Synthetic secret generator (`dlp_synth`)
 
@@ -206,6 +215,10 @@ carriers (EN/DE, config/prose). Content rules (source code, SQL, logs, business
 metrics) have no secret value and are listed under `content_rules`; their
 carriers come with E04. Generators listed as `shape_only` are the E02 shapes
 without a valid checksum or structure. They stay because the goldens use them.
+Generators listed as `weak` (T06) are low-variety but real values (a repeated
+password, a token with a `1234567890abcdef` run, a GitHub token shape with one
+repeated chunk) that the rule must keep reporting outside example context. The
+probe tests run them, carriers do not use them, and they need no format check.
 Every other generator yields format-, structure- and checksum-valid fakes:
 
 - GitHub `gh[pousr]_` and npm tokens with the base62 CRC-32 suffix, Base58Check

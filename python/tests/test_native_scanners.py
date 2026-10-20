@@ -3,6 +3,10 @@ import unittest
 from patronus_ark import SecurityGateway
 
 
+# Assembled at test time from obviously synthetic pieces; not a real token.
+OPENAI_KEY = "sk-proj-" + "q7mzk2xv9pwd" + "4hrt8nyc3bja6ufs0ge1"
+
+
 def classes(results):
     return {result.get("class_name") for result in results}
 
@@ -60,7 +64,7 @@ class NativeScannerTests(unittest.TestCase):
         self.assertIn("EMAIL", classes(pii_results))
 
         evidence_dlp_results = scanner.scan_category(
-            "dlp", "prefix sk-proj-abcdefghijklmnopqrstuvwxyz012345 suffix"
+            "dlp", f"prefix {OPENAI_KEY} suffix"
         )
         native_dlp = next(
             result
@@ -72,7 +76,7 @@ class NativeScannerTests(unittest.TestCase):
             [
                 {
                     "label": "API_KEY",
-                    "text": "sk-proj-abcdefghijklmnopqrstuvwxyz012345",
+                    "text": OPENAI_KEY,
                     "score": 1.0,
                     "start_byte": 7,
                     "end_byte": 47,
@@ -279,7 +283,7 @@ class NativeScannerTests(unittest.TestCase):
 
         results = scanner.scan_categories(
             ["dlp", "pii"],
-            "OPENAI_API_KEY=sk-proj-abcdefghijklmnopqrstuvwxyz012345 and ada@example.com",
+            f"OPENAI_API_KEY={OPENAI_KEY} and ada@example.com",
         )
 
         result_classes = classes(results)

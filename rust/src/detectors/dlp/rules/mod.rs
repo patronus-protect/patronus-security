@@ -11,6 +11,7 @@ mod identifiers;
 mod providers;
 
 use super::dlp::DlpPattern;
+use std::{borrow::Cow, ops::Range};
 
 const PARTS: &[&[DlpPattern]] = &[
     providers::RULES,
@@ -23,6 +24,85 @@ const PARTS: &[&[DlpPattern]] = &[
 ];
 
 pub(super) static DLP_RULES: [DlpPattern; rule_count(PARTS)] = concat(PARTS);
+
+/// How the example/test value check (T06) applies to a rule.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ExampleCheck {
+    /// Identifier and content rules.
+    Off,
+    /// Generic credential rules: marker words always, low-variety values only
+    /// in explicit example context. A value that a fixed-format rule matches at
+    /// the same position is checked as [`ExampleCheck::FixedFormat`].
+    Generic,
+    /// Fixed-format provider, key, hash and signature rules: marker words and
+    /// repeated-chunk values always, sequential-run values in explicit example
+    /// context.
+    FixedFormat,
+}
+
+/// Credential-family rules whose values have a platform-defined format
+/// (JWT, SigV4/GCS signatures, server session IDs) rather than a chosen secret.
+const FIXED_FORMAT_CREDENTIALS: &[&str] = &[
+    "dlp_jwt_token",
+    "dlp_signed_url_signature",
+    "dlp_session_cookie",
+];
+
+pub(crate) fn example_check(rule_id: &str) -> ExampleCheck {
+    let in_family = |family: &[DlpPattern]| family.iter().any(|rule| rule.name == rule_id);
+    if in_family(providers::RULES)
+        || in_family(crypto::RULES)
+        || in_family(hashes::RULES)
+        || FIXED_FORMAT_CREDENTIALS.contains(&rule_id)
+    {
+        ExampleCheck::FixedFormat
+    } else if in_family(credentials::RULES) || in_family(credentials::URL_USERINFO_RULES) {
+        ExampleCheck::Generic
+    } else {
+        ExampleCheck::Off
+    }
+}
+
+/// T06: whether the value `range` of `text` that `rule_id` matched is a
+/// documented example or test value. PEM rules check the key body without the
+/// armor lines; the bare header rule checks the body that follows it.
+pub(crate) fn is_example_match(
+    check: ExampleCheck,
+    rule_id: &str,
+    text: &str,
+    range: Range<usize>,
+) -> bool {
+    let value: Cow<'_, str> = match rule_id {
+        "dlp_private_key_block" => pem_body(&text[range.clone()]).into(),
+        "dlp_private_key_header" => {
+            let rest = &text[range.end..];
+            let mut end = rest.find("-----").unwrap_or(rest.len()).min(16 * 1024);
+            while !rest.is_char_boundary(end) {
+                end -= 1;
+            }
+            rest[..end].into()
+        }
+        _ => text[range.clone()].into(),
+    };
+    let example_context = || credentials::has_example_context(text, range.start, range.end);
+    match check {
+        ExampleCheck::Off => false,
+        ExampleCheck::Generic => credentials::is_example_value(&value, false, example_context),
+        ExampleCheck::FixedFormat => credentials::is_example_value(&value, true, example_context),
+    }
+}
+
+/// Cheap precondition of [`is_example_match`] for a provider-shaped part of a
+/// generic value: the value holds a repeated chunk, sequential or
+/// same-character run.
+pub(crate) fn has_low_variety_run(text: &str, range: Range<usize>) -> bool {
+    credentials::has_low_variety_run(&text[range])
+}
+
+/// PEM text without its `-----BEGIN …-----`/`-----END …-----` armor.
+fn pem_body(block: &str) -> String {
+    block.split("-----").step_by(2).collect()
+}
 
 const fn rule_count(parts: &[&[DlpPattern]]) -> usize {
     let mut count = 0;

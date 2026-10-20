@@ -452,162 +452,300 @@
   {
     "category": "dlp",
     "rule_id": "dlp_anthropic_key",
-    "de": "sk-ant-abcDEfGhIJklMNopQRsT123456",
-    "en": "sk-ant-abcDEfGhIJklMNopQRsT123456",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "anthropic_api_key",
+        "seed": 1
+      }
+    ],
     "language_neutral": true
   },
   {
     "category": "dlp",
     "rule_id": "dlp_openai_key",
-    "de": "sk-proj-abcDEfGhIJklMNopQRsT123456",
-    "en": "sk-proj-abcDEfGhIJklMNopQRsT123456",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "openai_project_api_key",
+        "seed": 1
+      }
+    ],
     "language_neutral": true
   },
   {
     "category": "dlp",
     "rule_id": "dlp_openai_legacy",
-    "de": "sk-aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12",
-    "en": "sk-aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "openai_legacy_key",
+        "seed": 1
+      }
+    ],
     "language_neutral": true
   },
   {
     "category": "dlp",
     "rule_id": "dlp_openai_svc",
-    "de": "sk-svcacct-abcDEfGhIJklMNopQRsT123456",
-    "en": "sk-svcacct-abcDEfGhIJklMNopQRsT123456",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "openai_service_account_key",
+        "seed": 1
+      }
+    ],
     "language_neutral": true
   },
   {
     "category": "dlp",
     "rule_id": "dlp_huggingface",
-    "de": "hf_aB12aB12aB12aB12aB12aB12",
-    "en": "hf_aB12aB12aB12aB12aB12aB12",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "huggingface_token",
+        "seed": 1
+      }
+    ],
     "language_neutral": true
   },
   {
     "category": "dlp",
     "rule_id": "dlp_groq_key",
-    "de": "gsk_aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12",
-    "en": "gsk_aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "groq_key",
+        "seed": 1
+      }
+    ],
     "language_neutral": true
   },
   {
     "category": "dlp",
     "rule_id": "dlp_xai_key",
-    "de": "xai-aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12",
-    "en": "xai-aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12aB12",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "xai_api_key",
+        "seed": 1
+      }
+    ],
     "language_neutral": true
   },
   {
     "category": "dlp",
     "rule_id": "dlp_replicate",
-    "de": "r8_aB12aB12aB12aB12aB12aB12",
-    "en": "r8_aB12aB12aB12aB12aB12aB12",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "replicate_api_token",
+        "seed": 1
+      }
+    ],
     "language_neutral": true
   },
   {
     "category": "dlp",
     "rule_id": "dlp_aws_access_key",
-    "de": "AKIAIOSFODNN7EXAMPLE",
-    "en": "AKIAIOSFODNN7EXAMPLE",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "aws_access_key_id",
+        "seed": 1
+      }
+    ],
     "language_neutral": true
   },
   {
     "category": "dlp",
     "rule_id": "dlp_aws_secret_key",
-    "de": "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
-    "en": "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+    "de": "AWS_SECRET_ACCESS_KEY=<<secret\u003a0>>",
+    "en": "AWS_SECRET_ACCESS_KEY=<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "aws_secret_access_key",
+        "seed": 1
+      }
+    ],
     "language_neutral": true
   },
   {
     "category": "dlp",
     "rule_id": "dlp_google_api_key",
-    "de": "AIzaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    "en": "AIzaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "google_api_key",
+        "seed": 1
+      }
+    ],
     "language_neutral": true
   },
   {
     "category": "dlp",
     "rule_id": "dlp_google_oauth_token",
-    "de": "ya29.aB12aB12aB12aB12aB12aB12",
-    "en": "ya29.aB12aB12aB12aB12aB12aB12",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "google_oauth_access_token",
+        "seed": 1
+      }
+    ],
     "language_neutral": true
   },
   {
     "category": "dlp",
     "rule_id": "dlp_gcp_client_secret",
-    "de": "GOCSPX-aB12aB12aB12aB12aB12aB12aB12",
-    "en": "GOCSPX-aB12aB12aB12aB12aB12aB12aB12",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "gcp_oauth_client_secret",
+        "seed": 1
+      }
+    ],
     "language_neutral": true
   },
   {
     "category": "dlp",
     "rule_id": "dlp_github_token",
-    "de": "ghp_aB12aB12aB12aB12aB12aB12aB12aB12",
-    "en": "ghp_aB12aB12aB12aB12aB12aB12aB12aB12",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "github_ghp_token",
+        "seed": 1
+      }
+    ],
     "language_neutral": true
   },
   {
     "category": "dlp",
     "rule_id": "dlp_github_pat",
-    "de": "github_pat_aB12aB12aB12aB12aB12aB12aB12aB12aB12",
-    "en": "github_pat_aB12aB12aB12aB12aB12aB12aB12aB12aB12",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "github_fine_grained_pat",
+        "seed": 1
+      }
+    ],
     "language_neutral": true
   },
   {
     "category": "dlp",
     "rule_id": "dlp_gitlab_pat",
-    "de": "glpat-aB12aB12aB12aB12aB12",
-    "en": "glpat-aB12aB12aB12aB12aB12",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "gitlab_pat",
+        "seed": 1
+      }
+    ],
     "language_neutral": true
   },
   {
     "category": "dlp",
     "rule_id": "dlp_npm_token",
-    "de": "npm_aB12aB12aB12aB12aB12aB12aB12aB12aB12",
-    "en": "npm_aB12aB12aB12aB12aB12aB12aB12aB12aB12",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "npm_access_token",
+        "seed": 1
+      }
+    ],
     "language_neutral": true
   },
   {
     "category": "dlp",
     "rule_id": "dlp_stripe_key",
-    "de": "sk_live_aB12aB12aB12aB12aB12",
-    "en": "sk_live_aB12aB12aB12aB12aB12",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "stripe_secret_live",
+        "seed": 1
+      }
+    ],
     "language_neutral": true
   },
   {
     "category": "dlp",
     "rule_id": "dlp_stripe_webhook",
-    "de": "whsec_aB12aB12aB12aB12aB12",
-    "en": "whsec_aB12aB12aB12aB12aB12",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "stripe_webhook_secret",
+        "seed": 1
+      }
+    ],
     "language_neutral": true
   },
   {
     "category": "dlp",
     "rule_id": "dlp_slack_token",
-    "de": "xoxb-aB12aB12aB12aB12aB12",
-    "en": "xoxb-aB12aB12aB12aB12aB12",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "slack_bot_token",
+        "seed": 1
+      }
+    ],
     "language_neutral": true
   },
   {
     "category": "dlp",
     "rule_id": "dlp_discord_token",
-    "de": "Maaaaaaaaaaaaaaaaaaaaaaa.aBc123.aaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    "en": "Maaaaaaaaaaaaaaaaaaaaaaa.aBc123.aaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "discord_bot_token",
+        "seed": 1
+      }
+    ],
     "language_neutral": true
   },
   {
     "category": "dlp",
     "rule_id": "dlp_eth_private_key",
-    "de": "0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
-    "en": "0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "eth_private_key_hex",
+        "seed": 1
+      }
+    ],
     "language_neutral": true
   },
   {
     "category": "dlp",
     "rule_id": "dlp_btc_wif",
-    "de": "5aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    "en": "5aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "btc_wif_mainnet_uncompressed",
+        "seed": 1
+      }
+    ],
     "language_neutral": true
   },
   {
@@ -676,15 +814,15 @@
   {
     "category": "dlp",
     "rule_id": "dlp_signed_url_signature",
-    "de": "https://example.test?X-Amz-Signature=0123456789abcdef0123456789abcdef",
-    "en": "https://example.test?X-Amz-Signature=0123456789abcdef0123456789abcdef",
+    "de": "https://example.test?X-Amz-Signature=9f3a1c7e4b20d86f5ea9c3172b4d08e6",
+    "en": "https://example.test?X-Amz-Signature=9f3a1c7e4b20d86f5ea9c3172b4d08e6",
     "language_neutral": true
   },
   {
     "category": "dlp",
     "rule_id": "dlp_session_cookie",
-    "de": "Cookie: sessionid=abcDEF0123456789xyz",
-    "en": "Cookie: sessionid=abcDEF0123456789xyz",
+    "de": "Cookie: sessionid=kQ7vRz2mXp9TsW4nYb3",
+    "en": "Cookie: sessionid=kQ7vRz2mXp9TsW4nYb3",
     "language_neutral": true
   },
   {
@@ -697,8 +835,8 @@
   {
     "category": "dlp",
     "rule_id": "dlp_password_hash",
-    "de": "Passwort-Hash: 0123456789abcdef0123456789abcdef",
-    "en": "Password hash: 0123456789abcdef0123456789abcdef",
+    "de": "Passwort-Hash: 5d41c8e07b2a96f3e18d4c7a0b9f62e5",
+    "en": "Password hash: 5d41c8e07b2a96f3e18d4c7a0b9f62e5",
     "language_neutral": false
   },
   {
