@@ -48,11 +48,14 @@ result shapes may be breaking for downstream users, and is called out explicitly
 - Score `rust/examples/12_l1_pii_fixture_eval.rs` on character offsets. It compared the UTF-8 byte offsets of `native:pii` spans with the code-point offsets of `dynamic_pii.jsonl`, so every span after a non-ASCII character counted as one FP and one FN. Gold spans outside the text now abort the run, and the example's unit tests run with `cargo test`. **Detection change:** none; this is evaluation tooling only.
 - DLP secret rules no longer report documented example and test values (T06). A shared check next
   to `is_secret_value` rejects values with a marker word: `EXAMPLE`, `SAMPLE`, `BEISPIEL` or
-  `MUSTER` anywhere, `TEST`/`TESTKEY`, `FAKE` or `DUMMY` as a whole word or repeated, so a short
-  marker inside random base62 does not count and the Stripe mode `sk_test_` is no marker. Values
-  mostly made of repeated chunks, sequential runs (`1234567890abcdef`) or same-character runs are
-  rejected for fixed-format provider, key, hash, JWT, signed-URL and session-ID rules, and for
-  generic password/credential assignments only with explicit example context (example, sample,
+  `MUSTER` at the start or end of a word (not inside one, e.g. `resampler`), `TEST`/`TESTKEY`,
+  `FAKE` or `DUMMY` as a whole word, or any marker repeated, so a marker inside random base62 does
+  not count and the Stripe mode `sk_test_` is no marker. Values mostly made of repeated chunks or
+  same-character runs are rejected for fixed-format provider, key, hash, JWT, signed-URL and
+  session-ID rules, also when a generic rule (`dlp_env_var_secret`, assignments, URLs) captures
+  the provider-shaped value. Values that count as low-variety only through a single sequential run
+  (`AKIA1234567890ABCDEF`, hand-typed demo keys) and low-variety generic password/credential
+  assignments are rejected only with explicit example context (example, sample,
   dummy, fixture, Beispiel, Muster … in the line or the three lines above; host names such as
   `example.com` do not count). PEM rules check the key body. Weak but real credentials
   (`password=abcabcabcabc`, a token with a `1234567890abcdef` run, a provider token with one

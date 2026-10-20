@@ -5,6 +5,7 @@ use crate::{
     EvaluationResult,
 };
 use regex::Regex;
+use std::ops::Range;
 
 use super::rules::{self, ExampleCheck};
 
@@ -346,6 +347,44 @@ impl DlpPipeline {
         use rayon::prelude::*;
         texts.par_iter().map(|text| self.evaluate(text)).collect()
     }
+
+    /// Values that fixed-format rules (provider tokens, keys, hashes) match
+    /// inside `range` of `text`, so that a generic rule capturing such a value
+    /// applies the fixed-format example check to it (T06). Only the line around
+    /// the value is searched.
+    fn fixed_format_values<'a>(
+        &'a self,
+        text: &'a str,
+        range: Range<usize>,
+    ) -> impl Iterator<Item = (&'static str, Range<usize>)> + 'a {
+        let floor = |mut index: usize| {
+            while !text.is_char_boundary(index) {
+                index -= 1;
+            }
+            index
+        };
+        let line_start = text[..range.start].rfind('\n').map_or(0, |index| index + 1);
+        let line_end = text[range.end..]
+            .find('\n')
+            .map_or(text.len(), |index| range.end + index);
+        let window_start = floor(line_start.max(range.start.saturating_sub(256)));
+        let window_end = floor(line_end.min(range.end + 256));
+        let window = &text[window_start..window_end];
+        (0..self.regexes.len())
+            .filter(|&index| self.example_checks[index] == ExampleCheck::FixedFormat)
+            .flat_map(move |index| {
+                self.regexes[index]
+                    .captures_iter(window)
+                    .filter_map(move |captures| captures.get(self.span_groups[index].unwrap_or(0)))
+                    .map(move |value| {
+                        (
+                            self.rule_ids[index],
+                            window_start + value.start()..window_start + value.end(),
+                        )
+                    })
+            })
+            .filter(move |(_, value)| range.start <= value.start && value.end <= range.end)
+    }
 }
 
 impl NativeRegexDetector for DlpPipeline {
@@ -396,7 +435,19 @@ impl NativeRegexDetector for DlpPipeline {
         if placeholder_check && rules::is_placeholder_match(text, value.range()) {
             return false;
         }
-        !rules::is_example_match(check, self.rule_ids[index], text, value.range())
+        let rule_id = self.rule_ids[index];
+        if rules::is_example_match(check, rule_id, text, value.range()) {
+            return false;
+        }
+        // A generic rule capturing a provider-shaped value applies the
+        // provider's fixed-format check to it.
+        check != ExampleCheck::Generic
+            || !rules::has_low_variety_run(text, value.range())
+            || self
+                .fixed_format_values(text, value.range())
+                .all(|(provider, range)| {
+                    !rules::is_example_match(ExampleCheck::FixedFormat, provider, text, range)
+                })
     }
 
     fn finalize_spans(&self, _text: &str, spans: &mut Vec<crate::EvidenceSpan>) {

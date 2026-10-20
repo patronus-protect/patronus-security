@@ -32,10 +32,12 @@ pub(crate) enum ExampleCheck {
     /// Identifier and content rules.
     Off,
     /// Generic credential rules: marker words always, low-variety values only
-    /// in explicit example context.
+    /// in explicit example context. A value that a fixed-format rule matches at
+    /// the same position is checked as [`ExampleCheck::FixedFormat`].
     Generic,
     /// Fixed-format provider, key, hash and signature rules: marker words and
-    /// low-variety values.
+    /// repeated-chunk values always, sequential-run values in explicit example
+    /// context.
     FixedFormat,
 }
 
@@ -95,13 +97,19 @@ pub(crate) fn is_example_match(
         }
         _ => text[range.clone()].into(),
     };
+    let example_context = || credentials::has_example_context(text, range.start, range.end);
     match check {
         ExampleCheck::Off => false,
-        ExampleCheck::Generic => credentials::is_example_value(&value, false, || {
-            credentials::has_example_context(text, range.start, range.end)
-        }),
-        ExampleCheck::FixedFormat => credentials::is_example_value(&value, true, || true),
+        ExampleCheck::Generic => credentials::is_example_value(&value, false, example_context),
+        ExampleCheck::FixedFormat => credentials::is_example_value(&value, true, example_context),
     }
+}
+
+/// Cheap precondition of [`is_example_match`] for a provider-shaped part of a
+/// generic value: the value holds a repeated chunk, sequential or
+/// same-character run.
+pub(crate) fn has_low_variety_run(text: &str, range: Range<usize>) -> bool {
+    credentials::has_low_variety_run(&text[range])
 }
 
 /// PEM text without its `-----BEGIN …-----`/`-----END …-----` armor.
