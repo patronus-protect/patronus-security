@@ -75,6 +75,21 @@ Teilmengen bleiben, damit sich Vorhersagen bestehender Korpora nicht ändern; da
 liest die Scopes aus `entity_map.yaml`. Neue ARK-Labels brauchen einen Eintrag, sonst ist
 `scripts/tests/test_l1_entity_map.py` rot.
 
+## M3-Zählung
+
+`count_validated.py` zählt die prüfziffervalidierten Entitäten von ARK und Presidio 2.2.364 nach der
+Zählregel in [`research/l1-pii/README.md`](../../research/l1-pii/README.md) (je Benchmark-ID und
+Land, nur echte Prüfziffern). Grundlage ist der Abschnitt `checksums` in `entity_map.yaml`: jede
+Validator-Funktion der `PII_PATTERNS`-Registry und jede Presidio-Entität mit `validate_result`,
+eingestuft mit Verfahren oder `null` (nur Format).
+
+```bash
+python3 scripts/l1_presidio/count_validated.py count           # Tabelle je Einheit + M3-Zeile
+python3 scripts/l1_presidio/count_validated.py count --json
+python3 scripts/l1_presidio/count_validated.py check           # Einstufung vollständig?
+~/ark-l1/presidio-venv/bin/python scripts/l1_presidio/count_validated.py check --presidio   # + Registry und Pin
+```
+
 ## Korpora und Dev/Holdout-Split
 
 `prepare_corpora.py` lädt Gretel Finance (alle sechs Test-Shards), OpenPII Nano und TAB (ECHR-Test)
@@ -313,5 +328,5 @@ python3 scripts/l1_presidio/latency.py compare --base base.json --head head.json
   Ergebnis auf der VPS: [`research/l1-pii/scoreboard/latency.md`](../../research/l1-pii/scoreboard/latency.md).
 
 Tests: `scripts/tests/test_l1_scoreboard.py`, `scripts/tests/test_l1_latency.py`, `scripts/tests/test_l1_synth_goldset.py`, `scripts/tests/test_l1_prepare_corpora.py`, `scripts/tests/test_l1_presidio_runner.py`, `scripts/tests/test_l1_ark_runner.py`,
-`scripts/tests/test_l1_entity_map.py`. Die Tests gegen echtes Presidio laufen nur,
+`scripts/tests/test_l1_entity_map.py`, `scripts/tests/test_l1_count_validated.py`. Die Tests gegen echtes Presidio laufen nur,
 wenn `presidio_analyzer` installiert ist (z. B. in `~/ark-l1/presidio-venv`).

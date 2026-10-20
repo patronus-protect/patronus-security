@@ -157,6 +157,7 @@ tasks:
     accept: research/l1-pii/scoreboard/baseline.md; gaps as candidates for TRIAGE
 
   - id: T03
+    status: done
     title: M3 counting rule (checksum-validated entities ARK vs. Presidio 2.2.364) + counting script
     type: eval-infra
     deps: [E03]
