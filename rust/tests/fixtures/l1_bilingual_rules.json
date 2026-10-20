@@ -10,6 +10,10 @@
         "de": "Kontakt per E-Mail an ada@example.com",
         "en": "Contact by email at ada@example.com"
       }
+    },
+    "obfuscated": {
+      "de": "E-Mail: lena.vogt＠beispiel.de",
+      "en": "Email: ada.wong@north​wind.com"
     }
   },
   {
@@ -23,6 +27,10 @@
         "de": "Quelle laut IP-Adresse 203.0.113.42",
         "en": "Logged IP address 203.0.113.42"
       }
+    },
+    "obfuscated": {
+      "de": "Angreifer-IP: 198[.]51[.]100[.]23",
+      "en": "Source IP: １９２．０．２．１４"
     }
   },
   {
@@ -61,6 +69,10 @@
         "de": "Rechnungsnummer: +44 20 7946 0958",
         "en": "Invoice number: +44 20 7946 0958"
       }
+    },
+    "obfuscated": {
+      "de": "Telefon: +49​170​1234567",
+      "en": "Mobile: ＋４４ ７７００ ９００１２３"
     }
   },
   {
@@ -126,6 +138,10 @@
         "de": "MAC-Adresse 02:42:ac:11:00:02",
         "en": "MAC address 02:42:ac:11:00:02"
       }
+    },
+    "obfuscated": {
+      "de": "MAC: ０２:４２:ａｃ:１１:００:０２",
+      "en": "MAC: 02​:42​:ac​:11​:00​:02"
     }
   },
   {
@@ -133,7 +149,11 @@
     "rule_id": "pii_iban_de",
     "de": "IBAN: DE89370400440532013000",
     "en": "IBAN: DE89370400440532013000",
-    "language_neutral": true
+    "language_neutral": true,
+    "obfuscated": {
+      "de": "IBAN: DE89​3704​0044​0532​0130​00",
+      "en": "IBAN: ＤＥ８９３７０４００４４０５３２０１３０００"
+    }
   },
   {
     "category": "pii",
@@ -163,6 +183,10 @@
         "de": "Bestellnummer 4532 0151 1283 0366",
         "en": "Order number 4532 0151 1283 0366"
       }
+    },
+    "obfuscated": {
+      "de": "Karte: ４１１１ １１１１ １１１１ １１１１",
+      "en": "Card: 5555​5555​5555​4444"
     }
   },
   {
@@ -319,6 +343,10 @@
     "structure": {
       "de": "{\"steuer_id\": \"82736451927\"}",
       "en": "<taxpayer><taxId>31415926539</taxId></taxpayer>"
+    },
+    "obfuscated": {
+      "de": "Steuer-ID: ８６０９５７４２７１９",
+      "en": "Tax identification number: 86095​742719"
     }
   },
   {
@@ -408,6 +436,10 @@
     "structure": {
       "de": "{\"ssn\": \"456-78-9013\"}",
       "en": "<table><tr><th>SSN</th><td>536-90-4399</td></tr></table>"
+    },
+    "obfuscated": {
+      "de": "US-Sozialversicherungsnummer: ５３２-８７-１０９４",
+      "en": "Social security number: 532​-87​-1094"
     }
   },
   {

@@ -115,6 +115,9 @@ haben; ein Scanner sieht ihnen das nicht an.
 - **Dokumentations-IPs** (`203.0.113.0/24`, `2001:db8::/32`) sind in `pii_l1` und der Rule-Fixture
   schon positiv und bleiben es.
 
+Seit K06 meldet der Opt-in-Modus `recall` ausgeschriebene Formen (`[at]`, `ät`, `dot`, `punkt`) als
+`EMAIL` mit `obfuscation: spelled_out`; Gold-Zeilen mit `pii_mode: recall` dürfen sie als Positiv führen.
+
 Stand der Goldsets: `pii_l1`, `l1_bilingual_rules.json` und `demo_pii_dlp*` folgen der Konvention
 (`cu-07` ist seit T01 positiv). Das synthetische E05-Goldset ist eingefroren und enthält keine
 Platzhalter, weder als Positive noch in Hard-Negative-Spans. Durchgesetzt wird das von
@@ -176,6 +179,19 @@ einem Schrägstrich-Pfad, keine Zifferngruppe ein Leerzeichen daneben). Die erst
 „Rechnungsnummer“) mit `validators::steuer_id_issued`: Prüfziffer plus BZSt-Ziffernverteilung. Die
 B-/A-/C-Aufgaben mit neuen Prüfziffern (B01 ff.) hängen ihre kontextfreie Form auf dieselbe Weise an.
 `rust/tests/pii_context_free.rs` verlangt für jedes Prüfziffer-Label eine kontextfreie Regel.
+
+## Obfuskation (K06)
+
+`rust/src/detectors/obfuscation.rs` baut eine normalisierte Sicht des Texts mit Byte-Abbildung
+zurück auf das Original; die PII-Pipeline scannt sie zusätzlich, wenn sie etwas rückgängig macht,
+und meldet nur Funde, in deren Original-Span eine Obfuskation liegt (Original-Offsets,
+`matched_rules[].obfuscation`). In jedem Modus: Zero-Width-Zeichen zwischen zwei Wertzeichen,
+Full-Width-Formen (Lauf mit Full-Width-Buchstabe/-Ziffer oder Full-Width-Trenner zwischen
+ASCII-Alnum), entschärfte Trenner `[.]`, `(@)`, `{.}`, `[:]`. Nur in `recall` (−10 Punkte):
+ausgeschriebene E-Mail-Trenner (`[at]`, `ät`, `dot`, `punkt`, ` @ `, ` . `) und zeichenweise
+gesperrte Nummern (`D E 8 9 …`). Die Gold-Konvention T01 gilt damit für `strict` und `balanced`
+unverändert; `recall` darf ausgeschriebene Adressen melden. Validatoren entscheiden auf dem
+normalisierten Wert. DLP D04 kann dieselbe Sicht nutzen.
 
 ## Hebel
 

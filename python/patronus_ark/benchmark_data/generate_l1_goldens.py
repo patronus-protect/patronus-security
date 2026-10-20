@@ -222,12 +222,12 @@ PII_CASES = {
         p("EMAIL", "de", "pii_email", "Name;E-Mail;Ort\nKarin Hoff;", "karin.hoff@praxis-hoff.de", ";Köln", carrier="csv"),
         p("EMAIL", "de", "pii_email", "| Abteilung | Kontakt |\n|---|---|\n| Vertrieb | ", "vertrieb@moebelhaus-nord.de", " |", carrier="table"),
         p("EMAIL", "de", "pii_email", "E-Mail:", "m.krause@kanzlei-krause.de", "   Seite 1/2", tags=("ocr",)),
-        p("EMAIL", "de", "pii_email", "E-Mail: ", "anna.berg@firma​.de", "", tags=("obfuscated",), gap=True),
+        p("EMAIL", "de", "pii_email", "E-Mail: ", "anna.berg@firma​.de", "", tags=("obfuscated",)),
         p("EMAIL", "en", "pii_email", "Ping ", "dev.lead@northwind.example", " if the nightly build breaks.", carrier="prose", tags=("no_context",)),
         p("EMAIL", "en", "pii_email", '{"user": {"id": 17, "email": "', "maria.ochoa@contoso-mail.com", '"}}', carrier="json"),
         p("EMAIL", "en", "pii_email", "contact:\n  owner: Priya Nair\n  email: ", "priya.nair@fabrikam.io", "\n", carrier="yaml"),
         p("EMAIL", "en", "pii_email", "| E-mail |", "tom.reyes@acme-corp.net", "|", carrier="table", tags=("ocr",)),
-        p("EMAIL", "en", "pii_email", "Email: ", "ada.wong＠northwind.com", "", tags=("obfuscated",), gap=True),
+        p("EMAIL", "en", "pii_email", "Email: ", "ada.wong＠northwind.com", "", tags=("obfuscated",)),
         n("EMAIL", "de", "pii_email", "Schreiben Sie an info @ firma . de", "spaced address is not a value of the label", carrier="prose", tags=("obfuscated",)),
         n("EMAIL", "de", "pii_email", "Die Domain firma-beispiel.de ist erreichbar.", "domain without a local part", carrier="prose"),
         n("EMAIL", "de", "pii_email", "Instagram: @anna_berg_fotografie", "social handle has no domain"),
@@ -249,13 +249,13 @@ PII_CASES = {
         p("IP_ADDRESS", "de", "pii_ipv6_compressed", "Zeit;Quelle\nMontag;", "2001:db8:4::17", "", carrier="csv"),
         p("IP_ADDRESS", "de", "pii_ipv6_loopback", "Zugeordnete Adresse: ", "::ffff:c000:0280"),
         p("IP_ADDRESS", "de", "pii_ipv4", "aktion=blockiert\nquelle=", "203.0.113.9", "\nport=443", carrier="kv"),
-        p("IP_ADDRESS", "de", "pii_ipv4", "Quelle: ", "１９８．５１．１００．７", "", tags=("obfuscated",), gap=True),
+        p("IP_ADDRESS", "de", "pii_ipv4", "Quelle: ", "１９８．５１．１００．７", "", tags=("obfuscated",)),
         p("IP_ADDRESS", "en", "pii_ipv6_full", "Interface address ", "2001:0db8:0000:0042:0000:8a2e:0370:7334"),
         p("IP_ADDRESS", "en", "pii_ipv6_loopback", "Mapped address: ", "::ffff:c633:6407"),
         p("IP_ADDRESS", "en", "pii_ipv4", "server:\n  bind: ", "198.51.100.14", "\n  port: 8443", carrier="yaml"),
         p("IP_ADDRESS", "en", "pii_ipv6_compressed", "| host | address |\n|---|---|\n| web-1 | ", "2001:db8:a::1", " |", carrier="table"),
         p("IP_ADDRESS", "en", "pii_ipv4", "IP addr.:", "198.51.100.200", "  (scanned page 2)", tags=("ocr",)),
-        p("IP_ADDRESS", "en", "pii_ipv4", "Source IP: ", "203[.]0[.]113[.]5", "", tags=("obfuscated",), gap=True),
+        p("IP_ADDRESS", "en", "pii_ipv4", "Source IP: ", "203[.]0[.]113[.]5", "", tags=("obfuscated",)),
         n("IP_ADDRESS", "de", "pii_ipv4", "Version 2.14.0 wurde gestern ausgerollt.", "three-part version number", carrier="prose"),
         n("IP_ADDRESS", "de", "pii_ipv4", "Multicast-Gruppe: 224.0.0.251", "multicast address is excluded"),
         n("IP_ADDRESS", "de", "pii_ipv4", "Bind-Adresse: 0.0.0.0", "unspecified address is excluded"),
@@ -280,7 +280,7 @@ PII_CASES = {
         p("PHONE", "de", "pii_phone_us", "US-Büro: ", "212-736-4410"),
         p("PHONE", "de", "pii_phone_us", "US-Büro: ", "(212) 736-4410", gap=True),
         p("PHONE", "de", "pii_phone_de_national_context", '{"telefon": "', "030 98765432", '"}', carrier="json"),
-        p("PHONE", "de", "pii_phone_de_national_context", "Telefon: ", "０３０ １２３４５６７８", "", tags=("obfuscated",), gap=True),
+        p("PHONE", "de", "pii_phone_de_national_context", "Telefon: ", "０３０ １２３４５６７８", "", tags=("obfuscated",)),
         p("PHONE", "de", "pii_phone_de_national_context", "Te1efon: ", "0221 4711230", "", tags=("ocr",), gap=True),
         p("PHONE", "en", "pii_phone_us", "Call me at ", "415-555-2671", " tomorrow.", carrier="prose", tags=("no_context",)),
         p("PHONE", "en", "pii_phone_us", "Call me at ", "(415) 555-2671", " tomorrow.", carrier="prose", tags=("no_context",), gap=True),
@@ -289,7 +289,7 @@ PII_CASES = {
         p("PHONE", "en", "pii_phone_de_national_context", "Phone: ", "040 30051200"),
         p("PHONE", "en", "pii_phone_international", "| Name | Phone |\n|---|---|\n| R. Patel | ", "+44 20 7946 0123", " |", carrier="table"),
         p("PHONE", "en", "pii_phone_us", "Phone:", "212-736-4410", "   Fax: none", tags=("ocr",)),
-        p("PHONE", "en", "pii_phone_international", "Mobile: ", "+44​7700​900123", "", tags=("obfuscated",), gap=True),
+        p("PHONE", "en", "pii_phone_international", "Mobile: ", "+44​7700​900123", "", tags=("obfuscated",)),
         n("PHONE", "de", "pii_phone_us", "Bestellnummer 2026-104-88", "order number with too few digits"),
         n("PHONE", "de", "pii_phone_de_national_context", "Telefon: +49 (0) XXX XXXXXXX", "masked number", tags=("obfuscated",)),
         n("PHONE", "de", "pii_phone_de_national_context", "Telefon: 0000 000000", "repeated zeros"),
@@ -399,7 +399,7 @@ PII_CASES = {
         p("CREDITCARD", "de", "pii_credit_card", "Kunde;Karte\nKaya;", "4000 0000 0000 0002", "", carrier="csv"),
         p("CREDITCARD", "de", "pii_credit_card", "| Zahlart | Nummer |\n|---|---|\n| Visa | ", "4556 7375 8006 5008", " |", carrier="table"),
         p("CREDITCARD", "de", "pii_credit_card", "Karten-Nr.:", "5432 1098 7654 3212", "  Unterschrift: ______", tags=("ocr",)),
-        p("CREDITCARD", "de", "pii_credit_card", "Karte ", "4111​1111​1111​1111", "", tags=("obfuscated",), gap=True),
+        p("CREDITCARD", "de", "pii_credit_card", "Karte ", "4111​1111​1111​1111", "", tags=("obfuscated",)),
         p("CREDITCARD", "en", "pii_credit_card", "Charge it to ", "3714 496353 98431", " please.", carrier="prose", tags=("no_context",)),
         p("CREDITCARD", "en", "pii_credit_card", '{"payment": {"pan": "', "6011111111111117", '"}}', carrier="json"),
         p("CREDITCARD", "en", "pii_credit_card", "payment:\n  card: ", "3530 1113 3330 0000", "\n", carrier="yaml"),
@@ -505,7 +505,7 @@ PII_CASES = {
         p("IBAN", "de", "pii_iban_de", "Name;IBAN\nWeber;", "DE18 4306 0967 1234 5678 00", "", carrier="csv"),
         p("IBAN", "de", "pii_iban_generic", "| Bank | IBAN |\n|---|---|\n| Raiffeisen | ", "CH9300762011623852957", " |", carrier="table"),
         p("IBAN", "de", "pii_iban_de", "IBAN:", "DE02100500000024290661", "  BIC: siehe oben", tags=("ocr",)),
-        p("IBAN", "de", "pii_iban_de", "IBAN: ", "DE02​3705​0299​0000​6847​12", "", tags=("obfuscated",), gap=True),
+        p("IBAN", "de", "pii_iban_de", "IBAN: ", "DE02​3705​0299​0000​6847​12", "", tags=("obfuscated",)),
         p("IBAN", "de", "pii_iban_generic", "IBAN: ", "AT61 1904 3002 3457 3201", "", gap=True),
         p("IBAN", "en", "pii_iban_generic", "Please wire the deposit to ", "NL91ABNA0417164300", " by Friday.", carrier="prose", tags=("no_context",)),
         p("IBAN", "en", "pii_iban_generic", '{"beneficiary": "Acme BV", "iban": "', "FR1420041010050500013M02606", '"}', carrier="json"),
@@ -1143,6 +1143,45 @@ K05_CONTEXT_FREE_CASES = [
     n("STEUERID", "en", "pii_steuer_id_de_context_free", "Range 86095742719-86095742720 reserved.", "part of a hyphenated number range", carrier="prose", mode="balanced"),
 ]
 for _row in K05_CONTEXT_FREE_CASES:
+    PII_CASES[_row["target_label"]].append(_row)
+
+# K06 obfuscation: zero-width characters inside a value, full-width forms and defanged
+# separators (`[.]`, `(@)`) leave the value readable and count in every mode; the scanner
+# normalizes them and reports the original span. Spelled-out e-mail separators (`[at]`,
+# `ät`, `dot`, `punkt`) and numbers spaced character by character are reported in `recall` only; in
+# `strict` and `balanced` they stay hard negatives (gold convention T01). Checksums decide
+# behind the obfuscation. Appended so existing ids stay stable.
+K06_OBFUSCATION_CASES = [
+    p("EMAIL", "de", "pii_email", "Bitte an ", "jana.roth＠beispiel．de", " schreiben.", carrier="prose", tags=("obfuscated",)),
+    p("IP_ADDRESS", "de", "pii_ipv4", "Angreifer-IP laut Bericht: ", "198[.]51[.]100[.]23", "", tags=("obfuscated",)),
+    p("IBAN", "de", "pii_iban_de", "IBAN: ", "ＤＥ８９ ３７０４ ００４４ ０５３２ ０１３０ ００", "", tags=("obfuscated",)),
+    p("CREDITCARD", "de", "pii_credit_card", "Kreditkarte: ", "5555\u200b5555\u200b5555\u200b4444", "", tags=("obfuscated",)),
+    p("STEUERID", "de", "pii_steuer_id_de", "Steuer-ID: ", "８６０９５７４２７１９", "", tags=("obfuscated",)),
+    p("EMAIL", "de", "pii_email", "Kontakt: ", "max punkt mustermann ät firma punkt de", "", tags=("obfuscated",), mode="recall"),
+    p("IBAN", "de", "pii_iban_de", "IBAN: ", "D E 8 9 3 7 0 4 0 0 4 4 0 5 3 2 0 1 3 0 0 0", "", tags=("obfuscated",), mode="recall"),
+    p("EMAIL", "en", "pii_email", "Reply to ", "m\u200bara.lee@north\u200bwind.com", " today.", carrier="prose", tags=("obfuscated",)),
+    p("IP_ADDRESS", "en", "pii_ipv4", "Blocked host: ", "１９２．０．２．１４", "", tags=("obfuscated",)),
+    p("PHONE", "en", "pii_phone_international", "Phone: ", "+1\u200b212\u200b736\u200b4410", "", tags=("obfuscated",)),
+    p("SSN", "en", "pii_ssn_us", "SSN: ", "５３２-８７-１０９４", "", tags=("obfuscated",)),
+    p("CREDITCARD", "en", "pii_credit_card", "Card number: ", "４１１１ １１１１ １１１１ １１１１", "", tags=("obfuscated",)),
+    p("EMAIL", "en", "pii_email", "Mail ", "ada [at] northwind [dot] com", " for access.", carrier="prose", tags=("obfuscated",), mode="recall"),
+    p("IBAN", "en", "pii_iban_generic", "Account IBAN: ", "G B 8 2 W E S T 1 2 3 4 5 6 9 8 7 6 5 4 3 2", "", tags=("obfuscated",), mode="recall"),
+    n("EMAIL", "de", "pii_email", "Schreiben Sie an max punkt mustermann ät firma punkt de", "spelled-out address outside recall (T01)", carrier="prose", tags=("obfuscated",)),
+    n("EMAIL", "de", "pii_email", "Infos unter firma punkt de.", "spelled-out domain without a local part", carrier="prose", tags=("obfuscated",), mode="recall"),
+    n("EMAIL", "de", "pii_email", "Treffpunkt ist um 10 Uhr ät der Rezeption.", "spelled-out word in prose", carrier="prose", tags=("obfuscated",), mode="recall"),
+    n("CREDITCARD", "de", "pii_credit_card", "Karte 4111\u200b1111\u200b1111\u200b1112", "Luhn fails behind zero-width characters", tags=("obfuscated",)),
+    n("CREDITCARD", "de", "pii_credit_card", "Karte: 4 1 1 1 1 1 1 1 1 1 1 1 1 1 1 2", "Luhn fails behind spaced digits", tags=("obfuscated",), mode="recall"),
+    n("IBAN", "de", "pii_iban_de", "IBAN: ＤＥ８９３７０４００４４０５３２０１３００１", "MOD-97 fails behind full-width digits", tags=("obfuscated",)),
+    n("IP_ADDRESS", "de", "pii_ipv4", "Version 1[.]2[.]3 ist veröffentlicht.", "defanged version number, not an address", carrier="prose", tags=("obfuscated",)),
+    n("EMAIL", "en", "pii_email", "Mail ada [at] northwind [dot] com for access.", "spelled-out address outside recall (T01)", carrier="prose", tags=("obfuscated",), mode="balanced"),
+    n("EMAIL", "en", "pii_email", "Read the docs at example dot com.", "spelled-out domain in prose", carrier="prose", tags=("obfuscated",), mode="recall"),
+    n("EMAIL", "en", "pii_email", "Look at the dot product of both vectors.", "spelled-out words in prose", carrier="prose", tags=("obfuscated",), mode="recall"),
+    n("CREDITCARD", "en", "pii_credit_card", "Card: ５５５５ ５５５５ ５５５５ ４４４５", "Luhn fails behind full-width digits", tags=("obfuscated",)),
+    n("PHONE", "en", "pii_phone_us", "Phone: ＸＸＸ-ＸＸＸ-ＸＸＸＸ", "masked number in full-width letters", tags=("obfuscated",)),
+    n("IBAN", "en", "pii_iban_generic", "Account IBAN: G B 8 2 W E S T 1 2 3 4 5 6 9 8 7 6 5 4 3 2", "characters spaced one by one count in recall only", tags=("obfuscated",), mode="balanced"),
+    n("STEUERID", "de", "pii_steuer_id_de", "Steuer-ID: 8 6 0 9 5 7 4 2 7 1 8", "check digit fails behind spaced digits", tags=("obfuscated",), mode="recall"),
+]
+for _row in K06_OBFUSCATION_CASES:
     PII_CASES[_row["target_label"]].append(_row)
 
 # DLP golden schema v2 (E13). Every DLP row names the rule it exercises (`rule_id`), the

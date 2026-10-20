@@ -6,6 +6,7 @@ pub(crate) mod evidence;
 pub mod injection;
 pub mod lexical_anchors;
 pub mod mcp;
+pub(crate) mod obfuscation;
 pub mod pii;
 pub mod shell;
 pub(crate) mod structure;
@@ -337,7 +338,7 @@ pub(crate) trait NativeRegexDetector {
     }
 }
 
-fn populate_char_offsets(text: &str, spans: &mut [EvidenceSpan]) {
+pub(crate) fn populate_char_offsets(text: &str, spans: &mut [EvidenceSpan]) {
     let ranges = spans
         .iter()
         .map(|span| (span.start_byte, span.end_byte))

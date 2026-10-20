@@ -159,11 +159,34 @@ fn strict_explicit_and_default_are_bit_identical_on_every_golden() {
 /// Model score of a `matched_rules` entry: field context for field rules,
 /// otherwise the structural key of the matched value (K04), else its proximity
 /// context.
+/// Whether only the `recall` normalization (K06: spelled-out separators, spaced
+/// characters) revealed the match of `rule`.
+fn recall_obfuscation(rule: &serde_json::Value) -> bool {
+    rule["obfuscation"].as_array().is_some_and(|kinds| {
+        kinds
+            .iter()
+            .any(|kind| kind == "spelled_out" || kind == "spaced_digits")
+    })
+}
+
 fn expected_score(text: &str, rule: &serde_json::Value) -> (f64, Context) {
     let pattern = PII_PATTERNS
         .iter()
         .find(|pattern| pattern.name == rule["rule_id"])
         .unwrap();
+    if recall_obfuscation(rule) {
+        let (plain, context) = expected_score_of(text, rule, pattern);
+        let points = (plain * 100.0).round() - f64::from(score::SPELLED_OUT_PENALTY_POINTS);
+        return (points.max(0.0) / 100.0, context);
+    }
+    expected_score_of(text, rule, pattern)
+}
+
+fn expected_score_of(
+    text: &str,
+    rule: &serde_json::Value,
+    pattern: &patronus_ark::detectors::pii::pii::PiiPattern,
+) -> (f64, Context) {
     let context = if pattern.captured_value {
         Context::Field
     } else {
@@ -180,6 +203,7 @@ fn balanced_and_recall_keep_the_strict_spans_unless_counter_context_outranks() {
     // K03: scored modes drop a strict span only when a counter-context term is
     // nearer than any support term; every other strict span stays, with the
     // score of its rule in its context. K05: scored-only rules may add spans.
+    // K06: in recall, so may spelled-out or spaced values (10 points lower).
     let strict_scanner = scanner(None);
     for mode in [PiiMode::Balanced, PiiMode::Recall] {
         let scored_scanner = scanner(with_mode(mode));
@@ -222,13 +246,15 @@ fn balanced_and_recall_keep_the_strict_spans_unless_counter_context_outranks() {
                 }
             }
             for span in &scored.evidence_spans {
-                // K05: only a scored-only rule (a bare checksum value) adds a span.
+                // K05: only a scored-only rule (a bare checksum value) adds a span;
+                // K06: or the recall normalization.
                 let scored_only = rules.iter().any(|rule| {
                     rule["start_byte"] == span.start_byte
                         && rule["end_byte"] == span.end_byte
-                        && PII_PATTERNS
+                        && (PII_PATTERNS
                             .iter()
                             .any(|pattern| pattern.name == rule["rule_id"] && pattern.scored_only)
+                            || (mode == PiiMode::Recall && recall_obfuscation(rule)))
                 });
                 assert!(
                     scored_only
