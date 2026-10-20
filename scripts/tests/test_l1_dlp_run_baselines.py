@@ -149,10 +149,12 @@ def test_parse_detect_secrets_worker_lines(tmp_path):
                     "start": 10, "end": 22, "normalization": ["relocated"]}),
         json.dumps({"path": "000002/config.yaml", "line": 4, "plugin": "KeywordDetector",
                     "start": None, "end": None, "normalization": []}),
+        json.dumps({"path": "000005/release.yaml", "error": "ValueError"}),
     ]
-    found, missing = MODULE.parse_detect_secrets("\n".join(lines) + "\n", tmp_path)
+    (found, missing), errors = MODULE.parse_detect_secrets("\n".join(lines) + "\n", tmp_path)
     assert (found.doc, found.rule_id, found.line, found.secret) == (2, "KeywordDetector", 3, "")
     assert found.located == (10, 22, ("relocated",)) and missing.located is None
+    assert errors == [MODULE.ScanError(doc=5, error="ValueError")]
 
 
 # ── Locating and value normalization ───────────────────────────────────────
@@ -263,7 +265,7 @@ def test_run_is_byte_identical_and_meta_has_digests(tmp_path):
         return [
             finding(doc=0, rule_id="Github", secret=GH, line=1, extra={"decoder": decoder})
             for decoder in ("PLAIN", "HTML")
-        ]
+        ], []
 
     outputs = []
     for name in ("one", "two"):
@@ -277,6 +279,7 @@ def test_run_is_byte_identical_and_meta_has_digests(tmp_path):
     assert meta["pinned"]["version"] == "3.97.9" and meta["span_unit"] == "unicode_code_point"
     assert "--no-verification" in meta["command"]
     assert len(meta["input_sha256"]) == len(meta["entity_map_sha256"]) == 64
+    assert meta["errors"] == []
     [first, second] = [json.loads(line) for line in outputs[0][0].decode().splitlines()]
     [span] = first["evidence_spans"]
     assert span["entities"] == ["vcs.github.fine_grained_pat", "vcs.github.token"]
@@ -334,7 +337,7 @@ def test_real_tool_finds_value_spans(tool, tmp_path):
     if tool != "gitleaks":  # gitleaks has no URL-userinfo rule in its default config
         assert PASSWORD in values
     assert rows_out[1]["evidence_spans"] == []
-    assert meta["unlocated"] == {}
+    assert meta["unlocated"] == {} and meta["errors"] == []
 
 
 @pytest.mark.skipif(not _tools_installed(), reason="pinned baselines not installed")
@@ -471,7 +474,8 @@ def test_detect_secrets_worker_logs_spans_not_secrets(tmp_path, capsys):
     captured = capsys.readouterr()
     for secret in (PASSWORD, GH):
         assert secret not in captured.out and secret not in captured.err
-    findings = MODULE.parse_detect_secrets(captured.out, tmp_path)
+    findings, errors = MODULE.parse_detect_secrets(captured.out, tmp_path)
+    assert errors == []
     [row], summary = MODULE.predict("detect-secrets", rows, findings, entity_index())
     values = {rows[0]["text"][s["start_char"]:s["end_char"]] for s in row["evidence_spans"]}
     assert {PASSWORD, GH} <= values and summary["unlocated"] == {}
@@ -503,7 +507,7 @@ def test_cli_run_logs_no_secret(tmp_path, capsys, monkeypatch):
         trufflehog_line(tmp_path, "AWS", Raw=AWS_ID, RawV2=AWS_ID + AWS_SECRET),
         trufflehog_line(tmp_path, "Postgres", line=2, Raw=f"postgres://app:{PASSWORD}@db:5432"),
     ])
-    monkeypatch.setattr(MODULE, "scan_with_tool", lambda tool, rows, *_: MODULE.parse_trufflehog(stdout, tmp_path))
+    monkeypatch.setattr(MODULE, "scan_with_tool", lambda tool, rows, *_: (MODULE.parse_trufflehog(stdout, tmp_path), []))
     code = MODULE.main(["run", "--tool", "trufflehog", "--input", str(tmp_path / "in.jsonl"),
                         "--output", str(tmp_path / "o.jsonl")])
     assert code == 0
@@ -512,3 +516,90 @@ def test_cli_run_logs_no_secret(tmp_path, capsys, monkeypatch):
     for secret in (AWS_ID, AWS_SECRET, PASSWORD):
         assert secret not in captured.out + captured.err and secret not in written
     assert "1 unlocated" in captured.err  # the key id is not in this text
+
+
+# ── Files a detect-secrets plugin raises on (T05) ──────────────────────────
+# The CLI aborts the whole scan on such a file; the runner lists it under ``errors`` and
+# keeps the findings of every other file.
+
+# A YAML date that does not exist: PyYAML's date constructor raises ValueError inside the
+# detect-secrets YAML transformer.
+BAD_YAML_DATE = "name: demo\nreleased: 2023-02-30\n"
+
+
+def test_worker_lines_skip_a_raising_file_and_keep_the_others(tmp_path):
+    rows = [
+        {"id": "ok-1", "text": f"password = \"{PASSWORD}\"\n", "format": "env"},
+        {"id": "bad", "text": BAD_YAML_DATE, "path": "deploy/release.yaml"},
+        {"id": "ok-2", "text": f"token: {PASSWORD}\n", "format": "yaml"},
+    ]
+    MODULE.materialize(rows, tmp_path)
+
+    def scan(path):
+        if path.name == "release.yaml":
+            raise ValueError(f"day is out of range for month: {PASSWORD}")
+        text = path.read_text(encoding="utf-8")
+        return [(1, "KeywordDetector", PASSWORD)] if PASSWORD in text else []
+
+    lines = list(MODULE.worker_lines(tmp_path, scan, {}))
+    assert PASSWORD not in "".join(lines)  # neither values nor exception messages are logged
+    findings, errors = MODULE.parse_detect_secrets("\n".join(lines) + "\n", tmp_path)
+    assert errors == [MODULE.ScanError(doc=1, error="ValueError")]
+    predictions, summary = MODULE.predict("detect-secrets", rows, findings, entity_index())
+    found = [[row["text"][s["start_char"]:s["end_char"]] for s in p["evidence_spans"]]
+             for row, p in zip(rows, predictions)]
+    assert found == [[PASSWORD], [], [PASSWORD]] and summary["unlocated"] == {}
+
+
+def test_run_lists_scan_errors_in_meta(tmp_path):
+    rows = [
+        {"id": "ok", "text": f"password = \"{PASSWORD}\"\n", "format": "env"},
+        {"id": "bad", "text": BAD_YAML_DATE, "path": "deploy/release.yaml"},
+    ]
+    write_jsonl(tmp_path / "in.jsonl", rows)
+    start = rows[0]["text"].index(PASSWORD)
+
+    def scan(tool, scan_rows):
+        located = (start, start + len(PASSWORD), ())
+        return ([finding(doc=0, rule_id="KeywordDetector", secret="", line=1, located=located)],
+                [MODULE.ScanError(doc=1, error="ValueError")])
+
+    meta = MODULE.run("detect-secrets", tmp_path / "in.jsonl", tmp_path / "out.jsonl",
+                      tmp_path / "out.meta.json", scan, {"version": "1.5.0"})
+    assert meta["errors"] == [{"id": "bad", "file": "deploy/release.yaml", "error": "ValueError"}]
+    assert json.loads((tmp_path / "out.meta.json").read_text())["errors"] == meta["errors"]
+    out = [json.loads(line) for line in (tmp_path / "out.jsonl").read_text().splitlines()]
+    assert [row["id"] for row in out] == ["ok", "bad"]
+    assert len(out[0]["evidence_spans"]) == 1 and out[1]["evidence_spans"] == []
+
+
+def test_cli_run_reports_scan_errors(tmp_path, capsys, monkeypatch):
+    write_jsonl(tmp_path / "in.jsonl", [{"id": "bad", "text": BAD_YAML_DATE, "format": "yaml"}])
+    monkeypatch.setattr(MODULE, "check_pins", lambda tools, *_: ({t: {"version": "x"} for t in tools}, []))
+    monkeypatch.setattr(MODULE, "scan_with_tool",
+                        lambda tool, rows, *_: ([], [MODULE.ScanError(doc=0, error="ValueError")]))
+    assert MODULE.main(["run", "--tool", "detect-secrets", "--input", str(tmp_path / "in.jsonl"),
+                        "--output", str(tmp_path / "o.jsonl")]) == 0
+    assert "1 errors" in capsys.readouterr().err
+    assert json.loads((tmp_path / "o.meta.json").read_text())["errors"][0]["id"] == "bad"
+
+
+@pytest.mark.skipif(not _tools_installed(), reason="pinned baselines not installed")
+def test_real_detect_secrets_run_survives_a_raising_file(tmp_path):
+    rows = [
+        {"id": "doc", "text": f"github_token = \"{GH}\"\n", "format": "env"},
+        {"id": "bad", "text": BAD_YAML_DATE, "path": "deploy/release.yaml"},
+        {"id": "doc-2", "text": f"password: \"{PASSWORD}\"\n", "format": "yaml"},
+    ]
+    write_jsonl(tmp_path / "in.jsonl", rows)
+    installed, _ = MODULE.check_pins(["detect-secrets"], BASELINES, BASELINES_PYTHON)
+    meta = MODULE.run(
+        "detect-secrets", tmp_path / "in.jsonl", tmp_path / "out.jsonl", tmp_path / "out.meta.json",
+        lambda name, scan_rows: MODULE.scan_with_tool(name, scan_rows, BASELINES, BASELINES_PYTHON),
+        installed["detect-secrets"],
+    )
+    assert meta["errors"] == [{"id": "bad", "file": "deploy/release.yaml", "error": "ValueError"}]
+    out = [json.loads(line) for line in (tmp_path / "out.jsonl").read_text().splitlines()]
+    values = [{row["text"][s["start_char"]:s["end_char"]] for s in p["evidence_spans"]}
+              for row, p in zip(rows, out)]
+    assert GH in values[0] and values[1] == set() and PASSWORD in values[2]
