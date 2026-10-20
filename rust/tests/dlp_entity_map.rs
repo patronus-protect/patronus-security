@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use patronus_ark::detectors::dlp::dlp::DLP_PATTERNS;
+use patronus_ark::detectors::dlp::dlp::{SecretSubtype, DLP_PATTERNS};
 use serde::Deserialize;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -20,6 +20,7 @@ struct EntityMap {
     schema: String,
     baselines: BTreeMap<String, Baseline>,
     taxonomy: BTreeMap<String, Group>,
+    subtypes: BTreeMap<String, Subtype>,
     entities: Vec<Entity>,
 }
 
@@ -42,11 +43,21 @@ struct Group {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+struct Subtype {
+    groups: Vec<String>,
+    #[serde(default)]
+    planned: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Entity {
     id: String,
     scope: String,
     #[serde(default)]
     group: Option<String>,
+    #[serde(default)]
+    subtype: Option<String>,
     #[serde(default)]
     ark: Vec<String>,
     #[serde(default)]
@@ -159,6 +170,64 @@ fn scopes_match_the_mapped_tools() {
             .iter()
             .any(|e| !e.ark.is_empty() && e.group.as_ref() == Some(name));
         assert_eq!(group.planned, !used_by_ark, "planned flag of {name}");
+    }
+}
+
+#[test]
+fn subtypes_match_the_rule_metadata() {
+    let map = load();
+    let declared: BTreeMap<_, _> = SecretSubtype::ALL
+        .iter()
+        .map(|subtype| (subtype.as_str().to_string(), subtype.groups()))
+        .collect();
+    assert_eq!(
+        map.subtypes.keys().collect::<Vec<_>>(),
+        declared.keys().collect::<Vec<_>>(),
+        "subtypes of entity_map.yaml vs. SecretSubtype::ALL"
+    );
+    for (name, subtype) in &map.subtypes {
+        assert_eq!(subtype.groups, declared[name], "groups of {name}");
+        for group in &subtype.groups {
+            assert!(map.taxonomy.contains_key(group), "{name}: {group}");
+        }
+        let used = DLP_PATTERNS
+            .iter()
+            .any(|rule| rule.meta.subtype.map(SecretSubtype::as_str) == Some(name.as_str()));
+        assert_eq!(subtype.planned, !used, "planned flag of subtype {name}");
+    }
+    // K09: the new kinds are subtypes, not groups of their own.
+    for kind in [
+        "connection_string",
+        "webhook_url",
+        "auth_url",
+        "otp_secret",
+        "seed_phrase",
+    ] {
+        assert!(map.subtypes.contains_key(kind), "{kind} must be a subtype");
+        assert!(
+            !map.taxonomy.contains_key(&kind.to_ascii_uppercase()),
+            "{kind} must not be a group"
+        );
+    }
+    for entity in &map.entities {
+        let Some(name) = &entity.subtype else {
+            continue;
+        };
+        let subtype = map
+            .subtypes
+            .get(name)
+            .unwrap_or_else(|| panic!("{}: unknown subtype {name}", entity.id));
+        let group = entity.group.as_ref().expect("a subtype needs a group");
+        assert!(subtype.groups.contains(group), "{}: {group}", entity.id);
+        for rule in &entity.ark {
+            let pattern = DLP_PATTERNS.iter().find(|p| p.name == rule).unwrap();
+            assert_eq!(
+                pattern.meta.subtype.map(SecretSubtype::as_str),
+                Some(name.as_str()),
+                "{}: {rule}",
+                entity.id
+            );
+        }
     }
 }
 
