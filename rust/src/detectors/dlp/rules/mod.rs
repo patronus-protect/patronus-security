@@ -6,6 +6,7 @@
 mod content;
 mod credentials;
 mod crypto;
+mod documented;
 mod hashes;
 mod identifiers;
 mod placeholders;
@@ -77,16 +78,41 @@ pub(crate) fn placeholder_check(rule_id: &str) -> bool {
 pub(crate) use placeholders::is_placeholder_match;
 
 /// T06: whether the value `range` of `text` that `rule_id` matched is a
-/// documented example or test value. PEM rules check the key body without the
-/// armor lines; the bare header rule checks the body that follows it.
+/// documented example or test value by its markers or low variety.
 pub(crate) fn is_example_match(
     check: ExampleCheck,
     rule_id: &str,
     text: &str,
     range: Range<usize>,
 ) -> bool {
-    let value: Cow<'_, str> = match rule_id {
-        "dlp_private_key_block" => pem_body(&text[range.clone()]).into(),
+    let value = checked_value(rule_id, text, range.clone());
+    let example_context = || credentials::has_example_context(text, range.start, range.end);
+    match check {
+        ExampleCheck::Off => false,
+        ExampleCheck::Generic => credentials::is_example_value(&value, false, example_context),
+        ExampleCheck::FixedFormat => credentials::is_example_value(&value, true, example_context),
+    }
+}
+
+/// K06: whether the value `range` of `text` that `rule_id` matched is a
+/// vendor-documented example value (`research/dlp/documented_values.yaml`).
+pub(crate) fn is_documented_example(rule_id: &str, text: &str, range: Range<usize>) -> bool {
+    documented::documented_kind(&checked_value(rule_id, text, range))
+        == Some(documented::DocumentedKind::Example)
+}
+
+/// K06: whether a matched secret `value` is a publicly known test key
+/// (severity `test`).
+pub(crate) fn is_documented_test_value(value: &str) -> bool {
+    documented::documented_kind(value) == Some(documented::DocumentedKind::Test)
+}
+
+/// The part of a match that the value checks see: PEM rules check the key
+/// body without the armor lines; the bare header rule checks the body that
+/// follows it.
+fn checked_value<'a>(rule_id: &str, text: &'a str, range: Range<usize>) -> Cow<'a, str> {
+    match rule_id {
+        "dlp_private_key_block" => pem_body(&text[range]).into(),
         "dlp_private_key_header" => {
             let rest = &text[range.end..];
             let mut end = rest.find("-----").unwrap_or(rest.len()).min(16 * 1024);
@@ -95,13 +121,7 @@ pub(crate) fn is_example_match(
             }
             rest[..end].into()
         }
-        _ => text[range.clone()].into(),
-    };
-    let example_context = || credentials::has_example_context(text, range.start, range.end);
-    match check {
-        ExampleCheck::Off => false,
-        ExampleCheck::Generic => credentials::is_example_value(&value, false, example_context),
-        ExampleCheck::FixedFormat => credentials::is_example_value(&value, true, example_context),
+        _ => text[range].into(),
     }
 }
 
