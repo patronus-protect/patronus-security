@@ -207,6 +207,7 @@ tasks:
       explicit configuration; score field and modes in docs/reference/result-schema.md
 
   - id: K03
+    status: done
     title: Context engine v2 (two-sided proximity, DE/EN lexicon from pii.json, counter-context such as order/invoice numbers)
     type: engine
     deps: [K02]
