@@ -95,8 +95,8 @@ class PiiGoldenSchemaV2Tests(unittest.TestCase):
         for language in LANGUAGES:
             for tag in TAGS:
                 self.assertGreater(positives[(tag, language)], 0, (tag, language))
-            # Today's detector already passes these tags; obfuscated values are gaps (K06).
-            for tag in ("no_context", "structured", "ocr"):
+            # Since K06 the detector also passes obfuscated values.
+            for tag in TAGS:
                 self.assertGreater(gated[(tag, language)], 0, (tag, language))
         self.assertGreater(sum(row["known_gap"] for row in rows), 0)
 
@@ -126,10 +126,18 @@ class PiiGoldenSchemaV2Tests(unittest.TestCase):
             self.assertGreater(negatives[rule_id], 0, rule_id)
 
     def test_spelled_out_email_addresses_stay_hard_negatives(self):
-        # Gold convention T01: `[at]`/`[dot]` and spaced forms are not values of EMAIL.
+        # Gold convention T01: `[at]`/`[dot]` and spaced forms are not values of EMAIL in
+        # strict and balanced. Only the opt-in `recall` mode reports them (K06).
+        spelled_out = ("[at]", " @ ", " ät ", " punkt ", " dot ")
+        modes = Counter()
         for row in load_rows():
-            if row["target_label"] == "EMAIL" and ("[at]" in row["text"] or " @ " in row["text"]):
-                self.assertEqual(row["case_type"], "hard_negative", row["id"])
+            if row["target_label"] == "EMAIL" and any(token in row["text"] for token in spelled_out):
+                mode = row.get("pii_mode", "strict")
+                if mode != "recall":
+                    self.assertEqual(row["case_type"], "hard_negative", row["id"])
+                modes[(mode, row["case_type"])] += 1
+        self.assertGreater(modes[("recall", "positive")], 0)
+        self.assertGreater(modes[("strict", "hard_negative")] + modes[("balanced", "hard_negative")], 2)
 
 
 if __name__ == "__main__":
