@@ -478,3 +478,25 @@ fn bilingual_obfuscated_probes_report_in_strict() {
     }
     assert!(probed >= 8, "only {probed} obfuscated probes");
 }
+
+#[test]
+fn every_matched_rule_keeps_its_own_score_behind_the_obfuscation() {
+    // pii_iban_de and pii_iban_generic both match a bare German IBAN with
+    // different scores; the deobfuscated finding must not copy one onto the other.
+    // Without a field name: with one, both rules reach the score cap and look equal.
+    let plain = "Bitte überweisen an DE89370400440532013000 danke";
+    let wide = "Bitte überweisen an ＤＥ８９３７０４００４４０５３２０１３０００ danke";
+    let wide_value = "ＤＥ８９３７０４００４４０５３２０１３０００";
+    for mode in MODES {
+        let plain_rules = matched_rules(&pii_result(plain, mode));
+        let wide_rules = matched_rules(&pii_result(wide, mode));
+        for rule_id in ["pii_iban_de", "pii_iban_generic"] {
+            let plain_rule = rule_on(&plain_rules, plain, rule_id, "DE89370400440532013000")
+                .unwrap_or_else(|| panic!("{mode}: {rule_id} plain: {plain_rules:#?}"));
+            let wide_rule = rule_on(&wide_rules, wide, rule_id, wide_value)
+                .unwrap_or_else(|| panic!("{mode}: {rule_id} full-width: {wide_rules:#?}"));
+            assert_eq!(obfuscation(wide_rule), ["full_width"], "{mode}: {rule_id}");
+            assert_eq!(wide_rule["score"], plain_rule["score"], "{mode}: {rule_id}");
+        }
+    }
+}

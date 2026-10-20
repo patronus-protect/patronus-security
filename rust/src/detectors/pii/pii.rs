@@ -255,7 +255,7 @@ fn merge_deobfuscated(
     view: &Deobfuscated,
     mode: PiiMode,
 ) -> NativeDetection {
-    // (normalized range, original range, label, obfuscation kinds, score)
+    // (normalized range, original range, label, obfuscation kinds, penalty points)
     let mut added = Vec::new();
     for span in normalized.evidence_spans {
         let range = view.original(span.start_byte..span.end_byte);
@@ -264,10 +264,13 @@ fn merge_deobfuscated(
             continue;
         }
         let mut score = span.score;
-        if kinds.iter().any(|kind| kind.level() == Level::SpelledOut) {
-            let points =
-                (span.score * 100.0).round() as i16 - i16::from(score::SPELLED_OUT_PENALTY_POINTS);
-            score = f64::from(points.max(0)) / 100.0;
+        let penalty = if kinds.iter().any(|kind| kind.level() == Level::SpelledOut) {
+            score::SPELLED_OUT_PENALTY_POINTS
+        } else {
+            0
+        };
+        if penalty > 0 {
+            score = penalized(span.score, penalty);
             if mode.min_score().is_some_and(|threshold| score < threshold) {
                 continue;
             }
@@ -301,7 +304,7 @@ fn merge_deobfuscated(
             range,
             span.label,
             kinds,
-            score,
+            penalty,
         ));
     }
     if added.is_empty() {
@@ -321,7 +324,7 @@ fn merge_deobfuscated(
                 .iter()
                 .find(|pattern| rule["rule_id"] == pattern.name)?
                 .entity_group;
-            let (_, original, _, kinds, score) =
+            let (_, original, _, kinds, penalty) =
                 added.iter().find(|(range, _, added_label, ..)| {
                     *range == (start..end) && added_label == label
                 })?;
@@ -338,8 +341,10 @@ fn merge_deobfuscated(
                 }
             }
             rule["obfuscation"] = kinds.iter().map(|kind| kind.as_str()).collect();
-            if rule.get("score").is_some() {
-                rule["score"] = serde_json::json!(score);
+            // Each rule keeps its own score (pii_iban_de 0.90, pii_iban_generic 0.80 on
+            // the same value); only the recall penalty applies to it.
+            if let Some(own) = rule["score"].as_f64() {
+                rule["score"] = serde_json::json!(penalized(own, *penalty));
             }
             Some(rule)
         })
@@ -361,6 +366,11 @@ fn merge_deobfuscated(
     }
     result.confidence = spans.iter().map(|span| span.score).fold(0.0, f64::max);
     detection
+}
+
+/// `score` minus `points` hundredths, floored at zero.
+fn penalized(score: f64, points: u8) -> f64 {
+    f64::from(((score * 100.0).round() as i16 - i16::from(points)).max(0)) / 100.0
 }
 
 /// Whether the field part `key` of a rule accepts the normalized structural key
