@@ -315,31 +315,41 @@ const SHAPES: &[Shape] = &[
 ];
 
 /// Fills of a body alphabet: marker words (`EXAMPLEKEY…`, `TESTKEY…`) and
-/// low-variety bodies (repeated chunks, sequential and zero runs).
+/// low-variety bodies (repeated chunks, also of sequential runs, and zero
+/// runs). A low-variety fill must repeat at least 6 characters within the body:
+/// a single sequential run needs example context, see
+/// `provider_values_with_one_sequential_run_need_example_context`.
 fn example_bodies(alphabet: &str, length: usize) -> (Vec<String>, Vec<String>) {
-    let fills = |words: &[&str]| {
+    let fills = |words: &[&str], min_repeated: usize| {
         words
             .iter()
             .filter(|word| word.chars().all(|character| alphabet.contains(character)))
+            .filter(|word| length >= word.len() + min_repeated)
             .map(|word| fill(word, length))
             .collect::<Vec<_>>()
     };
-    let markers = fills(&[
-        "EXAMPLEKEY",
-        "TESTKEY",
-        "BEISPIEL",
-        "MUSTER",
-        "DUMMY",
-        "FAKE",
-    ]);
-    let low_variety = fills(&[
-        "deadbeef",
-        "1234567890",
-        "0123456789abcdef",
-        "ABCDEFGHIJKLMNOP",
-        "0",
-        "A",
-    ]);
+    let markers = fills(
+        &[
+            "EXAMPLEKEY",
+            "TESTKEY",
+            "BEISPIEL",
+            "MUSTER",
+            "DUMMY",
+            "FAKE",
+        ],
+        0,
+    );
+    let low_variety = fills(
+        &[
+            "deadbeef",
+            "1234567890",
+            "0123456789abcdef",
+            "ABCDEFGH",
+            "0",
+            "A",
+        ],
+        6,
+    );
     // Hex bodies cannot hold a marker word; every alphabet has a low-variety fill.
     assert!(!low_variety.is_empty());
     (markers, low_variety)
@@ -354,18 +364,11 @@ fn provider_example_and_test_values_are_silent_in_de_and_en() {
                 let value = format!("{}{body}{}", shape.prefix, shape.suffix);
                 assert_silent(&carrier.replace("{}", &value));
             }
-            // Generic assignment rules in the carrier may still report a
-            // low-variety value; the provider rule itself must not.
+            // Generic assignment rules in the carrier check a provider-shaped
+            // value like the provider rule does.
             for body in &low_variety {
-                let text =
-                    carrier.replace("{}", &format!("{}{body}{}", shape.prefix, shape.suffix));
-                assert!(
-                    !matched_rules(&scan(&text))
-                        .iter()
-                        .any(|rule| rule == shape.rule_id),
-                    "{}: low-variety value reported in {text:?}",
-                    shape.rule_id
-                );
+                let value = format!("{}{body}{}", shape.prefix, shape.suffix);
+                assert_silent(&carrier.replace("{}", &value));
             }
         }
     }
@@ -527,6 +530,80 @@ fn generic_marker_values_are_silent_without_context() {
         "https://api.example.com/v1/export?api_key=SAMPLEKEY4711",
         "Authorization: Bearer EXAMPLE-TOKEN-4711",
         "Passwort: Musterpasswort2026",
+    ] {
+        assert_silent(text);
+    }
+}
+
+#[test]
+fn provider_values_with_one_sequential_run_need_example_context() {
+    // Hand-typed demo values: one ascending run, no repeated chunk.
+    let values = [
+        (
+            "dlp_aws_access_key",
+            concat!("AKIA", "1234567890", "ABCDEF"),
+        ),
+        (
+            "dlp_github_token",
+            concat!("ghp_", "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "123456"),
+        ),
+    ];
+    for (rule_id, value) in values {
+        for text in [
+            format!("GITHUB_TOKEN={value}"),
+            format!("const token = '{value}';"),
+            format!("Der Schlüssel lautet {value}"),
+        ] {
+            assert_reported(&text, rule_id, value);
+        }
+        for text in [
+            format!("# Example from the docs\nGITHUB_TOKEN={value}"),
+            format!("Beispielwert: {value}"),
+        ] {
+            assert_silent(&text);
+        }
+    }
+}
+
+#[test]
+fn generic_rules_check_provider_shaped_values_as_fixed_format() {
+    for text in [
+        concat!(
+            "GITHUB_TOKEN=",
+            "ghp_",
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ),
+        concat!("api_key: ", "ghp_", "Zq7Zq7Zq7Zq7Zq7Zq7Zq7Zq7Zq7Zq7Zq7Zq7"),
+        concat!("AWS_SECRET_ACCESS_KEY=", "AKIA", "0000000000000000"),
+    ] {
+        assert_silent(text);
+    }
+    // The same repetition in a value without a provider format stays a
+    // weak but real credential.
+    assert_reported(
+        "SERVICE_TOKEN=Zq7Zq7Zq7Zq7Zq7Zq7Zq7Zq7",
+        "dlp_env_var_secret",
+        "Zq7Zq7Zq7Zq7Zq7Zq7Zq7Zq7",
+    );
+}
+
+#[test]
+fn long_markers_inside_a_word_are_no_markers() {
+    for (text, value) in [
+        ("password=resampler2026!", "resampler2026!"),
+        ("DB_PASSWORD=Gegenbeispielhaft#77", "Gegenbeispielhaft#77"),
+        ("Passwort: Ummusterung-Kx7q", "Ummusterung-Kx7q"),
+    ] {
+        let result = scan(text);
+        assert!(
+            result.evidence_spans.iter().any(|span| span.text == value),
+            "{value:?} dropped in {text:?}"
+        );
+    }
+    for text in [
+        "password=Musterpasswort2026",
+        "DB_PASSWORD=counterexample-2026",
+        "secret: sample_api_key_9f3a",
     ] {
         assert_silent(text);
     }

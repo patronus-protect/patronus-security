@@ -126,8 +126,9 @@ pub(super) fn is_secret_value(candidate: &str) -> bool {
 }
 
 /// Marker words of documented example and test values, lower case. Long
-/// markers occur in random base62 with a chance of about 62^-6 per position,
-/// so they count anywhere in a value.
+/// markers are rare in random base62 (about 62^-6 per position); they count at
+/// the start or end of a word (`EXAMPLEKEY`, `CYEXAMPLE`, `Musterpasswort`),
+/// not inside one (`resampler`).
 const LONG_EXAMPLE_MARKERS: &[&str] = &["example", "sample", "beispiel", "muster"];
 
 /// Short markers turn up by chance in random tokens (`…7Test…`); they count
@@ -147,38 +148,82 @@ const LOW_VARIETY_MIN_COVERAGE: usize = 600;
 
 /// Example/test marker check shared by every secret rule (T06): `value` names
 /// an example or test value if it holds `EXAMPLE`, `SAMPLE`, `BEISPIEL` or
-/// `MUSTER` anywhere, or `TEST`/`TESTKEY`, `FAKE` or `DUMMY` as a whole word or
-/// at least twice. Words end at separators and at case or letter/digit changes
-/// (`myTestKey`, `TEST_TOKEN`); a short marker merely embedded in random base62
-/// (`aXtestQ`) does not count. The Stripe mode segment (`sk_test_`) is format,
-/// not a marker.
+/// `MUSTER` at the start or end of a word, `TEST`/`TESTKEY`, `FAKE` or `DUMMY`
+/// as a whole word, or any marker at least twice. Words end at separators and
+/// at case or letter/digit changes (`myTestKey`, `TEST_TOKEN`); a marker merely
+/// embedded in a word (`aXtestQ`, `resampler`) does not count. The Stripe mode
+/// segment (`sk_test_`) is format, not a marker.
 pub(crate) fn has_example_marker(value: &str) -> bool {
     let lower = value.to_ascii_lowercase();
     if LONG_EXAMPLE_MARKERS
         .iter()
-        .any(|marker| lower.contains(marker))
-        || SHORT_EXAMPLE_MARKERS
-            .iter()
-            .any(|marker| lower.matches(marker).count() >= 2)
+        .chain(SHORT_EXAMPLE_MARKERS)
+        .any(|marker| lower.matches(marker).count() >= 2)
     {
         return true;
     }
-    if value.bytes().filter(u8::is_ascii_alphanumeric).count() > WHOLE_MARKER_MAX_LEN {
-        return false;
-    }
+    let whole_short_words =
+        value.bytes().filter(u8::is_ascii_alphanumeric).count() <= WHOLE_MARKER_MAX_LEN;
     value_words(value).any(|(start, word)| {
         let word = word.to_ascii_lowercase();
-        let marker = word.strip_suffix("key").unwrap_or(&word);
-        SHORT_EXAMPLE_MARKERS.contains(&marker) && !is_stripe_mode(value, start, &word)
+        let stem = word.strip_suffix("key").unwrap_or(&word);
+        LONG_EXAMPLE_MARKERS
+            .iter()
+            .any(|marker| stem.starts_with(marker) || stem.ends_with(marker))
+            || (whole_short_words
+                && SHORT_EXAMPLE_MARKERS.contains(&stem)
+                && !is_stripe_mode(value, start, &word))
     })
+}
+
+/// How a value lacks variety (T06), see [`low_variety`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum LowVariety {
+    /// Random enough.
+    No,
+    /// Covered only together with sequential runs (`AKIA1234567890ABCDEF`):
+    /// a hand-typed demo value as often as a documented one, so it needs
+    /// explicit example context even in a fixed provider format.
+    Sequential,
+    /// Covered by repeated chunks and same-character runs alone.
+    Repeated,
 }
 
 /// Low-variety check (T06): repeated chunks (`abcabc…`, `deadbeefdeadbeef…`),
 /// sequential runs (`1234567890abcdef`) and same-character runs (`000000…`)
-/// cover at least 60 % of the value's alphanumeric characters. Only a
-/// fixed-format provider value or a value in explicit example context is
-/// rejected for this; a generic password such as `abcabcabcabc` stays a secret.
+/// cover at least 60 % of the value's alphanumeric characters.
+#[cfg(test)]
 pub(crate) fn is_low_variety(value: &str) -> bool {
+    low_variety(value) != LowVariety::No
+}
+
+/// [`is_low_variety`] with the kind of coverage. Only a fixed-format provider
+/// value ([`LowVariety::Repeated`]) or a value in explicit example context is
+/// rejected for this; a generic password such as `abcabcabcabc` stays a secret.
+pub(crate) fn low_variety(value: &str) -> LowVariety {
+    let (repeated, with_sequential, length) = low_variety_coverage(value);
+    let enough = |covered: usize| covered * 1000 >= length * LOW_VARIETY_MIN_COVERAGE;
+    if length == 0 {
+        LowVariety::No
+    } else if enough(repeated) {
+        LowVariety::Repeated
+    } else if enough(with_sequential) {
+        LowVariety::Sequential
+    } else {
+        LowVariety::No
+    }
+}
+
+/// Whether any repeated chunk, sequential run or same-character run occurs in
+/// `value`: a cheap precondition for a low-variety part of it.
+pub(crate) fn has_low_variety_run(value: &str) -> bool {
+    low_variety_coverage(value).1 > 0
+}
+
+/// Alphanumeric characters of `value` covered by repeated chunks and
+/// same-character runs, covered when sequential runs are added, and the
+/// number of alphanumeric characters (0 below 8).
+fn low_variety_coverage(value: &str) -> (usize, usize, usize) {
     let mut characters = Vec::with_capacity(value.len());
     let mut bytes = value.bytes();
     while let Some(byte) = bytes.next() {
@@ -192,7 +237,7 @@ pub(crate) fn is_low_variety(value: &str) -> bool {
     characters.truncate(8192);
     let length = characters.len();
     if length < 8 {
-        return false;
+        return (0, 0, 0);
     }
     let mut covered = vec![false; length];
     for period in 1..=64.min(length - 1) {
@@ -210,6 +255,8 @@ pub(crate) fn is_low_variety(value: &str) -> bool {
             index = end + 1;
         }
     }
+    let count = |covered: &[bool]| covered.iter().filter(|covered| **covered).count();
+    let repeated = count(&covered);
     let mut start = 0;
     for index in 1..=length {
         let ascending = index < length && {
@@ -223,7 +270,7 @@ pub(crate) fn is_low_variety(value: &str) -> bool {
             start = index;
         }
     }
-    covered.iter().filter(|covered| **covered).count() * 1000 >= length * LOW_VARIETY_MIN_COVERAGE
+    (repeated, count(&covered), length)
 }
 
 /// Explicit example/test context (T06): the line of the value or one of the
@@ -270,14 +317,19 @@ pub(crate) fn has_example_context(text: &str, start: usize, end: usize) -> bool 
 }
 
 /// T06 decision for one match: a marker word rejects every secret rule;
-/// low-variety values reject fixed-format rules always and generic credential
-/// rules only in explicit example context.
+/// repeated-chunk values reject fixed-format rules always, sequential-run values
+/// and generic credential rules only in explicit example context.
 pub(crate) fn is_example_value(
     value: &str,
     fixed_format: bool,
     example_context: impl FnOnce() -> bool,
 ) -> bool {
-    has_example_marker(value) || (is_low_variety(value) && (fixed_format || example_context()))
+    has_example_marker(value)
+        || match low_variety(value) {
+            LowVariety::No => false,
+            LowVariety::Repeated if fixed_format => true,
+            LowVariety::Repeated | LowVariety::Sequential => example_context(),
+        }
 }
 
 /// Alphanumeric words of `value` with their byte offsets, split at every other
@@ -357,7 +409,10 @@ fn floor_char_boundary(text: &str, mut index: usize) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use super::{has_example_context, has_example_marker, is_example_value, is_low_variety};
+    use super::{
+        has_example_context, has_example_marker, is_example_value, is_low_variety, low_variety,
+        LowVariety,
+    };
 
     /// Deterministic pseudo-random base62 strings (SplitMix64).
     fn random_base62(seed: u64, length: usize) -> String {
@@ -406,8 +461,44 @@ mod tests {
             concat!("sk_test_", "Zq8Wm4Rk2Tn7", "Vb6Xc9Lp3Hd5Jf1"),
             concat!("rk_test_", "9f3a1c7e4b20", "d86f5ea9c317"),
             "Kx7!pQ2#vL9@rT4$",
+            "resampler2026!",
+            "Gegenbeispielhaft#77",
+            "Ummusterung-Kx7q",
+            "Xyzexamples9",
         ] {
             assert!(!has_example_marker(value), "{value}");
+        }
+    }
+
+    #[test]
+    fn long_markers_count_at_word_edges() {
+        for value in [
+            "Musterpasswort2026",
+            "counterexample-2026",
+            "Examples4All",
+            "resampler-resampler",
+        ] {
+            assert!(has_example_marker(value), "{value}");
+        }
+    }
+
+    #[test]
+    fn single_sequential_runs_need_example_context() {
+        for value in [
+            concat!("AKIA", "1234567890", "ABCDEF"),
+            concat!("ghp_", "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "123456"),
+            concat!("abcdefghijklmnopqrstuvwxyz", "1234567890", "ABCD"),
+        ] {
+            assert_eq!(low_variety(value), LowVariety::Sequential, "{value}");
+            assert!(!is_example_value(value, true, || false), "{value}");
+            assert!(is_example_value(value, true, || true), "{value}");
+        }
+        for value in [
+            concat!("AKIA", "1234567890", "123456"),
+            concat!("ghp_", "ABCDEFGH", "ABCDEFGH", "ABCDEFGH", "ABCDEFGH", "ABCD"),
+        ] {
+            assert_eq!(low_variety(value), LowVariety::Repeated, "{value}");
+            assert!(is_example_value(value, true, || false), "{value}");
         }
     }
 
