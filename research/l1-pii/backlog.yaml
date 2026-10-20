@@ -231,6 +231,7 @@ tasks:
     deps: [K03]
 
   - id: K07
+    status: done
     title: Cross-label overlap resolution with priorities in balanced/recall (IBAN vs. PAN vs. account vs. phone)
     type: engine
     deps: [K05]
