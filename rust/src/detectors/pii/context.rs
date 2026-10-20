@@ -7,13 +7,18 @@
 //! serial numbers). Both come from `anchor_lexicons/pii.json`; this module only
 //! maps lexicon IDs to labels. The nearest term decides; see [`proximity`].
 //! [`evidence`] also names the deciding term for `matched_rules[].context`.
+//! Structure (K04): a JSON key, CSV or table header, XML element or `key: value`
+//! line that is a term of the lexicon is a field name of the value it holds; see
+//! [`key_evidence`]. It outranks proximity: the key names the value, nearby words
+//! may name its neighbours.
 //! The older helpers below gate single rules on the preceding clause.
-use std::{collections::HashMap, sync::LazyLock};
+use std::{collections::HashMap, ops::Range, sync::LazyLock};
 
 use regex::Regex;
 
 use super::{score::Context, validators};
 use crate::detectors::lexical_anchors::LexicalAnchorScanner;
+use crate::detectors::structure::{normalize_key, Field, Fields};
 
 /// Support lexicon IDs of `pii.json` per PII label.
 pub static SUPPORT_LEXICON: &[(&str, &[&str])] = &[
@@ -203,6 +208,8 @@ fn region(text: &str, value: (usize, usize), longest: usize) -> (usize, usize) {
 pub enum Side {
     Before,
     After,
+    /// The term is the structural key of the value (K04).
+    Key,
 }
 
 impl Side {
@@ -210,6 +217,7 @@ impl Side {
         match self {
             Self::Before => "before",
             Self::After => "after",
+            Self::Key => "key",
         }
     }
 }
@@ -233,6 +241,15 @@ impl Evidence {
             context: Context::Field,
             anchor: Some("field"),
             ..Self::none()
+        }
+    }
+
+    /// A value bound to a field name: right before it, or as its structural key
+    /// (K04) when `structural`.
+    pub fn field_at(structural: bool) -> Self {
+        Self {
+            side: structural.then_some(Side::Key),
+            ..Self::field()
         }
     }
 
@@ -363,6 +380,109 @@ fn support_ids(label: &str) -> &'static [&'static str] {
         .iter()
         .find(|(known, _)| *known == label)
         .map_or(&[], |(_, ids)| ids)
+}
+
+/// Lexicon terms that are no structural key of a label although they support it
+/// in prose: an `iban` key holds an IBAN, which `pii_iban_*` reports, not a
+/// second finding as account number.
+const KEY_EXCLUSIONS: &[(&str, &str)] = &[("FINANCIAL_ACCOUNT_NUMBER", "iban")];
+
+/// Words a key may append to a lexicon term: `passport no`, `ni number`.
+const KEY_SUFFIXES: &[&str] = &[" no", " nr", " number", " nummer"];
+
+/// A lexicon term as a structural key: a support term of `label`, or a
+/// counter-context term (`label: None`).
+#[derive(Debug, Clone, Copy)]
+pub(super) struct KeyTerm {
+    label: Option<&'static str>,
+    id: &'static str,
+}
+
+/// Normalized lexicon terms (see [`normalize_key`]) and what they name.
+static KEYS: LazyLock<HashMap<String, Vec<KeyTerm>>> = LazyLock::new(|| {
+    let mut keys: HashMap<String, Vec<KeyTerm>> = HashMap::new();
+    let support = SUPPORT_LEXICON
+        .iter()
+        .flat_map(|(label, ids)| ids.iter().map(|id| (Some(*label), *id)));
+    let counter = COUNTER_LEXICON.iter().map(|id| (None, *id));
+    for (label, id) in support.chain(counter) {
+        for word in lexicon_words(&[id]) {
+            if label.is_some_and(|label| KEY_EXCLUSIONS.contains(&(label, word))) {
+                continue;
+            }
+            let terms = keys.entry(normalize_key(word)).or_default();
+            if !terms
+                .iter()
+                .any(|term| term.label == label && term.id == id)
+            {
+                terms.push(KeyTerm { label, id });
+            }
+        }
+    }
+    keys
+});
+
+/// What the normalized key `name` names: its lexicon terms, else those of the
+/// key without a generic suffix such as `no` or `nummer`.
+fn key_terms(name: &str) -> &'static [KeyTerm] {
+    let keys = &*KEYS;
+    keys.get(name)
+        .or_else(|| {
+            KEY_SUFFIXES
+                .iter()
+                .find_map(|suffix| keys.get(name.strip_suffix(suffix)?))
+        })
+        .map_or(&[], Vec::as_slice)
+}
+
+/// Context that the key of `field` gives a value of `label`: the field context
+/// of a support term, else a counter term, else `None` (the key names nothing or
+/// another label). The most specific name with lexicon terms decides.
+/// `terms` gives the lexicon terms of a name index.
+fn key_evidence(
+    terms: impl Fn(usize) -> &'static [KeyTerm],
+    field: &Field,
+    label: &str,
+) -> Option<Evidence> {
+    let terms = field
+        .names
+        .iter()
+        .map(|&name| terms(name))
+        .find(|terms| !terms.is_empty())?;
+    let (context, term) = match terms.iter().find(|term| term.label == Some(label)) {
+        Some(term) => (Context::Field, term),
+        None => (
+            Context::Counter,
+            terms.iter().find(|term| term.label.is_none())?,
+        ),
+    };
+    Some(Evidence {
+        context,
+        anchor: Some(term.id),
+        side: Some(Side::Key),
+        distance: None,
+    })
+}
+
+/// Structural context (K04) of the value at `value` (byte range) for `label`:
+/// [`Context::Field`] if a key of the label names exactly this value,
+/// [`Context::Counter`] for a counter-context key, `None` without such a key.
+/// Parses the structure of `text` on every call; detection caches it per text.
+pub fn key_context(text: &str, value: (usize, usize), label: &str) -> Option<Context> {
+    structure_evidence(&Fields::parse(text), value.0..value.1, label)
+        .map(|evidence| evidence.context)
+}
+
+/// Structural context of the value at `value`: the key of a field whose value
+/// it is, if that key names `label` or counter-context.
+pub(super) fn structure_evidence(
+    fields: &Fields,
+    value: Range<usize>,
+    label: &str,
+) -> Option<Evidence> {
+    fields
+        .at(value)
+        .find_map(|field| key_evidence(|name| key_terms(&fields.names()[name]), field, label))
 }
 
 // Context must precede the field in the same clause. A card or employee mention
