@@ -19,7 +19,9 @@ Subcommands:
   env             print the current run as shell assignments
   ahead           print the number of commits in the agent clone (sandboxed)
   gate            import the agent commits and run the independent checks (sandboxed)
-  publish         mark the task done, push the branch, open a draft PR on the stack (idempotent)
+  ci              push the would-be PR head to the branch and wait for GitHub CI on it
+                  (0 = green, 1 = red with the failed logs in gate-report.md, 3 = no verdict)
+  publish         open a ready PR on the stack, only for a head with green GitHub CI (idempotent)
   block ID REASON skip a task until `unblock`; drops the current worktree
   abort           drop the current worktree without blocking the task
   unblock ID      make a blocked task selectable again
@@ -276,7 +278,13 @@ def restack(open_prs: list[dict]) -> tuple[tuple[str, str], dict | None]:
             head = new_head
             print(f"RESTACKED={name}")
         if pr["baseRefName"] != prev_name:
-            run(["gh", "pr", "edit", str(pr["number"]), "--repo", GH_REPO, "--base", prev_name])
+            try:
+                run(["gh", "pr", "edit", str(pr["number"]), "--repo", GH_REPO, "--base", prev_name])
+            except RuntimeError as err:
+                # GitHub refuses base changes on PRs that are part of a native stack. The branch is
+                # already rebased; a stale PR base must not abort every following run.
+                print(f"WARN=base of #{pr['number']} not changed to {prev_name}: "
+                      f"{str(err).strip().splitlines()[-1]}")
         prev_name, prev_sha = name, head
     for name in list(stack):
         if name not in {p["headRefName"] for p in open_prs}:
@@ -437,15 +445,28 @@ def gate_steps(wt: Path) -> list[tuple[str, list[str], dict]]:
     py = str(ROOT / P["eval_venv"] / "bin" / "python")
     gpy = str(GATE_VENV / "bin" / "python")
     build = {"rw": [wt, GATE_TARGET, GATE_HOME, GATE_VENV]}
+    gitleaks = program_root("dlp") / "baselines" / "bin" / "gitleaks"
     steps = [
+        # First and cheap: GitHub push protection rejects a branch for one literal token in any commit.
+        ("plaintext-secrets", ["python3", str(SHARED / "bin" / "secret_check.py"), "--repo", str(wt),
+                               "--base", load(CURRENT, {}).get("base_sha", ""), "--head", "HEAD",
+                               "--gitleaks", str(gitleaks)], {"rw": [wt], "network": False}),
         ("fmt", [str(CARGO), "fmt", "--all", "--", "--check"], build),
         ("clippy", [str(CARGO), "clippy", "--workspace", "--all-targets", "--", "-D", "warnings"], build),
-        ("test", [str(CARGO), "test", "-p", "patronus-ark"], build),
-        ("golden", ["sh", "-c", f"cd rust && exec {CARGO} run --quiet --example 13_l1_golden_eval -- "
-                    + shlex.quote(P["golden"])], build),
+        # The following steps mirror .github/workflows/ci.yml (rust and python jobs); GitHub CI on
+        # the pushed branch is checked again before a PR is opened (`ark-l1 ci`).
+        ("test", [str(CARGO), "test", "-p", "patronus-ark", "-p", "ark-api", "-p", "ark-coordinator",
+                  "-p", "ark-distributed-protocol"], build),
+        ("golden", ["sh", "-c", f"cd rust && exec {CARGO} run --quiet --locked --example 13_l1_golden_eval -- all"],
+         build),
         ("python-ext", [gpy, "-m", "maturin", "develop", "--quiet", "--manifest-path", "python/Cargo.toml"],
          build),
         ("python-tests", [gpy, "-m", "unittest", "discover", "-s", "python/tests"], build),
+        # scripts/tests/entrypoint_peers.py expects the binary in the checkout's target/debug.
+        ("ark-api-entrypoint", ["sh", "-c", f"{CARGO} build --locked -p ark-api --bin ark-api-entrypoint && "
+                                "mkdir -p target/debug && ln -sf \"$CARGO_TARGET_DIR/debug/ark-api-entrypoint\" "
+                                "target/debug/ark-api-entrypoint"], build),
+        ("scripts-tests", [gpy, "-m", "pytest", "scripts/tests", "-q"], build),
         ("docs", ["python3", "scripts/generate_docs.py", "--check"], build),
     ]
     prepare = wt / P["eval_dir"] / "prepare_corpora.py"
@@ -577,6 +598,86 @@ def done_commit(commit: str, task: dict) -> str:
                    f"chore({PROGRAM}): mark {task['id']} done").strip()
 
 
+CI_REQUIRED = {"rust", "python"}     # jobs of .github/workflows/ci.yml that must be among the checks
+CI_TIMEOUT = 75 * 60                 # native-throughput alone may take 30 minutes
+CI_POLL = 60
+OK_CONCLUSIONS = {"success", "skipped", "neutral"}
+
+
+def publish_head(cur: dict) -> str:
+    task = cur["task"]
+    return cur["gated_commit"] if task.get("type") == "triage" else done_commit(cur["gated_commit"], task)
+
+
+def ci_failure_log(head: str) -> str:
+    """Tail of the failed job logs of the CI runs on head, for the agent's next round."""
+    runs = json.loads(run(["gh", "run", "list", "--repo", GH_REPO, "--commit", head, "--json",
+                           "databaseId,conclusion,name"], check=False) or "[]")
+    out = []
+    for r in runs:
+        if r.get("conclusion") not in OK_CONCLUSIONS:
+            log = run(["gh", "run", "view", str(r["databaseId"]), "--repo", GH_REPO, "--log-failed"], check=False)
+            out.append(f"### {r['name']} ({r.get('conclusion')})\n{log[-5000:]}")
+    return "\n".join(out)[-9000:]
+
+
+def cmd_ci() -> int:
+    """Push the would-be PR head to the branch (no PR yet) and wait for GitHub CI on it.
+
+    Exit 0 = green (publish may open a ready PR), 1 = red (report in gate-report.md for the next
+    round), 3 = no verdict (timeout, missing checks, GitHub error): the run stays resumable."""
+    cur = load(CURRENT, None)
+    if cur is None or not cur.get("gated_commit"):
+        print("no gated run to check")
+        return 3
+    if cur["task"].get("type") == "restack":
+        return 0  # the branch already has a PR; its CI runs on the force-push
+    head = publish_head(cur)
+    cur["publish_commit"] = head
+    save(CURRENT, cur)
+    if cur.get("ci_green") == head:
+        print(f"CI=green {head[:12]} (cached)")
+        return 0
+    try:
+        git("push", "--quiet", "origin", f"+{head}:refs/heads/{cur['branch']}")
+    except RuntimeError as err:
+        print(f"PUBLISH_ERROR={str(err).strip().splitlines()[-1]}")
+        return 3
+    print(f"== waiting for GitHub CI on {cur['branch']} @ {head[:12]}")
+    deadline = dt.datetime.now() + dt.timedelta(seconds=CI_TIMEOUT)
+    checks: list[dict] = []
+    while dt.datetime.now() < deadline:
+        subprocess.run(["sleep", str(CI_POLL)])
+        try:
+            checks = json.loads(run(["gh", "api", f"repos/{GH_REPO}/commits/{head}/check-runs?per_page=100"]))[
+                "check_runs"]
+        except (RuntimeError, ValueError, KeyError) as err:
+            print(f"WARN=check-runs not readable: {str(err).strip().splitlines()[-1] if str(err).strip() else err}")
+            continue
+        names = {c["name"] for c in checks}
+        if not CI_REQUIRED <= names or any(c["status"] != "completed" for c in checks):
+            continue
+        failed = [c["name"] for c in checks if c["conclusion"] not in OK_CONCLUSIONS]
+        report = STATE / "gate-report.md"
+        if not failed:
+            cur["ci_green"] = head
+            save(CURRENT, cur)
+            if report.exists():
+                report.write_text(report.read_text() + f"- ✅ GitHub CI ({', '.join(sorted(names))})\n")
+            print(f"CI=green {head[:12]}")
+            return 0
+        report.write_text(
+            f"# GitHub CI {cur['task_id']} ({cur['branch']} @ {head[:12]})\n\n"
+            f"- ❌ GitHub CI red: {', '.join(failed)}. The local gate was green, so the failing step is not\n"
+            f"  mirrored locally; reproduce it like .github/workflows/ci.yml does.\n```\n{ci_failure_log(head)}\n```\n")
+        print(report.read_text())
+        print(f"CI=red {', '.join(failed)}")
+        return 1
+    print(f"CI=timeout after {CI_TIMEOUT // 60} min; checks: "
+          + ", ".join(f"{c['name']}:{c['status']}/{c.get('conclusion')}" for c in checks))
+    return 3
+
+
 def cmd_publish() -> int:
     cur = load(CURRENT, None)
     if cur is None or not cur.get("gated_commit"):
@@ -585,11 +686,13 @@ def cmd_publish() -> int:
     task = cur["task"]
     if task.get("type") == "restack":
         return publish_restack(cur)
+    head = cur.get("publish_commit") or publish_head(cur)
+    if cur.get("ci_green") != head:
+        # Rule: no PR without green GitHub CI on exactly the commit the PR shows.
+        print(f"PUBLISH_ERROR=GitHub CI not green on {head[:12]} (run `ark-l1 ci` first)")
+        return 1
     if task.get("type") == "triage":
         (STATE / f"triage-{task['week']}").write_text(dt.datetime.now(dt.timezone.utc).isoformat() + "\n")
-        head = cur["gated_commit"]
-    else:
-        head = cur.get("publish_commit") or done_commit(cur["gated_commit"], task)
     cur["publish_commit"] = head
     save(CURRENT, cur)
     git("push", "--quiet", "origin", f"+{head}:refs/heads/{cur['branch']}")
@@ -612,7 +715,8 @@ def cmd_publish() -> int:
     if existing:
         url = existing[0]["url"]
     else:
-        url = run(["gh", "pr", "create", "--repo", GH_REPO, "--draft", "--base", cur["base"],
+        # Ready for review, not a draft: only green, finished work reaches this point.
+        url = run(["gh", "pr", "create", "--repo", GH_REPO, "--base", cur["base"],
                    "--head", cur["branch"], "--label", LABEL,
                    "--title", f"{P['title']} {task['id']}: {task.get('title', '')}"[:250], "--body", body])
     stack = load(STACK, {})
@@ -654,6 +758,11 @@ def cmd_block(task_id: str, reason: str) -> int:
     blocked[task_id] = {"reason": reason, "at": dt.datetime.now(dt.timezone.utc).isoformat()}
     save(BLOCKED, blocked)
     if cur is not None and cur["task_id"] == task_id:
+        if cur.get("publish_commit") and cur["task"].get("type") != "restack" and not json.loads(run(
+                ["gh", "pr", "list", "--repo", GH_REPO, "--head", cur["branch"], "--state", "all",
+                 "--json", "number"], check=False) or "[]"):
+            # `ark-l1 ci` pushed the branch for a CI run that stayed red; without a PR it is just noise.
+            git("push", "--quiet", "origin", "--delete", cur["branch"], check=False)
         drop_worktree(cur)
     print(f"BLOCKED={task_id}")
     return 0
@@ -697,7 +806,7 @@ def main(argv: list[str]) -> int:
     cmd, args = argv[0], argv[1:]
     table = {
         "next": cmd_next, "env": cmd_env, "gate": cmd_gate, "publish": cmd_publish,
-        "abort": cmd_abort, "status": cmd_status, "ahead": cmd_ahead,
+        "abort": cmd_abort, "status": cmd_status, "ahead": cmd_ahead, "ci": cmd_ci,
     }
     if cmd in table:
         return table[cmd]()
