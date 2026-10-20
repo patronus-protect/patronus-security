@@ -179,7 +179,7 @@ fn expected_score(text: &str, rule: &serde_json::Value) -> (f64, Context) {
 fn balanced_and_recall_keep_the_strict_spans_unless_counter_context_outranks() {
     // K03: scored modes drop a strict span only when a counter-context term is
     // nearer than any support term; every other strict span stays, with the
-    // score of its rule in its context.
+    // score of its rule in its context. K05: scored-only rules may add spans.
     let strict_scanner = scanner(None);
     for mode in [PiiMode::Balanced, PiiMode::Recall] {
         let scored_scanner = scanner(with_mode(mode));
@@ -222,8 +222,21 @@ fn balanced_and_recall_keep_the_strict_spans_unless_counter_context_outranks() {
                 }
             }
             for span in &scored.evidence_spans {
+                // K05: only a scored-only rule (a bare checksum value) adds a span.
+                let scored_only = rules.iter().any(|rule| {
+                    rule["start_byte"] == span.start_byte
+                        && rule["end_byte"] == span.end_byte
+                        && PII_PATTERNS
+                            .iter()
+                            .any(|pattern| pattern.name == rule["rule_id"] && pattern.scored_only)
+                });
                 assert!(
-                    spans(&strict).contains(&(span.label.clone(), span.start_char, span.end_char)),
+                    scored_only
+                        || spans(&strict).contains(&(
+                            span.label.clone(),
+                            span.start_char,
+                            span.end_char
+                        )),
                     "{mode:?}: {text}: {span:?} not in strict"
                 );
                 assert!(
@@ -348,7 +361,8 @@ fn checksum_strength_is_reserved_for_real_check_digits() {
             "pii_iban_de",
             "pii_iban_generic",
             "pii_credit_card",
-            "pii_steuer_id_de"
+            "pii_steuer_id_de",
+            "pii_steuer_id_de_context_free"
         ]
     );
 }
@@ -365,6 +379,7 @@ fn reference_scores_per_rule() {
         ("pii_credit_card", 0.75),
         ("pii_credit_card_cvv", 0.60),
         ("pii_steuer_id_de", 1.00),
+        ("pii_steuer_id_de_context_free", 0.55),
         ("pii_rentenversicherung_de", 0.90),
         ("pii_kfz_kennzeichen_de", 0.65),
         ("pii_ssn_us", 0.85),

@@ -14,6 +14,7 @@ pub(super) const IBAN_DE: PiiPattern = PiiPattern {
     base_score: 55,
     captured_value: false,
     requires_context: false,
+    scored_only: false,
 };
 
 pub(super) const IBAN_GENERIC: PiiPattern = PiiPattern {
@@ -25,6 +26,7 @@ pub(super) const IBAN_GENERIC: PiiPattern = PiiPattern {
     base_score: 45,
     captured_value: false,
     requires_context: false,
+    scored_only: false,
 };
 
 // ── Kreditkarte ──────────────────────────────────────────────────────────
@@ -37,6 +39,7 @@ pub(super) const CREDIT_CARD: PiiPattern = PiiPattern {
     base_score: 40,
     captured_value: false,
     requires_context: false,
+    scored_only: false,
 };
 
 pub(super) const CREDIT_CARD_CVV: PiiPattern = PiiPattern {
@@ -48,6 +51,7 @@ pub(super) const CREDIT_CARD_CVV: PiiPattern = PiiPattern {
     base_score: 20,
     captured_value: true,
     requires_context: false,
+    scored_only: false,
 };
 
 pub(super) const CREDIT_CARD_EXPIRY: PiiPattern = PiiPattern {
@@ -59,6 +63,7 @@ pub(super) const CREDIT_CARD_EXPIRY: PiiPattern = PiiPattern {
     base_score: 25,
     captured_value: true,
     requires_context: false,
+    scored_only: false,
 };
 
 // ── SWIFT / BIC ─────────────────────────────────────────────────────────
@@ -72,4 +77,5 @@ pub(super) const SWIFT_BIC_CONTEXT: PiiPattern = PiiPattern {
     base_score: 40,
     captured_value: true,
     requires_context: false,
+    scored_only: false,
 };

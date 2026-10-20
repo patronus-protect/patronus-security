@@ -365,6 +365,7 @@ checksums:
     luhn: {algorithm: Luhn}
     mod97: {algorithm: ISO 7064 MOD 97-10}
     steuer_id: {algorithm: "ISO 7064 MOD 11,10"}
+    steuer_id_issued: {algorithm: "ISO 7064 MOD 11,10"}   # plus BZSt-Ziffernverteilung (K05, kontextfrei)
     ip_address: null
     unanchored_phone: null
     phone: null

@@ -32,6 +32,10 @@ pub struct PiiPattern {
     /// Emit only when the context engine finds a support term of the label near
     /// the value and no nearer counter-context term, in every mode (K03).
     pub requires_context: bool,
+    /// Emit only in the scored modes `balanced` and `recall`; `strict` never runs
+    /// the rule (K05). Reserved for unbound checksum rules: the bare form of a
+    /// value that strict reports only after its field name.
+    pub scored_only: bool,
 }
 
 /// All PII rules in evaluation order. The rules live in regional modules; the
@@ -68,6 +72,7 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     identifiers::DATE_OF_BIRTH_WRITTEN_MONTH_FIRST,
     identifiers::FINANCIAL_ACCOUNT_NUMBER,
     de::STEUER_ID,
+    de::STEUER_ID_CONTEXT_FREE,
     de::STEUERNUMMER,
     de::RENTENVERSICHERUNG,
     de::HEALTH_INSURANCE_NUMBER,
@@ -178,7 +183,19 @@ impl PiiPipeline {
     where
         F: Fn(&str) -> bool,
     {
-        self.detect_prepared_scored(prepared, allows_rule, explain, mode.min_score())
+        let strict = mode.min_score().is_none();
+        self.detect_prepared_scored(
+            prepared,
+            |rule_id| {
+                allows_rule(rule_id)
+                    && !(strict
+                        && PII_PATTERNS
+                            .iter()
+                            .any(|pattern| pattern.name == rule_id && pattern.scored_only))
+            },
+            explain,
+            mode.min_score(),
+        )
     }
 
     /// Context of a match: the field the rule binds (its own field name or a
@@ -288,6 +305,9 @@ impl NativeRegexDetector for PiiPipeline {
     ) -> bool {
         let pattern = &PII_PATTERNS[index];
         let text = prepared.text();
+        if pattern.scored_only && !context::stands_alone(text, captures.get(0).unwrap().range()) {
+            return false;
+        }
         if pattern.requires_context {
             // Context-bound rules emit the whole match; it is the value. A
             // structural key decides before proximity.
@@ -359,6 +379,19 @@ impl NativeRegexDetector for PiiPipeline {
             }
             _ => true,
         }
+    }
+
+    /// The trait's unscored detection is `strict`: scored-only rules stay off.
+    fn detect_prepared_with_options<F>(
+        &self,
+        prepared: &crate::threat::NativeText<'_>,
+        allows_rule: F,
+        explain: bool,
+    ) -> NativeDetection
+    where
+        F: Fn(&str) -> bool,
+    {
+        self.detect_prepared_with_mode(prepared, allows_rule, explain, PiiMode::Strict)
     }
 
     fn anchor_gates(&self) -> &[crate::detectors::anchor_gate::AnchorGate] {

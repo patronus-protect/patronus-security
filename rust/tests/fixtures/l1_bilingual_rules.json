@@ -323,6 +323,20 @@
   },
   {
     "category": "pii",
+    "rule_id": "pii_steuer_id_de_context_free",
+    "de": "Für die Lohnabrechnung brauche ich noch 47426548904.",
+    "en": "Please add 74265832011 to the payroll file.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Ihre Steuer-ID ist 39662845670.",
+        "en": "29046789957 is the German tax ID on file."
+      }
+    }
+  },
+  {
+    "category": "pii",
     "rule_id": "pii_steuernummer_de",
     "de": "Steuernummer: 123/456/78901",
     "en": "German tax number: 123/456/78901",
