@@ -1272,6 +1272,81 @@ T07_STRICT_SECONDARY_CASES = [
 for _row in T07_STRICT_SECONDARY_CASES:
     PII_CASES[_row["target_label"]].append(_row)
 
+# T26 field names in FR/ES/IT/NL (TRIAGE 2026-W43 bucket 12): the anchor rules for date of
+# birth, customer and employee ID, account number, CVV, US SSN, passport and username accept
+# them in `strict`, before the value and as a structural key. Hard negatives keep the field
+# name but carry a value the unchanged validator rejects, no assignment, a non-card security
+# code, or a neighbouring field (order number, expiry date). Appended so existing ids stay
+# stable.
+T26_MULTILINGUAL_FIELD_CASES = [
+    p("DOB", "fr", "pii_date_of_birth", "Date de naissance : ", "14/07/1985"),
+    p("DOB", "fr", "pii_date_of_birth", "Mme Lefèvre, née le ", "03.11.1979", ", réside à Lyon.", carrier="prose"),
+    p("CUSTOMER_ID", "fr", "pii_customer_id", "Numéro de client : ", "CL-480215"),
+    p("CUSTOMER_ID", "fr", "pii_customer_id", '{"numero_client": "', "CL-99120", '", "ville": "Lyon"}', carrier="json"),
+    p("EMPLOYEE_ID", "fr", "pii_employee_id", "Identifiant d'employé : ", "E-204518"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "fr", "pii_financial_account_number", "Numéro de compte : ", "CPT-0091827"),
+    p("CREDITCARD_CVV", "fr", "pii_credit_card_cvv", "Carte 4111 1111 1111 1111, code de sécurité de la carte de crédit : ", "737", also=(("CREDITCARD", "4111 1111 1111 1111"),)),
+    p("SSN", "fr", "pii_ssn_us", "Numéro de sécurité sociale : ", "536-90-4421"),
+    p("PASSPORT_NUMBER", "fr", "pii_passport_number_de", "Numéro de passeport : ", "C01X00T47"),
+    p("USERNAME", "fr", "pii_username", "Nom d'utilisateur : ", "claire.martin85"),
+    n("DOB", "fr", "pii_date_of_birth", "Date de naissance : 31/02/1985", "impossible calendar date"),
+    n("CUSTOMER_ID", "fr", "pii_customer_id", "Numéro de commande : CMD-480215", "order number, not a customer id"),
+    n("USERNAME", "fr", "pii_username", "Choisissez un nom d'utilisateur pour votre compte.", "field name in prose without an assignment", carrier="prose"),
+    n("CREDITCARD_CVV", "fr", "pii_credit_card_cvv", "Carte 4111 1111 1111 1111. Code de sécurité du bâtiment : 4821", "building access code, not a card security code", also=(("CREDITCARD", "4111 1111 1111 1111"),)),
+    n("SSN", "fr", "pii_ssn_us", "Numéro de sécurité sociale : 000-12-3456", "area 000 is never issued"),
+    n("PASSPORT_NUMBER", "fr", "pii_passport_number_de", "Date d'expiration du passeport : 12/03/2031", "expiry date, not a passport number"),
+    p("DOB", "es", "pii_date_of_birth", "Fecha de Nacimiento: ", "23/08/1975"),
+    p("DOB", "es", "pii_date_of_birth", "La titular, nacida el ", "05/09/1990", ", reside en Sevilla.", carrier="prose"),
+    p("CUSTOMER_ID", "es", "pii_customer_id", "Número de cliente: ", "CLI-302948"),
+    p("EMPLOYEE_ID", "es", "pii_employee_id", "Número de Identificación del Empleado: ", "Vn-21203"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "es", "pii_financial_account_number", "Número de cuenta: ", "CTA-20481937"),
+    p("CREDITCARD_CVV", "es", "pii_credit_card_cvv", "Tarjeta 5555 5555 5555 4444, código de seguridad de la tarjeta: ", "318", also=(("CREDITCARD", "5555 5555 5555 4444"),)),
+    p("SSN", "es", "pii_ssn_us", "Número de seguro social: ", "412-56-7834"),
+    p("PASSPORT_NUMBER", "es", "pii_passport_number_de", "Número de pasaporte: ", "P4K7R2M9X"),
+    p("USERNAME", "es", "pii_username", "Nombre de usuario: ", "jgarcia_88"),
+    p("DOB", "es", "pii_date_of_birth", '{"fecha_de_nacimiento": "', "12/10/1980", '"}', carrier="json"),
+    n("DOB", "es", "pii_date_of_birth", "Fecha de nacimiento: 30/02/1990", "impossible calendar date"),
+    n("CUSTOMER_ID", "es", "pii_customer_id", "Número de pedido: PED-302948", "order number, not a customer id"),
+    n("USERNAME", "es", "pii_username", "Introduzca su nombre de usuario y contraseña.", "field name in prose without an assignment", carrier="prose"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "es", "pii_financial_account_number", "Número de cuenta: 000000000", "all-zero placeholder"),
+    n("SSN", "es", "pii_ssn_us", "Número de seguro social: 666-12-3456", "area 666 is never issued"),
+    n("PASSPORT_NUMBER", "es", "pii_passport_number_de", "Fecha de caducidad del pasaporte: 14/05/2030", "expiry date, not a passport number"),
+    p("DOB", "it", "pii_date_of_birth", "Data di Nascita: ", "09/11/1973"),
+    p("DOB", "it", "pii_date_of_birth", "Il sig. Rossi, nato il ", "15/04/1981", ", risiede a Torino.", carrier="prose"),
+    p("CUSTOMER_ID", "it", "pii_customer_id", "Codice cliente: ", "CC-448210"),
+    p("CUSTOMER_ID", "it", "pii_customer_id", "nome;codice_cliente\nRossi;", "CC-77125", carrier="csv"),
+    p("EMPLOYEE_ID", "it", "pii_employee_id", "ID dipendente: ", "D-55012"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "it", "pii_financial_account_number", "Numero di conto: ", "CT-0091827"),
+    p("CREDITCARD_CVV", "it", "pii_credit_card_cvv", "Carta 4111 1111 1111 1111, codice di sicurezza della carta di credito: ", "552", also=(("CREDITCARD", "4111 1111 1111 1111"),)),
+    p("SSN", "it", "pii_ssn_us", "Numero di previdenza sociale: ", "219-45-7781"),
+    p("PASSPORT_NUMBER", "it", "pii_passport_number_de", "Numero di passaporto: ", "YN8K4T7C2"),
+    p("USERNAME", "it", "pii_username", "Nome utente: ", "lbianchi77"),
+    n("DOB", "it", "pii_date_of_birth", "Data di nascita: 32/01/1975", "impossible calendar date"),
+    n("CUSTOMER_ID", "it", "pii_customer_id", "Numero d'ordine: ORD-448210", "order number, not a customer id"),
+    n("USERNAME", "it", "pii_username", "Il nome utente è obbligatorio.", "field name in prose without an assignment", carrier="prose"),
+    n("EMPLOYEE_ID", "it", "pii_employee_id", "ID dipendente: sconosciuto", "no identifier value"),
+    n("SSN", "it", "pii_ssn_us", "Numero di previdenza sociale: 123-00-4567", "group 00 is never issued"),
+    n("CREDITCARD_CVV", "it", "pii_credit_card_cvv", "Carta 4111 1111 1111 1112, codice di sicurezza della carta: 552", "the card number fails Luhn, so no card verification code"),
+    p("DOB", "nl", "pii_date_of_birth", "Geboortedatum: ", "15-12-1992"),
+    p("DOB", "nl", "pii_date_of_birth", "Mevrouw De Vries, geboren op ", "02-03-1987", ", woont in Utrecht.", carrier="prose"),
+    p("CUSTOMER_ID", "nl", "pii_customer_id", "Klantnummer: ", "KL-501873"),
+    p("CUSTOMER_ID", "nl", "pii_customer_id", "Ik ben Rune Johansson, klantnummer ", "CUST14229662", ".", carrier="prose"),
+    p("EMPLOYEE_ID", "nl", "pii_employee_id", "Personeelsnummer: ", "P-30411"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "nl", "pii_financial_account_number", "Bankrekeningnummer: ", "619867267"),
+    p("CREDITCARD_CVV", "nl", "pii_credit_card_cvv", "Creditcard 5555 5555 5555 4444, creditcard-beveiligingscode is ", "713", also=(("CREDITCARD", "5555 5555 5555 4444"),)),
+    p("SSN", "nl", "pii_ssn_us", "Sociaal zekerheidsnummer: ", "523-41-9087"),
+    p("PASSPORT_NUMBER", "nl", "pii_passport_number_de", "Paspoortnummer: ", "NXR4C7T19"),
+    p("USERNAME", "nl", "pii_username", '{"gebruikersnaam": "', "jdevries", '"}', carrier="json"),
+    n("DOB", "nl", "pii_date_of_birth", "Geboortedatum: 29-02-1991", "impossible calendar date (1991 is no leap year)"),
+    n("CUSTOMER_ID", "nl", "pii_customer_id", "Ordernummer: ORD-501873", "order number, not a customer id"),
+    n("USERNAME", "nl", "pii_username", "Kies een gebruikersnaam voor uw account.", "field name in prose without an assignment", carrier="prose"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "nl", "pii_financial_account_number", "Rekeningnummer: 0000000", "all-zero placeholder"),
+    n("CREDITCARD_CVV", "nl", "pii_credit_card_cvv", "Creditcard 5555 5555 5555 4444. Beveiligingscode van de app: 9921", "app security code, not a card security code", also=(("CREDITCARD", "5555 5555 5555 4444"),)),
+    n("PASSPORT_NUMBER", "nl", "pii_passport_number_de", "Vervaldatum paspoort: 30-06-2032", "expiry date, not a passport number"),
+]
+for _row in T26_MULTILINGUAL_FIELD_CASES:
+    PII_CASES[_row["target_label"]].append(_row)
+
 # DLP golden schema v2 (E13). Every DLP row names the rule it exercises (`rule_id`), the
 # document that carries the value (`carrier`), its difficulty `tags` and whether it is a
 # `known_gap`: a positive the detector misses today, reported by 13_l1_golden_eval but

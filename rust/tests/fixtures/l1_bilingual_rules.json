@@ -218,6 +218,12 @@
     "structure": {
       "de": "| Karte | CVV |\n|---|---|\n| 4111 1111 1111 1111 | 737 |",
       "en": "| Card | CVV |\n|---|---|\n| 4111 1111 1111 1111 | 246 |"
+    },
+    "multilingual": {
+      "fr": "Carte 4111 1111 1111 1111, code de sécurité de la carte : 737",
+      "es": "Tarjeta 5555 5555 5555 4444, código de seguridad de la tarjeta: 318",
+      "it": "Carta 4111 1111 1111 1111, codice di sicurezza della carta: 552",
+      "nl": "Creditcard 5555 5555 5555 4444, creditcard-beveiligingscode: 713"
     }
   },
   {
@@ -247,6 +253,12 @@
     "structure": {
       "de": "<mitarbeiter><personalnummer>PN-77120</personalnummer></mitarbeiter>",
       "en": "employee_id,name\nE-40512,Maya Patel"
+    },
+    "multilingual": {
+      "fr": "Identifiant d'employé : E-204518",
+      "es": "Número de empleado: E-118204",
+      "it": "ID dipendente: D-55012",
+      "nl": "Personeelsnummer: P-30411"
     }
   },
   {
@@ -272,6 +284,12 @@
     "structure": {
       "de": "Name;Kundennummer\nJana Roth;KD-55120",
       "en": "{\"customerId\": \"CUS-88412\"}"
+    },
+    "multilingual": {
+      "fr": "Numéro de client : CL-480215",
+      "es": "Número de cliente: CLI-302948",
+      "it": "Codice cliente: CC-448210",
+      "nl": "Klantnummer: KL-501873"
     }
   },
   {
@@ -316,6 +334,12 @@
     "structure": {
       "de": "{\"benutzername\": \"p.lang\"}",
       "en": "user_name\tteam\nm.chen\tplatform"
+    },
+    "multilingual": {
+      "fr": "Nom d'utilisateur : claire.martin85",
+      "es": "Nombre de usuario: jgarcia_88",
+      "it": "Nome utente: lbianchi77",
+      "nl": "Gebruikersnaam: vidal1842"
     }
   },
   {
@@ -327,6 +351,12 @@
     "structure": {
       "de": "Name;Geburtsdatum\nJana Roth;14.03.1987",
       "en": "{\"date_of_birth\": \"02/11/1990\"}"
+    },
+    "multilingual": {
+      "fr": "Date de naissance : 14/07/1985",
+      "es": "Fecha de nacimiento: 23/08/1975",
+      "it": "Data di nascita: 09/11/1973",
+      "nl": "Geboortedatum: 15-12-1992"
     }
   },
   {
@@ -360,6 +390,12 @@
     "secondary": {
       "de": "Kontonummer: GB82WEST12345698765432",
       "en": "Bank account: GB82WEST12345698765432"
+    },
+    "multilingual": {
+      "fr": "Numéro de compte : CPT-0091827",
+      "es": "Número de cuenta: CTA-20481937",
+      "it": "Numero di conto: CT-0091827",
+      "nl": "Bankrekeningnummer: 619867267"
     }
   },
   {
@@ -432,6 +468,12 @@
     "structure": {
       "de": "{\"passnummer\": \"C4J7K9L2N\"}",
       "en": "<traveler passportNumber=\"C01X00T47\"/>"
+    },
+    "multilingual": {
+      "fr": "Numéro de passeport : C01X00T47",
+      "es": "Número de pasaporte: P4K7R2M9X",
+      "it": "Numero di passaporto: YN8K4T7C2",
+      "nl": "Paspoortnummer: NXR4C7T19"
     }
   },
   {
@@ -468,6 +510,12 @@
     "obfuscated": {
       "de": "US-Sozialversicherungsnummer: ５３２-８７-１０９４",
       "en": "Social security number: 532​-87​-1094"
+    },
+    "multilingual": {
+      "fr": "Numéro de sécurité sociale : 536-90-4421",
+      "es": "Número de seguro social: 412-56-7834",
+      "it": "Numero di previdenza sociale: 219-45-7781",
+      "nl": "Sociaal zekerheidsnummer: 523-41-9087"
     }
   },
   {

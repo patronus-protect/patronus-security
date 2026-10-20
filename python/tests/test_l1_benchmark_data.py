@@ -121,6 +121,16 @@ class L1BenchmarkDataTests(unittest.TestCase):
                         counts[(label, language, case_type)], 5, (label, language, case_type)
                     )
 
+    def test_fr_es_it_nl_field_names_have_n_gated_cases_per_language(self):
+        # T26: the anchor rules accept FR/ES/IT/NL field names; each language has at least
+        # five gated positives and five hard negatives.
+        counts = Counter(
+            (row["language"], row["case_type"]) for row in load("pii_l1") if not row["known_gap"]
+        )
+        for language in ("fr", "es", "it", "nl"):
+            for case_type in ("positive", "hard_negative"):
+                self.assertGreaterEqual(counts[(language, case_type)], 5, (language, case_type))
+
     def test_every_native_dlp_label_has_n_gated_cases_per_language(self):
         # Golden schema v2 (E13): known gaps are reported, not gated, so they do not count.
         rows = load("dlp_l1")
@@ -144,7 +154,9 @@ class L1BenchmarkDataTests(unittest.TestCase):
             for row in rows:
                 materialized = recipes.materialize_row(row)
                 self.assertEqual(row["suite"], name, row["id"])
-                self.assertIn(row["language"], {"de", "en"}, row["id"])
+                # pii_l1 also carries FR/ES/IT/NL field names of the anchor rules (T26).
+                languages = {"de", "en", "fr", "es", "it", "nl"} if name == "pii_l1" else {"de", "en"}
+                self.assertIn(row["language"], languages, row["id"])
                 self.assertEqual(row["span_unit"], "unicode_code_point", row["id"])
                 self.assertIn(row["provenance"]["origin"], {"synthetic", "derived_existing_fixture"})
                 if row["case_type"] == "positive":
@@ -179,7 +191,7 @@ class L1BenchmarkDataTests(unittest.TestCase):
 
     def test_language_distribution_is_broad(self):
         expected = {
-            "pii_l1": {"de": 468, "en": 449},
+            "pii_l1": {"de": 468, "en": 449, "fr": 16, "es": 16, "it": 16, "nl": 16},
             "dlp_l1": {"de": 318, "en": 324},
         }
         for name, distribution in expected.items():
@@ -243,6 +255,10 @@ class SecondaryEntityGoldTests(unittest.TestCase):
         annotated = Counter()
         for row in load("pii_l1"):
             if row["case_type"] != "hard_negative" or not row["entities"]:
+                continue
+            if row["target_label"] == "CREDITCARD_CVV":
+                # T26: a non-card security code next to a real card annotates that card.
+                self.assertEqual([e["label"] for e in row["entities"]], ["CREDITCARD"], row["id"])
                 continue
             self.assertEqual([e["label"] for e in row["entities"]], ["IBAN"], row["id"])
             self.assertIn(row["target_label"], {"CREDITCARD", "FINANCIAL_ACCOUNT_NUMBER"}, row["id"])
