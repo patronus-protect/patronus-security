@@ -86,6 +86,8 @@
     "weak_repeated_password": {"source": "T06: weak but real password made of one repeated chunk", "segments": [{"lit": "abcabcabcabc"}]},
     "weak_sequential_run_token": {"source": "T06: generic token with a 1234567890abcdef run", "segments": [{"alphabet": "alnum", "len": 12}, {"lit": "1234567890abcdef"}, {"alphabet": "alnum", "len": 12}]},
     "weak_repeated_chunk_github_token": {"source": "T06: ghp_ token shape with one repeated chunk (CRC over the tail only, not checksum-valid)", "segments": [{"lit": "ghp_"}, {"alphabet": "alnum", "len": 10}, {"lit": "Zq7Zq7Zq7Zq7"}, {"alphabet": "alnum", "len": 10}, {"checksum": "crc32_base62"}]},
+    "weak_snake_case_password": {"source": "T07: real SCREAMING_SNAKE password without a placeholder word", "segments": [{"alphabet": "upper", "len": 6}, {"lit": "_"}, {"alphabet": "upper", "len": 7}, {"lit": "_"}, {"alphabet": "digit", "len": 4}]},
+    "weak_dollar_password": {"source": "T07: real password with a leading $ and digits (not a shell variable)", "segments": [{"lit": "$"}, {"alphabet": "lower", "len": 7}, {"alphabet": "digit", "len": 4}]},
     "generic_api_secret": {"source": "40-char hex API secret", "segments": [{"alphabet": "hex_lower", "len": 40}]},
     "aws_sigv4_signature": {"source": "AWS SigV4 query auth: X-Amz-Signature is 64 hex", "segments": [{"alphabet": "hex_lower", "len": 64}]},
     "java_session_id": {"source": "Servlet JSESSIONID, 32 upper-case hex", "segments": [{"alphabet": "hex_upper", "len": 32}]},

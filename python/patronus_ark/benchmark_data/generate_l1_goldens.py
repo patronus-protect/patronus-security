@@ -3475,6 +3475,228 @@ DLP_T06_CASES = {
 for _label, _rows in DLP_T06_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
+
+# T07: placeholders (YOUR_…_HERE, HIER_…_EINTRAGEN, BITTE_AENDERN, TODO, REPLACE_ME, kebab
+# YOUR-API-TOKEN, masks) and references to the environment or a template ($VAR, ${VAR},
+# %VAR%, {{var}}, var.x, os.environ[…], ENV.fetch(…), os.Getenv, System.getenv,
+# Environment.GetEnvironmentVariable) in value-capturing rules are hard negatives. Real values
+# next to such references and placeholder-like real passwords stay positives.
+DLP_T07_CASES = {
+    "CREDENTIAL": [
+        dn(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "# Vorlage: Werte vor dem ersten Start setzen\nDB_PASSWORT=HIER_DB_PASSWORT_EINTRAGEN\nAPP_PORT=8080\n",
+            "placeholder HIER_…_EINTRAGEN", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "datenbank:\n  host: db.intern\n  passwort: BITTE_AENDERN\n",
+            "placeholder BITTE_AENDERN", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "module Abgleich\n  class Client\n    SERVICE_TOKEN = ENV.fetch(\"SERVICE_TOKEN\")\n  end\nend\n",
+            "Ruby ENV.fetch reference", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "provider \"objektspeicher\" {\n  region        = \"eu-central-1\"\n  client_secret = var.client_secret\n}\n",
+            "Terraform variable reference var.x", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "GET /v1/lieferungen?status=offen HTTP/1.1\nHost: api.example.de\nClient-Secret: {{clientSecret}}\n",
+            "Handlebars template reference {{var}}", carrier="http",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_credential_in_url",
+            "$ curl -sS \"https://api.example.de/v1/export?format=csv&api_key=$EXPORT_API_KEY\"\n",
+            "shell variable $VAR", carrier="cli",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "$ export SERVICE_TOKEN=\"$VAULT_SERVICE_TOKEN\"\n$ ./bin/abgleich --einmalig\n",
+            "shell variable $VAR in quotes", carrier="cli",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_url_userinfo_password",
+            "DATABASE_URL=postgres://app:HIER_PASSWORT_EINTRAGEN@db.intern:5432/lager\n",
+            "placeholder HIER_…_EINTRAGEN in URL userinfo", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_signed_url_signature",
+            "Download-Link: https://dateien.example.de/bericht.zip?Expires=1767225600&Signature=HIER_SIGNATUR_EINTRAGEN",
+            "placeholder HIER_…_EINTRAGEN as signature", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "// Client für den Berichtsdienst\nprivate static readonly string ClientSecret = Environment.GetEnvironmentVariable(\"CLIENT_SECRET\");\n",
+            "C# Environment.GetEnvironmentVariable reference", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "import os\n\nDB_KENNWORT = os.environ[\"DB_KENNWORT\"]\n",
+            "Python os.environ[…] reference", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "# .env.example - copy to .env\nDB_PASSWORD=YOUR_DB_PASSWORD_HERE\nAPP_PORT=8080\n",
+            "placeholder YOUR_…_HERE", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "[database]\nhost = db.internal\npassword = TODO\n",
+            "placeholder TODO", carrier="ini",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "import os\n\nclient_secret = os.environ[\"CLIENT_SECRET\"]\n",
+            "Python os.environ[…] reference", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "package billing\n\nimport \"os\"\n\nvar clientSecret = os.Getenv(\"CLIENT_SECRET\")\n",
+            "Go os.Getenv reference", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "resource \"aws_db_instance\" \"reports\" {\n  username = \"app\"\n  password = var.db_password\n}\n",
+            "Terraform variable reference var.x", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_credential_in_url",
+            "$ curl -sS \"https://api.example.com/v1/export?format=csv&api_key=YOUR_API_KEY_HERE\"\n",
+            "placeholder YOUR_…_HERE in a query parameter", carrier="cli",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_url_userinfo_password",
+            "cache:\n  url: redis://default:REPLACE_ME@cache:6379/0\n",
+            "placeholder REPLACE_ME in URL userinfo", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "<appSettings>\n  <add key=\"Region\" value=\"eu-central-1\" />\n</appSettings>\n"
+            "2026-09-14 08:12:03 DEBUG effective config: client_secret=%CLIENT_SECRET% retries=3\n",
+            "Windows environment reference %VAR%", carrier="log",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "require \"net/http\"\n\nmodule Acme\n  API_TOKEN = ENV[\"API_TOKEN\"]\nend\n",
+            "Ruby ENV[…] reference", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "{\"cells\": [{\"cell_type\": \"code\", \"source\": [\"api_key = \\\"********\\\"\\n\", \"client = Client(api_key)\"]}]}",
+            "masked value in a JSON-escaped notebook cell", carrier="json",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "# TODO: in den Vault verschieben\nAPI_BASIS=${API_BASIS_URL}\nDB_PASSWORT=<<secret:0>>\n",
+            "password", 7001, carrier="env",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "datenbank:\n  host: db.intern\n  benutzer: ${DB_BENUTZER}\n  passwort: <<secret:0>>\n",
+            "weak_snake_case_password", 7002, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "Hallo Jonas, das Passwort lautet <<secret:0>> (nicht $DB_PASSWORT, das ist nur die Variable).",
+            "weak_dollar_password", 7003, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_credential_in_url",
+            "GET {{basisUrl}}/v1/export?format=csv&api_key=<<secret:0>> HTTP/1.1\nHost: {{host}}\n",
+            "url_token", 7004, carrier="http",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_url_userinfo_password",
+            "# ersetzt ${DATABASE_URL} bis zur Umstellung\nDATABASE_URL=postgres://app:<<secret:0>>@db.intern:5432/lager\n",
+            "url_userinfo_password", 7005, carrier="env",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "import os\n\nREGION = os.environ[\"REGION\"]\napi_key = \"<<secret:0>>\"\n",
+            "generic_api_secret", 7006, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "# replace YOUR_DB_PASSWORD_HERE before deploying\nDB_PASSWORD=<<secret:0>>\n",
+            "weak_snake_case_password", 7007, carrier="env",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "smtp:\n  user: ${SMTP_USER}\n  password: <<secret:0>>\n",
+            "weak_dollar_password", 7008, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_signed_url_signature",
+            "$ curl -o report.pdf \"https://reports.s3.eu-central-1.amazonaws.com/report.pdf"
+            "?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=900&X-Amz-Signature=<<secret:0>>\"\n",
+            "aws_sigv4_signature", 7009, carrier="cli",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "provider \"acme\" {\n  region        = var.region\n  client_secret = \"<<secret:0>>\"\n}\n",
+            "generic_api_secret", 7010, carrier="code",
+        ),
+    ],
+    "SECRET_TOKEN": [
+        dn(
+            "SECRET_TOKEN", "de", "dlp_bearer_token",
+            "GET /v1/konten HTTP/1.1\nHost: api.example.de\nAuthorization: Bearer HIER_TOKEN_EINTRAGEN\n",
+            "placeholder HIER_…_EINTRAGEN as bearer token", carrier="http",
+        ),
+        dn(
+            "SECRET_TOKEN", "de", "dlp_csrf_token",
+            "X-CSRF-Token: HIER_CSRF_TOKEN_EINTRAGEN",
+            "placeholder HIER_…_EINTRAGEN as CSRF token", carrier="http",
+        ),
+        dn(
+            "SECRET_TOKEN", "de", "dlp_csrf_token",
+            "// Zugang zum Formulardienst\nString csrfToken = System.getenv(\"CSRF_TOKEN\");\n",
+            "Java System.getenv reference", carrier="code",
+        ),
+        dn(
+            "SECRET_TOKEN", "en", "dlp_bearer_token",
+            "$ curl -H \"Authorization: Bearer YOUR-API-TOKEN\" https://api.example.com/v1/me\n",
+            "kebab placeholder YOUR-API-TOKEN", carrier="cli",
+        ),
+        dn(
+            "SECRET_TOKEN", "en", "dlp_csrf_token",
+            "package forms\n\nvar csrfToken = os.Getenv(\"CSRF_TOKEN\")\n",
+            "Go os.Getenv reference", carrier="code",
+        ),
+        dn(
+            "SECRET_TOKEN", "en", "dlp_csrf_token",
+            "variable \"csrf_token\" {}\n\nlocals {\n  csrf_token = var.csrf_token\n}\n",
+            "Terraform variable reference var.x", carrier="code",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_bearer_token",
+            "GET {{basisUrl}}/v1/konten HTTP/1.1\nHost: {{host}}\nAuthorization: Bearer <<secret:0>>\n",
+            "bearer_opaque_token", 7011, carrier="http",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_csrf_token",
+            "POST /formular HTTP/1.1\nX-CSRF-Token: <<secret:0>>\nX-Request-Id: {{requestId}}\n",
+            "csrf_token", 7012, carrier="http",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_bearer_token",
+            "$ export API_URL=$BASE_URL\n$ curl -H \"Authorization: Bearer <<secret:0>>\" \"$API_URL/v1/me\"\n",
+            "bearer_opaque_token", 7013, carrier="cli",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_csrf_token",
+            "username=${USER}&csrf_token=<<secret:0>>",
+            "csrf_token", 7014, carrier="http",
+        ),
+    ],
+}
+for _label, _rows in DLP_T07_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
 def flatten(suite: str, cases: dict[str, list[dict]]) -> list[dict]:
     rows = []
     for label, label_cases in cases.items():

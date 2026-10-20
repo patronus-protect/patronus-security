@@ -774,6 +774,16 @@
     "rule_id": "dlp_credential_in_url",
     "de": "https://example.test?passwort=actual-secret",
     "en": "https://example.test?password=actual-secret",
+    "hard_negatives": {
+      "de": [
+        "https://example.test?passwort=HIER_PASSWORT_EINTRAGEN",
+        "curl \"https://example.test/export?api_key=$EXPORT_API_KEY\""
+      ],
+      "en": [
+        "https://example.test?password=YOUR_PASSWORD_HERE",
+        "https://example.test/export?token={{exportToken}}"
+      ]
+    },
     "language_neutral": false
   },
   {
@@ -781,6 +791,16 @@
     "rule_id": "dlp_env_var_secret",
     "de": "DB_PASSWORT=Kx7!pQ2#vL9@rT4$",
     "en": "DB_PASSWORD=Kx7!pQ2#vL9@rT4$",
+    "hard_negatives": {
+      "de": [
+        "DB_PASSWORT=BITTE_AENDERN",
+        "DB_PASSWORT = os.environ[\"DB_PASSWORT\"]"
+      ],
+      "en": [
+        "DB_PASSWORD=YOUR_DB_PASSWORD_HERE",
+        "DB_PASSWORD = ENV.fetch(\"DB_PASSWORD\")"
+      ]
+    },
     "language_neutral": false
   },
   {
@@ -788,6 +808,16 @@
     "rule_id": "dlp_password_assignment",
     "de": "Passwort: Sommer2026!",
     "en": "Password: Summer2026!",
+    "hard_negatives": {
+      "de": [
+        "Passwort: HIER_PASSWORT_EINTRAGEN",
+        "passwort = var.db_passwort"
+      ],
+      "en": [
+        "Password: TODO",
+        "password: {{dbPassword}}"
+      ]
+    },
     "language_neutral": false
   },
   {
@@ -795,6 +825,16 @@
     "rule_id": "dlp_generic_credential_assignment",
     "de": "API-Schlüssel: abcDEfGhIJkl123456",
     "en": "API key: abcDEfGhIJkl123456",
+    "hard_negatives": {
+      "de": [
+        "API-Schl\u00fcssel: HIER_API_SCHLUESSEL_EINTRAGEN",
+        "client_secret = Environment.GetEnvironmentVariable(\"CLIENT_SECRET\")"
+      ],
+      "en": [
+        "API key: YOUR-API-TOKEN",
+        "client_secret: %CLIENT_SECRET%"
+      ]
+    },
     "language_neutral": false
   },
   {
@@ -802,6 +842,14 @@
     "rule_id": "dlp_bearer_token",
     "de": "Authorization: Bearer abcDEfGhIJkl123456",
     "en": "Authorization: Bearer abcDEfGhIJkl123456",
+    "hard_negatives": {
+      "de": [
+        "Authorization: Bearer HIER_TOKEN_EINTRAGEN"
+      ],
+      "en": [
+        "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE"
+      ]
+    },
     "language_neutral": true
   },
   {
@@ -816,6 +864,14 @@
     "rule_id": "dlp_signed_url_signature",
     "de": "https://example.test?X-Amz-Signature=9f3a1c7e4b20d86f5ea9c3172b4d08e6",
     "en": "https://example.test?X-Amz-Signature=9f3a1c7e4b20d86f5ea9c3172b4d08e6",
+    "hard_negatives": {
+      "de": [
+        "https://example.test/a.zip?Signature=HIER_SIGNATUR_EINTRAGEN"
+      ],
+      "en": [
+        "https://example.test/a.zip?X-Amz-Signature=YOUR_URL_SIGNATURE_HERE"
+      ]
+    },
     "language_neutral": true
   },
   {
@@ -830,6 +886,16 @@
     "rule_id": "dlp_csrf_token",
     "de": "X-CSRF-Token: abcDEF0123456789xyz",
     "en": "X-CSRF-Token: abcDEF0123456789xyz",
+    "hard_negatives": {
+      "de": [
+        "X-CSRF-Token: HIER_CSRF_TOKEN_EINTRAGEN",
+        "csrf_token = System.getenv(\"CSRF_TOKEN\")"
+      ],
+      "en": [
+        "X-CSRF-Token: YOUR_CSRF_TOKEN_HERE",
+        "csrf_token = os.environ[\"CSRF_TOKEN\"]"
+      ]
+    },
     "language_neutral": true
   },
   {
@@ -844,6 +910,15 @@
     "rule_id": "dlp_url_userinfo_password",
     "de": "postgres://dbuser:s3cr3t-value@db.internal/app",
     "en": "postgres://dbuser:s3cr3t-value@db.internal/app",
+    "hard_negatives": {
+      "de": [
+        "postgres://dbuser:BITTE_AENDERN@db.internal/app"
+      ],
+      "en": [
+        "postgres://dbuser:TODO@db.internal/app",
+        "mysql://report:$DB_PASSWORD@db1/app"
+      ]
+    },
     "language_neutral": true
   },
   {

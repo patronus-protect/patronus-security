@@ -21,7 +21,7 @@ compiled extension.
 | `dynamic_pii_threshold_sweep.jsonl` | 85 | Threshold calibration |
 | `education_pii_threshold_sweep.jsonl` | 50 | Education-context threshold calibration |
 | `pii_l1.jsonl` | 789 | Native PII L1 exact-span goldens, hard negatives and known gaps (schema v2) |
-| `dlp_l1.jsonl` | 601 | Native DLP L1 exact-span goldens, hard negatives and known gaps (schema v2) |
+| `dlp_l1.jsonl` | 642 | Native DLP L1 exact-span goldens, hard negatives and known gaps (schema v2) |
 
 ## Native L1 golden-set contract
 
@@ -217,8 +217,10 @@ carriers come with E04. Generators listed as `shape_only` are the E02 shapes
 without a valid checksum or structure. They stay because the goldens use them.
 Generators listed as `weak` (T06) are low-variety but real values (a repeated
 password, a token with a `1234567890abcdef` run, a GitHub token shape with one
-repeated chunk) that the rule must keep reporting outside example context. The
-probe tests run them, carriers do not use them, and they need no format check.
+repeated chunk) that the rule must keep reporting outside example context, and
+placeholder-like real passwords (T07: SCREAMING_SNAKE words without a
+placeholder word such as `YOUR`/`HERE`/`HIER`/`EINTRAGEN`, a leading `$` with
+digits that is no shell variable). The probe tests run them, carriers do not use them, and they need no format check.
 Every other generator yields format-, structure- and checksum-valid fakes:
 
 - GitHub `gh[pousr]_` and npm tokens with the base62 CRC-32 suffix, Base58Check
