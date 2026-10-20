@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use patronus_ark::{
-    detectors::{dlp::dlp::DLP_PATTERNS, pii::pii::PII_PATTERNS},
+    detectors::{
+        dlp::dlp::DLP_PATTERNS,
+        pii::{pii::PII_PATTERNS, score::PiiMode},
+    },
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel,
 };
 use serde::Deserialize;
@@ -13,6 +16,9 @@ struct Case {
     de: String,
     en: String,
     language_neutral: bool,
+    /// PII mode of the scan; rules that only report in a scored mode (K05) name it.
+    #[serde(default)]
+    pii_mode: PiiMode,
 }
 
 #[test]
@@ -36,9 +42,12 @@ fn every_pii_and_dlp_rule_is_reachable_with_bilingual_source_evidence() {
         None,
         false,
     );
-    gateway.set_execution_gates(ScanGateMatrix::all_enabled());
     let mut missing = Vec::new();
     for case in cases {
+        gateway.set_execution_gates(ScanGateMatrix {
+            pii_mode: case.pii_mode,
+            ..ScanGateMatrix::all_enabled()
+        });
         assert!(
             case.language_neutral || case.de != case.en,
             "translate {}",

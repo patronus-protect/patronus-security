@@ -1,0 +1,345 @@
+// SPDX-License-Identifier: GPL-3.0-only
+//! Context-free output of checksum-strong values (K05).
+//!
+//! In `balanced` and `recall` a value whose validator proves a real check digit
+//! needs no field name. IBAN and card numbers report bare already; scored-only
+//! rules (`PiiPattern::scored_only`) add the bare form of checksum values that
+//! strict reports only after their field name, first the Steuer-ID. Strict never
+//! runs a scored-only rule (decision K02). A bare value stands alone (not part
+//! of a longer number, range or date) and drops below both thresholds when a
+//! counter-context term is nearer than any support term. A bare Steuer-ID also
+//! has to follow the digit distribution of issued IDs; validators are never
+//! relaxed.
+
+use patronus_ark::detectors::pii::{
+    pii::{PiiPattern, PII_PATTERNS},
+    score::{self, Context, PiiMode, ValidatorStrength},
+    validators,
+};
+use patronus_ark::{
+    ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
+};
+
+fn scanner(mode: PiiMode) -> SecurityGateway {
+    let scanner = SecurityGateway::with_max_level(
+        vec![SecurityCategory::Pii],
+        SecurityLevel::L1,
+        None,
+        false,
+    );
+    scanner.set_execution_gates(ScanGateMatrix {
+        pii_mode: mode,
+        ..Default::default()
+    });
+    scanner
+}
+
+fn scan(scanner: &SecurityGateway, text: &str) -> SecurityScanResult {
+    scanner
+        .scan_category(SecurityCategory::Pii, text)
+        .into_iter()
+        .find(|result| result.model == "native:pii")
+        .expect("native PII result must be present")
+}
+
+fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
+    scan(&scanner(mode), text)
+}
+
+fn matched_rules(result: &SecurityScanResult) -> Vec<serde_json::Value> {
+    result.layers[0]
+        .details
+        .get("matched_rules")
+        .map(|rules| rules.as_array().unwrap().clone())
+        .unwrap_or_default()
+}
+
+/// `(text, score)` of the spans of `label`.
+fn spans(text: &str, mode: PiiMode, label: &str) -> Vec<(String, f64)> {
+    pii_result(text, mode)
+        .evidence_spans
+        .into_iter()
+        .filter(|span| span.label == label)
+        .map(|span| (span.text, span.score))
+        .collect()
+}
+
+fn pattern(rule_id: &str) -> &'static PiiPattern {
+    PII_PATTERNS
+        .iter()
+        .find(|pattern| pattern.name == rule_id)
+        .unwrap_or_else(|| panic!("unknown rule {rule_id}"))
+}
+
+const SCORED: [PiiMode; 2] = [PiiMode::Balanced, PiiMode::Recall];
+const STEUER_ID: &str = "pii_steuer_id_de_context_free";
+
+/// Issued Steuer-IDs: check digit valid, one digit twice or three times (not
+/// three in a row) in the first ten digits, every other digit at most once.
+const ISSUED: &[&str] = &[
+    "86095742719",
+    "82736451927",
+    "65929970489",
+    "57549285017",
+    "25768131411",
+    "47426548904",
+    "39662845670",
+    "86794425307",
+    "86231292506",
+    "95082467219",
+    "74265832011",
+    "29046789957",
+    "28540106973",
+    "86055742197",
+];
+
+#[test]
+fn scored_only_rules_are_unbound_checksum_rules() {
+    let scored_only: Vec<_> = PII_PATTERNS
+        .iter()
+        .filter(|pattern| pattern.scored_only)
+        .collect();
+    assert_eq!(
+        scored_only
+            .iter()
+            .map(|pattern| pattern.name)
+            .collect::<Vec<_>>(),
+        [STEUER_ID]
+    );
+    for pattern in scored_only {
+        assert_eq!(
+            pattern.strength,
+            ValidatorStrength::Checksum,
+            "{}",
+            pattern.name
+        );
+        assert!(!pattern.captured_value, "{}", pattern.name);
+        assert!(!pattern.requires_context, "{}", pattern.name);
+        // Bare, the checksum alone reaches the balanced threshold ...
+        assert!(
+            score::rule_score(pattern) >= PiiMode::Balanced.min_score().unwrap(),
+            "{}",
+            pattern.name
+        );
+        // ... and a nearer counter-context term drops it in every scored mode.
+        assert!(
+            score::score(pattern, Context::Counter) < PiiMode::Recall.min_score().unwrap(),
+            "{}",
+            pattern.name
+        );
+    }
+    // Every checksum label has an unbound rule: a checksum value never needs its
+    // field name in the scored modes.
+    for bound in PII_PATTERNS
+        .iter()
+        .filter(|pattern| pattern.strength == ValidatorStrength::Checksum)
+    {
+        assert!(
+            PII_PATTERNS.iter().any(|pattern| {
+                pattern.entity_group == bound.entity_group
+                    && pattern.strength == ValidatorStrength::Checksum
+                    && !pattern.captured_value
+                    && !pattern.requires_context
+            }),
+            "{} has no context-free rule",
+            bound.entity_group
+        );
+    }
+}
+
+#[test]
+fn every_checksum_label_reports_a_bare_value_in_the_scored_modes() {
+    let bare = [
+        ("IBAN", "DE89370400440532013000", 0.90),
+        ("IBAN", "GB82WEST12345698765432", 0.80),
+        ("CREDITCARD", "4111 1111 1111 1111", 0.75),
+        ("STEUERID", "86095742719", 0.55),
+        ("STEUERID", "86 095 742 719", 0.55),
+    ];
+    for label in PII_PATTERNS
+        .iter()
+        .filter(|pattern| pattern.strength == ValidatorStrength::Checksum)
+        .map(|pattern| pattern.entity_group)
+    {
+        assert!(
+            bare.iter().any(|(known, _, _)| *known == label),
+            "{label}: no bare sample"
+        );
+    }
+    for (label, value, expected) in bare {
+        for mode in SCORED {
+            assert_eq!(
+                spans(value, mode, label),
+                [(value.to_string(), expected)],
+                "{mode:?}: {value}"
+            );
+        }
+    }
+    // Strict keeps the field-name rule for the Steuer-ID (K02).
+    assert!(spans("86095742719", PiiMode::Strict, "STEUERID").is_empty());
+    assert_eq!(
+        spans("DE89370400440532013000", PiiMode::Strict, "IBAN"),
+        [("DE89370400440532013000".to_string(), 1.0)]
+    );
+}
+
+#[test]
+fn strict_never_runs_a_scored_only_rule() {
+    let mut texts: Vec<String> = ISSUED
+        .iter()
+        .flat_map(|value| {
+            [
+                value.to_string(),
+                format!("Ihre Steuer-ID ist {value}."),
+                format!("{value} is the German tax ID on file."),
+                format!("{{\"steuer_id\": \"{value}\"}}"),
+            ]
+        })
+        .collect();
+    let goldens = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../python/patronus_ark/benchmark_data/pii_l1.jsonl");
+    for line in std::fs::read_to_string(goldens).unwrap().lines() {
+        let row: serde_json::Value = serde_json::from_str(line).unwrap();
+        texts.push(row["text"].as_str().unwrap().to_string());
+    }
+    let strict = scanner(PiiMode::Strict);
+    for text in texts {
+        for rule in matched_rules(&scan(&strict, &text)) {
+            assert!(
+                !pattern(rule["rule_id"].as_str().unwrap()).scored_only,
+                "{text}: {rule}"
+            );
+        }
+    }
+}
+
+#[test]
+fn bare_steuer_id_scores_its_context() {
+    let rule_of = |text: &str, mode: PiiMode| {
+        matched_rules(&pii_result(text, mode))
+            .into_iter()
+            .find(|rule| rule["rule_id"] == STEUER_ID)
+    };
+    for mode in SCORED {
+        // No context: base 20 + checksum 35.
+        assert_eq!(
+            spans("Bitte noch 47426548904 nachtragen.", mode, "STEUERID"),
+            [("47426548904".to_string(), 0.55)],
+            "{mode:?}"
+        );
+        // A support term before or after the value raises it.
+        let before = rule_of("Ihre Steuer-ID ist 39662845670.", mode).unwrap();
+        assert_eq!(before["score"], 0.8, "{mode:?}");
+        assert_eq!(before["context"]["anchor"], "pii.tax_identifier");
+        assert_eq!(before["context"]["side"], "before");
+        let after = rule_of("29046789957 is the German tax ID on file.", mode).unwrap();
+        assert_eq!(after["context"]["side"], "after");
+        assert!(after["score"].as_f64().unwrap() > 0.55, "{mode:?}");
+        // A nearer counter-context term drops it in balanced and recall.
+        for text in [
+            "Rechnungsnummer 86095742719 bitte bei Zahlung angeben.",
+            "Bestellnummer: 65929970489",
+            "Invoice number 86095742719 is overdue.",
+            "Tracking number 25768131411 is in transit.",
+            r#"{"order_id": "86095742719"}"#,
+        ] {
+            assert!(spans(text, mode, "STEUERID").is_empty(), "{mode:?}: {text}");
+        }
+        // After its field name the field-bound rule keeps the span and its score.
+        assert_eq!(
+            spans("Steuer-ID: 86095742719", mode, "STEUERID"),
+            [("86095742719".to_string(), 1.0)],
+            "{mode:?}"
+        );
+    }
+}
+
+#[test]
+fn bare_steuer_id_stands_alone() {
+    for text in [
+        "Messwert 860957427190 im Log.",
+        "Aktenzeile 86095742719/2026 abgelegt.",
+        "Range 86095742719-86095742720 reserved.",
+        "Faktor 3,86095742719 berechnet.",
+        "Version 1.86095742719 released.",
+        "Kennung DE86095742719",
+        "Code X86095742719Y",
+        "Zeile 12 86 095 742 719 im Export.",
+        "Gruppe 86 095 742 719 12 im Export.",
+        "Konto 2026/86095742719",
+        "+86095742719",
+    ] {
+        for mode in SCORED {
+            assert!(spans(text, mode, "STEUERID").is_empty(), "{mode:?}: {text}");
+        }
+    }
+    for (text, value) in [
+        ("(47426548904)", "47426548904"),
+        ("Nummer: 47426548904.", "47426548904"),
+        ("Name;Nummer\nJonas Weber;86231292506", "86231292506"),
+        ("name,tin\nAda Weber,28540106973", "28540106973"),
+        ("Jonas\t86231292506\t4711", "86231292506"),
+        ("„86 794 425 307“ übernehmen", "86 794 425 307"),
+    ] {
+        for mode in SCORED {
+            assert_eq!(
+                spans(text, mode, "STEUERID")
+                    .into_iter()
+                    .map(|(text, _)| text)
+                    .collect::<Vec<_>>(),
+                [value],
+                "{mode:?}: {text}"
+            );
+        }
+    }
+}
+
+#[test]
+fn issued_steuer_id_checksum_vectors() {
+    for value in ISSUED {
+        assert!(validators::steuer_id(value), "{value}");
+        assert!(validators::steuer_id_issued(value), "{value}");
+        for mode in SCORED {
+            assert_eq!(
+                spans(&format!("Bitte {value} übernehmen."), mode, "STEUERID"),
+                [(value.to_string(), 0.55)],
+                "{mode:?}: {value}"
+            );
+        }
+    }
+    assert!(validators::steuer_id_issued("86 095 742 719"));
+    for (value, reason) in [
+        ("86095742718", "check digit fails"),
+        ("47426548905", "check digit fails"),
+        ("06095742719", "leading zero"),
+        ("8609574271", "ten digits"),
+        ("860957427190", "twelve digits"),
+        ("12345678903", "ten distinct digits, check digit valid"),
+        ("67890123455", "ten distinct digits, check digit valid"),
+        ("98765432106", "ten distinct digits, check digit valid"),
+        ("47110815008", "two digits repeated, check digit valid"),
+        (
+            "86555742194",
+            "a digit three times in a row, check digit valid",
+        ),
+        ("11111111111", "one digit only"),
+    ] {
+        assert!(!validators::steuer_id_issued(value), "{value}: {reason}");
+        for mode in SCORED {
+            assert!(
+                spans(&format!("Bitte {value} übernehmen."), mode, "STEUERID").is_empty(),
+                "{mode:?}: {value}: {reason}"
+            );
+        }
+    }
+    // The issued check only tightens the Steuer-ID validator.
+    for body in (1_000_000_000u64..10_000_000_000).step_by(7_919_993) {
+        for check in 0..10 {
+            let value = format!("{body}{check}");
+            assert!(
+                !validators::steuer_id_issued(&value) || validators::steuer_id(&value),
+                "{value}"
+            );
+        }
+    }
+}
