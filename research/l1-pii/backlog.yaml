@@ -197,6 +197,7 @@ tasks:
     accept: goldens and scoreboard bit-identical
 
   - id: K02
+    status: done
     title: Score model (base per rule + validator strength checksum/format/none + context bonus) and modes strict/balanced/recall
     type: engine
     deps: [K01, E11]

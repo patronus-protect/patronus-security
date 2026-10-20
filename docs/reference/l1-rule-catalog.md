@@ -8,47 +8,49 @@ These are the stable rule IDs accepted by execution-gate `rules`. Missing IDs in
 
 All PII rules are eligible by default when PII L1 is enabled.
 
-| Rule ID | Result entity group | Extra validator |
-| --- | --- | --- |
-| `pii_email` | `EMAIL` | no |
-| `pii_ipv4` | `IP_ADDRESS` | yes |
-| `pii_ipv6_full` | `IP_ADDRESS` | yes |
-| `pii_ipv6_compressed` | `IP_ADDRESS` | yes |
-| `pii_ipv6_loopback` | `IP_ADDRESS` | yes |
-| `pii_phone_international` | `PHONE` | yes |
-| `pii_phone_de` | `PHONE` | yes |
-| `pii_phone_de_national_context` | `PHONE` | yes |
-| `pii_phone_us` | `PHONE` | yes |
-| `pii_mac_address` | `MAC_ADDRESS` | yes |
-| `pii_iban_de` | `IBAN` | yes |
-| `pii_iban_generic` | `IBAN` | yes |
-| `pii_credit_card` | `CREDITCARD` | yes |
-| `pii_credit_card_cvv` | `CREDITCARD_CVV` | yes |
-| `pii_credit_card_expiry` | `CREDITCARD_EXPIRY` | yes |
-| `pii_swift_bic_context` | `SWIFT_CODE` | yes |
-| `pii_employee_id` | `EMPLOYEE_ID` | yes |
-| `pii_employee_id_ocr_field` | `EMPLOYEE_ID` | yes |
-| `pii_employee_id_prefixed` | `EMPLOYEE_ID` | yes |
-| `pii_customer_id` | `CUSTOMER_ID` | yes |
-| `pii_patient_id` | `PATIENT_ID` | yes |
-| `pii_student_id` | `STUDENT_ID` | yes |
-| `pii_applicant_id` | `APPLICANT_ID` | yes |
-| `pii_username` | `USERNAME` | yes |
-| `pii_date_of_birth` | `DOB` | yes |
-| `pii_date_of_birth_written_day_first` | `DOB` | yes |
-| `pii_date_of_birth_written_month_first` | `DOB` | yes |
-| `pii_financial_account_number` | `FINANCIAL_ACCOUNT_NUMBER` | yes |
-| `pii_steuer_id_de` | `STEUERID` | yes |
-| `pii_steuernummer_de` | `TAX_NUMBER_DE` | yes |
-| `pii_rentenversicherung_de` | `SOCIALID` | yes |
-| `pii_health_insurance_number_de` | `HEALTH_INSURANCE_NUMBER` | yes |
-| `pii_physician_number_lanr_de` | `PHYSICIAN_NUMBER_LANR` | yes |
-| `pii_passport_number_de` | `PASSPORT_NUMBER` | yes |
-| `pii_identity_card_number_de` | `IDENTITY_CARD_NUMBER` | yes |
-| `pii_driver_license_number_de` | `DRIVER_LICENSE_NUMBER` | yes |
-| `pii_kfz_kennzeichen_de` | `LICENSEPLATE` | no |
-| `pii_ssn_us` | `SSN` | yes |
-| `pii_ni_uk` | `NATIONALID` | yes |
+In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `recall` a finding scores the rule base plus the validator strength (checksum 35, format 15, none 0) plus 25 when the rule binds the value to a field name, capped at 100 and divided by 100 (see [PII score and modes](result-schema.md#pii-score-and-modes)).
+
+| Rule ID | Result entity group | Extra validator | Validator strength | Base | Field context | Score (`balanced`/`recall`) |
+| --- | --- | --- | --- | --- | --- | --- |
+| `pii_email` | `EMAIL` | no | none | 70 | no | 0.70 |
+| `pii_ipv4` | `IP_ADDRESS` | yes | format | 50 | no | 0.65 |
+| `pii_ipv6_full` | `IP_ADDRESS` | yes | format | 50 | no | 0.65 |
+| `pii_ipv6_compressed` | `IP_ADDRESS` | yes | format | 50 | no | 0.65 |
+| `pii_ipv6_loopback` | `IP_ADDRESS` | yes | format | 40 | no | 0.55 |
+| `pii_phone_international` | `PHONE` | yes | format | 40 | no | 0.55 |
+| `pii_phone_de` | `PHONE` | yes | format | 45 | no | 0.60 |
+| `pii_phone_de_national_context` | `PHONE` | yes | format | 30 | yes | 0.70 |
+| `pii_phone_us` | `PHONE` | yes | format | 35 | no | 0.50 |
+| `pii_mac_address` | `MAC_ADDRESS` | yes | format | 55 | no | 0.70 |
+| `pii_iban_de` | `IBAN` | yes | checksum | 55 | no | 0.90 |
+| `pii_iban_generic` | `IBAN` | yes | checksum | 45 | no | 0.80 |
+| `pii_credit_card` | `CREDITCARD` | yes | checksum | 40 | no | 0.75 |
+| `pii_credit_card_cvv` | `CREDITCARD_CVV` | yes | format | 20 | yes | 0.60 |
+| `pii_credit_card_expiry` | `CREDITCARD_EXPIRY` | yes | format | 25 | yes | 0.65 |
+| `pii_swift_bic_context` | `SWIFT_CODE` | yes | format | 40 | yes | 0.80 |
+| `pii_employee_id` | `EMPLOYEE_ID` | yes | format | 30 | yes | 0.70 |
+| `pii_employee_id_ocr_field` | `EMPLOYEE_ID` | yes | format | 25 | yes | 0.65 |
+| `pii_employee_id_prefixed` | `EMPLOYEE_ID` | yes | format | 45 | no | 0.60 |
+| `pii_customer_id` | `CUSTOMER_ID` | yes | format | 30 | yes | 0.70 |
+| `pii_patient_id` | `PATIENT_ID` | yes | format | 30 | yes | 0.70 |
+| `pii_student_id` | `STUDENT_ID` | yes | format | 30 | yes | 0.70 |
+| `pii_applicant_id` | `APPLICANT_ID` | yes | format | 30 | yes | 0.70 |
+| `pii_username` | `USERNAME` | yes | format | 30 | yes | 0.70 |
+| `pii_date_of_birth` | `DOB` | yes | format | 40 | yes | 0.80 |
+| `pii_date_of_birth_written_day_first` | `DOB` | yes | format | 45 | yes | 0.85 |
+| `pii_date_of_birth_written_month_first` | `DOB` | yes | format | 45 | yes | 0.85 |
+| `pii_financial_account_number` | `FINANCIAL_ACCOUNT_NUMBER` | yes | format | 30 | yes | 0.70 |
+| `pii_steuer_id_de` | `STEUERID` | yes | checksum | 40 | yes | 1.00 |
+| `pii_steuernummer_de` | `TAX_NUMBER_DE` | yes | format | 35 | yes | 0.75 |
+| `pii_rentenversicherung_de` | `SOCIALID` | yes | format | 50 | yes | 0.90 |
+| `pii_health_insurance_number_de` | `HEALTH_INSURANCE_NUMBER` | yes | format | 45 | yes | 0.85 |
+| `pii_physician_number_lanr_de` | `PHYSICIAN_NUMBER_LANR` | yes | format | 30 | yes | 0.70 |
+| `pii_passport_number_de` | `PASSPORT_NUMBER` | yes | format | 40 | yes | 0.80 |
+| `pii_identity_card_number_de` | `IDENTITY_CARD_NUMBER` | yes | format | 40 | yes | 0.80 |
+| `pii_driver_license_number_de` | `DRIVER_LICENSE_NUMBER` | yes | format | 35 | yes | 0.75 |
+| `pii_kfz_kennzeichen_de` | `LICENSEPLATE` | no | none | 40 | yes | 0.65 |
+| `pii_ssn_us` | `SSN` | yes | format | 45 | yes | 0.85 |
+| `pii_ni_uk` | `NATIONALID` | yes | format | 50 | yes | 0.90 |
 
 ## DLP regex rules (59)
 

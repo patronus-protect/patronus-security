@@ -11,7 +11,8 @@ comparisons treat both engines alike. Ark labels without a benchmark id are
 namespaced as ``ark.<LABEL>`` and are therefore never scored by accident.
 
 The engine is ``SecurityGateway(categories=["pii"], max_level="l1")`` without model
-downloads. The metadata sidecar records input and output digests and the SHA-256
+downloads, in the default PII mode ``strict`` unless ``--pii-mode balanced|recall`` asks for
+the scored modes (K02; the sidecar then records ``engine.pii_mode``). The metadata sidecar records input and output digests and the SHA-256
 of the native module but no timestamps, so a rerun on the same build is
 byte-identical.
 
@@ -37,6 +38,8 @@ from patronus_ark.external_pii_eval import ARK_OUTPUT_MAP, read_jsonl
 SCHEMA = "ark-l1-predictions-v1"
 CATEGORY = "pii"
 MAX_LEVEL = "l1"
+PII_MODES = ("strict", "balanced", "recall")
+DEFAULT_PII_MODE = "strict"
 
 
 def sha256_bytes(data: bytes) -> str:
@@ -47,11 +50,20 @@ def benchmark_label(ark_label: str) -> str:
     return ARK_OUTPUT_MAP.get(ark_label, f"ark.{ark_label}")
 
 
-def build_gateway() -> Any:
+def _check_pii_mode(pii_mode: str) -> None:
+    if pii_mode not in PII_MODES:
+        raise ValueError(f"pii_mode must be one of {', '.join(PII_MODES)}, got {pii_mode!r}")
+
+
+def build_gateway(pii_mode: str = DEFAULT_PII_MODE) -> Any:
     """Create the L1 PII gateway (imports the native binding lazily)."""
     from patronus_ark import SecurityGateway
 
-    return SecurityGateway(categories=[CATEGORY], max_level=MAX_LEVEL, download_files=False)
+    _check_pii_mode(pii_mode)
+    gateway = SecurityGateway(categories=[CATEGORY], max_level=MAX_LEVEL, download_files=False)
+    if pii_mode != DEFAULT_PII_MODE:
+        gateway.set_execution_gates({"pii_mode": pii_mode})
+    return gateway
 
 
 def build_info() -> dict[str, str]:
@@ -120,10 +132,12 @@ def run(
     meta_path: Path,
     gateway: Any = None,
     build: dict[str, str] | None = None,
+    pii_mode: str = DEFAULT_PII_MODE,
 ) -> dict[str, Any]:
     """Write predictions plus a timestamp-free metadata sidecar; return the metadata."""
+    _check_pii_mode(pii_mode)
     if gateway is None:
-        gateway = build_gateway()
+        gateway = build_gateway(pii_mode)
     if build is None:
         build = build_info()
     source = input_path.read_bytes()
@@ -132,9 +146,12 @@ def run(
         json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in predictions
     ).encode("utf-8")
     output_path.write_bytes(encoded)
+    engine: dict[str, Any] = {"categories": [CATEGORY], "max_level": MAX_LEVEL}
+    if pii_mode != DEFAULT_PII_MODE:
+        engine["pii_mode"] = pii_mode
     meta = {
         "schema": SCHEMA,
-        "engine": {"categories": [CATEGORY], "max_level": MAX_LEVEL},
+        "engine": engine,
         "input_sha256": sha256_bytes(source),
         "output_sha256": sha256_bytes(encoded),
         "rows": len(predictions),
@@ -152,9 +169,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--input", type=Path, required=True, help="normalized Gold JSONL")
     parser.add_argument("--output", type=Path, required=True, help="prediction JSONL")
     parser.add_argument("--meta", type=Path, help="metadata JSON (default: OUTPUT with .meta.json)")
+    parser.add_argument(
+        "--pii-mode", choices=PII_MODES, default=DEFAULT_PII_MODE, help="PII output mode (default: strict)"
+    )
     args = parser.parse_args(argv)
     meta_path = args.meta or args.output.with_name(args.output.stem + ".meta.json")
-    meta = run(args.input, args.output, meta_path)
+    meta = run(args.input, args.output, meta_path, pii_mode=args.pii_mode)
     print(
         f"ark l1: {meta['rows']} rows, {meta['spans']} spans -> {args.output} "
         f"(sha256 {meta['output_sha256'][:12]})",

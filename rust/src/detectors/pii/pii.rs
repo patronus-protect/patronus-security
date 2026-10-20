@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::{
-    detectors::{NativeMatchValidator, NativeRegexDetector},
+    detectors::{NativeDetection, NativeMatchValidator, NativeRegexDetector},
     EvaluationResult,
 };
 
 use super::context_anchors::PII_ANCHOR_PATTERNS;
+use super::score::{self, PiiMode, ValidatorStrength};
 use super::{common, de, identifiers, intl, uk, us, validators};
 use crate::detectors::anchors;
 use regex::Regex;
@@ -19,6 +20,10 @@ pub struct PiiPattern {
     pub entity_group: &'static str,
     /// Optional validator called after a regex match to reduce false positives.
     pub validator: Option<fn(&str) -> bool>,
+    /// What `validator` proves: checksum, format only, or nothing (no validator).
+    pub strength: ValidatorStrength,
+    /// Score-model points (1–100) for the regex form alone; see [`score`].
+    pub base_score: u8,
     /// For anchor-bound patterns, emit only the named `value` capture.
     pub captured_value: bool,
 }
@@ -76,6 +81,7 @@ pub struct PiiPipeline {
     entity_groups: Vec<&'static str>,
     validators: Vec<Option<NativeMatchValidator>>,
     capture_groups: Vec<Option<usize>>,
+    scores: Vec<f64>,
     anchor_regexes: Vec<Regex>,
 }
 
@@ -94,6 +100,7 @@ impl PiiPipeline {
         let mut rule_ids = Vec::new();
         let mut validators = Vec::new();
         let mut capture_groups = Vec::new();
+        let mut scores = Vec::new();
 
         for p in PII_PATTERNS {
             regexes.push(Regex::new(p.pattern).unwrap());
@@ -117,6 +124,7 @@ impl PiiPipeline {
             rule_ids.push(p.name);
             validators.push(p.validator);
             capture_groups.push(p.captured_value.then_some(1));
+            scores.push(score::rule_score(p));
         }
 
         let anchor_regexes = PII_ANCHOR_PATTERNS
@@ -131,6 +139,7 @@ impl PiiPipeline {
             entity_groups,
             validators,
             capture_groups,
+            scores,
             anchor_regexes,
         }
     }
@@ -142,6 +151,21 @@ impl PiiPipeline {
     pub fn evaluate_batch(&self, texts: &[String]) -> Vec<EvaluationResult> {
         use rayon::prelude::*;
         texts.par_iter().map(|text| self.evaluate(text)).collect()
+    }
+
+    /// Detect with an explicit output mode. `PiiMode::Strict` is identical to
+    /// the trait's `detect_prepared_with_options`.
+    pub(crate) fn detect_prepared_with_mode<F>(
+        &self,
+        prepared: &crate::threat::NativeText<'_>,
+        allows_rule: F,
+        explain: bool,
+        mode: PiiMode,
+    ) -> NativeDetection
+    where
+        F: Fn(&str) -> bool,
+    {
+        self.detect_prepared_scored(prepared, allows_rule, explain, mode.min_score())
     }
 }
 
@@ -218,6 +242,10 @@ impl NativeRegexDetector for PiiPipeline {
 
     fn preserve_cross_label_overlaps(&self) -> bool {
         true
+    }
+
+    fn match_score(&self, index: usize, _text: &str, _captures: &regex::Captures<'_>) -> f64 {
+        self.scores[index]
     }
 
     fn finalize_spans(&self, text: &str, spans: &mut Vec<crate::EvidenceSpan>) {

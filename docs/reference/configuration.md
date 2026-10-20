@@ -91,6 +91,9 @@ scanner.set_execution_gates({
   See the complete [L1 rule catalog](l1-rule-catalog.md) for every accepted ID and the shared
   default state of DLP rules.
 - `conditional` — conditional gates (see [below](#conditional-gates)).
+- `pii_mode` — native PII output mode: `strict` (default; every finding scores `1.0`),
+  `balanced` or `recall` (model scores with thresholds 0.50 and 0.30). See
+  [PII score and modes](result-schema.md#pii-score-and-modes).
 - `explain` — opt into bounded PII/DLP diagnostic context anchors (default `false`);
   [matched rule components and evidence spans](result-schema.md#native-l1-components) remain
   available without it. This flag does not change detection or conditional routing.
@@ -116,6 +119,7 @@ gates:
   l1: true
   l2: false
   l3: false
+  pii_mode: strict
   rules:
     pii_employee_id: true
     dlp_sql_statement: false

@@ -1488,13 +1488,34 @@ impl SecurityGateway {
                             "native:pii",
                             text.len(),
                             || {
-                                timed_native_regex_scan_result(
+                                let pii_mode = execution.gates().pii_mode;
+                                let mut result = timed_native_detection_scan_result(
                                     category,
                                     "native:pii",
-                                    native,
-                                    prepared,
-                                    execution,
-                                )
+                                    prepared.text(),
+                                    || {
+                                        native.detect_prepared_with_mode(
+                                            prepared,
+                                            |rule_id| execution.allows_rule(rule_id),
+                                            execution.gates().explain,
+                                            pii_mode,
+                                        )
+                                    },
+                                );
+                                // Scored modes report the best span that survives
+                                // post-prediction filtering; strict stays at 1.0.
+                                if pii_mode.min_score().is_some() {
+                                    if let Some(best) = result
+                                        .evidence_spans
+                                        .iter()
+                                        .map(|span| span.score)
+                                        .reduce(f64::max)
+                                    {
+                                        result.confidence = best;
+                                        result.layers[0].confidence = best;
+                                    }
+                                }
+                                result
                             },
                         ));
                     }
