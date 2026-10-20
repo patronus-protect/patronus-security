@@ -210,6 +210,7 @@ tasks:
     deps: [K04]
 
   - id: K09
+    status: done
     title: Taxonomy v2 (new groups CONNECTION_STRING, WEBHOOK_URL, AUTH_URL, OTP_SECRET, SEED_PHRASE; provider attribute in details)
     type: engine
     deps: [K02]
