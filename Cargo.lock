@@ -1502,6 +1502,7 @@ dependencies = [
  "rayon",
  "redb",
  "regex",
+ "regex-automata",
  "regex-syntax",
  "ring",
  "sentencepiece-rust",

@@ -8,6 +8,7 @@ use crate::{
 use regex::Regex;
 use std::ops::Range;
 
+use super::prefilter::{RulePrefilter, ValueClass, ValueRun};
 use super::rules::{self, ExampleCheck};
 use super::score::DlpMode;
 use super::{context, score};
@@ -90,6 +91,9 @@ pub struct RuleMeta {
     pub source_ref: &'static str,
     /// Value prefixes of provider test/sandbox credentials (severity `test`).
     pub test_prefixes: &'static [&'static str],
+    /// Structural prefilter of a rule without keywords (K07): a run of value
+    /// characters that every match contains.
+    pub value_run: Option<ValueRun>,
 }
 
 impl RuleMeta {
@@ -105,6 +109,7 @@ impl RuleMeta {
             min_entropy: None,
             source_ref,
             test_prefixes: &[],
+            value_run: None,
         }
     }
 
@@ -125,6 +130,13 @@ impl RuleMeta {
     pub const fn with_test_prefixes(self, test_prefixes: &'static [&'static str]) -> Self {
         Self {
             test_prefixes,
+            ..self
+        }
+    }
+
+    pub const fn with_value_run(self, class: ValueClass, min_len: usize) -> Self {
+        Self {
+            value_run: Some(ValueRun { class, min_len }),
             ..self
         }
     }
@@ -274,6 +286,7 @@ pub struct DlpPipeline {
     example_checks: Vec<ExampleCheck>,
     placeholder_checks: Vec<bool>,
     metas: Vec<RuleMeta>,
+    prefilter: RulePrefilter,
     anchor_regexes: Vec<Regex>,
 }
 
@@ -324,6 +337,7 @@ impl DlpPipeline {
             example_checks,
             placeholder_checks,
             metas,
+            prefilter: RulePrefilter::new(DLP_PATTERNS),
             anchor_regexes,
         }
     }
@@ -440,6 +454,23 @@ impl NativeRegexDetector for DlpPipeline {
     }
     fn regexes(&self) -> &[Regex] {
         &self.regexes
+    }
+
+    fn rule_scan(&self, text: &str) -> Option<super::prefilter::RuleScan> {
+        Some(self.prefilter.scan(text))
+    }
+
+    fn rule_captures<'t>(
+        &self,
+        index: usize,
+        regex: &Regex,
+        text: &'t str,
+        scan: Option<&super::prefilter::RuleScan>,
+    ) -> Vec<regex::Captures<'t>> {
+        match scan {
+            Some(scan) => self.prefilter.captures(index, regex, text, scan),
+            None => regex.captures_iter(text).collect(),
+        }
     }
 
     fn entity_groups(&self) -> &[&'static str] {

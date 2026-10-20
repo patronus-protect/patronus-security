@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! Key material: wallet keys and PEM private keys.
-use crate::detectors::dlp::dlp::{DlpPattern, RuleMeta, ValidatorStrength};
+use crate::detectors::dlp::{
+    dlp::{DlpPattern, RuleMeta, ValidatorStrength},
+    prefilter::ValueClass,
+};
 
 pub(super) const RULES: &[DlpPattern] = &[
     // ── Crypto ───────────────────────────────────────────────────────────────
@@ -32,7 +35,8 @@ pub(super) const RULES: &[DlpPattern] = &[
             &[],
         )
         .with_provider("bitcoin")
-        .with_min_entropy(3.0),
+        .with_min_entropy(3.0)
+        .with_value_run(ValueClass::Base58, 51),
     },
     // ── Private key material ─────────────────────────────────────────────────
     DlpPattern {

@@ -19,6 +19,10 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   Seit K02 trägt jede Regel Metadaten v2 (`RuleMeta`: Provider, Validator-Stärke, Prefilter-Keywords,
   Entropie-Untergrenze, Formatquelle, live/test); `matched_rules` meldet sie, die Quellen stehen in
   [`rule_sources.yaml`](rule_sources.yaml).
+  Seit K07 läuft vor den Regexen ein Prefilter: ein Aho-Corasick-Durchlauf über die Keywords aller
+  Regeln, Wertläufe für die zwei Regeln ohne Literal (Discord, WIF) und Suche nur an den
+  Keyword-Treffern, wo der Regex-Baum den Abstand begrenzt. Jedes Gate ist aus der Regex bewiesen;
+  eine Regel ohne Keyword lässt `rust/tests/dlp_rule_prefilter.rs` scheitern.
 - Validatoren sind schwach: `is_secret_value` prüft nur Länge, Platzhalter und Env-Referenzen.
   Prüfsummen fehlen ganz: GitHub/npm CRC32, Base58Check (WIF), JWT-Struktur und PEM/DER.
   Seit K03 liegen die Bausteine dafür in `rust/src/detectors/validators/` (CRC32-Base62,
