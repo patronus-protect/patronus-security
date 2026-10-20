@@ -85,7 +85,11 @@
     "rule_id": "pii_phone_de_national_context",
     "de": "Telefon: 030 12345678",
     "en": "Phone: 030 12345678",
-    "language_neutral": false
+    "language_neutral": false,
+    "structure": {
+      "de": "{\"telefon\": \"030 98765432\"}",
+      "en": "{\"phone_number\": \"030 98765432\"}"
+    }
   },
   {
     "category": "pii",
@@ -166,7 +170,11 @@
     "rule_id": "pii_credit_card_cvv",
     "de": "Kartennummer: 4111 1111 1111 1111, Kartenprüfnummer: 123",
     "en": "Card number: 4111 1111 1111 1111, card verification code: 123",
-    "language_neutral": false
+    "language_neutral": false,
+    "structure": {
+      "de": "| Karte | CVV |\n|---|---|\n| 4111 1111 1111 1111 | 737 |",
+      "en": "| Card | CVV |\n|---|---|\n| 4111 1111 1111 1111 | 246 |"
+    }
   },
   {
     "category": "pii",
@@ -180,14 +188,22 @@
     "rule_id": "pii_swift_bic_context",
     "de": "BIC: DEUTDEFF500",
     "en": "BIC: DEUTDEFF500",
-    "language_neutral": true
+    "language_neutral": true,
+    "structure": {
+      "de": "{\"bic\": \"DEUTDEFF500\"}",
+      "en": "<bank><bic>BARCGB22</bic></bank>"
+    }
   },
   {
     "category": "pii",
     "rule_id": "pii_employee_id",
     "de": "Personalnummer: EMP-4711",
     "en": "Employee ID: EMP-4711",
-    "language_neutral": false
+    "language_neutral": false,
+    "structure": {
+      "de": "<mitarbeiter><personalnummer>PN-77120</personalnummer></mitarbeiter>",
+      "en": "employee_id,name\nE-40512,Maya Patel"
+    }
   },
   {
     "category": "pii",
@@ -208,42 +224,66 @@
     "rule_id": "pii_customer_id",
     "de": "Kundennummer: KD-88231",
     "en": "Customer ID: CUST-88231",
-    "language_neutral": false
+    "language_neutral": false,
+    "structure": {
+      "de": "Name;Kundennummer\nJana Roth;KD-55120",
+      "en": "{\"customerId\": \"CUS-88412\"}"
+    }
   },
   {
     "category": "pii",
     "rule_id": "pii_patient_id",
     "de": "Patientennummer: PAT-2048",
     "en": "Patient ID: PAT-2048",
-    "language_neutral": false
+    "language_neutral": false,
+    "structure": {
+      "de": "| Patientennummer | Station |\n|---|---|\n| PAT-20931 | 4B |",
+      "en": "| MRN | Ward |\n|---|---|\n| MRN-981134 | 7 |"
+    }
   },
   {
     "category": "pii",
     "rule_id": "pii_student_id",
     "de": "Matrikelnummer: STU-9911",
     "en": "Student number: STU-9911",
-    "language_neutral": false
+    "language_neutral": false,
+    "structure": {
+      "de": "Name;Matrikelnummer\nLea Brandt;4718205",
+      "en": "<student><student_id>STU-9912</student_id></student>"
+    }
   },
   {
     "category": "pii",
     "rule_id": "pii_applicant_id",
     "de": "Bewerbernummer: BEW-713",
     "en": "Applicant number: APP-713",
-    "language_neutral": false
+    "language_neutral": false,
+    "structure": {
+      "de": "{\"bewerbernummer\": \"BEW-5520\"}",
+      "en": "| Applicant ID | Role |\n|---|---|\n| APP-30418 | Analyst |"
+    }
   },
   {
     "category": "pii",
     "rule_id": "pii_username",
     "de": "Benutzername: ada.lovelace",
     "en": "Username: ada.lovelace",
-    "language_neutral": false
+    "language_neutral": false,
+    "structure": {
+      "de": "{\"benutzername\": \"p.lang\"}",
+      "en": "user_name\tteam\nm.chen\tplatform"
+    }
   },
   {
     "category": "pii",
     "rule_id": "pii_date_of_birth",
     "de": "Geburtsdatum: 14.03.1985",
     "en": "Date of birth: 14/03/1985",
-    "language_neutral": false
+    "language_neutral": false,
+    "structure": {
+      "de": "Name;Geburtsdatum\nJana Roth;14.03.1987",
+      "en": "{\"date_of_birth\": \"02/11/1990\"}"
+    }
   },
   {
     "category": "pii",
@@ -264,14 +304,22 @@
     "rule_id": "pii_financial_account_number",
     "de": "Kontonummer: ACC-44001234",
     "en": "Account number: ACC-44001234",
-    "language_neutral": false
+    "language_neutral": false,
+    "structure": {
+      "de": "{\"kontonummer\": \"KTO-30202\"}",
+      "en": "[payout]\naccount_number = ACC-55120"
+    }
   },
   {
     "category": "pii",
     "rule_id": "pii_steuer_id_de",
     "de": "Steuer-ID: 86095742719",
     "en": "Tax identification number: 86095742719",
-    "language_neutral": false
+    "language_neutral": false,
+    "structure": {
+      "de": "{\"steuer_id\": \"82736451927\"}",
+      "en": "<taxpayer><taxId>31415926539</taxId></taxpayer>"
+    }
   },
   {
     "category": "pii",
@@ -292,7 +340,11 @@
     "rule_id": "pii_health_insurance_number_de",
     "de": "Versichertennummer: A123456789",
     "en": "Health insurance number: A123456789",
-    "language_neutral": false
+    "language_neutral": false,
+    "structure": {
+      "de": "<table><tr><th>Versichertennummer</th><td>M345678912</td></tr></table>",
+      "en": "<insured kvnr=\"E912345679\"/>"
+    }
   },
   {
     "category": "pii",
@@ -306,7 +358,11 @@
     "rule_id": "pii_passport_number_de",
     "de": "Passnummer: C01X00T47",
     "en": "Passport number: C01X00T47",
-    "language_neutral": false
+    "language_neutral": false,
+    "structure": {
+      "de": "{\"passnummer\": \"C4J7K9L2N\"}",
+      "en": "<traveler passportNumber=\"C01X00T47\"/>"
+    }
   },
   {
     "category": "pii",
@@ -334,7 +390,11 @@
     "rule_id": "pii_ssn_us",
     "de": "US-Sozialversicherungsnummer: 123-45-6789",
     "en": "Social security number: 123-45-6789",
-    "language_neutral": false
+    "language_neutral": false,
+    "structure": {
+      "de": "{\"ssn\": \"456-78-9013\"}",
+      "en": "<table><tr><th>SSN</th><td>536-90-4399</td></tr></table>"
+    }
   },
   {
     "category": "pii",

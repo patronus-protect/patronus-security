@@ -12,6 +12,7 @@ pub(crate) struct NativeText<'a> {
     windows: OnceLock<Vec<(Range<usize>, MatchText)>>,
     tags: OnceLock<Vec<(usize, NativeText<'a>)>>,
     anchors: OnceLock<crate::detectors::lexical_anchors::AnchorPresence>,
+    structure: OnceLock<crate::detectors::structure::Fields>,
 }
 
 impl<'a> NativeText<'a> {
@@ -26,6 +27,7 @@ impl<'a> NativeText<'a> {
             windows: OnceLock::new(),
             tags: OnceLock::new(),
             anchors: OnceLock::new(),
+            structure: OnceLock::new(),
         }
     }
 
@@ -42,6 +44,12 @@ impl<'a> NativeText<'a> {
             crate::detectors::lexical_anchors::LexicalAnchorScanner::shared()
                 .presence_lowercase(&self.lower().text)
         })
+    }
+
+    /// Keyed fields of the text: JSON, key-value lines, XML, CSV and tables (K04).
+    pub(crate) fn structure(&self) -> &crate::detectors::structure::Fields {
+        self.structure
+            .get_or_init(|| crate::detectors::structure::Fields::parse(self.text()))
     }
 
     pub(crate) fn lower_windows(&self) -> &[(Range<usize>, MatchText)] {

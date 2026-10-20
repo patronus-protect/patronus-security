@@ -8,54 +8,54 @@ These are the stable rule IDs accepted by execution-gate `rules`. Missing IDs in
 
 All PII rules are eligible by default when PII L1 is enabled.
 
-In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `recall` a finding scores the rule base plus the validator strength (checksum 35, format 15, none 0) plus its context, capped at 100 and divided by 100: 25 when the rule binds the value to a field name, otherwise 25/20/15 for a support term of the label near the value and -30 when a counter-context term is nearer (see [PII score and modes](result-schema.md#pii-score-and-modes), [PII context lexicon](#pii-context-lexicon)). Rules marked `proximity (required)` report only with a support term, in every mode.
+In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `recall` a finding scores the rule base plus the validator strength (checksum 35, format 15, none 0) plus its context, capped at 100 and divided by 100: 25 when the rule binds the value to a field name, otherwise 25/20/15 for a support term of the label near the value and -30 when a counter-context term is nearer (see [PII score and modes](result-schema.md#pii-score-and-modes), [PII context lexicon](#pii-context-lexicon)). Rules marked `proximity (required)` report only with a support term, in every mode. Structure (K04): a JSON key, a `key: value`/`key=value` line, an XML element or attribute, a CSV header or a Markdown/HTML table header that a `field` rule accepts as its field name binds the value it holds to the rule in every mode, if the value matches the rule's value form in full; for the other rules a key of the label (or a counter-context key) that names exactly the value is its context (+25 or -30) instead of proximity.
 
 | Rule ID | Result entity group | Extra validator | Validator strength | Base | Context | Score (`balanced`/`recall`) |
 | --- | --- | --- | --- | --- | --- | --- |
-| `pii_email` | `EMAIL` | no | none | 70 | proximity | 0.70–0.95 |
-| `pii_ipv4` | `IP_ADDRESS` | yes | format | 50 | proximity | 0.65–0.90 |
-| `pii_ipv6_full` | `IP_ADDRESS` | yes | format | 50 | proximity | 0.65–0.90 |
-| `pii_ipv6_compressed` | `IP_ADDRESS` | yes | format | 50 | proximity | 0.65–0.90 |
-| `pii_ipv6_loopback` | `IP_ADDRESS` | yes | format | 40 | proximity | 0.55–0.80 |
-| `pii_phone_international` | `PHONE` | yes | format | 40 | proximity | 0.55–0.80 |
-| `pii_phone_de` | `PHONE` | yes | format | 45 | proximity | 0.60–0.85 |
-| `pii_phone_de_national_context` | `PHONE` | yes | format | 30 | field | 0.70 |
-| `pii_phone_de_national_proximity` | `PHONE` | yes | format | 20 | proximity (required) | 0.50–0.60 |
-| `pii_phone_us` | `PHONE` | yes | format | 35 | proximity | 0.50–0.75 |
-| `pii_mac_address` | `MAC_ADDRESS` | yes | format | 55 | proximity | 0.70–0.95 |
-| `pii_iban_de` | `IBAN` | yes | checksum | 55 | proximity | 0.90–1.00 |
-| `pii_iban_generic` | `IBAN` | yes | checksum | 45 | proximity | 0.80–1.00 |
-| `pii_credit_card` | `CREDITCARD` | yes | checksum | 40 | proximity | 0.75–1.00 |
-| `pii_credit_card_cvv` | `CREDITCARD_CVV` | yes | format | 20 | field | 0.60 |
-| `pii_credit_card_expiry` | `CREDITCARD_EXPIRY` | yes | format | 25 | field | 0.65 |
-| `pii_swift_bic_context` | `SWIFT_CODE` | yes | format | 40 | field | 0.80 |
-| `pii_employee_id` | `EMPLOYEE_ID` | yes | format | 30 | field | 0.70 |
-| `pii_employee_id_ocr_field` | `EMPLOYEE_ID` | yes | format | 25 | field | 0.65 |
-| `pii_employee_id_prefixed` | `EMPLOYEE_ID` | yes | format | 45 | proximity | 0.60–0.85 |
-| `pii_customer_id` | `CUSTOMER_ID` | yes | format | 30 | field | 0.70 |
-| `pii_patient_id` | `PATIENT_ID` | yes | format | 30 | field | 0.70 |
-| `pii_student_id` | `STUDENT_ID` | yes | format | 30 | field | 0.70 |
-| `pii_applicant_id` | `APPLICANT_ID` | yes | format | 30 | field | 0.70 |
-| `pii_username` | `USERNAME` | yes | format | 30 | field | 0.70 |
-| `pii_date_of_birth` | `DOB` | yes | format | 40 | field | 0.80 |
-| `pii_date_of_birth_written_day_first` | `DOB` | yes | format | 45 | field | 0.85 |
-| `pii_date_of_birth_written_month_first` | `DOB` | yes | format | 45 | field | 0.85 |
-| `pii_financial_account_number` | `FINANCIAL_ACCOUNT_NUMBER` | yes | format | 30 | field | 0.70 |
-| `pii_steuer_id_de` | `STEUERID` | yes | checksum | 40 | field | 1.00 |
-| `pii_steuernummer_de` | `TAX_NUMBER_DE` | yes | format | 35 | field | 0.75 |
-| `pii_rentenversicherung_de` | `SOCIALID` | yes | format | 50 | field | 0.90 |
-| `pii_health_insurance_number_de` | `HEALTH_INSURANCE_NUMBER` | yes | format | 45 | field | 0.85 |
-| `pii_physician_number_lanr_de` | `PHYSICIAN_NUMBER_LANR` | yes | format | 30 | field | 0.70 |
-| `pii_passport_number_de` | `PASSPORT_NUMBER` | yes | format | 40 | field | 0.80 |
-| `pii_identity_card_number_de` | `IDENTITY_CARD_NUMBER` | yes | format | 40 | field | 0.80 |
-| `pii_driver_license_number_de` | `DRIVER_LICENSE_NUMBER` | yes | format | 35 | field | 0.75 |
-| `pii_kfz_kennzeichen_de` | `LICENSEPLATE` | no | none | 40 | field | 0.65 |
-| `pii_ssn_us` | `SSN` | yes | format | 45 | field | 0.85 |
-| `pii_ni_uk` | `NATIONALID` | yes | format | 50 | field | 0.90 |
+| `pii_email` | `EMAIL` | no | none | 70 | key or proximity | 0.70–0.95 |
+| `pii_ipv4` | `IP_ADDRESS` | yes | format | 50 | key or proximity | 0.65–0.90 |
+| `pii_ipv6_full` | `IP_ADDRESS` | yes | format | 50 | key or proximity | 0.65–0.90 |
+| `pii_ipv6_compressed` | `IP_ADDRESS` | yes | format | 50 | key or proximity | 0.65–0.90 |
+| `pii_ipv6_loopback` | `IP_ADDRESS` | yes | format | 40 | key or proximity | 0.55–0.80 |
+| `pii_phone_international` | `PHONE` | yes | format | 40 | key or proximity | 0.55–0.80 |
+| `pii_phone_de` | `PHONE` | yes | format | 45 | key or proximity | 0.60–0.85 |
+| `pii_phone_de_national_context` | `PHONE` | yes | format | 30 | field or key | 0.70 |
+| `pii_phone_de_national_proximity` | `PHONE` | yes | format | 20 | key or proximity (required) | 0.50–0.60 |
+| `pii_phone_us` | `PHONE` | yes | format | 35 | key or proximity | 0.50–0.75 |
+| `pii_mac_address` | `MAC_ADDRESS` | yes | format | 55 | key or proximity | 0.70–0.95 |
+| `pii_iban_de` | `IBAN` | yes | checksum | 55 | key or proximity | 0.90–1.00 |
+| `pii_iban_generic` | `IBAN` | yes | checksum | 45 | key or proximity | 0.80–1.00 |
+| `pii_credit_card` | `CREDITCARD` | yes | checksum | 40 | key or proximity | 0.75–1.00 |
+| `pii_credit_card_cvv` | `CREDITCARD_CVV` | yes | format | 20 | field or key | 0.60 |
+| `pii_credit_card_expiry` | `CREDITCARD_EXPIRY` | yes | format | 25 | field or key | 0.65 |
+| `pii_swift_bic_context` | `SWIFT_CODE` | yes | format | 40 | field or key | 0.80 |
+| `pii_employee_id` | `EMPLOYEE_ID` | yes | format | 30 | field or key | 0.70 |
+| `pii_employee_id_ocr_field` | `EMPLOYEE_ID` | yes | format | 25 | field or key | 0.65 |
+| `pii_employee_id_prefixed` | `EMPLOYEE_ID` | yes | format | 45 | key or proximity | 0.60–0.85 |
+| `pii_customer_id` | `CUSTOMER_ID` | yes | format | 30 | field or key | 0.70 |
+| `pii_patient_id` | `PATIENT_ID` | yes | format | 30 | field or key | 0.70 |
+| `pii_student_id` | `STUDENT_ID` | yes | format | 30 | field or key | 0.70 |
+| `pii_applicant_id` | `APPLICANT_ID` | yes | format | 30 | field or key | 0.70 |
+| `pii_username` | `USERNAME` | yes | format | 30 | field or key | 0.70 |
+| `pii_date_of_birth` | `DOB` | yes | format | 40 | field or key | 0.80 |
+| `pii_date_of_birth_written_day_first` | `DOB` | yes | format | 45 | field or key | 0.85 |
+| `pii_date_of_birth_written_month_first` | `DOB` | yes | format | 45 | field or key | 0.85 |
+| `pii_financial_account_number` | `FINANCIAL_ACCOUNT_NUMBER` | yes | format | 30 | field or key | 0.70 |
+| `pii_steuer_id_de` | `STEUERID` | yes | checksum | 40 | field or key | 1.00 |
+| `pii_steuernummer_de` | `TAX_NUMBER_DE` | yes | format | 35 | field or key | 0.75 |
+| `pii_rentenversicherung_de` | `SOCIALID` | yes | format | 50 | field or key | 0.90 |
+| `pii_health_insurance_number_de` | `HEALTH_INSURANCE_NUMBER` | yes | format | 45 | field or key | 0.85 |
+| `pii_physician_number_lanr_de` | `PHYSICIAN_NUMBER_LANR` | yes | format | 30 | field or key | 0.70 |
+| `pii_passport_number_de` | `PASSPORT_NUMBER` | yes | format | 40 | field or key | 0.80 |
+| `pii_identity_card_number_de` | `IDENTITY_CARD_NUMBER` | yes | format | 40 | field or key | 0.80 |
+| `pii_driver_license_number_de` | `DRIVER_LICENSE_NUMBER` | yes | format | 35 | field or key | 0.75 |
+| `pii_kfz_kennzeichen_de` | `LICENSEPLATE` | no | none | 40 | field or key | 0.65 |
+| `pii_ssn_us` | `SSN` | yes | format | 45 | field or key | 0.85 |
+| `pii_ni_uk` | `NATIONALID` | yes | format | 50 | field or key | 0.90 |
 
 ### PII context lexicon
 
-The context engine reads these DE/EN entries of `rust/src/detectors/anchor_lexicons/pii.json`; `rust/src/detectors/pii/context.rs` maps them to labels. Support terms of a label count for rules without a field name of their own, a counter-context term counts for every label when it is nearer than every support term.
+The context engine reads these DE/EN entries of `rust/src/detectors/anchor_lexicons/pii.json`; `rust/src/detectors/pii/context.rs` maps them to labels. Support terms of a label count for rules without a field name of their own, a counter-context term counts for every label when it is nearer than every support term. As a structural key (a JSON key, CSV or table header, XML element), a term of either kind names the value it holds; keys are compared lowercased, with `_`, `-`, `.` and camelCase boundaries as spaces, optionally followed by `no`, `nr`, `number` or `nummer`. The key `iban` names no account number.
 
 | Result entity group | Support anchors |
 | --- | --- |

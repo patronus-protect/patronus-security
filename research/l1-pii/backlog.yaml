@@ -213,6 +213,7 @@ tasks:
     deps: [K02]
 
   - id: K04
+    status: done
     title: Structure awareness (JSON keys, CSV headers, key-value, Markdown/HTML tables as context)
     type: engine
     deps: [K03]

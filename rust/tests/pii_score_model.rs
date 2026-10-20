@@ -157,7 +157,8 @@ fn strict_explicit_and_default_are_bit_identical_on_every_golden() {
 }
 
 /// Model score of a `matched_rules` entry: field context for field rules,
-/// otherwise the proximity context of the matched value.
+/// otherwise the structural key of the matched value (K04), else its proximity
+/// context.
 fn expected_score(text: &str, rule: &serde_json::Value) -> (f64, Context) {
     let pattern = PII_PATTERNS
         .iter()
@@ -168,7 +169,8 @@ fn expected_score(text: &str, rule: &serde_json::Value) -> (f64, Context) {
     } else {
         let start = rule["start_byte"].as_u64().unwrap() as usize;
         let end = rule["end_byte"].as_u64().unwrap() as usize;
-        context::proximity(text, (start, end), pattern.entity_group)
+        context::key_context(text, (start, end), pattern.entity_group)
+            .unwrap_or_else(|| context::proximity(text, (start, end), pattern.entity_group))
     };
     (score::score(pattern, context), context)
 }
