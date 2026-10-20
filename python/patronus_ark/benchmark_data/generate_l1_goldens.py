@@ -1190,7 +1190,9 @@ for _row in K06_OBFUSCATION_CASES:
 # document that carries the value (`carrier`), its difficulty `tags` and whether it is a
 # `known_gap`: a positive the detector misses today, reported by 13_l1_golden_eval but
 # not gated. `carrier` and `prose` follow from the carrier, `encoded` and `split` from the
-# placeholders of positives; `no_context` is set by hand.
+# placeholders of positives; `no_context` is set by hand. A row scanned in an opt-in DLP
+# mode (K04 score model: scores, proximity and counter-context only act there) also carries
+# `dlp_mode`; rows without it run in the default `strict` mode.
 DLP_SCHEMA_VERSION = 2
 DLP_TAGS = ("carrier", "no_context", "encoded", "split", "prose")
 DLP_CARRIERS = (
@@ -1199,12 +1201,17 @@ DLP_CARRIERS = (
 )
 # Minimum gated positives and hard negatives per target label and language.
 DLP_MIN_PER_LANGUAGE = 5
+DLP_MODES = ("strict", "balanced", "recall")
 
 
-def dlp_row(row: dict, rule: str, carrier: str, tags: tuple[str, ...], known_gap: bool) -> dict:
+def dlp_row(
+    row: dict, rule: str, carrier: str, tags: tuple[str, ...], known_gap: bool, mode: str = "strict"
+) -> dict:
     tags = set(tags)
     if carrier not in DLP_CARRIERS or not tags <= {"no_context", "encoded", "split"}:
         raise ValueError(f"bad carrier {carrier!r} or hand-set tags {sorted(tags)}")
+    if mode not in DLP_MODES:
+        raise ValueError(f"bad dlp_mode {mode!r}")
     if known_gap and row["case_type"] != "positive":
         raise ValueError("only positives can be known gaps")
     if carrier not in ("line", "prose"):
@@ -1226,6 +1233,8 @@ def dlp_row(row: dict, rule: str, carrier: str, tags: tuple[str, ...], known_gap
         "tags": [tag for tag in DLP_TAGS if tag in tags],
         "known_gap": known_gap,
     }
+    if mode != "strict":
+        head["dlp_mode"] = mode
     return {**head, **{key: value for key, value in row.items() if key not in head}}
 
 
@@ -1240,10 +1249,11 @@ def ds(
     carrier: str = "line",
     tags: tuple[str, ...] = (),
     gap: bool = False,
+    mode: str = "strict",
 ) -> dict:
     """Secret positive: one generator recipe placed by `template`."""
     row = secret_template_positive(label, language, template, [{"gen": generator, "seed": seed}])
-    return dlp_row(row, rule, carrier, tags, gap)
+    return dlp_row(row, rule, carrier, tags, gap, mode)
 
 
 def dp(
@@ -1293,6 +1303,44 @@ def dx(
         },
     }
     return dlp_row(row, rule, carrier, tags, False)
+
+
+def dc(
+    label: str,
+    language: str,
+    rule: str,
+    template: str,
+    generator: str,
+    seed: int,
+    reason: str,
+    *,
+    carrier: str = "line",
+    tags: tuple[str, ...] = (),
+    mode: str = "balanced",
+) -> dict:
+    """Hard negative of a scored DLP mode (K04): a generated value that `rule` reports in
+    `strict`, but whose context marks it as no secret (a nearer digest/hash term, or no
+    credential term at all). Its value is a plain recipe: it is no example value."""
+    if mode == "strict":
+        raise ValueError("generated hard negatives need a scored dlp_mode")
+    secrets = [{"gen": generator, "seed": seed}]
+    text, _ = recipes.materialize(template, secrets)
+    row = {
+        "language": language,
+        "case_type": "hard_negative",
+        "target_label": label,
+        "template": template,
+        "secrets": secrets,
+        "text_fingerprint": recipes.fingerprint(text),
+        "entities": [],
+        "span_unit": "unicode_code_point",
+        "negative_reason": reason,
+        "provenance": {
+            "origin": "synthetic",
+            "source": "generator recipe (patronus_ark.dlp_synth) in non-secret context, materialized at test time",
+        },
+    }
+    return dlp_row(row, rule, carrier, tags, False, mode)
 
 
 def dn(
@@ -3696,6 +3744,129 @@ DLP_T07_CASES = {
 }
 for _label, _rows in DLP_T07_CASES.items():
     DLP_CASES[_label].extend(_rows)
+
+
+# K04: the score model in `balanced` (rows name `dlp_mode`). Positives reach the threshold
+# through a field name, a provider format or a credential term next to a value without a
+# field name (wallet keys). Hard negatives are hex values that `strict` reports as Ethereum
+# keys, but that a nearer digest/hash term (tx hash, checksum, Prüfsumme) or the absence of
+# any credential term keeps below the threshold.
+DLP_K04_CASES = {
+    "CRYPTO_KEY": [
+        ds(
+            "CRYPTO_KEY", "en", "dlp_eth_private_key",
+            "wallet:\n  network: mainnet\n  private_key: <<secret:0>>\n",
+            "eth_private_key_hex", 8001, carrier="yaml", mode="balanced",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_eth_private_key",
+            "Privater Schlüssel des Hot-Wallets: <<secret:0>>",
+            "eth_private_key_hex", 8002, carrier="prose", mode="balanced",
+        ),
+        ds(
+            "CRYPTO_KEY", "en", "dlp_btc_wif",
+            "Paper wallet backup, private key (WIF): <<secret:0>>",
+            "btc_wif_mainnet_compressed", 8003, carrier="prose", mode="balanced",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_btc_wif",
+            "Papier-Backup der Wallet, privater Schlüssel im WIF-Format: <<secret:0>>",
+            "btc_wif_mainnet_compressed", 8004, carrier="prose", mode="balanced",
+        ),
+        dc(
+            "CRYPTO_KEY", "en", "dlp_eth_private_key",
+            "2026-10-20T08:15:02Z INFO relay: tx hash: <<secret:0>> confirmed\n",
+            "eth_private_key_hex", 8011, "transaction hash (counter-context tx hash)", carrier="log",
+        ),
+        dc(
+            "CRYPTO_KEY", "en", "dlp_eth_private_key",
+            "Block 18 sealed, block hash <<secret:0>>",
+            "eth_private_key_hex", 8012, "block hash (counter-context block hash)", carrier="prose",
+        ),
+        dc(
+            "CRYPTO_KEY", "en", "dlp_eth_private_key",
+            "The Merkle root <<secret:0>> matches the header.",
+            "eth_private_key_hex", 8013, "Merkle root without any credential term", carrier="prose",
+        ),
+        dc(
+            "CRYPTO_KEY", "en", "dlp_eth_private_key",
+            "release:\n  artifact: node.tar.gz\n  checksum: <<secret:0>>\n",
+            "eth_private_key_hex", 8014, "release checksum (counter-context key)", carrier="yaml",
+        ),
+        dc(
+            "CRYPTO_KEY", "en", "dlp_eth_private_key",
+            "{\"status\": \"ok\", \"transactionHash\": \"<<secret:0>>\"}",
+            "eth_private_key_hex", 8015, "transaction hash in an RPC receipt, no credential term", carrier="json",
+        ),
+        dc(
+            "CRYPTO_KEY", "de", "dlp_eth_private_key",
+            "Transaktionshash: <<secret:0>> (bestätigt)",
+            "eth_private_key_hex", 8016, "Transaktionshash (Gegenkontext)", carrier="prose",
+        ),
+        dc(
+            "CRYPTO_KEY", "de", "dlp_eth_private_key",
+            "Laut Explorer wurde der Blockhash <<secret:0>> bestätigt.",
+            "eth_private_key_hex", 8017, "Blockhash (Gegenkontext)", carrier="prose",
+        ),
+        dc(
+            "CRYPTO_KEY", "de", "dlp_eth_private_key",
+            "Prüfsumme der Datei: <<secret:0>>",
+            "eth_private_key_hex", 8018, "Prüfsumme (Gegenkontext)", carrier="prose",
+        ),
+        dc(
+            "CRYPTO_KEY", "de", "dlp_eth_private_key",
+            "Die Zustandswurzel <<secret:0>> stimmt mit dem Header überein.",
+            "eth_private_key_hex", 8019, "Zustandswurzel ohne Zugangsdaten-Begriff", carrier="prose",
+        ),
+        dc(
+            "CRYPTO_KEY", "de", "dlp_eth_private_key",
+            "[INFO] Abgleich ok, Hashwert <<secret:0>>\n",
+            "eth_private_key_hex", 8020, "Hashwert (Gegenkontext)", carrier="log",
+        ),
+    ],
+    "API_KEY": [
+        ds(
+            "API_KEY", "en", "dlp_openai_key", "OPENAI_API_KEY=<<secret:0>>\nOPENAI_MODEL=gpt\n",
+            "openai_project_key", 8021, carrier="env", mode="balanced",
+        ),
+    ],
+    "SECRET_TOKEN": [
+        ds(
+            "SECRET_TOKEN", "de", "dlp_github_token",
+            "Schritt 3/5: export GITHUB_TOKEN=<<secret:0>>\n",
+            "github_ghp_token", 8022, carrier="log", mode="balanced",
+        ),
+    ],
+    "CREDENTIAL": [
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "database:\n  host: db.internal\n  password: <<secret:0>>\n",
+            "password", 8023, carrier="yaml", mode="balanced",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "Das Passwort lautet <<secret:0>>, bitte nach dem ersten Login ändern.",
+            "password", 8024, carrier="prose", mode="balanced",
+        ),
+    ],
+    "CLOUD_KEY": [
+        ds(
+            "CLOUD_KEY", "de", "dlp_aws_secret_key",
+            "[default]\naws_access_key_id = AKIA_SIEHE_TRESOR\naws_secret_access_key = <<secret:0>>\n",
+            "aws_secret_access_key", 8025, carrier="ini", mode="balanced",
+        ),
+    ],
+    "PRIVATE_KEY": [
+        ds(
+            "PRIVATE_KEY", "en", "dlp_private_key_block",
+            "const SERVER_KEY = `<<secret:0>>`;\n",
+            "pem_pkcs8_private_key", 8026, carrier="code", mode="balanced",
+        ),
+    ],
+}
+for _label, _rows in DLP_K04_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
 
 def flatten(suite: str, cases: dict[str, list[dict]]) -> list[dict]:
     rows = []

@@ -136,6 +136,41 @@ class PublicApiTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 scanner.set_execution_gates({"pii_mode": invalid})
 
+    def test_dlp_mode_is_strict_by_default_and_opt_in(self):
+        scanner = SecurityGateway(categories=["dlp"], max_level="l1", download_files=False)
+        # A field-bound password scores base 35 + field 25; a WIF-shaped value without a
+        # field name (base 30 + format 15) needs a credential term for balanced (K04).
+        from patronus_ark.dlp_synth import recipes
+
+        wif = recipes.generate("btc_wif_uncompressed", 1)
+        text = f"password: Sommer2026!x\nbackup {wif}"
+
+        def native():
+            return next(result for result in scanner.scan_categories(["dlp"], text)
+                        if result["model"] == "native:dlp")
+
+        strict = native()
+        self.assertEqual({span["score"] for span in strict["evidence_spans"]}, {1.0})
+        self.assertEqual({span["label"] for span in strict["evidence_spans"]}, {"CREDENTIAL", "CRYPTO_KEY"})
+        self.assertEqual(strict["confidence"], 1.0)
+        scanner.set_execution_gates({"dlp_mode": "strict"})
+        self.assertEqual(native()["evidence_spans"], strict["evidence_spans"])
+
+        expected = {"balanced": {"CREDENTIAL": 0.6}, "recall": {"CREDENTIAL": 0.6, "CRYPTO_KEY": 0.45}}
+        for mode, scores in expected.items():
+            scanner.set_execution_gates({"dlp_mode": mode})
+            scored = native()
+            self.assertEqual({span["label"]: span["score"] for span in scored["evidence_spans"]}, scores, mode)
+            self.assertEqual(scored["confidence"], 0.6, mode)
+            rules = {rule["rule_id"]: rule for rule in scored["layers"][0]["details"]["matched_rules"]}
+            self.assertEqual(rules["dlp_password_assignment"]["context"]["anchor"], "field")
+
+        scanner.set_execution_gates(None)
+        self.assertEqual(native()["evidence_spans"], strict["evidence_spans"])
+        for invalid in ("fast", "Strict", 1, True, None):
+            with self.assertRaises(ValueError):
+                scanner.set_execution_gates({"dlp_mode": invalid})
+
     def test_normalize_text_is_public_pure_text_api(self):
         text = "  &amp;#x69;gnor\u200be\u00a0\u202e Ρrеνіоus  "
 

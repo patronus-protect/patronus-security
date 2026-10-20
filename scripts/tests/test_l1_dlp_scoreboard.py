@@ -170,6 +170,88 @@ def test_opt_in_identifier_spans_come_from_the_extended_run_only():
     assert "API_KEY" not in report["groups"] and report["overall"]["predicted"] == 1
 
 
+def scored(start: int, end: int, rule: tuple[str, str, list[str]], score: float) -> dict:
+    return {**ark(start, end, rule), "score": score}
+
+
+def test_curves_score_the_spans_that_reach_each_threshold():
+    # K04: recall-mode predictions with model scores; every threshold keeps the spans scoring at least it.
+    predictions = [
+        {"id": "openai-1", "evidence_spans": [scored(10, 30, OPENAI, 0.7)]},
+        {"id": "openai-2", "evidence_spans": [scored(5, 25, OPENAI, 0.4)]},
+        {"id": "anthropic-1", "evidence_spans": [scored(0, 20, ANTHROPIC, 1.0)]},
+        {"id": "password-1", "evidence_spans": [scored(8, 16, PASSWORD, 0.6)]},
+        {"id": "openai-placeholder", "evidence_spans": [scored(2, 9, PASSWORD, 0.3)]},
+    ]
+    curves = MODULE.score_curves(carrier_rows(), predictions, TAXONOMY)
+    assert curves["mode"] == "recall"
+    points = {point["threshold"]: point for point in curves["points"]}
+    assert tuple(points) == MODULE.CURVE_THRESHOLDS
+    assert MODULE.CURVE_THRESHOLDS[:3] == (0.3, 0.4, 0.5)
+    # 0.3: everything, incl. the hard-negative FP; precision 4/5, recall 4/4.
+    low = points[0.3]["overall"]["exact"]
+    assert (points[0.3]["hard_negative_fp"], low["precision"], low["recall"]) == (1, 0.8, 1.0)
+    # 0.5 (balanced): the FP and the 0.4 span are gone.
+    mid = points[0.5]["overall"]["exact"]
+    assert (points[0.5]["hard_negative_fp"], mid["precision"], mid["recall"]) == (0, 1.0, 0.75)
+    assert points[0.5]["groups"]["API_KEY"]["exact"]["recall"] == pytest.approx(2 / 3)
+    # 1.0: only the span scoring 1.0.
+    assert points[1.0]["overall"]["exact"]["recall"] == 0.25 and points[1.0]["overall"]["predicted"] == 1
+    # Recall falls monotonically with the threshold.
+    recalls = [point["overall"]["exact"]["recall"] for point in curves["points"]]
+    assert recalls == sorted(recalls, reverse=True)
+    # Spans without a score (a build without the scored mode) count as 1.0.
+    flat = MODULE.score_curves(carrier_rows(), base_predictions(), TAXONOMY)
+    assert len({json.dumps(point["overall"]) for point in flat["points"]}) == 1
+
+
+def test_curves_are_reported_only_with_recall_predictions_and_never_gated(splits):
+    dev, _ = splits
+    split = MODULE.load_split(dev)
+    without = MODULE.score_split(split, [], TAXONOMY)
+    assert without["curves"] is None
+    recall = [{"id": row["id"], "evidence_spans": []} for row in split.carriers]
+    report = MODULE.score_split(split, [], TAXONOMY, recall_predictions=recall)
+    assert [point["threshold"] for point in report["curves"]["points"]] == list(MODULE.CURVE_THRESHOLDS)
+    # Curves add no checks: a head that loses all curve points still passes.
+    base = dict(report)
+    head = dict(report, curves={"mode": "recall", "points": []})
+    assert all(check["ok"] for check in MODULE.compare(base, head))
+    assert not any("curve" in check["check"] for check in MODULE.compare(base, head))
+
+
+def test_recall_profile_scans_carriers_in_the_scored_mode_with_its_own_cache_key(splits):
+    dev, _ = splits
+    split = MODULE.load_split(dev)
+    build = MODULE.Build(commit="c" * 40, key="k" * 64, package=Path("/nonexistent"), entity_map=ROOT / "x")
+    shas = {path: sha256(path.read_bytes()) for paths in split.files.values() for path in paths}
+    jobs = MODULE.plan_jobs(build, split, TAXONOMY, Path("/cache"), shas)
+    recall = [job for job in jobs if job.profile == "recall"]
+    assert recall and {job.component for job in recall} == {"synthetic"}
+    assert {job.mode for job in recall} == {"recall"} and not recall[0].rules
+    assert {job.mode for job in jobs if job.profile != "recall"} == {"strict"}
+    default = next(job for job in jobs if job.profile == "default" and job.source == recall[0].source)
+    assert default.key != recall[0].key
+    # Strict keys are unchanged by the scored profile: cached strict predictions stay valid.
+    expected = sha256(json.dumps([MODULE.PREDICTION_VERSION, build.key, MODULE._predictor_sha(), [],
+                                  shas[default.source]]).encode())
+    assert default.key == expected
+
+
+def test_predict_file_passes_the_dlp_mode_only_when_scored(monkeypatch, tmp_path):
+    calls = []
+
+    class Done:
+        returncode = 0
+
+    monkeypatch.setattr(MODULE.subprocess, "run", lambda cmd, **_: calls.append(cmd) or Done())
+    build = MODULE.Build(commit="c" * 40, key="k", package=tmp_path, entity_map=tmp_path / "map.yaml")
+    MODULE.predict_file(build, tmp_path / "in.jsonl", [], tmp_path / "out.jsonl")
+    MODULE.predict_file(build, tmp_path / "in.jsonl", [], tmp_path / "out.jsonl", mode="recall")
+    assert "--dlp-mode" not in calls[0]
+    assert calls[1][calls[1].index("--dlp-mode") + 1] == "recall"
+
+
 def test_taxonomy_lists_opt_in_rules_from_the_entity_map():
     # Default on: secret families only (docs/reference/l1-rule-catalog.md); everything else is opt-in.
     assert {"dlp_sql_statement", "dlp_record_order_id", "dlp_de_vat_id"} <= set(TAXONOMY.opt_in_rules)
@@ -364,14 +446,16 @@ class FakeEngine:
     """Stands in for ensure_build/predict_file: the head adds one FP per benign code document."""
 
     def __init__(self, repo: Path, head: str, regress: str | None = None):
-        self.repo, self.head, self.regress, self.calls = repo, head, regress, []
+        self.repo, self.head, self.regress, self.calls, self.modes = repo, head, regress, [], []
 
     def ensure_build(self, tree: Path, commit: str, cache: Path) -> MODULE.Build:
         key = MODULE.build_key(tree, commit)
         return MODULE.Build(commit=commit, key=key, package=cache / key, entity_map=ROOT / "research/dlp/entity_map.yaml")
 
-    def predict_file(self, build: MODULE.Build, source: Path, rules: list[str], output: Path) -> None:
+    def predict_file(self, build: MODULE.Build, source: Path, rules: list[str], output: Path,
+                     mode: str = "strict") -> None:
         self.calls.append((build.commit, source.name, tuple(rules)))
+        self.modes.append((build.commit, source.name, mode))
         head = build.commit == self.head
         rows = []
         for line in source.read_text().splitlines():
@@ -438,6 +522,13 @@ def test_gate_passes_without_regression_and_reports_dev_only(monkeypatch, capsys
     # Default and extended profile per build and file; extended only on carriers and benign docs.
     profiles = {(name, bool(rules)) for _, name, rules in engine.calls}
     assert ("alpha.jsonl", True) not in profiles and ("carriers.jsonl", True) in profiles
+    # The recall profile (P/R curves) scans the carriers only, for head and base.
+    recall = {(commit, name) for commit, name, mode in engine.modes if mode == "recall"}
+    assert {name for _, name in recall} == {"carriers.jsonl"} and len(recall) == 2
+    assert "P/R curve (recall mode, exact spans)" in out
+    dev_report = json.loads(next((tmp_path / "cache" / "scoreboard" / "reports").rglob("dev.json")).read_text())
+    assert [point["threshold"] for point in dev_report["head"]["curves"]["points"]] == list(MODULE.CURVE_THRESHOLDS)
+    assert not any("curve" in check["check"] for check in dev_report["checks"])
 
 
 def test_gate_fails_on_a_dev_fp_regression_and_names_it(monkeypatch, capsys, tmp_path, splits):
@@ -497,8 +588,8 @@ def test_same_build_for_head_and_base_scans_once(monkeypatch, capsys, tmp_path, 
     dev, _ = splits
     assert MODULE.main(["gate", "--head", str(repo), "--base-sha", head, "--dev", str(dev),
                         "--cache", str(tmp_path / "cache")]) == 0
-    # carriers and benign docs in both profiles, benign code in the default profile only
-    assert len(engine.calls) == 5
+    # carriers in all three profiles, benign docs in default and extended, benign code in default only
+    assert len(engine.calls) == 6
     # one build: the real latency check measures nothing
     assert "dev latency: not measured (head and base share one build)" in capsys.readouterr().out
 
@@ -657,9 +748,9 @@ def test_external_f1_losses_are_regressions():
 class ExternalEngine(FakeEngine):
     """FakeEngine that also predicts the external Gold in the extended profile; the head can miss a statement."""
 
-    def predict_file(self, build, source, rules, output):
+    def predict_file(self, build, source, rules, output, mode="strict"):
         if not source.name.startswith(("gitleaks", "schemapile")):
-            return super().predict_file(build, source, rules, output)
+            return super().predict_file(build, source, rules, output, mode)
         self.calls.append((build.commit, source.name, tuple(rules)))
         drop = build.commit == self.head and self.regress == "external"
         rows = []

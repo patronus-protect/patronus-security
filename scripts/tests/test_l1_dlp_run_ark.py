@@ -170,6 +170,16 @@ def test_execution_gates_keep_defaults_unless_rules_are_enabled():
         MODULE.execution_gates(["dlp_does_not_exist"], index)
 
 
+def test_execution_gates_add_a_scored_dlp_mode_only_when_asked():
+    index = entity_index()
+    assert MODULE.execution_gates([], index, "strict") is None
+    assert MODULE.execution_gates([], index, "recall") == {"dlp_mode": "recall"}
+    assert MODULE.execution_gates(["dlp_sql_statement"], index, "balanced") == {
+        "rules": {"dlp_sql_statement": True}, "dlp_mode": "balanced"}
+    with pytest.raises(ValueError, match="unknown dlp_mode"):
+        MODULE.execution_gates([], index, "precision")
+
+
 # ── Prediction rows ───────────────────────────────────────────────────────
 
 
@@ -398,6 +408,17 @@ def test_run_writes_byte_identical_predictions_and_metadata(tmp_path):
     assert [json.loads(line)["id"] for line in lines] == ["env", "log", "neg"]
 
 
+def test_run_records_a_scored_mode_and_the_cli_rejects_unknown_modes(tmp_path, capsys):
+    source = tmp_path / "rows.jsonl"
+    write_jsonl(source, rows())
+    meta = MODULE.run(source, tmp_path / "out.jsonl", tmp_path / "out.meta.json", gateway=FakeGateway(fake_results()),
+                      build={"native_sha256": "0" * 64, "package_version": "0.0.0"}, mode="recall")
+    assert meta["engine"]["dlp_mode"] == "recall"
+    with pytest.raises(SystemExit):
+        MODULE.main(["--input", str(source), "--output", str(tmp_path / "x.jsonl"), "--dlp-mode", "fast"])
+    assert "invalid choice" in capsys.readouterr().err
+
+
 def native_available() -> bool:
     try:
         return importlib.util.find_spec("patronus_ark._patronus_ark") is not None
@@ -471,3 +492,29 @@ def test_real_binding_respects_default_off_content_rules(tmp_path):
     assert spans and {item["rule_id"] for item in spans} <= set(sql_rules)
     meta = json.loads((tmp_path / "enabled.meta.json").read_text(encoding="utf-8"))
     assert meta["engine"]["enabled_rules"] == sorted(sql_rules)
+
+
+@needs_native
+def test_real_binding_scores_spans_in_the_recall_mode(tmp_path):
+    from patronus_ark.dlp_synth import recipes
+
+    # K04: a hex value without a credential term scores 0.40 (kept by recall, below balanced);
+    # next to a digest term it is dropped; a field-bound password scores 0.60. Strict scores 1.0.
+    hex_value = lambda seed: recipes.generate("eth_private_key_hex", seed)  # noqa: E731
+    data = [
+        {"id": "bare", "text": f"state root {hex_value(1)} ok"},
+        {"id": "counter", "text": f"tx hash: {hex_value(2)}"},
+        {"id": "field", "text": "password: Sommer2026!x"},
+    ]
+    source = tmp_path / "rows.jsonl"
+    write_jsonl(source, data)
+    scores = {}
+    for mode in ("strict", "balanced", "recall"):
+        out = tmp_path / f"{mode}.jsonl"
+        meta = MODULE.run(source, out, tmp_path / f"{mode}.meta.json", mode=mode)
+        assert meta["engine"].get("dlp_mode", "strict") == mode
+        scores[mode] = {row["id"]: [span["score"] for span in row["evidence_spans"]]
+                        for row in map(json.loads, out.read_text(encoding="utf-8").splitlines())}
+    assert scores["strict"] == {"bare": [1.0], "counter": [1.0], "field": [1.0]}
+    assert scores["balanced"] == {"bare": [], "counter": [], "field": [0.6]}
+    assert scores["recall"] == {"bare": [0.4], "counter": [], "field": [0.6]}

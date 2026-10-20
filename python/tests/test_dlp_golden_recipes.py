@@ -285,8 +285,11 @@ class DlpGoldenRecipeTests(unittest.TestCase):
             if "template" in row:
                 self.assertNotIn("text", row, row["id"])
                 self.assertTrue(row["secrets"], row["id"])
-                # Positives hold real-shaped recipes; hard negatives only fill variants.
-                keys = {"gen", "seed"} if row["case_type"] == "positive" else {"gen", "seed", "fill"}
+                # Positives hold real-shaped recipes; hard negatives only fill variants, except
+                # hard negatives of a scored DLP mode (K04), whose context marks the value as
+                # no secret.
+                plain = row["case_type"] == "positive" or row.get("dlp_mode") in ("balanced", "recall")
+                keys = {"gen", "seed"} if plain else {"gen", "seed", "fill"}
                 for secret in row["secrets"]:
                     self.assertEqual(set(secret), keys, row["id"])
             else:
