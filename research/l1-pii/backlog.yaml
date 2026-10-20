@@ -219,6 +219,7 @@ tasks:
     deps: [K03]
 
   - id: K05
+    status: done
     title: Context-free output of checksum-strong values in balanced mode
     type: engine
     deps: [K03]
