@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! T07: placeholders and environment/template references in value-capturing
 //! rules are no findings, while real values next to them and placeholder-like
-//! real passwords stay detected. Values are synthetic.
+//! real passwords stay detected. K06 adds template syntaxes, secret-manager
+//! references, DE/EN placeholders and values that only name the credential.
+//! Values are synthetic.
 
 use std::sync::OnceLock;
 
@@ -261,6 +263,163 @@ fn real_values_next_to_references_and_placeholder_like_passwords_stay_detected()
             "SERVICE_TOKEN=variable.kqztrwx4711",
             "dlp_env_var_secret",
             "variable.kqztrwx4711",
+        ),
+    ] {
+        assert_reported(text, rule_id, value);
+    }
+}
+
+#[test]
+fn k06_template_and_secret_manager_references_are_silent() {
+    let texts: Vec<String> = [
+        // Python %-format, str.format/f-strings, C#/Rust format strings
+        "DSN = \"postgresql://lager:%(passwort)s@db.intern:5432/lager\"\n",
+        "password=%(db_password)s\n",
+        "DB_PASSWORD=%(db_password)s\n",
+        "return f\"postgres://app:{db_password}@db.internal:5432/app\"\n",
+        "conn = \"Server=db;Password={password};\"\n",
+        "conn = \"Server=db;Passwort={0};\"\n",
+        "password = \"{password!r}\"\n",
+        "DB_PASSWORD={env:DB_PASSWORD}\n",
+        // Ruby/Puppet/Logstash %{…}
+        "DB_PASSWORD=%{db_password}\n",
+        "password: \"%{[secrets][db]}\"\n",
+        // Maven/Gradle/autoconf filter tokens, replace tokens, cmd delayed expansion
+        "datenbank.passwort=@db.passwort@\n",
+        "spring.datasource.password=@DB_PASSWORD@\n",
+        "DB_PASSWORD=__DB_PASSWORD__\n",
+        "Authorization: Bearer __ACCESS_TOKEN__\n",
+        "set PASSWORD=!DB_PASSWORD!\n",
+        // Concourse/BOSH, Home Assistant/ESPHome, CloudFormation
+        "passwort: ((lager.db_passwort))\n",
+        "password: (( db_password ))\n",
+        "password: !secret wlan_passwort\n",
+        "password: !Ref DbPassword\n",
+        "password: !Sub '{{resolve:secretsmanager:${Db}:SecretString:password}}'\n",
+        // Secret managers: 1Password, vals, Azure Key Vault, AWS, GCP, Docker/Kubernetes files
+        "DB_PASSWORD=op://Production/postgres/password\n",
+        "password: ref+vault://secret/data/app#db_password\n",
+        "API_TOKEN=ref+awssecrets://prod/api#token\n",
+        "DB_PASSWORT=@Microsoft.KeyVault(SecretUri=https://lager-kv.vault.azure.net/secrets/db-passwort/)\n",
+        "SERVICE_TOKEN=arn:aws:secretsmanager:eu-central-1:123456789012:secret:prod/service-token-AbCdEf\n",
+        "DB_PASSWORD=arn:aws:ssm:eu-central-1:123456789012:parameter/prod/db/password\n",
+        "DB_PASSWORD=projects/lager-prod/secrets/db-password/versions/latest\n",
+        "DB_PASSWORD=/run/secrets/db_password\n",
+        "SERVICE_TOKEN=/var/run/secrets/kubernetes.io/serviceaccount/token\n",
+    ]
+    .iter()
+    .map(|text| (*text).to_owned())
+    .collect();
+    let reported = silent(&texts);
+    assert!(reported.is_empty(), "references reported: {reported:#?}");
+}
+
+#[test]
+fn k06_placeholders_are_silent_in_de_and_en() {
+    let de = [
+        "PASSWORT_HIER_EINGEBEN",
+        "BITTE_AUSFUELLEN",
+        "TOKEN_EINSETZEN",
+        "SCHLUESSEL_HIER_HINTERLEGEN",
+        "***ENTFERNT***",
+        "GESCHWAERZT",
+        "MEIN_PASSWORT",
+    ];
+    let en = [
+        "null",
+        "None",
+        "nil",
+        "undefined",
+        "changeit",
+        "***REMOVED***",
+        "**None**",
+        "*****REDACTED*****",
+        "my-access-token",
+        "secret_token",
+        "SECRET_PASSWORD",
+        "your-password",
+    ];
+    let mut reported = silent(&in_carriers(&de));
+    reported.extend(silent(&in_carriers(&en)));
+    reported.extend(silent(&[
+        "$ git clone https://x-token-auth:my-access-token@bitbucket.org/acme/repo.git\n".to_owned(),
+        "ENV API_KEY=\"**None**\" \\\n".to_owned(),
+        "expect(text).to.include('Authorization: Bearer secret_token')\n".to_owned(),
+        "keystore.password=changeit\n".to_owned(),
+        "database:\n  password: null\n".to_owned(),
+    ]));
+    assert!(reported.is_empty(), "placeholders reported: {reported:#?}");
+}
+
+#[test]
+fn k06_lookalike_real_values_stay_detected() {
+    for (text, rule_id, value) in [
+        // Braces, @, __, !, (( )) around values that look like passwords.
+        (
+            "password = {kqztrwx4711}\n",
+            "dlp_password_assignment",
+            "{kqztrwx4711",
+        ),
+        (
+            "password=@kqztrwx4711@\n",
+            "dlp_password_assignment",
+            "@kqztrwx4711@",
+        ),
+        (
+            "DB_PASSWORD=__Kx7pQ2vL9rT4__\n",
+            "dlp_env_var_secret",
+            "__Kx7pQ2vL9rT4__",
+        ),
+        (
+            "password=!Kx7pQ2vL9rT4!\n",
+            "dlp_password_assignment",
+            "!Kx7pQ2vL9rT4!",
+        ),
+        (
+            "password: !Reference2026Kq\n",
+            "dlp_password_assignment",
+            "!Reference2026Kq",
+        ),
+        (
+            "password=%Kx7(pQ2)vL9\n",
+            "dlp_password_assignment",
+            "%Kx7(pQ2)vL9",
+        ),
+        // Words outside the credential-name vocabulary, masks with a real value.
+        (
+            "https://example.test?password=actual-secret",
+            "dlp_credential_in_url",
+            "actual-secret",
+        ),
+        (
+            "password: my-dog-rex-2026\n",
+            "dlp_password_assignment",
+            "my-dog-rex-2026",
+        ),
+        (
+            "Das Passwort lautet geheim-sauce-4711 und gilt bis Freitag.",
+            "dlp_password_assignment",
+            "geheim-sauce-4711",
+        ),
+        (
+            "password: *Kx7pQ2vL9rT4*\n",
+            "dlp_password_assignment",
+            "*Kx7pQ2vL9rT4*",
+        ),
+        (
+            "password: nullpointer4711\n",
+            "dlp_password_assignment",
+            "nullpointer4711",
+        ),
+        (
+            "DB_PASSWORD=opal://Kx7pQ2vL9rT4\n",
+            "dlp_env_var_secret",
+            "opal://Kx7pQ2vL9rT4",
+        ),
+        (
+            "DB_PASSWORD=projects4711Kq/x\n",
+            "dlp_env_var_secret",
+            "projects4711Kq/x",
         ),
     ] {
         assert_reported(text, rule_id, value);

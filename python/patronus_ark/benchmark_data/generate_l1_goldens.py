@@ -3746,6 +3746,7 @@ for _label, _rows in DLP_T07_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
 
+
 # K04: the score model in `balanced` (rows name `dlp_mode`). Positives reach the threshold
 # through a field name, a provider format or a credential term next to a value without a
 # field name (wallet keys). Hard negatives are hex values that `strict` reports as Ethereum
@@ -3865,6 +3866,174 @@ DLP_K04_CASES = {
     ],
 }
 for _label, _rows in DLP_K04_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+
+# K06: template and secret-manager references beyond T07 (Python `%(name)s` and `{name}`,
+# Maven `@name@`, replace tokens `__NAME__`, Concourse `((name))`, Home Assistant
+# `!secret name`, CloudFormation `!Ref`, 1Password `op://`, vals `ref+vault://`, Azure
+# `@Microsoft.KeyVault(…)`, AWS Secrets Manager ARNs), DE/EN placeholders (`…_EINGEBEN`,
+# `null`, the keystore default `changeit`, masks around a word such as `***ENTFERNT***`) and
+# values that only name the credential (`my-access-token`, `secret_token`) are hard negatives.
+# Real values next to such references stay positives. Vendor-documented example values and
+# test keys are assembled at test time (rust/tests/dlp_documented_values.rs), never stored.
+DLP_K06_CASES = {
+    "CREDENTIAL": [
+        dn(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "# Vorlage für den Lagerdienst\nDB_PASSWORT=PASSWORT_HIER_EINGEBEN\nAPP_PORT=8080\n",
+            "placeholder …_HIER_EINGEBEN", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_url_userinfo_password",
+            "import psycopg\n\nDSN = \"postgresql://lager:%(passwort)s@db.intern:5432/lager\"\n",
+            "Python %-format reference %(name)s in URL userinfo", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "wifi:\n  ssid: Lager-WLAN\n  password: !secret wlan_passwort\n",
+            "Home Assistant/ESPHome !secret reference", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "# wird beim Maven-Build gefiltert\ndatenbank.url=jdbc:postgresql://db.intern/lager\ndatenbank.passwort=@db.passwort@\n",
+            "Maven resource filter token @name@", carrier="ini",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "# Schlüssel liegen im Key Vault\nDB_PASSWORT=@Microsoft.KeyVault(SecretUri=https://lager-kv.vault.azure.net/secrets/db-passwort/)\n",
+            "Azure Key Vault reference @Microsoft.KeyVault(…)", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "jobs:\n- name: abgleich\n  plan:\n  - task: export\n    params:\n      passwort: ((lager.db_passwort))\n",
+            "Concourse credential reference ((name))", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "2026-10-02 08:00:01 INFO Konfiguration geladen: SMTP_PASSWORT=***ENTFERNT*** SMTP_HOST=mail.intern\n",
+            "mask around a redaction word ***ENTFERNT***", carrier="log",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "# JKS default, the real one comes from the vault\nkeystore.path=/etc/app/keystore.jks\nkeystore.password=changeit\n",
+            "documented keystore default changeit", carrier="ini",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "database:\n  host: db.internal\n  user: app\n  password: null\n",
+            "null value", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_url_userinfo_password",
+            "def dsn(db_password: str) -> str:\n    return f\"postgres://app:{db_password}@db.internal:5432/app\"\n",
+            "Python f-string reference {name} in URL userinfo", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "# resolved by `op run --env-file=.env`\nDB_PASSWORD=op://Production/postgres/password\n",
+            "1Password secret reference op://", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "# Azure Pipelines replace tokens\nDB_PASSWORD=__DB_PASSWORD__\nDB_HOST=__DB_HOST__\n",
+            "replace token __NAME__", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "SERVICE_TOKEN=arn:aws:secretsmanager:eu-central-1:123456789012:secret:prod/service-token-AbCdEf\n",
+            "AWS Secrets Manager ARN", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "db:\n  password: ref+vault://secret/data/app#db_password\n",
+            "vals secret reference ref+vault://", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_url_userinfo_password",
+            "$ git clone https://x-token-auth:my-access-token@bitbucket.org/acme/repo.git\n",
+            "value that only names the credential (my-access-token)", carrier="cli",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "FROM nginx:1.27-alpine\nENV API_KEY=\"**None**\" \\\n    BASE_URL=\"\"\n",
+            "mask around a placeholder word **None**", carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "# PASSWORT_HIER_EINGEBEN wurde ersetzt\nDB_BENUTZER=__DB_BENUTZER__\nDB_PASSWORT=<<secret:0>>\n",
+            "password", 9601, carrier="env",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "wifi:\n  ssid: !secret wlan_ssid\n  password: <<secret:0>>\n",
+            "password", 9602, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "datenbank.benutzer=@db.benutzer@\ndatenbank.passwort=<<secret:0>>\n",
+            "weak_snake_case_password", 9603, carrier="ini",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_url_userinfo_password",
+            "# früher postgresql://lager:%(passwort)s@db.intern/lager\nDATABASE_URL=postgres://lager:<<secret:0>>@db.intern:5432/lager\n",
+            "url_userinfo_password", 9604, carrier="env",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "Hallo Team, im Vault steht noch ((lager.db_passwort)), das Passwort lautet <<secret:0>> und gilt bis Freitag.",
+            "password", 9605, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "truststore.password=changeit\nkeystore.password=<<secret:0>>\n",
+            "password", 9606, carrier="ini",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_url_userinfo_password",
+            "PRIMARY = f\"postgres://app:{db_password}@db.internal/app\"\nFALLBACK = \"postgres://app:<<secret:0>>@db.internal/app\"\n",
+            "url_userinfo_password", 9607, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "DB_HOST=op://Production/postgres/host\nDB_PASSWORD=<<secret:0>>\n",
+            "password", 9608, carrier="env",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "db:\n  password: ref+vault://secret/data/app#db_password\napi_key: \"<<secret:0>>\"\n",
+            "generic_api_secret", 9609, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "2026-10-02 08:00:01 WARN legacy login enabled, password=<<secret:0>> (was ***REMOVED***)\n",
+            "weak_dollar_password", 9610, carrier="log",
+        ),
+    ],
+    "SECRET_TOKEN": [
+        dn(
+            "SECRET_TOKEN", "de", "dlp_bearer_token",
+            "# Release-Pipeline ersetzt die Tokens\nGET /v1/lager HTTP/1.1\nHost: api.example.de\nAuthorization: Bearer __ZUGRIFFSTOKEN__\n",
+            "replace token __NAME__ as bearer token", carrier="http",
+        ),
+        dn(
+            "SECRET_TOKEN", "en", "dlp_bearer_token",
+            "it('sends the header', () => {\n  expect(request.headers).to.include('Authorization: Bearer secret_token')\n})\n",
+            "value that only names the credential (secret_token)", carrier="code",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_bearer_token",
+            "GET /v1/lager HTTP/1.1\nX-Request-Id: __REQUEST_ID__\nAuthorization: Bearer <<secret:0>>\n",
+            "bearer_opaque_token", 9611, carrier="http",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_bearer_token",
+            "$ curl -H \"X-Trace: {trace_id}\" -H \"Authorization: Bearer <<secret:0>>\" https://api.example.com/v1/me\n",
+            "bearer_opaque_token", 9612, carrier="cli",
+        ),
+    ],
+}
+for _label, _rows in DLP_K06_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
 

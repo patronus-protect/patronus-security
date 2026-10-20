@@ -846,11 +846,13 @@
     "hard_negatives": {
       "de": [
         "DB_PASSWORT=BITTE_AENDERN",
-        "DB_PASSWORT = os.environ[\"DB_PASSWORT\"]"
+        "DB_PASSWORT = os.environ[\"DB_PASSWORT\"]",
+        "DB_PASSWORT=@Microsoft.KeyVault(SecretUri=https://lager-kv.vault.azure.net/secrets/db-passwort/)"
       ],
       "en": [
         "DB_PASSWORD=YOUR_DB_PASSWORD_HERE",
-        "DB_PASSWORD = ENV.fetch(\"DB_PASSWORD\")"
+        "DB_PASSWORD = ENV.fetch(\"DB_PASSWORD\")",
+        "DB_PASSWORD=op://Production/postgres/password"
       ]
     },
     "language_neutral": false
@@ -863,11 +865,13 @@
     "hard_negatives": {
       "de": [
         "Passwort: HIER_PASSWORT_EINTRAGEN",
-        "passwort = var.db_passwort"
+        "passwort = var.db_passwort",
+        "passwort: ((lager.db_passwort))"
       ],
       "en": [
         "Password: TODO",
-        "password: {{dbPassword}}"
+        "password: {{dbPassword}}",
+        "keystore.password=changeit"
       ]
     },
     "language_neutral": false
@@ -896,10 +900,12 @@
     "en": "Authorization: Bearer abcDEfGhIJkl123456",
     "hard_negatives": {
       "de": [
-        "Authorization: Bearer HIER_TOKEN_EINTRAGEN"
+        "Authorization: Bearer HIER_TOKEN_EINTRAGEN",
+        "Authorization: Bearer __ZUGRIFFSTOKEN__"
       ],
       "en": [
-        "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE"
+        "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE",
+        "Authorization: Bearer secret_token"
       ]
     },
     "language_neutral": true
@@ -964,11 +970,13 @@
     "en": "postgres://dbuser:s3cr3t-value@db.internal/app",
     "hard_negatives": {
       "de": [
-        "postgres://dbuser:BITTE_AENDERN@db.internal/app"
+        "postgres://dbuser:BITTE_AENDERN@db.internal/app",
+        "postgresql://lager:%(passwort)s@db.intern/lager"
       ],
       "en": [
         "postgres://dbuser:TODO@db.internal/app",
-        "mysql://report:$DB_PASSWORD@db1/app"
+        "mysql://report:$DB_PASSWORD@db1/app",
+        "https://x-token-auth:my-access-token@bitbucket.org/acme/repo.git"
       ]
     },
     "language_neutral": true
