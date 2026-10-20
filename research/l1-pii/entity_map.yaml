@@ -16,6 +16,8 @@
 #   - jedes ARK-Label der Registry genau einmal, keine Labels, die die Registry nicht kennt;
 #   - jede Presidio-Entität höchstens einmal (mit installiertem Presidio: genau die Registry);
 #   - jedes Korpus-Label genau so wie im Manifest;
+#   - jede Gold-Quelle (Manifest-Korpora, pii_l1, l1_bilingual_rules, E05-Goldset) hat genau eine
+#     Quellfamilie (source_families);
 #   - ARK_OUTPUT_MAP (external_pii_eval) und PRESIDIO_OUTPUT_MAP (run_presidio.py) widersprechen
 #     der Tabelle nicht. Sie dürfen Teilmengen sein: dort fehlende Labels bleiben ark.<LABEL> bzw.
 #     presidio.<ENTITY> und werden erst gewertet, wenn ein Gold-Set die ID trägt.
@@ -29,6 +31,13 @@
 schema: ark-l1-entity-map-v1
 presidio_version: 2.2.364
 
+# Quellfamilien (Fairness-Regel in research/l1-pii/README.md): jede Gold-Quelle genau einmal.
+# Meilensteine entscheiden nur neutral und presidio_favored; ark_authored wird nur berichtet.
+source_families:
+  ark_authored: [pii_l1, l1_bilingual_rules, ark-synthetic-de-eu]
+  neutral: [gretel-synthetic-pii-finance, ai4privacy-openpii-nano-1k, tab]
+  presidio_favored: [presidio-evaluator-synth-v2, presidio-analyzer-recognizer-tests]
+
 entities:
   # ── shared ─────────────────────────────────────────────────────────────
   - id: pii.email
@@ -38,6 +47,8 @@ entities:
     corpora:
       ai4privacy-openpii-nano-1k: [EMAIL]
       gretel-synthetic-pii-finance: [EMAIL]
+      presidio-evaluator-synth-v2: [EMAIL_ADDRESS]
+      presidio-analyzer-recognizer-tests: [EMAIL_ADDRESS]
 
   - id: pii.phone
     scope: shared
@@ -46,6 +57,8 @@ entities:
     corpora:
       ai4privacy-openpii-nano-1k: [TELEPHONENUM]
       gretel-synthetic-pii-finance: [phone_number]
+      presidio-evaluator-synth-v2: [PHONE_NUMBER]
+      presidio-analyzer-recognizer-tests: [PHONE_NUMBER]
 
   - id: pii.ip_address
     scope: shared
@@ -53,12 +66,15 @@ entities:
     presidio: [IP_ADDRESS]
     corpora:
       gretel-synthetic-pii-finance: [ipv4, ipv6]
+      presidio-evaluator-synth-v2: [IP_ADDRESS]
+      presidio-analyzer-recognizer-tests: [IP_ADDRESS]
 
   - id: pii.mac_address
     scope: shared
     ark: [MAC_ADDRESS]
     presidio: [MAC_ADDRESS]
-    corpora: {}
+    corpora:
+      presidio-analyzer-recognizer-tests: [MAC_ADDRESS]
 
   - id: pii.iban
     scope: shared
@@ -67,6 +83,8 @@ entities:
     corpora:
       ai4privacy-openpii-nano-1k: [IBAN]
       gretel-synthetic-pii-finance: [IBAN]
+      presidio-evaluator-synth-v2: [IBAN_CODE]
+      presidio-analyzer-recognizer-tests: [IBAN_CODE]
 
   - id: pii.credit_card.pan
     scope: shared
@@ -75,6 +93,8 @@ entities:
     corpora:
       ai4privacy-openpii-nano-1k: [CREDITCARDNUMBER]
       gretel-synthetic-pii-finance: [credit_card_number]
+      presidio-evaluator-synth-v2: [CREDIT_CARD]
+      presidio-analyzer-recognizer-tests: [CREDIT_CARD]
 
   - id: pii.financial_account_number
     scope: shared
@@ -82,6 +102,7 @@ entities:
     presidio: [US_BANK_NUMBER, ABA_ROUTING_NUMBER]
     corpora:
       gretel-synthetic-pii-finance: [bban, bank_routing_number]
+      presidio-analyzer-recognizer-tests: [ABA_ROUTING_NUMBER, US_BANK_NUMBER]
 
   - id: pii.us.social_security_number
     scope: shared
@@ -89,42 +110,50 @@ entities:
     presidio: [US_SSN]
     corpora:
       gretel-synthetic-pii-finance: [ssn]
+      presidio-evaluator-synth-v2: [US_SSN]
+      presidio-analyzer-recognizer-tests: [US_SSN]
 
   - id: pii.uk.national_insurance_number
     scope: shared
     ark: [NATIONALID]
     presidio: [UK_NINO]
-    corpora: {}
+    corpora:
+      presidio-analyzer-recognizer-tests: [UK_NINO]
 
   - id: pii.de.tax_id
     scope: shared
     ark: [STEUERID]
     presidio: [DE_TAX_ID]
-    corpora: {}
+    corpora:
+      presidio-analyzer-recognizer-tests: [DE_TAX_ID]
 
   - id: pii.de.tax_number
     scope: shared
     ark: [TAX_NUMBER_DE]
     presidio: [DE_TAX_NUMBER]
-    corpora: {}
+    corpora:
+      presidio-analyzer-recognizer-tests: [DE_TAX_NUMBER]
 
   - id: pii.de.social_security_number
     scope: shared
     ark: [SOCIALID]
     presidio: [DE_SOCIAL_SECURITY]
-    corpora: {}
+    corpora:
+      presidio-analyzer-recognizer-tests: [DE_SOCIAL_SECURITY]
 
   - id: pii.de.health_insurance_number
     scope: shared
     ark: [HEALTH_INSURANCE_NUMBER]
     presidio: [DE_HEALTH_INSURANCE]
-    corpora: {}
+    corpora:
+      presidio-analyzer-recognizer-tests: [DE_HEALTH_INSURANCE]
 
   - id: pii.de.lanr
     scope: shared
     ark: [PHYSICIAN_NUMBER_LANR]
     presidio: [DE_LANR]
-    corpora: {}
+    corpora:
+      presidio-analyzer-recognizer-tests: [DE_LANR]
 
   - id: entity.passport_number
     scope: shared
@@ -133,12 +162,14 @@ entities:
     corpora:
       ai4privacy-openpii-nano-1k: [PASSPORTNUM]
       gretel-synthetic-pii-finance: [passport_number]
+      presidio-analyzer-recognizer-tests: [DE_PASSPORT, ES_PASSPORT, IN_PASSPORT, IT_PASSPORT, KR_PASSPORT, UK_PASSPORT, US_PASSPORT]
 
   - id: pii.identity_card_number
     scope: shared
     ark: [IDENTITY_CARD_NUMBER]
     presidio: [DE_ID_CARD, IT_IDENTITY_CARD]
-    corpora: {}
+    corpora:
+      presidio-analyzer-recognizer-tests: [DE_ID_CARD, IT_IDENTITY_CARD]
 
   - id: entity.driver_license_number
     scope: shared
@@ -147,12 +178,15 @@ entities:
     corpora:
       ai4privacy-openpii-nano-1k: [DRIVERLICENSENUM]
       gretel-synthetic-pii-finance: [driver_license_number]
+      presidio-evaluator-synth-v2: [US_DRIVER_LICENSE]
+      presidio-analyzer-recognizer-tests: [DE_FUEHRERSCHEIN, IT_DRIVER_LICENSE, KR_DRIVER_LICENSE, UK_DRIVING_LICENCE, US_DRIVER_LICENSE]
 
   - id: pii.license_plate
     scope: shared
     ark: [LICENSEPLATE]
     presidio: [DE_KFZ, UK_VEHICLE_REGISTRATION, IN_VEHICLE_REGISTRATION, NG_VEHICLE_REGISTRATION, TR_LICENSE_PLATE]
-    corpora: {}
+    corpora:
+      presidio-analyzer-recognizer-tests: [DE_KFZ, IN_VEHICLE_REGISTRATION, NG_VEHICLE_REGISTRATION, TR_LICENSE_PLATE, UK_VEHICLE_REGISTRATION]
 
   # ── ark_only ───────────────────────────────────────────────────────────
   - id: pii.swift_bic
@@ -222,46 +256,46 @@ entities:
       gretel-synthetic-pii-finance: [user_name]
 
   # ── presidio_only ──────────────────────────────────────────────────────
-  - {id: pii.url, scope: presidio_only, ark: [], presidio: [URL], corpora: {}}
-  - {id: pii.crypto_wallet, scope: presidio_only, ark: [], presidio: [CRYPTO], corpora: {}}
-  - {id: pii.us.medical_license, scope: presidio_only, ark: [], presidio: [MEDICAL_LICENSE], corpora: {}}
-  - {id: pii.us.itin, scope: presidio_only, ark: [], presidio: [US_ITIN], corpora: {}}
-  - {id: pii.us.mbi, scope: presidio_only, ark: [], presidio: [US_MBI], corpora: {}}
-  - {id: pii.us.npi, scope: presidio_only, ark: [], presidio: [US_NPI], corpora: {}}
-  - {id: pii.uk.nhs_number, scope: presidio_only, ark: [], presidio: [UK_NHS], corpora: {}}
-  - {id: pii.uk.postcode, scope: presidio_only, ark: [], presidio: [UK_POSTCODE], corpora: {}}
-  - {id: pii.de.bsnr, scope: presidio_only, ark: [], presidio: [DE_BSNR], corpora: {}}
-  - {id: pii.de.commercial_register, scope: presidio_only, ark: [], presidio: [DE_HANDELSREGISTER], corpora: {}}
-  - {id: pii.de.postal_code, scope: presidio_only, ark: [], presidio: [DE_PLZ], corpora: {}}
-  - {id: pii.de.vat_id, scope: presidio_only, ark: [], presidio: [DE_VAT_ID], corpora: {}}
-  - {id: pii.es.nie, scope: presidio_only, ark: [], presidio: [ES_NIE], corpora: {}}
-  - {id: pii.es.nif, scope: presidio_only, ark: [], presidio: [ES_NIF], corpora: {}}
-  - {id: pii.it.fiscal_code, scope: presidio_only, ark: [], presidio: [IT_FISCAL_CODE], corpora: {}}
-  - {id: pii.it.vat_code, scope: presidio_only, ark: [], presidio: [IT_VAT_CODE], corpora: {}}
-  - {id: pii.fi.personal_identity_code, scope: presidio_only, ark: [], presidio: [FI_PERSONAL_IDENTITY_CODE], corpora: {}}
-  - {id: pii.pl.pesel, scope: presidio_only, ark: [], presidio: [PL_PESEL], corpora: {}}
-  - {id: pii.se.personnummer, scope: presidio_only, ark: [], presidio: [SE_PERSONNUMMER], corpora: {}}
-  - {id: pii.se.organisationsnummer, scope: presidio_only, ark: [], presidio: [SE_ORGANISATIONSNUMMER], corpora: {}}
-  - {id: pii.tr.national_id, scope: presidio_only, ark: [], presidio: [TR_NATIONAL_ID], corpora: {}}
-  - {id: pii.au.abn, scope: presidio_only, ark: [], presidio: [AU_ABN], corpora: {}}
-  - {id: pii.au.acn, scope: presidio_only, ark: [], presidio: [AU_ACN], corpora: {}}
-  - {id: pii.au.medicare, scope: presidio_only, ark: [], presidio: [AU_MEDICARE], corpora: {}}
-  - {id: pii.au.tfn, scope: presidio_only, ark: [], presidio: [AU_TFN], corpora: {}}
-  - {id: pii.ca.sin, scope: presidio_only, ark: [], presidio: [CA_SIN], corpora: {}}
-  - {id: pii.in.aadhaar, scope: presidio_only, ark: [], presidio: [IN_AADHAAR], corpora: {}}
-  - {id: pii.in.gstin, scope: presidio_only, ark: [], presidio: [IN_GSTIN], corpora: {}}
-  - {id: pii.in.pan, scope: presidio_only, ark: [], presidio: [IN_PAN], corpora: {}}
-  - {id: pii.in.voter_id, scope: presidio_only, ark: [], presidio: [IN_VOTER], corpora: {}}
-  - {id: pii.kr.brn, scope: presidio_only, ark: [], presidio: [KR_BRN], corpora: {}}
-  - {id: pii.kr.frn, scope: presidio_only, ark: [], presidio: [KR_FRN], corpora: {}}
-  - {id: pii.kr.rrn, scope: presidio_only, ark: [], presidio: [KR_RRN], corpora: {}}
-  - {id: pii.ng.nin, scope: presidio_only, ark: [], presidio: [NG_NIN], corpora: {}}
-  - {id: pii.ph.tin, scope: presidio_only, ark: [], presidio: [PH_TIN], corpora: {}}
-  - {id: pii.ph.umid, scope: presidio_only, ark: [], presidio: [PH_UMID], corpora: {}}
-  - {id: pii.sg.nric_fin, scope: presidio_only, ark: [], presidio: [SG_NRIC_FIN], corpora: {}}
-  - {id: pii.sg.uen, scope: presidio_only, ark: [], presidio: [SG_UEN], corpora: {}}
-  - {id: pii.th.tnin, scope: presidio_only, ark: [], presidio: [TH_TNIN], corpora: {}}
-  - {id: pii.za.id_number, scope: presidio_only, ark: [], presidio: [ZA_ID_NUMBER], corpora: {}}
+  - {id: pii.url, scope: presidio_only, ark: [], presidio: [URL], corpora: {presidio-evaluator-synth-v2: [DOMAIN_NAME], presidio-analyzer-recognizer-tests: [URL]}}
+  - {id: pii.crypto_wallet, scope: presidio_only, ark: [], presidio: [CRYPTO], corpora: {presidio-analyzer-recognizer-tests: [CRYPTO]}}
+  - {id: pii.us.medical_license, scope: presidio_only, ark: [], presidio: [MEDICAL_LICENSE], corpora: {presidio-analyzer-recognizer-tests: [MEDICAL_LICENSE]}}
+  - {id: pii.us.itin, scope: presidio_only, ark: [], presidio: [US_ITIN], corpora: {presidio-analyzer-recognizer-tests: [US_ITIN]}}
+  - {id: pii.us.mbi, scope: presidio_only, ark: [], presidio: [US_MBI], corpora: {presidio-analyzer-recognizer-tests: [US_MBI]}}
+  - {id: pii.us.npi, scope: presidio_only, ark: [], presidio: [US_NPI], corpora: {presidio-analyzer-recognizer-tests: [US_NPI]}}
+  - {id: pii.uk.nhs_number, scope: presidio_only, ark: [], presidio: [UK_NHS], corpora: {presidio-analyzer-recognizer-tests: [UK_NHS]}}
+  - {id: pii.uk.postcode, scope: presidio_only, ark: [], presidio: [UK_POSTCODE], corpora: {presidio-analyzer-recognizer-tests: [UK_POSTCODE]}}
+  - {id: pii.de.bsnr, scope: presidio_only, ark: [], presidio: [DE_BSNR], corpora: {presidio-analyzer-recognizer-tests: [DE_BSNR]}}
+  - {id: pii.de.commercial_register, scope: presidio_only, ark: [], presidio: [DE_HANDELSREGISTER], corpora: {presidio-analyzer-recognizer-tests: [DE_HANDELSREGISTER]}}
+  - {id: pii.de.postal_code, scope: presidio_only, ark: [], presidio: [DE_PLZ], corpora: {presidio-analyzer-recognizer-tests: [DE_PLZ]}}
+  - {id: pii.de.vat_id, scope: presidio_only, ark: [], presidio: [DE_VAT_ID], corpora: {presidio-analyzer-recognizer-tests: [DE_VAT_ID]}}
+  - {id: pii.es.nie, scope: presidio_only, ark: [], presidio: [ES_NIE], corpora: {presidio-analyzer-recognizer-tests: [ES_NIE]}}
+  - {id: pii.es.nif, scope: presidio_only, ark: [], presidio: [ES_NIF], corpora: {presidio-analyzer-recognizer-tests: [ES_NIF]}}
+  - {id: pii.it.fiscal_code, scope: presidio_only, ark: [], presidio: [IT_FISCAL_CODE], corpora: {presidio-analyzer-recognizer-tests: [IT_FISCAL_CODE]}}
+  - {id: pii.it.vat_code, scope: presidio_only, ark: [], presidio: [IT_VAT_CODE], corpora: {presidio-analyzer-recognizer-tests: [IT_VAT_CODE]}}
+  - {id: pii.fi.personal_identity_code, scope: presidio_only, ark: [], presidio: [FI_PERSONAL_IDENTITY_CODE], corpora: {presidio-analyzer-recognizer-tests: [FI_PERSONAL_IDENTITY_CODE]}}
+  - {id: pii.pl.pesel, scope: presidio_only, ark: [], presidio: [PL_PESEL], corpora: {presidio-analyzer-recognizer-tests: [PL_PESEL]}}
+  - {id: pii.se.personnummer, scope: presidio_only, ark: [], presidio: [SE_PERSONNUMMER], corpora: {presidio-analyzer-recognizer-tests: [SE_PERSONNUMMER]}}
+  - {id: pii.se.organisationsnummer, scope: presidio_only, ark: [], presidio: [SE_ORGANISATIONSNUMMER], corpora: {presidio-analyzer-recognizer-tests: [SE_ORGANISATIONSNUMMER]}}
+  - {id: pii.tr.national_id, scope: presidio_only, ark: [], presidio: [TR_NATIONAL_ID], corpora: {presidio-analyzer-recognizer-tests: [TR_NATIONAL_ID]}}
+  - {id: pii.au.abn, scope: presidio_only, ark: [], presidio: [AU_ABN], corpora: {presidio-analyzer-recognizer-tests: [AU_ABN]}}
+  - {id: pii.au.acn, scope: presidio_only, ark: [], presidio: [AU_ACN], corpora: {presidio-analyzer-recognizer-tests: [AU_ACN]}}
+  - {id: pii.au.medicare, scope: presidio_only, ark: [], presidio: [AU_MEDICARE], corpora: {presidio-analyzer-recognizer-tests: [AU_MEDICARE]}}
+  - {id: pii.au.tfn, scope: presidio_only, ark: [], presidio: [AU_TFN], corpora: {presidio-analyzer-recognizer-tests: [AU_TFN]}}
+  - {id: pii.ca.sin, scope: presidio_only, ark: [], presidio: [CA_SIN], corpora: {presidio-analyzer-recognizer-tests: [CA_SIN]}}
+  - {id: pii.in.aadhaar, scope: presidio_only, ark: [], presidio: [IN_AADHAAR], corpora: {presidio-analyzer-recognizer-tests: [IN_AADHAAR]}}
+  - {id: pii.in.gstin, scope: presidio_only, ark: [], presidio: [IN_GSTIN], corpora: {presidio-analyzer-recognizer-tests: [IN_GSTIN]}}
+  - {id: pii.in.pan, scope: presidio_only, ark: [], presidio: [IN_PAN], corpora: {presidio-analyzer-recognizer-tests: [IN_PAN]}}
+  - {id: pii.in.voter_id, scope: presidio_only, ark: [], presidio: [IN_VOTER], corpora: {presidio-analyzer-recognizer-tests: [IN_VOTER]}}
+  - {id: pii.kr.brn, scope: presidio_only, ark: [], presidio: [KR_BRN], corpora: {presidio-analyzer-recognizer-tests: [KR_BRN]}}
+  - {id: pii.kr.frn, scope: presidio_only, ark: [], presidio: [KR_FRN], corpora: {presidio-analyzer-recognizer-tests: [KR_FRN]}}
+  - {id: pii.kr.rrn, scope: presidio_only, ark: [], presidio: [KR_RRN], corpora: {presidio-analyzer-recognizer-tests: [KR_RRN]}}
+  - {id: pii.ng.nin, scope: presidio_only, ark: [], presidio: [NG_NIN], corpora: {presidio-analyzer-recognizer-tests: [NG_NIN]}}
+  - {id: pii.ph.tin, scope: presidio_only, ark: [], presidio: [PH_TIN], corpora: {presidio-analyzer-recognizer-tests: [PH_TIN]}}
+  - {id: pii.ph.umid, scope: presidio_only, ark: [], presidio: [PH_UMID], corpora: {presidio-analyzer-recognizer-tests: [PH_UMID]}}
+  - {id: pii.sg.nric_fin, scope: presidio_only, ark: [], presidio: [SG_NRIC_FIN], corpora: {presidio-analyzer-recognizer-tests: [SG_NRIC_FIN]}}
+  - {id: pii.sg.uen, scope: presidio_only, ark: [], presidio: [SG_UEN], corpora: {presidio-analyzer-recognizer-tests: [SG_UEN]}}
+  - {id: pii.th.tnin, scope: presidio_only, ark: [], presidio: [TH_TNIN], corpora: {presidio-analyzer-recognizer-tests: [TH_TNIN]}}
+  - {id: pii.za.id_number, scope: presidio_only, ark: [], presidio: [ZA_ID_NUMBER], corpora: {presidio-analyzer-recognizer-tests: [ZA_ID_NUMBER]}}
 
   # ── semantic ───────────────────────────────────────────────────────────
   - id: entity.person_name
@@ -272,6 +306,7 @@ entities:
       ai4privacy-openpii-nano-1k: [GIVENNAME, SURNAME]
       gretel-synthetic-pii-finance: [name, first_name, last_name]
       tab: [PERSON]
+      presidio-evaluator-synth-v2: [PERSON]
 
   - id: entity.organization
     scope: semantic
@@ -280,6 +315,7 @@ entities:
     corpora:
       gretel-synthetic-pii-finance: [company]
       tab: [ORG]
+      presidio-evaluator-synth-v2: [ORGANIZATION]
 
   - id: entity.location
     scope: semantic
@@ -288,12 +324,14 @@ entities:
     corpora:
       ai4privacy-openpii-nano-1k: [CITY]
       tab: [LOC]
+      presidio-evaluator-synth-v2: [GPE]
 
   - id: entity.nrp
     scope: semantic
     ark: []
     presidio: [NRP]
-    corpora: {}
+    corpora:
+      presidio-evaluator-synth-v2: [NRP]
 
   - id: entity.date
     scope: semantic
@@ -303,6 +341,7 @@ entities:
       ai4privacy-openpii-nano-1k: [DATE]
       gretel-synthetic-pii-finance: [date, date_time]
       tab: [DATETIME]
+      presidio-evaluator-synth-v2: [DATE_TIME]
 
   - id: entity.street_address
     scope: semantic
@@ -311,3 +350,85 @@ entities:
     corpora:
       ai4privacy-openpii-nano-1k: [STREET]
       gretel-synthetic-pii-finance: [street_address]
+      presidio-evaluator-synth-v2: [STREET_ADDRESS]
+
+# ── M3: prüfziffervalidierte Entitäten (Zählregel T03, research/l1-pii/README.md) ──
+# Gezählt wird je Benchmark-ID und Land eine Einheit, wenn mindestens ein Validator eine echte
+# Prüfziffer bzw. Prüfsumme rechnet. null = nur Format/Plausibilität (Länge, Alphabet, Bereich,
+# Datum, Bezirkstabelle) und zählt nicht. Das Land kommt aus der ID (pii.<land>.*) oder aus
+# `country`; ohne beides gilt die Einheit als international (IBAN, PAN, Krypto) und zählt einmal.
+# Prüft und zählt: scripts/l1_presidio/count_validated.py (Test scripts/tests/test_l1_count_validated.py).
+checksums:
+  # Validator-Funktion in rust/src/detectors/pii/validators.rs, wie in PII_PATTERNS eingetragen.
+  # Jeder dort verwendete Validator steht hier, auch die reinen Formatprüfungen.
+  ark:
+    luhn: {algorithm: Luhn}
+    mod97: {algorithm: ISO 7064 MOD 97-10}
+    steuer_id: {algorithm: "ISO 7064 MOD 11,10"}
+    steuer_id_issued: {algorithm: "ISO 7064 MOD 11,10"}   # plus BZSt-Ziffernverteilung (K05, kontextfrei)
+    ip_address: null
+    unanchored_phone: null
+    phone: null
+    mac_address: null
+    cvv: null
+    card_expiry: null
+    bic: null
+    bounded_employee_identifier: null
+    bounded_identifier: null
+    username: null
+    calendar_date: null
+    written_calendar_date: null
+    de_tax_number: null                 # Länge 10–13, nicht alle Ziffern gleich
+    de_social_security_number: null     # Form 8 Ziffern + Buchstabe + 3 Ziffern, keine Prüfziffer
+    de_health_insurance_number: null    # Form Buchstabe + 9 Ziffern, keine Prüfziffer
+    lanr: null                          # 9 Ziffern, keine Prüfziffer
+    de_document_number: null            # ICAO-Alphabet, keine 7-3-1-Prüfziffer
+    de_driver_license_number: null
+    us_ssn: null                        # Bereichsprüfung
+    uk_nino: null                       # Präfix-/Suffixprüfung
+  # Pattern-Recognizer mit validate_result in presidio_analyzer 2.2.364 (43 Stück, mit Presidio
+  # vollständig geprüft von `count_validated.py check --presidio`).
+  presidio:
+    ABA_ROUTING_NUMBER: {algorithm: ABA 3-7-1 mod 10, country: us}
+    AU_ABN: {algorithm: gewichtet mod 89}
+    AU_ACN: {algorithm: gewichtet mod 10}
+    AU_MEDICARE: {algorithm: gewichtet 1-3-7-9 mod 10}
+    AU_TFN: {algorithm: gewichtet mod 11}
+    CREDIT_CARD: {algorithm: Luhn}
+    CRYPTO: {algorithm: Base58Check / Bech32}
+    DE_HEALTH_INSURANCE: {algorithm: gewichtet 1-2 mod 10}
+    DE_ID_CARD: {algorithm: ICAO 9303 7-3-1, country: de}
+    DE_LANR: {algorithm: gewichtet 4-9 mod 10}
+    DE_PASSPORT: {algorithm: ICAO 9303 7-3-1, country: de}
+    DE_SOCIAL_SECURITY: {algorithm: "VKVV § 4"}
+    DE_TAX_ID: {algorithm: "ISO 7064 MOD 11,10"}
+    DE_VAT_ID: {algorithm: "ISO 7064 MOD 11,10"}
+    ES_NIE: {algorithm: Kontrollbuchstabe mod 23}
+    ES_NIF: {algorithm: Kontrollbuchstabe mod 23}
+    FI_PERSONAL_IDENTITY_CODE: {algorithm: Kontrollzeichen mod 31}
+    IBAN_CODE: {algorithm: ISO 7064 MOD 97-10}
+    IN_AADHAAR: {algorithm: Verhoeff}
+    IT_FISCAL_CODE: {algorithm: Kontrollbuchstabe mod 26}
+    IT_VAT_CODE: {algorithm: Luhn}
+    KR_BRN: {algorithm: gewichtet mod 10}
+    KR_FRN: {algorithm: gewichtet mod 11}
+    KR_RRN: {algorithm: gewichtet mod 11}
+    MEDICAL_LICENSE: {algorithm: DEA-Prüfziffer}
+    NG_NIN: {algorithm: Verhoeff}
+    PL_PESEL: {algorithm: gewichtet 1-3-7-9 mod 10}
+    SE_ORGANISATIONSNUMMER: {algorithm: Luhn}
+    SE_PERSONNUMMER: {algorithm: Luhn}
+    SG_UEN: {algorithm: Prüfbuchstabe mod 11}
+    TH_TNIN: {algorithm: gewichtet mod 11}
+    TR_NATIONAL_ID: {algorithm: zwei Prüfziffern mod 10}
+    UK_NHS: {algorithm: gewichtet mod 11}
+    US_NPI: {algorithm: Luhn mit Präfix 80840}
+    ZA_ID_NUMBER: {algorithm: Luhn}
+    DE_BSNR: null                  # nur Länge und 000000000
+    EMAIL_ADDRESS: null            # Domain über tldextract
+    IN_GSTIN: null                 # Form; das Prüfzeichen wird nicht gerechnet
+    IN_VEHICLE_REGISTRATION: null  # Bezirkstabelle
+    KR_DRIVER_LICENSE: null        # Regionscode
+    TR_LICENSE_PLATE: null         # Provinzcode 01–81
+    UK_DRIVING_LICENCE: null       # Namensteil
+    UK_VEHICLE_REGISTRATION: null  # Altersbezeichner

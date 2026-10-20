@@ -1,11 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use crate::{
-    detectors::{NativeMatchValidator, NativeRegexDetector},
+    detectors::{
+        MatchScore, NativeDetection, NativeMatchValidator, NativeRegexDetector, StructuredValue,
+    },
     EvaluationResult,
 };
 
-use super::validators;
-use crate::detectors::anchors::{self, AnchorPattern};
+use super::context::Evidence;
+use super::context_anchors::PII_ANCHOR_PATTERNS;
+use super::score::{self, PiiMode, ValidatorStrength};
+use super::{common, context, de, identifiers, intl, uk, us, validators};
+use crate::detectors::anchors;
+use crate::detectors::obfuscation::{Deobfuscated, Level};
+use crate::EvidenceSpan;
 use regex::Regex;
 
 /// A single PII heuristic pattern.
@@ -18,390 +25,66 @@ pub struct PiiPattern {
     pub entity_group: &'static str,
     /// Optional validator called after a regex match to reduce false positives.
     pub validator: Option<fn(&str) -> bool>,
+    /// What `validator` proves: checksum, format only, or nothing (no validator).
+    pub strength: ValidatorStrength,
+    /// Score-model points (1–100) for the regex form alone; see [`score`].
+    pub base_score: u8,
     /// For anchor-bound patterns, emit only the named `value` capture.
     pub captured_value: bool,
+    /// Emit only when the context engine finds a support term of the label near
+    /// the value and no nearer counter-context term, in every mode (K03).
+    pub requires_context: bool,
+    /// Emit only in the scored modes `balanced` and `recall`; `strict` never runs
+    /// the rule (K05). Reserved for unbound checksum rules: the bare form of a
+    /// value that strict reports only after its field name.
+    pub scored_only: bool,
 }
 
+/// All PII rules in evaluation order. The rules live in regional modules; the
+/// order stays here because it is behaviour: the first match sets `class_name`
+/// and an earlier rule keeps its span against later same-label overlaps.
 pub static PII_PATTERNS: &[PiiPattern] = &[
-    // ── Email ────────────────────────────────────────────────────────────────
-    PiiPattern {
-        name: "pii_email",
-        pattern: r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}",
-        entity_group: "EMAIL",
-        validator: None,
-        captured_value: false,
-    },
-    // ── IP-Adressen ─────────────────────────────────────────────────────────
-    PiiPattern {
-        name: "pii_ipv4",
-        pattern: r"\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b",
-        entity_group: "IP_ADDRESS",
-        validator: Some(validators::ip_address),
-        captured_value: false,
-    },
-    PiiPattern {
-        name: "pii_ipv6_full",
-        pattern: r"\b(?:[0-9A-Fa-f]{1,4}:){7}[0-9A-Fa-f]{1,4}\b",
-        entity_group: "IP_ADDRESS",
-        validator: Some(validators::ip_address),
-        captured_value: false,
-    },
-    PiiPattern {
-        name: "pii_ipv6_compressed",
-        pattern: r"\b(?:[0-9A-Fa-f]{1,4}:){1,7}:(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4})*)?\b",
-        entity_group: "IP_ADDRESS",
-        validator: Some(validators::ip_address),
-        captured_value: false,
-    },
-    PiiPattern {
-        name: "pii_ipv6_loopback",
-        pattern: r"::(?:[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4})*)?\b",
-        entity_group: "IP_ADDRESS",
-        validator: Some(validators::ip_address),
-        captured_value: false,
-    },
-    // ── Telefon ──────────────────────────────────────────────────────────────
-    PiiPattern {
-        name: "pii_phone_international",
-        pattern: r"\+[1-9](?:[\s./()\-]*\d){6,14}\b",
-        entity_group: "PHONE",
-        validator: Some(validators::unanchored_phone),
-        captured_value: false,
-    },
-    PiiPattern {
-        name: "pii_phone_de",
-        pattern: r"(?:\+49|0049)\s?[1-9][\d\s\-\/]{5,12}\d",
-        entity_group: "PHONE",
-        validator: Some(validators::unanchored_phone),
-        captured_value: false,
-    },
-    PiiPattern {
-        name: "pii_phone_de_national_context",
-        pattern: r"(?i)\b(?:phone(?:[ \t]+number)?|telephone|mobile(?:[ \t]+number)?|telefon(?:[-_ ]?(?:nummer|nr))?|tel(?:efon)?[-_ ]?nr\.?|tel\.?|festnetz(?:[-_ ]?(?:nummer|nr))?|mobil(?:telefon|funk)?(?:[-_ ]?(?:nummer|nr))?|handy(?:[-_ ]?(?:nummer|nr))?|fax(?:[-_ ]?(?:nummer|nr))?)[ \t]*[:#=\-]?[ \t]*(?P<value>0(?:[ \t()./\-]*\d){6,14})\b",
-        entity_group: "PHONE",
-        validator: Some(validators::phone),
-        captured_value: true,
-    },
-    PiiPattern {
-        name: "pii_phone_us",
-        pattern: r"\b(?:\+1[\s\-]?)?\(?\d{3}\)?[\s\-\.]?\d{3}[\s\-\.]?\d{4}\b",
-        entity_group: "PHONE",
-        validator: Some(validators::unanchored_phone),
-        captured_value: false,
-    },
-    // ── MAC-Adresse ─────────────────────────────────────────────────────────
-    PiiPattern {
-        name: "pii_mac_address",
-        pattern: r"(?i)\b(?:[0-9a-f]{2}:){5}[0-9a-f]{2}\b|\b(?:[0-9a-f]{2}-){5}[0-9a-f]{2}\b",
-        entity_group: "MAC_ADDRESS",
-        validator: Some(validators::mac_address),
-        captured_value: false,
-    },
-    // ── IBAN ─────────────────────────────────────────────────────────────────
-    // Keep IBAN as the primary classification when a numeric substring also
-    // passes the card validator. Evidence retains both labels.
-    PiiPattern {
-        name: "pii_iban_de",
-        pattern: r"\bDE\d{2}[\s]?\d{4}[\s]?\d{4}[\s]?\d{4}[\s]?\d{4}[\s]?\d{2}\b",
-        entity_group: "IBAN",
-        validator: Some(validators::mod97),
-        captured_value: false,
-    },
-    PiiPattern {
-        name: "pii_iban_generic",
-        pattern: r"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b",
-        entity_group: "IBAN",
-        validator: Some(validators::mod97),
-        captured_value: false,
-    },
-    // ── Kreditkarte ──────────────────────────────────────────────────────────
-    PiiPattern {
-        name: "pii_credit_card",
-        pattern: r"\b(?:\d[ \-]?){11,18}\d\b",
-        entity_group: "CREDITCARD",
-        validator: Some(validators::luhn),
-        captured_value: false,
-    },
-    PiiPattern {
-        name: "pii_credit_card_cvv",
-        pattern: r"(?i)\b(?:cvv2?|cvc2?|card[ \t]+verification[ \t]+(?:value|code)|kartenpr(?:ü|ue)fnummer|kartenpr(?:ü|ue)fziffer|sicherheitscode)[ \t]*(?:is[ \t]*)?[:#=\-]?[ \t]*(?P<value>\d{3,4})\b",
-        entity_group: "CREDITCARD_CVV",
-        validator: Some(validators::cvv),
-        captured_value: true,
-    },
-    PiiPattern {
-        name: "pii_credit_card_expiry",
-        pattern: r"(?i)\b(?:expiry|expiration|expires|ablaufdatum|g(?:ü|ue)ltig[ \t]+bis)[ \t]*(?:date[ \t]*)?(?:is[ \t]*)?[:#=\-]?[ \t]*(?P<value>\d{1,2}[/-]\d{2}(?:\d{2})?)\b",
-        entity_group: "CREDITCARD_EXPIRY",
-        validator: Some(validators::card_expiry),
-        captured_value: true,
-    },
-    // ── SWIFT / BIC ─────────────────────────────────────────────────────────
-    PiiPattern {
-        name: "pii_swift_bic_context",
-        // "Swift supports ..." describes a programming language, not a bank field.
-        pattern: r"(?i)\b(?:(?:swift|bic)(?:[ \t]+code)?[ \t]*[:#=][ \t]*|(?:swift[ \t]+code|bic(?:[ \t]+code)?)[ \t]+is[ \t]+)(?P<value>[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}(?:[A-Z0-9]{3})?)\b",
-        entity_group: "SWIFT_CODE",
-        validator: Some(validators::bic),
-        captured_value: true,
-    },
-    // ── Anchor-gebundene Personenkennungen ─────────────────────────────────
-    PiiPattern {
-        name: "pii_employee_id",
-        pattern: r"(?i)\b(?:personalnummer|pers(?:onal)?[ \t]*nr\.?|mitarbeiter(?:nummer|[-_ ]?id)|employee(?:[ \t_-]+)(?:id|number)|personnel[ \t]+(?:id|number)|staff[ \t]+(?:id|code|number)|kennung)\b[ \t]*(?:is[ \t]*)?[:#=\-]?[ \t]*(?P<value>[A-Z0-9](?:[A-Z0-9._/-]{1,30}[A-Z0-9])?)\b",
-        entity_group: "EMPLOYEE_ID",
-        validator: Some(validators::bounded_employee_identifier),
-        captured_value: true,
-    },
-    PiiPattern {
-        name: "pii_employee_id_ocr_field",
-        pattern: r"(?m)(?:^|[\n|])[ \t]*ID[ \t]*[:#=\-]?[ \t]*(?P<value>[A-Z]{1,8}[ \t]{1,3}\d{2,20})\b",
-        entity_group: "EMPLOYEE_ID",
-        validator: Some(validators::bounded_employee_identifier),
-        captured_value: true,
-    },
-    PiiPattern {
-        name: "pii_employee_id_prefixed",
-        pattern: r"(?i)\bEMP[-_/][A-Z0-9]+[-_/][A-Z0-9](?:[A-Z0-9._/-]{1,24}[A-Z0-9])?\b",
-        entity_group: "EMPLOYEE_ID",
-        validator: Some(validators::bounded_employee_identifier),
-        captured_value: false,
-    },
-    PiiPattern {
-        name: "pii_customer_id",
-        pattern: r"(?i)\b(?:kundennummer|kunden[-_ ]?id|debitor(?:ennummer)?|customer[ \t]+(?:id|number))\b[ \t]*(?:is[ \t]*)?[:#=\-]?[ \t]*(?P<value>[A-Z0-9](?:[A-Z0-9._/-]{1,30}[A-Z0-9])?)\b",
-        entity_group: "CUSTOMER_ID",
-        validator: Some(validators::bounded_identifier),
-        captured_value: true,
-    },
-    PiiPattern {
-        name: "pii_patient_id",
-        pattern: r"(?i)\b(?:patientennummer|patienten[-_ ]?id|patient[ \t]+(?:id|number)|mrn|medical[ \t]+record[ \t]+number)\b[ \t]*(?:is[ \t]*)?[:#=\-]?[ \t]*(?P<value>[A-Z0-9](?:[A-Z0-9._/-]{1,30}[A-Z0-9])?)\b",
-        entity_group: "PATIENT_ID",
-        validator: Some(validators::bounded_identifier),
-        captured_value: true,
-    },
-    PiiPattern {
-        name: "pii_student_id",
-        pattern: r"(?i)\b(?:matrikelnummer|sch(?:ü|ue)ler(?:nummer|[-_ ]?id)|student(?:en)?[-_ ]?(?:id|nummer)|student[ \t]+number)\b[ \t]*(?:(?:lautet|ist|is)[ \t]*)?[:#=\-]?[ \t]*(?P<value>[A-Z0-9](?:[A-Z0-9._/-]{1,30}[A-Z0-9])?)\b",
-        entity_group: "STUDENT_ID",
-        validator: Some(validators::bounded_identifier),
-        captured_value: true,
-    },
-    PiiPattern {
-        name: "pii_applicant_id",
-        pattern: r"(?i)\b(?:bewerber(?:nummer|[-_ ]?id)|applicant[ \t]+(?:id|number)|candidate[ \t]+id)\b[ \t]*(?:(?:lautet|ist|is)[ \t]*)?[:#=\-]?[ \t]*(?P<value>[A-Z0-9](?:[A-Z0-9._/-]{1,30}[A-Z0-9])?)\b",
-        entity_group: "APPLICANT_ID",
-        validator: Some(validators::bounded_identifier),
-        captured_value: true,
-    },
-    PiiPattern {
-        name: "pii_username",
-        // The value must follow an explicit assignment. Prose such as "CLI login
-        // token" or "login-flow" names a concept, not an account.
-        pattern: r"(?i)\b(?:benutzername|benutzer|login|username|user[ \t]+name|account[ \t]+name)(?:[ \t]*[:#=][ \t]*|[ \t]+(?:is|ist|lautet)[ \t]*:?[ \t]*)(?P<value>[A-Z0-9](?:[A-Z0-9._@-]{0,62}[A-Z0-9])?)\b",
-        entity_group: "USERNAME",
-        validator: Some(validators::username),
-        captured_value: true,
-    },
-    PiiPattern {
-        name: "pii_date_of_birth",
-        pattern: r"(?i)\b(?:geburtsdatum|geboren[ \t]+am|date[ \t]+of[ \t]+birth|dob)\b[ \t]*(?:(?:is|as|ist|lautet)[ \t]*)?[:#=\-]?[ \t]*(?P<value>\d{1,2}[./-]\d{1,2}[./-]\d{2,4})\b",
-        entity_group: "DOB",
-        validator: Some(validators::calendar_date),
-        captured_value: true,
-    },
-    PiiPattern {
-        name: "pii_date_of_birth_written_day_first",
-        pattern: r"(?i)\b(?:geburtsdatum|geboren[ \t]+am|date[ \t]+of[ \t]+birth|dob)\b[ \t]*(?:(?:is|as|ist|lautet)[ \t]*)?[:#=\-]?[ \t]*(?P<value>\d{1,2}\.?[ \t]+(?:januar|februar|m(?:ä|ae)rz|april|mai|juni|juli|august|september|oktober|november|dezember|january|february|march|may|june|july|october|december)[ \t]+\d{4})\b",
-        entity_group: "DOB",
-        validator: Some(validators::written_calendar_date),
-        captured_value: true,
-    },
-    PiiPattern {
-        name: "pii_date_of_birth_written_month_first",
-        pattern: r"(?i)\b(?:geburtsdatum|geboren[ \t]+am|date[ \t]+of[ \t]+birth|dob)\b[ \t]*(?:(?:is|as|ist|lautet)[ \t]*)?[:#=\-]?[ \t]*(?P<value>(?:januar|februar|m(?:ä|ae)rz|mai|juni|juli|oktober|dezember|january|february|march|april|may|june|july|august|september|october|november|december)[ \t]+\d{1,2}(?:st|nd|rd|th)?[,]?[ \t]+\d{4})\b",
-        entity_group: "DOB",
-        validator: Some(validators::written_calendar_date),
-        captured_value: true,
-    },
-    PiiPattern {
-        name: "pii_financial_account_number",
-        pattern: r"(?i)\b(?:kontonummer|konto[-_ ]?nr|depotnummer|depot[-_ ]?nr|account[ \t]+number|bank[ \t]+account)\b[ \t]*(?:is[ \t]*)?[:#=\-]?[ \t]*(?P<value>[A-Z0-9](?:[A-Z0-9._/-]{1,30}[A-Z0-9])?)\b",
-        entity_group: "FINANCIAL_ACCOUNT_NUMBER",
-        validator: Some(validators::bounded_identifier),
-        captured_value: true,
-    },
-    // ── Deutsche Steuer-IDs ──────────────────────────────────────────────────
-    PiiPattern {
-        name: "pii_steuer_id_de",
-        pattern: r"(?i)\b(?:steuer[-_ ]?id|steueridentifikationsnummer|idnr\b\.?|(?:german[ \t]+)?tax[ \t]+(?:identification[ \t]+number|id))\s*(?:is[ \t]*)?[:#=\-]?[ \t]*(?P<value>[1-9](?:[ \t]?\d){10})\b",
-        entity_group: "STEUERID",
-        validator: Some(validators::steuer_id),
-        captured_value: true,
-    },
-    PiiPattern {
-        name: "pii_steuernummer_de",
-        pattern: r"(?i)\b(?:steuernummer|steuer[-_ \t]*nr|(?:german[ \t]+)?tax[ \t]+number)\b\.?[ \t]*(?:is[ \t]*)?[:#=\-]?[ \t]*(?P<value>\d(?:[0-9 /-]{8,20}\d))\b",
-        entity_group: "TAX_NUMBER_DE",
-        validator: Some(validators::de_tax_number),
-        captured_value: true,
-    },
-    // ── Deutsche Ausweise / Sozialversicherung ───────────────────────────────
-    PiiPattern {
-        name: "pii_rentenversicherung_de",
-        pattern: r"(?i)\b(?:sozialversicherungsnummer|rentenversicherungsnummer|sv[-_ \t]*nr|(?:german[ \t]+)?(?:pension[ \t]+insurance|social[ \t]+security)[ \t]+number)\b\.?\s*(?:is[ \t]*)?[:#=\-]?[ \t]*(?P<value>\d{2}[ \t]?\d{6}[ \t]?[A-Z][ \t]?\d{3})\b",
-        entity_group: "SOCIALID",
-        validator: Some(validators::de_social_security_number),
-        captured_value: true,
-    },
-    PiiPattern {
-        name: "pii_health_insurance_number_de",
-        pattern: r"(?i)\b(?:versichertennummer|krankenversicherungsnummer|kvnr|health[ \t]+insurance[ \t]+number)\b[ \t]*(?:is[ \t]*)?[:#=\-]?[ \t]*(?P<value>[A-Z]\d{9})\b",
-        entity_group: "HEALTH_INSURANCE_NUMBER",
-        validator: Some(validators::de_health_insurance_number),
-        captured_value: true,
-    },
-    PiiPattern {
-        name: "pii_physician_number_lanr_de",
-        pattern: r"(?i)\b(?:lanr|lebenslange[ \t]+arztnummer|(?:lifelong[ \t]+)?physician[ \t]+number)\b[ \t]*(?:is[ \t]*)?[:#=\-]?[ \t]*(?P<value>\d{9})\b",
-        entity_group: "PHYSICIAN_NUMBER_LANR",
-        validator: Some(validators::lanr),
-        captured_value: true,
-    },
-    PiiPattern {
-        name: "pii_passport_number_de",
-        pattern: r"(?i)\b(?:reisepass(?:nummer)?|passnummer|passport[ \t]+number)\b[ \t]*(?:is[ \t]*)?[:#=\-]?[ \t]*(?P<value>[0-9CFGHJKLMNPRTVWXYZ]{9})\b",
-        entity_group: "PASSPORT_NUMBER",
-        validator: Some(validators::de_document_number),
-        captured_value: true,
-    },
-    PiiPattern {
-        name: "pii_identity_card_number_de",
-        pattern: r"(?i)\b(?:personalausweis(?:nummer)?|ausweisnummer|identity[ \t]+card[ \t]+number)\b[ \t]*(?:is[ \t]*)?[:#=\-]?[ \t]*(?P<value>[0-9CFGHJKLMNPRTVWXYZ]{9})\b",
-        entity_group: "IDENTITY_CARD_NUMBER",
-        validator: Some(validators::de_document_number),
-        captured_value: true,
-    },
-    PiiPattern {
-        name: "pii_driver_license_number_de",
-        pattern: r"(?i)\b(?:f(?:ü|ue)hrerschein(?:nummer)?|fahrerlaubnis(?:nummer)?|driver'?s?[ \t]+licen[cs]e[ \t]+number)\b[ \t]*(?:is[ \t]*)?[:#=\-]?[ \t]*(?P<value>[A-Z0-9]{11})\b",
-        entity_group: "DRIVER_LICENSE_NUMBER",
-        validator: Some(validators::de_driver_license_number),
-        captured_value: true,
-    },
-    PiiPattern {
-        name: "pii_kfz_kennzeichen_de",
-        pattern: r"(?i)\b(?:kfz[-_ ]?(?:kennzeichen)?|kennzeichen|nummernschild|vehicle[ \t]+registration)\b[ \t]*(?:is[ \t]*)?[:#=\-]?[ \t]*(?P<value>[A-ZÄÖÜ]{1,3}[- ][A-Z]{1,2}[ ]?\d{1,4}(?:[EH])?)\b",
-        entity_group: "LICENSEPLATE",
-        validator: None,
-        captured_value: true,
-    },
-    // ── US / UK ──────────────────────────────────────────────────────────────
-    PiiPattern {
-        name: "pii_ssn_us",
-        pattern: r"(?i)\b(?:ssn|social[ \t]+security[ \t]+number|(?:us[- \t]+)?sozialversicherungsnummer)\b[ \t]*(?:is[ \t]*)?[:#=\-]?[ \t]*(?P<value>\d{3}[ -]\d{2}[ -]\d{4})\b",
-        entity_group: "SSN",
-        validator: Some(validators::us_ssn),
-        captured_value: true,
-    },
-    PiiPattern {
-        name: "pii_ni_uk",
-        pattern: r"(?i)\b(?:nino|national[ \t]+insurance[ \t]+number|britische[ \t]+sozialversicherungsnummer)\b[ \t]*(?:is[ \t]*)?[:#=\-]?[ \t]*(?P<value>[A-Z]{2}[ ]?\d{6}[ ]?[A-D])\b",
-        entity_group: "NATIONALID",
-        validator: Some(validators::uk_nino),
-        captured_value: true,
-    },
-];
-
-/// Context facts that are useful for Dynamic PII but are not findings by
-/// themselves. A field name such as `Diagnose` says what a nearby value may be;
-/// it does not prove that the text already contains a sensitive value.
-static PII_ANCHOR_PATTERNS: &[AnchorPattern] = &[
-    AnchorPattern {
-        anchor_kind: "lexical",
-        category: "person_identity",
-        strength: "weak",
-        pattern: r"(?i)\b(?:vollständige[rs]?[ \t]+name|komplette[rs]?[ \t]+name|vor[-_ \t]?name|ruf[-_ \t]?name|zweite[rs]?[ \t]+vorname|nach[-_ \t]?name|familien[-_ \t]?name|geburts[-_ \t]?name|mädchen[-_ \t]?name|patienten[-_ \t]?name|kunden[-_ \t]?name|mitarbeiter[-_ \t]?name|name|first[-_ \t]+name|given[-_ \t]+name|middle[-_ \t]+name|last[-_ \t]+name|family[-_ \t]+name|full[-_ \t]+name|legal[-_ \t]+name|preferred[-_ \t]+name|maiden[-_ \t]+name|birth[-_ \t]+name|surname|patient[-_ \t]+name|customer[-_ \t]+name|employee[-_ \t]+name)\b",
-    },
-    AnchorPattern {
-        anchor_kind: "lexical",
-        category: "person_role",
-        strength: "weak",
-        pattern: r"(?i)\b(?:ansprechpartner(?:in)?|kontaktperson|notfallkontakt|kontoinhaber(?:in)?|versicherte[rs]?|mitglied|patient(?:in)?|bewerber(?:in)?|kandidat(?:in)?|beschäftigte[rs]?|arbeitnehmer(?:in)?|mitarbeiter(?:in)?|kunde|kundin|contact[-_ \t]+person|emergency[-_ \t]+contact|account[-_ \t]+holder|policy[-_ \t]+holder|insured[-_ \t]+person|insured|member|patient|applicant|candidate|employee|worker|customer|client)\b",
-    },
-    AnchorPattern {
-        anchor_kind: "lexical",
-        category: "contact",
-        strength: "medium",
-        pattern: r"(?i)\b(?:e[-_ ]?mail(?:[-_ ]?adresse)?|mail[-_ ]?adresse|phone(?:[ \t]+number)?|telephone|mobile(?:[ \t]+number)?|telefon(?:[-_ ]?(?:nummer|nr))?|tel(?:efon)?[-_ ]?nr|festnetz(?:[-_ ]?nummer)?|mobil(?:telefon|funk)?(?:[-_ ]?(?:nummer|nr))?|handy(?:[-_ ]?(?:nummer|nr))?|fax(?:[-_ ]?(?:nummer|nr))?|durchwahl|kontakt[-_ ]?nummer|email[-_ \t]+address|email[-_ \t]+id|phone[-_ \t]+number|telephone[-_ \t]+number|contact[-_ \t]+number|mobile[-_ \t]+(?:number|phone)|cell(?:ular)?[-_ \t]+(?:number|phone)|cellphone|home[-_ \t]+phone|work[-_ \t]+phone|fax[-_ \t]+number|extension|emergency[-_ \t]+contact)\b",
-    },
-    AnchorPattern {
-        anchor_kind: "lexical",
-        category: "address",
-        strength: "weak",
-        pattern: r"(?i)\b(?:anschrift|wohn[-_ ]?(?:anschrift|adresse)|melde[-_ ]?(?:anschrift|adresse)|post[-_ ]?(?:anschrift|adresse)|korrespondenz[-_ ]?adresse|zustell[-_ ]?adresse|rechnungs[-_ ]?adresse|liefer[-_ ]?adresse|geschäfts[-_ ]?adresse|heimat[-_ ]?adresse|adresse|straße|strasse|str\.|haus[-_ ]?(?:nummer|nr)|post[-_ ]?leitzahl|plz|postfach|wohnort|address|street[-_ \t]+address|street|house[-_ \t]+number|postal[-_ \t]+code|postcode|zip(?:[-_ \t]+code)?|home[-_ \t]+address|residential[-_ \t]+address|permanent[-_ \t]+address|current[-_ \t]+address|physical[-_ \t]+address|mailing[-_ \t]+address|correspondence[-_ \t]+address|billing[-_ \t]+address|shipping[-_ \t]+address|delivery[-_ \t]+address|business[-_ \t]+address|p\.?[ \t]*o\.?[-_ \t]+box|city|town)\b",
-    },
-    AnchorPattern {
-        anchor_kind: "lexical",
-        category: "date_of_birth",
-        strength: "strong",
-        pattern: r"(?i)\b(?:geburts[-_ ]?datum|geb(?:urts)?[.-]*[ \t]*dat(?:um)?|geburtstag|geboren(?:[-_ \t]+am)?|date[-_ \t]+of[-_ \t]+birth|birth[-_ \t]*date|birthday|born(?:[-_ \t]+on)?|d\.?[ \t]*o\.?[ \t]*b\.?)\b",
-    },
-    AnchorPattern {
-        anchor_kind: "lexical",
-        category: "person_identifier",
-        strength: "strong",
-        pattern: r"(?i)\b(?:personal[-_ ]?(?:nummer|nr)|mitarbeiter[-_ ]?(?:nummer|nr|id)|personal[-_ ]?id|beschäftigten[-_ ]?(?:nummer|id)|kund(?:en)?[-_ ]?(?:nummer|nr|id)|debitor(?:en)?[-_ ]?(?:nummer|nr|id)?|patienten[-_ ]?(?:nummer|nr|id)|krankenhaus[-_ ]?(?:nummer|id)|mrn|medical[-_ \t]+record[-_ \t]+(?:number|no)|health[-_ \t]+record[-_ \t]+(?:number|id)|matrikel[-_ ]?(?:nummer|nr)|immatrikulations[-_ ]?nummer|sch(?:ü|ue)ler[-_ ]?(?:nummer|nr|id)|student(?:en)?[-_ ]?(?:id|nummer|nr)|bewerber[-_ ]?(?:nummer|nr|id)|kandidaten[-_ ]?(?:nummer|id)|employee[-_ \t]+(?:id|number|no)|personnel[-_ \t]+(?:id|number|no)|staff[-_ \t]+(?:id|number|no)|customer[-_ \t]+(?:id|number|no)|client[-_ \t]+(?:id|number|no)|debtor[-_ \t]+(?:id|number|no)|patient[-_ \t]+(?:id|number|no)|student[-_ \t]+(?:id|number|no)|pupil[-_ \t]+(?:id|number|no)|applicant[-_ \t]+(?:id|number|no)|application[-_ \t]+(?:id|number|no)|candidate[-_ \t]+(?:id|number|no))\b",
-    },
-    AnchorPattern {
-        anchor_kind: "lexical",
-        category: "account_identifier",
-        strength: "medium",
-        pattern: r"(?i)\b(?:benutzer[-_ ]?name|benutzer[-_ ]?kennung|benutzer[-_ ]?konto|login[-_ ]?(?:name|kennung)|konto[-_ ]?name|username|user[-_ \t]+name|user[-_ \t]+id|login[-_ \t]+name|login[-_ \t]+id|account[-_ \t]+name|account[-_ \t]+id)\b",
-    },
-    AnchorPattern {
-        anchor_kind: "lexical",
-        category: "payment_card",
-        strength: "strong",
-        pattern: r"(?i)\b(?:cvv2?|cvc2?|karten[-_ ]?prüf[-_ ]?(?:nummer|ziffer)|prüf[-_ ]?ziffer|sicherheits[-_ ]?code|karten[-_ ]?ablauf[-_ ]?(?:datum|date)|ablauf[-_ ]?datum|gültig[-_ ]+bis|card[-_ \t]+verification[-_ \t]+(?:value|code)|card[-_ \t]+security[-_ \t]+code|security[-_ \t]+code|expiry(?:[-_ \t]+date)?|expiration(?:[-_ \t]+date)?|expires)\b",
-    },
-    AnchorPattern {
-        anchor_kind: "lexical",
-        category: "financial_identifier",
-        strength: "strong",
-        pattern: r"(?i)\b(?:bic|swift(?:[-_ ]?code)?|bankleitzahl|blz|konto[-_ ]?(?:nummer|nr)|bankkonto[-_ ]?(?:nummer|nr)?|depot[-_ ]?(?:nummer|nr)|account[-_ \t]+number|bank[-_ \t]+account(?:[-_ \t]+number)?|brokerage[-_ \t]+account(?:[-_ \t]+number)?|routing[-_ \t]+number)\b",
-    },
-    AnchorPattern {
-        anchor_kind: "lexical",
-        category: "government_identifier",
-        strength: "strong",
-        pattern: r"(?i)\b(?:steuer[-_ ]?(?:id|identifikations[-_ ]?nummer|nummer|nr)|id[-_ ]?nr|st[-_ ]?nr|sozialversicherungs[-_ ]?(?:nummer|nr)|sv[-_ ]?nr|rentenversicherungs[-_ ]?(?:nummer|nr)|rv[-_ ]?nr|krankenversicherungs[-_ ]?(?:nummer|nr)|versicherten[-_ ]?(?:nummer|nr)|kv[-_ ]?nr|kvnr|lanr|lebenslange[-_ \t]+arzt[-_ ]?(?:nummer|nr)|arzt[-_ ]?(?:nummer|nr)|reisepass[-_ ]?(?:nummer|nr)|pass[-_ ]?(?:nummer|nr)|personalausweis[-_ ]?(?:nummer|nr)|ausweis[-_ ]?(?:nummer|nr)|führerschein[-_ ]?(?:nummer|nr)|fahrerlaubnis[-_ ]?(?:nummer|nr)|ssn|social[-_ \t]+security[-_ \t]+(?:number|no)|nino|national[-_ \t]+insurance[-_ \t]+(?:number|no)|passport[-_ \t]+(?:number|no)|identity[-_ \t]+card[-_ \t]+(?:number|no)|id[-_ \t]+card[-_ \t]+(?:number|no)|driver'?s?[-_ \t]+licen[cs]e[-_ \t]+(?:number|no))\b",
-    },
-    AnchorPattern {
-        anchor_kind: "lexical",
-        category: "vehicle_identifier",
-        strength: "strong",
-        pattern: r"(?i)\b(?:kfz[-_ ]?(?:kennzeichen|nummer)?|kraftfahrzeug[-_ ]?kennzeichen|kennzeichen|nummern[-_ ]?schild|amtliches[-_ ]?kennzeichen|vehicle[-_ \t]+registration(?:[-_ \t]+(?:number|no))?|registration[-_ \t]+(?:number|no)|license[-_ \t]+plate|licence[-_ \t]+plate|number[-_ \t]+plate)\b",
-    },
-    AnchorPattern {
-        anchor_kind: "lexical",
-        category: "medical",
-        strength: "medium",
-        pattern: r"(?i)\b(?:patienten[-_ ]?akte|kranken[-_ ]?akte|gesundheits[-_ ]?akte|elektronische[ \t]+patientenakte|epa|arzt[-_ ]?brief|entlassungs[-_ ]?(?:brief|bericht)|behandlungs[-_ ]?(?:bericht|plan)|behandlung|therapie|verschreibung|verordnung|rezept|symptom(?:e)?|allergie(?:n)?|diagnose(?:n)?|anamnes[ei]|medikation|medikament(?:e)?|befund(?:e)?|labor[-_ ]?(?:wert|ergebnis|befund)(?:e|se)?|icd(?:[-_ ]?10)?|krankheit|erkrankung|gesundheits[-_ ]?zustand|patient[-_ \t]+record|medical[-_ \t]+record|health[-_ \t]+record|electronic[-_ \t]+health[-_ \t]+record|ehr|electronic[-_ \t]+medical[-_ \t]+record|emr|clinical[-_ \t]+note|discharge[-_ \t]+summary|medical[-_ \t]+history|health[-_ \t]+condition|diagnos(?:is|es)|treatment[-_ \t]+plan|treatment|therapy|prescription|symptoms?|allerg(?:y|ies)|lab(?:oratory)?[-_ \t]+(?:result|report|value)s?|medication(?:s)?)\b",
-    },
-    AnchorPattern {
-        anchor_kind: "lexical",
-        category: "special_category",
-        strength: "medium",
-        pattern: r"(?i)\b(?:religion|religions[-_ ]?zugehörigkeit|glaubens[-_ ]?richtung|konfession|weltanschauung|politische[-_ ]+(?:meinung|einstellung)|parteizugehörigkeit|partei[-_ ]?mitgliedschaft|gewerkschafts[-_ ]?(?:zugehörigkeit|mitgliedschaft)|behinderung|schwerbehinderung|sexuelle[-_ ]+(?:orientierung|identität)|geschlechts[-_ ]?identität|ethnische[-_ ]+(?:herkunft|zugehörigkeit)|rassische[-_ ]?herkunft|genetische[-_ ]+daten|biometrische[-_ ]+daten|religious[-_ \t]+beliefs?|religious[-_ \t]+affiliation|philosophical[-_ \t]+beliefs?|political[-_ \t]+opinions?|political[-_ \t]+affiliation|party[-_ \t]+membership|trade[-_ \t]+union(?:[-_ \t]+membership)?|disability[-_ \t]+status|sexual[-_ \t]+orientation|gender[-_ \t]+identity|ethnic[-_ \t]+origin|racial[-_ \t]+origin|genetic[-_ \t]+data|biometric[-_ \t]+data)\b",
-    },
-    AnchorPattern {
-        anchor_kind: "lexical",
-        category: "employment_compensation",
-        strength: "weak",
-        pattern: r"(?i)\b(?:gehalt|grund[-_ ]?gehalt|brutto[-_ ]?gehalt|netto[-_ ]?gehalt|jahres[-_ ]?gehalt|monats[-_ ]?gehalt|vergütung|gesamt[-_ ]?vergütung|entgelt|bezüge|besoldung|lohn|stunden[-_ ]?lohn|provision|prämie|bonus|ziel[-_ ]?bonus|lohn[-_ ]?abrechnung|gehalts[-_ ]?abrechnung|entgelt[-_ ]?abrechnung|personal[-_ ]?akte|salary|base[-_ \t]+salary|gross[-_ \t]+salary|net[-_ \t]+salary|annual[-_ \t]+salary|monthly[-_ \t]+salary|compensation|total[-_ \t]+compensation|remuneration|wages?|hourly[-_ \t]+rate|commission|bonus|target[-_ \t]+bonus|payroll|pay[-_ \t]*slip|salary[-_ \t]+statement|pay[-_ \t]+grade|stock[-_ \t]+options?|restricted[-_ \t]+stock[-_ \t]+units?|rsu|personnel[-_ \t]+file|employee[-_ \t]+file)\b",
-    },
+    common::EMAIL,
+    common::IPV4,
+    common::IPV6_FULL,
+    common::IPV6_COMPRESSED,
+    common::IPV6_LOOPBACK,
+    common::PHONE_INTERNATIONAL,
+    de::PHONE,
+    de::PHONE_NATIONAL_CONTEXT,
+    de::PHONE_NATIONAL_PROXIMITY,
+    us::PHONE,
+    common::MAC_ADDRESS,
+    intl::IBAN_DE,
+    intl::IBAN_GENERIC,
+    intl::CREDIT_CARD,
+    intl::CREDIT_CARD_CVV,
+    intl::CREDIT_CARD_EXPIRY,
+    intl::SWIFT_BIC_CONTEXT,
+    identifiers::EMPLOYEE_ID,
+    identifiers::EMPLOYEE_ID_OCR_FIELD,
+    identifiers::EMPLOYEE_ID_PREFIXED,
+    identifiers::CUSTOMER_ID,
+    identifiers::PATIENT_ID,
+    identifiers::STUDENT_ID,
+    identifiers::APPLICANT_ID,
+    identifiers::USERNAME,
+    identifiers::DATE_OF_BIRTH,
+    identifiers::DATE_OF_BIRTH_WRITTEN_DAY_FIRST,
+    identifiers::DATE_OF_BIRTH_WRITTEN_MONTH_FIRST,
+    identifiers::FINANCIAL_ACCOUNT_NUMBER,
+    de::STEUER_ID,
+    de::STEUER_ID_CONTEXT_FREE,
+    de::STEUERNUMMER,
+    de::RENTENVERSICHERUNG,
+    de::HEALTH_INSURANCE_NUMBER,
+    de::PHYSICIAN_NUMBER_LANR,
+    de::PASSPORT_NUMBER,
+    de::IDENTITY_CARD_NUMBER,
+    de::DRIVER_LICENSE_NUMBER,
+    de::KFZ_KENNZEICHEN,
+    us::SSN,
+    uk::NINO,
 ];
 
 pub struct PiiPipeline {
@@ -412,6 +95,8 @@ pub struct PiiPipeline {
     entity_groups: Vec<&'static str>,
     validators: Vec<Option<NativeMatchValidator>>,
     capture_groups: Vec<Option<usize>>,
+    structured_regexes: Vec<Option<Regex>>,
+    structured_keys: Vec<Option<Regex>>,
     anchor_regexes: Vec<Regex>,
 }
 
@@ -430,6 +115,8 @@ impl PiiPipeline {
         let mut rule_ids = Vec::new();
         let mut validators = Vec::new();
         let mut capture_groups = Vec::new();
+        let mut structured_regexes = Vec::new();
+        let mut structured_keys = Vec::new();
 
         for p in PII_PATTERNS {
             regexes.push(Regex::new(p.pattern).unwrap());
@@ -453,6 +140,10 @@ impl PiiPipeline {
             rule_ids.push(p.name);
             validators.push(p.validator);
             capture_groups.push(p.captured_value.then_some(1));
+            let structured = p.captured_value.then(|| structured_regexes_of(p.pattern));
+            let (value, key) = structured.unzip();
+            structured_regexes.push(value);
+            structured_keys.push(key);
         }
 
         let anchor_regexes = PII_ANCHOR_PATTERNS
@@ -467,6 +158,8 @@ impl PiiPipeline {
             entity_groups,
             validators,
             capture_groups,
+            structured_regexes,
+            structured_keys,
             anchor_regexes,
         }
     }
@@ -479,17 +172,326 @@ impl PiiPipeline {
         use rayon::prelude::*;
         texts.par_iter().map(|text| self.evaluate(text)).collect()
     }
+
+    /// Detect with an explicit output mode. `PiiMode::Strict` is identical to
+    /// the trait's `detect_prepared_with_options`.
+    pub(crate) fn detect_prepared_with_mode<F>(
+        &self,
+        prepared: &crate::threat::NativeText<'_>,
+        allows_rule: F,
+        explain: bool,
+        mode: PiiMode,
+    ) -> NativeDetection
+    where
+        F: Fn(&str) -> bool,
+    {
+        let strict = mode.min_score().is_none();
+        let allows = |rule_id: &str| {
+            allows_rule(rule_id)
+                && !(strict
+                    && PII_PATTERNS
+                        .iter()
+                        .any(|pattern| pattern.name == rule_id && pattern.scored_only))
+        };
+        let detection = self.detect_prepared_scored(prepared, allows, explain, mode.min_score());
+        // K06: values behind zero-width, full-width or defanged characters (in
+        // `recall` also spelled-out separators and spaced digits) are found in a
+        // normalized view and mapped back to the original text.
+        let level = if mode == PiiMode::Recall {
+            Level::SpelledOut
+        } else {
+            Level::Invisible
+        };
+        let Some(view) = Deobfuscated::new(prepared.text(), level) else {
+            return detection;
+        };
+        let normalized = self.detect_prepared_scored(
+            &crate::threat::NativeText::new(&view.text),
+            allows,
+            false,
+            mode.min_score(),
+        );
+        merge_deobfuscated(prepared.text(), detection, normalized, &view, mode)
+    }
+
+    /// Context of a match: the field the rule binds (its own field name or a
+    /// structural key), else the structural key of the value, else two-sided
+    /// proximity.
+    fn context(
+        &self,
+        index: usize,
+        prepared: &crate::threat::NativeText<'_>,
+        captures: &regex::Captures<'_>,
+    ) -> Evidence {
+        let pattern = &PII_PATTERNS[index];
+        let text = prepared.text();
+        let value = captures.get(usize::from(pattern.captured_value)).unwrap();
+        let structure =
+            context::structure_evidence(prepared.structure(), value.range(), pattern.entity_group);
+        if pattern.captured_value {
+            // A regex match includes its field name; a structural match is the value
+            // alone, and its key is the field.
+            let structural = captures.get(0).unwrap().start() == value.start();
+            return structure
+                .filter(|evidence| structural && evidence.context.supports())
+                .unwrap_or_else(|| Evidence::field_at(structural));
+        }
+        structure.unwrap_or_else(|| {
+            context::evidence(text, (value.start(), value.end()), pattern.entity_group)
+        })
+    }
+}
+
+/// Adds the findings of the normalized view whose original span contains an
+/// undone obfuscation (K06); every other finding of the view is already in
+/// `detection`. Such a finding replaces the same-label findings it contains and
+/// yields to any other same-label overlap. Its `matched_rules` entry carries
+/// original offsets and `obfuscation`; findings that only the `recall` level
+/// reveals lose [`score::SPELLED_OUT_PENALTY_POINTS`].
+fn merge_deobfuscated(
+    text: &str,
+    mut detection: NativeDetection,
+    normalized: NativeDetection,
+    view: &Deobfuscated,
+    mode: PiiMode,
+) -> NativeDetection {
+    // (normalized range, original range, label, obfuscation kinds, penalty points)
+    let mut added = Vec::new();
+    for span in normalized.evidence_spans {
+        let range = view.original(span.start_byte..span.end_byte);
+        let kinds = view.kinds(range.clone());
+        if kinds.is_empty() {
+            continue;
+        }
+        let mut score = span.score;
+        let penalty = if kinds.iter().any(|kind| kind.level() == Level::SpelledOut) {
+            score::SPELLED_OUT_PENALTY_POINTS
+        } else {
+            0
+        };
+        if penalty > 0 {
+            score = penalized(span.score, penalty);
+            if mode.min_score().is_some_and(|threshold| score < threshold) {
+                continue;
+            }
+        }
+        let overlaps = |other: &EvidenceSpan| {
+            other.label == span.label
+                && other.start_byte < range.end
+                && range.start < other.end_byte
+        };
+        // A plain finding on the same span (spaced card digits) or one that the
+        // normalized finding does not contain wins.
+        if detection.evidence_spans.iter().any(|other| {
+            overlaps(other)
+                && ((other.start_byte..other.end_byte) == range
+                    || !(range.start <= other.start_byte && other.end_byte <= range.end))
+        }) {
+            continue;
+        }
+        detection.evidence_spans.retain(|other| !overlaps(other));
+        detection.evidence_spans.push(EvidenceSpan {
+            label: span.label.clone(),
+            text: text[range.clone()].to_string(),
+            score,
+            start_byte: range.start,
+            end_byte: range.end,
+            start_char: 0,
+            end_char: 0,
+        });
+        added.push((
+            span.start_byte..span.end_byte,
+            range,
+            span.label,
+            kinds,
+            penalty,
+        ));
+    }
+    if added.is_empty() {
+        return detection;
+    }
+
+    let rules = normalized
+        .details
+        .get("matched_rules")
+        .and_then(|rules| rules.as_array())
+        .into_iter()
+        .flatten()
+        .filter_map(|rule| {
+            let start = rule["start_byte"].as_u64()? as usize;
+            let end = rule["end_byte"].as_u64()? as usize;
+            let label = PII_PATTERNS
+                .iter()
+                .find(|pattern| rule["rule_id"] == pattern.name)?
+                .entity_group;
+            let (_, original, _, kinds, penalty) =
+                added.iter().find(|(range, _, added_label, ..)| {
+                    *range == (start..end) && added_label == label
+                })?;
+            let mut rule = rule.clone();
+            rule["start_byte"] = original.start.into();
+            rule["end_byte"] = original.end.into();
+            for component in rule["components"].as_array_mut().into_iter().flatten() {
+                let start = component["start_byte"].as_u64().unwrap_or_default() as usize;
+                let end = component["end_byte"].as_u64().unwrap_or_default() as usize;
+                if start < end {
+                    let range = view.original(start..end);
+                    component["start_byte"] = range.start.into();
+                    component["end_byte"] = range.end.into();
+                }
+            }
+            rule["obfuscation"] = kinds.iter().map(|kind| kind.as_str()).collect();
+            // Each rule keeps its own score (pii_iban_de 0.90, pii_iban_generic 0.80 on
+            // the same value); only the recall penalty applies to it.
+            if let Some(own) = rule["score"].as_f64() {
+                rule["score"] = serde_json::json!(penalized(own, *penalty));
+            }
+            Some(rule)
+        })
+        .collect::<Vec<_>>();
+    let matched_rules = detection
+        .details
+        .entry("matched_rules".into())
+        .or_insert_with(|| serde_json::json!([]));
+    if let Some(matched_rules) = matched_rules.as_array_mut() {
+        matched_rules.extend(rules);
+    }
+
+    let spans = &mut detection.evidence_spans;
+    spans.sort_by_key(|span| (span.start_byte, span.end_byte));
+    crate::detectors::populate_char_offsets(text, spans);
+    let result = &mut detection.result;
+    if !spans.iter().any(|span| span.label == result.class_name) {
+        result.class_name = spans[0].label.clone();
+    }
+    result.confidence = spans.iter().map(|span| span.score).fold(0.0, f64::max);
+    detection
+}
+
+/// `score` minus `points` hundredths, floored at zero.
+fn penalized(score: f64, points: u8) -> f64 {
+    f64::from(((score * 100.0).round() as i16 - i16::from(points)).max(0)) / 100.0
+}
+
+/// Whether the field part `key` of a rule accepts the normalized structural key
+/// `name` (`customer id`), or the key without spaces for compounds that the rule
+/// names in one word (`matrikelNummer`, `kunden_nummer`).
+fn key_accepts(key: &Regex, name: &str) -> bool {
+    key.is_match(&format!("{name}: "))
+        || (name.contains(' ') && key.is_match(&format!("{}: ", name.replace(' ', ""))))
+}
+
+/// Structural regexes of a field-bound rule (K04): the value regex
+/// `(?P<value>…)\z` that a structural value must match in full, with the rule's
+/// leading flags, and the key regex: the rule's field part before the value,
+/// which must accept `"{key}: "` for a normalized key. A key thus binds a rule
+/// only if the rule accepts it as field name; the wider lexicon only scores.
+fn structured_regexes_of(pattern: &str) -> (Regex, Regex) {
+    let flags = pattern
+        .strip_prefix("(?")
+        .and_then(|rest| rest.split_once(')'))
+        .filter(|(flags, _)| flags.bytes().all(|byte| byte.is_ascii_alphabetic()))
+        .map_or(String::new(), |(flags, _)| format!("(?{flags})"));
+    let start = pattern
+        .find("(?P<value>")
+        .expect("field-bound PII rules capture a named value");
+    let (mut depth, mut escaped, mut class) = (0usize, false, false);
+    let mut end = None;
+    for (offset, byte) in pattern.as_bytes()[start..].iter().enumerate() {
+        match byte {
+            _ if escaped => escaped = false,
+            b'\\' => escaped = true,
+            b'[' if !class => class = true,
+            b']' if class => class = false,
+            b'(' if !class => depth += 1,
+            b')' if !class => {
+                depth -= 1;
+                if depth == 0 {
+                    end = Some(start + offset + 1);
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let value = &pattern[start..end.expect("balanced value group")];
+    (
+        Regex::new(&format!("{flags}{value}\\z")).unwrap(),
+        Regex::new(&format!("\\A(?:{})\\z", &pattern[..start])).unwrap(),
+    )
+}
+
+impl PiiPipeline {
+    /// Key of the structural field that holds exactly `value` and binds rule `index`.
+    fn structural_key(
+        &self,
+        index: usize,
+        prepared: &crate::threat::NativeText<'_>,
+        value: std::ops::Range<usize>,
+    ) -> Option<std::ops::Range<usize>> {
+        let key = self.structured_keys[index].as_ref()?;
+        let fields = prepared.structure();
+        fields
+            .at(value)
+            .find(|field| {
+                field
+                    .names
+                    .iter()
+                    .any(|&name| key_accepts(key, &fields.names()[name]))
+            })
+            .map(|field| field.key.clone())
+    }
 }
 
 impl NativeRegexDetector for PiiPipeline {
-    fn allows_match(&self, index: usize, text: &str, captures: &regex::Captures<'_>) -> bool {
+    fn allows_match(
+        &self,
+        index: usize,
+        prepared: &crate::threat::NativeText<'_>,
+        captures: &regex::Captures<'_>,
+    ) -> bool {
+        let pattern = &PII_PATTERNS[index];
+        let text = prepared.text();
+        if pattern.scored_only && !context::stands_alone(text, captures.get(0).unwrap().range()) {
+            return false;
+        }
+        if pattern.requires_context {
+            // Context-bound rules emit the whole match; it is the value. A
+            // structural key decides before proximity.
+            let value = captures.get(0).unwrap();
+            let supported = context::structure_evidence(
+                prepared.structure(),
+                value.range(),
+                pattern.entity_group,
+            )
+            .map_or_else(
+                || context::supports(text, (value.start(), value.end()), pattern.entity_group),
+                |evidence| evidence.context.supports(),
+            );
+            if !supported {
+                return false;
+            }
+        }
+        // The field name of a field-bound match: before the value in the match, or
+        // the structural key that bound it (K04).
+        let field = pattern.captured_value.then(|| {
+            let (whole, value) = (captures.get(0).unwrap(), captures.name("value").unwrap());
+            if whole.start() < value.start() {
+                whole.start()..value.start()
+            } else {
+                self.structural_key(index, prepared, value.range())
+                    .unwrap_or(value.start()..value.start())
+            }
+        });
         match self.rule_ids[index] {
             "pii_swift_bic_context" => {
                 let value = captures.name("value").unwrap();
-                let field = &text[captures.get(0).unwrap().start()..value.start()];
-                // Lowercase values remain valid in explicit assignments. In prose,
-                // require conventional uppercase codes, not "Swift code is powerful".
-                field.contains([':', '#', '='])
+                let structural = captures.get(0).unwrap().start() == value.start();
+                // Lowercase values remain valid in explicit assignments (and as
+                // structural values). In prose, require conventional uppercase
+                // codes, not "Swift code is powerful".
+                structural
+                    || text[field.unwrap()].contains([':', '#', '='])
                     || !value.as_str().bytes().any(|byte| byte.is_ascii_lowercase())
             }
             "pii_credit_card_expiry" => {
@@ -498,25 +500,25 @@ impl NativeRegexDetector for PiiPipeline {
                     .iter()
                     .position(|id| *id == "pii_credit_card")
                     .expect("PII credit-card rule must be present");
-                super::context::payment_expiry(
+                context::payment_expiry(
                     text,
                     captures.get(0).unwrap().start(),
                     &self.regexes[card_index],
                 )
             }
             "pii_employee_id" | "pii_employee_id_ocr_field" => {
-                let whole = captures.get(0).unwrap();
+                let field = field.unwrap();
+                let field_text = &text[field.clone()];
                 let generic_field = self.rule_ids[index] == "pii_employee_id_ocr_field"
-                    || whole.as_str().to_lowercase().starts_with("kennung");
+                    || field_text.to_lowercase().starts_with("kennung");
                 // The OCR regex consumes a leading newline/pipe. That separator
                 // must remain a context boundary rather than exposing the prior field.
-                let field_start = whole.start()
-                    + whole
-                        .as_str()
+                let field_start = field.start
+                    + field_text
                         .find(|ch: char| !ch.is_whitespace() && ch != '|')
                         .unwrap_or(0);
                 !generic_field
-                    || super::context::employee_identifier(
+                    || context::employee_identifier(
                         text,
                         field_start,
                         captures.name("value").unwrap().as_str(),
@@ -524,6 +526,19 @@ impl NativeRegexDetector for PiiPipeline {
             }
             _ => true,
         }
+    }
+
+    /// The trait's unscored detection is `strict`: scored-only rules stay off.
+    fn detect_prepared_with_options<F>(
+        &self,
+        prepared: &crate::threat::NativeText<'_>,
+        allows_rule: F,
+        explain: bool,
+    ) -> NativeDetection
+    where
+        F: Fn(&str) -> bool,
+    {
+        self.detect_prepared_with_mode(prepared, allows_rule, explain, PiiMode::Strict)
     }
 
     fn anchor_gates(&self) -> &[crate::detectors::anchor_gate::AnchorGate] {
@@ -552,8 +567,53 @@ impl NativeRegexDetector for PiiPipeline {
         Some(&self.capture_groups)
     }
 
+    fn structured_regexes(&self) -> Option<&[Option<Regex>]> {
+        Some(&self.structured_regexes)
+    }
+
+    fn structured_values(
+        &self,
+        index: usize,
+        prepared: &crate::threat::NativeText<'_>,
+    ) -> Vec<StructuredValue> {
+        let fields = prepared.structure();
+        if fields.is_empty() {
+            return Vec::new();
+        }
+        let Some(key) = &self.structured_keys[index] else {
+            return Vec::new();
+        };
+        let names: Vec<bool> = fields
+            .names()
+            .iter()
+            .map(|name| key_accepts(key, name))
+            .collect();
+        fields
+            .iter()
+            .filter(|field| field.names.iter().any(|&name| names[name]))
+            .map(|field| StructuredValue {
+                key: field.key.clone(),
+                value: field.value.clone(),
+                carrier: field.carrier.as_str(),
+            })
+            .collect()
+    }
+
     fn preserve_cross_label_overlaps(&self) -> bool {
         true
+    }
+
+    fn match_score(
+        &self,
+        index: usize,
+        prepared: &crate::threat::NativeText<'_>,
+        captures: &regex::Captures<'_>,
+    ) -> MatchScore {
+        let evidence = self.context(index, prepared, captures);
+        MatchScore {
+            score: score::score(&PII_PATTERNS[index], evidence.context),
+            context: Some(evidence.to_json()),
+        }
     }
 
     fn finalize_spans(&self, text: &str, spans: &mut Vec<crate::EvidenceSpan>) {

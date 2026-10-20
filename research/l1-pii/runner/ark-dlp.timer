@@ -1,8 +1,8 @@
 [Unit]
-Description=ARK L1-DLP runs hourly at :30 (offset to L1-PII; shared run lock; a busy lock skips the run)
+Description=ARK L1-DLP runs every 2 hours at odd hours :00 (offset to L1-PII; shared run lock; a busy lock skips the run)
 
 [Timer]
-OnCalendar=*-*-* *:30:00
+OnCalendar=*-*-* 01/2:00:00
 Persistent=false
 
 [Install]
