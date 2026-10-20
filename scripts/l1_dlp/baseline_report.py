@@ -12,7 +12,8 @@ Predictions are read from ``PRED/<tool>.<component>.jsonl`` with ``tool`` in
 ``ark, gitleaks, trufflehog, detect-secrets`` and ``component`` in ``synthetic, benign_code,
 benign_docs`` (``run_ark.py`` / ``run_baselines.py`` output). ARK's opt-in run goes to
 ``PRED/ark.extended.<component>.jsonl`` (component also ``external``). Missing tools are
-skipped. Reports and tables carry offsets, counts and rule IDs only, never text.
+skipped; a tool or profile with only part of its component files is an error. The default
+tables score every tool on its default run only; ARK's extended run feeds the opt-in table. Reports and tables carry offsets, counts and rule IDs only, never text.
 
     python3 scripts/l1_dlp/baseline_report.py --dev DIR --predictions PRED [--output-dir OUT]
 """
@@ -51,24 +52,34 @@ def _load_scoreboard() -> ModuleType:
 SCOREBOARD = _load_scoreboard()
 
 
-def _read(paths: Iterable[Path]) -> list[dict[str, Any]] | None:
+def _read(directory: Path, prefix: str, components: Iterable[str]) -> list[dict[str, Any]] | None:
+    """Rows of every ``<prefix>.<component>.jsonl``; ``None`` if none exists.
+
+    A partial set is an error: a missing component would silently score as "no findings".
+    """
+    paths = [directory / f"{prefix}.{component}.jsonl" for component in components]
+    present = [path for path in paths if path.is_file()]
+    if not present:
+        return None
+    missing = [path.name for path in paths if not path.is_file()]
+    if missing:
+        raise ValueError(f"{directory}: incomplete component set for {prefix}, missing {', '.join(missing)}")
     rows: list[dict[str, Any]] = []
-    found = False
-    for path in paths:
-        if path.is_file():
-            found = True
-            rows.extend(SCOREBOARD._read_jsonl(path))
-    return rows if found else None
+    for path in present:
+        rows.extend(SCOREBOARD._read_jsonl(path))
+    return rows
 
 
 def load_predictions(directory: Path) -> dict[str, dict[str, list[dict[str, Any]] | None]]:
     """``{tool: {"default": rows, "extended": rows | None}}`` for every tool with a default run."""
     tools = {}
     for tool in TOOLS:
-        default = _read(directory / f"{tool}.{component}.jsonl" for component in COMPONENTS)
+        default = _read(directory, tool, COMPONENTS)
+        extended = _read(directory, f"{tool}.extended", EXTENDED_COMPONENTS)
         if default is None:
+            if extended is not None:
+                raise ValueError(f"{directory}: {tool}.extended.* without a default run of {tool}")
             continue
-        extended = _read(directory / f"{tool}.extended.{component}.jsonl" for component in EXTENDED_COMPONENTS)
         tools[tool] = {"default": default, "extended": extended}
     return tools
 
@@ -222,8 +233,8 @@ def bucket_lines(buckets: dict[str, Any], code: dict[str, Any]) -> list[str]:
 
 
 def render(reports: dict[str, dict[str, Any]], buckets: dict[str, Any] | None, entities: dict[str, dict[str, str]],
-           taxonomy: Any) -> str:
-    """Markdown tables; secret groups for every tool, opt-in groups (ARK extended run) separately."""
+           taxonomy: Any, extended: dict[str, Any] | None = None) -> str:
+    """Markdown tables; secret groups for every tool (default runs), opt-in groups of ARK's extended run separately."""
     scopes = {entity: meta["scope"] for entity, meta in entities.items()}
 
     def secret(group: str) -> bool:
@@ -236,10 +247,9 @@ def render(reports: dict[str, dict[str, Any]], buckets: dict[str, Any] | None, e
              "", "### F1 je Secret-Gruppe", "", *group_table(reports, secret),
              "", "### Hard Negatives je Variante", "", *hard_negative_table(reports),
              "", "### Recall je Secret-Entität", "", *provider_table(reports, scopes, secret_entity)]
-    if "ark" in reports:
-        ark = {"ark": reports["ark"]}
+    if extended is not None:
         lines += ["", "### Opt-in-Gruppen (nur ARK, Profil extended)", "",
-                  *group_table(ark, taxonomy.is_opt_in)]
+                  *group_table({"ark": extended}, taxonomy.is_opt_in)]
     if buckets is not None and "ark" in reports:
         lines += ["", "### Fehler-Buckets ARK", "", *bucket_lines(buckets, reports["ark"]["benign_code"])]
     return "\n".join(lines) + "\n"
@@ -259,7 +269,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dev", type=Path, required=True, help="frozen dev split (prepare_corpora.py)")
     parser.add_argument("--predictions", type=Path, required=True, help="directory with <tool>.<component>.jsonl")
     parser.add_argument("--entity-map", type=Path, default=ROOT / SCOREBOARD.ENTITY_MAP)
-    parser.add_argument("--output-dir", type=Path, help="write <tool>.json score reports and ark.buckets.json here")
+    parser.add_argument("--output-dir", type=Path, help="write <tool>.json default reports, ark.extended.json and ark.buckets.json here")
     args = parser.parse_args(argv)
     try:
         split = SCOREBOARD.load_split(args.dev)
@@ -267,17 +277,25 @@ def main(argv: list[str] | None = None) -> int:
         predictions = load_predictions(args.predictions)
         if not predictions:
             raise ValueError(f"{args.predictions}: no predictions of {', '.join(TOOLS)}")
-        reports = {tool: SCOREBOARD.score_split(split, runs["default"], taxonomy, runs["extended"])
+        # Default tables: every tool on its default run only, so ARK is not credited with opt-in spans.
+        reports = {tool: SCOREBOARD.score_split(split, runs["default"], taxonomy)
                    for tool, runs in predictions.items()}
+        # Opt-in table: ARK's default plus extended run.
+        extended = None
+        if "ark" in predictions and predictions["ark"]["extended"] is not None:
+            extended = SCOREBOARD.score_split(split, predictions["ark"]["default"], taxonomy,
+                                              predictions["ark"]["extended"])
         buckets = None
         if "ark" in predictions:
             buckets = error_buckets(split.carriers, predictions["ark"]["default"], taxonomy)
         if args.output_dir:
             for tool, report in reports.items():
                 SCOREBOARD._write_json(args.output_dir / f"{tool}.json", report)
+            if extended is not None:
+                SCOREBOARD._write_json(args.output_dir / "ark.extended.json", extended)
             if buckets is not None:
                 SCOREBOARD._write_json(args.output_dir / "ark.buckets.json", buckets)
-        sys.stdout.write(render(reports, buckets, load_entities(args.entity_map), taxonomy))
+        sys.stdout.write(render(reports, buckets, load_entities(args.entity_map), taxonomy, extended))
         return 0
     except (ValueError, OSError) as exc:
         print(f"baseline_report: error: {exc}", file=sys.stderr)
