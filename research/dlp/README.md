@@ -23,6 +23,13 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   Regeln, Wertläufe für die zwei Regeln ohne Literal (Discord, WIF) und Suche nur an den
   Keyword-Treffern, wo der Regex-Baum den Abstand begrenzt. Jedes Gate ist aus der Regex bewiesen;
   eine Regel ohne Keyword lässt `rust/tests/dlp_rule_prefilter.rs` scheitern.
+  Seit K08 überlappen sich Secret-Spans nicht mehr: Bei mehreren Treffern auf einem Wert bleibt
+  einer, nach Stufe Provider/Schlüssel > Token > Passwort-Hash > strukturelles Credential >
+  generische Zuweisung. Ein Span, der nur Anführungszeichen ergänzt, weicht dem engeren Span
+  derselben Stufe, ein Teilstring-Artefakt (WIF-förmiger Lauf in einem Stripe-Key oder JWT)
+  dem Wert, in dem er liegt. Unterdrückte Treffer nennen in `matched_rules` den Gewinner
+  (`suppressed_by`). Scannen DLP und PII denselben Text, gehört der Bereich eines Secret-Spans
+  DLP; überlappende PII-Spans (URL-Passwort als E-Mail-Lokalteil) entfallen.
 - Validatoren sind schwach: `is_secret_value` prüft nur Länge, Platzhalter und Env-Referenzen.
   Prüfsummen fehlen ganz: GitHub/npm CRC32, Base58Check (WIF), JWT-Struktur und PEM/DER.
   Seit K03 liegen die Bausteine dafür in `rust/src/detectors/validators/` (CRC32-Base62,

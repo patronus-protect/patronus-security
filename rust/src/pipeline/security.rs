@@ -1847,15 +1847,14 @@ impl SecurityGateway {
                 .entry(text)
                 .or_insert_with(|| crate::threat::NativeText::new(text));
         }
-        inputs
+        let mut results = inputs
             .par_iter()
             .map(|input| {
                 self.scan_category_prepared(input, &execution, &prepared[input.text.as_ref()])
             })
-            .collect::<Vec<_>>()
-            .into_iter()
-            .flatten()
-            .collect()
+            .collect::<Vec<_>>();
+        crate::post_prediction::resolve_dlp_pii_overlaps(inputs, &mut results);
+        results.into_iter().flatten().collect()
     }
 
     fn scan_l2_inputs(

@@ -121,6 +121,59 @@ pub(crate) fn filter_evidence(
         .collect()
 }
 
+/// K08: DLP vs. PII double labels. When DLP and PII scan the same text, a
+/// DLP secret span owns its range: PII spans overlapping it (a URL password
+/// read as the local part of an e-mail address, token digits read as a card
+/// number) are dropped from the PII results. Only evidence changes; the PII
+/// decision stays as scanned. `results[i]` holds the results of `inputs[i]`.
+pub(crate) fn resolve_dlp_pii_overlaps(
+    inputs: &[crate::ExternalL1Input],
+    results: &mut [Vec<crate::SecurityScanResult>],
+) {
+    let is_pii = |category| {
+        matches!(
+            category,
+            SecurityCategory::Pii | SecurityCategory::DynamicPii
+        )
+    };
+    if !inputs
+        .iter()
+        .any(|input| input.category == SecurityCategory::Dlp)
+        || !inputs.iter().any(|input| is_pii(input.category))
+    {
+        return;
+    }
+    for (dlp, dlp_input) in inputs.iter().enumerate() {
+        if dlp_input.category != SecurityCategory::Dlp {
+            continue;
+        }
+        let mut secrets = results[dlp]
+            .iter()
+            .flat_map(|result| &result.evidence_spans)
+            .filter(|span| crate::detectors::dlp::dlp::SECRET_GROUPS.contains(&span.label.as_str()))
+            .map(|span| (span.start_byte, span.end_byte))
+            .collect::<Vec<_>>();
+        if secrets.is_empty() {
+            continue;
+        }
+        secrets.sort_unstable();
+        let overlaps_secret = |span: &EvidenceSpan| {
+            let after = secrets.partition_point(|&(start, _)| start < span.end_byte);
+            secrets[..after]
+                .iter()
+                .any(|&(_, end)| end > span.start_byte)
+        };
+        for (pii, pii_input) in inputs.iter().enumerate() {
+            if !is_pii(pii_input.category) || *pii_input.text != *dlp_input.text {
+                continue;
+            }
+            for result in &mut results[pii] {
+                result.evidence_spans.retain(|span| !overlaps_secret(span));
+            }
+        }
+    }
+}
+
 pub(crate) fn is_real_secret_assignment(value: &str) -> bool {
     let Some((_, raw)) = value.split_once('=') else {
         return true;

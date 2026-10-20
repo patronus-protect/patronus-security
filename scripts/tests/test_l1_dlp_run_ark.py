@@ -247,6 +247,29 @@ def test_same_range_same_group_takes_the_first_matched_rule():
     assert [s["rule_id"] for s in predictions[0]["evidence_spans"]] == ["dlp_env_var_secret"]
 
 
+def test_same_range_takes_the_rule_that_was_not_suppressed():
+    # K08: the engine keeps the higher-tier match of a range and marks the other one
+    # with suppressed_by; matched_rules stays in rule order.
+    text = f"token: https://token:{TOKEN}@bitbucket.org/acme/repo.git"
+    start = text.index(TOKEN)
+    end = start + len(TOKEN)
+    loser = matched("dlp_generic_credential_assignment", text, start, end)
+    loser["suppressed_by"] = "dlp_url_userinfo_password"
+    gateway = FakeGateway(
+        {
+            text: [
+                result(
+                    "native:dlp",
+                    [span("CREDENTIAL", text, start, end)],
+                    [loser, matched("dlp_url_userinfo_password", text, start, end)],
+                )
+            ]
+        }
+    )
+    predictions, _ = MODULE.predict_rows([{"id": "a", "text": text}], gateway, entity_index())
+    assert [s["rule_id"] for s in predictions[0]["evidence_spans"]] == ["dlp_url_userinfo_password"]
+
+
 def test_rules_join_within_their_own_scanner_result():
     text = f"scp ~/.ssh/id_rsa backup:/tmp {PASSWORD}"
     path_end = text.index(" backup")

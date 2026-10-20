@@ -185,6 +185,30 @@ numeric IBAN substring that also passes the credit-card validator. The primary `
 does not enumerate every match; consume `evidence_spans` for all detected classes. Overlapping
 matches within the same PII label are deduplicated.
 
+DLP secret spans (credential and secret groups) never overlap (K08). Where several secret
+rules match one value, one span stays:
+
+1. A span of the same tier that only adds quotes or a trailing `;`/`,` to a tighter span gives
+   way to it (`'value'` of `dlp_env_var_secret` against `value` of the assignment rule).
+2. A substring artefact gives way to the value it lies in: a fixed-format match strictly inside a
+   longer fixed-format value of another rule (a WIF-shaped Base58 run inside a Stripe key or a
+   JWT), or a match of a rule without keywords strictly inside a longer secret value.
+3. Then the tier decides: provider and key-material formats > platform-format tokens (JWT,
+   bearer, CSRF, session cookie, URL signature) > password hashes > structural credentials (URL
+   userinfo and parameters, Basic auth) > generic assignments (`dlp_env_var_secret`,
+   `dlp_password_assignment`, `dlp_generic_credential_assignment`); within a tier the stronger
+   validator, then the registry order.
+
+A generic key that is the userinfo of a URL (`https://token:…@host`) belongs to the URL
+credential and is no assignment of its own. A suppressed match stays in `matched_rules` and names
+the rule it gave way to in `suppressed_by`. Identifier and content classes keep overlapping spans
+(the first match per label).
+
+When one request scans DLP and PII on the same text, a DLP secret span owns its range: PII L1
+spans that overlap it (a URL password read as the local part of an e-mail address, token digits
+read as a card number) are dropped from the PII `evidence_spans`. The PII result's `class_name`
+and `confidence` stay as scanned, and a PII-only scan is unchanged.
+
 ### PII score and modes
 
 The PII `score` depends on the PII mode, an opt-in execution gate (Rust

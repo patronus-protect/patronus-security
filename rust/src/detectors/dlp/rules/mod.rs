@@ -12,7 +12,8 @@ mod identifiers;
 mod placeholders;
 mod providers;
 
-use super::dlp::{DlpPattern, RuleMeta, ValidatorStrength};
+use super::dlp::{DlpPattern, RuleMeta, ValidatorStrength, SECRET_GROUPS};
+use super::overlap::OverlapTier;
 use std::{borrow::Cow, ops::Range};
 
 const PARTS: &[&[DlpPattern]] = &[
@@ -76,6 +77,38 @@ pub(crate) fn placeholder_check(rule_id: &str) -> bool {
 }
 
 pub(crate) use placeholders::is_placeholder_match;
+
+/// Credential rules that take any value under a secret-like key or variable
+/// name: the generic tier of the overlap resolution (K08).
+const GENERIC_CREDENTIALS: &[&str] = &[
+    "dlp_env_var_secret",
+    "dlp_password_assignment",
+    "dlp_generic_credential_assignment",
+];
+
+/// K08: the overlap tier of a secret rule; `None` for identifier and content
+/// rules, which keep overlapping spans. Provider and key-material formats
+/// rank first, then platform-format tokens (JWT, bearer, CSRF, session
+/// cookie, URL signature), password hashes, structural credentials (URL
+/// userinfo and parameters, Basic auth) and last the generic assignments.
+pub(crate) fn overlap_tier(rule_id: &str) -> Option<OverlapTier> {
+    let rule = DLP_RULES.iter().find(|rule| rule.name == rule_id)?;
+    if !SECRET_GROUPS.contains(&rule.entity_group) {
+        return None;
+    }
+    let in_family = |family: &[DlpPattern]| family.iter().any(|rule| rule.name == rule_id);
+    Some(if in_family(providers::RULES) || in_family(crypto::RULES) {
+        OverlapTier::Provider
+    } else if in_family(hashes::RULES) {
+        OverlapTier::Hash
+    } else if FIXED_FORMAT_CREDENTIALS.contains(&rule_id) || rule.entity_group == "SECRET_TOKEN" {
+        OverlapTier::Token
+    } else if GENERIC_CREDENTIALS.contains(&rule_id) {
+        OverlapTier::Generic
+    } else {
+        OverlapTier::Credential
+    })
+}
 
 /// T06: whether the value `range` of `text` that `rule_id` matched is a
 /// documented example or test value by its markers or low variety.
