@@ -4,11 +4,11 @@
 
 These are the stable rule IDs accepted by execution-gate `rules`. Missing IDs inherit the shared Rust/Python/API defaults below. Model gates such as `native:pii`, `native:dlp`, `native:injection_l1`, and `native:threat_l1` control complete producers; rule gates control individual entries below.
 
-## PII rules (40)
+## PII rules (41)
 
 All PII rules are eligible by default when PII L1 is enabled.
 
-In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `recall` a finding scores the rule base plus the validator strength (checksum 35, format 15, none 0) plus its context, capped at 100 and divided by 100: 25 when the rule binds the value to a field name, otherwise 25/20/15 for a support term of the label near the value and -30 when a counter-context term is nearer (see [PII score and modes](result-schema.md#pii-score-and-modes), [PII context lexicon](#pii-context-lexicon)). Rules marked `proximity (required)` report only with a support term, in every mode. Structure (K04): a JSON key, a `key: value`/`key=value` line, an XML element or attribute, a CSV header or a Markdown/HTML table header that a `field` rule accepts as its field name binds the value it holds to the rule in every mode, if the value matches the rule's value form in full; for the other rules a key of the label (or a counter-context key) that names exactly the value is its context (+25 or -30) instead of proximity.
+In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `recall` a finding scores the rule base plus the validator strength (checksum 35, format 15, none 0) plus its context, capped at 100 and divided by 100: 25 when the rule binds the value to a field name, otherwise 25/20/15 for a support term of the label near the value and -30 when a counter-context term is nearer (see [PII score and modes](result-schema.md#pii-score-and-modes), [PII context lexicon](#pii-context-lexicon)). Rules marked `proximity (required)` report only with a support term, in every mode. Rules marked `balanced`/`recall` only (K05) report a checksum value without a field name and never run in `strict`; the value must stand alone, not inside a longer number. Structure (K04): a JSON key, a `key: value`/`key=value` line, an XML element or attribute, a CSV header or a Markdown/HTML table header that a `field` rule accepts as its field name binds the value it holds to the rule in every mode, if the value matches the rule's value form in full; for the other rules a key of the label (or a counter-context key) that names exactly the value is its context (+25 or -30) instead of proximity.
 
 | Rule ID | Result entity group | Extra validator | Validator strength | Base | Context | Score (`balanced`/`recall`) |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -42,6 +42,7 @@ In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `
 | `pii_date_of_birth_written_month_first` | `DOB` | yes | format | 45 | field or key | 0.85 |
 | `pii_financial_account_number` | `FINANCIAL_ACCOUNT_NUMBER` | yes | format | 30 | field or key | 0.70 |
 | `pii_steuer_id_de` | `STEUERID` | yes | checksum | 40 | field or key | 1.00 |
+| `pii_steuer_id_de_context_free` | `STEUERID` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
 | `pii_steuernummer_de` | `TAX_NUMBER_DE` | yes | format | 35 | field or key | 0.75 |
 | `pii_rentenversicherung_de` | `SOCIALID` | yes | format | 50 | field or key | 0.90 |
 | `pii_health_insurance_number_de` | `HEALTH_INSURANCE_NUMBER` | yes | format | 45 | field or key | 0.85 |

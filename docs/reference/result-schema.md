@@ -243,7 +243,13 @@ and carry neither field.
 
 Every rule that does not require context scores at least `0.50` without it, so `balanced` and
 `recall` return the `strict` spans except those a nearer counter-context term pushes below their
-threshold. A context-bound rule (`pii_phone_de_national_proximity`: a national number such as
+threshold. They also report checksum-strong values without a field name (K05): IBAN and card
+numbers as in `strict`, and scored-only rules add the bare form of values that `strict` reports
+only after their field name. The first is `pii_steuer_id_de_context_free`: 11 digits or
+`86 095 742 719` that pass the check digit and the digit distribution of issued Steuer-IDs (one
+digit twice or three times, never three in a row), standing alone rather than inside a longer
+number, range or decimal. It scores `0.55` bare, `0.80` after `Steuer-ID ist`, and `0.25` behind
+a nearer counter-context term (`Rechnungsnummer 86095742719`), below both thresholds. A context-bound rule (`pii_phone_de_national_proximity`: a national number such as
 `ist unter 0176 90817263 erreichbar`) reports only with a support term and no nearer counter term,
 in every mode including `strict`, and then scores at least `0.50`. Validators decide in every
 mode: a value with a wrong check digit is never reported. Scores are rule-based evidence strengths, not calibrated

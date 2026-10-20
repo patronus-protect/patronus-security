@@ -13,6 +13,7 @@ pub(super) const PHONE: PiiPattern = PiiPattern {
     base_score: 45,
     captured_value: false,
     requires_context: false,
+    scored_only: false,
 };
 
 pub(super) const PHONE_NATIONAL_CONTEXT: PiiPattern = PiiPattern {
@@ -24,6 +25,7 @@ pub(super) const PHONE_NATIONAL_CONTEXT: PiiPattern = PiiPattern {
     base_score: 30,
     captured_value: true,
     requires_context: false,
+    scored_only: false,
 };
 
 // A national number without a field name right before it: "ist unter 0176 90817263
@@ -38,6 +40,7 @@ pub(super) const PHONE_NATIONAL_PROXIMITY: PiiPattern = PiiPattern {
     base_score: 20,
     captured_value: false,
     requires_context: true,
+    scored_only: false,
 };
 
 // ── Deutsche Steuer-IDs ──────────────────────────────────────────────────
@@ -50,6 +53,22 @@ pub(super) const STEUER_ID: PiiPattern = PiiPattern {
     base_score: 40,
     captured_value: true,
     requires_context: false,
+    scored_only: false,
+};
+
+/// A bare Steuer-ID, 11 digits or grouped 2-3-3-3, in `balanced` and `recall` only
+/// (K05). Strict keeps the field name of [`STEUER_ID`]; here the issued digit
+/// distribution and the check digit carry the finding.
+pub(super) const STEUER_ID_CONTEXT_FREE: PiiPattern = PiiPattern {
+    name: "pii_steuer_id_de_context_free",
+    pattern: r"\b[1-9](?:[0-9]{10}|[0-9] [0-9]{3} [0-9]{3} [0-9]{3})\b",
+    entity_group: "STEUERID",
+    validator: Some(validators::steuer_id_issued),
+    strength: ValidatorStrength::Checksum,
+    base_score: 20,
+    captured_value: false,
+    requires_context: false,
+    scored_only: true,
 };
 
 pub(super) const STEUERNUMMER: PiiPattern = PiiPattern {
@@ -61,6 +80,7 @@ pub(super) const STEUERNUMMER: PiiPattern = PiiPattern {
     base_score: 35,
     captured_value: true,
     requires_context: false,
+    scored_only: false,
 };
 
 // ── Deutsche Ausweise / Sozialversicherung ───────────────────────────────
@@ -73,6 +93,7 @@ pub(super) const RENTENVERSICHERUNG: PiiPattern = PiiPattern {
     base_score: 50,
     captured_value: true,
     requires_context: false,
+    scored_only: false,
 };
 
 pub(super) const HEALTH_INSURANCE_NUMBER: PiiPattern = PiiPattern {
@@ -84,6 +105,7 @@ pub(super) const HEALTH_INSURANCE_NUMBER: PiiPattern = PiiPattern {
     base_score: 45,
     captured_value: true,
     requires_context: false,
+    scored_only: false,
 };
 
 pub(super) const PHYSICIAN_NUMBER_LANR: PiiPattern = PiiPattern {
@@ -95,6 +117,7 @@ pub(super) const PHYSICIAN_NUMBER_LANR: PiiPattern = PiiPattern {
     base_score: 30,
     captured_value: true,
     requires_context: false,
+    scored_only: false,
 };
 
 pub(super) const PASSPORT_NUMBER: PiiPattern = PiiPattern {
@@ -106,6 +129,7 @@ pub(super) const PASSPORT_NUMBER: PiiPattern = PiiPattern {
     base_score: 40,
     captured_value: true,
     requires_context: false,
+    scored_only: false,
 };
 
 pub(super) const IDENTITY_CARD_NUMBER: PiiPattern = PiiPattern {
@@ -117,6 +141,7 @@ pub(super) const IDENTITY_CARD_NUMBER: PiiPattern = PiiPattern {
     base_score: 40,
     captured_value: true,
     requires_context: false,
+    scored_only: false,
 };
 
 pub(super) const DRIVER_LICENSE_NUMBER: PiiPattern = PiiPattern {
@@ -128,6 +153,7 @@ pub(super) const DRIVER_LICENSE_NUMBER: PiiPattern = PiiPattern {
     base_score: 35,
     captured_value: true,
     requires_context: false,
+    scored_only: false,
 };
 
 pub(super) const KFZ_KENNZEICHEN: PiiPattern = PiiPattern {
@@ -139,4 +165,5 @@ pub(super) const KFZ_KENNZEICHEN: PiiPattern = PiiPattern {
     base_score: 40,
     captured_value: true,
     requires_context: false,
+    scored_only: false,
 };

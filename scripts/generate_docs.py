@@ -194,6 +194,7 @@ def parse_native_patterns(path: Path, struct_name: str) -> list[dict[str, str]]:
                     "base_score": int(base_score.group(1)) if base_score else None,
                     "field_context": re.search(r"\bcaptured_value:\s*true\b", block) is not None,
                     "requires_context": re.search(r"\brequires_context:\s*true\b", block) is not None,
+                    "scored_only": re.search(r"\bscored_only:\s*true\b", block) is not None,
                 }
             )
     return patterns
@@ -284,6 +285,8 @@ def pii_rule_score(rule: dict, strength_points: dict[str, int], context_points: 
 def pii_rule_context(rule: dict) -> str:
     if rule["field_context"]:
         return "field or key"
+    if rule["scored_only"]:
+        return "key or proximity, `balanced`/`recall` only"
     return "key or proximity (required)" if rule["requires_context"] else "key or proximity"
 
 
@@ -357,6 +360,8 @@ def generate_l1_rule_catalog_doc() -> str:
         "(see [PII score and modes](result-schema.md#pii-score-and-modes), "
         "[PII context lexicon](#pii-context-lexicon)). "
         "Rules marked `proximity (required)` report only with a support term, in every mode. "
+        "Rules marked `balanced`/`recall` only (K05) report a checksum value without a field name "
+        "and never run in `strict`; the value must stand alone, not inside a longer number. "
         "Structure (K04): a JSON key, a `key: value`/`key=value` line, an XML element or attribute, a CSV "
         "header or a Markdown/HTML table header that a `field` rule accepts as its field name binds the value "
         "it holds to the rule in every mode, if the value matches the rule's value form in full; for the "

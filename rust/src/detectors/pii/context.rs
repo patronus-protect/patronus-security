@@ -485,6 +485,24 @@ pub(super) fn structure_evidence(
         .find_map(|field| key_evidence(|name| key_terms(&fields.names()[name]), field, label))
 }
 
+/// Whether the value at `value` (byte range) stands alone rather than continuing
+/// a number: no `+` right before it, no `-`, `/`, `.` or `,` joining it to a digit
+/// on either side, and no digit group one space away (`+49 30 123 456 789`). A
+/// context-free value (K05) has no field name that delimits it.
+pub(super) fn stands_alone(text: &str, value: Range<usize>) -> bool {
+    let joins = |ch: char| matches!(ch, '-' | '/' | '.' | ',');
+    let mut before = text[..value.start].chars().rev();
+    let mut after = text[value.end..].chars();
+    let (prev, prev2) = (before.next(), before.next());
+    let (next, next2) = (after.next(), after.next());
+    let digit = |ch: Option<char>| ch.is_some_and(|ch| ch.is_ascii_digit());
+    !(prev == Some('+')
+        || (prev.is_some_and(joins) && digit(prev2))
+        || (next.is_some_and(joins) && digit(next2))
+        || (prev == Some(' ') && digit(prev2))
+        || (next == Some(' ') && digit(next2)))
+}
+
 // Context must precede the field in the same clause. A card or employee mention
 // elsewhere in a document must not turn unrelated dates or product IDs into PII.
 fn preceding_clause(text: &str, field_start: usize) -> &str {

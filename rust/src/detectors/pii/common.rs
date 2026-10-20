@@ -12,6 +12,7 @@ pub(super) const EMAIL: PiiPattern = PiiPattern {
     base_score: 70,
     captured_value: false,
     requires_context: false,
+    scored_only: false,
 };
 
 // ── IP-Adressen ─────────────────────────────────────────────────────────
@@ -24,6 +25,7 @@ pub(super) const IPV4: PiiPattern = PiiPattern {
     base_score: 50,
     captured_value: false,
     requires_context: false,
+    scored_only: false,
 };
 
 pub(super) const IPV6_FULL: PiiPattern = PiiPattern {
@@ -35,6 +37,7 @@ pub(super) const IPV6_FULL: PiiPattern = PiiPattern {
     base_score: 50,
     captured_value: false,
     requires_context: false,
+    scored_only: false,
 };
 
 pub(super) const IPV6_COMPRESSED: PiiPattern = PiiPattern {
@@ -46,6 +49,7 @@ pub(super) const IPV6_COMPRESSED: PiiPattern = PiiPattern {
     base_score: 50,
     captured_value: false,
     requires_context: false,
+    scored_only: false,
 };
 
 pub(super) const IPV6_LOOPBACK: PiiPattern = PiiPattern {
@@ -57,6 +61,7 @@ pub(super) const IPV6_LOOPBACK: PiiPattern = PiiPattern {
     base_score: 40,
     captured_value: false,
     requires_context: false,
+    scored_only: false,
 };
 
 // ── Telefon ──────────────────────────────────────────────────────────────
@@ -69,6 +74,7 @@ pub(super) const PHONE_INTERNATIONAL: PiiPattern = PiiPattern {
     base_score: 40,
     captured_value: false,
     requires_context: false,
+    scored_only: false,
 };
 
 // ── MAC-Adresse ─────────────────────────────────────────────────────────
@@ -81,4 +87,5 @@ pub(super) const MAC_ADDRESS: PiiPattern = PiiPattern {
     base_score: 55,
     captured_value: false,
     requires_context: false,
+    scored_only: false,
 };
