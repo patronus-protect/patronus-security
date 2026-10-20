@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! Confidential business content and source/SQL/dump/log content classes
 //! (default off).
-use crate::detectors::dlp::dlp::DlpPattern;
+use crate::detectors::dlp::dlp::{DlpPattern, RuleMeta, ValidatorStrength};
 
 pub(super) const RULES: &[DlpPattern] = &[
     // ── Confidential business content ───────────────────────────────────────
@@ -11,6 +11,22 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.internal.business_metric",
         validator: None,
         span_group: None,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "ark",
+            &[
+                "gehalt",
+                "salary",
+                "marge",
+                "deckungsbeitrag",
+                "umsatz",
+                "rohertrag",
+                "ebit",
+                "revenue",
+                "margin",
+                "forecast",
+            ],
+        ),
     },
     // ── Source/code-like content ────────────────────────────────────────────
     DlpPattern {
@@ -19,6 +35,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.content.database_dump",
         validator: None,
         span_group: None,
+        meta: RuleMeta::new(ValidatorStrength::Format, "ark", &["insert"]),
     },
     DlpPattern {
         name: "dlp_source_code_fence",
@@ -26,6 +43,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.content.source_code",
         validator: None,
         span_group: None,
+        meta: RuleMeta::new(ValidatorStrength::Format, "ark", &["```"]),
     },
     DlpPattern {
         name: "dlp_source_code_statement",
@@ -33,6 +51,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.content.source_code",
         validator: None,
         span_group: None,
+        meta: RuleMeta::new(ValidatorStrength::Format, "ark", &["const", "let", "var"]),
     },
     DlpPattern {
         name: "dlp_source_code_python_rust_assignment",
@@ -40,6 +59,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.content.source_code",
         validator: Some(is_non_placeholder_source_assignment),
         span_group: None,
+        meta: RuleMeta::new(ValidatorStrength::Format, "ark", &["="]),
     },
     DlpPattern {
         name: "dlp_source_code_declaration",
@@ -47,6 +67,20 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.content.source_code",
         validator: None,
         span_group: None,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "ark",
+            &[
+                "package",
+                "fn",
+                "def",
+                "function",
+                "class",
+                "interface",
+                "struct",
+                "enum",
+            ],
+        ),
     },
     DlpPattern {
         name: "dlp_source_code_import",
@@ -54,6 +88,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.content.source_code",
         validator: None,
         span_group: None,
+        meta: RuleMeta::new(ValidatorStrength::Format, "ark", &["import", "use"]),
     },
     DlpPattern {
         name: "dlp_sql_statement",
@@ -61,6 +96,14 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.content.sql",
         validator: Some(is_structured_sql_statement),
         span_group: Some(1),
+        meta: RuleMeta::new(
+            ValidatorStrength::Structure,
+            "ark",
+            &[
+                "create", "alter", "insert", "drop", "set", "use", "commit", "select", "update",
+                "delete", "truncate", "grant", "revoke", "replace", "merge", "call", "begin",
+            ],
+        ),
     },
     DlpPattern {
         name: "dlp_sql_multiline_statement",
@@ -68,6 +111,11 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.content.sql",
         validator: None,
         span_group: None,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "ark",
+            &["select", "update", "insert", "delete"],
+        ),
     },
     DlpPattern {
         name: "dlp_database_dump_header",
@@ -75,6 +123,11 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.content.database_dump",
         validator: None,
         span_group: None,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "ark",
+            &["dump", "pragma", "create"],
+        ),
     },
     DlpPattern {
         name: "dlp_stacktrace_block",
@@ -82,6 +135,18 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.content.system_log",
         validator: None,
         span_group: None,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "ark",
+            &[
+                "traceback",
+                "error",
+                "exception",
+                "fatal",
+                "fehler",
+                "ausnahme",
+            ],
+        ),
     },
     DlpPattern {
         name: "dlp_structured_system_log",
@@ -89,6 +154,11 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.content.system_log",
         validator: None,
         span_group: None,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "ark",
+            &["error", "fatal", "critical", "fehler", "kritisch"],
+        ),
     },
 ];
 

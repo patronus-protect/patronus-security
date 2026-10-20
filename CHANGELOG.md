@@ -11,6 +11,19 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- DLP rule metadata v2: every rule in `DLP_PATTERNS` carries a `RuleMeta` (`provider`,
+  `validator_strength` `checksum`/`structure`/`format`/`none`, prefilter `keywords`, `min_entropy`,
+  `source_ref`, live/test severity via `test_prefixes`). Each `matched_rules` entry in the native
+  DLP layer details now reports `provider`, `validator_strength`, `source_ref` and, for
+  credential/secret rules, `severity` (`test` for Stripe `sk_test_`/`rk_test_` keys, otherwise
+  `live`). `research/dlp/rule_sources.yaml` lists the format source of every provider and key rule
+  (gitleaks rule ID or vendor documentation; six legacy provider rules point to the F/T task that
+  documents them), and the L1 rule catalog renders provider, validator strength and source.
+  `DlpPattern` gains the public `meta` field. **Detection change:** provider, key and JWT rules
+  drop values with a Shannon entropy below 3.0 bits per character (synthetic values drawn from a
+  handful of characters); all golden positives and dev positives stay above the floor. Spans of
+  all other matches are unchanged.
+
 - `scripts/l1_dlp/baseline_report.py` scores ARK, gitleaks, TruffleHog and detect-secrets on one
   frozen DLP split with the scoreboard metrics and prints the tables of the new E14 baseline report
   `research/dlp/scoreboard/baseline.md` (untyped and per-group P/R/F1, hard-negative FP per

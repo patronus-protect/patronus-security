@@ -66,6 +66,16 @@ pub(crate) trait NativeRegexDetector {
     }
     fn finalize_spans(&self, _text: &str, _spans: &mut Vec<EvidenceSpan>) {}
 
+    /// Rule metadata added to the `matched_rules` entry of a match of rule
+    /// `index` with value `value`.
+    fn match_details(
+        &self,
+        _index: usize,
+        _value: &str,
+    ) -> serde_json::Map<String, serde_json::Value> {
+        serde_json::Map::new()
+    }
+
     /// Reject contextually ambiguous matches before emitting evidence or rule details.
     fn allows_match(
         &self,
@@ -259,6 +269,9 @@ pub(crate) trait NativeRegexDetector {
                 }
                 if let Some(context) = context {
                     rule["context"] = context;
+                }
+                if let Some(rule) = rule.as_object_mut() {
+                    rule.extend(self.match_details(index, matched.as_str()));
                 }
                 matched_rules.push(rule);
                 class_name.get_or_insert(self.entity_groups()[index]);

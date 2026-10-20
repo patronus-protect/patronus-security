@@ -49,6 +49,22 @@ class NativeScannerTests(unittest.TestCase):
                     for component in rule["components"]:
                         self.assertTrue(raw[component["start_byte"]:component["end_byte"]].decode("utf-8"))
 
+    def test_native_dlp_matched_rules_carry_rule_metadata(self):
+        scanner = SecurityGateway(categories=["dlp"], max_level="l1", download_files=False)
+        body = "q7mzk2xv9pwd" + "4hrt8nyc3bja"
+        for mode in ("live", "test"):
+            with self.subTest(mode=mode):
+                text = "STRIPE_KEY=" + "sk_" + mode + "_" + body
+                result = next(r for r in scanner.scan_category("dlp", text) if r["model"] == "native:dlp")
+                rule = next(
+                    r for r in result["layers"][0]["details"]["matched_rules"]
+                    if r["rule_id"] == "dlp_stripe_key"
+                )
+                self.assertEqual(rule["provider"], "stripe")
+                self.assertEqual(rule["validator_strength"], "format")
+                self.assertEqual(rule["source_ref"], "gitleaks:stripe-access-token")
+                self.assertEqual(rule["severity"], mode)
+
     def test_dlp_and_pii_native_scans_find_obvious_matches(self):
         scanner = SecurityGateway(
             categories=["dlp", "pii"], max_level="l2", download_files=False

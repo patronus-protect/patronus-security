@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! Key material: wallet keys and PEM private keys.
-use crate::detectors::dlp::dlp::DlpPattern;
+use crate::detectors::dlp::dlp::{DlpPattern, RuleMeta, ValidatorStrength};
 
 pub(super) const RULES: &[DlpPattern] = &[
     // ── Crypto ───────────────────────────────────────────────────────────────
@@ -10,6 +10,13 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "CRYPTO_KEY",
         validator: None,
         span_group: None,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://ethereum.org/en/developers/docs/accounts/",
+            &["0x"],
+        )
+        .with_provider("ethereum")
+        .with_min_entropy(3.0),
     },
     DlpPattern {
         name: "dlp_btc_wif",
@@ -17,6 +24,13 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "CRYPTO_KEY",
         validator: None,
         span_group: None,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://en.bitcoin.it/wiki/Wallet_import_format",
+            &[],
+        )
+        .with_provider("bitcoin")
+        .with_min_entropy(3.0),
     },
     // ── Private key material ─────────────────────────────────────────────────
     DlpPattern {
@@ -25,6 +39,11 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "PRIVATE_KEY",
         validator: None,
         span_group: None,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:private-key",
+            &["-----begin"],
+        ),
     },
     DlpPattern {
         name: "dlp_private_key_header",
@@ -32,5 +51,10 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "PRIVATE_KEY",
         validator: None,
         span_group: None,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:private-key",
+            &["-----begin"],
+        ),
     },
 ];

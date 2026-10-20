@@ -163,6 +163,7 @@ tasks:
   - {id: T07, title: "Placeholder/reference values in value-capturing rules (env_var_secret, generic/password assignment, credential_in_url, signed_url_signature, url_userinfo_password, csrf, bearer): SCREAMING_SNAKE/kebab placeholders DE/EN (YOUR_…_HERE, BITTE_AENDERN, HIER_…_EINTRAGEN, TODO, CHANGEME, YOUR-API-TOKEN), $VAR, {{var}}, var.x, os.environ[…], ENV.fetch(…), os.Getenv/System.getenv/Environment.GetEnvironmentVariable, process.env.X", type: precision-fix, deps: [K01], accept: "277 dev FP on placeholder/env_ref rows as hard negatives (Ruby/Python/Go/C#/HCL/Handlebars/shell); general code expressions stay with T03", status: done}
 
   - id: K02
+    status: done
     title: Rule metadata v2 (provider, validator_strength checksum/structure/format/none, keywords for prefilter, min_entropy, source_ref, severity live/test)
     type: engine
     deps: [K01]
