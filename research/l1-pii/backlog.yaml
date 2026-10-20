@@ -100,6 +100,7 @@ tasks:
     deps: [E08]
 
   - id: E10
+    status: done
     title: Golden schema v2 (N per language, difficulty tags no_context/structured/obfuscated/ocr) + coverage per rule_id
     type: eval-infra
     deps: [E09]

@@ -20,16 +20,16 @@ compiled extension.
 | `dynamic_pii.jsonl` | 133 | Dynamic PII entity spans |
 | `dynamic_pii_threshold_sweep.jsonl` | 85 | Threshold calibration |
 | `education_pii_threshold_sweep.jsonl` | 50 | Education-context threshold calibration |
-| `pii_l1.jsonl` | 140 | Native PII L1 exact-span capability goldens and hard negatives |
+| `pii_l1.jsonl` | 713 | Native PII L1 exact-span goldens, hard negatives and known gaps (schema v2) |
 | `dlp_l1.jsonl` | 537 | Native DLP L1 exact-span goldens, hard negatives and known gaps (schema v2) |
 
 ## Native L1 golden-set contract
 
-`pii_l1.jsonl` covers all 28 currently emitted PII L1 labels with three
-positive variants and two hard negatives per label. `dlp_l1.jsonl` covers all
-23 currently emitted DLP L1 labels with golden schema v2 (below). The cases are
-balanced across German and English where the identifier is not intrinsically
-country-specific.
+`pii_l1.jsonl` covers all 28 currently emitted PII L1 labels with PII golden
+schema v2, `dlp_l1.jsonl` all 23 currently emitted DLP L1 labels with DLP
+golden schema v2 (both below). Each label has German and English cases; a
+country-specific identifier appears in German and English text around the same
+national format.
 
 Every row declares `case_type`, `target_label`, `language`, `span_unit`, and
 `provenance`. Positive rows contain one exact expected entity (a split DLP
@@ -45,6 +45,51 @@ Reserved placeholder values (RFC 2606/6761 domains such as `example.com` or
 form only (obfuscated, masked, single-label host, invalid prefix), never because
 a name or number is reserved. The full convention is in
 [`research/l1-pii/README.md`](../../../research/l1-pii/README.md).
+
+### PII golden schema v2
+
+Every `pii_l1.jsonl` row starts with these fields:
+
+```json
+{"id": "pii_l1-iban-pos-08", "suite": "pii_l1", "schema_version": 2,
+ "language": "de", "case_type": "positive", "target_label": "IBAN",
+ "rule_id": "pii_iban_de", "carrier": "json", "tags": ["structured"],
+ "known_gap": false, ...}
+```
+
+- `rule_id` is the `pii_*` rule of `PII_PATTERNS` the row exercises and belongs
+  to `target_label`. For a positive, `13_l1_golden_eval` requires that this rule
+  reported every gold span (`matched_rules` of the scan result); another rule of
+  the same label may report it as well. For a hard negative it is the rule the
+  lookalike aims at; no PII rule may report anything in the text.
+- `carrier` is the document that holds the value: `line` (a single
+  `label: value` probe), `prose` (sentence, chat, mail), `json`, `yaml`, `xml`,
+  `csv`, `kv` (`key=value` or `Key: value` lines of a form) or `table` (Markdown
+  table).
+- `tags` are the difficulty tags, in this order: `no_context` (no field name or
+  label names the value), `structured` (carrier `json`, `yaml`, `xml`, `csv`,
+  `kv` or `table`; derived by the generator), `obfuscated` (characters inserted
+  or substituted while the value stays readable: zero-width spaces, full-width
+  digits or `＠`, defanged `[.]`; on hard negatives also masked values) and `ocr`
+  (scan layout noise: no space after the colon, trailing form fields, table
+  pipes, line breaks inside a value, misread letters in the field name). Spans of
+  obfuscated and OCR values cover the text as written. Spelled-out e-mail forms
+  (`[at]`, `name @ domain . de`) stay hard negatives under the gold convention
+  below.
+- `known_gap: true` marks a positive the detector misses today. The eval runs
+  it and prints it in the coverage report, but does not gate on it. It fails
+  when a known gap starts passing, so the task that closes it flips the flag.
+  Hard negatives are never known gaps.
+- Each label has at least 5 gated positives and 5 hard negatives per language
+  (DE and EN). Each rule has a gated positive in both languages and a hard
+  negative. `python/tests/test_pii_golden_schema.py` and
+  `rust/tests/pii_golden_schema.rs` check this statically; `13_l1_golden_eval`
+  checks it on the scan results and prints the coverage per `rule_id` and per
+  tag and language.
+
+```shell
+cd rust && cargo run --example 13_l1_golden_eval -- pii
+```
 
 ### DLP golden schema v2
 
