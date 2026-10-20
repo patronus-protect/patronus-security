@@ -268,6 +268,17 @@ carry `overlap` with the `reason` and, except for `iban_form`, the winning label
 (an e-mail address after `Username:` stays `EMAIL` and `USERNAME`), and `strict` keeps both
 labels (decision T07).
 
+**Secondary evidence in `strict` (T07).** `strict` keeps reporting both labels, with spans, class
+and confidence unchanged, but a `CREDITCARD` or `FINANCIAL_ACCOUNT_NUMBER` finding inside a reported
+(MOD-97-valid) IBAN is secondary evidence of it: the card-shaped BBAN of
+`DE18 4306 0967 1234 5678 00`, or the account after `Bank account:` on
+`GB82WEST12345698765432`. `details.secondary_evidence` lists each one as `label`, `start_byte`,
+`end_byte`, `reason` (`iban_value` for the IBAN's own span, `iban_part` for a part of it) and
+`primary_label` (`IBAN`); it is absent when there is none. Evaluations (`13_l1_golden_eval`,
+`scripts/l1_presidio/run_ark.py` for the scoreboard) score primary findings only. A card or
+account next to an IBAN, and the digits of an IBAN form whose check digits fail, stay primary.
+The scored modes drop these findings instead (K07) and list nothing.
+
 For example, a Steuer-ID after its field name scores `1.0`, an IBAN without a field name `0.90`
 (`1.0` right after the word `IBAN`), a licence plate after `Kennzeichen:` `0.65`, and a card
 number after `Bestellnummer` `0.45`, below the `balanced` threshold. The [L1 rule catalog](l1-rule-catalog.md) lists

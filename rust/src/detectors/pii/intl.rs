@@ -4,7 +4,8 @@ use super::{pii::PiiPattern, score::ValidatorStrength, validators};
 
 // ── IBAN ─────────────────────────────────────────────────────────────────
 // Keep IBAN as the primary classification when a numeric substring also
-// passes the card validator. Evidence retains both labels.
+// passes the card validator. Evidence retains both labels; strict lists the
+// card as secondary evidence of the IBAN (T07), the scored modes drop it (K07).
 pub(super) const IBAN_DE: PiiPattern = PiiPattern {
     name: "pii_iban_de",
     pattern: r"\bDE\d{2}[\s]?\d{4}[\s]?\d{4}[\s]?\d{4}[\s]?\d{4}[\s]?\d{2}\b",

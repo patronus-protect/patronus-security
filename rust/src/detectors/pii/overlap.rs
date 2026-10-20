@@ -12,7 +12,8 @@
 //! earlier rule. A finding inside a printed IBAN form (`DE64 7172 …`) yields
 //! even when no IBAN is reported because its check digits fail. The loser leaves
 //! the evidence; its `matched_rules` entries stay and name `overlap`. `strict`
-//! keeps both labels (decision T07).
+//! keeps both labels (decision T07) and only marks the card-shaped part of a
+//! valid IBAN and an account finding on an IBAN value as secondary evidence.
 use std::{cmp::Ordering, ops::Range, sync::LazyLock};
 
 use regex::Regex;
@@ -29,6 +30,10 @@ pub const COMPETING_LABELS: [&str; 5] = [
     "STEUERID",
     "PHONE",
 ];
+
+/// Labels whose findings inside a reported IBAN are secondary evidence of it in
+/// `strict` (decision T07).
+pub const SECONDARY_IN_IBAN: [&str; 2] = ["CREDITCARD", "FINANCIAL_ACCOUNT_NUMBER"];
 
 /// A printed IBAN: country code, check digits and groups of four separated by
 /// single spaces, with a shorter last group.
@@ -200,4 +205,37 @@ pub(crate) fn resolve(text: &str, detection: &mut NativeDetection) {
         result.class_name = first.label.clone();
     }
     result.confidence = spans.iter().map(|span| span.score).fold(0.0, f64::max);
+}
+
+/// Lists the card and account findings inside a reported IBAN under
+/// `secondary_evidence` (`strict`, decision T07): `iban_value` for the IBAN's own
+/// span, `iban_part` for a part of it. Findings, class and confidence stay as they
+/// are; evaluations score primary findings only.
+pub(crate) fn mark_secondary(detection: &mut NativeDetection) {
+    let spans = &detection.evidence_spans;
+    let secondary: Vec<_> = spans
+        .iter()
+        .filter(|span| SECONDARY_IN_IBAN.contains(&span.label.as_str()))
+        .filter_map(|span| {
+            let iban = spans.iter().find(|iban| {
+                iban.label == "IBAN"
+                    && iban.start_byte <= span.start_byte
+                    && span.end_byte <= iban.end_byte
+            })?;
+            let reason = if (iban.start_byte, iban.end_byte) == (span.start_byte, span.end_byte) {
+                "iban_value"
+            } else {
+                "iban_part"
+            };
+            Some(serde_json::json!({
+                "label": span.label, "start_byte": span.start_byte, "end_byte": span.end_byte,
+                "reason": reason, "primary_label": "IBAN",
+            }))
+        })
+        .collect();
+    if !secondary.is_empty() {
+        detection
+            .details
+            .insert("secondary_evidence".into(), secondary.into());
+    }
 }

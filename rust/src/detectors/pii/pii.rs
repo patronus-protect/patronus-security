@@ -215,8 +215,11 @@ impl PiiPipeline {
             }
         };
         // K07: in the scored modes one value yields one competing label; strict
-        // keeps both (decision T07).
-        if !strict {
+        // keeps both and marks the card or account inside an IBAN as secondary
+        // evidence (decision T07).
+        if strict {
+            overlap::mark_secondary(&mut detection);
+        } else {
             overlap::resolve(prepared.text(), &mut detection);
         }
         detection

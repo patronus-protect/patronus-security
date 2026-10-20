@@ -290,7 +290,7 @@ fn scored_modes_resolve_instead_of_marking() {
         ] {
             let result = scan(&scanner, text);
             assert!(
-                result.layers[0].details.get("secondary_evidence").is_none(),
+                !result.layers[0].details.contains_key("secondary_evidence"),
                 "{mode:?}: {text}"
             );
             assert!(
@@ -314,7 +314,7 @@ fn texts_without_an_iban_list_no_secondary_evidence() {
         let result = strict(text);
         assert!(!result.evidence_spans.is_empty(), "{text}");
         assert!(
-            result.layers[0].details.get("secondary_evidence").is_none(),
+            !result.layers[0].details.contains_key("secondary_evidence"),
             "{text}"
         );
     }

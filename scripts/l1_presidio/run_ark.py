@@ -12,7 +12,10 @@ namespaced as ``ark.<LABEL>`` and are therefore never scored by accident.
 
 The engine is ``SecurityGateway(categories=["pii"], max_level="l1")`` without model
 downloads, in the default PII mode ``strict`` unless ``--pii-mode balanced|recall`` asks for
-the scored modes (K02; the sidecar then records ``engine.pii_mode``). The metadata sidecar records input and output digests and the SHA-256
+the scored modes (K02; the sidecar then records ``engine.pii_mode``). Only primary findings
+are written: a span the result lists under ``details.secondary_evidence`` (in ``strict`` the
+card-shaped part of a valid IBAN and an account finding on an IBAN value, T07) is dropped
+and counted as ``secondary_spans`` in the sidecar. The metadata sidecar records input and output digests and the SHA-256
 of the native module but no timestamps, so a rerun on the same build is
 byte-identical.
 
@@ -99,8 +102,19 @@ def _evidence_span(span: dict[str, Any], text: str, row_id: str) -> dict[str, An
     }
 
 
-def predict_rows(rows: Iterable[dict[str, Any]], gateway: Any) -> Iterable[dict[str, Any]]:
-    """Yield one prediction row per Gold row, in input order."""
+def secondary_evidence(result: dict[str, Any]) -> set[tuple[str, int, int]]:
+    """``(label, start_byte, end_byte)`` of the spans a result marks as secondary evidence (T07)."""
+    return {
+        (str(entry.get("label", "")), entry.get("start_byte"), entry.get("end_byte"))
+        for layer in result.get("layers", [])
+        for entry in (layer.get("details") or {}).get("secondary_evidence", [])
+    }
+
+
+def predict_rows(
+    rows: Iterable[dict[str, Any]], gateway: Any, counts: Counter | None = None
+) -> Iterable[dict[str, Any]]:
+    """Yield one prediction row per Gold row, in input order; count dropped secondary spans."""
     seen = set()
     for row in rows:
         row_id = row.get("id")
@@ -113,7 +127,12 @@ def predict_rows(rows: Iterable[dict[str, Any]], gateway: Any) -> Iterable[dict[
         # Several rules may report the same span; keep it once with its best score.
         best: dict[tuple[str, int, int], dict[str, Any]] = {}
         for result in gateway.scan_category(CATEGORY, text):
+            secondary = secondary_evidence(result)
             for raw in result.get("evidence_spans", []):
+                if (raw.get("label"), raw.get("start_byte"), raw.get("end_byte")) in secondary:
+                    if counts is not None:
+                        counts["secondary_spans"] += 1
+                    continue
                 item = _evidence_span(raw, text, row_id)
                 key = (item["ark_label"], item["start_char"], item["end_char"])
                 if key not in best or item["score"] > best[key]["score"]:
@@ -141,7 +160,8 @@ def run(
     if build is None:
         build = build_info()
     source = input_path.read_bytes()
-    predictions = list(predict_rows(read_jsonl(input_path), gateway))
+    counts: Counter = Counter()
+    predictions = list(predict_rows(read_jsonl(input_path), gateway, counts))
     encoded = "".join(
         json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in predictions
     ).encode("utf-8")
@@ -156,6 +176,7 @@ def run(
         "output_sha256": sha256_bytes(encoded),
         "rows": len(predictions),
         "spans": sum(len(row["evidence_spans"]) for row in predictions),
+        "secondary_spans": counts["secondary_spans"],
         "languages": dict(sorted(Counter(row["language"] for row in predictions).items())),
         "label_map": ARK_OUTPUT_MAP,
         "build": build,
