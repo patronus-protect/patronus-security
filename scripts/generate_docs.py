@@ -164,11 +164,13 @@ def parse_native_patterns(path: Path, struct_name: str) -> list[dict[str, str]]:
         name = re.search(r'\bname:\s*"([^"]+)"', block)
         entity_group = re.search(r'\bentity_group:\s*"([^"]+)"', block)
         if name and entity_group:
+            validator = re.search(r"Some\((?:\w+::)*(\w+)\)", _field(block, "validator"))
             patterns.append(
                 {
                     "id": name.group(1),
                     "entity_group": entity_group.group(1),
-                    "validated": "None" not in _field(block, "validator"),
+                    "validated": validator is not None,
+                    "validator": validator.group(1) if validator else None,
                 }
             )
     return patterns
