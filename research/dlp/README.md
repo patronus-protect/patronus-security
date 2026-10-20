@@ -28,6 +28,9 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   `prose`). 27 Positive sind als `known_gap` markiert (u. a. alle geteilten und 9 von 12 kodierten Secrets);
   `13_l1_golden_eval` meldet die Abdeckung je `rule_id` und Tag
   ([Schema](../../python/patronus_ark/benchmark_data/README.md#dlp-golden-schema-v2)).
+- Der Baseline-Bericht [`scoreboard/baseline.md`](scoreboard/baseline.md) (E14) misst ARK auf dem
+  Dev-Split gegen gitleaks, TruffleHog und detect-secrets und enthält die Coverage-Matrix gegen
+  Google DLP und Purview, die Fehler-Buckets und TRIAGE-Kandidaten.
 
 ## Vergleichsbasis
 
