@@ -358,7 +358,8 @@ fn quoted_value_without_a_tighter_match_keeps_its_span() {
 #[test]
 fn substring_artefacts_inside_fixed_format_values_are_suppressed() {
     // Long Stripe test keys, Google OAuth tokens and JWTs contain 51-character
-    // Base58 runs that start like WIF keys. Such a run is part of the value.
+    // Base58 runs that start like WIF keys. Such a run is part of the value; the
+    // Base58Check validator rejects almost all of them.
     let carriers = [
         (
             "ENV STRIPE_SECRET_KEY=<<secret:0>>\n",
@@ -370,21 +371,11 @@ fn substring_artefacts_inside_fixed_format_values_are_suppressed() {
         ),
         ("Authorization: Bearer <<secret:0>>\n", "jwt_signed_rs256"),
     ];
-    let mut artefacts = 0;
     for (template, gen) in carriers {
         for seed in 0..300 {
             let (text, value) = fill(template, gen, seed);
             let result = scan(&text);
             assert_no_secret_overlap(&text, &result);
-            for (rule, start, end, suppressed) in rule_matches(&result) {
-                if rule == "dlp_btc_wif" {
-                    assert!(
-                        suppressed.is_some(),
-                        "WIF artefact {start}..{end} kept in {text:?}"
-                    );
-                    artefacts += 1;
-                }
-            }
             assert!(
                 result
                     .evidence_spans
@@ -403,7 +394,30 @@ fn substring_artefacts_inside_fixed_format_values_are_suppressed() {
             );
         }
     }
-    assert!(artefacts > 0, "the carriers must produce WIF-shaped runs");
+
+    // A run that passes the checksum is still an artefact of the longer value:
+    // a valid WIF key between non-Base58 characters in a Stripe key body.
+    for (seed, gen) in [
+        (11, "btc_wif_mainnet_uncompressed"),
+        (12, "btc_wif_mainnet_compressed"),
+    ] {
+        let (wif, _) = fill("<<secret:0>>", gen, seed);
+        let (stripe, _) = fill("<<secret:0>>", "stripe_secret_test_long", seed);
+        let body = format!("0{wif}0");
+        let key = format!("{}{body}{}", &stripe[..18], &stripe[18 + body.len()..]);
+        assert_eq!(key.len(), stripe.len());
+        let text = format!("ENV STRIPE_SECRET_KEY={key}\n");
+        let result = scan(&text);
+        let spans = secret_spans(&result);
+        assert_eq!(spans.len(), 1, "{text:?}: {:#?}", result.evidence_spans);
+        assert_eq!(spans[0].text, key);
+        let wif_matches = rule_matches(&result)
+            .into_iter()
+            .filter(|(rule, ..)| rule == "dlp_btc_wif")
+            .collect::<Vec<_>>();
+        assert_eq!(wif_matches.len(), 1, "{text:?}");
+        assert!(wif_matches[0].3.is_some(), "WIF artefact kept in {text:?}");
+    }
 }
 
 #[test]

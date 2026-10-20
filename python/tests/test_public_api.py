@@ -142,7 +142,7 @@ class PublicApiTests(unittest.TestCase):
         # field name (base 30 + format 15) needs a credential term for balanced (K04).
         from patronus_ark.dlp_synth import recipes
 
-        wif = recipes.generate("btc_wif_uncompressed", 1)
+        wif = recipes.generate("btc_wif_mainnet_uncompressed", 1)
         text = f"password: Sommer2026!x\nbackup {wif}"
 
         def native():

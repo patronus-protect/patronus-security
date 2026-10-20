@@ -535,9 +535,8 @@ fn proximity_decides_secrets_without_a_field_name() {
         let result = dlp_result(&text, DlpMode::Recall);
         assert!(result.evidence_spans.is_empty(), "{template}");
     }
-    // A hex hash dropped for its context does not free its range: a WIF-shaped
-    // run inside it (seed 8016) stays covered as in strict.
-    let mut covered = 0;
+    // A hex hash dropped for its context does not free its range for a
+    // shorter match inside it; strict reports the hash alone.
     for seed in (1..=48).chain([8016]) {
         let text = value(
             &generators,
@@ -546,11 +545,6 @@ fn proximity_decides_secrets_without_a_field_name() {
             seed,
         );
         let strict = dlp_result(&text, DlpMode::Strict);
-        covered += usize::from(
-            matched_rules(&strict)
-                .iter()
-                .any(|rule| rule["rule_id"] == "dlp_btc_wif"),
-        );
         assert_eq!(strict.evidence_spans.len(), 1, "{text}");
         for mode in [DlpMode::Balanced, DlpMode::Recall] {
             let scored = dlp_result(&text, mode);
@@ -563,7 +557,6 @@ fn proximity_decides_secrets_without_a_field_name() {
             );
         }
     }
-    assert!(covered > 0, "no hex value with a WIF-shaped run");
 
     // A support term nearer than the counter term wins.
     let text = eth("checksum ok, private key <<secret:0>>");
