@@ -11,6 +11,8 @@ use super::context_anchors::PII_ANCHOR_PATTERNS;
 use super::score::{self, PiiMode, ValidatorStrength};
 use super::{common, context, de, identifiers, intl, uk, us, validators};
 use crate::detectors::anchors;
+use crate::detectors::obfuscation::{Deobfuscated, Level};
+use crate::EvidenceSpan;
 use regex::Regex;
 
 /// A single PII heuristic pattern.
@@ -184,18 +186,32 @@ impl PiiPipeline {
         F: Fn(&str) -> bool,
     {
         let strict = mode.min_score().is_none();
-        self.detect_prepared_scored(
-            prepared,
-            |rule_id| {
-                allows_rule(rule_id)
-                    && !(strict
-                        && PII_PATTERNS
-                            .iter()
-                            .any(|pattern| pattern.name == rule_id && pattern.scored_only))
-            },
-            explain,
+        let allows = |rule_id: &str| {
+            allows_rule(rule_id)
+                && !(strict
+                    && PII_PATTERNS
+                        .iter()
+                        .any(|pattern| pattern.name == rule_id && pattern.scored_only))
+        };
+        let detection = self.detect_prepared_scored(prepared, allows, explain, mode.min_score());
+        // K06: values behind zero-width, full-width or defanged characters (in
+        // `recall` also spelled-out separators and spaced digits) are found in a
+        // normalized view and mapped back to the original text.
+        let level = if mode == PiiMode::Recall {
+            Level::SpelledOut
+        } else {
+            Level::Invisible
+        };
+        let Some(view) = Deobfuscated::new(prepared.text(), level) else {
+            return detection;
+        };
+        let normalized = self.detect_prepared_scored(
+            &crate::threat::NativeText::new(&view.text),
+            allows,
+            false,
             mode.min_score(),
-        )
+        );
+        merge_deobfuscated(prepared.text(), detection, normalized, &view, mode)
     }
 
     /// Context of a match: the field the rule binds (its own field name or a
@@ -224,6 +240,127 @@ impl PiiPipeline {
             context::evidence(text, (value.start(), value.end()), pattern.entity_group)
         })
     }
+}
+
+/// Adds the findings of the normalized view whose original span contains an
+/// undone obfuscation (K06); every other finding of the view is already in
+/// `detection`. Such a finding replaces the same-label findings it contains and
+/// yields to any other same-label overlap. Its `matched_rules` entry carries
+/// original offsets and `obfuscation`; findings that only the `recall` level
+/// reveals lose [`score::SPELLED_OUT_PENALTY_POINTS`].
+fn merge_deobfuscated(
+    text: &str,
+    mut detection: NativeDetection,
+    normalized: NativeDetection,
+    view: &Deobfuscated,
+    mode: PiiMode,
+) -> NativeDetection {
+    // (normalized range, original range, label, obfuscation kinds, score)
+    let mut added = Vec::new();
+    for span in normalized.evidence_spans {
+        let range = view.original(span.start_byte..span.end_byte);
+        let kinds = view.kinds(range.clone());
+        if kinds.is_empty() {
+            continue;
+        }
+        let mut score = span.score;
+        if kinds.iter().any(|kind| kind.level() == Level::SpelledOut) {
+            let points =
+                (span.score * 100.0).round() as i16 - i16::from(score::SPELLED_OUT_PENALTY_POINTS);
+            score = f64::from(points.max(0)) / 100.0;
+            if mode.min_score().is_some_and(|threshold| score < threshold) {
+                continue;
+            }
+        }
+        let overlaps = |other: &EvidenceSpan| {
+            other.label == span.label
+                && other.start_byte < range.end
+                && range.start < other.end_byte
+        };
+        // A plain finding on the same span (spaced card digits) or one that the
+        // normalized finding does not contain wins.
+        if detection.evidence_spans.iter().any(|other| {
+            overlaps(other)
+                && ((other.start_byte..other.end_byte) == range
+                    || !(range.start <= other.start_byte && other.end_byte <= range.end))
+        }) {
+            continue;
+        }
+        detection.evidence_spans.retain(|other| !overlaps(other));
+        detection.evidence_spans.push(EvidenceSpan {
+            label: span.label.clone(),
+            text: text[range.clone()].to_string(),
+            score,
+            start_byte: range.start,
+            end_byte: range.end,
+            start_char: 0,
+            end_char: 0,
+        });
+        added.push((
+            span.start_byte..span.end_byte,
+            range,
+            span.label,
+            kinds,
+            score,
+        ));
+    }
+    if added.is_empty() {
+        return detection;
+    }
+
+    let rules = normalized
+        .details
+        .get("matched_rules")
+        .and_then(|rules| rules.as_array())
+        .into_iter()
+        .flatten()
+        .filter_map(|rule| {
+            let start = rule["start_byte"].as_u64()? as usize;
+            let end = rule["end_byte"].as_u64()? as usize;
+            let label = PII_PATTERNS
+                .iter()
+                .find(|pattern| rule["rule_id"] == pattern.name)?
+                .entity_group;
+            let (_, original, _, kinds, score) =
+                added.iter().find(|(range, _, added_label, ..)| {
+                    *range == (start..end) && added_label == label
+                })?;
+            let mut rule = rule.clone();
+            rule["start_byte"] = original.start.into();
+            rule["end_byte"] = original.end.into();
+            for component in rule["components"].as_array_mut().into_iter().flatten() {
+                let start = component["start_byte"].as_u64().unwrap_or_default() as usize;
+                let end = component["end_byte"].as_u64().unwrap_or_default() as usize;
+                if start < end {
+                    let range = view.original(start..end);
+                    component["start_byte"] = range.start.into();
+                    component["end_byte"] = range.end.into();
+                }
+            }
+            rule["obfuscation"] = kinds.iter().map(|kind| kind.as_str()).collect();
+            if rule.get("score").is_some() {
+                rule["score"] = serde_json::json!(score);
+            }
+            Some(rule)
+        })
+        .collect::<Vec<_>>();
+    let matched_rules = detection
+        .details
+        .entry("matched_rules".into())
+        .or_insert_with(|| serde_json::json!([]));
+    if let Some(matched_rules) = matched_rules.as_array_mut() {
+        matched_rules.extend(rules);
+    }
+
+    let spans = &mut detection.evidence_spans;
+    spans.sort_by_key(|span| (span.start_byte, span.end_byte));
+    crate::detectors::populate_char_offsets(text, spans);
+    let result = &mut detection.result;
+    if !spans.iter().any(|span| span.label == result.class_name) {
+        result.class_name = spans[0].label.clone();
+    }
+    result.confidence = spans.iter().map(|span| span.score).fold(0.0, f64::max);
+    detection
 }
 
 /// Whether the field part `key` of a rule accepts the normalized structural key

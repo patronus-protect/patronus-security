@@ -80,8 +80,10 @@ Every `pii_l1.jsonl` row starts with these fields:
   (scan layout noise: no space after the colon, trailing form fields, table
   pipes, line breaks inside a value, misread letters in the field name). Spans of
   obfuscated and OCR values cover the text as written. Spelled-out e-mail forms
-  (`[at]`, `name @ domain . de`) stay hard negatives under the gold convention
-  below.
+  (`[at]`, `name @ domain . de`) and numbers spaced character by character stay
+  hard negatives in `strict` and `balanced` under the gold convention below; rows
+  with `pii_mode: recall` may make them positives, because only `recall` undoes
+  them (K06).
 - `known_gap: true` marks a positive the detector misses today. The eval runs
   it and prints it in the coverage report, but does not gate on it. It fails
   when a known gap starts passing, so the task that closes it flips the flag.

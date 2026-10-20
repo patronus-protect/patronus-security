@@ -227,6 +227,14 @@ def pii_score_points(path: Path = ROOT / "rust/src/detectors/pii/score.rs") -> t
     return strength, int(context.group(1)), tiers, int(counter.group(1))
 
 
+def pii_spelled_out_penalty(path: Path = ROOT / "rust/src/detectors/pii/score.rs") -> int:
+    """Points a finding loses when only the `recall` obfuscation normalization reveals it (K06)."""
+    match = re.search(r"pub const SPELLED_OUT_PENALTY_POINTS: u8 = (\d+);", path.read_text())
+    if not match:
+        raise ValueError(f"Missing SPELLED_OUT_PENALTY_POINTS in {path}")
+    return int(match.group(1))
+
+
 PII_LEXICON_PATH = ROOT / "rust/src/detectors/anchor_lexicons/pii.json"
 PII_CONTEXT_PATH = ROOT / "rust/src/detectors/pii/context.rs"
 
@@ -366,7 +374,12 @@ def generate_l1_rule_catalog_doc() -> str:
         "header or a Markdown/HTML table header that a `field` rule accepts as its field name binds the value "
         "it holds to the rule in every mode, if the value matches the rule's value form in full; for the "
         "other rules a key of the label (or a counter-context key) that names exactly the value is its context "
-        f"(+{context_points} or -{counter_points}) instead of proximity.",
+        f"(+{context_points} or -{counter_points}) instead of proximity. "
+        "Obfuscation (K06): every rule also sees values behind zero-width characters, full-width forms "
+        "and defanged separators (`[.]`, `(@)`) in every mode, and in `recall` also spelled-out e-mail "
+        "separators (`[at]`, `ät`, `dot`, `punkt`) and numbers spaced character by character "
+        f"(-{pii_spelled_out_penalty()}); the span is the original text and the validator decides on the "
+        "normalized value.",
         "",
         "| Rule ID | Result entity group | Extra validator | Validator strength | Base | Context | Score (`balanced`/`recall`) |",
         "| --- | --- | --- | --- | --- | --- | --- |",
