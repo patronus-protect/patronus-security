@@ -106,6 +106,7 @@ tasks:
     deps: [E09]
 
   - id: T02
+    status: done
     title: Gold hygiene - annotate secondary entities in pii_l1 positives, test gold values of checksum-based labels against the validators
     type: eval-infra
     deps: [E10]

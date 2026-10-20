@@ -32,8 +32,14 @@ country-specific identifier appears in German and English text around the same
 national format.
 
 Every row declares `case_type`, `target_label`, `language`, `span_unit`, and
-`provenance`. Positive rows contain one exact expected entity (a split DLP
-secret has one entity per fragment). `start` and
+`provenance`. Positive rows contain one exact expected entity of the target
+label (a split DLP secret has one entity per fragment). PII positives also
+annotate every other real entity in the text with its own label, in text
+order, for example the card number next to a CVV; the evaluation scores the
+target label only. Every PII gold value passes a validator of its label in
+`PII_PATTERNS`; known gaps are exempt only from format validators, never from
+the checksum labels `CREDITCARD`, `IBAN` and `STEUERID`
+(`rust/tests/pii_gold_hygiene.rs`). `start` and
 `end` are zero-based Python Unicode-code-point offsets and form a half-open
 `[start, end)` interval; they are deliberately not UTF-8 byte offsets. Hard
 negative rows contain no entities and explain the excluded lookalike in
@@ -272,7 +278,9 @@ package installed (`maturin develop --manifest-path python/Cargo.toml`).
 
 Most cases are hand-authored with invented values. A small subset is derived
 from `dynamic_pii.jsonl` and identifies the source row in
-`provenance.source_fixture_id`. This links the native regression set to the
+`provenance.source_fixture_id`. `dynamic_pii.jsonl` keeps its seven
+Luhn-invalid `credit_card` values for the L3 NER but marks them with
+`"checksum_valid": false`; `12_l1_pii_fixture_eval` skips marked spans. This links the native regression set to the
 existing NER fixture without pretending that synthetic data is an external
 release-validation corpus. No text from `sensitive_current`, `v4.1`, or other
 sensitive-document stores is copied into these redistributable fixtures.
