@@ -443,7 +443,12 @@ def gate_steps(wt: Path) -> list[tuple[str, list[str], dict]]:
     py = str(ROOT / P["eval_venv"] / "bin" / "python")
     gpy = str(GATE_VENV / "bin" / "python")
     build = {"rw": [wt, GATE_TARGET, GATE_HOME, GATE_VENV]}
+    gitleaks = program_root("dlp") / "baselines" / "bin" / "gitleaks"
     steps = [
+        # First and cheap: GitHub push protection rejects a branch for one literal token in any commit.
+        ("plaintext-secrets", ["python3", str(SHARED / "bin" / "secret_check.py"), "--repo", str(wt),
+                               "--base", load(CURRENT, {}).get("base_sha", ""), "--head", "HEAD",
+                               "--gitleaks", str(gitleaks)], {"rw": [wt], "network": False}),
         ("fmt", [str(CARGO), "fmt", "--all", "--", "--check"], build),
         ("clippy", [str(CARGO), "clippy", "--workspace", "--all-targets", "--", "-D", "warnings"], build),
         ("test", [str(CARGO), "test", "-p", "patronus-ark"], build),

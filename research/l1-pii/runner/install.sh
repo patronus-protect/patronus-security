@@ -22,6 +22,7 @@ fi
 install -m 755 "$SRC/run.sh" "$ROOT/bin/"
 sed "1s|.*|#!$ROOT/runner-venv/bin/python|" "$SRC/ark-l1" > "$ROOT/bin/ark-l1"
 chmod 755 "$ROOT/bin/ark-l1"
+install -m 755 "$SRC/secret_check.py" "$ROOT/bin/"
 install -m 644 "$SRC/../AGENT_PROMPT.md" "$ROOT/bin/AGENT_PROMPT.md"
 install -m 644 "$SRC/../../dlp/AGENT_PROMPT.md" "$ROOT/bin/AGENT_PROMPT.dlp.md"
 install -m 644 "$SRC/AGENT_PROMPT.restack.md" "$ROOT/bin/AGENT_PROMPT.restack.md"
