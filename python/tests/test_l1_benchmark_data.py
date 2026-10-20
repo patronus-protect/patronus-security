@@ -171,7 +171,7 @@ class L1BenchmarkDataTests(unittest.TestCase):
 
     def test_language_distribution_is_broad(self):
         expected = {
-            "pii_l1": {"de": 444, "en": 425},
+            "pii_l1": {"de": 456, "en": 437},
             "dlp_l1": {"de": 318, "en": 324},
         }
         for name, distribution in expected.items():

@@ -1186,6 +1186,41 @@ K06_OBFUSCATION_CASES = [
 for _row in K06_OBFUSCATION_CASES:
     PII_CASES[_row["target_label"]].append(_row)
 
+# K07 cross-label overlaps: in `balanced` and `recall` one value yields one label. The digits
+# of a grouped IBAN or of an international phone number can pass Luhn; that card-shaped part
+# is no card, and a field name outranks a bare checksum on the same value. A card-shaped part
+# of a printed IBAN form whose check digits fail is no card either. Strict keeps both labels
+# (decision T07). Every IBAN, BBAN and phone vector below passes the checksum it names.
+# Appended so existing ids stay stable.
+K07_OVERLAP_CASES = [
+    p("CREDITCARD", "de", "pii_credit_card", "Karte ", "4111 1111 1111 1111", ", IBAN DE60 5393 3633 8750 0474 39", mode="balanced", also=(("IBAN", "DE60 5393 3633 8750 0474 39"),)),
+    p("CREDITCARD", "de", "pii_credit_card", "Kreditkarte ", "5555 5555 5555 4444", ", Rückruf unter +49 69 3361 9496", carrier="prose", mode="balanced", also=(("PHONE", "+49 69 3361 9496"),)),
+    p("CREDITCARD", "de", "pii_credit_card", "Name;Karte;IBAN\nWeber;", "4532 0151 1283 0366", ";DE13 3380 1412 6906 0443 19", carrier="csv", mode="balanced", also=(("IBAN", "DE13 3380 1412 6906 0443 19"),)),
+    p("CREDITCARD", "de", "pii_credit_card", "Zahlung mit ", "4111 1111 1111 1111", " abgelehnt, bitte auf AT33 2854 3001 9603 7672 überweisen.", carrier="prose", mode="recall", also=(("IBAN", "AT33 2854 3001 9603 7672"),)),
+    p("CREDITCARD", "de", "pii_credit_card", "Telefon: 0151 2345 6789 01, Karte ", "5105 1051 0510 5100", "", mode="balanced", also=(("PHONE", "0151 2345 6789 01"),)),
+    p("CREDITCARD", "de", "pii_credit_card", '{"karte": "', "4111 1111 1111 1111", '", "iban": "DE21 5873 5570 6360 6071 04"}', carrier="json", mode="recall", also=(("IBAN", "DE21 5873 5570 6360 6071 04"),)),
+    p("CREDITCARD", "en", "pii_credit_card", "Card ", "4111 1111 1111 1111", ", IBAN DE63 8415 3776 0207 7642 65", mode="balanced", also=(("IBAN", "DE63 8415 3776 0207 7642 65"),)),
+    p("CREDITCARD", "en", "pii_credit_card", "Charge ", "5555 5555 5555 4444", " and call +44 20 6642 3850 to confirm.", carrier="prose", mode="balanced", also=(("PHONE", "+44 20 6642 3850"),)),
+    p("CREDITCARD", "en", "pii_credit_card", "Phone: +49 89 4613 8662, card ", "4532 0151 1283 0366", "", mode="recall", also=(("PHONE", "+49 89 4613 8662"),)),
+    p("CREDITCARD", "en", "pii_credit_card", "Pay with ", "6011 1111 1111 1117", " or wire to AT71 4952 2280 5377 3567.", carrier="prose", mode="balanced", also=(("IBAN", "AT71 4952 2280 5377 3567"),)),
+    p("CREDITCARD", "en", "pii_credit_card", "name,card,iban\nAda Weber,", "4111 1111 1111 1111", ",DE06 6826 5123 3080 5169 78", carrier="csv", mode="balanced", also=(("IBAN", "DE06 6826 5123 3080 5169 78"),)),
+    p("CREDITCARD", "en", "pii_credit_card", "Mobile: 0151 2345 6789 01, card ", "5105 1051 0510 5100", "", mode="recall", also=(("PHONE", "0151 2345 6789 01"),)),
+    n("CREDITCARD", "de", "pii_credit_card", "IBAN: DE64 7172 7958 4924 3372 11", "IBAN form with failing check digits; the Luhn-valid digits inside it are no card", mode="balanced"),
+    n("CREDITCARD", "de", "pii_credit_card", "Überweisung an DE34 6659 4134 6836 7322 13 fehlgeschlagen.", "IBAN form with failing check digits; the Luhn-valid digits inside it are no card", carrier="prose", mode="recall"),
+    n("CREDITCARD", "de", "pii_credit_card", "Name;IBAN\nWeber;DE25 2704 9372 0521 4877 40", "IBAN form with failing check digits; the Luhn-valid digits inside it are no card", carrier="csv", mode="balanced"),
+    n("CREDITCARD", "de", "pii_credit_card", "IBAN AT77 5761 4565 6741 3978 (Prüfziffer falsch)", "IBAN form with failing check digits; the Luhn-valid digits inside it are no card", carrier="prose", mode="balanced"),
+    n("CREDITCARD", "de", "pii_credit_card", '{"iban": "AT84 8900 8717 3455 8933"}', "IBAN form with failing check digits; the Luhn-valid digits inside it are no card", carrier="json", mode="recall"),
+    n("CREDITCARD", "de", "pii_credit_card", "Das Konto DE03 4977 4035 3388 6960 52 ist gesperrt.", "IBAN form with failing check digits; the Luhn-valid digits inside it are no card", carrier="prose", mode="balanced"),
+    n("CREDITCARD", "en", "pii_credit_card", "IBAN: DE47 9570 1831 6586 8923 67", "IBAN form with failing check digits; the Luhn-valid digits inside it are no card", mode="balanced"),
+    n("CREDITCARD", "en", "pii_credit_card", "Wire to DE56 4057 3004 4314 7125 77 bounced.", "IBAN form with failing check digits; the Luhn-valid digits inside it are no card", carrier="prose", mode="recall"),
+    n("CREDITCARD", "en", "pii_credit_card", "name,iban\nAda Weber,AT78 3498 0320 8465 1419", "IBAN form with failing check digits; the Luhn-valid digits inside it are no card", carrier="csv", mode="balanced"),
+    n("CREDITCARD", "en", "pii_credit_card", "IBAN AT80 9719 0726 3779 2179 has a typo.", "IBAN form with failing check digits; the Luhn-valid digits inside it are no card", carrier="prose", mode="balanced"),
+    n("CREDITCARD", "en", "pii_credit_card", '{"iban": "AT07 5340 7771 1787 1617"}', "IBAN form with failing check digits; the Luhn-valid digits inside it are no card", carrier="json", mode="recall"),
+    n("CREDITCARD", "en", "pii_credit_card", "Refund to AT56 7788 6243 8146 2282 failed.", "IBAN form with failing check digits; the Luhn-valid digits inside it are no card", carrier="prose", mode="balanced"),
+]
+for _row in K07_OVERLAP_CASES:
+    PII_CASES[_row["target_label"]].append(_row)
+
 # DLP golden schema v2 (E13). Every DLP row names the rule it exercises (`rule_id`), the
 # document that carries the value (`carrier`), its difficulty `tags` and whether it is a
 # `known_gap`: a positive the detector misses today, reported by 13_l1_golden_eval but
