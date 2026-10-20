@@ -163,6 +163,20 @@ jedem Modus; die erste ist `pii_phone_de_national_proximity`. Spätere „mit Ko
 F07, F15, A03–A05, T08, T10, C05, C07, C08) setzen darauf auf. `strict` bleibt für alle übrigen
 Regeln unverändert.
 
+## Kontextfreie Prüfziffernwerte (K05)
+
+In `balanced` und `recall` braucht ein Wert, dessen Validator eine echte Prüfziffer rechnet, keinen
+Feldnamen. IBAN und PAN meldet ARK ohnehin ohne Kontext; Regeln mit `scored_only: true` ergänzen die
+blanke Form von Werten, die `strict` nur hinter ihrem Feldnamen meldet. `strict` führt sie nie aus
+(Entscheidung K02). Sie sind ungebundene `checksum`-Regeln, erreichen ohne Kontext die
+`balanced`-Schwelle und fallen hinter einem näheren Gegen-Kontext-Begriff unter beide Schwellen; der
+Wert muss für sich stehen (nicht nach `+`, nicht in einer längeren Zahl, Spanne, Dezimalzahl oder
+einem Schrägstrich-Pfad, keine Zifferngruppe ein Leerzeichen daneben). Die erste ist
+`pii_steuer_id_de_context_free` (Basis 20: 0,55 blank, 0,80 mit „Steuer-ID ist“, 0,25 hinter
+„Rechnungsnummer“) mit `validators::steuer_id_issued`: Prüfziffer plus BZSt-Ziffernverteilung. Die
+B-/A-/C-Aufgaben mit neuen Prüfziffern (B01 ff.) hängen ihre kontextfreie Form auf dieselbe Weise an.
+`rust/tests/pii_context_free.rs` verlangt für jedes Prüfziffer-Label eine kontextfreie Regel.
+
 ## Hebel
 
 1. Score-Stufen statt Feldnamenpflicht: prüfzifferstarke Werte ohne Kontext, formschwache nur mit

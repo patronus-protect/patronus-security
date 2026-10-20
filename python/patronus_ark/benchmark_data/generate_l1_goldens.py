@@ -1111,6 +1111,40 @@ K04_STRUCTURE_CASES = [
 for _row in K04_STRUCTURE_CASES:
     PII_CASES[_row["target_label"]].append(_row)
 
+
+# K05 context-free output: in `balanced` and `recall` a checksum-strong value needs no field
+# name; strict keeps the field-name rule (K02). A bare Steuer-ID must pass the check digit
+# and the BZSt digit distribution of issued IDs, stand alone (no longer number, range or
+# slash) and have no nearer counter-context term. Appended so existing ids stay stable.
+K05_CONTEXT_FREE_CASES = [
+    p("STEUERID", "de", "pii_steuer_id_de_context_free", "Für die Lohnabrechnung brauche ich noch ", "47426548904", ".", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("STEUERID", "de", "pii_steuer_id_de_context_free", "Ihre Steuer-ID ist ", "39662845670", ".", carrier="prose", mode="balanced"),
+    p("STEUERID", "de", "pii_steuer_id_de_context_free", "", "86 794 425 307", " (Steuer-ID) bitte übernehmen.", carrier="prose", mode="balanced"),
+    p("STEUERID", "de", "pii_steuer_id_de_context_free", "Name;Nummer\nJonas Weber;", "86231292506", "", carrier="csv", tags=("no_context",), mode="balanced"),
+    p("STEUERID", "de", "pii_steuer_id_de_context_free", '{"person": "Jonas Weber", "kennziffer": "', "95082467219", '"}', carrier="json", tags=("no_context",), mode="balanced"),
+    p("STEUERID", "de", "pii_steuer_id_de_context_free", "Bitte noch ", "35347368292", " im Formular nachtragen.", carrier="prose", tags=("no_context",), mode="recall"),
+    p("STEUERID", "en", "pii_steuer_id_de_context_free", "Please add ", "74265832011", " to the payroll file.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("STEUERID", "en", "pii_steuer_id_de_context_free", "", "29046789957", " is the German tax ID on file.", carrier="prose", mode="balanced"),
+    p("STEUERID", "en", "pii_steuer_id_de_context_free", "Payroll needs ", "45 917 893 901", " before Friday.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("STEUERID", "en", "pii_steuer_id_de_context_free", "name,tin\nAda Weber,", "28540106973", "", carrier="csv", tags=("no_context",), mode="balanced"),
+    p("STEUERID", "en", "pii_steuer_id_de_context_free", '{"employee": "Ada Weber", "code": "', "56470900312", '"}', carrier="json", tags=("no_context",), mode="balanced"),
+    p("STEUERID", "en", "pii_steuer_id_de_context_free", "Record 7 lists ", "33694273817", " for the employee.", carrier="prose", tags=("no_context",), mode="recall"),
+    n("STEUERID", "de", "pii_steuer_id_de_context_free", "Rechnungsnummer 86095742719 bitte bei Zahlung angeben.", "invoice number with a valid check digit", carrier="prose", mode="balanced"),
+    n("STEUERID", "de", "pii_steuer_id_de_context_free", "Bestellnummer: 65929970489", "order number with a valid check digit", mode="recall"),
+    n("STEUERID", "de", "pii_steuer_id_de_context_free", "Die Zahl 86095742718 steht im Protokoll.", "checksum fails", carrier="prose", mode="balanced"),
+    n("STEUERID", "de", "pii_steuer_id_de_context_free", "Vorgang 12345678903 wurde archiviert.", "check digit valid, but ten distinct digits are never issued", carrier="prose", mode="balanced"),
+    n("STEUERID", "de", "pii_steuer_id_de_context_free", "Messwert 860957427190 im Log.", "twelve digits", carrier="prose", mode="balanced"),
+    n("STEUERID", "de", "pii_steuer_id_de_context_free", "Aktenzeile 86095742719/2026 abgelegt.", "part of a longer slash-separated number", carrier="prose", mode="balanced"),
+    n("STEUERID", "en", "pii_steuer_id_de_context_free", "Invoice number 86095742719 is overdue.", "invoice number with a valid check digit", carrier="prose", mode="balanced"),
+    n("STEUERID", "en", "pii_steuer_id_de_context_free", "Tracking number 25768131411 is in transit.", "tracking number with a valid check digit", carrier="prose", mode="recall"),
+    n("STEUERID", "en", "pii_steuer_id_de_context_free", "Batch 86095742718 failed the import.", "checksum fails", carrier="prose", mode="balanced"),
+    n("STEUERID", "en", "pii_steuer_id_de_context_free", "Build 67890123455 passed.", "check digit valid, but ten distinct digits are never issued", carrier="prose", mode="balanced"),
+    n("STEUERID", "en", "pii_steuer_id_de_context_free", "Value 86555742194 logged.", "a digit three times in a row is never issued", carrier="prose", mode="balanced"),
+    n("STEUERID", "en", "pii_steuer_id_de_context_free", "Range 86095742719-86095742720 reserved.", "part of a hyphenated number range", carrier="prose", mode="balanced"),
+]
+for _row in K05_CONTEXT_FREE_CASES:
+    PII_CASES[_row["target_label"]].append(_row)
+
 # DLP golden schema v2 (E13). Every DLP row names the rule it exercises (`rule_id`), the
 # document that carries the value (`carrier`), its difficulty `tags` and whether it is a
 # `known_gap`: a positive the detector misses today, reported by 13_l1_golden_eval but

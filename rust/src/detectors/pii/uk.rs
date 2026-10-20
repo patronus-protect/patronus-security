@@ -11,4 +11,5 @@ pub(super) const NINO: PiiPattern = PiiPattern {
     base_score: 50,
     captured_value: true,
     requires_context: false,
+    scored_only: false,
 };

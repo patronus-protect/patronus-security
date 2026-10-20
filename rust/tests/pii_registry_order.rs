@@ -37,6 +37,7 @@ const EXPECTED_ORDER: &[(&str, &str)] = &[
     ("pii_date_of_birth_written_month_first", "DOB"),
     ("pii_financial_account_number", "FINANCIAL_ACCOUNT_NUMBER"),
     ("pii_steuer_id_de", "STEUERID"),
+    ("pii_steuer_id_de_context_free", "STEUERID"),
     ("pii_steuernummer_de", "TAX_NUMBER_DE"),
     ("pii_rentenversicherung_de", "SOCIALID"),
     ("pii_health_insurance_number_de", "HEALTH_INSURANCE_NUMBER"),
