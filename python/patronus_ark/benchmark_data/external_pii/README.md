@@ -58,6 +58,14 @@ Revision, Seed, Template-/Dokumentgruppe, Dokument-ID und ausgewählte
 Offset-Spans. Gretel nutzt `expanded_type` als Templategruppe; andere Adapter
 verwenden eine Dokumentgruppe.
 
+Die beiden Presidio-nahen Korpora (`presidio-evaluator-synth-v2`,
+`presidio-analyzer-recognizer-tests`, beide MIT) pinnen ebenfalls Revision und
+SHA-256, haben aber eigene Adapter (`presidio_evaluator_json_v1`,
+`presidio_recognizer_tests_v1`) in `scripts/l1_presidio/prepare_corpora.py
+--family presidio_favored`; `normalize` kennt sie nicht. Sie bilden die
+Quellfamilie `presidio_favored` (Fairness-Regel in
+`research/l1-pii/README.md`).
+
 Die Prediction-Datei muss jeden Gold-`id` exakt einmal enthalten. Nicht
 gemappte Upstream-Labels werden vor dem Vergleich bewusst ausgeschlossen; die
 verwendete Label- und Lizenzzuordnung bleibt im Manifest nachvollziehbar.
