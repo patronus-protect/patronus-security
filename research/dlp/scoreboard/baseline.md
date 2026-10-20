@@ -1,6 +1,8 @@
 # DLP-Baseline-Bericht (E14): ARK vs. gitleaks / TruffleHog / detect-secrets
 
-Stand: 2026-10-19. Gemessen auf Detektor-Stand `bbb5448` (Base von E14; E14 ändert keinen Detektor-
+Stand: 2026-10-19, Default-Tabellen und ARK-Kennzahlen am 2026-10-20 mit dem korrigierten
+`baseline_report.py` neu erzeugt (ARK im Default-Profil ohne Opt-in-Spans, wie die Baselines).
+Gemessen auf Detektor-Stand `bbb5448` (Base von E14; E14 ändert keinen Detektor-
 code). Alle Zahlen stammen aus dem **Dev-Split** (`$ARK_L1_DEV_DATA`, Manifest-SHA-256
 `45f047dc6cc8…`). Der Holdout ist für den Agenten nicht lesbar; das Abschlussurteil auf dem Holdout
 kommt mit H06. Lücken stehen am Ende als TRIAGE-Kandidaten; der Backlog wird erst im nächsten
@@ -32,8 +34,10 @@ $PY scripts/l1_dlp/baseline_report.py --dev $ARK_L1_DEV_DATA --predictions PRED 
     --detect-secrets-python $PY --output latency.json
 ```
 
-`IN/<component>.jsonl` sind die aneinandergehängten JSONL-Dateien einer Komponente. Die ARK-Werte
-stimmen mit dem Gate-Scoreboard überein (TRIAGE 2026-W43: exakt F1 35,0, P 23,2, R 71,4).
+`IN/<component>.jsonl` sind die aneinandergehängten JSONL-Dateien einer Komponente. Das Gate-Scoreboard
+wertet ARK mit Default- plus Opt-in-Spans (TRIAGE 2026-W43: exakt F1 35,0, P 23,2, R 71,4);
+`baseline_report.py` reproduziert genau diese Werte in `ark.extended.json`. Die Default-Tabellen
+unten werten ARK wie die Baselines nur im Default-Lauf (`ark.json`: F1 34,0, P 22,8, R 67,3).
 detect-secrets meldete eine Datei mit Plugin-Ausnahme (YAML-Datum, `errors` in der Meta, T05).
 
 ## Kurzfassung gegen die Meilensteine (Dev)
@@ -46,11 +50,11 @@ detect-secrets meldete eine Datei mit Plugin-Ausnahme (YAML-Datum, `errors` in d
 | M4 Latenz | 100 KiB p95 **20,3 ms** (Budget 10 ms); Durchsatz 10-MiB-Repo 6,47 MiB/s Scan bzw. 4,90 MiB/s Ende-zu-Ende gegen gitleaks 5,40 / 4,07 | Durchsatz erfüllt, p95 verfehlt (Faktor 2) |
 | Immer | FP/MB Benign-Code ≤ beste Baseline: verfehlt (s. M1). Benign-Dokumente: ARK 4 FP (0,53/MB), alle Baselines 0 | verfehlt |
 
-Ungetypt über alle Carrier liegt ARK mit F1 35,0 hinter gitleaks (51,1), TruffleHog (46,2) und
-detect-secrets (40,9), hat aber den höchsten Recall (71,4 gegen 53,4 / 36,4 / 51,6).
+Ungetypt über alle Carrier liegt ARK mit F1 34,0 hinter gitleaks (51,1), TruffleHog (46,2) und
+detect-secrets (40,9), hat aber den höchsten Recall (67,3 gegen 53,4 / 36,4 / 51,6).
 Präzision ist auf den Carriern vor allem eine Frage der Hard Negatives: auf 1 757 Gold-Spans kommen
-7 012 HN-Zeilen. ARK meldet auf 2 809 davon 4 011 Spans; 3 734 davon liegen auf `doc_example`/
-`test_key`-Zeilen (T06). Ohne HN-FP läge die exakte Präzision von ARK bei 1 255 / 1 399 = 89,7 %. Der ungetypte Recall
+7 012 HN-Zeilen. ARK meldet auf 2 665 davon 3 867 Spans; 3 590 davon liegen auf `doc_example`/
+`test_key`-Zeilen (T06). Ohne HN-FP läge die exakte Präzision von ARK bei 1 183 / 1 327 = 89,1 %. Der ungetypte Recall
 aller Tools zählt auch die 320 Opt-in-Gold-Spans mit, die im Default-Profil niemand meldet.
 
 ## Messwerte (Dev, `baseline_report.py`)
@@ -65,7 +69,7 @@ detect-secrets `KeywordDetector`). TruffleHog meldet AWS nur als Schlüsselpaar,
 
 | Tool | Gold | Pred | P | R | F1 exact | F1 overlap | HN-FP (Spans / Zeilen) | Code-FP | Code-FP/MB | Doku-FP | Doku-FP/MB |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| ark | 1757 | 5410 | 23.2 | 71.4 | 35.0 | 38.1 | 4011 / 2809 | 384 | 10.1699 | 4 | 0.5309 |
+| ark | 1757 | 5194 | 22.8 | 67.3 | 34.0 | 37.2 | 3867 / 2665 | 384 | 10.1699 | 4 | 0.5309 |
 | gitleaks | 1757 | 1912 | 49.1 | 53.4 | 51.1 | 51.1 | 974 / 974 | 8 | 0.2119 | 0 | 0.0 |
 | trufflehog | 1757 | 1013 | 63.2 | 36.4 | 46.2 | 46.3 | 326 / 323 | 54 | 1.4301 | 0 | 0.0 |
 | detect-secrets | 1757 | 2676 | 33.9 | 51.6 | 40.9 | 42.3 | 1731 / 1655 | 1370 | 36.2832 | 0 | 0.0 |
@@ -87,10 +91,10 @@ detect-secrets `KeywordDetector`). TruffleHog meldet AWS nur als Schlüsselpaar,
 
 | Variante | Zeilen | ark FP / Zeilen | gitleaks FP / Zeilen | trufflehog FP / Zeilen | detect-secrets FP / Zeilen |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| doc_example | 1749 | 1867 / 1267 | 567 / 567 | 101 / 100 | 756 / 718 |
+| doc_example | 1749 | 1795 / 1195 | 567 / 567 | 101 / 100 | 756 / 718 |
 | env_ref | 1757 | 126 / 124 | 0 / 0 | 47 / 47 | 0 / 0 |
 | placeholder | 1757 | 151 / 151 | 8 / 8 | 77 / 76 | 260 / 260 |
-| test_key | 1749 | 1867 / 1267 | 399 / 399 | 101 / 100 | 715 / 677 |
+| test_key | 1749 | 1795 / 1195 | 399 / 399 | 101 / 100 | 715 / 677 |
 
 ### Recall je Secret-Entität
 
@@ -159,7 +163,7 @@ detect-secrets `KeywordDetector`). TruffleHog meldet AWS nur als Schlüsselpaar,
 
 ### Attribution (exakt gefundene Gold-Werte mit richtiger Entität)
 
-ARK 1 250 / 1 255 (99,6 %; richtige `rule_id` 1 242). gitleaks 621 / 938 (66,2 %), TruffleHog
+ARK 1 178 / 1 183 (99,6 %; richtige `rule_id` 1 170). gitleaks 621 / 938 (66,2 %), TruffleHog
 640 / 640 (100 %), detect-secrets 464 / 906 (51,2 %). Bei den Baselines fehlen Zuordnungen vor
 allem dort, wo eine generische Regel (`generic-api-key`, `KeywordDetector`,
 `Base64HighEntropyString`) einen Provider-Wert meldet.
@@ -286,7 +290,7 @@ Die generierten Tabellen unten zählen je Regel. Zusammengefasst und den Aufgabe
 
 | # | Bucket | Belege (Dev) | Aufgabe |
 |---|---|---|---|
-| 1 | Beispiel-/Testwerte: jede Provider-Regel feuert auf allen 80 `doc_example`/`test_key`-Zeilen ihres Providers | 3 734 der 4 011 HN-FP | T06 |
+| 1 | Beispiel-/Testwerte: jede Provider-Regel feuert auf allen 80 `doc_example`/`test_key`-Zeilen ihres Providers | 3 590 der 3 867 HN-FP | T06 |
 | 2 | `dlp_btc_wif` ohne Base58Check und ohne Token-Grenze: trifft Teilstrings anderer Tokens und Lockfile-Digests | 1 054 HN-FP, 109 Benign-Code-FP (Lockfiles 25 FP/MB) | T01, F02 |
 | 3 | Platzhalter und Variablenreferenzen in wertfangenden Regeln | 277 FP auf `placeholder`/`env_ref` (`env_var_secret` 120, `generic_credential_assignment` 102, `credential_in_url` 17 …) | T07 |
 | 4 | Code-Ausdrücke als Wert in generischen Zuweisungen | 199 Benign-Code-FP (`generic_credential_assignment` 106, `password_assignment` 93) | T03 |
