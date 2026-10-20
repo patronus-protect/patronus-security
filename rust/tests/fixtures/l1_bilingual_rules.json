@@ -203,6 +203,10 @@
     "obfuscated": {
       "de": "Karte: ４１１１ １１１１ １１１１ １１１１",
       "en": "Card: 5555​5555​5555​4444"
+    },
+    "secondary": {
+      "de": "Überweisung an DE63 8415 3776 0207 7642 65 erhalten.",
+      "en": "IBAN DE60 5393 3633 8750 0474 39 is on file"
     }
   },
   {
@@ -352,6 +356,10 @@
     "overlap": {
       "de": "Kontonummer: 4111-1111-1111-1111",
       "en": "Account number: 5555-5555-5555-4444"
+    },
+    "secondary": {
+      "de": "Kontonummer: GB82WEST12345698765432",
+      "en": "Bank account: GB82WEST12345698765432"
     }
   },
   {
