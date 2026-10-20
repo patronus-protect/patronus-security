@@ -267,6 +267,81 @@ def test_main_m1_subcommand(tmp_path, capsys):
     assert MODULE.main(args) == 2
 
 
+# ── baseline report ──────────────────────────────────────────────────────
+
+
+def write_report_tree(tmp_path):
+    """Gold in three frozen directories plus Ark, Presidio default and Presidio tuned predictions."""
+    rows, ark, tuned = m1_rows()
+    rows.append(gold("ark-hn", [], corpus=SYNTH, language="de", hard_negatives=[(40, 50)]))
+    ark.append(pred("ark-hn", []))
+    tuned.append(pred("ark-hn", [("pii.phone", 40, 50)]))
+    default = [pred(row["id"], []) for row in rows]
+    by_corpus = {GRETEL: "g.jsonl", EVALUATOR: "presidio_favored/e.jsonl", SYNTH: "synthetic/s.jsonl"}
+    for root, predictions in (("gold", None), ("ark", ark), ("default", default), ("tuned", tuned)):
+        for corpus, name in by_corpus.items():
+            selected = [i for i, row in enumerate(rows) if row["corpus"] == corpus]
+            write_jsonl(tmp_path / root / name, [rows[i] if predictions is None else predictions[i] for i in selected])
+            if predictions is None:
+                (tmp_path / root / name).parent.joinpath(".ready").write_text("x")
+    return {name: tmp_path / name for name in ("ark", "default", "tuned")}
+
+
+def test_report_scores_every_engine_per_family_corpus_and_entity(tmp_path):
+    engines = write_report_tree(tmp_path)
+    report = MODULE.baseline_report(tmp_path / "gold", {"ark": engines["ark"], "presidio-tuned": engines["tuned"]}, EMAP)
+    assert list(report["engines"]) == ["ark", "presidio-tuned"]
+    ark, tuned = report["engines"]["ark"], report["engines"]["presidio-tuned"]
+    assert ark["buckets"]["family/neutral"] == {"gold": 20, "predicted": 15, "exact": 15, "gold_found": 15,
+                                                "predicted_correct": 15}
+    assert ark["buckets"][f"corpus/{GRETEL}"] == ark["buckets"]["family/neutral"]
+    # Hard-negative hits are attributed to the family of their row.
+    assert report["hard_negative_fp"] == {"ark": {}, "presidio-tuned": {"ark_authored": 1}}
+    assert tuned["buckets"]["family/ark_authored"]["predicted"] == 20
+    # M1 compares the first engine with every other one.
+    assert list(report["m1"]) == ["presidio-tuned"]
+    assert report["m1"]["presidio-tuned"]["families"]["presidio_favored"]["holds"]
+    assert not report["m1"]["presidio-tuned"]["met"]
+    with pytest.raises(MODULE.ScoreboardError, match="two engines"):
+        MODULE.baseline_report(tmp_path / "gold", {"ark": engines["ark"]}, EMAP)
+
+
+def test_report_markdown_tables(tmp_path):
+    engines = write_report_tree(tmp_path)
+    report = MODULE.baseline_report(
+        tmp_path / "gold",
+        {"ark": engines["ark"], "presidio-default": engines["default"], "presidio-tuned": engines["tuned"]},
+        EMAP,
+    )
+    lines = MODULE.report_lines(report)
+    text = "\n".join(lines)
+    assert "| Family | Engine | Rows | Gold | Pred | Exact P | Exact R | Exact F1 | Overlap F1 | EN F1 | DE F1 | HN-FP |" in lines
+    assert "| neutral | ark | 10 | 20 | 15 | 100.0 | 75.0 | 85.7 | 85.7 | 85.7 | – | 0 |" in lines
+    assert "| ark_authored ¹ | presidio-tuned | 11 | 20 | 20 | 95.0 | 95.0 | 95.0 | 95.0 | 97.4 | 0.0 | 1 |" in lines
+    assert f"| {GRETEL} | neutral | 10 | 20 | 100.0 / 75.0 / 85.7 | 0.0 / 0.0 / 0.0 | 100.0 / 95.0 / **97.4** |" in lines
+    # Per entity: exact F1 per engine, the best one in bold, shared ids marked.
+    assert "| neutral | pii.phone | shared | 10 | 66.7 | 0.0 | **100.0** |" in lines
+    assert "| presidio_favored | pii.email | shared | 10 | **100.0** | 0.0 | 94.7 |" in lines
+    # M1 per milestone family against each Presidio profile.
+    assert "| presidio-tuned | NOT MET | 1/2 (below: pii.phone) | 2/2 | 1/2 (below: pii.phone) |" in lines
+    assert "| presidio-default | MET | 2/2 | 2/2 | 2/2 |" in lines
+    assert "¹ ark_authored is reported and decides no milestone." in text
+
+
+def test_main_report_subcommand(tmp_path, capsys):
+    engines = write_report_tree(tmp_path)
+    args = ["report", "--gold", str(tmp_path / "gold"), "--engine", f"ark={engines['ark']}",
+            "--engine", f"presidio-tuned={engines['tuned']}"]
+    assert MODULE.main(args + ["--json", str(tmp_path / "report.json")]) == 0
+    out = capsys.readouterr().out
+    assert out.startswith("## ") and "| neutral | ark |" in out
+    assert json.loads((tmp_path / "report.json").read_text())["m1"]["presidio-tuned"]["met"] is False
+    assert MODULE.main(args + ["--engine", "broken"]) == 2
+    assert MODULE.main(args + ["--engine", f"ark={engines['tuned']}"]) == 2
+    (engines["tuned"] / "g.jsonl").unlink()
+    assert MODULE.main(args) == 2
+
+
 def test_predictions_must_match_gold_ids():
     rows = [gold("a", [])]
     with pytest.raises(MODULE.ScoreboardError):

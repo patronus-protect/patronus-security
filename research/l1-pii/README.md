@@ -10,7 +10,8 @@ Stand: 2026-10-11. Aufgabenliste: [`backlog.yaml`](backlog.yaml). Agent-Prompt:
   Gretel-Finance (exact span F1): IP .97 · IBAN .83 · PAN .60 · Telefon .59 · SSN .54 · DOB .54 ·
   BIC .50 · Pass .44 · Username .08 · Führerschein 0.
 - Fehlende Prüfziffern: KVNR, RVNR, Personalausweis/Pass (MRZ), LANR. Keine regionale Telefonprüfung.
-- Kein gemessener Presidio-Vergleich. `13_l1_golden_eval` lief nicht in CI (seit E09 im CI-Job `rust`,
+- Kein gemessener Presidio-Vergleich (seit E11: [`scoreboard/baseline.md`](scoreboard/baseline.md), Dev, exact F1
+  neutral ARK 52.7 vs. Presidio tuned 40.5, presidio_favored 45.7 vs. 71.4, M1 nicht erreicht). `13_l1_golden_eval` lief nicht in CI (seit E09 im CI-Job `rust`,
   PII und DLP); `12_l1_pii_fixture_eval` verglich Byte- mit Zeichen-Offsets (seit E08 durchgehend
   Zeichen-Offsets).
 
