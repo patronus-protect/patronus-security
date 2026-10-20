@@ -13,6 +13,7 @@ pub(super) const IBAN_DE: PiiPattern = PiiPattern {
     strength: ValidatorStrength::Checksum,
     base_score: 55,
     captured_value: false,
+    requires_context: false,
 };
 
 pub(super) const IBAN_GENERIC: PiiPattern = PiiPattern {
@@ -23,6 +24,7 @@ pub(super) const IBAN_GENERIC: PiiPattern = PiiPattern {
     strength: ValidatorStrength::Checksum,
     base_score: 45,
     captured_value: false,
+    requires_context: false,
 };
 
 // ── Kreditkarte ──────────────────────────────────────────────────────────
@@ -34,6 +36,7 @@ pub(super) const CREDIT_CARD: PiiPattern = PiiPattern {
     strength: ValidatorStrength::Checksum,
     base_score: 40,
     captured_value: false,
+    requires_context: false,
 };
 
 pub(super) const CREDIT_CARD_CVV: PiiPattern = PiiPattern {
@@ -44,6 +47,7 @@ pub(super) const CREDIT_CARD_CVV: PiiPattern = PiiPattern {
     strength: ValidatorStrength::Format,
     base_score: 20,
     captured_value: true,
+    requires_context: false,
 };
 
 pub(super) const CREDIT_CARD_EXPIRY: PiiPattern = PiiPattern {
@@ -54,6 +58,7 @@ pub(super) const CREDIT_CARD_EXPIRY: PiiPattern = PiiPattern {
     strength: ValidatorStrength::Format,
     base_score: 25,
     captured_value: true,
+    requires_context: false,
 };
 
 // ── SWIFT / BIC ─────────────────────────────────────────────────────────
@@ -66,4 +71,5 @@ pub(super) const SWIFT_BIC_CONTEXT: PiiPattern = PiiPattern {
     strength: ValidatorStrength::Format,
     base_score: 40,
     captured_value: true,
+    requires_context: false,
 };

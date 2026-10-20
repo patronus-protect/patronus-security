@@ -118,18 +118,25 @@ def secret_positive(
 # 13_l1_golden_eval but not gated. `structured` follows from the carrier; `no_context`
 # (no field name or label names the value), `obfuscated` (inserted or substituted
 # characters that leave the value readable) and `ocr` (scan layout noise) are set by hand.
+# A row scanned in an opt-in PII mode (K03 context engine: scores and counter-context only
+# act there) also carries `pii_mode`; rows without it run in the default `strict` mode.
 PII_SCHEMA_VERSION = 2
 PII_TAGS = ("no_context", "structured", "obfuscated", "ocr")
 PII_CARRIERS = ("line", "prose", "json", "yaml", "xml", "csv", "kv", "table")
 PII_STRUCTURED_CARRIERS = ("json", "yaml", "xml", "csv", "kv", "table")
 # Minimum gated positives and hard negatives per target label and language.
 PII_MIN_PER_LANGUAGE = 5
+PII_MODES = ("strict", "balanced", "recall")
 
 
-def pii_row(row: dict, rule: str, carrier: str, tags: tuple[str, ...], known_gap: bool) -> dict:
+def pii_row(
+    row: dict, rule: str, carrier: str, tags: tuple[str, ...], known_gap: bool, mode: str = "strict"
+) -> dict:
     tags = set(tags)
     if carrier not in PII_CARRIERS or not tags <= {"no_context", "obfuscated", "ocr"}:
         raise ValueError(f"bad carrier {carrier!r} or hand-set tags {sorted(tags)}")
+    if mode not in PII_MODES:
+        raise ValueError(f"bad pii_mode {mode!r}")
     if known_gap and row["case_type"] != "positive":
         raise ValueError("only positives can be known gaps")
     if carrier in PII_STRUCTURED_CARRIERS:
@@ -144,6 +151,8 @@ def pii_row(row: dict, rule: str, carrier: str, tags: tuple[str, ...], known_gap
         "tags": [tag for tag in PII_TAGS if tag in tags],
         "known_gap": known_gap,
     }
+    if mode != "strict":
+        head["pii_mode"] = mode
     return {**head, **{key: value for key, value in row.items() if key not in head}}
 
 
@@ -160,8 +169,9 @@ def p(
     gap: bool = False,
     source_fixture_id: str | None = None,
     also: tuple[tuple[str, str], ...] = (),
+    mode: str = "strict",
 ) -> dict:
-    """Positive: `value` is the gold span `rule` must report.
+    """Positive: `value` is the gold span `rule` must report in PII mode `mode`.
 
     `also` annotates every other real entity in the text as `(label, value)` (T02), e.g.
     the card number next to a CVV. The value must occur exactly once outside the target.
@@ -182,7 +192,7 @@ def p(
             {"label": other_label, "text": other_value, "start": start, "end": start + len(other_value)}
         )
     row["entities"].sort(key=lambda entity: entity["start"])
-    return pii_row(row, rule, carrier, tags, gap)
+    return pii_row(row, rule, carrier, tags, gap, mode)
 
 
 def n(
@@ -194,9 +204,10 @@ def n(
     *,
     carrier: str = "line",
     tags: tuple[str, ...] = (),
+    mode: str = "strict",
 ) -> dict:
-    """Hard negative: a lookalike for `rule` that no PII rule may report."""
-    return pii_row(negative(label, language, text, reason), rule, carrier, tags, False)
+    """Hard negative: a lookalike for `rule` that no PII rule may report in PII mode `mode`."""
+    return pii_row(negative(label, language, text, reason), rule, carrier, tags, False, mode)
 
 
 PII_CASES = {
@@ -289,6 +300,45 @@ PII_CASES = {
         n("PHONE", "en", "pii_phone_us", "Ticket 2024-0042-17 was closed.", "ticket number is not a phone number", carrier="prose"),
         n("PHONE", "en", "pii_phone_us", "Build 20261019 passed.", "build number has no separators"),
         n("PHONE", "en", "pii_phone_de", "Dial +49 first, then the area code.", "country prefix without a subscriber number", carrier="prose"),
+        # K03 context engine: a national number without a field name right before it needs a
+        # phone term of the lexicon on either side; a nearer counter-context term, the field
+        # name of the next value or a line break in between rule it out.
+        p("PHONE", "de", "pii_phone_de_national_proximity", "Frau Weber ist unter ", "0176 90817263", " erreichbar.", carrier="prose", tags=("no_context",)),
+        p("PHONE", "de", "pii_phone_de_national_proximity", "Rückruf bitte unter ", "(030) 1234567", ".", carrier="prose", tags=("no_context",)),
+        p("PHONE", "de", "pii_phone_de_national_proximity", "Mobil erreichbar: ", "0151 2345678"),
+        p("PHONE", "de", "pii_phone_de_national_proximity", "", "0221 4711230", " (Handy)"),
+        p("PHONE", "de", "pii_phone_de_national_proximity", "Bei Rückfragen rufen Sie uns an: ", "0211 5583920", ".", carrier="prose", tags=("no_context",)),
+        p("PHONE", "de", "pii_phone_de_national_proximity", "Name: Petra Lang\nTelefon privat: ", "089 2019440", "\nOrt: München", carrier="kv"),
+        p("PHONE", "en", "pii_phone_de_national_proximity", "You can reach Mr. Weber at ", "0176 90817263", " (mobile).", carrier="prose", tags=("no_context",)),
+        p("PHONE", "en", "pii_phone_de_national_proximity", "Please call back on ", "0221 4711230", ".", carrier="prose", tags=("no_context",)),
+        p("PHONE", "en", "pii_phone_de_national_proximity", "Office line ", "0711 2223334", " (telephone)"),
+        p("PHONE", "en", "pii_phone_de_national_proximity", "Mobile reachable at ", "0151 23456789"),
+        p("PHONE", "en", "pii_phone_de_national_proximity", "Ms. Kaya is reachable on ", "06221 543210", " during office hours.", carrier="prose", tags=("no_context",)),
+        p("PHONE", "en", "pii_phone_de_national_proximity", "name: R. Patel\nhome phone number (Berlin): ", "030 98765432", "\n", carrier="yaml"),
+        n("PHONE", "de", "pii_phone_de_national_proximity", "Bestellnummer 0176 90817263, Rückfragen bitte telefonisch.", "order number: the counter-context term is nearer than any phone term", carrier="prose"),
+        n("PHONE", "de", "pii_phone_de_national_proximity", "Die Rechnungsnummer 0221 4711230 steht oben rechts.", "invoice number without a phone term", carrier="prose"),
+        n("PHONE", "de", "pii_phone_de_national_proximity", "Aktenzeichen 0711 2223334 – Rückruf erbeten.", "file reference: the counter-context term is nearer than the phone term after the number", carrier="prose"),
+        n("PHONE", "de", "pii_phone_de_national_proximity", "Seriennummer 0170 1234567 des Handys", "serial number; 'Handys' is not the whole word 'Handy'"),
+        n("PHONE", "de", "pii_phone_de_national_proximity", "Vertrag 0123 4567890, Telefon folgt.", "the next field name after a comma is not context of the number", carrier="prose"),
+        n("PHONE", "de", "pii_phone_de_national_proximity", "Telefon:\nVertrag 0123 4567890", "the phone term is on another line", carrier="kv"),
+        n("PHONE", "en", "pii_phone_de_national_proximity", "Order number 0176 90817263 – questions by phone only.", "order number: the counter-context term is nearer than the phone term", carrier="prose"),
+        n("PHONE", "en", "pii_phone_de_national_proximity", "Invoice no 0221 4711230 is overdue.", "invoice number without a phone term", carrier="prose"),
+        n("PHONE", "en", "pii_phone_de_national_proximity", "Tracking number 0151 23456789 (parcel)", "tracking number"),
+        n("PHONE", "en", "pii_phone_de_national_proximity", "Serial number 0711 2223334 of the mobile router", "serial number: the counter-context term is nearer than 'mobile'"),
+        n("PHONE", "en", "pii_phone_de_national_proximity", "Contract 0123 4567890, phone to follow.", "the next field name after a comma is not context of the number", carrier="prose"),
+        n("PHONE", "en", "pii_phone_de_national_proximity", "Phone:\nContract 0123 4567890", "the phone term is on another line", carrier="kv"),
+        # K03 in balanced: a counter-context term lowers a value strict reports by 30 points,
+        # below the balanced threshold; a nearer support term keeps it.
+        p("PHONE", "de", "pii_phone_de", "Rechnungsnummer 2024-117, Telefon ", "+49 30 12345678", carrier="prose", mode="balanced"),
+        p("PHONE", "de", "pii_phone_de_national_context", "Handy ", "0151 2345678", " (Bestellnummer siehe unten)", mode="balanced"),
+        p("PHONE", "en", "pii_phone_us", "Invoice 2024-117 attached; call me at ", "415-555-2671", ".", carrier="prose", tags=("no_context",), mode="balanced"),
+        p("PHONE", "en", "pii_phone_de_national_proximity", "Mobile reachable at ", "0151 23456789", " (order number below)", mode="balanced"),
+        n("PHONE", "de", "pii_phone_us", "Rechnungsnummer 030-123-4567", "invoice number in phone form", mode="balanced"),
+        n("PHONE", "de", "pii_phone_de", "Sendungsnummer +49 30 12345678", "tracking number in phone form", mode="balanced"),
+        n("PHONE", "de", "pii_phone_us", "Ticketnummer 415-555-2671 wurde geschlossen.", "ticket number in phone form", carrier="prose", mode="balanced"),
+        n("PHONE", "en", "pii_phone_us", "Invoice no. 415-555-2671 is overdue.", "invoice number in phone form", carrier="prose", mode="balanced"),
+        n("PHONE", "en", "pii_phone_de", "Tracking number +49 30 12345678", "tracking number in phone form", mode="balanced"),
+        n("PHONE", "en", "pii_phone_us", "Serial number 212-736-4410 on the label.", "serial number in phone form", carrier="prose", mode="balanced"),
     ],
     "MAC_ADDRESS": [
         p("MAC_ADDRESS", "de", "pii_mac_address", "MAC: ", "02:42:ac:11:00:02"),
@@ -340,6 +390,16 @@ PII_CASES = {
         n("CREDITCARD", "en", "pii_credit_card", "Card: 5555 5555 5555 4445", "Luhn checksum fails"),
         n("CREDITCARD", "en", "pii_credit_card", "Order 0000 0000 0000 0000", "repeated digits are excluded"),
         n("CREDITCARD", "en", "pii_credit_card", "Card: XXXX-XXXX-XXXX-1881", "masked card number", tags=("obfuscated",)),
+        # K03 in balanced: an order or transaction number in card form drops below the threshold;
+        # an order number with its own value next to a card term does not.
+        p("CREDITCARD", "de", "pii_credit_card", "Kreditkarte ", "4111 1111 1111 1111", " für Bestellnummer 4711.", carrier="prose", mode="balanced"),
+        p("CREDITCARD", "de", "pii_credit_card", "Bestellnummer 4711, bezahlt mit Kreditkarte ", "5555 5555 5555 4444", carrier="prose", mode="balanced"),
+        p("CREDITCARD", "en", "pii_credit_card", "Credit card ", "5555 5555 5555 4444", " for order number 1182.", carrier="prose", mode="balanced"),
+        p("CREDITCARD", "en", "pii_credit_card", "Order number 1182, paid by Visa ", "4012 8888 8888 1881", carrier="prose", mode="balanced"),
+        n("CREDITCARD", "de", "pii_credit_card", "Bestellnummer 4111 1111 1111 1111 wurde versandt.", "order number that passes Luhn", carrier="prose", mode="balanced"),
+        n("CREDITCARD", "de", "pii_credit_card", "Transaktionsnummer 5555 5555 5555 4444", "transaction number that passes Luhn", mode="balanced"),
+        n("CREDITCARD", "en", "pii_credit_card", "Order number 4111 1111 1111 1111 shipped today.", "order number that passes Luhn", carrier="prose", mode="balanced"),
+        n("CREDITCARD", "en", "pii_credit_card", "Transaction ID 5555 5555 5555 4444 was settled.", "transaction number that passes Luhn", carrier="prose", mode="balanced"),
     ],
     "CREDITCARD_CVV": [
         p("CREDITCARD_CVV", "de", "pii_credit_card_cvv", "Karte 4111 1111 1111 1111, CVV: ", "123", also=(("CREDITCARD", "4111 1111 1111 1111"),)),
@@ -425,6 +485,9 @@ PII_CASES = {
         n("IBAN", "en", "pii_iban_generic", "Serial SN12ABCDEFGHIJK", "serial number shaped like an IBAN fails MOD-97"),
         n("IBAN", "en", "pii_iban_de", "IBAN: DE00 0000 0000 0000 0000 00", "all-zero placeholder fails MOD-97", tags=("obfuscated",)),
         n("IBAN", "en", "pii_iban_generic", "iban: <redacted>", "redacted value", carrier="yaml"),
+        # K03 in balanced: the IBAN term is nearer than the invoice number term.
+        p("IBAN", "de", "pii_iban_de", "Bitte die Rechnungsnummer im Verwendungszweck angeben. IBAN ", "DE89370400440532013000", carrier="prose", mode="balanced"),
+        p("IBAN", "en", "pii_iban_generic", "Please quote the invoice number as reference. IBAN: ", "GB82WEST12345698765432", carrier="prose", mode="balanced"),
     ],
     "SWIFT_CODE": [
         p("SWIFT_CODE", "de", "pii_swift_bic_context", "BIC: ", "DEUTDEFF500"),

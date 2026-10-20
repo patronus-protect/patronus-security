@@ -11,6 +11,7 @@ pub(super) const EMAIL: PiiPattern = PiiPattern {
     strength: ValidatorStrength::None,
     base_score: 70,
     captured_value: false,
+    requires_context: false,
 };
 
 // ── IP-Adressen ─────────────────────────────────────────────────────────
@@ -22,6 +23,7 @@ pub(super) const IPV4: PiiPattern = PiiPattern {
     strength: ValidatorStrength::Format,
     base_score: 50,
     captured_value: false,
+    requires_context: false,
 };
 
 pub(super) const IPV6_FULL: PiiPattern = PiiPattern {
@@ -32,6 +34,7 @@ pub(super) const IPV6_FULL: PiiPattern = PiiPattern {
     strength: ValidatorStrength::Format,
     base_score: 50,
     captured_value: false,
+    requires_context: false,
 };
 
 pub(super) const IPV6_COMPRESSED: PiiPattern = PiiPattern {
@@ -42,6 +45,7 @@ pub(super) const IPV6_COMPRESSED: PiiPattern = PiiPattern {
     strength: ValidatorStrength::Format,
     base_score: 50,
     captured_value: false,
+    requires_context: false,
 };
 
 pub(super) const IPV6_LOOPBACK: PiiPattern = PiiPattern {
@@ -52,6 +56,7 @@ pub(super) const IPV6_LOOPBACK: PiiPattern = PiiPattern {
     strength: ValidatorStrength::Format,
     base_score: 40,
     captured_value: false,
+    requires_context: false,
 };
 
 // ── Telefon ──────────────────────────────────────────────────────────────
@@ -63,6 +68,7 @@ pub(super) const PHONE_INTERNATIONAL: PiiPattern = PiiPattern {
     strength: ValidatorStrength::Format,
     base_score: 40,
     captured_value: false,
+    requires_context: false,
 };
 
 // ── MAC-Adresse ─────────────────────────────────────────────────────────
@@ -74,4 +80,5 @@ pub(super) const MAC_ADDRESS: PiiPattern = PiiPattern {
     strength: ValidatorStrength::Format,
     base_score: 55,
     captured_value: false,
+    requires_context: false,
 };
