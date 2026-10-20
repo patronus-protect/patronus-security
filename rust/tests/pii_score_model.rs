@@ -1,14 +1,16 @@
 //! PII score model and modes (K02).
 //!
 //! A span score is the rule base plus the validator strength (checksum,
-//! format, none) plus a context bonus for a field name bound by the rule.
-//! `strict` stays the default and keeps the previous output bit for bit
-//! (every span 1.0); `balanced` and `recall` are opt-in, report the model
-//! score and drop candidates below their threshold.
+//! format, none) plus its context: a field name bound by the rule, else the
+//! proximity context of the K03 engine (support terms add, a nearer counter
+//! term subtracts; `pii_context_engine.rs`). `strict` stays the default and
+//! scores every span 1.0; `balanced` and `recall` are opt-in, report the
+//! model score and drop candidates below their threshold.
 
 use patronus_ark::detectors::pii::{
+    context,
     pii::PII_PATTERNS,
-    score::{self, PiiMode, ValidatorStrength},
+    score::{self, Context, PiiMode, ValidatorStrength},
     validators,
 };
 use patronus_ark::{
@@ -154,24 +156,71 @@ fn strict_explicit_and_default_are_bit_identical_on_every_golden() {
     }
 }
 
+/// Model score of a `matched_rules` entry: field context for field rules,
+/// otherwise the proximity context of the matched value.
+fn expected_score(text: &str, rule: &serde_json::Value) -> (f64, Context) {
+    let pattern = PII_PATTERNS
+        .iter()
+        .find(|pattern| pattern.name == rule["rule_id"])
+        .unwrap();
+    let context = if pattern.captured_value {
+        Context::Field
+    } else {
+        let start = rule["start_byte"].as_u64().unwrap() as usize;
+        let end = rule["end_byte"].as_u64().unwrap() as usize;
+        context::proximity(text, (start, end), pattern.entity_group)
+    };
+    (score::score(pattern, context), context)
+}
+
 #[test]
-fn balanced_and_recall_keep_the_strict_spans_and_report_model_scores() {
-    // K02 adds no candidates: every rule scores at least the balanced threshold,
-    // so both opt-in modes return the strict spans with their model scores.
+fn balanced_and_recall_keep_the_strict_spans_unless_counter_context_outranks() {
+    // K03: scored modes drop a strict span only when a counter-context term is
+    // nearer than any support term; every other strict span stays, with the
+    // score of its rule in its context.
     let strict_scanner = scanner(None);
     for mode in [PiiMode::Balanced, PiiMode::Recall] {
         let scored_scanner = scanner(with_mode(mode));
         for text in corpus() {
             let strict = scan(&strict_scanner, &text);
             let scored = scan(&scored_scanner, &text);
-            assert_eq!(spans(&strict), spans(&scored), "{mode:?}: {text}");
-            assert_eq!(strict.class_name, scored.class_name, "{mode:?}: {text}");
             let rules = scored.layers[0]
                 .details
                 .get("matched_rules")
                 .map(|rules| rules.as_array().unwrap().clone())
                 .unwrap_or_default();
+            let strict_rules = strict.layers[0]
+                .details
+                .get("matched_rules")
+                .map(|rules| rules.as_array().unwrap().clone())
+                .unwrap_or_default();
+            let scored_spans = spans(&scored);
+            for (span, strict_span) in strict.evidence_spans.iter().zip(spans(&strict)) {
+                if scored_spans.contains(&strict_span) {
+                    continue;
+                }
+                // Every rule that reported the dropped span saw a nearer counter term.
+                let reporting: Vec<_> = strict_rules
+                    .iter()
+                    .filter(|rule| {
+                        rule["start_byte"] == span.start_byte && rule["end_byte"] == span.end_byte
+                    })
+                    .collect();
+                assert!(!reporting.is_empty(), "{mode:?}: {text}: {span:?}");
+                for rule in reporting {
+                    let (score, context) = expected_score(&text, rule);
+                    assert_eq!(context, Context::Counter, "{mode:?}: {text}: {rule}");
+                    assert!(
+                        score < mode.min_score().unwrap(),
+                        "{mode:?}: {text}: {rule}"
+                    );
+                }
+            }
             for span in &scored.evidence_spans {
+                assert!(
+                    spans(&strict).contains(&(span.label.clone(), span.start_char, span.end_char)),
+                    "{mode:?}: {text}: {span:?} not in strict"
+                );
                 assert!(
                     span.score >= mode.min_score().unwrap() && span.score <= 1.0,
                     "{mode:?}: {text}: {span:?}"
@@ -182,12 +231,7 @@ fn balanced_and_recall_keep_the_strict_spans_and_report_model_scores() {
                         rule["start_byte"] == span.start_byte
                             && rule["end_byte"] == span.end_byte
                             && rule["score"] == span.score
-                            && score::rule_score(
-                                PII_PATTERNS
-                                    .iter()
-                                    .find(|pattern| pattern.name == rule["rule_id"])
-                                    .unwrap(),
-                            ) == span.score
+                            && expected_score(&text, rule).0 == span.score
                     }),
                     "{mode:?}: {text}: {span:?} not in {rules:?}"
                 );
@@ -245,8 +289,10 @@ fn score_is_base_plus_validator_strength_plus_field_context() {
             pattern.name,
             pattern.base_score
         );
+        // Context-bound rules emit only with support (pii_context_engine.rs).
         assert!(
-            score::rule_score(pattern) >= PiiMode::Balanced.min_score().unwrap(),
+            pattern.requires_context
+                || score::rule_score(pattern) >= PiiMode::Balanced.min_score().unwrap(),
             "{} would change balanced output",
             pattern.name
         );
@@ -357,8 +403,11 @@ fn balanced_scores_rank_checksum_values_above_format_values() {
             .score
     };
     assert_eq!(score_of("STEUERID"), 1.0);
-    assert_eq!(score_of("IBAN"), 0.9);
+    // 0.90 without context; the "IBAN" term right before it adds 25 (K03).
+    assert_eq!(score_of("IBAN"), 1.0);
     assert_eq!(score_of("LICENSEPLATE"), 0.65);
+    // 0.55 without context; "Tel." right before it adds 25.
+    assert_eq!(score_of("PHONE"), 0.8);
     assert!(score_of("STEUERID") > score_of("LICENSEPLATE"));
     assert!(score_of("IBAN") > score_of("PHONE"));
     assert_eq!(result.confidence, 1.0);

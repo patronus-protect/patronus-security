@@ -20,7 +20,7 @@ compiled extension.
 | `dynamic_pii.jsonl` | 133 | Dynamic PII entity spans |
 | `dynamic_pii_threshold_sweep.jsonl` | 85 | Threshold calibration |
 | `education_pii_threshold_sweep.jsonl` | 50 | Education-context threshold calibration |
-| `pii_l1.jsonl` | 713 | Native PII L1 exact-span goldens, hard negatives and known gaps (schema v2) |
+| `pii_l1.jsonl` | 757 | Native PII L1 exact-span goldens, hard negatives and known gaps (schema v2) |
 | `dlp_l1.jsonl` | 537 | Native DLP L1 exact-span goldens, hard negatives and known gaps (schema v2) |
 
 ## Native L1 golden-set contract
@@ -86,6 +86,14 @@ Every `pii_l1.jsonl` row starts with these fields:
   it and prints it in the coverage report, but does not gate on it. It fails
   when a known gap starts passing, so the task that closes it flips the flag.
   Hard negatives are never known gaps.
+- `pii_mode` (optional, right after `known_gap`) names the opt-in PII mode the
+  row runs in, `balanced` or `recall`; rows without it run in the default
+  `strict` mode. The K03 context engine scores values there: such a hard
+  negative is a value `strict` reports but a nearer counter-context term (order,
+  invoice, tracking number ...) lowers below the threshold, such a positive a
+  value whose support term outranks a counter term nearby. There are at least
+  5 gated `balanced` positives and hard negatives per language. Known gaps
+  always run in `strict`.
 - Each label has at least 5 gated positives and 5 hard negatives per language
   (DE and EN). Each rule has a gated positive in both languages and a hard
   negative. `python/tests/test_pii_golden_schema.py` and

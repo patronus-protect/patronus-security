@@ -308,5 +308,6 @@ def test_real_ark_binding_scores_spans_in_opt_in_modes(tmp_path):
         row = json.loads(out.read_text(encoding="utf-8"))
         scores[mode] = {item["ark_label"]: item["score"] for item in row["evidence_spans"]}
     assert scores["strict"] == {"IBAN": 1.0, "LICENSEPLATE": 1.0}
-    assert scores["balanced"] == {"IBAN": 0.9, "LICENSEPLATE": 0.65}
+    # IBAN 0.90 plus 25 for the "IBAN" term right before it (K03 context engine).
+    assert scores["balanced"] == {"IBAN": 1.0, "LICENSEPLATE": 0.65}
     assert scores["recall"] == scores["balanced"]

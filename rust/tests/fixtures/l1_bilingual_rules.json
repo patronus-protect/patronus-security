@@ -57,6 +57,13 @@
   },
   {
     "category": "pii",
+    "rule_id": "pii_phone_de_national_proximity",
+    "de": "Frau Weber ist unter 0176 90817263 erreichbar.",
+    "en": "You can reach Mr. Weber at 0176 90817263 (mobile).",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
     "rule_id": "pii_phone_us",
     "de": "Telefon: 212-555-1234",
     "en": "Phone: 212-555-1234",
