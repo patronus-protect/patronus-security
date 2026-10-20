@@ -614,8 +614,21 @@ OK_CONCLUSIONS = {"success", "skipped", "neutral"}
 
 
 def publish_head(cur: dict) -> str:
+    """The PR head for the gated commit, built once: commit-tree stamps the time, so building it
+    again on a resumed run would give a new SHA, lose the green-CI record and push again."""
     task = cur["task"]
-    return cur["gated_commit"] if task.get("type") == "triage" else done_commit(cur["gated_commit"], task)
+    cached = cur.get("publish_commit")
+    if cached and "publish_of" not in cur:
+        # State from a runner before publish_of: the head belongs to the gated commit when it is
+        # that commit (triage) or the done commit right on top of it.
+        parent = git("rev-parse", "--verify", "--quiet", f"{cached}^", check=False)
+        if cached == cur["gated_commit"] or parent == cur["gated_commit"]:
+            cur["publish_of"] = cur["gated_commit"]
+    if cached and cur.get("publish_of") == cur["gated_commit"]:
+        return cached
+    head = cur["gated_commit"] if task.get("type") == "triage" else done_commit(cur["gated_commit"], task)
+    cur["publish_commit"], cur["publish_of"] = head, cur["gated_commit"]
+    return head
 
 
 def ci_failure_log(head: str) -> str:
@@ -695,7 +708,7 @@ def cmd_publish() -> int:
     task = cur["task"]
     if task.get("type") == "restack":
         return publish_restack(cur)
-    head = cur.get("publish_commit") or publish_head(cur)
+    head = publish_head(cur)
     if cur.get("ci_green") != head:
         # Rule: no PR without green GitHub CI on exactly the commit the PR shows.
         print(f"PUBLISH_ERROR=GitHub CI not green on {head[:12]} (run `ark-l1 ci` first)")
