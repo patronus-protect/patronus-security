@@ -616,9 +616,16 @@ OK_CONCLUSIONS = {"success", "skipped", "neutral"}
 def publish_head(cur: dict) -> str:
     """The PR head for the gated commit, built once: commit-tree stamps the time, so building it
     again on a resumed run would give a new SHA, lose the green-CI record and push again."""
-    if cur.get("publish_commit") and cur.get("publish_of") == cur["gated_commit"]:
-        return cur["publish_commit"]
     task = cur["task"]
+    cached = cur.get("publish_commit")
+    if cached and "publish_of" not in cur:
+        # State from a runner before publish_of: the head belongs to the gated commit when it is
+        # that commit (triage) or the done commit right on top of it.
+        parent = git("rev-parse", "--verify", "--quiet", f"{cached}^", check=False)
+        if cached == cur["gated_commit"] or parent == cur["gated_commit"]:
+            cur["publish_of"] = cur["gated_commit"]
+    if cached and cur.get("publish_of") == cur["gated_commit"]:
+        return cached
     head = cur["gated_commit"] if task.get("type") == "triage" else done_commit(cur["gated_commit"], task)
     cur["publish_commit"], cur["publish_of"] = head, cur["gated_commit"]
     return head
