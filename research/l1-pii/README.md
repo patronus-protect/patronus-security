@@ -167,6 +167,14 @@ jedem Modus; die erste ist `pii_phone_de_national_proximity`. Spätere „mit Ko
 F07, F15, A03–A05, T08, T10, C05, C07, C08) setzen darauf auf. `strict` bleibt für alle übrigen
 Regeln unverändert.
 
+Seit T26 (TRIAGE 2026-W43 Bucket 12) tragen die Einträge der Anker-Regeln für Geburtsdatum, Kunden-
+und Personalnummer, Kontonummer, CVV, US-SSN, Pass und Benutzername optionale Listen `fr`, `es`,
+`it` und `nl`; Engine und Lexical-Anchor-Scanner lesen sie mit. Dieselben Feldnamen stehen in den
+Regex der Regeln selbst, damit `strict` sie vor dem Wert und als Strukturschlüssel (K04) bindet.
+Benutzernamen verlangen dort `:`, `=` oder `#`, ein CVV einen Kartenbezug im Feldnamen
+(`code de sécurité de la carte`, nicht `code de sécurité`). `pii_l1` führt je Sprache 10 Positive
+und 6 Hard Negatives; Validatoren sind unverändert.
+
 ## Kontextfreie Prüfziffernwerte (K05)
 
 In `balanced` und `recall` braucht ein Wert, dessen Validator eine echte Prüfziffer rechnet, keinen
