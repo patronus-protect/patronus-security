@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # One scheduled L1 run (programme pii or dlp): pick a task, let a sandboxed Claude Code session
-# work on it, gate the result independently, publish a stacked draft PR or block the task.
+# work on it, gate the result independently, wait for green GitHub CI, publish a ready stacked PR
+# or block the task.
 # Usage: run.sh [--program pii|dlp]
 set -uo pipefail
 
@@ -31,9 +32,15 @@ echo "== ark-l1 $PROGRAM run $(date -u +%FT%TZ)"
 "${L1[@]}" next
 rc=$?
 if [ "$rc" -eq 11 ]; then
-  # The previous run passed the gate but publishing failed: retry only that.
-  "${L1[@]}" publish && exit 0
-  echo "== publish failed again; the run stays pending"
+  # The previous run passed the gate but CI or publishing did not finish: retry only that.
+  "${L1[@]}" ci
+  ci_rc=$?
+  if [ "$ci_rc" -eq 1 ]; then
+    "${L1[@]}" block "$("${L1[@]}" env | sed -n 's/^TASK_ID=//p' | tr -d "'")" "GitHub CI red after a resumed run; log $LOG"
+    exit 1
+  fi
+  [ "$ci_rc" -eq 0 ] && "${L1[@]}" publish && exit 0
+  echo "== CI or publish not done; the run stays pending"
   exit 1
 fi
 [ "$rc" -eq 10 ] && exit 0
@@ -82,14 +89,23 @@ $feedback"
   fi
 
   if "${L1[@]}" gate; then
-    "${L1[@]}" publish && exit 0
-    echo "== publish failed; the next run retries it"
-    exit 1
+    # A PR only for green GitHub CI: red CI goes back to the agent like a red gate.
+    "${L1[@]}" ci
+    ci_rc=$?
+    if [ "$ci_rc" -eq 0 ]; then
+      "${L1[@]}" publish && exit 0
+      echo "== publish failed; the next run retries it"
+      exit 1
+    fi
+    if [ "$ci_rc" -ne 1 ]; then
+      echo "== no CI verdict; the next run waits for it again"
+      exit 1
+    fi
   fi
   feedback="
-## Gate-Ergebnis der vorherigen Runde (rot) — behebe genau das
+## Gate-/CI-Ergebnis der vorherigen Runde (rot) — behebe genau das
 $(tail -c 12000 "$ROOT/state/gate-report.md")"
 done
 
-"${L1[@]}" block "$TASK_ID" "gate red after $MAX_ROUNDS rounds; log $LOG"
+"${L1[@]}" block "$TASK_ID" "gate or CI red after $MAX_ROUNDS rounds; log $LOG"
 exit 1
