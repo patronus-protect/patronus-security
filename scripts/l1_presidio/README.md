@@ -96,7 +96,46 @@ schreibt er nichts und endet mit Exit 1 (`--force` ersetzt es). Rohdaten landen 
 `--sources` (Standard `HOLDOUT/.sources`), nie im Dev-Verzeichnis; stdout nennt nur Dev-Zahlen.
 
 Das Gate führt den Lauf einmal außerhalb der Agent-Sandbox aus (`~/ark-l1/data/dev`,
-`~/ark-l1/holdout`); Agenten sehen nur Dev unter `$ARK_L1_DEV_DATA`. Nur Standardbibliothek:
+`~/ark-l1/holdout`); Agenten sehen nur Dev unter `$ARK_L1_DEV_DATA`.
+
+### Familie `presidio_favored` (E12)
+
+`--family presidio_favored` teilt zwei Quellen, die Presidio begünstigen (Fairness-Regel in
+[`research/l1-pii/README.md`](../../research/l1-pii/README.md)), in eigene Verzeichnisse:
+
+```bash
+python3 scripts/l1_presidio/prepare_corpora.py --family presidio_favored \
+  --dev-out DEV/presidio_favored --holdout-out HOLDOUT/presidio_favored   # [--sources DIR] [--offline]
+```
+
+| Korpus | Quelle | Zeilen |
+|---|---|---|
+| `presidio-evaluator-synth-v2` | `data/synth_dataset_v2.json` aus microsoft/presidio-research (MIT, Commit `7f568b6da8a5`) | 1500 synthetische englische Sätze; Gruppe = `template_id`; `TITLE`, `AGE`, `ZIP_CODE` haben keine Benchmark-ID, `DOMAIN_NAME` zählt als `pii.url` |
+| `presidio-analyzer-recognizer-tests` | 74 Testdateien `presidio-analyzer/tests/test_*_recognizer.py` des Release-Tags 2.2.364 (MIT, Commit `779dbd286d5e`) | ein Fall je Zeile; Gruppe = SHA-256 des Texts |
+
+Die Testdateien werden mit `ast` gelesen, nie importiert oder ausgeführt. Ein parametrisierter Test
+liefert Fälle, wenn sein erstes Argument der analysierte Text ist (`text`, `iban`), er die erwartete
+Anzahl (`expected_len`) und/oder Spans (`expected_positions`, `expected_position`, `expected_res`,
+`expected_start`/`expected_end`) nennt, keine weiteren Aufruf-Parameter hat (z. B. `leniency`,
+`deny_list`, `entity_num`) und nur den ohne Argumente gebauten Recognizer-Fixture der Datei nutzt
+(Ausnahme, von Hand geprüft: `PhoneRecognizer` mit Standardregionen plus JP/CN). Werte müssen
+Literale sein, auch Modulkonstanten und f-Strings daraus; berechnete Werte (z. B. Verhoeff-Ziffern
+per Funktion) entfallen. Ein Positivfall ohne Spans zählt nur, wenn der Text der blanke Wert ist
+(`("BO12345678A", 1)`). Die Entität kommt aus dem `entities`-Fixture oder der Spalte `entities`;
+Fälle ohne Benchmark-ID (z. B. `DATE_TIME`) entfallen. Zusätzliche Felder je Zeile:
+
+- `scored_entities`: die IDs, auf die der Test prüft. Das Scoreboard wertet die Zeile nur darauf.
+- `hard_negatives`: bei Negativfällen (`expected_len` 0) ein Span über den ganzen Text mit
+  `entity_type`; nur Vorhersagen dieser ID zählen als Hard-Negative-Treffer.
+- `source_test`: `datei::test[index]` upstream.
+
+Gleiche Fälle (Text und IDs) bleiben einmal; widersprechen sich zwei Tests für denselben Text und
+dieselben IDs, entfallen beide. Das Manifest beider Splits trägt `"family": "presidio_favored"`;
+das Manifest der neutralen Familie bleibt Byte für Byte wie in E04, damit der eingefrorene Split
+reproduzierbar bleibt. Das Gate legt die Familie einmalig an (Schritt `presidio-favored-corpora`,
+`~/ark-l1/data/dev/presidio_favored`, `~/ark-l1/holdout/presidio_favored`, Rohdaten in
+`HOLDOUT/presidio_favored/.sources`). Gegen die echten Quellen prüft
+`ARK_L1_CORPUS_SOURCES=<--sources> pytest scripts/tests/test_l1_prepare_corpora.py`. Nur Standardbibliothek:
 Die Gretel-Parquet-Dateien liest ein minimaler Reader im Skript (Snappy, Dictionary/Plain,
 Page v1/v2), weil das Presidio-Venv kein pyarrow hat. Er ist gegen pyarrow auf den gepinnten Shards
 geprüft (`ARK_L1_CORPUS_SOURCES=<--sources> pytest scripts/tests/test_l1_prepare_corpora.py`);
@@ -168,14 +207,20 @@ python3 scripts/l1_presidio/scoreboard.py score --gold gold.jsonl --predictions 
   nur auf den IDs gewertet, die er annotiert (Gretel kennt keine Steuer-ID); Korpora ohne Eintrag
   (das synthetische DE/EU-Set) auf allen L1-IDs. ARK-Spans werden über `ark_label` gemappt,
   Presidio-Spans über `presidio_entity`; `ark.<LABEL>` aus `run_ark.py` zählt also mit.
-- **Hard Negatives:** jede L1-Vorhersage, die einen `hard_negatives`-Span überlappt.
+- **Quellfamilien:** jeder Bucket auch je Familie (`family/<familie>`, `family_language/…`,
+  `family_entity/…`, `family_language_entity/…`), Familie aus `source_families` in
+  `entity_map.yaml`; ein Korpus ohne Familie ist ein Eingabefehler (Exit 2). Zeilen mit
+  `scored_entities` (Recognizer-Tests) werden nur auf diesen IDs gewertet.
+- **Hard Negatives:** jede L1-Vorhersage, die einen `hard_negatives`-Span überlappt; trägt der Span
+  `entity_type`, nur Vorhersagen dieser ID.
 - **Regression (Exit 1):** F1-Verlust > 0,5 pp (`--tolerance-pp`), exakt oder überlappend, für eine
-  Entität, alle L1-IDs zusammen, `de` oder `en`, in Dev oder Holdout; oder ein neuer Treffer auf
+  Entität, alle L1-IDs zusammen, eine Quellfamilie, `de` oder `en`, in Dev oder Holdout; oder ein neuer Treffer auf
   einem Hard Negative (gleiche Zeile, ID und Offsets wie in der Basis zählen nicht). Exit 2 =
   Eingabe- oder Infrastrukturfehler (unbekannter Commit, Build fehlgeschlagen, Vorhersagen passen
   nicht zum Gold).
 - **Ausgabe:** stdout endet mit einer Zeile je Split (F1 exakt/überlappend gesamt, DE, EN, Δ zur
-  Basis, Hard-Negative-FP), den Regressionen und `RESULT: PASS|REGRESSION`. Eine Tabelle je
+  Basis, Hard-Negative-FP) und darunter je Quellfamilie (gesamt, EN; `ark_authored` mit dem Hinweis,
+  dass es keinen Meilenstein entscheidet), den Regressionen und `RESULT: PASS|REGRESSION`. Eine Tabelle je
   Entität gibt es nur für Dev; vom Holdout erscheinen nur Aggregate und Regressionen, nie
   Zeilen-IDs oder Text. `--json` schreibt den vollständigen Bericht (mit Holdout-Zeilen-IDs).
 - **Head:** `run_ark.py` des Checkouts mit `--ark-python` (Standard `$VIRTUAL_ENV/bin/python`).
@@ -192,6 +237,22 @@ python3 scripts/l1_presidio/scoreboard.py score --gold gold.jsonl --predictions 
   gebaut; ändert ein Lauf nur Skripte oder Doku, sind Head und Basis identisch. Ergebnisse je
   Commit: `CACHE/scoreboard/results/<sha>.json`. Ein Head mit uncommitteten Änderungen an diesen
   Pfaden wird gerechnet, aber nicht gecacht.
+
+### M1 je Quellfamilie
+
+`m1` vergleicht ARK- und Presidio-Vorhersagen, die unter denselben relativen Dateinamen wie das Gold
+liegen (`run_ark.py` bzw. `run_presidio.py --profile tuned` je Datei):
+
+```bash
+python3 scripts/l1_presidio/scoreboard.py m1 --gold "$ARK_L1_DEV_DATA" \
+  --ark /tmp/ark --presidio /tmp/presidio-tuned   # [--language en|de|all] [--metric exact|overlap] [--check] [--json F]
+```
+
+Je Familie und gemeinsamer (`shared`) Entität mit Gold in der Familie: F1(ARK) ≥ F1(Presidio)?
+Standard: englische Zeilen, exakte Spans. Eine Familie hält, wenn das für jede solche Entität gilt
+und es mindestens eine gibt; `M1: MET` nur, wenn `neutral` und `presidio_favored` je für sich
+halten. `ark_authored` wird gedruckt, entscheidet aber nicht. `--check` endet mit Exit 1, wenn M1
+nicht erfüllt ist; fehlende Vorhersagedateien sind Exit 2.
 
 Im Gate (`ark-l1 gate`) läuft der Schritt mit dem Presidio-Venv, ohne Netz, mit Lesezugriff auf
 Holdout und Checkout und Schreibzugriff nur auf den Cache; `VIRTUAL_ENV` zeigt auf das Gate-Venv,

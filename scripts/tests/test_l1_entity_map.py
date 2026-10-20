@@ -58,6 +58,10 @@ def minimal_map():
                 "corpora": {"tab": ["PERSON"]},
             },
         ],
+        "source_families": {
+            "ark_authored": ["pii_l1", "l1_bilingual_rules", "ark-synthetic-de-eu"],
+            "neutral": ["gretel-synthetic-pii-finance", "tab"],
+        },
     }
 
 
@@ -128,6 +132,54 @@ def test_scopes_follow_the_l1_program():
 # ── validation of malformed maps ─────────────────────────────────────────────
 
 
+def test_every_gold_source_has_its_family():
+    entity_map = MODULE.load()
+    assert entity_map.families == {
+        "pii_l1": "ark_authored",
+        "l1_bilingual_rules": "ark_authored",
+        "ark-synthetic-de-eu": "ark_authored",
+        "gretel-synthetic-pii-finance": "neutral",
+        "ai4privacy-openpii-nano-1k": "neutral",
+        "tab": "neutral",
+        "presidio-evaluator-synth-v2": "presidio_favored",
+        "presidio-analyzer-recognizer-tests": "presidio_favored",
+    }
+    assert set(entity_map.families) == set(external_pii_eval.load_manifest()) | set(MODULE.ARK_GOLD_SOURCES)
+    assert MODULE.MILESTONE_FAMILIES == ("neutral", "presidio_favored")
+    assert all(path.is_file() for path in MODULE.ARK_GOLD_SOURCES.values())
+
+
+def test_presidio_favored_corpora_use_presidio_entity_names():
+    entity_map = MODULE.load()
+    assert entity_map.corpus_label("presidio-analyzer-recognizer-tests", "CREDIT_CARD") == "pii.credit_card.pan"
+    assert entity_map.corpus_label("presidio-analyzer-recognizer-tests", "DE_TAX_ID") == "pii.de.tax_id"
+    assert entity_map.corpus_label("presidio-evaluator-synth-v2", "DOMAIN_NAME") == "pii.url"
+    assert entity_map.corpus_label("presidio-evaluator-synth-v2", "ZIP_CODE") is None
+    # Every recognizer-test label is the Presidio entity of the same id.
+    for label, benchmark in entity_map.corpus_labels("presidio-analyzer-recognizer-tests").items():
+        assert entity_map.presidio_entity(label.upper()) == benchmark
+
+
+def test_check_reports_untagged_and_unknown_gold_sources():
+    payload = minimal_map()
+    payload["source_families"]["neutral"] = ["gretel-synthetic-pii-finance", "no-such-corpus"]
+    problems = MODULE.check(
+        MODULE.EntityMap.from_dict(payload),
+        ark_labels={"EMAIL", "SWIFT_CODE"},
+        ark_output_map={},
+        presidio_output_map={},
+        benchmark_aliases={},
+        manifest={
+            "gretel-synthetic-pii-finance": {"label_map": {"EMAIL": "pii.email"}},
+            "tab": {"label_map": {"PERSON": "entity.person_name"}},
+        },
+    )
+    assert problems == [
+        "gold source tab has no source family",
+        "source family entry no-such-corpus is not a known gold source",
+    ]
+
+
 def test_minimal_map_is_valid():
     entity_map = MODULE.EntityMap.from_dict(minimal_map())
     assert entity_map.ark_label("EMAIL") == "pii.email"
@@ -152,6 +204,9 @@ def test_minimal_map_is_valid():
         (lambda m: m["entities"][3]["corpora"].update({"gretel-synthetic-pii-finance": ["email"]}), "email"),
         (lambda m: m["entities"][0].update(ark="EMAIL"), "list"),
         (lambda m: m["entities"][0].update(extra=1), "extra"),
+        (lambda m: m["source_families"].update(favored=["x"]), "source family"),
+        (lambda m: m["source_families"]["neutral"].append("pii_l1"), "pii_l1"),
+        (lambda m: m.update(source_families=["tab"]), "source_families"),
     ],
 )
 def test_malformed_maps_are_rejected(mutate, message):
