@@ -105,13 +105,21 @@ class L1BenchmarkDataTests(unittest.TestCase):
             expected = namespace["flatten"](name, namespace[cases_name])
             self.assertEqual(load(name), expected, name)
 
-    def test_every_native_pii_label_has_three_positives_and_two_hard_negatives(self):
+    def test_every_native_pii_label_has_n_gated_cases_per_language(self):
+        # Golden schema v2 (E10): known gaps are reported, not gated, so they do not count.
         rows = load("pii_l1")
         self.assertEqual({row["target_label"] for row in rows}, PII_LABELS)
-        counts = Counter((row["target_label"], row["case_type"]) for row in rows)
+        counts = Counter(
+            (row["target_label"], row["language"], row["case_type"])
+            for row in rows
+            if not row["known_gap"]
+        )
         for label in PII_LABELS:
-            self.assertEqual(counts[(label, "positive")], 3, label)
-            self.assertEqual(counts[(label, "hard_negative")], 2, label)
+            for language in ("de", "en"):
+                for case_type in ("positive", "hard_negative"):
+                    self.assertGreaterEqual(
+                        counts[(label, language, case_type)], 5, (label, language, case_type)
+                    )
 
     def test_every_native_dlp_label_has_n_gated_cases_per_language(self):
         # Golden schema v2 (E13): known gaps are reported, not gated, so they do not count.
@@ -159,7 +167,7 @@ class L1BenchmarkDataTests(unittest.TestCase):
 
     def test_language_distribution_is_broad(self):
         expected = {
-            "pii_l1": {"de": 74, "en": 66},
+            "pii_l1": {"de": 365, "en": 348},
             "dlp_l1": {"de": 265, "en": 272},
         }
         for name, distribution in expected.items():

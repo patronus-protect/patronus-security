@@ -6,7 +6,7 @@ use std::{
 };
 
 use patronus_ark::{
-    detectors::dlp::dlp::DLP_PATTERNS,
+    detectors::{dlp::dlp::DLP_PATTERNS, pii::pii::PII_PATTERNS},
     golden_recipes::{materialize_fragments, GeneratorSet, SecretRecipe},
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
@@ -18,8 +18,8 @@ struct FixtureRow {
     language: String,
     case_type: String,
     target_label: String,
-    /// DLP golden schema v2: the rule that must report every gold span, the
-    /// difficulty tags, and whether the positive is a known gap (reported, not gated).
+    /// Golden schema v2 (PII and DLP): the rule that must report every gold span,
+    /// the difficulty tags, and whether the positive is a known gap (reported, not gated).
     rule_id: Option<String>,
     #[serde(default)]
     tags: Vec<String>,
@@ -87,11 +87,12 @@ fn matched_rules(result: &SecurityScanResult, text: &str) -> BTreeSet<(usize, us
 }
 
 /// Gated positives per rule and language that the declared rule reported exactly,
-/// out of the gated positives declaring that rule; plus pass/total and known gaps per tag.
+/// out of the gated positives declaring that rule; plus pass/total and known gaps per
+/// tag and language.
 #[derive(Default)]
 struct Coverage {
     rules: BTreeMap<String, BTreeMap<String, (usize, usize)>>,
-    tags: BTreeMap<String, (usize, usize, usize)>,
+    tags: BTreeMap<(String, String), (usize, usize, usize)>,
     gaps_closed: Vec<String>,
 }
 
@@ -117,7 +118,7 @@ impl Coverage {
             row.tags.clone()
         };
         for tag in tags {
-            let cell = self.tags.entry(tag).or_default();
+            let cell = self.tags.entry((tag, row.language.clone())).or_default();
             if row.known_gap {
                 cell.2 += 1;
             } else {
@@ -146,9 +147,9 @@ impl Coverage {
             });
             println!("  {rule:<40} {:>5} | {:>5}", cells[0], cells[1]);
         }
-        println!("positives per difficulty tag (gated passed/total, known gaps):");
-        for (tag, (passed, total, gaps)) in &self.tags {
-            println!("  {tag:<12} {passed}/{total} gaps={gaps}");
+        println!("positives per difficulty tag and language (gated passed/total, known gaps):");
+        for ((tag, language), (passed, total, gaps)) in &self.tags {
+            println!("  {tag:<12} {language} {passed}/{total} gaps={gaps}");
         }
         missing
     }
@@ -160,6 +161,7 @@ fn evaluate(
     path: &Path,
     category: SecurityCategory,
     model: &str,
+    rule_ids: &[&str],
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut rows = Vec::new();
     for line in BufReader::new(File::open(path)?).lines() {
@@ -256,11 +258,7 @@ fn evaluate(
     );
     let mut failed = positive_exact != positive_total || negative_rejected != negative_total;
     if rows.iter().any(|row| row.rule_id.is_some()) {
-        let rules = DLP_PATTERNS
-            .iter()
-            .map(|pattern| pattern.name)
-            .collect::<Vec<_>>();
-        let missing = coverage.report(&rules);
+        let missing = coverage.report(rule_ids);
         if !missing.is_empty() {
             eprintln!("rules without a passing gated positive: {missing:?}");
             failed = true;
@@ -302,6 +300,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             &root.join("pii_l1.jsonl"),
             SecurityCategory::Pii,
             "native:pii",
+            &PII_PATTERNS
+                .iter()
+                .map(|pattern| pattern.name)
+                .collect::<Vec<_>>(),
         )?;
     }
     if suite != "pii" {
@@ -311,6 +313,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             &root.join("dlp_l1.jsonl"),
             SecurityCategory::Dlp,
             "native:dlp",
+            &DLP_PATTERNS
+                .iter()
+                .map(|pattern| pattern.name)
+                .collect::<Vec<_>>(),
         )?;
     }
     Ok(())
