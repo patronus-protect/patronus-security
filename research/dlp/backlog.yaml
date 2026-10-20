@@ -177,6 +177,7 @@ tasks:
     accept: rust/src/detectors/validators/ with test vectors; reusable by PII
 
   - id: K04
+    status: done
     title: Connect the score model to PII K02 (base per rule + validator strength + context), modes strict/balanced/recall
     type: engine
     deps: [K02, E14]
