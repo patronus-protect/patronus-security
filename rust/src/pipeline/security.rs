@@ -1441,13 +1441,41 @@ impl SecurityGateway {
                             "native:dlp",
                             text.len(),
                             || {
-                                timed_native_regex_scan_result(
+                                let dlp_mode = execution.gates().dlp_mode;
+                                if dlp_mode.min_score().is_none() {
+                                    return timed_native_regex_scan_result(
+                                        category,
+                                        "native:dlp",
+                                        native,
+                                        prepared,
+                                        execution,
+                                    );
+                                }
+                                let mut result = timed_native_detection_scan_result(
                                     category,
                                     "native:dlp",
-                                    native,
-                                    prepared,
-                                    execution,
-                                )
+                                    prepared.text(),
+                                    || {
+                                        native.detect_prepared_with_mode(
+                                            prepared,
+                                            |rule_id| execution.allows_rule(rule_id),
+                                            execution.gates().explain,
+                                            dlp_mode,
+                                        )
+                                    },
+                                );
+                                // Scored modes report the best span that survives
+                                // post-prediction filtering, as for PII.
+                                if let Some(best) = result
+                                    .evidence_spans
+                                    .iter()
+                                    .map(|span| span.score)
+                                    .reduce(f64::max)
+                                {
+                                    result.confidence = best;
+                                    result.layers[0].confidence = best;
+                                }
+                                result
                             },
                         ));
                     }

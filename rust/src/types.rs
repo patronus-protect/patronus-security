@@ -557,7 +557,7 @@ impl Default for OnnxRuntimeOptions {
 ///
 /// Unspecified rules use the shared credentials/secrets-only DLP default;
 /// other execution gates default to enabled. Diagnostic `explain` and the
-/// scored PII modes are opt-in. `max_level` is still enforced by
+/// scored PII and DLP modes are opt-in. `max_level` is still enforced by
 /// `ScanExecution`, so a gate can only further restrict the configured scanner.
 pub struct ScanGateMatrix {
     /// Include bounded diagnostic anchor metadata. Disabled by default.
@@ -565,6 +565,9 @@ pub struct ScanGateMatrix {
     /// Native PII output mode. `Strict` (default) keeps rule acceptance with
     /// score `1.0`; `Balanced` and `Recall` report model scores and thresholds.
     pub pii_mode: crate::detectors::pii::score::PiiMode,
+    /// Native DLP output mode. `Strict` (default) keeps rule acceptance with
+    /// score `1.0`; `Balanced` and `Recall` report model scores and thresholds.
+    pub dlp_mode: crate::detectors::dlp::score::DlpMode,
     /// Optional L1 override. `None` means enabled.
     pub l1: Option<bool>,
     /// Optional L2 override. `None` means enabled.
@@ -919,6 +922,7 @@ impl ScanGateMatrix {
         Self {
             explain: false,
             pii_mode: Default::default(),
+            dlp_mode: Default::default(),
             l1: Some(l1),
             l2: Some(l2),
             l3: Some(l3),

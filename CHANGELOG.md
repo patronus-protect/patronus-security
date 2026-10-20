@@ -11,6 +11,24 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Add a DLP score model and the DLP output modes `strict`, `balanced` and `recall` (K04), on the
+  PII score model: every DLP rule declares a base (1–100 points for its regex form); a finding
+  scores base plus validator strength (checksum 35, structure 25, format 15, none 0) plus its
+  context. A rule that captures the value behind a field name of its own adds 25; a secret without
+  a field name (provider tokens, wallet and PEM keys, JWTs) takes the nearest DE/EN term on its
+  line with the PII proximity rules: a credential term of `anchor_lexicons/dlp.json` adds
+  25/20/15, a nearer digest/hash/ID term (new lexicon entry `dlp.digest_reference`: checksum,
+  tx hash, Transaktionshash, Prüfsumme, commit SHA, sha256, UUID …) subtracts 30. The mode is a new
+  execution gate: `ScanGateMatrix.dlp_mode` (`DlpMode`), Python `execution_gates={"dlp_mode": …}`
+  and Ark API `gates.dlp_mode`; unknown names are rejected. `balanced` (0.50) and `recall` (0.30)
+  keep the `strict` spans that reach the threshold, after the same overlap resolution, and report
+  `score` and `context` in `matched_rules`; a bare `0x` + 64 hex value scores 0.40 and next to
+  `tx hash` 0.10. `run_ark.py` takes `--dlp-mode`, and the DLP scoreboard reports P/R curves (exact
+  and overlap P/R/F1 and hard-negative FP per score threshold) from a `recall` run on the carrier
+  rows, without gating them. Detection change: none in the default `strict` mode; goldens,
+  13_l1_golden_eval and the scoreboard profiles `default`/`extended` are unchanged. New `dlp_l1`
+  goldens run in `balanced` (`dlp_mode`), and the rule catalog lists base, context source and score
+  range per DLP rule.
 - Shared validator library `patronus_ark::detectors::validators` for DLP and PII rules: CRC-32 and
   the CRC32-Base62 suffix of GitHub/npm tokens, Base58/Base58Check, Bech32/Bech32m (BIP 173/350,
   configurable length limit, 5/8-bit regrouping), strict canonical base64 (standard, unpadded,

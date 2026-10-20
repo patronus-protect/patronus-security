@@ -7,7 +7,7 @@ use std::{
 
 use patronus_ark::{
     detectors::{
-        dlp::dlp::DLP_PATTERNS,
+        dlp::{dlp::DLP_PATTERNS, score::DlpMode},
         pii::{pii::PII_PATTERNS, score::PiiMode},
     },
     golden_recipes::{materialize_fragments, GeneratorSet, SecretRecipe},
@@ -31,6 +31,9 @@ struct FixtureRow {
     /// PII rows for the opt-in modes (K03 context engine) name the mode they run in.
     #[serde(default)]
     pii_mode: PiiMode,
+    /// DLP rows for the opt-in modes (K04 score model) name the mode they run in.
+    #[serde(default)]
+    dlp_mode: DlpMode,
     /// Literal rows carry `text`; secret rows carry `template` + `secrets` recipes.
     text: Option<String>,
     template: Option<String>,
@@ -63,10 +66,11 @@ struct FixtureEntity {
 
 /// Default-off DLP classes (business records, content) are reachability-tested
 /// with exactly their own rules opted in; every other row runs on the defaults,
-/// in the PII mode the row names (default `strict`).
-fn gates_for(target_label: &str, pii_mode: PiiMode) -> ScanGateMatrix {
+/// in the PII and DLP modes the row names (default `strict`).
+fn gates_for(target_label: &str, pii_mode: PiiMode, dlp_mode: DlpMode) -> ScanGateMatrix {
     let mut gates = ScanGateMatrix {
         pii_mode,
+        dlp_mode,
         ..ScanGateMatrix::default()
     };
     for pattern in DLP_PATTERNS {
@@ -191,7 +195,7 @@ fn evaluate(
             .filter(|entity| entity.label == row.target_label)
             .map(|entity| (entity.start, entity.end, entity.label.clone()))
             .collect::<BTreeSet<_>>();
-        gateway.set_execution_gates(gates_for(&row.target_label, row.pii_mode));
+        gateway.set_execution_gates(gates_for(&row.target_label, row.pii_mode, row.dlp_mode));
         let text = row.materialized_text(generators)?;
         let result = gateway
             .scan_category(category, &text)

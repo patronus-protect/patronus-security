@@ -197,6 +197,7 @@ def parse_native_patterns(
                 "field_context": re.search(r"\bcaptured_value:\s*true\b", block) is not None,
                 "requires_context": re.search(r"\brequires_context:\s*true\b", block) is not None,
                 "scored_only": re.search(r"\bscored_only:\s*true\b", block) is not None,
+                "span_group": re.search(r"\bspan_group:\s*Some\(", block) is not None,
             }
             meta = re.search(r'\bmeta:\s*RuleMeta::new\(\s*ValidatorStrength::(\w+),\s*"([^"]+)"', block)
             if meta:
@@ -338,10 +339,50 @@ def pii_rule_score_range(rule: dict, strength_points: dict[str, int], context_po
     return f"{min(low, 100) / 100:.2f}–{min(points + max(tiers), 100) / 100:.2f}"
 
 
+def dlp_strength_points(path: Path = ROOT / "rust/src/detectors/dlp/score.rs") -> dict[str, int]:
+    """Validator strength points of the DLP score model (K04)."""
+    body = re.search(r"pub const fn points\(self\) -> u8 \{(.*?)\n    \}", path.read_text(), flags=re.S)
+    if not body:
+        raise ValueError(f"Missing DLP strength points in {path}")
+    return {name.lower(): int(points) for name, points in re.findall(r"Self::(\w+) => (\d+),", body.group(1))}
+
+
+def dlp_context_lexicon(path: Path = ROOT / "rust/src/detectors/dlp/context.rs") -> tuple[list[str], list[str]]:
+    """Support and counter-context lexicon IDs of the DLP score model (K04)."""
+    source = path.read_text()
+    lists = []
+    for name in ("SUPPORT_LEXICON", "COUNTER_LEXICON"):
+        body = re.search(rf"pub static {name}: &\[&str\] = &\[(.*?)\];", source, flags=re.S)
+        if not body:
+            raise ValueError(f"Missing {name} in {path}")
+        lists.append(re.findall(r'"([^"]+)"', body.group(1)))
+    return lists[0], lists[1]
+
+
+def dlp_rule_context(rule: dict, credential_groups: set[str]) -> str:
+    """Context source of a DLP rule, as `detectors::dlp::context::source` decides it."""
+    if rule["entity_group"].startswith(("dlp.content.", "dlp.internal.")):
+        return "none"
+    if rule["span_group"]:
+        return "field"
+    return "proximity" if rule["entity_group"] in credential_groups else "none"
+
+
+def dlp_rule_score_range(rule: dict, context: str, strength_points: dict[str, int], context_points: int) -> str:
+    points = rule["base_score"] + strength_points[rule["validator_strength"]]
+    if context == "field":
+        return f"{min(points + context_points, 100) / 100:.2f}"
+    if context == "proximity":
+        return f"{min(points, 100) / 100:.2f}–{min(points + context_points, 100) / 100:.2f}"
+    return f"{min(points, 100) / 100:.2f}"
+
+
 def generate_l1_rule_catalog_doc() -> str:
     pii = parse_native_patterns(ROOT / "rust/src/detectors/pii/pii.rs", "PiiPattern")
     strength_points, context_points, proximity_tiers, counter_points = pii_score_points()
     dlp = parse_dlp_patterns()
+    dlp_points = dlp_strength_points()
+    dlp_support, dlp_counter = dlp_context_lexicon()
     credential_groups = {
         "API_KEY", "CLOUD_KEY", "CREDENTIAL", "CRYPTO_KEY", "PASSWORD_HASH",
         "PAYMENT_KEY", "PRIVATE_KEY", "SECRET_TOKEN",
@@ -435,13 +476,27 @@ def generate_l1_rule_catalog_doc() -> str:
         "",
         "Each rule carries metadata v2, and every entry of `matched_rules` in the layer details reports it: `provider` for provider-bound formats, `validator_strength` (`checksum`: check digits verified; `structure`: decoded or parsed structure verified; `format`: fixed prefix, alphabet, length or syntax shape; `none`: keyword or context only), `source_ref` (`gitleaks:<rule-id>`, vendor or specification URL, or `ark` for in-house rules; see `research/dlp/rule_sources.yaml`) and, for credential/secret rules, `severity` (`test` for provider test/sandbox credentials such as Stripe `sk_test_`, otherwise `live`). Provider, key and JWT rules drop values whose Shannon entropy is below 3.0 bits per character.",
         "",
-        "| Rule ID | Result entity group | Provider | Validator | Source | Extra validator | Default |",
-        "| --- | --- | --- | --- | --- | --- | --- |",
+        "In the default `strict` DLP mode every finding scores `1.0`. In `balanced` and `recall` (K04, "
+        "thresholds 0.50 and 0.30 as for PII) a finding scores the rule base plus the validator strength "
+        f"(checksum {dlp_points['checksum']}, structure {dlp_points['structure']}, format {dlp_points['format']}, "
+        f"none {dlp_points['none']}) plus its context, capped at 100 and divided by 100: {context_points} for a "
+        "`field` rule, which captures the value behind a field name of its own; for a `proximity` rule "
+        f"{'/'.join(str(points) for points in proximity_tiers)} for a credential term near the value "
+        f"({', '.join(f'`{lexicon_id}`' for lexicon_id in dlp_support)}) and -{counter_points} when a "
+        f"digest, hash or ID term ({', '.join(f'`{lexicon_id}`' for lexicon_id in dlp_counter)}) is nearer; "
+        "`none` rules score without context. A scored mode keeps the `strict` spans whose score reaches the "
+        "threshold (see [DLP score and modes](result-schema.md#dlp-score-and-modes)). The score column "
+        "shows the score without counter-context.",
+        "",
+        "| Rule ID | Result entity group | Provider | Validator | Source | Extra validator | Default | Base | Context | Score (`balanced`/`recall`) |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ])
     for rule in dlp:
         provider = f"`{rule['provider']}`" if rule["provider"] else "–"
+        context = dlp_rule_context(rule, credential_groups)
+        score_range = dlp_rule_score_range(rule, context, dlp_points, context_points)
         lines.append(
-            f"| `{rule['id']}` | `{rule['entity_group']}` | {provider} | `{rule['validator_strength']}` | {_source_ref_cell(rule['source_ref'])} | {'yes' if rule['validated'] else 'no'} | {'on' if rule['entity_group'] in credential_groups else 'off'} |"
+            f"| `{rule['id']}` | `{rule['entity_group']}` | {provider} | `{rule['validator_strength']}` | {_source_ref_cell(rule['source_ref'])} | {'yes' if rule['validated'] else 'no'} | {'on' if rule['entity_group'] in credential_groups else 'off'} | {rule['base_score']} | {context} | {score_range} |"
         )
 
     lines.extend([

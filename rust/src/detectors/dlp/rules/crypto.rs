@@ -10,6 +10,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "CRYPTO_KEY",
         validator: None,
         span_group: None,
+        base_score: 25,
         meta: RuleMeta::new(
             ValidatorStrength::Format,
             "https://ethereum.org/en/developers/docs/accounts/",
@@ -24,6 +25,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "CRYPTO_KEY",
         validator: None,
         span_group: None,
+        base_score: 30,
         meta: RuleMeta::new(
             ValidatorStrength::Format,
             "https://en.bitcoin.it/wiki/Wallet_import_format",
@@ -39,6 +41,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "PRIVATE_KEY",
         validator: None,
         span_group: None,
+        base_score: 70,
         meta: RuleMeta::new(
             ValidatorStrength::Format,
             "gitleaks:private-key",
@@ -51,6 +54,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "PRIVATE_KEY",
         validator: None,
         span_group: None,
+        base_score: 50,
         meta: RuleMeta::new(
             ValidatorStrength::Format,
             "gitleaks:private-key",

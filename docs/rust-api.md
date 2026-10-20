@@ -30,6 +30,7 @@ pub use cache::{
     CacheEncryptionConfig, CacheError, CacheWriteMode, ExactCacheConfig, MemoryCacheConfig,
     PersistentCacheConfig, WriteBehindConfig,
 };
+pub use detectors::dlp::score::DlpMode;
 pub use detectors::pii::score::PiiMode;
 pub use dynamic_pii::{
     DynamicPiiConditionalLabels, DynamicPiiConfig, DynamicPiiExecutionGate,
@@ -1253,6 +1254,9 @@ pub struct ScanGateMatrix {
     /// Native PII output mode. `Strict` (default) keeps rule acceptance with
     /// score `1.0`; `Balanced` and `Recall` report model scores and thresholds.
     pub pii_mode: crate::detectors::pii::score::PiiMode,
+    /// Native DLP output mode. `Strict` (default) keeps rule acceptance with
+    /// score `1.0`; `Balanced` and `Recall` report model scores and thresholds.
+    pub dlp_mode: crate::detectors::dlp::score::DlpMode,
     /// Optional L1 override. `None` means enabled.
     pub l1: Option<bool>,
     /// Optional L2 override. `None` means enabled.
@@ -1276,7 +1280,7 @@ Caller-controlled execution gates for one scanner execution profile.
 
 Unspecified rules use the shared credentials/secrets-only DLP default;
 other execution gates default to enabled. Diagnostic `explain` and the
-scored PII modes are opt-in. `max_level` is still enforced by
+scored PII and DLP modes are opt-in. `max_level` is still enforced by
 `ScanExecution`, so a gate can only further restrict the configured scanner.
 
 ```rust

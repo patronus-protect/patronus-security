@@ -380,6 +380,49 @@ public finding spans and use `source: "l1"`; rejected candidates remain visible 
 native Injection producer verdicts are no longer returned as separate public results. Registered
 external L1 detectors remain separate and unchanged.
 
+### DLP score and modes
+
+The DLP `score` of the `native:dlp` producer depends on the DLP mode, an opt-in execution gate
+(Rust `ScanGateMatrix.dlp_mode`, Python `execution_gates={"dlp_mode": "balanced"}`, Ark API
+`gates: {dlp_mode: balanced}`). Unknown mode names are rejected. The modes and thresholds are
+those of the [PII modes](#pii-score-and-modes); the two gates are independent.
+
+| Mode | `evidence_spans[].score` | Threshold | `confidence` |
+| --- | --- | --- | --- |
+| `strict` (default) | always `1.0` | none: the rules decide | `1.0` |
+| `balanced` | model score | findings below `0.50` are dropped | highest span score |
+| `recall` | model score | findings below `0.30` are dropped | highest span score |
+
+The model score is the PII score model applied to the DLP rules, capped at 100 and divided by 100:
+
+- **Base** (1–100 points) of the rule: how specific its pattern is on its own (a long provider
+  prefix such as `github_pat_` scores higher than a bare `0x` + 64 hex digits).
+- **Validator strength** from the rule metadata: `checksum` +35, `structure` +25, `format` +15,
+  `none` +0.
+- **Context**: +25 when the rule captures the value behind a field name of its own (assignments,
+  `Authorization` headers, URL parameters and userinfo, cookies, keyed provider secrets such as
+  `aws_secret_access_key`, business identifiers). A secret without a field name (provider
+  tokens, wallet keys, PEM keys, JWTs) takes the nearest DE/EN term on its line with the windows
+  and boundaries of the PII context engine: a credential term of
+  `rust/src/detectors/anchor_lexicons/dlp.json` (`private key`, `privater Schlüssel`,
+  `access token`, `API-Schlüssel`, `GITHUB_TOKEN` …) adds +25/+20/+15, a strictly nearer digest,
+  hash or ID term (`dlp.digest_reference`: `checksum`, `tx hash`, `Transaktionshash`,
+  `Prüfsumme`, `commit sha`, `sha256`, `UUID`, `request id` …) subtracts 30. Content classes
+  score without context.
+
+So a bare `0x` + 64 hex value scores 0.40 (kept by `recall` only), next to `private key` 0.65,
+and next to `tx hash` 0.10 (dropped in both scored modes); a provider token scores 0.50–0.75
+without context, which a counter term lowers below `balanced`. Every field-bound and content rule
+scores at least 0.50, so `balanced` changes only findings without a field name.
+
+A scored mode scores the findings that `strict` reports, after the same overlap resolution, and
+then drops those below the threshold: its spans are always a subset of the `strict` spans, and a
+value dropped for its context does not free its range for a weaker rule. Each surviving
+`matched_rules` entry carries `score` and `context` (`bonus`, `penalty` and, if a term decided,
+`anchor` — the lexicon entry or `field` —, `side` and `distance`) next to the rule metadata.
+The [L1 rule catalog](l1-rule-catalog.md#dlp-regex-rules-59) lists base, context source and
+score range per rule.
+
 ### Shell command results
 
 `shell_command` returns one L1 result with `model: "cat-shell-risk-commander"` and `class_name`

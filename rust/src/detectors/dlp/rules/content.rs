@@ -11,6 +11,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.internal.business_metric",
         validator: None,
         span_group: None,
+        base_score: 40,
         meta: RuleMeta::new(
             ValidatorStrength::Format,
             "ark",
@@ -35,6 +36,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.content.database_dump",
         validator: None,
         span_group: None,
+        base_score: 40,
         meta: RuleMeta::new(ValidatorStrength::Format, "ark", &["insert"]),
     },
     DlpPattern {
@@ -43,6 +45,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.content.source_code",
         validator: None,
         span_group: None,
+        base_score: 40,
         meta: RuleMeta::new(ValidatorStrength::Format, "ark", &["```"]),
     },
     DlpPattern {
@@ -51,6 +54,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.content.source_code",
         validator: None,
         span_group: None,
+        base_score: 40,
         meta: RuleMeta::new(ValidatorStrength::Format, "ark", &["const", "let", "var"]),
     },
     DlpPattern {
@@ -59,6 +63,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.content.source_code",
         validator: Some(is_non_placeholder_source_assignment),
         span_group: None,
+        base_score: 40,
         meta: RuleMeta::new(ValidatorStrength::Format, "ark", &["="]),
     },
     DlpPattern {
@@ -67,6 +72,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.content.source_code",
         validator: None,
         span_group: None,
+        base_score: 40,
         meta: RuleMeta::new(
             ValidatorStrength::Format,
             "ark",
@@ -88,6 +94,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.content.source_code",
         validator: None,
         span_group: None,
+        base_score: 40,
         meta: RuleMeta::new(ValidatorStrength::Format, "ark", &["import", "use"]),
     },
     DlpPattern {
@@ -96,6 +103,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.content.sql",
         validator: Some(is_structured_sql_statement),
         span_group: Some(1),
+        base_score: 30,
         meta: RuleMeta::new(
             ValidatorStrength::Structure,
             "ark",
@@ -111,6 +119,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.content.sql",
         validator: None,
         span_group: None,
+        base_score: 40,
         meta: RuleMeta::new(
             ValidatorStrength::Format,
             "ark",
@@ -123,6 +132,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.content.database_dump",
         validator: None,
         span_group: None,
+        base_score: 40,
         meta: RuleMeta::new(
             ValidatorStrength::Format,
             "ark",
@@ -135,6 +145,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.content.system_log",
         validator: None,
         span_group: None,
+        base_score: 40,
         meta: RuleMeta::new(
             ValidatorStrength::Format,
             "ark",
@@ -154,6 +165,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.content.system_log",
         validator: None,
         span_group: None,
+        base_score: 40,
         meta: RuleMeta::new(
             ValidatorStrength::Format,
             "ark",

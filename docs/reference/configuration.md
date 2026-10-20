@@ -94,6 +94,9 @@ scanner.set_execution_gates({
 - `pii_mode` — native PII output mode: `strict` (default; every finding scores `1.0`),
   `balanced` or `recall` (model scores with thresholds 0.50 and 0.30). See
   [PII score and modes](result-schema.md#pii-score-and-modes).
+- `dlp_mode` — native DLP output mode: `strict` (default; every finding scores `1.0`),
+  `balanced` or `recall` (model scores with the PII thresholds 0.50 and 0.30). See
+  [DLP score and modes](result-schema.md#dlp-score-and-modes).
 - `explain` — opt into bounded PII/DLP diagnostic context anchors (default `false`);
   [matched rule components and evidence spans](result-schema.md#native-l1-components) remain
   available without it. This flag does not change detection or conditional routing.
@@ -120,6 +123,7 @@ gates:
   l2: false
   l3: false
   pii_mode: strict
+  dlp_mode: strict
   rules:
     pii_employee_id: true
     dlp_sql_statement: false

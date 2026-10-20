@@ -11,6 +11,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "SECRET_TOKEN",
         validator: None,
         span_group: None,
+        base_score: 45,
         meta: RuleMeta::new(ValidatorStrength::Format, "gitleaks:jwt", &["ey"])
             .with_min_entropy(3.0),
     },
@@ -20,6 +21,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "CREDENTIAL",
         validator: Some(is_unredacted_url_credential),
         span_group: Some(1),
+        base_score: 25,
         meta: RuleMeta::new(
             ValidatorStrength::None,
             "ark",
@@ -32,6 +34,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "CREDENTIAL",
         validator: Some(is_secret_value),
         span_group: Some(1),
+        base_score: 35,
         meta: RuleMeta::new(
             ValidatorStrength::None,
             "ark",
@@ -45,6 +48,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "CREDENTIAL",
         validator: Some(is_secret_value),
         span_group: Some(1),
+        base_score: 35,
         meta: RuleMeta::new(
             ValidatorStrength::None,
             "ark",
@@ -57,6 +61,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "CREDENTIAL",
         validator: Some(is_secret_value),
         span_group: Some(1),
+        base_score: 30,
         meta: RuleMeta::new(
             ValidatorStrength::None,
             "ark",
@@ -69,6 +74,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "SECRET_TOKEN",
         validator: Some(is_secret_value),
         span_group: Some(1),
+        base_score: 35,
         meta: RuleMeta::new(ValidatorStrength::None, "ark", &["bearer"]),
     },
     DlpPattern {
@@ -77,6 +83,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "CREDENTIAL",
         validator: Some(is_secret_value),
         span_group: Some(1),
+        base_score: 35,
         meta: RuleMeta::new(ValidatorStrength::None, "ark", &["authorization"]),
     },
     DlpPattern {
@@ -85,6 +92,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "CREDENTIAL",
         validator: Some(is_secret_value),
         span_group: Some(1),
+        base_score: 25,
         meta: RuleMeta::new(ValidatorStrength::None, "ark", &["sig"]),
     },
     DlpPattern {
@@ -93,6 +101,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "CREDENTIAL",
         validator: Some(is_secret_value),
         span_group: Some(1),
+        base_score: 30,
         meta: RuleMeta::new(ValidatorStrength::None, "ark", &["cookie"]),
     },
     DlpPattern {
@@ -101,6 +110,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "SECRET_TOKEN",
         validator: Some(is_secret_value),
         span_group: Some(1),
+        base_score: 25,
         meta: RuleMeta::new(ValidatorStrength::None, "ark", &["csrf", "xsrf"]),
     },
 ];
@@ -112,6 +122,7 @@ pub(super) const URL_USERINFO_RULES: &[DlpPattern] = &[DlpPattern {
     entity_group: "CREDENTIAL",
     validator: Some(is_secret_value),
     span_group: Some(1),
+    base_score: 35,
     meta: RuleMeta::new(ValidatorStrength::None, "ark", &["://"]),
 }];
 

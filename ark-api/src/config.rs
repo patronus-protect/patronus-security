@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use patronus_ark::{
-    ConditionalPipelineGate, DynamicPiiConfig, L3ClusteringStrategy, L3EarlyExitMode,
+    ConditionalPipelineGate, DlpMode, DynamicPiiConfig, L3ClusteringStrategy, L3EarlyExitMode,
     L3PipelinePolicy, L3ProgressMode, L3SchedulerPolicy, OnnxRuntimeOptions, PiiMode,
     ScanGateMatrix, SecurityCategory, SecurityLevel,
 };
@@ -125,6 +125,8 @@ pub(crate) struct RawGates {
     #[serde(default)]
     pii_mode: PiiMode,
     #[serde(default)]
+    dlp_mode: DlpMode,
+    #[serde(default)]
     l1: Option<bool>,
     #[serde(default)]
     l2: Option<bool>,
@@ -169,6 +171,7 @@ impl RawGates {
         let RawGates {
             explain,
             pii_mode,
+            dlp_mode,
             l1,
             l2,
             l3,
@@ -229,6 +232,7 @@ impl RawGates {
         Ok(ScanGateMatrix {
             explain,
             pii_mode,
+            dlp_mode,
             l1,
             l2,
             l3,
@@ -510,6 +514,25 @@ mod tests {
         }
         assert!(serde_yaml::from_str::<RawGates>("pii_mode: fast").is_err());
         assert!(serde_yaml::from_str::<RawGates>("pii_mode: Balanced").is_err());
+    }
+
+    #[test]
+    fn dlp_mode_is_strict_by_default_and_explicitly_configurable() {
+        use patronus_ark::DlpMode;
+        assert_eq!(
+            RawGates::default().into_gate_matrix().unwrap().dlp_mode,
+            DlpMode::Strict
+        );
+        for (yaml, mode) in [
+            ("dlp_mode: strict", DlpMode::Strict),
+            ("dlp_mode: balanced", DlpMode::Balanced),
+            ("dlp_mode: recall", DlpMode::Recall),
+        ] {
+            let raw: RawGates = serde_yaml::from_str(yaml).unwrap();
+            assert_eq!(raw.into_gate_matrix().unwrap().dlp_mode, mode);
+        }
+        assert!(serde_yaml::from_str::<RawGates>("dlp_mode: fast").is_err());
+        assert!(serde_yaml::from_str::<RawGates>("dlp_mode: Balanced").is_err());
     }
 
     #[test]
