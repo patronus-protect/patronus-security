@@ -11,6 +11,7 @@ pub(super) const PHONE: PiiPattern = PiiPattern {
     strength: ValidatorStrength::Format,
     base_score: 35,
     captured_value: false,
+    requires_context: false,
 };
 
 // ── Sozialversicherung ───────────────────────────────────────────────────────
@@ -22,4 +23,5 @@ pub(super) const SSN: PiiPattern = PiiPattern {
     strength: ValidatorStrength::Format,
     base_score: 45,
     captured_value: true,
+    requires_context: false,
 };

@@ -202,18 +202,31 @@ The model score of a finding is the sum of three parts, capped at 100 and divide
 - **Base** (1–100 points) of the rule: how specific its pattern is on its own.
 - **Validator strength**: `checksum` +35 (Luhn, ISO 7064 MOD 97-10, Steuer-ID check digit),
   `format` +15 (length, alphabet, ranges, dates, prefixes), `none` +0 (no validator).
-- **Context bonus**: +25 when the rule binds the value to a field name such as `IBAN:` or
-  `Steuer-ID`.
+- **Context**: +25 when the rule binds the value to a field name such as `IBAN:` or
+  `Steuer-ID`. Otherwise the context engine looks at both sides of the value, on the same line,
+  for a term of the DE/EN lexicon in `rust/src/detectors/anchor_lexicons/pii.json` that belongs
+  to the label (`Telefon`, `erreichbar`, `call me at`, `Kreditkarte`, `IBAN`, `client IP` …):
+  +25 up to 16 characters away, +20 up to 32, +15 up to 48 before or 32 after the value.
+  A counter-context term (order, invoice, tracking, ticket, reference or serial number:
+  `Bestellnummer`, `Rechnungsnummer`, `Sendungsnummer`, `invoice no`, `transaction ID` …) that
+  is strictly nearer than every support term subtracts 30 instead. A term does not count across
+  a line break, a digit (the value of another field) or `;`/`|`; after the value it also does
+  not count behind `,`, `:`, `=` or `#`, or when it is followed by `:`, `=`, `#` or a digit,
+  because then it names the next value.
 
-For example, a Steuer-ID after its field name scores `1.0`, an IBAN without a field name `0.90`, a
-licence plate after `Kennzeichen:` `0.65`. The [L1 rule catalog](l1-rule-catalog.md) lists
+For example, a Steuer-ID after its field name scores `1.0`, an IBAN without a field name `0.90`
+(`1.0` right after the word `IBAN`), a licence plate after `Kennzeichen:` `0.65`, and a card
+number after `Bestellnummer` `0.45`, below the `balanced` threshold. The [L1 rule catalog](l1-rule-catalog.md) lists
 strength, base and score per rule. In `balanced` and `recall`, every `details.matched_rules`
 entry also carries the `score` of its finding; `strict` results are unchanged and carry no
 such field.
 
-Every current rule scores at least `0.50`, so `balanced` and `recall` return the same spans as
-`strict` and differ only in `score` and `confidence`. Validators decide in every mode: a value with
-a wrong check digit is never reported. Scores are rule-based evidence strengths, not calibrated
+Every rule that does not require context scores at least `0.50` without it, so `balanced` and
+`recall` return the `strict` spans except those a nearer counter-context term pushes below their
+threshold. A context-bound rule (`pii_phone_de_national_proximity`: a national number such as
+`ist unter 0176 90817263 erreichbar`) reports only with a support term and no nearer counter term,
+in every mode including `strict`, and then scores at least `0.50`. Validators decide in every
+mode: a value with a wrong check digit is never reported. Scores are rule-based evidence strengths, not calibrated
 probabilities; do not compare them with model confidences of other layers.
 
 Ambiguous PII fields require additional context before they emit findings or
