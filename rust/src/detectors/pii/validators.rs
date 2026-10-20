@@ -403,6 +403,26 @@ pub fn steuer_id(s: &str) -> bool {
     check == digits[10]
 }
 
+/// A Steuer-ID as the BZSt issues it: [`steuer_id`] plus the digit distribution
+/// of the first ten digits. Exactly one digit occurs twice or three times, never
+/// three times in a row; every other digit occurs at most once.
+pub fn steuer_id_issued(s: &str) -> bool {
+    if !steuer_id(s) {
+        return false;
+    }
+    let digits: Vec<u8> = s.bytes().filter(u8::is_ascii_digit).take(10).collect();
+    let mut counts = [0u8; 10];
+    for digit in &digits {
+        counts[usize::from(digit - b'0')] += 1;
+    }
+    let repeated: Vec<_> = counts.iter().filter(|&&count| count > 1).collect();
+    repeated.len() == 1
+        && matches!(repeated[0], 2 | 3)
+        && !digits
+            .windows(3)
+            .any(|run| run[0] == run[1] && run[1] == run[2])
+}
+
 pub fn postal_address_de(s: &str) -> bool {
     let mut parts = s.split_whitespace();
     let Some(postal_code) = parts.next() else {

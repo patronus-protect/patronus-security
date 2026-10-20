@@ -1,0 +1,357 @@
+from __future__ import annotations
+
+import importlib.util
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+import yaml
+
+
+ROOT = Path(__file__).resolve().parents[2]
+SCRIPT = ROOT / "scripts" / "l1_presidio" / "count_validated.py"
+SPEC = importlib.util.spec_from_file_location("l1_count_validated", SCRIPT)
+MODULE = importlib.util.module_from_spec(SPEC)
+assert SPEC.loader is not None
+SPEC.loader.exec_module(MODULE)
+
+ENTITY_MAP = MODULE.ENTITY_MAP_MODULE
+Unit = MODULE.Unit
+ArkRule = MODULE.ArkRule
+
+
+def raw_map():
+    return yaml.safe_load(ENTITY_MAP.ENTITY_MAP_PATH.read_text(encoding="utf-8"))
+
+
+def minimal_payload():
+    return {
+        "schema": ENTITY_MAP.SCHEMA,
+        "presidio_version": "2.2.364",
+        "entities": [
+            {"id": "pii.iban", "scope": "shared", "ark": ["IBAN"], "presidio": ["IBAN_CODE"], "corpora": {}},
+            {"id": "pii.swift_bic", "scope": "ark_only", "ark": ["SWIFT_CODE"], "presidio": [], "corpora": {}},
+            {
+                "id": "entity.passport_number",
+                "scope": "shared",
+                "ark": ["PASSPORT_NUMBER"],
+                "presidio": ["DE_PASSPORT", "UK_PASSPORT"],
+                "corpora": {},
+            },
+            {"id": "pii.de.vat_id", "scope": "presidio_only", "ark": [], "presidio": ["DE_VAT_ID"], "corpora": {}},
+            {"id": "pii.it.vat_code", "scope": "presidio_only", "ark": [], "presidio": ["IT_VAT_CODE"], "corpora": {}},
+            {"id": "pii.de.bsnr", "scope": "presidio_only", "ark": [], "presidio": ["DE_BSNR"], "corpora": {}},
+        ],
+        "checksums": {
+            "ark": {
+                "mod97": {"algorithm": "ISO 7064 MOD 97-10"},
+                "bic": None,
+                "de_document_number": {"algorithm": "ICAO 9303 7-3-1", "country": "de"},
+            },
+            "presidio": {
+                "IBAN_CODE": {"algorithm": "ISO 7064 MOD 97-10"},
+                "DE_PASSPORT": {"algorithm": "ICAO 9303 7-3-1", "country": "de"},
+                "DE_VAT_ID": {"algorithm": "ISO 7064 MOD 11,10"},
+                "IT_VAT_CODE": {"algorithm": "Luhn"},
+                "DE_BSNR": None,
+            },
+        },
+    }
+
+
+MINIMAL_ARK_RULES = [
+    ArkRule("pii_iban_de", "IBAN", "mod97"),
+    ArkRule("pii_iban_generic", "IBAN", "mod97"),
+    ArkRule("pii_swift_bic_context", "SWIFT_CODE", "bic"),
+    ArkRule("pii_passport_number_de", "PASSPORT_NUMBER", "de_document_number"),
+]
+
+
+def load_minimal(payload=None):
+    payload = payload or minimal_payload()
+    return ENTITY_MAP.EntityMap.from_dict(payload), MODULE.rules_from_dict(payload)
+
+
+# ── the counting rule ────────────────────────────────────────────────────────
+
+
+def test_checksum_entries_count_once_per_entity_and_country():
+    entity_map, rules = load_minimal()
+    counts = MODULE.count(entity_map, rules, ark_rules=MINIMAL_ARK_RULES)
+    assert set(counts.presidio) == {
+        Unit("pii.iban", None),
+        Unit("entity.passport_number", "de"),
+        Unit("pii.de.vat_id", "de"),
+        Unit("pii.it.vat_code", "it"),
+    }
+    # pii_iban_de and pii_iban_generic share one unit; the BIC check is format only.
+    assert set(counts.ark) == {Unit("pii.iban", None), Unit("entity.passport_number", "de")}
+    assert counts.ark[Unit("pii.iban", None)] == ("pii_iban_de: mod97", "pii_iban_generic: mod97")
+
+
+def test_format_only_validation_does_not_count():
+    entity_map, rules = load_minimal()
+    counts = MODULE.count(entity_map, rules, ark_rules=MINIMAL_ARK_RULES)
+    assert Unit("pii.de.bsnr", "de") not in counts.presidio
+    assert Unit("pii.swift_bic", None) not in counts.ark
+    assert rules.presidio["DE_BSNR"] is None
+    assert rules.ark["bic"] is None
+
+
+def test_vat_ids_count_per_country():
+    entity_map, rules = load_minimal()
+    counts = MODULE.count(entity_map, rules, ark_rules=MINIMAL_ARK_RULES)
+    vat = sorted(unit for unit in counts.presidio if unit.entity_id.endswith((".vat_id", ".vat_code")))
+    assert vat == [Unit("pii.de.vat_id", "de"), Unit("pii.it.vat_code", "it")]
+
+
+def test_one_cross_country_id_counts_each_country():
+    payload = minimal_payload()
+    payload["checksums"]["presidio"]["UK_PASSPORT"] = {"algorithm": "ICAO 9303 7-3-1", "country": "uk"}
+    entity_map, rules = load_minimal(payload)
+    counts = MODULE.count(entity_map, rules, ark_rules=MINIMAL_ARK_RULES)
+    assert {unit for unit in counts.presidio if unit.entity_id == "entity.passport_number"} == {
+        Unit("entity.passport_number", "de"),
+        Unit("entity.passport_number", "uk"),
+    }
+
+
+def test_country_comes_from_the_entity_id():
+    assert MODULE.id_country("pii.de.tax_id") == "de"
+    assert MODULE.id_country("pii.us.medical_license") == "us"
+    assert MODULE.id_country("pii.iban") is None
+    assert MODULE.id_country("pii.credit_card.pan") is None
+    assert MODULE.id_country("entity.passport_number") is None
+
+
+def test_m3_target_is_twice_the_presidio_count():
+    entity_map, rules = load_minimal()
+    counts = MODULE.count(entity_map, rules, ark_rules=MINIMAL_ARK_RULES)
+    assert MODULE.M3_FACTOR == 2
+    assert counts.target == 8
+    assert counts.m3_met is False
+    assert counts.shared == {Unit("pii.iban", None), Unit("entity.passport_number", "de")}
+
+
+# ── the checked-in map ───────────────────────────────────────────────────────
+
+
+def test_checked_in_map_is_consistent_with_the_pii_registry():
+    entity_map = ENTITY_MAP.load()
+    rules = MODULE.load_rules()
+    assert MODULE.check(entity_map, rules) == []
+
+
+def test_checked_in_presidio_count_matches_the_pinned_registry():
+    # Presidio 2.2.364: 43 pattern recognizers with validate_result, 35 of them compute a check digit.
+    rules = MODULE.load_rules()
+    assert len(rules.presidio) == 43
+    format_only = {entity for entity, rule in rules.presidio.items() if rule is None}
+    assert format_only == {
+        "DE_BSNR",
+        "EMAIL_ADDRESS",
+        "IN_GSTIN",
+        "IN_VEHICLE_REGISTRATION",
+        "KR_DRIVER_LICENSE",
+        "TR_LICENSE_PLATE",
+        "UK_DRIVING_LICENCE",
+        "UK_VEHICLE_REGISTRATION",
+    }
+    counts = MODULE.count(ENTITY_MAP.load(), rules)
+    assert len(counts.presidio) == 35
+    assert counts.target == 70
+    assert Unit("entity.passport_number", "de") in counts.presidio
+    assert Unit("pii.identity_card_number", "de") in counts.presidio
+    assert Unit("pii.financial_account_number", "us") in counts.presidio
+
+
+def test_checked_in_ark_count():
+    counts = MODULE.count(ENTITY_MAP.load(), MODULE.load_rules())
+    # At T03 only Luhn, MOD 97-10 and the Steuer-ID check compute a check digit.
+    assert set(counts.ark) == {
+        Unit("pii.credit_card.pan", None),
+        Unit("pii.iban", None),
+        Unit("pii.de.tax_id", "de"),
+    }
+    assert counts.m3_met is False
+
+
+def test_ark_rules_are_read_from_the_pii_registry():
+    rules = {rule.name: rule for rule in MODULE.ark_rules_from_source()}
+    assert rules["pii_credit_card"] == ArkRule("pii_credit_card", "CREDITCARD", "luhn", "checksum")
+    assert rules["pii_steuer_id_de"].validator == "steuer_id"
+    assert rules["pii_kfz_kennzeichen_de"].validator is None
+
+
+def test_ark_rules_carry_the_score_model_strength():
+    # K02: the score model weighs `strength` of every registry entry; it must agree with checksums.ark.
+    rules = {rule.name: rule for rule in MODULE.ark_rules_from_source()}
+    assert rules["pii_iban_de"].strength == "checksum"
+    assert rules["pii_steuer_id_de"].strength == "checksum"
+    assert rules["pii_swift_bic_context"].strength == "format"
+    assert rules["pii_passport_number_de"].strength == "format"
+    assert rules["pii_kfz_kennzeichen_de"].strength == "none"
+    assert {rule.strength for rule in rules.values()} == {"checksum", "format", "none"}
+
+
+# ── problems ─────────────────────────────────────────────────────────────────
+
+
+def test_unclassified_and_unused_ark_validators_are_problems():
+    entity_map, rules = load_minimal()
+    ark_rules = MINIMAL_ARK_RULES + [ArkRule("pii_new", "SWIFT_CODE", "new_check")]
+    problems = MODULE.check(entity_map, rules, ark_rules=ark_rules[1:])
+    assert any("new_check" in problem and "not classified" in problem for problem in problems)
+    problems = MODULE.check(entity_map, rules, ark_rules=MINIMAL_ARK_RULES[:3])
+    assert any("de_document_number" in problem and "not used" in problem for problem in problems)
+
+
+def test_score_strength_contradicting_the_classification_is_a_problem():
+    entity_map, rules = load_minimal()
+    consistent = [
+        ArkRule("pii_iban_de", "IBAN", "mod97", "checksum"),
+        ArkRule("pii_swift_bic_context", "SWIFT_CODE", "bic", "format"),
+        ArkRule("pii_passport_number_de", "PASSPORT_NUMBER", "de_document_number", "checksum"),
+        ArkRule("pii_plain", "SWIFT_CODE", None, "none"),
+    ]
+    assert MODULE.check(entity_map, rules, ark_rules=consistent) == []
+    for broken in (
+        ArkRule("pii_iban_de", "IBAN", "mod97", "format"),
+        ArkRule("pii_swift_bic_context", "SWIFT_CODE", "bic", "checksum"),
+        ArkRule("pii_plain", "SWIFT_CODE", None, "format"),
+        ArkRule("pii_swift_bic_context", "SWIFT_CODE", "bic", "none"),
+    ):
+        problems = MODULE.check(entity_map, rules, ark_rules=consistent + [broken])
+        assert any(broken.name in problem and "strength" in problem for problem in problems), broken
+
+
+def test_unmapped_labels_and_entities_are_problems():
+    payload = minimal_payload()
+    payload["checksums"]["presidio"]["XX_UNKNOWN"] = {"algorithm": "Luhn"}
+    entity_map, rules = load_minimal(payload)
+    problems = MODULE.check(entity_map, rules, ark_rules=MINIMAL_ARK_RULES + [ArkRule("pii_x", "NOPE", "mod97")])
+    assert any("XX_UNKNOWN" in problem for problem in problems)
+    assert any("NOPE" in problem for problem in problems)
+
+
+def test_country_conflicting_with_the_id_is_a_problem():
+    payload = minimal_payload()
+    payload["checksums"]["presidio"]["DE_VAT_ID"] = {"algorithm": "ISO 7064 MOD 11,10", "country": "at"}
+    entity_map, rules = load_minimal(payload)
+    problems = MODULE.check(entity_map, rules, ark_rules=MINIMAL_ARK_RULES)
+    assert any("DE_VAT_ID" in problem and "at" in problem for problem in problems)
+
+
+def test_check_compares_the_presidio_registry_when_given():
+    entity_map, rules = load_minimal()
+    registry = {"IBAN_CODE", "DE_PASSPORT", "DE_VAT_ID", "DE_BSNR", "AU_TFN"}
+    problems = MODULE.check(
+        entity_map, rules, ark_rules=MINIMAL_ARK_RULES, presidio_validated=registry, presidio_version="2.2.364"
+    )
+    assert any("AU_TFN" in problem and "not classified" in problem for problem in problems)
+    assert any("IT_VAT_CODE" in problem and "validate_result" in problem for problem in problems)
+    problems = MODULE.check(
+        entity_map,
+        rules,
+        ark_rules=MINIMAL_ARK_RULES,
+        presidio_validated=set(rules.presidio),
+        presidio_version="2.2.365",
+    )
+    assert any("2.2.365" in problem and "2.2.364" in problem for problem in problems)
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda c: c.update(ark="luhn"),
+        lambda c: c["ark"].update(mod97={"algorithm": ""}),
+        lambda c: c["ark"].update(mod97={"algorithm": "x", "weights": [1]}),
+        lambda c: c["presidio"].update(DE_VAT_ID={"algorithm": "x", "country": "DEU"}),
+        lambda c: c.update(extra={}),
+    ],
+)
+def test_invalid_checksum_sections_are_rejected(mutate):
+    payload = minimal_payload()
+    mutate(payload["checksums"])
+    with pytest.raises(ValueError):
+        MODULE.rules_from_dict(payload)
+
+
+def test_missing_checksum_section_is_rejected():
+    payload = minimal_payload()
+    del payload["checksums"]
+    with pytest.raises(ValueError):
+        MODULE.rules_from_dict(payload)
+
+
+# ── report and CLI ───────────────────────────────────────────────────────────
+
+
+def test_markdown_report_names_both_counts_and_the_target():
+    entity_map, rules = load_minimal()
+    text = MODULE.markdown(MODULE.count(entity_map, rules, ark_rules=MINIMAL_ARK_RULES))
+    assert "| `pii.de.vat_id` | de | – | DE_VAT_ID (ISO 7064 MOD 11,10) |" in text
+    assert "ARK 2, Presidio 4" in text
+    assert "M3 (≥ 2× Presidio = 8): offen" in text
+
+
+def test_cli_count_json_and_check(tmp_path):
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "count", "--json"], capture_output=True, text=True, check=True
+    )
+    payload = json.loads(result.stdout)
+    assert payload["presidio_version"] == "2.2.364"
+    assert payload["presidio"]["count"] == 35
+    assert payload["ark"]["count"] == 3
+    assert payload["m3"] == {"factor": 2, "target": 70, "met": False}
+    assert {
+        "entity_id": "pii.de.tax_id",
+        "country": "de",
+        "sources": ["pii_steuer_id_de: steuer_id", "pii_steuer_id_de_context_free: steuer_id_issued"],
+    } in payload["ark"]["units"]
+
+    result = subprocess.run([sys.executable, str(SCRIPT), "check"], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+
+    broken = raw_map()
+    broken["checksums"]["ark"].pop("luhn")
+    path = tmp_path / "map.yaml"
+    path.write_text(yaml.safe_dump(broken), encoding="utf-8")
+    result = subprocess.run([sys.executable, str(SCRIPT), "check", "--map", str(path)], capture_output=True, text=True)
+    assert result.returncode == 1
+    assert "luhn" in result.stderr
+
+
+def test_the_entity_map_check_still_accepts_the_checksum_section():
+    assert raw_map()["checksums"]
+    assert subprocess.run(
+        [sys.executable, str(ENTITY_MAP.__file__), "check"], capture_output=True, text=True
+    ).returncode == 0
+
+
+# ── against the installed Presidio ───────────────────────────────────────────
+
+
+def presidio_available():
+    try:
+        return importlib.util.find_spec("presidio_analyzer") is not None
+    except (ImportError, ValueError):
+        return False
+
+
+@pytest.mark.skipif(not presidio_available(), reason="presidio_analyzer is not installed")
+def test_classification_covers_exactly_the_pinned_registry():
+    rules = MODULE.load_rules()
+    assert MODULE.presidio_version() == "2.2.364"
+    assert MODULE.presidio_validated_entities() == set(rules.presidio)
+    assert (
+        MODULE.check(
+            ENTITY_MAP.load(),
+            rules,
+            presidio_validated=MODULE.presidio_validated_entities(),
+            presidio_version=MODULE.presidio_version(),
+        )
+        == []
+    )

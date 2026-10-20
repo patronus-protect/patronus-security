@@ -23,6 +23,8 @@ SPEC.loader.exec_module(MODULE)
 EMAP = MODULE.entity_map_module.load()
 GRETEL = "gretel-synthetic-pii-finance"
 SYNTH = "ark-synthetic-de-eu"
+EVALUATOR = "presidio-evaluator-synth-v2"
+RECOGNIZER_TESTS = "presidio-analyzer-recognizer-tests"
 
 
 def write_jsonl(path, rows):
@@ -124,6 +126,222 @@ def test_hard_negative_predictions_are_recorded():
     assert result["hard_negative_fp"] == [["synthetic/x.jsonl", "a", "pii.phone", 55, 70]]
 
 
+def test_buckets_per_source_family():
+    rows = [
+        gold("a", [("pii.email", 0, 10)]),
+        gold("b", [("pii.email", 0, 10)], corpus=GRETEL, language="en"),
+        gold("c", [("pii.email", 0, 10)], corpus=EVALUATOR, language="en"),
+    ]
+    preds = [pred("a", [("pii.email", 0, 10)]), pred("b", []), pred("c", [("pii.email", 0, 10)])]
+    buckets = MODULE.score_rows(rows, preds, EMAP)["buckets"]
+    assert buckets["family/ark_authored"]["exact"] == 1
+    assert buckets["family/neutral"] == {"gold": 1, "predicted": 0, "exact": 0, "gold_found": 0, "predicted_correct": 0}
+    assert buckets["family/presidio_favored"]["exact"] == 1
+    assert buckets["family_entity/neutral/pii.email"]["gold"] == 1
+    assert buckets["family_language/presidio_favored/en"]["exact"] == 1
+    assert buckets["family_language_entity/ark_authored/de/pii.email"]["exact"] == 1
+
+
+def test_every_gold_corpus_needs_a_source_family():
+    rows = [gold("a", [("pii.email", 0, 10)], corpus="unknown-corpus")]
+    with pytest.raises(MODULE.ScoreboardError, match="source family"):
+        MODULE.score_rows(rows, [pred("a", [])], EMAP)
+
+
+def recognizer_case(row_id, entities, scored, negative=False):
+    row = gold(row_id, entities, corpus=RECOGNIZER_TESTS, language="en")
+    row["scored_entities"] = scored
+    if negative:
+        row["hard_negatives"] = [
+            {"start": 0, "end": 200, "kind": "presidio_recognizer_negative", "entity_type": label} for label in scored
+        ]
+    return row
+
+
+def test_scored_entities_restrict_a_row_to_its_recognizer():
+    # A credit card test case says nothing about the e-mail address next to the card number.
+    rows = [recognizer_case("a", [("pii.credit_card.pan", 0, 16)], ["pii.credit_card.pan"])]
+    preds = [pred("a", [("pii.credit_card.pan", 0, 16), ("pii.email", 20, 30)])]
+    result = MODULE.score_rows(rows, preds, EMAP)
+    assert result["buckets"]["all"] == {"gold": 1, "predicted": 1, "exact": 1, "gold_found": 1, "predicted_correct": 1}
+    assert "entity/pii.email" not in result["buckets"]
+    rows[0]["scored_entities"] = "pii.credit_card.pan"
+    with pytest.raises(MODULE.ScoreboardError, match="scored_entities"):
+        MODULE.score_rows(rows, preds, EMAP)
+
+
+def test_typed_hard_negative_only_forbids_its_entity():
+    rows = [recognizer_case("a", [], ["pii.us.social_security_number"], negative=True)]
+    preds = [pred("a", [("pii.us.social_security_number", 0, 11), ("pii.phone", 0, 11)])]
+    result = MODULE.score_rows(rows, preds, EMAP, "presidio_favored/t.jsonl")
+    assert result["hard_negative_fp"] == [["presidio_favored/t.jsonl", "a", "pii.us.social_security_number", 0, 11]]
+    assert result["buckets"]["entity/pii.us.social_security_number"]["predicted"] == 1
+    assert "entity/pii.phone" not in result["buckets"]
+
+
+def test_compare_gates_source_families():
+    favored = [gold(f"f{i}", [("pii.email", 0, 10)], corpus=EVALUATOR, language="en") for i in range(100)]
+    neutral = [gold(f"n{i}", [("pii.email", 0, 10)], corpus=GRETEL, language="en") for i in range(900)]
+    rows = favored + neutral
+    base = MODULE.score_rows(rows, [pred(row["id"], [("pii.email", 0, 10)]) for row in rows], EMAP)
+    # 4 presidio_favored rows lost: -0.2 pp overall, but -2 pp in the family.
+    head = MODULE.score_rows(
+        rows, [pred(row["id"], [] if row["id"] in {"f0", "f1", "f2", "f3"} else [("pii.email", 0, 10)]) for row in rows], EMAP
+    )
+    assert {item["bucket"] for item in MODULE.compare(base, head)["regressions"]} == {"family/presidio_favored"}
+
+
+def m1_rows():
+    rows, ark, presidio = [], [], []
+    for family, corpus in (("neutral", GRETEL), ("favored", EVALUATOR), ("ark", SYNTH)):
+        for i in range(10):
+            row_id = f"{family}-{i}"
+            rows.append(gold(row_id, [("pii.email", 0, 10), ("pii.phone", 20, 30)], corpus=corpus, language="en"))
+            # Ark finds every e-mail; it misses phones in neutral rows 0-4 and in all ark_authored rows.
+            ark_spans = [("pii.email", 0, 10)]
+            if not ((family == "neutral" and i < 5) or family == "ark"):
+                ark_spans.append(("pii.phone", 20, 30))
+            ark.append(pred(row_id, ark_spans))
+            presidio.append(pred(row_id, [("pii.email", 0, 10), ("pii.phone", 20, 30)] if i else [("pii.phone", 20, 30)]))
+    return rows, ark, presidio
+
+
+def test_m1_must_hold_on_neutral_and_presidio_favored_separately():
+    rows, ark, presidio = m1_rows()
+    report = MODULE.m1_report(MODULE.score_rows(rows, ark, EMAP), MODULE.score_rows(rows, presidio, EMAP), EMAP)
+    families = report["families"]
+    assert families["presidio_favored"]["holds"]
+    assert not families["neutral"]["holds"]
+    assert families["neutral"]["entities"]["pii.phone"]["holds"] is False
+    assert families["neutral"]["entities"]["pii.email"]["holds"] is True
+    # ark_authored is reported, never decides: Ark is worse there and M1 does not care.
+    assert not families["ark_authored"]["decides"] and not families["ark_authored"]["holds"]
+    assert report["met"] is False
+    # Ark perfect on neutral: M1 met although ark_authored still fails.
+    ark = [pred(row["id"], [(e["entity_type"], e["start"], e["end"]) for e in row["entities"]])
+           if row["corpus"] == GRETEL else p for row, p in zip(rows, ark)]
+    report = MODULE.m1_report(MODULE.score_rows(rows, ark, EMAP), MODULE.score_rows(rows, presidio, EMAP), EMAP)
+    assert report["met"] is True and not report["families"]["ark_authored"]["holds"]
+    lines = MODULE.m1_lines(report)
+    assert lines[-1] == "M1: MET (neutral holds, presidio_favored holds)"
+    assert any(line.startswith("ark_authored: NOT MET") and "decides no milestone" in line for line in lines)
+
+
+def test_m1_needs_data_in_both_families_and_counts_only_shared_ids():
+    rows = [gold(f"n{i}", [("pii.email", 0, 10), ("pii.swift_bic", 20, 31)], corpus=GRETEL, language="en") for i in range(5)]
+    ark = [pred(row["id"], [("pii.email", 0, 10)]) for row in rows]
+    report = MODULE.m1_report(MODULE.score_rows(rows, ark, EMAP), MODULE.score_rows(rows, ark, EMAP), EMAP)
+    assert report["families"]["neutral"]["holds"] and set(report["families"]["neutral"]["entities"]) == {"pii.email"}
+    assert report["families"]["presidio_favored"] == {"decides": True, "holds": False, "entities": {}}
+    assert report["met"] is False
+    assert "presidio_favored: NO DATA, 0/0 shared ids" in MODULE.m1_lines(report)
+
+
+def test_m1_is_english_by_default():
+    rows = [gold("de", [("pii.email", 0, 10)], corpus=GRETEL, language="de"),
+            gold("en", [("pii.email", 0, 10)], corpus=GRETEL, language="en")]
+    ark = [pred("de", []), pred("en", [("pii.email", 0, 10)])]
+    presidio = [pred("de", [("pii.email", 0, 10)]), pred("en", [("pii.email", 0, 10)])]
+    scored = MODULE.score_rows(rows, ark, EMAP), MODULE.score_rows(rows, presidio, EMAP)
+    assert MODULE.m1_report(*scored, EMAP)["families"]["neutral"]["holds"]
+    assert not MODULE.m1_report(*scored, EMAP, language="all")["families"]["neutral"]["holds"]
+
+
+def test_main_m1_subcommand(tmp_path, capsys):
+    rows, ark, presidio = m1_rows()
+    by_corpus = {GRETEL: "g.jsonl", EVALUATOR: "presidio_favored/e.jsonl", SYNTH: "synthetic/s.jsonl"}
+    for root, predictions in (("gold", None), ("ark", ark), ("presidio", presidio)):
+        for corpus, name in by_corpus.items():
+            selected = [i for i, row in enumerate(rows) if row["corpus"] == corpus]
+            write_jsonl(tmp_path / root / name, [rows[i] if predictions is None else predictions[i] for i in selected])
+            if predictions is None:
+                (tmp_path / root / name).parent.joinpath(".ready").write_text("x")
+    args = ["m1", "--gold", str(tmp_path / "gold"), "--ark", str(tmp_path / "ark"), "--presidio", str(tmp_path / "presidio")]
+    assert MODULE.main(args + ["--json", str(tmp_path / "m1.json")]) == 0
+    out = capsys.readouterr().out
+    assert "neutral: NOT MET, 1/2 shared ids" in out
+    assert out.strip().endswith("M1: NOT MET (neutral not met, presidio_favored holds)")
+    assert json.loads((tmp_path / "m1.json").read_text())["met"] is False
+    assert MODULE.main(args + ["--check"]) == 1
+    (tmp_path / "ark" / "g.jsonl").unlink()
+    assert MODULE.main(args) == 2
+
+
+# ── baseline report ──────────────────────────────────────────────────────
+
+
+def write_report_tree(tmp_path):
+    """Gold in three frozen directories plus Ark, Presidio default and Presidio tuned predictions."""
+    rows, ark, tuned = m1_rows()
+    rows.append(gold("ark-hn", [], corpus=SYNTH, language="de", hard_negatives=[(40, 50)]))
+    ark.append(pred("ark-hn", []))
+    tuned.append(pred("ark-hn", [("pii.phone", 40, 50)]))
+    default = [pred(row["id"], []) for row in rows]
+    by_corpus = {GRETEL: "g.jsonl", EVALUATOR: "presidio_favored/e.jsonl", SYNTH: "synthetic/s.jsonl"}
+    for root, predictions in (("gold", None), ("ark", ark), ("default", default), ("tuned", tuned)):
+        for corpus, name in by_corpus.items():
+            selected = [i for i, row in enumerate(rows) if row["corpus"] == corpus]
+            write_jsonl(tmp_path / root / name, [rows[i] if predictions is None else predictions[i] for i in selected])
+            if predictions is None:
+                (tmp_path / root / name).parent.joinpath(".ready").write_text("x")
+    return {name: tmp_path / name for name in ("ark", "default", "tuned")}
+
+
+def test_report_scores_every_engine_per_family_corpus_and_entity(tmp_path):
+    engines = write_report_tree(tmp_path)
+    report = MODULE.baseline_report(tmp_path / "gold", {"ark": engines["ark"], "presidio-tuned": engines["tuned"]}, EMAP)
+    assert list(report["engines"]) == ["ark", "presidio-tuned"]
+    ark, tuned = report["engines"]["ark"], report["engines"]["presidio-tuned"]
+    assert ark["buckets"]["family/neutral"] == {"gold": 20, "predicted": 15, "exact": 15, "gold_found": 15,
+                                                "predicted_correct": 15}
+    assert ark["buckets"][f"corpus/{GRETEL}"] == ark["buckets"]["family/neutral"]
+    # Hard-negative hits are attributed to the family of their row.
+    assert report["hard_negative_fp"] == {"ark": {}, "presidio-tuned": {"ark_authored": 1}}
+    assert tuned["buckets"]["family/ark_authored"]["predicted"] == 20
+    # M1 compares the first engine with every other one.
+    assert list(report["m1"]) == ["presidio-tuned"]
+    assert report["m1"]["presidio-tuned"]["families"]["presidio_favored"]["holds"]
+    assert not report["m1"]["presidio-tuned"]["met"]
+    with pytest.raises(MODULE.ScoreboardError, match="two engines"):
+        MODULE.baseline_report(tmp_path / "gold", {"ark": engines["ark"]}, EMAP)
+
+
+def test_report_markdown_tables(tmp_path):
+    engines = write_report_tree(tmp_path)
+    report = MODULE.baseline_report(
+        tmp_path / "gold",
+        {"ark": engines["ark"], "presidio-default": engines["default"], "presidio-tuned": engines["tuned"]},
+        EMAP,
+    )
+    lines = MODULE.report_lines(report)
+    text = "\n".join(lines)
+    assert "| Family | Engine | Rows | Gold | Pred | Exact P | Exact R | Exact F1 | Overlap F1 | EN F1 | DE F1 | HN-FP |" in lines
+    assert "| neutral | ark | 10 | 20 | 15 | 100.0 | 75.0 | 85.7 | 85.7 | 85.7 | – | 0 |" in lines
+    assert "| ark_authored ¹ | presidio-tuned | 11 | 20 | 20 | 95.0 | 95.0 | 95.0 | 95.0 | 97.4 | 0.0 | 1 |" in lines
+    assert f"| {GRETEL} | neutral | 10 | 20 | 100.0 / 75.0 / 85.7 | 0.0 / 0.0 / 0.0 | 100.0 / 95.0 / **97.4** |" in lines
+    # Per entity: exact F1 per engine, the best one in bold, shared ids marked.
+    assert "| neutral | pii.phone | shared | 10 | 66.7 | 0.0 | **100.0** |" in lines
+    assert "| presidio_favored | pii.email | shared | 10 | **100.0** | 0.0 | 94.7 |" in lines
+    # M1 per milestone family against each Presidio profile.
+    assert "| presidio-tuned | NOT MET | 1/2 (below: pii.phone) | 2/2 | 1/2 (below: pii.phone) |" in lines
+    assert "| presidio-default | MET | 2/2 | 2/2 | 2/2 |" in lines
+    assert "¹ ark_authored is reported and decides no milestone." in text
+
+
+def test_main_report_subcommand(tmp_path, capsys):
+    engines = write_report_tree(tmp_path)
+    args = ["report", "--gold", str(tmp_path / "gold"), "--engine", f"ark={engines['ark']}",
+            "--engine", f"presidio-tuned={engines['tuned']}"]
+    assert MODULE.main(args + ["--json", str(tmp_path / "report.json")]) == 0
+    out = capsys.readouterr().out
+    assert out.startswith("## ") and "| neutral | ark |" in out
+    assert json.loads((tmp_path / "report.json").read_text())["m1"]["presidio-tuned"]["met"] is False
+    assert MODULE.main(args + ["--engine", "broken"]) == 2
+    assert MODULE.main(args + ["--engine", f"ark={engines['tuned']}"]) == 2
+    (engines["tuned"] / "g.jsonl").unlink()
+    assert MODULE.main(args) == 2
+
+
 def test_predictions_must_match_gold_ids():
     rows = [gold("a", [])]
     with pytest.raises(MODULE.ScoreboardError):
@@ -143,7 +361,7 @@ def test_compare_flags_f1_losses_above_tolerance():
     regressions = MODULE.compare(base, large)["regressions"]
     assert {(item["bucket"], item["metric"]) for item in regressions} == {
         (bucket, metric)
-        for bucket in ("all", "language/de", "entity/pii.email")
+        for bucket in ("all", "language/de", "entity/pii.email", "family/ark_authored")
         for metric in ("exact", "overlap")
     }
     assert all(item["delta_pp"] < -0.5 for item in regressions)
@@ -354,6 +572,10 @@ def test_gate_detects_regression_on_holdout(repo, data, tmp_path):
     assert not any("h0" in line or "h1" in line for line in lines)
     # Per-entity tables are printed for dev only.
     assert not any("pii.iban" in line for line in lines if not line.startswith("  holdout"))
+    # Aggregates per source family for both splits; the family regression is named, the rows are not.
+    assert any(line.startswith("  dev ark_authored") and "decides no milestone" in line for line in lines)
+    assert any(line.startswith("  holdout neutral") and "L1 F1 88.9/88.9 (-11.1/-11.1)" in line for line in lines)
+    assert any(line.startswith("  holdout family/neutral exact F1 100.0 -> ") for line in lines)
 
 
 def test_gate_detects_new_hard_negative_fp(repo, data, tmp_path):

@@ -2815,5 +2815,448 @@
     "sources": [
       "rust/src/detectors/pii/pii.rs"
     ]
+  },
+  {
+    "id": "pii.phone_reachability",
+    "description": "Erreichbarkeit unter einer Rufnummer",
+    "en": [
+      "call me at",
+      "call me on",
+      "call us at",
+      "call us on",
+      "reach me at",
+      "reach me on",
+      "reach us at",
+      "reach us on",
+      "reach him at",
+      "reach her at",
+      "reach them at",
+      "can be reached at",
+      "can be reached on",
+      "reachable at",
+      "reachable on",
+      "reachable under",
+      "text me at",
+      "text me on",
+      "phone me at",
+      "ring me on",
+      "give me a call",
+      "call back",
+      "callback",
+      "callback number"
+    ],
+    "de": [
+      "erreichbar",
+      "erreichbar unter",
+      "erreichen sie mich unter",
+      "erreichen sie uns unter",
+      "rufen sie mich an",
+      "rufen sie uns an",
+      "rufen sie an",
+      "ruf mich an",
+      "ruft mich an",
+      "anrufen unter",
+      "anrufbar unter",
+      "unter der nummer",
+      "unter der rufnummer",
+      "rückruf",
+      "rueckruf",
+      "rückrufnummer",
+      "rueckrufnummer",
+      "zurückrufen",
+      "zu erreichen unter",
+      "rückruf unter"
+    ],
+    "shared": [
+      "whatsapp"
+    ],
+    "sources": [
+      "rust/src/detectors/pii/context.rs"
+    ]
+  },
+  {
+    "id": "pii.network_address",
+    "description": "IP-Adresse eines Geräts oder Clients",
+    "en": [
+      "ip address",
+      "ip-address",
+      "ip_address",
+      "ip addr",
+      "client ip",
+      "client-ip",
+      "client_ip",
+      "remote ip",
+      "remote addr",
+      "remote_addr",
+      "source ip",
+      "source-ip",
+      "src ip",
+      "host ip",
+      "server ip",
+      "login ip",
+      "source_ip",
+      "remote address",
+      "remote-address"
+    ],
+    "de": [
+      "ip-adresse",
+      "ip adresse",
+      "ipadresse",
+      "ip_adresse",
+      "netzwerkadresse",
+      "rechneradresse",
+      "quell-ip",
+      "quell ip",
+      "ziel-ip",
+      "client-adresse"
+    ],
+    "shared": [
+      "ip",
+      "ipv4",
+      "ipv6"
+    ],
+    "sources": [
+      "rust/src/detectors/pii/context.rs"
+    ]
+  },
+  {
+    "id": "pii.hardware_address",
+    "description": "MAC-Adresse eines Geräts",
+    "en": [
+      "mac address",
+      "mac-address",
+      "mac_address",
+      "hardware address",
+      "hardware-address",
+      "device mac",
+      "wifi mac",
+      "ethernet address",
+      "hardware_address",
+      "device address"
+    ],
+    "de": [
+      "mac-adresse",
+      "mac adresse",
+      "macadresse",
+      "mac_adresse",
+      "hardwareadresse",
+      "hardware-adresse",
+      "geräteadresse",
+      "geraeteadresse"
+    ],
+    "shared": [
+      "mac",
+      "bssid"
+    ],
+    "sources": [
+      "rust/src/detectors/pii/context.rs"
+    ]
+  },
+  {
+    "id": "pii.payment_card",
+    "description": "Zahlungskarte und Kartennummer",
+    "en": [
+      "credit card",
+      "credit-card",
+      "credit_card",
+      "creditcard",
+      "debit card",
+      "debit-card",
+      "debit_card",
+      "payment card",
+      "payment-card",
+      "card number",
+      "card-number",
+      "card_number",
+      "card no",
+      "card",
+      "pan",
+      "credit card number",
+      "payment_card",
+      "card no."
+    ],
+    "de": [
+      "kreditkarte",
+      "kreditkartennummer",
+      "kreditkarten-nummer",
+      "kreditkarten nummer",
+      "debitkarte",
+      "bankkarte",
+      "girokarte",
+      "zahlungskarte",
+      "kartennummer",
+      "karten-nummer",
+      "karten_nummer",
+      "karten nummer",
+      "karte",
+      "kartennr",
+      "karten-nr",
+      "karten nr",
+      "girocard"
+    ],
+    "shared": [
+      "visa",
+      "mastercard",
+      "maestro",
+      "amex",
+      "american express"
+    ],
+    "sources": [
+      "rust/src/detectors/pii/context.rs"
+    ]
+  },
+  {
+    "id": "pii.order_number",
+    "description": "Gegen-Kontext: Bestell- und Auftragsnummer",
+    "en": [
+      "order number",
+      "order-number",
+      "order_number",
+      "order no",
+      "order id",
+      "order-id",
+      "order_id",
+      "order #",
+      "order ref",
+      "purchase order",
+      "po number",
+      "po no",
+      "order no.",
+      "purchase order number"
+    ],
+    "de": [
+      "bestellnummer",
+      "bestell-nummer",
+      "bestell_nummer",
+      "bestell nummer",
+      "bestellnr",
+      "bestell-nr",
+      "bestell nr",
+      "auftragsnummer",
+      "auftrags-nummer",
+      "auftrags_nummer",
+      "auftragsnr",
+      "auftrags-nr",
+      "auftrag nr",
+      "bestellung nr",
+      "bestellung #",
+      "kommissionsnummer",
+      "auftrags nummer",
+      "auftrags nr",
+      "bestell-id"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/context.rs"
+    ]
+  },
+  {
+    "id": "pii.invoice_number",
+    "description": "Gegen-Kontext: Rechnungs- und Belegnummer",
+    "en": [
+      "invoice number",
+      "invoice-number",
+      "invoice_number",
+      "invoice no",
+      "invoice id",
+      "invoice #",
+      "bill number",
+      "receipt number",
+      "receipt no",
+      "credit note number",
+      "invoice no.",
+      "invoice-id",
+      "invoice_id"
+    ],
+    "de": [
+      "rechnungsnummer",
+      "rechnungs-nummer",
+      "rechnungs_nummer",
+      "rechnungs nummer",
+      "rechnungsnr",
+      "rechnungs-nr",
+      "rechnung nr",
+      "belegnummer",
+      "beleg-nr",
+      "belegnr",
+      "quittungsnummer",
+      "gutschriftsnummer",
+      "rechnungs nr",
+      "beleg-nummer"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/context.rs"
+    ]
+  },
+  {
+    "id": "pii.shipment_number",
+    "description": "Gegen-Kontext: Sendungs- und Liefernummer",
+    "en": [
+      "tracking number",
+      "tracking-number",
+      "tracking_number",
+      "tracking no",
+      "tracking id",
+      "tracking code",
+      "shipment number",
+      "shipment id",
+      "parcel number",
+      "consignment number",
+      "waybill number",
+      "delivery note number",
+      "tracking-id",
+      "tracking_id"
+    ],
+    "de": [
+      "sendungsnummer",
+      "sendungs-nummer",
+      "sendungs-nr",
+      "sendungsverfolgungsnummer",
+      "trackingnummer",
+      "tracking-nummer",
+      "paketnummer",
+      "paket-nr",
+      "lieferscheinnummer",
+      "lieferschein-nr",
+      "lieferscheinnr",
+      "frachtbriefnummer"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/context.rs"
+    ]
+  },
+  {
+    "id": "pii.ticket_number",
+    "description": "Gegen-Kontext: Ticket- und Vorgangsnummer",
+    "en": [
+      "ticket number",
+      "ticket-number",
+      "ticket_number",
+      "ticket no",
+      "ticket id",
+      "ticket #",
+      "case number",
+      "case id",
+      "case #",
+      "incident number",
+      "incident id",
+      "issue number",
+      "request id",
+      "request number"
+    ],
+    "de": [
+      "ticketnummer",
+      "ticket-nummer",
+      "ticket-nr",
+      "ticketnr",
+      "vorgangsnummer",
+      "vorgangs-nummer",
+      "vorgangs-nr",
+      "vorgangsnr",
+      "anfragenummer",
+      "störungsnummer",
+      "meldungsnummer",
+      "fallnummer"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/context.rs"
+    ]
+  },
+  {
+    "id": "pii.reference_number",
+    "description": "Gegen-Kontext: Referenz-, Buchungs- und Transaktionsnummer",
+    "en": [
+      "reference number",
+      "reference-number",
+      "reference_number",
+      "reference no",
+      "ref no",
+      "ref. no",
+      "booking reference",
+      "booking number",
+      "confirmation number",
+      "reservation number",
+      "transaction id",
+      "transaction-id",
+      "transaction_id",
+      "transaction number",
+      "transaction reference"
+    ],
+    "de": [
+      "referenznummer",
+      "referenz-nummer",
+      "referenz-nr",
+      "buchungsnummer",
+      "buchungs-nummer",
+      "buchungs-nr",
+      "bestätigungsnummer",
+      "reservierungsnummer",
+      "transaktionsnummer",
+      "transaktions-nummer",
+      "transaktions-id",
+      "transaktions-nr",
+      "aktenzeichen",
+      "bestaetigungsnummer"
+    ],
+    "shared": [],
+    "sources": [
+      "rust/src/detectors/pii/context.rs"
+    ]
+  },
+  {
+    "id": "pii.product_number",
+    "description": "Gegen-Kontext: Serien-, Artikel- und Versionsnummer",
+    "en": [
+      "serial number",
+      "serial-number",
+      "serial_number",
+      "serial no",
+      "part number",
+      "part-number",
+      "part no",
+      "article number",
+      "item number",
+      "sku",
+      "model number",
+      "batch number",
+      "lot number",
+      "version number",
+      "build number",
+      "item no",
+      "product id",
+      "product number"
+    ],
+    "de": [
+      "seriennummer",
+      "serien-nummer",
+      "serien-nr",
+      "seriennr",
+      "artikelnummer",
+      "artikel-nummer",
+      "artikel-nr",
+      "artikelnr",
+      "teilenummer",
+      "materialnummer",
+      "chargennummer",
+      "chargen-nr",
+      "losnummer",
+      "modellnummer",
+      "versionsnummer",
+      "build-nummer",
+      "teile-nr",
+      "produktnummer",
+      "produkt-nr",
+      "typennummer"
+    ],
+    "shared": [
+      "ean",
+      "gtin"
+    ],
+    "sources": [
+      "rust/src/detectors/pii/context.rs"
+    ]
   }
 ]

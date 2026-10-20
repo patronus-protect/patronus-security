@@ -14,6 +14,11 @@ manifest. ``check`` verifies the map against those sources:
 
 ``--presidio`` additionally compares the mapped Presidio entities with the predefined
 recognizers of the installed Presidio. Exit code 1 on any problem.
+
+``source_families`` tags every gold source (each corpus of the manifest and the Ark-authored
+gold sets) with the family it belongs to: ``ark_authored``, ``neutral`` or
+``presidio_favored``. Milestones are decided on neutral and presidio_favored data only
+(research/l1-pii/README.md, fairness rule).
 """
 
 from __future__ import annotations
@@ -37,6 +42,15 @@ SCHEMA = "ark-l1-entity-map-v1"
 SCOPES = ("shared", "ark_only", "presidio_only", "semantic")
 ENTITY_KEYS = {"id", "scope", "ark", "presidio", "corpora"}
 ID_PATTERN = re.compile(r"^(?:pii|entity)\.[a-z0-9_]+(?:\.[a-z0-9_]+)*$")
+FAMILIES = ("ark_authored", "neutral", "presidio_favored")
+# Families that decide a milestone; ark_authored results are reported only.
+MILESTONE_FAMILIES = ("neutral", "presidio_favored")
+# Gold sets outside the external PII manifest; all of them are written by the Ark project.
+ARK_GOLD_SOURCES = {
+    "pii_l1": ROOT / "python" / "patronus_ark" / "benchmark_data" / "pii_l1.jsonl",
+    "l1_bilingual_rules": ROOT / "rust" / "tests" / "fixtures" / "l1_bilingual_rules.json",
+    "ark-synthetic-de-eu": HERE / "synth_goldset.py",
+}
 
 
 class Entity(NamedTuple):
@@ -92,8 +106,9 @@ def _entity(raw: Any) -> Entity:
 class EntityMap:
     """Validated entity map with lookups from each vocabulary to the benchmark id."""
 
-    def __init__(self, presidio_version: str, entities: Iterable[Entity]):
+    def __init__(self, presidio_version: str, entities: Iterable[Entity], families: dict[str, str] | None = None):
         self.presidio_version = presidio_version
+        self.families: dict[str, str] = dict(families or {})  # gold source -> family
         self.entities: dict[str, Entity] = {}
         self._ark: dict[str, str] = {}
         self._presidio: dict[str, str] = {}
@@ -126,7 +141,7 @@ class EntityMap:
         entities = payload.get("entities")
         if not isinstance(entities, list) or not entities:
             raise ValueError("entity map requires a non-empty entities list")
-        return cls(version, (_entity(raw) for raw in entities))
+        return cls(version, (_entity(raw) for raw in entities), _families(payload.get("source_families", {})))
 
     def ark_label(self, label: str) -> str | None:
         return self._ark.get(label)
@@ -156,6 +171,24 @@ class EntityMap:
     def corpus_labels(self, corpus: str) -> dict[str, str]:
         """Lower-cased upstream label -> benchmark id for one corpus."""
         return dict(self._corpora.get(corpus, {}))
+
+    def family(self, source: str) -> str | None:
+        """Source family of a gold source (corpus id or Ark gold set name)."""
+        return self.families.get(source)
+
+
+def _families(raw: Any) -> dict[str, str]:
+    if not isinstance(raw, dict):
+        raise ValueError("source_families must map a family to a list of gold sources")
+    families: dict[str, str] = {}
+    for family, sources in raw.items():
+        if family not in FAMILIES:
+            raise ValueError(f"unknown source family {family!r}; expected one of {', '.join(FAMILIES)}")
+        for source in _names(sources, f"source_families.{family}"):
+            if source in families:
+                raise ValueError(f"gold source {source} is tagged {families[source]} and {family}")
+            families[source] = family
+    return families
 
 
 def _load_file(name: str, path: Path) -> ModuleType:
@@ -262,6 +295,11 @@ def check(
                     f"{corpus_id} label {label}: manifest {expected.get(label)}, entity map {actual.get(label)}"
                 )
 
+    sources = set(manifest) | set(ARK_GOLD_SOURCES)
+    problems += [f"Ark gold source {name} not found at {path}" for name, path in ARK_GOLD_SOURCES.items() if not path.is_file()]
+    problems += [f"gold source {source} has no source family" for source in sorted(sources - entity_map.families.keys())]
+    problems += [f"source family entry {source} is not a known gold source" for source in sorted(entity_map.families.keys() - sources)]
+
     if presidio_entities is not None:
         known = entity_map.presidio_entities()
         problems += [f"Presidio entity {name} is not mapped" for name in sorted(presidio_entities - known)]
@@ -285,7 +323,11 @@ def table(entity_map: EntityMap) -> str:
                 f"{', '.join(entity.presidio) or '–'} | {corpora or '–'} |"
             )
     counts = ", ".join(f"{scope} {len(entity_map.ids(scope))}" for scope in SCOPES)
-    return "\n".join(lines) + f"\n\n{len(entity_map.entities)} IDs: {counts}.\n"
+    families = "\n".join(
+        f"- {family}: " + ", ".join(sorted(s for s, f in entity_map.families.items() if f == family))
+        for family in FAMILIES
+    )
+    return "\n".join(lines) + f"\n\n{len(entity_map.entities)} IDs: {counts}.\n\nQuellfamilien:\n{families}\n"
 
 
 def main(argv: list[str] | None = None) -> int:

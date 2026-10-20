@@ -1,8 +1,8 @@
 [Unit]
-Description=ARK L1-PII runs hourly at :00 (shared run lock with L1-DLP; a busy lock skips the run)
+Description=ARK L1-PII runs every 2 hours at even hours :00 (shared run lock with L1-DLP; a busy lock skips the run)
 
 [Timer]
-OnCalendar=*-*-* *:00:00
+OnCalendar=*-*-* 00/2:00:00
 Persistent=false
 
 [Install]

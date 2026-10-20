@@ -2,7 +2,7 @@
 
 Stand: 2026-10-11. Aufgabenliste: [`backlog.yaml`](backlog.yaml). Ausführung über denselben
 VPS-Runner wie [`../l1-pii/`](../l1-pii/README.md) (systemd-Timer → sandboxed Claude Code → Gate →
-Stacked Draft-PR), Branch-Präfix `dlp/`. Agent-Prompt: [`AGENT_PROMPT.md`](AGENT_PROMPT.md).
+Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`AGENT_PROMPT.md`](AGENT_PROMPT.md).
 
 ## Ausgangslage
 

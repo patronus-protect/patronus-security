@@ -419,7 +419,13 @@ impl NativeRegexDetector for DlpPipeline {
     /// and test values of secret rules (T06) and placeholders and
     /// environment/template references in the value of value-capturing
     /// credential rules (T07).
-    fn allows_match(&self, index: usize, text: &str, captures: &regex::Captures<'_>) -> bool {
+    fn allows_match(
+        &self,
+        index: usize,
+        prepared: &crate::threat::NativeText<'_>,
+        captures: &regex::Captures<'_>,
+    ) -> bool {
+        let text = prepared.text();
         let check = self.example_checks[index];
         let placeholder_check = self.placeholder_checks[index];
         let meta = &self.metas[index];

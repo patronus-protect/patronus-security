@@ -4,51 +4,99 @@
 
 These are the stable rule IDs accepted by execution-gate `rules`. Missing IDs inherit the shared Rust/Python/API defaults below. Model gates such as `native:pii`, `native:dlp`, `native:injection_l1`, and `native:threat_l1` control complete producers; rule gates control individual entries below.
 
-## PII rules (39)
+## PII rules (41)
 
 All PII rules are eligible by default when PII L1 is enabled.
 
-| Rule ID | Result entity group | Extra validator |
+In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `recall` a finding scores the rule base plus the validator strength (checksum 35, format 15, none 0) plus its context, capped at 100 and divided by 100: 25 when the rule binds the value to a field name, otherwise 25/20/15 for a support term of the label near the value and -30 when a counter-context term is nearer (see [PII score and modes](result-schema.md#pii-score-and-modes), [PII context lexicon](#pii-context-lexicon)). Rules marked `proximity (required)` report only with a support term, in every mode. Rules marked `balanced`/`recall` only (K05) report a checksum value without a field name and never run in `strict`; the value must stand alone, not inside a longer number. Structure (K04): a JSON key, a `key: value`/`key=value` line, an XML element or attribute, a CSV header or a Markdown/HTML table header that a `field` rule accepts as its field name binds the value it holds to the rule in every mode, if the value matches the rule's value form in full; for the other rules a key of the label (or a counter-context key) that names exactly the value is its context (+25 or -30) instead of proximity. Obfuscation (K06): every rule also sees values behind zero-width characters, full-width forms and defanged separators (`[.]`, `(@)`) in every mode, and in `recall` also spelled-out e-mail separators (`[at]`, `ät`, `dot`, `punkt`) and numbers spaced character by character (-10); the span is the original text and the validator decides on the normalized value.
+
+| Rule ID | Result entity group | Extra validator | Validator strength | Base | Context | Score (`balanced`/`recall`) |
+| --- | --- | --- | --- | --- | --- | --- |
+| `pii_email` | `EMAIL` | no | none | 70 | key or proximity | 0.70–0.95 |
+| `pii_ipv4` | `IP_ADDRESS` | yes | format | 50 | key or proximity | 0.65–0.90 |
+| `pii_ipv6_full` | `IP_ADDRESS` | yes | format | 50 | key or proximity | 0.65–0.90 |
+| `pii_ipv6_compressed` | `IP_ADDRESS` | yes | format | 50 | key or proximity | 0.65–0.90 |
+| `pii_ipv6_loopback` | `IP_ADDRESS` | yes | format | 40 | key or proximity | 0.55–0.80 |
+| `pii_phone_international` | `PHONE` | yes | format | 40 | key or proximity | 0.55–0.80 |
+| `pii_phone_de` | `PHONE` | yes | format | 45 | key or proximity | 0.60–0.85 |
+| `pii_phone_de_national_context` | `PHONE` | yes | format | 30 | field or key | 0.70 |
+| `pii_phone_de_national_proximity` | `PHONE` | yes | format | 20 | key or proximity (required) | 0.50–0.60 |
+| `pii_phone_us` | `PHONE` | yes | format | 35 | key or proximity | 0.50–0.75 |
+| `pii_mac_address` | `MAC_ADDRESS` | yes | format | 55 | key or proximity | 0.70–0.95 |
+| `pii_iban_de` | `IBAN` | yes | checksum | 55 | key or proximity | 0.90–1.00 |
+| `pii_iban_generic` | `IBAN` | yes | checksum | 45 | key or proximity | 0.80–1.00 |
+| `pii_credit_card` | `CREDITCARD` | yes | checksum | 40 | key or proximity | 0.75–1.00 |
+| `pii_credit_card_cvv` | `CREDITCARD_CVV` | yes | format | 20 | field or key | 0.60 |
+| `pii_credit_card_expiry` | `CREDITCARD_EXPIRY` | yes | format | 25 | field or key | 0.65 |
+| `pii_swift_bic_context` | `SWIFT_CODE` | yes | format | 40 | field or key | 0.80 |
+| `pii_employee_id` | `EMPLOYEE_ID` | yes | format | 30 | field or key | 0.70 |
+| `pii_employee_id_ocr_field` | `EMPLOYEE_ID` | yes | format | 25 | field or key | 0.65 |
+| `pii_employee_id_prefixed` | `EMPLOYEE_ID` | yes | format | 45 | key or proximity | 0.60–0.85 |
+| `pii_customer_id` | `CUSTOMER_ID` | yes | format | 30 | field or key | 0.70 |
+| `pii_patient_id` | `PATIENT_ID` | yes | format | 30 | field or key | 0.70 |
+| `pii_student_id` | `STUDENT_ID` | yes | format | 30 | field or key | 0.70 |
+| `pii_applicant_id` | `APPLICANT_ID` | yes | format | 30 | field or key | 0.70 |
+| `pii_username` | `USERNAME` | yes | format | 30 | field or key | 0.70 |
+| `pii_date_of_birth` | `DOB` | yes | format | 40 | field or key | 0.80 |
+| `pii_date_of_birth_written_day_first` | `DOB` | yes | format | 45 | field or key | 0.85 |
+| `pii_date_of_birth_written_month_first` | `DOB` | yes | format | 45 | field or key | 0.85 |
+| `pii_financial_account_number` | `FINANCIAL_ACCOUNT_NUMBER` | yes | format | 30 | field or key | 0.70 |
+| `pii_steuer_id_de` | `STEUERID` | yes | checksum | 40 | field or key | 1.00 |
+| `pii_steuer_id_de_context_free` | `STEUERID` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
+| `pii_steuernummer_de` | `TAX_NUMBER_DE` | yes | format | 35 | field or key | 0.75 |
+| `pii_rentenversicherung_de` | `SOCIALID` | yes | format | 50 | field or key | 0.90 |
+| `pii_health_insurance_number_de` | `HEALTH_INSURANCE_NUMBER` | yes | format | 45 | field or key | 0.85 |
+| `pii_physician_number_lanr_de` | `PHYSICIAN_NUMBER_LANR` | yes | format | 30 | field or key | 0.70 |
+| `pii_passport_number_de` | `PASSPORT_NUMBER` | yes | format | 40 | field or key | 0.80 |
+| `pii_identity_card_number_de` | `IDENTITY_CARD_NUMBER` | yes | format | 40 | field or key | 0.80 |
+| `pii_driver_license_number_de` | `DRIVER_LICENSE_NUMBER` | yes | format | 35 | field or key | 0.75 |
+| `pii_kfz_kennzeichen_de` | `LICENSEPLATE` | no | none | 40 | field or key | 0.65 |
+| `pii_ssn_us` | `SSN` | yes | format | 45 | field or key | 0.85 |
+| `pii_ni_uk` | `NATIONALID` | yes | format | 50 | field or key | 0.90 |
+
+### PII context lexicon
+
+The context engine reads these DE/EN entries of `rust/src/detectors/anchor_lexicons/pii.json`; `rust/src/detectors/pii/context.rs` maps them to labels. Support terms of a label count for rules without a field name of their own, a counter-context term counts for every label when it is nearer than every support term. As a structural key (a JSON key, CSV or table header, XML element), a term of either kind names the value it holds; keys are compared lowercased, with `_`, `-`, `.` and camelCase boundaries as spaces, optionally followed by `no`, `nr`, `number` or `nummer`. The key `iban` names no account number.
+
+| Result entity group | Support anchors |
+| --- | --- |
+| `EMAIL` | `pii.email_address` |
+| `IP_ADDRESS` | `pii.network_address` |
+| `PHONE` | `pii.telephone`, `pii.mobile_phone`, `pii.fax`, `pii.telephone_extension`, `pii.phone_reachability` |
+| `MAC_ADDRESS` | `pii.hardware_address` |
+| `IBAN` | `pii.bank_account` |
+| `CREDITCARD` | `pii.payment_card` |
+| `CREDITCARD_CVV` | `pii.card_verification` |
+| `CREDITCARD_EXPIRY` | `pii.card_expiry` |
+| `SWIFT_CODE` | `pii.bank_identifier` |
+| `EMPLOYEE_ID` | `pii.employee_identifier` |
+| `CUSTOMER_ID` | `pii.customer_identifier` |
+| `PATIENT_ID` | `pii.patient_identifier` |
+| `STUDENT_ID` | `pii.student_identifier` |
+| `APPLICANT_ID` | `pii.applicant_identifier` |
+| `USERNAME` | `pii.user_account` |
+| `DOB` | `pii.date_of_birth` |
+| `FINANCIAL_ACCOUNT_NUMBER` | `pii.bank_account`, `pii.brokerage_account` |
+| `STEUERID` | `pii.tax_identifier` |
+| `TAX_NUMBER_DE` | `pii.tax_number` |
+| `SOCIALID` | `pii.social_insurance_number` |
+| `HEALTH_INSURANCE_NUMBER` | `pii.health_insurance_number` |
+| `PHYSICIAN_NUMBER_LANR` | `pii.physician_number` |
+| `PASSPORT_NUMBER` | `pii.passport` |
+| `IDENTITY_CARD_NUMBER` | `pii.identity_card` |
+| `DRIVER_LICENSE_NUMBER` | `pii.driver_license` |
+| `LICENSEPLATE` | `pii.vehicle_registration` |
+| `SSN` | `pii.social_insurance_number` |
+| `NATIONALID` | `pii.national_insurance_number` |
+
+| Counter-context anchor | DE | EN |
 | --- | --- | --- |
-| `pii_email` | `EMAIL` | no |
-| `pii_ipv4` | `IP_ADDRESS` | yes |
-| `pii_ipv6_full` | `IP_ADDRESS` | yes |
-| `pii_ipv6_compressed` | `IP_ADDRESS` | yes |
-| `pii_ipv6_loopback` | `IP_ADDRESS` | yes |
-| `pii_phone_international` | `PHONE` | yes |
-| `pii_phone_de` | `PHONE` | yes |
-| `pii_phone_de_national_context` | `PHONE` | yes |
-| `pii_phone_us` | `PHONE` | yes |
-| `pii_mac_address` | `MAC_ADDRESS` | yes |
-| `pii_iban_de` | `IBAN` | yes |
-| `pii_iban_generic` | `IBAN` | yes |
-| `pii_credit_card` | `CREDITCARD` | yes |
-| `pii_credit_card_cvv` | `CREDITCARD_CVV` | yes |
-| `pii_credit_card_expiry` | `CREDITCARD_EXPIRY` | yes |
-| `pii_swift_bic_context` | `SWIFT_CODE` | yes |
-| `pii_employee_id` | `EMPLOYEE_ID` | yes |
-| `pii_employee_id_ocr_field` | `EMPLOYEE_ID` | yes |
-| `pii_employee_id_prefixed` | `EMPLOYEE_ID` | yes |
-| `pii_customer_id` | `CUSTOMER_ID` | yes |
-| `pii_patient_id` | `PATIENT_ID` | yes |
-| `pii_student_id` | `STUDENT_ID` | yes |
-| `pii_applicant_id` | `APPLICANT_ID` | yes |
-| `pii_username` | `USERNAME` | yes |
-| `pii_date_of_birth` | `DOB` | yes |
-| `pii_date_of_birth_written_day_first` | `DOB` | yes |
-| `pii_date_of_birth_written_month_first` | `DOB` | yes |
-| `pii_financial_account_number` | `FINANCIAL_ACCOUNT_NUMBER` | yes |
-| `pii_steuer_id_de` | `STEUERID` | yes |
-| `pii_steuernummer_de` | `TAX_NUMBER_DE` | yes |
-| `pii_rentenversicherung_de` | `SOCIALID` | yes |
-| `pii_health_insurance_number_de` | `HEALTH_INSURANCE_NUMBER` | yes |
-| `pii_physician_number_lanr_de` | `PHYSICIAN_NUMBER_LANR` | yes |
-| `pii_passport_number_de` | `PASSPORT_NUMBER` | yes |
-| `pii_identity_card_number_de` | `IDENTITY_CARD_NUMBER` | yes |
-| `pii_driver_license_number_de` | `DRIVER_LICENSE_NUMBER` | yes |
-| `pii_kfz_kennzeichen_de` | `LICENSEPLATE` | no |
-| `pii_ssn_us` | `SSN` | yes |
-| `pii_ni_uk` | `NATIONALID` | yes |
+| `pii.order_number` | `bestellnummer`, `bestell-nummer`, `bestell_nummer`, `bestell nummer`, `bestellnr`, `bestell-nr`, `bestell nr`, `auftragsnummer`, `auftrags-nummer`, `auftrags_nummer`, `auftragsnr`, `auftrags-nr`, `auftrag nr`, `bestellung nr`, `bestellung #`, `kommissionsnummer`, `auftrags nummer`, `auftrags nr`, `bestell-id` | `order number`, `order-number`, `order_number`, `order no`, `order id`, `order-id`, `order_id`, `order #`, `order ref`, `purchase order`, `po number`, `po no`, `order no.`, `purchase order number` |
+| `pii.invoice_number` | `rechnungsnummer`, `rechnungs-nummer`, `rechnungs_nummer`, `rechnungs nummer`, `rechnungsnr`, `rechnungs-nr`, `rechnung nr`, `belegnummer`, `beleg-nr`, `belegnr`, `quittungsnummer`, `gutschriftsnummer`, `rechnungs nr`, `beleg-nummer` | `invoice number`, `invoice-number`, `invoice_number`, `invoice no`, `invoice id`, `invoice #`, `bill number`, `receipt number`, `receipt no`, `credit note number`, `invoice no.`, `invoice-id`, `invoice_id` |
+| `pii.shipment_number` | `sendungsnummer`, `sendungs-nummer`, `sendungs-nr`, `sendungsverfolgungsnummer`, `trackingnummer`, `tracking-nummer`, `paketnummer`, `paket-nr`, `lieferscheinnummer`, `lieferschein-nr`, `lieferscheinnr`, `frachtbriefnummer` | `tracking number`, `tracking-number`, `tracking_number`, `tracking no`, `tracking id`, `tracking code`, `shipment number`, `shipment id`, `parcel number`, `consignment number`, `waybill number`, `delivery note number`, `tracking-id`, `tracking_id` |
+| `pii.ticket_number` | `ticketnummer`, `ticket-nummer`, `ticket-nr`, `ticketnr`, `vorgangsnummer`, `vorgangs-nummer`, `vorgangs-nr`, `vorgangsnr`, `anfragenummer`, `störungsnummer`, `meldungsnummer`, `fallnummer` | `ticket number`, `ticket-number`, `ticket_number`, `ticket no`, `ticket id`, `ticket #`, `case number`, `case id`, `case #`, `incident number`, `incident id`, `issue number`, `request id`, `request number` |
+| `pii.reference_number` | `referenznummer`, `referenz-nummer`, `referenz-nr`, `buchungsnummer`, `buchungs-nummer`, `buchungs-nr`, `bestätigungsnummer`, `reservierungsnummer`, `transaktionsnummer`, `transaktions-nummer`, `transaktions-id`, `transaktions-nr`, `aktenzeichen`, `bestaetigungsnummer` | `reference number`, `reference-number`, `reference_number`, `reference no`, `ref no`, `ref. no`, `booking reference`, `booking number`, `confirmation number`, `reservation number`, `transaction id`, `transaction-id`, `transaction_id`, `transaction number`, `transaction reference` |
+| `pii.product_number` | `seriennummer`, `serien-nummer`, `serien-nr`, `seriennr`, `artikelnummer`, `artikel-nummer`, `artikel-nr`, `artikelnr`, `teilenummer`, `materialnummer`, `chargennummer`, `chargen-nr`, `losnummer`, `modellnummer`, `versionsnummer`, `build-nummer`, `teile-nr`, `produktnummer`, `produkt-nr`, `typennummer`, `ean`, `gtin` | `serial number`, `serial-number`, `serial_number`, `serial no`, `part number`, `part-number`, `part no`, `article number`, `item number`, `sku`, `model number`, `batch number`, `lot number`, `version number`, `build number`, `item no`, `product id`, `product number`, `ean`, `gtin` |
 
 ## DLP regex rules (59)
 

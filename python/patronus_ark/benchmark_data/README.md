@@ -20,20 +20,26 @@ compiled extension.
 | `dynamic_pii.jsonl` | 133 | Dynamic PII entity spans |
 | `dynamic_pii_threshold_sweep.jsonl` | 85 | Threshold calibration |
 | `education_pii_threshold_sweep.jsonl` | 50 | Education-context threshold calibration |
-| `pii_l1.jsonl` | 140 | Native PII L1 exact-span capability goldens and hard negatives |
+| `pii_l1.jsonl` | 789 | Native PII L1 exact-span goldens, hard negatives and known gaps (schema v2) |
 | `dlp_l1.jsonl` | 642 | Native DLP L1 exact-span goldens, hard negatives and known gaps (schema v2) |
 
 ## Native L1 golden-set contract
 
-`pii_l1.jsonl` covers all 28 currently emitted PII L1 labels with three
-positive variants and two hard negatives per label. `dlp_l1.jsonl` covers all
-23 currently emitted DLP L1 labels with golden schema v2 (below). The cases are
-balanced across German and English where the identifier is not intrinsically
-country-specific.
+`pii_l1.jsonl` covers all 28 currently emitted PII L1 labels with PII golden
+schema v2, `dlp_l1.jsonl` all 23 currently emitted DLP L1 labels with DLP
+golden schema v2 (both below). Each label has German and English cases; a
+country-specific identifier appears in German and English text around the same
+national format.
 
 Every row declares `case_type`, `target_label`, `language`, `span_unit`, and
-`provenance`. Positive rows contain one exact expected entity (a split DLP
-secret has one entity per fragment). `start` and
+`provenance`. Positive rows contain one exact expected entity of the target
+label (a split DLP secret has one entity per fragment). PII positives also
+annotate every other real entity in the text with its own label, in text
+order, for example the card number next to a CVV; the evaluation scores the
+target label only. Every PII gold value passes a validator of its label in
+`PII_PATTERNS`; known gaps are exempt only from format validators, never from
+the checksum labels `CREDITCARD`, `IBAN` and `STEUERID`
+(`rust/tests/pii_gold_hygiene.rs`). `start` and
 `end` are zero-based Python Unicode-code-point offsets and form a half-open
 `[start, end)` interval; they are deliberately not UTF-8 byte offsets. Hard
 negative rows contain no entities and explain the excluded lookalike in
@@ -45,6 +51,61 @@ Reserved placeholder values (RFC 2606/6761 domains such as `example.com` or
 form only (obfuscated, masked, single-label host, invalid prefix), never because
 a name or number is reserved. The full convention is in
 [`research/l1-pii/README.md`](../../../research/l1-pii/README.md).
+
+### PII golden schema v2
+
+Every `pii_l1.jsonl` row starts with these fields:
+
+```json
+{"id": "pii_l1-iban-pos-08", "suite": "pii_l1", "schema_version": 2,
+ "language": "de", "case_type": "positive", "target_label": "IBAN",
+ "rule_id": "pii_iban_de", "carrier": "json", "tags": ["structured"],
+ "known_gap": false, ...}
+```
+
+- `rule_id` is the `pii_*` rule of `PII_PATTERNS` the row exercises and belongs
+  to `target_label`. For a positive, `13_l1_golden_eval` requires that this rule
+  reported every gold span (`matched_rules` of the scan result); another rule of
+  the same label may report it as well. For a hard negative it is the rule the
+  lookalike aims at; no PII rule may report anything in the text.
+- `carrier` is the document that holds the value: `line` (a single
+  `label: value` probe), `prose` (sentence, chat, mail), `json`, `yaml`, `xml`,
+  `csv`, `kv` (`key=value` or `Key: value` lines of a form) or `table` (Markdown
+  table).
+- `tags` are the difficulty tags, in this order: `no_context` (no field name or
+  label names the value), `structured` (carrier `json`, `yaml`, `xml`, `csv`,
+  `kv` or `table`; derived by the generator), `obfuscated` (characters inserted
+  or substituted while the value stays readable: zero-width spaces, full-width
+  digits or `＠`, defanged `[.]`; on hard negatives also masked values) and `ocr`
+  (scan layout noise: no space after the colon, trailing form fields, table
+  pipes, line breaks inside a value, misread letters in the field name). Spans of
+  obfuscated and OCR values cover the text as written. Spelled-out e-mail forms
+  (`[at]`, `name @ domain . de`) and numbers spaced character by character stay
+  hard negatives in `strict` and `balanced` under the gold convention below; rows
+  with `pii_mode: recall` may make them positives, because only `recall` undoes
+  them (K06).
+- `known_gap: true` marks a positive the detector misses today. The eval runs
+  it and prints it in the coverage report, but does not gate on it. It fails
+  when a known gap starts passing, so the task that closes it flips the flag.
+  Hard negatives are never known gaps.
+- `pii_mode` (optional, right after `known_gap`) names the opt-in PII mode the
+  row runs in, `balanced` or `recall`; rows without it run in the default
+  `strict` mode. The K03 context engine scores values there: such a hard
+  negative is a value `strict` reports but a nearer counter-context term (order,
+  invoice, tracking number ...) lowers below the threshold, such a positive a
+  value whose support term outranks a counter term nearby. There are at least
+  5 gated `balanced` positives and hard negatives per language. Known gaps
+  always run in `strict`.
+- Each label has at least 5 gated positives and 5 hard negatives per language
+  (DE and EN). Each rule has a gated positive in both languages and a hard
+  negative. `python/tests/test_pii_golden_schema.py` and
+  `rust/tests/pii_golden_schema.rs` check this statically; `13_l1_golden_eval`
+  checks it on the scan results and prints the coverage per `rule_id` and per
+  tag and language.
+
+```shell
+cd rust && cargo run --example 13_l1_golden_eval -- pii
+```
 
 ### DLP golden schema v2
 
@@ -242,7 +303,9 @@ package installed (`maturin develop --manifest-path python/Cargo.toml`).
 
 Most cases are hand-authored with invented values. A small subset is derived
 from `dynamic_pii.jsonl` and identifies the source row in
-`provenance.source_fixture_id`. This links the native regression set to the
+`provenance.source_fixture_id`. `dynamic_pii.jsonl` keeps its seven
+Luhn-invalid `credit_card` values for the L3 NER but marks them with
+`"checksum_valid": false`; `12_l1_pii_fixture_eval` skips marked spans. This links the native regression set to the
 existing NER fixture without pretending that synthetic data is an external
 release-validation corpus. No text from `sensitive_current`, `v4.1`, or other
 sensitive-document stores is copied into these redistributable fixtures.

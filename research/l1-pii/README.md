@@ -10,7 +10,8 @@ Stand: 2026-10-11. Aufgabenliste: [`backlog.yaml`](backlog.yaml). Agent-Prompt:
   Gretel-Finance (exact span F1): IP .97 · IBAN .83 · PAN .60 · Telefon .59 · SSN .54 · DOB .54 ·
   BIC .50 · Pass .44 · Username .08 · Führerschein 0.
 - Fehlende Prüfziffern: KVNR, RVNR, Personalausweis/Pass (MRZ), LANR. Keine regionale Telefonprüfung.
-- Kein gemessener Presidio-Vergleich. `13_l1_golden_eval` lief nicht in CI (seit E09 im CI-Job `rust`,
+- Kein gemessener Presidio-Vergleich (seit E11: [`scoreboard/baseline.md`](scoreboard/baseline.md), Dev, exact F1
+  neutral ARK 52.7 vs. Presidio tuned 40.5, presidio_favored 45.7 vs. 71.4, M1 nicht erreicht). `13_l1_golden_eval` lief nicht in CI (seit E09 im CI-Job `rust`,
   PII und DLP); `12_l1_pii_fixture_eval` verglich Byte- mit Zeichen-Offsets (seit E08 durchgehend
   Zeichen-Offsets).
 
@@ -24,16 +25,75 @@ SHA-gepinnt). Presidio läuft in zwei Profilen: `default` und `tuned` (spaCy `en
 |---|---|
 | M1 Parität EN | Je gemeinsamer Pattern-Entität: F1(ARK) ≥ F1(Presidio tuned) |
 | M2 DE/EU | Macro-F1 ≥ Presidio tuned + 15 pp |
-| M3 Breite | ≥ 3× so viele prüfziffervalidierte Entitäten wie Presidio |
+| M3 Breite | ≥ 2× so viele prüfziffervalidierte Entitäten wie Presidio 2.2.364 (Zählregel unten: 35 → ≥ 70) |
 | M4 Latenz | 100 KiB p95 ≤ 10 ms; Presidio auf derselben Maschine gemessen |
 | Immer | FP auf Hard Negatives ≤ Presidio; keine Entität verliert > 0,5 pp F1 |
 
 PERSON/LOCATION/ORG/NRP sind kein L1-Scope; dort tritt L1 + `dynamic-pii` (GLiNER L3) an.
 
+## Fairness-Regel: Quellfamilien
+
+Festgelegt mit E12. Gold, das ARK selbst geschrieben hat, begünstigt ARK; Gold aus Presidios eigenem
+Werkzeug begünstigt Presidio. Deshalb trägt jede Gold-Quelle genau eine Familie
+(`source_families` in [`entity_map.yaml`](entity_map.yaml), geprüft von `entity_map.py check`):
+
+| Familie | Quellen | Rolle |
+|---|---|---|
+| `ark_authored` | `pii_l1`, `l1_bilingual_rules`, synthetisches E05-Goldset | wird berichtet, entscheidet **nie** einen Meilenstein |
+| `neutral` | Gretel Finance, OpenPII Nano, TAB | entscheidet |
+| `presidio_favored` | presidio-evaluator `synth_dataset_v2.json` (presidio-research, MIT, Commit `7f568b6`), Positiv-/Negativfälle der presidio-analyzer-Recognizer-Tests (MIT, Release 2.2.364) | entscheidet |
+
+- **M1 gilt nur, wenn es auf `neutral` und auf `presidio_favored` je für sich hält:** auf jeder der
+  beiden Familien je gemeinsamer Pattern-Entität mit Gold in der Familie F1(ARK) ≥ F1(Presidio tuned),
+  exakte Spans, englische Zeilen. Ein Vorsprung auf der einen Familie gleicht keinen Rückstand auf der
+  anderen aus; eine Familie ohne Gold für gemeinsame Entitäten erfüllt M1 nicht. Prüfung:
+  `scoreboard.py m1` (siehe [`scripts/l1_presidio/README.md`](../../scripts/l1_presidio/README.md)).
+- Für M2–M4 und „Immer“ gilt dieselbe Trennung: Ergebnisse auf `ark_authored` stehen im Bericht,
+  zählen aber für kein Kriterium.
+- Das Gate (`scoreboard.py gate`) rechnet Regressionen weiter auf allen Familien, zusätzlich je
+  Familie gesamt; eine Verschlechterung auf `ark_authored` ist also weiterhin rot.
+- Presidio-Gold wird nicht nachkorrigiert: Werte, die ein ARK-Validator ablehnt, bleiben Gold. Die
+  Recognizer-Tests werden mit `ast` gelesen, nie ausgeführt. Übernommen werden nur Fälle gegen den
+  Standard-Recognizer der Datei (Ausnahme: `PhoneRecognizer` mit zusätzlichen Regionen JP/CN) mit
+  literalem Text und erwarteter Anzahl bzw. Spans; ein Fall ohne Spans nur, wenn der Text der blanke
+  Wert ist. Ein Negativfall wird ein Hard Negative über den ganzen Text, aber nur für die Entität des
+  Recognizers (`scored_entities`); andere Treffer im selben Text zählen dort weder als TP noch als FP.
+
 Welche Entität zu welchem Kriterium zählt, legt [`entity_map.yaml`](entity_map.yaml) fest: jede
 Benchmark-ID mit ARK-Labels, Presidio-Entitäten, Korpus-Labels und Scope (`shared` → M1/„Immer“,
 `ark_only`, `presidio_only`, `semantic` → kein L1-Scope). Prüfung:
 `python3 scripts/l1_presidio/entity_map.py check`.
+
+## Zählregel M3: prüfziffervalidierte Entitäten
+
+Entschieden am 2026-10-14 (T03, TRIAGE 2026-W42, Abschnitt Abdeckung). Das Ziel war 3× (≈ 120);
+der Backlog kommt auf 60–80, deshalb gilt **2×**.
+
+- **Einheit:** eine Benchmark-ID aus [`entity_map.yaml`](entity_map.yaml) je Land. Nationale
+  Nummernsysteme zählen je Land einzeln (USt-IdNr. DE und IT sind zwei, Reisepass DE und UK auch);
+  internationale Systeme (IBAN, Kartennummer, Krypto-Adresse) zählen einmal. Mehrere Regeln oder
+  Recognizer derselben Einheit zählen einmal.
+- **Nur echte Prüfziffern/Prüfsummen:** Luhn, ISO 7064, gewichtete Summen, Verhoeff,
+  Kontrollbuchstaben, Base58Check. Reine Formprüfung zählt nicht: Länge, Alphabet, Präfix- oder
+  Bereichsprüfung, Datum, Bezirks-/Provinztabellen, Domain-Lookup (z. B. Kennzeichen,
+  Führerschein UK, GSTIN ohne Prüfzeichen, BSNR, SSN-Bereiche).
+- **Presidio ist auf 2.2.364 gepinnt.** Gezählt werden die Pattern-Recognizer mit
+  `validate_result`: 43, davon rechnen 35 eine Prüfziffer. M3 verlangt damit ≥ 70 ARK-Einheiten
+  (die Entscheidung schätzte ≈ 80). Eine neue Presidio-Version ändert das Ziel erst, wenn der
+  Pin bewusst angehoben wird.
+- **Gleiche Regel für beide Seiten:** ARK wird je Validator-Funktion der `PII_PATTERNS`-Registry
+  eingestuft, Presidio je Entität. Die Einstufung steht unter `checksums` in `entity_map.yaml`;
+  `null` heißt „nur Format“.
+- **Zählen:** `python3 scripts/l1_presidio/count_validated.py count` (Markdown, `--json`).
+  `check` endet mit Exit 1, wenn ein Validator der Registry nicht eingestuft ist, eine Einstufung
+  ungenutzt bleibt, ein Label oder eine Entität nicht in der Map steht oder ein Land der ID
+  widerspricht; mit `--presidio` (im Presidio-Venv) zusätzlich, wenn die installierte Version vom
+  Pin abweicht oder die `validate_result`-Recognizer nicht genau den eingestuften entsprechen.
+  Eine Aufgabe, die einen Validator hinzufügt, stuft ihn dort ein, sonst ist
+  `scripts/tests/test_l1_count_validated.py` rot.
+
+Stand T03: ARK 3 (PAN/Luhn, IBAN/MOD 97-10, Steuer-ID), Presidio 35, beide gemeinsam 3. Die
+DE-Validatoren für RVNR, KVNR, LANR, Pass/Ausweis prüfen heute nur die Form (siehe Ausgangslage).
 
 ## Gold-Konvention: Platzhalter-Werte
 
@@ -55,6 +115,9 @@ haben; ein Scanner sieht ihnen das nicht an.
 - **Dokumentations-IPs** (`203.0.113.0/24`, `2001:db8::/32`) sind in `pii_l1` und der Rule-Fixture
   schon positiv und bleiben es.
 
+Seit K06 meldet der Opt-in-Modus `recall` ausgeschriebene Formen (`[at]`, `ät`, `dot`, `punkt`) als
+`EMAIL` mit `obfuscation: spelled_out`; Gold-Zeilen mit `pii_mode: recall` dürfen sie als Positiv führen.
+
 Stand der Goldsets: `pii_l1`, `l1_bilingual_rules.json` und `demo_pii_dlp*` folgen der Konvention
 (`cu-07` ist seit T01 positiv). Das synthetische E05-Goldset ist eingefroren und enthält keine
 Platzhalter, weder als Positive noch in Hard-Negative-Spans. Durchgesetzt wird das von
@@ -62,6 +125,73 @@ Platzhalter, weder als Positive noch in Hard-Negative-Spans. Durchgesetzt wird d
 `scripts/tests/test_l1_synth_goldset.py` und `rust/tests/pii_l1.rs`
 (`reserved_placeholder_values_are_gold_positives`). ARK meldet alle Platzhalter schon heute; eine
 spätere regionale Telefonprüfung (Hebel 4) darf `+1 000-000-0000` und `555-01xx` nicht verwerfen.
+
+## Gold-Hygiene: Nebenentitäten und Prüfziffern
+
+Seit T02 (TRIAGE 2026-W42, Buckets 6 + 7) annotiert ein Positiv in `pii_l1` jede echte Entität im
+Text, nicht nur den Ziel-Span (Generator: `also=(Label, Wert)`), z. B. die PAN neben CVV oder
+Ablaufdatum. Gewertet wird weiter nur das Ziel-Label. `rust/tests/pii_gold_hygiene.rs` prüft, dass
+jeder Gold-Wert einen Validator seines Labels besteht (Known Gaps nur bei Luhn, MOD-97 und
+Steuer-ID, nach Rückbau der Obfuskation) und dass jeder weitere L1-Treffer auf einem Positiv Gold
+ist oder als Detektor-FP gelistet ist (PAN in IBAN, Telefonziffern mit gültiger Luhn-Summe, IBAN
+zusätzlich als FINANCIAL_ACCOUNT_NUMBER; T07). Die sieben Luhn-ungültigen `credit_card`-Werte in
+`dynamic_pii.jsonl` bleiben für L3 im Fixture, tragen `"checksum_valid": false` und zählen in
+`12_l1_pii_fixture_eval` nicht. Validatoren bleiben unverändert.
+
+## Capability-Goldens: Schema v2
+
+Seit E10 folgt `pii_l1.jsonl` dem Golden-Schema v2 (Format in
+[`benchmark_data/README.md`](../../python/patronus_ark/benchmark_data/README.md)): jede Zeile nennt
+die `pii_*`-Regel (`rule_id`), den Carrier (`line`, `prose`, `json`, `yaml`, `xml`, `csv`, `kv`,
+`table`), Schwierigkeits-Tags (`no_context`, `structured`, `obfuscated`, `ocr`) und `known_gap`.
+Je Label und Sprache (DE/EN) gibt es mindestens 5 gegatete Positive und 5 Hard Negatives, jede der
+37 Regeln hat ein gegatetes Positiv in beiden Sprachen und ein Hard Negative. `13_l1_golden_eval`
+verlangt, dass die deklarierte Regel den Gold-Span meldet, und druckt die Abdeckung je `rule_id`
+(DE | EN) sowie je Tag und Sprache. Bekannte Lücken (Stand E10: 89, v. a. JSON-/CSV-/Tabellen-Keys,
+deutsches „ist“/„lautet“ nach dem Feldnamen, Zero-Width-/Full-Width-Zeichen) laufen mit, gaten aber
+nicht; schließt eine Aufgabe (K04, K05, K06 …) eine Lücke, schlägt die Eval fehl, bis die Aufgabe
+`known_gap` auf `false` setzt.
+Seit K03 kann eine Zeile `pii_mode` (`balanced`/`recall`) nennen; die Eval scannt sie in diesem
+Modus. So prüfen die Goldens die Kontext-Engine, deren Scores und Gegen-Kontext nur dort wirken.
+
+## Kontext-Engine (K03)
+
+Support- und Gegen-Kontext-Begriffe stehen im DE/EN-Lexikon `rust/src/detectors/anchor_lexicons/pii.json`;
+`rust/src/detectors/pii/context.rs` ordnet die Lexikon-IDs den Labels zu (neue Sprachen wie in T26
+kommen als Einträge dort hinzu). Gesucht wird beidseitig auf derselben Zeile, der nächste Begriff
+entscheidet: Support gibt +25/+20/+15 (bis 16/32/48 Zeichen davor, 32 danach), ein echt näherer
+Gegen-Kontext-Begriff (Bestell-, Rechnungs-, Sendungs-, Ticket-, Referenz-, Seriennummer) −30.
+Feldgebundene Regeln behalten +25. Regeln mit `requires_context: true` melden nur mit Support, in
+jedem Modus; die erste ist `pii_phone_de_national_proximity`. Spätere „mit Kontext“-Aufgaben (F06,
+F07, F15, A03–A05, T08, T10, C05, C07, C08) setzen darauf auf. `strict` bleibt für alle übrigen
+Regeln unverändert.
+
+## Kontextfreie Prüfziffernwerte (K05)
+
+In `balanced` und `recall` braucht ein Wert, dessen Validator eine echte Prüfziffer rechnet, keinen
+Feldnamen. IBAN und PAN meldet ARK ohnehin ohne Kontext; Regeln mit `scored_only: true` ergänzen die
+blanke Form von Werten, die `strict` nur hinter ihrem Feldnamen meldet. `strict` führt sie nie aus
+(Entscheidung K02). Sie sind ungebundene `checksum`-Regeln, erreichen ohne Kontext die
+`balanced`-Schwelle und fallen hinter einem näheren Gegen-Kontext-Begriff unter beide Schwellen; der
+Wert muss für sich stehen (nicht nach `+`, nicht in einer längeren Zahl, Spanne, Dezimalzahl oder
+einem Schrägstrich-Pfad, keine Zifferngruppe ein Leerzeichen daneben). Die erste ist
+`pii_steuer_id_de_context_free` (Basis 20: 0,55 blank, 0,80 mit „Steuer-ID ist“, 0,25 hinter
+„Rechnungsnummer“) mit `validators::steuer_id_issued`: Prüfziffer plus BZSt-Ziffernverteilung. Die
+B-/A-/C-Aufgaben mit neuen Prüfziffern (B01 ff.) hängen ihre kontextfreie Form auf dieselbe Weise an.
+`rust/tests/pii_context_free.rs` verlangt für jedes Prüfziffer-Label eine kontextfreie Regel.
+
+## Obfuskation (K06)
+
+`rust/src/detectors/obfuscation.rs` baut eine normalisierte Sicht des Texts mit Byte-Abbildung
+zurück auf das Original; die PII-Pipeline scannt sie zusätzlich, wenn sie etwas rückgängig macht,
+und meldet nur Funde, in deren Original-Span eine Obfuskation liegt (Original-Offsets,
+`matched_rules[].obfuscation`). In jedem Modus: Zero-Width-Zeichen zwischen zwei Wertzeichen,
+Full-Width-Formen (Lauf mit Full-Width-Buchstabe/-Ziffer oder Full-Width-Trenner zwischen
+ASCII-Alnum), entschärfte Trenner `[.]`, `(@)`, `{.}`, `[:]`. Nur in `recall` (−10 Punkte):
+ausgeschriebene E-Mail-Trenner (`[at]`, `ät`, `dot`, `punkt`, ` @ `, ` . `) und zeichenweise
+gesperrte Nummern (`D E 8 9 …`). Die Gold-Konvention T01 gilt damit für `strict` und `balanced`
+unverändert; `recall` darf ausgeschriebene Adressen melden. Validatoren entscheiden auf dem
+normalisierten Wert. DLP D04 kann dieselbe Sicht nutzen.
 
 ## Hebel
 
@@ -80,20 +210,24 @@ spätere regionale Telefonprüfung (Hebel 4) darf `+1 000-000-0000` und `555-01x
 ## Ausführung: systemd-Timer auf der VPS → Stacked Branch
 
 Eine Claude-Cloud-Routine kommt nicht auf die VPS (Port 22 aus der Cloud gesperrt). Deshalb plant
-die VPS selbst: `ark-l1.timer` startet stündlich zur vollen Stunde `runner/run.sh`, `ark-dlp.timer`
-zur halben Stunde `runner/run.sh --program dlp`. Beide teilen ein Lock; ist es belegt, entfällt der Lauf.
+die VPS selbst, und nur die VPS: `ark-l1.timer` startet alle 2 Stunden zu geraden Stunden `runner/run.sh`,
+`ark-dlp.timer` zu ungeraden Stunden `runner/run.sh --program dlp`. Beide teilen ein Lock; ist es belegt,
+entfällt der Lauf.
 
 ```
 run.sh
   ark-l1 next     → Stack restacken, eine Aufgabe wählen, eigener Klon l1/NNN-<id> auf der Stack-Spitze
   claude -p       → in systemd-Sandbox (nur Klon + Cargo-Target beschreibbar, kein sudo/GitHub/Holdout)
   ark-l1 gate     → Agent-Commits als Bundle (sandboxed erzeugt) ins vertrauenswürdige Repo holen,
-                    frischer Checkout; fmt/clippy/test, Golden-Eval, Python-Tests, Docs in einer
-                    Sandbox ohne Credentials; Scoreboard (scoreboard.py gate, E06) zusätzlich ohne Netz,
-                    als einziger Schritt mit Lesezugriff auf den Holdout
-  grün: ark-l1 publish → Status done per Plumbing, push aus dem vertrauenswürdigen Repo, Draft-PR
-                    (idempotent; schlägt es fehl, holt der nächste Lauf nur das Publish nach)
-  rot:  Gate-Bericht zurück an den Agenten, max. 3 Runden, danach ark-l1 block
+                    frischer Checkout; dieselben Schritte wie .github/workflows/ci.yml (fmt/clippy/test,
+                    Golden-Eval, Python-Tests, pytest scripts/tests, Docs) in einer Sandbox ohne
+                    Credentials; Scoreboard (scoreboard.py gate, E06) zusätzlich ohne Netz, als einziger
+                    Schritt mit Lesezugriff auf den Holdout, rot bei jeder Regression
+  ark-l1 ci       → Status done per Plumbing, Branch pushen (noch ohne PR), auf die GitHub-CI warten
+  grün: ark-l1 publish → PR öffnen, fertig zum Review (kein Draft); ohne grüne CI auf genau diesem
+                    Commit verweigert publish (idempotent; der nächste Lauf holt CI/Publish nach)
+  rot:  Gate- bzw. CI-Bericht zurück an den Agenten, max. 3 Runden, danach ark-l1 block
+                    (ein Branch ohne PR wird dabei gelöscht)
 ```
 
 - **Ein Lauf = eine Aufgabe.** Gewählt wird die erste Aufgabe ohne `status`, deren `deps` erledigt
@@ -119,11 +253,14 @@ run.sh
 - **Holdout** liegt unter `~/ark-l1/holdout`, für den Agenten per Sandbox unsichtbar. Erzeugt wird er
   zusammen mit Dev (`~/ark-l1/data/dev`) einmalig von `scripts/l1_presidio/prepare_corpora.py`
   (Gretel Finance, OpenPII Nano, TAB; gruppenweiser Split, 60 % Holdout, SHA-256-Manifest, `.ready`).
+  Die Familie `presidio_favored` (E12) friert derselbe Skript mit `--family presidio_favored` getrennt
+  nach `…/presidio_favored/` ein (Gate-Schritt `presidio-favored-corpora`, einmalig, erst nach
+  Neuinstallation des Runners); Gruppen sind presidio-evaluator-Templates bzw. Testtexte.
   Dazu kommt das synthetische DE/EU-Goldset aus `scripts/l1_presidio/synth_goldset.py` unter
   `…/synthetic/`: Dev mit öffentlichem Seed, Holdout mit geheimem Seed (`~/ark-l1/holdout/synthetic/.seed`),
   ebenfalls einmalig vom Gate erzeugt (Schritt `synthetic-goldset`, erst nach Neuinstallation des Runners).
 - **Scoreboard:** `scripts/l1_presidio/scoreboard.py gate` rechnet Head und Basis (exakt und
-  überlappend, je Entität, DE/EN, Hard-Negative-FP) auf Dev und Holdout; Exit 1 bei > 0,5 pp
+  überlappend, je Entität, DE/EN, je Quellfamilie, Hard-Negative-FP) auf Dev und Holdout; Exit 1 bei > 0,5 pp
   F1-Verlust oder neuem Hard-Negative-Treffer. Lokal mit `--dev "$ARK_L1_DEV_DATA"` ohne
   `--holdout`; Details in [`scripts/l1_presidio/README.md`](../../scripts/l1_presidio/README.md).
 - **Beobachten:** `~/ark-l1/bin/ark-l1 status`, Logs unter `~/ark-l1/logs/`, PR-Mails von GitHub.
