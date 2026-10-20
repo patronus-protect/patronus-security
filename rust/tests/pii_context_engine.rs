@@ -105,9 +105,9 @@ fn evidence(text: &str, value: &str, label: &str) -> context::Evidence {
 
 /// Model score of `pattern` with `bonus` context points and `penalty` counter points.
 fn model_score(pattern: &PiiPattern, bonus: u8, penalty: u8) -> f64 {
-    let points = i16::from(pattern.base_score) + i16::from(pattern.strength.points())
-        + i16::from(bonus)
-        - i16::from(penalty);
+    let points =
+        i16::from(pattern.base_score) + i16::from(pattern.strength.points()) + i16::from(bonus)
+            - i16::from(penalty);
     f64::from(points.clamp(0, 100)) / 100.0
 }
 
@@ -431,15 +431,26 @@ fn every_label_has_de_and_en_terms_and_counter_terms_cover_both_languages() {
             .iter()
             .filter(|definition| ids.contains(&definition.id.as_str()))
             .collect();
-        let de = entries.iter().map(|e| e.de.len() + e.shared.len()).sum::<usize>();
-        let en = entries.iter().map(|e| e.en.len() + e.shared.len()).sum::<usize>();
+        let de = entries
+            .iter()
+            .map(|e| e.de.len() + e.shared.len())
+            .sum::<usize>();
+        let en = entries
+            .iter()
+            .map(|e| e.en.len() + e.shared.len())
+            .sum::<usize>();
         (de, en)
     };
     for (label, ids) in SUPPORT_LEXICON {
         let (de, en) = words(ids);
         assert!(de > 0 && en > 0, "{label}: {de} DE / {en} EN terms");
     }
-    for id in ["pii.order_number", "pii.invoice_number", "pii.reference_number", "pii.product_number"] {
+    for id in [
+        "pii.order_number",
+        "pii.invoice_number",
+        "pii.reference_number",
+        "pii.product_number",
+    ] {
         assert!(COUNTER_LEXICON.contains(&id), "{id}");
         let (de, en) = words(&[id]);
         assert!(de > 0 && en > 0, "{id}: {de} DE / {en} EN terms");
@@ -450,16 +461,55 @@ fn every_label_has_de_and_en_terms_and_counter_terms_cover_both_languages() {
 fn evidence_names_the_deciding_term_its_side_and_distance() {
     let phone = "+49 30 1234567";
     for (text, bonus, anchor, side, distance) in [
-        ("Telefon: +49 30 1234567", 25, "pii.telephone", Side::Before, 2),
+        (
+            "Telefon: +49 30 1234567",
+            25,
+            "pii.telephone",
+            Side::Before,
+            2,
+        ),
         ("Phone +49 30 1234567", 25, "pii.telephone", Side::Before, 1),
-        ("+49 30 1234567 (mobil)", 25, "pii.mobile_phone", Side::After, 2),
-        ("+49 30 1234567 (mobile)", 25, "pii.mobile_phone", Side::After, 2),
-        ("Phone, during office hours only +49 30 1234567", 20, "pii.telephone", Side::Before, 27),
-        ("Telefon (nur werktags, nicht am Wochenende): +49 30 1234567", 15, "pii.telephone", Side::Before, 38),
-        ("+49 30 1234567 – rund um die Uhr per Handy", 20, "pii.mobile_phone", Side::After, 23),
+        (
+            "+49 30 1234567 (mobil)",
+            25,
+            "pii.mobile_phone",
+            Side::After,
+            2,
+        ),
+        (
+            "+49 30 1234567 (mobile)",
+            25,
+            "pii.mobile_phone",
+            Side::After,
+            2,
+        ),
+        (
+            "Phone, during office hours only +49 30 1234567",
+            20,
+            "pii.telephone",
+            Side::Before,
+            27,
+        ),
+        (
+            "Telefon (nur werktags, nicht am Wochenende): +49 30 1234567",
+            15,
+            "pii.telephone",
+            Side::Before,
+            38,
+        ),
+        (
+            "+49 30 1234567 – rund um die Uhr per Handy",
+            20,
+            "pii.mobile_phone",
+            Side::After,
+            23,
+        ),
     ] {
         let found = evidence(text, phone, "PHONE");
-        assert!(matches!(found.context, Context::Support { .. }), "{text}: {found:?}");
+        assert!(
+            matches!(found.context, Context::Support { .. }),
+            "{text}: {found:?}"
+        );
         assert_eq!((found.bonus(), found.penalty()), (bonus, 0), "{text}");
         assert_eq!(found.anchor, Some(anchor), "{text}");
         assert_eq!(found.side, Some(side), "{text}");
@@ -473,16 +523,28 @@ fn evidence_names_the_deciding_term_its_side_and_distance() {
         let found = evidence(text, phone, "PHONE");
         assert_eq!(found.context, Context::None, "{text}");
         assert_eq!((found.bonus(), found.penalty()), (0, 0), "{text}");
-        assert_eq!((found.anchor, found.side, found.distance), (None, None, None), "{text}");
+        assert_eq!(
+            (found.anchor, found.side, found.distance),
+            (None, None, None),
+            "{text}"
+        );
     }
 }
 
 #[test]
 fn context_is_label_specific_case_insensitive_and_unicode_safe() {
     let phone = "+49 30 1234567";
-    assert_eq!(evidence("TELEFON: +49 30 1234567", phone, "PHONE").bonus(), 25);
     assert_eq!(
-        evidence("Grüße – Rückruf über Telefon: +49 30 1234567", phone, "PHONE").bonus(),
+        evidence("TELEFON: +49 30 1234567", phone, "PHONE").bonus(),
+        25
+    );
+    assert_eq!(
+        evidence(
+            "Grüße – Rückruf über Telefon: +49 30 1234567",
+            phone,
+            "PHONE"
+        )
+        .bonus(),
         25
     );
     assert_eq!(
@@ -530,7 +592,10 @@ fn short_terms_count_only_as_words_of_their_own() {
         evidence("SKU 212-736-4410", phone, "PHONE").penalty(),
         COUNTER_CONTEXT_POINTS
     );
-    assert_eq!(evidence("Muskuläre 212-736-4410", phone, "PHONE").penalty(), 0);
+    assert_eq!(
+        evidence("Muskuläre 212-736-4410", phone, "PHONE").penalty(),
+        0
+    );
 }
 
 #[test]
@@ -550,7 +615,11 @@ fn counter_context_names_its_lexicon_entry() {
     ] {
         let found = evidence(text, phone, "PHONE");
         assert_eq!(found.context, Context::Counter, "{text}");
-        assert_eq!((found.bonus(), found.penalty()), (0, COUNTER_CONTEXT_POINTS), "{text}");
+        assert_eq!(
+            (found.bonus(), found.penalty()),
+            (0, COUNTER_CONTEXT_POINTS),
+            "{text}"
+        );
         assert_eq!(found.anchor, Some(anchor), "{text}");
         assert_eq!(found.side, Some(Side::Before), "{text}");
     }
@@ -570,8 +639,15 @@ fn the_nearest_term_decides() {
         assert_eq!(found.penalty(), 0, "{text}");
     }
     // The counter term is nearer: only the penalty counts.
-    let found = evidence("Telefon-Hotline, Bestellnummer +49 30 1234567", phone, "PHONE");
-    assert_eq!((found.bonus(), found.penalty()), (0, COUNTER_CONTEXT_POINTS));
+    let found = evidence(
+        "Telefon-Hotline, Bestellnummer +49 30 1234567",
+        phone,
+        "PHONE",
+    );
+    assert_eq!(
+        (found.bonus(), found.penalty()),
+        (0, COUNTER_CONTEXT_POINTS)
+    );
     assert_eq!(found.anchor, Some("pii.order_number"));
     // Equal distance: support wins.
     let found = evidence("Telefon +49 30 1234567 Bestellnummer", phone, "PHONE");
@@ -584,10 +660,22 @@ fn balanced_scores_follow_the_context_and_strict_ignores_it() {
         ("Tel. 212-736-4410", "PHONE", "pii_phone_us", 25, 0),
         ("212-736-4410 (Festnetz)", "PHONE", "pii_phone_us", 25, 0),
         ("Call 212-736-4410", "PHONE", "pii_phone_us", 0, 0),
-        ("Kreditkarte 4111 1111 1111 1111", "CREDITCARD", "pii_credit_card", 25, 0),
+        (
+            "Kreditkarte 4111 1111 1111 1111",
+            "CREDITCARD",
+            "pii_credit_card",
+            25,
+            0,
+        ),
         ("IBAN DE89370400440532013000", "IBAN", "pii_iban_de", 25, 0),
         ("E-Mail: ada@example.com", "EMAIL", "pii_email", 25, 0),
-        ("Bestellnummer 4532 0151 1283 0366", "CREDITCARD", "pii_credit_card", 0, 30),
+        (
+            "Bestellnummer 4532 0151 1283 0366",
+            "CREDITCARD",
+            "pii_credit_card",
+            0,
+            30,
+        ),
     ] {
         let expected = model_score(pattern(rule_id), bonus, penalty);
         for mode in [PiiMode::Balanced, PiiMode::Recall] {
@@ -598,7 +686,11 @@ fn balanced_scores_follow_the_context_and_strict_ignores_it() {
                 assert!(rule(&rules, rule_id).is_none(), "{mode:?}: {text}");
                 continue;
             }
-            assert_eq!(span_score(&result, label), Some(expected), "{mode:?}: {text}");
+            assert_eq!(
+                span_score(&result, label),
+                Some(expected),
+                "{mode:?}: {text}"
+            );
             let matched = rule(&rules, rule_id).unwrap_or_else(|| panic!("{mode:?}: {text}"));
             assert_eq!(matched["score"], expected, "{mode:?}: {text}");
             assert_eq!(matched["context"]["bonus"], bonus, "{mode:?}: {text}");
@@ -635,7 +727,10 @@ fn matched_rules_explain_the_deciding_context() {
     assert_eq!(context["distance"], 1);
 
     // Field-bound rules name their own field.
-    let result = pii_result("Bestellnummer 4711, Steuer-ID: 86095742719", PiiMode::Balanced);
+    let result = pii_result(
+        "Bestellnummer 4711, Steuer-ID: 86095742719",
+        PiiMode::Balanced,
+    );
     let rules = matched_rules(&result);
     let context = &rule(&rules, "pii_steuer_id_de").unwrap()["context"];
     assert_eq!(context["bonus"], FIELD_CONTEXT_POINTS);
@@ -653,7 +748,10 @@ fn matched_rules_explain_the_deciding_context() {
 fn field_bound_values_never_take_a_penalty() {
     for (text, label) in [
         ("Bestellnummer 4711, Steuer-ID: 86095742719", "STEUERID"),
-        ("Rechnungsnummer 88213, Kontonummer: 1234567890", "FINANCIAL_ACCOUNT_NUMBER"),
+        (
+            "Rechnungsnummer 88213, Kontonummer: 1234567890",
+            "FINANCIAL_ACCOUNT_NUMBER",
+        ),
         ("Order number 4711, SSN: 123-45-6789", "SSN"),
     ] {
         let strict = pii_result(text, PiiMode::Strict);
@@ -688,7 +786,12 @@ fn checksum_vectors_decide_emission_next_to_any_context() {
     ] {
         assert!(validator(valid), "{valid}");
         assert!(!validator(invalid), "{invalid}");
-        for prefix in ["Kreditkarte ", "Bankkonto ", "Bestellnummer ", "Invoice no. "] {
+        for prefix in [
+            "Kreditkarte ",
+            "Bankkonto ",
+            "Bestellnummer ",
+            "Invoice no. ",
+        ] {
             for mode in [PiiMode::Strict, PiiMode::Balanced, PiiMode::Recall] {
                 let rejected = pii_result(&format!("{prefix}{invalid}"), mode);
                 assert_eq!(
@@ -750,8 +853,8 @@ fn bilingual_rule_fixture_probes_context_and_counter_context() {
         for text in [&probes.context.de, &probes.context.en] {
             let result = pii_result(text, PiiMode::Balanced);
             let rules = matched_rules(&result);
-            let matched = rule(&rules, &case.rule_id)
-                .unwrap_or_else(|| panic!("{}: {text}", case.rule_id));
+            let matched =
+                rule(&rules, &case.rule_id).unwrap_or_else(|| panic!("{}: {text}", case.rule_id));
             assert!(
                 matched["context"]["bonus"].as_u64().unwrap() > 0,
                 "{}: {text}: {matched}",

@@ -226,6 +226,52 @@ def pii_score_points(path: Path = ROOT / "rust/src/detectors/pii/score.rs") -> t
     return strength, int(context.group(1)), tiers, int(counter.group(1))
 
 
+PII_LEXICON_PATH = ROOT / "rust/src/detectors/anchor_lexicons/pii.json"
+PII_CONTEXT_PATH = ROOT / "rust/src/detectors/pii/context.rs"
+
+
+def pii_context_lexicon(path: Path = PII_CONTEXT_PATH) -> tuple[dict[str, list[str]], list[str]]:
+    """Support lexicon ids per PII label and the counter-context ids of the PII context engine."""
+    source = path.read_text()
+    support = re.search(r"pub static SUPPORT_LEXICON: .*? = &\[(.*?)\n\];", source, flags=re.S)
+    counter = re.search(r"pub static COUNTER_LEXICON: &\[&str\] = &\[(.*?)\];", source, flags=re.S)
+    if not support or not counter:
+        raise ValueError(f"Missing PII context lexicon in {path}")
+    labels = {
+        label: re.findall(r'"(pii\.\w+)"', ids)
+        for label, ids in re.findall(r'\(\s*"(\w+)",\s*&\[(.*?)\],?\s*\)', support.group(1), flags=re.S)
+    }
+    return labels, re.findall(r'"(pii\.\w+)"', counter.group(1))
+
+
+def pii_context_lexicon_lines(labels: list[str], path: Path = PII_LEXICON_PATH) -> list[str]:
+    """Catalog section: support lexicon ids per PII label and the counter-context terms."""
+    entries = {entry["id"]: entry for entry in json.loads(path.read_text())}
+    support, counter = pii_context_lexicon()
+    lines = [
+        "",
+        "### PII context lexicon",
+        "",
+        "The context engine reads these DE/EN entries of `rust/src/detectors/anchor_lexicons/pii.json`; "
+        "`rust/src/detectors/pii/context.rs` maps them to labels. Support terms of a label count for "
+        "rules without a field name of their own, a counter-context term counts for every label when it "
+        "is nearer than every support term.",
+        "",
+        "| Result entity group | Support anchors |",
+        "| --- | --- |",
+    ]
+    for label in labels:
+        anchors = ", ".join(f"`{anchor}`" for anchor in support.get(label, [])) or "—"
+        lines.append(f"| `{label}` | {anchors} |")
+    lines.extend(["", "| Counter-context anchor | DE | EN |", "| --- | --- | --- |"])
+    for anchor in counter:
+        entry = entries[anchor]
+        de = ", ".join(f"`{word}`" for word in entry["de"] + entry["shared"])
+        en = ", ".join(f"`{word}`" for word in entry["en"] + entry["shared"])
+        lines.append(f"| `{anchor}` | {de} | {en} |")
+    return lines
+
+
 def pii_rule_score(rule: dict, strength_points: dict[str, int], context_points: int) -> float:
     points = rule["base_score"] + strength_points[rule["strength"]]
     points += context_points if rule["field_context"] else 0
@@ -305,7 +351,8 @@ def generate_l1_rule_catalog_doc() -> str:
         f"plus its context, capped at 100 and divided by 100: {context_points} when the rule binds the value "
         f"to a field name, otherwise {'/'.join(str(points) for points in proximity_tiers)} for a support term "
         f"of the label near the value and -{counter_points} when a counter-context term is nearer "
-        "(see [PII score and modes](result-schema.md#pii-score-and-modes)). "
+        "(see [PII score and modes](result-schema.md#pii-score-and-modes), "
+        "[PII context lexicon](#pii-context-lexicon)). "
         "Rules marked `proximity (required)` report only with a support term, in every mode.",
         "",
         "| Rule ID | Result entity group | Extra validator | Validator strength | Base | Context | Score (`balanced`/`recall`) |",
@@ -317,6 +364,7 @@ def generate_l1_rule_catalog_doc() -> str:
             f"| {rule['strength']} | {rule['base_score']} | {pii_rule_context(rule)} "
             f"| {pii_rule_score_range(rule, strength_points, context_points, proximity_tiers)} |"
         )
+    lines.extend(pii_context_lexicon_lines(list(dict.fromkeys(rule["entity_group"] for rule in pii))))
 
     lines.extend([
         "",

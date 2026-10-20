@@ -2863,7 +2863,9 @@
       "rueckruf",
       "rückrufnummer",
       "rueckrufnummer",
-      "zurückrufen"
+      "zurückrufen",
+      "zu erreichen unter",
+      "rückruf unter"
     ],
     "shared": [
       "whatsapp"
@@ -2891,7 +2893,10 @@
       "src ip",
       "host ip",
       "server ip",
-      "login ip"
+      "login ip",
+      "source_ip",
+      "remote address",
+      "remote-address"
     ],
     "de": [
       "ip-adresse",
@@ -2899,7 +2904,11 @@
       "ipadresse",
       "ip_adresse",
       "netzwerkadresse",
-      "rechneradresse"
+      "rechneradresse",
+      "quell-ip",
+      "quell ip",
+      "ziel-ip",
+      "client-adresse"
     ],
     "shared": [
       "ip",
@@ -2921,7 +2930,9 @@
       "hardware-address",
       "device mac",
       "wifi mac",
-      "ethernet address"
+      "ethernet address",
+      "hardware_address",
+      "device address"
     ],
     "de": [
       "mac-adresse",
@@ -2930,10 +2941,12 @@
       "mac_adresse",
       "hardwareadresse",
       "hardware-adresse",
-      "geräteadresse"
+      "geräteadresse",
+      "geraeteadresse"
     ],
     "shared": [
-      "mac"
+      "mac",
+      "bssid"
     ],
     "sources": [
       "rust/src/detectors/pii/context.rs"
@@ -2957,7 +2970,10 @@
       "card_number",
       "card no",
       "card",
-      "pan"
+      "pan",
+      "credit card number",
+      "payment_card",
+      "card no."
     ],
     "de": [
       "kreditkarte",
@@ -2972,7 +2988,11 @@
       "karten-nummer",
       "karten_nummer",
       "karten nummer",
-      "karte"
+      "karte",
+      "kartennr",
+      "karten-nr",
+      "karten nr",
+      "girocard"
     ],
     "shared": [
       "visa",
@@ -3000,7 +3020,9 @@
       "order ref",
       "purchase order",
       "po number",
-      "po no"
+      "po no",
+      "order no.",
+      "purchase order number"
     ],
     "de": [
       "bestellnummer",
@@ -3018,7 +3040,10 @@
       "auftrag nr",
       "bestellung nr",
       "bestellung #",
-      "kommissionsnummer"
+      "kommissionsnummer",
+      "auftrags nummer",
+      "auftrags nr",
+      "bestell-id"
     ],
     "shared": [],
     "sources": [
@@ -3038,7 +3063,10 @@
       "bill number",
       "receipt number",
       "receipt no",
-      "credit note number"
+      "credit note number",
+      "invoice no.",
+      "invoice-id",
+      "invoice_id"
     ],
     "de": [
       "rechnungsnummer",
@@ -3052,7 +3080,9 @@
       "beleg-nr",
       "belegnr",
       "quittungsnummer",
-      "gutschriftsnummer"
+      "gutschriftsnummer",
+      "rechnungs nr",
+      "beleg-nummer"
     ],
     "shared": [],
     "sources": [
@@ -3074,7 +3104,9 @@
       "parcel number",
       "consignment number",
       "waybill number",
-      "delivery note number"
+      "delivery note number",
+      "tracking-id",
+      "tracking_id"
     ],
     "de": [
       "sendungsnummer",
@@ -3125,7 +3157,8 @@
       "vorgangsnr",
       "anfragenummer",
       "störungsnummer",
-      "meldungsnummer"
+      "meldungsnummer",
+      "fallnummer"
     ],
     "shared": [],
     "sources": [
@@ -3165,7 +3198,8 @@
       "transaktions-nummer",
       "transaktions-id",
       "transaktions-nr",
-      "aktenzeichen"
+      "aktenzeichen",
+      "bestaetigungsnummer"
     ],
     "shared": [],
     "sources": [
@@ -3190,7 +3224,10 @@
       "batch number",
       "lot number",
       "version number",
-      "build number"
+      "build number",
+      "item no",
+      "product id",
+      "product number"
     ],
     "de": [
       "seriennummer",
@@ -3208,9 +3245,16 @@
       "losnummer",
       "modellnummer",
       "versionsnummer",
-      "build-nummer"
+      "build-nummer",
+      "teile-nr",
+      "produktnummer",
+      "produkt-nr",
+      "typennummer"
     ],
-    "shared": [],
+    "shared": [
+      "ean",
+      "gtin"
+    ],
     "sources": [
       "rust/src/detectors/pii/context.rs"
     ]

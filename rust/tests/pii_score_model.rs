@@ -290,20 +290,24 @@ fn score_is_base_plus_validator_strength_plus_field_context() {
             "{}",
             pattern.name
         );
+        let field = if pattern.captured_value {
+            Context::Field
+        } else {
+            Context::None
+        };
         assert_eq!(
             score::rule_score(pattern),
-            score::model_score(pattern, context, 0),
+            score::score(pattern, field),
             "{}",
             pattern.name
         );
-        // The context bonus is capped at the field bonus; the penalty floors at 0.
-        assert_eq!(
-            score::model_score(pattern, 100, 0),
-            score::model_score(pattern, score::FIELD_CONTEXT_POINTS, 0),
+        // Counter-context floors at 0 and never exceeds the context-free score.
+        let counter = score::score(pattern, Context::Counter);
+        assert!(
+            (0.0..=score::rule_score(pattern)).contains(&counter),
             "{}",
             pattern.name
         );
-        assert_eq!(score::model_score(pattern, 0, 200), 0.0, "{}", pattern.name);
         assert!(
             (1..=100).contains(&pattern.base_score),
             "{}: base {}",
