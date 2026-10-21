@@ -11,6 +11,16 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Shared validator library `patronus_ark::detectors::validators` for DLP and PII rules: CRC-32 and
+  the CRC32-Base62 suffix of GitHub/npm tokens, Base58/Base58Check, Bech32/Bech32m (BIP 173/350,
+  configurable length limit, 5/8-bit regrouping), strict canonical base64 (standard, unpadded,
+  URL-safe), DER TLV parsing with minimal-length and INTEGER checks, JWT header (`alg`, `typ`,
+  unsecured `none`) and compact JWS parsing, Shannon entropy per character, character classes and
+  token alphabets. Spec test vectors (CRC-32 check value, Bitcoin Core base58, BIP 173/350,
+  RFC 4648, X.690) plus a cross-check against the golden generator are in
+  `rust/tests/validators.rs`. The DLP entropy floor now uses the shared `shannon_entropy`.
+  **Detection change:** none; no rule uses the new checks yet (F01–F09 build on them).
+
 - DLP rule metadata v2: every rule in `DLP_PATTERNS` carries a `RuleMeta` (`provider`,
   `validator_strength` `checksum`/`structure`/`format`/`none`, prefilter `keywords`, `min_entropy`,
   `source_ref`, live/test severity via `test_prefixes`). Each `matched_rules` entry in the native

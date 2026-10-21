@@ -170,6 +170,7 @@ tasks:
     accept: output in details; generate_docs.py renders provider/validator/source in the rule catalog
 
   - id: K03
+    status: done
     title: Shared validator library (CRC32-Base62, Base58Check, Bech32/Bech32m, Base64/DER parse, JWT header, Shannon entropy, character classes)
     type: engine
     deps: [K01]

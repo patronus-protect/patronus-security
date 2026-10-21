@@ -11,6 +11,7 @@ pub mod pii;
 pub mod shell;
 pub(crate) mod structure;
 pub mod threat;
+pub mod validators;
 
 use regex::Regex;
 use std::{collections::HashMap, ops::Range};
