@@ -81,9 +81,11 @@ const SIX_FOUR: [&str; 6] = [
 ];
 
 /// `(text, value)`: the PHONE span stays exactly `value` in strict.
-const KEPT: [(&str, &str); 16] = [
+const KEPT: [(&str, &str); 18] = [
     ("Telefon: +49 30 1234567", "+49 30 1234567"),
     ("Tel.:+49 30 1234567", "+49 30 1234567"),
+    ("tel2:+49 30 1234567", "+49 30 1234567"),
+    ("Mobil2:+49 30 1234567", "+49 30 1234567"),
     ("Phone:+1 415 555 2671", "+1 415 555 2671"),
     ("Rückruf unter +49 170 1234567 (Handy)", "+49 170 1234567"),
     (

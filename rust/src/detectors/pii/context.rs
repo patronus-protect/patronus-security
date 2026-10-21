@@ -501,9 +501,9 @@ pub(super) fn stands_alone(text: &str, value: Range<usize>) -> bool {
 /// Whether an international phone number at `start` (its `+` or `00`) opens a
 /// value rather than continuing an element run (T17): no letter or digit right
 /// before it, so not `UNB+UNOC:3+520173321` or `NAD+BY+987654321`. A `+` also
-/// does not follow another `+` (`MOA+1++…`) or a tag with a digit and `:`
-/// (`{86:+33…}`, `:62F:+…`); a field name and `:` (`Tel.:+49 …`, `tel:+31…`)
-/// stay. `00` after `+` is the number of an EDIFACT `COM+0049…:TE` segment.
+/// does not follow another `+` (`MOA+1++…`) or a tag that starts with a digit
+/// and `:` (`{86:+33…}`, `:62F:+…`); a field name and `:` (`Tel.:+49 …`,
+/// `tel:+31…`, numbered `tel2:+49 …`) stay. `00` after `+` is the number of an EDIFACT `COM+0049…:TE` segment.
 pub(super) fn opens_phone_number(text: &str, start: usize) -> bool {
     let plus = text[start..].starts_with('+');
     let head = &text[..start];
@@ -518,7 +518,7 @@ pub(super) fn opens_phone_number(text: &str, start: usize) -> bool {
             if name == head.len() {
                 !head.ends_with([':', '+'])
             } else {
-                !head[name..].bytes().any(|byte| byte.is_ascii_digit())
+                !head[name..].starts_with(|ch: char| ch.is_ascii_digit())
             }
         }
         _ => true,
