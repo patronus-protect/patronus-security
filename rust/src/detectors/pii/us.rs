@@ -6,8 +6,10 @@ use super::{pii::PiiPattern, score::ValidatorStrength, validators};
 pub(super) const PHONE: PiiPattern = PiiPattern {
     name: "pii_phone_us",
     // A balanced `(NXX)` starts the span (T04); `\b` never holds before `(` after a
-    // space, so the second branch alone yields `415) 555-2671`.
-    pattern: r"(?:\(\d{3}\)|\b(?:\+1[\s\-]?)?\(?\d{3}\)?)[\s\-\.]?\d{3}[\s\-\.]?\d{4}\b",
+    // space, so the second branch alone yields `415) 555-2671`. The area code is set
+    // off by `)` or a separator (T17): `712390-9678` (6-4) and zero-padded IDs like
+    // `0000012345` have no NANP grouping.
+    pattern: r"(?:\(\d{3}\)[\s\-\.]?|\b(?:\+1[\s\-]?)?\(?\d{3}(?:\)[\s\-\.]?|[\s\-\.]))\d{3}[\s\-\.]?\d{4}\b",
     entity_group: "PHONE",
     validator: Some(validators::unanchored_phone),
     strength: ValidatorStrength::Format,

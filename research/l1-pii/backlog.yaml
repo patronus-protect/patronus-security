@@ -263,6 +263,7 @@ tasks:
   # ── F: Repair existing rules ──────────────────────────────────────────
   - {id: T04, title: "US phone: span boundary for parenthesized area code, (415) 555-2671 instead of 415) 555-2671", type: fix, deps: [E06], source: "TRIAGE 2026-W42, bucket 2", status: done}
   - id: T17
+    status: done
     title: "Phone precision in strict: no matches inside EDI/X12/SWIFT MT elements, zero-padded IDs, 6-4 digit groups"
     type: precision-fix
     deps: [E06]

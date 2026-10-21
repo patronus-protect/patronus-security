@@ -1376,6 +1376,46 @@ T04_PARENTHESIZED_AREA_CODE_CASES = [
 for _row in T04_PARENTHESIZED_AREA_CODE_CASES:
     PII_CASES[_row["target_label"]].append(_row)
 
+# T17 phone precision (TRIAGE 2026-W43 buckets 1 + 2): `pii_phone_international` and the `+49`
+# form of `pii_phone_de` do not start inside an EDIFACT element run (`NAD+BY+987654321`) or a
+# SWIFT MT tag (`{86:+33…}`), and `pii_phone_us` needs the area code set off, so zero-padded
+# IDs (`0000012345`) and 6-4 groups (`811228-9874`) are no NANP number. Positives keep `+49 …`,
+# `+1 …` and the placeholder numbers of T01 after a field name, also directly after `:`.
+# Appended so existing ids stay stable.
+T17_PHONE_ELEMENT_RUN_CASES = [
+    p("PHONE", "de", "pii_phone_international", "Tel.:", "+49 30 1234567"),
+    p("PHONE", "de", "pii_phone_de", "Rückruf unter ", "+49 170 1234567", " (Handy)", carrier="prose"),
+    p("PHONE", "de", "pii_phone_us", "Telefon (USA): ", "212-555-0100"),
+    p("PHONE", "de", "pii_phone_international", "Platzhalter in der Vorlage: ", "+1 000-000-0000"),
+    p("PHONE", "de", "pii_phone_de", "Kommunikationssegment: COM+", "0049 30 1234567", ":TE'"),
+    p("PHONE", "de", "pii_phone_us", "Büro New York: ", "(617) 5550183"),
+    p("PHONE", "en", "pii_phone_international", "Phone:", "+1 415 555 2671"),
+    p("PHONE", "en", "pii_phone_international", "Placeholder in the template: ", "+1 000-000-0000"),
+    p("PHONE", "en", "pii_phone_us", "Office: ", "212-555-0147"),
+    p("PHONE", "en", "pii_phone_international", "Contact for this EDI interchange: ", "+44 20 7946 0958", carrier="prose"),
+    p("PHONE", "en", "pii_phone_international", "Mobile (", "+44 7700 900123", ")"),
+    p("PHONE", "en", "pii_phone_us", "Fax: ", "(617) 5550183"),
+    n("PHONE", "de", "pii_phone_international", "Kopfsegment der Übertragung: UNB+UNOC:3+520173321::2+520173321::4+202202150830+1323327835++STA'", "EDIFACT interchange header, element run"),
+    n("PHONE", "de", "pii_phone_international", "Käufer im Lieferavis: NAD+BY+987654321::9'", "EDIFACT party ID after a qualifier"),
+    n("PHONE", "de", "pii_phone_international", "Belegdatum und Betrag: DTM+137:20220215:102'\nMOA+1++520173321'", "EDIFACT date and empty element before an ID"),
+    n("PHONE", "de", "pii_phone_international", "EDIFACT-Position: LIN+1++5310330123:SRV'", "EDIFACT item number after an empty element"),
+    n("PHONE", "de", "pii_phone_us", "X12-Bestellung: ST*850*0000012345~", "zero-padded X12 control number"),
+    n("PHONE", "de", "pii_phone_us", "Schlusssaldo im Kontoauszug: :62F:/0000001234/", "zero-padded account in a SWIFT MT field"),
+    n("PHONE", "de", "pii_phone_us", "Belegnummer: 0012345678", "zero-padded document number"),
+    n("PHONE", "de", "pii_phone_us", "Personnummer: 811228-9874", "Swedish personal number, 6-4 groups"),
+    n("PHONE", "en", "pii_phone_international", "Interchange header: UNB+UNOC:3+520173321::2+520173321::4+202202150830+1323327835++STA'", "EDIFACT interchange header, element run"),
+    n("PHONE", "en", "pii_phone_international", "Buyer party segment: NAD+BY+987654321::9'", "EDIFACT party ID after a qualifier"),
+    n("PHONE", "en", "pii_phone_international", "SWIFT narrative block {86:+330105789456}", "number after a SWIFT MT tag"),
+    n("PHONE", "en", "pii_phone_international", "Line item segment: LIN+1+3553 6548 1210 8739:1:PCE'", "EDIFACT item number after a qualifier"),
+    n("PHONE", "en", "pii_phone_us", "X12 purchase order: ST*850*0000012345~\nSE*13*0000012345~", "zero-padded X12 control numbers"),
+    n("PHONE", "en", "pii_phone_us", "Closing balance field: :62F:/0000001234/", "zero-padded account in a SWIFT MT field"),
+    n("PHONE", "en", "pii_phone_us", '<xbrli:identifier scheme="http://www.sec.gov/CIK">0001234567</xbrli:identifier>', "zero-padded SEC CIK", carrier="xml"),
+    n("PHONE", "en", "pii_phone_us", "Swedish personal identity number: 811228-9874", "Swedish personal number, 6-4 groups"),
+    n("PHONE", "en", "pii_phone_us", "My SSN is 600427-7817, issued in Sweden.", "Swedish personal number, 6-4 groups", carrier="prose"),
+]
+for _row in T17_PHONE_ELEMENT_RUN_CASES:
+    PII_CASES[_row["target_label"]].append(_row)
+
 # DLP golden schema v2 (E13). Every DLP row names the rule it exercises (`rule_id`), the
 # document that carries the value (`carrier`), its difficulty `tags` and whether it is a
 # `known_gap`: a positive the detector misses today, reported by 13_l1_golden_eval but

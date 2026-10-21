@@ -23,8 +23,9 @@ struct Case {
     /// `de`/`en`), materialized here so the fixture holds no plaintext token.
     #[serde(default)]
     secrets: Vec<SecretRecipe>,
-    /// Lookalikes per language (T07: placeholders and environment/template
-    /// references) that no DLP rule may report.
+    /// Lookalikes per language that no rule of the case's category may report
+    /// (DLP T07: placeholders and environment/template references; PII T17: EDI,
+    /// X12 and SWIFT MT elements, zero-padded IDs, 6-4 digit groups).
     #[serde(default)]
     hard_negatives: BTreeMap<String, Vec<String>>,
     language_neutral: bool,
@@ -124,19 +125,23 @@ fn every_pii_and_dlp_rule_is_reachable_with_bilingual_source_evidence() {
 }
 
 #[test]
-fn dlp_hard_negatives_are_silent_in_de_and_en() {
+fn hard_negatives_are_silent_in_de_and_en() {
     let cases: Vec<Case> =
         serde_json::from_str(include_str!("fixtures/l1_bilingual_rules.json")).unwrap();
     let gateway = SecurityGateway::with_max_level(
-        vec![SecurityCategory::Dlp],
+        vec![SecurityCategory::Dlp, SecurityCategory::Pii],
         SecurityLevel::L1,
         None,
         false,
     );
     let mut reported = Vec::new();
-    let mut rules = 0;
+    let mut rules = BTreeMap::<&str, usize>::new();
     for case in cases.iter().filter(|case| !case.hard_negatives.is_empty()) {
-        assert_eq!(case.category, "dlp", "{}", case.rule_id);
+        let category = match case.category.as_str() {
+            "dlp" => SecurityCategory::Dlp,
+            "pii" => SecurityCategory::Pii,
+            other => panic!("{}: unknown category {other}", case.rule_id),
+        };
         for language in ["de", "en"] {
             let texts = case
                 .hard_negatives
@@ -149,14 +154,14 @@ fn dlp_hard_negatives_are_silent_in_de_and_en() {
             );
         }
         assert_eq!(case.hard_negatives.len(), 2, "{}: only de/en", case.rule_id);
-        rules += 1;
+        *rules.entry(case.category.as_str()).or_default() += 1;
         for (language, text) in case
             .hard_negatives
             .iter()
             .flat_map(|(language, texts)| texts.iter().map(move |text| (language, text)))
         {
             let spans = gateway
-                .scan_category(SecurityCategory::Dlp, text)
+                .scan_category(category, text)
                 .into_iter()
                 .flat_map(|result| result.evidence_spans)
                 .map(|span| span.text)
@@ -169,7 +174,8 @@ fn dlp_hard_negatives_are_silent_in_de_and_en() {
             }
         }
     }
-    assert!(rules >= 8, "T07 hard negatives missing");
+    assert!(rules["dlp"] >= 8, "T07 hard negatives missing");
+    assert!(rules["pii"] >= 3, "T17 hard negatives missing");
     assert!(
         reported.is_empty(),
         "hard negatives reported: {reported:#?}"
