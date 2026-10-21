@@ -267,7 +267,8 @@ Prüfziffer bleiben in `strict` primär.
 Eine Claude-Cloud-Routine kommt nicht auf die VPS (Port 22 aus der Cloud gesperrt). Deshalb plant
 die VPS selbst, und nur die VPS: `ark-l1.timer` startet alle 2 Stunden zu geraden Stunden `runner/run.sh`,
 `ark-dlp.timer` zu ungeraden Stunden `runner/run.sh --program dlp`. Beide teilen ein Lock; ist es belegt,
-entfällt der Lauf.
+wartet der Lauf bis zu 2 Stunden und startet direkt danach (seit 2026-10-21; vorher entfiel er, und ein
+langer Lauf des einen Programms verdrängte mehrere Slots des anderen). So wechseln sich die Programme ab.
 
 ```
 run.sh
