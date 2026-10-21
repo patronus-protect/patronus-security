@@ -422,34 +422,34 @@ def ci_state(head: str) -> str:
     return "green" if all(c["conclusion"] in OK_CONCLUSIONS for c in checks) else "red"
 
 
-def auto_merge(open_prs: list[dict]) -> bool:
+def auto_merge(open_prs: list[dict]) -> int | None:
     """Squash-merge the bottom stack PR when it targets main, is mergeable and its CI is green.
 
     At most one per run: the PR above it is rebased onto the squash commit by `restack` and needs
     a fresh CI run before it can follow. The repository deletes merged branches, so GitHub moves
-    the next PR to main by itself."""
+    the next PR to main by itself. Returns the merged PR number, else None."""
     if not AUTO_MERGE or not open_prs:
-        return False
+        return None
     bottom = min(open_prs, key=lambda p: branch_number(p["headRefName"]))
     label = f"#{bottom['number']} {bottom['headRefName']}"
     if bottom["baseRefName"] != "main" or bottom.get("isDraft"):
         print(f"AUTO_MERGE_SKIP={label} (base {bottom['baseRefName']}, draft {bottom.get('isDraft')})")
-        return False
+        return None
     if bottom.get("mergeable") != "MERGEABLE":
         print(f"AUTO_MERGE_WAIT={label} mergeable={bottom.get('mergeable')}")
-        return False
+        return None
     state = ci_state(bottom["headRefOid"])
     if state != "green":
         print(f"AUTO_MERGE_WAIT={label} CI {state}")
-        return False
+        return None
     try:
         run(["gh", "pr", "merge", str(bottom["number"]), "--repo", GH_REPO, "--squash",
              "--match-head-commit", bottom["headRefOid"]])
     except RuntimeError as err:
         print(f"AUTO_MERGE_ERROR={label}: {str(err).strip().splitlines()[-1]}")
-        return False
+        return None
     print(f"AUTO_MERGED={label}")
-    return True
+    return bottom["number"]
 
 
 # ── subcommands ──────────────────────────────────────────────────────────
@@ -467,10 +467,13 @@ def cmd_next() -> int:
     git("fetch", "--quiet", "--prune", "origin")
     git("checkout", "--quiet", "--detach", "origin/main")
     open_prs = prs("open")
-    if auto_merge(open_prs):
+    merged = auto_merge(open_prs)
+    if merged is not None:
         git("fetch", "--quiet", "--prune", "origin")
         git("checkout", "--quiet", "--detach", "origin/main")
-        open_prs = prs("open")
+        # GitHub may still list the PR as open for a moment; a merged (and deleted) branch must
+        # never become the stack top a new task is based on.
+        open_prs = [p for p in prs("open") if p["number"] != merged]
     top, conflict = restack(open_prs)
     if conflict is not None:
         if conflict.get("push_error"):
