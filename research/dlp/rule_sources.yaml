@@ -118,7 +118,7 @@ rules:
   dlp_eth_private_key:
     provider: ethereum
     source_ref: https://ethereum.org/en/developers/docs/accounts/
-    format: "0x and 64 hex digits (32-byte secp256k1 private key)"
+    format: "0x and 64 hex digits (32-byte secp256k1 private key, 1 <= k < n); reported only in a key context (F01), since tx/block hashes share the shape"
   dlp_btc_wif:
     provider: bitcoin
     source_ref: https://en.bitcoin.it/wiki/Wallet_import_format

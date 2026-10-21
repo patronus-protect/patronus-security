@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! Key material: wallet keys and PEM private keys.
+use crate::detectors::dlp::key_context::has_key_context;
 use crate::detectors::dlp::{
     dlp::{DlpPattern, RuleMeta, SecretSubtype, ValidatorStrength},
     prefilter::ValueClass,
@@ -26,13 +27,30 @@ fn is_btc_wif(value: &str) -> bool {
     scalar.iter().any(|byte| *byte != 0) && scalar < SECP256K1_ORDER.as_slice()
 }
 
+/// Order of the secp256k1 group as 64 lowercase hex digits.
+const SECP256K1_ORDER_HEX: &str =
+    "fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141";
+
+/// Ethereum private key: a secp256k1 scalar in 1..n-1 as `0x` and 64
+/// lowercase hex digits, which compare like the numbers they spell.
+fn is_eth_private_key(value: &str) -> bool {
+    value.strip_prefix("0x").is_some_and(|hex| {
+        hex.len() == 64
+            && hex
+                .bytes()
+                .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+            && hex.bytes().any(|byte| byte != b'0')
+            && hex < SECP256K1_ORDER_HEX
+    })
+}
+
 pub(super) const RULES: &[DlpPattern] = &[
     // ── Crypto ───────────────────────────────────────────────────────────────
     DlpPattern {
         name: "dlp_eth_private_key",
         pattern: r"0x[0-9a-f]{64}\b",
         entity_group: "CRYPTO_KEY",
-        validator: None,
+        validator: Some(is_eth_private_key),
         span_group: None,
         base_score: 25,
         meta: RuleMeta::new(
@@ -43,6 +61,8 @@ pub(super) const RULES: &[DlpPattern] = &[
         .with_provider("ethereum")
         .with_min_entropy(3.0)
         .with_boundary("")
+        // F01: tx/block hashes, roots and digests share the shape.
+        .with_context_gate(has_key_context)
         .with_subtype(SecretSubtype::PrivateKey),
     },
     DlpPattern {

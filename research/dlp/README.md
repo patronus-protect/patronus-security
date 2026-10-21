@@ -34,6 +34,11 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   (`RuleMeta::boundary`): Vor und nach dem Wert steht kein `[A-Za-z0-9_]` und kein Zeichen des
   Provider-Alphabets, und der Wert liegt in keinem Base64-Blob. Escapes wie `\n` oder `%3D`
   begrenzen ein Token weiterhin.
+  Seit F01 braucht `dlp_eth_private_key` Schlüsselkontext (`RuleMeta::context_gate`, in jedem
+  Modus): einen Schlüsselbegriff auf der Zeile (private key, privkey, mnemonic, wallet, signer,
+  Schlüssel …) oder ohne Begriff auf der Zeile einen Schlüsselbegriff in den drei Zeilen
+  darüber. Der nächste Begriff entscheidet; ein näherer Hash-, Root- oder ID-Begriff (tx hash,
+  blockHash, Transaktionshash, Prüfsumme, topic, salt …) verwirft den Wert.
   Seit K09 (Taxonomie v2) nennt jede Secret-Regel einen Untertyp ihrer Gruppe (`subtype` in
   `matched_rules`: `api_key`, `access_token`, `password`, `auth_url` …). Connection-Strings,
   Webhook-URLs, Auth-URLs, OTP-Secrets und Seed-Phrasen werden keine eigenen Gruppen, sondern
@@ -44,8 +49,8 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   Seit K03 liegen die Bausteine dafür in `rust/src/detectors/validators/` (CRC32-Base62,
   Base58Check, Bech32/Bech32m, Base64/DER, JWT-Header, Entropie, Zeichenklassen; auch für PII);
   angebunden werden sie regelweise in F01–F09.
-- Bekannte Präzisionslücken: `dlp_eth_private_key` trifft jeden 0x-64-Hex-Wert, also auch Tx- und
-  Block-Hashes. `dlp_btc_wif` validiert die Prüfsumme nicht. `dlp_signed_url_signature`
+- Bekannte Präzisionslücken: `dlp_eth_private_key` traf bis F01 jeden 0x-64-Hex-Wert, also auch
+  Tx- und Block-Hashes. `dlp_btc_wif` validiert die Prüfsumme nicht. `dlp_signed_url_signature`
   (`sig=`) und `dlp_credential_in_url` (`token=`) treffen auch Paginierungs- und CSRF-Parameter.
   `dlp_password_assignment` nimmt in Prosa beliebige Wörter („Passwort ist falsch“).
 - Gemessen ist bisher nur Content: 214 Go-Dokumente aus gitleaks (Dokumentlabel) und 250
