@@ -12,8 +12,7 @@ const MIN_BLOB_RUN: usize = 16;
 
 /// Whether `range` of `text` is a whole token for `boundary`: no word or
 /// provider-alphabet character directly before or after it, except at the
-/// end of an escape (`\n`, `%3D`, `\uHHHH`), and no base64 blob on a `+`/`/`
-/// side.
+/// end of an escape (`\n`, `%3D`, `\uHHHH`), and not part of a base64 blob.
 pub(super) fn is_whole_token(text: &str, range: Range<usize>, boundary: TokenBoundary) -> bool {
     let bytes = text.as_bytes();
     let continues = |byte: u8| {
@@ -23,19 +22,39 @@ pub(super) fn is_whole_token(text: &str, range: Range<usize>, boundary: TokenBou
         if continues(before) && !ends_with_escape(&bytes[..range.start]) {
             return false;
         }
-        if matches!(before, b'+' | b'/') && is_blob_run(bytes[..range.start - 1].iter().rev()) {
-            return false;
-        }
     }
-    if let Some(&after) = bytes.get(range.end) {
-        if continues(after) {
-            return false;
-        }
-        if matches!(after, b'+' | b'/') && is_blob_run(bytes[range.end + 1..].iter()) {
-            return false;
-        }
+    if bytes.get(range.end).is_some_and(|&after| continues(after)) {
+        return false;
     }
-    true
+    !in_base64_blob(bytes, range)
+}
+
+/// Whether `range` sits in a standard base64 blob: a blob run beyond a `+`/`/`
+/// neighbour, a value of base64 characters only (`hf_…`, `npm_…` cannot be in
+/// one) and a `+` or `=` padding somewhere in the blob, since a `/` alone is
+/// also a path delimiter (`https://host/ReleaseAsset2026Ab/AKIA…`).
+fn in_base64_blob(bytes: &[u8], range: Range<usize>) -> bool {
+    let base64 = |byte: &u8| byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'/' | b'=');
+    if !bytes[range.clone()].iter().all(base64) {
+        return false;
+    }
+    let left = range.start > 0
+        && matches!(bytes[range.start - 1], b'+' | b'/')
+        && is_blob_run(bytes[..range.start - 1].iter().rev());
+    let right = matches!(bytes.get(range.end), Some(b'+' | b'/'))
+        && is_blob_run(bytes[range.end + 1..].iter());
+    if !left && !right {
+        return false;
+    }
+    let start = range.start
+        - bytes[..range.start]
+            .iter()
+            .rev()
+            .take_while(|b| base64(b))
+            .count();
+    let end = range.end + bytes[range.end..].iter().take_while(|b| base64(b)).count();
+    let blob = &bytes[start..end];
+    blob.contains(&b'+') || blob.ends_with(b"=")
 }
 
 /// Whether `head` ends with a character escape whose last character is a
@@ -120,5 +139,16 @@ mod tests {
         assert!(whole("s3://bucket/tok/", "tok", WORD));
         assert!(whole("/home/user/projects/tok", "tok", WORD));
         assert!(whole("a+tok", "tok", WORD));
+        assert!(!whole("h1:Zm9yZWlnbjAxMjM0NTY3/tok=", "tok", WORD));
+    }
+
+    #[test]
+    fn path_segments_and_non_base64_values_are_no_blob() {
+        // A `/` alone is a path delimiter, not base64 evidence.
+        assert!(whole("https://host/ReleaseAsset2026Ab/tok", "tok", WORD));
+        assert!(whole("https://host/tok/ReleaseAsset2026Ab/x", "tok", WORD));
+        // `_` and `-` are not in the standard base64 alphabet.
+        assert!(whole("Zm9yZWlnbjAxMjM0NTY3+hf_tok", "hf_tok", WORD));
+        assert!(whole("npm_tok/Zm9yZWlnbjAxMjM0NTY3==", "npm_tok", WORD));
     }
 }
