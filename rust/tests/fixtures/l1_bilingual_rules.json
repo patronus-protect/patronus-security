@@ -133,6 +133,16 @@
         "de": "Bestellnummer 202-604-7110",
         "en": "Order number 202-604-7110"
       }
+    },
+    "span": {
+      "de": {
+        "text": "US-Büro: (212) 736-4410",
+        "value": "(212) 736-4410"
+      },
+      "en": {
+        "text": "Call me at (415) 555-2671 tomorrow.",
+        "value": "(415) 555-2671"
+      }
     }
   },
   {
