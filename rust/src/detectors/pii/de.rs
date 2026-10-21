@@ -6,7 +6,8 @@ use super::{pii::PiiPattern, score::ValidatorStrength, validators};
 // ── Telefon ──────────────────────────────────────────────────────────────────
 pub(super) const PHONE: PiiPattern = PiiPattern {
     name: "pii_phone_de",
-    pattern: r"(?:\+49|0049)\s?[1-9][\d\s\-\/]{5,12}\d",
+    // No separator is a line break (T18).
+    pattern: r"(?:\+49|0049)[\s&&[^\n-\r\x85\x{2028}\x{2029}]]?[1-9][\d\s\-\/&&[^\n-\r\x85\x{2028}\x{2029}]]{5,12}\d",
     entity_group: "PHONE",
     validator: Some(validators::unanchored_phone),
     strength: ValidatorStrength::Format,
