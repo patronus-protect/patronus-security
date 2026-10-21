@@ -243,6 +243,10 @@ run.sh
   ein. Lehnt GitHub den Restack-Push ab (Branch ändert `.github/workflows`, Token ohne `workflow`-Scope),
   meldet der Lauf `RESTACK_PUSH_ERROR` und hebt den Rebase unter `RESTACK_REF` auf; nach einem Push von
   außen (mit Lease) geht der Stack im nächsten Lauf weiter.
+  Verweigert GitHub die neue PR-Basis (PR ist Teil eines nativen Stacks), zieht `next` den alten
+  Basis-Branch nach, sofern er kein offener Stack-Branch mehr ist (Parent gemergt): Push mit Lease auf
+  den neuen Parent (`MOVED_BASE`). Sonst behält der PR die ungesquashten Commits des Parents als Basis
+  und meldet dauerhaft einen Konflikt. Scheitert der Push, steht `STALE_BASE_REF` im Log.
   Ab 15 offenen PRs pausiert der Timer, bis gemergt wird; Restack-Läufe laufen trotzdem.
 - **Isolation:** Der Host führt nie Code oder Git-Konfiguration des Agenten aus. Git-Befehle im
   Agent-Klon (`status`, `bundle`, `rev-list`) laufen in der Sandbox; das gemeinsame `.git`, der

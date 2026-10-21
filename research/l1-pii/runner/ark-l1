@@ -285,12 +285,39 @@ def restack(open_prs: list[dict]) -> tuple[tuple[str, str], dict | None]:
                 # already rebased; a stale PR base must not abort every following run.
                 print(f"WARN=base of #{pr['number']} not changed to {prev_name}: "
                       f"{str(err).strip().splitlines()[-1]}")
+                move_stale_base(pr, prev_name, prev_sha, {p["headRefName"] for p in open_prs})
         prev_name, prev_sha = name, head
     for name in list(stack):
         if name not in {p["headRefName"] for p in open_prs}:
             del stack[name]
     save(STACK, stack)
     return (prev_name, prev_sha), conflict
+
+
+def move_stale_base(pr: dict, onto_name: str, onto_sha: str, open_heads: set[str]) -> None:
+    """Point the stale base branch of a stacked PR at its new parent.
+
+    A PR keeps the head branch of its merged parent as base when GitHub refuses the base change
+    (native stack). That branch still holds the parent's unsquashed commits, so GitHub reports the
+    rebased PR as conflicting and the next run rebases it again. Moving the merged branch, never an
+    open stack branch, to the new parent leaves the PR with only its own commits."""
+    base = pr["baseRefName"]
+    if not base.startswith(BRANCH_PREFIX) or base in open_heads:
+        return
+    old = ""
+    try:
+        old = git("ls-remote", "origin", f"refs/heads/{base}").split("\t")[0]
+        if not old or old == onto_sha:
+            return
+        git("push", "--quiet", f"--force-with-lease=refs/heads/{base}:{old}", "origin",
+            f"{onto_sha}:refs/heads/{base}")
+    except RuntimeError as err:
+        # E.g. a `.github/workflows` change between the two commits and a token without `workflow`
+        # scope; the PR stays as it is and the next run tries again.
+        print(f"WARN=stale base {base} of #{pr['number']} not moved to {onto_name}: "
+              f"{str(err).strip().splitlines()[-1]}\nSTALE_BASE_REF={base} {onto_sha} lease={old}")
+        return
+    print(f"MOVED_BASE={base} → {onto_name} for #{pr['number']}")
 
 
 def start_restack(conflict: dict) -> int:
