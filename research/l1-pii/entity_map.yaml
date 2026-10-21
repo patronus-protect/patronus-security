@@ -362,7 +362,7 @@ checksums:
   # Validator-Funktion in rust/src/detectors/pii/validators.rs, wie in PII_PATTERNS eingetragen.
   # Jeder dort verwendete Validator steht hier, auch die reinen Formatprüfungen.
   ark:
-    luhn: {algorithm: Luhn}
+    payment_card: {algorithm: Luhn}             # plus IIN-Präfix und Länge je Marke (B-PAN)
     mod97: {algorithm: ISO 7064 MOD 97-10}
     steuer_id: {algorithm: "ISO 7064 MOD 11,10"}
     steuer_id_issued: {algorithm: "ISO 7064 MOD 11,10"}   # plus BZSt-Ziffernverteilung (K05, kontextfrei)

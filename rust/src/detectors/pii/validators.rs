@@ -55,6 +55,127 @@ pub fn luhn(s: &str) -> bool {
     sum.is_multiple_of(10)
 }
 
+/// Payment card brand of an IIN range (B-PAN).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CardBrand {
+    AmericanExpress,
+    DinersClub,
+    Discover,
+    Jcb,
+    Maestro,
+    Mastercard,
+    Mir,
+    UnionPay,
+    Uatp,
+    Visa,
+}
+
+/// One IIN range of a brand: card numbers whose first `low.len()` digits lie in
+/// `low..=high` and whose digit count is one of `lengths`.
+#[derive(Debug)]
+pub struct CardIinRange {
+    pub brand: CardBrand,
+    pub low: &'static str,
+    pub high: &'static str,
+    pub lengths: &'static [usize],
+}
+
+const fn iin(
+    brand: CardBrand,
+    low: &'static str,
+    high: &'static str,
+    lengths: &'static [usize],
+) -> CardIinRange {
+    CardIinRange {
+        brand,
+        low,
+        high,
+        lengths,
+    }
+}
+
+const SIXTEEN_TO_NINETEEN: &[usize] = &[16, 17, 18, 19];
+const FOURTEEN_TO_NINETEEN: &[usize] = &[14, 15, 16, 17, 18, 19];
+
+/// IIN prefixes and lengths of the card brands (ISO/IEC 7812 issuer ranges as the
+/// networks publish them). First match names the brand: Discover and UnionPay come
+/// before the wider Maestro ranges. JCB is `35` as test-card generators issue it
+/// (the network's own range is 3528–3589), plus the 15-digit `1800`/`2131`.
+pub const CARD_IIN_RANGES: &[CardIinRange] = &[
+    iin(CardBrand::AmericanExpress, "34", "34", &[15]),
+    iin(CardBrand::AmericanExpress, "37", "37", &[15]),
+    iin(CardBrand::DinersClub, "300", "305", FOURTEEN_TO_NINETEEN),
+    iin(CardBrand::DinersClub, "3095", "3095", FOURTEEN_TO_NINETEEN),
+    iin(CardBrand::DinersClub, "36", "36", FOURTEEN_TO_NINETEEN),
+    iin(CardBrand::DinersClub, "38", "39", FOURTEEN_TO_NINETEEN),
+    iin(CardBrand::Jcb, "35", "35", SIXTEEN_TO_NINETEEN),
+    iin(CardBrand::Jcb, "1800", "1800", &[15]),
+    iin(CardBrand::Jcb, "2131", "2131", &[15]),
+    iin(CardBrand::Mir, "2200", "2204", SIXTEEN_TO_NINETEEN),
+    iin(CardBrand::Mastercard, "2221", "2720", &[16]),
+    iin(CardBrand::Mastercard, "51", "55", &[16]),
+    iin(CardBrand::Visa, "4", "4", &[13, 16, 19]),
+    iin(CardBrand::Discover, "6011", "6011", SIXTEEN_TO_NINETEEN),
+    iin(CardBrand::Discover, "644", "649", SIXTEEN_TO_NINETEEN),
+    iin(CardBrand::Discover, "65", "65", SIXTEEN_TO_NINETEEN),
+    iin(CardBrand::UnionPay, "62", "62", SIXTEEN_TO_NINETEEN),
+    iin(
+        CardBrand::Maestro,
+        "50",
+        "50",
+        &[12, 13, 14, 15, 16, 17, 18, 19],
+    ),
+    iin(
+        CardBrand::Maestro,
+        "56",
+        "69",
+        &[12, 13, 14, 15, 16, 17, 18, 19],
+    ),
+    iin(CardBrand::Uatp, "1", "1", &[15]),
+];
+
+/// Brand of a card number by IIN prefix and length; separators are ignored.
+pub fn card_brand(s: &str) -> Option<CardBrand> {
+    let digits: String = s.chars().filter(char::is_ascii_digit).collect();
+    CARD_IIN_RANGES
+        .iter()
+        .find(|range| {
+            range.lengths.contains(&digits.len())
+                && digits
+                    .get(..range.low.len())
+                    .is_some_and(|prefix| (range.low..=range.high).contains(&prefix))
+        })
+        .map(|range| range.brand)
+}
+
+/// A payment card number: [`luhn`] plus the IIN prefix and a length of a brand
+/// ([`CARD_IIN_RANGES`]). Thirteen digits that open with a valid YYMMDD birth date
+/// are a national ID (ZA ID number, KR resident registration number), and digits
+/// that open with a valid YYYYMMDD date a time stamp, not a card.
+pub fn payment_card(s: &str) -> bool {
+    if !luhn(s) || card_brand(s).is_none() {
+        return false;
+    }
+    let digits: Vec<u8> = s
+        .bytes()
+        .filter(u8::is_ascii_digit)
+        .map(|b| b - b'0')
+        .collect();
+    let number = |range: std::ops::Range<usize>| {
+        digits[range]
+            .iter()
+            .fold(0u16, |value, digit| value * 10 + u16::from(*digit))
+    };
+    let birth_date_id = digits.len() == 13 && {
+        let (year, month, day) = (number(0..2), number(2..4), number(4..6));
+        // Any century: the two-digit year only decides February 29.
+        valid_date(day as u8, month as u8, 2000 + year)
+    };
+    let time_stamp = matches!(number(0..2), 19 | 20)
+        && valid_date(number(6..8) as u8, number(4..6) as u8, number(0..4));
+    !birth_date_id && !time_stamp
+}
+
 pub fn phone(s: &str) -> bool {
     let digits = s
         .chars()

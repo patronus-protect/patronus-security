@@ -570,6 +570,43 @@ pub(super) fn stands_alone(text: &str, value: Range<usize>) -> bool {
         || (next == Some(' ') && digit(next2)))
 }
 
+/// Whether a card candidate at `value` (byte range) can be a card number by its
+/// position (B-PAN): not the digits after the `+` of a phone number
+/// (`+44 20 1234 5678`), and not a segment of a token, i.e. joined by `-` or `_`
+/// to alphanumerics on both sides (`xoxb-…-485275870833-…`) or, without a space
+/// inside, to a run with a letter (`xoxb-249332005873`, `pkg-…`).
+pub(super) fn card_position(text: &str, value: Range<usize>) -> bool {
+    let joins = |ch: char| matches!(ch, '-' | '_');
+    let head = &text[..value.start];
+    let tail = &text[value.end..];
+    if head.ends_with('+') {
+        return false;
+    }
+    // The alphanumeric run joined to the value on each side, if any.
+    let before = head
+        .strip_suffix(joins)
+        .map(|head| {
+            let start = head
+                .trim_end_matches(|ch: char| ch.is_ascii_alphanumeric())
+                .len();
+            &head[start..]
+        })
+        .filter(|run| !run.is_empty());
+    let after = tail
+        .strip_prefix(joins)
+        .map(|tail| {
+            let end = tail
+                .find(|ch: char| !ch.is_ascii_alphanumeric())
+                .unwrap_or(tail.len());
+            &tail[..end]
+        })
+        .filter(|run| !run.is_empty());
+    let lettered =
+        |run: Option<&str>| run.is_some_and(|run| run.bytes().any(|b| b.is_ascii_alphabetic()));
+    let compact = !text[value].contains(' ');
+    !((before.is_some() && after.is_some()) || (compact && (lettered(before) || lettered(after))))
+}
+
 /// Whether an international phone number at `start` (its `+` or `00`) opens a
 /// value rather than continuing an element run (T17): no letter or digit right
 /// before it, so not `UNB+UNOC:3+520173321` or `NAD+BY+987654321`. A `+` also

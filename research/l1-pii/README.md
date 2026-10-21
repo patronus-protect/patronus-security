@@ -167,8 +167,8 @@ Text, nicht nur den Ziel-Span (Generator: `also=(Label, Wert)`), z. B. die PAN n
 Ablaufdatum. Gewertet wird weiter nur das Ziel-Label. `rust/tests/pii_gold_hygiene.rs` prüft, dass
 jeder Gold-Wert einen Validator seines Labels besteht (Known Gaps nur bei Luhn, MOD-97 und
 Steuer-ID, nach Rückbau der Obfuskation) und dass jeder weitere L1-Treffer auf einem Positiv Gold
-ist oder als Detektor-FP gelistet ist (Telefonziffern mit gültiger Luhn-Summe, PAN in einer noch nicht
-gemeldeten gruppierten Nicht-DE-IBAN). PAN in einer gültigen IBAN und die IBAN als
+ist oder als Detektor-FP gelistet ist (bis B-PAN Telefonziffern mit gültiger Luhn-Summe und eine PAN in
+einer noch nicht gemeldeten gruppierten Nicht-DE-IBAN; seitdem ist die Liste leer). PAN in einer gültigen IBAN und die IBAN als
 FINANCIAL_ACCOUNT_NUMBER sind seit T07 Sekundär-Evidenz und zählen dort nicht. Die sieben Luhn-ungültigen `credit_card`-Werte in
 `dynamic_pii.jsonl` bleiben für L3 im Fixture, tragen `"checksum_valid": false` und zählen in
 `12_l1_pii_fixture_eval` nicht. Validatoren bleiben unverändert.
@@ -222,6 +222,22 @@ einem Schrägstrich-Pfad, keine Zifferngruppe ein Leerzeichen daneben). Die erst
 „Rechnungsnummer“) mit `validators::steuer_id_issued`: Prüfziffer plus BZSt-Ziffernverteilung. Die
 B-/A-/C-Aufgaben mit neuen Prüfziffern (B01 ff.) hängen ihre kontextfreie Form auf dieselbe Weise an.
 `rust/tests/pii_context_free.rs` verlangt für jedes Prüfziffer-Label eine kontextfreie Regel.
+
+## Kartennummern: IIN und Länge (B-PAN)
+
+Seit B-PAN (T19 + F02, TRIAGE 2026-W43 Bucket 4, Baseline N1/P8) prüft `pii_credit_card` mit
+`validators::payment_card`: Luhn (unverändert), dann IIN-Präfix und Länge einer Marke aus
+`validators::CARD_IIN_RANGES` (Amex 34/37 mit 15, Diners 300–305/3095/36/38–39 mit 14–19, JCB 35 mit
+16–19 sowie 1800/2131 mit 15, Mir 2200–2204, Mastercard 2221–2720 und 51–55 mit 16, Visa 4 mit 13/16/19,
+Discover 6011/644–649/65, UnionPay 62, Maestro 50/56–69 mit 12–19, UATP 1 mit 15). JCB steht als `35`
+in der Tabelle, weil Testkarten-Generatoren (presidio-evaluator) so erzeugen. 13 Ziffern, die mit einem
+gültigen Datum YYMMDD beginnen (ZA-ID, KR-RRN), und Ziffern, die mit YYYYMMDD beginnen
+(Zeitstempel), sind keine Karte. Dazu prüft die Regel die Lage: keine Karte direkt nach `+`
+(`+44 20 1234 5678`, auch keine Teilspanne) und kein `-`/`_`-Segment eines Tokens (`xoxb-…-…`). Die
+Prüfung gilt in jedem Modus; die kontextfreie Karte von `balanced` geht also durch dieselbe Tabelle.
+Jeder Luhn-gültige PAN-Gold-Wert in `pii_l1`, der Rule-Fixture und den Dev-Korpora erfüllt sie
+(`rust/tests/pii_card_precision.rs`). Der Gold-Lücken-Bericht (T16) wertet PAN-Gold seitdem mit
+`payment_card`.
 
 ## Obfuskation (K06)
 

@@ -498,6 +498,7 @@ impl NativeRegexDetector for PiiPipeline {
             "pii_phone_international" | "pii_phone_de" => {
                 context::opens_phone_number(text, captures.get(0).unwrap().start())
             }
+            "pii_credit_card" => context::card_position(text, captures.get(0).unwrap().range()),
             "pii_swift_bic_context" => {
                 let value = captures.name("value").unwrap();
                 let structural = captures.get(0).unwrap().start() == value.start();
