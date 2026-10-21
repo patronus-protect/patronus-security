@@ -35,10 +35,12 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   Provider-Alphabets, und der Wert liegt in keinem Base64-Blob. Escapes wie `\n` oder `%3D`
   begrenzen ein Token weiterhin.
   Seit F01 braucht `dlp_eth_private_key` Schlüsselkontext (`RuleMeta::context_gate`, in jedem
-  Modus): einen Schlüsselbegriff auf der Zeile (private key, privkey, mnemonic, wallet, signer,
-  Schlüssel …) oder ohne Begriff auf der Zeile einen Schlüsselbegriff in den drei Zeilen
-  darüber. Der nächste Begriff entscheidet; ein näherer Hash-, Root- oder ID-Begriff (tx hash,
-  blockHash, Transaktionshash, Prüfsumme, topic, salt …) verwirft den Wert.
+  Modus): einen Schlüsselbegriff auf der Zeile oder in bis zu fünf Zeilen darüber (private key,
+  privkey, mnemonic, Schlüssel …; wallet, signer nur auf der Zeile oder als Bezeichner). Ein
+  Begriff, der den Wert direkt bezeichnet (nur Trennzeichen dazwischen), entscheidet: tx hash,
+  blockHash, Transaktionshash, Prüfsumme, topic, salt … verwerfen ihn. Ohne Bezeichner genügt
+  ein Schlüsselbegriff im Kontext; ein Hash- oder ID-Wort an anderer Stelle im Satz verwirft
+  nicht.
   Seit K09 (Taxonomie v2) nennt jede Secret-Regel einen Untertyp ihrer Gruppe (`subtype` in
   `matched_rules`: `api_key`, `access_token`, `password`, `auth_url` …). Connection-Strings,
   Webhook-URLs, Auth-URLs, OTP-Secrets und Seed-Phrasen werden keine eigenen Gruppen, sondern

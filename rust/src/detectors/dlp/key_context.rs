@@ -6,24 +6,25 @@
 //! privkey, mnemonic, wallet, signer, Schlüssel …) and not where a hash, root
 //! or ID term stands nearer.
 //!
-//! The nearest term decides. On the value's line, terms before the value
-//! count up to the previous value; a term after the value counts within a
-//! short gap and unless it names the next field (`…", "txHash": …`). Without
-//! a term on its line, the nearest term on the lines above decides (chat
-//! replies, mail bodies), but only a key term proper or a counter term, and
-//! only when no other value follows it on its own line.
+//! A term that labels the value decides: only separators stand between them
+//! (`txHash: "…"`, `privateKey=…`, `Wallet transactions:` on the line above).
+//! Without a label, a key term proper anywhere in the context supports the
+//! value, so a hash or ID term elsewhere in a sentence does not veto it
+//! (`the wallet private key for the event job: …`). Otherwise the nearest
+//! term decides. The context is the value's line and up to five lines above
+//! it, back to the previous value; a term after the value counts on its line
+//! within a short gap and unless it names the next field (`…", "txHash": …`).
+//! Wallet and signer terms count only on the value's line or as its label.
 use regex::Regex;
 use std::ops::Range;
 use std::sync::LazyLock;
 
-/// Characters before the value on its line that a term may stand off.
-const BEFORE_WINDOW: usize = 160;
+/// Characters before the value that a term may stand off.
+const BEFORE_WINDOW: usize = 600;
 /// Characters after the value that a term may stand off.
 const AFTER_WINDOW: usize = 40;
-/// Lines above the value searched when its own line has no term.
-const LINES_ABOVE: usize = 3;
-/// Bytes above the value searched when its own line has no term.
-const ABOVE_WINDOW: usize = 400;
+/// Lines above the value's line searched for terms.
+const LINES_ABOVE: usize = 5;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Kind {
@@ -214,61 +215,90 @@ fn names_next_field(text: &str, gap: &str, term_end: usize) -> bool {
         || next.is_some_and(|ch| matches!(ch, ':' | '='))
 }
 
-/// The kind of the nearest term on the value's line, if any.
-fn line_context(text: &str, value: &Range<usize>, line: &Range<usize>) -> Option<Kind> {
-    let start = back(text, value.start, BEFORE_WINDOW, line.start);
-    // Terms before the value count only up to the previous value.
-    let start = VALUE_RUN
-        .find_iter(&text[start..value.start])
+/// Whether only separators stand between a term and the value it labels.
+fn is_label_gap(gap: &str) -> bool {
+    gap.chars().all(|ch| {
+        ch.is_whitespace()
+            || matches!(
+                ch,
+                '"' | '\''
+                    | '`'
+                    | ':'
+                    | '='
+                    | '('
+                    | ')'
+                    | '['
+                    | ']'
+                    | '{'
+                    | '}'
+                    | '<'
+                    | '>'
+                    | '|'
+                    | '*'
+                    | '#'
+                    | '-'
+                    | '_'
+                    | '\\'
+            )
+    })
+}
+
+/// A term of the value's context.
+struct Near {
+    kind: Kind,
+    /// Characters between the term and the value.
+    distance: usize,
+    /// Whether the term labels the value (`is_label_gap`).
+    label: bool,
+}
+
+/// Start of the context before the value: its line and `LINES_ABOVE` lines
+/// above, at most `BEFORE_WINDOW` characters, after the last other value.
+fn context_start(text: &str, value_start: usize, line_start: usize) -> usize {
+    let mut start = line_start;
+    for _ in 0..LINES_ABOVE {
+        if start == 0 {
+            break;
+        }
+        start = text[..start - 1].rfind('\n').map_or(0, |index| index + 1);
+    }
+    let start = back(text, value_start, BEFORE_WINDOW, start);
+    VALUE_RUN
+        .find_iter(&text[start..value_start])
         .last()
-        .map_or(start, |run| start + run.end());
+        .map_or(start, |run| start + run.end())
+}
+
+/// Terms of the value's context with their distance and label flag.
+fn context(text: &str, value: &Range<usize>, line: &Range<usize>) -> Vec<Near> {
+    let start = context_start(text, value.start, line.start);
     let before = terms(text, start..value.start)
         .into_iter()
-        .last()
-        .map(|found| (value.start - found.range.end, found.kind));
+        .filter_map(|found| {
+            let gap = &text[found.range.end..value.start];
+            let label = is_label_gap(gap);
+            // Wallet and signer terms above the value's line only as its label.
+            (found.kind != Kind::Wallet || label || found.range.start >= line.start).then(|| Near {
+                kind: found.kind,
+                distance: gap.chars().count(),
+                label,
+            })
+        });
     let end = ahead(text, value.end, AFTER_WINDOW, line.end);
     let after = terms(text, value.end..end)
         .into_iter()
-        .next()
         .filter(|found| {
             !names_next_field(text, &text[value.end..found.range.start], found.range.end)
         })
-        .map(|found| (found.range.start - value.end, found.kind));
-    match (before, after) {
-        (Some(before), Some(after)) if after.0 < before.0 => Some(after.1),
-        (Some(before), _) => Some(before.1),
-        (None, after) => after.map(|after| after.1),
-    }
-}
-
-/// The kind of the nearest key or counter term on the lines above the value
-/// (`None` when there is none, or another value follows it on its line).
-fn above_context(text: &str, line_start: usize) -> Option<Kind> {
-    let floor = back(text, line_start, ABOVE_WINDOW, 0);
-    let mut end = line_start;
-    for _ in 0..LINES_ABOVE {
-        if end <= floor {
-            return None;
-        }
-        let line_end = end - 1;
-        let start = text[floor..line_end]
-            .rfind('\n')
-            .map_or(floor, |index| floor + index + 1);
-        let found = terms(text, start..line_end)
-            .into_iter()
-            .rfind(|found| found.kind != Kind::Wallet);
-        if let Some(found) = found {
-            if VALUE_RUN.is_match(&text[found.range.end..line_end]) {
-                return None;
+        .map(|found| {
+            let gap = &text[value.end..found.range.start];
+            Near {
+                kind: found.kind,
+                distance: gap.chars().count(),
+                label: is_label_gap(gap),
             }
-            return Some(found.kind);
-        }
-        if VALUE_RUN.is_match(&text[start..line_end]) {
-            return None;
-        }
-        end = start;
-    }
-    None
+        });
+    before.chain(after).collect()
 }
 
 /// F01: whether the wallet key at `value` (byte range) of `text` stands in a
@@ -278,8 +308,20 @@ pub(super) fn has_key_context(text: &str, value: Range<usize>) -> bool {
     let line_end = text[value.end..]
         .find('\n')
         .map_or(text.len(), |index| value.end + index);
-    let line = line_start..line_end;
-    let kind = line_context(text, &value, &line).or_else(|| above_context(text, line_start));
+    let near = context(text, &value, &(line_start..line_end));
+    let nearest = |label_only: bool| {
+        near.iter()
+            .filter(|near| near.label || !label_only)
+            .min_by_key(|near| near.distance)
+            .map(|near| near.kind)
+    };
+    let kind = nearest(true).or_else(|| {
+        if near.iter().any(|near| near.kind == Kind::Key) {
+            Some(Kind::Key)
+        } else {
+            nearest(false)
+        }
+    });
     matches!(kind, Some(Kind::Key | Kind::Wallet))
 }
 
@@ -324,6 +366,20 @@ mod tests {
         assert!(context(
             "anbei die Zugangsdaten (Wallet-Private-Key):\n\n{}\n\nBitte löschen."
         ));
+        assert!(context(
+            "[09:41] maria: the wallet private key for the event export?\n[09:42] tom: one sec\n[09:42] tom: which block?\n[09:43] tom: here: {}\n"
+        ));
+    }
+
+    #[test]
+    fn hash_terms_that_do_not_label_the_value_yield_to_key_terms() {
+        for template in [
+            "Note: the job still uses the old wallet private key from the last commit, current value: {}",
+            "Wallet-Private-Key für die Event-Verarbeitung (Mandant 42) lautet {}",
+            "here is the wallet private key for the transaction relayer:\n\n{}\n",
+        ] {
+            assert!(context(template), "{template}");
+        }
     }
 
     #[test]
@@ -346,6 +402,8 @@ mod tests {
             "privateKey=0x1111222233334444aaaa data={}",
             "wallet private key: 0x1111222233334444aaaa\n{}",
             "Wallet transactions:\n{}",
+            "Our wallet private key never leaves the HSM. Transaction hash:\n\n{}",
+            "private key rotated; block hash {}",
             "monkey: {}",
         ] {
             assert!(!context(template), "{template}");
