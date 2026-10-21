@@ -495,6 +495,9 @@ impl NativeRegexDetector for PiiPipeline {
             }
         });
         match self.rule_ids[index] {
+            "pii_phone_international" | "pii_phone_de" => {
+                context::opens_phone_number(text, captures.get(0).unwrap().start())
+            }
             "pii_swift_bic_context" => {
                 let value = captures.name("value").unwrap();
                 let structural = captures.get(0).unwrap().start() == value.start();
