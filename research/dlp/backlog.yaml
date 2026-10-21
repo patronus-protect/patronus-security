@@ -1,7 +1,9 @@
 # L1-DLP backlog. One scheduled run completes exactly one task.
 # Selection (deterministic, ark-l1 --program dlp next): first task in file order with
 # status: todo, all deps done, all ext_deps merged to main and no open needs_decision.
-# status: todo | in_progress | done | blocked | manual
+# status: todo | in_progress | done | blocked | manual | deferred | bundled
+# deferred: skipped by the schedule, field `deferred` gives the reason (trim 2026-10-21).
+# bundled: absorbed into the bundle named in `into`; a bundle lists its old tasks in `bundles`.
 # ext_deps: tasks of other programs, form <program>:<id> (e.g. pii:K03); must be on main.
 #
 # Shared acceptance (applies to every task in addition to `accept`):
@@ -184,30 +186,6 @@ tasks:
     ext_deps: [pii:K02]
     accept: strict = current behaviour bit-identical; P/R curves in the scoreboard
 
-  - id: K05
-    title: Config key→value extraction, part 1 (env, INI/properties, HTTP headers) on PII K04, with a value-shape filter
-    type: engine
-    deps: [K04]
-    ext_deps: [pii:K04]
-    source: "Split 2026-10-21: the full-format K05 was blocked after 3 red rounds (holdout precision regression)"
-    accept: >-
-      Before a value is bound through a credential-like key, shapes that are not secrets are rejected:
-      UUIDs, algorithm-prefixed or bare hex digests, ObjectIds, template/format fields, variable references,
-      booleans, numbers, paths and URLs without credentials. Hard negatives for each shape (DE/EN keys);
-      scoreboard without precision regression on any family
-
-  - id: K05B
-    title: Config key→value extraction, part 2 (YAML, JSON, TOML) reusing the K05 value-shape filter
-    type: engine
-    deps: [K05]
-    accept: Nested keys and arrays; same hard-negative shapes as K05 per format; no precision regression
-
-  - id: K05C
-    title: Config key→value extraction, part 3 (HCL, XML attributes/elements) reusing the K05 value-shape filter
-    type: engine
-    deps: [K05B]
-    accept: Same hard-negative shapes as K05 per format; no precision regression
-
   - id: K06
     status: done
     title: Allowlist/suppression (documented provider example values, placeholders DE/EN, test/sandbox keys as severity test, variable/template references ${}, {{}}, %()s)
@@ -243,106 +221,154 @@ tasks:
   - {id: F03, title: "GitHub tokens (ghp/gho/ghu/ghs/ghr, github_pat_): exact lengths + CRC32 checksum", type: precision-fix, deps: [K03]}
   - {id: F04, title: "npm token: length + CRC32 checksum; GitLab: all documented prefixes (deploy, runner, trigger, feed, OAuth …)", type: recall-fix, deps: [K03]}
   - {id: F05, title: "AWS access key ID: exactly 20 characters, Base32 alphabet, prefix list; AWS secret key via structural context (credentials file, Terraform, CLI)", type: precision-fix, deps: [K03]}
-  - {id: F06, title: "OpenAI (project/svcacct/admin/legacy) and Anthropic (api/admin): format markers and lengths per docs; unify the validator", type: precision-fix, deps: [K03]}
-  - {id: T02, title: "Provider rules without an F task: HuggingFace (hf_, api_org_), Groq (gsk_), Replicate (r8_), Google API key (AIza, exactly 39), OAuth ya29., GCP GOCSPX-: lengths/alphabet per source instead of open {20,}", type: precision-fix, deps: [K03, T01], accept: "Format source per rule in rule_sources.yaml; set entity_map backlog for these entities to T02"}
-  - {id: F07, title: "JWT: header base64url → JSON with alg/typ; flag none alg; distinguish Supabase/Firebase service JWTs", type: precision-fix, deps: [K03]}
-  - {id: F08, title: "PEM blocks: all types (PKCS#8, ENCRYPTED, EC, DSA, OPENSSH, PGP PRIVATE KEY BLOCK, PuTTY PPK) + body base64/DER check; header only when a body is nearby", type: precision-fix, deps: [K03]}
-  - {id: F09, title: "Slack (bot/user/app/config/refresh) and Discord (bot token: ID segment base64 → snowflake digits)", type: precision-fix, deps: [K03]}
-  - {id: F10, title: "Stripe: sk/rk live vs. test (severity), pk_ explicitly negative; webhook secret length", type: precision-fix, deps: [K02]}
-  - {id: F11, title: "dlp_password_assignment/dlp_generic_credential_assignment: password likeness (character classes, DE/EN dictionary, entropy) against prose FP (\"Passwort ist falsch\")", type: precision-fix, deps: [K03]}
-  - {id: T03, title: "Generic assignments: reject code expressions as values (function call, index/member access, type annotation string/str/Option<…>/Arc<…>, paths, format placeholder %s, shell variable as key $PWD:) — probe: 17 of 21 CREDENTIAL matches in repo code", type: precision-fix, deps: [F11], accept: "Hard negatives in Rust/Python/TS/Go/Shell (token: Option<&str>, token = get_token(), password = os.environ[…], docker -v \"$PWD:/work\"); prose FP stays with F11"}
-  - {id: T04, title: "Capture quoted values in dlp_password_assignment/dlp_generic_credential_assignment up to the closing quote (spaces, ; , } in the value) — today truncated (\"blue Kite …\" → blue) or missed (value < 4 characters before ;)", type: recall-fix, deps: [T03], accept: "Exact spans for YAML/JSON/TOML/INI with quotes and special characters; interim until K05 takes over extraction structurally"}
-  - {id: T08, title: "dlp_env_var_secret: value without surrounding quotes and trailing ;/, (today the span includes the quote: 120 extra spans on dev positives, 20 shell export '…' FN), also KEY: \"value\" (YAML/compose env), and reject code constants (DATA_API_KEY = '.data-api', AUTH_FLOW_PASSWORD = \"password\")", type: precision-fix, deps: [T04], accept: "Exact spans in env/shell/Dockerfile/code/YAML carriers; benign-code FP of the rule (30 on dev) as hard negatives"}
-  - {id: T09, title: "Key shapes in key-anchored rules (password/generic assignment, csrf, password_hash, aws_secret_key): quoted keys (\"client_secret\": …, 'password' => …), prefixed/compound keys (db_password, service_secret, Aws-Secret-Access-Key:), camelCase (dbPassword, clientSecret, passwordHash, awsSecretAccessKey), typed declarations (const X: &str = …, : string = …), escaped quotes in JSON strings/notebooks (\\\"…\\\"), XML key=\"…\" value=\"…\" — 87 dev FN", type: recall-fix, deps: [T04], accept: "Goldens per key shape in JSON/YAML/TOML/XML/TS/Rust/Jupyter; benign-code FP not higher (T03 rejections stay); interim until K05/G02"}
-  - {id: T10, title: "dlp_url_userinfo_password: password likeness from F11 for userinfo (test credentials user:pass, user:secret, till:test, masked ***), and token-in-username forms (https://<token>:x-oauth-basic@, x-token-auth:<token>@) attribute the token, not the pseudo-password — 23 FP on dev benign code", type: precision-fix, deps: [F11], accept: "Hard negatives from test-suite URL patterns; token-in-username as positive with the token span"}
-  - {id: F12, title: "dlp_credential_in_url / dlp_signed_url_signature: exclude pagination/cursor/CSRF parameters, signature only with signed-URL structure (X-Amz-*, X-Goog-*, Azure sv/se/sp)", type: precision-fix, deps: [K02]}
-  - {id: F13, title: "Bearer/Basic/Cookie/CSRF: decode Basic auth base64 → user:pass; pre-attribute bearer values against JWT/provider; extend cookie names (connect.sid, laravel_session, __Host-*)", type: recall-fix, deps: [K03]}
-  - {id: T11, title: "Bearer/Basic/session cookie outside a literal HTTP header line: authorization/proxy_authorization keys in env/JSON/YAML/TOML/code (AUTHORIZATION=Bearer …, \"authorization\": \"Bearer …\", proxyAuthorization), standalone Bearer/Basic values with DE/EN context in tickets/mails/logs, JSESSIONID=/PHPSESSID=/… values without Cookie: — 111 of 120 dev FN", type: recall-fix, deps: [F13], accept: "Basic only when the base64 decodes to user:pass (F13), bearer with entropy/JWT/provider check; dev benign-code FP not higher (swagger-ui tests: Bearer abc123.xyz.789, Bearer secret_token as hard negatives)"}
-  - {id: F14, title: "Password hash: relax the anchor requirement in favour of format detection ($2y$, $argon2id$, $6$, $5$, $1$, $apr1$, pbkdf2_sha256$, scrypt) with context", type: recall-fix, deps: [K04]}
-  - {id: F15, title: "Clarify DLP vs. PII ownership for VAT ID, commercial register, BSNR and resolve double labels", type: engine, deps: [K08], decision: "PII owns VAT ID, commercial register and BSNR; DLP does not emit them, T12 covers only DLP-owned classes (approved 2026-10-19)"}
-  - {id: F16, title: "Business/record IDs and business_metric: counter-context (example, template, sample), table headers as anchors", type: precision-fix, deps: [K05]}
-  - {id: T12, title: "Business/record IDs (opt-in): key-name anchors in config/code (order_id/orderId, vat_id/vatId, bsnr, case_id …) and the label in parentheses in prose (\"(Bestellnummer)\", \"(USt-IdNr.)\") — extended profile recall 4/32 per class on dev", type: recall-fix, deps: [F16, F15], accept: "Extended-profile goldens per class DE/EN; benign-docs flagged not higher"}
+  - {id: F06, title: "OpenAI (project/svcacct/admin/legacy) and Anthropic (api/admin): format markers and lengths per docs; unify the validator", type: precision-fix, deps: [K03], status: bundled, into: F-LLM}
+  - {id: T02, title: "Provider rules without an F task: HuggingFace (hf_, api_org_), Groq (gsk_), Replicate (r8_), Google API key (AIza, exactly 39), OAuth ya29., GCP GOCSPX-: lengths/alphabet per source instead of open {20,}", type: precision-fix, deps: [K03, T01], accept: "Format source per rule in rule_sources.yaml; set entity_map backlog for these entities to T02", status: bundled, into: F-LLM}
+  - {id: F07, title: "JWT: header base64url → JSON with alg/typ; flag none alg; distinguish Supabase/Firebase service JWTs", type: precision-fix, deps: [K03], status: bundled, into: F-STRUCT}
+  - {id: F08, title: "PEM blocks: all types (PKCS#8, ENCRYPTED, EC, DSA, OPENSSH, PGP PRIVATE KEY BLOCK, PuTTY PPK) + body base64/DER check; header only when a body is nearby", type: precision-fix, deps: [K03], status: bundled, into: F-STRUCT}
+  - {id: F09, title: "Slack (bot/user/app/config/refresh) and Discord (bot token: ID segment base64 → snowflake digits)", type: precision-fix, deps: [K03], status: bundled, into: F-PROV}
+  - {id: F10, title: "Stripe: sk/rk live vs. test (severity), pk_ explicitly negative; webhook secret length", type: precision-fix, deps: [K02], status: bundled, into: F-PROV}
+  - {id: F11, title: "dlp_password_assignment/dlp_generic_credential_assignment: password likeness (character classes, DE/EN dictionary, entropy) against prose FP (\"Passwort ist falsch\")", type: precision-fix, deps: [K03], status: bundled, into: F-GEN1}
+  - {id: T03, title: "Generic assignments: reject code expressions as values (function call, index/member access, type annotation string/str/Option<…>/Arc<…>, paths, format placeholder %s, shell variable as key $PWD:) — probe: 17 of 21 CREDENTIAL matches in repo code", type: precision-fix, deps: [F11], accept: "Hard negatives in Rust/Python/TS/Go/Shell (token: Option<&str>, token = get_token(), password = os.environ[…], docker -v \"$PWD:/work\"); prose FP stays with F11", status: bundled, into: F-GEN1}
+  - {id: T04, title: "Capture quoted values in dlp_password_assignment/dlp_generic_credential_assignment up to the closing quote (spaces, ; , } in the value) — today truncated (\"blue Kite …\" → blue) or missed (value < 4 characters before ;)", type: recall-fix, deps: [T03], accept: "Exact spans for YAML/JSON/TOML/INI with quotes and special characters; interim until K05 takes over extraction structurally", status: bundled, into: F-GEN2}
+  - {id: T08, title: "dlp_env_var_secret: value without surrounding quotes and trailing ;/, (today the span includes the quote: 120 extra spans on dev positives, 20 shell export '…' FN), also KEY: \"value\" (YAML/compose env), and reject code constants (DATA_API_KEY = '.data-api', AUTH_FLOW_PASSWORD = \"password\")", type: precision-fix, deps: [T04], accept: "Exact spans in env/shell/Dockerfile/code/YAML carriers; benign-code FP of the rule (30 on dev) as hard negatives", status: bundled, into: F-GEN2}
+  - {id: T10, title: "dlp_url_userinfo_password: password likeness from F11 for userinfo (test credentials user:pass, user:secret, till:test, masked ***), and token-in-username forms (https://<token>:x-oauth-basic@, x-token-auth:<token>@) attribute the token, not the pseudo-password — 23 FP on dev benign code", type: precision-fix, deps: [F11], accept: "Hard negatives from test-suite URL patterns; token-in-username as positive with the token span", status: bundled, into: F-GEN1}
+  - {id: F12, title: "dlp_credential_in_url / dlp_signed_url_signature: exclude pagination/cursor/CSRF parameters, signature only with signed-URL structure (X-Amz-*, X-Goog-*, Azure sv/se/sp)", type: precision-fix, deps: [K02], status: bundled, into: G-URL}
+  - {id: F13, title: "Bearer/Basic/Cookie/CSRF: decode Basic auth base64 → user:pass; pre-attribute bearer values against JWT/provider; extend cookie names (connect.sid, laravel_session, __Host-*)", type: recall-fix, deps: [K03], status: bundled, into: F-HTTP}
+  - {id: T11, title: "Bearer/Basic/session cookie outside a literal HTTP header line: authorization/proxy_authorization keys in env/JSON/YAML/TOML/code (AUTHORIZATION=Bearer …, \"authorization\": \"Bearer …\", proxyAuthorization), standalone Bearer/Basic values with DE/EN context in tickets/mails/logs, JSESSIONID=/PHPSESSID=/… values without Cookie: — 111 of 120 dev FN", type: recall-fix, deps: [F13], accept: "Basic only when the base64 decodes to user:pass (F13), bearer with entropy/JWT/provider check; dev benign-code FP not higher (swagger-ui tests: Bearer abc123.xyz.789, Bearer secret_token as hard negatives)", status: bundled, into: F-HTTP}
+  - {id: F14, title: "Password hash: relax the anchor requirement in favour of format detection ($2y$, $argon2id$, $6$, $5$, $1$, $apr1$, pbkdf2_sha256$, scrypt) with context", type: recall-fix, deps: [K04], status: bundled, into: G-HASH}
+  - {id: F15, title: "Clarify DLP vs. PII ownership for VAT ID, commercial register, BSNR and resolve double labels", type: engine, deps: [K08], decision: "PII owns VAT ID, commercial register and BSNR; DLP does not emit them, T12 covers only DLP-owned classes (approved 2026-10-19)", status: deferred, deferred: "No milestone impact; the ownership decision is recorded and M3 already counts VAT ID/commercial register/BSNR as PII"}
+  - {id: F16, title: "Business/record IDs and business_metric: counter-context (example, template, sample), table headers as anchors", type: precision-fix, deps: [K05], status: deferred, deferred: "Opt-in business classes; their precision is no milestone criterion and M3 already counts them"}
+  - {id: T12, title: "Business/record IDs (opt-in): key-name anchors in config/code (order_id/orderId, vat_id/vatId, bsnr, case_id …) and the label in parentheses in prose (\"(Bestellnummer)\", \"(USt-IdNr.)\") — extended profile recall 4/32 per class on dev", type: recall-fix, deps: [F16, F15], accept: "Extended-profile goldens per class DE/EN; benign-docs flagged not higher", status: deferred, deferred: "Opt-in business ID recall (extended profile) is no milestone criterion"}
 
   # ── P: Provider secrets ───────────────────────────────────────────────
-  - {id: P01, title: "LLM/AI I: Google Gemini/AI Studio, Mistral, Cohere, Perplexity, DeepSeek, OpenRouter, Together, Fireworks", type: new-entity, deps: [F06]}
+  - {id: P04, title: "EU/DE cloud: IONOS, Hetzner, STACKIT, OVHcloud, Scaleway, Open Telekom Cloud, Exoscale (formats only with a source, otherwise context rule)", type: new-entity, deps: [K04], status: deferred, deferred: "Few gitleaks default rules and mostly undocumented formats; M3 thresholds are reachable with the other P packages"}
+
+  # ── G: Generic credentials ────────────────────────────────────────────
+  - {id: G06, title: "DE/EN prose: „Passwort lautet/ist“, „Zugangsdaten: user / pass“, „login with … password …“ in tickets, chats, emails; password likeness from F11", type: recall-fix, deps: [F11, K04], status: bundled, into: G-PROSE}
+  - {id: G07, title: "PIN/TAN/PUK/Geheimzahl, card blocking/online banking access, Wi-Fi key/WPA-PSK (DE/EN context)", type: new-entity, deps: [G06], status: bundled, into: G-PROSE}
+  - {id: G08, title: "OTP: otpauth:// URIs (secret=Base32), TOTP seeds with context, 2FA recovery/backup code lists", type: new-entity, deps: [K09], status: bundled, into: G-URL}
+  - {id: G09, title: "Auth URLs: password reset/magic links, OAuth code/access_token in redirect fragments, invitation tokens (path token with entropy)", type: new-entity, deps: [K09, F12], status: bundled, into: G-URL}
+  - {id: G10, title: "System hashes: /etc/shadow lines, htpasswd, NTLM/LM (pwdump/secretsdump format), MySQL *41hex, PostgreSQL md5/SCRAM, Kerberos hash formats", type: new-entity, deps: [F14], status: bundled, into: G-HASH}
+  - {id: G11, title: "Network devices: Cisco type 5/7/8/9 + enable secret, Juniper $9$, SNMP community, RADIUS/TACACS shared secrets, Windows GPP cpassword, unattend.xml", type: new-entity, deps: [F14], status: bundled, into: G-HASH}
+  - {id: G12, title: "Generic high-entropy value only on a secret-like key (detect-secrets parity, but with allowlist/structure), balanced/recall mode only", type: recall-fix, deps: [G02, K06], status: deferred, deferred: "Balanced/recall mode only; milestones are judged in the default profile"}
+  - {id: G13, title: "References to sensitive paths as context anchors (~/.ssh/id_*, ~/.aws/credentials, .env, kubeconfig, /etc/shadow, Keychain/Credential Manager) — no finding type of their own", type: engine, deps: [K02], status: deferred, deferred: "Context anchors without a finding type; no measured gap"}
+  - {id: G14, title: "Remote access: VNC/RDP files (password 51:b:), FileZilla/WinSCP saved passwords, SSH agent forwarding configs with IdentityFile + passphrase context", type: new-entity, deps: [G04], status: deferred, deferred: "No baseline counterpart and no measured gap; not needed for M2/M3 thresholds"}
+
+  # ── C: Crypto and key material ────────────────────────────────────────
+  - {id: C02, title: "Extended private keys (xprv/yprv/zprv/tprv, Base58Check) and Electrum seeds (context)", type: new-entity, deps: [F02], status: bundled, into: C-WALLET}
+  - {id: C03, title: "Wallet files: Ethereum keystore JSON (crypto.ciphertext/kdf), Solana keypair array (64 bytes, context), Monero/Cardano signing keys with a source", type: new-entity, deps: [F01], status: bundled, into: C-WALLET}
+  - {id: C04, title: "JWK/JWKS with private parameters (d, p, q, dp, dq, qi) and OKP keys", type: new-entity, deps: [K05], status: bundled, into: C-KEYS}
+  - {id: C06, title: "WireGuard PrivateKey, OpenVPN <key>/<tls-auth>, IPsec PSK (context)", type: new-entity, deps: [K05], status: bundled, into: C-KEYS}
+  - {id: C07, title: "SSH: distinguish unencrypted vs. encrypted (bcrypt KDF) → severity; authorized_keys/known_hosts as hard negatives", type: precision-fix, deps: [F08], status: bundled, into: F-STRUCT}
+  - {id: C08, title: "Symmetric keys in code (AES/HMAC constants as byte arrays/hex with context key/secret), Django SECRET_KEY, Rails secret_key_base, Laravel APP_KEY", type: new-entity, deps: [G02], status: bundled, into: C-KEYS}
+
+  # ── D: Decoders and obfuscation ───────────────────────────────────────
+  - {id: D02, title: "Hex, URL percent, JSON/C escape and Unicode escape decoding", type: engine, deps: [D01], status: deferred, deferred: "No measured gap on the dev scoreboard (encoded secrets are known_gap goldens only); D01 covers the base64 cases G05/C05 need"}
+  - {id: D03, title: "UTF-16LE/BE text (PowerShell -EncodedCommand, Windows exports)", type: engine, deps: [D02], status: deferred, deferred: "No measured gap; UTF-16 carriers are not in the generator"}
+  - {id: D04, title: "Concatenated strings (\"sk-\" + \"…\", template literals, line continuation with \\ ) and zero-width/full-width via PII K06", type: engine, deps: [D02], ext_deps: [pii:K06], status: deferred, deferred: "No measured gap; waits on pii:K06"}
+  - {id: D05, title: "Secrets in diffs/patches and git log output (+/- lines, only added lines count as current)", type: engine, deps: [K05], status: deferred, deferred: "No measured gap; diff/patch carriers are not in the generator"}
+
+  # ── M: Sensitive material and document classes ───────────────────────
+  - {id: M02, title: "Classification markings DE: VS-NUR FÜR DEN DIENSTGEBRAUCH, VS-VERTRAULICH, GEHEIM, STRENG GEHEIM; corporate levels intern/vertraulich/streng vertraulich", type: new-entity, deps: [M01], status: bundled, into: M-MARK}
+  - {id: M03, title: "Classification markings EN/international: Confidential, Restricted, Internal Only, TLP 2.0 (CLEAR/GREEN/AMBER/AMBER+STRICT/RED), NATO/EU markings", type: new-entity, deps: [M02], status: bundled, into: M-MARK}
+  - {id: M04, title: "Confidentiality/NDA: non-disclosure agreement (Geheimhaltungsvereinbarung), GeschGehG notice, trade secret markers, embargo/blocking period", type: new-entity, deps: [M01], status: bundled, into: M-LEGAL}
+  - {id: M05, title: "Legally privileged: lawyer/client correspondence, attorney-client privileged, draft pleadings, settlement negotiations", type: new-entity, deps: [M01], status: bundled, into: M-LEGAL}
+  - {id: M06, title: "HR documents: employment reference (Arbeitszeugnis), warning letter (Abmahnung), termination, termination agreement, payslip, performance review", type: new-entity, deps: [M01], status: bundled, into: M-HRSEC}
+  - {id: M07, title: "Unpublished financials: quarterly/annual figures before publication, ad hoc/inside information (MAR Art. 7), insider list, guidance", type: new-entity, deps: [M01, F16], status: bundled, into: M-CORP}
+  - {id: M08, title: "M&A/transactions: term sheet, LOI, due diligence, data room, project code names, SPA, valuation/cap table", type: new-entity, deps: [M01], status: bundled, into: M-CORP}
+  - {id: M09, title: "Boards: management/supervisory board minutes, board minutes, resolution drafts", type: new-entity, deps: [M01], status: bundled, into: M-CORP}
+  - {id: M10, title: "Terms/prices: purchase prices, discount tiers, internal price lists, quote calculations, supplier terms", type: new-entity, deps: [M01, F16], status: deferred, deferred: "Not needed for the >= 20 content-class target (covered by M-MARK/M-LEGAL/M-CORP/M-HRSEC); depended on deferred F16"}
+  - {id: M11, title: "Bulk personal data: CSV/JSON/tables with ≥ N PII columns (header detection) and ≥ M rows — customer list export", type: new-entity, deps: [M01], ext_deps: [pii:K04], status: deferred, deferred: "Overlaps the PII programme and waits on pii:K04; not needed for the content-class target"}
+  - {id: M12, title: "Health documents as a class: doctor's letter, findings, sick note (AU-Bescheinigung), discharge letter (document label; single values stay PII)", type: new-entity, deps: [M01], status: deferred, deferred: "Single values belong to PII; not needed for the content-class target"}
+  - {id: M13, title: "Security documents: pentest/audit reports, internal vulnerabilities with system reference, incident reports, firewall rule sets", type: new-entity, deps: [M01], status: bundled, into: M-HRSEC}
+  - {id: M14, title: "Infrastructure topology: internal hostnames/domains (.corp/.intern/.local), RFC1918 + port inventories, AD DNs (CN=…,DC=…), network diagrams", type: new-entity, deps: [M01], status: deferred, deferred: "Not needed for the content-class target; high FP risk on benign code (.local hosts, RFC1918)"}
+  - {id: M15, title: "Infrastructure files: terraform.tfstate, Ansible inventory/vault header, Cisco running-config, iptables/nftables dumps, docker-compose with environment", type: new-entity, deps: [M01, G02], status: deferred, deferred: "Not needed for the content-class target; secrets in these files are covered by K05/G02"}
+  - {id: M16, title: "Export control: export list (AL numbers), ECCN, ITAR/EAR, dual-use regulation identifiers with context", type: new-entity, deps: [M01], status: bundled, into: M-HRSEC}
+  - {id: M17, title: "R&D/IP: invention disclosure (Erfindungsmeldung), patent draft before filing, formulations/specifications with confidentiality marker", type: new-entity, deps: [M01], status: bundled, into: M-HRSEC}
+  - {id: M18, title: "Extend source code detection: Java, C#, C/C++, Go, PHP, Ruby, Kotlin, Swift, Shell, PowerShell, HCL, CI YAML; Jupyter notebooks", type: recall-fix, deps: [E12], status: deferred, deferred: "Content-class recall is no milestone criterion (only the no-loss rule); revisit with TK-2/TK-6"}
+  - {id: T13, title: "dlp_structured_system_log (opt-in): only matches ERROR/FATAL lines with dot milliseconds, so 0 of 456 dev log carriers get content.system_log; accept runs of >= N timestamped lines of any level (INFO/DEBUG/WARN), log4j comma milliseconds, thread/logger columns", type: recall-fix, deps: [E12], accept: "Document F1 content.system_log on dev carriers; benign docs/code flagged not higher; M19 keeps new formats (JSON, syslog, access logs, stack traces)", status: deferred, deferred: "Content-class recall is no milestone criterion (system_log is opt-in)"}
+  - {id: M19, title: "Extend logs: JSON logs, syslog, access logs with auth parameters, Kubernetes events, Java/Go/.NET/Node stack traces", type: recall-fix, deps: [E12], status: deferred, deferred: "Content-class recall is no milestone criterion"}
+  - {id: M20, title: "Extend database dumps: pg_dump COPY blocks, mysqldump headers, MongoDB exports (JSON Lines with _id/$oid), Redis/RDB hints", type: recall-fix, deps: [E12], status: deferred, deferred: "Content-class recall is no milestone criterion"}
+  - {id: M21, title: "Extend business metrics: pipeline, CAC/LTV, churn, valuation, burn/runway, budget vs. actual in table form", type: recall-fix, deps: [F16, K05], status: deferred, deferred: "Content-class recall is no milestone criterion; depended on deferred F16"}
+  - {id: M22, title: "Customer/supplier contracts as a class (contracting parties + remuneration + term + confidentiality clause)", type: new-entity, deps: [M01], status: bundled, into: M-LEGAL}
+  - {id: M23, title: "Define the default profile for content/document classes (which classes are on by default)", type: engine, deps: [M22], decision: "classification markings (M02/M03) on by default, all other content/document classes opt-in (approved 2026-10-19)", status: bundled, into: M-MARK}
+
+  # ── H: Hardening and wrap-up ──────────────────────────────────────────
+  - {id: H02, title: "Property/fuzz tests: no panic, valid UTF-8 offsets after decoding, strict bit-identical, decoder recursion limit", type: test, deps: [H01], status: deferred, deferred: "Hardening without a milestone criterion; every task already ships unit tests"}
+  - {id: H04, title: "Redaction quality: PlaceholderEncoder for new groups, no secret fragments in details/logs", type: test, deps: [H01], status: deferred, deferred: "No milestone criterion; redaction is covered per task by the shared acceptance"}
+  - {id: H05, title: "Docs: categories, rule catalog (provider/validator/source), result schema, choose-categories, comparison page", type: docs, deps: [H03, H04], status: bundled, into: H-FINAL}
+  - {id: H06, title: "Final report M1–M4 on holdout incl. coverage matrix gitleaks/TruffleHog/detect-secrets/Google DLP", type: report, deps: [H05], status: bundled, into: H-FINAL}
+
+  # ── Critical path (trim 2026-10-21) ───────────────────────────────
+  # Only open tasks that move a milestone (M1–M4, research/dlp/README.md) or are infrastructure for
+  # one, ordered by the measured gap in scoreboard/baseline.md: M1/always FP/MB (10.17 vs. gitleaks
+  # 0.21) and M2 CREDENTIAL F1 (22.0 vs. target 43.7) first, then M3 breadth, then M4/report.
+  # Bundles (bundles: [...]) replace several old tasks in one run; absorbed tasks carry
+  # status: bundled + into, the rest status: deferred + deferred (reason). Both are skipped.
+  - {id: F-GEN1, title: "Generic credential precision (F11 + T03 + T10): password likeness (character classes, DE/EN dictionary, entropy) for dlp_password_assignment/dlp_generic_credential_assignment against prose FP (\"Passwort ist falsch\"); reject code expressions as values (function call, index/member access, type annotations string/str/Option<…>/Arc<…>, paths, %s, $PWD: as key); reuse the likeness for dlp_url_userinfo_password (test credentials, masked ***, token in the username attributes the token)", type: precision-fix, deps: [K03], bundles: [F11, T03, T10], accept: "Hard negatives in Rust/Python/TS/Go/Shell for code expressions (token: Option<&str>, token = get_token(), password = os.environ[…], docker -v \"$PWD:/work\") and DE/EN prose; test-suite URL patterns as hard negatives, token-in-username as positive with the token span; dev benign-code FP of generic_credential_assignment + password_assignment + url_userinfo_password (222 on dev) down by >= 80 %; weak but real passwords stay detected; no golden positive lost"}
+  - {id: F-GEN2, title: "Value capture (T04 + T08): quoted values of dlp_password_assignment/dlp_generic_credential_assignment up to the closing quote (spaces, ; , } inside the value, values < 4 characters before ;); dlp_env_var_secret value without surrounding quotes and trailing ;/, plus KEY: \"value\" (YAML/compose env), code constants rejected (DATA_API_KEY = '.data-api', AUTH_FLOW_PASSWORD = \"password\")", type: recall-fix, deps: [F-GEN1], bundles: [T04, T08], accept: "Exact spans in YAML/JSON/TOML/INI/env/shell/Dockerfile/code carriers with quotes and special characters; the 20 dev boundary errors and the 120 extra dlp_env_var_secret spans fixed; the 30 dev benign-code FP of dlp_env_var_secret as hard negatives; interim until K05 takes over extraction structurally"}
+  - {id: T09, title: "Key shapes in key-anchored rules (password/generic assignment, csrf, password_hash, aws_secret_key): quoted keys (\"client_secret\": …, 'password' => …), prefixed/compound keys (db_password, service_secret, Aws-Secret-Access-Key:), camelCase (dbPassword, clientSecret, passwordHash, awsSecretAccessKey), typed declarations (const X: &str = …, : string = …), escaped quotes in JSON strings/notebooks (\\\"…\\\"), XML key=\"…\" value=\"…\" — 87 dev FN", type: recall-fix, deps: [F-GEN2], accept: "Goldens per key shape in JSON/YAML/TOML/XML/TS/Rust/Jupyter; benign-code FP not higher (T03 rejections stay); interim until K05/G02"}
+  - {id: F-HTTP, title: "HTTP auth values (F13 + T11): decode Basic base64 → user:pass, pre-attribute bearer values against JWT/provider, cookie names (connect.sid, laravel_session, __Host-*); Bearer/Basic/session cookie outside a literal header line (authorization/proxy_authorization keys in env/JSON/YAML/TOML/code, standalone values with DE/EN context in tickets/mails/logs, JSESSIONID=/PHPSESSID= without Cookie:)", type: recall-fix, deps: [K03], bundles: [F13, T11], accept: "Basic only when the base64 decodes to user:pass, bearer with entropy/JWT/provider check; dev recall of credential.http_basic_auth, credential.http_bearer and credential.session_cookie from 7.5 % to >= 80 % each; dev benign-code FP not higher (swagger-ui tests: Bearer abc123.xyz.789, Bearer secret_token as hard negatives)"}
+
+  - id: K05
+    title: Config key→value extraction, part 1 (env, INI/properties, HTTP headers) on PII K04, with a value-shape filter
+    type: engine
+    deps: [K04]
+    ext_deps: [pii:K04]
+    source: "Split 2026-10-21: the full-format K05 was blocked after 3 red rounds (holdout precision regression)"
+    accept: >-
+      Before a value is bound through a credential-like key, shapes that are not secrets are rejected:
+      UUIDs, algorithm-prefixed or bare hex digests, ObjectIds, template/format fields, variable references,
+      booleans, numbers, paths and URLs without credentials. Hard negatives for each shape (DE/EN keys);
+      scoreboard without precision regression on any family
+
+  - id: K05B
+    title: Config key→value extraction, part 2 (YAML, JSON, TOML) reusing the K05 value-shape filter
+    type: engine
+    deps: [K05]
+    accept: Nested keys and arrays; same hard-negative shapes as K05 per format; no precision regression
+
+  - id: K05C
+    title: Config key→value extraction, part 3 (HCL, XML attributes/elements) reusing the K05 value-shape filter
+    type: engine
+    deps: [K05B]
+    accept: Same hard-negative shapes as K05 per format; no precision regression
+
+  - {id: G-PROSE, title: "DE/EN prose credentials (G06 + G07): „Passwort lautet/ist“, „Zugangsdaten: user / pass“, login + password in tickets, chats and mails; PIN/TAN/PUK/Geheimzahl, online banking access and Wi-Fi key/WPA-PSK with DE/EN context; password likeness from F-GEN1", type: recall-fix, deps: [F-GEN1, K04], bundles: [G06, G07], accept: "Dev recall on chat/ticket/mail carriers (54 missed values today) >= 70 %; PIN/TAN only with DE/EN context, never bare digit runs; benign-docs flagged not higher (encyclopedia/law prose mentioning Passwort/PIN as hard negatives)"}
+  - {id: G01, title: "Connection strings per scheme (postgres, mysql, mongodb+srv, redis, amqp, mssql/ADO.NET Password=, JDBC, ODBC, LDAP bind) incl. query passwords", type: new-entity, deps: [K05, K09]}
+  - {id: G03, title: "CLI credentials: curl -u, mysql -p…, psql PGPASSWORD=, sshpass -p, docker login -p, htpasswd -b, PowerShell ConvertTo-SecureString -AsPlainText, net use /user", type: new-entity, deps: [K05]}
+  - {id: G02, title: "Structure-aware config keys: all secret-like keys in YAML/JSON/TOML/HCL/XML/properties (password, secret, token, apiKey, credentials, privateKey, DE variants)", type: recall-fix, deps: [K05C]}
+  - {id: F-LLM, title: "LLM/Google provider formats (F06 + T02): OpenAI project/svcacct/admin/legacy and Anthropic api/admin markers and lengths with one shared validator; HuggingFace (hf_, api_org_), Groq (gsk_), Replicate (r8_), Google API key (AIza, exactly 39), OAuth ya29., GCP GOCSPX- lengths/alphabet per source instead of open {20,}", type: precision-fix, deps: [K03], bundles: [F06, T02], accept: "Format source per rule in rule_sources.yaml; entity_map backlog for these entities set to F-LLM; hard negatives with wrong length/alphabet; dev recall on llm.* and cloud.gcp.* stays 100 %"}
+  - {id: F-STRUCT, title: "JWT and PEM structure (F07 + F08 + C07): JWT header base64url → JSON with alg/typ, flag alg none, distinguish Supabase/Firebase service JWTs; PEM blocks of all types (PKCS#8, ENCRYPTED, EC, DSA, OPENSSH, PGP PRIVATE KEY BLOCK, PuTTY PPK) with body base64/DER check, header only with a body nearby; OpenSSH unencrypted vs. encrypted (bcrypt KDF) as severity, authorized_keys/known_hosts as hard negatives", type: precision-fix, deps: [K03], bundles: [F07, F08, C07], accept: "Valid/invalid vectors per JWT header shape and PEM type (DER parse via K03), validator_strength structure in RuleMeta; dev recall on token.jwt and key.pem_private_key stays 100 %; dev benign-code FP of dlp_jwt_token not higher (2 today)"}
+  - {id: F-PROV, title: "Slack, Discord and Stripe formats (F09 + F10): Slack bot/user/app/config/refresh tokens, Discord bot token ID segment base64 → snowflake digits; Stripe sk/rk live vs. test as severity, pk_ explicitly negative, webhook secret length", type: precision-fix, deps: [K02, K03], bundles: [F09, F10], accept: "Format sources in rule_sources.yaml; Discord snowflake check as validator_strength structure; sk_test_/rk_test_ with severity test, pk_ as hard negative; dev recall on comm.slack, comm.discord and payment.stripe stays 100 %"}
+  - {id: G-URL, title: "URL credentials (F12 + G08 + G09): dlp_credential_in_url/dlp_signed_url_signature exclude pagination/cursor/CSRF parameters, signature only with signed-URL structure (X-Amz-*, X-Goog-*, Azure sv/se/sp); otpauth:// URIs (secret=Base32), TOTP seeds with context, 2FA recovery code lists; auth URLs (password reset/magic links, OAuth code/access_token in redirect fragments, invitation path tokens with entropy)", type: new-entity, deps: [K02, K09], bundles: [F12, G08, G09], accept: "Hard negatives for pagination/cursor/CSRF query parameters; Base32 check for otpauth secrets; K09 subtypes otp_secret/auth_url; dev recall on credential.signed_url_signature and credential.url_query_secret >= 95 %; benign-code FP not higher"}
+  - {id: P01, title: "LLM/AI I: Google Gemini/AI Studio, Mistral, Cohere, Perplexity, DeepSeek, OpenRouter, Together, Fireworks", type: new-entity, deps: [F-LLM]}
   - {id: P02, title: "LLM/AI II: Azure OpenAI (context), LangSmith, Pinecone, Weights & Biases, ElevenLabs, AssemblyAI, Deepgram, Stability", type: new-entity, deps: [P01]}
-  - {id: P03, title: "Hyperscalers: AWS session token/MWS, Azure Storage AccountKey + SAS + Entra client secret, GCP service account JSON, Alibaba, Tencent, IBM Cloud, Oracle OCI", type: new-entity, deps: [F05, F12]}
-  - {id: P04, title: "EU/DE cloud: IONOS, Hetzner, STACKIT, OVHcloud, Scaleway, Open Telekom Cloud, Exoscale (formats only with a source, otherwise context rule)", type: new-entity, deps: [K04]}
+  - {id: P03, title: "Hyperscalers: AWS session token/MWS, Azure Storage AccountKey + SAS + Entra client secret, GCP service account JSON, Alibaba, Tencent, IBM Cloud, Oracle OCI", type: new-entity, deps: [F05, G-URL]}
   - {id: P05, title: "DevOps/registries: Docker Hub PAT, PyPI (macaroon structure), RubyGems, NuGet, crates.io, Packagist, JFrog, Terraform Cloud, Pulumi, Vault, Doppler", type: new-entity, deps: [F04]}
   - {id: P06, title: "CI/hosting: Bitbucket, Azure DevOps PAT (context), CircleCI, Travis, Vercel, Netlify, Fly.io, Heroku, Render, Railway, Cloudflare, DigitalOcean", type: new-entity, deps: [P05]}
   - {id: P07, title: "Observability: Datadog, New Relic, Sentry (token + DSN), Grafana (cloud/service account), Dynatrace, Splunk HEC, Elastic, Honeycomb, PagerDuty", type: new-entity, deps: [K04]}
-  - {id: P08, title: "Communication/webhooks: Slack/Teams/Discord webhook URLs, Telegram bot, Twilio (SK/AC + context), SendGrid, Mailgun, Mailchimp, Postmark, Brevo", type: new-entity, deps: [F09]}
-  - {id: P09, title: "Payment/commerce: PayPal/Braintree, Square, Adyen, Mollie, Klarna, Shopify (all token types), Coinbase, Plaid, GoCardless", type: new-entity, deps: [F10]}
+  - {id: P08, title: "Communication/webhooks: Slack/Teams/Discord webhook URLs, Telegram bot, Twilio (SK/AC + context), SendGrid, Mailgun, Mailchimp, Postmark, Brevo", type: new-entity, deps: [F-PROV]}
+  - {id: P09, title: "Payment/commerce: PayPal/Braintree, Square, Adyen, Mollie, Klarna, Shopify (all token types), Coinbase, Plaid, GoCardless", type: new-entity, deps: [F-PROV]}
   - {id: P10, title: "Productivity/SaaS: Atlassian, Notion, Linear, Airtable, Figma, Asana, monday, HubSpot, Salesforce (context), Zendesk, Intercom, Postman, Mapbox (sk vs. pk)", type: new-entity, deps: [K04]}
-  - {id: P11, title: "Identity/auth: Okta, Auth0 (client secret context), Clerk, Supabase (service role JWT, sbp_), Firebase (Admin SDK JSON), age secret key, 1Password service account", type: new-entity, deps: [F07]}
+  - {id: P11, title: "Identity/auth: Okta, Auth0 (client secret context), Clerk, Supabase (service role JWT, sbp_), Firebase (Admin SDK JSON), age secret key, 1Password service account", type: new-entity, deps: [F-STRUCT]}
   - {id: P12, title: "Data/DB platforms: Databricks, Snowflake, PlanetScale, Neon, MongoDB Atlas API, Confluent, Algolia admin key (context), Elastic Cloud", type: new-entity, deps: [K04]}
-
-  # ── G: Generic credentials ────────────────────────────────────────────
-  - {id: G01, title: "Connection strings per scheme (postgres, mysql, mongodb+srv, redis, amqp, mssql/ADO.NET Password=, JDBC, ODBC, LDAP bind) incl. query passwords", type: new-entity, deps: [K05, K09]}
-  - {id: G02, title: "Structure-aware config keys: all secret-like keys in YAML/JSON/TOML/HCL/XML/properties (password, secret, token, apiKey, credentials, privateKey, DE variants)", type: recall-fix, deps: [K05]}
-  - {id: G03, title: "CLI credentials: curl -u, mysql -p…, psql PGPASSWORD=, sshpass -p, docker login -p, htpasswd -b, PowerShell ConvertTo-SecureString -AsPlainText, net use /user", type: new-entity, deps: [K05]}
-  - {id: G04, title: "Credential files: .netrc, .git-credentials, .npmrc _authToken, .pypirc, docker config.json auths, Maven settings.xml, NuGet.config, rclone/s3cfg", type: new-entity, deps: [K05]}
-  - {id: G05, title: "Kubernetes: secret manifests (data base64 → check decoded, stringData), kubeconfig (client-key-data, token), Helm values", type: new-entity, deps: [G02, D01]}
-  - {id: G06, title: "DE/EN prose: „Passwort lautet/ist“, „Zugangsdaten: user / pass“, „login with … password …“ in tickets, chats, emails; password likeness from F11", type: recall-fix, deps: [F11, K04]}
-  - {id: G07, title: "PIN/TAN/PUK/Geheimzahl, card blocking/online banking access, Wi-Fi key/WPA-PSK (DE/EN context)", type: new-entity, deps: [G06]}
-  - {id: G08, title: "OTP: otpauth:// URIs (secret=Base32), TOTP seeds with context, 2FA recovery/backup code lists", type: new-entity, deps: [K09]}
-  - {id: G09, title: "Auth URLs: password reset/magic links, OAuth code/access_token in redirect fragments, invitation tokens (path token with entropy)", type: new-entity, deps: [K09, F12]}
-  - {id: G10, title: "System hashes: /etc/shadow lines, htpasswd, NTLM/LM (pwdump/secretsdump format), MySQL *41hex, PostgreSQL md5/SCRAM, Kerberos hash formats", type: new-entity, deps: [F14]}
-  - {id: G11, title: "Network devices: Cisco type 5/7/8/9 + enable secret, Juniper $9$, SNMP community, RADIUS/TACACS shared secrets, Windows GPP cpassword, unattend.xml", type: new-entity, deps: [F14]}
-  - {id: G12, title: "Generic high-entropy value only on a secret-like key (detect-secrets parity, but with allowlist/structure), balanced/recall mode only", type: recall-fix, deps: [G02, K06]}
-  - {id: G13, title: "References to sensitive paths as context anchors (~/.ssh/id_*, ~/.aws/credentials, .env, kubeconfig, /etc/shadow, Keychain/Credential Manager) — no finding type of their own", type: engine, deps: [K02]}
-  - {id: G14, title: "Remote access: VNC/RDP files (password 51:b:), FileZilla/WinSCP saved passwords, SSH agent forwarding configs with IdentityFile + passphrase context", type: new-entity, deps: [G04]}
-
-  # ── C: Crypto and key material ────────────────────────────────────────
-  - {id: C01, title: "BIP39 seed phrases (12/15/18/21/24 words, EN + other official word lists, checksum), also numbered/line by line", type: new-entity, deps: [K09, K03]}
-  - {id: C02, title: "Extended private keys (xprv/yprv/zprv/tprv, Base58Check) and Electrum seeds (context)", type: new-entity, deps: [F02]}
-  - {id: C03, title: "Wallet files: Ethereum keystore JSON (crypto.ciphertext/kdf), Solana keypair array (64 bytes, context), Monero/Cardano signing keys with a source", type: new-entity, deps: [F01]}
-  - {id: C04, title: "JWK/JWKS with private parameters (d, p, q, dp, dq, qi) and OKP keys", type: new-entity, deps: [K05]}
-  - {id: C05, title: "PKCS#12/JKS/Keychain/KeePass as base64 blob (magic bytes after decoding) and certificate passwords (keystore.password)", type: new-entity, deps: [D01]}
-  - {id: C06, title: "WireGuard PrivateKey, OpenVPN <key>/<tls-auth>, IPsec PSK (context)", type: new-entity, deps: [K05]}
-  - {id: C07, title: "SSH: distinguish unencrypted vs. encrypted (bcrypt KDF) → severity; authorized_keys/known_hosts as hard negatives", type: precision-fix, deps: [F08]}
-  - {id: C08, title: "Symmetric keys in code (AES/HMAC constants as byte arrays/hex with context key/secret), Django SECRET_KEY, Rails secret_key_base, Laravel APP_KEY", type: new-entity, deps: [G02]}
-
-  # ── D: Decoders and obfuscation ───────────────────────────────────────
+  - {id: G04, title: "Credential files: .netrc, .git-credentials, .npmrc _authToken, .pypirc, docker config.json auths, Maven settings.xml, NuGet.config, rclone/s3cfg", type: new-entity, deps: [K05C]}
   - {id: D01, title: "Decoder pipeline base64/base64url with offset back-mapping, recursion depth 2, size limit", type: engine, deps: [K02], accept: "Decoded matches point to the encoded range; latency budget kept"}
-  - {id: D02, title: "Hex, URL percent, JSON/C escape and Unicode escape decoding", type: engine, deps: [D01]}
-  - {id: D03, title: "UTF-16LE/BE text (PowerShell -EncodedCommand, Windows exports)", type: engine, deps: [D02]}
-  - {id: D04, title: "Concatenated strings (\"sk-\" + \"…\", template literals, line continuation with \\ ) and zero-width/full-width via PII K06", type: engine, deps: [D02], ext_deps: [pii:K06]}
-  - {id: D05, title: "Secrets in diffs/patches and git log output (+/- lines, only added lines count as current)", type: engine, deps: [K05]}
-
-  # ── M: Sensitive material and document classes ───────────────────────
+  - {id: G05, title: "Kubernetes: secret manifests (data base64 → check decoded, stringData), kubeconfig (client-key-data, token), Helm values", type: new-entity, deps: [G02, D01]}
+  - {id: G-HASH, title: "Password hash formats (F14 + G10 + G11): format detection with context instead of the anchor requirement ($2y$, $argon2id$, $6$, $5$, $1$, $apr1$, pbkdf2_sha256$, scrypt); /etc/shadow lines, htpasswd, NTLM/LM (pwdump/secretsdump), MySQL *41hex, PostgreSQL md5/SCRAM, Kerberos hash formats; Cisco type 5/7/8/9 + enable secret, Juniper $9$, Windows GPP cpassword", type: new-entity, deps: [K04], bundles: [F14, G10, G11], accept: "Structure check per format (field count, alphabet, length; GPP cpassword base64 of AES block size); dev recall on credential.password_hash >= 90 % (13 missed today in prose/JSON); bare hex digests, lockfile integrity hashes and commit SHAs as hard negatives; SNMP community, RADIUS/TACACS secrets and unattend.xml from G11 are not part of this bundle"}
+  - {id: C01, title: "BIP39 seed phrases (12/15/18/21/24 words, EN + other official word lists, checksum), also numbered/line by line", type: new-entity, deps: [K09, K03]}
+  - {id: C-WALLET, title: "Extended keys and wallet files (C02 + C03): xprv/yprv/zprv/tprv (Base58Check) and Electrum seeds (context); Ethereum keystore JSON (crypto.ciphertext/kdf), Solana keypair array (64 bytes, context), Monero/Cardano signing keys only with a source", type: new-entity, deps: [F01, F02], bundles: [C02, C03], accept: "Base58Check + version bytes per extended-key variant (tprv with severity test); keystore JSON structure check; xpub/tpub, public keystore fields and number arrays without key context as hard negatives"}
+  - {id: C-KEYS, title: "Key material in config and code (C04 + C06 + C08): JWK/JWKS with private parameters (d, p, q, dp, dq, qi) and OKP keys; WireGuard PrivateKey, OpenVPN <key>/<tls-auth>, IPsec PSK (context); symmetric keys in code (AES/HMAC constants as byte arrays/hex with key/secret context), Django SECRET_KEY, Rails secret_key_base, Laravel APP_KEY", type: new-entity, deps: [G02], bundles: [C04, C06, C08], accept: "JWK parsed as JSON with kty and a private member; WireGuard key = 32 bytes base64; Laravel base64: key decodes to 16/32 bytes; public JWKs, WireGuard PublicKey and published test vectors as hard negatives; benign-code FP not higher"}
+  - {id: C05, title: "PKCS#12/JKS/Keychain/KeePass as base64 blob (magic bytes after decoding) and certificate passwords (keystore.password)", type: new-entity, deps: [D01]}
   - {id: M01, title: "Content class engine: document label from anchor combination (strong/medium/structural) + evidence span, minimum density, counter-context", type: engine, deps: [E12, K04]}
-  - {id: M02, title: "Classification markings DE: VS-NUR FÜR DEN DIENSTGEBRAUCH, VS-VERTRAULICH, GEHEIM, STRENG GEHEIM; corporate levels intern/vertraulich/streng vertraulich", type: new-entity, deps: [M01]}
-  - {id: M03, title: "Classification markings EN/international: Confidential, Restricted, Internal Only, TLP 2.0 (CLEAR/GREEN/AMBER/AMBER+STRICT/RED), NATO/EU markings", type: new-entity, deps: [M02]}
-  - {id: M04, title: "Confidentiality/NDA: non-disclosure agreement (Geheimhaltungsvereinbarung), GeschGehG notice, trade secret markers, embargo/blocking period", type: new-entity, deps: [M01]}
-  - {id: M05, title: "Legally privileged: lawyer/client correspondence, attorney-client privileged, draft pleadings, settlement negotiations", type: new-entity, deps: [M01]}
-  - {id: M06, title: "HR documents: employment reference (Arbeitszeugnis), warning letter (Abmahnung), termination, termination agreement, payslip, performance review", type: new-entity, deps: [M01]}
-  - {id: M07, title: "Unpublished financials: quarterly/annual figures before publication, ad hoc/inside information (MAR Art. 7), insider list, guidance", type: new-entity, deps: [M01, F16]}
-  - {id: M08, title: "M&A/transactions: term sheet, LOI, due diligence, data room, project code names, SPA, valuation/cap table", type: new-entity, deps: [M01]}
-  - {id: M09, title: "Boards: management/supervisory board minutes, board minutes, resolution drafts", type: new-entity, deps: [M01]}
-  - {id: M10, title: "Terms/prices: purchase prices, discount tiers, internal price lists, quote calculations, supplier terms", type: new-entity, deps: [M01, F16]}
-  - {id: M11, title: "Bulk personal data: CSV/JSON/tables with ≥ N PII columns (header detection) and ≥ M rows — customer list export", type: new-entity, deps: [M01], ext_deps: [pii:K04]}
-  - {id: M12, title: "Health documents as a class: doctor's letter, findings, sick note (AU-Bescheinigung), discharge letter (document label; single values stay PII)", type: new-entity, deps: [M01]}
-  - {id: M13, title: "Security documents: pentest/audit reports, internal vulnerabilities with system reference, incident reports, firewall rule sets", type: new-entity, deps: [M01]}
-  - {id: M14, title: "Infrastructure topology: internal hostnames/domains (.corp/.intern/.local), RFC1918 + port inventories, AD DNs (CN=…,DC=…), network diagrams", type: new-entity, deps: [M01]}
-  - {id: M15, title: "Infrastructure files: terraform.tfstate, Ansible inventory/vault header, Cisco running-config, iptables/nftables dumps, docker-compose with environment", type: new-entity, deps: [M01, G02]}
-  - {id: M16, title: "Export control: export list (AL numbers), ECCN, ITAR/EAR, dual-use regulation identifiers with context", type: new-entity, deps: [M01]}
-  - {id: M17, title: "R&D/IP: invention disclosure (Erfindungsmeldung), patent draft before filing, formulations/specifications with confidentiality marker", type: new-entity, deps: [M01]}
-  - {id: M18, title: "Extend source code detection: Java, C#, C/C++, Go, PHP, Ruby, Kotlin, Swift, Shell, PowerShell, HCL, CI YAML; Jupyter notebooks", type: recall-fix, deps: [E12]}
-  - {id: T13, title: "dlp_structured_system_log (opt-in): only matches ERROR/FATAL lines with dot milliseconds, so 0 of 456 dev log carriers get content.system_log; accept runs of >= N timestamped lines of any level (INFO/DEBUG/WARN), log4j comma milliseconds, thread/logger columns", type: recall-fix, deps: [E12], accept: "Document F1 content.system_log on dev carriers; benign docs/code flagged not higher; M19 keeps new formats (JSON, syslog, access logs, stack traces)"}
-  - {id: M19, title: "Extend logs: JSON logs, syslog, access logs with auth parameters, Kubernetes events, Java/Go/.NET/Node stack traces", type: recall-fix, deps: [E12]}
-  - {id: M20, title: "Extend database dumps: pg_dump COPY blocks, mysqldump headers, MongoDB exports (JSON Lines with _id/$oid), Redis/RDB hints", type: recall-fix, deps: [E12]}
-  - {id: M21, title: "Extend business metrics: pipeline, CAC/LTV, churn, valuation, burn/runway, budget vs. actual in table form", type: recall-fix, deps: [F16, K05]}
-  - {id: M22, title: "Customer/supplier contracts as a class (contracting parties + remuneration + term + confidentiality clause)", type: new-entity, deps: [M01]}
-  - {id: M23, title: "Define the default profile for content/document classes (which classes are on by default)", type: engine, deps: [M22], decision: "classification markings (M02/M03) on by default, all other content/document classes opt-in (approved 2026-10-19)"}
-
-  # ── H: Hardening and wrap-up ──────────────────────────────────────────
-  - {id: H01, title: "Hard-negative mining: 1,000 technical benign snippets (hashes, UUIDs, digests, lockfile integrity, commit SHAs, test vectors, docs example keys)", type: precision-fix, deps: [M23, D05, C08, G14]}
-  - {id: H02, title: "Property/fuzz tests: no panic, valid UTF-8 offsets after decoding, strict bit-identical, decoder recursion limit", type: test, deps: [H01]}
+  - {id: M-MARK, title: "Classification markings (M02 + M03 + M23): DE VS-NUR FÜR DEN DIENSTGEBRAUCH, VS-VERTRAULICH, GEHEIM, STRENG GEHEIM and corporate levels intern/vertraulich/streng vertraulich; EN Confidential, Restricted, Internal Only, TLP 2.0 (CLEAR/GREEN/AMBER/AMBER+STRICT/RED), NATO/EU markings; apply the M23 default profile (markings on by default)", type: new-entity, deps: [M01], bundles: [M02, M03, M23], decision: "classification markings (M02/M03) on by default, all other content/document classes opt-in (approved 2026-10-19, taken over from M23)", accept: "Document label + evidence span per marking family DE/EN; benign docs flagged <= 1 per class (articles about classification levels as hard negatives); default profile documented in the rule catalog"}
+  - {id: M-LEGAL, title: "Legal document classes (M04 + M05 + M22): NDA/Geheimhaltungsvereinbarung, GeschGehG notice, trade secret markers, embargo period; attorney-client privileged correspondence, draft pleadings, settlement negotiations; customer/supplier contracts (contracting parties + remuneration + term + confidentiality clause)", type: new-entity, deps: [M01], bundles: [M04, M05, M22], accept: "One opt-in class per family on the M01 anchor engine; >= 5 positive + 5 hard-negative documents per class and language (published laws, court decisions, contract templates as hard negatives); benign docs flagged not higher"}
+  - {id: M-CORP, title: "Corporate document classes (M07 + M08 + M09): unpublished financials, ad hoc/inside information (MAR Art. 7), insider list, guidance; M&A (term sheet, LOI, due diligence, data room, project code names, SPA, valuation/cap table); management/supervisory board minutes and resolution drafts", type: new-entity, deps: [M01], bundles: [M07, M08, M09], accept: "One opt-in class per family on the M01 anchor engine; >= 5 positive + 5 hard-negative documents per class and language (published annual reports, press releases, encyclopedia articles on M&A as hard negatives); benign docs flagged not higher"}
+  - {id: M-HRSEC, title: "HR, security, export-control and R&D document classes (M06 + M13 + M16 + M17): employment reference, warning letter, termination (agreement), payslip, performance review; pentest/audit/incident reports with system reference; export list (AL numbers), ECCN, ITAR/EAR, dual-use identifiers with context; invention disclosure and patent draft before filing", type: new-entity, deps: [M01], bundles: [M06, M13, M16, M17], accept: "One opt-in class per family on the M01 anchor engine; >= 5 positive + 5 hard-negative documents per class and language (job ads, public CVE advisories, published patents, regulation texts as hard negatives); benign docs flagged not higher"}
+  - {id: H01, title: "Hard-negative mining: 1,000 technical benign snippets (hashes, UUIDs, digests, lockfile integrity, commit SHAs, test vectors, docs example keys)", type: precision-fix, deps: [M-HRSEC, C-KEYS, C05, G05]}
   - {id: H03, title: "Latency/throughput budget after all rules (100 KiB p95 ≤ 10 ms, ≥ gitleaks throughput), prefilter coverage 100 %", type: perf, deps: [H01]}
-  - {id: H04, title: "Redaction quality: PlaceholderEncoder for new groups, no secret fragments in details/logs", type: test, deps: [H01]}
-  - {id: H05, title: "Docs: categories, rule catalog (provider/validator/source), result schema, choose-categories, comparison page", type: docs, deps: [H03, H04]}
-  - {id: H06, title: "Final report M1–M4 on holdout incl. coverage matrix gitleaks/TruffleHog/detect-secrets/Google DLP", type: report, deps: [H05]}
+  - {id: H-FINAL, title: "Docs and final report (H05 + H06): categories, rule catalog (provider/validator/source), result schema, choose-categories, comparison page; final report M1–M4 on the holdout incl. coverage matrix gitleaks/TruffleHog/detect-secrets/Google DLP/Purview", type: report, deps: [H03], bundles: [H05, H06], accept: "research/dlp/scoreboard/final.md with holdout numbers per milestone criterion; M3 counts (mapped gitleaks rules, secret formats, offline structure checks, content classes) computed by a script from entity_map.yaml/RuleMeta"}
 
 recurring:
   - id: TRIAGE
