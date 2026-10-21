@@ -204,6 +204,7 @@ tasks:
     accept: 100 KiB p95 before/after in the scoreboard; new rules without a keyword fail the test
 
   - id: K08
+    status: done
     title: Overlap resolution (provider > token > credential > generic; hash vs. secret; DLP vs. PII double labels)
     type: engine
     deps: [K04]

@@ -121,12 +121,17 @@ def _checked_span(span: dict[str, Any], text: str, row_id: str) -> tuple[int, in
 
 
 def _matched_rules(result: dict[str, Any]) -> list[tuple[int, int, str]]:
-    """``(start_byte, end_byte, rule_id)`` of every rule match the scanner reported."""
-    found = []
+    """``(start_byte, end_byte, rule_id)`` of every rule match the scanner reported.
+
+    Matches that gave way to an overlapping match (``suppressed_by``, K08) come last, so
+    that the rule that kept a range is attributed before a suppressed rule of the same range.
+    """
+    kept, suppressed = [], []
     for layer in result.get("layers") or []:
         for item in (layer.get("details") or {}).get("matched_rules") or []:
-            found.append((int(item["start_byte"]), int(item["end_byte"]), str(item["rule_id"])))
-    return found
+            entry = (int(item["start_byte"]), int(item["end_byte"]), str(item["rule_id"]))
+            (suppressed if item.get("suppressed_by") else kept).append(entry)
+    return kept + suppressed
 
 
 def attribute(
@@ -134,10 +139,11 @@ def attribute(
 ) -> str:
     """The rule that produced ``span``: a match on the same byte range in the same result.
 
-    Several rules can match one range (cross-label overlaps, or a later rule the engine
-    dropped as an overlap). The span label is the engine's entity group, so the first
-    match whose mapped group is that label wins; the engine keeps the first match per
-    group, in rule order. Without such a rule (unmapped or stale map) the first match wins.
+    Several rules can match one range (cross-label overlaps, or a rule the engine
+    suppressed as an overlap). The span label is the engine's entity group, so the first
+    match whose mapped group is that label wins; matches the engine suppressed come after
+    the others (``_matched_rules``). Without such a rule (unmapped or stale map) the first
+    match wins.
     """
     label = str(span.get("label", ""))
     candidates = [rule for start, end, rule in rules if (start, end) == (span.get("start_byte"), span.get("end_byte"))]

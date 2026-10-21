@@ -82,6 +82,22 @@ pub(crate) trait NativeRegexDetector {
     }
     fn finalize_spans(&self, _text: &str, _spans: &mut Vec<EvidenceSpan>) {}
 
+    /// Resolve overlaps between accepted matches. `candidates[i]` is the
+    /// evidence of rule index `candidates[i].0` and of `matched_rules[i]`, in
+    /// rule order. The default keeps, per label (or across labels unless
+    /// [`Self::preserve_cross_label_overlaps`]), the first match of a range.
+    fn resolve_overlaps(
+        &self,
+        _text: &str,
+        candidates: Vec<(usize, EvidenceSpan)>,
+        _matched_rules: &mut [serde_json::Value],
+    ) -> Vec<EvidenceSpan> {
+        first_match_per_range(
+            candidates.into_iter().map(|(_, span)| span),
+            self.preserve_cross_label_overlaps(),
+        )
+    }
+
     /// Rule metadata added to the `matched_rules` entry of a match of rule
     /// `index` with value `value`.
     fn match_details(
@@ -293,18 +309,26 @@ pub(crate) trait NativeRegexDetector {
                 }
                 matched_rules.push(rule);
                 class_name.get_or_insert(self.entity_groups()[index]);
-                evidence_spans.push(EvidenceSpan {
-                    label: self.entity_groups()[index].to_string(),
-                    text: matched.as_str().to_string(),
-                    score,
-                    start_byte: matched.start(),
-                    end_byte: matched.end(),
-                    start_char: 0,
-                    end_char: 0,
-                });
+                evidence_spans.push((
+                    index,
+                    EvidenceSpan {
+                        label: self.entity_groups()[index].to_string(),
+                        text: matched.as_str().to_string(),
+                        score,
+                        start_byte: matched.start(),
+                        end_byte: matched.end(),
+                        start_char: 0,
+                        end_char: 0,
+                    },
+                ));
             }
         }
 
+        let mut non_overlapping_spans = if evidence_spans.is_empty() {
+            Vec::new()
+        } else {
+            self.resolve_overlaps(text, evidence_spans, &mut matched_rules)
+        };
         if !matched_rules.is_empty() {
             details.insert("matched_rules".into(), serde_json::json!(matched_rules));
         }
@@ -315,25 +339,6 @@ pub(crate) trait NativeRegexDetector {
                 details,
             };
         };
-        let preserve_cross_label_overlaps = self.preserve_cross_label_overlaps();
-        let mut non_overlapping_spans = Vec::with_capacity(evidence_spans.len());
-        let mut intervals = HashMap::<String, std::collections::BTreeMap<usize, usize>>::new();
-        for span in evidence_spans {
-            let group = if preserve_cross_label_overlaps {
-                span.label.clone()
-            } else {
-                String::new()
-            };
-            let intervals = intervals.entry(group).or_default();
-            let overlaps_existing = intervals
-                .range(..span.end_byte)
-                .next_back()
-                .is_some_and(|(_, &end)| end > span.start_byte);
-            if !overlaps_existing {
-                intervals.insert(span.start_byte, span.end_byte);
-                non_overlapping_spans.push(span);
-            }
-        }
         self.finalize_spans(text, &mut non_overlapping_spans);
         non_overlapping_spans.sort_by_key(|span| (span.start_byte, span.end_byte));
         if non_overlapping_spans.is_empty() {
@@ -367,6 +372,33 @@ pub(crate) trait NativeRegexDetector {
             details,
         }
     }
+}
+
+/// The first span of every range in input order: per label when
+/// `per_label`, else across all labels.
+pub(crate) fn first_match_per_range(
+    spans: impl IntoIterator<Item = EvidenceSpan>,
+    per_label: bool,
+) -> Vec<EvidenceSpan> {
+    let mut kept = Vec::new();
+    let mut intervals = HashMap::<String, std::collections::BTreeMap<usize, usize>>::new();
+    for span in spans {
+        let group = if per_label {
+            span.label.clone()
+        } else {
+            String::new()
+        };
+        let intervals = intervals.entry(group).or_default();
+        let overlaps_existing = intervals
+            .range(..span.end_byte)
+            .next_back()
+            .is_some_and(|(_, &end)| end > span.start_byte);
+        if !overlaps_existing {
+            intervals.insert(span.start_byte, span.end_byte);
+            kept.push(span);
+        }
+    }
+    kept
 }
 
 pub(crate) fn populate_char_offsets(text: &str, spans: &mut [EvidenceSpan]) {

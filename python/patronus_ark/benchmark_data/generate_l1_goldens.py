@@ -1763,7 +1763,7 @@ DLP_CASES = {
     ],
     "CRYPTO_KEY": [
         ds("CRYPTO_KEY", "en", "dlp_eth_private_key", "Ethereum private key: <<secret:0>>", "eth_private_key_hex", 401),
-        ds("CRYPTO_KEY", "de", "dlp_btc_wif", "Wallet-Schlüssel: <<secret:0>>", "btc_wif_uncompressed", 402),
+        ds("CRYPTO_KEY", "de", "dlp_btc_wif", "Wallet-Schlüssel: <<secret:0>>", "btc_wif_mainnet_uncompressed", 402),
         ds("CRYPTO_KEY", "en", "dlp_eth_private_key", "Signing scalar <<secret:0>>", "eth_private_key_hex", 403),
         dn("CRYPTO_KEY", "en", "dlp_eth_private_key", "Ethereum address: 0x0123456789abcdef0123456789abcdef01234567", "address is not a private key"),
         dn("CRYPTO_KEY", "de", "dlp_eth_private_key", "Wallet-Schlüssel: 0x1234", "value is too short"),
@@ -4154,6 +4154,133 @@ DLP_K07_CASES = {
     ],
 }
 for _label, _rows in DLP_K07_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+
+# K08: overlap resolution. Where several rules match one value, one span stays, by tier
+# (provider > token > hash > credential > generic): a URL password inside a generic
+# `token:` assignment is the URL credential, a quoted env value gives way to the unquoted
+# value span of the assignment rule, provider keys and JWTs win over the quoted env value.
+# Hard negatives are the DLP side of the PII double label: e-mail-shaped userinfo without a
+# password (database URLs, SSH remotes, SMTP URLs), an empty or templated URL password after
+# the userinfo `token:`, and plain e-mail addresses in prose.
+DLP_K08_CASES = {
+    "CREDENTIAL": [
+        ds(
+            "CREDENTIAL", "de", "dlp_url_userinfo_password",
+            "# Spiegel des Lager-Repositorys einrichten\n"
+            "$ git remote set-url origin https://token:<<secret:0>>@bitbucket.org/acme/lager.git\n",
+            "generic_api_secret", 9801, carrier="cli",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_url_userinfo_password",
+            "[remote \"origin\"]\n  url = https://token:<<secret:0>>@git.example.de/team/abgleich.git\n"
+            "  fetch = +refs/heads/*:refs/remotes/origin/*\n",
+            "generic_api_secret", 9802, carrier="ini",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "$ export CLIENT_SECRET='<<secret:0>>'\n$ ./bin/abgleich --trocken\n"
+            "Abgleich von 214 Belegen … fertig\n",
+            "generic_api_secret", 9803, carrier="cli",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_url_userinfo_password",
+            "# mirror the warehouse repository\n"
+            "$ git remote set-url origin https://token:<<secret:0>>@bitbucket.org/acme/warehouse.git\n",
+            "generic_api_secret", 9806, carrier="cli",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_url_userinfo_password",
+            "[remote \"origin\"]\n  url = https://token:<<secret:0>>@git.example.com/team/sync.git\n"
+            "  fetch = +refs/heads/*:refs/remotes/origin/*\n",
+            "generic_api_secret", 9807, carrier="ini",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "$ export CLIENT_SECRET=\"<<secret:0>>\"\n$ ./bin/sync --dry-run\nsynced 214 objects … done\n",
+            "generic_api_secret", 9808, carrier="cli",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_url_userinfo_password",
+            "DATABASE_URL=postgres://lager@db.intern:5432/lager\n",
+            "userinfo without a password reads as e-mail address", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_url_userinfo_password",
+            "$ git remote add spiegel git@bitbucket.org:acme/lager.git\n",
+            "SSH remote userinfo without a secret", carrier="cli",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "$ git remote set-url origin https://token:@bitbucket.org/acme/lager.git\n",
+            "empty URL password after the userinfo token", carrier="cli",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_url_userinfo_password",
+            "Rückfragen bitte an max.mustermann@example.org, Benachrichtigungen über "
+            "smtp://alarme@mail.example.de:587.",
+            "e-mail address and SMTP userinfo in prose", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_url_userinfo_password",
+            "[remote \"origin\"]\n  url = https://token:{{ bitbucket_token }}@bitbucket.org/acme/lager.git\n",
+            "templated URL password after the userinfo token", carrier="ini",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_url_userinfo_password",
+            "DATABASE_URL=postgres://warehouse@db.internal:5432/warehouse\n",
+            "userinfo without a password reads as e-mail address", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_url_userinfo_password",
+            "$ git remote add mirror git@bitbucket.org:acme/warehouse.git\n",
+            "SSH remote userinfo without a secret", carrier="cli",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "$ git remote set-url origin https://token:@bitbucket.org/acme/warehouse.git\n",
+            "empty URL password after the userinfo token", carrier="cli",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_url_userinfo_password",
+            "Questions go to jane.doe@example.com, alerts are sent via smtp://alerts@mail.example.com:587.",
+            "e-mail address and SMTP userinfo in prose", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_url_userinfo_password",
+            "[remote \"origin\"]\n  url = https://token:{{ bitbucket_token }}@bitbucket.org/acme/warehouse.git\n",
+            "templated URL password after the userinfo token", carrier="ini",
+        ),
+    ],
+    "PAYMENT_KEY": [
+        ds(
+            "PAYMENT_KEY", "de", "dlp_stripe_key",
+            "# Laufzeit-Image für den Zahlungsdienst\nFROM eclipse-temurin:21-jre\n"
+            "ENV STRIPE_SECRET_KEY=\"<<secret:0>>\"\n",
+            "stripe_secret_test_long", 9804, carrier="code",
+        ),
+        ds(
+            "PAYMENT_KEY", "en", "dlp_stripe_key",
+            "# runtime image for the payment service\nFROM eclipse-temurin:21-jre\n"
+            "ENV STRIPE_SECRET_KEY=\"<<secret:0>>\"\n",
+            "stripe_secret_test_long", 9809, carrier="code",
+        ),
+    ],
+    "SECRET_TOKEN": [
+        ds(
+            "SECRET_TOKEN", "de", "dlp_jwt_token",
+            "# Sitzung des Abgleichdienstes (nur lokal)\nSESSION_TOKEN='<<secret:0>>'\n",
+            "jwt_signed_hs256", 9805, carrier="env",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_jwt_token",
+            "# session of the sync service (local only)\nSESSION_TOKEN='<<secret:0>>'\n",
+            "jwt_signed_hs256", 9810, carrier="env",
+        ),
+    ],
+}
+for _label, _rows in DLP_K08_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
 

@@ -8,6 +8,8 @@ use crate::{
 use regex::Regex;
 use std::ops::Range;
 
+use super::overlap::OverlapRules;
+pub use super::overlap::OverlapTier;
 use super::prefilter::{RulePrefilter, ValueClass, ValueRun};
 use super::rules::{self, ExampleCheck};
 use super::score::DlpMode;
@@ -173,6 +175,12 @@ pub(crate) const SECRET_GROUPS: &[&str] = &[
     "SECRET_TOKEN",
 ];
 
+/// K08: the overlap tier of a secret rule (provider > token > hash >
+/// credential > generic); `None` for identifier and content rules.
+pub fn overlap_tier(rule_id: &str) -> Option<OverlapTier> {
+    rules::overlap_tier(rule_id)
+}
+
 /// Shared DLP rule defaults for Rust, Python, and HTTP gateway execution.
 pub(crate) fn default_rule_enabled(rule_id: &str) -> bool {
     if !rule_id.starts_with("dlp_") {
@@ -286,6 +294,7 @@ pub struct DlpPipeline {
     example_checks: Vec<ExampleCheck>,
     placeholder_checks: Vec<bool>,
     metas: Vec<RuleMeta>,
+    tiers: Vec<Option<OverlapTier>>,
     prefilter: RulePrefilter,
     anchor_regexes: Vec<Regex>,
 }
@@ -307,6 +316,7 @@ impl DlpPipeline {
         let mut example_checks = Vec::new();
         let mut placeholder_checks = Vec::new();
         let mut metas = Vec::new();
+        let mut tiers = Vec::new();
 
         for p in DLP_PATTERNS {
             regexes.push(Regex::new(p.pattern).unwrap());
@@ -320,6 +330,7 @@ impl DlpPipeline {
             example_checks.push(rules::example_check(p.name));
             placeholder_checks.push(rules::placeholder_check(p.name));
             metas.push(p.meta);
+            tiers.push(rules::overlap_tier(p.name));
         }
 
         let anchor_regexes = DLP_ANCHOR_PATTERNS
@@ -337,6 +348,7 @@ impl DlpPipeline {
             example_checks,
             placeholder_checks,
             metas,
+            tiers,
             prefilter: RulePrefilter::new(DLP_PATTERNS),
             anchor_regexes,
         }
@@ -493,7 +505,8 @@ impl NativeRegexDetector for DlpPipeline {
         true
     }
 
-    /// Drops values below the rule's entropy floor (K02), documented example
+    /// Drops generic assignments whose key is a URL userinfo (K08), values
+    /// below the rule's entropy floor (K02), documented example
     /// and test values of secret rules (T06), vendor-documented example values
     /// (K06) and placeholders and environment/template references in the value
     /// of value-capturing credential rules (T07, K06).
@@ -504,6 +517,15 @@ impl NativeRegexDetector for DlpPipeline {
         captures: &regex::Captures<'_>,
     ) -> bool {
         let text = prepared.text();
+        // K08: a generic key that is the userinfo of a URL (`https://token:…@`)
+        // belongs to the URL credential, also when that has no value to report.
+        if self.tiers[index] == Some(OverlapTier::Generic)
+            && captures
+                .get(0)
+                .is_some_and(|matched| text[..matched.start()].ends_with("://"))
+        {
+            return false;
+        }
         let check = self.example_checks[index];
         let placeholder_check = self.placeholder_checks[index];
         let meta = &self.metas[index];
@@ -555,30 +577,19 @@ impl NativeRegexDetector for DlpPipeline {
         }
     }
 
-    fn finalize_spans(&self, _text: &str, spans: &mut Vec<crate::EvidenceSpan>) {
-        let provider_spans = spans
-            .iter()
-            .filter(|span| {
-                matches!(
-                    span.label.as_str(),
-                    "API_KEY" | "CLOUD_KEY" | "PAYMENT_KEY" | "CRYPTO_KEY" | "PRIVATE_KEY"
-                )
-            })
-            .map(|span| (span.start_byte, span.end_byte))
-            .collect::<std::collections::HashSet<_>>();
-        let token_spans = spans
-            .iter()
-            .filter(|span| span.label == "SECRET_TOKEN")
-            .map(|span| (span.start_byte, span.end_byte))
-            .collect::<std::collections::HashSet<_>>();
-        spans.retain(|span| {
-            let range = (span.start_byte, span.end_byte);
-            match span.label.as_str() {
-                "CREDENTIAL" => !provider_spans.contains(&range) && !token_spans.contains(&range),
-                "SECRET_TOKEN" => !provider_spans.contains(&range),
-                _ => true,
-            }
-        });
+    /// K08: overlapping secret matches keep one span (see [`super::overlap`]).
+    fn resolve_overlaps(
+        &self,
+        text: &str,
+        candidates: Vec<(usize, crate::EvidenceSpan)>,
+        matched_rules: &mut [serde_json::Value],
+    ) -> Vec<crate::EvidenceSpan> {
+        let rules = OverlapRules {
+            rule_ids: &self.rule_ids,
+            tiers: &self.tiers,
+            metas: &self.metas,
+        };
+        super::overlap::resolve(text, &rules, candidates, matched_rules)
     }
 
     fn match_details(

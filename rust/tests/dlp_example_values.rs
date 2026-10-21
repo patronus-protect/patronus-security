@@ -377,6 +377,9 @@ fn provider_example_and_test_values_are_silent_in_de_and_en() {
 #[test]
 fn provider_values_with_a_random_body_stay_detected_in_de_and_en() {
     for (index, shape) in SHAPES.iter().enumerate() {
+        if shape.rule_id == "dlp_btc_wif" {
+            continue; // Base58Check: a random body has no valid checksum (dlp_btc_wif.rs)
+        }
         let body = random(index as u64 + 1, shape.alphabet, shape.length);
         let value = format!("{}{body}{}", shape.prefix, shape.suffix);
         for carrier in [shape.carrier_de, shape.carrier_en] {

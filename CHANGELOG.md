@@ -11,6 +11,26 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Add overlap resolution for DLP secret findings and DLP vs. PII double labels (K08). Overlapping
+  credential/secret spans keep one span: a span that only adds quotes or a trailing `;`/`,` to a
+  tighter span of the same tier gives way to it; a fixed-format match strictly inside a longer
+  fixed-format value of another rule (a WIF-shaped Base58 run inside a Stripe key, OAuth token or
+  JWT), or a keywordless match inside a longer secret value, is a substring artefact; then the tier
+  decides (provider/key material > platform tokens > password hashes > structural credentials >
+  generic assignments; `patronus_ark::detectors::dlp::dlp::overlap_tier`), within a tier the
+  stronger validator, then the registry order. Suppressed matches stay in `matched_rules` with
+  `suppressed_by`; `run_ark.py` attributes a range to the rule that kept it. A generic key that is
+  the userinfo of a URL (`https://token:…@host`) belongs to the URL credential. When one request
+  scans DLP and PII on the same text, PII L1 spans overlapping a DLP secret span are dropped from
+  the PII evidence (URL passwords read as e-mail local parts, Slack token digits read as card
+  numbers); the PII decision stays. **Detection change:** fewer DLP spans (generic `env`/assignment
+  spans around provider tokens and JWTs, WIF artefacts inside other keys, the host after an empty
+  URL password), tighter generic spans without quotes, URL passwords instead of the whole URL under
+  a `token:` userinfo, and fewer PII spans in combined DLP+PII scans.
+  `dlp_btc_wif` now validates Base58Check (mainnet version byte `0x80`, a secp256k1 scalar in
+  range, the `0x01` flag for compressed keys); scoring stays at format strength. **Detection
+  change:** WIF-shaped strings with an invalid checksum (documented example and test fills, random
+  Base58 runs inside hashes, Stripe keys, OAuth tokens and JWTs) are no `CRYPTO_KEY` findings.
 - Add a DLP rule prefilter (K07) so that the rule set scales to 200+ rules. One Aho-Corasick pass
   finds the prefilter keywords of all rules (`RuleMeta::keywords`, ASCII case-insensitive); a rule
   without a keyword in the text does not run. The keywordless rules get a structural prefilter
