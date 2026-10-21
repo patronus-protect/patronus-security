@@ -121,7 +121,10 @@ tasks:
     title: Report gold gaps of the neutral corpora separately (duplicate values, checksum-invalid gold) without editing the corpora
     type: eval-infra
     deps: [E06]
-    needs_decision: true
+    decision: >-
+      2026-10-21: option (a). Scoring stays as is; the gold-gap buckets (predictions equal to an annotated
+      gold value elsewhere in the row, gold failing the entity's validator) are reported separately per
+      corpus and entity for both engines. Corpora are never edited; (b) and (c) do not change any metric.
     source: "TRIAGE 2026-W43 (research/l1-pii/triage/2026-W43.md, buckets 13 + 14)"
     question: >-
       Gretel annotates only one copy of `[x@y.com](mailto:x@y.com)` (117 Ark email FP on dev), leaves many
@@ -176,7 +179,10 @@ tasks:
     title: Define which Ark mode is scored for M1-M3 (strict default vs. balanced) and score both modes
     type: eval-infra
     deps: [E06, K02]
-    needs_decision: true
+    decision: >-
+      2026-10-21: M1-M3 are judged on balanced (the mode that competes with Presidio tuned); strict stays
+      the bit-identical default. Both modes are scored for head and base; the gate guards strict
+      (bit-identical) and balanced (no regression > 0.5 pp F1 per entity, no new hard-negative FP).
     source: "TRIAGE 2026-W43 (research/l1-pii/triage/2026-W43.md, section mode)"
     question: >-
       K02 keeps strict as the bit-identical default; balanced/recall are opt-in. Presidio tuned emits
