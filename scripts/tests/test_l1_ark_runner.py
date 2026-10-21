@@ -322,3 +322,74 @@ def test_real_ark_binding_scores_spans_in_opt_in_modes(tmp_path):
     # K03: the field name before the IBAN lifts it, the order number drops the card number.
     assert scores["balanced"] == {"de": {"IBAN": 0.9, "LICENSEPLATE": 0.65}, "context": {"IBAN": 1.0}, "counter": {}}
     assert scores["recall"] == {**scores["balanced"], "counter": {"CREDITCARD": 0.45}}
+
+
+SECONDARY_TEXT = "IBAN: DE18 4306 0967 1234 5678 00"
+
+
+class SecondaryGateway:
+    """Returns the strict result for SECONDARY_TEXT: the card digits are secondary evidence (T07)."""
+
+    def scan_category(self, category, text):
+        card = span("CREDITCARD", text, 11, 33)
+        return [
+            {
+                "category": "pii",
+                "class_name": "IBAN",
+                "evidence_spans": [span("IBAN", text, 6, 33), card],
+                "layers": [
+                    {
+                        "details": {
+                            "secondary_evidence": [
+                                {
+                                    "label": "CREDITCARD",
+                                    "start_byte": card["start_byte"],
+                                    "end_byte": card["end_byte"],
+                                    "reason": "iban_part",
+                                    "primary_label": "IBAN",
+                                }
+                            ]
+                        }
+                    }
+                ],
+            }
+        ]
+
+
+def test_predict_rows_scores_primary_findings_only(tmp_path):
+    rows = [{"id": "a", "language": "de", "text": SECONDARY_TEXT}]
+    predicted = list(MODULE.predict_rows(rows, SecondaryGateway()))
+    assert predicted[0]["evidence_spans"] == [
+        {"label": "pii.iban", "ark_label": "IBAN", "start_char": 6, "end_char": 33, "score": 1.0}
+    ]
+    source = tmp_path / "gold.jsonl"
+    write_jsonl(source, rows)
+    meta = MODULE.run(
+        input_path=source,
+        output_path=tmp_path / "out.jsonl",
+        meta_path=tmp_path / "out.meta.json",
+        gateway=SecondaryGateway(),
+        build={"native_sha256": "0" * 64},
+    )
+    assert meta["spans"] == 1
+    assert meta["secondary_spans"] == 1
+
+
+@pytest.mark.skipif(not native_available(), reason="patronus_ark native binding is not built")
+def test_real_ark_binding_drops_secondary_evidence_in_strict(tmp_path):
+    source = tmp_path / "gold.jsonl"
+    write_jsonl(
+        source,
+        [
+            {"id": "card", "language": "de", "text": SECONDARY_TEXT},
+            {"id": "account", "language": "en", "text": "Bank account: GB82WEST12345698765432"},
+            {"id": "next", "language": "en", "text": "Card 4111 1111 1111 1111, IBAN DE06 6826 5123 3080 5169 78"},
+        ],
+    )
+    out = tmp_path / "ark.jsonl"
+    assert MODULE.main(["--input", str(source), "--output", str(out)]) == 0
+    labels = {
+        row["id"]: [item["ark_label"] for item in row["evidence_spans"]]
+        for row in map(json.loads, out.read_text(encoding="utf-8").splitlines())
+    }
+    assert labels == {"card": ["IBAN"], "account": ["IBAN"], "next": ["CREDITCARD", "IBAN"]}

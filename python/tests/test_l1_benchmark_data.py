@@ -165,13 +165,21 @@ class L1BenchmarkDataTests(unittest.TestCase):
                             row["id"],
                         )
                 else:
+                    # A hard negative may annotate other real entities in its text (T07: the
+                    # valid IBAN around a card-shaped BBAN), never one of its target label.
                     self.assertEqual(row["case_type"], "hard_negative", row["id"])
-                    self.assertEqual(row["entities"], [], row["id"])
                     self.assertTrue(row["negative_reason"].strip(), row["id"])
+                    self.assertNotIn(row["target_label"], {e["label"] for e in row["entities"]}, row["id"])
+                    if row["entities"]:
+                        self.assertEqual(name, "pii_l1", row["id"])
+                    starts = [entity["start"] for entity in row["entities"]]
+                    self.assertEqual(starts, sorted(starts), row["id"])
+                    for entity in row["entities"]:
+                        self.assertEqual(row["text"][entity["start"] : entity["end"]], entity["text"], row["id"])
 
     def test_language_distribution_is_broad(self):
         expected = {
-            "pii_l1": {"de": 456, "en": 437},
+            "pii_l1": {"de": 468, "en": 449},
             "dlp_l1": {"de": 318, "en": 324},
         }
         for name, distribution in expected.items():
@@ -228,6 +236,35 @@ class SecondaryEntityGoldTests(unittest.TestCase):
                 {(entity["label"], entity["text"]) for entity in rows[row_id]["entities"]},
                 row_id,
             )
+
+    def test_t07_hard_negatives_annotate_the_iban_that_carries_the_lookalike(self):
+        # The card-shaped BBAN inside a valid IBAN and an account finding on an IBAN value are
+        # secondary evidence in strict (T07); the IBAN itself is gold.
+        annotated = Counter()
+        for row in load("pii_l1"):
+            if row["case_type"] != "hard_negative" or not row["entities"]:
+                continue
+            self.assertEqual([e["label"] for e in row["entities"]], ["IBAN"], row["id"])
+            self.assertIn(row["target_label"], {"CREDITCARD", "FINANCIAL_ACCOUNT_NUMBER"}, row["id"])
+            self.assertNotIn("pii_mode", row, row["id"])
+            annotated[(row["target_label"], row["language"])] += 1
+        self.assertEqual(
+            annotated,
+            {
+                ("CREDITCARD", "de"): 3,
+                ("CREDITCARD", "en"): 3,
+                ("FINANCIAL_ACCOUNT_NUMBER", "de"): 3,
+                ("FINANCIAL_ACCOUNT_NUMBER", "en"): 3,
+            },
+        )
+
+    def test_generator_rejects_hard_negatives_that_annotate_their_target(self):
+        namespace = runpy.run_path(str(benchmark.DATA_DIR / "generate_l1_goldens.py"))
+        n = namespace["n"]
+        with self.assertRaises(ValueError):
+            n("CREDITCARD", "en", "pii_credit_card", "Card 4111 1111 1111 1111", "x", also=(("CREDITCARD", "4111 1111 1111 1111"),))
+        with self.assertRaises(ValueError):
+            n("CREDITCARD", "en", "pii_credit_card", "IBAN DE89370400440532013000", "x", also=(("IBAN", "DE00000000000000000000"),))
 
     def test_generator_rejects_ambiguous_secondary_values(self):
         namespace = runpy.run_path(str(benchmark.DATA_DIR / "generate_l1_goldens.py"))

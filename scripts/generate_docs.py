@@ -266,6 +266,14 @@ def pii_competing_labels(path: Path = ROOT / "rust/src/detectors/pii/overlap.rs"
     return re.findall(r'"([A-Z_]+)"', match.group(1))
 
 
+def pii_secondary_labels(path: Path = ROOT / "rust/src/detectors/pii/overlap.rs") -> list[str]:
+    """Labels whose findings inside a reported IBAN `strict` marks as secondary evidence (T07)."""
+    match = re.search(r"pub const SECONDARY_IN_IBAN: \[&str; \d+\] = \[(.*?)\];", path.read_text(), re.S)
+    if not match:
+        raise ValueError(f"Missing SECONDARY_IN_IBAN in {path}")
+    return re.findall(r'"([A-Z_]+)"', match.group(1))
+
+
 def pii_spelled_out_penalty(path: Path = ROOT / "rust/src/detectors/pii/score.rs") -> int:
     """Points a finding loses when only the `recall` obfuscation normalization reveals it (K06)."""
     match = re.search(r"pub const SPELLED_OUT_PENALTY_POINTS: u8 = (\d+);", path.read_text())
@@ -423,7 +431,9 @@ def generate_l1_rule_catalog_doc() -> str:
         f"{', '.join(f'`{label}`' for label in pii_competing_labels())} resolve to one: an IBAN wins, then the "
         "longer value, context that supports its own label, a checksum, the higher score, the earlier rule; a "
         "finding inside a printed IBAN form (`DE64 7172 …`) yields even when its check digits fail. "
-        "`strict` keeps both labels.",
+        "`strict` keeps both labels and lists "
+        f"{' and '.join(f'`{label}`' for label in pii_secondary_labels())} findings inside a reported IBAN "
+        "under `details.secondary_evidence` (T07); evaluations score primary findings only.",
         "",
         "| Rule ID | Result entity group | Extra validator | Validator strength | Base | Context | Score (`balanced`/`recall`) |",
         "| --- | --- | --- | --- | --- | --- | --- |",

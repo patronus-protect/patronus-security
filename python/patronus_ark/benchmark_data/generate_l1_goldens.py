@@ -158,6 +158,25 @@ def pii_row(
     return {**head, **{key: value for key, value in row.items() if key not in head}}
 
 
+def annotate(row: dict, also: tuple[tuple[str, str], ...], outside: tuple[int, int] = (0, 0)) -> None:
+    """Add `also` as `(label, value)` entities; each value occurs once outside `outside`."""
+    text = row["text"]
+    for other_label, other_value in also:
+        starts = [
+            start
+            for start in range(len(text))
+            if text.startswith(other_value, start)
+            and (start + len(other_value) <= outside[0] or start >= outside[1])
+        ]
+        if len(starts) != 1:
+            raise ValueError(f"{other_value!r} must occur once outside the target in {text!r}")
+        start = starts[0]
+        row["entities"].append(
+            {"label": other_label, "text": other_value, "start": start, "end": start + len(other_value)}
+        )
+    row["entities"].sort(key=lambda entity: entity["start"])
+
+
 def p(
     label: str,
     language: str,
@@ -179,21 +198,8 @@ def p(
     the card number next to a CVV. The value must occur exactly once outside the target.
     """
     row = positive(label, language, prefix, value, suffix, source_fixture_id=source_fixture_id)
-    text, target = row["text"], row["entities"][0]
-    for other_label, other_value in also:
-        starts = [
-            start
-            for start in range(len(text))
-            if text.startswith(other_value, start)
-            and (start + len(other_value) <= target["start"] or start >= target["end"])
-        ]
-        if len(starts) != 1:
-            raise ValueError(f"{other_value!r} must occur once outside the target in {text!r}")
-        start = starts[0]
-        row["entities"].append(
-            {"label": other_label, "text": other_value, "start": start, "end": start + len(other_value)}
-        )
-    row["entities"].sort(key=lambda entity: entity["start"])
+    target = row["entities"][0]
+    annotate(row, also, (target["start"], target["end"]))
     return pii_row(row, rule, carrier, tags, gap, mode)
 
 
@@ -206,10 +212,20 @@ def n(
     *,
     carrier: str = "line",
     tags: tuple[str, ...] = (),
+    also: tuple[tuple[str, str], ...] = (),
     mode: str = "strict",
 ) -> dict:
-    """Hard negative: a lookalike for `rule` that no PII rule may report in PII mode `mode`."""
-    return pii_row(negative(label, language, text, reason), rule, carrier, tags, False, mode)
+    """Hard negative: a lookalike for `rule` that no PII rule may report in PII mode `mode`.
+
+    `also` annotates other real entities in the text as `(label, value)` (T07), e.g. the
+    valid IBAN around a card-shaped BBAN: they must be reported as primary findings, and
+    nothing else may be. The target label is never annotated.
+    """
+    if any(other_label == label for other_label, _ in also):
+        raise ValueError(f"a hard negative never annotates its target label {label}")
+    row = negative(label, language, text, reason)
+    annotate(row, also)
+    return pii_row(row, rule, carrier, tags, False, mode)
 
 
 PII_CASES = {
@@ -1219,6 +1235,41 @@ K07_OVERLAP_CASES = [
     n("CREDITCARD", "en", "pii_credit_card", "Refund to AT56 7788 6243 8146 2282 failed.", "IBAN form with failing check digits; the Luhn-valid digits inside it are no card", carrier="prose", mode="balanced"),
 ]
 for _row in K07_OVERLAP_CASES:
+    PII_CASES[_row["target_label"]].append(_row)
+
+# T07 secondary evidence in `strict` (decision 2026-10-14): strict keeps reporting the
+# card-shaped BBAN inside a valid IBAN and FINANCIAL_ACCOUNT_NUMBER on an IBAN value, but
+# marks them as secondary evidence of the IBAN; evaluations score primary findings only.
+# A card or account next to an IBAN stays primary. Every IBAN below passes MOD-97 and its
+# BBAN digits pass Luhn (or it sits under an account field name). Appended so existing
+# ids stay stable.
+T07_STRICT_SECONDARY_CASES = [
+    p("CREDITCARD", "de", "pii_credit_card", "Karte ", "4111 1111 1111 1111", ", IBAN DE18 4306 0967 1234 5678 00", also=(("IBAN", "DE18 4306 0967 1234 5678 00"),)),
+    p("CREDITCARD", "de", "pii_credit_card", "Kreditkarte ", "5555 5555 5555 4444", "; Lastschrift von DE60 5393 3633 8750 0474 39", carrier="prose", also=(("IBAN", "DE60 5393 3633 8750 0474 39"),)),
+    p("CREDITCARD", "de", "pii_credit_card", "Name;Karte;IBAN\nWeber;", "4532 0151 1283 0366", ";DE13 3380 1412 6906 0443 19", carrier="csv", also=(("IBAN", "DE13 3380 1412 6906 0443 19"),)),
+    p("CREDITCARD", "de", "pii_credit_card", "Bitte die Karte ", "5105 1051 0510 5100", " belasten, nicht das Konto DE63 8415 3776 0207 7642 65.", carrier="prose", also=(("IBAN", "DE63 8415 3776 0207 7642 65"),)),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_financial_account_number", "Depotnummer: ", "DP-77120", "\nKontonummer: DE89370400440532013000", carrier="kv", also=(("IBAN", "DE89370400440532013000"),)),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_financial_account_number", "Konto-Nr: ", "KTO-30202", ", IBAN DE21 5873 5570 6360 6071 04", also=(("IBAN", "DE21 5873 5570 6360 6071 04"),)),
+    p("CREDITCARD", "en", "pii_credit_card", "Card ", "4111 1111 1111 1111", ", IBAN DE06 6826 5123 3080 5169 78", also=(("IBAN", "DE06 6826 5123 3080 5169 78"),)),
+    p("CREDITCARD", "en", "pii_credit_card", "Charge ", "5555 5555 5555 4444", " or debit DE18 4306 0967 1234 5678 00.", carrier="prose", also=(("IBAN", "DE18 4306 0967 1234 5678 00"),)),
+    p("CREDITCARD", "en", "pii_credit_card", "name,card,iban\nAda Weber,", "4532 0151 1283 0366", ",DE60 5393 3633 8750 0474 39", carrier="csv", also=(("IBAN", "DE60 5393 3633 8750 0474 39"),)),
+    p("CREDITCARD", "en", "pii_credit_card", "Refund card ", "4012 8888 8888 1881", " instead of IBAN DE21 5873 5570 6360 6071 04.", carrier="prose", also=(("IBAN", "DE21 5873 5570 6360 6071 04"),)),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_financial_account_number", "Account number: ", "ACC-44001234", "\nBank account: GB82WEST12345698765432", carrier="kv", also=(("IBAN", "GB82WEST12345698765432"),)),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_financial_account_number", "Account number ", "ACC-55120", ", IBAN DE06 6826 5123 3080 5169 78", also=(("IBAN", "DE06 6826 5123 3080 5169 78"),)),
+    n("CREDITCARD", "de", "pii_credit_card", "IBAN: DE18 4306 0967 1234 5678 00", "valid IBAN; its Luhn-valid BBAN digits are secondary evidence, no card", also=(("IBAN", "DE18 4306 0967 1234 5678 00"),)),
+    n("CREDITCARD", "de", "pii_credit_card", "Überweisung an DE63 8415 3776 0207 7642 65 erhalten.", "valid IBAN; its Luhn-valid BBAN digits are secondary evidence, no card", carrier="prose", also=(("IBAN", "DE63 8415 3776 0207 7642 65"),)),
+    n("CREDITCARD", "de", "pii_credit_card", '{"iban": "DE21 5873 5570 6360 6071 04"}', "valid IBAN; its Luhn-valid BBAN digits are secondary evidence, no card", carrier="json", also=(("IBAN", "DE21 5873 5570 6360 6071 04"),)),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_financial_account_number", "Kontonummer: GB82WEST12345698765432", "IBAN under an account field name; the account finding is secondary evidence of the IBAN", also=(("IBAN", "GB82WEST12345698765432"),)),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_financial_account_number", "Kontonummer DE21 5873 5570 6360 6071 04 bestätigt.", "IBAN under an account field name; its country code and card-shaped BBAN are secondary evidence", carrier="prose", also=(("IBAN", "DE21 5873 5570 6360 6071 04"),)),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_financial_account_number", '{"kontonummer": "DE89370400440532013000"}', "IBAN under an account key; the account finding is secondary evidence of the IBAN", carrier="json", also=(("IBAN", "DE89370400440532013000"),)),
+    n("CREDITCARD", "en", "pii_credit_card", "IBAN DE60 5393 3633 8750 0474 39 is on file", "valid IBAN; its Luhn-valid BBAN digits are secondary evidence, no card", carrier="prose", also=(("IBAN", "DE60 5393 3633 8750 0474 39"),)),
+    n("CREDITCARD", "en", "pii_credit_card", "Refund sent to DE06 6826 5123 3080 5169 78 today.", "valid IBAN; its Luhn-valid BBAN digits are secondary evidence, no card", carrier="prose", also=(("IBAN", "DE06 6826 5123 3080 5169 78"),)),
+    n("CREDITCARD", "en", "pii_credit_card", "name,iban\nAda Weber,DE13 3380 1412 6906 0443 19", "valid IBAN; its Luhn-valid BBAN digits are secondary evidence, no card", carrier="csv", also=(("IBAN", "DE13 3380 1412 6906 0443 19"),)),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_financial_account_number", "Bank account: GB82WEST12345698765432", "IBAN under an account field name; the account finding is secondary evidence of the IBAN", also=(("IBAN", "GB82WEST12345698765432"),)),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_financial_account_number", "Account number is GB33BUKB20201555555555.", "IBAN under an account field name; the account finding is secondary evidence of the IBAN", carrier="prose", also=(("IBAN", "GB33BUKB20201555555555"),)),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_financial_account_number", "Bank account: DE44 5001 0517 5407 3249 31", "IBAN under an account field name; its country code and card-shaped BBAN are secondary evidence", also=(("IBAN", "DE44 5001 0517 5407 3249 31"),)),
+]
+for _row in T07_STRICT_SECONDARY_CASES:
     PII_CASES[_row["target_label"]].append(_row)
 
 # DLP golden schema v2 (E13). Every DLP row names the rule it exercises (`rule_id`), the

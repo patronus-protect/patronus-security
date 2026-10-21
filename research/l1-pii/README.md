@@ -133,8 +133,9 @@ Text, nicht nur den Ziel-Span (Generator: `also=(Label, Wert)`), z. B. die PAN n
 Ablaufdatum. Gewertet wird weiter nur das Ziel-Label. `rust/tests/pii_gold_hygiene.rs` prüft, dass
 jeder Gold-Wert einen Validator seines Labels besteht (Known Gaps nur bei Luhn, MOD-97 und
 Steuer-ID, nach Rückbau der Obfuskation) und dass jeder weitere L1-Treffer auf einem Positiv Gold
-ist oder als Detektor-FP gelistet ist (PAN in IBAN, Telefonziffern mit gültiger Luhn-Summe, IBAN
-zusätzlich als FINANCIAL_ACCOUNT_NUMBER; T07). Die sieben Luhn-ungültigen `credit_card`-Werte in
+ist oder als Detektor-FP gelistet ist (Telefonziffern mit gültiger Luhn-Summe, PAN in einer noch nicht
+gemeldeten gruppierten Nicht-DE-IBAN). PAN in einer gültigen IBAN und die IBAN als
+FINANCIAL_ACCOUNT_NUMBER sind seit T07 Sekundär-Evidenz und zählen dort nicht. Die sieben Luhn-ungültigen `credit_card`-Werte in
 `dynamic_pii.jsonl` bleiben für L3 im Fixture, tragen `"checksum_valid": false` und zählen in
 `12_l1_pii_fixture_eval` nicht. Validatoren bleiben unverändert.
 
@@ -204,6 +205,15 @@ höherer Score, frühere Regel. Ein Fund in einer gedruckten IBAN-Form (`DE64 71
 wenn deren Prüfziffer fehlschlägt. Der Verlierer verlässt `evidence_spans`, sein `matched_rules`-Eintrag
 nennt `overlap` (`reason`, `yields_to`). `strict` behält beide Labels (Entscheidung T07); andere Labels
 (EMAIL und USERNAME auf einem Wert) behalten ihre Überlappung. Validatoren unverändert.
+
+Seit T07 (Entscheidung 2026-10-14) bleibt `strict` bitgleich in Spans, Klasse und Konfidenz, markiert
+aber eine Karte (`CREDITCARD`) oder Kontonummer (`FINANCIAL_ACCOUNT_NUMBER`) innerhalb einer gemeldeten,
+MOD-97-gültigen IBAN als Sekundär-Evidenz: `details.secondary_evidence` mit `label`, Byte-Offsets,
+`reason` (`iban_value`, `iban_part`) und `primary_label`. Gewertet werden nur Primärfunde:
+`13_l1_golden_eval`, `pii_gold_hygiene.rs` und `run_ark.py` (Scoreboard) lassen Sekundär-Evidenz weg.
+Ein Hard Negative in `pii_l1` darf dafür andere echte Entitäten annotieren (`n(also=…)`, nie das
+Ziel-Label); die Auswertung verlangt genau diese als Primärfunde. Ziffern einer IBAN-Form mit falscher
+Prüfziffer bleiben in `strict` primär.
 
 ## Hebel
 
