@@ -1,0 +1,78 @@
+# Herstellerdokumentierte Beispielwerte und öffentlich bekannte Testschlüssel (K06).
+# Geprüft von rust/tests/dlp_documented_values.rs und dem Unit-Test in
+# rust/src/detectors/dlp/rules/documented.rs (Tabelle dort == diese Datei).
+#
+# Werte stehen hier nie im Klartext, nur als SHA-256 des normalisierten Werts:
+#   - umgebende Anführungszeichen entfernt;
+#   - Hex-Schlüssel (`0x…`): ohne `0x`, klein geschrieben;
+#   - PEM-Blöcke: nur der Base64-Body (Armor, Zeilenumbrüche und JSON-Escapes `\n` entfernt).
+# Die Tests erzeugen die Werte zur Testzeit aus der dokumentierten Quelle (Schlüsselbytes,
+# Claims + HMAC-Schlüssel) und vergleichen die Fingerprints.
+#
+# kind:
+#   example  dokumentierter Beispielwert ohne Funktion: der Treffer entfällt (jede Secret-Regel)
+#   test     öffentlich bekannter Testschlüssel: der Treffer bleibt, `severity: test`
+schema: ark-dlp-documented-values-v1
+
+values:
+  - id: aws_access_key_id_docs
+    rule_id: dlp_aws_access_key
+    kind: example
+    sha256: 1a5d44a2dca19669d72edf4c4f1c27c4c1ca4b4408fbb17f6ce4ad452d78ddb3
+    source: https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html
+    note: "AWS example access key ID (AKIA…EXAMPLE)"
+  - id: aws_secret_access_key_docs
+    rule_id: dlp_aws_secret_key
+    kind: example
+    sha256: 78314b11be2e581549ac1c4f616563fad3fdf0c3b71678f6e2299182080e0598
+    source: https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html
+    note: "AWS example secret access key (…EXAMPLEKEY)"
+  - id: bitcoin_wiki_wif_uncompressed
+    rule_id: dlp_btc_wif
+    kind: example
+    sha256: 9d6a2b9d1f01d4577cbdce4de6f0834ac6b21d675518ace150009338685b5276
+    source: https://en.bitcoin.it/wiki/Wallet_import_format
+    note: "WIF of the wiki example key 0C28FCA3…72AA1D (mainnet, uncompressed)"
+  - id: bitcoin_wiki_wif_compressed
+    rule_id: dlp_btc_wif
+    kind: example
+    sha256: 110040843c3adf0df9dfa12aa89635f8c2a24a7fa0b068d78bc5e5c9f4fe7e30
+    source: https://en.bitcoin.it/wiki/Wallet_import_format
+    note: "WIF of the same wiki example key, compressed public key flag 0x01"
+  - id: rfc8410_ed25519_private_key
+    rule_id: dlp_private_key_block
+    kind: example
+    sha256: 4ff96a60934849a7f7c7733f163824cc22be7da33384bbd0b5de992972ea5586
+    source: https://www.rfc-editor.org/rfc/rfc8410#section-10.3
+    note: "RFC 8410 example Ed25519 PKCS#8 private key (key D4EE72DB…755842)"
+  - id: hardhat_account_0
+    rule_id: dlp_eth_private_key
+    kind: test
+    sha256: bc1a50966c9e6486bc4ebf880b51611a2a97fcb8e7a6976e9b81a9e3e8ca0e3c
+    source: https://hardhat.org/hardhat-network/docs/reference
+    note: "Hardhat Network / Foundry Anvil default account #0 (address 0xf39F…2266), publicly known"
+  - id: hardhat_account_1
+    rule_id: dlp_eth_private_key
+    kind: test
+    sha256: 8335c55334821eefd4334369ff9c04a8594f161013cf9d87f58802d87297837e
+    source: https://hardhat.org/hardhat-network/docs/reference
+    note: "Hardhat Network / Foundry Anvil default account #1 (address 0x7099…79C8), publicly known"
+  - id: hardhat_account_2
+    rule_id: dlp_eth_private_key
+    kind: test
+    sha256: b26ab6529d20ebebb4192256f202984754f785481c64b1a1aed58cac93b3617e
+    source: https://hardhat.org/hardhat-network/docs/reference
+    note: "Hardhat Network / Foundry Anvil default account #2 (address 0x3C44…93BC), publicly known"
+
+# JWTs der Doku tragen feste Claims; erkannt wird jede Signatur und jeder Header (der
+# jwt.io-Debugger signiert dieselben Claims mit HS256, RS256, ES256 …). Ein JWT gilt als
+# Beispiel, wenn sein Payload alle Claims eines Eintrags mit genau diesen Werten enthält.
+jwt_claims:
+  - id: jwt_io_debugger
+    claims: {sub: "1234567890", name: "John Doe"}
+    source: https://jwt.io/
+    note: "default token of the jwt.io debugger and the JWT introduction"
+  - id: rfc7519_example
+    claims: {iss: "joe", exp: 1300819380}
+    source: https://www.rfc-editor.org/rfc/rfc7519#section-3.1
+    note: "RFC 7519 section 3.1 / RFC 7515 appendix A example claims set"

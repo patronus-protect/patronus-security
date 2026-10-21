@@ -463,9 +463,9 @@ impl NativeRegexDetector for DlpPipeline {
     }
 
     /// Drops values below the rule's entropy floor (K02), documented example
-    /// and test values of secret rules (T06) and placeholders and
-    /// environment/template references in the value of value-capturing
-    /// credential rules (T07).
+    /// and test values of secret rules (T06), vendor-documented example values
+    /// (K06) and placeholders and environment/template references in the value
+    /// of value-capturing credential rules (T07, K06).
     fn allows_match(
         &self,
         index: usize,
@@ -490,6 +490,10 @@ impl NativeRegexDetector for DlpPipeline {
         }
         let rule_id = self.rule_ids[index];
         if rules::is_example_match(check, rule_id, text, value.range()) {
+            return false;
+        }
+        if check != ExampleCheck::Off && rules::is_documented_example(rule_id, text, value.range())
+        {
             return false;
         }
         // A generic rule capturing a provider-shaped value applies the
@@ -562,7 +566,12 @@ impl NativeRegexDetector for DlpPipeline {
         );
         details.insert("source_ref".into(), meta.source_ref.into());
         if SECRET_GROUPS.contains(&self.entity_groups[index]) {
-            details.insert("severity".into(), meta.severity(value).as_str().into());
+            let severity = if rules::is_documented_test_value(value) {
+                Severity::Test
+            } else {
+                meta.severity(value)
+            };
+            details.insert("severity".into(), severity.as_str().into());
         }
         details
     }

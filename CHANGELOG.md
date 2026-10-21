@@ -131,6 +131,31 @@ result shapes may be breaking for downstream users, and is called out explicitly
   with T03. **Detection change:** on the dev carrier split, hard-negative FP on `placeholder`/
   `env_ref` rows fall from 277 to 0 with unchanged positives (exact TP 1 183); benign-code dev FP
   fall from 372 to 367 (`your-client-secret-if-required`, `YOUR-API-TOKEN`), benign docs unchanged.
+- DLP allowlist for documented values, test keys and further references (K06). Every secret rule
+  drops vendor-documented example values listed in the new `research/dlp/documented_values.yaml`
+  (AWS documentation keys, the Bitcoin wiki WIF example, the RFC 8410 Ed25519 key), which holds
+  them only as SHA-256 of the normalized value with their source, and every JWT whose claims are
+  the documented example claims of jwt.io (`sub` 1234567890, `name` John Doe) or RFC 7519/7515
+  (`iss` joe, `exp` 1300819380), under any header and signature. Publicly known test keys (Hardhat
+  Network/Foundry Anvil default accounts #0–#2) stay findings with `severity: test`. The
+  value-capturing credential rules of T07 also drop Python `%(name)s` and `{name}`/`{0}`/`{name!r}`,
+  Ruby/Puppet `%{name}`, Maven `@name@`, replace tokens `__NAME__`, cmd `!NAME!`, Concourse
+  `((name))`, the YAML tags `!secret`, `!vault`, `!env_var` and CloudFormation `!Ref`/`!Sub`/…,
+  secret-manager references (1Password `op://`, vals `ref+…://`, Azure `@Microsoft.KeyVault(…)`,
+  AWS Secrets Manager/SSM ARNs, GCP `projects/…/secrets/…`, `/run/secrets/…`, also when the rule
+  captures a part of the ARN), `null`/`None`/`nil`/`undefined`, the JKS default `changeit`,
+  redaction words (`REDACTED`, `***REMOVED***`, `***ENTFERNT***`, `GESCHWAERZT`, `**None**`), the
+  DE last words `…_EINGEBEN`, `…_AUSFUELLEN`, `…_EINSETZEN`, `…_HINTERLEGEN`, and values that only
+  name the credential (`my-access-token`, `secret_token`, `SECRET_PASSWORD`, `MEIN_PASSWORT`,
+  `auth.password`). Delimited names that look like the rest of a password (`{kqztrwx4711}`,
+  `__Kx7pQ2vL9rT4__`) and words outside the credential-name vocabulary (`actual-secret`) stay
+  findings. Inline suppression comments (`gitleaks:allow`, `pragma: allowlist secret`) are
+  deliberately not honoured: in a DLP gateway they would let any sender exempt a secret.
+  **Detection change:** on the dev split, benign-code FP fall from 374 to 350 and benign-docs FP
+  from 4 to 3 (`None`/`null` defaults, `my-access-token`, `auth.password`, `**None**`,
+  `Bearer secret_token`, a jwt.io RS256 documentation token); carrier spans are bit-identical
+  (1 541), no span is new anywhere. 30 new `dlp_l1` goldens (DE/EN, 18 hard negatives, 12 positives)
+  and eight hard negatives in `l1_bilingual_rules.json`.
 - `scripts/l1_dlp/run_baselines.py run --tool detect-secrets` no longer aborts the whole run when
   a plugin raises on one file (a YAML date the detect-secrets YAML transformer cannot parse in the
   benign-code dev split). That file is listed under `errors` in `<output>.meta.json` (row `id`,

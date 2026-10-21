@@ -191,6 +191,7 @@ tasks:
     ext_deps: [pii:K04]
 
   - id: K06
+    status: done
     title: Allowlist/suppression (documented provider example values, placeholders DE/EN, test/sandbox keys as severity test, variable/template references ${}, {{}}, %()s)
     type: precision-fix
     deps: [K02]
