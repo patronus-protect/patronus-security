@@ -9,9 +9,10 @@ use crate::{
     post_prediction::is_real_secret_assignment,
 };
 
-/// GitHub token (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`): after the prefix,
-/// 30 random base62 characters and their CRC32 as six base62 digits.
-fn is_github_token(value: &str) -> bool {
+/// GitHub token (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`) and npm token
+/// (`npm_`, F04): after the four-character prefix, 30 random base62
+/// characters and their CRC32 as six base62 digits.
+fn is_crc32_token(value: &str) -> bool {
     value.len() == 40 && value.get(4..).is_some_and(crc32_base62_valid)
 }
 
@@ -221,7 +222,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         name: "dlp_github_token",
         pattern: r"gh[pousr]_[A-Za-z0-9]{36}",
         entity_group: "SECRET_TOKEN",
-        validator: Some(is_github_token),
+        validator: Some(is_crc32_token),
         span_group: None,
         base_score: 55,
         meta: RuleMeta::new(
@@ -253,9 +254,12 @@ pub(super) const RULES: &[DlpPattern] = &[
         .with_body_len(82, 36)
         .with_subtype(SecretSubtype::AccessToken),
     },
+    // F04: legacy tokens have exactly 20 characters; routable tokens a longer
+    // payload, a dot, a two-character version and a seven-character base36
+    // check value (gitleaks gitlab-pat, gitlab-pat-routable).
     DlpPattern {
         name: "dlp_gitlab_pat",
-        pattern: r"glpat-[a-zA-Z0-9\-_]{20,}",
+        pattern: r"glpat-(?:[A-Za-z0-9_\-]{27,300}\.[0-9a-z]{9}|[A-Za-z0-9_\-]{20})",
         entity_group: "SECRET_TOKEN",
         validator: None,
         span_group: None,
@@ -270,15 +274,73 @@ pub(super) const RULES: &[DlpPattern] = &[
         .with_boundary("-")
         .with_subtype(SecretSubtype::AccessToken),
     },
+    // F04: the other documented GitLab token prefixes, with the lengths of the
+    // gitleaks rules: deploy, runner (also routable), runner registration,
+    // pipeline trigger, feed, incoming mail, Kubernetes agent, CI/CD job, SCIM
+    // and feature flag client tokens.
     DlpPattern {
-        name: "dlp_npm_token",
-        pattern: r"npm_[A-Za-z0-9]{36,}",
+        name: "dlp_gitlab_token",
+        pattern: concat!(
+            r"(?:glrt-t[0-9]_[A-Za-z0-9_\-]{27,300}\.[0-9a-z]{9}",
+            r"|(?:gldt|glrt|glft|glsoat|glffct)-[A-Za-z0-9_\-]{20}",
+            r"|glcbt-[A-Za-z0-9]{1,5}_[A-Za-z0-9_\-]{20}",
+            r"|glimt-[A-Za-z0-9_\-]{25}",
+            r"|glagent-[A-Za-z0-9_\-]{50}",
+            r"|glptt-[0-9a-f]{40}",
+            r"|GR1348941[A-Za-z0-9_\-]{20})",
+        ),
         entity_group: "SECRET_TOKEN",
         validator: None,
         span_group: None,
-        base_score: 50,
+        base_score: 55,
         meta: RuleMeta::new(
             ValidatorStrength::Format,
+            "https://docs.gitlab.com/security/tokens/#token-prefixes",
+            &[
+                "gldt-",
+                "glrt-",
+                "glft-",
+                "glsoat-",
+                "glffct-",
+                "glcbt-",
+                "glimt-",
+                "glagent-",
+                "glptt-",
+                "gr1348941",
+            ],
+        )
+        .with_provider("gitlab")
+        .with_min_entropy(3.0)
+        .with_boundary("-")
+        .with_subtype(SecretSubtype::AccessToken),
+    },
+    DlpPattern {
+        name: "dlp_gitlab_oauth_secret",
+        pattern: r"gloas-[A-Za-z0-9_\-]{64}",
+        entity_group: "API_KEY",
+        validator: None,
+        span_group: None,
+        base_score: 55,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:gitlab-oauth-app-secret",
+            &["gloas-"],
+        )
+        .with_provider("gitlab")
+        .with_min_entropy(3.0)
+        .with_boundary("-")
+        .with_subtype(SecretSubtype::SecretKey),
+    },
+    // F04: npm tokens carry a CRC32 like GitHub tokens.
+    DlpPattern {
+        name: "dlp_npm_token",
+        pattern: r"npm_[A-Za-z0-9]{36}",
+        entity_group: "SECRET_TOKEN",
+        validator: Some(is_crc32_token),
+        span_group: None,
+        base_score: 50,
+        meta: RuleMeta::new(
+            ValidatorStrength::Checksum,
             "gitleaks:npm-access-token",
             &["npm_"],
         )
