@@ -560,6 +560,29 @@ impl DlpPipeline {
         detection
     }
 
+    /// F03: whether `value`, without leading quotes, starts with a whole
+    /// token of a prefixed provider rule with a checksum (GitHub `ghp_` …)
+    /// whose checksum fails, as in `ghp_…` or `ghp_…@github.com/acme/app`.
+    fn fails_token_checksum(&self, value: &str) -> bool {
+        let value = value.trim_start_matches(['"', '\'', '`']);
+        (0..self.regexes.len()).any(|index| {
+            let meta = &self.metas[index];
+            meta.validator_strength == ValidatorStrength::Checksum
+                && meta.keywords.iter().any(|keyword| {
+                    value
+                        .get(..keyword.len())
+                        .is_some_and(|head| head.eq_ignore_ascii_case(keyword))
+                })
+                && self.regexes[index].find(value).is_some_and(|token| {
+                    token.start() == 0
+                        && !value[token.end()..]
+                            .starts_with(|c: char| c.is_ascii_alphanumeric() || c == '_')
+                        && self.validators[index]
+                            .is_some_and(|validator| !validator(token.as_str()))
+                })
+        })
+    }
+
     /// Values that fixed-format rules (provider tokens, keys, hashes) match
     /// inside `range` of `text`, so that a generic rule capturing such a value
     /// applies the fixed-format example check to it (T06). Only the line around
@@ -705,6 +728,11 @@ impl NativeRegexDetector for DlpPipeline {
         }
         if check != ExampleCheck::Off && rules::is_documented_example(rule_id, text, value.range())
         {
+            return false;
+        }
+        // F03: a generic rule's value that is a checksummed provider token
+        // with a wrong checksum is no secret of that provider either.
+        if check == ExampleCheck::Generic && self.fails_token_checksum(value.as_str()) {
             return false;
         }
         // A generic rule capturing a provider-shaped value applies the

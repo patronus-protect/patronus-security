@@ -79,11 +79,11 @@ rules:
   dlp_github_token:
     provider: github
     source_ref: gitleaks:github-pat
-    format: "ghp_/gho_/ghu_/ghs_/ghr_ prefix, 36 base62 characters (30 random + CRC32, F03)"
+    format: "ghp_/gho_/ghu_/ghs_/ghr_ prefix, exactly 36 base62 characters: 30 random and their CRC32 as 6 base62 digits (GitHub token format, 2021; F03)"
   dlp_github_pat:
     provider: github
     source_ref: gitleaks:github-fine-grained-pat
-    format: "github_pat_ prefix, base62 and underscore body"
+    format: "github_pat_ prefix, exactly 82 base62 and underscore characters (F03)"
   dlp_gitlab_pat:
     provider: gitlab
     source_ref: gitleaks:gitlab-pat
