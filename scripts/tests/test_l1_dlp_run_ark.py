@@ -521,11 +521,12 @@ def test_real_binding_respects_default_off_content_rules(tmp_path):
 def test_real_binding_scores_spans_in_the_recall_mode(tmp_path):
     from patronus_ark.dlp_synth import recipes
 
-    # K04: a hex value without a credential term scores 0.40 (kept by recall, below balanced);
-    # next to a digest term it is dropped; a field-bound password scores 0.60. Strict scores 1.0.
+    # K04: a wallet key without a credential term (only the F01 key context "signer") scores
+    # 0.40 (kept by recall, below balanced); next to a digest term it is dropped, since F01
+    # also in strict; a field-bound password scores 0.60. Strict scores 1.0.
     hex_value = lambda seed: recipes.generate("eth_private_key_hex", seed)  # noqa: E731
     data = [
-        {"id": "bare", "text": f"state root {hex_value(1)} ok"},
+        {"id": "bare", "text": f"signer {hex_value(1)} ok"},
         {"id": "counter", "text": f"tx hash: {hex_value(2)}"},
         {"id": "field", "text": "password: Sommer2026!x"},
     ]
@@ -538,6 +539,6 @@ def test_real_binding_scores_spans_in_the_recall_mode(tmp_path):
         assert meta["engine"].get("dlp_mode", "strict") == mode
         scores[mode] = {row["id"]: [span["score"] for span in row["evidence_spans"]]
                         for row in map(json.loads, out.read_text(encoding="utf-8").splitlines())}
-    assert scores["strict"] == {"bare": [1.0], "counter": [1.0], "field": [1.0]}
+    assert scores["strict"] == {"bare": [1.0], "counter": [], "field": [1.0]}
     assert scores["balanced"] == {"bare": [], "counter": [], "field": [0.6]}
     assert scores["recall"] == {"bare": [0.4], "counter": [], "field": [0.6]}
