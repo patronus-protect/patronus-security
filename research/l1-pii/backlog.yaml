@@ -279,6 +279,7 @@ tasks:
 
   # infra: M1/M2 are judged on balanced (T15 decision), the gate guards strict + balanced
   - id: B-EVAL
+    status: done
     title: Score strict and balanced for head and base (milestones on balanced) + report gold gaps of the neutral corpora separately
     type: eval-infra
     deps: [E06, K02]

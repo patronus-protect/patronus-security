@@ -31,6 +31,31 @@ SHA-gepinnt). Presidio läuft in zwei Profilen: `default` und `tuned` (spaCy `en
 
 PERSON/LOCATION/ORG/NRP sind kein L1-Scope; dort tritt L1 + `dynamic-pii` (GLiNER L3) an.
 
+## Messmodus und Gold-Lücken (T15, T16)
+
+Entschieden am 2026-10-21 (TRIAGE 2026-W43, Abschnitt Modus und Buckets 13 + 14; umgesetzt in B-EVAL).
+
+- **Meilensteine auf `balanced`:** M1–M3 und „Immer“ werden im PII-Modus `balanced` gemessen, dem
+  Modus, der gegen Presidio tuned (kontextfreie Muster, Kontext hebt den Score, Schwelle 0,4) antritt.
+  `strict` bleibt der Standard des Builds und wird weiter berichtet, entscheidet aber keinen Meilenstein.
+  `scoreboard.py m1` und `report` drucken jeden übergebenen Modus und lesen das Urteil aus `balanced`.
+- **Das Gate schützt beide Modi:** `scoreboard.py gate` rechnet Head und Basis in `strict` und in
+  `balanced` und ist rot bei > 0,5 pp F1-Verlust (je Entität, alle L1-IDs, Familie, DE/EN, exakt oder
+  überlappend) oder einem neuen Hard-Negative-Treffer in **einem** der beiden Modi. Ein Gewinn in einem
+  Modus gleicht keinen Verlust im anderen aus.
+- **`strict` ändert sich nur mit Absicht:** Die Ausgabe von `strict` (Spans, Klasse, Konfidenz) ändert
+  sich nur dort, wo die Akzeptanz einer Aufgabe das ausdrücklich sagt; sonst bleibt sie bitgleich.
+- **Gold-Lücken werden getrennt berichtet (Option a):** Die Wertung bleibt unverändert, die Korpora
+  werden nie bearbeitet. `scoreboard.py report` zählt je Korpus und Entität und für jede Engine (ARK je
+  Modus, Presidio je Profil) zwei Buckets: Vorhersagen, die unter exakter Wertung FP sind und deren Wert
+  einem annotierten Gold-Wert derselben ID an anderer Stelle der Zeile gleicht (ohne umgebende Klammern,
+  Anführungszeichen, Satzzeichen und `mailto:`; z. B. die nicht annotierte Kopie in
+  `[x@y.com](mailto:x@y.com)`), und Gold-Werte, die keinen Prüfziffer-Validator ihrer ID bestehen (mit
+  der Zahl, die jede Engine trotzdem exakt meldet). Kein Gate- oder Meilenstein-Wert ändert sich dadurch.
+  Die Validatoren laufen als Python-Ports der Rust-Funktionen (`CHECKSUM_PORTS` in `scoreboard.py`); eine
+  Aufgabe, die in `checksums.ark` einen Prüfziffer-Validator einstuft, portiert ihn dort, sonst ist
+  `scripts/tests/test_l1_scoreboard.py` rot.
+
 ## Fairness-Regel: Quellfamilien
 
 Festgelegt mit E12. Gold, das ARK selbst geschrieben hat, begünstigt ARK; Gold aus Presidios eigenem
@@ -297,9 +322,10 @@ run.sh
   Dazu kommt das synthetische DE/EU-Goldset aus `scripts/l1_presidio/synth_goldset.py` unter
   `…/synthetic/`: Dev mit öffentlichem Seed, Holdout mit geheimem Seed (`~/ark-l1/holdout/synthetic/.seed`),
   ebenfalls einmalig vom Gate erzeugt (Schritt `synthetic-goldset`, erst nach Neuinstallation des Runners).
-- **Scoreboard:** `scripts/l1_presidio/scoreboard.py gate` rechnet Head und Basis (exakt und
-  überlappend, je Entität, DE/EN, je Quellfamilie, Hard-Negative-FP) auf Dev und Holdout; Exit 1 bei > 0,5 pp
-  F1-Verlust oder neuem Hard-Negative-Treffer. Lokal mit `--dev "$ARK_L1_DEV_DATA"` ohne
+- **Scoreboard:** `scripts/l1_presidio/scoreboard.py gate` rechnet Head und Basis in den PII-Modi
+  `strict` und `balanced` (exakt und überlappend, je Entität, DE/EN, je Quellfamilie, Hard-Negative-FP)
+  auf Dev und Holdout; Exit 1 bei > 0,5 pp F1-Verlust oder neuem Hard-Negative-Treffer in einem der
+  beiden Modi (T15). Lokal mit `--dev "$ARK_L1_DEV_DATA"` ohne
   `--holdout`; Details in [`scripts/l1_presidio/README.md`](../../scripts/l1_presidio/README.md).
 - **Beobachten:** `~/ark-l1/bin/ark-l1 status`, Logs unter `~/ark-l1/logs/`, PR-Mails von GitHub.
   `ark-l1 unblock <ID>` gibt blockierte Aufgaben frei.
