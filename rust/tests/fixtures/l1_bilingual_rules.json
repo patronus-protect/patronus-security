@@ -59,6 +59,16 @@
     "rule_id": "pii_phone_international",
     "de": "Telefon: +491701234567",
     "en": "Phone: +491701234567",
+    "hard_negatives": {
+      "de": [
+        "Kopfsegment: UNB+UNOC:3+520173321::2+520173321::4+202202150830+1323327835++STA'",
+        "Käufer: NAD+BY+987654321::9'"
+      ],
+      "en": [
+        "Interchange header: UNB+UNOC:3+5010500154:1+5020022223:1+190101:0930+2'",
+        "SWIFT narrative block {86:+330105789456}"
+      ]
+    },
     "language_neutral": false,
     "balanced": {
       "context": {
@@ -84,6 +94,14 @@
     "rule_id": "pii_phone_de",
     "de": "Telefon: +49 1701234567",
     "en": "Phone: +49 1701234567",
+    "hard_negatives": {
+      "de": [
+        "Lieferant: NAD+SU+4930123456789::9'"
+      ],
+      "en": [
+        "Supplier party: NAD+SU+4930123456789::9'"
+      ]
+    },
     "language_neutral": false,
     "balanced": {
       "context": {
@@ -123,6 +141,16 @@
     "rule_id": "pii_phone_us",
     "de": "Telefon: 212-555-1234",
     "en": "Phone: 212-555-1234",
+    "hard_negatives": {
+      "de": [
+        "X12-Bestellung: ST*850*0000012345~",
+        "Personnummer: 811228-9874"
+      ],
+      "en": [
+        "Closing balance field: :62F:/0000001234/",
+        "Swedish personal identity number: 811228-9874"
+      ]
+    },
     "language_neutral": false,
     "balanced": {
       "context": {
