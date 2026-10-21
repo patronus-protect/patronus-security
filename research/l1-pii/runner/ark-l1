@@ -105,6 +105,8 @@ BRANCH_PREFIX = P["prefix"]
 BACKLOG = P["backlog"]
 MAX_OPEN = 15
 NOTHING = 10
+# Squash-merge the bottom stack PR once its GitHub CI is green (decided 2026-10-21); 0 turns it off.
+AUTO_MERGE = os.environ.get("ARK_L1_AUTO_MERGE", "1") != "0"
 
 CURRENT = STATE / "current.json"
 
@@ -202,7 +204,7 @@ def branch_number(name: str) -> int:
 def prs(state: str) -> list[dict]:
     out = run([
         "gh", "pr", "list", "--repo", GH_REPO, "--label", LABEL, "--state", state, "--limit", "200",
-        "--json", "number,headRefName,baseRefName,headRefOid,state,url,mergeable",
+        "--json", "number,headRefName,baseRefName,headRefOid,state,url,mergeable,isDraft",
     ])
     return [p for p in json.loads(out) if p["headRefName"].startswith(BRANCH_PREFIX)]
 
@@ -404,6 +406,52 @@ def mark_done_text(text: str, task_id: str) -> str:
     return "".join(lines)
 
 
+# ── auto-merge ───────────────────────────────────────────────────────────
+
+
+def ci_state(head: str) -> str:
+    """'green', 'red' or 'pending' for the GitHub check runs on head (same rule as `ci`)."""
+    try:
+        checks = json.loads(run(["gh", "api", f"repos/{GH_REPO}/commits/{head}/check-runs?per_page=100"]))[
+            "check_runs"]
+    except (RuntimeError, ValueError, KeyError):
+        return "pending"
+    names = {c["name"] for c in checks}
+    if not CI_REQUIRED <= names or any(c["status"] != "completed" for c in checks):
+        return "pending"
+    return "green" if all(c["conclusion"] in OK_CONCLUSIONS for c in checks) else "red"
+
+
+def auto_merge(open_prs: list[dict]) -> bool:
+    """Squash-merge the bottom stack PR when it targets main, is mergeable and its CI is green.
+
+    At most one per run: the PR above it is rebased onto the squash commit by `restack` and needs
+    a fresh CI run before it can follow. The repository deletes merged branches, so GitHub moves
+    the next PR to main by itself."""
+    if not AUTO_MERGE or not open_prs:
+        return False
+    bottom = min(open_prs, key=lambda p: branch_number(p["headRefName"]))
+    label = f"#{bottom['number']} {bottom['headRefName']}"
+    if bottom["baseRefName"] != "main" or bottom.get("isDraft"):
+        print(f"AUTO_MERGE_SKIP={label} (base {bottom['baseRefName']}, draft {bottom.get('isDraft')})")
+        return False
+    if bottom.get("mergeable") != "MERGEABLE":
+        print(f"AUTO_MERGE_WAIT={label} mergeable={bottom.get('mergeable')}")
+        return False
+    state = ci_state(bottom["headRefOid"])
+    if state != "green":
+        print(f"AUTO_MERGE_WAIT={label} CI {state}")
+        return False
+    try:
+        run(["gh", "pr", "merge", str(bottom["number"]), "--repo", GH_REPO, "--squash",
+             "--match-head-commit", bottom["headRefOid"]])
+    except RuntimeError as err:
+        print(f"AUTO_MERGE_ERROR={label}: {str(err).strip().splitlines()[-1]}")
+        return False
+    print(f"AUTO_MERGED={label}")
+    return True
+
+
 # ── subcommands ──────────────────────────────────────────────────────────
 
 
@@ -419,6 +467,10 @@ def cmd_next() -> int:
     git("fetch", "--quiet", "--prune", "origin")
     git("checkout", "--quiet", "--detach", "origin/main")
     open_prs = prs("open")
+    if auto_merge(open_prs):
+        git("fetch", "--quiet", "--prune", "origin")
+        git("checkout", "--quiet", "--detach", "origin/main")
+        open_prs = prs("open")
     top, conflict = restack(open_prs)
     if conflict is not None:
         if conflict.get("push_error"):
