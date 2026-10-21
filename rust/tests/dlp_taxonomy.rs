@@ -8,7 +8,10 @@
 use std::collections::BTreeSet;
 
 use patronus_ark::{
-    detectors::dlp::dlp::{SecretSubtype, DLP_PATTERNS},
+    detectors::{
+        dlp::dlp::{SecretSubtype, DLP_PATTERNS},
+        validators::crc32_base62,
+    },
     golden_recipes::SplitMix64,
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
@@ -150,6 +153,12 @@ fn matched_rule(result: &SecurityScanResult, rule_id: &str) -> serde_json::Value
         .unwrap_or_else(|| panic!("{rule_id} must match"))
 }
 
+/// A `ghp_` token with a random body and its CRC32 suffix (F03).
+fn github_token(seed: u64) -> String {
+    let body = random_body(seed, BASE62, 30);
+    format!("{}{body}{}", "ghp_", crc32_base62(&body))
+}
+
 fn random_body(seed: u64, alphabet: &str, len: usize) -> String {
     let alphabet = alphabet.as_bytes();
     let mut rng = SplitMix64::new(seed);
@@ -229,7 +238,7 @@ fn every_secret_rule_declares_a_subtype_of_its_group() {
 fn matched_rules_report_the_subtype() {
     let cases = [
         (
-            format!("GITHUB_TOKEN={}{}", "ghp_", random_body(21, BASE62, 36)),
+            format!("GITHUB_TOKEN={}", github_token(21)),
             "dlp_github_token",
             "access_token",
             Some("github"),
@@ -283,7 +292,7 @@ fn identifier_and_content_rules_report_no_subtype() {
 
 #[test]
 fn spans_keep_the_group_label() {
-    let text = format!("GITHUB_TOKEN={}{}", "ghp_", random_body(24, BASE62, 36));
+    let text = format!("GITHUB_TOKEN={}", github_token(24));
     let result = scan(&text);
     assert_eq!(result.class_name, "SECRET_TOKEN");
     assert!(result

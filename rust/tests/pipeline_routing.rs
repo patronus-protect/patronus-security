@@ -605,11 +605,11 @@ fn rule_gates_filter_individual_dlp_and_injection_rules() {
     dlp.set_execution_gates(
         ScanGateMatrix::all_enabled().with_rule("dlp_password_assignment", false),
     );
-    let dlp_results = dlp.scan_all(concat!(
-        "password = CorrectHorseBatteryStaple\n",
-        "ghp_",
-        "K7QZM2XWP9RDT4HB",
-        "N8YC3JLA6VFE0GU1"
+    // A GitHub token with its CRC32 suffix, computed here (F03).
+    let body = concat!("K7QZM2XWP9RDT4HB", "N8YC3JLA6VFE0G");
+    let dlp_results = dlp.scan_all(&format!(
+        "password = CorrectHorseBatteryStaple\nghp_{body}{}",
+        patronus_ark::detectors::validators::crc32_base62(body)
     ));
     let native_dlp = dlp_results
         .iter()

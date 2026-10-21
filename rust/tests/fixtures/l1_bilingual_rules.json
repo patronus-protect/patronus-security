@@ -781,6 +781,16 @@
         "seed": 1
       }
     ],
+    "hard_negatives": {
+      "de": [
+        "Platzhalter in der Doku: GITHUB_TOKEN=<dein-token>",
+        "Abgeschnittenes Token im Ticket: ghp_4WW5PUgz…"
+      ],
+      "en": [
+        "export GH_TOKEN=\"$(gh auth token)\"",
+        "GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}"
+      ]
+    },
     "language_neutral": true,
     "balanced": {
       "context": {
@@ -800,6 +810,14 @@
         "seed": 1
       }
     ],
+    "hard_negatives": {
+      "de": [
+        "Gekürzt im Audit-Log: github_pat_11AB…"
+      ],
+      "en": [
+        "Fine-grained tokens look like github_pat_<22 characters>_<59 characters>."
+      ]
+    },
     "language_neutral": true
   },
   {

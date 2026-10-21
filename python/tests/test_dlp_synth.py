@@ -189,6 +189,19 @@ SHAPE_ONLY_FAILURES = {
     "pem_rsa_private_key": pem("RSA PRIVATE KEY", checks.is_valid_pkcs1_rsa),
 }
 
+# F03 lookalikes: the rule's shape with a wrong check value or length.
+LOOKALIKE_FAILURES = {
+    **{
+        f"github_{prefix}_bad_crc": (lambda prefix: lambda v: checks.has_valid_crc32_suffix(v, f"{prefix}_"))(prefix)
+        for prefix in ("ghp", "gho", "ghu", "ghs", "ghr")
+    },
+    "github_ghp_short": lambda v: len(v) == 40,
+    "github_gho_short": lambda v: len(v) == 40,
+    "github_ghp_long": lambda v: len(v) == 40,
+    "github_fine_grained_pat_short": lambda v: len(v) == 93,
+    "github_fine_grained_pat_long": lambda v: len(v) == 93,
+}
+
 
 def valid_generators():
     names = set()
@@ -211,7 +224,12 @@ class GeneratorSpecTests(unittest.TestCase):
             self.assertFalse(set(entry["generators"]) & set(entry.get("shape_only", [])), rule_id)
             self.assertGreaterEqual(len(entry["probes"]), 2, rule_id)
             self.assertFalse(set(entry["generators"]) & set(entry.get("weak", [])), rule_id)
-            referenced.update(entry["generators"], entry.get("shape_only", []), entry.get("weak", []))
+            self.assertFalse(
+                set(entry.get("lookalike", [])) & set(entry["generators"] + entry.get("weak", [])), rule_id
+            )
+            referenced.update(
+                entry["generators"], entry.get("shape_only", []), entry.get("weak", []), entry.get("lookalike", [])
+            )
         self.assertEqual(referenced, set(recipes.load_generators()))
 
     def test_every_valid_generator_has_an_independent_check(self):
@@ -258,6 +276,22 @@ class StructureTests(unittest.TestCase):
         for name, check in SHAPE_ONLY_FAILURES.items():
             for seed in range(8):
                 self.assertFalse(check(recipes.generate(name, seed)), f"{name} seed={seed}")
+
+    def test_lookalike_generators_fail_their_check(self):
+        lookalike = set()
+        for entry in rules.load_rule_map().values():
+            lookalike.update(entry.get("lookalike", []))
+        self.assertEqual(set(LOOKALIKE_FAILURES), lookalike)
+        for name, check in LOOKALIKE_FAILURES.items():
+            for seed in SEEDS:
+                self.assertFalse(check(recipes.generate(name, seed)), f"{name} seed={seed}")
+
+    def test_weak_github_token_keeps_its_repeated_chunk_and_a_valid_crc32(self):
+        # F03: dlp_github_token checks the CRC32 over all 30 body characters.
+        for seed in SEEDS:
+            value = recipes.generate("weak_repeated_chunk_github_token", seed)
+            self.assertTrue(checks.has_valid_crc32_suffix(value, "ghp_"), f"seed={seed}")
+            self.assertEqual(value[14:26], "Zq7" * 4, f"seed={seed}")
 
     def test_checksum_checks_reject_a_single_changed_character(self):
         cases = {
@@ -343,6 +377,24 @@ class RuleProbeTests(unittest.TestCase):
                 )
         self.gateway.set_execution_gates(None)
 
+    def test_rules_do_not_report_their_lookalike_values(self):
+        # F03: a token shape with a wrong check value or length is no match for its rule.
+        checked = 0
+        for rule_id in rules.load_rule_map():
+            self.gateway.set_execution_gates(
+                {"rules": {other: other == rule_id for other in self.all_rules}}
+            )
+            for sample in rules.samples(rule_id, range(8), lookalike=True):
+                spans = [
+                    span
+                    for result in self.gateway.scan_category("dlp", sample.text)
+                    if result["model"] == "native:dlp"
+                    for span in result["evidence_spans"]
+                ]
+                self.assertEqual(spans, [], f"{rule_id} gen={sample.generator} probe={sample.probe} seed={sample.seed}")
+                checked += 1
+        self.gateway.set_execution_gates(None)
+        self.assertGreater(checked, 0)
 
 if __name__ == "__main__":
     unittest.main()

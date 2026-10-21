@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! T06: documented example and test values of secret rules are no findings,
 //! while the same shapes with a random body and weak but real credentials
-//! stay detected. Values are synthetic shapes without valid checksums.
+//! stay detected. Values are synthetic shapes without valid checksums; GitHub
+//! tokens get their CRC32 suffix here at test time (F03).
 
 use std::sync::OnceLock;
 
-use patronus_ark::{SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult};
+use patronus_ark::{
+    detectors::validators::crc32_base62, SecurityCategory, SecurityGateway, SecurityLevel,
+    SecurityScanResult,
+};
 
 fn scan(text: &str) -> SecurityScanResult {
     static SCANNER: OnceLock<SecurityGateway> = OnceLock::new();
@@ -57,6 +61,12 @@ fn assert_silent(text: &str) {
         "example value reported in {text:?}: {:#?}",
         result.evidence_spans
     );
+}
+
+/// A `ghp_` token whose 30 body characters `body` end in their CRC32 (F03).
+fn github_token(body: &str) -> String {
+    assert_eq!(body.len(), 30, "{body}");
+    format!("ghp_{body}{}", crc32_base62(body))
 }
 
 fn fill(word: &str, length: usize) -> String {
@@ -381,7 +391,10 @@ fn provider_values_with_a_random_body_stay_detected_in_de_and_en() {
             continue; // Base58Check: a random body has no valid checksum (dlp_btc_wif.rs)
         }
         let body = random(index as u64 + 1, shape.alphabet, shape.length);
-        let value = format!("{}{body}{}", shape.prefix, shape.suffix);
+        let value = match shape.rule_id {
+            "dlp_github_token" => github_token(&body),
+            _ => format!("{}{body}{}", shape.prefix, shape.suffix),
+        };
         for carrier in [shape.carrier_de, shape.carrier_en] {
             assert_reported(&carrier.replace("{}", &value), shape.rule_id, &value);
         }
@@ -487,11 +500,11 @@ fn weak_but_real_credentials_stay_detected() {
         "dlp_env_var_secret",
         "deadbeefdeadbeef",
     );
-    let github = format!(
-        "ghp_{}Zq7Zq7Zq7Zq7{}",
+    let github = github_token(&format!(
+        "{}Zq7Zq7Zq7Zq7{}",
         random(9, ALNUM, 12),
-        random(10, ALNUM, 12)
-    );
+        random(10, ALNUM, 6)
+    ));
     assert_reported(
         &format!("GITHUB_TOKEN={github}"),
         "dlp_github_token",
@@ -544,14 +557,14 @@ fn provider_values_with_one_sequential_run_need_example_context() {
     let values = [
         (
             "dlp_aws_access_key",
-            concat!("AKIA", "1234567890", "ABCDEF"),
+            concat!("AKIA", "1234567890", "ABCDEF").to_owned(),
         ),
         (
             "dlp_github_token",
-            concat!("ghp_", "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "123456"),
+            github_token(concat!("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "1234")),
         ),
     ];
-    for (rule_id, value) in values {
+    for (rule_id, value) in &values {
         for text in [
             format!("GITHUB_TOKEN={value}"),
             format!("const token = '{value}';"),

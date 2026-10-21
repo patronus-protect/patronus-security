@@ -362,6 +362,22 @@ fn is_glued(template: &str) -> bool {
 }
 
 /// F01: whether `rule_id` reports a value only in its key context.
+/// F03: generators in a rule's shape with a wrong check value or length (`lookalike` in
+/// `dlp_synth/rules.json`). They are no secret, so hard negatives hold them as plain recipes.
+fn lookalike_generators() -> Vec<String> {
+    let raw = std::fs::read_to_string(repo_root().join("python/patronus_ark/dlp_synth/rules.json"))
+        .expect("rules.json must exist");
+    let map: serde_json::Value = serde_json::from_str(&raw).expect("valid rules.json");
+    map["rules"]
+        .as_object()
+        .expect("rules object")
+        .values()
+        .filter_map(|entry| entry["lookalike"].as_array())
+        .flatten()
+        .map(|name| name.as_str().expect("generator name").to_owned())
+        .collect()
+}
+
 fn is_context_gated(rule_id: Option<&str>) -> bool {
     rule_id.is_some_and(|rule_id| {
         DLP_PATTERNS
@@ -373,6 +389,7 @@ fn is_context_gated(rule_id: Option<&str>) -> bool {
 #[test]
 fn recipe_rows_materialize_identically_to_the_python_generator() {
     let generators = generators();
+    let lookalikes = lookalike_generators();
     let mut recipe_rows = 0;
     for row in rows() {
         let secret_positive =
@@ -399,13 +416,17 @@ fn recipe_rows_materialize_identically_to_the_python_generator() {
             // context marks it as no secret; it is no example value. So is a
             // value glued into a longer run (T01), which is no whole token. A
             // context-gated rule (F01) may have either: an example value or a
-            // generated value without key context.
+            // generated value without key context. A lookalike value (F03) has a
+            // wrong check value or length and is no secret either.
             assert!(row.entities.is_empty(), "{}", row.id);
             if is_context_gated(row.rule_id.as_deref()) {
                 continue;
             }
-            let plain =
-                row.dlp_mode.as_deref().is_some_and(|mode| mode != "strict") || is_glued(template);
+            let plain = row.dlp_mode.as_deref().is_some_and(|mode| mode != "strict")
+                || is_glued(template)
+                || recipes
+                    .iter()
+                    .all(|recipe| lookalikes.contains(&recipe.gen));
             assert!(
                 recipes.iter().all(|recipe| recipe.fill.is_some() != plain),
                 "{}: strict hard negatives use fill recipes, scored and glued ones plain recipes",

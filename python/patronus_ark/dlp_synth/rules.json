@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "note": "Maps every dlp_* rule in DLP_PATTERNS to the generators whose values it must find. Each probe is a minimal carrier; the rule alone must report exactly the <<secret:0>> span. shape_only generators predate E03 and are format-shaped without a valid checksum or structure; they stay for the E02 goldens. weak generators are real values the rule must keep reporting: low-variety values outside example context (T06: repeated chunk, sequential run) and placeholder-like shapes (T07: SCREAMING_SNAKE without a placeholder word, leading $ with digits); carriers do not use them. Content rules have no secret value and are covered by carrier templates (E04).",
+  "note": "Maps every dlp_* rule in DLP_PATTERNS to the generators whose values it must find. Each probe is a minimal carrier; the rule alone must report exactly the <<secret:0>> span. shape_only generators predate E03 and are format-shaped without a valid checksum or structure; they stay for the E02 goldens. weak generators are real values the rule must keep reporting: low-variety values outside example context (T06: repeated chunk, sequential run) and placeholder-like shapes (T07: SCREAMING_SNAKE without a placeholder word, leading $ with digits); carriers do not use them. lookalike generators (F03) are values in the rule's shape with a wrong check value or length that the rule must not report; goldens use them as hard negatives in carriers without key context. Content rules have no secret value and are covered by carrier templates (E04).",
   "rules": {
     "dlp_anthropic_key": {
       "generators": ["anthropic_api_key", "anthropic_admin_key"],
@@ -58,11 +58,13 @@
     "dlp_github_token": {
       "generators": ["github_ghp_token", "github_gho_token", "github_ghu_token", "github_ghs_token", "github_ghr_token"],
       "shape_only": ["github_pat_classic"],
+      "lookalike": ["github_ghp_bad_crc", "github_gho_bad_crc", "github_ghu_bad_crc", "github_ghs_bad_crc", "github_ghr_bad_crc", "github_ghp_short", "github_gho_short", "github_ghp_long"],
       "weak": ["weak_repeated_chunk_github_token"],
       "probes": ["GITHUB_TOKEN=<<secret:0>>", "git clone https://x-access-token:<<secret:0>>@github.com/acme/app.git"]
     },
     "dlp_github_pat": {
       "generators": ["github_fine_grained_pat"],
+      "lookalike": ["github_fine_grained_pat_short", "github_fine_grained_pat_long"],
       "probes": ["GH_TOKEN=<<secret:0>>", "Neuer Fine-grained Token: <<secret:0>>"]
     },
     "dlp_gitlab_pat": {
