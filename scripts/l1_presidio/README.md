@@ -284,6 +284,27 @@ und es mindestens eine gibt; `M1: MET` nur, wenn `neutral` und `presidio_favored
 halten. `ark_authored` wird gedruckt, entscheidet aber nicht. `--check` endet mit Exit 1, wenn M1
 nicht erfüllt ist; fehlende Vorhersagedateien sind Exit 2.
 
+### M2 je Quellfamilie
+
+`m2` liest dieselben Vorhersage-Verzeichnisse wie `m1` und prüft die M2-Regel (D-M2, Entscheidung
+2026-10-21):
+
+```bash
+python3 scripts/l1_presidio/scoreboard.py m2 --gold "$ARK_L1_DEV_DATA" \
+  --ark strict=/tmp/ark-strict --ark balanced=/tmp/ark-balanced \
+  --presidio /tmp/presidio-tuned   # [--language de|en|all] [--metric exact|overlap] [--json F]
+```
+
+Je Familie: Macro-F1 = ungewichtetes Mittel des F1 über alle `shared`- und `ark_only`-IDs mit Gold auf
+deutschen Zeilen der Familie (exakte Spans; für Presidio zählt eine `ark_only`-ID mit F1 0).
+`presidio_only`-IDs mit Gold stehen als `excluded` in der Ausgabe und zählen erst, wenn
+`entity_map.yaml` sie `shared` führt (ARK hat dann ein Label dafür); `semantic` zählt nie. `neutral`
+hält bei Macro-F1(ARK) ≥ Macro-F1(Presidio) + 15 pp, `presidio_favored` bei Macro-F1(ARK) ≥
+Macro-F1(Presidio), jeweils nur mit mindestens einer ID. `ark_authored` wird mit +15 pp gedruckt und
+entscheidet nicht. Jeder Modus erscheint als eigener Abschnitt; `M2: MET|NOT MET (balanced: …)` und
+der Exit-Code folgen `balanced`: Exit 1, solange nicht beide Familien halten (ohne Schalter), fehlende
+Vorhersagedateien sind Exit 2.
+
 ### Baseline-Bericht
 
 `report` rechnet ARK je Modus und Presidio je Profil auf denselben Gold-Dateien und schreibt
@@ -301,6 +322,8 @@ python3 scripts/l1_presidio/scoreboard.py report --gold DEV \
   bestes F1 fett;
 - M1 jedes ARK-Modus gegen jedes Profil: je Familie gehaltene gemeinsame IDs und die Entitäten
   darunter; `balanced` zuerst, weitere Modi mit dem Hinweis, dass sie keinen Meilenstein entscheiden;
+- M2 jedes ARK-Modus gegen jedes Profil: je Familie Macro-F1 von ARK gegen das Ziel (Presidio + Marge)
+  und die Zahl der IDs, Regel wie bei `m2`;
 - Gold-Lücken je Korpus und Entität (T16), nur berichtet: Vorhersagen, die unter exakter Wertung FP
   sind und deren Wert einem annotierten Gold-Wert derselben ID an anderer Stelle der Zeile gleicht
   (Vergleich ohne umgebende Klammern, Anführungszeichen, Satzzeichen und `mailto:`, eine Überlappung mit

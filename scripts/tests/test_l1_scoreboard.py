@@ -296,6 +296,153 @@ def test_main_m1_subcommand_prints_every_mode_and_decides_on_balanced(tmp_path, 
     assert MODULE.main(swapped) == 2
 
 
+# ── M2 per source family ─────────────────────────────────────────────────
+
+
+def m2_rows(neutral_phones=5, favored_phones=10):
+    """DE rows: Gretel (neutral) and presidio-evaluator (presidio_favored), each with e-mail and phone gold,
+    plus postal-code recognizer cases (presidio_only). Presidio finds every e-mail, phones only in
+    presidio_favored rows and every postal code; Ark finds every e-mail, the first neutral_phones
+    neutral and favored_phones favored phones, and no postal code."""
+    rows, ark, presidio = [], [], []
+    for family, corpus, found in (("neutral", GRETEL, neutral_phones), ("favored", EVALUATOR, favored_phones)):
+        for i in range(10):
+            row_id = f"{family}-{i}"
+            rows.append(gold(row_id, [("pii.email", 0, 10), ("pii.phone", 20, 30)], corpus=corpus))
+            ark.append(pred(row_id, [("pii.email", 0, 10)] + ([("pii.phone", 20, 30)] if i < found else [])))
+            presidio.append(pred(row_id, [("pii.email", 0, 10)] + ([("pii.phone", 20, 30)] if family == "favored" else [])))
+    for i in range(3):
+        row = recognizer_case(f"plz-{i}", [("pii.de.postal_code", 0, 5)], ["pii.de.postal_code"])
+        row["language"] = "de"
+        rows.append(row)
+        ark.append(pred(row["id"], []))
+        presidio.append(pred(row["id"], [("pii.de.postal_code", 0, 5)]))
+    return rows, ark, presidio
+
+
+def m2(rows, ark, presidio, emap=EMAP, **kwargs):
+    return MODULE.m2_report(MODULE.score_rows(rows, ark, emap), MODULE.score_rows(rows, presidio, emap), emap, **kwargs)
+
+
+def test_m2_neutral_needs_tuned_plus_15_pp_and_presidio_favored_parity():
+    # neutral: Presidio macro (100 + 0) / 2 = 50, target 65; Ark (100 + 66.7) / 2 = 83.3.
+    report = m2(*m2_rows())
+    neutral, favored = report["families"]["neutral"], report["families"]["presidio_favored"]
+    assert neutral["margin_pp"] == 15.0 and favored["margin_pp"] == 0.0
+    assert neutral["ids"] == ["pii.email", "pii.phone"]
+    assert neutral["ark_macro_f1"] == pytest.approx((1 + 2 / 3) / 2)
+    assert neutral["presidio_macro_f1"] == pytest.approx(0.5) and neutral["target"] == pytest.approx(0.65)
+    assert neutral["holds"] is True
+    # presidio_favored: both perfect on e-mail and phone; parity is enough, no margin.
+    assert favored["ark_macro_f1"] == pytest.approx(1.0) and favored["presidio_macro_f1"] == pytest.approx(1.0)
+    assert favored["holds"] is True and report["met"] is True
+    # One neutral phone: Ark 59.1 is 9 pp ahead of Presidio but below the +15 pp target.
+    report = m2(*m2_rows(neutral_phones=1))
+    assert report["families"]["neutral"]["ark_macro_f1"] == pytest.approx((1 + 2 / 11) / 2)
+    assert report["families"]["neutral"]["holds"] is False and report["met"] is False
+    # Exactly at the target still holds (two phones: (100 + 33.3) / 2 = 66.7 >= 65).
+    assert m2(*m2_rows(neutral_phones=2))["families"]["neutral"]["holds"] is True
+    # presidio_favored below parity fails although neutral holds.
+    report = m2(*m2_rows(favored_phones=9))
+    assert report["families"]["neutral"]["holds"] and not report["families"]["presidio_favored"]["holds"]
+    assert report["met"] is False
+
+
+def test_m2_neutral_target_is_tuned_macro_f1_plus_15_pp():
+    rows = [gold(f"n{i}", [("pii.email", 0, 10)], corpus=GRETEL) for i in range(20)]
+    # Presidio finds 10 of 20 e-mails (F1 66.7, target 81.7); Ark 14 of 20 gives 82.4, 13 gives 78.8.
+    presidio = [pred(row["id"], [("pii.email", 0, 10)] if i < 10 else []) for i, row in enumerate(rows)]
+    for found, holds in ((16, True), (14, True), (13, False)):
+        ark = [pred(row["id"], [("pii.email", 0, 10)] if i < found else []) for i, row in enumerate(rows)]
+        assert m2(rows, ark, presidio)["families"]["neutral"]["holds"] is holds, found
+
+
+def test_m2_keeps_presidio_only_ids_out_unless_the_map_marks_them_shared():
+    rows, ark, presidio = m2_rows()
+    favored = m2(rows, ark, presidio)["families"]["presidio_favored"]
+    # Presidio finds every postal code, Ark none; the id stays out and is listed as excluded.
+    assert "pii.de.postal_code" not in favored["ids"] and "pii.de.postal_code" not in favored["entities"]
+    assert favored["excluded"] == {"pii.de.postal_code": {"gold": 3, "scope": "presidio_only"}}
+    assert favored["holds"] is True
+    # Once the map marks the id shared (an Ark label exists), it counts and pulls Ark below parity.
+    entities = [entity._replace(scope="shared", ark=("POSTAL_CODE_DE",)) if entity.id == "pii.de.postal_code" else entity
+                for entity in EMAP.entities.values()]
+    emap = MODULE.entity_map_module.EntityMap(EMAP.presidio_version, entities, EMAP.families)
+    favored = m2(rows, ark, presidio, emap=emap)["families"]["presidio_favored"]
+    assert favored["ids"] == ["pii.de.postal_code", "pii.email", "pii.phone"] and favored["excluded"] == {}
+    assert favored["ark_macro_f1"] == pytest.approx(2 / 3) and favored["holds"] is False
+
+
+def test_m2_counts_ark_only_ids_and_ignores_semantic_ones():
+    rows = [gold(f"n{i}", [("pii.email", 0, 10), ("pii.swift_bic", 20, 31), ("entity.person", 40, 50)], corpus=GRETEL)
+            for i in range(5)]
+    ark = perfect(rows)
+    presidio = [pred(row["id"], [("pii.email", 0, 10)]) for row in rows]
+    neutral = m2(rows, ark, presidio)["families"]["neutral"]
+    # Presidio has no recognizer for the BIC (ark_only): F1 0 there, macro 50.
+    assert neutral["ids"] == ["pii.email", "pii.swift_bic"]
+    assert neutral["entities"]["pii.swift_bic"] == {"gold": 5, "scope": "ark_only", "ark_f1": 1.0, "presidio_f1": 0.0}
+    assert neutral["presidio_macro_f1"] == pytest.approx(0.5) and neutral["holds"]
+
+
+def test_m2_is_german_by_default_and_needs_data_in_both_families():
+    rows = [gold("de", [("pii.email", 0, 10)], corpus=GRETEL, language="de"),
+            gold("en", [("pii.phone", 20, 30)], corpus=GRETEL, language="en")]
+    ark = [pred("de", [("pii.email", 0, 10)]), pred("en", [])]
+    presidio = [pred("de", []), pred("en", [("pii.phone", 20, 30)])]
+    report = m2(rows, ark, presidio)
+    assert report["language"] == "de" and report["families"]["neutral"]["ids"] == ["pii.email"]
+    assert report["families"]["neutral"]["holds"]
+    # No German gold in presidio_favored: that family does not hold and M2 is not met.
+    assert report["families"]["presidio_favored"]["ids"] == [] and not report["families"]["presidio_favored"]["holds"]
+    assert report["met"] is False
+    assert not m2(rows, ark, presidio, language="all")["families"]["neutral"]["holds"]
+    lines = MODULE.m2_lines(report)
+    assert "presidio_favored: NO DATA, 0 ids" in lines
+    assert lines[-1] == "M2: NOT MET (neutral holds, presidio_favored not met)"
+
+
+def test_m2_lines_print_macro_f1_target_and_excluded_ids():
+    lines = MODULE.m2_lines(m2(*m2_rows()))
+    assert lines[0].startswith("ark-l1-scoreboard-v1 M2 (de, exact F1 in %")
+    assert "neutral: HOLDS, macro-F1 Ark  83.3 >= target  65.0 (Presidio  50.0 + 15.0 pp), 2 ids" in lines
+    assert "presidio_favored: HOLDS, macro-F1 Ark 100.0 >= target 100.0 (Presidio 100.0 + 0.0 pp), 2 ids" in lines
+    assert "  pii.phone                            gold    10  Ark  66.7  Presidio   0.0" in lines
+    assert "  excluded pii.de.postal_code (presidio_only, gold 3)" in lines
+    assert any(line.startswith("ark_authored: NO DATA") and "decides no milestone" in line for line in lines)
+    assert lines[-1] == "M2: MET (neutral holds, presidio_favored holds)"
+
+
+def test_main_m2_subcommand_prints_every_mode_and_exits_1_unless_balanced_holds(tmp_path, capsys):
+    # write_tree has no recognizer-test file; the postal-code rows stay out (covered above).
+    rows, weak, presidio = m2_rows(neutral_phones=1)
+    dirs = write_tree(tmp_path, rows, {"weak": weak, "perfect": perfect(rows), "presidio": presidio})
+    base = ["m2", "--gold", str(tmp_path / "gold"), "--presidio", str(dirs["presidio"])]
+    args = base + ["--ark", f"strict={dirs['weak']}", "--ark", f"balanced={dirs['perfect']}"]
+    assert MODULE.main(args + ["--json", str(tmp_path / "m2.json")]) == 0
+    lines = capsys.readouterr().out.strip().splitlines()
+    assert "== Ark strict (reported, decides no milestone)" in lines and "== Ark balanced (milestone mode)" in lines
+    strict = lines[lines.index("== Ark strict (reported, decides no milestone)"):lines.index("== Ark balanced (milestone mode)")]
+    assert any(line.startswith("neutral: NOT MET, macro-F1 Ark  59.1 < target  65.0") for line in strict)
+    assert "M2 strict: NOT MET (neutral not met, presidio_favored holds)" in lines
+    assert "M2 balanced: MET (neutral holds, presidio_favored holds)" in lines
+    assert lines[-1] == "M2: MET (balanced: neutral holds, presidio_favored holds)"
+    report = json.loads((tmp_path / "m2.json").read_text())
+    assert report["milestone_mode"] == "balanced" and report["met"] is True and report["language"] == "de"
+    assert report["modes"]["strict"]["met"] is False
+    assert report["modes"]["balanced"]["families"]["neutral"]["margin_pp"] == 15.0
+    # Swapped: balanced misses the rule, so m2 exits 1 without any extra flag.
+    swapped = base + ["--ark", f"strict={dirs['perfect']}", "--ark", f"balanced={dirs['weak']}"]
+    assert MODULE.main(swapped) == 1
+    assert capsys.readouterr().out.strip().endswith("M2: NOT MET (balanced: neutral not met, presidio_favored holds)")
+    # Balanced is required; modes are named once and must exist.
+    assert MODULE.main(base + ["--ark", f"strict={dirs['perfect']}"]) == 2
+    assert MODULE.main(base + ["--ark", f"balanced={dirs['perfect']}"]) == 0
+    assert MODULE.main(base + ["--ark", f"balanced={dirs['perfect']}", "--ark", f"fast={dirs['weak']}"]) == 2
+    (dirs["weak"] / "g.jsonl").unlink()
+    assert MODULE.main(swapped) == 2
+
+
 # ── baseline report ──────────────────────────────────────────────────────
 
 
@@ -328,6 +475,9 @@ def test_report_scores_every_engine_per_family_corpus_and_entity(tmp_path):
     m1 = report["m1"]["presidio-tuned"]
     assert m1["modes"]["strict"]["families"]["presidio_favored"]["holds"] and not m1["modes"]["strict"]["met"]
     assert m1["modes"]["balanced"]["met"] and m1["met"]
+    # M2 likewise per profile and mode; these rows carry no German gold, so no family holds.
+    m2 = report["m2"]["presidio-tuned"]
+    assert m2["language"] == "de" and m2["met"] is False and set(m2["modes"]) == {"strict", "balanced"}
     with pytest.raises(MODULE.ScoreboardError, match="balanced"):
         MODULE.baseline_report(tmp_path / "gold", {"strict": engines["ark"]}, {"presidio-tuned": engines["tuned"]}, EMAP)
     with pytest.raises(MODULE.ScoreboardError, match="Presidio"):
@@ -363,6 +513,18 @@ def test_report_markdown_tables(tmp_path):
         "| strict ² | presidio-tuned | NOT MET | 1/2 (below: pii.phone) | 2/2 | 1/2 (below: pii.phone) |")
     assert "¹ ark_authored is reported and decides no milestone." in text
     assert "² reported; milestones are judged on balanced (T15)." in text
+    # M2 per Ark mode and profile: DE rows, macro-F1 over shared + ark_only ids; no German gold here.
+    assert "| Ark mode | Profile | M2 | neutral | presidio_favored | ark_authored ¹ |" in lines
+    assert "| balanced | presidio-tuned | NOT MET | no data | no data | no data |" in lines
+    assert "| strict ² | presidio-default | NOT MET | no data | no data | no data |" in lines
+
+
+def test_report_m2_cells_show_macro_f1_and_target(tmp_path):
+    rows, ark, presidio = m2_rows()
+    dirs = write_tree(tmp_path, rows, {"ark": ark, "tuned": presidio})
+    report = MODULE.baseline_report(tmp_path / "gold", {"balanced": dirs["ark"]}, {"presidio-tuned": dirs["tuned"]}, EMAP)
+    assert ("| balanced | presidio-tuned | MET | 83.3 vs 65.0 (50.0 + 15), 2 ids | 100.0 vs 100.0 (100.0 + 0), 2 ids "
+            "| no data |") in MODULE.report_lines(report)
 
 
 def test_main_report_subcommand(tmp_path, capsys):

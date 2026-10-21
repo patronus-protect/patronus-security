@@ -297,6 +297,7 @@ tasks:
 
   # infra: M2 cannot be met on presidio_favored as defined (tuned 87.0 + 15 pp > 100)
   - id: D-M2
+    status: done
     title: Implement the decided M2 rule and add scoreboard.py m2
     type: eval-infra
     deps: [B-EVAL]
@@ -598,7 +599,8 @@ tasks:
     deps: [K05]
     accept: count_validated.py count rises by 2
 
-  # M2 (only if D-M2 keeps presidio_favored DE / presidio_only ids)
+  # M2: D-M2 keeps presidio_favored DE; the tax number (shared) counts, the commercial register
+  # (presidio_only) only once entity_map.yaml marks it shared with an Ark label, so not deferred
   - id: B-DEFMT
     title: "DE format ids: tax number (Steuernummer) formats per federal state + 13-digit ELSTER, commercial register HRA/HRB with local court context"
     type: precision-fix

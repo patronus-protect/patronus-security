@@ -11,6 +11,16 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Implement the decided M2 rule and add `scripts/l1_presidio/scoreboard.py m2` (D-M2, decision of
+  2026-10-21 in `research/l1-pii/README.md`, M2 row and fairness section). M2 holds only if it holds on
+  both milestone families on their own, judged on `balanced`: macro-F1 is the unweighted mean exact F1
+  over the `shared` and `ark_only` ids with gold on German rows of the family; `neutral` needs Presidio
+  tuned + 15 pp, `presidio_favored` parity (tuned + 15 pp exceeds 100 there). `presidio_only` ids stay
+  out of the macro average (listed as excluded) until `entity_map.yaml` marks them `shared`; a family
+  without such gold does not hold. `m2` takes `--ark MODE=DIR` (balanced required) and `--presidio DIR`
+  like `m1`, prints macro-F1, target and per-id F1 per family and mode, and exits 1 unless both family
+  rules hold on balanced. `report` adds an M2 table per Ark mode and Presidio profile. **Detection
+  change:** none; this is evaluation tooling only.
 - Score the L1-PII scoreboard in the PII modes `strict` and `balanced` and report gold gaps of the
   frozen corpora separately (B-EVAL: T15 + T16, decisions of 2026-10-21 in
   `research/l1-pii/README.md`). `scripts/l1_presidio/scoreboard.py gate` runs `run_ark.py --pii-mode`
