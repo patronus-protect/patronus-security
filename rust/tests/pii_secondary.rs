@@ -2,7 +2,7 @@
 //! Secondary evidence in `strict` (T07, TRIAGE 2026-W42 bucket 4).
 //!
 //! Decision 2026-10-14: strict keeps emitting both labels bit-identically, but the
-//! card-shaped part of a valid IBAN (`CREDITCARD` on its Luhn-valid BBAN) and
+//! card-shaped part of a valid IBAN (`CREDITCARD` on a BBAN that is a card number) and
 //! `FINANCIAL_ACCOUNT_NUMBER` on an IBAN value are secondary evidence of the IBAN.
 //! `details.secondary_evidence` lists them as `{label, start_byte, end_byte, reason,
 //! primary_label}` with `reason` `iban_value` (the same span as the IBAN) or `iban_part`
@@ -90,21 +90,22 @@ fn owned(spans: &[(&str, &str)]) -> Vec<(String, String)> {
         .collect()
 }
 
-/// Valid IBANs whose BBAN digits pass Luhn.
+/// Valid IBANs whose BBAN digits are a card number: Luhn plus an 18-digit Maestro IIN
+/// (B-PAN; a BBAN without a card IIN, e.g. `4306 …` or `8415 …`, is no card).
 const IBANS_WITH_LUHN_DIGITS: [(&str, &str); 6] = [
-    ("DE18 4306 0967 1234 5678 00", "4306 0967 1234 5678 00"),
-    ("DE60 5393 3633 8750 0474 39", "5393 3633 8750 0474 39"),
-    ("DE13 3380 1412 6906 0443 19", "3380 1412 6906 0443 19"),
-    ("DE21 5873 5570 6360 6071 04", "5873 5570 6360 6071 04"),
-    ("DE63 8415 3776 0207 7642 65", "8415 3776 0207 7642 65"),
+    ("DE94 5001 0517 5401 2345 65", "5001 0517 5401 2345 65"),
+    ("DE11 6005 0101 7400 1234 56", "6005 0101 7400 1234 56"),
+    ("DE87 6605 0101 1002 3456 78", "6605 0101 1002 3456 78"),
+    ("DE45 5005 0201 1234 5678 98", "5005 0201 1234 5678 98"),
+    ("DE70 5625 0030 1234 5067 86", "5625 0030 1234 5067 86"),
     ("DE06 6826 5123 3080 5169 78", "6826 5123 3080 5169 78"),
 ];
 
-/// IBAN forms whose check digits fail, with Luhn-valid BBAN digits: no valid IBAN.
+/// IBAN forms whose check digits fail, with card-number BBAN digits: no valid IBAN.
 const IBAN_FORMS_WITH_LUHN_DIGITS: [(&str, &str); 3] = [
-    ("DE64 7172 7958 4924 3372 11", "7172 7958 4924 3372 11"),
+    ("DE74 6009 0800 1237 8945 61", "6009 0800 1237 8945 61"),
     ("DE34 6659 4134 6836 7322 13", "6659 4134 6836 7322 13"),
-    ("DE47 9570 1831 6586 8923 67", "9570 1831 6586 8923 67"),
+    ("DE90 5007 0010 1755 2630 33", "5007 0010 1755 2630 33"),
 ];
 
 /// Valid IBANs under an account field name: `(text, iban, account value)`.
@@ -140,11 +141,11 @@ const IBANS_ON_ACCOUNT_FIELDS: [(&str, &str, &str); 5] = [
 fn checksum_vectors_pass_or_fail_what_they_name() {
     for (iban, digits) in IBANS_WITH_LUHN_DIGITS {
         assert!(validators::mod97(iban), "IBAN vector fails mod97");
-        assert!(validators::luhn(digits), "{digits}");
+        assert!(validators::payment_card(digits), "{digits}");
     }
     for (form, digits) in IBAN_FORMS_WITH_LUHN_DIGITS {
         assert!(!validators::mod97(form), "{form}");
-        assert!(validators::luhn(digits), "{digits}");
+        assert!(validators::payment_card(digits), "{digits}");
     }
     for (_, iban, _) in IBANS_ON_ACCOUNT_FIELDS {
         assert!(
@@ -153,8 +154,15 @@ fn checksum_vectors_pass_or_fail_what_they_name() {
         );
     }
     // Invalid vectors: one changed digit breaks each checksum.
-    assert!(!validators::mod97("DE18 4306 0967 1234 5678 01"));
-    assert!(!validators::luhn("4306 0967 1234 5678 01"));
+    assert!(!validators::mod97("DE94 5001 0517 5401 2345 66"));
+    assert!(!validators::luhn("5001 0517 5401 2345 66"));
+    // Luhn-valid BBANs without a card IIN: no card, so nothing to mark (B-PAN).
+    for digits in ["4306 0967 1234 5678 00", "8415 3776 0207 7642 65"] {
+        assert!(
+            validators::luhn(digits) && !validators::payment_card(digits),
+            "{digits}"
+        );
+    }
     assert!(!validators::mod97("GB82WEST12345698765433"));
 }
 
@@ -266,7 +274,7 @@ fn findings_next_to_an_iban_or_in_a_failing_iban_form_stay_primary() {
         assert!(secondary(&text, &result).is_empty(), "{text}");
     }
     // One changed digit: no IBAN, no card, nothing to mark.
-    let text = "IBAN: DE18 4306 0967 1234 5678 01";
+    let text = "IBAN: DE94 5001 0517 5401 2345 66";
     let result = strict(text);
     assert!(result.evidence_spans.is_empty(), "{:?}", spans(&result));
     assert!(secondary(text, &result).is_empty());
@@ -276,7 +284,7 @@ fn findings_next_to_an_iban_or_in_a_failing_iban_form_stay_primary() {
 fn strict_class_and_confidence_stay_as_before() {
     // The marker adds evidence detail only; strict findings, class and confidence
     // are those of K02.
-    let result = strict("IBAN: DE18 4306 0967 1234 5678 00");
+    let result = strict("IBAN: DE94 5001 0517 5401 2345 65");
     assert_eq!(result.class_name, "IBAN");
     assert_eq!(result.confidence, 1.0);
     assert!(result.evidence_spans.iter().all(|span| span.score == 1.0));
@@ -287,7 +295,7 @@ fn scored_modes_resolve_instead_of_marking() {
     for mode in [PiiMode::Balanced, PiiMode::Recall] {
         let scanner = scanner(mode);
         for text in [
-            "IBAN: DE18 4306 0967 1234 5678 00",
+            "IBAN: DE94 5001 0517 5401 2345 65",
             "Bank account: GB82WEST12345698765432",
             "Bank account: DE44 5001 0517 5407 3249 31",
         ] {
