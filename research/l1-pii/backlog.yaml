@@ -275,6 +275,7 @@ tasks:
       pii_phone_us requires a separator pattern a real NANP number uses (3-3-4), not 6-4. Positives with
       `+49 …`, `+1 …` and placeholder numbers (T01) stay; Gretel dev: ≥ 100 of 161 phone FP gone
   - id: T18
+    status: done
     title: "Phone span boundaries: no line break inside a number, NANP trunk prefix 1- (1-800-123-4567), 00 international prefix"
     type: fix
     deps: [T04]

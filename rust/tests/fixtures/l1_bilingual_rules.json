@@ -62,11 +62,13 @@
     "hard_negatives": {
       "de": [
         "Kopfsegment: UNB+UNOC:3+520173321::2+520173321::4+202202150830+1323327835++STA'",
-        "Käufer: NAD+BY+987654321::9'"
+        "Käufer: NAD+BY+987654321::9'",
+        "Positionen\n+49 30\n12345"
       ],
       "en": [
         "Interchange header: UNB+UNOC:3+5010500154:1+5020022223:1+190101:0930+2'",
-        "SWIFT narrative block {86:+330105789456}"
+        "SWIFT narrative block {86:+330105789456}",
+        "Positions\n+49 30\n12345"
       ]
     },
     "language_neutral": false,
@@ -87,6 +89,16 @@
     "overlap": {
       "de": "Rückruf unter +49 89 2019 4400",
       "en": "Call +44 20 6642 3850"
+    },
+    "span": {
+      "de": {
+        "text": "Telefon: +49 30 1234567\n2. Ansprechpartnerin",
+        "value": "+49 30 1234567"
+      },
+      "en": {
+        "text": "Call +1-123-456-7890\n\n2. Next step",
+        "value": "+1-123-456-7890"
+      }
     }
   },
   {
@@ -111,6 +123,16 @@
       "counter": {
         "de": "Auftragsnummer +49 170 1234567",
         "en": "Order ID +49 170 1234567"
+      }
+    },
+    "span": {
+      "de": {
+        "text": "Zentrale 0049 170 1234567\n\n2. Ansprechpartner",
+        "value": "0049 170 1234567"
+      },
+      "en": {
+        "text": "Head office 0049 170 1234567\n\n2. Contact",
+        "value": "0049 170 1234567"
       }
     }
   },
@@ -144,11 +166,13 @@
     "hard_negatives": {
       "de": [
         "X12-Bestellung: ST*850*0000012345~",
-        "Personnummer: 811228-9874"
+        "Personnummer: 811228-9874",
+        "Lagerbestand je Regal:\n415\n555-2671"
       ],
       "en": [
         "Closing balance field: :62F:/0000001234/",
-        "Swedish personal identity number: 811228-9874"
+        "Swedish personal identity number: 811228-9874",
+        "Units per shelf:\n212\n555 0100"
       ]
     },
     "language_neutral": false,
