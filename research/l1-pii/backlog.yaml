@@ -2,6 +2,8 @@
 # Selection (deterministic, ark-l1 next): first task in file order with status: todo,
 # all deps done and no open needs_decision.
 # status: missing = todo; the runner sets done when publishing. Blocked: ~/ark-l1/state/blocked.json
+# status: bundled (+ into: <bundle id>) and status: deferred (+ deferred: <reason>) are skipped by
+#   the runner; a bundle lists the absorbed ids in `bundles`. Cut of 2026-10-21: see section P.
 #
 # Shared acceptance (applies to every task in addition to `accept`):
 #   tests_first:  goldens via generate_l1_goldens.py (>= 5 positives + 5 hard negatives per language,
@@ -118,10 +120,15 @@ tasks:
       or marked invalid; validators stay unchanged
 
   - id: T16
+    status: bundled
+    into: B-EVAL
     title: Report gold gaps of the neutral corpora separately (duplicate values, checksum-invalid gold) without editing the corpora
     type: eval-infra
     deps: [E06]
-    needs_decision: true
+    decision: >-
+      2026-10-21: option (a). Scoring stays as is; the gold-gap buckets (predictions equal to an annotated
+      gold value elsewhere in the row, gold failing the entity's validator) are reported separately per
+      corpus and entity for both engines. Corpora are never edited; (b) and (c) do not change any metric.
     source: "TRIAGE 2026-W43 (research/l1-pii/triage/2026-W43.md, buckets 13 + 14)"
     question: >-
       Gretel annotates only one copy of `[x@y.com](mailto:x@y.com)` (117 Ark email FP on dev), leaves many
@@ -173,10 +180,15 @@ tasks:
       entity_map.yaml and the Presidio registry, with a test
 
   - id: T15
+    status: bundled
+    into: B-EVAL
     title: Define which Ark mode is scored for M1-M3 (strict default vs. balanced) and score both modes
     type: eval-infra
     deps: [E06, K02]
-    needs_decision: true
+    decision: >-
+      2026-10-21: M1-M3 are judged on balanced (the mode that competes with Presidio tuned); strict stays
+      the bit-identical default. Both modes are scored for head and base; the gate guards strict
+      (bit-identical) and balanced (no regression > 0.5 pp F1 per entity, no new hard-negative FP).
     source: "TRIAGE 2026-W43 (research/l1-pii/triage/2026-W43.md, section mode)"
     question: >-
       K02 keeps strict as the bit-identical default; balanced/recall are opt-in. Presidio tuned emits
@@ -260,6 +272,371 @@ tasks:
       Lexicon entries in the K03 lexicon, goldens per language (>= 5 positives + 5 hard negatives each for
       FR, ES, IT, NL), validators unchanged
 
+  # ── P: Critical path to M1-M4 (2026-10-21 cut) ────────────────────────
+  # Ordered by milestone impact on the measured gaps (scoreboard/baseline.md, latency.md). Open
+  # work lives only here; absorbed tasks elsewhere carry `status: bundled` + `into`, cut tasks
+  # `status: deferred` + reason. M3 tally after each task assumes the T03 counting rule (start: 3 units).
+
+  # infra: M1/M2 are judged on balanced (T15 decision), the gate guards strict + balanced
+  - id: B-EVAL
+    title: Score strict and balanced for head and base (milestones on balanced) + report gold gaps of the neutral corpora separately
+    type: eval-infra
+    deps: [E06, K02]
+    bundles: [T15, T16]
+    decision: >-
+      2026-10-21: T15: milestones on balanced; the gate guards strict and balanced (no regression > 0.5 pp F1
+      per entity, no new hard-negative FP); strict output changes only where a task's accept says so on
+      purpose. T16: option (a), scoring unchanged, gold gaps reported separately, corpora never edited.
+    accept: >-
+      Rule in research/l1-pii/README.md (T15 + T16 decisions); scoreboard.py gate scores head and base in
+      strict and balanced and fails on a regression in either mode; report and m1 print per mode, milestones
+      from balanced; baseline numbers for balanced added to scoreboard/baseline.md. Gold-gap report per corpus
+      and entity as in T16 accept (predictions equal to an annotated gold value elsewhere in the row, gold
+      values failing the entity's validator) without changing any gate metric; tests
+
+  # infra: M2 cannot be met on presidio_favored as defined (tuned 87.0 + 15 pp > 100)
+  - id: D-M2
+    title: Implement the decided M2 rule and add scoreboard.py m2
+    type: eval-infra
+    deps: [B-EVAL]
+    decision: >-
+      2026-10-21: M2 holds on both families: neutral DE/EU macro-F1 >= Presidio tuned + 15 pp, and on
+      presidio_favored Ark macro-F1 >= Presidio tuned (no +15 pp there). Judged on balanced like M1.
+    source: "scoreboard/baseline.md, candidate C7"
+    question: >-
+      Baseline: neutral DE macro-F1 ARK 44.6 vs tuned 18.6 (+26 pp, 161 Gretel DE rows); presidio_favored DE
+      ARK 2.0 vs tuned 87.0 on 11 ids with 1-5 gold each, where tuned + 15 pp exceeds 100. Does M2 count
+      neutral only, both families with a minimum gold count per id, or a capped target? Are presidio_only
+      ids (commercial register, BSNR, postal code) part of the macro average?
+    accept: >-
+      Rule in research/l1-pii/README.md (M2 row and fairness section); scoreboard.py m2 prints macro-F1 per
+      family and mode and exits 1 unless both family rules hold; presidio_only ids stay out of the macro
+      average unless entity_map.yaml marks them shared; test
+
+  # M1 PAN (neutral EN 45.8 vs 49.1) + Immer (presidio_favored hard negative, bucket P8)
+  - id: B-PAN
+    title: "Credit card: IIN ranges + lengths per brand in strict (no PAN after +, in date-time stamps or token segments), context-free in balanced"
+    type: precision-fix
+    deps: [E06, K05, B-EVAL]
+    bundles: [T19, F02]
+    source: "TRIAGE 2026-W43 bucket 4; baseline N1, P8"
+    accept: >-
+      T19 accept in full (hard negatives DE + EN, IIN/length table with tests per brand, every Luhn-valid PAN
+      gold value stays found, Luhn unchanged) plus F02: the same table gates the balanced context-free PAN;
+      neutral EN PAN F1 >= tuned in balanced; the presidio_favored PAN hard negative of bucket P8 is no match
+
+  # M1 IP (presidio_favored 56.8 vs 96.2, neutral 87.9 vs 92.2) + Immer (bucket P9)
+  - id: B-IP
+    title: "IPv6 spans: no match inside SWIFT/EDIFACT colon chains, IPv4-mapped/embedded as one span, zone ID and CIDR prefix in the span, no partial match on invalid mixed forms"
+    type: precision-fix
+    deps: [E06, B-EVAL]
+    bundles: [T20]
+    source: "TRIAGE 2026-W43 bucket 5; baseline P3, P9, candidate C1"
+    accept: >-
+      T20 accept in full plus baseline C1: IPv4-mapped and embedded IPv6 reported as one span, zone ID and
+      CIDR prefix length inside the span (convention written to the README gold section), no IPv6 sub-span
+      on an invalid mixed address (P9 hard negative no match); loopback/unspecified stay rejected (decided 2026-10-21, see D-IP);
+      presidio_favored IP F1 >= 85 and neutral IP F1 >= tuned in balanced
+
+  # M1 IP: remaining 5 FN need a gold convention
+  - id: D-IP
+    title: Gold convention for loopback and unspecified addresses (127.0.0.1, ::1, 0.0.0.0, ::) and matching validator change
+    type: recall-fix
+    deps: [B-IP]
+    status: deferred
+    deferred: "Decided 2026-10-21: Ark always rejects loopback/unspecified addresses (strict and balanced); no validator change. The 5 presidio_favored FN stay and are reported as a known gap"
+    source: "scoreboard/baseline.md, bucket P4, candidate C2"
+    question: >-
+      validators::ip_address rejects loopback and unspecified addresses on purpose; presidio_favored gold
+      counts them (5 FN). Are they PII-positive like the T01 placeholders, or hard negatives?
+    accept: >-
+      Convention in research/l1-pii/README.md; gold and validator consistent with it; presidio_favored IP
+      F1 >= tuned in balanced
+
+  # M1 IBAN (presidio_favored 63.9 vs 100; 35 of 66 FN are grouped non-DE IBAN)
+  - id: B-IBAN
+    title: "IBAN: grouped and lowercase variants for all countries in strict, length per country from the SWIFT IBAN registry, SEPA creditor IDs are no IBAN"
+    type: recall-fix
+    deps: [K05, B-EVAL]
+    bundles: [T05, T21, F03]
+    source: "TRIAGE 2026-W42 bucket 1, TRIAGE 2026-W43 bucket 6; baseline P2"
+    accept: >-
+      T21 accept in full (length table with a test per country, creditor IDs as hard negatives DE + EN,
+      mod97 unchanged, no IBAN gold value lost) plus grouped blocks of four with letters and lowercase
+      variants for every registry country; presidio_favored IBAN F1 >= tuned and neutral IBAN F1 >= tuned
+
+  # M3 +8 (11)
+  - id: B01
+    title: "VAT ID part 1: DE, AT, CH, FR, NL, BE, IT, ES with checksums"
+    type: new-entity
+    deps: [K05]
+    accept: >-
+      One validator per country with checksum vectors, classified under checksums in entity_map.yaml;
+      context-free form in balanced as in K05; count_validated.py count rises by 8
+
+  # M3 +2 (13); prerequisite for B-PASS
+  - id: F08
+    title: "Passport/ID card DE: ICAO 9303 check digits (7-3-1), old + new formats"
+    type: precision-fix
+    deps: [K02]
+    accept: >-
+      Check digits for passport and ID card; context-free form in balanced; the "Pass-Nr." field name
+      (baseline P6) joins the K03 lexicon; count_validated.py count rises by 2
+
+  # M1 passport (neutral 44.9 vs 53.2, presidio_favored 0 vs 40)
+  - id: B-PASS
+    title: "Passport/ID numbers by field name: generic format rule after passport field names (EN/DE/ES/FR/IT/NL), US passport, AT/CH passport and ID, IT/ES documents"
+    type: recall-fix
+    deps: [F08, K03, B-EVAL]
+    bundles: [T24, A05, B08, T10]
+    source: "TRIAGE 2026-W43 bucket 10; baseline P6"
+    accept: >-
+      T24 accept in full (format-only rule for 6-9 alphanumerics with at least 5 digits after an explicit
+      passport field name, DE passport form values failing ICAO 9303 stay negative); US passport and AT/CH
+      passport/ID numbers and IT carta d'identità/ES pasaporte as format + context rules on the same
+      mechanism (IT patente goes to F15); neutral and presidio_favored passport F1 >= tuned in balanced
+
+  # M3 +11 (24)
+  - id: B02
+    title: "VAT ID part 2: BG, CY, CZ, DK, EE, EL, FI, HR, HU, IE, LT with checksums"
+    type: new-entity
+    deps: [B01]
+    accept: >-
+      Same structure as B01; one validator per country with checksum vectors; count_validated.py count
+      rises by 11
+
+  # M1 driver's licence (neutral 0 vs 7.8, presidio_favored 0 vs 90)
+  - id: F15
+    title: "Driver's licence DE + US states + IT patente with context (incl. \"my driver's license number is …\")"
+    type: recall-fix
+    deps: [K03, B-EVAL]
+    source: "baseline P6"
+    accept: >-
+      Format + context rules for DE, the US state formats and IT patente; prose phrasing such as "driver's
+      license number is" counts as context; numbers without a licence field name stay negative in strict;
+      neutral and presidio_favored driver's licence F1 >= tuned in balanced (UK licence comes with B-UK)
+
+  # M3 +11 (35)
+  - id: B16
+    title: "VAT ID part 3: LU, LV, MT, PL, PT, RO, SE, SI, SK + XI, NO, GB with checksums"
+    type: new-entity
+    deps: [B01]
+    source: "split from B02 on 2026-10-21 to fit one run"
+    accept: >-
+      Same structure as B01; XI shares the GB validator and counts with GB; count_validated.py count rises
+      by 11
+
+  # M1 US SSN (neutral 58.5 vs 79.3, presidio_favored 57.1 vs 88.9)
+  - id: B-SSN
+    title: "US SSN: AAA-GG-SSSS with proximity and structural context, SSN without separators with context"
+    type: recall-fix
+    deps: [K04, B-EVAL]
+    bundles: [T25, F07]
+    source: "TRIAGE 2026-W43 bucket 11; baseline P1"
+    accept: >-
+      T25 accept in full (SSA range validator unchanged, dashed 3-2-4 values without SSN context stay
+      negative in strict) plus F07 (9 digits without separators only with SSN context); neutral and
+      presidio_favored SSN F1 >= tuned in balanced
+
+  # M4 pass 1 (100 KiB p95 76 ms vs 10 ms)
+  - id: H03
+    title: "Latency pass 1: profile 100 KiB, AnchorGate/prefilter coverage for every rule, remove the top hotspots"
+    type: perf
+    deps: []
+    accept: >-
+      Profile of the 100 KiB DE and EN workloads in the PR; every rule behind an AnchorGate or prefilter
+      (test that fails for an ungated rule); 100 KiB p95 (native and Python) at least halved versus
+      scoreboard/latency.md on the VPS; latency.md updated; goldens and scoreboard unchanged
+
+  # M1 UK NINO (presidio_favored 0 vs 100) + UK driving licence (P6) + M3 +1 (36)
+  - id: B-UK
+    title: "UK: NHS number (mod 11), passport and driving licence, NINO without spaces / in pairs / lowercase after a field name"
+    type: new-entity
+    deps: [K03, K05]
+    bundles: [A07]
+    source: "baseline P6, candidate C4"
+    accept: >-
+      A07 scope plus baseline C4 (NINO variants, invalid prefixes stay negative, validator not relaxed);
+      presidio_favored NINO and driver's licence F1 >= tuned in balanced; count_validated.py count rises by 1
+
+  # M3 +6 (42)
+  - id: B-APAC
+    title: "AU ABN, ACN, TFN, Medicare + SG NRIC/FIN and UEN with checksums"
+    type: new-entity
+    deps: [K05]
+    bundles: [A08, A10]
+    accept: count_validated.py count rises by 6; context-free form in balanced as in K05
+
+  # M1 phone (presidio_favored 53.5 vs 65.1)
+  - id: F18
+    title: "Phone: NANP extensions (x123, ext. 123) inside the phone span"
+    type: fix
+    deps: [E06, B-EVAL]
+    source: "scoreboard/baseline.md, bucket P5, candidate C3 (T04/T18 already done)"
+    accept: >-
+      The extension belongs to the span of a NANP number; a bare `x` or `ext` without digits ends the span
+      before it; no new matches elsewhere; presidio_favored phone F1 rises in balanced and neutral phone
+      stays >= tuned
+
+  # M3 +3 (45)
+  - id: B-DE1
+    title: "DE check digits: KVNR, pension insurance number (RVNR), LANR (+ BSNR format)"
+    type: precision-fix
+    deps: [K02, K05]
+    bundles: [F10, F11, F12]
+    accept: >-
+      Check digits replace the format-only validators of the existing rules; context-free form in balanced;
+      BSNR as format + context (no M3 unit); count_validated.py count rises by 3
+
+  # M1 account number (neutral 1.9 vs 13.2) + M3 +1 (46)
+  - id: B-ACCT
+    title: "Account numbers: US bank account (context) + ABA routing number (checksum), account/customer/employee IDs via structural context"
+    type: recall-fix
+    deps: [K03, K04]
+    bundles: [A04, F14]
+    accept: >-
+      ABA 3-7-1 validator with vectors; financial_account_number via field names and structural keys
+      (JSON keys, CSV headers, key-value); neutral account number F1 >= tuned in balanced; username and
+      customer/employee IDs (ark_only) must not regress; count_validated.py count rises by 1
+
+  # M3 +4 (50)
+  - id: B-EU1
+    title: "FR NIR (mod 97) + SIREN/SIRET (Luhn), NL BSN (11-proof), BE national register number (mod 97)"
+    type: new-entity
+    deps: [K05]
+    bundles: [B09, B10, B11]
+    accept: count_validated.py count rises by >= 4; context-free form in balanced as in K05
+
+  # M1 email (presidio_favored 93.8 vs 100, neutral tie 57.0 vs 57.0)
+  - id: B-EMAIL
+    title: "Email: no match in URL userinfo, Unicode local parts (RFC 6531) and apostrophes, IDN/punycode TLDs"
+    type: recall-fix
+    deps: [E06, K06]
+    bundles: [T06, T23, F05]
+    source: "TRIAGE 2026-W42 bucket 3, TRIAGE 2026-W43 bucket 9; baseline P7"
+    accept: >-
+      T06 and T23 accept in full; IDN TLDs (xn--) inside the span (P7); IANA TLD list only if it keeps
+      the T01 placeholder TLDs positive; neutral and presidio_favored email F1 >= tuned in balanced
+
+  # M3 +3 (53)
+  - id: B-NORD
+    title: "SE personnummer (Luhn), DK CPR, NO fødselsnummer, FI HETU"
+    type: new-entity
+    deps: [K05]
+    bundles: [B12, B13]
+    accept: >-
+      DK CPR counts only where its mod 11 check applies (no M3 unit otherwise); count_validated.py count
+      rises by >= 3
+
+  # M3 +4 (57)
+  - id: B-LUHN
+    title: "SE organisationsnummer (Luhn), ZA ID (Luhn), CA SIN (Luhn), TR T.C. Kimlik No (check digits)"
+    type: new-entity
+    deps: [K05, B-NORD]
+    bundles: [T13, T09]
+    accept: >-
+      Checksum parts of T13 and T09; the format-only parts (TR licence plate, US MBI) are dropped and stay
+      out of the programme; count_validated.py count rises by 4
+
+  # M3 +3 (60)
+  - id: B-EU2
+    title: "AT social insurance number, CH AHV (EAN-13), PT NIF, IE PPSN"
+    type: new-entity
+    deps: [K05]
+    bundles: [B06, B07, B14]
+    accept: >-
+      PT NIF counts only if entity_map keeps it apart from the PT VAT unit of B16; count_validated.py count
+      rises by >= 3
+
+  # M1 phone remainder (FR/BE/AT formats, bucket P5)
+  - id: F01
+    title: "Phone regional via the phonenumber crate (DE/AT/CH/US/UK/FR/…), check cargo-deny"
+    type: recall-fix
+    deps: [K03, F18]
+    accept: >-
+      cargo-deny passes; T01 placeholder numbers stay positive; presidio_favored phone F1 >= tuned and
+      neutral phone F1 >= tuned in balanced; 100 KiB p95 within the gate budget
+
+  # M3 +3 (63)
+  - id: B-ESIT
+    title: "ES NIF/NIE/CIF (check letter) + IT Codice Fiscale (check letter) and Partita IVA"
+    type: new-entity
+    deps: [K05, B01]
+    bundles: [A11, A12]
+    accept: >-
+      CIF and Partita IVA reuse the B01 VAT validators (no double count); count_validated.py count rises by
+      >= 3 (ES NIF, ES NIE, IT CF)
+
+  # M3 +3 (66)
+  - id: B-KR
+    title: "KR RRN, BRN, FRN (check digits) + KR driving licence and passport (context)"
+    type: new-entity
+    deps: [K05]
+    bundles: [A14, T12]
+    accept: count_validated.py count rises by 3
+
+  # M3 +2 (68)
+  - id: A13
+    title: "PL PESEL, NIP, REGON"
+    type: new-entity
+    deps: [K05, B16]
+    accept: NIP reuses the PL VAT validator of B16 (no double count); count_validated.py count rises by 2
+
+  # M3 +2 (70: target reached)
+  - id: B-IN
+    title: "IN Aadhaar (Verhoeff), GSTIN (check character), PAN, voter ID, passport, vehicle registration"
+    type: new-entity
+    deps: [K05]
+    bundles: [A09, T11]
+    accept: count_validated.py count rises by 2 (Aadhaar, GSTIN); the other IN ids are format + context
+
+  # M3 +2 (72)
+  - id: A06
+    title: "Medical licence: DEA (checksum) + NPI (Luhn with 80840)"
+    type: new-entity
+    deps: [K05]
+    accept: count_validated.py count rises by 2
+
+  # M2 (only if D-M2 keeps presidio_favored DE / presidio_only ids)
+  - id: B-DEFMT
+    title: "DE format ids: tax number (Steuernummer) formats per federal state + 13-digit ELSTER, commercial register HRA/HRB with local court context"
+    type: precision-fix
+    deps: [K03, D-M2]
+    bundles: [F13, B03]
+    accept: >-
+      Defer this task in the D-M2 PR if M2 does not count these ids; otherwise M2 macro-F1 on the decided
+      families rises and no strict regression
+
+  # M3 buffer +3 (75): overlaps and DK CPR make the count above uncertain
+  - id: B-DEVID
+    title: "IMEI (Luhn) + MEID, ICCID (Luhn) + IMSI (context)"
+    type: new-entity
+    deps: [K05]
+    bundles: [C01, C02]
+    accept: count_validated.py count rises by >= 3
+
+  # M3 buffer +4 (79)
+  - id: B-FIN
+    title: "VIN (check digit NA, format EU), ISIN (Luhn) + LEI (mod 97), PZN (mod 11)"
+    type: new-entity
+    deps: [K05]
+    bundles: [C03, C04, C07]
+    accept: count_validated.py count rises by >= 4; the ICD-10 part of C07 is dropped
+
+  # M3 buffer +1 (80)
+  - {id: A02, title: "Crypto wallets: BTC Base58Check/Bech32(m), ETH EIP-55, LTC", type: new-entity, deps: [K05]}
+
+  # M4 pass 2 after all rules
+  - id: H06
+    title: "Latency pass 2: 100 KiB p95 <= 10 ms (native and Python) with all rules"
+    type: perf
+    deps: [H03, A02]
+    accept: >-
+      M4 met on the VPS per scripts/l1_presidio/latency.py; latency.md updated; goldens and scoreboard
+      unchanged; if 10 ms is out of reach, the PR documents the remaining hotspots for the next TRIAGE
+
+  - {id: H05, title: "Final report M1–M4 on holdout", type: report, deps: [H06]}
+
   # ── F: Repair existing rules ──────────────────────────────────────────
   - {id: T04, title: "US phone: span boundary for parenthesized area code, (415) 555-2671 instead of 415) 555-2671", type: fix, deps: [E06], source: "TRIAGE 2026-W42, bucket 2", status: done}
   - id: T17
@@ -283,8 +660,9 @@ tasks:
     accept: >-
       `+1-123-456-7890\n\n2` ends before the line break (pii_phone_international uses `\s`); `1-800-123-4567`
       and `1 (800) 123-4567` include the trunk prefix; `0049 …`/`001 …` keep the prefix; no new matches elsewhere
-  - {id: F01, title: "Phone regional via the phonenumber crate (DE/AT/CH/US/UK/FR/…), check cargo-deny", type: recall-fix, deps: [K03]}
   - id: T19
+    status: bundled
+    into: B-PAN
     title: "Credit card precision in strict: IIN ranges + lengths per brand, no PAN after `+`, in date-time stamps or token segments"
     type: precision-fix
     deps: [E06]
@@ -294,9 +672,11 @@ tasks:
       `20220314-123456`, `xoxb-…-485275870833-…`, ZA ID numbers and KR RRN that pass Luhn; IIN/length table
       with tests per brand; every Luhn-valid PAN gold value in pii_l1, the rule fixture and the dev corpora
       stays found; Luhn unchanged
-  - {id: F02, title: "Credit card: IIN ranges + lengths per brand, context-free in balanced", type: recall-fix, deps: [K05]}
-  - {id: T05, title: "Grouped IBAN for all countries in strict mode (blocks of four with letters, e.g. GB82 WEST 1234 5698 7654 32), mod97 unchanged", type: recall-fix, deps: [E06], source: "TRIAGE 2026-W42, bucket 1; M1 risk IBAN"}
+  - {id: F02, title: "Credit card: IIN ranges + lengths per brand, context-free in balanced", type: recall-fix, deps: [K05], status: bundled, into: B-PAN}
+  - {id: T05, title: "Grouped IBAN for all countries in strict mode (blocks of four with letters, e.g. GB82 WEST 1234 5698 7654 32), mod97 unchanged", type: recall-fix, deps: [E06], source: "TRIAGE 2026-W42, bucket 1; M1 risk IBAN", status: bundled, into: B-IBAN}
   - id: T21
+    status: bundled
+    into: B-IBAN
     title: "IBAN length per country in strict (SWIFT IBAN registry), SEPA creditor IDs (DE98ZZZ09999999999) are no IBAN"
     type: precision-fix
     deps: [T05]
@@ -305,10 +685,12 @@ tasks:
       Both Ark hard-negative FP on the synthetic dev set are creditor IDs (`DE30ZZZ56545348553` passes mod97);
       length table from the SWIFT IBAN registry with a test per country, creditor IDs as hard negatives DE + EN;
       mod97 unchanged, no IBAN gold value lost
-  - {id: F03, title: "IBAN: per-country length table (SWIFT-Registry), grouped/lowercase variants, DE recall", type: recall-fix, deps: [K05]}
-  - {id: F04, title: "BIC: ISO 3166 check, low context when an IBAN is nearby", type: recall-fix, deps: [F03]}
-  - {id: T06, title: "Email: no matches in URL userinfo (scheme://user:pass@host), credentials stay DLP", type: precision-fix, deps: [E06], source: "TRIAGE 2026-W42, bucket 3"}
+  - {id: F03, title: "IBAN: per-country length table (SWIFT-Registry), grouped/lowercase variants, DE recall", type: recall-fix, deps: [K05], status: bundled, into: B-IBAN}
+  - {id: F04, title: "BIC: ISO 3166 check, low context when an IBAN is nearby", type: recall-fix, deps: [F03], status: deferred, deferred: "pii.swift_bic is ark_only and decides no milestone"}
+  - {id: T06, title: "Email: no matches in URL userinfo (scheme://user:pass@host), credentials stay DLP", type: precision-fix, deps: [E06], source: "TRIAGE 2026-W42, bucket 3", status: bundled, into: B-EMAIL}
   - id: T20
+    status: bundled
+    into: B-IP
     title: "IPv6: no compressed IPv6 inside colon-delimited SWIFT MT / EDIFACT tag chains (:60F::61F:, LIN+1::1:550)"
     type: precision-fix
     deps: [E06]
@@ -318,6 +700,8 @@ tasks:
       `::EA:20`); a compressed IPv6 directly preceded or followed by a further `:`-group is no match;
       `2001:db8::1`, `fe80::1%eth0`, `::1` and full IPv6 stay found
   - id: T23
+    status: bundled
+    into: B-EMAIL
     title: "Email: Unicode local parts (RFC 6531) and apostrophes, e.g. moeleprêtr@outlook.com, o'neil@example.com"
     type: recall-fix
     deps: [E06]
@@ -325,8 +709,10 @@ tasks:
     accept: >-
       Nano dev: the 6 Unicode/apostrophe addresses Presidio finds are found; offsets in code points; hard
       negatives for obfuscated addresses (T01 convention) and for `'@` in prose/code stay negative
-  - {id: F05, title: "Email: IANA TLD list, IDN, obfuscated variants", type: precision-fix, deps: [K06]}
+  - {id: F05, title: "Email: IANA TLD list, IDN, obfuscated variants", type: precision-fix, deps: [K06], status: bundled, into: B-EMAIL}
   - id: T22
+    status: deferred
+    deferred: "pii.date_of_birth is ark_only; M2 neutral DE is already +26 pp"
     title: "Date of birth in strict: ISO 8601 (1988-05-19) and ordinal dates (18th December 1983) after an existing DOB field name"
     type: recall-fix
     deps: [E06]
@@ -335,9 +721,11 @@ tasks:
       `date of birth: 1926-01-20`, `DateOfBirth=1951-09-12`, `Geburtsdatum: 1985-01-16`, `Date of Birth:
       18th December 1983`; calendar validation unchanged; ISO dates without a DOB field name (invoice dates,
       timestamps) stay negative; geb./born on remain F06
-  - {id: F06, title: "Date of birth: spelled-out months, geb./born on, numeric with context", type: recall-fix, deps: [K03]}
-  - {id: F07, title: "US SSN without separators with context", type: recall-fix, deps: [K03]}
+  - {id: F06, title: "Date of birth: spelled-out months, geb./born on, numeric with context", type: recall-fix, deps: [K03], status: deferred, deferred: "pii.date_of_birth is ark_only; M2 neutral DE is already +26 pp"}
+  - {id: F07, title: "US SSN without separators with context", type: recall-fix, deps: [K03], status: bundled, into: B-SSN}
   - id: T25
+    status: bundled
+    into: B-SSN
     title: "US SSN AAA-GG-SSSS with proximity and structural context (Social Security Number (SSN) …, ssn=, \"ssn\":, <SSN>)"
     type: recall-fix
     deps: [K04]
@@ -345,9 +733,10 @@ tasks:
     accept: >-
       SSA range validator unchanged; Gretel dev SSN F1 ≥ Presidio tuned; hard negatives for dashed
       3-2-4 values without SSN context (order, reference and part numbers) stay negative in strict
-  - {id: F08, title: "Passport/ID card DE: ICAO 9303 check digits (7-3-1), old + new formats", type: precision-fix, deps: [K02]}
-  - {id: F09, title: "MRZ lines TD1/TD3 as a separate entity", type: new-entity, deps: [F08]}
+  - {id: F09, title: "MRZ lines TD1/TD3 as a separate entity", type: new-entity, deps: [F08], status: deferred, deferred: "No MRZ gold in the deciding families; its check digits count with the passport/ID units of F08"}
   - id: T24
+    status: bundled
+    into: B-PASS
     title: "Passport numbers outside DE after an explicit passport field name (passport number/no., Reisepass, pasaporte, passeport, passaporto, paspoort)"
     type: recall-fix
     deps: [F08]
@@ -356,15 +745,16 @@ tasks:
       42 of 83 passport FN on Gretel + Nano dev have a passport field name within 45 characters; format-only
       rule for 6-9 alphanumerics with at least 5 digits; values in DE passport form that fail the ICAO 9303
       check stay negative (no_relax); per-country formats with check digits stay in A05/B08
-  - {id: F10, title: "KVNR check digit", type: precision-fix, deps: [K02]}
-  - {id: F11, title: "Pension insurance number (RVNR) check digit", type: precision-fix, deps: [K02]}
-  - {id: F12, title: "LANR check digit + BSNR as a new entity", type: precision-fix, deps: [K02]}
-  - {id: F13, title: "Tax number (Steuernummer): formats per federal state + 13-digit ELSTER format", type: precision-fix, deps: [K02]}
-  - {id: F14, title: "Username/customer/employee/account IDs via structural context (Gretel recall)", type: recall-fix, deps: [K04]}
-  - {id: F15, title: "Driver's licence DE + US states with context", type: recall-fix, deps: [K03]}
-  - {id: F16, title: "Licence plate DE: valid list of district codes", type: precision-fix, deps: [K02]}
-  - {id: F17, title: "CVV/expiry date: recall via structure, keep coupling to PAN", type: recall-fix, deps: [K04, F02]}
+  - {id: F10, title: "KVNR check digit", type: precision-fix, deps: [K02], status: bundled, into: B-DE1}
+  - {id: F11, title: "Pension insurance number (RVNR) check digit", type: precision-fix, deps: [K02], status: bundled, into: B-DE1}
+  - {id: F12, title: "LANR check digit + BSNR as a new entity", type: precision-fix, deps: [K02], status: bundled, into: B-DE1}
+  - {id: F13, title: "Tax number (Steuernummer): formats per federal state + 13-digit ELSTER format", type: precision-fix, deps: [K02], status: bundled, into: B-DEFMT}
+  - {id: F14, title: "Username/customer/employee/account IDs via structural context (Gretel recall)", type: recall-fix, deps: [K04], status: bundled, into: B-ACCT}
+  - {id: F16, title: "Licence plate DE: valid list of district codes", type: precision-fix, deps: [K02], status: deferred, deferred: "Licence plates are format-only (no M3 unit); M1 plate is already met (tuned 0 on presidio_favored)"}
+  - {id: F17, title: "CVV/expiry date: recall via structure, keep coupling to PAN", type: recall-fix, deps: [K04, F02], status: deferred, deferred: "CVV/expiry are ark_only and decide no milestone"}
   - id: T14
+    status: deferred
+    deferred: "Runtime-hook FP outside the benchmark corpora, no milestone impact; fix as a standalone hotfix if it recurs"
     title: "FP: digit-only IDs in URL paths (GitHub Actions /actions/runs/<id>/job/<id>) detected as L1 PII"
     type: precision-fix
     deps: []
@@ -375,62 +765,55 @@ tasks:
       REST IDs) DE + EN; a digit sequence without PII context in a URL path → no match
 
   # ── B: DACH/EU depth ──────────────────────────────────────────────────
-  - {id: B01, title: "VAT ID part 1: DE, AT, CH, FR, NL, BE, IT, ES with checksums", type: new-entity, deps: [K05]}
-  - {id: B02, title: "VAT ID part 2: remaining EU + XI, NO, GB", type: new-entity, deps: [B01]}
-  - {id: B03, title: "Commercial register number HRA/HRB with local court context", type: new-entity, deps: [K03]}
-  - {id: B04, title: "DE postal address: postcode ranges + street + house number (revive postal_address_de)", type: new-entity, deps: [K04]}
-  - {id: B05, title: "DE bank code + account number (legacy format) with context", type: new-entity, deps: [F03]}
-  - {id: B06, title: "AT social insurance number (check digit)", type: new-entity, deps: [K05]}
-  - {id: B07, title: "CH AHV number (EAN-13)", type: new-entity, deps: [K05]}
-  - {id: B08, title: "AT/CH passport and ID numbers (format + context)", type: new-entity, deps: [F08]}
-  - {id: B09, title: "FR NIR (mod 97) + SIREN/SIRET (Luhn)", type: new-entity, deps: [K05]}
-  - {id: B10, title: "NL BSN (11-proof)", type: new-entity, deps: [K05]}
-  - {id: B11, title: "BE national register number", type: new-entity, deps: [K05]}
-  - {id: B12, title: "SE personnummer (Luhn) + DK CPR", type: new-entity, deps: [K05]}
-  - {id: B13, title: "NO fødselsnummer + FI HETU", type: new-entity, deps: [K05]}
-  - {id: B14, title: "PT NIF + IE PPSN", type: new-entity, deps: [K05]}
-  - {id: B15, title: "Licence plates AT/CH/NL/FR with context", type: new-entity, deps: [F16]}
+  - {id: B03, title: "Commercial register number HRA/HRB with local court context", type: new-entity, deps: [K03], status: bundled, into: B-DEFMT}
+  - {id: B04, title: "DE postal address: postcode ranges + street + house number (revive postal_address_de)", type: new-entity, deps: [K04], status: deferred, deferred: "pii.de.postal_code is presidio_only with gold only in ark_authored; revisit after D-M2"}
+  - {id: B05, title: "DE bank code + account number (legacy format) with context", type: new-entity, deps: [F03], status: deferred, deferred: "No legacy DE account gold in the deciding families and no M3 unit"}
+  - {id: B06, title: "AT social insurance number (check digit)", type: new-entity, deps: [K05], status: bundled, into: B-EU2}
+  - {id: B07, title: "CH AHV number (EAN-13)", type: new-entity, deps: [K05], status: bundled, into: B-EU2}
+  - {id: B08, title: "AT/CH passport and ID numbers (format + context)", type: new-entity, deps: [F08], status: bundled, into: B-PASS}
+  - {id: B09, title: "FR NIR (mod 97) + SIREN/SIRET (Luhn)", type: new-entity, deps: [K05], status: bundled, into: B-EU1}
+  - {id: B10, title: "NL BSN (11-proof)", type: new-entity, deps: [K05], status: bundled, into: B-EU1}
+  - {id: B11, title: "BE national register number", type: new-entity, deps: [K05], status: bundled, into: B-EU1}
+  - {id: B12, title: "SE personnummer (Luhn) + DK CPR", type: new-entity, deps: [K05], status: bundled, into: B-NORD}
+  - {id: B13, title: "NO fødselsnummer + FI HETU", type: new-entity, deps: [K05], status: bundled, into: B-NORD}
+  - {id: B14, title: "PT NIF + IE PPSN", type: new-entity, deps: [K05], status: bundled, into: B-EU2}
+  - {id: B15, title: "Licence plates AT/CH/NL/FR with context", type: new-entity, deps: [F16], status: deferred, deferred: "Licence plates are format-only (no M3 unit) and depend on the deferred F16"}
 
   # ── A: Presidio parity ────────────────────────────────────────────────
-  - {id: A01, title: "URL (with/without scheme, TLD-validated)", type: new-entity, deps: [F05]}
-  - {id: A02, title: "Crypto wallets: BTC Base58Check/Bech32(m), ETH EIP-55, LTC", type: new-entity, deps: [K05]}
-  - {id: A03, title: "US ITIN", type: new-entity, deps: [K03]}
-  - {id: A04, title: "US bank account (context) + ABA routing number (checksum)", type: new-entity, deps: [K03]}
-  - {id: A05, title: "US passport (context)", type: new-entity, deps: [K03]}
-  - {id: A06, title: "Medical licence: DEA (checksum) + NPI (Luhn with 80840)", type: new-entity, deps: [K05]}
-  - {id: A07, title: "UK NHS number (mod 11) + UK passport/driving licence", type: new-entity, deps: [K05]}
-  - {id: A08, title: "AU ABN, ACN, TFN, Medicare", type: new-entity, deps: [K05]}
-  - {id: A09, title: "IN Aadhaar (Verhoeff), PAN, voter ID, passport", type: new-entity, deps: [K05]}
-  - {id: A10, title: "SG NRIC/FIN + UEN", type: new-entity, deps: [K05]}
-  - {id: A11, title: "ES NIF/NIE/CIF", type: new-entity, deps: [K05]}
-  - {id: A12, title: "IT Codice Fiscale + Partita IVA", type: new-entity, deps: [K05]}
-  - {id: A13, title: "PL PESEL, NIP, REGON", type: new-entity, deps: [K05]}
-  - {id: A14, title: "KR RRN", type: new-entity, deps: [K05]}
-  - {id: T08, title: "UK postcode + vehicle registration (format + context)", type: new-entity, deps: [K03], source: "TRIAGE 2026-W42, Presidio parity"}
-  - {id: T09, title: "US MBI (format + context) + CA SIN (Luhn)", type: new-entity, deps: [K05], source: "TRIAGE 2026-W42, Presidio parity"}
-  - {id: T10, title: "IT carta d'identità, patente, passaporto + ES pasaporte (format + context)", type: new-entity, deps: [K03], source: "TRIAGE 2026-W42, Presidio parity"}
-  - {id: T11, title: "IN GSTIN (check digit) + vehicle registration", type: new-entity, deps: [K05], source: "TRIAGE 2026-W42, Presidio parity"}
-  - {id: T12, title: "KR BRN + FRN (check digit), driving licence + passport (context)", type: new-entity, deps: [A14], source: "TRIAGE 2026-W42, Presidio parity"}
-  - {id: T13, title: "SE organisationsnummer (Luhn), TR T.C. Kimlik No (check digit) + licence plate, ZA ID (Luhn)", type: new-entity, deps: [B12], source: "TRIAGE 2026-W42, Presidio parity"}
-  - {id: A15, title: "Generic DATE_TIME, recall mode only", type: new-entity, deps: [K02, F06]}
+  - {id: A01, title: "URL (with/without scheme, TLD-validated)", type: new-entity, deps: [F05], status: deferred, deferred: "pii.url is presidio_only, format-only and no M1 entity"}
+  - {id: A03, title: "US ITIN", type: new-entity, deps: [K03], status: deferred, deferred: "US ITIN is presidio_only and format-only (no M1 entity, no M3 unit)"}
+  - {id: A04, title: "US bank account (context) + ABA routing number (checksum)", type: new-entity, deps: [K03], status: bundled, into: B-ACCT}
+  - {id: A05, title: "US passport (context)", type: new-entity, deps: [K03], status: bundled, into: B-PASS}
+  - {id: A07, title: "UK NHS number (mod 11) + UK passport/driving licence", type: new-entity, deps: [K05], status: bundled, into: B-UK}
+  - {id: A08, title: "AU ABN, ACN, TFN, Medicare", type: new-entity, deps: [K05], status: bundled, into: B-APAC}
+  - {id: A09, title: "IN Aadhaar (Verhoeff), PAN, voter ID, passport", type: new-entity, deps: [K05], status: bundled, into: B-IN}
+  - {id: A10, title: "SG NRIC/FIN + UEN", type: new-entity, deps: [K05], status: bundled, into: B-APAC}
+  - {id: A11, title: "ES NIF/NIE/CIF", type: new-entity, deps: [K05], status: bundled, into: B-ESIT}
+  - {id: A12, title: "IT Codice Fiscale + Partita IVA", type: new-entity, deps: [K05], status: bundled, into: B-ESIT}
+  - {id: A14, title: "KR RRN", type: new-entity, deps: [K05], status: bundled, into: B-KR}
+  - {id: T08, title: "UK postcode + vehicle registration (format + context)", type: new-entity, deps: [K03], source: "TRIAGE 2026-W42, Presidio parity", status: deferred, deferred: "UK postcode/vehicle registration are presidio_only and format-only (no M1 entity, no M3 unit)"}
+  - {id: T09, title: "US MBI (format + context) + CA SIN (Luhn)", type: new-entity, deps: [K05], source: "TRIAGE 2026-W42, Presidio parity", status: bundled, into: B-LUHN}
+  - {id: T10, title: "IT carta d'identità, patente, passaporto + ES pasaporte (format + context)", type: new-entity, deps: [K03], source: "TRIAGE 2026-W42, Presidio parity", status: bundled, into: B-PASS}
+  - {id: T11, title: "IN GSTIN (check digit) + vehicle registration", type: new-entity, deps: [K05], source: "TRIAGE 2026-W42, Presidio parity", status: bundled, into: B-IN}
+  - {id: T12, title: "KR BRN + FRN (check digit), driving licence + passport (context)", type: new-entity, deps: [A14], source: "TRIAGE 2026-W42, Presidio parity", status: bundled, into: B-KR}
+  - {id: T13, title: "SE organisationsnummer (Luhn), TR T.C. Kimlik No (check digit) + licence plate, ZA ID (Luhn)", type: new-entity, deps: [B12], source: "TRIAGE 2026-W42, Presidio parity", status: bundled, into: B-LUHN}
+  - {id: A15, title: "Generic DATE_TIME, recall mode only", type: new-entity, deps: [K02, F06], status: deferred, deferred: "Recall mode only; no milestone is scored on recall"}
 
   # ── C: Beyond Presidio ────────────────────────────────────────────────
-  - {id: C01, title: "IMEI (Luhn) + MEID", type: new-entity, deps: [K05]}
-  - {id: C02, title: "ICCID (Luhn) + IMSI (context)", type: new-entity, deps: [C01]}
-  - {id: C03, title: "VIN (check digit NA, format EU, context)", type: new-entity, deps: [K05]}
-  - {id: C04, title: "ISIN (Luhn) + LEI (mod 97)", type: new-entity, deps: [K05]}
-  - {id: C05, title: "Geo coordinates decimal + DMS with context", type: new-entity, deps: [K03]}
-  - {id: C06, title: "Social handles + profile URLs with context", type: new-entity, deps: [A01]}
-  - {id: C07, title: "PZN (mod 11) + ICD-10 with context", type: new-entity, deps: [K03]}
-  - {id: C08, title: "Advertising/device IDs (IDFA, GAID, Android ID) with context", type: new-entity, deps: [K03]}
-  - {id: C09, title: "EHIC card number with context", type: new-entity, deps: [F10]}
+  - {id: C01, title: "IMEI (Luhn) + MEID", type: new-entity, deps: [K05], status: bundled, into: B-DEVID}
+  - {id: C02, title: "ICCID (Luhn) + IMSI (context)", type: new-entity, deps: [C01], status: bundled, into: B-DEVID}
+  - {id: C03, title: "VIN (check digit NA, format EU, context)", type: new-entity, deps: [K05], status: bundled, into: B-FIN}
+  - {id: C04, title: "ISIN (Luhn) + LEI (mod 97)", type: new-entity, deps: [K05], status: bundled, into: B-FIN}
+  - {id: C05, title: "Geo coordinates decimal + DMS with context", type: new-entity, deps: [K03], status: deferred, deferred: "Beyond-Presidio format/context entity; no milestone"}
+  - {id: C06, title: "Social handles + profile URLs with context", type: new-entity, deps: [A01], status: deferred, deferred: "Depends on the deferred A01; format/context entity without milestone"}
+  - {id: C07, title: "PZN (mod 11) + ICD-10 with context", type: new-entity, deps: [K03], status: bundled, into: B-FIN}
+  - {id: C08, title: "Advertising/device IDs (IDFA, GAID, Android ID) with context", type: new-entity, deps: [K03], status: deferred, deferred: "Beyond-Presidio format/context entity; no milestone"}
+  - {id: C09, title: "EHIC card number with context", type: new-entity, deps: [F10], status: deferred, deferred: "Format-only; no milestone"}
 
   # ── H: Hardening and wrap-up ──────────────────────────────────────────
-  - {id: H01, title: "Hard-negative mining: 500 technical benign texts (versions, hashes, order numbers, UUIDs, timestamps)", type: precision-fix, deps: [A15, C09]}
-  - {id: H02, title: "Property/fuzz tests: no panic, valid UTF-8 offsets, strict bit-identical", type: test, deps: [H01]}
-  - {id: H03, title: "Latency budget after all rules, AnchorGate coverage of new rules", type: perf, deps: [H01]}
-  - {id: H04, title: "Docs: categories, rule catalog, result schema, choose-categories", type: docs, deps: [H03]}
-  - {id: H05, title: "Final report M1–M4 on holdout", type: report, deps: [H04]}
+  - {id: H01, title: "Hard-negative mining: 500 technical benign texts (versions, hashes, order numbers, UUIDs, timestamps)", type: precision-fix, deps: [A15, C09], status: deferred, deferred: "Mining adds ark_authored hard negatives only; Immer is judged on neutral and presidio_favored"}
+  - {id: H02, title: "Property/fuzz tests: no panic, valid UTF-8 offsets, strict bit-identical", type: test, deps: [H01], status: deferred, deferred: "Quality hardening without milestone impact; can follow the programme"}
+  - {id: H04, title: "Docs: categories, rule catalog, result schema, choose-categories", type: docs, deps: [H03], status: deferred, deferred: "Docs are part of every task's shared acceptance; wrap-up docs can follow H05"}
 
 recurring:
   - id: TRIAGE

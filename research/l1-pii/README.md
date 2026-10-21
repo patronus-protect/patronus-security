@@ -309,6 +309,13 @@ run.sh
 
 ## Reihenfolge
 
-E (Messinfrastruktur) → K (Engine) → F (bestehende Regeln reparieren) → B (DACH/EU) → A
-(Presidio-Parität) → C (über Presidio hinaus) → H (Härtung, Abschluss). 106 Aufgaben (inkl. TRIAGE-Einträge Txx), bei 2 Läufen/Tag
-≈ 7–8 Wochen inkl. Review-Pausen.
+Gekürzt am 2026-10-21 auf den kritischen Pfad zu M1–M4: Die offenen Aufgaben stehen in Laufreihenfolge
+im Abschnitt „Critical path“ von `backlog.yaml`. Ähnliche Aufgaben sind zu Bündeln zusammengefasst
+(`bundles: [...]`; aufgegangene Aufgaben tragen `status: bundled` und `into`), Aufgaben ohne
+Meilenstein-Wirkung tragen `status: deferred` mit Grund. 35 offene Aufgaben, bei 2 Läufen/Tag
+≈ 2,5–3 Wochen. Neue TRIAGE-Aufgaben nur, wenn sie einen Meilenstein bewegen.
+
+Entscheidungen vom 2026-10-21: M2 gilt auf beiden Familien (neutral: ≥ Presidio tuned + 15 pp;
+`presidio_favored`: ≥ Presidio tuned). Loopback- und unspezifizierte Adressen (`127.0.0.1`, `::1`,
+`0.0.0.0`, `::`) verwirft ARK in jedem Modus; ihre Gold-Werte auf `presidio_favored` bleiben eine
+bekannte Lücke für M1 (IP).
