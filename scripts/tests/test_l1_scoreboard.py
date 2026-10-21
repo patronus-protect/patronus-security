@@ -247,99 +247,268 @@ def test_m1_is_english_by_default():
     assert not MODULE.m1_report(*scored, EMAP, language="all")["families"]["neutral"]["holds"]
 
 
-def test_main_m1_subcommand(tmp_path, capsys):
-    rows, ark, presidio = m1_rows()
-    by_corpus = {GRETEL: "g.jsonl", EVALUATOR: "presidio_favored/e.jsonl", SYNTH: "synthetic/s.jsonl"}
-    for root, predictions in (("gold", None), ("ark", ark), ("presidio", presidio)):
-        for corpus, name in by_corpus.items():
+BY_CORPUS = {GRETEL: "g.jsonl", EVALUATOR: "presidio_favored/e.jsonl", SYNTH: "synthetic/s.jsonl"}
+
+
+def write_tree(tmp_path, rows, engines):
+    """Gold rows in three frozen directories plus one prediction directory per engine."""
+    for root, predictions in (("gold", None), *engines.items()):
+        for corpus, name in BY_CORPUS.items():
             selected = [i for i, row in enumerate(rows) if row["corpus"] == corpus]
             write_jsonl(tmp_path / root / name, [rows[i] if predictions is None else predictions[i] for i in selected])
             if predictions is None:
                 (tmp_path / root / name).parent.joinpath(".ready").write_text("x")
-    args = ["m1", "--gold", str(tmp_path / "gold"), "--ark", str(tmp_path / "ark"), "--presidio", str(tmp_path / "presidio")]
+    return {name: tmp_path / name for name in engines}
+
+
+def perfect(rows):
+    return [pred(row["id"], [(e["entity_type"], e["start"], e["end"]) for e in row["entities"]]) for row in rows]
+
+
+def test_main_m1_subcommand_prints_every_mode_and_decides_on_balanced(tmp_path, capsys):
+    rows, ark, presidio = m1_rows()
+    dirs = write_tree(tmp_path, rows, {"weak": ark, "perfect": perfect(rows), "presidio": presidio})
+    base = ["m1", "--gold", str(tmp_path / "gold"), "--presidio", str(dirs["presidio"])]
+    args = base + ["--ark", f"strict={dirs['weak']}", "--ark", f"balanced={dirs['perfect']}"]
     assert MODULE.main(args + ["--json", str(tmp_path / "m1.json")]) == 0
-    out = capsys.readouterr().out
-    assert "neutral: NOT MET, 1/2 shared ids" in out
-    assert out.strip().endswith("M1: NOT MET (neutral not met, presidio_favored holds)")
-    assert json.loads((tmp_path / "m1.json").read_text())["met"] is False
-    assert MODULE.main(args + ["--check"]) == 1
-    (tmp_path / "ark" / "g.jsonl").unlink()
-    assert MODULE.main(args) == 2
+    lines = capsys.readouterr().out.strip().splitlines()
+    assert "== Ark strict (reported, decides no milestone)" in lines and "== Ark balanced (milestone mode)" in lines
+    strict = lines[lines.index("== Ark strict (reported, decides no milestone)"):lines.index("== Ark balanced (milestone mode)")]
+    assert "neutral: NOT MET, 1/2 shared ids" in strict
+    assert "M1 strict: NOT MET (neutral not met, presidio_favored holds)" in lines
+    assert "M1 balanced: MET (neutral holds, presidio_favored holds)" in lines
+    assert lines[-1] == "M1: MET (balanced: neutral holds, presidio_favored holds)"
+    report = json.loads((tmp_path / "m1.json").read_text())
+    assert report["milestone_mode"] == "balanced" and report["met"] is True
+    assert report["modes"]["strict"]["met"] is False and report["modes"]["balanced"]["met"] is True
+    assert MODULE.main(args + ["--check"]) == 0
+    # Swapped: strict meets M1, balanced does not, so M1 is not met.
+    swapped = base + ["--ark", f"strict={dirs['perfect']}", "--ark", f"balanced={dirs['weak']}"]
+    assert MODULE.main(swapped + ["--check"]) == 1
+    assert capsys.readouterr().out.strip().endswith("M1: NOT MET (balanced: neutral not met, presidio_favored holds)")
+    # Balanced is required; modes are named once and must exist.
+    assert MODULE.main(base + ["--ark", f"strict={dirs['perfect']}"]) == 2
+    assert MODULE.main(base + ["--ark", f"balanced={dirs['weak']}"]) == 0
+    for bad in (str(dirs["weak"]), f"fast={dirs['weak']}"):
+        assert MODULE.main(base + ["--ark", f"balanced={dirs['weak']}", "--ark", bad]) == 2
+    assert MODULE.main(swapped + ["--ark", f"balanced={dirs['weak']}"]) == 2
+    (dirs["weak"] / "g.jsonl").unlink()
+    assert MODULE.main(swapped) == 2
 
 
 # ── baseline report ──────────────────────────────────────────────────────
 
 
 def write_report_tree(tmp_path):
-    """Gold in three frozen directories plus Ark, Presidio default and Presidio tuned predictions."""
+    """Gold in three frozen directories plus Ark strict/balanced and Presidio default/tuned predictions."""
     rows, ark, tuned = m1_rows()
     rows.append(gold("ark-hn", [], corpus=SYNTH, language="de", hard_negatives=[(40, 50)]))
     ark.append(pred("ark-hn", []))
     tuned.append(pred("ark-hn", [("pii.phone", 40, 50)]))
     default = [pred(row["id"], []) for row in rows]
-    by_corpus = {GRETEL: "g.jsonl", EVALUATOR: "presidio_favored/e.jsonl", SYNTH: "synthetic/s.jsonl"}
-    for root, predictions in (("gold", None), ("ark", ark), ("default", default), ("tuned", tuned)):
-        for corpus, name in by_corpus.items():
-            selected = [i for i, row in enumerate(rows) if row["corpus"] == corpus]
-            write_jsonl(tmp_path / root / name, [rows[i] if predictions is None else predictions[i] for i in selected])
-            if predictions is None:
-                (tmp_path / root / name).parent.joinpath(".ready").write_text("x")
-    return {name: tmp_path / name for name in ("ark", "default", "tuned")}
+    return write_tree(tmp_path, rows, {"ark": ark, "balanced": perfect(rows), "default": default, "tuned": tuned})
 
 
 def test_report_scores_every_engine_per_family_corpus_and_entity(tmp_path):
     engines = write_report_tree(tmp_path)
-    report = MODULE.baseline_report(tmp_path / "gold", {"ark": engines["ark"], "presidio-tuned": engines["tuned"]}, EMAP)
-    assert list(report["engines"]) == ["ark", "presidio-tuned"]
-    ark, tuned = report["engines"]["ark"], report["engines"]["presidio-tuned"]
-    assert ark["buckets"]["family/neutral"] == {"gold": 20, "predicted": 15, "exact": 15, "gold_found": 15,
-                                                "predicted_correct": 15}
-    assert ark["buckets"][f"corpus/{GRETEL}"] == ark["buckets"]["family/neutral"]
+    ark = {"strict": engines["ark"], "balanced": engines["balanced"]}
+    report = MODULE.baseline_report(tmp_path / "gold", ark, {"presidio-tuned": engines["tuned"]}, EMAP)
+    assert list(report["engines"]) == ["ark-strict", "ark-balanced", "presidio-tuned"]
+    strict, tuned = report["engines"]["ark-strict"], report["engines"]["presidio-tuned"]
+    assert strict["buckets"]["family/neutral"] == {"gold": 20, "predicted": 15, "exact": 15, "gold_found": 15,
+                                                   "predicted_correct": 15}
+    assert strict["buckets"][f"corpus/{GRETEL}"] == strict["buckets"]["family/neutral"]
+    assert report["engines"]["ark-balanced"]["buckets"]["family/neutral"]["exact"] == 20
     # Hard-negative hits are attributed to the family of their row.
-    assert report["hard_negative_fp"] == {"ark": {}, "presidio-tuned": {"ark_authored": 1}}
+    assert report["hard_negative_fp"] == {"ark-strict": {}, "ark-balanced": {}, "presidio-tuned": {"ark_authored": 1}}
     assert tuned["buckets"]["family/ark_authored"]["predicted"] == 20
-    # M1 compares the first engine with every other one.
+    # M1 compares every Ark mode with every Presidio profile; the milestone is read from balanced.
+    assert report["milestone_mode"] == "balanced"
     assert list(report["m1"]) == ["presidio-tuned"]
-    assert report["m1"]["presidio-tuned"]["families"]["presidio_favored"]["holds"]
-    assert not report["m1"]["presidio-tuned"]["met"]
-    with pytest.raises(MODULE.ScoreboardError, match="two engines"):
-        MODULE.baseline_report(tmp_path / "gold", {"ark": engines["ark"]}, EMAP)
+    m1 = report["m1"]["presidio-tuned"]
+    assert m1["modes"]["strict"]["families"]["presidio_favored"]["holds"] and not m1["modes"]["strict"]["met"]
+    assert m1["modes"]["balanced"]["met"] and m1["met"]
+    with pytest.raises(MODULE.ScoreboardError, match="balanced"):
+        MODULE.baseline_report(tmp_path / "gold", {"strict": engines["ark"]}, {"presidio-tuned": engines["tuned"]}, EMAP)
+    with pytest.raises(MODULE.ScoreboardError, match="Presidio"):
+        MODULE.baseline_report(tmp_path / "gold", ark, {}, EMAP)
 
 
 def test_report_markdown_tables(tmp_path):
     engines = write_report_tree(tmp_path)
     report = MODULE.baseline_report(
         tmp_path / "gold",
-        {"ark": engines["ark"], "presidio-default": engines["default"], "presidio-tuned": engines["tuned"]},
+        {"strict": engines["ark"], "balanced": engines["balanced"]},
+        {"presidio-default": engines["default"], "presidio-tuned": engines["tuned"]},
         EMAP,
     )
     lines = MODULE.report_lines(report)
     text = "\n".join(lines)
     assert "| Family | Engine | Rows | Gold | Pred | Exact P | Exact R | Exact F1 | Overlap F1 | EN F1 | DE F1 | HN-FP |" in lines
-    assert "| neutral | ark | 10 | 20 | 15 | 100.0 | 75.0 | 85.7 | 85.7 | 85.7 | – | 0 |" in lines
+    assert "| neutral | ark-strict | 10 | 20 | 15 | 100.0 | 75.0 | 85.7 | 85.7 | 85.7 | – | 0 |" in lines
+    assert "| neutral | ark-balanced | 10 | 20 | 20 | 100.0 | 100.0 | 100.0 | 100.0 | 100.0 | – | 0 |" in lines
     assert "| ark_authored ¹ | presidio-tuned | 11 | 20 | 20 | 95.0 | 95.0 | 95.0 | 95.0 | 97.4 | 0.0 | 1 |" in lines
-    assert f"| {GRETEL} | neutral | 10 | 20 | 100.0 / 75.0 / 85.7 | 0.0 / 0.0 / 0.0 | 100.0 / 95.0 / **97.4** |" in lines
+    assert (f"| {GRETEL} | neutral | 10 | 20 | 100.0 / 75.0 / 85.7 | 100.0 / 100.0 / **100.0** | 0.0 / 0.0 / 0.0 | "
+            "100.0 / 95.0 / 97.4 |") in lines
     # Per entity: exact F1 per engine, the best one in bold, shared ids marked.
-    assert "| neutral | pii.phone | shared | 10 | 66.7 | 0.0 | **100.0** |" in lines
-    assert "| presidio_favored | pii.email | shared | 10 | **100.0** | 0.0 | 94.7 |" in lines
-    # M1 per milestone family against each Presidio profile.
-    assert "| presidio-tuned | NOT MET | 1/2 (below: pii.phone) | 2/2 | 1/2 (below: pii.phone) |" in lines
-    assert "| presidio-default | MET | 2/2 | 2/2 | 2/2 |" in lines
+    assert "| neutral | pii.phone | shared | 10 | 66.7 | **100.0** | 0.0 | **100.0** |" in lines
+    assert "| presidio_favored | pii.email | shared | 10 | **100.0** | **100.0** | 0.0 | 94.7 |" in lines
+    # M1 per Ark mode and milestone family against each Presidio profile; balanced decides.
+    assert "| Ark mode | Profile | M1 | neutral | presidio_favored | ark_authored ¹ |" in lines
+    assert "| balanced | presidio-default | MET | 2/2 | 2/2 | 2/2 |" in lines
+    assert "| balanced | presidio-tuned | MET | 2/2 | 2/2 | 2/2 |" in lines
+    assert "| strict ² | presidio-tuned | NOT MET | 1/2 (below: pii.phone) | 2/2 | 1/2 (below: pii.phone) |" in lines
+    assert "| strict ² | presidio-default | MET | 2/2 | 2/2 | 2/2 |" in lines
+    assert lines.index("| balanced | presidio-tuned | MET | 2/2 | 2/2 | 2/2 |") < lines.index(
+        "| strict ² | presidio-tuned | NOT MET | 1/2 (below: pii.phone) | 2/2 | 1/2 (below: pii.phone) |")
     assert "¹ ark_authored is reported and decides no milestone." in text
+    assert "² reported; milestones are judged on balanced (T15)." in text
 
 
 def test_main_report_subcommand(tmp_path, capsys):
     engines = write_report_tree(tmp_path)
-    args = ["report", "--gold", str(tmp_path / "gold"), "--engine", f"ark={engines['ark']}",
-            "--engine", f"presidio-tuned={engines['tuned']}"]
+    args = ["report", "--gold", str(tmp_path / "gold"), "--ark", f"strict={engines['ark']}",
+            "--ark", f"balanced={engines['balanced']}", "--engine", f"presidio-tuned={engines['tuned']}"]
     assert MODULE.main(args + ["--json", str(tmp_path / "report.json")]) == 0
     out = capsys.readouterr().out
-    assert out.startswith("## ") and "| neutral | ark |" in out
-    assert json.loads((tmp_path / "report.json").read_text())["m1"]["presidio-tuned"]["met"] is False
+    assert out.startswith("## ") and "| neutral | ark-strict |" in out and "## Gold gaps" in out
+    report = json.loads((tmp_path / "report.json").read_text())
+    assert report["m1"]["presidio-tuned"]["met"] is True
+    assert report["m1"]["presidio-tuned"]["modes"]["strict"]["met"] is False
     assert MODULE.main(args + ["--engine", "broken"]) == 2
-    assert MODULE.main(args + ["--engine", f"ark={engines['tuned']}"]) == 2
+    assert MODULE.main(args + ["--engine", f"presidio-tuned={engines['default']}"]) == 2
+    assert MODULE.main(args + ["--engine", f"ark-strict={engines['default']}"]) == 2
+    assert MODULE.main(args + ["--ark", f"balanced={engines['default']}"]) == 2
     (engines["tuned"] / "g.jsonl").unlink()
     assert MODULE.main(args) == 2
+
+
+# ── gold gaps (T16) ──────────────────────────────────────────────────────
+
+
+def annotated(row_id, text, items, corpus=GRETEL, language="en"):
+    """A gold row with real text; items are (label, value, occurrence) and annotate that occurrence."""
+    entities = []
+    for label, value, occurrence in items:
+        start = -1
+        for _ in range(occurrence + 1):
+            start = text.index(value, start + 1)
+        entities.append({"entity_type": label, "start": start, "end": start + len(value)})
+    return {"id": row_id, "corpus": corpus, "language": language, "text": text, "entities": entities}
+
+
+def spans_of(row_id, text, items):
+    """Prediction row for (label, value, occurrence) items."""
+    spans = []
+    for label, value, occurrence in items:
+        start = -1
+        for _ in range(occurrence + 1):
+            start = text.index(value, start + 1)
+        spans.append((label, start, start + len(value)))
+    return pred(row_id, spans)
+
+
+MAIL_TEXT = "Contact [ann@bank.example](mailto:ann@bank.example), cc ann@bank.example or bob@bank.example."
+CARD_TEXT = "Cards 4111 1111 1111 1111 and 4111 1111 1111 1112, IBAN DE89370400440532013000 / DE89370400440532013001."
+
+
+def gap_rows():
+    rows = [
+        # Gretel annotates one copy of the markdown mail link only.
+        annotated("mail", MAIL_TEXT, [("pii.email", "ann@bank.example", 0)]),
+        annotated("card", CARD_TEXT, [("pii.credit_card.pan", "4111 1111 1111 1111", 0),
+                                      ("pii.credit_card.pan", "4111 1111 1111 1112", 0),
+                                      ("pii.iban", "DE89370400440532013000", 0),
+                                      ("pii.iban", "DE89370400440532013001", 0)]),
+    ]
+    ark = [
+        spans_of("mail", MAIL_TEXT, [("pii.email", "ann@bank.example", i) for i in range(3)]
+                 + [("pii.email", "bob@bank.example", 0), ("pii.phone", "ann@bank.example", 1)]),
+        spans_of("card", CARD_TEXT, [("pii.credit_card.pan", "4111 1111 1111 1111", 0),
+                                     ("pii.iban", "DE89370400440532013000", 0)]),
+    ]
+    presidio = [
+        spans_of("mail", MAIL_TEXT, [("pii.email", "ann@bank.example", 1)]),
+        spans_of("card", CARD_TEXT, [("pii.credit_card.pan", "4111 1111 1111 1112", 0),
+                                     ("pii.iban", "DE89370400440532013001", 0)]),
+    ]
+    return rows, ark, presidio
+
+
+def test_gold_gaps_count_duplicate_values_and_checksum_invalid_gold():
+    rows, ark, presidio = gap_rows()
+    gaps = MODULE.gold_gaps(rows, ark, EMAP)[GRETEL]
+    # Two further copies of the annotated value count; bob@ is an ordinary FP, and a phone span on the
+    # e-mail value is another id.
+    assert gaps["pii.email"] == {"gold": 1, "gold_invalid": None, "invalid_found": None, "duplicate_fp": 2}
+    assert gaps["pii.credit_card.pan"] == {"gold": 2, "gold_invalid": 1, "invalid_found": 0, "duplicate_fp": 0}
+    assert gaps["pii.iban"] == {"gold": 2, "gold_invalid": 1, "invalid_found": 0, "duplicate_fp": 0}
+    assert "pii.phone" not in gaps
+    gaps = MODULE.gold_gaps(rows, presidio, EMAP)[GRETEL]
+    assert gaps["pii.email"]["duplicate_fp"] == 1
+    assert gaps["pii.credit_card.pan"]["invalid_found"] == 1 and gaps["pii.iban"]["invalid_found"] == 1
+
+
+def test_gold_gaps_follow_the_scored_ids_of_a_row():
+    text = "Card 4111 1111 1111 1112 for ann@bank.example and ann@bank.example"
+    row = annotated("r", text, [("pii.credit_card.pan", "4111 1111 1111 1112", 0), ("pii.email", "ann@bank.example", 0)],
+                    corpus=RECOGNIZER_TESTS)
+    row["scored_entities"] = ["pii.credit_card.pan"]
+    gaps = MODULE.gold_gaps([row], [spans_of("r", text, [("pii.email", "ann@bank.example", 1)])], EMAP)
+    assert gaps == {RECOGNIZER_TESTS: {"pii.credit_card.pan": {"gold": 1, "gold_invalid": 1, "invalid_found": 0,
+                                                               "duplicate_fp": 0}}}
+
+
+def test_gold_gaps_change_no_metric(tmp_path):
+    rows, ark, presidio = gap_rows()
+    dirs = write_tree(tmp_path, rows, {"strict": ark, "balanced": ark, "tuned": presidio})
+    report = MODULE.baseline_report(tmp_path / "gold", {"strict": dirs["strict"], "balanced": dirs["balanced"]},
+                                    {"presidio-tuned": dirs["tuned"]}, EMAP)
+    assert report["engines"]["ark-strict"] == MODULE.score_rows(rows, ark, EMAP, "g.jsonl")
+    assert report["engines"]["presidio-tuned"] == MODULE.score_rows(rows, presidio, EMAP, "g.jsonl")
+    gaps = report["gold_gaps"]
+    assert gaps["validators"]["pii.iban"] == ["mod97"]
+    email = gaps["corpora"][GRETEL]["pii.email"]
+    assert email["gold"] == 1 and email["gold_invalid"] is None
+    assert email["engines"] == {"ark-strict": {"duplicate_fp": 2, "invalid_found": None},
+                                "ark-balanced": {"duplicate_fp": 2, "invalid_found": None},
+                                "presidio-tuned": {"duplicate_fp": 1, "invalid_found": None}}
+    lines = MODULE.report_lines(report)
+    assert "## Gold gaps (reported only; no metric changes, T16)" in lines
+    assert "| Corpus | Entity | Gold | ark-strict | ark-balanced | presidio-tuned |" in lines
+    assert f"| {GRETEL} | pii.email | 1 | 2 | 2 | 1 |" in lines
+    assert "| Corpus | Entity | Validator | Gold | Invalid | ark-strict | ark-balanced | presidio-tuned |" in lines
+    assert f"| {GRETEL} | pii.credit_card.pan | luhn | 2 | 1 | 0 | 0 | 1 |" in lines
+    assert f"| {GRETEL} | pii.iban | mod97 | 2 | 1 | 0 | 0 | 1 |" in lines
+
+
+def test_gold_validators_cover_every_checksum_validator():
+    validators = MODULE.gold_validators(EMAP)
+    assert validators["pii.iban"] == ("mod97",)
+    assert validators["pii.credit_card.pan"] == ("luhn",)
+    assert validators["pii.de.tax_id"] == ("steuer_id", "steuer_id_issued")
+    rules = MODULE.count_validated_module().load_rules()
+    checksum = {name for name, rule in rules.ark.items() if rule is not None}
+    # A task that adds a checksum validator ports it to CHECKSUM_PORTS for the gold-gap report.
+    assert checksum <= set(MODULE.CHECKSUM_PORTS), sorted(checksum - set(MODULE.CHECKSUM_PORTS))
+    assert {v for ids in validators.values() for v in ids} <= checksum
+
+
+@pytest.mark.parametrize("name,valid,invalid", [
+    ("luhn", ["4111111111111111", "4111 1111 1111 1111", "4111-1111-1111-1111"],
+     ["4111111111111112", "4111 1111 1111 1112", "49 89 2019 4401", "0151 2345 6789 02", "00000000000000", "4242"]),
+    ("mod97", ["DE89370400440532013000", "DE89 3704 0044 0532 0130 00", "GB82WEST12345698765432"],
+     ["DE89370400440532013001", "DE00370400440532013000", "DE18 4306 0967 1234 5678 01", "GB82WEST12345698765433",
+      "DE8"]),
+    ("steuer_id", ["86095742719", "86 095 742 719", "12345678903"],
+     ["86095742718", "06095742719", "8609574271", "860957427190"]),
+    ("steuer_id_issued", ["86095742719", "86 095 742 719"],
+     ["86095742718", "12345678903", "47110815008", "86555742194", "11111111111"]),
+])
+def test_checksum_ports_match_the_rust_vectors(name, valid, invalid):
+    check = MODULE.CHECKSUM_PORTS[name]
+    assert all(check(value) for value in valid), [v for v in valid if not check(v)]
+    assert not any(check(value) for value in invalid), [v for v in invalid if check(v)]
 
 
 def test_predictions_must_match_gold_ids():
@@ -423,20 +592,24 @@ def test_discover_without_frozen_data_fails(tmp_path):
 
 FAKE_RUN_ARK = """\
 import argparse, json
-# Fake run_ark.py: predicts every gold entity except those whose id is in DROP.
+# Fake run_ark.py: predicts every gold entity except those whose id is in DROP (a list for every
+# PII mode or a mapping mode -> list) and records the mode like run_ark.py.
 DROP = {drop!r}
 p = argparse.ArgumentParser()
 p.add_argument("--input"); p.add_argument("--output"); p.add_argument("--meta")
+p.add_argument("--pii-mode", default="strict")
 a = p.parse_args()
+drop = DROP.get(a.pii_mode, []) if isinstance(DROP, dict) else DROP
 with open(a.input) as src, open(a.output, "w") as out:
     for line in src:
         row = json.loads(line)
-        spans = [] if row["id"] in DROP else [
+        spans = [] if row["id"] in drop else [
             {{"label": e["entity_type"], "start_char": e["start"], "end_char": e["end"], "score": 1.0}}
             for e in row["entities"]
         ]
         out.write(json.dumps({{"id": row["id"], "language": row["language"], "evidence_spans": spans}}) + "\\n")
-open(a.meta, "w").write("{{}}")
+engine = {{}} if a.pii_mode == "strict" else {{"pii_mode": a.pii_mode}}
+open(a.meta, "w").write(json.dumps({{"engine": engine}}))
 """
 
 
@@ -548,10 +721,18 @@ def test_gate_same_sources_reuses_head_predictions(repo, data, tmp_path):
     assert builds.head_builds == 1 and builds.base_builds == []
     assert lines[-1] == "RESULT: PASS"
     assert "(same Ark sources)" in lines[0]
-    assert set(report["splits"]) == {"dev", "holdout"}
-    # Results are stored per commit, predictions per source key.
+    # Both PII modes are scored for both splits; milestones are read from balanced (T15).
+    assert report["milestone_mode"] == "balanced"
+    assert list(report["modes"]) == ["strict", "balanced"]
+    assert all(set(splits) == {"dev", "holdout"} for splits in report["modes"].values())
+    # Results are stored per commit (both modes), predictions per source key and mode.
     results = tmp_path / "cache" / "scoreboard" / "results"
     assert {p.stem for p in results.iterdir()} == {base, run_git(repo, "rev-parse", "HEAD")}
+    stored = json.loads((results / f"{base}.json").read_text())
+    assert set(stored["modes"]) == {"strict", "balanced"} and set(stored["modes"]["balanced"]) == {"dev", "holdout"}
+    predictions = tmp_path / "cache" / "scoreboard" / "predictions" / report["head_source_key"]
+    # strict keeps the layout from before T15, so cached strict predictions stay valid.
+    assert len(list(predictions.glob("*.jsonl"))) == 2 and len(list((predictions / "balanced").glob("*.jsonl"))) == 2
     # A second gate is served from the cache.
     builds = Builds(repo, tmp_path)
     builds.gate(base, data, tmp_path / "cache")
@@ -566,16 +747,20 @@ def test_gate_detects_regression_on_holdout(repo, data, tmp_path):
     assert regressed
     assert builds.base_builds == [base]
     assert lines[-1] == "RESULT: REGRESSION"
-    assert any(line.startswith("  holdout entity/pii.iban exact F1 100.0 -> ") for line in lines)
-    assert report["splits"]["dev"]["compare"]["regressions"] == []
+    for mode in ("strict", "balanced"):
+        assert any(line.startswith(f"  {mode} holdout entity/pii.iban exact F1 100.0 -> ") for line in lines)
+        assert report["modes"][mode]["dev"]["compare"]["regressions"] == []
     # Holdout row ids never reach stdout.
     assert not any("h0" in line or "h1" in line for line in lines)
-    # Per-entity tables are printed for dev only.
-    assert not any("pii.iban" in line for line in lines if not line.startswith("  holdout"))
-    # Aggregates per source family for both splits; the family regression is named, the rows are not.
-    assert any(line.startswith("  dev ark_authored") and "decides no milestone" in line for line in lines)
-    assert any(line.startswith("  holdout neutral") and "L1 F1 88.9/88.9 (-11.1/-11.1)" in line for line in lines)
-    assert any(line.startswith("  holdout family/neutral exact F1 100.0 -> ") for line in lines)
+    # Per-entity tables are printed for dev only, one per mode.
+    assert not any("pii.iban" in line for line in lines if not line.startswith(("  strict holdout", "  balanced holdout")))
+    assert "dev per entity, strict (head; Δ vs base in pp):" in lines
+    assert "dev per entity, balanced (head; Δ vs base in pp):" in lines
+    # Aggregates per mode and source family for both splits; the family regression is named, the rows are not.
+    assert any(line.startswith("  strict dev ark_authored") and "decides no milestone" in line for line in lines)
+    assert any(line.startswith("  balanced holdout neutral") and "L1 F1 88.9/88.9 (-11.1/-11.1)" in line for line in lines)
+    assert any(line.startswith("  balanced holdout family/neutral exact F1 100.0 -> ") for line in lines)
+    assert any(line.startswith("balanced holdout rows    10") for line in lines)
 
 
 def test_gate_detects_new_hard_negative_fp(repo, data, tmp_path):
@@ -588,8 +773,54 @@ def test_gate_detects_new_hard_negative_fp(repo, data, tmp_path):
     commit_files(repo, {"scripts/l1_presidio/run_ark.py": noisy}, "noisy")
     lines, regressed, report = Builds(repo, tmp_path).gate(base, data, tmp_path / "cache")
     assert regressed
-    assert len(report["splits"]["dev"]["compare"]["new_hard_negative_fp"]) == 10
-    assert "  dev new hard-negative FP: pii.phone 10" in lines
+    for mode in ("strict", "balanced"):
+        assert len(report["modes"][mode]["dev"]["compare"]["new_hard_negative_fp"]) == 10
+        assert f"  {mode} dev new hard-negative FP: pii.phone 10" in lines
+
+
+@pytest.mark.parametrize("mode", ["strict", "balanced"])
+def test_gate_fails_on_a_regression_in_either_mode(repo, data, tmp_path, mode):
+    base = run_git(repo, "rev-parse", "HEAD")
+    commit_files(repo, {"scripts/l1_presidio/run_ark.py": FAKE_RUN_ARK.format(drop={mode: ["h0", "h1"]})}, "worse")
+    lines, regressed, report = Builds(repo, tmp_path).gate(base, data, tmp_path / "cache")
+    assert regressed and lines[-1] == "RESULT: REGRESSION"
+    other = "balanced" if mode == "strict" else "strict"
+    assert report["modes"][mode]["holdout"]["compare"]["regressions"]
+    assert report["modes"][other]["holdout"]["compare"]["regressions"] == []
+    assert any(line.startswith(f"  {mode} holdout entity/pii.iban") for line in lines)
+    assert not any(line.startswith(f"  {other} holdout entity/") for line in lines)
+
+
+def test_gate_balanced_gain_does_not_hide_a_strict_loss(repo, data, tmp_path):
+    commit_files(repo, {"scripts/l1_presidio/run_ark.py": FAKE_RUN_ARK.format(drop={"balanced": ["h0", "h1"]})}, "weak")
+    weak = run_git(repo, "rev-parse", "HEAD")
+    commit_files(repo, {"scripts/l1_presidio/run_ark.py": FAKE_RUN_ARK.format(drop={"strict": ["h0"]})}, "trade")
+    lines, regressed, report = Builds(repo, tmp_path).gate(weak, data, tmp_path / "cache")
+    assert regressed
+    assert report["modes"]["strict"]["holdout"]["compare"]["regressions"]
+    assert report["modes"]["balanced"]["holdout"]["compare"]["regressions"] == []
+
+
+def test_gate_rejects_a_runner_that_ignores_the_pii_mode(repo, data, tmp_path):
+    # A run_ark.py without --pii-mode support (meta without engine.pii_mode) must not pass as balanced.
+    legacy = FAKE_RUN_ARK.format(drop=[]).replace('engine = {} if a.pii_mode == "strict" else {"pii_mode": a.pii_mode}',
+                                                  "engine = {}")
+    assert legacy != FAKE_RUN_ARK.format(drop=[])
+    base = run_git(repo, "rev-parse", "HEAD")
+    commit_files(repo, {"scripts/l1_presidio/run_ark.py": legacy}, "legacy")
+    with pytest.raises(MODULE.ScoreboardError, match="balanced"):
+        Builds(repo, tmp_path).gate(base, data, tmp_path / "cache")
+
+
+def test_run_predictions_passes_the_pii_mode(tmp_path):
+    script = tmp_path / "run_ark.py"
+    script.write_text(FAKE_RUN_ARK.format(drop={"balanced": ["a"]}))
+    write_jsonl(tmp_path / "g.jsonl", [gold("a", [("pii.email", 0, 10)])])
+    build = MODULE.ArkBuild(sys.executable, script, {}, None)
+    for mode, spans in (("strict", 1), ("balanced", 0)):
+        output = tmp_path / f"{mode}.jsonl"
+        MODULE.run_predictions(build, tmp_path / "g.jsonl", output, mode)
+        assert len(MODULE.read_jsonl(output)[0]["evidence_spans"]) == spans
 
 
 def test_gate_improvement_passes_and_base_is_cached_per_source(repo, data, tmp_path):
@@ -616,7 +847,8 @@ def test_gate_dirty_head_is_not_cached(repo, data, tmp_path):
     lines, regressed, report = builds.gate(base, data, tmp_path / "cache")
     assert not regressed and report["head_source_key"] is None
     assert "(uncommitted changes)" in lines[0]
-    assert builds.base_builds == [base]
+    # One build per side serves both modes.
+    assert builds.base_builds == [base] and builds.head_builds == 1
     # Only the committed base lands in the prediction cache.
     assert [p.name for p in (tmp_path / "cache" / "scoreboard" / "predictions").iterdir()] == [report["base_source_key"]]
 
