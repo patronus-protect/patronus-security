@@ -296,12 +296,12 @@ PII_CASES = {
         p("PHONE", "de", "pii_phone_international", "Name;Telefon\nMüller;", "+49 89 2019 4400", "", carrier="csv"),
         p("PHONE", "de", "pii_phone_de", "Fax: ", "0049 211 5583920"),
         p("PHONE", "de", "pii_phone_us", "US-Büro: ", "212-736-4410"),
-        p("PHONE", "de", "pii_phone_us", "US-Büro: ", "(212) 736-4410", gap=True),
+        p("PHONE", "de", "pii_phone_us", "US-Büro: ", "(212) 736-4410"),
         p("PHONE", "de", "pii_phone_de_national_context", '{"telefon": "', "030 98765432", '"}', carrier="json"),
         p("PHONE", "de", "pii_phone_de_national_context", "Telefon: ", "０３０ １２３４５６７８", "", tags=("obfuscated",)),
         p("PHONE", "de", "pii_phone_de_national_context", "Te1efon: ", "0221 4711230", "", tags=("ocr",), gap=True),
         p("PHONE", "en", "pii_phone_us", "Call me at ", "415-555-2671", " tomorrow.", carrier="prose", tags=("no_context",)),
-        p("PHONE", "en", "pii_phone_us", "Call me at ", "(415) 555-2671", " tomorrow.", carrier="prose", tags=("no_context",), gap=True),
+        p("PHONE", "en", "pii_phone_us", "Call me at ", "(415) 555-2671", " tomorrow.", carrier="prose", tags=("no_context",)),
         p("PHONE", "en", "pii_phone_international", '{"phone": "', "+1 415 555 2671", '"}', carrier="json"),
         p("PHONE", "en", "pii_phone_de", "contact:\n  phone: ", "+49 40 3005 1200", "\n", carrier="yaml"),
         p("PHONE", "en", "pii_phone_de_national_context", "Phone: ", "040 30051200"),
@@ -1345,6 +1345,35 @@ T26_MULTILINGUAL_FIELD_CASES = [
     n("PASSPORT_NUMBER", "nl", "pii_passport_number_de", "Vervaldatum paspoort: 30-06-2032", "expiry date, not a passport number"),
 ]
 for _row in T26_MULTILINGUAL_FIELD_CASES:
+    PII_CASES[_row["target_label"]].append(_row)
+
+# T04 parenthesized area code (TRIAGE 2026-W42 bucket 2): `pii_phone_us` reports a balanced
+# `(NXX)` as part of the span, `(415) 555-2671` instead of `415) 555-2671`. Hard negatives keep
+# the parentheses but fail the unchanged validator (repeated digits), the 3-3-4 shape or carry
+# no digits. Appended so existing ids stay stable.
+T04_PARENTHESIZED_AREA_CODE_CASES = [
+    p("PHONE", "de", "pii_phone_us", "Rufen Sie unser Büro in Boston unter ", "(617) 555-0183", " an.", carrier="prose", tags=("no_context",)),
+    p("PHONE", "de", "pii_phone_us", "Telefon (USA): ", "(415) 555-2671"),
+    p("PHONE", "de", "pii_phone_us", '{"telefon_us": "', "(303) 499-7111", '"}', carrier="json"),
+    p("PHONE", "de", "pii_phone_us", "Name;Telefon\nMiller;", "(206) 386-4636", "", carrier="csv"),
+    p("PHONE", "de", "pii_phone_us", "", "(312) 744-5000", " ist die Zentrale in Chicago.", carrier="prose", tags=("no_context",)),
+    p("PHONE", "en", "pii_phone_us", "Phone: ", "(212) 736-4410"),
+    p("PHONE", "en", "pii_phone_us", "Office:", "(646)555-0199", "", tags=("ocr",)),
+    p("PHONE", "en", "pii_phone_us", "contact:\n  phone: ", "(720) 913-1311", "\n", carrier="yaml"),
+    p("PHONE", "en", "pii_phone_us", "| Name | Phone |\n|---|---|\n| R. Patel | ", "(213) 485-2121", " |", carrier="table"),
+    p("PHONE", "en", "pii_phone_us", "Placeholder line ", "(212) 555-0100", " in the template.", carrier="prose", tags=("no_context",)),
+    n("PHONE", "de", "pii_phone_us", "Rückfrage: (111) 111-1111", "repeated digits in parenthesized form"),
+    n("PHONE", "de", "pii_phone_us", "Telefon: (XXX) XXX-XXXX", "masked number with parentheses", tags=("obfuscated",)),
+    n("PHONE", "de", "pii_phone_us", "Abschnitt (12) 345-67 der Satzung", "section number, no 3-3-4 shape", carrier="prose"),
+    n("PHONE", "de", "pii_phone_us", "Siehe Anhang (3) auf Seite 12.", "enumeration in parentheses", carrier="prose"),
+    n("PHONE", "de", "pii_phone_us", "Telefon: (000) 000-0000", "all-zero number in parenthesized form"),
+    n("PHONE", "en", "pii_phone_us", "Phone: (999) 999-9999", "repeated digits in parenthesized form"),
+    n("PHONE", "en", "pii_phone_us", "Phone: (XXX) 555-XXXX", "partly masked number", tags=("obfuscated",)),
+    n("PHONE", "en", "pii_phone_us", "See note (2) on page 14.", "enumeration in parentheses", carrier="prose"),
+    n("PHONE", "en", "pii_phone_us", "Area code (415) only, number withheld.", "area code without a subscriber number", carrier="prose"),
+    n("PHONE", "en", "pii_phone_us", "Order (12) 345-678 shipped.", "order number, no 3-3-4 shape", carrier="prose"),
+]
+for _row in T04_PARENTHESIZED_AREA_CODE_CASES:
     PII_CASES[_row["target_label"]].append(_row)
 
 # DLP golden schema v2 (E13). Every DLP row names the rule it exercises (`rule_id`), the
