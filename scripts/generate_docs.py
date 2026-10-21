@@ -308,7 +308,8 @@ def pii_context_lexicon_lines(labels: list[str], path: Path = PII_LEXICON_PATH) 
         "",
         "### PII context lexicon",
         "",
-        "The context engine reads these DE/EN entries of `rust/src/detectors/anchor_lexicons/pii.json`; "
+        "The context engine reads these DE/EN entries of `rust/src/detectors/anchor_lexicons/pii.json` "
+        "(with their FR/ES/IT/NL field names where an entry lists them, T26); "
         "`rust/src/detectors/pii/context.rs` maps them to labels. Support terms of a label count for "
         "rules without a field name of their own, a counter-context term counts for every label when it "
         "is nearer than every support term. As a structural key (a JSON key, CSV or table header, XML "

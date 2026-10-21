@@ -249,6 +249,7 @@ tasks:
       (scoreboard scores primary), or is this left to K07 alone (balanced/recall)?
 
   - id: T26
+    status: done
     title: Field-name lexicon FR/ES/IT/NL for the existing anchor rules (DOB, customer/employee ID, account number, CVV, SSN, passport, username)
     type: recall-fix
     deps: [K03]

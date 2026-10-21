@@ -911,6 +911,39 @@
       "d-o-b",
       "d_o_b"
     ],
+    "fr": [
+      "date de naissance",
+      "date-de-naissance",
+      "date_de_naissance",
+      "né le",
+      "née le",
+      "né(e) le"
+    ],
+    "es": [
+      "fecha de nacimiento",
+      "fecha-de-nacimiento",
+      "fecha_de_nacimiento",
+      "fecha nacimiento",
+      "fecha_nacimiento",
+      "nacido el",
+      "nacida el"
+    ],
+    "it": [
+      "data di nascita",
+      "data-di-nascita",
+      "data_di_nascita",
+      "data nascita",
+      "data_nascita",
+      "nato il",
+      "nata il"
+    ],
+    "nl": [
+      "geboortedatum",
+      "geboorte datum",
+      "geboorte-datum",
+      "geboorte_datum",
+      "geboren op"
+    ],
     "sources": [
       "rust/src/detectors/pii/pii.rs"
     ]
@@ -997,6 +1030,45 @@
       "mitarbeiterkennung"
     ],
     "shared": [],
+    "fr": [
+      "numéro d'employé",
+      "numéro d’employé",
+      "numéro de l'employé",
+      "numero d'employe",
+      "identifiant d'employé",
+      "identifiant d’employé",
+      "id employé",
+      "id d'employé"
+    ],
+    "es": [
+      "número de empleado",
+      "numero de empleado",
+      "número de identificación del empleado",
+      "id de empleado",
+      "id empleado",
+      "id_empleado",
+      "código de empleado"
+    ],
+    "it": [
+      "numero dipendente",
+      "numero del dipendente",
+      "codice dipendente",
+      "id dipendente",
+      "id_dipendente",
+      "matricola dipendente"
+    ],
+    "nl": [
+      "personeelsnummer",
+      "werknemersnummer",
+      "medewerkersnummer",
+      "medewerkernummer",
+      "medewerker id",
+      "medewerker-id",
+      "medewerker_id",
+      "werknemer id",
+      "werknemer-id",
+      "werknemer_id"
+    ],
     "sources": [
       "rust/src/detectors/pii/pii.rs"
     ]
@@ -1090,6 +1162,45 @@
       "kundencode"
     ],
     "shared": [],
+    "fr": [
+      "numéro client",
+      "numéro de client",
+      "numero client",
+      "numero de client",
+      "id client",
+      "id de client",
+      "identifiant client",
+      "identifiant de client",
+      "référence client",
+      "reference client"
+    ],
+    "es": [
+      "número de cliente",
+      "numero de cliente",
+      "id de cliente",
+      "código de cliente",
+      "codigo de cliente",
+      "identificador de cliente"
+    ],
+    "it": [
+      "numero cliente",
+      "numero del cliente",
+      "codice cliente",
+      "codice_cliente",
+      "id cliente",
+      "id_cliente"
+    ],
+    "nl": [
+      "klantnummer",
+      "klant nummer",
+      "klant-nummer",
+      "klant_nummer",
+      "klantennummer",
+      "klantid",
+      "klant id",
+      "klant-id",
+      "klant_id"
+    ],
     "sources": [
       "rust/src/detectors/pii/pii.rs"
     ]
@@ -1361,6 +1472,27 @@
     "shared": [
       "login"
     ],
+    "fr": [
+      "nom d'utilisateur",
+      "nom d’utilisateur",
+      "nom_utilisateur",
+      "identifiant de connexion"
+    ],
+    "es": [
+      "nombre de usuario",
+      "nombre_de_usuario",
+      "nombre_usuario"
+    ],
+    "it": [
+      "nome utente",
+      "nome_utente"
+    ],
+    "nl": [
+      "gebruikersnaam",
+      "gebruikers naam",
+      "gebruikers-naam",
+      "gebruikers_naam"
+    ],
     "sources": [
       "rust/src/detectors/pii/pii.rs"
     ]
@@ -1431,6 +1563,27 @@
       "cvv2",
       "cvc",
       "cvc2"
+    ],
+    "fr": [
+      "code de sécurité de la carte",
+      "code de sécurité de carte",
+      "cryptogramme",
+      "cryptogramme visuel"
+    ],
+    "es": [
+      "código de seguridad de la tarjeta",
+      "código de seguridad de tarjeta",
+      "codigo de seguridad de la tarjeta"
+    ],
+    "it": [
+      "codice di sicurezza della carta"
+    ],
+    "nl": [
+      "creditcard veiligheidscode",
+      "creditcardveiligheidscode",
+      "creditcard-beveiligingscode",
+      "creditcardbeveiligingscode",
+      "kaartverificatiecode"
     ],
     "sources": [
       "rust/src/detectors/pii/pii.rs"
@@ -1540,6 +1693,34 @@
     ],
     "shared": [
       "iban"
+    ],
+    "fr": [
+      "numéro de compte",
+      "numero de compte",
+      "numéro de compte bancaire",
+      "compte bancaire"
+    ],
+    "es": [
+      "número de cuenta",
+      "numero de cuenta",
+      "número de cuenta bancaria",
+      "cuenta bancaria"
+    ],
+    "it": [
+      "numero di conto",
+      "numero del conto",
+      "numero conto",
+      "conto corrente",
+      "numero di conto corrente"
+    ],
+    "nl": [
+      "rekeningnummer",
+      "rekening nummer",
+      "rekening-nummer",
+      "rekening_nummer",
+      "rekeningnr",
+      "bankrekeningnummer",
+      "bankrekening"
     ],
     "sources": [
       "rust/src/detectors/pii/pii.rs"
@@ -1689,6 +1870,25 @@
     "shared": [
       "ssn"
     ],
+    "fr": [
+      "numéro de sécurité sociale",
+      "numero de securite sociale"
+    ],
+    "es": [
+      "número de seguridad social",
+      "número de la seguridad social",
+      "número de seguro social",
+      "numero de seguro social"
+    ],
+    "it": [
+      "numero di sicurezza sociale",
+      "numero di previdenza sociale"
+    ],
+    "nl": [
+      "sociaal zekerheidsnummer",
+      "sociaal-zekerheidsnummer",
+      "socialezekerheidsnummer"
+    ],
     "sources": [
       "rust/src/detectors/pii/pii.rs"
     ]
@@ -1828,6 +2028,29 @@
       "passdokument"
     ],
     "shared": [],
+    "fr": [
+      "passeport",
+      "numéro de passeport",
+      "numero de passeport"
+    ],
+    "es": [
+      "pasaporte",
+      "número de pasaporte",
+      "numero de pasaporte",
+      "numero_de_pasaporte"
+    ],
+    "it": [
+      "passaporto",
+      "numero di passaporto",
+      "numero del passaporto"
+    ],
+    "nl": [
+      "paspoort",
+      "paspoortnummer",
+      "paspoort nummer",
+      "paspoortnr",
+      "reisdocumentnummer"
+    ],
     "sources": [
       "rust/src/detectors/pii/pii.rs"
     ]

@@ -2,7 +2,7 @@
 //! Local context for PII values.
 //!
 //! The context engine (K03) looks at both sides of a value for the terms of a
-//! DE/EN lexicon: support terms of the value's label and counter-context terms
+//! DE/EN lexicon (since T26 also FR/ES/IT/NL field names): support terms of the value's label and counter-context terms
 //! for numbers that are not PII (order, invoice, tracking, ticket, reference,
 //! serial numbers). Both come from `anchor_lexicons/pii.json`; this module only
 //! maps lexicon IDs to labels. The nearest term decides; see [`proximity`].
@@ -96,12 +96,7 @@ fn lexicon_words(ids: &[&str]) -> Vec<&'static str> {
                 .iter()
                 .find(|definition| definition.id == *id)
                 .unwrap_or_else(|| panic!("unknown PII lexicon id {id}"));
-            definition
-                .en
-                .iter()
-                .chain(&definition.de)
-                .chain(&definition.shared)
-                .map(String::as_str)
+            definition.words().map(String::as_str)
         })
         .collect()
 }

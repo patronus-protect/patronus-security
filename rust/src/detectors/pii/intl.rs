@@ -45,7 +45,7 @@ pub(super) const CREDIT_CARD: PiiPattern = PiiPattern {
 
 pub(super) const CREDIT_CARD_CVV: PiiPattern = PiiPattern {
     name: "pii_credit_card_cvv",
-    pattern: r"(?i)\b(?:cvv2?|cvc2?|card[ \t]+verification[ \t]+(?:value|code)|kartenpr(?:ü|ue)fnummer|kartenpr(?:ü|ue)fziffer|sicherheitscode)[ \t]*(?:is[ \t]*)?[:#=\-]?[ \t]*(?P<value>\d{3,4})\b",
+    pattern: r"(?i)\b(?:cvv2?|cvc2?|card[ \t]+verification[ \t]+(?:value|code)|kartenpr(?:ü|ue)fnummer|kartenpr(?:ü|ue)fziffer|sicherheitscode|code[ \t]+de[ \t]+s(?:é|e)curit(?:é|e)[ \t]+de[ \t]+(?:la[ \t]+)?carte(?:[ \t]+(?:de[ \t]+cr(?:é|e)dit|bancaire))?|cryptogramme(?:[ \t]+visuel)?|c(?:ó|o)digo[ \t]+de[ \t]+seguridad[ \t]+de[ \t]+(?:la[ \t]+)?tarjeta(?:[ \t]+de[ \t]+(?:cr(?:é|e)dito|d(?:é|e)bito))?|codice[ \t]+di[ \t]+sicurezza[ \t]+della[ \t]+carta(?:[ \t]+di[ \t]+(?:credito|debito))?|(?:creditcard|kaart)[- \t]?(?:veiligheids|beveiligings|verificatie)code)[ \t]*(?:is[ \t]*)?[:#=\-]?[ \t]*(?P<value>\d{3,4})\b",
     entity_group: "CREDITCARD_CVV",
     validator: Some(validators::cvv),
     strength: ValidatorStrength::Format,

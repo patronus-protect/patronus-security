@@ -56,7 +56,7 @@ In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `
 
 ### PII context lexicon
 
-The context engine reads these DE/EN entries of `rust/src/detectors/anchor_lexicons/pii.json`; `rust/src/detectors/pii/context.rs` maps them to labels. Support terms of a label count for rules without a field name of their own, a counter-context term counts for every label when it is nearer than every support term. As a structural key (a JSON key, CSV or table header, XML element), a term of either kind names the value it holds; keys are compared lowercased, with `_`, `-`, `.` and camelCase boundaries as spaces, optionally followed by `no`, `nr`, `number` or `nummer`. The key `iban` names no account number.
+The context engine reads these DE/EN entries of `rust/src/detectors/anchor_lexicons/pii.json` (with their FR/ES/IT/NL field names where an entry lists them, T26); `rust/src/detectors/pii/context.rs` maps them to labels. Support terms of a label count for rules without a field name of their own, a counter-context term counts for every label when it is nearer than every support term. As a structural key (a JSON key, CSV or table header, XML element), a term of either kind names the value it holds; keys are compared lowercased, with `_`, `-`, `.` and camelCase boundaries as spaces, optionally followed by `no`, `nr`, `number` or `nummer`. The key `iban` names no account number.
 
 | Result entity group | Support anchors |
 | --- | --- |
