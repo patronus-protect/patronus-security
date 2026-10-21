@@ -99,7 +99,12 @@ fn overlap_of(text: &str, mode: PiiMode, rule_id: &str, value: &str) -> Value {
                         ..rule["end_byte"].as_u64().unwrap() as usize,
                 ) == Some(value)
         })
-        .unwrap_or_else(|| panic!("{rule_id} on {value:?} missing in {rules:#?}"));
+        .unwrap_or_else(|| {
+            panic!(
+                "{rule_id} missing at the expected span ({} matched rules)",
+                rules.len()
+            )
+        });
     rule["overlap"].clone()
 }
 
@@ -108,7 +113,9 @@ fn overlap_of(text: &str, mode: PiiMode, rule_id: &str, value: &str) -> Value {
 fn assert_strict_overlap(text: &str, label: &str, value: &str) {
     assert!(
         spans(text, PiiMode::Strict).contains(&(label.into(), value.into())),
-        "strict lost {label} {value:?} in {text:?}"
+        "strict lost {label} ({} chars in a {}-char text)",
+        value.chars().count(),
+        text.chars().count()
     );
 }
 
@@ -142,7 +149,7 @@ const PHONES_WITH_LUHN_DIGITS: [(&str, &str); 4] = [
 #[test]
 fn checksum_vectors_pass_or_fail_what_they_name() {
     for (iban, digits) in IBANS_WITH_LUHN_DIGITS {
-        assert!(validators::mod97(iban), "{iban}");
+        assert!(validators::mod97(iban), "IBAN vector fails mod97");
         assert!(validators::luhn(digits), "{digits}");
     }
     for (form, digits) in IBAN_FORMS_WITH_LUHN_DIGITS {
@@ -189,8 +196,8 @@ fn an_iban_keeps_the_luhn_valid_digits_inside_it() {
         for mode in SCORED {
             assert_eq!(spans(&text, mode), owned(&[("IBAN", iban)]), "{mode:?}");
             let overlap = overlap_of(&text, mode, "pii_credit_card", digits);
-            assert_eq!(overlap["reason"], "iban", "{mode:?}: {text}");
-            assert_eq!(overlap["yields_to"], "IBAN", "{mode:?}: {text}");
+            assert_eq!(overlap["reason"], "iban", "{mode:?}");
+            assert_eq!(overlap["yields_to"], "IBAN", "{mode:?}");
         }
     }
 }
@@ -323,6 +330,26 @@ fn card_digits_inside_an_iban_form_are_no_card() {
                 assert_eq!(overlap["reason"], "iban_form", "{mode:?}: {text}");
                 assert!(overlap.get("yields_to").is_none(), "{mode:?}: {text}");
             }
+        }
+    }
+}
+
+#[test]
+fn an_account_value_at_the_start_of_an_iban_form_yields() {
+    // A failing grouped IBAN under an account field: the account rule captures only the country
+    // code and check digits, which start the printed form and are part of it, not an account number.
+    for text in [
+        "Bank account: DE00 1234 5678 9012 3456 78",
+        "Account number: GB00 WEST 1234 5698 7654 32",
+    ] {
+        for mode in SCORED {
+            let found = spans(text, mode);
+            assert!(
+                found
+                    .iter()
+                    .all(|(label, _)| label != "FINANCIAL_ACCOUNT_NUMBER"),
+                "{mode:?}: {found:?}"
+            );
         }
     }
 }

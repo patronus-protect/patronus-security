@@ -158,7 +158,7 @@ pub(crate) fn resolve(text: &str, detection: &mut NativeDetection) {
         let inside_form = finding.label != "IBAN"
             && forms
                 .iter()
-                .any(|form| form.start < finding.range.start && finding.range.end <= form.end);
+                .any(|form| form.start <= finding.range.start && finding.range.end <= form.end);
         if inside_form {
             losers.push((finding, None, "iban_form"));
         }

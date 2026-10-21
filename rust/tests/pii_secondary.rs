@@ -139,7 +139,7 @@ const IBANS_ON_ACCOUNT_FIELDS: [(&str, &str, &str); 5] = [
 #[test]
 fn checksum_vectors_pass_or_fail_what_they_name() {
     for (iban, digits) in IBANS_WITH_LUHN_DIGITS {
-        assert!(validators::mod97(iban), "{iban}");
+        assert!(validators::mod97(iban), "IBAN vector fails mod97");
         assert!(validators::luhn(digits), "{digits}");
     }
     for (form, digits) in IBAN_FORMS_WITH_LUHN_DIGITS {
@@ -147,7 +147,10 @@ fn checksum_vectors_pass_or_fail_what_they_name() {
         assert!(validators::luhn(digits), "{digits}");
     }
     for (_, iban, _) in IBANS_ON_ACCOUNT_FIELDS {
-        assert!(validators::mod97(iban), "{iban}");
+        assert!(
+            validators::mod97(iban),
+            "account-field IBAN vector fails mod97"
+        );
     }
     // Invalid vectors: one changed digit breaks each checksum.
     assert!(!validators::mod97("DE18 4306 0967 1234 5678 01"));
@@ -176,12 +179,12 @@ fn card_digits_inside_a_valid_iban_are_secondary_in_strict() {
             assert_eq!(
                 spans(&result),
                 owned(&[("IBAN", iban), ("CREDITCARD", digits)]),
-                "{text}"
+                "strict evidence of an IBAN text"
             );
             assert_eq!(
                 secondary(&text, &result),
                 vec![entry("CREDITCARD", digits, "iban_part")],
-                "{text}"
+                "secondary marks of an IBAN text"
             );
         }
     }
