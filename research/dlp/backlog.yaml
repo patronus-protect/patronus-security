@@ -185,10 +185,28 @@ tasks:
     accept: strict = current behaviour bit-identical; P/R curves in the scoreboard
 
   - id: K05
-    title: Config format context (env, YAML, JSON, TOML, INI/properties, HCL, XML attributes/elements, HTTP headers) as key→value extraction on PII K04
+    title: Config key→value extraction, part 1 (env, INI/properties, HTTP headers) on PII K04, with a value-shape filter
     type: engine
     deps: [K04]
     ext_deps: [pii:K04]
+    source: "Split 2026-10-21: the full-format K05 was blocked after 3 red rounds (holdout precision regression)"
+    accept: >-
+      Before a value is bound through a credential-like key, shapes that are not secrets are rejected:
+      UUIDs, algorithm-prefixed or bare hex digests, ObjectIds, template/format fields, variable references,
+      booleans, numbers, paths and URLs without credentials. Hard negatives for each shape (DE/EN keys);
+      scoreboard without precision regression on any family
+
+  - id: K05B
+    title: Config key→value extraction, part 2 (YAML, JSON, TOML) reusing the K05 value-shape filter
+    type: engine
+    deps: [K05]
+    accept: Nested keys and arrays; same hard-negative shapes as K05 per format; no precision regression
+
+  - id: K05C
+    title: Config key→value extraction, part 3 (HCL, XML attributes/elements) reusing the K05 value-shape filter
+    type: engine
+    deps: [K05B]
+    accept: Same hard-negative shapes as K05 per format; no precision regression
 
   - id: K06
     status: done
