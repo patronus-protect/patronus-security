@@ -59,6 +59,18 @@
     "rule_id": "pii_phone_international",
     "de": "Telefon: +491701234567",
     "en": "Phone: +491701234567",
+    "hard_negatives": {
+      "de": [
+        "Kopfsegment: UNB+UNOC:3+520173321::2+520173321::4+202202150830+1323327835++STA'",
+        "Käufer: NAD+BY+987654321::9'",
+        "Positionen\n+49 30\n12345"
+      ],
+      "en": [
+        "Interchange header: UNB+UNOC:3+5010500154:1+5020022223:1+190101:0930+2'",
+        "SWIFT narrative block {86:+330105789456}",
+        "Positions\n+49 30\n12345"
+      ]
+    },
     "language_neutral": false,
     "balanced": {
       "context": {
@@ -73,6 +85,20 @@
     "obfuscated": {
       "de": "Telefon: +49​170​1234567",
       "en": "Mobile: ＋４４ ７７００ ９００１２３"
+    },
+    "overlap": {
+      "de": "Rückruf unter +49 89 2019 4400",
+      "en": "Call +44 20 6642 3850"
+    },
+    "span": {
+      "de": {
+        "text": "Telefon: +49 30 1234567\n2. Ansprechpartnerin",
+        "value": "+49 30 1234567"
+      },
+      "en": {
+        "text": "Call +1-123-456-7890\n\n2. Next step",
+        "value": "+1-123-456-7890"
+      }
     }
   },
   {
@@ -80,6 +106,14 @@
     "rule_id": "pii_phone_de",
     "de": "Telefon: +49 1701234567",
     "en": "Phone: +49 1701234567",
+    "hard_negatives": {
+      "de": [
+        "Lieferant: NAD+SU+4930123456789::9'"
+      ],
+      "en": [
+        "Supplier party: NAD+SU+4930123456789::9'"
+      ]
+    },
     "language_neutral": false,
     "balanced": {
       "context": {
@@ -89,6 +123,16 @@
       "counter": {
         "de": "Auftragsnummer +49 170 1234567",
         "en": "Order ID +49 170 1234567"
+      }
+    },
+    "span": {
+      "de": {
+        "text": "Zentrale 0049 170 1234567\n\n2. Ansprechpartner",
+        "value": "0049 170 1234567"
+      },
+      "en": {
+        "text": "Head office 0049 170 1234567\n\n2. Contact",
+        "value": "0049 170 1234567"
       }
     }
   },
@@ -101,6 +145,10 @@
     "structure": {
       "de": "{\"telefon\": \"030 98765432\"}",
       "en": "{\"phone_number\": \"030 98765432\"}"
+    },
+    "overlap": {
+      "de": "Telefon: 0151 2345 6789 01",
+      "en": "Mobile: 0151 2345 6789 01"
     }
   },
   {
@@ -115,6 +163,18 @@
     "rule_id": "pii_phone_us",
     "de": "Telefon: 212-555-1234",
     "en": "Phone: 212-555-1234",
+    "hard_negatives": {
+      "de": [
+        "X12-Bestellung: ST*850*0000012345~",
+        "Personnummer: 811228-9874",
+        "Lagerbestand je Regal:\n415\n555-2671"
+      ],
+      "en": [
+        "Closing balance field: :62F:/0000001234/",
+        "Swedish personal identity number: 811228-9874",
+        "Units per shelf:\n212\n555 0100"
+      ]
+    },
     "language_neutral": false,
     "balanced": {
       "context": {
@@ -124,6 +184,16 @@
       "counter": {
         "de": "Bestellnummer 202-604-7110",
         "en": "Order number 202-604-7110"
+      }
+    },
+    "span": {
+      "de": {
+        "text": "US-Büro: (212) 736-4410",
+        "value": "(212) 736-4410"
+      },
+      "en": {
+        "text": "Call me at (415) 555-2671 tomorrow.",
+        "value": "(415) 555-2671"
       }
     }
   },
@@ -153,6 +223,10 @@
     "obfuscated": {
       "de": "IBAN: DE89​3704​0044​0532​0130​00",
       "en": "IBAN: ＤＥ８９３７０４００４４０５３２０１３０００"
+    },
+    "overlap": {
+      "de": "IBAN: DE18 4306 0967 1234 5678 00",
+      "en": "IBAN DE60 5393 3633 8750 0474 39 is on file"
     }
   },
   {
@@ -166,6 +240,10 @@
         "de": "Bankkonto GB82WEST12345698765432",
         "en": "Bank account GB82WEST12345698765432"
       }
+    },
+    "overlap": {
+      "de": "Kontonummer: GB82WEST12345698765432",
+      "en": "Bank account: GB82WEST12345698765432"
     }
   },
   {
@@ -187,6 +265,10 @@
     "obfuscated": {
       "de": "Karte: ４１１１ １１１１ １１１１ １１１１",
       "en": "Card: 5555​5555​5555​4444"
+    },
+    "secondary": {
+      "de": "Überweisung an DE63 8415 3776 0207 7642 65 erhalten.",
+      "en": "IBAN DE60 5393 3633 8750 0474 39 is on file"
     }
   },
   {
@@ -198,6 +280,12 @@
     "structure": {
       "de": "| Karte | CVV |\n|---|---|\n| 4111 1111 1111 1111 | 737 |",
       "en": "| Card | CVV |\n|---|---|\n| 4111 1111 1111 1111 | 246 |"
+    },
+    "multilingual": {
+      "fr": "Carte 4111 1111 1111 1111, code de sécurité de la carte : 737",
+      "es": "Tarjeta 5555 5555 5555 4444, código de seguridad de la tarjeta: 318",
+      "it": "Carta 4111 1111 1111 1111, codice di sicurezza della carta: 552",
+      "nl": "Creditcard 5555 5555 5555 4444, creditcard-beveiligingscode: 713"
     }
   },
   {
@@ -227,6 +315,12 @@
     "structure": {
       "de": "<mitarbeiter><personalnummer>PN-77120</personalnummer></mitarbeiter>",
       "en": "employee_id,name\nE-40512,Maya Patel"
+    },
+    "multilingual": {
+      "fr": "Identifiant d'employé : E-204518",
+      "es": "Número de empleado: E-118204",
+      "it": "ID dipendente: D-55012",
+      "nl": "Personeelsnummer: P-30411"
     }
   },
   {
@@ -252,6 +346,12 @@
     "structure": {
       "de": "Name;Kundennummer\nJana Roth;KD-55120",
       "en": "{\"customerId\": \"CUS-88412\"}"
+    },
+    "multilingual": {
+      "fr": "Numéro de client : CL-480215",
+      "es": "Número de cliente: CLI-302948",
+      "it": "Codice cliente: CC-448210",
+      "nl": "Klantnummer: KL-501873"
     }
   },
   {
@@ -296,6 +396,12 @@
     "structure": {
       "de": "{\"benutzername\": \"p.lang\"}",
       "en": "user_name\tteam\nm.chen\tplatform"
+    },
+    "multilingual": {
+      "fr": "Nom d'utilisateur : claire.martin85",
+      "es": "Nombre de usuario: jgarcia_88",
+      "it": "Nome utente: lbianchi77",
+      "nl": "Gebruikersnaam: vidal1842"
     }
   },
   {
@@ -307,6 +413,12 @@
     "structure": {
       "de": "Name;Geburtsdatum\nJana Roth;14.03.1987",
       "en": "{\"date_of_birth\": \"02/11/1990\"}"
+    },
+    "multilingual": {
+      "fr": "Date de naissance : 14/07/1985",
+      "es": "Fecha de nacimiento: 23/08/1975",
+      "it": "Data di nascita: 09/11/1973",
+      "nl": "Geboortedatum: 15-12-1992"
     }
   },
   {
@@ -332,6 +444,20 @@
     "structure": {
       "de": "{\"kontonummer\": \"KTO-30202\"}",
       "en": "[payout]\naccount_number = ACC-55120"
+    },
+    "overlap": {
+      "de": "Kontonummer: 4111-1111-1111-1111",
+      "en": "Account number: 5555-5555-5555-4444"
+    },
+    "secondary": {
+      "de": "Kontonummer: GB82WEST12345698765432",
+      "en": "Bank account: GB82WEST12345698765432"
+    },
+    "multilingual": {
+      "fr": "Numéro de compte : CPT-0091827",
+      "es": "Número de cuenta: CTA-20481937",
+      "it": "Numero di conto: CT-0091827",
+      "nl": "Bankrekeningnummer: 619867267"
     }
   },
   {
@@ -404,6 +530,12 @@
     "structure": {
       "de": "{\"passnummer\": \"C4J7K9L2N\"}",
       "en": "<traveler passportNumber=\"C01X00T47\"/>"
+    },
+    "multilingual": {
+      "fr": "Numéro de passeport : C01X00T47",
+      "es": "Número de pasaporte: P4K7R2M9X",
+      "it": "Numero di passaporto: YN8K4T7C2",
+      "nl": "Paspoortnummer: NXR4C7T19"
     }
   },
   {
@@ -440,6 +572,12 @@
     "obfuscated": {
       "de": "US-Sozialversicherungsnummer: ５３２-８７-１０９４",
       "en": "Social security number: 532​-87​-1094"
+    },
+    "multilingual": {
+      "fr": "Numéro de sécurité sociale : 536-90-4421",
+      "es": "Número de seguro social: 412-56-7834",
+      "it": "Numero di previdenza sociale: 219-45-7781",
+      "nl": "Sociaal zekerheidsnummer: 523-41-9087"
     }
   },
   {

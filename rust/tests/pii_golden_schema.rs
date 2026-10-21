@@ -114,3 +114,39 @@ fn every_pii_label_has_n_gated_positives_and_hard_negatives_per_language() {
         }
     }
 }
+
+/// T26: FR/ES/IT/NL field names of the anchor rules, at least five gated positives and five
+/// hard negatives per language, each naming a rule that binds a field name.
+#[test]
+fn fr_es_it_nl_field_names_have_n_gated_positives_and_hard_negatives() {
+    const FIELD_LANGUAGES: [&str; 4] = ["fr", "es", "it", "nl"];
+    let mut counts = BTreeMap::<(String, String), usize>::new();
+    for row in rows().into_iter().filter(|row| !row.known_gap) {
+        if !FIELD_LANGUAGES.contains(&row.language.as_str()) {
+            assert!(LANGUAGES.contains(&row.language.as_str()), "{}", row.id);
+            continue;
+        }
+        let pattern = PII_PATTERNS
+            .iter()
+            .find(|pattern| pattern.name == row.rule_id)
+            .unwrap();
+        assert!(
+            pattern.captured_value,
+            "{}: {} binds no field name",
+            row.id, row.rule_id
+        );
+        *counts.entry((row.language, row.case_type)).or_default() += 1;
+    }
+    for language in FIELD_LANGUAGES {
+        for case_type in ["positive", "hard_negative"] {
+            let count = counts
+                .get(&(language.to_owned(), case_type.to_owned()))
+                .copied()
+                .unwrap_or_default();
+            assert!(
+                count >= MIN_PER_LANGUAGE,
+                "{language}/{case_type}: {count} < {MIN_PER_LANGUAGE}"
+            );
+        }
+    }
+}

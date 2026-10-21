@@ -231,11 +231,13 @@ tasks:
     deps: [K03]
 
   - id: K07
+    status: done
     title: Cross-label overlap resolution with priorities in balanced/recall (IBAN vs. PAN vs. account vs. phone)
     type: engine
     deps: [K05]
 
   - id: T07
+    status: done
     title: "Strict: do not emit a PAN sub-span inside a valid IBAN or FINANCIAL_ACCOUNT_NUMBER on an IBAN value"
     type: precision-fix
     deps: [K02]
@@ -247,6 +249,7 @@ tasks:
       (scoreboard scores primary), or is this left to K07 alone (balanced/recall)?
 
   - id: T26
+    status: done
     title: Field-name lexicon FR/ES/IT/NL for the existing anchor rules (DOB, customer/employee ID, account number, CVV, SSN, passport, username)
     type: recall-fix
     deps: [K03]
@@ -258,8 +261,9 @@ tasks:
       FR, ES, IT, NL), validators unchanged
 
   # ── F: Repair existing rules ──────────────────────────────────────────
-  - {id: T04, title: "US phone: span boundary for parenthesized area code, (415) 555-2671 instead of 415) 555-2671", type: fix, deps: [E06], source: "TRIAGE 2026-W42, bucket 2"}
+  - {id: T04, title: "US phone: span boundary for parenthesized area code, (415) 555-2671 instead of 415) 555-2671", type: fix, deps: [E06], source: "TRIAGE 2026-W42, bucket 2", status: done}
   - id: T17
+    status: done
     title: "Phone precision in strict: no matches inside EDI/X12/SWIFT MT elements, zero-padded IDs, 6-4 digit groups"
     type: precision-fix
     deps: [E06]
@@ -271,6 +275,7 @@ tasks:
       pii_phone_us requires a separator pattern a real NANP number uses (3-3-4), not 6-4. Positives with
       `+49 …`, `+1 …` and placeholder numbers (T01) stay; Gretel dev: ≥ 100 of 161 phone FP gone
   - id: T18
+    status: done
     title: "Phone span boundaries: no line break inside a number, NANP trunk prefix 1- (1-800-123-4567), 00 international prefix"
     type: fix
     deps: [T04]

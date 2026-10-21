@@ -5,6 +5,7 @@ mod context_anchors;
 mod de;
 mod identifiers;
 mod intl;
+pub mod overlap;
 #[allow(clippy::module_inception)]
 pub mod pii;
 pub mod score;

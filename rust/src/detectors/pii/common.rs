@@ -67,7 +67,8 @@ pub(super) const IPV6_LOOPBACK: PiiPattern = PiiPattern {
 // ── Telefon ──────────────────────────────────────────────────────────────
 pub(super) const PHONE_INTERNATIONAL: PiiPattern = PiiPattern {
     name: "pii_phone_international",
-    pattern: r"\+[1-9](?:[\s./()\-]*\d){6,14}\b",
+    // No separator is a line break (T18): `+1-123-456-7890\n\n2` ends before it.
+    pattern: r"\+[1-9](?:[\s./()\-&&[^\n-\r\x85\x{2028}\x{2029}]]*\d){6,14}\b",
     entity_group: "PHONE",
     validator: Some(validators::unanchored_phone),
     strength: ValidatorStrength::Format,

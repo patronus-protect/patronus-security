@@ -9,24 +9,20 @@
 use std::{collections::BTreeSet, path::Path};
 
 use patronus_ark::detectors::pii::pii::PII_PATTERNS;
-use patronus_ark::{SecurityCategory, SecurityGateway, SecurityLevel};
+use patronus_ark::{SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult};
 use serde::Deserialize;
 
-/// Non-target L1 findings on positives that are detector false positives, not gold gaps:
-/// `(row id, label, value)`. Fixing the detector must remove the entry (T07).
+/// Non-target primary L1 findings on positives that are detector false positives, not gold
+/// gaps: `(row id, label, value)`. Fixing the detector must remove the entry. Since T07 the
+/// PAN-shaped part of a valid IBAN and an account finding on an IBAN value are secondary
+/// evidence (`details.secondary_evidence`) and not checked here.
 const KNOWN_DETECTOR_FP: &[(&str, &str, &str)] = &[
     // Phone digits that happen to pass Luhn.
     ("pii_l1-phone-pos-09", "CREDITCARD", "49 89 2019 4400"),
     ("pii_l1-phone-pos-19", "CREDITCARD", "49 40 3005 1200"),
-    // PAN-shaped part of an IBAN (TRIAGE 2026-W42 bucket 4).
-    ("pii_l1-iban-pos-09", "CREDITCARD", "4306 0967 1234 5678 00"),
+    // PAN-shaped part of an IBAN form that is not reported as an IBAN yet: a grouped
+    // IBAN outside DE (T05).
     ("pii_l1-iban-pos-13", "CREDITCARD", "1904 3002 3457 3201"),
-    // IBAN after "Bank account:" also reported as FINANCIAL_ACCOUNT_NUMBER (bucket 4).
-    (
-        "pii_l1-iban-pos-02",
-        "FINANCIAL_ACCOUNT_NUMBER",
-        "GB82WEST12345698765432",
-    ),
 ];
 
 /// Labels whose validators are checksums: they hold for every gold value, known gaps included.
@@ -137,6 +133,24 @@ fn positives_target_exactly_one_entity_and_keep_text_order() {
     }
 }
 
+/// `(label, start_byte, end_byte)` of the findings strict marks as secondary evidence (T07).
+fn secondary_evidence(result: &SecurityScanResult) -> BTreeSet<(String, usize, usize)> {
+    result
+        .layers
+        .iter()
+        .filter_map(|layer| layer.details.get("secondary_evidence"))
+        .filter_map(|entries| entries.as_array())
+        .flatten()
+        .filter_map(|entry| {
+            Some((
+                entry.get("label")?.as_str()?.to_owned(),
+                entry.get("start_byte")?.as_u64()? as usize,
+                entry.get("end_byte")?.as_u64()? as usize,
+            ))
+        })
+        .collect()
+}
+
 #[test]
 fn every_l1_finding_on_a_positive_is_gold_or_a_known_detector_fp() {
     let gateway = SecurityGateway::with_max_level(
@@ -159,9 +173,11 @@ fn every_l1_finding_on_a_positive_is_gold_or_a_known_detector_fp() {
             .into_iter()
             .find(|result| result.model == "native:pii")
             .expect("native PII result must be present");
+        let secondary = secondary_evidence(&result);
         for span in result.evidence_spans {
             // Target-label spans are scored by 13_l1_golden_eval (incl. known gaps).
             if span.label == row.target_label
+                || secondary.contains(&(span.label.clone(), span.start_byte, span.end_byte))
                 || gold.contains(&(span.start_char, span.end_char, span.label.as_str()))
             {
                 continue;
