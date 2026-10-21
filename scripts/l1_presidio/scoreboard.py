@@ -8,11 +8,13 @@
 
     scoreboard.py gate --head WT --base-sha SHA --dev DIR [--holdout DIR] --cache DIR
 
-Exit code 0 = no regression, 1 = regression, 2 = usage or infrastructure error. A
-regression is any F1 loss above the tolerance (default 0.5 pp; exact or overlap) of an
-entity, of all L1 entities together, of a source family or of DE/EN, in any split, or any
-new prediction on a hard-negative span. The summary goes to stdout; for the holdout it
-only names aggregates and regressions, never row ids or text.
+Both sides are scored in the PII modes ``strict`` (the default build) and ``balanced`` (the
+mode milestones are judged on, T15). Exit code 0 = no regression, 1 = regression, 2 = usage
+or infrastructure error. A regression is any F1 loss above the tolerance (default 0.5 pp;
+exact or overlap) of an entity, of all L1 entities together, of a source family or of DE/EN,
+in any split and either mode, or any new prediction on a hard-negative span. The summary
+goes to stdout; for the holdout it only names aggregates and regressions, never row ids or
+text.
 
 Scoring follows ``research/l1-pii/entity_map.yaml``: semantic entities are not L1
 scope; a corpus listed in the map is scored only on the ids it annotates, a corpus
@@ -36,15 +38,19 @@ whose source equals the previously gated head, is never rebuilt. Results land in
 
 Every bucket also exists per source family (``family/<family>``, ``family_entity/...``;
 families from ``source_families`` in the entity map). ``m1`` checks milestone M1 per family
-from Ark and Presidio predictions stored under the gold file names:
+from Ark and Presidio predictions stored under the gold file names, for every Ark mode given;
+the verdict comes from balanced:
 
-    scoreboard.py m1 --gold DIR --ark ARK_DIR --presidio PRESIDIO_DIR [--language en] [--check]
+    scoreboard.py m1 --gold DIR --ark strict=DIR --ark balanced=DIR --presidio PRESIDIO_DIR [--language en] [--check]
 
 ``report`` renders the Markdown baseline (research/l1-pii/scoreboard/baseline.md): P/R/F1 per
-source family, corpus and entity for Ark and each Presidio profile, hard-negative FP per
-family, M1 of the first engine against each other one:
+source family, corpus and entity for each Ark mode and each Presidio profile, hard-negative FP
+per family, M1 of every Ark mode against each profile, and the gold gaps per corpus and entity
+(predictions equal to an annotated gold value elsewhere in the row, gold failing the entity's
+checksum validator; reported only, T16):
 
-    scoreboard.py report --gold DIR --engine ark=DIR --engine presidio-default=DIR --engine presidio-tuned=DIR
+    scoreboard.py report --gold DIR --ark strict=DIR --ark balanced=DIR \
+        --engine presidio-default=DIR --engine presidio-tuned=DIR
 """
 
 from __future__ import annotations
@@ -72,6 +78,10 @@ SCHEMA = "ark-l1-scoreboard-v1"
 # Bump when run_ark.py output or the build recipe changes in a way the source key misses.
 PREDICTION_VERSION = "1"
 TOLERANCE_PP = 0.5
+# PII modes the gate scores for head and base; milestones are judged on balanced (T15).
+MODES = ("strict", "balanced")
+MILESTONE_MODE = "balanced"
+ARK_MODES = ("strict", "balanced", "recall")  # accepted by m1 and report
 # Everything that goes into the native module and the prediction runner.
 KEY_PATHS = (
     "Cargo.toml",
@@ -195,11 +205,10 @@ def empty_counts() -> dict[str, int]:
     return dict.fromkeys(COUNT_FIELDS, 0)
 
 
-def score_rows(
-    gold_rows: Iterable[dict[str, Any]], prediction_rows: Iterable[dict[str, Any]], emap: Any, dataset: str = ""
-) -> dict[str, Any]:
-    """Count exact and overlap matches per bucket plus predictions on hard-negative spans."""
-    gold_rows = list(gold_rows)
+def _predictions_by_id(
+    gold_rows: list[dict[str, Any]], prediction_rows: Iterable[dict[str, Any]], dataset: str
+) -> dict[str, list[dict[str, Any]]]:
+    """Predicted spans per row id; the ids must match the gold rows one to one."""
     predictions: dict[str, list[dict[str, Any]]] = {}
     for row in prediction_rows:
         row_id = row.get("id")
@@ -216,7 +225,31 @@ def score_rows(
     missing = set(gold_ids) - predictions.keys()
     if unknown or missing:
         raise ScoreboardError(f"{dataset}: predictions do not match gold ({len(missing)} missing, {len(unknown)} unknown)")
+    return predictions
 
+
+def _row_scope(row: dict[str, Any], emap: Any, where: str) -> tuple[str, str, set[str]]:
+    """Corpus, source family and the ids a gold row is scored on."""
+    corpus = str(row.get("corpus", ""))
+    family = emap.family(corpus)
+    if family is None:
+        raise ScoreboardError(f"{where}: corpus {corpus!r} has no source family in entity_map.yaml")
+    allowed = scored_ids(emap, corpus)
+    if "scored_entities" in row:
+        # Rows that assert on some ids only (Presidio recognizer test cases).
+        scored = row["scored_entities"]
+        if not isinstance(scored, list) or not all(isinstance(item, str) for item in scored):
+            raise ScoreboardError(f"{where}: scored_entities must be a list of ids")
+        allowed = allowed & set(scored)
+    return corpus, family, allowed
+
+
+def score_rows(
+    gold_rows: Iterable[dict[str, Any]], prediction_rows: Iterable[dict[str, Any]], emap: Any, dataset: str = ""
+) -> dict[str, Any]:
+    """Count exact and overlap matches per bucket plus predictions on hard-negative spans."""
+    gold_rows = list(gold_rows)
+    predictions = _predictions_by_id(gold_rows, prediction_rows, dataset)
     l1 = l1_ids(emap)
     scopes = {entity_id: emap.entities[entity_id].scope for entity_id in l1}
     buckets: dict[str, dict[str, int]] = defaultdict(empty_counts)
@@ -224,18 +257,9 @@ def score_rows(
     rows = 0
     for row in gold_rows:
         rows += 1
-        row_id, corpus = row["id"], str(row.get("corpus", ""))
+        row_id = row["id"]
         where = f"{dataset}:{row_id}"
-        family = emap.family(corpus)
-        if family is None:
-            raise ScoreboardError(f"{where}: corpus {corpus!r} has no source family in entity_map.yaml")
-        allowed = scored_ids(emap, corpus)
-        if "scored_entities" in row:
-            # Rows that assert on some ids only (Presidio recognizer test cases).
-            scored = row["scored_entities"]
-            if not isinstance(scored, list) or not all(isinstance(item, str) for item in scored):
-                raise ScoreboardError(f"{where}: scored_entities must be a list of ids")
-            allowed = allowed & set(scored)
+        corpus, family, allowed = _row_scope(row, emap, where)
         gold = {_span(e, e.get("entity_type", e.get("label")), where) for e in row.get("entities", [])}
         gold = {item for item in gold if item[0] in allowed}
         predicted_all = {_span(s, resolve_label(s, emap), where) for s in predictions[row_id]}
@@ -310,6 +334,156 @@ def metrics(counts: dict[str, int]) -> dict[str, dict[str, float]]:
         "exact": _prf(counts["exact"], counts["predicted"], counts["exact"], counts["gold"]),
         "overlap": _prf(counts["predicted_correct"], counts["predicted"], counts["gold_found"], counts["gold"]),
     }
+
+
+# ── gold gaps (T16) ──────────────────────────────────────────────────────
+
+
+def _digits(value: str) -> list[int]:
+    return [int(ch) for ch in value if ch.isascii() and ch.isdigit()]
+
+
+def luhn(value: str) -> bool:
+    """Port of ``validators::luhn``: 12-19 digits (separators ignored), not one repeated digit."""
+    digits = _digits(value)
+    if not 12 <= len(digits) <= 19 or len(set(digits)) == 1:
+        return False
+    total = sum(d if i % 2 == 0 else (2 * d - 9 if d > 4 else 2 * d) for i, d in enumerate(reversed(digits)))
+    return total % 10 == 0
+
+
+def mod97(value: str) -> bool:
+    """Port of ``validators::mod97`` (ISO 7064 MOD 97-10 on the value without whitespace)."""
+    normalized = "".join(ch for ch in value if not ch.isspace())
+    if len(normalized.encode()) < 5:
+        return False
+    remainder = 0
+    for ch in normalized[4:] + normalized[:4]:
+        digits = str(ord(ch) - ord("A") + 10) if "A" <= ch <= "Z" else ch
+        for digit in digits:
+            if digit.isascii() and digit.isdigit():
+                remainder = (remainder * 10 + int(digit)) % 97
+    return remainder == 1
+
+
+def steuer_id(value: str) -> bool:
+    """Port of ``validators::steuer_id`` (ISO 7064 MOD 11,10, 11 digits, no leading zero)."""
+    digits = _digits(value)
+    if len(digits) != 11 or digits[0] == 0:
+        return False
+    product = 10
+    for digit in digits[:10]:
+        total = (digit + product) % 10 or 10
+        product = total * 2 % 11
+    return (11 - product) % 10 == digits[10]
+
+
+def steuer_id_issued(value: str) -> bool:
+    """Port of ``validators::steuer_id_issued``: checksum plus the BZSt digit distribution."""
+    if not steuer_id(value):
+        return False
+    digits = _digits(value)[:10]
+    repeated = [n for n in (digits.count(d) for d in set(digits)) if n > 1]
+    runs = any(digits[i] == digits[i + 1] == digits[i + 2] for i in range(len(digits) - 2))
+    return len(repeated) == 1 and repeated[0] in (2, 3) and not runs
+
+
+# Python ports of every checksum validator (``checksums.ark`` with an algorithm in entity_map.yaml);
+# a task that adds one ports it here, or scripts/tests/test_l1_scoreboard.py is red.
+CHECKSUM_PORTS: dict[str, Callable[[str], bool]] = {
+    "luhn": luhn,
+    "mod97": mod97,
+    "steuer_id": steuer_id,
+    "steuer_id_issued": steuer_id_issued,
+}
+
+
+def count_validated_module() -> Any:
+    import count_validated  # noqa: PLC0415 - only the gold-gap report needs the registry
+
+    return count_validated
+
+
+def gold_validators(emap: Any) -> dict[str, tuple[str, ...]]:
+    """Checksum validators per benchmark id, from the PII_PATTERNS registry and ``checksums.ark``."""
+    counter = count_validated_module()
+    rules = counter.load_rules()
+    found: dict[str, set[str]] = defaultdict(set)
+    for rule in counter.ark_rules_from_source():
+        if rule.validator is None or rules.ark.get(rule.validator) is None:
+            continue
+        entity_id = emap.ark_label(rule.label)
+        if entity_id is not None:
+            found[entity_id].add(rule.validator)
+    return {entity_id: tuple(sorted(names)) for entity_id, names in sorted(found.items())}
+
+
+# Markup around a value does not make it another value: Gretel annotates "[x@y.com]" or "mailto:x@y.com"
+# of "[x@y.com](mailto:x@y.com)".
+VALUE_EDGES = " \t\r\n[](){}<>\"'`*_.,;:"
+
+
+def gap_value(value: str) -> str:
+    value = value.strip(VALUE_EDGES)
+    if value[:7].lower() == "mailto:":
+        value = value[7:].strip(VALUE_EDGES)
+    return value
+
+
+def gold_gaps(
+    gold_rows: Iterable[dict[str, Any]], prediction_rows: Iterable[dict[str, Any]], emap: Any, dataset: str = "",
+    validators: dict[str, tuple[str, ...]] | None = None,
+) -> dict[str, dict[str, dict[str, int | None]]]:
+    """Gold gaps of one engine per corpus and scored id; reported next to the metrics, never part of them.
+
+    ``duplicate_fp``: predictions that are false positives under exact scoring, overlap no gold span of
+    their id with the same value, and whose text equals an annotated gold value of the same id elsewhere
+    in the row (e.g. the unannotated ``mailto:`` copy of a mail link); values compare without
+    surrounding brackets, quotes and punctuation (``VALUE_EDGES``) and without a ``mailto:`` prefix.
+    ``gold_invalid``: gold values failing every checksum validator of their id, ``invalid_found``: those
+    the engine reports with the exact span; both None for ids without a checksum validator."""
+    gold_rows = list(gold_rows)
+    predictions = _predictions_by_id(gold_rows, prediction_rows, dataset)
+    validators = gold_validators(emap) if validators is None else validators
+    unported = {name for names in validators.values() for name in names} - CHECKSUM_PORTS.keys()
+    if unported:
+        raise ScoreboardError(f"no Python port in CHECKSUM_PORTS for checksum validator(s) {', '.join(sorted(unported))}")
+    gaps: dict[str, dict[str, dict[str, int]]] = defaultdict(
+        lambda: defaultdict(lambda: {"gold": 0, "gold_invalid": 0, "invalid_found": 0, "duplicate_fp": 0})
+    )
+    for row in gold_rows:
+        where = f"{dataset}:{row['id']}"
+        corpus, _, allowed = _row_scope(row, emap, where)
+        text = row.get("text")
+        if not isinstance(text, str):
+            raise ScoreboardError(f"{where}: gold row without text")
+        gold = {_span(e, e.get("entity_type", e.get("label")), where) for e in row.get("entities", [])}
+        gold = {item for item in gold if item[0] in allowed}
+        predicted = {_span(s, resolve_label(s, emap), where) for s in predictions[row["id"]]}
+        predicted = {item for item in predicted if item[0] in allowed}
+        values: dict[str, list[tuple[str, int, int]]] = defaultdict(list)
+        for label, start, end in gold:
+            values[label].append((gap_value(text[start:end]), start, end))
+            counts = gaps[corpus][label]
+            counts["gold"] += 1
+            names = validators.get(label)
+            if names and not any(CHECKSUM_PORTS[name](text[start:end]) for name in names):
+                counts["gold_invalid"] += 1
+                counts["invalid_found"] += (label, start, end) in predicted
+        for label, start, end in predicted - gold:
+            value = gap_value(text[start:end])
+            same = [(g_start, g_end) for g_value, g_start, g_end in values[label] if value and g_value == value]
+            if same and not any(g_start < end and start < g_end for g_start, g_end in same):
+                gaps[corpus][label]["duplicate_fp"] += 1
+    result: dict[str, dict[str, dict[str, int | None]]] = {}
+    for corpus in sorted(gaps):
+        result[corpus] = {}
+        for label in sorted(gaps[corpus]):
+            counts: dict[str, int | None] = dict(gaps[corpus][label])
+            if label not in validators:
+                counts["gold_invalid"] = counts["invalid_found"] = None
+            result[corpus][label] = counts
+    return result
 
 
 def gated_buckets(base: dict[str, Any], head: dict[str, Any]) -> list[str]:
@@ -445,10 +619,11 @@ def build_base(
     return ArkBuild(ark_python, run_ark, {"PYTHONPATH": str(stage)}, package / NATIVE_MODULE)
 
 
-def run_predictions(build: ArkBuild, input_path: Path, output_path: Path) -> None:
+def run_predictions(build: ArkBuild, input_path: Path, output_path: Path, mode: str = "strict") -> None:
     meta = output_path.with_name(output_path.name + ".meta.json")
     proc = subprocess.run(
-        [build.python, str(build.run_ark), "--input", str(input_path), "--output", str(output_path), "--meta", str(meta)],
+        [build.python, str(build.run_ark), "--input", str(input_path), "--output", str(output_path), "--meta", str(meta),
+         "--pii-mode", mode],
         cwd="/", env={**os.environ, **build.env}, text=True, capture_output=True,
     )
     if proc.returncode != 0:
@@ -458,38 +633,49 @@ def run_predictions(build: ArkBuild, input_path: Path, output_path: Path) -> Non
         stderr.parent.mkdir(parents=True, exist_ok=True)
         stderr.write_text(proc.stderr, encoding="utf-8")
         raise ScoreboardError(f"run_ark.py failed (exit {proc.returncode}); stderr in {stderr}")
+    try:
+        info = json.loads(meta.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        raise ScoreboardError(f"run_ark.py wrote no readable metadata {meta}") from None
+    # run_ark.py records a non-default mode as engine.pii_mode; a runner that ignored the flag scored strict.
+    if (info.get("engine") or {}).get("pii_mode", "strict") != mode:
+        raise ScoreboardError(f"run_ark.py {build.run_ark} did not run in PII mode {mode}")
     if build.native is not None:
-        native = json.loads(meta.read_text(encoding="utf-8")).get("build", {}).get("native_sha256")
+        native = info.get("build", {}).get("native_sha256")
         if native != sha256_file(build.native):
             raise ScoreboardError(f"run_ark.py did not load the base build {build.native}")
 
 
-Predictor = Callable[[Dataset, Path], None]
+Predictor = Callable[[Dataset, Path, str], None]
 
 
 class PredictionCache:
-    """Prediction files per source key and input SHA-256 below CACHE/predictions."""
+    """Prediction files per source key, PII mode and input SHA-256 below CACHE/predictions."""
 
     def __init__(self, root: Path):
         self.root = root / "predictions"
         self.scratch = root / "scratch"
 
-    def path(self, key: str, dataset: Dataset) -> Path:
-        return self.root / key / f"{dataset.sha256}.jsonl"
+    def path(self, key: str, dataset: Dataset, mode: str = "strict") -> Path:
+        # strict keeps the layout from before T15, so its cached predictions stay valid.
+        directory = self.root / key if mode == "strict" else self.root / key / mode
+        return directory / f"{dataset.sha256}.jsonl"
 
-    def has(self, key: str | None, dataset: Dataset) -> bool:
-        return key is not None and self.path(key, dataset).is_file()
+    def has(self, key: str | None, dataset: Dataset, mode: str = "strict") -> bool:
+        return key is not None and self.path(key, dataset, mode).is_file()
 
-    def get(self, key: str | None, dataset: Dataset, predict: Callable[[], Predictor]) -> list[dict[str, Any]]:
-        if self.has(key, dataset):
-            return read_jsonl(self.path(key, dataset))
+    def get(
+        self, key: str | None, dataset: Dataset, mode: str, predict: Callable[[], Predictor]
+    ) -> list[dict[str, Any]]:
+        if self.has(key, dataset, mode):
+            return read_jsonl(self.path(key, dataset, mode))
         self.scratch.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(dir=self.scratch) as tmp:
             output = Path(tmp) / "predictions.jsonl"
-            predict()(dataset, output)
+            predict()(dataset, output, mode)
             rows = read_jsonl(output)
             if key is not None:
-                write_atomic(self.path(key, dataset), output.read_bytes())
+                write_atomic(self.path(key, dataset, mode), output.read_bytes())
         return rows
 
 
@@ -510,17 +696,19 @@ def lazy(factory: Callable[[], ArkBuild]) -> Callable[[], Predictor]:
     def get() -> Predictor:
         if not built:
             built.append(factory())
-        return lambda dataset, output: run_predictions(built[0], dataset.path, output)
+        return lambda dataset, output, mode: run_predictions(built[0], dataset.path, output, mode)
 
     return get
 
 
-def score_side(side: Side, datasets: list[Dataset], cache: PredictionCache, emap: Any) -> dict[str, Any]:
+def score_side(
+    side: Side, datasets: list[Dataset], cache: PredictionCache, emap: Any, mode: str = "strict"
+) -> dict[str, Any]:
     splits: dict[str, Any] = {}
     for split in dict.fromkeys(d.split for d in datasets):
         parts = []
         for dataset in (d for d in datasets if d.split == split):
-            predictions = cache.get(side.key, dataset, side.predict)
+            predictions = cache.get(side.key, dataset, mode, side.predict)
             parts.append(score_rows(read_jsonl(dataset.path), predictions, emap, dataset.name))
         splits[split] = {
             "datasets": {d.name: d.sha256 for d in datasets if d.split == split},
@@ -529,14 +717,15 @@ def score_side(side: Side, datasets: list[Dataset], cache: PredictionCache, emap
     return splits
 
 
-def store_results(root: Path, side: Side, splits: dict[str, Any]) -> None:
-    """CACHE/results/<sha>.json; only for committed sources (key known)."""
+def store_results(root: Path, side: Side, modes: dict[str, dict[str, Any]]) -> None:
+    """CACHE/results/<sha>.json with the splits per PII mode; only for committed sources (key known)."""
     if side.key is None:
         return
     path = root / "results" / f"{side.sha}.json"
     previous = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
-    stored = previous.get("splits", {}) if previous.get("source_key") == side.key else {}
-    payload = {"schema": SCHEMA, "commit": side.sha, "source_key": side.key, "splits": {**stored, **splits}}
+    stored = previous.get("modes", {}) if previous.get("source_key") == side.key else {}
+    merged = {mode: {**stored.get(mode, {}), **splits} for mode, splits in modes.items()}
+    payload = {"schema": SCHEMA, "commit": side.sha, "source_key": side.key, "modes": {**stored, **merged}}
     write_atomic(path, (json.dumps(payload, indent=1, sort_keys=True) + "\n").encode())
 
 
@@ -569,7 +758,7 @@ def entity_table(base: dict[str, Any], head: dict[str, Any]) -> list[str]:
 
 
 def family_lines(split: str, base: dict[str, Any], head: dict[str, Any]) -> list[str]:
-    """F1 per source family of one split (all L1 ids and EN), Δ vs base."""
+    """F1 per source family of one split (all L1 ids and EN), Δ vs base; split may carry the mode."""
     lines = []
     for family in entity_map_module.FAMILIES:
         key = f"family/{family}"
@@ -585,7 +774,7 @@ def family_lines(split: str, base: dict[str, Any], head: dict[str, Any]) -> list
 
 
 def split_line(split: str, base: dict[str, Any], head: dict[str, Any], new_fp: int) -> str:
-    parts = [f"{split:<8} rows {head['rows']:>5}"]
+    parts = [f"{split:<16} rows {head['rows']:>5}"]
     for key, name in (("all", "L1"), *((f"language/{lang}", lang) for lang in LANGUAGES)):
         (be, bo), (he, ho) = f1_pair(base["buckets"].get(key, empty_counts())), f1_pair(head["buckets"].get(key, empty_counts()))
         parts.append(f"{name} F1 {pct(he).strip()}/{pct(ho).strip()} ({signed((he - be) * 100)}/{signed((ho - bo) * 100)})")
@@ -599,28 +788,33 @@ def summary(head: Side, base: Side, results: dict[str, Any], tolerance_pp: float
         f"{SCHEMA}: head {head.sha[:12]}{'' if head.key else ' (uncommitted changes)'} vs base {base.sha[:12]}"
         + (" (same Ark sources)" if same else ""),
     ]
-    for split, result in results.items():
-        if split == "dev":
-            lines.append("dev per entity (head; Δ vs base in pp):")
-            lines += entity_table(result["base"], result["head"])
-    lines.append(f"F1 exact/overlap in % (Δ pp vs base), tolerance {tolerance_pp} pp:")
+    for mode, splits in results.items():
+        if "dev" in splits:
+            lines.append(f"dev per entity, {mode} (head; Δ vs base in pp):")
+            lines += entity_table(splits["dev"]["base"], splits["dev"]["head"])
+    lines.append(
+        f"F1 exact/overlap in % (Δ pp vs base), tolerance {tolerance_pp} pp, gated in {', '.join(results)}; "
+        f"milestones on {MILESTONE_MODE}:"
+    )
     regressed = False
     problems = []
-    for split, result in results.items():
-        verdict = result["compare"]
-        lines.append(split_line(split, result["base"], result["head"], len(verdict["new_hard_negative_fp"])))
-        lines += family_lines(split, result["base"], result["head"])
-        for item in verdict["regressions"]:
-            problems.append(
-                f"  {split} {item['bucket']} {item['metric']} F1 {pct(item['base_f1']).strip()} -> "
-                f"{pct(item['head_f1']).strip()} ({signed(item['delta_pp'])} pp)"
-            )
-        if verdict["new_hard_negative_fp"]:
-            labels: dict[str, int] = defaultdict(int)
-            for item in verdict["new_hard_negative_fp"]:
-                labels[item[2]] += 1
-            problems.append(f"  {split} new hard-negative FP: " + ", ".join(f"{k} {v}" for k, v in sorted(labels.items())))
-        regressed = regressed or bool(verdict["regressions"] or verdict["new_hard_negative_fp"])
+    for mode, splits in results.items():
+        for split, result in splits.items():
+            verdict = result["compare"]
+            where = f"{mode} {split}"
+            lines.append(split_line(where, result["base"], result["head"], len(verdict["new_hard_negative_fp"])))
+            lines += family_lines(where, result["base"], result["head"])
+            for item in verdict["regressions"]:
+                problems.append(
+                    f"  {where} {item['bucket']} {item['metric']} F1 {pct(item['base_f1']).strip()} -> "
+                    f"{pct(item['head_f1']).strip()} ({signed(item['delta_pp'])} pp)"
+                )
+            if verdict["new_hard_negative_fp"]:
+                labels: dict[str, int] = defaultdict(int)
+                for item in verdict["new_hard_negative_fp"]:
+                    labels[item[2]] += 1
+                problems.append(f"  {where} new hard-negative FP: " + ", ".join(f"{k} {v}" for k, v in sorted(labels.items())))
+            regressed = regressed or bool(verdict["regressions"] or verdict["new_hard_negative_fp"])
     lines.append(f"regressions: {len(problems)}" if problems else "regressions: none")
     lines += problems[:20] + ([f"  … {len(problems) - 20} more"] if len(problems) > 20 else [])
     lines.append("RESULT: REGRESSION" if regressed else "RESULT: PASS")
@@ -639,6 +833,7 @@ def gate(
     emap: Any = None,
     head_factory: Callable[[], ArkBuild] | None = None,
     base_factory: Callable[[str, str], ArkBuild] | None = None,
+    modes: tuple[str, ...] = MODES,
 ) -> tuple[list[str], bool, dict[str, Any]]:
     head_dir = head_dir.resolve()
     root = cache_dir.resolve() / "scoreboard"
@@ -657,18 +852,22 @@ def gate(
 
     datasets = [d for split, path in splits.items() for d in discover(split, path)]
     cache = PredictionCache(root)
-    head_results = score_side(head, datasets, cache, emap)
-    base_results = score_side(base, datasets, cache, emap)
+    head_results = {mode: score_side(head, datasets, cache, emap, mode) for mode in modes}
+    base_results = {mode: score_side(base, datasets, cache, emap, mode) for mode in modes}
     store_results(root, head, head_results)
     store_results(root, base, base_results)
     results = {
-        split: {"base": base_results[split], "head": head_results[split],
-                "compare": compare(base_results[split], head_results[split], tolerance_pp)}
-        for split in head_results
+        mode: {
+            split: {"base": base_results[mode][split], "head": head_results[mode][split],
+                    "compare": compare(base_results[mode][split], head_results[mode][split], tolerance_pp)}
+            for split in head_results[mode]
+        }
+        for mode in modes
     }
     lines, regressed = summary(head, base, results, tolerance_pp)
     report = {"schema": SCHEMA, "head": head_sha, "base": base_sha, "head_source_key": head_key,
-              "base_source_key": base_key, "tolerance_pp": tolerance_pp, "regressed": regressed, "splits": results}
+              "base_source_key": base_key, "tolerance_pp": tolerance_pp, "regressed": regressed,
+              "milestone_mode": MILESTONE_MODE, "modes": results}
     return lines, regressed, report
 
 
@@ -730,7 +929,14 @@ def m1_report(ark: dict[str, Any], presidio: dict[str, Any], emap: Any, language
     return {"language": language, "metric": metric, "met": met, "families": families}
 
 
-def m1_lines(report: dict[str, Any]) -> list[str]:
+def _deciding(report: dict[str, Any]) -> str:
+    return ", ".join(
+        f"{family} {'holds' if result['holds'] else 'not met'}"
+        for family, result in report["families"].items() if result["decides"]
+    )
+
+
+def m1_lines(report: dict[str, Any], label: str = "M1") -> list[str]:
     lines = [f"{SCHEMA} M1 ({report['language']}, {report['metric']} F1 in %, Ark vs Presidio):"]
     for family, result in report["families"].items():
         entities = result["entities"]
@@ -743,37 +949,87 @@ def m1_lines(report: dict[str, Any]) -> list[str]:
                 f"  {entity_id:<36} gold {item['gold']:>5}  Ark {pct(item['ark_f1'])}  "
                 f"Presidio {pct(item['presidio_f1'])}  {'ok' if item['holds'] else 'below'}"
             )
-    deciding = ", ".join(
-        f"{family} {'holds' if result['holds'] else 'not met'}"
-        for family, result in report["families"].items() if result["decides"]
-    )
-    lines.append(f"M1: {'MET' if report['met'] else 'NOT MET'} ({deciding})")
+    lines.append(f"{label}: {'MET' if report['met'] else 'NOT MET'} ({_deciding(report)})")
+    return lines
+
+
+def m1_by_mode(ark: dict[str, dict[str, Any]], presidio: dict[str, Any], emap: Any, language: str = "en",
+               metric: str = "exact") -> dict[str, Any]:
+    """M1 of every Ark mode against one Presidio result; the milestone is judged on balanced (T15)."""
+    if MILESTONE_MODE not in ark:
+        raise ScoreboardError(f"M1 needs Ark predictions in {MILESTONE_MODE} mode (milestones are judged on it)")
+    modes = {mode: m1_report(ark[mode], presidio, emap, language, metric) for mode in ARK_MODES if mode in ark}
+    return {"milestone_mode": MILESTONE_MODE, "language": language, "metric": metric,
+            "met": modes[MILESTONE_MODE]["met"], "modes": modes}
+
+
+def m1_mode_lines(report: dict[str, Any]) -> list[str]:
+    lines = [f"{SCHEMA} M1 ({report['language']}, {report['metric']} F1 in %, Ark vs Presidio; "
+             f"milestones on {MILESTONE_MODE}):"]
+    for mode, item in report["modes"].items():
+        lines.append(f"== Ark {mode} " + ("(milestone mode)" if mode == MILESTONE_MODE else "(reported, decides no milestone)"))
+        lines += m1_lines(item, label=f"M1 {mode}")[1:]
+    milestone = report["modes"][MILESTONE_MODE]
+    lines.append(f"M1: {'MET' if report['met'] else 'NOT MET'} ({MILESTONE_MODE}: {_deciding(milestone)})")
     return lines
 
 
 # ── baseline report ──────────────────────────────────────────────────────
 
 
-def baseline_report(gold_root: Path, engines: dict[str, Path], emap: Any) -> dict[str, Any]:
-    """Every engine's merged result on every frozen gold file, hard-negative FP per family, M1 vs the first engine.
+def ark_engine(mode: str) -> str:
+    return f"ark-{mode}"
 
-    ``engines`` maps a name to a prediction directory with the gold file names; the first engine
-    (Ark) is compared with each of the others (Presidio profiles) for M1."""
-    if len(engines) < 2:
-        raise ScoreboardError("report needs at least two engines (Ark first, then the Presidio profiles)")
+
+def merge_gaps(parts: Iterable[dict[str, dict[str, dict[str, int | None]]]]) -> dict[str, dict[str, dict[str, int | None]]]:
+    """Sum gold gaps of several gold files (None, i.e. no checksum validator, stays None)."""
+    merged: dict[str, dict[str, dict[str, int | None]]] = {}
+    for part in parts:
+        for corpus, entities in part.items():
+            for entity_id, counts in entities.items():
+                target = merged.setdefault(corpus, {}).get(entity_id)
+                if target is None:
+                    merged[corpus][entity_id] = dict(counts)
+                    continue
+                for field, value in counts.items():
+                    if value is not None and target[field] is not None:
+                        target[field] += value
+    return {corpus: dict(sorted(entities.items())) for corpus, entities in sorted(merged.items())}
+
+
+def baseline_report(gold_root: Path, ark: dict[str, Path], presidio: dict[str, Path], emap: Any) -> dict[str, Any]:
+    """Every engine's merged result on every frozen gold file, hard-negative FP per family, M1, gold gaps.
+
+    ``ark`` maps a PII mode, ``presidio`` a profile name to a prediction directory with the gold file
+    names. Every Ark mode is compared with every profile for M1; the milestone comes from balanced (T15).
+    The gold gaps (T16) are counted per corpus and entity for every engine and change no metric."""
+    if MILESTONE_MODE not in ark:
+        raise ScoreboardError(f"report needs Ark predictions in {MILESTONE_MODE} mode (milestones are judged on it)")
+    if not presidio:
+        raise ScoreboardError("report needs at least one Presidio profile")
+    engines = {ark_engine(mode): ark[mode] for mode in ARK_MODES if mode in ark}
+    for name, root in presidio.items():
+        if name in engines:
+            raise ScoreboardError(f"engine name {name!r} is taken by an Ark mode")
+        engines[name] = root
     datasets = discover("gold", gold_root)
     gold = {dataset.name: read_jsonl(dataset.path) for dataset in datasets}
     row_family = {(name, row["id"]): emap.family(str(row.get("corpus", ""))) for name, rows in gold.items() for row in rows}
+    validators = gold_validators(emap)
     results: dict[str, Any] = {}
+    gaps: dict[str, dict[str, dict[str, dict[str, int | None]]]] = {}
     hard_negative_fp: dict[str, dict[str, int]] = {}
     for engine, root in engines.items():
-        parts = []
+        parts, gap_parts = [], []
         for name, rows in gold.items():
             predictions = root / name
             if not predictions.is_file():
                 raise ScoreboardError(f"{engine}: no predictions {predictions} for {name}")
-            parts.append(score_rows(rows, read_jsonl(predictions), emap, name))
+            prediction_rows = read_jsonl(predictions)
+            parts.append(score_rows(rows, prediction_rows, emap, name))
+            gap_parts.append(gold_gaps(rows, prediction_rows, emap, name, validators))
         results[engine] = merge(parts)
+        gaps[engine] = merge_gaps(gap_parts)
         per_family: dict[str, int] = defaultdict(int)
         for name, row_id, *_ in results[engine]["hard_negative_fp"]:
             per_family[row_family[(name, row_id)]] += 1
@@ -785,7 +1041,26 @@ def baseline_report(gold_root: Path, engines: dict[str, Path], emap: Any) -> dic
     family_rows: dict[str, int] = defaultdict(int)
     for family in row_family.values():
         family_rows[family] += 1
-    first, *others = engines
+    corpora: dict[str, dict[str, Any]] = {}
+    for corpus in sorted({corpus for engine_gaps in gaps.values() for corpus in engine_gaps}):
+        ids = sorted({entity_id for engine_gaps in gaps.values() for entity_id in engine_gaps.get(corpus, {})})
+        corpora[corpus] = {}
+        for entity_id in ids:
+            checked = entity_id in validators
+            counts = {engine: gaps[engine].get(corpus, {}).get(entity_id) for engine in engines}
+            # Gold counts do not depend on the engine; an engine without entry has no gap there.
+            known = next(c for c in counts.values() if c is not None)
+            corpora[corpus][entity_id] = {
+                "gold": known["gold"],
+                "gold_invalid": known["gold_invalid"],
+                "engines": {
+                    engine: {"duplicate_fp": c["duplicate_fp"] if c else 0,
+                             "invalid_found": (c["invalid_found"] if c else 0) if checked else None}
+                    for engine, c in counts.items()
+                },
+            }
+    profiles = list(presidio)
+    ark_results = {mode: results[ark_engine(mode)] for mode in ARK_MODES if mode in ark}
     return {
         "schema": SCHEMA,
         "datasets": {dataset.name: dataset.sha256 for dataset in datasets},
@@ -795,7 +1070,10 @@ def baseline_report(gold_root: Path, engines: dict[str, Path], emap: Any) -> dic
         "scopes": {entity_id: emap.entities[entity_id].scope for entity_id in sorted(l1_ids(emap))},
         "engines": results,
         "hard_negative_fp": hard_negative_fp,
-        "m1": {other: m1_report(results[first], results[other], emap) for other in others},
+        "milestone_mode": MILESTONE_MODE,
+        "m1": {profile: m1_by_mode(ark_results, results[profile], emap) for profile in profiles},
+        "gold_gaps": {"validators": {entity_id: list(names) for entity_id, names in validators.items()},
+                      "corpora": corpora},
     }
 
 
@@ -879,21 +1157,90 @@ def report_lines(report: dict[str, Any]) -> list[str]:
     # Milestone families first; ark_authored is shown last and decides nothing.
     m1_families = [*entity_map_module.MILESTONE_FAMILIES,
                    *(f for f in entity_map_module.FAMILIES if f not in entity_map_module.MILESTONE_FAMILIES)]
+    milestone = report["milestone_mode"]
+    modes = list(next(iter(report["m1"].values()))["modes"])
     lines += [
-        f"## M1 ({names[0]} vs each profile; EN rows, exact F1, shared ids with gold)",
+        f"## M1 (each Ark mode vs each profile; EN rows, exact F1, shared ids with gold; milestone on {milestone})",
         "",
-        "| Profile | M1 | " + " | ".join(_family_cell(f) for f in m1_families) + " |",
-        "|---|---|" + "---|" * len(m1_families),
+        "| Ark mode | Profile | M1 | " + " | ".join(_family_cell(f) for f in m1_families) + " |",
+        "|---|---|---|" + "---|" * len(m1_families),
     ]
-    for other, m1 in report["m1"].items():
-        cells = []
-        for family in m1_families:
-            entities = m1["families"][family]["entities"]
-            below = [entity_id for entity_id, item in entities.items() if not item["holds"]]
-            cell = f"{len(entities) - len(below)}/{len(entities)}" if entities else "no data"
-            cells.append(cell + (f" (below: {', '.join(below)})" if below else ""))
-        lines.append(f"| {other} | {'MET' if m1['met'] else 'NOT MET'} | " + " | ".join(cells) + " |")
+    for mode in [milestone, *(m for m in modes if m != milestone)]:
+        for profile, by_mode in report["m1"].items():
+            m1 = by_mode["modes"][mode]
+            cells = []
+            for family in m1_families:
+                entities = m1["families"][family]["entities"]
+                below = [entity_id for entity_id, item in entities.items() if not item["holds"]]
+                cell = f"{len(entities) - len(below)}/{len(entities)}" if entities else "no data"
+                cells.append(cell + (f" (below: {', '.join(below)})" if below else ""))
+            mode_cell = mode if mode == milestone else f"{mode} ²"
+            lines.append(f"| {mode_cell} | {profile} | {'MET' if m1['met'] else 'NOT MET'} | " + " | ".join(cells) + " |")
+    lines += ["", f"² reported; milestones are judged on {milestone} (T15).", ""]
+    lines += gold_gap_lines(report["gold_gaps"], names)
     return lines
+
+
+def gold_gap_lines(gaps: dict[str, Any], names: list[str]) -> list[str]:
+    """Markdown tables of the gold gaps per corpus and entity (T16); the metrics above include them unchanged."""
+    lines = [
+        "## Gold gaps (reported only; no metric changes, T16)",
+        "",
+        "The frozen corpora are never edited; these counts are already part of the scores above.",
+        "",
+        "### Predictions equal to an annotated gold value elsewhere in the row",
+        "",
+        "Exact-span false positives whose text equals a gold value of the same id in the same row.",
+        "",
+        "| Corpus | Entity | Gold | " + " | ".join(names) + " |",
+        "|---|---|---:|" + "---:|" * len(names),
+    ]
+    rows = 0
+    for corpus, entities in gaps["corpora"].items():
+        for entity_id, item in entities.items():
+            counts = [item["engines"][engine]["duplicate_fp"] for engine in names]
+            if any(counts):
+                rows += 1
+                lines.append(f"| {corpus} | {entity_id} | {item['gold']} | " + " | ".join(map(str, counts)) + " |")
+    if not rows:
+        lines.append("| – | – | – |" + " – |" * len(names))
+    lines += [
+        "",
+        "### Gold values failing the entity's validator",
+        "",
+        "Gold of ids with a checksum validator (Python ports of the Rust validators) that fails every one of",
+        "them; the engine columns count those gold values reported with the exact span.",
+        "",
+        "| Corpus | Entity | Validator | Gold | Invalid | " + " | ".join(names) + " |",
+        "|---|---|---|---:|---:|" + "---:|" * len(names),
+    ]
+    rows = 0
+    for corpus, entities in gaps["corpora"].items():
+        for entity_id, item in entities.items():
+            if item["gold_invalid"] is None or not item["gold"]:
+                continue
+            rows += 1
+            found = [str(item["engines"][engine]["invalid_found"]) for engine in names]
+            lines.append(
+                f"| {corpus} | {entity_id} | {', '.join(gaps['validators'][entity_id])} | {item['gold']} | "
+                f"{item['gold_invalid']} | " + " | ".join(found) + " |"
+            )
+    if not rows:
+        lines.append("| – | – | – | – | – |" + " – |" * len(names))
+    return lines
+
+
+def named_dirs(items: Iterable[str], option: str, allowed: tuple[str, ...] | None = None) -> dict[str, Path]:
+    """Parse repeated NAME=DIR options; names are unique and, with allowed, one of those."""
+    result: dict[str, Path] = {}
+    for item in items:
+        name, sep, directory = item.partition("=")
+        if not sep or not name or not directory or name in result:
+            raise ScoreboardError(f"{option} {item!r}: expected a unique NAME=DIR")
+        if allowed is not None and name not in allowed:
+            raise ScoreboardError(f"{option} {item!r}: mode must be one of {', '.join(allowed)}")
+        result[name] = Path(directory)
+    return result
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -915,37 +1262,41 @@ def main(argv: list[str] | None = None) -> int:
     score_parser.add_argument("--json", type=Path, help="also write bucket counts as JSON")
     m1_parser = commands.add_parser("m1", help="M1 per source family: Ark vs Presidio on the shared ids")
     m1_parser.add_argument("--gold", type=Path, required=True, help="gold directory (frozen dirs with .ready)")
-    m1_parser.add_argument("--ark", type=Path, required=True, help="Ark predictions, same relative file names")
+    m1_parser.add_argument("--ark", action="append", required=True, metavar="MODE=DIR",
+                           help="Ark predictions of one PII mode (run_ark.py --pii-mode), same relative file names; "
+                                f"{MILESTONE_MODE} is required and decides")
     m1_parser.add_argument("--presidio", type=Path, required=True, help="Presidio predictions, same relative file names")
     m1_parser.add_argument("--language", choices=(*LANGUAGES, "all"), default="en", help="M1 is EN parity (default en)")
     m1_parser.add_argument("--metric", choices=METRICS, default="exact")
-    m1_parser.add_argument("--check", action="store_true", help="exit 1 if M1 is not met")
+    m1_parser.add_argument("--check", action="store_true", help=f"exit 1 if M1 is not met on {MILESTONE_MODE}")
     m1_parser.add_argument("--json", type=Path, help="also write the report as JSON")
     report_parser = commands.add_parser("report", help="Markdown baseline: Ark vs Presidio profiles per family, corpus, entity, M1")
     report_parser.add_argument("--gold", type=Path, required=True, help="gold directory (frozen dirs with .ready)")
+    report_parser.add_argument("--ark", action="append", required=True, metavar="MODE=DIR",
+                               help=f"Ark predictions of one PII mode with the gold file names; {MILESTONE_MODE} is required")
     report_parser.add_argument("--engine", action="append", required=True, metavar="NAME=DIR",
-                               help="predictions with the gold file names; Ark first, then the Presidio profiles")
+                               help="Presidio predictions of one profile with the gold file names")
     report_parser.add_argument("--json", type=Path, help="also write the report as JSON")
     args = parser.parse_args(argv)
     try:
         if args.command == "report":
-            engines: dict[str, Path] = {}
-            for item in args.engine:
-                name, sep, directory = item.partition("=")
-                if not sep or not name or not directory or name in engines:
-                    raise ScoreboardError(f"--engine {item!r}: expected a unique NAME=DIR")
-                engines[name] = Path(directory)
+            ark = named_dirs(args.ark, "--ark", ARK_MODES)
+            presidio = named_dirs(args.engine, "--engine")
             emap = entity_map_module.load()
-            report = baseline_report(args.gold, engines, emap)
+            report = baseline_report(args.gold, ark, presidio, emap)
             print("\n".join(report_lines(report)))
             if args.json:
                 args.json.write_text(json.dumps(report, indent=1, sort_keys=True) + "\n", encoding="utf-8")
             return 0
         if args.command == "m1":
+            ark = named_dirs(args.ark, "--ark", ARK_MODES)
+            if MILESTONE_MODE not in ark:
+                raise ScoreboardError(f"m1 needs --ark {MILESTONE_MODE}=DIR (milestones are judged on {MILESTONE_MODE})")
             emap = entity_map_module.load()
-            report = m1_report(score_directory(args.gold, args.ark, emap), score_directory(args.gold, args.presidio, emap),
-                               emap, args.language, args.metric)
-            print("\n".join(m1_lines(report)))
+            ark_results = {mode: score_directory(args.gold, directory, emap) for mode, directory in ark.items()}
+            report = m1_by_mode(ark_results, score_directory(args.gold, args.presidio, emap), emap,
+                                args.language, args.metric)
+            print("\n".join(m1_mode_lines(report)))
             if args.json:
                 args.json.write_text(json.dumps(report, indent=1, sort_keys=True) + "\n", encoding="utf-8")
             return 1 if args.check and not report["met"] else 0

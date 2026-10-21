@@ -409,6 +409,7 @@ def spans_of(row_id, text, items):
 
 
 MAIL_TEXT = "Contact [ann@bank.example](mailto:ann@bank.example), cc ann@bank.example or bob@bank.example."
+LINK_TEXT = "Write to [cy@bank.example](mailto:cy@bank.example) today."
 CARD_TEXT = "Cards 4111 1111 1111 1111 and 4111 1111 1111 1112, IBAN DE89370400440532013000 / DE89370400440532013001."
 
 
@@ -416,6 +417,8 @@ def gap_rows():
     rows = [
         # Gretel annotates one copy of the markdown mail link only.
         annotated("mail", MAIL_TEXT, [("pii.email", "ann@bank.example", 0)]),
+        # Gretel's span includes the link bracket: the inner value is a boundary error, the mailto copy a gap.
+        annotated("link", LINK_TEXT, [("pii.email", "[cy@bank.example]", 0)]),
         annotated("card", CARD_TEXT, [("pii.credit_card.pan", "4111 1111 1111 1111", 0),
                                       ("pii.credit_card.pan", "4111 1111 1111 1112", 0),
                                       ("pii.iban", "DE89370400440532013000", 0),
@@ -424,11 +427,13 @@ def gap_rows():
     ark = [
         spans_of("mail", MAIL_TEXT, [("pii.email", "ann@bank.example", i) for i in range(3)]
                  + [("pii.email", "bob@bank.example", 0), ("pii.phone", "ann@bank.example", 1)]),
+        spans_of("link", LINK_TEXT, [("pii.email", "cy@bank.example", i) for i in range(2)]),
         spans_of("card", CARD_TEXT, [("pii.credit_card.pan", "4111 1111 1111 1111", 0),
                                      ("pii.iban", "DE89370400440532013000", 0)]),
     ]
     presidio = [
         spans_of("mail", MAIL_TEXT, [("pii.email", "ann@bank.example", 1)]),
+        spans_of("link", LINK_TEXT, [("pii.email", "[cy@bank.example]", 0)]),
         spans_of("card", CARD_TEXT, [("pii.credit_card.pan", "4111 1111 1111 1112", 0),
                                      ("pii.iban", "DE89370400440532013001", 0)]),
     ]
@@ -438,12 +443,18 @@ def gap_rows():
 def test_gold_gaps_count_duplicate_values_and_checksum_invalid_gold():
     rows, ark, presidio = gap_rows()
     gaps = MODULE.gold_gaps(rows, ark, EMAP)[GRETEL]
-    # Two further copies of the annotated value count; bob@ is an ordinary FP, and a phone span on the
-    # e-mail value is another id.
-    assert gaps["pii.email"] == {"gold": 1, "gold_invalid": None, "invalid_found": None, "duplicate_fp": 2}
+    # Two further copies of the annotated value count, and the mailto copy of the bracketed link value;
+    # bob@ is an ordinary FP, the value inside the gold bracket a boundary error, and a phone span on
+    # the e-mail value is another id.
+    assert gaps["pii.email"] == {"gold": 2, "gold_invalid": None, "invalid_found": None, "duplicate_fp": 3}
     assert gaps["pii.credit_card.pan"] == {"gold": 2, "gold_invalid": 1, "invalid_found": 0, "duplicate_fp": 0}
     assert gaps["pii.iban"] == {"gold": 2, "gold_invalid": 1, "invalid_found": 0, "duplicate_fp": 0}
     assert "pii.phone" not in gaps
+    # Gold on the mailto copy: the bracketed copy is the gap.
+    text = "Mail [dee@bank.example](mailto:dee@bank.example)"
+    mailto = [annotated("m", text, [("pii.email", "mailto:dee@bank.example", 0)])]
+    gaps = MODULE.gold_gaps(mailto, [spans_of("m", text, [("pii.email", "dee@bank.example", i) for i in range(2)])], EMAP)
+    assert gaps[GRETEL]["pii.email"]["duplicate_fp"] == 1
     gaps = MODULE.gold_gaps(rows, presidio, EMAP)[GRETEL]
     assert gaps["pii.email"]["duplicate_fp"] == 1
     assert gaps["pii.credit_card.pan"]["invalid_found"] == 1 and gaps["pii.iban"]["invalid_found"] == 1
@@ -469,14 +480,14 @@ def test_gold_gaps_change_no_metric(tmp_path):
     gaps = report["gold_gaps"]
     assert gaps["validators"]["pii.iban"] == ["mod97"]
     email = gaps["corpora"][GRETEL]["pii.email"]
-    assert email["gold"] == 1 and email["gold_invalid"] is None
-    assert email["engines"] == {"ark-strict": {"duplicate_fp": 2, "invalid_found": None},
-                                "ark-balanced": {"duplicate_fp": 2, "invalid_found": None},
+    assert email["gold"] == 2 and email["gold_invalid"] is None
+    assert email["engines"] == {"ark-strict": {"duplicate_fp": 3, "invalid_found": None},
+                                "ark-balanced": {"duplicate_fp": 3, "invalid_found": None},
                                 "presidio-tuned": {"duplicate_fp": 1, "invalid_found": None}}
     lines = MODULE.report_lines(report)
     assert "## Gold gaps (reported only; no metric changes, T16)" in lines
     assert "| Corpus | Entity | Gold | ark-strict | ark-balanced | presidio-tuned |" in lines
-    assert f"| {GRETEL} | pii.email | 1 | 2 | 2 | 1 |" in lines
+    assert f"| {GRETEL} | pii.email | 2 | 3 | 3 | 1 |" in lines
     assert "| Corpus | Entity | Validator | Gold | Invalid | ark-strict | ark-balanced | presidio-tuned |" in lines
     assert f"| {GRETEL} | pii.credit_card.pan | luhn | 2 | 1 | 0 | 0 | 1 |" in lines
     assert f"| {GRETEL} | pii.iban | mod97 | 2 | 1 | 0 | 0 | 1 |" in lines

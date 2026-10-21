@@ -39,7 +39,7 @@ max_level="l1")`, ohne Downloads) über dasselbe Gold-JSONL laufen. Zeilen trage
 Regel denselben Span, bleibt er einmal mit dem höchsten Score. ARK-Labels ohne Benchmark-ID heißen
 `ark.<LABEL>` und werden nicht gewertet. Standard ist der PII-Modus `strict` (jeder Span 1.0);
 `--pii-mode balanced|recall` liefert die Modell-Scores (K02) und trägt den Modus als
-`engine.pii_mode` in die Metadaten ein. Das Gate rechnet weiter mit `strict`.
+`engine.pii_mode` in die Metadaten ein. Das Gate rechnet `strict` und `balanced` (T15).
 
 ```bash
 .venv/bin/python scripts/l1_presidio/run_ark.py --input /tmp/gold.jsonl --output /tmp/ark.jsonl
@@ -208,7 +208,9 @@ eingefrorener Holdout nach einer Generator-Änderung ist ein bewusster Handgriff
 ## Scoreboard
 
 `scoreboard.py gate` vergleicht den ARK-Build eines Checkouts mit seinem Basis-Commit auf allen
-eingefrorenen Goldsets (Verzeichnisse mit `.ready`: `DIR/*.jsonl`, `DIR/synthetic/*.jsonl`):
+eingefrorenen Goldsets (Verzeichnisse mit `.ready`: `DIR/*.jsonl`, `DIR/synthetic/*.jsonl`), je Seite
+in den PII-Modi `strict` und `balanced` (`run_ark.py --pii-mode`, Entscheidung T15 in
+[`research/l1-pii/README.md`](../../research/l1-pii/README.md)):
 
 ```bash
 VIRTUAL_ENV=$PWD/.venv python3 scripts/l1_presidio/scoreboard.py gate \
@@ -230,16 +232,22 @@ python3 scripts/l1_presidio/scoreboard.py score --gold gold.jsonl --predictions 
   `scored_entities` (Recognizer-Tests) werden nur auf diesen IDs gewertet.
 - **Hard Negatives:** jede L1-Vorhersage, die einen `hard_negatives`-Span überlappt; trägt der Span
   `entity_type`, nur Vorhersagen dieser ID.
+- **Modi:** Head und Basis werden je Modus getrennt gewertet und verglichen; ein Build je Seite
+  bedient beide Modi. `run_ark.py` muss den Modus in den Metadaten bestätigen (`engine.pii_mode`, bei
+  `strict` fehlend), sonst Exit 2: ein Runner, der `--pii-mode` ignoriert, würde `strict` als
+  `balanced` ausgeben. Meilensteine liest `m1`/`report` aus `balanced`.
 - **Regression (Exit 1):** F1-Verlust > 0,5 pp (`--tolerance-pp`), exakt oder überlappend, für eine
-  Entität, alle L1-IDs zusammen, eine Quellfamilie, `de` oder `en`, in Dev oder Holdout; oder ein neuer Treffer auf
-  einem Hard Negative (gleiche Zeile, ID und Offsets wie in der Basis zählen nicht). Exit 2 =
+  Entität, alle L1-IDs zusammen, eine Quellfamilie, `de` oder `en`, in Dev oder Holdout, in `strict` oder
+  `balanced`; oder ein neuer Treffer auf einem Hard Negative in einem der Modi (gleiche Zeile, ID und
+  Offsets wie in der Basis zählen nicht). Exit 2 =
   Eingabe- oder Infrastrukturfehler (unbekannter Commit, Build fehlgeschlagen, Vorhersagen passen
   nicht zum Gold).
-- **Ausgabe:** stdout endet mit einer Zeile je Split (F1 exakt/überlappend gesamt, DE, EN, Δ zur
-  Basis, Hard-Negative-FP) und darunter je Quellfamilie (gesamt, EN; `ark_authored` mit dem Hinweis,
-  dass es keinen Meilenstein entscheidet), den Regressionen und `RESULT: PASS|REGRESSION`. Eine Tabelle je
-  Entität gibt es nur für Dev; vom Holdout erscheinen nur Aggregate und Regressionen, nie
-  Zeilen-IDs oder Text. `--json` schreibt den vollständigen Bericht (mit Holdout-Zeilen-IDs).
+- **Ausgabe:** stdout endet mit einer Zeile je Modus und Split (`strict dev`, …, `balanced holdout`:
+  F1 exakt/überlappend gesamt, DE, EN, Δ zur Basis, Hard-Negative-FP) und darunter je Quellfamilie
+  (gesamt, EN; `ark_authored` mit dem Hinweis, dass es keinen Meilenstein entscheidet), den Regressionen
+  (mit Modus und Split) und `RESULT: PASS|REGRESSION`. Eine Tabelle je Entität gibt es je Modus nur für
+  Dev; vom Holdout erscheinen nur Aggregate und Regressionen, nie Zeilen-IDs oder Text. `--json` schreibt
+  den vollständigen Bericht (`modes.<modus>.<split>`, mit Holdout-Zeilen-IDs).
 - **Head:** `run_ark.py` des Checkouts mit `--ark-python` (Standard `$VIRTUAL_ENV/bin/python`).
   Der Interpreter muss `patronus_ark` aus `HEAD/python` importieren (`maturin develop`), sonst
   Exit 2. Nach Rust-Änderungen also erst neu bauen.
@@ -248,22 +256,27 @@ python3 scripts/l1_presidio/scoreboard.py score --gold gold.jsonl --predictions 
   `CACHE/scoreboard/builds/<key>/`, Lauf mit `PYTHONPATH` auf diese Stufe. Geprüft wird, dass
   `run_ark.py` genau dieses Modul geladen hat.
 - **Cache:** Vorhersagen liegen unter `CACHE/scoreboard/predictions/<source-key>/<sha256 der
-  Eingabe>.jsonl`. Der Source-Key hasht die Git-Objekte von `Cargo.toml`, `Cargo.lock`,
+  Eingabe>.jsonl` (`strict`, Layout wie vor T15) bzw. `…/<source-key>/balanced/<sha256>.jsonl`. Der Source-Key hasht die Git-Objekte von `Cargo.toml`, `Cargo.lock`,
   `rust-toolchain.toml`, `rust/`, `python/` und `run_ark.py`. Die Basis eines Stack-Laufs (der
   Done-Commit des vorigen Laufs) hat denselben Key wie der zuvor gegatete Head und wird nicht neu
   gebaut; ändert ein Lauf nur Skripte oder Doku, sind Head und Basis identisch. Ergebnisse je
-  Commit: `CACHE/scoreboard/results/<sha>.json`. Ein Head mit uncommitteten Änderungen an diesen
+  Commit und Modus: `CACHE/scoreboard/results/<sha>.json` (`modes.<modus>.<split>`). Ein Head mit uncommitteten Änderungen an diesen
   Pfaden wird gerechnet, aber nicht gecacht.
 
 ### M1 je Quellfamilie
 
 `m1` vergleicht ARK- und Presidio-Vorhersagen, die unter denselben relativen Dateinamen wie das Gold
-liegen (`run_ark.py` bzw. `run_presidio.py --profile tuned` je Datei):
+liegen (`run_ark.py --pii-mode MODUS` bzw. `run_presidio.py --profile tuned` je Datei):
 
 ```bash
 python3 scripts/l1_presidio/scoreboard.py m1 --gold "$ARK_L1_DEV_DATA" \
-  --ark /tmp/ark --presidio /tmp/presidio-tuned   # [--language en|de|all] [--metric exact|overlap] [--check] [--json F]
+  --ark strict=/tmp/ark-strict --ark balanced=/tmp/ark-balanced \
+  --presidio /tmp/presidio-tuned   # [--language en|de|all] [--metric exact|overlap] [--check] [--json F]
 ```
+
+`--ark MODUS=DIR` ist wiederholbar (`strict`, `balanced`, `recall`), `balanced` ist Pflicht. Jeder Modus
+erscheint als eigener Abschnitt (`== Ark strict (reported, decides no milestone)`), die letzte Zeile
+`M1: MET|NOT MET (balanced: …)` und `--check` folgen `balanced` (T15).
 
 Je Familie und gemeinsamer (`shared`) Entität mit Gold in der Familie: F1(ARK) ≥ F1(Presidio)?
 Standard: englische Zeilen, exakte Spans. Eine Familie hält, wenn das für jede solche Entität gilt
@@ -273,24 +286,31 @@ nicht erfüllt ist; fehlende Vorhersagedateien sind Exit 2.
 
 ### Baseline-Bericht
 
-`report` rechnet beliebig viele Engines auf denselben Gold-Dateien und schreibt Markdown-Tabellen
-nach stdout (Grundlage von [`research/l1-pii/scoreboard/baseline.md`](../../research/l1-pii/scoreboard/baseline.md), E11):
+`report` rechnet ARK je Modus und Presidio je Profil auf denselben Gold-Dateien und schreibt
+Markdown-Tabellen nach stdout (Grundlage von [`research/l1-pii/scoreboard/baseline.md`](../../research/l1-pii/scoreboard/baseline.md), E11):
 
 ```bash
 python3 scripts/l1_presidio/scoreboard.py report --gold DEV \
-  --engine ark=/tmp/ark --engine presidio-default=/tmp/presidio-default \
-  --engine presidio-tuned=/tmp/presidio-tuned   # [--json F]
+  --ark strict=/tmp/ark-strict --ark balanced=/tmp/ark-balanced \
+  --engine presidio-default=/tmp/presidio-default --engine presidio-tuned=/tmp/presidio-tuned   # [--json F]
 ```
 
 - je Quellfamilie und Engine: Zeilen, Gold, Vorhersagen, exakt P/R/F1, überlappend F1, EN- und
   DE-F1, Hard-Negative-Treffer (der Familie ihrer Zeile zugeordnet);
 - je Korpus exakt P/R/F1 je Engine, je Familie und Entität mit Gold exakt F1 je Engine, jeweils
   bestes F1 fett;
-- M1 der ersten Engine (ARK) gegen jede weitere: je Familie gehaltene gemeinsame IDs und die
-  Entitäten darunter.
+- M1 jedes ARK-Modus gegen jedes Profil: je Familie gehaltene gemeinsame IDs und die Entitäten
+  darunter; `balanced` zuerst, weitere Modi mit dem Hinweis, dass sie keinen Meilenstein entscheiden;
+- Gold-Lücken je Korpus und Entität (T16), nur berichtet: Vorhersagen, die unter exakter Wertung FP
+  sind und deren Wert einem annotierten Gold-Wert derselben ID an anderer Stelle der Zeile gleicht
+  (Vergleich ohne umgebende Klammern, Anführungszeichen, Satzzeichen und `mailto:`, eine Überlappung mit
+  diesem Gold-Span ist ein Grenzfehler und zählt nicht), sowie Gold-Werte, die jeden
+  Prüfziffer-Validator ihrer ID verfehlen, mit der Zahl, die jede Engine exakt meldet. Die Validatoren je
+  ID kommen aus der `PII_PATTERNS`-Registry und `checksums.ark` (wie bei `count_validated.py`), gerechnet
+  wird mit den Python-Ports in `CHECKSUM_PORTS`. Metriken und Gate bleiben unverändert.
 
-Die erste Engine ist immer ARK; mindestens zwei Engines, eindeutige Namen, fehlende
-Vorhersagedateien sind Exit 2.
+Engines heißen `ark-<modus>` und dann wie die Profile; `--ark balanced=DIR` und mindestens ein
+`--engine` sind Pflicht, Namen eindeutig, fehlende Vorhersagedateien sind Exit 2.
 
 Im Gate (`ark-l1 gate`) läuft der Schritt mit dem Presidio-Venv, ohne Netz, mit Lesezugriff auf
 Holdout und Checkout und Schreibzugriff nur auf den Cache; `VIRTUAL_ENV` zeigt auf das Gate-Venv,

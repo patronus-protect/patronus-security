@@ -11,6 +11,23 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Score the L1-PII scoreboard in the PII modes `strict` and `balanced` and report gold gaps of the
+  frozen corpora separately (B-EVAL: T15 + T16, decisions of 2026-10-21 in
+  `research/l1-pii/README.md`). `scripts/l1_presidio/scoreboard.py gate` runs `run_ark.py --pii-mode`
+  for head and base in both modes (one build per side), checks that the runner confirms the mode, and
+  fails on an F1 loss above 0.5 pp or a new hard-negative FP in either mode; stdout, the JSON report
+  (`modes.<mode>.<split>`) and the per-commit results carry the mode, and strict predictions keep their
+  cache layout. Milestones M1–M3 are judged on `balanced`: `m1` and `report` take `--ark MODE=DIR`
+  (balanced required), print every mode and read the verdict from balanced. `report` adds a gold-gap
+  section per corpus and entity for every engine: exact-span false positives whose value equals an
+  annotated gold value of the same id elsewhere in the row, and gold values failing every checksum
+  validator of their id (Python ports of `luhn`, `mod97`, `steuer_id`, `steuer_id_issued` in
+  `CHECKSUM_PORTS`), with the number each engine still reports exactly; no metric changes.
+  `research/l1-pii/scoreboard/baseline.md` adds the balanced numbers on dev (neutral exact F1 61.8
+  balanced vs. 61.4 strict vs. 40.5 Presidio tuned; M1 on balanced 4/9 neutral, 5/12 presidio_favored)
+  and the gold gaps (Gretel 21/53 PAN and 14/70 IBAN gold fail the checksum, Nano 65/82 PAN; 15 Ark and
+  17 Presidio e-mail FP equal an annotated value elsewhere in the row). **Detection change:** none; this
+  is evaluation tooling and a report only.
 - Add DLP taxonomy v2 (K09). The entity groups stay unchanged; every credential/secret rule
   names a subtype within its group (`RuleMeta::subtype`,
   `patronus_ark::detectors::dlp::dlp::SecretSubtype`), and each of its `matched_rules` entries
