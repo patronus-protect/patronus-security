@@ -5,7 +5,9 @@ use super::{pii::PiiPattern, score::ValidatorStrength, validators};
 // ── Telefon ──────────────────────────────────────────────────────────────────
 pub(super) const PHONE: PiiPattern = PiiPattern {
     name: "pii_phone_us",
-    pattern: r"\b(?:\+1[\s\-]?)?\(?\d{3}\)?[\s\-\.]?\d{3}[\s\-\.]?\d{4}\b",
+    // A balanced `(NXX)` starts the span (T04); `\b` never holds before `(` after a
+    // space, so the second branch alone yields `415) 555-2671`.
+    pattern: r"(?:\(\d{3}\)|\b(?:\+1[\s\-]?)?\(?\d{3}\)?)[\s\-\.]?\d{3}[\s\-\.]?\d{4}\b",
     entity_group: "PHONE",
     validator: Some(validators::unanchored_phone),
     strength: ValidatorStrength::Format,
