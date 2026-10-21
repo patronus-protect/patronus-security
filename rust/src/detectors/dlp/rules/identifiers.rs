@@ -10,6 +10,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.de.vat_id",
         validator: None,
         span_group: Some(1),
+        base_score: 30,
         meta: RuleMeta::new(
             ValidatorStrength::Format,
             "ark",
@@ -22,6 +23,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.de.commercial_register_number",
         validator: Some(is_identifier_value),
         span_group: Some(1),
+        base_score: 30,
         meta: RuleMeta::new(ValidatorStrength::Format, "ark", &["hr", "vr", "pr", "gnr"]),
     },
     DlpPattern {
@@ -30,6 +32,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.de.facility_number_bsnr",
         validator: None,
         span_group: Some(1),
+        base_score: 30,
         meta: RuleMeta::new(
             ValidatorStrength::Format,
             "ark",
@@ -42,6 +45,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.record.case_id",
         validator: Some(is_identifier_value),
         span_group: Some(1),
+        base_score: 30,
         meta: RuleMeta::new(
             ValidatorStrength::None,
             "ark",
@@ -54,6 +58,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.record.contract_id",
         validator: Some(is_identifier_value),
         span_group: Some(1),
+        base_score: 30,
         meta: RuleMeta::new(ValidatorStrength::None, "ark", &["vertrags", "contract"]),
     },
     DlpPattern {
@@ -62,6 +67,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.record.claim_id",
         validator: Some(is_identifier_value),
         span_group: Some(1),
+        base_score: 30,
         meta: RuleMeta::new(
             ValidatorStrength::None,
             "ark",
@@ -74,6 +80,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.record.order_id",
         validator: Some(is_identifier_value),
         span_group: Some(1),
+        base_score: 30,
         meta: RuleMeta::new(
             ValidatorStrength::None,
             "ark",
@@ -86,6 +93,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.record.invoice_id",
         validator: Some(is_identifier_value),
         span_group: Some(1),
+        base_score: 30,
         meta: RuleMeta::new(ValidatorStrength::None, "ark", &["rechnungs", "invoice"]),
     },
     DlpPattern {
@@ -94,6 +102,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.project_id",
         validator: Some(is_identifier_value),
         span_group: Some(1),
+        base_score: 30,
         meta: RuleMeta::new(ValidatorStrength::None, "ark", &["projekt", "project"]),
     },
     DlpPattern {
@@ -102,6 +111,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "dlp.organization_id",
         validator: Some(is_identifier_value),
         span_group: Some(1),
+        base_score: 30,
         meta: RuleMeta::new(
             ValidatorStrength::None,
             "ark",

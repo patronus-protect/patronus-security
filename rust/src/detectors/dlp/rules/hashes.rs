@@ -9,5 +9,6 @@ pub(super) const RULES: &[DlpPattern] = &[DlpPattern {
     entity_group: "PASSWORD_HASH",
     validator: Some(is_secret_value),
     span_group: Some(1),
+    base_score: 35,
     meta: RuleMeta::new(ValidatorStrength::Format, "ark", &["passw"]),
 }];

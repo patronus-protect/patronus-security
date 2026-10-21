@@ -2,13 +2,15 @@
 use crate::detectors::anchors::{self, AnchorPattern};
 use crate::detectors::validators;
 use crate::{
-    detectors::{NativeMatchValidator, NativeRegexDetector},
+    detectors::{MatchScore, NativeDetection, NativeMatchValidator, NativeRegexDetector},
     EvaluationResult,
 };
 use regex::Regex;
 use std::ops::Range;
 
 use super::rules::{self, ExampleCheck};
+use super::score::DlpMode;
+use super::{context, score};
 
 /// A single DLP heuristic pattern (credentials / secrets).
 #[derive(Clone, Copy)]
@@ -22,6 +24,8 @@ pub struct DlpPattern {
     pub validator: Option<fn(&str) -> bool>,
     /// Optional capture group containing only the actionable value.
     pub span_group: Option<usize>,
+    /// Score-model points (1–100) for the regex form alone; see [`super::score`].
+    pub base_score: u8,
     /// Rule metadata v2: provider, validator strength, keywords, entropy floor,
     /// format source and live/test severity.
     pub meta: RuleMeta,
@@ -333,6 +337,64 @@ impl DlpPipeline {
         texts.par_iter().map(|text| self.evaluate(text)).collect()
     }
 
+    /// Detect with an explicit output mode. `DlpMode::Strict` is identical to
+    /// the trait's `detect_prepared_with_options`.
+    ///
+    /// A scored mode scores every strict finding first, so that overlap
+    /// resolution and provider precedence decide exactly as in `strict`, and
+    /// then drops what scores below the mode's threshold. Its spans are thus
+    /// always strict spans: a value dropped for its context does not free its
+    /// range for a weaker rule (a WIF-shaped run inside a dropped hex hash).
+    pub(crate) fn detect_prepared_with_mode<F>(
+        &self,
+        prepared: &crate::threat::NativeText<'_>,
+        allows_rule: F,
+        explain: bool,
+        mode: DlpMode,
+    ) -> NativeDetection
+    where
+        F: Fn(&str) -> bool,
+    {
+        let Some(threshold) = mode.min_score() else {
+            return self.detect_prepared_with_options(prepared, allows_rule, explain);
+        };
+        let mut detection = self.detect_prepared_scored(prepared, allows_rule, explain, Some(0.0));
+        detection
+            .evidence_spans
+            .retain(|span| span.score >= threshold);
+        let mut first_group = None;
+        if let Some(rules) = detection.details.get_mut("matched_rules") {
+            if let Some(entries) = rules.as_array_mut() {
+                entries.retain(|rule| rule["score"].as_f64().is_some_and(|s| s >= threshold));
+                first_group = entries.first().and_then(|rule| {
+                    let rule_id = rule["rule_id"].as_str()?;
+                    let index = self.rule_ids.iter().position(|id| *id == rule_id)?;
+                    Some(self.entity_groups[index])
+                });
+            }
+            if rules.as_array().is_some_and(Vec::is_empty) {
+                detection.details.remove("matched_rules");
+            }
+        }
+        let spans = &detection.evidence_spans;
+        detection.result = match spans.iter().map(|span| span.score).reduce(f64::max) {
+            None => EvaluationResult {
+                class_name: "safe".to_string(),
+                confidence: 1.0,
+                level: "L1".to_string(),
+            },
+            // The class of the first surviving rule match, as in the unscored contract.
+            Some(confidence) => EvaluationResult {
+                class_name: first_group
+                    .filter(|group| spans.iter().any(|span| span.label == *group))
+                    .map_or_else(|| spans[0].label.clone(), str::to_string),
+                confidence,
+                level: "L1".to_string(),
+            },
+        };
+        detection
+    }
+
     /// Values that fixed-format rules (provider tokens, keys, hashes) match
     /// inside `range` of `text`, so that a generic rule capturing such a value
     /// applies the fixed-format example check to it (T06). Only the line around
@@ -439,6 +501,23 @@ impl NativeRegexDetector for DlpPipeline {
                 .all(|(provider, range)| {
                     !rules::is_example_match(ExampleCheck::FixedFormat, provider, text, range)
                 })
+    }
+
+    fn match_score(
+        &self,
+        index: usize,
+        prepared: &crate::threat::NativeText<'_>,
+        captures: &regex::Captures<'_>,
+    ) -> MatchScore {
+        let pattern = &DLP_PATTERNS[index];
+        let value = captures
+            .get(self.span_groups[index].unwrap_or(0))
+            .unwrap_or_else(|| captures.get(0).unwrap());
+        let evidence = context::evidence(pattern, prepared.text(), (value.start(), value.end()));
+        MatchScore {
+            score: score::score(pattern, evidence.context),
+            context: Some(evidence.to_json()),
+        }
     }
 
     fn finalize_spans(&self, _text: &str, spans: &mut Vec<crate::EvidenceSpan>) {

@@ -429,6 +429,15 @@ fn parse_execution_gates_json(value: Option<&str>) -> PyResult<Option<ScanGateMa
             .parse()
             .map_err(pyo3::exceptions::PyValueError::new_err)?;
     }
+    if let Some(mode) = object.get("dlp_mode") {
+        gates.dlp_mode = mode
+            .as_str()
+            .ok_or_else(|| {
+                pyo3::exceptions::PyValueError::new_err("execution_gates.dlp_mode must be a string")
+            })?
+            .parse()
+            .map_err(pyo3::exceptions::PyValueError::new_err)?;
+    }
     if let Some(levels) = object.get("levels") {
         let levels = levels.as_object().ok_or_else(|| {
             pyo3::exceptions::PyValueError::new_err("execution_gates.levels must be an object")

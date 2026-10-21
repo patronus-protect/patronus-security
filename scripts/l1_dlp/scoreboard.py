@@ -15,9 +15,14 @@ Metrics per split (``prepare_corpora.py`` layout: ``synthetic/``, ``benign_code/
   SQL statement spans, under the attach/scope contract of
   ``docs/research/dlp-external-content-contract-0.1.8.md``.
 
-Two ARK profiles: ``default`` (what ships: secret groups only) and ``extended`` (plus every
-opt-in rule, i.e. business identifiers, content and document classes). Secret groups and
-FP/MB are scored on ``default``; opt-in groups and classes on ``extended``.
+Three ARK profiles: ``default`` (what ships: secret groups only), ``extended`` (plus every
+opt-in rule, i.e. business identifiers, content and document classes) and ``recall`` (the
+default rules in the scored DLP mode ``recall``, K04; carrier rows only). Secret groups and
+FP/MB are scored on ``default``; opt-in groups and classes on ``extended``. The ``recall``
+run yields the P/R curves: exact and overlap P/R/F1 overall and per group, and hard-negative
+FP, for the spans scoring at least each threshold of ``CURVE_THRESHOLDS``. ``balanced``
+equals the curve point at its threshold 0.5 up to overlap resolution among spans below it.
+The curves are reported, never gated: a build without the scored mode scores every span 1.0.
 
 ``gate`` builds the head and the base commit (release module of ``python/``, offline, in the
 cache), predicts with ``run_ark.py`` on dev and holdout and fails on a regression: > 0.5 pp
@@ -86,13 +91,18 @@ UNMAPPED = "(unmapped)"
 BUILD_PATHS = ("Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "rust", "python", str(ENTITY_MAP))
 # Prediction code of the head that runs against every build.
 PREDICTOR_FILES = ("run_ark.py", "run_baselines.py", "scoreboard.py")
-PROFILES = ("default", "extended")
+PROFILES = ("default", "extended", "recall")
 # Component files scanned per profile; FP/MB on benign code is measured on what ships.
 # The external content goldens (dev only, optional) hold content classes only.
 PROFILE_COMPONENTS = {
     "default": ("synthetic", "benign_code", "benign_docs"),
     "extended": ("synthetic", "benign_docs", "external"),
+    "recall": ("synthetic",),
 }
+# DLP mode per profile (run_ark.py --dlp-mode); unlisted profiles run in strict.
+PROFILE_MODES = {"recall": "recall"}
+# Score thresholds of the P/R curves (K04): the recall and balanced thresholds and above.
+CURVE_THRESHOLDS = (0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0)
 EXTERNAL_DIR = "external"
 NATIVE_LIB = "lib_patronus_ark.so"
 NATIVE_MODULE = "_patronus_ark.abi3.so"
@@ -294,6 +304,32 @@ def score_synthetic(
     }
 
 
+def score_curves(
+    rows: list[dict[str, Any]],
+    predictions: Iterable[dict[str, Any]],
+    taxonomy: Taxonomy,
+    thresholds: Iterable[float] = CURVE_THRESHOLDS,
+) -> dict[str, Any]:
+    """P/R curves of scored predictions on carrier rows: one point per threshold, scored on
+    the spans whose ``score`` reaches it (a span without a score counts as 1.0)."""
+    rows_in = list(predictions)
+    points = []
+    for threshold in thresholds:
+        kept = [
+            {**row, "evidence_spans": [span for span in row.get("evidence_spans") or []
+                                       if float(span.get("score", 1.0)) >= threshold - 1e-9]}
+            for row in rows_in
+        ]
+        report = score_synthetic(rows, kept, taxonomy)
+        points.append({
+            "threshold": threshold,
+            "overall": report["overall"],
+            "groups": {group: metrics for group, metrics in report["groups"].items() if metrics["gold"]},
+            "hard_negative_fp": report["hard_negatives"]["fp"],
+        })
+    return {"mode": PROFILE_MODES["recall"], "points": points}
+
+
 def _classes(spans: Iterable[dict[str, Any]], keep) -> set[str]:
     """Entity ids (else ``group:<label>``) of the spans whose groups pass ``keep``."""
     classes: set[str] = set()
@@ -408,12 +444,17 @@ def score_split(
     predictions: Iterable[dict[str, Any]],
     taxonomy: Taxonomy,
     extended_predictions: Iterable[dict[str, Any]] | None = None,
+    recall_predictions: Iterable[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Report of one tool on one split; prediction rows of all components may be mixed."""
+    """Report of one tool on one split; prediction rows of all components may be mixed.
+
+    ``recall_predictions`` (carrier rows in the scored ``recall`` mode) add the P/R curves.
+    """
     parts: dict[str, dict[str, list[dict[str, Any]]]] = {profile: defaultdict(list) for profile in PROFILES}
     carrier_ids = {row["id"] for row in split.carriers}
     external_ids = {row["id"] for row in split.external or []}
-    for profile, rows in (("default", predictions), ("extended", extended_predictions or [])):
+    for profile, rows in (("default", predictions), ("extended", extended_predictions or []),
+                          ("recall", recall_predictions or [])):
         for row in rows:
             row_id = row.get("id")
             component = ("synthetic" if row_id in carrier_ids else "benign_code" if row_id in split.code
@@ -438,6 +479,9 @@ def score_split(
         # Content classes only, so only the extended run counts.
         "external": None if split.external is None or extended is None else EXTERNAL.score(
             split.external, extended[EXTERNAL_DIR], taxonomy.content_classes
+        ),
+        "curves": None if recall_predictions is None else score_curves(
+            split.carriers, parts["recall"]["synthetic"], taxonomy
         ),
     }
 
@@ -592,12 +636,14 @@ def ensure_build(tree: Path, commit: str, cache: Path) -> Build:
     return Build(commit=commit, key=key, package=package, entity_map=out / "entity_map.yaml")
 
 
-def predict_file(build: Build, source: Path, rules: list[str], output: Path) -> None:
+def predict_file(build: Build, source: Path, rules: list[str], output: Path, mode: str = "strict") -> None:
     """Run run_ark.py (head code) with the module of ``build`` on one JSONL file."""
     cmd = [sys.executable, str(HERE / "scoreboard.py"), "_predict", "--package", str(build.package),
            "--entity-map", str(build.entity_map), "--input", str(source), "--output", str(output)]
     for rule in rules:
         cmd += ["--enable-rule", rule]
+    if mode != "strict":
+        cmd += ["--dlp-mode", mode]
     env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
     env.pop("PYTHONPATH", None)
     result = subprocess.run(cmd, capture_output=True, text=True, env=env, stdin=subprocess.DEVNULL)
@@ -606,7 +652,9 @@ def predict_file(build: Build, source: Path, rules: list[str], output: Path) -> 
         raise RuntimeError(f"run_ark on {source.name} with build {build.commit[:12]} failed (exit {result.returncode})")
 
 
-def _predict_worker(package: Path, entity_map: Path, source: Path, output: Path, rules: list[str]) -> int:
+def _predict_worker(
+    package: Path, entity_map: Path, source: Path, output: Path, rules: list[str], mode: str = "strict"
+) -> int:
     sys.path.insert(0, str(package))
     import patronus_ark
 
@@ -614,7 +662,7 @@ def _predict_worker(package: Path, entity_map: Path, source: Path, output: Path,
         raise RuntimeError(f"patronus_ark resolved outside the build: {patronus_ark.__file__}")
     run_ark = _load_file("_ark_l1_dlp_run_ark", HERE / "run_ark.py")
     meta = output.with_name(output.stem + ".meta.json")
-    run_ark.run(source, output, meta, enabled_rules=rules, entity_map_path=entity_map)
+    run_ark.run(source, output, meta, enabled_rules=rules, entity_map_path=entity_map, mode=mode)
     return 0
 
 
@@ -626,6 +674,7 @@ class Job(NamedTuple):
     rules: list[str]
     key: str
     path: Path
+    mode: str = "strict"
 
 
 def latency_check(builds: dict[str, Build], dev: Path, cache: Path) -> dict[str, Any]:
@@ -642,11 +691,14 @@ def plan_jobs(build: Build, split: Split, taxonomy: Taxonomy, cache: Path, input
     predictor = _predictor_sha()
     for profile in PROFILES:
         rules = list(taxonomy.opt_in_rules) if profile == "extended" else []
+        mode = PROFILE_MODES.get(profile, "strict")
         for component in PROFILE_COMPONENTS[profile]:
             for source in split.files.get(component, []):
-                key = sha256_bytes(json.dumps(
-                    [PREDICTION_VERSION, build.key, predictor, rules, input_shas[source]]).encode())
-                jobs.append(Job(build, component, source, profile, rules, key, cache / "predictions" / f"{key}.jsonl"))
+                # Strict keys stay as before, so cached strict predictions remain valid.
+                parts = [PREDICTION_VERSION, build.key, predictor, rules, input_shas[source]]
+                key = sha256_bytes(json.dumps(parts + ([mode] if mode != "strict" else [])).encode())
+                jobs.append(Job(build, component, source, profile, rules, key,
+                                cache / "predictions" / f"{key}.jsonl", mode))
     return jobs
 
 
@@ -660,7 +712,10 @@ def run_jobs(jobs: list[Job], workers: int) -> None:
     def one(job: Job) -> None:
         job.path.parent.mkdir(parents=True, exist_ok=True)
         tmp = job.path.with_name(job.key + ".part.jsonl")
-        predict_file(job.build, job.source, job.rules, tmp)
+        if job.mode == "strict":
+            predict_file(job.build, job.source, job.rules, tmp)
+        else:
+            predict_file(job.build, job.source, job.rules, tmp, mode=job.mode)
         tmp.replace(job.path)
         tmp.with_name(tmp.stem + ".meta.json").unlink(missing_ok=True)
 
@@ -737,6 +792,19 @@ def summary_lines(base: dict[str, Any], head: dict[str, Any]) -> list[str]:
     return lines
 
 
+def curve_lines(report: dict[str, Any]) -> list[str]:
+    """Dev P/R curve of the head in the scored ``recall`` mode (reported, not gated)."""
+    curves = report.get("curves")
+    if not curves:
+        return []
+    lines = [f"P/R curve ({curves['mode']} mode, exact spans): threshold  P      R      F1    hard-neg FP"]
+    for point in curves["points"]:
+        exact = point["overall"]["exact"]
+        lines.append(f"  ≥ {point['threshold']:.2f}  {_pct(exact['precision'])}  {_pct(exact['recall'])}  "
+                     f"{_pct(exact['f1'])}  {point['hard_negative_fp']:>6}")
+    return lines
+
+
 def verdict_lines(split: str, base: dict[str, Any], head: dict[str, Any], checks: list[dict[str, Any]]) -> list[str]:
     failed = [check for check in checks if not check["ok"]]
     b_code, h_code = base["benign_code"], head["benign_code"]
@@ -795,7 +863,8 @@ def gate(head_tree: Path, base_sha: str, dev: Path, holdout: Path | None, cache:
         for name in builds:
             predictions = load_predictions(planned[(split_name, name)])
             # Both sides are scored with the head taxonomy; extended runs used each build's own rules.
-            reports[name] = score_split(split, predictions["default"], taxonomies["head"], predictions["extended"])
+            reports[name] = score_split(split, predictions["default"], taxonomies["head"], predictions["extended"],
+                                        predictions["recall"])
             reports[name]["opt_in_classes"] = list(taxonomies[name].opt_in_classes)
             reports[name]["build"] = {"commit": builds[name].commit, "key": builds[name].key}
         checks = compare(reports["base"], reports["head"])
@@ -808,6 +877,7 @@ def gate(head_tree: Path, base_sha: str, dev: Path, holdout: Path | None, cache:
                      "checks": checks, "tolerance_pp": TOLERANCE_PP})
         if split_name == "dev":
             output += summary_lines(reports["base"], reports["head"])
+            output += curve_lines(reports["head"])
             output += LATENCY.gate_lines(latency)
             output += verdict_lines("dev", reports["base"], reports["head"], checks)
         else:
@@ -832,6 +902,8 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--split", type=Path, required=True, help="corpora directory (prepare_corpora.py)")
     s.add_argument("--predictions", type=Path, required=True, help="JSONL with id and evidence_spans")
     s.add_argument("--extended-predictions", type=Path, help="predictions with every opt-in rule switched on")
+    s.add_argument("--recall-predictions", type=Path,
+                   help="carrier predictions in the scored recall mode (run_ark.py --dlp-mode recall): P/R curves")
     s.add_argument("--entity-map", type=Path, default=ROOT / ENTITY_MAP, help="entity_map.yaml for group families")
     s.add_argument("--output", type=Path, help="write the JSON report here instead of stdout")
     c = commands.add_parser("compare", help="compare two score reports of the same split")
@@ -844,6 +916,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--input", type=Path, required=True)
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--enable-rule", action="append", default=[])
+    p.add_argument("--dlp-mode", default="strict")
     args = parser.parse_args(argv)
 
     try:
@@ -852,7 +925,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "score":
             split = load_split(args.split)
             extended = _read_jsonl(args.extended_predictions) if args.extended_predictions else None
-            report = score_split(split, _read_jsonl(args.predictions), load_taxonomy(args.entity_map), extended)
+            recall = _read_jsonl(args.recall_predictions) if args.recall_predictions else None
+            report = score_split(split, _read_jsonl(args.predictions), load_taxonomy(args.entity_map), extended,
+                                 recall)
             if args.output:
                 _write_json(args.output, report)
             else:
@@ -864,7 +939,8 @@ def main(argv: list[str] | None = None) -> int:
             checks = compare(base, head, args.tolerance_pp)
             print("\n".join(verdict_lines(str(head.get("split", "split")), base, head, checks)))
             return 1 if any(not check["ok"] for check in checks) else 0
-        return _predict_worker(args.package, args.entity_map, args.input, args.output, args.enable_rule)
+        return _predict_worker(args.package, args.entity_map, args.input, args.output, args.enable_rule,
+                               args.dlp_mode)
     except (ValueError, RuntimeError, OSError) as exc:
         print(f"scoreboard: error: {exc}", file=sys.stderr)
         return 2

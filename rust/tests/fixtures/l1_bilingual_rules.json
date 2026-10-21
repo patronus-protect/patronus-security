@@ -564,7 +564,13 @@
         "seed": 1
       }
     ],
-    "language_neutral": true
+    "language_neutral": true,
+    "balanced": {
+      "context": {
+        "de": "AWS-Zugangsschlüssel <<secret\u003a0>>",
+        "en": "AWS access key <<secret\u003a0>>"
+      }
+    }
   },
   {
     "category": "dlp",
@@ -629,7 +635,13 @@
         "seed": 1
       }
     ],
-    "language_neutral": true
+    "language_neutral": true,
+    "balanced": {
+      "context": {
+        "de": "GitHub-Zugriffstoken für die CI: <<secret\u003a0>>",
+        "en": "GitHub access token for CI: <<secret\u003a0>>"
+      }
+    }
   },
   {
     "category": "dlp",
@@ -733,7 +745,17 @@
         "seed": 1
       }
     ],
-    "language_neutral": true
+    "language_neutral": true,
+    "balanced": {
+      "context": {
+        "de": "Privater Schlüssel der Wallet: <<secret\u003a0>>",
+        "en": "Wallet private key: <<secret\u003a0>>"
+      },
+      "counter": {
+        "de": "Transaktionshash: <<secret\u003a0>>",
+        "en": "Tx hash: <<secret\u003a0>>"
+      }
+    }
   },
   {
     "category": "dlp",
@@ -746,14 +768,32 @@
         "seed": 1
       }
     ],
-    "language_neutral": true
+    "language_neutral": true,
+    "balanced": {
+      "context": {
+        "de": "Privater Schlüssel (WIF): <<secret\u003a0>>",
+        "en": "Private key (WIF): <<secret\u003a0>>"
+      }
+    }
   },
   {
     "category": "dlp",
     "rule_id": "dlp_private_key_block",
-    "de": "-----BEGIN PRIVATE KEY-----\nQUJDREVGR0hJSktM\n-----END PRIVATE KEY-----",
-    "en": "-----BEGIN PRIVATE KEY-----\nQUJDREVGR0hJSktM\n-----END PRIVATE KEY-----",
-    "language_neutral": true
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "pem_pkcs8_private_key",
+        "seed": 1
+      }
+    ],
+    "language_neutral": true,
+    "balanced": {
+      "context": {
+        "de": "Privater Schlüssel des Servers: <<secret\u003a0>>",
+        "en": "Server private key: <<secret\u003a0>>"
+      }
+    }
   },
   {
     "category": "dlp",
@@ -765,9 +805,21 @@
   {
     "category": "dlp",
     "rule_id": "dlp_jwt_token",
-    "de": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijklmnop",
-    "en": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijklmnop",
-    "language_neutral": true
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "jwt_hs256",
+        "seed": 1
+      }
+    ],
+    "language_neutral": true,
+    "balanced": {
+      "context": {
+        "de": "Zugriffstoken: <<secret\u003a0>>",
+        "en": "Access token: <<secret\u003a0>>"
+      }
+    }
   },
   {
     "category": "dlp",

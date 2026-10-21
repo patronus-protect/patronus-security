@@ -95,7 +95,7 @@ fn lexicon_words(ids: &[&str]) -> Vec<&'static str> {
             let definition = definitions
                 .iter()
                 .find(|definition| definition.id == *id)
-                .unwrap_or_else(|| panic!("unknown PII lexicon id {id}"));
+                .unwrap_or_else(|| panic!("unknown lexicon id {id}"));
             definition
                 .en
                 .iter()
@@ -253,7 +253,7 @@ impl Evidence {
         }
     }
 
-    const fn none() -> Self {
+    pub(crate) const fn none() -> Self {
         Self {
             context: Context::None,
             anchor: None,
@@ -372,6 +372,78 @@ fn proximity_with(
             .find(|id| lexicon.ids[id].is_match(found)),
         side: Some(term.side),
         distance: Some(term.gap),
+    }
+}
+
+/// The proximity rules of this engine over one support and one counter-context
+/// lexicon, for the score models of other categories (DLP K04): the same
+/// windows, word boundaries and line limits, and the nearest term decides.
+pub(crate) struct ProximityLexicon {
+    support_ids: &'static [&'static str],
+    counter_ids: &'static [&'static str],
+    support: Regex,
+    counter: Regex,
+    /// Whole-term matchers per lexicon ID, to name the ID of a found term.
+    ids: Vec<(&'static str, Regex)>,
+    longest: usize,
+}
+
+impl ProximityLexicon {
+    pub(crate) fn new(
+        support_ids: &'static [&'static str],
+        counter_ids: &'static [&'static str],
+    ) -> Self {
+        let all = || support_ids.iter().chain(counter_ids);
+        Self {
+            support_ids,
+            counter_ids,
+            support: lexicon_regex(support_ids),
+            counter: lexicon_regex(counter_ids),
+            ids: all()
+                .map(|id| {
+                    let words = lexicon_alternation(&[id]);
+                    (*id, Regex::new(&format!("(?i)^(?:{words})$")).unwrap())
+                })
+                .collect(),
+            longest: lexicon_words(support_ids)
+                .into_iter()
+                .chain(lexicon_words(counter_ids))
+                .map(|word| word.chars().count())
+                .max()
+                .unwrap_or(0),
+        }
+    }
+
+    /// Two-sided proximity context of the value at `value` (byte range): the
+    /// nearest support term gives [`Context::Support`] unless a counter-context
+    /// term is strictly nearer, which gives [`Context::Counter`].
+    pub(crate) fn evidence(&self, text: &str, value: (usize, usize)) -> Evidence {
+        let region = region(text, value, self.longest);
+        let support = nearest(text, &self.support, region, value);
+        let counter = nearest(text, &self.counter, region, value);
+        let (context, term, ids) = match (support, counter) {
+            (Some(support), Some(counter)) if counter.gap < support.gap => {
+                (Context::Counter, counter, self.counter_ids)
+            }
+            (Some(support), _) => (
+                Context::Support { gap: support.gap },
+                support,
+                self.support_ids,
+            ),
+            (None, Some(counter)) => (Context::Counter, counter, self.counter_ids),
+            (None, None) => return Evidence::none(),
+        };
+        let found = &text[term.range.0..term.range.1];
+        Evidence {
+            context,
+            anchor: self
+                .ids
+                .iter()
+                .find(|(id, regex)| ids.contains(id) && regex.is_match(found))
+                .map(|(id, _)| *id),
+            side: Some(term.side),
+            distance: Some(term.gap),
+        }
     }
 }
 

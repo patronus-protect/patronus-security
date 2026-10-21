@@ -134,6 +134,7 @@ const fn concat<const N: usize>(parts: &[&[DlpPattern]]) -> [DlpPattern; N] {
         entity_group: "",
         validator: None,
         span_group: None,
+        base_score: 0,
         meta: RuleMeta::new(ValidatorStrength::None, "", &[]),
     };
     let mut rules = [EMPTY; N];

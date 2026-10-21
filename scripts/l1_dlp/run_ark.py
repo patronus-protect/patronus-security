@@ -12,7 +12,9 @@ of the baseline runner: code-point ``start_char``/``end_char``, ``rule_id`` (the
 rule), ``label`` (``ark.<rule_id>``), ``entities``/``groups`` from
 ``research/dlp/entity_map.yaml`` and ``normalization`` (always empty: ARK spans are
 already value spans). ARK adds ``group`` (the engine's entity group, i.e. the span
-label) and ``score``. No secret text is written. ``<output>.meta.json`` records the
+label) and ``score``. ``--dlp-mode balanced|recall`` scans in a scored DLP mode (K04):
+``score`` is then the model score and spans below the mode's threshold are dropped; the
+default ``strict`` scores every span 1.0. No secret text is written. ``<output>.meta.json`` records the
 engine profile, the SHA-256 of the native module, entity-map and I/O digests and
 counters, without timestamps; a rerun on the same build is byte-identical.
 
@@ -38,6 +40,7 @@ SCHEMA = "ark-l1-dlp-predictions-v1"
 TOOL = "ark"
 CATEGORY = "dlp"
 MAX_LEVEL = "l1"
+DLP_MODES = ("strict", "balanced", "recall")
 
 
 def _load_baselines():
@@ -62,20 +65,30 @@ def load_rule_index(path: Path = ENTITY_MAP_PATH) -> dict[str, tuple[list[str], 
     return baselines.load_entity_index(path, {TOOL: "ark"})[TOOL]
 
 
-def execution_gates(enabled_rules: Iterable[str], index: dict[str, Any]) -> dict[str, Any] | None:
-    """Gates that switch on ``enabled_rules`` on top of the default profile, or None."""
+def execution_gates(
+    enabled_rules: Iterable[str], index: dict[str, Any], mode: str = "strict"
+) -> dict[str, Any] | None:
+    """Gates that switch on ``enabled_rules`` and the DLP ``mode`` on top of the default
+    profile, or None for the default profile itself."""
     rules = sorted(set(enabled_rules))
     unknown = [rule for rule in rules if rule not in index]
     if unknown:
         raise ValueError(f"unknown ARK DLP rule(s): {', '.join(unknown)}")
-    return {"rules": {rule: True for rule in rules}} if rules else None
+    if mode not in DLP_MODES:
+        raise ValueError(f"unknown dlp_mode {mode!r}; expected one of {', '.join(DLP_MODES)}")
+    gates: dict[str, Any] = {"rules": {rule: True for rule in rules}} if rules else {}
+    if mode != "strict":
+        gates["dlp_mode"] = mode
+    return gates or None
 
 
-def build_gateway(enabled_rules: Iterable[str] = (), index: dict[str, Any] | None = None) -> Any:
+def build_gateway(
+    enabled_rules: Iterable[str] = (), index: dict[str, Any] | None = None, mode: str = "strict"
+) -> Any:
     """Create the L1 DLP gateway (imports the native binding lazily)."""
     from patronus_ark import SecurityGateway
 
-    gates = execution_gates(enabled_rules, load_rule_index() if index is None else index)
+    gates = execution_gates(enabled_rules, load_rule_index() if index is None else index, mode)
     return SecurityGateway(
         categories=[CATEGORY], max_level=MAX_LEVEL, download_files=False, execution_gates=gates
     )
@@ -202,13 +215,14 @@ def run(
     build: dict[str, str] | None = None,
     enabled_rules: Iterable[str] = (),
     entity_map_path: Path = ENTITY_MAP_PATH,
+    mode: str = "strict",
 ) -> dict[str, Any]:
     """Write predictions plus a timestamp-free metadata sidecar; return the metadata."""
     index = load_rule_index(entity_map_path)
     enabled = sorted(set(enabled_rules))
-    execution_gates(enabled, index)  # validate before scanning
+    execution_gates(enabled, index, mode)  # validate before scanning
     if gateway is None:
-        gateway = build_gateway(enabled, index)
+        gateway = build_gateway(enabled, index, mode)
     if build is None:
         build = build_info()
     source = input_path.read_bytes()
@@ -218,10 +232,13 @@ def run(
         json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in predictions
     ).encode("utf-8")
     output_path.write_bytes(encoded)
+    engine: dict[str, Any] = {"categories": [CATEGORY], "max_level": MAX_LEVEL, "enabled_rules": enabled}
+    if mode != "strict":
+        engine["dlp_mode"] = mode
     meta = {
         "schema": SCHEMA,
         "tool": TOOL,
-        "engine": {"categories": [CATEGORY], "max_level": MAX_LEVEL, "enabled_rules": enabled},
+        "engine": engine,
         "build": build,
         "entity_map_sha256": sha256_bytes(entity_map_path.read_bytes()),
         "input_sha256": sha256_bytes(source),
@@ -244,9 +261,13 @@ def main(argv: list[str] | None = None) -> int:
         "--enable-rule", action="append", default=[], metavar="RULE",
         help="switch on a default-off dlp_* rule (content/document classes); repeatable",
     )
+    parser.add_argument(
+        "--dlp-mode", choices=DLP_MODES, default="strict",
+        help="DLP output mode (K04): strict (default, every score 1.0), balanced or recall (model scores)",
+    )
     args = parser.parse_args(argv)
     meta_path = args.meta or args.output.with_name(args.output.stem + ".meta.json")
-    meta = run(args.input, args.output, meta_path, enabled_rules=args.enable_rule)
+    meta = run(args.input, args.output, meta_path, enabled_rules=args.enable_rule, mode=args.dlp_mode)
     print(
         f"ark dlp: {meta['rows']} rows, {meta['spans']} spans -> {args.output} "
         f"(sha256 {meta['output_sha256'][:12]})",

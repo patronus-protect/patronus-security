@@ -99,13 +99,17 @@ Vorhersagen im Format von `run_baselines.py`. Ausgeführt wird er mit dem ARK-Ve
 
 ```bash
 .venv/bin/python scripts/l1_dlp/run_ark.py --input rows.jsonl --output ark.jsonl
-    # [--meta FILE] [--enable-rule dlp_sql_statement …]
+    # [--meta FILE] [--enable-rule dlp_sql_statement …] [--dlp-mode strict|balanced|recall]
 ```
 
 **Engine.** `SecurityGateway(categories=["dlp"], max_level="l1", download_files=False)` im
 Default-Profil: Secret-Gruppen an, Content- und Dokumentklassen aus. `--enable-rule` schaltet
 einzelne `dlp_*`-Regeln zusätzlich ein (unbekannte Regeln brechen ab). Gemessen werden alle
 DLP-Produzenten der Kategorie (`native:dlp`, `sensitive_material`, `secret_transfer` …).
+`--dlp-mode balanced|recall` scannt im bewerteten DLP-Modus (K04, Execution-Gate `dlp_mode`):
+`score` ist dann der Modell-Score des Spans, Spans unter der Schwelle des Modus (0,50 bzw. 0,30)
+fehlen. Ohne die Option (`strict`) hat jeder Span `score` 1,0, und die Gates bleiben `None` wie
+bisher.
 
 **Ausgabe.** Je Eingabezeile eine Zeile in Eingabereihenfolge, ohne Secret-Text:
 
@@ -130,7 +134,8 @@ Entity-Map dem Span-Label entspricht. Die Engine behält je Gruppe ebenfalls den
 Regelreihenfolge. Ohne passende Gruppe gewinnt der erste Treffer. Ein Span ohne Treffer und ein
 Scanner-Fehler brechen den Lauf ab, statt leere Vorhersagen zu schreiben.
 
-**Metadaten.** `<output>.meta.json` enthält Schema, Engine-Profil (`enabled_rules`), SHA-256
+**Metadaten.** `<output>.meta.json` enthält Schema, Engine-Profil (`enabled_rules`, bei
+bewertetem Modus auch `dlp_mode`), SHA-256
 des nativen Moduls und die Paketversion, SHA-256 von `entity_map.yaml`, Eingabe und Ausgabe,
 und Zähler: Spans je Regel (`findings`) und Gruppe (`groups`), Regeln ohne Entität (`unmapped`)
 und Spans, deren Engine-Gruppe nicht zur Entity-Map passt (`group_mismatch`, `regel:gruppe`).
@@ -357,7 +362,7 @@ Netz, mit Lesezugriff auf Holdout und Checkout und Schreibzugriff nur auf den Ca
 ```bash
 PY=~/ark-dlp/baselines-venv/bin/python
 $PY scripts/l1_dlp/scoreboard.py gate --head WT --base-sha SHA --dev DIR --holdout DIR --cache DIR   # [--jobs N]
-$PY scripts/l1_dlp/scoreboard.py score --split DIR --predictions FILE    # [--extended-predictions FILE] [--output FILE]
+$PY scripts/l1_dlp/scoreboard.py score --split DIR --predictions FILE    # [--extended-predictions FILE] [--recall-predictions FILE] [--output FILE]
 $PY scripts/l1_dlp/scoreboard.py compare --base REPORT --head REPORT     # [--tolerance-pp 0.5]
 ```
 
@@ -383,10 +388,11 @@ werden die acht zuletzt genutzten Builds.
 |---|---|---|---|
 | `default` | Auslieferungszustand: nur Secret-Gruppen (`provider_secret`, `generic_credential`, `key_material`) | Carrier, Benign-Code, Benign-Dokumente | Secret-Gruppen, FP/MB |
 | `extended` | zusätzlich alle Opt-in-Regeln laut `taxonomy` der eigenen Entity-Map (Business-IDs, Content- und Dokumentklassen) | Carrier, Benign-Dokumente, externe Content-Goldens (nur Dev) | Opt-in-Gruppen auf Spans, Content-Klassen je Dokument, FP der Opt-in-Regeln auf Benign-Dokumenten |
+| `recall` | Auslieferungszustand im bewerteten DLP-Modus `recall` (`run_ark.py --dlp-mode recall`, K04) | Carrier | P/R-Kurven, nicht gegated |
 
 Vorhersagen liegen unter `CACHE/scoreboard/predictions/<key>.jsonl`. Der Schlüssel enthält
 Build, SHA-256 von `run_ark.py`, `run_baselines.py` und `scoreboard.py`, die Regeln und die
-Eingabedatei. Ein Lauf auf demselben Build scannt nichts neu. Nach 14 Tagen ohne Nutzung werden
+Eingabedatei, bei bewertetem Modus auch den Modus (Schlüssel der `strict`-Profile unverändert). Ein Lauf auf demselben Build scannt nichts neu. Nach 14 Tagen ohne Nutzung werden
 Vorhersagen gelöscht.
 
 **Metriken je Split** (Bericht `score`, im Gate je Head und Basis):
@@ -407,6 +413,11 @@ Vorhersagen gelöscht.
 - `synthetic.documents`: P/R/F1 je Content-Klasse auf Dokumentebene. Gold sind die
   `content_labels` der Zeile, Vorhersage ist jede Klasse, deren Regel in der Zeile einen Span
   meldet (Profil `extended`). Content-Spans zählen nie in den Span-Metriken.
+- `curves` (K04): P/R-Kurven aus dem Profil `recall`, sonst `null`. Je Schwelle aus
+  `CURVE_THRESHOLDS` (0,30, 0,40 … 1,00) zählen nur die Spans mit `score` ≥ Schwelle: `overall`
+  (exakt und Overlap), `groups` (Gruppen mit Gold) und `hard_negative_fp`. Der Punkt 0,30 ist der
+  Modus `recall`, der Punkt 0,50 entspricht `balanced` (bis auf Überlappungen unter der
+  Schwelle). Eine Basis ohne bewerteten Modus meldet überall Score 1,0, also eine flache Kurve.
 - `benign_code`: FP/MB wie `benign_code.py fp-per-mb` (Profil `default`).
 - `benign_docs.default`: FP-Bericht wie `benign_docs.py fp-report`; `benign_docs.extended`:
   derselbe Bericht für die Opt-in-Spans, dazu `by_class` mit markierten Dokumenten je Klasse.
@@ -432,13 +443,14 @@ gelten als leer, unbekannte IDs sind ein Fehler. So lassen sich auch die Ausgabe
 | `latency:100k_p95_ms` | 100-KiB-p95 des Heads > 1,10 × Basis + 0,25 ms (nur Dev, siehe [Latenz](#latenz-und-durchsatz)) |
 | `latency:budget_100k_p95_ms` | Head über dem H03-Budget von 10 ms, obwohl die Basis darunter liegt |
 
-Provider-Werte und Attribution werden berichtet, aber nicht gegated. Beide Seiten werden mit der
+Provider-Werte, Attribution und die P/R-Kurven werden berichtet, aber nicht gegated. Beide Seiten werden mit der
 Taxonomie des Heads bewertet; das `extended`-Profil nutzt die Opt-in-Regeln der jeweils eigenen
 Entity-Map. Die Latenz-Checks misst `latency.py` nach allen Vorhersagen auf den Dev-Workloads
 (siehe unten); der Holdout spielt dafür keine Rolle.
 
 **Ausgabe.** stdout nennt Head, Basis und Build-Schlüssel, die Dev-Tabelle (F1 je Gruppe und
-Content-Klasse, Attribution, geänderte Provider), Dev-FP und Dev-Regressionen. Für den Holdout
+Content-Klasse, Attribution, geänderte Provider), die Dev-P/R-Kurve des Heads (exakte P/R/F1 und
+Hard-Negative-FP je Schwelle), Dev-FP und Dev-Regressionen. Für den Holdout
 steht dort nur `holdout: no regression` bzw. `holdout: regression`, und zuletzt
 `scoreboard: PASS|FAIL`. Vor dem Dev-Urteil steht eine Zeile `dev latency: 100 KiB p95 … ms`
 mit dem Durchsatz auf dem 10-MiB-Repo. Bei Erfolg übernimmt der Runner die letzten 15 Zeilen in den Gate-Bericht,

@@ -20,6 +20,8 @@ V2_FIELDS = (
     "id", "suite", "schema_version", "language", "case_type", "target_label", "rule_id",
     "carrier", "tags", "known_gap",
 )
+# Opt-in DLP modes a row may name (K04); rows without `dlp_mode` run in `strict`.
+SCORED_MODES = ("balanced", "recall")
 
 
 def raw_lines():
@@ -53,6 +55,29 @@ class DlpGoldenSchemaV2Tests(unittest.TestCase):
             self.assertIs(type(row["known_gap"]), bool, row["id"])
             self.assertEqual(row["tags"], [tag for tag in TAGS if tag in row["tags"]], row["id"])
             self.assertEqual(len(set(row["tags"])), len(row["tags"]), row["id"])
+
+    def test_dlp_mode_follows_known_gap_and_names_a_scored_mode(self):
+        rows = load_rows()
+        for row in rows:
+            if "dlp_mode" in row:
+                self.assertEqual(tuple(row).index("dlp_mode"), len(V2_FIELDS), row["id"])
+                self.assertIn(row["dlp_mode"], SCORED_MODES, row["id"])
+        # K04: >= 5 positives and 5 hard negatives per language run in balanced.
+        balanced = Counter(
+            (row["language"], row["case_type"]) for row in rows if row.get("dlp_mode") == "balanced"
+        )
+        for language in LANGUAGES:
+            for case_type in ("positive", "hard_negative"):
+                self.assertGreaterEqual(balanced[(language, case_type)], MIN_PER_LANGUAGE, (language, case_type))
+
+    def test_generated_hard_negatives_run_in_a_scored_mode(self):
+        # Strict hard negatives hold example/test values (fill recipes, T06); a plain
+        # generator value is a hard negative only where context marks it as no secret (K04).
+        for row in load_rows():
+            if row["case_type"] != "hard_negative" or "secrets" not in row:
+                continue
+            plain = any("fill" not in secret for secret in row["secrets"])
+            self.assertEqual(plain, row.get("dlp_mode") in SCORED_MODES, row["id"])
 
     def test_only_positives_can_be_known_gaps(self):
         for row in load_rows():

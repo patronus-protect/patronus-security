@@ -12,6 +12,10 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   Stripe, Slack, Discord, ETH/BTC, PEM). Dazu kommen generische Zuweisungen
   (Passwort, Token, Bearer/Basic, Cookie, URL-Userinfo), Business-/Record-IDs und Content-Klassen
   (Quellcode, SQL, Dump, Log/Stacktrace, Business-Metrik). Jeder Treffer hat `score: 1.0`.
+  Seit K04 gilt das nur im Default-Modus `strict`: Die opt-in Modi `balanced`/`recall`
+  (Gate `dlp_mode`) bewerten jeden Treffer mit dem PII-Score-Modell (Basis je Regel +
+  Validator-Stärke + Feld-/Nähe-Kontext, Gegenkontext Hash/Prüfsumme/ID aus `dlp.json`); das
+  Scoreboard meldet daraus P/R-Kurven.
   Seit K02 trägt jede Regel Metadaten v2 (`RuleMeta`: Provider, Validator-Stärke, Prefilter-Keywords,
   Entropie-Untergrenze, Formatquelle, live/test); `matched_rules` meldet sie, die Quellen stehen in
   [`rule_sources.yaml`](rule_sources.yaml).

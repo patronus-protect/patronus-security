@@ -13,6 +13,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "API_KEY",
         validator: Some(is_real_secret_assignment),
         span_group: None,
+        base_score: 55,
         meta: RuleMeta::new(
             ValidatorStrength::Format,
             "gitleaks:anthropic-api-key",
@@ -27,6 +28,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "API_KEY",
         validator: None,
         span_group: None,
+        base_score: 55,
         meta: RuleMeta::new(
             ValidatorStrength::Format,
             "gitleaks:openai-api-key",
@@ -41,6 +43,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "API_KEY",
         validator: None,
         span_group: None,
+        base_score: 45,
         meta: RuleMeta::new(
             ValidatorStrength::Format,
             "gitleaks:openai-api-key",
@@ -55,6 +58,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "API_KEY",
         validator: None,
         span_group: None,
+        base_score: 55,
         meta: RuleMeta::new(
             ValidatorStrength::Format,
             "gitleaks:openai-api-key",
@@ -69,6 +73,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "API_KEY",
         validator: None,
         span_group: None,
+        base_score: 45,
         meta: RuleMeta::new(
             ValidatorStrength::Format,
             "gitleaks:huggingface-access-token",
@@ -83,6 +88,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "API_KEY",
         validator: None,
         span_group: None,
+        base_score: 50,
         meta: RuleMeta::new(ValidatorStrength::Format, "ark", &["gsk_"])
             .with_provider("groq")
             .with_min_entropy(3.0),
@@ -93,6 +99,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "API_KEY",
         validator: None,
         span_group: None,
+        base_score: 50,
         meta: RuleMeta::new(ValidatorStrength::Format, "ark", &["xai-"])
             .with_provider("xai")
             .with_min_entropy(3.0),
@@ -103,6 +110,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "API_KEY",
         validator: None,
         span_group: None,
+        base_score: 45,
         meta: RuleMeta::new(ValidatorStrength::Format, "ark", &["r8_"])
             .with_provider("replicate")
             .with_min_entropy(3.0),
@@ -114,6 +122,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "CLOUD_KEY",
         validator: None,
         span_group: None,
+        base_score: 55,
         meta: RuleMeta::new(
             ValidatorStrength::Format,
             "gitleaks:aws-access-token",
@@ -130,6 +139,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "CLOUD_KEY",
         validator: None,
         span_group: Some(1),
+        base_score: 35,
         meta: RuleMeta::new(
             ValidatorStrength::Format,
             "https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html",
@@ -144,6 +154,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "CLOUD_KEY",
         validator: None,
         span_group: None,
+        base_score: 55,
         meta: RuleMeta::new(ValidatorStrength::Format, "gitleaks:gcp-api-key", &["aiza"])
             .with_provider("google")
             .with_min_entropy(3.0),
@@ -154,6 +165,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "CLOUD_KEY",
         validator: None,
         span_group: None,
+        base_score: 50,
         meta: RuleMeta::new(ValidatorStrength::Format, "ark", &["ya29."])
             .with_provider("google")
             .with_min_entropy(3.0),
@@ -164,6 +176,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "CLOUD_KEY",
         validator: None,
         span_group: None,
+        base_score: 55,
         meta: RuleMeta::new(ValidatorStrength::Format, "ark", &["gocspx-"])
             .with_provider("google")
             .with_min_entropy(3.0),
@@ -175,6 +188,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "SECRET_TOKEN",
         validator: None,
         span_group: None,
+        base_score: 55,
         meta: RuleMeta::new(
             ValidatorStrength::Format,
             "gitleaks:github-pat",
@@ -189,6 +203,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "SECRET_TOKEN",
         validator: None,
         span_group: None,
+        base_score: 60,
         meta: RuleMeta::new(
             ValidatorStrength::Format,
             "gitleaks:github-fine-grained-pat",
@@ -203,6 +218,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "SECRET_TOKEN",
         validator: None,
         span_group: None,
+        base_score: 55,
         meta: RuleMeta::new(
             ValidatorStrength::Format,
             "gitleaks:gitlab-pat",
@@ -217,6 +233,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "SECRET_TOKEN",
         validator: None,
         span_group: None,
+        base_score: 50,
         meta: RuleMeta::new(
             ValidatorStrength::Format,
             "gitleaks:npm-access-token",
@@ -232,6 +249,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "PAYMENT_KEY",
         validator: None,
         span_group: None,
+        base_score: 55,
         meta: RuleMeta::new(
             ValidatorStrength::Format,
             "gitleaks:stripe-access-token",
@@ -247,6 +265,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "PAYMENT_KEY",
         validator: None,
         span_group: None,
+        base_score: 55,
         meta: RuleMeta::new(
             ValidatorStrength::Format,
             "https://docs.stripe.com/webhooks",
@@ -262,6 +281,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "SECRET_TOKEN",
         validator: None,
         span_group: None,
+        base_score: 55,
         meta: RuleMeta::new(
             ValidatorStrength::Format,
             "https://api.slack.com/authentication/token-types",
@@ -276,6 +296,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         entity_group: "SECRET_TOKEN",
         validator: None,
         span_group: None,
+        base_score: 35,
         meta: RuleMeta::new(ValidatorStrength::Format, "ark", &[])
             .with_provider("discord")
             .with_min_entropy(3.0),

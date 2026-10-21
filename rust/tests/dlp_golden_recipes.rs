@@ -25,6 +25,8 @@ struct Row {
     secrets: Option<Vec<SecretRecipe>>,
     text_fingerprint: Option<String>,
     entities: Vec<Entity>,
+    /// Scored DLP mode of the row (K04); rows without it run in `strict`.
+    dlp_mode: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -369,11 +371,14 @@ fn recipe_rows_materialize_identically_to_the_python_generator() {
             row.id
         );
         if row.case_type == "hard_negative" {
-            // T06: example/test values in a provider format are fill recipes.
+            // T06: example/test values in a provider format are fill recipes. A
+            // hard negative of a scored mode (K04) is a generated value whose
+            // context marks it as no secret; it is no example value.
             assert!(row.entities.is_empty(), "{}", row.id);
+            let scored = row.dlp_mode.as_deref().is_some_and(|mode| mode != "strict");
             assert!(
-                recipes.iter().all(|recipe| recipe.fill.is_some()),
-                "{}: hard negatives use fill recipes",
+                recipes.iter().all(|recipe| recipe.fill.is_some() != scored),
+                "{}: strict hard negatives use fill recipes, scored ones plain recipes",
                 row.id
             );
             continue;

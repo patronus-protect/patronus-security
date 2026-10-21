@@ -1897,5 +1897,60 @@
     "sources": [
       "rust/src/detectors/mcp/mcp_policy.rs"
     ]
+  },
+  {
+    "id": "dlp.digest_reference",
+    "description": "Prüfsummen, Hash- und Digest-Werte und technische IDs, die kein Geheimnis sind (Gegenkontext des DLP-Score-Modells)",
+    "en": [
+      "checksum",
+      "hash value",
+      "file hash",
+      "content hash",
+      "commit hash",
+      "commit sha",
+      "commit id",
+      "git sha",
+      "tx hash",
+      "tx id",
+      "transaction hash",
+      "block hash",
+      "digest",
+      "fingerprint",
+      "integrity",
+      "request id",
+      "trace id",
+      "correlation id"
+    ],
+    "de": [
+      "prüfsumme",
+      "pruefsumme",
+      "hashwert",
+      "dateihash",
+      "transaktionshash",
+      "transaktions-hash",
+      "blockhash",
+      "block-hash",
+      "commit-hash",
+      "fingerabdruck",
+      "anfrage-id",
+      "korrelations-id"
+    ],
+    "shared": [
+      "sha256",
+      "sha-256",
+      "sha512",
+      "sha-512",
+      "sha1",
+      "sha-1",
+      "md5",
+      "txhash",
+      "tx_hash",
+      "txid",
+      "uuid",
+      "guid"
+    ],
+    "sources": [
+      "rust/src/detectors/dlp/context.rs"
+    ]
   }
 ]
