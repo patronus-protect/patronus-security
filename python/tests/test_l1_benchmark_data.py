@@ -192,7 +192,7 @@ class L1BenchmarkDataTests(unittest.TestCase):
     def test_language_distribution_is_broad(self):
         expected = {
             "pii_l1": {"de": 503, "en": 485, "fr": 16, "es": 16, "it": 16, "nl": 16},
-            "dlp_l1": {"de": 362, "en": 370},
+            "dlp_l1": {"de": 376, "en": 384},
         }
         for name, distribution in expected.items():
             self.assertEqual(Counter(row["language"] for row in load(name)), distribution)

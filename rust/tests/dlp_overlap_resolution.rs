@@ -396,7 +396,9 @@ fn substring_artefacts_inside_fixed_format_values_are_suppressed() {
     }
 
     // A run that passes the checksum is still an artefact of the longer value:
-    // a valid WIF key between non-Base58 characters in a Stripe key body.
+    // a valid WIF key between non-Base58 characters in a Stripe key body. Glued
+    // to the digits around it, it is no whole token, so the WIF rule does not
+    // match at all (T01).
     for (seed, gen) in [
         (11, "btc_wif_mainnet_uncompressed"),
         (12, "btc_wif_mainnet_compressed"),
@@ -411,12 +413,12 @@ fn substring_artefacts_inside_fixed_format_values_are_suppressed() {
         let spans = secret_spans(&result);
         assert_eq!(spans.len(), 1, "{text:?}: {:#?}", result.evidence_spans);
         assert_eq!(spans[0].text, key);
-        let wif_matches = rule_matches(&result)
-            .into_iter()
-            .filter(|(rule, ..)| rule == "dlp_btc_wif")
-            .collect::<Vec<_>>();
-        assert_eq!(wif_matches.len(), 1, "{text:?}");
-        assert!(wif_matches[0].3.is_some(), "WIF artefact kept in {text:?}");
+        assert!(
+            rule_matches(&result)
+                .iter()
+                .all(|(rule, ..)| rule != "dlp_btc_wif"),
+            "WIF run inside a token matched in {text:?}"
+        );
     }
 }
 

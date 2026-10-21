@@ -650,6 +650,14 @@
         "seed": 1
       }
     ],
+    "hard_negatives": {
+      "de": [
+        "# Tokenizer laden\ntokenizer = load_hf_PretrainedTokenizerCheckpoint(pfad)"
+      ],
+      "en": [
+        "const loader = new Cachedhf_PretrainedTokenizerCheckpoint(path);"
+      ]
+    },
     "language_neutral": true
   },
   {
@@ -891,6 +899,14 @@
         "seed": 1
       }
     ],
+    "hard_negatives": {
+      "de": [
+        "# Aufrufdaten (ABI-kodiert)\ndata: 0xa9059cbb0000000000000000000000000x6840f7cedff654093aece745190193d7ac64afb80bf4cbc60b0a890a368e2ff5"
+      ],
+      "en": [
+        "image: ghcr.io/acme/api@sha256:e2901fbaf0b55e5ce60f9ace8918c5df0x6840f7cedff654093aece745190193d7ac64afb80bf4cbc60b0a890a368e2ff5"
+      ]
+    },
     "language_neutral": true,
     "balanced": {
       "context": {
@@ -916,10 +932,12 @@
     ],
     "hard_negatives": {
       "de": [
-        "Prüfsumme (Base58): 5qcCPMN3pG57Z4BT11TcwWcm8SfgVVSQuSSDV1qMW4K6cepkSv"
+        "Prüfsumme (Base58): 5qcCPMN3pG57Z4BT11TcwWcm8SfgVVSQuSSDV1qMW4K6cepkSv",
+        "# Automatisch von Cargo erzeugt\nchecksum = \"3a62b7f976a112d59e38e370981a935fac5bc0dc422c4b4cc23cc4ee5b5426ac\""
       ],
       "en": [
-        "Checksum (Base58): LRQepRFaLzK7d6Gmy6odtC6XBTgAWxjZQ3fDyvLSLTngoPjXqr"
+        "Checksum (Base58): LRQepRFaLzK7d6Gmy6odtC6XBTgAWxjZQ3fDyvLSLTngoPjXqr",
+        "golang.org/x/text v0.14.0 h1:Pkq3jg/AZxbrjZGvwkkfNLHaaB5Z2+3Ph7fi9EoTkDY="
       ]
     },
     "language_neutral": true,

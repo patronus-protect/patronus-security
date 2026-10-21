@@ -347,6 +347,18 @@ fn encoded_and_split_placeholders_yield_fragments() {
     }
 }
 
+/// T01: every placeholder of `template` continues a word, `+` or `/` run.
+fn is_glued(template: &str) -> bool {
+    let mut placeholders = template.match_indices("<<secret:").peekable();
+    placeholders.peek().is_some()
+        && placeholders.all(|(index, _)| {
+            template[..index]
+                .bytes()
+                .last()
+                .is_some_and(|byte| byte.is_ascii_alphanumeric() || b"_+/".contains(&byte))
+        })
+}
+
 #[test]
 fn recipe_rows_materialize_identically_to_the_python_generator() {
     let generators = generators();
@@ -373,12 +385,14 @@ fn recipe_rows_materialize_identically_to_the_python_generator() {
         if row.case_type == "hard_negative" {
             // T06: example/test values in a provider format are fill recipes. A
             // hard negative of a scored mode (K04) is a generated value whose
-            // context marks it as no secret; it is no example value.
+            // context marks it as no secret; it is no example value. So is a
+            // value glued into a longer run (T01), which is no whole token.
             assert!(row.entities.is_empty(), "{}", row.id);
-            let scored = row.dlp_mode.as_deref().is_some_and(|mode| mode != "strict");
+            let plain =
+                row.dlp_mode.as_deref().is_some_and(|mode| mode != "strict") || is_glued(template);
             assert!(
-                recipes.iter().all(|recipe| recipe.fill.is_some() != scored),
-                "{}: strict hard negatives use fill recipes, scored ones plain recipes",
+                recipes.iter().all(|recipe| recipe.fill.is_some() != plain),
+                "{}: strict hard negatives use fill recipes, scored and glued ones plain recipes",
                 row.id
             );
             continue;
