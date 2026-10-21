@@ -9,7 +9,7 @@ use crate::{
 use super::context::Evidence;
 use super::context_anchors::PII_ANCHOR_PATTERNS;
 use super::score::{self, PiiMode, ValidatorStrength};
-use super::{common, context, de, identifiers, intl, uk, us, validators};
+use super::{common, context, de, identifiers, intl, overlap, uk, us, validators};
 use crate::detectors::anchors;
 use crate::detectors::obfuscation::{Deobfuscated, Level};
 use crate::EvidenceSpan;
@@ -202,16 +202,24 @@ impl PiiPipeline {
         } else {
             Level::Invisible
         };
-        let Some(view) = Deobfuscated::new(prepared.text(), level) else {
-            return detection;
+        let mut detection = match Deobfuscated::new(prepared.text(), level) {
+            None => detection,
+            Some(view) => {
+                let normalized = self.detect_prepared_scored(
+                    &crate::threat::NativeText::new(&view.text),
+                    allows,
+                    false,
+                    mode.min_score(),
+                );
+                merge_deobfuscated(prepared.text(), detection, normalized, &view, mode)
+            }
         };
-        let normalized = self.detect_prepared_scored(
-            &crate::threat::NativeText::new(&view.text),
-            allows,
-            false,
-            mode.min_score(),
-        );
-        merge_deobfuscated(prepared.text(), detection, normalized, &view, mode)
+        // K07: in the scored modes one value yields one competing label; strict
+        // keeps both (decision T07).
+        if !strict {
+            overlap::resolve(prepared.text(), &mut detection);
+        }
+        detection
     }
 
     /// Context of a match: the field the rule binds (its own field name or a

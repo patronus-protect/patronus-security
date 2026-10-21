@@ -251,6 +251,23 @@ a wrong check digit stays unreported. A finding that needed normalization replac
 finding it contains and yields to any other; its `matched_rules` entry carries original offsets
 and `obfuscation` (`zero_width`, `full_width`, `defanged`, `spelled_out`, `spaced_digits`).
 
+**Cross-label overlaps (K07).** Number labels compete for the same digits: the BBAN of a grouped
+IBAN or the digits of a `+49` number can pass Luhn, and an account field can hold an IBAN or a
+card-shaped number. In `balanced` and `recall` one value yields one label among `IBAN`,
+`CREDITCARD`, `FINANCIAL_ACCOUNT_NUMBER`, `STEUERID` and `PHONE`. Of two overlapping findings
+with different labels the first criterion that differs decides: an IBAN (`iban`), the longer
+value (`longer_value`: `+49 89 2019 4400` keeps its Luhn-valid `49 89 2019 4400`), context that
+supports the finding's own label, i.e. a field name, a structural key or a nearby support term
+(`context`: `Telefon: 0151 2345 6789 01`, `Kontonummer: 4111-1111-1111-1111`, `via telephone at
+0157-09-316-8811`), a checksum (`checksum`), the higher score (`score`), the earlier rule
+(`rule_order`). A finding inside a printed IBAN form (country code, two digits, groups of four:
+`DE64 7172 7958 4924 3372 11`) yields even when the IBAN's check digits fail and no IBAN is
+reported (`iban_form`). The loser leaves `evidence_spans`; its `matched_rules` entries stay and
+carry `overlap` with the `reason` and, except for `iban_form`, the winning label in `yields_to`.
+`class_name` and `confidence` follow the remaining findings. Other labels keep their overlaps
+(an e-mail address after `Username:` stays `EMAIL` and `USERNAME`), and `strict` keeps both
+labels (decision T07).
+
 For example, a Steuer-ID after its field name scores `1.0`, an IBAN without a field name `0.90`
 (`1.0` right after the word `IBAN`), a licence plate after `Kennzeichen:` `0.65`, and a card
 number after `Bestellnummer` `0.45`, below the `balanced` threshold. The [L1 rule catalog](l1-rule-catalog.md) lists
@@ -262,7 +279,7 @@ and carry neither field.
 
 Every rule that does not require context scores at least `0.50` without it, so `balanced` and
 `recall` return the `strict` spans except those a nearer counter-context term pushes below their
-threshold. They also report checksum-strong values without a field name (K05): IBAN and card
+threshold and those that yield to an overlapping finding of a competing label (K07). They also report checksum-strong values without a field name (K05): IBAN and card
 numbers as in `strict`, and scored-only rules add the bare form of values that `strict` reports
 only after their field name. The first is `pii_steuer_id_de_context_free`: 11 digits or
 `86 095 742 719` that pass the check digit and the digit distribution of issued Steuer-IDs (one
