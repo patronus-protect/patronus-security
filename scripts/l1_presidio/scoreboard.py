@@ -63,6 +63,7 @@ checksum validator; reported only, T16):
 from __future__ import annotations
 
 import argparse
+import datetime
 import hashlib
 import json
 import os
@@ -363,6 +364,41 @@ def luhn(value: str) -> bool:
     return total % 10 == 0
 
 
+# (lowest prefix, highest prefix, lengths) of ``validators::CARD_IIN_RANGES``.
+CARD_IIN_RANGES: tuple[tuple[str, str, tuple[int, ...]], ...] = (
+    ("34", "34", (15,)), ("37", "37", (15,)),
+    ("300", "305", tuple(range(14, 20))), ("3095", "3095", tuple(range(14, 20))),
+    ("36", "36", tuple(range(14, 20))), ("38", "39", tuple(range(14, 20))),
+    ("35", "35", tuple(range(16, 20))), ("1800", "1800", (15,)), ("2131", "2131", (15,)),
+    ("2200", "2204", tuple(range(16, 20))), ("2221", "2720", (16,)), ("51", "55", (16,)),
+    ("4", "4", (13, 16, 19)),
+    ("6011", "6011", tuple(range(16, 20))), ("644", "649", tuple(range(16, 20))), ("65", "65", tuple(range(16, 20))),
+    ("62", "62", tuple(range(16, 20))),
+    ("50", "50", tuple(range(12, 20))), ("56", "69", tuple(range(12, 20))),
+    ("1", "1", (15,)),
+)
+
+
+def _valid_date(year: int, month: int, day: int) -> bool:
+    try:
+        datetime.date(year, month, day)
+    except ValueError:
+        return False
+    return 1900 <= year <= 2100
+
+
+def payment_card(value: str) -> bool:
+    """Port of ``validators::payment_card``: Luhn, IIN prefix and length of a brand, no birth-date ID or stamp."""
+    if not luhn(value):
+        return False
+    digits = "".join(str(d) for d in _digits(value))
+    if not any(len(digits) in lengths and low <= digits[: len(low)] <= high for low, high, lengths in CARD_IIN_RANGES):
+        return False
+    birth_date_id = len(digits) == 13 and _valid_date(2000 + int(digits[:2]), int(digits[2:4]), int(digits[4:6]))
+    stamp = digits[:2] in ("19", "20") and _valid_date(int(digits[:4]), int(digits[4:6]), int(digits[6:8]))
+    return not birth_date_id and not stamp
+
+
 def mod97(value: str) -> bool:
     """Port of ``validators::mod97`` (ISO 7064 MOD 97-10 on the value without whitespace)."""
     normalized = "".join(ch for ch in value if not ch.isspace())
@@ -403,6 +439,7 @@ def steuer_id_issued(value: str) -> bool:
 # a task that adds one ports it here, or scripts/tests/test_l1_scoreboard.py is red.
 CHECKSUM_PORTS: dict[str, Callable[[str], bool]] = {
     "luhn": luhn,
+    "payment_card": payment_card,
     "mod97": mod97,
     "steuer_id": steuer_id,
     "steuer_id_issued": steuer_id_issued,

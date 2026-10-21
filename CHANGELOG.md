@@ -9,6 +9,24 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ## [Unreleased]
 
+### Changed
+
+- Payment card numbers need the IIN prefix and a length of their brand besides Luhn (B-PAN: T19 +
+  F02, TRIAGE 2026-W43 bucket 4, baseline N1/P8). `pii_credit_card` validates with the new
+  `validators::payment_card`: Luhn (unchanged), then `validators::CARD_IIN_RANGES` (Amex, Diners
+  Club, Discover, JCB, Maestro, Mastercard incl. 2221–2720, Mir, UnionPay, UATP, Visa 13/16/19
+  digits); 13 digits that open with a valid YYMMDD birth date (ZA ID number, KR resident registration
+  number) and digits that open with a YYYYMMDD date (time stamps) are no card. The rule also no longer
+  reports the digits right after `+` (`+44 20 1234 5678`, no sub-span either) or a `-`/`_` segment of
+  a token (`xoxb-…-485275870833-…`). `checksums.ark` in `entity_map.yaml` lists `payment_card` instead
+  of `luhn`; `scoreboard.py` ports it for the gold-gap report. **Detection change:** in `strict` and
+  `balanced` (the same table gates the context-free card of `balanced`) card findings on phone
+  numbers, EDIFACT/SWIFT stamps, token segments, ZA/KR IDs, IBAN BBANs without a card IIN and other
+  Luhn-valid numbers without a brand disappear, and with them the card's secondary evidence inside such
+  IBANs and its `overlap` entries next to phone numbers. Dev: card FP 95 → 11 (`strict`) and 59 → 8
+  (`balanced`), every card TP and every Luhn-valid card gold value stays found; the presidio-analyzer
+  hard negative `1748503543012` is no match.
+
 ### Added
 
 - Implement the decided M2 rule and add `scripts/l1_presidio/scoreboard.py m2` (D-M2, decision of

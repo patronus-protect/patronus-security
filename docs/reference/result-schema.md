@@ -275,17 +275,17 @@ a wrong check digit stays unreported. A finding that needed normalization replac
 finding it contains and yields to any other; its `matched_rules` entry carries original offsets
 and `obfuscation` (`zero_width`, `full_width`, `defanged`, `spelled_out`, `spaced_digits`).
 
-**Cross-label overlaps (K07).** Number labels compete for the same digits: the BBAN of a grouped
-IBAN or the digits of a `+49` number can pass Luhn, and an account field can hold an IBAN or a
-card-shaped number. In `balanced` and `recall` one value yields one label among `IBAN`,
+**Cross-label overlaps (K07).** Number labels compete for the same digits: the BBAN of an IBAN can
+be a valid card number, and an account field can hold an IBAN or a card-shaped number. Since B-PAN
+a card needs Luhn plus the IIN prefix and a length of its brand and never starts right after `+`,
+so phone digits no longer compete as a card. In `balanced` and `recall` one value yields one label among `IBAN`,
 `CREDITCARD`, `FINANCIAL_ACCOUNT_NUMBER`, `STEUERID` and `PHONE`. Of two overlapping findings
 with different labels the first criterion that differs decides: an IBAN (`iban`), the longer
-value (`longer_value`: `+49 89 2019 4400` keeps its Luhn-valid `49 89 2019 4400`), context that
-supports the finding's own label, i.e. a field name, a structural key or a nearby support term
-(`context`: `Telefon: 0151 2345 6789 01`, `Kontonummer: 4111-1111-1111-1111`, `via telephone at
-0157-09-316-8811`), a checksum (`checksum`), the higher score (`score`), the earlier rule
+value (`longer_value`: a card-shaped part of a longer value), context that supports the finding's
+own label, i.e. a field name, a structural key or a nearby support term (`context`:
+`Kontonummer: 4111-1111-1111-1111`), a checksum (`checksum`), the higher score (`score`), the earlier rule
 (`rule_order`). A finding inside a printed IBAN form (country code, two digits, groups of four:
-`DE64 7172 7958 4924 3372 11`) yields even when the IBAN's check digits fail and no IBAN is
+`DE34 6659 4134 6836 7322 13`) yields even when the IBAN's check digits fail and no IBAN is
 reported (`iban_form`). The loser leaves `evidence_spans`; its `matched_rules` entries stay and
 carry `overlap` with the `reason` and, except for `iban_form`, the winning label in `yields_to`.
 `class_name` and `confidence` follow the remaining findings. Other labels keep their overlaps
@@ -295,7 +295,7 @@ labels (decision T07).
 **Secondary evidence in `strict` (T07).** `strict` keeps reporting both labels, with spans, class
 and confidence unchanged, but a `CREDITCARD` or `FINANCIAL_ACCOUNT_NUMBER` finding inside a reported
 (MOD-97-valid) IBAN is secondary evidence of it: the card-shaped BBAN of
-`DE18 4306 0967 1234 5678 00`, or the account after `Bank account:` on
+`DE94 5001 0517 5401 2345 65`, or the account after `Bank account:` on
 `GB82WEST12345698765432`. `details.secondary_evidence` lists each one as `label`, `start_byte`,
 `end_byte`, `reason` (`iban_value` for the IBAN's own span, `iban_part` for a part of it) and
 `primary_label` (`IBAN`); it is absent when there is none. Evaluations (`13_l1_golden_eval`,
