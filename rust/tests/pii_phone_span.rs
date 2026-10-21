@@ -164,34 +164,25 @@ fn parenthesized_lookalikes_stay_silent() {
 
 #[test]
 fn no_us_phone_span_is_cut_inside_parentheses() {
-    // The country code is the international rule's part; the US rule reports the
-    // balanced national form, never a half-open `415) …`.
-    for (text, us, international) in [
-        (
-            "Phone: +1 (415) 555-2671",
-            "(415) 555-2671",
-            "+1 (415) 555-2671",
-        ),
-        (
-            "Telefon: +1 (212) 736-4410",
-            "(212) 736-4410",
-            "+1 (212) 736-4410",
-        ),
+    // The US rule reports the balanced form, never a half-open `415) …`. Since T18 a
+    // trunk prefix is part of its span, so with `+1` both rules report the whole
+    // number; a `1 (415) …` without its `+` would cut the country code.
+    for (text, value) in [
+        ("Phone: +1 (415) 555-2671", "+1 (415) 555-2671"),
+        ("Telefon: +1 (212) 736-4410", "+1 (212) 736-4410"),
     ] {
         let result = scan(text, PiiMode::Strict);
         let found = rules(text, &result);
         assert!(
-            found.contains(&("pii_phone_us".to_owned(), us.to_owned()))
-                && found.contains(&(
-                    "pii_phone_international".to_owned(),
-                    international.to_owned()
-                )),
+            found.contains(&("pii_phone_us".to_owned(), value.to_owned()))
+                && found.contains(&("pii_phone_international".to_owned(), value.to_owned())),
             "{text}: {found:?}"
         );
         assert!(
             found.iter().all(|(_, value)| balanced_parentheses(value)),
             "{text}: {found:?}"
         );
+        assert_eq!(phone_spans(&result), vec![value.to_owned()], "{text}");
     }
 }
 
@@ -249,5 +240,8 @@ fn bilingual_span_probes_report_the_exact_value() {
         }
         probed.push(probe.rule_id.as_str());
     }
-    assert_eq!(probed, ["pii_phone_us"]);
+    assert_eq!(
+        probed,
+        ["pii_phone_international", "pii_phone_de", "pii_phone_us"]
+    );
 }

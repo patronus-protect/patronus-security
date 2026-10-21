@@ -1416,6 +1416,38 @@ T17_PHONE_ELEMENT_RUN_CASES = [
 for _row in T17_PHONE_ELEMENT_RUN_CASES:
     PII_CASES[_row["target_label"]].append(_row)
 
+# T18 phone span boundaries (TRIAGE 2026-W43 bucket 3): a number ends before a line break
+# (`+1-123-456-7890\n\n2` took the item number of the next line), and a NANP trunk prefix
+# (`1-800-123-4567`, `1 (800) 123-4567`) or a `00` international prefix (`001 415 555 2671`)
+# is part of the span; `0049 …` keeps its prefix. Hard negatives are digit groups split by a
+# line break and prefixes without a number. Appended so existing ids stay stable.
+T18_PHONE_BOUNDARY_CASES = [
+    p("PHONE", "de", "pii_phone_us", "Gebührenfreie Hotline: ", "1-800-123-4567"),
+    p("PHONE", "de", "pii_phone_us", "US-Kundendienst unter ", "1 (888) 432-7716", " erreichbar", carrier="prose"),
+    p("PHONE", "de", "pii_phone_us", "Aus Deutschland wählen Sie ", "001 415 555 2671", ".", carrier="prose"),
+    p("PHONE", "de", "pii_phone_international", "Telefon: ", "+49 30 1234567", "\n2. Ansprechpartnerin"),
+    p("PHONE", "de", "pii_phone_de", "Zentrale ", "0049 170 1234567", "\n\n2. Ansprechpartner"),
+    p("PHONE", "de", "pii_phone_international", "Fax ", "+44 20 7946 0958", "\r\n3 Seiten"),
+    p("PHONE", "en", "pii_phone_international", "Call ", "+1-123-456-7890", "\n\n2. Next step"),
+    p("PHONE", "en", "pii_phone_us", "Toll-free: ", "1-800-959-5525"),
+    p("PHONE", "en", "pii_phone_us", "Customer service ", "1 (800) 123-4567", " is open 24/7.", carrier="prose"),
+    p("PHONE", "en", "pii_phone_us", "From abroad dial ", "001-518-640-0854", ".", carrier="prose"),
+    p("PHONE", "en", "pii_phone_us", "Support: ", "1.800.432.7716"),
+    p("PHONE", "en", "pii_phone_de", "Head office ", "0049 170 1234567", "\n\n2. Contact"),
+    n("PHONE", "de", "pii_phone_us", "Lagerbestand je Regal:\n415\n555-2671", "two counts on separate lines"),
+    n("PHONE", "de", "pii_phone_international", "Positionen\n+49 30\n12345", "digit groups split by line breaks"),
+    n("PHONE", "de", "pii_phone_us", "Bestand: 415\r\n555 2671", "two counts on separate lines"),
+    n("PHONE", "de", "pii_phone_us", "Bestellnummer 001-2345-6789", "order number with a 00 lead"),
+    n("PHONE", "de", "pii_phone_us", "Kapitel 1-800 bis 1-900", "section range, trunk-like prefix without a number"),
+    n("PHONE", "en", "pii_phone_us", "Units per shelf:\n212\n555 0100", "two counts on separate lines"),
+    n("PHONE", "en", "pii_phone_international", "Positions\n+49 30\n12345", "digit groups split by line breaks"),
+    n("PHONE", "en", "pii_phone_us", "Codes 212\n\n555.0100", "two codes in separate paragraphs"),
+    n("PHONE", "en", "pii_phone_us", "Part number 001-555-01", "part number with a 00 lead"),
+    n("PHONE", "en", "pii_phone_us", "Version 1.800.12 released", "version string, trunk-like prefix without a number"),
+]
+for _row in T18_PHONE_BOUNDARY_CASES:
+    PII_CASES[_row["target_label"]].append(_row)
+
 # DLP golden schema v2 (E13). Every DLP row names the rule it exercises (`rule_id`), the
 # document that carries the value (`carrier`), its difficulty `tags` and whether it is a
 # `known_gap`: a positive the detector misses today, reported by 13_l1_golden_eval but
