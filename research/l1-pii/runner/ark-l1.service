@@ -9,5 +9,5 @@ User=ubuntu
 Group=ubuntu
 Environment=HOME=/home/ubuntu
 ExecStart=/home/ubuntu/ark-l1/bin/run.sh
-TimeoutStartSec=6h
+TimeoutStartSec=24h
 Nice=5

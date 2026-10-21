@@ -21,9 +21,13 @@ MODEL="${ARK_L1_MODEL:-claude-opus-5-5}"
 
 mkdir -p "$ROOT/logs" "$ROOT/state" "$SHARED/state"
 # One lock for all programmes: two agents with MemoryMax=9G do not fit on the VPS.
-# Taken before the log exists, so a skipped hourly run leaves no log (journal only).
+# A busy lock queues the run instead of dropping the slot: a long run of one programme
+# (three rounds of agent, gate and CI wait, up to about nine hours) used to swallow several
+# slots of the other. The wait has no limit of its own; the unit's TimeoutStartSec bounds wait
+# plus run. systemd starts no second instance while this one waits, so at most one run per
+# programme queues, and the programmes alternate. Taken before the log exists.
 exec 9>"$SHARED/state/run.lock"
-flock -n 9 || { echo "another run is active"; exit 0; }
+flock -n 9 || { echo "== run lock busy; queued until the other run ends"; flock 9; }
 LOG="$ROOT/logs/$(date -u +%Y%m%dT%H%M%SZ).log"
 exec > >(tee -a "$LOG") 2>&1
 find "$ROOT/logs" -name '*.log' -mtime +30 -delete
