@@ -5,7 +5,7 @@
 //! that compete for the same digits (`overlap::COMPETING_LABELS`: IBAN, card,
 //! account, Steuer-ID, phone). Of two overlapping findings with different labels
 //! the first in this order wins: an IBAN (country code and MOD-97 prove the kind
-//! of value), the longer value (a Luhn-valid part of an IBAN or of a `+49` number
+//! of value), the longer value (a card-shaped part of an IBAN or a longer number
 //! is a coincidence), context that supports its own label (a field name such as
 //! `Telefon:` or `Kontonummer:`, a structural key, a nearby support term), a
 //! checksum, the higher score, the earlier rule. A card-shaped part of a printed
@@ -119,26 +119,27 @@ fn assert_strict_overlap(text: &str, label: &str, value: &str) {
     );
 }
 
-/// Valid IBANs whose BBAN digits pass Luhn: strict reports a card inside them.
+/// Valid IBANs whose BBAN digits are a card number (Luhn plus a Maestro IIN, B-PAN):
+/// strict reports a card inside them.
 const IBANS_WITH_LUHN_DIGITS: [(&str, &str); 4] = [
-    ("DE18 4306 0967 1234 5678 00", "4306 0967 1234 5678 00"),
-    ("DE60 5393 3633 8750 0474 39", "5393 3633 8750 0474 39"),
-    ("DE13 3380 1412 6906 0443 19", "3380 1412 6906 0443 19"),
-    ("DE21 5873 5570 6360 6071 04", "5873 5570 6360 6071 04"),
+    ("DE94 5001 0517 5401 2345 65", "5001 0517 5401 2345 65"),
+    ("DE11 6005 0101 7400 1234 56", "6005 0101 7400 1234 56"),
+    ("DE87 6605 0101 1002 3456 78", "6605 0101 1002 3456 78"),
+    ("DE45 5005 0201 1234 5678 98", "5005 0201 1234 5678 98"),
 ];
 
-/// IBAN forms whose check digits fail, with Luhn-valid BBAN digits.
+/// IBAN forms whose check digits fail, with card-number BBAN digits.
 const IBAN_FORMS_WITH_LUHN_DIGITS: [(&str, &str); 6] = [
-    ("DE64 7172 7958 4924 3372 11", "7172 7958 4924 3372 11"),
+    ("DE74 6009 0800 1237 8945 61", "6009 0800 1237 8945 61"),
     ("DE34 6659 4134 6836 7322 13", "6659 4134 6836 7322 13"),
-    ("DE47 9570 1831 6586 8923 67", "9570 1831 6586 8923 67"),
+    ("DE90 5007 0010 1755 2630 33", "5007 0010 1755 2630 33"),
     ("AT77 5761 4565 6741 3978", "5761 4565 6741 3978"),
-    ("AT84 8900 8717 3455 8933", "8900 8717 3455 8933"),
+    ("AT56 6000 0123 4567 8900", "6000 0123 4567 8900"),
     // Valid, but grouped IBANs outside DE are not reported yet (T05).
-    ("AT61 1904 3002 3457 3201", "1904 3002 3457 3201"),
+    ("AT29 5600 0001 2345 6785", "5600 0001 2345 6785"),
 ];
 
-/// Phone numbers whose digits after `+` pass Luhn.
+/// Phone numbers whose digits after `+` pass Luhn; since B-PAN no card starts after `+`.
 const PHONES_WITH_LUHN_DIGITS: [(&str, &str); 4] = [
     ("+49 89 2019 4400", "49 89 2019 4400"),
     ("+49 69 3361 9496", "49 69 3361 9496"),
@@ -153,8 +154,11 @@ fn checksum_vectors_pass_or_fail_what_they_name() {
         assert!(validators::luhn(digits), "{digits}");
     }
     for (form, digits) in IBAN_FORMS_WITH_LUHN_DIGITS {
-        assert_eq!(validators::mod97(form), form.starts_with("AT61"), "{form}");
-        assert!(validators::luhn(digits), "{digits}");
+        assert_eq!(validators::mod97(form), form.starts_with("AT29"), "{form}");
+        assert!(validators::payment_card(digits), "{digits}");
+    }
+    for (iban, digits) in IBANS_WITH_LUHN_DIGITS {
+        assert!(validators::payment_card(digits), "{iban}");
     }
     for (_, digits) in PHONES_WITH_LUHN_DIGITS {
         assert!(validators::luhn(digits), "{digits}");
@@ -168,7 +172,7 @@ fn checksum_vectors_pass_or_fail_what_they_name() {
         assert!(validators::luhn(value), "{value}");
     }
     // Invalid vectors: one changed digit breaks each checksum.
-    assert!(!validators::mod97("DE18 4306 0967 1234 5678 01"));
+    assert!(!validators::mod97("DE94 5001 0517 5401 2345 66"));
     assert!(!validators::luhn("49 89 2019 4401"));
     assert!(!validators::luhn("0151 2345 6789 02"));
 }
@@ -228,33 +232,47 @@ fn an_iban_outranks_the_account_field_that_holds_it() {
 
 #[test]
 fn a_phone_number_keeps_its_digits_that_pass_luhn() {
-    for (phone, digits) in PHONES_WITH_LUHN_DIGITS {
+    // B-PAN: the digits after `+` are no card in any mode, so nothing competes.
+    for (phone, _) in PHONES_WITH_LUHN_DIGITS {
         let text = format!("Rückruf unter {phone}");
-        assert_strict_overlap(&text, "CREDITCARD", digits);
-        for mode in SCORED {
+        for mode in [PiiMode::Strict, PiiMode::Balanced, PiiMode::Recall] {
             assert_eq!(spans(&text, mode), owned(&[("PHONE", phone)]), "{mode:?}");
-            let overlap = overlap_of(&text, mode, "pii_credit_card", digits);
-            assert_eq!(overlap["reason"], "longer_value", "{mode:?}: {text}");
-            assert_eq!(overlap["yields_to"], "PHONE", "{mode:?}: {text}");
+            assert!(
+                matched_rules(&pii_result(&text, mode))
+                    .iter()
+                    .all(|rule| rule["rule_id"] != "pii_credit_card"),
+                "{mode:?}: {text}"
+            );
         }
     }
 }
 
 #[test]
 fn supporting_context_outranks_a_bare_checksum_on_the_same_value() {
+    // B-PAN: Luhn-valid phone digits without a card IIN (`0151 …`, `0157 …`) are no card in
+    // any mode, so the phone rule reports them without competition.
+    for (text, value) in [
+        ("Telefon: 0151 2345 6789 01", "0151 2345 6789 01"),
+        ("Mobile: 0151 2345 6789 01", "0151 2345 6789 01"),
+        (
+            "The assessment is scheduled via telephone at 0157-09-316-8811.",
+            "0157-09-316-8811",
+        ),
+        ("Rückruf bitte unter 0157-09-316-8811.", "0157-09-316-8811"),
+    ] {
+        assert!(!validators::payment_card(value), "{value}");
+        for mode in [PiiMode::Strict, PiiMode::Balanced, PiiMode::Recall] {
+            let found = spans(text, mode);
+            assert!(
+                found.iter().all(|(label, _)| label != "CREDITCARD"),
+                "{mode:?}: {text}: {found:?}"
+            );
+        }
+        for mode in SCORED {
+            assert_eq!(spans(text, mode), owned(&[("PHONE", value)]), "{mode:?}");
+        }
+    }
     for (text, label, rule_id, value) in [
-        (
-            "Telefon: 0151 2345 6789 01",
-            "PHONE",
-            "pii_phone_de_national_context",
-            "0151 2345 6789 01",
-        ),
-        (
-            "Mobile: 0151 2345 6789 01",
-            "PHONE",
-            "pii_phone_de_national_context",
-            "0151 2345 6789 01",
-        ),
         (
             "Kontonummer: 4111-1111-1111-1111",
             "FINANCIAL_ACCOUNT_NUMBER",
@@ -266,18 +284,6 @@ fn supporting_context_outranks_a_bare_checksum_on_the_same_value() {
             "FINANCIAL_ACCOUNT_NUMBER",
             "pii_financial_account_number",
             "5555-5555-5555-4444",
-        ),
-        (
-            "The assessment is scheduled via telephone at 0157-09-316-8811.",
-            "PHONE",
-            "pii_phone_de_national_proximity",
-            "0157-09-316-8811",
-        ),
-        (
-            "Rückruf bitte unter 0157-09-316-8811.",
-            "PHONE",
-            "pii_phone_de_national_proximity",
-            "0157-09-316-8811",
         ),
     ] {
         assert_strict_overlap(text, "CREDITCARD", value);
@@ -409,10 +415,10 @@ fn labels_outside_the_competing_set_keep_their_overlaps() {
 fn strict_keeps_both_labels() {
     // Decision T07: strict stays bit-identical; it never names `overlap`.
     for text in [
-        "IBAN: DE18 4306 0967 1234 5678 00",
+        "IBAN: DE94 5001 0517 5401 2345 65",
         "Bank account: GB82WEST12345698765432",
         "Rückruf unter +49 89 2019 4400",
-        "IBAN: DE64 7172 7958 4924 3372 11",
+        "IBAN: DE74 6009 0800 1237 8945 61",
     ] {
         let result = pii_result(text, PiiMode::Strict);
         assert!(
@@ -550,5 +556,7 @@ fn bilingual_overlap_probes_keep_their_rule() {
         }
         probed += 1;
     }
-    assert!(probed >= 5, "only {probed} overlap probes");
+    // Since B-PAN phone numbers have no card-shaped digits left to probe (no card after `+`
+    // or without a card IIN): IBAN, generic IBAN and account remain.
+    assert!(probed >= 3, "only {probed} overlap probes");
 }

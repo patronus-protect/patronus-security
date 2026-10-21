@@ -86,10 +86,6 @@
       "de": "Telefon: +49​170​1234567",
       "en": "Mobile: ＋４４ ７７００ ９００１２３"
     },
-    "overlap": {
-      "de": "Rückruf unter +49 89 2019 4400",
-      "en": "Call +44 20 6642 3850"
-    },
     "span": {
       "de": {
         "text": "Telefon: +49 30 1234567\n2. Ansprechpartnerin",
@@ -145,10 +141,6 @@
     "structure": {
       "de": "{\"telefon\": \"030 98765432\"}",
       "en": "{\"phone_number\": \"030 98765432\"}"
-    },
-    "overlap": {
-      "de": "Telefon: 0151 2345 6789 01",
-      "en": "Mobile: 0151 2345 6789 01"
     }
   },
   {
@@ -225,8 +217,8 @@
       "en": "IBAN: ＤＥ８９３７０４００４４０５３２０１３０００"
     },
     "overlap": {
-      "de": "IBAN: DE18 4306 0967 1234 5678 00",
-      "en": "IBAN DE60 5393 3633 8750 0474 39 is on file"
+      "de": "IBAN: DE87 6605 0101 1002 3456 78",
+      "en": "IBAN DE70 5625 0030 1234 5067 86 is on file"
     }
   },
   {
@@ -267,8 +259,26 @@
       "en": "Card: 5555​5555​5555​4444"
     },
     "secondary": {
-      "de": "Überweisung an DE63 8415 3776 0207 7642 65 erhalten.",
-      "en": "IBAN DE60 5393 3633 8750 0474 39 is on file"
+      "de": "Überweisung an DE94 5001 0517 5401 2345 65 erhalten.",
+      "en": "IBAN DE11 6005 0101 7400 1234 56 is on file"
+    },
+    "hard_negatives": {
+      "de": [
+        "Belegdatum: DTM+137:202201010800'",
+        "Handels-ID: 20220314-123456-ABC",
+        "Paketversion: pkg-507314925862-485275870833-amd64",
+        "Südafrikanische ID-Nummer: 4506095123081",
+        "Koreanische Registrierungsnummer: 470312-1081835",
+        "Referenz 1748503543012"
+      ],
+      "en": [
+        "Message date: DTM+137:202201010800'",
+        "\"TradeID\": \"20220314-123456-ABC-IBK\"",
+        "Package version: pkg-507314925862-485275870833-amd64",
+        "South African ID number: 6109240123185",
+        "Resident Registration Number: 590724-1069401",
+        "1748503543012"
+      ]
     }
   },
   {

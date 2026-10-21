@@ -191,7 +191,7 @@ class L1BenchmarkDataTests(unittest.TestCase):
 
     def test_language_distribution_is_broad(self):
         expected = {
-            "pii_l1": {"de": 503, "en": 485, "fr": 16, "es": 16, "it": 16, "nl": 16},
+            "pii_l1": {"de": 527, "en": 509, "fr": 16, "es": 16, "it": 16, "nl": 16},
             "dlp_l1": {"de": 362, "en": 370},
         }
         for name, distribution in expected.items():
@@ -260,6 +260,12 @@ class SecondaryEntityGoldTests(unittest.TestCase):
                 # T26: a non-card security code next to a real card annotates that card.
                 self.assertEqual([e["label"] for e in row["entities"]], ["CREDITCARD"], row["id"])
                 continue
+            if [e["label"] for e in row["entities"]] == ["PHONE"]:
+                # B-PAN: the Luhn-valid digits after the `+` of a phone number are no card.
+                self.assertEqual(row["target_label"], "CREDITCARD", row["id"])
+                self.assertTrue(row["entities"][0]["text"].startswith("+"), row["id"])
+                annotated[("PHONE", row["language"])] += 1
+                continue
             self.assertEqual([e["label"] for e in row["entities"]], ["IBAN"], row["id"])
             self.assertIn(row["target_label"], {"CREDITCARD", "FINANCIAL_ACCOUNT_NUMBER"}, row["id"])
             self.assertNotIn("pii_mode", row, row["id"])
@@ -271,6 +277,8 @@ class SecondaryEntityGoldTests(unittest.TestCase):
                 ("CREDITCARD", "en"): 3,
                 ("FINANCIAL_ACCOUNT_NUMBER", "de"): 3,
                 ("FINANCIAL_ACCOUNT_NUMBER", "en"): 3,
+                ("PHONE", "de"): 3,
+                ("PHONE", "en"): 3,
             },
         )
 

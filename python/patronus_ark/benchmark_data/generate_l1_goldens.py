@@ -1448,6 +1448,68 @@ T18_PHONE_BOUNDARY_CASES = [
 for _row in T18_PHONE_BOUNDARY_CASES:
     PII_CASES[_row["target_label"]].append(_row)
 
+# B-PAN card precision (T19 + F02, TRIAGE 2026-W43 bucket 4, baseline N1/P8): a card number
+# needs the IIN prefix and a length of its brand (`validators::CARD_IIN_RANGES`) besides Luhn,
+# in every mode, so the balanced context-free card passes the same table. No card starts
+# right after `+` (`+[44 20 1234 5678]`) or is a `-`/`_` segment of a token (`xoxb-…-…`);
+# 13 digits that start with a valid YYMMDD birth date (ZA ID, KR RRN) and digits that start
+# with a YYYYMMDD date (time stamps) are no card. Every hard negative below passes Luhn.
+# Appended so existing ids stay stable.
+B_PAN_CARD_PRECISION_CASES = [
+    p("CREDITCARD", "de", "pii_credit_card", "Diners Club: ", "3673 149258 6076"),
+    p("CREDITCARD", "de", "pii_credit_card", "Maestro-Karte ", "6973 1492 5860 7314 927", carrier="prose"),
+    p("CREDITCARD", "de", "pii_credit_card", "Mir-Karte: ", "2200 7314 9258 6072"),
+    p("CREDITCARD", "de", "pii_credit_card", "Kartennummer: ", "2221731492586077"),
+    p("CREDITCARD", "de", "pii_credit_card", "UnionPay ", "6273149258607314922"),
+    p("CREDITCARD", "de", "pii_credit_card", "Die Zahlung lief über ", "4731 4925 8607 3149 253", ".", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("CREDITCARD", "en", "pii_credit_card", "Diners Club card ", "36731492586076", carrier="prose"),
+    p("CREDITCARD", "en", "pii_credit_card", "Maestro: ", "507314925862"),
+    p("CREDITCARD", "en", "pii_credit_card", "JCB card number: ", "3589 7314 9258 6073 144"),
+    p("CREDITCARD", "en", "pii_credit_card", "Card number: ", "2720-7314-9258-6073"),
+    p("CREDITCARD", "en", "pii_credit_card", "Amex ", "3773 149258 60736"),
+    p("CREDITCARD", "en", "pii_credit_card", "It was charged to ", "6011 7314 9258 6072", ".", carrier="prose", tags=("no_context",), mode="balanced"),
+    # A valid IBAN whose BBAN is a card number (Maestro IIN, 18 digits): strict lists the
+    # card as secondary evidence of the IBAN (T07), the scored modes keep the IBAN (K07).
+    p("IBAN", "de", "pii_iban_de", "IBAN: ", "DE94 5001 0517 5401 2345 65"),
+    p("IBAN", "de", "pii_iban_de", "Überweisung an ", "DE11 6005 0101 7400 1234 56", " erhalten.", carrier="prose"),
+    p("IBAN", "en", "pii_iban_de", "IBAN ", "DE87 6605 0101 1002 3456 78", " is on file", carrier="prose"),
+    p("IBAN", "en", "pii_iban_de", '{"iban": "', "DE45 5005 0201 1234 5678 98", '"}', carrier="json"),
+    n("CREDITCARD", "de", "pii_credit_card", "Kontaktnummer: +44 20 1234 5678", "digits after + of a phone number", also=(("PHONE", "+44 20 1234 5678"),)),
+    n("CREDITCARD", "de", "pii_credit_card", "Rückruf unter +63 917 123 4565", "digits after + of a phone number (Maestro-shaped)", carrier="prose", also=(("PHONE", "+63 917 123 4565"),)),
+    n("CREDITCARD", "de", "pii_credit_card", "Belegdatum: DTM+137:202201010800'", "EDIFACT date-time stamp"),
+    n("CREDITCARD", "de", "pii_credit_card", "Handels-ID: 20220314-123456-ABC", "date-time stamp in a trade ID"),
+    n("CREDITCARD", "de", "pii_credit_card", "Protokollzeit 199912312359596", "date-time stamp, UATP-shaped"),
+    n("CREDITCARD", "de", "pii_credit_card", "Sitzungs-Token: sess-507314925862-485275870833-t2VJdhdgBlIo58gou6ZuqmoL", "token segments"),
+    n("CREDITCARD", "de", "pii_credit_card", "Südafrikanische ID-Nummer: 4506095123081", "ZA ID number (birth date 1945-06-09)"),
+    n("CREDITCARD", "de", "pii_credit_card", "Südafrikanische ID-Nummer: 6804114321085", "ZA ID number (birth date 1968-04-11)"),
+    n("CREDITCARD", "de", "pii_credit_card", "Koreanische Registrierungsnummer: 470312-1081835", "KR resident registration number"),
+    n("CREDITCARD", "de", "pii_credit_card", "Referenz 1748503543012", "13 digits without a card IIN"),
+    n("CREDITCARD", "de", "pii_credit_card", "Belegnummer 3731 4925 8607 3149", "Amex prefix with 16 digits"),
+    n("CREDITCARD", "en", "pii_credit_card", "Phone: +44 20 1234 5678", "digits after + of a phone number", also=(("PHONE", "+44 20 1234 5678"),)),
+    n("CREDITCARD", "en", "pii_credit_card", "Mobile: +63 917 123 4565", "digits after + of a phone number (Maestro-shaped)", also=(("PHONE", "+63 917 123 4565"),)),
+    n("CREDITCARD", "en", "pii_credit_card", "Message date: DTM+137:202201010800'", "EDIFACT date-time stamp"),
+    n("CREDITCARD", "en", "pii_credit_card", '"TradeID": "20220314-123456-ABC-IBK"', "date-time stamp in a trade ID", carrier="json"),
+    n("CREDITCARD", "en", "pii_credit_card", "Log time 199912312359596", "date-time stamp, UATP-shaped"),
+    n("CREDITCARD", "en", "pii_credit_card", "Session token: sess-507314925862-485275870833-t2VJdhdgBlIo58gou6ZuqmoL", "token segments"),
+    n("CREDITCARD", "en", "pii_credit_card", "South African ID number: 6109240123185", "ZA ID number (birth date 1961-09-24)"),
+    n("CREDITCARD", "en", "pii_credit_card", "SA ID: 4901015009082", "ZA ID number (birth date 1949-01-01)"),
+    n("CREDITCARD", "en", "pii_credit_card", "Resident Registration Number: 590724-1069401", "KR resident registration number"),
+    n("CREDITCARD", "en", "pii_credit_card", "1748503543012", "13 digits without a card IIN (presidio-analyzer credit card test)"),
+    n("CREDITCARD", "en", "pii_credit_card", "Reference 2731 4925 8607 3141", "no brand in the 27xx range above 2720"),
+    n("CREDITCARD", "de", "pii_credit_card", "Rückruf unter +63 917 123 4565", "digits after + of a phone number (Maestro-shaped)", carrier="prose", also=(("PHONE", "+63 917 123 4565"),), mode="balanced"),
+    n("CREDITCARD", "de", "pii_credit_card", "Südafrikanische ID-Nummer: 4506095123081", "ZA ID number (birth date 1945-06-09)", mode="balanced"),
+    n("CREDITCARD", "de", "pii_credit_card", "Referenz 1748503543012", "13 digits without a card IIN", mode="balanced"),
+    n("CREDITCARD", "de", "pii_credit_card", "Sitzungs-Token: sess-507314925862-485275870833-t2VJdhdgBlIo58gou6ZuqmoL", "token segments", mode="balanced"),
+    n("CREDITCARD", "de", "pii_credit_card", "Koreanische Registrierungsnummer: 640918-2196672", "KR resident registration number", mode="balanced"),
+    n("CREDITCARD", "en", "pii_credit_card", "Mobile: +63 917 123 4565", "digits after + of a phone number (Maestro-shaped)", also=(("PHONE", "+63 917 123 4565"),), mode="balanced"),
+    n("CREDITCARD", "en", "pii_credit_card", "South African ID number: 6109240123185", "ZA ID number (birth date 1961-09-24)", mode="balanced"),
+    n("CREDITCARD", "en", "pii_credit_card", "1748503543012", "13 digits without a card IIN (presidio-analyzer credit card test)", mode="balanced"),
+    n("CREDITCARD", "en", "pii_credit_card", "Session token: sess-507314925862-485275870833-t2VJdhdgBlIo58gou6ZuqmoL", "token segments", mode="balanced"),
+    n("CREDITCARD", "en", "pii_credit_card", "RRN 450630-2848967", "KR resident registration number", mode="balanced"),
+]
+for _row in B_PAN_CARD_PRECISION_CASES:
+    PII_CASES[_row["target_label"]].append(_row)
+
 # DLP golden schema v2 (E13). Every DLP row names the rule it exercises (`rule_id`), the
 # document that carries the value (`carrier`), its difficulty `tags` and whether it is a
 # `known_gap`: a positive the detector misses today, reported by 13_l1_golden_eval but

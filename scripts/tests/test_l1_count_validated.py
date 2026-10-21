@@ -180,7 +180,7 @@ def test_checked_in_ark_count():
 
 def test_ark_rules_are_read_from_the_pii_registry():
     rules = {rule.name: rule for rule in MODULE.ark_rules_from_source()}
-    assert rules["pii_credit_card"] == ArkRule("pii_credit_card", "CREDITCARD", "luhn", "checksum")
+    assert rules["pii_credit_card"] == ArkRule("pii_credit_card", "CREDITCARD", "payment_card", "checksum")
     assert rules["pii_steuer_id_de"].validator == "steuer_id"
     assert rules["pii_kfz_kennzeichen_de"].validator is None
 
@@ -316,12 +316,12 @@ def test_cli_count_json_and_check(tmp_path):
     assert result.returncode == 0, result.stderr
 
     broken = raw_map()
-    broken["checksums"]["ark"].pop("luhn")
+    broken["checksums"]["ark"].pop("payment_card")
     path = tmp_path / "map.yaml"
     path.write_text(yaml.safe_dump(broken), encoding="utf-8")
     result = subprocess.run([sys.executable, str(SCRIPT), "check", "--map", str(path)], capture_output=True, text=True)
     assert result.returncode == 1
-    assert "luhn" in result.stderr
+    assert "payment_card" in result.stderr
 
 
 def test_the_entity_map_check_still_accepts_the_checksum_section():
