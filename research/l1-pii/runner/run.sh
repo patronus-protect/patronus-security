@@ -27,6 +27,14 @@ flock -n 9 || { echo "another run is active"; exit 0; }
 LOG="$ROOT/logs/$(date -u +%Y%m%dT%H%M%SZ).log"
 exec > >(tee -a "$LOG") 2>&1
 find "$ROOT/logs" -name '*.log' -mtime +30 -delete
+# A full disk kills the gate halfway and leaves a STALE_RUN; the debug caches rebuild on demand.
+MIN_FREE_GB=15
+free_gb() { df -P -BG "$SHARED" | awk 'NR==2 { sub("G", "", $4); print $4 }'; }
+if [ "$(free_gb)" -lt "$MIN_FREE_GB" ]; then
+  echo "== only $(free_gb) GB free; removing debug build caches"
+  rm -rf "$SHARED"/target*/debug "$DLP_ROOT"/target*/debug
+  echo "== $(free_gb) GB free"
+fi
 
 echo "== ark-l1 $PROGRAM run $(date -u +%FT%TZ)"
 "${L1[@]}" next
