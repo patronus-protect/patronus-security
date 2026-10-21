@@ -317,6 +317,7 @@ tasks:
 
   # M1 PAN (neutral EN 45.8 vs 49.1) + Immer (presidio_favored hard negative, bucket P8)
   - id: B-PAN
+    status: done
     title: "Credit card: IIN ranges + lengths per brand in strict (no PAN after +, in date-time stamps or token segments), context-free in balanced"
     type: precision-fix
     deps: [E06, K05, B-EVAL]
