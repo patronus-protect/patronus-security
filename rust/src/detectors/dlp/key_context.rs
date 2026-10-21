@@ -204,15 +204,16 @@ fn ahead(text: &str, index: usize, chars: usize, ceil: usize) -> usize {
         .map_or(ceil, |(offset, _)| index + offset)
 }
 
-/// Whether a term after the value names the next field (`, "txHash": …`).
-fn names_next_field(text: &str, gap: &str, term_end: usize) -> bool {
-    let next = text[term_end..]
-        .trim_start_matches(['"', '\'', ' ', '\t'])
-        .chars()
-        .next();
-    gap.chars()
-        .any(|ch| matches!(ch, ',' | ';' | '|' | ':' | '='))
-        || next.is_some_and(|ch| matches!(ch, ':' | '='))
+/// The rest of a field label after a term: the term's word, at most one more
+/// word and quotes, then an assignment (`": `, ` hash:`, `Id=`).
+static FIELD_LABEL_END: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"^[\w-]*["' \t]*(?:[\w-]+["' \t]*)?[:=]"#).unwrap());
+
+/// Whether a term after the value names the next field (`, "txHash": …`,
+/// `; tx hash: …`). Punctuation before the term alone does not: in prose it
+/// introduces an explanation (`0x…, this is the private key`).
+fn names_next_field(text: &str, term_end: usize) -> bool {
+    FIELD_LABEL_END.is_match(&text[term_end..])
 }
 
 /// Whether only separators stand between a term and the value it labels.
@@ -287,9 +288,7 @@ fn context(text: &str, value: &Range<usize>, line: &Range<usize>) -> Vec<Near> {
     let end = ahead(text, value.end, AFTER_WINDOW, line.end);
     let after = terms(text, value.end..end)
         .into_iter()
-        .filter(|found| {
-            !names_next_field(text, &text[value.end..found.range.start], found.range.end)
-        })
+        .filter(|found| !names_next_field(text, found.range.end))
         .map(|found| {
             let gap = &text[value.end..found.range.start];
             Near {
@@ -353,6 +352,8 @@ mod tests {
             "Hotwallet-Export {}",
             "{} is the wallet's private key",
             "{\"address\": \"relayer\", \"privateKey\": \"{}\", \"chainId\": 11155111}",
+            "{}, this is the private key",
+            "{}; das ist der private Schlüssel der Wallet",
         ] {
             assert!(context(template), "{template}");
         }
@@ -405,6 +406,8 @@ mod tests {
             "Our wallet private key never leaves the HSM. Transaction hash:\n\n{}",
             "private key rotated; block hash {}",
             "monkey: {}",
+            "{}, tx hash: pending",
+            "{}; private key: rotated",
         ] {
             assert!(!context(template), "{template}");
         }
