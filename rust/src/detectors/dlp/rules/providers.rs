@@ -24,6 +24,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         )
         .with_provider("anthropic")
         .with_min_entropy(3.0)
+        .with_boundary("-")
         .with_subtype(SecretSubtype::ApiKey),
     },
     DlpPattern {
@@ -40,11 +41,12 @@ pub(super) const RULES: &[DlpPattern] = &[
         )
         .with_provider("openai")
         .with_min_entropy(3.0)
+        .with_boundary("-")
         .with_subtype(SecretSubtype::ApiKey),
     },
     DlpPattern {
         name: "dlp_openai_legacy",
-        pattern: r"\bsk-[a-zA-Z0-9]{48}\b",
+        pattern: r"sk-[a-zA-Z0-9]{48}",
         entity_group: "API_KEY",
         validator: None,
         span_group: None,
@@ -56,6 +58,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         )
         .with_provider("openai")
         .with_min_entropy(3.0)
+        .with_boundary("")
         .with_subtype(SecretSubtype::ApiKey),
     },
     DlpPattern {
@@ -72,6 +75,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         )
         .with_provider("openai")
         .with_min_entropy(3.0)
+        .with_boundary("-")
         .with_subtype(SecretSubtype::ApiKey),
     },
     DlpPattern {
@@ -88,6 +92,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         )
         .with_provider("huggingface")
         .with_min_entropy(3.0)
+        .with_boundary("")
         .with_subtype(SecretSubtype::ApiKey),
     },
     DlpPattern {
@@ -100,6 +105,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         meta: RuleMeta::new(ValidatorStrength::Format, "ark", &["gsk_"])
             .with_provider("groq")
             .with_min_entropy(3.0)
+            .with_boundary("")
             .with_subtype(SecretSubtype::ApiKey),
     },
     DlpPattern {
@@ -112,6 +118,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         meta: RuleMeta::new(ValidatorStrength::Format, "ark", &["xai-"])
             .with_provider("xai")
             .with_min_entropy(3.0)
+            .with_boundary("-")
             .with_subtype(SecretSubtype::ApiKey),
     },
     DlpPattern {
@@ -124,6 +131,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         meta: RuleMeta::new(ValidatorStrength::Format, "ark", &["r8_"])
             .with_provider("replicate")
             .with_min_entropy(3.0)
+            .with_boundary("")
             .with_subtype(SecretSubtype::ApiKey),
     },
     // ── Cloud Provider Keys ──────────────────────────────────────────────────
@@ -143,6 +151,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         )
         .with_provider("aws")
         .with_min_entropy(3.0)
+        .with_boundary("")
         .with_subtype(SecretSubtype::ApiKey),
     },
     DlpPattern {
@@ -171,6 +180,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         meta: RuleMeta::new(ValidatorStrength::Format, "gitleaks:gcp-api-key", &["aiza"])
             .with_provider("google")
             .with_min_entropy(3.0)
+            .with_boundary("-")
             .with_subtype(SecretSubtype::ApiKey),
     },
     DlpPattern {
@@ -183,6 +193,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         meta: RuleMeta::new(ValidatorStrength::Format, "ark", &["ya29."])
             .with_provider("google")
             .with_min_entropy(3.0)
+            .with_boundary("-")
             .with_subtype(SecretSubtype::AccessToken),
     },
     DlpPattern {
@@ -195,6 +206,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         meta: RuleMeta::new(ValidatorStrength::Format, "ark", &["gocspx-"])
             .with_provider("google")
             .with_min_entropy(3.0)
+            .with_boundary("-")
             .with_subtype(SecretSubtype::SecretKey),
     },
     // ── Source Control / Dev Tools ───────────────────────────────────────────
@@ -212,6 +224,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         )
         .with_provider("github")
         .with_min_entropy(3.0)
+        .with_boundary("")
         .with_subtype(SecretSubtype::AccessToken),
     },
     DlpPattern {
@@ -228,6 +241,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         )
         .with_provider("github")
         .with_min_entropy(3.0)
+        .with_boundary("")
         .with_subtype(SecretSubtype::AccessToken),
     },
     DlpPattern {
@@ -244,6 +258,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         )
         .with_provider("gitlab")
         .with_min_entropy(3.0)
+        .with_boundary("-")
         .with_subtype(SecretSubtype::AccessToken),
     },
     DlpPattern {
@@ -260,6 +275,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         )
         .with_provider("npm")
         .with_min_entropy(3.0)
+        .with_boundary("")
         .with_subtype(SecretSubtype::AccessToken),
     },
     // ── Payment ───────────────────────────────────────────────────────────────
@@ -278,6 +294,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         .with_provider("stripe")
         .with_min_entropy(3.0)
         .with_test_prefixes(&["sk_test", "sk-test", "rk_test", "rk-test"])
+        .with_boundary("-")
         .with_subtype(SecretSubtype::ApiKey),
     },
     DlpPattern {
@@ -294,6 +311,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         )
         .with_provider("stripe")
         .with_min_entropy(3.0)
+        .with_boundary("-")
         .with_subtype(SecretSubtype::SecretKey),
     },
     // ── Communication ────────────────────────────────────────────────────────
@@ -311,6 +329,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         )
         .with_provider("slack")
         .with_min_entropy(3.0)
+        .with_boundary("-")
         .with_subtype(SecretSubtype::AccessToken),
     },
     DlpPattern {
@@ -324,6 +343,7 @@ pub(super) const RULES: &[DlpPattern] = &[
             .with_provider("discord")
             .with_min_entropy(3.0)
             .with_value_run(ValueClass::Alphanumeric, 24)
+            .with_boundary("-")
             .with_subtype(SecretSubtype::AccessToken),
     },
 ];

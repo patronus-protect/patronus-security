@@ -14,6 +14,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         base_score: 45,
         meta: RuleMeta::new(ValidatorStrength::Format, "gitleaks:jwt", &["ey"])
             .with_min_entropy(3.0)
+            .with_boundary("-")
             .with_subtype(SecretSubtype::AccessToken),
     },
     DlpPattern {

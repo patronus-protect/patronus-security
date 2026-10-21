@@ -42,6 +42,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         )
         .with_provider("ethereum")
         .with_min_entropy(3.0)
+        .with_boundary("")
         .with_subtype(SecretSubtype::PrivateKey),
     },
     DlpPattern {
@@ -61,6 +62,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         .with_provider("bitcoin")
         .with_min_entropy(3.0)
         .with_value_run(ValueClass::Base58, 51)
+        .with_boundary("")
         .with_subtype(SecretSubtype::PrivateKey),
     },
     // ── Private key material ─────────────────────────────────────────────────
