@@ -7,6 +7,9 @@ use super::charset::BECH32;
 /// Lightning invoices pass their own limit to [`bech32_decode_with_limit`].
 pub const BECH32_MAX_LENGTH: usize = 90;
 
+/// Maximum length of the human-readable part (BIP 173), whatever the total limit.
+const BECH32_MAX_HRP_LENGTH: usize = 83;
+
 const BECH32M_CONSTANT: u32 = 0x2bc8_30a3;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -51,8 +54,8 @@ pub fn bech32_decode(value: &str) -> Option<Bech32> {
 }
 
 /// Decode a Bech32 or Bech32m string of at most `max_length` characters:
-/// printable ASCII, not mixed case, a non-empty HRP before the last `1` and at
-/// least six data characters that carry a valid checksum.
+/// printable ASCII, not mixed case, a non-empty HRP of at most 83 characters
+/// before the last `1` and at least six data characters that carry a valid checksum.
 pub fn bech32_decode_with_limit(value: &str, max_length: usize) -> Option<Bech32> {
     if value.len() > max_length || !value.bytes().all(|byte| (33..=126).contains(&byte)) {
         return None;
@@ -64,7 +67,7 @@ pub fn bech32_decode_with_limit(value: &str, max_length: usize) -> Option<Bech32
     }
     let value = value.to_ascii_lowercase();
     let separator = value.rfind('1')?;
-    if separator == 0 || separator + 7 > value.len() {
+    if separator == 0 || separator > BECH32_MAX_HRP_LENGTH || separator + 7 > value.len() {
         return None;
     }
     let (hrp, data) = (&value[..separator], &value[separator + 1..]);

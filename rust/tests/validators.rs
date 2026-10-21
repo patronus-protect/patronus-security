@@ -186,6 +186,9 @@ fn bech32_length_limit_is_configurable() {
     let long = "an83characterlonghumanreadablepartthatcontainsthenumber1andtheexcludedcharactersbio1tt5tgs";
     assert!(bech32_decode_with_limit(long, 89).is_none());
     assert!(bech32_decode_with_limit(long, 90).is_some());
+    // A longer total limit does not lift the 83-character HRP limit.
+    let long_hrp = "an84characterslonghumanreadablepartthatcontainsthenumber1andtheexcludedcharactersbio1569pvx";
+    assert!(bech32_decode_with_limit(long_hrp, 91).is_none());
 }
 
 #[test]
@@ -284,6 +287,8 @@ fn der_rejects_truncated_indefinite_and_non_minimal_lengths() {
         &[0x04, 0x81, 0x05, 0, 0, 0, 0, 0][..], // long form for a short length
         &[0x04, 0x82, 0x00, 0x80][..],          // leading zero length byte
         &[0x04, 0x85, 1, 0, 0, 0, 0][..],       // more than four length bytes
+        &[0x1f, 0x02, 0x01, 0x00][..],          // high-tag-number identifier
+        &[0x3f, 0x81, 0x01, 0x00][..],          // high-tag-number, constructed
     ] {
         assert!(der_parse(invalid).is_none(), "{invalid:02x?}");
     }

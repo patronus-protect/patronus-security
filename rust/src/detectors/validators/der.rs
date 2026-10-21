@@ -8,14 +8,19 @@ pub struct DerElement<'a> {
     pub content: &'a [u8],
 }
 
-/// Parse `raw` completely into consecutive TLV elements. Definite minimal
-/// lengths of at most four length bytes only; `None` on any truncation,
-/// indefinite length (BER) or non-minimal length encoding.
+/// Parse `raw` completely into consecutive TLV elements. Single-byte tags and
+/// definite minimal lengths of at most four length bytes only; `None` on any
+/// truncation, high-tag-number identifier, indefinite length (BER) or
+/// non-minimal length encoding.
 pub fn der_parse(raw: &[u8]) -> Option<Vec<DerElement<'_>>> {
     let mut elements = Vec::new();
     let mut offset = 0;
     while offset < raw.len() {
         let tag = *raw.get(offset)?;
+        if tag & 0x1f == 0x1f {
+            // High-tag-number form: the tag continues in the next octets.
+            return None;
+        }
         let first = *raw.get(offset + 1)?;
         offset += 2;
         let length = if first & 0x80 == 0 {
