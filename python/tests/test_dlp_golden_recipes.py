@@ -9,6 +9,8 @@ from patronus_ark import benchmark
 from patronus_ark.dlp_synth import recipes
 
 
+# F01: rules whose strict hard negatives may also hold plain generator values (no key context).
+CONTEXT_GATED_RULES = {"dlp_eth_private_key"}
 SECRET_GROUPS = {
     "API_KEY",
     "CLOUD_KEY",
@@ -287,7 +289,8 @@ class DlpGoldenRecipeTests(unittest.TestCase):
                 self.assertTrue(row["secrets"], row["id"])
                 # Positives hold real-shaped recipes; hard negatives only fill variants, except
                 # hard negatives of a scored DLP mode (K04), whose context marks the value as
-                # no secret, and values glued into a longer run (T01), which are no token.
+                # no secret, values glued into a longer run (T01), which are no token, and
+                # values of a context-gated rule without key context (F01).
                 glued = not re.search(r"(?<![A-Za-z0-9_+/])<<secret:", row["template"])
                 plain = (
                     row["case_type"] == "positive"
@@ -296,6 +299,9 @@ class DlpGoldenRecipeTests(unittest.TestCase):
                 )
                 keys = {"gen", "seed"} if plain else {"gen", "seed", "fill"}
                 for secret in row["secrets"]:
+                    if row.get("rule_id") in CONTEXT_GATED_RULES and row["case_type"] != "positive":
+                        self.assertIn(set(secret), ({"gen", "seed"}, {"gen", "seed", "fill"}), row["id"])
+                        continue
                     self.assertEqual(set(secret), keys, row["id"])
             else:
                 self.assertNotIn("secrets", row, row["id"])
