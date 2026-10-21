@@ -51,6 +51,21 @@ pub(crate) trait NativeRegexDetector {
     fn prefilters(&self) -> Option<&[Option<Regex>]> {
         None
     }
+    /// One prefilter pass over `text` for all rules (K07): which rules may
+    /// match, and where rules searched near their keywords look.
+    fn rule_scan(&self, _text: &str) -> Option<dlp::prefilter::RuleScan> {
+        None
+    }
+    /// The matches of rule `index`, identical to `regex.captures_iter(text)`.
+    fn rule_captures<'t>(
+        &self,
+        _index: usize,
+        regex: &Regex,
+        text: &'t str,
+        _scan: Option<&dlp::prefilter::RuleScan>,
+    ) -> Vec<regex::Captures<'t>> {
+        regex.captures_iter(text).collect()
+    }
     fn entity_groups(&self) -> &[&'static str];
     fn rule_ids(&self) -> &[&'static str] {
         self.entity_groups()
@@ -174,14 +189,16 @@ pub(crate) trait NativeRegexDetector {
         let mut matched_rules = Vec::new();
         let mut class_name = None;
         let mut evidence_spans = Vec::new();
+        let scan = self.rule_scan(text);
         for (index, regex) in self.regexes().iter().enumerate() {
             if !allows_rule(self.rule_ids()[index]) {
                 continue;
             }
-            let gated =
-                self.anchor_gates().get(index).is_some_and(|gate| {
+            let gated = scan.as_ref().is_some_and(|scan| !scan.is_active(index))
+                || self.anchor_gates().get(index).is_some_and(|gate| {
                     !gate.is_unconditional() && !gate.allows(prepared.anchors())
-                }) || self
+                })
+                || self
                     .prefilters()
                     .and_then(|filters| filters[index].as_ref())
                     .is_some_and(|filter| !filter.is_match(text));
@@ -201,7 +218,7 @@ pub(crate) trait NativeRegexDetector {
             let regex_matches: Vec<_> = if gated {
                 Vec::new()
             } else {
-                regex.captures_iter(text).collect()
+                self.rule_captures(index, regex, text, scan.as_ref())
             };
             let regex_values: Vec<_> = regex_matches
                 .iter()

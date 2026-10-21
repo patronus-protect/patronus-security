@@ -4037,6 +4037,126 @@ for _label, _rows in DLP_K06_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
 
+# K07: the rule prefilter (one keyword pass for all rules, searches near the keyword hits,
+# value runs for keywordless rules) must not change a result. Positives put the keyword in
+# upper case, after multi-byte text (umlauts, dashes, check marks) or spell it with LONG S,
+# which `(?i)` matches and the ASCII keyword search does not; keywordless Discord tokens and
+# WIF keys sit in a log line and in JSON. Hard negatives keep the keyword without a value
+# (prose, a line break between keyword and value, a KELVIN SIGN next to a keyword) or fall
+# one character short of the value run (a 50-character Base58 checksum, a 22-character
+# first token segment).
+DLP_K07_CASES = {
+    "CREDENTIAL": [
+        ds(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "# Zugangsdaten für den Lagerdienst – bitte nicht ändern ✓\nÄnderung: 2026-10-02\n"
+            "lager:\n  api_key: \"<<secret:0>>\"\n",
+            "generic_api_secret", 9701, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "Das Paſſwort lautet <<secret:0>> und gilt bis Freitag.",
+            "password", 9702, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "GEHEIMNIS=<<secret:0>>\n", "generic_api_secret", 9703, carrier="env",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "# credentials for the staging bucket — do not commit ✓\nstaging:\n"
+            "  client_secret: \"<<secret:0>>\"\n",
+            "generic_api_secret", 9706, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "The paſſword is <<secret:0>> until Friday.",
+            "password", 9707, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "deploy:\n  ACCESS-TOKEN: <<secret:0>>\n", "generic_api_secret", 9708, carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "Der API-Schlüssel wird über den Tresor verteilt; Änderungen nur per Ticket.",
+            "keyword in prose without a value", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "Temperatur im Serverraum: 295 K, Geheimnis gibt es keines.",
+            "KELVIN SIGN next to a keyword without a value", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "api\n_key = wird_spaeter_gesetzt\n",
+            "line break inside the keyword", carrier="ini",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "The API key comes from the vault; changes go through a ticket.",
+            "keyword in prose without a value", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "Server room temperature: 295 K, there is no secret here.",
+            "KELVIN SIGN next to a keyword without a value", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "token\n= see the deployment guide\n",
+            "keyword and separator on different lines without a value", carrier="ini",
+        ),
+    ],
+    "SECRET_TOKEN": [
+        ds(
+            "SECRET_TOKEN", "de", "dlp_discord_token",
+            "2026-10-02 08:00:01 INFO Bot verbunden, Token im Klartext: <<secret:0>>\n",
+            "discord_bot_token", 9704, carrier="log",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_discord_token",
+            "2026-10-02 08:00:01 WARN bot login with token in plain text: <<secret:0>>\n",
+            "discord_bot_token", 9709, carrier="log",
+        ),
+        dn(
+            "SECRET_TOKEN", "de", "dlp_discord_token",
+            "Build-Kennung: M3mwqAC3eoS9CiOqC0tvUm.GSUONX.LkWWUmlfNM5CSVg24WnFVExCCnFEA9",
+            "first segment one character short of the value run", carrier="log",
+        ),
+        dn(
+            "SECRET_TOKEN", "en", "dlp_discord_token",
+            "Build id: NcGJJ0YBrix5VSApTFiuyC.kSVOq7.GV0bmSrgTSCwaNTiOut07XUZaxLAAs",
+            "first segment one character short of the value run", carrier="log",
+        ),
+    ],
+    "CRYPTO_KEY": [
+        ds(
+            "CRYPTO_KEY", "de", "dlp_btc_wif",
+            "{\"wallet\": {\"netz\": \"mainnet\", \"wif\": \"<<secret:0>>\"}}",
+            "btc_wif_mainnet_compressed", 9705, carrier="json",
+        ),
+        ds(
+            "CRYPTO_KEY", "en", "dlp_btc_wif",
+            "{\"wallet\": {\"network\": \"mainnet\", \"wif\": \"<<secret:0>>\"}}",
+            "btc_wif_mainnet_uncompressed", 9710, carrier="json",
+        ),
+        dn(
+            "CRYPTO_KEY", "de", "dlp_btc_wif",
+            "Prüfsumme (Base58): 52fhNZpbWj1ZyacvjL8YW3h5JrU7xfkJiVJniWVGcSQgJYV7Tg",
+            "Base58 run one character short of a WIF key",
+        ),
+        dn(
+            "CRYPTO_KEY", "en", "dlp_btc_wif",
+            "Checksum (Base58): KuW6WXvRgxZC1WhjNLfK1PaKWtuS4TL9BMzbtxDbDxbUVhtk7s",
+            "Base58 run one character short of a WIF key",
+        ),
+    ],
+}
+for _label, _rows in DLP_K07_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+
 def flatten(suite: str, cases: dict[str, list[dict]]) -> list[dict]:
     rows = []
     for label, label_cases in cases.items():

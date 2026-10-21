@@ -197,6 +197,7 @@ tasks:
     deps: [K02]
 
   - id: K07
+    status: done
     title: Prefilter scaling for 200+ rules (Aho-Corasick over prefixes/keywords, AnchorGate coverage per rule)
     type: perf
     deps: [K02]

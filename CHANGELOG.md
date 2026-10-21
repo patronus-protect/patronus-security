@@ -11,6 +11,20 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Add a DLP rule prefilter (K07) so that the rule set scales to 200+ rules. One Aho-Corasick pass
+  finds the prefilter keywords of all rules (`RuleMeta::keywords`, ASCII case-insensitive); a rule
+  without a keyword in the text does not run. The keywordless rules get a structural prefilter
+  (`RuleMeta::value_run`: 24 alphanumerics for `dlp_discord_token`, 51 Base58 characters for
+  `dlp_btc_wif`). Rules whose matches start at most 64 bytes before a keyword and that cannot run
+  on through a wide class are tried only at those positions, in text order, with an anchored probe;
+  this takes `dlp_generic_credential_assignment` (Unicode `\b` on non-ASCII text) from about 6.5 ms
+  to 0.2 ms per 100 KiB of code. Every gate is proven from the rule's regex syntax tree at pipeline
+  construction (`patronus_ark::detectors::dlp::prefilter`); a rule without a proven gate runs on the
+  whole text and fails `rust/tests/dlp_rule_prefilter.rs`, so new rules must declare keywords.
+  Texts with LONG S or KELVIN SIGN, which `(?i)` matches for `s` and `k`, run every rule on the whole
+  text. Native DLP time on 100 KiB benign code drops from about 9.4 ms to 3.2 ms (in-process,
+  release build). **Detection change:** none; the matches equal a full scan on all goldens, the rule
+  fixture and keyword-dense random texts.
 - Add a DLP score model and the DLP output modes `strict`, `balanced` and `recall` (K04), on the
   PII score model: every DLP rule declares a base (1–100 points for its regex form); a finding
   scores base plus validator strength (checksum 35, structure 25, format 15, none 0) plus its

@@ -11,7 +11,10 @@ use std::{
 };
 
 use patronus_ark::{
-    detectors::dlp::dlp::{Severity, ValidatorStrength, DLP_PATTERNS},
+    detectors::dlp::{
+        dlp::{Severity, ValidatorStrength, DLP_PATTERNS},
+        prefilter::FOLDS_TO_ASCII,
+    },
     golden_recipes::{materialize_fragments, GeneratorSet, SecretRecipe, SplitMix64},
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
@@ -29,8 +32,9 @@ const SECRET_GROUPS: &[&str] = &[
     "SECRET_TOKEN",
 ];
 
-/// Rules whose regex has no literal every match must contain (K07 adds
-/// structural prefilters for them). New rules must declare keywords.
+/// Rules whose regex has no literal every match must contain; they declare a
+/// structural prefilter instead (`RuleMeta::value_run`, K07,
+/// `dlp_rule_prefilter.rs`). New rules must declare keywords.
 const KEYWORDLESS_RULES: &[&str] = &["dlp_btc_wif", "dlp_discord_token"];
 
 fn repo_root() -> PathBuf {
@@ -210,7 +214,9 @@ fn golden_texts() -> Vec<(String, String)> {
 }
 
 /// The keyword prefilter must never hide a match: every regex match in the
-/// goldens contains one of the rule's keywords (ASCII case-insensitive).
+/// goldens contains one of the rule's keywords (ASCII case-insensitive, with
+/// LONG S and KELVIN SIGN folded as `(?i)` does; such texts skip the
+/// prefilter, see `dlp_rule_prefilter.rs`).
 #[test]
 fn every_golden_match_contains_a_keyword() {
     let texts = golden_texts();
@@ -223,7 +229,16 @@ fn every_golden_match_contains_a_keyword() {
         let regex = Regex::new(rule.pattern).unwrap();
         for (id, text) in &texts {
             for matched in regex.find_iter(text) {
-                let lower = matched.as_str().to_ascii_lowercase();
+                let lower: String = matched
+                    .as_str()
+                    .chars()
+                    .map(|c| {
+                        FOLDS_TO_ASCII
+                            .iter()
+                            .find(|(folded, _)| *folded == c)
+                            .map_or(c.to_ascii_lowercase(), |&(_, ascii)| ascii)
+                    })
+                    .collect();
                 assert!(
                     rule.meta.keywords.iter().any(|kw| lower.contains(kw)),
                     "{}: golden {id} matches without a keyword",

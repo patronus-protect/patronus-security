@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! Provider-bound secret formats (LLM, cloud, source control, payment, chat).
 use crate::{
-    detectors::dlp::dlp::{DlpPattern, RuleMeta, ValidatorStrength},
+    detectors::dlp::{
+        dlp::{DlpPattern, RuleMeta, ValidatorStrength},
+        prefilter::ValueClass,
+    },
     post_prediction::is_real_secret_assignment,
 };
 
@@ -299,6 +302,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         base_score: 35,
         meta: RuleMeta::new(ValidatorStrength::Format, "ark", &[])
             .with_provider("discord")
-            .with_min_entropy(3.0),
+            .with_min_entropy(3.0)
+            .with_value_run(ValueClass::Alphanumeric, 24),
     },
 ];
