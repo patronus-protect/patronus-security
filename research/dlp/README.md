@@ -41,18 +41,24 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   blockHash, Transaktionshash, Prüfsumme, topic, salt … verwerfen ihn. Ohne Bezeichner genügt
   ein Schlüsselbegriff im Kontext; ein Hash- oder ID-Wort an anderer Stelle im Satz verwirft
   nicht.
+  Seit F02 prüft `dlp_btc_wif` Base58Check mit der WIF-Versionsbyte von Mainnet (`0x80`, `5…`,
+  `K…`/`L…`) oder Testnet/Signet/Regtest (`0xef`, `9…`, `c…`), einen secp256k1-Skalar und das
+  Kompressionsflag `0x01`. Testnet-Schlüssel haben Severity `test`. Die Regel wertet mit
+  Prüfsummen-Stärke: Im Modus `balanced` bleibt ein WIF-Schlüssel ohne Kontext (0,65), ein
+  näherer Prüfsummen-/Hash-Begriff verwirft ihn.
   Seit K09 (Taxonomie v2) nennt jede Secret-Regel einen Untertyp ihrer Gruppe (`subtype` in
   `matched_rules`: `api_key`, `access_token`, `password`, `auth_url` …). Connection-Strings,
   Webhook-URLs, Auth-URLs, OTP-Secrets und Seed-Phrasen werden keine eigenen Gruppen, sondern
   Untertypen von `CREDENTIAL`, `SECRET_TOKEN` bzw. `CRYPTO_KEY` (Liste in
   [`entity_map.yaml`](entity_map.yaml), `subtypes`).
 - Validatoren sind schwach: `is_secret_value` prüft nur Länge, Platzhalter und Env-Referenzen.
-  Prüfsummen fehlen ganz: GitHub/npm CRC32, Base58Check (WIF), JWT-Struktur und PEM/DER.
+  Prüfsummen fehlen ganz: GitHub/npm CRC32, JWT-Struktur und PEM/DER (Base58Check für WIF seit
+  K08/F02).
   Seit K03 liegen die Bausteine dafür in `rust/src/detectors/validators/` (CRC32-Base62,
   Base58Check, Bech32/Bech32m, Base64/DER, JWT-Header, Entropie, Zeichenklassen; auch für PII);
   angebunden werden sie regelweise in F01–F09.
 - Bekannte Präzisionslücken: `dlp_eth_private_key` traf bis F01 jeden 0x-64-Hex-Wert, also auch
-  Tx- und Block-Hashes. `dlp_btc_wif` validiert die Prüfsumme nicht. `dlp_signed_url_signature`
+  Tx- und Block-Hashes. `dlp_btc_wif` validierte bis K08 die Prüfsumme nicht. `dlp_signed_url_signature`
   (`sig=`) und `dlp_credential_in_url` (`token=`) treffen auch Paginierungs- und CSRF-Parameter.
   `dlp_password_assignment` nimmt in Prosa beliebige Wörter („Passwort ist falsch“).
 - Gemessen ist bisher nur Content: 214 Go-Dokumente aus gitleaks (Dokumentlabel) und 250

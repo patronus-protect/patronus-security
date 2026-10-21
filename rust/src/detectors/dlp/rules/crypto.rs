@@ -13,15 +13,20 @@ const SECP256K1_ORDER: [u8; 32] = [
     0xba, 0xae, 0xdc, 0xe6, 0xaf, 0x48, 0xa0, 0x3b, 0xbf, 0xd2, 0x5e, 0x8c, 0xd0, 0x36, 0x41, 0x41,
 ];
 
-/// Mainnet WIF: Base58Check with version byte 0x80, a secp256k1 scalar and an
-/// optional 0x01 compression flag (`5…` uncompressed, `K…`/`L…` compressed).
+/// WIF version bytes: mainnet and testnet (also signet and regtest).
+const WIF_MAINNET: u8 = 0x80;
+const WIF_TESTNET: u8 = 0xef;
+
+/// WIF: Base58Check with version byte 0x80 (`5…` uncompressed, `K…`/`L…`
+/// compressed) or 0xef (`9…`, `c…`), a secp256k1 scalar and the 0x01 flag of
+/// compressed keys.
 fn is_btc_wif(value: &str) -> bool {
     let Some(payload) = base58check_decode(value) else {
         return false;
     };
     let scalar = match (payload.as_slice(), value.len()) {
-        ([0x80, scalar @ ..], 51) if scalar.len() == 32 => scalar,
-        ([0x80, scalar @ .., 0x01], 52) if scalar.len() == 32 => scalar,
+        ([WIF_MAINNET | WIF_TESTNET, scalar @ ..], 51) if scalar.len() == 32 => scalar,
+        ([WIF_MAINNET | WIF_TESTNET, scalar @ .., 0x01], 52) if scalar.len() == 32 => scalar,
         _ => return false,
     };
     scalar.iter().any(|byte| *byte != 0) && scalar < SECP256K1_ORDER.as_slice()
@@ -67,19 +72,19 @@ pub(super) const RULES: &[DlpPattern] = &[
     },
     DlpPattern {
         name: "dlp_btc_wif",
-        pattern: r"(?P<anchor_1>5[1-9A-HJ-NP-Za-km-z]{50}|[KL][1-9A-HJ-NP-Za-km-z]{51})",
+        pattern: r"(?P<anchor_1>[59][1-9A-HJ-NP-Za-km-z]{50}|[KLc][1-9A-HJ-NP-Za-km-z]{51})",
         entity_group: "CRYPTO_KEY",
         validator: Some(is_btc_wif),
         span_group: None,
         base_score: 30,
-        // Scored as format until the score model is recalibrated for the
-        // checksum (F02); the validator only filters.
         meta: RuleMeta::new(
-            ValidatorStrength::Format,
+            ValidatorStrength::Checksum,
             "https://en.bitcoin.it/wiki/Wallet_import_format",
             &[],
         )
         .with_provider("bitcoin")
+        // Testnet keys (version byte 0xef); mainnet keys never start so.
+        .with_test_prefixes(&["9", "c"])
         .with_min_entropy(3.0)
         .with_value_run(ValueClass::Base58, 51)
         .with_boundary("")
