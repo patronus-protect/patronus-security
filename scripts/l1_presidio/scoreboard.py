@@ -43,9 +43,16 @@ the verdict comes from balanced:
 
     scoreboard.py m1 --gold DIR --ark strict=DIR --ark balanced=DIR --presidio PRESIDIO_DIR [--language en] [--check]
 
+``m2`` checks milestone M2 per family the same way (D-M2): exact macro-F1 on German rows over the
+shared and ark_only ids with gold in the family (presidio_only ids stay out until the entity map
+marks them shared); neutral needs Presidio tuned + 15 pp, presidio_favored parity. It exits 1
+unless both hold on balanced:
+
+    scoreboard.py m2 --gold DIR --ark strict=DIR --ark balanced=DIR --presidio PRESIDIO_DIR [--language de]
+
 ``report`` renders the Markdown baseline (research/l1-pii/scoreboard/baseline.md): P/R/F1 per
 source family, corpus and entity for each Ark mode and each Presidio profile, hard-negative FP
-per family, M1 of every Ark mode against each profile, and the gold gaps per corpus and entity
+per family, M1 and M2 of every Ark mode against each profile, and the gold gaps per corpus and entity
 (predictions equal to an annotated gold value elsewhere in the row, gold failing the entity's
 checksum validator; reported only, T16):
 
@@ -81,7 +88,11 @@ TOLERANCE_PP = 0.5
 # PII modes the gate scores for head and base; milestones are judged on balanced (T15).
 MODES = ("strict", "balanced")
 MILESTONE_MODE = "balanced"
-ARK_MODES = ("strict", "balanced", "recall")  # accepted by m1 and report
+ARK_MODES = ("strict", "balanced", "recall")  # accepted by m1, m2 and report
+# M2 (D-M2): DE macro-F1 over these scopes; neutral needs Presidio tuned + 15 pp, presidio_favored parity.
+M2_SCOPES = ("shared", "ark_only")
+M2_MARGIN_PP = 15.0
+M2_PARITY_FAMILIES = ("presidio_favored",)
 # Everything that goes into the native module and the prediction runner.
 KEY_PATHS = (
     "Cargo.toml",
@@ -974,6 +985,100 @@ def m1_mode_lines(report: dict[str, Any]) -> list[str]:
     return lines
 
 
+# ── M2 per source family ─────────────────────────────────────────────────
+
+
+def m2_margin_pp(family: str) -> float:
+    return 0.0 if family in M2_PARITY_FAMILIES else M2_MARGIN_PP
+
+
+def m2_report(ark: dict[str, Any], presidio: dict[str, Any], emap: Any, language: str = "de",
+              metric: str = "exact") -> dict[str, Any]:
+    """M2 per source family: macro-F1(Ark) >= macro-F1(Presidio) + margin (15 pp, 0 on presidio_favored).
+
+    The macro average is the unweighted mean F1 over the shared and ark_only ids with gold in the
+    family; presidio_only ids with gold are listed as excluded until the entity map marks them shared.
+    A family holds only if it has at least one such id; M2 is met only if both milestone families hold."""
+    families = {}
+    for family in entity_map_module.FAMILIES:
+        entities, excluded = {}, {}
+        for entity_id in sorted(l1_ids(emap)):
+            key = (f"family_entity/{family}/{entity_id}" if language == "all"
+                   else f"family_language_entity/{family}/{language}/{entity_id}")
+            ark_counts = ark["buckets"].get(key, empty_counts())
+            presidio_counts = presidio["buckets"].get(key, empty_counts())
+            gold = max(ark_counts["gold"], presidio_counts["gold"])
+            if not gold:
+                continue
+            scope = emap.entities[entity_id].scope
+            if scope not in M2_SCOPES:
+                excluded[entity_id] = {"gold": gold, "scope": scope}
+                continue
+            entities[entity_id] = {"gold": gold, "scope": scope, "ark_f1": metrics(ark_counts)[metric]["f1"],
+                                   "presidio_f1": metrics(presidio_counts)[metric]["f1"]}
+        margin = m2_margin_pp(family)
+        ark_macro = sum(item["ark_f1"] for item in entities.values()) / len(entities) if entities else 0.0
+        presidio_macro = sum(item["presidio_f1"] for item in entities.values()) / len(entities) if entities else 0.0
+        target = presidio_macro + margin / 100
+        families[family] = {
+            "decides": family in entity_map_module.MILESTONE_FAMILIES,
+            "holds": bool(entities) and ark_macro >= target - 1e-12,
+            "margin_pp": margin,
+            "ids": sorted(entities),
+            "ark_macro_f1": ark_macro,
+            "presidio_macro_f1": presidio_macro,
+            "target": target,
+            "entities": entities,
+            "excluded": excluded,
+        }
+    met = all(families[family]["holds"] for family in entity_map_module.MILESTONE_FAMILIES)
+    return {"language": language, "metric": metric, "scopes": list(M2_SCOPES), "met": met, "families": families}
+
+
+def m2_lines(report: dict[str, Any], label: str = "M2") -> list[str]:
+    lines = [f"{SCHEMA} M2 ({report['language']}, {report['metric']} F1 in %, macro over "
+             f"{' + '.join(report['scopes'])} ids, Ark vs Presidio):"]
+    for family, result in report["families"].items():
+        note = "" if result["decides"] else " (reported, decides no milestone)"
+        if not result["ids"]:
+            lines.append(f"{family}: NO DATA, 0 ids{note}")
+        else:
+            verdict, op = ("HOLDS", ">=") if result["holds"] else ("NOT MET", "<")
+            lines.append(
+                f"{family}: {verdict}, macro-F1 Ark {pct(result['ark_macro_f1'])} {op} target {pct(result['target'])} "
+                f"(Presidio {pct(result['presidio_macro_f1'])} + {result['margin_pp']:.1f} pp), "
+                f"{len(result['ids'])} ids{note}"
+            )
+        for entity_id, item in result["entities"].items():
+            lines.append(f"  {entity_id:<36} gold {item['gold']:>5}  Ark {pct(item['ark_f1'])}  "
+                         f"Presidio {pct(item['presidio_f1'])}")
+        for entity_id, item in result["excluded"].items():
+            lines.append(f"  excluded {entity_id} ({item['scope']}, gold {item['gold']})")
+    lines.append(f"{label}: {'MET' if report['met'] else 'NOT MET'} ({_deciding(report)})")
+    return lines
+
+
+def m2_by_mode(ark: dict[str, dict[str, Any]], presidio: dict[str, Any], emap: Any, language: str = "de",
+               metric: str = "exact") -> dict[str, Any]:
+    """M2 of every Ark mode against one Presidio result; the milestone is judged on balanced (T15)."""
+    if MILESTONE_MODE not in ark:
+        raise ScoreboardError(f"M2 needs Ark predictions in {MILESTONE_MODE} mode (milestones are judged on it)")
+    modes = {mode: m2_report(ark[mode], presidio, emap, language, metric) for mode in ARK_MODES if mode in ark}
+    return {"milestone_mode": MILESTONE_MODE, "language": language, "metric": metric,
+            "met": modes[MILESTONE_MODE]["met"], "modes": modes}
+
+
+def m2_mode_lines(report: dict[str, Any]) -> list[str]:
+    lines = [f"{SCHEMA} M2 ({report['language']}, {report['metric']} F1 in %, macro over "
+             f"{' + '.join(M2_SCOPES)} ids, Ark vs Presidio; milestones on {MILESTONE_MODE}):"]
+    for mode, item in report["modes"].items():
+        lines.append(f"== Ark {mode} " + ("(milestone mode)" if mode == MILESTONE_MODE else "(reported, decides no milestone)"))
+        lines += m2_lines(item, label=f"M2 {mode}")[1:]
+    milestone = report["modes"][MILESTONE_MODE]
+    lines.append(f"M2: {'MET' if report['met'] else 'NOT MET'} ({MILESTONE_MODE}: {_deciding(milestone)})")
+    return lines
+
+
 # ── baseline report ──────────────────────────────────────────────────────
 
 
@@ -1072,6 +1177,7 @@ def baseline_report(gold_root: Path, ark: dict[str, Path], presidio: dict[str, P
         "hard_negative_fp": hard_negative_fp,
         "milestone_mode": MILESTONE_MODE,
         "m1": {profile: m1_by_mode(ark_results, results[profile], emap) for profile in profiles},
+        "m2": {profile: m2_by_mode(ark_results, results[profile], emap) for profile in profiles},
         "gold_gaps": {"validators": {entity_id: list(names) for entity_id, names in validators.items()},
                       "corpora": corpora},
     }
@@ -1177,6 +1283,26 @@ def report_lines(report: dict[str, Any]) -> list[str]:
             mode_cell = mode if mode == milestone else f"{mode} ²"
             lines.append(f"| {mode_cell} | {profile} | {'MET' if m1['met'] else 'NOT MET'} | " + " | ".join(cells) + " |")
     lines += ["", f"² reported; milestones are judged on {milestone} (T15).", ""]
+    lines += [
+        f"## M2 (each Ark mode vs each profile; DE rows, exact macro-F1 over {' + '.join(M2_SCOPES)} ids with gold; "
+        f"Ark vs target = Presidio + margin; milestone on {milestone})",
+        "",
+        "| Ark mode | Profile | M2 | " + " | ".join(_family_cell(f) for f in m1_families) + " |",
+        "|---|---|---|" + "---|" * len(m1_families),
+    ]
+    for mode in [milestone, *(m for m in modes if m != milestone)]:
+        for profile, by_mode in report["m2"].items():
+            m2 = by_mode["modes"][mode]
+            cells = []
+            for family in m1_families:
+                item = m2["families"][family]
+                cells.append(
+                    f"{_cell(item['ark_macro_f1'])} vs {_cell(item['target'])} ({_cell(item['presidio_macro_f1'])} + "
+                    f"{item['margin_pp']:g}), {len(item['ids'])} ids" if item["ids"] else "no data"
+                )
+            mode_cell = mode if mode == milestone else f"{mode} ²"
+            lines.append(f"| {mode_cell} | {profile} | {'MET' if m2['met'] else 'NOT MET'} | " + " | ".join(cells) + " |")
+    lines += ["", "presidio_only ids stay out of the macro average until entity_map.yaml marks them shared (D-M2).", ""]
     lines += gold_gap_lines(report["gold_gaps"], names)
     return lines
 
@@ -1270,6 +1396,16 @@ def main(argv: list[str] | None = None) -> int:
     m1_parser.add_argument("--metric", choices=METRICS, default="exact")
     m1_parser.add_argument("--check", action="store_true", help=f"exit 1 if M1 is not met on {MILESTONE_MODE}")
     m1_parser.add_argument("--json", type=Path, help="also write the report as JSON")
+    m2_parser = commands.add_parser("m2", help="M2 per source family: DE macro-F1 of Ark vs Presidio, exit 1 unless met")
+    m2_parser.add_argument("--gold", type=Path, required=True, help="gold directory (frozen dirs with .ready)")
+    m2_parser.add_argument("--ark", action="append", required=True, metavar="MODE=DIR",
+                           help="Ark predictions of one PII mode (run_ark.py --pii-mode), same relative file names; "
+                                f"{MILESTONE_MODE} is required and decides")
+    m2_parser.add_argument("--presidio", type=Path, required=True,
+                           help="Presidio tuned predictions, same relative file names")
+    m2_parser.add_argument("--language", choices=(*LANGUAGES, "all"), default="de", help="M2 is DE/EU (default de)")
+    m2_parser.add_argument("--metric", choices=METRICS, default="exact")
+    m2_parser.add_argument("--json", type=Path, help="also write the report as JSON")
     report_parser = commands.add_parser("report", help="Markdown baseline: Ark vs Presidio profiles per family, corpus, entity, M1")
     report_parser.add_argument("--gold", type=Path, required=True, help="gold directory (frozen dirs with .ready)")
     report_parser.add_argument("--ark", action="append", required=True, metavar="MODE=DIR",
@@ -1288,18 +1424,22 @@ def main(argv: list[str] | None = None) -> int:
             if args.json:
                 args.json.write_text(json.dumps(report, indent=1, sort_keys=True) + "\n", encoding="utf-8")
             return 0
-        if args.command == "m1":
+        if args.command in ("m1", "m2"):
             ark = named_dirs(args.ark, "--ark", ARK_MODES)
             if MILESTONE_MODE not in ark:
-                raise ScoreboardError(f"m1 needs --ark {MILESTONE_MODE}=DIR (milestones are judged on {MILESTONE_MODE})")
+                raise ScoreboardError(f"{args.command} needs --ark {MILESTONE_MODE}=DIR "
+                                      f"(milestones are judged on {MILESTONE_MODE})")
             emap = entity_map_module.load()
             ark_results = {mode: score_directory(args.gold, directory, emap) for mode, directory in ark.items()}
-            report = m1_by_mode(ark_results, score_directory(args.gold, args.presidio, emap), emap,
-                                args.language, args.metric)
-            print("\n".join(m1_mode_lines(report)))
+            by_mode, mode_lines = (m1_by_mode, m1_mode_lines) if args.command == "m1" else (m2_by_mode, m2_mode_lines)
+            report = by_mode(ark_results, score_directory(args.gold, args.presidio, emap), emap,
+                             args.language, args.metric)
+            print("\n".join(mode_lines(report)))
             if args.json:
                 args.json.write_text(json.dumps(report, indent=1, sort_keys=True) + "\n", encoding="utf-8")
-            return 1 if args.check and not report["met"] else 0
+            # m1 fails only with --check; m2 always exits 1 unless both family rules hold (D-M2).
+            check = args.check if args.command == "m1" else True
+            return 1 if check and not report["met"] else 0
         if args.command == "score":
             lines, result = score_file(args.gold, args.predictions)
             print("\n".join(lines))

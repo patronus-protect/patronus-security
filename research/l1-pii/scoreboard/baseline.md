@@ -95,19 +95,39 @@ Die Wertung oben enthält diese Fälle unverändert; die Korpora bleiben eingefr
   in `[x@y.com](mailto:x@y.com)`. Die übrigen ≈ 220 E-Mail-FP von ARK auf Gretel liegen in Zeilen ohne
   E-Mail-Gold (nicht annotierte Personen- und Rollenadressen) und fallen nicht unter diesen Bucket.
 
+### M2 (D-M2, Stand 2026-10-21)
+
+Regel seit D-M2 ([`../README.md`](../README.md#fairness-regel-quellfamilien)): exakter Macro-F1 auf deutschen
+Zeilen über `shared` + `ark_only`-IDs mit Gold, `balanced`; `neutral` ≥ tuned + 15 pp, `presidio_favored`
+≥ tuned. Dieselben Vorhersagen wie oben, `scoreboard.py m2` endet mit Exit 1.
+
+| Ark mode | Profile | M2 | neutral | presidio_favored | ark_authored ¹ |
+|---|---|---|---|---|---|
+| balanced | presidio-default | NOT MET | 51.7 vs 36.7 (21.7 + 15), 14 ids | 2.8 vs 9.1 (9.1 + 0), 8 ids | 73.9 vs 34.0 (19.0 + 15), 28 ids |
+| balanced | presidio-tuned | NOT MET | 51.7 vs 33.6 (18.6 + 15), 14 ids | 2.8 vs 87.5 (87.5 + 0), 8 ids | 73.9 vs 56.3 (41.3 + 15), 28 ids |
+| strict ² | presidio-default | NOT MET | 51.2 vs 36.7 (21.7 + 15), 14 ids | 2.8 vs 9.1 (9.1 + 0), 8 ids | 73.3 vs 34.0 (19.0 + 15), 28 ids |
+| strict ² | presidio-tuned | NOT MET | 51.2 vs 33.6 (18.6 + 15), 14 ids | 2.8 vs 87.5 (87.5 + 0), 8 ids | 73.3 vs 56.3 (41.3 + 15), 28 ids |
+
+- **neutral hält:** 51.7 vs. Ziel 33.6 (tuned 18.6, 14 IDs; strict 51.2). Gegenüber E11 (44.6) zählen
+  die seither gemergten Aufgaben; die Basis bleiben 161 Gretel-DE-Zeilen mit 4–22 Gold je ID.
+- **presidio_favored hält nicht:** 2.8 vs. 87.5 auf 8 IDs mit 1–8 Gold, alle aus den Recognizer-Tests
+  (blanke Werte, Bucket P1): Pass, KVNR, LANR, RVNR, Steuer-ID, Steuernummer, Ausweis (22.2) und
+  Führerschein (beide 0). BSNR (5), USt-IdNr. (5) und Handelsregister (1) sind `presidio_only` und stehen
+  nur als `excluded` in der Ausgabe; die frühere Zählung (11 IDs, tuned 87.0) schloss sie ein.
+
 ## Stand der Meilensteine
 
 | Meilenstein | Stand (Dev) | Lücke |
 |---|---|---|
 | M1 Parität EN | **nicht erreicht**. neutral 3/9 gemeinsame IDs ≥ tuned, presidio_favored 4/12 | siehe nächste Tabelle |
-| M2 DE/EU (Macro-F1 ≥ tuned + 15 pp) | neutral DE: ARK 44.6 vs. tuned 18.6 (+26.0 pp, 14 IDs, nur 161 Gretel-DE-Zeilen); presidio_favored DE: ARK 2.0 vs. tuned 87.0 (11 IDs, nur blanke DE-Prüfziffernwerte). Nicht erreicht, solange beide Familien zählen | P1 (blanke DE-Werte), Messmodus T15 |
+| M2 DE/EU (D-M2: neutral ≥ tuned + 15 pp, presidio_favored ≥ tuned; DE, `balanced`) | **nicht erreicht** (Stand 2026-10-21): neutral 51.7 vs. Ziel 33.6 hält; presidio_favored 2.8 vs. 87.5 (8 IDs, nur blanke DE-Prüfziffernwerte) hält nicht. E11 (strict, alle IDs): neutral 44.6 vs. 18.6, presidio_favored 2.0 vs. 87.0 | P1 (blanke DE-Werte in `balanced`, K05-Folgeaufgaben) |
 | M3 Breite (Zählregel T03, 2×) | nicht gemessen, `count_validated.py` fehlt (T03) | T03 |
 | M4 Latenz (100 KiB p95 ≤ 10 ms) | **nicht erreicht**: 76 ms Python, 68 ms nativ; Presidio ≈ 10,4 s ([`latency.md`](latency.md), E07) | Hebel 6 |
 | Immer: HN-FP ≤ Presidio | **verletzt** auf presidio_favored (2 vs. 0); neutral 0 vs. 0 | P8, P9 |
 
-Macro-F1 für M2 hier: Mittel des exakten F1 über alle L1-IDs mit DE-Gold in der Familie, einschließlich
-`ark_only`/`presidio_only`. Eine verbindliche M2-Definition (welche IDs, welcher Modus) fehlt noch; das
-ist ein Kandidat für die TRIAGE (C7).
+Die E11-Zahlen für M2 mitteln den exakten F1 über alle L1-IDs mit DE-Gold in der Familie, einschließlich
+`presidio_only`. Seit D-M2 (C7 entschieden) zählen nur `shared` + `ark_only`, gemessen in `balanced`
+(Abschnitt [M2](#m2-d-m2-stand-2026-10-21)).
 
 ### M1 je gemeinsamer Entität (EN, exact F1, ARK vs. tuned)
 
@@ -171,7 +191,7 @@ Neue Einträge legt erst die TRIAGE an; dieser Bericht ordnet nur vor.
 | C4 | UK-NINO ohne Leerzeichen bzw. in Zweiergruppen (`hh 01 02 03 d`), Kleinschreibung bei explizitem Feldnamen | 3 FN, M1-ID mit Gold nur in presidio_favored | fix, deps K03 |
 | C5 | Reihenfolge: T19 (PAN-Präzision) entscheidet zwei M1-Lücken (neutral EN PAN) und ein „Immer“-Kriterium; T05 ist der größte IBAN-Hebel auf presidio_favored | – | Priorisierung durch den Menschen |
 | C6 | Messmodus: P1 zeigt, dass presidio_favored im Modus `strict` strukturell nicht zu gewinnen ist (blanke Werte) | M1, M2 | in T15 einfließen lassen |
-| C7 | M2-Definition (IDs, Familien, Mindest-Gold) | M2 | needs_decision |
+| C7 | M2-Definition (IDs, Familien, Mindest-Gold) | M2 | entschieden 2026-10-21, umgesetzt in D-M2 |
 | C8 | Gate-Schritt `presidio-favored-corpora` ausführen, damit Dev und Holdout der Familie auf der VPS liegen | alle | Runner-Neuinstallation |
 
 ## Reproduktion
@@ -191,6 +211,8 @@ python3 scripts/l1_presidio/scoreboard.py report --gold DEV --ark strict=PRED/ar
   --ark balanced=PRED/ark-balanced --engine presidio-default=PRED/presidio-default \
   --engine presidio-tuned=PRED/presidio-tuned
 python3 scripts/l1_presidio/scoreboard.py m1 --gold DEV --ark strict=PRED/ark-strict \
+  --ark balanced=PRED/ark-balanced --presidio PRED/presidio-tuned
+python3 scripts/l1_presidio/scoreboard.py m2 --gold DEV --ark strict=PRED/ark-strict \
   --ark balanced=PRED/ark-balanced --presidio PRED/presidio-tuned
 ```
 

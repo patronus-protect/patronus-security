@@ -24,7 +24,7 @@ SHA-gepinnt). Presidio läuft in zwei Profilen: `default` und `tuned` (spaCy `en
 | Meilenstein | Kriterium |
 |---|---|
 | M1 Parität EN | Je gemeinsamer Pattern-Entität: F1(ARK) ≥ F1(Presidio tuned) |
-| M2 DE/EU | Macro-F1 ≥ Presidio tuned + 15 pp |
+| M2 DE/EU | Macro-F1 (DE-Zeilen, `shared` + `ark_only`) auf `neutral` ≥ Presidio tuned + 15 pp und auf `presidio_favored` ≥ Presidio tuned (Regel unten) |
 | M3 Breite | ≥ 2× so viele prüfziffervalidierte Entitäten wie Presidio 2.2.364 (Zählregel unten: 35 → ≥ 70) |
 | M4 Latenz | 100 KiB p95 ≤ 10 ms; Presidio auf derselben Maschine gemessen |
 | Immer | FP auf Hard Negatives ≤ Presidio; keine Entität verliert > 0,5 pp F1 |
@@ -73,8 +73,17 @@ Werkzeug begünstigt Presidio. Deshalb trägt jede Gold-Quelle genau eine Famili
   exakte Spans, englische Zeilen. Ein Vorsprung auf der einen Familie gleicht keinen Rückstand auf der
   anderen aus; eine Familie ohne Gold für gemeinsame Entitäten erfüllt M1 nicht. Prüfung:
   `scoreboard.py m1` (siehe [`scripts/l1_presidio/README.md`](../../scripts/l1_presidio/README.md)).
-- Für M2–M4 und „Immer“ gilt dieselbe Trennung: Ergebnisse auf `ark_authored` stehen im Bericht,
-  zählen aber für kein Kriterium.
+- **M2 gilt nur, wenn es auf `neutral` und auf `presidio_favored` je für sich hält** (D-M2, entschieden
+  am 2026-10-21): Macro-F1 = ungewichtetes Mittel des exakten F1 über alle `shared`- und `ark_only`-IDs
+  mit Gold auf den deutschen Zeilen der Familie, gemessen in `balanced`. Auf `neutral` muss ARK
+  Presidio tuned um ≥ 15 pp übertreffen, auf `presidio_favored` genügt Parität (≥ Presidio tuned):
+  dort liegt tuned bei 87 und tuned + 15 pp über 100. Eine Mindestzahl an Gold je ID gibt es nicht;
+  eine Familie ohne deutsches Gold für eine zählende ID erfüllt M2 nicht. `presidio_only`-IDs
+  (Handelsregister, BSNR, PLZ, USt-IdNr. …) zählen nicht zum Mittel, bis `entity_map.yaml` sie
+  `shared` führt, weil ARK sie erkennt; `semantic` zählt nie. Prüfung: `scoreboard.py m2` (Exit 1,
+  solange nicht beide Familien halten).
+- Für M3, M4 und „Immer“ gilt dieselbe Trennung: Ergebnisse auf `ark_authored` stehen im Bericht,
+  zählen aber für kein Kriterium (M2 druckt `ark_authored` mit +15 pp, ohne Urteil).
 - Das Gate (`scoreboard.py gate`) rechnet Regressionen weiter auf allen Familien, zusätzlich je
   Familie gesamt; eine Verschlechterung auf `ark_authored` ist also weiterhin rot.
 - Presidio-Gold wird nicht nachkorrigiert: Werte, die ein ARK-Validator ablehnt, bleiben Gold. Die
@@ -346,7 +355,7 @@ im Abschnitt „Critical path“ von `backlog.yaml`. Ähnliche Aufgaben sind zu 
 Meilenstein-Wirkung tragen `status: deferred` mit Grund. 35 offene Aufgaben, bei 2 Läufen/Tag
 ≈ 2,5–3 Wochen. Neue TRIAGE-Aufgaben nur, wenn sie einen Meilenstein bewegen.
 
-Entscheidungen vom 2026-10-21: M2 gilt auf beiden Familien (neutral: ≥ Presidio tuned + 15 pp;
+Entscheidungen vom 2026-10-21: M2 gilt auf beiden Familien (umgesetzt in D-M2, Regel oben; neutral: ≥ Presidio tuned + 15 pp;
 `presidio_favored`: ≥ Presidio tuned). Loopback- und unspezifizierte Adressen (`127.0.0.1`, `::1`,
 `0.0.0.0`, `::`) verwirft ARK in jedem Modus; ihre Gold-Werte auf `presidio_favored` bleiben eine
 bekannte Lücke für M1 (IP).
