@@ -149,6 +149,8 @@ CHECKS = {
     "eth_private_key_hex": checks.is_valid_eth_private_key,
     "btc_wif_mainnet_uncompressed": lambda v: v[0] == "5" and len(v) == 51 and checks.is_valid_btc_wif(v),
     "btc_wif_mainnet_compressed": lambda v: v[0] in "KL" and len(v) == 52 and checks.is_valid_btc_wif(v),
+    "btc_wif_testnet_uncompressed": lambda v: v[0] == "9" and len(v) == 51 and checks.is_valid_btc_wif(v),
+    "btc_wif_testnet_compressed": lambda v: v[0] == "c" and len(v) == 52 and checks.is_valid_btc_wif(v),
     "pem_pkcs8_ed25519_private_key": pem("PRIVATE KEY", checks.is_valid_pkcs8_ed25519),
     "pem_pkcs1_rsa_private_key": pem("RSA PRIVATE KEY", checks.is_valid_pkcs1_rsa),
     "pem_sec1_ec_private_key": pem("EC PRIVATE KEY", checks.is_valid_sec1_p256),
@@ -181,6 +183,7 @@ CHECKS = {
 SHAPE_ONLY_FAILURES = {
     "github_pat_classic": lambda v: checks.has_valid_crc32_suffix(v, "ghp_"),
     "btc_wif_uncompressed": checks.is_valid_btc_wif,
+    "btc_wif_testnet_compressed_shape": checks.is_valid_btc_wif,
     "jwt_hs256": lambda v: checks.jwt_parts(v) is not None,
     "pem_pkcs8_private_key": pem("PRIVATE KEY", checks.is_valid_pkcs8_ed25519),
     "pem_rsa_private_key": pem("RSA PRIVATE KEY", checks.is_valid_pkcs1_rsa),
@@ -262,6 +265,8 @@ class StructureTests(unittest.TestCase):
             "npm_access_token": lambda v: checks.has_valid_crc32_suffix(v, "npm_"),
             "btc_wif_mainnet_compressed": checks.is_valid_btc_wif,
             "btc_wif_mainnet_uncompressed": checks.is_valid_btc_wif,
+            "btc_wif_testnet_compressed": checks.is_valid_btc_wif,
+            "btc_wif_testnet_uncompressed": checks.is_valid_btc_wif,
             "de_vat_id": checks.is_valid_de_vat_id,
         }
         for name, check in cases.items():
@@ -269,6 +274,24 @@ class StructureTests(unittest.TestCase):
                 value = recipes.generate(name, seed)
                 for index in (len(value) - 1, len(value) // 2):
                     self.assertFalse(check(mutate(value, index)), f"{name} seed={seed} index={index}")
+
+    def test_wif_check_requires_a_wif_version_byte_and_flag(self):
+        # F02: mainnet 0x80 and testnet 0xef, a scalar in 1..n-1, flag 0x01 when compressed.
+        scalar = bytes([0x3C]) + bytes([0x5A]) * 31
+        order = checks.SECP256K1_ORDER.to_bytes(32, "big")
+        for payload, valid in (
+            (b"\x80" + scalar, True),
+            (b"\x80" + scalar + b"\x01", True),
+            (b"\xef" + scalar, True),
+            (b"\xef" + scalar + b"\x01", True),
+            (b"\xef" + scalar + b"\x02", False),
+            (b"\xef" + bytes(32), False),
+            (b"\xef" + order + b"\x01", False),
+            (b"\xee" + scalar, False),
+            (b"\xf0" + scalar + b"\x01", False),
+            (b"\x81" + scalar, False),
+        ):
+            self.assertEqual(checks.is_valid_btc_wif(recipes.base58check(payload)), valid, payload.hex())
 
     def test_checks_accept_published_reference_vectors(self):
         # RFC 8410, section 10.3: Ed25519 private key in PKCS#8.

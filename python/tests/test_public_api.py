@@ -138,8 +138,8 @@ class PublicApiTests(unittest.TestCase):
 
     def test_dlp_mode_is_strict_by_default_and_opt_in(self):
         scanner = SecurityGateway(categories=["dlp"], max_level="l1", download_files=False)
-        # A field-bound password scores base 35 + field 25; a WIF-shaped value without a
-        # field name (base 30 + format 15) needs a credential term for balanced (K04).
+        # A field-bound password scores base 35 + field 25; a WIF key without a field name
+        # scores base 30 + checksum 35 (F02), which balanced keeps without a credential term.
         from patronus_ark.dlp_synth import recipes
 
         wif = recipes.generate("btc_wif_mainnet_uncompressed", 1)
@@ -156,12 +156,15 @@ class PublicApiTests(unittest.TestCase):
         scanner.set_execution_gates({"dlp_mode": "strict"})
         self.assertEqual(native()["evidence_spans"], strict["evidence_spans"])
 
-        expected = {"balanced": {"CREDENTIAL": 0.6}, "recall": {"CREDENTIAL": 0.6, "CRYPTO_KEY": 0.45}}
+        expected = {
+            "balanced": {"CREDENTIAL": 0.6, "CRYPTO_KEY": 0.65},
+            "recall": {"CREDENTIAL": 0.6, "CRYPTO_KEY": 0.65},
+        }
         for mode, scores in expected.items():
             scanner.set_execution_gates({"dlp_mode": mode})
             scored = native()
             self.assertEqual({span["label"]: span["score"] for span in scored["evidence_spans"]}, scores, mode)
-            self.assertEqual(scored["confidence"], 0.6, mode)
+            self.assertEqual(scored["confidence"], 0.65, mode)
             rules = {rule["rule_id"]: rule for rule in scored["layers"][0]["details"]["matched_rules"]}
             self.assertEqual(rules["dlp_password_assignment"]["context"]["anchor"], "field")
 

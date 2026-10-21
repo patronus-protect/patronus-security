@@ -94,9 +94,9 @@
       "probes": ["PRIVATE_KEY=<<secret:0>>", "wallet private key: <<secret:0>>"]
     },
     "dlp_btc_wif": {
-      "generators": ["btc_wif_mainnet_uncompressed", "btc_wif_mainnet_compressed"],
-      "shape_only": ["btc_wif_uncompressed"],
-      "probes": ["importprivkey <<secret:0>>", "WIF-Schlüssel der Cold Wallet: <<secret:0>>"]
+      "generators": ["btc_wif_mainnet_uncompressed", "btc_wif_mainnet_compressed", "btc_wif_testnet_uncompressed", "btc_wif_testnet_compressed"],
+      "shape_only": ["btc_wif_uncompressed", "btc_wif_testnet_compressed_shape"],
+      "probes": ["importprivkey <<secret:0>>", "WIF-Schlüssel der Cold Wallet: <<secret:0>>", "bitcoin-cli -testnet importprivkey <<secret:0>>"]
     },
     "dlp_private_key_block": {
       "generators": ["pem_pkcs8_ed25519_private_key", "pem_pkcs1_rsa_private_key", "pem_sec1_ec_private_key", "pem_dsa_private_key", "pem_openssh_ed25519_private_key"],
