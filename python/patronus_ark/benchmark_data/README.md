@@ -42,8 +42,11 @@ the checksum labels `CREDITCARD`, `IBAN` and `STEUERID`
 (`rust/tests/pii_gold_hygiene.rs`). `start` and
 `end` are zero-based Python Unicode-code-point offsets and form a half-open
 `[start, end)` interval; they are deliberately not UTF-8 byte offsets. Hard
-negative rows contain no entities and explain the excluded lookalike in
-`negative_reason`.
+negative rows explain the excluded lookalike in `negative_reason`. They contain
+no entities, except that a PII hard negative may annotate other real entities in
+its text, never one of its target label (T07: the valid IBAN around a
+card-shaped BBAN). Evaluations score primary findings only; a finding the
+scanner lists under `details.secondary_evidence` (T07) is not scored.
 
 Reserved placeholder values (RFC 2606/6761 domains such as `example.com` or
 `.invalid`, NANP `555-01xx` and `+1 000-000-0000`) are PII and gold positives in
@@ -67,7 +70,8 @@ Every `pii_l1.jsonl` row starts with these fields:
   to `target_label`. For a positive, `13_l1_golden_eval` requires that this rule
   reported every gold span (`matched_rules` of the scan result); another rule of
   the same label may report it as well. For a hard negative it is the rule the
-  lookalike aims at; no PII rule may report anything in the text.
+  lookalike aims at; no PII rule may report a primary finding in the text other
+  than its annotated entities.
 - `carrier` is the document that holds the value: `line` (a single
   `label: value` probe), `prose` (sentence, chat, mail), `json`, `yaml`, `xml`,
   `csv`, `kv` (`key=value` or `Key: value` lines of a form) or `table` (Markdown

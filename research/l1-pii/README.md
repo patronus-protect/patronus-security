@@ -133,8 +133,9 @@ Text, nicht nur den Ziel-Span (Generator: `also=(Label, Wert)`), z. B. die PAN n
 Ablaufdatum. Gewertet wird weiter nur das Ziel-Label. `rust/tests/pii_gold_hygiene.rs` prüft, dass
 jeder Gold-Wert einen Validator seines Labels besteht (Known Gaps nur bei Luhn, MOD-97 und
 Steuer-ID, nach Rückbau der Obfuskation) und dass jeder weitere L1-Treffer auf einem Positiv Gold
-ist oder als Detektor-FP gelistet ist (PAN in IBAN, Telefonziffern mit gültiger Luhn-Summe, IBAN
-zusätzlich als FINANCIAL_ACCOUNT_NUMBER; T07). Die sieben Luhn-ungültigen `credit_card`-Werte in
+ist oder als Detektor-FP gelistet ist (Telefonziffern mit gültiger Luhn-Summe, PAN in einer noch nicht
+gemeldeten gruppierten Nicht-DE-IBAN). PAN in einer gültigen IBAN und die IBAN als
+FINANCIAL_ACCOUNT_NUMBER sind seit T07 Sekundär-Evidenz und zählen dort nicht. Die sieben Luhn-ungültigen `credit_card`-Werte in
 `dynamic_pii.jsonl` bleiben für L3 im Fixture, tragen `"checksum_valid": false` und zählen in
 `12_l1_pii_fixture_eval` nicht. Validatoren bleiben unverändert.
 
@@ -166,6 +167,14 @@ jedem Modus; die erste ist `pii_phone_de_national_proximity`. Spätere „mit Ko
 F07, F15, A03–A05, T08, T10, C05, C07, C08) setzen darauf auf. `strict` bleibt für alle übrigen
 Regeln unverändert.
 
+Seit T26 (TRIAGE 2026-W43 Bucket 12) tragen die Einträge der Anker-Regeln für Geburtsdatum, Kunden-
+und Personalnummer, Kontonummer, CVV, US-SSN, Pass und Benutzername optionale Listen `fr`, `es`,
+`it` und `nl`; Engine und Lexical-Anchor-Scanner lesen sie mit. Dieselben Feldnamen stehen in den
+Regex der Regeln selbst, damit `strict` sie vor dem Wert und als Strukturschlüssel (K04) bindet.
+Benutzernamen verlangen dort `:`, `=` oder `#`, ein CVV einen Kartenbezug im Feldnamen
+(`code de sécurité de la carte`, nicht `code de sécurité`). `pii_l1` führt je Sprache 10 Positive
+und 6 Hard Negatives; Validatoren sind unverändert.
+
 ## Kontextfreie Prüfziffernwerte (K05)
 
 In `balanced` und `recall` braucht ein Wert, dessen Validator eine echte Prüfziffer rechnet, keinen
@@ -192,6 +201,27 @@ ausgeschriebene E-Mail-Trenner (`[at]`, `ät`, `dot`, `punkt`, ` @ `, ` . `) und
 gesperrte Nummern (`D E 8 9 …`). Die Gold-Konvention T01 gilt damit für `strict` und `balanced`
 unverändert; `recall` darf ausgeschriebene Adressen melden. Validatoren entscheiden auf dem
 normalisierten Wert. DLP D04 kann dieselbe Sicht nutzen.
+
+## Label-Überlappungen (K07)
+
+`rust/src/detectors/pii/overlap.rs`: In `balanced` und `recall` ergibt ein Wert ein Label unter den
+konkurrierenden Nummern-Labels (`COMPETING_LABELS`: IBAN, Karte, Kontonummer, Steuer-ID, Telefon).
+Von zwei überlappenden Funden verschiedener Labels gewinnt nach dem ersten Kriterium, das sich
+unterscheidet: IBAN, längerer Wert (Luhn-gültige Teilspanne einer IBAN oder einer `+49`-Nummer),
+Kontext des eigenen Labels (Feldname, Strukturschlüssel, Support-Begriff in der Nähe), Prüfziffer,
+höherer Score, frühere Regel. Ein Fund in einer gedruckten IBAN-Form (`DE64 7172 …`) weicht auch dann,
+wenn deren Prüfziffer fehlschlägt. Der Verlierer verlässt `evidence_spans`, sein `matched_rules`-Eintrag
+nennt `overlap` (`reason`, `yields_to`). `strict` behält beide Labels (Entscheidung T07); andere Labels
+(EMAIL und USERNAME auf einem Wert) behalten ihre Überlappung. Validatoren unverändert.
+
+Seit T07 (Entscheidung 2026-10-14) bleibt `strict` bitgleich in Spans, Klasse und Konfidenz, markiert
+aber eine Karte (`CREDITCARD`) oder Kontonummer (`FINANCIAL_ACCOUNT_NUMBER`) innerhalb einer gemeldeten,
+MOD-97-gültigen IBAN als Sekundär-Evidenz: `details.secondary_evidence` mit `label`, Byte-Offsets,
+`reason` (`iban_value`, `iban_part`) und `primary_label`. Gewertet werden nur Primärfunde:
+`13_l1_golden_eval`, `pii_gold_hygiene.rs` und `run_ark.py` (Scoreboard) lassen Sekundär-Evidenz weg.
+Ein Hard Negative in `pii_l1` darf dafür andere echte Entitäten annotieren (`n(also=…)`, nie das
+Ziel-Label); die Auswertung verlangt genau diese als Primärfunde. Ziffern einer IBAN-Form mit falscher
+Prüfziffer bleiben in `strict` primär.
 
 ## Hebel
 
@@ -283,6 +313,13 @@ run.sh
 
 ## Reihenfolge
 
-E (Messinfrastruktur) → K (Engine) → F (bestehende Regeln reparieren) → B (DACH/EU) → A
-(Presidio-Parität) → C (über Presidio hinaus) → H (Härtung, Abschluss). 106 Aufgaben (inkl. TRIAGE-Einträge Txx), bei 2 Läufen/Tag
-≈ 7–8 Wochen inkl. Review-Pausen.
+Gekürzt am 2026-10-21 auf den kritischen Pfad zu M1–M4: Die offenen Aufgaben stehen in Laufreihenfolge
+im Abschnitt „Critical path“ von `backlog.yaml`. Ähnliche Aufgaben sind zu Bündeln zusammengefasst
+(`bundles: [...]`; aufgegangene Aufgaben tragen `status: bundled` und `into`), Aufgaben ohne
+Meilenstein-Wirkung tragen `status: deferred` mit Grund. 35 offene Aufgaben, bei 2 Läufen/Tag
+≈ 2,5–3 Wochen. Neue TRIAGE-Aufgaben nur, wenn sie einen Meilenstein bewegen.
+
+Entscheidungen vom 2026-10-21: M2 gilt auf beiden Familien (neutral: ≥ Presidio tuned + 15 pp;
+`presidio_favored`: ≥ Presidio tuned). Loopback- und unspezifizierte Adressen (`127.0.0.1`, `::1`,
+`0.0.0.0`, `::`) verwirft ARK in jedem Modus; ihre Gold-Werte auf `presidio_favored` bleiben eine
+bekannte Lücke für M1 (IP).

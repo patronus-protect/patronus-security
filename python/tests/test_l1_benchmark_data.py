@@ -121,6 +121,16 @@ class L1BenchmarkDataTests(unittest.TestCase):
                         counts[(label, language, case_type)], 5, (label, language, case_type)
                     )
 
+    def test_fr_es_it_nl_field_names_have_n_gated_cases_per_language(self):
+        # T26: the anchor rules accept FR/ES/IT/NL field names; each language has at least
+        # five gated positives and five hard negatives.
+        counts = Counter(
+            (row["language"], row["case_type"]) for row in load("pii_l1") if not row["known_gap"]
+        )
+        for language in ("fr", "es", "it", "nl"):
+            for case_type in ("positive", "hard_negative"):
+                self.assertGreaterEqual(counts[(language, case_type)], 5, (language, case_type))
+
     def test_every_native_dlp_label_has_n_gated_cases_per_language(self):
         # Golden schema v2 (E13): known gaps are reported, not gated, so they do not count.
         rows = load("dlp_l1")
@@ -144,7 +154,9 @@ class L1BenchmarkDataTests(unittest.TestCase):
             for row in rows:
                 materialized = recipes.materialize_row(row)
                 self.assertEqual(row["suite"], name, row["id"])
-                self.assertIn(row["language"], {"de", "en"}, row["id"])
+                # pii_l1 also carries FR/ES/IT/NL field names of the anchor rules (T26).
+                languages = {"de", "en", "fr", "es", "it", "nl"} if name == "pii_l1" else {"de", "en"}
+                self.assertIn(row["language"], languages, row["id"])
                 self.assertEqual(row["span_unit"], "unicode_code_point", row["id"])
                 self.assertIn(row["provenance"]["origin"], {"synthetic", "derived_existing_fixture"})
                 if row["case_type"] == "positive":
@@ -165,13 +177,21 @@ class L1BenchmarkDataTests(unittest.TestCase):
                             row["id"],
                         )
                 else:
+                    # A hard negative may annotate other real entities in its text (T07: the
+                    # valid IBAN around a card-shaped BBAN), never one of its target label.
                     self.assertEqual(row["case_type"], "hard_negative", row["id"])
-                    self.assertEqual(row["entities"], [], row["id"])
                     self.assertTrue(row["negative_reason"].strip(), row["id"])
+                    self.assertNotIn(row["target_label"], {e["label"] for e in row["entities"]}, row["id"])
+                    if row["entities"]:
+                        self.assertEqual(name, "pii_l1", row["id"])
+                    starts = [entity["start"] for entity in row["entities"]]
+                    self.assertEqual(starts, sorted(starts), row["id"])
+                    for entity in row["entities"]:
+                        self.assertEqual(row["text"][entity["start"] : entity["end"]], entity["text"], row["id"])
 
     def test_language_distribution_is_broad(self):
         expected = {
-            "pii_l1": {"de": 444, "en": 425},
+            "pii_l1": {"de": 503, "en": 485, "fr": 16, "es": 16, "it": 16, "nl": 16},
             "dlp_l1": {"de": 362, "en": 370},
         }
         for name, distribution in expected.items():
@@ -228,6 +248,39 @@ class SecondaryEntityGoldTests(unittest.TestCase):
                 {(entity["label"], entity["text"]) for entity in rows[row_id]["entities"]},
                 row_id,
             )
+
+    def test_t07_hard_negatives_annotate_the_iban_that_carries_the_lookalike(self):
+        # The card-shaped BBAN inside a valid IBAN and an account finding on an IBAN value are
+        # secondary evidence in strict (T07); the IBAN itself is gold.
+        annotated = Counter()
+        for row in load("pii_l1"):
+            if row["case_type"] != "hard_negative" or not row["entities"]:
+                continue
+            if row["target_label"] == "CREDITCARD_CVV":
+                # T26: a non-card security code next to a real card annotates that card.
+                self.assertEqual([e["label"] for e in row["entities"]], ["CREDITCARD"], row["id"])
+                continue
+            self.assertEqual([e["label"] for e in row["entities"]], ["IBAN"], row["id"])
+            self.assertIn(row["target_label"], {"CREDITCARD", "FINANCIAL_ACCOUNT_NUMBER"}, row["id"])
+            self.assertNotIn("pii_mode", row, row["id"])
+            annotated[(row["target_label"], row["language"])] += 1
+        self.assertEqual(
+            annotated,
+            {
+                ("CREDITCARD", "de"): 3,
+                ("CREDITCARD", "en"): 3,
+                ("FINANCIAL_ACCOUNT_NUMBER", "de"): 3,
+                ("FINANCIAL_ACCOUNT_NUMBER", "en"): 3,
+            },
+        )
+
+    def test_generator_rejects_hard_negatives_that_annotate_their_target(self):
+        namespace = runpy.run_path(str(benchmark.DATA_DIR / "generate_l1_goldens.py"))
+        n = namespace["n"]
+        with self.assertRaises(ValueError):
+            n("CREDITCARD", "en", "pii_credit_card", "Card 4111 1111 1111 1111", "x", also=(("CREDITCARD", "4111 1111 1111 1111"),))
+        with self.assertRaises(ValueError):
+            n("CREDITCARD", "en", "pii_credit_card", "IBAN DE89370400440532013000", "x", also=(("IBAN", "DE00000000000000000000"),))
 
     def test_generator_rejects_ambiguous_secondary_values(self):
         namespace = runpy.run_path(str(benchmark.DATA_DIR / "generate_l1_goldens.py"))

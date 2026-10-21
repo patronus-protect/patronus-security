@@ -204,6 +204,7 @@ fn balanced_and_recall_keep_the_strict_spans_unless_counter_context_outranks() {
     // nearer than any support term; every other strict span stays, with the
     // score of its rule in its context. K05: scored-only rules may add spans.
     // K06: in recall, so may spelled-out or spaced values (10 points lower).
+    // K07: a span of a competing label may yield to an overlapping one.
     let strict_scanner = scanner(None);
     for mode in [PiiMode::Balanced, PiiMode::Recall] {
         let scored_scanner = scanner(with_mode(mode));
@@ -226,6 +227,14 @@ fn balanced_and_recall_keep_the_strict_spans_unless_counter_context_outranks() {
             let scored_spans = spans(&scored);
             for (span, strict_span) in strict.evidence_spans.iter().zip(spans(&strict)) {
                 if scored_spans.contains(&strict_span) {
+                    continue;
+                }
+                // K07: or it yielded to an overlapping finding of a competing label.
+                if rules.iter().any(|rule| {
+                    rule["start_byte"] == span.start_byte
+                        && rule["end_byte"] == span.end_byte
+                        && rule.get("overlap").is_some()
+                }) {
                     continue;
                 }
                 // Every rule that reported the dropped span saw a nearer counter term.

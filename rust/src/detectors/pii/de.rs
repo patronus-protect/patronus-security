@@ -6,7 +6,8 @@ use super::{pii::PiiPattern, score::ValidatorStrength, validators};
 // ── Telefon ──────────────────────────────────────────────────────────────────
 pub(super) const PHONE: PiiPattern = PiiPattern {
     name: "pii_phone_de",
-    pattern: r"(?:\+49|0049)\s?[1-9][\d\s\-\/]{5,12}\d",
+    // No separator is a line break (T18).
+    pattern: r"(?:\+49|0049)[\s&&[^\n-\r\x85\x{2028}\x{2029}]]?[1-9][\d\s\-\/&&[^\n-\r\x85\x{2028}\x{2029}]]{5,12}\d",
     entity_group: "PHONE",
     validator: Some(validators::unanchored_phone),
     strength: ValidatorStrength::Format,
@@ -122,7 +123,7 @@ pub(super) const PHYSICIAN_NUMBER_LANR: PiiPattern = PiiPattern {
 
 pub(super) const PASSPORT_NUMBER: PiiPattern = PiiPattern {
     name: "pii_passport_number_de",
-    pattern: r"(?i)\b(?:reisepass(?:nummer)?|passnummer|passport[ \t]+number)\b[ \t]*(?:is[ \t]*)?[:#=\-]?[ \t]*(?P<value>[0-9CFGHJKLMNPRTVWXYZ]{9})\b",
+    pattern: r"(?i)\b(?:reisepass(?:nummer)?|passnummer|passport[ \t]+number|num(?:é|e)ro[ \t]+de[ \t]+passeport|passeport[ \t]+num(?:é|e)ro|n(?:ú|u)mero[ \t]+de[ \t]+pasaporte|pasaporte[ \t]+n(?:ú|u)mero|numero[ \t]+(?:di|del)[ \t]+passaporto|passaporto[ \t]+numero|paspoort(?:nummer|[-_ \t]?nr)|reisdocumentnummer)\b[ \t]*(?:is[ \t]*)?[:#=\-]?[ \t]*(?P<value>[0-9CFGHJKLMNPRTVWXYZ]{9})\b",
     entity_group: "PASSPORT_NUMBER",
     validator: Some(validators::de_document_number),
     strength: ValidatorStrength::Format,

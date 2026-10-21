@@ -100,6 +100,25 @@ fn matched_rules(result: &SecurityScanResult, text: &str) -> BTreeSet<(usize, us
         .collect()
 }
 
+/// `(start_byte, end_byte, label)` of the findings the scanner marked as secondary
+/// evidence of another finding (T07).
+fn secondary_evidence(result: &SecurityScanResult) -> BTreeSet<(usize, usize, String)> {
+    result
+        .layers
+        .iter()
+        .filter_map(|layer| layer.details.get("secondary_evidence"))
+        .filter_map(|entries| entries.as_array())
+        .flatten()
+        .filter_map(|entry| {
+            Some((
+                entry.get("start_byte")?.as_u64()? as usize,
+                entry.get("end_byte")?.as_u64()? as usize,
+                entry.get("label")?.as_str()?.to_owned(),
+            ))
+        })
+        .collect()
+}
+
 /// Gated positives per rule and language that the declared rule reported exactly,
 /// out of the gated positives declaring that rule; plus pass/total and known gaps per
 /// tag and language.
@@ -203,9 +222,15 @@ fn evaluate(
             .find(|result| result.model == model)
             .expect("native L1 result must exist");
         let rules = matched_rules(&result, &text);
+        // T07: only primary findings are scored; strict keeps secondary evidence (the
+        // card-shaped part of a valid IBAN, an account finding on an IBAN value) as well.
+        let secondary = secondary_evidence(&result);
         let predicted_all = result
             .evidence_spans
             .into_iter()
+            .filter(|span| {
+                !secondary.contains(&(span.start_byte, span.end_byte, span.label.clone()))
+            })
             .map(|span| (span.start_char, span.end_char, span.label))
             .collect::<BTreeSet<_>>();
         let predicted = predicted_all
@@ -244,8 +269,15 @@ fn evaluate(
                 return Err(format!("{}: only positives can be known gaps", row.id).into())
             }
             "hard_negative" => {
+                // A hard negative may annotate other real entities in its text (T07: the
+                // IBAN around a card-shaped BBAN); they must be found, nothing else.
+                let annotated = row
+                    .entities
+                    .iter()
+                    .map(|entity| (entity.start, entity.end, entity.label.clone()))
+                    .collect::<BTreeSet<_>>();
                 negative_total += 1;
-                if predicted_all.is_empty() {
+                if predicted_all == annotated {
                     negative_rejected += 1;
                 } else {
                     eprintln!(

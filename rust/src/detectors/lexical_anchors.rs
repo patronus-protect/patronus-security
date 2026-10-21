@@ -11,7 +11,30 @@ pub struct LexicalAnchor {
     pub en: Vec<String>,
     pub de: Vec<String>,
     pub shared: Vec<String>,
+    /// Field names in further languages (T26: PII anchor rules); optional per entry.
+    #[serde(default)]
+    pub fr: Vec<String>,
+    #[serde(default)]
+    pub es: Vec<String>,
+    #[serde(default)]
+    pub it: Vec<String>,
+    #[serde(default)]
+    pub nl: Vec<String>,
     pub sources: Vec<String>,
+}
+
+impl LexicalAnchor {
+    /// Every literal of the entry: EN, DE, shared, then FR/ES/IT/NL.
+    pub fn words(&self) -> impl Iterator<Item = &String> {
+        self.en
+            .iter()
+            .chain(&self.de)
+            .chain(&self.shared)
+            .chain(&self.fr)
+            .chain(&self.es)
+            .chain(&self.it)
+            .chain(&self.nl)
+    }
 }
 
 pub struct LexicalAnchorScanner {
@@ -58,12 +81,7 @@ impl LexicalAnchorScanner {
             let mut words = Vec::new();
             let mut pattern_anchors: Vec<Vec<usize>> = Vec::new();
             for (anchor, definition) in definitions.iter().enumerate() {
-                for word in definition
-                    .en
-                    .iter()
-                    .chain(&definition.de)
-                    .chain(&definition.shared)
-                {
+                for word in definition.words() {
                     let word = fold_literal(word);
                     assert!(!word.is_empty(), "empty anchor word: {}", definition.id);
                     let index = *indices.entry(word.clone()).or_insert_with(|| {
@@ -276,7 +294,15 @@ mod tests {
                 "duplicate ID: {}",
                 definition.id
             );
-            for words in [&definition.en, &definition.de, &definition.shared] {
+            for words in [
+                &definition.en,
+                &definition.de,
+                &definition.shared,
+                &definition.fr,
+                &definition.es,
+                &definition.it,
+                &definition.nl,
+            ] {
                 let mut seen = std::collections::HashSet::new();
                 for word in words {
                     assert!(!word.trim().is_empty(), "{}", definition.id);

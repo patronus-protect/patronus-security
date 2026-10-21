@@ -158,6 +158,25 @@ def pii_row(
     return {**head, **{key: value for key, value in row.items() if key not in head}}
 
 
+def annotate(row: dict, also: tuple[tuple[str, str], ...], outside: tuple[int, int] = (0, 0)) -> None:
+    """Add `also` as `(label, value)` entities; each value occurs once outside `outside`."""
+    text = row["text"]
+    for other_label, other_value in also:
+        starts = [
+            start
+            for start in range(len(text))
+            if text.startswith(other_value, start)
+            and (start + len(other_value) <= outside[0] or start >= outside[1])
+        ]
+        if len(starts) != 1:
+            raise ValueError(f"{other_value!r} must occur once outside the target in {text!r}")
+        start = starts[0]
+        row["entities"].append(
+            {"label": other_label, "text": other_value, "start": start, "end": start + len(other_value)}
+        )
+    row["entities"].sort(key=lambda entity: entity["start"])
+
+
 def p(
     label: str,
     language: str,
@@ -179,21 +198,8 @@ def p(
     the card number next to a CVV. The value must occur exactly once outside the target.
     """
     row = positive(label, language, prefix, value, suffix, source_fixture_id=source_fixture_id)
-    text, target = row["text"], row["entities"][0]
-    for other_label, other_value in also:
-        starts = [
-            start
-            for start in range(len(text))
-            if text.startswith(other_value, start)
-            and (start + len(other_value) <= target["start"] or start >= target["end"])
-        ]
-        if len(starts) != 1:
-            raise ValueError(f"{other_value!r} must occur once outside the target in {text!r}")
-        start = starts[0]
-        row["entities"].append(
-            {"label": other_label, "text": other_value, "start": start, "end": start + len(other_value)}
-        )
-    row["entities"].sort(key=lambda entity: entity["start"])
+    target = row["entities"][0]
+    annotate(row, also, (target["start"], target["end"]))
     return pii_row(row, rule, carrier, tags, gap, mode)
 
 
@@ -206,10 +212,20 @@ def n(
     *,
     carrier: str = "line",
     tags: tuple[str, ...] = (),
+    also: tuple[tuple[str, str], ...] = (),
     mode: str = "strict",
 ) -> dict:
-    """Hard negative: a lookalike for `rule` that no PII rule may report in PII mode `mode`."""
-    return pii_row(negative(label, language, text, reason), rule, carrier, tags, False, mode)
+    """Hard negative: a lookalike for `rule` that no PII rule may report in PII mode `mode`.
+
+    `also` annotates other real entities in the text as `(label, value)` (T07), e.g. the
+    valid IBAN around a card-shaped BBAN: they must be reported as primary findings, and
+    nothing else may be. The target label is never annotated.
+    """
+    if any(other_label == label for other_label, _ in also):
+        raise ValueError(f"a hard negative never annotates its target label {label}")
+    row = negative(label, language, text, reason)
+    annotate(row, also)
+    return pii_row(row, rule, carrier, tags, False, mode)
 
 
 PII_CASES = {
@@ -280,12 +296,12 @@ PII_CASES = {
         p("PHONE", "de", "pii_phone_international", "Name;Telefon\nMüller;", "+49 89 2019 4400", "", carrier="csv"),
         p("PHONE", "de", "pii_phone_de", "Fax: ", "0049 211 5583920"),
         p("PHONE", "de", "pii_phone_us", "US-Büro: ", "212-736-4410"),
-        p("PHONE", "de", "pii_phone_us", "US-Büro: ", "(212) 736-4410", gap=True),
+        p("PHONE", "de", "pii_phone_us", "US-Büro: ", "(212) 736-4410"),
         p("PHONE", "de", "pii_phone_de_national_context", '{"telefon": "', "030 98765432", '"}', carrier="json"),
         p("PHONE", "de", "pii_phone_de_national_context", "Telefon: ", "０３０ １２３４５６７８", "", tags=("obfuscated",)),
         p("PHONE", "de", "pii_phone_de_national_context", "Te1efon: ", "0221 4711230", "", tags=("ocr",), gap=True),
         p("PHONE", "en", "pii_phone_us", "Call me at ", "415-555-2671", " tomorrow.", carrier="prose", tags=("no_context",)),
-        p("PHONE", "en", "pii_phone_us", "Call me at ", "(415) 555-2671", " tomorrow.", carrier="prose", tags=("no_context",), gap=True),
+        p("PHONE", "en", "pii_phone_us", "Call me at ", "(415) 555-2671", " tomorrow.", carrier="prose", tags=("no_context",)),
         p("PHONE", "en", "pii_phone_international", '{"phone": "', "+1 415 555 2671", '"}', carrier="json"),
         p("PHONE", "en", "pii_phone_de", "contact:\n  phone: ", "+49 40 3005 1200", "\n", carrier="yaml"),
         p("PHONE", "en", "pii_phone_de_national_context", "Phone: ", "040 30051200"),
@@ -1184,6 +1200,252 @@ K06_OBFUSCATION_CASES = [
     n("STEUERID", "de", "pii_steuer_id_de", "Steuer-ID: 8 6 0 9 5 7 4 2 7 1 8", "check digit fails behind spaced digits", tags=("obfuscated",), mode="recall"),
 ]
 for _row in K06_OBFUSCATION_CASES:
+    PII_CASES[_row["target_label"]].append(_row)
+
+# K07 cross-label overlaps: in `balanced` and `recall` one value yields one label. The digits
+# of a grouped IBAN or of an international phone number can pass Luhn; that card-shaped part
+# is no card, and a field name outranks a bare checksum on the same value. A card-shaped part
+# of a printed IBAN form whose check digits fail is no card either. Strict keeps both labels
+# (decision T07). Every IBAN, BBAN and phone vector below passes the checksum it names.
+# Appended so existing ids stay stable.
+K07_OVERLAP_CASES = [
+    p("CREDITCARD", "de", "pii_credit_card", "Karte ", "4111 1111 1111 1111", ", IBAN DE60 5393 3633 8750 0474 39", mode="balanced", also=(("IBAN", "DE60 5393 3633 8750 0474 39"),)),
+    p("CREDITCARD", "de", "pii_credit_card", "Kreditkarte ", "5555 5555 5555 4444", ", Rückruf unter +49 69 3361 9496", carrier="prose", mode="balanced", also=(("PHONE", "+49 69 3361 9496"),)),
+    p("CREDITCARD", "de", "pii_credit_card", "Name;Karte;IBAN\nWeber;", "4532 0151 1283 0366", ";DE13 3380 1412 6906 0443 19", carrier="csv", mode="balanced", also=(("IBAN", "DE13 3380 1412 6906 0443 19"),)),
+    p("CREDITCARD", "de", "pii_credit_card", "Zahlung mit ", "4111 1111 1111 1111", " abgelehnt, bitte auf AT33 2854 3001 9603 7672 überweisen.", carrier="prose", mode="recall", also=(("IBAN", "AT33 2854 3001 9603 7672"),)),
+    p("CREDITCARD", "de", "pii_credit_card", "Telefon: 0151 2345 6789 01, Karte ", "5105 1051 0510 5100", "", mode="balanced", also=(("PHONE", "0151 2345 6789 01"),)),
+    p("CREDITCARD", "de", "pii_credit_card", '{"karte": "', "4111 1111 1111 1111", '", "iban": "DE21 5873 5570 6360 6071 04"}', carrier="json", mode="recall", also=(("IBAN", "DE21 5873 5570 6360 6071 04"),)),
+    p("CREDITCARD", "en", "pii_credit_card", "Card ", "4111 1111 1111 1111", ", IBAN DE63 8415 3776 0207 7642 65", mode="balanced", also=(("IBAN", "DE63 8415 3776 0207 7642 65"),)),
+    p("CREDITCARD", "en", "pii_credit_card", "Charge ", "5555 5555 5555 4444", " and call +44 20 6642 3850 to confirm.", carrier="prose", mode="balanced", also=(("PHONE", "+44 20 6642 3850"),)),
+    p("CREDITCARD", "en", "pii_credit_card", "Phone: +49 89 4613 8662, card ", "4532 0151 1283 0366", "", mode="recall", also=(("PHONE", "+49 89 4613 8662"),)),
+    p("CREDITCARD", "en", "pii_credit_card", "Pay with ", "6011 1111 1111 1117", " or wire to AT71 4952 2280 5377 3567.", carrier="prose", mode="balanced", also=(("IBAN", "AT71 4952 2280 5377 3567"),)),
+    p("CREDITCARD", "en", "pii_credit_card", "name,card,iban\nAda Weber,", "4111 1111 1111 1111", ",DE06 6826 5123 3080 5169 78", carrier="csv", mode="balanced", also=(("IBAN", "DE06 6826 5123 3080 5169 78"),)),
+    p("CREDITCARD", "en", "pii_credit_card", "Mobile: 0151 2345 6789 01, card ", "5105 1051 0510 5100", "", mode="recall", also=(("PHONE", "0151 2345 6789 01"),)),
+    n("CREDITCARD", "de", "pii_credit_card", "IBAN: DE64 7172 7958 4924 3372 11", "IBAN form with failing check digits; the Luhn-valid digits inside it are no card", mode="balanced"),
+    n("CREDITCARD", "de", "pii_credit_card", "Überweisung an DE34 6659 4134 6836 7322 13 fehlgeschlagen.", "IBAN form with failing check digits; the Luhn-valid digits inside it are no card", carrier="prose", mode="recall"),
+    n("CREDITCARD", "de", "pii_credit_card", "Name;IBAN\nWeber;DE25 2704 9372 0521 4877 40", "IBAN form with failing check digits; the Luhn-valid digits inside it are no card", carrier="csv", mode="balanced"),
+    n("CREDITCARD", "de", "pii_credit_card", "IBAN AT77 5761 4565 6741 3978 (Prüfziffer falsch)", "IBAN form with failing check digits; the Luhn-valid digits inside it are no card", carrier="prose", mode="balanced"),
+    n("CREDITCARD", "de", "pii_credit_card", '{"iban": "AT84 8900 8717 3455 8933"}', "IBAN form with failing check digits; the Luhn-valid digits inside it are no card", carrier="json", mode="recall"),
+    n("CREDITCARD", "de", "pii_credit_card", "Das Konto DE03 4977 4035 3388 6960 52 ist gesperrt.", "IBAN form with failing check digits; the Luhn-valid digits inside it are no card", carrier="prose", mode="balanced"),
+    n("CREDITCARD", "en", "pii_credit_card", "IBAN: DE47 9570 1831 6586 8923 67", "IBAN form with failing check digits; the Luhn-valid digits inside it are no card", mode="balanced"),
+    n("CREDITCARD", "en", "pii_credit_card", "Wire to DE56 4057 3004 4314 7125 77 bounced.", "IBAN form with failing check digits; the Luhn-valid digits inside it are no card", carrier="prose", mode="recall"),
+    n("CREDITCARD", "en", "pii_credit_card", "name,iban\nAda Weber,AT78 3498 0320 8465 1419", "IBAN form with failing check digits; the Luhn-valid digits inside it are no card", carrier="csv", mode="balanced"),
+    n("CREDITCARD", "en", "pii_credit_card", "IBAN AT80 9719 0726 3779 2179 has a typo.", "IBAN form with failing check digits; the Luhn-valid digits inside it are no card", carrier="prose", mode="balanced"),
+    n("CREDITCARD", "en", "pii_credit_card", '{"iban": "AT07 5340 7771 1787 1617"}', "IBAN form with failing check digits; the Luhn-valid digits inside it are no card", carrier="json", mode="recall"),
+    n("CREDITCARD", "en", "pii_credit_card", "Refund to AT56 7788 6243 8146 2282 failed.", "IBAN form with failing check digits; the Luhn-valid digits inside it are no card", carrier="prose", mode="balanced"),
+]
+for _row in K07_OVERLAP_CASES:
+    PII_CASES[_row["target_label"]].append(_row)
+
+# T07 secondary evidence in `strict` (decision 2026-10-14): strict keeps reporting the
+# card-shaped BBAN inside a valid IBAN and FINANCIAL_ACCOUNT_NUMBER on an IBAN value, but
+# marks them as secondary evidence of the IBAN; evaluations score primary findings only.
+# A card or account next to an IBAN stays primary. Every IBAN below passes MOD-97 and its
+# BBAN digits pass Luhn (or it sits under an account field name). Appended so existing
+# ids stay stable.
+T07_STRICT_SECONDARY_CASES = [
+    p("CREDITCARD", "de", "pii_credit_card", "Karte ", "4111 1111 1111 1111", ", IBAN DE18 4306 0967 1234 5678 00", also=(("IBAN", "DE18 4306 0967 1234 5678 00"),)),
+    p("CREDITCARD", "de", "pii_credit_card", "Kreditkarte ", "5555 5555 5555 4444", "; Lastschrift von DE60 5393 3633 8750 0474 39", carrier="prose", also=(("IBAN", "DE60 5393 3633 8750 0474 39"),)),
+    p("CREDITCARD", "de", "pii_credit_card", "Name;Karte;IBAN\nWeber;", "4532 0151 1283 0366", ";DE13 3380 1412 6906 0443 19", carrier="csv", also=(("IBAN", "DE13 3380 1412 6906 0443 19"),)),
+    p("CREDITCARD", "de", "pii_credit_card", "Bitte die Karte ", "5105 1051 0510 5100", " belasten, nicht das Konto DE63 8415 3776 0207 7642 65.", carrier="prose", also=(("IBAN", "DE63 8415 3776 0207 7642 65"),)),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_financial_account_number", "Depotnummer: ", "DP-77120", "\nKontonummer: DE89370400440532013000", carrier="kv", also=(("IBAN", "DE89370400440532013000"),)),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_financial_account_number", "Konto-Nr: ", "KTO-30202", ", IBAN DE21 5873 5570 6360 6071 04", also=(("IBAN", "DE21 5873 5570 6360 6071 04"),)),
+    p("CREDITCARD", "en", "pii_credit_card", "Card ", "4111 1111 1111 1111", ", IBAN DE06 6826 5123 3080 5169 78", also=(("IBAN", "DE06 6826 5123 3080 5169 78"),)),
+    p("CREDITCARD", "en", "pii_credit_card", "Charge ", "5555 5555 5555 4444", " or debit DE18 4306 0967 1234 5678 00.", carrier="prose", also=(("IBAN", "DE18 4306 0967 1234 5678 00"),)),
+    p("CREDITCARD", "en", "pii_credit_card", "name,card,iban\nAda Weber,", "4532 0151 1283 0366", ",DE60 5393 3633 8750 0474 39", carrier="csv", also=(("IBAN", "DE60 5393 3633 8750 0474 39"),)),
+    p("CREDITCARD", "en", "pii_credit_card", "Refund card ", "4012 8888 8888 1881", " instead of IBAN DE21 5873 5570 6360 6071 04.", carrier="prose", also=(("IBAN", "DE21 5873 5570 6360 6071 04"),)),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_financial_account_number", "Account number: ", "ACC-44001234", "\nBank account: GB82WEST12345698765432", carrier="kv", also=(("IBAN", "GB82WEST12345698765432"),)),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_financial_account_number", "Account number ", "ACC-55120", ", IBAN DE06 6826 5123 3080 5169 78", also=(("IBAN", "DE06 6826 5123 3080 5169 78"),)),
+    n("CREDITCARD", "de", "pii_credit_card", "IBAN: DE18 4306 0967 1234 5678 00", "valid IBAN; its Luhn-valid BBAN digits are secondary evidence, no card", also=(("IBAN", "DE18 4306 0967 1234 5678 00"),)),
+    n("CREDITCARD", "de", "pii_credit_card", "Überweisung an DE63 8415 3776 0207 7642 65 erhalten.", "valid IBAN; its Luhn-valid BBAN digits are secondary evidence, no card", carrier="prose", also=(("IBAN", "DE63 8415 3776 0207 7642 65"),)),
+    n("CREDITCARD", "de", "pii_credit_card", '{"iban": "DE21 5873 5570 6360 6071 04"}', "valid IBAN; its Luhn-valid BBAN digits are secondary evidence, no card", carrier="json", also=(("IBAN", "DE21 5873 5570 6360 6071 04"),)),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_financial_account_number", "Kontonummer: GB82WEST12345698765432", "IBAN under an account field name; the account finding is secondary evidence of the IBAN", also=(("IBAN", "GB82WEST12345698765432"),)),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_financial_account_number", "Kontonummer DE21 5873 5570 6360 6071 04 bestätigt.", "IBAN under an account field name; its country code and card-shaped BBAN are secondary evidence", carrier="prose", also=(("IBAN", "DE21 5873 5570 6360 6071 04"),)),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_financial_account_number", '{"kontonummer": "DE89370400440532013000"}', "IBAN under an account key; the account finding is secondary evidence of the IBAN", carrier="json", also=(("IBAN", "DE89370400440532013000"),)),
+    n("CREDITCARD", "en", "pii_credit_card", "IBAN DE60 5393 3633 8750 0474 39 is on file", "valid IBAN; its Luhn-valid BBAN digits are secondary evidence, no card", carrier="prose", also=(("IBAN", "DE60 5393 3633 8750 0474 39"),)),
+    n("CREDITCARD", "en", "pii_credit_card", "Refund sent to DE06 6826 5123 3080 5169 78 today.", "valid IBAN; its Luhn-valid BBAN digits are secondary evidence, no card", carrier="prose", also=(("IBAN", "DE06 6826 5123 3080 5169 78"),)),
+    n("CREDITCARD", "en", "pii_credit_card", "name,iban\nAda Weber,DE13 3380 1412 6906 0443 19", "valid IBAN; its Luhn-valid BBAN digits are secondary evidence, no card", carrier="csv", also=(("IBAN", "DE13 3380 1412 6906 0443 19"),)),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_financial_account_number", "Bank account: GB82WEST12345698765432", "IBAN under an account field name; the account finding is secondary evidence of the IBAN", also=(("IBAN", "GB82WEST12345698765432"),)),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_financial_account_number", "Account number is GB33BUKB20201555555555.", "IBAN under an account field name; the account finding is secondary evidence of the IBAN", carrier="prose", also=(("IBAN", "GB33BUKB20201555555555"),)),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_financial_account_number", "Bank account: DE44 5001 0517 5407 3249 31", "IBAN under an account field name; its country code and card-shaped BBAN are secondary evidence", also=(("IBAN", "DE44 5001 0517 5407 3249 31"),)),
+]
+for _row in T07_STRICT_SECONDARY_CASES:
+    PII_CASES[_row["target_label"]].append(_row)
+
+# T26 field names in FR/ES/IT/NL (TRIAGE 2026-W43 bucket 12): the anchor rules for date of
+# birth, customer and employee ID, account number, CVV, US SSN, passport and username accept
+# them in `strict`, before the value and as a structural key. Hard negatives keep the field
+# name but carry a value the unchanged validator rejects, no assignment, a non-card security
+# code, or a neighbouring field (order number, expiry date). Appended so existing ids stay
+# stable.
+T26_MULTILINGUAL_FIELD_CASES = [
+    p("DOB", "fr", "pii_date_of_birth", "Date de naissance : ", "14/07/1985"),
+    p("DOB", "fr", "pii_date_of_birth", "Mme Lefèvre, née le ", "03.11.1979", ", réside à Lyon.", carrier="prose"),
+    p("CUSTOMER_ID", "fr", "pii_customer_id", "Numéro de client : ", "CL-480215"),
+    p("CUSTOMER_ID", "fr", "pii_customer_id", '{"numero_client": "', "CL-99120", '", "ville": "Lyon"}', carrier="json"),
+    p("EMPLOYEE_ID", "fr", "pii_employee_id", "Identifiant d'employé : ", "E-204518"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "fr", "pii_financial_account_number", "Numéro de compte : ", "CPT-0091827"),
+    p("CREDITCARD_CVV", "fr", "pii_credit_card_cvv", "Carte 4111 1111 1111 1111, code de sécurité de la carte de crédit : ", "737", also=(("CREDITCARD", "4111 1111 1111 1111"),)),
+    p("SSN", "fr", "pii_ssn_us", "Numéro de sécurité sociale : ", "536-90-4421"),
+    p("PASSPORT_NUMBER", "fr", "pii_passport_number_de", "Numéro de passeport : ", "C01X00T47"),
+    p("USERNAME", "fr", "pii_username", "Nom d'utilisateur : ", "claire.martin85"),
+    n("DOB", "fr", "pii_date_of_birth", "Date de naissance : 31/02/1985", "impossible calendar date"),
+    n("CUSTOMER_ID", "fr", "pii_customer_id", "Numéro de commande : CMD-480215", "order number, not a customer id"),
+    n("USERNAME", "fr", "pii_username", "Choisissez un nom d'utilisateur pour votre compte.", "field name in prose without an assignment", carrier="prose"),
+    n("CREDITCARD_CVV", "fr", "pii_credit_card_cvv", "Carte 4111 1111 1111 1111. Code de sécurité du bâtiment : 4821", "building access code, not a card security code", also=(("CREDITCARD", "4111 1111 1111 1111"),)),
+    n("SSN", "fr", "pii_ssn_us", "Numéro de sécurité sociale : 000-12-3456", "area 000 is never issued"),
+    n("PASSPORT_NUMBER", "fr", "pii_passport_number_de", "Date d'expiration du passeport : 12/03/2031", "expiry date, not a passport number"),
+    p("DOB", "es", "pii_date_of_birth", "Fecha de Nacimiento: ", "23/08/1975"),
+    p("DOB", "es", "pii_date_of_birth", "La titular, nacida el ", "05/09/1990", ", reside en Sevilla.", carrier="prose"),
+    p("CUSTOMER_ID", "es", "pii_customer_id", "Número de cliente: ", "CLI-302948"),
+    p("EMPLOYEE_ID", "es", "pii_employee_id", "Número de Identificación del Empleado: ", "Vn-21203"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "es", "pii_financial_account_number", "Número de cuenta: ", "CTA-20481937"),
+    p("CREDITCARD_CVV", "es", "pii_credit_card_cvv", "Tarjeta 5555 5555 5555 4444, código de seguridad de la tarjeta: ", "318", also=(("CREDITCARD", "5555 5555 5555 4444"),)),
+    p("SSN", "es", "pii_ssn_us", "Número de seguro social: ", "412-56-7834"),
+    p("PASSPORT_NUMBER", "es", "pii_passport_number_de", "Número de pasaporte: ", "P4K7R2M9X"),
+    p("USERNAME", "es", "pii_username", "Nombre de usuario: ", "jgarcia_88"),
+    p("DOB", "es", "pii_date_of_birth", '{"fecha_de_nacimiento": "', "12/10/1980", '"}', carrier="json"),
+    n("DOB", "es", "pii_date_of_birth", "Fecha de nacimiento: 30/02/1990", "impossible calendar date"),
+    n("CUSTOMER_ID", "es", "pii_customer_id", "Número de pedido: PED-302948", "order number, not a customer id"),
+    n("USERNAME", "es", "pii_username", "Introduzca su nombre de usuario y contraseña.", "field name in prose without an assignment", carrier="prose"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "es", "pii_financial_account_number", "Número de cuenta: 000000000", "all-zero placeholder"),
+    n("SSN", "es", "pii_ssn_us", "Número de seguro social: 666-12-3456", "area 666 is never issued"),
+    n("PASSPORT_NUMBER", "es", "pii_passport_number_de", "Fecha de caducidad del pasaporte: 14/05/2030", "expiry date, not a passport number"),
+    p("DOB", "it", "pii_date_of_birth", "Data di Nascita: ", "09/11/1973"),
+    p("DOB", "it", "pii_date_of_birth", "Il sig. Rossi, nato il ", "15/04/1981", ", risiede a Torino.", carrier="prose"),
+    p("CUSTOMER_ID", "it", "pii_customer_id", "Codice cliente: ", "CC-448210"),
+    p("CUSTOMER_ID", "it", "pii_customer_id", "nome;codice_cliente\nRossi;", "CC-77125", carrier="csv"),
+    p("EMPLOYEE_ID", "it", "pii_employee_id", "ID dipendente: ", "D-55012"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "it", "pii_financial_account_number", "Numero di conto: ", "CT-0091827"),
+    p("CREDITCARD_CVV", "it", "pii_credit_card_cvv", "Carta 4111 1111 1111 1111, codice di sicurezza della carta di credito: ", "552", also=(("CREDITCARD", "4111 1111 1111 1111"),)),
+    p("SSN", "it", "pii_ssn_us", "Numero di previdenza sociale: ", "219-45-7781"),
+    p("PASSPORT_NUMBER", "it", "pii_passport_number_de", "Numero di passaporto: ", "YN8K4T7C2"),
+    p("USERNAME", "it", "pii_username", "Nome utente: ", "lbianchi77"),
+    n("DOB", "it", "pii_date_of_birth", "Data di nascita: 32/01/1975", "impossible calendar date"),
+    n("CUSTOMER_ID", "it", "pii_customer_id", "Numero d'ordine: ORD-448210", "order number, not a customer id"),
+    n("USERNAME", "it", "pii_username", "Il nome utente è obbligatorio.", "field name in prose without an assignment", carrier="prose"),
+    n("EMPLOYEE_ID", "it", "pii_employee_id", "ID dipendente: sconosciuto", "no identifier value"),
+    n("SSN", "it", "pii_ssn_us", "Numero di previdenza sociale: 123-00-4567", "group 00 is never issued"),
+    n("CREDITCARD_CVV", "it", "pii_credit_card_cvv", "Carta 4111 1111 1111 1112, codice di sicurezza della carta: 552", "the card number fails Luhn, so no card verification code"),
+    p("DOB", "nl", "pii_date_of_birth", "Geboortedatum: ", "15-12-1992"),
+    p("DOB", "nl", "pii_date_of_birth", "Mevrouw De Vries, geboren op ", "02-03-1987", ", woont in Utrecht.", carrier="prose"),
+    p("CUSTOMER_ID", "nl", "pii_customer_id", "Klantnummer: ", "KL-501873"),
+    p("CUSTOMER_ID", "nl", "pii_customer_id", "Ik ben Rune Johansson, klantnummer ", "CUST14229662", ".", carrier="prose"),
+    p("EMPLOYEE_ID", "nl", "pii_employee_id", "Personeelsnummer: ", "P-30411"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "nl", "pii_financial_account_number", "Bankrekeningnummer: ", "619867267"),
+    p("CREDITCARD_CVV", "nl", "pii_credit_card_cvv", "Creditcard 5555 5555 5555 4444, creditcard-beveiligingscode is ", "713", also=(("CREDITCARD", "5555 5555 5555 4444"),)),
+    p("SSN", "nl", "pii_ssn_us", "Sociaal zekerheidsnummer: ", "523-41-9087"),
+    p("PASSPORT_NUMBER", "nl", "pii_passport_number_de", "Paspoortnummer: ", "NXR4C7T19"),
+    p("USERNAME", "nl", "pii_username", '{"gebruikersnaam": "', "jdevries", '"}', carrier="json"),
+    n("DOB", "nl", "pii_date_of_birth", "Geboortedatum: 29-02-1991", "impossible calendar date (1991 is no leap year)"),
+    n("CUSTOMER_ID", "nl", "pii_customer_id", "Ordernummer: ORD-501873", "order number, not a customer id"),
+    n("USERNAME", "nl", "pii_username", "Kies een gebruikersnaam voor uw account.", "field name in prose without an assignment", carrier="prose"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "nl", "pii_financial_account_number", "Rekeningnummer: 0000000", "all-zero placeholder"),
+    n("CREDITCARD_CVV", "nl", "pii_credit_card_cvv", "Creditcard 5555 5555 5555 4444. Beveiligingscode van de app: 9921", "app security code, not a card security code", also=(("CREDITCARD", "5555 5555 5555 4444"),)),
+    n("PASSPORT_NUMBER", "nl", "pii_passport_number_de", "Vervaldatum paspoort: 30-06-2032", "expiry date, not a passport number"),
+]
+for _row in T26_MULTILINGUAL_FIELD_CASES:
+    PII_CASES[_row["target_label"]].append(_row)
+
+# T04 parenthesized area code (TRIAGE 2026-W42 bucket 2): `pii_phone_us` reports a balanced
+# `(NXX)` as part of the span, `(415) 555-2671` instead of `415) 555-2671`. Hard negatives keep
+# the parentheses but fail the unchanged validator (repeated digits), the 3-3-4 shape or carry
+# no digits. Appended so existing ids stay stable.
+T04_PARENTHESIZED_AREA_CODE_CASES = [
+    p("PHONE", "de", "pii_phone_us", "Rufen Sie unser Büro in Boston unter ", "(617) 555-0183", " an.", carrier="prose", tags=("no_context",)),
+    p("PHONE", "de", "pii_phone_us", "Telefon (USA): ", "(415) 555-2671"),
+    p("PHONE", "de", "pii_phone_us", '{"telefon_us": "', "(303) 499-7111", '"}', carrier="json"),
+    p("PHONE", "de", "pii_phone_us", "Name;Telefon\nMiller;", "(206) 386-4636", "", carrier="csv"),
+    p("PHONE", "de", "pii_phone_us", "", "(312) 744-5000", " ist die Zentrale in Chicago.", carrier="prose", tags=("no_context",)),
+    p("PHONE", "en", "pii_phone_us", "Phone: ", "(212) 736-4410"),
+    p("PHONE", "en", "pii_phone_us", "Office:", "(646)555-0199", "", tags=("ocr",)),
+    p("PHONE", "en", "pii_phone_us", "contact:\n  phone: ", "(720) 913-1311", "\n", carrier="yaml"),
+    p("PHONE", "en", "pii_phone_us", "| Name | Phone |\n|---|---|\n| R. Patel | ", "(213) 485-2121", " |", carrier="table"),
+    p("PHONE", "en", "pii_phone_us", "Placeholder line ", "(212) 555-0100", " in the template.", carrier="prose", tags=("no_context",)),
+    n("PHONE", "de", "pii_phone_us", "Rückfrage: (111) 111-1111", "repeated digits in parenthesized form"),
+    n("PHONE", "de", "pii_phone_us", "Telefon: (XXX) XXX-XXXX", "masked number with parentheses", tags=("obfuscated",)),
+    n("PHONE", "de", "pii_phone_us", "Abschnitt (12) 345-67 der Satzung", "section number, no 3-3-4 shape", carrier="prose"),
+    n("PHONE", "de", "pii_phone_us", "Siehe Anhang (3) auf Seite 12.", "enumeration in parentheses", carrier="prose"),
+    n("PHONE", "de", "pii_phone_us", "Telefon: (000) 000-0000", "all-zero number in parenthesized form"),
+    n("PHONE", "en", "pii_phone_us", "Phone: (999) 999-9999", "repeated digits in parenthesized form"),
+    n("PHONE", "en", "pii_phone_us", "Phone: (XXX) 555-XXXX", "partly masked number", tags=("obfuscated",)),
+    n("PHONE", "en", "pii_phone_us", "See note (2) on page 14.", "enumeration in parentheses", carrier="prose"),
+    n("PHONE", "en", "pii_phone_us", "Area code (415) only, number withheld.", "area code without a subscriber number", carrier="prose"),
+    n("PHONE", "en", "pii_phone_us", "Order (12) 345-678 shipped.", "order number, no 3-3-4 shape", carrier="prose"),
+]
+for _row in T04_PARENTHESIZED_AREA_CODE_CASES:
+    PII_CASES[_row["target_label"]].append(_row)
+
+# T17 phone precision (TRIAGE 2026-W43 buckets 1 + 2): `pii_phone_international` and the `+49`
+# form of `pii_phone_de` do not start inside an EDIFACT element run (`NAD+BY+987654321`) or a
+# SWIFT MT tag (`{86:+33…}`), and `pii_phone_us` needs the area code set off, so zero-padded
+# IDs (`0000012345`) and 6-4 groups (`811228-9874`) are no NANP number. Positives keep `+49 …`,
+# `+1 …` and the placeholder numbers of T01 after a field name, also directly after `:`.
+# Appended so existing ids stay stable.
+T17_PHONE_ELEMENT_RUN_CASES = [
+    p("PHONE", "de", "pii_phone_international", "Tel.:", "+49 30 1234567"),
+    p("PHONE", "de", "pii_phone_de", "Rückruf unter ", "+49 170 1234567", " (Handy)", carrier="prose"),
+    p("PHONE", "de", "pii_phone_us", "Telefon (USA): ", "212-555-0100"),
+    p("PHONE", "de", "pii_phone_international", "Platzhalter in der Vorlage: ", "+1 000-000-0000"),
+    p("PHONE", "de", "pii_phone_de", "Kommunikationssegment: COM+", "0049 30 1234567", ":TE'"),
+    p("PHONE", "de", "pii_phone_us", "Büro New York: ", "(617) 5550183"),
+    p("PHONE", "en", "pii_phone_international", "Phone:", "+1 415 555 2671"),
+    p("PHONE", "en", "pii_phone_international", "Placeholder in the template: ", "+1 000-000-0000"),
+    p("PHONE", "en", "pii_phone_us", "Office: ", "212-555-0147"),
+    p("PHONE", "en", "pii_phone_international", "Contact for this EDI interchange: ", "+44 20 7946 0958", carrier="prose"),
+    p("PHONE", "en", "pii_phone_international", "Mobile (", "+44 7700 900123", ")"),
+    p("PHONE", "en", "pii_phone_us", "Fax: ", "(617) 5550183"),
+    n("PHONE", "de", "pii_phone_international", "Kopfsegment der Übertragung: UNB+UNOC:3+520173321::2+520173321::4+202202150830+1323327835++STA'", "EDIFACT interchange header, element run"),
+    n("PHONE", "de", "pii_phone_international", "Käufer im Lieferavis: NAD+BY+987654321::9'", "EDIFACT party ID after a qualifier"),
+    n("PHONE", "de", "pii_phone_international", "Belegdatum und Betrag: DTM+137:20220215:102'\nMOA+1++520173321'", "EDIFACT date and empty element before an ID"),
+    n("PHONE", "de", "pii_phone_international", "EDIFACT-Position: LIN+1++5310330123:SRV'", "EDIFACT item number after an empty element"),
+    n("PHONE", "de", "pii_phone_us", "X12-Bestellung: ST*850*0000012345~", "zero-padded X12 control number"),
+    n("PHONE", "de", "pii_phone_us", "Schlusssaldo im Kontoauszug: :62F:/0000001234/", "zero-padded account in a SWIFT MT field"),
+    n("PHONE", "de", "pii_phone_us", "Belegnummer: 0012345678", "zero-padded document number"),
+    n("PHONE", "de", "pii_phone_us", "Personnummer: 811228-9874", "Swedish personal number, 6-4 groups"),
+    n("PHONE", "en", "pii_phone_international", "Interchange header: UNB+UNOC:3+520173321::2+520173321::4+202202150830+1323327835++STA'", "EDIFACT interchange header, element run"),
+    n("PHONE", "en", "pii_phone_international", "Buyer party segment: NAD+BY+987654321::9'", "EDIFACT party ID after a qualifier"),
+    n("PHONE", "en", "pii_phone_international", "SWIFT narrative block {86:+330105789456}", "number after a SWIFT MT tag"),
+    n("PHONE", "en", "pii_phone_international", "Line item segment: LIN+1+3553 6548 1210 8739:1:PCE'", "EDIFACT item number after a qualifier"),
+    n("PHONE", "en", "pii_phone_us", "X12 purchase order: ST*850*0000012345~\nSE*13*0000012345~", "zero-padded X12 control numbers"),
+    n("PHONE", "en", "pii_phone_us", "Closing balance field: :62F:/0000001234/", "zero-padded account in a SWIFT MT field"),
+    n("PHONE", "en", "pii_phone_us", '<xbrli:identifier scheme="http://www.sec.gov/CIK">0001234567</xbrli:identifier>', "zero-padded SEC CIK", carrier="xml"),
+    n("PHONE", "en", "pii_phone_us", "Swedish personal identity number: 811228-9874", "Swedish personal number, 6-4 groups"),
+    n("PHONE", "en", "pii_phone_us", "My SSN is 600427-7817, issued in Sweden.", "Swedish personal number, 6-4 groups", carrier="prose"),
+]
+for _row in T17_PHONE_ELEMENT_RUN_CASES:
+    PII_CASES[_row["target_label"]].append(_row)
+
+# T18 phone span boundaries (TRIAGE 2026-W43 bucket 3): a number ends before a line break
+# (`+1-123-456-7890\n\n2` took the item number of the next line), and a NANP trunk prefix
+# (`1-800-123-4567`, `1 (800) 123-4567`) or a `00` international prefix (`001 415 555 2671`)
+# is part of the span; `0049 …` keeps its prefix. Hard negatives are digit groups split by a
+# line break and prefixes without a number. Appended so existing ids stay stable.
+T18_PHONE_BOUNDARY_CASES = [
+    p("PHONE", "de", "pii_phone_us", "Gebührenfreie Hotline: ", "1-800-123-4567"),
+    p("PHONE", "de", "pii_phone_us", "US-Kundendienst unter ", "1 (888) 432-7716", " erreichbar", carrier="prose"),
+    p("PHONE", "de", "pii_phone_us", "Aus Deutschland wählen Sie ", "001 415 555 2671", ".", carrier="prose"),
+    p("PHONE", "de", "pii_phone_international", "Telefon: ", "+49 30 1234567", "\n2. Ansprechpartnerin"),
+    p("PHONE", "de", "pii_phone_de", "Zentrale ", "0049 170 1234567", "\n\n2. Ansprechpartner"),
+    p("PHONE", "de", "pii_phone_international", "Fax ", "+44 20 7946 0958", "\r\n3 Seiten"),
+    p("PHONE", "en", "pii_phone_international", "Call ", "+1-123-456-7890", "\n\n2. Next step"),
+    p("PHONE", "en", "pii_phone_us", "Toll-free: ", "1-800-959-5525"),
+    p("PHONE", "en", "pii_phone_us", "Customer service ", "1 (800) 123-4567", " is open 24/7.", carrier="prose"),
+    p("PHONE", "en", "pii_phone_us", "From abroad dial ", "001-518-640-0854", ".", carrier="prose"),
+    p("PHONE", "en", "pii_phone_us", "Support: ", "1.800.432.7716"),
+    p("PHONE", "en", "pii_phone_de", "Head office ", "0049 170 1234567", "\n\n2. Contact"),
+    n("PHONE", "de", "pii_phone_us", "Lagerbestand je Regal:\n415\n555-2671", "two counts on separate lines"),
+    n("PHONE", "de", "pii_phone_international", "Positionen\n+49 30\n12345", "digit groups split by line breaks"),
+    n("PHONE", "de", "pii_phone_us", "Bestand: 415\r\n555 2671", "two counts on separate lines"),
+    n("PHONE", "de", "pii_phone_us", "Bestellnummer 001-2345-6789", "order number with a 00 lead"),
+    n("PHONE", "de", "pii_phone_us", "Kapitel 1-800 bis 1-900", "section range, trunk-like prefix without a number"),
+    n("PHONE", "en", "pii_phone_us", "Units per shelf:\n212\n555 0100", "two counts on separate lines"),
+    n("PHONE", "en", "pii_phone_international", "Positions\n+49 30\n12345", "digit groups split by line breaks"),
+    n("PHONE", "en", "pii_phone_us", "Codes 212\n\n555.0100", "two codes in separate paragraphs"),
+    n("PHONE", "en", "pii_phone_us", "Part number 001-555-01", "part number with a 00 lead"),
+    n("PHONE", "en", "pii_phone_us", "Version 1.800.12 released", "version string, trunk-like prefix without a number"),
+]
+for _row in T18_PHONE_BOUNDARY_CASES:
     PII_CASES[_row["target_label"]].append(_row)
 
 # DLP golden schema v2 (E13). Every DLP row names the rule it exercises (`rule_id`), the

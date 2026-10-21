@@ -1,0 +1,554 @@
+// SPDX-License-Identifier: GPL-3.0-only
+//! Cross-label overlap resolution in the scored modes (K07).
+//!
+//! In `balanced` and `recall` one value yields one label among the number labels
+//! that compete for the same digits (`overlap::COMPETING_LABELS`: IBAN, card,
+//! account, Steuer-ID, phone). Of two overlapping findings with different labels
+//! the first in this order wins: an IBAN (country code and MOD-97 prove the kind
+//! of value), the longer value (a Luhn-valid part of an IBAN or of a `+49` number
+//! is a coincidence), context that supports its own label (a field name such as
+//! `Telefon:` or `Kontonummer:`, a structural key, a nearby support term), a
+//! checksum, the higher score, the earlier rule. A card-shaped part of a printed
+//! IBAN form (`DE64 7172 …`) yields even when the IBAN's check digits fail. The
+//! loser leaves `evidence_spans`; its `matched_rules` entry stays and names
+//! `overlap` (`reason`, `yields_to`). Strict keeps both labels (decision T07);
+//! labels outside the competing set keep their overlaps. Validators are not
+//! relaxed: the vectors below pass or fail the checksum they name.
+
+use std::collections::BTreeSet;
+use std::path::Path;
+
+use patronus_ark::detectors::pii::{overlap::COMPETING_LABELS, score::PiiMode, validators};
+use patronus_ark::{
+    ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
+};
+use serde::Deserialize;
+use serde_json::Value;
+
+const SCORED: [PiiMode; 2] = [PiiMode::Balanced, PiiMode::Recall];
+
+const REASONS: [&str; 7] = [
+    "iban",
+    "longer_value",
+    "context",
+    "checksum",
+    "score",
+    "rule_order",
+    "iban_form",
+];
+
+fn scanner(mode: PiiMode) -> SecurityGateway {
+    let scanner = SecurityGateway::with_max_level(
+        vec![SecurityCategory::Pii],
+        SecurityLevel::L1,
+        None,
+        false,
+    );
+    scanner.set_execution_gates(ScanGateMatrix {
+        pii_mode: mode,
+        ..Default::default()
+    });
+    scanner
+}
+
+fn scan(scanner: &SecurityGateway, text: &str) -> SecurityScanResult {
+    scanner
+        .scan_category(SecurityCategory::Pii, text)
+        .into_iter()
+        .find(|result| result.model == "native:pii")
+        .expect("native PII result must be present")
+}
+
+fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
+    scan(&scanner(mode), text)
+}
+
+fn matched_rules(result: &SecurityScanResult) -> Vec<Value> {
+    result.layers[0]
+        .details
+        .get("matched_rules")
+        .and_then(|rules| rules.as_array().cloned())
+        .unwrap_or_default()
+}
+
+/// `(label, text)` of every evidence span.
+fn spans(text: &str, mode: PiiMode) -> Vec<(String, String)> {
+    pii_result(text, mode)
+        .evidence_spans
+        .into_iter()
+        .map(|span| (span.label, span.text))
+        .collect()
+}
+
+fn owned(spans: &[(&str, &str)]) -> Vec<(String, String)> {
+    spans
+        .iter()
+        .map(|(label, text)| (label.to_string(), text.to_string()))
+        .collect()
+}
+
+/// The `overlap` object of the `matched_rules` entry of `rule_id` on `value`.
+fn overlap_of(text: &str, mode: PiiMode, rule_id: &str, value: &str) -> Value {
+    let rules = matched_rules(&pii_result(text, mode));
+    let rule = rules
+        .iter()
+        .find(|rule| {
+            rule["rule_id"] == rule_id
+                && text.get(
+                    rule["start_byte"].as_u64().unwrap() as usize
+                        ..rule["end_byte"].as_u64().unwrap() as usize,
+                ) == Some(value)
+        })
+        .unwrap_or_else(|| {
+            panic!(
+                "{rule_id} missing at the expected span ({} matched rules)",
+                rules.len()
+            )
+        });
+    rule["overlap"].clone()
+}
+
+/// Strict reports `label` on `value` next to the winner: the probe exercises the
+/// resolution (decision T07 keeps strict bit-identical).
+fn assert_strict_overlap(text: &str, label: &str, value: &str) {
+    assert!(
+        spans(text, PiiMode::Strict).contains(&(label.into(), value.into())),
+        "strict lost {label} ({} chars in a {}-char text)",
+        value.chars().count(),
+        text.chars().count()
+    );
+}
+
+/// Valid IBANs whose BBAN digits pass Luhn: strict reports a card inside them.
+const IBANS_WITH_LUHN_DIGITS: [(&str, &str); 4] = [
+    ("DE18 4306 0967 1234 5678 00", "4306 0967 1234 5678 00"),
+    ("DE60 5393 3633 8750 0474 39", "5393 3633 8750 0474 39"),
+    ("DE13 3380 1412 6906 0443 19", "3380 1412 6906 0443 19"),
+    ("DE21 5873 5570 6360 6071 04", "5873 5570 6360 6071 04"),
+];
+
+/// IBAN forms whose check digits fail, with Luhn-valid BBAN digits.
+const IBAN_FORMS_WITH_LUHN_DIGITS: [(&str, &str); 6] = [
+    ("DE64 7172 7958 4924 3372 11", "7172 7958 4924 3372 11"),
+    ("DE34 6659 4134 6836 7322 13", "6659 4134 6836 7322 13"),
+    ("DE47 9570 1831 6586 8923 67", "9570 1831 6586 8923 67"),
+    ("AT77 5761 4565 6741 3978", "5761 4565 6741 3978"),
+    ("AT84 8900 8717 3455 8933", "8900 8717 3455 8933"),
+    // Valid, but grouped IBANs outside DE are not reported yet (T05).
+    ("AT61 1904 3002 3457 3201", "1904 3002 3457 3201"),
+];
+
+/// Phone numbers whose digits after `+` pass Luhn.
+const PHONES_WITH_LUHN_DIGITS: [(&str, &str); 4] = [
+    ("+49 89 2019 4400", "49 89 2019 4400"),
+    ("+49 69 3361 9496", "49 69 3361 9496"),
+    ("+44 20 6642 3850", "44 20 6642 3850"),
+    ("+49 89 4613 8662", "49 89 4613 8662"),
+];
+
+#[test]
+fn checksum_vectors_pass_or_fail_what_they_name() {
+    for (iban, digits) in IBANS_WITH_LUHN_DIGITS {
+        assert!(validators::mod97(iban), "IBAN vector fails mod97");
+        assert!(validators::luhn(digits), "{digits}");
+    }
+    for (form, digits) in IBAN_FORMS_WITH_LUHN_DIGITS {
+        assert_eq!(validators::mod97(form), form.starts_with("AT61"), "{form}");
+        assert!(validators::luhn(digits), "{digits}");
+    }
+    for (_, digits) in PHONES_WITH_LUHN_DIGITS {
+        assert!(validators::luhn(digits), "{digits}");
+    }
+    for value in [
+        "0151 2345 6789 01",
+        "0157-09-316-8811",
+        "4111-1111-1111-1111",
+        "5555-5555-5555-4444",
+    ] {
+        assert!(validators::luhn(value), "{value}");
+    }
+    // Invalid vectors: one changed digit breaks each checksum.
+    assert!(!validators::mod97("DE18 4306 0967 1234 5678 01"));
+    assert!(!validators::luhn("49 89 2019 4401"));
+    assert!(!validators::luhn("0151 2345 6789 02"));
+}
+
+#[test]
+fn competing_labels_are_the_number_labels() {
+    let labels: BTreeSet<_> = COMPETING_LABELS.into_iter().collect();
+    assert_eq!(
+        labels,
+        BTreeSet::from([
+            "CREDITCARD",
+            "FINANCIAL_ACCOUNT_NUMBER",
+            "IBAN",
+            "PHONE",
+            "STEUERID"
+        ])
+    );
+}
+
+#[test]
+fn an_iban_keeps_the_luhn_valid_digits_inside_it() {
+    for (iban, digits) in IBANS_WITH_LUHN_DIGITS {
+        let text = format!("IBAN: {iban}");
+        assert_strict_overlap(&text, "CREDITCARD", digits);
+        for mode in SCORED {
+            assert_eq!(spans(&text, mode), owned(&[("IBAN", iban)]), "{mode:?}");
+            let overlap = overlap_of(&text, mode, "pii_credit_card", digits);
+            assert_eq!(overlap["reason"], "iban", "{mode:?}");
+            assert_eq!(overlap["yields_to"], "IBAN", "{mode:?}");
+        }
+    }
+}
+
+#[test]
+fn an_iban_outranks_the_account_field_that_holds_it() {
+    for (text, iban, account) in [
+        (
+            "Bank account: GB82WEST12345698765432",
+            "GB82WEST12345698765432",
+            "GB82WEST12345698765432",
+        ),
+        (
+            "Kontonummer: DE89 3704 0044 0532 0130 00",
+            "DE89 3704 0044 0532 0130 00",
+            "DE89",
+        ),
+    ] {
+        assert_strict_overlap(text, "FINANCIAL_ACCOUNT_NUMBER", account);
+        for mode in SCORED {
+            assert_eq!(spans(text, mode), owned(&[("IBAN", iban)]), "{mode:?}");
+            let overlap = overlap_of(text, mode, "pii_financial_account_number", account);
+            assert_eq!(overlap["reason"], "iban", "{mode:?}: {text}");
+            assert_eq!(overlap["yields_to"], "IBAN", "{mode:?}: {text}");
+        }
+    }
+}
+
+#[test]
+fn a_phone_number_keeps_its_digits_that_pass_luhn() {
+    for (phone, digits) in PHONES_WITH_LUHN_DIGITS {
+        let text = format!("Rückruf unter {phone}");
+        assert_strict_overlap(&text, "CREDITCARD", digits);
+        for mode in SCORED {
+            assert_eq!(spans(&text, mode), owned(&[("PHONE", phone)]), "{mode:?}");
+            let overlap = overlap_of(&text, mode, "pii_credit_card", digits);
+            assert_eq!(overlap["reason"], "longer_value", "{mode:?}: {text}");
+            assert_eq!(overlap["yields_to"], "PHONE", "{mode:?}: {text}");
+        }
+    }
+}
+
+#[test]
+fn supporting_context_outranks_a_bare_checksum_on_the_same_value() {
+    for (text, label, rule_id, value) in [
+        (
+            "Telefon: 0151 2345 6789 01",
+            "PHONE",
+            "pii_phone_de_national_context",
+            "0151 2345 6789 01",
+        ),
+        (
+            "Mobile: 0151 2345 6789 01",
+            "PHONE",
+            "pii_phone_de_national_context",
+            "0151 2345 6789 01",
+        ),
+        (
+            "Kontonummer: 4111-1111-1111-1111",
+            "FINANCIAL_ACCOUNT_NUMBER",
+            "pii_financial_account_number",
+            "4111-1111-1111-1111",
+        ),
+        (
+            "Account number: 5555-5555-5555-4444",
+            "FINANCIAL_ACCOUNT_NUMBER",
+            "pii_financial_account_number",
+            "5555-5555-5555-4444",
+        ),
+        (
+            "The assessment is scheduled via telephone at 0157-09-316-8811.",
+            "PHONE",
+            "pii_phone_de_national_proximity",
+            "0157-09-316-8811",
+        ),
+        (
+            "Rückruf bitte unter 0157-09-316-8811.",
+            "PHONE",
+            "pii_phone_de_national_proximity",
+            "0157-09-316-8811",
+        ),
+    ] {
+        assert_strict_overlap(text, "CREDITCARD", value);
+        for mode in SCORED {
+            let result = pii_result(text, mode);
+            let kept: Vec<_> = result
+                .evidence_spans
+                .iter()
+                .map(|span| (span.label.clone(), span.text.clone()))
+                .collect();
+            assert_eq!(kept, owned(&[(label, value)]), "{mode:?}");
+            // The card scored higher (0.75); the result now reports the winner.
+            assert_eq!(result.class_name, label, "{mode:?}: {text}");
+            assert_eq!(
+                result.confidence, result.evidence_spans[0].score,
+                "{mode:?}: {text}"
+            );
+            assert!(
+                matched_rules(&result)
+                    .iter()
+                    .any(|rule| rule["rule_id"] == rule_id && rule.get("overlap").is_none()),
+                "{mode:?}: {text}"
+            );
+            let overlap = overlap_of(text, mode, "pii_credit_card", value);
+            assert_eq!(overlap["reason"], "context", "{mode:?}: {text}");
+            assert_eq!(overlap["yields_to"], label, "{mode:?}: {text}");
+        }
+    }
+}
+
+#[test]
+fn card_digits_inside_an_iban_form_are_no_card() {
+    for (form, digits) in IBAN_FORMS_WITH_LUHN_DIGITS {
+        for text in [
+            format!("IBAN: {form}"),
+            format!("Wire to {form} bounced."),
+            format!("{{\"iban\": \"{form}\"}}"),
+        ] {
+            assert_strict_overlap(&text, "CREDITCARD", digits);
+            for mode in SCORED {
+                let result = pii_result(&text, mode);
+                assert!(
+                    result.evidence_spans.is_empty(),
+                    "{mode:?}: {text}: {:?}",
+                    result.evidence_spans
+                );
+                assert_eq!(result.class_name, "safe", "{mode:?}: {text}");
+                assert_eq!(result.confidence, 1.0, "{mode:?}: {text}");
+                let overlap = overlap_of(&text, mode, "pii_credit_card", digits);
+                assert_eq!(overlap["reason"], "iban_form", "{mode:?}: {text}");
+                assert!(overlap.get("yields_to").is_none(), "{mode:?}: {text}");
+            }
+        }
+    }
+}
+
+#[test]
+fn an_account_value_at_the_start_of_an_iban_form_yields() {
+    // A failing grouped IBAN under an account field: the account rule captures only the country
+    // code and check digits, which start the printed form and are part of it, not an account number.
+    for text in [
+        "Bank account: DE00 1234 5678 9012 3456 78",
+        "Account number: GB00 WEST 1234 5698 7654 32",
+    ] {
+        for mode in SCORED {
+            let found = spans(text, mode);
+            assert!(
+                found
+                    .iter()
+                    .all(|(label, _)| label != "FINANCIAL_ACCOUNT_NUMBER"),
+                "{mode:?}: {found:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn cards_outside_an_iban_form_stay_cards() {
+    for text in [
+        "Karte 4111 1111 1111 1111",
+        "Card DE 4111 1111 1111 1111",
+        "Kartennummer: 4111 1111 1111 1111 (DE12)",
+        "Ref DE12-4111 1111 1111 1111",
+        "Card no. 5555 5555 5555 4444 for AB12",
+    ] {
+        for mode in SCORED {
+            let found = spans(text, mode);
+            assert!(
+                found.iter().any(|(label, value)| label == "CREDITCARD"
+                    && (value == "4111 1111 1111 1111" || value == "5555 5555 5555 4444")),
+                "{mode:?}: {text}: {found:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn separate_values_keep_their_findings() {
+    let text = "Karte 4111 1111 1111 1111, IBAN DE60 5393 3633 8750 0474 39, Tel. +49 69 3361 9496";
+    for mode in SCORED {
+        assert_eq!(
+            spans(text, mode),
+            owned(&[
+                ("CREDITCARD", "4111 1111 1111 1111"),
+                ("IBAN", "DE60 5393 3633 8750 0474 39"),
+                ("PHONE", "+49 69 3361 9496"),
+            ]),
+            "{mode:?}"
+        );
+    }
+}
+
+#[test]
+fn labels_outside_the_competing_set_keep_their_overlaps() {
+    let text = "Username: ada@example.com";
+    for mode in SCORED {
+        assert_eq!(
+            spans(text, mode),
+            owned(&[
+                ("EMAIL", "ada@example.com"),
+                ("USERNAME", "ada@example.com")
+            ]),
+            "{mode:?}"
+        );
+    }
+}
+
+#[test]
+fn strict_keeps_both_labels() {
+    // Decision T07: strict stays bit-identical; it never names `overlap`.
+    for text in [
+        "IBAN: DE18 4306 0967 1234 5678 00",
+        "Bank account: GB82WEST12345698765432",
+        "Rückruf unter +49 89 2019 4400",
+        "IBAN: DE64 7172 7958 4924 3372 11",
+    ] {
+        let result = pii_result(text, PiiMode::Strict);
+        assert!(
+            matched_rules(&result)
+                .iter()
+                .all(|rule| rule.get("overlap").is_none()),
+            "{text}"
+        );
+    }
+}
+
+#[derive(Deserialize)]
+struct Row {
+    text: String,
+}
+
+fn golden_texts() -> Vec<String> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../python/patronus_ark/benchmark_data/pii_l1.jsonl");
+    std::fs::read_to_string(path)
+        .expect("pii_l1.jsonl must exist")
+        .lines()
+        .map(|line| serde_json::from_str::<Row>(line).expect("golden row").text)
+        .collect()
+}
+
+/// In the scored modes no two findings of different competing labels overlap,
+/// and every `overlap` entry names a reason and a surviving winner.
+fn assert_resolved(scanner: &SecurityGateway, text: &str, mode: PiiMode) {
+    let result = scan(scanner, text);
+    let spans = &result.evidence_spans;
+    for (index, a) in spans.iter().enumerate() {
+        for b in &spans[index + 1..] {
+            let competing = COMPETING_LABELS.contains(&a.label.as_str())
+                && COMPETING_LABELS.contains(&b.label.as_str())
+                && a.label != b.label;
+            assert!(
+                !(competing && a.start_byte < b.end_byte && b.start_byte < a.end_byte),
+                "{mode:?}: {text:?}: {} {:?} overlaps {} {:?}",
+                a.label,
+                a.text,
+                b.label,
+                b.text
+            );
+        }
+    }
+    for rule in matched_rules(&result) {
+        let Some(overlap) = rule.get("overlap") else {
+            continue;
+        };
+        let reason = overlap["reason"].as_str().unwrap_or_default();
+        assert!(REASONS.contains(&reason), "{mode:?}: {text:?}: {rule}");
+        let (start, end) = (
+            rule["start_byte"].as_u64().unwrap() as usize,
+            rule["end_byte"].as_u64().unwrap() as usize,
+        );
+        if reason == "iban_form" {
+            continue;
+        }
+        let winner = overlap["yields_to"].as_str().unwrap_or_default();
+        assert!(
+            spans
+                .iter()
+                .any(|span| span.label == winner && span.start_byte < end && start < span.end_byte),
+            "{mode:?}: {text:?}: {rule}: no {winner} finding"
+        );
+    }
+}
+
+#[test]
+fn no_competing_overlap_remains_on_any_golden() {
+    let texts = golden_texts();
+    assert!(texts.len() > 800);
+    for mode in SCORED {
+        let scanner = scanner(mode);
+        for text in &texts {
+            assert_resolved(&scanner, text, mode);
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct Probe {
+    category: String,
+    rule_id: String,
+    #[serde(default)]
+    overlap: Option<OverlapProbe>,
+}
+
+#[derive(Deserialize)]
+struct OverlapProbe {
+    de: String,
+    en: String,
+}
+
+#[test]
+fn bilingual_overlap_probes_keep_their_rule() {
+    let probes: Vec<Probe> =
+        serde_json::from_str(include_str!("fixtures/l1_bilingual_rules.json")).unwrap();
+    let mut probed = 0;
+    for probe in probes.iter().filter(|probe| probe.category == "pii") {
+        let Some(overlap) = &probe.overlap else {
+            continue;
+        };
+        assert_ne!(overlap.de, overlap.en, "translate {}", probe.rule_id);
+        for text in [&overlap.de, &overlap.en] {
+            let strict = pii_result(text, PiiMode::Strict);
+            let labels: BTreeSet<_> = strict
+                .evidence_spans
+                .iter()
+                .map(|span| span.label.as_str())
+                .collect();
+            assert!(
+                labels.len() > 1,
+                "{}: {text:?} has no overlap",
+                probe.rule_id
+            );
+            for mode in SCORED {
+                let scanner = scanner(mode);
+                assert_resolved(&scanner, text, mode);
+                let result = scan(&scanner, text);
+                assert_eq!(result.evidence_spans.len(), 1, "{mode:?}: {text:?}");
+                let span = &result.evidence_spans[0];
+                assert!(
+                    matched_rules(&result).iter().any(|rule| {
+                        rule["rule_id"] == probe.rule_id.as_str()
+                            && rule["start_byte"] == span.start_byte
+                            && rule["end_byte"] == span.end_byte
+                            && rule.get("overlap").is_none()
+                    }),
+                    "{mode:?}: {}: {text:?}",
+                    probe.rule_id
+                );
+            }
+        }
+        probed += 1;
+    }
+    assert!(probed >= 5, "only {probed} overlap probes");
+}
