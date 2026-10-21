@@ -25,6 +25,8 @@ const REGISTRY_ORDER: &[&str] = &[
     "dlp_github_token",
     "dlp_github_pat",
     "dlp_gitlab_pat",
+    "dlp_gitlab_token",
+    "dlp_gitlab_oauth_secret",
     "dlp_npm_token",
     "dlp_stripe_key",
     "dlp_stripe_webhook",

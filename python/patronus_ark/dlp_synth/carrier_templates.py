@@ -1277,6 +1277,11 @@ PROFILES = {
     "dlp_github_token": Profile("vcs.github.token", "SECRET_TOKEN", "secret", "github_token", "GitHub token", "GitHub-Token"),
     "dlp_github_pat": Profile("vcs.github.fine_grained_pat", "SECRET_TOKEN", "secret", "gh_token", "GitHub fine-grained token", "GitHub-Fine-grained-Token"),
     "dlp_gitlab_pat": Profile("vcs.gitlab.pat", "SECRET_TOKEN", "secret", "gitlab_token", "GitLab access token", "GitLab-Zugriffstoken"),
+    "dlp_gitlab_token": Profile("vcs.gitlab.token", "SECRET_TOKEN", "secret", "gitlab_deploy_token", "GitLab deploy token", "GitLab-Deploy-Token"),
+    "dlp_gitlab_oauth_secret": Profile(
+        "vcs.gitlab.oauth_app_secret", "API_KEY", "secret", "gitlab_oauth_secret", "GitLab OAuth application secret",
+        "GitLab-OAuth-Anwendungs-Secret",
+    ),
     "dlp_npm_token": Profile("registry.npm.access_token", "SECRET_TOKEN", "secret", "npm_token", "npm token", "npm-Token"),
     "dlp_stripe_key": Profile("payment.stripe.secret_key", "PAYMENT_KEY", "secret", "stripe_secret_key", "Stripe secret key", "Stripe-Secret-Key"),
     "dlp_stripe_webhook": Profile("payment.stripe.webhook_secret", "PAYMENT_KEY", "secret", "stripe_webhook_secret", "Stripe webhook secret", "Stripe-Webhook-Secret"),

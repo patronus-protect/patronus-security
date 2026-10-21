@@ -113,6 +113,14 @@ B64URL = ALNUM + "-_"
 B64 = ALNUM + "+/"
 HEX = "0123456789abcdef"
 DIGITS = "0123456789"
+BASE36 = DIGITS + "abcdefghijklmnopqrstuvwxyz"
+
+
+def gitlab_routable(value, prefix, length):
+    """GitLab routable token (F04, gitleaks gitlab-pat-routable): `prefix`, a base64url
+    payload of `length`, a dot, a two-character version and seven base36 characters."""
+    head, _, tail = value.rpartition(".")
+    return prefixed(prefix, B64URL, length)(head) and len(tail) == 9 and set(tail) <= set(BASE36)
 
 # One independent check per format-valid generator (shape_only generators excluded).
 CHECKS = {
@@ -138,6 +146,21 @@ CHECKS = {
     "github_ghr_token": lambda v: checks.has_valid_crc32_suffix(v, "ghr_"),
     "github_fine_grained_pat": lambda v: prefixed("github_pat_", ALNUM + "_", 82)(v) and v[33] == "_",
     "gitlab_pat": prefixed("glpat-", B64URL, 20),
+    "gitlab_pat_routable": lambda v: gitlab_routable(v, "glpat-", 38),
+    "gitlab_deploy_token": prefixed("gldt-", B64URL, 20),
+    "gitlab_runner_token": prefixed("glrt-", B64URL, 20),
+    "gitlab_runner_token_routable": lambda v: v[6] in DIGITS and v[7] == "_" and gitlab_routable(v[8:], "", 36)
+    and v.startswith("glrt-t"),
+    "gitlab_runner_registration_token": prefixed("GR1348941", B64URL, 20),
+    "gitlab_trigger_token": prefixed("glptt-", HEX, 40),
+    "gitlab_feed_token": prefixed("glft-", B64URL, 20),
+    "gitlab_incoming_mail_token": prefixed("glimt-", B64URL, 25),
+    "gitlab_agent_token": prefixed("glagent-", B64URL, 50),
+    "gitlab_cicd_job_token": lambda v: v.startswith("glcbt-") and v[8] == "_" and prefixed("", ALNUM, 2)(v[6:8])
+    and prefixed("", B64URL, 20)(v[9:]),
+    "gitlab_scim_token": prefixed("glsoat-", B64URL, 20),
+    "gitlab_feature_flag_token": prefixed("glffct-", B64URL, 20),
+    "gitlab_oauth_app_secret": prefixed("gloas-", B64URL, 64),
     "npm_access_token": lambda v: checks.has_valid_crc32_suffix(v, "npm_"),
     "stripe_secret_live": prefixed("sk_live_", ALNUM, 24),
     "stripe_restricted_test": prefixed("rk_test_", ALNUM, 24),
@@ -200,6 +223,13 @@ LOOKALIKE_FAILURES = {
     "github_ghp_long": lambda v: len(v) == 40,
     "github_fine_grained_pat_short": lambda v: len(v) == 93,
     "github_fine_grained_pat_long": lambda v: len(v) == 93,
+    # F04
+    "npm_bad_crc": lambda v: checks.has_valid_crc32_suffix(v, "npm_"),
+    "npm_short": lambda v: len(v) == 40,
+    "npm_long": lambda v: len(v) == 40,
+    "gitlab_pat_long": lambda v: len(v) == 26 or gitlab_routable(v, "glpat-", len(v) - 16),
+    "gitlab_deploy_token_short": lambda v: len(v) == 25,
+    "gitlab_trigger_token_upper_hex": prefixed("glptt-", HEX, 40),
 }
 
 

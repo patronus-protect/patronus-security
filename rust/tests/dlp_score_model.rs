@@ -406,8 +406,8 @@ fn score_is_base_plus_validator_strength_plus_context() {
             ),
             // Without a field name: recall keeps every finding without counter
             // context, and a nearer counter term drops every provider token
-            // from balanced; only a complete PEM block and a GitHub token with
-            // a valid CRC32 (F03) outweigh it.
+            // from balanced; only a complete PEM block and GitHub and npm
+            // tokens with a valid CRC32 (F03, F04) outweigh it.
             ContextSource::Proximity => {
                 assert!(
                     score::rule_score(pattern) >= recall,
@@ -416,7 +416,10 @@ fn score_is_base_plus_validator_strength_plus_context() {
                 );
                 assert_eq!(
                     counter < balanced,
-                    !matches!(pattern.name, "dlp_private_key_block" | "dlp_github_token"),
+                    !matches!(
+                        pattern.name,
+                        "dlp_private_key_block" | "dlp_github_token" | "dlp_npm_token"
+                    ),
                     "{}",
                     pattern.name
                 );

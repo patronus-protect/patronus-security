@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "note": "Maps every dlp_* rule in DLP_PATTERNS to the generators whose values it must find. Each probe is a minimal carrier; the rule alone must report exactly the <<secret:0>> span. shape_only generators predate E03 and are format-shaped without a valid checksum or structure; they stay for the E02 goldens. weak generators are real values the rule must keep reporting: low-variety values outside example context (T06: repeated chunk, sequential run) and placeholder-like shapes (T07: SCREAMING_SNAKE without a placeholder word, leading $ with digits); carriers do not use them. lookalike generators (F03) are values in the rule's shape with a wrong check value or length that the rule must not report; goldens use them as hard negatives in carriers without key context. Content rules have no secret value and are covered by carrier templates (E04).",
+  "note": "Maps every dlp_* rule in DLP_PATTERNS to the generators whose values it must find. Each probe is a minimal carrier; the rule alone must report exactly the <<secret:0>> span. shape_only generators predate E03 and are format-shaped without a valid checksum or structure; they stay for the E02 goldens. weak generators are real values the rule must keep reporting: low-variety values outside example context (T06: repeated chunk, sequential run) and placeholder-like shapes (T07: SCREAMING_SNAKE without a placeholder word, leading $ with digits); carriers do not use them. lookalike generators (F03, F04) are values in the rule's shape with a wrong check value or length that the rule must not report; goldens use them as hard negatives in carriers without key context. Content rules have no secret value and are covered by carrier templates (E04).",
   "rules": {
     "dlp_anthropic_key": {
       "generators": ["anthropic_api_key", "anthropic_admin_key"],
@@ -68,11 +68,22 @@
       "probes": ["GH_TOKEN=<<secret:0>>", "Neuer Fine-grained Token: <<secret:0>>"]
     },
     "dlp_gitlab_pat": {
-      "generators": ["gitlab_pat"],
+      "generators": ["gitlab_pat", "gitlab_pat_routable"],
+      "lookalike": ["gitlab_pat_long"],
       "probes": ["GITLAB_TOKEN=<<secret:0>>", "curl --header \"PRIVATE-TOKEN: <<secret:0>>\" https://gitlab.example.com/api/v4/projects"]
+    },
+    "dlp_gitlab_token": {
+      "generators": ["gitlab_deploy_token", "gitlab_runner_token", "gitlab_runner_token_routable", "gitlab_runner_registration_token", "gitlab_trigger_token", "gitlab_feed_token", "gitlab_incoming_mail_token", "gitlab_agent_token", "gitlab_cicd_job_token", "gitlab_scim_token", "gitlab_feature_flag_token"],
+      "lookalike": ["gitlab_deploy_token_short", "gitlab_trigger_token_upper_hex"],
+      "probes": ["GITLAB_TOKEN=<<secret:0>>", "Das GitLab-Token <<secret:0>> stand im Build-Log."]
+    },
+    "dlp_gitlab_oauth_secret": {
+      "generators": ["gitlab_oauth_app_secret"],
+      "probes": ["GITLAB_OAUTH_CLIENT_SECRET=<<secret:0>>", "{\"gitlab\": {\"app_id\": \"4711\", \"secret\": \"<<secret:0>>\"}}"]
     },
     "dlp_npm_token": {
       "generators": ["npm_access_token"],
+      "lookalike": ["npm_bad_crc", "npm_short", "npm_long"],
       "probes": ["//registry.npmjs.org/:_authToken=<<secret:0>>", "NPM_TOKEN=<<secret:0>>"]
     },
     "dlp_stripe_key": {
