@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! Generic credentials: tokens, credential assignments, auth headers,
 //! cookies and connection strings.
-use crate::detectors::dlp::dlp::{DlpPattern, RuleMeta, ValidatorStrength};
+use crate::detectors::dlp::dlp::{DlpPattern, RuleMeta, SecretSubtype, ValidatorStrength};
 
 pub(super) const RULES: &[DlpPattern] = &[
     // ── Generische Credential-Patterns ───────────────────────────────────────
@@ -13,7 +13,8 @@ pub(super) const RULES: &[DlpPattern] = &[
         span_group: None,
         base_score: 45,
         meta: RuleMeta::new(ValidatorStrength::Format, "gitleaks:jwt", &["ey"])
-            .with_min_entropy(3.0),
+            .with_min_entropy(3.0)
+            .with_subtype(SecretSubtype::AccessToken),
     },
     DlpPattern {
         name: "dlp_credential_in_url",
@@ -26,7 +27,8 @@ pub(super) const RULES: &[DlpPattern] = &[
             ValidatorStrength::None,
             "ark",
             &["passw", "kennwort", "secret", "geheimnis", "token", "api"],
-        ),
+        )
+        .with_subtype(SecretSubtype::AuthUrl),
     },
     DlpPattern {
         name: "dlp_env_var_secret",
@@ -39,7 +41,8 @@ pub(super) const RULES: &[DlpPattern] = &[
             ValidatorStrength::None,
             "ark",
             &["secret", "passw", "kennwort", "geheimnis", "token", "api"],
-        ),
+        )
+        .with_subtype(SecretSubtype::GenericSecret),
     },
     // ── Generic credentials / connection strings ───────────────────────────
     DlpPattern {
@@ -53,7 +56,8 @@ pub(super) const RULES: &[DlpPattern] = &[
             ValidatorStrength::None,
             "ark",
             &["passw", "kennwort", "pwd"],
-        ),
+        )
+        .with_subtype(SecretSubtype::Password),
     },
     DlpPattern {
         name: "dlp_generic_credential_assignment",
@@ -66,7 +70,8 @@ pub(super) const RULES: &[DlpPattern] = &[
             ValidatorStrength::None,
             "ark",
             &["api", "token", "secret", "key", "schl", "geheimnis"],
-        ),
+        )
+        .with_subtype(SecretSubtype::GenericSecret),
     },
     DlpPattern {
         name: "dlp_bearer_token",
@@ -75,7 +80,8 @@ pub(super) const RULES: &[DlpPattern] = &[
         validator: Some(is_secret_value),
         span_group: Some(1),
         base_score: 35,
-        meta: RuleMeta::new(ValidatorStrength::None, "ark", &["bearer"]),
+        meta: RuleMeta::new(ValidatorStrength::None, "ark", &["bearer"])
+            .with_subtype(SecretSubtype::AccessToken),
     },
     DlpPattern {
         name: "dlp_basic_auth",
@@ -84,7 +90,8 @@ pub(super) const RULES: &[DlpPattern] = &[
         validator: Some(is_secret_value),
         span_group: Some(1),
         base_score: 35,
-        meta: RuleMeta::new(ValidatorStrength::None, "ark", &["authorization"]),
+        meta: RuleMeta::new(ValidatorStrength::None, "ark", &["authorization"])
+            .with_subtype(SecretSubtype::Password),
     },
     DlpPattern {
         name: "dlp_signed_url_signature",
@@ -93,7 +100,8 @@ pub(super) const RULES: &[DlpPattern] = &[
         validator: Some(is_secret_value),
         span_group: Some(1),
         base_score: 25,
-        meta: RuleMeta::new(ValidatorStrength::None, "ark", &["sig"]),
+        meta: RuleMeta::new(ValidatorStrength::None, "ark", &["sig"])
+            .with_subtype(SecretSubtype::Signature),
     },
     DlpPattern {
         name: "dlp_session_cookie",
@@ -102,7 +110,8 @@ pub(super) const RULES: &[DlpPattern] = &[
         validator: Some(is_secret_value),
         span_group: Some(1),
         base_score: 30,
-        meta: RuleMeta::new(ValidatorStrength::None, "ark", &["cookie"]),
+        meta: RuleMeta::new(ValidatorStrength::None, "ark", &["cookie"])
+            .with_subtype(SecretSubtype::SessionToken),
     },
     DlpPattern {
         name: "dlp_csrf_token",
@@ -111,7 +120,8 @@ pub(super) const RULES: &[DlpPattern] = &[
         validator: Some(is_secret_value),
         span_group: Some(1),
         base_score: 25,
-        meta: RuleMeta::new(ValidatorStrength::None, "ark", &["csrf", "xsrf"]),
+        meta: RuleMeta::new(ValidatorStrength::None, "ark", &["csrf", "xsrf"])
+            .with_subtype(SecretSubtype::SessionToken),
     },
 ];
 
@@ -123,7 +133,8 @@ pub(super) const URL_USERINFO_RULES: &[DlpPattern] = &[DlpPattern {
     validator: Some(is_secret_value),
     span_group: Some(1),
     base_score: 35,
-    meta: RuleMeta::new(ValidatorStrength::None, "ark", &["://"]),
+    meta: RuleMeta::new(ValidatorStrength::None, "ark", &["://"])
+        .with_subtype(SecretSubtype::Password),
 }];
 
 fn is_unredacted_url_credential(candidate: &str) -> bool {

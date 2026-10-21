@@ -33,7 +33,10 @@ See [Models & the NTDB format](models-and-ntdb.md).
 assets** and are always available offline. `pii` combines checksum/structure validators with
 field anchors for contact, payment, government, account, and person identifiers. `dlp` detects
 credentials and secrets as well as gateable business identifiers, internal metrics, source code,
-SQL, dumps, logs, and risky operations. PII and regex-based DLP findings populate
+SQL, dumps, logs, and risky operations. Credential/secret findings keep their entity group
+(`API_KEY`, `SECRET_TOKEN`, `CREDENTIAL` …) as label and name a `subtype` within it, such as
+`password`, `access_token`, `auth_url` or `private_key` (see
+[DLP taxonomy](../reference/result-schema.md#dlp-taxonomy)). PII and regex-based DLP findings populate
 `evidence_spans` with original-text offsets; native DLP operation and MCP rules also retain
 source-bound components and finding spans.
 Both can publish localized, non-finding `l1_anchors` with `explain: true`. The shared Rust/Python/API default enables only

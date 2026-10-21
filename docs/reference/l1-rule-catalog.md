@@ -108,7 +108,7 @@ Value-capturing credential rules (assignments, URL parameters and userinfo, sign
 
 Every credential/secret rule also drops the vendor-documented example values of `research/dlp/documented_values.yaml` (stored as SHA-256 of the normalized value) and JWTs with the documented example claims of jwt.io and RFC 7519; publicly known test keys listed there (Hardhat/Anvil default accounts) stay findings with `severity` `test`.
 
-Each rule carries metadata v2, and every entry of `matched_rules` in the layer details reports it: `provider` for provider-bound formats, `validator_strength` (`checksum`: check digits verified; `structure`: decoded or parsed structure verified; `format`: fixed prefix, alphabet, length or syntax shape; `none`: keyword or context only), `source_ref` (`gitleaks:<rule-id>`, vendor or specification URL, or `ark` for in-house rules; see `research/dlp/rule_sources.yaml`) and, for credential/secret rules, `severity` (`test` for provider test/sandbox credentials such as Stripe `sk_test_`, otherwise `live`). Provider, key and JWT rules drop values whose Shannon entropy is below 3.0 bits per character.
+Each rule carries metadata v2, and every entry of `matched_rules` in the layer details reports it: `provider` for provider-bound formats, `validator_strength` (`checksum`: check digits verified; `structure`: decoded or parsed structure verified; `format`: fixed prefix, alphabet, length or syntax shape; `none`: keyword or context only), `source_ref` (`gitleaks:<rule-id>`, vendor or specification URL, or `ark` for in-house rules; see `research/dlp/rule_sources.yaml`) and, for credential/secret rules, `severity` (`test` for provider test/sandbox credentials such as Stripe `sk_test_`, otherwise `live`) and `subtype` (taxonomy v2, K09: what the value is within its group, see [DLP taxonomy](result-schema.md#dlp-taxonomy)). Provider, key and JWT rules drop values whose Shannon entropy is below 3.0 bits per character.
 
 Before any regex runs, one Aho-Corasick pass finds the prefilter keywords of all rules (ASCII case-insensitive); a rule whose keywords are absent is skipped. The two rules without a literal have a structural prefilter instead: `dlp_discord_token` needs a run of 24 alphanumerics, `dlp_btc_wif` a run of 51 Base58 characters. Where every match starts a bounded number of bytes before a keyword (for example `dlp_generic_credential_assignment`), the rule is only tried at those positions, in text order. Every gate is proven from the rule's regex, so the findings are the same as a full scan; a text with LONG S or KELVIN SIGN, which case-insensitive rules match for `s` and `k`, runs every rule on the whole text (K07, `rust/tests/dlp_rule_prefilter.rs`).
 
@@ -116,67 +116,67 @@ Overlapping credential/secret findings keep one span (K08): a span that only add
 
 In the default `strict` DLP mode every finding scores `1.0`. In `balanced` and `recall` (K04, thresholds 0.50 and 0.30 as for PII) a finding scores the rule base plus the validator strength (checksum 35, structure 25, format 15, none 0) plus its context, capped at 100 and divided by 100: 25 for a `field` rule, which captures the value behind a field name of its own; for a `proximity` rule 25/20/15 for a credential term near the value (`dlp.password`, `dlp.credentials`, `dlp.api_key`, `dlp.access_key`, `dlp.access_token`, `dlp.refresh_token`, `dlp.secret_token`, `dlp.client_secret`, `dlp.service_account_key`, `dlp.encryption_key`, `dlp.signing_key`, `dlp.private_key`, `dlp.secret`, `dlp.secret_environment_labels`, `dlp.database_connection`, `dlp.authorization_header`, `dlp.credential_files`) and -30 when a digest, hash or ID term (`dlp.digest_reference`) is nearer; `none` rules score without context. A scored mode keeps the `strict` spans whose score reaches the threshold (see [DLP score and modes](result-schema.md#dlp-score-and-modes)). The score column shows the score without counter-context.
 
-| Rule ID | Result entity group | Provider | Validator | Source | Extra validator | Default | Base | Context | Score (`balanced`/`recall`) |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `dlp_anthropic_key` | `API_KEY` | `anthropic` | `format` | `gitleaks:anthropic-api-key` | yes | on | 55 | proximity | 0.70–0.95 |
-| `dlp_openai_key` | `API_KEY` | `openai` | `format` | `gitleaks:openai-api-key` | no | on | 55 | proximity | 0.70–0.95 |
-| `dlp_openai_legacy` | `API_KEY` | `openai` | `format` | `gitleaks:openai-api-key` | no | on | 45 | proximity | 0.60–0.85 |
-| `dlp_openai_svc` | `API_KEY` | `openai` | `format` | `gitleaks:openai-api-key` | no | on | 55 | proximity | 0.70–0.95 |
-| `dlp_huggingface` | `API_KEY` | `huggingface` | `format` | `gitleaks:huggingface-access-token` | no | on | 45 | proximity | 0.60–0.85 |
-| `dlp_groq_key` | `API_KEY` | `groq` | `format` | `ark` | no | on | 50 | proximity | 0.65–0.90 |
-| `dlp_xai_key` | `API_KEY` | `xai` | `format` | `ark` | no | on | 50 | proximity | 0.65–0.90 |
-| `dlp_replicate` | `API_KEY` | `replicate` | `format` | `ark` | no | on | 45 | proximity | 0.60–0.85 |
-| `dlp_aws_access_key` | `CLOUD_KEY` | `aws` | `format` | `gitleaks:aws-access-token` | no | on | 55 | proximity | 0.70–0.95 |
-| `dlp_aws_secret_key` | `CLOUD_KEY` | `aws` | `format` | [docs.aws.amazon.com](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html) | no | on | 35 | field | 0.75 |
-| `dlp_google_api_key` | `CLOUD_KEY` | `google` | `format` | `gitleaks:gcp-api-key` | no | on | 55 | proximity | 0.70–0.95 |
-| `dlp_google_oauth_token` | `CLOUD_KEY` | `google` | `format` | `ark` | no | on | 50 | proximity | 0.65–0.90 |
-| `dlp_gcp_client_secret` | `CLOUD_KEY` | `google` | `format` | `ark` | no | on | 55 | proximity | 0.70–0.95 |
-| `dlp_github_token` | `SECRET_TOKEN` | `github` | `format` | `gitleaks:github-pat` | no | on | 55 | proximity | 0.70–0.95 |
-| `dlp_github_pat` | `SECRET_TOKEN` | `github` | `format` | `gitleaks:github-fine-grained-pat` | no | on | 60 | proximity | 0.75–1.00 |
-| `dlp_gitlab_pat` | `SECRET_TOKEN` | `gitlab` | `format` | `gitleaks:gitlab-pat` | no | on | 55 | proximity | 0.70–0.95 |
-| `dlp_npm_token` | `SECRET_TOKEN` | `npm` | `format` | `gitleaks:npm-access-token` | no | on | 50 | proximity | 0.65–0.90 |
-| `dlp_stripe_key` | `PAYMENT_KEY` | `stripe` | `format` | `gitleaks:stripe-access-token` | no | on | 55 | proximity | 0.70–0.95 |
-| `dlp_stripe_webhook` | `PAYMENT_KEY` | `stripe` | `format` | [docs.stripe.com](https://docs.stripe.com/webhooks) | no | on | 55 | proximity | 0.70–0.95 |
-| `dlp_slack_token` | `SECRET_TOKEN` | `slack` | `format` | [api.slack.com](https://api.slack.com/authentication/token-types) | no | on | 55 | proximity | 0.70–0.95 |
-| `dlp_discord_token` | `SECRET_TOKEN` | `discord` | `format` | `ark` | no | on | 35 | proximity | 0.50–0.75 |
-| `dlp_eth_private_key` | `CRYPTO_KEY` | `ethereum` | `format` | [ethereum.org](https://ethereum.org/en/developers/docs/accounts/) | no | on | 25 | proximity | 0.40–0.65 |
-| `dlp_btc_wif` | `CRYPTO_KEY` | `bitcoin` | `format` | [en.bitcoin.it](https://en.bitcoin.it/wiki/Wallet_import_format) | yes | on | 30 | proximity | 0.45–0.70 |
-| `dlp_private_key_block` | `PRIVATE_KEY` | – | `format` | `gitleaks:private-key` | no | on | 70 | proximity | 0.85–1.00 |
-| `dlp_private_key_header` | `PRIVATE_KEY` | – | `format` | `gitleaks:private-key` | no | on | 50 | proximity | 0.65–0.90 |
-| `dlp_jwt_token` | `SECRET_TOKEN` | – | `format` | `gitleaks:jwt` | no | on | 45 | proximity | 0.60–0.85 |
-| `dlp_credential_in_url` | `CREDENTIAL` | – | `none` | `ark` | yes | on | 25 | field | 0.50 |
-| `dlp_env_var_secret` | `CREDENTIAL` | – | `none` | `ark` | yes | on | 35 | field | 0.60 |
-| `dlp_password_assignment` | `CREDENTIAL` | – | `none` | `ark` | yes | on | 35 | field | 0.60 |
-| `dlp_generic_credential_assignment` | `CREDENTIAL` | – | `none` | `ark` | yes | on | 30 | field | 0.55 |
-| `dlp_bearer_token` | `SECRET_TOKEN` | – | `none` | `ark` | yes | on | 35 | field | 0.60 |
-| `dlp_basic_auth` | `CREDENTIAL` | – | `none` | `ark` | yes | on | 35 | field | 0.60 |
-| `dlp_signed_url_signature` | `CREDENTIAL` | – | `none` | `ark` | yes | on | 25 | field | 0.50 |
-| `dlp_session_cookie` | `CREDENTIAL` | – | `none` | `ark` | yes | on | 30 | field | 0.55 |
-| `dlp_csrf_token` | `SECRET_TOKEN` | – | `none` | `ark` | yes | on | 25 | field | 0.50 |
-| `dlp_password_hash` | `PASSWORD_HASH` | – | `format` | `ark` | yes | on | 35 | field | 0.75 |
-| `dlp_url_userinfo_password` | `CREDENTIAL` | – | `none` | `ark` | yes | on | 35 | field | 0.60 |
-| `dlp_de_vat_id` | `dlp.de.vat_id` | – | `format` | `ark` | no | off | 30 | field | 0.70 |
-| `dlp_de_commercial_register_number` | `dlp.de.commercial_register_number` | – | `format` | `ark` | yes | off | 30 | field | 0.70 |
-| `dlp_de_facility_number_bsnr` | `dlp.de.facility_number_bsnr` | – | `format` | `ark` | no | off | 30 | field | 0.70 |
-| `dlp_record_case_id` | `dlp.record.case_id` | – | `none` | `ark` | yes | off | 30 | field | 0.55 |
-| `dlp_record_contract_id` | `dlp.record.contract_id` | – | `none` | `ark` | yes | off | 30 | field | 0.55 |
-| `dlp_record_claim_id` | `dlp.record.claim_id` | – | `none` | `ark` | yes | off | 30 | field | 0.55 |
-| `dlp_record_order_id` | `dlp.record.order_id` | – | `none` | `ark` | yes | off | 30 | field | 0.55 |
-| `dlp_record_invoice_id` | `dlp.record.invoice_id` | – | `none` | `ark` | yes | off | 30 | field | 0.55 |
-| `dlp_project_id` | `dlp.project_id` | – | `none` | `ark` | yes | off | 30 | field | 0.55 |
-| `dlp_organization_id` | `dlp.organization_id` | – | `none` | `ark` | yes | off | 30 | field | 0.55 |
-| `dlp_internal_business_metric` | `dlp.internal.business_metric` | – | `format` | `ark` | no | off | 40 | none | 0.55 |
-| `dlp_database_dump_insert` | `dlp.content.database_dump` | – | `format` | `ark` | no | off | 40 | none | 0.55 |
-| `dlp_source_code_fence` | `dlp.content.source_code` | – | `format` | `ark` | no | off | 40 | none | 0.55 |
-| `dlp_source_code_statement` | `dlp.content.source_code` | – | `format` | `ark` | no | off | 40 | none | 0.55 |
-| `dlp_source_code_python_rust_assignment` | `dlp.content.source_code` | – | `format` | `ark` | yes | off | 40 | none | 0.55 |
-| `dlp_source_code_declaration` | `dlp.content.source_code` | – | `format` | `ark` | no | off | 40 | none | 0.55 |
-| `dlp_source_code_import` | `dlp.content.source_code` | – | `format` | `ark` | no | off | 40 | none | 0.55 |
-| `dlp_sql_statement` | `dlp.content.sql` | – | `structure` | `ark` | yes | off | 30 | none | 0.55 |
-| `dlp_sql_multiline_statement` | `dlp.content.sql` | – | `format` | `ark` | no | off | 40 | none | 0.55 |
-| `dlp_database_dump_header` | `dlp.content.database_dump` | – | `format` | `ark` | no | off | 40 | none | 0.55 |
-| `dlp_stacktrace_block` | `dlp.content.system_log` | – | `format` | `ark` | no | off | 40 | none | 0.55 |
-| `dlp_structured_system_log` | `dlp.content.system_log` | – | `format` | `ark` | no | off | 40 | none | 0.55 |
+| Rule ID | Result entity group | Subtype | Provider | Validator | Source | Extra validator | Default | Base | Context | Score (`balanced`/`recall`) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `dlp_anthropic_key` | `API_KEY` | `api_key` | `anthropic` | `format` | `gitleaks:anthropic-api-key` | yes | on | 55 | proximity | 0.70–0.95 |
+| `dlp_openai_key` | `API_KEY` | `api_key` | `openai` | `format` | `gitleaks:openai-api-key` | no | on | 55 | proximity | 0.70–0.95 |
+| `dlp_openai_legacy` | `API_KEY` | `api_key` | `openai` | `format` | `gitleaks:openai-api-key` | no | on | 45 | proximity | 0.60–0.85 |
+| `dlp_openai_svc` | `API_KEY` | `api_key` | `openai` | `format` | `gitleaks:openai-api-key` | no | on | 55 | proximity | 0.70–0.95 |
+| `dlp_huggingface` | `API_KEY` | `api_key` | `huggingface` | `format` | `gitleaks:huggingface-access-token` | no | on | 45 | proximity | 0.60–0.85 |
+| `dlp_groq_key` | `API_KEY` | `api_key` | `groq` | `format` | `ark` | no | on | 50 | proximity | 0.65–0.90 |
+| `dlp_xai_key` | `API_KEY` | `api_key` | `xai` | `format` | `ark` | no | on | 50 | proximity | 0.65–0.90 |
+| `dlp_replicate` | `API_KEY` | `api_key` | `replicate` | `format` | `ark` | no | on | 45 | proximity | 0.60–0.85 |
+| `dlp_aws_access_key` | `CLOUD_KEY` | `api_key` | `aws` | `format` | `gitleaks:aws-access-token` | no | on | 55 | proximity | 0.70–0.95 |
+| `dlp_aws_secret_key` | `CLOUD_KEY` | `secret_key` | `aws` | `format` | [docs.aws.amazon.com](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html) | no | on | 35 | field | 0.75 |
+| `dlp_google_api_key` | `CLOUD_KEY` | `api_key` | `google` | `format` | `gitleaks:gcp-api-key` | no | on | 55 | proximity | 0.70–0.95 |
+| `dlp_google_oauth_token` | `CLOUD_KEY` | `access_token` | `google` | `format` | `ark` | no | on | 50 | proximity | 0.65–0.90 |
+| `dlp_gcp_client_secret` | `CLOUD_KEY` | `secret_key` | `google` | `format` | `ark` | no | on | 55 | proximity | 0.70–0.95 |
+| `dlp_github_token` | `SECRET_TOKEN` | `access_token` | `github` | `format` | `gitleaks:github-pat` | no | on | 55 | proximity | 0.70–0.95 |
+| `dlp_github_pat` | `SECRET_TOKEN` | `access_token` | `github` | `format` | `gitleaks:github-fine-grained-pat` | no | on | 60 | proximity | 0.75–1.00 |
+| `dlp_gitlab_pat` | `SECRET_TOKEN` | `access_token` | `gitlab` | `format` | `gitleaks:gitlab-pat` | no | on | 55 | proximity | 0.70–0.95 |
+| `dlp_npm_token` | `SECRET_TOKEN` | `access_token` | `npm` | `format` | `gitleaks:npm-access-token` | no | on | 50 | proximity | 0.65–0.90 |
+| `dlp_stripe_key` | `PAYMENT_KEY` | `api_key` | `stripe` | `format` | `gitleaks:stripe-access-token` | no | on | 55 | proximity | 0.70–0.95 |
+| `dlp_stripe_webhook` | `PAYMENT_KEY` | `secret_key` | `stripe` | `format` | [docs.stripe.com](https://docs.stripe.com/webhooks) | no | on | 55 | proximity | 0.70–0.95 |
+| `dlp_slack_token` | `SECRET_TOKEN` | `access_token` | `slack` | `format` | [api.slack.com](https://api.slack.com/authentication/token-types) | no | on | 55 | proximity | 0.70–0.95 |
+| `dlp_discord_token` | `SECRET_TOKEN` | `access_token` | `discord` | `format` | `ark` | no | on | 35 | proximity | 0.50–0.75 |
+| `dlp_eth_private_key` | `CRYPTO_KEY` | `private_key` | `ethereum` | `format` | [ethereum.org](https://ethereum.org/en/developers/docs/accounts/) | no | on | 25 | proximity | 0.40–0.65 |
+| `dlp_btc_wif` | `CRYPTO_KEY` | `private_key` | `bitcoin` | `format` | [en.bitcoin.it](https://en.bitcoin.it/wiki/Wallet_import_format) | yes | on | 30 | proximity | 0.45–0.70 |
+| `dlp_private_key_block` | `PRIVATE_KEY` | `private_key` | – | `format` | `gitleaks:private-key` | no | on | 70 | proximity | 0.85–1.00 |
+| `dlp_private_key_header` | `PRIVATE_KEY` | `private_key` | – | `format` | `gitleaks:private-key` | no | on | 50 | proximity | 0.65–0.90 |
+| `dlp_jwt_token` | `SECRET_TOKEN` | `access_token` | – | `format` | `gitleaks:jwt` | no | on | 45 | proximity | 0.60–0.85 |
+| `dlp_credential_in_url` | `CREDENTIAL` | `auth_url` | – | `none` | `ark` | yes | on | 25 | field | 0.50 |
+| `dlp_env_var_secret` | `CREDENTIAL` | `generic_secret` | – | `none` | `ark` | yes | on | 35 | field | 0.60 |
+| `dlp_password_assignment` | `CREDENTIAL` | `password` | – | `none` | `ark` | yes | on | 35 | field | 0.60 |
+| `dlp_generic_credential_assignment` | `CREDENTIAL` | `generic_secret` | – | `none` | `ark` | yes | on | 30 | field | 0.55 |
+| `dlp_bearer_token` | `SECRET_TOKEN` | `access_token` | – | `none` | `ark` | yes | on | 35 | field | 0.60 |
+| `dlp_basic_auth` | `CREDENTIAL` | `password` | – | `none` | `ark` | yes | on | 35 | field | 0.60 |
+| `dlp_signed_url_signature` | `CREDENTIAL` | `signature` | – | `none` | `ark` | yes | on | 25 | field | 0.50 |
+| `dlp_session_cookie` | `CREDENTIAL` | `session_token` | – | `none` | `ark` | yes | on | 30 | field | 0.55 |
+| `dlp_csrf_token` | `SECRET_TOKEN` | `session_token` | – | `none` | `ark` | yes | on | 25 | field | 0.50 |
+| `dlp_password_hash` | `PASSWORD_HASH` | `password_hash` | – | `format` | `ark` | yes | on | 35 | field | 0.75 |
+| `dlp_url_userinfo_password` | `CREDENTIAL` | `password` | – | `none` | `ark` | yes | on | 35 | field | 0.60 |
+| `dlp_de_vat_id` | `dlp.de.vat_id` | – | – | `format` | `ark` | no | off | 30 | field | 0.70 |
+| `dlp_de_commercial_register_number` | `dlp.de.commercial_register_number` | – | – | `format` | `ark` | yes | off | 30 | field | 0.70 |
+| `dlp_de_facility_number_bsnr` | `dlp.de.facility_number_bsnr` | – | – | `format` | `ark` | no | off | 30 | field | 0.70 |
+| `dlp_record_case_id` | `dlp.record.case_id` | – | – | `none` | `ark` | yes | off | 30 | field | 0.55 |
+| `dlp_record_contract_id` | `dlp.record.contract_id` | – | – | `none` | `ark` | yes | off | 30 | field | 0.55 |
+| `dlp_record_claim_id` | `dlp.record.claim_id` | – | – | `none` | `ark` | yes | off | 30 | field | 0.55 |
+| `dlp_record_order_id` | `dlp.record.order_id` | – | – | `none` | `ark` | yes | off | 30 | field | 0.55 |
+| `dlp_record_invoice_id` | `dlp.record.invoice_id` | – | – | `none` | `ark` | yes | off | 30 | field | 0.55 |
+| `dlp_project_id` | `dlp.project_id` | – | – | `none` | `ark` | yes | off | 30 | field | 0.55 |
+| `dlp_organization_id` | `dlp.organization_id` | – | – | `none` | `ark` | yes | off | 30 | field | 0.55 |
+| `dlp_internal_business_metric` | `dlp.internal.business_metric` | – | – | `format` | `ark` | no | off | 40 | none | 0.55 |
+| `dlp_database_dump_insert` | `dlp.content.database_dump` | – | – | `format` | `ark` | no | off | 40 | none | 0.55 |
+| `dlp_source_code_fence` | `dlp.content.source_code` | – | – | `format` | `ark` | no | off | 40 | none | 0.55 |
+| `dlp_source_code_statement` | `dlp.content.source_code` | – | – | `format` | `ark` | no | off | 40 | none | 0.55 |
+| `dlp_source_code_python_rust_assignment` | `dlp.content.source_code` | – | – | `format` | `ark` | yes | off | 40 | none | 0.55 |
+| `dlp_source_code_declaration` | `dlp.content.source_code` | – | – | `format` | `ark` | no | off | 40 | none | 0.55 |
+| `dlp_source_code_import` | `dlp.content.source_code` | – | – | `format` | `ark` | no | off | 40 | none | 0.55 |
+| `dlp_sql_statement` | `dlp.content.sql` | – | – | `structure` | `ark` | yes | off | 30 | none | 0.55 |
+| `dlp_sql_multiline_statement` | `dlp.content.sql` | – | – | `format` | `ark` | no | off | 40 | none | 0.55 |
+| `dlp_database_dump_header` | `dlp.content.database_dump` | – | – | `format` | `ark` | no | off | 40 | none | 0.55 |
+| `dlp_stacktrace_block` | `dlp.content.system_log` | – | – | `format` | `ark` | no | off | 40 | none | 0.55 |
+| `dlp_structured_system_log` | `dlp.content.system_log` | – | – | `format` | `ark` | no | off | 40 | none | 0.55 |
 
 ## DLP relationship rules (5)
 

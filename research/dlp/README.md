@@ -30,6 +30,11 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   dem Wert, in dem er liegt. Unterdrückte Treffer nennen in `matched_rules` den Gewinner
   (`suppressed_by`). Scannen DLP und PII denselben Text, gehört der Bereich eines Secret-Spans
   DLP; überlappende PII-Spans (URL-Passwort als E-Mail-Lokalteil) entfallen.
+  Seit K09 (Taxonomie v2) nennt jede Secret-Regel einen Untertyp ihrer Gruppe (`subtype` in
+  `matched_rules`: `api_key`, `access_token`, `password`, `auth_url` …). Connection-Strings,
+  Webhook-URLs, Auth-URLs, OTP-Secrets und Seed-Phrasen werden keine eigenen Gruppen, sondern
+  Untertypen von `CREDENTIAL`, `SECRET_TOKEN` bzw. `CRYPTO_KEY` (Liste in
+  [`entity_map.yaml`](entity_map.yaml), `subtypes`).
 - Validatoren sind schwach: `is_secret_value` prüft nur Länge, Platzhalter und Env-Referenzen.
   Prüfsummen fehlen ganz: GitHub/npm CRC32, Base58Check (WIF), JWT-Struktur und PEM/DER.
   Seit K03 liegen die Bausteine dafür in `rust/src/detectors/validators/` (CRC32-Base62,

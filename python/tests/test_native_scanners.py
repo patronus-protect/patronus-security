@@ -64,6 +64,26 @@ class NativeScannerTests(unittest.TestCase):
                 self.assertEqual(rule["validator_strength"], "format")
                 self.assertEqual(rule["source_ref"], "gitleaks:stripe-access-token")
                 self.assertEqual(rule["severity"], mode)
+                self.assertEqual(rule["subtype"], "api_key")
+
+    def test_native_dlp_subtypes_stay_in_existing_groups(self):
+        scanner = SecurityGateway(categories=["dlp"], max_level="l1", download_files=False)
+        for text, rule_id, group, subtype in (
+            ("Das Passwort lautet Kx9vQ2mLp7Rt", "dlp_password_assignment", "CREDENTIAL", "password"),
+            (
+                "reset link: https://app.example.net/verify?token=" + "Qm7Rk2Zp" + "Lw9Xv4Nc",
+                "dlp_credential_in_url",
+                "CREDENTIAL",
+                "auth_url",
+            ),
+        ):
+            with self.subTest(rule_id=rule_id):
+                result = next(r for r in scanner.scan_category("dlp", text) if r["model"] == "native:dlp")
+                self.assertEqual({span["label"] for span in result["evidence_spans"]}, {group})
+                rule = next(
+                    r for r in result["layers"][0]["details"]["matched_rules"] if r["rule_id"] == rule_id
+                )
+                self.assertEqual(rule["subtype"], subtype)
 
     def test_dlp_and_pii_native_scans_find_obvious_matches(self):
         scanner = SecurityGateway(
