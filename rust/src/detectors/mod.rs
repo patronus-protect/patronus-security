@@ -74,6 +74,14 @@ pub(crate) trait NativeRegexDetector {
     fn capture_groups(&self) -> Option<&[Option<usize>]> {
         None
     }
+    /// Capture group that holds the value of a match of rule `index`; `None`
+    /// is the whole match. By default the rule's group of [`Self::capture_groups`].
+    fn value_group(&self, index: usize, _captures: &regex::Captures<'_>) -> Option<usize> {
+        self.capture_groups()
+            .and_then(|groups| groups.get(index))
+            .copied()
+            .flatten()
+    }
     fn preserve_cross_label_overlaps(&self) -> bool {
         false
     }
@@ -226,11 +234,6 @@ pub(crate) trait NativeRegexDetector {
             if gated && structured.is_none() {
                 continue;
             }
-            let value_group = self
-                .capture_groups()
-                .and_then(|groups| groups.get(index))
-                .copied()
-                .flatten();
             let regex_matches: Vec<_> = if gated {
                 Vec::new()
             } else {
@@ -238,7 +241,7 @@ pub(crate) trait NativeRegexDetector {
             };
             let regex_values: Vec<_> = regex_matches
                 .iter()
-                .filter_map(|captures| captures.get(value_group.unwrap_or(0)))
+                .filter_map(|captures| captures.get(self.value_group(index, captures).unwrap_or(0)))
                 .map(|matched| matched.range())
                 .collect();
             // A key names its whole value, so structural values come first and keep
@@ -260,6 +263,7 @@ pub(crate) trait NativeRegexDetector {
                 .into_iter()
                 .chain(regex_matches.into_iter().map(|captures| (captures, None)));
             for (captures, structured) in candidates {
+                let value_group = self.value_group(index, &captures);
                 let Some(matched) = captures.get(value_group.unwrap_or(0)) else {
                     continue;
                 };

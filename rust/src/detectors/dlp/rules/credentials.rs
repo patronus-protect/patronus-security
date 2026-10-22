@@ -34,7 +34,15 @@ pub(super) const RULES: &[DlpPattern] = &[
     },
     DlpPattern {
         name: "dlp_env_var_secret",
-        pattern: r"(?-i:[A-Z][A-Z0-9]*[_\-](?:SECRET(?:[_\-]ACCESS)?[_\-]?KEY|SECRET|PASSWORD|PASSWD|PASSWORT|KENNWORT|GEHEIMNIS|TOKEN|API[_\-]?KEY))\s*=\s*([^\s]{8,})",
+        // F-GEN2 (T08): `KEY=value`, `KEY = "value"`, `export KEY='value'`,
+        // `ENV KEY="value"` and YAML/compose `KEY: "value"`; the value without
+        // its quotes, a bare value without a trailing `;`/`,`. After `:` a bare
+        // value is the rest of the line.
+        pattern: concat!(
+            r"(?-i:[A-Z][A-Z0-9]*[_\-](?:SECRET(?:[_\-]ACCESS)?[_\-]?KEY|SECRET|PASSWORD|PASSWD|PASSWORT|KENNWORT|GEHEIMNIS|TOKEN|API[_\-]?KEY))",
+            r#"(?:[ \t]*=[ \t]*(?:"([^"\r\n]{8,})"|'([^'\r\n]{8,})'|([^\s"'`]{7,}[^\s"'`;,]))"#,
+            r#"|:[ \t]+(?:"([^"\r\n]{8,})"|'([^'\r\n]{8,})'|([^\s"'`#]{7,}[^\s"'`;,#])[ \t]*\r?(?m:$)))"#,
+        ),
         entity_group: "CREDENTIAL",
         validator: Some(is_secret_value),
         span_group: Some(1),
@@ -44,12 +52,18 @@ pub(super) const RULES: &[DlpPattern] = &[
             "ark",
             &["secret", "passw", "kennwort", "geheimnis", "token", "api"],
         )
-        .with_subtype(SecretSubtype::GenericSecret),
+        .with_subtype(SecretSubtype::GenericSecret)
+        .with_value_gate(likeness::is_env_value),
     },
     // ── Generic credentials / connection strings ───────────────────────────
     DlpPattern {
         name: "dlp_password_assignment",
-        pattern: r#"(?i)\b(?:password|passwort|passwd|kennwort|pwd)\b\s*(?:=|:|\bis\b|\bist\b|\blautet\b)\s*["']?([^\s"';,}\]]{4,150})"#,
+        // F-GEN2 (T04): a quoted value runs to its closing quote (spaces,
+        // `;`, `,`, `}` inside), a bare value or an unclosed quote stops at them.
+        pattern: concat!(
+            r"(?i)\b(?:password|passwort|passwd|kennwort|pwd)\b\s*(?:=|:|\bis\b|\bist\b|\blautet\b)\s*",
+            r#"(?:"([^"\r\n]{4,150})"|'([^'\r\n]{4,150})'|["']?([^\s"';,}\]]{4,150}))"#,
+        ),
         entity_group: "CREDENTIAL",
         validator: Some(is_secret_value),
         span_group: Some(1),
@@ -64,7 +78,10 @@ pub(super) const RULES: &[DlpPattern] = &[
     },
     DlpPattern {
         name: "dlp_generic_credential_assignment",
-        pattern: r#"(?i)\b(?:api[ _-]?key|access[ _-]?token|refresh[ _-]?token|auth[ _-]?token|client[ _-]?secret|encryption[ _-]?key|master[ _-]?key|api[ _-]?schl(?:ü|ue)ssel|zugangstoken|geheimnis|verschl(?:ü|ue)sselungsschl(?:ü|ue)ssel|secret|token)\b\s*(?:=|:|\bis\b|\bist\b|\blautet\b)\s*["']?([^\s"';,}\]]{8,150})"#,
+        pattern: concat!(
+            r"(?i)\b(?:api[ _-]?key|access[ _-]?token|refresh[ _-]?token|auth[ _-]?token|client[ _-]?secret|encryption[ _-]?key|master[ _-]?key|api[ _-]?schl(?:ü|ue)ssel|zugangstoken|geheimnis|verschl(?:ü|ue)sselungsschl(?:ü|ue)ssel|secret|token)\b\s*(?:=|:|\bis\b|\bist\b|\blautet\b)\s*",
+            r#"(?:"([^"\r\n]{8,150})"|'([^'\r\n]{8,150})'|["']?([^\s"';,}\]]{8,150}))"#,
+        ),
         entity_group: "CREDENTIAL",
         validator: Some(is_secret_value),
         span_group: Some(1),
@@ -209,6 +226,14 @@ const LONG_EXAMPLE_MARKERS: &[&str] = &["example", "sample", "beispiel", "muster
 /// only as a whole word or when repeated.
 const SHORT_EXAMPLE_MARKERS: &[&str] = &["test", "fake", "dummy"];
 
+/// Marker words and compounds (F-GEN2) that a documented value may cut to
+/// its field length (`Eexampl0123!`, `Ttestke1234!`): a word ending in at
+/// least [`MIN_CUT_MARKER_LEN`] leading letters of one of them is a marker.
+const CUT_MARKERS: &[&str] = &["examplekey", "testkey", "sample", "beispiel", "muster"];
+
+/// Letters of a cut marker; shorter cuts (`exam`, `test`) are ordinary words.
+const MIN_CUT_MARKER_LEN: usize = 6;
+
 /// Values longer than this (alphanumeric characters, i.e. PEM bodies) need a
 /// repeated short marker: one whole short word turns up by chance in long base64.
 const WHOLE_MARKER_MAX_LEN: usize = 256;
@@ -244,10 +269,31 @@ pub(crate) fn has_example_marker(value: &str) -> bool {
         LONG_EXAMPLE_MARKERS
             .iter()
             .any(|marker| stem.starts_with(marker) || stem.ends_with(marker))
+            || ends_with_cut_marker(&word)
             || (whole_short_words
                 && SHORT_EXAMPLE_MARKERS.contains(&stem)
                 && !is_stripe_mode(value, start, &word))
     })
+}
+
+/// F-GEN2: `word` (lower case) ends in a marker cut to the field length,
+/// see [`CUT_MARKERS`].
+fn ends_with_cut_marker(word: &str) -> bool {
+    CUT_MARKERS
+        .iter()
+        .any(|marker| (MIN_CUT_MARKER_LEN..=marker.len()).any(|len| word.ends_with(&marker[..len])))
+}
+
+/// Hex digits from which a generic value counts as machine-issued (F-GEN2):
+/// 128-bit keys and longer.
+const MACHINE_HEX_MIN_LEN: usize = 32;
+
+/// F-GEN2: `value` is a hex string of at least [`MACHINE_HEX_MIN_LEN`]
+/// digits, the shape of generated API secrets and digests. The backslash of
+/// an escaped closing quote (`…deadbeef\"` in a notebook) does not count.
+pub(crate) fn is_machine_hex(value: &str) -> bool {
+    let value = value.trim_end_matches('\\');
+    value.len() >= MACHINE_HEX_MIN_LEN && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
 /// How a value lacks variety (T06), see [`low_variety`].
@@ -484,8 +530,8 @@ fn floor_char_boundary(text: &str, mut index: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::{
-        has_example_context, has_example_marker, is_example_value, is_low_variety, low_variety,
-        LowVariety,
+        has_example_context, has_example_marker, is_example_value, is_low_variety, is_machine_hex,
+        low_variety, LowVariety,
     };
 
     /// Deterministic pseudo-random base62 strings (SplitMix64).
@@ -540,6 +586,26 @@ mod tests {
             "Ummusterung-Kx7q",
             "Xyzexamples9",
         ] {
+            assert!(!has_example_marker(value), "{value}");
+        }
+    }
+
+    #[test]
+    fn long_hex_values_take_the_fixed_format_check() {
+        assert!(is_machine_hex("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"));
+        assert!(is_machine_hex("1234567890123456789012345678901234567890"));
+        assert!(is_machine_hex("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\\"));
+        assert!(!is_machine_hex("deadbeefdeadbeef"));
+        assert!(!is_machine_hex("abcabcabcabc"));
+        assert!(!is_machine_hex("Kx7pQ2vL1234567890abcdefRt4Mw8Zn3"));
+    }
+
+    #[test]
+    fn marker_words_cut_to_the_field_length_are_markers() {
+        for value in ["Eexampl0123!", "Ttestke1234!", "Xbeispie42", "qzexamplek7"] {
+            assert!(has_example_marker(value), "{value}");
+        }
+        for value in ["Testkeller2026!", "Exam2026!", "Kontext2026!", "Sampl3r!"] {
             assert!(!has_example_marker(value), "{value}");
         }
     }

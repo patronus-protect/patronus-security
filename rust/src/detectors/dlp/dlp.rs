@@ -600,6 +600,11 @@ impl DlpPipeline {
         detection
     }
 
+    /// The value of a match of rule `index`, see [`NativeRegexDetector::value_group`].
+    fn value<'t>(&self, index: usize, captures: &regex::Captures<'t>) -> Option<regex::Match<'t>> {
+        captures.get(self.value_group(index, captures).unwrap_or(0))
+    }
+
     /// F03: whether `value`, without leading quotes, starts with a whole
     /// token of a prefixed provider rule with a checksum (GitHub `ghp_` …)
     /// whose checksum fails, as in `ghp_…` or `ghp_…@github.com/acme/app`.
@@ -685,7 +690,7 @@ impl DlpPipeline {
             .flat_map(move |index| {
                 self.regexes[index]
                     .captures_iter(window)
-                    .filter_map(move |captures| captures.get(self.span_groups[index].unwrap_or(0)))
+                    .filter_map(move |captures| self.value(index, &captures))
                     .map(move |value| {
                         (
                             self.rule_ids[index],
@@ -738,6 +743,16 @@ impl NativeRegexDetector for DlpPipeline {
         Some(&self.span_groups)
     }
 
+    /// F-GEN2: a rule may hold its value in one group per quoting style
+    /// (`"…"`, `'…'`, bare); the value is the first group from the rule's
+    /// `span_group` on that took part in the match.
+    fn value_group(&self, index: usize, captures: &regex::Captures<'_>) -> Option<usize> {
+        let first = self.span_groups[index]?;
+        (first..captures.len())
+            .find(|&group| captures.get(group).is_some())
+            .or(Some(first))
+    }
+
     fn preserve_cross_label_overlaps(&self) -> bool {
         true
     }
@@ -770,7 +785,7 @@ impl NativeRegexDetector for DlpPipeline {
         // T01: a prefix rule's value inside an identifier, hex run or base64
         // blob is no token.
         if let Some(boundary) = meta.boundary {
-            if let Some(value) = captures.get(self.span_groups[index].unwrap_or(0)) {
+            if let Some(value) = self.value(index, captures) {
                 if !super::boundary::is_whole_token(text, value.range(), boundary) {
                     return false;
                 }
@@ -778,7 +793,7 @@ impl NativeRegexDetector for DlpPipeline {
         }
         // F01: a value whose shape is no proof needs its context.
         if let Some(gate) = meta.context_gate {
-            if let Some(value) = captures.get(self.span_groups[index].unwrap_or(0)) {
+            if let Some(value) = self.value(index, captures) {
                 if !gate(text, value.range()) {
                     return false;
                 }
@@ -786,7 +801,7 @@ impl NativeRegexDetector for DlpPipeline {
         }
         // F-GEN1: a generic key's value must look like a secret.
         if let Some(gate) = meta.value_gate {
-            if let Some(value) = captures.get(self.span_groups[index].unwrap_or(0)) {
+            if let Some(value) = self.value(index, captures) {
                 if !gate(text, value.range()) {
                     return false;
                 }
@@ -797,7 +812,7 @@ impl NativeRegexDetector for DlpPipeline {
         if check == ExampleCheck::Off && !placeholder_check && meta.min_entropy.is_none() {
             return true;
         }
-        let Some(value) = captures.get(self.span_groups[index].unwrap_or(0)) else {
+        let Some(value) = self.value(index, captures) else {
             return true;
         };
         if !meta.has_min_entropy(value.as_str()) {
@@ -841,7 +856,7 @@ impl NativeRegexDetector for DlpPipeline {
     ) -> MatchScore {
         let pattern = &DLP_PATTERNS[index];
         let value = captures
-            .get(self.span_groups[index].unwrap_or(0))
+            .get(self.value_group(index, captures).unwrap_or(0))
             .unwrap_or_else(|| captures.get(0).unwrap());
         let evidence = context::evidence(pattern, prepared.text(), (value.start(), value.end()));
         MatchScore {

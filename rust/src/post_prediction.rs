@@ -175,6 +175,19 @@ pub(crate) fn resolve_dlp_pii_overlaps(
 }
 
 pub(crate) fn is_real_secret_assignment(value: &str) -> bool {
+    // F-GEN2: base64 padding (`KEY: <base64>=` in a Kubernetes Secret) is no
+    // assignment.
+    let unpadded = value
+        .strip_suffix("==")
+        .or_else(|| value.strip_suffix('='))
+        .unwrap_or(value);
+    if unpadded.len() >= 16
+        && unpadded
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'/' | b'-' | b'_'))
+    {
+        return true;
+    }
     let Some((_, raw)) = value.split_once('=') else {
         return true;
     };
@@ -214,7 +227,8 @@ fn shannon_entropy(value: &[u8]) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::{
-        filter_evidence, LocalPathPersonHook, PostPredictionHook, PrivateNetworkDiagnosticHook,
+        filter_evidence, is_real_secret_assignment, LocalPathPersonHook, PostPredictionHook,
+        PrivateNetworkDiagnosticHook,
     };
     use crate::{EvidenceSpan, SecurityCategory};
 
@@ -301,5 +315,17 @@ mod tests {
             }
         ));
         assert!(filter_evidence(SecurityCategory::Pii, diagnostic, vec![private]).is_empty());
+    }
+
+    #[test]
+    fn base64_padding_is_no_assignment() {
+        // F-GEN2: `KEY: <base64>=` in a Kubernetes Secret keeps its span.
+        assert!(is_real_secret_assignment(
+            "c2stYW50LWFkbWluMDEtRTMzaGpnNmY2OG9ERTdF="
+        ));
+        assert!(is_real_secret_assignment("dXNlcjpLeDdwUTJ2TDlyVDQ=="));
+        assert!(!is_real_secret_assignment("password=changeme"));
+        assert!(!is_real_secret_assignment("token="));
+        assert!(is_real_secret_assignment("password=Kx7pQ2vL9rT4mW"));
     }
 }

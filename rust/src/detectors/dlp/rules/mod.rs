@@ -123,7 +123,14 @@ pub(crate) fn is_example_match(
     let example_context = || credentials::has_example_context(text, range.start, range.end);
     match check {
         ExampleCheck::Off => false,
-        ExampleCheck::Generic => credentials::is_example_value(&value, false, example_context),
+        // F-GEN2: a long hex value under a generic key is machine-issued,
+        // so repeated chunks (`deadbeef…`) mark it as an example as for a
+        // fixed format; hand-typed passwords (`abcabcabcabc`) are shorter.
+        ExampleCheck::Generic => credentials::is_example_value(
+            &value,
+            credentials::is_machine_hex(&value),
+            example_context,
+        ),
         ExampleCheck::FixedFormat => credentials::is_example_value(&value, true, example_context),
     }
 }
