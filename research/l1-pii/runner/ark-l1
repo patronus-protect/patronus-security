@@ -107,6 +107,8 @@ MAX_OPEN = 15
 NOTHING = 10
 # Squash-merge the bottom stack PR once its GitHub CI is green (decided 2026-10-21); 0 turns it off.
 AUTO_MERGE = os.environ.get("ARK_L1_AUTO_MERGE", "1") != "0"
+MERGE_TIMEOUT = 300      # seconds to wait for an asynchronous merge result
+RETARGET_TIMEOUT = 300   # seconds to wait for GitHub to move the PRs above onto main
 
 CURRENT = STATE / "current.json"
 
@@ -422,6 +424,45 @@ def ci_state(head: str) -> str:
     return "green" if all(c["conclusion"] in OK_CONCLUSIONS for c in checks) else "red"
 
 
+def open_review_threads(number: int) -> int:
+    """Unresolved review threads on a PR; main requires all of them resolved before a merge."""
+    query = ("query($n:Int!){repository(owner:\"%s\",name:\"%s\"){pullRequest(number:$n)"
+             "{reviewThreads(first:100){nodes{isResolved}}}}}" % tuple(GH_REPO.split("/")))
+    out = run(["gh", "api", "graphql", "-f", f"query={query}", "-F", f"n={number}", "--jq",
+               "[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length"])
+    return int(out or 0)
+
+
+def merge_async(number: int, head: str) -> str:
+    """Squash-merge one PR through the asynchronous merge API (required for native stacks).
+
+    Returns 'merged', 'failed: <message>' or 'pending' after MERGE_TIMEOUT seconds."""
+    out = json.loads(run(["gh", "api", "-X", "PUT", f"repos/{GH_REPO}/pulls/{number}/merge-async",
+                          "-f", "merge_method=squash", "-f", "merge_action=direct_merge",
+                          "-f", f"sha={head}"]) or "{}")
+    status, uuid = out.get("status"), (out.get("details") or {}).get("uuid")
+    deadline = dt.datetime.now() + dt.timedelta(seconds=MERGE_TIMEOUT)
+    while status not in ("merged", "failed") and uuid and dt.datetime.now() < deadline:
+        subprocess.run(["sleep", "10"])
+        out = json.loads(run(["gh", "api", f"repos/{GH_REPO}/pulls/{number}/merge-async/{uuid}"],
+                             check=False) or "{}")
+        status = out.get("status", status)
+    if status == "failed":
+        return f"failed: {(out.get('details') or {}).get('message', '')}"
+    return status if status == "merged" else "pending"
+
+
+def wait_for_retarget(merged_branch: str) -> None:
+    """After a merge GitHub rebases the PRs above and moves them to main; let it finish first so
+    `restack` does not race the server-side rebase with its own force-push."""
+    deadline = dt.datetime.now() + dt.timedelta(seconds=RETARGET_TIMEOUT)
+    while dt.datetime.now() < deadline:
+        if not any(p["baseRefName"] == merged_branch for p in prs("open")):
+            return
+        subprocess.run(["sleep", "15"])
+    print(f"WARN=PRs on {merged_branch} not retargeted after {RETARGET_TIMEOUT}s; restack takes over")
+
+
 def auto_merge(open_prs: list[dict]) -> int | None:
     """Squash-merge the bottom stack PR when it targets main, is mergeable and its CI is green.
 
@@ -443,12 +484,19 @@ def auto_merge(open_prs: list[dict]) -> int | None:
         print(f"AUTO_MERGE_WAIT={label} CI {state}")
         return None
     try:
-        run(["gh", "pr", "merge", str(bottom["number"]), "--repo", GH_REPO, "--squash",
-             "--match-head-commit", bottom["headRefOid"]])
-    except RuntimeError as err:
-        print(f"AUTO_MERGE_ERROR={label}: {str(err).strip().splitlines()[-1]}")
+        threads = open_review_threads(bottom["number"])
+        if threads:
+            print(f"AUTO_MERGE_WAIT={label} {threads} unresolved review thread(s)")
+            return None
+        result = merge_async(bottom["number"], bottom["headRefOid"])
+    except (RuntimeError, ValueError) as err:
+        print(f"AUTO_MERGE_ERROR={label}: {str(err).strip().splitlines()[-1] if str(err).strip() else err}")
+        return None
+    if result != "merged":
+        print(f"AUTO_MERGE_ERROR={label}: {result}")
         return None
     print(f"AUTO_MERGED={label}")
+    wait_for_retarget(bottom["headRefName"])
     return bottom["number"]
 
 
