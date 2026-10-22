@@ -71,6 +71,13 @@ result shapes may be breaking for downstream users, and is called out explicitly
   failing check digit) and `pii.it.vat_code` F1 96.4 (27/29, 0 FP), balanced L1 F1 +2.1 pp, no new
   hard-negative FP on any dev corpus; 13_l1_golden_eval 706/706 positives, 610/610 hard negatives.
   Validators of existing labels are unchanged.
+- `VAT_ID_FR` joins the K07 competing labels (B01 review): the eleven digits of a French VAT ID
+  with a space after `FR` (`FR 40 303 265 045`, `FR 40303265045`) can also pass the context-free
+  Steuer-ID, which kept a second, false `STEUERID` finding next to the VAT ID. The VAT ID is the
+  longer value and wins like a Partita IVA; the other VAT IDs of B01 have no eleven-digit body and
+  no competing overlap. Validators are unchanged. **Detection change:** none in `strict`; in
+  `balanced` and `recall` such a French VAT ID reports one `VAT_ID_FR` finding, and the Steuer-ID
+  rule's `matched_rules` entry names `overlap` (`longer_value`, `yields_to: VAT_ID_FR`).
 - Implement the decided M2 rule and add `scripts/l1_presidio/scoreboard.py m2` (D-M2, decision of
   2026-10-21 in `research/l1-pii/README.md`, M2 row and fairness section). M2 holds only if it holds on
   both milestone families on their own, judged on `balanced`: macro-F1 is the unweighted mean exact F1

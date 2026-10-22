@@ -3,7 +3,7 @@
 //!
 //! In `balanced` and `recall` one value yields one label among the number labels
 //! that compete for the same digits (`overlap::COMPETING_LABELS`: IBAN, card,
-//! account, Steuer-ID, phone, Partita IVA). Of two overlapping findings with different labels
+//! account, Steuer-ID, phone, Partita IVA, French VAT ID). Of two overlapping findings with different labels
 //! the first in this order wins: an IBAN (country code and MOD-97 prove the kind
 //! of value), the longer value (a card-shaped part of an IBAN or a longer number
 //! is a coincidence), context that supports its own label (a field name such as
@@ -188,9 +188,46 @@ fn competing_labels_are_the_number_labels() {
             "IBAN",
             "PHONE",
             "STEUERID",
+            "VAT_ID_FR",
             "VAT_ID_IT"
         ])
     );
+}
+
+/// French VAT IDs (key and SIREN) whose digits after `FR ` are also an issued
+/// Steuer-ID, grouped 2-3-3-3 like the context-free Steuer-ID form.
+const FR_VAT_IDS_WITH_STEUER_ID_DIGITS: [&str; 2] = ["44 796 082 147", "47 508 826 930"];
+
+#[test]
+fn a_french_vat_id_keeps_the_steuer_id_digits_inside_it() {
+    // B01 review: the digits of a spaced French VAT ID can also be a context-free Steuer-ID. Like a
+    // Partita IVA the VAT ID is the longer value and wins; strict reports neither (both scored-only).
+    for grouped in FR_VAT_IDS_WITH_STEUER_ID_DIGITS {
+        let compact: String = grouped.split(' ').collect();
+        for digits in [grouped, compact.as_str()] {
+            assert!(validators::steuer_id_issued(digits), "{digits}");
+            let value = format!("FR {digits}");
+            assert!(validators::fr_vat_id(&value), "{value}");
+            let text = format!("Invoice sent to {value} yesterday.");
+            assert!(
+                pii_result(&text, PiiMode::Strict)
+                    .evidence_spans
+                    .iter()
+                    .all(|span| span.label != "VAT_ID_FR" && span.label != "STEUERID"),
+                "strict: {text}"
+            );
+            for mode in SCORED {
+                assert_eq!(
+                    spans(&text, mode),
+                    owned(&[("VAT_ID_FR", value.as_str())]),
+                    "{mode:?}"
+                );
+                let overlap = overlap_of(&text, mode, "pii_steuer_id_de_context_free", digits);
+                assert_eq!(overlap["reason"], "longer_value", "{mode:?}: {text}");
+                assert_eq!(overlap["yields_to"], "VAT_ID_FR", "{mode:?}: {text}");
+            }
+        }
+    }
 }
 
 #[test]
