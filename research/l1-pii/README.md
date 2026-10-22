@@ -160,6 +160,31 @@ Platzhalter, weder als Positive noch in Hard-Negative-Spans. Durchgesetzt wird d
 (`reserved_placeholder_values_are_gold_positives`). ARK meldet alle Platzhalter schon heute; eine
 spätere regionale Telefonprüfung (Hebel 4) darf `+1 000-000-0000` und `555-01xx` nicht verwerfen.
 
+## Gold-Konvention: IP-Spans (B-IP)
+
+Festgelegt mit B-IP (T20 + Kandidat C1, TRIAGE 2026-W43 Bucket 5, Baseline P3/P9), wie das Gold der
+presidio-analyzer-IP-Tests:
+
+- **Ein Span je Adresse:** Eine IPv4-gemappte oder eingebettete IPv6-Adresse ist ein Span
+  (`::ffff:10.0.0.1`, `64:ff9b::198.51.100.1`, `2001:db8:85a3::8a2e:192.168.0.1`), kein IPv4-Teilspan.
+- **Zonen-ID und CIDR-Präfixlänge gehören in den Span:** `fe80::1%eth0`, `192.168.1.0/24`,
+  `2001:db8::/32`, `2001:db8::%eth0/128`. Eine Präfixlänge außerhalb des Bereichs (IPv4 > 32,
+  IPv6 > 128) gehört nicht dazu, die Adresse bleibt ein Span (`10.0.0.0/123` → `10.0.0.0`).
+- **Kein Teiltreffer:** Eine ungültige Misch- oder Kettenform ergibt keinen Span, auch keinen
+  Teilspan: `2001:db8::256.1.1.1` (Hard Negative P9), neun Gruppen, Doppelpunkt-Ketten aus SWIFT MT
+  und EDIFACT (`:28C::52D:`, `:60F::61F::62F:`, `BGM+380:21:3::90:FRET`, `LIN+1::1:550:::EA:20`).
+  Eine IPv6-Adresse beginnt nicht nach einer weiteren `:`-Gruppe, nach `.`, `-`, `+` oder einem
+  Wortzeichen und endet nicht vor einer weiteren `:`- oder `.`-Gruppe; ein SWIFT-MT-Tag am
+  Zeilenanfang (`:25:`, ` :52A:`) und ein Feldname (`IPv6:`) eröffnen den Wert.
+- **Loopback und unspezifiziert bleiben negativ** (D-IP, 2026-10-21), auch gemappt und mit
+  Präfixlänge: `::ffff:127.0.0.1`, `::ffff:0.0.0.0`, `::/0`, `::1/128`. Die neun
+  `presidio_favored`-Gold-Werte dieser Art (`127.0.0.1`, `0.0.0.0`, `::` zweimal, `::1`,
+  `::ffff:127.0.0.1`, `::ffff:0.0.0.0`, `::/0`, `::/128`) bleiben bekannte FN.
+
+`validators::ip_address` prüft den ganzen Span (Präfixlänge, Zonen-ID nur bei IPv6). Der
+Netzwerkdiagnose-Filter (`post_prediction.rs`) wertet private Adressen auch mit Zonen-ID, Präfixlänge
+und in gemappter Form. Tests: `rust/tests/pii_ip_spans.rs`, Goldens `B_IP_SPAN_CASES`.
+
 ## Gold-Hygiene: Nebenentitäten und Prüfziffern
 
 Seit T02 (TRIAGE 2026-W42, Buckets 6 + 7) annotiert ein Positiv in `pii_l1` jede echte Entität im

@@ -139,7 +139,12 @@ impl PiiPipeline {
             entity_groups.push(p.entity_group);
             rule_ids.push(p.name);
             validators.push(p.validator);
-            capture_groups.push(p.captured_value.then_some(1));
+            // Field-bound rules capture their value after the field name, the IPv6
+            // rules after what opens the address (B-IP); both name it `value`.
+            capture_groups.push(regexes.last().and_then(|regex: &Regex| {
+                regex.capture_names().position(|name| name == Some("value"))
+            }));
+            debug_assert!(!p.captured_value || capture_groups.last() == Some(&Some(1)));
             let structured = p.captured_value.then(|| structured_regexes_of(p.pattern));
             let (value, key) = structured.unzip();
             structured_regexes.push(value);
@@ -236,7 +241,9 @@ impl PiiPipeline {
     ) -> Evidence {
         let pattern = &PII_PATTERNS[index];
         let text = prepared.text();
-        let value = captures.get(usize::from(pattern.captured_value)).unwrap();
+        let value = captures
+            .get(self.capture_groups[index].unwrap_or(0))
+            .unwrap();
         let structure =
             context::structure_evidence(prepared.structure(), value.range(), pattern.entity_group);
         if pattern.captured_value {
@@ -499,6 +506,10 @@ impl NativeRegexDetector for PiiPipeline {
                 context::opens_phone_number(text, captures.get(0).unwrap().start())
             }
             "pii_credit_card" => context::card_position(text, captures.get(0).unwrap().range()),
+            "pii_ipv4" => context::ipv4_position(text, captures.get(0).unwrap().start()),
+            "pii_ipv6_full" | "pii_ipv6_compressed" | "pii_ipv6_loopback" => {
+                context::ipv6_position(text, captures.name("value").unwrap().end())
+            }
             "pii_swift_bic_context" => {
                 let value = captures.name("value").unwrap();
                 let structural = captures.get(0).unwrap().start() == value.start();
