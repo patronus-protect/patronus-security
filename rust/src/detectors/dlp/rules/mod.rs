@@ -3,6 +3,33 @@
 //! order. The order is behaviour: rules run in this order, the first matching
 //! rule sets the result class and `matched_rules` follows it
 //! (`rust/tests/dlp_rule_registry.rs`).
+
+// T09: key shapes of the key-anchored rules, as regex fragments for
+// `concat!` (inside `(?i)`). The regexes start at the credential noun
+// without `\b`, so that `db_password` and `dbPassword` match; the key gate
+// (`likeness::key_shape`) reads the prefix before the noun. Word boundaries
+// of keys are ASCII (`(?-u:\b)`): a Unicode `\b` next to a literal that may
+// start anywhere keeps the regex off its fast engines.
+
+/// What stands between a key and its quoted value besides the separator:
+/// the closing quote of a quoted key (`"client_secret":`, `'password' =>`,
+/// escaped `\"db_password\":` in a JSON string), a subscript
+/// (`os.environ["DB_PASSWORD"] =`) and a string type of a declaration
+/// (`DB_PASSWORD: &str =`, `dbPassword: string =`, Go `dbPassword string =`).
+macro_rules! key_suffix {
+    () => {
+        r#"(?:\\?["'])?\]?(?:\s*:\s*&?(?:'static\s+)?(?:str|string)(?-u:\b)|\s+string(?-u:\b))?\s*"#
+    };
+}
+
+/// XML `key="DbPassword" value="…"` and `name="password" value="…"`: the
+/// key's closing quote and the `value` attribute.
+macro_rules! xml_value_attribute {
+    () => {
+        r#"["']\s+value\s*="#
+    };
+}
+
 mod content;
 mod credentials;
 mod crypto;

@@ -172,6 +172,46 @@ result shapes may be breaking for downstream users, and is called out explicitly
 - End phone spans before a line break and keep NANP trunk and `00` prefixes (T18, TRIAGE 2026-W43 bucket 3). `pii_phone_international`, the `+49`/`0049` form of `pii_phone_de` and `pii_phone_us` no longer separate digit groups with a line break (`\n`, `\r`, U+0085, U+2028, U+2029; other spaces such as U+00A0 still separate), so `+1-123-456-7890\n\n2` ends before the break and digits split across lines (`212\n555 0100`) are no phone number. `pii_phone_us` takes an optional trunk `1`/`+1` or a `00` international prefix in front of a 3-3-4 number into the span: `1-800-123-4567`, `1 (800) 123-4567`, `1.800.432.7716`, `001 415 555 2671`, `0044 207 946 0958`; with `+1` it now reports the whole number like `pii_phone_international`. The prefix is optional and needs a word boundary, so it only widens a number found before; a prefix alone (`1-800-FLOWERS`, `Kapitel 1-800`), `0044 20 7946 0958` and other `00` numbers without a 3-3-4 part stay unmatched. `0049 …` keeps its prefix as before. `pii_l1.jsonl` gains 12 positives and 10 hard negatives (DE and EN); `l1_bilingual_rules.json` gains exact-span probes for `pii_phone_international` and `pii_phone_de` and line-break hard negatives; the new `rust/tests/pii_phone_boundaries.rs` covers strict, balanced and recall. **Detection change:** phone spans with a trunk or `00` prefix start earlier, spans no longer run over a line break, and digits split by a line break are no longer reported; no new match. Scoreboard gate on the dev corpora PASS: phone exact F1 +6.6 pp (overlap unchanged), L1 exact F1 +1.0 pp (DE +0.2, EN +1.4; neutral +2.1, presidio_favored +0.3, ark_authored +0.0), no new hard-negative FP; `13_l1_golden_eval` 564/564 positives, 451/451 hard negatives. Validators are unchanged.
 - Stop reporting EDIFACT, X12 and SWIFT MT elements, zero-padded IDs and 6-4 digit groups as phone numbers in strict (T17, TRIAGE 2026-W43 buckets 1 + 2). `pii_phone_international` and the `+49` form of `pii_phone_de` no longer start right after a letter or digit (`UNB+UNOC:3+520173321::2`, `NAD+BY+987654321`), after another `+` (`MOA+1++520173321`) or after a tag with a digit and `:` (`{86:+330105789456}`); a field name and `:` (`Tel.:+49 30 1234567`, `tel:+31…`) still opens a number, and `00` after `+` keeps an EDIFACT `COM+0049…:TE` number. `pii_phone_us` needs the area code set off by `)` or a separator, so `811228-9874` (Swedish personal number, 6-4), `0000012345` (`ST*850*0000012345~`, `:62F:/0000001234/`, SEC CIK) and other bare 10-digit runs are no longer matched; 3-3-4 and 3-7 forms (`(617) 5550183`, `020-1234567`) stay. `pii_l1.jsonl` gains 12 positives and 17 hard negatives (DE and EN); `l1_bilingual_rules.json` gains DE/EN hard negatives for the three rules, and its hard-negative test now covers PII; the new `rust/tests/pii_phone_precision.rs` covers strict, balanced and recall. **Detection change:** fewer phone findings, none of them gold on the dev corpora. Scoreboard gate on the dev corpora PASS: Gretel Finance phone FP 198 → 75 (−123), phone exact F1 65.7 → 77.3 with unchanged recall; all corpora phone exact F1 +9.6 pp, L1 exact F1 +1.1 pp (DE +1.1, EN +1.1; neutral +2.0, presidio_favored +0.0, ark_authored +0.6 with 49 fewer 6-4 phone FP), no new hard-negative FP; `13_l1_golden_eval` 552/552 positives, 441/441 hard negatives. Validators are unchanged.
 - Report the parenthesized area code of a US phone number as part of the span (T04, TRIAGE 2026-W42 bucket 2). `pii_phone_us` opened with `\b`, which never holds before `(` after a space or at the start of a text, so `(415) 555-2671` was reported as `415) 555-2671` and missed every exact-span gold. A balanced `(NXX)` now starts the span in every mode; with `+1` in front the international rule keeps the full number as before. Unbalanced forms (`(415 555-2671`, `415) 555-2671`) keep their span. `pii_l1.jsonl` gates the two parenthesized known gaps and gains 10 positives and 10 hard negatives (5 each for DE and EN); `l1_bilingual_rules.json` gains an exact-span probe for `pii_phone_us`; the new `rust/tests/pii_phone_span.rs` covers strict, balanced and recall. **Detection change:** US phone spans with a parenthesized area code start one character earlier; no finding is added or removed. Scoreboard gate on the dev corpora PASS: phone exact F1 55.2 → 65.0 (+9.8 pp, overlap unchanged), L1 exact F1 50.8 → 52.4 (EN +2.9 pp; neutral +2.8 pp, presidio_favored +0.9 pp), no new hard-negative FP; `13_l1_golden_eval` 540/540 positives, 424/424 hard negatives. Validators are unchanged.
+- Find credential values under compound, camelCase, quoted and typed keys (T09).
+  `dlp_password_assignment`, `dlp_generic_credential_assignment`, `dlp_csrf_token` and
+  `dlp_password_hash` now start at the credential noun without `\b`, so compound keys
+  (`db_password`, `service_secret`, `LAGER_DB_PASSWORT`) and camelCase keys (`dbPassword`,
+  `serviceSecret`, `ClientSecret`, `csrfToken`, `PasswordHash`) match; the new key gate
+  (`RuleMeta::key_gate`, `likeness::key_shape`) reads the prefix before the noun and rejects a noun
+  that merely ends a word (`mypassword`, `DBPASSWORD`, `Benutzerkennwort`). Between key and value the
+  rules accept the closing quote of a quoted key (`"client_secret":`, `'password' =>`, escaped
+  `\"db_password\":` inside a JSON string), a subscript (`os.environ["DB_PASSWORD"] =`), a string
+  type (`const DB_PASSWORD: &str =`, `dbPassword: string =`, Go `dbPassword string =`), `=>` and the
+  XML `value` attribute after a `key`/`name` attribute (`<add key="DbPassword" value="…" />`); the
+  assignment rules take an escaped value in a notebook cell or JSON string (`\"…\"`). Compound and
+  quoted keys name fields, so their values must suit one: no identifier in a naming convention
+  (`"github-copilot"`, `"prefixItems"`), word, credential name or stand-in, no version range
+  (`"^1.0.0"`), no code (also in quotes), a passphrase with a capital, digit or symbol, and after a
+  quoted key or `=>` no unquoted value (`case"apiKey":u=…`, `'password' => !empty(…)`). Compound
+  `…token` keys of cursors, handles and counts (`nextPageToken`, `continuation_token`, `pathToken`,
+  `max_token`, `csrf_token` for the generic rule) and `…secret` keys of Kubernetes/Helm objects
+  (`existingSecret`, `imagePullSecret`, `tls_secret`) are no credentials; a bare value cut at the
+  150-character capture limit is none either (`id_token=` with a long example JWT). Code at the start
+  of a bare value (casts and parameter lists, arrow functions, comparisons, negated calls) is no
+  value. `dlp_csrf_token` gains the value gate `likeness::is_token_value` (no word or name such as
+  `"X-CSRF-Token"`, no member access); `dlp_password_hash` no longer takes the backslash of an
+  escaped closing quote into a bcrypt or Argon2 value. A generic key with a compound prefix in a URL
+  userinfo (`https://github_token:x-oauth-basic@…`) belongs to the URL rules (K08). Word boundaries
+  of the keys are ASCII (`(?-u:\b)`), which makes the generic rule's regex about 25 times faster on
+  benign code; `dlp_aws_secret_key` already matched every AWS key shape and is unchanged. `dlp_l1.jsonl`
+  gains 31 rows (17 positives, 14 hard negatives; JSON, YAML, TOML, XML, TS, Rust, PHP, HTTP and
+  notebook carriers, DE and EN) and the
+  JSON `password_hash` golden is no longer a known gap; `l1_bilingual_rules.json` gains hard
+  negatives for the three rules; the new `rust/tests/dlp_key_shapes.rs` checks every key shape per
+  carrier and the silent code, field-name, cursor and reference shapes. **Detection change:** on the
+  dev split the exact span F1 on the synthetic carriers rises from 81.6 % to 84.4 % (TP 1225 → 1294,
+  precision 98.2 % → 98.8 %, no positive lost); every structured-carrier miss of the five rules is
+  found (69 values; the remaining misses are prose, F-HTTP and opt-in classes), hard-negative FP drop
+  from 22 to 16 (six example JWTs under `id-token` keys) with no new FP row; benign-code and
+  benign-doc spans are unchanged. Scoreboard gate on the dev corpora PASS: exact F1 80.6 → 83.2
+  (CREDENTIAL 69.6 → 81.9, PASSWORD_HASH 80.6 → 91.9, SECRET_TOKEN 89.7 → 93.6), FP/MB benign code
+  unchanged (8 FP), hard-negative FP 166 → 160, 100 KiB p95 9.55 → 9.43 ms. Golden eval: 460/460
+  positives, 494/494 hard negatives.
 - Capture generic credential values exactly (F-GEN2: T04 + T08). A quoted value of
   `dlp_password_assignment` and `dlp_generic_credential_assignment` now runs to its closing quote,
   with spaces, `;`, `,` and `}` inside (`passwort = "blau Drache 47 Zaun"`, `password='ab;Kx7…'`);

@@ -465,6 +465,42 @@ static PATH: LazyLock<Regex> = LazyLock::new(|| {
     .unwrap()
 });
 
+/// T09: an identifier in one naming convention: lower, upper, snake, kebab,
+/// dotted, camelCase or PascalCase words (`github-copilot`, `prefixItems`,
+/// `ExtensionKeywords`), unlike random mixed case (`QDaKkIyIVKw`).
+static IDENTIFIER: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(concat!(
+        r"^(?:[a-z]+(?:[-_.][a-z]+)*|[A-Z]+(?:[-_.][A-Z]+)*",
+        r"|[a-z]+(?:[A-Z][a-z]+)+|[A-Z][a-z]+(?:[-_.]?[A-Z][a-z]+)*)$",
+    ))
+    .unwrap()
+});
+
+/// T09: a package version or range (`^1.0.0`, `~2.3.4`, `>=5.2.3`).
+static VERSION_RANGE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[\^~<>=]*v?\d+\.\d+\.\d+(?:[-+.][0-9A-Za-z.-]*)?$").unwrap());
+
+/// T09: the XML `value` attribute after the key's closing quote, as the
+/// rules match it (`" value="`).
+static XML_VALUE_SEPARATOR: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"["']\s+value\s*=\s*["']?$"#).unwrap());
+
+/// T09: a key in a `key` or `name` attribute followed by the quoted value
+/// (`<add key="DbPassword" value="`, `<property name="password" value="`).
+static XML_KEY_VALUE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"(?i)\b(?:key|name)\s*=\s*["'][^"'<>\r\n]*["']\s+value\s*=\s*["']$"#).unwrap()
+});
+
+/// T09: code at the start of a value: a cast or parameter list
+/// (`(string) $x`, `()=>f`), an arrow function (`e=>({…})`), a comparison
+/// (`===C`) or a negated call (`!empty($uri[…])`).
+static CODE_START: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"^(?:\([^)]*\)|[A-Za-z_$][A-Za-z0-9_$]*\s*=>|[=>]|!\s*[A-Za-z_$][A-Za-z0-9_$]*\s*\()",
+    )
+    .unwrap()
+});
+
 /// How the key separates its value.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Separator {
@@ -484,9 +520,30 @@ pub(crate) fn is_assignment_value(text: &str, range: Range<usize>) -> bool {
     if quoted && closes_string(before) {
         return false;
     }
+    // T09: XML `key="…" value="…"` holds the key in a `key`/`name` attribute
+    // and the value in quotes (not `placeholder="API key" value={…}`).
+    let xml_value = XML_VALUE_SEPARATOR.is_match(before);
+    if xml_value && !(quoted && XML_KEY_VALUE.is_match(before)) {
+        return false;
+    }
     let Some((separator, key_end)) = separator(before) else {
         return true;
     };
+    // T09: a quoted key (`"password":`, `'password' =>`, `["DB_PASSWORD"] =`)
+    // is a field of JSON, a dict or an array: an unquoted value is code
+    // (`{"password": pwd}`, `case"apiKey":u=…`, `'password' => !empty(…)`),
+    // as after `=>`, and a quoted one must suit a field.
+    let quoted_key = xml_value
+        || before[..key_end]
+            .trim_end_matches(']')
+            .ends_with(['"', '\''])
+        || before[key_end..].trim_start().starts_with("=>");
+    if quoted_key && !quoted {
+        return false;
+    }
+    if quoted_key && !suits_field_key(value) {
+        return false;
+    }
     // `$PWD:/work` (a `docker -v` mount): the key is a shell variable.
     let key_start = before[..key_end]
         .trim_end_matches(|c: char| c.is_alphanumeric() || c == '_')
@@ -557,6 +614,194 @@ pub(crate) fn is_env_value(text: &str, range: Range<usize>) -> bool {
             || !(is_stand_in(bare) || names_a_credential(bare) || is_word_sequence(bare)))
 }
 
+/// Prefix words of a compound `…token` key whose value is no credential:
+/// pagination and stream cursors (`nextPageToken`, `continuation_token`),
+/// JSON pointer segments (`pathToken`),
+/// cancellation and sync handles, token counts of models and lexers
+/// (`max_token`, `prompt_token`) and the CSRF token, which
+/// `dlp_csrf_token` reports.
+const NON_SECRET_TOKEN_PREFIXES: &[&str] = &[
+    "page",
+    "next",
+    "prev",
+    "previous",
+    "cursor",
+    "path",
+    "continuation",
+    "cancel",
+    "cancellation",
+    "sync",
+    "resume",
+    "max",
+    "min",
+    "total",
+    "input",
+    "output",
+    "prompt",
+    "completion",
+    "start",
+    "end",
+    "eof",
+    "lexer",
+    "parser",
+    "csrf",
+    "xsrf",
+];
+
+/// Prefix words of a compound `…secret` key that names a Kubernetes or Helm
+/// secret object rather than holding a secret (`existingSecret`,
+/// `imagePullSecret`, `tls_secret`).
+const SECRET_OBJECT_PREFIXES: &[&str] = &["existing", "pull", "tls"];
+
+/// Bytes before the credential noun searched for a compound-key prefix.
+const MAX_KEY_PREFIX: usize = 64;
+
+/// T09: the shape of a key whose credential noun starts at `key_start`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum KeyShape<'a> {
+    /// The noun stands alone or after `.`/`-` (`password`, `app.db.password`,
+    /// `X-Api-Key`), as before T09.
+    Simple,
+    /// A compound or camelCase key with its prefix (`db_` of `db_password`,
+    /// `service` of `serviceSecret`).
+    Compound(&'a str),
+    /// The noun ends a word without a naming-convention break
+    /// (`mypassword`, `DBPASSWORD`, `Benutzerkennwort`): no key.
+    Word,
+}
+
+/// T09: the key shape at `key_start`. After `_` the prefix is the
+/// identifier before it (`DB_`, `lager_db_`); after a letter or digit the
+/// key is camelCase only where a lower-case letter or digit meets a capital
+/// noun (`dbPassword`, `DbPassword`, `adminDbPassword`).
+fn key_shape(text: &str, key_start: usize) -> KeyShape<'_> {
+    let before = &text[..key_start];
+    let Some(last) = before.chars().next_back() else {
+        return KeyShape::Simple;
+    };
+    let mut floor = key_start.saturating_sub(MAX_KEY_PREFIX);
+    while !text.is_char_boundary(floor) {
+        floor += 1;
+    }
+    let window = &before[floor..];
+    let head = &window[window
+        .trim_end_matches(|c: char| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-'))
+        .len()..];
+    if last == '_' {
+        return if words(head).is_empty() {
+            KeyShape::Simple
+        } else {
+            KeyShape::Compound(head)
+        };
+    }
+    // A letter outside ASCII (`Maßpasswort`) continues the word, as
+    // under the Unicode `\b` before T09.
+    if !last.is_alphanumeric() {
+        return KeyShape::Simple;
+    }
+    let capital_noun = text[key_start..]
+        .chars()
+        .next()
+        .is_some_and(|c| c.is_ascii_uppercase());
+    if capital_noun && (last.is_ascii_lowercase() || last.is_ascii_digit()) {
+        KeyShape::Compound(head)
+    } else {
+        KeyShape::Word
+    }
+}
+
+/// T09: whether the key whose credential noun starts at `key_start` has the
+/// shape of a key ([`key_shape`]) and the value at `value` suits it. A
+/// compound key names a field, so its value must suit one
+/// ([`suits_field_key`], `forgotPassword: "forgot-password"`).
+pub(crate) fn is_key_prefix(text: &str, key_start: usize, value: Range<usize>) -> bool {
+    match key_shape(text, key_start) {
+        KeyShape::Simple => true,
+        KeyShape::Compound(_) => suits_field_key(&text[value]),
+        KeyShape::Word => false,
+    }
+}
+
+/// T09: whether a quoted `value` suits a field key (a compound or quoted
+/// key) as a secret: no identifier in a naming convention, word, name or
+/// stand-in (`"github-copilot"`, `"prefixItems"`, `"alpha"`), no version
+/// range (`"^1.0.0"`), no code (`"IPython.core.magics.osm:OSMagics"`), and
+/// a passphrase with a capital, digit or symbol beyond lower-case words
+/// (`'little green men'` in a test array).
+fn suits_field_key(value: &str) -> bool {
+    let bare = trim_trailing_punctuation(value.trim());
+    if bare.contains(char::is_whitespace) {
+        return bare
+            .chars()
+            .any(|c| !(c.is_lowercase() || c.is_whitespace()));
+    }
+    !(VERSION_RANGE.is_match(bare)
+        || is_code_expression(bare)
+        || (is_word_like(bare)
+            && (IDENTIFIER.is_match(bare)
+                || is_stand_in(bare)
+                || names_a_credential(bare)
+                || is_word_sequence(bare))))
+}
+
+/// T09: [`is_assignment_key`] for `dlp_generic_credential_assignment`, and
+/// no compound `…token` key of a cursor, handle or count and no `…secret`
+/// key of a secret object (see [`NON_SECRET_TOKEN_PREFIXES`],
+/// [`SECRET_OBJECT_PREFIXES`]).
+pub(crate) fn is_credential_key(text: &str, key_start: usize, value: Range<usize>) -> bool {
+    if let KeyShape::Compound(head) = key_shape(text, key_start) {
+        let noun: String = text[key_start..]
+            .chars()
+            .take_while(|c| c.is_alphanumeric() || matches!(c, '_' | '-' | ' '))
+            .collect::<String>()
+            .trim_end()
+            .to_lowercase();
+        let prefix_words = words(head);
+        let excluded = |list: &[&str]| {
+            prefix_words
+                .iter()
+                .any(|word| list.contains(&word.as_str()))
+        };
+        if (noun.ends_with("token") && excluded(NON_SECRET_TOKEN_PREFIXES))
+            || (noun == "secret" && excluded(SECRET_OBJECT_PREFIXES))
+        {
+            return false;
+        }
+    }
+    is_assignment_key(text, key_start, value)
+}
+
+/// T09: [`is_key_prefix`] for the assignment rules, whose bare value stops
+/// after 150 characters: a value cut there (`id_token=eyJ…` with a long
+/// example JWT) is no whole value, and its example markers may lie beyond
+/// the cut.
+pub(crate) fn is_assignment_key(text: &str, key_start: usize, value: Range<usize>) -> bool {
+    let truncated = text[value.end..].chars().next().is_some_and(|c| {
+        !(c.is_whitespace() || matches!(c, '"' | '\'' | ';' | ',' | '}' | ']' | '\\'))
+    });
+    !truncated && is_key_prefix(text, key_start, value)
+}
+
+/// T09: whether the value at `range` of `text`, which `dlp_csrf_token`
+/// matched after its key, could be a token: no word sequence and no name
+/// with a credential noun (`"X-CSRF-Token"`, `csrf_token`) and, without
+/// quotes, no member access
+/// (`request.form.csrf`).
+pub(crate) fn is_token_value(text: &str, range: Range<usize>) -> bool {
+    let value = &text[range.clone()];
+    let quoted = text[..range.start].ends_with(['"', '\'']);
+    if !quoted && MEMBER_ACCESS.is_match(value) {
+        return false;
+    }
+    let bare = trim_trailing_punctuation(value);
+    !is_metasyntactic(bare)
+        && !(is_word_like(bare)
+            && (words(bare)
+                .iter()
+                .any(|word| is_credential_noun(word) || matches!(word.as_str(), "csrf" | "xsrf"))
+                || is_word_sequence(bare)))
+}
+
 /// F-GEN2: whether the quote that `before` ends with closes a string rather
 /// than opening the value: key and separator are a string of their own
 /// (`"Password:"),d?i.createElement(` in minified code, where the key is a
@@ -566,12 +811,27 @@ fn closes_string(before: &str) -> bool {
     let Some(quote) = before.chars().next_back() else {
         return false;
     };
-    let label = before[..before.len() - 1]
+    let head = &before[..before.len() - 1];
+    // T09: an escaped quote (`= \"…` in a JSON string or notebook cell) opens
+    // a value inside the outer string; it closes one after an odd number of
+    // escaped quotes on the line.
+    if let Some(head) = head.strip_suffix('\\') {
+        let line = &head[head.rfind('\n').map_or(0, |index| index + 1)..];
+        return line.matches(&format!("\\{quote}")).count() % 2 == 1;
+    }
+    // A label holds the key inside the string (`"Password:"`); a quoted key
+    // (`{"password":"…`) closes before its separator, and an XML attribute
+    // (`key="DbPassword" value="…`) follows a space.
+    let label = head
         .strip_suffix([':', '='])
         .map(|head| {
-            head.trim_end_matches(|c: char| c.is_alphanumeric() || matches!(c, '_' | '-' | ' '))
+            let opening = head
+                .trim_end_matches(|c: char| c.is_alphanumeric() || matches!(c, '_' | '-' | ' '));
+            (opening, &head[opening.len()..])
         })
-        .is_some_and(|head| head.ends_with(quote));
+        .is_some_and(|(opening, label)| {
+            opening.ends_with(quote) && label.starts_with(|c: char| !c.is_whitespace())
+        });
     if label {
         return true;
     }
@@ -704,7 +964,17 @@ pub(crate) fn is_userinfo_token(text: &str, range: Range<usize>) -> bool {
 /// The separator before a value and the byte offset where the key ends, or
 /// `None` if `before` does not end in a key and separator.
 fn separator(before: &str) -> Option<(Separator, usize)> {
-    let head = before.trim_end_matches(['"', '\'']).trim_end();
+    let head = before
+        .trim_end_matches(['"', '\''])
+        .trim_end_matches('\\')
+        .trim_end();
+    if let Some(found) = XML_VALUE_SEPARATOR.find(before) {
+        let key = before[..found.start()].trim_end_matches('\\');
+        return Some((Separator::Symbol, key.len()));
+    }
+    if let Some(rest) = head.strip_suffix("=>") {
+        return Some((Separator::Symbol, rest.trim_end().len()));
+    }
     if let Some(rest) = head.strip_suffix(['=', ':']) {
         return Some((Separator::Symbol, rest.trim_end().len()));
     }
@@ -721,6 +991,7 @@ fn is_code_expression(value: &str) -> bool {
     let value = value.trim_start_matches('`');
     value.starts_with(':')
         || value.starts_with("--")
+        || CODE_START.is_match(value)
         || ABNF_REPETITION.is_match(value)
         || CALL_OR_INDEX.is_match(value)
         || MEMBER_ACCESS.is_match(value)
@@ -898,7 +1169,7 @@ fn trim_trailing_punctuation(value: &str) -> &str {
 mod tests {
     use super::{
         closes_string, is_assignment_value, is_env_value, is_passphrase, is_userinfo_password,
-        is_userinfo_token,
+        is_userinfo_token, key_shape, suits_field_key, KeyShape,
     };
 
     /// The value after the last `{v}` marker position of `template`.
@@ -1168,5 +1439,81 @@ mod tests {
             "i.createElement(\"label\",{},\"Password:\"{v}\"",
             "),d?i.createElement("
         ));
+    }
+
+    /// The shape of the key whose noun starts at `noun` in `text`.
+    fn shape<'a>(text: &'a str, noun: &str) -> KeyShape<'a> {
+        key_shape(text, text.find(noun).unwrap())
+    }
+
+    #[test]
+    fn compound_and_camel_case_keys_have_their_prefix() {
+        assert_eq!(shape("password = x", "password"), KeyShape::Simple);
+        assert_eq!(shape("app.db.password=x", "password"), KeyShape::Simple);
+        assert_eq!(shape("X-Api-Key: x", "Api"), KeyShape::Simple);
+        assert_eq!(shape("_password = x", "password"), KeyShape::Simple);
+        assert_eq!(
+            shape("db_password = x", "password"),
+            KeyShape::Compound("db_")
+        );
+        assert_eq!(
+            shape("LAGER_DB_PASSWORD=x", "PASSWORD"),
+            KeyShape::Compound("LAGER_DB_")
+        );
+        assert_eq!(shape("dbPassword: x", "Password"), KeyShape::Compound("db"));
+        assert_eq!(
+            shape("<add key=\"AdminDbPassword\"", "Password"),
+            KeyShape::Compound("AdminDb")
+        );
+        assert_eq!(
+            shape("oauth2Secret = x", "Secret"),
+            KeyShape::Compound("oauth2")
+        );
+        for (text, noun) in [
+            ("mypassword = x", "password"),
+            ("DBPASSWORD=x", "PASSWORD"),
+            ("Benutzerkennwort: x", "kennwort"),
+            ("Maßpasswort: x", "passwort"),
+        ] {
+            assert_eq!(shape(text, noun), KeyShape::Word, "{text}");
+        }
+    }
+
+    #[test]
+    fn field_keys_need_more_than_identifiers_words_and_versions() {
+        for value in [
+            "Kx7!pQ2#vL9",
+            "QDaKkIyIVKwWKJSRDK",
+            "Blau Drache 47 Zaun",
+            "ab;Kx7pQ,42}Zr",
+        ] {
+            assert!(suits_field_key(value), "{value}");
+        }
+        for value in [
+            "github-copilot",
+            "prefixItems",
+            "ExtensionKeywords",
+            "alpha",
+            "SERVICE_NAME",
+            "^1.0.0",
+            ">=5.2.3",
+            "IPython.core.magics.osm:OSMagics",
+            "string",
+            "little green men",
+            "confirmPassword",
+        ] {
+            assert!(!suits_field_key(value), "{value}");
+        }
+    }
+
+    #[test]
+    fn escaped_quotes_open_values_inside_a_string() {
+        assert!(!closes_string("    \"db_password = \\\""));
+        assert!(!closes_string("{\"config\": \"{\\\"password\\\": \\\""));
+        assert!(closes_string("    \"print(\\\"Password: \\\""));
+        // A quoted JSON key closes before its separator; an XML attribute
+        // follows a space.
+        assert!(!closes_string("{\"password\":\""));
+        assert!(!closes_string("<add key=\"DbPassword\" value=\""));
     }
 }

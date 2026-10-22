@@ -12,7 +12,10 @@
 
 use std::sync::OnceLock;
 
-use patronus_ark::{SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult};
+use patronus_ark::{
+    detectors::dlp::dlp::DLP_PATTERNS, SecurityCategory, SecurityGateway, SecurityLevel,
+    SecurityScanResult,
+};
 
 fn scan(text: &str) -> SecurityScanResult {
     static SCANNER: OnceLock<SecurityGateway> = OnceLock::new();
@@ -329,4 +332,20 @@ fn token_urls_with_compound_keys_belong_to_the_url_rules() {
         "https://github_token:x-oauth-basic@github.com/acme/app.git\n",
         "https://YOUR_GITHUB_TOKEN:x-oauth-basic@github.com/acme/app.git\n",
     ]);
+}
+
+#[test]
+fn key_anchored_rules_have_a_key_gate() {
+    for rule_id in [
+        "dlp_password_assignment",
+        "dlp_generic_credential_assignment",
+        "dlp_csrf_token",
+        "dlp_password_hash",
+    ] {
+        let rule = DLP_PATTERNS
+            .iter()
+            .find(|rule| rule.name == rule_id)
+            .unwrap();
+        assert!(rule.meta.key_gate.is_some(), "{rule_id}");
+    }
 }

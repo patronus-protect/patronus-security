@@ -67,9 +67,15 @@ pub(super) const RULES: &[DlpPattern] = &[
         name: "dlp_password_assignment",
         // F-GEN2 (T04): a quoted value runs to its closing quote (spaces,
         // `;`, `,`, `}` inside), a bare value or an unclosed quote stops at them.
+        // T09: compound and camelCase keys, quoted and escaped keys and values,
+        // `=>`, subscripts, typed declarations and XML `key`/`value` attributes.
         pattern: concat!(
-            r"(?i)\b(?:password|passwort|passwd|kennwort|pwd)\b\s*(?:=|:|\bis\b|\bist\b|\blautet\b)\s*",
-            r#"(?:"([^"\r\n]{4,150})"|'([^'\r\n]{4,150})'|["']?([^\s"';,}\]]{4,150}))"#,
+            r"(?i)(?:password|passwort|passwd|kennwort|pwd)(?-u:\b)(?:",
+            xml_value_attribute!(),
+            "|",
+            key_suffix!(),
+            r"(?:=>|=|:|(?-u:\bis\b|\bist\b|\blautet\b)))\s*",
+            r#"(?:\\"([^"\\\r\n]{4,150})\\"|"([^"\r\n]{4,150})"|'([^'\r\n]{4,150})'|["']?([^\s"';,}\]]{4,150}))"#,
         ),
         entity_group: "CREDENTIAL",
         validator: Some(is_secret_value),
@@ -81,13 +87,18 @@ pub(super) const RULES: &[DlpPattern] = &[
             &["passw", "kennwort", "pwd"],
         )
         .with_subtype(SecretSubtype::Password)
-        .with_value_gate(likeness::is_assignment_value),
+        .with_value_gate(likeness::is_assignment_value)
+        .with_key_gate(likeness::is_assignment_key),
     },
     DlpPattern {
         name: "dlp_generic_credential_assignment",
         pattern: concat!(
-            r"(?i)\b(?:api[ _-]?key|access[ _-]?token|refresh[ _-]?token|auth[ _-]?token|client[ _-]?secret|encryption[ _-]?key|master[ _-]?key|api[ _-]?schl(?:ü|ue)ssel|zugangstoken|geheimnis|verschl(?:ü|ue)sselungsschl(?:ü|ue)ssel|secret|token)\b\s*(?:=|:|\bis\b|\bist\b|\blautet\b)\s*",
-            r#"(?:"([^"\r\n]{8,150})"|'([^'\r\n]{8,150})'|["']?([^\s"';,}\]]{8,150}))"#,
+            r"(?i)(?:api[ _-]?key|access[ _-]?token|refresh[ _-]?token|auth[ _-]?token|client[ _-]?secret|encryption[ _-]?key|master[ _-]?key|api[ _-]?schl(?:ü|ue)ssel|zugangstoken|geheimnis|verschl(?:ü|ue)sselungsschl(?:ü|ue)ssel|secret|token)(?-u:\b)(?:",
+            xml_value_attribute!(),
+            "|",
+            key_suffix!(),
+            r"(?:=>|=|:|(?-u:\bis\b|\bist\b|\blautet\b)))\s*",
+            r#"(?:\\"([^"\\\r\n]{8,150})\\"|"([^"\r\n]{8,150})"|'([^'\r\n]{8,150})'|["']?([^\s"';,}\]]{8,150}))"#,
         ),
         entity_group: "CREDENTIAL",
         validator: Some(is_secret_value),
@@ -99,7 +110,8 @@ pub(super) const RULES: &[DlpPattern] = &[
             &["api", "token", "secret", "key", "schl", "geheimnis"],
         )
         .with_subtype(SecretSubtype::GenericSecret)
-        .with_value_gate(likeness::is_assignment_value),
+        .with_value_gate(likeness::is_assignment_value)
+        .with_key_gate(likeness::is_credential_key),
     },
     DlpPattern {
         name: "dlp_bearer_token",
@@ -143,13 +155,23 @@ pub(super) const RULES: &[DlpPattern] = &[
     },
     DlpPattern {
         name: "dlp_csrf_token",
-        pattern: r"(?i)\b(?:X-CSRF-Token|X-XSRF-Token|csrf[ _-]?token|xsrf[ _-]?token)\b\s*(?::|=)?\s*([A-Za-z0-9._~+/%=-]{8,})",
+        // T09: key shapes as for the assignments; after a quoted key, a
+        // subscript or a type the separator is required.
+        pattern: concat!(
+            r"(?i)(?:X-CSRF-Token|X-XSRF-Token|csrf[ _-]?token|xsrf[ _-]?token)(?-u:\b)(?:",
+            xml_value_attribute!(),
+            "|",
+            key_suffix!(),
+            r#"(?::|=>|=)|)\s*(?:\\?["'])?([A-Za-z0-9._~+/%=-]{8,})"#,
+        ),
         entity_group: "SECRET_TOKEN",
         validator: Some(is_secret_value),
         span_group: Some(1),
         base_score: 25,
         meta: RuleMeta::new(ValidatorStrength::None, "ark", &["csrf", "xsrf"])
-            .with_subtype(SecretSubtype::SessionToken),
+            .with_subtype(SecretSubtype::SessionToken)
+            .with_value_gate(likeness::is_token_value)
+            .with_key_gate(likeness::is_key_prefix),
     },
 ];
 
