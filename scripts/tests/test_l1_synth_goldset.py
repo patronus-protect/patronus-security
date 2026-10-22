@@ -59,7 +59,10 @@ def compact(value: str) -> str:
 
 
 def test_generator_kinds_cover_exactly_the_entity_map_ids():
-    assert set(MODULE.entity_ids()) == map_ids()
+    # Ids added to the map after the freeze are listed and never generated.
+    assert set(MODULE.entity_ids()) == map_ids() - MODULE.NOT_GENERATED
+    assert MODULE.NOT_GENERATED <= map_ids()
+    assert not MODULE.NOT_GENERATED & set(MODULE.entity_ids())
 
 
 @pytest.mark.parametrize("rows", [dev_rows, holdout_rows], ids=["dev", "holdout"])
@@ -68,11 +71,11 @@ def test_every_entity_map_id_appears_in_both_languages(rows):
     missing = {
         (language, entity): counts[(language, entity)]
         for language in ("de", "en")
-        for entity in map_ids()
+        for entity in map_ids() - MODULE.NOT_GENERATED
         if counts[(language, entity)] < MODULE.MIN_PER_LANGUAGE
     }
     assert missing == {}
-    assert {entity for _, entity in counts} == map_ids()
+    assert {entity for _, entity in counts} == map_ids() - MODULE.NOT_GENERATED
 
 
 def test_every_document_type_appears_in_both_languages():
@@ -230,7 +233,7 @@ def test_write_splits_freezes_both_directories(tmp_path, capsys):
     assert "seed" not in holdout_manifest
     assert HOLDOUT_SEED not in (holdout / "manifest.json").read_text(encoding="utf-8")
     assert holdout_manifest["rows"] == MODULE.DEFAULT_DOCS["holdout"]
-    assert set(dev_manifest["entities"]) == map_ids()
+    assert set(dev_manifest["entities"]) == map_ids() - MODULE.NOT_GENERATED
     output = capsys.readouterr().out
     assert "dev: written" in output and "holdout: written" in output
     before = {path: path.read_bytes() for directory in (dev, holdout) for path in directory.iterdir()}

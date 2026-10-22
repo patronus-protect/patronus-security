@@ -62,6 +62,14 @@ pub static SUPPORT_LEXICON: &[(&str, &[&str])] = &[
     ("LICENSEPLATE", &["pii.vehicle_registration"]),
     ("SSN", &["pii.social_insurance_number"]),
     ("NATIONALID", &["pii.national_insurance_number"]),
+    ("VAT_ID_DE", &["pii.vat_identifier"]),
+    ("VAT_ID_AT", &["pii.vat_identifier"]),
+    ("VAT_ID_CH", &["pii.vat_identifier"]),
+    ("VAT_ID_FR", &["pii.vat_identifier"]),
+    ("VAT_ID_NL", &["pii.vat_identifier"]),
+    ("VAT_ID_BE", &["pii.vat_identifier"]),
+    ("VAT_ID_IT", &["pii.vat_identifier"]),
+    ("VAT_ID_ES", &["pii.vat_identifier"]),
 ];
 
 /// Counter-context lexicon IDs of `pii.json`: numbers that are not PII.
@@ -555,18 +563,22 @@ pub(super) fn structure_evidence(
 /// Whether the value at `value` (byte range) stands alone rather than continuing
 /// a number: no `+` right before it, no `-`, `/`, `.` or `,` joining it to a digit
 /// on either side, and no digit group one space away (`+49 30 123 456 789`). A
-/// context-free value (K05) has no field name that delimits it.
+/// context-free value (K05) has no field name that delimits it. A value that
+/// starts with a letter (the country prefix of a VAT ID, B01) is no decimal and
+/// no digit group: `,` and a space delimit it, so `…,17810,DE396839779,150279-0487,…`
+/// in a CSV row stands alone.
 pub(super) fn stands_alone(text: &str, value: Range<usize>) -> bool {
-    let joins = |ch: char| matches!(ch, '-' | '/' | '.' | ',');
+    let digit = |ch: Option<char>| ch.is_some_and(|ch| ch.is_ascii_digit());
+    let numeric = digit(text[value.clone()].chars().next());
+    let joins = |ch: char| matches!(ch, '-' | '/' | '.') || (numeric && ch == ',');
     let mut before = text[..value.start].chars().rev();
     let mut after = text[value.end..].chars();
     let (prev, prev2) = (before.next(), before.next());
     let (next, next2) = (after.next(), after.next());
-    let digit = |ch: Option<char>| ch.is_some_and(|ch| ch.is_ascii_digit());
     !(prev == Some('+')
         || (prev.is_some_and(joins) && digit(prev2))
         || (next.is_some_and(joins) && digit(next2))
-        || (prev == Some(' ') && digit(prev2))
+        || (numeric && prev == Some(' ') && digit(prev2))
         || (next == Some(' ') && digit(next2)))
 }
 

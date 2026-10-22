@@ -9,7 +9,7 @@ use crate::{
 use super::context::Evidence;
 use super::context_anchors::PII_ANCHOR_PATTERNS;
 use super::score::{self, PiiMode, ValidatorStrength};
-use super::{common, context, de, identifiers, intl, overlap, uk, us, validators};
+use super::{common, context, de, identifiers, intl, overlap, uk, us, validators, vat};
 use crate::detectors::anchors;
 use crate::detectors::obfuscation::{Deobfuscated, Level};
 use crate::EvidenceSpan;
@@ -85,6 +85,15 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     de::KFZ_KENNZEICHEN,
     us::SSN,
     uk::NINO,
+    vat::VAT_ID_DE,
+    vat::VAT_ID_AT,
+    vat::VAT_ID_CH,
+    vat::VAT_ID_FR,
+    vat::VAT_ID_NL,
+    vat::VAT_ID_BE,
+    vat::VAT_ID_IT,
+    vat::VAT_ID_IT_PROXIMITY,
+    vat::VAT_ID_ES,
 ];
 
 pub struct PiiPipeline {

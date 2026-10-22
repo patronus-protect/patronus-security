@@ -54,8 +54,10 @@ fn pattern(rule_id: &str) -> &'static PiiPattern {
 
 const SCORED: [PiiMode; 2] = [PiiMode::Balanced, PiiMode::Recall];
 
+type Validator = fn(&str) -> bool;
+
 /// Rule, label and validator of every VAT rule, in registry order.
-const RULES: [(&str, &str, fn(&str) -> bool); 9] = [
+const RULES: [(&str, &str, Validator); 9] = [
     ("pii_vat_id_de", "VAT_ID_DE", validators::de_vat_id),
     ("pii_vat_id_at", "VAT_ID_AT", validators::at_vat_id),
     ("pii_vat_id_ch", "VAT_ID_CH", validators::ch_vat_id),
@@ -246,7 +248,7 @@ const INVALID: &[(&str, &[(&str, &str)])] = &[
     ),
 ];
 
-fn validator_of(label: &str) -> fn(&str) -> bool {
+fn validator_of(label: &str) -> Validator {
     RULES
         .iter()
         .find(|(_, rule_label, _)| *rule_label == label)
@@ -404,6 +406,22 @@ fn printed_forms_keep_the_whole_number_and_no_trailing_suffix() {
         assert_eq!(
             spans("USt-IdNr.: DE 136 695 976 · Steuernummer folgt", mode),
             [("VAT_ID_DE".into(), "DE 136 695 976".into(), 0.80)],
+        );
+    }
+}
+
+#[test]
+fn a_comma_delimits_a_prefixed_value_in_a_csv_row() {
+    // A value that starts with its country prefix is no decimal: `,` next to a
+    // digit is the CSV delimiter, not a joined number as for a bare Steuer-ID.
+    for mode in SCORED {
+        assert_eq!(
+            spans("2,Emily Wright,447-12-55430,DE396839779,150279-0487", mode)
+                .into_iter()
+                .filter(|(label, ..)| label.starts_with("VAT_ID"))
+                .collect::<Vec<_>>(),
+            [("VAT_ID_DE".into(), "DE396839779".into(), 0.55)],
+            "{mode:?}"
         );
     }
 }

@@ -169,11 +169,20 @@ def test_checked_in_presidio_count_matches_the_pinned_registry():
 
 def test_checked_in_ark_count():
     counts = MODULE.count(ENTITY_MAP.load(), MODULE.load_rules())
-    # At T03 only Luhn, MOD 97-10 and the Steuer-ID check compute a check digit.
+    # At T03 only Luhn, MOD 97-10 and the Steuer-ID check compute a check digit; B01 adds
+    # one VAT ID per country.
     assert set(counts.ark) == {
         Unit("pii.credit_card.pan", None),
         Unit("pii.iban", None),
         Unit("pii.de.tax_id", "de"),
+        Unit("pii.de.vat_id", "de"),
+        Unit("pii.at.vat_id", "at"),
+        Unit("pii.ch.vat_id", "ch"),
+        Unit("pii.fr.vat_id", "fr"),
+        Unit("pii.nl.vat_id", "nl"),
+        Unit("pii.be.vat_id", "be"),
+        Unit("pii.it.vat_code", "it"),
+        Unit("pii.es.vat_id", "es"),
     }
     assert counts.m3_met is False
 

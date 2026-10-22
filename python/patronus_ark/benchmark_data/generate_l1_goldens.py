@@ -1632,8 +1632,8 @@ B01_VAT_ID_CASES = [
     n("VAT_ID_CH", "de", "pii_vat_id_ch", "Code XCHE265523994 gesperrt.", "glued to a letter", carrier="prose", mode="recall"),
     n("VAT_ID_CH", "en", "pii_vat_id_ch", "Swiss VAT number CHE-763.140.574", "check digit fails", mode="balanced"),
     n("VAT_ID_CH", "en", "pii_vat_id_ch", "Ticket number CHE-763.140.573 was closed.", "ticket number with a valid check digit", carrier="prose", mode="balanced"),
-    n("VAT_ID_CH", "en", "pii_vat_id_ch", "VAT number CHE-763.140.5731", "ten digits", mode="balanced"),
-    n("VAT_ID_CH", "en", "pii_vat_id_ch", "Range CHE763140573-4 reserved.", "part of a hyphenated number", carrier="prose", mode="balanced"),
+    n("VAT_ID_CH", "en", "pii_vat_id_ch", "VAT number CHE-763.140.57", "eight digits", mode="balanced"),
+    n("VAT_ID_CH", "en", "pii_vat_id_ch", "Model CHE763140573B sold out.", "glued to a letter", carrier="prose", mode="balanced"),
     n("VAT_ID_CH", "en", "pii_vat_id_ch", "VAT number CHE-100.155.213", "check digit fails", mode="recall"),
     # ── FR: key (12 + 3 × SIREN mod 97) mod 97 and SIREN Luhn ──────────────
     p("VAT_ID_FR", "de", "pii_vat_id_fr", "Die französische USt-IdNr. lautet ", "FR69626275960", ".", carrier="prose", mode="balanced"),

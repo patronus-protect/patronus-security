@@ -23,12 +23,13 @@ use super::score::ValidatorStrength;
 use crate::detectors::NativeDetection;
 
 /// Labels whose values rules of another label in this set can also match.
-pub const COMPETING_LABELS: [&str; 5] = [
+pub const COMPETING_LABELS: [&str; 6] = [
     "IBAN",
     "CREDITCARD",
     "FINANCIAL_ACCOUNT_NUMBER",
     "STEUERID",
     "PHONE",
+    "VAT_ID_IT",
 ];
 
 /// Labels whose findings inside a reported IBAN are secondary evidence of it in

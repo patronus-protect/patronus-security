@@ -3,7 +3,7 @@
 //!
 //! In `balanced` and `recall` one value yields one label among the number labels
 //! that compete for the same digits (`overlap::COMPETING_LABELS`: IBAN, card,
-//! account, Steuer-ID, phone). Of two overlapping findings with different labels
+//! account, Steuer-ID, phone, Partita IVA). Of two overlapping findings with different labels
 //! the first in this order wins: an IBAN (country code and MOD-97 prove the kind
 //! of value), the longer value (a card-shaped part of an IBAN or a longer number
 //! is a coincidence), context that supports its own label (a field name such as
@@ -187,7 +187,8 @@ fn competing_labels_are_the_number_labels() {
             "FINANCIAL_ACCOUNT_NUMBER",
             "IBAN",
             "PHONE",
-            "STEUERID"
+            "STEUERID",
+            "VAT_ID_IT"
         ])
     );
 }

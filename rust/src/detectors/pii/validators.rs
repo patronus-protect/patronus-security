@@ -582,6 +582,209 @@ pub fn steuer_id_issued(s: &str) -> bool {
             .any(|run| run[0] == run[1] && run[1] == run[2])
 }
 
+// ── VAT identification numbers (B01) ──────────────────────────────────────
+// One validator per country. Each takes the printed form (`DE 136 695 976`,
+// `CHE-100.155.212`) and checks the check digit of the issuing authority.
+
+/// The alphanumerics of `s` in upper case after the country prefix `prefix`:
+/// `DE.136.695.976` → `136695976`. A value without the prefix stays whole.
+fn vat_body(s: &str, prefix: &str) -> String {
+    let compact: String = s
+        .chars()
+        .filter(char::is_ascii_alphanumeric)
+        .map(|ch| ch.to_ascii_uppercase())
+        .collect();
+    match compact.strip_prefix(prefix) {
+        Some(body) => body.to_string(),
+        None => compact,
+    }
+}
+
+/// The decimal digits of `s`, if `s` has exactly `len` characters, all digits.
+fn vat_digits(s: &str, len: usize) -> Option<Vec<u32>> {
+    (s.len() == len && s.bytes().all(|byte| byte.is_ascii_digit()))
+        .then(|| s.bytes().map(|byte| u32::from(byte - b'0')).collect())
+}
+
+/// Luhn checksum of `digits` with the last digit undoubled, in `0..10`.
+fn luhn_checksum(digits: &[u32]) -> u32 {
+    digits
+        .iter()
+        .rev()
+        .enumerate()
+        .map(|(index, &digit)| match index % 2 {
+            0 => digit,
+            _ if digit > 4 => digit * 2 - 9,
+            _ => digit * 2,
+        })
+        .sum::<u32>()
+        % 10
+}
+
+/// ISO 7064 MOD 11,10 check digit of `digits`.
+fn iso7064_mod11_10(digits: &[u32]) -> u32 {
+    let product = digits.iter().fold(10, |product, &digit| {
+        let sum = (digit + product) % 10;
+        (if sum == 0 { 10 } else { sum }) * 2 % 11
+    });
+    (11 - product) % 10
+}
+
+/// German USt-IdNr.: `DE` and nine digits, no leading zero, the last an
+/// ISO 7064 MOD 11,10 check digit.
+pub fn de_vat_id(s: &str) -> bool {
+    let Some(digits) = vat_digits(&vat_body(s, "DE"), 9) else {
+        return false;
+    };
+    digits[0] != 0 && iso7064_mod11_10(&digits[..8]) == digits[8]
+}
+
+/// Austrian UID: `ATU` and eight digits; the check digit is
+/// `(6 − Luhn checksum of the first seven) mod 10`.
+pub fn at_vat_id(s: &str) -> bool {
+    let body = vat_body(s, "AT");
+    let Some(digits) = body.strip_prefix('U').and_then(|body| vat_digits(body, 8)) else {
+        return false;
+    };
+    (16 - luhn_checksum(&digits[..7])) % 10 == digits[7]
+}
+
+/// Swiss UID (`CHE-123.456.789`, the MWST number without its `MWST`/`TVA`/`IVA`
+/// suffix): nine digits, the last a weighted mod 11 check digit (weights
+/// 5 4 3 2 7 6 5 4; remainder 10 is never issued).
+pub fn ch_vat_id(s: &str) -> bool {
+    let mut body = vat_body(s, "CHE");
+    for suffix in ["MWST", "TVA", "IVA", "TPV"] {
+        if let Some(stripped) = body.strip_suffix(suffix) {
+            body = stripped.to_string();
+            break;
+        }
+    }
+    let Some(digits) = vat_digits(&body, 9) else {
+        return false;
+    };
+    let sum: u32 = digits[..8]
+        .iter()
+        .zip([5, 4, 3, 2, 7, 6, 5, 4])
+        .map(|(digit, weight)| digit * weight)
+        .sum();
+    let check = (11 - sum % 11) % 11;
+    check != 10 && check == digits[8]
+}
+
+/// French numéro de TVA: `FR`, a two-digit key and the nine-digit SIREN. The key
+/// is `(12 + 3 × (SIREN mod 97)) mod 97`; the SIREN passes Luhn except for the
+/// Monaco range `000…`. Keys with letters are not accepted.
+pub fn fr_vat_id(s: &str) -> bool {
+    let Some(digits) = vat_digits(&vat_body(s, "FR"), 11) else {
+        return false;
+    };
+    let siren = &digits[2..];
+    let number = siren
+        .iter()
+        .fold(0u64, |number, &digit| number * 10 + u64::from(digit));
+    let key = u64::from(digits[0] * 10 + digits[1]);
+    (siren[..3] == [0, 0, 0] || luhn_checksum(siren) == 0) && key == (number * 100 + 12) % 97
+}
+
+/// Dutch btw-id: `NL`, nine digits, `B` and a branch number `01`–`99`. Either the
+/// nine digits pass the mod 11 check of the former format (weights 9…2, minus
+/// the last digit) or the whole ID passes ISO 7064 MOD 97-10 (sole traders
+/// since 2020).
+pub fn nl_vat_id(s: &str) -> bool {
+    let body = vat_body(s, "NL");
+    if body.len() != 12 || body.as_bytes()[9] != b'B' {
+        return false;
+    }
+    let (Some(digits), Some(branch)) = (vat_digits(&body[..9], 9), vat_digits(&body[10..], 2))
+    else {
+        return false;
+    };
+    if digits.iter().all(|&digit| digit == 0) || branch == [0, 0] {
+        return false;
+    }
+    let weighted = digits[..8]
+        .iter()
+        .zip((2..=9).rev())
+        .map(|(digit, weight)| digit * weight)
+        .sum::<u32>();
+    let mod11 = (weighted + 11 * 9 - digits[8]) % 11 == 0;
+    let mod97 = format!("NL{body}")
+        .chars()
+        .filter_map(|ch| ch.to_digit(36))
+        .fold(0u32, |remainder, value| {
+            let shift = if value > 9 { 100 } else { 10 };
+            (remainder * shift + value) % 97
+        })
+        == 1;
+    mod11 || mod97
+}
+
+/// Belgian BTW/TVA number: `BE` and ten digits starting with `0` or `1`; the
+/// last two are `97 − (first eight mod 97)`.
+pub fn be_vat_id(s: &str) -> bool {
+    let Some(digits) = vat_digits(&vat_body(s, "BE"), 10) else {
+        return false;
+    };
+    let number = digits[..8]
+        .iter()
+        .fold(0u32, |number, &digit| number * 10 + digit);
+    digits[0] <= 1 && number != 0 && 97 - number % 97 == digits[8] * 10 + digits[9]
+}
+
+/// Italian Partita IVA, with or without `IT`: eleven digits, a company number
+/// that is not zero, a province office code `001`–`100`, `120`, `121`, `888` or
+/// `999`, and a Luhn check digit.
+pub fn it_vat_id(s: &str) -> bool {
+    let Some(digits) = vat_digits(&vat_body(s, "IT"), 11) else {
+        return false;
+    };
+    let office = digits[7] * 100 + digits[8] * 10 + digits[9];
+    digits[..7].iter().any(|&digit| digit != 0)
+        && matches!(office, 1..=100 | 120 | 121 | 888 | 999)
+        && luhn_checksum(&digits) == 0
+}
+
+/// Control letters of the Spanish DNI/NIE by remainder mod 23.
+const ES_CONTROL_LETTERS: &[u8; 23] = b"TRWAGMYFPDXBNJZSQVHLCKE";
+
+/// Spanish NIF-IVA: `ES` and a DNI (eight digits and a control letter), an NIE
+/// (`X`/`Y`/`Z`, seven digits, control letter), a NIF of `K`/`L`/`M` or a CIF
+/// (entity letter, seven digits and a control digit or letter).
+pub fn es_vat_id(s: &str) -> bool {
+    let body = vat_body(s, "ES");
+    let bytes = body.as_bytes();
+    if bytes.len() != 9 {
+        return false;
+    }
+    let (first, last) = (bytes[0], bytes[8]);
+    let Some(middle) = vat_digits(&body[1..8], 7) else {
+        return false;
+    };
+    let number = middle
+        .iter()
+        .fold(0u32, |number, &digit| number * 10 + digit);
+    let letter = |number: u32| ES_CONTROL_LETTERS[(number % 23) as usize];
+    match first {
+        b'0'..=b'9' => last == letter(u32::from(first - b'0') * 10_000_000 + number),
+        b'X' | b'Y' | b'Z' => last == letter(u32::from(first - b'X') * 10_000_000 + number),
+        b'K' | b'L' | b'M' => last == letter(number),
+        b'A'..=b'H' | b'J' | b'N' | b'P'..=b'S' | b'U'..=b'W' => {
+            let sum: u32 = middle
+                .iter()
+                .enumerate()
+                .map(|(index, &digit)| match index % 2 {
+                    0 => digit * 2 / 10 + digit * 2 % 10,
+                    _ => digit,
+                })
+                .sum();
+            let check = (10 - sum % 10) % 10;
+            last == b'0' + check as u8 || last == b"JABCDEFGHI"[check as usize]
+        }
+        _ => false,
+    }
+}
+
 pub fn postal_address_de(s: &str) -> bool {
     let mut parts = s.split_whitespace();
     let Some(postal_code) = parts.next() else {
