@@ -673,6 +673,132 @@
     "language_neutral": false
   },
   {
+    "category": "pii",
+    "rule_id": "pii_vat_id_de",
+    "de": "Bitte tragen Sie DE703082462 im Formular ein.",
+    "en": "Please copy DE478383064 into the supplier record.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Unsere USt-IdNr. lautet DE 500 088 387.",
+        "en": "Our VAT ID is DE973557063."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_at",
+    "de": "Bitte ATU87780063 auf der Rechnung ergänzen.",
+    "en": "Please add ATU66693740 to the vendor file.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Unsere UID-Nummer lautet ATU83263898.",
+        "en": "Our Austrian VAT number is ATU55987490."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_ch",
+    "de": "Bitte CHE-087.254.229 im Lieferantenstamm hinterlegen.",
+    "en": "Please store CHE-246.155.884 with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Unsere MWST-Nummer lautet CHE-265.523.994.",
+        "en": "Our Swiss VAT number is CHE-763.140.573."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_fr",
+    "de": "Bitte FR93932436389 im Lieferantenstamm hinterlegen.",
+    "en": "Please store FR74914367255 with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die französische USt-IdNr. lautet FR69626275960.",
+        "en": "Our French VAT number is FR 26 862 648 003."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_nl",
+    "de": "Bitte NL775186739B01 im Lieferantenstamm hinterlegen.",
+    "en": "Please store NL008203210B01 with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die niederländische USt-IdNr. lautet NL496806300B01.",
+        "en": "Our Dutch VAT number is NL703551818B02."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_be",
+    "de": "Bitte BE1680932103 im Lieferantenstamm hinterlegen.",
+    "en": "Please store BE0134627882 with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die belgische USt-IdNr. lautet BE 0843.608.406.",
+        "en": "Our Belgian VAT number is BE1481735574."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_it",
+    "de": "Bitte IT15761530615 im Lieferantenstamm hinterlegen.",
+    "en": "Please store IT55850260096 with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die italienische USt-IdNr. lautet IT57709980593.",
+        "en": "Our Italian VAT number is IT49352320276."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_it_proximity",
+    "de": "Partita IVA: 18149200349",
+    "en": "Italian VAT number: 53859980343",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die Partita IVA des Lieferanten ist 01002660106.",
+        "en": "The supplier's Partita IVA is 43123510471."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_es",
+    "de": "Bitte ESN32115586 im Lieferantenstamm hinterlegen.",
+    "en": "Please store ESV1760354I with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die spanische USt-IdNr. lautet ESJ4233905A.",
+        "en": "Our Spanish VAT number is ESX6866965Q."
+      }
+    }
+  },
+  {
     "category": "dlp",
     "rule_id": "dlp_anthropic_key",
     "de": "<<secret\u003a0>>",

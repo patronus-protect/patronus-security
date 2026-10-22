@@ -104,7 +104,18 @@ fn scored_only_rules_are_unbound_checksum_rules() {
             .iter()
             .map(|pattern| pattern.name)
             .collect::<Vec<_>>(),
-        [STEUER_ID]
+        [
+            STEUER_ID,
+            "pii_vat_id_de",
+            "pii_vat_id_at",
+            "pii_vat_id_ch",
+            "pii_vat_id_fr",
+            "pii_vat_id_nl",
+            "pii_vat_id_be",
+            "pii_vat_id_it",
+            "pii_vat_id_it_proximity",
+            "pii_vat_id_es",
+        ]
     );
     for pattern in scored_only {
         assert_eq!(
@@ -114,7 +125,14 @@ fn scored_only_rules_are_unbound_checksum_rules() {
             pattern.name
         );
         assert!(!pattern.captured_value, "{}", pattern.name);
-        assert!(!pattern.requires_context, "{}", pattern.name);
+        // The bare Partita IVA (B01) is the one unbound checksum rule that needs a
+        // VAT term; 11 bare digits with a Luhn digit prove too little alone.
+        assert_eq!(
+            pattern.requires_context,
+            pattern.name == "pii_vat_id_it_proximity",
+            "{}",
+            pattern.name
+        );
         // Bare, the checksum alone reaches the balanced threshold ...
         assert!(
             score::rule_score(pattern) >= PiiMode::Balanced.min_score().unwrap(),
@@ -155,6 +173,14 @@ fn every_checksum_label_reports_a_bare_value_in_the_scored_modes() {
         ("CREDITCARD", "4111 1111 1111 1111", 0.75),
         ("STEUERID", "86095742719", 0.55),
         ("STEUERID", "86 095 742 719", 0.55),
+        ("VAT_ID_DE", "DE136695976", 0.55),
+        ("VAT_ID_AT", "ATU13585627", 0.55),
+        ("VAT_ID_CH", "CHE-100.155.212", 0.55),
+        ("VAT_ID_FR", "FR40303265045", 0.55),
+        ("VAT_ID_NL", "NL004495445B01", 0.55),
+        ("VAT_ID_BE", "BE0403019261", 0.55),
+        ("VAT_ID_IT", "IT00743110157", 0.55),
+        ("VAT_ID_ES", "ESA13585625", 0.55),
     ];
     for label in PII_PATTERNS
         .iter()
