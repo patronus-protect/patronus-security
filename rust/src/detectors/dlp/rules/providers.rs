@@ -2,6 +2,7 @@
 //! Provider-bound secret formats (LLM, cloud, source control, payment, chat).
 use crate::{
     detectors::dlp::{
+        aws_context::{has_aws_secret_context, is_aws_secret_value},
         dlp::{DlpPattern, RuleMeta, SecretSubtype, ValidatorStrength},
         prefilter::ValueClass,
     },
@@ -143,9 +144,13 @@ pub(super) const RULES: &[DlpPattern] = &[
             .with_subtype(SecretSubtype::ApiKey),
     },
     // ── Cloud Provider Keys ──────────────────────────────────────────────────
+    // F05: credential prefixes of the IAM unique-ID table (long-term AKIA,
+    // temporary ASIA, STS bearer ABIA, context-specific ACCA, legacy A3T…)
+    // and exactly 16 Base32 characters. Group, user, role, policy and other
+    // unique IDs (AGPA, AIDA, AROA, ANPA …) are no credentials.
     DlpPattern {
         name: "dlp_aws_access_key",
-        pattern: r"(AKIA|A3T|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16,}",
+        pattern: r"(?:A3T[A-Z0-9]|AKIA|ASIA|ABIA|ACCA)[A-Z2-7]{16}",
         entity_group: "CLOUD_KEY",
         validator: None,
         span_group: None,
@@ -153,29 +158,37 @@ pub(super) const RULES: &[DlpPattern] = &[
         meta: RuleMeta::new(
             ValidatorStrength::Format,
             "gitleaks:aws-access-token",
-            &[
-                "akia", "a3t", "agpa", "aida", "aroa", "aipa", "anpa", "anva", "asia",
-            ],
+            &["akia", "asia", "abia", "acca", "a3t"],
         )
         .with_provider("aws")
         .with_min_entropy(3.0)
         .with_boundary("")
         .with_subtype(SecretSubtype::ApiKey),
     },
+    // F05: 40 base64 characters after an AWS key name or label (also in
+    // prose, up to two lines on), an access key ID, or a generic secret key
+    // name with AWS context (`aws_context`).
     DlpPattern {
         name: "dlp_aws_secret_key",
-        pattern: r#"(?i)(?:aws_secret_access_key|SecretAccessKey)\s*["'=:\s]{1,5}\s*([A-Za-z0-9/+=]{40})"#,
+        pattern: concat!(
+            r"(?:(?i:aws[\s_.-]?secret[\s_.-]?(?:access[\s_.-]?)?key|secret[\s_.-]?access[\s_.-]?key)",
+            r"(?:[^\n]{0,100}?|[^\n=]{0,100}\n(?:[^\n=]{0,100}\n)?[^\n=]{0,60}?)",
+            r"|(?:A3T[A-Z0-9]|AKIA|ASIA|ABIA|ACCA)[A-Z2-7]{16}[\x22'\\]{0,2}[ \t,;:|]{0,3}",
+            r"|\b(?:secret[_-]key|Secret[_-]Key|secretKey|SecretKey)[^\n]{0,30}?)",
+            r"[\s\x22'`:=(,>\[|;]([A-Za-z0-9/+]{40})(?:[^A-Za-z0-9/+=]|$)",
+        ),
         entity_group: "CLOUD_KEY",
-        validator: None,
+        validator: Some(is_aws_secret_value),
         span_group: Some(1),
         base_score: 35,
         meta: RuleMeta::new(
             ValidatorStrength::Format,
             "https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html",
-            &["aws_secret_access_key", "secretaccesskey"],
+            &["secret", "akia", "asia", "abia", "acca", "a3t"],
         )
         .with_provider("aws")
         .with_min_entropy(3.0)
+        .with_context_gate(has_aws_secret_context)
         .with_subtype(SecretSubtype::SecretKey),
     },
     DlpPattern {

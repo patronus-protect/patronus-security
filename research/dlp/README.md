@@ -62,6 +62,16 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   der gitleaks-Regeln, `dlp_gitlab_oauth_secret` das OAuth-Anwendungs-Secret `gloas-` (`API_KEY`,
   Untertyp `secret_key`). Die Prüfwerte der routbaren GitLab-Tokens werden nicht verifiziert,
   weil GitLab den Algorithmus nicht dokumentiert.
+  Seit F05 nimmt `dlp_aws_access_key` nur die Credential-Präfixe der IAM-Unique-ID-Tabelle
+  (`AKIA`, `ASIA`, `ABIA`, `ACCA`, alt `A3T…`) mit genau 16 Base32-Zeichen; Gruppen-, Benutzer-,
+  Rollen- und Policy-IDs (`AGPA`, `AIDA`, `AROA`, `ANPA` …) sind keine Zugangsdaten.
+  `dlp_aws_secret_key` nimmt 40 Base64-Zeichen mit Groß- und Kleinbuchstaben als ganzen Lauf, und
+  nur in strukturellem AWS-Kontext (`RuleMeta::context_gate`): nach einem AWS-Schlüsselnamen oder
+  -Label (auch in Prosa bis zu zwei Zeilen weiter), direkt nach einer Access Key ID (SDK-Aufruf,
+  Credentials-CSV, CLI) oder nach einem generischen `secret_key`/`secret-key`/`secretKey` mit
+  AWS-Kontext in bis zu fünf Zeilen darüber oder zwei darunter (Access Key ID oder
+  `access_key`-Schlüssel, Terraform `provider "aws"`/`backend "s3"`, `amazonaws.com`, `aws` als
+  Namensteil). Hex-Digests, 41 Zeichen lange Läufe und einfarbige Werte sind kein Secret Key.
   Seit K09 (Taxonomie v2) nennt jede Secret-Regel einen Untertyp ihrer Gruppe (`subtype` in
   `matched_rules`: `api_key`, `access_token`, `password`, `auth_url` …). Connection-Strings,
   Webhook-URLs, Auth-URLs, OTP-Secrets und Seed-Phrasen werden keine eigenen Gruppen, sondern
