@@ -164,8 +164,8 @@ In the default `strict` DLP mode every finding scores `1.0`. In `balanced` and `
 | `dlp_env_var_secret` | `CREDENTIAL` | `generic_secret` | – | `none` | `ark` | yes | on | 35 | field | 0.60 |
 | `dlp_password_assignment` | `CREDENTIAL` | `password` | – | `none` | `ark` | yes | on | 35 | field | 0.60 |
 | `dlp_generic_credential_assignment` | `CREDENTIAL` | `generic_secret` | – | `none` | `ark` | yes | on | 30 | field | 0.55 |
-| `dlp_bearer_token` | `SECRET_TOKEN` | `access_token` | – | `none` | `ark` | yes | on | 35 | field | 0.60 |
-| `dlp_basic_auth` | `CREDENTIAL` | `password` | – | `none` | `ark` | yes | on | 35 | field | 0.60 |
+| `dlp_bearer_token` | `SECRET_TOKEN` | `access_token` | – | `format` | [www.rfc-editor.org](https://www.rfc-editor.org/rfc/rfc6750#section-2.1) | yes | on | 35 | field | 0.75 |
+| `dlp_basic_auth` | `CREDENTIAL` | `password` | – | `structure` | [www.rfc-editor.org](https://www.rfc-editor.org/rfc/rfc7617#section-2) | yes | on | 35 | field | 0.85 |
 | `dlp_signed_url_signature` | `CREDENTIAL` | `signature` | – | `none` | `ark` | yes | on | 25 | field | 0.50 |
 | `dlp_session_cookie` | `CREDENTIAL` | `session_token` | – | `none` | `ark` | yes | on | 30 | field | 0.55 |
 | `dlp_csrf_token` | `SECRET_TOKEN` | `session_token` | – | `none` | `ark` | yes | on | 25 | field | 0.50 |

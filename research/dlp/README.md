@@ -113,6 +113,20 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   ein an der Fanggrenze von 150 Zeichen abgeschnittener Wert auch nicht. Wortgrenzen der Schlüssel
   sind ASCII (`(?-u:\b)`), der Regex der generischen Regel läuft dadurch etwa 25-mal schneller.
   Übergangslösung, bis K05/G02 die Schlüssel strukturell lesen.
+  Seit F-HTTP (F13 + T11) stehen `Bearer`, `Basic` und Session-Cookies nicht mehr nur in einer
+  wörtlichen `Authorization:`- oder `Cookie:`-Zeile: Die Regeln treffen unter
+  `authorization`/`proxy_authorization`-Schlüsseln in env/JSON/YAML/TOML/XML/Code, in Logs und
+  allein in Chats, Tickets und Mails. Der Wert belegt dafür seine Art (`rules/http_auth.rs`):
+  `Basic` nur, wenn das Base64 kanonisch ist und zu druckbarem `user-id:passwort` dekodiert
+  (RFC 7617), mit gewähltem Passwort (kein Platzhalter, Stellvertreter oder Credential-Name, auch
+  nicht in Leetspeak wie `user:p@ss`, nicht gleich der User-ID); `Bearer` nur als ausgestelltes
+  Token (RFC 6750, ab 16 Zeichen, zwei Zeichenklassen, 3 Bit Entropie je Zeichen, keine
+  Sequenz-/Wiederholungsläufe, kein Bezeichner). Ein gültiges JWT nach `Bearer` gehört `dlp_jwt_token`,
+  ein Provider-Token seiner Provider-Regel. Session-Cookies von Servern und Frameworks
+  (`JSESSIONID`, `PHPSESSID`, `ASP.NET_SessionId`, `connect.sid`, `laravel_session`,
+  `__Host-`/`__Secure-`) zählen auch ohne `Cookie:`-Zeile, generische Namen (`session`,
+  `sessionid`, `sid`) weiter nur darin; der Wert muss wie eine ausgestellte Session-ID aussehen.
+  Das RFC-7617-Beispiel ist ein dokumentierter Beispielwert (K06).
   Seit K09 (Taxonomie v2) nennt jede Secret-Regel einen Untertyp ihrer Gruppe (`subtype` in
   `matched_rules`: `api_key`, `access_token`, `password`, `auth_url` …). Connection-Strings,
   Webhook-URLs, Auth-URLs, OTP-Secrets und Seed-Phrasen werden keine eigenen Gruppen, sondern

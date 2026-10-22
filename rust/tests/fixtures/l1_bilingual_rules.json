@@ -1214,8 +1214,8 @@
   {
     "category": "dlp",
     "rule_id": "dlp_bearer_token",
-    "de": "Access-Token für den Abgleich: Bearer abcDEfGhIJkl123456",
-    "en": "AUTHORIZATION=Bearer abcDEfGhIJkl123456",
+    "de": "Access-Token für den Abgleich: Bearer kQ7vRz2mXp9TsW4nYb3d",
+    "en": "AUTHORIZATION=Bearer kQ7vRz2mXp9TsW4nYb3d",
     "hard_negatives": {
       "de": [
         "Authorization: Bearer HIER_TOKEN_EINTRAGEN",

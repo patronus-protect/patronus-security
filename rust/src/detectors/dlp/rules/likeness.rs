@@ -934,12 +934,18 @@ pub(crate) fn is_userinfo_password(text: &str, range: Range<usize>) -> bool {
 }
 
 /// T10: whether the username of a token-in-username URL
-/// (`https://<value>:x-oauth-basic@…`) looks like a token: no word, name or
-/// stand-in, two character classes, at least 3 bits of entropy per
-/// character and no hand-typed runs: a machine-issued token covered by
-/// sequential or repeated runs (`ghp_1234567890abcdef…`) is a demo value.
+/// (`https://<value>:x-oauth-basic@…`) looks like a token, see
+/// [`is_token_like`].
 pub(crate) fn is_userinfo_token(text: &str, range: Range<usize>) -> bool {
-    let value = &text[range];
+    is_token_like(&text[range])
+}
+
+/// T10, F-HTTP: whether `value` looks like a machine-issued token: no word,
+/// name or stand-in, two character classes, at least 3 bits of entropy per
+/// character and no hand-typed runs: a token covered by sequential or
+/// repeated runs (`ghp_1234567890abcdef…`, `DEADBEEFDEADBEEF…`) is a demo
+/// value.
+pub(super) fn is_token_like(value: &str) -> bool {
     if low_variety(value) != LowVariety::No {
         return false;
     }
@@ -959,6 +965,37 @@ pub(crate) fn is_userinfo_token(text: &str, range: Range<usize>) -> bool {
         && !is_metasyntactic(value)
         && !(is_word_like(value)
             && (is_stand_in(value) || names_a_credential(value) || is_word_sequence(value)))
+}
+
+/// F-HTTP: an identifier in one naming convention (`zugangstoken_lager`,
+/// `accessTokenFromVault`, `YOUR_ACCESS_TOKEN`) rather than a token.
+pub(super) fn is_identifier(value: &str) -> bool {
+    is_word_like(value) && IDENTIFIER.is_match(value)
+}
+
+/// F-HTTP: whether the password of a decoded Basic `user:password` pair
+/// (RFC 7617) is a chosen one: not the user-id again (`admin:admin`), no
+/// metasyntactic stand-in (`foo:bar`) and, read without leetspeak digits and
+/// symbols (`p@ss`, `s3cr3t`), no credential name or stand-in
+/// (`user:password`, `application:secret`, `confidentialApplication:topSecret`)
+/// and no word sequence.
+pub(super) fn is_chosen_password(user: &str, password: &str) -> bool {
+    let plain: String = password
+        .chars()
+        .map(|c| match c {
+            '@' | '4' => 'a',
+            '3' => 'e',
+            '1' | '!' => 'i',
+            '0' => 'o',
+            '$' | '5' => 's',
+            '7' => 't',
+            c => c,
+        })
+        .collect();
+    !password.eq_ignore_ascii_case(user)
+        && !is_metasyntactic(password)
+        && !(is_word_like(&plain)
+            && (is_stand_in(&plain) || names_a_credential(&plain) || is_word_sequence(&plain)))
 }
 
 /// The separator before a value and the byte offset where the key ends, or

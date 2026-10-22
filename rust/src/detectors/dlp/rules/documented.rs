@@ -59,6 +59,12 @@ const DOCUMENTED_VALUES: &[DocumentedValue] = &[
         sha256: "4ff96a60934849a7f7c7733f163824cc22be7da33384bbd0b5de992972ea5586",
     },
     DocumentedValue {
+        id: "rfc7617_basic_credentials",
+        rule_id: "dlp_basic_auth",
+        kind: DocumentedKind::Example,
+        sha256: "cf4d418ed3de92d71f767db5391d5a2dacd40e1ce49e75d1137e2ecf4982d844",
+    },
+    DocumentedValue {
         id: "hardhat_account_0",
         rule_id: "dlp_eth_private_key",
         kind: DocumentedKind::Test,

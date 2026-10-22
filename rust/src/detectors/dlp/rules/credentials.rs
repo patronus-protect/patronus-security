@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! Generic credentials: tokens, credential assignments, auth headers,
 //! cookies and connection strings.
-use super::likeness;
+use super::{http_auth, likeness};
 use crate::detectors::dlp::dlp::{DlpPattern, RuleMeta, SecretSubtype, ValidatorStrength};
 
 pub(super) const RULES: &[DlpPattern] = &[
@@ -115,23 +115,39 @@ pub(super) const RULES: &[DlpPattern] = &[
     },
     DlpPattern {
         name: "dlp_bearer_token",
-        pattern: r"(?i)\bAuthorization\s*:\s*Bearer\s+([A-Za-z0-9._~+/=-]{8,})",
+        // F-HTTP: `Bearer <b64token>` (RFC 6750) wherever it stands: in a
+        // header line, under `authorization` keys of env/JSON/YAML/TOML/code,
+        // in logs and alone in chats and mails. The token proves itself
+        // (`http_auth::is_bearer_token`); it does not end with a dot.
+        pattern: r"(?i)(?-u:\b)Bearer\s+([A-Za-z0-9._~+/-]*[A-Za-z0-9_~+/-]=*)",
         entity_group: "SECRET_TOKEN",
         validator: Some(is_secret_value),
         span_group: Some(1),
         base_score: 35,
-        meta: RuleMeta::new(ValidatorStrength::None, "ark", &["bearer"])
-            .with_subtype(SecretSubtype::AccessToken),
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://www.rfc-editor.org/rfc/rfc6750#section-2.1",
+            &["bearer"],
+        )
+        .with_subtype(SecretSubtype::AccessToken)
+        .with_value_gate(http_auth::is_bearer_token),
     },
     DlpPattern {
         name: "dlp_basic_auth",
-        pattern: r"(?i)\bAuthorization\s*:\s*Basic\s+([A-Za-z0-9+/]{8,}={0,2})",
+        // F-HTTP: `Basic <base64>` (RFC 7617) wherever it stands; the base64
+        // must decode to `user-id:password` (`http_auth::is_basic_credentials`).
+        pattern: r"(?i)(?-u:\b)Basic\s+([A-Za-z0-9+/]{8,}={0,2})",
         entity_group: "CREDENTIAL",
         validator: Some(is_secret_value),
         span_group: Some(1),
         base_score: 35,
-        meta: RuleMeta::new(ValidatorStrength::None, "ark", &["authorization"])
-            .with_subtype(SecretSubtype::Password),
+        meta: RuleMeta::new(
+            ValidatorStrength::Structure,
+            "https://www.rfc-editor.org/rfc/rfc7617#section-2",
+            &["basic"],
+        )
+        .with_subtype(SecretSubtype::Password)
+        .with_value_gate(http_auth::is_basic_credentials),
     },
     DlpPattern {
         name: "dlp_signed_url_signature",
@@ -145,13 +161,38 @@ pub(super) const RULES: &[DlpPattern] = &[
     },
     DlpPattern {
         name: "dlp_session_cookie",
-        pattern: r"(?i)\b(?:Cookie|Set-Cookie)\s*:[^\r\n]{0,200}?\b(?:sessionid|session|JSESSIONID|PHPSESSID)=([A-Za-z0-9._~+/%=-]{8,})",
+        // F-HTTP: generic session names (`session`, `sessionid`, `sid`) only
+        // in a `Cookie:`/`Set-Cookie:` line; the session cookies of servers
+        // and frameworks (`JSESSIONID`, `PHPSESSID`, `ASP.NET_SessionId`,
+        // `connect.sid`, `laravel_session`) and `__Host-`/`__Secure-` names
+        // anywhere, as `name=value` or a quoted key and value
+        // (`"JSESSIONID": "…"`, `'laravel_session' => '…'`). The value does
+        // not end with a dot and must look issued (`http_auth::is_session_id`).
+        pattern: concat!(
+            r"(?i)(?:(?-u:\b)(?:Cookie|Set-Cookie)\s*:[^\r\n]{0,200}?(?-u:\b)(?:sessionid|session_id|session|sid)",
+            r"|(?-u:\b)(?:JSESSIONID|PHPSESSID|ASP\.NET_SessionId|connect\.sid|laravel_session|__Host-[A-Za-z0-9_.-]{1,64}|__Secure-[A-Za-z0-9_.-]{1,64}))",
+            r#"(?:=|["']\s*(?::|=>)\s*["'])([A-Za-z0-9._~+/%=-]{7,}[A-Za-z0-9_~+/%=-])"#,
+        ),
         entity_group: "CREDENTIAL",
         validator: Some(is_secret_value),
         span_group: Some(1),
         base_score: 30,
-        meta: RuleMeta::new(ValidatorStrength::None, "ark", &["cookie"])
-            .with_subtype(SecretSubtype::SessionToken),
+        meta: RuleMeta::new(
+            ValidatorStrength::None,
+            "ark",
+            &[
+                "cookie",
+                "jsessionid",
+                "phpsessid",
+                "asp.net_sessionid",
+                "connect.sid",
+                "laravel_session",
+                "__host-",
+                "__secure-",
+            ],
+        )
+        .with_subtype(SecretSubtype::SessionToken)
+        .with_value_gate(http_auth::is_session_id),
     },
     DlpPattern {
         name: "dlp_csrf_token",

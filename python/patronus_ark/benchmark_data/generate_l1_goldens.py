@@ -1624,6 +1624,8 @@ DLP_LOOKALIKE_GENERATORS = (
     # F05
     "aws_access_key_id_non_base32", "aws_access_key_id_long", "aws_iam_user_unique_id",
     "aws_secret_access_key_long", "aws_secret_access_key_hex",
+    # F-HTTP: random base64 that decodes to no user:password pair
+    "http_basic_credentials",
 )
 
 
@@ -6203,6 +6205,16 @@ DLP_FHTTP_CASES = {
             "Basic usage of the client is documented in docs/usage.md\n",
             "word after Basic", carrier="prose",
         ),
+        dl(
+            "CREDENTIAL", "de", "dlp_basic_auth",
+            "GET /v1/lager HTTP/1.1\nHost: api.intern\nAuthorization: Basic <<secret:0>>\n",
+            "http_basic_credentials", 14006, "random base64 that decodes to no user:password", carrier="http",
+        ),
+        dl(
+            "CREDENTIAL", "en", "dlp_basic_auth",
+            "proxy_authorization: \"Basic <<secret:0>>\"\n",
+            "http_basic_credentials", 14016, "random base64 that decodes to no user:password", carrier="yaml",
+        ),
         dn(
             "CREDENTIAL", "en", "dlp_session_cookie",
             "session_cookie: \"JSESSIONID=<redacted>\"\n",
@@ -6254,7 +6266,7 @@ DLP_FHTTP_CASES = {
         ds(
             "SECRET_TOKEN", "en", "dlp_bearer_token",
             "From: Alex Turner <alex.turner@example.com>\nSubject: Access token for the reporting job\n\n"
-            "Hi team,\n\nhere is the access token:\n\nBearer <<secret:0>>\n\nThanks, Alex\n",
+            "Hi team,\n\nhere is the access token for the job, valid until Friday:\n\nBearer <<secret:0>>\n\nThanks, Alex\n",
             "bearer_opaque_token", 14033, carrier="prose",
         ),
         ds(

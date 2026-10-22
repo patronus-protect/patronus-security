@@ -346,8 +346,7 @@ fn low_entropy_identifiers_and_examples_after_bearer_stay_silent() {
         "Authorization: Bearer abcd1234",
         "Authorization: Bearer abcdefghijklmnopqrstuvwxyz",
         "Authorization: Bearer 12345678901234567890",
-        // A malformed JWT and documented values.
-        "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.notajwt.signature",
+        // Documented values.
         "AUTHORIZATION=Bearer EXAMPLEKEYEXAMPLEKEYEXAMPLEKEYEXAMPLEKEYEXA",
         "AUTHORIZATION=Bearer TESTKEYTESTKEYTESTKEYTESTKEYTESTKEYTESTKEYQ",
         // References, templates and format placeholders.
