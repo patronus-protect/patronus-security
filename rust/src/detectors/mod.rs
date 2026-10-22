@@ -80,7 +80,12 @@ pub(crate) trait NativeRegexDetector {
     fn details(&self, _text: &str) -> HashMap<String, serde_json::Value> {
         HashMap::new()
     }
-    fn finalize_spans(&self, _text: &str, _spans: &mut Vec<EvidenceSpan>) {}
+    fn finalize_spans(
+        &self,
+        _prepared: &crate::threat::NativeText<'_>,
+        _spans: &mut Vec<EvidenceSpan>,
+    ) {
+    }
 
     /// Resolve overlaps between accepted matches. `candidates[i]` is the
     /// evidence of rule index `candidates[i].0` and of `matched_rules[i]`, in
@@ -339,7 +344,7 @@ pub(crate) trait NativeRegexDetector {
                 details,
             };
         };
-        self.finalize_spans(text, &mut non_overlapping_spans);
+        self.finalize_spans(prepared, &mut non_overlapping_spans);
         non_overlapping_spans.sort_by_key(|span| (span.start_byte, span.end_byte));
         if non_overlapping_spans.is_empty() {
             return NativeDetection {

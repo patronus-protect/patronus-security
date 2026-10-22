@@ -33,6 +33,11 @@ result shapes may be breaking for downstream users, and is called out explicitly
   `strict` and `balanced`, CVV and expiry findings next to a phone number or a brandless Luhn-valid
   number disappear, and compact or hyphen-grouped PANs after a hyphenated card-field label are found
   again.
+- A CVV in a table column headed by a CVV label (`cvc`, `cvv`, … as a CSV or Markdown-table header)
+  is reported without a card in the text; a `CVV: 123` field or a `cvv` key elsewhere still needs a
+  reported card. **Detection change:** in `strict` and `balanced`, such column CVVs next to a phone
+  number (found before only because the phone number passed Luhn) stay found, and column CVVs without
+  any card number are new findings.
 
 ### Added
 

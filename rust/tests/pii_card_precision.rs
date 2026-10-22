@@ -414,6 +414,32 @@ fn a_reported_pan_still_enables_cvv_and_expiry() {
 }
 
 #[test]
+fn a_cvv_column_needs_no_reported_pan() {
+    // A table column headed `cvc` types its values; a `CVV:` field elsewhere still needs a card.
+    for text in [
+        "nr;telefon;cvc\n1;+49 151 23456787;309\n",
+        "| name | cvv |\n|---|---|\n| A | 309 |\n",
+    ] {
+        for mode in MODES {
+            let labels = labels(text, mode);
+            assert!(
+                labels.iter().any(|label| label == "CREDITCARD_CVV"),
+                "{mode:?}: {text}: {labels:?}"
+            );
+        }
+    }
+    for text in ["cvc: 309", "CVV=309", "{\"cvv\": \"309\"}"] {
+        for mode in MODES {
+            let labels = labels(text, mode);
+            assert!(
+                !labels.iter().any(|label| label == "CREDITCARD_CVV"),
+                "{mode:?}: {text}: {labels:?}"
+            );
+        }
+    }
+}
+
+#[test]
 fn pans_after_a_hyphenated_card_field_label_stay_found() {
     // A card-field label joined by `-` names the card; it is no token prefix. (After `_` the
     // card rule has no word boundary, so `card_number_…` is no match at all.)
