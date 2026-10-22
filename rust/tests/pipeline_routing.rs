@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use patronus_ark::detectors::validators::crc32_base62;
 use patronus_ark::{
     EvaluationResult, ExternalL1Detector, ExternalL1Input, L3SchedulerPolicy, QueuedSecurityEvent,
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityRequestCompletion,
@@ -951,16 +952,15 @@ fn native_dlp_evidence_covers_governance_github_token_fixture() {
         false,
     );
     scanner.warmup().unwrap();
+    // F03: a ghp_ token has 30 base62 characters and their CRC32; the
+    // checksum is computed here so no valid token is checked in.
+    let payload = concat!("w8dkq3zrm7xbt2vn", "h9pyc4fls6ajg0");
+    let token = format!("ghp_{payload}{}", crc32_base62(payload));
 
     let result = scanner
         .scan_category(
             SecurityCategory::Dlp,
-            concat!(
-                "Authorization: Bearer ",
-                "ghp_",
-                "w8dkq3zrm7xbt2vn",
-                "h9pyc4fls6ajg0eu"
-            ),
+            &format!("Authorization: Bearer {token}"),
         )
         .into_iter()
         .find(|result| result.model == "native:dlp")
@@ -968,10 +968,7 @@ fn native_dlp_evidence_covers_governance_github_token_fixture() {
 
     assert_eq!(result.class_name, "SECRET_TOKEN");
     assert_eq!(result.evidence_spans.len(), 1);
-    assert_eq!(
-        result.evidence_spans[0].text,
-        concat!("ghp_", "w8dkq3zrm7xbt2vn", "h9pyc4fls6ajg0eu")
-    );
+    assert_eq!(result.evidence_spans[0].text, token);
 }
 
 #[test]
