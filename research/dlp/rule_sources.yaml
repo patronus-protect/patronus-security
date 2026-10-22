@@ -140,3 +140,6 @@ rules:
   dlp_jwt_token:
     source_ref: gitleaks:jwt
     format: "three base64url segments, header and payload start with ey"
+  dlp_url_userinfo_token:
+    source_ref: https://github.blog/2012-09-21-easier-builds-and-deployments-using-git-over-https-and-oauth/
+    format: "token as the username of a URL with the constant password x-oauth-basic (https://<token>:x-oauth-basic@github.com/…); the token needs two character classes, 3 bits of entropy per character and no sequential or repeated runs (F-GEN1)"

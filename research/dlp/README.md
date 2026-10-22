@@ -72,6 +72,18 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   AWS-Kontext in bis zu fünf Zeilen darüber oder zwei darunter (Access Key ID oder
   `access_key`-Schlüssel, Terraform `provider "aws"`/`backend "s3"`, `amazonaws.com`, `aws` als
   Namensteil). Hex-Digests, 41 Zeichen lange Läufe und einfarbige Werte sind kein Secret Key.
+  Seit F-GEN1 brauchen die Werte der generischen Regeln Passwort-Ähnlichkeit
+  (`RuleMeta::value_gate`, `rules/likeness.rs`): `dlp_password_assignment` und
+  `dlp_generic_credential_assignment` verwerfen Code-Ausdrücke (Aufruf, Index-/Member-Zugriff,
+  `Token::…`-Pfad, Typannotation wie `Option<&str>` oder `string|null`, `%s`), Schlüssel mit
+  `:` am Ende, Pfade, eine Shell-Variable als Schlüssel (`$PWD:/work`), DE/EN-Wörterbuchwörter
+  und Wortformen („Passwort ist falsch“), Credential-Namen in einer Namenskonvention
+  (`GIT_PASSWORD`, `clientSecret`) und Test-Platzhalter (`"password"`, `"topSecret"`, `foo001`).
+  Ein Wert mit Ziffer oder Sonderzeichen ist nie ein Wort; schwache echte Passwörter bleiben
+  Treffer. `dlp_url_userinfo_password` verwirft Test-Zugangsdaten (`user:pass`, `user:secret`)
+  und das Pseudo-Passwort `x-oauth-basic`; `dlp_url_userinfo_token` meldet das Token im
+  Benutzernamen von `https://<token>:x-oauth-basic@…` (zwei Zeichenklassen, Entropie ≥ 3 Bit,
+  keine Folgen/Wiederholungen).
   Seit K09 (Taxonomie v2) nennt jede Secret-Regel einen Untertyp ihrer Gruppe (`subtype` in
   `matched_rules`: `api_key`, `access_token`, `password`, `auth_url` …). Connection-Strings,
   Webhook-URLs, Auth-URLs, OTP-Secrets und Seed-Phrasen werden keine eigenen Gruppen, sondern
@@ -86,7 +98,7 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
 - Bekannte Präzisionslücken: `dlp_eth_private_key` traf bis F01 jeden 0x-64-Hex-Wert, also auch
   Tx- und Block-Hashes. `dlp_btc_wif` validierte bis K08 die Prüfsumme nicht. `dlp_signed_url_signature`
   (`sig=`) und `dlp_credential_in_url` (`token=`) treffen auch Paginierungs- und CSRF-Parameter.
-  `dlp_password_assignment` nimmt in Prosa beliebige Wörter („Passwort ist falsch“).
+  `dlp_password_assignment` nahm bis F-GEN1 in Prosa beliebige Wörter („Passwort ist falsch“).
 - Gemessen ist bisher nur Content: 214 Go-Dokumente aus gitleaks (Dokumentlabel) und 250
   SQL-Statements aus SchemaPile. Beide liegen als Dev-Komponente `external/` im Scoreboard
   (E12; Attach/Scope-Vertrag in

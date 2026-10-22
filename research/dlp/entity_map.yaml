@@ -420,6 +420,12 @@ entities:
     group: CRYPTO_KEY
     ark: [dlp_btc_wif]
     backlog: F02
+  - id: credential.url_userinfo_token
+    scope: ark_only
+    group: SECRET_TOKEN
+    subtype: access_token
+    ark: [dlp_url_userinfo_token]
+    backlog: F-GEN1
   - id: credential.url_query_secret
     scope: ark_only
     group: CREDENTIAL
