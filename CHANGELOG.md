@@ -73,6 +73,14 @@ result shapes may be breaking for downstream users, and is called out explicitly
   unannotated value), identity card F1 47.3 → 70.8, balanced L1 F1 +0.3 pp (DE +0.6 pp), no new
   hard-negative FP; 13_l1_golden_eval 734/734 positives, 638/638 hard negatives. Existing validators
   are unchanged.
+- The foreign-field guard of F08 also covers the old numeric serial (`pii_passport_number_de_legacy`,
+  `pii_identity_card_number_de_legacy`, PR #132 review): a key that names another value overrides a
+  document term found by proximity, so `passport: archived` followed by `member_code: <ten digits>`
+  reports no passport. **Detection change:** none in `strict`; in `balanced` and `recall` a
+  checksum-valid ten-digit value under an unrelated key no longer becomes a passport or identity card
+  finding because a document term stands nearby. A document key (`passport_no:`, `Ausweisnummer:`)
+  and a key that holds a document term itself (`old passport number:`, new
+  `context::key_holds_term`) still report it; validators are unchanged.
 - Add VAT identification numbers for DE, AT, CH, FR, NL, BE, IT and ES (B01), one label and one
   check-digit validator per country: `VAT_ID_DE` (ISO 7064 MOD 11,10), `VAT_ID_AT` (UID `ATU`, Luhn
   variant), `VAT_ID_CH` (UID `CHE`, weighted mod 11), `VAT_ID_FR` (key `(12 + 3 × SIREN) mod 97` plus

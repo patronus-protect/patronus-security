@@ -589,6 +589,27 @@ pub(super) fn foreign_field(fields: &Fields, text: &str, value: Range<usize>, la
             .is_some_and(|distance| distance <= PROXIMITY_CONTEXT_POINTS[0].0))
 }
 
+/// Whether the structural key of the value at `value` (byte range) holds a term
+/// of `label` itself although no key of the lexicon names it (`old passport
+/// number: …`, F08). The old numeric serial carries no letter series: a document
+/// term on another line (`passport: archived` before `member_code: …`) does not
+/// claim it, a term inside its own key does.
+pub(super) fn key_holds_term(
+    fields: &Fields,
+    text: &str,
+    value: Range<usize>,
+    label: &str,
+) -> bool {
+    fields.at(value.clone()).any(|field| {
+        let own = evidence(text, (value.start, value.end), label);
+        own.context.supports()
+            && own.side == Some(Side::Before)
+            && own.distance.is_some_and(|distance| {
+                distance < text[field.key.start..value.start].chars().count()
+            })
+    })
+}
+
 /// Whether the value at `value` (byte range) stands alone rather than continuing
 /// a number: no `+` right before it, no `-`, `/`, `.` or `,` joining it to a digit
 /// on either side, and no digit group one space away (`+49 30 123 456 789`). A

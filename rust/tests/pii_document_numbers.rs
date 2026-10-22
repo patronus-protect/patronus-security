@@ -455,6 +455,43 @@ fn a_field_that_names_another_value_keeps_a_bare_check_digit_silent() {
 }
 
 #[test]
+fn a_foreign_key_keeps_an_old_numeric_serial_silent_despite_a_nearby_document_term() {
+    // The old numeric serial takes a document term from proximity only when no
+    // key names another value: a document term on the line before does not
+    // claim the value of an unrelated key.
+    assert!(validators::de_identity_card_number("1220001297"));
+    assert!(validators::de_passport_number("3000123454"));
+    for mode in SCORED {
+        for text in [
+            "passport: archived\nmember_code: 1220001297",
+            "{\"passport\": \"archived\", \"member_code\": \"3000123454\"}",
+            "Personalausweis: abgelaufen\nVorgang: 1220001297",
+            "Reisepass: archiviert\nVorgang=3000123454",
+        ] {
+            assert!(document_spans(text, mode).is_empty(), "{mode:?}: {text}");
+        }
+        for (text, label, value) in [
+            (
+                "member: archived\npassport_no: 3000123454",
+                "PASSPORT_NUMBER",
+                "3000123454",
+            ),
+            (
+                "Vorgang: offen\nAusweisnummer: 1220001297",
+                "IDENTITY_CARD_NUMBER",
+                "1220001297",
+            ),
+        ] {
+            assert_eq!(
+                document_spans(text, mode),
+                [(label.to_string(), value.to_string(), 0.80)],
+                "{mode:?}: {text}"
+            );
+        }
+    }
+}
+
+#[test]
 fn counter_context_and_values_inside_longer_tokens_stay_silent() {
     for mode in SCORED {
         for text in [
