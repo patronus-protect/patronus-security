@@ -46,6 +46,33 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Add ICAO 9303 check digits for German passport and identity card numbers (F08), one validator per
+  document (weights 7-3-1, `A`=10 … `Z`=35): `validators::de_passport_number` (series `C F G H J K`)
+  and `validators::de_identity_card_number` (series `L M N P R T V W X Y`), each for eight characters
+  of the ICAO alphabet plus the check digit (`F12345671`, `L01X00T44`, the form presidio-analyzer and
+  its tests use), the MRZ form of the nine-character serial plus its check digit (`C01X00T478`,
+  `T220001293`, also inside `IDD<<T220001293<<…`) and the old numeric serial of ten digits
+  (`1220001297`). The four new rules are scored-only like K05: `pii_passport_number_de_context_free`
+  and `pii_identity_card_number_de_context_free` report a letter-led value without a field name at
+  0.55, 0.80 with a document term (`Pass-Nr.`, baseline P6, `Reisepass-Nr.`, `Ausweis-Nr.`, `ID card
+  no.`; `pass-nr` was already a K03 term of `pii.passport`, the rule that reads it was missing), and
+  drop below both thresholds behind a nearer counter-context term; `…_legacy` reports the old numeric
+  serial only with a document term or key. A bare value of a field that names something else stays
+  silent (`DEA-Nummer: RN4135883`, `Codice Fiscale: …`, a `driver_license_number` column), and in
+  `balanced`/`recall` passport and identity card findings compete with an overlapping finding of any
+  other label (`overlap::DOCUMENT_LABELS`): a field-bound value of another label wins, so
+  `Kundennummer K12345676` stays `CUSTOMER_ID` and `Passport number: Y22400855` stays a passport. The
+  field-bound rules `pii_passport_number_de` and `pii_identity_card_number_de` keep their format check
+  (`de_document_number`) in every mode, since a printed nine-character serial carries no check digit.
+  `entity_map.yaml` classifies both validators as checksums with country `de` (M3: ARK 11 → 13 units,
+  7 shared with Presidio); `scoreboard.py` ports them. `pii_l1.jsonl` gains 56 balanced/recall rows (at
+  least 5 positives and 5 hard negatives per label in DE and EN). **Detection change:** none in the
+  default `strict` mode (dev scoreboard +0.0 pp everywhere). In `balanced` and `recall` German passport
+  and identity card numbers are new findings without a field name: dev passport F1 38.5 → 44.9
+  (presidio_favored 0.0 → 34.3, ark_authored 70.3 → 76.9, neutral 38.0 → 37.7 with one new FP on an
+  unannotated value), identity card F1 47.3 → 70.8, balanced L1 F1 +0.3 pp (DE +0.6 pp), no new
+  hard-negative FP; 13_l1_golden_eval 734/734 positives, 638/638 hard negatives. Existing validators
+  are unchanged.
 - Add VAT identification numbers for DE, AT, CH, FR, NL, BE, IT and ES (B01), one label and one
   check-digit validator per country: `VAT_ID_DE` (ISO 7064 MOD 11,10), `VAT_ID_AT` (UID `ATU`, Luhn
   variant), `VAT_ID_CH` (UID `CHE`, weighted mod 11), `VAT_ID_FR` (key `(12 + 3 × SIREN) mod 97` plus

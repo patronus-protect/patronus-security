@@ -403,7 +403,7 @@ checksums:
     de_social_security_number: null     # Form 8 Ziffern + Buchstabe + 3 Ziffern, keine Prüfziffer
     de_health_insurance_number: null    # Form Buchstabe + 9 Ziffern, keine Prüfziffer
     lanr: null                          # 9 Ziffern, keine Prüfziffer
-    de_document_number: null            # ICAO-Alphabet, keine 7-3-1-Prüfziffer
+    de_document_number: null            # ICAO-Alphabet, keine Prüfziffer (gedruckte Serie, feldgebunden)
     de_driver_license_number: null
     us_ssn: null                        # Bereichsprüfung
     uk_nino: null                       # Präfix-/Suffixprüfung
@@ -415,6 +415,8 @@ checksums:
     be_vat_id: {algorithm: 97 − (Nummer mod 97)}           # B01
     it_vat_id: {algorithm: Luhn}                           # B01, Partita IVA plus Amtscode
     es_vat_id: {algorithm: Kontrollzeichen mod 23 / CIF-Luhn}  # B01, NIF-IVA
+    de_passport_number: {algorithm: ICAO 9303 7-3-1, country: de}        # F08, Serie C F G H J K oder alt numerisch
+    de_identity_card_number: {algorithm: ICAO 9303 7-3-1, country: de}   # F08, Serie L M N P R T V W X Y oder alt numerisch
   # Pattern-Recognizer mit validate_result in presidio_analyzer 2.2.364 (43 Stück, mit Presidio
   # vollständig geprüft von `count_validated.py check --presidio`).
   presidio:

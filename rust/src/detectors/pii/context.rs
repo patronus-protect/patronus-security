@@ -16,7 +16,10 @@ use std::{collections::HashMap, ops::Range, sync::LazyLock};
 
 use regex::Regex;
 
-use super::{score::Context, validators};
+use super::{
+    score::{Context, PROXIMITY_CONTEXT_POINTS},
+    validators,
+};
 use crate::detectors::lexical_anchors::LexicalAnchorScanner;
 use crate::detectors::structure::{normalize_key, Field, Fields};
 
@@ -558,6 +561,32 @@ pub(super) fn structure_evidence(
     fields
         .at(value)
         .find_map(|field| key_evidence(|name| key_terms(&fields.names()[name]), field, label))
+}
+
+/// Whether a context-free value at `value` (byte range) is the value of a field
+/// that names another kind of value (F08): a structural key without a term of
+/// `label`, or a field name ending in `:` or `=` right before it without a term
+/// of `label` in the nearest proximity window (`DEA-Nummer: RN4135883`,
+/// `Codice Fiscale: J3405H901`, a `driver_license_number` column). A bare
+/// document check digit (7-3-1 mod 10) fits one in ten letter-led codes; the
+/// field says what the code is.
+pub(super) fn foreign_field(fields: &Fields, text: &str, value: Range<usize>, label: &str) -> bool {
+    if fields.at(value.clone()).next().is_some() {
+        return !structure_evidence(fields, value, label)
+            .is_some_and(|evidence| evidence.context.supports());
+    }
+    if !text[..value.start]
+        .trim_end_matches([' ', '\t'])
+        .ends_with([':', '='])
+    {
+        return false;
+    }
+    let own = evidence(text, (value.start, value.end), label);
+    !(own.context.supports()
+        && own.side == Some(Side::Before)
+        && own
+            .distance
+            .is_some_and(|distance| distance <= PROXIMITY_CONTEXT_POINTS[0].0))
 }
 
 /// Whether the value at `value` (byte range) stands alone rather than continuing

@@ -135,6 +135,19 @@ in `balanced`/`recall` (scored-only wie K05). DE und IT sind `shared`, die übri
 das eingefrorene E05-Goldset erzeugt die sechs neuen IDs nicht (`NOT_GENERATED` in
 `synth_goldset.py`) und bleibt bytegleich.
 
+Stand F08: ARK 13, gemeinsam 7. Reisepass und Personalausweis DE prüfen die ICAO-9303-Prüfziffer
+(7-3-1, `validators::de_passport_number`, `de_identity_card_number`): Serie `C F G H J K` bzw.
+`L M N P R T V W X Y`, acht Zeichen plus Prüfziffer (Form von presidio-analyzer, `F12345671`) oder
+MRZ-Form mit neun Zeichen plus Prüfziffer (`C01X00T478`), dazu die alte numerische Seriennummer
+(zehn Ziffern, nur mit Dokumentbegriff). Nur in `balanced`/`recall` (scored-only wie K05); die
+feldgebundenen Regeln behalten in jedem Modus die Formprüfung, weil eine gedruckte neunstellige
+Seriennummer keine eigene Prüfziffer trägt. Ein blanker Wert eines Felds, das etwas anderes nennt
+(`DEA-Nummer: …`, Spalte `driver_license_number`), bleibt stumm (`context::foreign_field`), und Pass-
+und Ausweisfunde konkurrieren in den Score-Modi mit überlappenden Funden jedes anderen Labels
+(`overlap::DOCUMENT_LABELS`): ein Feldname wie `Kundennummer` entscheidet. `Pass-Nr.` (Baseline P6) stand schon im K03-Lexikon (`pii.passport`)
+und hebt jetzt den kontextfreien Wert auf 0,80; die `strict`-Regel kennt den Feldnamen weiter nicht
+(B-PASS).
+
 ## Gold-Konvention: Platzhalter-Werte
 
 Entschieden am 2026-10-14 (T01, TRIAGE 2026-W42 Bucket 5): Reservierte Platzhalter sind PII und im
