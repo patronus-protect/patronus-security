@@ -198,6 +198,16 @@ result shapes may be breaking for downstream users, and is called out explicitly
   and token URLs. **Detection change:** on the dev split the benign-code findings of the three
   rules drop from 192 to 3 (−98 %; the rest are percent-encoded test passwords), benign docs lose
   both `$PWD:` findings, and the `strict` output on the synthetic carriers is unchanged.
+- Tighten the F-GEN1 likeness checks (review of PR #129). A DE/EN suffix or participle shape
+  alone no longer makes a value a word form: the stem must be a dictionary word (also with a
+  dropped `e`, a doubled final consonant or `y` → `i`) or read like a word (at least a quarter
+  vowels, no run of more than three consonants), so random letters ending in `ing`, `ed` or `ic`
+  after a credential key stay findings. `dlp_url_userinfo_token` no longer reports a word or name
+  with a numeric suffix only (a handle such as `jane.doe2026`) as a token. **Detection change:**
+  `dlp_password_assignment` and `dlp_generic_credential_assignment` regain unquoted random
+  alphabetic secrets with suffix-like endings (fewer false negatives); `dlp_url_userinfo_token`
+  drops numeric-suffixed usernames (fewer false positives). Dictionary words, word forms with a
+  known or pronounceable stem and all existing positives are unchanged.
 - AWS access key IDs need a credential prefix and exactly 16 Base32 characters, and AWS secret
   access keys are found by their structural context (F05). `dlp_aws_access_key` takes `AKIA`,
   `ASIA`, `ABIA`, `ACCA` or legacy `A3T…` and exactly 16 Base32 characters (before: also `AGPA`,

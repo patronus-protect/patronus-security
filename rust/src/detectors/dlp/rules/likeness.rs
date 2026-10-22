@@ -554,6 +554,12 @@ pub(crate) fn is_userinfo_token(text: &str, range: Range<usize>) -> bool {
         .iter()
         .filter(|count| **count > 0)
         .count();
+    // A word or name with a numeric suffix only (`johnsmith42`,
+    // `jane.doe2026`) is a handle: its digits are no token evidence.
+    let head = value.trim_end_matches(|c: char| c.is_ascii_digit());
+    if head.len() < value.len() && is_word_like(head) {
+        return false;
+    }
     alphanumeric_classes >= 2
         && shannon_entropy(value) >= 3.0
         && !is_metasyntactic(value)
@@ -663,7 +669,9 @@ fn is_word_sequence(value: &str) -> bool {
 
 /// Inflected and derived DE/EN word forms: EN participles and derivations
 /// (`configured`, `missing`, `problematic`, `sensitive`), DE derivations and
-/// participles (`erforderlich`, `gesetzt`, `hinterlegt`, `abgelaufen`).
+/// participles (`erforderlich`, `gesetzt`, `hinterlegt`, `abgelaufen`). A
+/// suffix or participle shape alone is no evidence (`kqztrwxing`): the stem
+/// must be a dictionary word (`stored`, `configured`) or read like one.
 fn is_word_form(word: &str) -> bool {
     const SUFFIXES: &[&str] = &[
         "ed", "ing", "able", "ible", "tion", "sion", "ment", "ness", "less", "ful", "ous", "ive",
@@ -676,8 +684,48 @@ fn is_word_form(word: &str) -> bool {
         ))
         .unwrap()
     });
-    word.chars().count() >= 5
-        && (SUFFIXES.iter().any(|suffix| word.ends_with(suffix)) || PARTICIPLE.is_match(word))
+    if word.chars().count() < 5 {
+        return false;
+    }
+    SUFFIXES.iter().any(|suffix| {
+        word.strip_suffix(suffix)
+            .is_some_and(|stem| is_known_stem(stem) || reads_like_word(stem))
+    }) || (PARTICIPLE.is_match(word) && reads_like_word(word))
+}
+
+/// A dictionary word behind an inflection: the stem itself, with a dropped
+/// `e` (`stor|ed`), a doubled final consonant (`stopp|ed`) or `y` → `i`
+/// (`carri|ed`).
+fn is_known_stem(stem: &str) -> bool {
+    let mut candidates = vec![stem.to_string(), format!("{stem}e")];
+    let mut chars = stem.chars().rev();
+    if let (Some(last), Some(previous)) = (chars.next(), chars.next()) {
+        if last == previous {
+            candidates.push(stem[..stem.len() - last.len_utf8()].to_string());
+        }
+    }
+    if let Some(rest) = stem.strip_suffix('i') {
+        candidates.push(format!("{rest}y"));
+    }
+    candidates
+        .iter()
+        .any(|candidate| DICTIONARY.contains(&candidate.as_str()))
+}
+
+/// Letters that alternate like DE/EN words: at least a quarter vowels and
+/// no run of more than three consonants, `sch`/`ch` counting as one
+/// (`problemat`, `verschlüssel`); random letters fail (`kqztrwx`).
+fn reads_like_word(letters: &str) -> bool {
+    let letters = letters.replace("sch", "s").replace("ch", "c");
+    let is_vowel = |c: char| "aeiouyäöü".contains(c);
+    let total = letters.chars().count();
+    let vowels = letters.chars().filter(|c| is_vowel(*c)).count();
+    let longest_consonant_run = letters
+        .split(is_vowel)
+        .map(|run| run.chars().count())
+        .max()
+        .unwrap_or(0);
+    total > 0 && vowels * 4 >= total && longest_consonant_run <= 3
 }
 
 /// Lower-case words of an identifier or phrase, split at `_`, `-`, `.` and
@@ -816,6 +864,24 @@ mod tests {
     }
 
     #[test]
+    fn suffix_endings_of_random_letters_are_no_word_forms() {
+        // Review PR #129: a suffix alone (`-ing`, `-ed`, `-ic`) is no word
+        // form; the stem must be a dictionary word or read like one.
+        for value in ["kqztrwxing", "zvbxqtmed", "wqxzrkplic"] {
+            assert!(assignment("password = {v}", value), "{value}");
+        }
+        for value in [
+            "stored",
+            "configured",
+            "missing",
+            "problematic",
+            "verschlüsselung",
+        ] {
+            assert!(!assignment("the password is {v}", value), "{value}");
+        }
+    }
+
+    #[test]
     fn userinfo_stand_ins_are_no_passwords() {
         for value in [
             "pass",
@@ -845,6 +911,8 @@ mod tests {
             "TOKEN",
             "github_token",
             "abcdefgh",
+            "johnsmith42",
+            "jane.doe2026",
             concat!("ghp_", "1234567890abcdefghijklmnopqrstuvwxyz", "AB"),
         ] {
             assert!(
