@@ -287,8 +287,13 @@ class DlpGoldenRecipeTests(unittest.TestCase):
                 self.assertTrue(row["secrets"], row["id"])
                 # Positives hold real-shaped recipes; hard negatives only fill variants, except
                 # hard negatives of a scored DLP mode (K04), whose context marks the value as
-                # no secret.
-                plain = row["case_type"] == "positive" or row.get("dlp_mode") in ("balanced", "recall")
+                # no secret, and values glued into a longer run (T01), which are no token.
+                glued = not re.search(r"(?<![A-Za-z0-9_+/])<<secret:", row["template"])
+                plain = (
+                    row["case_type"] == "positive"
+                    or row.get("dlp_mode") in ("balanced", "recall")
+                    or glued
+                )
                 keys = {"gen", "seed"} if plain else {"gen", "seed", "fill"}
                 for secret in row["secrets"]:
                     self.assertEqual(set(secret), keys, row["id"])

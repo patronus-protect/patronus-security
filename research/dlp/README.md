@@ -30,6 +30,10 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   dem Wert, in dem er liegt. Unterdrückte Treffer nennen in `matched_rules` den Gewinner
   (`suppressed_by`). Scannen DLP und PII denselben Text, gehört der Bereich eines Secret-Spans
   DLP; überlappende PII-Spans (URL-Passwort als E-Mail-Lokalteil) entfallen.
+  Seit T01 haben die Präfix-Regeln (Provider-Token, ETH/WIF, JWT) eine Token-Grenze
+  (`RuleMeta::boundary`): Vor und nach dem Wert steht kein `[A-Za-z0-9_]` und kein Zeichen des
+  Provider-Alphabets, und der Wert liegt in keinem Base64-Blob. Escapes wie `\n` oder `%3D`
+  begrenzen ein Token weiterhin.
   Seit K09 (Taxonomie v2) nennt jede Secret-Regel einen Untertyp ihrer Gruppe (`subtype` in
   `matched_rules`: `api_key`, `access_token`, `password`, `auth_url` …). Connection-Strings,
   Webhook-URLs, Auth-URLs, OTP-Secrets und Seed-Phrasen werden keine eigenen Gruppen, sondern

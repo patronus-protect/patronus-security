@@ -18,6 +18,7 @@ generator's ``fill`` variant the same way (T06).
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from patronus_ark.dlp_synth import recipes
@@ -4543,6 +4544,228 @@ DLP_K08_CASES = {
     ],
 }
 for _label, _rows in DLP_K08_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+
+# T01: a placeholder that continues an identifier, hex run or base64 blob on its left.
+DLP_GLUED_PLACEHOLDER = re.compile(r"(?<![A-Za-z0-9_+/])<<secret:")
+
+
+def dg(
+    label: str,
+    language: str,
+    rule: str,
+    template: str,
+    generator: str,
+    seed: int,
+    reason: str,
+    *,
+    carrier: str = "line",
+) -> dict:
+    """Hard negative (T01): a generated value glued into an identifier, hex run or base64
+    blob, so it is no whole token. Every placeholder follows a word, `+` or `/` character."""
+    if DLP_GLUED_PLACEHOLDER.search(template) or "<<secret:" not in template:
+        raise ValueError(f"T01 hard negative needs glued placeholders: {template!r}")
+    secrets = [{"gen": generator, "seed": seed}]
+    text, _ = recipes.materialize(template, secrets)
+    row = {
+        "language": language,
+        "case_type": "hard_negative",
+        "target_label": label,
+        "template": template,
+        "secrets": secrets,
+        "text_fingerprint": recipes.fingerprint(text),
+        "entities": [],
+        "span_unit": "unicode_code_point",
+        "negative_reason": reason,
+        "provenance": {
+            "origin": "synthetic",
+            "source": "generator recipe (patronus_ark.dlp_synth) glued into a longer run, materialized at test time",
+        },
+    }
+    return dlp_row(row, rule, carrier, (), False)
+
+
+# T01: token boundaries of the prefix rules. Positives delimit the token by escapes that end
+# in a letter or digit (JSON `\n`/`\t`, URL `%3D`/`%22`) and by Markdown code spans; hard
+# negatives are lockfile checksums, sha256 digests and go.sum hashes, and provider-shaped
+# values glued into identifiers, hex runs or base64 blobs.
+DLP_T01_CASES = {
+    "SECRET_TOKEN": [
+        ds(
+            "SECRET_TOKEN", "de", "dlp_github_token",
+            '{"level":"warn","msg":"Deploy-Token abgelehnt:\\n<<secret:0>>\\nbitte rotieren","retry":3}\n',
+            "github_ghp_token", 10101, carrier="log",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_npm_token",
+            "GET /anmeldung/rueckruf?state=%7B%22registry%22%3A%22<<secret:0>>%22%7D HTTP/1.1\n"
+            "Host: pakete.example.de\n",
+            "npm_access_token", 10102, carrier="http",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_github_token",
+            '{"level":"warn","msg":"deploy token rejected:\\n<<secret:0>>\\nplease rotate","retry":3}\n',
+            "github_ghp_token", 10111, carrier="log",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_npm_token",
+            "GET /login/callback?state=%7B%22registry%22%3A%22<<secret:0>>%22%7D HTTP/1.1\n"
+            "Host: packages.example.com\n",
+            "npm_access_token", 10112, carrier="http",
+        ),
+        dg(
+            "SECRET_TOKEN", "de", "dlp_npm_token",
+            "// Auflösung der Workspace-Manifeste\nexport function resolve<<secret:0>>(root: string) {}\n",
+            "npm_access_token", 10103, "npm_ prefix inside a camelCase identifier", carrier="code",
+        ),
+        dg(
+            "SECRET_TOKEN", "en", "dlp_npm_token",
+            "// resolve the workspace manifests\nexport function resolve<<secret:0>>(root: string) {}\n",
+            "npm_access_token", 10113, "npm_ prefix inside a camelCase identifier", carrier="code",
+        ),
+    ],
+    "API_KEY": [
+        ds(
+            "API_KEY", "de", "dlp_huggingface",
+            "10.0.4.17 - - [12/Okt/2026:08:14:03 +0200] \"GET /modelle?next=%2Fdownload%3Fkey%3D<<secret:0>>%26rev%3Dmain HTTP/1.1\" 302 0\n",
+            "huggingface_token", 10104, carrier="log",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_huggingface",
+            "10.0.4.17 - - [12/Oct/2026:08:14:03 +0200] \"GET /models?next=%2Fdownload%3Fkey%3D<<secret:0>>%26rev%3Dmain HTTP/1.1\" 302 0\n",
+            "huggingface_token", 10114, carrier="log",
+        ),
+        dg(
+            "API_KEY", "de", "dlp_huggingface",
+            "# Tokenizer aus dem lokalen Cache laden\ntokenizer = load_<<secret:0>>(pfad, revision=\"main\")\n",
+            "huggingface_token", 10105, "hf_ prefix inside a snake_case function name", carrier="code",
+        ),
+        dg(
+            "API_KEY", "en", "dlp_huggingface",
+            "# load the tokenizer from the local cache\ntokenizer = load_<<secret:0>>(path, revision=\"main\")\n",
+            "huggingface_token", 10115, "hf_ prefix inside a snake_case function name", carrier="code",
+        ),
+    ],
+    "CLOUD_KEY": [
+        ds(
+            "CLOUD_KEY", "de", "dlp_aws_access_key",
+            "Der alte Zugriffsschlüssel `<<secret:0>>` wurde gestern deaktiviert.\n",
+            "aws_access_key_id", 10106, carrier="markdown",
+        ),
+        ds(
+            "CLOUD_KEY", "en", "dlp_aws_access_key",
+            "The old access key `<<secret:0>>` was deactivated yesterday.\n",
+            "aws_access_key_id", 10116, carrier="markdown",
+        ),
+        dg(
+            "CLOUD_KEY", "de", "dlp_aws_access_key",
+            "# Prüfsummen der Abhängigkeiten (go.sum)\n"
+            "golang.org/x/text v0.14.0 h1:lLSapj+3AlbBO4W2fYVGiX5Xfo+<<secret:0>>Q=\n"
+            "golang.org/x/text v0.14.0/go.mod h1:gcO/c6AXUWfT+uiSBFYrclufnnCEFRjJcUeEXi28qZo=\n",
+            "aws_access_key_id", 10107, "AKIA run inside a go.sum base64 hash", carrier="code",
+        ),
+        dg(
+            "CLOUD_KEY", "en", "dlp_aws_access_key",
+            "# dependency checksums (go.sum)\n"
+            "golang.org/x/text v0.14.0 h1:lLSapj+3AlbBO4W2fYVGiX5Xfo+<<secret:0>>Q=\n"
+            "golang.org/x/text v0.14.0/go.mod h1:gcO/c6AXUWfT+uiSBFYrclufnnCEFRjJcUeEXi28qZo=\n",
+            "aws_access_key_id", 10117, "AKIA run inside a go.sum base64 hash", carrier="code",
+        ),
+        dg(
+            "CLOUD_KEY", "de", "dlp_aws_access_key",
+            "// Richtlinie im Speicher zwischenhalten\ntype Cached<<secret:0>>Policy struct{}\n",
+            "aws_access_key_id", 10108, "AKIA run inside a CamelCase type name", carrier="code",
+        ),
+        dg(
+            "CLOUD_KEY", "en", "dlp_aws_access_key",
+            "// keep the policy in memory\ntype Cached<<secret:0>>Policy struct{}\n",
+            "aws_access_key_id", 10118, "AKIA run inside a CamelCase type name", carrier="code",
+        ),
+    ],
+    "CRYPTO_KEY": [
+        ds(
+            "CRYPTO_KEY", "de", "dlp_btc_wif",
+            '{"ts":"2026-10-12T08:14:03Z","msg":"Schlüssel für Cold-Storage:\\n<<secret:0>>\\nbitte löschen"}\n',
+            "btc_wif_mainnet_compressed", 10109, carrier="log",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_eth_private_key",
+            '{"export":"konto\\tschluessel","zeile":"wallet-3\\t<<secret:0>>"}\n',
+            "eth_private_key_hex", 10110, carrier="json",
+        ),
+        ds(
+            "CRYPTO_KEY", "en", "dlp_btc_wif",
+            '{"ts":"2026-10-12T08:14:03Z","msg":"cold storage key:\\n<<secret:0>>\\nplease delete"}\n',
+            "btc_wif_mainnet_compressed", 10119, carrier="log",
+        ),
+        ds(
+            "CRYPTO_KEY", "en", "dlp_eth_private_key",
+            '{"export":"account\\tkey","row":"wallet-3\\t<<secret:0>>"}\n',
+            "eth_private_key_hex", 10120, carrier="json",
+        ),
+        dn(
+            "CRYPTO_KEY", "de", "dlp_btc_wif",
+            "# Diese Datei wird automatisch von Cargo erzeugt.\n# Sie ist nicht für manuelle Bearbeitung gedacht.\n"
+            "[[package]]\nname = \"serde\"\nversion = \"1.0.210\"\n"
+            "source = \"registry+https://github.com/rust-lang/crates.io-index\"\n"
+            "checksum = \"3a62b7f976a112d59e38e370981a935fac5bc0dc422c4b4cc23cc4ee5b5426ac\"\n\n"
+            "[[package]]\nname = \"serde_json\"\nversion = \"1.0.128\"\n"
+            "source = \"registry+https://github.com/rust-lang/crates.io-index\"\n"
+            "checksum = \"cbebe80b7d935279e4f5c8ed674f2d848f989bbd2fabfa11db04596206dba4d3\"\n",
+            "Cargo.lock package checksums (sha256)", carrier="toml",
+        ),
+        dn(
+            "CRYPTO_KEY", "en", "dlp_btc_wif",
+            "# This file is automatically @generated by Cargo.\n# It is not intended for manual editing.\n"
+            "[[package]]\nname = \"serde\"\nversion = \"1.0.210\"\n"
+            "source = \"registry+https://github.com/rust-lang/crates.io-index\"\n"
+            "checksum = \"6840f7cedff654093aece745190193d7ac64afb80bf4cbc60b0a890a368e2ff5\"\n\n"
+            "[[package]]\nname = \"serde_json\"\nversion = \"1.0.128\"\n"
+            "source = \"registry+https://github.com/rust-lang/crates.io-index\"\n"
+            "checksum = \"bf2ea12cf6b5276c9ca9a0ff607a7e17ae8914c734097b2af1286961e94e38f1\"\n",
+            "Cargo.lock package checksums (sha256)", carrier="toml",
+        ),
+        dn(
+            "CRYPTO_KEY", "de", "dlp_eth_private_key",
+            "# Basis-Image fest auf den Digest gepinnt\n"
+            "FROM python:3.12-slim@sha256:b1ab2c69f7efd8126aa67853c92cda37306c9a5c6d6a238bdc4787ae5f793a6d\n"
+            "RUN pip install --no-cache-dir -r requirements.txt\n",
+            "Docker image sha256 digest", carrier="code",
+        ),
+        dn(
+            "CRYPTO_KEY", "en", "dlp_eth_private_key",
+            "services:\n  api:\n    # pinned to the image digest\n"
+            "    image: ghcr.io/acme/api@sha256:e2901fbaf0b55e5ce60f9ace8918c5df0ff3827db00af7352da2475a6695caa9\n",
+            "Docker image sha256 digest", carrier="yaml",
+        ),
+        dg(
+            "CRYPTO_KEY", "de", "dlp_btc_wif",
+            "# Prüfsumme des Release-Archivs\n"
+            "sha256 = \"9f3c2a<<secret:0>>\"\n",
+            "btc_wif_mainnet_compressed", 10121, "WIF-shaped run glued into a hex digest", carrier="toml",
+        ),
+        dg(
+            "CRYPTO_KEY", "en", "dlp_btc_wif",
+            "# checksum of the release archive\n"
+            "sha256 = \"9f3c2a<<secret:0>>\"\n",
+            "btc_wif_mainnet_compressed", 10122, "WIF-shaped run glued into a hex digest", carrier="toml",
+        ),
+        dg(
+            "CRYPTO_KEY", "de", "dlp_eth_private_key",
+            "# Aufrufdaten der Überweisung (ABI-kodiert)\n"
+            "data: 0xa9059cbb000000000000000000000000<<secret:0>>\n",
+            "eth_private_key_hex", 10123, "0x run glued into ABI-encoded calldata", carrier="yaml",
+        ),
+        dg(
+            "CRYPTO_KEY", "en", "dlp_eth_private_key",
+            "# transfer call data (ABI-encoded)\n"
+            "data: 0xa9059cbb000000000000000000000000<<secret:0>>\n",
+            "eth_private_key_hex", 10124, "0x run glued into ABI-encoded calldata", carrier="yaml",
+        ),
+    ],
+}
+for _label, _rows in DLP_T01_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
 

@@ -1,6 +1,7 @@
 """DLP golden schema v2 (E13): rule ids, carriers, difficulty tags, known gaps, coverage."""
 
 import json
+import re
 import runpy
 import unittest
 from collections import Counter
@@ -30,6 +31,11 @@ def raw_lines():
 
 def load_rows():
     return [json.loads(line) for line in raw_lines()]
+
+
+def is_glued(template):
+    """T01: every placeholder continues a word, `+` or `/` run on its left."""
+    return "<<secret:" in template and not re.search(r"(?<![A-Za-z0-9_+/])<<secret:", template)
 
 
 def all_rule_ids():
@@ -72,12 +78,31 @@ class DlpGoldenSchemaV2Tests(unittest.TestCase):
 
     def test_generated_hard_negatives_run_in_a_scored_mode(self):
         # Strict hard negatives hold example/test values (fill recipes, T06); a plain
-        # generator value is a hard negative only where context marks it as no secret (K04).
+        # generator value is a hard negative only where context marks it as no secret (K04)
+        # or where it is glued into an identifier, hex run or base64 blob (T01).
+        glued = 0
         for row in load_rows():
             if row["case_type"] != "hard_negative" or "secrets" not in row:
                 continue
             plain = any("fill" not in secret for secret in row["secrets"])
+            if plain and is_glued(row["template"]) and "dlp_mode" not in row:
+                glued += 1
+                continue
             self.assertEqual(plain, row.get("dlp_mode") in SCORED_MODES, row["id"])
+        # T01: >= 5 glued hard negatives per language.
+        for language in LANGUAGES:
+            self.assertGreaterEqual(
+                sum(
+                    row["case_type"] == "hard_negative"
+                    and row["language"] == language
+                    and "secrets" in row
+                    and is_glued(row["template"])
+                    for row in load_rows()
+                ),
+                MIN_PER_LANGUAGE,
+                language,
+            )
+        self.assertGreater(glued, 0)
 
     def test_only_positives_can_be_known_gaps(self):
         for row in load_rows():

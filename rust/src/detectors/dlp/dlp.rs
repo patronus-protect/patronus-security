@@ -192,6 +192,19 @@ pub struct RuleMeta {
     /// Taxonomy v2 subtype of a secret rule (K09); `None` for identifier and
     /// content rules.
     pub subtype: Option<SecretSubtype>,
+    /// Token boundary of a prefix rule (T01); `None` for key-anchored,
+    /// identifier and content rules.
+    pub boundary: Option<TokenBoundary>,
+}
+
+/// T01: a prefix rule reports a value only as a whole token. The characters
+/// right before and after the value are no `[A-Za-z0-9_]` and none of
+/// `alphabet`, and the value is no part of a base64 blob.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TokenBoundary {
+    /// Value characters of the provider beyond `[A-Za-z0-9_]` (`-` for most
+    /// base64url-style tokens).
+    pub alphabet: &'static str,
 }
 
 impl RuleMeta {
@@ -209,6 +222,16 @@ impl RuleMeta {
             test_prefixes: &[],
             value_run: None,
             subtype: None,
+            boundary: None,
+        }
+    }
+
+    /// T01: the value must stand as a whole token; `alphabet` lists the
+    /// value characters beyond `[A-Za-z0-9_]`.
+    pub const fn with_boundary(self, alphabet: &'static str) -> Self {
+        Self {
+            boundary: Some(TokenBoundary { alphabet }),
+            ..self
         }
     }
 
@@ -609,7 +632,8 @@ impl NativeRegexDetector for DlpPipeline {
         true
     }
 
-    /// Drops generic assignments whose key is a URL userinfo (K08), values
+    /// Drops prefix-rule values that are no whole token (T01), generic
+    /// assignments whose key is a URL userinfo (K08), values
     /// below the rule's entropy floor (K02), documented example
     /// and test values of secret rules (T06), vendor-documented example values
     /// (K06) and placeholders and environment/template references in the value
@@ -630,9 +654,18 @@ impl NativeRegexDetector for DlpPipeline {
         {
             return false;
         }
+        let meta = &self.metas[index];
+        // T01: a prefix rule's value inside an identifier, hex run or base64
+        // blob is no token.
+        if let Some(boundary) = meta.boundary {
+            if let Some(value) = captures.get(self.span_groups[index].unwrap_or(0)) {
+                if !super::boundary::is_whole_token(text, value.range(), boundary) {
+                    return false;
+                }
+            }
+        }
         let check = self.example_checks[index];
         let placeholder_check = self.placeholder_checks[index];
-        let meta = &self.metas[index];
         if check == ExampleCheck::Off && !placeholder_check && meta.min_entropy.is_none() {
             return true;
         }

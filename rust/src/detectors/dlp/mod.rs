@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+mod boundary;
 pub mod context;
 pub mod destructive_operation;
 #[allow(clippy::module_inception)]
