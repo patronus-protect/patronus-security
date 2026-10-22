@@ -1621,6 +1621,9 @@ DLP_LOOKALIKE_GENERATORS = (
     # F04
     "npm_bad_crc", "npm_short", "npm_long", "gitlab_pat_long", "gitlab_deploy_token_short",
     "gitlab_trigger_token_upper_hex",
+    # F05
+    "aws_access_key_id_non_base32", "aws_access_key_id_long", "aws_iam_user_unique_id",
+    "aws_secret_access_key_long", "aws_secret_access_key_hex",
 )
 
 
@@ -5393,6 +5396,155 @@ DLP_F04_CASES = {
     ],
 }
 for _label, _rows in DLP_F04_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+
+# F05: `dlp_aws_access_key` takes the credential prefixes of the IAM unique-ID table (`AKIA`,
+# `ASIA`, `ABIA`, `ACCA`, legacy `A3T…`) and exactly 16 Base32 characters. `dlp_aws_secret_key`
+# takes 40 base64 characters with upper and lower case letters after an AWS key name or label
+# (also in prose, up to two lines on), right after an access key ID, or after a generic secret
+# key name with AWS context (Terraform `provider "aws"`, `.s3cfg`, Spring `cloud.aws`). Hard
+# negatives are IAM unique IDs of other entities, key IDs outside Base32 or of another length,
+# 41-character and hex values, references, example/test fills and documented formats.
+DLP_F05_CASES = {
+    "CLOUD_KEY": [
+        ds(
+            "CLOUD_KEY", "de", "dlp_aws_secret_key",
+            "# Zugang für den Rechnungsexport\nprovider \"aws\" {\n  region     = \"eu-central-1\"\n"
+            "  access_key = var.zugangs_id\n  secret_key = \"<<secret:0>>\"\n}\n",
+            "aws_secret_access_key", 10701, carrier="code",
+        ),
+        ds(
+            "CLOUD_KEY", "de", "dlp_aws_secret_key",
+            "# s3cmd-Konfiguration für das Archiv\n[default]\nhost_base = s3.eu-central-1.amazonaws.com\n"
+            "secret_key = <<secret:0>>\nuse_https = True\n",
+            "aws_secret_access_key", 10702, carrier="ini",
+        ),
+        ds(
+            "CLOUD_KEY", "de", "dlp_aws_secret_key",
+            "# Zugangsdaten Lager-Export\ncloud:\n  aws:\n    region:\n      static: eu-central-1\n"
+            "    credentials:\n      secret-key: <<secret:0>>\n",
+            "aws_secret_access_key", 10703, carrier="yaml",
+        ),
+        ds(
+            "CLOUD_KEY", "de", "dlp_aws_secret_key",
+            "[10:02] jana.k: Hast du den AWS Secret Access Key für Staging? Die Pipeline hängt.\n"
+            "[10:03] tim.b: <<secret:0>>\n[10:03] tim.b: Bitte nur lokal nutzen.\n",
+            "aws_secret_access_key", 10704, carrier="prose",
+        ),
+        ds(
+            "CLOUD_KEY", "de", "dlp_aws_secret_key",
+            "Der AWS-Secret-Access-Key für den Export lautet <<secret:0>>, bitte nach dem Test rotieren.\n",
+            "aws_secret_access_key", 10705, carrier="prose",
+        ),
+        ds(
+            "CLOUD_KEY", "de", "dlp_aws_access_key",
+            "$ aws configure set aws_access_key_id <<secret:0>> --profile buchhaltung\n",
+            "aws_sts_bearer_key_id", 10706, carrier="cli",
+        ),
+        ds(
+            "CLOUD_KEY", "en", "dlp_aws_secret_key",
+            "terraform {\n  backend \"s3\" {\n    bucket     = \"acme-tf-state\"\n    region     = \"us-east-1\"\n"
+            "    secret_key = \"<<secret:0>>\"\n  }\n}\n",
+            "aws_secret_access_key", 10711, carrier="code",
+        ),
+        ds(
+            "CLOUD_KEY", "en", "dlp_aws_secret_key",
+            "$ aws configure --profile reporting\nAWS Access Key ID [None]: \n"
+            "AWS Secret Access Key [None]: <<secret:0>>\nDefault region name [None]: us-east-1\n",
+            "aws_secret_access_key", 10712, carrier="cli",
+        ),
+        ds(
+            "CLOUD_KEY", "en", "dlp_aws_secret_key",
+            "2026-10-22T08:01:12Z DEBUG botocore.credentials: loaded secret_key=<<secret:0>> "
+            "from ~/.aws/credentials\n",
+            "aws_secret_access_key", 10713, carrier="log",
+        ),
+        ds(
+            "CLOUD_KEY", "en", "dlp_aws_secret_key",
+            "<appSettings>\n  <add key=\"AWSRegion\" value=\"us-east-1\" />\n"
+            "  <add key=\"AwsSecretAccessKey\" value=\"<<secret:0>>\" />\n</appSettings>\n",
+            "aws_secret_access_key", 10714, carrier="xml",
+        ),
+        ds(
+            "CLOUD_KEY", "en", "dlp_aws_secret_key",
+            "Hi team,\n\nhere is the AWS secret access key for the backup job:\n\n<<secret:0>>\n\n"
+            "Please move it to the vault this week.\n",
+            "aws_secret_access_key", 10715, carrier="prose",
+        ),
+        ds(
+            "CLOUD_KEY", "en", "dlp_aws_access_key",
+            "{\"Credentials\": {\"AccessKeyId\": \"<<secret:0>>\", \"Expiration\": \"2026-10-22T10:00:00Z\"}}\n",
+            "aws_context_credential_key_id", 10716, carrier="json",
+        ),
+        dl(
+            "CLOUD_KEY", "de", "dlp_aws_secret_key",
+            "# Commit, mit dem der AWS-Secret-Access-Key aus der Konfiguration entfernt wurde\n"
+            "commit <<secret:0>>\n",
+            "aws_secret_access_key_hex", 10721, "40 hex digits (git commit ID) after an AWS label", carrier="log",
+        ),
+        dn(
+            "CLOUD_KEY", "de", "dlp_aws_secret_key",
+            "provider \"aws\" {\n  region     = \"eu-central-1\"\n  access_key = var.zugangs_id\n"
+            "  secret_key = var.geheimer_schluessel\n}\n",
+            "Terraform variable reference", carrier="code",
+        ),
+        dx(
+            "CLOUD_KEY", "de", "dlp_aws_secret_key",
+            "[default]\nhost_base = s3.amazonaws.com\nsecret_key = <<secret:0>>\n",
+            "aws_secret_access_key", "BEISPIEL", "documented example value (BEISPIEL fill)", carrier="ini",
+        ),
+        dl(
+            "CLOUD_KEY", "de", "dlp_aws_access_key",
+            "{\"userIdentity\": {\"type\": \"IAMUser\", \"principalId\": \"<<secret:0>>\", "
+            "\"userName\": \"rechnung-export\"}}\n",
+            "aws_iam_user_unique_id", 10722, "IAM user unique ID (AIDA), no credential", carrier="json",
+        ),
+        dl(
+            "CLOUD_KEY", "de", "dlp_aws_access_key",
+            "2026-10-22 08:14:03 WARN import: ungültige Kennung <<secret:0>> verworfen\n",
+            "aws_access_key_id_non_base32", 10723, "AKIA shape with a digit outside Base32", carrier="log",
+        ),
+        dn(
+            "CLOUD_KEY", "de", "dlp_aws_secret_key",
+            "Der geheime Zugriffsschlüssel (AWS Secret Access Key) besteht aus 40 Base64-Zeichen.",
+            "documented format without a value", carrier="prose",
+        ),
+        dl(
+            "CLOUD_KEY", "en", "dlp_aws_secret_key",
+            "2026-10-22T08:14:03Z WARN iam: rejected AWS secret access key candidate <<secret:0>> "
+            "(41 characters)\n",
+            "aws_secret_access_key_long", 10731, "base64 run of 41 instead of 40 characters", carrier="log",
+        ),
+        dn(
+            "CLOUD_KEY", "en", "dlp_aws_secret_key",
+            "    env:\n      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}\n"
+            "      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}\n",
+            "GitHub Actions secret references", carrier="yaml",
+        ),
+        dx(
+            "CLOUD_KEY", "en", "dlp_aws_secret_key",
+            "provider \"aws\" {\n  region     = \"us-east-1\"\n  secret_key = \"<<secret:0>>\"\n}\n",
+            "aws_secret_access_key", "TESTKEY", "test key (TESTKEY fill)", carrier="code",
+        ),
+        dl(
+            "CLOUD_KEY", "en", "dlp_aws_access_key",
+            "2026-10-22T08:14:03Z WARN sts: malformed key id <<secret:0>> (17 characters after the prefix)\n",
+            "aws_access_key_id_long", 10732, "AKIA shape with 17 instead of 16 Base32 characters", carrier="log",
+        ),
+        dl(
+            "CLOUD_KEY", "en", "dlp_aws_access_key",
+            "{\"eventName\": \"ConsoleLogin\", \"userIdentity\": {\"principalId\": \"<<secret:0>>\"}}\n",
+            "aws_iam_user_unique_id", 10733, "IAM user unique ID (AIDA), no credential", carrier="json",
+        ),
+        dn(
+            "CLOUD_KEY", "en", "dlp_aws_access_key",
+            "Access key IDs start with AKIA (long-term) or ASIA (temporary) followed by 16 Base32 characters.",
+            "documented prefixes without a value", carrier="prose",
+        ),
+    ],
+}
+for _label, _rows in DLP_F05_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
 

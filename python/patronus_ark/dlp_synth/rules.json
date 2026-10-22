@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "note": "Maps every dlp_* rule in DLP_PATTERNS to the generators whose values it must find. Each probe is a minimal carrier; the rule alone must report exactly the <<secret:0>> span. shape_only generators predate E03 and are format-shaped without a valid checksum or structure; they stay for the E02 goldens. weak generators are real values the rule must keep reporting: low-variety values outside example context (T06: repeated chunk, sequential run) and placeholder-like shapes (T07: SCREAMING_SNAKE without a placeholder word, leading $ with digits); carriers do not use them. lookalike generators (F03, F04) are values in the rule's shape with a wrong check value or length that the rule must not report; goldens use them as hard negatives in carriers without key context. Content rules have no secret value and are covered by carrier templates (E04).",
+  "note": "Maps every dlp_* rule in DLP_PATTERNS to the generators whose values it must find. Each probe is a minimal carrier; the rule alone must report exactly the <<secret:0>> span. shape_only generators predate E03 and are format-shaped without a valid checksum or structure; they stay for the E02 goldens. weak generators are real values the rule must keep reporting: low-variety values outside example context (T06: repeated chunk, sequential run) and placeholder-like shapes (T07: SCREAMING_SNAKE without a placeholder word, leading $ with digits); carriers do not use them. lookalike generators (F03, F04, F05) are values in the rule's shape with a wrong check value or length that the rule must not report; goldens use them as hard negatives in carriers without key context. Content rules have no secret value and are covered by carrier templates (E04).",
   "rules": {
     "dlp_anthropic_key": {
       "generators": ["anthropic_api_key", "anthropic_admin_key"],
@@ -36,12 +36,14 @@
       "probes": ["REPLICATE_API_TOKEN=<<secret:0>>", "replicate token: <<secret:0>>"]
     },
     "dlp_aws_access_key": {
-      "generators": ["aws_access_key_id", "aws_session_access_key_id"],
+      "generators": ["aws_access_key_id", "aws_session_access_key_id", "aws_sts_bearer_key_id", "aws_context_credential_key_id"],
+      "lookalike": ["aws_access_key_id_non_base32", "aws_access_key_id_long", "aws_iam_user_unique_id"],
       "probes": ["aws_access_key_id = <<secret:0>>", "Die Access Key ID lautet <<secret:0>>."]
     },
     "dlp_aws_secret_key": {
       "generators": ["aws_secret_access_key"],
-      "probes": ["aws_secret_access_key = <<secret:0>>", "{\"SecretAccessKey\": \"<<secret:0>>\"}"]
+      "lookalike": ["aws_secret_access_key_long", "aws_secret_access_key_hex"],
+      "probes": ["aws_secret_access_key = <<secret:0>>", "{\"SecretAccessKey\": \"<<secret:0>>\"}", "provider \"aws\" {\n  region     = \"eu-central-1\"\n  secret_key = \"<<secret:0>>\"\n}\n"]
     },
     "dlp_google_api_key": {
       "generators": ["google_api_key"],

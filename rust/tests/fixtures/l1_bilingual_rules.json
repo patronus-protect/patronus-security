@@ -710,6 +710,16 @@
         "seed": 1
       }
     ],
+    "hard_negatives": {
+      "de": [
+        "Zugangs-IDs beginnen mit AKIA (dauerhaft) oder ASIA (temporär).",
+        "aws_access_key_id = ${AWS_ACCESS_KEY_ID}"
+      ],
+      "en": [
+        "AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}",
+        "IAM user IDs start with AIDA, role IDs with AROA; neither is a credential."
+      ]
+    },
     "language_neutral": true,
     "balanced": {
       "context": {
@@ -721,15 +731,25 @@
   {
     "category": "dlp",
     "rule_id": "dlp_aws_secret_key",
-    "de": "AWS_SECRET_ACCESS_KEY=<<secret\u003a0>>",
-    "en": "AWS_SECRET_ACCESS_KEY=<<secret\u003a0>>",
+    "de": "provider \"aws\" {\n  secret_key = \"<<secret\u003a0>>\"\n}",
+    "en": "AWS Secret Access Key [None]: <<secret\u003a0>>",
     "secrets": [
       {
         "gen": "aws_secret_access_key",
         "seed": 1
       }
     ],
-    "language_neutral": true
+    "hard_negatives": {
+      "de": [
+        "provider \"aws\" {\n  secret_key = var.geheimer_schluessel\n}",
+        "Der geheime Zugriffsschlüssel besteht aus 40 Base64-Zeichen."
+      ],
+      "en": [
+        "AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}",
+        "aws_secret_access_key = <your-secret-access-key>"
+      ]
+    },
+    "language_neutral": false
   },
   {
     "category": "dlp",
