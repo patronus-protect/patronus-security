@@ -2243,7 +2243,7 @@ DLP_CASES = {
         ds(
             "PASSWORD_HASH", "en", "dlp_password_hash",
             "{\"email\": \"ada@example.org\", \"password_hash\": \"<<secret:0>>\"}",
-            "argon2id_phc_hash", 5011, carrier="json", gap=True,
+            "argon2id_phc_hash", 5011, carrier="json",
         ),
         dn(
             "PASSWORD_HASH", "de", "dlp_password_hash",
@@ -5913,6 +5913,188 @@ DLP_FGEN2_CASES = {
     ],
 }
 for _label, _rows in DLP_FGEN2_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+
+# T09: key shapes of the key-anchored rules. Quoted and escaped keys (`"client_secret":`,
+# `'password' =>`), compound and camelCase keys (`db_password`, `serviceSecret`,
+# `PasswordHash`), typed declarations (`const X: &str =`, `: string =`), subscripts
+# (`os.environ["DB_PASSWORD"] =`), escaped values in notebooks and XML `key`/`value`
+# attributes find their value. Cursor and handle tokens, Helm/Kubernetes secret objects,
+# field names, types, templates, calls and placeholders after the new key shapes stay silent.
+# Notebook cells (`.ipynb`) are JSON carriers.
+DLP_T09_CASES = {
+    "CREDENTIAL": [
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "{\n  \"dienst\": \"lagerabgleich\",\n  \"zugang\": {\n    \"db_passwort\": \"<<secret:0>>\",\n"
+            "    \"anmerkung\": \"nur für den Nachtlauf\"\n  }\n}\n",
+            "password", 13001, carrier="json",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "anbindungen:\n  spedition:\n    basis_url: https://api.intern/v1\n    dienstSecret: \"<<secret:0>>\"\n",
+            "generic_api_secret", 13002, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "use std::time::Duration;\n\n// Zugang zum Import-Endpunkt\nconst DB_PASSWORT: &str = \"<<secret:0>>\";\n",
+            "password", 13003, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "{\n \"cells\": [\n  {\n   \"cell_type\": \"code\",\n   \"source\": [\n    \"import os\\n\",\n"
+            "    \"os.environ[\\\"CLIENT_SECRET\\\"] = \\\"<<secret:0>>\\\"\\n\"\n   ]\n  }\n ]\n}\n",
+            "generic_api_secret", 13004, carrier="json",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "import { HttpClient } from \"@acme/http\";\n\nexport const lagerApiKey: string = \"<<secret:0>>\";\n",
+            "generic_api_secret", 13005, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "{\n  \"region\": \"eu-central-1\",\n  \"oauth\": {\n    \"client_secret\": \"<<secret:0>>\"\n  }\n}\n",
+            "generic_api_secret", 13011, carrier="json",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "upstream:\n  enabled: true\n  base_url: https://api.internal/v2\n  db_password: \"<<secret:0>>\"\n",
+            "password", 13012, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "<configuration>\n  <appSettings>\n    <add key=\"Environment\" value=\"Production\" />\n"
+            "    <add key=\"DbPassword\" value=\"<<secret:0>>\" />\n  </appSettings>\n</configuration>\n",
+            "password", 13013, carrier="xml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "# reconciler settings\n[server]\nlisten = \"0.0.0.0:7000\"\n\n[auth]\nservice_secret = \"<<secret:0>>\"\n",
+            "generic_api_secret", 13014, carrier="toml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "{\n \"cells\": [\n  {\n   \"cell_type\": \"code\",\n   \"source\": [\n    \"import requests\\n\",\n"
+            "    \"db_password = \\\"<<secret:0>>\\\"\\n\"\n   ]\n  }\n ]\n}\n",
+            "password", 13015, carrier="json",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "<?php\n\nreturn [\n    'host' => 'db.internal',\n    'password' => '<<secret:0>>',\n];\n",
+            "password", 13016, carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "{\n  \"artikel\": [],\n  \"nextPageToken\": \"Q0FVUUFBYTFiMmMz\"\n}\n",
+            "pagination cursor under a compound token key", carrier="json",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "lager:\n  auth:\n    existingSecret: \"lager-release-auth\"\n",
+            "Helm reference to an existing Kubernetes Secret", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "export interface Konfig {\n  dbPasswort: string;\n  dienstSecret?: string;\n}\n",
+            "TypeScript field types", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "<appSettings>\n  <add key=\"DbPasswort\" value=\"{{DB_PASSWORT}}\" />\n</appSettings>\n",
+            "XML template reference", carrier="xml",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "   \"source\": [\n    \"db_passwort = getpass.getpass()\\n\",\n    \"verbinde(db_passwort)\"\n   ]\n",
+            "notebook call as value", carrier="json",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "const DB_PASSWORT: &str = env!(\"DB_PASSWORT\");\n",
+            "Rust compile-time environment reference", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "{\n  \"items\": [],\n  \"continuation_token\": \"a8f3k2m9x7q1z5w4\"\n}\n",
+            "stream continuation cursor", carrier="json",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "const routes = { forgotPassword: \"forgot-password\", resetPassword: \"/reset-password\" };\n",
+            "route names after camelCase password keys", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "ingress:\n  tls_secret: \"wildcard-internal-2026\"\n",
+            "name of a Kubernetes TLS Secret", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "<appSettings>\n  <add key=\"ClientSecret\" value=\"YOUR_CLIENT_SECRET\" />\n</appSettings>\n",
+            "documented placeholder in an XML key/value pair", carrier="xml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "   \"source\": [\n    \"os.environ[\\\"DB_PASSWORD\\\"] = getpass.getpass()\\n\",\n   ]\n",
+            "notebook call as value of a subscript", carrier="json",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "pub struct Config {\n    pub db_password: Option<String>,\n}\n",
+            "Rust field type", carrier="code",
+        ),
+    ],
+    "SECRET_TOKEN": [
+        ds(
+            "SECRET_TOKEN", "de", "dlp_csrf_token",
+            "[server]\nworker = 4\n\n[upstream]\nbasis_url = \"https://api.intern/v2\"\ncsrf_token = \"<<secret:0>>\"\n",
+            "csrf_token", 13021, carrier="toml",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_csrf_token",
+            "<exporter>\n  <endpoint url=\"https://reports.internal/api\" timeout=\"30\" />\n"
+            "  <credentials csrfToken=\"<<secret:0>>\" />\n</exporter>\n",
+            "csrf_token", 13022, carrier="xml",
+        ),
+        dn(
+            "SECRET_TOKEN", "de", "dlp_csrf_token",
+            "<meta name=\"csrf-token\" content=\"{{ csrf_token() }}\">\n",
+            "template in a CSRF meta tag", carrier="code",
+        ),
+        dn(
+            "SECRET_TOKEN", "en", "dlp_csrf_token",
+            "{\n  \"csrf_token\": \"X-CSRF-Token\"\n}\n",
+            "header name as value", carrier="json",
+        ),
+    ],
+    "PASSWORD_HASH": [
+        ds(
+            "PASSWORD_HASH", "de", "dlp_password_hash",
+            "<appSettings>\n  <add key=\"Umgebung\" value=\"Produktion\" />\n"
+            "  <add key=\"PasswordHash\" value=\"<<secret:0>>\" />\n</appSettings>\n",
+            "bcrypt_hash", 13031, carrier="xml",
+        ),
+        ds(
+            "PASSWORD_HASH", "en", "dlp_password_hash",
+            "import { HttpClient } from \"@acme/http\";\n\nexport const passwordHash: string = \"<<secret:0>>\";\n",
+            "bcrypt_hash", 13032, carrier="code",
+        ),
+    ],
+    "CLOUD_KEY": [
+        ds(
+            "CLOUD_KEY", "en", "dlp_aws_secret_key",
+            "{\n  \"awsAccessKeyId\": \"from-vault\",\n  \"awsSecretAccessKey\": \"<<secret:0>>\"\n}\n",
+            "aws_secret_access_key", 13041, carrier="json",
+        ),
+        ds(
+            "CLOUD_KEY", "de", "dlp_aws_secret_key",
+            "POST /v1/upload HTTP/1.1\nHost: lager.intern\nAws-Secret-Access-Key: <<secret:0>>\n",
+            "aws_secret_access_key", 13042, carrier="http",
+        ),
+    ],
+}
+for _label, _rows in DLP_T09_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
 

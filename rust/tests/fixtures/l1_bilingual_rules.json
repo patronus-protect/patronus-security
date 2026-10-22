@@ -1157,7 +1157,11 @@
         "docker run -v \"$PWD:/arbeit\" lager-export",
         "passwort = self.tresor.lese_passwort(konto)",
         "const meldungen = { passwort: \"Bitte geben Sie ein Passwort ein\" };",
-        "e.createElement(\"label\",{htmlFor:\"passwort\"},\"Passwort:\"),d?e.createElement(\"code\",null,\" ******\")"
+        "e.createElement(\"label\",{htmlFor:\"passwort\"},\"Passwort:\"),d?e.createElement(\"code\",null,\" ******\")",
+        "export interface Konfig {\n  dbPasswort: string;\n}",
+        "const DB_PASSWORT: &str = env!(\"DB_PASSWORT\");",
+        "<add key=\"DbPasswort\" value=\"{{DB_PASSWORT}}\" />",
+        "'passwort' => !empty($zugang['pass']) ? $zugang['pass'] : ''"
       ],
       "en": [
         "Password: TODO",
@@ -1167,7 +1171,11 @@
         "def set_password(self, name: str, password: str) -> None:",
         "The password is stored in the system keyring.",
         "export default { password: \"Enter your password\", submit: \"Sign in\" };",
-        "Login failed because the password is \"too short\" for the new policy."
+        "Login failed because the password is \"too short\" for the new policy.",
+        "const routes = { forgotPassword: \"forgot-password\" };",
+        "pub struct Config {\n    pub db_password: Option<String>,\n}",
+        "{\"devDependencies\": {\"parse-passwd\": \"^1.0.0\"}}",
+        "switch(u){case\"password\":return void t.authorizePassword(e)}"
       ]
     },
     "language_neutral": false
@@ -1184,7 +1192,9 @@
         "git remote set-url origin https://token:@bitbucket.org/acme/lager.git",
         "Das Token ist abgelaufen und muss erneuert werden.",
         "let token = berechtigung.token_fuer(&konto)?;",
-        "lager:\n  token: \"{{ .Values.lager.token }}\""
+        "lager:\n  token: \"{{ .Values.lager.token }}\"",
+        "{\"artikel\": [], \"nextPageToken\": \"Q0FVUUFBYTFiMmMz\"}",
+        "lager:\n  auth:\n    existingSecret: \"lager-release-auth\""
       ],
       "en": [
         "API key: YOUR-API-TOKEN",
@@ -1193,7 +1203,10 @@
         "token = get_token(repository_name)",
         "pub fn connect(token: Option<&str>) -> Result<Client> {",
         "Token::Literal(c) => self.push(c),",
-        "oauth:\n  client_secret: \"<your client secret>\""
+        "oauth:\n  client_secret: \"<your client secret>\"",
+        "{\"items\": [], \"continuation_token\": \"a8f3k2m9x7q1z5w4\"}",
+        "ingress:\n  tls_secret: \"wildcard-internal-2026\"",
+        "    'COPILOT_GITHUB_TOKEN' => 'github-copilot',"
       ]
     },
     "language_neutral": false
@@ -1252,11 +1265,13 @@
     "hard_negatives": {
       "de": [
         "X-CSRF-Token: HIER_CSRF_TOKEN_EINTRAGEN",
-        "csrf_token = System.getenv(\"CSRF_TOKEN\")"
+        "csrf_token = System.getenv(\"CSRF_TOKEN\")",
+        "<meta name=\"csrf-token\" content=\"{{ csrf_token() }}\">"
       ],
       "en": [
         "X-CSRF-Token: YOUR_CSRF_TOKEN_HERE",
-        "csrf_token = os.environ[\"CSRF_TOKEN\"]"
+        "csrf_token = os.environ[\"CSRF_TOKEN\"]",
+        "{\"csrf_token\": \"X-CSRF-Token\"}"
       ]
     },
     "language_neutral": true
