@@ -315,8 +315,11 @@ run.sh
   Ab 15 offenen PRs pausiert der Timer, bis gemergt wird; Restack-Läufe laufen trotzdem.
 - **Auto-Merge** (entschieden 2026-10-21): Zu Beginn jedes Laufs merged `ark-l1 next` den untersten
   Stack-PR per Squash, wenn er auf `main` zielt, kein Draft ist, GitHub ihn als `MERGEABLE` meldet und
-  seine CI vollständig grün ist (dieselben Checks wie `ark-l1 ci`). Höchstens einer pro Lauf; der nächste
-  folgt nach Restack und neuer CI. Abschalten: `ARK_L1_AUTO_MERGE=0` in der Service-Umgebung.
+  seine CI vollständig grün ist (dieselben Checks wie `ark-l1 ci`) und kein Review-Thread offen ist
+  (`main` verlangt aufgelöste Threads). Gemergt wird über `PUT …/pulls/{n}/merge-async` (Pflicht für
+  GitHubs native Stacks); danach wartet der Runner, bis GitHub die PRs darüber auf `main` umgesetzt hat.
+  Höchstens einer pro Lauf; der nächste folgt nach Restack und neuer CI. Abschalten:
+  `ARK_L1_AUTO_MERGE=0` in der Service-Umgebung.
 - **Isolation:** Der Host führt nie Code oder Git-Konfiguration des Agenten aus. Git-Befehle im
   Agent-Klon (`status`, `bundle`, `rev-list`) laufen in der Sandbox; das gemeinsame `.git`, der
   Gate-Target, das Gate-Venv und der Scoreboard-Cache sind für den Agenten nicht beschreibbar bzw.
