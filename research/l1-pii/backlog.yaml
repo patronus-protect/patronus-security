@@ -330,6 +330,7 @@ tasks:
 
   # M1 IP (presidio_favored 56.8 vs 96.2, neutral 87.9 vs 92.2) + Immer (bucket P9)
   - id: B-IP
+    status: done
     title: "IPv6 spans: no match inside SWIFT/EDIFACT colon chains, IPv4-mapped/embedded as one span, zone ID and CIDR prefix in the span, no partial match on invalid mixed forms"
     type: precision-fix
     deps: [E06, B-EVAL]
