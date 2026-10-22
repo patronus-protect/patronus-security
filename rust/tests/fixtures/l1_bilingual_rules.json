@@ -891,8 +891,8 @@
   {
     "category": "dlp",
     "rule_id": "dlp_eth_private_key",
-    "de": "<<secret\u003a0>>",
-    "en": "<<secret\u003a0>>",
+    "de": "Privatschlüssel der Wallet: <<secret\u003a0>>",
+    "en": "PRIVKEY=<<secret\u003a0>>",
     "secrets": [
       {
         "gen": "eth_private_key_hex",
@@ -901,13 +901,17 @@
     ],
     "hard_negatives": {
       "de": [
-        "# Aufrufdaten (ABI-kodiert)\ndata: 0xa9059cbb0000000000000000000000000x6840f7cedff654093aece745190193d7ac64afb80bf4cbc60b0a890a368e2ff5"
+        "# Aufrufdaten (ABI-kodiert)\ndata: 0xa9059cbb0000000000000000000000000x6840f7cedff654093aece745190193d7ac64afb80bf4cbc60b0a890a368e2ff5",
+        "Transaktion bestätigt, Transaktionshash: 0x9e4b79baf9cb6200ee58ded0af6a8b5bd329db4c8495b15a604b762b87c79cff",
+        "Wallet-Export: Blockhash 0x4b97caba768fb5ccd7b261eb50b4a9f055321707630c4b56886352821a74e3fd"
       ],
       "en": [
-        "image: ghcr.io/acme/api@sha256:e2901fbaf0b55e5ce60f9ace8918c5df0x6840f7cedff654093aece745190193d7ac64afb80bf4cbc60b0a890a368e2ff5"
+        "image: ghcr.io/acme/api@sha256:e2901fbaf0b55e5ce60f9ace8918c5df0x6840f7cedff654093aece745190193d7ac64afb80bf4cbc60b0a890a368e2ff5",
+        "{\"blockNumber\": \"0x12a4\", \"transactionHash\": \"0x9c528064367211129dd5c54fb5ce0037d0922f2485070d2307ff80afc6dfefa7\"}",
+        "0x60f3c77f840c1173d7c91586f5a93047e33824aa9662fa7e79ced970668d285c"
       ]
     },
-    "language_neutral": true,
+    "language_neutral": false,
     "balanced": {
       "context": {
         "de": "Privater Schlüssel der Wallet: <<secret\u003a0>>",

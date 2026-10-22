@@ -195,6 +195,9 @@ pub struct RuleMeta {
     /// Token boundary of a prefix rule (T01); `None` for key-anchored,
     /// identifier and content rules.
     pub boundary: Option<TokenBoundary>,
+    /// Context a value needs beyond its shape (F01): called with the text and
+    /// the value's byte range; `None` for rules whose shape suffices.
+    pub context_gate: Option<fn(&str, Range<usize>) -> bool>,
 }
 
 /// T01: a prefix rule reports a value only as a whole token. The characters
@@ -223,6 +226,15 @@ impl RuleMeta {
             value_run: None,
             subtype: None,
             boundary: None,
+            context_gate: None,
+        }
+    }
+
+    /// F01: the value counts only where `gate` finds its context.
+    pub const fn with_context_gate(self, gate: fn(&str, Range<usize>) -> bool) -> Self {
+        Self {
+            context_gate: Some(gate),
+            ..self
         }
     }
 
@@ -632,7 +644,8 @@ impl NativeRegexDetector for DlpPipeline {
         true
     }
 
-    /// Drops prefix-rule values that are no whole token (T01), generic
+    /// Drops prefix-rule values that are no whole token (T01), values
+    /// without the context their rule needs (F01), generic
     /// assignments whose key is a URL userinfo (K08), values
     /// below the rule's entropy floor (K02), documented example
     /// and test values of secret rules (T06), vendor-documented example values
@@ -660,6 +673,14 @@ impl NativeRegexDetector for DlpPipeline {
         if let Some(boundary) = meta.boundary {
             if let Some(value) = captures.get(self.span_groups[index].unwrap_or(0)) {
                 if !super::boundary::is_whole_token(text, value.range(), boundary) {
+                    return false;
+                }
+            }
+        }
+        // F01: a value whose shape is no proof needs its context.
+        if let Some(gate) = meta.context_gate {
+            if let Some(value) = captures.get(self.span_groups[index].unwrap_or(0)) {
+                if !gate(text, value.range()) {
                     return false;
                 }
             }

@@ -79,8 +79,13 @@ class DlpGoldenSchemaV2Tests(unittest.TestCase):
     def test_generated_hard_negatives_run_in_a_scored_mode(self):
         # Strict hard negatives hold example/test values (fill recipes, T06); a plain
         # generator value is a hard negative only where context marks it as no secret (K04)
-        # or where it is glued into an identifier, hex run or base64 blob (T01).
+        # or where it is glued into an identifier, hex run or base64 blob (T01). A rule with
+        # a context gate (F01) drops a value without key context already in strict.
+        gated_rules = set(runpy.run_path(str(benchmark.DATA_DIR / "generate_l1_goldens.py"))[
+            "DLP_CONTEXT_GATED_RULES"
+        ])
         glued = 0
+        gated = Counter()
         for row in load_rows():
             if row["case_type"] != "hard_negative" or "secrets" not in row:
                 continue
@@ -88,7 +93,13 @@ class DlpGoldenSchemaV2Tests(unittest.TestCase):
             if plain and is_glued(row["template"]) and "dlp_mode" not in row:
                 glued += 1
                 continue
+            if plain and row["rule_id"] in gated_rules and "dlp_mode" not in row:
+                gated[row["language"]] += 1
+                continue
             self.assertEqual(plain, row.get("dlp_mode") in SCORED_MODES, row["id"])
+        # F01: >= 5 strict hard negatives of context-gated rules per language.
+        for language in LANGUAGES:
+            self.assertGreaterEqual(gated[language], MIN_PER_LANGUAGE, language)
         # T01: >= 5 glued hard negatives per language.
         for language in LANGUAGES:
             self.assertGreaterEqual(

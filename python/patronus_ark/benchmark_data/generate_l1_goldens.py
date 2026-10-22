@@ -1568,6 +1568,10 @@ def dx(
     return dlp_row(row, rule, carrier, tags, False)
 
 
+# F01: rules that report a value only in its key context, also in `strict`.
+DLP_CONTEXT_GATED_RULES = ("dlp_eth_private_key",)
+
+
 def dc(
     label: str,
     language: str,
@@ -1583,9 +1587,10 @@ def dc(
 ) -> dict:
     """Hard negative of a scored DLP mode (K04): a generated value that `rule` reports in
     `strict`, but whose context marks it as no secret (a nearer digest/hash term, or no
-    credential term at all). Its value is a plain recipe: it is no example value."""
-    if mode == "strict":
-        raise ValueError("generated hard negatives need a scored dlp_mode")
+    credential term at all). Its value is a plain recipe: it is no example value. A rule
+    with a context gate (F01) drops such a value already in `strict`."""
+    if mode == "strict" and rule not in DLP_CONTEXT_GATED_RULES:
+        raise ValueError("generated hard negatives need a scored dlp_mode or a context-gated rule")
     secrets = [{"gen": generator, "seed": seed}]
     text, _ = recipes.materialize(template, secrets)
     row = {
@@ -4766,6 +4771,125 @@ DLP_T01_CASES = {
     ],
 }
 for _label, _rows in DLP_T01_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+
+# F01: `dlp_eth_private_key` needs a key context in every mode. Positives name the key on
+# the value's line (CLI flag, env/TOML/YAML key, wallet constructor) or on a line above
+# (chat reply, mail body). Hard negatives are generated values next to a nearer hash, root,
+# ID or chain-data term (tx hash, block hash, event topic, CREATE2 salt, state root), also
+# where a wallet is mentioned further away; they run in `strict`.
+DLP_F01_CASES = {
+    "CRYPTO_KEY": [
+        ds(
+            "CRYPTO_KEY", "de", "dlp_eth_private_key",
+            "# Adresse des Deployers prüfen\n$ cast wallet address --private-key <<secret:0>>\n",
+            "eth_private_key_hex", 10301, carrier="cli",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_eth_private_key",
+            "[10:02] jonas: Hat jemand den Privatschlüssel vom Faucet-Wallet?\n"
+            "[10:04] mia: <<secret:0>>\n[10:04] mia: bitte nach dem Test rotieren\n",
+            "eth_private_key_hex", 10302, carrier="prose",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_eth_private_key",
+            "# Foundry-Deployment (Sepolia), nicht einchecken\nRPC_URL=https://rpc.example.de\n"
+            "DEPLOYER_PK=<<secret:0>>\nETHERSCAN_TIMEOUT=30\n",
+            "eth_private_key_hex", 10303, carrier="env",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_eth_private_key",
+            "relayer:\n  netz: sepolia\n  signer:\n    privkey: \"<<secret:0>>\"\n",
+            "eth_private_key_hex", 10304, carrier="yaml",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_eth_private_key",
+            "Hallo Tim,\n\nanbei der geheime Schlüssel der Treasury-Wallet:\n\n<<secret:0>>\n\n"
+            "Bitte sofort im Tresor ablegen.\n",
+            "eth_private_key_hex", 10305, carrier="prose",
+        ),
+        ds(
+            "CRYPTO_KEY", "en", "dlp_eth_private_key",
+            "$ forge script script/Deploy.s.sol --rpc-url $SEPOLIA_RPC_URL --private-key <<secret:0>> --broadcast\n",
+            "eth_private_key_hex", 10311, carrier="cli",
+        ),
+        ds(
+            "CRYPTO_KEY", "en", "dlp_eth_private_key",
+            "[14:20] sam: can someone DM me the privkey of the faucet wallet?\n"
+            "[14:22] lee: <<secret:0>>\n[14:22] lee: rotate it after the demo\n",
+            "eth_private_key_hex", 10312, carrier="prose",
+        ),
+        ds(
+            "CRYPTO_KEY", "en", "dlp_eth_private_key",
+            "from eth_account import Account\n\n"
+            "acct = Account.from_key(\"<<secret:0>>\")  # relayer signer\n",
+            "eth_private_key_hex", 10313, carrier="code",
+        ),
+        ds(
+            "CRYPTO_KEY", "en", "dlp_eth_private_key",
+            "import { ethers } from \"ethers\";\n\n"
+            "const wallet = new ethers.Wallet(\"<<secret:0>>\", provider);\n",
+            "eth_private_key_hex", 10314, carrier="code",
+        ),
+        ds(
+            "CRYPTO_KEY", "en", "dlp_eth_private_key",
+            "[deployer]\nnetwork = \"sepolia\"\nsecret_key = \"<<secret:0>>\"\n",
+            "eth_private_key_hex", 10315, carrier="toml",
+        ),
+        dc(
+            "CRYPTO_KEY", "de", "dlp_eth_private_key",
+            "2026-10-21 09:14:07 INFO  Relayer: Transaktion bestätigt, Hash <<secret:0>>, Block 18233411\n",
+            "eth_private_key_hex", 10306, "transaction hash in a relayer log", carrier="log", mode="strict",
+        ),
+        dc(
+            "CRYPTO_KEY", "de", "dlp_eth_private_key",
+            '{"jsonrpc":"2.0","id":1,"result":{"blockHash":"<<secret:0>>","blockNumber":"0x1166a3b","status":"0x1"}}\n',
+            "eth_private_key_hex", 10307, "block hash in an RPC receipt", carrier="json", mode="strict",
+        ),
+        dc(
+            "CRYPTO_KEY", "de", "dlp_eth_private_key",
+            "Laut Etherscan wurde die Überweisung aus dem Wallet mit der Transaktions-ID <<secret:0>> bestätigt.",
+            "eth_private_key_hex", 10308, "transaction ID nearer than the wallet mention", carrier="prose", mode="strict",
+        ),
+        dc(
+            "CRYPTO_KEY", "de", "dlp_eth_private_key",
+            "snapshot:\n  hoehe: 18233411\n  zustandswurzel: <<secret:0>>\n",
+            "eth_private_key_hex", 10309, "state root of a chain snapshot", carrier="yaml", mode="strict",
+        ),
+        dc(
+            "CRYPTO_KEY", "de", "dlp_eth_private_key",
+            "# Beleg der Auszahlung abrufen\n$ cast receipt <<secret:0>> --rpc-url $RPC_URL\n",
+            "eth_private_key_hex", 10310, "transaction hash as a CLI argument", carrier="cli", mode="strict",
+        ),
+        dc(
+            "CRYPTO_KEY", "en", "dlp_eth_private_key",
+            "2026-10-21T09:14:07Z INFO relayer: submitted tx <<secret:0>> nonce=42 gas=21000\n",
+            "eth_private_key_hex", 10316, "transaction hash in a relayer log", carrier="log", mode="strict",
+        ),
+        dc(
+            "CRYPTO_KEY", "en", "dlp_eth_private_key",
+            '{"logIndex":"0x0","removed":false,"topics":["<<secret:0>>"],"data":"0x"}\n',
+            "eth_private_key_hex", 10317, "event topic in an RPC log entry", carrier="json", mode="strict",
+        ),
+        dc(
+            "CRYPTO_KEY", "en", "dlp_eth_private_key",
+            "The wallet funding went through; Etherscan shows transaction <<secret:0>> as confirmed.",
+            "eth_private_key_hex", 10318, "transaction hash nearer than the wallet mention", carrier="prose", mode="strict",
+        ),
+        dc(
+            "CRYPTO_KEY", "en", "dlp_eth_private_key",
+            "// CREATE2 salt of the factory deployment\nbytes32 constant SALT = <<secret:0>>;\n",
+            "eth_private_key_hex", 10319, "CREATE2 salt constant", carrier="code", mode="strict",
+        ),
+        dc(
+            "CRYPTO_KEY", "en", "dlp_eth_private_key",
+            "attestation:\n  merkle_root: <<secret:0>>\n  leaves: 1024\n",
+            "eth_private_key_hex", 10320, "Merkle root of an attestation", carrier="yaml", mode="strict",
+        ),
+    ],
+}
+for _label, _rows in DLP_F01_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
 

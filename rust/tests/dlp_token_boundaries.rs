@@ -177,6 +177,12 @@ fn generated_values_between_delimiters_stay_findings() {
             format!("{{\"msg\":\"retrying with\\n{value}\\tok\"}}"),
             format!("{{\"msg\":\"key=\\u0022{value}\\u0022\"}}"),
         ] {
+            // F01: a wallet key needs a key term; here on the line above.
+            let text = if rule == "dlp_eth_private_key" {
+                format!("wallet private key:\n{text}")
+            } else {
+                text
+            };
             assert!(reports(&text, &value), "{rule}: {text:?}");
         }
     }

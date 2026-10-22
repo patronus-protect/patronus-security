@@ -480,13 +480,31 @@ fn proximity_decides_secrets_without_a_field_name() {
         })
     };
 
-    // Bare: strict reports it, the score model needs a credential term for balanced.
+    // Bare: no key context, so F01 drops it in every mode.
     let bare = eth("<<secret:0>>");
-    assert!(score_of(&bare, DlpMode::Strict).is_some());
-    assert!(score_of(&bare, DlpMode::Balanced).is_none());
-    let (recall, context) = score_of(&bare, DlpMode::Recall).unwrap();
-    assert_eq!(recall, score::score(eth_rule, Context::None));
-    assert_eq!(recall, 0.4);
+    for mode in [DlpMode::Strict, DlpMode::Balanced, DlpMode::Recall] {
+        assert!(score_of(&bare, mode).is_none(), "{mode:?}");
+    }
+    // A bare WIF key: strict reports it, the score model needs a credential
+    // term for balanced.
+    let wif = value(
+        &generators,
+        "<<secret:0>>",
+        "btc_wif_mainnet_compressed",
+        11,
+    );
+    let wif_score = |mode: DlpMode| {
+        rule(&matched_rules(&dlp_result(&wif, mode)), "dlp_btc_wif").map(|rule| {
+            (
+                rule["score"].as_f64().unwrap_or(1.0),
+                rule["context"].clone(),
+            )
+        })
+    };
+    assert!(wif_score(DlpMode::Strict).is_some());
+    assert!(wif_score(DlpMode::Balanced).is_none());
+    let (recall, context) = wif_score(DlpMode::Recall).unwrap();
+    assert_eq!(recall, score::score(pattern("dlp_btc_wif"), Context::None));
     assert_eq!(context, serde_json::json!({"bonus": 0, "penalty": 0}));
 
     // A credential term before or after the value supports it.
@@ -520,7 +538,7 @@ fn proximity_decides_secrets_without_a_field_name() {
         assert_eq!(context["bonus"], gap.points(), "{template}");
     }
 
-    // A nearer digest/hash term marks a hash, not a key: dropped in balanced and recall.
+    // A nearer digest/hash term marks a hash, not a key: dropped in every mode (F01).
     for template in [
         "tx hash: <<secret:0>>",
         "Transaktionshash <<secret:0>>",
@@ -529,14 +547,14 @@ fn proximity_decides_secrets_without_a_field_name() {
         "private key? no, block hash: <<secret:0>>",
     ] {
         let text = eth(template);
-        assert!(score_of(&text, DlpMode::Strict).is_some(), "{template}");
+        assert!(score_of(&text, DlpMode::Strict).is_none(), "{template}");
         assert!(score_of(&text, DlpMode::Balanced).is_none(), "{template}");
         assert!(score_of(&text, DlpMode::Recall).is_none(), "{template}");
         let result = dlp_result(&text, DlpMode::Recall);
         assert!(result.evidence_spans.is_empty(), "{template}");
     }
     // A hex hash dropped for its context does not free its range for a
-    // shorter match inside it; strict reports the hash alone.
+    // shorter match inside it, in no mode.
     for seed in (1..=48).chain([8016]) {
         let text = value(
             &generators,
@@ -544,9 +562,7 @@ fn proximity_decides_secrets_without_a_field_name() {
             "eth_private_key_hex",
             seed,
         );
-        let strict = dlp_result(&text, DlpMode::Strict);
-        assert_eq!(strict.evidence_spans.len(), 1, "{text}");
-        for mode in [DlpMode::Balanced, DlpMode::Recall] {
+        for mode in [DlpMode::Strict, DlpMode::Balanced, DlpMode::Recall] {
             let scored = dlp_result(&text, mode);
             assert!(scored.evidence_spans.is_empty(), "{mode:?}: {text}");
             assert_eq!(scored.class_name, "safe", "{mode:?}: {text}");
@@ -629,9 +645,12 @@ fn bilingual_rule_fixture_probes_context_and_counter_context() {
         if let Some(counter) = &probes.counter {
             for template in [&counter.de, &counter.en] {
                 let text = materialized(&generators, case, template);
+                // F01: a rule with a context gate drops it already in strict.
+                let gated = pattern(&case.rule_id).meta.context_gate.is_some();
                 let strict = matched_rules(&dlp_result(&text, DlpMode::Strict));
-                assert!(
+                assert_eq!(
                     rule(&strict, &case.rule_id).is_some(),
+                    !gated,
                     "strict {}: {text}",
                     case.rule_id
                 );

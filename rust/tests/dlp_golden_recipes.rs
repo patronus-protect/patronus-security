@@ -7,6 +7,7 @@
 use std::path::{Path, PathBuf};
 
 use patronus_ark::{
+    detectors::dlp::dlp::DLP_PATTERNS,
     golden_recipes::{
         materialize, materialize_fragments, transform, Fragment, GeneratorSet, RecipeError,
         SecretRecipe, SplitMix64,
@@ -27,6 +28,7 @@ struct Row {
     entities: Vec<Entity>,
     /// Scored DLP mode of the row (K04); rows without it run in `strict`.
     dlp_mode: Option<String>,
+    rule_id: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -359,6 +361,15 @@ fn is_glued(template: &str) -> bool {
         })
 }
 
+/// F01: whether `rule_id` reports a value only in its key context.
+fn is_context_gated(rule_id: Option<&str>) -> bool {
+    rule_id.is_some_and(|rule_id| {
+        DLP_PATTERNS
+            .iter()
+            .any(|pattern| pattern.name == rule_id && pattern.meta.context_gate.is_some())
+    })
+}
+
 #[test]
 fn recipe_rows_materialize_identically_to_the_python_generator() {
     let generators = generators();
@@ -386,8 +397,13 @@ fn recipe_rows_materialize_identically_to_the_python_generator() {
             // T06: example/test values in a provider format are fill recipes. A
             // hard negative of a scored mode (K04) is a generated value whose
             // context marks it as no secret; it is no example value. So is a
-            // value glued into a longer run (T01), which is no whole token.
+            // value glued into a longer run (T01), which is no whole token. A
+            // context-gated rule (F01) may have either: an example value or a
+            // generated value without key context.
             assert!(row.entities.is_empty(), "{}", row.id);
+            if is_context_gated(row.rule_id.as_deref()) {
+                continue;
+            }
             let plain =
                 row.dlp_mode.as_deref().is_some_and(|mode| mode != "strict") || is_glued(template);
             assert!(
