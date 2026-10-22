@@ -54,15 +54,40 @@ pub(super) fn is_basic_credentials(text: &str, range: Range<usize>) -> bool {
 }
 
 /// `dlp_bearer_token`: whether the value at `range` is an opaque token. A
-/// value that parses as a JWT belongs to `dlp_jwt_token`, which checks its
-/// entropy and documented examples; a malformed `ey…` value is judged as an
-/// opaque token.
+/// value that parses as a JWT and has the shape `dlp_jwt_token` matches
+/// belongs to that rule, which checks its entropy and documented examples;
+/// a malformed `ey…` value and a JWT outside that shape (empty claims `e30`,
+/// a short signature) are judged as opaque tokens.
 pub(super) fn is_bearer_token(text: &str, range: Range<usize>) -> bool {
     let value = &text[range];
-    if jwt_parse(value).is_some() {
+    if jwt_parse(value).is_some() && has_jwt_rule_shape(value) {
         return false;
     }
     is_issued_token(value.trim_end_matches('='))
+}
+
+/// Mirrors the `dlp_jwt_token` pattern: header and claims start with `ey`
+/// followed by at least ten characters, the signature has at least ten.
+fn has_jwt_rule_shape(value: &str) -> bool {
+    let in_class = |segment: &str| {
+        segment
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'='))
+    };
+    let mut segments = value.split('.');
+    let (Some(header), Some(claims), Some(signature), None) = (
+        segments.next(),
+        segments.next(),
+        segments.next(),
+        segments.next(),
+    ) else {
+        return false;
+    };
+    [header, claims]
+        .iter()
+        .all(|segment| segment.starts_with("ey") && segment.len() >= 12 && in_class(segment))
+        && signature.len() >= 10
+        && in_class(signature)
 }
 
 /// `dlp_session_cookie`: whether the cookie value at `range` is a session ID.
@@ -149,6 +174,14 @@ mod tests {
         ]
         .join(".");
         assert!(!gate("Bearer {v}", &jwt, is_bearer_token), "{jwt}");
+        // Valid JWTs `dlp_jwt_token` cannot match stay with the bearer rule:
+        // empty claims (`e30`) and a signature shorter than ten characters.
+        for jwt in [
+            ["eyJhbGciOiJIUzI1NiJ9", "e30", "c2lnbmF0dXJlLWJ5dGVz"].join("."),
+            ["eyJhbGciOiJIUzI1NiJ9", "eyJzdWIiOiI0NzExIn0", "Q7vRz2"].join("."),
+        ] {
+            assert!(gate("Bearer {v}", &jwt, is_bearer_token), "{jwt}");
+        }
     }
 
     #[test]

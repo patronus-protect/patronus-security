@@ -202,6 +202,13 @@ result shapes may be breaking for downstream users, and is called out explicitly
   exact F1 83.2 → 87.2 (CREDENTIAL 81.9 → 96.8, SECRET_TOKEN 93.6 → 99.2), FP/MB benign code
   0.2119 → 0.1324 (8 → 5 FP), benign docs unchanged, hard-negative FP 160 → 154 with no new FP
   row, 100 KiB p95 10.56 → 10.54 ms. Golden eval: 480/480 positives, 516/516 hard negatives.
+- Leave a `Bearer` JWT to `dlp_jwt_token` only when that rule can match it (F-HTTP review). A
+  structurally valid JWT with empty claims (`e30`) or a signature shorter than ten characters parses
+  but falls outside the `dlp_jwt_token` pattern, so `dlp_bearer_token` rejected it and nothing
+  reported it. The bearer gate now defers only JWTs in the shape of the JWT rule (header and claims
+  `ey` plus at least ten characters, a signature of at least ten) and judges every other value as an
+  opaque token. **Detection change:** such `Bearer` JWTs are now reported by `dlp_bearer_token` when
+  they look like an issued token; JWTs the JWT rule matches are unchanged.
 - Find credential values under compound, camelCase, quoted and typed keys (T09).
   `dlp_password_assignment`, `dlp_generic_credential_assignment`, `dlp_csrf_token` and
   `dlp_password_hash` now start at the credential noun without `\b`, so compound keys
