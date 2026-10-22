@@ -1,24 +1,62 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use std::net::IpAddr;
 
-/// Validate an IPv4 or IPv6 candidate matched by a PII regex.
+/// Validate an IPv4 or IPv6 candidate matched by a PII regex. The span may end in a
+/// CIDR prefix length (`/0`–`/32`, `/0`–`/128`) and an IPv6 address in a zone ID
+/// before it (`fe80::1%eth0`, `2001:db8::%eth0/128`, B-IP). Loopback, unspecified
+/// and multicast addresses are rejected, also as the IPv4 part of an IPv4-mapped
+/// address (`::ffff:127.0.0.1`).
 pub fn ip_address(s: &str) -> bool {
-    let Ok(candidate) = s.parse::<IpAddr>() else {
+    let (address, prefix) = match s.split_once('/') {
+        Some((address, prefix)) => (address, Some(prefix)),
+        None => (s, None),
+    };
+    let (address, zone) = match address.split_once('%') {
+        Some((address, zone)) => (address, Some(zone)),
+        None => (address, None),
+    };
+    let Ok(candidate) = address.parse::<IpAddr>() else {
         return false;
     };
-    if candidate.is_loopback() || candidate.is_multicast() || candidate.is_unspecified() {
+    let max_prefix = if candidate.is_ipv4() { 32 } else { 128 };
+    if prefix.is_some_and(|prefix| {
+        prefix.is_empty()
+            || !prefix.bytes().all(|byte| byte.is_ascii_digit())
+            || prefix
+                .parse::<u8>()
+                .map_or(true, |length| length > max_prefix)
+    }) || zone.is_some_and(|zone| candidate.is_ipv4() || zone.is_empty())
+    {
+        return false;
+    }
+    let local = |candidate: IpAddr| {
+        candidate.is_loopback() || candidate.is_multicast() || candidate.is_unspecified()
+    };
+    if local(candidate) {
         return false;
     }
     match candidate {
         IpAddr::V4(_) => true,
-        IpAddr::V6(_) => {
-            let compact = s.trim();
+        IpAddr::V6(v6) => {
+            if v6
+                .to_ipv4_mapped()
+                .is_some_and(|mapped| local(IpAddr::V4(mapped)))
+            {
+                return false;
+            }
+            let compact = address.trim();
             compact.len() >= 7
                 && ((compact.contains("::")
                     && compact.chars().filter(|ch| *ch == ':').count() >= 2)
                     || compact.split(':').filter(|part| !part.is_empty()).count() >= 3)
         }
     }
+}
+
+/// The address of an IP span without its zone ID and CIDR prefix length
+/// (`fe80::1%eth0` → `fe80::1`, `192.0.2.0/24` → `192.0.2.0`).
+pub fn ip_address_part(s: &str) -> &str {
+    s.split(['%', '/']).next().unwrap_or(s)
 }
 
 /// Luhn algorithm (ISO/IEC 7812) — credit card number validation.
