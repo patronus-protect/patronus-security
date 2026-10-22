@@ -378,10 +378,11 @@ def test_module_split_registry_rejects_unknown_references(tmp_path):
 
 def test_checked_in_registry_order_matches_the_rust_order_test():
     rust_test = (ROOT / "rust" / "tests" / "pii_registry_order.rs").read_text(encoding="utf-8")
-    expected = re.findall(r'\("(pii_\w+)", "(\w+)"\)', rust_test)
+    # rustfmt wraps long entries over several lines.
+    expected = re.findall(r'\(\s*"(pii_\w+)",\s*"(\w+)",?\s*\)', rust_test)
     rules = _generate_docs().parse_native_patterns(MODULE.PII_SOURCE_PATH, "PiiPattern")
     assert [(rule["id"], rule["entity_group"]) for rule in rules] == expected
-    assert len(expected) == 50
+    assert len(expected) == 54
 
 
 def test_cli_check_succeeds_and_fails(tmp_path):

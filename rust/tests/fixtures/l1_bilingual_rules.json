@@ -799,6 +799,62 @@
     }
   },
   {
+    "category": "pii",
+    "rule_id": "pii_passport_number_de_context_free",
+    "de": "Bitte legen Sie G8H2N5R13 am Schalter vor.",
+    "en": "Please bring J7T3X9V54 to the front desk.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Pass-Nr.: F12345671",
+        "en": "My passport C01X00T478 expires next year."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_passport_number_de_legacy",
+    "de": "Alte Reisepass-Nr.: 3000123454",
+    "en": "Old passport number: 3000123454",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Der alte Reisepass 1220001297 ist abgelaufen.",
+        "en": "His old passport no 1220001297 expired."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_identity_card_number_de_context_free",
+    "de": "Bitte zeigen Sie R5N8L3W90 am Eingang vor.",
+    "en": "Please show M3N7P9R11 at the entrance.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Ausweis-Nr.: L01X00T44",
+        "en": "ID card number: T220001293"
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_identity_card_number_de_legacy",
+    "de": "Personalausweis Nr. 1220001297",
+    "en": "Old ID card number 1220001297",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Alte Ausweisnummer: 3000123454 (bis 2010)",
+        "en": "Her old identity card 3000123454 expired."
+      }
+    }
+  },
+  {
     "category": "dlp",
     "rule_id": "dlp_anthropic_key",
     "de": "<<secret\u003a0>>",

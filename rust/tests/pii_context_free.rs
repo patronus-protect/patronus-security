@@ -115,6 +115,10 @@ fn scored_only_rules_are_unbound_checksum_rules() {
             "pii_vat_id_it",
             "pii_vat_id_it_proximity",
             "pii_vat_id_es",
+            "pii_passport_number_de_context_free",
+            "pii_passport_number_de_legacy",
+            "pii_identity_card_number_de_context_free",
+            "pii_identity_card_number_de_legacy",
         ]
     );
     for pattern in scored_only {
@@ -125,11 +129,17 @@ fn scored_only_rules_are_unbound_checksum_rules() {
             pattern.name
         );
         assert!(!pattern.captured_value, "{}", pattern.name);
-        // The bare Partita IVA (B01) is the one unbound checksum rule that needs a
-        // VAT term; 11 bare digits with a Luhn digit prove too little alone.
+        // The bare Partita IVA (B01) and the old numeric document serial (F08) are
+        // the unbound checksum rules that need a term; 11 bare digits with a Luhn
+        // digit or 10 with a 7-3-1 digit prove too little alone.
         assert_eq!(
             pattern.requires_context,
-            pattern.name == "pii_vat_id_it_proximity",
+            [
+                "pii_vat_id_it_proximity",
+                "pii_passport_number_de_legacy",
+                "pii_identity_card_number_de_legacy",
+            ]
+            .contains(&pattern.name),
             "{}",
             pattern.name
         );
@@ -181,6 +191,10 @@ fn every_checksum_label_reports_a_bare_value_in_the_scored_modes() {
         ("VAT_ID_BE", "BE0403019261", 0.55),
         ("VAT_ID_IT", "IT00743110157", 0.55),
         ("VAT_ID_ES", "ESA13585625", 0.55),
+        ("PASSPORT_NUMBER", "C01X00T41", 0.55),
+        ("PASSPORT_NUMBER", "C01X00T478", 0.55),
+        ("IDENTITY_CARD_NUMBER", "L01X00T44", 0.55),
+        ("IDENTITY_CARD_NUMBER", "T220001293", 0.55),
     ];
     for label in PII_PATTERNS
         .iter()

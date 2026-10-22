@@ -170,7 +170,7 @@ def test_checked_in_presidio_count_matches_the_pinned_registry():
 def test_checked_in_ark_count():
     counts = MODULE.count(ENTITY_MAP.load(), MODULE.load_rules())
     # At T03 only Luhn, MOD 97-10 and the Steuer-ID check compute a check digit; B01 adds
-    # one VAT ID per country.
+    # one VAT ID per country, F08 the German passport and identity card (ICAO 9303).
     assert set(counts.ark) == {
         Unit("pii.credit_card.pan", None),
         Unit("pii.iban", None),
@@ -183,6 +183,8 @@ def test_checked_in_ark_count():
         Unit("pii.be.vat_id", "be"),
         Unit("pii.it.vat_code", "it"),
         Unit("pii.es.vat_id", "es"),
+        Unit("entity.passport_number", "de"),
+        Unit("pii.identity_card_number", "de"),
     }
     assert counts.m3_met is False
 
@@ -313,7 +315,7 @@ def test_cli_count_json_and_check(tmp_path):
     payload = json.loads(result.stdout)
     assert payload["presidio_version"] == "2.2.364"
     assert payload["presidio"]["count"] == 35
-    assert payload["ark"]["count"] == 11
+    assert payload["ark"]["count"] == 13
     assert payload["m3"] == {"factor": 2, "target": 70, "met": False}
     assert {
         "entity_id": "pii.de.tax_id",
@@ -327,6 +329,24 @@ def test_cli_count_json_and_check(tmp_path):
         "pii.es.vat_id", "pii.fr.vat_id", "pii.it.vat_code", "pii.nl.vat_id",
     ]
     assert vat["pii.it.vat_code"]["sources"] == ["pii_vat_id_it: it_vat_id", "pii_vat_id_it_proximity: it_vat_id"]
+    # F08: German passport and identity card (ICAO 9303 7-3-1) count per country; the
+    # field-bound rules keep the format-only de_document_number.
+    assert {
+        "entity_id": "entity.passport_number",
+        "country": "de",
+        "sources": [
+            "pii_passport_number_de_context_free: de_passport_number",
+            "pii_passport_number_de_legacy: de_passport_number",
+        ],
+    } in payload["ark"]["units"]
+    assert {
+        "entity_id": "pii.identity_card_number",
+        "country": "de",
+        "sources": [
+            "pii_identity_card_number_de_context_free: de_identity_card_number",
+            "pii_identity_card_number_de_legacy: de_identity_card_number",
+        ],
+    } in payload["ark"]["units"]
 
     result = subprocess.run([sys.executable, str(SCRIPT), "check"], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
