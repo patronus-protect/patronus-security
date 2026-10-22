@@ -176,6 +176,10 @@
       "generators": ["url_userinfo_password"],
       "probes": ["DATABASE_URL=postgres://app:<<secret:0>>@db", "Verbindung zur Reporting-DB: mysql://report:<<secret:0>>@db1"]
     },
+    "dlp_url_userinfo_token": {
+      "generators": ["generic_api_secret", "url_token"],
+      "probes": ["$ git clone https://<<secret:0>>:x-oauth-basic@github.com/acme/app.git", "Spiegel des Lager-Repos: https://<<secret:0>>:x-oauth-basic@github.com/acme/lager.git"]
+    },
     "dlp_de_vat_id": {
       "generators": ["de_vat_id"],
       "probes": ["USt-IdNr.: <<secret:0>>", "VAT ID: <<secret:0>>"]

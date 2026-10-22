@@ -52,6 +52,7 @@ const REGISTRY_ORDER: &[&str] = &[
     "dlp_password_hash",
     // credentials (URL userinfo runs after the hash rule)
     "dlp_url_userinfo_password",
+    "dlp_url_userinfo_token",
     // identifiers
     "dlp_de_vat_id",
     "dlp_de_commercial_register_number",

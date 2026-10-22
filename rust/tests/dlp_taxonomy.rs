@@ -122,6 +122,7 @@ const RULE_SUBTYPES: &[(&str, &str)] = &[
     ("dlp_csrf_token", "session_token"),
     ("dlp_password_hash", "password_hash"),
     ("dlp_url_userinfo_password", "password"),
+    ("dlp_url_userinfo_token", "access_token"),
 ];
 
 fn scan_with(gates: Option<ScanGateMatrix>, text: &str) -> SecurityScanResult {
