@@ -109,6 +109,7 @@ NOTHING = 10
 AUTO_MERGE = os.environ.get("ARK_L1_AUTO_MERGE", "1") != "0"
 MERGE_TIMEOUT = 300      # seconds to wait for an asynchronous merge result
 RETARGET_TIMEOUT = 300   # seconds to wait for GitHub to move the PRs above onto main
+MERGE_PENDING = -1       # auto_merge result: GitHub is still merging, the run must stop
 
 CURRENT = STATE / "current.json"
 
@@ -463,7 +464,7 @@ def wait_for_retarget(merged_branch: str) -> None:
     print(f"WARN=PRs on {merged_branch} not retargeted after {RETARGET_TIMEOUT}s; restack takes over")
 
 
-def auto_merge(open_prs: list[dict]) -> int | None:
+def auto_merge(open_prs: list[dict]) -> int | None:  # PR number, MERGE_PENDING or None
     """Squash-merge the bottom stack PR when it targets main, is mergeable and its CI is green.
 
     At most one per run: the PR above it is rebased onto the squash commit by `restack` and needs
@@ -492,6 +493,11 @@ def auto_merge(open_prs: list[dict]) -> int | None:
     except (RuntimeError, ValueError) as err:
         print(f"AUTO_MERGE_ERROR={label}: {str(err).strip().splitlines()[-1] if str(err).strip() else err}")
         return None
+    if result == "pending":
+        # Still in progress: it may yet merge and rebase the stack on the server, so this run must
+        # not restack or start a task now.
+        print(f"AUTO_MERGE_PENDING={label} after {MERGE_TIMEOUT}s")
+        return MERGE_PENDING
     if result != "merged":
         print(f"AUTO_MERGE_ERROR={label}: {result}")
         return None
@@ -516,6 +522,8 @@ def cmd_next() -> int:
     git("checkout", "--quiet", "--detach", "origin/main")
     open_prs = prs("open")
     merged = auto_merge(open_prs)
+    if merged == MERGE_PENDING:
+        return nothing("MERGE_PENDING (asynchronous merge still running; the next run continues)")
     if merged is not None:
         git("fetch", "--quiet", "--prune", "origin")
         git("checkout", "--quiet", "--detach", "origin/main")
