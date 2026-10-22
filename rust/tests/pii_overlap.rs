@@ -157,8 +157,11 @@ fn checksum_vectors_pass_or_fail_what_they_name() {
         assert_eq!(validators::mod97(form), form.starts_with("AT29"), "{form}");
         assert!(validators::payment_card(digits), "{digits}");
     }
-    for (iban, digits) in IBANS_WITH_LUHN_DIGITS {
-        assert!(validators::payment_card(digits), "{iban}");
+    for (_, digits) in IBANS_WITH_LUHN_DIGITS {
+        assert!(
+            validators::payment_card(digits),
+            "BBAN digits of an IBAN vector fail payment_card"
+        );
     }
     for (_, digits) in PHONES_WITH_LUHN_DIGITS {
         assert!(validators::luhn(digits), "{digits}");

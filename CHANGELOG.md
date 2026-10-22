@@ -26,6 +26,13 @@ result shapes may be breaking for downstream users, and is called out explicitly
   IBANs and its `overlap` entries next to phone numbers. Dev: card FP 95 → 11 (`strict`) and 59 → 8
   (`balanced`), every card TP and every Luhn-valid card gold value stays found; the presidio-analyzer
   hard negative `1748503543012` is no match.
+- B-PAN follow-ups: CVV and card expiry now depend on a card that `pii_credit_card` reports
+  (`payment_card` plus the position check, `context::has_payment_card`), not on any Luhn-valid
+  number, and a `-`/`_`-joined card-field label of the card lexicon (`card-`, `card-number-`,
+  `kartennummer-`, `karten-nr-`) is no token prefix, so the PAN after it stays found. **Detection change:** in
+  `strict` and `balanced`, CVV and expiry findings next to a phone number or a brandless Luhn-valid
+  number disappear, and compact or hyphen-grouped PANs after a hyphenated card-field label are found
+  again.
 
 ### Added
 

@@ -9,7 +9,7 @@ use crate::{
 use super::context::Evidence;
 use super::context_anchors::PII_ANCHOR_PATTERNS;
 use super::score::{self, PiiMode, ValidatorStrength};
-use super::{common, context, de, identifiers, intl, overlap, uk, us, validators};
+use super::{common, context, de, identifiers, intl, overlap, uk, us};
 use crate::detectors::anchors;
 use crate::detectors::obfuscation::{Deobfuscated, Level};
 use crate::EvidenceSpan;
@@ -637,9 +637,8 @@ impl NativeRegexDetector for PiiPipeline {
             .iter()
             .position(|rule_id| *rule_id == "pii_credit_card")
             .expect("PII credit-card rule must be present");
-        let has_payment_card = self.regexes[card_index]
-            .find_iter(text)
-            .any(|matched| validators::luhn(matched.as_str()));
+        let has_payment_card =
+            context::has_payment_card(text, 0..text.len(), &self.regexes[card_index]);
         spans.retain(|span| {
             let coupled_cvv = span.label == "CREDITCARD_CVV" && has_payment_card;
             (span.end_byte - span.start_byte >= 4 || coupled_cvv)

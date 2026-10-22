@@ -350,3 +350,100 @@ fn every_luhn_valid_card_of_the_goldens_passes_the_table() {
     }
     assert!(checked >= 60, "only {checked} Luhn-valid golden cards");
 }
+
+fn labels(text: &str, mode: PiiMode) -> Vec<String> {
+    scan(text, mode)
+        .evidence_spans
+        .into_iter()
+        .map(|span| span.label)
+        .collect()
+}
+
+/// Luhn-valid numbers the card rule rejects (B-PAN): no IIN of the table, and the
+/// digits after the `+` of a phone number.
+const REJECTED_PANS: [&str; 2] = ["1234567812345670", "+49 151 23456787"];
+
+#[test]
+fn a_rejected_pan_enables_no_cvv_or_expiry() {
+    // CVV and expiry depend on a card the card rule reports, not on a Luhn sum.
+    for pan in REJECTED_PANS {
+        assert!(validators::luhn(pan), "rejected PAN vector fails Luhn");
+        assert!(
+            cards(pan, PiiMode::Strict).is_empty(),
+            "rejected PAN vector is a card"
+        );
+        for text in [
+            format!("Phone {pan}, CVV: 123"),
+            format!("Phone {pan}, expiry: 12/29"),
+            format!("Telefon {pan}, Kartenprüfnummer: 123"),
+            format!("Telefon {pan}, gültig bis 12/29"),
+        ] {
+            for mode in MODES {
+                let labels = labels(&text, mode);
+                assert!(
+                    !labels.iter().any(|label| label.starts_with("CREDITCARD")),
+                    "{mode:?}: {text}: {labels:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn a_reported_pan_still_enables_cvv_and_expiry() {
+    for (text, label) in [
+        ("Phone 4111111111111111, CVV: 123", "CREDITCARD_CVV"),
+        ("Phone 4111111111111111, expiry: 12/29", "CREDITCARD_EXPIRY"),
+        (
+            "Telefon 4111111111111111, Kartenprüfnummer: 123",
+            "CREDITCARD_CVV",
+        ),
+        (
+            "Telefon 4111111111111111, gültig bis 12/29",
+            "CREDITCARD_EXPIRY",
+        ),
+    ] {
+        for mode in MODES {
+            let labels = labels(text, mode);
+            assert!(
+                labels.iter().any(|found| found == label),
+                "{mode:?}: {text}: {labels:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn pans_after_a_hyphenated_card_field_label_stay_found() {
+    // A card-field label joined by `-` names the card; it is no token prefix. (After `_` the
+    // card rule has no word boundary, so `card_number_…` is no match at all.)
+    for (text, card) in [
+        ("card-4111111111111111", "4111111111111111"),
+        ("card-number-4111-1111-1111-1111", "4111-1111-1111-1111"),
+        ("card_number-4111111111111111", "4111111111111111"),
+        ("kartennummer-4111111111111111", "4111111111111111"),
+        ("Karten-Nr-4111-1111-1111-1111", "4111-1111-1111-1111"),
+    ] {
+        for mode in MODES {
+            assert_eq!(
+                cards(text, mode),
+                vec![card.to_string()],
+                "{mode:?}: {text}"
+            );
+        }
+    }
+}
+
+#[test]
+fn token_segments_after_other_labels_stay_no_card() {
+    for text in [
+        "pkg-4111111111111111",
+        "build-4111-1111-1111-1111",
+        "card-4111111111111111-abc",
+        "xoxb-card-4111111111111111",
+    ] {
+        for mode in MODES {
+            assert!(cards(text, mode).is_empty(), "{mode:?}: {text}");
+        }
+    }
+}
