@@ -1941,7 +1941,7 @@ DLP_CASES = {
     "CREDENTIAL": [
         ds("CREDENTIAL", "de", "dlp_password_assignment", "Passwort = <<secret:0>>", "password", 301),
         ds("CREDENTIAL", "en", "dlp_credential_in_url", "https://example.test?token=<<secret:0>>", "url_token", 302),
-        ds("CREDENTIAL", "en", "dlp_basic_auth", "Authorization: Basic <<secret:0>>", "http_basic_credentials", 303),
+        ds("CREDENTIAL", "en", "dlp_basic_auth", "Authorization: Basic <<secret:0>>", "http_basic_auth", 303),
         dn("CREDENTIAL", "de", "dlp_password_assignment", "Passwort = ${PASSWORD}", "environment reference"),
         dn("CREDENTIAL", "en", "dlp_generic_credential_assignment", "token = [REDACTED]", "redacted placeholder"),
         ds(
@@ -6095,6 +6095,231 @@ DLP_T09_CASES = {
     ],
 }
 for _label, _rows in DLP_T09_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+
+# F-HTTP (F13 + T11): HTTP auth values outside a literal header line. Bearer and Basic values
+# under authorization/proxy_authorization keys (env, JSON, YAML, TOML, code, logs) and standalone
+# in chats, tickets and mails; session cookies of known servers and frameworks (JSESSIONID,
+# PHPSESSID, connect.sid, laravel_session, __Host-) without a Cookie: line. Basic counts only
+# when its base64 decodes to user:password, Bearer only as a high-entropy opaque token (a JWT
+# goes to dlp_jwt_token). Hard negatives: swagger-ui test values (Bearer abc123.xyz.789,
+# Bearer secret_token, Basic application:secret), base64 without user:password, the RFC 7617
+# example, references, placeholders and identifiers.
+DLP_FHTTP_CASES = {
+    "CREDENTIAL": [
+        ds(
+            "CREDENTIAL", "de", "dlp_basic_auth",
+            "# Proxy für den Lagerabgleich\nHTTP_PROXY=http://proxy.intern:3128\nPROXY_AUTHORIZATION=Basic <<secret:0>>\n",
+            "http_basic_auth", 14001, carrier="env",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_basic_auth",
+            "Ticket #20931 – Proxy lehnt den Abruf ab\n\nLaut Konfiguration hinterlegt (Proxy-Zugangsdaten): "
+            "Basic <<secret:0>>\nBitte prüfen, ob der Wert noch gültig ist.\n",
+            "http_basic_auth", 14002, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_session_cookie",
+            "2026-09-14 08:12:03,902 DEBUG [main] Sitzung übernommen: mandant=0042 JSESSIONID=<<secret:0>> "
+            "wiederholungen=3\n",
+            "java_session_id", 14003, carrier="log",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_session_cookie",
+            "sitzung:\n  domain: shop.intern\n  cookie: \"PHPSESSID=<<secret:0>>\"\n",
+            "php_session_id", 14004, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_session_cookie",
+            "[08:17] daniel.r: Cookie aus dem Browser, damit du die Sitzung nachstellen kannst: "
+            "laravel_session=<<secret:0>>\n",
+            "laravel_session", 14005, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_basic_auth",
+            "upstream:\n  base_url: https://api.internal/v2\n  proxy_authorization: \"Basic <<secret:0>>\"\n",
+            "http_basic_auth", 14011, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_basic_auth",
+            "Hi team,\n\nhere are the proxy credentials for the reporting job:\n\nBasic <<secret:0>>\n\n"
+            "Please delete this mail after the run.\n",
+            "http_basic_auth", 14012, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_session_cookie",
+            "# copied from the browser for the load test\nSESSION_COOKIE=JSESSIONID=<<secret:0>>\n",
+            "java_session_id", 14013, carrier="env",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_session_cookie",
+            "[09:43] tom.w: grabbed it from devtools: connect.sid=<<secret:0>>\n",
+            "express_session_id", 14014, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_session_cookie",
+            "$ curl -b 'laravel_session=<<secret:0>>' https://shop.internal/account\n",
+            "laravel_session", 14015, carrier="cli",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_basic_auth",
+            "PROXY_AUTHORIZATION=Basic SGFsbG8gV2VsdCBkYXMgaXN0IGVpbg==\n",
+            "base64 without user:password", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_basic_auth",
+            "// Testfall: Zugangsdaten werden kodiert\nexpect(header).toBe(\"Basic YmVudXR6ZXI6cGFzc3dvcnQ=\");\n",
+            "test value benutzer:passwort", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_session_cookie",
+            "SESSION_COOKIE=PHPSESSID=HIER_SITZUNG_EINTRAGEN\n",
+            "placeholder as session id", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_session_cookie",
+            "if (cookie.getName().equals(\"JSESSIONID\")) {\n    sitzung = cookie.getValue();\n}\n",
+            "cookie name in code", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_session_cookie",
+            "2026-09-14 08:12:03,902 DEBUG [main] Sitzung beendet: JSESSIONID=${SITZUNG}\n",
+            "template reference as session id", carrier="log",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_basic_auth",
+            "    cy.get(\"@tokenRequest\")\n      .its(\"request.headers.authorization\")\n"
+            "      .should(\"equal\", \"Basic YXBwbGljYXRpb246c2VjcmV0\")\n",
+            "swagger-ui test value application:secret", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_basic_auth",
+            "The RFC 7617 example sends Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==\n",
+            "documented RFC 7617 example", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_basic_auth",
+            "Basic usage of the client is documented in docs/usage.md\n",
+            "word after Basic", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_session_cookie",
+            "session_cookie: \"JSESSIONID=<redacted>\"\n",
+            "redacted session id", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_session_cookie",
+            "Set-Cookie: __Host-session=${SESSION_ID}; Path=/; Secure; HttpOnly\n",
+            "environment reference in a __Host- cookie", carrier="http",
+        ),
+    ],
+    "SECRET_TOKEN": [
+        ds(
+            "SECRET_TOKEN", "de", "dlp_bearer_token",
+            "{\n  \"dienst\": \"lagerabgleich\",\n  \"zugang\": {\n    \"authorization\": \"Bearer <<secret:0>>\"\n  }\n}\n",
+            "bearer_opaque_token", 14021, carrier="json",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_bearer_token",
+            "[08:15] lena.s: Wie lautet der Access-Token für die Testumgebung?\n[08:17] daniel.r: Bearer <<secret:0>>\n",
+            "bearer_opaque_token", 14022, carrier="prose",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_bearer_token",
+            "[upstream]\nbasis_url = \"https://api.intern/v2\"\nauthorization = \"Bearer <<secret:0>>\"\n",
+            "bearer_opaque_token", 14023, carrier="toml",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_bearer_token",
+            "2026-09-14 08:12:03,902 DEBUG [main] Konfiguration geladen: mandant=0042 "
+            "authorization=Bearer <<secret:0>> wiederholungen=3\n",
+            "bearer_opaque_token", 14024, carrier="log",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_jwt_token",
+            "{\n  \"zugang\": {\n    \"proxyAuthorization\": \"Bearer <<secret:0>>\"\n  }\n}\n",
+            "jwt_signed_hs256", 14025, carrier="json",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_bearer_token",
+            "API_BASE_URL=https://api.internal/v1\nAUTHORIZATION=Bearer <<secret:0>>\n",
+            "bearer_opaque_token", 14031, carrier="env",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_bearer_token",
+            "const client = new Client({\n  baseUrl: \"https://api.internal\",\n  authorization: \"Bearer <<secret:0>>\",\n});\n",
+            "bearer_opaque_token", 14032, carrier="code",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_bearer_token",
+            "From: Alex Turner <alex.turner@example.com>\nSubject: Access token for the reporting job\n\n"
+            "Hi team,\n\nhere is the access token:\n\nBearer <<secret:0>>\n\nThanks, Alex\n",
+            "bearer_opaque_token", 14033, carrier="prose",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_bearer_token",
+            "    \"os.environ[\\\"AUTHORIZATION\\\"] = \\\"Bearer <<secret:0>>\\\"\\n\",\n",
+            "bearer_opaque_token", 14034, carrier="json",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_jwt_token",
+            "AUTHORIZATION=Bearer <<secret:0>>\n",
+            "jwt_signed_rs256", 14035, carrier="env",
+        ),
+        dn(
+            "SECRET_TOKEN", "de", "dlp_bearer_token",
+            "AUTHORIZATION=Bearer ${LAGER_TOKEN}\n",
+            "environment reference after Bearer", carrier="env",
+        ),
+        dn(
+            "SECRET_TOKEN", "de", "dlp_bearer_token",
+            "{\n  \"authorization\": \"Bearer {{zugangstoken}}\"\n}\n",
+            "template after Bearer", carrier="json",
+        ),
+        dn(
+            "SECRET_TOKEN", "de", "dlp_bearer_token",
+            "[08:17] daniel.r: Der Header lautet Bearer gefolgt vom Token aus dem Vault.\n",
+            "prose word after Bearer", carrier="prose",
+        ),
+        dn(
+            "SECRET_TOKEN", "de", "dlp_bearer_token",
+            "headers = {\"Authorization\": \"Bearer \" + zugangs_token}\n",
+            "concatenated variable", carrier="code",
+        ),
+        dn(
+            "SECRET_TOKEN", "de", "dlp_bearer_token",
+            "authorization = \"Bearer zugangstoken_lager\"\n",
+            "identifier after Bearer", carrier="toml",
+        ),
+        dn(
+            "SECRET_TOKEN", "en", "dlp_bearer_token",
+            "    expect(text).to.include(`-H \"Authorization: Bearer abc123.xyz.789\"`)\n",
+            "swagger-ui test value abc123.xyz.789", carrier="code",
+        ),
+        dn(
+            "SECRET_TOKEN", "en", "dlp_bearer_token",
+            "      .its(\"authorization\")\n      .should(\"equal\", \"Bearer secret_token\")\n",
+            "swagger-ui test value secret_token", carrier="code",
+        ),
+        dn(
+            "SECRET_TOKEN", "en", "dlp_bearer_token",
+            "Bearer authentication (also called token authentication) sends a token in the header.\n",
+            "prose about the scheme", carrier="prose",
+        ),
+        dn(
+            "SECRET_TOKEN", "en", "dlp_bearer_token",
+            "AUTHORIZATION=Bearer YOUR_ACCESS_TOKEN_HERE\n",
+            "documented placeholder", carrier="env",
+        ),
+        dn(
+            "SECRET_TOKEN", "en", "dlp_bearer_token",
+            "log.debug(\"authorization=Bearer %s\", token)\n",
+            "format placeholder", carrier="code",
+        ),
+    ],
+}
+for _label, _rows in DLP_FHTTP_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
 

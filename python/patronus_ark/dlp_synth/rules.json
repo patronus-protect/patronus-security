@@ -151,20 +151,21 @@
     },
     "dlp_bearer_token": {
       "generators": ["bearer_opaque_token"],
-      "probes": ["Authorization: Bearer <<secret:0>>", "curl -H 'Authorization: Bearer <<secret:0>>' https://api.example.com/v1/me"]
+      "probes": ["Authorization: Bearer <<secret:0>>", "curl -H 'Authorization: Bearer <<secret:0>>' https://api.example.com/v1/me", "AUTHORIZATION=Bearer <<secret:0>>", "{\"authorization\": \"Bearer <<secret:0>>\"}", "Hier der Access-Token: Bearer <<secret:0>>"]
     },
     "dlp_basic_auth": {
       "generators": ["http_basic_auth"],
       "shape_only": ["http_basic_credentials"],
-      "probes": ["Authorization: Basic <<secret:0>>", "proxy_set_header Authorization: Basic <<secret:0>>;"]
+      "lookalike": ["http_basic_credentials"],
+      "probes": ["Authorization: Basic <<secret:0>>", "proxy_set_header Authorization: Basic <<secret:0>>;", "proxy_authorization: \"Basic <<secret:0>>\"", "Proxy credentials for the job: Basic <<secret:0>>"]
     },
     "dlp_signed_url_signature": {
       "generators": ["aws_sigv4_signature"],
       "probes": ["https://bucket.s3.eu-central-1.amazonaws.com/report.pdf?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=900&X-Amz-Signature=<<secret:0>>", "Download-Link (15 min gültig): https://files.example.de/a.zip?Expires=1767225600&Signature=<<secret:0>>"]
     },
     "dlp_session_cookie": {
-      "generators": ["java_session_id", "php_session_id"],
-      "probes": ["Cookie: theme=dark; JSESSIONID=<<secret:0>>", "Set-Cookie: PHPSESSID=<<secret:0>>; path=/; HttpOnly"]
+      "generators": ["java_session_id", "php_session_id", "express_session_id", "laravel_session"],
+      "probes": ["Cookie: theme=dark; JSESSIONID=<<secret:0>>", "Set-Cookie: PHPSESSID=<<secret:0>>; path=/; HttpOnly", "SESSION_COOKIE=JSESSIONID=<<secret:0>>", "Cookie aus dem Browser: PHPSESSID=<<secret:0>>", "Set-Cookie: connect.sid=<<secret:0>>; Path=/; HttpOnly", "curl -b 'laravel_session=<<secret:0>>' https://shop.example.com/account", "Cookie: __Host-session=<<secret:0>>"]
     },
     "dlp_csrf_token": {
       "generators": ["csrf_token"],

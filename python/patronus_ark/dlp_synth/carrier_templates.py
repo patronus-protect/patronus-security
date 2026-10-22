@@ -1312,7 +1312,12 @@ PROFILES = {
     ),
     "dlp_session_cookie": Profile(
         "credential.session_cookie", "CREDENTIAL", "secret", "session_cookie", "session cookie", "Session-Cookie",
-        {"java_session_id": "JSESSIONID=<<value>>", "php_session_id": "PHPSESSID=<<value>>"},
+        {
+            "java_session_id": "JSESSIONID=<<value>>",
+            "php_session_id": "PHPSESSID=<<value>>",
+            "express_session_id": "connect.sid=<<value>>",
+            "laravel_session": "laravel_session=<<value>>",
+        },
     ),
     "dlp_csrf_token": Profile("credential.csrf_token", "SECRET_TOKEN", "secret", "csrf_token", "CSRF token", "CSRF-Token"),
     "dlp_password_hash": Profile("credential.password_hash", "PASSWORD_HASH", "secret", "password_hash", "password hash", "Passwort-Hash"),
