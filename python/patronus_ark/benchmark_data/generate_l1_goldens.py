@@ -1510,6 +1510,59 @@ B_PAN_CARD_PRECISION_CASES = [
 for _row in B_PAN_CARD_PRECISION_CASES:
     PII_CASES[_row["target_label"]].append(_row)
 
+# B-IP IP spans (T20 + baseline C1, TRIAGE 2026-W43 bucket 5, baseline P3/P9): an address
+# span holds its zone ID and CIDR prefix length, an IPv4-mapped or embedded IPv6 address is
+# one span, and a prefix length out of range stays outside the span. No IPv6 starts inside
+# a colon-delimited SWIFT MT or EDIFACT chain (`:28C::52D:`, `BGM+380:21:3::90:FRET`) or
+# ends before a further `:`/`.` group; an invalid chain or mixed form (`2001:db8::256.1.1.1`)
+# yields no span at all, not even a sub-span. A SWIFT MT tag at the start of a line
+# (`:25:`) and a field name (`IPv6:`) open a value. Loopback and unspecified addresses stay
+# rejected (D-IP), also mapped (`::ffff:127.0.0.1`) and with a prefix (`::/0`).
+# Appended so existing ids stay stable.
+B_IP_SPAN_CASES = [
+    p("IP_ADDRESS", "de", "pii_ipv6_loopback", "Verbindung von ", "::ffff:10.20.30.40", " abgelehnt.", carrier="prose"),
+    p("IP_ADDRESS", "de", "pii_ipv6_compressed", "NAT64-Adresse: ", "64:ff9b::198.51.100.1"),
+    p("IP_ADDRESS", "de", "pii_ipv6_compressed", "Schnittstelle: ", "fe80::a1b2:3c4d%eth0"),
+    p("IP_ADDRESS", "de", "pii_ipv4", "Freigegebenes Netz: ", "198.51.100.0/24"),
+    p("IP_ADDRESS", "de", "pii_ipv6_compressed", "Präfix ", "2001:db8:4f00::/40", " gesperrt.", carrier="prose"),
+    p("IP_ADDRESS", "de", "pii_ipv6_full", ":20:REF2209\n:25:", "2a02:810d:4b40:3d00:91f2:6c1e:8a3b:52d7", "\n:28C:00042/001", carrier="kv"),
+    p("IP_ADDRESS", "de", "pii_ipv6_compressed", "IPv6:", "2001:db8:85a3::8a2e:198.51.100.23"),
+    p("IP_ADDRESS", "de", "pii_ipv4", "Route ", "203.0.113.0", "/123 ist ungültig.", carrier="prose"),
+    p("IP_ADDRESS", "de", "pii_ipv6_loopback", "Gemappt: ", "::ffff:198.51.100.0/120", mode="balanced"),
+    p("IP_ADDRESS", "en", "pii_ipv6_loopback", "Connect to ", "::ffff:10.0.0.1", " now", carrier="prose"),
+    p("IP_ADDRESS", "en", "pii_ipv6_loopback", "Mapped peer [", "::ffff:192.0.2.71", "]:443 accepted.", carrier="prose"),
+    p("IP_ADDRESS", "en", "pii_ipv6_compressed", "Link-local: ", "fe80::1%eth0"),
+    p("IP_ADDRESS", "en", "pii_ipv6_compressed", "Zone and prefix: ", "2001:db8::%eth0/128"),
+    p("IP_ADDRESS", "en", "pii_ipv4", "Subnet: ", "192.0.2.0/24"),
+    p("IP_ADDRESS", "en", "pii_ipv6_full", " :50K:/ACME LTD\n :52A:", "2001:db8:85a3:0:0:8a2e:370:7334", "\n :57A:BANKDEFF", carrier="kv"),
+    p("IP_ADDRESS", "en", "pii_ipv6_full", "Embedded: ", "2001:db8:1:2:3:4:203.0.113.9"),
+    p("IP_ADDRESS", "en", "pii_ipv4", "Host ", "10.0.0.0", "/123 is malformed.", carrier="prose"),
+    p("IP_ADDRESS", "en", "pii_ipv6_compressed", "Prefix ", "2001:db8::/32", ".", carrier="prose", mode="balanced"),
+    n("IP_ADDRESS", "de", "pii_ipv6_compressed", ":20:MT940 STMT\n:28C::52D:20220920\n:60F::STP", "SWIFT MT tag chain", carrier="kv"),
+    n("IP_ADDRESS", "de", "pii_ipv6_compressed", "Saldo :60F::61F::62F::63F::64F::70:3/31/2022", "SWIFT MT tag chain"),
+    n("IP_ADDRESS", "de", "pii_ipv6_compressed", "Belegkopf: BGM+380:21:3::90:FRET:FRCOMPAGNIE'", "EDIFACT composite element"),
+    n("IP_ADDRESS", "de", "pii_ipv6_loopback", "Position: LIN+1::1:550:::EA:20'", "EDIFACT composite element"),
+    n("IP_ADDRESS", "de", "pii_ipv6_compressed", "Ungültige Adresse 2001:db8::256.1.1.1", "invalid mixed IPv6 (octet 256)"),
+    n("IP_ADDRESS", "de", "pii_ipv6_loopback", "Lokaler Dienst auf ::ffff:127.0.0.1", "IPv4-mapped loopback is excluded"),
+    n("IP_ADDRESS", "de", "pii_ipv6_loopback", "Standardroute ::/0", "unspecified address with prefix is excluded"),
+    n("IP_ADDRESS", "de", "pii_ipv6_full", "Schlüssel 2001:db8:1:2:3:4:5:6:7", "nine groups are no IPv6 address"),
+    n("IP_ADDRESS", "de", "pii_ipv6_compressed", "Belegkopf: BGM+380:21:3::90:FRET:FRCOMPAGNIE'", "EDIFACT composite element", mode="balanced"),
+    n("IP_ADDRESS", "de", "pii_ipv6_compressed", "Ungültige Adresse 2001:db8::256.1.1.1", "invalid mixed IPv6 (octet 256)", mode="balanced"),
+    n("IP_ADDRESS", "en", "pii_ipv6_compressed", ":20:MT940 STMT\n:25:Lk-27571\n:28C::52D:20220920", "SWIFT MT tag chain", carrier="kv"),
+    n("IP_ADDRESS", "en", "pii_ipv6_compressed", "Charges :71F::72F/140350.00GBP/GBP041316.7", "SWIFT MT tag chain"),
+    n("IP_ADDRESS", "en", "pii_ipv6_compressed", "Document: BGM+380:21:3::90:FRET:FRCOMPAGNIE'", "EDIFACT composite element"),
+    n("IP_ADDRESS", "en", "pii_ipv6_loopback", "Item: LIN+1::1:550:::EA:20'", "EDIFACT composite element"),
+    n("IP_ADDRESS", "en", "pii_ipv6_compressed", "2001:db8::256.1.1.1", "invalid mixed IPv6 (presidio-analyzer IP test)"),
+    n("IP_ADDRESS", "en", "pii_ipv6_compressed", "text2001:db8::1", "address glued to a word (presidio-analyzer IP test)"),
+    n("IP_ADDRESS", "en", "pii_ipv6_loopback", "Mapped unspecified ::ffff:0.0.0.0", "IPv4-mapped unspecified address is excluded"),
+    n("IP_ADDRESS", "en", "pii_ipv6_loopback", "Loopback route ::1/128", "loopback with prefix is excluded"),
+    n("IP_ADDRESS", "en", "pii_ipv6_full", "Rate between the U.9101:8c5c:e9b4:50ce:7e5d:ce61:c1d2:d092", "groups glued to a dot"),
+    n("IP_ADDRESS", "en", "pii_ipv6_loopback", "Item: LIN+1::1:550:::EA:20'", "EDIFACT composite element", mode="balanced"),
+    n("IP_ADDRESS", "en", "pii_ipv6_compressed", "2001:db8::256.1.1.1", "invalid mixed IPv6 (presidio-analyzer IP test)", mode="balanced"),
+]
+for _row in B_IP_SPAN_CASES:
+    PII_CASES[_row["target_label"]].append(_row)
+
 # DLP golden schema v2 (E13). Every DLP row names the rule it exercises (`rule_id`), the
 # document that carries the value (`carrier`), its difficulty `tags` and whether it is a
 # `known_gap`: a positive the detector misses today, reported by 13_l1_golden_eval but
