@@ -180,6 +180,31 @@ fn env_var_values_have_no_quotes_or_trailing_terminator() {
 }
 
 #[test]
+fn env_var_escaped_quoted_values_are_detected() {
+    // Serialized source or log text escapes the quotes (`\"`, `\'`).
+    let value = "Kx7!pQ2#vL9@rT4$";
+    for template in [
+        "{\"cmd\": \"DB_PASSWORD=\\\"{v}\\\" ./bin/sync\"}\n",
+        "log: export SERVICE_SECRET=\\'{v}\\'\n",
+        "\"    SERVICE_SECRET = \\\"{v}\\\"\\n\"\n",
+        "\"      DB_PASSWORD: \\\"{v}\\\"\\n\"\n",
+    ] {
+        assert_exact(template, value, "dlp_env_var_secret");
+    }
+}
+
+#[test]
+fn env_var_bare_values_stop_at_command_separators() {
+    for template in [
+        "$ SERVICE_SECRET={v};./bin/report\n",
+        "$ SERVICE_SECRET={v};/usr/bin/report\n",
+        "$ SERVICE_SECRET={v};~/bin/report\n",
+    ] {
+        assert_exact(template, "Kx7pQ2vL9rT4", "dlp_env_var_secret");
+    }
+}
+
+#[test]
 fn env_var_code_constants_are_silent() {
     assert_silent(&[
         "const NAME = 'collapse'\nconst DATA_KEY = 'bs.collapse'\nconst DATA_API_KEY = '.data-api'\n",

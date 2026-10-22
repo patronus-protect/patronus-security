@@ -37,11 +37,18 @@ pub(super) const RULES: &[DlpPattern] = &[
         // F-GEN2 (T08): `KEY=value`, `KEY = "value"`, `export KEY='value'`,
         // `ENV KEY="value"` and YAML/compose `KEY: "value"`; the value without
         // its quotes, a bare value without a trailing `;`/`,`. After `:` a bare
-        // value is the rest of the line.
+        // value is the rest of the line. Escaped quotes (`KEY=\"value\"` in
+        // serialized source or logs) delimit the value like plain ones. A `;`
+        // before a path (`;./bin/run`, `;/usr/bin/x`, `;~/x`) ends a bare value
+        // as a shell command separator; any other `;` belongs to it.
         pattern: concat!(
             r"(?-i:[A-Z][A-Z0-9]*[_\-](?:SECRET(?:[_\-]ACCESS)?[_\-]?KEY|SECRET|PASSWORD|PASSWD|PASSWORT|KENNWORT|GEHEIMNIS|TOKEN|API[_\-]?KEY))",
-            r#"(?:[ \t]*=[ \t]*(?:"([^"\r\n]{8,})"|'([^'\r\n]{8,})'|([^\s"'`]{7,}[^\s"'`;,]))"#,
-            r#"|:[ \t]+(?:"([^"\r\n]{8,})"|'([^'\r\n]{8,})'|([^\s"'`#]{7,}[^\s"'`;,#])[ \t]*\r?(?m:$)))"#,
+            r#"(?:[ \t]*=[ \t]*(?:"([^"\r\n]{8,})"|'([^'\r\n]{8,})'"#,
+            r#"|\\"([^"\\\r\n]{8,})\\"|\\'([^'\\\r\n]{8,})\\'"#,
+            r#"|((?:[^\s"'`;]|;[^\s"'`;./~]){7,}[^\s"'`;,]))"#,
+            r#"|:[ \t]+(?:"([^"\r\n]{8,})"|'([^'\r\n]{8,})'"#,
+            r#"|\\"([^"\\\r\n]{8,})\\"|\\'([^'\\\r\n]{8,})\\'"#,
+            r#"|([^\s"'`#]{7,}[^\s"'`;,#])[ \t]*\r?(?m:$)))"#,
         ),
         entity_group: "CREDENTIAL",
         validator: Some(is_secret_value),

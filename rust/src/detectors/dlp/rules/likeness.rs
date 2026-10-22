@@ -537,8 +537,12 @@ pub(crate) fn is_assignment_value(text: &str, range: Range<usize>) -> bool {
 /// checked: `.env` values such as `wPF.DZs~Brb…` hold dots.
 pub(crate) fn is_env_value(text: &str, range: Range<usize>) -> bool {
     let value = &text[range.clone()];
-    let quoted = text[..range.start].ends_with(['"', '\'']);
-    if (quoted && closes_string(&text[..range.start]))
+    let before = &text[..range.start];
+    let quoted = before.ends_with(['"', '\'']);
+    // An escaped quote (`KEY=\"value\"` inside a serialized string) opens the
+    // value; it cannot close the surrounding string.
+    let escaped = before.ends_with("\\\"") || before.ends_with("\\'");
+    if (quoted && !escaped && closes_string(before))
         || is_path(value)
         || (!quoted && (CALL_OR_INDEX.is_match(value) || FORMAT_PLACEHOLDER.is_match(value)))
     {

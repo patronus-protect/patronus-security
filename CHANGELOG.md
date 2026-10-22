@@ -205,6 +205,16 @@ result shapes may be breaking for downstream users, and is called out explicitly
   98.2 %, no positive lost), hard-negative FP drop from 134 to 22 with no new FP row, and
   benign-code spans drop from 38 to 8 (all 30 `dlp_env_var_secret` FP, i.e.
   `DATA_API_KEY = '.data-api'` and `AUTH_FLOW_PASSWORD = \"password\"`). Validators are unchanged.
+- Keep escaped quoted env values and stop bare shell values at command separators (F-GEN2 review).
+  `dlp_env_var_secret` also takes a value between escaped quotes (`KEY=\"…\"`, `KEY=\'…\'`,
+  `KEY: \"…\"`) as found in serialized source, JSON strings and logs; the broad value pattern
+  before F-GEN2 caught these, the quoted branches did not. `likeness::is_env_value` treats an escaped
+  opening quote as opening the value, never as closing the surrounding string. A `;` followed by a
+  path (`KEY=value;./bin/report`, `;/usr/bin/x`, `;~/x`) now ends a bare value as a shell command
+  separator; any other `;` stays part of a `.env` value (`Kx7;pQ2vL9`). `rust/tests/dlp_value_capture.rs`
+  gains regression tests for both. **Detection change:** escaped quoted env assignments are reported
+  again (value without the escaped quotes); bare env values no longer run over `;` into a following
+  path command, so those spans end at the separator.
 - Generic credential values need password likeness (F-GEN1: F11 + T03 + T10).
   `dlp_password_assignment` and `dlp_generic_credential_assignment` no longer report code
   expressions after a credential key (calls such as `token = get_token()`, index and member access
