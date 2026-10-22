@@ -232,6 +232,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         .with_provider("github")
         .with_min_entropy(3.0)
         .with_boundary("")
+        .with_body_len(36, 32)
         .with_subtype(SecretSubtype::AccessToken),
     },
     DlpPattern {
@@ -249,6 +250,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         .with_provider("github")
         .with_min_entropy(3.0)
         .with_boundary("")
+        .with_body_len(82, 36)
         .with_subtype(SecretSubtype::AccessToken),
     },
     DlpPattern {

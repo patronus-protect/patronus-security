@@ -187,6 +187,14 @@ result shapes may be breaking for downstream users, and is called out explicitly
   values of another length are no findings any more, also not as generic credentials. On the dev
   split the `strict` carrier output is unchanged and the benign-code corpus loses 13 false
   positives (GitHub token test fixtures), with no new span.
+- Skip GitHub token shapes of a wrong length in generic rules too (F03 review). A generic
+  assignment, URL or header rule (`dlp_env_var_secret` …) no longer reports a value that is a
+  `ghp_`/`gho_`/`ghu_`/`ghs_`/`ghr_` or `github_pat_` prefix with a whole-token body of another
+  length than 36 or 82 characters (`GITHUB_TOKEN=ghp_` and 35 characters), matching the provider
+  rules, which reject those lengths; `RuleMeta::body_len` holds the exact body length and the
+  shortest token-shaped body (32 and 36, the former minimums). Shorter bodies and bodies that end
+  in other punctuation stay generic credentials. **Detection change:** fewer generic
+  `CREDENTIAL` spans for wrong-length GitHub token shapes; exact-length tokens are unchanged.
 - `dlp_btc_wif` accepts testnet WIF keys and scores at checksum strength (F02). Base58Check now
   takes the version byte of mainnet (`0x80`; `5…`, `K…`/`L…`) or of testnet, signet and regtest
   (`0xef`; `9…` uncompressed, `c…` compressed), still with a secp256k1 scalar in range and the

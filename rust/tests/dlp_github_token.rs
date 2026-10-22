@@ -323,3 +323,58 @@ fn fine_grained_tokens_have_82_characters_after_the_prefix() {
         }
     }
 }
+
+#[test]
+fn generic_rules_skip_github_tokens_of_another_length() {
+    let scanner = SecurityGateway::with_max_level(
+        vec![SecurityCategory::Dlp],
+        SecurityLevel::L1,
+        None,
+        false,
+    );
+    let scan = |text: &str| {
+        scanner
+            .scan_category(SecurityCategory::Dlp, text)
+            .into_iter()
+            .find(|result| result.model == "native:dlp")
+            .unwrap()
+    };
+    let templates = [
+        "password = {}\n",
+        "GITHUB_TOKEN={}\n",
+        "api_key: \"{}\"\n",
+        "export GH_TOKEN='{}'\n",
+    ];
+    for seed in 0..4 {
+        let mut wrong = Vec::new();
+        for prefix in PREFIXES {
+            // 35 and 37 characters ending in a CRC32, 35 and 40 random ones.
+            wrong.push(token(prefix, seed, 29));
+            wrong.push(token(prefix, seed, 31));
+            wrong.push(format!("{prefix}{}", random(seed, BASE62, 35)));
+            wrong.push(format!("{prefix}{}", random(seed, BASE62, 40)));
+        }
+        let pat = generated("github_fine_grained_pat", seed);
+        wrong.push(pat[..pat.len() - 1].to_string());
+        wrong.push(format!("{pat}Q"));
+        for value in &wrong {
+            for template in templates {
+                let text = template.replace("{}", value);
+                assert!(scan(&text).evidence_spans.is_empty(), "{text:?}");
+            }
+        }
+        // The exact lengths stay findings in the same carriers.
+        for value in [generated("github_ghp_token", seed), pat] {
+            for template in templates {
+                let text = template.replace("{}", &value);
+                assert!(
+                    scan(&text)
+                        .evidence_spans
+                        .iter()
+                        .any(|span| span.text == value),
+                    "{text:?}"
+                );
+            }
+        }
+    }
+}
