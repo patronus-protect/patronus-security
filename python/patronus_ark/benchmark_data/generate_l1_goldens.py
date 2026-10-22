@@ -1987,7 +1987,7 @@ DLP_CASES = {
         ds(
             "CREDENTIAL", "de", "dlp_env_var_secret",
             "apiVersion: v1\nkind: Secret\nmetadata:\n  name: datenbank\ndata:\n  DB_PASSWORD: <<secret:0|base64>>\n",
-            "password", 3009, carrier="yaml", gap=True,
+            "password", 3009, carrier="yaml",
         ),
         ds(
             "CREDENTIAL", "en", "dlp_env_var_secret",
@@ -5730,6 +5730,189 @@ DLP_FGEN1_CASES = {
     ],
 }
 for _label, _rows in DLP_FGEN1_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+
+# F-GEN2 (T04 + T08): value capture. A quoted value of `dlp_password_assignment` and
+# `dlp_generic_credential_assignment` runs to its closing quote (spaces, `;`, `,`, `}` inside,
+# two characters before the first `;`); `dlp_env_var_secret` reports the value without its
+# quotes and without a trailing `;`, also after `KEY:` in YAML/compose env maps. Code constants
+# (`DATA_API_KEY = '.data-api'`, `AUTH_FLOW_PASSWORD = "password"`), the closing quote of a
+# label (`"Passwort:"),d?…`), messages and template or environment references are no values.
+DLP_FGEN2_CASES = {
+    "CREDENTIAL": [
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "[datenbank]\nhost = \"db.intern\"\nbenutzer = \"lager\"\npasswort = \"<<secret:0>>\"\n",
+            "quoted_passphrase", 12001, carrier="toml",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "smtp:\n  host: mail.intern\n  benutzer: versand\n  password: '<<secret:0>>'\n",
+            "quoted_punctuated_password", 12002, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "const konfig = { region: \"eu-central-1\", token: \"<<secret:0>>\", wiederholungen: 3 };\n",
+            "quoted_punctuated_password", 12003, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "Hallo Jana, das neue Passwort lautet \"<<secret:0>>\", bitte nach dem ersten Login ändern.\n",
+            "quoted_passphrase", 12004, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "# Abgleich lokal starten\n$ export LAGER_API_TOKEN='<<secret:0>>'\n$ ./bin/abgleich --voll\n",
+            "generic_api_secret", 12005, carrier="cli",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "FROM eclipse-temurin:21-jre\nCOPY target/abgleich.jar /app/abgleich.jar\n"
+            "ENV LAGER_DB_PASSWORD=\"<<secret:0>>\"\nENTRYPOINT [\"java\", \"-jar\", \"/app/abgleich.jar\"]\n",
+            "password", 12006, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "services:\n  abgleich:\n    image: acme/abgleich:2.3\n    environment:\n"
+            "      LAGER_DB_HOST: db.intern\n      LAGER_DB_PASSWORD: \"<<secret:0>>\"\n",
+            "password", 12007, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "public final class Exportdienst {\n"
+            "    private static final String EXPORT_API_KEY = \"<<secret:0>>\";\n}\n",
+            "url_token", 12008, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "$ LAGER_SECRET=<<secret:0>>; ./bin/abgleich --mandant 0042\n",
+            "url_token", 12009, carrier="cli",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "[smtp]\nhost = mail.internal\nuser = reports\npassword = \"<<secret:0>>\"\n",
+            "quoted_passphrase", 12011, carrier="ini",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "conn = psycopg.connect(host=\"db.internal\", user=\"reports\", password='<<secret:0>>')\n",
+            "quoted_punctuated_password", 12012, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "oauth:\n  issuer: https://login.internal\n  client_secret: \"<<secret:0>>\"\n",
+            "quoted_punctuated_password", 12013, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "Hi Sam, the API token is \"<<secret:0>>\" until the rotation on Friday.\n",
+            "quoted_passphrase", 12014, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "# .env for the report worker\nREPORTS_QUEUE=reports\nREPORTS_API_TOKEN=\"<<secret:0>>\"\n",
+            "generic_api_secret", 12015, carrier="env",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "jobs:\n  export:\n    runs-on: ubuntu-24.04\n    env:\n"
+            "      REPORTS_DB_PASSWORD: \"<<secret:0>>\"\n    steps:\n      - run: ./export.sh\n",
+            "password", 12016, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "import requests\n\nREPORTS_API_KEY = \"<<secret:0>>\"\n",
+            "url_token", 12017, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "$ REPORTS_SECRET=<<secret:0>>; ./bin/report --all\n",
+            "url_token", 12018, carrier="cli",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "const NAME = 'zeitleiste'\nconst DATA_KEY = 'bs.zeitleiste'\nconst DATA_API_KEY = '.data-api'\n",
+            "code constant: event namespace, no secret", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "const ANMELDUNG_IMPLIZIT = \"implicit\"\nconst ANMELDUNG_FLOW_PASSWORD = \"password\"\n",
+            "code constant: OAuth flow name", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "services:\n  abgleich:\n    environment:\n      LAGER_DB_PASSWORD: \"${LAGER_DB_PASSWORD}\"\n",
+            "compose environment reference", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "e.createElement(\"label\",{htmlFor:\"passwort\"},\"Passwort:\"),d?e.createElement(\"code\",null,\" ******\")\n",
+            "closing quote of a label in minified code", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "const meldungen = { passwort: \"Bitte geben Sie ein Passwort ein\", senden: \"Anmelden\" };\n",
+            "UI message about the password", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "lager:\n  token: \"{{ .Values.lager.token }}\"\n",
+            "Helm template reference", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "LAGER_SECRET_KEY = konfig.get(\"lager_secret\")\n",
+            "Python call as value", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "const NAME = \"collapse\";\nconst DATA_API_KEY = \".data-api\";\nconst EVENT_SHOW = \"show\";\n",
+            "code constant: event namespace, no secret", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "    const AUTH_FLOW_IMPLICIT = \"implicit\"\n    const AUTH_FLOW_PASSWORD = \"password\"\n",
+            "code constant: OAuth flow name", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "    env:\n      REPORTS_DB_PASSWORD: ${{ secrets.REPORTS_DB_PASSWORD }}\n",
+            "GitHub Actions secret reference", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "export default { password: \"Enter your password\", submit: \"Sign in\" };\n",
+            "UI message about the password", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "Login failed because the password is \"too short\" for the new policy.\n",
+            "prose: quoted dictionary words", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "oauth:\n  client_secret: \"<your client secret>\"\n",
+            "documented placeholder", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "ENV REPORTS_API_TOKEN=\"$(cat /run/secrets/reports_token)\"\n",
+            "command substitution from a mounted secret", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "    environment:\n      LAGER_API_TOKEN: \"" + "deadbeef" * 5 + "\"\n",
+            "documented hex fill value under a compose key", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "[oauth]\nclient_secret = \"" + "1234567890" * 4 + "\"\n",
+            "repeated digit fill as a 40-character hex secret", carrier="toml",
+        ),
+    ],
+}
+for _label, _rows in DLP_FGEN2_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
 

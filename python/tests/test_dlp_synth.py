@@ -262,11 +262,18 @@ class GeneratorSpecTests(unittest.TestCase):
             self.assertFalse(set(entry["generators"]) & set(entry.get("shape_only", [])), rule_id)
             self.assertGreaterEqual(len(entry["probes"]), 2, rule_id)
             self.assertFalse(set(entry["generators"]) & set(entry.get("weak", [])), rule_id)
+            self.assertFalse(set(entry["generators"] + entry.get("weak", [])) & set(entry.get("quoted", [])), rule_id)
             self.assertFalse(
-                set(entry.get("lookalike", [])) & set(entry["generators"] + entry.get("weak", [])), rule_id
+                set(entry.get("lookalike", []))
+                & set(entry["generators"] + entry.get("weak", []) + entry.get("quoted", [])),
+                rule_id,
             )
             referenced.update(
-                entry["generators"], entry.get("shape_only", []), entry.get("weak", []), entry.get("lookalike", [])
+                entry["generators"],
+                entry.get("shape_only", []),
+                entry.get("weak", []),
+                entry.get("quoted", []),
+                entry.get("lookalike", []),
             )
         self.assertEqual(referenced, set(recipes.load_generators()))
 

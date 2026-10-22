@@ -104,6 +104,8 @@
     "pem_rsa_private_key": "93d8f5bbc96d1eb7837210a6",
     "pem_sec1_ec_private_key": "a8dbb2adf815a2182a1ff85e",
     "php_session_id": "711cf581086887cda9057b54",
+    "quoted_passphrase": "adb801138c71575c61d43d7f",
+    "quoted_punctuated_password": "f3f5f326c5c79134da549bf2",
     "record_reference": "2d129c0ace5874f5f96326e8",
     "replicate_api_token": "080a48fd3f7b0eec965f340f",
     "sha256_hex": "5252df040001471b2698a7c2",

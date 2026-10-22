@@ -36,6 +36,10 @@ struct RuleEntry {
     /// Low-variety but real values (T06) the rule must keep reporting.
     #[serde(default)]
     weak: Vec<String>,
+    /// Real values with spaces or `;`/`,`/`}` inside (F-GEN2); the rule reports them up
+    /// to the closing quote, so each probe wraps them in double quotes.
+    #[serde(default)]
+    quoted: Vec<String>,
     /// Values in the rule's shape with a wrong check value or length (F03); the rule must
     /// not report them.
     #[serde(default)]
@@ -102,6 +106,7 @@ fn every_dlp_pattern_has_generators_or_is_a_content_rule() {
             .iter()
             .chain(&entry.shape_only)
             .chain(&entry.weak)
+            .chain(&entry.quoted)
             .chain(&entry.lookalike)
         {
             assert!(known.contains(name.as_str()), "{rule}: unknown {name}");
@@ -187,11 +192,22 @@ fn each_rule_reports_exactly_its_generated_values() {
             gates.set_rule(pattern.name, pattern.name == rule);
         }
         gateway.set_execution_gates(gates);
-        for name in entry.generators.iter().chain(&entry.weak) {
+        let values = entry
+            .generators
+            .iter()
+            .chain(&entry.weak)
+            .map(|name| (name, false))
+            .chain(entry.quoted.iter().map(|name| (name, true)));
+        for (name, quoted) in values {
             for probe in &entry.probes {
+                let probe = if quoted {
+                    probe.replace("<<secret:0>>", "\"<<secret:0>>\"")
+                } else {
+                    probe.clone()
+                };
                 for seed in 0..32 {
                     let recipes = [SecretRecipe::new(name, seed)];
-                    let (text, spans) = materialize(&generators, probe, &recipes).unwrap();
+                    let (text, spans) = materialize(&generators, &probe, &recipes).unwrap();
                     let predicted = gateway
                         .scan_category(SecurityCategory::Dlp, &text)
                         .into_iter()
