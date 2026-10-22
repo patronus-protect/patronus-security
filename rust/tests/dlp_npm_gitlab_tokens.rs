@@ -4,8 +4,10 @@
 //! scores at checksum strength, and a generic rule does not report a
 //! token-shaped value whose CRC32 fails. `dlp_gitlab_pat` takes `glpat-` and
 //! exactly 20 characters or the routable form (payload, `.`, two-character
-//! version, seven base36 characters). `dlp_gitlab_token` takes the other
-//! documented GitLab prefixes (deploy, runner, runner registration, pipeline
+//! version, seven base36 characters; or the current form with `.01.` and a
+//! two-character length). `dlp_gitlab_token` takes the other documented GitLab
+//! prefixes (deploy, runner `glrt-`/`glrtr-` and workspace `glwt-` tokens, also
+//! in the current routable form, runner registration, pipeline
 //! trigger, feed, incoming mail, Kubernetes agent, CI/CD job, SCIM, feature
 //! flag client), `dlp_gitlab_oauth_secret` the OAuth application secret
 //! (`gloas-`). Tokens come from the golden generator or get their checksum
@@ -54,6 +56,24 @@ const GITLAB_FIXED: [(&str, usize); 8] = [
 ];
 
 const BASE64URL: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+const BASE36: &str = "0123456789abcdefghijklmnopqrstuvwxyz";
+
+/// The current routable shape of GitLab's `RoutableToken` generator (HTTP
+/// router docs): prefix, a base64url payload of `len` characters, `.01.`, the
+/// payload length as two base36 digits and a seven-digit base36 CRC32. The
+/// CRC32 is not verified, so a random one stands in here.
+fn routable(prefix: &str, seed: u64, len: usize) -> String {
+    let length = format!(
+        "{}{}",
+        BASE36.as_bytes()[len / 36 % 36] as char,
+        BASE36.as_bytes()[len % 36] as char
+    );
+    format!(
+        "{prefix}{}.01.{length}{}",
+        random(seed, BASE64URL, len),
+        random(seed ^ 0x5a5a, BASE36, 7)
+    )
+}
 
 fn generators() -> &'static GeneratorSet {
     static GENERATORS: OnceLock<GeneratorSet> = OnceLock::new();
@@ -414,6 +434,95 @@ fn a_broken_routable_suffix_is_no_routable_token() {
             entry(&text, "dlp_gitlab_token", DlpMode::Strict).is_none(),
             "{text:?}"
         );
+    }
+}
+
+#[test]
+fn current_routable_runner_and_workspace_tokens_are_reported_whole() {
+    for seed in 0..6 {
+        for len in [27, 43, 120] {
+            // Runner tokens (also created through a registration token) and
+            // workspace tokens; `glrt-t<digit>_` is a payload of this shape too.
+            for prefix in ["glrt-", "glrtr-", "glwt-", "glrt-t1_"] {
+                let value = routable(prefix, seed, len);
+                for carrier in GITLAB_CARRIERS {
+                    let text = carrier.replace("{}", &value);
+                    assert!(reports(&text, "SECRET_TOKEN", &value), "{text:?}");
+                    let rule = entry(&text, "dlp_gitlab_token", DlpMode::Strict)
+                        .unwrap_or_else(|| panic!("{text:?}"));
+                    assert_eq!(rule["provider"], "gitlab");
+                    assert_eq!(rule["subtype"], "access_token");
+                }
+            }
+            let value = routable("glpat-", seed, len);
+            for carrier in GITLAB_CARRIERS {
+                let text = carrier.replace("{}", &value);
+                assert!(reports(&text, "SECRET_TOKEN", &value), "{text:?}");
+                assert!(
+                    entry(&text, "dlp_gitlab_pat", DlpMode::Strict).is_some(),
+                    "{text:?}"
+                );
+            }
+        }
+        // A runner token created through a registration token, legacy length.
+        let value = format!("glrtr-{}", random(seed, BASE64URL, 20));
+        for carrier in GITLAB_CARRIERS {
+            let text = carrier.replace("{}", &value);
+            assert!(reports(&text, "SECRET_TOKEN", &value), "{text:?}");
+            assert!(
+                entry(&text, "dlp_gitlab_token", DlpMode::Strict).is_some(),
+                "{text:?}"
+            );
+        }
+    }
+    // A sentence may end right after a routable token.
+    let value = routable("glwt-", 9, 40);
+    let text = format!("Das Workspace-Token lautet {value}.");
+    assert!(reports(&text, "SECRET_TOKEN", &value), "{text:?}");
+}
+
+#[test]
+fn near_misses_of_the_current_routable_shape_are_no_gitlab_token() {
+    for seed in 0..8 {
+        let mut values = Vec::new();
+        for prefix in ["glrt-", "glrtr-", "glwt-"] {
+            let value = routable(prefix, seed, 40);
+            let (head, tail) = value.rsplit_once('.').expect("routable token");
+            values.extend([
+                // Another version, an upper-case check value, a check value
+                // of 8 or 10 characters, a payload of 26 characters.
+                value.replace(".01.", ".02."),
+                format!("{head}.{}", tail.to_uppercase()),
+                format!("{head}.{}", &tail[..8]),
+                format!("{head}.{tail}x"),
+                routable(prefix, seed, 26),
+            ]);
+        }
+        // Undocumented prefixes next to the documented ones, and a workspace
+        // token without the routable suffix.
+        for prefix in ["glwtr-", "glw-", "glrtrr-", "glrtx-"] {
+            values.push(routable(prefix, seed, 40));
+        }
+        values.push(format!("glwt-{}", random(seed, BASE64URL, 20)));
+        for value in &values {
+            for carrier in GITLAB_CARRIERS {
+                let text = carrier.replace("{}", value);
+                assert!(
+                    entry(&text, "dlp_gitlab_token", DlpMode::Strict).is_none(),
+                    "{text:?}"
+                );
+            }
+        }
+        let value = routable("glpat-", seed, 40);
+        for broken in [value.replace(".01.", ".02."), routable("glpat-", seed, 26)] {
+            for carrier in GITLAB_CARRIERS {
+                let text = carrier.replace("{}", &broken);
+                assert!(
+                    entry(&text, "dlp_gitlab_pat", DlpMode::Strict).is_none(),
+                    "{text:?}"
+                );
+            }
+        }
     }
 }
 

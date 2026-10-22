@@ -194,6 +194,17 @@ result shapes may be breaking for downstream users, and is called out explicitly
   values of another length are no findings any more; GitLab deploy, runner, trigger, feed, mail,
   agent, job, SCIM, feature flag and OAuth tokens are new findings. On the dev split the `strict`
   output on synthetic carriers, benign code and benign docs is unchanged.
+- Find GitLab runner tokens created through a registration token (`glrtr-`), workspace tokens
+  (`glwt-`) and the current routable token form (F04 review). `dlp_gitlab_token` also takes
+  `glrtr-` with 20 characters and the current routable form of GitLab's HTTP router and
+  `RoutableToken` generator for `glrt-`, `glrtr-` and `glwt-`: a base64url payload of 27–300
+  characters, `.01.`, the payload length as two base36 digits and a seven-digit base36 CRC32 (not
+  verified); `dlp_gitlab_pat` takes this form for `glpat-` too. Workspace tokens are only taken in
+  the routable form. Another version, an upper-case or wrongly sized check value, a payload of
+  fewer than 27 characters and undocumented neighbour prefixes (`glwtr-`, `glrtrr-`) stay no
+  GitLab token (`rust/tests/dlp_npm_gitlab_tokens.rs`). **Detection change:** `glrtr-` and `glwt-`
+  tokens and current routable runner and personal access tokens are new findings, reported whole;
+  no finding is removed.
 - GitHub tokens need their exact length and, for classic tokens, a valid CRC32 (F03).
   `dlp_github_token` takes `ghp_`/`gho_`/`ghu_`/`ghs_`/`ghr_` and exactly 36 base62 characters
   whose last six are the CRC32 of the first 30 (before: 32 or more word characters, no checksum);

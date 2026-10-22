@@ -55,8 +55,8 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   die letzten sechs sind die CRC32 der ersten 30 (Prüfsummen-Stärke, 0,85 ohne Kontext). Ein
   `npm_`-Wert mit falscher CRC32 ist auch für generische Regeln kein Secret. `dlp_gitlab_pat`
   nimmt `glpat-` mit genau 20 Zeichen oder die routbare Form (Payload, Punkt, zwei Zeichen
-  Version, sieben Zeichen Base36). `dlp_gitlab_token` deckt die übrigen dokumentierten
-  GitLab-Präfixe ab (Deploy `gldt-`, Runner `glrt-` auch routbar, Runner-Registrierung
+  Version, sieben Zeichen Base36; aktuell `.01.`, zwei Base36-Längenziffern, sieben Base36-CRC32-Ziffern). `dlp_gitlab_token` deckt die übrigen dokumentierten
+  GitLab-Präfixe ab (Deploy `gldt-`, Runner `glrt-`/`glrtr-` auch routbar, Workspace `glwt-` nur routbar, Runner-Registrierung
   `GR1348941`, Pipeline-Trigger `glptt-`, Feed `glft-`, Incoming Mail `glimt-`, Kubernetes-Agent
   `glagent-`, CI/CD-Job `glcbt-`, SCIM `glsoat-`, Feature-Flag-Client `glffct-`) mit den Längen
   der gitleaks-Regeln, `dlp_gitlab_oauth_secret` das OAuth-Anwendungs-Secret `gloas-` (`API_KEY`,

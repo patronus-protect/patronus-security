@@ -87,11 +87,11 @@ rules:
   dlp_gitlab_pat:
     provider: gitlab
     source_ref: gitleaks:gitlab-pat
-    format: "glpat- prefix and exactly 20 base64url characters, or the routable form: 27-300 base64url characters, a dot, a two-character version and a seven-character base36 check value (gitleaks gitlab-pat, gitlab-pat-routable; F04)"
+    format: "glpat- prefix and exactly 20 base64url characters, or the routable form: 27-300 base64url characters, a dot, a two-character version and a seven-character base36 check value, or the current form with .01., two base36 length digits and seven base36 CRC32 digits (gitleaks gitlab-pat, gitlab-pat-routable; GitLab HTTP router docs; F04)"
   dlp_gitlab_token:
     provider: gitlab
     source_ref: https://docs.gitlab.com/security/tokens/#token-prefixes
-    format: "Documented GitLab token prefixes with the lengths of the gitleaks rules (F04): gldt- deploy, glrt- runner, glft- feed, glsoat- SCIM and glffct- feature flag client token with 20 base64url characters; glrt-t<digit>_ routable runner token (27-300 characters, dot, 2 + 7 base36); glcbt- CI/CD job token (1-5 alphanumerics, _, 20 characters); glimt- incoming mail token (25); glagent- Kubernetes agent token (50); glptt- pipeline trigger token (40 lower-case hex); GR1348941 runner registration token (20). gitleaks gitlab-deploy-token, gitlab-runner-authentication-token(-routable), gitlab-feed-token, gitlab-scim-token, gitlab-feature-flag-client-token, gitlab-cicd-job-token, gitlab-incoming-mail-token, gitlab-kubernetes-agent-token, gitlab-ptt, gitlab-rrt"
+    format: "Documented GitLab token prefixes with the lengths of the gitleaks rules (F04): gldt- deploy, glrt- runner, glrtr- runner created through a registration token, glft- feed, glsoat- SCIM and glffct- feature flag client token with 20 base64url characters; glrt-t<digit>_ routable runner token (27-300 characters, dot, 2 + 7 base36); current routable glrt-, glrtr- runner and glwt- workspace token (27-300 base64url characters, .01., 2 base36 length digits, 7 base36 CRC32 digits; https://docs.gitlab.com/development/cells/http_router/); glcbt- CI/CD job token (1-5 alphanumerics, _, 20 characters); glimt- incoming mail token (25); glagent- Kubernetes agent token (50); glptt- pipeline trigger token (40 lower-case hex); GR1348941 runner registration token (20). gitleaks gitlab-deploy-token, gitlab-runner-authentication-token(-routable), gitlab-feed-token, gitlab-scim-token, gitlab-feature-flag-client-token, gitlab-cicd-job-token, gitlab-incoming-mail-token, gitlab-kubernetes-agent-token, gitlab-ptt, gitlab-rrt"
   dlp_gitlab_oauth_secret:
     provider: gitlab
     source_ref: gitleaks:gitlab-oauth-app-secret

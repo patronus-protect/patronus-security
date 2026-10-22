@@ -256,10 +256,11 @@ pub(super) const RULES: &[DlpPattern] = &[
     },
     // F04: legacy tokens have exactly 20 characters; routable tokens a longer
     // payload, a dot, a two-character version and a seven-character base36
-    // check value (gitleaks gitlab-pat, gitlab-pat-routable).
+    // check value (gitleaks gitlab-pat, gitlab-pat-routable), or in the
+    // current form `.01.` before the two-character length and the check value.
     DlpPattern {
         name: "dlp_gitlab_pat",
-        pattern: r"glpat-(?:[A-Za-z0-9_\-]{27,300}\.[0-9a-z]{9}|[A-Za-z0-9_\-]{20})",
+        pattern: r"glpat-(?:[A-Za-z0-9_\-]{27,300}\.(?:01\.)?[0-9a-z]{9}|[A-Za-z0-9_\-]{20})",
         entity_group: "SECRET_TOKEN",
         validator: None,
         span_group: None,
@@ -275,14 +276,19 @@ pub(super) const RULES: &[DlpPattern] = &[
         .with_subtype(SecretSubtype::AccessToken),
     },
     // F04: the other documented GitLab token prefixes, with the lengths of the
-    // gitleaks rules: deploy, runner (also routable), runner registration,
-    // pipeline trigger, feed, incoming mail, Kubernetes agent, CI/CD job, SCIM
-    // and feature flag client tokens.
+    // gitleaks rules: deploy, runner (`glrt-`, or `glrtr-` when created through
+    // a registration token; also routable), workspace (routable only), runner
+    // registration, pipeline trigger, feed, incoming mail, Kubernetes agent,
+    // CI/CD job, SCIM and feature flag client tokens. The current routable form
+    // (GitLab HTTP router, `RoutableToken` generator) is a base64url payload,
+    // `.01.`, the payload length as two base36 digits and a seven-digit base36
+    // CRC32 (not verified).
     DlpPattern {
         name: "dlp_gitlab_token",
         pattern: concat!(
-            r"(?:glrt-t[0-9]_[A-Za-z0-9_\-]{27,300}\.[0-9a-z]{9}",
-            r"|(?:gldt|glrt|glft|glsoat|glffct)-[A-Za-z0-9_\-]{20}",
+            r"(?:(?:glrtr?|glwt)-[A-Za-z0-9_\-]{27,300}\.01\.[0-9a-z]{9}",
+            r"|glrt-t[0-9]_[A-Za-z0-9_\-]{27,300}\.[0-9a-z]{9}",
+            r"|(?:gldt|glrtr?|glft|glsoat|glffct)-[A-Za-z0-9_\-]{20}",
             r"|glcbt-[A-Za-z0-9]{1,5}_[A-Za-z0-9_\-]{20}",
             r"|glimt-[A-Za-z0-9_\-]{25}",
             r"|glagent-[A-Za-z0-9_\-]{50}",
@@ -299,6 +305,8 @@ pub(super) const RULES: &[DlpPattern] = &[
             &[
                 "gldt-",
                 "glrt-",
+                "glrtr-",
+                "glwt-",
                 "glft-",
                 "glsoat-",
                 "glffct-",
