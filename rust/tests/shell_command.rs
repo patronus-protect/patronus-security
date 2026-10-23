@@ -6,8 +6,7 @@ use patronus_ark::{
     SecurityCategory, SecurityGateway, SecurityLevel, SecurityLevelReadiness,
 };
 
-const SCORE_TOLERANCE: f64 = 1e-5;
-const SCORE_TOLERANCE_V2: f64 = 1e-6;
+const SCORE_TOLERANCE: f64 = 1e-6;
 
 fn fixture(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -19,15 +18,10 @@ fn parity_cases() -> serde_json::Value {
     serde_json::from_slice(&std::fs::read(fixture("shell_command_parity.json")).unwrap()).unwrap()
 }
 
-fn v2_parity_cases() -> serde_json::Value {
-    serde_json::from_slice(&std::fs::read(fixture("shell_command_v2_parity.json")).unwrap())
-        .unwrap()
-}
-
-/// Assert Rust decision scores match scikit-learn within `tolerance` and that
-/// neither threshold flips a single decision versus the Python reference.
-fn assert_v2_parity(model: &ShellRiskModel, key: &str, tolerance: f64) {
-    let fixture = v2_parity_cases();
+/// Assert Rust decision scores match scikit-learn within `SCORE_TOLERANCE` and
+/// that neither threshold flips a single decision versus the Python reference.
+fn assert_parity(model: &ShellRiskModel, key: &str) {
+    let fixture = parity_cases();
     let thresholds = fixture["thresholds"].as_object().unwrap();
     let mut max_error = 0.0_f64;
     for case in fixture["cases"].as_array().unwrap() {
@@ -37,7 +31,7 @@ fn assert_v2_parity(model: &ShellRiskModel, key: &str, tolerance: f64) {
         let error = (actual - expected).abs();
         max_error = max_error.max(error);
         assert!(
-            error < tolerance,
+            error < SCORE_TOLERANCE,
             "{key} mismatch for {text:?}: rust={actual} sklearn={expected}"
         );
         for (policy, threshold) in thresholds {
@@ -90,23 +84,8 @@ fn synthetic_bundle(model_dir: &Path, manifest_sha: Option<&str>) {
     .unwrap();
 }
 
-fn assert_parity(model: &ShellRiskModel, key: &str) {
-    let fixture = parity_cases();
-    let mut max_error = 0.0_f64;
-    for case in fixture["cases"].as_array().unwrap() {
-        let text = case["text"].as_str().unwrap();
-        let expected = case[key].as_f64().unwrap();
-        let actual = model.decision_score(text);
-        let error = (actual - expected).abs();
-        max_error = max_error.max(error);
-        assert!(
-            error < SCORE_TOLERANCE,
-            "{key} mismatch for {text:?}: rust={actual} sklearn={expected}"
-        );
-    }
-    eprintln!("{key}: max absolute score error {max_error:e}");
-}
-
+/// The two-block scorer (char_wb + shell_tokens) matches scikit-learn on the
+/// parity corpus, with no decision flips at either threshold.
 #[test]
 fn synthetic_model_matches_scikit_learn() {
     let model = ShellRiskModel::from_json_slice(
@@ -114,18 +93,6 @@ fn synthetic_model_matches_scikit_learn() {
     )
     .unwrap();
     assert_parity(&model, "synthetic_score");
-}
-
-/// The two-block `format_version: 2` scorer (char_wb + shell_tokens) matches
-/// scikit-learn bit-for-bit on the parity corpus, with no decision flips at
-/// either threshold.
-#[test]
-fn synthetic_v2_model_matches_scikit_learn() {
-    let model = ShellRiskModel::from_json_slice(
-        &std::fs::read(fixture("shell_command_v2_synthetic_model.json")).unwrap(),
-    )
-    .unwrap();
-    assert_v2_parity(&model, "synthetic_v2_score", SCORE_TOLERANCE_V2);
 }
 
 /// Runs against the published A1 model when its bundle is cached locally, for
@@ -147,17 +114,17 @@ fn published_model_matches_scikit_learn_when_cached() {
         eprintln!("skipping published shell_command parity; set PATRONUS_SHELL_COMMAND_MODEL_DIR");
         return;
     };
-    let expected_sha = v2_parity_cases()["published_model"]["sha256"]
+    let expected_sha = parity_cases()["published_model"]["sha256"]
         .as_str()
         .unwrap()
         .to_string();
     assert_eq!(
         sha256_hex(&std::fs::read(bundle.join("model.json")).unwrap()),
         expected_sha,
-        "cached model.json is not the revision the v2 parity fixture was generated from"
+        "cached model.json is not the revision the parity fixture was generated from"
     );
     let model = ShellRiskModel::from_bundle_dir(&bundle).unwrap();
-    assert_v2_parity(&model, "published_score", SCORE_TOLERANCE_V2);
+    assert_parity(&model, "published_score");
 
     // Comment padding does not hide a risky command: the stripped variant wins
     // and the command flags under the published default policy.
@@ -218,7 +185,7 @@ fn gateway_scans_commands_from_a_local_bundle() {
         assert_eq!(result.class_name, expected, "{text:?}");
         let details = &result.layers[0].details;
         assert_eq!(details["decision_score"], score.decision_score);
-        assert_eq!(details["threshold_policy"], "synthetic_default");
+        assert_eq!(details["threshold_policy"], "v2_default");
         assert_eq!(result.evidence_spans.is_empty(), !score.flagged, "{text:?}");
         for span in &result.evidence_spans {
             assert_eq!(&text[span.start_byte..span.end_byte], span.text);

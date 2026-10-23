@@ -283,12 +283,12 @@ fn head(token: &str) -> &str {
 /// shape the Python `shell_tokens.features` produces (unigrams, adjacent
 /// bigrams, then the `CMD=`, `PIPE->` and `REDIR->` structural markers).
 pub fn features(text: &str) -> Vec<String> {
-    let raw = tokenize(text);
-    let norm: Vec<String> = raw.iter().map(|token| normalise(token)).collect();
+    let norm: Vec<String> = tokenize(text).into_iter().map(normalise).collect();
 
-    let mut out: Vec<String> = norm.clone();
+    // Unigrams first, then bigrams and markers, in the reference order.
+    let mut extra = Vec::with_capacity(norm.len() * 2);
     for pair in norm.windows(2) {
-        out.push(format!("{} {}", pair[0], pair[1]));
+        extra.push(format!("{} {}", pair[0], pair[1]));
     }
 
     let mut at_start = true;
@@ -307,7 +307,7 @@ pub fn features(text: &str) -> Vec<String> {
             continue;
         }
         match after {
-            Some("|") => out.push(format!("PIPE->{}", head(value))),
+            Some("|") => extra.push(format!("PIPE->{}", head(value))),
             Some(">") | Some(">>") => {
                 let target = if value == "/dev/null" {
                     "/dev/null"
@@ -316,16 +316,18 @@ pub fn features(text: &str) -> Vec<String> {
                 } else {
                     "<FILE>"
                 };
-                out.push(format!("REDIR->{target}"));
+                extra.push(format!("REDIR->{target}"));
             }
             _ => {}
         }
         if at_start {
-            out.push(format!("CMD={}", head(value)));
+            extra.push(format!("CMD={}", head(value)));
         }
         at_start = false;
         after = None;
     }
+    let mut out = norm;
+    out.append(&mut extra);
     out
 }
 
