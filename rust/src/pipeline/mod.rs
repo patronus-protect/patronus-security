@@ -32,7 +32,7 @@ pub(crate) use strategy::{ChunkAggregation, PipelineStrategy};
 #[cfg(feature = "test-util")]
 #[doc(hidden)]
 pub mod test_util {
-    pub use super::decision_cache::{DecisionCache, DecisionCacheConfig};
+    pub use super::decision_cache::{CachedScanParts, DecisionCache, DecisionCacheConfig};
     pub use super::l3_worker::{
         aggregate_unified_head_for_test, public_unified_class_for_test,
         replace_unified_pending_layer_for_test, selected_l3_chunks_for_test,
@@ -42,7 +42,8 @@ pub mod test_util {
     pub use super::long_text::{aggregate_chunk_outputs, candidate_selection, l3_metadata};
     pub use super::security::{
         ntdb_l2_enabled_for_category, ntdb_l2_model_config_for_id,
-        ntdb_l2_model_configs_for_category, ntdb_l2_scan_result, NtdbL2ModelConfig,
+        ntdb_l2_model_configs_for_category, ntdb_l2_scan_result, restore_l2_decision,
+        NtdbL2ModelConfig,
     };
     pub use super::strategy::ChunkAggregation;
 }

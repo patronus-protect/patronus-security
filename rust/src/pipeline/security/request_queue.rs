@@ -721,6 +721,10 @@ impl SecurityGateway {
                         serde_json::json!("conditional_gate"),
                     );
                 }
+                *result = super::ntdb_l2::restore_l2_decision(
+                    result.clone(),
+                    execution.ntdb_decision_threshold_point(),
+                );
                 continue;
             }
             jobs.push(L3JobSpec {
