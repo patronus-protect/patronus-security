@@ -952,15 +952,16 @@ fn native_dlp_evidence_covers_governance_github_token_fixture() {
     );
     scanner.warmup().unwrap();
 
+    // A real-shaped GitHub token: 30-character body plus its CRC32 suffix (F03).
+    let body = concat!("w8dkq3zrm7xbt2vn", "h9pyc4fls6ajg0");
+    let token = format!(
+        "ghp_{body}{}",
+        patronus_ark::detectors::validators::crc32_base62(body)
+    );
     let result = scanner
         .scan_category(
             SecurityCategory::Dlp,
-            concat!(
-                "Authorization: Bearer ",
-                "ghp_",
-                "w8dkq3zrm7xbt2vn",
-                "h9pyc4fls6ajg0eu"
-            ),
+            &format!("Authorization: Bearer {token}"),
         )
         .into_iter()
         .find(|result| result.model == "native:dlp")
@@ -968,10 +969,7 @@ fn native_dlp_evidence_covers_governance_github_token_fixture() {
 
     assert_eq!(result.class_name, "SECRET_TOKEN");
     assert_eq!(result.evidence_spans.len(), 1);
-    assert_eq!(
-        result.evidence_spans[0].text,
-        concat!("ghp_", "w8dkq3zrm7xbt2vn", "h9pyc4fls6ajg0eu")
-    );
+    assert_eq!(result.evidence_spans[0].text, token);
 }
 
 #[test]
