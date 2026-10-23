@@ -172,12 +172,18 @@ pub(super) fn enqueue(worker: &L3Worker, spec: L3JobSpec) {
         result.duration_ms = 0.0;
         result.queue_wait_ms = 0.0;
         result.cache_hits = 1;
-        worker
+        let mut runs = worker
             .state
             .unified_runs
             .lock()
-            .expect("unified run mutex poisoned")
-            .insert(run_key, UnifiedRunState::Completed(result.clone()));
+            .expect("unified run mutex poisoned");
+        // An earlier job of this request may have started its own run before
+        // the cache entry existed. That run still owes its waiting jobs a
+        // result, so it keeps the key; only an idle key records the cache hit.
+        if !matches!(runs.get(&run_key), Some(UnifiedRunState::Running { .. })) {
+            runs.insert(run_key, UnifiedRunState::Completed(result.clone()));
+        }
+        drop(runs);
         let output = materialize_unified_result(&spec, &result);
         finish_job(&worker.state, spec.job_id, spec.request_id.clone(), output);
         return;
@@ -242,6 +248,47 @@ fn subscriber_spec(mut spec: L3JobSpec) -> L3JobSpec {
         .collect::<Vec<_>>()
         .into();
     spec
+}
+
+/// A finished unified run that answered every head in `heads` with `benign`.
+#[cfg(test)]
+pub(super) fn completed_outcome_for_test(
+    heads: &[&str],
+    physical_job_id: u64,
+) -> UnifiedRunOutcome {
+    UnifiedRunOutcome::Completed(UnifiedRunResult {
+        output: UnifiedModelOutput {
+            heads: heads
+                .iter()
+                .map(|head| {
+                    (
+                        (*head).to_string(),
+                        UnifiedHeadOutput {
+                            class_name: "benign".to_string(),
+                            confidence: 0.9,
+                            label_scores: Vec::new(),
+                        },
+                    )
+                })
+                .collect(),
+        },
+        duration_ms: 1.0,
+        queue_wait_ms: 0.0,
+        chunk_count: 1,
+        inferred_chunks: 1,
+        propagated_chunks: 0,
+        planned_l3_chunks: 1,
+        resolved_chunks: 1,
+        total_effective_chunks: 1,
+        head_early_exits: HashSet::new(),
+        resolved_chunks_by_head: HashMap::new(),
+        total_chunks_by_head: HashMap::new(),
+        cache_hits: 0,
+        clustering: L3ClusteringStrategy::Disabled,
+        physical_job_id,
+        chunk_trace: None,
+        chunk_scores_by_head: HashMap::new(),
+    })
 }
 
 pub(super) fn remove_request(state: &L3WorkerState, request_id: &str) {

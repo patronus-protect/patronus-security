@@ -1997,6 +1997,92 @@ mod tests {
             .all(|failure| failure.message == "expired_before_inference"));
     }
 
+    /// Two requests with the same text share one cache entry. When the first
+    /// request's run finishes while the second request's run is still in
+    /// flight, a later job of the second request is answered from that cache
+    /// entry. That must not drop the jobs waiting on the second request's run.
+    #[test]
+    fn cache_hit_keeps_jobs_waiting_on_the_same_requests_running_run() {
+        let requests = Arc::new(RequestRegistry::default());
+        let state = Arc::new(test_worker_state(Arc::clone(&requests)));
+        let worker = L3Worker {
+            state: Arc::clone(&state),
+        };
+        let mut execution = ScanExecution::new(SecurityLevel::L3);
+        execution.set_l3_strategy(L3Strategy::Multi);
+        let candidates = vec![
+            test_l3_candidate(0, 4, "injection"),
+            test_l3_candidate(0, 4, "threat"),
+        ];
+        let chunk_outputs = ["injection", "threat"]
+            .map(|pipeline| {
+                let mut output = test_l2_chunk_output(0, 4, pipeline, true);
+                output.token_ids = vec![1, 2, 3];
+                output.tokenizer_family = "mmbert".to_string();
+                output
+            })
+            .to_vec();
+        let spec = |request_id: &str, category: &str, job_id: u64| {
+            let mut spec = test_l3_spec(request_id, category, job_id, execution.clone());
+            spec.ttl_ms = 60_000;
+            spec.inference_timeout_ms = 60_000;
+            spec.l3_candidates = candidates.clone();
+            spec.l2_chunk_outputs = chunk_outputs.clone().into();
+            spec
+        };
+        for (request_id, jobs) in [("rq-first", [1, 2]), ("rq-second", [3, 4])] {
+            requests.state.lock().unwrap().requests.insert(
+                request_id.to_string(),
+                RequestState {
+                    pending_l3_job_ids: HashSet::from(jobs),
+                    pending_l3_job_categories: HashMap::from([
+                        (jobs[0], "injection".to_string()),
+                        (jobs[1], "threat".to_string()),
+                    ]),
+                    ..RequestState::running()
+                },
+            );
+        }
+        let take_physical = |request_id: &str| {
+            let mut jobs = state.jobs.lock().unwrap();
+            let index = jobs
+                .iter()
+                .position(|job| job.request_id == request_id)
+                .expect("the request's run should be queued");
+            jobs.swap_remove(index)
+        };
+        let finish = |job: L3WorkerJob| {
+            let run_key = unified::run_key_for_job(&job);
+            let cache_key = unified::cache_key_for_job(&job);
+            let outcome = unified::completed_outcome_for_test(&["injection", "threat"], job.job_id);
+            unified::finish_run(&state, run_key, cache_key, outcome);
+        };
+
+        worker.enqueue(spec("rq-first", "injection", 1));
+        worker.enqueue(spec("rq-first", "threat", 2));
+        worker.enqueue(spec("rq-second", "injection", 3));
+        let first_run = take_physical("rq-first");
+        let second_run = take_physical("rq-second");
+        finish(first_run);
+        worker.enqueue(spec("rq-second", "threat", 4));
+        finish(second_run);
+
+        let registry = requests.state.lock().unwrap();
+        for request_id in ["rq-first", "rq-second"] {
+            let request = &registry.requests[request_id];
+            assert!(
+                request.pending_l3_job_ids.is_empty(),
+                "{request_id} still waits on L3 jobs {:?}",
+                request.pending_l3_job_ids
+            );
+            assert_eq!(
+                request.completion,
+                Some(SecurityRequestCompletion::Complete),
+                "{request_id} should finish"
+            );
+        }
+    }
+
     fn test_worker_state(requests: Arc<RequestRegistry>) -> L3WorkerState {
         L3WorkerState {
             jobs: Mutex::new(Vec::new()),
