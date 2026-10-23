@@ -335,6 +335,11 @@ Ark-API-only `SecurityGateway::enqueue_ark_api_categories_with_options` and
   Lithuanian VAT ID no longer adds a `STEUERID` or `CREDITCARD` finding on its digits (the rule's
   `matched_rules` entry names `overlap`, `longer_value`); 13_l1_golden_eval 855/855 positives,
   759/759 hard negatives. Validators of existing labels are unchanged.
+- `VAT_ID_IE` accepts the old Irish form with `+` or `*` as the second character (`IE8*79739I`,
+  `IE8+79739I`; B02 review): the pattern allowed only a letter there, and the validator dropped the
+  symbol before the check. The check letter is unchanged (`0`, the five digits and the first digit,
+  mod 23), and `scoreboard.py` ports the change. **Detection change:** none in `strict`; in `balanced`
+  and `recall` such a legacy Irish VAT ID is a new `VAT_ID_IE` finding.
 - Implement the decided M2 rule and add `scripts/l1_presidio/scoreboard.py m2` (D-M2, decision of
   2026-10-21 in `research/l1-pii/README.md`, M2 row and fairness section). M2 holds only if it holds on
   both milestone families on their own, judged on `balanced`: macro-F1 is the unweighted mean exact F1

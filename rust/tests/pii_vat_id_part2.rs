@@ -193,6 +193,8 @@ const VALID: &[(&str, &[&str])] = &[
             "IE 6433435F",
             "IE6433435OA", // since 2013: second letter
             "IE8D79739I",  // old form: digit, letter, five digits
+            "IE8*79739I",  // old form with `*` as the second character
+            "IE 8+79739I", // old form with `+` as the second character
             "IE2710022OH",
             "IE1868254J",
             "IE0138719V",
@@ -297,6 +299,10 @@ const INVALID: &[(&str, &[(&str, &str)])] = &[
             ("IE6433435E", "check letter fails"),
             ("IE6433435OB", "check letter fails for the second letter"),
             ("IE8D79739J", "old form check letter fails"),
+            ("IE8*79739J", "old form with `*`, check letter fails"),
+            ("IE8+7973I", "old form with `+`, too short"),
+            ("IE6433435*", "symbol in place of the check letter"),
+            ("IE64334+5F", "symbol in the new form"),
             ("IE0000000W", "zero number"),
         ],
     ),

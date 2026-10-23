@@ -665,14 +665,16 @@ IE_CHECK_LETTERS = "WABCDEFGHIJKLMNOPQRSTUV"
 
 def ie_vat_id(value: str) -> bool:
     """Port of ``validators::ie_vat_id`` (7 digits + check letter + optional letter, or the old form)."""
-    body = _vat_body(value, "IE")
+    # The old form may carry ``+`` or ``*`` as its second character, which ``_vat_body`` drops.
+    compact = "".join(ch.upper() for ch in value if ch.isascii() and (ch.isalnum() or ch in "+*"))
+    body = compact[2:] if compact.startswith("IE") else compact
     if len(body) not in (8, 9) or not all(ch in IE_CHECK_LETTERS for ch in body[7:]):
         return False
     digits = _vat_digits(body[:7], 7)
     second = IE_CHECK_LETTERS.index(body[8]) if len(body) == 9 else 0
     if digits is None:
         tail, first = _vat_digits(body[2:7], 5), _vat_digits(body[:1], 1)
-        if len(body) != 8 or not ("A" <= body[1] <= "Z") or tail is None or first is None:
+        if len(body) != 8 or not ("A" <= body[1] <= "Z" or body[1] in "+*") or tail is None or first is None:
             return False
         digits, second = [0, *tail, *first], 0
     total = _weighted(digits, range(8, 1, -1)) + 9 * second

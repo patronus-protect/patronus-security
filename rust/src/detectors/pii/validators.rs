@@ -1090,12 +1090,18 @@ pub fn hu_vat_id(s: &str) -> bool {
 const IE_CHECK_LETTERS: &[u8; 23] = b"WABCDEFGHIJKLMNOPQRSTUV";
 
 /// Irish VAT number: `IE`, seven digits, a check letter and an optional second
-/// letter (since 2013), or the old form of a digit, a letter, five digits and
-/// the check letter (read as `0`, the five digits and the first digit). The
-/// check letter is `(Σ weights 8…2 + 9 × value of the second letter) mod 23`
-/// over `W A B … V`.
+/// letter (since 2013), or the old form of a digit, a letter, `+` or `*`, five
+/// digits and the check letter (read as `0`, the five digits and the first
+/// digit). The check letter is `(Σ weights 8…2 + 9 × value of the second
+/// letter) mod 23` over `W A B … V`.
 pub fn ie_vat_id(s: &str) -> bool {
-    let body = vat_body(s, "IE");
+    // `vat_body` would drop the `+` or `*` of the old form.
+    let compact: String = s
+        .chars()
+        .filter(|&ch| ch.is_ascii_alphanumeric() || matches!(ch, '+' | '*'))
+        .map(|ch| ch.to_ascii_uppercase())
+        .collect();
+    let body = compact.strip_prefix("IE").unwrap_or(&compact);
     let bytes = body.as_bytes();
     let letter_value = |byte: u8| IE_CHECK_LETTERS.iter().position(|&letter| letter == byte);
     if !matches!(bytes.len(), 8 | 9) || !bytes[7..].iter().all(|&byte| letter_value(byte).is_some())
@@ -1110,7 +1116,7 @@ pub fn ie_vat_id(s: &str) -> bool {
                 .and_then(|&byte| letter_value(byte))
                 .unwrap_or(0),
         )
-    } else if bytes.len() == 8 && bytes[1].is_ascii_uppercase() {
+    } else if bytes.len() == 8 && matches!(bytes[1], b'A'..=b'Z' | b'+' | b'*') {
         let Some(tail) = vat_digits(&body[2..7], 5) else {
             return false;
         };

@@ -248,10 +248,11 @@ pub(super) const VAT_ID_HU: PiiPattern = PiiPattern {
     scored_only: true,
 };
 
-/// `IE6433435F`, `IE6433435OA` (since 2013), `IE8D79739I` (old form).
+/// `IE6433435F`, `IE6433435OA` (since 2013), `IE8D79739I`, `IE8*79739I`,
+/// `IE8+79739I` (old form).
 pub(super) const VAT_ID_IE: PiiPattern = PiiPattern {
     name: "pii_vat_id_ie",
-    pattern: r"\bIE ?(?:[0-9]{7}[A-W][A-W]?|[0-9][A-Z][0-9]{5}[A-W])\b",
+    pattern: r"\bIE ?(?:[0-9]{7}[A-W][A-W]?|[0-9][A-Z+*][0-9]{5}[A-W])\b",
     entity_group: "VAT_ID_IE",
     validator: Some(validators::ie_vat_id),
     strength: ValidatorStrength::Checksum,
