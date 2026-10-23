@@ -68,12 +68,14 @@ result shapes may be breaking for downstream users, and is called out explicitly
   for credential phishing (ASI-09, #60). It reports a request to verify, confirm or re-enter an
   identity, account, credentials or password (DE: `bestätigen`/`verifizieren` … `Identität`,
   `Konto`, `Zugangsdaten`, `Passwort`, `Anmeldedaten`) followed in the same clause by an http(s)
-  link whose host or path names a login or auth page (`login`, `signin`, `auth` …). It is
+  link with a login or auth host label or path segment (`login`, `signin`, `auth` …; query and
+  fragment are not searched and stay outside the span). It is
   audited high precision and scores in the `ark.injection.agentic.control_abuse` family, the
   family of the existing `phishing` relation, which alone stayed far below the acceptance
   threshold. An e-mail or order confirmation link, a sign-in link without a verification request
-  and prose about phishing stay silent. The governance goldens gain 4 positives and 4 hard
-  negatives (DE and EN). **Detection change:** such phishing requests are now terminal
+  and prose about phishing stay silent. The governance goldens gain 5 positives and 6 hard
+  negatives (DE and EN), among them a link with a long token query, an `auth_token` query parameter
+  and an `/author` path. **Detection change:** such phishing requests are now terminal
   `injection` findings on L1 (`agentic_control_abuse`); no other golden changes.
 
 - Add ICAO 9303 check digits for German passport and identity card numbers (F08), one validator per
