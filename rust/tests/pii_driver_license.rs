@@ -180,6 +180,8 @@ fn us_state_format_vectors() {
         "ABC12345",         // three letters before digits
         "2031-04-30",       // ISO date (expiry)
         "30-04-2031",       // day-month-year date
+        "04-30-2031",       // month-day-year date (US expiry)
+        "04-30-31",         // month-day-year date, two-digit year
         "RG61031335",       // two letters + eight digits
         "B072RRE2A57",      // German card number
         "4111111111111111", // sixteen digits (card)
@@ -394,6 +396,8 @@ fn numbers_without_a_licence_field_name_stay_negative() {
         // Values that no licence format takes.
         "Driver's license number: 2031-04-30",
         "Führerscheinnummer: 30-04-2031",
+        "Driver's license number: 04-30-2031",
+        "Führerscheinnummer: 04-30-2031",
         "Driver's license number: D123",
         "Driver's license number: ABCDEFGHIJ",
         "Numero di patente: U1A2345678",

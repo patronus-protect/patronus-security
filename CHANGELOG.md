@@ -100,6 +100,10 @@ result shapes may be breaking for downstream users, and is called out explicitly
   IT incl. Italian, FR/ES/NL). Existing validators are unchanged. The field part uses ASCII word
   boundaries so the regexes keep the DFA on German text: 0.18 ms per rule on the 100 KiB DE workload
   (the old DE rule 0.3 ms); `latency.py compare` ark-native 100 KiB p95 149.3 → 138.3 ms (PASS, noise).
+- `validators::us_driver_license_number` also rejects a month-day-year date (`04-30-2031`,
+  `04-30-31`), which it took before as six to fourteen digits once the hyphens were removed.
+  **Detection change:** in every mode a US-style expiry date after a licence field name is no longer
+  reported as a US licence number.
 - Pass the dynamic PII labels per scan request (#146). The Ark API scan `config` takes an optional
   `dynamic_pii` block with the shape of `pipeline.dynamic_pii` — `labels` (required), `threshold`,
   `label_thresholds`, `execution_gate` and `conditional_labels` — that replaces the worker's

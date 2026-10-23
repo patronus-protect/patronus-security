@@ -528,20 +528,34 @@ static US_DRIVER_LICENSE_FORMATS: LazyLock<regex::Regex> = LazyLock::new(|| {
 
 /// US driver's licence number in a state format (F15). Format only: no state
 /// publishes a check digit. A hyphenated calendar date (`2031-04-30`,
-/// `30-04-2031`, an expiry next to the field name) is no licence number.
+/// `30-04-2031`, `04-30-2031`, an expiry next to the field name) is no licence
+/// number.
 pub fn us_driver_license_number(s: &str) -> bool {
     let parts: Vec<&str> = s.split('-').collect();
-    let date = parts.len() == 3
-        && (calendar_date(s)
-            || (parts[0].len() == 4
-                && match (
-                    parts[0].parse::<u16>(),
-                    parts[1].parse::<u8>(),
-                    parts[2].parse::<u8>(),
-                ) {
-                    (Ok(year), Ok(month), Ok(day)) => valid_date(day, month, year),
-                    _ => false,
-                }));
+    let date = match parts[..] {
+        [first, second, third] => match (
+            first.parse::<u16>(),
+            second.parse::<u8>(),
+            third.parse::<u16>(),
+        ) {
+            (Ok(first_value), Ok(month_or_day), Ok(third_value)) => {
+                let year = if third.len() == 2 {
+                    1900 + third_value
+                } else {
+                    third_value
+                };
+                (first.len() == 4
+                    && u8::try_from(third_value)
+                        .is_ok_and(|day| valid_date(day, month_or_day, first_value)))
+                    || u8::try_from(first_value).is_ok_and(|value| {
+                        valid_date(value, month_or_day, year)
+                            || valid_date(month_or_day, value, year)
+                    })
+            }
+            _ => false,
+        },
+        _ => false,
+    };
     !date && US_DRIVER_LICENSE_FORMATS.is_match(&parts.concat())
 }
 
