@@ -28,26 +28,38 @@ workflow. The project is pre-1.0; see [`SECURITY.md`](../security.md) for the su
 
 ## Cutting a release
 
-1. Update [`CHANGELOG.md`](../changelog.md) — move items from *Unreleased* into a new versioned
-   section with the date.
-2. Bump and cross-check the version in `rust/Cargo.toml`, `python/Cargo.toml`, and
-   `python/pyproject.toml`.
-3. Ensure generated docs are current:
+Releases are cut from a release branch, so `main` (and the scheduled L1 runners that merge into
+it) keeps moving while the release is prepared.
+
+1. Branch `release/X.Y.Z` from `main`. Fixes for the release land on `main` first and are
+   cherry-picked into the release branch through a pull request.
+2. On the release branch, update [`CHANGELOG.md`](../changelog.md) — move items from
+   *Unreleased* into a new versioned section with the date. Summarize every detection change of
+   the default modes at the top of the section.
+3. Bump the version in every workspace manifest — `rust/`, `python/`, `ark-api/`,
+   `ark-coordinator/` and `ark-distributed-protocol/` `Cargo.toml`, `python/pyproject.toml` and
+   `Cargo.lock` — and in the image checks of `ark-api/deploy/bootstrap.sh`,
+   `ark-coordinator/deploy/bootstrap.sh` and `scripts/tests/test_cube_runtime_config.py`. The
+   image workflows read the version from the manifests and fail if they disagree.
+4. Ensure generated docs are current:
    ```bash
    python scripts/generate_docs.py
    git diff --exit-code docs/   # must be clean
    ```
-4. Commit the release prep and tag it:
+5. Merge the release prep into the release branch and tag it:
    ```bash
-   git tag v0.1.0
-   git push origin main
-   git push origin v0.1.0
+   git tag vX.Y.Z origin/release/X.Y.Z
+   git push origin vX.Y.Z
    ```
-5. Manually run the Release workflow on that tag. Start with `testpypi`; after installation
+   Pushes to `release/**` build the ARK API and Coordinator images and their versioned
+   deployment assets.
+6. Manually run the Release workflow on that tag. Start with `testpypi`; after installation
    succeeds, rerun the same tag with `production`.
-6. After publishing, verify install commands from crates.io and PyPI, then add live package
+7. Merge the release branch back into `main` with a merge commit; keep *Unreleased* entries
+   added on `main` meanwhile above the new section.
+8. After publishing, verify install commands from crates.io and PyPI, then add live package
    badges to `README.md`.
-7. Enable a GitHub Security Advisory draft channel for coordinated disclosure (per
+9. Enable a GitHub Security Advisory draft channel for coordinated disclosure (per
    [`SECURITY.md`](../security.md)).
 
 TestPyPI and PyPI publishing use trusted publishing. Configure the GitHub environments
