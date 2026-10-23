@@ -84,6 +84,20 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   und das Pseudo-Passwort `x-oauth-basic`; `dlp_url_userinfo_token` meldet das Token im
   Benutzernamen von `https://<token>:x-oauth-basic@…` (zwei Zeichenklassen, Entropie ≥ 3 Bit,
   keine Folgen/Wiederholungen).
+  Seit F-GEN2 nehmen `dlp_password_assignment` und `dlp_generic_credential_assignment` einen
+  Wert in Anführungszeichen bis zum schließenden Zeichen, mit Leerzeichen, `;`, `,` und `}` darin;
+  ein Wert ohne Anführungszeichen endet weiter daran. `dlp_env_var_secret` meldet den Wert ohne
+  Anführungszeichen und ohne `;`/`,` am Ende, auch nach `KEY:` in YAML/Compose-`environment`, und
+  verwirft Code-Konstanten (`DATA_API_KEY = '.data-api'`, `AUTH_FLOW_PASSWORD = "password"`),
+  Aufrufe, Index-Zugriffe und Pfade (`likeness::is_env_value`). Eine Regel kann ihren Wert in je
+  einer Gruppe pro Schreibweise fangen (`"…"`, `'…'`, ohne); es zählt die erste beteiligte Gruppe
+  ab `span_group`. Ein Wert mit Leerzeichen muss wie eine Passphrase aussehen, nicht wie eine
+  Meldung („Bitte Passwort eingeben“, "too short"), ein Platzhalter oder eine Vorlage. Ein
+  Anführungszeichen, das einen String schließt (`"Password:"),…` in minifiziertem Code), öffnet
+  keinen Wert. Der Beispiel-Check (T06) zählt zusätzlich ein auf die Feldlänge gekürztes
+  Markerwort am Wortende (`Eexampl0123!`) und behandelt einen generischen Wert aus mindestens
+  32 Hex-Ziffern wie ein festes Format (`deadbeef…` ist ein Beispiel, `abcabcabcabc` bleibt ein
+  schwaches echtes Passwort). Übergangslösung, bis K05 die Werte strukturell extrahiert.
   Seit K09 (Taxonomie v2) nennt jede Secret-Regel einen Untertyp ihrer Gruppe (`subtype` in
   `matched_rules`: `api_key`, `access_token`, `password`, `auth_url` …). Connection-Strings,
   Webhook-URLs, Auth-URLs, OTP-Secrets und Seed-Phrasen werden keine eigenen Gruppen, sondern

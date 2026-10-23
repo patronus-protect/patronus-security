@@ -481,6 +481,9 @@ pub(crate) fn is_assignment_value(text: &str, range: Range<usize>) -> bool {
     let value = &text[range.clone()];
     let before = &text[..range.start];
     let quoted = before.ends_with(['"', '\'']);
+    if quoted && closes_string(before) {
+        return false;
+    }
     let Some((separator, key_end)) = separator(before) else {
         return true;
     };
@@ -507,6 +510,9 @@ pub(crate) fn is_assignment_value(text: &str, range: Range<usize>) -> bool {
     if (!quoted || concatenated) && (is_code_expression(value) || value.ends_with(':')) {
         return false;
     }
+    if value.contains(char::is_whitespace) {
+        return is_passphrase(value);
+    }
     let bare = trim_trailing_punctuation(value.trim_start_matches('`'));
     if is_metasyntactic(bare) {
         return false;
@@ -520,6 +526,134 @@ pub(crate) fn is_assignment_value(text: &str, range: Range<usize>) -> bool {
     }
     !(is_stand_in(bare) || names_a_credential(bare) || is_word_sequence(bare))
 }
+
+/// F-GEN2 (T08): whether the value at `range` of `text`, which
+/// `dlp_env_var_secret` matched after an upper-case variable name, could be
+/// a secret. A constant such as `DATA_API_KEY = '.data-api'` or
+/// `AUTH_FLOW_PASSWORD = "password"` names something instead: word-like
+/// values are checked as words, credential names and stand-ins also inside
+/// quotes. Bare values must not be a call or index access (`os.environ[…]`,
+/// `getenv(…)`), a format placeholder or a path. Member access is not
+/// checked: `.env` values such as `wPF.DZs~Brb…` hold dots.
+pub(crate) fn is_env_value(text: &str, range: Range<usize>) -> bool {
+    let value = &text[range.clone()];
+    let before = &text[..range.start];
+    let quoted = before.ends_with(['"', '\'']);
+    // An escaped quote (`KEY=\"value\"` inside a serialized string) opens the
+    // value; it cannot close the surrounding string.
+    let escaped = before.ends_with("\\\"") || before.ends_with("\\'");
+    if (quoted && !escaped && closes_string(before))
+        || is_path(value)
+        || (!quoted && (CALL_OR_INDEX.is_match(value) || FORMAT_PLACEHOLDER.is_match(value)))
+    {
+        return false;
+    }
+    if value.contains(char::is_whitespace) {
+        return is_passphrase(value);
+    }
+    let bare = trim_trailing_punctuation(value);
+    !is_metasyntactic(bare)
+        && (!is_word_like(bare)
+            || !(is_stand_in(bare) || names_a_credential(bare) || is_word_sequence(bare)))
+}
+
+/// F-GEN2: whether the quote that `before` ends with closes a string rather
+/// than opening the value: key and separator are a string of their own
+/// (`"Password:"),d?i.createElement(` in minified code, where the key is a
+/// label), or the line holds an odd number of that quote before it. Escaped
+/// quotes and apostrophes inside words (`it's`) do not count.
+fn closes_string(before: &str) -> bool {
+    let Some(quote) = before.chars().next_back() else {
+        return false;
+    };
+    let label = before[..before.len() - 1]
+        .strip_suffix([':', '='])
+        .map(|head| {
+            head.trim_end_matches(|c: char| c.is_alphanumeric() || matches!(c, '_' | '-' | ' '))
+        })
+        .is_some_and(|head| head.ends_with(quote));
+    if label {
+        return true;
+    }
+    let line = &before[before[..before.len() - 1]
+        .rfind('\n')
+        .map_or(0, |index| index + 1)..];
+    let bytes = line.as_bytes();
+    let quote = quote as u8;
+    let opening = bytes.len() - 1;
+    (0..opening)
+        .filter(|&index| {
+            bytes[index] == quote
+                && (index == 0 || bytes[index - 1] != b'\\')
+                && !(quote == b'\''
+                    && index > 0
+                    && bytes[index - 1].is_ascii_alphabetic()
+                    && bytes[index + 1].is_ascii_alphabetic())
+        })
+        .count()
+        % 2
+        == 1
+}
+
+/// F-GEN2 (T04): a quoted value with spaces is a passphrase unless it reads
+/// as text: a label or message that names the credential („Passwort
+/// eingeben“, "Enter your token"), only dictionary words ("too short"), a
+/// sentence (function words such as `the`, `bitte`, a closing `.`, `?` or
+/// `:`, more than six words), a placeholder (`change me`) or a format or
+/// template string (`%s`, `{0}`, `${…}`).
+fn is_passphrase(value: &str) -> bool {
+    let value = value.trim();
+    let parts: Vec<&str> = value.split_whitespace().collect();
+    let words = words(value);
+    if parts.len() > MAX_PASSPHRASE_WORDS
+        || value.ends_with(['.', '?', ':', ',', ';', '…'])
+        || is_template(value)
+        || words.is_empty()
+    {
+        return false;
+    }
+    let names_credential = words
+        .iter()
+        .any(|word| is_credential_noun(word) || CREDENTIAL_LABEL_WORDS.contains(&word.as_str()));
+    let sentence = words
+        .iter()
+        .any(|word| FUNCTION_WORDS.contains(&word.as_str()));
+    let only_dictionary = parts.iter().all(|part| {
+        let part = trim_trailing_punctuation(part);
+        is_word_like(part) && is_word_sequence(part)
+    });
+    let joined: String = parts.concat();
+    !(names_credential
+        || sentence
+        || only_dictionary
+        || super::placeholders::is_placeholder_value(&joined))
+}
+
+/// A format or template string: `{…}`, `<…>`, `${…}`, `$(…)` or a printf
+/// placeholder anywhere in the value.
+fn is_template(value: &str) -> bool {
+    value.contains(['{', '<', '>'])
+        || value.contains("${")
+        || value.contains("$(")
+        || value
+            .match_indices('%')
+            .any(|(index, _)| FORMAT_PLACEHOLDER.is_match(&value[index..]))
+}
+
+/// More words than a passphrase has: a sentence.
+const MAX_PASSPHRASE_WORDS: usize = 6;
+
+/// Words of labels and messages about a credential besides the nouns.
+const CREDENTIAL_LABEL_WORDS: &[&str] = &["login", "anmeldung", "username", "benutzername"];
+
+/// DE/EN function words of sentences and UI messages; diceware passphrases
+/// are content words.
+const FUNCTION_WORDS: &[&str] = &[
+    "a", "an", "the", "to", "of", "for", "be", "is", "are", "was", "at", "in", "on", "with",
+    "your", "you", "please", "must", "not", "and", "or", "this", "that", "it", "enter", "der",
+    "die", "das", "ein", "eine", "einen", "und", "oder", "zu", "mit", "ist", "sind", "nicht",
+    "sie", "ihr", "ihre", "bitte", "muss", "eingeben", "geben",
+];
 
 /// T10: whether the password of a URL userinfo (`scheme://user:<value>@`)
 /// looks like a chosen secret: no pseudo-password of a token-in-username
@@ -762,7 +896,10 @@ fn trim_trailing_punctuation(value: &str) -> &str {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_assignment_value, is_userinfo_password, is_userinfo_token};
+    use super::{
+        closes_string, is_assignment_value, is_env_value, is_passphrase, is_userinfo_password,
+        is_userinfo_token,
+    };
 
     /// The value after the last `{v}` marker position of `template`.
     fn assignment(template: &str, value: &str) -> bool {
@@ -928,6 +1065,108 @@ mod tests {
             "https://{v}:x-oauth-basic@github.com/",
             "4fe210f1c90defd5f704f7ff182304b24a615234",
             is_userinfo_token
+        ));
+    }
+
+    fn env(template: &str, value: &str) -> bool {
+        let start = template.find("{v}").unwrap();
+        let text = template.replace("{v}", value);
+        is_env_value(&text, start..start + value.len())
+    }
+
+    #[test]
+    fn passphrases_are_content_words() {
+        for value in [
+            "blau Drache 47 Zaun",
+            "correct horse battery 42",
+            "Jabmrq xilats rdrzr 22",
+            "Kx7 pQ2;vL9",
+            "Kx7, pQ2}vL9",
+        ] {
+            assert!(is_passphrase(value), "{value}");
+        }
+    }
+
+    #[test]
+    fn messages_labels_and_templates_are_no_passphrases() {
+        for value in [
+            "Enter your password",
+            "Bitte Passwort eingeben",
+            "Bitte geben Sie ein Passwort ein",
+            "too short",
+            "Passwort ist falsch",
+            "change me",
+            "Invalid token: %s",
+            "{{ .Values.lager.token }}",
+            "$(cat /run/secrets/db)",
+            "${DB_PASSWORD} fallback",
+            "<your client secret>",
+            "Must be at least eight characters long.",
+            "one two three four five six seven",
+            "Username or login",
+        ] {
+            assert!(!is_passphrase(value), "{value}");
+        }
+    }
+
+    #[test]
+    fn quotes_that_close_a_string_open_no_value() {
+        assert!(closes_string(
+            r#"i.createElement("label",{htmlFor:"pw"},"Password:""#
+        ));
+        assert!(closes_string(r#"t("client_secret:""#));
+        assert!(closes_string(r#"msg = "the password is ""#));
+        assert!(!closes_string(r#"password: ""#));
+        assert!(!closes_string(r#"conn = connect(host="db", password=""#));
+        assert!(!closes_string("it's password: '"));
+    }
+
+    #[test]
+    fn env_values_reject_constants_calls_and_paths() {
+        for (template, value) in [
+            ("const DATA_API_KEY = '{v}'", ".data-api"),
+            ("const AUTH_FLOW_PASSWORD = \"{v}\"", "password"),
+            ("LOGIN_FORM_PASSWORD = '{v}'", "passwordField"),
+            ("ADMIN_TOKEN = \"{v}\"", "MY_ADMIN_TOKEN"),
+            ("SECRET_KEY = {v}", "config.get(\"secret\")"),
+            ("SERVICE_SECRET = {v}", "os.environ[\"SERVICE_SECRET\"]"),
+            ("DB_PASSWORD_FILE_SECRET={v}", "/run/secrets/db_password"),
+            ("API_TOKEN={v}", "%s"),
+            ("DB_PASSWORD=\"{v}\"", "Enter the database password"),
+            (
+                "e.createElement(\"label\",{},\"DB_PASSWORD:\"{v}\"",
+                "),d?e.x(",
+            ),
+        ] {
+            assert!(!env(template, value), "{template} / {value}");
+        }
+    }
+
+    #[test]
+    fn env_values_keep_real_secrets() {
+        for (template, value) in [
+            ("DB_PASSWORD={v}", "wPF.DZs~BrbDYmfvGE"),
+            ("DB_PASSWORD={v}", "Kx7;pQ2vL9"),
+            ("SERVICE_SECRET = \"{v}\"", "Otaoqkq1952*"),
+            (
+                "export API_TOKEN='{v}'",
+                "26254c0665131707f3991d8526485850dbcd9646",
+            ),
+            ("      DB_PASSWORD: \"{v}\"", "blau Drache 47 Zaun"),
+            ("DB_PASSWORD={v}", "XkqPwzLmRtVb"),
+        ] {
+            assert!(env(template, value), "{template} / {value}");
+        }
+    }
+
+    #[test]
+    fn quoted_assignment_values_with_spaces_need_passphrase_likeness() {
+        assert!(assignment("password = \"{v}\"", "blau Drache 47 Zaun"));
+        assert!(assignment("token: '{v}'", "kq;Ab3xZq,42}QX"));
+        assert!(!assignment("password: \"{v}\"", "Enter your password"));
+        assert!(!assignment(
+            "i.createElement(\"label\",{},\"Password:\"{v}\"",
+            "),d?i.createElement("
         ));
     }
 }

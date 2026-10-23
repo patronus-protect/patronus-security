@@ -326,7 +326,9 @@ fn password_hash_wins_over_a_credential_around_it() {
 }
 
 #[test]
-fn quoted_generic_value_gives_way_to_the_unquoted_value_span() {
+fn generic_rules_on_the_same_quoted_value_keep_one_span() {
+    // F-GEN2: env_var_secret reports the value without its quotes, so both
+    // generic rules match the same span and the first in registry order wins.
     for template in [
         "export CLIENT_SECRET='<<secret:0>>'\n",
         "$ export CLIENT_SECRET=\"<<secret:0>>\"\n$ ./bin/sync --dry-run\n",
@@ -336,21 +338,21 @@ fn quoted_generic_value_gives_way_to_the_unquoted_value_span() {
             "generic_api_secret",
             14,
             "CREDENTIAL",
-            "dlp_generic_credential_assignment",
             "dlp_env_var_secret",
+            "dlp_generic_credential_assignment",
         );
     }
 }
 
 #[test]
-fn quoted_value_without_a_tighter_match_keeps_its_span() {
-    // Only env_var_secret matches: nothing to resolve, the span is unchanged.
+fn quoted_value_of_a_single_rule_is_the_value_span() {
+    // Only env_var_secret matches: its span is the value without the quotes (F-GEN2).
     let (text, value) = fill("export DB_PASSWORD='<<secret:0>>'\n", "password", 41);
     let result = scan(&text);
     let spans = secret_spans(&result);
     assert_eq!(spans.len(), 1, "{:#?}", result.evidence_spans);
-    assert_eq!(spans[0].start_byte, value.start - 1);
-    assert_eq!(spans[0].end_byte, value.end + 1);
+    assert_eq!(spans[0].start_byte, value.start);
+    assert_eq!(spans[0].end_byte, value.end);
     assert!(rule_matches(&result)
         .iter()
         .all(|(_, _, _, suppressed)| suppressed.is_none()));

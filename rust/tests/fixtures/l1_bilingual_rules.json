@@ -1137,12 +1137,18 @@
       "de": [
         "DB_PASSWORT=BITTE_AENDERN",
         "DB_PASSWORT = os.environ[\"DB_PASSWORT\"]",
-        "DB_PASSWORT=@Microsoft.KeyVault(SecretUri=https://lager-kv.vault.azure.net/secrets/db-passwort/)"
+        "DB_PASSWORT=@Microsoft.KeyVault(SecretUri=https://lager-kv.vault.azure.net/secrets/db-passwort/)",
+        "const DATA_API_KEY = '.data-api'",
+        "const ANMELDUNG_FLOW_PASSWORD = \"password\"",
+        "      LAGER_DB_PASSWORT: \"${LAGER_DB_PASSWORT}\""
       ],
       "en": [
         "DB_PASSWORD=YOUR_DB_PASSWORD_HERE",
         "DB_PASSWORD = ENV.fetch(\"DB_PASSWORD\")",
-        "DB_PASSWORD=op://Production/postgres/password"
+        "DB_PASSWORD=op://Production/postgres/password",
+        "const DATA_API_KEY = \".data-api\";",
+        "const AUTH_FLOW_PASSWORD = \"password\"",
+        "      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}"
       ]
     },
     "language_neutral": false
@@ -1159,7 +1165,9 @@
         "passwort: ((lager.db_passwort))",
         "Das Passwort ist falsch, bitte erneut eingeben.",
         "docker run -v \"$PWD:/arbeit\" lager-export",
-        "passwort = self.tresor.lese_passwort(konto)"
+        "passwort = self.tresor.lese_passwort(konto)",
+        "const meldungen = { passwort: \"Bitte geben Sie ein Passwort ein\" };",
+        "e.createElement(\"label\",{htmlFor:\"passwort\"},\"Passwort:\"),d?e.createElement(\"code\",null,\" ******\")"
       ],
       "en": [
         "Password: TODO",
@@ -1167,7 +1175,9 @@
         "keystore.password=changeit",
         "password = os.environ[\"DB_PASSWORD\"]",
         "def set_password(self, name: str, password: str) -> None:",
-        "The password is stored in the system keyring."
+        "The password is stored in the system keyring.",
+        "export default { password: \"Enter your password\", submit: \"Sign in\" };",
+        "Login failed because the password is \"too short\" for the new policy."
       ]
     },
     "language_neutral": false
@@ -1183,7 +1193,8 @@
         "client_secret = Environment.GetEnvironmentVariable(\"CLIENT_SECRET\")",
         "git remote set-url origin https://token:@bitbucket.org/acme/lager.git",
         "Das Token ist abgelaufen und muss erneuert werden.",
-        "let token = berechtigung.token_fuer(&konto)?;"
+        "let token = berechtigung.token_fuer(&konto)?;",
+        "lager:\n  token: \"{{ .Values.lager.token }}\""
       ],
       "en": [
         "API key: YOUR-API-TOKEN",
@@ -1191,7 +1202,8 @@
         "git remote set-url origin https://token:@bitbucket.org/acme/warehouse.git",
         "token = get_token(repository_name)",
         "pub fn connect(token: Option<&str>) -> Result<Client> {",
-        "Token::Literal(c) => self.push(c),"
+        "Token::Literal(c) => self.push(c),",
+        "oauth:\n  client_secret: \"<your client secret>\""
       ]
     },
     "language_neutral": false

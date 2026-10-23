@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "note": "Maps every dlp_* rule in DLP_PATTERNS to the generators whose values it must find. Each probe is a minimal carrier; the rule alone must report exactly the <<secret:0>> span. shape_only generators predate E03 and are format-shaped without a valid checksum or structure; they stay for the E02 goldens. weak generators are real values the rule must keep reporting: low-variety values outside example context (T06: repeated chunk, sequential run) and placeholder-like shapes (T07: SCREAMING_SNAKE without a placeholder word, leading $ with digits); carriers do not use them. lookalike generators (F03, F04, F05) are values in the rule's shape with a wrong check value or length that the rule must not report; goldens use them as hard negatives in carriers without key context. Content rules have no secret value and are covered by carrier templates (E04).",
+  "note": "Maps every dlp_* rule in DLP_PATTERNS to the generators whose values it must find. Each probe is a minimal carrier; the rule alone must report exactly the <<secret:0>> span. shape_only generators predate E03 and are format-shaped without a valid checksum or structure; they stay for the E02 goldens. weak generators are real values the rule must keep reporting: low-variety values outside example context (T06: repeated chunk, sequential run) and placeholder-like shapes (T07: SCREAMING_SNAKE without a placeholder word, leading $ with digits); carriers do not use them. quoted generators (F-GEN2) are real values with spaces or ;/,/} inside that the rule reports up to the closing quote; each probe wraps them in double quotes, and carriers do not use them. lookalike generators (F03, F04, F05) are values in the rule's shape with a wrong check value or length that the rule must not report; goldens use them as hard negatives in carriers without key context. Content rules have no secret value and are covered by carrier templates (E04).",
   "rules": {
     "dlp_anthropic_key": {
       "generators": ["anthropic_api_key", "anthropic_admin_key"],
@@ -134,16 +134,19 @@
     "dlp_env_var_secret": {
       "generators": ["password", "generic_api_secret", "url_token"],
       "weak": ["weak_snake_case_password"],
+      "quoted": ["quoted_passphrase", "quoted_punctuated_password"],
       "probes": ["DB_PASSWORD=<<secret:0>>", "  SERVICE_API_TOKEN = <<secret:0>>"]
     },
     "dlp_password_assignment": {
       "generators": ["password", "url_userinfo_password"],
       "weak": ["weak_repeated_password", "weak_snake_case_password", "weak_dollar_password"],
+      "quoted": ["quoted_passphrase", "quoted_punctuated_password"],
       "probes": ["password: <<secret:0>>", "Das Passwort lautet <<secret:0>> (bitte nach dem ersten Login ändern)."]
     },
     "dlp_generic_credential_assignment": {
       "generators": ["generic_api_secret", "url_token"],
       "weak": ["weak_sequential_run_token"],
+      "quoted": ["quoted_passphrase", "quoted_punctuated_password"],
       "probes": ["client_secret: <<secret:0>>", "Der API-Schlüssel ist <<secret:0>>"]
     },
     "dlp_bearer_token": {
