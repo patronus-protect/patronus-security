@@ -347,6 +347,80 @@ def start_restack(conflict: dict) -> int:
     return 0
 
 
+# ── review ───────────────────────────────────────────────────────────────
+
+# Log lines of a failed CI job that point at the GitHub runner, not at the code: rerun once.
+INFRA_FAILURES = ("failed to install component", "No space left on device",
+                  "The runner has received a shutdown signal", "Could not resolve host",
+                  "The operation was canceled", "lost communication with the server")
+
+
+def rerun_infra_failures(head: str) -> bool:
+    """Rerun the failed CI runs on head once when their logs show a runner or toolchain failure."""
+    reruns = load(STATE / "ci-reruns.json", {})
+    if head in reruns:
+        return False
+    runs = json.loads(run(["gh", "run", "list", "--repo", GH_REPO, "--commit", head, "--json",
+                           "databaseId,conclusion"], check=False) or "[]")
+    failed = [r["databaseId"] for r in runs if r.get("conclusion") == "failure"]
+    if not failed:
+        return False
+    logs = "".join(run(["gh", "run", "view", str(r), "--repo", GH_REPO, "--log-failed"], check=False)
+                   for r in failed)
+    if not any(marker in logs for marker in INFRA_FAILURES):
+        return False
+    for r in failed:
+        run(["gh", "run", "rerun", str(r), "--repo", GH_REPO, "--failed"], check=False)
+    reruns[head] = dt.datetime.now(dt.timezone.utc).isoformat()
+    save(STATE / "ci-reruns.json", reruns)
+    print(f"CI_RERUN={head[:12]} (runner/toolchain failure)")
+    return True
+
+
+def find_review(open_prs: list[dict]) -> dict | None:
+    """The lowest stack PR with unresolved review threads or red CI that is not a runner failure.
+
+    Fixing it comes before any new backlog task: such a PR can never be merged, and everything
+    stacked on it waits."""
+    blocked = load(BLOCKED, {})
+    for pr in sorted(open_prs, key=lambda p: branch_number(p["headRefName"])):
+        threads = review_threads(pr["number"])
+        ci_red = ci_state(pr["headRefOid"]) == "red" and not rerun_infra_failures(pr["headRefOid"])
+        if not threads and not ci_red:
+            continue
+        if f"REVIEW:{pr['headRefName']}" in blocked:
+            print(f"WARN=review of {pr['headRefName']} is blocked; it stays unmergeable until unblocked")
+            continue
+        return {"pr": pr, "threads": threads, "ci_red": ci_red}
+    return None
+
+
+def start_review(review: dict) -> int:
+    """Hand a PR's open review threads and/or red CI to the agent, on top of the PR's own branch."""
+    pr = review["pr"]
+    branch, head = pr["headRefName"], pr["headRefOid"]
+    git("fetch", "--quiet", "origin", f"+refs/heads/{branch}:refs/ark/{PROGRAM}/review-head")
+    task = {"id": f"REVIEW:{branch}", "type": "review",
+            "title": f"Address the open review threads and red CI of {pr['url']}",
+            "branch": branch, "pr": pr["url"], "number": pr["number"], "old_head": head,
+            "threads": review["threads"],
+            "ci_failure": ci_failure_log(head) if review["ci_red"] else ""}
+    worktree = WORKTREES / ("review-" + branch.replace("/", "-"))
+    shutil.rmtree(worktree, ignore_errors=True)
+    git("clone", "--quiet", "--shared", "--no-checkout", str(REPO), str(worktree))
+    git("checkout", "--quiet", "-B", branch, head, cwd=worktree)
+    current = {
+        # base_sha is the PR head: the agent's fix commits sit on top of it and the gate compares
+        # the fixed head against the PR as it was.
+        "task_id": task["id"], "task": task, "branch": branch, "base": pr["baseRefName"],
+        "base_sha": head, "worktree": str(worktree),
+        "started": dt.datetime.now(dt.timezone.utc).isoformat(),
+    }
+    save(CURRENT, current)
+    print(f"TASK_ID={task['id']}\nBRANCH={branch}\nBASE={pr['baseRefName']}\nWORKTREE={worktree}")
+    return 0
+
+
 # ── backlog ──────────────────────────────────────────────────────────────
 
 
@@ -425,13 +499,31 @@ def ci_state(head: str) -> str:
     return "green" if all(c["conclusion"] in OK_CONCLUSIONS for c in checks) else "red"
 
 
+def review_threads(number: int) -> list[dict]:
+    """Unresolved review threads of a PR (Codex, CodeQL, people); main requires all resolved."""
+    owner, name = GH_REPO.split("/")
+    query = (f'query($n:Int!){{repository(owner:"{owner}",name:"{name}"){{pullRequest(number:$n)'
+             '{reviewThreads(first:100){nodes{id isResolved path line comments(first:1)'
+             '{nodes{databaseId author{login} body}}}}}}}')
+    out = json.loads(run(["gh", "api", "graphql", "-f", f"query={query}", "-F", f"n={number}"]) or "{}")
+    nodes = (((out.get("data") or {}).get("repository") or {}).get("pullRequest") or {}).get(
+        "reviewThreads", {}).get("nodes", [])
+    threads = []
+    for node in nodes:
+        if node.get("isResolved") or not node["comments"]["nodes"]:
+            continue
+        first = node["comments"]["nodes"][0]
+        threads.append({
+            "id": node["id"], "comment": first["databaseId"], "path": node.get("path"),
+            "line": node.get("line"), "author": (first.get("author") or {}).get("login", ""),
+            # Bot comments carry HTML metadata after the finding; the agent needs only the text.
+            "body": first.get("body", "").split("<!--")[0].strip()[:4000],
+        })
+    return threads
+
+
 def open_review_threads(number: int) -> int:
-    """Unresolved review threads on a PR; main requires all of them resolved before a merge."""
-    query = ("query($n:Int!){repository(owner:\"%s\",name:\"%s\"){pullRequest(number:$n)"
-             "{reviewThreads(first:100){nodes{isResolved}}}}}" % tuple(GH_REPO.split("/")))
-    out = run(["gh", "api", "graphql", "-f", f"query={query}", "-F", f"n={number}", "--jq",
-               "[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length"])
-    return int(out or 0)
+    return len(review_threads(number))
 
 
 def merge_async(number: int, head: str) -> str:
@@ -537,6 +629,10 @@ def cmd_next() -> int:
         if f"RESTACK:{conflict['branch']}" in load(BLOCKED, {}):
             return nothing(f"REBASE_CONFLICT {conflict['branch']} (agent failed; resolve by hand, then unblock)")
         return start_restack(conflict)
+    # Heads may have moved in restack; read them again before judging threads and CI.
+    review = find_review([p for p in prs("open") if p["number"] != merged])
+    if review is not None:
+        return start_review(review)
     if len(open_prs) >= MAX_OPEN:
         return nothing(f"PAUSED {len(open_prs)} open stack PRs (limit {MAX_OPEN})")
     top_name, top_sha = top
@@ -572,8 +668,9 @@ def cmd_env() -> int:
         print(f"{key.upper()}={shlex.quote(cur[key])}")
     print(f"PROGRAM={PROGRAM}")
     print(f"PROGRAM_ROOT={shlex.quote(str(ROOT))}")
-    restack_run = cur["task"].get("type") == "restack"
-    print(f"PROMPT_FILE={'AGENT_PROMPT.restack.md' if restack_run else P['prompt']}")
+    prompt = {"restack": "AGENT_PROMPT.restack.md", "review": "AGENT_PROMPT.review.md"}.get(
+        cur["task"].get("type"), P["prompt"])
+    print(f"PROMPT_FILE={prompt}")
     print(f"TASK_YAML={shlex.quote(yaml.safe_dump(cur['task'], allow_unicode=True, sort_keys=False))}")
     return 0
 
@@ -764,7 +861,8 @@ def publish_head(cur: dict) -> str:
             cur["publish_of"] = cur["gated_commit"]
     if cached and cur.get("publish_of") == cur["gated_commit"]:
         return cached
-    head = cur["gated_commit"] if task.get("type") == "triage" else done_commit(cur["gated_commit"], task)
+    head = (cur["gated_commit"] if task.get("type") in ("triage", "review")
+            else done_commit(cur["gated_commit"], task))
     cur["publish_commit"], cur["publish_of"] = head, cur["gated_commit"]
     return head
 
@@ -799,7 +897,13 @@ def cmd_ci() -> int:
         print(f"CI=green {head[:12]} (cached)")
         return 0
     try:
-        git("push", "--quiet", "origin", f"+{head}:refs/heads/{cur['branch']}")
+        if cur["task"].get("type") == "review":
+            # The PR branch exists; fast-forward it, but never over a push made in the meantime
+            # (a server-side stack rebase after a merge below, or a person).
+            git("push", "--quiet", f"--force-with-lease=refs/heads/{cur['branch']}:{cur['task']['old_head']}",
+                "origin", f"{head}:refs/heads/{cur['branch']}")
+        else:
+            git("push", "--quiet", "origin", f"+{head}:refs/heads/{cur['branch']}")
     except RuntimeError as err:
         print(f"PUBLISH_ERROR={str(err).strip().splitlines()[-1]}")
         return 3
@@ -846,6 +950,8 @@ def cmd_publish() -> int:
     task = cur["task"]
     if task.get("type") == "restack":
         return publish_restack(cur)
+    if task.get("type") == "review":
+        return publish_review(cur)
     head = publish_head(cur)
     if cur.get("ci_green") != head:
         # Rule: no PR without green GitHub CI on exactly the commit the PR shows.
@@ -900,6 +1006,40 @@ def publish_restack(cur: dict) -> int:
     save(STACK, stack)
     drop_worktree(cur)
     print(f"RESTACKED={branch}\nPR={task['pr']}")
+    return 0
+
+
+def review_notes(cur: dict) -> dict:
+    """Per-thread notes the agent left in its clone (`.git/ark-review.json`, thread id -> text).
+
+    Untrusted agent output: only short plain strings for known thread ids are used."""
+    path = Path(cur["worktree"]) / ".git" / "ark-review.json"
+    try:
+        notes = json.loads(path.read_text()) if path.is_file() and path.stat().st_size < 64_000 else {}
+    except (OSError, ValueError):
+        return {}
+    known = {t["id"] for t in cur["task"].get("threads", [])}
+    return {k: v.strip()[:1500] for k, v in notes.items() if k in known and isinstance(v, str) and v.strip()}
+
+
+def publish_review(cur: dict) -> int:
+    """The fix is on the PR branch (pushed by `ci`, CI green): answer and resolve every thread."""
+    task, head = cur["task"], cur["gated_commit"]
+    if cur.get("ci_green") != head:
+        print(f"PUBLISH_ERROR=GitHub CI not green on {head[:12]} (run `ark-l1 ci` first)")
+        return 1
+    notes = review_notes(cur)
+    for thread in task.get("threads", []):
+        body = f"Addressed in {head[:12]} (scheduled {P['name']} review run)."
+        if notes.get(thread["id"]):
+            body += "\n\n" + notes[thread["id"]]
+        run(["gh", "api", f"repos/{GH_REPO}/pulls/{task['number']}/comments/{thread['comment']}/replies",
+             "-f", f"body={body}"], check=False)
+        run(["gh", "api", "graphql", "-f",
+             f'query=mutation{{resolveReviewThread(input:{{threadId:"{thread["id"]}"}}){{thread{{isResolved}}}}}}'],
+            check=False)
+    drop_worktree(cur)
+    print(f"REVIEWED={cur['branch']} threads={len(task.get('threads', []))}\nPR={task['pr']}")
     return 0
 
 

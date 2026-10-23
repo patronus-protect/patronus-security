@@ -336,6 +336,14 @@ run.sh
   GitHubs native Stacks); danach wartet der Runner, bis GitHub die PRs darüber auf `main` umgesetzt hat.
   Höchstens einer pro Lauf; der nächste folgt nach Restack und neuer CI. Abschalten:
   `ARK_L1_AUTO_MERGE=0` in der Service-Umgebung.
+- **Review-Läufe** (seit 2026-10-23): Nach Auto-Merge und Restack prüft `ark-l1 next` den Stack von
+  unten nach oben. Hat ein PR unaufgelöste Review-Threads (Codex, CodeQL, Menschen) oder rote CI, wird
+  er zur Aufgabe des Laufs (`REVIEW:<branch>`, Prompt `runner/AGENT_PROMPT.review.md`), vor jeder neuen
+  Backlog-Aufgabe. Rote CI mit Runner-/Toolchain-Fehler im Log (z. B. `failed to install component`)
+  wird stattdessen einmal neu gestartet. Der Agent committet den Fix auf dem PR-Branch, Gate und CI
+  prüfen wie sonst, `ci` pusht mit Lease auf den alten Head, `publish` antwortet in jedem Thread mit dem
+  Commit (plus der Notiz des Agenten aus `.git/ark-review.json`) und löst ihn auf. Drei rote Runden
+  blockieren `REVIEW:<branch>`; der PR bleibt dann bis `unblock` unmergebar, neue Aufgaben laufen weiter.
 - **Isolation:** Der Host führt nie Code oder Git-Konfiguration des Agenten aus. Git-Befehle im
   Agent-Klon (`status`, `bundle`, `rev-list`) laufen in der Sandbox; das gemeinsame `.git`, der
   Gate-Target, das Gate-Venv und der Scoreboard-Cache sind für den Agenten nicht beschreibbar bzw.
