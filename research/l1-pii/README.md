@@ -158,6 +158,14 @@ der Formate trägt eine Prüfziffer (M3 unverändert); ein Wert ohne Führersche
 jedem Modus negativ, auch die blanken Werte der presidio-analyzer-Tests (`H12234567`, `KO12345678X`).
 Der UK-Führerschein (`MORGA657054SM9IJ`, 5 der 14 `presidio_favored`-Gold-Werte) kommt mit B-UK.
 
+Stand B02: ARK 24, gemeinsam 7. Dazu kommen die USt-IdNr. von BG, CY, CZ, DK, EE, EL, FI, HR, HU, IE
+und LT, gleiche Struktur wie B01 (je Land ein Label `VAT_ID_BG` … und ein Validator mit Prüfziffer,
+nur in `balanced`/`recall`), alle `ark_only`; Griechenland trägt im Label das MwSt.-Präfix `EL`, in
+der ID den Ländercode (`pii.gr.vat_id`). Die Algorithmen folgen python-stdnum 2.2, strenger bei
+Formen ohne Prüfziffer (neunstellige tschechische Geburtsnummer vor 1954) und bei Nullnummern.
+`VAT_ID_HR` (elf Ziffern wie eine Steuer-ID) und `VAT_ID_LT` (zwölf Ziffern, mitunter kartenförmig)
+konkurrieren nach K07 als längerer Wert. Das E05-Goldset erzeugt die elf IDs nicht (`NOT_GENERATED`).
+
 ## Gold-Konvention: Platzhalter-Werte
 
 Entschieden am 2026-10-14 (T01, TRIAGE 2026-W42 Bucket 5): Reservierte Platzhalter sind PII und im

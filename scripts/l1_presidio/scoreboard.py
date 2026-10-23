@@ -545,6 +545,152 @@ def es_vat_id(value: str) -> bool:
     return False
 
 
+# ── B02: VAT IDs part 2 ──────────────────────────────────────────────────────
+
+
+def _vat_number(body: str, *lengths: int) -> list[int] | None:
+    """Digits of ``body`` if its length is one of ``lengths`` and not every digit is zero."""
+    digits = _vat_digits(body, len(body)) if len(body) in lengths else None
+    return digits if digits and any(digits) else None
+
+
+def _weighted(digits: list[int], weights: tuple[int, ...] | range) -> int:
+    return sum(d * w for d, w in zip(digits, weights))
+
+
+def bg_vat_id(value: str) -> bool:
+    """Port of ``validators::bg_vat_id`` (9 digits weights 1…8/3…10 mod 11; 10 digits EGN, LNCh or other)."""
+    digits = _vat_number(_vat_body(value, "BG"), 9, 10)
+    if digits is None:
+        return False
+    if len(digits) == 9:
+        check = _weighted(digits[:8], range(1, 9)) % 11
+        if check == 10:
+            check = _weighted(digits[:8], range(3, 11)) % 11
+        return check % 10 == digits[8]
+    year, month, day = digits[0] * 10 + digits[1], digits[2] * 10 + digits[3], digits[4] * 10 + digits[5]
+    if month > 40:
+        year, month = 2000 + year, month - 40
+    elif month > 20:
+        year, month = 1800 + year, month - 20
+    else:
+        year += 1900
+    egn = _valid_date(year, month, day) and _weighted(digits[:9], (2, 4, 8, 5, 10, 9, 7, 3, 6)) % 11 % 10 == digits[9]
+    foreigner = _weighted(digits[:9], (21, 19, 17, 13, 11, 9, 7, 3, 1)) % 10 == digits[9]
+    other = (11 - _weighted(digits[:9], (4, 3, 2, 7, 6, 5, 4, 3, 2)) % 11) % 11 == digits[9]
+    return egn or foreigner or other
+
+
+def cy_vat_id(value: str) -> bool:
+    """Port of ``validators::cy_vat_id`` (8 digits not starting 12, check letter mod 26)."""
+    body = _vat_body(value, "CY")
+    digits = _vat_number(body[:-1], 8)
+    if digits is None or digits[:2] == [1, 2]:
+        return False
+    total = sum((1, 0, 5, 7, 9, 13, 15, 17, 19, 21)[d] for d in digits[::2]) + sum(digits[1::2])
+    return body[-1] == chr(ord("A") + total % 26)
+
+
+def cz_vat_id(value: str) -> bool:
+    """Port of ``validators::cz_vat_id`` (legal entity, special 6…, ten-digit birth number)."""
+    digits = _vat_number(_vat_body(value, "CZ"), 8, 9, 10)
+    if digits is None:
+        return False
+    weights = range(8, 1, -1)
+    if len(digits) == 8:
+        check = (11 - _weighted(digits[:7], weights) % 11) % 11
+        return digits[0] != 9 and (check or 1) % 10 == digits[7]
+    if len(digits) == 9:
+        return digits[0] == 6 and (_weighted(digits[1:8], weights) % 11 + 8) % 10 == digits[8]
+    year, month, day = digits[0] * 10 + digits[1], digits[2] * 10 + digits[3], digits[4] * 10 + digits[5]
+    year += 1900 if year >= 54 else 2000
+    valid_month = 1 <= month <= 12 or 21 <= month <= 32 or 51 <= month <= 62 or 71 <= month <= 82
+    return (
+        valid_month
+        and _valid_date(year, month % 50 % 20, day)
+        and int("".join(map(str, digits[:9]))) % 11 % 10 == digits[9]
+    )
+
+
+def dk_vat_id(value: str) -> bool:
+    """Port of ``validators::dk_vat_id`` (8 digits, no leading zero, weights 2-7-6-5-4-3-2-1 mod 11)."""
+    digits = _vat_number(_vat_body(value, "DK"), 8)
+    return digits is not None and digits[0] != 0 and _weighted(digits, (2, 7, 6, 5, 4, 3, 2, 1)) % 11 == 0
+
+
+def ee_vat_id(value: str) -> bool:
+    """Port of ``validators::ee_vat_id`` (9 digits starting 10, weights 3-7-1 mod 10)."""
+    digits = _vat_number(_vat_body(value, "EE"), 9)
+    return digits is not None and digits[:2] == [1, 0] and _weighted(digits, (3, 7, 1) * 3) % 10 == 0
+
+
+def el_vat_id(value: str) -> bool:
+    """Port of ``validators::el_vat_id`` (prefix EL or GR, 9 digits, Σ d × 2^(9 − i) mod 11 mod 10)."""
+    compact = _vat_body(value, "")
+    body = next((compact[2:] for prefix in ("EL", "GR") if compact.startswith(prefix)), compact)
+    digits = _vat_number(body, 9)
+    if digits is None:
+        return False
+    total = 0
+    for digit in digits[:8]:
+        total = total * 2 + digit
+    return total * 2 % 11 % 10 == digits[8]
+
+
+def fi_vat_id(value: str) -> bool:
+    """Port of ``validators::fi_vat_id`` (8 digits, weights 7-9-10-5-8-4-2-1 mod 11)."""
+    digits = _vat_number(_vat_body(value, "FI"), 8)
+    return digits is not None and _weighted(digits, (7, 9, 10, 5, 8, 4, 2, 1)) % 11 == 0
+
+
+def hr_vat_id(value: str) -> bool:
+    """Port of ``validators::hr_vat_id`` (OIB: 11 digits, ISO 7064 MOD 11,10)."""
+    digits = _vat_number(_vat_body(value, "HR"), 11)
+    if digits is None:
+        return False
+    product = 10
+    for digit in digits[:10]:
+        product = ((digit + product) % 10 or 10) * 2 % 11
+    return (11 - product) % 10 == digits[10]
+
+
+def hu_vat_id(value: str) -> bool:
+    """Port of ``validators::hu_vat_id`` (8 digits, weights 9-7-3-1 mod 10)."""
+    digits = _vat_number(_vat_body(value, "HU"), 8)
+    return digits is not None and _weighted(digits, (9, 7, 3, 1) * 2) % 10 == 0
+
+
+IE_CHECK_LETTERS = "WABCDEFGHIJKLMNOPQRSTUV"
+
+
+def ie_vat_id(value: str) -> bool:
+    """Port of ``validators::ie_vat_id`` (7 digits + check letter + optional letter, or the old form)."""
+    body = _vat_body(value, "IE")
+    if len(body) not in (8, 9) or not all(ch in IE_CHECK_LETTERS for ch in body[7:]):
+        return False
+    digits = _vat_digits(body[:7], 7)
+    second = IE_CHECK_LETTERS.index(body[8]) if len(body) == 9 else 0
+    if digits is None:
+        tail, first = _vat_digits(body[2:7], 5), _vat_digits(body[:1], 1)
+        if len(body) != 8 or not ("A" <= body[1] <= "Z") or tail is None or first is None:
+            return False
+        digits, second = [0, *tail, *first], 0
+    total = _weighted(digits, range(8, 1, -1)) + 9 * second
+    return any(digits) and IE_CHECK_LETTERS[total % 23] == body[7]
+
+
+def lt_vat_id(value: str) -> bool:
+    """Port of ``validators::lt_vat_id`` (9 or 12 digits with the 1 marker, weights 1…9 mod 11, second step +2)."""
+    digits = _vat_number(_vat_body(value, "LT"), 9, 12)
+    if digits is None:
+        return False
+    number, check = digits[:-1], digits[-1]
+    remainder = sum((1 + i % 9) * d for i, d in enumerate(number)) % 11
+    if remainder == 10:
+        remainder = sum((1 + (i + 2) % 9) * d for i, d in enumerate(number)) % 11
+    return number[-1] == 1 and remainder % 10 == check
+
+
 ICAO_DOCUMENT_ALPHABET = "0123456789CFGHJKLMNPRTVWXYZ"
 
 
@@ -601,6 +747,17 @@ CHECKSUM_PORTS: dict[str, Callable[[str], bool]] = {
     "be_vat_id": be_vat_id,
     "it_vat_id": it_vat_id,
     "es_vat_id": es_vat_id,
+    "bg_vat_id": bg_vat_id,
+    "cy_vat_id": cy_vat_id,
+    "cz_vat_id": cz_vat_id,
+    "dk_vat_id": dk_vat_id,
+    "ee_vat_id": ee_vat_id,
+    "el_vat_id": el_vat_id,
+    "fi_vat_id": fi_vat_id,
+    "hr_vat_id": hr_vat_id,
+    "hu_vat_id": hu_vat_id,
+    "ie_vat_id": ie_vat_id,
+    "lt_vat_id": lt_vat_id,
     "de_passport_number": de_passport_number,
     "de_identity_card_number": de_identity_card_number,
 }
