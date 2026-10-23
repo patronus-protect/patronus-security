@@ -1494,38 +1494,20 @@ fn materialize_unified_request_wide_skip(
     subscriber: &L3JobSpec,
     reason: &str,
 ) -> SecurityScanResult {
-    let mut result = subscriber.fallback.clone();
-    result.confidence = (result.confidence * subscriber.degraded_factor).clamp(0.0, 1.0);
+    let mut result = super::request_wide_skip_result(
+        subscriber.fallback.clone(),
+        &subscriber.execution,
+        subscriber.degraded_factor,
+        reason,
+    );
     for layer in &mut result.layers {
-        if layer.level == result.level && layer.layer_type != "l3_pending" {
-            layer.confidence = result.confidence;
-            layer
-                .details
-                .insert("degraded".to_string(), serde_json::json!(true));
-            layer.details.insert(
-                "degraded_reason".to_string(),
-                serde_json::json!("request_wide_early_exit"),
-            );
-        }
-        if layer.layer_type == "l3_pending" {
-            layer.layer_type = "l3_skipped".to_string();
-            layer.class_name = "skipped".to_string();
-            layer.details.insert(
-                "skip_reason".to_string(),
-                serde_json::json!("request_wide_early_exit"),
-            );
-            layer.details.insert(
-                "request_wide_early_exit_reason".to_string(),
-                serde_json::json!(reason),
-            );
+        if layer.details.get("skip_reason") == Some(&serde_json::json!("request_wide_early_exit")) {
             layer.details.insert(
                 "unified_l3_physical_reuse".to_string(),
                 serde_json::json!(true),
             );
         }
     }
-    super::super::mark_decision_degraded(&mut result, "request_wide_early_exit");
-    result.duration_ms = result.layers.iter().map(|layer| layer.duration_ms).sum();
     result
 }
 

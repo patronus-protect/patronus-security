@@ -47,7 +47,7 @@ mod warmup;
 use ntdb_l2::{ntdb_l2_cache_namespace, ntdb_l2_error_scan_result};
 #[cfg(feature = "test-util")]
 pub use ntdb_l2::{ntdb_l2_enabled_for_category, ntdb_l2_model_config_for_id, NtdbL2ModelConfig};
-pub use ntdb_l2::{ntdb_l2_model_configs_for_category, ntdb_l2_scan_result};
+pub use ntdb_l2::{ntdb_l2_model_configs_for_category, ntdb_l2_scan_result, restore_l2_decision};
 
 const DEFAULT_QUEUE_WORKER_COUNT: usize = 2;
 
@@ -1705,15 +1705,15 @@ impl SecurityGateway {
                 let mut all_cached = true;
                 for aggregator_id in aggregator_ids {
                     let namespace = ntdb_l2_cache_namespace(config.model_id, &aggregator_id);
-                    if let Some((result, layers)) =
+                    if let Some((result, layers, parts)) =
                         self.ntdb_decision_cache.get(&namespace, text, execution)
                     {
-                        cached_for_category.push(scan_result(
-                            config.category,
-                            config.public_model,
-                            result,
-                            layers,
-                        ));
+                        let mut cached =
+                            scan_result(config.category, config.public_model, result, layers);
+                        cached.decision = parts.decision;
+                        cached.label_scores = parts.label_scores;
+                        cached.evidence_spans = parts.evidence_spans;
+                        cached_for_category.push(cached);
                     } else {
                         all_cached = false;
                         break;
@@ -1796,6 +1796,11 @@ impl SecurityGateway {
                             execution,
                             &evaluation,
                             &result.layers,
+                            super::decision_cache::CachedScanParts {
+                                decision: result.decision.clone(),
+                                label_scores: result.label_scores.clone(),
+                                evidence_spans: result.evidence_spans.clone(),
+                            },
                         );
                         scored_results
                             .entry(config.model_id)

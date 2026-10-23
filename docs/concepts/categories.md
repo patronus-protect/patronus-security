@@ -49,8 +49,8 @@ credential/secret DLP rules by default; other DLP families are opt-in through ru
 risk. The **caller** declares that the input is a command by choosing this category (for example
 from a PreToolUse hook for a Bash tool); it is not meant for prose. It runs natively in the L1
 phase — so also in distributed mode and with `max_level="l1"` — but is the one L1 detector that
-needs a downloaded model file: `cat-shell-risk-commander`, a TF-IDF character n-gram logistic
-regression (`model.json`, ~2.5 MB, no ONNX/tokenizer). ARK also scores a comments-stripped
+needs a downloaded model file: `cat-shell-risk-commander` (A1), a logistic regression over TF-IDF
+character n-grams and shell tokens (`model.json`, ~4 MB, no ONNX/tokenizer). ARK also scores a comments-stripped
 variant and keeps the max, to resist comment padding. It is text-only: it neither executes nor
 parses commands. Like every category it is available through the library, the HTTP API and the
 Cube Coordinator. See [Assets](../assets.md) and the

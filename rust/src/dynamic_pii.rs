@@ -80,6 +80,59 @@ pub struct DynamicPiiConfig {
     pub max_timeout_ms: u64,
 }
 
+/// Longest label, in bytes, that a request-local configuration may name.
+pub const MAX_REQUEST_LABEL_BYTES: usize = 64;
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+/// Request-local labels, thresholds and gates for `dynamic-pii`.
+///
+/// For one request it replaces the entity fields of the gateway's
+/// [`DynamicPiiConfig`]: `labels`, `label_thresholds`, `execution_gate` and
+/// `conditional_labels`, and `threshold` when given. Input limits, chunking and
+/// timeouts stay those of the gateway.
+pub struct DynamicPiiRequestConfig {
+    /// Canonical entity labels of the base GLiNER group.
+    pub labels: Vec<String>,
+    /// Default entity score threshold; the gateway's threshold when absent.
+    #[serde(default)]
+    pub threshold: Option<f32>,
+    /// Optional threshold overrides keyed by entity label.
+    #[serde(default)]
+    pub label_thresholds: HashMap<String, f32>,
+    /// Gate deciding whether this pipeline runs.
+    #[serde(default)]
+    pub execution_gate: DynamicPiiExecutionGate,
+    /// Additional labels activated by final source-pipeline results.
+    #[serde(default)]
+    pub conditional_labels: Vec<DynamicPiiConditionalLabels>,
+}
+
+impl DynamicPiiRequestConfig {
+    /// Apply this request configuration to `base` and validate the result.
+    pub fn resolve(self, base: &DynamicPiiConfig) -> Result<DynamicPiiConfig, String> {
+        let config = DynamicPiiConfig {
+            labels: self.labels,
+            threshold: self.threshold.unwrap_or(base.threshold),
+            label_thresholds: self.label_thresholds,
+            execution_gate: self.execution_gate,
+            conditional_labels: self.conditional_labels,
+            ..base.clone()
+        }
+        .validated()?;
+        if let Some(label) = config
+            .possible_labels()
+            .into_iter()
+            .find(|label| label.len() > MAX_REQUEST_LABEL_BYTES)
+        {
+            return Err(format!(
+                "dynamic-pii label {label:?} is longer than {MAX_REQUEST_LABEL_BYTES} bytes"
+            ));
+        }
+        Ok(config)
+    }
+}
+
 impl Default for DynamicPiiConfig {
     fn default() -> Self {
         Self {

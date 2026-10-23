@@ -338,7 +338,11 @@ pub fn ntdb_l2_scan_result(
     execution: &ScanExecution,
     duration_ms: f64,
 ) -> SecurityScanResult {
-    let source_pipeline = ntdb_l2_source_pipeline(config, decision);
+    let source_pipeline = source_pipeline_for(
+        config.category.as_str(),
+        &decision.model_id,
+        &decision.aggregator_id,
+    );
     let allow_l3 = config.has_l3
         && (execution.l3_strategy() == crate::L3Strategy::Dedicated
             || execution.allows_model(crate::ml::unified_onnx::UNIFIED_MODEL));
@@ -372,22 +376,59 @@ pub fn ntdb_l2_scan_result(
     scan
 }
 
-fn ntdb_l2_source_pipeline(config: NtdbL2ModelConfig, decision: &NtdbDecision) -> String {
-    if config.category == SecurityCategory::ToolTags {
+fn source_pipeline_for(category: &str, model_id: &str, aggregator_id: &str) -> String {
+    if category == SecurityCategory::ToolTags.as_str() {
         if matches!(
-            decision.model_id.as_str(),
+            model_id,
             "tool_tags_sink_external" | "tool_tags_source_sensitive" | "tool_tags_source_untrusted"
         ) {
-            return decision.model_id.clone();
+            return model_id.to_string();
         }
         if matches!(
-            decision.aggregator_id.as_str(),
+            aggregator_id,
             "sink_external" | "source_sensitive" | "source_untrusted"
         ) {
-            return format!("tool_tags_{}", decision.aggregator_id);
+            return format!("tool_tags_{aggregator_id}");
         }
     }
-    config.category.as_str().to_string()
+    category.to_string()
+}
+
+/// Restore the L2 decision of a result whose deferred L3 pass never ran.
+///
+/// `ntdb_l2_scan_result` withholds the decision while L3 is pending. When L3 is
+/// skipped (conditional gate, request-wide early exit), the L2 arbitration is
+/// the final one, so it is recomputed from the L2 evidence the result still
+/// carries. Results with a decision, or without an NTDB L2 layer, are returned
+/// unchanged.
+pub fn restore_l2_decision(
+    result: SecurityScanResult,
+    point: crate::NtdbOperatingPoint,
+) -> SecurityScanResult {
+    if result.decision.is_some() {
+        return result;
+    }
+    let Some(layer) = result
+        .layers
+        .iter()
+        .find(|layer| layer.layer_type == "ntdb_l2")
+    else {
+        return result;
+    };
+    let detail = |key: &str| {
+        layer
+            .details
+            .get(key)
+            .and_then(|value| value.as_str())
+            .unwrap_or_default()
+            .to_string()
+    };
+    let pipeline = source_pipeline_for(
+        &result.category,
+        &detail("ntdb_model_id"),
+        &detail("aggregator_id"),
+    );
+    arbitrate_l2(&pipeline, result, point)
 }
 
 fn l2_chunk_outputs_with_source(

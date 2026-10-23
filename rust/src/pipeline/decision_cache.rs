@@ -4,7 +4,9 @@ use std::hash::{Hash, Hasher};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use crate::{EvaluationResult, LayerResult, ScanExecution, SecurityLevel};
+use crate::{
+    DecisionEnvelope, EvaluationResult, LabelScore, LayerResult, ScanExecution, SecurityLevel,
+};
 
 const DEFAULT_MAX_ENTRIES: usize = 100_000;
 const DEFAULT_MAX_BYTES: usize = 128 * 1024 * 1024;
@@ -48,10 +50,20 @@ impl Hash for DecisionCacheKey {
     }
 }
 
+/// Result fields beyond the class and layers that a cache hit must return
+/// unchanged, so that a hit equals the miss it replays.
+#[derive(Clone, Default)]
+pub struct CachedScanParts {
+    pub decision: Option<DecisionEnvelope>,
+    pub label_scores: Vec<LabelScore>,
+    pub evidence_spans: Vec<crate::dynamic_pii::EvidenceSpan>,
+}
+
 #[derive(Clone)]
 struct DecisionCacheEntry {
     result: EvaluationResult,
     layers: Vec<LayerResult>,
+    parts: CachedScanParts,
     expires_at: Instant,
     last_access: u64,
     estimated_bytes: usize,
@@ -95,7 +107,7 @@ impl DecisionCache {
         namespace: &str,
         text: &str,
         execution: &ScanExecution,
-    ) -> Option<(EvaluationResult, Vec<LayerResult>)> {
+    ) -> Option<(EvaluationResult, Vec<LayerResult>, CachedScanParts)> {
         let started = Instant::now();
         let now = Instant::now();
         let key = cache_key(namespace, text, execution);
@@ -117,7 +129,7 @@ impl DecisionCache {
         let mut layers = entry.layers.clone();
         let lookup_ms = started.elapsed().as_secs_f64() * 1000.0;
         mark_cache_hit(&mut layers, lookup_ms, text.len());
-        Some((entry.result.clone(), layers))
+        Some((entry.result.clone(), layers, entry.parts.clone()))
     }
 
     pub fn insert(
@@ -127,6 +139,7 @@ impl DecisionCache {
         execution: &ScanExecution,
         result: &EvaluationResult,
         layers: &[LayerResult],
+        parts: CachedScanParts,
     ) {
         if !cacheable_layers(layers) {
             return;
@@ -134,7 +147,7 @@ impl DecisionCache {
 
         let key = cache_key(namespace, text, execution);
         let ttl = ttl_for_len(text.len());
-        let estimated_bytes = estimate_entry_bytes(result, layers);
+        let estimated_bytes = estimate_entry_bytes(result, layers, &parts);
         let now = Instant::now();
         let mut inner = self.inner.lock().expect("decision cache mutex poisoned");
         let next_access = inner.access_counter.wrapping_add(1);
@@ -150,6 +163,7 @@ impl DecisionCache {
             DecisionCacheEntry {
                 result: result.clone(),
                 layers: zero_duration_layers(layers),
+                parts,
                 expires_at: now + ttl,
                 last_access: next_access,
                 estimated_bytes,
@@ -259,8 +273,22 @@ fn mark_cache_hit(layers: &mut [LayerResult], lookup_ms: f64, text_len: usize) {
     );
 }
 
-fn estimate_entry_bytes(result: &EvaluationResult, layers: &[LayerResult]) -> usize {
-    let mut bytes = 128 + result.class_name.len() + result.level.len();
+fn estimate_entry_bytes(
+    result: &EvaluationResult,
+    layers: &[LayerResult],
+    parts: &CachedScanParts,
+) -> usize {
+    fn json_len(value: &impl serde::Serialize) -> usize {
+        serde_json::to_string(value)
+            .map(|value| value.len())
+            .unwrap_or(0)
+    }
+    let mut bytes = 128
+        + result.class_name.len()
+        + result.level.len()
+        + json_len(&parts.decision)
+        + json_len(&parts.label_scores)
+        + json_len(&parts.evidence_spans);
     for layer in layers {
         bytes += 192
             + layer.level.len()
@@ -312,6 +340,40 @@ fn prune(inner: &mut DecisionCacheInner, config: DecisionCacheConfig, now: Insta
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cache_hit_returns_the_stored_scan_parts() {
+        let cache = DecisionCache::default();
+        let execution = ScanExecution::default();
+        let result = EvaluationResult {
+            class_name: "attack".to_string(),
+            confidence: 0.97,
+            level: "L2".to_string(),
+        };
+        let label_scores = vec![LabelScore {
+            label: "attack".to_string(),
+            confidence: 0.97,
+            matched: true,
+        }];
+        cache.insert(
+            "injection",
+            "same text",
+            &execution,
+            &result,
+            &[],
+            CachedScanParts {
+                decision: None,
+                label_scores: label_scores.clone(),
+                evidence_spans: Vec::new(),
+            },
+        );
+
+        let (_, _, parts) = cache
+            .get("injection", "same text", &execution)
+            .expect("the scan should be cached");
+
+        assert_eq!(parts.label_scores, label_scores);
+    }
 
     #[test]
     fn cache_key_separates_chunk_overlap() {

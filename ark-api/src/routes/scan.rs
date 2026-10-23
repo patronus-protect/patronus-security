@@ -8,7 +8,8 @@ use axum::response::IntoResponse;
 use axum::{Extension, Json};
 use futures::StreamExt;
 use patronus_ark::{
-    NtdbOperatingPoint, QueuedSecurityEvent, ScanGateMatrix, SecurityCategory, SecurityLevel,
+    DynamicPiiConfig, DynamicPiiRequestConfig, NtdbOperatingPoint, QueuedSecurityEvent,
+    ScanGateMatrix, SecurityCategory, SecurityLevel,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -36,6 +37,10 @@ pub struct RequestScanConfig {
     ntdb_operating_point: Option<String>,
     #[serde(default)]
     chunk_overlap_tokens: Option<i64>,
+    /// Request-local `dynamic-pii` labels, thresholds and gates; the worker's
+    /// `pipeline.dynamic_pii` input limits, chunking and timeouts still apply.
+    #[serde(default)]
+    dynamic_pii: Option<DynamicPiiRequestConfig>,
 }
 
 fn empty_metadata() -> Value {
@@ -48,6 +53,7 @@ struct ResolvedScanConfig {
     metadata: Value,
     ntdb_operating_point: Option<NtdbOperatingPoint>,
     chunk_overlap_tokens: patronus_ark::ChunkOverlapTokens,
+    dynamic_pii: Option<DynamicPiiConfig>,
 }
 
 fn resolve_request_config(
@@ -116,12 +122,27 @@ fn resolve_request_config(
     let chunk_overlap_tokens =
         patronus_ark::ChunkOverlapTokens::try_from(request.chunk_overlap_tokens.unwrap_or(0))
             .map_err(|error| format!("config.{error}"))?;
+    let dynamic_pii = request
+        .dynamic_pii
+        .map(|dynamic_pii| {
+            if !categories.contains(&SecurityCategory::DynamicPii) {
+                return Err(
+                    "config.dynamic_pii requires the 'dynamic-pii' category in this request"
+                        .to_string(),
+                );
+            }
+            dynamic_pii
+                .resolve(&config.dynamic_pii.clone().unwrap_or_default())
+                .map_err(|error| format!("config.dynamic_pii: {error}"))
+        })
+        .transpose()?;
     Ok(ResolvedScanConfig {
         categories,
         gates,
         metadata: request.metadata,
         ntdb_operating_point,
         chunk_overlap_tokens,
+        dynamic_pii,
     })
 }
 
@@ -246,14 +267,16 @@ fn enqueue_scan(
 ) -> (String, String) {
     let request_id = state
         .gateway
-        .enqueue_ark_api_categories_with_chunk_overlap_options(
+        .enqueue_ark_api_categories_with_request_options(
             resolved.categories.clone(),
             content,
             resolved.metadata.clone(),
             Some(resolved.gates.clone()),
             resolved.ntdb_operating_point,
             resolved.chunk_overlap_tokens,
-        );
+            resolved.dynamic_pii.clone(),
+        )
+        .expect("the request dynamic-pii config was validated while resolving the request");
     state.register(request_id.clone(), owner_key_hash);
     (request_id, source)
 }
@@ -533,6 +556,86 @@ mod tests {
             resolved.ntdb_operating_point,
             Some(NtdbOperatingPoint::BestFprInF1)
         );
+    }
+
+    fn dynamic_pii_config_and_key() -> (Config, ApiKeyConfig) {
+        let (mut config, mut key) = config_and_key();
+        let categories = vec![SecurityCategory::Injection, SecurityCategory::DynamicPii];
+        config.categories = categories.clone();
+        config.dynamic_pii = Some(DynamicPiiConfig {
+            labels: vec!["person".to_string()],
+            timeout_ms: 7_000,
+            ..DynamicPiiConfig::default()
+        });
+        key.allowed_categories = Some(categories);
+        (config, key)
+    }
+
+    #[test]
+    fn request_config_resolves_request_local_dynamic_pii_labels() {
+        let (config, key) = dynamic_pii_config_and_key();
+        let request: RequestScanConfig = serde_json::from_value(json!({
+            "categories": ["dynamic-pii"],
+            "dynamic_pii": {
+                "labels": ["street_address", "person"],
+                "label_thresholds": {"street_address": 0.4}
+            }
+        }))
+        .unwrap();
+
+        let dynamic_pii = resolve_request_config(&config, &key, Some(request))
+            .unwrap()
+            .dynamic_pii
+            .expect("the request block resolves to a config");
+
+        assert_eq!(
+            dynamic_pii.labels,
+            ["street_address", "person"].map(String::from)
+        );
+        assert_eq!(
+            dynamic_pii.label_thresholds,
+            HashMap::from([("street_address".to_string(), 0.4)])
+        );
+        assert_eq!(dynamic_pii.timeout_ms, 7_000);
+
+        let request: RequestScanConfig =
+            serde_json::from_value(json!({"categories": ["dynamic-pii"]})).unwrap();
+        assert!(resolve_request_config(&config, &key, Some(request))
+            .unwrap()
+            .dynamic_pii
+            .is_none());
+    }
+
+    #[test]
+    fn request_config_rejects_invalid_dynamic_pii_blocks() {
+        let (config, key) = dynamic_pii_config_and_key();
+        let request: RequestScanConfig = serde_json::from_value(json!({
+            "categories": ["injection"],
+            "dynamic_pii": {"labels": ["street_address"]}
+        }))
+        .unwrap();
+        assert_eq!(
+            resolve_request_config(&config, &key, Some(request))
+                .err()
+                .unwrap(),
+            "config.dynamic_pii requires the 'dynamic-pii' category in this request"
+        );
+
+        let request: RequestScanConfig = serde_json::from_value(json!({
+            "categories": ["dynamic-pii"],
+            "dynamic_pii": {"labels": ["person"], "threshold": 1.5}
+        }))
+        .unwrap();
+        assert!(resolve_request_config(&config, &key, Some(request))
+            .err()
+            .unwrap()
+            .starts_with("config.dynamic_pii: "));
+
+        assert!(serde_json::from_value::<RequestScanConfig>(json!({
+            "categories": ["dynamic-pii"],
+            "dynamic_pii": {"labels": ["person"], "max_timeout_ms": 600000}
+        }))
+        .is_err());
     }
 
     #[test]

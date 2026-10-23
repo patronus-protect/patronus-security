@@ -82,11 +82,11 @@ impl Pipeline {
             return None;
         }
 
-        if let Some(cached) = self
-            .decision_cache
-            .get(&self.cache_namespace, text, execution)
+        if let Some((result, layers, _)) =
+            self.decision_cache
+                .get(&self.cache_namespace, text, execution)
         {
-            return Some(cached);
+            return Some((result, layers));
         }
 
         let started = Instant::now();
@@ -109,8 +109,14 @@ impl Pipeline {
             thresholds: HashMap::new(),
             details: HashMap::new(),
         }];
-        self.decision_cache
-            .insert(&self.cache_namespace, text, execution, &result, &layers);
+        self.decision_cache.insert(
+            &self.cache_namespace,
+            text,
+            execution,
+            &result,
+            &layers,
+            Default::default(),
+        );
         Some((result, layers))
     }
 

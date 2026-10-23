@@ -15,7 +15,7 @@ use crate::pipeline::{
 #[cfg(any(test, feature = "test-util"))]
 use crate::LayerResult;
 use crate::{
-    assets::DYNAMIC_PII_ASSET, ChunkOverlapTokens, ExternalL1Input, GateResult,
+    assets::DYNAMIC_PII_ASSET, ChunkOverlapTokens, DynamicPiiConfig, ExternalL1Input, GateResult,
     QueuedSecurityEvent, QueuedSecurityScanResult, RequestId, ScanExecution, ScanGateMatrix,
     SecurityCategory, SecurityFailure, SecurityFailureKind, SecurityFailureStage, SecurityLevel,
     SecurityRequestState, SecurityScanResult,
@@ -28,6 +28,7 @@ pub(super) struct QueueWork {
     inputs: Vec<ExternalL1Input>,
     execution: ScanExecution,
     metadata: serde_json::Value,
+    dynamic_pii: Option<DynamicPiiConfig>,
     #[cfg(feature = "test-util")]
     delay_ms: Option<u64>,
 }
@@ -35,6 +36,7 @@ pub(super) struct QueueWork {
 #[derive(Default)]
 struct EnqueueExecutionOptions {
     gates: Option<ScanGateMatrix>,
+    dynamic_pii: Option<DynamicPiiConfig>,
     ntdb_decision_threshold_point: Option<crate::NtdbOperatingPoint>,
     ark_api_short_injection_utility: bool,
     chunk_overlap_tokens: ChunkOverlapTokens,
@@ -174,31 +176,15 @@ impl SecurityGateway {
         )
     }
 
-    /// Submit an Ark API request with short-document Injection utility routing.
-    /// This profile is intentionally not used by library callers.
-    pub fn enqueue_ark_api_categories_with_options(
-        &self,
-        categories: Vec<SecurityCategory>,
-        text: impl Into<String>,
-        metadata: serde_json::Value,
-        gates: Option<ScanGateMatrix>,
-        ntdb_decision_threshold_point: Option<crate::NtdbOperatingPoint>,
-    ) -> RequestId {
-        self.enqueue_categories_with_execution_options(
-            categories,
-            text,
-            metadata,
-            EnqueueExecutionOptions {
-                gates,
-                ntdb_decision_threshold_point,
-                ark_api_short_injection_utility: true,
-                ..Default::default()
-            },
-        )
-    }
-
-    /// Submit an Ark API request with request-local classifier chunk overlap.
-    pub fn enqueue_ark_api_categories_with_chunk_overlap_options(
+    /// Submit an Ark API request: short-document Injection utility routing,
+    /// request-local classifier chunk overlap and an optional request-local
+    /// `dynamic-pii` configuration. Library callers use the other enqueue methods.
+    ///
+    /// `dynamic_pii` replaces the gateway's configuration for this request only;
+    /// build it with [`crate::DynamicPiiRequestConfig::resolve`]. It is validated
+    /// again here and rejected before anything is queued.
+    #[allow(clippy::too_many_arguments)]
+    pub fn enqueue_ark_api_categories_with_request_options(
         &self,
         categories: Vec<SecurityCategory>,
         text: impl Into<String>,
@@ -206,19 +192,22 @@ impl SecurityGateway {
         gates: Option<ScanGateMatrix>,
         ntdb_decision_threshold_point: Option<crate::NtdbOperatingPoint>,
         chunk_overlap_tokens: ChunkOverlapTokens,
-    ) -> RequestId {
-        self.enqueue_categories_with_execution_options(
+        dynamic_pii: Option<DynamicPiiConfig>,
+    ) -> Result<RequestId, String> {
+        let dynamic_pii = dynamic_pii.map(DynamicPiiConfig::validated).transpose()?;
+        Ok(self.enqueue_categories_with_execution_options(
             categories,
             text,
             metadata,
             EnqueueExecutionOptions {
                 gates,
+                dynamic_pii,
                 ntdb_decision_threshold_point,
                 ark_api_short_injection_utility: true,
                 chunk_overlap_tokens,
                 ..Default::default()
             },
-        )
+        ))
     }
 
     fn enqueue_categories_with_execution_options(
@@ -282,6 +271,7 @@ impl SecurityGateway {
             inputs,
             execution,
             metadata,
+            dynamic_pii: options.dynamic_pii,
             #[cfg(feature = "test-util")]
             delay_ms: options.delay_ms,
         });
@@ -348,6 +338,7 @@ impl SecurityGateway {
             inputs,
             execution,
             metadata,
+            dynamic_pii,
             #[cfg(feature = "test-util")]
             delay_ms,
         } = work;
@@ -446,6 +437,7 @@ impl SecurityGateway {
             &l3_execution,
             &metadata,
             &conditional_results,
+            dynamic_pii,
         );
         drop_internal_l2_chunk_outputs(&mut l2_results);
         metrics.checkpoint(
@@ -721,6 +713,10 @@ impl SecurityGateway {
                         serde_json::json!("conditional_gate"),
                     );
                 }
+                *result = super::ntdb_l2::restore_l2_decision(
+                    result.clone(),
+                    execution.ntdb_decision_threshold_point(),
+                );
                 continue;
             }
             jobs.push(L3JobSpec {
@@ -761,6 +757,7 @@ impl SecurityGateway {
         jobs
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn pending_dynamic_pii_for_request(
         &self,
         request_id: &str,
@@ -769,6 +766,7 @@ impl SecurityGateway {
         execution: &ScanExecution,
         metadata: &serde_json::Value,
         gate_results: &[GateResult],
+        dynamic_pii: Option<DynamicPiiConfig>,
     ) -> Option<PendingDynamicPii> {
         if !inputs
             .iter()
@@ -786,7 +784,7 @@ impl SecurityGateway {
         {
             return None;
         }
-        let config = self.dynamic_pii_config();
+        let config = dynamic_pii.unwrap_or_else(|| self.dynamic_pii_config());
         let policy = execution.l3_policy();
         let job_id = self.l3_worker.next_job_id();
         Some(PendingDynamicPii {
@@ -1081,6 +1079,7 @@ impl SecurityGateway {
                 &execution,
                 &serde_json::json!({}),
                 &[],
+                None,
             )
             .expect("test dynamic-pii job must be enabled");
         let source_job_id = self.l3_worker.next_job_id();

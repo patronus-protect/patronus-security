@@ -9,8 +9,73 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ## [Unreleased]
 
+## [0.1.11] - 2026-10-23
+
+### Detection changes in the default modes
+
+The default PII and DLP mode is `strict`. These entries change what `strict` reports; the
+detailed entries below carry the measurements. The scored modes `balanced` and `recall`, the
+DLP output modes and the new labels that only they report are opt-in.
+
+- **Payment cards (B-PAN):** a card number needs the IIN prefix and a length of its brand
+  besides Luhn. Card findings on phone numbers, EDIFACT/SWIFT stamps, token segments, ZA/KR IDs,
+  digits after `+` and brandless Luhn-valid numbers disappear; CVV and expiry need a reported
+  card, and a CVV in a CVV-headed table column is a new finding.
+- **IP addresses (B-IP):** spans include the zone ID and the CIDR prefix length, IPv4-mapped and
+  embedded IPv6 addresses are one span, and IPv6 findings inside SWIFT MT/EDIFACT chains and on
+  invalid mixed forms disappear.
+- **Phone numbers (T04, T17, T18):** spans end at line breaks, NANP trunk and `00` prefixes and
+  a US area code in parentheses are part of the span, and EDIFACT/X12/SWIFT elements, zero-padded
+  IDs and 6-4 digit groups are no phone numbers.
+- **FR/ES/IT/NL field names (T26):** date of birth, customer and employee ID, account number,
+  CVV, US SSN, passport number and username are new findings behind these field names.
+- **Obfuscation (K06):** values with zero-width characters, full-width forms or defanged
+  separators are found in every mode.
+- **Secondary evidence (T07):** a card or account finding inside a valid IBAN moves to
+  `details.secondary_evidence`; no finding is added or removed.
+- **Combined DLP+PII scans (K08):** PII spans that overlap a DLP secret span are dropped from the
+  PII evidence.
+- **Provider tokens (F03, F04, F05, T01, K02):** GitHub tokens need their exact length and, for
+  classic tokens, a valid CRC32; npm tokens need a valid CRC32; all documented GitLab token
+  prefixes are found; AWS access key IDs need a credential prefix and 16 Base32 characters, and
+  AWS secret access keys are found by their structural context; prefix rules match whole tokens
+  only; provider, key and JWT values below 3.0 bits of entropy per character are dropped.
+- **Crypto keys (F01, F02):** `0x` plus 64 hex digits is a private key only in a key context;
+  WIF keys need a valid Base58Check, and testnet keys are found.
+- **Generic credentials (F-GEN1, F-GEN2, T06, T07, T09, K05, K06, K08):** far fewer findings on
+  code expressions, prose, placeholders, documented example values, UUIDs, digests and other
+  non-secret value shapes; new findings under compound, camelCase, quoted and typed keys, for
+  quoted passphrases and for unquoted config values with `;`, `,`, `}` or `]`; tighter spans
+  without quotes and one span per overlapping secret.
+- **HTTP auth (F-HTTP):** `Basic` and `Bearer` credentials and server session cookies are found
+  outside a literal header line when the value proves its kind.
+- **Shell commands (#128):** `shell_command` scores with the A1 model (character n-grams plus
+  shell tokens with pipe, redirect and command markers): `curl … | jq` and similar pipes into
+  read-only filters are no longer flagged, loopback reverse shells are. The model asset revision
+  changes, so warmup downloads A1; `format_version: 1` model files no longer load.
+- **Credential phishing (#60):** a request to verify identity or credentials at a login or auth
+  link is a terminal injection finding on L1.
+
+Result shapes only grow: `dlp_mode` and the PII modes are new execution gates, `matched_rules`
+entries gain `subtype`, `score`, `context`, `overlap`, `suppressed_by` and `structure`, and PII
+results gain `details.secondary_evidence`.
+The Ark API scan `config` gains an optional `dynamic_pii` block (#146). **Rust API:** the
+Ark-API-only `SecurityGateway::enqueue_ark_api_categories_with_options` and
+`enqueue_ark_api_categories_with_chunk_overlap_options` are replaced by
+`enqueue_ark_api_categories_with_request_options`.
+
 ### Changed
 
+- Score `shell_command` with the A1 `cat-shell-risk-commander` model (#128). A1 (`format_version: 2`)
+  adds a second TF-IDF block over a deterministic shell tokenizer (`shell_tokens`, a port of the
+  reference analyzer) with command, pipe and redirect markers (`CMD=`, `PIPE->jq` vs. `PIPE->sh`,
+  `REDIR->`) next to the character n-grams; the asset revision moves to the A1 commit, so warmup
+  downloads it. The loader reads `format_version: 2` only; the `format_version: 1` path, its parity
+  fixture and generator are removed. A flagged command whose score comes from the shell tokens
+  alone reports the trimmed command as its evidence span. Parity with scikit-learn 1.8 is below
+  1e-14 on the synthetic and the published model. **Detection change:** `shell_command` scores
+  change in every mode with the new model; the `curl … | jq` false positive and the loopback
+  reverse-shell gap of #128 close.
 - AWS access key IDs and HTTP Basic credentials (F05, F-HTTP, PR #142 review). **Detection
   change:** legacy alphanumeric AWS access key IDs (16 upper-case letters or digits after `AKIA`,
   `ASIA`, `ABIA`, `ACCA` or `A3T…`, also holding 0, 1, 8 or 9) are found again, also as the anchor
@@ -62,7 +127,49 @@ result shapes may be breaking for downstream users, and is called out explicitly
   number (found before only because the phone number passed Luhn) stay found, and column CVVs without
   any card number are new findings.
 
+- Split the PII L1 rules out of `rust/src/detectors/pii/pii.rs` into regional modules (K01): `common` (e-mail, IP, MAC, international phone), `intl` (IBAN, card number, CVV, expiry, SWIFT/BIC), `identifiers` (field-bound employee, customer, patient, student and applicant IDs, username, date of birth, account number), `de`, `us` and `uk`; the Dynamic-PII field anchors move to `context_anchors.rs`. Each rule is a `const` in its module, and `pii.rs` keeps `PiiPattern`, the pipeline and the `PII_PATTERNS` registry, which lists the 39 rules in the previous order because the first match sets `class_name` and wins same-label overlaps. `rust/tests/pii_registry_order.rs` pins that order, and `parse_native_patterns` in `scripts/generate_docs.py` (used by the rule catalog, `entity_map.py` and `count_validated.py`) resolves `module::CONST` entries. Rule ids, patterns, validators, goldens, `13_l1_golden_eval`, the generated docs and the ARK predictions on every dev corpus are bit-identical. **Detection change:** none; this is a refactor only.
+- Move the PII L1 goldens (`pii_l1.jsonl`) to golden schema v2. Every row names the `pii_*` rule it exercises (`rule_id`), its carrier document (`carrier`: `line`, `prose`, `json`, `yaml`, `xml`, `csv`, `kv`, `table`), difficulty tags (`no_context`, `structured`, `obfuscated`, `ocr`) and whether it is a `known_gap`, a positive the detector misses today. The set grows from 140 to 713 rows: at least 5 gated positives and 5 hard negatives per label and language (DE/EN), every one of the 37 `pii_*` rules with a gated positive in both languages and a hard negative, and 89 known gaps (quoted JSON keys, CSV headers, table and XML cells, German `ist`/`lautet` after the field name, zero-width and full-width characters, parenthesised US area codes). The 140 existing rows keep their ids, text and spans. `13_l1_golden_eval` now checks PII coverage against `PII_PATTERNS`: it requires that the declared rule reported each gold span, prints coverage per `rule_id` (DE | EN) and per tag and language, and fails if a PII rule loses its last passing positive in a language or a known gap starts passing. `python/tests/test_pii_golden_schema.py` and `rust/tests/pii_golden_schema.rs` check the schema statically. **Detection change:** none; this is evaluation tooling only.
+
+- The DLP rules moved out of `rust/src/detectors/dlp/dlp.rs` into family modules under
+  `rust/src/detectors/dlp/rules/` (`providers`, `crypto`, `credentials`, `hashes`, `identifiers`,
+  `content`), each with its own validators. `DLP_PATTERNS` keeps its path and type and
+  concatenates the families in the previous rule order. That order is pinned in
+  `rust/tests/dlp_rule_registry.rs` because the first matching rule sets the result class.
+  `scripts/generate_docs.py` and `scripts/measure_demo_pii_dlp.py` now read the rule modules.
+  **Detection change:** none. Goldens, the golden eval and the full DLP output on the dev split
+  are bit-identical.
+
 ### Added
+
+- Pass the dynamic PII labels per scan request (#146). The Ark API scan `config` takes an optional
+  `dynamic_pii` block with the shape of `pipeline.dynamic_pii` — `labels` (required), `threshold`,
+  `label_thresholds`, `execution_gate` and `conditional_labels` — that replaces the worker's
+  labels, thresholds and gates for that request only; input limits, chunking and timeouts stay
+  those of the worker. The block needs `dynamic-pii` among the request's categories, is validated
+  like the server config plus a 64-byte limit per label, and an invalid block is rejected with
+  `422`. The ARK Coordinator checks the block with the same rules before it accepts the job and
+  forwards it to the worker. In Rust,
+  `DynamicPiiRequestConfig::resolve` builds the request config from the gateway's and
+  `SecurityGateway::enqueue_ark_api_categories_with_request_options` queues a request with it; it
+  replaces the Ark-API-only `enqueue_ark_api_categories_with_options` and
+  `enqueue_ark_api_categories_with_chunk_overlap_options`, which are removed.
+  Requests with different label lists never share results: the config travels with the
+  request's dynamic PII job, and the GLiNER chunk cache keys include the inference labels.
+  **Detection change:** none without the block; with it, `dynamic-pii` reports the requested
+  labels (for example `street_address`) instead of the worker's defaults.
+- Add the injection L1 governance rule `ark.injection.governance.credential_verification_link`
+  for credential phishing (ASI-09, #60). It reports a request to verify, confirm or re-enter an
+  identity, account, credentials or password (DE: `bestätigen`/`verifizieren` … `Identität`,
+  `Konto`, `Zugangsdaten`, `Passwort`, `Anmeldedaten`) followed in the same clause by an http(s)
+  link with a login or auth host label or path segment (`login`, `signin`, `auth` …; query and
+  fragment are not searched and stay outside the span). It is
+  audited high precision and scores in the `ark.injection.agentic.control_abuse` family, the
+  family of the existing `phishing` relation, which alone stayed far below the acceptance
+  threshold. An e-mail or order confirmation link, a sign-in link without a verification request
+  and prose about phishing stay silent. The governance goldens gain 5 positives and 6 hard
+  negatives (DE and EN), among them a link with a long token query, an `auth_token` query parameter
+  and an `/author` path. **Detection change:** such phishing requests are now terminal
+  `injection` findings on L1 (`agentic_control_abuse`); no other golden changes.
 
 - Add ICAO 9303 check digits for German passport and identity card numbers (F08), one validator per
   document (weights 7-3-1, `A`=10 … `Z`=35): `validators::de_passport_number` (series `C F G H J K`)
@@ -266,23 +373,17 @@ result shapes may be breaking for downstream users, and is called out explicitly
 - Add the L1-PII baseline report Ark vs. Presidio (E11). `research/l1-pii/scoreboard/baseline.md` scores Ark (strict) and Presidio 2.2.364 (`default`, `tuned`) on every dev gold set per source family, corpus and entity, states M1–M4 and the hard-negative criterion, and sorts the errors into buckets with candidates for the next TRIAGE. On dev, Ark leads on `neutral` (exact F1 52.7 vs. 40.5 tuned) and trails on `presidio_favored` (45.7 vs. 71.4, bare values without field names, grouped non-DE IBANs, IPv6 span boundaries); M1 holds for 3/9 shared ids on `neutral` and 4/12 on `presidio_favored`, and Ark hits 2 Presidio negative cases where tuned hits none. `scripts/l1_presidio/scoreboard.py report --gold DIR --engine NAME=DIR …` renders the tables (P/R/F1 per family, corpus and entity, hard-negative FP per family, M1 of the first engine against each other one). **Detection change:** none; this is evaluation tooling and a report only.
 - Add Presidio-favored L1-PII gold sets and scoring per source family (E12). `scripts/l1_presidio/prepare_corpora.py --family presidio_favored` downloads the synthetic `synth_dataset_v2.json` of microsoft/presidio-research (MIT, pinned commit `7f568b6da8a5`) and the recognizer unit tests of presidio-analyzer 2.2.364 (MIT, 74 pinned test files), verifies their SHA-256 and freezes a group-atomic dev/holdout split with a SHA-256 manifest in its own directory pair (`presidio_favored/`). The test files are parsed with `ast`, never executed: cases on the default recognizer with literal text and an expected count or spans become rows scored only on the recognizer's ids (`scored_entities`), negative cases become whole-text hard negatives typed to that id. `research/l1-pii/entity_map.yaml` tags every gold source as `ark_authored` (`pii_l1`, `l1_bilingual_rules`, E05 synthetic), `neutral` (Gretel Finance, OpenPII Nano, TAB) or `presidio_favored`; `entity_map.py check` fails on an untagged source. The scoreboard reports P/R/F1 per family, gates the family aggregates like the other buckets, and `scoreboard.py m1` checks M1 on `neutral` and `presidio_favored` separately while `ark_authored` is reported only (fairness rule in `research/l1-pii/README.md`). The L1 gate gets a one-off `presidio-favored-corpora` step. **Detection change:** none; this is evaluation tooling only.
 
-### Changed
-
-- Split the PII L1 rules out of `rust/src/detectors/pii/pii.rs` into regional modules (K01): `common` (e-mail, IP, MAC, international phone), `intl` (IBAN, card number, CVV, expiry, SWIFT/BIC), `identifiers` (field-bound employee, customer, patient, student and applicant IDs, username, date of birth, account number), `de`, `us` and `uk`; the Dynamic-PII field anchors move to `context_anchors.rs`. Each rule is a `const` in its module, and `pii.rs` keeps `PiiPattern`, the pipeline and the `PII_PATTERNS` registry, which lists the 39 rules in the previous order because the first match sets `class_name` and wins same-label overlaps. `rust/tests/pii_registry_order.rs` pins that order, and `parse_native_patterns` in `scripts/generate_docs.py` (used by the rule catalog, `entity_map.py` and `count_validated.py`) resolves `module::CONST` entries. Rule ids, patterns, validators, goldens, `13_l1_golden_eval`, the generated docs and the ARK predictions on every dev corpus are bit-identical. **Detection change:** none; this is a refactor only.
-- Move the PII L1 goldens (`pii_l1.jsonl`) to golden schema v2. Every row names the `pii_*` rule it exercises (`rule_id`), its carrier document (`carrier`: `line`, `prose`, `json`, `yaml`, `xml`, `csv`, `kv`, `table`), difficulty tags (`no_context`, `structured`, `obfuscated`, `ocr`) and whether it is a `known_gap`, a positive the detector misses today. The set grows from 140 to 713 rows: at least 5 gated positives and 5 hard negatives per label and language (DE/EN), every one of the 37 `pii_*` rules with a gated positive in both languages and a hard negative, and 89 known gaps (quoted JSON keys, CSV headers, table and XML cells, German `ist`/`lautet` after the field name, zero-width and full-width characters, parenthesised US area codes). The 140 existing rows keep their ids, text and spans. `13_l1_golden_eval` now checks PII coverage against `PII_PATTERNS`: it requires that the declared rule reported each gold span, prints coverage per `rule_id` (DE | EN) and per tag and language, and fails if a PII rule loses its last passing positive in a language or a known gap starts passing. `python/tests/test_pii_golden_schema.py` and `rust/tests/pii_golden_schema.rs` check the schema statically. **Detection change:** none; this is evaluation tooling only.
-
-### Changed
-
-- The DLP rules moved out of `rust/src/detectors/dlp/dlp.rs` into family modules under
-  `rust/src/detectors/dlp/rules/` (`providers`, `crypto`, `credentials`, `hashes`, `identifiers`,
-  `content`), each with its own validators. `DLP_PATTERNS` keeps its path and type and
-  concatenates the families in the previous rule order. That order is pinned in
-  `rust/tests/dlp_rule_registry.rs` because the first matching rule sets the result class.
-  `scripts/generate_docs.py` and `scripts/measure_demo_pii_dlp.py` now read the rule modules.
-  **Detection change:** none. Goldens, the golden eval and the full DLP output on the dev split
-  are bit-identical.
-
 ### Fixed
+
+- Return the decision envelope on NTDB L2 decision-cache hits and when a deferred L3 pass is
+  skipped (#100). A repeated scan within the cache TTL returned the cached class and confidence
+  with `decision: None` and without `label_scores` and `evidence_spans`; the cache now stores
+  them with the entry, so a hit equals the miss it replays apart from the cache diagnostics. A
+  result whose L2 pass routed to L3 also lost its decision when L3 then did not run (the
+  caller's conditional gate skipped it, or a request-wide early exit degraded it); the L2
+  arbitration is now restored as the final decision (`terminality.completion` `degraded` after
+  an early exit). **Detection change:** none; classes and confidences are unchanged, and the
+  affected results carry the decision a terminal L2 result carries.
 
 - Fix the K07 `iban_form` suppression for findings that start at the printed IBAN form. In
   `balanced` and `recall`, an account field over a failing grouped IBAN (`Bank account: DE00 1234 …`)
