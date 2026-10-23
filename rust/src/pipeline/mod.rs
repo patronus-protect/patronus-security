@@ -32,7 +32,7 @@ pub(crate) use strategy::{ChunkAggregation, PipelineStrategy};
 #[cfg(feature = "test-util")]
 #[doc(hidden)]
 pub mod test_util {
-    pub use super::decision_cache::{DecisionCache, DecisionCacheConfig};
+    pub use super::decision_cache::{CachedScanParts, DecisionCache, DecisionCacheConfig};
     pub use super::l3_worker::{
         aggregate_unified_head_for_test, public_unified_class_for_test,
         replace_unified_pending_layer_for_test, selected_l3_chunks_for_test,

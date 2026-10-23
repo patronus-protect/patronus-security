@@ -1705,9 +1705,8 @@ impl SecurityGateway {
                 let mut all_cached = true;
                 for aggregator_id in aggregator_ids {
                     let namespace = ntdb_l2_cache_namespace(config.model_id, &aggregator_id);
-                    if let Some((result, layers, parts)) = self
-                        .ntdb_decision_cache
-                        .get_scan(&namespace, text, execution)
+                    if let Some((result, layers, parts)) =
+                        self.ntdb_decision_cache.get(&namespace, text, execution)
                     {
                         let mut cached =
                             scan_result(config.category, config.public_model, result, layers);
@@ -1791,7 +1790,7 @@ impl SecurityGateway {
                         };
                         let namespace =
                             ntdb_l2_cache_namespace(&decision.model_id, &decision.aggregator_id);
-                        self.ntdb_decision_cache.insert_scan(
+                        self.ntdb_decision_cache.insert(
                             &namespace,
                             text,
                             execution,

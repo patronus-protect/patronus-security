@@ -338,7 +338,11 @@ pub fn ntdb_l2_scan_result(
     execution: &ScanExecution,
     duration_ms: f64,
 ) -> SecurityScanResult {
-    let source_pipeline = ntdb_l2_source_pipeline(config, decision);
+    let source_pipeline = source_pipeline_for(
+        config.category.as_str(),
+        &decision.model_id,
+        &decision.aggregator_id,
+    );
     let allow_l3 = config.has_l3
         && (execution.l3_strategy() == crate::L3Strategy::Dedicated
             || execution.allows_model(crate::ml::unified_onnx::UNIFIED_MODEL));
@@ -370,14 +374,6 @@ pub fn ntdb_l2_scan_result(
         scan.decision = None;
     }
     scan
-}
-
-fn ntdb_l2_source_pipeline(config: NtdbL2ModelConfig, decision: &NtdbDecision) -> String {
-    source_pipeline_for(
-        config.category.as_str(),
-        &decision.model_id,
-        &decision.aggregator_id,
-    )
 }
 
 fn source_pipeline_for(category: &str, model_id: &str, aggregator_id: &str) -> String {

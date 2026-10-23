@@ -510,7 +510,14 @@ mod decision_cache {
             details: HashMap::new(),
         });
 
-        cache.insert("pending", "same text", &execution, &result, &layers);
+        cache.insert(
+            "pending",
+            "same text",
+            &execution,
+            &result,
+            &layers,
+            Default::default(),
+        );
 
         assert!(cache.get("pending", "same text", &execution).is_none());
     }
@@ -522,8 +529,15 @@ mod decision_cache {
         let result = result("secret");
         let layers = layers("secret");
 
-        cache.insert("model-a", "repeat me", &execution, &result, &layers);
-        let (cached, cached_layers) = cache
+        cache.insert(
+            "model-a",
+            "repeat me",
+            &execution,
+            &result,
+            &layers,
+            Default::default(),
+        );
+        let (cached, cached_layers, _) = cache
             .get("model-a", "repeat me", &execution)
             .expect("decision should be cached");
 
@@ -542,7 +556,14 @@ mod decision_cache {
         let result = result("secret");
         let layers = layers("secret");
 
-        cache.insert("model-a", "repeat me", &execution, &result, &layers);
+        cache.insert(
+            "model-a",
+            "repeat me",
+            &execution,
+            &result,
+            &layers,
+            Default::default(),
+        );
         execution.set_defer_l3(true);
 
         assert!(cache.get("model-a", "repeat me", &execution).is_none());
@@ -558,8 +579,22 @@ mod decision_cache {
         let result = result("secret");
         let layers = layers("secret");
 
-        cache.insert("model-a", "first", &execution, &result, &layers);
-        cache.insert("model-a", "second", &execution, &result, &layers);
+        cache.insert(
+            "model-a",
+            "first",
+            &execution,
+            &result,
+            &layers,
+            Default::default(),
+        );
+        cache.insert(
+            "model-a",
+            "second",
+            &execution,
+            &result,
+            &layers,
+            Default::default(),
+        );
 
         assert!(cache.get("model-a", "first", &execution).is_none());
         assert!(cache.get("model-a", "second", &execution).is_some());

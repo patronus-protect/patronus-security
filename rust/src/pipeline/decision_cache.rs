@@ -53,7 +53,7 @@ impl Hash for DecisionCacheKey {
 /// Result fields beyond the class and layers that a cache hit must return
 /// unchanged, so that a hit equals the miss it replays.
 #[derive(Clone, Default)]
-pub(crate) struct CachedScanParts {
+pub struct CachedScanParts {
     pub decision: Option<DecisionEnvelope>,
     pub label_scores: Vec<LabelScore>,
     pub evidence_spans: Vec<crate::dynamic_pii::EvidenceSpan>,
@@ -107,17 +107,6 @@ impl DecisionCache {
         namespace: &str,
         text: &str,
         execution: &ScanExecution,
-    ) -> Option<(EvaluationResult, Vec<LayerResult>)> {
-        self.get_scan(namespace, text, execution)
-            .map(|(result, layers, _)| (result, layers))
-    }
-
-    /// Like [`DecisionCache::get`], plus the stored [`CachedScanParts`].
-    pub(crate) fn get_scan(
-        &self,
-        namespace: &str,
-        text: &str,
-        execution: &ScanExecution,
     ) -> Option<(EvaluationResult, Vec<LayerResult>, CachedScanParts)> {
         let started = Instant::now();
         let now = Instant::now();
@@ -144,25 +133,6 @@ impl DecisionCache {
     }
 
     pub fn insert(
-        &self,
-        namespace: &str,
-        text: &str,
-        execution: &ScanExecution,
-        result: &EvaluationResult,
-        layers: &[LayerResult],
-    ) {
-        self.insert_scan(
-            namespace,
-            text,
-            execution,
-            result,
-            layers,
-            CachedScanParts::default(),
-        );
-    }
-
-    /// Like [`DecisionCache::insert`], keeping `parts` for [`DecisionCache::get_scan`].
-    pub(crate) fn insert_scan(
         &self,
         namespace: &str,
         text: &str,
@@ -385,7 +355,7 @@ mod tests {
             confidence: 0.97,
             matched: true,
         }];
-        cache.insert_scan(
+        cache.insert(
             "injection",
             "same text",
             &execution,
@@ -399,7 +369,7 @@ mod tests {
         );
 
         let (_, _, parts) = cache
-            .get_scan("injection", "same text", &execution)
+            .get("injection", "same text", &execution)
             .expect("the scan should be cached");
 
         assert_eq!(parts.label_scores, label_scores);
