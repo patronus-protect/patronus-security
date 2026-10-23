@@ -16,7 +16,10 @@ use std::{collections::HashMap, ops::Range, sync::LazyLock};
 
 use regex::Regex;
 
-use super::{score::Context, validators};
+use super::{
+    score::{Context, PROXIMITY_CONTEXT_POINTS},
+    validators,
+};
 use crate::detectors::lexical_anchors::LexicalAnchorScanner;
 use crate::detectors::structure::{normalize_key, Field, Fields};
 
@@ -62,6 +65,14 @@ pub static SUPPORT_LEXICON: &[(&str, &[&str])] = &[
     ("LICENSEPLATE", &["pii.vehicle_registration"]),
     ("SSN", &["pii.social_insurance_number"]),
     ("NATIONALID", &["pii.national_insurance_number"]),
+    ("VAT_ID_DE", &["pii.vat_identifier"]),
+    ("VAT_ID_AT", &["pii.vat_identifier"]),
+    ("VAT_ID_CH", &["pii.vat_identifier"]),
+    ("VAT_ID_FR", &["pii.vat_identifier"]),
+    ("VAT_ID_NL", &["pii.vat_identifier"]),
+    ("VAT_ID_BE", &["pii.vat_identifier"]),
+    ("VAT_ID_IT", &["pii.vat_identifier"]),
+    ("VAT_ID_ES", &["pii.vat_identifier"]),
 ];
 
 /// Counter-context lexicon IDs of `pii.json`: numbers that are not PII.
@@ -552,21 +563,72 @@ pub(super) fn structure_evidence(
         .find_map(|field| key_evidence(|name| key_terms(&fields.names()[name]), field, label))
 }
 
+/// Whether a context-free value at `value` (byte range) is the value of a field
+/// that names another kind of value (F08): a structural key without a term of
+/// `label`, or a field name ending in `:` or `=` right before it without a term
+/// of `label` in the nearest proximity window (`DEA-Nummer: RN4135883`,
+/// `Codice Fiscale: J3405H901`, a `driver_license_number` column). A bare
+/// document check digit (7-3-1 mod 10) fits one in ten letter-led codes; the
+/// field says what the code is.
+pub(super) fn foreign_field(fields: &Fields, text: &str, value: Range<usize>, label: &str) -> bool {
+    if fields.at(value.clone()).next().is_some() {
+        return !structure_evidence(fields, value, label)
+            .is_some_and(|evidence| evidence.context.supports());
+    }
+    if !text[..value.start]
+        .trim_end_matches([' ', '\t'])
+        .ends_with([':', '='])
+    {
+        return false;
+    }
+    let own = evidence(text, (value.start, value.end), label);
+    !(own.context.supports()
+        && own.side == Some(Side::Before)
+        && own
+            .distance
+            .is_some_and(|distance| distance <= PROXIMITY_CONTEXT_POINTS[0].0))
+}
+
+/// Whether the structural key of the value at `value` (byte range) holds a term
+/// of `label` itself although no key of the lexicon names it (`old passport
+/// number: …`, F08). The old numeric serial carries no letter series: a document
+/// term on another line (`passport: archived` before `member_code: …`) does not
+/// claim it, a term inside its own key does.
+pub(super) fn key_holds_term(
+    fields: &Fields,
+    text: &str,
+    value: Range<usize>,
+    label: &str,
+) -> bool {
+    fields.at(value.clone()).any(|field| {
+        let own = evidence(text, (value.start, value.end), label);
+        own.context.supports()
+            && own.side == Some(Side::Before)
+            && own.distance.is_some_and(|distance| {
+                distance < text[field.key.start..value.start].chars().count()
+            })
+    })
+}
+
 /// Whether the value at `value` (byte range) stands alone rather than continuing
 /// a number: no `+` right before it, no `-`, `/`, `.` or `,` joining it to a digit
 /// on either side, and no digit group one space away (`+49 30 123 456 789`). A
-/// context-free value (K05) has no field name that delimits it.
+/// context-free value (K05) has no field name that delimits it. A value that
+/// starts with a letter (the country prefix of a VAT ID, B01) is no decimal and
+/// no digit group: `,` and a space delimit it, so `…,17810,DE396839779,150279-0487,…`
+/// in a CSV row stands alone.
 pub(super) fn stands_alone(text: &str, value: Range<usize>) -> bool {
-    let joins = |ch: char| matches!(ch, '-' | '/' | '.' | ',');
+    let digit = |ch: Option<char>| ch.is_some_and(|ch| ch.is_ascii_digit());
+    let numeric = digit(text[value.clone()].chars().next());
+    let joins = |ch: char| matches!(ch, '-' | '/' | '.') || (numeric && ch == ',');
     let mut before = text[..value.start].chars().rev();
     let mut after = text[value.end..].chars();
     let (prev, prev2) = (before.next(), before.next());
     let (next, next2) = (after.next(), after.next());
-    let digit = |ch: Option<char>| ch.is_some_and(|ch| ch.is_ascii_digit());
     !(prev == Some('+')
         || (prev.is_some_and(joins) && digit(prev2))
         || (next.is_some_and(joins) && digit(next2))
-        || (prev == Some(' ') && digit(prev2))
+        || (numeric && prev == Some(' ') && digit(prev2))
         || (next == Some(' ') && digit(next2)))
 }
 
@@ -635,6 +697,61 @@ pub(super) fn has_payment_card(text: &str, within: Range<usize>, card_regex: &Re
         let value = within.start + matched.start()..within.start + matched.end();
         validators::payment_card(matched.as_str()) && card_position(text, value)
     })
+}
+
+/// Whether an IPv4 candidate at `start` stands for itself rather than ending an
+/// IPv6 address (B-IP): the `:`-run before it is no IPv6 head (`::ffff:`,
+/// `64:ff9b::`, `2001:db8:1:2:3:4:`), so an IPv4-mapped or embedded address is one
+/// IPv6 span and an invalid mixed form no IPv4 sub-span. A field name (`IP:`,
+/// `web:`) or a SWIFT MT tag at the start of a line (`:25:`, ` :52A:`) stays.
+pub(super) fn ipv4_position(text: &str, start: usize) -> bool {
+    let head = &text[..start];
+    if !head.ends_with(':') {
+        return true;
+    }
+    let run = &head[head
+        .trim_end_matches(|ch: char| ch.is_ascii_hexdigit() || ch == ':')
+        .len()..];
+    let line = head[..head.len() - run.len()].trim_end_matches([' ', '\t']);
+    let line_start = line.is_empty() || line.ends_with('\n');
+    let run = match swift_tag(run) {
+        Some(tag) if line_start => &run[tag..],
+        _ => run,
+    };
+    !(run.contains("::") || run.matches(':').count() >= 2)
+}
+
+/// Length of the SWIFT MT tag that opens `run` (`:25:`, `:28C:`), if any.
+fn swift_tag(run: &str) -> Option<usize> {
+    let bytes = run.as_bytes();
+    let digits = bytes.len() >= 4
+        && bytes[0] == b':'
+        && bytes[1].is_ascii_digit()
+        && bytes[2].is_ascii_digit();
+    if !digits {
+        return None;
+    }
+    match bytes[3] {
+        b':' => Some(4),
+        letter if letter.is_ascii_alphabetic() && bytes.get(4) == Some(&b':') => Some(5),
+        _ => None,
+    }
+}
+
+/// Whether an IPv6 candidate ending at `end` is the whole address (B-IP): no
+/// further `:`-group (`380:21:3::90:FRET`, `1::1:550:::EA`), `.`-group
+/// (`2001:db8::256.1.1.1`) or zone ID the rule did not take, and no letter, digit
+/// or `_` right after it. A prefix length out of range stays outside the span
+/// (`2001:db8::1/129`). Where the value may start is part of the rule's regex.
+pub(super) fn ipv6_position(text: &str, end: usize) -> bool {
+    let mut after = text[end..].chars();
+    let (next, next2) = (after.next(), after.next());
+    let word = |ch: Option<char>| ch.is_some_and(|ch| ch.is_alphanumeric() || ch == '_');
+    match next {
+        Some(':') => !(word(next2) || next2 == Some(':')),
+        Some('.' | '%') => !word(next2),
+        next => !word(next),
+    }
 }
 
 /// Whether an international phone number at `start` (its `+` or `00`) opens a

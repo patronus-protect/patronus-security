@@ -130,6 +130,25 @@ def test_scopes_follow_the_l1_program():
     assert "pii.email" not in entity_map.ids("ark_only")
 
 
+def test_vat_ids_have_one_label_and_id_per_country():
+    # B01: DE and IT VAT IDs are shared with Presidio, the other six countries are ARK-only.
+    entity_map = MODULE.load()
+    for label, benchmark, scope in (
+        ("VAT_ID_DE", "pii.de.vat_id", "shared"),
+        ("VAT_ID_IT", "pii.it.vat_code", "shared"),
+        ("VAT_ID_AT", "pii.at.vat_id", "ark_only"),
+        ("VAT_ID_CH", "pii.ch.vat_id", "ark_only"),
+        ("VAT_ID_FR", "pii.fr.vat_id", "ark_only"),
+        ("VAT_ID_NL", "pii.nl.vat_id", "ark_only"),
+        ("VAT_ID_BE", "pii.be.vat_id", "ark_only"),
+        ("VAT_ID_ES", "pii.es.vat_id", "ark_only"),
+    ):
+        assert entity_map.ark_label(label) == benchmark
+        assert entity_map.scope(benchmark) == scope
+    assert entity_map.presidio_entity("DE_VAT_ID") == "pii.de.vat_id"
+    assert entity_map.presidio_entity("IT_VAT_CODE") == "pii.it.vat_code"
+
+
 # ── validation of malformed maps ─────────────────────────────────────────────
 
 
@@ -359,10 +378,11 @@ def test_module_split_registry_rejects_unknown_references(tmp_path):
 
 def test_checked_in_registry_order_matches_the_rust_order_test():
     rust_test = (ROOT / "rust" / "tests" / "pii_registry_order.rs").read_text(encoding="utf-8")
-    expected = re.findall(r'\("(pii_\w+)", "(\w+)"\)', rust_test)
+    # rustfmt wraps long entries over several lines.
+    expected = re.findall(r'\(\s*"(pii_\w+)",\s*"(\w+)",?\s*\)', rust_test)
     rules = _generate_docs().parse_native_patterns(MODULE.PII_SOURCE_PATH, "PiiPattern")
     assert [(rule["id"], rule["entity_group"]) for rule in rules] == expected
-    assert len(expected) == 41
+    assert len(expected) == 54
 
 
 def test_cli_check_succeeds_and_fails(tmp_path):

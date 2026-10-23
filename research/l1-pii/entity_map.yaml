@@ -181,6 +181,22 @@ entities:
       presidio-evaluator-synth-v2: [US_DRIVER_LICENSE]
       presidio-analyzer-recognizer-tests: [DE_FUEHRERSCHEIN, IT_DRIVER_LICENSE, KR_DRIVER_LICENSE, UK_DRIVING_LICENCE, US_DRIVER_LICENSE]
 
+  # VAT IDs (B01): one ID and one ARK label per country; the bare Partita IVA rule shares
+  # VAT_ID_IT with the IT-prefixed form.
+  - id: pii.de.vat_id
+    scope: shared
+    ark: [VAT_ID_DE]
+    presidio: [DE_VAT_ID]
+    corpora:
+      presidio-analyzer-recognizer-tests: [DE_VAT_ID]
+
+  - id: pii.it.vat_code
+    scope: shared
+    ark: [VAT_ID_IT]
+    presidio: [IT_VAT_CODE]
+    corpora:
+      presidio-analyzer-recognizer-tests: [IT_VAT_CODE]
+
   - id: pii.license_plate
     scope: shared
     ark: [LICENSEPLATE]
@@ -255,6 +271,13 @@ entities:
     corpora:
       gretel-synthetic-pii-finance: [user_name]
 
+  - {id: pii.at.vat_id, scope: ark_only, ark: [VAT_ID_AT], presidio: [], corpora: {}}
+  - {id: pii.ch.vat_id, scope: ark_only, ark: [VAT_ID_CH], presidio: [], corpora: {}}
+  - {id: pii.fr.vat_id, scope: ark_only, ark: [VAT_ID_FR], presidio: [], corpora: {}}
+  - {id: pii.nl.vat_id, scope: ark_only, ark: [VAT_ID_NL], presidio: [], corpora: {}}
+  - {id: pii.be.vat_id, scope: ark_only, ark: [VAT_ID_BE], presidio: [], corpora: {}}
+  - {id: pii.es.vat_id, scope: ark_only, ark: [VAT_ID_ES], presidio: [], corpora: {}}
+
   # ── presidio_only ──────────────────────────────────────────────────────
   - {id: pii.url, scope: presidio_only, ark: [], presidio: [URL], corpora: {presidio-evaluator-synth-v2: [DOMAIN_NAME], presidio-analyzer-recognizer-tests: [URL]}}
   - {id: pii.crypto_wallet, scope: presidio_only, ark: [], presidio: [CRYPTO], corpora: {presidio-analyzer-recognizer-tests: [CRYPTO]}}
@@ -267,11 +290,9 @@ entities:
   - {id: pii.de.bsnr, scope: presidio_only, ark: [], presidio: [DE_BSNR], corpora: {presidio-analyzer-recognizer-tests: [DE_BSNR]}}
   - {id: pii.de.commercial_register, scope: presidio_only, ark: [], presidio: [DE_HANDELSREGISTER], corpora: {presidio-analyzer-recognizer-tests: [DE_HANDELSREGISTER]}}
   - {id: pii.de.postal_code, scope: presidio_only, ark: [], presidio: [DE_PLZ], corpora: {presidio-analyzer-recognizer-tests: [DE_PLZ]}}
-  - {id: pii.de.vat_id, scope: presidio_only, ark: [], presidio: [DE_VAT_ID], corpora: {presidio-analyzer-recognizer-tests: [DE_VAT_ID]}}
   - {id: pii.es.nie, scope: presidio_only, ark: [], presidio: [ES_NIE], corpora: {presidio-analyzer-recognizer-tests: [ES_NIE]}}
   - {id: pii.es.nif, scope: presidio_only, ark: [], presidio: [ES_NIF], corpora: {presidio-analyzer-recognizer-tests: [ES_NIF]}}
   - {id: pii.it.fiscal_code, scope: presidio_only, ark: [], presidio: [IT_FISCAL_CODE], corpora: {presidio-analyzer-recognizer-tests: [IT_FISCAL_CODE]}}
-  - {id: pii.it.vat_code, scope: presidio_only, ark: [], presidio: [IT_VAT_CODE], corpora: {presidio-analyzer-recognizer-tests: [IT_VAT_CODE]}}
   - {id: pii.fi.personal_identity_code, scope: presidio_only, ark: [], presidio: [FI_PERSONAL_IDENTITY_CODE], corpora: {presidio-analyzer-recognizer-tests: [FI_PERSONAL_IDENTITY_CODE]}}
   - {id: pii.pl.pesel, scope: presidio_only, ark: [], presidio: [PL_PESEL], corpora: {presidio-analyzer-recognizer-tests: [PL_PESEL]}}
   - {id: pii.se.personnummer, scope: presidio_only, ark: [], presidio: [SE_PERSONNUMMER], corpora: {presidio-analyzer-recognizer-tests: [SE_PERSONNUMMER]}}
@@ -382,10 +403,20 @@ checksums:
     de_social_security_number: null     # Form 8 Ziffern + Buchstabe + 3 Ziffern, keine Prüfziffer
     de_health_insurance_number: null    # Form Buchstabe + 9 Ziffern, keine Prüfziffer
     lanr: null                          # 9 Ziffern, keine Prüfziffer
-    de_document_number: null            # ICAO-Alphabet, keine 7-3-1-Prüfziffer
+    de_document_number: null            # ICAO-Alphabet, keine Prüfziffer (gedruckte Serie, feldgebunden)
     de_driver_license_number: null
     us_ssn: null                        # Bereichsprüfung
     uk_nino: null                       # Präfix-/Suffixprüfung
+    de_vat_id: {algorithm: "ISO 7064 MOD 11,10"}            # B01, USt-IdNr.
+    at_vat_id: {algorithm: Luhn-Variante (6 − Summe) mod 10}  # B01, UID ATU
+    ch_vat_id: {algorithm: gewichtet 5-4-3-2-7-6-5-4 mod 11}   # B01, UID CHE
+    fr_vat_id: {algorithm: Schlüssel (12 + 3 × SIREN) mod 97 + SIREN-Luhn}  # B01
+    nl_vat_id: {algorithm: gewichtet mod 11 / ISO 7064 MOD 97-10}           # B01, btw-id
+    be_vat_id: {algorithm: 97 − (Nummer mod 97)}           # B01
+    it_vat_id: {algorithm: Luhn}                           # B01, Partita IVA plus Amtscode
+    es_vat_id: {algorithm: Kontrollzeichen mod 23 / CIF-Luhn}  # B01, NIF-IVA
+    de_passport_number: {algorithm: ICAO 9303 7-3-1, country: de}        # F08, Serie C F G H J K oder alt numerisch
+    de_identity_card_number: {algorithm: ICAO 9303 7-3-1, country: de}   # F08, Serie L M N P R T V W X Y oder alt numerisch
   # Pattern-Recognizer mit validate_result in presidio_analyzer 2.2.364 (43 Stück, mit Presidio
   # vollständig geprüft von `count_validated.py check --presidio`).
   presidio:

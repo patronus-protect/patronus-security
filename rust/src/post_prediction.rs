@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use std::net::IpAddr;
+use std::net::{IpAddr, Ipv4Addr};
 
 use crate::{EvidenceSpan, SecurityCategory};
 
@@ -59,12 +59,18 @@ impl PostPredictionHook for PrivateNetworkDiagnosticHook {
 }
 
 fn is_private_or_local_ip(value: &str) -> bool {
-    match value.parse::<IpAddr>() {
-        Ok(IpAddr::V4(address)) => {
-            address.is_private() || address.is_link_local() || address.is_loopback()
-        }
+    // An IP span may carry a zone ID or CIDR prefix length, and an IPv4-mapped
+    // address is one span (B-IP).
+    let v4 = |address: Ipv4Addr| {
+        address.is_private() || address.is_link_local() || address.is_loopback()
+    };
+    match crate::detectors::pii::validators::ip_address_part(value).parse::<IpAddr>() {
+        Ok(IpAddr::V4(address)) => v4(address),
         Ok(IpAddr::V6(address)) => {
-            address.is_unique_local() || address.is_unicast_link_local() || address.is_loopback()
+            address.is_unique_local()
+                || address.is_unicast_link_local()
+                || address.is_loopback()
+                || address.to_ipv4_mapped().is_some_and(v4)
         }
         Err(_) => false,
     }

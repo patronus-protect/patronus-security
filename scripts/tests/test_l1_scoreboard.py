@@ -660,6 +660,10 @@ def test_gold_validators_cover_every_checksum_validator():
     assert validators["pii.iban"] == ("mod97",)
     assert validators["pii.credit_card.pan"] == ("payment_card",)
     assert validators["pii.de.tax_id"] == ("steuer_id", "steuer_id_issued")
+    assert validators["pii.de.vat_id"] == ("de_vat_id",)
+    assert validators["pii.it.vat_code"] == ("it_vat_id",)
+    assert validators["entity.passport_number"] == ("de_passport_number",)
+    assert validators["pii.identity_card_number"] == ("de_identity_card_number",)
     rules = MODULE.count_validated_module().load_rules()
     checksum = {name for name, rule in rules.ark.items() if rule is not None}
     # A task that adds a checksum validator ports it to CHECKSUM_PORTS for the gold-gap report.
@@ -683,6 +687,30 @@ def test_gold_validators_cover_every_checksum_validator():
      ["86095742718", "06095742719", "8609574271", "860957427190"]),
     ("steuer_id_issued", ["86095742719", "86 095 742 719"],
      ["86095742718", "12345678903", "47110815008", "86555742194", "11111111111"]),
+    # B01: VAT IDs per country (rust/tests/pii_vat_id.rs).
+    ("de_vat_id", ["DE136695976", "DE 136 695 976", "DE.136.695.976", "DE123456788"],
+     ["DE136695977", "DE987654321", "DE100000001", "DE036695976", "DE13669597", "ATU13585627"]),
+    ("at_vat_id", ["ATU13585627", "ATU 13585627", "ATU68044369"],
+     ["ATU13585626", "ATU00000000", "AT13585627", "DE136695976"]),
+    ("ch_vat_id", ["CHE-100.155.212", "CHE100155212", "CHE 100 155 212", "CHE-712.368.516"],
+     ["CHE-100.155.213", "CHE-000.000.001", "CHE-100.155.21"]),
+    ("fr_vat_id", ["FR40303265045", "FR 40 303 265 045", "FR78610357972"],
+     ["FR41303265045", "FR40303265046", "FR43303265046", "FR12345678901"]),
+    ("nl_vat_id", ["NL004495445B01", "NL000099998B57", "NL434938713B02"],
+     ["NL004495446B01", "NL004495445B00", "NL000000000B01", "NL004495445X01"]),
+    ("be_vat_id", ["BE0403019261", "BE 0403.019.261", "BE0776091951"],
+     ["BE0403019262", "BE1403019261", "BE0000000097", "BE2403019261"]),
+    ("it_vat_id", ["IT00743110157", "00743110157", "01333550323", "IT24442930335"],
+     ["IT00743110158", "IT00000000000", "IT12345670009", "IT12345675008", "0074311015"]),
+    ("es_vat_id", ["ESA13585625", "ESX5253868R", "ES54362315K", "ESB58378431", "ESM1234567L"],
+     ["ESA13585626", "ESX5253868Q", "ES54362315L", "ESI1234567L"]),
+    # F08: German passport and identity card, ICAO 9303 7-3-1 (rust/tests/pii_document_numbers.rs).
+    ("de_passport_number", ["C01X00T41", "F12345671", "c01234565", "C01X00T478", "CF21823027", "1220001297"],
+     ["C01X00T42", "C01X00T47", "L01X00T44", "C01X00T479", "1220001298", "0000000000", "B01X00T41",
+      "C01A00T41", "C01x00T41", "C01X00T4", "122000129"]),
+    ("de_identity_card_number", ["L01X00T44", "l01x00t44", "X12345677", "T220001293", "L01X00T471", "1220001297"],
+     ["L01X00T45", "T22000129", "C01X00T41", "T220001294", "1220001298", "0000000000", "D12345675",
+      "L01x00T44", "L01X00T4", "L01X00T4711"]),
 ])
 def test_checksum_ports_match_the_rust_vectors(name, valid, invalid):
     check = MODULE.CHECKSUM_PORTS[name]

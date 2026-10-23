@@ -1,24 +1,62 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use std::net::IpAddr;
 
-/// Validate an IPv4 or IPv6 candidate matched by a PII regex.
+/// Validate an IPv4 or IPv6 candidate matched by a PII regex. The span may end in a
+/// CIDR prefix length (`/0`–`/32`, `/0`–`/128`) and an IPv6 address in a zone ID
+/// before it (`fe80::1%eth0`, `2001:db8::%eth0/128`, B-IP). Loopback, unspecified
+/// and multicast addresses are rejected, also as the IPv4 part of an IPv4-mapped
+/// address (`::ffff:127.0.0.1`).
 pub fn ip_address(s: &str) -> bool {
-    let Ok(candidate) = s.parse::<IpAddr>() else {
+    let (address, prefix) = match s.split_once('/') {
+        Some((address, prefix)) => (address, Some(prefix)),
+        None => (s, None),
+    };
+    let (address, zone) = match address.split_once('%') {
+        Some((address, zone)) => (address, Some(zone)),
+        None => (address, None),
+    };
+    let Ok(candidate) = address.parse::<IpAddr>() else {
         return false;
     };
-    if candidate.is_loopback() || candidate.is_multicast() || candidate.is_unspecified() {
+    let max_prefix = if candidate.is_ipv4() { 32 } else { 128 };
+    if prefix.is_some_and(|prefix| {
+        prefix.is_empty()
+            || !prefix.bytes().all(|byte| byte.is_ascii_digit())
+            || prefix
+                .parse::<u8>()
+                .map_or(true, |length| length > max_prefix)
+    }) || zone.is_some_and(|zone| candidate.is_ipv4() || zone.is_empty())
+    {
+        return false;
+    }
+    let local = |candidate: IpAddr| {
+        candidate.is_loopback() || candidate.is_multicast() || candidate.is_unspecified()
+    };
+    if local(candidate) {
         return false;
     }
     match candidate {
         IpAddr::V4(_) => true,
-        IpAddr::V6(_) => {
-            let compact = s.trim();
+        IpAddr::V6(v6) => {
+            if v6
+                .to_ipv4_mapped()
+                .is_some_and(|mapped| local(IpAddr::V4(mapped)))
+            {
+                return false;
+            }
+            let compact = address.trim();
             compact.len() >= 7
                 && ((compact.contains("::")
                     && compact.chars().filter(|ch| *ch == ':').count() >= 2)
                     || compact.split(':').filter(|part| !part.is_empty()).count() >= 3)
         }
     }
+}
+
+/// The address of an IP span without its zone ID and CIDR prefix length
+/// (`fe80::1%eth0` → `fe80::1`, `192.0.2.0/24` → `192.0.2.0`).
+pub fn ip_address_part(s: &str) -> &str {
+    s.split(['%', '/']).next().unwrap_or(s)
 }
 
 /// Luhn algorithm (ISO/IEC 7812) — credit card number validation.
@@ -417,6 +455,61 @@ pub fn de_document_number(s: &str) -> bool {
             .all(|ch| ALPHABET.contains(ch.to_ascii_uppercase()))
 }
 
+/// ICAO 9303 (part 3) check digit of an MRZ field: weights 7, 3, 1 repeating,
+/// digits at face value, `A`=10 … `Z`=35, the filler `<` is 0; `None` for any
+/// other character.
+pub fn icao_check_digit(data: &str) -> Option<u32> {
+    data.chars()
+        .zip([7, 3, 1].into_iter().cycle())
+        .try_fold(0, |total, (ch, weight)| {
+            let value = match ch {
+                '0'..='9' => ch.to_digit(10)?,
+                'A'..='Z' => u32::from(ch) - u32::from('A') + 10,
+                '<' => 0,
+                _ => return None,
+            };
+            Some(total + value * weight)
+        })
+        .map(|total| total % 10)
+}
+
+/// A German document number with its ICAO 9303 check digit (F08): a letter of
+/// `series`, then characters of the ICAO alphabet without vowels and lookalikes
+/// (`0-9CFGHJKLMNPRTVWXYZ`), eight in all plus the check digit, or the nine
+/// character serial plus the check digit of the MRZ; or the old numeric serial,
+/// nine digits plus the check digit. Letters are all upper or all lower case.
+fn de_document_check_digit(s: &str, series: &str) -> bool {
+    const ALPHABET: &str = "0123456789CFGHJKLMNPRTVWXYZ";
+    if !s.is_ascii()
+        || !matches!(s.len(), 9 | 10)
+        || (s.bytes().any(|byte| byte.is_ascii_uppercase())
+            && s.bytes().any(|byte| byte.is_ascii_lowercase()))
+    {
+        return false;
+    }
+    let upper = s.to_ascii_uppercase();
+    let (data, check) = upper.split_at(upper.len() - 1);
+    let first = data.chars().next().unwrap_or_default();
+    let numeric = upper.len() == 10 && upper.bytes().all(|byte| byte.is_ascii_digit());
+    let lettered = series.contains(first) && data.chars().all(|ch| ALPHABET.contains(ch));
+    ((numeric && upper.bytes().any(|byte| byte != b'0')) || lettered)
+        && check
+            .parse::<u32>()
+            .is_ok_and(|digit| icao_check_digit(data) == Some(digit))
+}
+
+/// German passport number (Reisepass): series C, F, G, H, J, K, or the old
+/// numeric serial, with its ICAO 9303 check digit (F08).
+pub fn de_passport_number(s: &str) -> bool {
+    de_document_check_digit(s, "CFGHJK")
+}
+
+/// German identity card number (Personalausweis): series L, M, N, P, R, T, V,
+/// W, X, Y, or the old numeric serial, with its ICAO 9303 check digit (F08).
+pub fn de_identity_card_number(s: &str) -> bool {
+    de_document_check_digit(s, "LMNPRTVWXY")
+}
+
 pub fn de_driver_license_number(s: &str) -> bool {
     s.len() == 11 && s.chars().all(|ch| ch.is_ascii_alphanumeric())
 }
@@ -542,6 +635,209 @@ pub fn steuer_id_issued(s: &str) -> bool {
         && !digits
             .windows(3)
             .any(|run| run[0] == run[1] && run[1] == run[2])
+}
+
+// ── VAT identification numbers (B01) ──────────────────────────────────────
+// One validator per country. Each takes the printed form (`DE 136 695 976`,
+// `CHE-100.155.212`) and checks the check digit of the issuing authority.
+
+/// The alphanumerics of `s` in upper case after the country prefix `prefix`:
+/// `DE.136.695.976` → `136695976`. A value without the prefix stays whole.
+fn vat_body(s: &str, prefix: &str) -> String {
+    let compact: String = s
+        .chars()
+        .filter(char::is_ascii_alphanumeric)
+        .map(|ch| ch.to_ascii_uppercase())
+        .collect();
+    match compact.strip_prefix(prefix) {
+        Some(body) => body.to_string(),
+        None => compact,
+    }
+}
+
+/// The decimal digits of `s`, if `s` has exactly `len` characters, all digits.
+fn vat_digits(s: &str, len: usize) -> Option<Vec<u32>> {
+    (s.len() == len && s.bytes().all(|byte| byte.is_ascii_digit()))
+        .then(|| s.bytes().map(|byte| u32::from(byte - b'0')).collect())
+}
+
+/// Luhn checksum of `digits` with the last digit undoubled, in `0..10`.
+fn luhn_checksum(digits: &[u32]) -> u32 {
+    digits
+        .iter()
+        .rev()
+        .enumerate()
+        .map(|(index, &digit)| match index % 2 {
+            0 => digit,
+            _ if digit > 4 => digit * 2 - 9,
+            _ => digit * 2,
+        })
+        .sum::<u32>()
+        % 10
+}
+
+/// ISO 7064 MOD 11,10 check digit of `digits`.
+fn iso7064_mod11_10(digits: &[u32]) -> u32 {
+    let product = digits.iter().fold(10, |product, &digit| {
+        let sum = (digit + product) % 10;
+        (if sum == 0 { 10 } else { sum }) * 2 % 11
+    });
+    (11 - product) % 10
+}
+
+/// German USt-IdNr.: `DE` and nine digits, no leading zero, the last an
+/// ISO 7064 MOD 11,10 check digit.
+pub fn de_vat_id(s: &str) -> bool {
+    let Some(digits) = vat_digits(&vat_body(s, "DE"), 9) else {
+        return false;
+    };
+    digits[0] != 0 && iso7064_mod11_10(&digits[..8]) == digits[8]
+}
+
+/// Austrian UID: `ATU` and eight digits; the check digit is
+/// `(6 − Luhn checksum of the first seven) mod 10`.
+pub fn at_vat_id(s: &str) -> bool {
+    let body = vat_body(s, "AT");
+    let Some(digits) = body.strip_prefix('U').and_then(|body| vat_digits(body, 8)) else {
+        return false;
+    };
+    (16 - luhn_checksum(&digits[..7])) % 10 == digits[7]
+}
+
+/// Swiss UID (`CHE-123.456.789`, the MWST number without its `MWST`/`TVA`/`IVA`
+/// suffix): nine digits, the last a weighted mod 11 check digit (weights
+/// 5 4 3 2 7 6 5 4; remainder 10 is never issued).
+pub fn ch_vat_id(s: &str) -> bool {
+    let mut body = vat_body(s, "CHE");
+    for suffix in ["MWST", "TVA", "IVA", "TPV"] {
+        if let Some(stripped) = body.strip_suffix(suffix) {
+            body = stripped.to_string();
+            break;
+        }
+    }
+    let Some(digits) = vat_digits(&body, 9) else {
+        return false;
+    };
+    let sum: u32 = digits[..8]
+        .iter()
+        .zip([5, 4, 3, 2, 7, 6, 5, 4])
+        .map(|(digit, weight)| digit * weight)
+        .sum();
+    let check = (11 - sum % 11) % 11;
+    check != 10 && check == digits[8]
+}
+
+/// French numéro de TVA: `FR`, a two-digit key and the nine-digit SIREN. The key
+/// is `(12 + 3 × (SIREN mod 97)) mod 97`; the SIREN passes Luhn except for the
+/// Monaco range `000…`. Keys with letters are not accepted.
+pub fn fr_vat_id(s: &str) -> bool {
+    let Some(digits) = vat_digits(&vat_body(s, "FR"), 11) else {
+        return false;
+    };
+    let siren = &digits[2..];
+    let number = siren
+        .iter()
+        .fold(0u64, |number, &digit| number * 10 + u64::from(digit));
+    let key = u64::from(digits[0] * 10 + digits[1]);
+    (siren[..3] == [0, 0, 0] || luhn_checksum(siren) == 0) && key == (number * 100 + 12) % 97
+}
+
+/// Dutch btw-id: `NL`, nine digits, `B` and a branch number `01`–`99`. Either the
+/// nine digits pass the mod 11 check of the former format (weights 9…2, minus
+/// the last digit) or the whole ID passes ISO 7064 MOD 97-10 (sole traders
+/// since 2020).
+pub fn nl_vat_id(s: &str) -> bool {
+    let body = vat_body(s, "NL");
+    if body.len() != 12 || body.as_bytes()[9] != b'B' {
+        return false;
+    }
+    let (Some(digits), Some(branch)) = (vat_digits(&body[..9], 9), vat_digits(&body[10..], 2))
+    else {
+        return false;
+    };
+    if digits.iter().all(|&digit| digit == 0) || branch == [0, 0] {
+        return false;
+    }
+    let weighted = digits[..8]
+        .iter()
+        .zip((2..=9).rev())
+        .map(|(digit, weight)| digit * weight)
+        .sum::<u32>();
+    let mod11 = (weighted + 11 * 9 - digits[8]) % 11 == 0;
+    let mod97 = format!("NL{body}")
+        .chars()
+        .filter_map(|ch| ch.to_digit(36))
+        .fold(0u32, |remainder, value| {
+            let shift = if value > 9 { 100 } else { 10 };
+            (remainder * shift + value) % 97
+        })
+        == 1;
+    mod11 || mod97
+}
+
+/// Belgian BTW/TVA number: `BE` and ten digits starting with `0` or `1`; the
+/// last two are `97 − (first eight mod 97)`.
+pub fn be_vat_id(s: &str) -> bool {
+    let Some(digits) = vat_digits(&vat_body(s, "BE"), 10) else {
+        return false;
+    };
+    let number = digits[..8]
+        .iter()
+        .fold(0u32, |number, &digit| number * 10 + digit);
+    digits[0] <= 1 && number != 0 && 97 - number % 97 == digits[8] * 10 + digits[9]
+}
+
+/// Italian Partita IVA, with or without `IT`: eleven digits, a company number
+/// that is not zero, a province office code `001`–`100`, `120`, `121`, `888` or
+/// `999`, and a Luhn check digit.
+pub fn it_vat_id(s: &str) -> bool {
+    let Some(digits) = vat_digits(&vat_body(s, "IT"), 11) else {
+        return false;
+    };
+    let office = digits[7] * 100 + digits[8] * 10 + digits[9];
+    digits[..7].iter().any(|&digit| digit != 0)
+        && matches!(office, 1..=100 | 120 | 121 | 888 | 999)
+        && luhn_checksum(&digits) == 0
+}
+
+/// Control letters of the Spanish DNI/NIE by remainder mod 23.
+const ES_CONTROL_LETTERS: &[u8; 23] = b"TRWAGMYFPDXBNJZSQVHLCKE";
+
+/// Spanish NIF-IVA: `ES` and a DNI (eight digits and a control letter), an NIE
+/// (`X`/`Y`/`Z`, seven digits, control letter), a NIF of `K`/`L`/`M` or a CIF
+/// (entity letter, seven digits and a control digit or letter).
+pub fn es_vat_id(s: &str) -> bool {
+    let body = vat_body(s, "ES");
+    let bytes = body.as_bytes();
+    if bytes.len() != 9 {
+        return false;
+    }
+    let (first, last) = (bytes[0], bytes[8]);
+    let Some(middle) = vat_digits(&body[1..8], 7) else {
+        return false;
+    };
+    let number = middle
+        .iter()
+        .fold(0u32, |number, &digit| number * 10 + digit);
+    let letter = |number: u32| ES_CONTROL_LETTERS[(number % 23) as usize];
+    match first {
+        b'0'..=b'9' => last == letter(u32::from(first - b'0') * 10_000_000 + number),
+        b'X' | b'Y' | b'Z' => last == letter(u32::from(first - b'X') * 10_000_000 + number),
+        b'K' | b'L' | b'M' => last == letter(number),
+        b'A'..=b'H' | b'J' | b'N' | b'P'..=b'S' | b'U'..=b'W' => {
+            let sum: u32 = middle
+                .iter()
+                .enumerate()
+                .map(|(index, &digit)| match index % 2 {
+                    0 => digit * 2 / 10 + digit * 2 % 10,
+                    _ => digit,
+                })
+                .sum();
+            let check = (10 - sum % 10) % 10;
+            last == b'0' + check as u8 || last == b"JABCDEFGHI"[check as usize]
+        }
+        _ => false,
+    }
 }
 
 pub fn postal_address_de(s: &str) -> bool {

@@ -11,6 +11,23 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Changed
 
+- IP address spans (B-IP: T20 + baseline C1, TRIAGE 2026-W43 bucket 5, baseline P3/P9). An
+  IPv4-mapped or embedded IPv6 address is one span (`::ffff:10.0.0.1`, `64:ff9b::198.51.100.1`), the
+  zone ID and the CIDR prefix length are part of the span (`fe80::1%eth0`, `192.168.1.0/24`,
+  `2001:db8::%eth0/128`); a prefix length out of range stays outside it (`10.0.0.0/123`). The IPv6
+  rules no longer start inside a colon-delimited SWIFT MT or EDIFACT chain (`:28C::52D:`,
+  `:60F::61F::62F:`, `BGM+380:21:3::90:FRET`, `LIN+1::1:550:::EA:20`), after `.`, `-`, `+` or a word
+  character, and no longer report a value that a further `:`/`.` group continues, so an invalid mixed
+  address (`2001:db8::256.1.1.1`) yields no sub-span; a SWIFT MT tag at the start of a line (`:25:`,
+  ` :52A:`) and a field name (`IPv6:`) open a value. `validators::ip_address` checks the prefix length
+  and zone ID and also rejects loopback, unspecified and multicast IPv4 inside a mapped address
+  (`::ffff:127.0.0.1`, D-IP); the network-diagnostic filter strips zone ID and prefix and checks the
+  mapped IPv4. Gold convention in `research/l1-pii/README.md`. **Detection change:** in `strict` and
+  `balanced` IP spans grow by their zone ID and prefix length, mapped/embedded addresses replace their
+  IPv4 sub-span, and IPv6 findings in SWIFT/EDIFACT chains and partial matches on invalid forms
+  disappear. Dev: Gretel IP F1 90.6 → 96.7 (11 FP fewer, two SWIFT-tagged gold values now exact),
+  presidio-analyzer IP tests 50.0 → 85.7, the P9 hard negative is no match.
+
 - Payment card numbers need the IIN prefix and a length of their brand besides Luhn (B-PAN: T19 +
   F02, TRIAGE 2026-W43 bucket 4, baseline N1/P8). `pii_credit_card` validates with the new
   `validators::payment_card`: Luhn (unchanged), then `validators::CARD_IIN_RANGES` (Amex, Diners
@@ -41,6 +58,73 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Add ICAO 9303 check digits for German passport and identity card numbers (F08), one validator per
+  document (weights 7-3-1, `A`=10 … `Z`=35): `validators::de_passport_number` (series `C F G H J K`)
+  and `validators::de_identity_card_number` (series `L M N P R T V W X Y`), each for eight characters
+  of the ICAO alphabet plus the check digit (`F12345671`, `L01X00T44`, the form presidio-analyzer and
+  its tests use), the MRZ form of the nine-character serial plus its check digit (`C01X00T478`,
+  `T220001293`, also inside `IDD<<T220001293<<…`) and the old numeric serial of ten digits
+  (`1220001297`). The four new rules are scored-only like K05: `pii_passport_number_de_context_free`
+  and `pii_identity_card_number_de_context_free` report a letter-led value without a field name at
+  0.55, 0.80 with a document term (`Pass-Nr.`, baseline P6, `Reisepass-Nr.`, `Ausweis-Nr.`, `ID card
+  no.`; `pass-nr` was already a K03 term of `pii.passport`, the rule that reads it was missing), and
+  drop below both thresholds behind a nearer counter-context term; `…_legacy` reports the old numeric
+  serial only with a document term or key. A bare value of a field that names something else stays
+  silent (`DEA-Nummer: RN4135883`, `Codice Fiscale: …`, a `driver_license_number` column), and in
+  `balanced`/`recall` passport and identity card findings compete with an overlapping finding of any
+  other label (`overlap::DOCUMENT_LABELS`): a field-bound value of another label wins, so
+  `Kundennummer K12345676` stays `CUSTOMER_ID` and `Passport number: Y22400855` stays a passport. The
+  field-bound rules `pii_passport_number_de` and `pii_identity_card_number_de` keep their format check
+  (`de_document_number`) in every mode, since a printed nine-character serial carries no check digit.
+  `entity_map.yaml` classifies both validators as checksums with country `de` (M3: ARK 11 → 13 units,
+  7 shared with Presidio); `scoreboard.py` ports them. `pii_l1.jsonl` gains 56 balanced/recall rows (at
+  least 5 positives and 5 hard negatives per label in DE and EN). **Detection change:** none in the
+  default `strict` mode (dev scoreboard +0.0 pp everywhere). In `balanced` and `recall` German passport
+  and identity card numbers are new findings without a field name: dev passport F1 38.5 → 44.9
+  (presidio_favored 0.0 → 34.3, ark_authored 70.3 → 76.9, neutral 38.0 → 37.7 with one new FP on an
+  unannotated value), identity card F1 47.3 → 70.8, balanced L1 F1 +0.3 pp (DE +0.6 pp), no new
+  hard-negative FP; 13_l1_golden_eval 734/734 positives, 638/638 hard negatives. Existing validators
+  are unchanged.
+- The foreign-field guard of F08 also covers the old numeric serial (`pii_passport_number_de_legacy`,
+  `pii_identity_card_number_de_legacy`, PR #132 review): a key that names another value overrides a
+  document term found by proximity, so `passport: archived` followed by `member_code: <ten digits>`
+  reports no passport. **Detection change:** none in `strict`; in `balanced` and `recall` a
+  checksum-valid ten-digit value under an unrelated key no longer becomes a passport or identity card
+  finding because a document term stands nearby. A document key (`passport_no:`, `Ausweisnummer:`)
+  and a key that holds a document term itself (`old passport number:`, new
+  `context::key_holds_term`) still report it; validators are unchanged.
+- Add VAT identification numbers for DE, AT, CH, FR, NL, BE, IT and ES (B01), one label and one
+  check-digit validator per country: `VAT_ID_DE` (ISO 7064 MOD 11,10), `VAT_ID_AT` (UID `ATU`, Luhn
+  variant), `VAT_ID_CH` (UID `CHE`, weighted mod 11), `VAT_ID_FR` (key `(12 + 3 × SIREN) mod 97` plus
+  SIREN Luhn), `VAT_ID_NL` (mod 11 or ISO 7064 MOD 97-10, branch `B01`–`B99`), `VAT_ID_BE`
+  (`97 − first eight mod 97`), `VAT_ID_IT` (Partita IVA: Luhn plus province office code) and
+  `VAT_ID_ES` (DNI/NIE control letter or CIF control character), in `rust/src/detectors/pii/vat.rs`.
+  The rules are scored-only like K05: an upper-case country prefix and the national printed form
+  (`DE 136 695 976`, `CHE-100.155.212 MWST` without the suffix, `FR 40 303 265 045`,
+  `BE 0403.019.261`) report without a field name at 0.55, 0.80 with a term of the new lexicon entry
+  `pii.vat_identifier` (`USt-IdNr.`, `UID-Nummer`, `MWST-Nr.`, `VAT ID`, `TVA`, `btw-nummer`,
+  `Partita IVA`, `NIF-IVA` …), and drop below both thresholds behind a nearer counter-context term.
+  A bare Partita IVA (`pii_vat_id_it_proximity`, 11 digits without `IT`) needs such a term or key
+  and joins the K07 competing labels, so it wins over a bare Steuer-ID on the same digits. A value
+  that starts with a letter no longer counts as joined by `,` or a digit group before it
+  (`context::stands_alone`, CSV cells); bare numeric values (Steuer-ID) are unchanged.
+  `entity_map.yaml` classifies the eight validators as checksums (M3: ARK 3 → 11 units), maps DE
+  and IT as `shared` and the six others as `ark_only` IDs; `scoreboard.py` ports the validators;
+  the frozen E05 synthetic goldset stays byte-identical and lists the six new IDs as not generated.
+  `pii_l1.jsonl` gains 214 balanced/recall rows (5 positives and 5 hard negatives per label in DE,
+  EN and the national language). **Detection change:** none in the default `strict` mode (dev
+  scoreboard +0.0 pp everywhere). In `balanced` and `recall` VAT IDs are new findings: dev
+  `pii.de.vat_id` F1 98.9 (90/92 gold, 0 FP; the two misses are presidio-analyzer values with a
+  failing check digit) and `pii.it.vat_code` F1 96.4 (27/29, 0 FP), balanced L1 F1 +2.1 pp, no new
+  hard-negative FP on any dev corpus; 13_l1_golden_eval 706/706 positives, 610/610 hard negatives.
+  Validators of existing labels are unchanged.
+- `VAT_ID_FR` joins the K07 competing labels (B01 review): the eleven digits of a French VAT ID
+  with a space after `FR` (`FR 40 303 265 045`, `FR 40303265045`) can also pass the context-free
+  Steuer-ID, which kept a second, false `STEUERID` finding next to the VAT ID. The VAT ID is the
+  longer value and wins like a Partita IVA; the other VAT IDs of B01 have no eleven-digit body and
+  no competing overlap. Validators are unchanged. **Detection change:** none in `strict`; in
+  `balanced` and `recall` such a French VAT ID reports one `VAT_ID_FR` finding, and the Steuer-ID
+  rule's `matched_rules` entry names `overlap` (`longer_value`, `yields_to: VAT_ID_FR`).
 - Implement the decided M2 rule and add `scripts/l1_presidio/scoreboard.py m2` (D-M2, decision of
   2026-10-21 in `research/l1-pii/README.md`, M2 row and fairness section). M2 holds only if it holds on
   both milestone families on their own, judged on `balanced`: macro-F1 is the unweighted mean exact F1

@@ -397,7 +397,20 @@ fn checksum_strength_is_reserved_for_real_check_digits() {
             "pii_iban_generic",
             "pii_credit_card",
             "pii_steuer_id_de",
-            "pii_steuer_id_de_context_free"
+            "pii_steuer_id_de_context_free",
+            "pii_vat_id_de",
+            "pii_vat_id_at",
+            "pii_vat_id_ch",
+            "pii_vat_id_fr",
+            "pii_vat_id_nl",
+            "pii_vat_id_be",
+            "pii_vat_id_it",
+            "pii_vat_id_it_proximity",
+            "pii_vat_id_es",
+            "pii_passport_number_de_context_free",
+            "pii_passport_number_de_legacy",
+            "pii_identity_card_number_de_context_free",
+            "pii_identity_card_number_de_legacy"
         ]
     );
 }
