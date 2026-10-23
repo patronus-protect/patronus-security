@@ -40,7 +40,7 @@ it) keeps moving while the release is prepared.
    `ark-coordinator/` and `ark-distributed-protocol/` `Cargo.toml`, `python/pyproject.toml` and
    `Cargo.lock` — and in the image checks of `ark-api/deploy/bootstrap.sh`,
    `ark-coordinator/deploy/bootstrap.sh` and `scripts/tests/test_cube_runtime_config.py`. The
-   image workflows read the version from the manifests and fail if they disagree.
+   image workflows read it with `scripts/release_version.py`, which fails if any source disagrees.
 4. Ensure generated docs are current:
    ```bash
    python scripts/generate_docs.py
