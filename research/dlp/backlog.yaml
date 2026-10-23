@@ -311,6 +311,7 @@ tasks:
   - {id: F-HTTP, title: "HTTP auth values (F13 + T11): decode Basic base64 → user:pass, pre-attribute bearer values against JWT/provider, cookie names (connect.sid, laravel_session, __Host-*); Bearer/Basic/session cookie outside a literal header line (authorization/proxy_authorization keys in env/JSON/YAML/TOML/code, standalone values with DE/EN context in tickets/mails/logs, JSESSIONID=/PHPSESSID= without Cookie:)", type: recall-fix, deps: [K03], bundles: [F13, T11], accept: "Basic only when the base64 decodes to user:pass, bearer with entropy/JWT/provider check; dev recall of credential.http_basic_auth, credential.http_bearer and credential.session_cookie from 7.5 % to >= 80 % each; dev benign-code FP not higher (swagger-ui tests: Bearer abc123.xyz.789, Bearer secret_token as hard negatives)", status: done}
 
   - id: K05
+    status: done
     title: Config key→value extraction, part 1 (env, INI/properties, HTTP headers) on PII K04, with a value-shape filter
     type: engine
     deps: [K04]

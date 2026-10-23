@@ -1036,7 +1036,7 @@ fn is_code_expression(value: &str) -> bool {
         || FORMAT_PLACEHOLDER.is_match(value)
 }
 
-fn is_path(value: &str) -> bool {
+pub(super) fn is_path(value: &str) -> bool {
     PATH.is_match(trim_trailing_punctuation(value))
 }
 
