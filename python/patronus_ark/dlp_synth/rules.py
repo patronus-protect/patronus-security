@@ -36,9 +36,9 @@ def _rules() -> dict:
         raise recipes.RecipeError("unsupported rules spec")
     known = set(recipes.load_generators())
     for rule_id, entry in spec["rules"].items():
-        if set(entry) - {"generators", "shape_only", "weak", "probes"} or not entry.get("generators"):
+        if set(entry) - {"generators", "shape_only", "weak", "lookalike", "probes"} or not entry.get("generators"):
             raise recipes.RecipeError(f"{rule_id}: invalid rule entry")
-        for name in entry["generators"] + entry.get("shape_only", []) + entry.get("weak", []):
+        for name in entry["generators"] + entry.get("shape_only", []) + entry.get("weak", []) + entry.get("lookalike", []):
             if name not in known:
                 raise recipes.RecipeError(f"{rule_id}: unknown generator {name!r}")
         for probe in entry["probes"]:
@@ -49,7 +49,7 @@ def _rules() -> dict:
 
 
 def load_rule_map() -> dict:
-    """``{rule_id: {"generators": [...], "shape_only": [...], "weak": [...], "probes": [...]}}``."""
+    """``{rule_id: {"generators": [...], "shape_only": [...], "weak": [...], "lookalike": [...], "probes": [...]}}``."""
     return copy.deepcopy(_rules()["rules"])
 
 
@@ -65,12 +65,15 @@ def generators_for(rule_id: str) -> list[str]:
         raise recipes.RecipeError(f"no generators for rule {rule_id!r}") from None
 
 
-def samples(rule_id: str, seeds: range | list[int]) -> Iterator[Sample]:
-    """Yield every (generator, probe, seed) carrier of ``rule_id``, weak values included."""
+def samples(rule_id: str, seeds: range | list[int], *, lookalike: bool = False) -> Iterator[Sample]:
+    """Yield every (generator, probe, seed) carrier of ``rule_id``, weak values included.
+
+    With ``lookalike`` the carriers hold the rule's lookalike values instead (F03)."""
     entry = _rules()["rules"].get(rule_id)
     if entry is None:
         raise recipes.RecipeError(f"no generators for rule {rule_id!r}")
-    for generator in entry["generators"] + entry.get("weak", []):
+    names = entry.get("lookalike", []) if lookalike else entry["generators"] + entry.get("weak", [])
+    for generator in names:
         for probe_index, probe in enumerate(entry["probes"]):
             for seed in seeds:
                 text, spans = recipes.materialize(probe, [{"gen": generator, "seed": seed}])

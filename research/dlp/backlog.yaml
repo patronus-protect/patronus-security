@@ -218,7 +218,7 @@ tasks:
   - {id: T01, title: "Token boundaries for all prefix rules: no match inside identifiers, hex runs or base64 blobs (probe: dlp_btc_wif 10 FP in Cargo.lock checksums and sha256 digests; hf_/npm_/AKIA in CamelCase identifiers)", type: precision-fix, deps: [K01], accept: "Left/right boundary per rule (no [A-Za-z0-9_] before/after, or provider alphabet), hard negatives Cargo.lock/go.sum/Docker digest/identifiers; checksum validation stays with F02–F05", status: done}
   - {id: F01, title: "dlp_eth_private_key: only with context (private key, privkey, mnemonic, wallet) instead of every 0x-64-hex (tx/block hash FP)", type: precision-fix, deps: [K03], status: done}
   - {id: F02, title: "dlp_btc_wif: Base58Check + version byte (mainnet/testnet, compressed)", type: precision-fix, deps: [K03], status: done}
-  - {id: F03, title: "GitHub tokens (ghp/gho/ghu/ghs/ghr, github_pat_): exact lengths + CRC32 checksum", type: precision-fix, deps: [K03]}
+  - {id: F03, title: "GitHub tokens (ghp/gho/ghu/ghs/ghr, github_pat_): exact lengths + CRC32 checksum", type: precision-fix, deps: [K03], status: done}
   - {id: F04, title: "npm token: length + CRC32 checksum; GitLab: all documented prefixes (deploy, runner, trigger, feed, OAuth …)", type: recall-fix, deps: [K03]}
   - {id: F05, title: "AWS access key ID: exactly 20 characters, Base32 alphabet, prefix list; AWS secret key via structural context (credentials file, Terraform, CLI)", type: precision-fix, deps: [K03]}
   - {id: F06, title: "OpenAI (project/svcacct/admin/legacy) and Anthropic (api/admin): format markers and lengths per docs; unify the validator", type: precision-fix, deps: [K03], status: bundled, into: F-LLM}

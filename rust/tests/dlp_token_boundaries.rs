@@ -231,7 +231,7 @@ fn values_glued_to_their_provider_alphabet_are_no_findings() {
 #[test]
 fn values_inside_base64_blobs_are_no_findings() {
     // Only a value of standard base64 characters can be part of a blob; a
-    // value with `-` or `_` (`sk-ant-…`, `hf_…`) stays a token beside one,
+    // value with `-` or `_` (`sk-ant-…`, `ghp_…`) stays a token beside one,
     // and a `/` without a `+` or `=` padding in the blob is a path delimiter.
     for (rule, value) in bounded_values() {
         let in_alphabet = value
@@ -245,14 +245,17 @@ fn values_inside_base64_blobs_are_no_findings() {
         for text in [
             format!("data:application/octet-stream;base64,{BLOB}+{value}/{BLOB}=="),
             format!("data:application/octet-stream;base64,{BLOB}+{BLOB}/{value}"),
+            format!("data:application/octet-stream;base64,{BLOB}/{value}=="),
             format!("h1:{BLOB}+{value}="),
         ] {
             assert!(!reports(&text, &value), "{rule}: {text:?}");
         }
     }
-    // A short path segment before the slash is no blob.
+    // A short path segment before the slash is no blob, and neither is a long
+    // one without `+` or `=` padding.
     let key = value("aws_access_key_id", 7107);
     assert!(reports(&format!("s3://backup/{key}/"), &key));
+    assert!(reports(&format!("https://host/{BLOB}/{key}"), &key));
 }
 
 #[test]

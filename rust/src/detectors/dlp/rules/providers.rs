@@ -5,8 +5,15 @@ use crate::{
         dlp::{DlpPattern, RuleMeta, SecretSubtype, ValidatorStrength},
         prefilter::ValueClass,
     },
+    detectors::validators::crc32_base62_valid,
     post_prediction::is_real_secret_assignment,
 };
+
+/// GitHub token (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`): after the prefix,
+/// 30 random base62 characters and their CRC32 as six base62 digits.
+fn is_github_token(value: &str) -> bool {
+    value.len() == 40 && value.get(4..).is_some_and(crc32_base62_valid)
+}
 
 pub(super) const RULES: &[DlpPattern] = &[
     // ── AI / LLM API Keys ────────────────────────────────────────────────────
@@ -212,24 +219,25 @@ pub(super) const RULES: &[DlpPattern] = &[
     // ── Source Control / Dev Tools ───────────────────────────────────────────
     DlpPattern {
         name: "dlp_github_token",
-        pattern: r"gh[pousr]_[A-Za-z0-9_]{32,}",
+        pattern: r"gh[pousr]_[A-Za-z0-9]{36}",
         entity_group: "SECRET_TOKEN",
-        validator: None,
+        validator: Some(is_github_token),
         span_group: None,
         base_score: 55,
         meta: RuleMeta::new(
-            ValidatorStrength::Format,
+            ValidatorStrength::Checksum,
             "gitleaks:github-pat",
             &["ghp_", "gho_", "ghu_", "ghs_", "ghr_"],
         )
         .with_provider("github")
         .with_min_entropy(3.0)
         .with_boundary("")
+        .with_body_len(36, 32)
         .with_subtype(SecretSubtype::AccessToken),
     },
     DlpPattern {
         name: "dlp_github_pat",
-        pattern: r"github_pat_[a-zA-Z0-9_]{36,}",
+        pattern: r"github_pat_[A-Za-z0-9_]{82}",
         entity_group: "SECRET_TOKEN",
         validator: None,
         span_group: None,
@@ -242,6 +250,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         .with_provider("github")
         .with_min_entropy(3.0)
         .with_boundary("")
+        .with_body_len(82, 36)
         .with_subtype(SecretSubtype::AccessToken),
     },
     DlpPattern {

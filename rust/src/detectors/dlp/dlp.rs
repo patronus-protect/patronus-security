@@ -198,6 +198,22 @@ pub struct RuleMeta {
     /// Context a value needs beyond its shape (F01): called with the text and
     /// the value's byte range; `None` for rules whose shape suffices.
     pub context_gate: Option<fn(&str, Range<usize>) -> bool>,
+    /// F03: exact length of the token body after the keyword prefix of a
+    /// prefix rule; a generic rule skips a value with the prefix and a
+    /// token-shaped body of another length. `None` for rules without a fixed
+    /// length.
+    pub body_len: Option<BodyLen>,
+}
+
+/// F03: the fixed body length of a prefix rule.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BodyLen {
+    /// Characters after the keyword prefix of a token.
+    pub exact: usize,
+    /// Shortest body that is still token-shaped (the former open-ended
+    /// minimum); a shorter one, as in a password that only starts like a
+    /// token, stays a generic credential.
+    pub shape_min: usize,
 }
 
 /// T01: a prefix rule reports a value only as a whole token. The characters
@@ -227,6 +243,16 @@ impl RuleMeta {
             subtype: None,
             boundary: None,
             context_gate: None,
+            body_len: None,
+        }
+    }
+
+    /// F03: the body after the keyword prefix has exactly `exact`
+    /// characters; bodies from `shape_min` characters on are token-shaped.
+    pub const fn with_body_len(self, exact: usize, shape_min: usize) -> Self {
+        Self {
+            body_len: Some(BodyLen { exact, shape_min }),
+            ..self
         }
     }
 
@@ -560,6 +586,64 @@ impl DlpPipeline {
         detection
     }
 
+    /// F03: whether `value`, without leading quotes, starts with a whole
+    /// token of a prefixed provider rule with a checksum (GitHub `ghp_` …)
+    /// whose checksum fails, as in `ghp_…` or `ghp_…@github.com/acme/app`.
+    fn fails_token_checksum(&self, value: &str) -> bool {
+        let value = value.trim_start_matches(['"', '\'', '`']);
+        (0..self.regexes.len()).any(|index| {
+            let meta = &self.metas[index];
+            meta.validator_strength == ValidatorStrength::Checksum
+                && meta.keywords.iter().any(|keyword| {
+                    value
+                        .get(..keyword.len())
+                        .is_some_and(|head| head.eq_ignore_ascii_case(keyword))
+                })
+                && self.regexes[index].find(value).is_some_and(|token| {
+                    token.start() == 0
+                        && !value[token.end()..]
+                            .starts_with(|c: char| c.is_ascii_alphanumeric() || c == '_')
+                        && self.validators[index]
+                            .is_some_and(|validator| !validator(token.as_str()))
+                })
+        })
+    }
+
+    /// F03: whether the value at `range` of `text`, without leading quotes,
+    /// is the keyword prefix of a prefix rule with a fixed body length
+    /// (GitHub `ghp_`, `github_pat_` …) and a whole-token body of another
+    /// token-shaped length, as in `ghp_` with 35 characters or
+    /// `ghp_…@github.com/acme/app`. The body ends at the end of the text, a
+    /// space, a quote, `@`, `,` or `;`.
+    fn has_wrong_token_length(&self, text: &str, range: Range<usize>) -> bool {
+        let value = text[range.start..].trim_start_matches(['"', '\'', '`']);
+        (0..self.regexes.len()).any(|index| {
+            let meta = &self.metas[index];
+            let (Some(body_len), Some(boundary)) = (meta.body_len, meta.boundary) else {
+                return false;
+            };
+            meta.keywords.iter().any(|keyword| {
+                let Some(body) = value
+                    .get(..keyword.len())
+                    .filter(|head| head.eq_ignore_ascii_case(keyword))
+                    .map(|_| &value[keyword.len()..])
+                else {
+                    return false;
+                };
+                let end = body
+                    .find(|c: char| {
+                        !(c.is_ascii_alphanumeric() || c == '_' || boundary.alphabet.contains(c))
+                    })
+                    .unwrap_or(body.len());
+                end != body_len.exact
+                    && end >= body_len.shape_min
+                    && body[end..].chars().next().is_none_or(|c| {
+                        c.is_whitespace() || matches!(c, '"' | '\'' | '`' | '@' | ',' | ';')
+                    })
+            })
+        })
+    }
+
     /// Values that fixed-format rules (provider tokens, keys, hashes) match
     /// inside `range` of `text`, so that a generic rule capturing such a value
     /// applies the fixed-format example check to it (T06). Only the line around
@@ -704,6 +788,14 @@ impl NativeRegexDetector for DlpPipeline {
             return false;
         }
         if check != ExampleCheck::Off && rules::is_documented_example(rule_id, text, value.range())
+        {
+            return false;
+        }
+        // F03: a generic rule's value that is a checksummed provider token
+        // with a wrong checksum is no secret of that provider either.
+        if check == ExampleCheck::Generic
+            && (self.fails_token_checksum(value.as_str())
+                || self.has_wrong_token_length(text, value.range()))
         {
             return false;
         }

@@ -36,6 +36,10 @@ struct RuleEntry {
     /// Low-variety but real values (T06) the rule must keep reporting.
     #[serde(default)]
     weak: Vec<String>,
+    /// Values in the rule's shape with a wrong check value or length (F03); the rule must
+    /// not report them.
+    #[serde(default)]
+    lookalike: Vec<String>,
     probes: Vec<String>,
 }
 
@@ -98,6 +102,7 @@ fn every_dlp_pattern_has_generators_or_is_a_content_rule() {
             .iter()
             .chain(&entry.shape_only)
             .chain(&entry.weak)
+            .chain(&entry.lookalike)
         {
             assert!(known.contains(name.as_str()), "{rule}: unknown {name}");
             referenced.insert(name.as_str());
@@ -108,6 +113,13 @@ fn every_dlp_pattern_has_generators_or_is_a_content_rule() {
                 .iter()
                 .all(|name| !entry.shape_only.contains(name)),
             "{rule}: generator listed as valid and shape_only"
+        );
+        assert!(
+            entry
+                .lookalike
+                .iter()
+                .all(|name| !entry.generators.contains(name) && !entry.weak.contains(name)),
+            "{rule}: generator listed as reported and lookalike"
         );
     }
     let patterns = DLP_PATTERNS
@@ -197,4 +209,46 @@ fn each_rule_reports_exactly_its_generated_values() {
         }
     }
     gateway.set_execution_gates(ScanGateMatrix::default());
+}
+
+#[test]
+fn rules_do_not_report_their_lookalike_values() {
+    // F03: a token shape with a wrong check value or length is no match for its rule.
+    let map = rule_map();
+    let generators = generators();
+    let gateway = SecurityGateway::with_max_level(
+        vec![SecurityCategory::Dlp],
+        SecurityLevel::L1,
+        None,
+        false,
+    );
+    let mut checked = 0;
+    for (rule, entry) in &map.rules {
+        let mut gates = ScanGateMatrix::default();
+        for pattern in DLP_PATTERNS {
+            gates.set_rule(pattern.name, pattern.name == rule);
+        }
+        gateway.set_execution_gates(gates);
+        for name in &entry.lookalike {
+            for probe in &entry.probes {
+                for seed in 0..32 {
+                    let recipes = [SecretRecipe::new(name, seed)];
+                    let (text, _) = materialize(&generators, probe, &recipes).unwrap();
+                    let predicted = gateway
+                        .scan_category(SecurityCategory::Dlp, &text)
+                        .into_iter()
+                        .filter(|result| result.model == "native:dlp")
+                        .flat_map(|result| result.evidence_spans)
+                        .collect::<Vec<_>>();
+                    assert!(
+                        predicted.is_empty(),
+                        "{rule} gen={name} seed={seed} probe={probe:?}"
+                    );
+                    checked += 1;
+                }
+            }
+        }
+    }
+    gateway.set_execution_gates(ScanGateMatrix::default());
+    assert!(checked > 0, "no lookalike generator");
 }

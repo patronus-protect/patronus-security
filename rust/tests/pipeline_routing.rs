@@ -605,11 +605,11 @@ fn rule_gates_filter_individual_dlp_and_injection_rules() {
     dlp.set_execution_gates(
         ScanGateMatrix::all_enabled().with_rule("dlp_password_assignment", false),
     );
-    let dlp_results = dlp.scan_all(concat!(
-        "password = CorrectHorseBatteryStaple\n",
-        "ghp_",
-        "K7QZM2XWP9RDT4HB",
-        "N8YC3JLA6VFE0GU1"
+    // A GitHub token with its CRC32 suffix, computed here (F03).
+    let body = concat!("K7QZM2XWP9RDT4HB", "N8YC3JLA6VFE0G");
+    let dlp_results = dlp.scan_all(&format!(
+        "password = CorrectHorseBatteryStaple\nghp_{body}{}",
+        patronus_ark::detectors::validators::crc32_base62(body)
     ));
     let native_dlp = dlp_results
         .iter()
@@ -952,15 +952,16 @@ fn native_dlp_evidence_covers_governance_github_token_fixture() {
     );
     scanner.warmup().unwrap();
 
+    // A real-shaped GitHub token: 30-character body plus its CRC32 suffix (F03).
+    let body = concat!("w8dkq3zrm7xbt2vn", "h9pyc4fls6ajg0");
+    let token = format!(
+        "ghp_{body}{}",
+        patronus_ark::detectors::validators::crc32_base62(body)
+    );
     let result = scanner
         .scan_category(
             SecurityCategory::Dlp,
-            concat!(
-                "Authorization: Bearer ",
-                "ghp_",
-                "w8dkq3zrm7xbt2vn",
-                "h9pyc4fls6ajg0eu"
-            ),
+            &format!("Authorization: Bearer {token}"),
         )
         .into_iter()
         .find(|result| result.model == "native:dlp")
@@ -968,10 +969,7 @@ fn native_dlp_evidence_covers_governance_github_token_fixture() {
 
     assert_eq!(result.class_name, "SECRET_TOKEN");
     assert_eq!(result.evidence_spans.len(), 1);
-    assert_eq!(
-        result.evidence_spans[0].text,
-        concat!("ghp_", "w8dkq3zrm7xbt2vn", "h9pyc4fls6ajg0eu")
-    );
+    assert_eq!(result.evidence_spans[0].text, token);
 }
 
 #[test]

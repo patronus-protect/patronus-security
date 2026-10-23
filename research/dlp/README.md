@@ -46,14 +46,19 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   Kompressionsflag `0x01`. Testnet-Schlüssel haben Severity `test`. Die Regel wertet mit
   Prüfsummen-Stärke: Im Modus `balanced` bleibt ein WIF-Schlüssel ohne Kontext (0,65), ein
   näherer Prüfsummen-/Hash-Begriff verwirft ihn.
+  Seit F03 prüft `dlp_github_token` die CRC32 der GitHub-Tokens: `ghp_`/`gho_`/`ghu_`/`ghs_`/`ghr_`
+  und genau 36 Base62-Zeichen, die letzten sechs sind die CRC32 der ersten 30. `dlp_github_pat`
+  nimmt `github_pat_` und genau 82 Zeichen. Die Regel wertet mit Prüfsummen-Stärke (0,90 ohne
+  Kontext). Ein Token-förmiger Wert mit falscher CRC32 ist auch für generische Zuweisungen,
+  URL- und Header-Regeln kein Secret.
   Seit K09 (Taxonomie v2) nennt jede Secret-Regel einen Untertyp ihrer Gruppe (`subtype` in
   `matched_rules`: `api_key`, `access_token`, `password`, `auth_url` …). Connection-Strings,
   Webhook-URLs, Auth-URLs, OTP-Secrets und Seed-Phrasen werden keine eigenen Gruppen, sondern
   Untertypen von `CREDENTIAL`, `SECRET_TOKEN` bzw. `CRYPTO_KEY` (Liste in
   [`entity_map.yaml`](entity_map.yaml), `subtypes`).
 - Validatoren sind schwach: `is_secret_value` prüft nur Länge, Platzhalter und Env-Referenzen.
-  Prüfsummen fehlen ganz: GitHub/npm CRC32, JWT-Struktur und PEM/DER (Base58Check für WIF seit
-  K08/F02).
+  Prüfsummen fehlen ganz: npm CRC32, JWT-Struktur und PEM/DER (Base58Check für WIF seit
+  K08/F02, GitHub CRC32 seit F03).
   Seit K03 liegen die Bausteine dafür in `rust/src/detectors/validators/` (CRC32-Base62,
   Base58Check, Bech32/Bech32m, Base64/DER, JWT-Header, Entropie, Zeichenklassen; auch für PII);
   angebunden werden sie regelweise in F01–F09.

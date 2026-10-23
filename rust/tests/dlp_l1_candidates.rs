@@ -4,8 +4,8 @@ use std::{
 };
 
 use patronus_ark::{
-    detectors::dlp::dlp::DlpPipeline, SecurityCategory, SecurityGateway, SecurityLevel,
-    SecurityScanResult,
+    detectors::{dlp::dlp::DlpPipeline, validators::crc32_base62},
+    SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
 
 fn scan(text: &str) -> SecurityScanResult {
@@ -795,7 +795,10 @@ fn provider_prefix_does_not_suppress_a_real_password() {
         "CREDENTIAL",
         "ghp_shortButRealPassword",
     );
-    let token = concat!("ghp_", "t5hw2kz8qm3rd9xv", "b7nc4pjy6fla1gse0u2o");
+    // The CRC32 suffix of the GitHub token is computed here (F03).
+    let body = concat!("t5hw2kz8qm3rd9xv", "b7nc4pjy6fla1g");
+    let token = format!("ghp_{body}{}", crc32_base62(body));
+    let token = token.as_str();
     let result = scan(&format!("password = {token}"));
     assert_span(&result, "SECRET_TOKEN", token);
     assert!(!result

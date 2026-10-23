@@ -1673,6 +1673,52 @@ def dc(
     return dlp_row(row, rule, carrier, tags, False, mode)
 
 
+# F03: lookalike generators (`lookalike` in dlp_synth/rules.json): a provider shape with a
+# wrong check value or length. Their rule never reports them; rows place them where no
+# other DLP rule does either, also in `strict`.
+DLP_LOOKALIKE_GENERATORS = (
+    "github_ghp_bad_crc", "github_gho_bad_crc", "github_ghu_bad_crc", "github_ghs_bad_crc",
+    "github_ghr_bad_crc", "github_ghp_short", "github_gho_short", "github_ghp_long",
+    "github_fine_grained_pat_short", "github_fine_grained_pat_long",
+)
+
+
+def dl(
+    label: str,
+    language: str,
+    rule: str,
+    template: str,
+    generator: str,
+    seed: int,
+    reason: str,
+    *,
+    carrier: str = "line",
+    tags: tuple[str, ...] = (),
+) -> dict:
+    """Hard negative with a lookalike value (F03): `rule`'s shape with a wrong check value or
+    length, stored as a plain recipe so no committed text holds a token-shaped value."""
+    if generator not in DLP_LOOKALIKE_GENERATORS:
+        raise ValueError(f"{generator} is no lookalike generator")
+    secrets = [{"gen": generator, "seed": seed}]
+    text, _ = recipes.materialize(template, secrets)
+    row = {
+        "language": language,
+        "case_type": "hard_negative",
+        "target_label": label,
+        "template": template,
+        "secrets": secrets,
+        "text_fingerprint": recipes.fingerprint(text),
+        "entities": [],
+        "span_unit": "unicode_code_point",
+        "negative_reason": reason,
+        "provenance": {
+            "origin": "synthetic",
+            "source": "lookalike generator recipe (patronus_ark.dlp_synth), materialized at test time",
+        },
+    }
+    return dlp_row(row, rule, carrier, tags, False)
+
+
 def dn(
     label: str,
     language: str,
@@ -2506,7 +2552,8 @@ DLP_CASES = {
         ),
     ],
     "SECRET_TOKEN": [
-        ds("SECRET_TOKEN", "en", "dlp_github_token", "GITHUB_TOKEN=<<secret:0>>", "github_pat_classic", 801),
+        # F03: dlp_github_token checks the CRC32; the shape-only `github_pat_classic` has none.
+        ds("SECRET_TOKEN", "en", "dlp_github_token", "GITHUB_TOKEN=<<secret:0>>", "github_ghp_token", 801),
         ds("SECRET_TOKEN", "de", "dlp_gitlab_pat", "GitLab Token: <<secret:0>>", "gitlab_pat", 802),
         ds("SECRET_TOKEN", "en", "dlp_jwt_token", "Authorization: Bearer <<secret:0>>", "jwt_hs256", 803),
         dn("SECRET_TOKEN", "en", "dlp_github_token", "Truncated GitHub prefix in the docs: ghp_short", "provider token is too short"),
@@ -5078,6 +5125,143 @@ DLP_F02_CASES = {
     ],
 }
 for _label, _rows in DLP_F02_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+
+# F03: `dlp_github_token` takes `ghp_`/`gho_`/`ghu_`/`ghs_`/`ghr_` with exactly 36 base62
+# characters whose last six are the CRC32 of the first 30, at checksum strength;
+# `dlp_github_pat` takes `github_pat_` with exactly 82 characters. Positives are generated
+# tokens of every prefix in .env, YAML, JSON, TOML, code, CLI, log and prose carriers. Hard
+# negatives are token shapes with a wrong check value or length (no rule may report them,
+# also not a generic assignment), example/test fills, secret references and the documented
+# format.
+DLP_F03_CASES = {
+    "SECRET_TOKEN": [
+        ds(
+            "SECRET_TOKEN", "de", "dlp_github_token",
+            "# Spiegel-Job, nicht einchecken\nGITHUB_APP_ID=48211\nGITHUB_USER_TOKEN=<<secret:0>>\n",
+            "github_ghu_token", 10501, carrier="env",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_github_token",
+            "spiegel:\n  quelle: github.com/acme/app\n  zugang:\n    refresh_token: \"<<secret:0>>\"\n",
+            "github_ghr_token", 10502, carrier="yaml",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_github_token",
+            "{\"installation\": 4711, \"zugriffstoken\": \"<<secret:0>>\", \"gueltig_bis\": \"2026-10-21T11:00:00Z\"}\n",
+            "github_ghs_token", 10503, carrier="json",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_github_token",
+            "2026-10-21 10:14:02 FEHLER oauth: Rückruf lieferte <<secret:0>> für Nutzer 1182\n",
+            "github_gho_token", 10504, carrier="log",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_github_token",
+            "[10:02] ana: Kannst du mir dein GitHub-Token für den Release schicken?\n"
+            "[10:03] ben: <<secret:0>>\n[10:03] ben: bitte danach rotieren\n",
+            "github_ghp_token", 10505, carrier="prose",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_github_pat",
+            "# Anmeldung für das Release-Skript\n$ echo <<secret:0>> | gh auth login --with-token\n",
+            "github_fine_grained_pat", 10506, carrier="cli",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_github_token",
+            "from github import Auth, Github\n\ngh = Github(auth=Auth.Token(\"<<secret:0>>\"))\n",
+            "github_ghs_token", 10511, carrier="code",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_github_token",
+            "$ curl -H \"Authorization: token <<secret:0>>\" https://api.github.com/user\n",
+            "github_ghp_token", 10512, carrier="cli",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_github_token",
+            "[mirror]\nsource = \"github.com/acme/app\"\nrefresh_token = \"<<secret:0>>\"\n",
+            "github_ghr_token", 10513, carrier="toml",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_github_token",
+            "2026-10-21T10:14:02Z ERROR app-auth: user-to-server token <<secret:0>> expired\n",
+            "github_ghu_token", 10514, carrier="log",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_github_token",
+            "Hi Jo,\n\nthe OAuth token for the dashboard is <<secret:0>>\n\nPlease revoke it after the demo.\n",
+            "github_gho_token", 10515, carrier="prose",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_github_pat",
+            "jobs:\n  release:\n    env:\n      GH_TOKEN: <<secret:0>>\n",
+            "github_fine_grained_pat", 10516, carrier="yaml",
+        ),
+        dl(
+            "SECRET_TOKEN", "de", "dlp_github_token",
+            "# Token mit Tippfehler, abgelehnt\nGITHUB_TOKEN=<<secret:0>>\n",
+            "github_ghp_bad_crc", 10521, "ghp_ token shape with a wrong CRC32 check value", carrier="env",
+        ),
+        dl(
+            "SECRET_TOKEN", "de", "dlp_github_token",
+            "2026-10-21 10:14:02 WARN oauth: verworfener Wert <<secret:0>> (35 Zeichen)\n",
+            "github_gho_short", 10522, "gho_ token shape with 35 instead of 36 characters", carrier="log",
+        ),
+        dn(
+            "SECRET_TOKEN", "de", "dlp_github_token",
+            "jobs:\n  release:\n    env:\n      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n",
+            "GitHub Actions secret reference", carrier="yaml",
+        ),
+        dn(
+            "SECRET_TOKEN", "de", "dlp_github_token",
+            "Klassische GitHub-Tokens beginnen mit ghp_, gho_, ghu_, ghs_ oder ghr_ und haben danach 36 Zeichen, "
+            "die letzten sechs sind eine CRC32-Prüfsumme.",
+            "documented format without a value", carrier="prose",
+        ),
+        dx(
+            "SECRET_TOKEN", "de", "dlp_github_token",
+            "{\"github\": {\"benutzer_token\": \"<<secret:0>>\"}}\n",
+            "github_ghu_token", "BEISPIEL", "documented example value (BEISPIEL fill)", carrier="json",
+        ),
+        dl(
+            "SECRET_TOKEN", "de", "dlp_github_pat",
+            "2026-10-21 10:14:02 WARN cli: Eingabe <<secret:0>> verworfen (81 Zeichen)\n",
+            "github_fine_grained_pat_short", 10523, "github_pat_ shape with 81 instead of 82 characters", carrier="log",
+        ),
+        dl(
+            "SECRET_TOKEN", "en", "dlp_github_token",
+            "$ curl -H \"Authorization: token <<secret:0>>\" https://api.github.com/app\n",
+            "github_ghs_bad_crc", 10531, "ghs_ token shape with a wrong CRC32 check value", carrier="cli",
+        ),
+        dl(
+            "SECRET_TOKEN", "en", "dlp_github_token",
+            "{\"oauth\": {\"token\": \"<<secret:0>>\"}}\n",
+            "github_gho_bad_crc", 10532, "gho_ token shape with a wrong CRC32 check value", carrier="json",
+        ),
+        dn(
+            "SECRET_TOKEN", "en", "dlp_github_token",
+            "import os\n\ngh = Github(auth=Auth.Token(os.environ[\"GITHUB_TOKEN\"]))\n",
+            "environment lookup", carrier="code",
+        ),
+        dl(
+            "SECRET_TOKEN", "en", "dlp_github_token",
+            "2026-10-21T10:14:02Z WARN auth: rejected <<secret:0>> (37 characters)\n",
+            "github_ghp_long", 10533, "ghp_ token shape with 37 instead of 36 characters", carrier="log",
+        ),
+        dx(
+            "SECRET_TOKEN", "en", "dlp_github_token",
+            "# test fixture\nGITHUB_REFRESH_TOKEN=<<secret:0>>\n",
+            "github_ghr_token", "TESTKEY", "test key (TESTKEY fill)", carrier="env",
+        ),
+        dn(
+            "SECRET_TOKEN", "en", "dlp_github_pat",
+            "Fine-grained personal access tokens start with github_pat_ followed by 82 characters.",
+            "documented format without a value", carrier="prose",
+        ),
+    ],
+}
+for _label, _rows in DLP_F03_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
 

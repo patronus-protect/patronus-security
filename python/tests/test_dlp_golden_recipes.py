@@ -6,11 +6,12 @@ import unittest
 import zlib
 
 from patronus_ark import benchmark
-from patronus_ark.dlp_synth import recipes
+from patronus_ark.dlp_synth import recipes, rules
 
 
 # F01: rules whose strict hard negatives may also hold plain generator values (no key context).
 CONTEXT_GATED_RULES = {"dlp_eth_private_key"}
+LOOKALIKE_GENERATORS = {name for entry in rules.load_rule_map().values() for name in entry.get("lookalike", [])}
 SECRET_GROUPS = {
     "API_KEY",
     "CLOUD_KEY",
@@ -290,12 +291,14 @@ class DlpGoldenRecipeTests(unittest.TestCase):
                 # Positives hold real-shaped recipes; hard negatives only fill variants, except
                 # hard negatives of a scored DLP mode (K04), whose context marks the value as
                 # no secret, values glued into a longer run (T01), which are no token, and
-                # values of a context-gated rule without key context (F01).
+                # values of a context-gated rule without key context (F01), and lookalike values
+                # with a wrong check value or length (F03), which are no secret.
                 glued = not re.search(r"(?<![A-Za-z0-9_+/])<<secret:", row["template"])
                 plain = (
                     row["case_type"] == "positive"
                     or row.get("dlp_mode") in ("balanced", "recall")
                     or glued
+                    or all(secret["gen"] in LOOKALIKE_GENERATORS for secret in row["secrets"])
                 )
                 keys = {"gen", "seed"} if plain else {"gen", "seed", "fill"}
                 for secret in row["secrets"]:
