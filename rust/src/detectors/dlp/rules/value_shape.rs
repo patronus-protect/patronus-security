@@ -186,11 +186,7 @@ const OBJECT_ID_EPOCHS: Range<u32> = 0x495C_0780..0x83AA_7E80;
 /// K05: the shape of the value at `range` of `text` that a key binds, if it
 /// is no secret. The key is read before the value on its line.
 pub(crate) fn non_secret_shape(text: &str, range: Range<usize>) -> Option<NonSecretShape> {
-    // Without an escaped closing quote and a code terminator (`8107,`).
-    let value = text[range.clone()]
-        .trim()
-        .trim_end_matches('\\')
-        .trim_end_matches([',', ';']);
+    let value = value_without_terminators(text, range.clone());
     if value.is_empty() {
         return None;
     }
@@ -229,6 +225,30 @@ pub(crate) fn non_secret_shape(text: &str, range: Range<usize>) -> Option<NonSec
         return Some(NonSecretShape::Url);
     }
     None
+}
+
+/// The value at `range` without what lies outside it in source code: a
+/// quoted value loses only the backslash of an escaped closing quote
+/// (`\"12345678\"` in a JSON string), since `,`, `;` and `\` inside the
+/// quotes belong to the secret; an unquoted value also loses a code
+/// terminator (`8107,`).
+fn value_without_terminators(text: &str, range: Range<usize>) -> &str {
+    const QUOTES: [char; 3] = ['"', '\'', '`'];
+    let value = &text[range.clone()];
+    let opening = text[..range.start].chars().next_back();
+    if let Some(quote) = opening.filter(|c| QUOTES.contains(c)) {
+        let closes = text[range.end..].starts_with(quote);
+        let backslashes = value.len() - value.trim_end_matches('\\').len();
+        return if closes && backslashes % 2 == 1 {
+            &value[..value.len() - 1]
+        } else {
+            value
+        };
+    }
+    value
+        .trim()
+        .trim_end_matches('\\')
+        .trim_end_matches([',', ';'])
 }
 
 /// Digest bytes of an algorithm name (lower case, without `-`).
@@ -522,6 +542,49 @@ mod tests {
         ] {
             assert_eq!(shape(line), None, "{line}");
         }
+    }
+
+    /// The shape of the value between the first and the last `"` of `line`.
+    fn quoted_shape(line: &str) -> Option<NonSecretShape> {
+        let start = line.find('"').unwrap() + 1;
+        let end = line.rfind('"').unwrap();
+        non_secret_shape(line, start..end)
+    }
+
+    #[test]
+    fn punctuation_inside_quotes_belongs_to_the_secret() {
+        // `,`, `;` and `\` before the closing quote are part of the value.
+        for line in [
+            "password = \"12345678;\"",
+            "API_TOKEN = \"86400,\"",
+            "client_secret = \"550e8400-e29b-41d4-a716-446655440000;\"",
+            "api_key = \"$API_KEY,\"",
+            "password = \"true,\"",
+            "passwort = \"12345678\\\\\"",
+        ] {
+            assert_eq!(quoted_shape(line), None, "{line}");
+        }
+        // Quoted shapes without trailing punctuation stay no secrets, also
+        // behind an escaped closing quote (`\"12345678\"` in a JSON string).
+        for (line, expected) in [
+            ("password = \"12345678\"", NonSecretShape::Number),
+            (
+                "client_secret = \"550e8400-e29b-41d4-a716-446655440000\"",
+                NonSecretShape::Uuid,
+            ),
+            (
+                "{\\\"password\\\": \\\"12345678\\\"}",
+                NonSecretShape::Number,
+            ),
+        ] {
+            let start = line
+                .find(": \\\"")
+                .map_or_else(|| line.find('"').unwrap() + 1, |index| index + 4);
+            let end = line.rfind('"').unwrap();
+            assert_eq!(non_secret_shape(line, start..end), Some(expected), "{line}");
+        }
+        // Unquoted code terminators lie outside the value.
+        assert_eq!(shape("API_TOKEN = 86400;"), Some(NonSecretShape::Number));
     }
 
     #[test]
