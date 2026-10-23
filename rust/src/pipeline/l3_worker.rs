@@ -1200,7 +1200,12 @@ fn abort_queued_l3_jobs_for_request(worker: &Arc<L3WorkerState>, request_id: &st
             state.usable_results += 1;
             ready.push(QueuedSecurityEvent::Result(QueuedSecurityScanResult {
                 request_id: request_id.to_string(),
-                result: request_wide_degraded_result(job, reason),
+                result: request_wide_skip_result(
+                    job.fallback,
+                    &job.execution,
+                    job.degraded_factor,
+                    reason,
+                ),
             }));
         }
     }
@@ -1208,9 +1213,18 @@ fn abort_queued_l3_jobs_for_request(worker: &Arc<L3WorkerState>, request_id: &st
     worker.requests.available.notify_all();
 }
 
-fn request_wide_degraded_result(job: L3WorkerJob, reason: &str) -> SecurityScanResult {
-    let mut result = job.fallback;
-    result.confidence = (result.confidence * job.degraded_factor).clamp(0.0, 1.0);
+/// The L2 fallback of a job that a request-wide early exit skips, degraded.
+pub(super) fn request_wide_skip_result(
+    fallback: SecurityScanResult,
+    execution: &ScanExecution,
+    degraded_factor: f64,
+    reason: &str,
+) -> SecurityScanResult {
+    let mut result = crate::pipeline::security::restore_l2_decision(
+        fallback,
+        execution.ntdb_decision_threshold_point(),
+    );
+    result.confidence = (result.confidence * degraded_factor).clamp(0.0, 1.0);
     for layer in &mut result.layers {
         if layer.level == result.level && layer.layer_type != "l3_pending" {
             layer.confidence = result.confidence;

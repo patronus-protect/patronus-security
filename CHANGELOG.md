@@ -80,6 +80,19 @@ result shapes may be breaking for downstream users, and is called out explicitly
   request's dynamic PII job, and the GLiNER chunk cache keys include the inference labels.
   **Detection change:** none without the block; with it, `dynamic-pii` reports the requested
   labels (for example `street_address`) instead of the worker's defaults.
+- Add the injection L1 governance rule `ark.injection.governance.credential_verification_link`
+  for credential phishing (ASI-09, #60). It reports a request to verify, confirm or re-enter an
+  identity, account, credentials or password (DE: `bestätigen`/`verifizieren` … `Identität`,
+  `Konto`, `Zugangsdaten`, `Passwort`, `Anmeldedaten`) followed in the same clause by an http(s)
+  link with a login or auth host label or path segment (`login`, `signin`, `auth` …; query and
+  fragment are not searched and stay outside the span). It is
+  audited high precision and scores in the `ark.injection.agentic.control_abuse` family, the
+  family of the existing `phishing` relation, which alone stayed far below the acceptance
+  threshold. An e-mail or order confirmation link, a sign-in link without a verification request
+  and prose about phishing stay silent. The governance goldens gain 5 positives and 6 hard
+  negatives (DE and EN), among them a link with a long token query, an `auth_token` query parameter
+  and an `/author` path. **Detection change:** such phishing requests are now terminal
+  `injection` findings on L1 (`agentic_control_abuse`); no other golden changes.
 
 - Add ICAO 9303 check digits for German passport and identity card numbers (F08), one validator per
   document (weights 7-3-1, `A`=10 … `Z`=35): `validators::de_passport_number` (series `C F G H J K`)
@@ -300,6 +313,16 @@ result shapes may be breaking for downstream users, and is called out explicitly
   are bit-identical.
 
 ### Fixed
+
+- Return the decision envelope on NTDB L2 decision-cache hits and when a deferred L3 pass is
+  skipped (#100). A repeated scan within the cache TTL returned the cached class and confidence
+  with `decision: None` and without `label_scores` and `evidence_spans`; the cache now stores
+  them with the entry, so a hit equals the miss it replays apart from the cache diagnostics. A
+  result whose L2 pass routed to L3 also lost its decision when L3 then did not run (the
+  caller's conditional gate skipped it, or a request-wide early exit degraded it); the L2
+  arbitration is now restored as the final decision (`terminality.completion` `degraded` after
+  an early exit). **Detection change:** none; classes and confidences are unchanged, and the
+  affected results carry the decision a terminal L2 result carries.
 
 - Fix the K07 `iban_form` suppression for findings that start at the printed IBAN form. In
   `balanced` and `recall`, an account field over a failing grouped IBAN (`Bank account: DE00 1234 …`)
