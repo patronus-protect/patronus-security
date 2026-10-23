@@ -34,7 +34,7 @@ pub use detectors::dlp::score::DlpMode;
 pub use detectors::pii::score::PiiMode;
 pub use dynamic_pii::{
     DynamicPiiConditionalLabels, DynamicPiiConfig, DynamicPiiExecutionGate,
-    DynamicPiiResultCondition, EvidenceSpan,
+    DynamicPiiRequestConfig, DynamicPiiResultCondition, EvidenceSpan, MAX_REQUEST_LABEL_BYTES,
 };
 pub use external_l1::{ExternalL1Detector, ExternalL1Input};
 pub use ml::tokenizer::{ChunkOverlapTokens, MAX_CHUNK_OVERLAP_TOKENS};
@@ -562,21 +562,7 @@ pub fn enqueue_categories_with_chunk_overlap_options(
 Submit selected categories with request-local execution and chunking options.
 
 ```rust
-pub fn enqueue_ark_api_categories_with_options(
-    &self,
-    categories: Vec<SecurityCategory>,
-    text: impl Into<String>,
-    metadata: serde_json::Value,
-    gates: Option<ScanGateMatrix>,
-    ntdb_decision_threshold_point: Option<crate::NtdbOperatingPoint>,
-) -> RequestId;
-```
-
-Submit an Ark API request with short-document Injection utility routing.
-This profile is intentionally not used by library callers.
-
-```rust
-pub fn enqueue_ark_api_categories_with_chunk_overlap_options(
+pub fn enqueue_ark_api_categories_with_request_options(
     &self,
     categories: Vec<SecurityCategory>,
     text: impl Into<String>,
@@ -584,10 +570,17 @@ pub fn enqueue_ark_api_categories_with_chunk_overlap_options(
     gates: Option<ScanGateMatrix>,
     ntdb_decision_threshold_point: Option<crate::NtdbOperatingPoint>,
     chunk_overlap_tokens: ChunkOverlapTokens,
-) -> RequestId;
+    dynamic_pii: Option<DynamicPiiConfig>,
+) -> Result<RequestId, String>;
 ```
 
-Submit an Ark API request with request-local classifier chunk overlap.
+Submit an Ark API request: short-document Injection utility routing,
+request-local classifier chunk overlap and an optional request-local
+`dynamic-pii` configuration. Library callers use the other enqueue methods.
+
+`dynamic_pii` replaces the gateway's configuration for this request only;
+build it with [`crate::DynamicPiiRequestConfig::resolve`]. It is validated
+again here and rejected before anything is queued.
 
 ```rust
 pub fn enqueue_input(
@@ -761,6 +754,38 @@ matches. Base labels repeated by a conditional rule are removed from its
 extra call. Dynamic PII waits for referenced source pipelines to reach a
 terminal result (including L2 results that do not promote), instead of
 resolving against an interim L2 class.
+
+```rust
+pub struct DynamicPiiRequestConfig {
+    /// Canonical entity labels of the base GLiNER group.
+    pub labels: Vec<String>,
+    /// Default entity score threshold; the gateway's threshold when absent.
+    #[serde(default)]
+    pub threshold: Option<f32>,
+    /// Optional threshold overrides keyed by entity label.
+    #[serde(default)]
+    pub label_thresholds: HashMap<String, f32>,
+    /// Gate deciding whether this pipeline runs.
+    #[serde(default)]
+    pub execution_gate: DynamicPiiExecutionGate,
+    /// Additional labels activated by final source-pipeline results.
+    #[serde(default)]
+    pub conditional_labels: Vec<DynamicPiiConditionalLabels>,
+}
+```
+
+Request-local labels, thresholds and gates for `dynamic-pii`.
+
+For one request it replaces the entity fields of the gateway's
+[`DynamicPiiConfig`]: `labels`, `label_thresholds`, `execution_gate` and
+`conditional_labels`, and `threshold` when given. Input limits, chunking and
+timeouts stay those of the gateway.
+
+```rust
+pub fn resolve(self, base: &DynamicPiiConfig) -> Result<DynamicPiiConfig, String>;
+```
+
+Apply this request configuration to `base` and validate the result.
 
 ```rust
 pub fn validated(mut self) -> Result<Self, String>;

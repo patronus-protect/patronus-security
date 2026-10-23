@@ -123,6 +123,22 @@ results gain `details.secondary_evidence`.
 
 ### Added
 
+- Pass the dynamic PII labels per scan request (#146). The Ark API scan `config` takes an optional
+  `dynamic_pii` block with the shape of `pipeline.dynamic_pii` — `labels` (required), `threshold`,
+  `label_thresholds`, `execution_gate` and `conditional_labels` — that replaces the worker's
+  labels, thresholds and gates for that request only; input limits, chunking and timeouts stay
+  those of the worker. The block needs `dynamic-pii` among the request's categories, is validated
+  like the server config plus a 64-byte limit per label, and an invalid block is rejected with
+  `422`. The ARK Coordinator checks the block with the same rules before it accepts the job and
+  forwards it to the worker. In Rust,
+  `DynamicPiiRequestConfig::resolve` builds the request config from the gateway's and
+  `SecurityGateway::enqueue_ark_api_categories_with_request_options` queues a request with it; it
+  replaces the Ark-API-only `enqueue_ark_api_categories_with_options` and
+  `enqueue_ark_api_categories_with_chunk_overlap_options`, which are removed.
+  Requests with different label lists never share results: the config travels with the
+  request's dynamic PII job, and the GLiNER chunk cache keys include the inference labels.
+  **Detection change:** none without the block; with it, `dynamic-pii` reports the requested
+  labels (for example `street_address`) instead of the worker's defaults.
 - Add the injection L1 governance rule `ark.injection.governance.credential_verification_link`
   for credential phishing (ASI-09, #60). It reports a request to verify, confirm or re-enter an
   identity, account, credentials or password (DE: `bestätigen`/`verifizieren` … `Identität`,
