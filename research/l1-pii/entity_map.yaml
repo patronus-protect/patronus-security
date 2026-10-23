@@ -404,7 +404,9 @@ checksums:
     de_health_insurance_number: null    # Form Buchstabe + 9 Ziffern, keine Prüfziffer
     lanr: null                          # 9 Ziffern, keine Prüfziffer
     de_document_number: null            # ICAO-Alphabet, keine Prüfziffer (gedruckte Serie, feldgebunden)
-    de_driver_license_number: null
+    de_driver_license_number: null      # 11 Zeichen, keine Prüfziffer
+    us_driver_license_number: null      # F15, Formate der Bundesstaaten, keine Prüfziffer
+    it_driver_license_number: null      # F15, Patente-Form, keine Prüfziffer
     us_ssn: null                        # Bereichsprüfung
     uk_nino: null                       # Präfix-/Suffixprüfung
     de_vat_id: {algorithm: "ISO 7064 MOD 11,10"}            # B01, USt-IdNr.

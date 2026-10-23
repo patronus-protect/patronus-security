@@ -2234,7 +2234,11 @@
       "driver's-licence",
       "driver's_licence",
       "driving licence",
-      "driving license"
+      "driving license",
+      "driver’s license",
+      "driver’s licence",
+      "dl number",
+      "dl no"
     ],
     "de": [
       "führerschein",
@@ -2266,6 +2270,34 @@
       "fahrerlaubnis_nr"
     ],
     "shared": [],
+    "fr": [
+      "permis de conduire",
+      "numéro de permis de conduire",
+      "numero de permis de conduire",
+      "numéro de permis",
+      "licence de conducteur"
+    ],
+    "es": [
+      "licencia de conducir",
+      "número de licencia de conducir",
+      "numero de licencia de conducir",
+      "permiso de conducir",
+      "carnet de conducir",
+      "carné de conducir"
+    ],
+    "it": [
+      "patente di guida",
+      "numero di patente",
+      "numero della patente",
+      "numero patente",
+      "licenza di guida"
+    ],
+    "nl": [
+      "rijbewijs",
+      "rijbewijsnummer",
+      "rijbewijs nummer",
+      "rijbewijsnr"
+    ],
     "sources": [
       "rust/src/detectors/pii/pii.rs"
     ]
