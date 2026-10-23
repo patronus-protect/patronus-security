@@ -7,6 +7,7 @@ use patronus_ark::{
 };
 
 const SCORE_TOLERANCE: f64 = 1e-5;
+const SCORE_TOLERANCE_V2: f64 = 1e-6;
 
 fn fixture(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -16,6 +17,38 @@ fn fixture(name: &str) -> PathBuf {
 
 fn parity_cases() -> serde_json::Value {
     serde_json::from_slice(&std::fs::read(fixture("shell_command_parity.json")).unwrap()).unwrap()
+}
+
+fn v2_parity_cases() -> serde_json::Value {
+    serde_json::from_slice(&std::fs::read(fixture("shell_command_v2_parity.json")).unwrap()).unwrap()
+}
+
+/// Assert Rust decision scores match scikit-learn within `tolerance` and that
+/// neither threshold flips a single decision versus the Python reference.
+fn assert_v2_parity(model: &ShellRiskModel, key: &str, tolerance: f64) {
+    let fixture = v2_parity_cases();
+    let thresholds = fixture["thresholds"].as_object().unwrap();
+    let mut max_error = 0.0_f64;
+    for case in fixture["cases"].as_array().unwrap() {
+        let text = case["text"].as_str().unwrap();
+        let expected = case[key].as_f64().unwrap();
+        let actual = model.decision_score(text);
+        let error = (actual - expected).abs();
+        max_error = max_error.max(error);
+        assert!(
+            error < tolerance,
+            "{key} mismatch for {text:?}: rust={actual} sklearn={expected}"
+        );
+        for (policy, threshold) in thresholds {
+            let threshold = threshold.as_f64().unwrap();
+            assert_eq!(
+                actual > threshold,
+                expected > threshold,
+                "decision flip at {policy} ({threshold}) for {text:?}: rust={actual} sklearn={expected}"
+            );
+        }
+    }
+    eprintln!("{key}: max absolute score error {max_error:e}");
 }
 
 fn temp_dir(name: &str) -> PathBuf {
@@ -80,6 +113,43 @@ fn synthetic_model_matches_scikit_learn() {
     )
     .unwrap();
     assert_parity(&model, "synthetic_score");
+}
+
+/// The two-block `format_version: 2` scorer (char_wb + shell_tokens) matches
+/// scikit-learn bit-for-bit on the parity corpus, with no decision flips at
+/// either threshold.
+#[test]
+fn synthetic_v2_model_matches_scikit_learn() {
+    let model = ShellRiskModel::from_json_slice(
+        &std::fs::read(fixture("shell_command_v2_synthetic_model.json")).unwrap(),
+    )
+    .unwrap();
+    assert_v2_parity(&model, "synthetic_v2_score", SCORE_TOLERANCE_V2);
+}
+
+/// Runs against the published A1 model when its bundle is cached locally and
+/// `PATRONUS_SHELL_COMMAND_V2_MODEL_DIR` points at it.
+#[test]
+fn published_v2_model_matches_scikit_learn_when_cached() {
+    let Some(bundle) = std::env::var("PATRONUS_SHELL_COMMAND_V2_MODEL_DIR")
+        .map(PathBuf::from)
+        .ok()
+        .filter(|dir| dir.join("model.json").is_file())
+    else {
+        eprintln!("skipping published v2 parity; set PATRONUS_SHELL_COMMAND_V2_MODEL_DIR");
+        return;
+    };
+    let expected_sha = v2_parity_cases()["published_model"]["sha256"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert_eq!(
+        sha256_hex(&std::fs::read(bundle.join("model.json")).unwrap()),
+        expected_sha,
+        "cached model.json is not the revision the v2 parity fixture was generated from"
+    );
+    let model = ShellRiskModel::from_bundle_dir(&bundle).unwrap();
+    assert_v2_parity(&model, "published_score", SCORE_TOLERANCE_V2);
 }
 
 /// Runs against the published model when its bundle is cached locally, for
