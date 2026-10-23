@@ -989,18 +989,18 @@ PII_CASES = {
         p("DRIVER_LICENSE_NUMBER", "de", "pii_driver_license_number_de", "Führerscheinnummer=", "M5N6P7Q8R90", carrier="kv"),
         p("DRIVER_LICENSE_NUMBER", "de", "pii_driver_license_number_de", "Führerscheinnummer:", "K4711AB0815", "   Klasse: B", tags=("ocr",)),
         p("DRIVER_LICENSE_NUMBER", "de", "pii_driver_license_number_de", '{"fuehrerschein": "', "K4711AB0816", '"}', carrier="json"),
-        p("DRIVER_LICENSE_NUMBER", "de", "pii_driver_license_number_de", "Die Führerscheinnummer lautet ", "J0101234K57", ".", carrier="prose", gap=True),
+        p("DRIVER_LICENSE_NUMBER", "de", "pii_driver_license_number_de", "Die Führerscheinnummer lautet ", "J0101234K57", ".", carrier="prose"),
         p("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_de", "Driver's license number: ", "J0101234K56"),
         p("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_de", "Her driver licence number is ", "F3X7Y9Z1W24", ".", carrier="prose"),
         p("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_de", "driver:\n  driver license number: ", "M5N6P7Q8R90", "\n", carrier="yaml"),
         p("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_de", "driver's license number=", "K4711AB0815", carrier="kv"),
         p("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_de", "Driver's license number:", "B072RRE2A58", "   Page 1", tags=("ocr",)),
-        p("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_de", "Driving licence no.: ", "B072RRE2A59", "", gap=True),
+        p("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_de", "Driving licence no.: ", "B072RRE2A59", ""),
         n("DRIVER_LICENSE_NUMBER", "de", "pii_driver_license_number_de", "Führerscheinnummer: B072RRE2A57X", "twelve characters"),
         n("DRIVER_LICENSE_NUMBER", "de", "pii_driver_license_number_de", "Führerscheinnummer: folgt", "field without a value"),
         n("DRIVER_LICENSE_NUMBER", "de", "pii_driver_license_number_de", "Der Führerschein wurde 2019 umgetauscht.", "field name without a value", carrier="prose"),
         n("DRIVER_LICENSE_NUMBER", "de", "pii_driver_license_number_de", "Führerscheinnummer: ***********", "masked value", tags=("obfuscated",)),
-        n("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_de", "Driver's license number: D123456789", "only ten characters"),
+        n("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_de", "Driver's license number: ABCDEFGHIJ", "letters only, no licence format"),
         n("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_de", "Driver's license number: pending", "field without a value"),
         n("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_de", "Enter your driver's license number on page two.", "field name without a value", carrier="prose"),
         n("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_de", "Driver's license number: ***********", "masked value", tags=("obfuscated",)),
@@ -1867,6 +1867,75 @@ F08_DOCUMENT_NUMBER_CASES = [
     n("IDENTITY_CARD_NUMBER", "en", "pii_identity_card_number_de_legacy", "ID card no. 1220001298", "old numeric check digit fails", mode="balanced"),
 ]
 for _row in F08_DOCUMENT_NUMBER_CASES:
+    PII_CASES.setdefault(_row["target_label"], []).append(_row)
+
+# F15 driver's licence numbers (baseline P6): the German card number, the US state formats
+# and the Italian patente. The three rules share one field part: a licence field name in DE,
+# EN, IT, FR, ES or NL before the value or as its structural key, with prose such as "my
+# driver's license number is", "of", "lautet" or "è" in between. The value decides the rule.
+# No format carries a check digit: a number without a licence field name stays negative in
+# every mode. Hard negatives: other fields, software and boat licences, licence terms without
+# a value, dates next to the field name, values no format takes. Appended so existing ids
+# stay stable.
+F15_DRIVER_LICENSE_CASES = [
+    # ── US state formats ────────────────────────────────────────────────────
+    p("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_us", "My driver's license number is ", "6940579", carrier="prose"),
+    p("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_us", "my driver's license number is ", "2270-66-1551", carrier="prose", mode="balanced"),
+    p("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_us", "Florida driver license number: ", "S530-460-72-345-0"),
+    p("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_us", "DL number: ", "D400-7836-0001"),
+    p("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_us", "The contract was signed by Vito Gaito, with a driver's license number of ", "G577-7354-469-9", ", and his residence.", carrier="prose"),
+    p("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_us", '{"driver_license_number": "', "K0472618", '"}', carrier="json"),
+    p("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_us", "name,driver_license,city\nJane Doe,", "L5149233", ",Austin", carrier="csv"),
+    p("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_us", "<driver_license_number>", "MB6118130", "</driver_license_number>", carrier="xml"),
+    p("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_us", "Washington driver license ", "WDLABCD456DG"),
+    p("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_us", "Driver’s license no.: ", "123AB4567", mode="balanced"),
+    p("DRIVER_LICENSE_NUMBER", "de", "pii_driver_license_number_us", "Führerscheinnummer: ", "T36493663"),
+    p("DRIVER_LICENSE_NUMBER", "de", "pii_driver_license_number_us", "US-Führerschein-Nr. ", "D400-7836-0001"),
+    p("DRIVER_LICENSE_NUMBER", "de", "pii_driver_license_number_us", "Die Führerscheinnummer lautet ", "6915030052", ".", carrier="prose"),
+    p("DRIVER_LICENSE_NUMBER", "de", "pii_driver_license_number_us", '{"fuehrerschein_nr": "', "S530-460-72-345-0", '"}', carrier="json", mode="balanced"),
+    p("DRIVER_LICENSE_NUMBER", "de", "pii_driver_license_number_us", "Fahrerlaubnisnummer = ", "492817365", carrier="kv"),
+    n("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_us", "Order number: 41827365", "order number, no licence field name"),
+    n("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_us", "The licence number L4718203 belongs to a software seat.", "software licence, no driver's licence field name", carrier="prose"),
+    n("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_us", "Driver's license number: 2031-04-30", "expiry date next to the field name"),
+    n("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_us", "Driver's license number: D123", "a letter and three digits, no state format"),
+    n("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_us", "Driving licence since 2015, no points.", "licence term without a value", carrier="prose"),
+    n("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_us", "H12234567", "bare value without a field name (presidio-analyzer US test)", tags=("no_context",)),
+    n("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_us", "My license number is 6940579.", "licence without a driver's licence term", carrier="prose", mode="balanced"),
+    n("DRIVER_LICENSE_NUMBER", "de", "pii_driver_license_number_us", "Bestellnummer 41827365 ist eingegangen.", "order number, no licence field name", carrier="prose"),
+    n("DRIVER_LICENSE_NUMBER", "de", "pii_driver_license_number_us", "Führerscheinnummer: 30-04-2031", "date next to the field name"),
+    n("DRIVER_LICENSE_NUMBER", "de", "pii_driver_license_number_us", "Lizenznummer L4718203 der Software", "software licence"),
+    n("DRIVER_LICENSE_NUMBER", "de", "pii_driver_license_number_us", "Führerscheinklasse: BE, gültig bis 2031", "licence class, no number"),
+    n("DRIVER_LICENSE_NUMBER", "de", "pii_driver_license_number_us", "Führerschein seit 2015 ohne Punkte.", "licence term without a value", carrier="prose"),
+    n("DRIVER_LICENSE_NUMBER", "de", "pii_driver_license_number_us", "Bitte 6915030052 übernehmen.", "ten digits without a licence term", carrier="prose", mode="balanced"),
+    # ── Italian patente ─────────────────────────────────────────────────────
+    p("DRIVER_LICENSE_NUMBER", "it", "pii_driver_license_number_it", "Numero di patente: ", "AB1234567C"),
+    p("DRIVER_LICENSE_NUMBER", "it", "pii_driver_license_number_it", "La patente di guida è ", "RM5512345K", ".", carrier="prose"),
+    p("DRIVER_LICENSE_NUMBER", "it", "pii_driver_license_number_it", '{"numero_patente": "', "TO7712345B", '"}', carrier="json"),
+    p("DRIVER_LICENSE_NUMBER", "it", "pii_driver_license_number_it", "nome;patente di guida\nRossi;", "U1H34K56LX", carrier="csv"),
+    p("DRIVER_LICENSE_NUMBER", "it", "pii_driver_license_number_it", "N. patente ", "PD4401234Z"),
+    p("DRIVER_LICENSE_NUMBER", "it", "pii_driver_license_number_it", "Numero della patente: ", "MI2045678T", mode="balanced"),
+    p("DRIVER_LICENSE_NUMBER", "de", "pii_driver_license_number_it", "Italienischer Führerschein: ", "RM5512345K"),
+    p("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_it", "Italian driving licence: ", "U1H34K56LX"),
+    p("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_it", "Her Italian driver's license number is ", "AB1234567C", ".", carrier="prose"),
+    n("DRIVER_LICENSE_NUMBER", "it", "pii_driver_license_number_it", "Numero di patente: U1A2345678", "A is no paper-licence character"),
+    n("DRIVER_LICENSE_NUMBER", "it", "pii_driver_license_number_it", "Numero di patente: ab1234567c", "lowercase"),
+    n("DRIVER_LICENSE_NUMBER", "it", "pii_driver_license_number_it", "Numero di patente: AB-1234567-C", "hyphenated, no patente format"),
+    n("DRIVER_LICENSE_NUMBER", "it", "pii_driver_license_number_it", "La patente è scaduta nel 2019.", "licence term without a value", carrier="prose"),
+    n("DRIVER_LICENSE_NUMBER", "it", "pii_driver_license_number_it", "Patente nautica n. 4471", "boat licence, no driving licence number"),
+    n("DRIVER_LICENSE_NUMBER", "it", "pii_driver_license_number_it", "RM5512345K", "bare value without a field name", tags=("no_context",)),
+    n("DRIVER_LICENSE_NUMBER", "de", "pii_driver_license_number_it", "Italienischer Führerschein: ab1234567c", "lowercase"),
+    n("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_it", "Italian driving licence: U1A2345678", "A is no paper-licence character"),
+    # ── German card number, FR/ES/NL field names ────────────────────────────
+    p("DRIVER_LICENSE_NUMBER", "de", "pii_driver_license_number_de", "Führerschein-Nr. ", "M5N6P7Q8R91"),
+    p("DRIVER_LICENSE_NUMBER", "fr", "pii_driver_license_number_de", "Numéro de permis de conduire : ", "B072RRE2A57"),
+    p("DRIVER_LICENSE_NUMBER", "fr", "pii_driver_license_number_us", "Licence de conducteur : ", "D84-5122-431-46"),
+    p("DRIVER_LICENSE_NUMBER", "es", "pii_driver_license_number_us", "Licencia de conducir: ", "B6728301"),
+    p("DRIVER_LICENSE_NUMBER", "nl", "pii_driver_license_number_us", "Rijbewijsnummer: ", "S38387690"),
+    n("DRIVER_LICENSE_NUMBER", "fr", "pii_driver_license_number_us", "Le permis de conduire est valable jusqu'en 2031.", "licence term without a value", carrier="prose"),
+    n("DRIVER_LICENSE_NUMBER", "es", "pii_driver_license_number_us", "Número de patente: 1234567", "patent number, not a driving licence"),
+    n("DRIVER_LICENSE_NUMBER", "nl", "pii_driver_license_number_us", "Het rijbewijs is verlopen in 2019.", "licence term without a value", carrier="prose"),
+]
+for _row in F15_DRIVER_LICENSE_CASES:
     PII_CASES.setdefault(_row["target_label"], []).append(_row)
 
 # DLP golden schema v2 (E13). Every DLP row names the rule it exercises (`rule_id`), the

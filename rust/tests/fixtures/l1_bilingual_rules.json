@@ -639,6 +639,52 @@
   },
   {
     "category": "pii",
+    "rule_id": "pii_driver_license_number_us",
+    "de": "Führerscheinnummer: T36493663",
+    "en": "My driver's license number is 6940579",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Bestellnummer 41827365 ist eingegangen.",
+        "Führerscheinnummer: 30-04-2031"
+      ],
+      "en": [
+        "The licence number L4718203 belongs to a software seat.",
+        "Driver's license number: 2031-04-30"
+      ]
+    },
+    "structure": {
+      "de": "{\"fuehrerschein_nr\": \"S530-460-72-345-0\"}",
+      "en": "name,driver_license,city\nJane Doe,L5149233,Austin"
+    },
+    "multilingual": {
+      "fr": "Licence de conducteur : D84-5122-431-46",
+      "es": "Licencia de conducir: B6728301",
+      "it": "Numero di patente: C35-5710-197-76",
+      "nl": "Rijbewijsnummer: S38387690"
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_driver_license_number_it",
+    "de": "Italienischer Führerschein: RM5512345K",
+    "en": "Italian driving licence: U1H34K56LX",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Italienischer Führerschein: ab1234567c"
+      ],
+      "en": [
+        "Italian driving licence: U1A2345678"
+      ]
+    },
+    "structure": {
+      "de": "{\"patente_di_guida\": \"TO7712345B\"}",
+      "en": "<driving_licence>MI2045678T</driving_licence>"
+    }
+  },
+  {
+    "category": "pii",
     "rule_id": "pii_kfz_kennzeichen_de",
     "de": "Kennzeichen: B-AB 1234E",
     "en": "Vehicle registration: B-AB 1234E",
