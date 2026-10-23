@@ -145,6 +145,69 @@ pub(super) const IDENTITY_CARD_NUMBER: PiiPattern = PiiPattern {
     scored_only: false,
 };
 
+/// A bare passport number with its ICAO 9303 check digit, in `balanced` and
+/// `recall` only (F08, K05): series C, F, G, H, J or K, eight characters plus the
+/// check digit (`F12345671`) or the MRZ form, nine plus the check digit
+/// (`C01X00T478`). Strict keeps the field name and format check of
+/// [`PASSPORT_NUMBER`]: a printed nine-character serial has no check digit.
+pub(super) const PASSPORT_NUMBER_CONTEXT_FREE: PiiPattern = PiiPattern {
+    name: "pii_passport_number_de_context_free",
+    pattern: r"(?i)\b[CFGHJK][0-9CFGHJKLMNPRTVWXYZ]{7,8}[0-9]\b",
+    entity_group: "PASSPORT_NUMBER",
+    validator: Some(validators::de_passport_number),
+    strength: ValidatorStrength::Checksum,
+    base_score: 20,
+    captured_value: false,
+    requires_context: false,
+    scored_only: true,
+};
+
+/// The old numeric passport serial, nine digits plus the check digit
+/// (`3000123454`). Ten digits with a mod-10 digit prove too little alone: the
+/// context engine requires a passport term on either side or as the key.
+pub(super) const PASSPORT_NUMBER_LEGACY: PiiPattern = PiiPattern {
+    name: "pii_passport_number_de_legacy",
+    pattern: r"\b[0-9]{10}\b",
+    entity_group: "PASSPORT_NUMBER",
+    validator: Some(validators::de_passport_number),
+    strength: ValidatorStrength::Checksum,
+    base_score: 20,
+    captured_value: false,
+    requires_context: true,
+    scored_only: true,
+};
+
+/// A bare identity card number with its ICAO 9303 check digit, in `balanced`
+/// and `recall` only (F08, K05): series L, M, N, P, R, T, V, W, X or Y, eight
+/// characters plus the check digit (`L01X00T44`) or the MRZ form
+/// (`T220001293`, also inside `IDD<<T220001293<<…`).
+pub(super) const IDENTITY_CARD_NUMBER_CONTEXT_FREE: PiiPattern = PiiPattern {
+    name: "pii_identity_card_number_de_context_free",
+    pattern: r"(?i)\b[LMNPRTVWXY][0-9CFGHJKLMNPRTVWXYZ]{7,8}[0-9]\b",
+    entity_group: "IDENTITY_CARD_NUMBER",
+    validator: Some(validators::de_identity_card_number),
+    strength: ValidatorStrength::Checksum,
+    base_score: 20,
+    captured_value: false,
+    requires_context: false,
+    scored_only: true,
+};
+
+/// The numeric serial of identity cards issued before November 2010
+/// (`1220001297`: authority code, serial, check digit), with an identity card
+/// term on either side or as the key.
+pub(super) const IDENTITY_CARD_NUMBER_LEGACY: PiiPattern = PiiPattern {
+    name: "pii_identity_card_number_de_legacy",
+    pattern: r"\b[0-9]{10}\b",
+    entity_group: "IDENTITY_CARD_NUMBER",
+    validator: Some(validators::de_identity_card_number),
+    strength: ValidatorStrength::Checksum,
+    base_score: 20,
+    captured_value: false,
+    requires_context: true,
+    scored_only: true,
+};
+
 pub(super) const DRIVER_LICENSE_NUMBER: PiiPattern = PiiPattern {
     name: "pii_driver_license_number_de",
     pattern: r"(?i)\b(?:f(?:ü|ue)hrerschein(?:nummer)?|fahrerlaubnis(?:nummer)?|driver'?s?[ \t]+licen[cs]e[ \t]+number)\b[ \t]*(?:is[ \t]*)?[:#=\-]?[ \t]*(?P<value>[A-Z0-9]{11})\b",

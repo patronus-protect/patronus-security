@@ -279,7 +279,8 @@ and `obfuscation` (`zero_width`, `full_width`, `defanged`, `spelled_out`, `space
 be a valid card number, and an account field can hold an IBAN or a card-shaped number. Since B-PAN
 a card needs Luhn plus the IIN prefix and a length of its brand and never starts right after `+`,
 so phone digits no longer compete as a card. In `balanced` and `recall` one value yields one label among `IBAN`,
-`CREDITCARD`, `FINANCIAL_ACCOUNT_NUMBER`, `STEUERID` and `PHONE`. Of two overlapping findings
+`CREDITCARD`, `FINANCIAL_ACCOUNT_NUMBER`, `STEUERID`, `PHONE` and `VAT_ID_IT` (a bare Partita IVA
+has 11 digits like a Steuer-ID, B01). Of two overlapping findings
 with different labels the first criterion that differs decides: an IBAN (`iban`), the longer
 value (`longer_value`: a card-shaped part of a longer value), context that supports the finding's
 own label, i.e. a field name, a structural key or a nearby support term (`context`:
@@ -288,8 +289,12 @@ own label, i.e. a field name, a structural key or a nearby support term (`contex
 `DE34 6659 4134 6836 7322 13`) yields even when the IBAN's check digits fail and no IBAN is
 reported (`iban_form`). The loser leaves `evidence_spans`; its `matched_rules` entries stay and
 carry `overlap` with the `reason` and, except for `iban_form`, the winning label in `yields_to`.
-`class_name` and `confidence` follow the remaining findings. Other labels keep their overlaps
-(an e-mail address after `Username:` stays `EMAIL` and `USERNAME`), and `strict` keeps both
+`class_name` and `confidence` follow the remaining findings. `PASSPORT_NUMBER` and
+`IDENTITY_CARD_NUMBER` compete with an overlapping finding of any other label (F08): a bare check
+digit of 7-3-1 mod 10 fits one in ten letter-led codes, so a document finding with only a nearby term
+ranks below every other supported label, and `Kundennummer K12345676` stays `CUSTOMER_ID` and
+`Passport number: Y22400855` stays `PASSPORT_NUMBER`. Other labels keep their
+overlaps (an e-mail address after `Username:` stays `EMAIL` and `USERNAME`), and `strict` keeps both
 labels (decision T07).
 
 **Secondary evidence in `strict` (T07).** `strict` keeps reporting both labels, with spans, class
@@ -320,7 +325,21 @@ only after their field name. The first is `pii_steuer_id_de_context_free`: 11 di
 `86 095 742 719` that pass the check digit and the digit distribution of issued Steuer-IDs (one
 digit twice or three times, never three in a row), standing alone rather than inside a longer
 number, range or decimal. It scores `0.55` bare, `0.80` after `Steuer-ID ist`, and `0.25` behind
-a nearer counter-context term (`Rechnungsnummer 86095742719`), below both thresholds. A context-bound rule (`pii_phone_de_national_proximity`: a national number such as
+a nearer counter-context term (`Rechnungsnummer 86095742719`), below both thresholds. The VAT ID
+rules (B01) are scored-only as well, with one label per country (`VAT_ID_DE`, `VAT_ID_AT`,
+`VAT_ID_CH`, `VAT_ID_FR`, `VAT_ID_NL`, `VAT_ID_BE`, `VAT_ID_IT`, `VAT_ID_ES`): an upper-case
+country prefix, the national form (`DE 136 695 976`, `ATU13585627`, `CHE-100.155.212`,
+`FR 40 303 265 045`, `NL004495445B01`, `BE 0403.019.261`, `IT00743110157`, `ESA13585625`) and its
+check digit; `0.55` bare, `0.80` with a VAT term such as `USt-IdNr.`, `TVA` or `Partita IVA`. A
+bare Partita IVA without `IT` (`pii_vat_id_it_proximity`) needs such a term or key. German passport
+and identity card numbers (F08) are scored-only with their ICAO 9303 check digit (weights 7-3-1):
+passport series `C F G H J K`, identity card series `L M N P R T V W X Y`, eight characters plus the
+check digit (`F12345671`, `L01X00T44`) or the MRZ form of nine plus the check digit (`C01X00T478`,
+`T220001293`); `0.55` bare, `0.80` with a document term such as `Pass-Nr.` or `Ausweis-Nr.`. A bare
+value of a field that names something else is not reported (`DEA-Nummer: RN4135883`, a
+`driver_license_number` column). The old numeric serial of ten digits (`1220001297`) needs such a
+term or key. The field-bound rules keep
+their format check in every mode, since a printed nine-character serial carries no check digit. A context-bound rule (`pii_phone_de_national_proximity`: a national number such as
 `ist unter 0176 90817263 erreichbar`) reports only with a support term and no nearer counter term,
 in every mode including `strict`, and then scores at least `0.50`. Validators decide in every
 mode: a value with a wrong check digit is never reported. Scores are rule-based evidence strengths, not calibrated

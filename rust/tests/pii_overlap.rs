@@ -3,7 +3,7 @@
 //!
 //! In `balanced` and `recall` one value yields one label among the number labels
 //! that compete for the same digits (`overlap::COMPETING_LABELS`: IBAN, card,
-//! account, Steuer-ID, phone). Of two overlapping findings with different labels
+//! account, Steuer-ID, phone, Partita IVA, French VAT ID). Of two overlapping findings with different labels
 //! the first in this order wins: an IBAN (country code and MOD-97 prove the kind
 //! of value), the longer value (a card-shaped part of an IBAN or a longer number
 //! is a coincidence), context that supports its own label (a field name such as
@@ -12,13 +12,20 @@
 //! IBAN form (`DE64 7172 …`) yields even when the IBAN's check digits fail. The
 //! loser leaves `evidence_spans`; its `matched_rules` entry stays and names
 //! `overlap` (`reason`, `yields_to`). Strict keeps both labels (decision T07);
-//! labels outside the competing set keep their overlaps. Validators are not
+//! labels outside the competing set keep their overlaps. Document numbers
+//! (`overlap::DOCUMENT_LABELS`: passport, identity card, F08) compete with an
+//! overlapping finding of any other label, since their context-free check digit
+//! (7-3-1 mod 10) fits one in ten letter-led codes. Validators are not
 //! relaxed: the vectors below pass or fail the checksum they name.
 
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use patronus_ark::detectors::pii::{overlap::COMPETING_LABELS, score::PiiMode, validators};
+use patronus_ark::detectors::pii::{
+    overlap::{COMPETING_LABELS, DOCUMENT_LABELS},
+    score::PiiMode,
+    validators,
+};
 use patronus_ark::{
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
@@ -190,8 +197,71 @@ fn competing_labels_are_the_number_labels() {
             "FINANCIAL_ACCOUNT_NUMBER",
             "IBAN",
             "PHONE",
-            "STEUERID"
+            "STEUERID",
+            "VAT_ID_FR",
+            "VAT_ID_IT"
         ])
+    );
+}
+
+/// French VAT IDs (key and SIREN) whose digits after `FR ` are also an issued
+/// Steuer-ID, grouped 2-3-3-3 like the context-free Steuer-ID form.
+const FR_VAT_IDS_WITH_STEUER_ID_DIGITS: [&str; 2] = ["44 796 082 147", "47 508 826 930"];
+
+#[test]
+fn a_french_vat_id_keeps_the_steuer_id_digits_inside_it() {
+    // B01 review: the digits of a spaced French VAT ID can also be a context-free Steuer-ID. Like a
+    // Partita IVA the VAT ID is the longer value and wins; strict reports neither (both scored-only).
+    for grouped in FR_VAT_IDS_WITH_STEUER_ID_DIGITS {
+        let compact: String = grouped.split(' ').collect();
+        for digits in [grouped, compact.as_str()] {
+            assert!(validators::steuer_id_issued(digits), "{digits}");
+            let value = format!("FR {digits}");
+            assert!(validators::fr_vat_id(&value), "{value}");
+            let text = format!("Invoice sent to {value} yesterday.");
+            assert!(
+                pii_result(&text, PiiMode::Strict)
+                    .evidence_spans
+                    .iter()
+                    .all(|span| span.label != "VAT_ID_FR" && span.label != "STEUERID"),
+                "strict: {text}"
+            );
+            for mode in SCORED {
+                assert_eq!(
+                    spans(&text, mode),
+                    owned(&[("VAT_ID_FR", value.as_str())]),
+                    "{mode:?}"
+                );
+                let overlap = overlap_of(&text, mode, "pii_steuer_id_de_context_free", digits);
+                assert_eq!(overlap["reason"], "longer_value", "{mode:?}: {text}");
+                assert_eq!(overlap["yields_to"], "VAT_ID_FR", "{mode:?}: {text}");
+            }
+        }
+    }
+}
+
+#[test]
+fn document_labels_compete_with_every_label() {
+    assert_eq!(DOCUMENT_LABELS, ["PASSPORT_NUMBER", "IDENTITY_CARD_NUMBER"]);
+    for mode in SCORED {
+        // The passport field name beats the bare identity card check digit ...
+        let found = spans("Passport number: Y22400855", mode);
+        assert_eq!(found, [("PASSPORT_NUMBER".into(), "Y22400855".into())]);
+        // ... and a customer number field beats a bare passport check digit.
+        let found = spans("Kundennummer K12345676", mode);
+        assert_eq!(found, [("CUSTOMER_ID".into(), "K12345676".into())]);
+        let rules = matched_rules(&pii_result("Kundennummer K12345676", mode));
+        let loser = rules
+            .iter()
+            .find(|rule| rule["rule_id"] == "pii_passport_number_de_context_free")
+            .unwrap();
+        assert_eq!(loser["overlap"]["reason"], "context");
+        assert_eq!(loser["overlap"]["yields_to"], "CUSTOMER_ID");
+    }
+    // Strict keeps every label and runs no context-free rule.
+    assert_eq!(
+        spans("Kundennummer K12345676", PiiMode::Strict),
+        [("CUSTOMER_ID".into(), "K12345676".into())]
     );
 }
 
@@ -455,8 +525,11 @@ fn assert_resolved(scanner: &SecurityGateway, text: &str, mode: PiiMode) {
     let spans = &result.evidence_spans;
     for (index, a) in spans.iter().enumerate() {
         for b in &spans[index + 1..] {
-            let competing = COMPETING_LABELS.contains(&a.label.as_str())
-                && COMPETING_LABELS.contains(&b.label.as_str())
+            let document = |label: &str| DOCUMENT_LABELS.contains(&label);
+            let competing = ((COMPETING_LABELS.contains(&a.label.as_str())
+                && COMPETING_LABELS.contains(&b.label.as_str()))
+                || document(&a.label)
+                || document(&b.label))
                 && a.label != b.label;
             assert!(
                 !(competing && a.start_byte < b.end_byte && b.start_byte < a.end_byte),

@@ -37,6 +37,14 @@ PII_LABELS = {
     "SWIFT_CODE",
     "TAX_NUMBER_DE",
     "USERNAME",
+    "VAT_ID_AT",
+    "VAT_ID_BE",
+    "VAT_ID_CH",
+    "VAT_ID_DE",
+    "VAT_ID_ES",
+    "VAT_ID_FR",
+    "VAT_ID_IT",
+    "VAT_ID_NL",
 }
 
 DLP_LABELS = {
@@ -191,7 +199,7 @@ class L1BenchmarkDataTests(unittest.TestCase):
 
     def test_language_distribution_is_broad(self):
         expected = {
-            "pii_l1": {"de": 527, "en": 509, "fr": 16, "es": 16, "it": 16, "nl": 16},
+            "pii_l1": {"de": 658, "en": 637, "fr": 26, "es": 26, "it": 26, "nl": 36},
             "dlp_l1": {"de": 397, "en": 405},
         }
         for name, distribution in expected.items():
@@ -266,6 +274,14 @@ class SecondaryEntityGoldTests(unittest.TestCase):
                 self.assertTrue(row["entities"][0]["text"].startswith("+"), row["id"])
                 annotated[("PHONE", row["language"])] += 1
                 continue
+            if row["target_label"] in {"PASSPORT_NUMBER", "IDENTITY_CARD_NUMBER"}:
+                # F08: the field name of another label wins over a bare document check digit.
+                [entity] = row["entities"]
+                self.assertIn(entity["label"], {"CUSTOMER_ID", "PASSPORT_NUMBER"}, row["id"])
+                self.assertNotEqual(entity["label"], row["target_label"], row["id"])
+                self.assertEqual(row["pii_mode"], "balanced", row["id"])
+                annotated[(row["target_label"], row["language"])] += 1
+                continue
             self.assertEqual([e["label"] for e in row["entities"]], ["IBAN"], row["id"])
             self.assertIn(row["target_label"], {"CREDITCARD", "FINANCIAL_ACCOUNT_NUMBER"}, row["id"])
             self.assertNotIn("pii_mode", row, row["id"])
@@ -279,6 +295,8 @@ class SecondaryEntityGoldTests(unittest.TestCase):
                 ("FINANCIAL_ACCOUNT_NUMBER", "en"): 3,
                 ("PHONE", "de"): 3,
                 ("PHONE", "en"): 3,
+                ("PASSPORT_NUMBER", "de"): 1,
+                ("IDENTITY_CARD_NUMBER", "en"): 1,
             },
         )
 

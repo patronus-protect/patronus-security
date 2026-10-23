@@ -130,6 +130,11 @@ fn fr_es_it_nl_field_names_have_n_gated_positives_and_hard_negatives() {
             .iter()
             .find(|pattern| pattern.name == row.rule_id)
             .unwrap();
+        // B01: country IDs also have rows in their national language; they bind
+        // no field name and are counted per label above.
+        if pattern.entity_group.starts_with("VAT_ID_") {
+            continue;
+        }
         assert!(
             pattern.captured_value,
             "{}: {} binds no field name",

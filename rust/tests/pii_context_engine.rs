@@ -411,7 +411,12 @@ fn context_bound_rules_score_at_least_the_balanced_threshold_with_support() {
         .collect();
     assert_eq!(
         bound.iter().map(|pattern| pattern.name).collect::<Vec<_>>(),
-        [PROXIMITY_RULE]
+        [
+            PROXIMITY_RULE,
+            "pii_vat_id_it_proximity",
+            "pii_passport_number_de_legacy",
+            "pii_identity_card_number_de_legacy"
+        ]
     );
     for pattern in bound {
         assert!(!pattern.captured_value, "{}", pattern.name);

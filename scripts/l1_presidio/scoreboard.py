@@ -435,6 +435,156 @@ def steuer_id_issued(value: str) -> bool:
     return len(repeated) == 1 and repeated[0] in (2, 3) and not runs
 
 
+def _vat_body(value: str, prefix: str) -> str:
+    """Upper-case alphanumerics of a VAT ID without its country prefix (``DE.136.695.976`` → ``136695976``)."""
+    compact = "".join(ch.upper() for ch in value if ch.isascii() and ch.isalnum())
+    return compact[len(prefix):] if compact.startswith(prefix) else compact
+
+
+def _vat_digits(body: str, length: int) -> list[int] | None:
+    return [int(ch) for ch in body] if len(body) == length and body.isascii() and body.isdigit() else None
+
+
+def _luhn_checksum(digits: list[int]) -> int:
+    """Luhn checksum with the last digit undoubled, in ``0..10``."""
+    return sum(d if i % 2 == 0 else (2 * d - 9 if d > 4 else 2 * d) for i, d in enumerate(reversed(digits))) % 10
+
+
+def de_vat_id(value: str) -> bool:
+    """Port of ``validators::de_vat_id`` (9 digits, no leading zero, ISO 7064 MOD 11,10)."""
+    digits = _vat_digits(_vat_body(value, "DE"), 9)
+    if digits is None or digits[0] == 0:
+        return False
+    product = 10
+    for digit in digits[:8]:
+        product = ((digit + product) % 10 or 10) * 2 % 11
+    return (11 - product) % 10 == digits[8]
+
+
+def at_vat_id(value: str) -> bool:
+    """Port of ``validators::at_vat_id`` (``U`` + 8 digits, check = (6 − Luhn checksum) mod 10)."""
+    body = _vat_body(value, "AT")
+    digits = _vat_digits(body[1:], 8) if body.startswith("U") else None
+    return digits is not None and (16 - _luhn_checksum(digits[:7])) % 10 == digits[7]
+
+
+def ch_vat_id(value: str) -> bool:
+    """Port of ``validators::ch_vat_id`` (9 digits, weighted mod 11, remainder 10 never issued)."""
+    body = _vat_body(value, "CHE")
+    for suffix in ("MWST", "TVA", "IVA", "TPV"):
+        if body.endswith(suffix):
+            body = body[: -len(suffix)]
+            break
+    digits = _vat_digits(body, 9)
+    if digits is None:
+        return False
+    check = (11 - sum(d * w for d, w in zip(digits, (5, 4, 3, 2, 7, 6, 5, 4))) % 11) % 11
+    return check != 10 and check == digits[8]
+
+
+def fr_vat_id(value: str) -> bool:
+    """Port of ``validators::fr_vat_id`` (numeric key (12 + 3 × SIREN) mod 97, SIREN Luhn unless 000…)."""
+    digits = _vat_digits(_vat_body(value, "FR"), 11)
+    if digits is None:
+        return False
+    siren = digits[2:]
+    number = int("".join(map(str, siren)))
+    return (siren[:3] == [0, 0, 0] or _luhn_checksum(siren) == 0) and digits[0] * 10 + digits[1] == (number * 100 + 12) % 97
+
+
+def nl_vat_id(value: str) -> bool:
+    """Port of ``validators::nl_vat_id`` (9 digits + B + branch 01–99, mod 11 or ISO 7064 MOD 97-10)."""
+    body = _vat_body(value, "NL")
+    if len(body) != 12 or body[9] != "B":
+        return False
+    digits, branch = _vat_digits(body[:9], 9), _vat_digits(body[10:], 2)
+    if digits is None or branch is None or not any(digits) or branch == [0, 0]:
+        return False
+    mod11 = (sum(d * w for d, w in zip(digits[:8], range(9, 1, -1))) - digits[8]) % 11 == 0
+    mod97 = int("".join(str(int(ch, 36)) for ch in "NL" + body)) % 97 == 1
+    return mod11 or mod97
+
+
+def be_vat_id(value: str) -> bool:
+    """Port of ``validators::be_vat_id`` (10 digits starting 0 or 1, check = 97 − first eight mod 97)."""
+    digits = _vat_digits(_vat_body(value, "BE"), 10)
+    if digits is None:
+        return False
+    number = int("".join(map(str, digits[:8])))
+    return digits[0] <= 1 and number != 0 and 97 - number % 97 == digits[8] * 10 + digits[9]
+
+
+def it_vat_id(value: str) -> bool:
+    """Port of ``validators::it_vat_id`` (11 digits, company not zero, office code, Luhn)."""
+    digits = _vat_digits(_vat_body(value, "IT"), 11)
+    if digits is None:
+        return False
+    office = digits[7] * 100 + digits[8] * 10 + digits[9]
+    return any(digits[:7]) and (1 <= office <= 100 or office in (120, 121, 888, 999)) and _luhn_checksum(digits) == 0
+
+
+ES_CONTROL_LETTERS = "TRWAGMYFPDXBNJZSQVHLCKE"
+
+
+def es_vat_id(value: str) -> bool:
+    """Port of ``validators::es_vat_id`` (DNI, NIE, NIF K/L/M or CIF with control character)."""
+    body = _vat_body(value, "ES")
+    if len(body) != 9 or _vat_digits(body[1:8], 7) is None:
+        return False
+    first, middle, last = body[0], body[1:8], body[8]
+    if first.isdigit():
+        return last == ES_CONTROL_LETTERS[int(first + middle) % 23]
+    if first in "XYZ":
+        return last == ES_CONTROL_LETTERS[int(str("XYZ".index(first)) + middle) % 23]
+    if first in "KLM":
+        return last == ES_CONTROL_LETTERS[int(middle) % 23]
+    if first in "ABCDEFGHJNPQRSUVW":
+        total = sum(int(d) for d in middle[1::2]) + sum(sum(divmod(2 * int(d), 10)) for d in middle[0::2])
+        check = (10 - total % 10) % 10
+        return last in (str(check), "JABCDEFGHI"[check])
+    return False
+
+
+ICAO_DOCUMENT_ALPHABET = "0123456789CFGHJKLMNPRTVWXYZ"
+
+
+def icao_check_digit(data: str) -> int | None:
+    """Port of ``validators::icao_check_digit`` (ICAO 9303: weights 7-3-1, A=10 … Z=35, ``<`` = 0)."""
+    total = 0
+    for index, ch in enumerate(data):
+        if "0" <= ch <= "9":
+            value = int(ch)
+        elif "A" <= ch <= "Z":
+            value = ord(ch) - ord("A") + 10
+        elif ch == "<":
+            value = 0
+        else:
+            return None
+        total += value * (7, 3, 1)[index % 3]
+    return total % 10
+
+
+def _de_document_check_digit(value: str, series: str) -> bool:
+    """Port of ``validators::de_document_check_digit``: series letter + ICAO alphabet or old numeric serial."""
+    if not value.isascii() or len(value) not in (9, 10) or (value != value.upper() and value != value.lower()):
+        return False
+    upper = value.upper()
+    data, check = upper[:-1], upper[-1]
+    numeric = len(upper) == 10 and upper.isdigit() and upper.strip("0") != ""
+    lettered = data[0] in series and all(ch in ICAO_DOCUMENT_ALPHABET for ch in data)
+    return (numeric or lettered) and check.isdigit() and icao_check_digit(data) == int(check)
+
+
+def de_passport_number(value: str) -> bool:
+    """Port of ``validators::de_passport_number`` (series C F G H J K or old numeric, ICAO 9303)."""
+    return _de_document_check_digit(value, "CFGHJK")
+
+
+def de_identity_card_number(value: str) -> bool:
+    """Port of ``validators::de_identity_card_number`` (series L M N P R T V W X Y or old numeric, ICAO 9303)."""
+    return _de_document_check_digit(value, "LMNPRTVWXY")
+
+
 # Python ports of every checksum validator (``checksums.ark`` with an algorithm in entity_map.yaml);
 # a task that adds one ports it here, or scripts/tests/test_l1_scoreboard.py is red.
 CHECKSUM_PORTS: dict[str, Callable[[str], bool]] = {
@@ -443,6 +593,16 @@ CHECKSUM_PORTS: dict[str, Callable[[str], bool]] = {
     "mod97": mod97,
     "steuer_id": steuer_id,
     "steuer_id_issued": steuer_id_issued,
+    "de_vat_id": de_vat_id,
+    "at_vat_id": at_vat_id,
+    "ch_vat_id": ch_vat_id,
+    "fr_vat_id": fr_vat_id,
+    "nl_vat_id": nl_vat_id,
+    "be_vat_id": be_vat_id,
+    "it_vat_id": it_vat_id,
+    "es_vat_id": es_vat_id,
+    "de_passport_number": de_passport_number,
+    "de_identity_card_number": de_identity_card_number,
 }
 
 

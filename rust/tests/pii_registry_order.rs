@@ -48,6 +48,22 @@ const EXPECTED_ORDER: &[(&str, &str)] = &[
     ("pii_kfz_kennzeichen_de", "LICENSEPLATE"),
     ("pii_ssn_us", "SSN"),
     ("pii_ni_uk", "NATIONALID"),
+    ("pii_vat_id_de", "VAT_ID_DE"),
+    ("pii_vat_id_at", "VAT_ID_AT"),
+    ("pii_vat_id_ch", "VAT_ID_CH"),
+    ("pii_vat_id_fr", "VAT_ID_FR"),
+    ("pii_vat_id_nl", "VAT_ID_NL"),
+    ("pii_vat_id_be", "VAT_ID_BE"),
+    ("pii_vat_id_it", "VAT_ID_IT"),
+    ("pii_vat_id_it_proximity", "VAT_ID_IT"),
+    ("pii_vat_id_es", "VAT_ID_ES"),
+    ("pii_passport_number_de_context_free", "PASSPORT_NUMBER"),
+    ("pii_passport_number_de_legacy", "PASSPORT_NUMBER"),
+    (
+        "pii_identity_card_number_de_context_free",
+        "IDENTITY_CARD_NUMBER",
+    ),
+    ("pii_identity_card_number_de_legacy", "IDENTITY_CARD_NUMBER"),
 ];
 
 #[test]

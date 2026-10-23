@@ -242,6 +242,14 @@ fn bilingual_span_probes_report_the_exact_value() {
     }
     assert_eq!(
         probed,
-        ["pii_phone_international", "pii_phone_de", "pii_phone_us"]
+        [
+            "pii_ipv4",
+            "pii_ipv6_full",
+            "pii_ipv6_compressed",
+            "pii_ipv6_loopback",
+            "pii_phone_international",
+            "pii_phone_de",
+            "pii_phone_us"
+        ]
     );
 }

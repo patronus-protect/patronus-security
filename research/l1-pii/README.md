@@ -129,6 +129,25 @@ der Backlog kommt auf 60–80, deshalb gilt **2×**.
 Stand T03: ARK 3 (PAN/Luhn, IBAN/MOD 97-10, Steuer-ID), Presidio 35, beide gemeinsam 3. Die
 DE-Validatoren für RVNR, KVNR, LANR, Pass/Ausweis prüfen heute nur die Form (siehe Ausgangslage).
 
+Stand B01: ARK 11, gemeinsam 5. Dazu kommen die USt-IdNr. von DE, AT, CH, FR, NL, BE, IT und ES, je
+Land ein Label (`VAT_ID_DE` …) und ein Validator mit Prüfziffer (`rust/src/detectors/pii/vat.rs`), nur
+in `balanced`/`recall` (scored-only wie K05). DE und IT sind `shared`, die übrigen sechs `ark_only`;
+das eingefrorene E05-Goldset erzeugt die sechs neuen IDs nicht (`NOT_GENERATED` in
+`synth_goldset.py`) und bleibt bytegleich.
+
+Stand F08: ARK 13, gemeinsam 7. Reisepass und Personalausweis DE prüfen die ICAO-9303-Prüfziffer
+(7-3-1, `validators::de_passport_number`, `de_identity_card_number`): Serie `C F G H J K` bzw.
+`L M N P R T V W X Y`, acht Zeichen plus Prüfziffer (Form von presidio-analyzer, `F12345671`) oder
+MRZ-Form mit neun Zeichen plus Prüfziffer (`C01X00T478`), dazu die alte numerische Seriennummer
+(zehn Ziffern, nur mit Dokumentbegriff). Nur in `balanced`/`recall` (scored-only wie K05); die
+feldgebundenen Regeln behalten in jedem Modus die Formprüfung, weil eine gedruckte neunstellige
+Seriennummer keine eigene Prüfziffer trägt. Ein blanker Wert eines Felds, das etwas anderes nennt
+(`DEA-Nummer: …`, Spalte `driver_license_number`), bleibt stumm (`context::foreign_field`), und Pass-
+und Ausweisfunde konkurrieren in den Score-Modi mit überlappenden Funden jedes anderen Labels
+(`overlap::DOCUMENT_LABELS`): ein Feldname wie `Kundennummer` entscheidet. `Pass-Nr.` (Baseline P6) stand schon im K03-Lexikon (`pii.passport`)
+und hebt jetzt den kontextfreien Wert auf 0,80; die `strict`-Regel kennt den Feldnamen weiter nicht
+(B-PASS).
+
 ## Gold-Konvention: Platzhalter-Werte
 
 Entschieden am 2026-10-14 (T01, TRIAGE 2026-W42 Bucket 5): Reservierte Platzhalter sind PII und im
@@ -159,6 +178,31 @@ Platzhalter, weder als Positive noch in Hard-Negative-Spans. Durchgesetzt wird d
 `scripts/tests/test_l1_synth_goldset.py` und `rust/tests/pii_l1.rs`
 (`reserved_placeholder_values_are_gold_positives`). ARK meldet alle Platzhalter schon heute; eine
 spätere regionale Telefonprüfung (Hebel 4) darf `+1 000-000-0000` und `555-01xx` nicht verwerfen.
+
+## Gold-Konvention: IP-Spans (B-IP)
+
+Festgelegt mit B-IP (T20 + Kandidat C1, TRIAGE 2026-W43 Bucket 5, Baseline P3/P9), wie das Gold der
+presidio-analyzer-IP-Tests:
+
+- **Ein Span je Adresse:** Eine IPv4-gemappte oder eingebettete IPv6-Adresse ist ein Span
+  (`::ffff:10.0.0.1`, `64:ff9b::198.51.100.1`, `2001:db8:85a3::8a2e:192.168.0.1`), kein IPv4-Teilspan.
+- **Zonen-ID und CIDR-Präfixlänge gehören in den Span:** `fe80::1%eth0`, `192.168.1.0/24`,
+  `2001:db8::/32`, `2001:db8::%eth0/128`. Eine Präfixlänge außerhalb des Bereichs (IPv4 > 32,
+  IPv6 > 128) gehört nicht dazu, die Adresse bleibt ein Span (`10.0.0.0/123` → `10.0.0.0`).
+- **Kein Teiltreffer:** Eine ungültige Misch- oder Kettenform ergibt keinen Span, auch keinen
+  Teilspan: `2001:db8::256.1.1.1` (Hard Negative P9), neun Gruppen, Doppelpunkt-Ketten aus SWIFT MT
+  und EDIFACT (`:28C::52D:`, `:60F::61F::62F:`, `BGM+380:21:3::90:FRET`, `LIN+1::1:550:::EA:20`).
+  Eine IPv6-Adresse beginnt nicht nach einer weiteren `:`-Gruppe, nach `.`, `-`, `+` oder einem
+  Wortzeichen und endet nicht vor einer weiteren `:`- oder `.`-Gruppe; ein SWIFT-MT-Tag am
+  Zeilenanfang (`:25:`, ` :52A:`) und ein Feldname (`IPv6:`) eröffnen den Wert.
+- **Loopback und unspezifiziert bleiben negativ** (D-IP, 2026-10-21), auch gemappt und mit
+  Präfixlänge: `::ffff:127.0.0.1`, `::ffff:0.0.0.0`, `::/0`, `::1/128`. Die neun
+  `presidio_favored`-Gold-Werte dieser Art (`127.0.0.1`, `0.0.0.0`, `::` zweimal, `::1`,
+  `::ffff:127.0.0.1`, `::ffff:0.0.0.0`, `::/0`, `::/128`) bleiben bekannte FN.
+
+`validators::ip_address` prüft den ganzen Span (Präfixlänge, Zonen-ID nur bei IPv6). Der
+Netzwerkdiagnose-Filter (`post_prediction.rs`) wertet private Adressen auch mit Zonen-ID, Präfixlänge
+und in gemappter Form. Tests: `rust/tests/pii_ip_spans.rs`, Goldens `B_IP_SPAN_CASES`.
 
 ## Gold-Hygiene: Nebenentitäten und Prüfziffern
 

@@ -12,3 +12,4 @@ pub mod score;
 mod uk;
 mod us;
 pub mod validators;
+mod vat;
