@@ -901,6 +901,160 @@
     }
   },
   {
+    "category": "pii",
+    "rule_id": "pii_vat_id_bg",
+    "de": "Bitte BG9534761359 im Lieferantenstamm hinterlegen.",
+    "en": "Please store BG6195102972 with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die bulgarische USt-IdNr. lautet BG6014235807.",
+        "en": "Our Bulgarian VAT number is BG462554213."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_cy",
+    "de": "Bitte CY13567608C im Lieferantenstamm hinterlegen.",
+    "en": "Please store CY54819377H with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die zyprische USt-IdNr. lautet CY07773960L.",
+        "en": "Our Cypriot VAT number is CY50496892Z."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_cz",
+    "de": "Bitte CZ640638362 im Lieferantenstamm hinterlegen.",
+    "en": "Please store CZ682596965 with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die tschechische USt-IdNr. lautet CZ24924288.",
+        "en": "Our Czech VAT number is CZ27839672."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_dk",
+    "de": "Bitte DK27410960 im Lieferantenstamm hinterlegen.",
+    "en": "Please store DK47272858 with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die dänische USt-IdNr. lautet DK32844472.",
+        "en": "Our Danish VAT number is DK70369516."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_ee",
+    "de": "Bitte EE104228296 im Lieferantenstamm hinterlegen.",
+    "en": "Please store EE108740071 with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die estnische USt-IdNr. lautet EE100237728.",
+        "en": "Our Estonian VAT number is EE109972628."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_el",
+    "de": "Bitte EL516804314 im Lieferantenstamm hinterlegen.",
+    "en": "Please store EL732665525 with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die griechische USt-IdNr. lautet EL914493709.",
+        "en": "Our Greek VAT number is EL029373948."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_fi",
+    "de": "Bitte FI66151506 im Lieferantenstamm hinterlegen.",
+    "en": "Please store FI14362715 with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die finnische USt-IdNr. lautet FI18892174.",
+        "en": "Our Finnish VAT number is FI00156865."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_hr",
+    "de": "Bitte HR97439266177 im Lieferantenstamm hinterlegen.",
+    "en": "Please store HR71393722135 with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die kroatische USt-IdNr. lautet HR34583047606.",
+        "en": "Our Croatian VAT number is HR26103968170."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_hu",
+    "de": "Bitte HU26457969 im Lieferantenstamm hinterlegen.",
+    "en": "Please store HU05847334 with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die ungarische USt-IdNr. lautet HU11313193.",
+        "en": "Our Hungarian VAT number is HU66818791."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_ie",
+    "de": "Bitte IE0693778RH im Lieferantenstamm hinterlegen.",
+    "en": "Please store IE8297130VH with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die irische USt-IdNr. lautet IE7960205OH.",
+        "en": "Our Irish VAT number is IE0630667DH."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_lt",
+    "de": "Bitte LT621223427710 im Lieferantenstamm hinterlegen.",
+    "en": "Please store LT178966315 with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die litauische USt-IdNr. lautet LT324418449515.",
+        "en": "Our Lithuanian VAT number is LT449700617."
+      }
+    }
+  },
+  {
     "category": "dlp",
     "rule_id": "dlp_anthropic_key",
     "de": "<<secret\u003a0>>",

@@ -410,7 +410,18 @@ fn checksum_strength_is_reserved_for_real_check_digits() {
             "pii_passport_number_de_context_free",
             "pii_passport_number_de_legacy",
             "pii_identity_card_number_de_context_free",
-            "pii_identity_card_number_de_legacy"
+            "pii_identity_card_number_de_legacy",
+            "pii_vat_id_bg",
+            "pii_vat_id_cy",
+            "pii_vat_id_cz",
+            "pii_vat_id_dk",
+            "pii_vat_id_ee",
+            "pii_vat_id_el",
+            "pii_vat_id_fi",
+            "pii_vat_id_hr",
+            "pii_vat_id_hu",
+            "pii_vat_id_ie",
+            "pii_vat_id_lt"
         ]
     );
 }

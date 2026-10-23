@@ -131,7 +131,8 @@ def test_scopes_follow_the_l1_program():
 
 
 def test_vat_ids_have_one_label_and_id_per_country():
-    # B01: DE and IT VAT IDs are shared with Presidio, the other six countries are ARK-only.
+    # B01: DE and IT VAT IDs are shared with Presidio, the other six countries are ARK-only; B02 adds
+    # eleven ARK-only countries (Greece: label prefix EL, ID country gr).
     entity_map = MODULE.load()
     for label, benchmark, scope in (
         ("VAT_ID_DE", "pii.de.vat_id", "shared"),
@@ -142,6 +143,17 @@ def test_vat_ids_have_one_label_and_id_per_country():
         ("VAT_ID_NL", "pii.nl.vat_id", "ark_only"),
         ("VAT_ID_BE", "pii.be.vat_id", "ark_only"),
         ("VAT_ID_ES", "pii.es.vat_id", "ark_only"),
+        ("VAT_ID_BG", "pii.bg.vat_id", "ark_only"),
+        ("VAT_ID_CY", "pii.cy.vat_id", "ark_only"),
+        ("VAT_ID_CZ", "pii.cz.vat_id", "ark_only"),
+        ("VAT_ID_DK", "pii.dk.vat_id", "ark_only"),
+        ("VAT_ID_EE", "pii.ee.vat_id", "ark_only"),
+        ("VAT_ID_EL", "pii.gr.vat_id", "ark_only"),
+        ("VAT_ID_FI", "pii.fi.vat_id", "ark_only"),
+        ("VAT_ID_HR", "pii.hr.vat_id", "ark_only"),
+        ("VAT_ID_HU", "pii.hu.vat_id", "ark_only"),
+        ("VAT_ID_IE", "pii.ie.vat_id", "ark_only"),
+        ("VAT_ID_LT", "pii.lt.vat_id", "ark_only"),
     ):
         assert entity_map.ark_label(label) == benchmark
         assert entity_map.scope(benchmark) == scope
@@ -382,7 +394,7 @@ def test_checked_in_registry_order_matches_the_rust_order_test():
     expected = re.findall(r'\(\s*"(pii_\w+)",\s*"(\w+)",?\s*\)', rust_test)
     rules = _generate_docs().parse_native_patterns(MODULE.PII_SOURCE_PATH, "PiiPattern")
     assert [(rule["id"], rule["entity_group"]) for rule in rules] == expected
-    assert len(expected) == 56
+    assert len(expected) == 67
 
 
 def test_cli_check_succeeds_and_fails(tmp_path):
