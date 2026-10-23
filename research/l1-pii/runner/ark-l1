@@ -1201,9 +1201,10 @@ def cmd_status() -> int:
         print(f"  #{p['number']} {p['headRefName']} ← {p['baseRefName']}  {p['url']}")
     print("Blocked:", json.dumps(load(BLOCKED, {}), indent=2, ensure_ascii=False))
     print("Current:", load(CURRENT, None))
-    top = open_prs[-1]["headRefOid"] if open_prs else "origin/main"
-    backlog = backlog_at(top)
-    task = pick(backlog, load(BLOCKED, {})) if backlog else None
+    # Same choice as `next`: flat tasks start from main and skip tasks that already have a PR.
+    backlog = backlog_at("origin/main")
+    in_flight = {task_of_branch(p["headRefName"]) for p in open_prs}
+    task = pick(backlog, load(BLOCKED, {}), in_flight) if backlog else None
     print("Next:", task and f"{task['id']} {task.get('title', '')}")
     return 0
 
