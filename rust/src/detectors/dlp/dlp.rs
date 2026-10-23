@@ -855,8 +855,10 @@ impl NativeRegexDetector for DlpPipeline {
     /// K05B adds YAML, JSON and TOML values and array items. A plural key
     /// (`api_keys`) binds only items; an item stands apart from its key, so
     /// it is checked on its own ([`rules::is_item_value`]) and the key must
-    /// not name a digest. A list binds its items only if every item passes:
-    /// a credential list holds no words, templates or tokenizer entries.
+    /// not name a digest. A list binds its items only if every item passes,
+    /// also the shape check of [`Self::allows_match`] (no UUID, digest or
+    /// object id): a credential list holds no words, templates, tokenizer
+    /// entries or identifiers.
     fn structured_values(
         &self,
         index: usize,
@@ -876,7 +878,9 @@ impl NativeRegexDetector for DlpPipeline {
             }
             let passes = binds.is_some()
                 && rules::is_item_value(&text[config.value.clone()])
-                && !rules::key_names_digest(&text[config.key.clone()]);
+                && !rules::key_names_digest(&text[config.key.clone()])
+                && !(self.tiers[index] == Some(OverlapTier::Generic)
+                    && rules::non_secret_shape(text, config.value.clone()).is_some());
             if !passes {
                 failed_lists.push(config.key.start);
             }

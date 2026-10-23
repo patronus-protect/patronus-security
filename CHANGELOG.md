@@ -40,6 +40,12 @@ result shapes may be breaking for downstream users, and is called out explicitly
   numbers: exact F1 87.2, FP/MB benign code 0.1324 (5 FP), benign docs 0.1327, hard-negative FP
   154, 100 KiB p95 13.18 → 13.56 ms (+2.9 %). Golden eval: 503/503 positives, 560/560 hard
   negatives. Validators are unchanged.
+- A credential list binds nothing when one of its items has a non-secret shape (K05B, PR #152
+  review). **Detection change** (`dlp_env_var_secret`, `dlp_password_assignment`,
+  `dlp_generic_credential_assignment`): the all-or-nothing list check also applies the K05
+  value-shape filter (UUID, digest, object id) to every item, so in
+  `tokens: ["550e8400-…", "Tz8Wm4K93RVqe7xAb2Lp"]` the token-like item is no longer reported on
+  its own.
 
 ## [0.1.11] - 2026-10-23
 

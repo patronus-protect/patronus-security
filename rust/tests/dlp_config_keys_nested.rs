@@ -284,6 +284,16 @@ fn lists_of_words_templates_and_mappings_bind_nothing() {
 }
 
 #[test]
+fn a_list_with_one_non_secret_item_binds_nothing() {
+    assert_silent(&[
+        "tokens: [\"550e8400-e29b-41d4-a716-446655440000\", \"Tz8Wm4K93RVqe7xAb2Lp\"]\n",
+        "{\"api_keys\": [\"Tz8Wm4K93RVqe7xAb2Lp\", \"550e8400-e29b-41d4-a716-446655440000\"]}\n",
+        "[versand]\napi_schluessel = [\"Tz8Wm4K93RVqe7xAb2Lp\", \"6512bd43d9caa6e02c990b0a\"]\n",
+        "zugangstokens:\n  - 3f2a9c4e-7b1d-4e8a-9c2f-5d6e7f8a9b0c\n  - Kx7pQ2vL9rT4mN8bW3sD\n",
+    ]);
+}
+
+#[test]
 fn code_is_no_yaml() {
     assert_silent(&[
         "const config = {\n  secret: process.env.SECRET,\n  token: this.token\n}\n",
