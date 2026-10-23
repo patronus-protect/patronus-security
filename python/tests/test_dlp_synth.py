@@ -5,6 +5,8 @@ Every generator listed for a rule in ``dlp_synth/rules.json`` must produce value
 by exactly that rule with exactly the value span. Generated values exist only in memory.
 """
 
+import base64
+import binascii
 import json
 import unittest
 from pathlib import Path
@@ -103,6 +105,34 @@ def basic_auth(value):
     return pair is not None and pair[0].islower() and len(pair[0]) == 8 and pair[1].isalnum()
 
 
+def express_session_id(value):
+    # connect.sid: URL-encoded "s:" + 32-character uid-safe id + "." + 43-character signature.
+    if not value.startswith("s%3A"):
+        return False
+    session_id, _, signature = value[4:].partition(".")
+    return (
+        len(session_id) == 32
+        and set(session_id) <= set(ALNUM + "-_")
+        and len(signature) == 43
+        and signature.isalnum()
+    )
+
+
+def laravel_session(value):
+    # Laravel encrypted cookie: base64 of {"iv", "value", "mac", "tag"} with a 64-hex MAC.
+    try:
+        payload = json.loads(base64.b64decode(value, validate=True))
+    except (ValueError, binascii.Error):
+        return False
+    return (
+        isinstance(payload, dict)
+        and set(payload) == {"iv", "value", "mac", "tag"}
+        and len(base64.b64decode(payload["iv"])) == 16
+        and len(payload["mac"]) == 64
+        and set(payload["mac"]) <= set(HEX)
+    )
+
+
 def record_reference(value):
     letters, year, number = value.split("-")
     return letters.isupper() and len(letters) == 2 and year.startswith("20") and len(year) == 4 and len(number) == 6
@@ -113,6 +143,14 @@ B64URL = ALNUM + "-_"
 B64 = ALNUM + "+/"
 HEX = "0123456789abcdef"
 DIGITS = "0123456789"
+BASE36 = DIGITS + "abcdefghijklmnopqrstuvwxyz"
+
+
+def gitlab_routable(value, prefix, length):
+    """GitLab routable token (F04, gitleaks gitlab-pat-routable): `prefix`, a base64url
+    payload of `length`, a dot, a two-character version and seven base36 characters."""
+    head, _, tail = value.rpartition(".")
+    return prefixed(prefix, B64URL, length)(head) and len(tail) == 9 and set(tail) <= set(BASE36)
 
 # One independent check per format-valid generator (shape_only generators excluded).
 CHECKS = {
@@ -127,6 +165,9 @@ CHECKS = {
     "replicate_api_token": prefixed("r8_", ALNUM, 37),
     "aws_access_key_id": prefixed("AKIA", "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567", 16),
     "aws_session_access_key_id": prefixed("ASIA", "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567", 16),
+    "aws_sts_bearer_key_id": prefixed("ABIA", "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567", 16),
+    "aws_context_credential_key_id": prefixed("ACCA", "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567", 16),
+    "aws_access_key_id_non_base32": prefixed("AKIA", "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 16),
     "aws_secret_access_key": prefixed("", B64, 40),
     "google_api_key": prefixed("AIza", B64URL, 35),
     "google_oauth_access_token": prefixed("ya29.", B64URL, 150),
@@ -138,6 +179,21 @@ CHECKS = {
     "github_ghr_token": lambda v: checks.has_valid_crc32_suffix(v, "ghr_"),
     "github_fine_grained_pat": lambda v: prefixed("github_pat_", ALNUM + "_", 82)(v) and v[33] == "_",
     "gitlab_pat": prefixed("glpat-", B64URL, 20),
+    "gitlab_pat_routable": lambda v: gitlab_routable(v, "glpat-", 38),
+    "gitlab_deploy_token": prefixed("gldt-", B64URL, 20),
+    "gitlab_runner_token": prefixed("glrt-", B64URL, 20),
+    "gitlab_runner_token_routable": lambda v: v[6] in DIGITS and v[7] == "_" and gitlab_routable(v[8:], "", 36)
+    and v.startswith("glrt-t"),
+    "gitlab_runner_registration_token": prefixed("GR1348941", B64URL, 20),
+    "gitlab_trigger_token": prefixed("glptt-", HEX, 40),
+    "gitlab_feed_token": prefixed("glft-", B64URL, 20),
+    "gitlab_incoming_mail_token": prefixed("glimt-", B64URL, 25),
+    "gitlab_agent_token": prefixed("glagent-", B64URL, 50),
+    "gitlab_cicd_job_token": lambda v: v.startswith("glcbt-") and v[8] == "_" and prefixed("", ALNUM, 2)(v[6:8])
+    and prefixed("", B64URL, 20)(v[9:]),
+    "gitlab_scim_token": prefixed("glsoat-", B64URL, 20),
+    "gitlab_feature_flag_token": prefixed("glffct-", B64URL, 20),
+    "gitlab_oauth_app_secret": prefixed("gloas-", B64URL, 64),
     "npm_access_token": lambda v: checks.has_valid_crc32_suffix(v, "npm_"),
     "stripe_secret_live": prefixed("sk_live_", ALNUM, 24),
     "stripe_restricted_test": prefixed("rk_test_", ALNUM, 24),
@@ -169,6 +225,8 @@ CHECKS = {
     "aws_sigv4_signature": prefixed("", HEX, 64),
     "java_session_id": prefixed("", "0123456789ABCDEF", 32),
     "php_session_id": prefixed("", "0123456789abcdefghijklmnopqrstuv", 26),
+    "express_session_id": express_session_id,
+    "laravel_session": laravel_session,
     "bcrypt_2b_hash": bcrypt,
     "argon2id_phc_hash": argon2id,
     "md5_hex": prefixed("", HEX, 32),
@@ -187,6 +245,33 @@ SHAPE_ONLY_FAILURES = {
     "jwt_hs256": lambda v: checks.jwt_parts(v) is not None,
     "pem_pkcs8_private_key": pem("PRIVATE KEY", checks.is_valid_pkcs8_ed25519),
     "pem_rsa_private_key": pem("RSA PRIVATE KEY", checks.is_valid_pkcs1_rsa),
+}
+
+# F03 lookalikes: the rule's shape with a wrong check value or length.
+LOOKALIKE_FAILURES = {
+    **{
+        f"github_{prefix}_bad_crc": (lambda prefix: lambda v: checks.has_valid_crc32_suffix(v, f"{prefix}_"))(prefix)
+        for prefix in ("ghp", "gho", "ghu", "ghs", "ghr")
+    },
+    "github_ghp_short": lambda v: len(v) == 40,
+    "github_gho_short": lambda v: len(v) == 40,
+    "github_ghp_long": lambda v: len(v) == 40,
+    "github_fine_grained_pat_short": lambda v: len(v) == 93,
+    "github_fine_grained_pat_long": lambda v: len(v) == 93,
+    # F04
+    "npm_bad_crc": lambda v: checks.has_valid_crc32_suffix(v, "npm_"),
+    "npm_short": lambda v: len(v) == 40,
+    "npm_long": lambda v: len(v) == 40,
+    "gitlab_pat_long": lambda v: len(v) == 26 or gitlab_routable(v, "glpat-", len(v) - 16),
+    "gitlab_deploy_token_short": lambda v: len(v) == 25,
+    "gitlab_trigger_token_upper_hex": prefixed("glptt-", HEX, 40),
+    # F05
+    "aws_access_key_id_long": lambda v: len(v) == 20,
+    "aws_iam_user_unique_id": lambda v: v[:4] in ("AKIA", "ASIA", "ABIA", "ACCA"),
+    "aws_secret_access_key_long": lambda v: len(v) == 40,
+    "aws_secret_access_key_hex": lambda v: any(c.isupper() for c in v),
+    # F-HTTP: random base64 that decodes to no user:password pair
+    "http_basic_credentials": lambda v: checks.basic_auth_pair(v) is not None,
 }
 
 
@@ -211,7 +296,19 @@ class GeneratorSpecTests(unittest.TestCase):
             self.assertFalse(set(entry["generators"]) & set(entry.get("shape_only", [])), rule_id)
             self.assertGreaterEqual(len(entry["probes"]), 2, rule_id)
             self.assertFalse(set(entry["generators"]) & set(entry.get("weak", [])), rule_id)
-            referenced.update(entry["generators"], entry.get("shape_only", []), entry.get("weak", []))
+            self.assertFalse(set(entry["generators"] + entry.get("weak", [])) & set(entry.get("quoted", [])), rule_id)
+            self.assertFalse(
+                set(entry.get("lookalike", []))
+                & set(entry["generators"] + entry.get("weak", []) + entry.get("quoted", [])),
+                rule_id,
+            )
+            referenced.update(
+                entry["generators"],
+                entry.get("shape_only", []),
+                entry.get("weak", []),
+                entry.get("quoted", []),
+                entry.get("lookalike", []),
+            )
         self.assertEqual(referenced, set(recipes.load_generators()))
 
     def test_every_valid_generator_has_an_independent_check(self):
@@ -258,6 +355,22 @@ class StructureTests(unittest.TestCase):
         for name, check in SHAPE_ONLY_FAILURES.items():
             for seed in range(8):
                 self.assertFalse(check(recipes.generate(name, seed)), f"{name} seed={seed}")
+
+    def test_lookalike_generators_fail_their_check(self):
+        lookalike = set()
+        for entry in rules.load_rule_map().values():
+            lookalike.update(entry.get("lookalike", []))
+        self.assertEqual(set(LOOKALIKE_FAILURES), lookalike)
+        for name, check in LOOKALIKE_FAILURES.items():
+            for seed in SEEDS:
+                self.assertFalse(check(recipes.generate(name, seed)), f"{name} seed={seed}")
+
+    def test_weak_github_token_keeps_its_repeated_chunk_and_a_valid_crc32(self):
+        # F03: dlp_github_token checks the CRC32 over all 30 body characters.
+        for seed in SEEDS:
+            value = recipes.generate("weak_repeated_chunk_github_token", seed)
+            self.assertTrue(checks.has_valid_crc32_suffix(value, "ghp_"), f"seed={seed}")
+            self.assertEqual(value[14:26], "Zq7" * 4, f"seed={seed}")
 
     def test_checksum_checks_reject_a_single_changed_character(self):
         cases = {
@@ -343,6 +456,24 @@ class RuleProbeTests(unittest.TestCase):
                 )
         self.gateway.set_execution_gates(None)
 
+    def test_rules_do_not_report_their_lookalike_values(self):
+        # F03: a token shape with a wrong check value or length is no match for its rule.
+        checked = 0
+        for rule_id in rules.load_rule_map():
+            self.gateway.set_execution_gates(
+                {"rules": {other: other == rule_id for other in self.all_rules}}
+            )
+            for sample in rules.samples(rule_id, range(8), lookalike=True):
+                spans = [
+                    span
+                    for result in self.gateway.scan_category("dlp", sample.text)
+                    if result["model"] == "native:dlp"
+                    for span in result["evidence_spans"]
+                ]
+                self.assertEqual(spans, [], f"{rule_id} gen={sample.generator} probe={sample.probe} seed={sample.seed}")
+                checked += 1
+        self.gateway.set_execution_gates(None)
+        self.assertGreater(checked, 0)
 
 if __name__ == "__main__":
     unittest.main()

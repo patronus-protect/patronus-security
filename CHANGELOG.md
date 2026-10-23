@@ -11,6 +11,12 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Changed
 
+- AWS access key IDs and HTTP Basic credentials (F05, F-HTTP, PR #142 review). **Detection
+  change:** legacy alphanumeric AWS access key IDs (16 upper-case letters or digits after `AKIA`,
+  `ASIA`, `ABIA`, `ACCA` or `A3T…`, also holding 0, 1, 8 or 9) are found again, also as the anchor
+  of `dlp_aws_secret_key`. `dlp_basic_auth` reports Basic credentials with an empty side
+  (`token:`, `:token`, RFC 7617) when the populated side is a machine-issued token and no
+  placeholder; both sides empty stays silent.
 - IP address spans (B-IP: T20 + baseline C1, TRIAGE 2026-W43 bucket 5, baseline P3/P9). An
   IPv4-mapped or embedded IPv6 address is one span (`::ffff:10.0.0.1`, `64:ff9b::198.51.100.1`), the
   zone ID and the CIDR prefix length are part of the span (`fe80::1%eth0`, `192.168.1.0/24`,
@@ -286,6 +292,273 @@ result shapes may be breaking for downstream users, and is called out explicitly
 - End phone spans before a line break and keep NANP trunk and `00` prefixes (T18, TRIAGE 2026-W43 bucket 3). `pii_phone_international`, the `+49`/`0049` form of `pii_phone_de` and `pii_phone_us` no longer separate digit groups with a line break (`\n`, `\r`, U+0085, U+2028, U+2029; other spaces such as U+00A0 still separate), so `+1-123-456-7890\n\n2` ends before the break and digits split across lines (`212\n555 0100`) are no phone number. `pii_phone_us` takes an optional trunk `1`/`+1` or a `00` international prefix in front of a 3-3-4 number into the span: `1-800-123-4567`, `1 (800) 123-4567`, `1.800.432.7716`, `001 415 555 2671`, `0044 207 946 0958`; with `+1` it now reports the whole number like `pii_phone_international`. The prefix is optional and needs a word boundary, so it only widens a number found before; a prefix alone (`1-800-FLOWERS`, `Kapitel 1-800`), `0044 20 7946 0958` and other `00` numbers without a 3-3-4 part stay unmatched. `0049 …` keeps its prefix as before. `pii_l1.jsonl` gains 12 positives and 10 hard negatives (DE and EN); `l1_bilingual_rules.json` gains exact-span probes for `pii_phone_international` and `pii_phone_de` and line-break hard negatives; the new `rust/tests/pii_phone_boundaries.rs` covers strict, balanced and recall. **Detection change:** phone spans with a trunk or `00` prefix start earlier, spans no longer run over a line break, and digits split by a line break are no longer reported; no new match. Scoreboard gate on the dev corpora PASS: phone exact F1 +6.6 pp (overlap unchanged), L1 exact F1 +1.0 pp (DE +0.2, EN +1.4; neutral +2.1, presidio_favored +0.3, ark_authored +0.0), no new hard-negative FP; `13_l1_golden_eval` 564/564 positives, 451/451 hard negatives. Validators are unchanged.
 - Stop reporting EDIFACT, X12 and SWIFT MT elements, zero-padded IDs and 6-4 digit groups as phone numbers in strict (T17, TRIAGE 2026-W43 buckets 1 + 2). `pii_phone_international` and the `+49` form of `pii_phone_de` no longer start right after a letter or digit (`UNB+UNOC:3+520173321::2`, `NAD+BY+987654321`), after another `+` (`MOA+1++520173321`) or after a tag with a digit and `:` (`{86:+330105789456}`); a field name and `:` (`Tel.:+49 30 1234567`, `tel:+31…`) still opens a number, and `00` after `+` keeps an EDIFACT `COM+0049…:TE` number. `pii_phone_us` needs the area code set off by `)` or a separator, so `811228-9874` (Swedish personal number, 6-4), `0000012345` (`ST*850*0000012345~`, `:62F:/0000001234/`, SEC CIK) and other bare 10-digit runs are no longer matched; 3-3-4 and 3-7 forms (`(617) 5550183`, `020-1234567`) stay. `pii_l1.jsonl` gains 12 positives and 17 hard negatives (DE and EN); `l1_bilingual_rules.json` gains DE/EN hard negatives for the three rules, and its hard-negative test now covers PII; the new `rust/tests/pii_phone_precision.rs` covers strict, balanced and recall. **Detection change:** fewer phone findings, none of them gold on the dev corpora. Scoreboard gate on the dev corpora PASS: Gretel Finance phone FP 198 → 75 (−123), phone exact F1 65.7 → 77.3 with unchanged recall; all corpora phone exact F1 +9.6 pp, L1 exact F1 +1.1 pp (DE +1.1, EN +1.1; neutral +2.0, presidio_favored +0.0, ark_authored +0.6 with 49 fewer 6-4 phone FP), no new hard-negative FP; `13_l1_golden_eval` 552/552 positives, 441/441 hard negatives. Validators are unchanged.
 - Report the parenthesized area code of a US phone number as part of the span (T04, TRIAGE 2026-W42 bucket 2). `pii_phone_us` opened with `\b`, which never holds before `(` after a space or at the start of a text, so `(415) 555-2671` was reported as `415) 555-2671` and missed every exact-span gold. A balanced `(NXX)` now starts the span in every mode; with `+1` in front the international rule keeps the full number as before. Unbalanced forms (`(415 555-2671`, `415) 555-2671`) keep their span. `pii_l1.jsonl` gates the two parenthesized known gaps and gains 10 positives and 10 hard negatives (5 each for DE and EN); `l1_bilingual_rules.json` gains an exact-span probe for `pii_phone_us`; the new `rust/tests/pii_phone_span.rs` covers strict, balanced and recall. **Detection change:** US phone spans with a parenthesized area code start one character earlier; no finding is added or removed. Scoreboard gate on the dev corpora PASS: phone exact F1 55.2 → 65.0 (+9.8 pp, overlap unchanged), L1 exact F1 50.8 → 52.4 (EN +2.9 pp; neutral +2.8 pp, presidio_favored +0.9 pp), no new hard-negative FP; `13_l1_golden_eval` 540/540 positives, 424/424 hard negatives. Validators are unchanged.
+- Reject value shapes that are no secret under credential keys and read env, INI/properties and
+  HTTP header lines as config fields (K05, part 1). `dlp_env_var_secret`,
+  `dlp_password_assignment` and `dlp_generic_credential_assignment` now pass every value that a
+  credential-like key binds through a value-shape filter (`rules/value_shape.rs`): UUIDs (also in
+  braces or as `urn:uuid:`), digests after their algorithm name in the algorithm's length
+  (`sha256:<hex>`, `sha1-<hex>`, SRI `sha512-<base64>`, go.sum `h1:<base64>`), hex digests of a
+  digest length under a key that names a digest (`hashed_password`, `SHA256_TOKEN`,
+  `gehashtes_passwort`), MongoDB ObjectIds (24 hex digits with a timestamp between 2009 and 2040),
+  template and format fields (`{client_secret}`, `%(password)s`, `%s`, `{0}`, `<%= … %>`, an
+  interpolation inside the value), variable references (`$TOKEN`, `%PASSWORT%`, `$env:X`,
+  `env:X`), booleans and null words in DE and EN (`true`, `disabled`, `wahr`, `deaktiviert`),
+  numbers with an optional unit, paths and URLs with a host but without userinfo or secret query
+  parameter are no secret. Hex under a plain credential key stays a secret (OAuth client secrets, Flask/Rails
+  secret keys), as does `$` before a word with digits. The new `dlp/config_keys.rs` reads env
+  (`KEY=value`, `export KEY=value`), INI/properties (`key = value`, `app.db.password=…`) and HTTP
+  header lines in the head of a request or response on the `key: value`/`key=value` grammar of the
+  document structure (PII K04, `structure::key_value_line`): a key binds the value through the
+  rule's own key grammar and key gate, and an unquoted value with `;`, `,`, `}` or `]` inside runs
+  to the end of the line or to an inline comment (`␣#`, `␣;`) instead of stopping at the first
+  such character. Values with blanks, quotes or an interpolation inside, a trailing `,`/`;`, and
+  env values with `;` are no config values; matches from a config line carry `structure`
+  (`env`, `properties`, `http_header`) in `matched_rules`. `dlp_l1.jsonl` gains 30 rows (10
+  positives, 20 hard negatives, one per shape with DE and EN keys); the new
+  `rust/tests/dlp_config_keys.rs` checks every carrier and shape. **Detection change:** fewer
+  generic credential findings: on a 400 MB probe of public code (Rust crates, Python packages,
+  docs) 91 of 1247 spans disappear (90 UUID-valued `ChangeToken`s in botocore examples, one enum
+  constant `ClearTextPassword = 8107`) and none is added. Unquoted config values with `;`, `,`,
+  `}` or `]` under a credential key are now reported whole (`password = {kqztrwx4711}` with its
+  closing brace). Scoreboard gate on the dev corpora
+  PASS with unchanged numbers: exact F1 87.2, FP/MB benign code 0.1324 (5 FP), benign docs
+  0.1327, hard-negative FP 154, 100 KiB p95 11.27 → 11.12 ms. Golden eval: 490/490 positives,
+  536/536 hard negatives. Validators are unchanged.
+- Find HTTP auth values outside a literal header line (F-HTTP: F13 + T11). `dlp_bearer_token`
+  and `dlp_basic_auth` no longer need an `Authorization:` line: `Bearer …` and `Basic …` count under
+  `authorization`/`proxy_authorization` keys in env, JSON, YAML, TOML, XML, properties, shell,
+  Dockerfile and code carriers, in logs and standalone in chats, tickets and mails. The value proves
+  its kind instead (`rules/http_auth.rs`): `Basic` only when its base64 is canonical and decodes to
+  printable `user-id:password` (RFC 7617) with a chosen password (no placeholder, stand-in or
+  credential name, also read without leetspeak such as `user:p@ss`, and not the user-id again);
+  `Bearer` only as an issued token (RFC 6750 `b64token`, at least 16 characters, two character
+  classes, 3 bits of entropy per character, no sequential or repeated runs, no identifier). A
+  `Bearer` value that parses as a JWT is left to `dlp_jwt_token`, a provider token to its provider
+  rule. `dlp_session_cookie` reports the session cookies of servers and frameworks (`JSESSIONID`,
+  `PHPSESSID`, `ASP.NET_SessionId`, `connect.sid`, `laravel_session`, `__Host-`/`__Secure-` names)
+  also without a `Cookie:` line, as `name=value` or a quoted key and value; generic names
+  (`session`, `sessionid`, `sid`) still need a `Cookie:`/`Set-Cookie:` line, and every value must
+  look like an issued session ID. `dlp_basic_auth` now has validator strength `structure` and
+  `dlp_bearer_token` `format`, both with an RFC as format source (`rule_sources.yaml`); the RFC
+  7617 example credentials are a documented example value (K06). New generators
+  `express_session_id` and `laravel_session`; random base64 (`http_basic_credentials`) is a
+  lookalike that `dlp_basic_auth` must not report. `dlp_l1.jsonl` gains 42 rows (20 positives,
+  22 hard negatives; DE and EN) including the swagger-ui test values (`Bearer abc123.xyz.789`,
+  `Bearer secret_token`, `Basic application:secret`); the new `rust/tests/dlp_http_auth.rs`
+  checks every carrier and the valid and invalid Basic decodings. **Detection change:** on the dev
+  split the exact F1 of `credential.http_basic_auth`, `credential.http_bearer` and
+  `credential.session_cookie` rises from 12.2/14.0/14.0 % to 100 % each (recall 7.5 % → 100 %),
+  six hard-negative FP of Basic example values without `user:password` and the three benign-code
+  FP of the old header rules (`Bearer abc123.xyz.789`, `Bearer secret_token`,
+  `Proxy-Authorization: Basic` of `user:p@ss`) disappear. Scoreboard gate on the dev corpora PASS:
+  exact F1 83.2 → 87.2 (CREDENTIAL 81.9 → 96.8, SECRET_TOKEN 93.6 → 99.2), FP/MB benign code
+  0.2119 → 0.1324 (8 → 5 FP), benign docs unchanged, hard-negative FP 160 → 154 with no new FP
+  row, 100 KiB p95 10.56 → 10.54 ms. Golden eval: 480/480 positives, 516/516 hard negatives.
+- Leave a `Bearer` JWT to `dlp_jwt_token` only when that rule can match it (F-HTTP review). A
+  structurally valid JWT with empty claims (`e30`) or a signature shorter than ten characters parses
+  but falls outside the `dlp_jwt_token` pattern, so `dlp_bearer_token` rejected it and nothing
+  reported it. The bearer gate now defers only JWTs in the shape of the JWT rule (header and claims
+  `ey` plus at least ten characters, a signature of at least ten) and judges every other value as an
+  opaque token. **Detection change:** such `Bearer` JWTs are now reported by `dlp_bearer_token` when
+  they look like an issued token; JWTs the JWT rule matches are unchanged.
+- Find credential values under compound, camelCase, quoted and typed keys (T09).
+  `dlp_password_assignment`, `dlp_generic_credential_assignment`, `dlp_csrf_token` and
+  `dlp_password_hash` now start at the credential noun without `\b`, so compound keys
+  (`db_password`, `service_secret`, `LAGER_DB_PASSWORT`) and camelCase keys (`dbPassword`,
+  `serviceSecret`, `ClientSecret`, `csrfToken`, `PasswordHash`) match; the new key gate
+  (`RuleMeta::key_gate`, `likeness::key_shape`) reads the prefix before the noun and rejects a noun
+  that merely ends a word (`mypassword`, `DBPASSWORD`, `Benutzerkennwort`). Between key and value the
+  rules accept the closing quote of a quoted key (`"client_secret":`, `'password' =>`, escaped
+  `\"db_password\":` inside a JSON string), a subscript (`os.environ["DB_PASSWORD"] =`), a string
+  type (`const DB_PASSWORD: &str =`, `dbPassword: string =`, Go `dbPassword string =`), `=>` and the
+  XML `value` attribute after a `key`/`name` attribute (`<add key="DbPassword" value="…" />`); the
+  assignment rules take an escaped value in a notebook cell or JSON string (`\"…\"`). Compound and
+  quoted keys name fields, so their values must suit one: no identifier in a naming convention
+  (`"github-copilot"`, `"prefixItems"`), word, credential name or stand-in, no version range
+  (`"^1.0.0"`), no code (also in quotes), a passphrase with a capital, digit or symbol, and after a
+  quoted key or `=>` no unquoted value (`case"apiKey":u=…`, `'password' => !empty(…)`). Compound
+  `…token` keys of cursors, handles and counts (`nextPageToken`, `continuation_token`, `pathToken`,
+  `max_token`, `csrf_token` for the generic rule) and `…secret` keys of Kubernetes/Helm objects
+  (`existingSecret`, `imagePullSecret`, `tls_secret`) are no credentials; a bare value cut at the
+  150-character capture limit is none either (`id_token=` with a long example JWT). Code at the start
+  of a bare value (casts and parameter lists, arrow functions, comparisons, negated calls) is no
+  value. `dlp_csrf_token` gains the value gate `likeness::is_token_value` (no word or name such as
+  `"X-CSRF-Token"`, no member access); `dlp_password_hash` no longer takes the backslash of an
+  escaped closing quote into a bcrypt or Argon2 value. A generic key with a compound prefix in a URL
+  userinfo (`https://github_token:x-oauth-basic@…`) belongs to the URL rules (K08). Word boundaries
+  of the keys are ASCII (`(?-u:\b)`), which makes the generic rule's regex about 25 times faster on
+  benign code; `dlp_aws_secret_key` already matched every AWS key shape and is unchanged. `dlp_l1.jsonl`
+  gains 31 rows (17 positives, 14 hard negatives; JSON, YAML, TOML, XML, TS, Rust, PHP, HTTP and
+  notebook carriers, DE and EN) and the
+  JSON `password_hash` golden is no longer a known gap; `l1_bilingual_rules.json` gains hard
+  negatives for the three rules; the new `rust/tests/dlp_key_shapes.rs` checks every key shape per
+  carrier and the silent code, field-name, cursor and reference shapes. **Detection change:** on the
+  dev split the exact span F1 on the synthetic carriers rises from 81.6 % to 84.4 % (TP 1225 → 1294,
+  precision 98.2 % → 98.8 %, no positive lost); every structured-carrier miss of the five rules is
+  found (69 values; the remaining misses are prose, F-HTTP and opt-in classes), hard-negative FP drop
+  from 22 to 16 (six example JWTs under `id-token` keys) with no new FP row; benign-code and
+  benign-doc spans are unchanged. Scoreboard gate on the dev corpora PASS: exact F1 80.6 → 83.2
+  (CREDENTIAL 69.6 → 81.9, PASSWORD_HASH 80.6 → 91.9, SECRET_TOKEN 89.7 → 93.6), FP/MB benign code
+  unchanged (8 FP), hard-negative FP 166 → 160, 100 KiB p95 9.55 → 9.43 ms. Golden eval: 460/460
+  positives, 494/494 hard negatives.
+- Capture generic credential values exactly (F-GEN2: T04 + T08). A quoted value of
+  `dlp_password_assignment` and `dlp_generic_credential_assignment` now runs to its closing quote,
+  with spaces, `;`, `,` and `}` inside (`passwort = "blau Drache 47 Zaun"`, `password='ab;Kx7…'`);
+  a bare value or an unclosed quote still stops at them. `dlp_env_var_secret` reports the value
+  without its quotes and without a trailing `;`/`,` (`export DB_PASSWORD='…'`, `ENV KEY="…"`,
+  `KEY = "…";` in Python, Java and Ruby), no longer takes the next line after an empty `KEY=`, and
+  also matches YAML/compose env maps (`KEY: "value"`, `KEY: 'value'`, a bare value up to the end of
+  the line). Rules may now hold their value in one capture group per quoting style; the engine
+  reports the first group that took part in the match
+  (`NativeRegexDetector::value_group`). The new value gate `likeness::is_env_value` drops code
+  constants (`DATA_API_KEY = '.data-api'`, `AUTH_FLOW_PASSWORD = "password"`), credential names,
+  calls and index access (`config.get(…)`, `os.environ[…]`), format placeholders and paths. A
+  quoted value with spaces must read as a passphrase, not as a message (`"Enter your password"`,
+  `"Bitte Passwort eingeben"`, `"too short"`, a closing `.`/`?`/`:`, more than six words), a
+  placeholder (`"change me"`) or a template (`{{ … }}`, `${…}`, `$(…)`, `%s`). A quote that closes
+  a string opens no value (`"Password:"),d?i.createElement(` in minified code). The T06 example
+  check also counts a marker cut to the field length at the end of a word (`Eexampl0123!`,
+  `Ttestke1234!`; at least six letters of `example(key)`, `testkey`, `sample`, `beispiel`,
+  `muster`), and a generic value of at least 32 hex digits is machine-issued, so repeated chunks
+  (`deadbeef…`, `1234567890…`) reject it as for a fixed format; shorter hand-typed repeats
+  (`deadbeefdeadbeef`, `abcabcabcabc`) stay weak but real passwords. `CredentialTemplateHook` no longer reads base64 padding as `key=value`, so
+  `DB_PASSWORD: <base64>=` in a Kubernetes Secret keeps its span. `dlp_synth/rules.json` gains
+  `quoted` generators (`quoted_passphrase`, `quoted_punctuated_password`) that every probe wraps in
+  quotes; `dlp_l1.jsonl` gains 33 rows (TOML, YAML, INI, compose, CI, shell, Dockerfile, Java,
+  Python, JS and DE/EN prose positives; code constants, label quotes, messages, templates and
+  references and hex fill values as hard negatives) and gates a Kubernetes Secret known gap; `l1_bilingual_rules.json`
+  gains hard negatives for the three rules; the new `rust/tests/dlp_value_capture.rs` covers the
+  spans per carrier. **Detection change:** on the dev split the 15 `dlp_env_var_secret` boundary
+  errors (values with quotes or a trailing `;`) are gone, 6 CI-YAML values are found, exact span
+  F1 on the synthetic carriers rises from 77.4 % to 81.6 % (TP 1204 → 1225, precision 89.0 % →
+  98.2 %, no positive lost), hard-negative FP drop from 134 to 22 with no new FP row, and
+  benign-code spans drop from 38 to 8 (all 30 `dlp_env_var_secret` FP, i.e.
+  `DATA_API_KEY = '.data-api'` and `AUTH_FLOW_PASSWORD = \"password\"`). Validators are unchanged.
+- Keep escaped quoted env values and stop bare shell values at command separators (F-GEN2 review).
+  `dlp_env_var_secret` also takes a value between escaped quotes (`KEY=\"…\"`, `KEY=\'…\'`,
+  `KEY: \"…\"`) as found in serialized source, JSON strings and logs; the broad value pattern
+  before F-GEN2 caught these, the quoted branches did not. `likeness::is_env_value` treats an escaped
+  opening quote as opening the value, never as closing the surrounding string. A `;` followed by a
+  path (`KEY=value;./bin/report`, `;/usr/bin/x`, `;~/x`) now ends a bare value as a shell command
+  separator; any other `;` stays part of a `.env` value (`Kx7;pQ2vL9`). `rust/tests/dlp_value_capture.rs`
+  gains regression tests for both. **Detection change:** escaped quoted env assignments are reported
+  again (value without the escaped quotes); bare env values no longer run over `;` into a following
+  path command, so those spans end at the separator.
+- Generic credential values need password likeness (F-GEN1: F11 + T03 + T10).
+  `dlp_password_assignment` and `dlp_generic_credential_assignment` no longer report code
+  expressions after a credential key (calls such as `token = get_token()`, index and member access
+  such as `os.environ[…]`, `this._input.value`, `$authTokens[$url]`, Rust paths `Token::Literal(c)`,
+  type annotations such as `token: Option<&str>`, `password: str)`, `string|null`, `Arc<…>`, format
+  placeholders `%s`, ABNF repetitions), keys and labels ending in `:` (`password:\n  type: string`),
+  file paths, a shell variable as key (`docker -v "$PWD:/work"`), DE/EN dictionary words and word
+  forms in prose („Passwort ist falsch“, „Token ist abgelaufen“, "the password is stored"),
+  credential names in one naming convention (`GIT_PASSWORD`, `passwordGenerator`, `clientSecret`)
+  or test stand-ins (`password: "password"`, `"pass"`, `"topSecret"`, `foo001`). A value with a
+  digit or another symbol is never a word, so weak but real passwords (`hunter2`, `Sommer2026!`,
+  `P@ssw0rd`, `letmein`, `abcabcabcabc`) stay findings. `dlp_url_userinfo_password` drops stand-in
+  and credential-name passwords of test suites (`user:pass`, `user:secret`,
+  `token:MY_GITHUB_TOKEN`, `gitlab-ci-token:realtoken`) and the pseudo-password `x-oauth-basic`.
+  The new rule `dlp_url_userinfo_token` (`SECRET_TOKEN`, subtype `access_token`, format source
+  GitHub) reports the token in the username of `https://<token>:x-oauth-basic@…` if it has two
+  character classes, 3 bits of entropy per character and no sequential or repeated runs. The checks
+  live in the new `rust/src/detectors/dlp/rules/likeness.rs` and run through the new
+  `RuleMeta::value_gate`. `dlp_l1.jsonl` gains 33 rows (code, prose, INI, CLI, log and JSON
+  positives with weak passwords and token URLs; Rust/Python/TS/PHP/shell expressions, DE/EN prose
+  and test-suite URLs as hard negatives); `l1_bilingual_rules.json` gains hard negatives for the
+  three rules and a case for the new one; the new `rust/tests/dlp_generic_precision.rs` covers Rust,
+  Python, TS/JS, Go, PHP and shell expressions, prose, stand-ins, test-suite URLs, weak passwords
+  and token URLs. **Detection change:** on the dev split the benign-code findings of the three
+  rules drop from 192 to 3 (−98 %; the rest are percent-encoded test passwords), benign docs lose
+  both `$PWD:` findings, and the `strict` output on the synthetic carriers is unchanged.
+- Tighten the F-GEN1 likeness checks (review of PR #129). A DE/EN suffix or participle shape
+  alone no longer makes a value a word form: the stem must be a dictionary word (also with a
+  dropped `e`, a doubled final consonant or `y` → `i`) or read like a word (at least a quarter
+  vowels, no run of more than three consonants), so random letters ending in `ing`, `ed` or `ic`
+  after a credential key stay findings. `dlp_url_userinfo_token` no longer reports a word or name
+  with a numeric suffix only (a handle such as `jane.doe2026`) as a token. **Detection change:**
+  `dlp_password_assignment` and `dlp_generic_credential_assignment` regain unquoted random
+  alphabetic secrets with suffix-like endings (fewer false negatives); `dlp_url_userinfo_token`
+  drops numeric-suffixed usernames (fewer false positives). Dictionary words, word forms with a
+  known or pronounceable stem and all existing positives are unchanged.
+- AWS access key IDs need a credential prefix and exactly 16 Base32 characters, and AWS secret
+  access keys are found by their structural context (F05). `dlp_aws_access_key` takes `AKIA`,
+  `ASIA`, `ABIA`, `ACCA` or legacy `A3T…` and exactly 16 Base32 characters (before: also `AGPA`,
+  `AIDA`, `AROA`, `AIPA`, `ANPA`, `ANVA` and 16 or more upper-case alphanumerics); group, user,
+  role and policy unique IDs are no credentials. `dlp_aws_secret_key` takes 40 base64 characters
+  with upper and lower case letters as a whole run (before: the first 40 characters of any longer
+  run, also with `=`), and finds them after AWS key names and labels in every naming style
+  (`aws-secret-access-key`, `AwsSecretAccessKey`, `aws.secretKey`, `AWS_SECRET_KEY`, HTTP header,
+  XML `key="…" value="…"`, typed constants, escaped JSON), in DE/EN prose up to two lines after
+  the label, right after an access key ID (SDK calls, IAM credentials CSV, `mc alias set`), and
+  after a generic `secret_key`/`secret-key`/`secretKey` with AWS context (Terraform
+  `provider "aws"`/`backend "s3"`, `.s3cfg`, Spring `cloud.aws`, an access key ID or
+  `access_key` key nearby); a Django/Flask `SECRET_KEY` is no anchor. The new
+  `rust/src/detectors/dlp/aws_context.rs` holds the value check and the context gate.
+  `dlp_l1.jsonl` gains 24 rows (Terraform, `.s3cfg`, Spring YAML, CLI, `aws configure`, XML,
+  log, chat and mail positives; IAM user IDs, key IDs outside Base32 or of another length,
+  41-character and hex values, references, example/test fills and documented formats as hard
+  negatives), with new generators (`ABIA`, `ACCA`) and lookalike generators in `dlp_synth`.
+  **Detection change:** access key IDs with other prefixes, a `0`/`1`/`8`/`9` or another length
+  and secret keys that are hex, single-case or part of a longer run are no findings any more; AWS
+  secret access keys in the new contexts are new findings. On the dev split the `strict` output on
+  benign code and benign docs is unchanged; synthetic carriers gain 16 gold secret keys
+  (`cloud.aws.secret_access_key` recall 24/40 → 40/40) and no other span.
+- npm tokens need a valid CRC32, and every documented GitLab token prefix is found (F04).
+  `dlp_npm_token` takes `npm_` and exactly 36 base62 characters whose last six are the CRC32 of
+  the first 30 (before: 36 or more, no checksum) and scores at `checksum` strength, so a bare
+  token scores 0.85 instead of 0.65. A generic assignment, URL or header rule no longer reports a
+  value that starts with a whole `npm_` token shape whose CRC32 fails. `dlp_gitlab_pat` takes
+  `glpat-` and exactly 20 characters (before: 20 or more) or the routable form (payload, `.`, a
+  two-character version and a seven-character base36 check value, reported whole; before cut at
+  the dot). The new rule `dlp_gitlab_token` (`SECRET_TOKEN`, `access_token`) finds deploy
+  (`gldt-`), runner (`glrt-`, also routable), runner registration (`GR1348941`), pipeline trigger
+  (`glptt-`), feed (`glft-`), incoming mail (`glimt-`), Kubernetes agent (`glagent-`), CI/CD job
+  (`glcbt-`), SCIM (`glsoat-`) and feature flag client tokens (`glffct-`) with the lengths of the
+  gitleaks rules; the new rule `dlp_gitlab_oauth_secret` (`API_KEY`, `secret_key`) finds OAuth
+  application secrets (`gloas-`). Both are on by default; the entity map moves the GitLab tokens
+  from `baseline_only` to `shared` (`vcs.gitlab.token`, `vcs.gitlab.oauth_app_secret`).
+  `dlp_l1.jsonl` gains 32 rows (tokens of every prefix in `.env`, YAML, JSON, TOML, INI, code, CLI,
+  HTTP, log and prose; wrong check values, lengths and alphabets, example/test fills, references
+  and documented prefixes as hard negatives), with new generators and lookalike generators in
+  `dlp_synth`.
+  **Detection change:** `npm_` values with a wrong CRC32 or another body length and `glpat-`
+  values of another length are no findings any more; GitLab deploy, runner, trigger, feed, mail,
+  agent, job, SCIM, feature flag and OAuth tokens are new findings. On the dev split the `strict`
+  output on synthetic carriers, benign code and benign docs is unchanged.
+- Find GitLab runner tokens created through a registration token (`glrtr-`), workspace tokens
+  (`glwt-`) and the current routable token form (F04 review). `dlp_gitlab_token` also takes
+  `glrtr-` with 20 characters and the current routable form of GitLab's HTTP router and
+  `RoutableToken` generator for `glrt-`, `glrtr-` and `glwt-`: a base64url payload of 27–300
+  characters, `.01.`, the payload length as two base36 digits and a seven-digit base36 CRC32 (not
+  verified); `dlp_gitlab_pat` takes this form for `glpat-` too. Workspace tokens are only taken in
+  the routable form. Another version, an upper-case or wrongly sized check value, a payload of
+  fewer than 27 characters and undocumented neighbour prefixes (`glwtr-`, `glrtrr-`) stay no
+  GitLab token (`rust/tests/dlp_npm_gitlab_tokens.rs`). **Detection change:** `glrtr-` and `glwt-`
+  tokens and current routable runner and personal access tokens are new findings, reported whole;
+  no finding is removed.
+- GitHub tokens need their exact length and, for classic tokens, a valid CRC32 (F03).
+  `dlp_github_token` takes `ghp_`/`gho_`/`ghu_`/`ghs_`/`ghr_` and exactly 36 base62 characters
+  whose last six are the CRC32 of the first 30 (before: 32 or more word characters, no checksum);
+  `dlp_github_pat` takes `github_pat_` and exactly 82 characters (before: 36 or more).
+  `validator_strength` of `dlp_github_token` is `checksum` (was `format`), so a bare token scores
+  0.90 instead of 0.70 and stays in `balanced` next to a counter term. A generic assignment, URL or
+  header rule no longer reports a value that starts with a whole `gh…_` token shape whose CRC32
+  fails. `dlp_l1.jsonl` gains 24 rows (tokens of every prefix in `.env`, YAML, JSON, TOML, code,
+  CLI, log, chat and mail; broken check values, wrong lengths, example/test fills, references and
+  the documented format as hard negatives), and `secret-token-pos-01` uses a checksum-valid token.
+  The synthetic generator `weak_repeated_chunk_github_token` now carries a CRC32 over its whole body.
+  **Detection change:** `gh…_` values with a wrong CRC32 or another body length and `github_pat_`
+  values of another length are no findings any more, also not as generic credentials. On the dev
+  split the `strict` carrier output is unchanged and the benign-code corpus loses 13 false
+  positives (GitHub token test fixtures), with no new span.
+- Skip GitHub token shapes of a wrong length in generic rules too (F03 review). A generic
+  assignment, URL or header rule (`dlp_env_var_secret` …) no longer reports a value that is a
+  `ghp_`/`gho_`/`ghu_`/`ghs_`/`ghr_` or `github_pat_` prefix with a whole-token body of another
+  length than 36 or 82 characters (`GITHUB_TOKEN=ghp_` and 35 characters), matching the provider
+  rules, which reject those lengths; `RuleMeta::body_len` holds the exact body length and the
+  shortest token-shaped body (32 and 36, the former minimums). Shorter bodies and bodies that end
+  in other punctuation stay generic credentials. **Detection change:** fewer generic
+  `CREDENTIAL` spans for wrong-length GitHub token shapes; exact-length tokens are unchanged.
 - `dlp_btc_wif` accepts testnet WIF keys and scores at checksum strength (F02). Base58Check now
   takes the version byte of mainnet (`0x80`; `5…`, `K…`/`L…`) or of testnet, signet and regtest
   (`0xef`; `9…` uncompressed, `c…` compressed), still with a secp256k1 scalar in range and the

@@ -11,9 +11,12 @@ use std::{
 };
 
 use patronus_ark::{
-    detectors::dlp::{
-        dlp::{Severity, ValidatorStrength, DLP_PATTERNS},
-        prefilter::FOLDS_TO_ASCII,
+    detectors::{
+        dlp::{
+            dlp::{Severity, ValidatorStrength, DLP_PATTERNS},
+            prefilter::FOLDS_TO_ASCII,
+        },
+        validators::crc32_base62,
     },
     golden_recipes::{materialize_fragments, GeneratorSet, SecretRecipe, SplitMix64},
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
@@ -357,11 +360,12 @@ fn rule_sources_match_the_rule_metadata() {
 
 #[test]
 fn matched_rules_report_metadata() {
-    let token = format!("{}{}", "ghp_", random_body(11, BASE62, 36));
+    let body = random_body(11, BASE62, 30);
+    let token = format!("{}{body}{}", "ghp_", crc32_base62(&body));
     let rule = matched_rule(&format!("GITHUB_TOKEN={token}"), "dlp_github_token")
         .expect("github token must match");
     assert_eq!(rule["provider"], "github");
-    assert_eq!(rule["validator_strength"], "format");
+    assert_eq!(rule["validator_strength"], "checksum");
     assert_eq!(rule["source_ref"], "gitleaks:github-pat");
     assert_eq!(rule["severity"], "live");
 

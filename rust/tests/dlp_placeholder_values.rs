@@ -355,10 +355,11 @@ fn k06_placeholders_are_silent_in_de_and_en() {
 fn k06_lookalike_real_values_stay_detected() {
     for (text, rule_id, value) in [
         // Braces, @, __, !, (( )) around values that look like passwords.
+        // K05: the config line binds the whole value, closing brace included.
         (
             "password = {kqztrwx4711}\n",
             "dlp_password_assignment",
-            "{kqztrwx4711",
+            "{kqztrwx4711}",
         ),
         (
             "password=@kqztrwx4711@\n",

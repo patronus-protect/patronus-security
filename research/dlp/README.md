@@ -46,21 +46,119 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   Kompressionsflag `0x01`. Testnet-Schlüssel haben Severity `test`. Die Regel wertet mit
   Prüfsummen-Stärke: Im Modus `balanced` bleibt ein WIF-Schlüssel ohne Kontext (0,65), ein
   näherer Prüfsummen-/Hash-Begriff verwirft ihn.
+  Seit F03 prüft `dlp_github_token` die CRC32 der GitHub-Tokens: `ghp_`/`gho_`/`ghu_`/`ghs_`/`ghr_`
+  und genau 36 Base62-Zeichen, die letzten sechs sind die CRC32 der ersten 30. `dlp_github_pat`
+  nimmt `github_pat_` und genau 82 Zeichen. Die Regel wertet mit Prüfsummen-Stärke (0,90 ohne
+  Kontext). Ein Token-förmiger Wert mit falscher CRC32 ist auch für generische Zuweisungen,
+  URL- und Header-Regeln kein Secret.
+  Seit F04 prüft `dlp_npm_token` die CRC32 wie bei GitHub: `npm_` und genau 36 Base62-Zeichen,
+  die letzten sechs sind die CRC32 der ersten 30 (Prüfsummen-Stärke, 0,85 ohne Kontext). Ein
+  `npm_`-Wert mit falscher CRC32 ist auch für generische Regeln kein Secret. `dlp_gitlab_pat`
+  nimmt `glpat-` mit genau 20 Zeichen oder die routbare Form (Payload, Punkt, zwei Zeichen
+  Version, sieben Zeichen Base36; aktuell `.01.`, zwei Base36-Längenziffern, sieben Base36-CRC32-Ziffern). `dlp_gitlab_token` deckt die übrigen dokumentierten
+  GitLab-Präfixe ab (Deploy `gldt-`, Runner `glrt-`/`glrtr-` auch routbar, Workspace `glwt-` nur routbar, Runner-Registrierung
+  `GR1348941`, Pipeline-Trigger `glptt-`, Feed `glft-`, Incoming Mail `glimt-`, Kubernetes-Agent
+  `glagent-`, CI/CD-Job `glcbt-`, SCIM `glsoat-`, Feature-Flag-Client `glffct-`) mit den Längen
+  der gitleaks-Regeln, `dlp_gitlab_oauth_secret` das OAuth-Anwendungs-Secret `gloas-` (`API_KEY`,
+  Untertyp `secret_key`). Die Prüfwerte der routbaren GitLab-Tokens werden nicht verifiziert,
+  weil GitLab den Algorithmus nicht dokumentiert.
+  Seit F05 nimmt `dlp_aws_access_key` nur die Credential-Präfixe der IAM-Unique-ID-Tabelle
+  (`AKIA`, `ASIA`, `ABIA`, `ACCA`, alt `A3T…`) mit genau 16 Base32-Zeichen; Gruppen-, Benutzer-,
+  Rollen- und Policy-IDs (`AGPA`, `AIDA`, `AROA`, `ANPA` …) sind keine Zugangsdaten.
+  `dlp_aws_secret_key` nimmt 40 Base64-Zeichen mit Groß- und Kleinbuchstaben als ganzen Lauf, und
+  nur in strukturellem AWS-Kontext (`RuleMeta::context_gate`): nach einem AWS-Schlüsselnamen oder
+  -Label (auch in Prosa bis zu zwei Zeilen weiter), direkt nach einer Access Key ID (SDK-Aufruf,
+  Credentials-CSV, CLI) oder nach einem generischen `secret_key`/`secret-key`/`secretKey` mit
+  AWS-Kontext in bis zu fünf Zeilen darüber oder zwei darunter (Access Key ID oder
+  `access_key`-Schlüssel, Terraform `provider "aws"`/`backend "s3"`, `amazonaws.com`, `aws` als
+  Namensteil). Hex-Digests, 41 Zeichen lange Läufe und einfarbige Werte sind kein Secret Key.
+  Seit F-GEN1 brauchen die Werte der generischen Regeln Passwort-Ähnlichkeit
+  (`RuleMeta::value_gate`, `rules/likeness.rs`): `dlp_password_assignment` und
+  `dlp_generic_credential_assignment` verwerfen Code-Ausdrücke (Aufruf, Index-/Member-Zugriff,
+  `Token::…`-Pfad, Typannotation wie `Option<&str>` oder `string|null`, `%s`), Schlüssel mit
+  `:` am Ende, Pfade, eine Shell-Variable als Schlüssel (`$PWD:/work`), DE/EN-Wörterbuchwörter
+  und Wortformen („Passwort ist falsch“), Credential-Namen in einer Namenskonvention
+  (`GIT_PASSWORD`, `clientSecret`) und Test-Platzhalter (`"password"`, `"topSecret"`, `foo001`).
+  Ein Wert mit Ziffer oder Sonderzeichen ist nie ein Wort; schwache echte Passwörter bleiben
+  Treffer. `dlp_url_userinfo_password` verwirft Test-Zugangsdaten (`user:pass`, `user:secret`)
+  und das Pseudo-Passwort `x-oauth-basic`; `dlp_url_userinfo_token` meldet das Token im
+  Benutzernamen von `https://<token>:x-oauth-basic@…` (zwei Zeichenklassen, Entropie ≥ 3 Bit,
+  keine Folgen/Wiederholungen).
+  Seit F-GEN2 nehmen `dlp_password_assignment` und `dlp_generic_credential_assignment` einen
+  Wert in Anführungszeichen bis zum schließenden Zeichen, mit Leerzeichen, `;`, `,` und `}` darin;
+  ein Wert ohne Anführungszeichen endet weiter daran. `dlp_env_var_secret` meldet den Wert ohne
+  Anführungszeichen und ohne `;`/`,` am Ende, auch nach `KEY:` in YAML/Compose-`environment`, und
+  verwirft Code-Konstanten (`DATA_API_KEY = '.data-api'`, `AUTH_FLOW_PASSWORD = "password"`),
+  Aufrufe, Index-Zugriffe und Pfade (`likeness::is_env_value`). Eine Regel kann ihren Wert in je
+  einer Gruppe pro Schreibweise fangen (`"…"`, `'…'`, ohne); es zählt die erste beteiligte Gruppe
+  ab `span_group`. Ein Wert mit Leerzeichen muss wie eine Passphrase aussehen, nicht wie eine
+  Meldung („Bitte Passwort eingeben“, "too short"), ein Platzhalter oder eine Vorlage. Ein
+  Anführungszeichen, das einen String schließt (`"Password:"),…` in minifiziertem Code), öffnet
+  keinen Wert. Der Beispiel-Check (T06) zählt zusätzlich ein auf die Feldlänge gekürztes
+  Markerwort am Wortende (`Eexampl0123!`) und behandelt einen generischen Wert aus mindestens
+  32 Hex-Ziffern wie ein festes Format (`deadbeef…` ist ein Beispiel, `abcabcabcabc` bleibt ein
+  schwaches echtes Passwort). Übergangslösung, bis K05 die Werte strukturell extrahiert.
+  Seit T09 beginnen `dlp_password_assignment`, `dlp_generic_credential_assignment`,
+  `dlp_csrf_token` und `dlp_password_hash` am Credential-Nomen ohne `\b`: zusammengesetzte
+  (`db_password`, `service_secret`) und camelCase-Schlüssel (`dbPassword`, `ClientSecret`,
+  `PasswordHash`) treffen, ein Nomen am Wortende (`mypassword`, `DBPASSWORD`) nicht
+  (`RuleMeta::key_gate`, `likeness::key_shape`). Zwischen Schlüssel und Wert stehen auch das
+  schließende Anführungszeichen eines Schlüssels (`"client_secret":`, `'password' =>`, escaped
+  `\"…\":`), ein Index (`os.environ["DB_PASSWORD"] =`), ein String-Typ (`: &str =`, `: string =`)
+  und XML `key="…" value="…"`; Werte in `\"…\"` (Notebook, JSON-String) zählen. Nach
+  zusammengesetzten oder gequoteten Schlüsseln muss der Wert zu einem Feld passen: kein Bezeichner
+  in Namenskonvention, kein Wort oder Name, keine Version (`^1.0.0`), kein Code, nach gequotetem
+  Schlüssel oder `=>` nicht ohne Anführungszeichen. Cursor-/Handle-Tokens (`nextPageToken`,
+  `continuation_token`) und Secret-Objekte (`existingSecret`, `tls_secret`) sind keine Credentials,
+  ein an der Fanggrenze von 150 Zeichen abgeschnittener Wert auch nicht. Wortgrenzen der Schlüssel
+  sind ASCII (`(?-u:\b)`), der Regex der generischen Regel läuft dadurch etwa 25-mal schneller.
+  Übergangslösung, bis K05/G02 die Schlüssel strukturell lesen.
+  Seit F-HTTP (F13 + T11) stehen `Bearer`, `Basic` und Session-Cookies nicht mehr nur in einer
+  wörtlichen `Authorization:`- oder `Cookie:`-Zeile: Die Regeln treffen unter
+  `authorization`/`proxy_authorization`-Schlüsseln in env/JSON/YAML/TOML/XML/Code, in Logs und
+  allein in Chats, Tickets und Mails. Der Wert belegt dafür seine Art (`rules/http_auth.rs`):
+  `Basic` nur, wenn das Base64 kanonisch ist und zu druckbarem `user-id:passwort` dekodiert
+  (RFC 7617), mit gewähltem Passwort (kein Platzhalter, Stellvertreter oder Credential-Name, auch
+  nicht in Leetspeak wie `user:p@ss`, nicht gleich der User-ID); `Bearer` nur als ausgestelltes
+  Token (RFC 6750, ab 16 Zeichen, zwei Zeichenklassen, 3 Bit Entropie je Zeichen, keine
+  Sequenz-/Wiederholungsläufe, kein Bezeichner). Ein gültiges JWT nach `Bearer` gehört `dlp_jwt_token`,
+  ein Provider-Token seiner Provider-Regel. Session-Cookies von Servern und Frameworks
+  (`JSESSIONID`, `PHPSESSID`, `ASP.NET_SessionId`, `connect.sid`, `laravel_session`,
+  `__Host-`/`__Secure-`) zählen auch ohne `Cookie:`-Zeile, generische Namen (`session`,
+  `sessionid`, `sid`) weiter nur darin; der Wert muss wie eine ausgestellte Session-ID aussehen.
+  Das RFC-7617-Beispiel ist ein dokumentierter Beispielwert (K06).
+  Seit K05 (Teil 1) lesen die generischen Schlüsselregeln (`dlp_env_var_secret`,
+  `dlp_password_assignment`, `dlp_generic_credential_assignment`) Config-Zeilen strukturell
+  (`dlp/config_keys.rs` auf der `key: value`/`key=value`-Grammatik von PII K04): env
+  (`KEY=value`, `export KEY=value`), INI/properties (`key = value`, `app.db.password=…`) und
+  HTTP-Header im Kopf einer Anfrage oder Antwort. Der Schlüssel bindet den Wert über dieselbe
+  Schlüsselgrammatik und dasselbe Key-Gate wie die Regex; ein Wert ohne Anführungszeichen läuft bis
+  zum Zeilenende oder Inline-Kommentar (`␣#`, `␣;`), mit `;`, `,`, `}` darin. Kein Config-Wert
+  sind Werte mit Leerzeichen, Anführungszeichen oder Interpolation darin, mit `,`/`;` am Ende und
+  env-Werte mit `;` (bleiben bei der Shell-Logik der Regex). Vor jeder Bindung durch einen
+  Credential-Schlüssel, ob Regex oder Config-Zeile, verwirft der Wertform-Filter
+  (`rules/value_shape.rs`) Formen, die kein Secret sind: UUIDs, Digests mit Algorithmus-Präfix
+  in passender Länge (`sha256:`, `sha1-`, SRI, `h1:`), Hex-Digests nur unter einem Schlüssel, der
+  einen Digest nennt (`hashed_password`, `SHA256_TOKEN`, `gehashtes_passwort`), ObjectIds
+  (24 Hex mit Zeitstempel 2009–2040), Template- und Formatfelder, Variablenreferenzen,
+  Wahrheitswerte und Null-Wörter (DE/EN), Zahlen, Pfade und URLs ohne Zugangsdaten. Hex unter
+  einem einfachen Credential-Schlüssel bleibt ein Secret (OAuth-Client-Secrets, Flask/Rails-
+  Secret-Keys). YAML/JSON/TOML folgen in K05B, HCL/XML in K05C.
   Seit K09 (Taxonomie v2) nennt jede Secret-Regel einen Untertyp ihrer Gruppe (`subtype` in
   `matched_rules`: `api_key`, `access_token`, `password`, `auth_url` …). Connection-Strings,
   Webhook-URLs, Auth-URLs, OTP-Secrets und Seed-Phrasen werden keine eigenen Gruppen, sondern
   Untertypen von `CREDENTIAL`, `SECRET_TOKEN` bzw. `CRYPTO_KEY` (Liste in
   [`entity_map.yaml`](entity_map.yaml), `subtypes`).
 - Validatoren sind schwach: `is_secret_value` prüft nur Länge, Platzhalter und Env-Referenzen.
-  Prüfsummen fehlen ganz: GitHub/npm CRC32, JWT-Struktur und PEM/DER (Base58Check für WIF seit
-  K08/F02).
+  Prüfsummen fehlen ganz: JWT-Struktur und PEM/DER (Base58Check für WIF seit
+  K08/F02, GitHub CRC32 seit F03, npm CRC32 seit F04).
   Seit K03 liegen die Bausteine dafür in `rust/src/detectors/validators/` (CRC32-Base62,
   Base58Check, Bech32/Bech32m, Base64/DER, JWT-Header, Entropie, Zeichenklassen; auch für PII);
   angebunden werden sie regelweise in F01–F09.
 - Bekannte Präzisionslücken: `dlp_eth_private_key` traf bis F01 jeden 0x-64-Hex-Wert, also auch
   Tx- und Block-Hashes. `dlp_btc_wif` validierte bis K08 die Prüfsumme nicht. `dlp_signed_url_signature`
   (`sig=`) und `dlp_credential_in_url` (`token=`) treffen auch Paginierungs- und CSRF-Parameter.
-  `dlp_password_assignment` nimmt in Prosa beliebige Wörter („Passwort ist falsch“).
+  `dlp_password_assignment` nahm bis F-GEN1 in Prosa beliebige Wörter („Passwort ist falsch“).
 - Gemessen ist bisher nur Content: 214 Go-Dokumente aus gitleaks (Dokumentlabel) und 250
   SQL-Statements aus SchemaPile. Beide liegen als Dev-Komponente `external/` im Scoreboard
   (E12; Attach/Scope-Vertrag in

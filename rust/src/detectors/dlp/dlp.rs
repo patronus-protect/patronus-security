@@ -166,6 +166,9 @@ impl SecretSubtype {
     }
 }
 
+/// T09: key gate of a key-anchored rule, see [`RuleMeta::key_gate`].
+pub type KeyGate = fn(&str, usize, Range<usize>) -> bool;
+
 /// Rule metadata v2 (K02). Matches report `provider`, `validator_strength`,
 /// `source_ref` and, for secret rules, `severity` and `subtype` (K09) in
 /// `matched_rules`.
@@ -198,6 +201,32 @@ pub struct RuleMeta {
     /// Context a value needs beyond its shape (F01): called with the text and
     /// the value's byte range; `None` for rules whose shape suffices.
     pub context_gate: Option<fn(&str, Range<usize>) -> bool>,
+    /// F03: exact length of the token body after the keyword prefix of a
+    /// prefix rule; a generic rule skips a value with the prefix and a
+    /// token-shaped body of another length. `None` for rules without a fixed
+    /// length.
+    pub body_len: Option<BodyLen>,
+    /// Likeness a value needs beyond the rule's regex (F-GEN1): called with
+    /// the text and the value's byte range; rejects code expressions, words
+    /// and credential names after a generic key. `None` for rules whose
+    /// value shape suffices.
+    pub value_gate: Option<fn(&str, Range<usize>) -> bool>,
+    /// Key shape a key needs (T09): called with the text, the byte offset
+    /// where the match (the credential noun of the key) starts and the
+    /// value's byte range; reads a compound or camelCase prefix before the
+    /// noun. `None` for rules whose key is matched in full.
+    pub key_gate: Option<KeyGate>,
+}
+
+/// F03: the fixed body length of a prefix rule.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BodyLen {
+    /// Characters after the keyword prefix of a token.
+    pub exact: usize,
+    /// Shortest body that is still token-shaped (the former open-ended
+    /// minimum); a shorter one, as in a password that only starts like a
+    /// token, stays a generic credential.
+    pub shape_min: usize,
 }
 
 /// T01: a prefix rule reports a value only as a whole token. The characters
@@ -227,6 +256,34 @@ impl RuleMeta {
             subtype: None,
             boundary: None,
             context_gate: None,
+            value_gate: None,
+            body_len: None,
+            key_gate: None,
+        }
+    }
+
+    /// F03: the body after the keyword prefix has exactly `exact`
+    /// characters; bodies from `shape_min` characters on are token-shaped.
+    pub const fn with_body_len(self, exact: usize, shape_min: usize) -> Self {
+        Self {
+            body_len: Some(BodyLen { exact, shape_min }),
+            ..self
+        }
+    }
+
+    /// F-GEN1: the value counts only where `gate` finds it secret-like.
+    pub const fn with_value_gate(self, gate: fn(&str, Range<usize>) -> bool) -> Self {
+        Self {
+            value_gate: Some(gate),
+            ..self
+        }
+    }
+
+    /// T09: the key counts only where `gate` accepts its shape.
+    pub const fn with_key_gate(self, gate: KeyGate) -> Self {
+        Self {
+            key_gate: Some(gate),
+            ..self
         }
     }
 
@@ -436,6 +493,18 @@ pub struct DlpPipeline {
     tiers: Vec<Option<OverlapTier>>,
     prefilter: RulePrefilter,
     anchor_regexes: Vec<Regex>,
+    /// K05: per generic key-bound rule, the value regex of config-line values.
+    structured_regexes: Vec<Option<Regex>>,
+    /// K05: per generic key-bound rule, its key grammar for config lines.
+    config_keys: Vec<Option<ConfigKeyRegexes>>,
+}
+
+/// K05: the key grammar of a rule, compiled for config lines.
+struct ConfigKeyRegexes {
+    /// Finds the credential part of a key in the text.
+    find: Regex,
+    /// The whole key, for rules whose grammar spans it (`DB_PASSWORD`).
+    whole: Option<Regex>,
 }
 
 impl Default for DlpPipeline {
@@ -456,6 +525,8 @@ impl DlpPipeline {
         let mut placeholder_checks = Vec::new();
         let mut metas = Vec::new();
         let mut tiers = Vec::new();
+        let mut structured_regexes = Vec::new();
+        let mut config_keys = Vec::new();
 
         for p in DLP_PATTERNS {
             regexes.push(Regex::new(p.pattern).unwrap());
@@ -470,6 +541,23 @@ impl DlpPipeline {
             placeholder_checks.push(rules::placeholder_check(p.name));
             metas.push(p.meta);
             tiers.push(rules::overlap_tier(p.name));
+            let config_key = rules::config_key(p.name);
+            structured_regexes.push(config_key.map(|key| {
+                let max = key.max_len.map_or(String::new(), |max| max.to_string());
+                Regex::new(&format!(
+                    r"(?P<structured>[^\r\n]{{{},{max}}})\z",
+                    key.min_len
+                ))
+                .unwrap()
+            }));
+            config_keys.push(config_key.map(|key| {
+                ConfigKeyRegexes {
+                    find: Regex::new(key.pattern).unwrap(),
+                    whole: key
+                        .whole
+                        .then(|| Regex::new(&format!("^(?:{})$", key.pattern)).unwrap()),
+                }
+            }));
         }
 
         let anchor_regexes = DLP_ANCHOR_PATTERNS
@@ -490,6 +578,8 @@ impl DlpPipeline {
             tiers,
             prefilter: RulePrefilter::new(DLP_PATTERNS),
             anchor_regexes,
+            structured_regexes,
+            config_keys,
         }
     }
 
@@ -560,6 +650,69 @@ impl DlpPipeline {
         detection
     }
 
+    /// The value of a match of rule `index`, see [`NativeRegexDetector::value_group`].
+    fn value<'t>(&self, index: usize, captures: &regex::Captures<'t>) -> Option<regex::Match<'t>> {
+        captures.get(self.value_group(index, captures).unwrap_or(0))
+    }
+
+    /// F03: whether `value`, without leading quotes, starts with a whole
+    /// token of a prefixed provider rule with a checksum (GitHub `ghp_` …)
+    /// whose checksum fails, as in `ghp_…` or `ghp_…@github.com/acme/app`.
+    fn fails_token_checksum(&self, value: &str) -> bool {
+        let value = value.trim_start_matches(['"', '\'', '`']);
+        (0..self.regexes.len()).any(|index| {
+            let meta = &self.metas[index];
+            meta.validator_strength == ValidatorStrength::Checksum
+                && meta.keywords.iter().any(|keyword| {
+                    value
+                        .get(..keyword.len())
+                        .is_some_and(|head| head.eq_ignore_ascii_case(keyword))
+                })
+                && self.regexes[index].find(value).is_some_and(|token| {
+                    token.start() == 0
+                        && !value[token.end()..]
+                            .starts_with(|c: char| c.is_ascii_alphanumeric() || c == '_')
+                        && self.validators[index]
+                            .is_some_and(|validator| !validator(token.as_str()))
+                })
+        })
+    }
+
+    /// F03: whether the value at `range` of `text`, without leading quotes,
+    /// is the keyword prefix of a prefix rule with a fixed body length
+    /// (GitHub `ghp_`, `github_pat_` …) and a whole-token body of another
+    /// token-shaped length, as in `ghp_` with 35 characters or
+    /// `ghp_…@github.com/acme/app`. The body ends at the end of the text, a
+    /// space, a quote, `@`, `,` or `;`.
+    fn has_wrong_token_length(&self, text: &str, range: Range<usize>) -> bool {
+        let value = text[range.start..].trim_start_matches(['"', '\'', '`']);
+        (0..self.regexes.len()).any(|index| {
+            let meta = &self.metas[index];
+            let (Some(body_len), Some(boundary)) = (meta.body_len, meta.boundary) else {
+                return false;
+            };
+            meta.keywords.iter().any(|keyword| {
+                let Some(body) = value
+                    .get(..keyword.len())
+                    .filter(|head| head.eq_ignore_ascii_case(keyword))
+                    .map(|_| &value[keyword.len()..])
+                else {
+                    return false;
+                };
+                let end = body
+                    .find(|c: char| {
+                        !(c.is_ascii_alphanumeric() || c == '_' || boundary.alphabet.contains(c))
+                    })
+                    .unwrap_or(body.len());
+                end != body_len.exact
+                    && end >= body_len.shape_min
+                    && body[end..].chars().next().is_none_or(|c| {
+                        c.is_whitespace() || matches!(c, '"' | '\'' | '`' | '@' | ',' | ';')
+                    })
+            })
+        })
+    }
+
     /// Values that fixed-format rules (provider tokens, keys, hashes) match
     /// inside `range` of `text`, so that a generic rule capturing such a value
     /// applies the fixed-format example check to it (T06). Only the line around
@@ -587,7 +740,7 @@ impl DlpPipeline {
             .flat_map(move |index| {
                 self.regexes[index]
                     .captures_iter(window)
-                    .filter_map(move |captures| captures.get(self.span_groups[index].unwrap_or(0)))
+                    .filter_map(move |captures| self.value(index, &captures))
                     .map(move |value| {
                         (
                             self.rule_ids[index],
@@ -640,12 +793,66 @@ impl NativeRegexDetector for DlpPipeline {
         Some(&self.span_groups)
     }
 
+    /// K05: config-line values of the generic key-bound rules; a value
+    /// counts with the length bounds of the rule's regex.
+    fn structured_regexes(&self) -> Option<&[Option<Regex>]> {
+        Some(&self.structured_regexes)
+    }
+
+    /// K05: the env, INI/properties and HTTP header values whose key the
+    /// rule's key grammar accepts: as the whole key (`dlp_env_var_secret`)
+    /// or as its last word, with the rule's key gate (T09). The value
+    /// checks of [`Self::allows_match`] then apply as for a regex match.
+    fn structured_values(
+        &self,
+        index: usize,
+        prepared: &crate::threat::NativeText<'_>,
+    ) -> Vec<crate::detectors::StructuredValue> {
+        let Some(keys) = &self.config_keys[index] else {
+            return Vec::new();
+        };
+        let text = prepared.text();
+        let key_gate = self.metas[index].key_gate;
+        super::config_keys::config_values(text, &keys.find)
+            .into_iter()
+            .filter(|config| {
+                let key = &text[config.key.clone()];
+                match &keys.whole {
+                    Some(whole) => whole.is_match(key),
+                    None => keys.find.find_iter(key).any(|noun| {
+                        noun.end() == key.len()
+                            && key_gate.is_none_or(|gate| {
+                                gate(text, config.key.start + noun.start(), config.value.clone())
+                            })
+                    }),
+                }
+            })
+            .map(|config| crate::detectors::StructuredValue {
+                key: config.key,
+                value: config.value,
+                carrier: config.format.as_str(),
+            })
+            .collect()
+    }
+
+    /// F-GEN2: a rule may hold its value in one group per quoting style
+    /// (`"…"`, `'…'`, bare); the value is the first group from the rule's
+    /// `span_group` on that took part in the match.
+    fn value_group(&self, index: usize, captures: &regex::Captures<'_>) -> Option<usize> {
+        let first = self.span_groups[index]?;
+        (first..captures.len())
+            .find(|&group| captures.get(group).is_some())
+            .or(Some(first))
+    }
+
     fn preserve_cross_label_overlaps(&self) -> bool {
         true
     }
 
     /// Drops prefix-rule values that are no whole token (T01), values
-    /// without the context their rule needs (F01), generic
+    /// without the context their rule needs (F01), code expressions, words
+    /// and credential names after generic keys (F-GEN1), compound keys of
+    /// the wrong shape (T09), generic
     /// assignments whose key is a URL userinfo (K08), values
     /// below the rule's entropy floor (K02), documented example
     /// and test values of secret rules (T06), vendor-documented example values
@@ -658,12 +865,17 @@ impl NativeRegexDetector for DlpPipeline {
         captures: &regex::Captures<'_>,
     ) -> bool {
         let text = prepared.text();
-        // K08: a generic key that is the userinfo of a URL (`https://token:…@`)
-        // belongs to the URL credential, also when that has no value to report.
+        // K08: a generic key that is the userinfo of a URL (`https://token:…@`,
+        // since T09 also `https://github_token:…@`) belongs to the URL
+        // credential, also when that has no value to report.
         if self.tiers[index] == Some(OverlapTier::Generic)
-            && captures
-                .get(0)
-                .is_some_and(|matched| text[..matched.start()].ends_with("://"))
+            && captures.get(0).is_some_and(|matched| {
+                text[..matched.start()]
+                    .trim_end_matches(|c: char| {
+                        c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-')
+                    })
+                    .ends_with("://")
+            })
         {
             return false;
         }
@@ -671,7 +883,7 @@ impl NativeRegexDetector for DlpPipeline {
         // T01: a prefix rule's value inside an identifier, hex run or base64
         // blob is no token.
         if let Some(boundary) = meta.boundary {
-            if let Some(value) = captures.get(self.span_groups[index].unwrap_or(0)) {
+            if let Some(value) = self.value(index, captures) {
                 if !super::boundary::is_whole_token(text, value.range(), boundary) {
                     return false;
                 }
@@ -679,8 +891,34 @@ impl NativeRegexDetector for DlpPipeline {
         }
         // F01: a value whose shape is no proof needs its context.
         if let Some(gate) = meta.context_gate {
-            if let Some(value) = captures.get(self.span_groups[index].unwrap_or(0)) {
+            if let Some(value) = self.value(index, captures) {
                 if !gate(text, value.range()) {
+                    return false;
+                }
+            }
+        }
+        // F-GEN1: a generic key's value must look like a secret.
+        if let Some(gate) = meta.value_gate {
+            if let Some(value) = self.value(index, captures) {
+                if !gate(text, value.range()) {
+                    return false;
+                }
+            }
+        }
+        // K05: a config-line value had its key checked when it was bound.
+        let structured = captures.name("structured").is_some();
+        // K05: a key binds no value of a shape that is no secret.
+        if self.tiers[index] == Some(OverlapTier::Generic) {
+            if let Some(value) = self.value(index, captures) {
+                if rules::non_secret_shape(text, value.range()).is_some() {
+                    return false;
+                }
+            }
+        }
+        // T09: a compound or camelCase key must have the shape of one.
+        if let (Some(gate), false) = (meta.key_gate, structured) {
+            if let (Some(key), Some(value)) = (captures.get(0), self.value(index, captures)) {
+                if !gate(text, key.start(), value.range()) {
                     return false;
                 }
             }
@@ -690,7 +928,7 @@ impl NativeRegexDetector for DlpPipeline {
         if check == ExampleCheck::Off && !placeholder_check && meta.min_entropy.is_none() {
             return true;
         }
-        let Some(value) = captures.get(self.span_groups[index].unwrap_or(0)) else {
+        let Some(value) = self.value(index, captures) else {
             return true;
         };
         if !meta.has_min_entropy(value.as_str()) {
@@ -704,6 +942,14 @@ impl NativeRegexDetector for DlpPipeline {
             return false;
         }
         if check != ExampleCheck::Off && rules::is_documented_example(rule_id, text, value.range())
+        {
+            return false;
+        }
+        // F03: a generic rule's value that is a checksummed provider token
+        // with a wrong checksum is no secret of that provider either.
+        if check == ExampleCheck::Generic
+            && (self.fails_token_checksum(value.as_str())
+                || self.has_wrong_token_length(text, value.range()))
         {
             return false;
         }
@@ -726,7 +972,7 @@ impl NativeRegexDetector for DlpPipeline {
     ) -> MatchScore {
         let pattern = &DLP_PATTERNS[index];
         let value = captures
-            .get(self.span_groups[index].unwrap_or(0))
+            .get(self.value_group(index, captures).unwrap_or(0))
             .unwrap_or_else(|| captures.get(0).unwrap());
         let evidence = context::evidence(pattern, prepared.text(), (value.start(), value.end()));
         MatchScore {

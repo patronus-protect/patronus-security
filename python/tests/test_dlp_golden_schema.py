@@ -80,14 +80,21 @@ class DlpGoldenSchemaV2Tests(unittest.TestCase):
         # Strict hard negatives hold example/test values (fill recipes, T06); a plain
         # generator value is a hard negative only where context marks it as no secret (K04)
         # or where it is glued into an identifier, hex run or base64 blob (T01). A rule with
-        # a context gate (F01) drops a value without key context already in strict.
-        gated_rules = set(runpy.run_path(str(benchmark.DATA_DIR / "generate_l1_goldens.py"))[
-            "DLP_CONTEXT_GATED_RULES"
-        ])
+        # a context gate (F01) drops a value without key context already in strict. A
+        # lookalike value (wrong check value or length, F03) is no secret in any mode.
+        generator = runpy.run_path(str(benchmark.DATA_DIR / "generate_l1_goldens.py"))
+        gated_rules = set(generator["DLP_CONTEXT_GATED_RULES"])
+        lookalikes = set(generator["DLP_LOOKALIKE_GENERATORS"])
+        self.assertEqual(
+            lookalikes, {name for entry in rules.load_rule_map().values() for name in entry.get("lookalike", [])}
+        )
         glued = 0
         gated = Counter()
         for row in load_rows():
             if row["case_type"] != "hard_negative" or "secrets" not in row:
+                continue
+            if all(secret["gen"] in lookalikes for secret in row["secrets"]):
+                self.assertNotIn("dlp_mode", row, row["id"])
                 continue
             plain = any("fill" not in secret for secret in row["secrets"])
             if plain and is_glued(row["template"]) and "dlp_mode" not in row:

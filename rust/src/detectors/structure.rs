@@ -237,17 +237,36 @@ fn json(text: &str, builder: &mut Builder) {
     }
 }
 
+/// A `key: value` or `key=value` line: the key, the separator and the raw value.
+static KEY_VALUE_LINE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"(?m)^[ \t]*(?:[-*+][ \t]+)?(\p{L}[\p{L}\p{N} ._'/#()&+\-]{0,47}?)[ \t]*[:=][ \t]*([^\r\n]+?)[ \t]*\r?$",
+    )
+    .unwrap()
+});
+
+/// One line of `text` read as a [`Carrier::KeyValue`] field (DLP K05): the
+/// byte ranges of the key and of the raw value, untrimmed of quotes and
+/// comments, so that a caller can apply the quoting rules of its format.
+/// `None` if `line` is no `key: value` or `key=value` line.
+pub(crate) fn key_value_line(
+    text: &str,
+    line: Range<usize>,
+) -> Option<(Range<usize>, Range<usize>)> {
+    let captures = KEY_VALUE_LINE.captures(&text[line.clone()])?;
+    let key = captures.get(1)?;
+    let value = captures.get(2)?;
+    Some((
+        line.start + key.start()..line.start + key.end(),
+        line.start + value.start()..line.start + value.end(),
+    ))
+}
+
 fn key_value_lines(text: &str, builder: &mut Builder) {
-    static LINE: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(
-            r"(?m)^[ \t]*(?:[-*+][ \t]+)?(\p{L}[\p{L}\p{N} ._'/#()&+\-]{0,47}?)[ \t]*[:=][ \t]*([^\r\n]+?)[ \t]*\r?$",
-        )
-        .unwrap()
-    });
     if !text.contains([':', '=']) {
         return;
     }
-    for captures in LINE.captures_iter(text) {
+    for captures in KEY_VALUE_LINE.captures_iter(text) {
         let key = captures.get(1).unwrap();
         let value = captures.get(2).unwrap();
         builder.push(text, key.range(), None, value.range(), Carrier::KeyValue);

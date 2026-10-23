@@ -310,7 +310,7 @@ pub(crate) fn is_placeholder_value(value: &str) -> bool {
 /// `$name` is a shell, PHP or template variable unless the name looks like
 /// the rest of a password: a mixed-case or lower-case word with digits and
 /// without `_` (`$ecret2026`, `$kqztrwx4711`).
-fn is_variable_name(name: &str) -> bool {
+pub(crate) fn is_variable_name(name: &str) -> bool {
     if !is_identifier(name) {
         return false;
     }

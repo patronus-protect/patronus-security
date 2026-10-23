@@ -977,6 +977,16 @@
         "seed": 1
       }
     ],
+    "hard_negatives": {
+      "de": [
+        "Zugangs-IDs beginnen mit AKIA (dauerhaft) oder ASIA (temporär).",
+        "aws_access_key_id = ${AWS_ACCESS_KEY_ID}"
+      ],
+      "en": [
+        "AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}",
+        "IAM user IDs start with AIDA, role IDs with AROA; neither is a credential."
+      ]
+    },
     "language_neutral": true,
     "balanced": {
       "context": {
@@ -988,15 +998,25 @@
   {
     "category": "dlp",
     "rule_id": "dlp_aws_secret_key",
-    "de": "AWS_SECRET_ACCESS_KEY=<<secret\u003a0>>",
-    "en": "AWS_SECRET_ACCESS_KEY=<<secret\u003a0>>",
+    "de": "provider \"aws\" {\n  secret_key = \"<<secret\u003a0>>\"\n}",
+    "en": "AWS Secret Access Key [None]: <<secret\u003a0>>",
     "secrets": [
       {
         "gen": "aws_secret_access_key",
         "seed": 1
       }
     ],
-    "language_neutral": true
+    "hard_negatives": {
+      "de": [
+        "provider \"aws\" {\n  secret_key = var.geheimer_schluessel\n}",
+        "Der geheime Zugriffsschlüssel besteht aus 40 Base64-Zeichen."
+      ],
+      "en": [
+        "AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}",
+        "aws_secret_access_key = <your-secret-access-key>"
+      ]
+    },
+    "language_neutral": false
   },
   {
     "category": "dlp",
@@ -1048,6 +1068,16 @@
         "seed": 1
       }
     ],
+    "hard_negatives": {
+      "de": [
+        "Platzhalter in der Doku: GITHUB_TOKEN=<dein-token>",
+        "Abgeschnittenes Token im Ticket: ghp_4WW5PUgz…"
+      ],
+      "en": [
+        "export GH_TOKEN=\"$(gh auth token)\"",
+        "GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}"
+      ]
+    },
     "language_neutral": true,
     "balanced": {
       "context": {
@@ -1067,6 +1097,14 @@
         "seed": 1
       }
     ],
+    "hard_negatives": {
+      "de": [
+        "Gekürzt im Audit-Log: github_pat_11AB…"
+      ],
+      "en": [
+        "Fine-grained tokens look like github_pat_<22 characters>_<59 characters>."
+      ]
+    },
     "language_neutral": true
   },
   {
@@ -1080,6 +1118,60 @@
         "seed": 1
       }
     ],
+    "hard_negatives": {
+      "de": [
+        "Platzhalter in der Doku: GITLAB_TOKEN=<dein-gitlab-token>",
+        "Abgeschnittenes Token im Ticket: glpat-x7Kq…"
+      ],
+      "en": [
+        "GITLAB_TOKEN: $CI_JOB_TOKEN",
+        "Personal access tokens start with glpat- and have 20 characters."
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_gitlab_token",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "gitlab_deploy_token",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "Runner-Token aus dem Tresor: token = \"${RUNNER_TOKEN}\"",
+        "Deploy-Tokens beginnen mit gldt-."
+      ],
+      "en": [
+        "docker login -u gitlab-ci-token -p \"$CI_JOB_TOKEN\" \"$CI_REGISTRY\"",
+        "Pipeline trigger tokens start with glptt- followed by 40 hex digits."
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_gitlab_oauth_secret",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "gitlab_oauth_app_secret",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "GITLAB_APP_SECRET=<hier-secret-eintragen>"
+      ],
+      "en": [
+        "{\"application_id\": \"4711\", \"secret\": \"${GITLAB_APP_SECRET}\"}"
+      ]
+    },
     "language_neutral": true
   },
   {
@@ -1093,6 +1185,16 @@
         "seed": 1
       }
     ],
+    "hard_negatives": {
+      "de": [
+        "//registry.npmjs.org/:_authToken=${NPM_TOKEN}",
+        "Abgeschnittenes npm-Token im Ticket: npm_Zq7…"
+      ],
+      "en": [
+        "npm config set //registry.npmjs.org/:_authToken \"$NPM_TOKEN\"",
+        "Granular access tokens start with npm_ followed by 36 characters."
+      ]
+    },
     "language_neutral": true
   },
   {
@@ -1292,12 +1394,26 @@
       "de": [
         "DB_PASSWORT=BITTE_AENDERN",
         "DB_PASSWORT = os.environ[\"DB_PASSWORT\"]",
-        "DB_PASSWORT=@Microsoft.KeyVault(SecretUri=https://lager-kv.vault.azure.net/secrets/db-passwort/)"
+        "DB_PASSWORT=@Microsoft.KeyVault(SecretUri=https://lager-kv.vault.azure.net/secrets/db-passwort/)",
+        "const DATA_API_KEY = '.data-api'",
+        "const ANMELDUNG_FLOW_PASSWORD = \"password\"",
+        "      LAGER_DB_PASSWORT: \"${LAGER_DB_PASSWORT}\"",
+        "LAGER_API_TOKEN=3f2a9c4e-7b1d-4e8a-9c2f-5d6e7f8a9b0c",
+        "LAGER_KENNWORT=%LAGER_KENNWORT%",
+        "LAGER_GEHEIMNIS=deaktiviert",
+        "LAGER_PASSWORT=/etc/lager/passwort.txt"
       ],
       "en": [
         "DB_PASSWORD=YOUR_DB_PASSWORD_HERE",
         "DB_PASSWORD = ENV.fetch(\"DB_PASSWORD\")",
-        "DB_PASSWORD=op://Production/postgres/password"
+        "DB_PASSWORD=op://Production/postgres/password",
+        "const DATA_API_KEY = \".data-api\";",
+        "const AUTH_FLOW_PASSWORD = \"password\"",
+        "      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}",
+        "DEPLOY_SECRET=sha1-2fd4e1c67a2d28fced849ee1bb76e7391b93eb12",
+        "SHA256_RELEASE_TOKEN=9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+        "ORDER_SERVICE_TOKEN=6512bd43d9caa6e02c990b0a",
+        "IDP_CLIENT_SECRET=https://auth.internal/realms/acme/protocol/openid-connect/token"
       ]
     },
     "language_neutral": false
@@ -1311,12 +1427,36 @@
       "de": [
         "Passwort: HIER_PASSWORT_EINTRAGEN",
         "passwort = var.db_passwort",
-        "passwort: ((lager.db_passwort))"
+        "passwort: ((lager.db_passwort))",
+        "Das Passwort ist falsch, bitte erneut eingeben.",
+        "docker run -v \"$PWD:/arbeit\" lager-export",
+        "passwort = self.tresor.lese_passwort(konto)",
+        "const meldungen = { passwort: \"Bitte geben Sie ein Passwort ein\" };",
+        "e.createElement(\"label\",{htmlFor:\"passwort\"},\"Passwort:\"),d?e.createElement(\"code\",null,\" ******\")",
+        "export interface Konfig {\n  dbPasswort: string;\n}",
+        "const DB_PASSWORT: &str = env!(\"DB_PASSWORT\");",
+        "<add key=\"DbPasswort\" value=\"{{DB_PASSWORT}}\" />",
+        "'passwort' => !empty($zugang['pass']) ? $zugang['pass'] : ''",
+        "[konto]\ngehashtes_passwort = 2fd4e1c67a2d28fced849ee1bb76e7391b93eb12",
+        "[datenbank]\npasswort = {lager_passwort}",
+        "[sicherheit]\npasswort = 20260914"
       ],
       "en": [
         "Password: TODO",
         "password: {{dbPassword}}",
-        "keystore.password=changeit"
+        "keystore.password=changeit",
+        "password = os.environ[\"DB_PASSWORD\"]",
+        "def set_password(self, name: str, password: str) -> None:",
+        "The password is stored in the system keyring.",
+        "export default { password: \"Enter your password\", submit: \"Sign in\" };",
+        "Login failed because the password is \"too short\" for the new policy.",
+        "const routes = { forgotPassword: \"forgot-password\" };",
+        "pub struct Config {\n    pub db_password: Option<String>,\n}",
+        "{\"devDependencies\": {\"parse-passwd\": \"^1.0.0\"}}",
+        "switch(u){case\"password\":return void t.authorizePassword(e)}",
+        "hashed_password=5d41402abc4b2a76b9719d911017c592",
+        "app.db.password=<%= @db_password %>",
+        "[database]\npassword = C:\\secrets\\orders-db.txt"
       ]
     },
     "language_neutral": false
@@ -1328,14 +1468,33 @@
     "en": "API key: abcDEfGhIJkl123456",
     "hard_negatives": {
       "de": [
-        "API-Schl\u00fcssel: HIER_API_SCHLUESSEL_EINTRAGEN",
+        "API-Schlüssel: HIER_API_SCHLUESSEL_EINTRAGEN",
         "client_secret = Environment.GetEnvironmentVariable(\"CLIENT_SECRET\")",
-        "git remote set-url origin https://token:@bitbucket.org/acme/lager.git"
+        "git remote set-url origin https://token:@bitbucket.org/acme/lager.git",
+        "Das Token ist abgelaufen und muss erneuert werden.",
+        "let token = berechtigung.token_fuer(&konto)?;",
+        "lager:\n  token: \"{{ .Values.lager.token }}\"",
+        "{\"artikel\": [], \"nextPageToken\": \"Q0FVUUFBYTFiMmMz\"}",
+        "lager:\n  auth:\n    existingSecret: \"lager-release-auth\"",
+        "lager.geheimnis=sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+        "lager.zugangstoken=5f8d0c3e9b1a2d4c6e8f0a1b",
+        "GET /v1/lieferungen HTTP/1.1\nHost: api.lager.intern\nX-Api-Schluessel: https://tresor.lager.intern/v1/lager/api"
       ],
       "en": [
         "API key: YOUR-API-TOKEN",
         "client_secret: %CLIENT_SECRET%",
-        "git remote set-url origin https://token:@bitbucket.org/acme/warehouse.git"
+        "git remote set-url origin https://token:@bitbucket.org/acme/warehouse.git",
+        "token = get_token(repository_name)",
+        "pub fn connect(token: Option<&str>) -> Result<Client> {",
+        "Token::Literal(c) => self.push(c),",
+        "oauth:\n  client_secret: \"<your client secret>\"",
+        "{\"items\": [], \"continuation_token\": \"a8f3k2m9x7q1z5w4\"}",
+        "ingress:\n  tls_secret: \"wildcard-internal-2026\"",
+        "    'COPILOT_GITHUB_TOKEN' => 'github-copilot',",
+        "POST /v1/exports HTTP/1.1\nHost: api.internal\nX-Api-Key: 550e8400-e29b-41d4-a716-446655440000",
+        "[oauth]\nclient_secret = %(client_secret)s",
+        "POST /v1/exports HTTP/1.1\nHost: api.internal\nX-Auth-Token: disabled",
+        "oauth.client-secret=86400000"
       ]
     },
     "language_neutral": false
@@ -1343,26 +1502,38 @@
   {
     "category": "dlp",
     "rule_id": "dlp_bearer_token",
-    "de": "Authorization: Bearer abcDEfGhIJkl123456",
-    "en": "Authorization: Bearer abcDEfGhIJkl123456",
+    "de": "Access-Token für den Abgleich: Bearer kQ7vRz2mXp9TsW4nYb3d",
+    "en": "AUTHORIZATION=Bearer kQ7vRz2mXp9TsW4nYb3d",
     "hard_negatives": {
       "de": [
         "Authorization: Bearer HIER_TOKEN_EINTRAGEN",
-        "Authorization: Bearer __ZUGRIFFSTOKEN__"
+        "Authorization: Bearer __ZUGRIFFSTOKEN__",
+        "AUTHORIZATION=Bearer ${LAGER_TOKEN}"
       ],
       "en": [
         "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE",
-        "Authorization: Bearer secret_token"
+        "Authorization: Bearer secret_token",
+        "curl -H \"Authorization: Bearer abc123.xyz.789\""
       ]
     },
-    "language_neutral": true
+    "language_neutral": false
   },
   {
     "category": "dlp",
     "rule_id": "dlp_basic_auth",
-    "de": "Authorization: Basic YWRhOnNlY3JldC04ODQy",
-    "en": "Authorization: Basic YWRhOnNlY3JldC04ODQy",
-    "language_neutral": true
+    "de": "Proxy-Zugangsdaten: Basic YWRhOnNlY3JldC04ODQy",
+    "en": "proxy_authorization: \"Basic YWRhOnNlY3JldC04ODQy\"",
+    "hard_negatives": {
+      "de": [
+        "PROXY_AUTHORIZATION=Basic SGFsbG8gV2VsdCBkYXMgaXN0IGVpbg==",
+        "expect(header).toBe(\"Basic YmVudXR6ZXI6cGFzc3dvcnQ=\")"
+      ],
+      "en": [
+        ".should(\"equal\", \"Basic YXBwbGljYXRpb246c2VjcmV0\")",
+        "Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ=="
+      ]
+    },
+    "language_neutral": false
   },
   {
     "category": "dlp",
@@ -1382,9 +1553,17 @@
   {
     "category": "dlp",
     "rule_id": "dlp_session_cookie",
-    "de": "Cookie: sessionid=kQ7vRz2mXp9TsW4nYb3",
+    "de": "Sitzungs-Cookie aus dem Browser: JSESSIONID=8F3A1C7E4B20D86F5EA9C3172B4D08E6",
     "en": "Cookie: sessionid=kQ7vRz2mXp9TsW4nYb3",
-    "language_neutral": true
+    "hard_negatives": {
+      "de": [
+        "SESSION_COOKIE=PHPSESSID=HIER_SITZUNG_EINTRAGEN"
+      ],
+      "en": [
+        "Set-Cookie: __Host-session=${SESSION_ID}; Path=/"
+      ]
+    },
+    "language_neutral": false
   },
   {
     "category": "dlp",
@@ -1394,11 +1573,13 @@
     "hard_negatives": {
       "de": [
         "X-CSRF-Token: HIER_CSRF_TOKEN_EINTRAGEN",
-        "csrf_token = System.getenv(\"CSRF_TOKEN\")"
+        "csrf_token = System.getenv(\"CSRF_TOKEN\")",
+        "<meta name=\"csrf-token\" content=\"{{ csrf_token() }}\">"
       ],
       "en": [
         "X-CSRF-Token: YOUR_CSRF_TOKEN_HERE",
-        "csrf_token = os.environ[\"CSRF_TOKEN\"]"
+        "csrf_token = os.environ[\"CSRF_TOKEN\"]",
+        "{\"csrf_token\": \"X-CSRF-Token\"}"
       ]
     },
     "language_neutral": true
@@ -1419,16 +1600,43 @@
       "de": [
         "postgres://dbuser:BITTE_AENDERN@db.internal/app",
         "postgresql://lager:%(passwort)s@db.intern/lager",
-        "DATABASE_URL=postgres://lager@db.intern:5432/lager"
+        "DATABASE_URL=postgres://lager@db.intern:5432/lager",
+        "$fs->get('https://user:pass@github.com/composer/composer/404');",
+        "'http_proxy' => 'http://benutzer:geheimnis@proxy.intern:3128',"
       ],
       "en": [
         "postgres://dbuser:TODO@db.internal/app",
         "mysql://report:$DB_PASSWORD@db1/app",
         "https://x-token-auth:my-access-token@bitbucket.org/acme/repo.git",
-        "DATABASE_URL=postgres://warehouse@db.internal:5432/warehouse"
+        "DATABASE_URL=postgres://warehouse@db.internal:5432/warehouse",
+        "$this->git->syncMirror('https://user:secret@example.com/repo.git', $dir);",
+        "['https://token:MY_GITHUB_TOKEN@github.com/acme/repo.git', 1],"
       ]
     },
     "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_url_userinfo_token",
+    "de": "Spiegel des Lager-Repos: https://<<secret\u003a0>>:x-oauth-basic@github.com/acme/lager.git",
+    "en": "$ git clone https://<<secret\u003a0>>:x-oauth-basic@github.com/acme/app.git",
+    "secrets": [
+      {
+        "gen": "generic_api_secret",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "git clone https://$GITHUB_TOKEN:x-oauth-basic@github.com/acme/lager.git",
+        "https://<token>:x-oauth-basic@github.com/acme/lager.git"
+      ],
+      "en": [
+        "https://myusername:x-oauth-basic@github.com/acme/app.git",
+        "git clone https://${{ secrets.GITHUB_TOKEN }}:x-oauth-basic@github.com/acme/app.git"
+      ]
+    },
+    "language_neutral": false
   },
   {
     "category": "dlp",

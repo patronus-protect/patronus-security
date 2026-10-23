@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "note": "Maps every dlp_* rule in DLP_PATTERNS to the generators whose values it must find. Each probe is a minimal carrier; the rule alone must report exactly the <<secret:0>> span. shape_only generators predate E03 and are format-shaped without a valid checksum or structure; they stay for the E02 goldens. weak generators are real values the rule must keep reporting: low-variety values outside example context (T06: repeated chunk, sequential run) and placeholder-like shapes (T07: SCREAMING_SNAKE without a placeholder word, leading $ with digits); carriers do not use them. Content rules have no secret value and are covered by carrier templates (E04).",
+  "note": "Maps every dlp_* rule in DLP_PATTERNS to the generators whose values it must find. Each probe is a minimal carrier; the rule alone must report exactly the <<secret:0>> span. shape_only generators predate E03 and are format-shaped without a valid checksum or structure; they stay for the E02 goldens. weak generators are real values the rule must keep reporting: low-variety values outside example context (T06: repeated chunk, sequential run) and placeholder-like shapes (T07: SCREAMING_SNAKE without a placeholder word, leading $ with digits); carriers do not use them. quoted generators (F-GEN2) are real values with spaces or ;/,/} inside that the rule reports up to the closing quote; each probe wraps them in double quotes, and carriers do not use them. lookalike generators (F03, F04, F05) are values in the rule's shape with a wrong check value or length that the rule must not report; goldens use them as hard negatives in carriers without key context. Content rules have no secret value and are covered by carrier templates (E04).",
   "rules": {
     "dlp_anthropic_key": {
       "generators": ["anthropic_api_key", "anthropic_admin_key"],
@@ -36,12 +36,14 @@
       "probes": ["REPLICATE_API_TOKEN=<<secret:0>>", "replicate token: <<secret:0>>"]
     },
     "dlp_aws_access_key": {
-      "generators": ["aws_access_key_id", "aws_session_access_key_id"],
+      "generators": ["aws_access_key_id", "aws_session_access_key_id", "aws_sts_bearer_key_id", "aws_context_credential_key_id", "aws_access_key_id_non_base32"],
+      "lookalike": ["aws_access_key_id_long", "aws_iam_user_unique_id"],
       "probes": ["aws_access_key_id = <<secret:0>>", "Die Access Key ID lautet <<secret:0>>."]
     },
     "dlp_aws_secret_key": {
       "generators": ["aws_secret_access_key"],
-      "probes": ["aws_secret_access_key = <<secret:0>>", "{\"SecretAccessKey\": \"<<secret:0>>\"}"]
+      "lookalike": ["aws_secret_access_key_long", "aws_secret_access_key_hex"],
+      "probes": ["aws_secret_access_key = <<secret:0>>", "{\"SecretAccessKey\": \"<<secret:0>>\"}", "provider \"aws\" {\n  region     = \"eu-central-1\"\n  secret_key = \"<<secret:0>>\"\n}\n"]
     },
     "dlp_google_api_key": {
       "generators": ["google_api_key"],
@@ -58,19 +60,32 @@
     "dlp_github_token": {
       "generators": ["github_ghp_token", "github_gho_token", "github_ghu_token", "github_ghs_token", "github_ghr_token"],
       "shape_only": ["github_pat_classic"],
+      "lookalike": ["github_ghp_bad_crc", "github_gho_bad_crc", "github_ghu_bad_crc", "github_ghs_bad_crc", "github_ghr_bad_crc", "github_ghp_short", "github_gho_short", "github_ghp_long"],
       "weak": ["weak_repeated_chunk_github_token"],
       "probes": ["GITHUB_TOKEN=<<secret:0>>", "git clone https://x-access-token:<<secret:0>>@github.com/acme/app.git"]
     },
     "dlp_github_pat": {
       "generators": ["github_fine_grained_pat"],
+      "lookalike": ["github_fine_grained_pat_short", "github_fine_grained_pat_long"],
       "probes": ["GH_TOKEN=<<secret:0>>", "Neuer Fine-grained Token: <<secret:0>>"]
     },
     "dlp_gitlab_pat": {
-      "generators": ["gitlab_pat"],
+      "generators": ["gitlab_pat", "gitlab_pat_routable"],
+      "lookalike": ["gitlab_pat_long"],
       "probes": ["GITLAB_TOKEN=<<secret:0>>", "curl --header \"PRIVATE-TOKEN: <<secret:0>>\" https://gitlab.example.com/api/v4/projects"]
+    },
+    "dlp_gitlab_token": {
+      "generators": ["gitlab_deploy_token", "gitlab_runner_token", "gitlab_runner_token_routable", "gitlab_runner_registration_token", "gitlab_trigger_token", "gitlab_feed_token", "gitlab_incoming_mail_token", "gitlab_agent_token", "gitlab_cicd_job_token", "gitlab_scim_token", "gitlab_feature_flag_token"],
+      "lookalike": ["gitlab_deploy_token_short", "gitlab_trigger_token_upper_hex"],
+      "probes": ["GITLAB_TOKEN=<<secret:0>>", "Das GitLab-Token <<secret:0>> stand im Build-Log."]
+    },
+    "dlp_gitlab_oauth_secret": {
+      "generators": ["gitlab_oauth_app_secret"],
+      "probes": ["GITLAB_OAUTH_CLIENT_SECRET=<<secret:0>>", "{\"gitlab\": {\"app_id\": \"4711\", \"secret\": \"<<secret:0>>\"}}"]
     },
     "dlp_npm_token": {
       "generators": ["npm_access_token"],
+      "lookalike": ["npm_bad_crc", "npm_short", "npm_long"],
       "probes": ["//registry.npmjs.org/:_authToken=<<secret:0>>", "NPM_TOKEN=<<secret:0>>"]
     },
     "dlp_stripe_key": {
@@ -119,34 +134,38 @@
     "dlp_env_var_secret": {
       "generators": ["password", "generic_api_secret", "url_token"],
       "weak": ["weak_snake_case_password"],
+      "quoted": ["quoted_passphrase", "quoted_punctuated_password"],
       "probes": ["DB_PASSWORD=<<secret:0>>", "  SERVICE_API_TOKEN = <<secret:0>>"]
     },
     "dlp_password_assignment": {
       "generators": ["password", "url_userinfo_password"],
       "weak": ["weak_repeated_password", "weak_snake_case_password", "weak_dollar_password"],
+      "quoted": ["quoted_passphrase", "quoted_punctuated_password"],
       "probes": ["password: <<secret:0>>", "Das Passwort lautet <<secret:0>> (bitte nach dem ersten Login ändern)."]
     },
     "dlp_generic_credential_assignment": {
       "generators": ["generic_api_secret", "url_token"],
       "weak": ["weak_sequential_run_token"],
+      "quoted": ["quoted_passphrase", "quoted_punctuated_password"],
       "probes": ["client_secret: <<secret:0>>", "Der API-Schlüssel ist <<secret:0>>"]
     },
     "dlp_bearer_token": {
       "generators": ["bearer_opaque_token"],
-      "probes": ["Authorization: Bearer <<secret:0>>", "curl -H 'Authorization: Bearer <<secret:0>>' https://api.example.com/v1/me"]
+      "probes": ["Authorization: Bearer <<secret:0>>", "curl -H 'Authorization: Bearer <<secret:0>>' https://api.example.com/v1/me", "AUTHORIZATION=Bearer <<secret:0>>", "{\"authorization\": \"Bearer <<secret:0>>\"}", "Hier der Access-Token: Bearer <<secret:0>>"]
     },
     "dlp_basic_auth": {
       "generators": ["http_basic_auth"],
       "shape_only": ["http_basic_credentials"],
-      "probes": ["Authorization: Basic <<secret:0>>", "proxy_set_header Authorization: Basic <<secret:0>>;"]
+      "lookalike": ["http_basic_credentials"],
+      "probes": ["Authorization: Basic <<secret:0>>", "proxy_set_header Authorization: Basic <<secret:0>>;", "proxy_authorization: \"Basic <<secret:0>>\"", "Proxy credentials for the job: Basic <<secret:0>>"]
     },
     "dlp_signed_url_signature": {
       "generators": ["aws_sigv4_signature"],
       "probes": ["https://bucket.s3.eu-central-1.amazonaws.com/report.pdf?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=900&X-Amz-Signature=<<secret:0>>", "Download-Link (15 min gültig): https://files.example.de/a.zip?Expires=1767225600&Signature=<<secret:0>>"]
     },
     "dlp_session_cookie": {
-      "generators": ["java_session_id", "php_session_id"],
-      "probes": ["Cookie: theme=dark; JSESSIONID=<<secret:0>>", "Set-Cookie: PHPSESSID=<<secret:0>>; path=/; HttpOnly"]
+      "generators": ["java_session_id", "php_session_id", "express_session_id", "laravel_session"],
+      "probes": ["Cookie: theme=dark; JSESSIONID=<<secret:0>>", "Set-Cookie: PHPSESSID=<<secret:0>>; path=/; HttpOnly", "SESSION_COOKIE=JSESSIONID=<<secret:0>>", "Cookie aus dem Browser: PHPSESSID=<<secret:0>>", "Set-Cookie: connect.sid=<<secret:0>>; Path=/; HttpOnly", "curl -b 'laravel_session=<<secret:0>>' https://shop.example.com/account", "Cookie: __Host-session=<<secret:0>>"]
     },
     "dlp_csrf_token": {
       "generators": ["csrf_token"],
@@ -160,6 +179,10 @@
     "dlp_url_userinfo_password": {
       "generators": ["url_userinfo_password"],
       "probes": ["DATABASE_URL=postgres://app:<<secret:0>>@db", "Verbindung zur Reporting-DB: mysql://report:<<secret:0>>@db1"]
+    },
+    "dlp_url_userinfo_token": {
+      "generators": ["generic_api_secret", "url_token"],
+      "probes": ["$ git clone https://<<secret:0>>:x-oauth-basic@github.com/acme/app.git", "Spiegel des Lager-Repos: https://<<secret:0>>:x-oauth-basic@github.com/acme/lager.git"]
     },
     "dlp_de_vat_id": {
       "generators": ["de_vat_id"],

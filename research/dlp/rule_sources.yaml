@@ -55,11 +55,11 @@ rules:
   dlp_aws_access_key:
     provider: aws
     source_ref: gitleaks:aws-access-token
-    format: "unique-ID prefix (AKIA, ASIA, AGPA …), 16+ upper-case alphanumerics"
+    format: "credential prefix of the IAM unique-ID table (AKIA long-term, ASIA temporary, ABIA STS service bearer token, ACCA context-specific credential; legacy A3T + one upper-case alphanumeric) and exactly 16 Base32 characters (A-Z, 2-7); 20 characters in total. Group, user, role, policy and other unique IDs (AGPA, AIDA, AROA, AIPA, ANPA, ANVA, APKA, ASCA) are no credentials (https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_identifiers.html#identifiers-unique-ids; gitleaks aws-access-token; F05)"
   dlp_aws_secret_key:
     provider: aws
     source_ref: https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html
-    format: "40 base64 characters after aws_secret_access_key/SecretAccessKey"
+    format: "40 base64 characters (A-Z, a-z, 0-9, /, +; no padding) with upper and lower case letters, as a whole run, in structural AWS context (F05): after an AWS key name or label (aws_secret_access_key, AwsSecretAccessKey, aws.secretKey, AWS-Secret-Access-Key, SecretAccessKey, secret_access_key; in prose up to two lines on), right after an access key ID (SDK call, IAM credentials CSV, CLI), or after a generic secret key name (secret_key, secret-key, secretKey) with AWS context: an access key ID or access_key/accessKeyId key, Terraform provider \"aws\"/backend \"s3\", amazonaws.com or aws as a name part within five lines above or two below"
   dlp_google_api_key:
     provider: google
     source_ref: gitleaks:gcp-api-key
@@ -79,19 +79,27 @@ rules:
   dlp_github_token:
     provider: github
     source_ref: gitleaks:github-pat
-    format: "ghp_/gho_/ghu_/ghs_/ghr_ prefix, 36 base62 characters (30 random + CRC32, F03)"
+    format: "ghp_/gho_/ghu_/ghs_/ghr_ prefix, exactly 36 base62 characters: 30 random and their CRC32 as 6 base62 digits (GitHub token format, 2021; F03)"
   dlp_github_pat:
     provider: github
     source_ref: gitleaks:github-fine-grained-pat
-    format: "github_pat_ prefix, base62 and underscore body"
+    format: "github_pat_ prefix, exactly 82 base62 and underscore characters (F03)"
   dlp_gitlab_pat:
     provider: gitlab
     source_ref: gitleaks:gitlab-pat
-    format: "glpat- prefix, base64url body"
+    format: "glpat- prefix and exactly 20 base64url characters, or the routable form: 27-300 base64url characters, a dot, a two-character version and a seven-character base36 check value, or the current form with .01., two base36 length digits and seven base36 CRC32 digits (gitleaks gitlab-pat, gitlab-pat-routable; GitLab HTTP router docs; F04)"
+  dlp_gitlab_token:
+    provider: gitlab
+    source_ref: https://docs.gitlab.com/security/tokens/#token-prefixes
+    format: "Documented GitLab token prefixes with the lengths of the gitleaks rules (F04): gldt- deploy, glrt- runner, glrtr- runner created through a registration token, glft- feed, glsoat- SCIM and glffct- feature flag client token with 20 base64url characters; glrt-t<digit>_ routable runner token (27-300 characters, dot, 2 + 7 base36); current routable glrt-, glrtr- runner and glwt- workspace token (27-300 base64url characters, .01., 2 base36 length digits, 7 base36 CRC32 digits; https://docs.gitlab.com/development/cells/http_router/); glcbt- CI/CD job token (1-5 alphanumerics, _, 20 characters); glimt- incoming mail token (25); glagent- Kubernetes agent token (50); glptt- pipeline trigger token (40 lower-case hex); GR1348941 runner registration token (20). gitleaks gitlab-deploy-token, gitlab-runner-authentication-token(-routable), gitlab-feed-token, gitlab-scim-token, gitlab-feature-flag-client-token, gitlab-cicd-job-token, gitlab-incoming-mail-token, gitlab-kubernetes-agent-token, gitlab-ptt, gitlab-rrt"
+  dlp_gitlab_oauth_secret:
+    provider: gitlab
+    source_ref: gitleaks:gitlab-oauth-app-secret
+    format: "gloas- prefix, exactly 64 base64url characters (OAuth application secret; F04)"
   dlp_npm_token:
     provider: npm
     source_ref: gitleaks:npm-access-token
-    format: "npm_ prefix, 36 base62 characters"
+    format: "npm_ prefix, exactly 36 base62 characters: 30 random and their CRC32 as 6 base62 digits (npm token format 2021, same layout as GitHub tokens; F04)"
 
   # ── Payment ──────────────────────────────────────────────────────────────
   dlp_stripe_key:
@@ -132,3 +140,12 @@ rules:
   dlp_jwt_token:
     source_ref: gitleaks:jwt
     format: "three base64url segments, header and payload start with ey"
+  dlp_bearer_token:
+    source_ref: https://www.rfc-editor.org/rfc/rfc6750#section-2.1
+    format: "Bearer followed by a b64token (letters, digits, -._~+/ and trailing =) anywhere: in an Authorization header, under authorization/proxy_authorization keys, in logs and standalone in prose (F-HTTP); the token has at least 16 characters, two character classes, 3 bits of entropy per character, no sequential or repeated runs and is no identifier; a value that parses as a JWT is left to dlp_jwt_token"
+  dlp_basic_auth:
+    source_ref: https://www.rfc-editor.org/rfc/rfc7617#section-2
+    format: "Basic followed by canonical padded base64 (RFC 4648 section 4) anywhere, as a whole token; it decodes to printable UTF-8 user-id:password with a non-empty user-id (no colon) and password; the password is no stand-in, credential name or metasyntactic word, also read without leetspeak (user:p@ss), and differs from the user-id (F-HTTP)"
+  dlp_url_userinfo_token:
+    source_ref: https://github.blog/2012-09-21-easier-builds-and-deployments-using-git-over-https-and-oauth/
+    format: "token as the username of a URL with the constant password x-oauth-basic (https://<token>:x-oauth-basic@github.com/…); the token needs two character classes, 3 bits of entropy per character and no sequential or repeated runs (F-GEN1)"

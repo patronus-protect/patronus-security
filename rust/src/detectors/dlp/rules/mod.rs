@@ -3,14 +3,44 @@
 //! order. The order is behaviour: rules run in this order, the first matching
 //! rule sets the result class and `matched_rules` follows it
 //! (`rust/tests/dlp_rule_registry.rs`).
+
+// T09: key shapes of the key-anchored rules, as regex fragments for
+// `concat!` (inside `(?i)`). The regexes start at the credential noun
+// without `\b`, so that `db_password` and `dbPassword` match; the key gate
+// (`likeness::key_shape`) reads the prefix before the noun. Word boundaries
+// of keys are ASCII (`(?-u:\b)`): a Unicode `\b` next to a literal that may
+// start anywhere keeps the regex off its fast engines.
+
+/// What stands between a key and its quoted value besides the separator:
+/// the closing quote of a quoted key (`"client_secret":`, `'password' =>`,
+/// escaped `\"db_password\":` in a JSON string), a subscript
+/// (`os.environ["DB_PASSWORD"] =`) and a string type of a declaration
+/// (`DB_PASSWORD: &str =`, `dbPassword: string =`, Go `dbPassword string =`).
+macro_rules! key_suffix {
+    () => {
+        r#"(?:\\?["'])?\]?(?:\s*:\s*&?(?:'static\s+)?(?:str|string)(?-u:\b)|\s+string(?-u:\b))?\s*"#
+    };
+}
+
+/// XML `key="DbPassword" value="…"` and `name="password" value="…"`: the
+/// key's closing quote and the `value` attribute.
+macro_rules! xml_value_attribute {
+    () => {
+        r#"["']\s+value\s*="#
+    };
+}
+
 mod content;
 mod credentials;
 mod crypto;
 mod documented;
 mod hashes;
+mod http_auth;
 mod identifiers;
+mod likeness;
 mod placeholders;
 mod providers;
+mod value_shape;
 
 use super::dlp::{DlpPattern, RuleMeta, ValidatorStrength, SECRET_GROUPS};
 use super::overlap::OverlapTier;
@@ -77,6 +107,28 @@ pub(crate) fn placeholder_check(rule_id: &str) -> bool {
 }
 
 pub(crate) use placeholders::is_placeholder_match;
+pub(crate) use value_shape::non_secret_shape;
+
+/// K05: how config lines (`dlp::config_keys`) bind a value to a generic
+/// key-bound rule.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct ConfigKey {
+    /// The key grammar of the rule's regex.
+    pub pattern: &'static str,
+    /// The grammar matches the whole key (`DB_PASSWORD` for
+    /// `dlp_env_var_secret`) rather than its last word (`password` of
+    /// `app.db.password`).
+    pub whole: bool,
+    /// Value length in characters, as the rule's value groups take it.
+    pub min_len: usize,
+    pub max_len: Option<usize>,
+}
+
+/// K05: the config-line binding of a generic key-bound rule; `None` for
+/// every other rule.
+pub(crate) fn config_key(rule_id: &str) -> Option<ConfigKey> {
+    credentials::config_key(rule_id)
+}
 
 /// Credential rules that take any value under a secret-like key or variable
 /// name: the generic tier of the overlap resolution (K08).
@@ -122,7 +174,14 @@ pub(crate) fn is_example_match(
     let example_context = || credentials::has_example_context(text, range.start, range.end);
     match check {
         ExampleCheck::Off => false,
-        ExampleCheck::Generic => credentials::is_example_value(&value, false, example_context),
+        // F-GEN2: a long hex value under a generic key is machine-issued,
+        // so repeated chunks (`deadbeef…`) mark it as an example as for a
+        // fixed format; hand-typed passwords (`abcabcabcabc`) are shorter.
+        ExampleCheck::Generic => credentials::is_example_value(
+            &value,
+            credentials::is_machine_hex(&value),
+            example_context,
+        ),
         ExampleCheck::FixedFormat => credentials::is_example_value(&value, true, example_context),
     }
 }

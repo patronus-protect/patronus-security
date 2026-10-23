@@ -1,7 +1,52 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! Generic credentials: tokens, credential assignments, auth headers,
 //! cookies and connection strings.
+use super::{http_auth, likeness, ConfigKey};
 use crate::detectors::dlp::dlp::{DlpPattern, RuleMeta, SecretSubtype, ValidatorStrength};
+
+// K05: the key parts of the generic key-bound rules. The rule regexes start
+// with them, and config lines (`dlp::config_keys`) bind a value through the
+// same key grammar.
+
+/// `dlp_env_var_secret`: an upper-case variable name ending in a credential
+/// noun (`DB_PASSWORD`, `SERVICE_API_TOKEN`).
+macro_rules! env_key {
+    () => {
+        r"(?-i:[A-Z][A-Z0-9]*[_\-](?:SECRET(?:[_\-]ACCESS)?[_\-]?KEY|SECRET|PASSWORD|PASSWD|PASSWORT|KENNWORT|GEHEIMNIS|TOKEN|API[_\-]?KEY))"
+    };
+}
+
+/// `dlp_password_assignment`: a password noun; the key gate reads a
+/// compound or camelCase prefix before it.
+macro_rules! password_key {
+    () => {
+        r"(?i)(?:password|passwort|passwd|kennwort|pwd)(?-u:\b)"
+    };
+}
+
+/// `dlp_generic_credential_assignment`: an API key, token or secret noun.
+macro_rules! generic_key {
+    () => {
+        r"(?i)(?:api[ _-]?key|access[ _-]?token|refresh[ _-]?token|auth[ _-]?token|client[ _-]?secret|encryption[ _-]?key|master[ _-]?key|api[ _-]?schl(?:ü|ue)ssel|zugangstoken|geheimnis|verschl(?:ü|ue)sselungsschl(?:ü|ue)ssel|secret|token)(?-u:\b)"
+    };
+}
+
+/// K05: how config lines bind a value to a generic key-bound rule: its key
+/// grammar and the value lengths of its regex.
+pub(super) fn config_key(rule_id: &str) -> Option<ConfigKey> {
+    let (pattern, whole, min_len, max_len) = match rule_id {
+        "dlp_env_var_secret" => (env_key!(), true, 8, None),
+        "dlp_password_assignment" => (password_key!(), false, 4, Some(150)),
+        "dlp_generic_credential_assignment" => (generic_key!(), false, 8, Some(150)),
+        _ => return None,
+    };
+    Some(ConfigKey {
+        pattern,
+        whole,
+        min_len,
+        max_len,
+    })
+}
 
 pub(super) const RULES: &[DlpPattern] = &[
     // ── Generische Credential-Patterns ───────────────────────────────────────
@@ -33,7 +78,22 @@ pub(super) const RULES: &[DlpPattern] = &[
     },
     DlpPattern {
         name: "dlp_env_var_secret",
-        pattern: r"(?-i:[A-Z][A-Z0-9]*[_\-](?:SECRET(?:[_\-]ACCESS)?[_\-]?KEY|SECRET|PASSWORD|PASSWD|PASSWORT|KENNWORT|GEHEIMNIS|TOKEN|API[_\-]?KEY))\s*=\s*([^\s]{8,})",
+        // F-GEN2 (T08): `KEY=value`, `KEY = "value"`, `export KEY='value'`,
+        // `ENV KEY="value"` and YAML/compose `KEY: "value"`; the value without
+        // its quotes, a bare value without a trailing `;`/`,`. After `:` a bare
+        // value is the rest of the line. Escaped quotes (`KEY=\"value\"` in
+        // serialized source or logs) delimit the value like plain ones. A `;`
+        // before a path (`;./bin/run`, `;/usr/bin/x`, `;~/x`) ends a bare value
+        // as a shell command separator; any other `;` belongs to it.
+        pattern: concat!(
+            env_key!(),
+            r#"(?:[ \t]*=[ \t]*(?:"([^"\r\n]{8,})"|'([^'\r\n]{8,})'"#,
+            r#"|\\"([^"\\\r\n]{8,})\\"|\\'([^'\\\r\n]{8,})\\'"#,
+            r#"|((?:[^\s"'`;]|;[^\s"'`;./~]){7,}[^\s"'`;,]))"#,
+            r#"|:[ \t]+(?:"([^"\r\n]{8,})"|'([^'\r\n]{8,})'"#,
+            r#"|\\"([^"\\\r\n]{8,})\\"|\\'([^'\\\r\n]{8,})\\'"#,
+            r#"|([^\s"'`#]{7,}[^\s"'`;,#])[ \t]*\r?(?m:$)))"#,
+        ),
         entity_group: "CREDENTIAL",
         validator: Some(is_secret_value),
         span_group: Some(1),
@@ -43,12 +103,25 @@ pub(super) const RULES: &[DlpPattern] = &[
             "ark",
             &["secret", "passw", "kennwort", "geheimnis", "token", "api"],
         )
-        .with_subtype(SecretSubtype::GenericSecret),
+        .with_subtype(SecretSubtype::GenericSecret)
+        .with_value_gate(likeness::is_env_value),
     },
     // ── Generic credentials / connection strings ───────────────────────────
     DlpPattern {
         name: "dlp_password_assignment",
-        pattern: r#"(?i)\b(?:password|passwort|passwd|kennwort|pwd)\b\s*(?:=|:|\bis\b|\bist\b|\blautet\b)\s*["']?([^\s"';,}\]]{4,150})"#,
+        // F-GEN2 (T04): a quoted value runs to its closing quote (spaces,
+        // `;`, `,`, `}` inside), a bare value or an unclosed quote stops at them.
+        // T09: compound and camelCase keys, quoted and escaped keys and values,
+        // `=>`, subscripts, typed declarations and XML `key`/`value` attributes.
+        pattern: concat!(
+            password_key!(),
+            "(?:",
+            xml_value_attribute!(),
+            "|",
+            key_suffix!(),
+            r"(?:=>|=|:|(?-u:\bis\b|\bist\b|\blautet\b)))\s*",
+            r#"(?:\\"([^"\\\r\n]{4,150})\\"|"([^"\r\n]{4,150})"|'([^'\r\n]{4,150})'|["']?([^\s"';,}\]]{4,150}))"#,
+        ),
         entity_group: "CREDENTIAL",
         validator: Some(is_secret_value),
         span_group: Some(1),
@@ -58,11 +131,21 @@ pub(super) const RULES: &[DlpPattern] = &[
             "ark",
             &["passw", "kennwort", "pwd"],
         )
-        .with_subtype(SecretSubtype::Password),
+        .with_subtype(SecretSubtype::Password)
+        .with_value_gate(likeness::is_assignment_value)
+        .with_key_gate(likeness::is_assignment_key),
     },
     DlpPattern {
         name: "dlp_generic_credential_assignment",
-        pattern: r#"(?i)\b(?:api[ _-]?key|access[ _-]?token|refresh[ _-]?token|auth[ _-]?token|client[ _-]?secret|encryption[ _-]?key|master[ _-]?key|api[ _-]?schl(?:ü|ue)ssel|zugangstoken|geheimnis|verschl(?:ü|ue)sselungsschl(?:ü|ue)ssel|secret|token)\b\s*(?:=|:|\bis\b|\bist\b|\blautet\b)\s*["']?([^\s"';,}\]]{8,150})"#,
+        pattern: concat!(
+            generic_key!(),
+            "(?:",
+            xml_value_attribute!(),
+            "|",
+            key_suffix!(),
+            r"(?:=>|=|:|(?-u:\bis\b|\bist\b|\blautet\b)))\s*",
+            r#"(?:\\"([^"\\\r\n]{8,150})\\"|"([^"\r\n]{8,150})"|'([^'\r\n]{8,150})'|["']?([^\s"';,}\]]{8,150}))"#,
+        ),
         entity_group: "CREDENTIAL",
         validator: Some(is_secret_value),
         span_group: Some(1),
@@ -72,27 +155,45 @@ pub(super) const RULES: &[DlpPattern] = &[
             "ark",
             &["api", "token", "secret", "key", "schl", "geheimnis"],
         )
-        .with_subtype(SecretSubtype::GenericSecret),
+        .with_subtype(SecretSubtype::GenericSecret)
+        .with_value_gate(likeness::is_assignment_value)
+        .with_key_gate(likeness::is_credential_key),
     },
     DlpPattern {
         name: "dlp_bearer_token",
-        pattern: r"(?i)\bAuthorization\s*:\s*Bearer\s+([A-Za-z0-9._~+/=-]{8,})",
+        // F-HTTP: `Bearer <b64token>` (RFC 6750) wherever it stands: in a
+        // header line, under `authorization` keys of env/JSON/YAML/TOML/code,
+        // in logs and alone in chats and mails. The token proves itself
+        // (`http_auth::is_bearer_token`); it does not end with a dot.
+        pattern: r"(?i)(?-u:\b)Bearer\s+([A-Za-z0-9._~+/-]*[A-Za-z0-9_~+/-]=*)",
         entity_group: "SECRET_TOKEN",
         validator: Some(is_secret_value),
         span_group: Some(1),
         base_score: 35,
-        meta: RuleMeta::new(ValidatorStrength::None, "ark", &["bearer"])
-            .with_subtype(SecretSubtype::AccessToken),
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://www.rfc-editor.org/rfc/rfc6750#section-2.1",
+            &["bearer"],
+        )
+        .with_subtype(SecretSubtype::AccessToken)
+        .with_value_gate(http_auth::is_bearer_token),
     },
     DlpPattern {
         name: "dlp_basic_auth",
-        pattern: r"(?i)\bAuthorization\s*:\s*Basic\s+([A-Za-z0-9+/]{8,}={0,2})",
+        // F-HTTP: `Basic <base64>` (RFC 7617) wherever it stands; the base64
+        // must decode to `user-id:password` (`http_auth::is_basic_credentials`).
+        pattern: r"(?i)(?-u:\b)Basic\s+([A-Za-z0-9+/]{8,}={0,2})",
         entity_group: "CREDENTIAL",
         validator: Some(is_secret_value),
         span_group: Some(1),
         base_score: 35,
-        meta: RuleMeta::new(ValidatorStrength::None, "ark", &["authorization"])
-            .with_subtype(SecretSubtype::Password),
+        meta: RuleMeta::new(
+            ValidatorStrength::Structure,
+            "https://www.rfc-editor.org/rfc/rfc7617#section-2",
+            &["basic"],
+        )
+        .with_subtype(SecretSubtype::Password)
+        .with_value_gate(http_auth::is_basic_credentials),
     },
     DlpPattern {
         name: "dlp_signed_url_signature",
@@ -106,37 +207,92 @@ pub(super) const RULES: &[DlpPattern] = &[
     },
     DlpPattern {
         name: "dlp_session_cookie",
-        pattern: r"(?i)\b(?:Cookie|Set-Cookie)\s*:[^\r\n]{0,200}?\b(?:sessionid|session|JSESSIONID|PHPSESSID)=([A-Za-z0-9._~+/%=-]{8,})",
+        // F-HTTP: generic session names (`session`, `sessionid`, `sid`) only
+        // in a `Cookie:`/`Set-Cookie:` line; the session cookies of servers
+        // and frameworks (`JSESSIONID`, `PHPSESSID`, `ASP.NET_SessionId`,
+        // `connect.sid`, `laravel_session`) and `__Host-`/`__Secure-` names
+        // anywhere, as `name=value` or a quoted key and value
+        // (`"JSESSIONID": "…"`, `'laravel_session' => '…'`). The value does
+        // not end with a dot and must look issued (`http_auth::is_session_id`).
+        pattern: concat!(
+            r"(?i)(?:(?-u:\b)(?:Cookie|Set-Cookie)\s*:[^\r\n]{0,200}?(?-u:\b)(?:sessionid|session_id|session|sid)",
+            r"|(?-u:\b)(?:JSESSIONID|PHPSESSID|ASP\.NET_SessionId|connect\.sid|laravel_session|__Host-[A-Za-z0-9_.-]{1,64}|__Secure-[A-Za-z0-9_.-]{1,64}))",
+            r#"(?:=|["']\s*(?::|=>)\s*["'])([A-Za-z0-9._~+/%=-]{7,}[A-Za-z0-9_~+/%=-])"#,
+        ),
         entity_group: "CREDENTIAL",
         validator: Some(is_secret_value),
         span_group: Some(1),
         base_score: 30,
-        meta: RuleMeta::new(ValidatorStrength::None, "ark", &["cookie"])
-            .with_subtype(SecretSubtype::SessionToken),
+        meta: RuleMeta::new(
+            ValidatorStrength::None,
+            "ark",
+            &[
+                "cookie",
+                "jsessionid",
+                "phpsessid",
+                "asp.net_sessionid",
+                "connect.sid",
+                "laravel_session",
+                "__host-",
+                "__secure-",
+            ],
+        )
+        .with_subtype(SecretSubtype::SessionToken)
+        .with_value_gate(http_auth::is_session_id),
     },
     DlpPattern {
         name: "dlp_csrf_token",
-        pattern: r"(?i)\b(?:X-CSRF-Token|X-XSRF-Token|csrf[ _-]?token|xsrf[ _-]?token)\b\s*(?::|=)?\s*([A-Za-z0-9._~+/%=-]{8,})",
+        // T09: key shapes as for the assignments; after a quoted key, a
+        // subscript or a type the separator is required.
+        pattern: concat!(
+            r"(?i)(?:X-CSRF-Token|X-XSRF-Token|csrf[ _-]?token|xsrf[ _-]?token)(?-u:\b)(?:",
+            xml_value_attribute!(),
+            "|",
+            key_suffix!(),
+            r#"(?::|=>|=)|)\s*(?:\\?["'])?([A-Za-z0-9._~+/%=-]{8,})"#,
+        ),
         entity_group: "SECRET_TOKEN",
         validator: Some(is_secret_value),
         span_group: Some(1),
         base_score: 25,
         meta: RuleMeta::new(ValidatorStrength::None, "ark", &["csrf", "xsrf"])
-            .with_subtype(SecretSubtype::SessionToken),
+            .with_subtype(SecretSubtype::SessionToken)
+            .with_value_gate(likeness::is_token_value)
+            .with_key_gate(likeness::is_key_prefix),
     },
 ];
 
 /// Runs after `hashes::RULES`, see the registry order in `rules/mod.rs`.
-pub(super) const URL_USERINFO_RULES: &[DlpPattern] = &[DlpPattern {
-    name: "dlp_url_userinfo_password",
-    pattern: r#"(?i)\b(?:jdbc:)?[a-z][a-z0-9+.-]{1,20}://[^/\s:@]+:([^@\s/]{4,150})@[^\s/]+"#,
-    entity_group: "CREDENTIAL",
-    validator: Some(is_secret_value),
-    span_group: Some(1),
-    base_score: 35,
-    meta: RuleMeta::new(ValidatorStrength::None, "ark", &["://"])
-        .with_subtype(SecretSubtype::Password),
-}];
+pub(super) const URL_USERINFO_RULES: &[DlpPattern] = &[
+    DlpPattern {
+        name: "dlp_url_userinfo_password",
+        pattern: r#"(?i)\b(?:jdbc:)?[a-z][a-z0-9+.-]{1,20}://[^/\s:@]+:([^@\s/]{4,150})@[^\s/]+"#,
+        entity_group: "CREDENTIAL",
+        validator: Some(is_secret_value),
+        span_group: Some(1),
+        base_score: 35,
+        meta: RuleMeta::new(ValidatorStrength::None, "ark", &["://"])
+            .with_subtype(SecretSubtype::Password)
+            .with_value_gate(likeness::is_userinfo_password),
+    },
+    // T10: the token is the username, the password a constant
+    // (`https://<token>:x-oauth-basic@github.com/…`).
+    DlpPattern {
+        name: "dlp_url_userinfo_token",
+        pattern: r"(?i)\b[a-z][a-z0-9+.-]{1,20}://([^/\s:@]{8,150}):x-oauth-basic@[^\s/]+",
+        entity_group: "SECRET_TOKEN",
+        validator: Some(is_secret_value),
+        span_group: Some(1),
+        base_score: 35,
+        meta: RuleMeta::new(
+            ValidatorStrength::None,
+            "https://github.blog/2012-09-21-easier-builds-and-deployments-using-git-over-https-and-oauth/",
+            &["x-oauth-basic"],
+        )
+        .with_subtype(SecretSubtype::AccessToken)
+        .with_value_gate(likeness::is_userinfo_token),
+    },
+];
 
 fn is_unredacted_url_credential(candidate: &str) -> bool {
     is_secret_value(candidate)
@@ -186,6 +342,14 @@ const LONG_EXAMPLE_MARKERS: &[&str] = &["example", "sample", "beispiel", "muster
 /// only as a whole word or when repeated.
 const SHORT_EXAMPLE_MARKERS: &[&str] = &["test", "fake", "dummy"];
 
+/// Marker words and compounds (F-GEN2) that a documented value may cut to
+/// its field length (`Eexampl0123!`, `Ttestke1234!`): a word ending in at
+/// least [`MIN_CUT_MARKER_LEN`] leading letters of one of them is a marker.
+const CUT_MARKERS: &[&str] = &["examplekey", "testkey", "sample", "beispiel", "muster"];
+
+/// Letters of a cut marker; shorter cuts (`exam`, `test`) are ordinary words.
+const MIN_CUT_MARKER_LEN: usize = 6;
+
 /// Values longer than this (alphanumeric characters, i.e. PEM bodies) need a
 /// repeated short marker: one whole short word turns up by chance in long base64.
 const WHOLE_MARKER_MAX_LEN: usize = 256;
@@ -221,10 +385,31 @@ pub(crate) fn has_example_marker(value: &str) -> bool {
         LONG_EXAMPLE_MARKERS
             .iter()
             .any(|marker| stem.starts_with(marker) || stem.ends_with(marker))
+            || ends_with_cut_marker(&word)
             || (whole_short_words
                 && SHORT_EXAMPLE_MARKERS.contains(&stem)
                 && !is_stripe_mode(value, start, &word))
     })
+}
+
+/// F-GEN2: `word` (lower case) ends in a marker cut to the field length,
+/// see [`CUT_MARKERS`].
+fn ends_with_cut_marker(word: &str) -> bool {
+    CUT_MARKERS
+        .iter()
+        .any(|marker| (MIN_CUT_MARKER_LEN..=marker.len()).any(|len| word.ends_with(&marker[..len])))
+}
+
+/// Hex digits from which a generic value counts as machine-issued (F-GEN2):
+/// 128-bit keys and longer.
+const MACHINE_HEX_MIN_LEN: usize = 32;
+
+/// F-GEN2: `value` is a hex string of at least [`MACHINE_HEX_MIN_LEN`]
+/// digits, the shape of generated API secrets and digests. The backslash of
+/// an escaped closing quote (`…deadbeef\"` in a notebook) does not count.
+pub(crate) fn is_machine_hex(value: &str) -> bool {
+    let value = value.trim_end_matches('\\');
+    value.len() >= MACHINE_HEX_MIN_LEN && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
 /// How a value lacks variety (T06), see [`low_variety`].
@@ -461,8 +646,8 @@ fn floor_char_boundary(text: &str, mut index: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::{
-        has_example_context, has_example_marker, is_example_value, is_low_variety, low_variety,
-        LowVariety,
+        has_example_context, has_example_marker, is_example_value, is_low_variety, is_machine_hex,
+        low_variety, LowVariety,
     };
 
     /// Deterministic pseudo-random base62 strings (SplitMix64).
@@ -517,6 +702,26 @@ mod tests {
             "Ummusterung-Kx7q",
             "Xyzexamples9",
         ] {
+            assert!(!has_example_marker(value), "{value}");
+        }
+    }
+
+    #[test]
+    fn long_hex_values_take_the_fixed_format_check() {
+        assert!(is_machine_hex("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"));
+        assert!(is_machine_hex("1234567890123456789012345678901234567890"));
+        assert!(is_machine_hex("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\\"));
+        assert!(!is_machine_hex("deadbeefdeadbeef"));
+        assert!(!is_machine_hex("abcabcabcabc"));
+        assert!(!is_machine_hex("Kx7pQ2vL1234567890abcdefRt4Mw8Zn3"));
+    }
+
+    #[test]
+    fn marker_words_cut_to_the_field_length_are_markers() {
+        for value in ["Eexampl0123!", "Ttestke1234!", "Xbeispie42", "qzexamplek7"] {
+            assert!(has_example_marker(value), "{value}");
+        }
+        for value in ["Testkeller2026!", "Exam2026!", "Kontext2026!", "Sampl3r!"] {
             assert!(!has_example_marker(value), "{value}");
         }
     }

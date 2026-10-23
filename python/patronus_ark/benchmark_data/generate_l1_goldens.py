@@ -2031,6 +2031,60 @@ def dc(
     return dlp_row(row, rule, carrier, tags, False, mode)
 
 
+# F03: lookalike generators (`lookalike` in dlp_synth/rules.json): a provider shape with a
+# wrong check value or length. Their rule never reports them; rows place them where no
+# other DLP rule does either, also in `strict`.
+DLP_LOOKALIKE_GENERATORS = (
+    "github_ghp_bad_crc", "github_gho_bad_crc", "github_ghu_bad_crc", "github_ghs_bad_crc",
+    "github_ghr_bad_crc", "github_ghp_short", "github_gho_short", "github_ghp_long",
+    "github_fine_grained_pat_short", "github_fine_grained_pat_long",
+    # F04
+    "npm_bad_crc", "npm_short", "npm_long", "gitlab_pat_long", "gitlab_deploy_token_short",
+    "gitlab_trigger_token_upper_hex",
+    # F05
+    "aws_access_key_id_long", "aws_iam_user_unique_id",
+    "aws_secret_access_key_long", "aws_secret_access_key_hex",
+    # F-HTTP: random base64 that decodes to no user:password pair
+    "http_basic_credentials",
+)
+
+
+def dl(
+    label: str,
+    language: str,
+    rule: str,
+    template: str,
+    generator: str,
+    seed: int,
+    reason: str,
+    *,
+    carrier: str = "line",
+    tags: tuple[str, ...] = (),
+) -> dict:
+    """Hard negative with a lookalike value (F03): `rule`'s shape with a wrong check value or
+    length, stored as a plain recipe so no committed text holds a token-shaped value."""
+    if generator not in DLP_LOOKALIKE_GENERATORS:
+        raise ValueError(f"{generator} is no lookalike generator")
+    secrets = [{"gen": generator, "seed": seed}]
+    text, _ = recipes.materialize(template, secrets)
+    row = {
+        "language": language,
+        "case_type": "hard_negative",
+        "target_label": label,
+        "template": template,
+        "secrets": secrets,
+        "text_fingerprint": recipes.fingerprint(text),
+        "entities": [],
+        "span_unit": "unicode_code_point",
+        "negative_reason": reason,
+        "provenance": {
+            "origin": "synthetic",
+            "source": "lookalike generator recipe (patronus_ark.dlp_synth), materialized at test time",
+        },
+    }
+    return dlp_row(row, rule, carrier, tags, False)
+
+
 def dn(
     label: str,
     language: str,
@@ -2309,7 +2363,7 @@ DLP_CASES = {
     "CREDENTIAL": [
         ds("CREDENTIAL", "de", "dlp_password_assignment", "Passwort = <<secret:0>>", "password", 301),
         ds("CREDENTIAL", "en", "dlp_credential_in_url", "https://example.test?token=<<secret:0>>", "url_token", 302),
-        ds("CREDENTIAL", "en", "dlp_basic_auth", "Authorization: Basic <<secret:0>>", "http_basic_credentials", 303),
+        ds("CREDENTIAL", "en", "dlp_basic_auth", "Authorization: Basic <<secret:0>>", "http_basic_auth", 303),
         dn("CREDENTIAL", "de", "dlp_password_assignment", "Passwort = ${PASSWORD}", "environment reference"),
         dn("CREDENTIAL", "en", "dlp_generic_credential_assignment", "token = [REDACTED]", "redacted placeholder"),
         ds(
@@ -2355,7 +2409,7 @@ DLP_CASES = {
         ds(
             "CREDENTIAL", "de", "dlp_env_var_secret",
             "apiVersion: v1\nkind: Secret\nmetadata:\n  name: datenbank\ndata:\n  DB_PASSWORD: <<secret:0|base64>>\n",
-            "password", 3009, carrier="yaml", gap=True,
+            "password", 3009, carrier="yaml",
         ),
         ds(
             "CREDENTIAL", "en", "dlp_env_var_secret",
@@ -2611,7 +2665,7 @@ DLP_CASES = {
         ds(
             "PASSWORD_HASH", "en", "dlp_password_hash",
             "{\"email\": \"ada@example.org\", \"password_hash\": \"<<secret:0>>\"}",
-            "argon2id_phc_hash", 5011, carrier="json", gap=True,
+            "argon2id_phc_hash", 5011, carrier="json",
         ),
         dn(
             "PASSWORD_HASH", "de", "dlp_password_hash",
@@ -2864,7 +2918,8 @@ DLP_CASES = {
         ),
     ],
     "SECRET_TOKEN": [
-        ds("SECRET_TOKEN", "en", "dlp_github_token", "GITHUB_TOKEN=<<secret:0>>", "github_pat_classic", 801),
+        # F03: dlp_github_token checks the CRC32; the shape-only `github_pat_classic` has none.
+        ds("SECRET_TOKEN", "en", "dlp_github_token", "GITHUB_TOKEN=<<secret:0>>", "github_ghp_token", 801),
         ds("SECRET_TOKEN", "de", "dlp_gitlab_pat", "GitLab Token: <<secret:0>>", "gitlab_pat", 802),
         ds("SECRET_TOKEN", "en", "dlp_jwt_token", "Authorization: Bearer <<secret:0>>", "jwt_hs256", 803),
         dn("SECRET_TOKEN", "en", "dlp_github_token", "Truncated GitHub prefix in the docs: ghp_short", "provider token is too short"),
@@ -5436,6 +5491,1436 @@ DLP_F02_CASES = {
     ],
 }
 for _label, _rows in DLP_F02_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+
+# F03: `dlp_github_token` takes `ghp_`/`gho_`/`ghu_`/`ghs_`/`ghr_` with exactly 36 base62
+# characters whose last six are the CRC32 of the first 30, at checksum strength;
+# `dlp_github_pat` takes `github_pat_` with exactly 82 characters. Positives are generated
+# tokens of every prefix in .env, YAML, JSON, TOML, code, CLI, log and prose carriers. Hard
+# negatives are token shapes with a wrong check value or length (no rule may report them,
+# also not a generic assignment), example/test fills, secret references and the documented
+# format.
+DLP_F03_CASES = {
+    "SECRET_TOKEN": [
+        ds(
+            "SECRET_TOKEN", "de", "dlp_github_token",
+            "# Spiegel-Job, nicht einchecken\nGITHUB_APP_ID=48211\nGITHUB_USER_TOKEN=<<secret:0>>\n",
+            "github_ghu_token", 10501, carrier="env",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_github_token",
+            "spiegel:\n  quelle: github.com/acme/app\n  zugang:\n    refresh_token: \"<<secret:0>>\"\n",
+            "github_ghr_token", 10502, carrier="yaml",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_github_token",
+            "{\"installation\": 4711, \"zugriffstoken\": \"<<secret:0>>\", \"gueltig_bis\": \"2026-10-21T11:00:00Z\"}\n",
+            "github_ghs_token", 10503, carrier="json",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_github_token",
+            "2026-10-21 10:14:02 FEHLER oauth: Rückruf lieferte <<secret:0>> für Nutzer 1182\n",
+            "github_gho_token", 10504, carrier="log",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_github_token",
+            "[10:02] ana: Kannst du mir dein GitHub-Token für den Release schicken?\n"
+            "[10:03] ben: <<secret:0>>\n[10:03] ben: bitte danach rotieren\n",
+            "github_ghp_token", 10505, carrier="prose",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_github_pat",
+            "# Anmeldung für das Release-Skript\n$ echo <<secret:0>> | gh auth login --with-token\n",
+            "github_fine_grained_pat", 10506, carrier="cli",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_github_token",
+            "from github import Auth, Github\n\ngh = Github(auth=Auth.Token(\"<<secret:0>>\"))\n",
+            "github_ghs_token", 10511, carrier="code",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_github_token",
+            "$ curl -H \"Authorization: token <<secret:0>>\" https://api.github.com/user\n",
+            "github_ghp_token", 10512, carrier="cli",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_github_token",
+            "[mirror]\nsource = \"github.com/acme/app\"\nrefresh_token = \"<<secret:0>>\"\n",
+            "github_ghr_token", 10513, carrier="toml",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_github_token",
+            "2026-10-21T10:14:02Z ERROR app-auth: user-to-server token <<secret:0>> expired\n",
+            "github_ghu_token", 10514, carrier="log",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_github_token",
+            "Hi Jo,\n\nthe OAuth token for the dashboard is <<secret:0>>\n\nPlease revoke it after the demo.\n",
+            "github_gho_token", 10515, carrier="prose",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_github_pat",
+            "jobs:\n  release:\n    env:\n      GH_TOKEN: <<secret:0>>\n",
+            "github_fine_grained_pat", 10516, carrier="yaml",
+        ),
+        dl(
+            "SECRET_TOKEN", "de", "dlp_github_token",
+            "# Token mit Tippfehler, abgelehnt\nGITHUB_TOKEN=<<secret:0>>\n",
+            "github_ghp_bad_crc", 10521, "ghp_ token shape with a wrong CRC32 check value", carrier="env",
+        ),
+        dl(
+            "SECRET_TOKEN", "de", "dlp_github_token",
+            "2026-10-21 10:14:02 WARN oauth: verworfener Wert <<secret:0>> (35 Zeichen)\n",
+            "github_gho_short", 10522, "gho_ token shape with 35 instead of 36 characters", carrier="log",
+        ),
+        dn(
+            "SECRET_TOKEN", "de", "dlp_github_token",
+            "jobs:\n  release:\n    env:\n      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n",
+            "GitHub Actions secret reference", carrier="yaml",
+        ),
+        dn(
+            "SECRET_TOKEN", "de", "dlp_github_token",
+            "Klassische GitHub-Tokens beginnen mit ghp_, gho_, ghu_, ghs_ oder ghr_ und haben danach 36 Zeichen, "
+            "die letzten sechs sind eine CRC32-Prüfsumme.",
+            "documented format without a value", carrier="prose",
+        ),
+        dx(
+            "SECRET_TOKEN", "de", "dlp_github_token",
+            "{\"github\": {\"benutzer_token\": \"<<secret:0>>\"}}\n",
+            "github_ghu_token", "BEISPIEL", "documented example value (BEISPIEL fill)", carrier="json",
+        ),
+        dl(
+            "SECRET_TOKEN", "de", "dlp_github_pat",
+            "2026-10-21 10:14:02 WARN cli: Eingabe <<secret:0>> verworfen (81 Zeichen)\n",
+            "github_fine_grained_pat_short", 10523, "github_pat_ shape with 81 instead of 82 characters", carrier="log",
+        ),
+        dl(
+            "SECRET_TOKEN", "en", "dlp_github_token",
+            "$ curl -H \"Authorization: token <<secret:0>>\" https://api.github.com/app\n",
+            "github_ghs_bad_crc", 10531, "ghs_ token shape with a wrong CRC32 check value", carrier="cli",
+        ),
+        dl(
+            "SECRET_TOKEN", "en", "dlp_github_token",
+            "{\"oauth\": {\"token\": \"<<secret:0>>\"}}\n",
+            "github_gho_bad_crc", 10532, "gho_ token shape with a wrong CRC32 check value", carrier="json",
+        ),
+        dn(
+            "SECRET_TOKEN", "en", "dlp_github_token",
+            "import os\n\ngh = Github(auth=Auth.Token(os.environ[\"GITHUB_TOKEN\"]))\n",
+            "environment lookup", carrier="code",
+        ),
+        dl(
+            "SECRET_TOKEN", "en", "dlp_github_token",
+            "2026-10-21T10:14:02Z WARN auth: rejected <<secret:0>> (37 characters)\n",
+            "github_ghp_long", 10533, "ghp_ token shape with 37 instead of 36 characters", carrier="log",
+        ),
+        dx(
+            "SECRET_TOKEN", "en", "dlp_github_token",
+            "# test fixture\nGITHUB_REFRESH_TOKEN=<<secret:0>>\n",
+            "github_ghr_token", "TESTKEY", "test key (TESTKEY fill)", carrier="env",
+        ),
+        dn(
+            "SECRET_TOKEN", "en", "dlp_github_pat",
+            "Fine-grained personal access tokens start with github_pat_ followed by 82 characters.",
+            "documented format without a value", carrier="prose",
+        ),
+    ],
+}
+for _label, _rows in DLP_F03_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+
+# F04: `dlp_npm_token` takes `npm_` with exactly 36 base62 characters whose last six are the
+# CRC32 of the first 30, at checksum strength. `dlp_gitlab_pat` takes `glpat-` with exactly 20
+# characters or the routable form (`glpat-…` + `.` + version + base36 check value);
+# `dlp_gitlab_token` takes the other documented GitLab prefixes (deploy, runner, runner
+# registration, pipeline trigger, feed, incoming mail, Kubernetes agent, CI/CD job, SCIM,
+# feature flag client) and `dlp_gitlab_oauth_secret` the OAuth application secret (`gloas-`).
+# Hard negatives are shapes with a wrong check value, length or alphabet (no rule may report
+# them), example/test fills, secret references and the documented prefixes.
+DLP_F04_CASES = {
+    "SECRET_TOKEN": [
+        ds(
+            "SECRET_TOKEN", "de", "dlp_npm_token",
+            "jobs:\n  veroeffentlichen:\n    steps:\n      - run: npm publish\n        env:\n"
+            "          NODE_AUTH_TOKEN: <<secret:0>>\n",
+            "npm_access_token", 10601, carrier="yaml",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_gitlab_token",
+            "# Registry-Zugang des Deploy-Jobs\n"
+            "$ echo <<secret:0>> | docker login registry.gitlab.example.com -u gitlab+deploy-token-12 --password-stdin\n",
+            "gitlab_deploy_token", 10602, carrier="cli",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_gitlab_token",
+            "concurrent = 4\n\n[[runners]]\n  name = \"baurunner-01\"\n  url = \"https://gitlab.example.com\"\n"
+            "  token = \"<<secret:0>>\"\n  executor = \"docker\"\n",
+            "gitlab_runner_token", 10603, carrier="toml",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_gitlab_token",
+            "# Nächtlicher Build über den Pipeline-Trigger\n"
+            "$ curl -X POST --fail -F token=<<secret:0>> -F ref=main "
+            "https://gitlab.example.com/api/v4/projects/42/trigger/pipeline\n",
+            "gitlab_trigger_token", 10604, carrier="cli",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_gitlab_token",
+            "Hallo Team,\n\nder Feed-Token für den Kalender-Export lautet <<secret:0>>\n\n"
+            "Bitte nicht weitergeben.\n",
+            "gitlab_feed_token", 10605, carrier="prose",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_gitlab_token",
+            "agent:\n  # Zugang des Clusters zu GitLab\n  config:\n    token: <<secret:0>>\n"
+            "    kasAddress: wss://kas.gitlab.example.com\n",
+            "gitlab_agent_token", 10606, carrier="yaml",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_gitlab_pat",
+            "{\"quelle\": \"gitlab.example.com\", \"zugang\": {\"token\": \"<<secret:0>>\"}}\n",
+            "gitlab_pat_routable", 10607, carrier="json",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_npm_token",
+            "$ npm config set //registry.npmjs.org/:_authToken <<secret:0>>\n",
+            "npm_access_token", 10611, carrier="cli",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_npm_token",
+            "const RegClient = require(\"npm-registry-client\");\n\n"
+            "const client = new RegClient({ auth: { token: \"<<secret:0>>\", alwaysAuth: true } });\n",
+            "npm_access_token", 10612, carrier="code",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_gitlab_token",
+            "$ gitlab-runner register --non-interactive --url https://gitlab.example.com "
+            "--token <<secret:0>> --executor docker\n",
+            "gitlab_runner_token_routable", 10613, carrier="cli",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_gitlab_token",
+            "gitlabUrl: https://gitlab.example.com/\nrunnerRegistrationToken: \"<<secret:0>>\"\nconcurrent: 10\n",
+            "gitlab_runner_registration_token", 10614, carrier="yaml",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_gitlab_token",
+            "2026-10-21T10:14:02Z INFO mail_room: delivering to /api/v4/internal/mail_room "
+            "with incoming mail token <<secret:0>>\n",
+            "gitlab_incoming_mail_token", 10615, carrier="log",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_gitlab_token",
+            "PATCH /api/scim/v2/groups/acme/Users/42 HTTP/1.1\nHost: gitlab.example.com\n"
+            "Authorization: Bearer <<secret:0>>\nContent-Type: application/scim+json\n",
+            "gitlab_scim_token", 10616, carrier="http",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_gitlab_token",
+            "Hi Sam,\n\nthe feature flag client token for the storefront is <<secret:0>>\n\n"
+            "Please rotate it after the release.\n",
+            "gitlab_feature_flag_token", 10617, carrier="prose",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_gitlab_token",
+            "2026-10-21T10:14:02Z DEBUG job 8812: fetching artifacts with job token <<secret:0>>\n",
+            "gitlab_cicd_job_token", 10618, carrier="log",
+        ),
+        dl(
+            "SECRET_TOKEN", "de", "dlp_npm_token",
+            "; Token mit Tippfehler, von der Registry abgelehnt\n//registry.npmjs.org/:_authToken=<<secret:0>>\n",
+            "npm_bad_crc", 10621, "npm_ token shape with a wrong CRC32 check value", carrier="ini",
+        ),
+        dl(
+            "SECRET_TOKEN", "de", "dlp_npm_token",
+            "2026-10-21 10:14:02 WARN publish: verworfener Wert <<secret:0>> (35 Zeichen)\n",
+            "npm_short", 10622, "npm_ token shape with 35 instead of 36 characters", carrier="log",
+        ),
+        dn(
+            "SECRET_TOKEN", "de", "dlp_npm_token",
+            "      - run: echo \"//npm.pkg.github.com/:_authToken=${{ secrets.NPM_TOKEN }}\" >> .npmrc\n",
+            "GitHub Actions secret reference", carrier="yaml",
+        ),
+        dl(
+            "SECRET_TOKEN", "de", "dlp_gitlab_pat",
+            "2026-10-21 10:14:02 WARN api: verworfener Wert <<secret:0>> (21 Zeichen)\n",
+            "gitlab_pat_long", 10623, "glpat- shape with 21 instead of 20 characters", carrier="log",
+        ),
+        dl(
+            "SECRET_TOKEN", "de", "dlp_gitlab_token",
+            "2026-10-21 10:14:02 WARN trigger: verworfener Wert <<secret:0>> (Großbuchstaben)\n",
+            "gitlab_trigger_token_upper_hex", 10624, "glptt- shape with upper-case hex digits", carrier="log",
+        ),
+        dn(
+            "SECRET_TOKEN", "de", "dlp_gitlab_token",
+            "Deploy-Tokens beginnen mit gldt-, Runner-Tokens mit glrt- und Pipeline-Trigger-Tokens mit glptt-.",
+            "documented prefixes without a value", carrier="prose",
+        ),
+        dx(
+            "SECRET_TOKEN", "de", "dlp_gitlab_token",
+            "deploy:\n  registry:\n    benutzer: gitlab+deploy-token-12\n    token: <<secret:0>>\n",
+            "gitlab_deploy_token", "BEISPIEL", "documented example value (BEISPIEL fill)", carrier="yaml",
+        ),
+        dl(
+            "SECRET_TOKEN", "en", "dlp_npm_token",
+            "{\"npmAuthToken\": \"<<secret:0>>\", \"npmRegistryServer\": \"https://registry.npmjs.org\"}\n",
+            "npm_bad_crc", 10631, "npm_ token shape with a wrong CRC32 check value", carrier="json",
+        ),
+        dl(
+            "SECRET_TOKEN", "en", "dlp_npm_token",
+            "2026-10-21T10:14:02Z WARN publish: rejected <<secret:0>> (37 characters)\n",
+            "npm_long", 10632, "npm_ token shape with 37 instead of 36 characters", carrier="log",
+        ),
+        dx(
+            "SECRET_TOKEN", "en", "dlp_npm_token",
+            "# test fixture\n//registry.npmjs.org/:_authToken=<<secret:0>>\n",
+            "npm_access_token", "TESTKEY", "test key (TESTKEY fill, zero checksum)", carrier="ini",
+        ),
+        dl(
+            "SECRET_TOKEN", "en", "dlp_gitlab_token",
+            "2026-10-21T10:14:02Z WARN registry: rejected <<secret:0>> (19 characters)\n",
+            "gitlab_deploy_token_short", 10633, "gldt- shape with 19 instead of 20 characters", carrier="log",
+        ),
+        dn(
+            "SECRET_TOKEN", "en", "dlp_gitlab_token",
+            "[[runners]]\n  url = \"https://gitlab.example.com\"\n  token = \"${RUNNER_TOKEN}\"\n",
+            "environment reference", carrier="toml",
+        ),
+        dn(
+            "SECRET_TOKEN", "en", "dlp_gitlab_token",
+            "Feed tokens start with glft-, SCIM tokens with glsoat- and OAuth application secrets with gloas-.",
+            "documented prefixes without a value", carrier="prose",
+        ),
+    ],
+    "API_KEY": [
+        ds(
+            "API_KEY", "de", "dlp_gitlab_oauth_secret",
+            "# Anmeldung über GitLab (OmniAuth)\nGITLAB_APP_ID=4711\nGITLAB_APP_SECRET=<<secret:0>>\n",
+            "gitlab_oauth_app_secret", 10641, carrier="env",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_gitlab_oauth_secret",
+            "{\"application_id\": \"4711\", \"application_name\": \"dashboard\", \"secret\": \"<<secret:0>>\"}\n",
+            "gitlab_oauth_app_secret", 10642, carrier="json",
+        ),
+        dx(
+            "API_KEY", "de", "dlp_gitlab_oauth_secret",
+            "GITLAB_APP_SECRET=<<secret:0>>\n",
+            "gitlab_oauth_app_secret", "MUSTER", "documented example value (MUSTER fill)", carrier="env",
+        ),
+        dx(
+            "API_KEY", "en", "dlp_gitlab_oauth_secret",
+            "{\"application_id\": \"4711\", \"secret\": \"<<secret:0>>\"}\n",
+            "gitlab_oauth_app_secret", "EXAMPLE", "documented example value (EXAMPLE fill)", carrier="json",
+        ),
+    ],
+}
+for _label, _rows in DLP_F04_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+
+# F05: `dlp_aws_access_key` takes the credential prefixes of the IAM unique-ID table (`AKIA`,
+# `ASIA`, `ABIA`, `ACCA`, legacy `A3T…`) and exactly 16 Base32 characters. `dlp_aws_secret_key`
+# takes 40 base64 characters with upper and lower case letters after an AWS key name or label
+# (also in prose, up to two lines on), right after an access key ID, or after a generic secret
+# key name with AWS context (Terraform `provider "aws"`, `.s3cfg`, Spring `cloud.aws`). Hard
+# negatives are IAM unique IDs of other entities, key IDs outside Base32 or of another length,
+# 41-character and hex values, references, example/test fills and documented formats.
+DLP_F05_CASES = {
+    "CLOUD_KEY": [
+        ds(
+            "CLOUD_KEY", "de", "dlp_aws_secret_key",
+            "# Zugang für den Rechnungsexport\nprovider \"aws\" {\n  region     = \"eu-central-1\"\n"
+            "  access_key = var.zugangs_id\n  secret_key = \"<<secret:0>>\"\n}\n",
+            "aws_secret_access_key", 10701, carrier="code",
+        ),
+        ds(
+            "CLOUD_KEY", "de", "dlp_aws_secret_key",
+            "# s3cmd-Konfiguration für das Archiv\n[default]\nhost_base = s3.eu-central-1.amazonaws.com\n"
+            "secret_key = <<secret:0>>\nuse_https = True\n",
+            "aws_secret_access_key", 10702, carrier="ini",
+        ),
+        ds(
+            "CLOUD_KEY", "de", "dlp_aws_secret_key",
+            "# Zugangsdaten Lager-Export\ncloud:\n  aws:\n    region:\n      static: eu-central-1\n"
+            "    credentials:\n      secret-key: <<secret:0>>\n",
+            "aws_secret_access_key", 10703, carrier="yaml",
+        ),
+        ds(
+            "CLOUD_KEY", "de", "dlp_aws_secret_key",
+            "[10:02] jana.k: Hast du den AWS Secret Access Key für Staging? Die Pipeline hängt.\n"
+            "[10:03] tim.b: <<secret:0>>\n[10:03] tim.b: Bitte nur lokal nutzen.\n",
+            "aws_secret_access_key", 10704, carrier="prose",
+        ),
+        ds(
+            "CLOUD_KEY", "de", "dlp_aws_secret_key",
+            "Der AWS-Secret-Access-Key für den Export lautet <<secret:0>>, bitte nach dem Test rotieren.\n",
+            "aws_secret_access_key", 10705, carrier="prose",
+        ),
+        ds(
+            "CLOUD_KEY", "de", "dlp_aws_access_key",
+            "$ aws configure set aws_access_key_id <<secret:0>> --profile buchhaltung\n",
+            "aws_sts_bearer_key_id", 10706, carrier="cli",
+        ),
+        ds(
+            "CLOUD_KEY", "en", "dlp_aws_secret_key",
+            "terraform {\n  backend \"s3\" {\n    bucket     = \"acme-tf-state\"\n    region     = \"us-east-1\"\n"
+            "    secret_key = \"<<secret:0>>\"\n  }\n}\n",
+            "aws_secret_access_key", 10711, carrier="code",
+        ),
+        ds(
+            "CLOUD_KEY", "en", "dlp_aws_secret_key",
+            "$ aws configure --profile reporting\nAWS Access Key ID [None]: \n"
+            "AWS Secret Access Key [None]: <<secret:0>>\nDefault region name [None]: us-east-1\n",
+            "aws_secret_access_key", 10712, carrier="cli",
+        ),
+        ds(
+            "CLOUD_KEY", "en", "dlp_aws_secret_key",
+            "2026-10-22T08:01:12Z DEBUG botocore.credentials: loaded secret_key=<<secret:0>> "
+            "from ~/.aws/credentials\n",
+            "aws_secret_access_key", 10713, carrier="log",
+        ),
+        ds(
+            "CLOUD_KEY", "en", "dlp_aws_secret_key",
+            "<appSettings>\n  <add key=\"AWSRegion\" value=\"us-east-1\" />\n"
+            "  <add key=\"AwsSecretAccessKey\" value=\"<<secret:0>>\" />\n</appSettings>\n",
+            "aws_secret_access_key", 10714, carrier="xml",
+        ),
+        ds(
+            "CLOUD_KEY", "en", "dlp_aws_secret_key",
+            "Hi team,\n\nhere is the AWS secret access key for the backup job:\n\n<<secret:0>>\n\n"
+            "Please move it to the vault this week.\n",
+            "aws_secret_access_key", 10715, carrier="prose",
+        ),
+        ds(
+            "CLOUD_KEY", "en", "dlp_aws_access_key",
+            "{\"Credentials\": {\"AccessKeyId\": \"<<secret:0>>\", \"Expiration\": \"2026-10-22T10:00:00Z\"}}\n",
+            "aws_context_credential_key_id", 10716, carrier="json",
+        ),
+        dl(
+            "CLOUD_KEY", "de", "dlp_aws_secret_key",
+            "# Commit, mit dem der AWS-Secret-Access-Key aus der Konfiguration entfernt wurde\n"
+            "commit <<secret:0>>\n",
+            "aws_secret_access_key_hex", 10721, "40 hex digits (git commit ID) after an AWS label", carrier="log",
+        ),
+        dn(
+            "CLOUD_KEY", "de", "dlp_aws_secret_key",
+            "provider \"aws\" {\n  region     = \"eu-central-1\"\n  access_key = var.zugangs_id\n"
+            "  secret_key = var.geheimer_schluessel\n}\n",
+            "Terraform variable reference", carrier="code",
+        ),
+        dx(
+            "CLOUD_KEY", "de", "dlp_aws_secret_key",
+            "[default]\nhost_base = s3.amazonaws.com\nsecret_key = <<secret:0>>\n",
+            "aws_secret_access_key", "BEISPIEL", "documented example value (BEISPIEL fill)", carrier="ini",
+        ),
+        dl(
+            "CLOUD_KEY", "de", "dlp_aws_access_key",
+            "{\"userIdentity\": {\"type\": \"IAMUser\", \"principalId\": \"<<secret:0>>\", "
+            "\"userName\": \"rechnung-export\"}}\n",
+            "aws_iam_user_unique_id", 10722, "IAM user unique ID (AIDA), no credential", carrier="json",
+        ),
+        ds(
+            "CLOUD_KEY", "de", "dlp_aws_access_key",
+            "2026-10-22 08:14:03 WARN import: alter Zugriffsschlüssel <<secret:0>> noch aktiv\n",
+            "aws_access_key_id_non_base32", 10723, carrier="log",
+        ),
+        dn(
+            "CLOUD_KEY", "de", "dlp_aws_secret_key",
+            "Der geheime Zugriffsschlüssel (AWS Secret Access Key) besteht aus 40 Base64-Zeichen.",
+            "documented format without a value", carrier="prose",
+        ),
+        dl(
+            "CLOUD_KEY", "en", "dlp_aws_secret_key",
+            "2026-10-22T08:14:03Z WARN iam: rejected AWS secret access key candidate <<secret:0>> "
+            "(41 characters)\n",
+            "aws_secret_access_key_long", 10731, "base64 run of 41 instead of 40 characters", carrier="log",
+        ),
+        dn(
+            "CLOUD_KEY", "en", "dlp_aws_secret_key",
+            "    env:\n      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}\n"
+            "      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}\n",
+            "GitHub Actions secret references", carrier="yaml",
+        ),
+        dx(
+            "CLOUD_KEY", "en", "dlp_aws_secret_key",
+            "provider \"aws\" {\n  region     = \"us-east-1\"\n  secret_key = \"<<secret:0>>\"\n}\n",
+            "aws_secret_access_key", "TESTKEY", "test key (TESTKEY fill)", carrier="code",
+        ),
+        dl(
+            "CLOUD_KEY", "en", "dlp_aws_access_key",
+            "2026-10-22T08:14:03Z WARN sts: malformed key id <<secret:0>> (17 characters after the prefix)\n",
+            "aws_access_key_id_long", 10732, "AKIA shape with 17 instead of 16 Base32 characters", carrier="log",
+        ),
+        dl(
+            "CLOUD_KEY", "en", "dlp_aws_access_key",
+            "{\"eventName\": \"ConsoleLogin\", \"userIdentity\": {\"principalId\": \"<<secret:0>>\"}}\n",
+            "aws_iam_user_unique_id", 10733, "IAM user unique ID (AIDA), no credential", carrier="json",
+        ),
+        dn(
+            "CLOUD_KEY", "en", "dlp_aws_access_key",
+            "Access key IDs start with AKIA (long-term) or ASIA (temporary) followed by 16 Base32 characters.",
+            "documented prefixes without a value", carrier="prose",
+        ),
+    ],
+}
+for _label, _rows in DLP_F05_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+
+# F-GEN1 (F11 + T03 + T10): the values of `dlp_password_assignment`,
+# `dlp_generic_credential_assignment` and `dlp_url_userinfo_password` need password likeness.
+# Code expressions (calls, index/member access, type annotations, `Token::…` paths, format
+# placeholders, paths), a shell variable as key (`$PWD:/work`), DE/EN prose words („Passwort ist
+# falsch“) and credential names or test stand-ins (`user:pass`, `token:MY_GITHUB_TOKEN`) are no
+# secrets; weak but real passwords stay secrets. `dlp_url_userinfo_token` reports the token in
+# the username of `https://<token>:x-oauth-basic@…`.
+DLP_FGEN1_CASES = {
+    "CREDENTIAL": [
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "import psycopg\n\nverbindung = psycopg.connect(host=\"db.intern\", user=\"lager\", "
+            "password=\"<<secret:0>>\")\n",
+            "password", 11001, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "Hallo Sven, das Passwort ist <<secret:0>>, bitte nach dem ersten Login ändern.\n",
+            "password", 11002, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "[smtp]\nserver = mail.intern\nbenutzer = versand\npasswort = <<secret:0>>\n",
+            "weak_dollar_password", 11003, carrier="ini",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "let client = Client::new(Config {\n    region: \"eu-central-1\".into(),\n"
+            "    token: \"<<secret:0>>\".into(),\n});\n",
+            "generic_api_secret", 11004, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_url_userinfo_password",
+            "// Verbindung zur Lager-DB\ndsn := \"postgres://lager:<<secret:0>>@db.intern:5432/lager\"\n",
+            "url_userinfo_password", 11005, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "Zugang Testsystem\nBenutzer: pruefer\nPasswort: <<secret:0>>\n",
+            "weak_repeated_password", 11006, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "const pool = new Pool({ host: \"db.internal\", user: \"app\", password: \"<<secret:0>>\" });\n",
+            "password", 11011, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "Hi Dana, the password is <<secret:0>> until Friday, please change it after login.\n",
+            "weak_snake_case_password", 11012, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "client := api.New(api.Config{\n\tRegion: \"us-east-1\",\n\tToken:  \"<<secret:0>>\",\n})\n",
+            "generic_api_secret", 11013, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_url_userinfo_password",
+            "$ git clone https://deploy:<<secret:0>>@git.example.com/team/app.git\n",
+            "url_userinfo_password", 11014, carrier="cli",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "2026-10-22 08:01:12 WARN legacy auth enabled for user=ops password=<<secret:0>>\n",
+            "weak_repeated_password", 11015, carrier="log",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "Das Passwort ist falsch. Bitte prüfen Sie die Feststelltaste und versuchen Sie es erneut.",
+            "prose: the password is wrong (no value)", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "Hinweis: Das Token ist abgelaufen, bitte melden Sie sich neu an.",
+            "prose: the token has expired (no value)", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "fn verbinde(token: Option<&str>) -> Result<Verbindung, Fehler> {\n    todo!()\n}\n",
+            "Rust type annotation", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "def anmelden(konto):\n    passwort = tresor.passwort_lesen(konto)\n    return login(konto, passwort)\n",
+            "Python function call", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "$ docker run --rm -v \"$PWD:/arbeit\" -w /arbeit lager/export:1.4\n",
+            "shell variable $PWD as key of a volume mount", carrier="cli",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_url_userinfo_password",
+            "$this->assertSame('https://user:pass@example.org/repo.git', $url);\n",
+            "test-suite URL with stand-in credentials", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "const passwort = this.eingabe.value;\nconst staerke = this.bewerten(passwort);\n",
+            "TypeScript member access", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "If a system keyring is available, the password is stored there and never written to disk.",
+            "prose: the password is stored (no value)", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "token = self._authenticator.get_pypi_token(repository_name)\n",
+            "Python method call", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "export interface StrengthConfig {\n  scorer: ((password: string) => number) | null\n}\n",
+            "TypeScript type annotation", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "/**\n * @return array{username: string|null, password: string|null}\n */\n",
+            "PHP doc type annotation", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_url_userinfo_password",
+            "['https://gitlab-ci-token:***@gitlab.example.org/', 'https://gitlab-ci-token:realtoken@gitlab.example.org/'],\n",
+            "test-suite URL with a stand-in token", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "match tok {\n    Token::Literal(c) => out.push(c),\n    Token::ZeroOrMore => out.push_str(\".*\"),\n}\n",
+            "Rust enum path Token::…", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_url_userinfo_password",
+            "['https://token:MY_GITHUB_TOKEN@github.com/acme/repo.git', 2],\n",
+            "test-suite URL with a variable name as token", carrier="code",
+        ),
+    ],
+    "SECRET_TOKEN": [
+        ds(
+            "SECRET_TOKEN", "de", "dlp_url_userinfo_token",
+            "# Spiegel des Lager-Repos\n$ git remote set-url spiegel "
+            "https://<<secret:0>>:x-oauth-basic@github.com/acme/lager.git\n",
+            "generic_api_secret", 11021, carrier="cli",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_url_userinfo_token",
+            "[remote \"origin\"]\n  url = https://<<secret:0>>:x-oauth-basic@github.com/acme/abgleich.git\n",
+            "url_token", 11022, carrier="ini",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_url_userinfo_token",
+            "$ git clone https://<<secret:0>>:x-oauth-basic@github.com/acme/app.git\n",
+            "generic_api_secret", 11031, carrier="cli",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_url_userinfo_token",
+            "{\"mirror\": {\"remote\": \"https://<<secret:0>>:x-oauth-basic@github.com/acme/sync.git\"}}\n",
+            "url_token", 11032, carrier="json",
+        ),
+        dn(
+            "SECRET_TOKEN", "de", "dlp_url_userinfo_token",
+            "$ git clone https://$GITHUB_TOKEN:x-oauth-basic@github.com/acme/lager.git\n",
+            "shell variable as token", carrier="cli",
+        ),
+        dn(
+            "SECRET_TOKEN", "de", "dlp_url_userinfo_token",
+            "Format: https://<token>:x-oauth-basic@github.com/acme/lager.git",
+            "documented format without a token", carrier="prose",
+        ),
+        dn(
+            "SECRET_TOKEN", "en", "dlp_url_userinfo_token",
+            "https://myusername:x-oauth-basic@github.com/acme/app.git\n",
+            "word as username, no token", carrier="line",
+        ),
+        dn(
+            "SECRET_TOKEN", "en", "dlp_url_userinfo_token",
+            "  run: git clone https://${{ secrets.GITHUB_TOKEN }}:x-oauth-basic@github.com/acme/app.git\n",
+            "GitHub Actions secret reference", carrier="yaml",
+        ),
+    ],
+}
+for _label, _rows in DLP_FGEN1_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+
+# F-GEN2 (T04 + T08): value capture. A quoted value of `dlp_password_assignment` and
+# `dlp_generic_credential_assignment` runs to its closing quote (spaces, `;`, `,`, `}` inside,
+# two characters before the first `;`); `dlp_env_var_secret` reports the value without its
+# quotes and without a trailing `;`, also after `KEY:` in YAML/compose env maps. Code constants
+# (`DATA_API_KEY = '.data-api'`, `AUTH_FLOW_PASSWORD = "password"`), the closing quote of a
+# label (`"Passwort:"),d?…`), messages and template or environment references are no values.
+DLP_FGEN2_CASES = {
+    "CREDENTIAL": [
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "[datenbank]\nhost = \"db.intern\"\nbenutzer = \"lager\"\npasswort = \"<<secret:0>>\"\n",
+            "quoted_passphrase", 12001, carrier="toml",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "smtp:\n  host: mail.intern\n  benutzer: versand\n  password: '<<secret:0>>'\n",
+            "quoted_punctuated_password", 12002, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "const konfig = { region: \"eu-central-1\", token: \"<<secret:0>>\", wiederholungen: 3 };\n",
+            "quoted_punctuated_password", 12003, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "Hallo Jana, das neue Passwort lautet \"<<secret:0>>\", bitte nach dem ersten Login ändern.\n",
+            "quoted_passphrase", 12004, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "# Abgleich lokal starten\n$ export LAGER_API_TOKEN='<<secret:0>>'\n$ ./bin/abgleich --voll\n",
+            "generic_api_secret", 12005, carrier="cli",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "FROM eclipse-temurin:21-jre\nCOPY target/abgleich.jar /app/abgleich.jar\n"
+            "ENV LAGER_DB_PASSWORD=\"<<secret:0>>\"\nENTRYPOINT [\"java\", \"-jar\", \"/app/abgleich.jar\"]\n",
+            "password", 12006, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "services:\n  abgleich:\n    image: acme/abgleich:2.3\n    environment:\n"
+            "      LAGER_DB_HOST: db.intern\n      LAGER_DB_PASSWORD: \"<<secret:0>>\"\n",
+            "password", 12007, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "public final class Exportdienst {\n"
+            "    private static final String EXPORT_API_KEY = \"<<secret:0>>\";\n}\n",
+            "url_token", 12008, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "$ LAGER_SECRET=<<secret:0>>; ./bin/abgleich --mandant 0042\n",
+            "url_token", 12009, carrier="cli",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "[smtp]\nhost = mail.internal\nuser = reports\npassword = \"<<secret:0>>\"\n",
+            "quoted_passphrase", 12011, carrier="ini",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "conn = psycopg.connect(host=\"db.internal\", user=\"reports\", password='<<secret:0>>')\n",
+            "quoted_punctuated_password", 12012, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "oauth:\n  issuer: https://login.internal\n  client_secret: \"<<secret:0>>\"\n",
+            "quoted_punctuated_password", 12013, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "Hi Sam, the API token is \"<<secret:0>>\" until the rotation on Friday.\n",
+            "quoted_passphrase", 12014, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "# .env for the report worker\nREPORTS_QUEUE=reports\nREPORTS_API_TOKEN=\"<<secret:0>>\"\n",
+            "generic_api_secret", 12015, carrier="env",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "jobs:\n  export:\n    runs-on: ubuntu-24.04\n    env:\n"
+            "      REPORTS_DB_PASSWORD: \"<<secret:0>>\"\n    steps:\n      - run: ./export.sh\n",
+            "password", 12016, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "import requests\n\nREPORTS_API_KEY = \"<<secret:0>>\"\n",
+            "url_token", 12017, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "$ REPORTS_SECRET=<<secret:0>>; ./bin/report --all\n",
+            "url_token", 12018, carrier="cli",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "const NAME = 'zeitleiste'\nconst DATA_KEY = 'bs.zeitleiste'\nconst DATA_API_KEY = '.data-api'\n",
+            "code constant: event namespace, no secret", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "const ANMELDUNG_IMPLIZIT = \"implicit\"\nconst ANMELDUNG_FLOW_PASSWORD = \"password\"\n",
+            "code constant: OAuth flow name", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "services:\n  abgleich:\n    environment:\n      LAGER_DB_PASSWORD: \"${LAGER_DB_PASSWORD}\"\n",
+            "compose environment reference", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "e.createElement(\"label\",{htmlFor:\"passwort\"},\"Passwort:\"),d?e.createElement(\"code\",null,\" ******\")\n",
+            "closing quote of a label in minified code", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "const meldungen = { passwort: \"Bitte geben Sie ein Passwort ein\", senden: \"Anmelden\" };\n",
+            "UI message about the password", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "lager:\n  token: \"{{ .Values.lager.token }}\"\n",
+            "Helm template reference", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "LAGER_SECRET_KEY = konfig.get(\"lager_secret\")\n",
+            "Python call as value", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "const NAME = \"collapse\";\nconst DATA_API_KEY = \".data-api\";\nconst EVENT_SHOW = \"show\";\n",
+            "code constant: event namespace, no secret", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "    const AUTH_FLOW_IMPLICIT = \"implicit\"\n    const AUTH_FLOW_PASSWORD = \"password\"\n",
+            "code constant: OAuth flow name", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "    env:\n      REPORTS_DB_PASSWORD: ${{ secrets.REPORTS_DB_PASSWORD }}\n",
+            "GitHub Actions secret reference", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "export default { password: \"Enter your password\", submit: \"Sign in\" };\n",
+            "UI message about the password", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "Login failed because the password is \"too short\" for the new policy.\n",
+            "prose: quoted dictionary words", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "oauth:\n  client_secret: \"<your client secret>\"\n",
+            "documented placeholder", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "ENV REPORTS_API_TOKEN=\"$(cat /run/secrets/reports_token)\"\n",
+            "command substitution from a mounted secret", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "    environment:\n      LAGER_API_TOKEN: \"" + "deadbeef" * 5 + "\"\n",
+            "documented hex fill value under a compose key", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "[oauth]\nclient_secret = \"" + "1234567890" * 4 + "\"\n",
+            "repeated digit fill as a 40-character hex secret", carrier="toml",
+        ),
+    ],
+}
+for _label, _rows in DLP_FGEN2_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+
+# T09: key shapes of the key-anchored rules. Quoted and escaped keys (`"client_secret":`,
+# `'password' =>`), compound and camelCase keys (`db_password`, `serviceSecret`,
+# `PasswordHash`), typed declarations (`const X: &str =`, `: string =`), subscripts
+# (`os.environ["DB_PASSWORD"] =`), escaped values in notebooks and XML `key`/`value`
+# attributes find their value. Cursor and handle tokens, Helm/Kubernetes secret objects,
+# field names, types, templates, calls and placeholders after the new key shapes stay silent.
+# Notebook cells (`.ipynb`) are JSON carriers.
+DLP_T09_CASES = {
+    "CREDENTIAL": [
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "{\n  \"dienst\": \"lagerabgleich\",\n  \"zugang\": {\n    \"db_passwort\": \"<<secret:0>>\",\n"
+            "    \"anmerkung\": \"nur für den Nachtlauf\"\n  }\n}\n",
+            "password", 13001, carrier="json",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "anbindungen:\n  spedition:\n    basis_url: https://api.intern/v1\n    dienstSecret: \"<<secret:0>>\"\n",
+            "generic_api_secret", 13002, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "use std::time::Duration;\n\n// Zugang zum Import-Endpunkt\nconst DB_PASSWORT: &str = \"<<secret:0>>\";\n",
+            "password", 13003, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "{\n \"cells\": [\n  {\n   \"cell_type\": \"code\",\n   \"source\": [\n    \"import os\\n\",\n"
+            "    \"os.environ[\\\"CLIENT_SECRET\\\"] = \\\"<<secret:0>>\\\"\\n\"\n   ]\n  }\n ]\n}\n",
+            "generic_api_secret", 13004, carrier="json",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "import { HttpClient } from \"@acme/http\";\n\nexport const lagerApiKey: string = \"<<secret:0>>\";\n",
+            "generic_api_secret", 13005, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "{\n  \"region\": \"eu-central-1\",\n  \"oauth\": {\n    \"client_secret\": \"<<secret:0>>\"\n  }\n}\n",
+            "generic_api_secret", 13011, carrier="json",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "upstream:\n  enabled: true\n  base_url: https://api.internal/v2\n  db_password: \"<<secret:0>>\"\n",
+            "password", 13012, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "<configuration>\n  <appSettings>\n    <add key=\"Environment\" value=\"Production\" />\n"
+            "    <add key=\"DbPassword\" value=\"<<secret:0>>\" />\n  </appSettings>\n</configuration>\n",
+            "password", 13013, carrier="xml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "# reconciler settings\n[server]\nlisten = \"0.0.0.0:7000\"\n\n[auth]\nservice_secret = \"<<secret:0>>\"\n",
+            "generic_api_secret", 13014, carrier="toml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "{\n \"cells\": [\n  {\n   \"cell_type\": \"code\",\n   \"source\": [\n    \"import requests\\n\",\n"
+            "    \"db_password = \\\"<<secret:0>>\\\"\\n\"\n   ]\n  }\n ]\n}\n",
+            "password", 13015, carrier="json",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "<?php\n\nreturn [\n    'host' => 'db.internal',\n    'password' => '<<secret:0>>',\n];\n",
+            "password", 13016, carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "{\n  \"artikel\": [],\n  \"nextPageToken\": \"Q0FVUUFBYTFiMmMz\"\n}\n",
+            "pagination cursor under a compound token key", carrier="json",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "lager:\n  auth:\n    existingSecret: \"lager-release-auth\"\n",
+            "Helm reference to an existing Kubernetes Secret", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "export interface Konfig {\n  dbPasswort: string;\n  dienstSecret?: string;\n}\n",
+            "TypeScript field types", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "<appSettings>\n  <add key=\"DbPasswort\" value=\"{{DB_PASSWORT}}\" />\n</appSettings>\n",
+            "XML template reference", carrier="xml",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "   \"source\": [\n    \"db_passwort = getpass.getpass()\\n\",\n    \"verbinde(db_passwort)\"\n   ]\n",
+            "notebook call as value", carrier="json",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "const DB_PASSWORT: &str = env!(\"DB_PASSWORT\");\n",
+            "Rust compile-time environment reference", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "{\n  \"items\": [],\n  \"continuation_token\": \"a8f3k2m9x7q1z5w4\"\n}\n",
+            "stream continuation cursor", carrier="json",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "const routes = { forgotPassword: \"forgot-password\", resetPassword: \"/reset-password\" };\n",
+            "route names after camelCase password keys", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "ingress:\n  tls_secret: \"wildcard-internal-2026\"\n",
+            "name of a Kubernetes TLS Secret", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "<appSettings>\n  <add key=\"ClientSecret\" value=\"YOUR_CLIENT_SECRET\" />\n</appSettings>\n",
+            "documented placeholder in an XML key/value pair", carrier="xml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "   \"source\": [\n    \"os.environ[\\\"DB_PASSWORD\\\"] = getpass.getpass()\\n\",\n   ]\n",
+            "notebook call as value of a subscript", carrier="json",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "pub struct Config {\n    pub db_password: Option<String>,\n}\n",
+            "Rust field type", carrier="code",
+        ),
+    ],
+    "SECRET_TOKEN": [
+        ds(
+            "SECRET_TOKEN", "de", "dlp_csrf_token",
+            "[server]\nworker = 4\n\n[upstream]\nbasis_url = \"https://api.intern/v2\"\ncsrf_token = \"<<secret:0>>\"\n",
+            "csrf_token", 13021, carrier="toml",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_csrf_token",
+            "<exporter>\n  <endpoint url=\"https://reports.internal/api\" timeout=\"30\" />\n"
+            "  <credentials csrfToken=\"<<secret:0>>\" />\n</exporter>\n",
+            "csrf_token", 13022, carrier="xml",
+        ),
+        dn(
+            "SECRET_TOKEN", "de", "dlp_csrf_token",
+            "<meta name=\"csrf-token\" content=\"{{ csrf_token() }}\">\n",
+            "template in a CSRF meta tag", carrier="code",
+        ),
+        dn(
+            "SECRET_TOKEN", "en", "dlp_csrf_token",
+            "{\n  \"csrf_token\": \"X-CSRF-Token\"\n}\n",
+            "header name as value", carrier="json",
+        ),
+    ],
+    "PASSWORD_HASH": [
+        ds(
+            "PASSWORD_HASH", "de", "dlp_password_hash",
+            "<appSettings>\n  <add key=\"Umgebung\" value=\"Produktion\" />\n"
+            "  <add key=\"PasswordHash\" value=\"<<secret:0>>\" />\n</appSettings>\n",
+            "bcrypt_hash", 13031, carrier="xml",
+        ),
+        ds(
+            "PASSWORD_HASH", "en", "dlp_password_hash",
+            "import { HttpClient } from \"@acme/http\";\n\nexport const passwordHash: string = \"<<secret:0>>\";\n",
+            "bcrypt_hash", 13032, carrier="code",
+        ),
+    ],
+    "CLOUD_KEY": [
+        ds(
+            "CLOUD_KEY", "en", "dlp_aws_secret_key",
+            "{\n  \"awsAccessKeyId\": \"from-vault\",\n  \"awsSecretAccessKey\": \"<<secret:0>>\"\n}\n",
+            "aws_secret_access_key", 13041, carrier="json",
+        ),
+        ds(
+            "CLOUD_KEY", "de", "dlp_aws_secret_key",
+            "POST /v1/upload HTTP/1.1\nHost: lager.intern\nAws-Secret-Access-Key: <<secret:0>>\n",
+            "aws_secret_access_key", 13042, carrier="http",
+        ),
+    ],
+}
+for _label, _rows in DLP_T09_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+
+# F-HTTP (F13 + T11): HTTP auth values outside a literal header line. Bearer and Basic values
+# under authorization/proxy_authorization keys (env, JSON, YAML, TOML, code, logs) and standalone
+# in chats, tickets and mails; session cookies of known servers and frameworks (JSESSIONID,
+# PHPSESSID, connect.sid, laravel_session, __Host-) without a Cookie: line. Basic counts only
+# when its base64 decodes to user:password, Bearer only as a high-entropy opaque token (a JWT
+# goes to dlp_jwt_token). Hard negatives: swagger-ui test values (Bearer abc123.xyz.789,
+# Bearer secret_token, Basic application:secret), base64 without user:password, the RFC 7617
+# example, references, placeholders and identifiers.
+DLP_FHTTP_CASES = {
+    "CREDENTIAL": [
+        ds(
+            "CREDENTIAL", "de", "dlp_basic_auth",
+            "# Proxy für den Lagerabgleich\nHTTP_PROXY=http://proxy.intern:3128\nPROXY_AUTHORIZATION=Basic <<secret:0>>\n",
+            "http_basic_auth", 14001, carrier="env",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_basic_auth",
+            "Ticket #20931 – Proxy lehnt den Abruf ab\n\nLaut Konfiguration hinterlegt (Proxy-Zugangsdaten): "
+            "Basic <<secret:0>>\nBitte prüfen, ob der Wert noch gültig ist.\n",
+            "http_basic_auth", 14002, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_session_cookie",
+            "2026-09-14 08:12:03,902 DEBUG [main] Sitzung übernommen: mandant=0042 JSESSIONID=<<secret:0>> "
+            "wiederholungen=3\n",
+            "java_session_id", 14003, carrier="log",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_session_cookie",
+            "sitzung:\n  domain: shop.intern\n  cookie: \"PHPSESSID=<<secret:0>>\"\n",
+            "php_session_id", 14004, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_session_cookie",
+            "[08:17] daniel.r: Cookie aus dem Browser, damit du die Sitzung nachstellen kannst: "
+            "laravel_session=<<secret:0>>\n",
+            "laravel_session", 14005, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_basic_auth",
+            "upstream:\n  base_url: https://api.internal/v2\n  proxy_authorization: \"Basic <<secret:0>>\"\n",
+            "http_basic_auth", 14011, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_basic_auth",
+            "Hi team,\n\nhere are the proxy credentials for the reporting job:\n\nBasic <<secret:0>>\n\n"
+            "Please delete this mail after the run.\n",
+            "http_basic_auth", 14012, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_session_cookie",
+            "# copied from the browser for the load test\nSESSION_COOKIE=JSESSIONID=<<secret:0>>\n",
+            "java_session_id", 14013, carrier="env",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_session_cookie",
+            "[09:43] tom.w: grabbed it from devtools: connect.sid=<<secret:0>>\n",
+            "express_session_id", 14014, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_session_cookie",
+            "$ curl -b 'laravel_session=<<secret:0>>' https://shop.internal/account\n",
+            "laravel_session", 14015, carrier="cli",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_basic_auth",
+            "PROXY_AUTHORIZATION=Basic SGFsbG8gV2VsdCBkYXMgaXN0IGVpbg==\n",
+            "base64 without user:password", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_basic_auth",
+            "// Testfall: Zugangsdaten werden kodiert\nexpect(header).toBe(\"Basic YmVudXR6ZXI6cGFzc3dvcnQ=\");\n",
+            "test value benutzer:passwort", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_session_cookie",
+            "SESSION_COOKIE=PHPSESSID=HIER_SITZUNG_EINTRAGEN\n",
+            "placeholder as session id", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_session_cookie",
+            "if (cookie.getName().equals(\"JSESSIONID\")) {\n    sitzung = cookie.getValue();\n}\n",
+            "cookie name in code", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_session_cookie",
+            "2026-09-14 08:12:03,902 DEBUG [main] Sitzung beendet: JSESSIONID=${SITZUNG}\n",
+            "template reference as session id", carrier="log",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_basic_auth",
+            "    cy.get(\"@tokenRequest\")\n      .its(\"request.headers.authorization\")\n"
+            "      .should(\"equal\", \"Basic YXBwbGljYXRpb246c2VjcmV0\")\n",
+            "swagger-ui test value application:secret", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_basic_auth",
+            "The RFC 7617 example sends Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==\n",
+            "documented RFC 7617 example", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_basic_auth",
+            "Basic usage of the client is documented in docs/usage.md\n",
+            "word after Basic", carrier="prose",
+        ),
+        dl(
+            "CREDENTIAL", "de", "dlp_basic_auth",
+            "GET /v1/lager HTTP/1.1\nHost: api.intern\nAuthorization: Basic <<secret:0>>\n",
+            "http_basic_credentials", 14006, "random base64 that decodes to no user:password", carrier="http",
+        ),
+        dl(
+            "CREDENTIAL", "en", "dlp_basic_auth",
+            "proxy_authorization: \"Basic <<secret:0>>\"\n",
+            "http_basic_credentials", 14016, "random base64 that decodes to no user:password", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_session_cookie",
+            "session_cookie: \"JSESSIONID=<redacted>\"\n",
+            "redacted session id", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_session_cookie",
+            "Set-Cookie: __Host-session=${SESSION_ID}; Path=/; Secure; HttpOnly\n",
+            "environment reference in a __Host- cookie", carrier="http",
+        ),
+    ],
+    "SECRET_TOKEN": [
+        ds(
+            "SECRET_TOKEN", "de", "dlp_bearer_token",
+            "{\n  \"dienst\": \"lagerabgleich\",\n  \"zugang\": {\n    \"authorization\": \"Bearer <<secret:0>>\"\n  }\n}\n",
+            "bearer_opaque_token", 14021, carrier="json",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_bearer_token",
+            "[08:15] lena.s: Wie lautet der Access-Token für die Testumgebung?\n[08:17] daniel.r: Bearer <<secret:0>>\n",
+            "bearer_opaque_token", 14022, carrier="prose",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_bearer_token",
+            "[upstream]\nbasis_url = \"https://api.intern/v2\"\nauthorization = \"Bearer <<secret:0>>\"\n",
+            "bearer_opaque_token", 14023, carrier="toml",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_bearer_token",
+            "2026-09-14 08:12:03,902 DEBUG [main] Konfiguration geladen: mandant=0042 "
+            "authorization=Bearer <<secret:0>> wiederholungen=3\n",
+            "bearer_opaque_token", 14024, carrier="log",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_jwt_token",
+            "{\n  \"zugang\": {\n    \"proxyAuthorization\": \"Bearer <<secret:0>>\"\n  }\n}\n",
+            "jwt_signed_hs256", 14025, carrier="json",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_bearer_token",
+            "API_BASE_URL=https://api.internal/v1\nAUTHORIZATION=Bearer <<secret:0>>\n",
+            "bearer_opaque_token", 14031, carrier="env",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_bearer_token",
+            "const client = new Client({\n  baseUrl: \"https://api.internal\",\n  authorization: \"Bearer <<secret:0>>\",\n});\n",
+            "bearer_opaque_token", 14032, carrier="code",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_bearer_token",
+            "From: Alex Turner <alex.turner@example.com>\nSubject: Access token for the reporting job\n\n"
+            "Hi team,\n\nhere is the access token for the job, valid until Friday:\n\nBearer <<secret:0>>\n\nThanks, Alex\n",
+            "bearer_opaque_token", 14033, carrier="prose",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_bearer_token",
+            "    \"os.environ[\\\"AUTHORIZATION\\\"] = \\\"Bearer <<secret:0>>\\\"\\n\",\n",
+            "bearer_opaque_token", 14034, carrier="json",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_jwt_token",
+            "AUTHORIZATION=Bearer <<secret:0>>\n",
+            "jwt_signed_rs256", 14035, carrier="env",
+        ),
+        dn(
+            "SECRET_TOKEN", "de", "dlp_bearer_token",
+            "AUTHORIZATION=Bearer ${LAGER_TOKEN}\n",
+            "environment reference after Bearer", carrier="env",
+        ),
+        dn(
+            "SECRET_TOKEN", "de", "dlp_bearer_token",
+            "{\n  \"authorization\": \"Bearer {{zugangstoken}}\"\n}\n",
+            "template after Bearer", carrier="json",
+        ),
+        dn(
+            "SECRET_TOKEN", "de", "dlp_bearer_token",
+            "[08:17] daniel.r: Der Header lautet Bearer gefolgt vom Token aus dem Vault.\n",
+            "prose word after Bearer", carrier="prose",
+        ),
+        dn(
+            "SECRET_TOKEN", "de", "dlp_bearer_token",
+            "headers = {\"Authorization\": \"Bearer \" + zugangs_token}\n",
+            "concatenated variable", carrier="code",
+        ),
+        dn(
+            "SECRET_TOKEN", "de", "dlp_bearer_token",
+            "authorization = \"Bearer zugangstoken_lager\"\n",
+            "identifier after Bearer", carrier="toml",
+        ),
+        dn(
+            "SECRET_TOKEN", "en", "dlp_bearer_token",
+            "    expect(text).to.include(`-H \"Authorization: Bearer abc123.xyz.789\"`)\n",
+            "swagger-ui test value abc123.xyz.789", carrier="code",
+        ),
+        dn(
+            "SECRET_TOKEN", "en", "dlp_bearer_token",
+            "      .its(\"authorization\")\n      .should(\"equal\", \"Bearer secret_token\")\n",
+            "swagger-ui test value secret_token", carrier="code",
+        ),
+        dn(
+            "SECRET_TOKEN", "en", "dlp_bearer_token",
+            "Bearer authentication (also called token authentication) sends a token in the header.\n",
+            "prose about the scheme", carrier="prose",
+        ),
+        dn(
+            "SECRET_TOKEN", "en", "dlp_bearer_token",
+            "AUTHORIZATION=Bearer YOUR_ACCESS_TOKEN_HERE\n",
+            "documented placeholder", carrier="env",
+        ),
+        dn(
+            "SECRET_TOKEN", "en", "dlp_bearer_token",
+            "log.debug(\"authorization=Bearer %s\", token)\n",
+            "format placeholder", carrier="code",
+        ),
+    ],
+}
+for _label, _rows in DLP_FHTTP_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+
+# K05: config key->value extraction, part 1 (env, INI/properties, HTTP headers) with a
+# value-shape filter. A config line binds its whole value (an unquoted properties/INI/header value
+# with ; , } inside, up to an inline comment), and a hex secret under a plain credential key
+# stays a secret. Hard negatives: one per shape that a credential-like key must not bind, with
+# DE and EN keys: UUID, algorithm-prefixed digest, hex digest under a digest key, ObjectId,
+# template/format field, variable reference, boolean, number, path and URL without
+# credentials. Each value line ends the text, so that the raw JSONL line holds no finding.
+DLP_K05_CASES = {
+    "CREDENTIAL": [
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "# Anwendungseinstellungen Lagerverwaltung\nlager.standort=hamburg\nlager.db.passwort=<<secret:0>>\n",
+            "quoted_punctuated_password", 15001, carrier="ini",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "[datenbank]\nhost = db.lager.intern\nbenutzer = lager\npasswort = <<secret:0>> ; rotiert im September\n",
+            "quoted_punctuated_password", 15002, carrier="ini",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "GET /v1/lieferungen?status=offen HTTP/1.1\nHost: api.lager.intern\nX-Zugangstoken: <<secret:0>>\n"
+            "Accept: application/json\n",
+            "quoted_punctuated_password", 15003, carrier="http",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "# Lagerdienst, lokale Entwicklung\nLAGER_DIENST_SECRET=<<secret:0>>\nLAGER_PORT=8082\n",
+            "generic_api_secret", 15004, carrier="env",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "# Anwendungseinstellungen Versand\nversand.api-schluessel=<<secret:0>>\nversand.zeitlimit=30s\n",
+            "url_token", 15005, carrier="ini",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "# application.properties\nspring.datasource.url=jdbc:postgresql://db:5432/orders\n"
+            "spring.datasource.password=<<secret:0>>\n",
+            "quoted_punctuated_password", 15011, carrier="ini",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "[smtp]\nhost = mail.internal\nuser = reports\npassword = <<secret:0>> # rotated monthly\n",
+            "quoted_punctuated_password", 15012, carrier="ini",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "POST /v1/exports HTTP/1.1\nHost: api.internal\nX-Client-Secret: <<secret:0>>\n"
+            "Content-Type: application/json\n",
+            "quoted_punctuated_password", 15013, carrier="http",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "# .env for the billing worker\nBILLING_CLIENT_SECRET=<<secret:0>>\nBILLING_QUEUE=invoices\n",
+            "generic_api_secret", 15014, carrier="env",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "export REPORT_SERVICE_TOKEN=\"<<secret:0>>\"  # production\n",
+            "password", 15015, carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "# Lagerdienst\nLAGER_PORT=8082\nLAGER_API_TOKEN=3f2a9c4e-7b1d-4e8a-9c2f-5d6e7f8a9b0c",
+            "UUID under a token key", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "# Lagerverwaltung\nlager.geheimnis=sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+            "algorithm-prefixed digest under a secret key", carrier="ini",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "[konto]\nbenutzer = lager\ngehashtes_passwort = 2fd4e1c67a2d28fced849ee1bb76e7391b93eb12",
+            "hex digest under a hashed-password key", carrier="ini",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "# Lagerverwaltung\nlager.zugangstoken=5f8d0c3e9b1a2d4c6e8f0a1b",
+            "MongoDB ObjectId under a token key", carrier="ini",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "[datenbank]\nhost = db.lager.intern\npasswort = {lager_passwort}",
+            "format field under a password key", carrier="ini",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "REM Lagerdienst unter Windows\nset LAGER_PORT=8082\nLAGER_KENNWORT=%LAGER_KENNWORT%",
+            "Windows variable reference", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "# Verschlüsselung im Testsystem abgeschaltet\nLAGER_GEHEIMNIS=deaktiviert",
+            "boolean word under a secret key", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "[sicherheit]\npasswort_min_laenge = 12\npasswort = 20260914",
+            "number under a password key", carrier="ini",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "# Passwort liegt als Datei im Container\nLAGER_PASSWORT=/etc/lager/passwort.txt",
+            "path under a password key", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "GET /v1/lieferungen HTTP/1.1\nHost: api.lager.intern\nX-Api-Schluessel: https://tresor.lager.intern/v1/lager/api",
+            "URL without credentials in a header", carrier="http",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "POST /v1/exports HTTP/1.1\nHost: api.internal\nX-Api-Key: 550e8400-e29b-41d4-a716-446655440000",
+            "UUID in an API key header", carrier="http",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "# image digest pinned by the deploy job\nDEPLOY_SECRET=sha1-2fd4e1c67a2d28fced849ee1bb76e7391b93eb12",
+            "algorithm-prefixed digest under a secret key", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "# checksum of the release token, not the token\nSHA256_RELEASE_TOKEN="
+            "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+            "hex digest under a digest-named token key", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "# owner document of the integration\nORDER_SERVICE_TOKEN=6512bd43d9caa6e02c990b0a",
+            "MongoDB ObjectId under a token key", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "[oauth]\nclient_id = reports\nclient_secret = %(client_secret)s",
+            "Python format field under a secret key", carrier="ini",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "# filled in by the CI job\nexport DEPLOY_API_TOKEN=$CI_DEPLOY_API_TOKEN",
+            "shell variable reference", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "POST /v1/exports HTTP/1.1\nHost: api.internal\nX-Auth-Token: disabled",
+            "boolean word in a token header", carrier="http",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "# OAuth settings\noauth.client-secret=86400000",
+            "number under a secret key", carrier="ini",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "[database]\nhost = db.internal\npassword = C:\\secrets\\orders-db.txt",
+            "Windows path under a password key", carrier="ini",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "# token endpoint of the identity provider\nIDP_CLIENT_SECRET=https://auth.internal/realms/acme/protocol/openid-connect/token",
+            "URL without credentials under a secret key", carrier="env",
+        ),
+    ],
+}
+for _label, _rows in DLP_K05_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
 
