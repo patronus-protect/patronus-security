@@ -25,7 +25,7 @@ pub use detectors::dlp::score::DlpMode;
 pub use detectors::pii::score::PiiMode;
 pub use dynamic_pii::{
     DynamicPiiConditionalLabels, DynamicPiiConfig, DynamicPiiExecutionGate,
-    DynamicPiiResultCondition, EvidenceSpan,
+    DynamicPiiRequestConfig, DynamicPiiResultCondition, EvidenceSpan, MAX_REQUEST_LABEL_BYTES,
 };
 pub use external_l1::{ExternalL1Detector, ExternalL1Input};
 pub use ml::tokenizer::{ChunkOverlapTokens, MAX_CHUNK_OVERLAP_TOKENS};

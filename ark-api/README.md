@@ -37,8 +37,14 @@ All endpoints except `/healthz` and `/readyz` require
   field and/or one or more text-decodable files. An optional `config` field
   contains JSON with `categories`, `max_level`, `gates`, `metadata`, an
   optional request-local `ntdb_operating_point`, and `chunk_overlap_tokens`.
-  Chunk overlap defaults to `0` and accepts token counts from `0` through `64`. The config is
-  snapshotted into every queued job. Missing config uses the existing defaults.
+  Chunk overlap defaults to `0` and accepts token counts from `0` through `64`. An optional
+  `dynamic_pii` block (`labels`, `threshold`, `label_thresholds`, `execution_gate`,
+  `conditional_labels`, the shapes of `pipeline.dynamic_pii`) replaces the worker's dynamic PII
+  labels, thresholds and gates for this request only; `labels` is required, at most 30 unique
+  labels of up to 64 bytes are accepted, and the worker's input limits, chunking and timeouts
+  still apply. It needs `dynamic-pii` among the request's categories; an invalid block returns
+  `422`. The config is snapshotted into every queued job. Missing config uses the existing
+  defaults.
   `gates.rules` is a map from stable L1 rule IDs to booleans; absent IDs inherit
   shared Rust/Python/API defaults. PII IDs are the `pii_*` names in `PII_PATTERNS`, DLP IDs are the
   `dlp_*` names in `DLP_PATTERNS` plus `dlp_sensitive_material`,

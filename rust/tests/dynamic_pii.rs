@@ -7,9 +7,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use patronus_ark::{
     assets::DYNAMIC_PII_ASSET, DynamicPiiConditionalLabels, DynamicPiiConfig,
-    DynamicPiiExecutionGate, DynamicPiiResultCondition, QueuedSecurityEvent, SecurityCategory,
-    SecurityGateway, SecurityLevel, SecurityLevelReadiness, SecurityRequestCompletion,
-    SecurityRequestState,
+    DynamicPiiExecutionGate, DynamicPiiRequestConfig, DynamicPiiResultCondition,
+    QueuedSecurityEvent, SecurityCategory, SecurityGateway, SecurityLevel, SecurityLevelReadiness,
+    SecurityRequestCompletion, SecurityRequestState, MAX_REQUEST_LABEL_BYTES,
 };
 
 #[test]
@@ -525,4 +525,151 @@ fn warmed_gliner_single_scan_excludes_warmup_from_latency() {
 
     drop(gateway);
     std::fs::remove_dir_all(model_dir).unwrap();
+}
+
+#[test]
+fn request_config_replaces_entity_fields_and_keeps_gateway_limits() {
+    let base = DynamicPiiConfig {
+        labels: vec!["person".to_string()],
+        threshold: 0.6,
+        label_thresholds: HashMap::from([("person".to_string(), 0.7)]),
+        timeout_ms: 7_000,
+        max_timeout_ms: 30_000,
+        ..DynamicPiiConfig::default()
+    };
+    let request: DynamicPiiRequestConfig = serde_json::from_value(serde_json::json!({
+        "labels": ["street_address", "person", "street_address"],
+        "label_thresholds": {"street_address": 0.4}
+    }))
+    .unwrap();
+
+    let config = request.resolve(&base).unwrap();
+
+    assert_eq!(
+        config.labels,
+        ["street_address", "person"].map(String::from)
+    );
+    assert_eq!(config.threshold, 0.6);
+    assert_eq!(
+        config.label_thresholds,
+        HashMap::from([("street_address".to_string(), 0.4)])
+    );
+    assert_eq!(config.timeout_ms, 7_000);
+    assert_eq!(config.max_timeout_ms, 30_000);
+    assert_eq!(config.max_text_bytes, base.max_text_bytes);
+}
+
+#[test]
+fn request_config_rejects_invalid_blocks() {
+    let base = DynamicPiiConfig::default();
+    let resolve = |value: serde_json::Value| {
+        serde_json::from_value::<DynamicPiiRequestConfig>(value)
+            .map_err(|error| error.to_string())
+            .and_then(|request| request.resolve(&base))
+    };
+
+    assert!(resolve(serde_json::json!({"labels": ["person"], "timeout_ms": 1})).is_err());
+    assert!(resolve(serde_json::json!({"labels": []})).is_err());
+    assert!(resolve(serde_json::json!({"labels": ["person"], "threshold": 1.5})).is_err());
+    assert!(resolve(serde_json::json!({
+        "labels": ["person"],
+        "label_thresholds": {"city": 0.4}
+    }))
+    .is_err());
+    let too_many = (0..31)
+        .map(|index| format!("label_{index}"))
+        .collect::<Vec<_>>();
+    assert!(resolve(serde_json::json!({"labels": too_many})).is_err());
+    let too_long = "x".repeat(MAX_REQUEST_LABEL_BYTES + 1);
+    assert!(resolve(serde_json::json!({"labels": [too_long]})).is_err());
+    assert!(resolve(serde_json::json!({
+        "labels": ["person"],
+        "execution_gate": {"type": "if_no_result", "pipeline": "dynamic-pii"}
+    }))
+    .is_err());
+}
+
+#[test]
+fn request_config_applies_to_its_own_request_only() {
+    let gateway = SecurityGateway::with_max_level(
+        vec![SecurityCategory::Dlp, SecurityCategory::DynamicPii],
+        SecurityLevel::L3,
+        None,
+        false,
+    );
+    gateway
+        .set_dynamic_pii_config(DynamicPiiConfig {
+            labels: vec!["person".to_string()],
+            execution_gate: DynamicPiiExecutionGate::IfResultIn {
+                pipeline: "dlp".to_string(),
+                results: vec!["never".to_string()],
+            },
+            ..DynamicPiiConfig::default()
+        })
+        .unwrap();
+    let enqueue = |dynamic_pii: Option<DynamicPiiConfig>| {
+        gateway
+            .enqueue_ark_api_categories_with_request_options(
+                vec![SecurityCategory::Dlp, SecurityCategory::DynamicPii],
+                "ordinary text",
+                serde_json::json!({}),
+                None,
+                None,
+                Default::default(),
+                dynamic_pii,
+            )
+            .unwrap()
+    };
+    let request = DynamicPiiRequestConfig {
+        labels: vec!["street_address".to_string()],
+        threshold: None,
+        label_thresholds: HashMap::new(),
+        execution_gate: DynamicPiiExecutionGate::IfResultIn {
+            pipeline: "dlp".to_string(),
+            results: vec!["safe".to_string()],
+        },
+        conditional_labels: Vec::new(),
+    }
+    .resolve(&gateway.dynamic_pii_config())
+    .unwrap();
+
+    // Without the GLiNER model an enqueued dynamic-pii job degrades; a gated-off
+    // one leaves the request complete.
+    let with_request_config = enqueue(Some(request));
+    assert!(matches!(
+        completion_for(&gateway, &with_request_config),
+        SecurityRequestCompletion::Degraded { .. }
+    ));
+    let with_gateway_config = enqueue(None);
+    assert!(matches!(
+        completion_for(&gateway, &with_gateway_config),
+        SecurityRequestCompletion::Complete
+    ));
+    assert_eq!(gateway.dynamic_pii_config().labels, ["person"]);
+}
+
+#[test]
+fn request_options_reject_an_invalid_dynamic_pii_config() {
+    let gateway = SecurityGateway::with_max_level(
+        vec![SecurityCategory::DynamicPii],
+        SecurityLevel::L3,
+        None,
+        false,
+    );
+    let invalid = DynamicPiiConfig {
+        labels: Vec::new(),
+        ..DynamicPiiConfig::default()
+    };
+
+    assert!(gateway
+        .enqueue_ark_api_categories_with_request_options(
+            vec![SecurityCategory::DynamicPii],
+            "ordinary text",
+            serde_json::json!({}),
+            None,
+            None,
+            Default::default(),
+            Some(invalid),
+        )
+        .is_err());
 }
