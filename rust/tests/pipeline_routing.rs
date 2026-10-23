@@ -957,12 +957,6 @@ fn native_dlp_evidence_covers_governance_github_token_fixture() {
     let payload = concat!("w8dkq3zrm7xbt2vn", "h9pyc4fls6ajg0");
     let token = format!("ghp_{payload}{}", crc32_base62(payload));
 
-    // A real-shaped GitHub token: 30-character body plus its CRC32 suffix (F03).
-    let body = concat!("w8dkq3zrm7xbt2vn", "h9pyc4fls6ajg0");
-    let token = format!(
-        "ghp_{body}{}",
-        patronus_ark::detectors::validators::crc32_base62(body)
-    );
     let result = scanner
         .scan_category(
             SecurityCategory::Dlp,
