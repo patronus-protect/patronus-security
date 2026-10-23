@@ -404,6 +404,7 @@ tasks:
 
   # M3 +11 (24)
   - id: B02
+    status: done
     title: "VAT ID part 2: BG, CY, CZ, DK, EE, EL, FI, HR, HU, IE, LT with checksums"
     type: new-entity
     deps: [B01]
