@@ -651,14 +651,14 @@ def test_gold_gaps_change_no_metric(tmp_path):
     assert "| Corpus | Entity | Gold | ark-strict | ark-balanced | presidio-tuned |" in lines
     assert f"| {GRETEL} | pii.email | 2 | 3 | 3 | 1 |" in lines
     assert "| Corpus | Entity | Validator | Gold | Invalid | ark-strict | ark-balanced | presidio-tuned |" in lines
-    assert f"| {GRETEL} | pii.credit_card.pan | luhn | 2 | 1 | 0 | 0 | 1 |" in lines
+    assert f"| {GRETEL} | pii.credit_card.pan | payment_card | 2 | 1 | 0 | 0 | 1 |" in lines
     assert f"| {GRETEL} | pii.iban | mod97 | 2 | 1 | 0 | 0 | 1 |" in lines
 
 
 def test_gold_validators_cover_every_checksum_validator():
     validators = MODULE.gold_validators(EMAP)
     assert validators["pii.iban"] == ("mod97",)
-    assert validators["pii.credit_card.pan"] == ("luhn",)
+    assert validators["pii.credit_card.pan"] == ("payment_card",)
     assert validators["pii.de.tax_id"] == ("steuer_id", "steuer_id_issued")
     rules = MODULE.count_validated_module().load_rules()
     checksum = {name for name, rule in rules.ark.items() if rule is not None}
@@ -670,6 +670,12 @@ def test_gold_validators_cover_every_checksum_validator():
 @pytest.mark.parametrize("name,valid,invalid", [
     ("luhn", ["4111111111111111", "4111 1111 1111 1111", "4111-1111-1111-1111"],
      ["4111111111111112", "4111 1111 1111 1112", "49 89 2019 4401", "0151 2345 6789 02", "00000000000000", "4242"]),
+    # B-PAN: Luhn plus IIN prefix and length per brand; birth-date IDs and stamps are no card.
+    ("payment_card", ["4111111111111111", "4111 1111 1111 1111", "3773 149258 60736", "36731492586076",
+                      "507314925862", "2200731492586072", "6273149258607314922", "122000000000003",
+                      "4047737215142"],
+     ["4111111111111112", "44 20 1234 5678", "1748503543012", "3473149258607313", "2721731492586072",
+      "4506095123081", "470312-1081835", "202201010800", "199912312359596", "0157-09-316-8811", "4242"]),
     ("mod97", ["DE89370400440532013000", "DE89 3704 0044 0532 0130 00", "GB82WEST12345698765432"],
      ["DE89370400440532013001", "DE00370400440532013000", "DE18 4306 0967 1234 5678 01", "GB82WEST12345698765433",
       "DE8"]),

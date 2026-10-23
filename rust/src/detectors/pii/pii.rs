@@ -9,7 +9,7 @@ use crate::{
 use super::context::Evidence;
 use super::context_anchors::PII_ANCHOR_PATTERNS;
 use super::score::{self, PiiMode, ValidatorStrength};
-use super::{common, context, de, identifiers, intl, overlap, uk, us, validators};
+use super::{common, context, de, identifiers, intl, overlap, uk, us};
 use crate::detectors::anchors;
 use crate::detectors::obfuscation::{Deobfuscated, Level};
 use crate::EvidenceSpan;
@@ -498,6 +498,7 @@ impl NativeRegexDetector for PiiPipeline {
             "pii_phone_international" | "pii_phone_de" => {
                 context::opens_phone_number(text, captures.get(0).unwrap().start())
             }
+            "pii_credit_card" => context::card_position(text, captures.get(0).unwrap().range()),
             "pii_swift_bic_context" => {
                 let value = captures.name("value").unwrap();
                 let structural = captures.get(0).unwrap().start() == value.start();
@@ -630,17 +631,35 @@ impl NativeRegexDetector for PiiPipeline {
         }
     }
 
-    fn finalize_spans(&self, text: &str, spans: &mut Vec<crate::EvidenceSpan>) {
-        let card_index = self
-            .rule_ids
-            .iter()
-            .position(|rule_id| *rule_id == "pii_credit_card")
-            .expect("PII credit-card rule must be present");
-        let has_payment_card = self.regexes[card_index]
-            .find_iter(text)
-            .any(|matched| validators::luhn(matched.as_str()));
+    fn finalize_spans(
+        &self,
+        prepared: &crate::threat::NativeText<'_>,
+        spans: &mut Vec<crate::EvidenceSpan>,
+    ) {
+        let text = prepared.text();
+        let rule_index = |name: &str| {
+            self.rule_ids
+                .iter()
+                .position(|rule_id| *rule_id == name)
+                .expect("PII payment-card rules must be present")
+        };
+        let card_index = rule_index("pii_credit_card");
+        let has_payment_card =
+            context::has_payment_card(text, 0..text.len(), &self.regexes[card_index]);
+        // A table column headed `cvc`/`cvv` types its values; a CVV field elsewhere
+        // (`CVV: 123`, a `cvv` key) still needs a reported card.
+        let column_cvvs: Vec<_> = if spans.iter().any(|span| span.label == "CREDITCARD_CVV") {
+            self.structured_values(rule_index("pii_credit_card_cvv"), prepared)
+                .into_iter()
+                .filter(|structured| matches!(structured.carrier, "csv" | "table"))
+                .map(|structured| structured.value)
+                .collect()
+        } else {
+            Vec::new()
+        };
         spans.retain(|span| {
-            let coupled_cvv = span.label == "CREDITCARD_CVV" && has_payment_card;
+            let coupled_cvv = span.label == "CREDITCARD_CVV"
+                && (has_payment_card || column_cvvs.contains(&(span.start_byte..span.end_byte)));
             (span.end_byte - span.start_byte >= 4 || coupled_cvv)
                 && (span.label != "CREDITCARD_CVV" || coupled_cvv)
         });

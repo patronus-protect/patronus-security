@@ -31,11 +31,13 @@ pub(super) const IBAN_GENERIC: PiiPattern = PiiPattern {
 };
 
 // ── Kreditkarte ──────────────────────────────────────────────────────────
+// Luhn plus IIN prefix and length per brand (B-PAN), in every mode; the position
+// check (no `+` before it, no token segment) sits in `allows_match`.
 pub(super) const CREDIT_CARD: PiiPattern = PiiPattern {
     name: "pii_credit_card",
     pattern: r"\b(?:\d[ \-]?){11,18}\d\b",
     entity_group: "CREDITCARD",
-    validator: Some(validators::luhn),
+    validator: Some(validators::payment_card),
     strength: ValidatorStrength::Checksum,
     base_score: 40,
     captured_value: false,

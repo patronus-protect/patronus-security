@@ -16,14 +16,9 @@ use serde::Deserialize;
 /// gaps: `(row id, label, value)`. Fixing the detector must remove the entry. Since T07 the
 /// PAN-shaped part of a valid IBAN and an account finding on an IBAN value are secondary
 /// evidence (`details.secondary_evidence`) and not checked here.
-const KNOWN_DETECTOR_FP: &[(&str, &str, &str)] = &[
-    // Phone digits that happen to pass Luhn.
-    ("pii_l1-phone-pos-09", "CREDITCARD", "49 89 2019 4400"),
-    ("pii_l1-phone-pos-19", "CREDITCARD", "49 40 3005 1200"),
-    // PAN-shaped part of an IBAN form that is not reported as an IBAN yet: a grouped
-    // IBAN outside DE (T05).
-    ("pii_l1-iban-pos-13", "CREDITCARD", "1904 3002 3457 3201"),
-];
+/// Since B-PAN none is left: phone digits after `+` that pass Luhn (`49 89 2019 4400`) and
+/// the BBAN of a grouped IBAN outside DE (`1904 3002 3457 3201`, no card IIN) are no card.
+const KNOWN_DETECTOR_FP: &[(&str, &str, &str)] = &[];
 
 /// Labels whose validators are checksums: they hold for every gold value, known gaps included.
 const CHECKSUM_LABELS: [&str; 3] = ["CREDITCARD", "IBAN", "STEUERID"];

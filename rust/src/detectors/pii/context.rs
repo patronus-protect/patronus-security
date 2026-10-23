@@ -570,6 +570,73 @@ pub(super) fn stands_alone(text: &str, value: Range<usize>) -> bool {
         || (next == Some(' ') && digit(next2)))
 }
 
+/// Whether a card candidate at `value` (byte range) can be a card number by its
+/// position (B-PAN): not the digits after the `+` of a phone number
+/// (`+44 20 1234 5678`), and not a segment of a token, i.e. joined by `-` or `_`
+/// to alphanumerics on both sides (`xoxb-…-485275870833-…`) or, without a space
+/// inside, to a run with a letter (`xoxb-249332005873`, `pkg-…`).
+pub(super) fn card_position(text: &str, value: Range<usize>) -> bool {
+    let joins = |ch: char| matches!(ch, '-' | '_');
+    let head = &text[..value.start];
+    let tail = &text[value.end..];
+    if head.ends_with('+') {
+        return false;
+    }
+    // The alphanumeric run joined to the value on each side, if any.
+    let before = head
+        .strip_suffix(joins)
+        .map(|head| {
+            let start = head
+                .trim_end_matches(|ch: char| ch.is_ascii_alphanumeric())
+                .len();
+            &head[start..]
+        })
+        .filter(|run| !run.is_empty());
+    let after = tail
+        .strip_prefix(joins)
+        .map(|tail| {
+            let end = tail
+                .find(|ch: char| !ch.is_ascii_alphanumeric())
+                .unwrap_or(tail.len());
+            &tail[..end]
+        })
+        .filter(|run| !run.is_empty());
+    let lettered =
+        |run: Option<&str>| run.is_some_and(|run| run.bytes().any(|b| b.is_ascii_alphabetic()));
+    // A hyphenated card-field label before the value (`card-…`, `card-number-…`,
+    // `kreditkarten-nr-…`) names the card; it is no token prefix.
+    let card_label = before.is_some() && card_field_label(head);
+    let compact = !text[value].contains(' ');
+    !((before.is_some() && after.is_some())
+        || (compact && ((lettered(before) && !card_label) || lettered(after))))
+}
+
+/// Whether `head` ends with a payment-card field label joined to the value by
+/// `-` or `_`: the whole run of alphanumerics, `-` and `_` before the value is
+/// a term of the card lexicon as a key (`card`, `card-number`, `kartennummer`).
+fn card_field_label(head: &str) -> bool {
+    let joins = |ch: char| matches!(ch, '-' | '_');
+    let Some(head) = head.strip_suffix(joins) else {
+        return false;
+    };
+    let start = head
+        .trim_end_matches(|ch: char| ch.is_ascii_alphanumeric() || joins(ch))
+        .len();
+    key_terms(&normalize_key(&head[start..]))
+        .iter()
+        .any(|term| term.label == Some("CREDITCARD"))
+}
+
+/// Whether `text[within]` holds a payment card number as the card rule reports
+/// it (B-PAN): a match of `card_regex` that passes [`validators::payment_card`]
+/// and [`card_position`]. CVV and expiry fields depend on such a card.
+pub(super) fn has_payment_card(text: &str, within: Range<usize>, card_regex: &Regex) -> bool {
+    card_regex.find_iter(&text[within.clone()]).any(|matched| {
+        let value = within.start + matched.start()..within.start + matched.end();
+        validators::payment_card(matched.as_str()) && card_position(text, value)
+    })
+}
+
 /// Whether an international phone number at `start` (its `+` or `00`) opens a
 /// value rather than continuing an element run (T17): no letter or digit right
 /// before it, so not `UNB+UNOC:3+520173321` or `NAD+BY+987654321`. A `+` also
@@ -617,9 +684,7 @@ pub(super) fn payment_expiry(text: &str, field_start: usize, card_regex: &Regex)
     });
     let context = preceding_clause(text, field_start);
     PAYMENT.is_match(context)
-        || card_regex
-            .find_iter(context)
-            .any(|matched| validators::luhn(matched.as_str()))
+        || has_payment_card(text, field_start - context.len()..field_start, card_regex)
 }
 
 pub(super) fn employee_identifier(text: &str, field_start: usize, value: &str) -> bool {
