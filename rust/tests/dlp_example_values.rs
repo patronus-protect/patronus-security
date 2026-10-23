@@ -582,7 +582,8 @@ fn provider_values_with_one_sequential_run_need_example_context() {
     let values = [
         (
             "dlp_aws_access_key",
-            concat!("AKIA", "1234567890", "ABCDEF").to_owned(),
+            // F05: the 16 characters after the prefix are Base32.
+            concat!("AKIA", "ABCDEFGHIJ", "KLMNOP").to_owned(),
         ),
         (
             "dlp_github_token",
@@ -615,7 +616,7 @@ fn generic_rules_check_provider_shaped_values_as_fixed_format() {
             "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         ),
         concat!("api_key: ", "ghp_", "Zq7Zq7Zq7Zq7Zq7Zq7Zq7Zq7Zq7Zq7Zq7Zq7"),
-        concat!("AWS_SECRET_ACCESS_KEY=", "AKIA", "0000000000000000"),
+        concat!("AWS_SECRET_ACCESS_KEY=", "AKIA", "AAAAAAAAAAAAAAAA"),
     ] {
         assert_silent(text);
     }

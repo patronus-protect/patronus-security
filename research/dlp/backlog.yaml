@@ -220,7 +220,7 @@ tasks:
   - {id: F02, title: "dlp_btc_wif: Base58Check + version byte (mainnet/testnet, compressed)", type: precision-fix, deps: [K03], status: done}
   - {id: F03, title: "GitHub tokens (ghp/gho/ghu/ghs/ghr, github_pat_): exact lengths + CRC32 checksum", type: precision-fix, deps: [K03], status: done}
   - {id: F04, title: "npm token: length + CRC32 checksum; GitLab: all documented prefixes (deploy, runner, trigger, feed, OAuth …)", type: recall-fix, deps: [K03], status: done}
-  - {id: F05, title: "AWS access key ID: exactly 20 characters, Base32 alphabet, prefix list; AWS secret key via structural context (credentials file, Terraform, CLI)", type: precision-fix, deps: [K03]}
+  - {id: F05, title: "AWS access key ID: exactly 20 characters, Base32 alphabet, prefix list; AWS secret key via structural context (credentials file, Terraform, CLI)", type: precision-fix, deps: [K03], status: done}
   - {id: F06, title: "OpenAI (project/svcacct/admin/legacy) and Anthropic (api/admin): format markers and lengths per docs; unify the validator", type: precision-fix, deps: [K03], status: bundled, into: F-LLM}
   - {id: T02, title: "Provider rules without an F task: HuggingFace (hf_, api_org_), Groq (gsk_), Replicate (r8_), Google API key (AIza, exactly 39), OAuth ya29., GCP GOCSPX-: lengths/alphabet per source instead of open {20,}", type: precision-fix, deps: [K03, T01], accept: "Format source per rule in rule_sources.yaml; set entity_map backlog for these entities to T02", status: bundled, into: F-LLM}
   - {id: F07, title: "JWT: header base64url → JSON with alg/typ; flag none alg; distinguish Supabase/Firebase service JWTs", type: precision-fix, deps: [K03], status: bundled, into: F-STRUCT}

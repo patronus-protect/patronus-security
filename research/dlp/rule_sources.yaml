@@ -55,11 +55,11 @@ rules:
   dlp_aws_access_key:
     provider: aws
     source_ref: gitleaks:aws-access-token
-    format: "unique-ID prefix (AKIA, ASIA, AGPA …), 16+ upper-case alphanumerics"
+    format: "credential prefix of the IAM unique-ID table (AKIA long-term, ASIA temporary, ABIA STS service bearer token, ACCA context-specific credential; legacy A3T + one upper-case alphanumeric) and exactly 16 Base32 characters (A-Z, 2-7); 20 characters in total. Group, user, role, policy and other unique IDs (AGPA, AIDA, AROA, AIPA, ANPA, ANVA, APKA, ASCA) are no credentials (https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_identifiers.html#identifiers-unique-ids; gitleaks aws-access-token; F05)"
   dlp_aws_secret_key:
     provider: aws
     source_ref: https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html
-    format: "40 base64 characters after aws_secret_access_key/SecretAccessKey"
+    format: "40 base64 characters (A-Z, a-z, 0-9, /, +; no padding) with upper and lower case letters, as a whole run, in structural AWS context (F05): after an AWS key name or label (aws_secret_access_key, AwsSecretAccessKey, aws.secretKey, AWS-Secret-Access-Key, SecretAccessKey, secret_access_key; in prose up to two lines on), right after an access key ID (SDK call, IAM credentials CSV, CLI), or after a generic secret key name (secret_key, secret-key, secretKey) with AWS context: an access key ID or access_key/accessKeyId key, Terraform provider \"aws\"/backend \"s3\", amazonaws.com or aws as a name part within five lines above or two below"
   dlp_google_api_key:
     provider: google
     source_ref: gitleaks:gcp-api-key
