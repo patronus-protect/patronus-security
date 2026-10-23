@@ -916,9 +916,14 @@ def cmd_ci() -> int:
     try:
         if cur["task"].get("type") == "review":
             # The PR branch exists; fast-forward it, but never over a push made in the meantime
-            # (a server-side stack rebase after a merge below, or a person).
-            git("push", "--quiet", f"--force-with-lease=refs/heads/{cur['branch']}:{cur['task']['old_head']}",
-                "origin", f"{head}:refs/heads/{cur['branch']}")
+            # (a server-side stack rebase after a merge below, or a person). The lease follows our own
+            # last push: after a red round the branch sits at that fix, not at the original PR head.
+            lease = cur.get("review_pushed") or cur["task"]["old_head"]
+            if cur.get("review_pushed") != head:
+                git("push", "--quiet", f"--force-with-lease=refs/heads/{cur['branch']}:{lease}",
+                    "origin", f"{head}:refs/heads/{cur['branch']}")
+                cur["review_pushed"] = head
+                save(CURRENT, cur)
         else:
             git("push", "--quiet", "origin", f"+{head}:refs/heads/{cur['branch']}")
     except RuntimeError as err:
@@ -1035,6 +1040,8 @@ def review_notes(cur: dict) -> dict:
         notes = json.loads(path.read_text()) if path.is_file() and path.stat().st_size < 64_000 else {}
     except (OSError, ValueError):
         return {}
+    if not isinstance(notes, dict):
+        return {}
     known = {t["id"] for t in cur["task"].get("threads", [])}
     return {k: v.strip()[:1500] for k, v in notes.items() if k in known and isinstance(v, str) and v.strip()}
 
@@ -1046,15 +1053,32 @@ def publish_review(cur: dict) -> int:
         print(f"PUBLISH_ERROR=GitHub CI not green on {head[:12]} (run `ark-l1 ci` first)")
         return 1
     notes = review_notes(cur)
+    # Per-thread progress survives a failed GitHub call: the retry neither posts a reply twice nor
+    # drops the state (and with it the promised answer) before every thread is answered and resolved.
+    done = cur.setdefault("review_done", {})
+    failed = []
     for thread in task.get("threads", []):
-        body = f"Addressed in {head[:12]} (scheduled {P['name']} review run)."
-        if notes.get(thread["id"]):
-            body += "\n\n" + notes[thread["id"]]
-        run(["gh", "api", f"repos/{GH_REPO}/pulls/{task['number']}/comments/{thread['comment']}/replies",
-             "-f", f"body={body}"], check=False)
-        run(["gh", "api", "graphql", "-f",
-             f'query=mutation{{resolveReviewThread(input:{{threadId:"{thread["id"]}"}}){{thread{{isResolved}}}}}}'],
-            check=False)
+        step = done.setdefault(thread["id"], {})
+        try:
+            if not step.get("replied"):
+                body = f"Addressed in {head[:12]} (scheduled {P['name']} review run)."
+                if notes.get(thread["id"]):
+                    body += "\n\n" + notes[thread["id"]]
+                run(["gh", "api", f"repos/{GH_REPO}/pulls/{task['number']}/comments/{thread['comment']}/replies",
+                     "-f", f"body={body}"])
+                step["replied"] = True
+                save(CURRENT, cur)
+            if not step.get("resolved"):
+                run(["gh", "api", "graphql", "-f",
+                     f'query=mutation{{resolveReviewThread(input:{{threadId:"{thread["id"]}"}}){{thread{{isResolved}}}}}}'])
+                step["resolved"] = True
+                save(CURRENT, cur)
+        except RuntimeError as err:
+            failed.append(thread["id"])
+            print(f"WARN=thread {thread['id']}: {str(err).strip().splitlines()[0] if str(err).strip() else err}")
+    if failed:
+        print(f"PUBLISH_ERROR=GitHub thread update failed for {len(failed)} thread(s); the next run retries")
+        return 1
     drop_worktree(cur)
     print(f"REVIEWED={cur['branch']} threads={len(task.get('threads', []))}\nPR={task['pr']}")
     return 0
