@@ -26,6 +26,7 @@ install -m 755 "$SRC/secret_check.py" "$ROOT/bin/"
 install -m 644 "$SRC/../AGENT_PROMPT.md" "$ROOT/bin/AGENT_PROMPT.md"
 install -m 644 "$SRC/../../dlp/AGENT_PROMPT.md" "$ROOT/bin/AGENT_PROMPT.dlp.md"
 install -m 644 "$SRC/AGENT_PROMPT.restack.md" "$ROOT/bin/AGENT_PROMPT.restack.md"
+install -m 644 "$SRC/AGENT_PROMPT.review.md" "$ROOT/bin/AGENT_PROMPT.review.md"
 sudo install -m 644 "$SRC/ark-l1.service" "$SRC/ark-l1.timer" "$SRC/ark-dlp.service" "$SRC/ark-dlp.timer" \
   /etc/systemd/system/
 sudo systemctl daemon-reload
