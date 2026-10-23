@@ -4,7 +4,7 @@
 
 These are the stable rule IDs accepted by execution-gate `rules`. Missing IDs inherit the shared Rust/Python/API defaults below. Model gates such as `native:pii`, `native:dlp`, `native:injection_l1`, and `native:threat_l1` control complete producers; rule gates control individual entries below.
 
-## PII rules (50)
+## PII rules (54)
 
 All PII rules are eligible by default when PII L1 is enabled.
 
@@ -62,6 +62,10 @@ In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `
 | `pii_vat_id_it` | `VAT_ID_IT` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
 | `pii_vat_id_it_proximity` | `VAT_ID_IT` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.70–0.80 |
 | `pii_vat_id_es` | `VAT_ID_ES` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
+| `pii_passport_number_de_context_free` | `PASSPORT_NUMBER` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
+| `pii_passport_number_de_legacy` | `PASSPORT_NUMBER` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.70–0.80 |
+| `pii_identity_card_number_de_context_free` | `IDENTITY_CARD_NUMBER` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
+| `pii_identity_card_number_de_legacy` | `IDENTITY_CARD_NUMBER` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.70–0.80 |
 
 ### PII context lexicon
 

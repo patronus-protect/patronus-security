@@ -381,6 +381,7 @@ tasks:
 
   # M3 +2 (13); prerequisite for B-PASS
   - id: F08
+    status: done
     title: "Passport/ID card DE: ICAO 9303 check digits (7-3-1), old + new formats"
     type: precision-fix
     deps: [K02]

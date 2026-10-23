@@ -1797,6 +1797,78 @@ B01_VAT_ID_CASES = [
 for _row in B01_VAT_ID_CASES:
     PII_CASES.setdefault(_row["target_label"], []).append(_row)
 
+# F08 German passport and identity card numbers with ICAO 9303 check digits (7-3-1). The rules
+# are scored-only like K05: strict stays bit-identical (the field-bound rules keep their format
+# check), `balanced` and `recall` report a letter-led value without a field name: passport series
+# C, F, G, H, J, K, identity card series L, M, N, P, R, T, V, W, X, Y, eight characters plus the
+# check digit or the MRZ form (nine plus the check digit). The old numeric serial (ten digits)
+# needs a document term nearby or as its key. `Pass-Nr.` (baseline P6) is a passport term. Hard
+# negatives: failing check digits, wrong series, a nearer counter-context term, values glued to
+# letters or inside longer numbers and paths, a field name of another label. Appended so
+# existing ids stay stable.
+F08_DOCUMENT_NUMBER_CASES = [
+    # ── Passport ────────────────────────────────────────────────────────────
+    p("PASSPORT_NUMBER", "de", "pii_passport_number_de_context_free", "Pass-Nr.: ", "F12345671", "", mode="balanced"),
+    p("PASSPORT_NUMBER", "de", "pii_passport_number_de_context_free", "Bitte legen Sie den Pass ", "C01X00T41", " am Schalter vor.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("PASSPORT_NUMBER", "de", "pii_passport_number_de_context_free", '{"name": "Erika Mustermann", "pass_nr": "', "H1J2K3L47", '"}', carrier="json", mode="balanced"),
+    p("PASSPORT_NUMBER", "de", "pii_passport_number_de_context_free", "Reisepass-Nr. ", "C01X00T478", " laut MRZ", mode="balanced"),
+    p("PASSPORT_NUMBER", "de", "pii_passport_number_de_context_free", "Name;Pass-Nr.;Ort\nErika Mustermann;", "K2L4M6N82", ";Köln", carrier="csv", mode="recall"),
+    p("PASSPORT_NUMBER", "de", "pii_passport_number_de_legacy", "Alte Reisepass-Nr.: ", "3000123454", "", mode="balanced"),
+    p("PASSPORT_NUMBER", "de", "pii_passport_number_de_legacy", "Der alte Reisepass ", "1220001297", " ist abgelaufen.", carrier="prose", mode="recall"),
+    p("PASSPORT_NUMBER", "en", "pii_passport_number_de_context_free", "Passport no. ", "C01X00T41", "", mode="balanced"),
+    p("PASSPORT_NUMBER", "en", "pii_passport_number_de_context_free", "Please bring ", "F12345671", " to the front desk.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("PASSPORT_NUMBER", "en", "pii_passport_number_de_context_free", '{"traveller": "John Smith", "passport_no": "', "J7T3X9V54", '"}', carrier="json", mode="balanced"),
+    p("PASSPORT_NUMBER", "en", "pii_passport_number_de_context_free", "My passport ", "CF21823027", " expires next year.", carrier="prose", mode="balanced"),
+    p("PASSPORT_NUMBER", "en", "pii_passport_number_de_context_free", "Traveller;Passport no.\nJohn Smith;", "FX93K2L58", "", carrier="csv", mode="recall"),
+    p("PASSPORT_NUMBER", "en", "pii_passport_number_de_legacy", "Old passport number: ", "3000123454", "", mode="balanced"),
+    p("PASSPORT_NUMBER", "en", "pii_passport_number_de_legacy", '{"passport_no": "', "1220001297", '"}', carrier="json", mode="recall"),
+    n("PASSPORT_NUMBER", "de", "pii_passport_number_de_context_free", "Pass-Nr.: C01X00T42", "check digit fails", mode="balanced"),
+    n("PASSPORT_NUMBER", "de", "pii_passport_number_de_context_free", "Bestellnummer C01X00T41 ist eingegangen.", "order number with a valid check digit", carrier="prose", mode="balanced"),
+    n("PASSPORT_NUMBER", "de", "pii_passport_number_de_context_free", "Pass-Nr.: B01X00T41", "B is no passport series", mode="balanced"),
+    n("PASSPORT_NUMBER", "de", "pii_passport_number_de_context_free", "Ablage /archiv/C01X00T41/2026 angelegt.", "part of a slash path", carrier="prose", mode="balanced"),
+    n("PASSPORT_NUMBER", "de", "pii_passport_number_de_context_free", "Artikel XC01X00T41 ist vergriffen.", "glued to a letter", carrier="prose", mode="recall"),
+    n("PASSPORT_NUMBER", "de", "pii_passport_number_de_context_free", "Kundennummer: K12345676", "a customer number field wins over the passport check digit", also=(("CUSTOMER_ID", "K12345676"),), mode="balanced"),
+    n("PASSPORT_NUMBER", "de", "pii_passport_number_de_legacy", "Reisepass-Nr. 3000123455", "old numeric check digit fails", mode="balanced"),
+    n("PASSPORT_NUMBER", "de", "pii_passport_number_de_legacy", "Bitte 3000123454 übernehmen.", "ten digits without a document term", carrier="prose", mode="recall"),
+    n("PASSPORT_NUMBER", "en", "pii_passport_number_de_context_free", "Passport no. C01X00T42", "check digit fails", mode="balanced"),
+    n("PASSPORT_NUMBER", "en", "pii_passport_number_de_context_free", "Invoice number F12345671 is overdue.", "invoice number with a valid check digit", carrier="prose", mode="balanced"),
+    n("PASSPORT_NUMBER", "en", "pii_passport_number_de_context_free", "Build C01X00T41-2 failed.", "part of a hyphenated number", carrier="prose", mode="balanced"),
+    n("PASSPORT_NUMBER", "en", "pii_passport_number_de_context_free", "Passport no. C01X00T479", "MRZ check digit fails", mode="balanced"),
+    n("PASSPORT_NUMBER", "en", "pii_passport_number_de_context_free", "Passport no. D12345675", "D is no passport series", mode="recall"),
+    n("PASSPORT_NUMBER", "en", "pii_passport_number_de_legacy", "Old passport number: 1220001298", "old numeric check digit fails", mode="balanced"),
+    # ── Identity card ───────────────────────────────────────────────────────
+    p("IDENTITY_CARD_NUMBER", "de", "pii_identity_card_number_de_context_free", "Ausweis-Nr.: ", "L01X00T44", "", mode="balanced"),
+    p("IDENTITY_CARD_NUMBER", "de", "pii_identity_card_number_de_context_free", "Bitte zeigen Sie die Karte ", "X12345677", " am Eingang vor.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("IDENTITY_CARD_NUMBER", "de", "pii_identity_card_number_de_context_free", "IDD<<", "T220001293", "<<<<<<<<<<<<<<<", tags=("ocr",), mode="balanced"),
+    p("IDENTITY_CARD_NUMBER", "de", "pii_identity_card_number_de_context_free", '{"name": "Erika Mustermann", "ausweis_nr": "', "M3N7P9R11", '"}', carrier="json", mode="balanced"),
+    p("IDENTITY_CARD_NUMBER", "de", "pii_identity_card_number_de_context_free", "Name;Ausweis-Nr.\nErika Mustermann;", "TX7M4H2P1", "", carrier="csv", mode="recall"),
+    p("IDENTITY_CARD_NUMBER", "de", "pii_identity_card_number_de_legacy", "Personalausweis Nr. ", "1220001297", "", mode="balanced"),
+    p("IDENTITY_CARD_NUMBER", "de", "pii_identity_card_number_de_legacy", "Alte Ausweisnummer: ", "3000123454", " (bis 2010)", mode="recall"),
+    p("IDENTITY_CARD_NUMBER", "en", "pii_identity_card_number_de_context_free", "ID card no. ", "X12345677", "", mode="balanced"),
+    p("IDENTITY_CARD_NUMBER", "en", "pii_identity_card_number_de_context_free", "Please show ", "L01X00T44", " at the entrance.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("IDENTITY_CARD_NUMBER", "en", "pii_identity_card_number_de_context_free", "ID card number: ", "T220001293", "", mode="balanced"),
+    p("IDENTITY_CARD_NUMBER", "en", "pii_identity_card_number_de_context_free", '{"holder": "John Smith", "id_card_no": "', "R5N8L3W90", '"}', carrier="json", mode="balanced"),
+    p("IDENTITY_CARD_NUMBER", "en", "pii_identity_card_number_de_context_free", "Holder;ID card no.\nJohn Smith;", "N7YF1F0W5", "", carrier="csv", mode="recall"),
+    p("IDENTITY_CARD_NUMBER", "en", "pii_identity_card_number_de_legacy", "Old ID card number ", "1220001297", "", mode="balanced"),
+    p("IDENTITY_CARD_NUMBER", "en", "pii_identity_card_number_de_legacy", '{"id_card_no": "', "3000123454", '"}', carrier="json", mode="recall"),
+    n("IDENTITY_CARD_NUMBER", "de", "pii_identity_card_number_de_context_free", "Ausweis-Nr.: L01X00T45", "check digit fails", mode="balanced"),
+    n("IDENTITY_CARD_NUMBER", "de", "pii_identity_card_number_de_context_free", "Rechnungsnummer L01X00T44 bitte angeben.", "invoice number with a valid check digit", carrier="prose", mode="balanced"),
+    n("IDENTITY_CARD_NUMBER", "de", "pii_identity_card_number_de_context_free", "Version 2.L01X00T44 installiert.", "joined to a version number", carrier="prose", mode="balanced"),
+    n("IDENTITY_CARD_NUMBER", "de", "pii_identity_card_number_de_context_free", "Ausweis-Nr.: L01x00T44", "mixed case", mode="balanced"),
+    n("IDENTITY_CARD_NUMBER", "de", "pii_identity_card_number_de_context_free", "Ausweis-Nr.: T220001294", "MRZ check digit fails", mode="recall"),
+    n("IDENTITY_CARD_NUMBER", "de", "pii_identity_card_number_de_legacy", "Personalausweis Nr. 1220001298", "old numeric check digit fails", mode="balanced"),
+    n("IDENTITY_CARD_NUMBER", "de", "pii_identity_card_number_de_legacy", "Bitte 1220001297 übernehmen.", "ten digits without a document term", carrier="prose", mode="recall"),
+    n("IDENTITY_CARD_NUMBER", "en", "pii_identity_card_number_de_context_free", "ID card no. X12345678", "check digit fails", mode="balanced"),
+    n("IDENTITY_CARD_NUMBER", "en", "pii_identity_card_number_de_context_free", "Ticket number T220001293 was closed.", "ticket number with a valid check digit", carrier="prose", mode="balanced"),
+    n("IDENTITY_CARD_NUMBER", "en", "pii_identity_card_number_de_context_free", "Code XL01X00T44 revoked.", "glued to a letter", carrier="prose", mode="balanced"),
+    n("IDENTITY_CARD_NUMBER", "en", "pii_identity_card_number_de_context_free", "Range L01X00T44-5 reserved.", "part of a hyphenated number", carrier="prose", mode="balanced"),
+    n("IDENTITY_CARD_NUMBER", "en", "pii_identity_card_number_de_context_free", "Passport number: Y22400855", "a passport field wins over the identity card check digit", also=(("PASSPORT_NUMBER", "Y22400855"),), mode="balanced"),
+    n("IDENTITY_CARD_NUMBER", "en", "pii_identity_card_number_de_context_free", "ID card no. L01X00T4", "eight characters", mode="recall"),
+    n("IDENTITY_CARD_NUMBER", "en", "pii_identity_card_number_de_legacy", "ID card no. 1220001298", "old numeric check digit fails", mode="balanced"),
+]
+for _row in F08_DOCUMENT_NUMBER_CASES:
+    PII_CASES.setdefault(_row["target_label"], []).append(_row)
+
 # DLP golden schema v2 (E13). Every DLP row names the rule it exercises (`rule_id`), the
 # document that carries the value (`carrier`), its difficulty `tags` and whether it is a
 # `known_gap`: a positive the detector misses today, reported by 13_l1_golden_eval but

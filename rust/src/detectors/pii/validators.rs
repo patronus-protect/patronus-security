@@ -455,6 +455,61 @@ pub fn de_document_number(s: &str) -> bool {
             .all(|ch| ALPHABET.contains(ch.to_ascii_uppercase()))
 }
 
+/// ICAO 9303 (part 3) check digit of an MRZ field: weights 7, 3, 1 repeating,
+/// digits at face value, `A`=10 … `Z`=35, the filler `<` is 0; `None` for any
+/// other character.
+pub fn icao_check_digit(data: &str) -> Option<u32> {
+    data.chars()
+        .zip([7, 3, 1].into_iter().cycle())
+        .try_fold(0, |total, (ch, weight)| {
+            let value = match ch {
+                '0'..='9' => ch.to_digit(10)?,
+                'A'..='Z' => u32::from(ch) - u32::from('A') + 10,
+                '<' => 0,
+                _ => return None,
+            };
+            Some(total + value * weight)
+        })
+        .map(|total| total % 10)
+}
+
+/// A German document number with its ICAO 9303 check digit (F08): a letter of
+/// `series`, then characters of the ICAO alphabet without vowels and lookalikes
+/// (`0-9CFGHJKLMNPRTVWXYZ`), eight in all plus the check digit, or the nine
+/// character serial plus the check digit of the MRZ; or the old numeric serial,
+/// nine digits plus the check digit. Letters are all upper or all lower case.
+fn de_document_check_digit(s: &str, series: &str) -> bool {
+    const ALPHABET: &str = "0123456789CFGHJKLMNPRTVWXYZ";
+    if !s.is_ascii()
+        || !matches!(s.len(), 9 | 10)
+        || (s.bytes().any(|byte| byte.is_ascii_uppercase())
+            && s.bytes().any(|byte| byte.is_ascii_lowercase()))
+    {
+        return false;
+    }
+    let upper = s.to_ascii_uppercase();
+    let (data, check) = upper.split_at(upper.len() - 1);
+    let first = data.chars().next().unwrap_or_default();
+    let numeric = upper.len() == 10 && upper.bytes().all(|byte| byte.is_ascii_digit());
+    let lettered = series.contains(first) && data.chars().all(|ch| ALPHABET.contains(ch));
+    ((numeric && upper.bytes().any(|byte| byte != b'0')) || lettered)
+        && check
+            .parse::<u32>()
+            .is_ok_and(|digit| icao_check_digit(data) == Some(digit))
+}
+
+/// German passport number (Reisepass): series C, F, G, H, J, K, or the old
+/// numeric serial, with its ICAO 9303 check digit (F08).
+pub fn de_passport_number(s: &str) -> bool {
+    de_document_check_digit(s, "CFGHJK")
+}
+
+/// German identity card number (Personalausweis): series L, M, N, P, R, T, V,
+/// W, X, Y, or the old numeric serial, with its ICAO 9303 check digit (F08).
+pub fn de_identity_card_number(s: &str) -> bool {
+    de_document_check_digit(s, "LMNPRTVWXY")
+}
+
 pub fn de_driver_license_number(s: &str) -> bool {
     s.len() == 11 && s.chars().all(|ch| ch.is_ascii_alphanumeric())
 }

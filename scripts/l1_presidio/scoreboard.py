@@ -545,6 +545,46 @@ def es_vat_id(value: str) -> bool:
     return False
 
 
+ICAO_DOCUMENT_ALPHABET = "0123456789CFGHJKLMNPRTVWXYZ"
+
+
+def icao_check_digit(data: str) -> int | None:
+    """Port of ``validators::icao_check_digit`` (ICAO 9303: weights 7-3-1, A=10 … Z=35, ``<`` = 0)."""
+    total = 0
+    for index, ch in enumerate(data):
+        if "0" <= ch <= "9":
+            value = int(ch)
+        elif "A" <= ch <= "Z":
+            value = ord(ch) - ord("A") + 10
+        elif ch == "<":
+            value = 0
+        else:
+            return None
+        total += value * (7, 3, 1)[index % 3]
+    return total % 10
+
+
+def _de_document_check_digit(value: str, series: str) -> bool:
+    """Port of ``validators::de_document_check_digit``: series letter + ICAO alphabet or old numeric serial."""
+    if not value.isascii() or len(value) not in (9, 10) or (value != value.upper() and value != value.lower()):
+        return False
+    upper = value.upper()
+    data, check = upper[:-1], upper[-1]
+    numeric = len(upper) == 10 and upper.isdigit() and upper.strip("0") != ""
+    lettered = data[0] in series and all(ch in ICAO_DOCUMENT_ALPHABET for ch in data)
+    return (numeric or lettered) and check.isdigit() and icao_check_digit(data) == int(check)
+
+
+def de_passport_number(value: str) -> bool:
+    """Port of ``validators::de_passport_number`` (series C F G H J K or old numeric, ICAO 9303)."""
+    return _de_document_check_digit(value, "CFGHJK")
+
+
+def de_identity_card_number(value: str) -> bool:
+    """Port of ``validators::de_identity_card_number`` (series L M N P R T V W X Y or old numeric, ICAO 9303)."""
+    return _de_document_check_digit(value, "LMNPRTVWXY")
+
+
 # Python ports of every checksum validator (``checksums.ark`` with an algorithm in entity_map.yaml);
 # a task that adds one ports it here, or scripts/tests/test_l1_scoreboard.py is red.
 CHECKSUM_PORTS: dict[str, Callable[[str], bool]] = {
@@ -561,6 +601,8 @@ CHECKSUM_PORTS: dict[str, Callable[[str], bool]] = {
     "be_vat_id": be_vat_id,
     "it_vat_id": it_vat_id,
     "es_vat_id": es_vat_id,
+    "de_passport_number": de_passport_number,
+    "de_identity_card_number": de_identity_card_number,
 }
 
 

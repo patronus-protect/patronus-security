@@ -11,7 +11,10 @@
 //! structural key or a nearby support term), a checksum, the higher score, the
 //! earlier rule. A finding inside a printed IBAN form (`DE64 7172 …`) yields
 //! even when no IBAN is reported because its check digits fail. The loser leaves
-//! the evidence; its `matched_rules` entries stay and name `overlap`. `strict`
+//! the evidence; its `matched_rules` entries stay and name `overlap`. Document
+//! numbers (`DOCUMENT_LABELS`, F08) compete with an overlapping finding of any
+//! other label: their context-free check digit (7-3-1 mod 10) fits one in ten
+//! letter-led codes, so a field name such as `Kundennummer` decides. `strict`
 //! keeps both labels (decision T07) and only marks the card-shaped part of a
 //! valid IBAN and an account finding on an IBAN value as secondary evidence.
 use std::{cmp::Ordering, ops::Range, sync::LazyLock};
@@ -36,6 +39,18 @@ pub const COMPETING_LABELS: [&str; 7] = [
     "VAT_ID_FR",
 ];
 
+/// Labels whose findings compete with an overlapping finding of any other label
+/// (F08): a bare passport or identity card check digit proves little.
+pub const DOCUMENT_LABELS: [&str; 2] = ["PASSPORT_NUMBER", "IDENTITY_CARD_NUMBER"];
+
+/// Whether findings of `a` and `b` compete for overlapping characters.
+fn compete(a: &str, b: &str) -> bool {
+    a != b
+        && ((COMPETING_LABELS.contains(&a) && COMPETING_LABELS.contains(&b))
+            || DOCUMENT_LABELS.contains(&a)
+            || DOCUMENT_LABELS.contains(&b))
+}
+
 /// Labels whose findings inside a reported IBAN are secondary evidence of it in
 /// `strict` (decision T07).
 pub const SECONDARY_IN_IBAN: [&str; 2] = ["CREDITCARD", "FINANCIAL_ACCOUNT_NUMBER"];
@@ -54,9 +69,12 @@ struct Finding {
     range: Range<usize>,
     /// Score in integer points.
     points: i64,
-    /// Its context supports its label: a field name, a structural key or a
-    /// nearby support term (K03, K04).
-    supported: bool,
+    /// Rank of the context of its label (K03, K04): 2 for a field name, a
+    /// structural key or a nearby support term, plus 1 unless it is a document
+    /// number (F08) without a field name or key. A document number with only a
+    /// nearby term ranks below every other supported label, one without
+    /// context below every other label.
+    context: u8,
     checksum: bool,
     /// Registry index of the deciding rule.
     rule: usize,
@@ -73,7 +91,7 @@ fn decide(a: &Finding, b: &Finding) -> (Ordering, &'static str) {
     [
         ("iban", (a.label == "IBAN").cmp(&(b.label == "IBAN"))),
         ("longer_value", a.range.len().cmp(&b.range.len())),
-        ("context", a.supported.cmp(&b.supported)),
+        ("context", a.context.cmp(&b.context)),
         ("checksum", a.checksum.cmp(&b.checksum)),
         ("score", a.points.cmp(&b.points)),
         ("rule_order", b.rule.cmp(&a.rule)),
@@ -87,7 +105,7 @@ fn decide(a: &Finding, b: &Finding) -> (Ordering, &'static str) {
 
 /// Removes the findings that yield to an overlapping finding of another
 /// competing label or lie inside a printed IBAN form, and records why on their
-/// `matched_rules` entries.
+/// `matched_rules` entries. A document number competes with every label.
 pub(crate) fn resolve(text: &str, detection: &mut NativeDetection) {
     let rules = detection
         .details
@@ -113,11 +131,18 @@ pub(crate) fn resolve(text: &str, detection: &mut NativeDetection) {
             .filter(|&(index, _)| PII_PATTERNS[index].entity_group == label)
             .min_by_key(|&(index, _)| index)
     };
-    let mut findings: Vec<Finding> = detection
-        .evidence_spans
+    let spans = &detection.evidence_spans;
+    let mut findings: Vec<Finding> = spans
         .iter()
         .enumerate()
-        .filter(|(_, span)| COMPETING_LABELS.contains(&span.label.as_str()))
+        .filter(|(_, span)| {
+            COMPETING_LABELS.contains(&span.label.as_str())
+                || spans.iter().any(|other| {
+                    compete(&span.label, &other.label)
+                        && span.start_byte < other.end_byte
+                        && other.start_byte < span.end_byte
+                })
+        })
         .map(|(index, span)| {
             let range = span.start_byte..span.end_byte;
             let rule = rule_of(&span.label, &range);
@@ -127,11 +152,17 @@ pub(crate) fn resolve(text: &str, detection: &mut NativeDetection) {
                 label: span.label.clone(),
                 range,
                 points: (span.score * 100.0).round() as i64,
-                supported: rule.is_some_and(|(_, entry)| {
-                    entry["context"]["bonus"]
-                        .as_u64()
-                        .is_some_and(|bonus| bonus > 0)
-                }),
+                context: {
+                    let context = rule.map(|(_, entry)| &entry["context"]);
+                    let supported = context
+                        .and_then(|context| context["bonus"].as_u64())
+                        .is_some_and(|bonus| bonus > 0);
+                    let field = context.is_some_and(|context| {
+                        context["anchor"] == "field" || context["side"] == "key"
+                    });
+                    let document = DOCUMENT_LABELS.contains(&span.label.as_str());
+                    2 * u8::from(supported) + u8::from(!document || field)
+                },
                 checksum: pattern
                     .is_some_and(|pattern| pattern.strength == ValidatorStrength::Checksum),
                 rule: rule.map_or(usize::MAX, |(rule, _)| rule),
@@ -149,7 +180,7 @@ pub(crate) fn resolve(text: &str, detection: &mut NativeDetection) {
     for finding in findings {
         match kept
             .iter()
-            .find(|winner| winner.label != finding.label && winner.overlaps(&finding))
+            .find(|winner| compete(&winner.label, &finding.label) && winner.overlaps(&finding))
         {
             Some(winner) => {
                 let reason = decide(winner, &finding).1;
@@ -161,6 +192,7 @@ pub(crate) fn resolve(text: &str, detection: &mut NativeDetection) {
     let forms: Vec<_> = IBAN_FORM.find_iter(text).map(|form| form.range()).collect();
     for finding in kept {
         let inside_form = finding.label != "IBAN"
+            && COMPETING_LABELS.contains(&finding.label.as_str())
             && forms
                 .iter()
                 .any(|form| form.start <= finding.range.start && finding.range.end <= form.end);

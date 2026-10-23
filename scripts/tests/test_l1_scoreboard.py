@@ -662,6 +662,8 @@ def test_gold_validators_cover_every_checksum_validator():
     assert validators["pii.de.tax_id"] == ("steuer_id", "steuer_id_issued")
     assert validators["pii.de.vat_id"] == ("de_vat_id",)
     assert validators["pii.it.vat_code"] == ("it_vat_id",)
+    assert validators["entity.passport_number"] == ("de_passport_number",)
+    assert validators["pii.identity_card_number"] == ("de_identity_card_number",)
     rules = MODULE.count_validated_module().load_rules()
     checksum = {name for name, rule in rules.ark.items() if rule is not None}
     # A task that adds a checksum validator ports it to CHECKSUM_PORTS for the gold-gap report.
@@ -702,6 +704,13 @@ def test_gold_validators_cover_every_checksum_validator():
      ["IT00743110158", "IT00000000000", "IT12345670009", "IT12345675008", "0074311015"]),
     ("es_vat_id", ["ESA13585625", "ESX5253868R", "ES54362315K", "ESB58378431", "ESM1234567L"],
      ["ESA13585626", "ESX5253868Q", "ES54362315L", "ESI1234567L"]),
+    # F08: German passport and identity card, ICAO 9303 7-3-1 (rust/tests/pii_document_numbers.rs).
+    ("de_passport_number", ["C01X00T41", "F12345671", "c01234565", "C01X00T478", "CF21823027", "1220001297"],
+     ["C01X00T42", "C01X00T47", "L01X00T44", "C01X00T479", "1220001298", "0000000000", "B01X00T41",
+      "C01A00T41", "C01x00T41", "C01X00T4", "122000129"]),
+    ("de_identity_card_number", ["L01X00T44", "l01x00t44", "X12345677", "T220001293", "L01X00T471", "1220001297"],
+     ["L01X00T45", "T22000129", "C01X00T41", "T220001294", "1220001298", "0000000000", "D12345675",
+      "L01x00T44", "L01X00T4", "L01X00T4711"]),
 ])
 def test_checksum_ports_match_the_rust_vectors(name, valid, invalid):
     check = MODULE.CHECKSUM_PORTS[name]

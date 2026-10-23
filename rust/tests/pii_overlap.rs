@@ -12,13 +12,20 @@
 //! IBAN form (`DE64 7172 …`) yields even when the IBAN's check digits fail. The
 //! loser leaves `evidence_spans`; its `matched_rules` entry stays and names
 //! `overlap` (`reason`, `yields_to`). Strict keeps both labels (decision T07);
-//! labels outside the competing set keep their overlaps. Validators are not
+//! labels outside the competing set keep their overlaps. Document numbers
+//! (`overlap::DOCUMENT_LABELS`: passport, identity card, F08) compete with an
+//! overlapping finding of any other label, since their context-free check digit
+//! (7-3-1 mod 10) fits one in ten letter-led codes. Validators are not
 //! relaxed: the vectors below pass or fail the checksum they name.
 
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use patronus_ark::detectors::pii::{overlap::COMPETING_LABELS, score::PiiMode, validators};
+use patronus_ark::detectors::pii::{
+    overlap::{COMPETING_LABELS, DOCUMENT_LABELS},
+    score::PiiMode,
+    validators,
+};
 use patronus_ark::{
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult,
 };
@@ -231,6 +238,31 @@ fn a_french_vat_id_keeps_the_steuer_id_digits_inside_it() {
             }
         }
     }
+}
+
+#[test]
+fn document_labels_compete_with_every_label() {
+    assert_eq!(DOCUMENT_LABELS, ["PASSPORT_NUMBER", "IDENTITY_CARD_NUMBER"]);
+    for mode in SCORED {
+        // The passport field name beats the bare identity card check digit ...
+        let found = spans("Passport number: Y22400855", mode);
+        assert_eq!(found, [("PASSPORT_NUMBER".into(), "Y22400855".into())]);
+        // ... and a customer number field beats a bare passport check digit.
+        let found = spans("Kundennummer K12345676", mode);
+        assert_eq!(found, [("CUSTOMER_ID".into(), "K12345676".into())]);
+        let rules = matched_rules(&pii_result("Kundennummer K12345676", mode));
+        let loser = rules
+            .iter()
+            .find(|rule| rule["rule_id"] == "pii_passport_number_de_context_free")
+            .unwrap();
+        assert_eq!(loser["overlap"]["reason"], "context");
+        assert_eq!(loser["overlap"]["yields_to"], "CUSTOMER_ID");
+    }
+    // Strict keeps every label and runs no context-free rule.
+    assert_eq!(
+        spans("Kundennummer K12345676", PiiMode::Strict),
+        [("CUSTOMER_ID".into(), "K12345676".into())]
+    );
 }
 
 #[test]
@@ -493,8 +525,11 @@ fn assert_resolved(scanner: &SecurityGateway, text: &str, mode: PiiMode) {
     let spans = &result.evidence_spans;
     for (index, a) in spans.iter().enumerate() {
         for b in &spans[index + 1..] {
-            let competing = COMPETING_LABELS.contains(&a.label.as_str())
-                && COMPETING_LABELS.contains(&b.label.as_str())
+            let document = |label: &str| DOCUMENT_LABELS.contains(&label);
+            let competing = ((COMPETING_LABELS.contains(&a.label.as_str())
+                && COMPETING_LABELS.contains(&b.label.as_str()))
+                || document(&a.label)
+                || document(&b.label))
                 && a.label != b.label;
             assert!(
                 !(competing && a.start_byte < b.end_byte && b.start_byte < a.end_byte),

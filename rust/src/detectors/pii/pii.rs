@@ -94,6 +94,10 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     vat::VAT_ID_IT,
     vat::VAT_ID_IT_PROXIMITY,
     vat::VAT_ID_ES,
+    de::PASSPORT_NUMBER_CONTEXT_FREE,
+    de::PASSPORT_NUMBER_LEGACY,
+    de::IDENTITY_CARD_NUMBER_CONTEXT_FREE,
+    de::IDENTITY_CARD_NUMBER_LEGACY,
 ];
 
 pub struct PiiPipeline {
@@ -515,6 +519,22 @@ impl NativeRegexDetector for PiiPipeline {
                 context::opens_phone_number(text, captures.get(0).unwrap().start())
             }
             "pii_credit_card" => context::card_position(text, captures.get(0).unwrap().range()),
+            "pii_passport_number_de_context_free" | "pii_identity_card_number_de_context_free" => {
+                !context::foreign_field(
+                    prepared.structure(),
+                    text,
+                    captures.get(0).unwrap().range(),
+                    pattern.entity_group,
+                )
+            }
+            "pii_passport_number_de_legacy" | "pii_identity_card_number_de_legacy" => {
+                // A key that names another value overrides a document term
+                // found by proximity; a document term inside the key keeps it.
+                let value = captures.get(0).unwrap().range();
+                let fields = prepared.structure();
+                !context::foreign_field(fields, text, value.clone(), pattern.entity_group)
+                    || context::key_holds_term(fields, text, value, pattern.entity_group)
+            }
             "pii_ipv4" => context::ipv4_position(text, captures.get(0).unwrap().start()),
             "pii_ipv6_full" | "pii_ipv6_compressed" | "pii_ipv6_loopback" => {
                 context::ipv6_position(text, captures.name("value").unwrap().end())

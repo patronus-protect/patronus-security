@@ -406,7 +406,11 @@ fn checksum_strength_is_reserved_for_real_check_digits() {
             "pii_vat_id_be",
             "pii_vat_id_it",
             "pii_vat_id_it_proximity",
-            "pii_vat_id_es"
+            "pii_vat_id_es",
+            "pii_passport_number_de_context_free",
+            "pii_passport_number_de_legacy",
+            "pii_identity_card_number_de_context_free",
+            "pii_identity_card_number_de_legacy"
         ]
     );
 }
