@@ -1099,7 +1099,7 @@ fn infer_l3_chunk(
     let token_cache_key = blake3::hash(&crate::ml::tokenizer::token_key(&chunk.token_ids))
         .to_hex()
         .to_string();
-    if let Some((result, mut layers)) =
+    if let Some((result, mut layers, _)) =
         chunk_cache.get(&namespace, &token_cache_key, &job.execution)
     {
         decorate_l3_layers(
@@ -1166,6 +1166,7 @@ fn infer_l3_chunk(
         &job.execution,
         &result,
         &layers,
+        Default::default(),
     );
     decorate_l3_layers(
         &mut layers,
