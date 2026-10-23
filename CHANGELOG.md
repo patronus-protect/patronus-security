@@ -49,6 +49,10 @@ DLP output modes and the new labels that only they report are opt-in.
   without quotes and one span per overlapping secret.
 - **HTTP auth (F-HTTP):** `Basic` and `Bearer` credentials and server session cookies are found
   outside a literal header line when the value proves its kind.
+- **Shell commands (#128):** `shell_command` scores with the A1 model (character n-grams plus
+  shell tokens with pipe, redirect and command markers): `curl … | jq` and similar pipes into
+  read-only filters are no longer flagged, loopback reverse shells are. The model asset revision
+  changes, so warmup downloads A1; `format_version: 1` model files no longer load.
 - **Credential phishing (#60):** a request to verify identity or credentials at a login or auth
   link is a terminal injection finding on L1.
 
