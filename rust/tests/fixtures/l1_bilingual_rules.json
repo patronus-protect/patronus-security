@@ -937,11 +937,13 @@
     "hard_negatives": {
       "de": [
         "Prüfsumme (Base58): 5qcCPMN3pG57Z4BT11TcwWcm8SfgVVSQuSSDV1qMW4K6cepkSv",
-        "# Automatisch von Cargo erzeugt\nchecksum = \"3a62b7f976a112d59e38e370981a935fac5bc0dc422c4b4cc23cc4ee5b5426ac\""
+        "# Automatisch von Cargo erzeugt\nchecksum = \"3a62b7f976a112d59e38e370981a935fac5bc0dc422c4b4cc23cc4ee5b5426ac\"",
+        "Testnet-Schlüssel mit Tippfehler: 93HMnC3aJH6aQo5fncEKjFE4u1cWECA9oZvzrXZPCcLuxUxvFXf"
       ],
       "en": [
         "Checksum (Base58): LRQepRFaLzK7d6Gmy6odtC6XBTgAWxjZQ3fDyvLSLTngoPjXqr",
-        "golang.org/x/text v0.14.0 h1:Pkq3jg/AZxbrjZGvwkkfNLHaaB5Z2+3Ph7fi9EoTkDY="
+        "golang.org/x/text v0.14.0 h1:Pkq3jg/AZxbrjZGvwkkfNLHaaB5Z2+3Ph7fi9EoTkDY=",
+        "testnet key with a typo: cPZQmV4ARGrJKAQVhn6JWyiMBpFM4EQjniHas1sycrqhAqknhnE8"
       ]
     },
     "language_neutral": true,

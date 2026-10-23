@@ -485,8 +485,8 @@ fn proximity_decides_secrets_without_a_field_name() {
     for mode in [DlpMode::Strict, DlpMode::Balanced, DlpMode::Recall] {
         assert!(score_of(&bare, mode).is_none(), "{mode:?}");
     }
-    // A bare WIF key: strict reports it, the score model needs a credential
-    // term for balanced.
+    // A bare WIF key: its Base58Check checksum (F02) carries it into balanced
+    // without any context term.
     let wif = value(
         &generators,
         "<<secret:0>>",
@@ -502,10 +502,11 @@ fn proximity_decides_secrets_without_a_field_name() {
         })
     };
     assert!(wif_score(DlpMode::Strict).is_some());
-    assert!(wif_score(DlpMode::Balanced).is_none());
-    let (recall, context) = wif_score(DlpMode::Recall).unwrap();
-    assert_eq!(recall, score::score(pattern("dlp_btc_wif"), Context::None));
-    assert_eq!(context, serde_json::json!({"bonus": 0, "penalty": 0}));
+    for mode in [DlpMode::Balanced, DlpMode::Recall] {
+        let (score, context) = wif_score(mode).unwrap();
+        assert_eq!(score, score::score(pattern("dlp_btc_wif"), Context::None));
+        assert_eq!(context, serde_json::json!({"bonus": 0, "penalty": 0}));
+    }
 
     // A credential term before or after the value supports it.
     for (template, anchor, side, distance) in [

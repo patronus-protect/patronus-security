@@ -68,9 +68,10 @@ def base58check_decode(value: str) -> bytes | None:
 
 
 def is_valid_btc_wif(value: str) -> bool:
-    """Mainnet WIF: 0x80 version byte, a secp256k1 scalar, optional 0x01 compression flag."""
+    """WIF: version byte 0x80 (mainnet) or 0xef (testnet), a secp256k1 scalar, optional
+    0x01 compression flag."""
     payload = base58check_decode(value)
-    if payload is None or payload[0] != 0x80 or len(payload) not in (33, 34):
+    if payload is None or payload[0] not in (0x80, 0xEF) or len(payload) not in (33, 34):
         return False
     if len(payload) == 34 and payload[-1] != 0x01:
         return False

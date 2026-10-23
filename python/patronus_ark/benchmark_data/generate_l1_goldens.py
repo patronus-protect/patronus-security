@@ -4893,6 +4893,132 @@ for _label, _rows in DLP_F01_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
 
+# F02: `dlp_btc_wif` validates Base58Check with the WIF version byte of mainnet (0x80, `5`/`K`/`L`)
+# or testnet/signet/regtest (0xef, `9`/`c`) and scores at checksum strength. Positives are
+# generated testnet keys in faucet, CLI, wallet-library and chat carriers. Hard negatives are
+# testnet-shaped example/test fills, Base58 runs with a broken check value, references and the
+# documented format; in balanced, a checksum term next to a valid key drops it.
+DLP_F02_CASES = {
+    "CRYPTO_KEY": [
+        ds(
+            "CRYPTO_KEY", "de", "dlp_btc_wif",
+            "# Testnet-Faucet, nicht einchecken\nNETZ=testnet\nFAUCET_WIF=<<secret:0>>\nAUSZAHLUNG_MAX=0.01\n",
+            "btc_wif_testnet_compressed", 10401, carrier="env",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_btc_wif",
+            "# Schlüssel der Demo-Wallet ins Testnetz importieren\n"
+            "$ bitcoin-cli -testnet importprivkey <<secret:0>> \"demo\" false\n",
+            "btc_wif_testnet_uncompressed", 10402, carrier="cli",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_btc_wif",
+            "zahlungsdienst:\n  netz: testnet\n  wallet:\n    wif: \"<<secret:0>>\"\n",
+            "btc_wif_testnet_compressed", 10403, carrier="yaml",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_btc_wif",
+            "[09:12] ben: Kannst du mir den Testnet-Schlüssel für die Demo schicken?\n"
+            "[09:13] ana: <<secret:0>>\n[09:13] ana: nach dem Workshop bitte löschen\n",
+            "btc_wif_testnet_compressed", 10404, carrier="prose",
+        ),
+        ds(
+            "CRYPTO_KEY", "de", "dlp_btc_wif",
+            "{\"netzwerk\": \"testnet3\", \"privater_schluessel\": \"<<secret:0>>\", \"adresstyp\": \"legacy\"}\n",
+            "btc_wif_testnet_uncompressed", 10405, carrier="json",
+        ),
+        ds(
+            "CRYPTO_KEY", "en", "dlp_btc_wif",
+            "from bit import PrivateKeyTestnet\n\nkey = PrivateKeyTestnet(\"<<secret:0>>\")\nprint(key.address)\n",
+            "btc_wif_testnet_compressed", 10411, carrier="code",
+        ),
+        ds(
+            "CRYPTO_KEY", "en", "dlp_btc_wif",
+            "$ electrum --testnet restore <<secret:0>>\n",
+            "btc_wif_testnet_uncompressed", 10412, carrier="cli",
+        ),
+        ds(
+            "CRYPTO_KEY", "en", "dlp_btc_wif",
+            "[faucet]\nnetwork = \"testnet\"\nwif = \"<<secret:0>>\"\npayout_max = 0.01\n",
+            "btc_wif_testnet_compressed", 10413, carrier="toml",
+        ),
+        ds(
+            "CRYPTO_KEY", "en", "dlp_btc_wif",
+            "2026-10-21T10:02:11Z WARN faucet: loaded signing key <<secret:0>> from env\n",
+            "btc_wif_testnet_compressed", 10414, carrier="log",
+        ),
+        ds(
+            "CRYPTO_KEY", "en", "dlp_btc_wif",
+            "Hi Jo,\n\nhere is the signet wallet key for the workshop:\n\n<<secret:0>>\n\nPlease delete it afterwards.\n",
+            "btc_wif_testnet_uncompressed", 10415, carrier="prose",
+        ),
+        dx(
+            "CRYPTO_KEY", "de", "dlp_btc_wif",
+            "# Beispiel aus der Doku\nFAUCET_WIF=<<secret:0>>\n",
+            "btc_wif_testnet_compressed_shape", "EXAMPLEKEY", "documented testnet example value (EXAMPLE marker)",
+            carrier="env",
+        ),
+        dn(
+            "CRYPTO_KEY", "de", "dlp_btc_wif",
+            "Sitzungs-Token (Base58): 92bRew1RSMhiFXSS1F24kgeh48WT67LqwkHtCAA8i48n4pHBPpo",
+            "testnet-shaped Base58 run with an invalid Base58Check check value",
+        ),
+        dn(
+            "CRYPTO_KEY", "de", "dlp_btc_wif",
+            "NETZ=testnet\nFAUCET_WIF=${FAUCET_WIF:?WIF fehlt}\n",
+            "environment reference", carrier="env",
+        ),
+        dn(
+            "CRYPTO_KEY", "de", "dlp_btc_wif",
+            "zahlungsdienst:\n  netz: testnet\n  wallet:\n    wif: \"<Testnet-WIF hier einsetzen>\"\n",
+            "template placeholder", carrier="yaml",
+        ),
+        dn(
+            "CRYPTO_KEY", "de", "dlp_btc_wif",
+            "Testnet-WIF-Schlüssel beginnen mit 9 oder c und sind 51 bzw. 52 Zeichen lang.",
+            "documented format without a value", carrier="prose",
+        ),
+        dx(
+            "CRYPTO_KEY", "en", "dlp_btc_wif",
+            "{\"network\": \"testnet\", \"wif\": \"<<secret:0>>\"}\n",
+            "btc_wif_testnet_compressed_shape", "TESTKEY", "test key (TESTKEY fill)", carrier="json",
+        ),
+        dn(
+            "CRYPTO_KEY", "en", "dlp_btc_wif",
+            "2026-10-21T10:02:11Z ERROR faucet: rejected import cT1xecQJa7A7LtW6w7dEdSi7tRUtEi1BNcjkJiorgf2t5mHaGpgM\n",
+            "testnet-shaped Base58 run with an invalid Base58Check check value", carrier="log",
+        ),
+        dn(
+            "CRYPTO_KEY", "en", "dlp_btc_wif",
+            "from bit import PrivateKeyTestnet\n\nkey = PrivateKeyTestnet(os.environ[\"FAUCET_WIF\"])\n",
+            "environment lookup", carrier="code",
+        ),
+        dn(
+            "CRYPTO_KEY", "en", "dlp_btc_wif",
+            "$ bitcoin-cli -testnet dumpprivkey \"$FAUCET_ADDRESS\"\n",
+            "shell variable reference", carrier="cli",
+        ),
+        dn(
+            "CRYPTO_KEY", "en", "dlp_btc_wif",
+            "Testnet WIF keys start with 9 (uncompressed) or c (compressed).",
+            "documented format without a value", carrier="prose",
+        ),
+        dc(
+            "CRYPTO_KEY", "de", "dlp_btc_wif",
+            "Prüfsumme des Exports: <<secret:0>>",
+            "btc_wif_testnet_compressed", 10406, "checksum term next to the value (counter-context Prüfsumme)",
+        ),
+        dc(
+            "CRYPTO_KEY", "en", "dlp_btc_wif",
+            "Export checksum: <<secret:0>>",
+            "btc_wif_testnet_uncompressed", 10416, "checksum term next to the value (counter-context checksum)",
+        ),
+    ],
+}
+for _label, _rows in DLP_F02_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+
 def flatten(suite: str, cases: dict[str, list[dict]]) -> list[dict]:
     rows = []
     for label, label_cases in cases.items():

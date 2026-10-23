@@ -122,7 +122,7 @@ rules:
   dlp_btc_wif:
     provider: bitcoin
     source_ref: https://en.bitcoin.it/wiki/Wallet_import_format
-    format: "Base58Check WIF: version byte 0x80, 32-byte secp256k1 scalar, optional 0x01 compression flag; 51 characters starting with 5 or 52 starting with K/L"
+    format: "Base58Check WIF: version byte 0x80 (mainnet) or 0xef (testnet/signet/regtest, severity test), 32-byte secp256k1 scalar, 0x01 flag for compressed keys; 51 characters starting with 5/9 or 52 starting with K/L/c (F02)"
   dlp_private_key_block:
     source_ref: gitleaks:private-key
     format: "PEM armor BEGIN/END … PRIVATE KEY with body"

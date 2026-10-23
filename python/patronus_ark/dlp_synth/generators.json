@@ -22,6 +22,7 @@
     "php_session_id": ["0123456789", "abcdefghijklmnopqrstuv"],
     "snowflake_lead": ["123456"],
     "wif_uncompressed_lead": ["HJK"],
+    "wif_testnet_compressed_lead": ["MNPQRSTUVW"],
     "password_symbol": ["!%*?@"]
   },
   "generators": {
@@ -72,6 +73,9 @@
     "discord_bot_token": {"source": "Discord bot tokens are base64url(user snowflake), base64url(4-byte timestamp) and base64url(20-byte HMAC), joined by dots", "segments": [{"encode": "base64url", "bytes": [{"alphabet": "snowflake_lead", "len": 1}, {"alphabet": "digit", "len": 17}]}, {"lit": "."}, {"encode": "base64url", "bytes": [{"random": 4}]}, {"lit": "."}, {"encode": "base64url", "bytes": [{"random": 20}]}]},
     "btc_wif_mainnet_uncompressed": {"source": "Bitcoin WIF: Base58Check(0x80 || 32-byte key)", "segments": [{"encode": "base58check", "bytes": [{"hex": "80"}, {"hex": "7e"}, {"random": 31}]}]},
     "btc_wif_mainnet_compressed": {"source": "Bitcoin WIF: Base58Check(0x80 || 32-byte key || 0x01)", "segments": [{"encode": "base58check", "bytes": [{"hex": "80"}, {"hex": "7e"}, {"random": 31}, {"hex": "01"}]}]},
+    "btc_wif_testnet_uncompressed": {"source": "Bitcoin testnet WIF: Base58Check(0xef || 32-byte key)", "segments": [{"encode": "base58check", "bytes": [{"hex": "ef"}, {"hex": "7e"}, {"random": 31}]}]},
+    "btc_wif_testnet_compressed": {"source": "Bitcoin testnet WIF: Base58Check(0xef || 32-byte key || 0x01)", "segments": [{"encode": "base58check", "bytes": [{"hex": "ef"}, {"hex": "7e"}, {"random": 31}, {"hex": "01"}]}]},
+    "btc_wif_testnet_compressed_shape": {"source": "testnet WIF shape without Base58Check, for example/test fills", "segments": [{"lit": "c"}, {"alphabet": "wif_testnet_compressed_lead", "len": 1}, {"alphabet": "base58", "len": 50}]},
     "pem_pkcs8_ed25519_private_key": {"source": "RFC 8410 PKCS#8 Ed25519 OneAsymmetricKey (48 bytes DER)", "segments": [{"lit": "-----BEGIN "}, {"lit": "PRIVATE KEY-----\n"}, {"encode": "base64", "wrap": 64, "bytes": [{"hex": "302e020100300506032b657004220420"}, {"random": 32}]}, {"lit": "\n-----END "}, {"lit": "PRIVATE KEY-----"}]},
     "pem_pkcs1_rsa_private_key": {"source": "RFC 8017 RSAPrivateKey DER (1024-bit shape; integers are random, not a usable key)", "segments": [{"lit": "-----BEGIN "}, {"lit": "RSA PRIVATE KEY-----\n"}, {"encode": "base64", "wrap": 64, "bytes": [{"hex": "3082025b020100"}, {"hex": "02818100c5"}, {"random": 127}, {"hex": "0203010001"}, {"hex": "0281805b"}, {"random": 127}, {"hex": "024100e1"}, {"random": 63}, {"hex": "024100d7"}, {"random": 63}, {"hex": "02403a"}, {"random": 63}, {"hex": "024029"}, {"random": 63}, {"hex": "02404c"}, {"random": 63}]}, {"lit": "\n-----END "}, {"lit": "RSA PRIVATE KEY-----"}]},
     "pem_sec1_ec_private_key": {"source": "RFC 5915 ECPrivateKey DER, prime256v1 (public point random, not on the curve)", "segments": [{"lit": "-----BEGIN "}, {"lit": "EC PRIVATE KEY-----\n"}, {"encode": "base64", "wrap": 64, "bytes": [{"hex": "30770201010420"}, {"hex": "6b"}, {"random": 31}, {"hex": "a00a06082a8648ce3d030107a144034200"}, {"hex": "04"}, {"random": 64}]}, {"lit": "\n-----END "}, {"lit": "EC PRIVATE KEY-----"}]},

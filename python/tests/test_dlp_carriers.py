@@ -40,6 +40,8 @@ STRUCTURAL = {
     "npm_access_token": lambda v: checks.has_valid_crc32_suffix(v, "npm_"),
     "btc_wif_mainnet_compressed": checks.is_valid_btc_wif,
     "btc_wif_mainnet_uncompressed": checks.is_valid_btc_wif,
+    "btc_wif_testnet_compressed": checks.is_valid_btc_wif,
+    "btc_wif_testnet_uncompressed": checks.is_valid_btc_wif,
     "de_vat_id": checks.is_valid_de_vat_id,
     "jwt_signed_hs256": lambda v: checks.jwt_parts(v) is not None,
     "jwt_signed_rs256": lambda v: checks.jwt_parts(v) is not None,
@@ -58,6 +60,8 @@ STRUCTURAL = {
 SHAPE = {
     "btc_wif_mainnet_compressed": r"[KL][1-9A-HJ-NP-Za-km-z]{51}",
     "btc_wif_mainnet_uncompressed": r"5[1-9A-HJ-NP-Za-km-z]{50}",
+    "btc_wif_testnet_compressed": r"c[1-9A-HJ-NP-Za-km-z]{51}",
+    "btc_wif_testnet_uncompressed": r"9[1-9A-HJ-NP-Za-km-z]{50}",
     "jwt_signed_hs256": r"(ey[a-zA-Z0-9_\-=]{10,}\.){2}[a-zA-Z0-9_\-=]{10,}",
     "jwt_signed_rs256": r"(ey[a-zA-Z0-9_\-=]{10,}\.){2}[a-zA-Z0-9_\-=]{10,}",
     "discord_bot_token": r"[MN][A-Za-z0-9]{23,}\.[A-Za-z0-9\-_]{6}\.[A-Za-z0-9\-_]{27,}",
@@ -306,14 +310,19 @@ class BuildTests(unittest.TestCase):
     def test_encoded_hard_negatives_only_break_checksum_or_structure(self):
         for variant in ("doc_example", "test_key"):
             # Base58Check: version byte and length intact, only the check value is wrong.
-            for name, size in (("btc_wif_mainnet_uncompressed", 37), ("btc_wif_mainnet_compressed", 38)):
+            for name, size, version in (
+                ("btc_wif_mainnet_uncompressed", 37, b"\x80"),
+                ("btc_wif_mainnet_compressed", 38, b"\x80"),
+                ("btc_wif_testnet_uncompressed", 37, b"\xef"),
+                ("btc_wif_testnet_compressed", 38, b"\xef"),
+            ):
                 value = carriers.hard_negative_value(name, variant)
                 self.assertIsNone(checks.base58check_decode(value), name)
                 number = 0
                 for character in value:
                     number = number * 58 + checks.BASE58.index(character)
                 raw = number.to_bytes(size, "big")
-                self.assertEqual(raw[:2], b"\x80\x7e", name)
+                self.assertEqual(raw[:2], version + b"\x7e", name)
                 self.assertEqual(checks.base58check_decode(recipes.base58check(raw[:-4])), raw[:-4], name)
             # JWT: every segment is canonical base64url, the header still reads as JSON
             # up to its last byte, which is what breaks it.
