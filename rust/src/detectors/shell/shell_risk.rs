@@ -210,7 +210,9 @@ impl ShellRiskModel {
         match peek.format_version {
             1 => Self::from_v1(bytes),
             2 => Self::from_v2(bytes),
-            other => Err(format!("unsupported shell risk model format_version {other}")),
+            other => Err(format!(
+                "unsupported shell risk model format_version {other}"
+            )),
         }
     }
 

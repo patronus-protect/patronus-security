@@ -20,7 +20,8 @@ fn parity_cases() -> serde_json::Value {
 }
 
 fn v2_parity_cases() -> serde_json::Value {
-    serde_json::from_slice(&std::fs::read(fixture("shell_command_v2_parity.json")).unwrap()).unwrap()
+    serde_json::from_slice(&std::fs::read(fixture("shell_command_v2_parity.json")).unwrap())
+        .unwrap()
 }
 
 /// Assert Rust decision scores match scikit-learn within `tolerance` and that

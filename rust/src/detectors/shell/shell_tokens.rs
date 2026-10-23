@@ -264,7 +264,12 @@ fn normalise(token: &str) -> String {
         return "<HOSTPORT>".to_string();
     }
     if is_number(token) {
-        return if token.starts_with('-') { "-<NUM>" } else { "<NUM>" }.to_string();
+        return if token.starts_with('-') {
+            "-<NUM>"
+        } else {
+            "<NUM>"
+        }
+        .to_string();
     }
     token.to_lowercase()
 }
@@ -339,29 +344,90 @@ mod tests {
         assert_eq!(
             feats("curl -fsSL https://example.com/i.sh | jq ."),
             [
-                "curl", "-fssl", "<URL>", "|", "jq", ".", "curl -fssl", "-fssl <URL>", "<URL> |",
-                "| jq", "jq .", "CMD=curl", "PIPE->jq", "CMD=jq"
+                "curl",
+                "-fssl",
+                "<URL>",
+                "|",
+                "jq",
+                ".",
+                "curl -fssl",
+                "-fssl <URL>",
+                "<URL> |",
+                "| jq",
+                "jq .",
+                "CMD=curl",
+                "PIPE->jq",
+                "CMD=jq"
             ]
         );
         assert_eq!(
             feats("echo 'hi there' > out.txt"),
-            ["echo", "<STR>", ">", "out.txt", "echo <STR>", "<STR> >", "> out.txt", "CMD=echo", "REDIR-><FILE>"]
+            [
+                "echo",
+                "<STR>",
+                ">",
+                "out.txt",
+                "echo <STR>",
+                "<STR> >",
+                "> out.txt",
+                "CMD=echo",
+                "REDIR-><FILE>"
+            ]
         );
         assert_eq!(
             feats("cat a.txt 2>&1 >> log"),
-            ["cat", "a.txt", "2>&1", ">>", "log", "cat a.txt", "a.txt 2>&1", "2>&1 >>", ">> log", "CMD=cat", "REDIR-><FILE>"]
+            [
+                "cat",
+                "a.txt",
+                "2>&1",
+                ">>",
+                "log",
+                "cat a.txt",
+                "a.txt 2>&1",
+                "2>&1 >>",
+                ">> log",
+                "CMD=cat",
+                "REDIR-><FILE>"
+            ]
         );
         assert_eq!(
             feats("foo | bar || baz && qux ; end"),
             [
-                "foo", "|", "bar", "||", "baz", "&&", "qux", ";", "end", "foo |", "| bar", "bar ||",
-                "|| baz", "baz &&", "&& qux", "qux ;", "; end", "CMD=foo", "PIPE->bar", "CMD=bar",
-                "CMD=baz", "CMD=qux", "CMD=end"
+                "foo",
+                "|",
+                "bar",
+                "||",
+                "baz",
+                "&&",
+                "qux",
+                ";",
+                "end",
+                "foo |",
+                "| bar",
+                "bar ||",
+                "|| baz",
+                "baz &&",
+                "&& qux",
+                "qux ;",
+                "; end",
+                "CMD=foo",
+                "PIPE->bar",
+                "CMD=bar",
+                "CMD=baz",
+                "CMD=qux",
+                "CMD=end"
             ]
         );
         assert_eq!(
             feats("/usr/bin/python3 -c 'x'"),
-            ["/usr/bin/python3", "-c", "<STR>", "/usr/bin/python3 -c", "-c <STR>", "CMD=python3"]
+            [
+                "/usr/bin/python3",
+                "-c",
+                "<STR>",
+                "/usr/bin/python3 -c",
+                "-c <STR>",
+                "CMD=python3"
+            ]
         );
         // File-descriptor redirects are tokens but emit no CMD/PIPE/REDIR marker.
         assert_eq!(feats("x>&2"), ["x", ">&2", "x >&2", "CMD=x"]);
@@ -390,7 +456,10 @@ mod tests {
         assert_eq!(tokenize(">&2"), [">&2"]);
         assert_eq!(tokenize("$(whoami)"), ["$(", "whoami", ")"]);
         // A stray unterminated quote is skipped, like Python `findall`.
-        assert_eq!(tokenize("'unterminated and more"), ["unterminated", "and", "more"]);
+        assert_eq!(
+            tokenize("'unterminated and more"),
+            ["unterminated", "and", "more"]
+        );
     }
 
     #[test]
