@@ -346,16 +346,25 @@ fn generic_rules_on_the_same_quoted_value_keep_one_span() {
 
 #[test]
 fn quoted_value_of_a_single_rule_is_the_value_span() {
-    // Only env_var_secret matches: its span is the value without the quotes (F-GEN2).
+    // env_var_secret reports the value without the quotes (F-GEN2); since T09
+    // password_assignment takes the compound key as well and yields to it on
+    // the same span.
     let (text, value) = fill("export DB_PASSWORD='<<secret:0>>'\n", "password", 41);
     let result = scan(&text);
     let spans = secret_spans(&result);
     assert_eq!(spans.len(), 1, "{:#?}", result.evidence_spans);
     assert_eq!(spans[0].start_byte, value.start);
     assert_eq!(spans[0].end_byte, value.end);
-    assert!(rule_matches(&result)
-        .iter()
-        .all(|(_, _, _, suppressed)| suppressed.is_none()));
+    for (rule_id, start, end, suppressed) in rule_matches(&result) {
+        assert_eq!((start, end), (value.start, value.end), "{rule_id}");
+        match rule_id.as_str() {
+            "dlp_env_var_secret" => assert_eq!(suppressed, None),
+            "dlp_password_assignment" => {
+                assert_eq!(suppressed.as_deref(), Some("dlp_env_var_secret"))
+            }
+            other => panic!("unexpected rule {other}"),
+        }
+    }
 }
 
 #[test]

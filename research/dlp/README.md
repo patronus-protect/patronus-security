@@ -98,6 +98,21 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   Markerwort am Wortende (`Eexampl0123!`) und behandelt einen generischen Wert aus mindestens
   32 Hex-Ziffern wie ein festes Format (`deadbeef…` ist ein Beispiel, `abcabcabcabc` bleibt ein
   schwaches echtes Passwort). Übergangslösung, bis K05 die Werte strukturell extrahiert.
+  Seit T09 beginnen `dlp_password_assignment`, `dlp_generic_credential_assignment`,
+  `dlp_csrf_token` und `dlp_password_hash` am Credential-Nomen ohne `\b`: zusammengesetzte
+  (`db_password`, `service_secret`) und camelCase-Schlüssel (`dbPassword`, `ClientSecret`,
+  `PasswordHash`) treffen, ein Nomen am Wortende (`mypassword`, `DBPASSWORD`) nicht
+  (`RuleMeta::key_gate`, `likeness::key_shape`). Zwischen Schlüssel und Wert stehen auch das
+  schließende Anführungszeichen eines Schlüssels (`"client_secret":`, `'password' =>`, escaped
+  `\"…\":`), ein Index (`os.environ["DB_PASSWORD"] =`), ein String-Typ (`: &str =`, `: string =`)
+  und XML `key="…" value="…"`; Werte in `\"…\"` (Notebook, JSON-String) zählen. Nach
+  zusammengesetzten oder gequoteten Schlüsseln muss der Wert zu einem Feld passen: kein Bezeichner
+  in Namenskonvention, kein Wort oder Name, keine Version (`^1.0.0`), kein Code, nach gequotetem
+  Schlüssel oder `=>` nicht ohne Anführungszeichen. Cursor-/Handle-Tokens (`nextPageToken`,
+  `continuation_token`) und Secret-Objekte (`existingSecret`, `tls_secret`) sind keine Credentials,
+  ein an der Fanggrenze von 150 Zeichen abgeschnittener Wert auch nicht. Wortgrenzen der Schlüssel
+  sind ASCII (`(?-u:\b)`), der Regex der generischen Regel läuft dadurch etwa 25-mal schneller.
+  Übergangslösung, bis K05/G02 die Schlüssel strukturell lesen.
   Seit K09 (Taxonomie v2) nennt jede Secret-Regel einen Untertyp ihrer Gruppe (`subtype` in
   `matched_rules`: `api_key`, `access_token`, `password`, `auth_url` …). Connection-Strings,
   Webhook-URLs, Auth-URLs, OTP-Secrets und Seed-Phrasen werden keine eigenen Gruppen, sondern

@@ -166,6 +166,9 @@ impl SecretSubtype {
     }
 }
 
+/// T09: key gate of a key-anchored rule, see [`RuleMeta::key_gate`].
+pub type KeyGate = fn(&str, usize, Range<usize>) -> bool;
+
 /// Rule metadata v2 (K02). Matches report `provider`, `validator_strength`,
 /// `source_ref` and, for secret rules, `severity` and `subtype` (K09) in
 /// `matched_rules`.
@@ -208,6 +211,11 @@ pub struct RuleMeta {
     /// and credential names after a generic key. `None` for rules whose
     /// value shape suffices.
     pub value_gate: Option<fn(&str, Range<usize>) -> bool>,
+    /// Key shape a key needs (T09): called with the text, the byte offset
+    /// where the match (the credential noun of the key) starts and the
+    /// value's byte range; reads a compound or camelCase prefix before the
+    /// noun. `None` for rules whose key is matched in full.
+    pub key_gate: Option<KeyGate>,
 }
 
 /// F03: the fixed body length of a prefix rule.
@@ -250,6 +258,7 @@ impl RuleMeta {
             context_gate: None,
             value_gate: None,
             body_len: None,
+            key_gate: None,
         }
     }
 
@@ -266,6 +275,14 @@ impl RuleMeta {
     pub const fn with_value_gate(self, gate: fn(&str, Range<usize>) -> bool) -> Self {
         Self {
             value_gate: Some(gate),
+            ..self
+        }
+    }
+
+    /// T09: the key counts only where `gate` accepts its shape.
+    pub const fn with_key_gate(self, gate: KeyGate) -> Self {
+        Self {
+            key_gate: Some(gate),
             ..self
         }
     }
@@ -759,7 +776,8 @@ impl NativeRegexDetector for DlpPipeline {
 
     /// Drops prefix-rule values that are no whole token (T01), values
     /// without the context their rule needs (F01), code expressions, words
-    /// and credential names after generic keys (F-GEN1), generic
+    /// and credential names after generic keys (F-GEN1), compound keys of
+    /// the wrong shape (T09), generic
     /// assignments whose key is a URL userinfo (K08), values
     /// below the rule's entropy floor (K02), documented example
     /// and test values of secret rules (T06), vendor-documented example values
@@ -772,12 +790,17 @@ impl NativeRegexDetector for DlpPipeline {
         captures: &regex::Captures<'_>,
     ) -> bool {
         let text = prepared.text();
-        // K08: a generic key that is the userinfo of a URL (`https://token:…@`)
-        // belongs to the URL credential, also when that has no value to report.
+        // K08: a generic key that is the userinfo of a URL (`https://token:…@`,
+        // since T09 also `https://github_token:…@`) belongs to the URL
+        // credential, also when that has no value to report.
         if self.tiers[index] == Some(OverlapTier::Generic)
-            && captures
-                .get(0)
-                .is_some_and(|matched| text[..matched.start()].ends_with("://"))
+            && captures.get(0).is_some_and(|matched| {
+                text[..matched.start()]
+                    .trim_end_matches(|c: char| {
+                        c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-')
+                    })
+                    .ends_with("://")
+            })
         {
             return false;
         }
@@ -803,6 +826,14 @@ impl NativeRegexDetector for DlpPipeline {
         if let Some(gate) = meta.value_gate {
             if let Some(value) = self.value(index, captures) {
                 if !gate(text, value.range()) {
+                    return false;
+                }
+            }
+        }
+        // T09: a compound or camelCase key must have the shape of one.
+        if let Some(gate) = meta.key_gate {
+            if let (Some(key), Some(value)) = (captures.get(0), self.value(index, captures)) {
+                if !gate(text, key.start(), value.range()) {
                     return false;
                 }
             }
