@@ -333,6 +333,16 @@ Prüfziffer bleiben in `strict` primär.
 
 ## Ausführung: systemd-Timer auf der VPS → Stacked Branch
 
+> **Seit 2026-10-23 flach und durchgehend.** Jede Aufgabe baut auf `main` auf (kein Stacking mehr);
+> `publish` wartet bis zu 20 Minuten auf den automatischen Codex-Review und mergt den grünen PR noch im
+> selben Lauf, wenn kein Thread offen ist. Offene Threads oder rote CI übernimmt der nächste Lauf als
+> `REVIEW:<branch>` und mergt danach ebenso. Konflikte mit `main` löst `restack` (Rebase, sonst
+> `RESTACK:<branch>`). Eine Aufgabe mit offenem PR wird nicht erneut gewählt. Während `ci` auf GitHub
+> wartet und beim Publizieren gibt der Lauf das gemeinsame Lock frei, sodass das andere Programm schon
+> arbeitet. Die Timer starten den nächsten Lauf 3 Minuten nach dem Ende des vorigen
+> (`OnUnitInactiveSec=3min`); belegte Locks reihen ein. Die Beschreibung unten zu Stacks gilt nur noch
+> für alte, gestapelte PRs.
+
 Eine Claude-Cloud-Routine kommt nicht auf die VPS (Port 22 aus der Cloud gesperrt). Deshalb plant
 die VPS selbst, und nur die VPS: `ark-l1.timer` startet alle 2 Stunden zu geraden Stunden `runner/run.sh`,
 `ark-dlp.timer` zu ungeraden Stunden `runner/run.sh --program dlp`. Beide teilen ein Lock; ist es belegt,

@@ -1,8 +1,10 @@
 [Unit]
-Description=ARK L1-PII runs every 2 hours at even hours :00 (shared run lock with L1-DLP; a busy lock skips the run)
+Description=ARK L1-PII runs back to back (next run 3 minutes after the previous one ends; shared run lock with the other programme, a busy lock queues the run)
 
 [Timer]
-OnCalendar=*-*-* 00/2:00:00
+OnActiveSec=1min
+OnBootSec=2min
+OnUnitInactiveSec=3min
 Persistent=false
 
 [Install]

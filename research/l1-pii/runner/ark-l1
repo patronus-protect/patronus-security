@@ -242,7 +242,7 @@ def nothing(reason: str) -> int:
 
 
 def restack(open_prs: list[dict]) -> tuple[tuple[str, str], dict | None]:
-    """Rebase open stack branches whose recorded parent moved.
+    """Keep the open task PRs mergeable on main (flat: each PR is based on main, not on another).
 
     Returns ((top_name, top_sha), conflict); conflict describes the first branch whose rebase did
     not apply cleanly (the branches above it stay untouched until it is resolved)."""
@@ -308,7 +308,8 @@ def restack(open_prs: list[dict]) -> tuple[tuple[str, str], dict | None]:
                 print(f"WARN=base of #{pr['number']} not changed to {prev_name}: "
                       f"{str(err).strip().splitlines()[-1]}")
                 move_stale_base(pr, prev_name, prev_sha, {p["headRefName"] for p in open_prs})
-        prev_name, prev_sha = name, head
+        # Flat since 2026-10-23: every task PR targets main, none builds on another one; a PR is
+        # rebased only when GitHub reports a conflict with main (or its recorded base is a branch).
     for name in list(stack):
         if name not in {p["headRefName"] for p in open_prs}:
             del stack[name]
@@ -460,7 +461,14 @@ def done_on_main(ref: str) -> bool:
     return task_id in MAIN_DONE[program]
 
 
-def pick(backlog: dict, blocked: dict) -> dict | None:
+def task_of_branch(branch: str) -> str:
+    """`l1/042-b-iban` -> `b-iban`: the lower-cased task id a task branch was created for."""
+    m = re.match(rf"{re.escape(BRANCH_PREFIX)}\d+-(.+)$", branch)
+    return m.group(1) if m else ""
+
+
+def pick(backlog: dict, blocked: dict, in_flight: set[str] = frozenset()) -> dict | None:
+    """First selectable task; `in_flight` holds lower-cased ids that already have an open PR."""
     tasks = backlog.get("tasks", [])
     done = {t["id"] for t in tasks if t.get("status") == "done"}
     today = dt.date.today()
@@ -469,7 +477,7 @@ def pick(backlog: dict, blocked: dict) -> dict | None:
         rec = next(r for r in backlog.get("recurring", []) if r["id"] == "TRIAGE")
         return {**rec, "type": "triage", "week": week}
     for t in tasks:
-        if t.get("status", "todo") != "todo" or t["id"] in blocked:
+        if t.get("status", "todo") != "todo" or t["id"] in blocked or t["id"].lower() in in_flight:
             continue
         if t.get("needs_decision"):
             continue
@@ -560,6 +568,55 @@ def merge_async(number: int, head: str) -> str:
     if status == "failed":
         return f"failed: {(out.get('details') or {}).get('message', '')}"
     return status if status == "merged" else "pending"
+
+
+CODEX_LOGIN = "chatgpt-codex-connector[bot]"
+CODEX_WAIT = 20 * 60     # seconds to wait for the automatic Codex review of a new PR
+CODEX_POLL = 30
+
+
+def codex_reviewed(number: int, head: str) -> bool:
+    """True once the Codex review summary on the PR reports a completed review of `head`."""
+    out = run(["gh", "api", f"repos/{GH_REPO}/issues/{number}/comments", "--paginate", "--jq",
+               f'[.[] | select(.user.login == "{CODEX_LOGIN}") | .body]'], check=False)
+    try:
+        bodies = json.loads(out or "[]")
+    except ValueError:
+        return False
+    for body in bodies:
+        for raw in re.findall(r"codex-review-state:v1 (\{.*?\}) -->", body or "", re.S):
+            try:
+                review = json.loads(raw).get("code_review") or {}
+            except ValueError:
+                continue
+            if review.get("commit_sha") == head and review.get("status") == "completed":
+                return True
+    return False
+
+
+def land(number: int, head: str, wait_for_codex: bool = True) -> None:
+    """Merge a just-published, green PR in the same run instead of stacking the next task on it.
+
+    A new PR gets an automatic Codex review: wait for it (CODEX_WAIT), and leave the PR open when
+    it opened threads; the next run turns them into a REVIEW task and lands the fix the same way.
+    A Codex review that never completes does not block the merge."""
+    if not AUTO_MERGE:
+        return
+    label = f"#{number}"
+    deadline = dt.datetime.now() + dt.timedelta(seconds=CODEX_WAIT if wait_for_codex else 0)
+    while wait_for_codex and dt.datetime.now() < deadline and not codex_reviewed(number, head):
+        if open_review_threads(number):
+            break
+        subprocess.run(["sleep", str(CODEX_POLL)])
+    threads = open_review_threads(number)
+    if threads:
+        print(f"LAND_WAIT={label} {threads} unresolved review thread(s); the next run reviews them")
+        return
+    result = merge_async(number, head)
+    if result == "merged":
+        print(f"LANDED={label}")
+    else:
+        print(f"LAND_WAIT={label} merge {result}; the next run's auto-merge retries")
 
 
 def wait_for_retarget(merged_branch: str) -> None:
@@ -656,7 +713,8 @@ def cmd_next() -> int:
     backlog = backlog_at(top_sha)
     if backlog is None:
         return nothing(f"NO_BACKLOG on {top_name}")
-    task = pick(backlog, load(BLOCKED, {}))
+    in_flight = {task_of_branch(p["headRefName"]) for p in open_prs}
+    task = pick(backlog, load(BLOCKED, {}), in_flight)
     if task is None:
         return nothing("NOTHING_TO_DO")
 
@@ -1012,6 +1070,11 @@ def cmd_publish() -> int:
     save(STACK, stack)
     drop_worktree(cur)
     print(f"PR={url}")
+    try:
+        number = int(url.rstrip("/").rsplit("/", 1)[-1])
+        land(number, head)
+    except (RuntimeError, ValueError) as err:
+        print(f"WARN=landing {url} failed: {str(err).strip().splitlines()[-1] if str(err).strip() else err}")
     return 0
 
 
@@ -1081,6 +1144,11 @@ def publish_review(cur: dict) -> int:
         return 1
     drop_worktree(cur)
     print(f"REVIEWED={cur['branch']} threads={len(task.get('threads', []))}\nPR={task['pr']}")
+    try:
+        # Codex does not review follow-up pushes on its own; merge once the threads are resolved.
+        land(task["number"], head, wait_for_codex=False)
+    except (RuntimeError, ValueError) as err:
+        print(f"WARN=landing {task['pr']} failed: {str(err).strip().splitlines()[-1] if str(err).strip() else err}")
     return 0
 
 
@@ -1133,9 +1201,10 @@ def cmd_status() -> int:
         print(f"  #{p['number']} {p['headRefName']} ← {p['baseRefName']}  {p['url']}")
     print("Blocked:", json.dumps(load(BLOCKED, {}), indent=2, ensure_ascii=False))
     print("Current:", load(CURRENT, None))
-    top = open_prs[-1]["headRefOid"] if open_prs else "origin/main"
-    backlog = backlog_at(top)
-    task = pick(backlog, load(BLOCKED, {})) if backlog else None
+    # Same choice as `next`: flat tasks start from main and skip tasks that already have a PR.
+    backlog = backlog_at("origin/main")
+    in_flight = {task_of_branch(p["headRefName"]) for p in open_prs}
+    task = pick(backlog, load(BLOCKED, {}), in_flight) if backlog else None
     print("Next:", task and f"{task['id']} {task.get('title', '')}")
     return 0
 
