@@ -335,12 +335,16 @@ def test_cli_count_json_and_check(tmp_path):
         "country": "de",
         "sources": ["pii_steuer_id_de: steuer_id", "pii_steuer_id_de_context_free: steuer_id_issued"],
     } in payload["ark"]["units"]
-    # B01: one VAT unit per country, the bare Partita IVA rule shares the IT validator.
+    # B01/B02: one VAT unit per country, the bare Partita IVA rule shares the IT validator.
     vat = {unit["entity_id"]: unit for unit in payload["ark"]["units"] if unit["entity_id"].endswith((".vat_id", ".vat_code"))}
     assert sorted(vat) == [
-        "pii.at.vat_id", "pii.be.vat_id", "pii.ch.vat_id", "pii.de.vat_id",
-        "pii.es.vat_id", "pii.fr.vat_id", "pii.it.vat_code", "pii.nl.vat_id",
+        "pii.at.vat_id", "pii.be.vat_id", "pii.bg.vat_id", "pii.ch.vat_id", "pii.cy.vat_id",
+        "pii.cz.vat_id", "pii.de.vat_id", "pii.dk.vat_id", "pii.ee.vat_id", "pii.es.vat_id",
+        "pii.fi.vat_id", "pii.fr.vat_id", "pii.gr.vat_id", "pii.hr.vat_id", "pii.hu.vat_id",
+        "pii.ie.vat_id", "pii.it.vat_code", "pii.lt.vat_id", "pii.nl.vat_id",
     ]
+    # B02: the Greek rule keeps the VIES prefix EL, the benchmark ID follows ISO 3166 (gr).
+    assert vat["pii.gr.vat_id"]["sources"] == ["pii_vat_id_el: el_vat_id"]
     assert vat["pii.it.vat_code"]["sources"] == ["pii_vat_id_it: it_vat_id", "pii_vat_id_it_proximity: it_vat_id"]
     # F08: German passport and identity card (ICAO 9303 7-3-1) count per country; the
     # field-bound rules keep the format-only de_document_number.
