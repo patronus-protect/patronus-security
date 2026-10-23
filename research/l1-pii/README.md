@@ -148,6 +148,16 @@ und Ausweisfunde konkurrieren in den Score-Modi mit überlappenden Funden jedes 
 und hebt jetzt den kontextfreien Wert auf 0,80; die `strict`-Regel kennt den Feldnamen weiter nicht
 (B-PASS).
 
+Stand F15: Führerschein DE, US und IT (Baseline P6) sind drei feldgebundene Regeln mit einem
+gemeinsamen Feldteil (`rust/src/detectors/pii/driver_license.rs`): ein Führerschein-Feldname auf
+DE, EN, IT, FR, ES oder NL vor dem Wert oder als Strukturschlüssel, Prosa wie „my driver's license
+number is“, „of“, „lautet“ oder „è“ dazwischen. Der Wert entscheidet die Regel: elf Zeichen
+(`pii_driver_license_number_de`), ein Format der US-Bundesstaaten (`validators::us_driver_license_number`,
+Zifferngruppen auch mit Bindestrich, kein Datum) oder die Patente (`it_driver_license_number`). Keines
+der Formate trägt eine Prüfziffer (M3 unverändert); ein Wert ohne Führerschein-Feldnamen bleibt in
+jedem Modus negativ, auch die blanken Werte der presidio-analyzer-Tests (`H12234567`, `KO12345678X`).
+Der UK-Führerschein (`MORGA657054SM9IJ`, 5 der 14 `presidio_favored`-Gold-Werte) kommt mit B-UK.
+
 ## Gold-Konvention: Platzhalter-Werte
 
 Entschieden am 2026-10-14 (T01, TRIAGE 2026-W42 Bucket 5): Reservierte Platzhalter sind PII und im

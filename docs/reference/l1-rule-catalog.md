@@ -4,7 +4,7 @@
 
 These are the stable rule IDs accepted by execution-gate `rules`. Missing IDs inherit the shared Rust/Python/API defaults below. Model gates such as `native:pii`, `native:dlp`, `native:injection_l1`, and `native:threat_l1` control complete producers; rule gates control individual entries below.
 
-## PII rules (54)
+## PII rules (56)
 
 All PII rules are eligible by default when PII L1 is enabled.
 
@@ -50,6 +50,8 @@ In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `
 | `pii_passport_number_de` | `PASSPORT_NUMBER` | yes | format | 40 | field or key | 0.80 |
 | `pii_identity_card_number_de` | `IDENTITY_CARD_NUMBER` | yes | format | 40 | field or key | 0.80 |
 | `pii_driver_license_number_de` | `DRIVER_LICENSE_NUMBER` | yes | format | 35 | field or key | 0.75 |
+| `pii_driver_license_number_us` | `DRIVER_LICENSE_NUMBER` | yes | format | 25 | field or key | 0.65 |
+| `pii_driver_license_number_it` | `DRIVER_LICENSE_NUMBER` | yes | format | 30 | field or key | 0.70 |
 | `pii_kfz_kennzeichen_de` | `LICENSEPLATE` | no | none | 40 | field or key | 0.65 |
 | `pii_ssn_us` | `SSN` | yes | format | 45 | field or key | 0.85 |
 | `pii_ni_uk` | `NATIONALID` | yes | format | 50 | field or key | 0.90 |

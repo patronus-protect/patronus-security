@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-use std::net::IpAddr;
+use std::{net::IpAddr, sync::LazyLock};
 
 /// Validate an IPv4 or IPv6 candidate matched by a PII regex. The span may end in a
 /// CIDR prefix length (`/0`–`/32`, `/0`–`/128`) and an IPv6 address in a zone ID
@@ -512,6 +512,69 @@ pub fn de_identity_card_number(s: &str) -> bool {
 
 pub fn de_driver_license_number(s: &str) -> bool {
     s.len() == 11 && s.chars().all(|ch| ch.is_ascii_alphanumeric())
+}
+
+/// The US state formats of a driver's licence number (F15), without the hyphens
+/// that group its digits: the letter and digit runs that presidio-analyzer's
+/// `UsLicenseRecognizer` lists after ntsi.com/drivers-license-format, from one
+/// letter and four digits up, and Washington's `WDL` plus nine characters. Six to
+/// fourteen digits alone are a format too (New York, Texas, Pennsylvania …).
+static US_DRIVER_LICENSE_FORMATS: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(
+        r"\A(?:[A-Z][0-9]{4,14}|[A-Z]{2}[0-9]{3,7}|[0-9]{6,14}|[0-9]{7,9}[A-Z]|[0-9]{8}[A-Z]{2}|[A-Z]{2}[0-9]{6}[A-Z]|[0-9]{3}[A-Z]{2}[0-9]{4}|[0-9]{2}[A-Z]{3}[0-9]{5,6}|WDL[A-Z0-9]{9})\z",
+    )
+    .unwrap()
+});
+
+/// US driver's licence number in a state format (F15). Format only: no state
+/// publishes a check digit. A hyphenated calendar date (`2031-04-30`,
+/// `30-04-2031`, `04-30-2031`, an expiry next to the field name) is no licence
+/// number.
+pub fn us_driver_license_number(s: &str) -> bool {
+    let parts: Vec<&str> = s.split('-').collect();
+    let date = match parts[..] {
+        [first, second, third] => match (
+            first.parse::<u16>(),
+            second.parse::<u8>(),
+            third.parse::<u16>(),
+        ) {
+            (Ok(first_value), Ok(month_or_day), Ok(third_value)) => {
+                let year = if third.len() == 2 {
+                    1900 + third_value
+                } else {
+                    third_value
+                };
+                (first.len() == 4
+                    && u8::try_from(third_value)
+                        .is_ok_and(|day| valid_date(day, month_or_day, first_value)))
+                    || u8::try_from(first_value).is_ok_and(|value| {
+                        valid_date(value, month_or_day, year)
+                            || valid_date(month_or_day, value, year)
+                    })
+            }
+            _ => false,
+        },
+        _ => false,
+    };
+    !date && US_DRIVER_LICENSE_FORMATS.is_match(&parts.concat())
+}
+
+/// Italian patente (F15): two letters, seven digits and a letter on the card
+/// (`RM5512345K`), or `U1`, seven characters without the letters A, I, O, Q and V,
+/// and a letter on the paper licence (`U1H34K56LX`). Format only.
+pub fn it_driver_license_number(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    let card = bytes.len() == 10
+        && bytes[..2].iter().all(u8::is_ascii_uppercase)
+        && bytes[2..9].iter().all(u8::is_ascii_digit)
+        && bytes[9].is_ascii_uppercase();
+    let paper = bytes.len() == 10
+        && bytes.starts_with(b"U1")
+        && bytes[2..9]
+            .iter()
+            .all(|byte| byte.is_ascii_digit() || b"BCDEFGHJKLMNPRSTUWXYZ".contains(byte))
+        && bytes[9].is_ascii_uppercase();
+    card || paper
 }
 
 pub fn us_ssn(s: &str) -> bool {

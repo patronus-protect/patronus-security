@@ -9,7 +9,7 @@ use crate::{
 use super::context::Evidence;
 use super::context_anchors::PII_ANCHOR_PATTERNS;
 use super::score::{self, PiiMode, ValidatorStrength};
-use super::{common, context, de, identifiers, intl, overlap, uk, us, vat};
+use super::{common, context, de, driver_license, identifiers, intl, overlap, uk, us, vat};
 use crate::detectors::anchors;
 use crate::detectors::obfuscation::{Deobfuscated, Level};
 use crate::EvidenceSpan;
@@ -81,7 +81,9 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     de::PHYSICIAN_NUMBER_LANR,
     de::PASSPORT_NUMBER,
     de::IDENTITY_CARD_NUMBER,
-    de::DRIVER_LICENSE_NUMBER,
+    driver_license::DE,
+    driver_license::US,
+    driver_license::IT,
     de::KFZ_KENNZEICHEN,
     us::SSN,
     uk::NINO,

@@ -3,6 +3,7 @@ mod common;
 pub mod context;
 mod context_anchors;
 mod de;
+mod driver_license;
 mod identifiers;
 mod intl;
 pub mod overlap;

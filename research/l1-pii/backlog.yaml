@@ -413,6 +413,7 @@ tasks:
 
   # M1 driver's licence (neutral 0 vs 7.8, presidio_favored 0 vs 90)
   - id: F15
+    status: done
     title: "Driver's licence DE + US states + IT patente with context (incl. \"my driver's license number is …\")"
     type: recall-fix
     deps: [K03, B-EVAL]

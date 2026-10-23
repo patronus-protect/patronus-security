@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! German national identifiers: phone numbers, Steuer-ID, Steuernummer, social and health
-//! insurance numbers, LANR, passport, identity card, driving licence, vehicle registration.
+//! insurance numbers, LANR, passport, identity card, vehicle registration. The driving
+//! licence lives in `driver_license` with the other licence formats.
 use super::{pii::PiiPattern, score::ValidatorStrength, validators};
 
 // ── Telefon ──────────────────────────────────────────────────────────────────
@@ -206,18 +207,6 @@ pub(super) const IDENTITY_CARD_NUMBER_LEGACY: PiiPattern = PiiPattern {
     captured_value: false,
     requires_context: true,
     scored_only: true,
-};
-
-pub(super) const DRIVER_LICENSE_NUMBER: PiiPattern = PiiPattern {
-    name: "pii_driver_license_number_de",
-    pattern: r"(?i)\b(?:f(?:ü|ue)hrerschein(?:nummer)?|fahrerlaubnis(?:nummer)?|driver'?s?[ \t]+licen[cs]e[ \t]+number)\b[ \t]*(?:is[ \t]*)?[:#=\-]?[ \t]*(?P<value>[A-Z0-9]{11})\b",
-    entity_group: "DRIVER_LICENSE_NUMBER",
-    validator: Some(validators::de_driver_license_number),
-    strength: ValidatorStrength::Format,
-    base_score: 35,
-    captured_value: true,
-    requires_context: false,
-    scored_only: false,
 };
 
 pub(super) const KFZ_KENNZEICHEN: PiiPattern = PiiPattern {

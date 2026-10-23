@@ -141,6 +141,36 @@ Ark-API-only `SecurityGateway::enqueue_ark_api_categories_with_options` and
 
 ### Added
 
+- Driver's licence numbers for Germany, the US states and Italy (F15, baseline P6). The German rule
+  `pii_driver_license_number_de` moves to `rust/src/detectors/pii/driver_license.rs` and two rules
+  join it: `pii_driver_license_number_us` (a state format, `validators::us_driver_license_number`:
+  the letter/digit runs of presidio-analyzer's US recognizer from one letter and four digits up, six
+  to fourteen digits, Washington `WDL…`; digit groups may be joined by hyphens, a hyphenated
+  calendar date is rejected) and `pii_driver_license_number_it` (patente `RM5512345K` or paper
+  licence `U1H34K56LX`, `validators::it_driver_license_number`). All three share one field part: a
+  licence field name in DE, EN, IT, FR, ES or NL (`Führerschein-Nr.`, `Fahrerlaubnisnummer`,
+  `driving licence no.`, `DL number`, `numero di patente`, `patente di guida`, `permis de conduire`,
+  `licencia de conducir`, `rijbewijsnummer`) before the value or as its structural key, with prose
+  such as "my driver's license number is", "of", "lautet" or "è" in between. The `pii.driver_license`
+  lexicon gains the curly-apostrophe and `DL` terms and FR/ES/IT/NL lists. None of the formats has a
+  check digit (`entity_map.yaml`: format only, M3 unchanged). **Detection change:** in every mode
+  licence numbers after a licence field name are new findings (strict scores 1.0, balanced 0.65 US,
+  0.70 IT, 0.75 DE), also a US or Italian value after a German field name; a number without a
+  licence field name stays silent in every mode, so the bare presidio-analyzer values (`H12234567`,
+  `KO12345678X`) remain misses. Dev scoreboard vs. base (PASS, no new hard-negative FP): driver's
+  licence F1 neutral 0.0 → 37.1 (tuned 6.2), presidio_favored 0.0 → 52.6 (tuned 78.3; the gap is the
+  five UK licences of B-UK, without them 71.4 vs. 61.5), ark_authored 41.4 → 72.2, identical in
+  strict and balanced; L1 F1 +0.7 pp in both modes. `12_l1_pii_fixture_eval` closes its US licence
+  miss (F1 0.9857 → 0.9929). The golden negative `Driver's license number: D123456789` was a valid US
+  format and becomes a positive (`pii_l1` keeps its id with a letters-only value); the two known
+  gaps `… lautet J0101234K57` and `Driving licence no.: …` close. `pii_l1.jsonl` gains 53 rows (US,
+  IT incl. Italian, FR/ES/NL). Existing validators are unchanged. The field part uses ASCII word
+  boundaries so the regexes keep the DFA on German text: 0.18 ms per rule on the 100 KiB DE workload
+  (the old DE rule 0.3 ms); `latency.py compare` ark-native 100 KiB p95 149.3 → 138.3 ms (PASS, noise).
+- `validators::us_driver_license_number` also rejects a month-day-year date (`04-30-2031`,
+  `04-30-31`), which it took before as six to fourteen digits once the hyphens were removed.
+  **Detection change:** in every mode a US-style expiry date after a licence field name is no longer
+  reported as a US licence number.
 - Pass the dynamic PII labels per scan request (#146). The Ark API scan `config` takes an optional
   `dynamic_pii` block with the shape of `pipeline.dynamic_pii` — `labels` (required), `threshold`,
   `label_thresholds`, `execution_gate` and `conditional_labels` — that replaces the worker's
