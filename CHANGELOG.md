@@ -64,6 +64,20 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Pass the dynamic PII labels per scan request (#146). The Ark API scan `config` takes an optional
+  `dynamic_pii` block with the shape of `pipeline.dynamic_pii` — `labels` (required), `threshold`,
+  `label_thresholds`, `execution_gate` and `conditional_labels` — that replaces the worker's
+  labels, thresholds and gates for that request only; input limits, chunking and timeouts stay
+  those of the worker. The block needs `dynamic-pii` among the request's categories, is validated
+  like the server config plus a 64-byte limit per label, and an invalid block is rejected with
+  `422`. The ARK Coordinator passes the block through to the worker. In Rust,
+  `DynamicPiiRequestConfig::resolve` builds the request config from the gateway's and
+  `SecurityGateway::enqueue_ark_api_categories_with_request_options` queues a request with it.
+  Requests with different label lists never share results: the config travels with the
+  request's dynamic PII job, and the GLiNER chunk cache keys include the inference labels.
+  **Detection change:** none without the block; with it, `dynamic-pii` reports the requested
+  labels (for example `street_address`) instead of the worker's defaults.
+
 - Add ICAO 9303 check digits for German passport and identity card numbers (F08), one validator per
   document (weights 7-3-1, `A`=10 … `Z`=35): `validators::de_passport_number` (series `C F G H J K`)
   and `validators::de_identity_card_number` (series `L M N P R T V W X Y`), each for eight characters

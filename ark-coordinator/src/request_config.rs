@@ -17,6 +17,9 @@ pub struct RequestScanConfig {
     metadata: Value,
     #[serde(default)]
     ntdb_operating_point: Option<String>,
+    /// Request-local `dynamic-pii` labels; the ARK worker validates the block.
+    #[serde(default)]
+    dynamic_pii: Option<Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -212,6 +215,13 @@ impl RequestScanConfig {
         }
         if let Some(gates) = &self.gates {
             gates.validate()?;
+        }
+        if self
+            .dynamic_pii
+            .as_ref()
+            .is_some_and(|dynamic_pii| !dynamic_pii.is_object())
+        {
+            return Err("config.dynamic_pii must be a JSON object".into());
         }
         Ok(())
     }
@@ -431,5 +441,25 @@ mod tests {
         }))
         .unwrap();
         assert!(bad_policy.validate().is_err());
+    }
+
+    #[test]
+    fn dynamic_pii_block_passes_through_to_the_worker() {
+        let config: RequestScanConfig = serde_json::from_value(serde_json::json!({
+            "categories": ["dynamic-pii"],
+            "dynamic_pii": {"labels": ["street_address"]}
+        }))
+        .unwrap();
+        assert!(config.validate().is_ok());
+
+        let config: RequestScanConfig = serde_json::from_value(serde_json::json!({
+            "categories": ["dynamic-pii"],
+            "dynamic_pii": ["street_address"]
+        }))
+        .unwrap();
+        assert_eq!(
+            config.validate().unwrap_err(),
+            "config.dynamic_pii must be a JSON object"
+        );
     }
 }
