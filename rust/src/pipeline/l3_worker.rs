@@ -1209,7 +1209,10 @@ fn abort_queued_l3_jobs_for_request(worker: &Arc<L3WorkerState>, request_id: &st
 }
 
 fn request_wide_degraded_result(job: L3WorkerJob, reason: &str) -> SecurityScanResult {
-    let mut result = job.fallback;
+    let mut result = crate::pipeline::security::restore_l2_decision(
+        job.fallback,
+        job.execution.ntdb_decision_threshold_point(),
+    );
     result.confidence = (result.confidence * job.degraded_factor).clamp(0.0, 1.0);
     for layer in &mut result.layers {
         if layer.level == result.level && layer.layer_type != "l3_pending" {

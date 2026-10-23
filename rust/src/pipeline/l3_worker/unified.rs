@@ -1494,7 +1494,10 @@ fn materialize_unified_request_wide_skip(
     subscriber: &L3JobSpec,
     reason: &str,
 ) -> SecurityScanResult {
-    let mut result = subscriber.fallback.clone();
+    let mut result = crate::pipeline::security::restore_l2_decision(
+        subscriber.fallback.clone(),
+        subscriber.execution.ntdb_decision_threshold_point(),
+    );
     result.confidence = (result.confidence * subscriber.degraded_factor).clamp(0.0, 1.0);
     for layer in &mut result.layers {
         if layer.level == result.level && layer.layer_type != "l3_pending" {

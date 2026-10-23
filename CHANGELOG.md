@@ -284,6 +284,16 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Fixed
 
+- Return the decision envelope on NTDB L2 decision-cache hits and when a deferred L3 pass is
+  skipped (#100). A repeated scan within the cache TTL returned the cached class and confidence
+  with `decision: None` and without `label_scores` and `evidence_spans`; the cache now stores
+  them with the entry, so a hit equals the miss it replays apart from the cache diagnostics. A
+  result whose L2 pass routed to L3 also lost its decision when L3 then did not run (the
+  caller's conditional gate skipped it, or a request-wide early exit degraded it); the L2
+  arbitration is now restored as the final decision (`terminality.completion` `degraded` after
+  an early exit). **Detection change:** none; classes and confidences are unchanged, and the
+  affected results carry the decision a terminal L2 result carries.
+
 - Fix the K07 `iban_form` suppression for findings that start at the printed IBAN form. In
   `balanced` and `recall`, an account field over a failing grouped IBAN (`Bank account: DE00 1234 …`)
   reported its country code and check digits as `FINANCIAL_ACCOUNT_NUMBER`, because containment

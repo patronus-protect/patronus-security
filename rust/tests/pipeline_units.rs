@@ -570,17 +570,14 @@ mod ntdb_l2_results {
     use patronus_ark::ml::ntdb_executor::{ByteSpan, L2ChunkOutput, L3Candidate, NtdbDecision};
     use patronus_ark::pipeline::test_util::{
         ntdb_l2_enabled_for_category, ntdb_l2_model_config_for_id,
-        ntdb_l2_model_configs_for_category, ntdb_l2_scan_result,
+        ntdb_l2_model_configs_for_category, ntdb_l2_scan_result, restore_l2_decision,
     };
     use patronus_ark::{
         L3SchedulerPolicy, ScanExecution, ScanGateMatrix, SecurityCategory, SecurityLevel,
     };
 
-    #[test]
-    fn ntdb_l2_promote_result_preserves_old_api_model_and_queues_l3() {
-        let mut execution = ScanExecution::new(SecurityLevel::L3);
-        execution.set_defer_l3(true);
-        let decision = NtdbDecision {
+    fn routed_injection_decision() -> NtdbDecision {
+        NtdbDecision {
             model_id: "injection".to_string(),
             aggregator_id: "router".to_string(),
             task: "binary_promote".to_string(),
@@ -650,7 +647,14 @@ mod ntdb_l2_results {
                     joint_v3_decision: None,
                 },
             ],
-        };
+        }
+    }
+
+    #[test]
+    fn ntdb_l2_promote_result_preserves_old_api_model_and_queues_l3() {
+        let mut execution = ScanExecution::new(SecurityLevel::L3);
+        execution.set_defer_l3(true);
+        let decision = routed_injection_decision();
 
         let config = ntdb_l2_model_config_for_id("injection").unwrap();
         let result = ntdb_l2_scan_result(config, &decision, &execution, 4.0);
@@ -691,6 +695,35 @@ mod ntdb_l2_results {
             .layers
             .iter()
             .any(|layer| layer.layer_type == "l3_pending"));
+    }
+
+    #[test]
+    fn skipped_l3_restores_the_l2_decision() {
+        let decision = routed_injection_decision();
+        let config = ntdb_l2_model_config_for_id("injection").unwrap();
+        let mut deferred = ScanExecution::new(SecurityLevel::L3);
+        deferred.set_defer_l3(true);
+        let pending = ntdb_l2_scan_result(config, &decision, &deferred, 4.0);
+        assert!(
+            pending.decision.is_none(),
+            "L2 withholds its decision while L3 is pending"
+        );
+        let l2_only = ntdb_l2_scan_result(
+            config,
+            &decision,
+            &ScanExecution::new(SecurityLevel::L2),
+            4.0,
+        );
+        let expected = l2_only
+            .decision
+            .clone()
+            .expect("a terminal L2 result carries a decision");
+
+        let restored = restore_l2_decision(pending, deferred.ntdb_decision_threshold_point());
+
+        assert_eq!(restored.class_name, l2_only.class_name);
+        assert_eq!(restored.confidence, l2_only.confidence);
+        assert_eq!(restored.decision, Some(expected));
     }
 
     #[test]
