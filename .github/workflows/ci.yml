@@ -4,7 +4,7 @@ on:
   pull_request:
   push:
     # l1/** and dlp/**: the scheduled runners open a PR only after CI is green on the pushed branch.
-    branches: [main, "l1/**", "dlp/**"]
+    branches: [main, "release/**", "l1/**", "dlp/**"]
 
 jobs:
   rust:
