@@ -127,6 +127,23 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   `__Host-`/`__Secure-`) zählen auch ohne `Cookie:`-Zeile, generische Namen (`session`,
   `sessionid`, `sid`) weiter nur darin; der Wert muss wie eine ausgestellte Session-ID aussehen.
   Das RFC-7617-Beispiel ist ein dokumentierter Beispielwert (K06).
+  Seit K05 (Teil 1) lesen die generischen Schlüsselregeln (`dlp_env_var_secret`,
+  `dlp_password_assignment`, `dlp_generic_credential_assignment`) Config-Zeilen strukturell
+  (`dlp/config_keys.rs` auf der `key: value`/`key=value`-Grammatik von PII K04): env
+  (`KEY=value`, `export KEY=value`), INI/properties (`key = value`, `app.db.password=…`) und
+  HTTP-Header im Kopf einer Anfrage oder Antwort. Der Schlüssel bindet den Wert über dieselbe
+  Schlüsselgrammatik und dasselbe Key-Gate wie die Regex; ein Wert ohne Anführungszeichen läuft bis
+  zum Zeilenende oder Inline-Kommentar (`␣#`, `␣;`), mit `;`, `,`, `}` darin. Kein Config-Wert
+  sind Werte mit Leerzeichen, Anführungszeichen oder Interpolation darin, mit `,`/`;` am Ende und
+  env-Werte mit `;` (bleiben bei der Shell-Logik der Regex). Vor jeder Bindung durch einen
+  Credential-Schlüssel, ob Regex oder Config-Zeile, verwirft der Wertform-Filter
+  (`rules/value_shape.rs`) Formen, die kein Secret sind: UUIDs, Digests mit Algorithmus-Präfix
+  in passender Länge (`sha256:`, `sha1-`, SRI, `h1:`), Hex-Digests nur unter einem Schlüssel, der
+  einen Digest nennt (`hashed_password`, `SHA256_TOKEN`, `gehashtes_passwort`), ObjectIds
+  (24 Hex mit Zeitstempel 2009–2040), Template- und Formatfelder, Variablenreferenzen,
+  Wahrheitswerte und Null-Wörter (DE/EN), Zahlen, Pfade und URLs ohne Zugangsdaten. Hex unter
+  einem einfachen Credential-Schlüssel bleibt ein Secret (OAuth-Client-Secrets, Flask/Rails-
+  Secret-Keys). YAML/JSON/TOML folgen in K05B, HCL/XML in K05C.
   Seit K09 (Taxonomie v2) nennt jede Secret-Regel einen Untertyp ihrer Gruppe (`subtype` in
   `matched_rules`: `api_key`, `access_token`, `password`, `auth_url` …). Connection-Strings,
   Webhook-URLs, Auth-URLs, OTP-Secrets und Seed-Phrasen werden keine eigenen Gruppen, sondern

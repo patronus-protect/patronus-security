@@ -1,8 +1,52 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! Generic credentials: tokens, credential assignments, auth headers,
 //! cookies and connection strings.
-use super::{http_auth, likeness};
+use super::{http_auth, likeness, ConfigKey};
 use crate::detectors::dlp::dlp::{DlpPattern, RuleMeta, SecretSubtype, ValidatorStrength};
+
+// K05: the key parts of the generic key-bound rules. The rule regexes start
+// with them, and config lines (`dlp::config_keys`) bind a value through the
+// same key grammar.
+
+/// `dlp_env_var_secret`: an upper-case variable name ending in a credential
+/// noun (`DB_PASSWORD`, `SERVICE_API_TOKEN`).
+macro_rules! env_key {
+    () => {
+        r"(?-i:[A-Z][A-Z0-9]*[_\-](?:SECRET(?:[_\-]ACCESS)?[_\-]?KEY|SECRET|PASSWORD|PASSWD|PASSWORT|KENNWORT|GEHEIMNIS|TOKEN|API[_\-]?KEY))"
+    };
+}
+
+/// `dlp_password_assignment`: a password noun; the key gate reads a
+/// compound or camelCase prefix before it.
+macro_rules! password_key {
+    () => {
+        r"(?i)(?:password|passwort|passwd|kennwort|pwd)(?-u:\b)"
+    };
+}
+
+/// `dlp_generic_credential_assignment`: an API key, token or secret noun.
+macro_rules! generic_key {
+    () => {
+        r"(?i)(?:api[ _-]?key|access[ _-]?token|refresh[ _-]?token|auth[ _-]?token|client[ _-]?secret|encryption[ _-]?key|master[ _-]?key|api[ _-]?schl(?:ü|ue)ssel|zugangstoken|geheimnis|verschl(?:ü|ue)sselungsschl(?:ü|ue)ssel|secret|token)(?-u:\b)"
+    };
+}
+
+/// K05: how config lines bind a value to a generic key-bound rule: its key
+/// grammar and the value lengths of its regex.
+pub(super) fn config_key(rule_id: &str) -> Option<ConfigKey> {
+    let (pattern, whole, min_len, max_len) = match rule_id {
+        "dlp_env_var_secret" => (env_key!(), true, 8, None),
+        "dlp_password_assignment" => (password_key!(), false, 4, Some(150)),
+        "dlp_generic_credential_assignment" => (generic_key!(), false, 8, Some(150)),
+        _ => return None,
+    };
+    Some(ConfigKey {
+        pattern,
+        whole,
+        min_len,
+        max_len,
+    })
+}
 
 pub(super) const RULES: &[DlpPattern] = &[
     // ── Generische Credential-Patterns ───────────────────────────────────────
@@ -42,7 +86,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         // before a path (`;./bin/run`, `;/usr/bin/x`, `;~/x`) ends a bare value
         // as a shell command separator; any other `;` belongs to it.
         pattern: concat!(
-            r"(?-i:[A-Z][A-Z0-9]*[_\-](?:SECRET(?:[_\-]ACCESS)?[_\-]?KEY|SECRET|PASSWORD|PASSWD|PASSWORT|KENNWORT|GEHEIMNIS|TOKEN|API[_\-]?KEY))",
+            env_key!(),
             r#"(?:[ \t]*=[ \t]*(?:"([^"\r\n]{8,})"|'([^'\r\n]{8,})'"#,
             r#"|\\"([^"\\\r\n]{8,})\\"|\\'([^'\\\r\n]{8,})\\'"#,
             r#"|((?:[^\s"'`;]|;[^\s"'`;./~]){7,}[^\s"'`;,]))"#,
@@ -70,7 +114,8 @@ pub(super) const RULES: &[DlpPattern] = &[
         // T09: compound and camelCase keys, quoted and escaped keys and values,
         // `=>`, subscripts, typed declarations and XML `key`/`value` attributes.
         pattern: concat!(
-            r"(?i)(?:password|passwort|passwd|kennwort|pwd)(?-u:\b)(?:",
+            password_key!(),
+            "(?:",
             xml_value_attribute!(),
             "|",
             key_suffix!(),
@@ -93,7 +138,8 @@ pub(super) const RULES: &[DlpPattern] = &[
     DlpPattern {
         name: "dlp_generic_credential_assignment",
         pattern: concat!(
-            r"(?i)(?:api[ _-]?key|access[ _-]?token|refresh[ _-]?token|auth[ _-]?token|client[ _-]?secret|encryption[ _-]?key|master[ _-]?key|api[ _-]?schl(?:ü|ue)ssel|zugangstoken|geheimnis|verschl(?:ü|ue)sselungsschl(?:ü|ue)ssel|secret|token)(?-u:\b)(?:",
+            generic_key!(),
+            "(?:",
             xml_value_attribute!(),
             "|",
             key_suffix!(),

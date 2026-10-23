@@ -493,6 +493,18 @@ pub struct DlpPipeline {
     tiers: Vec<Option<OverlapTier>>,
     prefilter: RulePrefilter,
     anchor_regexes: Vec<Regex>,
+    /// K05: per generic key-bound rule, the value regex of config-line values.
+    structured_regexes: Vec<Option<Regex>>,
+    /// K05: per generic key-bound rule, its key grammar for config lines.
+    config_keys: Vec<Option<ConfigKeyRegexes>>,
+}
+
+/// K05: the key grammar of a rule, compiled for config lines.
+struct ConfigKeyRegexes {
+    /// Finds the credential part of a key in the text.
+    find: Regex,
+    /// The whole key, for rules whose grammar spans it (`DB_PASSWORD`).
+    whole: Option<Regex>,
 }
 
 impl Default for DlpPipeline {
@@ -513,6 +525,8 @@ impl DlpPipeline {
         let mut placeholder_checks = Vec::new();
         let mut metas = Vec::new();
         let mut tiers = Vec::new();
+        let mut structured_regexes = Vec::new();
+        let mut config_keys = Vec::new();
 
         for p in DLP_PATTERNS {
             regexes.push(Regex::new(p.pattern).unwrap());
@@ -527,6 +541,23 @@ impl DlpPipeline {
             placeholder_checks.push(rules::placeholder_check(p.name));
             metas.push(p.meta);
             tiers.push(rules::overlap_tier(p.name));
+            let config_key = rules::config_key(p.name);
+            structured_regexes.push(config_key.map(|key| {
+                let max = key.max_len.map_or(String::new(), |max| max.to_string());
+                Regex::new(&format!(
+                    r"(?P<structured>[^\r\n]{{{},{max}}})\z",
+                    key.min_len
+                ))
+                .unwrap()
+            }));
+            config_keys.push(config_key.map(|key| {
+                ConfigKeyRegexes {
+                    find: Regex::new(key.pattern).unwrap(),
+                    whole: key
+                        .whole
+                        .then(|| Regex::new(&format!("^(?:{})$", key.pattern)).unwrap()),
+                }
+            }));
         }
 
         let anchor_regexes = DLP_ANCHOR_PATTERNS
@@ -547,6 +578,8 @@ impl DlpPipeline {
             tiers,
             prefilter: RulePrefilter::new(DLP_PATTERNS),
             anchor_regexes,
+            structured_regexes,
+            config_keys,
         }
     }
 
@@ -760,6 +793,48 @@ impl NativeRegexDetector for DlpPipeline {
         Some(&self.span_groups)
     }
 
+    /// K05: config-line values of the generic key-bound rules; a value
+    /// counts with the length bounds of the rule's regex.
+    fn structured_regexes(&self) -> Option<&[Option<Regex>]> {
+        Some(&self.structured_regexes)
+    }
+
+    /// K05: the env, INI/properties and HTTP header values whose key the
+    /// rule's key grammar accepts: as the whole key (`dlp_env_var_secret`)
+    /// or as its last word, with the rule's key gate (T09). The value
+    /// checks of [`Self::allows_match`] then apply as for a regex match.
+    fn structured_values(
+        &self,
+        index: usize,
+        prepared: &crate::threat::NativeText<'_>,
+    ) -> Vec<crate::detectors::StructuredValue> {
+        let Some(keys) = &self.config_keys[index] else {
+            return Vec::new();
+        };
+        let text = prepared.text();
+        let key_gate = self.metas[index].key_gate;
+        super::config_keys::config_values(text, &keys.find)
+            .into_iter()
+            .filter(|config| {
+                let key = &text[config.key.clone()];
+                match &keys.whole {
+                    Some(whole) => whole.is_match(key),
+                    None => keys.find.find_iter(key).any(|noun| {
+                        noun.end() == key.len()
+                            && key_gate.is_none_or(|gate| {
+                                gate(text, config.key.start + noun.start(), config.value.clone())
+                            })
+                    }),
+                }
+            })
+            .map(|config| crate::detectors::StructuredValue {
+                key: config.key,
+                value: config.value,
+                carrier: config.format.as_str(),
+            })
+            .collect()
+    }
+
     /// F-GEN2: a rule may hold its value in one group per quoting style
     /// (`"…"`, `'…'`, bare); the value is the first group from the rule's
     /// `span_group` on that took part in the match.
@@ -830,8 +905,18 @@ impl NativeRegexDetector for DlpPipeline {
                 }
             }
         }
+        // K05: a config-line value had its key checked when it was bound.
+        let structured = captures.name("structured").is_some();
+        // K05: a key binds no value of a shape that is no secret.
+        if self.tiers[index] == Some(OverlapTier::Generic) {
+            if let Some(value) = self.value(index, captures) {
+                if rules::non_secret_shape(text, value.range()).is_some() {
+                    return false;
+                }
+            }
+        }
         // T09: a compound or camelCase key must have the shape of one.
-        if let Some(gate) = meta.key_gate {
+        if let (Some(gate), false) = (meta.key_gate, structured) {
             if let (Some(key), Some(value)) = (captures.get(0), self.value(index, captures)) {
                 if !gate(text, key.start(), value.range()) {
                     return false;

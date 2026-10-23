@@ -40,6 +40,7 @@ mod identifiers;
 mod likeness;
 mod placeholders;
 mod providers;
+mod value_shape;
 
 use super::dlp::{DlpPattern, RuleMeta, ValidatorStrength, SECRET_GROUPS};
 use super::overlap::OverlapTier;
@@ -106,6 +107,28 @@ pub(crate) fn placeholder_check(rule_id: &str) -> bool {
 }
 
 pub(crate) use placeholders::is_placeholder_match;
+pub(crate) use value_shape::non_secret_shape;
+
+/// K05: how config lines (`dlp::config_keys`) bind a value to a generic
+/// key-bound rule.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct ConfigKey {
+    /// The key grammar of the rule's regex.
+    pub pattern: &'static str,
+    /// The grammar matches the whole key (`DB_PASSWORD` for
+    /// `dlp_env_var_secret`) rather than its last word (`password` of
+    /// `app.db.password`).
+    pub whole: bool,
+    /// Value length in characters, as the rule's value groups take it.
+    pub min_len: usize,
+    pub max_len: Option<usize>,
+}
+
+/// K05: the config-line binding of a generic key-bound rule; `None` for
+/// every other rule.
+pub(crate) fn config_key(rule_id: &str) -> Option<ConfigKey> {
+    credentials::config_key(rule_id)
+}
 
 /// Credential rules that take any value under a secret-like key or variable
 /// name: the generic tier of the overlap resolution (K08).
