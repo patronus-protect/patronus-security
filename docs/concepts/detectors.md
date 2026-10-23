@@ -120,13 +120,15 @@ open-vocabulary entity extraction (names, organizations, locations, …) use the
 ## Shell command
 
 The `shell_command` category is the one L1 detector that needs a downloaded model file:
-`cat-shell-risk-commander`, a TF-IDF character n-gram (char_wb 3–5) logistic regression loaded
-from `model.json` (SHA-256 checked against `manifest.json`). It scores a caller-declared shell
+`cat-shell-risk-commander` (A1), a logistic regression over two TF-IDF blocks, character n-grams
+(char_wb 3–5) and shell tokens with pipe, redirect and command markers (`PIPE->jq` vs. `PIPE->sh`),
+loaded from `model.json` (SHA-256 checked against `manifest.json`). It scores a caller-declared shell
 command or script (POSIX/Bash, PowerShell, CMD) and returns `shell_risk` or `safe`. Because the
 model loses recall behind long comment padding, ARK also scores a variant with `#` comments,
 PowerShell `<# #>` blocks, and CMD `REM`/`::` lines blanked (quote-aware, offsets preserved) and
 keeps the higher score. Flagged results carry up to three `shell_risk` evidence spans over the
-n-gram regions that pushed the score up. Disable it with the model gate
+n-gram regions that pushed the score up, or the whole trimmed command when only the shell tokens
+did. Disable it with the model gate
 `{"cat-shell-risk-commander": false}`. See [Categories](categories.md#model-backed-l1-shell_command).
 
 ## Language and evidence guarantees

@@ -62,6 +62,16 @@ Ark-API-only `SecurityGateway::enqueue_ark_api_categories_with_options` and
 
 ### Changed
 
+- Score `shell_command` with the A1 `cat-shell-risk-commander` model (#128). A1 (`format_version: 2`)
+  adds a second TF-IDF block over a deterministic shell tokenizer (`shell_tokens`, a port of the
+  reference analyzer) with command, pipe and redirect markers (`CMD=`, `PIPE->jq` vs. `PIPE->sh`,
+  `REDIR->`) next to the character n-grams; the asset revision moves to the A1 commit, so warmup
+  downloads it. The loader reads `format_version: 2` only; the `format_version: 1` path, its parity
+  fixture and generator are removed. A flagged command whose score comes from the shell tokens
+  alone reports the trimmed command as its evidence span. Parity with scikit-learn 1.8 is below
+  1e-14 on the synthetic and the published model. **Detection change:** `shell_command` scores
+  change in every mode with the new model; the `curl … | jq` false positive and the loopback
+  reverse-shell gap of #128 close.
 - AWS access key IDs and HTTP Basic credentials (F05, F-HTTP, PR #142 review). **Detection
   change:** legacy alphanumeric AWS access key IDs (16 upper-case letters or digits after `AKIA`,
   `ASIA`, `ABIA`, `ACCA` or `A3T…`, also holding 0, 1, 8 or 9) are found again, also as the anchor

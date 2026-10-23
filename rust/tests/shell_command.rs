@@ -6,7 +6,7 @@ use patronus_ark::{
     SecurityCategory, SecurityGateway, SecurityLevel, SecurityLevelReadiness,
 };
 
-const SCORE_TOLERANCE: f64 = 1e-5;
+const SCORE_TOLERANCE: f64 = 1e-6;
 
 fn fixture(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -16,6 +16,34 @@ fn fixture(name: &str) -> PathBuf {
 
 fn parity_cases() -> serde_json::Value {
     serde_json::from_slice(&std::fs::read(fixture("shell_command_parity.json")).unwrap()).unwrap()
+}
+
+/// Assert Rust decision scores match scikit-learn within `SCORE_TOLERANCE` and
+/// that neither threshold flips a single decision versus the Python reference.
+fn assert_parity(model: &ShellRiskModel, key: &str) {
+    let fixture = parity_cases();
+    let thresholds = fixture["thresholds"].as_object().unwrap();
+    let mut max_error = 0.0_f64;
+    for case in fixture["cases"].as_array().unwrap() {
+        let text = case["text"].as_str().unwrap();
+        let expected = case[key].as_f64().unwrap();
+        let actual = model.decision_score(text);
+        let error = (actual - expected).abs();
+        max_error = max_error.max(error);
+        assert!(
+            error < SCORE_TOLERANCE,
+            "{key} mismatch for {text:?}: rust={actual} sklearn={expected}"
+        );
+        for (policy, threshold) in thresholds {
+            let threshold = threshold.as_f64().unwrap();
+            assert_eq!(
+                actual > threshold,
+                expected > threshold,
+                "decision flip at {policy} ({threshold}) for {text:?}: rust={actual} sklearn={expected}"
+            );
+        }
+    }
+    eprintln!("{key}: max absolute score error {max_error:e}");
 }
 
 fn temp_dir(name: &str) -> PathBuf {
@@ -56,23 +84,8 @@ fn synthetic_bundle(model_dir: &Path, manifest_sha: Option<&str>) {
     .unwrap();
 }
 
-fn assert_parity(model: &ShellRiskModel, key: &str) {
-    let fixture = parity_cases();
-    let mut max_error = 0.0_f64;
-    for case in fixture["cases"].as_array().unwrap() {
-        let text = case["text"].as_str().unwrap();
-        let expected = case[key].as_f64().unwrap();
-        let actual = model.decision_score(text);
-        let error = (actual - expected).abs();
-        max_error = max_error.max(error);
-        assert!(
-            error < SCORE_TOLERANCE,
-            "{key} mismatch for {text:?}: rust={actual} sklearn={expected}"
-        );
-    }
-    eprintln!("{key}: max absolute score error {max_error:e}");
-}
-
+/// The two-block scorer (char_wb + shell_tokens) matches scikit-learn on the
+/// parity corpus, with no decision flips at either threshold.
 #[test]
 fn synthetic_model_matches_scikit_learn() {
     let model = ShellRiskModel::from_json_slice(
@@ -82,8 +95,9 @@ fn synthetic_model_matches_scikit_learn() {
     assert_parity(&model, "synthetic_score");
 }
 
-/// Runs against the published model when its bundle is cached locally, for
-/// example after `PATRONUS_RUN_HF_E2E=1 cargo test --test hf_e2e`.
+/// Runs against the published A1 model when its bundle is cached locally, for
+/// example after `PATRONUS_RUN_HF_E2E=1 cargo test --test hf_e2e`, or when
+/// `PATRONUS_SHELL_COMMAND_MODEL_DIR` points at it.
 #[test]
 fn published_model_matches_scikit_learn_when_cached() {
     let bundle = std::env::var("PATRONUS_SHELL_COMMAND_MODEL_DIR")
@@ -112,11 +126,11 @@ fn published_model_matches_scikit_learn_when_cached() {
     let model = ShellRiskModel::from_bundle_dir(&bundle).unwrap();
     assert_parity(&model, "published_score");
 
-    // The published default policy flags the documented comment-padding bypass.
+    // Comment padding does not hide a risky command: the stripped variant wins
+    // and the command flags under the published default policy.
     let pipeline = ShellRiskPipeline::new(model);
     let padded = format!("rm -rf / # {}", "padding ".repeat(2048));
     let score = pipeline.score(&padded);
-    assert!(score.full_score <= score.threshold, "{score:?}");
     assert!(score.flagged, "{score:?}");
     assert_eq!(score.variant, "comments_stripped");
 }
@@ -171,7 +185,7 @@ fn gateway_scans_commands_from_a_local_bundle() {
         assert_eq!(result.class_name, expected, "{text:?}");
         let details = &result.layers[0].details;
         assert_eq!(details["decision_score"], score.decision_score);
-        assert_eq!(details["threshold_policy"], "synthetic_default");
+        assert_eq!(details["threshold_policy"], "v2_default");
         assert_eq!(result.evidence_spans.is_empty(), !score.flagged, "{text:?}");
         for span in &result.evidence_spans {
             assert_eq!(&text[span.start_byte..span.end_byte], span.text);

