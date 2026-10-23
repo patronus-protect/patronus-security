@@ -501,10 +501,66 @@ pub struct DlpPipeline {
 
 /// K05: the key grammar of a rule, compiled for config lines.
 struct ConfigKeyRegexes {
-    /// Finds the credential part of a key in the text.
+    /// Finds the credential part of a key in the text, also in the plural
+    /// (`api_keys`, `TOKENS`; K05B).
     find: Regex,
+    /// The singular credential part as a whole (`password`, `api_key`).
+    singular: Regex,
     /// The whole key, for rules whose grammar spans it (`DB_PASSWORD`).
     whole: Option<Regex>,
+    /// The whole key in the plural (`DB_PASSWORDS`; K05B).
+    whole_plural: Option<Regex>,
+}
+
+impl ConfigKeyRegexes {
+    /// K05B: a plural key (`api_keys`, `tokens`) names a list and binds only
+    /// its items. The grammar of a whole key ends with its noun, the others
+    /// with a word boundary that the plural `s` goes before.
+    fn new(key: rules::ConfigKey) -> Self {
+        const BOUNDARY: &str = "(?-u:\\b)";
+        let stem = key.pattern.strip_suffix(BOUNDARY).unwrap_or(key.pattern);
+        let find = match key.whole {
+            true => key.pattern.to_owned(),
+            false => format!("(?:{stem})[sS]?{BOUNDARY}"),
+        };
+        Self {
+            find: Regex::new(&find).unwrap(),
+            singular: Regex::new(&format!("^(?:{})$", key.pattern)).unwrap(),
+            whole: key
+                .whole
+                .then(|| Regex::new(&format!("^(?:{})$", key.pattern)).unwrap()),
+            whole_plural: key
+                .whole
+                .then(|| Regex::new(&format!("^(?:{})S$", key.pattern)).unwrap()),
+        }
+    }
+
+    /// Whether the key binds a value: `Some(false)` for a singular key,
+    /// `Some(true)` for a plural one, with the rule's key gate on the noun.
+    fn binds(
+        &self,
+        text: &str,
+        config: &super::config_keys::ConfigValue,
+        key_gate: Option<KeyGate>,
+    ) -> Option<bool> {
+        let key = &text[config.key.clone()];
+        if let (Some(whole), Some(plural)) = (&self.whole, &self.whole_plural) {
+            return if whole.is_match(key) {
+                Some(false)
+            } else {
+                plural.is_match(key).then_some(true)
+            };
+        }
+        self.find
+            .find_iter(key)
+            .filter(|noun| noun.end() == key.len())
+            .find(|noun| {
+                key_gate.is_none_or(|gate| {
+                    gate(text, config.key.start + noun.start(), config.value.clone())
+                })
+            })
+            .map(|noun| !self.singular.is_match(noun.as_str()))
+    }
 }
 
 impl Default for DlpPipeline {
@@ -550,14 +606,7 @@ impl DlpPipeline {
                 ))
                 .unwrap()
             }));
-            config_keys.push(config_key.map(|key| {
-                ConfigKeyRegexes {
-                    find: Regex::new(key.pattern).unwrap(),
-                    whole: key
-                        .whole
-                        .then(|| Regex::new(&format!("^(?:{})$", key.pattern)).unwrap()),
-                }
-            }));
+            config_keys.push(config_key.map(ConfigKeyRegexes::new));
         }
 
         let anchor_regexes = DLP_ANCHOR_PATTERNS
@@ -803,6 +852,11 @@ impl NativeRegexDetector for DlpPipeline {
     /// rule's key grammar accepts: as the whole key (`dlp_env_var_secret`)
     /// or as its last word, with the rule's key gate (T09). The value
     /// checks of [`Self::allows_match`] then apply as for a regex match.
+    /// K05B adds YAML, JSON and TOML values and array items. A plural key
+    /// (`api_keys`) binds only items; an item stands apart from its key, so
+    /// it is checked on its own ([`rules::is_item_value`]) and the key must
+    /// not name a digest. A list binds its items only if every item passes:
+    /// a credential list holds no words, templates or tokenizer entries.
     fn structured_values(
         &self,
         index: usize,
@@ -813,20 +867,24 @@ impl NativeRegexDetector for DlpPipeline {
         };
         let text = prepared.text();
         let key_gate = self.metas[index].key_gate;
-        super::config_keys::config_values(text, &keys.find)
+        let mut values = super::config_keys::config_values(text, &keys.find);
+        let mut failed_lists = Vec::new();
+        values.retain(|config| {
+            let binds = keys.binds(text, config, key_gate);
+            if !config.item {
+                return binds == Some(false);
+            }
+            let passes = binds.is_some()
+                && rules::is_item_value(&text[config.value.clone()])
+                && !rules::key_names_digest(&text[config.key.clone()]);
+            if !passes {
+                failed_lists.push(config.key.start);
+            }
+            passes
+        });
+        values
             .into_iter()
-            .filter(|config| {
-                let key = &text[config.key.clone()];
-                match &keys.whole {
-                    Some(whole) => whole.is_match(key),
-                    None => keys.find.find_iter(key).any(|noun| {
-                        noun.end() == key.len()
-                            && key_gate.is_none_or(|gate| {
-                                gate(text, config.key.start + noun.start(), config.value.clone())
-                            })
-                    }),
-                }
-            })
+            .filter(|config| !(config.item && failed_lists.contains(&config.key.start)))
             .map(|config| crate::detectors::StructuredValue {
                 key: config.key,
                 value: config.value,
@@ -897,16 +955,19 @@ impl NativeRegexDetector for DlpPipeline {
                 }
             }
         }
-        // F-GEN1: a generic key's value must look like a secret.
+        // K05: a config-line value had its key checked when it was bound.
+        let structured = captures.name("structured").is_some();
+        // F-GEN1: a generic key's value must look like a secret. K05B: an
+        // array item, whose key stands apart, was checked when it was bound.
         if let Some(gate) = meta.value_gate {
             if let Some(value) = self.value(index, captures) {
-                if !gate(text, value.range()) {
+                if !(structured && super::config_keys::is_item(text, value.start()))
+                    && !gate(text, value.range())
+                {
                     return false;
                 }
             }
         }
-        // K05: a config-line value had its key checked when it was bound.
-        let structured = captures.name("structured").is_some();
         // K05: a key binds no value of a shape that is no secret.
         if self.tiers[index] == Some(OverlapTier::Generic) {
             if let Some(value) = self.value(index, captures) {
