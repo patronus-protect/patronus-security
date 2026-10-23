@@ -79,7 +79,7 @@ fn scan_double_quote(text: &str, start: usize) -> Option<usize> {
                 // `\\.`: a backslash must be followed by a non-newline char.
                 match bytes.get(index + 1) {
                     None | Some(b'\n') => return None,
-                    Some(_) => index += 2,
+                    Some(_) => index += 1 + next_char_len(text, index + 1),
                 }
             }
             // `[^"\\]` matches any other character, newline included.
@@ -462,6 +462,12 @@ mod tests {
             tokenize("'unterminated and more"),
             ["unterminated", "and", "more"]
         );
+    }
+
+    #[test]
+    fn escaped_multibyte_character_inside_double_quotes_is_one_step() {
+        assert_eq!(tokenize("echo \"\\é\" x"), ["echo", "\"\\é\"", "x"]);
+        assert_eq!(tokenize("echo \"\\€"), ["echo", "\\€"]);
     }
 
     #[test]
