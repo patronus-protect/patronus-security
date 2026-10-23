@@ -279,7 +279,8 @@ and `obfuscation` (`zero_width`, `full_width`, `defanged`, `spelled_out`, `space
 be a valid card number, and an account field can hold an IBAN or a card-shaped number. Since B-PAN
 a card needs Luhn plus the IIN prefix and a length of its brand and never starts right after `+`,
 so phone digits no longer compete as a card. In `balanced` and `recall` one value yields one label among `IBAN`,
-`CREDITCARD`, `FINANCIAL_ACCOUNT_NUMBER`, `STEUERID` and `PHONE`. Of two overlapping findings
+`CREDITCARD`, `FINANCIAL_ACCOUNT_NUMBER`, `STEUERID`, `PHONE` and `VAT_ID_IT` (a bare Partita IVA
+has 11 digits like a Steuer-ID, B01). Of two overlapping findings
 with different labels the first criterion that differs decides: an IBAN (`iban`), the longer
 value (`longer_value`: a card-shaped part of a longer value), context that supports the finding's
 own label, i.e. a field name, a structural key or a nearby support term (`context`:
@@ -320,7 +321,13 @@ only after their field name. The first is `pii_steuer_id_de_context_free`: 11 di
 `86 095 742 719` that pass the check digit and the digit distribution of issued Steuer-IDs (one
 digit twice or three times, never three in a row), standing alone rather than inside a longer
 number, range or decimal. It scores `0.55` bare, `0.80` after `Steuer-ID ist`, and `0.25` behind
-a nearer counter-context term (`Rechnungsnummer 86095742719`), below both thresholds. A context-bound rule (`pii_phone_de_national_proximity`: a national number such as
+a nearer counter-context term (`Rechnungsnummer 86095742719`), below both thresholds. The VAT ID
+rules (B01) are scored-only as well, with one label per country (`VAT_ID_DE`, `VAT_ID_AT`,
+`VAT_ID_CH`, `VAT_ID_FR`, `VAT_ID_NL`, `VAT_ID_BE`, `VAT_ID_IT`, `VAT_ID_ES`): an upper-case
+country prefix, the national form (`DE 136 695 976`, `ATU13585627`, `CHE-100.155.212`,
+`FR 40 303 265 045`, `NL004495445B01`, `BE 0403.019.261`, `IT00743110157`, `ESA13585625`) and its
+check digit; `0.55` bare, `0.80` with a VAT term such as `USt-IdNr.`, `TVA` or `Partita IVA`. A
+bare Partita IVA without `IT` (`pii_vat_id_it_proximity`) needs such a term or key. A context-bound rule (`pii_phone_de_national_proximity`: a national number such as
 `ist unter 0176 90817263 erreichbar`) reports only with a support term and no nearer counter term,
 in every mode including `strict`, and then scores at least `0.50`. Validators decide in every
 mode: a value with a wrong check digit is never reported. Scores are rule-based evidence strengths, not calibrated

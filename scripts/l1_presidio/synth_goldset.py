@@ -2076,6 +2076,14 @@ def coverage(rows: list[dict[str, Any]]) -> Counter:
     return Counter((row["language"], entity["entity_type"]) for row in rows for entity in row["entities"])
 
 
+# Entity-map ids added after the goldset was frozen: the B01 VAT IDs of AT, CH, FR, NL, BE and ES.
+# The generator stays unchanged so that dev and holdout reproduce byte for byte; these ids have
+# no gold here (DE and IT VAT IDs are generated since E05).
+NOT_GENERATED = frozenset(
+    {"pii.at.vat_id", "pii.ch.vat_id", "pii.fr.vat_id", "pii.nl.vat_id", "pii.be.vat_id", "pii.es.vat_id"}
+)
+
+
 def entity_ids() -> list[str]:
     return sorted({item.entity for item in KINDS})
 

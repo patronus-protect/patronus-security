@@ -23,12 +23,17 @@ use super::score::ValidatorStrength;
 use crate::detectors::NativeDetection;
 
 /// Labels whose values rules of another label in this set can also match.
-pub const COMPETING_LABELS: [&str; 5] = [
+/// Among the VAT IDs only the Italian and the French carry eleven digits that can
+/// be a Steuer-ID (`IT 00743110157`, `FR 40 303 265 045`); the others are shorter
+/// or end in letters.
+pub const COMPETING_LABELS: [&str; 7] = [
     "IBAN",
     "CREDITCARD",
     "FINANCIAL_ACCOUNT_NUMBER",
     "STEUERID",
     "PHONE",
+    "VAT_ID_IT",
+    "VAT_ID_FR",
 ];
 
 /// Labels whose findings inside a reported IBAN are secondary evidence of it in

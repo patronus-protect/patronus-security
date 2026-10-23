@@ -58,6 +58,38 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Add VAT identification numbers for DE, AT, CH, FR, NL, BE, IT and ES (B01), one label and one
+  check-digit validator per country: `VAT_ID_DE` (ISO 7064 MOD 11,10), `VAT_ID_AT` (UID `ATU`, Luhn
+  variant), `VAT_ID_CH` (UID `CHE`, weighted mod 11), `VAT_ID_FR` (key `(12 + 3 × SIREN) mod 97` plus
+  SIREN Luhn), `VAT_ID_NL` (mod 11 or ISO 7064 MOD 97-10, branch `B01`–`B99`), `VAT_ID_BE`
+  (`97 − first eight mod 97`), `VAT_ID_IT` (Partita IVA: Luhn plus province office code) and
+  `VAT_ID_ES` (DNI/NIE control letter or CIF control character), in `rust/src/detectors/pii/vat.rs`.
+  The rules are scored-only like K05: an upper-case country prefix and the national printed form
+  (`DE 136 695 976`, `CHE-100.155.212 MWST` without the suffix, `FR 40 303 265 045`,
+  `BE 0403.019.261`) report without a field name at 0.55, 0.80 with a term of the new lexicon entry
+  `pii.vat_identifier` (`USt-IdNr.`, `UID-Nummer`, `MWST-Nr.`, `VAT ID`, `TVA`, `btw-nummer`,
+  `Partita IVA`, `NIF-IVA` …), and drop below both thresholds behind a nearer counter-context term.
+  A bare Partita IVA (`pii_vat_id_it_proximity`, 11 digits without `IT`) needs such a term or key
+  and joins the K07 competing labels, so it wins over a bare Steuer-ID on the same digits. A value
+  that starts with a letter no longer counts as joined by `,` or a digit group before it
+  (`context::stands_alone`, CSV cells); bare numeric values (Steuer-ID) are unchanged.
+  `entity_map.yaml` classifies the eight validators as checksums (M3: ARK 3 → 11 units), maps DE
+  and IT as `shared` and the six others as `ark_only` IDs; `scoreboard.py` ports the validators;
+  the frozen E05 synthetic goldset stays byte-identical and lists the six new IDs as not generated.
+  `pii_l1.jsonl` gains 214 balanced/recall rows (5 positives and 5 hard negatives per label in DE,
+  EN and the national language). **Detection change:** none in the default `strict` mode (dev
+  scoreboard +0.0 pp everywhere). In `balanced` and `recall` VAT IDs are new findings: dev
+  `pii.de.vat_id` F1 98.9 (90/92 gold, 0 FP; the two misses are presidio-analyzer values with a
+  failing check digit) and `pii.it.vat_code` F1 96.4 (27/29, 0 FP), balanced L1 F1 +2.1 pp, no new
+  hard-negative FP on any dev corpus; 13_l1_golden_eval 706/706 positives, 610/610 hard negatives.
+  Validators of existing labels are unchanged.
+- `VAT_ID_FR` joins the K07 competing labels (B01 review): the eleven digits of a French VAT ID
+  with a space after `FR` (`FR 40 303 265 045`, `FR 40303265045`) can also pass the context-free
+  Steuer-ID, which kept a second, false `STEUERID` finding next to the VAT ID. The VAT ID is the
+  longer value and wins like a Partita IVA; the other VAT IDs of B01 have no eleven-digit body and
+  no competing overlap. Validators are unchanged. **Detection change:** none in `strict`; in
+  `balanced` and `recall` such a French VAT ID reports one `VAT_ID_FR` finding, and the Steuer-ID
+  rule's `matched_rules` entry names `overlap` (`longer_value`, `yields_to: VAT_ID_FR`).
 - Implement the decided M2 rule and add `scripts/l1_presidio/scoreboard.py m2` (D-M2, decision of
   2026-10-21 in `research/l1-pii/README.md`, M2 row and fairness section). M2 holds only if it holds on
   both milestone families on their own, judged on `balanced`: macro-F1 is the unweighted mean exact F1

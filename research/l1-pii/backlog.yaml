@@ -371,6 +371,7 @@ tasks:
 
   # M3 +8 (11)
   - id: B01
+    status: done
     title: "VAT ID part 1: DE, AT, CH, FR, NL, BE, IT, ES with checksums"
     type: new-entity
     deps: [K05]

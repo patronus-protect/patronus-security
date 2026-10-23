@@ -169,11 +169,20 @@ def test_checked_in_presidio_count_matches_the_pinned_registry():
 
 def test_checked_in_ark_count():
     counts = MODULE.count(ENTITY_MAP.load(), MODULE.load_rules())
-    # At T03 only Luhn, MOD 97-10 and the Steuer-ID check compute a check digit.
+    # At T03 only Luhn, MOD 97-10 and the Steuer-ID check compute a check digit; B01 adds
+    # one VAT ID per country.
     assert set(counts.ark) == {
         Unit("pii.credit_card.pan", None),
         Unit("pii.iban", None),
         Unit("pii.de.tax_id", "de"),
+        Unit("pii.de.vat_id", "de"),
+        Unit("pii.at.vat_id", "at"),
+        Unit("pii.ch.vat_id", "ch"),
+        Unit("pii.fr.vat_id", "fr"),
+        Unit("pii.nl.vat_id", "nl"),
+        Unit("pii.be.vat_id", "be"),
+        Unit("pii.it.vat_code", "it"),
+        Unit("pii.es.vat_id", "es"),
     }
     assert counts.m3_met is False
 
@@ -304,13 +313,20 @@ def test_cli_count_json_and_check(tmp_path):
     payload = json.loads(result.stdout)
     assert payload["presidio_version"] == "2.2.364"
     assert payload["presidio"]["count"] == 35
-    assert payload["ark"]["count"] == 3
+    assert payload["ark"]["count"] == 11
     assert payload["m3"] == {"factor": 2, "target": 70, "met": False}
     assert {
         "entity_id": "pii.de.tax_id",
         "country": "de",
         "sources": ["pii_steuer_id_de: steuer_id", "pii_steuer_id_de_context_free: steuer_id_issued"],
     } in payload["ark"]["units"]
+    # B01: one VAT unit per country, the bare Partita IVA rule shares the IT validator.
+    vat = {unit["entity_id"]: unit for unit in payload["ark"]["units"] if unit["entity_id"].endswith((".vat_id", ".vat_code"))}
+    assert sorted(vat) == [
+        "pii.at.vat_id", "pii.be.vat_id", "pii.ch.vat_id", "pii.de.vat_id",
+        "pii.es.vat_id", "pii.fr.vat_id", "pii.it.vat_code", "pii.nl.vat_id",
+    ]
+    assert vat["pii.it.vat_code"]["sources"] == ["pii_vat_id_it: it_vat_id", "pii_vat_id_it_proximity: it_vat_id"]
 
     result = subprocess.run([sys.executable, str(SCRIPT), "check"], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr

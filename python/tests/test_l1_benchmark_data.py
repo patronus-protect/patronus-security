@@ -37,6 +37,14 @@ PII_LABELS = {
     "SWIFT_CODE",
     "TAX_NUMBER_DE",
     "USERNAME",
+    "VAT_ID_AT",
+    "VAT_ID_BE",
+    "VAT_ID_CH",
+    "VAT_ID_DE",
+    "VAT_ID_ES",
+    "VAT_ID_FR",
+    "VAT_ID_IT",
+    "VAT_ID_NL",
 }
 
 DLP_LABELS = {
@@ -191,7 +199,7 @@ class L1BenchmarkDataTests(unittest.TestCase):
 
     def test_language_distribution_is_broad(self):
         expected = {
-            "pii_l1": {"de": 546, "en": 529, "fr": 16, "es": 16, "it": 16, "nl": 16},
+            "pii_l1": {"de": 629, "en": 610, "fr": 26, "es": 26, "it": 26, "nl": 36},
             "dlp_l1": {"de": 397, "en": 405},
         }
         for name, distribution in expected.items():

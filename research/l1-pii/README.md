@@ -129,6 +129,12 @@ der Backlog kommt auf 60–80, deshalb gilt **2×**.
 Stand T03: ARK 3 (PAN/Luhn, IBAN/MOD 97-10, Steuer-ID), Presidio 35, beide gemeinsam 3. Die
 DE-Validatoren für RVNR, KVNR, LANR, Pass/Ausweis prüfen heute nur die Form (siehe Ausgangslage).
 
+Stand B01: ARK 11, gemeinsam 5. Dazu kommen die USt-IdNr. von DE, AT, CH, FR, NL, BE, IT und ES, je
+Land ein Label (`VAT_ID_DE` …) und ein Validator mit Prüfziffer (`rust/src/detectors/pii/vat.rs`), nur
+in `balanced`/`recall` (scored-only wie K05). DE und IT sind `shared`, die übrigen sechs `ark_only`;
+das eingefrorene E05-Goldset erzeugt die sechs neuen IDs nicht (`NOT_GENERATED` in
+`synth_goldset.py`) und bleibt bytegleich.
+
 ## Gold-Konvention: Platzhalter-Werte
 
 Entschieden am 2026-10-14 (T01, TRIAGE 2026-W42 Bucket 5): Reservierte Platzhalter sind PII und im
