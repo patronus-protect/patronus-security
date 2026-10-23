@@ -31,6 +31,16 @@
     "obfuscated": {
       "de": "Angreifer-IP: 198[.]51[.]100[.]23",
       "en": "Source IP: １９２．０．２．１４"
+    },
+    "span": {
+      "de": {
+        "text": "Freigegebenes Netz: 198.51.100.0/24",
+        "value": "198.51.100.0/24"
+      },
+      "en": {
+        "text": "Subnet: 192.0.2.0/24",
+        "value": "192.0.2.0/24"
+      }
     }
   },
   {
@@ -38,21 +48,86 @@
     "rule_id": "pii_ipv6_full",
     "de": "Adresse: 2001:0db8:85a3:0000:0000:8a2e:0370:7334",
     "en": "Address: 2001:0db8:85a3:0000:0000:8a2e:0370:7334",
-    "language_neutral": false
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Schlüssel 2001:db8:1:2:3:4:5:6:7",
+        "Kurs zwischen U.9101:8c5c:e9b4:50ce:7e5d:ce61:c1d2:d092"
+      ],
+      "en": [
+        "Key 2001:db8:1:2:3:4:5:6:7",
+        "Rate between the U.9101:8c5c:e9b4:50ce:7e5d:ce61:c1d2:d092"
+      ]
+    },
+    "span": {
+      "de": {
+        "text": ":20:REF2209\n:25:2a02:810d:4b40:3d00:91f2:6c1e:8a3b:52d7\n:28C:00042/001",
+        "value": "2a02:810d:4b40:3d00:91f2:6c1e:8a3b:52d7"
+      },
+      "en": {
+        "text": "Embedded: 2001:db8:1:2:3:4:203.0.113.9",
+        "value": "2001:db8:1:2:3:4:203.0.113.9"
+      }
+    }
   },
   {
     "category": "pii",
     "rule_id": "pii_ipv6_compressed",
     "de": "Adresse: 2001:db8::1",
     "en": "Address: 2001:db8::1",
-    "language_neutral": false
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        ":20:MT940 STMT\n:28C::52D:20220920\n:60F::STP",
+        "Belegkopf: BGM+380:21:3::90:FRET:FRCOMPAGNIE'",
+        "Ungültige Adresse 2001:db8::256.1.1.1"
+      ],
+      "en": [
+        "Balance :60F::61F::62F::63F::64F::70:3/31/2022",
+        "Document: BGM+380:21:3::90:FRET:FRCOMPAGNIE'",
+        "2001:db8::256.1.1.1",
+        "text2001:db8::1"
+      ]
+    },
+    "span": {
+      "de": {
+        "text": "NAT64-Adresse: 64:ff9b::198.51.100.1",
+        "value": "64:ff9b::198.51.100.1"
+      },
+      "en": {
+        "text": "Zone and prefix: 2001:db8::%eth0/128",
+        "value": "2001:db8::%eth0/128"
+      }
+    }
   },
   {
     "category": "pii",
     "rule_id": "pii_ipv6_loopback",
     "de": "Adresse: ::ffff:c000:0280",
     "en": "Address: ::ffff:c000:0280",
-    "language_neutral": false
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Position: LIN+1::1:550:::EA:20'",
+        "Lokaler Dienst auf ::ffff:127.0.0.1",
+        "Standardroute ::/0"
+      ],
+      "en": [
+        "Item: LIN+1::1:550:::EA:20'",
+        "Mapped unspecified ::ffff:0.0.0.0",
+        "Loopback route ::1/128"
+      ]
+    },
+    "span": {
+      "de": {
+        "text": "Verbindung von ::ffff:10.20.30.40 abgelehnt.",
+        "value": "::ffff:10.20.30.40"
+      },
+      "en": {
+        "text": "Mapped peer [::ffff:192.0.2.71]:443 accepted.",
+        "value": "::ffff:192.0.2.71"
+      }
+    }
   },
   {
     "category": "pii",

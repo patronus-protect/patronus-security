@@ -11,6 +11,23 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Changed
 
+- IP address spans (B-IP: T20 + baseline C1, TRIAGE 2026-W43 bucket 5, baseline P3/P9). An
+  IPv4-mapped or embedded IPv6 address is one span (`::ffff:10.0.0.1`, `64:ff9b::198.51.100.1`), the
+  zone ID and the CIDR prefix length are part of the span (`fe80::1%eth0`, `192.168.1.0/24`,
+  `2001:db8::%eth0/128`); a prefix length out of range stays outside it (`10.0.0.0/123`). The IPv6
+  rules no longer start inside a colon-delimited SWIFT MT or EDIFACT chain (`:28C::52D:`,
+  `:60F::61F::62F:`, `BGM+380:21:3::90:FRET`, `LIN+1::1:550:::EA:20`), after `.`, `-`, `+` or a word
+  character, and no longer report a value that a further `:`/`.` group continues, so an invalid mixed
+  address (`2001:db8::256.1.1.1`) yields no sub-span; a SWIFT MT tag at the start of a line (`:25:`,
+  ` :52A:`) and a field name (`IPv6:`) open a value. `validators::ip_address` checks the prefix length
+  and zone ID and also rejects loopback, unspecified and multicast IPv4 inside a mapped address
+  (`::ffff:127.0.0.1`, D-IP); the network-diagnostic filter strips zone ID and prefix and checks the
+  mapped IPv4. Gold convention in `research/l1-pii/README.md`. **Detection change:** in `strict` and
+  `balanced` IP spans grow by their zone ID and prefix length, mapped/embedded addresses replace their
+  IPv4 sub-span, and IPv6 findings in SWIFT/EDIFACT chains and partial matches on invalid forms
+  disappear. Dev: Gretel IP F1 90.6 → 96.7 (11 FP fewer, two SWIFT-tagged gold values now exact),
+  presidio-analyzer IP tests 50.0 → 85.7, the P9 hard negative is no match.
+
 - Payment card numbers need the IIN prefix and a length of their brand besides Luhn (B-PAN: T19 +
   F02, TRIAGE 2026-W43 bucket 4, baseline N1/P8). `pii_credit_card` validates with the new
   `validators::payment_card`: Luhn (unchanged), then `validators::CARD_IIN_RANGES` (Amex, Diners

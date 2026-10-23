@@ -637,6 +637,61 @@ pub(super) fn has_payment_card(text: &str, within: Range<usize>, card_regex: &Re
     })
 }
 
+/// Whether an IPv4 candidate at `start` stands for itself rather than ending an
+/// IPv6 address (B-IP): the `:`-run before it is no IPv6 head (`::ffff:`,
+/// `64:ff9b::`, `2001:db8:1:2:3:4:`), so an IPv4-mapped or embedded address is one
+/// IPv6 span and an invalid mixed form no IPv4 sub-span. A field name (`IP:`,
+/// `web:`) or a SWIFT MT tag at the start of a line (`:25:`, ` :52A:`) stays.
+pub(super) fn ipv4_position(text: &str, start: usize) -> bool {
+    let head = &text[..start];
+    if !head.ends_with(':') {
+        return true;
+    }
+    let run = &head[head
+        .trim_end_matches(|ch: char| ch.is_ascii_hexdigit() || ch == ':')
+        .len()..];
+    let line = head[..head.len() - run.len()].trim_end_matches([' ', '\t']);
+    let line_start = line.is_empty() || line.ends_with('\n');
+    let run = match swift_tag(run) {
+        Some(tag) if line_start => &run[tag..],
+        _ => run,
+    };
+    !(run.contains("::") || run.matches(':').count() >= 2)
+}
+
+/// Length of the SWIFT MT tag that opens `run` (`:25:`, `:28C:`), if any.
+fn swift_tag(run: &str) -> Option<usize> {
+    let bytes = run.as_bytes();
+    let digits = bytes.len() >= 4
+        && bytes[0] == b':'
+        && bytes[1].is_ascii_digit()
+        && bytes[2].is_ascii_digit();
+    if !digits {
+        return None;
+    }
+    match bytes[3] {
+        b':' => Some(4),
+        letter if letter.is_ascii_alphabetic() && bytes.get(4) == Some(&b':') => Some(5),
+        _ => None,
+    }
+}
+
+/// Whether an IPv6 candidate ending at `end` is the whole address (B-IP): no
+/// further `:`-group (`380:21:3::90:FRET`, `1::1:550:::EA`), `.`-group
+/// (`2001:db8::256.1.1.1`) or zone ID the rule did not take, and no letter, digit
+/// or `_` right after it. A prefix length out of range stays outside the span
+/// (`2001:db8::1/129`). Where the value may start is part of the rule's regex.
+pub(super) fn ipv6_position(text: &str, end: usize) -> bool {
+    let mut after = text[end..].chars();
+    let (next, next2) = (after.next(), after.next());
+    let word = |ch: Option<char>| ch.is_some_and(|ch| ch.is_alphanumeric() || ch == '_');
+    match next {
+        Some(':') => !(word(next2) || next2 == Some(':')),
+        Some('.' | '%') => !word(next2),
+        next => !word(next),
+    }
+}
+
 /// Whether an international phone number at `start` (its `+` or `00`) opens a
 /// value rather than continuing an element run (T17): no letter or digit right
 /// before it, so not `UNB+UNOC:3+520173321` or `NAD+BY+987654321`. A `+` also
