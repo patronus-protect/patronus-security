@@ -43,8 +43,12 @@ fi
 echo "== ark-l1 $PROGRAM run $(date -u +%FT%TZ)"
 "${L1[@]}" next
 rc=$?
+# CI waits and publishing need no agent memory: the other programme may run meanwhile.
+unlock() { flock -u 9; }
+relock() { flock -n 9 || { echo "== run lock busy; waiting for the other run before the next round"; flock 9; }; }
 if [ "$rc" -eq 11 ]; then
   # The previous run passed the gate but CI or publishing did not finish: retry only that.
+  unlock
   "${L1[@]}" ci
   ci_rc=$?
   if [ "$ci_rc" -eq 1 ]; then
@@ -102,6 +106,7 @@ $feedback"
 
   if "${L1[@]}" gate; then
     # A PR only for green GitHub CI: red CI goes back to the agent like a red gate.
+    unlock
     "${L1[@]}" ci
     ci_rc=$?
     if [ "$ci_rc" -eq 0 ]; then
@@ -113,6 +118,7 @@ $feedback"
       echo "== no CI verdict; the next run waits for it again"
       exit 1
     fi
+    relock
   fi
   feedback="
 ## Gate-/CI-Ergebnis der vorherigen Runde (rot) — behebe genau das
