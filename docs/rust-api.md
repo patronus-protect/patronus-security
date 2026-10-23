@@ -562,20 +562,6 @@ pub fn enqueue_categories_with_chunk_overlap_options(
 Submit selected categories with request-local execution and chunking options.
 
 ```rust
-pub fn enqueue_ark_api_categories_with_options(
-    &self,
-    categories: Vec<SecurityCategory>,
-    text: impl Into<String>,
-    metadata: serde_json::Value,
-    gates: Option<ScanGateMatrix>,
-    ntdb_decision_threshold_point: Option<crate::NtdbOperatingPoint>,
-) -> RequestId;
-```
-
-Submit an Ark API request with short-document Injection utility routing.
-This profile is intentionally not used by library callers.
-
-```rust
 pub fn enqueue_ark_api_categories_with_request_options(
     &self,
     categories: Vec<SecurityCategory>,
@@ -588,26 +574,13 @@ pub fn enqueue_ark_api_categories_with_request_options(
 ) -> Result<RequestId, String>;
 ```
 
-Submit an Ark API request with request-local classifier chunk overlap
-and an optional request-local `dynamic-pii` configuration.
+Submit an Ark API request: short-document Injection utility routing,
+request-local classifier chunk overlap and an optional request-local
+`dynamic-pii` configuration. Library callers use the other enqueue methods.
 
 `dynamic_pii` replaces the gateway's configuration for this request only;
 build it with [`crate::DynamicPiiRequestConfig::resolve`]. It is validated
 again here and rejected before anything is queued.
-
-```rust
-pub fn enqueue_ark_api_categories_with_chunk_overlap_options(
-    &self,
-    categories: Vec<SecurityCategory>,
-    text: impl Into<String>,
-    metadata: serde_json::Value,
-    gates: Option<ScanGateMatrix>,
-    ntdb_decision_threshold_point: Option<crate::NtdbOperatingPoint>,
-    chunk_overlap_tokens: ChunkOverlapTokens,
-) -> RequestId;
-```
-
-Submit an Ark API request with request-local classifier chunk overlap.
 
 ```rust
 pub fn enqueue_input(

@@ -72,7 +72,9 @@ result shapes may be breaking for downstream users, and is called out explicitly
   like the server config plus a 64-byte limit per label, and an invalid block is rejected with
   `422`. The ARK Coordinator passes the block through to the worker. In Rust,
   `DynamicPiiRequestConfig::resolve` builds the request config from the gateway's and
-  `SecurityGateway::enqueue_ark_api_categories_with_request_options` queues a request with it.
+  `SecurityGateway::enqueue_ark_api_categories_with_request_options` queues a request with it; it
+  replaces the Ark-API-only `enqueue_ark_api_categories_with_options` and
+  `enqueue_ark_api_categories_with_chunk_overlap_options`, which are removed.
   Requests with different label lists never share results: the config travels with the
   request's dynamic PII job, and the GLiNER chunk cache keys include the inference labels.
   **Detection change:** none without the block; with it, `dynamic-pii` reports the requested

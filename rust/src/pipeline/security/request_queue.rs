@@ -176,31 +176,9 @@ impl SecurityGateway {
         )
     }
 
-    /// Submit an Ark API request with short-document Injection utility routing.
-    /// This profile is intentionally not used by library callers.
-    pub fn enqueue_ark_api_categories_with_options(
-        &self,
-        categories: Vec<SecurityCategory>,
-        text: impl Into<String>,
-        metadata: serde_json::Value,
-        gates: Option<ScanGateMatrix>,
-        ntdb_decision_threshold_point: Option<crate::NtdbOperatingPoint>,
-    ) -> RequestId {
-        self.enqueue_categories_with_execution_options(
-            categories,
-            text,
-            metadata,
-            EnqueueExecutionOptions {
-                gates,
-                ntdb_decision_threshold_point,
-                ark_api_short_injection_utility: true,
-                ..Default::default()
-            },
-        )
-    }
-
-    /// Submit an Ark API request with request-local classifier chunk overlap
-    /// and an optional request-local `dynamic-pii` configuration.
+    /// Submit an Ark API request: short-document Injection utility routing,
+    /// request-local classifier chunk overlap and an optional request-local
+    /// `dynamic-pii` configuration. Library callers use the other enqueue methods.
     ///
     /// `dynamic_pii` replaces the gateway's configuration for this request only;
     /// build it with [`crate::DynamicPiiRequestConfig::resolve`]. It is validated
@@ -230,30 +208,6 @@ impl SecurityGateway {
                 ..Default::default()
             },
         ))
-    }
-
-    /// Submit an Ark API request with request-local classifier chunk overlap.
-    pub fn enqueue_ark_api_categories_with_chunk_overlap_options(
-        &self,
-        categories: Vec<SecurityCategory>,
-        text: impl Into<String>,
-        metadata: serde_json::Value,
-        gates: Option<ScanGateMatrix>,
-        ntdb_decision_threshold_point: Option<crate::NtdbOperatingPoint>,
-        chunk_overlap_tokens: ChunkOverlapTokens,
-    ) -> RequestId {
-        self.enqueue_categories_with_execution_options(
-            categories,
-            text,
-            metadata,
-            EnqueueExecutionOptions {
-                gates,
-                ntdb_decision_threshold_point,
-                ark_api_short_injection_utility: true,
-                chunk_overlap_tokens,
-                ..Default::default()
-            },
-        )
     }
 
     fn enqueue_categories_with_execution_options(
