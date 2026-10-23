@@ -70,7 +70,8 @@ result shapes may be breaking for downstream users, and is called out explicitly
   labels, thresholds and gates for that request only; input limits, chunking and timeouts stay
   those of the worker. The block needs `dynamic-pii` among the request's categories, is validated
   like the server config plus a 64-byte limit per label, and an invalid block is rejected with
-  `422`. The ARK Coordinator passes the block through to the worker. In Rust,
+  `422`. The ARK Coordinator checks the block with the same rules before it accepts the job and
+  forwards it to the worker. In Rust,
   `DynamicPiiRequestConfig::resolve` builds the request config from the gateway's and
   `SecurityGateway::enqueue_ark_api_categories_with_request_options` queues a request with it; it
   replaces the Ark-API-only `enqueue_ark_api_categories_with_options` and
