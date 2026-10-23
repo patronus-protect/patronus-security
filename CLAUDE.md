@@ -27,7 +27,9 @@ agents alike. A change that breaks one of them is not done.
     gates) and keep its regex linear and bounded;
   - no avoidable allocation, cloning or re-scan of the whole text inside per-match loops; reuse the
     prepared views (`NativeText`, `MatchText`);
-  - no I/O, model calls or locks held across a scan on L1;
+  - no I/O, network or remote model calls and no locks held across a scan on L1; the one
+    model-backed L1 detector (`shell_command`, a TF-IDF logistic regression loaded once) stays a
+    single in-memory pass, and no further L1 model is added without a measured reason;
   - measure: state the latency effect of an L1 change in the PR (`scripts/l1_dlp/latency.py`,
     `scripts/benchmark_injection_l1.py`, the CI `native-throughput` job). A measurable slowdown
     needs a reason, and the DLP budget (100 KiB p95 ≤ 10 ms) must hold.
