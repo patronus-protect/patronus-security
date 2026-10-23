@@ -324,6 +324,7 @@ tasks:
       scoreboard without precision regression on any family
 
   - id: K05B
+    status: done
     title: Config key→value extraction, part 2 (YAML, JSON, TOML) reusing the K05 value-shape filter
     type: engine
     deps: [K05]
