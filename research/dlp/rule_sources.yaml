@@ -140,6 +140,12 @@ rules:
   dlp_jwt_token:
     source_ref: gitleaks:jwt
     format: "three base64url segments, header and payload start with ey"
+  dlp_bearer_token:
+    source_ref: https://www.rfc-editor.org/rfc/rfc6750#section-2.1
+    format: "Bearer followed by a b64token (letters, digits, -._~+/ and trailing =) anywhere: in an Authorization header, under authorization/proxy_authorization keys, in logs and standalone in prose (F-HTTP); the token has at least 16 characters, two character classes, 3 bits of entropy per character, no sequential or repeated runs and is no identifier; a value that parses as a JWT is left to dlp_jwt_token"
+  dlp_basic_auth:
+    source_ref: https://www.rfc-editor.org/rfc/rfc7617#section-2
+    format: "Basic followed by canonical padded base64 (RFC 4648 section 4) anywhere, as a whole token; it decodes to printable UTF-8 user-id:password with a non-empty user-id (no colon) and password; the password is no stand-in, credential name or metasyntactic word, also read without leetspeak (user:p@ss), and differs from the user-id (F-HTTP)"
   dlp_url_userinfo_token:
     source_ref: https://github.blog/2012-09-21-easier-builds-and-deployments-using-git-over-https-and-oauth/
     format: "token as the username of a URL with the constant password x-oauth-basic (https://<token>:x-oauth-basic@github.com/…); the token needs two character classes, 3 bits of entropy per character and no sequential or repeated runs (F-GEN1)"

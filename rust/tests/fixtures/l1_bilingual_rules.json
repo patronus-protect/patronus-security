@@ -1224,26 +1224,38 @@
   {
     "category": "dlp",
     "rule_id": "dlp_bearer_token",
-    "de": "Authorization: Bearer abcDEfGhIJkl123456",
-    "en": "Authorization: Bearer abcDEfGhIJkl123456",
+    "de": "Access-Token für den Abgleich: Bearer kQ7vRz2mXp9TsW4nYb3d",
+    "en": "AUTHORIZATION=Bearer kQ7vRz2mXp9TsW4nYb3d",
     "hard_negatives": {
       "de": [
         "Authorization: Bearer HIER_TOKEN_EINTRAGEN",
-        "Authorization: Bearer __ZUGRIFFSTOKEN__"
+        "Authorization: Bearer __ZUGRIFFSTOKEN__",
+        "AUTHORIZATION=Bearer ${LAGER_TOKEN}"
       ],
       "en": [
         "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE",
-        "Authorization: Bearer secret_token"
+        "Authorization: Bearer secret_token",
+        "curl -H \"Authorization: Bearer abc123.xyz.789\""
       ]
     },
-    "language_neutral": true
+    "language_neutral": false
   },
   {
     "category": "dlp",
     "rule_id": "dlp_basic_auth",
-    "de": "Authorization: Basic YWRhOnNlY3JldC04ODQy",
-    "en": "Authorization: Basic YWRhOnNlY3JldC04ODQy",
-    "language_neutral": true
+    "de": "Proxy-Zugangsdaten: Basic YWRhOnNlY3JldC04ODQy",
+    "en": "proxy_authorization: \"Basic YWRhOnNlY3JldC04ODQy\"",
+    "hard_negatives": {
+      "de": [
+        "PROXY_AUTHORIZATION=Basic SGFsbG8gV2VsdCBkYXMgaXN0IGVpbg==",
+        "expect(header).toBe(\"Basic YmVudXR6ZXI6cGFzc3dvcnQ=\")"
+      ],
+      "en": [
+        ".should(\"equal\", \"Basic YXBwbGljYXRpb246c2VjcmV0\")",
+        "Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ=="
+      ]
+    },
+    "language_neutral": false
   },
   {
     "category": "dlp",
@@ -1263,9 +1275,17 @@
   {
     "category": "dlp",
     "rule_id": "dlp_session_cookie",
-    "de": "Cookie: sessionid=kQ7vRz2mXp9TsW4nYb3",
+    "de": "Sitzungs-Cookie aus dem Browser: JSESSIONID=8F3A1C7E4B20D86F5EA9C3172B4D08E6",
     "en": "Cookie: sessionid=kQ7vRz2mXp9TsW4nYb3",
-    "language_neutral": true
+    "hard_negatives": {
+      "de": [
+        "SESSION_COOKIE=PHPSESSID=HIER_SITZUNG_EINTRAGEN"
+      ],
+      "en": [
+        "Set-Cookie: __Host-session=${SESSION_ID}; Path=/"
+      ]
+    },
+    "language_neutral": false
   },
   {
     "category": "dlp",

@@ -35,6 +35,7 @@ mod credentials;
 mod crypto;
 mod documented;
 mod hashes;
+mod http_auth;
 mod identifiers;
 mod likeness;
 mod placeholders;

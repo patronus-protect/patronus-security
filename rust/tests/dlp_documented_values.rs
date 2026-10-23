@@ -176,6 +176,9 @@ fn ed25519_pkcs8(key: &[u8]) -> String {
 /// RFC 8410 section 10.3 example private key.
 const RFC8410_KEY: &str = "D4EE72DBF913584AD5B6D8F1F769F8AD3AFE7C28CBF1D4FBE097A88F44755842";
 
+/// The Basic credentials of RFC 7617 section 2 (user-id and password).
+const RFC7617_CREDENTIALS: &str = "Aladdin:open sesame";
+
 fn pem(body: &str) -> String {
     format!(
         concat!(
@@ -278,6 +281,14 @@ fn documented_example_values_are_silent() {
         format!("ID_TOKEN={}\n", jwt_io_token()),
         format!("Das Token aus der Doku: {}", jwt_io_token()),
         format!("{{\"access_token\": \"{}\"}}", rfc7515_token()),
+        format!(
+            "Authorization: Basic {}\n",
+            base64(RFC7617_CREDENTIALS.as_bytes(), STANDARD, true)
+        ),
+        format!(
+            "PROXY_AUTHORIZATION=Basic {}\n",
+            base64(RFC7617_CREDENTIALS.as_bytes(), STANDARD, true)
+        ),
     ] {
         assert_silent(&text);
     }
@@ -400,6 +411,7 @@ fn documented_values_yaml_lists_exactly_the_built_values() {
         wif(&key, false),
         wif(&key, true),
         ed25519_pkcs8(&hex(RFC8410_KEY)),
+        base64(RFC7617_CREDENTIALS.as_bytes(), STANDARD, true),
     ]
     .into_iter()
     .chain(

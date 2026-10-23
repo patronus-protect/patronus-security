@@ -5,6 +5,8 @@ Every generator listed for a rule in ``dlp_synth/rules.json`` must produce value
 by exactly that rule with exactly the value span. Generated values exist only in memory.
 """
 
+import base64
+import binascii
 import json
 import unittest
 from pathlib import Path
@@ -103,6 +105,34 @@ def basic_auth(value):
     return pair is not None and pair[0].islower() and len(pair[0]) == 8 and pair[1].isalnum()
 
 
+def express_session_id(value):
+    # connect.sid: URL-encoded "s:" + 32-character uid-safe id + "." + 43-character signature.
+    if not value.startswith("s%3A"):
+        return False
+    session_id, _, signature = value[4:].partition(".")
+    return (
+        len(session_id) == 32
+        and set(session_id) <= set(ALNUM + "-_")
+        and len(signature) == 43
+        and signature.isalnum()
+    )
+
+
+def laravel_session(value):
+    # Laravel encrypted cookie: base64 of {"iv", "value", "mac", "tag"} with a 64-hex MAC.
+    try:
+        payload = json.loads(base64.b64decode(value, validate=True))
+    except (ValueError, binascii.Error):
+        return False
+    return (
+        isinstance(payload, dict)
+        and set(payload) == {"iv", "value", "mac", "tag"}
+        and len(base64.b64decode(payload["iv"])) == 16
+        and len(payload["mac"]) == 64
+        and set(payload["mac"]) <= set(HEX)
+    )
+
+
 def record_reference(value):
     letters, year, number = value.split("-")
     return letters.isupper() and len(letters) == 2 and year.startswith("20") and len(year) == 4 and len(number) == 6
@@ -194,6 +224,8 @@ CHECKS = {
     "aws_sigv4_signature": prefixed("", HEX, 64),
     "java_session_id": prefixed("", "0123456789ABCDEF", 32),
     "php_session_id": prefixed("", "0123456789abcdefghijklmnopqrstuv", 26),
+    "express_session_id": express_session_id,
+    "laravel_session": laravel_session,
     "bcrypt_2b_hash": bcrypt,
     "argon2id_phc_hash": argon2id,
     "md5_hex": prefixed("", HEX, 32),
@@ -238,6 +270,8 @@ LOOKALIKE_FAILURES = {
     "aws_iam_user_unique_id": lambda v: v[:4] in ("AKIA", "ASIA", "ABIA", "ACCA"),
     "aws_secret_access_key_long": lambda v: len(v) == 40,
     "aws_secret_access_key_hex": lambda v: any(c.isupper() for c in v),
+    # F-HTTP: random base64 that decodes to no user:password pair
+    "http_basic_credentials": lambda v: checks.basic_auth_pair(v) is not None,
 }
 
 
