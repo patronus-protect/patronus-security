@@ -204,12 +204,29 @@ def branch_number(name: str) -> int:
     return int(m.group(1)) if m else -1
 
 
+RUNNER_LOGIN: list[str] = []
+
+
+def runner_login() -> str:
+    """The GitHub account the runner publishes as; only its own PRs belong to a stack."""
+    if not RUNNER_LOGIN:
+        RUNNER_LOGIN.append(os.environ.get("ARK_L1_GH_LOGIN") or run(["gh", "api", "user", "--jq", ".login"]))
+    return RUNNER_LOGIN[0]
+
+
 def prs(state: str) -> list[dict]:
+    """The programme's stack PRs: its label and branch prefix, opened by the runner's own account
+    from a branch of this repository. A fork or someone else's PR with the same label or branch
+    name is never restacked, reviewed or merged."""
     out = run([
         "gh", "pr", "list", "--repo", GH_REPO, "--label", LABEL, "--state", state, "--limit", "200",
-        "--json", "number,headRefName,baseRefName,headRefOid,state,url,mergeable,isDraft",
+        "--json", "number,headRefName,baseRefName,headRefOid,state,url,mergeable,isDraft,"
+                  "isCrossRepository,author",
     ])
-    return [p for p in json.loads(out) if p["headRefName"].startswith(BRANCH_PREFIX)]
+    own = runner_login()
+    return [p for p in json.loads(out)
+            if p["headRefName"].startswith(BRANCH_PREFIX) and not p.get("isCrossRepository")
+            and (p.get("author") or {}).get("login") == own]
 
 
 def sha(ref: str) -> str:
