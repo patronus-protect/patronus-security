@@ -77,13 +77,18 @@ const MAX_HEADER_LINES: usize = 100;
 pub(crate) fn config_values(text: &str, key: &Regex) -> Vec<ConfigValue> {
     let mut values = Vec::new();
     let mut last_line = None;
+    // Header fields need a start line; most texts have none.
+    let http = text.starts_with("HTTP/") || text.contains(" HTTP/") || text.contains("\nHTTP/");
     for found in key.find_iter(text) {
         let line = line_at(text, found.start());
         if last_line == Some(line.start) {
             continue;
         }
         last_line = Some(line.start);
-        if let Some(value) = config_line(text, line) {
+        if !may_hold_key(text, &line, found.range()) {
+            continue;
+        }
+        if let Some(value) = config_line(text, line, http) {
             if value.key.start <= found.start() && found.end() <= value.key.end {
                 values.push(value);
             }
@@ -92,9 +97,26 @@ pub(crate) fn config_values(text: &str, key: &Regex) -> Vec<ConfigValue> {
     values
 }
 
+/// A cheap precondition of [`config_line`] for a key match at `found`: only
+/// key characters and blanks stand before the match and between it and the
+/// first `=` or `:` of the line, as in every env, INI/properties or header
+/// key (`export DB_PASSWORD=`, `app.db.password =`, `X-Api-Key:`).
+fn may_hold_key(text: &str, line: &Range<usize>, found: Range<usize>) -> bool {
+    let is_key_byte = |byte: &u8| byte.is_ascii_alphanumeric() || b"_.- \t".contains(byte);
+    let rest = &text.as_bytes()[found.end..line.end];
+    text.as_bytes()[line.start..found.start]
+        .iter()
+        .all(is_key_byte)
+        && rest
+            .iter()
+            .position(|&byte| byte == b'=' || byte == b':')
+            .is_some_and(|separator| rest[..separator].iter().all(is_key_byte))
+}
+
 /// The config value of `line`, if the line is an env, INI/properties or
-/// HTTP header field.
-pub(crate) fn config_line(text: &str, line: Range<usize>) -> Option<ConfigValue> {
+/// HTTP header field; `http` tells whether the text may hold an HTTP
+/// message head at all.
+pub(crate) fn config_line(text: &str, line: Range<usize>, http: bool) -> Option<ConfigValue> {
     let (key, raw) = structure::key_value_line(text, line.clone())?;
     // The key starts the line (no list bullet); a header field is not indented.
     let indent = &text[line.start..key.start];
@@ -121,7 +143,8 @@ pub(crate) fn config_line(text: &str, line: Range<usize>) -> Option<ConfigValue>
                 None => return None,
             }
         }
-        ":" if indent.is_empty()
+        ":" if http
+            && indent.is_empty()
             && HEADER_KEY.is_match(&text[key.clone()])
             && in_http_head(text, line.start) =>
         {
@@ -232,7 +255,8 @@ mod tests {
 
     fn parse(text: &str) -> Option<(&str, &str, ConfigFormat)> {
         let line = line_at(text, text.len());
-        config_line(text, line).map(|value| (&text[value.key], &text[value.value], value.format))
+        config_line(text, line, true)
+            .map(|value| (&text[value.key], &text[value.value], value.format))
     }
 
     #[test]
@@ -256,7 +280,7 @@ mod tests {
     fn properties_and_ini_lines() {
         let text = "[auth]\nclient_secret = Kx7]pQ2,vL9 ; rotated\n";
         let line = line_at(text, 8);
-        let value = config_line(text, line).unwrap();
+        let value = config_line(text, line, true).unwrap();
         assert_eq!(&text[value.key], "client_secret");
         assert_eq!(&text[value.value], "Kx7]pQ2,vL9");
         assert_eq!(value.format, ConfigFormat::Properties);
@@ -327,5 +351,24 @@ mod tests {
             .map(|value| (&text[value.key], &text[value.value]))
             .collect();
         assert_eq!(values, vec![("DB_PASSWORD", "Kx7,pQ2")]);
+    }
+
+    #[test]
+    fn key_precondition_and_http_start_line_gate_the_lines() {
+        let key = Regex::new(r"(?i)password|api-key").unwrap();
+        let text = "- DB_PASSWORD=Kx7,pQ2\nlog(password)=Kx7,pQ2\n  export DB_PASSWORD=Kx7,pQ3\napp.db.password = Kx7,pQ4\n";
+        let values: Vec<_> = config_values(text, &key)
+            .into_iter()
+            .map(|value| &text[value.value])
+            .collect();
+        assert_eq!(values, vec!["Kx7,pQ3", "Kx7,pQ4"]);
+        let headers = "X-Api-Key: Kx7,pQ2vL9\n";
+        assert!(config_values(headers, &key).is_empty());
+        let request = format!("GET /v1/items HTTP/1.1\n{headers}");
+        let values: Vec<_> = config_values(&request, &key)
+            .into_iter()
+            .map(|value| (&request[value.key], value.format))
+            .collect();
+        assert_eq!(values, vec![("X-Api-Key", ConfigFormat::HttpHeader)]);
     }
 }
