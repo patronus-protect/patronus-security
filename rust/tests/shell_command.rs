@@ -128,33 +128,9 @@ fn synthetic_v2_model_matches_scikit_learn() {
     assert_v2_parity(&model, "synthetic_v2_score", SCORE_TOLERANCE_V2);
 }
 
-/// Runs against the published A1 model when its bundle is cached locally and
-/// `PATRONUS_SHELL_COMMAND_V2_MODEL_DIR` points at it.
-#[test]
-fn published_v2_model_matches_scikit_learn_when_cached() {
-    let Some(bundle) = std::env::var("PATRONUS_SHELL_COMMAND_V2_MODEL_DIR")
-        .map(PathBuf::from)
-        .ok()
-        .filter(|dir| dir.join("model.json").is_file())
-    else {
-        eprintln!("skipping published v2 parity; set PATRONUS_SHELL_COMMAND_V2_MODEL_DIR");
-        return;
-    };
-    let expected_sha = v2_parity_cases()["published_model"]["sha256"]
-        .as_str()
-        .unwrap()
-        .to_string();
-    assert_eq!(
-        sha256_hex(&std::fs::read(bundle.join("model.json")).unwrap()),
-        expected_sha,
-        "cached model.json is not the revision the v2 parity fixture was generated from"
-    );
-    let model = ShellRiskModel::from_bundle_dir(&bundle).unwrap();
-    assert_v2_parity(&model, "published_score", SCORE_TOLERANCE_V2);
-}
-
-/// Runs against the published model when its bundle is cached locally, for
-/// example after `PATRONUS_RUN_HF_E2E=1 cargo test --test hf_e2e`.
+/// Runs against the published A1 model when its bundle is cached locally, for
+/// example after `PATRONUS_RUN_HF_E2E=1 cargo test --test hf_e2e`, or when
+/// `PATRONUS_SHELL_COMMAND_MODEL_DIR` points at it.
 #[test]
 fn published_model_matches_scikit_learn_when_cached() {
     let bundle = std::env::var("PATRONUS_SHELL_COMMAND_MODEL_DIR")
@@ -171,23 +147,23 @@ fn published_model_matches_scikit_learn_when_cached() {
         eprintln!("skipping published shell_command parity; set PATRONUS_SHELL_COMMAND_MODEL_DIR");
         return;
     };
-    let expected_sha = parity_cases()["published_model"]["sha256"]
+    let expected_sha = v2_parity_cases()["published_model"]["sha256"]
         .as_str()
         .unwrap()
         .to_string();
     assert_eq!(
         sha256_hex(&std::fs::read(bundle.join("model.json")).unwrap()),
         expected_sha,
-        "cached model.json is not the revision the parity fixture was generated from"
+        "cached model.json is not the revision the v2 parity fixture was generated from"
     );
     let model = ShellRiskModel::from_bundle_dir(&bundle).unwrap();
-    assert_parity(&model, "published_score");
+    assert_v2_parity(&model, "published_score", SCORE_TOLERANCE_V2);
 
-    // The published default policy flags the documented comment-padding bypass.
+    // Comment padding does not hide a risky command: the stripped variant wins
+    // and the command flags under the published default policy.
     let pipeline = ShellRiskPipeline::new(model);
     let padded = format!("rm -rf / # {}", "padding ".repeat(2048));
     let score = pipeline.score(&padded);
-    assert!(score.full_score <= score.threshold, "{score:?}");
     assert!(score.flagged, "{score:?}");
     assert_eq!(score.variant, "comments_stripped");
 }
