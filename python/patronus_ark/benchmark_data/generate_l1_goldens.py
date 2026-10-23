@@ -6993,6 +6993,232 @@ for _label, _rows in DLP_K05_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
 
+
+def ds_items(
+    label: str,
+    language: str,
+    rule: str,
+    template: str,
+    generator: str,
+    seeds: tuple[int, ...],
+    *,
+    carrier: str,
+) -> dict:
+    """Secret positive with one generator recipe per `<<secret:i>>` (array items)."""
+    secrets = [{"gen": generator, "seed": seed} for seed in seeds]
+    row = secret_template_positive(label, language, template, secrets)
+    return dlp_row(row, rule, carrier, (), False)
+
+
+# K05B: config key->value extraction, part 2 (YAML, JSON, TOML) with the K05 value-shape filter.
+# A key binds its whole value at any nesting depth (a plain YAML value with ; , } inside up to an
+# inline comment, a YAML list entry), and an array under a credential key binds each string item:
+# JSON and TOML arrays (also over several lines), YAML flow and block sequences; a plural key
+# (api_keys, tokens) binds only items. Hard negatives: the K05 shapes per format, as values and as
+# items (UUID, prefixed digest, hex digest under a digest key, ObjectId, template/format field,
+# reference, boolean, number, path, URL without credentials), plus a YAML alias, a SOPS value, a
+# tokenizer list and a Rust raw pointer type. Each value line ends the text.
+DLP_K05B_CASES = {
+    "CREDENTIAL": [
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "lager:\n  datenbank:\n    host: db.lager.intern\n    passwort: <<secret:0>>  # rotiert im September\n",
+            "quoted_punctuated_password", 15101, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "versand:\n  - name: paketdienst\n    zugangstoken: <<secret:0>> # produktiv\n  - name: spedition\n",
+            "quoted_punctuated_password", 15102, carrier="yaml",
+        ),
+        ds_items(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "# Versanddienst, Schlüssel werden quartalsweise rotiert\nversand:\n  api_schluessel:\n"
+            "    - <<secret:0>>\n    - <<secret:1>>\n  region: eu-central-1\n",
+            "url_token", (15103, 15104), carrier="yaml",
+        ),
+        ds_items(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "{\n  \"lager\": {\n    \"standort\": \"hamburg\",\n    \"zugangstokens\": [\n"
+            "      \"<<secret:0>>\",\n      \"<<secret:1>>\"\n    ]\n  }\n}\n",
+            "url_token", (15105, 15106), carrier="json",
+        ),
+        ds_items(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "[versand]\nendpunkt = \"https://api.versand.intern\"\ntokens = [\n  \"<<secret:0>>\",  # primär\n"
+            "  \"<<secret:1>>\",\n]\n",
+            "generic_api_secret", (15107, 15108), carrier="toml",
+        ),
+        ds_items(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "lager:\n  geheimnis: [<<secret:0>>, \"<<secret:1>>\"]\n  zeitlimit: 30s\n",
+            "url_token", (15109, 15110), carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "spring:\n  datasource:\n    url: jdbc:postgresql://db:5432/orders\n    password: <<secret:0>> # rotated monthly\n",
+            "quoted_punctuated_password", 15111, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "services:\n  - name: billing\n    client_secret: <<secret:0>>\n  - name: reports\n",
+            "quoted_punctuated_password", 15112, carrier="yaml",
+        ),
+        ds_items(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "{\"service\": \"exports\", \"auth\": {\"api_keys\": [\"<<secret:0>>\", \"<<secret:1>>\"]}}\n",
+            "url_token", (15113, 15114), carrier="json",
+        ),
+        ds_items(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "[auth]\nissuer = \"https://auth.internal\"\napi_keys = [\"<<secret:0>>\", '<<secret:1>>']\n",
+            "url_token", (15115, 15116), carrier="toml",
+        ),
+        ds_items(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "# webhook verification, old and new during rotation\nwebhooks:\n  tokens:\n    - <<secret:0>>\n"
+            "    - \"<<secret:1>>\" # since March\n",
+            "generic_api_secret", (15117, 15118), carrier="yaml",
+        ),
+        ds_items(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "services:\n  worker:\n    image: exports:1.4\n    environment:\n      SERVICE_TOKENS:\n"
+            "        - <<secret:0>>\n",
+            "url_token", (15119,), carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "lager:\n  standort: hamburg\n  api_token: 3f2a9c4e-7b1d-4e8a-9c2f-5d6e7f8a9b0c",
+            "UUID under a nested YAML token key", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "{\"lager\": {\"standort\": \"hamburg\", \"geheimnis\": "
+            "\"sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08\"}}",
+            "algorithm-prefixed digest under a nested JSON secret key", carrier="json",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "konto:\n  benutzer: lager\n  gehashtes_passwort: 2fd4e1c67a2d28fced849ee1bb76e7391b93eb12",
+            "hex digest under a YAML hashed-password key", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "{\"lager\": {\"zugangstokens\": [\"5f8d0c3e9b1a2d4c6e8f0a1b\", \"5f8d0c3e9b1a2d4c6e8f0a1c\"]}}",
+            "MongoDB ObjectIds in a JSON token array", carrier="json",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "[versand]\nendpunkt = \"https://api.versand.intern\"\ntokens = [\"${VERSAND_TOKEN}\", \"{versand_token}\"]",
+            "template fields in a TOML token array", carrier="toml",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "versand:\n  api_schluessel:\n    - $LAGER_API_SCHLUESSEL\n    - \"%LAGER_API_SCHLUESSEL%\"",
+            "variable references in a YAML key sequence", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "# Verschlüsselung im Testsystem abgeschaltet\nverschluesselung:\n  geheimnis: deaktiviert",
+            "boolean word under a nested YAML secret key", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "[sicherheit]\n# Gültigkeit der Tokens in Sekunden\ntokens = [86400, 3600]",
+            "numbers in a TOML token array", carrier="toml",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "# Passwort liegt als Docker-Secret im Container\nlager:\n  passwort: /run/secrets/lager_passwort",
+            "path under a nested YAML password key", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "{\"versand\": {\"api_schluessel\": \"https://tresor.lager.intern/v1/versand\"}}",
+            "URL without credentials under a nested JSON key", carrier="json",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "standard: &lager_standard\n  benutzer: lager\nproduktion:\n  passwort: *lager_standard_passwort",
+            "YAML alias under a password key", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "# mit SOPS verschlüsselt\nlager:\n  passwort: "
+            "ENC[AES256_GCM,data:Zm9vYmFyYmF6cXV4,iv:Tz8Wm4K93RVq,tag:Kx7pQ2vL,type:str]",
+            "SOPS-encrypted value under a password key", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "{\"auth\": {\"client_id\": \"reports\", \"client_secret\": \"550e8400-e29b-41d4-a716-446655440000\"}}",
+            "UUID under a nested JSON secret key", carrier="json",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "[auth]\nissuer = \"https://auth.internal\"\napi_keys = [\"550e8400-e29b-41d4-a716-446655440000\"]",
+            "UUID in a TOML key array", carrier="toml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "assets:\n  access_token: sha384-oqVuAfXRKap7fdgcCY5uykM6+R9GqQ8K/uxy9rx7HNQlGYl1kPzQho1wx4JwY8wC",
+            "SRI digest under a nested YAML token key", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "# checksums of the release tokens, not the tokens\n"
+            "sha256_tokens = [\"9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08\"]",
+            "hex digests under a digest-named TOML token array", carrier="toml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "# owner document of the integration\nowner:\n  api_token: 6512bd43d9caa6e02c990b0a",
+            "MongoDB ObjectId under a nested YAML token key", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "{\"oauth\": {\"client_id\": \"reports\", \"client_secret\": \"%(client_secret)s\"}}",
+            "Python format field under a nested JSON secret key", carrier="json",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "# filled in by the task runner\nauth:\n  api_key: env:BILLING_API_KEY",
+            "environment reference under a nested YAML key", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "{\"auth\": {\"mode\": \"none\", \"api_token\": \"disabled\"}}",
+            "boolean word under a nested JSON token key", carrier="json",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "# OAuth settings\noauth:\n  client_secret: 86400000",
+            "number under a nested YAML secret key", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "[database]\nhost = \"db.internal\"\npasswords = ['C:\\secrets\\orders-db.txt']",
+            "Windows path in a TOML password array", carrier="toml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "# token endpoint of the identity provider\nidp:\n  client_secret: "
+            "https://auth.internal/realms/acme/protocol/openid-connect/token",
+            "URL without credentials under a nested YAML secret key", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "{\"model\": \"bpe\", \"tokens\": [\"<|endoftext|>\", \"\u0120constructor\", \"ing</w>\", \"abc12345\"]}",
+            "tokenizer entries in a JSON token list", carrier="json",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "extern \"C\" {\n    pub fn getpwnam_r(\n        name: *const c_char,\n        pwd: *mut passwd,\n",
+            "Rust raw pointer type after a pwd parameter", carrier="code",
+        ),
+    ],
+}
+for _label, _rows in DLP_K05B_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
 def flatten(suite: str, cases: dict[str, list[dict]]) -> list[dict]:
     rows = []
     for label, label_cases in cases.items():
