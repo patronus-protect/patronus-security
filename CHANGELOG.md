@@ -55,6 +55,10 @@ DLP output modes and the new labels that only they report are opt-in.
 Result shapes only grow: `dlp_mode` and the PII modes are new execution gates, `matched_rules`
 entries gain `subtype`, `score`, `context`, `overlap`, `suppressed_by` and `structure`, and PII
 results gain `details.secondary_evidence`.
+The Ark API scan `config` gains an optional `dynamic_pii` block (#146). **Rust API:** the
+Ark-API-only `SecurityGateway::enqueue_ark_api_categories_with_options` and
+`enqueue_ark_api_categories_with_chunk_overlap_options` are replaced by
+`enqueue_ark_api_categories_with_request_options`.
 
 ### Changed
 
