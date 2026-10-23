@@ -51,14 +51,25 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   nimmt `github_pat_` und genau 82 Zeichen. Die Regel wertet mit Prüfsummen-Stärke (0,90 ohne
   Kontext). Ein Token-förmiger Wert mit falscher CRC32 ist auch für generische Zuweisungen,
   URL- und Header-Regeln kein Secret.
+  Seit F04 prüft `dlp_npm_token` die CRC32 wie bei GitHub: `npm_` und genau 36 Base62-Zeichen,
+  die letzten sechs sind die CRC32 der ersten 30 (Prüfsummen-Stärke, 0,85 ohne Kontext). Ein
+  `npm_`-Wert mit falscher CRC32 ist auch für generische Regeln kein Secret. `dlp_gitlab_pat`
+  nimmt `glpat-` mit genau 20 Zeichen oder die routbare Form (Payload, Punkt, zwei Zeichen
+  Version, sieben Zeichen Base36; aktuell `.01.`, zwei Base36-Längenziffern, sieben Base36-CRC32-Ziffern). `dlp_gitlab_token` deckt die übrigen dokumentierten
+  GitLab-Präfixe ab (Deploy `gldt-`, Runner `glrt-`/`glrtr-` auch routbar, Workspace `glwt-` nur routbar, Runner-Registrierung
+  `GR1348941`, Pipeline-Trigger `glptt-`, Feed `glft-`, Incoming Mail `glimt-`, Kubernetes-Agent
+  `glagent-`, CI/CD-Job `glcbt-`, SCIM `glsoat-`, Feature-Flag-Client `glffct-`) mit den Längen
+  der gitleaks-Regeln, `dlp_gitlab_oauth_secret` das OAuth-Anwendungs-Secret `gloas-` (`API_KEY`,
+  Untertyp `secret_key`). Die Prüfwerte der routbaren GitLab-Tokens werden nicht verifiziert,
+  weil GitLab den Algorithmus nicht dokumentiert.
   Seit K09 (Taxonomie v2) nennt jede Secret-Regel einen Untertyp ihrer Gruppe (`subtype` in
   `matched_rules`: `api_key`, `access_token`, `password`, `auth_url` …). Connection-Strings,
   Webhook-URLs, Auth-URLs, OTP-Secrets und Seed-Phrasen werden keine eigenen Gruppen, sondern
   Untertypen von `CREDENTIAL`, `SECRET_TOKEN` bzw. `CRYPTO_KEY` (Liste in
   [`entity_map.yaml`](entity_map.yaml), `subtypes`).
 - Validatoren sind schwach: `is_secret_value` prüft nur Länge, Platzhalter und Env-Referenzen.
-  Prüfsummen fehlen ganz: npm CRC32, JWT-Struktur und PEM/DER (Base58Check für WIF seit
-  K08/F02, GitHub CRC32 seit F03).
+  Prüfsummen fehlen ganz: JWT-Struktur und PEM/DER (Base58Check für WIF seit
+  K08/F02, GitHub CRC32 seit F03, npm CRC32 seit F04).
   Seit K03 liegen die Bausteine dafür in `rust/src/detectors/validators/` (CRC32-Base62,
   Base58Check, Bech32/Bech32m, Base64/DER, JWT-Header, Entropie, Zeichenklassen; auch für PII);
   angebunden werden sie regelweise in F01–F09.

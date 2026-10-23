@@ -99,6 +99,8 @@ const RULE_SUBTYPES: &[(&str, &str)] = &[
     ("dlp_github_token", "access_token"),
     ("dlp_github_pat", "access_token"),
     ("dlp_gitlab_pat", "access_token"),
+    ("dlp_gitlab_token", "access_token"),
+    ("dlp_gitlab_oauth_secret", "secret_key"),
     ("dlp_npm_token", "access_token"),
     ("dlp_stripe_key", "api_key"),
     ("dlp_stripe_webhook", "secret_key"),

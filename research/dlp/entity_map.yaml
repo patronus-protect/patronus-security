@@ -261,6 +261,22 @@ entities:
     trufflehog: [Gitlab]
     detect_secrets: [GitLabTokenDetector]
     backlog: F04
+  - id: vcs.gitlab.token
+    scope: shared
+    group: SECRET_TOKEN
+    ark: [dlp_gitlab_token]
+    gitleaks: [gitlab-cicd-job-token, gitlab-deploy-token, gitlab-feature-flag-client-token,
+      gitlab-feed-token, gitlab-incoming-mail-token, gitlab-kubernetes-agent-token, gitlab-ptt,
+      gitlab-rrt, gitlab-runner-authentication-token, gitlab-runner-authentication-token-routable,
+      gitlab-scim-token]
+    trufflehog: [Gitlab]
+    backlog: F04
+  - id: vcs.gitlab.oauth_app_secret
+    scope: shared
+    group: API_KEY
+    ark: [dlp_gitlab_oauth_secret]
+    gitleaks: [gitlab-oauth-app-secret]
+    backlog: F04
   - id: registry.npm.access_token
     scope: shared
     group: SECRET_TOKEN
@@ -433,16 +449,7 @@ entities:
     backlog: M20
 
   # ── baseline_only: Lücken in ARK, je Paket ──────────────────────────────
-  # F04/F09/F13: Varianten bestehender Provider
-  - id: vcs.gitlab.other_tokens
-    scope: baseline_only
-    group: SECRET_TOKEN
-    gitleaks: [gitlab-cicd-job-token, gitlab-deploy-token, gitlab-feature-flag-client-token,
-      gitlab-feed-token, gitlab-incoming-mail-token, gitlab-kubernetes-agent-token,
-      gitlab-oauth-app-secret, gitlab-ptt, gitlab-rrt, gitlab-runner-authentication-token,
-      gitlab-runner-authentication-token-routable, gitlab-scim-token]
-    trufflehog: [Gitlab]
-    backlog: F04
+  # F09/F13: Varianten bestehender Provider
   - {id: vcs.gitlab.session_cookie, scope: baseline_only, group: CREDENTIAL, gitleaks: [gitlab-session-cookie], backlog: F13}
   - id: comm.slack.app_config_token
     scope: baseline_only

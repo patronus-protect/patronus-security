@@ -841,6 +841,60 @@
         "seed": 1
       }
     ],
+    "hard_negatives": {
+      "de": [
+        "Platzhalter in der Doku: GITLAB_TOKEN=<dein-gitlab-token>",
+        "Abgeschnittenes Token im Ticket: glpat-x7Kq…"
+      ],
+      "en": [
+        "GITLAB_TOKEN: $CI_JOB_TOKEN",
+        "Personal access tokens start with glpat- and have 20 characters."
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_gitlab_token",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "gitlab_deploy_token",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "Runner-Token aus dem Tresor: token = \"${RUNNER_TOKEN}\"",
+        "Deploy-Tokens beginnen mit gldt-."
+      ],
+      "en": [
+        "docker login -u gitlab-ci-token -p \"$CI_JOB_TOKEN\" \"$CI_REGISTRY\"",
+        "Pipeline trigger tokens start with glptt- followed by 40 hex digits."
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_gitlab_oauth_secret",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "gitlab_oauth_app_secret",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "GITLAB_APP_SECRET=<hier-secret-eintragen>"
+      ],
+      "en": [
+        "{\"application_id\": \"4711\", \"secret\": \"${GITLAB_APP_SECRET}\"}"
+      ]
+    },
     "language_neutral": true
   },
   {
@@ -854,6 +908,16 @@
         "seed": 1
       }
     ],
+    "hard_negatives": {
+      "de": [
+        "//registry.npmjs.org/:_authToken=${NPM_TOKEN}",
+        "Abgeschnittenes npm-Token im Ticket: npm_Zq7…"
+      ],
+      "en": [
+        "npm config set //registry.npmjs.org/:_authToken \"$NPM_TOKEN\"",
+        "Granular access tokens start with npm_ followed by 36 characters."
+      ]
+    },
     "language_neutral": true
   },
   {
@@ -1089,7 +1153,7 @@
     "en": "API key: abcDEfGhIJkl123456",
     "hard_negatives": {
       "de": [
-        "API-Schl\u00fcssel: HIER_API_SCHLUESSEL_EINTRAGEN",
+        "API-Schlüssel: HIER_API_SCHLUESSEL_EINTRAGEN",
         "client_secret = Environment.GetEnvironmentVariable(\"CLIENT_SECRET\")",
         "git remote set-url origin https://token:@bitbucket.org/acme/lager.git"
       ],

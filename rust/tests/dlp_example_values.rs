@@ -2,7 +2,7 @@
 //! T06: documented example and test values of secret rules are no findings,
 //! while the same shapes with a random body and weak but real credentials
 //! stay detected. Values are synthetic shapes without valid checksums; GitHub
-//! tokens get their CRC32 suffix here at test time (F03).
+//! and npm tokens get their CRC32 suffix here at test time (F03, F04).
 
 use std::sync::OnceLock;
 
@@ -65,8 +65,14 @@ fn assert_silent(text: &str) {
 
 /// A `ghp_` token whose 30 body characters `body` end in their CRC32 (F03).
 fn github_token(body: &str) -> String {
+    crc_token("ghp_", body)
+}
+
+/// `prefix` and 30 body characters `body` that end in their CRC32 (GitHub
+/// F03, npm F04).
+fn crc_token(prefix: &str, body: &str) -> String {
     assert_eq!(body.len(), 30, "{body}");
-    format!("ghp_{body}{}", crc32_base62(body))
+    format!("{prefix}{body}{}", crc32_base62(body))
 }
 
 fn fill(word: &str, length: usize) -> String {
@@ -251,6 +257,24 @@ const SHAPES: &[Shape] = &[
         suffix: "",
     },
     Shape {
+        rule_id: "dlp_gitlab_token",
+        carrier_de: "GITLAB_DEPLOY_TOKEN={}",
+        carrier_en: "registry:\n  user: gitlab+deploy-token-12\n  token: {}\n",
+        prefix: "gldt-",
+        alphabet: ALNUM,
+        length: 20,
+        suffix: "",
+    },
+    Shape {
+        rule_id: "dlp_gitlab_oauth_secret",
+        carrier_de: "GITLAB_APP_SECRET={}",
+        carrier_en: "{\"application_id\": \"4711\", \"secret\": \"{}\"}",
+        prefix: "gloas-",
+        alphabet: ALNUM,
+        length: 64,
+        suffix: "",
+    },
+    Shape {
         rule_id: "dlp_npm_token",
         carrier_de: "//registry.npmjs.org/:_authToken={}",
         carrier_en: "NPM_TOKEN={}",
@@ -393,6 +417,7 @@ fn provider_values_with_a_random_body_stay_detected_in_de_and_en() {
         let body = random(index as u64 + 1, shape.alphabet, shape.length);
         let value = match shape.rule_id {
             "dlp_github_token" => github_token(&body),
+            "dlp_npm_token" => crc_token("npm_", &body),
             _ => format!("{}{body}{}", shape.prefix, shape.suffix),
         };
         for carrier in [shape.carrier_de, shape.carrier_en] {

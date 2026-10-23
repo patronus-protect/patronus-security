@@ -1680,6 +1680,9 @@ DLP_LOOKALIKE_GENERATORS = (
     "github_ghp_bad_crc", "github_gho_bad_crc", "github_ghu_bad_crc", "github_ghs_bad_crc",
     "github_ghr_bad_crc", "github_ghp_short", "github_gho_short", "github_ghp_long",
     "github_fine_grained_pat_short", "github_fine_grained_pat_long",
+    # F04
+    "npm_bad_crc", "npm_short", "npm_long", "gitlab_pat_long", "gitlab_deploy_token_short",
+    "gitlab_trigger_token_upper_hex",
 )
 
 
@@ -5262,6 +5265,196 @@ DLP_F03_CASES = {
     ],
 }
 for _label, _rows in DLP_F03_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+
+# F04: `dlp_npm_token` takes `npm_` with exactly 36 base62 characters whose last six are the
+# CRC32 of the first 30, at checksum strength. `dlp_gitlab_pat` takes `glpat-` with exactly 20
+# characters or the routable form (`glpat-…` + `.` + version + base36 check value);
+# `dlp_gitlab_token` takes the other documented GitLab prefixes (deploy, runner, runner
+# registration, pipeline trigger, feed, incoming mail, Kubernetes agent, CI/CD job, SCIM,
+# feature flag client) and `dlp_gitlab_oauth_secret` the OAuth application secret (`gloas-`).
+# Hard negatives are shapes with a wrong check value, length or alphabet (no rule may report
+# them), example/test fills, secret references and the documented prefixes.
+DLP_F04_CASES = {
+    "SECRET_TOKEN": [
+        ds(
+            "SECRET_TOKEN", "de", "dlp_npm_token",
+            "jobs:\n  veroeffentlichen:\n    steps:\n      - run: npm publish\n        env:\n"
+            "          NODE_AUTH_TOKEN: <<secret:0>>\n",
+            "npm_access_token", 10601, carrier="yaml",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_gitlab_token",
+            "# Registry-Zugang des Deploy-Jobs\n"
+            "$ echo <<secret:0>> | docker login registry.gitlab.example.com -u gitlab+deploy-token-12 --password-stdin\n",
+            "gitlab_deploy_token", 10602, carrier="cli",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_gitlab_token",
+            "concurrent = 4\n\n[[runners]]\n  name = \"baurunner-01\"\n  url = \"https://gitlab.example.com\"\n"
+            "  token = \"<<secret:0>>\"\n  executor = \"docker\"\n",
+            "gitlab_runner_token", 10603, carrier="toml",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_gitlab_token",
+            "# Nächtlicher Build über den Pipeline-Trigger\n"
+            "$ curl -X POST --fail -F token=<<secret:0>> -F ref=main "
+            "https://gitlab.example.com/api/v4/projects/42/trigger/pipeline\n",
+            "gitlab_trigger_token", 10604, carrier="cli",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_gitlab_token",
+            "Hallo Team,\n\nder Feed-Token für den Kalender-Export lautet <<secret:0>>\n\n"
+            "Bitte nicht weitergeben.\n",
+            "gitlab_feed_token", 10605, carrier="prose",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_gitlab_token",
+            "agent:\n  # Zugang des Clusters zu GitLab\n  config:\n    token: <<secret:0>>\n"
+            "    kasAddress: wss://kas.gitlab.example.com\n",
+            "gitlab_agent_token", 10606, carrier="yaml",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_gitlab_pat",
+            "{\"quelle\": \"gitlab.example.com\", \"zugang\": {\"token\": \"<<secret:0>>\"}}\n",
+            "gitlab_pat_routable", 10607, carrier="json",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_npm_token",
+            "$ npm config set //registry.npmjs.org/:_authToken <<secret:0>>\n",
+            "npm_access_token", 10611, carrier="cli",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_npm_token",
+            "const RegClient = require(\"npm-registry-client\");\n\n"
+            "const client = new RegClient({ auth: { token: \"<<secret:0>>\", alwaysAuth: true } });\n",
+            "npm_access_token", 10612, carrier="code",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_gitlab_token",
+            "$ gitlab-runner register --non-interactive --url https://gitlab.example.com "
+            "--token <<secret:0>> --executor docker\n",
+            "gitlab_runner_token_routable", 10613, carrier="cli",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_gitlab_token",
+            "gitlabUrl: https://gitlab.example.com/\nrunnerRegistrationToken: \"<<secret:0>>\"\nconcurrent: 10\n",
+            "gitlab_runner_registration_token", 10614, carrier="yaml",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_gitlab_token",
+            "2026-10-21T10:14:02Z INFO mail_room: delivering to /api/v4/internal/mail_room "
+            "with incoming mail token <<secret:0>>\n",
+            "gitlab_incoming_mail_token", 10615, carrier="log",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_gitlab_token",
+            "PATCH /api/scim/v2/groups/acme/Users/42 HTTP/1.1\nHost: gitlab.example.com\n"
+            "Authorization: Bearer <<secret:0>>\nContent-Type: application/scim+json\n",
+            "gitlab_scim_token", 10616, carrier="http",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_gitlab_token",
+            "Hi Sam,\n\nthe feature flag client token for the storefront is <<secret:0>>\n\n"
+            "Please rotate it after the release.\n",
+            "gitlab_feature_flag_token", 10617, carrier="prose",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_gitlab_token",
+            "2026-10-21T10:14:02Z DEBUG job 8812: fetching artifacts with job token <<secret:0>>\n",
+            "gitlab_cicd_job_token", 10618, carrier="log",
+        ),
+        dl(
+            "SECRET_TOKEN", "de", "dlp_npm_token",
+            "; Token mit Tippfehler, von der Registry abgelehnt\n//registry.npmjs.org/:_authToken=<<secret:0>>\n",
+            "npm_bad_crc", 10621, "npm_ token shape with a wrong CRC32 check value", carrier="ini",
+        ),
+        dl(
+            "SECRET_TOKEN", "de", "dlp_npm_token",
+            "2026-10-21 10:14:02 WARN publish: verworfener Wert <<secret:0>> (35 Zeichen)\n",
+            "npm_short", 10622, "npm_ token shape with 35 instead of 36 characters", carrier="log",
+        ),
+        dn(
+            "SECRET_TOKEN", "de", "dlp_npm_token",
+            "      - run: echo \"//npm.pkg.github.com/:_authToken=${{ secrets.NPM_TOKEN }}\" >> .npmrc\n",
+            "GitHub Actions secret reference", carrier="yaml",
+        ),
+        dl(
+            "SECRET_TOKEN", "de", "dlp_gitlab_pat",
+            "2026-10-21 10:14:02 WARN api: verworfener Wert <<secret:0>> (21 Zeichen)\n",
+            "gitlab_pat_long", 10623, "glpat- shape with 21 instead of 20 characters", carrier="log",
+        ),
+        dl(
+            "SECRET_TOKEN", "de", "dlp_gitlab_token",
+            "2026-10-21 10:14:02 WARN trigger: verworfener Wert <<secret:0>> (Großbuchstaben)\n",
+            "gitlab_trigger_token_upper_hex", 10624, "glptt- shape with upper-case hex digits", carrier="log",
+        ),
+        dn(
+            "SECRET_TOKEN", "de", "dlp_gitlab_token",
+            "Deploy-Tokens beginnen mit gldt-, Runner-Tokens mit glrt- und Pipeline-Trigger-Tokens mit glptt-.",
+            "documented prefixes without a value", carrier="prose",
+        ),
+        dx(
+            "SECRET_TOKEN", "de", "dlp_gitlab_token",
+            "deploy:\n  registry:\n    benutzer: gitlab+deploy-token-12\n    token: <<secret:0>>\n",
+            "gitlab_deploy_token", "BEISPIEL", "documented example value (BEISPIEL fill)", carrier="yaml",
+        ),
+        dl(
+            "SECRET_TOKEN", "en", "dlp_npm_token",
+            "{\"npmAuthToken\": \"<<secret:0>>\", \"npmRegistryServer\": \"https://registry.npmjs.org\"}\n",
+            "npm_bad_crc", 10631, "npm_ token shape with a wrong CRC32 check value", carrier="json",
+        ),
+        dl(
+            "SECRET_TOKEN", "en", "dlp_npm_token",
+            "2026-10-21T10:14:02Z WARN publish: rejected <<secret:0>> (37 characters)\n",
+            "npm_long", 10632, "npm_ token shape with 37 instead of 36 characters", carrier="log",
+        ),
+        dx(
+            "SECRET_TOKEN", "en", "dlp_npm_token",
+            "# test fixture\n//registry.npmjs.org/:_authToken=<<secret:0>>\n",
+            "npm_access_token", "TESTKEY", "test key (TESTKEY fill, zero checksum)", carrier="ini",
+        ),
+        dl(
+            "SECRET_TOKEN", "en", "dlp_gitlab_token",
+            "2026-10-21T10:14:02Z WARN registry: rejected <<secret:0>> (19 characters)\n",
+            "gitlab_deploy_token_short", 10633, "gldt- shape with 19 instead of 20 characters", carrier="log",
+        ),
+        dn(
+            "SECRET_TOKEN", "en", "dlp_gitlab_token",
+            "[[runners]]\n  url = \"https://gitlab.example.com\"\n  token = \"${RUNNER_TOKEN}\"\n",
+            "environment reference", carrier="toml",
+        ),
+        dn(
+            "SECRET_TOKEN", "en", "dlp_gitlab_token",
+            "Feed tokens start with glft-, SCIM tokens with glsoat- and OAuth application secrets with gloas-.",
+            "documented prefixes without a value", carrier="prose",
+        ),
+    ],
+    "API_KEY": [
+        ds(
+            "API_KEY", "de", "dlp_gitlab_oauth_secret",
+            "# Anmeldung über GitLab (OmniAuth)\nGITLAB_APP_ID=4711\nGITLAB_APP_SECRET=<<secret:0>>\n",
+            "gitlab_oauth_app_secret", 10641, carrier="env",
+        ),
+        ds(
+            "API_KEY", "en", "dlp_gitlab_oauth_secret",
+            "{\"application_id\": \"4711\", \"application_name\": \"dashboard\", \"secret\": \"<<secret:0>>\"}\n",
+            "gitlab_oauth_app_secret", 10642, carrier="json",
+        ),
+        dx(
+            "API_KEY", "de", "dlp_gitlab_oauth_secret",
+            "GITLAB_APP_SECRET=<<secret:0>>\n",
+            "gitlab_oauth_app_secret", "MUSTER", "documented example value (MUSTER fill)", carrier="env",
+        ),
+        dx(
+            "API_KEY", "en", "dlp_gitlab_oauth_secret",
+            "{\"application_id\": \"4711\", \"secret\": \"<<secret:0>>\"}\n",
+            "gitlab_oauth_app_secret", "EXAMPLE", "documented example value (EXAMPLE fill)", carrier="json",
+        ),
+    ],
+}
+for _label, _rows in DLP_F04_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
 
