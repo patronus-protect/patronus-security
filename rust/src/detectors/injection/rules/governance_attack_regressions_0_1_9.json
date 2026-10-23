@@ -273,6 +273,21 @@
         "immediately"
       ],
       "adaptation": "Requires a complete imperative, immediate timing, and an explicitly privileged execution tool."
+    },
+    {
+      "id": "ark.injection.governance.credential_verification_link",
+      "canonical_id": "ark.injection.agentic.control_abuse",
+      "upstream_id": "ark-governance-regression:credential-verification-link",
+      "family": "agentic_control_abuse",
+      "severity": "critical",
+      "upstream_weight": 0.97,
+      "evidence_tier": "audited_high_precision",
+      "description": "A request to verify identity, account or credentials at a login or auth link (credential phishing, ASI-09)",
+      "pattern": "\\b(?P<request>(?:verify|confirm|validate|re-?validate|re-?authenticate|re-?enter|update)[ \\t]+(?:your[ \\t]+)?(?:identity|account(?:[ \\t]+credentials)?|credentials|password|login(?:[ \\t]+details)?|sign-?in[ \\t]+details)|(?:bestätigen|bestätige|verifizieren|verifiziere)[^.!?;\\n]{0,24}?(?:identität|konto|zugangsdaten|passwort|anmeldedaten))\\b[^.!?;\\n]{0,80}?(?P<link>https?://[^\\s<>\\\"']{0,120}?(?:login|log-in|signin|sign-in|auth)[^\\s<>\\\"']*)",
+      "required_literals_any": [
+        "http"
+      ],
+      "adaptation": "Requires an identity, account or credential verification request and an http(s) link whose host or path names a login or auth page in one bounded clause; a plain e-mail confirmation link or prose about phishing stays silent."
     }
   ]
 }

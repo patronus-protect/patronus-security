@@ -64,6 +64,18 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Add the injection L1 governance rule `ark.injection.governance.credential_verification_link`
+  for credential phishing (ASI-09, #60). It reports a request to verify, confirm or re-enter an
+  identity, account, credentials or password (DE: `bestätigen`/`verifizieren` … `Identität`,
+  `Konto`, `Zugangsdaten`, `Passwort`, `Anmeldedaten`) followed in the same clause by an http(s)
+  link whose host or path names a login or auth page (`login`, `signin`, `auth` …). It is
+  audited high precision and scores in the `ark.injection.agentic.control_abuse` family, the
+  family of the existing `phishing` relation, which alone stayed far below the acceptance
+  threshold. An e-mail or order confirmation link, a sign-in link without a verification request
+  and prose about phishing stay silent. The governance goldens gain 4 positives and 4 hard
+  negatives (DE and EN). **Detection change:** such phishing requests are now terminal
+  `injection` findings on L1 (`agentic_control_abuse`); no other golden changes.
+
 - Add ICAO 9303 check digits for German passport and identity card numbers (F08), one validator per
   document (weights 7-3-1, `A`=10 … `Z`=35): `validators::de_passport_number` (series `C F G H J K`)
   and `validators::de_identity_card_number` (series `L M N P R T V W X Y`), each for eight characters
