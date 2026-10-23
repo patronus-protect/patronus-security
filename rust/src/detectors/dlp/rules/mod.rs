@@ -9,6 +9,7 @@ mod crypto;
 mod documented;
 mod hashes;
 mod identifiers;
+mod likeness;
 mod placeholders;
 mod providers;
 

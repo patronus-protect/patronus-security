@@ -5610,6 +5610,191 @@ for _label, _rows in DLP_F05_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
 
+# F-GEN1 (F11 + T03 + T10): the values of `dlp_password_assignment`,
+# `dlp_generic_credential_assignment` and `dlp_url_userinfo_password` need password likeness.
+# Code expressions (calls, index/member access, type annotations, `Token::…` paths, format
+# placeholders, paths), a shell variable as key (`$PWD:/work`), DE/EN prose words („Passwort ist
+# falsch“) and credential names or test stand-ins (`user:pass`, `token:MY_GITHUB_TOKEN`) are no
+# secrets; weak but real passwords stay secrets. `dlp_url_userinfo_token` reports the token in
+# the username of `https://<token>:x-oauth-basic@…`.
+DLP_FGEN1_CASES = {
+    "CREDENTIAL": [
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "import psycopg\n\nverbindung = psycopg.connect(host=\"db.intern\", user=\"lager\", "
+            "password=\"<<secret:0>>\")\n",
+            "password", 11001, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "Hallo Sven, das Passwort ist <<secret:0>>, bitte nach dem ersten Login ändern.\n",
+            "password", 11002, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "[smtp]\nserver = mail.intern\nbenutzer = versand\npasswort = <<secret:0>>\n",
+            "weak_dollar_password", 11003, carrier="ini",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "let client = Client::new(Config {\n    region: \"eu-central-1\".into(),\n"
+            "    token: \"<<secret:0>>\".into(),\n});\n",
+            "generic_api_secret", 11004, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_url_userinfo_password",
+            "// Verbindung zur Lager-DB\ndsn := \"postgres://lager:<<secret:0>>@db.intern:5432/lager\"\n",
+            "url_userinfo_password", 11005, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "Zugang Testsystem\nBenutzer: pruefer\nPasswort: <<secret:0>>\n",
+            "weak_repeated_password", 11006, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "const pool = new Pool({ host: \"db.internal\", user: \"app\", password: \"<<secret:0>>\" });\n",
+            "password", 11011, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "Hi Dana, the password is <<secret:0>> until Friday, please change it after login.\n",
+            "weak_snake_case_password", 11012, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "client := api.New(api.Config{\n\tRegion: \"us-east-1\",\n\tToken:  \"<<secret:0>>\",\n})\n",
+            "generic_api_secret", 11013, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_url_userinfo_password",
+            "$ git clone https://deploy:<<secret:0>>@git.example.com/team/app.git\n",
+            "url_userinfo_password", 11014, carrier="cli",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "2026-10-22 08:01:12 WARN legacy auth enabled for user=ops password=<<secret:0>>\n",
+            "weak_repeated_password", 11015, carrier="log",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "Das Passwort ist falsch. Bitte prüfen Sie die Feststelltaste und versuchen Sie es erneut.",
+            "prose: the password is wrong (no value)", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "Hinweis: Das Token ist abgelaufen, bitte melden Sie sich neu an.",
+            "prose: the token has expired (no value)", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "fn verbinde(token: Option<&str>) -> Result<Verbindung, Fehler> {\n    todo!()\n}\n",
+            "Rust type annotation", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "def anmelden(konto):\n    passwort = tresor.passwort_lesen(konto)\n    return login(konto, passwort)\n",
+            "Python function call", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "$ docker run --rm -v \"$PWD:/arbeit\" -w /arbeit lager/export:1.4\n",
+            "shell variable $PWD as key of a volume mount", carrier="cli",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_url_userinfo_password",
+            "$this->assertSame('https://user:pass@example.org/repo.git', $url);\n",
+            "test-suite URL with stand-in credentials", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "const passwort = this.eingabe.value;\nconst staerke = this.bewerten(passwort);\n",
+            "TypeScript member access", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "If a system keyring is available, the password is stored there and never written to disk.",
+            "prose: the password is stored (no value)", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "token = self._authenticator.get_pypi_token(repository_name)\n",
+            "Python method call", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "export interface StrengthConfig {\n  scorer: ((password: string) => number) | null\n}\n",
+            "TypeScript type annotation", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "/**\n * @return array{username: string|null, password: string|null}\n */\n",
+            "PHP doc type annotation", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_url_userinfo_password",
+            "['https://gitlab-ci-token:***@gitlab.example.org/', 'https://gitlab-ci-token:realtoken@gitlab.example.org/'],\n",
+            "test-suite URL with a stand-in token", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "match tok {\n    Token::Literal(c) => out.push(c),\n    Token::ZeroOrMore => out.push_str(\".*\"),\n}\n",
+            "Rust enum path Token::…", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_url_userinfo_password",
+            "['https://token:MY_GITHUB_TOKEN@github.com/acme/repo.git', 2],\n",
+            "test-suite URL with a variable name as token", carrier="code",
+        ),
+    ],
+    "SECRET_TOKEN": [
+        ds(
+            "SECRET_TOKEN", "de", "dlp_url_userinfo_token",
+            "# Spiegel des Lager-Repos\n$ git remote set-url spiegel "
+            "https://<<secret:0>>:x-oauth-basic@github.com/acme/lager.git\n",
+            "generic_api_secret", 11021, carrier="cli",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_url_userinfo_token",
+            "[remote \"origin\"]\n  url = https://<<secret:0>>:x-oauth-basic@github.com/acme/abgleich.git\n",
+            "url_token", 11022, carrier="ini",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_url_userinfo_token",
+            "$ git clone https://<<secret:0>>:x-oauth-basic@github.com/acme/app.git\n",
+            "generic_api_secret", 11031, carrier="cli",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_url_userinfo_token",
+            "{\"mirror\": {\"remote\": \"https://<<secret:0>>:x-oauth-basic@github.com/acme/sync.git\"}}\n",
+            "url_token", 11032, carrier="json",
+        ),
+        dn(
+            "SECRET_TOKEN", "de", "dlp_url_userinfo_token",
+            "$ git clone https://$GITHUB_TOKEN:x-oauth-basic@github.com/acme/lager.git\n",
+            "shell variable as token", carrier="cli",
+        ),
+        dn(
+            "SECRET_TOKEN", "de", "dlp_url_userinfo_token",
+            "Format: https://<token>:x-oauth-basic@github.com/acme/lager.git",
+            "documented format without a token", carrier="prose",
+        ),
+        dn(
+            "SECRET_TOKEN", "en", "dlp_url_userinfo_token",
+            "https://myusername:x-oauth-basic@github.com/acme/app.git\n",
+            "word as username, no token", carrier="line",
+        ),
+        dn(
+            "SECRET_TOKEN", "en", "dlp_url_userinfo_token",
+            "  run: git clone https://${{ secrets.GITHUB_TOKEN }}:x-oauth-basic@github.com/acme/app.git\n",
+            "GitHub Actions secret reference", carrier="yaml",
+        ),
+    ],
+}
+for _label, _rows in DLP_FGEN1_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+
 def flatten(suite: str, cases: dict[str, list[dict]]) -> list[dict]:
     rows = []
     for label, label_cases in cases.items():

@@ -1156,12 +1156,18 @@
       "de": [
         "Passwort: HIER_PASSWORT_EINTRAGEN",
         "passwort = var.db_passwort",
-        "passwort: ((lager.db_passwort))"
+        "passwort: ((lager.db_passwort))",
+        "Das Passwort ist falsch, bitte erneut eingeben.",
+        "docker run -v \"$PWD:/arbeit\" lager-export",
+        "passwort = self.tresor.lese_passwort(konto)"
       ],
       "en": [
         "Password: TODO",
         "password: {{dbPassword}}",
-        "keystore.password=changeit"
+        "keystore.password=changeit",
+        "password = os.environ[\"DB_PASSWORD\"]",
+        "def set_password(self, name: str, password: str) -> None:",
+        "The password is stored in the system keyring."
       ]
     },
     "language_neutral": false
@@ -1175,12 +1181,17 @@
       "de": [
         "API-Schlüssel: HIER_API_SCHLUESSEL_EINTRAGEN",
         "client_secret = Environment.GetEnvironmentVariable(\"CLIENT_SECRET\")",
-        "git remote set-url origin https://token:@bitbucket.org/acme/lager.git"
+        "git remote set-url origin https://token:@bitbucket.org/acme/lager.git",
+        "Das Token ist abgelaufen und muss erneuert werden.",
+        "let token = berechtigung.token_fuer(&konto)?;"
       ],
       "en": [
         "API key: YOUR-API-TOKEN",
         "client_secret: %CLIENT_SECRET%",
-        "git remote set-url origin https://token:@bitbucket.org/acme/warehouse.git"
+        "git remote set-url origin https://token:@bitbucket.org/acme/warehouse.git",
+        "token = get_token(repository_name)",
+        "pub fn connect(token: Option<&str>) -> Result<Client> {",
+        "Token::Literal(c) => self.push(c),"
       ]
     },
     "language_neutral": false
@@ -1264,16 +1275,43 @@
       "de": [
         "postgres://dbuser:BITTE_AENDERN@db.internal/app",
         "postgresql://lager:%(passwort)s@db.intern/lager",
-        "DATABASE_URL=postgres://lager@db.intern:5432/lager"
+        "DATABASE_URL=postgres://lager@db.intern:5432/lager",
+        "$fs->get('https://user:pass@github.com/composer/composer/404');",
+        "'http_proxy' => 'http://benutzer:geheimnis@proxy.intern:3128',"
       ],
       "en": [
         "postgres://dbuser:TODO@db.internal/app",
         "mysql://report:$DB_PASSWORD@db1/app",
         "https://x-token-auth:my-access-token@bitbucket.org/acme/repo.git",
-        "DATABASE_URL=postgres://warehouse@db.internal:5432/warehouse"
+        "DATABASE_URL=postgres://warehouse@db.internal:5432/warehouse",
+        "$this->git->syncMirror('https://user:secret@example.com/repo.git', $dir);",
+        "['https://token:MY_GITHUB_TOKEN@github.com/acme/repo.git', 1],"
       ]
     },
     "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_url_userinfo_token",
+    "de": "Spiegel des Lager-Repos: https://<<secret\u003a0>>:x-oauth-basic@github.com/acme/lager.git",
+    "en": "$ git clone https://<<secret\u003a0>>:x-oauth-basic@github.com/acme/app.git",
+    "secrets": [
+      {
+        "gen": "generic_api_secret",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "git clone https://$GITHUB_TOKEN:x-oauth-basic@github.com/acme/lager.git",
+        "https://<token>:x-oauth-basic@github.com/acme/lager.git"
+      ],
+      "en": [
+        "https://myusername:x-oauth-basic@github.com/acme/app.git",
+        "git clone https://${{ secrets.GITHUB_TOKEN }}:x-oauth-basic@github.com/acme/app.git"
+      ]
+    },
+    "language_neutral": false
   },
   {
     "category": "dlp",

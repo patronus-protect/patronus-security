@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! Generic credentials: tokens, credential assignments, auth headers,
 //! cookies and connection strings.
+use super::likeness;
 use crate::detectors::dlp::dlp::{DlpPattern, RuleMeta, SecretSubtype, ValidatorStrength};
 
 pub(super) const RULES: &[DlpPattern] = &[
@@ -58,7 +59,8 @@ pub(super) const RULES: &[DlpPattern] = &[
             "ark",
             &["passw", "kennwort", "pwd"],
         )
-        .with_subtype(SecretSubtype::Password),
+        .with_subtype(SecretSubtype::Password)
+        .with_value_gate(likeness::is_assignment_value),
     },
     DlpPattern {
         name: "dlp_generic_credential_assignment",
@@ -72,7 +74,8 @@ pub(super) const RULES: &[DlpPattern] = &[
             "ark",
             &["api", "token", "secret", "key", "schl", "geheimnis"],
         )
-        .with_subtype(SecretSubtype::GenericSecret),
+        .with_subtype(SecretSubtype::GenericSecret)
+        .with_value_gate(likeness::is_assignment_value),
     },
     DlpPattern {
         name: "dlp_bearer_token",
@@ -127,16 +130,36 @@ pub(super) const RULES: &[DlpPattern] = &[
 ];
 
 /// Runs after `hashes::RULES`, see the registry order in `rules/mod.rs`.
-pub(super) const URL_USERINFO_RULES: &[DlpPattern] = &[DlpPattern {
-    name: "dlp_url_userinfo_password",
-    pattern: r#"(?i)\b(?:jdbc:)?[a-z][a-z0-9+.-]{1,20}://[^/\s:@]+:([^@\s/]{4,150})@[^\s/]+"#,
-    entity_group: "CREDENTIAL",
-    validator: Some(is_secret_value),
-    span_group: Some(1),
-    base_score: 35,
-    meta: RuleMeta::new(ValidatorStrength::None, "ark", &["://"])
-        .with_subtype(SecretSubtype::Password),
-}];
+pub(super) const URL_USERINFO_RULES: &[DlpPattern] = &[
+    DlpPattern {
+        name: "dlp_url_userinfo_password",
+        pattern: r#"(?i)\b(?:jdbc:)?[a-z][a-z0-9+.-]{1,20}://[^/\s:@]+:([^@\s/]{4,150})@[^\s/]+"#,
+        entity_group: "CREDENTIAL",
+        validator: Some(is_secret_value),
+        span_group: Some(1),
+        base_score: 35,
+        meta: RuleMeta::new(ValidatorStrength::None, "ark", &["://"])
+            .with_subtype(SecretSubtype::Password)
+            .with_value_gate(likeness::is_userinfo_password),
+    },
+    // T10: the token is the username, the password a constant
+    // (`https://<token>:x-oauth-basic@github.com/…`).
+    DlpPattern {
+        name: "dlp_url_userinfo_token",
+        pattern: r"(?i)\b[a-z][a-z0-9+.-]{1,20}://([^/\s:@]{8,150}):x-oauth-basic@[^\s/]+",
+        entity_group: "SECRET_TOKEN",
+        validator: Some(is_secret_value),
+        span_group: Some(1),
+        base_score: 35,
+        meta: RuleMeta::new(
+            ValidatorStrength::None,
+            "https://github.blog/2012-09-21-easier-builds-and-deployments-using-git-over-https-and-oauth/",
+            &["x-oauth-basic"],
+        )
+        .with_subtype(SecretSubtype::AccessToken)
+        .with_value_gate(likeness::is_userinfo_token),
+    },
+];
 
 fn is_unredacted_url_credential(candidate: &str) -> bool {
     is_secret_value(candidate)

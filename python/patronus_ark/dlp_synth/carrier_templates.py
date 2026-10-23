@@ -1320,6 +1320,10 @@ PROFILES = {
         "credential.url_userinfo", "CREDENTIAL", "secret", "database_url", "database URL", "Datenbank-URL",
         "postgres://app:<<value>>@db.internal:5432/app",
     ),
+    "dlp_url_userinfo_token": Profile(
+        "credential.url_userinfo_token", "SECRET_TOKEN", "secret", "git_remote", "repository URL", "Repository-URL",
+        "https://<<value>>:x-oauth-basic@github.com/acme/app.git",
+    ),
     "dlp_de_vat_id": Profile("identifier.de.vat_id", "dlp.de.vat_id", "identifier", "vat_id", "VAT ID", "USt-IdNr."),
     "dlp_de_commercial_register_number": Profile(
         "identifier.de.commercial_register", "dlp.de.commercial_register_number", "identifier", "commercial_register",

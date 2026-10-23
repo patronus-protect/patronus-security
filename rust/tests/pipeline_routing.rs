@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use patronus_ark::detectors::validators::crc32_base62;
 use patronus_ark::{
     EvaluationResult, ExternalL1Detector, ExternalL1Input, L3SchedulerPolicy, QueuedSecurityEvent,
     ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, SecurityRequestCompletion,
@@ -951,6 +952,10 @@ fn native_dlp_evidence_covers_governance_github_token_fixture() {
         false,
     );
     scanner.warmup().unwrap();
+    // F03: a ghp_ token has 30 base62 characters and their CRC32; the
+    // checksum is computed here so no valid token is checked in.
+    let payload = concat!("w8dkq3zrm7xbt2vn", "h9pyc4fls6ajg0");
+    let token = format!("ghp_{payload}{}", crc32_base62(payload));
 
     // A real-shaped GitHub token: 30-character body plus its CRC32 suffix (F03).
     let body = concat!("w8dkq3zrm7xbt2vn", "h9pyc4fls6ajg0");
