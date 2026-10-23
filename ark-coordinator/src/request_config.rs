@@ -287,6 +287,7 @@ const MAX_DYNAMIC_PII_LABEL_BYTES: usize = 64;
 impl DynamicPiiRequest {
     fn validate(&self) -> Result<(), String> {
         let mut labels = std::collections::HashSet::new();
+        let mut gliner_names = HashMap::new();
         for label in self
             .labels
             .iter()
@@ -301,7 +302,14 @@ impl DynamicPiiRequest {
                     "label {label:?} is longer than {MAX_DYNAMIC_PII_LABEL_BYTES} bytes"
                 ));
             }
-            labels.insert(label);
+            // The worker sends labels to GLiNER with `_` as a space.
+            if labels.insert(label) {
+                if let Some(other) = gliner_names.insert(label.replace('_', " "), label) {
+                    return Err(format!(
+                        "labels {other:?} and {label:?} map to the same GLiNER label"
+                    ));
+                }
+            }
         }
         if labels.is_empty() || labels.len() > MAX_DYNAMIC_PII_LABELS {
             return Err(format!(
@@ -594,6 +602,7 @@ mod tests {
             serde_json::json!({"dynamic_pii": {"labels": ["person"], "label_thresholds": {"city": 0.4}}}),
             serde_json::json!({"dynamic_pii": {"labels": too_many}}),
             serde_json::json!({"dynamic_pii": {"labels": ["x".repeat(65)]}}),
+            serde_json::json!({"dynamic_pii": {"labels": ["first_name", "first name"]}}),
             serde_json::json!({"dynamic_pii": {
                 "labels": ["person"],
                 "execution_gate": {"type": "if_no_result", "pipeline": "dynamic-pii"}
