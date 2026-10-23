@@ -219,13 +219,48 @@ fn basic_values_that_decode_to_user_and_password_are_found_in_every_carrier() {
     }
 }
 
+/// 32 random alphanumeric characters, assembled at test time.
+fn random_token(seed: u64) -> String {
+    const ALNUM: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    let mut state = seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1;
+    (0..32)
+        .map(|_| {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            ALNUM[(state % ALNUM.len() as u64) as usize] as char
+        })
+        .collect()
+}
+
+#[test]
+fn basic_values_with_one_empty_side_and_a_token_are_found() {
+    // RFC 7617 allows an empty user-id or password: API tokens are sent as
+    // `token:` or `:token`.
+    for seed in 1..5 {
+        let token = random_token(seed);
+        for pair in [format!("{token}:"), format!(":{token}")] {
+            let value = base64(pair.as_bytes());
+            for key in ["authorization", "proxy_authorization"] {
+                for (template, value) in auth_texts(key, "Basic", &value) {
+                    assert_exact(&template, &value, "dlp_basic_auth");
+                }
+            }
+        }
+    }
+}
+
 #[test]
 fn basic_values_without_user_and_password_stay_silent() {
     let values = [
-        // No colon, empty user-id or password.
+        // No colon, both sides empty, a word or a placeholder on the one
+        // populated side.
         base64(b"Hallo Welt das ist ein"),
-        base64(b":Q7vRz2mXp9Ts"),
+        base64(b":"),
+        base64(b" : "),
         base64(b"lagerdienst:"),
+        base64(b":<token>"),
+        base64(b"<api-token>:"),
         // Control characters and binary data.
         base64(b"lager\x01dienst:Q7vRz2mXp9Ts"),
         base64(&[

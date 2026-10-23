@@ -11,6 +11,12 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Changed
 
+- AWS access key IDs and HTTP Basic credentials (F05, F-HTTP, PR #142 review). **Detection
+  change:** legacy alphanumeric AWS access key IDs (16 upper-case letters or digits after `AKIA`,
+  `ASIA`, `ABIA`, `ACCA` or `A3T…`, also holding 0, 1, 8 or 9) are found again, also as the anchor
+  of `dlp_aws_secret_key`. `dlp_basic_auth` reports Basic credentials with an empty side
+  (`token:`, `:token`, RFC 7617) when the populated side is a machine-issued token and no
+  placeholder; both sides empty stays silent.
 - IP address spans (B-IP: T20 + baseline C1, TRIAGE 2026-W43 bucket 5, baseline P3/P9). An
   IPv4-mapped or embedded IPv6 address is one span (`::ffff:10.0.0.1`, `64:ff9b::198.51.100.1`), the
   zone ID and the CIDR prefix length are part of the span (`fe80::1%eth0`, `192.168.1.0/24`,

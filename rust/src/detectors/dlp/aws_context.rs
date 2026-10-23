@@ -34,9 +34,10 @@ const WINDOW_BYTES: usize = 600;
 
 /// AWS access key IDs: the credential prefixes of the IAM unique-ID table
 /// (`AKIA` long-term, `ASIA` temporary, `ABIA` STS service bearer token,
-/// `ACCA` context-specific credential, legacy `A3T…`) and 16 Base32
-/// characters (gitleaks aws-access-token).
-pub(crate) const ACCESS_KEY_ID: &str = r"(?:A3T[A-Z0-9]|AKIA|ASIA|ABIA|ACCA)[A-Z2-7]{16}";
+/// `ACCA` context-specific credential, legacy `A3T…`) and 16 upper-case
+/// letters or digits: Base32 today, legacy IDs also hold 0, 1, 8 and 9
+/// (gitleaks aws-access-token).
+pub(crate) const ACCESS_KEY_ID: &str = r"(?:A3T[A-Z0-9]|AKIA|ASIA|ABIA|ACCA)[A-Z0-9]{16}";
 
 /// The AWS anchors of their own: an AWS secret key name or label, or an
 /// access key ID.

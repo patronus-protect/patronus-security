@@ -146,11 +146,12 @@ pub(super) const RULES: &[DlpPattern] = &[
     // ── Cloud Provider Keys ──────────────────────────────────────────────────
     // F05: credential prefixes of the IAM unique-ID table (long-term AKIA,
     // temporary ASIA, STS bearer ABIA, context-specific ACCA, legacy A3T…)
-    // and exactly 16 Base32 characters. Group, user, role, policy and other
+    // and exactly 16 upper-case letters or digits (Base32 today, legacy IDs
+    // also hold 0, 1, 8 and 9). Group, user, role, policy and other
     // unique IDs (AGPA, AIDA, AROA, ANPA …) are no credentials.
     DlpPattern {
         name: "dlp_aws_access_key",
-        pattern: r"(?:A3T[A-Z0-9]|AKIA|ASIA|ABIA|ACCA)[A-Z2-7]{16}",
+        pattern: r"(?:A3T[A-Z0-9]|AKIA|ASIA|ABIA|ACCA)[A-Z0-9]{16}",
         entity_group: "CLOUD_KEY",
         validator: None,
         span_group: None,
@@ -173,7 +174,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         pattern: concat!(
             r"(?:(?i:aws[\s_.-]?secret[\s_.-]?(?:access[\s_.-]?)?key|secret[\s_.-]?access[\s_.-]?key)",
             r"(?:[^\n]{0,100}?|[^\n=]{0,100}\n(?:[^\n=]{0,100}\n)?[^\n=]{0,60}?)",
-            r"|(?:A3T[A-Z0-9]|AKIA|ASIA|ABIA|ACCA)[A-Z2-7]{16}[\x22'\\]{0,2}[ \t,;:|]{0,3}",
+            r"|(?:A3T[A-Z0-9]|AKIA|ASIA|ABIA|ACCA)[A-Z0-9]{16}[\x22'\\]{0,2}[ \t,;:|]{0,3}",
             r"|\b(?:secret[_-]key|Secret[_-]Key|secretKey|SecretKey)[^\n]{0,30}?)",
             r"[\s\x22'`:=(,>\[|;]([A-Za-z0-9/+]{40})(?:[^A-Za-z0-9/+=]|$)",
         ),

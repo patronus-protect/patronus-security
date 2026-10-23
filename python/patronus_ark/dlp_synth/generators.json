@@ -65,7 +65,7 @@
     "aws_session_access_key_id": {"source": "gitleaks:aws-access-token", "segments": [{"lit": "ASIA"}, {"alphabet": "base32_upper", "len": 16}]},
     "aws_sts_bearer_key_id": {"source": "gitleaks:aws-access-token; ABIA: AWS STS service bearer token (IAM unique-ID prefixes, F05)", "segments": [{"lit": "ABIA"}, {"alphabet": "base32_upper", "len": 16}]},
     "aws_context_credential_key_id": {"source": "gitleaks:aws-access-token; ACCA: context-specific credential (IAM unique-ID prefixes, F05)", "segments": [{"lit": "ACCA"}, {"alphabet": "base32_upper", "len": 16}]},
-    "aws_access_key_id_non_base32": {"source": "F05 lookalike: AKIA key ID shape with a 0, 1, 8 or 9, outside the Base32 alphabet", "segments": [{"lit": "AKIA"}, {"alphabet": "base32_upper", "len": 7}, {"alphabet": "base32_excluded_digit", "len": 1}, {"alphabet": "base32_upper", "len": 8}]},
+    "aws_access_key_id_non_base32": {"source": "F05: legacy alphanumeric AKIA key ID with a 0, 1, 8 or 9, outside the Base32 alphabet", "segments": [{"lit": "AKIA"}, {"alphabet": "base32_upper", "len": 7}, {"alphabet": "base32_excluded_digit", "len": 1}, {"alphabet": "base32_upper", "len": 8}]},
     "aws_access_key_id_long": {"source": "F05 lookalike: AKIA key ID shape with 17 instead of 16 Base32 characters", "segments": [{"lit": "AKIA"}, {"alphabet": "base32_upper", "len": 17}]},
     "aws_iam_user_unique_id": {"source": "F05 lookalike: IAM user unique ID (AIDA prefix), an identifier, no credential", "segments": [{"lit": "AIDA"}, {"alphabet": "base32_upper", "len": 16}]},
     "aws_secret_access_key_long": {"source": "F05 lookalike: base64 run of 41 instead of 40 characters", "segments": [{"alphabet": "base64", "len": 41}]},

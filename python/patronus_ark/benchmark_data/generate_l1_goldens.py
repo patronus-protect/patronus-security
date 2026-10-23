@@ -2042,7 +2042,7 @@ DLP_LOOKALIKE_GENERATORS = (
     "npm_bad_crc", "npm_short", "npm_long", "gitlab_pat_long", "gitlab_deploy_token_short",
     "gitlab_trigger_token_upper_hex",
     # F05
-    "aws_access_key_id_non_base32", "aws_access_key_id_long", "aws_iam_user_unique_id",
+    "aws_access_key_id_long", "aws_iam_user_unique_id",
     "aws_secret_access_key_long", "aws_secret_access_key_hex",
     # F-HTTP: random base64 that decodes to no user:password pair
     "http_basic_credentials",
@@ -5922,10 +5922,10 @@ DLP_F05_CASES = {
             "\"userName\": \"rechnung-export\"}}\n",
             "aws_iam_user_unique_id", 10722, "IAM user unique ID (AIDA), no credential", carrier="json",
         ),
-        dl(
+        ds(
             "CLOUD_KEY", "de", "dlp_aws_access_key",
-            "2026-10-22 08:14:03 WARN import: ungültige Kennung <<secret:0>> verworfen\n",
-            "aws_access_key_id_non_base32", 10723, "AKIA shape with a digit outside Base32", carrier="log",
+            "2026-10-22 08:14:03 WARN import: alter Zugriffsschlüssel <<secret:0>> noch aktiv\n",
+            "aws_access_key_id_non_base32", 10723, carrier="log",
         ),
         dn(
             "CLOUD_KEY", "de", "dlp_aws_secret_key",

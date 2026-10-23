@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! AWS access key IDs and secret access keys (F05). `dlp_aws_access_key`
 //! takes the credential prefixes of the IAM unique-ID table (`AKIA`, `ASIA`,
-//! `ABIA`, `ACCA`, legacy `A3T…`) and exactly 16 Base32 characters; group,
+//! `ABIA`, `ACCA`, legacy `A3T…`) and exactly 16 upper-case letters or digits
+//! (Base32 today, legacy IDs also hold 0, 1, 8 and 9); group,
 //! user, role and policy IDs (`AGPA`, `AIDA`, `AROA`, `ANPA` …) are no
 //! credentials. `dlp_aws_secret_key` takes 40 base64 characters with upper and
 //! lower case letters after an AWS key name or label (also in prose, up to two
@@ -188,27 +189,40 @@ fn unique_ids_of_other_iam_entities_are_no_access_keys() {
 }
 
 #[test]
-fn key_ids_outside_base32_or_of_another_length_are_no_access_keys() {
+fn legacy_alphanumeric_key_ids_are_reported_and_other_lengths_are_not() {
     for seed in 0..8 {
         let base = key_id("AKIA", seed);
-        let mut values = vec![
-            generated("aws_access_key_id_non_base32", seed),
-            generated("aws_access_key_id_long", seed),
-            // 15 Base32 characters.
-            base[..19].to_owned(),
-        ];
-        // A 0, 1, 8 or 9 at the end, in the middle and after the prefix.
+        // Legacy key IDs: a 0, 1, 8 or 9 at the end, in the middle and after
+        // the prefix, outside today's Base32 alphabet.
+        let mut legacy = vec![generated("aws_access_key_id_non_base32", seed)];
         for (index, digit) in [(19, '0'), (11, '1'), (4, '8'), (15, '9')] {
             let mut chars: Vec<char> = base.chars().collect();
             chars[index] = digit;
-            values.push(chars.into_iter().collect());
+            legacy.push(chars.into_iter().collect());
         }
-        for value in &values {
+        for (i, value) in legacy.iter().enumerate() {
+            for carrier in [
+                "2026-10-22T08:14:03Z WARN sts: Schlüssel {} abgelehnt\n",
+                "Hi Sam, the key {} was rotated this morning.\n",
+                "AWS_ACCESS_KEY_ID={}\n",
+            ] {
+                let text = carrier.replace("{}", value);
+                assert!(
+                    reports(&text, "dlp_aws_access_key", value),
+                    "legacy key ID {i} of seed {seed}"
+                );
+            }
+        }
+        // 21 and 15 Base32 characters.
+        for value in [
+            generated("aws_access_key_id_long", seed),
+            base[..19].to_owned(),
+        ] {
             for carrier in [
                 "2026-10-22T08:14:03Z WARN sts: Schlüssel {} abgelehnt\n",
                 "Hi Sam, the key {} was rotated this morning.\n",
             ] {
-                let text = carrier.replace("{}", value);
+                let text = carrier.replace("{}", &value);
                 assert!(no_aws_finding(&text), "{text:?}");
             }
             assert!(
@@ -286,7 +300,7 @@ fn a_secret_key_right_after_its_access_key_id_is_reported() {
     for seed in 0..8 {
         let id = generated("aws_access_key_id", seed);
         let secret = generated("aws_secret_access_key", 100 + seed);
-        for text in [
+        for (i, text) in [
             // SDK calls, IAM credentials CSV, MinIO client, colon pair.
             format!("AWSCredentials creds = new BasicAWSCredentials(\"{id}\", \"{secret}\");\n"),
             format!("new AWS.Credentials('{id}', '{secret}');\n"),
@@ -294,9 +308,18 @@ fn a_secret_key_right_after_its_access_key_id_is_reported() {
             format!("User name,Access key ID,Secret access key\nexport-job,{id},{secret}\n"),
             format!("$ mc alias set archiv https://s3.eu-central-1.amazonaws.com {id} {secret}\n"),
             format!("Zugang für den Export: {id}:{secret}\n"),
-        ] {
-            assert!(reports(&text, "dlp_aws_secret_key", &secret), "{text:?}");
-            assert!(reports(&text, "dlp_aws_access_key", &id), "{text:?}");
+        ]
+        .iter()
+        .enumerate()
+        {
+            assert!(
+                reports(text, "dlp_aws_secret_key", &secret),
+                "secret key in carrier {i} of seed {seed}"
+            );
+            assert!(
+                reports(text, "dlp_aws_access_key", &id),
+                "access key ID in carrier {i} of seed {seed}"
+            );
         }
     }
 }

@@ -6,7 +6,8 @@
 //! prove its kind:
 //!
 //! - `Basic`: canonical base64 that decodes to printable `user-id:password`
-//!   (RFC 7617) with a chosen password (`likeness::is_chosen_password`);
+//!   (RFC 7617) with a chosen password (`likeness::is_chosen_password`), or
+//!   with one empty side and a machine-issued token on the other;
 //! - `Bearer`: an opaque token (RFC 6750 `b64token`) of at least
 //!   [`MIN_TOKEN_LENGTH`] characters that looks machine-issued
 //!   (`likeness::is_token_like`) and is no identifier; a JWT is left to
@@ -47,10 +48,23 @@ pub(super) fn is_basic_credentials(text: &str, range: Range<usize>) -> bool {
     let Some((user, password)) = decoded.split_once(':') else {
         return false;
     };
-    !user.trim().is_empty()
-        && !password.trim().is_empty()
-        && !super::placeholders::is_placeholder_value(password)
-        && likeness::is_chosen_password(user, password)
+    match (user.trim().is_empty(), password.trim().is_empty()) {
+        (true, true) => false,
+        // RFC 7617 allows an empty user-id or password (`token:`, `:token`):
+        // the populated side is the secret and has to look machine-issued.
+        (true, false) | (false, true) => {
+            let token = if user.trim().is_empty() {
+                password
+            } else {
+                user
+            };
+            !super::placeholders::is_placeholder_value(token) && likeness::is_token_like(token)
+        }
+        (false, false) => {
+            !super::placeholders::is_placeholder_value(password)
+                && likeness::is_chosen_password(user, password)
+        }
+    }
 }
 
 /// `dlp_bearer_token`: whether the value at `range` is an opaque token. A
@@ -130,8 +144,8 @@ mod tests {
             ),
             ("bGFnZXJkaWVuc3Q6UTd2UnoybVhwOVR", "not canonical"),
             ("SGFsbG8gV2VsdCBkYXMgaXN0IGVpbg==", "no colon"),
-            ("OlE3dlJ6Mm1YcDlUcw==", "empty user-id"),
-            ("bGFnZXJkaWVuc3Q6", "empty password"),
+            ("Og==", "both sides empty"),
+            ("bGFnZXJkaWVuc3Q6", "empty password, a word as user-id"),
             ("bGFnZXIBZGllbnN0OlE3dlJ6Mm1YcDlUcw==", "control character"),
             ("dXNlcjpwQHNz", "user:p@ss"),
             ("YXBwbGljYXRpb246c2VjcmV0", "application:secret"),

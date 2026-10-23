@@ -167,6 +167,7 @@ CHECKS = {
     "aws_session_access_key_id": prefixed("ASIA", "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567", 16),
     "aws_sts_bearer_key_id": prefixed("ABIA", "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567", 16),
     "aws_context_credential_key_id": prefixed("ACCA", "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567", 16),
+    "aws_access_key_id_non_base32": prefixed("AKIA", "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 16),
     "aws_secret_access_key": prefixed("", B64, 40),
     "google_api_key": prefixed("AIza", B64URL, 35),
     "google_oauth_access_token": prefixed("ya29.", B64URL, 150),
@@ -265,7 +266,6 @@ LOOKALIKE_FAILURES = {
     "gitlab_deploy_token_short": lambda v: len(v) == 25,
     "gitlab_trigger_token_upper_hex": prefixed("glptt-", HEX, 40),
     # F05
-    "aws_access_key_id_non_base32": prefixed("AKIA", "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567", 16),
     "aws_access_key_id_long": lambda v: len(v) == 20,
     "aws_iam_user_unique_id": lambda v: v[:4] in ("AKIA", "ASIA", "ABIA", "ACCA"),
     "aws_secret_access_key_long": lambda v: len(v) == 40,

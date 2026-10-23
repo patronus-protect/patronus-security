@@ -36,8 +36,8 @@
       "probes": ["REPLICATE_API_TOKEN=<<secret:0>>", "replicate token: <<secret:0>>"]
     },
     "dlp_aws_access_key": {
-      "generators": ["aws_access_key_id", "aws_session_access_key_id", "aws_sts_bearer_key_id", "aws_context_credential_key_id"],
-      "lookalike": ["aws_access_key_id_non_base32", "aws_access_key_id_long", "aws_iam_user_unique_id"],
+      "generators": ["aws_access_key_id", "aws_session_access_key_id", "aws_sts_bearer_key_id", "aws_context_credential_key_id", "aws_access_key_id_non_base32"],
+      "lookalike": ["aws_access_key_id_long", "aws_iam_user_unique_id"],
       "probes": ["aws_access_key_id = <<secret:0>>", "Die Access Key ID lautet <<secret:0>>."]
     },
     "dlp_aws_secret_key": {
