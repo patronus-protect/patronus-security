@@ -6335,6 +6335,175 @@ for _label, _rows in DLP_FHTTP_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
 
+# K05: config key->value extraction, part 1 (env, INI/properties, HTTP headers) with a
+# value-shape filter. A config line binds its whole value (an unquoted properties/INI/header value
+# with ; , } inside, up to an inline comment), and a hex secret under a plain credential key
+# stays a secret. Hard negatives: one per shape that a credential-like key must not bind, with
+# DE and EN keys: UUID, algorithm-prefixed digest, hex digest under a digest key, ObjectId,
+# template/format field, variable reference, boolean, number, path and URL without
+# credentials. Each value line ends the text, so that the raw JSONL line holds no finding.
+DLP_K05_CASES = {
+    "CREDENTIAL": [
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "# Anwendungseinstellungen Lagerverwaltung\nlager.standort=hamburg\nlager.db.passwort=<<secret:0>>\n",
+            "quoted_punctuated_password", 15001, carrier="ini",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "[datenbank]\nhost = db.lager.intern\nbenutzer = lager\npasswort = <<secret:0>> ; rotiert im September\n",
+            "quoted_punctuated_password", 15002, carrier="ini",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "GET /v1/lieferungen?status=offen HTTP/1.1\nHost: api.lager.intern\nX-Zugangstoken: <<secret:0>>\n"
+            "Accept: application/json\n",
+            "quoted_punctuated_password", 15003, carrier="http",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "# Lagerdienst, lokale Entwicklung\nLAGER_DIENST_SECRET=<<secret:0>>\nLAGER_PORT=8082\n",
+            "generic_api_secret", 15004, carrier="env",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "# Anwendungseinstellungen Versand\nversand.api-schluessel=<<secret:0>>\nversand.zeitlimit=30s\n",
+            "url_token", 15005, carrier="ini",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "# application.properties\nspring.datasource.url=jdbc:postgresql://db:5432/orders\n"
+            "spring.datasource.password=<<secret:0>>\n",
+            "quoted_punctuated_password", 15011, carrier="ini",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "[smtp]\nhost = mail.internal\nuser = reports\npassword = <<secret:0>> # rotated monthly\n",
+            "quoted_punctuated_password", 15012, carrier="ini",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "POST /v1/exports HTTP/1.1\nHost: api.internal\nX-Client-Secret: <<secret:0>>\n"
+            "Content-Type: application/json\n",
+            "quoted_punctuated_password", 15013, carrier="http",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "# .env for the billing worker\nBILLING_CLIENT_SECRET=<<secret:0>>\nBILLING_QUEUE=invoices\n",
+            "generic_api_secret", 15014, carrier="env",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "export REPORT_SERVICE_TOKEN=\"<<secret:0>>\"  # production\n",
+            "password", 15015, carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "# Lagerdienst\nLAGER_PORT=8082\nLAGER_API_TOKEN=3f2a9c4e-7b1d-4e8a-9c2f-5d6e7f8a9b0c",
+            "UUID under a token key", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "# Lagerverwaltung\nlager.geheimnis=sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+            "algorithm-prefixed digest under a secret key", carrier="ini",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "[konto]\nbenutzer = lager\ngehashtes_passwort = 2fd4e1c67a2d28fced849ee1bb76e7391b93eb12",
+            "hex digest under a hashed-password key", carrier="ini",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "# Lagerverwaltung\nlager.zugangstoken=5f8d0c3e9b1a2d4c6e8f0a1b",
+            "MongoDB ObjectId under a token key", carrier="ini",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "[datenbank]\nhost = db.lager.intern\npasswort = {lager_passwort}",
+            "format field under a password key", carrier="ini",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "REM Lagerdienst unter Windows\nset LAGER_PORT=8082\nLAGER_KENNWORT=%LAGER_KENNWORT%",
+            "Windows variable reference", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "# Verschlüsselung im Testsystem abgeschaltet\nLAGER_GEHEIMNIS=deaktiviert",
+            "boolean word under a secret key", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "[sicherheit]\npasswort_min_laenge = 12\npasswort = 20260914",
+            "number under a password key", carrier="ini",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "# Passwort liegt als Datei im Container\nLAGER_PASSWORT=/etc/lager/passwort.txt",
+            "path under a password key", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "GET /v1/lieferungen HTTP/1.1\nHost: api.lager.intern\nX-Api-Schluessel: https://tresor.lager.intern/v1/lager/api",
+            "URL without credentials in a header", carrier="http",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "POST /v1/exports HTTP/1.1\nHost: api.internal\nX-Api-Key: 550e8400-e29b-41d4-a716-446655440000",
+            "UUID in an API key header", carrier="http",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "# image digest pinned by the deploy job\nDEPLOY_SECRET=sha1-2fd4e1c67a2d28fced849ee1bb76e7391b93eb12",
+            "algorithm-prefixed digest under a secret key", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "# checksum of the release token, not the token\nSHA256_RELEASE_TOKEN="
+            "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+            "hex digest under a digest-named token key", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "# owner document of the integration\nORDER_SERVICE_TOKEN=6512bd43d9caa6e02c990b0a",
+            "MongoDB ObjectId under a token key", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "[oauth]\nclient_id = reports\nclient_secret = %(client_secret)s",
+            "Python format field under a secret key", carrier="ini",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "# filled in by the CI job\nexport DEPLOY_API_TOKEN=$CI_DEPLOY_API_TOKEN",
+            "shell variable reference", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "POST /v1/exports HTTP/1.1\nHost: api.internal\nX-Auth-Token: disabled",
+            "boolean word in a token header", carrier="http",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "# OAuth settings\noauth.client-secret=86400000",
+            "number under a secret key", carrier="ini",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "[database]\nhost = db.internal\npassword = C:\\secrets\\orders-db.txt",
+            "Windows path under a password key", carrier="ini",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "# token endpoint of the identity provider\nIDP_CLIENT_SECRET=https://auth.internal/realms/acme/protocol/openid-connect/token",
+            "URL without credentials under a secret key", carrier="env",
+        ),
+    ],
+}
+for _label, _rows in DLP_K05_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+
 def flatten(suite: str, cases: dict[str, list[dict]]) -> list[dict]:
     rows = []
     for label, label_cases in cases.items():

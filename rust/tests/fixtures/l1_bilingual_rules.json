@@ -1130,7 +1130,11 @@
         "DB_PASSWORT=@Microsoft.KeyVault(SecretUri=https://lager-kv.vault.azure.net/secrets/db-passwort/)",
         "const DATA_API_KEY = '.data-api'",
         "const ANMELDUNG_FLOW_PASSWORD = \"password\"",
-        "      LAGER_DB_PASSWORT: \"${LAGER_DB_PASSWORT}\""
+        "      LAGER_DB_PASSWORT: \"${LAGER_DB_PASSWORT}\"",
+        "LAGER_API_TOKEN=3f2a9c4e-7b1d-4e8a-9c2f-5d6e7f8a9b0c",
+        "LAGER_KENNWORT=%LAGER_KENNWORT%",
+        "LAGER_GEHEIMNIS=deaktiviert",
+        "LAGER_PASSWORT=/etc/lager/passwort.txt"
       ],
       "en": [
         "DB_PASSWORD=YOUR_DB_PASSWORD_HERE",
@@ -1138,7 +1142,11 @@
         "DB_PASSWORD=op://Production/postgres/password",
         "const DATA_API_KEY = \".data-api\";",
         "const AUTH_FLOW_PASSWORD = \"password\"",
-        "      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}"
+        "      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}",
+        "DEPLOY_SECRET=sha1-2fd4e1c67a2d28fced849ee1bb76e7391b93eb12",
+        "SHA256_RELEASE_TOKEN=9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+        "ORDER_SERVICE_TOKEN=6512bd43d9caa6e02c990b0a",
+        "IDP_CLIENT_SECRET=https://auth.internal/realms/acme/protocol/openid-connect/token"
       ]
     },
     "language_neutral": false
@@ -1161,7 +1169,10 @@
         "export interface Konfig {\n  dbPasswort: string;\n}",
         "const DB_PASSWORT: &str = env!(\"DB_PASSWORT\");",
         "<add key=\"DbPasswort\" value=\"{{DB_PASSWORT}}\" />",
-        "'passwort' => !empty($zugang['pass']) ? $zugang['pass'] : ''"
+        "'passwort' => !empty($zugang['pass']) ? $zugang['pass'] : ''",
+        "[konto]\ngehashtes_passwort = 2fd4e1c67a2d28fced849ee1bb76e7391b93eb12",
+        "[datenbank]\npasswort = {lager_passwort}",
+        "[sicherheit]\npasswort = 20260914"
       ],
       "en": [
         "Password: TODO",
@@ -1175,7 +1186,10 @@
         "const routes = { forgotPassword: \"forgot-password\" };",
         "pub struct Config {\n    pub db_password: Option<String>,\n}",
         "{\"devDependencies\": {\"parse-passwd\": \"^1.0.0\"}}",
-        "switch(u){case\"password\":return void t.authorizePassword(e)}"
+        "switch(u){case\"password\":return void t.authorizePassword(e)}",
+        "hashed_password=5d41402abc4b2a76b9719d911017c592",
+        "app.db.password=<%= @db_password %>",
+        "[database]\npassword = C:\\secrets\\orders-db.txt"
       ]
     },
     "language_neutral": false
@@ -1194,7 +1208,10 @@
         "let token = berechtigung.token_fuer(&konto)?;",
         "lager:\n  token: \"{{ .Values.lager.token }}\"",
         "{\"artikel\": [], \"nextPageToken\": \"Q0FVUUFBYTFiMmMz\"}",
-        "lager:\n  auth:\n    existingSecret: \"lager-release-auth\""
+        "lager:\n  auth:\n    existingSecret: \"lager-release-auth\"",
+        "lager.geheimnis=sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+        "lager.zugangstoken=5f8d0c3e9b1a2d4c6e8f0a1b",
+        "GET /v1/lieferungen HTTP/1.1\nHost: api.lager.intern\nX-Api-Schluessel: https://tresor.lager.intern/v1/lager/api"
       ],
       "en": [
         "API key: YOUR-API-TOKEN",
@@ -1206,7 +1223,11 @@
         "oauth:\n  client_secret: \"<your client secret>\"",
         "{\"items\": [], \"continuation_token\": \"a8f3k2m9x7q1z5w4\"}",
         "ingress:\n  tls_secret: \"wildcard-internal-2026\"",
-        "    'COPILOT_GITHUB_TOKEN' => 'github-copilot',"
+        "    'COPILOT_GITHUB_TOKEN' => 'github-copilot',",
+        "POST /v1/exports HTTP/1.1\nHost: api.internal\nX-Api-Key: 550e8400-e29b-41d4-a716-446655440000",
+        "[oauth]\nclient_secret = %(client_secret)s",
+        "POST /v1/exports HTTP/1.1\nHost: api.internal\nX-Auth-Token: disabled",
+        "oauth.client-secret=86400000"
       ]
     },
     "language_neutral": false
