@@ -49,6 +49,34 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- US Social Security Numbers beyond the field name (B-SSN: T25, F07; baseline P1). Two rules join
+  the field-bound `pii_ssn_us` in `rust/src/detectors/pii/us.rs`. `pii_ssn_us_proximity` reports
+  `AAA-GG-SSSS` (hyphens, dots or spaces) and nine digits without separators in every mode when an
+  SSN term stands near the value (`Social Security Number (SSN) 861-18-8883`, `… Social Security
+  Number (800-40-3880)`, `Als SSN ist … hinterlegt`, `536-90-4421 is my SSN`) or is its structural
+  key (`"ssn": …`, `ssn=…`, `<SSN>`, a CSV column); `pii_ssn_us_context_free` reports the grouped
+  form without a term in `balanced` and `recall` only (score 0.50, as presidio-analyzer reports it
+  context-free). It is the one format-only `scored_only` rule: the separators and SSA ranges stand
+  in for a check digit. A nearer counter-context term (order, reference, invoice, tracking, part or
+  serial number) suppresses both in every mode. `context::stands_alone` accepts a `+` after a letter
+  or another `+` as an EDIFACT element separator (`NAD+SU+341-33-4328`, `LIN+1++…`); a `+` that
+  opens a number still rejects the value. **Detection change:** in `strict` grouped values and nine
+  digits with an SSN term or key are new findings (score 1.0), a grouped value without an SSN term
+  stays silent; in `balanced`/`recall` grouped values without a term are new findings at 0.50,
+  with a term 0.65–0.75. The SSA range validator `validators::us_ssn` is unchanged, so the
+  presidio-analyzer values `987-65-4322` and `219-09-9999` and nine bare digits without a term
+  (`078051121`) stay misses. Dev scoreboard vs. base (PASS in strict and balanced, no new
+  hard-negative FP, no other entity changes): US SSN F1 all families strict 64.2 → 70.9, balanced
+  64.2 → 81.3; neutral (Gretel) strict 43.3 → 50.8, balanced 43.3 → 68.5 (tuned 66.7);
+  presidio_favored balanced 57.1 → 75.0 (tuned 88.9, capped at 75.0 by the unchanged validator);
+  ark_authored 90.6 → 98.2 strict, 100.0 balanced. L1 F1 balanced +0.3 pp (neutral +0.4,
+  presidio_favored +0.7). The golden known gap `Die SSN des US-Mitarbeiters ist …` closes;
+  `pii_l1.jsonl` gains 58 rows. Both regexes use ASCII
+  boundaries and digits and stay on the DFA: 0.10–0.16 ms per rule on the 100 KiB workloads;
+  best-of-15 full PII scans base → head DE strict 119.8 → 114.8 ms, EN strict 26.0 → 24.8 ms (noise);
+  `latency.py compare --engine ark-native` 100 KiB p95 133.3 → 145.9 ms (+9.5 %, PASS; p50 38.0 →
+  36.8 ms).
+
 - Add VAT identification numbers for LU, LV, MT, PL, PT, RO, SE, SI, SK, NO and GB (B16), one label
   and one check-digit validator per country in `rust/src/detectors/pii/vat.rs`, built like B01:
   `VAT_ID_LU` (first six mod 89), `VAT_ID_LV` (legal entities, weighted mod 11), `VAT_ID_MT`

@@ -36,7 +36,9 @@ pub struct PiiPattern {
     pub requires_context: bool,
     /// Emit only in the scored modes `balanced` and `recall`; `strict` never runs
     /// the rule (K05). Reserved for unbound checksum rules: the bare form of a
-    /// value that strict reports only after its field name.
+    /// value that strict reports only after its field name. The grouped US SSN
+    /// is the one format rule here (B-SSN): its separators and SSA ranges stand
+    /// in for a check digit.
     pub scored_only: bool,
 }
 
@@ -86,6 +88,8 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     driver_license::IT,
     de::KFZ_KENNZEICHEN,
     us::SSN,
+    us::SSN_PROXIMITY,
+    us::SSN_CONTEXT_FREE,
     uk::NINO,
     vat::VAT_ID_DE,
     vat::VAT_ID_AT,

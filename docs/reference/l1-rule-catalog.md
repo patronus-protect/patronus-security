@@ -4,7 +4,7 @@
 
 These are the stable rule IDs accepted by execution-gate `rules`. Missing IDs inherit the shared Rust/Python/API defaults below. Model gates such as `native:pii`, `native:dlp`, `native:injection_l1`, and `native:threat_l1` control complete producers; rule gates control individual entries below.
 
-## PII rules (78)
+## PII rules (80)
 
 All PII rules are eligible by default when PII L1 is enabled.
 
@@ -54,6 +54,8 @@ In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `
 | `pii_driver_license_number_it` | `DRIVER_LICENSE_NUMBER` | yes | format | 30 | field or key | 0.70 |
 | `pii_kfz_kennzeichen_de` | `LICENSEPLATE` | no | none | 40 | field or key | 0.65 |
 | `pii_ssn_us` | `SSN` | yes | format | 45 | field or key | 0.85 |
+| `pii_ssn_us_proximity` | `SSN` | yes | format | 35 | key or proximity (required) | 0.65–0.75 |
+| `pii_ssn_us_context_free` | `SSN` | yes | format | 35 | key or proximity, `balanced`/`recall` only | 0.50–0.75 |
 | `pii_ni_uk` | `NATIONALID` | yes | format | 50 | field or key | 0.90 |
 | `pii_vat_id_de` | `VAT_ID_DE` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
 | `pii_vat_id_at` | `VAT_ID_AT` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
