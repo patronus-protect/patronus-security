@@ -547,6 +547,9 @@ impl NativeRegexDetector for PiiPipeline {
                 context::opens_phone_number(text, captures.get(0).unwrap().start())
             }
             "pii_credit_card" => context::card_position(text, captures.get(0).unwrap().range()),
+            // An SSN term near the value does not make a fragment of a longer
+            // number (`401127789-0`) an SSN.
+            "pii_ssn_us_proximity" => context::stands_alone(text, captures.get(0).unwrap().range()),
             "pii_passport_number_de_context_free" | "pii_identity_card_number_de_context_free" => {
                 !context::foreign_field(
                     prepared.structure(),

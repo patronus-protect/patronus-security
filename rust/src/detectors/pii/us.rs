@@ -50,6 +50,7 @@ macro_rules! ssn_grouped {
 }
 
 /// The grouped form or nine digits, with an SSN term near the value or as its key.
+/// The value stands alone: `401127789-0` is part of a longer number.
 pub(super) const SSN_PROXIMITY: PiiPattern = PiiPattern {
     name: "pii_ssn_us_proximity",
     pattern: concat!(r"(?-u:\b)(?:", ssn_grouped!(), r"|[0-9]{9})(?-u:\b)"),

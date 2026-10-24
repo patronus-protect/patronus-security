@@ -78,6 +78,10 @@ result shapes may be breaking for downstream users, and is called out explicitly
   best-of-15 full PII scans base → head DE strict 119.8 → 114.8 ms, EN strict 26.0 → 24.8 ms (noise);
   `latency.py compare --engine ark-native` 100 KiB p95 133.3 → 145.9 ms (+9.5 %, PASS; p50 38.0 →
   36.8 ms).
+- `pii_ssn_us_proximity` now also requires the value to stand alone (`context::stands_alone`, as
+  the context-free rule): a fragment of a longer number, range or phone number near an SSN term
+  (`My SSN is 401127789-0`, `Als SSN ist 422-68-7360-1 hinterlegt`, `+401127789`) is no SSN.
+  **Detection change:** all modes; such fragments are no longer reported.
 
 - Add VAT identification numbers for LU, LV, MT, PL, PT, RO, SE, SI, SK, NO and GB (B16), one label
   and one check-digit validator per country in `rust/src/detectors/pii/vat.rs`, built like B01:
