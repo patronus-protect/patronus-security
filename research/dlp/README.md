@@ -143,7 +143,26 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   (24 Hex mit Zeitstempel 2009–2040), Template- und Formatfelder, Variablenreferenzen,
   Wahrheitswerte und Null-Wörter (DE/EN), Zahlen, Pfade und URLs ohne Zugangsdaten. Hex unter
   einem einfachen Credential-Schlüssel bleibt ein Secret (OAuth-Client-Secrets, Flask/Rails-
-  Secret-Keys). YAML/JSON/TOML folgen in K05B, HCL/XML in K05C.
+  Secret-Keys). HCL/XML folgen in K05C.
+  Seit K05B (Teil 2) lesen dieselben Regeln YAML, JSON und TOML: Ein Schlüssel bindet seinen Wert
+  in jeder Tiefe (eingerückte YAML-Mappings und Listeneinträge `- key: value`, verschachtelte
+  JSON-Objekte, TOML-Tabellen), ein JSON-/TOML-String läuft bis zum schließenden Anführungszeichen
+  über Escapes (`\"`) hinweg, ein ungequoteter YAML-Wert mit `;`, `,`, `}` darin bis zum
+  Inline-Kommentar. Ein Array unter einem Credential-Schlüssel bindet jedes String-Element:
+  JSON- und TOML-Arrays (auch über mehrere Zeilen), YAML-Flow- (`[a, "b"]`) und Block-Sequenzen
+  (`- item`); ein Schlüssel im Plural (`api_keys`, `tokens`, `SERVICE_TOKENS`) bindet nur
+  Elemente. Ein Element steht ohne seinen Schlüssel und muss allein wie ein Secret aussehen
+  (`likeness::is_item_value`: druckbares ASCII ohne Leerzeichen, Ziffer oder beide
+  Groß-/Kleinschreibungen, keine Template-Zeichen, kein Bezeichner, Wort oder Pfad); eine Liste
+  bindet nur, wenn alle Elemente bestehen (Tokenizer-Vokabulare, Scopes, Wortlisten nie), und ein
+  Array mit Zahlen, Objekten oder Mappings bindet nichts. Kein YAML-Wert sind Werte mit einem
+  YAML-Indikator am Anfang (Alias `*`, Anker `&`, Tag `!`, Blockskalar `|`/`>`, Flow `{`),
+  Wortlisten (`read,write`) und Header-Namen (`X-Client-Secret:`) außerhalb eines HTTP-Kopfs.
+  Der Wertform-Filter verwirft zusätzlich ungequotete YAML-Aliase (`*default_password`, auch
+  Rust-Zeigertypen wie `pwd: *mut passwd`) und für das Repository verschlüsselte Werte (SOPS
+  `ENC[AES256_GCM,data:…]`, `$ANSIBLE_VAULT;…`); der Digest-Schlüssel eines Elements wird an
+  seinem eigenen Schlüssel geprüft (`sha256_tokens`). Treffer tragen `structure` `yaml`, `json`
+  oder `toml`; ein TOML-Skalar nach ungequotetem Schlüssel bleibt `properties` (K05).
   Seit K09 (Taxonomie v2) nennt jede Secret-Regel einen Untertyp ihrer Gruppe (`subtype` in
   `matched_rules`: `api_key`, `access_token`, `password`, `auth_url` …). Connection-Strings,
   Webhook-URLs, Auth-URLs, OTP-Secrets und Seed-Phrasen werden keine eigenen Gruppen, sondern

@@ -584,6 +584,35 @@ pub(crate) fn is_assignment_value(text: &str, range: Range<usize>) -> bool {
     !(is_stand_in(bare) || names_a_credential(bare) || is_word_sequence(bare))
 }
 
+/// K05B: whether an item of an array or sequence under a credential key
+/// (`api_keys: [ … ]`, `tokens:` with `- …` lines) could be a secret. Its
+/// key stands apart, so the item must show it on its own, more strictly
+/// than a value after its key: printable ASCII without blanks, a digit or
+/// both cases among at least two of lower case, upper case, digits and
+/// symbols, no template characters (`<|endoftext|>`, `{name}`; a `}` alone
+/// belongs to a password), and as a field value no identifier, word, name,
+/// stand-in, version or code ([`suits_field_key`]), path or metasyntactic
+/// word. Scopes (`read:org`), words and tokenizer entries are no items of a
+/// credential list.
+pub(crate) fn is_item_value(value: &str) -> bool {
+    let bare = value.trim();
+    let classes = [
+        bare.bytes().any(|byte| byte.is_ascii_lowercase()),
+        bare.bytes().any(|byte| byte.is_ascii_uppercase()),
+        bare.bytes().any(|byte| byte.is_ascii_digit()),
+        bare.bytes().any(|byte| byte.is_ascii_punctuation()),
+    ];
+    !bare.is_empty()
+        && bare.bytes().all(|byte| byte.is_ascii_graphic())
+        && classes.iter().filter(|&&class| class).count() >= 2
+        && (classes[2] || (classes[0] && classes[1]))
+        && !bare.contains(['<', '>', '{', '|'])
+        && !is_word_like(bare)
+        && suits_field_key(bare)
+        && !is_path(bare)
+        && !is_metasyntactic(bare)
+}
+
 /// F-GEN2 (T08): whether the value at `range` of `text`, which
 /// `dlp_env_var_secret` matched after an upper-case variable name, could be
 /// a secret. A constant such as `DATA_API_KEY = '.data-api'` or
@@ -762,6 +791,8 @@ pub(crate) fn is_credential_key(text: &str, key_start: usize, value: Range<usize
                 .iter()
                 .any(|word| list.contains(&word.as_str()))
         };
+        // K05B: a plural key (`nextTokens`, `pullSecrets`) binds list items.
+        let noun = noun.strip_suffix('s').unwrap_or(&noun);
         if (noun.ends_with("token") && excluded(NON_SECRET_TOKEN_PREFIXES))
             || (noun == "secret" && excluded(SECRET_OBJECT_PREFIXES))
         {
@@ -1042,7 +1073,7 @@ pub(super) fn is_path(value: &str) -> bool {
 
 /// Only letters and the identifier separators `_`, `-`, `.`: a value with a
 /// digit or another symbol is no word, name or stand-in.
-fn is_word_like(value: &str) -> bool {
+pub(super) fn is_word_like(value: &str) -> bool {
     !value.is_empty()
         && value.chars().any(char::is_alphabetic)
         && value

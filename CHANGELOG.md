@@ -9,6 +9,44 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ## [Unreleased]
 
+### Changed
+
+- Read YAML, JSON and TOML values and arrays under credential keys (K05, part 2: K05B).
+  `dlp_env_var_secret`, `dlp_password_assignment` and `dlp_generic_credential_assignment` bind a
+  config value at any nesting depth: indented YAML mappings and list entries (`- key: value`),
+  nested JSON objects and TOML tables. A JSON or TOML string runs to its closing quote past
+  escapes (`\"`), and a plain YAML value with `;`, `,` or `}` inside runs to its inline comment
+  instead of stopping at the first such character. An array under a credential key binds each
+  string item: JSON and TOML arrays (also over several lines), YAML flow sequences (`[a, "b"]`)
+  and block sequences (`- item` lines); a plural key (`api_keys`, `tokens`, `SERVICE_TOKENS`)
+  binds only items. An item must look like a secret on its own (`likeness::is_item_value`:
+  printable ASCII without blanks, a digit or both cases, no template characters, no identifier,
+  word, path or stand-in), and a list binds only if every item does, so tokenizer vocabularies,
+  scopes and word lists stay silent; an array with numbers, objects or mappings binds nothing.
+  No YAML value is a plain scalar with a YAML indicator at its start (alias, anchor, tag, block
+  scalar, flow mapping), a word list (`read,write`), or a header field (`X-Client-Secret:`)
+  outside an HTTP head. The K05 value-shape filter also rejects unquoted YAML aliases
+  (`*default_password`) and values encrypted for the repository (SOPS `ENC[AES256_GCM,data:…]`,
+  `$ANSIBLE_VAULT;…`), and checks the digest name of an item's own key (`sha256_tokens`).
+  Matches carry `structure` `yaml`, `json` or `toml`. `dlp_l1.jsonl` gains 37 rows (12
+  positives, 25 hard negatives with the K05 shapes per format, DE and EN keys); the new
+  `rust/tests/dlp_config_keys_nested.rs` checks every format and shape. **Detection change:**
+  array items and whole punctuated YAML values under credential keys are new findings, and JSON
+  values with an escaped quote are reported whole (`Tz8\"Wm4K…` instead of `Tz8\`). Rust raw
+  pointer types after a `pwd`/`passwd` field (`pwd: *mut passwd`) are no longer reported as
+  passwords: on a 432 MB probe of local code and config (Rust crates, Python packages, docs) 102
+  such spans disappear and none is added. Dev benign code, benign docs and
+  synthetic carriers are byte-identical; scoreboard gate on the dev corpora PASS with unchanged
+  numbers: exact F1 87.2, FP/MB benign code 0.1324 (5 FP), benign docs 0.1327, hard-negative FP
+  154, 100 KiB p95 13.18 → 13.56 ms (+2.9 %). Golden eval: 503/503 positives, 560/560 hard
+  negatives. Validators are unchanged.
+- A credential list binds nothing when one of its items has a non-secret shape (K05B, PR #152
+  review). **Detection change** (`dlp_env_var_secret`, `dlp_password_assignment`,
+  `dlp_generic_credential_assignment`): the all-or-nothing list check also applies the K05
+  value-shape filter (UUID, digest, object id) to every item, so in
+  `tokens: ["550e8400-…", "Tz8Wm4K93RVqe7xAb2Lp"]` the token-like item is no longer reported on
+  its own.
+
 ## [0.1.11] - 2026-10-23
 
 ### Detection changes in the default modes

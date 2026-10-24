@@ -22,7 +22,9 @@
 //!   `%(password)s`, `%s`, `{0}`, `<%= token %>`, an interpolation inside the
 //!   value such as `prefix${SUFFIX}`) and variable references
 //!   (`$TOKEN`, `${TOKEN}`, `%PASSWORT%`, `$env:TOKEN`, `env:TOKEN`,
-//!   secret-manager references);
+//!   secret-manager references); since K05B also unquoted YAML aliases
+//!   (`*default_password`) and values encrypted for the repository (SOPS
+//!   `ENC[AES256_GCM,data:…]`, `$ANSIBLE_VAULT;…`);
 //! - booleans and null words (`true`, `disabled`, `wahr`, `none`), numbers
 //!   with an optional unit (`86400`, `1.5`, `30s`), paths and URLs without
 //!   credentials (no userinfo, no secret query parameter).
@@ -93,6 +95,10 @@ static ENV_REFERENCE: LazyLock<Regex> =
 
 /// An integer or decimal, with digit grouping, exponent and an optional
 /// duration, size or percent unit.
+/// A SOPS-encrypted value: `ENC[<cipher>,data:…`.
+static SOPS_VALUE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^ENC\[[A-Z0-9_]+,data:").unwrap());
+
 static NUMBER: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^[+-]?[0-9]+(?:[._,][0-9]+)*(?:[eE][+-]?[0-9]+)?(?i:ms|s|m|h|d|w|k|kb|mb|gb|%)?$")
         .unwrap()
@@ -199,10 +205,17 @@ pub(crate) fn non_secret_shape(text: &str, range: Range<usize>) -> Option<NonSec
     if is_object_id(value) {
         return Some(NonSecretShape::ObjectId);
     }
-    if is_hex_digest(value) && key_names_digest(text, range.start) {
+    if is_hex_digest(value) && key_before_names_digest(text, range.start) {
         return Some(NonSecretShape::HexDigest);
     }
-    if is_variable_reference(value) {
+    if is_variable_reference(value) || is_encrypted_value(value) {
+        return Some(NonSecretShape::Reference);
+    }
+    // K05B: a YAML alias (`password: *default_password`) refers to the
+    // anchored value; a quoted `*` starts a password.
+    if !text[..range.start].ends_with(['"', '\'', '`'])
+        && value.strip_prefix('*').is_some_and(likeness::is_word_like)
+    {
         return Some(NonSecretShape::Reference);
     }
     if FORMAT_FIELD.is_match(value)
@@ -305,6 +318,13 @@ fn is_object_id(value: &str) -> bool {
             .is_ok_and(|seconds| OBJECT_ID_EPOCHS.contains(&seconds))
 }
 
+/// K05B: a value encrypted for the repository, which holds no plaintext
+/// secret: SOPS `ENC[AES256_GCM,data:…,iv:…,tag:…,type:str]` and Ansible
+/// Vault `$ANSIBLE_VAULT;1.1;AES256`.
+fn is_encrypted_value(value: &str) -> bool {
+    SOPS_VALUE.is_match(value) || value.starts_with("$ANSIBLE_VAULT;")
+}
+
 /// `$NAME`, `%NAME%`, `!NAME!`, `$env:NAME`, `env:NAME` or a secret-manager
 /// reference as the whole value. A `$` before a word with digits
 /// (`$ecret2026`) stays a password.
@@ -344,12 +364,16 @@ fn is_url_without_credentials(value: &str) -> bool {
 
 /// Whether the key before the value at `value_start` has a word that names a
 /// digest (`hashed_password`, `SHA256_TOKEN`, `token-prüfsumme`).
-fn key_names_digest(text: &str, value_start: usize) -> bool {
-    key_before(text, value_start).is_some_and(|key| {
-        normalize_key(key)
-            .split(' ')
-            .any(|word| DIGEST_KEY_WORDS.contains(&word))
-    })
+fn key_before_names_digest(text: &str, value_start: usize) -> bool {
+    key_before(text, value_start).is_some_and(key_names_digest)
+}
+
+/// Whether `key` has a word that names a digest; K05B checks the key of an
+/// array item, which stands apart from it, with this.
+pub(crate) fn key_names_digest(key: &str) -> bool {
+    normalize_key(key)
+        .split(' ')
+        .any(|word| DIGEST_KEY_WORDS.contains(&word))
 }
 
 /// The key before a value on its line: the identifier before the separator
@@ -378,7 +402,7 @@ pub(crate) fn key_before(text: &str, value_start: usize) -> Option<&str> {
 
 #[cfg(test)]
 mod tests {
-    use super::{key_before, non_secret_shape, NonSecretShape};
+    use super::{key_before, key_names_digest, non_secret_shape, NonSecretShape};
 
     fn shape(line: &str) -> Option<NonSecretShape> {
         let start = line.find('=').map(|index| index + 1).unwrap();
@@ -601,5 +625,39 @@ mod tests {
             assert_eq!(key_before(line, line.len() - 1), Some(key), "{line}");
         }
         assert_eq!(key_before("Das Passwort ist x", 17), None);
+    }
+
+    #[test]
+    fn aliases_and_encrypted_values_are_references() {
+        for line in [
+            "password: *default_password",
+            "pwd: *mut",
+            "password: ENC[AES256_GCM,data:Zm9vYmFy,iv:Kx7pQ2,tag:vL9rT4,type:str]",
+            "secret: $ANSIBLE_VAULT;1.1;AES256",
+        ] {
+            let start = line.find(": ").unwrap() + 2;
+            assert_eq!(
+                non_secret_shape(line, start..line.len()),
+                Some(NonSecretShape::Reference),
+                "{line}"
+            );
+        }
+        // A `*` with digits or inside quotes starts a password.
+        for line in ["password: *Kx7pQ2vL9", "password: \"*default_password\""] {
+            let start = line.find(": ").unwrap() + 2;
+            let start = start + usize::from(line[start..].starts_with('"'));
+            let end = line.len() - usize::from(line.ends_with('"'));
+            assert_eq!(non_secret_shape(line, start..end), None, "{line}");
+        }
+    }
+
+    #[test]
+    fn digest_names_in_a_key_of_its_own() {
+        for key in ["sha256_tokens", "TOKEN_HASHES", "gehashte_passwoerter"] {
+            assert!(key_names_digest(key), "{key}");
+        }
+        for key in ["api_keys", "tokens", "client_secret"] {
+            assert!(!key_names_digest(key), "{key}");
+        }
     }
 }
