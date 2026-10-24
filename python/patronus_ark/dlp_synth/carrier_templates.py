@@ -1329,6 +1329,14 @@ PROFILES = {
         "credential.url_userinfo_token", "SECRET_TOKEN", "secret", "git_remote", "repository URL", "Repository-URL",
         "https://<<value>>:x-oauth-basic@github.com/acme/app.git",
     ),
+    "dlp_connection_string_password": Profile(
+        "credential.connection_string", "CREDENTIAL", "secret", "connection_string", "connection string",
+        "Verbindungszeichenfolge", "Server=db.internal;Database=app;User Id=app;Password=<<value>>;",
+    ),
+    "dlp_ldap_bind_password": Profile(
+        "credential.ldap_bind_password", "CREDENTIAL", "secret", "ldap_bind", "LDAP bind", "LDAP-Bind",
+        "ldapsearch -x -D cn=svc,dc=acme,dc=org -w <<value>>",
+    ),
     "dlp_de_vat_id": Profile("identifier.de.vat_id", "dlp.de.vat_id", "identifier", "vat_id", "VAT ID", "USt-IdNr."),
     "dlp_de_commercial_register_number": Profile(
         "identifier.de.commercial_register", "dlp.de.commercial_register_number", "identifier", "commercial_register",
