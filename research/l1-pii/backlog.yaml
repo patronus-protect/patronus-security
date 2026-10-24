@@ -447,16 +447,6 @@ tasks:
       negative in strict) plus F07 (9 digits without separators only with SSN context); neutral and
       presidio_favored SSN F1 >= tuned in balanced
 
-  # M4 pass 1 (100 KiB p95 76 ms vs 10 ms)
-  - id: H03
-    title: "Latency pass 1: profile 100 KiB, AnchorGate/prefilter coverage for every rule, remove the top hotspots"
-    type: perf
-    deps: []
-    accept: >-
-      Profile of the 100 KiB DE and EN workloads in the PR; every rule behind an AnchorGate or prefilter
-      (test that fails for an ungated rule); 100 KiB p95 (native and Python) at least halved versus
-      scoreboard/latency.md on the VPS; latency.md updated; goldens and scoreboard unchanged
-
   # M1 UK NINO (presidio_favored 0 vs 100) + UK driving licence (P6) + M3 +1 (36)
   - id: B-UK
     title: "UK: NHS number (mod 11), passport and driving licence, NINO without spaces / in pairs / lowercase after a field name"
@@ -635,6 +625,16 @@ tasks:
 
   # M3 buffer +1 (80)
   - {id: A02, title: "Crypto wallets: BTC Base58Check/Bech32(m), ETH EIP-55, LTC", type: new-entity, deps: [K05]}
+
+  # M4 pass 1 (100 KiB p95 76 ms vs 10 ms)
+  - id: H03
+    title: "Latency pass 1: profile 100 KiB, AnchorGate/prefilter coverage for every rule, remove the top hotspots"
+    type: perf
+    deps: []
+    accept: >-
+      Profile of the 100 KiB DE and EN workloads in the PR; every rule behind an AnchorGate or prefilter
+      (test that fails for an ungated rule); 100 KiB p95 (native and Python) at least halved versus
+      scoreboard/latency.md on the VPS; latency.md updated; goldens and scoreboard unchanged
 
   # M4 pass 2 after all rules
   - id: H06

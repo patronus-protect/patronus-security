@@ -460,6 +460,8 @@ im Abschnitt „Critical path“ von `backlog.yaml`. Ähnliche Aufgaben sind zu 
 Meilenstein-Wirkung tragen `status: deferred` mit Grund. 35 offene Aufgaben, bei 2 Läufen/Tag
 ≈ 2,5–3 Wochen. Neue TRIAGE-Aufgaben nur, wenn sie einen Meilenstein bewegen.
 
+Entscheidung vom 2026-10-24: Die Latenz (M4) kommt ans Ende, nach allen Regel-Aufgaben, weil jede neue Regel sie wieder verschiebt (gemessen 24.10.: 100 KiB p95 ≈ 150 ms, DE ≈ 155 ms); H03 steht deshalb direkt vor H06.
+
 Entscheidungen vom 2026-10-21: M2 gilt auf beiden Familien (umgesetzt in D-M2, Regel oben; neutral: ≥ Presidio tuned + 15 pp;
 `presidio_favored`: ≥ Presidio tuned). Loopback- und unspezifizierte Adressen (`127.0.0.1`, `::1`,
 `0.0.0.0`, `::`) verwirft ARK in jedem Modus; ihre Gold-Werte auf `presidio_favored` bleiben eine

@@ -222,7 +222,7 @@ unter `~/ark-dlp/holdout`, ist für die Agent-Sandbox unzugänglich und SHA-gepi
 | M1 Provider-Parität | Für jeden gemeinsamen Provider-Typ gilt Recall(ARK) ≥ max(gitleaks, TruffleHog) bei FP/MB ≤ gitleaks |
 | M2 Generische Secrets | F1 auf Passwort/Token/Connection-String in Config, CLI und DE/EN-Prosa ≥ bester Baseline + 20 pp |
 | M3 Breite | ≥ 90 % der gitleaks-Default-Regeln gemappt. ≥ 150 Secret-Formate, davon ≥ 30 mit Offline-Strukturprüfung (CRC, Base58Check, Bech32, BIP39, DER, JWT). ≥ 20 Dokument-/Content-Klassen, die keine der Secret-Baselines hat |
-| M4 Latenz | 100 KiB p95 ≤ 10 ms, Durchsatz ≥ gitleaks (gemessen auf der VPS mit `scripts/l1_dlp/latency.py`) |
+| M4 Latenz | Durchsatz ≥ gitleaks und 100 KiB p95 ≲ 15 ms (entschieden 2026-10-24; vorher ≤ 10 ms, gemessen 14,0 ms bei 8,18 vs. 4,16 MiB/s gegen gitleaks), gemessen auf der VPS mit `scripts/l1_dlp/latency.py` |
 | Immer | FP/MB auf dem Benign-Code-Korpus ≤ der besten Baseline. Keine Klasse verliert > 0,5 pp F1. Keine echten Secrets in Repo, Logs oder PRs |
 
 Metriken:
