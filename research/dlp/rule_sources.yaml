@@ -146,6 +146,12 @@ rules:
   dlp_basic_auth:
     source_ref: https://www.rfc-editor.org/rfc/rfc7617#section-2
     format: "Basic followed by canonical padded base64 (RFC 4648 section 4) anywhere, as a whole token; it decodes to printable UTF-8 user-id:password with a non-empty user-id (no colon) and password; the password is no stand-in, credential name or metasyntactic word, also read without leetspeak (user:p@ss), and differs from the user-id (F-HTTP)"
+  dlp_connection_string_password:
+    source_ref: https://learn.microsoft.com/en-us/dotnet/framework/data/adonet/connection-string-syntax
+    format: "password/pwd key of a connection string (G01): ;-separated key/value strings with a server, data source, host, DSN, driver or provider key or after a jdbc: URL (ADO.NET, ODBC with {…} values, OLE DB, JDBC SQL Server/DB2 properties, https://learn.microsoft.com/en-us/sql/connect/jdbc/building-the-connection-url); libpq keyword/value strings with a host and a dbname, user or port (https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING); the password query parameter of a database or broker URL (libpq URI, MySQL Connector/J, MongoDB, Redis, AMQP …); Oracle thin/OCI jdbc:oracle:thin:user/password@host (https://docs.oracle.com/en/database/oracle/oracle-database/23/jjdbc/data-sources-and-URLs.html); the password is no stand-in or credential name"
+  dlp_ldap_bind_password:
+    source_ref: https://www.openldap.org/software/man.cgi?query=ldapsearch
+    format: "LDAP simple-bind password (G01): -w <password> of the OpenLDAP client tools (ldapsearch, ldapmodify, ldapadd, ldapdelete, ldappasswd, ldapwhoami, ldapcompare, ldapmodrdn, ldapexop); bindpw/bind_pw (nss-pam-ldapd nslcd.conf, pam_ldap), bindCredential (Keycloak LDAP provider), ldap_default_authtok (SSSD), AuthLDAPBindPassword (Apache mod_authnz_ldap); a directive without = or : only at the start of its line; the password is no stand-in or credential name"
   dlp_url_userinfo_token:
     source_ref: https://github.blog/2012-09-21-easier-builds-and-deployments-using-git-over-https-and-oauth/
     format: "token as the username of a URL with the constant password x-oauth-basic (https://<token>:x-oauth-basic@github.com/…); the token needs two character classes, 3 bits of entropy per character and no sequential or repeated runs (F-GEN1)"

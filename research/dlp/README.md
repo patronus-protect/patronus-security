@@ -190,6 +190,20 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   Webhook-URLs, Auth-URLs, OTP-Secrets und Seed-Phrasen werden keine eigenen Gruppen, sondern
   Untertypen von `CREDENTIAL`, `SECRET_TOKEN` bzw. `CRYPTO_KEY` (Liste in
   [`entity_map.yaml`](entity_map.yaml), `subtypes`).
+  Seit G01 meldet `dlp_connection_string_password` (Untertyp `connection_string`, Stärke
+  `structure`) das Passwort eines Connection-Strings je Schema: `password`/`pwd` in einem
+  `;`-getrennten Key/Value-String mit Server-, Data-Source-, Host-, DSN-, Driver- oder
+  Provider-Schlüssel oder nach einer `jdbc:`-URL (ADO.NET, ODBC mit `{…}`, OLE DB, JDBC SQL
+  Server/DB2), in einem libpq-Keyword/Value-String mit Host und Datenbank, User oder Port
+  (Keyword-Argumente eines Aufrufs zählen nicht), als Query-Parameter einer Datenbank- oder
+  Broker-URL (`jdbc:mysql://…?user=…&password=…`, auch `&amp;`; Web-URLs bleiben bei
+  `dlp_credential_in_url`) und in Oracle-Thin/OCI-URLs (`jdbc:oracle:thin:user/…@host`).
+  `dlp_ldap_bind_password` meldet LDAP-Bind-Passwörter (`ldapsearch … -w`, `bindpw`, `bind_pw`,
+  `bindCredential`, `ldap_default_authtok`, `AuthLDAPBindPassword`). Beide verwerfen
+  Stellvertreter und Credential-Namen (auch Leetspeak) und gewinnen den Überlapp gegen die
+  generische Zuweisung und den URL-Parameter desselben Werts. `dlp_url_userinfo_password` nimmt
+  auch Userinfo ohne Benutzernamen (`redis://:…@host`). URL-Userinfo von
+  `postgres://`/`mysql://`/`mongodb+srv://`/`amqp://` bleibt bei `dlp_url_userinfo_password`.
 - Validatoren sind schwach: `is_secret_value` prüft nur Länge, Platzhalter und Env-Referenzen.
   Prüfsummen fehlen ganz: JWT-Struktur und PEM/DER (Base58Check für WIF seit
   K08/F02, GitHub CRC32 seit F03, npm CRC32 seit F04).
