@@ -750,6 +750,10 @@ def test_gold_validators_cover_every_checksum_validator():
     ("de_identity_card_number", ["L01X00T44", "l01x00t44", "X12345677", "T220001293", "L01X00T471", "1220001297"],
      ["L01X00T45", "T22000129", "C01X00T41", "T220001294", "1220001298", "0000000000", "D12345675",
       "L01x00T44", "L01X00T4", "L01X00T4711"]),
+    # B-UK: NHS number, weighted mod 11 (rust/tests/pii_uk.rs).
+    ("uk_nhs_number", ["9434765919", "943 476 5919", "943-476-5919", "4526018155", "6351819091"],
+     ["9434765918", "4526018156", "1234567890", "0000000000", "4444444444", "943476591", "94347659190",
+      "943 476 591X", "943/476/5919"]),
 ])
 def test_checksum_ports_match_the_rust_vectors(name, valid, invalid):
     check = MODULE.CHECKSUM_PORTS[name]

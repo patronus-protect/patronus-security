@@ -561,9 +561,10 @@ fn fr_es_it_nl_field_names_do_not_relax_validators() {
         ("FINANCIAL_ACCOUNT_NUMBER", "Número de cuenta: 000000000"),
         ("FINANCIAL_ACCOUNT_NUMBER", "Rekeningnummer: 0000000"),
         ("EMPLOYEE_ID", "ID dipendente: sconosciuto"),
-        // Letters outside the document alphabet.
-        ("PASSPORT_NUMBER", "Numéro de passeport : AB1234567"),
-        ("PASSPORT_NUMBER", "Paspoortnummer: QQ1234567"),
+        // Letters outside the document alphabet, and not the UK form of two letters and
+        // seven digits (B-UK).
+        ("PASSPORT_NUMBER", "Numéro de passeport : AB123456Q"),
+        ("PASSPORT_NUMBER", "Paspoortnummer: QQ12345Q7"),
         // A CVV is reported only next to a Luhn-valid card number.
         ("CREDITCARD_CVV", "Code de sécurité de la carte : 737"),
         (

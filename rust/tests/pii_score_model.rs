@@ -398,6 +398,7 @@ fn checksum_strength_is_reserved_for_real_check_digits() {
             "pii_credit_card",
             "pii_steuer_id_de",
             "pii_steuer_id_de_context_free",
+            "pii_nhs_number_uk",
             "pii_vat_id_de",
             "pii_vat_id_at",
             "pii_vat_id_ch",
@@ -454,6 +455,10 @@ fn reference_scores_per_rule() {
         ("pii_kfz_kennzeichen_de", 0.65),
         ("pii_ssn_us", 0.85),
         ("pii_ssn_us_context_free", 0.50),
+        ("pii_ni_uk", 0.90),
+        ("pii_ni_uk_context_free", 0.50),
+        ("pii_driver_license_number_uk", 0.75),
+        ("pii_driver_license_number_uk_context_free", 0.50),
     ] {
         assert_eq!(rule_score(rule_id), expected, "{rule_id}");
     }

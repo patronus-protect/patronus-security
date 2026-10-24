@@ -173,6 +173,15 @@ def test_vat_ids_have_one_label_and_id_per_country():
     assert entity_map.presidio_entity("IT_VAT_CODE") == "pii.it.vat_code"
 
 
+def test_uk_nhs_number_is_shared_with_presidio():
+    # B-UK: the NHS number gets its own label; NINO, passport and driving licence keep theirs.
+    entity_map = MODULE.load()
+    assert entity_map.ark_label("NHS_NUMBER") == "pii.uk.nhs_number"
+    assert entity_map.presidio_entity("UK_NHS") == "pii.uk.nhs_number"
+    assert entity_map.scope("pii.uk.nhs_number") == "shared"
+    assert entity_map.ark_label("NATIONALID") == "pii.uk.national_insurance_number"
+
+
 # ── validation of malformed maps ─────────────────────────────────────────────
 
 
@@ -406,7 +415,7 @@ def test_checked_in_registry_order_matches_the_rust_order_test():
     expected = re.findall(r'\(\s*"(pii_\w+)",\s*"(\w+)",?\s*\)', rust_test)
     rules = _generate_docs().parse_native_patterns(MODULE.PII_SOURCE_PATH, "PiiPattern")
     assert [(rule["id"], rule["entity_group"]) for rule in rules] == expected
-    assert len(expected) == 80
+    assert len(expected) == 85
 
 
 def test_cli_check_succeeds_and_fails(tmp_path):

@@ -196,6 +196,7 @@ fn competing_labels_are_the_number_labels() {
             "CREDITCARD",
             "FINANCIAL_ACCOUNT_NUMBER",
             "IBAN",
+            "NHS_NUMBER",
             "PHONE",
             "STEUERID",
             "VAT_ID_FR",
