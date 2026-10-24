@@ -24,6 +24,7 @@
 //! URL (`https://<token>:x-oauth-basic@…`) needs two character classes and
 //! token entropy as well.
 use super::credentials::{low_variety, LowVariety};
+use crate::detectors::dlp::config_keys;
 use crate::detectors::structure;
 use crate::detectors::validators::{shannon_entropy, CharClasses};
 use regex::Regex;
@@ -545,9 +546,15 @@ pub(crate) fn is_assignment_value(text: &str, range: Range<usize>) -> bool {
         return false;
     }
     // T09: XML `key="…" value="…"` holds the key in a `key`/`name` attribute
-    // and the value in quotes (not `placeholder="API key" value={…}`).
+    // and the value in quotes (not `placeholder="API key" value={…}`); K05C:
+    // in a keyed element also with other attributes between them
+    // (`<add key="ApiToken" type="string" value="…"/>`).
     let xml_value = XML_VALUE_SEPARATOR.is_match(before);
-    if xml_value && !(quoted && XML_KEY_VALUE.is_match(before)) {
+    if xml_value
+        && !(quoted
+            && (XML_KEY_VALUE.is_match(before)
+                || config_keys::is_keyed_xml_value(text, range.start)))
+    {
         return false;
     }
     let (separator, key_end) = match separator(before) {
@@ -1297,6 +1304,18 @@ mod tests {
             ("<api_key>{v}</api_key>", "apiKey", false),
             ("<secret>{v}</secret>", "changeme", false),
             ("<password>{v}</password>", "/run/secrets/db", false),
+            // The `value` attribute of a keyed element, also after another
+            // attribute; not of an HTML form element.
+            (
+                "<add key=\"ApiToken\" type=\"string\" value=\"{v}\"/>",
+                "Tz8Wm4K93RVqe7xAb2Lp",
+                true,
+            ),
+            (
+                "<input name=\"login\" type=\"password\" value=\"{v}\">",
+                "Tz8Wm4K93RVqe7xAb2Lp",
+                false,
+            ),
             // `=>` is no start tag: the usual rules for a bare value apply.
             ("password=>{v}", "get_password()", false),
         ] {

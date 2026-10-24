@@ -39,6 +39,11 @@ result shapes may be breaking for downstream users, and is called out explicitly
   is a 322 MB probe of local code, XML, HTML and docs (Rust crates, Python packages,
   `/usr/share`). 100 KiB p95 11.19 → 10.78 ms (noise). Golden eval: 515/515 positives, 576/576
   hard negatives. Validators are unchanged.
+- **Detection change:** (DLP L1, all modes) a keyed XML element binds its `value` attribute
+  also with other attributes between it and the `key`/`name` attribute (`<add key="ApiToken"
+  type="string" value="…"/>`); the value gate of `dlp_password_assignment` and
+  `dlp_generic_credential_assignment` no longer drops it. XML inside a comment over several
+  lines (`<!--` on a line above, up to `-->`) binds nothing. HTML form elements stay silent.
 - Read YAML, JSON and TOML values and arrays under credential keys (K05, part 2: K05B).
   `dlp_env_var_secret`, `dlp_password_assignment` and `dlp_generic_credential_assignment` bind a
   config value at any nesting depth: indented YAML mappings and list entries (`- key: value`),
