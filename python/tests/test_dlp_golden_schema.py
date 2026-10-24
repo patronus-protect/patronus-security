@@ -13,7 +13,7 @@ from patronus_ark.dlp_synth import recipes, rules
 TAGS = ("carrier", "no_context", "encoded", "split", "prose")
 CARRIERS = {
     "line", "env", "yaml", "json", "toml", "ini", "xml", "code", "log", "cli", "http", "csv",
-    "sql", "markdown", "prose",
+    "sql", "markdown", "prose", "hcl",
 }
 LANGUAGES = ("de", "en")
 MIN_PER_LANGUAGE = 5
