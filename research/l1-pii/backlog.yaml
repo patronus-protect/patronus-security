@@ -437,6 +437,7 @@ tasks:
 
   # M1 US SSN (neutral 58.5 vs 79.3, presidio_favored 57.1 vs 88.9)
   - id: B-SSN
+    status: done
     title: "US SSN: AAA-GG-SSSS with proximity and structural context, SSN without separators with context"
     type: recall-fix
     deps: [K04, B-EVAL]

@@ -36,7 +36,9 @@ pub struct PiiPattern {
     pub requires_context: bool,
     /// Emit only in the scored modes `balanced` and `recall`; `strict` never runs
     /// the rule (K05). Reserved for unbound checksum rules: the bare form of a
-    /// value that strict reports only after its field name.
+    /// value that strict reports only after its field name. The grouped US SSN
+    /// is the one format rule here (B-SSN): its separators and SSA ranges stand
+    /// in for a check digit.
     pub scored_only: bool,
 }
 
@@ -86,6 +88,8 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     driver_license::IT,
     de::KFZ_KENNZEICHEN,
     us::SSN,
+    us::SSN_PROXIMITY,
+    us::SSN_CONTEXT_FREE,
     uk::NINO,
     vat::VAT_ID_DE,
     vat::VAT_ID_AT,
@@ -543,6 +547,9 @@ impl NativeRegexDetector for PiiPipeline {
                 context::opens_phone_number(text, captures.get(0).unwrap().start())
             }
             "pii_credit_card" => context::card_position(text, captures.get(0).unwrap().range()),
+            // An SSN term near the value does not make a fragment of a longer
+            // number (`401127789-0`) an SSN.
+            "pii_ssn_us_proximity" => context::stands_alone(text, captures.get(0).unwrap().range()),
             "pii_passport_number_de_context_free" | "pii_identity_card_number_de_context_free" => {
                 !context::foreign_field(
                     prepared.structure(),

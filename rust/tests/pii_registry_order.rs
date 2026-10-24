@@ -49,6 +49,8 @@ const EXPECTED_ORDER: &[(&str, &str)] = &[
     ("pii_driver_license_number_it", "DRIVER_LICENSE_NUMBER"),
     ("pii_kfz_kennzeichen_de", "LICENSEPLATE"),
     ("pii_ssn_us", "SSN"),
+    ("pii_ssn_us_proximity", "SSN"),
+    ("pii_ssn_us_context_free", "SSN"),
     ("pii_ni_uk", "NATIONALID"),
     ("pii_vat_id_de", "VAT_ID_DE"),
     ("pii_vat_id_at", "VAT_ID_AT"),

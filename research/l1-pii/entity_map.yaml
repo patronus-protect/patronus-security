@@ -432,6 +432,7 @@ checksums:
     us_driver_license_number: null      # F15, Formate der Bundesstaaten, keine Prüfziffer
     it_driver_license_number: null      # F15, Patente-Form, keine Prüfziffer
     us_ssn: null                        # Bereichsprüfung
+    us_ssn_context_free: null           # B-SSN, Bereichsprüfung ohne Platzhalter, keine Prüfziffer
     uk_nino: null                       # Präfix-/Suffixprüfung
     de_vat_id: {algorithm: "ISO 7064 MOD 11,10"}            # B01, USt-IdNr.
     at_vat_id: {algorithm: Luhn-Variante (6 − Summe) mod 10}  # B01, UID ATU
