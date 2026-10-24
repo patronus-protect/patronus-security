@@ -11,6 +11,34 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Changed
 
+- Read HCL and XML values under credential keys (K05, part 3: K05C).
+  `dlp_env_var_secret`, `dlp_password_assignment` and `dlp_generic_credential_assignment` bind
+  an attribute in an HCL block (`resource "…" "…" {`, `provider`, `locals`, also nested blocks,
+  objects and `jsonencode({ … })`) by its double-quoted string or array items; a bare value
+  there is an expression (`var.db_password`, `random_password.db.result`) and binds nothing,
+  while HOCON and code blocks without an HCL header stay `properties`. A Terraform/Packer
+  `variable "db_password" {` block binds its `default` through the variable name. In XML an
+  element named by the key binds its text on the line (`<password>…</password>`, namespaced,
+  also in CDATA), and a config element (`add`, `entry`, `property`, `param`, `setting`,
+  `string` …) whose `key`/`name` attribute holds the key binds its `value` attribute in any
+  order or its text (`<entry key="client_secret">…</entry>`, `<add value="…" key="ApiToken"/>`).
+  Element text with blanks or markup, empty elements, HTML form elements and XML inside a string
+  or comment of code (`` Raw: `<password>…` ``, `"<token>"+t+"</token>"`, `/// <param …>`) bind
+  nothing; element text must suit a field value like a quoted one. The K05 value-shape filter
+  now checks every config value under its bound key, also when the key stands apart from the
+  value (`variable "passwort_sha256"`, `<hashed_password>`), and an XML `value` attribute under
+  its `key`/`name` attribute (`<add key="PasswordSha256" value="<hex>">`). Matches carry
+  `structure` `hcl` or `xml`; the XML tag grammar is shared with the PII K04 document structure.
+  `dlp_l1.jsonl` gains 28 rows (12 positives, 16 hard negatives with the K05 shapes per format,
+  DE and EN keys) and the carrier `hcl`; the new `rust/tests/dlp_config_keys_hcl_xml.rs` checks
+  both formats. **Detection change:** XML element text, keyed XML elements, HCL variable
+  defaults and `//`-commented HCL arrays under credential keys are new findings; an XML `value`
+  attribute holding a hex digest under a digest-named key is no longer reported by the generic
+  rules. Dev benign
+  code, benign docs, synthetic carriers and the external dev corpora are byte-identical, and so
+  is a 322 MB probe of local code, XML, HTML and docs (Rust crates, Python packages,
+  `/usr/share`). 100 KiB p95 11.19 → 10.78 ms (noise). Golden eval: 515/515 positives, 576/576
+  hard negatives. Validators are unchanged.
 - Read YAML, JSON and TOML values and arrays under credential keys (K05, part 2: K05B).
   `dlp_env_var_secret`, `dlp_password_assignment` and `dlp_generic_credential_assignment` bind a
   config value at any nesting depth: indented YAML mappings and list entries (`- key: value`),
