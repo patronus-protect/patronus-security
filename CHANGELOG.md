@@ -94,7 +94,7 @@ result shapes may be breaking for downstream users, and is called out explicitly
   letters HMRC never issues (`BG`, `NT`, `FQ …`, `UV …`) stay negative. `pii_ni_uk_context_free`
   reports a bare NINO in one letter case (`AB123456C`, `hh 01 02 03 d`, `tw987654a`;
   `validators::uk_nino_context_free`) in `balanced`/`recall` only, at 0.50.
-  `pii_passport_number_uk` reports two letters and seven digits (`AB1234567`) next to a passport
+  `pii_passport_number_uk` reports nine digits (`925665416`, HM Passport Office) next to a passport
   term or under a passport key in every mode. `pii_driver_license_number_uk` binds a UK driving
   licence (`MORGA657054SM9IJ`: surname, birth date with month + 50 for women, initials;
   `validators::uk_driver_license_number`, format only) to the shared licence field part in every
@@ -113,6 +113,13 @@ result shapes may be breaking for downstream users, and is called out explicitly
   the DFA; `latency.py compare --engine ark-native` 100 KiB p95 134.0 → 129.0 ms (−3.7 %, PASS;
   p50 32.0 → 35.3 ms, noise). Golden eval: 1091/1091 positives, 996/996 hard negatives;
   `pii_l1.jsonl` gains 128 rows and the known gap `NI number: JK 55 66 77 B` closes.
+
+- UK passport numbers are nine digits (B-UK review, PR #165): `pii_passport_number_uk` and
+  `validators::uk_passport_number` now read nine digits as HM Passport Office numbers the 2015 and
+  later designs (`Her UK passport 123456789 expires in 2031.`) instead of two letters and seven
+  digits, and reject one repeated digit. **Detection change:** in `strict`, `balanced` and `recall`
+  nine digits next to a passport term or under a passport key are UK passport findings; two letters
+  and seven digits next to a passport term are no longer reported by this rule.
 
 - US Social Security Numbers beyond the field name (B-SSN: T25, F07; baseline P1). Two rules join
   the field-bound `pii_ssn_us` in `rust/src/detectors/pii/us.rs`. `pii_ssn_us_proximity` reports

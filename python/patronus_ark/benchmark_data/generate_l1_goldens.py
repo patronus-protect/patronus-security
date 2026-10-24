@@ -2535,8 +2535,8 @@ for _row in B_SSN_CASES:
 # reports ten digits with the NHS mod-11 check digit (3-3-4 with spaces or hyphens, or
 # bare) in every mode when an NHS term stands near the value or is its key. `pii_ni_uk`
 # also reads a NINO in pairs and after `NI number`; `pii_ni_uk_context_free` reports a
-# bare NINO in one case in balanced and recall only. `pii_passport_number_uk` reports two
-# letters and seven digits next to a passport term. The UK driving licence is bound to a
+# bare NINO in one case in balanced and recall only. `pii_passport_number_uk` reports nine
+# digits next to a passport term. The UK driving licence is bound to a
 # licence field name in every mode (`pii_driver_license_number_uk`) and bare in balanced
 # and recall (`pii_driver_license_number_uk_context_free`). Hard negatives: failed check
 # digits, prefixes HMRC never issues, mixed case without a field name, impossible birth
@@ -2615,26 +2615,26 @@ B_UK_CASES = [
     n("NATIONALID", "de", "pii_ni_uk_context_free", "Artikelnummer AB123456C", "part number", mode="recall"),
     n("NATIONALID", "de", "pii_ni_uk_context_free", "Charge AB123456D-2 gesperrt", "part of a hyphenated number", mode="balanced"),
     # ── UK passport with a passport term, every mode ───────────────────────
-    p("PASSPORT_NUMBER", "en", "pii_passport_number_uk", "Passport number: ", "AB1234567"),
-    p("PASSPORT_NUMBER", "en", "pii_passport_number_uk", "Her UK passport ", "AB1234567", " expires in 2031.", carrier="prose"),
-    p("PASSPORT_NUMBER", "en", "pii_passport_number_uk", "My passport is ", "XY9876543", carrier="prose"),
-    p("PASSPORT_NUMBER", "en", "pii_passport_number_uk", '{"passport_number": "', "PA4567812", '"}', carrier="json"),
-    p("PASSPORT_NUMBER", "en", "pii_passport_number_uk", "name,passport,nationality\nJane Doe,", "SD7734120", ",British", carrier="csv"),
-    p("PASSPORT_NUMBER", "de", "pii_passport_number_uk", "Reisepass-Nr. ", "GB1234567", " (Vereinigtes Königreich)"),
-    p("PASSPORT_NUMBER", "de", "pii_passport_number_uk", "Der britische Reisepass ", "AB1234567", " ist gültig.", carrier="prose"),
-    p("PASSPORT_NUMBER", "de", "pii_passport_number_uk", "Passnummer: ", "SD7734120"),
-    p("PASSPORT_NUMBER", "de", "pii_passport_number_uk", '{"reisepass": "', "PA4567812", '"}', carrier="json"),
-    p("PASSPORT_NUMBER", "de", "pii_passport_number_uk", "<reisepassnummer>", "XY9876543", "</reisepassnummer>", carrier="xml"),
-    n("PASSPORT_NUMBER", "en", "pii_passport_number_uk", "AB1234567", "bare value without a passport term", tags=("no_context",), mode="balanced"),
-    n("PASSPORT_NUMBER", "en", "pii_passport_number_uk", "Passport number: ab1234567", "lowercase"),
-    n("PASSPORT_NUMBER", "en", "pii_passport_number_uk", "Passport number: AB123456", "only six digits"),
-    n("PASSPORT_NUMBER", "en", "pii_passport_number_uk", "Ticket AB1234567 was closed.", "no passport term", carrier="prose"),
-    n("PASSPORT_NUMBER", "en", "pii_passport_number_uk", "Passport photo order number AB1234567", "order number nearer than the passport term", mode="balanced"),
-    n("PASSPORT_NUMBER", "de", "pii_passport_number_uk", "Vorgang AB1234567 abgeschlossen.", "no passport term", carrier="prose"),
-    n("PASSPORT_NUMBER", "de", "pii_passport_number_uk", "Reisepass: ABC123456", "three letters"),
-    n("PASSPORT_NUMBER", "de", "pii_passport_number_uk", "Reisepass: AB12345678", "eight digits"),
-    n("PASSPORT_NUMBER", "de", "pii_passport_number_uk", "Reisepass-Foto, Bestellnummer AB1234567", "order number nearer than the passport term", mode="balanced"),
-    n("PASSPORT_NUMBER", "de", "pii_passport_number_uk", "Reisepass: AB1234567-2", "part of a hyphenated number"),
+    p("PASSPORT_NUMBER", "en", "pii_passport_number_uk", "Passport number: ", "925665416"),
+    p("PASSPORT_NUMBER", "en", "pii_passport_number_uk", "Her UK passport ", "123456789", " expires in 2031.", carrier="prose"),
+    p("PASSPORT_NUMBER", "en", "pii_passport_number_uk", "My passport is ", "107185703", carrier="prose"),
+    p("PASSPORT_NUMBER", "en", "pii_passport_number_uk", '{"passport_number": "', "761204958", '"}', carrier="json"),
+    p("PASSPORT_NUMBER", "en", "pii_passport_number_uk", "name,passport,nationality\nJane Doe,", "548812306", ",British", carrier="csv"),
+    p("PASSPORT_NUMBER", "de", "pii_passport_number_uk", "Reisepass-Nr. ", "925665416", " (Vereinigtes Königreich)"),
+    p("PASSPORT_NUMBER", "de", "pii_passport_number_uk", "Der britische Reisepass ", "533401372", " ist gültig.", carrier="prose"),
+    p("PASSPORT_NUMBER", "de", "pii_passport_number_uk", "Passnummer: ", "548812306"),
+    p("PASSPORT_NUMBER", "de", "pii_passport_number_uk", '{"reisepass": "', "761204958", '"}', carrier="json"),
+    p("PASSPORT_NUMBER", "de", "pii_passport_number_uk", "<reisepassnummer>", "107185703", "</reisepassnummer>", carrier="xml"),
+    n("PASSPORT_NUMBER", "en", "pii_passport_number_uk", "925665416", "bare value without a passport term", tags=("no_context",), mode="balanced"),
+    n("PASSPORT_NUMBER", "en", "pii_passport_number_uk", "Her UK passport AB1234567 expires in 2031.", "two letters and seven digits is no UK passport form", carrier="prose"),
+    n("PASSPORT_NUMBER", "en", "pii_passport_number_uk", "My passport is 12345678", "only eight digits", carrier="prose"),
+    n("PASSPORT_NUMBER", "en", "pii_passport_number_uk", "Ticket 925665416 was closed.", "no passport term", carrier="prose"),
+    n("PASSPORT_NUMBER", "en", "pii_passport_number_uk", "Passport photo order number 925665416", "order number nearer than the passport term", mode="balanced"),
+    n("PASSPORT_NUMBER", "de", "pii_passport_number_uk", "Vorgang 925665416 abgeschlossen.", "no passport term", carrier="prose"),
+    n("PASSPORT_NUMBER", "en", "pii_passport_number_uk", "My passport is 999999999", "one repeated digit", carrier="prose"),
+    n("PASSPORT_NUMBER", "de", "pii_passport_number_uk", "Der britische Pass 1234567890 ist gültig.", "ten digits", carrier="prose"),
+    n("PASSPORT_NUMBER", "de", "pii_passport_number_uk", "Reisepass-Foto, Bestellnummer 925665416", "order number nearer than the passport term", mode="balanced"),
+    n("PASSPORT_NUMBER", "en", "pii_passport_number_uk", "Her UK passport 925665416-2 expires in 2031.", "part of a hyphenated number", carrier="prose"),
     # ── UK driving licence after a licence field name, every mode ──────────
     p("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_uk", "Driving licence number: ", "MORGA657054SM9IJ"),
     p("DRIVER_LICENSE_NUMBER", "en", "pii_driver_license_number_uk", "My driving licence is ", "SMIT9801015JK2CD", carrier="prose"),

@@ -577,13 +577,13 @@ pub fn it_driver_license_number(s: &str) -> bool {
     card || paper
 }
 
-/// UK passport number since 2015 (B-UK): two letters and seven digits
-/// (`AB1234567`). Format only.
+/// UK passport number (B-UK): nine digits, as HM Passport Office numbers the 2015
+/// and later designs (`925665416`). No check digit; one repeated digit is no number.
 pub fn uk_passport_number(s: &str) -> bool {
     let bytes = s.as_bytes();
     bytes.len() == 9
-        && bytes[..2].iter().all(u8::is_ascii_uppercase)
-        && bytes[2..].iter().all(u8::is_ascii_digit)
+        && bytes.iter().all(u8::is_ascii_digit)
+        && bytes.iter().any(|&byte| byte != bytes[0])
 }
 
 /// UK driving licence number (B-UK): the first five letters of the surname padded

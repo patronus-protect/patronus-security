@@ -63,12 +63,11 @@ pub(super) const NHS_NUMBER: PiiPattern = PiiPattern {
     scored_only: false,
 };
 
-/// A UK passport number since 2015, two letters and seven digits (`AB1234567`), with
-/// a passport term near the value or as its key. Older nine-digit numbers stay with
-/// the field-bound passport rule.
+/// A UK passport number, nine digits (`925665416`), with a passport term near the
+/// value or as its key.
 pub(super) const PASSPORT_NUMBER: PiiPattern = PiiPattern {
     name: "pii_passport_number_uk",
-    pattern: r"(?-u:\b)[A-Z]{2}[0-9]{7}(?-u:\b)",
+    pattern: r"(?-u:\b)[0-9]{9}(?-u:\b)",
     entity_group: "PASSPORT_NUMBER",
     validator: Some(validators::uk_passport_number),
     strength: ValidatorStrength::Format,

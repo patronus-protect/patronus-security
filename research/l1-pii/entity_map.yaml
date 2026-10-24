@@ -437,7 +437,7 @@ checksums:
     de_driver_license_number: null      # 11 Zeichen, keine Prüfziffer
     us_driver_license_number: null      # F15, Formate der Bundesstaaten, keine Prüfziffer
     it_driver_license_number: null      # F15, Patente-Form, keine Prüfziffer
-    uk_passport_number: null            # B-UK, zwei Buchstaben + sieben Ziffern, keine Prüfziffer
+    uk_passport_number: null            # B-UK, neun Ziffern, keine Prüfziffer
     uk_driver_license_number: null      # B-UK, Nachname, Geburtsdatum, Initialen; DVLA-Prüfzeichen unveröffentlicht
     us_ssn: null                        # Bereichsprüfung
     us_ssn_context_free: null           # B-SSN, Bereichsprüfung ohne Platzhalter, keine Prüfziffer

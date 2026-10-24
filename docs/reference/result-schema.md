@@ -356,7 +356,7 @@ for a check digit, and score `0.50` bare: the grouped US SSN, a UK National Insu
 letter case (`AB123456C`, `AB 12 34 56 C`, `hh 01 02 03 d`; `NATIONALID`) and a UK driving licence
 (`MORGA657054SM9IJ`: surname, birth date, initials; `DRIVER_LICENSE_NUMBER`). The UK NHS number
 (`NHS_NUMBER`, mod-11 check digit: `943 476 5919`, `943-476-5919`, `9434765919`) and a UK passport
-number (`AB1234567`) need an NHS or passport term or key in every mode. The field-bound rules keep
+number (`925665416`) need an NHS or passport term or key in every mode. The field-bound rules keep
 their format check in every mode, since a printed nine-character serial carries no check digit. A context-bound rule (`pii_phone_de_national_proximity`: a national number such as
 `ist unter 0176 90817263 erreichbar`) reports only with a support term and no nearer counter term,
 in every mode including `strict`, and then scores at least `0.50`. Validators decide in every

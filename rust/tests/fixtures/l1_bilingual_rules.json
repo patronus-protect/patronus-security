@@ -832,15 +832,15 @@
   {
     "category": "pii",
     "rule_id": "pii_passport_number_uk",
-    "de": "Der britische Reisepass AB1234567 ist gültig.",
-    "en": "Her UK passport AB1234567 expires in 2031.",
+    "de": "Der britische Reisepass 533401372 ist gültig.",
+    "en": "Her UK passport 123456789 expires in 2031.",
     "language_neutral": false,
     "hard_negatives": {
       "de": [
-        "Vorgang AB1234567 abgeschlossen."
+        "Vorgang 925665416 abgeschlossen."
       ],
       "en": [
-        "Ticket AB1234567 was closed."
+        "Ticket 925665416 was closed."
       ]
     }
   },

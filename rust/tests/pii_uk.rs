@@ -7,7 +7,7 @@
 //! number (NINO) keeps its unchanged prefix/suffix validator: the field-bound rule
 //! now also reads the value in pairs (`AB 12 34 56 C`), and a bare NINO in one case
 //! (`AB123456C`, `hh 01 02 03 d`) is reported in `balanced`/`recall` only. A UK
-//! passport number (`AB1234567`) needs a passport term near it. The UK driving
+//! passport number (`925665416`, nine digits) needs a passport term near it. The UK driving
 //! licence (`MORGA657054SM9IJ`: surname, date of birth, initials) is bound to a
 //! licence field name in every mode and reported bare in the scored modes; its
 //! form has no check digit.
@@ -219,17 +219,19 @@ fn uk_driver_licence_validator_checks_surname_birth_date_and_initials() {
 }
 
 #[test]
-fn uk_passport_validator_checks_two_letters_and_seven_digits() {
-    for valid in ["AB1234567", "XY9876543", "GB1234567"] {
+fn uk_passport_validator_checks_nine_digits() {
+    for valid in ["123456789", "925665416", "107185703"] {
         assert!(validators::uk_passport_number(valid), "{valid}");
     }
     for invalid in [
-        "ab1234567",
-        "AB123456",
-        "AB12345678",
-        "ABC123456",
-        "A12345678",
-        "123456789",
+        // two letters and seven digits is no UK passport form
+        "AB1234567",
+        "12345678",
+        "1234567890",
+        "12345678A",
+        // one repeated digit
+        "000000000",
+        "999999999",
     ] {
         assert!(!validators::uk_passport_number(invalid), "{invalid}");
     }
@@ -446,24 +448,22 @@ fn invalid_prefixes_mixed_case_and_counter_context_stay_negative() {
 #[test]
 fn uk_passport_number_with_a_passport_term_in_every_mode() {
     for (text, value) in [
-        ("Passport number: AB1234567", "AB1234567"),
-        ("Her UK passport AB1234567 expires in 2031.", "AB1234567"),
-        ("My passport is XY9876543", "XY9876543"),
-        (
-            "Reisepass-Nr. GB1234567 (Vereinigtes Königreich)",
-            "GB1234567",
-        ),
-        ("{\"passport_number\": \"PA4567812\"}", "PA4567812"),
+        ("Passport number: 925665416", "925665416"),
+        ("Her UK passport 123456789 expires in 2031.", "123456789"),
+        ("My passport is 107185703", "107185703"),
+        ("Der britische Reisepass 533401372 ist gültig.", "533401372"),
+        ("{\"passport_number\": \"761204958\"}", "761204958"),
     ] {
         assert_reports(PASSPORT, text, value, &MODES);
     }
     for text in [
-        "AB1234567",
-        "ab1234567",
-        "Ticket AB1234567",
-        "Passport number: AB123456",
-        "Passport number: ABC123456",
-        "Passport photo order number AB1234567",
+        "123456789",
+        "Ticket 123456789",
+        "Her UK passport AB1234567 expires in 2031.",
+        "Passport number: 12345678",
+        "My passport is 999999999",
+        "Her UK passport 123456789-2 expires in 2031.",
+        "Passport photo order number 123456789",
     ] {
         assert_silent(text, "PASSPORT_NUMBER", &MODES);
     }
