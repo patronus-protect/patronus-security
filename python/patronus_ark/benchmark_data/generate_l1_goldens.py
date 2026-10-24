@@ -1039,7 +1039,7 @@ PII_CASES = {
         n("SSN", "en", "pii_ssn_us", "SSN: 000-12-3456", "reserved area number"),
         n("SSN", "en", "pii_ssn_us", "Release 123-45-6789", "missing SSN anchor"),
         p("SSN", "de", "pii_ssn_us", "US-Sozialversicherungsnummer: ", "401-12-7788"),
-        p("SSN", "de", "pii_ssn_us", "Die SSN des US-Mitarbeiters ist ", "532-87-1094", ".", carrier="prose", gap=True),
+        p("SSN", "de", "pii_ssn_us_proximity", "Die SSN des US-Mitarbeiters ist ", "532-87-1094", ".", carrier="prose"),
         p("SSN", "de", "pii_ssn_us", "Seine SSN: ", "532-87-1094", ", bitte vertraulich behandeln.", carrier="prose"),
         p("SSN", "de", "pii_ssn_us", "mitarbeiter_us:\n  ssn: ", "219-09-9998", "\n", carrier="yaml"),
         p("SSN", "de", "pii_ssn_us", "SSN=", "345-67-8901", carrier="kv"),
@@ -2444,6 +2444,79 @@ B16_VAT_ID_CASES = [
     n("VAT_ID_GB", "en", "pii_vat_id_gb", "Model GB203673191X sold out.", "glued to a letter", carrier="prose", mode="recall"),
 ]
 for _row in B16_VAT_ID_CASES:
+    PII_CASES.setdefault(_row["target_label"], []).append(_row)
+
+# B-SSN US Social Security Number beyond the field name (T25, F07; baseline P1, TRIAGE W43
+# bucket 11). `pii_ssn_us_proximity` reports AAA-GG-SSSS (hyphens, dots or spaces) and nine
+# bare digits in every mode when an SSN term stands near the value or is its structural key;
+# `pii_ssn_us_context_free` reports the grouped form without a term in balanced and recall
+# only. Hard negatives: grouped values without an SSN term in strict, order, reference and
+# part numbers (counter-context) in every mode, nine digits without an SSN term, values
+# outside the SSA ranges and values that continue a longer number. Appended so existing
+# ids stay stable.
+B_SSN_CASES = [
+    # ── SSN term near the value or as its key, every mode ──────────────────
+    p("SSN", "en", "pii_ssn_us_proximity", "Note: The Social Security Number (SSN) ", "861-18-8883", " is not required for this application.", carrier="prose"),
+    p("SSN", "en", "pii_ssn_us_proximity", "The applicant consents to the processing of their Social Security Number (", "800-40-3880", ") for payroll.", carrier="prose"),
+    p("SSN", "en", "pii_ssn_us_proximity", "Our records list the Social Security number as ", "404 15 2700", ".", carrier="prose"),
+    p("SSN", "en", "pii_ssn_us_proximity", "", "536-90-4421", " is my SSN.", carrier="prose"),
+    p("SSN", "en", "pii_ssn_us_proximity", "SSN No.: ", "078.05.1123"),
+    p("SSN", "en", "pii_ssn_us_proximity", "My SSN is ", "401127789", ", please keep it on file.", carrier="prose"),
+    p("SSN", "en", "pii_ssn_us_proximity", "ssn=", "857016921", carrier="kv"),
+    p("SSN", "en", "pii_ssn_us_proximity", '{"ssn": "', "401127789", '"}', carrier="json"),
+    p("SSN", "en", "pii_ssn_us_proximity", "<SSN>", "212.34.5678", "</SSN>", carrier="xml"),
+    p("SSN", "en", "pii_ssn_us_proximity", "name,ssn,city\nJane Doe,", "401127789", ",Boston", carrier="csv"),
+    p("SSN", "en", "pii_ssn_us_proximity", "The SSN on file is ", "401-12-7788", ".", carrier="prose", mode="balanced"),
+    p("SSN", "de", "pii_ssn_us_proximity", "Als SSN ist ", "422-68-7360", " hinterlegt.", carrier="prose"),
+    p("SSN", "de", "pii_ssn_us_proximity", "Seine SSN lautet ", "401127789", ".", carrier="prose"),
+    p("SSN", "de", "pii_ssn_us_proximity", "SSN-Nr. ", "401 12 7788", " liegt vor.", carrier="prose"),
+    p("SSN", "de", "pii_ssn_us_proximity", "Sozialversicherungsnummer (USA): ", "212.34.5678"),
+    p("SSN", "de", "pii_ssn_us_proximity", '{"ssn_nummer": "', "401127789", '"}', carrier="json"),
+    p("SSN", "de", "pii_ssn_us_proximity", "nr;name;ssn\n1;Jonas Weber;", "078.05.1123", "", carrier="csv"),
+    p("SSN", "de", "pii_ssn_us_proximity", "Die SSN des Antragstellers lautet ", "861-18-8883", ".", carrier="prose", mode="balanced"),
+    n("SSN", "en", "pii_ssn_us_proximity", "Release 523-41-1234 is out.", "grouped value without an SSN term", carrier="prose"),
+    n("SSN", "en", "pii_ssn_us_proximity", "Ticket 532-87-1094 was closed.", "grouped value without an SSN term", carrier="prose"),
+    n("SSN", "en", "pii_ssn_us_proximity", "From Account: 226-33-7819, To Account: 334-82-1956", "account fields without an SSN term"),
+    n("SSN", "en", "pii_ssn_us_proximity", "Send the form for 401127789 today.", "nine digits without an SSN term", carrier="prose", mode="balanced"),
+    n("SSN", "en", "pii_ssn_us_proximity", "The SSN request is under order number 401127789.", "order number nearer than the SSN term", carrier="prose", mode="balanced"),
+    n("SSN", "en", "pii_ssn_us_proximity", "SSN: 900123456", "area 9xx is never issued"),
+    n("SSN", "en", "pii_ssn_us_proximity", "SSN: 4011277890", "ten digits"),
+    n("SSN", "de", "pii_ssn_us_proximity", "Artikel 401-12-7788 ist lieferbar.", "grouped value without an SSN term", carrier="prose"),
+    n("SSN", "de", "pii_ssn_us_proximity", "Vorgang 123-45-6789 wurde abgeschlossen.", "grouped value without an SSN term", carrier="prose"),
+    n("SSN", "de", "pii_ssn_us_proximity", "Artikelnummer 401127789", "nine digits after a part number", mode="balanced"),
+    n("SSN", "de", "pii_ssn_us_proximity", "Die SSN folgt, Bestellnummer 401127789.", "order number nearer than the SSN term", carrier="prose", mode="balanced"),
+    n("SSN", "de", "pii_ssn_us_proximity", "SSN: 666000000", "area 666 is never issued"),
+    n("SSN", "de", "pii_ssn_us_proximity", "SSN: 40112778", "eight digits"),
+    # ── grouped value without a term, balanced and recall only ─────────────
+    p("SSN", "en", "pii_ssn_us_context_free", "", "078 05 1123", "", tags=("no_context",), mode="balanced"),
+    p("SSN", "en", "pii_ssn_us_context_free", "abc ", "078 05 1123", " abc", tags=("no_context",), mode="balanced"),
+    p("SSN", "en", "pii_ssn_us_context_free", "", "078.05.1123", "", tags=("no_context",), mode="balanced"),
+    p("SSN", "en", "pii_ssn_us_context_free", "NAD+SU+", "341-33-4328", "::735 Kyle Camp+Apt 3", tags=("no_context",), mode="balanced"),
+    p("SSN", "en", "pii_ssn_us_context_free", ":19A:20211115/00001/USD/", "399-38-9646", "", tags=("no_context",), mode="balanced"),
+    p("SSN", "en", "pii_ssn_us_context_free", "Release ", "123-45-6789", "", tags=("no_context",), mode="recall"),
+    p("SSN", "de", "pii_ssn_us_context_free", "Angaben zum US-Mitarbeiter: ", "219-09-9998", "", tags=("no_context",), mode="balanced"),
+    p("SSN", "de", "pii_ssn_us_context_free", "Vorgang ", "532-87-1094", " wurde abgeschlossen.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("SSN", "de", "pii_ssn_us_context_free", "<kennung>", "566-66-2655", "</kennung>", carrier="xml", tags=("no_context",), mode="balanced"),
+    p("SSN", "de", "pii_ssn_us_context_free", "Beleg vom 03.02.2026, Person ", "401.12.7788", "", tags=("no_context",), mode="balanced"),
+    p("SSN", "de", "pii_ssn_us_context_free", "LIN+1++", "341-33-4328", ":IN+++123456++10.50+EA", tags=("no_context",), mode="recall"),
+    n("SSN", "en", "pii_ssn_us_context_free", "Order number 123-45-6789 has shipped.", "order number", carrier="prose", mode="balanced"),
+    n("SSN", "en", "pii_ssn_us_context_free", "Reference number 523-41-1234", "reference number", mode="balanced"),
+    n("SSN", "en", "pii_ssn_us_context_free", "Part number 401-12-7788", "part number", mode="balanced"),
+    n("SSN", "en", "pii_ssn_us_context_free", "Tracking number 401-12-7788 is in transit.", "tracking number", carrier="prose", mode="recall"),
+    n("SSN", "en", "pii_ssn_us_context_free", '{"order_id": "123-45-6789"}', "order ID key", carrier="json", mode="balanced"),
+    n("SSN", "en", "pii_ssn_us_context_free", "900-12-3456", "area 9xx is never issued", tags=("no_context",), mode="balanced"),
+    n("SSN", "en", "pii_ssn_us_context_free", "Range 341-33-4328/2026", "part of a longer number", mode="balanced"),
+    n("SSN", "en", "pii_ssn_us_context_free", "341-33 4328", "mixed separators", tags=("no_context",), mode="balanced"),
+    n("SSN", "de", "pii_ssn_us_context_free", "Bestellnummer 123-45-6789 ist versandt.", "order number", carrier="prose", mode="balanced"),
+    n("SSN", "de", "pii_ssn_us_context_free", "Referenznummer 523-41-1234", "reference number", mode="balanced"),
+    n("SSN", "de", "pii_ssn_us_context_free", "Teilenummer 401-12-7788", "part number", mode="balanced"),
+    n("SSN", "de", "pii_ssn_us_context_free", "Rechnungsnummer 523-41-1234 ist offen.", "invoice number", carrier="prose", mode="recall"),
+    n("SSN", "de", "pii_ssn_us_context_free", "Seriennummer 219-45-7781", "serial number", mode="balanced"),
+    n("SSN", "de", "pii_ssn_us_context_free", "666-12-3456", "area 666 is never issued", tags=("no_context",), mode="balanced"),
+    n("SSN", "de", "pii_ssn_us_context_free", "Gruppe 12 341 33 4328", "digit group one space away", mode="balanced"),
+    n("SSN", "de", "pii_ssn_us_context_free", "Bestand 341-33-4328-7", "part of a longer number", mode="balanced"),
+]
+for _row in B_SSN_CASES:
     PII_CASES.setdefault(_row["target_label"], []).append(_row)
 
 # DLP golden schema v2 (E13). Every DLP row names the rule it exercises (`rule_id`), the

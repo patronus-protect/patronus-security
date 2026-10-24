@@ -9,7 +9,8 @@
 //! of a longer number, range or date) and drops below both thresholds when a
 //! counter-context term is nearer than any support term. A bare Steuer-ID also
 //! has to follow the digit distribution of issued IDs; validators are never
-//! relaxed.
+//! relaxed. The grouped US SSN (`AAA-GG-SSSS`, B-SSN) is the one format-only
+//! scored-only rule: its SSA ranges and separators stand in for a check digit.
 
 use patronus_ark::detectors::pii::{
     pii::{PiiPattern, PII_PATTERNS},
@@ -106,6 +107,7 @@ fn scored_only_rules_are_unbound_checksum_rules() {
             .collect::<Vec<_>>(),
         [
             STEUER_ID,
+            "pii_ssn_us_context_free",
             "pii_vat_id_de",
             "pii_vat_id_at",
             "pii_vat_id_ch",
@@ -144,12 +146,12 @@ fn scored_only_rules_are_unbound_checksum_rules() {
         ]
     );
     for pattern in scored_only {
-        assert_eq!(
-            pattern.strength,
-            ValidatorStrength::Checksum,
-            "{}",
-            pattern.name
-        );
+        let strength = if pattern.name == "pii_ssn_us_context_free" {
+            ValidatorStrength::Format
+        } else {
+            ValidatorStrength::Checksum
+        };
+        assert_eq!(pattern.strength, strength, "{}", pattern.name);
         assert!(!pattern.captured_value, "{}", pattern.name);
         // The bare Partita IVA (B01) and the old numeric document serial (F08) are
         // the unbound checksum rules that need a term; 11 bare digits with a Luhn

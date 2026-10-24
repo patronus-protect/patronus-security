@@ -255,8 +255,8 @@ fn balanced_and_recall_keep_the_strict_spans_unless_counter_context_outranks() {
                 }
             }
             for span in &scored.evidence_spans {
-                // K05: only a scored-only rule (a bare checksum value) adds a span;
-                // K06: or the recall normalization.
+                // K05: only a scored-only rule (a bare checksum value, B-SSN: a grouped
+                // SSN) adds a span; K06: or the recall normalization.
                 let scored_only = rules.iter().any(|rule| {
                     rule["start_byte"] == span.start_byte
                         && rule["end_byte"] == span.end_byte
@@ -453,6 +453,7 @@ fn reference_scores_per_rule() {
         ("pii_rentenversicherung_de", 0.90),
         ("pii_kfz_kennzeichen_de", 0.65),
         ("pii_ssn_us", 0.85),
+        ("pii_ssn_us_context_free", 0.50),
     ] {
         assert_eq!(rule_score(rule_id), expected, "{rule_id}");
     }
