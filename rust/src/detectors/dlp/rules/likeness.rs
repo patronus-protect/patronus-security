@@ -1052,14 +1052,23 @@ pub(super) fn is_chosen_password(user: &str, password: &str) -> bool {
 /// (`Password=<value>;`, `ldapsearch … -w <value>`) is a chosen one, as for
 /// [`is_chosen_password`]: `Password=password;`, `Pwd=s3cr3t;` and `-w secret`
 /// are stand-ins; code (`BindCredential = configuration["…"]`) holds no value.
+/// A quoted or braced literal holds one even where it reads as code
+/// (`bindpw "Violet.River!82"`), unless its quote closes a string
+/// (`"…;Password=" + cfg.DbPassword + "`).
 pub(crate) fn is_connection_password(text: &str, range: Range<usize>) -> bool {
+    let before = &text[..range.start];
     let value = &text[range];
-    !is_code_expression(value) && is_chosen_secret(value)
+    let code = match before.chars().next_back() {
+        Some('"' | '\'') => closes_string(before),
+        Some('{') => false,
+        _ => is_code_expression(value),
+    };
+    !code && is_chosen_secret(value)
 }
 
 /// [`is_chosen_password`] without the user-id.
-fn is_chosen_secret(password: &str) -> bool {
-    let plain: String = password
+fn is_chosen_secret(value: &str) -> bool {
+    let plain: String = value
         .chars()
         .map(|c| match c {
             '@' | '4' => 'a',
@@ -1071,7 +1080,7 @@ fn is_chosen_secret(password: &str) -> bool {
             c => c,
         })
         .collect();
-    !is_metasyntactic(password)
+    !is_metasyntactic(value)
         && !(is_word_like(&plain)
             && (is_stand_in(&plain) || names_a_credential(&plain) || is_word_sequence(&plain)))
 }
@@ -1682,5 +1691,18 @@ mod tests {
         ] {
             assert!(!chosen(value), "{value}");
         }
+        // A quoted literal holds a value even where it reads as code; a quote
+        // that closes a string leads into code.
+        let gate = |text: &str, value: &str| {
+            let start = text.find(value).unwrap();
+            is_connection_password(text, start..start + value.len())
+        };
+        assert!(gate("bindpw \"Violet.River!82\"", "Violet.River!82"));
+        assert!(gate("Pwd={Violet.River!82};", "Violet.River!82"));
+        assert!(!gate("bindpw Violet.River!82", "Violet.River!82"));
+        assert!(!gate(
+            "cs = \"Server=db;Password=\" + cfg.DbPassword + \";\"",
+            " + cfg.DbPassword + "
+        ));
     }
 }

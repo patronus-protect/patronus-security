@@ -125,10 +125,18 @@ fn key_value_connection_strings_report_the_password() {
     ] {
         assert_exact(template, PASSWORD, rule);
     }
-    // A value with spaces runs to the `;`.
+    // A value with spaces runs to the `;`, also past a ` key=` that would
+    // end a libpq value.
+    for value in ["Tr0ub4dor & 3", "Kx7pQ2vL9! part=Wm3zR8tQ4yN1"] {
+        assert_exact(
+            "Server=sql01;Database=orders;User Id=app;Password={v};",
+            value,
+            rule,
+        );
+    }
     assert_exact(
-        "Server=sql01;Database=orders;User Id=app;Password={v};",
-        "Tr0ub4dor & 3",
+        "Server=sql01; Password = {v} ;",
+        "Kx7pQ2vL9! part=Wm3zR8tQ4yN1",
         rule,
     );
 }
@@ -204,6 +212,29 @@ fn ldap_bind_passwords_are_reported() {
 }
 
 #[test]
+fn quoted_passwords_that_resemble_code_are_reported() {
+    // A quoted literal holds a value even where it reads as member access.
+    let value = "Violet.River!82";
+    for (template, rule) in [
+        ("bindpw \"{v}\"", "dlp_ldap_bind_password"),
+        (
+            "ldapsearch -x -D cn=admin,dc=acme,dc=org -w '{v}'",
+            "dlp_ldap_bind_password",
+        ),
+        (
+            "Server=sql01;Database=orders;User Id=app;Password='{v}';",
+            "dlp_connection_string_password",
+        ),
+        (
+            "Driver={ODBC Driver 18 for SQL Server};Server=sql01;Uid=sa;Pwd={{v}};",
+            "dlp_connection_string_password",
+        ),
+    ] {
+        assert_exact(template, value, rule);
+    }
+}
+
+#[test]
 fn passwords_outside_a_connection_string_keep_their_rule() {
     // No server key, no `;` or libpq host: a plain assignment.
     let text = format!("Database=orders;User Id=app;Password={PASSWORD};");
@@ -253,6 +284,10 @@ fn references_placeholders_and_stand_ins_are_no_findings() {
         "The bindpw option sets the password that nslcd uses for the simple bind.",
         "Der Parameter bindpw enthält das Passwort für die einfache Bindung.",
         "ldap_default_authtok = ${SSSD_BIND_PASSWORD}",
+        // unquoted code holds no value
+        "options.BindCredential = configuration[\"Ldap:BindPassword\"];",
+        "\"bindCredential\": settings.ldap.password,",
+        "var cs = \"Server=sql01;Database=orders;Password=\" + settings.DbPassword + \";\";",
     ] {
         assert_silent(text);
     }

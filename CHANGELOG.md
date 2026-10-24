@@ -146,6 +146,12 @@ result shapes may be breaking for downstream users, and is called out explicitly
   (5 FP), benign docs 0.1327, hard-negative FP 154; 100 KiB p95 +1.1 % and +5.5 % in two runs
   (11.23 → 11.35 ms, 10.35 → 10.93 ms; the base is above the 10 ms budget in both).
   Golden eval: 521/521 positives, 574/574 hard negatives. Existing validators are unchanged.
+- **Detection change:** (DLP L1, all modes) `dlp_connection_string_password` and
+  `dlp_ldap_bind_password` report a quoted or ODBC-braced password that reads like code
+  (`bindpw "Violet.River!82"`). Before, the member-access check rejected these values. A
+  quote that closes a string still leads into code (`"…;Password=" + cfg.DbPassword + "…"`), and
+  that case is now dropped. A bare value after a `;` runs to the next `;` even past a ` key=`
+  (`Server=db;Password=Kx7pQ2vL9! part=Wm3zR8tQ4yN1;`). It is no longer cut at the libpq key.
 - Add VAT identification numbers for LU, LV, MT, PL, PT, RO, SE, SI, SK, NO and GB (B16), one label
   and one check-digit validator per country in `rust/src/detectors/pii/vat.rs`, built like B01:
   `VAT_ID_LU` (first six mod 89), `VAT_ID_LV` (legal entities, weighted mod 11), `VAT_ID_MT`

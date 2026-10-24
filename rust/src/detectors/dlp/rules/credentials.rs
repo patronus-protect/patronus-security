@@ -303,11 +303,14 @@ pub(super) const CONNECTION_RULES: &[DlpPattern] = &[
         // A `password`/`pwd` key of a URL query (also `&amp;` in XML) or of a
         // key/value string, the value quoted, in ODBC braces or bare: a bare
         // value runs to `;`, a quote or backtick, the line end or the next libpq
-        // `key=` and may hold spaces (ADO.NET). Oracle thin/OCI URLs carry
-        // it as `user/<password>@`. `connection::is_connection_string`
+        // `key=` and may hold spaces (ADO.NET); after a `;` the bare value
+        // runs to the next `;` and may hold ` key=`. Oracle thin/OCI URLs
+        // carry it as `user/<password>@`. `connection::is_connection_string`
         // checks that the key belongs to a connection string.
         pattern: concat!(
             r#"(?i)(?:(?:[?&]|&amp;)(?:password|pwd)=([^&#\s"'<>]{1,150})"#,
+            r#"|;[ \t]*(?:password|pwd)[ \t]*=[ \t]*"#,
+            r#"([^;"'`\s{][^;"'`\r\n]{0,149}?)[ \t]*(?:;|\\?["'`]|\r|(?m:$))"#,
             r#"|(?:(?m:^)|[;\s"'{(])(?:password|pwd)[ \t]*=[ \t]*"#,
             r#"(?:"([^"\r\n]{1,150})"|'([^'\r\n]{1,150})'|\{([^{}\r\n]{1,150})\}"#,
             r#"|([^;"'`\s{][^;"'`\r\n]{0,149}?)(?:[ \t]*(?:;|\\?["'`]|\r|(?m:$))|[ \t]+[A-Za-z_]+[ \t]*=))"#,

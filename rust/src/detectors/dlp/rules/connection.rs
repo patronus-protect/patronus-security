@@ -77,6 +77,10 @@ static ORACLE_USER: LazyLock<Regex> =
 static PASSWORD_KEY: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r#"(?i)(?:password|pwd)[ \t]*=[ \t]*["'{]?\z"#).unwrap());
 
+/// A libpq ` key=` right after a bare value, where the rule cut it.
+static NEXT_LIBPQ_KEY: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\A[ \t]+[A-Za-z_]+[ \t]*=").unwrap());
+
 /// Whether the value at `range` of `text` is the password of a connection
 /// string, see the module docs.
 pub(super) fn is_connection_string(text: &str, range: Range<usize>) -> bool {
@@ -105,7 +109,10 @@ pub(super) fn is_connection_string(text: &str, range: Range<usize>) -> bool {
         .trim_start_matches([' ', '\t']);
     let lead_end = lead.trim_end_matches([' ', '\t']);
     if lead_end.ends_with(';') || after.starts_with(';') {
-        return SERVER_KEY.is_match(line);
+        // A bare value of a `;`-separated string runs to its `;`: spaces and
+        // `=` may belong to it (ADO.NET), so a value cut before ` key=` is
+        // part of a password.
+        return !NEXT_LIBPQ_KEY.is_match(&text[range.end..line_end]) && SERVER_KEY.is_match(line);
     }
     // libpq separates pairs by whitespace only; `host="db", password=…` is a
     // call with keyword arguments.
@@ -187,6 +194,10 @@ mod tests {
             "Kx7pQ2vL9!"
         ));
         assert!(!gate("password=Kx7pQ2vL9!", "Kx7pQ2vL9!"));
+        assert!(!gate(
+            "Server=db; Password=Kx7pQ2vL9! part=two;",
+            "Kx7pQ2vL9!"
+        ));
     }
 
     #[test]
