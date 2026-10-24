@@ -184,6 +184,14 @@
       "generators": ["generic_api_secret", "url_token"],
       "probes": ["$ git clone https://<<secret:0>>:x-oauth-basic@github.com/acme/app.git", "Spiegel des Lager-Repos: https://<<secret:0>>:x-oauth-basic@github.com/acme/lager.git"]
     },
+    "dlp_connection_string_password": {
+      "generators": ["password", "url_userinfo_password"],
+      "probes": ["Server=db.internal;Database=app;User Id=app;Password=<<secret:0>>;", "spring.datasource.url=jdbc:mysql://db:3306/app?user=app&password=<<secret:0>>&useSSL=true", "psql \"host=db port=5432 dbname=app user=app password=<<secret:0>> sslmode=require\"", "Driver={ODBC Driver 18 for SQL Server};Server=db;Uid=sa;Pwd={<<secret:0>>};", "Verbindungszeichenfolge: Data Source=sql01;Initial Catalog=lager;User ID=lager;Password=<<secret:0>>"]
+    },
+    "dlp_ldap_bind_password": {
+      "generators": ["password", "url_userinfo_password"],
+      "probes": ["ldapsearch -x -H ldaps://ldap.internal -D \"cn=admin,dc=acme,dc=org\" -w <<secret:0>> -b \"dc=acme,dc=org\"", "binddn cn=nslcd,ou=dienste,dc=acme,dc=de\nbindpw <<secret:0>>", "ldap_default_authtok = <<secret:0>>", "AuthLDAPBindPassword \"<<secret:0>>\""]
+    },
     "dlp_de_vat_id": {
       "generators": ["de_vat_id"],
       "probes": ["USt-IdNr.: <<secret:0>>", "VAT ID: <<secret:0>>"]

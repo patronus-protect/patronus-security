@@ -7727,6 +7727,207 @@ DLP_K05B_CASES = {
 for _label, _rows in DLP_K05B_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
+# G01: connection strings per scheme. `dlp_connection_string_password` reports the password of
+# a `;`-separated key/value string with a server, data source, host, DSN, driver or provider key or
+# after a jdbc: URL (ADO.NET, ODBC with {…} values, JDBC SQL Server properties), of a libpq
+# keyword/value string with a host and a database, user or port, the password query parameter of a
+# database or broker URL (JDBC MySQL/PostgreSQL, libpq URI) and the password of an Oracle thin URL;
+# `dlp_ldap_bind_password` the bind password of `ldapsearch … -w`, nslcd `bindpw`, SSSD
+# `ldap_default_authtok`, Keycloak `bindCredential` and Apache `AuthLDAPBindPassword`;
+# `dlp_url_userinfo_password` also the Redis password without a username (`redis://:…@`). Hard
+# negatives: environment and template references, placeholders, stand-ins, integrated security and
+# libpq strings without a password, the password prompt `-W` and documented call syntax.
+DLP_G01_CASES = {
+    "CREDENTIAL": [
+        ds(
+            "CREDENTIAL", "de", "dlp_connection_string_password",
+            "{\n  \"ConnectionStrings\": {\n    \"Lager\": \"Server=sql01.lager.intern;Database=lager;"
+            "User Id=lager_app;Password=<<secret:0>>;TrustServerCertificate=True\"\n  }\n}\n",
+            "password", 16001, carrier="json",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_connection_string_password",
+            "# Lagerabgleich (ODBC)\nLAGER_DSN=Driver={ODBC Driver 18 for SQL Server};Server=sql01;Uid=lager;"
+            "Pwd={<<secret:0>>};\n",
+            "password", 16002, carrier="env",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_connection_string_password",
+            "# Anwendungseinstellungen Lagerverwaltung\nlager.datasource.url=jdbc:sqlserver://sql01.lager.intern:1433;"
+            "databaseName=lager;user=lager_app;password=<<secret:0>>;encrypt=true\n",
+            "password", 16003, carrier="ini",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_connection_string_password",
+            "$ psql \"host=db.lager.intern port=5432 dbname=lager user=lager_app password=<<secret:0>> "
+            "sslmode=require\"\npsql (16.4)\nlager=>\n",
+            "url_userinfo_password", 16004, carrier="cli",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_connection_string_password",
+            "Hallo Jana,\n\ndie Berichtsdatenbank erreichst du über "
+            "jdbc:mysql://bericht.intern:3306/berichte?user=bericht&password=<<secret:0>>&useSSL=true\n"
+            "Bitte nicht weiterleiten.\n",
+            "url_userinfo_password", 16005, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_connection_string_password",
+            "// Altanbindung an das Lager-ERP\nString url = \"jdbc:oracle:thin:lager/<<secret:0>>"
+            "@//ora01.lager.intern:1521/LAGER\";\n",
+            "url_userinfo_password", 16006, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_url_userinfo_password",
+            "# Zwischenspeicher für Sitzungen\nCACHE_URL=redis://:<<secret:0>>@cache.lager.intern:6379/0\n",
+            "url_userinfo_password", 16007, carrier="env",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_ldap_bind_password",
+            "$ ldapsearch -x -H ldaps://verzeichnis.intern -D \"cn=admin,dc=lager,dc=de\" -w <<secret:0>> "
+            "-b \"ou=personen,dc=lager,dc=de\" uid=jana\n",
+            "url_userinfo_password", 16008, carrier="cli",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_ldap_bind_password",
+            "# /etc/nslcd.conf – Verzeichnisanbindung der Lagerrechner\nuri ldaps://verzeichnis.intern\n"
+            "base dc=lager,dc=de\nbinddn cn=nslcd,ou=dienste,dc=lager,dc=de\nbindpw <<secret:0>>\n",
+            "password", 16009, carrier="ini",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_connection_string_password",
+            "<configuration>\n  <connectionStrings>\n    <add name=\"Orders\" connectionString=\"Data Source=sql02.internal;"
+            "Initial Catalog=orders;User ID=orders_app;Password=<<secret:0>>;Encrypt=True\" "
+            "providerName=\"System.Data.SqlClient\" />\n  </connectionStrings>\n</configuration>\n",
+            "password", 16011, carrier="xml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_connection_string_password",
+            "spring:\n  datasource:\n    url: jdbc:postgresql://db.internal:5432/orders?user=orders&password=<<secret:0>>"
+            "&sslmode=require\n    hikari:\n      maximum-pool-size: 10\n",
+            "url_userinfo_password", 16012, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_connection_string_password",
+            "import pyodbc\n\nconn = pyodbc.connect(\n    \"DRIVER={ODBC Driver 18 for SQL Server};SERVER=sql02.internal;"
+            "DATABASE=orders;UID=orders;PWD=<<secret:0>>\"\n)\n",
+            "password", 16013, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_connection_string_password",
+            "2026-09-14T08:12:03.441Z DEBUG [pool] connecting with host=db.internal port=5432 dbname=orders "
+            "user=orders password=<<secret:0>> sslmode=require\n",
+            "url_userinfo_password", 16014, carrier="log",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_connection_string_password",
+            "Hi Sam,\n\nthe nightly export connects with\n\n"
+            "Server=sql02.internal;Database=orders;User Id=export;Password=<<secret:0>>;\n\n"
+            "Please move it to the vault after the migration.\n",
+            "password", 16015, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_url_userinfo_password",
+            "# session cache\nREDIS_URL=rediss://:<<secret:0>>@cache.internal:6380/0\n",
+            "url_userinfo_password", 16016, carrier="env",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_ldap_bind_password",
+            "[domain/acme]\nid_provider = ldap\nldap_uri = ldaps://ldap.internal\n"
+            "ldap_default_bind_dn = cn=sssd,ou=services,dc=acme,dc=org\nldap_default_authtok = <<secret:0>>\n",
+            "password", 16017, carrier="ini",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_ldap_bind_password",
+            "{\n  \"providerId\": \"ldap\",\n  \"bindDn\": \"cn=keycloak,ou=services,dc=acme,dc=org\",\n"
+            "  \"bindCredential\": \"<<secret:0>>\"\n}\n",
+            "url_userinfo_password", 16018, carrier="json",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_ldap_bind_password",
+            "<Location \"/intranet\">\n  AuthType Basic\n  AuthBasicProvider ldap\n"
+            "  AuthLDAPURL \"ldaps://ldap.internal/ou=people,dc=acme,dc=org?uid\"\n"
+            "  AuthLDAPBindDN \"cn=apache,ou=services,dc=acme,dc=org\"\n  AuthLDAPBindPassword \"<<secret:0>>\"\n"
+            "</Location>\n",
+            "password", 16019, carrier="ini",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_connection_string_password",
+            "LAGER_DB=Server=sql01.lager.intern;Database=lager;User Id=lager_app;Password=${LAGER_DB_PASSWORT};\n",
+            "environment reference as connection string password", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_connection_string_password",
+            "{\"ConnectionStrings\": {\"Lager\": \"Server=sql01;Database=lager;Trusted_Connection=True;\"}}\n",
+            "Windows authentication without a password", carrier="json",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_connection_string_password",
+            "# Vorlage, Passwort beim Deployment eintragen\nlager.db=Data Source=sql01;Initial Catalog=lager;"
+            "User ID=lager_app;Password=<hier-passwort-eintragen>;\n",
+            "placeholder as connection string password", carrier="ini",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_connection_string_password",
+            "$ psql \"host=db.lager.intern port=5432 dbname=lager user=lager_app sslmode=require\"\nPasswort für Benutzer lager_app:\n",
+            "libpq string without a password (prompt)", carrier="cli",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_ldap_bind_password",
+            "$ ldapsearch -x -D \"cn=admin,dc=lager,dc=de\" -W -b \"dc=lager,dc=de\" uid=jana\nEnter LDAP Password:\n",
+            "ldapsearch password prompt -W without a value", carrier="cli",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_ldap_bind_password",
+            "$ ldapsearch -x -D \"cn=admin,dc=lager,dc=de\" -w \"$LDAP_PASSWORT\" -b \"dc=lager,dc=de\"\n",
+            "shell variable as bind password", carrier="cli",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_ldap_bind_password",
+            "Aufruf laut Handbuch: ldapsearch -x -D <bind-dn> -w <passwort> -b <basis-dn> [filter]\n",
+            "documented call syntax with placeholders", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_connection_string_password",
+            "ORDERS_DB=Server=sql02.internal;Database=orders;User Id=orders_app;Password=${ORDERS_DB_PASSWORD};\n",
+            "environment reference as connection string password", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_connection_string_password",
+            "<add name=\"Orders\" connectionString=\"Data Source=sql02.internal;Initial Catalog=orders;"
+            "Integrated Security=SSPI\" providerName=\"System.Data.SqlClient\" />\n",
+            "integrated security without a password", carrier="xml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_connection_string_password",
+            "spring.datasource.url=jdbc:postgresql://db.internal:5432/orders?user=orders&password=<your-password>\n",
+            "placeholder as query password", carrier="ini",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_connection_string_password",
+            "// docs: connection string format\nvar cs = \"Server=myServerAddress;Database=myDataBase;"
+            "User Id=myUsername;Password=myPassword;\";\n",
+            "documented stand-in password", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_ldap_bind_password",
+            "$ ldapsearch -x -D \"cn=admin,dc=acme,dc=org\" -w \"$LDAP_BIND_PW\" -b \"dc=acme,dc=org\"\n",
+            "shell variable as bind password", carrier="cli",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_ldap_bind_password",
+            "# nslcd.conf template\nbinddn cn=nslcd,ou=services,dc=acme,dc=org\nbindpw changeme\n",
+            "placeholder as bind password", carrier="ini",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_ldap_bind_password",
+            "The bindpw option sets the password that nslcd uses for the simple bind.\n",
+            "option name in prose", carrier="prose",
+        ),
+    ],
+}
+for _label, _rows in DLP_G01_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
 def flatten(suite: str, cases: dict[str, list[dict]]) -> list[dict]:
     rows = []
     for label, label_cases in cases.items():

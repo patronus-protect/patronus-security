@@ -30,6 +30,7 @@ macro_rules! xml_value_attribute {
     };
 }
 
+mod connection;
 mod content;
 mod credentials;
 mod crypto;
@@ -52,11 +53,27 @@ const PARTS: &[&[DlpPattern]] = &[
     credentials::RULES,
     hashes::RULES,
     credentials::URL_USERINFO_RULES,
+    credentials::CONNECTION_RULES,
     identifiers::RULES,
     content::RULES,
 ];
 
 pub(super) static DLP_RULES: [DlpPattern; rule_count(PARTS)] = concat(PARTS);
+
+/// The credential families: generic credentials, URL userinfo and connection
+/// strings (G01).
+const CREDENTIAL_PARTS: &[&[DlpPattern]] = &[
+    credentials::RULES,
+    credentials::URL_USERINFO_RULES,
+    credentials::CONNECTION_RULES,
+];
+
+fn is_credential_rule(rule_id: &str, value_capturing: bool) -> bool {
+    CREDENTIAL_PARTS
+        .iter()
+        .flat_map(|part| part.iter())
+        .any(|rule| rule.name == rule_id && (!value_capturing || rule.span_group.is_some()))
+}
 
 /// How the example/test value check (T06) applies to a rule.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -89,7 +106,7 @@ pub(crate) fn example_check(rule_id: &str) -> ExampleCheck {
         || FIXED_FORMAT_CREDENTIALS.contains(&rule_id)
     {
         ExampleCheck::FixedFormat
-    } else if in_family(credentials::RULES) || in_family(credentials::URL_USERINFO_RULES) {
+    } else if is_credential_rule(rule_id, false) {
         ExampleCheck::Generic
     } else {
         ExampleCheck::Off
@@ -98,12 +115,9 @@ pub(crate) fn example_check(rule_id: &str) -> ExampleCheck {
 
 /// Whether the placeholder/reference check (T07) applies to a rule: the
 /// value-capturing credential rules (assignments, URL parameters and userinfo,
-/// signatures, auth headers, cookies, CSRF tokens).
+/// signatures, auth headers, cookies, CSRF tokens, connection strings).
 pub(crate) fn placeholder_check(rule_id: &str) -> bool {
-    credentials::RULES
-        .iter()
-        .chain(credentials::URL_USERINFO_RULES)
-        .any(|rule| rule.name == rule_id && rule.span_group.is_some())
+    is_credential_rule(rule_id, true)
 }
 
 pub(crate) use likeness::is_item_value;
@@ -143,7 +157,8 @@ const GENERIC_CREDENTIALS: &[&str] = &[
 /// rules, which keep overlapping spans. Provider and key-material formats
 /// rank first, then platform-format tokens (JWT, bearer, CSRF, session
 /// cookie, URL signature), password hashes, structural credentials (URL
-/// userinfo and parameters, Basic auth) and last the generic assignments.
+/// userinfo and parameters, Basic auth, connection strings, LDAP binds) and
+/// last the generic assignments.
 pub(crate) fn overlap_tier(rule_id: &str) -> Option<OverlapTier> {
     let rule = DLP_RULES.iter().find(|rule| rule.name == rule_id)?;
     if !SECRET_GROUPS.contains(&rule.entity_group) {
