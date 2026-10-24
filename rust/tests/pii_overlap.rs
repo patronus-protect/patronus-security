@@ -201,7 +201,8 @@ fn competing_labels_are_the_number_labels() {
             "VAT_ID_FR",
             "VAT_ID_HR",
             "VAT_ID_IT",
-            "VAT_ID_LT"
+            "VAT_ID_LT",
+            "VAT_ID_LV"
         ])
     );
 }
