@@ -273,15 +273,80 @@ fn key_value_lines(text: &str, builder: &mut Builder) {
     }
 }
 
+/// An XML/HTML tag: `/` of an end tag, the local name, the attributes and `/`
+/// of an empty-element tag.
+const XML_TAG: &str =
+    r"<(/?)(?:[A-Za-z_][\w.\-]*:)?([A-Za-z_][\w.\-]*)((?:[ \t\r\n]+[^<>]*?)?)[ \t\r\n]*(/?)>";
+
+static TAG: LazyLock<Regex> = LazyLock::new(|| Regex::new(XML_TAG).unwrap());
+
+static TAG_AT: LazyLock<Regex> = LazyLock::new(|| Regex::new(&format!("^{XML_TAG}")).unwrap());
+
+static ATTRIBUTE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"(?:[A-Za-z_][\w.\-]*:)?([A-Za-z_][\w.\-]*)[ \t\r\n]*=[ \t\r\n]*(?:"([^"\r\n]*)"|'([^'\r\n]*)')"#)
+        .unwrap()
+});
+
+/// A start tag of an XML element (DLP K05C): byte ranges of its local name
+/// and its attributes, where it ends and whether it is an empty-element tag
+/// (`<password/>`).
+pub(crate) struct XmlStartTag {
+    pub name: Range<usize>,
+    pub attributes: Range<usize>,
+    pub end: usize,
+    pub empty: bool,
+}
+
+/// The start tag that opens at `at` of `text`, if `<` at `at` opens one.
+pub(crate) fn xml_start_tag(text: &str, at: usize) -> Option<XmlStartTag> {
+    let captures = TAG_AT.captures(&text[at..])?;
+    if !captures[1].is_empty() {
+        return None;
+    }
+    let (name, attributes) = (captures.get(2)?, captures.get(3)?);
+    Some(XmlStartTag {
+        name: at + name.start()..at + name.end(),
+        attributes: at + attributes.start()..at + attributes.end(),
+        end: at + captures.get(0)?.end(),
+        empty: !captures[4].is_empty(),
+    })
+}
+
+/// Bytes before a position searched for the `<` of a start tag.
+const MAX_TAG_BYTES: usize = 256;
+
+/// The start tag of the last `<` before `at` of `text` within
+/// [`MAX_TAG_BYTES`], and where it opens; `None` if that `<` opens no start
+/// tag.
+pub(crate) fn xml_start_tag_before(text: &str, at: usize) -> Option<(usize, XmlStartTag)> {
+    let mut floor = at.saturating_sub(MAX_TAG_BYTES);
+    while !text.is_char_boundary(floor) {
+        floor += 1;
+    }
+    let open = floor + text[floor..at].rfind('<')?;
+    Some((open, xml_start_tag(text, open)?))
+}
+
+/// The attributes in `attributes` of `text`: byte ranges of the local name and
+/// of the value without quotes.
+pub(crate) fn xml_attributes(
+    text: &str,
+    attributes: Range<usize>,
+) -> impl Iterator<Item = (Range<usize>, Range<usize>)> + '_ {
+    let offset = attributes.start;
+    ATTRIBUTE
+        .captures_iter(&text[attributes])
+        .filter_map(move |attribute| {
+            let key = attribute.get(1)?;
+            let value = attribute.get(2).or_else(|| attribute.get(3))?;
+            Some((
+                offset + key.start()..offset + key.end(),
+                offset + value.start()..offset + value.end(),
+            ))
+        })
+}
+
 fn xml(text: &str, builder: &mut Builder) {
-    static TAG: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"<(/?)(?:[A-Za-z_][\w.\-]*:)?([A-Za-z_][\w.\-]*)((?:[ \t\r\n]+[^<>]*?)?)[ \t\r\n]*(/?)>")
-            .unwrap()
-    });
-    static ATTRIBUTE: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r#"(?:[A-Za-z_][\w.\-]*:)?([A-Za-z_][\w.\-]*)[ \t\r\n]*=[ \t\r\n]*(?:"([^"\r\n]*)"|'([^'\r\n]*)')"#)
-            .unwrap()
-    });
     if !text.contains('<') {
         return;
     }
@@ -320,17 +385,8 @@ fn xml(text: &str, builder: &mut Builder) {
         }
         let element = &text[name.range()];
         if let Some(attributes) = captures.get(3) {
-            for attribute in ATTRIBUTE.captures_iter(attributes.as_str()) {
-                let key = attribute.get(1).unwrap();
-                let value = attribute.get(2).or_else(|| attribute.get(3)).unwrap();
-                let offset = attributes.start();
-                builder.push(
-                    text,
-                    offset + key.start()..offset + key.end(),
-                    Some(element),
-                    offset + value.start()..offset + value.end(),
-                    Carrier::Xml,
-                );
+            for (key, value) in xml_attributes(text, attributes.range()) {
+                builder.push(text, key, Some(element), value, Carrier::Xml);
             }
         }
         if captures[4].is_empty() {

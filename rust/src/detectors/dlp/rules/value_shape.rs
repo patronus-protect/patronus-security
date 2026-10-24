@@ -192,6 +192,29 @@ const OBJECT_ID_EPOCHS: Range<u32> = 0x495C_0780..0x83AA_7E80;
 /// K05: the shape of the value at `range` of `text` that a key binds, if it
 /// is no secret. The key is read before the value on its line.
 pub(crate) fn non_secret_shape(text: &str, range: Range<usize>) -> Option<NonSecretShape> {
+    shape(text, range.clone(), || {
+        key_before_names_digest(text, range.start)
+    })
+}
+
+/// K05C: [`non_secret_shape`] under `key`, which a config format binds to
+/// the value from elsewhere: an array item, the `default` of an HCL
+/// `variable` block, the text of an XML element.
+pub(crate) fn non_secret_shape_under(
+    text: &str,
+    range: Range<usize>,
+    key: &str,
+) -> Option<NonSecretShape> {
+    shape(text, range, || key_names_digest(key))
+}
+
+/// The non-secret shape of the value at `range`; `key_names_digest` tells
+/// whether its key names a digest.
+fn shape(
+    text: &str,
+    range: Range<usize>,
+    key_names_digest: impl FnOnce() -> bool,
+) -> Option<NonSecretShape> {
     let value = value_without_terminators(text, range.clone());
     if value.is_empty() {
         return None;
@@ -205,7 +228,7 @@ pub(crate) fn non_secret_shape(text: &str, range: Range<usize>) -> Option<NonSec
     if is_object_id(value) {
         return Some(NonSecretShape::ObjectId);
     }
-    if is_hex_digest(value) && key_before_names_digest(text, range.start) {
+    if is_hex_digest(value) && key_names_digest() {
         return Some(NonSecretShape::HexDigest);
     }
     if is_variable_reference(value) || is_encrypted_value(value) {
@@ -378,9 +401,15 @@ pub(crate) fn key_names_digest(key: &str) -> bool {
 
 /// The key before a value on its line: the identifier before the separator
 /// (`=`, `:`, `=>`, prose `is`/`ist`/`lautet` excluded), without quotes,
-/// subscripts and blanks around it.
+/// subscripts and blanks around it; for an XML `value` attribute the
+/// `key`/`name` attribute before it (K05C).
 pub(crate) fn key_before(text: &str, value_start: usize) -> Option<&str> {
     let line_start = text[..value_start].rfind('\n').map_or(0, |index| index + 1);
+    // K05C: an XML `value` attribute takes its key from the `key`/`name`
+    // attribute before it.
+    if let Some(key) = likeness::xml_attribute_key(&text[line_start..value_start]) {
+        return Some(key);
+    }
     let head = text[line_start..value_start]
         .trim_end_matches(|c: char| c.is_whitespace() || matches!(c, '"' | '\'' | '`' | '\\'));
     let head = head
@@ -402,7 +431,9 @@ pub(crate) fn key_before(text: &str, value_start: usize) -> Option<&str> {
 
 #[cfg(test)]
 mod tests {
-    use super::{key_before, key_names_digest, non_secret_shape, NonSecretShape};
+    use super::{
+        key_before, key_names_digest, non_secret_shape, non_secret_shape_under, NonSecretShape,
+    };
 
     fn shape(line: &str) -> Option<NonSecretShape> {
         let start = line.find('=').map(|index| index + 1).unwrap();
@@ -621,6 +652,8 @@ mod tests {
             ("X-Token-Digest: x", "X-Token-Digest"),
             ("'passwort_hash' => 'x", "passwort_hash"),
             ("lager\\ngehashtes_passwort = x", "gehashtes_passwort"),
+            ("<add key=\"PasswordSha256\" value=\"x", "PasswordSha256"),
+            ("<property name='token.digest' value='x", "token.digest"),
         ] {
             assert_eq!(key_before(line, line.len() - 1), Some(key), "{line}");
         }
@@ -649,6 +682,20 @@ mod tests {
             let end = line.len() - usize::from(line.ends_with('"'));
             assert_eq!(non_secret_shape(line, start..end), None, "{line}");
         }
+    }
+
+    #[test]
+    fn shapes_under_a_key_that_stands_apart() {
+        let text =
+            "variable \"db_password_sha256\" {\n  default = \"5d41402abc4b2a76b9719d911017c592\"";
+        let start = text.rfind("= \"").unwrap() + 3;
+        let range = start..text.len() - 1;
+        assert_eq!(non_secret_shape(text, range.clone()), None);
+        assert_eq!(
+            non_secret_shape_under(text, range.clone(), "db_password_sha256"),
+            Some(NonSecretShape::HexDigest)
+        );
+        assert_eq!(non_secret_shape_under(text, range, "db_password"), None);
     }
 
     #[test]
