@@ -386,6 +386,34 @@ fn a_bare_grouped_value_stands_alone() {
 }
 
 #[test]
+fn an_ssn_term_does_not_claim_part_of_a_longer_number() {
+    // A value the proximity rule finds near an SSN term stands alone as well: a
+    // fragment of a longer number, a range or a phone number is no SSN.
+    for text in [
+        "My SSN is 401127789-0",
+        "My SSN is 401127789/12",
+        "My SSN is 401127789.5",
+        "My SSN is 401127789,5",
+        "My SSN is +401127789",
+        "My SSN is 12 401127789",
+        "Seine SSN lautet 7/401127789.",
+        "Als SSN ist 422-68-7360-1 hinterlegt.",
+        "Als SSN ist 422.68.7360.5 hinterlegt.",
+        "Als SSN ist 422 68 7360 15 hinterlegt.",
+    ] {
+        assert_silent(text, &MODES);
+    }
+    // A sentence end, a comma or a closing bracket still delimits the value.
+    for (text, value) in [
+        ("My SSN is 401127789-", "401127789"),
+        ("My SSN is 401127789, thanks", "401127789"),
+        ("Als SSN ist (422-68-7360) hinterlegt.", "422-68-7360"),
+    ] {
+        assert_reports(PROXIMITY, text, value, &MODES);
+    }
+}
+
+#[test]
 fn scores_follow_the_context() {
     let proximity = pattern(PROXIMITY);
     for (text, context) in [
