@@ -1045,7 +1045,30 @@ pub(super) fn is_identifier(value: &str) -> bool {
 /// (`user:password`, `application:secret`, `confidentialApplication:topSecret`)
 /// and no word sequence.
 pub(super) fn is_chosen_password(user: &str, password: &str) -> bool {
-    let plain: String = password
+    !password.eq_ignore_ascii_case(user) && is_chosen_secret(password)
+}
+
+/// G01: whether the password of a connection string or LDAP bind
+/// (`Password=<value>;`, `ldapsearch … -w <value>`) is a chosen one, as for
+/// [`is_chosen_password`]: `Password=password;`, `Pwd=s3cr3t;` and `-w secret`
+/// are stand-ins; code (`BindCredential = configuration["…"]`) holds no value.
+/// A quoted or braced literal holds one even where it reads as code
+/// (`bindpw "Violet.River!82"`), unless its quote closes a string
+/// (`"…;Password=" + cfg.DbPassword + "`).
+pub(crate) fn is_connection_password(text: &str, range: Range<usize>) -> bool {
+    let before = &text[..range.start];
+    let value = &text[range];
+    let code = match before.chars().next_back() {
+        Some('"' | '\'') => closes_string(before),
+        Some('{') => false,
+        _ => is_code_expression(value),
+    };
+    !code && is_chosen_secret(value)
+}
+
+/// [`is_chosen_password`] without the user-id.
+fn is_chosen_secret(value: &str) -> bool {
+    let plain: String = value
         .chars()
         .map(|c| match c {
             '@' | '4' => 'a',
@@ -1057,8 +1080,7 @@ pub(super) fn is_chosen_password(user: &str, password: &str) -> bool {
             c => c,
         })
         .collect();
-    !password.eq_ignore_ascii_case(user)
-        && !is_metasyntactic(password)
+    !is_metasyntactic(value)
         && !(is_word_like(&plain)
             && (is_stand_in(&plain) || names_a_credential(&plain) || is_word_sequence(&plain)))
 }
@@ -1270,8 +1292,8 @@ fn trim_trailing_punctuation(value: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::{
-        closes_string, is_assignment_value, is_env_value, is_passphrase, is_userinfo_password,
-        is_userinfo_token, key_shape, suits_field_key, KeyShape,
+        closes_string, is_assignment_value, is_connection_password, is_env_value, is_passphrase,
+        is_userinfo_password, is_userinfo_token, key_shape, suits_field_key, KeyShape,
     };
 
     /// The value after the last `{v}` marker position of `template`.
@@ -1649,5 +1671,38 @@ mod tests {
         // follows a space.
         assert!(!closes_string("{\"password\":\""));
         assert!(!closes_string("<add key=\"DbPassword\" value=\""));
+    }
+
+    #[test]
+    fn connection_passwords_are_chosen_ones() {
+        let chosen = |value: &str| is_connection_password(value, 0..value.len());
+        for value in ["Kx7pQ2vL9!", "Tr0ub4dor & 3", "Sommer2026!", "hunter22"] {
+            assert!(chosen(value), "{value}");
+        }
+        for value in [
+            "password",
+            "Pa55w0rd",
+            "s3cr3t",
+            "myPassword",
+            "secret",
+            "foo",
+            "configuration[",
+            "getPassword(",
+        ] {
+            assert!(!chosen(value), "{value}");
+        }
+        // A quoted literal holds a value even where it reads as code; a quote
+        // that closes a string leads into code.
+        let gate = |text: &str, value: &str| {
+            let start = text.find(value).unwrap();
+            is_connection_password(text, start..start + value.len())
+        };
+        assert!(gate("bindpw \"Violet.River!82\"", "Violet.River!82"));
+        assert!(gate("Pwd={Violet.River!82};", "Violet.River!82"));
+        assert!(!gate("bindpw Violet.River!82", "Violet.River!82"));
+        assert!(!gate(
+            "cs = \"Server=db;Password=\" + cfg.DbPassword + \";\"",
+            " + cfg.DbPassword + "
+        ));
     }
 }

@@ -482,19 +482,19 @@ identifier and content rules carry no `subtype`.
 | `secret_key` | `API_KEY`, `CLOUD_KEY`, `PAYMENT_KEY` | The secret half of a key pair or client credential, signing secrets (AWS secret access key, GCP client secret, Stripe webhook secret). |
 | `private_key` | `PRIVATE_KEY`, `CRYPTO_KEY` | PEM private keys, wallet keys (Ethereum, Bitcoin WIF). |
 | `seed_phrase` | `CRYPTO_KEY` | Mnemonic wallet seeds (planned). |
-| `password` | `CREDENTIAL` | Passwords in assignments and prose, URL userinfo, Basic auth. |
+| `password` | `CREDENTIAL` | Passwords in assignments and prose, URL userinfo, Basic auth, LDAP bind passwords. |
 | `password_hash` | `PASSWORD_HASH` | Password hashes. |
 | `generic_secret` | `CREDENTIAL` | Any value under a secret-like key or variable name. |
 | `session_token` | `SECRET_TOKEN`, `CREDENTIAL` | Session IDs in cookies, CSRF tokens. |
 | `signature` | `CREDENTIAL` | Signatures of signed URLs. |
-| `connection_string` | `CREDENTIAL` | Database and service connection strings with credentials (planned). |
+| `connection_string` | `CREDENTIAL` | Passwords in database and service connection strings: ADO.NET/ODBC/JDBC key/value strings, libpq keyword/value strings, query passwords of database URLs, Oracle thin URLs. |
 | `auth_url` | `CREDENTIAL` | Credentials carried in a URL: token, password and API key parameters; reset and magic links, OAuth redirects (planned). |
 | `webhook_url` | `SECRET_TOKEN` | Incoming webhook URLs that authorize by themselves (planned). |
 | `otp_secret` | `CREDENTIAL` | TOTP/HOTP seeds, `otpauth://` URIs, recovery codes (planned). |
 
 Subtypes marked planned have no rule yet; new rules for them report the listed group, so
 group filters and gates written for the existing groups keep covering them. The
-[L1 rule catalog](l1-rule-catalog.md#dlp-regex-rules-59) lists the subtype of every rule.
+[L1 rule catalog](l1-rule-catalog.md#dlp-regex-rules-64) lists the subtype of every rule.
 
 ### DLP score and modes
 
@@ -536,7 +536,7 @@ then drops those below the threshold: its spans are always a subset of the `stri
 value dropped for its context does not free its range for a weaker rule. Each surviving
 `matched_rules` entry carries `score` and `context` (`bonus`, `penalty` and, if a term decided,
 `anchor` — the lexicon entry or `field` —, `side` and `distance`) next to the rule metadata.
-The [L1 rule catalog](l1-rule-catalog.md#dlp-regex-rules-59) lists base, context source and
+The [L1 rule catalog](l1-rule-catalog.md#dlp-regex-rules-64) lists base, context source and
 score range per rule.
 
 ### Shell command results

@@ -115,7 +115,43 @@ result shapes may be breaking for downstream users, and is called out explicitly
   the context-free rule): a fragment of a longer number, range or phone number near an SSN term
   (`My SSN is 401127789-0`, `Als SSN ist 422-68-7360-1 hinterlegt`, `+401127789`) is no SSN.
   **Detection change:** all modes; such fragments are no longer reported.
-
+- Add connection-string passwords per scheme and LDAP bind passwords (G01). The new rule
+  `dlp_connection_string_password` (`CREDENTIAL`, subtype `connection_string`, `structure`
+  strength) reports the `password`/`pwd` value of a `;`-separated key/value connection string with
+  a server, data source, address, host, DSN, driver or provider key or after a `jdbc:` URL
+  (ADO.NET, ODBC with `{…}` values, OLE DB, JDBC SQL Server/DB2 properties), of a libpq
+  keyword/value string with a host and a database, user or port, the `password`/`pwd` query
+  parameter of a database or broker URL (JDBC MySQL/PostgreSQL/MariaDB, libpq URI, SQLAlchemy
+  `dialect+driver`, `&amp;` in XML) and the password of an Oracle thin/OCI URL
+  (`connection::is_connection_string`). A bare value runs to the `;`, a quote, the line end or the
+  next libpq `key=` and may hold spaces. The new rule `dlp_ldap_bind_password` (`CREDENTIAL`,
+  subtype `password`) reports the bind password of the OpenLDAP client tools (`ldapsearch … -w`),
+  `bindpw`/`bind_pw`/`bindCredential` keys, SSSD `ldap_default_authtok` and Apache
+  `AuthLDAPBindPassword`. Both drop references, placeholders, stand-ins and credential names, also
+  in leetspeak (`likeness::is_connection_password`). **Detection change:** the subtype
+  `connection_string` is no longer planned; a connection-string password that
+  `dlp_password_assignment` or `dlp_credential_in_url` reported before is now reported by
+  `dlp_connection_string_password` with the same span (the old matches stay in `matched_rules`
+  with `suppressed_by`), the span of a query password in XML ends before `&amp;` instead of
+  including it, and ODBC passwords in braces, Oracle thin passwords, LDAP bind passwords and
+  Redis passwords without a username (`redis://:…@host`, `dlp_url_userinfo_password`) are new
+  findings. The placeholder check (T07) also reads a value that a generic rule took with the
+  opening brace of an ODBC value, so `Pwd={<your-password>};` is no longer reported by
+  `dlp_password_assignment`. New entities `credential.connection_string` and `credential.ldap_bind_password` in
+  `research/dlp/entity_map.yaml`, format sources in `rule_sources.yaml`, carrier profiles and
+  probes in `dlp_synth`. `dlp_l1.jsonl` gains 32 rows (18 positives, 14 hard negatives, DE and EN,
+  in env, JSON, XML, YAML, INI, code, log, CLI and prose carriers); the new
+  `rust/tests/dlp_connection_strings.rs` checks every scheme and the hard negatives. Scoreboard
+  gate on the dev corpora PASS with unchanged numbers: exact F1 87.2, FP/MB benign code 0.1324
+  (5 FP), benign docs 0.1327, hard-negative FP 154; 100 KiB p95 +1.1 % and +5.5 % in two runs
+  (11.23 → 11.35 ms, 10.35 → 10.93 ms; the base is above the 10 ms budget in both).
+  Golden eval: 521/521 positives, 574/574 hard negatives. Existing validators are unchanged.
+- **Detection change:** (DLP L1, all modes) `dlp_connection_string_password` and
+  `dlp_ldap_bind_password` report a quoted or ODBC-braced password that reads like code
+  (`bindpw "Violet.River!82"`). Before, the member-access check rejected these values. A
+  quote that closes a string still leads into code (`"…;Password=" + cfg.DbPassword + "…"`), and
+  that case is now dropped. A bare value after a `;` runs to the next `;` even past a ` key=`
+  (`Server=db;Password=Kx7pQ2vL9! part=Wm3zR8tQ4yN1;`). It is no longer cut at the libpq key.
 - Add VAT identification numbers for LU, LV, MT, PL, PT, RO, SE, SI, SK, NO and GB (B16), one label
   and one check-digit validator per country in `rust/src/detectors/pii/vat.rs`, built like B01:
   `VAT_ID_LU` (first six mod 89), `VAT_ID_LV` (legal entities, weighted mod 11), `VAT_ID_MT`
