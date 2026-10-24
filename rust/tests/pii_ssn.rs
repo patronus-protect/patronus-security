@@ -114,15 +114,18 @@ fn assert_silent(text: &str, modes: &[PiiMode]) {
 
 #[test]
 fn the_new_rules_check_the_ssa_ranges_without_a_field_name() {
-    for rule_id in [PROXIMITY, CONTEXT_FREE] {
+    for (rule_id, validator) in [
+        (PROXIMITY, validators::us_ssn as fn(&str) -> bool),
+        (CONTEXT_FREE, validators::us_ssn_context_free),
+    ] {
         let pattern = pattern(rule_id);
         assert_eq!(pattern.entity_group, LABEL, "{rule_id}");
         assert!(!pattern.captured_value, "{rule_id} binds no field name");
         assert_eq!(pattern.strength, ValidatorStrength::Format, "{rule_id}");
         assert_eq!(
             pattern.validator.map(|validator| validator as usize),
-            Some(validators::us_ssn as fn(&str) -> bool as usize),
-            "{rule_id} keeps the SSA range validator"
+            Some(validator as usize),
+            "{rule_id} checks the SSA ranges"
         );
     }
     let proximity = pattern(PROXIMITY);
@@ -315,7 +318,7 @@ fn balanced_reports_a_grouped_value_without_a_term() {
             "<identification><id>566-66-2655</id></identification>",
             "566-66-2655",
         ),
-        ("Release 123-45-6789", "123-45-6789"),
+        ("Release 212-45-6789", "212-45-6789"),
         ("Angaben zum US-Mitarbeiter: 219-09-9998", "219-09-9998"),
     ] {
         assert_reports(CONTEXT_FREE, text, value, &SCORED);
@@ -323,6 +326,39 @@ fn balanced_reports_a_grouped_value_without_a_term() {
             assert_eq!(ssn_spans(text, mode)[0].1, 0.5, "{mode}: {text}");
         }
     }
+}
+
+#[test]
+fn placeholder_values_need_an_ssn_term() {
+    // presidio-analyzer rejects one repeated digit and the counting sequence in any
+    // context; without an SSN term they are no SSN in any mode, the SSA ranges alone
+    // (`us_ssn`) still accept them.
+    for placeholder in ["111-11-1111", "777 77 7777", "555.55.5555", "123-45-6789"] {
+        assert!(validators::us_ssn(placeholder), "{placeholder}");
+        assert!(
+            !validators::us_ssn_context_free(placeholder),
+            "{placeholder}"
+        );
+    }
+    for valid in ["078 05 1123", "212-45-6789", "123-45-6788", "111-11-1112"] {
+        assert!(validators::us_ssn_context_free(valid), "{valid}");
+    }
+    for invalid in ["000-12-3456", "666-12-3456", "900-12-3456", "078-05-1120"] {
+        assert!(!validators::us_ssn_context_free(invalid), "{invalid}");
+    }
+    for text in [
+        "111-11-1111",
+        "777 77 7777",
+        "abc 555.55.5555 abc",
+        "123-45-6789",
+        "Release 123-45-6789",
+        "Vorgang 123.45.6789 wurde abgeschlossen.",
+    ] {
+        assert_silent(text, &MODES);
+    }
+    // An SSN term or field name still reports them: the validator is unchanged.
+    assert_reports(PROXIMITY, "My SSN is 111-11-1111.", "111-11-1111", &MODES);
+    assert_reports("pii_ssn_us", "SSN: 123-45-6789", "123-45-6789", &MODES);
 }
 
 #[test]

@@ -2452,7 +2452,8 @@ for _row in B16_VAT_ID_CASES:
 # `pii_ssn_us_context_free` reports the grouped form without a term in balanced and recall
 # only. Hard negatives: grouped values without an SSN term in strict, order, reference and
 # part numbers (counter-context) in every mode, nine digits without an SSN term, values
-# outside the SSA ranges and values that continue a longer number. Appended so existing
+# outside the SSA ranges, values that continue a longer number and, without a term,
+# placeholder values (one repeated digit, 123-45-6789). Appended so existing
 # ids stay stable.
 B_SSN_CASES = [
     # ── SSN term near the value or as its key, every mode ──────────────────
@@ -2493,7 +2494,7 @@ B_SSN_CASES = [
     p("SSN", "en", "pii_ssn_us_context_free", "", "078.05.1123", "", tags=("no_context",), mode="balanced"),
     p("SSN", "en", "pii_ssn_us_context_free", "NAD+SU+", "341-33-4328", "::735 Kyle Camp+Apt 3", tags=("no_context",), mode="balanced"),
     p("SSN", "en", "pii_ssn_us_context_free", ":19A:20211115/00001/USD/", "399-38-9646", "", tags=("no_context",), mode="balanced"),
-    p("SSN", "en", "pii_ssn_us_context_free", "Release ", "123-45-6789", "", tags=("no_context",), mode="recall"),
+    p("SSN", "en", "pii_ssn_us_context_free", "Release ", "212-45-6789", "", tags=("no_context",), mode="recall"),
     p("SSN", "de", "pii_ssn_us_context_free", "Angaben zum US-Mitarbeiter: ", "219-09-9998", "", tags=("no_context",), mode="balanced"),
     p("SSN", "de", "pii_ssn_us_context_free", "Vorgang ", "532-87-1094", " wurde abgeschlossen.", carrier="prose", tags=("no_context",), mode="balanced"),
     p("SSN", "de", "pii_ssn_us_context_free", "<kennung>", "566-66-2655", "</kennung>", carrier="xml", tags=("no_context",), mode="balanced"),
@@ -2515,6 +2516,17 @@ B_SSN_CASES = [
     n("SSN", "de", "pii_ssn_us_context_free", "666-12-3456", "area 666 is never issued", tags=("no_context",), mode="balanced"),
     n("SSN", "de", "pii_ssn_us_context_free", "Gruppe 12 341 33 4328", "digit group one space away", mode="balanced"),
     n("SSN", "de", "pii_ssn_us_context_free", "Bestand 341-33-4328-7", "part of a longer number", mode="balanced"),
+    # ── placeholder values without a term (as presidio-analyzer rejects them) ──
+    n("SSN", "en", "pii_ssn_us_context_free", "111-11-1111", "one repeated digit", tags=("no_context",), mode="balanced"),
+    n("SSN", "en", "pii_ssn_us_context_free", "777 77 7777", "one repeated digit", tags=("no_context",), mode="recall"),
+    n("SSN", "en", "pii_ssn_us_context_free", "123-45-6789", "counting sequence", tags=("no_context",), mode="balanced"),
+    n("SSN", "en", "pii_ssn_us_context_free", "abc 555.55.5555 abc", "one repeated digit", tags=("no_context",), mode="balanced"),
+    n("SSN", "en", "pii_ssn_us_context_free", "Release 123-45-6789 is out.", "counting sequence", carrier="prose", mode="balanced"),
+    n("SSN", "de", "pii_ssn_us_context_free", "Platzhalter 111-11-1111", "one repeated digit", mode="balanced"),
+    n("SSN", "de", "pii_ssn_us_context_free", "Beispiel 444 44 4444", "one repeated digit", mode="recall"),
+    n("SSN", "de", "pii_ssn_us_context_free", "Muster 123-45-6789", "counting sequence", mode="balanced"),
+    n("SSN", "de", "pii_ssn_us_context_free", "Vorgang 123.45.6789 wurde abgeschlossen.", "counting sequence", carrier="prose", mode="balanced"),
+    n("SSN", "de", "pii_ssn_us_context_free", "Testwert 222.22.2222", "one repeated digit", mode="balanced"),
 ]
 for _row in B_SSN_CASES:
     PII_CASES.setdefault(_row["target_label"], []).append(_row)
