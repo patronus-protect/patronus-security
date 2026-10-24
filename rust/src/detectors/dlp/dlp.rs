@@ -636,6 +636,12 @@ impl DlpPipeline {
         self.detect(text).result
     }
 
+    /// The verdict with the exact evidence spans, restricted to the rules
+    /// enabled by default (credentials and secrets, as everywhere else).
+    pub fn scan(&self, text: &str) -> crate::detectors::RuleScan {
+        self.detect_with_rule_filter(text, default_rule_enabled).into()
+    }
+
     pub fn evaluate_batch(&self, texts: &[String]) -> Vec<EvaluationResult> {
         use rayon::prelude::*;
         texts.par_iter().map(|text| self.evaluate(text)).collect()

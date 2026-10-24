@@ -24,9 +24,9 @@ rayon = "1.10"
 dirs = "5.0"
 url = "2"
 ureq = { version = "2.10", features = ["json"] }
-ort = { version = "2.0.0-rc.13", default-features = false, features = ["std", "ndarray", "tracing", "download-binaries", "tls-rustls", "copy-dylibs", "api-24", "half"] }
-tokenizers = { version = "0.23.1", default-features = false, features = ["onig"] }
-sentencepiece-rust = "0.1.1"
+ort = { version = "2.0.0-rc.13", optional = true, default-features = false, features = ["std", "ndarray", "tracing", "download-binaries", "tls-rustls", "copy-dylibs", "api-24", "half"] }
+tokenizers = { version = "0.23.1", optional = true, default-features = false, features = ["onig"] }
+sentencepiece-rust = { version = "0.1.1", optional = true }
 half = "2.1"
 blake3 = "1.5"
 memmap2 = "0.9"
@@ -36,13 +36,18 @@ thiserror = "1.0"
 unicode-normalization = "0.1"
 
 [features]
-default = []
+# `ml`: the model layers (ONNX Runtime, tokenizers, the security pipeline).
+# Without it the crate is the rule layer alone (PII and DLP patterns with
+# their validators, anchors, normalization), small enough for hosts that
+# cannot carry ONNX Runtime, such as the iOS local tunnel.
+default = ["ml"]
+ml = ["dep:ort", "dep:tokenizers", "dep:sentencepiece-rust"]
 # Internal hooks for the integration test suite; never enable in production builds.
 test-util = []
-onnx-coreml = ["ort/coreml"]
-onnx-cuda = ["ort/cuda"]
-onnx-directml = ["ort/directml"]
-onnx-tensorrt = ["ort/tensorrt"]
+onnx-coreml = ["ml", "ort/coreml"]
+onnx-cuda = ["ml", "ort/cuda"]
+onnx-directml = ["ml", "ort/directml"]
+onnx-tensorrt = ["ml", "ort/tensorrt"]
 
 [dev-dependencies]
 patronus-ark = { path = ".", features = ["test-util"] }

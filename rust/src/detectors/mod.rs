@@ -42,6 +42,25 @@ pub(crate) struct NativeDetection {
     pub details: HashMap<String, serde_json::Value>,
 }
 
+/// The rule layer's verdict on one text with its exact evidence: the same
+/// matches the security pipeline turns into evidence spans. For hosts that
+/// apply the rules without the pipeline and its models (the iOS local
+/// tunnel masks the spans in requests before they leave the device).
+#[derive(Debug, Clone)]
+pub struct RuleScan {
+    pub result: EvaluationResult,
+    pub evidence_spans: Vec<EvidenceSpan>,
+}
+
+impl From<NativeDetection> for RuleScan {
+    fn from(detection: NativeDetection) -> Self {
+        Self {
+            result: detection.result,
+            evidence_spans: detection.evidence_spans,
+        }
+    }
+}
+
 /// Shared detection contract for native regex scanners that return exact evidence.
 pub(crate) trait NativeRegexDetector {
     fn regexes(&self) -> &[Regex];

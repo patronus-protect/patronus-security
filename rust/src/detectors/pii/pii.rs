@@ -214,6 +214,11 @@ impl PiiPipeline {
         self.detect(text).result
     }
 
+    /// The verdict with the exact evidence spans (strict mode, every rule).
+    pub fn scan(&self, text: &str) -> crate::detectors::RuleScan {
+        self.detect(text).into()
+    }
+
     pub fn evaluate_batch(&self, texts: &[String]) -> Vec<EvaluationResult> {
         use rayon::prelude::*;
         texts.par_iter().map(|text| self.evaluate(text)).collect()

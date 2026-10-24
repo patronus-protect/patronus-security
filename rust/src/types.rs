@@ -249,6 +249,7 @@ pub struct SecurityScanResult {
     /// Internal L2 chunk outputs reused by L3 planning. This field is cleared
     /// before results are published outside the gateway.
     #[doc(hidden)]
+    #[cfg(feature = "ml")]
     pub internal_l2_chunk_outputs: Vec<crate::ml::ntdb_executor::L2ChunkOutput>,
     /// Exact entity evidence returned by span-producing pipelines.
     pub evidence_spans: Vec<crate::dynamic_pii::EvidenceSpan>,
@@ -1202,11 +1203,13 @@ impl ScanExecution {
     }
 
     /// Set the request-local overlap between adjacent classifier chunks.
+    #[cfg(feature = "ml")]
     pub fn set_chunk_overlap_tokens(&mut self, overlap: usize) -> Result<(), String> {
         self.set_validated_chunk_overlap_tokens(crate::ChunkOverlapTokens::try_from(overlap)?);
         Ok(())
     }
 
+    #[cfg(feature = "ml")]
     pub(crate) fn set_validated_chunk_overlap_tokens(
         &mut self,
         overlap: crate::ChunkOverlapTokens,
