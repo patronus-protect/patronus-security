@@ -155,7 +155,13 @@ pub(crate) fn is_placeholder_match(text: &str, range: Range<usize>) -> bool {
         || is_delimited_variable(head)
         || is_secret_manager_reference(head)
         || is_secret_manager_reference(enclosing_token(text, range.start, end))
-        || is_placeholder_value(&text[range])
+        || is_placeholder_value(&text[range.clone()])
+        // G01: an ODBC value in braces (`Pwd={<password>};`) that a generic
+        // rule took with its opening brace.
+        || (text[range.clone()].starts_with('{')
+            && range.len() > 1
+            && text[range.end..].starts_with('}')
+            && is_placeholder_match(text, range.start + 1..range.end))
 }
 
 /// K06: secret-manager references: 1Password `op://`, vals `ref+…://`, Azure

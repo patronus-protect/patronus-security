@@ -159,7 +159,7 @@ subtypes:
   generic_secret: {groups: [CREDENTIAL]}
   session_token: {groups: [SECRET_TOKEN, CREDENTIAL]}
   signature: {groups: [CREDENTIAL]}
-  connection_string: {groups: [CREDENTIAL], planned: true}  # G01
+  connection_string: {groups: [CREDENTIAL]}  # G01
   auth_url: {groups: [CREDENTIAL]}  # dlp_credential_in_url; G09
   webhook_url: {groups: [SECRET_TOKEN], planned: true}  # P08
   otp_secret: {groups: [CREDENTIAL], planned: true}  # G08
@@ -359,6 +359,20 @@ entities:
     ark: [dlp_url_userinfo_password]
     trufflehog: [URI, Postgres, MongoDB, Redis, FTP, RabbitMQ, JDBC]
     detect_secrets: [BasicAuthDetector]
+    backlog: G01
+  - id: credential.connection_string
+    scope: shared
+    group: CREDENTIAL
+    subtype: connection_string
+    ark: [dlp_connection_string_password]
+    trufflehog: [JDBC, SQLServer]
+    backlog: G01
+  - id: credential.ldap_bind_password
+    scope: shared
+    group: CREDENTIAL
+    subtype: password
+    ark: [dlp_ldap_bind_password]
+    trufflehog: [LDAP]
     backlog: G01
   - id: credential.signed_url_signature
     scope: shared

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! Generic credentials: tokens, credential assignments, auth headers,
 //! cookies and connection strings.
-use super::{http_auth, likeness, ConfigKey};
+use super::{connection, http_auth, likeness, ConfigKey};
 use crate::detectors::dlp::dlp::{DlpPattern, RuleMeta, SecretSubtype, ValidatorStrength};
 
 // K05: the key parts of the generic key-bound rules. The rule regexes start
@@ -106,7 +106,7 @@ pub(super) const RULES: &[DlpPattern] = &[
         .with_subtype(SecretSubtype::GenericSecret)
         .with_value_gate(likeness::is_env_value),
     },
-    // ── Generic credentials / connection strings ───────────────────────────
+    // ── Generic credential assignments ────────────────────────────────────
     DlpPattern {
         name: "dlp_password_assignment",
         // F-GEN2 (T04): a quoted value runs to its closing quote (spaces,
@@ -266,7 +266,8 @@ pub(super) const RULES: &[DlpPattern] = &[
 pub(super) const URL_USERINFO_RULES: &[DlpPattern] = &[
     DlpPattern {
         name: "dlp_url_userinfo_password",
-        pattern: r#"(?i)\b(?:jdbc:)?[a-z][a-z0-9+.-]{1,20}://[^/\s:@]+:([^@\s/]{4,150})@[^\s/]+"#,
+        // G01: the username may be empty (`redis://:<password>@host:6379`).
+        pattern: r#"(?i)\b(?:jdbc:)?[a-z][a-z0-9+.-]{1,20}://[^/\s:@]*:([^@\s/]{4,150})@[^\s/]+"#,
         entity_group: "CREDENTIAL",
         validator: Some(is_secret_value),
         span_group: Some(1),
@@ -291,6 +292,75 @@ pub(super) const URL_USERINFO_RULES: &[DlpPattern] = &[
         )
         .with_subtype(SecretSubtype::AccessToken)
         .with_value_gate(likeness::is_userinfo_token),
+    },
+];
+
+/// G01: passwords of connection strings and LDAP binds. Runs after the URL
+/// userinfo rules, see the registry order in `rules/mod.rs`.
+pub(super) const CONNECTION_RULES: &[DlpPattern] = &[
+    DlpPattern {
+        name: "dlp_connection_string_password",
+        // A `password`/`pwd` key of a URL query (also `&amp;` in XML) or of a
+        // key/value string, the value quoted, in ODBC braces or bare: a bare
+        // value runs to `;`, a quote or backtick, the line end or the next libpq
+        // `key=` and may hold spaces (ADO.NET). Oracle thin/OCI URLs carry
+        // it as `user/<password>@`. `connection::is_connection_string`
+        // checks that the key belongs to a connection string.
+        pattern: concat!(
+            r#"(?i)(?:(?:[?&]|&amp;)(?:password|pwd)=([^&#\s"'<>]{1,150})"#,
+            r#"|(?:(?m:^)|[;\s"'{(])(?:password|pwd)[ \t]*=[ \t]*"#,
+            r#"(?:"([^"\r\n]{1,150})"|'([^'\r\n]{1,150})'|\{([^{}\r\n]{1,150})\}"#,
+            r#"|([^;"'`\s{][^;"'`\r\n]{0,149}?)(?:[ \t]*(?:;|\\?["'`]|\r|(?m:$))|[ \t]+[A-Za-z_]+[ \t]*=))"#,
+            r#"|jdbc:oracle:(?:thin|oci8?):[^/\s:@"']{1,64}/([^@\s"']{1,150})@)"#,
+        ),
+        entity_group: "CREDENTIAL",
+        validator: Some(is_secret_value),
+        span_group: Some(1),
+        base_score: 35,
+        meta: RuleMeta::new(
+            ValidatorStrength::Structure,
+            "https://learn.microsoft.com/en-us/dotnet/framework/data/adonet/connection-string-syntax",
+            &["password", "pwd", "jdbc:oracle"],
+        )
+        .with_subtype(SecretSubtype::ConnectionString)
+        .with_context_gate(connection::is_connection_string)
+        .with_value_gate(likeness::is_connection_password),
+    },
+    DlpPattern {
+        name: "dlp_ldap_bind_password",
+        // The bind password of the OpenLDAP client tools (`ldapsearch … -w
+        // <password>`), of `bindpw`/`bind_pw`/`bindCredential` keys in any
+        // naming convention
+        // (nss-pam-ldapd, pam_ldap, Keycloak), `ldap_default_authtok` (SSSD)
+        // and the Apache `AuthLDAPBindPassword` directive; a directive
+        // without `=`/`:` only at the start of its line. A bare value ends
+        // before an escape, a tag and a trailing `,`.
+        pattern: concat!(
+            r"(?i)(?:(?-u:\b)ldap(?:search|modify|add|delete|passwd|whoami|compare|modrdn|exop)(?-u:\b)",
+            r"[^\r\n|;&]{0,300}?[ \t](?-i:-w)[ \t]*",
+            r#"|(?:(?-u:\b)|_)(?:bind[_-]?pw|bind[_-]?credentials?|ldap_default_authtok)(?-u:\b)["']?[ \t]*[=:][ \t]*"#,
+            r"|(?m:^)[ \t]{0,16}(?:bindpw|ldap_default_authtok|AuthLDAPBindPassword)[ \t]+)",
+            r#"(?:"([^"\r\n]{1,150})"|'([^'\r\n]{1,150})'|([^\s"'`|;&<>\\]{0,149}[^\s"'`|;&<>\\,]))"#,
+        ),
+        entity_group: "CREDENTIAL",
+        validator: Some(is_secret_value),
+        span_group: Some(1),
+        base_score: 35,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://www.openldap.org/software/man.cgi?query=ldapsearch",
+            &[
+                "ldap",
+                "bindpw",
+                "bind_pw",
+                "bind-pw",
+                "bindcredential",
+                "bind_credential",
+                "bind-credential",
+            ],
+        )
+        .with_subtype(SecretSubtype::Password)
+        .with_value_gate(likeness::is_connection_password),
     },
 ];
 

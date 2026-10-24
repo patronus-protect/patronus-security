@@ -35,7 +35,8 @@ pub enum OverlapTier {
     Token,
     /// Password hashes.
     Hash,
-    /// Structural credentials: URL userinfo and parameters, Basic auth.
+    /// Structural credentials: URL userinfo and parameters, Basic auth,
+    /// connection strings and LDAP bind passwords (G01).
     Credential,
     /// Any value under a secret-like key or variable name.
     Generic,
