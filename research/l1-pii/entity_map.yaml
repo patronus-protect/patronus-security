@@ -290,6 +290,17 @@ entities:
   - {id: pii.hu.vat_id, scope: ark_only, ark: [VAT_ID_HU], presidio: [], corpora: {}}
   - {id: pii.ie.vat_id, scope: ark_only, ark: [VAT_ID_IE], presidio: [], corpora: {}}
   - {id: pii.lt.vat_id, scope: ark_only, ark: [VAT_ID_LT], presidio: [], corpora: {}}
+  - {id: pii.lu.vat_id, scope: ark_only, ark: [VAT_ID_LU], presidio: [], corpora: {}}
+  - {id: pii.lv.vat_id, scope: ark_only, ark: [VAT_ID_LV], presidio: [], corpora: {}}
+  - {id: pii.mt.vat_id, scope: ark_only, ark: [VAT_ID_MT], presidio: [], corpora: {}}
+  - {id: pii.pl.vat_id, scope: ark_only, ark: [VAT_ID_PL], presidio: [], corpora: {}}
+  - {id: pii.pt.vat_id, scope: ark_only, ark: [VAT_ID_PT], presidio: [], corpora: {}}
+  - {id: pii.ro.vat_id, scope: ark_only, ark: [VAT_ID_RO], presidio: [], corpora: {}}
+  - {id: pii.se.vat_id, scope: ark_only, ark: [VAT_ID_SE], presidio: [], corpora: {}}
+  - {id: pii.si.vat_id, scope: ark_only, ark: [VAT_ID_SI], presidio: [], corpora: {}}
+  - {id: pii.sk.vat_id, scope: ark_only, ark: [VAT_ID_SK], presidio: [], corpora: {}}
+  - {id: pii.no.vat_id, scope: ark_only, ark: [VAT_ID_NO], presidio: [], corpora: {}}
+  - {id: pii.uk.vat_id, scope: ark_only, ark: [VAT_ID_GB], presidio: [], corpora: {}}
 
   # ── presidio_only ──────────────────────────────────────────────────────
   - {id: pii.url, scope: presidio_only, ark: [], presidio: [URL], corpora: {presidio-evaluator-synth-v2: [DOMAIN_NAME], presidio-analyzer-recognizer-tests: [URL]}}
@@ -441,6 +452,17 @@ checksums:
     hu_vat_id: {algorithm: gewichtet 9-7-3-1 mod 10}               # B02, közösségi adószám
     ie_vat_id: {algorithm: Prüfbuchstabe gewichtet 8…2 mod 23}     # B02
     lt_vat_id: {algorithm: "gewichtet 1…9 mod 11, zweite Stufe +2"}  # B02, PVM kodas
+    lu_vat_id: {algorithm: "erste sechs mod 89"}  # B16, numéro TVA
+    lv_vat_id: {algorithm: "gewichtet 9-1-4-8-3-10-2-5-7-6-1 mod 11 = 3"}  # B16, PVN juristischer Personen
+    mt_vat_id: {algorithm: "gewichtet 3-4-6-7-8-9-10-1 mod 37"}  # B16
+    pl_vat_id: {algorithm: "gewichtet 6-5-7-2-3-4-5-6-7 mod 11"}  # B16, NIP
+    pt_vat_id: {algorithm: "11 − gewichtet 9…2 mod 11"}  # B16, NIF
+    ro_vat_id: {algorithm: "10 × gewichtet 7-5-3-2-1-7-5-3-2 mod 11"}  # B16, CUI/CIF
+    se_vat_id: {algorithm: "Luhn (Organisationsnummer) + 01"}  # B16, momsregistreringsnummer
+    si_vat_id: {algorithm: "11 − gewichtet 8…2 mod 11"}  # B16, ID za DDV
+    sk_vat_id: {algorithm: "Nummer mod 11"}  # B16, IČ DPH
+    no_vat_id: {algorithm: "gewichtet 3-2-7-6-5-4-3-2-1 mod 11"}  # B16, Organisationsnummer + MVA
+    gb_vat_id: {algorithm: "gewichtet 8-7-6-5-4-3-2-10-1 mod 97 (auch 9755)"}  # B16, GB und XI (Nordirland), eine Einheit
     de_passport_number: {algorithm: ICAO 9303 7-3-1, country: de}        # F08, Serie C F G H J K oder alt numerisch
     de_identity_card_number: {algorithm: ICAO 9303 7-3-1, country: de}   # F08, Serie L M N P R T V W X Y oder alt numerisch
   # Pattern-Recognizer mit validate_result in presidio_analyzer 2.2.364 (43 Stück, mit Presidio

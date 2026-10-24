@@ -135,6 +135,12 @@ in `balanced`/`recall` (scored-only wie K05). DE und IT sind `shared`, die übri
 das eingefrorene E05-Goldset erzeugt die sechs neuen IDs nicht (`NOT_GENERATED` in
 `synth_goldset.py`) und bleibt bytegleich.
 
+Stand B16: ARK 24, gemeinsam 7. Dazu kommen die USt-IdNr. von LU, LV, MT, PL, PT, RO, SE, SI, SK, NO
+und GB, aufgebaut wie B01 (je Land ein Label und ein Validator mit Prüfziffer, scored-only, alle
+`ark_only`). Nordirland (`XI`) teilt Label `VAT_ID_GB` und Validator mit GB und zählt mit GB als eine
+Einheit (`pii.uk.vat_id`). Formen ohne bestätigte Prüfziffer bleiben draußen: lettische
+Personenkennungen, slowakische Geburtsnummern, rumänische CNP und die britischen `GD`/`HA`-Nummern.
+
 Stand F08: ARK 13, gemeinsam 7. Reisepass und Personalausweis DE prüfen die ICAO-9303-Prüfziffer
 (7-3-1, `validators::de_passport_number`, `de_identity_card_number`): Serie `C F G H J K` bzw.
 `L M N P R T V W X Y`, acht Zeichen plus Prüfziffer (Form von presidio-analyzer, `F12345671`) oder

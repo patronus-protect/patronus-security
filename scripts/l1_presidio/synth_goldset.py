@@ -2077,15 +2077,18 @@ def coverage(rows: list[dict[str, Any]]) -> Counter:
 
 
 # Entity-map ids added after the goldset was frozen: the B01 VAT IDs of AT, CH, FR, NL, BE and ES
-# and the B02 VAT IDs of BG, CY, CZ, DK, EE, GR (prefix EL), FI, HR, HU, IE and LT. The generator
-# stays unchanged so that dev and holdout reproduce byte for byte; these ids have no gold here
-# (DE and IT VAT IDs are generated since E05).
+# and the B02 VAT IDs of BG, CY, CZ, DK, EE, GR (prefix EL), FI, HR, HU, IE and LT, and the B16 VAT
+# IDs of LU, LV, MT, PL, PT, RO, SE, SI, SK, NO and GB/XI. The generator stays unchanged so that dev
+# and holdout reproduce byte for byte; these ids have no gold here (DE and IT VAT IDs are generated
+# since E05).
 NOT_GENERATED = frozenset(
     {"pii.at.vat_id", "pii.ch.vat_id", "pii.fr.vat_id", "pii.nl.vat_id", "pii.be.vat_id", "pii.es.vat_id"}
     | {
         "pii.bg.vat_id", "pii.cy.vat_id", "pii.cz.vat_id", "pii.dk.vat_id", "pii.ee.vat_id", "pii.gr.vat_id",
         "pii.fi.vat_id", "pii.hr.vat_id", "pii.hu.vat_id", "pii.ie.vat_id", "pii.lt.vat_id",
     }
+    | {"pii.lu.vat_id", "pii.lv.vat_id", "pii.mt.vat_id", "pii.pl.vat_id", "pii.pt.vat_id", "pii.ro.vat_id"}
+    | {"pii.se.vat_id", "pii.si.vat_id", "pii.sk.vat_id", "pii.no.vat_id", "pii.uk.vat_id"}
 )
 
 

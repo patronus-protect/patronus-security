@@ -739,6 +739,22 @@ fn luhn_checksum(digits: &[u32]) -> u32 {
         % 10
 }
 
+/// Sum of `digits` times `weights`, pairwise; the shorter of the two decides.
+fn weighted_sum(digits: &[u32], weights: &[u32]) -> u32 {
+    digits
+        .iter()
+        .zip(weights)
+        .map(|(digit, weight)| digit * weight)
+        .sum()
+}
+
+/// The decimal value of `digits`.
+fn decimal(digits: &[u32]) -> u64 {
+    digits
+        .iter()
+        .fold(0, |number, &digit| number * 10 + u64::from(digit))
+}
+
 /// ISO 7064 MOD 11,10 check digit of `digits`.
 fn iso7064_mod11_10(digits: &[u32]) -> u32 {
     let product = digits.iter().fold(10, |product, &digit| {
@@ -781,12 +797,7 @@ pub fn ch_vat_id(s: &str) -> bool {
     let Some(digits) = vat_digits(&body, 9) else {
         return false;
     };
-    let sum: u32 = digits[..8]
-        .iter()
-        .zip([5, 4, 3, 2, 7, 6, 5, 4])
-        .map(|(digit, weight)| digit * weight)
-        .sum();
-    let check = (11 - sum % 11) % 11;
+    let check = (11 - weighted_sum(&digits[..8], &[5, 4, 3, 2, 7, 6, 5, 4]) % 11) % 11;
     check != 10 && check == digits[8]
 }
 
@@ -798,9 +809,7 @@ pub fn fr_vat_id(s: &str) -> bool {
         return false;
     };
     let siren = &digits[2..];
-    let number = siren
-        .iter()
-        .fold(0u64, |number, &digit| number * 10 + u64::from(digit));
+    let number = decimal(siren);
     let key = u64::from(digits[0] * 10 + digits[1]);
     (siren[..3] == [0, 0, 0] || luhn_checksum(siren) == 0) && key == (number * 100 + 12) % 97
 }
@@ -844,10 +853,8 @@ pub fn be_vat_id(s: &str) -> bool {
     let Some(digits) = vat_digits(&vat_body(s, "BE"), 10) else {
         return false;
     };
-    let number = digits[..8]
-        .iter()
-        .fold(0u32, |number, &digit| number * 10 + digit);
-    digits[0] <= 1 && number != 0 && 97 - number % 97 == digits[8] * 10 + digits[9]
+    let number = decimal(&digits[..8]);
+    digits[0] <= 1 && number != 0 && 97 - number % 97 == decimal(&digits[8..])
 }
 
 /// Italian Partita IVA, with or without `IT`: eleven digits, a company number
@@ -879,13 +886,11 @@ pub fn es_vat_id(s: &str) -> bool {
     let Some(middle) = vat_digits(&body[1..8], 7) else {
         return false;
     };
-    let number = middle
-        .iter()
-        .fold(0u32, |number, &digit| number * 10 + digit);
-    let letter = |number: u32| ES_CONTROL_LETTERS[(number % 23) as usize];
+    let number = decimal(&middle);
+    let letter = |number: u64| ES_CONTROL_LETTERS[(number % 23) as usize];
     match first {
-        b'0'..=b'9' => last == letter(u32::from(first - b'0') * 10_000_000 + number),
-        b'X' | b'Y' | b'Z' => last == letter(u32::from(first - b'X') * 10_000_000 + number),
+        b'0'..=b'9' => last == letter(u64::from(first - b'0') * 10_000_000 + number),
+        b'X' | b'Y' | b'Z' => last == letter(u64::from(first - b'X') * 10_000_000 + number),
         b'K' | b'L' | b'M' => last == letter(number),
         b'A'..=b'H' | b'J' | b'N' | b'P'..=b'S' | b'U'..=b'W' => {
             let sum: u32 = middle
@@ -923,22 +928,6 @@ fn vat_number(s: &str, lengths: &[usize]) -> Option<Vec<u32>> {
         .then(|| vat_digits(s, s.len()))
         .flatten()
         .filter(|digits| digits.iter().any(|&digit| digit != 0))
-}
-
-/// Sum of `digits` times `weights`, pairwise.
-fn weighted_sum(digits: &[u32], weights: &[u32]) -> u32 {
-    digits
-        .iter()
-        .zip(weights)
-        .map(|(digit, weight)| digit * weight)
-        .sum()
-}
-
-/// The decimal value of `digits`.
-fn decimal(digits: &[u32]) -> u64 {
-    digits
-        .iter()
-        .fold(0u64, |number, &digit| number * 10 + u64::from(digit))
 }
 
 /// Bulgarian ИН по ДДС: `BG` and nine digits (legal entity: weights 1…8 mod 11,
@@ -1153,6 +1142,134 @@ pub fn lt_vat_id(s: &str) -> bool {
         remainder = sum(2);
     }
     number[number.len() - 1] == 1 && remainder % 10 == check[0]
+}
+
+// ── VAT identification numbers, part 3 (B16) ──────────────────────────────
+
+/// Luxembourg numéro TVA: `LU` and eight digits; the last two are the first six
+/// mod 89.
+pub fn lu_vat_id(s: &str) -> bool {
+    let Some(digits) = vat_digits(&vat_body(s, "LU"), 8) else {
+        return false;
+    };
+    decimal(&digits[..6]) % 89 == decimal(&digits[6..])
+}
+
+/// Latvian PVN number of a legal entity: `LV` and eleven digits, the first `4`–`9`,
+/// weighted 9 1 4 8 3 10 2 5 7 6 1 to a remainder mod 11 of 3. The personal codes
+/// of natural persons (first digit `0`–`3`) carry no confirmed check digit and
+/// are not accepted.
+pub fn lv_vat_id(s: &str) -> bool {
+    let Some(digits) = vat_digits(&vat_body(s, "LV"), 11) else {
+        return false;
+    };
+    digits[0] > 3 && weighted_sum(&digits, &[9, 1, 4, 8, 3, 10, 2, 5, 7, 6, 1]) % 11 == 3
+}
+
+/// Maltese VAT number: `MT` and eight digits without a leading zero, weighted
+/// 3 4 6 7 8 9 10 1 to a multiple of 37.
+pub fn mt_vat_id(s: &str) -> bool {
+    let Some(digits) = vat_digits(&vat_body(s, "MT"), 8) else {
+        return false;
+    };
+    digits[0] != 0 && weighted_sum(&digits, &[3, 4, 6, 7, 8, 9, 10, 1]).is_multiple_of(37)
+}
+
+/// Polish NIP with `PL`: ten digits, the last the weighted sum of the first nine
+/// (6 5 7 2 3 4 5 6 7) mod 11; remainder 10 is never issued.
+pub fn pl_vat_id(s: &str) -> bool {
+    let Some(digits) = vat_digits(&vat_body(s, "PL"), 10) else {
+        return false;
+    };
+    weighted_sum(&digits[..9], &[6, 5, 7, 2, 3, 4, 5, 6, 7]) % 11 == digits[9]
+}
+
+/// Portuguese NIF with `PT`: nine digits without a leading zero, the last
+/// `11 − (weighted sum 9…2 mod 11)`, where 10 and 11 become 0.
+pub fn pt_vat_id(s: &str) -> bool {
+    let Some(digits) = vat_digits(&vat_body(s, "PT"), 9) else {
+        return false;
+    };
+    let check = (11 - weighted_sum(&digits[..8], &[9, 8, 7, 6, 5, 4, 3, 2]) % 11) % 11 % 10;
+    digits[0] != 0 && check == digits[8]
+}
+
+/// Romanian CUI/CIF with `RO`: two to ten digits without a leading zero; the
+/// last is `10 × weighted sum mod 11 mod 10` of the others, right-aligned to the
+/// weights 7 5 3 2 1 7 5 3 2. A CNP (13 digits) is not accepted.
+pub fn ro_vat_id(s: &str) -> bool {
+    let body = vat_body(s, "RO");
+    if !(2..=10).contains(&body.len()) || body.starts_with('0') {
+        return false;
+    }
+    let Some(digits) = vat_digits(&body, body.len()) else {
+        return false;
+    };
+    let (number, check) = digits.split_at(digits.len() - 1);
+    let weights = &[7, 5, 3, 2, 1, 7, 5, 3, 2][9 - number.len()..];
+    10 * weighted_sum(number, weights) % 11 % 10 == check[0]
+}
+
+/// Swedish momsregistreringsnummer: `SE`, the ten-digit organisation number
+/// (Luhn) and `01`.
+pub fn se_vat_id(s: &str) -> bool {
+    let Some(digits) = vat_digits(&vat_body(s, "SE"), 12) else {
+        return false;
+    };
+    digits[10..] == [0, 1] && luhn_checksum(&digits[..10]) == 0
+}
+
+/// Slovenian ID za DDV: `SI` and eight digits without a leading zero, the last
+/// `11 − (weighted sum 8…2 mod 11)`, where 10 becomes 0 and 11 is never issued.
+pub fn si_vat_id(s: &str) -> bool {
+    let Some(digits) = vat_digits(&vat_body(s, "SI"), 8) else {
+        return false;
+    };
+    let check = 11 - weighted_sum(&digits[..7], &[8, 7, 6, 5, 4, 3, 2]) % 11;
+    digits[0] != 0 && check != 11 && check % 10 == digits[7]
+}
+
+/// Slovak IČ DPH: `SK` and ten digits without a leading zero, the third `2`, `3`,
+/// `4`, `7`, `8` or `9`, the number a multiple of 11. A birth number (rodné
+/// číslo) is not accepted.
+pub fn sk_vat_id(s: &str) -> bool {
+    let Some(digits) = vat_digits(&vat_body(s, "SK"), 10) else {
+        return false;
+    };
+    digits[0] != 0
+        && matches!(digits[2], 2 | 3 | 4 | 7 | 8 | 9)
+        && decimal(&digits).is_multiple_of(11)
+}
+
+/// Norwegian MVA number: `NO`, the nine-digit organisation number (weights
+/// 3 2 7 6 5 4 3 2 1 to a multiple of 11) and `MVA`.
+pub fn no_vat_id(s: &str) -> bool {
+    let body = vat_body(s, "NO");
+    let Some(digits) = body
+        .strip_suffix("MVA")
+        .and_then(|number| vat_digits(number, 9))
+    else {
+        return false;
+    };
+    weighted_sum(&digits, &[3, 2, 7, 6, 5, 4, 3, 2, 1]).is_multiple_of(11)
+}
+
+/// UK VAT registration number with `GB`, or `XI` for Northern Ireland: nine
+/// digits, optionally followed by a three-digit branch. The first nine weighted
+/// 8 7 6 5 4 3 2 10 1 are a multiple of 97, or 42 mod 97 (the "9755" scheme,
+/// from `100 0000 00` on). The government department and health authority forms
+/// (`GD`, `HA`) carry no check digit and are not accepted.
+pub fn gb_vat_id(s: &str) -> bool {
+    let body = vat_body(s, "GB");
+    let body = body.strip_prefix("XI").unwrap_or(&body);
+    let Some(digits) = vat_digits(body, 9).or_else(|| vat_digits(body, 12)) else {
+        return false;
+    };
+    match weighted_sum(&digits, &[8, 7, 6, 5, 4, 3, 2, 10, 1]) % 97 {
+        0 => true,
+        42 => digits[0] != 0,
+        _ => false,
+    }
 }
 
 pub fn postal_address_de(s: &str) -> bool {
