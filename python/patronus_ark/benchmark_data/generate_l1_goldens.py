@@ -2542,7 +2542,7 @@ DLP_SCHEMA_VERSION = 2
 DLP_TAGS = ("carrier", "no_context", "encoded", "split", "prose")
 DLP_CARRIERS = (
     "line", "env", "yaml", "json", "toml", "ini", "xml", "code", "log", "cli", "http", "csv",
-    "sql", "markdown", "prose",
+    "sql", "markdown", "prose", "hcl",
 )
 # Minimum gated positives and hard negatives per target label and language.
 DLP_MIN_PER_LANGUAGE = 5
@@ -7810,6 +7810,179 @@ DLP_K05B_CASES = {
     ],
 }
 for _label, _rows in DLP_K05B_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+
+# K05C: config key->value extraction, part 3 (HCL, XML attributes and elements) with the K05
+# value-shape filter. An attribute in an HCL block binds its quoted string or array items (a bare
+# value is an expression), and a variable "..." block binds its default through the variable name.
+# An XML element named by the key binds its text (also in CDATA), and a config element whose
+# key/name attribute holds the key binds its value attribute in any order or its text. Hard
+# negatives: the K05 shapes per format, also under a key apart from the value (a digest-named
+# variable or element), HCL expressions, build-tool placeholders and XML in strings of code. Each
+# value line ends the text.
+DLP_K05C_CASES = {
+    "CREDENTIAL": [
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "<lager>\n  <datenbank>\n    <host>db.lager.intern</host>\n    <passwort><<secret:0>></passwort>\n"
+            "  </datenbank>\n</lager>\n",
+            "quoted_punctuated_password", 15201, carrier="xml",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "<!-- Zugang zur Lagerdatenbank, rotiert im September -->\n<datenbank>\n"
+            "  <kennwort><![CDATA[<<secret:0>>]]></kennwort>\n</datenbank>\n",
+            "quoted_punctuated_password", 15202, carrier="xml",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "<properties>\n  <entry key=\"versand.endpunkt\">https://api.versand.intern</entry>\n"
+            "  <entry key=\"versand.zugangstoken\"><<secret:0>></entry>\n</properties>\n",
+            "url_token", 15203, carrier="xml",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "<appSettings>\n  <add value=\"<<secret:0>>\" key=\"LagerApiToken\" />\n</appSettings>\n",
+            "url_token", 15204, carrier="xml",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "variable \"lager_passwort\" {\n  description = \"Passwort der Lagerdatenbank\"\n  type        = string\n"
+            "  default     = \"<<secret:0>>\"\n  sensitive   = true\n}\n",
+            "quoted_punctuated_password", 15205, carrier="hcl",
+        ),
+        ds_items(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "locals {\n  region         = \"eu-central-1\"\n  api_schluessel = [\"<<secret:0>>\", \"<<secret:1>>\"]\n}\n",
+            "generic_api_secret", (15206, 15207), carrier="hcl",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "<settings>\n  <servers>\n    <server>\n      <id>nexus-releases</id>\n      <username>deploy</username>\n"
+            "      <password><<secret:0>></password>\n    </server>\n  </servers>\n</settings>\n",
+            "quoted_punctuated_password", 15211, carrier="xml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "<hibernate-configuration>\n  <session-factory>\n"
+            "    <property name=\"hibernate.connection.password\"><<secret:0>></property>\n"
+            "  </session-factory>\n</hibernate-configuration>\n",
+            "quoted_punctuated_password", 15212, carrier="xml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "<resources>\n  <string name=\"app_name\">Billing</string>\n"
+            "  <string name=\"billing_api_secret\"><<secret:0>></string>\n</resources>\n",
+            "generic_api_secret", 15213, carrier="xml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "variable \"db_password\" {\n  type      = string\n  default   = \"<<secret:0>>\" # rotated monthly\n"
+            "  sensitive = true\n}\n",
+            "quoted_punctuated_password", 15214, carrier="hcl",
+        ),
+        ds_items(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "variable \"webhook_tokens\" {\n  type    = list(string)\n  default = [\n    \"<<secret:0>>\",\n"
+            "    \"<<secret:1>>\", // since March\n  ]\n}\n",
+            "url_token", (15215, 15216), carrier="hcl",
+        ),
+        ds_items(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "resource \"vault_generic_secret\" \"exports\" {\n  path = \"secret/exports\"\n  data_json = jsonencode({\n"
+            "    api_keys = [\"<<secret:0>>\"]\n  })\n}\n",
+            "url_token", (15217,), carrier="hcl",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "<lager>\n  <standort>hamburg</standort>\n  <api_token>3f2a9c4e-7b1d-4e8a-9c2f-5d6e7f8a9b0c</api_token>",
+            "UUID in an XML token element", carrier="xml",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "<konto>\n  <benutzer>lager</benutzer>\n  <gehashtes_passwort>2fd4e1c67a2d28fced849ee1bb76e7391b93eb12</gehashtes_passwort>",
+            "hex digest in an XML hashed-password element", carrier="xml",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "<!-- Maven-Resource-Filtering setzt den Wert beim Build -->\n<datenbank>\n  <passwort>@lager.passwort@</passwort>",
+            "Maven filter placeholder in an XML password element", carrier="xml",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "<!-- Verschlüsselung im Testsystem abgeschaltet -->\n<verschluesselung>\n  <geheimnis>deaktiviert</geheimnis>",
+            "boolean word in an XML secret element", carrier="xml",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "resource \"aws_db_instance\" \"lager\" {\n  username = \"lager\"\n  password = var.lager_passwort",
+            "HCL variable reference under a password attribute", carrier="hcl",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "variable \"lager_passwort_sha256\" {\n  type    = string\n"
+            "  default = \"9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08\"",
+            "hex digest as the default of a digest-named HCL variable", carrier="hcl",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "# Passwort liegt als Docker-Secret im Container\nvariable \"lager_passwort\" {\n"
+            "  default = \"/run/secrets/lager_passwort\"",
+            "path as the default of an HCL password variable", carrier="hcl",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "module \"versand\" {\n  source       = \"./module/versand\"\n  zugangstoken = \"6512bd43d9caa6e02c990b0a\"",
+            "MongoDB ObjectId under an HCL token attribute", carrier="hcl",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "<server>\n  <id>nexus-releases</id>\n  <password>${env.NEXUS_PASSWORD}</password>",
+            "environment placeholder in a Maven password element", carrier="xml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "<PropertyGroup>\n  <Configuration>Release</Configuration>\n  <ApiToken>$(BillingApiToken)</ApiToken>",
+            "MSBuild property reference in a token element", carrier="xml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "<appSettings>\n  <add key=\"PasswordSha256\" "
+            "value=\"9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08\" />",
+            "hex digest in the value attribute of a digest-named key", carrier="xml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "<!-- token endpoint of the identity provider -->\n<idp>\n"
+            "  <client_secret>https://auth.internal/realms/acme/protocol/openid-connect/token</client_secret>",
+            "URL without credentials in an XML secret element", carrier="xml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "func TestMavenSettings(t *testing.T) {\n\tfragment := Fragment{\n\t\tRaw: `<password>s3cr3tValue9</password>`,",
+            "XML in a string of Go test code", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "resource \"aws_db_instance\" \"orders\" {\n  username = \"orders\"\n"
+            "  password = random_password.orders.result",
+            "HCL resource reference under a password attribute", carrier="hcl",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "resource \"kubernetes_secret\" \"exports\" {\n  data = {\n"
+            "    client_secret = \"550e8400-e29b-41d4-a716-446655440000\"",
+            "UUID under a nested HCL secret attribute", carrier="hcl",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "provider \"vault\" {\n  address = \"https://vault.internal\"\n  token   = \"${var.vault_token}\"",
+            "HCL interpolation under a token attribute", carrier="hcl",
+        ),
+    ],
+}
+for _label, _rows in DLP_K05C_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
 def flatten(suite: str, cases: dict[str, list[dict]]) -> list[dict]:

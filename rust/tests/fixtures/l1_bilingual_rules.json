@@ -1790,7 +1790,9 @@
         "LAGER_GEHEIMNIS=deaktiviert",
         "LAGER_PASSWORT=/etc/lager/passwort.txt",
         "lager:\n  environment:\n    LAGER_API_TOKEN: 3f2a9c4e-7b1d-4e8a-9c2f-5d6e7f8a9b0c",
-        "{\"env\": {\"LAGER_KENNWORT\": \"%LAGER_KENNWORT%\"}}"
+        "{\"env\": {\"LAGER_KENNWORT\": \"%LAGER_KENNWORT%\"}}",
+        "<umgebung>\n  <LAGER_API_TOKEN>3f2a9c4e-7b1d-4e8a-9c2f-5d6e7f8a9b0c</LAGER_API_TOKEN>",
+        "resource \"x\" \"lager\" {\n  environment = {\n    LAGER_KENNWORT = \"${var.lager_kennwort}\""
       ],
       "en": [
         "DB_PASSWORD=YOUR_DB_PASSWORD_HERE",
@@ -1804,7 +1806,9 @@
         "ORDER_SERVICE_TOKEN=6512bd43d9caa6e02c990b0a",
         "IDP_CLIENT_SECRET=https://auth.internal/realms/acme/protocol/openid-connect/token",
         "services:\n  worker:\n    environment:\n      SERVICE_TOKENS:\n        - ${SERVICE_TOKEN}",
-        "[env]\nDEPLOY_SECRET = \"sha1-2fd4e1c67a2d28fced849ee1bb76e7391b93eb12\""
+        "[env]\nDEPLOY_SECRET = \"sha1-2fd4e1c67a2d28fced849ee1bb76e7391b93eb12\"",
+        "<env>\n  <DEPLOY_SECRET>sha1-2fd4e1c67a2d28fced849ee1bb76e7391b93eb12</DEPLOY_SECRET>",
+        "variable \"SERVICE_TOKEN\" {\n  default = \"6512bd43d9caa6e02c990b0a\""
       ]
     },
     "language_neutral": false
@@ -1833,7 +1837,10 @@
         "[sicherheit]\npasswort = 20260914",
         "konto:\n  gehashtes_passwort: 2fd4e1c67a2d28fced849ee1bb76e7391b93eb12",
         "lager:\n  passwort: /run/secrets/lager_passwort",
-        "produktion:\n  passwort: *lager_standard_passwort"
+        "produktion:\n  passwort: *lager_standard_passwort",
+        "<datenbank>\n  <passwort>@lager.passwort@</passwort>",
+        "resource \"aws_db_instance\" \"lager\" {\n  password = var.lager_passwort",
+        "variable \"lager_passwort_sha256\" {\n  default = \"9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08\""
       ],
       "en": [
         "Password: TODO",
@@ -1853,7 +1860,10 @@
         "[database]\npassword = C:\\secrets\\orders-db.txt",
         "[database]\npasswords = ['C:\\secrets\\orders-db.txt']",
         "db:\n  password: ENC[AES256_GCM,data:Zm9vYmFyYmF6cXV4,iv:Tz8Wm4K93RVq,tag:Kx7pQ2vL,type:str]",
-        "pub fn getpwnam_r(\n    name: *const c_char,\n    pwd: *mut passwd,"
+        "pub fn getpwnam_r(\n    name: *const c_char,\n    pwd: *mut passwd,",
+        "<server>\n  <password>${env.NEXUS_PASSWORD}</password>",
+        "<konto>\n  <hashed_password>5d41402abc4b2a76b9719d911017c592</hashed_password>",
+        "resource \"aws_db_instance\" \"orders\" {\n  password = random_password.orders.result"
       ]
     },
     "language_neutral": false
@@ -1879,7 +1889,10 @@
         "lager:\n  api_token: 3f2a9c4e-7b1d-4e8a-9c2f-5d6e7f8a9b0c",
         "{\"lager\": {\"zugangstokens\": [\"5f8d0c3e9b1a2d4c6e8f0a1b\", \"5f8d0c3e9b1a2d4c6e8f0a1c\"]}}",
         "[versand]\ntokens = [\"${VERSAND_TOKEN}\", \"{versand_token}\"]",
-        "verschluesselung:\n  geheimnis: deaktiviert"
+        "verschluesselung:\n  geheimnis: deaktiviert",
+        "<lager>\n  <api_token>3f2a9c4e-7b1d-4e8a-9c2f-5d6e7f8a9b0c</api_token>",
+        "<verschluesselung>\n  <geheimnis>deaktiviert</geheimnis>",
+        "module \"versand\" {\n  zugangstoken = \"6512bd43d9caa6e02c990b0a\""
       ],
       "en": [
         "API key: YOUR-API-TOKEN",
@@ -1899,7 +1912,10 @@
         "{\"auth\": {\"client_secret\": \"550e8400-e29b-41d4-a716-446655440000\"}}",
         "sha256_tokens = [\"9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08\"]",
         "[security]\ntokens = [86400, 3600]",
-        "{\"tokens\": [\"<|endoftext|>\", \"Ġconstructor\", \"ing</w>\", \"abc12345\"]}"
+        "{\"tokens\": [\"<|endoftext|>\", \"Ġconstructor\", \"ing</w>\", \"abc12345\"]}",
+        "<PropertyGroup>\n  <ApiToken>$(BillingApiToken)</ApiToken>",
+        "<idp>\n  <client_secret>https://auth.internal/realms/acme/protocol/openid-connect/token</client_secret>",
+        "provider \"vault\" {\n  token = \"${var.vault_token}\""
       ]
     },
     "language_neutral": false
