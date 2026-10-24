@@ -67,8 +67,8 @@ result shapes may be breaking for downstream users, and is called out explicitly
   the validators; the frozen E05 synthetic goldset stays byte-identical and lists the new IDs as not
   generated. `pii_l1.jsonl` gains 220 balanced/recall rows (5 positives and 5 hard negatives per
   label in DE and EN). **Detection change:** none in the default `strict` mode. In `balanced` and
-  `recall` VAT IDs of the eleven countries are new findings; `13_l1_golden_eval` 875/875 positives,
-  772/772 hard negatives. Existing validators are unchanged.
+  `recall` VAT IDs of the eleven countries are new findings; `13_l1_golden_eval` 996/996 positives,
+  893/893 hard negatives. Existing validators are unchanged.
 
 ## [0.1.11] - 2026-10-23
 

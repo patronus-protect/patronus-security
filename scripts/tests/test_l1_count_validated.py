@@ -339,7 +339,7 @@ def test_cli_count_json_and_check(tmp_path):
     payload = json.loads(result.stdout)
     assert payload["presidio_version"] == "2.2.364"
     assert payload["presidio"]["count"] == 35
-    assert payload["ark"]["count"] == 24
+    assert payload["ark"]["count"] == 35
     assert payload["m3"] == {"factor": 2, "target": 70, "met": False}
     assert {
         "entity_id": "pii.de.tax_id",
