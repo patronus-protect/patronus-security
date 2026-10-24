@@ -91,16 +91,12 @@ fn assert_reports(rule_id: &str, text: &str, value: &str, modes: &[PiiMode]) {
             found
                 .iter()
                 .any(|(rule, found)| rule == rule_id && found == value),
-            "{mode}: {rule_id} must report {value:?} in {text:?}: {found:?}"
+            "{mode}: {rule_id} must report the expected value"
         );
         let spans = ssn_spans(text, mode);
-        assert_eq!(
-            spans
-                .iter()
-                .map(|(span, _)| span.as_str())
-                .collect::<Vec<_>>(),
-            [value],
-            "{mode}: {text:?}"
+        assert!(
+            spans.len() == 1 && spans[0].0 == value,
+            "{mode}: the expected value must be the only SSN span"
         );
     }
 }
@@ -108,7 +104,7 @@ fn assert_reports(rule_id: &str, text: &str, value: &str, modes: &[PiiMode]) {
 fn assert_silent(text: &str, modes: &[PiiMode]) {
     for &mode in modes {
         let spans = ssn_spans(text, mode);
-        assert!(spans.is_empty(), "{mode}: no SSN in {text:?}: {spans:?}");
+        assert!(spans.is_empty(), "{mode}: no SSN expected");
     }
 }
 
@@ -163,7 +159,7 @@ fn ssa_range_vectors_are_unchanged() {
         "665-12-3456",
         "899-99-9999",
     ] {
-        assert!(validators::us_ssn(valid), "{valid}");
+        assert!(validators::us_ssn(valid));
     }
     for invalid in [
         "000-12-3456", // area 000
@@ -178,7 +174,7 @@ fn ssa_range_vectors_are_unchanged() {
         "12345678",    // eight digits
         "1234567890",  // ten digits
     ] {
-        assert!(!validators::us_ssn(invalid), "{invalid}");
+        assert!(!validators::us_ssn(invalid));
     }
 }
 
@@ -323,7 +319,7 @@ fn balanced_reports_a_grouped_value_without_a_term() {
     ] {
         assert_reports(CONTEXT_FREE, text, value, &SCORED);
         for mode in SCORED {
-            assert_eq!(ssn_spans(text, mode)[0].1, 0.5, "{mode}: {text}");
+            assert_eq!(ssn_spans(text, mode)[0].1, 0.5, "{mode}");
         }
     }
 }
@@ -334,17 +330,14 @@ fn placeholder_values_need_an_ssn_term() {
     // context; without an SSN term they are no SSN in any mode, the SSA ranges alone
     // (`us_ssn`) still accept them.
     for placeholder in ["111-11-1111", "777 77 7777", "555.55.5555", "123-45-6789"] {
-        assert!(validators::us_ssn(placeholder), "{placeholder}");
-        assert!(
-            !validators::us_ssn_context_free(placeholder),
-            "{placeholder}"
-        );
+        assert!(validators::us_ssn(placeholder));
+        assert!(!validators::us_ssn_context_free(placeholder));
     }
     for valid in ["078 05 1123", "212-45-6789", "123-45-6788", "111-11-1112"] {
-        assert!(validators::us_ssn_context_free(valid), "{valid}");
+        assert!(validators::us_ssn_context_free(valid));
     }
     for invalid in ["000-12-3456", "666-12-3456", "900-12-3456", "078-05-1120"] {
-        assert!(!validators::us_ssn_context_free(invalid), "{invalid}");
+        assert!(!validators::us_ssn_context_free(invalid));
     }
     for text in [
         "111-11-1111",
@@ -429,24 +422,20 @@ fn scores_follow_the_context() {
     ] {
         for mode in SCORED {
             let spans = ssn_spans(text, mode);
-            assert_eq!(spans.len(), 1, "{mode}: {text}: {spans:?}");
-            assert_eq!(
-                spans[0].1,
-                score::score(proximity, context),
-                "{mode}: {text}"
-            );
+            assert_eq!(spans.len(), 1, "{mode}");
+            assert_eq!(spans[0].1, score::score(proximity, context), "{mode}");
         }
-        assert_eq!(ssn_spans(text, PiiMode::Strict)[0].1, 1.0, "{text}");
+        assert_eq!(ssn_spans(text, PiiMode::Strict)[0].1, 1.0);
     }
     // After its field name the field-bound rule keeps its span and score.
     for mode in SCORED {
-        assert_eq!(
-            ssn_spans("SSN: 123-45-6789", mode),
-            [(
-                "123-45-6789".to_owned(),
-                score::rule_score(pattern("pii_ssn_us"))
-            )],
-            "{mode}"
+        assert!(
+            ssn_spans("SSN: 123-45-6789", mode)
+                == [(
+                    "123-45-6789".to_owned(),
+                    score::rule_score(pattern("pii_ssn_us"))
+                )],
+            "{mode}: the field-bound rule keeps its span and score"
         );
     }
 }
