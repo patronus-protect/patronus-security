@@ -2061,6 +2061,52 @@
   },
   {
     "category": "dlp",
+    "rule_id": "dlp_connection_string_password",
+    "de": "Verbindungszeichenfolge der Lager-DB: Server=sql01.lager.intern;Database=lager;User Id=lager_app;Password=<<secret\u003a0>>;",
+    "en": "spring.datasource.url=jdbc:postgresql://db.internal:5432/orders?user=orders&password=<<secret\u003a0>>&sslmode=require",
+    "secrets": [
+      {
+        "gen": "password",
+        "seed": 3
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "Server=sql01.lager.intern;Database=lager;User Id=lager_app;Password=${LAGER_DB_PASSWORT};",
+        "Data Source=sql01;Initial Catalog=lager;Integrated Security=SSPI;"
+      ],
+      "en": [
+        "jdbc:postgresql://db.internal:5432/orders?user=orders&password=<your-password>",
+        "Server=myServerAddress;Database=myDataBase;User Id=myUsername;Password=myPassword;"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_ldap_bind_password",
+    "de": "# /etc/nslcd.conf\nbinddn cn=nslcd,ou=dienste,dc=lager,dc=de\nbindpw <<secret\u003a0>>",
+    "en": "$ ldapsearch -x -H ldaps://ldap.internal -D \"cn=admin,dc=acme,dc=org\" -w <<secret\u003a0>> -b \"dc=acme,dc=org\"",
+    "secrets": [
+      {
+        "gen": "url_userinfo_password",
+        "seed": 3
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "$ ldapsearch -x -D \"cn=admin,dc=lager,dc=de\" -W -b \"dc=lager,dc=de\"",
+        "Aufruf: ldapsearch -x -D <bind-dn> -w <passwort> -b <basis-dn>"
+      ],
+      "en": [
+        "$ ldapsearch -x -D \"cn=admin,dc=acme,dc=org\" -w \"$LDAP_BIND_PW\" -b \"dc=acme,dc=org\"",
+        "The bindpw option sets the password that nslcd uses for the simple bind."
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
     "rule_id": "dlp_de_vat_id",
     "de": "USt-IdNr: DE123456789",
     "en": "VAT-ID: DE123456789",
