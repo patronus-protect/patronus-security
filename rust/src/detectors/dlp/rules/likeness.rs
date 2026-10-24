@@ -24,6 +24,7 @@
 //! URL (`https://<token>:x-oauth-basic@…`) needs two character classes and
 //! token entropy as well.
 use super::credentials::{low_variety, LowVariety};
+use crate::detectors::structure;
 use crate::detectors::validators::{shannon_entropy, CharClasses};
 use regex::Regex;
 use std::{ops::Range, sync::LazyLock};
@@ -488,8 +489,28 @@ static XML_VALUE_SEPARATOR: LazyLock<Regex> =
 /// T09: a key in a `key` or `name` attribute followed by the quoted value
 /// (`<add key="DbPassword" value="`, `<property name="password" value="`).
 static XML_KEY_VALUE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?i)\b(?:key|name)\s*=\s*["'][^"'<>\r\n]*["']\s+value\s*=\s*["']$"#).unwrap()
+    Regex::new(r#"(?i)\b(?:key|name)\s*=\s*["']([^"'<>\r\n]*)["']\s+value\s*=\s*["']$"#).unwrap()
 });
+
+/// K05C: the key of an XML `value` attribute in `before`, the text before the
+/// value: the `key`/`name` attribute right before it (`<add
+/// key="PasswordHash" value="`).
+pub(crate) fn xml_attribute_key(before: &str) -> Option<&str> {
+    Some(XML_KEY_VALUE.captures(before)?.get(1)?.as_str())
+}
+
+/// K05C: whether the value at `value_start` of `text` is the text of an XML
+/// element: it follows a start tag (`<password>`), also inside CDATA
+/// (`<password><![CDATA[`).
+fn is_element_text(text: &str, value_start: usize) -> bool {
+    let before = &text[..value_start];
+    let before = before.strip_suffix("<![CDATA[").unwrap_or(before);
+    if !before.ends_with('>') {
+        return false;
+    }
+    structure::xml_start_tag_before(text, before.len())
+        .is_some_and(|(_, tag)| tag.end == before.len() && !tag.empty)
+}
 
 /// T09: code at the start of a value: a cast or parameter list
 /// (`(string) $x`, `()=>f`), an arrow function (`e=>({…})`), a comparison
@@ -516,8 +537,11 @@ enum Separator {
 pub(crate) fn is_assignment_value(text: &str, range: Range<usize>) -> bool {
     let value = &text[range.clone()];
     let before = &text[..range.start];
-    let quoted = before.ends_with(['"', '\'']);
-    if quoted && closes_string(before) {
+    // K05C: the text of an XML element (`<password>…</password>`) is a
+    // literal value of a field, as after a quoted key.
+    let element = is_element_text(text, range.start);
+    let quoted = element || before.ends_with(['"', '\'']);
+    if quoted && !element && closes_string(before) {
         return false;
     }
     // T09: XML `key="…" value="…"` holds the key in a `key`/`name` attribute
@@ -526,14 +550,17 @@ pub(crate) fn is_assignment_value(text: &str, range: Range<usize>) -> bool {
     if xml_value && !(quoted && XML_KEY_VALUE.is_match(before)) {
         return false;
     }
-    let Some((separator, key_end)) = separator(before) else {
-        return true;
+    let (separator, key_end) = match separator(before) {
+        Some(found) => found,
+        None if element => (Separator::Symbol, before.len()),
+        None => return true,
     };
     // T09: a quoted key (`"password":`, `'password' =>`, `["DB_PASSWORD"] =`)
     // is a field of JSON, a dict or an array: an unquoted value is code
     // (`{"password": pwd}`, `case"apiKey":u=…`, `'password' => !empty(…)`),
     // as after `=>`, and a quoted one must suit a field.
     let quoted_key = xml_value
+        || element
         || before[..key_end]
             .trim_end_matches(']')
             .ends_with(['"', '\''])
@@ -808,7 +835,7 @@ pub(crate) fn is_credential_key(text: &str, key_start: usize, value: Range<usize
 /// the cut.
 pub(crate) fn is_assignment_key(text: &str, key_start: usize, value: Range<usize>) -> bool {
     let truncated = text[value.end..].chars().next().is_some_and(|c| {
-        !(c.is_whitespace() || matches!(c, '"' | '\'' | ';' | ',' | '}' | ']' | '\\'))
+        !(c.is_whitespace() || matches!(c, '"' | '\'' | ';' | ',' | '}' | ']' | '\\' | '<'))
     });
     !truncated && is_key_prefix(text, key_start, value)
 }
@@ -1255,6 +1282,26 @@ mod tests {
         let start = template.find("{v}").unwrap();
         let text = template.replace("{v}", value);
         check(&text, start..start + value.len())
+    }
+
+    #[test]
+    fn xml_element_text_is_a_field_value() {
+        for (template, value, expected) in [
+            ("<password>{v}</password>", "Kx7;pQ2,v}L", true),
+            (
+                "<db:token><![CDATA[{v}]]></db:token>",
+                "Tz8Wm4K93RVqe7xAb2Lp",
+                true,
+            ),
+            ("<password>{v}</password>", "password", false),
+            ("<api_key>{v}</api_key>", "apiKey", false),
+            ("<secret>{v}</secret>", "changeme", false),
+            ("<password>{v}</password>", "/run/secrets/db", false),
+            // `=>` is no start tag: the usual rules for a bare value apply.
+            ("password=>{v}", "get_password()", false),
+        ] {
+            assert_eq!(assignment(template, value), expected, "{template} {value}");
+        }
     }
 
     #[test]

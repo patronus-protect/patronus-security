@@ -108,7 +108,7 @@ pub(crate) fn placeholder_check(rule_id: &str) -> bool {
 
 pub(crate) use likeness::is_item_value;
 pub(crate) use placeholders::is_placeholder_match;
-pub(crate) use value_shape::{key_names_digest, non_secret_shape};
+pub(crate) use value_shape::{key_names_digest, non_secret_shape, non_secret_shape_under};
 
 /// K05: how config lines (`dlp::config_keys`) bind a value to a generic
 /// key-bound rule.
