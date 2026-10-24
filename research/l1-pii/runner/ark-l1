@@ -612,6 +612,14 @@ def land(number: int, head: str, wait_for_codex: bool = True) -> None:
     if threads:
         print(f"LAND_WAIT={label} {threads} unresolved review thread(s); the next run reviews them")
         return
+    # Only ever merge into main: a legacy stacked PR may still target an old task branch.
+    base = run(["gh", "pr", "view", str(number), "--repo", GH_REPO, "--json", "baseRefName", "--jq", ".baseRefName"])
+    if base != "main":
+        run(["gh", "pr", "edit", str(number), "--repo", GH_REPO, "--base", "main"], check=False)
+        base = run(["gh", "pr", "view", str(number), "--repo", GH_REPO, "--json", "baseRefName", "--jq", ".baseRefName"])
+    if base != "main":
+        print(f"LAND_WAIT={label} targets {base}, not main; the next restack retargets it")
+        return
     result = merge_async(number, head)
     if result == "merged":
         print(f"LANDED={label}")
