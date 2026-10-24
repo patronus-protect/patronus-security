@@ -279,8 +279,10 @@ and `obfuscation` (`zero_width`, `full_width`, `defanged`, `spelled_out`, `space
 be a valid card number, and an account field can hold an IBAN or a card-shaped number. Since B-PAN
 a card needs Luhn plus the IIN prefix and a length of its brand and never starts right after `+`,
 so phone digits no longer compete as a card. In `balanced` and `recall` one value yields one label among `IBAN`,
-`CREDITCARD`, `FINANCIAL_ACCOUNT_NUMBER`, `STEUERID`, `PHONE` and `VAT_ID_IT` (a bare Partita IVA
-has 11 digits like a Steuer-ID, B01). Of two overlapping findings
+`CREDITCARD`, `FINANCIAL_ACCOUNT_NUMBER`, `STEUERID`, `PHONE`, `VAT_ID_IT`, `VAT_ID_FR`, `VAT_ID_HR`
+and `VAT_ID_LT` (a bare Partita IVA and the digits of a spaced French or Croatian VAT ID have 11
+digits like a Steuer-ID, B01/B02; the twelve digits of a Lithuanian one can be card-shaped, B02).
+Of two overlapping findings
 with different labels the first criterion that differs decides: an IBAN (`iban`), the longer
 value (`longer_value`: a card-shaped part of a longer value), context that supports the finding's
 own label, i.e. a field name, a structural key or a nearby support term (`context`:
@@ -331,7 +333,12 @@ rules (B01) are scored-only as well, with one label per country (`VAT_ID_DE`, `V
 country prefix, the national form (`DE 136 695 976`, `ATU13585627`, `CHE-100.155.212`,
 `FR 40 303 265 045`, `NL004495445B01`, `BE 0403.019.261`, `IT00743110157`, `ESA13585625`) and its
 check digit; `0.55` bare, `0.80` with a VAT term such as `USt-IdNr.`, `TVA` or `Partita IVA`. A
-bare Partita IVA without `IT` (`pii_vat_id_it_proximity`) needs such a term or key. German passport
+bare Partita IVA without `IT` (`pii_vat_id_it_proximity`) needs such a term or key. Part 2 (B02)
+adds `VAT_ID_BG`, `VAT_ID_CY`, `VAT_ID_CZ`, `VAT_ID_DK`, `VAT_ID_EE`, `VAT_ID_EL` (prefix `EL` or
+`GR`), `VAT_ID_FI`, `VAT_ID_HR`, `VAT_ID_HU`, `VAT_ID_IE` and `VAT_ID_LT` in the same way
+(`BG175074752`, `CY-10259033P`, `CZ25123891`, `DK 13 58 56 28`, `EE100931558`, `EL094259216`,
+`FI20774740`, `HR33392005961`, `HU-12892312`, `IE6433435OA`, `LT100001919017`), with national terms
+such as `DIČ`, `CVR-nr.`, `ΑΦΜ`, `OIB` or `PVM kodas`. German passport
 and identity card numbers (F08) are scored-only with their ICAO 9303 check digit (weights 7-3-1):
 passport series `C F G H J K`, identity card series `L M N P R T V W X Y`, eight characters plus the
 check digit (`F12345671`, `L01X00T44`) or the MRZ form of nine plus the check digit (`C01X00T478`,

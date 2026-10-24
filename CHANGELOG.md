@@ -306,6 +306,40 @@ Ark-API-only `SecurityGateway::enqueue_ark_api_categories_with_options` and
   no competing overlap. Validators are unchanged. **Detection change:** none in `strict`; in
   `balanced` and `recall` such a French VAT ID reports one `VAT_ID_FR` finding, and the Steuer-ID
   rule's `matched_rules` entry names `overlap` (`longer_value`, `yields_to: VAT_ID_FR`).
+- Add VAT identification numbers for BG, CY, CZ, DK, EE, EL, FI, HR, HU, IE and LT (B02, part 2
+  of B01), one label and one check-digit validator per country in `rust/src/detectors/pii/vat.rs`:
+  `VAT_ID_BG` (nine digits weights 1…8, fallback 3…10, mod 11; ten digits ЕГН with birth date, ЛНЧ or
+  other person), `VAT_ID_CY` (check letter mod 26, never `12…`), `VAT_ID_CZ` (legal entity weights
+  8…2 mod 11 and never `9…`, special `6…`, ten-digit birth number with birth date and mod 11),
+  `VAT_ID_DK` (CVR weights 2-7-6-5-4-3-2-1 mod 11), `VAT_ID_EE` (KMKR `10…`, weights 3-7-1 mod 10),
+  `VAT_ID_EL` (prefix `EL` or `GR`, powers of two mod 11), `VAT_ID_FI` (weights 7-9-10-5-8-4-2-1
+  mod 11), `VAT_ID_HR` (OIB, ISO 7064 MOD 11,10), `VAT_ID_HU` (weights 9-7-3-1 mod 10), `VAT_ID_IE`
+  (check letter mod 23, second letter since 2013, old form) and `VAT_ID_LT` (nine or twelve digits
+  with the `1` marker, weights 1…9 mod 11 with a second step). The algorithms follow python-stdnum
+  2.2, stricter where a form carries no check digit (nine-digit Czech birth numbers before 1954) or
+  is no issued number (all-zero bodies, Estonian numbers outside `10…`, impossible Czech birth
+  months). Like B01 the rules are scored-only (K05): an upper-case country prefix and the printed
+  form (`DK 13 58 56 28`, `CY-10259033P`, `HU-12892312`) report without a field name at 0.55, 0.80
+  with a term of `pii.vat_identifier`, which gains English country terms (`Czech VAT number` …) and
+  national ones (`ИН по ДДС`, `ΦΠΑ`, `DIČ`, `CVR-nr.`, `KMKR`, `ΑΦΜ`, `ALV-numero`, `OIB`, `PDV ID`,
+  `közösségi adószám`, `PVM kodas` …), and drop below both thresholds behind a nearer counter-context
+  term. `VAT_ID_HR` and `VAT_ID_LT` join the K07 competing labels: the eleven digits of
+  `HR 57419348408` can also be a context-free Steuer-ID and the twelve digits of `LT 621223427710` a
+  card number; the VAT ID is the longer value and wins. The rules are appended to `PII_PATTERNS`, so
+  the order of existing rules is unchanged. `entity_map.yaml` adds eleven `ark_only` IDs (Greece as
+  `pii.gr.vat_id`) and classifies the validators as checksums (M3: ARK 13 → 24 units);
+  `scoreboard.py` ports them; the frozen E05 synthetic goldset stays byte-identical and lists the
+  new IDs as not generated. `pii_l1.jsonl` gains 242 balanced/recall rows (per label 6 DE and 5 EN
+  positives, 6 DE and 5 EN hard negatives). **Detection change:** none in the default `strict` mode.
+  In `balanced` and `recall` the eleven VAT IDs are new findings, and a spaced Croatian or
+  Lithuanian VAT ID no longer adds a `STEUERID` or `CREDITCARD` finding on its digits (the rule's
+  `matched_rules` entry names `overlap`, `longer_value`); 13_l1_golden_eval 855/855 positives,
+  759/759 hard negatives. Validators of existing labels are unchanged.
+- `VAT_ID_IE` accepts the old Irish form with `+` or `*` as the second character (`IE8*79739I`,
+  `IE8+79739I`; B02 review): the pattern allowed only a letter there, and the validator dropped the
+  symbol before the check. The check letter is unchanged (`0`, the five digits and the first digit,
+  mod 23), and `scoreboard.py` ports the change. **Detection change:** none in `strict`; in `balanced`
+  and `recall` such a legacy Irish VAT ID is a new `VAT_ID_IE` finding.
 - Implement the decided M2 rule and add `scripts/l1_presidio/scoreboard.py m2` (D-M2, decision of
   2026-10-21 in `research/l1-pii/README.md`, M2 row and fairness section). M2 holds only if it holds on
   both milestone families on their own, judged on `balanced`: macro-F1 is the unweighted mean exact F1

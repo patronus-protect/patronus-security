@@ -100,6 +100,17 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     de::PASSPORT_NUMBER_LEGACY,
     de::IDENTITY_CARD_NUMBER_CONTEXT_FREE,
     de::IDENTITY_CARD_NUMBER_LEGACY,
+    vat::VAT_ID_BG,
+    vat::VAT_ID_CY,
+    vat::VAT_ID_CZ,
+    vat::VAT_ID_DK,
+    vat::VAT_ID_EE,
+    vat::VAT_ID_EL,
+    vat::VAT_ID_FI,
+    vat::VAT_ID_HR,
+    vat::VAT_ID_HU,
+    vat::VAT_ID_IE,
+    vat::VAT_ID_LT,
 ];
 
 pub struct PiiPipeline {

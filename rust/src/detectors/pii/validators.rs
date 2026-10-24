@@ -903,6 +903,258 @@ pub fn es_vat_id(s: &str) -> bool {
     }
 }
 
+// ── VAT identification numbers, part 2 (B02) ──────────────────────────────
+
+/// The VAT body of `s` after the first of `prefixes` that opens it.
+fn vat_body_of(s: &str, prefixes: &[&str]) -> String {
+    let compact = vat_body(s, "");
+    prefixes
+        .iter()
+        .find_map(|prefix| compact.strip_prefix(prefix))
+        .unwrap_or(&compact)
+        .to_string()
+}
+
+/// The decimal digits of `s` if its length is one of `lengths` and not every
+/// digit is zero.
+fn vat_number(s: &str, lengths: &[usize]) -> Option<Vec<u32>> {
+    lengths
+        .contains(&s.len())
+        .then(|| vat_digits(s, s.len()))
+        .flatten()
+        .filter(|digits| digits.iter().any(|&digit| digit != 0))
+}
+
+/// Sum of `digits` times `weights`, pairwise.
+fn weighted_sum(digits: &[u32], weights: &[u32]) -> u32 {
+    digits
+        .iter()
+        .zip(weights)
+        .map(|(digit, weight)| digit * weight)
+        .sum()
+}
+
+/// The decimal value of `digits`.
+fn decimal(digits: &[u32]) -> u64 {
+    digits
+        .iter()
+        .fold(0u64, |number, &digit| number * 10 + u64::from(digit))
+}
+
+/// Bulgarian ИН по ДДС: `BG` and nine digits (legal entity: weights 1…8 mod 11,
+/// on remainder 10 weights 3…10) or ten digits that pass one of the three
+/// ten-digit checks: an ЕГН with a valid birth date from 1900 on (weights
+/// 2 4 8 5 10 9 7 3 6 mod 11), an ЛНЧ of a foreigner (weights 21 19 17 13 11 9 7 3 1 mod 10) or
+/// another person (weights 4 3 2 7 6 5 4 3 2, `11 − sum mod 11`).
+pub fn bg_vat_id(s: &str) -> bool {
+    let Some(digits) = vat_number(&vat_body(s, "BG"), &[9, 10]) else {
+        return false;
+    };
+    if digits.len() == 9 {
+        let mut check = weighted_sum(&digits[..8], &[1, 2, 3, 4, 5, 6, 7, 8]) % 11;
+        if check == 10 {
+            check = weighted_sum(&digits[..8], &[3, 4, 5, 6, 7, 8, 9, 10]) % 11;
+        }
+        return check % 10 == digits[8];
+    }
+    let (year, month, day) = (
+        digits[0] * 10 + digits[1],
+        digits[2] * 10 + digits[3],
+        digits[4] * 10 + digits[5],
+    );
+    let (year, month) = match month {
+        41.. => (2000 + year, month - 40),
+        21.. => (1800 + year, month - 20),
+        _ => (1900 + year, month),
+    };
+    let birth_date = u8::try_from(day).is_ok_and(|day| {
+        u8::try_from(month).is_ok_and(|month| valid_date(day, month, year as u16))
+    });
+    let egn = birth_date
+        && weighted_sum(&digits[..9], &[2, 4, 8, 5, 10, 9, 7, 3, 6]) % 11 % 10 == digits[9];
+    let foreigner = weighted_sum(&digits[..9], &[21, 19, 17, 13, 11, 9, 7, 3, 1]) % 10 == digits[9];
+    let other =
+        (11 - weighted_sum(&digits[..9], &[4, 3, 2, 7, 6, 5, 4, 3, 2]) % 11) % 11 == digits[9];
+    egn || foreigner || other
+}
+
+/// Cypriot ΦΠΑ number: `CY`, eight digits not starting with `12` and a check
+/// letter: the digits at even positions map to 1 0 5 7 9 13 15 17 19 21, the
+/// others count as they are, the sum mod 26 is the letter `A`…`Z`.
+pub fn cy_vat_id(s: &str) -> bool {
+    let body = vat_body(s, "CY");
+    let Some((&letter, number)) = body.as_bytes().split_last() else {
+        return false;
+    };
+    let Some(digits) = std::str::from_utf8(number)
+        .ok()
+        .and_then(|number| vat_number(number, &[8]))
+    else {
+        return false;
+    };
+    const EVEN: [u32; 10] = [1, 0, 5, 7, 9, 13, 15, 17, 19, 21];
+    let sum: u32 = digits
+        .iter()
+        .enumerate()
+        .map(|(index, &digit)| match index % 2 {
+            0 => EVEN[digit as usize],
+            _ => digit,
+        })
+        .sum();
+    digits[..2] != [1, 2] && letter == b'A' + (sum % 26) as u8
+}
+
+/// Czech DIČ: `CZ` and eight digits of a legal entity (not starting with `9`,
+/// weights 8…2, check `(11 − sum mod 11) mod 11`, 0 → 1, 10 → 0), nine digits
+/// starting with `6` (special case: weights 8…2 over the middle seven, check
+/// `(sum mod 11 + 8) mod 10`) or a ten-digit birth number (rodné číslo) with a
+/// valid birth date, divisible by 11 (remainder 10 with check digit 0).
+/// Nine-digit birth numbers (before 1954) carry no check digit and are not
+/// accepted.
+pub fn cz_vat_id(s: &str) -> bool {
+    let Some(digits) = vat_number(&vat_body(s, "CZ"), &[8, 9, 10]) else {
+        return false;
+    };
+    let weights = [8, 7, 6, 5, 4, 3, 2];
+    match digits.len() {
+        8 => {
+            let check = (11 - weighted_sum(&digits[..7], &weights) % 11) % 11;
+            digits[0] != 9 && (if check == 0 { 1 } else { check }) % 10 == digits[7]
+        }
+        9 => {
+            let check = weighted_sum(&digits[1..8], &weights) % 11;
+            digits[0] == 6 && (check + 8) % 10 == digits[8]
+        }
+        _ => {
+            let (year, month, day) = (
+                digits[0] * 10 + digits[1],
+                digits[2] * 10 + digits[3],
+                digits[4] * 10 + digits[5],
+            );
+            let year = if year >= 54 { 1900 + year } else { 2000 + year };
+            matches!(month, 1..=12 | 21..=32 | 51..=62 | 71..=82)
+                && valid_date(day as u8, (month % 50 % 20) as u8, year as u16)
+                && decimal(&digits[..9]) % 11 % 10 == u64::from(digits[9])
+        }
+    }
+}
+
+/// Danish CVR/SE number: `DK` and eight digits, no leading zero, weights
+/// 2 7 6 5 4 3 2 1 sum to a multiple of 11.
+pub fn dk_vat_id(s: &str) -> bool {
+    vat_number(&vat_body(s, "DK"), &[8]).is_some_and(|digits| {
+        digits[0] != 0 && weighted_sum(&digits, &[2, 7, 6, 5, 4, 3, 2, 1]).is_multiple_of(11)
+    })
+}
+
+/// Estonian KMKR number: `EE` and nine digits starting with `10`, weights
+/// 3 7 1 3 7 1 3 7 1 sum to a multiple of 10.
+pub fn ee_vat_id(s: &str) -> bool {
+    vat_number(&vat_body(s, "EE"), &[9]).is_some_and(|digits| {
+        digits[..2] == [1, 0]
+            && weighted_sum(&digits, &[3, 7, 1, 3, 7, 1, 3, 7, 1]).is_multiple_of(10)
+    })
+}
+
+/// Greek ΑΦΜ with the VAT prefix `EL` (also `GR`): nine digits, the last is
+/// `(Σ digit × 2^(9 − position)) mod 11 mod 10` over the first eight.
+pub fn el_vat_id(s: &str) -> bool {
+    vat_number(&vat_body_of(s, &["EL", "GR"]), &[9]).is_some_and(|digits| {
+        let sum = digits[..8].iter().fold(0, |sum, &digit| sum * 2 + digit);
+        sum * 2 % 11 % 10 == digits[8]
+    })
+}
+
+/// Finnish ALV number: `FI` and eight digits (the Y-tunnus without its hyphen),
+/// weights 7 9 10 5 8 4 2 1 sum to a multiple of 11.
+pub fn fi_vat_id(s: &str) -> bool {
+    vat_number(&vat_body(s, "FI"), &[8])
+        .is_some_and(|digits| weighted_sum(&digits, &[7, 9, 10, 5, 8, 4, 2, 1]).is_multiple_of(11))
+}
+
+/// Croatian OIB with the VAT prefix `HR`: eleven digits, the last an ISO 7064
+/// MOD 11,10 check digit.
+pub fn hr_vat_id(s: &str) -> bool {
+    vat_number(&vat_body(s, "HR"), &[11])
+        .is_some_and(|digits| iso7064_mod11_10(&digits[..10]) == digits[10])
+}
+
+/// Hungarian közösségi adószám: `HU` and eight digits, weights 9 7 3 1 9 7 3 1
+/// sum to a multiple of 10.
+pub fn hu_vat_id(s: &str) -> bool {
+    vat_number(&vat_body(s, "HU"), &[8])
+        .is_some_and(|digits| weighted_sum(&digits, &[9, 7, 3, 1, 9, 7, 3, 1]).is_multiple_of(10))
+}
+
+/// Check characters of the Irish VAT number by remainder mod 23.
+const IE_CHECK_LETTERS: &[u8; 23] = b"WABCDEFGHIJKLMNOPQRSTUV";
+
+/// Irish VAT number: `IE`, seven digits, a check letter and an optional second
+/// letter (since 2013), or the old form of a digit, a letter, `+` or `*`, five
+/// digits and the check letter (read as `0`, the five digits and the first
+/// digit). The check letter is `(Σ weights 8…2 + 9 × value of the second
+/// letter) mod 23` over `W A B … V`.
+pub fn ie_vat_id(s: &str) -> bool {
+    // `vat_body` would drop the `+` or `*` of the old form.
+    let compact: String = s
+        .chars()
+        .filter(|&ch| ch.is_ascii_alphanumeric() || matches!(ch, '+' | '*'))
+        .map(|ch| ch.to_ascii_uppercase())
+        .collect();
+    let body = compact.strip_prefix("IE").unwrap_or(&compact);
+    let bytes = body.as_bytes();
+    let letter_value = |byte: u8| IE_CHECK_LETTERS.iter().position(|&letter| letter == byte);
+    if !matches!(bytes.len(), 8 | 9) || !bytes[7..].iter().all(|&byte| letter_value(byte).is_some())
+    {
+        return false;
+    }
+    let (digits, second) = if let Some(digits) = vat_digits(&body[..7], 7) {
+        (
+            digits,
+            bytes
+                .get(8)
+                .and_then(|&byte| letter_value(byte))
+                .unwrap_or(0),
+        )
+    } else if bytes.len() == 8 && matches!(bytes[1], b'A'..=b'Z' | b'+' | b'*') {
+        let Some(tail) = vat_digits(&body[2..7], 5) else {
+            return false;
+        };
+        let Some(first) = vat_digits(&body[..1], 1) else {
+            return false;
+        };
+        ([&[0], &tail[..], &first[..]].concat(), 0)
+    } else {
+        return false;
+    };
+    let sum = weighted_sum(&digits, &[8, 7, 6, 5, 4, 3, 2]) + 9 * second as u32;
+    digits.iter().any(|&digit| digit != 0) && IE_CHECK_LETTERS[(sum % 23) as usize] == bytes[7]
+}
+
+/// Lithuanian PVM mokėtojo kodas: `LT` and nine digits (legal person, eighth
+/// digit `1`) or twelve digits (temporary taxpayer, eleventh digit `1`); the
+/// check digit uses weights 1…9, 1, 2 … mod 11, on remainder 10 weights shifted
+/// by two, and remainder 10 again gives 0.
+pub fn lt_vat_id(s: &str) -> bool {
+    let Some(digits) = vat_number(&vat_body(s, "LT"), &[9, 12]) else {
+        return false;
+    };
+    let (number, check) = digits.split_at(digits.len() - 1);
+    let sum = |shift: usize| -> u32 {
+        number
+            .iter()
+            .enumerate()
+            .map(|(index, &digit)| (1 + (index + shift) % 9) as u32 * digit)
+            .sum::<u32>()
+            % 11
+    };
+    let mut remainder = sum(0);
+    if remainder == 10 {
+        remainder = sum(2);
+    }
+    number[number.len() - 1] == 1 && remainder % 10 == check[0]
+}
+
 pub fn postal_address_de(s: &str) -> bool {
     let mut parts = s.split_whitespace();
     let Some(postal_code) = parts.next() else {

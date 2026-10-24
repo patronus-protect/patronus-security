@@ -4,11 +4,11 @@
 
 These are the stable rule IDs accepted by execution-gate `rules`. Missing IDs inherit the shared Rust/Python/API defaults below. Model gates such as `native:pii`, `native:dlp`, `native:injection_l1`, and `native:threat_l1` control complete producers; rule gates control individual entries below.
 
-## PII rules (56)
+## PII rules (67)
 
 All PII rules are eligible by default when PII L1 is enabled.
 
-In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `recall` a finding scores the rule base plus the validator strength (checksum 35, format 15, none 0) plus its context, capped at 100 and divided by 100: 25 when the rule binds the value to a field name, otherwise 25/20/15 for a support term of the label near the value and -30 when a counter-context term is nearer (see [PII score and modes](result-schema.md#pii-score-and-modes), [PII context lexicon](#pii-context-lexicon)). Rules marked `proximity (required)` report only with a support term, in every mode. Rules marked `balanced`/`recall` only (K05) report a checksum value without a field name and never run in `strict`; the value must stand alone, not inside a longer number. Structure (K04): a JSON key, a `key: value`/`key=value` line, an XML element or attribute, a CSV header or a Markdown/HTML table header that a `field` rule accepts as its field name binds the value it holds to the rule in every mode, if the value matches the rule's value form in full; for the other rules a key of the label (or a counter-context key) that names exactly the value is its context (+25 or -30) instead of proximity. Obfuscation (K06): every rule also sees values behind zero-width characters, full-width forms and defanged separators (`[.]`, `(@)`) in every mode, and in `recall` also spelled-out e-mail separators (`[at]`, `ät`, `dot`, `punkt`) and numbers spaced character by character (-10); the span is the original text and the validator decides on the normalized value. Overlaps (K07): in `balanced` and `recall` overlapping findings of two different labels among `IBAN`, `CREDITCARD`, `FINANCIAL_ACCOUNT_NUMBER`, `STEUERID`, `PHONE`, `VAT_ID_IT`, `VAT_ID_FR` resolve to one: an IBAN wins, then the longer value, context that supports its own label, a checksum, the higher score, the earlier rule; a finding inside a printed IBAN form (`DE64 7172 …`) yields even when its check digits fail. `strict` keeps both labels and lists `CREDITCARD` and `FINANCIAL_ACCOUNT_NUMBER` findings inside a reported IBAN under `details.secondary_evidence` (T07); evaluations score primary findings only.
+In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `recall` a finding scores the rule base plus the validator strength (checksum 35, format 15, none 0) plus its context, capped at 100 and divided by 100: 25 when the rule binds the value to a field name, otherwise 25/20/15 for a support term of the label near the value and -30 when a counter-context term is nearer (see [PII score and modes](result-schema.md#pii-score-and-modes), [PII context lexicon](#pii-context-lexicon)). Rules marked `proximity (required)` report only with a support term, in every mode. Rules marked `balanced`/`recall` only (K05) report a checksum value without a field name and never run in `strict`; the value must stand alone, not inside a longer number. Structure (K04): a JSON key, a `key: value`/`key=value` line, an XML element or attribute, a CSV header or a Markdown/HTML table header that a `field` rule accepts as its field name binds the value it holds to the rule in every mode, if the value matches the rule's value form in full; for the other rules a key of the label (or a counter-context key) that names exactly the value is its context (+25 or -30) instead of proximity. Obfuscation (K06): every rule also sees values behind zero-width characters, full-width forms and defanged separators (`[.]`, `(@)`) in every mode, and in `recall` also spelled-out e-mail separators (`[at]`, `ät`, `dot`, `punkt`) and numbers spaced character by character (-10); the span is the original text and the validator decides on the normalized value. Overlaps (K07): in `balanced` and `recall` overlapping findings of two different labels among `IBAN`, `CREDITCARD`, `FINANCIAL_ACCOUNT_NUMBER`, `STEUERID`, `PHONE`, `VAT_ID_IT`, `VAT_ID_FR`, `VAT_ID_HR`, `VAT_ID_LT` resolve to one: an IBAN wins, then the longer value, context that supports its own label, a checksum, the higher score, the earlier rule; a finding inside a printed IBAN form (`DE64 7172 …`) yields even when its check digits fail. `strict` keeps both labels and lists `CREDITCARD` and `FINANCIAL_ACCOUNT_NUMBER` findings inside a reported IBAN under `details.secondary_evidence` (T07); evaluations score primary findings only.
 
 | Rule ID | Result entity group | Extra validator | Validator strength | Base | Context | Score (`balanced`/`recall`) |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -68,6 +68,17 @@ In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `
 | `pii_passport_number_de_legacy` | `PASSPORT_NUMBER` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.70–0.80 |
 | `pii_identity_card_number_de_context_free` | `IDENTITY_CARD_NUMBER` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
 | `pii_identity_card_number_de_legacy` | `IDENTITY_CARD_NUMBER` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.70–0.80 |
+| `pii_vat_id_bg` | `VAT_ID_BG` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
+| `pii_vat_id_cy` | `VAT_ID_CY` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
+| `pii_vat_id_cz` | `VAT_ID_CZ` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
+| `pii_vat_id_dk` | `VAT_ID_DK` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
+| `pii_vat_id_ee` | `VAT_ID_EE` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
+| `pii_vat_id_el` | `VAT_ID_EL` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
+| `pii_vat_id_fi` | `VAT_ID_FI` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
+| `pii_vat_id_hr` | `VAT_ID_HR` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
+| `pii_vat_id_hu` | `VAT_ID_HU` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
+| `pii_vat_id_ie` | `VAT_ID_IE` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
+| `pii_vat_id_lt` | `VAT_ID_LT` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
 
 ### PII context lexicon
 
@@ -111,6 +122,17 @@ The context engine reads these DE/EN entries of `rust/src/detectors/anchor_lexic
 | `VAT_ID_BE` | `pii.vat_identifier` |
 | `VAT_ID_IT` | `pii.vat_identifier` |
 | `VAT_ID_ES` | `pii.vat_identifier` |
+| `VAT_ID_BG` | `pii.vat_identifier` |
+| `VAT_ID_CY` | `pii.vat_identifier` |
+| `VAT_ID_CZ` | `pii.vat_identifier` |
+| `VAT_ID_DK` | `pii.vat_identifier` |
+| `VAT_ID_EE` | `pii.vat_identifier` |
+| `VAT_ID_EL` | `pii.vat_identifier` |
+| `VAT_ID_FI` | `pii.vat_identifier` |
+| `VAT_ID_HR` | `pii.vat_identifier` |
+| `VAT_ID_HU` | `pii.vat_identifier` |
+| `VAT_ID_IE` | `pii.vat_identifier` |
+| `VAT_ID_LT` | `pii.vat_identifier` |
 
 | Counter-context anchor | DE | EN |
 | --- | --- | --- |

@@ -66,6 +66,17 @@ const EXPECTED_ORDER: &[(&str, &str)] = &[
         "IDENTITY_CARD_NUMBER",
     ),
     ("pii_identity_card_number_de_legacy", "IDENTITY_CARD_NUMBER"),
+    ("pii_vat_id_bg", "VAT_ID_BG"),
+    ("pii_vat_id_cy", "VAT_ID_CY"),
+    ("pii_vat_id_cz", "VAT_ID_CZ"),
+    ("pii_vat_id_dk", "VAT_ID_DK"),
+    ("pii_vat_id_ee", "VAT_ID_EE"),
+    ("pii_vat_id_el", "VAT_ID_EL"),
+    ("pii_vat_id_fi", "VAT_ID_FI"),
+    ("pii_vat_id_hr", "VAT_ID_HR"),
+    ("pii_vat_id_hu", "VAT_ID_HU"),
+    ("pii_vat_id_ie", "VAT_ID_IE"),
+    ("pii_vat_id_lt", "VAT_ID_LT"),
 ];
 
 #[test]

@@ -277,6 +277,19 @@ entities:
   - {id: pii.nl.vat_id, scope: ark_only, ark: [VAT_ID_NL], presidio: [], corpora: {}}
   - {id: pii.be.vat_id, scope: ark_only, ark: [VAT_ID_BE], presidio: [], corpora: {}}
   - {id: pii.es.vat_id, scope: ark_only, ark: [VAT_ID_ES], presidio: [], corpora: {}}
+  # B02: VAT IDs part 2, one ID and one ARK label per country; Greece uses the VAT prefix EL in
+  # the label and the ISO country code in the ID.
+  - {id: pii.bg.vat_id, scope: ark_only, ark: [VAT_ID_BG], presidio: [], corpora: {}}
+  - {id: pii.cy.vat_id, scope: ark_only, ark: [VAT_ID_CY], presidio: [], corpora: {}}
+  - {id: pii.cz.vat_id, scope: ark_only, ark: [VAT_ID_CZ], presidio: [], corpora: {}}
+  - {id: pii.dk.vat_id, scope: ark_only, ark: [VAT_ID_DK], presidio: [], corpora: {}}
+  - {id: pii.ee.vat_id, scope: ark_only, ark: [VAT_ID_EE], presidio: [], corpora: {}}
+  - {id: pii.gr.vat_id, scope: ark_only, ark: [VAT_ID_EL], presidio: [], corpora: {}}
+  - {id: pii.fi.vat_id, scope: ark_only, ark: [VAT_ID_FI], presidio: [], corpora: {}}
+  - {id: pii.hr.vat_id, scope: ark_only, ark: [VAT_ID_HR], presidio: [], corpora: {}}
+  - {id: pii.hu.vat_id, scope: ark_only, ark: [VAT_ID_HU], presidio: [], corpora: {}}
+  - {id: pii.ie.vat_id, scope: ark_only, ark: [VAT_ID_IE], presidio: [], corpora: {}}
+  - {id: pii.lt.vat_id, scope: ark_only, ark: [VAT_ID_LT], presidio: [], corpora: {}}
 
   # ── presidio_only ──────────────────────────────────────────────────────
   - {id: pii.url, scope: presidio_only, ark: [], presidio: [URL], corpora: {presidio-evaluator-synth-v2: [DOMAIN_NAME], presidio-analyzer-recognizer-tests: [URL]}}
@@ -417,6 +430,17 @@ checksums:
     be_vat_id: {algorithm: 97 − (Nummer mod 97)}           # B01
     it_vat_id: {algorithm: Luhn}                           # B01, Partita IVA plus Amtscode
     es_vat_id: {algorithm: Kontrollzeichen mod 23 / CIF-Luhn}  # B01, NIF-IVA
+    bg_vat_id: {algorithm: "gewichtet 1…8 (3…10) mod 11 / EGN, LNCh, sonstige mod 11 bzw. mod 10"}  # B02, ИН по ДДС
+    cy_vat_id: {algorithm: Prüfbuchstabe mod 26}                  # B02, ΦΠΑ
+    cz_vat_id: {algorithm: gewichtet 8…2 mod 11 / Geburtsnummer mod 11}  # B02, DIČ
+    dk_vat_id: {algorithm: gewichtet 2-7-6-5-4-3-2-1 mod 11}       # B02, CVR
+    ee_vat_id: {algorithm: gewichtet 3-7-1 mod 10}                 # B02, KMKR
+    el_vat_id: {algorithm: gewichtet 2^n mod 11, country: gr}      # B02, ΑΦΜ mit Präfix EL
+    fi_vat_id: {algorithm: gewichtet 7-9-10-5-8-4-2-1 mod 11}      # B02, ALV
+    hr_vat_id: {algorithm: "ISO 7064 MOD 11,10"}                   # B02, OIB
+    hu_vat_id: {algorithm: gewichtet 9-7-3-1 mod 10}               # B02, közösségi adószám
+    ie_vat_id: {algorithm: Prüfbuchstabe gewichtet 8…2 mod 23}     # B02
+    lt_vat_id: {algorithm: "gewichtet 1…9 mod 11, zweite Stufe +2"}  # B02, PVM kodas
     de_passport_number: {algorithm: ICAO 9303 7-3-1, country: de}        # F08, Serie C F G H J K oder alt numerisch
     de_identity_card_number: {algorithm: ICAO 9303 7-3-1, country: de}   # F08, Serie L M N P R T V W X Y oder alt numerisch
   # Pattern-Recognizer mit validate_result in presidio_analyzer 2.2.364 (43 Stück, mit Presidio

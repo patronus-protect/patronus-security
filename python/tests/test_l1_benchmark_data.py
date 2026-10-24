@@ -39,11 +39,22 @@ PII_LABELS = {
     "USERNAME",
     "VAT_ID_AT",
     "VAT_ID_BE",
+    "VAT_ID_BG",
     "VAT_ID_CH",
+    "VAT_ID_CY",
+    "VAT_ID_CZ",
     "VAT_ID_DE",
+    "VAT_ID_DK",
+    "VAT_ID_EE",
+    "VAT_ID_EL",
     "VAT_ID_ES",
+    "VAT_ID_FI",
     "VAT_ID_FR",
+    "VAT_ID_HR",
+    "VAT_ID_HU",
+    "VAT_ID_IE",
     "VAT_ID_IT",
+    "VAT_ID_LT",
     "VAT_ID_NL",
 }
 
@@ -199,7 +210,7 @@ class L1BenchmarkDataTests(unittest.TestCase):
 
     def test_language_distribution_is_broad(self):
         expected = {
-            "pii_l1": {"de": 672, "en": 657, "fr": 29, "es": 28, "it": 38, "nl": 38},
+            "pii_l1": {"de": 804, "en": 767, "fr": 29, "es": 28, "it": 38, "nl": 38},
             "dlp_l1": {"de": 540, "en": 548},
         }
         for name, distribution in expected.items():

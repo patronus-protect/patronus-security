@@ -3,7 +3,7 @@
 //!
 //! In `balanced` and `recall` one value yields one label among the number labels
 //! that compete for the same digits (`overlap::COMPETING_LABELS`: IBAN, card,
-//! account, Steuer-ID, phone, Partita IVA, French VAT ID). Of two overlapping findings with different labels
+//! account, Steuer-ID, phone, VAT IDs of IT, FR, HR and LT). Of two overlapping findings with different labels
 //! the first in this order wins: an IBAN (country code and MOD-97 prove the kind
 //! of value), the longer value (a card-shaped part of an IBAN or a longer number
 //! is a coincidence), context that supports its own label (a field name such as
@@ -199,7 +199,9 @@ fn competing_labels_are_the_number_labels() {
             "PHONE",
             "STEUERID",
             "VAT_ID_FR",
-            "VAT_ID_IT"
+            "VAT_ID_HR",
+            "VAT_ID_IT",
+            "VAT_ID_LT"
         ])
     );
 }
@@ -237,6 +239,67 @@ fn a_french_vat_id_keeps_the_steuer_id_digits_inside_it() {
                 assert_eq!(overlap["yields_to"], "VAT_ID_FR", "{mode:?}: {text}");
             }
         }
+    }
+}
+
+/// Croatian VAT IDs (OIB) whose eleven digits after `HR ` are also an issued
+/// Steuer-ID.
+const HR_VAT_IDS_WITH_STEUER_ID_DIGITS: [&str; 3] = ["57419348408", "32678194777", "35009487265"];
+
+#[test]
+fn a_croatian_vat_id_keeps_the_steuer_id_digits_inside_it() {
+    // B02: the eleven digits of a spaced Croatian VAT ID can also be a context-free Steuer-ID. Like
+    // the French VAT ID and the Partita IVA the VAT ID is the longer value and wins; strict reports
+    // neither (both scored-only).
+    for digits in HR_VAT_IDS_WITH_STEUER_ID_DIGITS {
+        assert!(validators::steuer_id_issued(digits), "{digits}");
+        let value = format!("HR {digits}");
+        assert!(validators::hr_vat_id(&value), "{value}");
+        let text = format!("Invoice sent to {value} yesterday.");
+        assert!(
+            pii_result(&text, PiiMode::Strict)
+                .evidence_spans
+                .iter()
+                .all(|span| span.label != "VAT_ID_HR" && span.label != "STEUERID"),
+            "strict: {text}"
+        );
+        for mode in SCORED {
+            assert_eq!(
+                spans(&text, mode),
+                owned(&[("VAT_ID_HR", value.as_str())]),
+                "{mode:?}"
+            );
+            let overlap = overlap_of(&text, mode, "pii_steuer_id_de_context_free", digits);
+            assert_eq!(overlap["reason"], "longer_value", "{mode:?}: {text}");
+            assert_eq!(overlap["yields_to"], "VAT_ID_HR", "{mode:?}: {text}");
+        }
+    }
+}
+
+#[test]
+fn a_lithuanian_vat_id_keeps_the_card_digits_inside_it() {
+    // B02: the twelve digits of a spaced Lithuanian VAT ID (temporary taxpayer) can pass the card
+    // IIN, length and Luhn check. The VAT ID is the longer value and wins in the scored modes;
+    // strict reports no VAT ID and keeps its card finding bit-identical.
+    let digits = "621223427710";
+    assert!(validators::payment_card(digits));
+    let value = format!("LT {digits}");
+    assert!(validators::lt_vat_id(&value), "{value}");
+    let text = format!("Invoice sent to {value} yesterday.");
+    assert_eq!(
+        spans(&text, PiiMode::Strict),
+        owned(&[("CREDITCARD", digits)]),
+        "strict: {text}"
+    );
+    for mode in SCORED {
+        assert_eq!(
+            spans(&text, mode),
+            owned(&[("VAT_ID_LT", value.as_str())]),
+            "{mode:?}"
+        );
+        let overlap = overlap_of(&text, mode, "pii_credit_card", digits);
+        assert_eq!(overlap["reason"], "longer_value", "{mode:?}: {text}");
+        assert_eq!(overlap["yields_to"], "VAT_ID_LT", "{mode:?}: {text}");
     }
 }
 
