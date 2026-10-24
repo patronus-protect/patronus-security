@@ -220,12 +220,18 @@ class L1BenchmarkDataTests(unittest.TestCase):
                         self.assertEqual(row["text"][entity["start"] : entity["end"]], entity["text"], row["id"])
 
     def test_language_distribution_is_broad(self):
-        expected = {
-            "pii_l1": {"de": 945, "en": 914, "fr": 29, "es": 28, "it": 38, "nl": 38},
-            "dlp_l1": {"de": 554, "en": 562},
-        }
-        for name, distribution in expected.items():
-            self.assertEqual(Counter(row["language"] for row in load(name)), distribution)
+        # Shape, not exact totals: every new golden row used to change hard-coded counts here, so
+        # concurrent PII and DLP changes conflicted in this test on every merge.
+        for name in ("pii_l1", "dlp_l1"):
+            counts = Counter(row["language"] for row in load(name))
+            self.assertGreaterEqual(counts["de"], 100, name)
+            self.assertGreaterEqual(counts["en"], 100, name)
+            # Neither of the two main languages may fall far behind the other.
+            self.assertLessEqual(max(counts["de"], counts["en"]) / min(counts["de"], counts["en"]), 1.25, name)
+        pii = Counter(row["language"] for row in load("pii_l1"))
+        for language in ("fr", "es", "it", "nl"):
+            self.assertGreaterEqual(pii[language], 16, language)
+        self.assertLessEqual(set(pii), {"de", "en", "fr", "es", "it", "nl"})
 
     def test_derived_cases_point_to_existing_dynamic_pii_values(self):
         dynamic_rows = {row["id"]: row for row in load("dynamic_pii")}
