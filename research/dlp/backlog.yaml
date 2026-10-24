@@ -331,6 +331,7 @@ tasks:
     accept: Nested keys and arrays; same hard-negative shapes as K05 per format; no precision regression
 
   - id: K05C
+    status: done
     title: Config key→value extraction, part 3 (HCL, XML attributes/elements) reusing the K05 value-shape filter
     type: engine
     deps: [K05B]

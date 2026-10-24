@@ -143,7 +143,7 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   (24 Hex mit Zeitstempel 2009–2040), Template- und Formatfelder, Variablenreferenzen,
   Wahrheitswerte und Null-Wörter (DE/EN), Zahlen, Pfade und URLs ohne Zugangsdaten. Hex unter
   einem einfachen Credential-Schlüssel bleibt ein Secret (OAuth-Client-Secrets, Flask/Rails-
-  Secret-Keys). HCL/XML folgen in K05C.
+  Secret-Keys).
   Seit K05B (Teil 2) lesen dieselben Regeln YAML, JSON und TOML: Ein Schlüssel bindet seinen Wert
   in jeder Tiefe (eingerückte YAML-Mappings und Listeneinträge `- key: value`, verschachtelte
   JSON-Objekte, TOML-Tabellen), ein JSON-/TOML-String läuft bis zum schließenden Anführungszeichen
@@ -163,6 +163,28 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   `ENC[AES256_GCM,data:…]`, `$ANSIBLE_VAULT;…`); der Digest-Schlüssel eines Elements wird an
   seinem eigenen Schlüssel geprüft (`sha256_tokens`). Treffer tragen `structure` `yaml`, `json`
   oder `toml`; ein TOML-Skalar nach ungequotetem Schlüssel bleibt `properties` (K05).
+  Seit K05C (Teil 3) lesen dieselben Regeln HCL und XML. Ein Attribut in einem HCL-Block
+  (`resource "…" "…" {`, `provider "…" {`, `locals {`, auch in verschachtelten Blöcken, Objekten
+  und `jsonencode({ … })`) bindet seinen String in doppelten Anführungszeichen oder die Elemente
+  seines Arrays (`#`/`//`-Kommentare dazwischen); ein Wert ohne Anführungszeichen ist dort ein
+  Ausdruck (`var.db_password`, `random_password.db.result`) und bindet nichts. HOCON- und
+  Code-Blöcke ohne HCL-Kopf (`db {`, `function f() {`) bleiben `properties`. Ein
+  Terraform-/Packer-Block `variable "db_password" {` bindet seinen `default` über den
+  Variablennamen. In XML bindet ein Element, das der Schlüssel benennt, seinen Text auf der Zeile
+  (`<password>…</password>`, `<db:passwort>`, auch in CDATA), und ein Config-Element (`add`,
+  `entry`, `property`, `param`, `setting`, `string` …), dessen `key`- oder `name`-Attribut den
+  Schlüssel trägt, sein `value`-Attribut in beliebiger Reihenfolge oder seinen Text
+  (`<entry key="client_secret">…</entry>`, `<add value="…" key="ApiToken"/>`). Kein XML-Wert
+  sind Text mit Leerzeichen oder Markup, leere Elemente, HTML-Formularelemente
+  (`<input name="password" value="…">`) und XML in einem String oder Kommentar von Code
+  (`` Raw: `<password>…` ``, `"<token>"+t+"</token>"`, `/// <param name="token">`): Das Tag
+  beginnt seine Zeile oder folgt einem anderen Tag. Elementtext zählt wie ein gequoteter
+  Feldwert (`likeness::is_assignment_value`). Der Wertform-Filter prüft jeden Config-Wert unter
+  seinem gebundenen Schlüssel, auch wenn dieser nicht vor dem Wert steht
+  (`variable "passwort_sha256"`, `<hashed_password>`), und ein XML-`value`-Attribut unter seinem
+  `key`/`name`-Attribut (`<add key="PasswordSha256" value="…">`). Treffer tragen `structure`
+  `hcl` oder `xml`; die XML-Tag-Grammatik teilt sich K05C mit der Dokumentstruktur von PII K04
+  (`structure::xml_start_tag`, `structure::xml_attributes`).
   Seit K09 (Taxonomie v2) nennt jede Secret-Regel einen Untertyp ihrer Gruppe (`subtype` in
   `matched_rules`: `api_key`, `access_token`, `password`, `auth_url` …). Connection-Strings,
   Webhook-URLs, Auth-URLs, OTP-Secrets und Seed-Phrasen werden keine eigenen Gruppen, sondern

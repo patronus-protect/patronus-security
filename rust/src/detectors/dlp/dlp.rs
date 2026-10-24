@@ -858,7 +858,10 @@ impl NativeRegexDetector for DlpPipeline {
     /// not name a digest. A list binds its items only if every item passes,
     /// also the shape check of [`Self::allows_match`] (no UUID, digest or
     /// object id): a credential list holds no words, templates, tokenizer
-    /// entries or identifiers.
+    /// entries or identifiers. K05C adds HCL attributes and `variable`
+    /// defaults and XML elements and attributes; every value is shape-checked
+    /// under its bound key (a digest name in `variable "password_sha256"` or
+    /// `<hashed_password>`), which may stand apart from it.
     fn structured_values(
         &self,
         index: usize,
@@ -873,14 +876,20 @@ impl NativeRegexDetector for DlpPipeline {
         let mut failed_lists = Vec::new();
         values.retain(|config| {
             let binds = keys.binds(text, config, key_gate);
+            let key = &text[config.key.clone()];
+            // K05C: the shape check under the bound key, which need not stand
+            // before the value on its line.
+            let shaped = || {
+                !(self.tiers[index] == Some(OverlapTier::Generic)
+                    && rules::non_secret_shape_under(text, config.value.clone(), key).is_some())
+            };
             if !config.item {
-                return binds == Some(false);
+                return binds == Some(false) && shaped();
             }
             let passes = binds.is_some()
                 && rules::is_item_value(&text[config.value.clone()])
-                && !rules::key_names_digest(&text[config.key.clone()])
-                && !(self.tiers[index] == Some(OverlapTier::Generic)
-                    && rules::non_secret_shape(text, config.value.clone()).is_some());
+                && !rules::key_names_digest(key)
+                && shaped();
             if !passes {
                 failed_lists.push(config.key.start);
             }
