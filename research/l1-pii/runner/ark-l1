@@ -612,6 +612,14 @@ def land(number: int, head: str, wait_for_codex: bool = True) -> None:
     if threads:
         print(f"LAND_WAIT={label} {threads} unresolved review thread(s); the next run reviews them")
         return
+    # Only ever merge into main: a legacy stacked PR may still target an old task branch.
+    base = run(["gh", "pr", "view", str(number), "--repo", GH_REPO, "--json", "baseRefName", "--jq", ".baseRefName"])
+    if base != "main":
+        run(["gh", "pr", "edit", str(number), "--repo", GH_REPO, "--base", "main"], check=False)
+        base = run(["gh", "pr", "view", str(number), "--repo", GH_REPO, "--json", "baseRefName", "--jq", ".baseRefName"])
+    if base != "main":
+        print(f"LAND_WAIT={label} targets {base}, not main; the next restack retargets it")
+        return
     result = merge_async(number, head)
     if result == "merged":
         print(f"LANDED={label}")
@@ -936,7 +944,7 @@ def publish_head(cur: dict) -> str:
             cur["publish_of"] = cur["gated_commit"]
     if cached and cur.get("publish_of") == cur["gated_commit"]:
         return cached
-    head = (cur["gated_commit"] if task.get("type") in ("triage", "review")
+    head = (cur["gated_commit"] if task.get("type") in ("triage", "review", "restack")
             else done_commit(cur["gated_commit"], task))
     cur["publish_commit"], cur["publish_of"] = head, cur["gated_commit"]
     return head
@@ -963,8 +971,6 @@ def cmd_ci() -> int:
     if cur is None or not cur.get("gated_commit"):
         print("no gated run to check")
         return 3
-    if cur["task"].get("type") == "restack":
-        return 0  # the branch already has a PR; its CI runs on the force-push
     head = publish_head(cur)
     cur["publish_commit"] = head
     save(CURRENT, cur)
@@ -972,7 +978,7 @@ def cmd_ci() -> int:
         print(f"CI=green {head[:12]} (cached)")
         return 0
     try:
-        if cur["task"].get("type") == "review":
+        if cur["task"].get("type") in ("review", "restack"):
             # The PR branch exists; fast-forward it, but never over a push made in the meantime
             # (a server-side stack rebase after a merge below, or a person). The lease follows our own
             # last push: after a red round the branch sits at that fix, not at the original PR head.
@@ -1081,16 +1087,21 @@ def cmd_publish() -> int:
 def publish_restack(cur: dict) -> int:
     """Replace the conflicting branch with the gated rebase; the next `next` restacks the branches above."""
     task, branch, head = cur["task"], cur["branch"], cur["gated_commit"]
-    remote = git("ls-remote", "origin", f"refs/heads/{branch}").split()
-    if not remote or remote[0] != head:
-        # Lease on the head the rebase started from: a push by someone else in between wins.
-        git("push", "--quiet", f"--force-with-lease=refs/heads/{branch}:{task['old_head']}", "origin",
-            f"{head}:refs/heads/{branch}")
+    if cur.get("ci_green") != head:
+        # `ci` pushed the rebase (lease on the head it started from) and waits for GitHub CI.
+        print(f"PUBLISH_ERROR=GitHub CI not green on {head[:12]} (run `ark-l1 ci` first)")
+        return 1
     stack = load(STACK, {})
     stack[branch] = {"base": task["onto_name"], "base_sha": task["onto"]}
     save(STACK, stack)
     drop_worktree(cur)
     print(f"RESTACKED={branch}\nPR={task['pr']}")
+    try:
+        # Merge the rebased PR in this run instead of leaving it to a later auto-merge, before main
+        # moves again; open review threads keep it open for a REVIEW run.
+        land(int(task["pr"].rstrip("/").rsplit("/", 1)[-1]), head, wait_for_codex=False)
+    except (RuntimeError, ValueError) as err:
+        print(f"WARN=landing {task['pr']} failed: {str(err).strip().splitlines()[-1] if str(err).strip() else err}")
     return 0
 
 
