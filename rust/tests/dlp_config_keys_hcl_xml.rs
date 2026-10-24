@@ -202,6 +202,20 @@ fn xml_keyed_elements_bind_their_value_or_text() {
             "<resources>\n  <string name=\"lager_api_schluessel\">{0}</string>\n</resources>\n",
             "dlp_generic_credential_assignment",
         ),
+        // After a closed comment over several lines.
+        (
+            "<properties>\n  <!-- rotated\n       monthly -->\n  <entry key=\"client_secret\">{0}</entry>\n</properties>\n",
+            "dlp_generic_credential_assignment",
+        ),
+        // Another attribute between the key and the value.
+        (
+            "<appSettings>\n  <add key=\"ApiToken\" type=\"string\" value=\"{0}\" />\n</appSettings>\n",
+            "dlp_generic_credential_assignment",
+        ),
+        (
+            "<einstellungen>\n  <setting name=\"lager.passwort\" typ=\"text\" value=\"{0}\"/>\n</einstellungen>\n",
+            "dlp_password_assignment",
+        ),
     ] {
         assert_values(template, &[TOKEN_A], rule_id, Some("xml"));
     }
@@ -253,6 +267,10 @@ fn xml_non_secret_shapes_and_markup_are_silent() {
         "<password>\n  Tz8Wm4K93RVqe7xAb2Lp\n</password>\n",
         "<password><b>Tz8Wm4K93RVqe7xAb2Lp</b></password>\n",
         "<button value=\"Tz8Wm4K93RVqe7xAb2Lp\" name=\"token\">Go</button>\n",
+        "<input name=\"login\" type=\"password\" value=\"Tz8Wm4K93RVqe7xAb2Lp\">\n",
+        // XML in a comment over several lines.
+        "<appSettings>\n  <!--\n  <add key=\"ApiToken\" type=\"string\" value=\"Tz8Wm4K93RVqe7xAb2Lp\" />\n  -->\n</appSettings>\n",
+        "<!-- alte Zugangsdaten:\n<datenbank>\n  <passwort>Tz8Wm4K93RVqe7xAb2Lp</passwort>\n</datenbank>\n-->\n",
     ]);
 }
 

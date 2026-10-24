@@ -42,6 +42,7 @@
 //! value="…"/>`) binds its `value` attribute in any order or its text. Element
 //! text with blanks or markup inside, empty elements, HTML form elements and
 //! XML inside a string or comment of code bind nothing.
+use std::cell::OnceCell;
 use std::ops::Range;
 use std::sync::LazyLock;
 
@@ -131,6 +132,7 @@ pub(crate) fn config_values(text: &str, key: &Regex) -> Vec<ConfigValue> {
     let mut config_line_at = None;
     // Header fields need a start line; most texts have none.
     let http = text.starts_with("HTTP/") || text.contains(" HTTP/") || text.contains("\nHTTP/");
+    let xml_comments = OnceCell::new();
     for found in key.find_iter(text) {
         let line = line_at(text, found.start());
         if last_line != Some(line.start) {
@@ -146,7 +148,7 @@ pub(crate) fn config_values(text: &str, key: &Regex) -> Vec<ConfigValue> {
             }
         }
         if config_line_at != Some(line.start) {
-            let nested = nested_values(text, &line, found.range());
+            let nested = nested_values(text, &line, found.range(), &xml_comments);
             values.extend(
                 nested
                     .into_iter()
@@ -314,11 +316,17 @@ const MAX_QUOTED_KEY: usize = 64;
 
 /// K05B: the YAML, JSON or TOML values bound by the key that holds `found`
 /// on `line`: a scalar, or the string items of an array or sequence.
-fn nested_values(text: &str, line: &Range<usize>, found: Range<usize>) -> Vec<ConfigValue> {
+/// `xml_comments` caches the XML comments of `text` ([`in_xml_comment`]).
+fn nested_values(
+    text: &str,
+    line: &Range<usize>,
+    found: Range<usize>,
+    xml_comments: &OnceCell<Vec<Range<usize>>>,
+) -> Vec<ConfigValue> {
     if let Some(values) = variable_default(text, line, &found) {
         return values;
     }
-    if let Some(value) = xml_value(text, &found) {
+    if let Some(value) = xml_value(text, &found, xml_comments) {
         return vec![value];
     }
     if let Some(key) = quoted_key(text, line, &found) {
@@ -874,31 +882,33 @@ const XML_KEYED_ELEMENTS: &[&str] = &[
 /// key, or that element's `value` attribute in any order (`<add value="…"
 /// key="ApiToken"/>`). The tag starts its line or follows another tag: XML
 /// in a string or comment of code (`` Raw: `<password>…` ``,
-/// `"<token>"+token+"</token>"`, `/// <param name="token">`) is none.
-fn xml_value(text: &str, found: &Range<usize>) -> Option<ConfigValue> {
+/// `"<token>"+token+"</token>"`, `/// <param name="token">`) and in an XML
+/// comment (`<!--` on a line above) is none.
+fn xml_value(
+    text: &str,
+    found: &Range<usize>,
+    xml_comments: &OnceCell<Vec<Range<usize>>>,
+) -> Option<ConfigValue> {
     let (open, tag) = structure::xml_start_tag_before(text, found.start)?;
     if found.end > tag.end {
         return None;
     }
     let line_start = text[..open].rfind('\n').map_or(0, |index| index + 1);
     let head = text[line_start..open].trim_end_matches([' ', '\t']);
-    if !(head.is_empty() || head.ends_with('>')) {
+    if !(head.is_empty() || head.ends_with('>')) || in_xml_comment(text, open, xml_comments) {
         return None;
     }
     let (key, value) = if tag.name.start <= found.start && found.end <= tag.name.end {
         (tag.name.clone(), element_text(text, open, &tag)?)
     } else {
-        if !XML_KEYED_ELEMENTS
-            .iter()
-            .any(|element| text[tag.name.clone()].eq_ignore_ascii_case(element))
-        {
+        if !is_keyed_element(text, &tag) {
             return None;
         }
         let mut key = None;
         let mut value = None;
         for (name, attribute) in structure::xml_attributes(text, tag.attributes.clone()) {
             let name = &text[name];
-            if (name.eq_ignore_ascii_case("key") || name.eq_ignore_ascii_case("name"))
+            if is_key_attribute(name)
                 && attribute.start <= found.start
                 && found.end <= attribute.end
             {
@@ -919,6 +929,62 @@ fn xml_value(text: &str, found: &Range<usize>) -> Option<ConfigValue> {
         format: ConfigFormat::Xml,
         item: false,
     })
+}
+
+/// K05C: whether `tag` is a keyed element ([`XML_KEYED_ELEMENTS`]).
+fn is_keyed_element(text: &str, tag: &structure::XmlStartTag) -> bool {
+    XML_KEYED_ELEMENTS
+        .iter()
+        .any(|element| text[tag.name.clone()].eq_ignore_ascii_case(element))
+}
+
+/// K05C: whether an attribute named `name` holds the key of a keyed element.
+fn is_key_attribute(name: &str) -> bool {
+    name.eq_ignore_ascii_case("key") || name.eq_ignore_ascii_case("name")
+}
+
+/// K05C: whether the value at `value_start` of `text` is the `value`
+/// attribute of a keyed element ([`XML_KEYED_ELEMENTS`]) with a `key` or
+/// `name` attribute, in any order (`<add key="ApiToken" type="string"
+/// value="…"/>`); an HTML form element (`<input name="login"
+/// type="password" value="…">`) is none.
+pub(crate) fn is_keyed_xml_value(text: &str, value_start: usize) -> bool {
+    let Some((_, tag)) = structure::xml_start_tag_before(text, value_start) else {
+        return false;
+    };
+    if value_start >= tag.end || !is_keyed_element(text, &tag) {
+        return false;
+    }
+    let (mut key, mut value) = (false, false);
+    for (name, attribute) in structure::xml_attributes(text, tag.attributes.clone()) {
+        let name = &text[name];
+        key |= is_key_attribute(name);
+        value |= name.eq_ignore_ascii_case("value") && attribute.start == value_start;
+    }
+    key && value
+}
+
+/// K05C: whether `at` of `text` lies in an XML comment (`<!-- … -->`, also
+/// over several lines; an unclosed one runs to the end). The comments are
+/// found once per text, on first use, in `comments`.
+fn in_xml_comment(text: &str, at: usize, comments: &OnceCell<Vec<Range<usize>>>) -> bool {
+    let comments = comments.get_or_init(|| {
+        let mut comments = Vec::new();
+        let mut from = 0;
+        while let Some(start) = text[from..].find("<!--").map(|index| from + index) {
+            let body = start + "<!--".len();
+            let end = text[body..]
+                .find("-->")
+                .map_or(text.len(), |index| body + index + "-->".len());
+            comments.push(start..end);
+            from = end;
+        }
+        comments
+    });
+    let index = comments.partition_point(|comment| comment.end <= at);
+    comments
+        .get(index)
+        .is_some_and(|comment| comment.start <= at)
 }
 
 /// K05C: the text of the element whose start tag opens at `open`, on the
@@ -1275,6 +1341,10 @@ mod tests {
             ),
             vec![("db.password", "Ef3", Xml, false), ("ApiToken", "Gh4", Xml, false)]
         );
+        assert_eq!(
+            nested("<!-- a\n b --><add key=\"token\" type=\"x\" value=\"Ij5\"/>\n"),
+            vec![("token", "Ij5", Xml, false)]
+        );
         for text in [
             "<password/>\n",
             "<password></password>\n",
@@ -1289,6 +1359,8 @@ mod tests {
             "Raw: `<password>Kx7</password>`,\n",
             "\"<token>\"+token+\"</token>\",\n",
             "<!-- <password>Kx7</password> -->\n",
+            "<!--\n<password>Kx7</password>\n-->\n",
+            "<!-- a -->\n<!--\n  <add key=\"token\" value=\"Kx7\"/>\n",
         ] {
             assert_eq!(nested(text), vec![], "{text}");
         }
