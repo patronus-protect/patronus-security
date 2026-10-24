@@ -71,7 +71,7 @@ pub(super) const SSN_CONTEXT_FREE: PiiPattern = PiiPattern {
     name: "pii_ssn_us_context_free",
     pattern: concat!(r"(?-u:\b)", ssn_grouped!(), r"(?-u:\b)"),
     entity_group: "SSN",
-    validator: Some(validators::us_ssn),
+    validator: Some(validators::us_ssn_context_free),
     strength: ValidatorStrength::Format,
     base_score: 35,
     captured_value: false,

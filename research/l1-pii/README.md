@@ -170,7 +170,9 @@ ohne Trenner in jedem Modus, wenn ein SSN-Begriff nah am Wert steht (`Social Sec
 `Als SSN ist … hinterlegt`) oder sein Strukturschlüssel ist (`"ssn":`, `ssn=`, `<SSN>`, CSV-Spalte);
 `pii_ssn_us_context_free` meldet die gruppierte Form ohne Begriff nur in `balanced`/`recall` (Score
 0,50, wie presidio-analyzer kontextfrei). Sie ist die einzige Formatregel unter den `scored_only`-Regeln:
-Trenner und SSA-Bereiche ersetzen die Prüfziffer. Ein näherer Gegenkontext-Begriff (Bestell-, Referenz-,
+Trenner und SSA-Bereiche ersetzen die Prüfziffer. Ohne Begriff verwirft sie zusätzlich die
+Platzhalter, die presidio-analyzer in jedem Kontext verwirft (`validators::us_ssn_context_free`: eine
+wiederholte Ziffer wie `111-11-1111`, die Zählfolge `123-45-6789`). Ein näherer Gegenkontext-Begriff (Bestell-, Referenz-,
 Teilenummer) unterdrückt beide in jedem Modus. Der SSA-Validator ist unverändert; `987-65-4322` und
 `219-09-9999` (presidio-analyzer-Tests) bleiben deshalb FN, ebenso neun blanke Ziffern ohne Begriff
 (`078051121`). Damit liegt `presidio_favored` im Dev-Split höchstens bei 75,0 gegen tuned 88,9.

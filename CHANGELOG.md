@@ -57,7 +57,9 @@ result shapes may be breaking for downstream users, and is called out explicitly
   key (`"ssn": …`, `ssn=…`, `<SSN>`, a CSV column); `pii_ssn_us_context_free` reports the grouped
   form without a term in `balanced` and `recall` only (score 0.50, as presidio-analyzer reports it
   context-free). It is the one format-only `scored_only` rule: the separators and SSA ranges stand
-  in for a check digit. A nearer counter-context term (order, reference, invoice, tracking, part or
+  in for a check digit, and without a term `validators::us_ssn_context_free` also rejects the
+  placeholders presidio-analyzer rejects in any context (one repeated digit as in `111-11-1111`, the
+  counting sequence `123-45-6789`). A nearer counter-context term (order, reference, invoice, tracking, part or
   serial number) suppresses both in every mode. `context::stands_alone` accepts a `+` after a letter
   or another `+` as an EDIFACT element separator (`NAD+SU+341-33-4328`, `LIN+1++…`); a `+` that
   opens a number still rejects the value. **Detection change:** in `strict` grouped values and nine
@@ -71,7 +73,7 @@ result shapes may be breaking for downstream users, and is called out explicitly
   presidio_favored balanced 57.1 → 75.0 (tuned 88.9, capped at 75.0 by the unchanged validator);
   ark_authored 90.6 → 98.2 strict, 100.0 balanced. L1 F1 balanced +0.3 pp (neutral +0.4,
   presidio_favored +0.7). The golden known gap `Die SSN des US-Mitarbeiters ist …` closes;
-  `pii_l1.jsonl` gains 58 rows. Both regexes use ASCII
+  `pii_l1.jsonl` gains 68 rows. Both regexes use ASCII
   boundaries and digits and stay on the DFA: 0.10–0.16 ms per rule on the 100 KiB workloads;
   best-of-15 full PII scans base → head DE strict 119.8 → 114.8 ms, EN strict 26.0 → 24.8 ms (noise);
   `latency.py compare --engine ark-native` 100 KiB p95 133.3 → 145.9 ms (+9.5 %, PASS; p50 38.0 →
