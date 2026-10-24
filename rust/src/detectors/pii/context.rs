@@ -633,12 +633,13 @@ pub(super) fn key_holds_term(
 }
 
 /// Whether the value at `value` (byte range) stands alone rather than continuing
-/// a number: no `+` right before it, no `-`, `/`, `.` or `,` joining it to a digit
-/// on either side, and no digit group one space away (`+49 30 123 456 789`). A
-/// context-free value (K05) has no field name that delimits it. A value that
-/// starts with a letter (the country prefix of a VAT ID, B01) is no decimal and
-/// no digit group: `,` and a space delimit it, so `…,17810,DE396839779,150279-0487,…`
-/// in a CSV row stands alone.
+/// a number: no `+` that opens a phone number right before it, no `-`, `/`, `.` or
+/// `,` joining it to a digit on either side, and no digit group one space away
+/// (`+49 30 123 456 789`). A `+` after a letter or another `+` separates EDIFACT
+/// elements (`NAD+SU+341-33-4328`, `LIN+1++…`, B-SSN). A context-free value (K05)
+/// has no field name that delimits it. A value that starts with a letter (the
+/// country prefix of a VAT ID, B01) is no decimal and no digit group: `,` and a
+/// space delimit it, so `…,17810,DE396839779,150279-0487,…` in a CSV row stands alone.
 pub(super) fn stands_alone(text: &str, value: Range<usize>) -> bool {
     let digit = |ch: Option<char>| ch.is_some_and(|ch| ch.is_ascii_digit());
     let numeric = digit(text[value.clone()].chars().next());
@@ -647,7 +648,8 @@ pub(super) fn stands_alone(text: &str, value: Range<usize>) -> bool {
     let mut after = text[value.end..].chars();
     let (prev, prev2) = (before.next(), before.next());
     let (next, next2) = (after.next(), after.next());
-    !(prev == Some('+')
+    let element_separator = prev2.is_some_and(|ch| ch.is_ascii_alphabetic() || ch == '+');
+    !((prev == Some('+') && !element_separator)
         || (prev.is_some_and(joins) && digit(prev2))
         || (next.is_some_and(joins) && digit(next2))
         || (numeric && prev == Some(' ') && digit(prev2))

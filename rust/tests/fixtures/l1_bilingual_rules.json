@@ -713,6 +713,39 @@
   },
   {
     "category": "pii",
+    "rule_id": "pii_ssn_us_proximity",
+    "de": "Als SSN ist 422-68-7360 hinterlegt.",
+    "en": "Note: The Social Security Number (SSN) 861-18-8883 is not required.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Bestellnummer 123-45-6789 ist versandt.",
+        "Teilenummer 401-12-7788",
+        "Artikelnummer 401127789"
+      ],
+      "en": [
+        "Order number 123-45-6789 has shipped.",
+        "Release 523-41-1234 is out.",
+        "Send the form for 401127789 today."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_ssn_us_context_free",
+    "de": "Angaben zum US-Mitarbeiter: 219-09-9998",
+    "en": "NAD+SU+341-33-4328::735 Kyle Camp+Apt 3",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Seine SSN lautet 532-87-1094.",
+        "en": "536-90-4421 is my SSN."
+      }
+    }
+  },
+  {
+    "category": "pii",
     "rule_id": "pii_ni_uk",
     "de": "Britische Sozialversicherungsnummer: AB123456C",
     "en": "National insurance number: AB123456C",

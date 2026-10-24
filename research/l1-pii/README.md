@@ -164,6 +164,21 @@ der Formate trägt eine Prüfziffer (M3 unverändert); ein Wert ohne Führersche
 jedem Modus negativ, auch die blanken Werte der presidio-analyzer-Tests (`H12234567`, `KO12345678X`).
 Der UK-Führerschein (`MORGA657054SM9IJ`, 5 der 14 `presidio_favored`-Gold-Werte) kommt mit B-UK.
 
+Stand B-SSN: US-SSN (T25, F07, Baseline P1) hat neben der feldgebundenen Regel zwei weitere:
+`pii_ssn_us_proximity` meldet `AAA-GG-SSSS` (Bindestrich, Punkt oder Leerzeichen) und neun Ziffern
+ohne Trenner in jedem Modus, wenn ein SSN-Begriff nah am Wert steht (`Social Security Number (SSN) …`,
+`Als SSN ist … hinterlegt`) oder sein Strukturschlüssel ist (`"ssn":`, `ssn=`, `<SSN>`, CSV-Spalte);
+`pii_ssn_us_context_free` meldet die gruppierte Form ohne Begriff nur in `balanced`/`recall` (Score
+0,50, wie presidio-analyzer kontextfrei). Sie ist die einzige Formatregel unter den `scored_only`-Regeln:
+Trenner und SSA-Bereiche ersetzen die Prüfziffer. Ohne Begriff verwirft sie zusätzlich die
+Platzhalter, die presidio-analyzer in jedem Kontext verwirft (`validators::us_ssn_context_free`: eine
+wiederholte Ziffer wie `111-11-1111`, die Zählfolge `123-45-6789`). Ein näherer Gegenkontext-Begriff (Bestell-, Referenz-,
+Teilenummer) unterdrückt beide in jedem Modus. Der SSA-Validator ist unverändert; `987-65-4322` und
+`219-09-9999` (presidio-analyzer-Tests) bleiben deshalb FN, ebenso neun blanke Ziffern ohne Begriff
+(`078051121`). Damit liegt `presidio_favored` im Dev-Split höchstens bei 75,0 gegen tuned 88,9.
+`context::stands_alone` lässt ein `+` nach Buchstabe oder `+` als EDIFACT-Trenner gelten
+(`NAD+SU+341-33-4328`).
+
 Stand B02: ARK 24, gemeinsam 7. Dazu kommen die USt-IdNr. von BG, CY, CZ, DK, EE, EL, FI, HR, HU, IE
 und LT, gleiche Struktur wie B01 (je Land ein Label `VAT_ID_BG` … und ein Validator mit Prüfziffer,
 nur in `balanced`/`recall`), alle `ark_only`; Griechenland trägt im Label das MwSt.-Präfix `EL`, in

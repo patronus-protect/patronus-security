@@ -597,6 +597,14 @@ pub fn us_ssn(s: &str) -> bool {
         && digits != "219099999"
 }
 
+/// A grouped SSN without an SSN term (B-SSN): the SSA ranges of [`us_ssn`] and
+/// none of the placeholder values presidio-analyzer rejects as well, one digit
+/// repeated (`111-11-1111`) or the counting sequence `123-45-6789`.
+pub fn us_ssn_context_free(s: &str) -> bool {
+    let digits = s.bytes().filter(u8::is_ascii_digit).collect::<Vec<_>>();
+    us_ssn(s) && digits.iter().any(|&digit| digit != digits[0]) && digits != b"123456789"
+}
+
 pub fn uk_nino(s: &str) -> bool {
     let normalized = s.replace(' ', "").to_ascii_uppercase();
     if normalized.len() != 9 {
