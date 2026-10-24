@@ -1,0 +1,2 @@
+# Concurrent PRs append bullets under [Unreleased]; keep both sides when rebasing.
+CHANGELOG.md merge=union
