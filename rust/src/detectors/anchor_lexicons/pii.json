@@ -2055,18 +2055,54 @@
       "national_insurance_number",
       "national insurance no",
       "national-insurance-no",
-      "national_insurance_no"
+      "national_insurance_no",
+      "national insurance",
+      "ni number",
+      "ni-number",
+      "ni_number",
+      "ni no"
     ],
     "de": [
       "britische sozialversicherungsnummer",
       "britische-sozialversicherungsnummer",
-      "britische_sozialversicherungsnummer"
+      "britische_sozialversicherungsnummer",
+      "ni-nummer",
+      "ni nummer",
+      "ni_nummer",
+      "ni-nr"
     ],
     "shared": [
       "nino"
     ],
     "sources": [
       "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.nhs_number",
+    "description": "Britische NHS-Nummer",
+    "en": [
+      "nhs number",
+      "nhs-number",
+      "nhs_number",
+      "nhs no",
+      "nhs-no",
+      "nhs_no",
+      "national health service number"
+    ],
+    "de": [
+      "nhs-nummer",
+      "nhs nummer",
+      "nhs_nummer",
+      "nhsnummer",
+      "nhs-nr",
+      "nhs nr"
+    ],
+    "shared": [
+      "nhs"
+    ],
+    "sources": [
+      "rust/src/detectors/pii/uk.rs"
     ]
   },
   {

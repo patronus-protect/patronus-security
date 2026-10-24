@@ -279,9 +279,10 @@ and `obfuscation` (`zero_width`, `full_width`, `defanged`, `spelled_out`, `space
 be a valid card number, and an account field can hold an IBAN or a card-shaped number. Since B-PAN
 a card needs Luhn plus the IIN prefix and a length of its brand and never starts right after `+`,
 so phone digits no longer compete as a card. In `balanced` and `recall` one value yields one label among `IBAN`,
-`CREDITCARD`, `FINANCIAL_ACCOUNT_NUMBER`, `STEUERID`, `PHONE`, `VAT_ID_IT`, `VAT_ID_FR`, `VAT_ID_HR`
-and `VAT_ID_LT` (a bare Partita IVA and the digits of a spaced French or Croatian VAT ID have 11
-digits like a Steuer-ID, B01/B02; the twelve digits of a Lithuanian one can be card-shaped, B02).
+`CREDITCARD`, `FINANCIAL_ACCOUNT_NUMBER`, `STEUERID`, `PHONE`, `VAT_ID_IT`, `VAT_ID_FR`, `VAT_ID_HR`,
+`VAT_ID_LT`, `VAT_ID_LV` and `NHS_NUMBER` (a bare Partita IVA and the digits of a spaced French or
+Croatian VAT ID have 11 digits like a Steuer-ID, B01/B02; the twelve digits of a Lithuanian one can be
+card-shaped, B02; an NHS number in 3-3-4 groups is also a US phone number, B-UK).
 Of two overlapping findings
 with different labels the first criterion that differs decides: an IBAN (`iban`), the longer
 value (`longer_value`: a card-shaped part of a longer value), context that supports the finding's
@@ -350,7 +351,12 @@ check digit (`F12345671`, `L01X00T44`) or the MRZ form of nine plus the check di
 `T220001293`); `0.55` bare, `0.80` with a document term such as `Pass-Nr.` or `Ausweis-Nr.`. A bare
 value of a field that names something else is not reported (`DEA-Nummer: RN4135883`, a
 `driver_license_number` column). The old numeric serial of ten digits (`1220001297`) needs such a
-term or key. The field-bound rules keep
+term or key. Three format rules are scored-only too (B-SSN, B-UK), their issuing rules standing in
+for a check digit, and score `0.50` bare: the grouped US SSN, a UK National Insurance number in one
+letter case (`AB123456C`, `AB 12 34 56 C`, `hh 01 02 03 d`; `NATIONALID`) and a UK driving licence
+(`MORGA657054SM9IJ`: surname, birth date, initials; `DRIVER_LICENSE_NUMBER`). The UK NHS number
+(`NHS_NUMBER`, mod-11 check digit: `943 476 5919`, `943-476-5919`, `9434765919`) and a UK passport
+number (`AB1234567`) need an NHS or passport term or key in every mode. The field-bound rules keep
 their format check in every mode, since a printed nine-character serial carries no check digit. A context-bound rule (`pii_phone_de_national_proximity`: a national number such as
 `ist unter 0176 90817263 erreichbar`) reports only with a support term and no nearer counter term,
 in every mode including `strict`, and then scores at least `0.50`. Validators decide in every

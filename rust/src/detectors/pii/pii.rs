@@ -36,9 +36,11 @@ pub struct PiiPattern {
     pub requires_context: bool,
     /// Emit only in the scored modes `balanced` and `recall`; `strict` never runs
     /// the rule (K05). Reserved for unbound checksum rules: the bare form of a
-    /// value that strict reports only after its field name. The grouped US SSN
-    /// is the one format rule here (B-SSN): its separators and SSA ranges stand
-    /// in for a check digit.
+    /// value that strict reports only after its field name. Three format rules
+    /// are here because their issuing rules stand in for a check digit: the
+    /// grouped US SSN (B-SSN: separators and SSA ranges), the UK NINO (issued
+    /// prefixes and suffixes, one letter case) and the UK driving licence
+    /// (surname, birth date and initials, B-UK).
     pub scored_only: bool,
 }
 
@@ -86,11 +88,16 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     driver_license::DE,
     driver_license::US,
     driver_license::IT,
+    driver_license::UK,
+    driver_license::UK_CONTEXT_FREE,
     de::KFZ_KENNZEICHEN,
     us::SSN,
     us::SSN_PROXIMITY,
     us::SSN_CONTEXT_FREE,
     uk::NINO,
+    uk::NINO_CONTEXT_FREE,
+    uk::NHS_NUMBER,
+    uk::PASSPORT_NUMBER,
     vat::VAT_ID_DE,
     vat::VAT_ID_AT,
     vat::VAT_ID_CH,
@@ -547,9 +554,11 @@ impl NativeRegexDetector for PiiPipeline {
                 context::opens_phone_number(text, captures.get(0).unwrap().start())
             }
             "pii_credit_card" => context::card_position(text, captures.get(0).unwrap().range()),
-            // An SSN term near the value does not make a fragment of a longer
-            // number (`401127789-0`) an SSN.
-            "pii_ssn_us_proximity" => context::stands_alone(text, captures.get(0).unwrap().range()),
+            // A term near the value does not make a fragment of a longer number
+            // (`401127789-0`) an SSN, an NHS or a passport number.
+            "pii_ssn_us_proximity" | "pii_nhs_number_uk" | "pii_passport_number_uk" => {
+                context::stands_alone(text, captures.get(0).unwrap().range())
+            }
             "pii_passport_number_de_context_free" | "pii_identity_card_number_de_context_free" => {
                 !context::foreign_field(
                     prepared.structure(),

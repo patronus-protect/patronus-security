@@ -82,6 +82,38 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- United Kingdom identifiers (B-UK: A07, baseline P6, candidate C4). New label `NHS_NUMBER`:
+  `pii_nhs_number_uk` reports ten digits with the NHS mod-11 check digit (`943 476 5919`,
+  `943-476-5919`, `9434765919`; `validators::uk_nhs_number`, which also rejects check digit 10
+  and one repeated digit) in every mode when an NHS term (`NHS number`, `NHS-Nummer`, `NHS`)
+  stands near the value or is its key; ten digits in phone groups pass mod 11 one time in eleven,
+  so there is no context-free form. `NHS_NUMBER` competes with `PHONE` in `balanced`/`recall`
+  (K07), where the NHS term decides; `strict` keeps both labels (T07). `pii_ni_uk` now reads a
+  NINO in pairs (`AB 12 34 56 C`) and after `NI number`, `NI No.`, `National insurance no` and
+  `NI-Nummer`, in any case; its validator `validators::uk_nino` is unchanged, so prefixes and
+  letters HMRC never issues (`BG`, `NT`, `FQ …`, `UV …`) stay negative. `pii_ni_uk_context_free`
+  reports a bare NINO in one letter case (`AB123456C`, `hh 01 02 03 d`, `tw987654a`;
+  `validators::uk_nino_context_free`) in `balanced`/`recall` only, at 0.50.
+  `pii_passport_number_uk` reports two letters and seven digits (`AB1234567`) next to a passport
+  term or under a passport key in every mode. `pii_driver_license_number_uk` binds a UK driving
+  licence (`MORGA657054SM9IJ`: surname, birth date with month + 50 for women, initials;
+  `validators::uk_driver_license_number`, format only) to the shared licence field part in every
+  mode, and `pii_driver_license_number_uk_context_free` reports it bare in `balanced`/`recall`
+  at 0.50. NINO and licence join the grouped SSN as format-only `scored_only` rules: their issuing
+  rules stand in for a check digit. The lexicon gains `pii.nhs_number` and NI terms. M3 count
+  (`count_validated.py`) ARK 35 → 36 (`pii.uk.nhs_number`, now `shared`). **Detection change:**
+  in `strict` NHS numbers with a term, NINOs in pairs or after the new field names, UK passports
+  with a term and UK licences after a licence field name are new findings; in `balanced`/`recall`
+  also bare NINOs and UK licences. Dev scoreboard vs. base (PASS in strict and balanced, no new
+  hard-negative FP): balanced L1 F1 +1.6 pp (neutral +0.3, presidio_favored +1.4); driver's
+  licence presidio_favored balanced 62.5 → 95.2 (Presidio tuned 90.0); NINO presidio_favored
+  balanced 0.0 → 66.7 exact, 100.0 overlap (tuned 100.0: its gold span ` YZ 61 48 68 B` keeps
+  the leading space of Presidio's regex, baseline P10); NHS number all families 0.0 → 94.0;
+  phone balanced +2.0 (synthetic NHS values no longer read as phones). The new regexes use ASCII boundaries and stay on
+  the DFA; `latency.py compare --engine ark-native` 100 KiB p95 134.0 → 129.0 ms (−3.7 %, PASS;
+  p50 32.0 → 35.3 ms, noise). Golden eval: 1091/1091 positives, 996/996 hard negatives;
+  `pii_l1.jsonl` gains 128 rows and the known gap `NI number: JK 55 66 77 B` closes.
+
 - US Social Security Numbers beyond the field name (B-SSN: T25, F07; baseline P1). Two rules join
   the field-bound `pii_ssn_us` in `rust/src/detectors/pii/us.rs`. `pii_ssn_us_proximity` reports
   `AAA-GG-SSSS` (hyphens, dots or spaces) and nine digits without separators in every mode when an
