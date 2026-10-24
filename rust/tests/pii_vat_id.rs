@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
-//! VAT identification numbers, part 1: DE, AT, CH, FR, NL, BE, IT, ES (B01).
+//! VAT identification numbers, part 1: DE, AT, CH, FR, NL, BE, IT, ES (B01);
+//! part 3: LU, LV, MT, PL, PT, RO, SE, SI, SK, NO, GB (B16).
 //!
 //! Each country has its own label (`VAT_ID_DE` …) and validator with a real check
-//! digit, so each counts as one M3 unit. The rules are scored-only (K05): strict
+//! digit, so each counts as one M3 unit. Northern Ireland (`XI`) shares the UK
+//! label and validator. The rules are scored-only (K05): strict
 //! stays bit-identical, `balanced` and `recall` report a prefixed VAT ID without a
 //! field name (`DE136695976`, `CHE-100.155.212 MWST`, `FR 40 303 265 045`). A bare
 //! Partita IVA (11 digits without `IT`) needs a VAT term nearby or as its key. A
@@ -57,7 +59,7 @@ const SCORED: [PiiMode; 2] = [PiiMode::Balanced, PiiMode::Recall];
 type Validator = fn(&str) -> bool;
 
 /// Rule, label and validator of every VAT rule, in registry order.
-const RULES: [(&str, &str, Validator); 9] = [
+const RULES: [(&str, &str, Validator); 20] = [
     ("pii_vat_id_de", "VAT_ID_DE", validators::de_vat_id),
     ("pii_vat_id_at", "VAT_ID_AT", validators::at_vat_id),
     ("pii_vat_id_ch", "VAT_ID_CH", validators::ch_vat_id),
@@ -71,6 +73,17 @@ const RULES: [(&str, &str, Validator); 9] = [
         validators::it_vat_id,
     ),
     ("pii_vat_id_es", "VAT_ID_ES", validators::es_vat_id),
+    ("pii_vat_id_lu", "VAT_ID_LU", validators::lu_vat_id),
+    ("pii_vat_id_lv", "VAT_ID_LV", validators::lv_vat_id),
+    ("pii_vat_id_mt", "VAT_ID_MT", validators::mt_vat_id),
+    ("pii_vat_id_pl", "VAT_ID_PL", validators::pl_vat_id),
+    ("pii_vat_id_pt", "VAT_ID_PT", validators::pt_vat_id),
+    ("pii_vat_id_ro", "VAT_ID_RO", validators::ro_vat_id),
+    ("pii_vat_id_se", "VAT_ID_SE", validators::se_vat_id),
+    ("pii_vat_id_si", "VAT_ID_SI", validators::si_vat_id),
+    ("pii_vat_id_sk", "VAT_ID_SK", validators::sk_vat_id),
+    ("pii_vat_id_no", "VAT_ID_NO", validators::no_vat_id),
+    ("pii_vat_id_gb", "VAT_ID_GB", validators::gb_vat_id),
 ];
 
 /// Valid VAT IDs per label: published examples (python-stdnum, BZSt, Presidio)
@@ -168,6 +181,129 @@ const VALID: &[(&str, &[&str])] = &[
             "ESM1234567L",
         ],
     ),
+    (
+        "VAT_ID_LU",
+        &[
+            "LU15027442",
+            "LU 15027442",
+            "LU08424551",
+            "LU96503710",
+            "LU15118866",
+            "LU83119726",
+        ],
+    ),
+    (
+        "VAT_ID_LV",
+        &[
+            "LV40003521600",
+            "LV 40003521600",
+            "LV75113572363",
+            "LV83812888476",
+            "LV57069134471",
+            "LV62123622530",
+        ],
+    ),
+    (
+        "VAT_ID_MT",
+        &[
+            "MT11679112",
+            "MT 1167-9112",
+            "MT 1167 9112",
+            "MT33016035",
+            "MT12570550",
+            "MT17069697",
+        ],
+    ),
+    (
+        "VAT_ID_PL",
+        &[
+            "PL8567346215",
+            "PL 856-734-62-15",
+            "PL 856-73-46-215",
+            "PL4370632131",
+            "PL3850442832",
+            "PL8241270857",
+        ],
+    ),
+    (
+        "VAT_ID_PT",
+        &[
+            "PT501964843",
+            "PT 501 964 843",
+            "PT392644339",
+            "PT272831166",
+            "PT534855024",
+            "PT345019873",
+        ],
+    ),
+    (
+        "VAT_ID_RO",
+        &[
+            "RO18547290",
+            "RO 18547290",
+            "RO1590082",
+            "RO15247492",
+            "RO77589533",
+            "RO95896510",
+        ],
+    ),
+    (
+        "VAT_ID_SE",
+        &[
+            "SE123456789701",
+            "SE556677889901",
+            "SE 556677-889901",
+            "SE472873492401",
+            "SE862473891301",
+            "SE723075271401",
+        ],
+    ),
+    (
+        "VAT_ID_SI",
+        &[
+            "SI50223054",
+            "SI 5022 3054",
+            "SI62364227",
+            "SI76894088",
+            "SI73570800",
+            "SI18320139",
+        ],
+    ),
+    (
+        "VAT_ID_SK",
+        &[
+            "SK2022749619",
+            "SK 202 274 96 19",
+            "SK3387441728",
+            "SK2180502423",
+            "SK4389402468",
+            "SK3133187211",
+        ],
+    ),
+    (
+        "VAT_ID_NO",
+        &[
+            "NO995525828MVA",
+            "NO 995 525 828 MVA",
+            "NO 995525828 MVA",
+            "NO911887517MVA",
+            "NO895698059MVA",
+            "NO856618315MVA",
+        ],
+    ),
+    (
+        "VAT_ID_GB",
+        &[
+            "GB980780684",
+            "GB 980 7806 84",
+            "GB 980 7806 84 001",
+            "XI 980 7806 84",
+            "GB134641974",
+            "XI406379938",
+            "GB218960684",
+            "GB099587978",
+        ],
+    ),
 ];
 
 /// Values in the regex form whose check digit or component fails, per label.
@@ -246,6 +382,110 @@ const INVALID: &[(&str, &[(&str, &str)])] = &[
             ("ESI1234567L", "no CIF, NIF or NIE starts with I"),
         ],
     ),
+    (
+        "VAT_ID_LU",
+        &[
+            ("LU15027443", "check digits fail"),
+            ("LU96503711", "check digits fail"),
+            ("LU00000001", "check digits fail"),
+        ],
+    ),
+    (
+        "VAT_ID_LV",
+        &[
+            ("LV40003521601", "check digit fails"),
+            ("LV75113572364", "check digit fails"),
+            (
+                "LV16117519997",
+                "personal code of a natural person, no confirmed check digit",
+            ),
+        ],
+    ),
+    (
+        "VAT_ID_MT",
+        &[
+            ("MT11679113", "check digits fail"),
+            ("MT33016036", "check digits fail"),
+            ("MT09722003", "mod 37 holds, a leading zero is never issued"),
+        ],
+    ),
+    (
+        "VAT_ID_PL",
+        &[
+            ("PL8567346216", "check digit fails"),
+            ("PL4370632132", "check digit fails"),
+            ("PL5709301372", "remainder 10 is never issued"),
+        ],
+    ),
+    (
+        "VAT_ID_PT",
+        &[
+            ("PT501964842", "check digit fails"),
+            ("PT392644338", "check digit fails"),
+            (
+                "PT006132677",
+                "check digit holds, a leading zero is never issued",
+            ),
+        ],
+    ),
+    (
+        "VAT_ID_RO",
+        &[
+            ("RO18547291", "check digit fails"),
+            ("RO77589534", "check digit fails"),
+            ("RO 1630615123457", "a CNP is not accepted"),
+        ],
+    ),
+    (
+        "VAT_ID_SE",
+        &[
+            ("SE123456789101", "Luhn fails"),
+            ("SE472873492501", "Luhn fails"),
+            ("SE123456789702", "the suffix is not 01"),
+        ],
+    ),
+    (
+        "VAT_ID_SI",
+        &[
+            ("SI50223055", "check digit fails"),
+            ("SI37315871", "check digit 11 is never issued"),
+            (
+                "SI07978707",
+                "check digit holds, a leading zero is never issued",
+            ),
+        ],
+    ),
+    (
+        "VAT_ID_SK",
+        &[
+            ("SK2022749618", "not a multiple of 11"),
+            ("SK3387441729", "not a multiple of 11"),
+            (
+                "SK8110629857",
+                "multiple of 11, third digit 1 is never issued",
+            ),
+        ],
+    ),
+    (
+        "VAT_ID_NO",
+        &[
+            ("NO995525829MVA", "check digit fails"),
+            ("NO911887518MVA", "check digit fails"),
+        ],
+    ),
+    (
+        "VAT_ID_GB",
+        &[
+            ("GB802311781", "check digits fail"),
+            ("GB980780685", "check digits fail"),
+            ("XI 980 7806 85", "check digits fail"),
+            (
+                "GB009537909",
+                "9755 scheme below 100 0000 00 is never issued",
+            ),
+            ("GB447009415", "remainder 55 is no published scheme"),
+        ],
+    ),
 ];
 
 fn validator_of(label: &str) -> Validator {
@@ -310,6 +550,13 @@ fn validators_reject_failing_check_digits_and_components() {
     assert!(!validators::it_vat_id("0074311015"));
     assert!(!validators::nl_vat_id("NL004495445X01"));
     assert!(!validators::be_vat_id("BE2403019261"));
+    // The number without `MVA` is the bare organisation number, no VAT ID.
+    assert!(!validators::no_vat_id("NO995525828"));
+    // `GD`/`HA` forms carry no check digit.
+    assert!(!validators::gb_vat_id("GBGD001"));
+    assert!(!validators::gb_vat_id("GBHA599"));
+    assert!(!validators::ro_vat_id("RO0185472"));
+    assert!(!validators::se_vat_id("SE1234567897"));
 }
 
 #[test]
@@ -370,6 +617,26 @@ fn a_vat_term_raises_the_score_and_a_counter_term_drops_the_value() {
         ("BTW BE0403019261", "VAT_ID_BE", "BE0403019261"),
         ("Partita IVA IT00743110157", "VAT_ID_IT", "IT00743110157"),
         ("NIF-IVA: ESA13585625", "VAT_ID_ES", "ESA13585625"),
+        ("Numéro de TVA LU15027442", "VAT_ID_LU", "LU15027442"),
+        ("VAT number LV40003521600", "VAT_ID_LV", "LV40003521600"),
+        ("VAT No. MT 1167-9112", "VAT_ID_MT", "MT 1167-9112"),
+        ("USt-IdNr. PL8567346215", "VAT_ID_PL", "PL8567346215"),
+        ("VAT ID: PT 501 964 843", "VAT_ID_PT", "PT 501 964 843"),
+        ("VAT code RO18547290", "VAT_ID_RO", "RO18547290"),
+        ("VAT reg no SE556677889901", "VAT_ID_SE", "SE556677889901"),
+        ("UID-Nr. SI50223054", "VAT_ID_SI", "SI50223054"),
+        ("VAT number SK2022749619", "VAT_ID_SK", "SK2022749619"),
+        (
+            "VAT number: NO 995 525 828 MVA",
+            "VAT_ID_NO",
+            "NO 995 525 828 MVA",
+        ),
+        (
+            "VAT registration number GB 980 7806 84",
+            "VAT_ID_GB",
+            "GB 980 7806 84",
+        ),
+        ("VAT number XI 980 7806 84", "VAT_ID_GB", "XI 980 7806 84"),
     ] {
         for mode in SCORED {
             assert_eq!(
@@ -385,6 +652,9 @@ fn a_vat_term_raises_the_score_and_a_counter_term_drops_the_value() {
         "Order number FR40303265045",
         "Bestellnummer ESA13585625",
         "Tracking number NL004495445B01",
+        "Rechnungsnummer PL8567346215",
+        "Order number GB980780684",
+        "Ticket number SE556677889901",
     ] {
         for mode in SCORED {
             assert!(spans(text, mode).is_empty(), "{mode:?}: {text}");
@@ -450,6 +720,13 @@ fn checksum_failures_and_values_inside_longer_tokens_stay_silent() {
             "Messwert 00743110157 im Log",
             "Telefon 01333550323",
             "de136695976 is lower case",
+            "Artikel XPL8567346215 bestellt",
+            "Code GB9807806841234 im Log",
+            "Pfad /srv/SE556677889901/2026",
+            "Range LU15027442-3 reserviert",
+            "Telefon +LV40003521600",
+            "NO995525828 ohne MVA",
+            "gb980780684 is lower case",
         ] {
             assert!(
                 !spans(text, mode)
@@ -501,5 +778,49 @@ fn a_partita_iva_wins_over_a_bare_steuer_id_on_the_same_digits() {
             [("VAT_ID_IT".into(), "26858780310".into(), 0.80)],
             "{mode:?}"
         );
+    }
+}
+
+#[test]
+fn northern_ireland_shares_the_uk_label_and_branches_stay_in_the_span() {
+    for mode in SCORED {
+        for value in ["XI 980 7806 84", "GB 980 7806 84 001", "XI980780684001"] {
+            assert_eq!(
+                spans(&format!("VAT number {value}"), mode),
+                [("VAT_ID_GB".into(), value.into(), 0.80)],
+                "{mode:?}: {value}"
+            );
+        }
+    }
+}
+
+#[test]
+fn the_norwegian_mva_suffix_belongs_to_the_span() {
+    for mode in SCORED {
+        assert_eq!(
+            spans("Org.nr. NO 995 525 828 MVA, Oslo", mode),
+            [("VAT_ID_NO".into(), "NO 995 525 828 MVA".into(), 0.55)],
+            "{mode:?}"
+        );
+    }
+}
+
+#[test]
+fn a_latvian_vat_id_wins_over_a_bare_steuer_id_on_the_same_digits() {
+    // 71890053205 passes both the Latvian and the issued Steuer-ID check; after
+    // `LV ` the longer prefixed value decides (K07 overlap).
+    assert!(validators::lv_vat_id("LV71890053205"));
+    assert!(validators::steuer_id_issued("71890053205"));
+    for mode in SCORED {
+        for (text, score) in [
+            ("VAT number LV 71890053205", 0.80),
+            ("Bitte LV 71890053205 übernehmen.", 0.55),
+        ] {
+            assert_eq!(
+                spans(text, mode),
+                [("VAT_ID_LV".into(), "LV 71890053205".into(), score)],
+                "{mode:?}: {text}"
+            );
+        }
     }
 }

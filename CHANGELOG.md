@@ -47,6 +47,29 @@ result shapes may be breaking for downstream users, and is called out explicitly
   `tokens: ["550e8400-…", "Tz8Wm4K93RVqe7xAb2Lp"]` the token-like item is no longer reported on
   its own.
 
+### Added
+
+- Add VAT identification numbers for LU, LV, MT, PL, PT, RO, SE, SI, SK, NO and GB (B16), one label
+  and one check-digit validator per country in `rust/src/detectors/pii/vat.rs`, built like B01:
+  `VAT_ID_LU` (first six mod 89), `VAT_ID_LV` (legal entities, weighted mod 11), `VAT_ID_MT`
+  (weighted mod 37), `VAT_ID_PL` (NIP, weighted mod 11), `VAT_ID_PT` (NIF, weighted mod 11),
+  `VAT_ID_RO` (CUI, weighted mod 11, six to ten digits), `VAT_ID_SE` (organisation number with Luhn
+  plus `01`), `VAT_ID_SI` (weighted mod 11), `VAT_ID_SK` (mod 11), `VAT_ID_NO` (organisation number,
+  weighted mod 11, with `MVA` in the span) and `VAT_ID_GB` (weighted mod 97 including the 9755
+  scheme, optional three-digit branch). Northern Ireland numbers (`XI …`) share `VAT_ID_GB` and its
+  validator. Forms without a confirmed check digit stay out: Latvian personal codes, Slovak birth
+  numbers, Romanian CNPs and the UK `GD`/`HA` numbers. The rules are scored-only like K05: an
+  upper-case prefix and the national printed form report without a field name at 0.55, 0.80 with a
+  term of `pii.vat_identifier`, and drop below both thresholds behind a nearer counter-context term.
+  `VAT_ID_LV` joins the K07 competing labels, so `LV 71890053205` is one Latvian VAT ID and not also
+  a bare Steuer-ID. `entity_map.yaml` classifies the eleven validators as checksums (M3: ARK 24 → 35
+  units, GB and XI one unit `pii.uk.vat_id`) and adds eleven `ark_only` IDs; `scoreboard.py` ports
+  the validators; the frozen E05 synthetic goldset stays byte-identical and lists the new IDs as not
+  generated. `pii_l1.jsonl` gains 220 balanced/recall rows (5 positives and 5 hard negatives per
+  label in DE and EN). **Detection change:** none in the default `strict` mode. In `balanced` and
+  `recall` VAT IDs of the eleven countries are new findings; `13_l1_golden_eval` 996/996 positives,
+  893/893 hard negatives. Existing validators are unchanged.
+
 ## [0.1.11] - 2026-10-23
 
 ### Detection changes in the default modes

@@ -171,7 +171,7 @@ def test_checked_in_ark_count():
     counts = MODULE.count(ENTITY_MAP.load(), MODULE.load_rules())
     # At T03 only Luhn, MOD 97-10 and the Steuer-ID check compute a check digit; B01 adds
     # one VAT ID per country, F08 the German passport and identity card (ICAO 9303), B02 one VAT ID
-    # for each of eleven more countries.
+    # for each of eleven more countries, B16 eleven more VAT IDs (GB and XI count once).
     assert set(counts.ark) == {
         Unit("pii.credit_card.pan", None),
         Unit("pii.iban", None),
@@ -184,6 +184,17 @@ def test_checked_in_ark_count():
         Unit("pii.be.vat_id", "be"),
         Unit("pii.it.vat_code", "it"),
         Unit("pii.es.vat_id", "es"),
+        Unit("pii.lu.vat_id", "lu"),
+        Unit("pii.lv.vat_id", "lv"),
+        Unit("pii.mt.vat_id", "mt"),
+        Unit("pii.pl.vat_id", "pl"),
+        Unit("pii.pt.vat_id", "pt"),
+        Unit("pii.ro.vat_id", "ro"),
+        Unit("pii.se.vat_id", "se"),
+        Unit("pii.si.vat_id", "si"),
+        Unit("pii.sk.vat_id", "sk"),
+        Unit("pii.no.vat_id", "no"),
+        Unit("pii.uk.vat_id", "uk"),
         Unit("entity.passport_number", "de"),
         Unit("pii.identity_card_number", "de"),
         Unit("pii.bg.vat_id", "bg"),
@@ -198,7 +209,7 @@ def test_checked_in_ark_count():
         Unit("pii.ie.vat_id", "ie"),
         Unit("pii.lt.vat_id", "lt"),
     }
-    assert len(counts.ark) == 24
+    assert len(counts.ark) == 35
     assert counts.m3_met is False
 
 
@@ -328,20 +339,22 @@ def test_cli_count_json_and_check(tmp_path):
     payload = json.loads(result.stdout)
     assert payload["presidio_version"] == "2.2.364"
     assert payload["presidio"]["count"] == 35
-    assert payload["ark"]["count"] == 24
+    assert payload["ark"]["count"] == 35
     assert payload["m3"] == {"factor": 2, "target": 70, "met": False}
     assert {
         "entity_id": "pii.de.tax_id",
         "country": "de",
         "sources": ["pii_steuer_id_de: steuer_id", "pii_steuer_id_de_context_free: steuer_id_issued"],
     } in payload["ark"]["units"]
-    # B01/B02: one VAT unit per country, the bare Partita IVA rule shares the IT validator.
+    # B01/B02/B16: one VAT unit per country, the bare Partita IVA rule shares the IT validator.
     vat = {unit["entity_id"]: unit for unit in payload["ark"]["units"] if unit["entity_id"].endswith((".vat_id", ".vat_code"))}
     assert sorted(vat) == [
         "pii.at.vat_id", "pii.be.vat_id", "pii.bg.vat_id", "pii.ch.vat_id", "pii.cy.vat_id",
         "pii.cz.vat_id", "pii.de.vat_id", "pii.dk.vat_id", "pii.ee.vat_id", "pii.es.vat_id",
         "pii.fi.vat_id", "pii.fr.vat_id", "pii.gr.vat_id", "pii.hr.vat_id", "pii.hu.vat_id",
-        "pii.ie.vat_id", "pii.it.vat_code", "pii.lt.vat_id", "pii.nl.vat_id",
+        "pii.ie.vat_id", "pii.it.vat_code", "pii.lt.vat_id", "pii.lu.vat_id", "pii.lv.vat_id", "pii.mt.vat_id",
+        "pii.nl.vat_id", "pii.no.vat_id", "pii.pl.vat_id", "pii.pt.vat_id", "pii.ro.vat_id", "pii.se.vat_id",
+        "pii.si.vat_id", "pii.sk.vat_id", "pii.uk.vat_id",
     ]
     # B02: the Greek rule keeps the VIES prefix EL, the benchmark ID follows ISO 3166 (gr).
     assert vat["pii.gr.vat_id"]["sources"] == ["pii_vat_id_el: el_vat_id"]

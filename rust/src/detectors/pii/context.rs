@@ -84,6 +84,17 @@ pub static SUPPORT_LEXICON: &[(&str, &[&str])] = &[
     ("VAT_ID_HU", &["pii.vat_identifier"]),
     ("VAT_ID_IE", &["pii.vat_identifier"]),
     ("VAT_ID_LT", &["pii.vat_identifier"]),
+    ("VAT_ID_LU", &["pii.vat_identifier"]),
+    ("VAT_ID_LV", &["pii.vat_identifier"]),
+    ("VAT_ID_MT", &["pii.vat_identifier"]),
+    ("VAT_ID_PL", &["pii.vat_identifier"]),
+    ("VAT_ID_PT", &["pii.vat_identifier"]),
+    ("VAT_ID_RO", &["pii.vat_identifier"]),
+    ("VAT_ID_SE", &["pii.vat_identifier"]),
+    ("VAT_ID_SI", &["pii.vat_identifier"]),
+    ("VAT_ID_SK", &["pii.vat_identifier"]),
+    ("VAT_ID_NO", &["pii.vat_identifier"]),
+    ("VAT_ID_GB", &["pii.vat_identifier"]),
 ];
 
 /// Counter-context lexicon IDs of `pii.json`: numbers that are not PII.

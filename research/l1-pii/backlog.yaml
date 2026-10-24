@@ -426,6 +426,7 @@ tasks:
 
   # M3 +11 (35)
   - id: B16
+    status: done
     title: "VAT ID part 3: LU, LV, MT, PL, PT, RO, SE, SI, SK + XI, NO, GB with checksums"
     type: new-entity
     deps: [B01]

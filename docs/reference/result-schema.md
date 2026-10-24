@@ -338,7 +338,12 @@ adds `VAT_ID_BG`, `VAT_ID_CY`, `VAT_ID_CZ`, `VAT_ID_DK`, `VAT_ID_EE`, `VAT_ID_EL
 `GR`), `VAT_ID_FI`, `VAT_ID_HR`, `VAT_ID_HU`, `VAT_ID_IE` and `VAT_ID_LT` in the same way
 (`BG175074752`, `CY-10259033P`, `CZ25123891`, `DK 13 58 56 28`, `EE100931558`, `EL094259216`,
 `FI20774740`, `HR33392005961`, `HU-12892312`, `IE6433435OA`, `LT100001919017`), with national terms
-such as `DIČ`, `CVR-nr.`, `ΑΦΜ`, `OIB` or `PVM kodas`. German passport
+such as `DIČ`, `CVR-nr.`, `ΑΦΜ`, `OIB` or `PVM kodas`. B16 adds `VAT_ID_LU`, `VAT_ID_LV`,
+`VAT_ID_MT`, `VAT_ID_PL`, `VAT_ID_PT`, `VAT_ID_RO`, `VAT_ID_SE`, `VAT_ID_SI`, `VAT_ID_SK`,
+`VAT_ID_NO` and `VAT_ID_GB` the same way (`LU15027442`, `LV40003521600`, `MT 1167-9112`,
+`PL 856-734-62-15`, `PT 501 964 843`, `RO18547290`, `SE556677889901`, `SI 5022 3054`,
+`SK 202 274 96 19`, `NO 995 525 828 MVA` with the suffix in the span, `GB 980 7806 84` with an
+optional three-digit branch); Northern Ireland numbers (`XI 980 7806 84`) are `VAT_ID_GB`. German passport
 and identity card numbers (F08) are scored-only with their ICAO 9303 check digit (weights 7-3-1):
 passport series `C F G H J K`, identity card series `L M N P R T V W X Y`, eight characters plus the
 check digit (`F12345671`, `L01X00T44`) or the MRZ form of nine plus the check digit (`C01X00T478`,

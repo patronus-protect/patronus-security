@@ -26,11 +26,11 @@ use super::score::ValidatorStrength;
 use crate::detectors::NativeDetection;
 
 /// Labels whose values rules of another label in this set can also match.
-/// Among the VAT IDs the Italian, the French and the Croatian carry eleven digits
-/// that can be a Steuer-ID (`IT 00743110157`, `FR 40 303 265 045`,
-/// `HR 57419348408`), and the twelve digits of a Lithuanian one can be a card
-/// number (`LT 621223427710`); the others are shorter or end in letters.
-pub const COMPETING_LABELS: [&str; 9] = [
+/// Among the VAT IDs the Italian, the French, the Croatian and the Latvian carry
+/// eleven digits that can be a Steuer-ID (`IT 00743110157`, `FR 40 303 265 045`,
+/// `HR 57419348408`, `LV 71890053205`), and the twelve digits of a Lithuanian one
+/// can be a card number (`LT 621223427710`); the others are shorter or end in letters.
+pub const COMPETING_LABELS: [&str; 10] = [
     "IBAN",
     "CREDITCARD",
     "FINANCIAL_ACCOUNT_NUMBER",
@@ -40,6 +40,7 @@ pub const COMPETING_LABELS: [&str; 9] = [
     "VAT_ID_FR",
     "VAT_ID_HR",
     "VAT_ID_LT",
+    "VAT_ID_LV",
 ];
 
 /// Labels whose findings compete with an overlapping finding of any other label

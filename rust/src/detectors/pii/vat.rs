@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //! VAT identification numbers, part 1 (B01): DE, AT, CH, FR, NL, BE, IT, ES;
-//! part 2 (B02): BG, CY, CZ, DK, EE, EL, FI, HR, HU, IE, LT.
+//! part 2 (B02): BG, CY, CZ, DK, EE, EL, FI, HR, HU, IE, LT;
+//! part 3 (B16): LU, LV, MT, PL, PT, RO, SE, SI, SK, NO and GB (with `XI` for
+//! Northern Ireland, same label and validator).
 //!
 //! One label and one check-digit validator per country. Every rule is
 //! scored-only (K05): strict stays unchanged, `balanced` and `recall` report the
@@ -268,6 +270,152 @@ pub(super) const VAT_ID_LT: PiiPattern = PiiPattern {
     pattern: r"\bLT ?(?:[0-9]{9}|[0-9]{12})\b",
     entity_group: "VAT_ID_LT",
     validator: Some(validators::lt_vat_id),
+    strength: ValidatorStrength::Checksum,
+    base_score: 20,
+    captured_value: false,
+    requires_context: false,
+    scored_only: true,
+};
+
+/// `LU15027442`, `LU 15027442`.
+pub(super) const VAT_ID_LU: PiiPattern = PiiPattern {
+    name: "pii_vat_id_lu",
+    pattern: r"\bLU ?[0-9]{8}\b",
+    entity_group: "VAT_ID_LU",
+    validator: Some(validators::lu_vat_id),
+    strength: ValidatorStrength::Checksum,
+    base_score: 20,
+    captured_value: false,
+    requires_context: false,
+    scored_only: true,
+};
+
+/// `LV40003521600`, `LV 40003521600` (legal entities).
+pub(super) const VAT_ID_LV: PiiPattern = PiiPattern {
+    name: "pii_vat_id_lv",
+    pattern: r"\bLV ?[0-9]{11}\b",
+    entity_group: "VAT_ID_LV",
+    validator: Some(validators::lv_vat_id),
+    strength: ValidatorStrength::Checksum,
+    base_score: 20,
+    captured_value: false,
+    requires_context: false,
+    scored_only: true,
+};
+
+/// `MT11679112`, `MT 1167-9112`.
+pub(super) const VAT_ID_MT: PiiPattern = PiiPattern {
+    name: "pii_vat_id_mt",
+    pattern: r"\bMT ?[0-9]{4}[ \-]?[0-9]{4}\b",
+    entity_group: "VAT_ID_MT",
+    validator: Some(validators::mt_vat_id),
+    strength: ValidatorStrength::Checksum,
+    base_score: 20,
+    captured_value: false,
+    requires_context: false,
+    scored_only: true,
+};
+
+/// `PL8567346215`, `PL 856-734-62-15`, `PL 856-73-46-215`.
+pub(super) const VAT_ID_PL: PiiPattern = PiiPattern {
+    name: "pii_vat_id_pl",
+    pattern: r"\bPL ?[0-9]{3}[ \-]?(?:[0-9]{3}[ \-]?[0-9]{2}[ \-]?[0-9]{2}|[0-9]{2}[ \-]?[0-9]{2}[ \-]?[0-9]{3})\b",
+    entity_group: "VAT_ID_PL",
+    validator: Some(validators::pl_vat_id),
+    strength: ValidatorStrength::Checksum,
+    base_score: 20,
+    captured_value: false,
+    requires_context: false,
+    scored_only: true,
+};
+
+/// `PT501964843`, `PT 501 964 843`.
+pub(super) const VAT_ID_PT: PiiPattern = PiiPattern {
+    name: "pii_vat_id_pt",
+    pattern: r"\bPT ?[0-9]{3} ?[0-9]{3} ?[0-9]{3}\b",
+    entity_group: "VAT_ID_PT",
+    validator: Some(validators::pt_vat_id),
+    strength: ValidatorStrength::Checksum,
+    base_score: 20,
+    captured_value: false,
+    requires_context: false,
+    scored_only: true,
+};
+
+/// `RO18547290`, `RO 18547290`. Six to ten digits: the validator also takes
+/// shorter CUIs, but two to five digits prove too little without a field name.
+pub(super) const VAT_ID_RO: PiiPattern = PiiPattern {
+    name: "pii_vat_id_ro",
+    pattern: r"\bRO ?[1-9][0-9]{5,9}\b",
+    entity_group: "VAT_ID_RO",
+    validator: Some(validators::ro_vat_id),
+    strength: ValidatorStrength::Checksum,
+    base_score: 20,
+    captured_value: false,
+    requires_context: false,
+    scored_only: true,
+};
+
+/// `SE556677889901`, `SE 556677-889901`.
+pub(super) const VAT_ID_SE: PiiPattern = PiiPattern {
+    name: "pii_vat_id_se",
+    pattern: r"\bSE ?[0-9]{6}-?[0-9]{4}01\b",
+    entity_group: "VAT_ID_SE",
+    validator: Some(validators::se_vat_id),
+    strength: ValidatorStrength::Checksum,
+    base_score: 20,
+    captured_value: false,
+    requires_context: false,
+    scored_only: true,
+};
+
+/// `SI50223054`, `SI 5022 3054`.
+pub(super) const VAT_ID_SI: PiiPattern = PiiPattern {
+    name: "pii_vat_id_si",
+    pattern: r"\bSI ?[0-9]{4} ?[0-9]{4}\b",
+    entity_group: "VAT_ID_SI",
+    validator: Some(validators::si_vat_id),
+    strength: ValidatorStrength::Checksum,
+    base_score: 20,
+    captured_value: false,
+    requires_context: false,
+    scored_only: true,
+};
+
+/// `SK2022749619`, `SK 202 274 96 19`.
+pub(super) const VAT_ID_SK: PiiPattern = PiiPattern {
+    name: "pii_vat_id_sk",
+    pattern: r"\bSK ?[0-9]{3} ?[0-9]{3} ?[0-9]{2} ?[0-9]{2}\b",
+    entity_group: "VAT_ID_SK",
+    validator: Some(validators::sk_vat_id),
+    strength: ValidatorStrength::Checksum,
+    base_score: 20,
+    captured_value: false,
+    requires_context: false,
+    scored_only: true,
+};
+
+/// `NO995525828MVA`, `NO 995 525 828 MVA`; the `MVA` suffix belongs to the
+/// number and to the span.
+pub(super) const VAT_ID_NO: PiiPattern = PiiPattern {
+    name: "pii_vat_id_no",
+    pattern: r"\bNO ?[0-9]{3} ?[0-9]{3} ?[0-9]{3} ?MVA\b",
+    entity_group: "VAT_ID_NO",
+    validator: Some(validators::no_vat_id),
+    strength: ValidatorStrength::Checksum,
+    base_score: 20,
+    captured_value: false,
+    requires_context: false,
+    scored_only: true,
+};
+
+/// `GB980780684`, `GB 980 7806 84`, a branch `GB 980 7806 84 001`, and the
+/// Northern Ireland form `XI 980 7806 84`.
+pub(super) const VAT_ID_GB: PiiPattern = PiiPattern {
+    name: "pii_vat_id_gb",
+    pattern: r"\b(?:GB|XI) ?[0-9]{3} ?[0-9]{4} ?[0-9]{2}(?: ?[0-9]{3})?\b",
+    entity_group: "VAT_ID_GB",
+    validator: Some(validators::gb_vat_id),
     strength: ValidatorStrength::Checksum,
     base_score: 20,
     captured_value: false,
