@@ -1,0 +1,10 @@
+{
+  "schema": "ark-l1-scoreboard-snapshot-v1",
+  "date": "2026-01-01",
+  "commit": "0000000",
+  "splits": "dev",
+  "pii": {"baseline": "Presidio tuned", "decision_mode": "balanced", "overall_f1": {"neutral": 0.0, "presidio_favored": 0.0},
+          "milestones": [], "entities": {"pii.email": {"neutral": {"ark": 1.0, "presidio": 2.0}}}},
+  "dlp": {"baselines": ["gitleaks"], "decision_profile": "default", "overall": {"f1": 0.0, "precision": 0.0, "recall": 0.0},
+          "group_f1": {"API_KEY": 1.0}, "milestones": []}
+}
