@@ -259,6 +259,37 @@ ohne mod 11 (seit 2007 vergeben) bleiben FN, sonst wäre die Einheit reine Formp
 konkurrieren in den Score-Modi untereinander und mit `STEUERID` (K07). Gold für DK und NO gibt es bisher
 nur in `pii_l1` und der Rule-Fixture; ein synthetisches Goldset fehlt (`NOT_GENERATED`).
 
+Stand Q-DE (Qualitätsuntergrenze, 2026-10-25): Analyse der deutschen IDs, die der Snapshot 2026-10-24
+auf `presidio_favored` unter F1 80 führt. Alle Gold-Werte dort sind blanke Werte aus den
+presidio-analyzer-Tests, ohne Feldnamen. Der Snapshot liegt vor B-DE1; seitdem steht RVNR bei 100,0
+und KVNR bei 80,0. Dev `presidio_favored` balanced, exakt, vorher → nachher:
+
+- **KVNR 80,0 → 100,0.** `a123456780` trägt einen Kleinbuchstaben; die Prüfziffer zählt ihn wie den
+  großen. `pii_health_insurance_number_de_context_free` liest den Buchstaben jetzt in beiden
+  Schreibweisen wie der blanke Pass und Ausweis (F08); `context::foreign_field` bleibt.
+- **Steuernummer 0,0 → 66,7.** Neu `pii_steuernummer_de_context_free`: die Schrägstrich-Gruppen der
+  Länder (2/3/5, 3/3/5, 3/4/4: `21/815/08150`, `123/456/78901`, `133/8150/8159`) ohne Feldnamen, nur in
+  `balanced`/`recall` (0,50, Format wie die gruppierte SSN; mit Begriff 0,75), still unter einem Feld,
+  das einen anderen Wert nennt (`Aktenzeichen: …`). In keinem neutralen Dev-Korpus kommt die Form vor.
+  **Entscheidung:** `0181508150000` bleibt FN. Presidios ELSTER-Muster nimmt einen Ländercode 01–16
+  und elf Ziffern an; die echte 13-stellige Form ist Finanzamtsnummer (vierstellig, BW `28…`, BY `9…`,
+  NW `5…` …), eine `0`, Bezirk, Unterscheidungsnummer und Prüfziffer. Den Wert gibt es so nicht, und
+  13 blanke Ziffern sind ebenso oft ein Zeitstempel in Millisekunden (`1698234567890`) oder eine
+  EAN-13. Die 13-stellige Form bleibt feldgebunden; Höchstwert 66,7.
+- **LANR 50,0, Entscheidung B-DE1 bleibt.** `234567701` und `999999901` sind neun blanke Ziffern ohne
+  LANR-Begriff; jede zehnte neunstellige Zahl besteht die Prüfziffer. Gemeldet wird weiter nur mit
+  Begriff (`Arztnummer 987654401 …`); Höchstwert 50,0.
+- **Steuer-ID 0,0, Validator bleibt.** Der einzige Gold-Wert `98765432106` hat in den ersten zehn
+  Ziffern zehn verschiedene Ziffern; vergeben wird nur eine Verteilung mit genau einer doppelten oder
+  dreifachen Ziffer (`validators::steuer_id_issued`, Hard Negative in `rust/tests/pii_context_free.rs`).
+  Presidio prüft nur „höchstens dreimal“. Höchstwert 0,0 bei einem Gold-Wert.
+- **USt-IdNr. DE 75,0, Validator bleibt.** `DE987654321` und `DE100000001` bestehen ISO 7064
+  MOD 11,10 nicht; der Test upstream prüft Presidios Standardmodus ohne Prüfziffer („heuristic
+  preserves recall“). Höchstwert 3 von 5, F1 75,0.
+
+`strict` bleibt bitgleich. Auf `ark_authored` (Dev-Goldset E05, balanced) liegen alle sechs IDs über 80:
+KVNR 100,0, LANR 98,1, RVNR 100,0, Steuer-ID 100,0, Steuernummer 94,2 → 98,1, USt-IdNr. DE 100,0.
+
 Stand B02: ARK 24, gemeinsam 7. Dazu kommen die USt-IdNr. von BG, CY, CZ, DK, EE, EL, FI, HR, HU, IE
 und LT, gleiche Struktur wie B01 (je Land ein Label `VAT_ID_BG` … und ein Validator mit Prüfziffer,
 nur in `balanced`/`recall`), alle `ark_only`; Griechenland trägt im Label das MwSt.-Präfix `EL`, in
