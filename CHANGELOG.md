@@ -117,9 +117,12 @@ result shapes may be breaking for downstream users, and is called out explicitly
 - UK passport numbers are nine digits (B-UK review, PR #165): `pii_passport_number_uk` and
   `validators::uk_passport_number` now read nine digits as HM Passport Office numbers the 2015 and
   later designs (`Her UK passport 123456789 expires in 2031.`) instead of two letters and seven
-  digits, and reject one repeated digit. **Detection change:** in `strict`, `balanced` and `recall`
-  nine digits next to a passport term or under a passport key are UK passport findings; two letters
-  and seven digits next to a passport term are no longer reported by this rule.
+  digits, and reject one repeated digit. The two-letter form moves to its own rule,
+  `pii_passport_number_two_letters` (`validators::passport_number_two_letters`; Irish and Japanese
+  passports such as `PA1234567`, `TK1234567`), so the dev scoreboard keeps its passport recall.
+  **Detection change:** in `strict`, `balanced` and `recall` nine digits next to a passport term or
+  under a passport key are UK passport findings; two letters and seven digits are reported as before,
+  under `pii_passport_number_two_letters`.
 
 - US Social Security Numbers beyond the field name (B-SSN: T25, F07; baseline P1). Two rules join
   the field-bound `pii_ssn_us` in `rust/src/detectors/pii/us.rs`. `pii_ssn_us_proximity` reports

@@ -60,6 +60,7 @@ const EXPECTED_ORDER: &[(&str, &str)] = &[
     ("pii_ni_uk_context_free", "NATIONALID"),
     ("pii_nhs_number_uk", "NHS_NUMBER"),
     ("pii_passport_number_uk", "PASSPORT_NUMBER"),
+    ("pii_passport_number_two_letters", "PASSPORT_NUMBER"),
     ("pii_vat_id_de", "VAT_ID_DE"),
     ("pii_vat_id_at", "VAT_ID_AT"),
     ("pii_vat_id_ch", "VAT_ID_CH"),

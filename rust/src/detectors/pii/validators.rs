@@ -586,6 +586,15 @@ pub fn uk_passport_number(s: &str) -> bool {
         && bytes.iter().any(|&byte| byte != bytes[0])
 }
 
+/// Passport number of two letters and seven digits (`PA1234567` Ireland,
+/// `TK1234567` Japan). Format only.
+pub fn passport_number_two_letters(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    bytes.len() == 9
+        && bytes[..2].iter().all(u8::is_ascii_uppercase)
+        && bytes[2..].iter().all(u8::is_ascii_digit)
+}
+
 /// UK driving licence number (B-UK): the first five letters of the surname padded
 /// with `9`, the decade digit of the birth year, the birth month (plus 50 for
 /// women), the day, the year digit, two initials (`9` for none), a digit or letter

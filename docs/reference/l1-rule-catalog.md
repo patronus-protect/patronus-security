@@ -4,7 +4,7 @@
 
 These are the stable rule IDs accepted by execution-gate `rules`. Missing IDs inherit the shared Rust/Python/API defaults below. Model gates such as `native:pii`, `native:dlp`, `native:injection_l1`, and `native:threat_l1` control complete producers; rule gates control individual entries below.
 
-## PII rules (85)
+## PII rules (86)
 
 All PII rules are eligible by default when PII L1 is enabled.
 
@@ -62,6 +62,7 @@ In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `
 | `pii_ni_uk_context_free` | `NATIONALID` | yes | format | 35 | key or proximity, `balanced`/`recall` only | 0.50–0.75 |
 | `pii_nhs_number_uk` | `NHS_NUMBER` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |
 | `pii_passport_number_uk` | `PASSPORT_NUMBER` | yes | format | 20 | key or proximity (required) | 0.50–0.60 |
+| `pii_passport_number_two_letters` | `PASSPORT_NUMBER` | yes | format | 20 | key or proximity (required) | 0.50–0.60 |
 | `pii_vat_id_de` | `VAT_ID_DE` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
 | `pii_vat_id_at` | `VAT_ID_AT` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
 | `pii_vat_id_ch` | `VAT_ID_CH` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |

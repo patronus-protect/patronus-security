@@ -98,6 +98,7 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     uk::NINO_CONTEXT_FREE,
     uk::NHS_NUMBER,
     uk::PASSPORT_NUMBER,
+    intl::PASSPORT_NUMBER_TWO_LETTERS,
     vat::VAT_ID_DE,
     vat::VAT_ID_AT,
     vat::VAT_ID_CH,
@@ -556,7 +557,10 @@ impl NativeRegexDetector for PiiPipeline {
             "pii_credit_card" => context::card_position(text, captures.get(0).unwrap().range()),
             // A term near the value does not make a fragment of a longer number
             // (`401127789-0`) an SSN, an NHS or a passport number.
-            "pii_ssn_us_proximity" | "pii_nhs_number_uk" | "pii_passport_number_uk" => {
+            "pii_ssn_us_proximity"
+            | "pii_nhs_number_uk"
+            | "pii_passport_number_uk"
+            | "pii_passport_number_two_letters" => {
                 context::stands_alone(text, captures.get(0).unwrap().range())
             }
             "pii_passport_number_de_context_free" | "pii_identity_card_number_de_context_free" => {

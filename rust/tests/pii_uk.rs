@@ -26,6 +26,7 @@ const NHS: &str = "pii_nhs_number_uk";
 const NINO: &str = "pii_ni_uk";
 const NINO_CONTEXT_FREE: &str = "pii_ni_uk_context_free";
 const PASSPORT: &str = "pii_passport_number_uk";
+const PASSPORT_TWO_LETTERS: &str = "pii_passport_number_two_letters";
 const LICENCE: &str = "pii_driver_license_number_uk";
 const LICENCE_CONTEXT_FREE: &str = "pii_driver_license_number_uk_context_free";
 const MODES: [PiiMode; 3] = [PiiMode::Strict, PiiMode::Balanced, PiiMode::Recall];
@@ -237,6 +238,26 @@ fn uk_passport_validator_checks_nine_digits() {
     }
 }
 
+#[test]
+fn two_letter_passport_validator_checks_letters_and_digits() {
+    for valid in ["AB1234567", "PA1234567", "TK1234567"] {
+        assert!(validators::passport_number_two_letters(valid), "{valid}");
+    }
+    for invalid in [
+        "123456789",
+        "AB123456",
+        "AB12345678",
+        "ab1234567",
+        "A12345678",
+        "ABC123456",
+    ] {
+        assert!(
+            !validators::passport_number_two_letters(invalid),
+            "{invalid}"
+        );
+    }
+}
+
 // ── rule properties ──────────────────────────────────────────────────────────
 
 #[test]
@@ -274,6 +295,16 @@ fn the_uk_rules_have_their_label_strength_and_mode() {
         Some(validators::uk_passport_number as fn(&str) -> bool as usize)
     );
     assert!(passport.requires_context && !passport.scored_only && !passport.captured_value);
+    let two_letters = pattern(PASSPORT_TWO_LETTERS);
+    assert_eq!(two_letters.entity_group, "PASSPORT_NUMBER");
+    assert_eq!(two_letters.strength, ValidatorStrength::Format);
+    assert_eq!(
+        validator(two_letters),
+        Some(validators::passport_number_two_letters as fn(&str) -> bool as usize)
+    );
+    assert!(
+        two_letters.requires_context && !two_letters.scored_only && !two_letters.captured_value
+    );
 
     for rule_id in [LICENCE, LICENCE_CONTEXT_FREE] {
         let licence = pattern(rule_id);
@@ -459,11 +490,40 @@ fn uk_passport_number_with_a_passport_term_in_every_mode() {
     for text in [
         "123456789",
         "Ticket 123456789",
-        "Her UK passport AB1234567 expires in 2031.",
         "Passport number: 12345678",
         "My passport is 999999999",
         "Her UK passport 123456789-2 expires in 2031.",
         "Passport photo order number 123456789",
+    ] {
+        assert_silent(text, "PASSPORT_NUMBER", &MODES);
+    }
+}
+
+#[test]
+fn two_letters_and_seven_digits_stay_a_passport_number_beside_the_uk_form() {
+    // Not the UK form, but the Irish and Japanese one (`PA1234567`, `TK1234567`).
+    for (text, value) in [
+        ("Her UK passport AB1234567 expires in 2031.", "AB1234567"),
+        (
+            "include your tax ID and passport number (SZ9954558) on the receipt.",
+            "SZ9954558",
+        ),
+        (
+            "Witness: Darusman Ratulangi (Passport No. SG9943897)",
+            "SG9943897",
+        ),
+        ("Der Reisepass PA1234567 ist gültig.", "PA1234567"),
+        ("{\"passnummer\": \"KB1572986\"}", "KB1572986"),
+    ] {
+        assert_reports(PASSPORT_TWO_LETTERS, text, value, &MODES);
+    }
+    for text in [
+        "AB1234567",
+        "Ticket AB1234567",
+        "Passport number: AB123456",
+        "Passport number: ab1234567",
+        "Her passport AB1234567-2 expires in 2031.",
+        "Vorgang AB1234567 abgeschlossen.",
     ] {
         assert_silent(text, "PASSPORT_NUMBER", &MODES);
     }

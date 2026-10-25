@@ -189,7 +189,8 @@ liest den Wert auch in Zweiergruppen (`AB 12 34 56 C`) und nach `NI number`, `NI
 insurance no`, `NI-Nummer`, in jeder Schreibweise; `validators::uk_nino` ist unverändert, nie
 vergebene Präfixe (`BG`, `NT`, `FQ`, `UV`) bleiben negativ. `pii_ni_uk_context_free` meldet eine
 blanke NINO in einer Schreibweise (`hh 01 02 03 d`, `tw987654a`) nur in `balanced`/`recall` (0,50).
-Der UK-Pass (neun Ziffern) braucht einen Pass-Begriff, der UK-Führerschein
+Der UK-Pass (neun Ziffern) und ein Pass aus zwei Buchstaben und sieben Ziffern (Irland, Japan;
+`pii_passport_number_two_letters`) brauchen einen Pass-Begriff, der UK-Führerschein
 (`MORGA657054SM9IJ`) ist feldgebunden (`pii_driver_license_number_uk`) und blank in den Score-Modi
 (`…_context_free`, 0,50). NINO und UK-Führerschein sind damit neben der gruppierten SSN die
 `scored_only`-Formatregeln: Vergaberegeln (Präfixe/Suffixe bzw. Nachname, Geburtsdatum, Initialen)

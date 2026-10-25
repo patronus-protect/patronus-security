@@ -846,6 +846,21 @@
   },
   {
     "category": "pii",
+    "rule_id": "pii_passport_number_two_letters",
+    "de": "Der irische Reisepass PA1234567 ist gültig.",
+    "en": "Her passport number is TK1234567.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Vorgang PA1234567 abgeschlossen."
+      ],
+      "en": [
+        "Ticket PA1234567 was closed."
+      ]
+    }
+  },
+  {
+    "category": "pii",
     "rule_id": "pii_vat_id_de",
     "de": "Bitte tragen Sie DE703082462 im Formular ein.",
     "en": "Please copy DE478383064 into the supplier record.",

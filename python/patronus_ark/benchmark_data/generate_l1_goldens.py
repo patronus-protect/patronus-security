@@ -2536,7 +2536,8 @@ for _row in B_SSN_CASES:
 # bare) in every mode when an NHS term stands near the value or is its key. `pii_ni_uk`
 # also reads a NINO in pairs and after `NI number`; `pii_ni_uk_context_free` reports a
 # bare NINO in one case in balanced and recall only. `pii_passport_number_uk` reports nine
-# digits next to a passport term. The UK driving licence is bound to a
+# digits next to a passport term, `pii_passport_number_two_letters` two letters and seven
+# digits (Ireland, Japan). The UK driving licence is bound to a
 # licence field name in every mode (`pii_driver_license_number_uk`) and bare in balanced
 # and recall (`pii_driver_license_number_uk_context_free`). Hard negatives: failed check
 # digits, prefixes HMRC never issues, mixed case without a field name, impossible birth
@@ -2626,7 +2627,7 @@ B_UK_CASES = [
     p("PASSPORT_NUMBER", "de", "pii_passport_number_uk", '{"reisepass": "', "761204958", '"}', carrier="json"),
     p("PASSPORT_NUMBER", "de", "pii_passport_number_uk", "<reisepassnummer>", "107185703", "</reisepassnummer>", carrier="xml"),
     n("PASSPORT_NUMBER", "en", "pii_passport_number_uk", "925665416", "bare value without a passport term", tags=("no_context",), mode="balanced"),
-    n("PASSPORT_NUMBER", "en", "pii_passport_number_uk", "Her UK passport AB1234567 expires in 2031.", "two letters and seven digits is no UK passport form", carrier="prose"),
+    n("PASSPORT_NUMBER", "en", "pii_passport_number_uk", "Her UK passport 12345678901 expires in 2031.", "eleven digits", carrier="prose"),
     n("PASSPORT_NUMBER", "en", "pii_passport_number_uk", "My passport is 12345678", "only eight digits", carrier="prose"),
     n("PASSPORT_NUMBER", "en", "pii_passport_number_uk", "Ticket 925665416 was closed.", "no passport term", carrier="prose"),
     n("PASSPORT_NUMBER", "en", "pii_passport_number_uk", "Passport photo order number 925665416", "order number nearer than the passport term", mode="balanced"),
@@ -2677,6 +2678,16 @@ B_UK_CASES = [
     n("DRIVER_LICENSE_NUMBER", "de", "pii_driver_license_number_uk_context_free", "SMITH801320AB1CD", "day 32", tags=("no_context",), mode="balanced"),
     n("DRIVER_LICENSE_NUMBER", "de", "pii_driver_license_number_uk_context_free", "Bestellnummer MORGA657054SM9IJ", "order number", mode="balanced"),
     n("DRIVER_LICENSE_NUMBER", "de", "pii_driver_license_number_uk_context_free", "Artikel XMORGA657054SM9IJ ist vergriffen.", "glued to a letter", carrier="prose", mode="balanced"),
+    # ── passport of two letters and seven digits (Ireland, Japan) next to a passport term ──
+    p("PASSPORT_NUMBER", "en", "pii_passport_number_two_letters", "Passport number: ", "PA1234567"),
+    p("PASSPORT_NUMBER", "en", "pii_passport_number_two_letters", "Witness: Darusman Ratulangi (Passport No. ", "SG9943897", ")", carrier="prose"),
+    p("PASSPORT_NUMBER", "en", "pii_passport_number_two_letters", '{"passport_number": "', "TK1234567", '"}', carrier="json"),
+    p("PASSPORT_NUMBER", "de", "pii_passport_number_two_letters", "Der irische Reisepass ", "PA1234567", " ist gültig.", carrier="prose"),
+    p("PASSPORT_NUMBER", "de", "pii_passport_number_two_letters", '{"passnummer": "', "KB1572986", '"}', carrier="json"),
+    n("PASSPORT_NUMBER", "en", "pii_passport_number_two_letters", "Ticket PA1234567 was closed.", "no passport term", carrier="prose"),
+    n("PASSPORT_NUMBER", "en", "pii_passport_number_two_letters", "Her passport PA1234567-2 expires in 2031.", "part of a hyphenated number", carrier="prose"),
+    n("PASSPORT_NUMBER", "de", "pii_passport_number_two_letters", "Vorgang PA1234567 abgeschlossen.", "no passport term", carrier="prose"),
+    n("PASSPORT_NUMBER", "de", "pii_passport_number_two_letters", "Der Reisepass pa1234567 ist gültig.", "lowercase", carrier="prose"),
 ]
 for _row in B_UK_CASES:
     PII_CASES.setdefault(_row["target_label"], []).append(_row)
