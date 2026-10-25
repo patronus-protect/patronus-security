@@ -105,6 +105,22 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Synthetic gold for the VAT IDs of AT, BE, BG, CH, CY, CZ, DK, EE, ES, FI, FR, GR, HR and HU
+  (GOLD-VAT1). These ids were implemented (B01, B02) but had gold in no source family. The E05
+  generator `scripts/l1_presidio/synth_goldset.py` gains `--goldset vat-1`: a goldset of its own
+  (corpus `ark-synthetic-vat-1`, family `ark_authored`, own public dev seed and secret holdout
+  seed, own directory `synthetic-vat-1`) so that the frozen `ark-synthetic-de-eu` set stays
+  byte-identical. Per id and language one letter, form, JSON and CSV document carry two
+  checksum-valid numbers in the printed forms of the ARK rules (BG, CZ and ES also numbers of
+  natural persons) and the hard negatives `vat_check_digit` (wrong check character),
+  `vat_length` (one digit outside the issued lengths) and `vat_postcode` (`DK-8000`); dev has
+  112 rows with 16 positives per id, holdout 224 rows. The tests check every positive and hard
+  negative against the scoreboard's ports of the Rust validators and pin the dev output. The
+  runner freezes the goldset once like E05 (gate step `synthetic-goldset-vat-1`, after the
+  runner is reinstalled). **Detection change:** none (evaluation data only; Rust, the E05 set and
+  every other goldset are unchanged). On the new dev set `balanced` reaches exact F1 100 for all
+  14 ids with no hard-negative hit; `strict` reports none of them (scored-only rules, as
+  decided in B01).
 - German health care check digits (B-DE1: F10, F11, F12). The field-bound rules
   `pii_health_insurance_number_de`, `pii_rentenversicherung_de` and `pii_physician_number_lanr_de`
   now compute the check digit instead of the form only: `validators::de_health_insurance_number`

@@ -803,11 +803,16 @@ def gate_steps(wt: Path) -> list[tuple[str, list[str], dict]]:
                                                    "--holdout-out", str(favored)],
                       {"rw": [wt, DEV_DATA, HOLDOUT, CACHE]}))
     synth = wt / P["eval_dir"] / "synth_goldset.py"
-    if synth.exists() and not (HOLDOUT / "synthetic" / ".ready").exists():
+    # One directory per goldset (E05, then GOLD-VAT1); a branch whose script lacks a goldset skips it.
+    for step, goldset, directory in (("synthetic-goldset", None, "synthetic"),
+                                     ("synthetic-goldset-vat-1", "vat-1", "synthetic-vat-1")):
+        if not synth.exists() or (HOLDOUT / directory / ".ready").exists() \
+                or (goldset and f'"{goldset}"' not in synth.read_text(encoding="utf-8")):
+            continue
         # Once, like prepare-corpora: afterwards agent branches never get write access to the holdout.
-        # The secret holdout seed is created in HOLDOUT/synthetic/.seed.
-        steps.append(("synthetic-goldset", [py, str(synth), "--dev-out", str(DEV_DATA / "synthetic"),
-                                            "--holdout-out", str(HOLDOUT / "synthetic")],
+        # The secret holdout seed is created in HOLDOUT/<directory>/.seed.
+        steps.append((step, [py, str(synth), *(["--goldset", goldset] if goldset else []),
+                             "--dev-out", str(DEV_DATA / directory), "--holdout-out", str(HOLDOUT / directory)],
                       {"rw": [DEV_DATA, HOLDOUT], "readable": (wt,), "network": False}))
     external = wt / P["eval_dir"] / "external_content.py"
     if external.exists() and not (DEV_DATA / "external" / ".ready").exists():

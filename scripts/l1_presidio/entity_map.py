@@ -50,6 +50,7 @@ ARK_GOLD_SOURCES = {
     "pii_l1": ROOT / "python" / "patronus_ark" / "benchmark_data" / "pii_l1.jsonl",
     "l1_bilingual_rules": ROOT / "rust" / "tests" / "fixtures" / "l1_bilingual_rules.json",
     "ark-synthetic-de-eu": HERE / "synth_goldset.py",
+    "ark-synthetic-vat-1": HERE / "synth_goldset.py",
 }
 
 
