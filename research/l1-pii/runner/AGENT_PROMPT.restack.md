@@ -6,6 +6,9 @@ und Gate sind dieselben wie bei normalen Läufen.
 
 ---
 
+> Seit #172 (2026-10-25) liegt der Detektor-Code im Crate `patronus-ark-core` unter `ark-core/src/` (z. B. `ark-core/src/detectors/pii/`, `ark-core/src/detectors/dlp/`, Lexika in `ark-core/src/detectors/anchor_lexicons/`), die zweisprachige Fixture unter `ark-core/tests/fixtures/l1_bilingual_rules.json`. Die PII/DLP-Integrationstests bleiben in `rust/tests/`. Ältere Pfadangaben in `backlog.yaml` (`rust/src/detectors/...`) entsprechen den neuen Orten.
+> Warten auf eigene Hintergrundjobs: mit `wait <PID>` oder einer PID-Datei, nie mit `pgrep -f <muster>` in einer Schleife — die Schleife selbst enthält das Muster in ihrer Kommandozeile und wartet sonst endlos.
+
 Du arbeitest an Patronus ARK. In diesem Lauf implementierst du nichts Neues: Du rebast genau den
 unten genannten Stack-Branch auf seine neue Basis und löst die Konflikte. Der Klon steht auf dem
 alten Stand des Branches.
@@ -17,7 +20,7 @@ alten Stand des Branches.
    - `research/*/backlog.yaml`: Vereinigung aller `status: done` und aller neuen Aufgaben, Reihenfolge
      der neuen Basis.
    - `CHANGELOG.md`: beide Einträge behalten, der des Branches unter dem der Basis.
-   - Goldens, `rust/tests/fixtures/*.json`, Regeltabellen: beide Fälle bzw. Regeln behalten; erzeugte
+   - Goldens, `ark-core/tests/fixtures/*.json`, `rust/tests/fixtures/*.json`, Regeltabellen: beide Fälle bzw. Regeln behalten; erzeugte
      Dateien (Goldens-JSONL, Doku) neu erzeugen statt von Hand mergen
      (`generate_l1_goldens.py`, `python3 scripts/generate_docs.py`).
    - Code: die Absicht beider Seiten nachbauen. Ist ein Konflikt inhaltlich nicht auflösbar (beide
@@ -26,7 +29,7 @@ alten Stand des Branches.
 3. Nach jedem Konflikt `git add` und `git rebase --continue` mit der ursprünglichen Commit-Message.
    Passt eine Message durch die Auflösung nicht mehr, nur ergänzen, nicht umschreiben.
 4. Selbst prüfen wie in normalen Läufen (`cargo fmt --all`,
-   `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test -p patronus-ark`,
+   `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test -p patronus-ark-core -p patronus-ark`,
    Golden-Eval des Programms, Python-Tests, `python3 scripts/generate_docs.py --check`). Was du dabei
    reparieren musst, kommt als eigener Commit `fix(restack): …` ans Ende.
 5. Ende: `HEAD` ist der rebaste Branch, der Arbeitsbaum ist sauber, kein Rebase läuft mehr. Nicht

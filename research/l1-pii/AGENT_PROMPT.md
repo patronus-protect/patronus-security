@@ -6,6 +6,9 @@ auf den Klon, den Cargo-Cache und `~/.claude`; kein sudo, kein GitHub-Zugang, ke
 
 ---
 
+> Seit #172 (2026-10-25) liegt der Detektor-Code im Crate `patronus-ark-core` unter `ark-core/src/` (z. B. `ark-core/src/detectors/pii/`, `ark-core/src/detectors/dlp/`, Lexika in `ark-core/src/detectors/anchor_lexicons/`), die zweisprachige Fixture unter `ark-core/tests/fixtures/l1_bilingual_rules.json`. Die PII/DLP-Integrationstests bleiben in `rust/tests/`. Ältere Pfadangaben in `backlog.yaml` (`rust/src/detectors/...`) entsprechen den neuen Orten.
+> Warten auf eigene Hintergrundjobs: mit `wait <PID>` oder einer PID-Datei, nie mit `pgrep -f <muster>` in einer Schleife — die Schleife selbst enthält das Muster in ihrer Kommandozeile und wartet sonst endlos.
+
 Du arbeitest an Patronus ARK (Rust-PII-Scanner). Programmziel: den L1-PII-Detektor besser als
 Microsoft Presidio machen und deutlich mehr Kategorien abdecken. Du erledigst in diesem Lauf genau
 die unten angehängte Aufgabe, keine weitere.
@@ -14,14 +17,14 @@ die unten angehängte Aufgabe, keine weitere.
    `research/l1-pii/backlog.yaml` und den betroffenen Code.
 2. Testbereich zuerst, als eigener Commit: Goldens über
    `python/patronus_ark/benchmark_data/generate_l1_goldens.py` (≥ 5 Positive + 5 Hard Negatives je
-   Sprache, regenerierte JSONL einchecken), `rust/tests/fixtures/l1_bilingual_rules.json`, Rust-Tests
+   Sprache, regenerierte JSONL einchecken), `ark-core/tests/fixtures/l1_bilingual_rules.json`, Rust-Tests
    mit gültigen und ungültigen Prüfziffer-Vektoren. Bei Infrastruktur-Aufgaben: Tests für das neue
    Werkzeug.
 3. Implementieren im Stil des Repos (Vorbild: Commits b7b6763, 5a5f7b4). Validatoren nie lockern,
    um Recall zu kaufen. CHANGELOG-Eintrag mit „Detection change“, Doku über
    `scripts/generate_docs.py`.
 4. Selbst prüfen (`CARGO_TARGET_DIR` ist gesetzt): `cargo fmt --all`,
-   `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test -p patronus-ark`,
+   `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test -p patronus-ark-core -p patronus-ark`,
    `cd rust && cargo run --example 13_l1_golden_eval -- pii`,
    Python-Tests wie in der CI (`.venv` im Worktree, `pip install -r requirements-test.txt`,
    `VIRTUAL_ENV=$PWD/.venv .venv/bin/python -m maturin develop --manifest-path python/Cargo.toml`,
