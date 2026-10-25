@@ -1,0 +1,13 @@
+{
+  "synthetic": {
+    "overall": {"gold": 40, "predicted": 20, "exact": {"f1": 0.5, "precision": 0.5, "recall": 0.5, "tp": 20}},
+    "groups": {
+      "API_KEY": {"gold": 40, "predicted": 20, "exact": {"f1": 0.5, "precision": 0.5, "recall": 0.5, "tp": 20}},
+      "dlp.de.vat_id": {"gold": 8, "predicted": 0, "exact": {"f1": 0.0, "precision": 0.0, "recall": 0.0, "tp": 0}}
+    },
+    "providers": {
+      "llm.openai.api_key": {"gold": 40, "predicted": 20, "exact": {"f1": 0.5, "precision": 0.5, "recall": 0.25, "tp": 10}},
+      "identifier.de.vat_id": {"gold": 8, "predicted": 0, "exact": {"f1": 0.0, "precision": 0.0, "recall": 0.0, "tp": 0}}
+    }
+  }
+}
