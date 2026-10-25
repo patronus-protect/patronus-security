@@ -51,6 +51,7 @@ ARK_GOLD_SOURCES = {
     "l1_bilingual_rules": ROOT / "ark-core" / "tests" / "fixtures" / "l1_bilingual_rules.json",
     "ark-synthetic-de-eu": HERE / "synth_goldset.py",
     "ark-synthetic-vat-1": HERE / "synth_goldset.py",
+    "ark-synthetic-vat-2": HERE / "synth_goldset.py",
 }
 
 

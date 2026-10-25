@@ -18,7 +18,7 @@ Stand: 2026-10-11. Aufgabenliste: [`backlog.yaml`](backlog.yaml). Agent-Prompt:
 ## Gold und Qualitätsuntergrenze (seit 2026-10-25)
 
 - **Gold überall:** Jede implementierte Entität braucht Gold in mindestens einer Quellfamilie. Neue Entitäten bringen ihr Gold in derselben Aufgabe mit (synthetisch, prüfziffergültig, ≥ 10 Positive und ≥ 5 Hard Negatives je Entität, DE + EN). Lücken stehen auf der Seite `docs/reference/l1-capabilities.md` als „no gold“.
-- **Gold für Entitäten nach dem E05-Freeze:** Das E05-Goldset bleibt bytegleich; nachgereichtes synthetisches Gold bekommt ein eigenes Goldset desselben Generators mit eigenem Korpus, eigenen Seeds und eigenem Verzeichnis (`--goldset`, Familie `ark_authored`). GOLD-VAT1: `ark-synthetic-vat-1` für die USt-IdNr. von AT, BE, BG, CH, CY, CZ, DK, EE, ES, FI, FR, GR, HR und HU (Aufbau in [`scripts/l1_presidio/README.md`](../../scripts/l1_presidio/README.md)); ohne Gold bleiben bis GOLD-VAT2 die übrigen VAT-IDs (`NOT_GENERATED`).
+- **Gold für Entitäten nach dem E05-Freeze:** Das E05-Goldset bleibt bytegleich; nachgereichtes synthetisches Gold bekommt ein eigenes Goldset desselben Generators mit eigenem Korpus, eigenen Seeds und eigenem Verzeichnis (`--goldset`, Familie `ark_authored`). GOLD-VAT1: `ark-synthetic-vat-1` für die USt-IdNr. von AT, BE, BG, CH, CY, CZ, DK, EE, ES, FI, FR, GR, HR und HU; GOLD-VAT2: `ark-synthetic-vat-2` für IE, LT, LU, LV, MT, NL, NO, PL, PT, RO, SE, SI, SK und UK (Aufbau in [`scripts/l1_presidio/README.md`](../../scripts/l1_presidio/README.md)). Damit erzeugen die drei Goldsets zusammen jede ID der Entity-Map.
 - **Untergrenze F1 ≥ 80:** Jede implementierte Entität mit Gold erreicht exakten F1 ≥ 80 auf jeder Familie mit Gold (PII: `balanced`; DLP: im Profil, in dem sie läuft, auch Opt-in). Darunter wird eine `Q-…`-Aufgabe angelegt; TRIAGE prüft das bei jeder Messung. Ausnahmen nur mit dokumentierter Entscheidung.
 
 ## Definition „besser als Presidio“
@@ -139,8 +139,8 @@ und B-DE1).
 Stand B01: ARK 11, gemeinsam 5. Dazu kommen die USt-IdNr. von DE, AT, CH, FR, NL, BE, IT und ES, je
 Land ein Label (`VAT_ID_DE` …) und ein Validator mit Prüfziffer (`rust/src/detectors/pii/vat.rs`), nur
 in `balanced`/`recall` (scored-only wie K05). DE und IT sind `shared`, die übrigen sechs `ark_only`;
-das eingefrorene E05-Goldset erzeugt die sechs neuen IDs nicht (`NOT_GENERATED` in
-`synth_goldset.py`) und bleibt bytegleich.
+das eingefrorene E05-Goldset erzeugt die sechs neuen IDs nicht und bleibt bytegleich; ihr Gold kommt aus
+den VAT-Goldsets von GOLD-VAT1 und GOLD-VAT2.
 
 Stand B16: ARK 24, gemeinsam 7. Dazu kommen die USt-IdNr. von LU, LV, MT, PL, PT, RO, SE, SI, SK, NO
 und GB, aufgebaut wie B01 (je Land ein Label und ein Validator mit Prüfziffer, scored-only, alle
@@ -248,7 +248,8 @@ nur in `balanced`/`recall`), alle `ark_only`; Griechenland trägt im Label das M
 der ID den Ländercode (`pii.gr.vat_id`). Die Algorithmen folgen python-stdnum 2.2, strenger bei
 Formen ohne Prüfziffer (neunstellige tschechische Geburtsnummer vor 1954) und bei Nullnummern.
 `VAT_ID_HR` (elf Ziffern wie eine Steuer-ID) und `VAT_ID_LT` (zwölf Ziffern, mitunter kartenförmig)
-konkurrieren nach K07 als längerer Wert. Das E05-Goldset erzeugt die elf IDs nicht (`NOT_GENERATED`).
+konkurrieren nach K07 als längerer Wert. Das E05-Goldset erzeugt die elf IDs nicht; ihr Gold kommt aus den
+VAT-Goldsets von GOLD-VAT1 und GOLD-VAT2.
 
 ## Gold-Konvention: Platzhalter-Werte
 
@@ -515,8 +516,9 @@ run.sh
   Dazu kommt das synthetische DE/EU-Goldset aus `scripts/l1_presidio/synth_goldset.py` unter
   `…/synthetic/`: Dev mit öffentlichem Seed, Holdout mit geheimem Seed (`~/ark-l1/holdout/synthetic/.seed`),
   ebenfalls einmalig vom Gate erzeugt (Schritt `synthetic-goldset`, erst nach Neuinstallation des Runners).
-  Das VAT-Goldset aus GOLD-VAT1 (`--goldset vat-1`) friert der Schritt `synthetic-goldset-vat-1` genauso
-  nach `…/synthetic-vat-1/` ein (Holdout-Seed in `~/ark-l1/holdout/synthetic-vat-1/.seed`), erst nach
+  Die VAT-Goldsets aus GOLD-VAT1 (`--goldset vat-1`) und GOLD-VAT2 (`--goldset vat-2`) frieren die Schritte
+  `synthetic-goldset-vat-1` und `synthetic-goldset-vat-2` genauso nach `…/synthetic-vat-1/` bzw.
+  `…/synthetic-vat-2/` ein (Holdout-Seed jeweils in dessen `.seed` unter `~/ark-l1/holdout/`), erst nach
   Neuinstallation des Runners.
 - **Scoreboard:** `scripts/l1_presidio/scoreboard.py gate` rechnet Head und Basis in den PII-Modi
   `strict` und `balanced` (exakt und überlappend, je Entität, DE/EN, je Quellfamilie, Hard-Negative-FP)

@@ -803,9 +803,10 @@ def gate_steps(wt: Path) -> list[tuple[str, list[str], dict]]:
                                                    "--holdout-out", str(favored)],
                       {"rw": [wt, DEV_DATA, HOLDOUT, CACHE]}))
     synth = wt / P["eval_dir"] / "synth_goldset.py"
-    # One directory per goldset (E05, then GOLD-VAT1); a branch whose script lacks a goldset skips it.
+    # One directory per goldset (E05, GOLD-VAT1, GOLD-VAT2); a branch whose script lacks a goldset skips it.
     for step, goldset, directory in (("synthetic-goldset", None, "synthetic"),
-                                     ("synthetic-goldset-vat-1", "vat-1", "synthetic-vat-1")):
+                                     ("synthetic-goldset-vat-1", "vat-1", "synthetic-vat-1"),
+                                     ("synthetic-goldset-vat-2", "vat-2", "synthetic-vat-2")):
         if not synth.exists() or (HOLDOUT / directory / ".ready").exists() \
                 or (goldset and f'"{goldset}"' not in synth.read_text(encoding="utf-8")):
             continue

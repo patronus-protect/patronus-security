@@ -205,41 +205,57 @@ einmalig nach `~/ark-l1/data/dev/synthetic` und `~/ark-l1/holdout/synthetic`, so
 `.ready` liegt. Später ändert ein Agent-Branch den eingefrorenen Holdout also nicht mehr. Ein neu
 eingefrorener Holdout nach einer Generator-Änderung ist ein bewusster Handgriff (`--force`).
 
-### VAT-Goldset, Teil 1 (GOLD-VAT1)
+### VAT-Goldsets (GOLD-VAT1, GOLD-VAT2)
 
-Das E05-Goldset ist eingefroren; IDs, die die Entity-Map später bekam, erzeugt es nicht
-(`NOT_GENERATED`). Für die USt-IdNr. von AT, BE, BG, CH, CY, CZ, DK, EE, ES, FI, FR, GR, HR und HU
-schreibt derselbe Generator mit `--goldset vat-1` ein eigenes Goldset: Korpus `ark-synthetic-vat-1`
-(Familie `ark_authored`), eigener öffentlicher Dev-Seed (`VAT_DEV_SEED`), eigener geheimer
-Holdout-Seed, eigenes Verzeichnis. `ark-synthetic-de-eu` bleibt dadurch bytegleich.
+Das E05-Goldset ist eingefroren; IDs, die die Entity-Map später bekam, erzeugt es nicht. Für die
+USt-IdNr. schreibt derselbe Generator mit `--goldset` zwei eigene Goldsets, je mit eigenem Korpus
+(Familie `ark_authored`), eigenem öffentlichem Dev-Seed (`VAT1_DEV_SEED`, `VAT2_DEV_SEED`), eigenem
+geheimem Holdout-Seed und eigenem Verzeichnis. `ark-synthetic-de-eu` und das zuerst eingefrorene
+`ark-synthetic-vat-1` bleiben dadurch bytegleich. Zusammen erzeugen die drei Goldsets jede ID der
+Entity-Map.
+
+| Goldset | Korpus | IDs |
+|---|---|---|
+| `vat-1` (GOLD-VAT1) | `ark-synthetic-vat-1` | AT, BE, BG, CH, CY, CZ, DK, EE, ES, FI, FR, GR, HR, HU |
+| `vat-2` (GOLD-VAT2) | `ark-synthetic-vat-2` | IE, LT, LU, LV, MT, NL, NO, PL, PT, RO, SE, SI, SK, UK |
 
 ```bash
 python3 scripts/l1_presidio/synth_goldset.py --goldset vat-1 --dev-out DIR --holdout-out DIR
+python3 scripts/l1_presidio/synth_goldset.py --goldset vat-2 --dev-out DIR --holdout-out DIR
 ```
 
 - **Aufbau:** je ID und Sprache (DE, EN) ein Dokument je Träger: Brief (Fließtext, mit und ohne
-  Feldnamen), Formular (Schlüssel/Wert), JSON und CSV; Dev 112 Zeilen (je Kombination eine),
-  Holdout 224 (je Kombination zwei).
+  Feldnamen), Formular (Schlüssel/Wert), JSON und CSV; je Goldset Dev 112 Zeilen (je Kombination
+  eine), Holdout 224 (je Kombination zwei).
 - **Positive:** je Dokument zwei prüfziffergültige Nummern in den gedruckten Formen der ARK-Regeln
-  (`ATU 12345678`, `BE 0403.019.261`, `CHE-123.456.789`, `DK 13 58 56 28`, `EL…`/`GR…`, …), bei BG,
-  CZ und ES auch Nummern natürlicher Personen (ЕГН, Rodné číslo, DNI/NIE); je Split und ID mindestens
-  16, je Sprache mindestens 8. Firmen, Orte und Bearbeiter sind als `entity.*` annotiert.
+  (`ATU 12345678`, `BE 0403.019.261`, `CHE-123.456.789`, `DK 13 58 56 28`, `EL…`/`GR…`,
+  `NO 995 525 828 MVA`, `PL 856-734-62-15`, `GB 980 7806 84 001`, `XI…`, …), dazu die anderen
+  vergebenen Formen: Nummern natürlicher Personen bei BG, CZ, ES, LT (zwölfstellig), NL (btw-id seit
+  2020, MOD 97-10), PT und SE (Personnummer), die irische Form mit zweitem Buchstaben und die alte Form
+  (`IE8D79739I`), britische Zweigstellen; je Split und ID mindestens 16, je Sprache mindestens 8.
+  Firmen, Orte und Bearbeiter sind als `entity.*` annotiert, britische Postleitzahlen als
+  `pii.uk.postcode` (wie in E05).
 - **Hard Negatives** (`hard_negatives`, ohne `entity_type`, gelten also für jede L1-ID):
   `vat_check_digit` (dieselbe Form mit falschem Prüfzeichen), `vat_length` (eine Stelle kürzer als die
-  kürzeste oder länger als die längste vergebene Form) und `vat_postcode` (Ländercode mit
-  Postleitzahl, `DK-8000`, `CZ-602 00`); je Split, ID und Sprache mindestens 4 von jeder Art.
+  kürzeste oder länger als die längste vergebene Form; RO nur länger, da CUI ab zwei Stellen gelten) und
+  `vat_postcode` (Ländercode mit Postleitzahl, `DK-8000`, `CZ-602 00`, `NL-3011 AB`, `L-4123`, bei
+  Malta `SLM 1549`); je Split, ID und Sprache mindestens 4 von jeder Art, beim Vereinigten Königreich
+  ohne `vat_postcode`. In `vat-2` nimmt kein Hard Negative zufällig einen Wert an, den eine andere
+  L1-Regel meldet (IBAN mit MOD 97, Kartennummer mit Luhn, deutsche Pass- und Ausweisnummer mit
+  ICAO-Prüfziffer: `other_l1_value`), und ein falsches NL-Prüfzeichen trifft auch kein MOD 97-10.
 - **Prüfung:** `scripts/tests/test_l1_synth_goldset.py` prüft jedes Positiv gegen die Python-Ports
   der Rust-Validatoren (`CHECKSUM_PORTS` in `scoreboard.py`) und jedes Hard Negative dagegen; die
-  Dev-Ausgabe ist je `VAT_GENERATOR_VERSION` gepinnt.
-- **Gate:** Der Runner friert das Goldset wie E05 einmalig ein (Schritt `synthetic-goldset-vat-1`,
-  `~/ark-l1/data/dev/synthetic-vat-1`, `~/ark-l1/holdout/synthetic-vat-1`, Seed in dessen `.seed`),
-  erst nach Neuinstallation des Runners.
+  Dev-Ausgabe ist je Goldset und Generator-Version (`VAT1_GENERATOR_VERSION`,
+  `VAT2_GENERATOR_VERSION`) gepinnt.
+- **Gate:** Der Runner friert jedes Goldset wie E05 einmalig ein (Schritte `synthetic-goldset-vat-1`
+  und `synthetic-goldset-vat-2`, `~/ark-l1/data/dev/synthetic-vat-N`, `~/ark-l1/holdout/synthetic-vat-N`,
+  Seed in dessen `.seed`), erst nach Neuinstallation des Runners.
 
 ## Scoreboard
 
 `scoreboard.py gate` vergleicht den ARK-Build eines Checkouts mit seinem Basis-Commit auf allen
 eingefrorenen Goldsets (Verzeichnisse mit `.ready`: `DIR/*.jsonl`, `DIR/synthetic/*.jsonl`,
-`DIR/synthetic-vat-1/*.jsonl`), je Seite
+`DIR/synthetic-vat-1/*.jsonl`, `DIR/synthetic-vat-2/*.jsonl`), je Seite
 in den PII-Modi `strict` und `balanced` (`run_ark.py --pii-mode`, Entscheidung T15 in
 [`research/l1-pii/README.md`](../../research/l1-pii/README.md)):
 
