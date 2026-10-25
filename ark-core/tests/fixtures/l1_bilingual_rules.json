@@ -1761,6 +1761,45 @@
     }
   },
   {
+    "category": "pii",
+    "rule_id": "pii_aba_routing_number_us",
+    "de": "Die Routingnummer der US-Bank lautet 021000021.",
+    "en": "The bank's ABA routing number is 026009593.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "ABA 421042111",
+        "Bestellnummer 121000358"
+      ],
+      "en": [
+        "ABA 121000359",
+        "Order 021000021 shipped."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_aba_routing_number_us_context_free",
+    "de": "Bitte überweisen Sie an 0260-0959-3.",
+    "en": "Please send the wire to 1210-0035-8 today.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die ABA-Nummer 0260-0959-3 liegt vor.",
+        "en": "0711-0130-7 is the routing number."
+      }
+    },
+    "hard_negatives": {
+      "de": [
+        "Rechnungsnummer 0711-0130-7"
+      ],
+      "en": [
+        "Ticket number 3222-7162-7"
+      ]
+    }
+  },
+  {
     "category": "dlp",
     "rule_id": "dlp_anthropic_key",
     "de": "<<secret\u003a0>>",

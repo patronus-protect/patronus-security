@@ -3199,6 +3199,98 @@ Q_DE_CASES = [
 for _row in Q_DE_CASES:
     PII_CASES.setdefault(_row["target_label"], []).append(_row)
 
+# B-ACCT (A04, F14): the ABA routing number (Federal Reserve routing symbol, 3-7-1 check digit) is
+# reported in every mode with a routing or account term near it or as its key; nine bare digits pass
+# the check one time in ten. Only the printed 4-4-1 form is reported bare, in `balanced`/`recall`
+# (K05). The field-bound account rule also binds the BBAN, the routing number (with or without its
+# check digit) and `acct` fields, before the value and as structural keys, and the customer ID rule
+# takes `customer_id`/`customer-number`. Appended so existing ids stay stable.
+B_ACCT_CASES = [
+    # ── ABA routing number with a term, every mode ────────────────────────
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us", "Die Routingnummer der US-Bank lautet ", "021000021", ".", carrier="prose"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us", "Überweisung über ABA ", "121000358", " an die Filiale in Boston.", carrier="prose"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us", "Bitte ", "011000015", " (ABA-Nummer) für die Gutschrift verwenden.", carrier="prose"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us", '{"aba": "', "053000196", '"}', carrier="json"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us", "rtn;betrag\n", "061000052", ";42,00", carrier="csv"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us", "Für die Lastschrift gilt die ABA ", "0711-0130-7", ".", carrier="prose", mode="balanced"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us", "The bank's ABA routing number is ", "026009593", ".", carrier="prose"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us", "Wire to ", "111000025", " (bank routing number) by Friday.", carrier="prose"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us", "We may also collect bank routing numbers, such as ", "322271627", ".", carrier="prose"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us", "rtn,amount\n", "091000019", ",42", carrier="csv"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us", "Lender: First Bank, ABA ", "256074974", ", Boston", carrier="prose"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us", "Payments clear through RTN ", "3222-7162-7", " only.", carrier="prose", mode="recall"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us", "Bestellnummer 121000358", "valid check digit without a routing term"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us", "Vorgang 021000021 wurde abgeschlossen.", "valid check digit without a routing term", carrier="prose", mode="balanced"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us", "ABA 121000359", "check digit fails"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us", "ABA 901000358", "check digit valid, but 90 is no routing symbol", mode="balanced"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us", "ABA 1210003580", "ten digits"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us", "Order 021000021 shipped.", "valid check digit without a routing term", carrier="prose"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us", "ABA 421042111", "check digit and routing symbol fail (presidio-analyzer negative)", mode="balanced"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us", "ABA, order number 121000358", "order number nearer than the routing term", mode="balanced"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us", "ABA 000000000", "one repeated digit"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us", "ABA 121000358-2", "part of a longer number"),
+    # ── bare 4-4-1 form (balanced/recall) ─────────────────────────────────
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us_context_free", "Bitte überweisen Sie an ", "0260-0959-3", ".", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us_context_free", "", "0711-0130-7", "", tags=("no_context",), mode="balanced"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us_context_free", "Gutschrift über ", "0210-0002-1", " ist erfolgt.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us_context_free", "Neue Angabe: ", "1110-0002-5", "", tags=("no_context",), mode="recall"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us_context_free", "Die ABA-Nummer ", "0530-0019-6", " liegt vor.", carrier="prose", mode="balanced"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us_context_free", "Please send the wire to ", "1210-0035-8", " today.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us_context_free", "", "3222-7162-7", "", tags=("no_context",), mode="balanced"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us_context_free", "Transfer via ", "0110-0001-5", ", thanks.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us_context_free", "Record 7 lists ", "0610-0005-2", " for the payee.", carrier="prose", tags=("no_context",), mode="recall"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us_context_free", "", "0910-0001-9", " is the routing number.", carrier="prose", mode="balanced"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us_context_free", "Rechnungsnummer 0711-0130-7", "counter-context nearer", mode="balanced"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us_context_free", "Bitte 0711-0130-8 prüfen.", "check digit fails", carrier="prose", mode="balanced"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us_context_free", "Teil 4210-4211-3 geliefert.", "check digit valid, but 42 is no routing symbol", carrier="prose", mode="balanced"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us_context_free", "Serie 0711-0130-75 gesperrt.", "part of a longer value", carrier="prose", mode="recall"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us_context_free", "121000358", "nine bare digits", mode="balanced"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us_context_free", "Ticket number 3222-7162-7", "counter-context nearer", mode="balanced"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us_context_free", "Batch 1210-0035-9 shipped.", "check digit fails", carrier="prose", mode="balanced"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us_context_free", "Part X0711-0130-7 ordered.", "part of a longer value", carrier="prose", mode="balanced"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us_context_free", "Lot 9010-0035-8 recalled.", "check digit valid, but 90 is no routing symbol", carrier="prose", mode="recall"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us_context_free", "0711-0130-7", "strict never reports the bare form"),
+    # ── BBAN, routing and acct fields, every mode ─────────────────────────
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_financial_account_number", "BBAN: ", "19617962324057605069"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_financial_account_number", "Routing-Nummer: ", "512345678"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_financial_account_number", '{"bban": "', "ADXO08034447307440", '"}', carrier="json"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_financial_account_number", "name;bank_routing_number\nIsidora Cordero;", "577522835", "", carrier="csv"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_financial_account_number", "<Konto>\n<AcctNumber>", "823754616", "</AcctNumber>\n</Konto>", carrier="xml"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_financial_account_number", "konto:\n  bban: ", "36641600086542880045", "\n", carrier="yaml"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_financial_account_number", "| Name | BBAN |\n|---|---|\n| Jonas Weber | ", "147235766578281277", " |", carrier="table"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_financial_account_number", "BBAN: ", "ZFJR88590163492773"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_financial_account_number", "Bank Routing Number: ", "932049652"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_financial_account_number", "My bank routing number is ", "885327936", ", as requested.", carrier="prose"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_financial_account_number", "Carr, with the BBAN number ", "NQTZ73395804946160", ", resides here.", carrier="prose"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_financial_account_number", "<RoutingNumber>", "174518479", "</RoutingNumber>", carrier="xml"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_financial_account_number", "Acct No: ", "55120443"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_financial_account_number", "routing_number: ", "259255680", "", carrier="kv"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_financial_account_number", "<AcctId>", "H0873491448510040803748", "</AcctId>", carrier="xml"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_financial_account_number", "BBAN: siehe Anlage", "field without a value"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_financial_account_number", "Die BBAN ist Teil der IBAN.", "field name without a value", carrier="prose"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_financial_account_number", "Routing-Nummer: ****", "masked value", tags=("obfuscated",)),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_financial_account_number", "Bestellnummer: 932049652", "wrong identifier anchor"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_financial_account_number", "Die Routing-Tabelle wurde für 10 Hosts aktualisiert.", "network routing, no field", carrier="prose"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_financial_account_number", "Bank routing number: on file", "field without a value"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_financial_account_number", "Routing number: ****", "masked value", tags=("obfuscated",)),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_financial_account_number", "Enter the routing number without dashes.", "field name without a value", carrier="prose"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_financial_account_number", "Network routing table updated for 10 hosts.", "network routing, no field", carrier="prose"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_financial_account_number", "Routing number for direct deposit is printed on the cheque.", "field name without a value", carrier="prose"),
+    # ── customer IDs under customer_id / customer-number ──────────────────
+    p("CUSTOMER_ID", "de", "pii_customer_id", "Datensatz: customer_id: ", "K7430771", ""),
+    p("CUSTOMER_ID", "de", "pii_customer_id", "57=customer_id:", "Xt70626-Z", "|57=passwort:x", carrier="kv"),
+    p("CUSTOMER_ID", "de", "pii_customer_id", "Laut Export customer-number = ", "C150-5439-416", "", carrier="kv"),
+    p("CUSTOMER_ID", "en", "pii_customer_id", "Services: braces. Customer_ID: ", "T-397878-G", ""),
+    p("CUSTOMER_ID", "en", "pii_customer_id", "57=customer_id:", "K7430771", "|57=password:x", carrier="kv"),
+    p("CUSTOMER_ID", "en", "pii_customer_id", "customer-number = ", "C150-5439-416", "", carrier="kv"),
+    n("CUSTOMER_ID", "de", "pii_customer_id", "customer_id: keine Angabe", "field without a value"),
+    n("CUSTOMER_ID", "de", "pii_customer_id", "customer_id=42", "value too short", carrier="kv"),
+    n("CUSTOMER_ID", "en", "pii_customer_id", "customer_id: none", "field without a value"),
+    n("CUSTOMER_ID", "en", "pii_customer_id", "customer-number = ****", "masked value", carrier="kv", tags=("obfuscated",)),
+]
+for _row in B_ACCT_CASES:
+    PII_CASES.setdefault(_row["target_label"], []).append(_row)
+
 # DLP golden schema v2 (E13). Every DLP row names the rule it exercises (`rule_id`), the
 # document that carries the value (`carrier`), its difficulty `tags` and whether it is a
 # `known_gap`: a positive the detector misses today, reported by 13_l1_golden_eval but

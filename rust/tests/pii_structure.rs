@@ -70,7 +70,8 @@ fn every_carrier_binds_its_value_to_the_rule_in_strict() {
         ("json", "pii_customer_id", r#"{"kundennummer": "KD-99120"}"#, "KD-99120"),
         ("json", "pii_customer_id", r#"{"customerId": "CUS-88412"}"#, "CUS-88412"),
         ("json", "pii_student_id", r#"{"matrikelNummer": "5520931"}"#, "5520931"),
-        ("kv", "pii_customer_id", "customer:\n  customer_id: C-104882\n", "C-104882"),
+        // `customer_id: …` is also a field name in running text (B-ACCT); camel case is a key only.
+        ("kv", "pii_customer_id", "customer:\n  customerNumber: C-104882\n", "C-104882"),
         ("kv", "pii_financial_account_number", "[payout]\naccount_number = ACC-55120", "ACC-55120"),
         ("xml", "pii_employee_id", "<employee><id>E-77121</id></employee>", "E-77121"),
         ("xml", "pii_customer_id", r#"<customer id="CUST-9001"/>"#, "CUST-9001"),

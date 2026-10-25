@@ -431,7 +431,8 @@ fn context_bound_rules_score_at_least_the_balanced_threshold_with_support() {
             "pii_personnummer_se",
             "pii_cpr_dk",
             "pii_fodselsnummer_no",
-            "pii_hetu_fi"
+            "pii_hetu_fi",
+            "pii_aba_routing_number_us"
         ]
     );
     for pattern in bound {

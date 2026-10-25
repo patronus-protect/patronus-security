@@ -172,6 +172,7 @@ fn scored_only_rules_are_unbound_checksum_rules() {
             "pii_fodselsnummer_no_context_free",
             "pii_hetu_fi_context_free",
             TAX_NUMBER,
+            "pii_aba_routing_number_us_context_free",
         ]
     );
     for pattern in scored_only {
@@ -290,6 +291,7 @@ fn every_checksum_label_reports_a_bare_value_in_the_scored_modes() {
         ("NO_FODSELSNUMMER", "110897 33660", 0.55),
         ("FI_PERSONAL_IDENTITY_CODE", "131052-308T", 0.55),
         ("HEALTH_INSURANCE_NUMBER", "a123456780", 0.55),
+        ("FINANCIAL_ACCOUNT_NUMBER", "0711-0130-7", 0.55),
     ];
     for label in PII_PATTERNS
         .iter()
