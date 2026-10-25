@@ -471,6 +471,7 @@ tasks:
 
   # M1 phone (presidio_favored 53.5 vs 65.1)
   - id: F18
+    status: done
     title: "Phone: NANP extensions (x123, ext. 123) inside the phone span"
     type: fix
     deps: [E06, B-EVAL]

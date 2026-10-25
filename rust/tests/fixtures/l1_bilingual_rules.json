@@ -234,12 +234,14 @@
       "de": [
         "X12-Bestellung: ST*850*0000012345~",
         "Personnummer: 811228-9874",
-        "Lagerbestand je Regal:\n415\n555-2671"
+        "Lagerbestand je Regal:\n415\n555-2671",
+        "Artikelcode 212-736-4410XL"
       ],
       "en": [
         "Closing balance field: :62F:/0000001234/",
         "Swedish personal identity number: 811228-9874",
-        "Units per shelf:\n212\n555 0100"
+        "Units per shelf:\n212\n555 0100",
+        "SKU 646-273-9915xl"
       ]
     },
     "language_neutral": false,
