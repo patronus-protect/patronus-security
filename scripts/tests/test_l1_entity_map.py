@@ -182,6 +182,14 @@ def test_uk_nhs_number_is_shared_with_presidio():
     assert entity_map.ark_label("NATIONALID") == "pii.uk.national_insurance_number"
 
 
+def test_bsnr_is_shared_with_presidio():
+    # B-DE1: the BSNR gets its own label (format and context, no check digit).
+    entity_map = MODULE.load()
+    assert entity_map.ark_label("FACILITY_NUMBER_BSNR") == "pii.de.bsnr"
+    assert entity_map.presidio_entity("DE_BSNR") == "pii.de.bsnr"
+    assert entity_map.scope("pii.de.bsnr") == "shared"
+
+
 def test_au_and_sg_identifiers_are_shared_with_presidio():
     # B-APAC: one label per numbering system, named like the Presidio entity.
     entity_map = MODULE.load()
@@ -431,7 +439,7 @@ def test_checked_in_registry_order_matches_the_rust_order_test():
     expected = re.findall(r'\(\s*"(pii_\w+)",\s*"(\w+)",?\s*\)', rust_test)
     rules = _generate_docs().parse_native_patterns(MODULE.PII_SOURCE_PATH, "PiiPattern")
     assert [(rule["id"], rule["entity_group"]) for rule in rules] == expected
-    assert len(expected) == 96
+    assert len(expected) == 100
 
 
 def test_cli_check_succeeds_and_fails(tmp_path):

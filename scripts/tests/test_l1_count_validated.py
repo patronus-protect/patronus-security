@@ -172,7 +172,8 @@ def test_checked_in_ark_count():
     # At T03 only Luhn, MOD 97-10 and the Steuer-ID check compute a check digit; B01 adds
     # one VAT ID per country, F08 the German passport and identity card (ICAO 9303), B02 one VAT ID
     # for each of eleven more countries, B16 eleven more VAT IDs (GB and XI count once), B-UK the
-    # NHS number (mod 11), B-APAC the AU ABN, ACN, TFN and Medicare number and the SG NRIC/FIN and UEN.
+    # NHS number (mod 11), B-APAC the AU ABN, ACN, TFN and Medicare number and the SG NRIC/FIN and UEN,
+    # B-DE1 the German pension and health insurance numbers and the LANR.
     assert set(counts.ark) == {
         Unit("pii.credit_card.pan", None),
         Unit("pii.iban", None),
@@ -216,8 +217,11 @@ def test_checked_in_ark_count():
         Unit("pii.au.medicare", "au"),
         Unit("pii.sg.nric_fin", "sg"),
         Unit("pii.sg.uen", "sg"),
+        Unit("pii.de.social_security_number", "de"),
+        Unit("pii.de.health_insurance_number", "de"),
+        Unit("pii.de.lanr", "de"),
     }
-    assert len(counts.ark) == 42
+    assert len(counts.ark) == 45
     assert counts.m3_met is False
 
 
@@ -347,7 +351,7 @@ def test_cli_count_json_and_check(tmp_path):
     payload = json.loads(result.stdout)
     assert payload["presidio_version"] == "2.2.364"
     assert payload["presidio"]["count"] == 35
-    assert payload["ark"]["count"] == 42
+    assert payload["ark"]["count"] == 45
     assert payload["m3"] == {"factor": 2, "target": 70, "met": False}
     assert {
         "entity_id": "pii.de.tax_id",
@@ -378,6 +382,25 @@ def test_cli_count_json_and_check(tmp_path):
         "pii.sg.nric_fin": ["pii_nric_fin_sg: sg_nric_fin", "pii_nric_fin_sg_context_free: sg_nric_fin"],
         "pii.sg.uen": ["pii_uen_sg: sg_uen", "pii_uen_sg_context_free: sg_uen"],
     }
+    # B-DE1: the check digit replaces the format check of the field-bound rules; the bare and
+    # proximity rules share the validator. The BSNR has no check digit and is no unit.
+    de1 = {
+        unit["entity_id"]: unit["sources"]
+        for unit in payload["ark"]["units"]
+        if unit["entity_id"] in ("pii.de.social_security_number", "pii.de.health_insurance_number", "pii.de.lanr")
+    }
+    assert de1 == {
+        "pii.de.social_security_number": [
+            "pii_rentenversicherung_de: de_social_security_number",
+            "pii_rentenversicherung_de_context_free: de_social_security_number",
+        ],
+        "pii.de.health_insurance_number": [
+            "pii_health_insurance_number_de: de_health_insurance_number",
+            "pii_health_insurance_number_de_context_free: de_health_insurance_number",
+        ],
+        "pii.de.lanr": ["pii_physician_number_lanr_de: lanr", "pii_physician_number_lanr_de_proximity: lanr"],
+    }
+    assert "pii.de.bsnr" not in {unit["entity_id"] for unit in payload["ark"]["units"]}
     # B02: the Greek rule keeps the VIES prefix EL, the benchmark ID follows ISO 3166 (gr).
     assert vat["pii.gr.vat_id"]["sources"] == ["pii_vat_id_el: el_vat_id"]
     assert vat["pii.it.vat_code"]["sources"] == ["pii_vat_id_it: it_vat_id", "pii_vat_id_it_proximity: it_vat_id"]

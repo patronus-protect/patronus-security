@@ -222,7 +222,7 @@ fn uk_driver_licence_validator_checks_surname_birth_date_and_initials() {
 #[test]
 fn uk_passport_validator_checks_nine_digits() {
     for valid in ["123456789", "925665416", "107185703"] {
-        assert!(validators::uk_passport_number(valid), "{valid}");
+        assert!(validators::nine_digits(valid), "{valid}");
     }
     for invalid in [
         // two letters and seven digits is no UK passport form
@@ -234,7 +234,7 @@ fn uk_passport_validator_checks_nine_digits() {
         "000000000",
         "999999999",
     ] {
-        assert!(!validators::uk_passport_number(invalid), "{invalid}");
+        assert!(!validators::nine_digits(invalid), "{invalid}");
     }
 }
 
@@ -292,7 +292,7 @@ fn the_uk_rules_have_their_label_strength_and_mode() {
     assert_eq!(passport.strength, ValidatorStrength::Format);
     assert_eq!(
         validator(passport),
-        Some(validators::uk_passport_number as fn(&str) -> bool as usize)
+        Some(validators::nine_digits as fn(&str) -> bool as usize)
     );
     assert!(passport.requires_context && !passport.scored_only && !passport.captured_value);
     let two_letters = pattern(PASSPORT_TWO_LETTERS);

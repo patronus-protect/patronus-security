@@ -586,27 +586,51 @@
   {
     "category": "pii",
     "rule_id": "pii_rentenversicherung_de",
-    "de": "Rentenversicherungsnummer: 12123456A123",
-    "en": "German pension insurance number: 12123456A123",
-    "language_neutral": false
+    "de": "Rentenversicherungsnummer: 15070649C103",
+    "en": "German pension insurance number: 65070803A019",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Rentenversicherungsnummer: 15070649C100"
+      ],
+      "en": [
+        "German pension insurance number: 15070049C103"
+      ]
+    }
   },
   {
     "category": "pii",
     "rule_id": "pii_health_insurance_number_de",
-    "de": "Versichertennummer: A123456789",
-    "en": "Health insurance number: A123456789",
+    "de": "Versichertennummer: A123456780",
+    "en": "Health insurance number: B123456782",
     "language_neutral": false,
     "structure": {
-      "de": "<table><tr><th>Versichertennummer</th><td>M345678912</td></tr></table>",
-      "en": "<insured kvnr=\"E912345679\"/>"
+      "de": "<table><tr><th>Versichertennummer</th><td>M345678911</td></tr></table>",
+      "en": "<insured kvnr=\"E912345702\"/>"
+    },
+    "hard_negatives": {
+      "de": [
+        "Versichertennummer: A123456789"
+      ],
+      "en": [
+        "Health insurance number: M123456789"
+      ]
     }
   },
   {
     "category": "pii",
     "rule_id": "pii_physician_number_lanr_de",
-    "de": "Lebenslange Arztnummer: 123456789",
-    "en": "Physician number: 123456789",
-    "language_neutral": false
+    "de": "Lebenslange Arztnummer: 123456601",
+    "en": "Physician number: 234567701",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "LANR: 123456789"
+      ],
+      "en": [
+        "Physician number: 111111111"
+      ]
+    }
   },
   {
     "category": "pii",
@@ -1507,6 +1531,63 @@
         "de": "Die UEN der Firma ist 201927806H.",
         "en": "T61CH8475D is the supplier's UEN."
       }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_rentenversicherung_de_context_free",
+    "de": "Bitte 15070649C103 im Personalbogen eintragen.",
+    "en": "Please file 65070803A019 with HR.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Meine Rentenversicherungsnummer ist 53270587M011.",
+        "en": "Her pension insurance number reads 12120356A122."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_health_insurance_number_de_context_free",
+    "de": "Bitte A123456780 auf das Rezept übertragen.",
+    "en": "Please add Z987654321 to the claim.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die Versichertennummer lautet M234567898.",
+        "en": "Her health insurance number, W564738296, is new."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_physician_number_lanr_de_proximity",
+    "de": "Arztnummer 987654401 auf dem Rezept.",
+    "en": "The physician number on the prescription is 999999901.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die LANR des Hausarztes lautet 123456601.",
+        "en": "LANR of the prescriber: 271828334"
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_facility_number_bsnr_de",
+    "de": "BSNR 711234567 der Praxis.",
+    "en": "My practice number is 613645811.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Bestellnummer 721234567"
+      ],
+      "en": [
+        "Order 721234567 shipped."
+      ]
     }
   },
   {

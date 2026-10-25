@@ -324,27 +324,27 @@ pii_golden!(
 pii_golden!(
     detects_de_social_security_id,
     "SOCIALID",
-    "Sozialversicherungsnummer: 12123456A123"
+    "Sozialversicherungsnummer: 15070649C103"
 );
 pii_golden!(
     detects_de_social_security_id_abbreviation,
     "SOCIALID",
-    "SV-Nr.: 12 123456 A 123"
+    "SV-Nr.: 65 230109 Z 872"
 );
 pii_golden!(
     detects_de_health_insurance_id,
     "HEALTH_INSURANCE_NUMBER",
-    "Versichertennummer: A123456789"
+    "Versichertennummer: A123456780"
 );
 pii_golden!(
     detects_english_health_insurance_id,
     "HEALTH_INSURANCE_NUMBER",
-    "Health insurance number X123456789"
+    "Health insurance number X123456788"
 );
 pii_golden!(
     detects_de_physician_lanr,
     "PHYSICIAN_NUMBER_LANR",
-    "LANR: 123456789"
+    "LANR: 123456601"
 );
 pii_golden!(
     detects_de_passport,
@@ -401,6 +401,10 @@ fn rejects_invalid_values_and_identifiers_without_the_right_anchor() {
         "Release: 123-45-6789",
         "AB123456C",
         "B-AB 1234E",
+        // B-DE1: the check digit fails
+        "Sozialversicherungsnummer: 12123456A123",
+        "Versichertennummer: A123456789",
+        "LANR: 123456789",
     ] {
         assert_eq!(
             pipeline.evaluate(text).class_name,
