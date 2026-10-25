@@ -372,6 +372,7 @@ tasks:
       CY, CZ, DK, EE, ES, FI, FR, GR, HR, HU.
 
   - id: GOLD-VAT2
+    status: done
     title: "Gold for VAT IDs without gold, part 2: IE, LT, LU, LV, MT, NL, NO, PL, PT, RO, SE, SI, SK, UK"
     type: eval-infra
     deps: [GOLD-VAT1]
