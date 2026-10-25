@@ -1,7 +1,7 @@
-//! Prepare a local bundle from the pinned published Wolf FP16 snapshot, using Rust only.
+//! Prepare a local Wolf FP16 directory from existing assets, using Rust only.
 use patronus_ark_core::{
     assets::mmbert_tokenizer::ensure_mmbert_compact_tokenizer,
-    wolf::{WolfConfig, WolfManifest, WolfRunner, PUBLISHED_MANIFEST, PUBLISHED_REVISION},
+    wolf::{WolfConfig, WolfRunner},
 };
 use std::{fs, path::PathBuf};
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -18,21 +18,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if !threshold.is_finite() || !(0.0..=1.0).contains(&threshold) {
         return Err("threshold must be in [0,1]".into());
     }
-    let manifest: WolfManifest = serde_json::from_str(PUBLISHED_MANIFEST)?;
-    // Never overwrite another bundle or silently bless a different artifact revision.
+    let model = [
+        "onnx/onnx_fp16/model_fp16.onnx",
+        "onnx/fp16/model_fp16.onnx",
+        "model_fp16.onnx",
+    ]
+    .into_iter()
+    .map(|path| source.join(path))
+    .find(|path| path.is_file())
+    .ok_or("no existing Wolf FP16 ONNX artifact found")?;
+    // Never overwrite another bundle. Reuse the source's assets and provenance.
     fs::create_dir(&output)?;
-    let model_target = output.join(&manifest.model.path);
-    fs::create_dir_all(model_target.parent().ok_or("invalid model path")?)?;
-    fs::copy(source.join(&manifest.model.path), &model_target)?;
+    fs::copy(model, output.join("model_fp16.onnx"))?;
     fs::copy(source.join("tokenizer.json"), output.join("tokenizer.json"))?;
+    for name in ["config.json", "tokenizer_config.json", ".patronus-revision"] {
+        if source.join(name).is_file() {
+            fs::copy(source.join(name), output.join(name))?;
+        }
+    }
     ensure_mmbert_compact_tokenizer("wolf-defender-small", &output.join("tokenizer.json"))?
         .ok_or("unsupported tokenizer")?;
-    fs::write(output.join("wolf.manifest.json"), PUBLISHED_MANIFEST)?;
     let mut runner = WolfRunner::new(&WolfConfig::new(&output, threshold))?;
     let probe = runner.scan("Please summarize the meeting agenda.")?;
     println!(
         "{}",
-        serde_json::json!({"bundle":output,"revision":PUBLISHED_REVISION,"verified":true,"provider":runner.execution_provider(),"probe_windows":probe.windows})
+        serde_json::json!({"bundle":output,"model":runner.model_path(),"loaded":true,"provider":runner.execution_provider(),"probe_windows":probe.windows})
     );
     Ok(())
 }

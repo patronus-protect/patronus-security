@@ -111,9 +111,10 @@ pub const DEDICATED_L3_ASSETS: &[PipelineModelAssetSpec] = &[
         category: SecurityCategory::Injection,
         model: "wolf-defender-small",
         repo: "patronus-studio/wolf-defender-prompt-injection-small",
-        revision: "a6b3bb2697cb69cca88f866e45c0f33f1d2793bc",
+        revision: "142fadc5474163d4c483cb761d5a6b02e3aa1741",
         destination_path: "injection/l3",
         files: &[
+            "onnx/int8_int4_embeddings/model.onnx",
             "onnx/onnx_fp16/model_fp16.onnx",
             "config.json",
             "tokenizer.json",

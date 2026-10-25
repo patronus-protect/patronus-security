@@ -75,7 +75,8 @@ struct FixtureCase {
 fn fixture_texts(generators: &GeneratorSet) -> Vec<(String, String)> {
     let cases: Vec<FixtureCase> = serde_json::from_str(
         &std::fs::read_to_string(
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/l1_bilingual_rules.json"),
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../ark-core/tests/fixtures/l1_bilingual_rules.json"),
         )
         .unwrap(),
     )

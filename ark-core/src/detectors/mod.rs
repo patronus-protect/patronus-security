@@ -9,7 +9,6 @@ pub mod mcp;
 pub mod obfuscation;
 pub mod pii;
 pub mod structure;
-pub mod threat;
 pub mod validators;
 
 use regex::Regex;

@@ -86,7 +86,7 @@ fn unified_l3_bundle_and_dedicated_models_are_revision_pinned() {
     for (category, revision) in [
         (
             SecurityCategory::Injection,
-            "a6b3bb2697cb69cca88f866e45c0f33f1d2793bc",
+            "142fadc5474163d4c483cb761d5a6b02e3aa1741",
         ),
         (
             SecurityCategory::SensitiveDocument,
@@ -115,15 +115,9 @@ fn unified_l3_bundle_and_dedicated_models_are_revision_pinned() {
     ] {
         let asset = dedicated_l3_asset(category).expect("dedicated L3 asset");
         assert_eq!(asset.revision, revision);
-        if category == SecurityCategory::Injection {
-            assert!(!asset
-                .files
-                .contains(&"onnx/int8_int4_embeddings/model.onnx"));
-        } else {
-            assert!(asset
-                .files
-                .contains(&"onnx/int8_int4_embeddings/model.onnx"));
-        }
+        assert!(asset
+            .files
+            .contains(&"onnx/int8_int4_embeddings/model.onnx"));
         if matches!(
             category,
             SecurityCategory::Injection

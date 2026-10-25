@@ -132,7 +132,8 @@ mod tests {
         let bundle = base.join(crate::assets::UNIFIED_L3_ASSET.destination_path);
         std::fs::create_dir_all(&bundle).unwrap();
         std::fs::copy(
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/tokenizer.mmbpe"),
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../ark-core/tests/fixtures/tokenizer.mmbpe"),
             bundle.join("tokenizer.mmbpe"),
         )
         .unwrap();

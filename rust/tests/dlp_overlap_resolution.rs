@@ -545,8 +545,10 @@ fn scored_modes_resolve_overlaps_like_strict() {
 #[test]
 fn golden_and_fixture_texts_never_report_overlapping_secret_spans() {
     let fixtures: serde_json::Value = serde_json::from_str(
-        &std::fs::read_to_string(repo_root().join("rust/tests/fixtures/l1_bilingual_rules.json"))
-            .unwrap(),
+        &std::fs::read_to_string(
+            repo_root().join("ark-core/tests/fixtures/l1_bilingual_rules.json"),
+        )
+        .unwrap(),
     )
     .unwrap();
     let mut texts = fixtures

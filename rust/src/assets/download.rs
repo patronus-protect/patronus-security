@@ -390,19 +390,6 @@ fn prepare_pipeline_model_compact_tokenizer(asset: PipelineModelAssetSpec, bundl
                 asset.model,
                 compact_path.display()
             );
-            if asset.model == "wolf-defender-small"
-                && asset.revision == patronus_ark_core::wolf::PUBLISHED_REVISION
-            {
-                let contract: serde_json::Value =
-                    serde_json::from_str(patronus_ark_core::wolf::PUBLISHED_MANIFEST)
-                        .expect("embedded Wolf contract must be valid JSON");
-                if let Err(error) = super::compact_tokenizer::write_json_atomic(
-                    &bundle_dir.join("wolf.manifest.json"),
-                    &contract,
-                ) {
-                    log::warn!("failed to prepare verified Wolf bundle manifest: {error}");
-                }
-            }
         }
         Ok(None) => log::debug!(
             "compact mmBERT tokenizer unsupported; model={}; tokenizer_json={}",

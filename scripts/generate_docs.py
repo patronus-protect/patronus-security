@@ -587,7 +587,7 @@ def generate_l1_rule_catalog_doc() -> str:
         lines.append(
             f"| `{rule_id}` | `{rule['family']}` | {description} | `{rule['source']}` |"
         )
-    threat = json.loads((ROOT / "ark-core/src/detectors/threat/rules.json").read_text())["rules"]
+    threat = json.loads((ROOT / "rust/src/detectors/threat/rules.json").read_text())["rules"]
     lines.extend([
         "", f"## Threat rules ({len(threat)})", "",
         "Enabled by default when Threat L1 is configured. Matches report risky operations, not proof of malicious intent. See [Threat L1](threat-l1.md) for context and coverage limits.", "",

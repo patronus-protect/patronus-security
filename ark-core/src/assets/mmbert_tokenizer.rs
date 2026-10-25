@@ -269,6 +269,22 @@ fn convert_huggingface_to_mmbpe(
     source: &Path,
     destination: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    write_huggingface_mmbpe(source, BufWriter::new(File::create(destination)?))
+}
+
+/// Convert in memory so a read-only existing model directory needs no migration.
+pub(crate) fn compact_tokenizer_bytes(
+    source: &Path,
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let mut bytes = Vec::new();
+    write_huggingface_mmbpe(source, &mut bytes)?;
+    Ok(bytes)
+}
+
+fn write_huggingface_mmbpe(
+    source: &Path,
+    mut writer: impl Write,
+) -> Result<(), Box<dyn std::error::Error>> {
     let parsed: TokenizerJson = serde_json::from_slice(&fs::read(source)?)?;
     let vocab = &parsed.model.vocab;
     let mut chars = vocab
@@ -287,7 +303,6 @@ fn convert_huggingface_to_mmbpe(
             .ok_or_else(|| format!("missing byte fallback token for byte {byte:#04X}"))?;
     }
 
-    let mut writer = BufWriter::new(File::create(destination)?);
     writer.write_all(MAGIC)?;
     write_u32(&mut writer, *vocab.get("<bos>").ok_or("missing <bos>")?)?;
     write_u32(&mut writer, *vocab.get("<eos>").ok_or("missing <eos>")?)?;

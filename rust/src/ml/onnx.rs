@@ -184,7 +184,7 @@ impl LazyOnnxTextClassifier {
         Ok(result)
     }
 
-    /// Dedicated Wolf shares the synchronous Core runner and its verified export contract.
+    /// Dedicated Wolf reuses existing FP16 assets through the synchronous Core runner.
     pub(crate) fn infer_wolf_document(
         &mut self,
         text: &str,

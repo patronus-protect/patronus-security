@@ -134,3 +134,50 @@ fn probability_error_cannot_hide_inside_logit_tolerance() {
         Err(ScanError::Asset(_))
     ));
 }
+
+#[test]
+fn existing_fp16_layout_needs_no_manifest_or_new_revision() {
+    let bundle = Bundle::new();
+    fs::remove_file(bundle.0.join("wolf.manifest.json")).unwrap();
+    fs::create_dir_all(bundle.0.join("onnx/onnx_fp16")).unwrap();
+    fs::rename(
+        bundle.0.join("model_fp16.onnx"),
+        bundle.0.join("onnx/onnx_fp16/model_fp16.onnx"),
+    )
+    .unwrap();
+    fs::write(
+        bundle.0.join("config.json"),
+        r#"{"num_labels":1,"pad_token_id":0}"#,
+    )
+    .unwrap();
+    fs::write(
+        bundle.0.join(".patronus-revision"),
+        "142fadc5474163d4c483cb761d5a6b02e3aa1741",
+    )
+    .unwrap();
+    let before = fs::read(bundle.0.join("tokenizer.mmbpe")).unwrap();
+    let mut scanner = Scanner::new(bundle.config(0.9)).unwrap();
+    let result = scanner.scan(&" a".repeat(257)).unwrap().wolf.unwrap();
+    assert_eq!(result.windows, 2);
+    assert_eq!(result.revision, "142fadc5474163d4c483cb761d5a6b02e3aa1741");
+    assert_eq!(before, fs::read(bundle.0.join("tokenizer.mmbpe")).unwrap());
+    assert!(!bundle.0.join("wolf.manifest.json").exists());
+    assert!(!bundle.0.join("tokenizer.mmbpe.meta.json").exists());
+}
+
+#[test]
+fn absent_manifest_does_not_accept_missing_or_broken_assets() {
+    let bundle = Bundle::new();
+    fs::remove_file(bundle.0.join("wolf.manifest.json")).unwrap();
+    fs::write(bundle.0.join("config.json"), r#"{"num_labels":1}"#).unwrap();
+    fs::write(bundle.0.join("model_fp16.onnx"), b"broken").unwrap();
+    assert!(matches!(
+        Scanner::new(bundle.config(0.5)),
+        Err(ScanError::Inference(_))
+    ));
+    fs::remove_file(bundle.0.join("model_fp16.onnx")).unwrap();
+    assert!(matches!(
+        Scanner::new(bundle.config(0.5)),
+        Err(ScanError::Asset(_))
+    ));
+}

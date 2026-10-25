@@ -793,8 +793,10 @@ struct Probe {
 
 #[test]
 fn rule_fixture_probes_fr_es_it_nl_field_names() {
-    let probes: Vec<Probe> =
-        serde_json::from_str(include_str!("fixtures/l1_bilingual_rules.json")).unwrap();
+    let probes: Vec<Probe> = serde_json::from_str(include_str!(
+        "../../ark-core/tests/fixtures/l1_bilingual_rules.json"
+    ))
+    .unwrap();
     let mut probed = 0;
     for probe in probes.iter().filter(|probe| !probe.multilingual.is_empty()) {
         let languages: Vec<_> = probe.multilingual.keys().map(String::as_str).collect();

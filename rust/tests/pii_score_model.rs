@@ -68,8 +68,10 @@ fn comparable(result: &SecurityScanResult) -> serde_json::Value {
 
 fn corpus() -> Vec<String> {
     let mut texts = Vec::new();
-    let fixture: serde_json::Value =
-        serde_json::from_str(include_str!("fixtures/l1_bilingual_rules.json")).unwrap();
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../../ark-core/tests/fixtures/l1_bilingual_rules.json"
+    ))
+    .unwrap();
     for case in fixture.as_array().unwrap() {
         if case["category"] == "pii" {
             for language in ["de", "en"] {

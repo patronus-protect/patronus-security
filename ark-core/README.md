@@ -32,18 +32,21 @@ Loading and scanning never download assets. The default CPU profile uses one int
 `backend` and `runtime_options` share Ark's existing ONNX Runtime configuration;
 provider features are optional. Real export parity was verified on CPU.
 
-A bundle contains a self-contained FP16 ONNX model, matching compact
-`tokenizer.mmbpe`, and `wolf.manifest.json`. The manifest pins BLAKE3 hashes,
-model revision, output name/semantics, tokenizer padding, and reference
-chunk logits. It describes the Single contract: 256 content tokens plus BOS
-and EOS, 258 input slots, overlap zero. Scalar outputs are binary attack
-logits. A two-class export must prove its `[benign, attack]` margin against
-the same training reference logits.
+Use an existing local FP16 ONNX artifact with `tokenizer.mmbpe` or
+`tokenizer.json`. The JSON fallback uses the same converter in memory and
+writes no cache or metadata into the existing asset directory.
+Known FP16 directory layouts are discovered automatically; `config.json` supplies
+label and padding metadata, and `.patronus-revision` records asset provenance
+when available. Existing Ark assets keep their current revision and need no
+manifest migration. A short inference warms the configured backend on load.
 
-Every reference case runs on load, both as export verification and backend
-warmup. Missing files, wrong hashes, incompatible inputs, non-finite outputs
-and reference mismatches are errors. A filename alone does not establish
-model precision or readiness.
+An optional `wolf.manifest.json` can explicitly pin BLAKE3 hashes, model revision,
+output semantics, tokenization settings and numerical reference cases. When
+present, its constraints are validated. Missing required assets, incompatible
+inputs, non-finite outputs and failed optional reference checks are errors.
+The Single profile uses 256 content tokens plus BOS and EOS, overlap zero.
+Scalar outputs are binary attack logits; two-class outputs use the declared
+`[benign, attack]` margin.
 
 Document pooling matches `runtime/wolf.py:smooth_max`:
 
@@ -57,18 +60,28 @@ averaging, L1-to-L3 gate, early positive exit or fallback to L1 on model error.
 Full-text tokenization is streamed at the tokenizer's real piece boundaries,
 including added tokens, before grouping tokens into model windows.
 
-Prepare a bundle directly in Rust from the pinned Hugging Face snapshot:
+Optionally copy existing FP16 assets to a separate directory with the Rust helper:
 
 ```sh
 cargo run --release -p patronus-ark-core --features wolf \
-  --example prepare_wolf_bundle -- /path/to/snapshot /path/to/new-bundle 0.8
+  --example prepare_wolf_bundle -- /path/to/existing-assets /path/to/new-bundle 0.8
 ```
 
-This copies the published FP16 ONNX artifact, generates the compact tokenizer
-with the shared Rust converter, and verifies checksums, raw logits, full-text
-tokenization and document pooling through ONNX Runtime. It never overwrites
-an existing bundle or changes the application's explicit decision threshold.
-The pinned contract is `assets/wolf-small-single-fp16.json`.
+This copies the existing FP16 artifact, tokenizer and available model metadata,
+generates the compact tokenizer with the shared Rust converter, and performs
+a local ONNX Runtime inference. It generates no mandatory manifest, does not
+repin or download assets, and never overwrites an existing output directory.
+The helper leaves the application's explicit threshold unchanged.
+
+Run all published raw-logit, tokenizer and long-document reference cases explicitly:
+
+```sh
+ARK_WOLF_BUNDLE=/path/to/bundle cargo test -p patronus-ark-core --features wolf \
+  published_fp16_matches_all_training_references -- --ignored
+```
+
+Those regression values live only in `tests/fixtures/wolf_published_reference.json`;
+they are not run on every production scanner startup.
 
 Reference checks use absolute logit tolerance 0.02 plus relative tolerance
 0.005, and independently require at most 0.005 absolute probability error for the published FP16 artifact versus its FP32 reference.
@@ -76,7 +89,10 @@ These are numerical export tolerances, not blocking thresholds. Dynamic
 sequence length avoids computing padding positions on short windows while
 retaining the 256-content-token maximum.
 
-## Verification and migration
+MCP policy/runtime checks remain shared because they are part of Ark's existing
+DLP-L1 behavior. The separate Threat-category detector remains in full Ark.
+
+## Verification and compatibility
 
 `cargo test -p patronus-ark-core` runs native checks. Add `--features wolf`
 for pooling, tokenizer and synthetic ONNX runtime checks. The tiny model in
@@ -85,11 +101,10 @@ not a Wolf checkpoint or evidence of classifier quality. Pooling reference
 values were generated from the supplied PyTorch Single training function.
 
 Existing Ark public imports are retained through re-exports. Dedicated Wolf
-uses the same Core document runner. Old 254-content-token bundles without
-a verified Single manifest are rejected: prepare and install the corrected
-bundle before enabling dedicated Wolf. Other classifiers and the unified
-model keep their execution paths. The standard Ark asset-preparation path now creates the pinned verified manifest
-after generating its compact tokenizer.
+uses the same Core document runner and selects the FP16 artifact from the
+existing pinned asset bundle. Compact-tokenizer preparation stays shared;
+no new manifest or asset revision is required. Other classifiers and the
+unified model keep their execution paths.
 
 ## License
 

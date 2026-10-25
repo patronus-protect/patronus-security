@@ -12,7 +12,7 @@ result shapes may be breaking for downstream users, and is called out explicitly
 - Extract shared native PII/DLP/PI implementations into the MIT OR Apache-2.0 `patronus-ark-core` crate.
 - Add queue-free scans, explicit resource limits and optional offline Wolf Single FP16.
 - Correct dedicated Wolf document pooling to training-normalized logit Smooth Max (temperature 0.1); thresholds remain application policy.
-- Dedicated Wolf now requires a checksummed 256-content-token Single bundle with reference logits; existing unverified bundles need migration.
+- Reuse existing dedicated Wolf FP16 assets and their pinned revision; an optional bundle manifest enables additional hash and reference checks.
 
 ## [Unreleased]
 

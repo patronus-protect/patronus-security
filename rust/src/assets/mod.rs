@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-3.0-only
-pub(crate) use patronus_ark_core::assets::compact_tokenizer;
 mod download;
 pub(crate) use patronus_ark_core::assets::mmbert_tokenizer;
 mod specs;

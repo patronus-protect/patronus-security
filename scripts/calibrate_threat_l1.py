@@ -74,7 +74,7 @@ def main():
     parser.add_argument("--acceptance-threshold", type=float, help="Explicit development operating point; default is zero observed FP")
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args(); args.output_dir.mkdir(parents=True, exist_ok=True)
-    catalog_path = Path(__file__).resolve().parents[1] / "ark-core/src/detectors/threat/rules.json"
+    catalog_path = Path(__file__).resolve().parents[1] / "rust/src/detectors/threat/rules.json"
     rule_ids = sorted(r["id"] for r in json.loads(catalog_path.read_text())["rules"])
     scanner = JsonlScanner(args.scanner_binary); records = []; seen = {}; excluded = {}; sources = {}
     try:

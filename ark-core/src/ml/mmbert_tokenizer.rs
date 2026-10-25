@@ -73,9 +73,12 @@ pub struct MmbertPairTokenizer {
 
 impl MmbertPairTokenizer {
     pub fn from_file(path: &Path) -> io::Result<Self> {
-        let data = std::fs::read(path)?;
-        let fingerprint = blake3::hash(&data);
-        let mut reader = BufReader::new(data.as_slice());
+        Self::from_bytes(&std::fs::read(path)?)
+    }
+
+    pub(crate) fn from_bytes(data: &[u8]) -> io::Result<Self> {
+        let fingerprint = blake3::hash(data);
+        let mut reader = BufReader::new(data);
         let mut magic = [0; 8];
         reader.read_exact(&mut magic)?;
         if &magic != MAGIC {

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT OR Apache-2.0
+// SPDX-License-Identifier: GPL-3.0-only
 //! Bounded, source-bound Threat L1 rules. A match describes risky behavior,
 //! not a calibrated probability that the author is malicious.
 use std::{
@@ -85,7 +85,7 @@ impl ThreatPipeline {
         Self
     }
 
-    pub fn detect_prepared(
+    pub(crate) fn detect_prepared(
         &self,
         prepared: &crate::threat::NativeText<'_>,
         allows_rule: impl Fn(&str) -> bool,
