@@ -462,14 +462,85 @@ fn run_wolf_document_job(
         }
         None => 0.93, // Preserve the legacy gateway default; the new Core requires an explicit threshold.
     };
+    let mut progress = |update: patronus_ark_core::wolf::WolfProgress| {
+        let completed = update.windows as usize;
+        let total = update.total_windows as usize;
+        publish_l3_progress(
+            &worker,
+            &job,
+            if completed == 0 {
+                "l3_started"
+            } else {
+                "l3_chunk"
+            },
+            completed,
+            total,
+            completed,
+            0,
+            0,
+            false,
+        );
+        if job.execution.l3_policy().progress != L3ProgressMode::Provisional {
+            return;
+        }
+        let Some(logit) = update.document_logit else {
+            return;
+        };
+        let probability = patronus_ark_core::aggregation::sigmoid(logit);
+        let matched = probability >= threshold;
+        let class = if matched { "attack" } else { "benign" };
+        let confidence = if matched {
+            probability
+        } else {
+            1.0 - probability
+        };
+        let mut preview = SecurityScanResult {
+            category: job.fallback.category.clone(),
+            model: job.fallback.model.clone(),
+            class_name: class.into(),
+            confidence,
+            level: "L3".into(),
+            duration_ms: started.elapsed().as_secs_f64() * 1000.0,
+            layers: Vec::new(),
+            internal_l2_chunk_outputs: Vec::new(),
+            evidence_spans: Vec::new(),
+            label_scores: Vec::new(),
+            decision: None,
+        };
+        let mut layer = l3_metadata_layer(class, &job.model, confidence, preview.duration_ms);
+        layer.matched = matched;
+        layer
+            .thresholds
+            .insert("attack_probability".into(), threshold);
+        layer.details.extend(HashMap::from([
+            ("provisional".into(), serde_json::json!(true)),
+            ("complete".into(), serde_json::json!(false)),
+            ("aggregation".into(), serde_json::json!("logit_smooth_max")),
+            ("temperature".into(), serde_json::json!(0.1)),
+            ("document_logit".into(), serde_json::json!(logit)),
+            ("attack_probability".into(), serde_json::json!(probability)),
+            (
+                "coverage".into(),
+                serde_json::json!(coverage(completed, total)),
+            ),
+        ]));
+        preview.layers = vec![layer];
+        publish_provisional(&worker, job.request_id.clone(), preview);
+    };
+    let callback = if job.execution.l3_policy().progress == L3ProgressMode::Disabled {
+        None
+    } else {
+        Some(&mut progress as &mut dyn FnMut(patronus_ark_core::wolf::WolfProgress))
+    };
     let output = model
         .lock()
         .map_err(|e| e.to_string())?
-        .infer_wolf_document(
+        .infer_wolf_document_with_progress(
             &job.source_text,
             threshold,
             job.execution.backend(),
             job.execution.onnx_runtime_options(),
+            callback,
         )
         .map_err(|e| e.to_string())?;
     let class = if output.matched { "attack" } else { "benign" };
@@ -1867,9 +1938,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn threat_l3_safe_class_is_benign() {
-        let job = L3WorkerJob {
+    fn lifecycle_test_job() -> L3WorkerJob {
+        L3WorkerJob {
             source_text: std::sync::Arc::from("text"),
             job_id: 1,
             request_id: "request-1".to_string(),
@@ -1907,9 +1977,189 @@ mod tests {
             dynamic_pii_inference_groups: Vec::new(),
             dynamic_pii_activated_rules: Vec::new(),
             test_delay_ms: None,
-        };
+        }
+    }
 
-        assert_eq!(l3_safe_class(&job), "benign");
+    #[test]
+    fn threat_l3_safe_class_is_benign() {
+        assert_eq!(l3_safe_class(&lifecycle_test_job()), "benign");
+    }
+
+    #[test]
+    fn wolf_dispatch_preserves_progress_and_terminal_lifecycle() {
+        use super::super::{finish_job, FairSchedulerState, RequestRegistry, RequestState};
+        use crate::{L3SchedulerPolicy, QueuedSecurityEvent, SecurityRequestCompletion};
+        use std::sync::{Condvar, Mutex};
+        let dir = std::env::temp_dir().join(format!("ark-wolf-lifecycle-{}", std::process::id()));
+        std::fs::create_dir(&dir).unwrap();
+        struct Cleanup(std::path::PathBuf);
+        impl Drop for Cleanup {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+        let _cleanup = Cleanup(dir.clone());
+        std::fs::write(
+            dir.join("tokenizer.mmbpe"),
+            include_bytes!("../../../../ark-core/tests/fixtures/tokenizer.mmbpe"),
+        )
+        .unwrap();
+        std::fs::write(dir.join("config.json"), r#"{"num_labels":1}"#).unwrap();
+        for (mode, broken) in [
+            (L3ProgressMode::Provisional, false),
+            (L3ProgressMode::Progress, false),
+            (L3ProgressMode::Disabled, false),
+            (L3ProgressMode::Provisional, true),
+        ] {
+            std::fs::write(
+                dir.join("model_fp16.onnx"),
+                if broken {
+                    &b"corrupt"[..]
+                } else {
+                    include_bytes!("../../../../ark-core/tests/fixtures/wolf_synthetic_fp16.onnx")
+                },
+            )
+            .unwrap();
+            let requests = Arc::new(RequestRegistry::default());
+            let mut request = RequestState::running();
+            request.pending_l3_job_ids.insert(1);
+            request
+                .pending_l3_job_categories
+                .insert(1, "injection".into());
+            requests
+                .state
+                .lock()
+                .unwrap()
+                .requests
+                .insert("request-1".into(), request);
+            let coordinator = Arc::new(
+                CacheCoordinator::from_config(crate::ExactCacheConfig::default()).unwrap(),
+            );
+            let worker = Arc::new(L3WorkerState {
+                jobs: Mutex::new(Vec::new()),
+                scheduler: Mutex::new(FairSchedulerState::default()),
+                available: Condvar::new(),
+                models: Mutex::new(HashMap::new()),
+                dynamic_pii_models: Mutex::new(HashMap::new()),
+                unified_model: Mutex::new(None),
+                unified_runs: Mutex::new(HashMap::new()),
+                unified_cache: Mutex::new(HashMap::new()),
+                chunk_cache: Arc::new(DecisionCache::default()),
+                exact_cache: Arc::clone(&coordinator),
+                pii_chunk_cache: Arc::new(crate::cache::PiiChunkCache::new(Arc::clone(
+                    &coordinator,
+                ))),
+                similarity_cache: Arc::new(HistoricalSimilarityCache::new(coordinator)),
+                requests: Arc::clone(&requests),
+                next_sequence: Mutex::new(0),
+            });
+            let classifier = crate::ml::onnx::LazyOnnxTextClassifier::from_dir_with_paths(
+                &dir,
+                vec!["benign".into(), "attack".into()],
+                "wolf-defender-small",
+                &["model_fp16.onnx"],
+                "tokenizer.json",
+                258,
+            )
+            .unwrap()
+            .unwrap();
+            worker.models.lock().unwrap().insert(
+                "wolf-defender-small".into(),
+                Arc::new(Mutex::new(classifier)),
+            );
+            let mut job = lifecycle_test_job();
+            job.category = "injection".into();
+            job.model = "wolf-defender-small".into();
+            job.source_text = Arc::from(" a".repeat(257));
+            job.fallback.category = "injection".into();
+            let mut gates = crate::ScanGateMatrix::default();
+            gates.set_l3_policy(L3SchedulerPolicy {
+                progress: mode,
+                ..Default::default()
+            });
+            job.execution.set_gates(gates);
+            assert!(job.test_delay_ms.is_none());
+            let (id, request_id, result) = execute(&worker, job);
+            {
+                let registry = requests.state.lock().unwrap();
+                assert_eq!(registry.requests[&request_id].usable_results, 0);
+                assert!(registry.requests[&request_id].completion.is_none());
+                let progress = registry
+                    .ready
+                    .iter()
+                    .filter_map(|event| match event {
+                        QueuedSecurityEvent::Progress(p) => {
+                            Some((p.stage.as_str(), p.completed_chunks, p.total_chunks))
+                        }
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>();
+                if !broken && mode != L3ProgressMode::Disabled {
+                    assert_eq!(
+                        progress,
+                        [
+                            ("l3_started", 0, 2),
+                            ("l3_chunk", 1, 2),
+                            ("l3_chunk", 2, 2),
+                            ("l3_complete", 2, 2)
+                        ]
+                    );
+                } else {
+                    assert!(progress.is_empty());
+                }
+                let previews = registry
+                    .ready
+                    .iter()
+                    .filter_map(|event| match event {
+                        QueuedSecurityEvent::Provisional(p) => Some(&p.result),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>();
+                assert_eq!(
+                    previews.len(),
+                    if mode == L3ProgressMode::Provisional && !broken {
+                        2
+                    } else {
+                        0
+                    }
+                );
+                for preview in &previews {
+                    assert!(preview.decision.is_none());
+                    assert_eq!(preview.layers[0].details["provisional"], true);
+                    assert_eq!(preview.layers[0].details["complete"], false);
+                    assert_eq!(preview.layers[0].details["aggregation"], "logit_smooth_max");
+                }
+                if let Some(last) = previews.last() {
+                    assert_eq!(
+                        last.layers[0].details["document_logit"],
+                        result.layers[0].details["wolf"]["document_logit"]
+                    );
+                }
+            }
+            finish_job(&worker, id, request_id, result);
+            let registry = requests.state.lock().unwrap();
+            let terminals = registry
+                .ready
+                .iter()
+                .filter_map(|event| match event {
+                    QueuedSecurityEvent::Finished { completion, .. } => Some(completion),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(terminals.len(), 1);
+            if broken {
+                assert!(matches!(
+                    terminals[0],
+                    SecurityRequestCompletion::Failed { .. }
+                ));
+                assert!(!registry
+                    .ready
+                    .iter()
+                    .any(|e| matches!(e, QueuedSecurityEvent::Result(_))));
+            } else {
+                assert!(matches!(terminals[0], SecurityRequestCompletion::Complete));
+            }
+        }
     }
 
     #[test]

@@ -84,6 +84,14 @@ pub struct WolfResult {
     pub revision: String,
     pub precision: String,
 }
+/// Non-authoritative progress over the windows processed so far.
+#[derive(Debug, Clone, Copy)]
+pub struct WolfProgress {
+    pub windows: u64,
+    pub total_windows: u64,
+    /// Absent before the first inference; otherwise the running SmoothMax logit.
+    pub document_logit: Option<f64>,
+}
 pub struct WolfRunner {
     session: Session,
     tokenizer: Arc<MmbertPairTokenizer>,
@@ -212,6 +220,42 @@ impl WolfRunner {
     }
 
     pub fn scan(&mut self, text: &str) -> Result<WolfResult, ScanError> {
+        self.scan_inner(text, None)
+    }
+
+    /// Emit a start update and one update per window without retaining chunk outputs.
+    /// Counting tokens first provides exact totals and uses bounded tokenizer memory.
+    pub fn scan_with_progress(
+        &mut self,
+        text: &str,
+        progress: &mut dyn FnMut(WolfProgress),
+    ) -> Result<WolfResult, ScanError> {
+        self.scan_inner(text, Some(progress))
+    }
+
+    fn scan_inner(
+        &mut self,
+        text: &str,
+        mut progress: Option<&mut dyn FnMut(WolfProgress)>,
+    ) -> Result<WolfResult, ScanError> {
+        let mut total_windows = 0;
+        if progress.is_some() {
+            let mut tokens = 0_u64;
+            self.tokenizer
+                .visit_tokens(text, |_| {
+                    tokens = tokens.checked_add(1).ok_or("too many Wolf tokens")?;
+                    Ok(())
+                })
+                .map_err(inference)?;
+            total_windows = tokens.div_ceil(self.manifest.content_tokens as u64).max(1);
+            if let Some(callback) = progress.as_mut() {
+                callback(WolfProgress {
+                    windows: 0,
+                    total_windows,
+                    document_logit: None,
+                });
+            }
+        }
         let mut pool = SmoothMax::default();
         let tokenizer = Arc::clone(&self.tokenizer);
         let mut pending = Vec::with_capacity(self.manifest.content_tokens);
@@ -221,6 +265,13 @@ impl WolfRunner {
                 if pending.len() == self.manifest.content_tokens {
                     let logit = self.infer(&pending).map_err(|e| e.to_string())?;
                     pool.push(logit).map_err(str::to_string)?;
+                    if let Some(callback) = progress.as_mut() {
+                        callback(WolfProgress {
+                            windows: pool.count(),
+                            total_windows,
+                            document_logit: pool.logit(),
+                        });
+                    }
                     pending.clear();
                 }
                 Ok(())
@@ -228,6 +279,13 @@ impl WolfRunner {
             .map_err(inference)?;
         if !pending.is_empty() || pool.count() == 0 {
             pool.push(self.infer(&pending)?).map_err(inference)?;
+            if let Some(callback) = progress.as_mut() {
+                callback(WolfProgress {
+                    windows: pool.count(),
+                    total_windows,
+                    document_logit: pool.logit(),
+                });
+            }
         }
         let document_logit = pool.logit().ok_or_else(|| inference("no Wolf windows"))?;
         let probability = pool
@@ -530,5 +588,55 @@ mod published_model_tests {
             fs::read_to_string(dir.join(".patronus-revision")).unwrap(),
             "142fadc5474163d4c483cb761d5a6b02e3aa1741"
         );
+    }
+}
+
+#[cfg(test)]
+mod progress_tests {
+    use super::*;
+
+    #[test]
+    fn progress_counts_windows_and_preserves_final_smooth_max() {
+        let dir = std::env::temp_dir().join(format!("ark-wolf-progress-{}", std::process::id()));
+        fs::create_dir(&dir).unwrap();
+        struct Cleanup(PathBuf);
+        impl Drop for Cleanup {
+            fn drop(&mut self) {
+                let _ = fs::remove_dir_all(&self.0);
+            }
+        }
+        let _cleanup = Cleanup(dir.clone());
+        fs::write(
+            dir.join("model_fp16.onnx"),
+            include_bytes!("../tests/fixtures/wolf_synthetic_fp16.onnx"),
+        )
+        .unwrap();
+        fs::write(
+            dir.join("tokenizer.mmbpe"),
+            include_bytes!("../tests/fixtures/tokenizer.mmbpe"),
+        )
+        .unwrap();
+        fs::write(dir.join("config.json"), r#"{"num_labels":1}"#).unwrap();
+        let mut runner = WolfRunner::new(&WolfConfig::new(&dir, 0.8)).unwrap();
+        for (tokens, windows) in [(0, 1), (256, 1), (257, 2), (513, 3)] {
+            let text = " a".repeat(tokens);
+            let expected = runner.scan(&text).unwrap();
+            let mut updates = Vec::new();
+            let actual = runner
+                .scan_with_progress(&text, &mut |update| updates.push(update))
+                .unwrap();
+            assert_eq!(updates.len(), windows + 1);
+            assert!(updates[0].document_logit.is_none());
+            for (index, update) in updates.iter().enumerate() {
+                assert_eq!(update.windows, index as u64);
+                assert_eq!(update.total_windows, windows as u64);
+            }
+            assert_eq!(actual.document_logit, expected.document_logit);
+            assert_eq!(actual.attack_probability, expected.attack_probability);
+            assert_eq!(
+                updates.last().unwrap().document_logit,
+                Some(actual.document_logit)
+            );
+        }
     }
 }

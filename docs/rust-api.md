@@ -2032,6 +2032,17 @@ pub struct WolfResult {
 No public documentation is available yet.
 
 ```rust
+pub struct WolfProgress {
+    pub windows: u64,
+    pub total_windows: u64,
+    /// Absent before the first inference; otherwise the running SmoothMax logit.
+    pub document_logit: Option<f64>,
+}
+```
+
+Non-authoritative progress over the windows processed so far.
+
+```rust
 pub struct WolfRunner {
     session: Session,
     tokenizer: Arc<MmbertPairTokenizer>,
@@ -2067,6 +2078,17 @@ pub fn scan(&mut self, text: &str) -> Result<WolfResult, ScanError>;
 ```
 
 No public documentation is available yet.
+
+```rust
+pub fn scan_with_progress(
+    &mut self,
+    text: &str,
+    progress: &mut dyn FnMut(WolfProgress),
+) -> Result<WolfResult, ScanError>;
+```
+
+Emit a start update and one update per window without retaining chunk outputs.
+Counting tokens first provides exact totals and uses bounded tokenizer memory.
 
 ```rust
 pub fn new(bundle_dir: impl Into<PathBuf>, threshold: f64) -> Self;

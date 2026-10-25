@@ -192,6 +192,20 @@ impl LazyOnnxTextClassifier {
         backend: ExecutionBackend,
         options: OnnxRuntimeOptions,
     ) -> Result<patronus_ark_core::wolf::WolfResult, Box<dyn std::error::Error>> {
+        self.infer_wolf_document_with_progress(text, threshold, backend, options, None)
+    }
+
+    pub(crate) fn infer_wolf_document_with_progress(
+        &mut self,
+        text: &str,
+        threshold: f64,
+        backend: ExecutionBackend,
+        options: OnnxRuntimeOptions,
+        progress: Option<&mut dyn FnMut(patronus_ark_core::wolf::WolfProgress)>,
+    ) -> Result<patronus_ark_core::wolf::WolfResult, Box<dyn std::error::Error>> {
+        if !threshold.is_finite() || !(0.0..=1.0).contains(&threshold) {
+            return Err("invalid Wolf threshold".into());
+        }
         let options = options.normalized();
         if self.wolf_runner.is_none()
             || self.loaded_backend != Some(backend)
@@ -209,14 +223,11 @@ impl LazyOnnxTextClassifier {
             self.loaded_options = Some(options);
         }
         self.last_used = Some(Instant::now());
-        let mut result = self
-            .wolf_runner
-            .as_mut()
-            .ok_or("Wolf runner not loaded")?
-            .scan(text)?;
-        if !threshold.is_finite() || !(0.0..=1.0).contains(&threshold) {
-            return Err("invalid Wolf threshold".into());
-        }
+        let runner = self.wolf_runner.as_mut().ok_or("Wolf runner not loaded")?;
+        let mut result = match progress {
+            Some(callback) => runner.scan_with_progress(text, callback)?,
+            None => runner.scan(text)?,
+        };
         result.threshold = threshold;
         result.matched = result.attack_probability >= threshold;
         Ok(result)
