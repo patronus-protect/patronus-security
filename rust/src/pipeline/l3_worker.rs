@@ -135,6 +135,7 @@ struct L3WorkerJob {
     category: String,
     model: String,
     input: L3WorkerInput,
+    source_text: Arc<str>,
     fallback: SecurityScanResult,
     priority: usize,
     ttl_ms: u64,
@@ -514,6 +515,7 @@ impl L3Worker {
             }
         };
         Ok(L3WorkerJob {
+            source_text: spec.text.clone(),
             job_id: spec.job_id,
             request_id: spec.request_id,
             category: spec.category,
@@ -587,6 +589,7 @@ impl L3Worker {
         for (spec, delay_ms) in specs {
             let (estimated_cost_ms, fairness_quantum_ms, max_wait_ms) = scheduling_values(&spec);
             jobs.push(L3WorkerJob {
+                source_text: spec.text.clone(),
                 job_id: spec.job_id,
                 request_id: spec.request_id,
                 category: spec.category,
@@ -2192,6 +2195,7 @@ mod tests {
 
     fn test_job(request_id: &str, category: &str, priority: usize, sequence: u64) -> L3WorkerJob {
         L3WorkerJob {
+            source_text: Arc::from("test"),
             job_id: sequence,
             request_id: request_id.to_string(),
             category: category.to_string(),

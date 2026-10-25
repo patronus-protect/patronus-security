@@ -1499,6 +1499,7 @@ dependencies = [
  "memmap2",
  "ort",
  "patronus-ark",
+ "patronus-ark-core",
  "rayon",
  "redb",
  "regex",
@@ -1513,6 +1514,29 @@ dependencies = [
  "tokenizers",
  "unicode-normalization",
  "ureq 2.12.1",
+ "url",
+]
+
+[[package]]
+name = "patronus-ark-core"
+version = "0.1.11"
+dependencies = [
+ "aho-corasick",
+ "blake3",
+ "half",
+ "log",
+ "ort",
+ "rayon",
+ "regex",
+ "regex-automata",
+ "regex-syntax",
+ "ring",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "thiserror 1.0.69",
+ "tokenizers",
+ "unicode-normalization",
  "url",
 ]
 

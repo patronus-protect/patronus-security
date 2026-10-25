@@ -1,0 +1,2530 @@
+[
+  {
+    "category": "pii",
+    "rule_id": "pii_email",
+    "de": "E-Mail: ada@example.com",
+    "en": "Email: ada@example.com",
+    "language_neutral": false,
+    "balanced": {
+      "context": {
+        "de": "Kontakt per E-Mail an ada@example.com",
+        "en": "Contact by email at ada@example.com"
+      }
+    },
+    "obfuscated": {
+      "de": "E-Mail: lena.vogt＠beispiel.de",
+      "en": "Email: ada.wong@north​wind.com"
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_ipv4",
+    "de": "IP: 203.0.113.42",
+    "en": "IP: 203.0.113.42",
+    "language_neutral": true,
+    "balanced": {
+      "context": {
+        "de": "Quelle laut IP-Adresse 203.0.113.42",
+        "en": "Logged IP address 203.0.113.42"
+      }
+    },
+    "obfuscated": {
+      "de": "Angreifer-IP: 198[.]51[.]100[.]23",
+      "en": "Source IP: １９２．０．２．１４"
+    },
+    "span": {
+      "de": {
+        "text": "Freigegebenes Netz: 198.51.100.0/24",
+        "value": "198.51.100.0/24"
+      },
+      "en": {
+        "text": "Subnet: 192.0.2.0/24",
+        "value": "192.0.2.0/24"
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_ipv6_full",
+    "de": "Adresse: 2001:0db8:85a3:0000:0000:8a2e:0370:7334",
+    "en": "Address: 2001:0db8:85a3:0000:0000:8a2e:0370:7334",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Schlüssel 2001:db8:1:2:3:4:5:6:7",
+        "Kurs zwischen U.9101:8c5c:e9b4:50ce:7e5d:ce61:c1d2:d092"
+      ],
+      "en": [
+        "Key 2001:db8:1:2:3:4:5:6:7",
+        "Rate between the U.9101:8c5c:e9b4:50ce:7e5d:ce61:c1d2:d092"
+      ]
+    },
+    "span": {
+      "de": {
+        "text": ":20:REF2209\n:25:2a02:810d:4b40:3d00:91f2:6c1e:8a3b:52d7\n:28C:00042/001",
+        "value": "2a02:810d:4b40:3d00:91f2:6c1e:8a3b:52d7"
+      },
+      "en": {
+        "text": "Embedded: 2001:db8:1:2:3:4:203.0.113.9",
+        "value": "2001:db8:1:2:3:4:203.0.113.9"
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_ipv6_compressed",
+    "de": "Adresse: 2001:db8::1",
+    "en": "Address: 2001:db8::1",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        ":20:MT940 STMT\n:28C::52D:20220920\n:60F::STP",
+        "Belegkopf: BGM+380:21:3::90:FRET:FRCOMPAGNIE'",
+        "Ungültige Adresse 2001:db8::256.1.1.1"
+      ],
+      "en": [
+        "Balance :60F::61F::62F::63F::64F::70:3/31/2022",
+        "Document: BGM+380:21:3::90:FRET:FRCOMPAGNIE'",
+        "2001:db8::256.1.1.1",
+        "text2001:db8::1"
+      ]
+    },
+    "span": {
+      "de": {
+        "text": "NAT64-Adresse: 64:ff9b::198.51.100.1",
+        "value": "64:ff9b::198.51.100.1"
+      },
+      "en": {
+        "text": "Zone and prefix: 2001:db8::%eth0/128",
+        "value": "2001:db8::%eth0/128"
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_ipv6_loopback",
+    "de": "Adresse: ::ffff:c000:0280",
+    "en": "Address: ::ffff:c000:0280",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Position: LIN+1::1:550:::EA:20'",
+        "Lokaler Dienst auf ::ffff:127.0.0.1",
+        "Standardroute ::/0"
+      ],
+      "en": [
+        "Item: LIN+1::1:550:::EA:20'",
+        "Mapped unspecified ::ffff:0.0.0.0",
+        "Loopback route ::1/128"
+      ]
+    },
+    "span": {
+      "de": {
+        "text": "Verbindung von ::ffff:10.20.30.40 abgelehnt.",
+        "value": "::ffff:10.20.30.40"
+      },
+      "en": {
+        "text": "Mapped peer [::ffff:192.0.2.71]:443 accepted.",
+        "value": "::ffff:192.0.2.71"
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_phone_international",
+    "de": "Telefon: +491701234567",
+    "en": "Phone: +491701234567",
+    "hard_negatives": {
+      "de": [
+        "Kopfsegment: UNB+UNOC:3+520173321::2+520173321::4+202202150830+1323327835++STA'",
+        "Käufer: NAD+BY+987654321::9'",
+        "Positionen\n+49 30\n12345"
+      ],
+      "en": [
+        "Interchange header: UNB+UNOC:3+5010500154:1+5020022223:1+190101:0930+2'",
+        "SWIFT narrative block {86:+330105789456}",
+        "Positions\n+49 30\n12345"
+      ]
+    },
+    "language_neutral": false,
+    "balanced": {
+      "context": {
+        "de": "Erreichbar unter +44 20 7946 0958",
+        "en": "Reachable at +44 20 7946 0958"
+      },
+      "counter": {
+        "de": "Rechnungsnummer: +44 20 7946 0958",
+        "en": "Invoice number: +44 20 7946 0958"
+      }
+    },
+    "obfuscated": {
+      "de": "Telefon: +49​170​1234567",
+      "en": "Mobile: ＋４４ ７７００ ９００１２３"
+    },
+    "span": {
+      "de": {
+        "text": "Telefon: +49 30 1234567\n2. Ansprechpartnerin",
+        "value": "+49 30 1234567"
+      },
+      "en": {
+        "text": "Call +1-123-456-7890\n\n2. Next step",
+        "value": "+1-123-456-7890"
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_phone_de",
+    "de": "Telefon: +49 1701234567",
+    "en": "Phone: +49 1701234567",
+    "hard_negatives": {
+      "de": [
+        "Lieferant: NAD+SU+4930123456789::9'"
+      ],
+      "en": [
+        "Supplier party: NAD+SU+4930123456789::9'"
+      ]
+    },
+    "language_neutral": false,
+    "balanced": {
+      "context": {
+        "de": "+49 170 1234567 (Handy)",
+        "en": "+49 170 1234567 (mobile)"
+      },
+      "counter": {
+        "de": "Auftragsnummer +49 170 1234567",
+        "en": "Order ID +49 170 1234567"
+      }
+    },
+    "span": {
+      "de": {
+        "text": "Zentrale 0049 170 1234567\n\n2. Ansprechpartner",
+        "value": "0049 170 1234567"
+      },
+      "en": {
+        "text": "Head office 0049 170 1234567\n\n2. Contact",
+        "value": "0049 170 1234567"
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_phone_de_national_context",
+    "de": "Telefon: 030 12345678",
+    "en": "Phone: 030 12345678",
+    "language_neutral": false,
+    "structure": {
+      "de": "{\"telefon\": \"030 98765432\"}",
+      "en": "{\"phone_number\": \"030 98765432\"}"
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_phone_de_national_proximity",
+    "de": "Frau Weber ist unter 0176 90817263 erreichbar.",
+    "en": "You can reach Mr. Weber at 0176 90817263 (mobile).",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_phone_us",
+    "de": "Telefon: 212-555-1234",
+    "en": "Phone: 212-555-1234",
+    "hard_negatives": {
+      "de": [
+        "X12-Bestellung: ST*850*0000012345~",
+        "Personnummer: 811228-9874",
+        "Lagerbestand je Regal:\n415\n555-2671",
+        "Artikelcode 212-736-4410XL"
+      ],
+      "en": [
+        "Closing balance field: :62F:/0000001234/",
+        "Swedish personal identity number: 811228-9874",
+        "Units per shelf:\n212\n555 0100",
+        "SKU 646-273-9915xl"
+      ]
+    },
+    "language_neutral": false,
+    "balanced": {
+      "context": {
+        "de": "212-736-4410 (Festnetz)",
+        "en": "212-736-4410 (work phone)"
+      },
+      "counter": {
+        "de": "Bestellnummer 202-604-7110",
+        "en": "Order number 202-604-7110"
+      }
+    },
+    "span": {
+      "de": {
+        "text": "US-Büro: (212) 736-4410",
+        "value": "(212) 736-4410"
+      },
+      "en": {
+        "text": "Call me at (415) 555-2671 tomorrow.",
+        "value": "(415) 555-2671"
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_mac_address",
+    "de": "MAC: 02:42:ac:11:00:02",
+    "en": "MAC: 02:42:ac:11:00:02",
+    "language_neutral": true,
+    "balanced": {
+      "context": {
+        "de": "MAC-Adresse 02:42:ac:11:00:02",
+        "en": "MAC address 02:42:ac:11:00:02"
+      }
+    },
+    "obfuscated": {
+      "de": "MAC: ０２:４２:ａｃ:１１:００:０２",
+      "en": "MAC: 02​:42​:ac​:11​:00​:02"
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_iban_de",
+    "de": "IBAN: DE89370400440532013000",
+    "en": "IBAN: DE89370400440532013000",
+    "language_neutral": true,
+    "obfuscated": {
+      "de": "IBAN: DE89​3704​0044​0532​0130​00",
+      "en": "IBAN: ＤＥ８９３７０４００４４０５３２０１３０００"
+    },
+    "overlap": {
+      "de": "IBAN: DE87 6605 0101 1002 3456 78",
+      "en": "IBAN DE70 5625 0030 1234 5067 86 is on file"
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_iban_generic",
+    "de": "IBAN: GB82WEST12345698765432",
+    "en": "IBAN: GB82WEST12345698765432",
+    "language_neutral": true,
+    "balanced": {
+      "context": {
+        "de": "Bankkonto GB82WEST12345698765432",
+        "en": "Bank account GB82WEST12345698765432"
+      }
+    },
+    "overlap": {
+      "de": "Kontonummer: GB82WEST12345698765432",
+      "en": "Bank account: GB82WEST12345698765432"
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_credit_card",
+    "de": "Karte: 4111 1111 1111 1111",
+    "en": "Card: 4111 1111 1111 1111",
+    "language_neutral": false,
+    "balanced": {
+      "context": {
+        "de": "Kreditkarte 4111 1111 1111 1111",
+        "en": "Credit card 4111 1111 1111 1111"
+      },
+      "counter": {
+        "de": "Bestellnummer 4532 0151 1283 0366",
+        "en": "Order number 4532 0151 1283 0366"
+      }
+    },
+    "obfuscated": {
+      "de": "Karte: ４１１１ １１１１ １１１１ １１１１",
+      "en": "Card: 5555​5555​5555​4444"
+    },
+    "secondary": {
+      "de": "Überweisung an DE94 5001 0517 5401 2345 65 erhalten.",
+      "en": "IBAN DE11 6005 0101 7400 1234 56 is on file"
+    },
+    "hard_negatives": {
+      "de": [
+        "Belegdatum: DTM+137:202201010800'",
+        "Handels-ID: 20220314-123456-ABC",
+        "Paketversion: pkg-507314925862-485275870833-amd64",
+        "Südafrikanische ID-Nummer: 4506095123081",
+        "Koreanische Registrierungsnummer: 470312-1081835",
+        "Referenz 1748503543012"
+      ],
+      "en": [
+        "Message date: DTM+137:202201010800'",
+        "\"TradeID\": \"20220314-123456-ABC-IBK\"",
+        "Package version: pkg-507314925862-485275870833-amd64",
+        "South African ID number: 6109240123185",
+        "Resident Registration Number: 590724-1069401",
+        "1748503543012"
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_credit_card_cvv",
+    "de": "Kartennummer: 4111 1111 1111 1111, Kartenprüfnummer: 123",
+    "en": "Card number: 4111 1111 1111 1111, card verification code: 123",
+    "language_neutral": false,
+    "structure": {
+      "de": "| Karte | CVV |\n|---|---|\n| 4111 1111 1111 1111 | 737 |",
+      "en": "| Card | CVV |\n|---|---|\n| 4111 1111 1111 1111 | 246 |"
+    },
+    "multilingual": {
+      "fr": "Carte 4111 1111 1111 1111, code de sécurité de la carte : 737",
+      "es": "Tarjeta 5555 5555 5555 4444, código de seguridad de la tarjeta: 318",
+      "it": "Carta 4111 1111 1111 1111, codice di sicurezza della carta: 552",
+      "nl": "Creditcard 5555 5555 5555 4444, creditcard-beveiligingscode: 713"
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_credit_card_expiry",
+    "de": "Kreditkarte Ablaufdatum: 12/29",
+    "en": "Credit card Expiry: 12/29",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_swift_bic_context",
+    "de": "BIC: DEUTDEFF500",
+    "en": "BIC: DEUTDEFF500",
+    "language_neutral": true,
+    "structure": {
+      "de": "{\"bic\": \"DEUTDEFF500\"}",
+      "en": "<bank><bic>BARCGB22</bic></bank>"
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_employee_id",
+    "de": "Personalnummer: EMP-4711",
+    "en": "Employee ID: EMP-4711",
+    "language_neutral": false,
+    "structure": {
+      "de": "<mitarbeiter><personalnummer>PN-77120</personalnummer></mitarbeiter>",
+      "en": "employee_id,name\nE-40512,Maya Patel"
+    },
+    "multilingual": {
+      "fr": "Identifiant d'employé : E-204518",
+      "es": "Número de empleado: E-118204",
+      "it": "ID dipendente: D-55012",
+      "nl": "Personeelsnummer: P-30411"
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_employee_id_ocr_field",
+    "de": "ID: HR 55019",
+    "en": "ID: HR 55019",
+    "language_neutral": true
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_employee_id_prefixed",
+    "de": "Kennung EMP-SYN-2048",
+    "en": "Identifier EMP-SYN-2048",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_customer_id",
+    "de": "Kundennummer: KD-88231",
+    "en": "Customer ID: CUST-88231",
+    "language_neutral": false,
+    "structure": {
+      "de": "Name;Kundennummer\nJana Roth;KD-55120",
+      "en": "{\"customerId\": \"CUS-88412\"}"
+    },
+    "multilingual": {
+      "fr": "Numéro de client : CL-480215",
+      "es": "Número de cliente: CLI-302948",
+      "it": "Codice cliente: CC-448210",
+      "nl": "Klantnummer: KL-501873"
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_patient_id",
+    "de": "Patientennummer: PAT-2048",
+    "en": "Patient ID: PAT-2048",
+    "language_neutral": false,
+    "structure": {
+      "de": "| Patientennummer | Station |\n|---|---|\n| PAT-20931 | 4B |",
+      "en": "| MRN | Ward |\n|---|---|\n| MRN-981134 | 7 |"
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_student_id",
+    "de": "Matrikelnummer: STU-9911",
+    "en": "Student number: STU-9911",
+    "language_neutral": false,
+    "structure": {
+      "de": "Name;Matrikelnummer\nLea Brandt;4718205",
+      "en": "<student><student_id>STU-9912</student_id></student>"
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_applicant_id",
+    "de": "Bewerbernummer: BEW-713",
+    "en": "Applicant number: APP-713",
+    "language_neutral": false,
+    "structure": {
+      "de": "{\"bewerbernummer\": \"BEW-5520\"}",
+      "en": "| Applicant ID | Role |\n|---|---|\n| APP-30418 | Analyst |"
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_username",
+    "de": "Benutzername: ada.lovelace",
+    "en": "Username: ada.lovelace",
+    "language_neutral": false,
+    "structure": {
+      "de": "{\"benutzername\": \"p.lang\"}",
+      "en": "user_name\tteam\nm.chen\tplatform"
+    },
+    "multilingual": {
+      "fr": "Nom d'utilisateur : claire.martin85",
+      "es": "Nombre de usuario: jgarcia_88",
+      "it": "Nome utente: lbianchi77",
+      "nl": "Gebruikersnaam: vidal1842"
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_date_of_birth",
+    "de": "Geburtsdatum: 14.03.1985",
+    "en": "Date of birth: 14/03/1985",
+    "language_neutral": false,
+    "structure": {
+      "de": "Name;Geburtsdatum\nJana Roth;14.03.1987",
+      "en": "{\"date_of_birth\": \"02/11/1990\"}"
+    },
+    "multilingual": {
+      "fr": "Date de naissance : 14/07/1985",
+      "es": "Fecha de nacimiento: 23/08/1975",
+      "it": "Data di nascita: 09/11/1973",
+      "nl": "Geboortedatum: 15-12-1992"
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_date_of_birth_written_day_first",
+    "de": "Geburtsdatum: 14. März 1985",
+    "en": "Date of birth: 14 March 1985",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_date_of_birth_written_month_first",
+    "de": "Geburtsdatum: März 14, 1985",
+    "en": "Date of birth: March 14th, 1985",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_financial_account_number",
+    "de": "Kontonummer: ACC-44001234",
+    "en": "Account number: ACC-44001234",
+    "language_neutral": false,
+    "structure": {
+      "de": "{\"kontonummer\": \"KTO-30202\"}",
+      "en": "[payout]\naccount_number = ACC-55120"
+    },
+    "overlap": {
+      "de": "Kontonummer: 4111-1111-1111-1111",
+      "en": "Account number: 5555-5555-5555-4444"
+    },
+    "secondary": {
+      "de": "Kontonummer: GB82WEST12345698765432",
+      "en": "Bank account: GB82WEST12345698765432"
+    },
+    "multilingual": {
+      "fr": "Numéro de compte : CPT-0091827",
+      "es": "Número de cuenta: CTA-20481937",
+      "it": "Numero di conto: CT-0091827",
+      "nl": "Bankrekeningnummer: 619867267"
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_steuer_id_de",
+    "de": "Steuer-ID: 86095742719",
+    "en": "Tax identification number: 86095742719",
+    "language_neutral": false,
+    "structure": {
+      "de": "{\"steuer_id\": \"82736451927\"}",
+      "en": "<taxpayer><taxId>31415926539</taxId></taxpayer>"
+    },
+    "obfuscated": {
+      "de": "Steuer-ID: ８６０９５７４２７１９",
+      "en": "Tax identification number: 86095​742719"
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_steuer_id_de_context_free",
+    "de": "Für die Lohnabrechnung brauche ich noch 47426548904.",
+    "en": "Please add 74265832011 to the payroll file.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Ihre Steuer-ID ist 39662845670.",
+        "en": "29046789957 is the German tax ID on file."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_steuernummer_de",
+    "de": "Steuernummer: 123/456/78901",
+    "en": "German tax number: 123/456/78901",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_rentenversicherung_de",
+    "de": "Rentenversicherungsnummer: 12123456A123",
+    "en": "German pension insurance number: 12123456A123",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_health_insurance_number_de",
+    "de": "Versichertennummer: A123456789",
+    "en": "Health insurance number: A123456789",
+    "language_neutral": false,
+    "structure": {
+      "de": "<table><tr><th>Versichertennummer</th><td>M345678912</td></tr></table>",
+      "en": "<insured kvnr=\"E912345679\"/>"
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_physician_number_lanr_de",
+    "de": "Lebenslange Arztnummer: 123456789",
+    "en": "Physician number: 123456789",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_passport_number_de",
+    "de": "Passnummer: C01X00T47",
+    "en": "Passport number: C01X00T47",
+    "language_neutral": false,
+    "structure": {
+      "de": "{\"passnummer\": \"C4J7K9L2N\"}",
+      "en": "<traveler passportNumber=\"C01X00T47\"/>"
+    },
+    "multilingual": {
+      "fr": "Numéro de passeport : C01X00T47",
+      "es": "Número de pasaporte: P4K7R2M9X",
+      "it": "Numero di passaporto: YN8K4T7C2",
+      "nl": "Paspoortnummer: NXR4C7T19"
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_identity_card_number_de",
+    "de": "Personalausweisnummer: L01X00T47",
+    "en": "Identity card number: L01X00T47",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_driver_license_number_de",
+    "de": "Führerscheinnummer: B072RRE2A57",
+    "en": "Driver license number: B072RRE2A57",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_driver_license_number_us",
+    "de": "Führerscheinnummer: T36493663",
+    "en": "My driver's license number is 6940579",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Bestellnummer 41827365 ist eingegangen.",
+        "Führerscheinnummer: 30-04-2031"
+      ],
+      "en": [
+        "The licence number L4718203 belongs to a software seat.",
+        "Driver's license number: 2031-04-30"
+      ]
+    },
+    "structure": {
+      "de": "{\"fuehrerschein_nr\": \"S530-460-72-345-0\"}",
+      "en": "name,driver_license,city\nJane Doe,L5149233,Austin"
+    },
+    "multilingual": {
+      "fr": "Licence de conducteur : D84-5122-431-46",
+      "es": "Licencia de conducir: B6728301",
+      "it": "Numero di patente: C35-5710-197-76",
+      "nl": "Rijbewijsnummer: S38387690"
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_driver_license_number_it",
+    "de": "Italienischer Führerschein: RM5512345K",
+    "en": "Italian driving licence: U1H34K56LX",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Italienischer Führerschein: ab1234567c"
+      ],
+      "en": [
+        "Italian driving licence: U1A2345678"
+      ]
+    },
+    "structure": {
+      "de": "{\"patente_di_guida\": \"TO7712345B\"}",
+      "en": "<driving_licence>MI2045678T</driving_licence>"
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_driver_license_number_uk",
+    "de": "Führerscheinnummer: SMITH851010AB1CD",
+    "en": "Driving licence number: MORGA657054SM9IJ",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Führerscheinnummer: SMITH851000AB1CD"
+      ],
+      "en": [
+        "Driving licence number: SMITH813010AB1CD"
+      ]
+    },
+    "structure": {
+      "de": "{\"fuehrerschein\": \"LEE99802123JA9MN\"}",
+      "en": "{\"driving_licence\": \"JONES710238HA3DX\"}"
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_driver_license_number_uk_context_free",
+    "de": "Fahrer LEE99802123JA9MN, Depot Leeds",
+    "en": "Licence: MORGA607054SM9IJ ok",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Den Führerschein MORGA657054SM9IJ hat der Fahrer vorgelegt.",
+        "en": "SMIT9801015JK2CD is her UK driving licence."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_kfz_kennzeichen_de",
+    "de": "Kennzeichen: B-AB 1234E",
+    "en": "Vehicle registration: B-AB 1234E",
+    "language_neutral": false
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_ssn_us",
+    "de": "US-Sozialversicherungsnummer: 123-45-6789",
+    "en": "Social security number: 123-45-6789",
+    "language_neutral": false,
+    "structure": {
+      "de": "{\"ssn\": \"456-78-9013\"}",
+      "en": "<table><tr><th>SSN</th><td>536-90-4399</td></tr></table>"
+    },
+    "obfuscated": {
+      "de": "US-Sozialversicherungsnummer: ５３２-８７-１０９４",
+      "en": "Social security number: 532​-87​-1094"
+    },
+    "multilingual": {
+      "fr": "Numéro de sécurité sociale : 536-90-4421",
+      "es": "Número de seguro social: 412-56-7834",
+      "it": "Numero di previdenza sociale: 219-45-7781",
+      "nl": "Sociaal zekerheidsnummer: 523-41-9087"
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_ssn_us_proximity",
+    "de": "Als SSN ist 422-68-7360 hinterlegt.",
+    "en": "Note: The Social Security Number (SSN) 861-18-8883 is not required.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Bestellnummer 123-45-6789 ist versandt.",
+        "Teilenummer 401-12-7788",
+        "Artikelnummer 401127789"
+      ],
+      "en": [
+        "Order number 123-45-6789 has shipped.",
+        "Release 523-41-1234 is out.",
+        "Send the form for 401127789 today."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_ssn_us_context_free",
+    "de": "Angaben zum US-Mitarbeiter: 219-09-9998",
+    "en": "NAD+SU+341-33-4328::735 Kyle Camp+Apt 3",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Seine SSN lautet 532-87-1094.",
+        "en": "536-90-4421 is my SSN."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_ni_uk",
+    "de": "Britische Sozialversicherungsnummer: AB123456C",
+    "en": "National insurance number: AB123456C",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "NINO: bg 12 34 56 a",
+        "NI-Nummer: AB 12 34 56 F"
+      ],
+      "en": [
+        "NI number: NT 12 34 56 A",
+        "This isn't a valid national insurance number UV 98 76 54 B"
+      ]
+    },
+    "structure": {
+      "de": "{\"ni_nummer\": \"WL 30 41 15 C\"}",
+      "en": "{\"ni_number\": \"CE 12 34 56 A\"}"
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_ni_uk_context_free",
+    "de": "Mitarbeiterin PR 482917 A, Standort London",
+    "en": "hh 01 02 03 d",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die NINO der Mitarbeiterin ist PR 482917 A.",
+        "en": "tw987654a is my national insurance number."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_nhs_number_uk",
+    "de": "NHS-Nr. 4014710491",
+    "en": "NHS number: 9434765919",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "NHS-Nummer: 4526018156",
+        "Vorgang 4908301662 wurde abgeschlossen."
+      ],
+      "en": [
+        "NHS number: 9434765918",
+        "Reference 4526018155 was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_passport_number_uk",
+    "de": "Der britische Reisepass 533401372 ist gültig.",
+    "en": "Her UK passport 123456789 expires in 2031.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Vorgang 925665416 abgeschlossen."
+      ],
+      "en": [
+        "Ticket 925665416 was closed."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_passport_number_two_letters",
+    "de": "Der irische Reisepass PA1234567 ist gültig.",
+    "en": "Her passport number is TK1234567.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Vorgang PA1234567 abgeschlossen."
+      ],
+      "en": [
+        "Ticket PA1234567 was closed."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_de",
+    "de": "Bitte tragen Sie DE703082462 im Formular ein.",
+    "en": "Please copy DE478383064 into the supplier record.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Unsere USt-IdNr. lautet DE 500 088 387.",
+        "en": "Our VAT ID is DE973557063."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_at",
+    "de": "Bitte ATU87780063 auf der Rechnung ergänzen.",
+    "en": "Please add ATU66693740 to the vendor file.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Unsere UID-Nummer lautet ATU83263898.",
+        "en": "Our Austrian VAT number is ATU55987490."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_ch",
+    "de": "Bitte CHE-087.254.229 im Lieferantenstamm hinterlegen.",
+    "en": "Please store CHE-246.155.884 with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Unsere MWST-Nummer lautet CHE-265.523.994.",
+        "en": "Our Swiss VAT number is CHE-763.140.573."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_fr",
+    "de": "Bitte FR93932436389 im Lieferantenstamm hinterlegen.",
+    "en": "Please store FR74914367255 with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die französische USt-IdNr. lautet FR69626275960.",
+        "en": "Our French VAT number is FR 26 862 648 003."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_nl",
+    "de": "Bitte NL775186739B01 im Lieferantenstamm hinterlegen.",
+    "en": "Please store NL008203210B01 with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die niederländische USt-IdNr. lautet NL496806300B01.",
+        "en": "Our Dutch VAT number is NL703551818B02."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_be",
+    "de": "Bitte BE1680932103 im Lieferantenstamm hinterlegen.",
+    "en": "Please store BE0134627882 with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die belgische USt-IdNr. lautet BE 0843.608.406.",
+        "en": "Our Belgian VAT number is BE1481735574."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_it",
+    "de": "Bitte IT15761530615 im Lieferantenstamm hinterlegen.",
+    "en": "Please store IT55850260096 with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die italienische USt-IdNr. lautet IT57709980593.",
+        "en": "Our Italian VAT number is IT49352320276."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_it_proximity",
+    "de": "Partita IVA: 18149200349",
+    "en": "Italian VAT number: 53859980343",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die Partita IVA des Lieferanten ist 01002660106.",
+        "en": "The supplier's Partita IVA is 43123510471."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_es",
+    "de": "Bitte ESN32115586 im Lieferantenstamm hinterlegen.",
+    "en": "Please store ESV1760354I with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die spanische USt-IdNr. lautet ESJ4233905A.",
+        "en": "Our Spanish VAT number is ESX6866965Q."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_lu",
+    "de": "Bitte LU37565474 im Lieferantenstamm hinterlegen.",
+    "en": "Please store LU 17089313 with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die luxemburgische USt-IdNr. lautet LU92830737.",
+        "en": "Our Luxembourg VAT number is LU 14850553."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_lv",
+    "de": "Bitte LV42131228182 im Lieferantenstamm hinterlegen.",
+    "en": "Please store LV 49909321921 with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die lettische USt-IdNr. lautet LV69752202622.",
+        "en": "Our Latvian VAT number is LV 77585212208."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_mt",
+    "de": "Bitte MT22531220 im Lieferantenstamm hinterlegen.",
+    "en": "Please store MT 5355 0494 with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die maltesische USt-IdNr. lautet MT74254561.",
+        "en": "Our Maltese VAT number is MT 1923 3945."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_pl",
+    "de": "Bitte PL7896101632 im Lieferantenstamm hinterlegen.",
+    "en": "Please store PL 376-59-87-202 with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die polnische USt-IdNr. lautet PL2231435839.",
+        "en": "Our Polish VAT number is PL 140-75-69-078."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_pt",
+    "de": "Bitte PT799036420 im Lieferantenstamm hinterlegen.",
+    "en": "Please store PT 264 819 314 with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die portugiesische USt-IdNr. lautet PT285486985.",
+        "en": "Our Portuguese VAT number is PT 981 509 649."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_ro",
+    "de": "Bitte RO30720810 im Lieferantenstamm hinterlegen.",
+    "en": "Please store RO 14147843 with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die rumänische USt-IdNr. lautet RO88602379.",
+        "en": "Our Romanian VAT number is RO 70149756."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_se",
+    "de": "Bitte SE763791364601 im Lieferantenstamm hinterlegen.",
+    "en": "Please store SE 381505-735501 with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die schwedische USt-IdNr. lautet SE598007986601.",
+        "en": "Our Swedish VAT number is SE 676070-455801."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_si",
+    "de": "Bitte SI59623748 im Lieferantenstamm hinterlegen.",
+    "en": "Please store SI 9069 7251 with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die slowenische USt-IdNr. lautet SI82789207.",
+        "en": "Our Slovenian VAT number is SI 2332 8681."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_sk",
+    "de": "Bitte SK8149325349 im Lieferantenstamm hinterlegen.",
+    "en": "Please store SK 332 210 05 07 with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die slowakische USt-IdNr. lautet SK8178511121.",
+        "en": "Our Slovak VAT number is SK 583 272 23 24."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_no",
+    "de": "Bitte NO878397576MVA im Lieferantenstamm hinterlegen.",
+    "en": "Please store NO 844 387 024 MVA with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die norwegische USt-IdNr. lautet NO998419077MVA.",
+        "en": "Our Norwegian VAT number is NO 995 195 631 MVA."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_gb",
+    "de": "Bitte GB773983474 im Lieferantenstamm hinterlegen.",
+    "en": "Please store GB 651 3278 45 001 with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die britische USt-IdNr. lautet GB351031353.",
+        "en": "Our UK VAT number is GB 143 0401 67."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_passport_number_de_context_free",
+    "de": "Bitte legen Sie G8H2N5R13 am Schalter vor.",
+    "en": "Please bring J7T3X9V54 to the front desk.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Pass-Nr.: F12345671",
+        "en": "My passport C01X00T478 expires next year."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_passport_number_de_legacy",
+    "de": "Alte Reisepass-Nr.: 3000123454",
+    "en": "Old passport number: 3000123454",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Der alte Reisepass 1220001297 ist abgelaufen.",
+        "en": "His old passport no 1220001297 expired."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_identity_card_number_de_context_free",
+    "de": "Bitte zeigen Sie R5N8L3W90 am Eingang vor.",
+    "en": "Please show M3N7P9R11 at the entrance.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Ausweis-Nr.: L01X00T44",
+        "en": "ID card number: T220001293"
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_identity_card_number_de_legacy",
+    "de": "Personalausweis Nr. 1220001297",
+    "en": "Old ID card number 1220001297",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Alte Ausweisnummer: 3000123454 (bis 2010)",
+        "en": "Her old identity card 3000123454 expired."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_bg",
+    "de": "Bitte BG9534761359 im Lieferantenstamm hinterlegen.",
+    "en": "Please store BG6195102972 with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die bulgarische USt-IdNr. lautet BG6014235807.",
+        "en": "Our Bulgarian VAT number is BG462554213."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_cy",
+    "de": "Bitte CY13567608C im Lieferantenstamm hinterlegen.",
+    "en": "Please store CY54819377H with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die zyprische USt-IdNr. lautet CY07773960L.",
+        "en": "Our Cypriot VAT number is CY50496892Z."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_cz",
+    "de": "Bitte CZ640638362 im Lieferantenstamm hinterlegen.",
+    "en": "Please store CZ682596965 with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die tschechische USt-IdNr. lautet CZ24924288.",
+        "en": "Our Czech VAT number is CZ27839672."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_dk",
+    "de": "Bitte DK27410960 im Lieferantenstamm hinterlegen.",
+    "en": "Please store DK47272858 with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die dänische USt-IdNr. lautet DK32844472.",
+        "en": "Our Danish VAT number is DK70369516."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_ee",
+    "de": "Bitte EE104228296 im Lieferantenstamm hinterlegen.",
+    "en": "Please store EE108740071 with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die estnische USt-IdNr. lautet EE100237728.",
+        "en": "Our Estonian VAT number is EE109972628."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_el",
+    "de": "Bitte EL516804314 im Lieferantenstamm hinterlegen.",
+    "en": "Please store EL732665525 with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die griechische USt-IdNr. lautet EL914493709.",
+        "en": "Our Greek VAT number is EL029373948."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_fi",
+    "de": "Bitte FI66151506 im Lieferantenstamm hinterlegen.",
+    "en": "Please store FI14362715 with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die finnische USt-IdNr. lautet FI18892174.",
+        "en": "Our Finnish VAT number is FI00156865."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_hr",
+    "de": "Bitte HR97439266177 im Lieferantenstamm hinterlegen.",
+    "en": "Please store HR71393722135 with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die kroatische USt-IdNr. lautet HR34583047606.",
+        "en": "Our Croatian VAT number is HR26103968170."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_hu",
+    "de": "Bitte HU26457969 im Lieferantenstamm hinterlegen.",
+    "en": "Please store HU05847334 with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die ungarische USt-IdNr. lautet HU11313193.",
+        "en": "Our Hungarian VAT number is HU66818791."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_ie",
+    "de": "Bitte IE0693778RH im Lieferantenstamm hinterlegen.",
+    "en": "Please store IE8297130VH with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die irische USt-IdNr. lautet IE7960205OH.",
+        "en": "Our Irish VAT number is IE0630667DH."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_lt",
+    "de": "Bitte LT621223427710 im Lieferantenstamm hinterlegen.",
+    "en": "Please store LT178966315 with the vendor.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die litauische USt-IdNr. lautet LT324418449515.",
+        "en": "Our Lithuanian VAT number is LT449700617."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_abn_au",
+    "de": "Die ABN lautet 98 340 661 317.",
+    "en": "ABN: 51 824 753 556",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "ABN: 51 824 753 557",
+        "Vorgang 51824753556 wurde abgeschlossen."
+      ],
+      "en": [
+        "ABN: 52 824 753 556",
+        "Reference 51824753556 was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_abn_au_context_free",
+    "de": "Bitte an 53 004 085 616 fakturieren.",
+    "en": "Please invoice 51 824 753 556 by Friday.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die australische ABN ist 28 141 006 888.",
+        "en": "51 824 753 556 is our ABN."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_acn_au",
+    "de": "Als ACN ist 445 637 310 hinterlegt.",
+    "en": "ACN: 006 249 976",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "ACN: 824 753 557",
+        "Vorgang 135 506 071 wurde abgeschlossen."
+      ],
+      "en": [
+        "ACN: 135 506 072",
+        "Order 006249976 shipped."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_tfn_au",
+    "de": "Die TFN lautet 865 414 088.",
+    "en": "Tax File Number: 842781633",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "TFN: 876 543 211",
+        "Vorgang 842781633 wurde abgeschlossen."
+      ],
+      "en": [
+        "TFN: 111 111 111",
+        "Reference 842781633 was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_medicare_au",
+    "de": "Australische Medicare-Nummer: 4762228909",
+    "en": "Medicare number: 2123 45670 1",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Medicare-Nummer: 2123 25870 1",
+        "Vorgang 6431309681 wurde abgeschlossen."
+      ],
+      "en": [
+        "Medicare number: 7123456701",
+        "Reference 6431309681 was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_medicare_au_context_free",
+    "de": "Karte 5309 78617 6 liegt vor.",
+    "en": "Card 2123 45670 1 is on file.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die Medicare-Karte 5309 78617 6 liegt vor.",
+        "en": "2123 45670 1 is my Medicare card."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_nric_fin_sg",
+    "de": "NRIC: T1092579C",
+    "en": "The FIN on file is G0228472W.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "NRIC: G1122144L",
+        "Vorgang B1234567Z abgeschlossen."
+      ],
+      "en": [
+        "NRIC: S0642712A",
+        "Ticket B1234567Z was closed."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_nric_fin_sg_context_free",
+    "de": "Antragsteller T1092579C wurde genehmigt.",
+    "en": "Applicant F2346401L has been approved.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die NRIC des Antragstellers ist S0642712Z.",
+        "en": "M2570575T is her FIN."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_uen_sg",
+    "de": "UEN: 21332689B",
+    "en": "The Unique Entity Number on file is 53125226D.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "UEN: 53125226E",
+        "Vorgang 53125226D abgeschlossen."
+      ],
+      "en": [
+        "UEN: 201434292E",
+        "Ticket 53125226D was closed."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_uen_sg_context_free",
+    "de": "Firma 201434292D, Singapur",
+    "en": "Supplier S57TU0392K, Singapore",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die UEN der Firma ist 201927806H.",
+        "en": "T61CH8475D is the supplier's UEN."
+      }
+    }
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_anthropic_key",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "anthropic_api_key",
+        "seed": 1
+      }
+    ],
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_openai_key",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "openai_project_api_key",
+        "seed": 1
+      }
+    ],
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_openai_legacy",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "openai_legacy_key",
+        "seed": 1
+      }
+    ],
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_openai_svc",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "openai_service_account_key",
+        "seed": 1
+      }
+    ],
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_huggingface",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "huggingface_token",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "# Tokenizer laden\ntokenizer = load_hf_PretrainedTokenizerCheckpoint(pfad)"
+      ],
+      "en": [
+        "const loader = new Cachedhf_PretrainedTokenizerCheckpoint(path);"
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_groq_key",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "groq_key",
+        "seed": 1
+      }
+    ],
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_xai_key",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "xai_api_key",
+        "seed": 1
+      }
+    ],
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_replicate",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "replicate_api_token",
+        "seed": 1
+      }
+    ],
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_aws_access_key",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "aws_access_key_id",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "Zugangs-IDs beginnen mit AKIA (dauerhaft) oder ASIA (temporär).",
+        "aws_access_key_id = ${AWS_ACCESS_KEY_ID}"
+      ],
+      "en": [
+        "AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}",
+        "IAM user IDs start with AIDA, role IDs with AROA; neither is a credential."
+      ]
+    },
+    "language_neutral": true,
+    "balanced": {
+      "context": {
+        "de": "AWS-Zugangsschlüssel <<secret\u003a0>>",
+        "en": "AWS access key <<secret\u003a0>>"
+      }
+    }
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_aws_secret_key",
+    "de": "provider \"aws\" {\n  secret_key = \"<<secret\u003a0>>\"\n}",
+    "en": "AWS Secret Access Key [None]: <<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "aws_secret_access_key",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "provider \"aws\" {\n  secret_key = var.geheimer_schluessel\n}",
+        "Der geheime Zugriffsschlüssel besteht aus 40 Base64-Zeichen."
+      ],
+      "en": [
+        "AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}",
+        "aws_secret_access_key = <your-secret-access-key>"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_google_api_key",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "google_api_key",
+        "seed": 1
+      }
+    ],
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_google_oauth_token",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "google_oauth_access_token",
+        "seed": 1
+      }
+    ],
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_gcp_client_secret",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "gcp_oauth_client_secret",
+        "seed": 1
+      }
+    ],
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_github_token",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "github_ghp_token",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "Platzhalter in der Doku: GITHUB_TOKEN=<dein-token>",
+        "Abgeschnittenes Token im Ticket: ghp_4WW5PUgz…"
+      ],
+      "en": [
+        "export GH_TOKEN=\"$(gh auth token)\"",
+        "GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}"
+      ]
+    },
+    "language_neutral": true,
+    "balanced": {
+      "context": {
+        "de": "GitHub-Zugriffstoken für die CI: <<secret\u003a0>>",
+        "en": "GitHub access token for CI: <<secret\u003a0>>"
+      }
+    }
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_github_pat",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "github_fine_grained_pat",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "Gekürzt im Audit-Log: github_pat_11AB…"
+      ],
+      "en": [
+        "Fine-grained tokens look like github_pat_<22 characters>_<59 characters>."
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_gitlab_pat",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "gitlab_pat",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "Platzhalter in der Doku: GITLAB_TOKEN=<dein-gitlab-token>",
+        "Abgeschnittenes Token im Ticket: glpat-x7Kq…"
+      ],
+      "en": [
+        "GITLAB_TOKEN: $CI_JOB_TOKEN",
+        "Personal access tokens start with glpat- and have 20 characters."
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_gitlab_token",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "gitlab_deploy_token",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "Runner-Token aus dem Tresor: token = \"${RUNNER_TOKEN}\"",
+        "Deploy-Tokens beginnen mit gldt-."
+      ],
+      "en": [
+        "docker login -u gitlab-ci-token -p \"$CI_JOB_TOKEN\" \"$CI_REGISTRY\"",
+        "Pipeline trigger tokens start with glptt- followed by 40 hex digits."
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_gitlab_oauth_secret",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "gitlab_oauth_app_secret",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "GITLAB_APP_SECRET=<hier-secret-eintragen>"
+      ],
+      "en": [
+        "{\"application_id\": \"4711\", \"secret\": \"${GITLAB_APP_SECRET}\"}"
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_npm_token",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "npm_access_token",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "//registry.npmjs.org/:_authToken=${NPM_TOKEN}",
+        "Abgeschnittenes npm-Token im Ticket: npm_Zq7…"
+      ],
+      "en": [
+        "npm config set //registry.npmjs.org/:_authToken \"$NPM_TOKEN\"",
+        "Granular access tokens start with npm_ followed by 36 characters."
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_stripe_key",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "stripe_secret_live",
+        "seed": 1
+      }
+    ],
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_stripe_webhook",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "stripe_webhook_secret",
+        "seed": 1
+      }
+    ],
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_slack_token",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "slack_bot_token",
+        "seed": 1
+      }
+    ],
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_discord_token",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "discord_bot_token",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "Build-Kennung: MYRJFGhlQIRiO4MPhCMrAyf.0SRujI.TBwmnR0ccPQ79D2HW0AbZHZnaHRQ"
+      ],
+      "en": [
+        "Build id: NBMorWnINgBVuZyA1GR6NJd.pSWU9i.Dy9gh0hIHF1eXIGTK9Xq519CNEZf"
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_eth_private_key",
+    "de": "Privatschlüssel der Wallet: <<secret\u003a0>>",
+    "en": "PRIVKEY=<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "eth_private_key_hex",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "# Aufrufdaten (ABI-kodiert)\ndata: 0xa9059cbb0000000000000000000000000x6840f7cedff654093aece745190193d7ac64afb80bf4cbc60b0a890a368e2ff5",
+        "Transaktion bestätigt, Transaktionshash: 0x9e4b79baf9cb6200ee58ded0af6a8b5bd329db4c8495b15a604b762b87c79cff",
+        "Wallet-Export: Blockhash 0x4b97caba768fb5ccd7b261eb50b4a9f055321707630c4b56886352821a74e3fd"
+      ],
+      "en": [
+        "image: ghcr.io/acme/api@sha256:e2901fbaf0b55e5ce60f9ace8918c5df0x6840f7cedff654093aece745190193d7ac64afb80bf4cbc60b0a890a368e2ff5",
+        "{\"blockNumber\": \"0x12a4\", \"transactionHash\": \"0x9c528064367211129dd5c54fb5ce0037d0922f2485070d2307ff80afc6dfefa7\"}",
+        "0x60f3c77f840c1173d7c91586f5a93047e33824aa9662fa7e79ced970668d285c"
+      ]
+    },
+    "language_neutral": false,
+    "balanced": {
+      "context": {
+        "de": "Privater Schlüssel der Wallet: <<secret\u003a0>>",
+        "en": "Wallet private key: <<secret\u003a0>>"
+      },
+      "counter": {
+        "de": "Transaktionshash: <<secret\u003a0>>",
+        "en": "Tx hash: <<secret\u003a0>>"
+      }
+    }
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_btc_wif",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "btc_wif_mainnet_uncompressed",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "Prüfsumme (Base58): 5qcCPMN3pG57Z4BT11TcwWcm8SfgVVSQuSSDV1qMW4K6cepkSv",
+        "# Automatisch von Cargo erzeugt\nchecksum = \"3a62b7f976a112d59e38e370981a935fac5bc0dc422c4b4cc23cc4ee5b5426ac\"",
+        "Testnet-Schlüssel mit Tippfehler: 93HMnC3aJH6aQo5fncEKjFE4u1cWECA9oZvzrXZPCcLuxUxvFXf"
+      ],
+      "en": [
+        "Checksum (Base58): LRQepRFaLzK7d6Gmy6odtC6XBTgAWxjZQ3fDyvLSLTngoPjXqr",
+        "golang.org/x/text v0.14.0 h1:Pkq3jg/AZxbrjZGvwkkfNLHaaB5Z2+3Ph7fi9EoTkDY=",
+        "testnet key with a typo: cPZQmV4ARGrJKAQVhn6JWyiMBpFM4EQjniHas1sycrqhAqknhnE8"
+      ]
+    },
+    "language_neutral": true,
+    "balanced": {
+      "context": {
+        "de": "Privater Schlüssel (WIF): <<secret\u003a0>>",
+        "en": "Private key (WIF): <<secret\u003a0>>"
+      }
+    }
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_private_key_block",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "pem_pkcs8_private_key",
+        "seed": 1
+      }
+    ],
+    "language_neutral": true,
+    "balanced": {
+      "context": {
+        "de": "Privater Schlüssel des Servers: <<secret\u003a0>>",
+        "en": "Server private key: <<secret\u003a0>>"
+      }
+    }
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_private_key_header",
+    "de": "-----BEGIN PRIVATE KEY-----",
+    "en": "-----BEGIN PRIVATE KEY-----",
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_jwt_token",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "jwt_hs256",
+        "seed": 1
+      }
+    ],
+    "language_neutral": true,
+    "balanced": {
+      "context": {
+        "de": "Zugriffstoken: <<secret\u003a0>>",
+        "en": "Access token: <<secret\u003a0>>"
+      }
+    }
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_credential_in_url",
+    "de": "https://example.test?passwort=actual-secret",
+    "en": "https://example.test?password=actual-secret",
+    "hard_negatives": {
+      "de": [
+        "https://example.test?passwort=HIER_PASSWORT_EINTRAGEN",
+        "curl \"https://example.test/export?api_key=$EXPORT_API_KEY\""
+      ],
+      "en": [
+        "https://example.test?password=YOUR_PASSWORD_HERE",
+        "https://example.test/export?token={{exportToken}}"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_env_var_secret",
+    "de": "DB_PASSWORT=Kx7!pQ2#vL9@rT4$",
+    "en": "DB_PASSWORD=Kx7!pQ2#vL9@rT4$",
+    "hard_negatives": {
+      "de": [
+        "DB_PASSWORT=BITTE_AENDERN",
+        "DB_PASSWORT = os.environ[\"DB_PASSWORT\"]",
+        "DB_PASSWORT=@Microsoft.KeyVault(SecretUri=https://lager-kv.vault.azure.net/secrets/db-passwort/)",
+        "const DATA_API_KEY = '.data-api'",
+        "const ANMELDUNG_FLOW_PASSWORD = \"password\"",
+        "      LAGER_DB_PASSWORT: \"${LAGER_DB_PASSWORT}\"",
+        "LAGER_API_TOKEN=3f2a9c4e-7b1d-4e8a-9c2f-5d6e7f8a9b0c",
+        "LAGER_KENNWORT=%LAGER_KENNWORT%",
+        "LAGER_GEHEIMNIS=deaktiviert",
+        "LAGER_PASSWORT=/etc/lager/passwort.txt",
+        "lager:\n  environment:\n    LAGER_API_TOKEN: 3f2a9c4e-7b1d-4e8a-9c2f-5d6e7f8a9b0c",
+        "{\"env\": {\"LAGER_KENNWORT\": \"%LAGER_KENNWORT%\"}}",
+        "<umgebung>\n  <LAGER_API_TOKEN>3f2a9c4e-7b1d-4e8a-9c2f-5d6e7f8a9b0c</LAGER_API_TOKEN>",
+        "resource \"x\" \"lager\" {\n  environment = {\n    LAGER_KENNWORT = \"${var.lager_kennwort}\""
+      ],
+      "en": [
+        "DB_PASSWORD=YOUR_DB_PASSWORD_HERE",
+        "DB_PASSWORD = ENV.fetch(\"DB_PASSWORD\")",
+        "DB_PASSWORD=op://Production/postgres/password",
+        "const DATA_API_KEY = \".data-api\";",
+        "const AUTH_FLOW_PASSWORD = \"password\"",
+        "      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}",
+        "DEPLOY_SECRET=sha1-2fd4e1c67a2d28fced849ee1bb76e7391b93eb12",
+        "SHA256_RELEASE_TOKEN=9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+        "ORDER_SERVICE_TOKEN=6512bd43d9caa6e02c990b0a",
+        "IDP_CLIENT_SECRET=https://auth.internal/realms/acme/protocol/openid-connect/token",
+        "services:\n  worker:\n    environment:\n      SERVICE_TOKENS:\n        - ${SERVICE_TOKEN}",
+        "[env]\nDEPLOY_SECRET = \"sha1-2fd4e1c67a2d28fced849ee1bb76e7391b93eb12\"",
+        "<env>\n  <DEPLOY_SECRET>sha1-2fd4e1c67a2d28fced849ee1bb76e7391b93eb12</DEPLOY_SECRET>",
+        "variable \"SERVICE_TOKEN\" {\n  default = \"6512bd43d9caa6e02c990b0a\""
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_password_assignment",
+    "de": "Passwort: Sommer2026!",
+    "en": "Password: Summer2026!",
+    "hard_negatives": {
+      "de": [
+        "Passwort: HIER_PASSWORT_EINTRAGEN",
+        "passwort = var.db_passwort",
+        "passwort: ((lager.db_passwort))",
+        "Das Passwort ist falsch, bitte erneut eingeben.",
+        "docker run -v \"$PWD:/arbeit\" lager-export",
+        "passwort = self.tresor.lese_passwort(konto)",
+        "const meldungen = { passwort: \"Bitte geben Sie ein Passwort ein\" };",
+        "e.createElement(\"label\",{htmlFor:\"passwort\"},\"Passwort:\"),d?e.createElement(\"code\",null,\" ******\")",
+        "export interface Konfig {\n  dbPasswort: string;\n}",
+        "const DB_PASSWORT: &str = env!(\"DB_PASSWORT\");",
+        "<add key=\"DbPasswort\" value=\"{{DB_PASSWORT}}\" />",
+        "'passwort' => !empty($zugang['pass']) ? $zugang['pass'] : ''",
+        "[konto]\ngehashtes_passwort = 2fd4e1c67a2d28fced849ee1bb76e7391b93eb12",
+        "[datenbank]\npasswort = {lager_passwort}",
+        "[sicherheit]\npasswort = 20260914",
+        "konto:\n  gehashtes_passwort: 2fd4e1c67a2d28fced849ee1bb76e7391b93eb12",
+        "lager:\n  passwort: /run/secrets/lager_passwort",
+        "produktion:\n  passwort: *lager_standard_passwort",
+        "<datenbank>\n  <passwort>@lager.passwort@</passwort>",
+        "resource \"aws_db_instance\" \"lager\" {\n  password = var.lager_passwort",
+        "variable \"lager_passwort_sha256\" {\n  default = \"9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08\""
+      ],
+      "en": [
+        "Password: TODO",
+        "password: {{dbPassword}}",
+        "keystore.password=changeit",
+        "password = os.environ[\"DB_PASSWORD\"]",
+        "def set_password(self, name: str, password: str) -> None:",
+        "The password is stored in the system keyring.",
+        "export default { password: \"Enter your password\", submit: \"Sign in\" };",
+        "Login failed because the password is \"too short\" for the new policy.",
+        "const routes = { forgotPassword: \"forgot-password\" };",
+        "pub struct Config {\n    pub db_password: Option<String>,\n}",
+        "{\"devDependencies\": {\"parse-passwd\": \"^1.0.0\"}}",
+        "switch(u){case\"password\":return void t.authorizePassword(e)}",
+        "hashed_password=5d41402abc4b2a76b9719d911017c592",
+        "app.db.password=<%= @db_password %>",
+        "[database]\npassword = C:\\secrets\\orders-db.txt",
+        "[database]\npasswords = ['C:\\secrets\\orders-db.txt']",
+        "db:\n  password: ENC[AES256_GCM,data:Zm9vYmFyYmF6cXV4,iv:Tz8Wm4K93RVq,tag:Kx7pQ2vL,type:str]",
+        "pub fn getpwnam_r(\n    name: *const c_char,\n    pwd: *mut passwd,",
+        "<server>\n  <password>${env.NEXUS_PASSWORD}</password>",
+        "<konto>\n  <hashed_password>5d41402abc4b2a76b9719d911017c592</hashed_password>",
+        "resource \"aws_db_instance\" \"orders\" {\n  password = random_password.orders.result"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_generic_credential_assignment",
+    "de": "API-Schlüssel: abcDEfGhIJkl123456",
+    "en": "API key: abcDEfGhIJkl123456",
+    "hard_negatives": {
+      "de": [
+        "API-Schlüssel: HIER_API_SCHLUESSEL_EINTRAGEN",
+        "client_secret = Environment.GetEnvironmentVariable(\"CLIENT_SECRET\")",
+        "git remote set-url origin https://token:@bitbucket.org/acme/lager.git",
+        "Das Token ist abgelaufen und muss erneuert werden.",
+        "let token = berechtigung.token_fuer(&konto)?;",
+        "lager:\n  token: \"{{ .Values.lager.token }}\"",
+        "{\"artikel\": [], \"nextPageToken\": \"Q0FVUUFBYTFiMmMz\"}",
+        "lager:\n  auth:\n    existingSecret: \"lager-release-auth\"",
+        "lager.geheimnis=sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+        "lager.zugangstoken=5f8d0c3e9b1a2d4c6e8f0a1b",
+        "GET /v1/lieferungen HTTP/1.1\nHost: api.lager.intern\nX-Api-Schluessel: https://tresor.lager.intern/v1/lager/api",
+        "lager:\n  api_token: 3f2a9c4e-7b1d-4e8a-9c2f-5d6e7f8a9b0c",
+        "{\"lager\": {\"zugangstokens\": [\"5f8d0c3e9b1a2d4c6e8f0a1b\", \"5f8d0c3e9b1a2d4c6e8f0a1c\"]}}",
+        "[versand]\ntokens = [\"${VERSAND_TOKEN}\", \"{versand_token}\"]",
+        "verschluesselung:\n  geheimnis: deaktiviert",
+        "<lager>\n  <api_token>3f2a9c4e-7b1d-4e8a-9c2f-5d6e7f8a9b0c</api_token>",
+        "<verschluesselung>\n  <geheimnis>deaktiviert</geheimnis>",
+        "module \"versand\" {\n  zugangstoken = \"6512bd43d9caa6e02c990b0a\""
+      ],
+      "en": [
+        "API key: YOUR-API-TOKEN",
+        "client_secret: %CLIENT_SECRET%",
+        "git remote set-url origin https://token:@bitbucket.org/acme/warehouse.git",
+        "token = get_token(repository_name)",
+        "pub fn connect(token: Option<&str>) -> Result<Client> {",
+        "Token::Literal(c) => self.push(c),",
+        "oauth:\n  client_secret: \"<your client secret>\"",
+        "{\"items\": [], \"continuation_token\": \"a8f3k2m9x7q1z5w4\"}",
+        "ingress:\n  tls_secret: \"wildcard-internal-2026\"",
+        "    'COPILOT_GITHUB_TOKEN' => 'github-copilot',",
+        "POST /v1/exports HTTP/1.1\nHost: api.internal\nX-Api-Key: 550e8400-e29b-41d4-a716-446655440000",
+        "[oauth]\nclient_secret = %(client_secret)s",
+        "POST /v1/exports HTTP/1.1\nHost: api.internal\nX-Auth-Token: disabled",
+        "oauth.client-secret=86400000",
+        "{\"auth\": {\"client_secret\": \"550e8400-e29b-41d4-a716-446655440000\"}}",
+        "sha256_tokens = [\"9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08\"]",
+        "[security]\ntokens = [86400, 3600]",
+        "{\"tokens\": [\"<|endoftext|>\", \"Ġconstructor\", \"ing</w>\", \"abc12345\"]}",
+        "<PropertyGroup>\n  <ApiToken>$(BillingApiToken)</ApiToken>",
+        "<idp>\n  <client_secret>https://auth.internal/realms/acme/protocol/openid-connect/token</client_secret>",
+        "provider \"vault\" {\n  token = \"${var.vault_token}\""
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_bearer_token",
+    "de": "Access-Token für den Abgleich: Bearer kQ7vRz2mXp9TsW4nYb3d",
+    "en": "AUTHORIZATION=Bearer kQ7vRz2mXp9TsW4nYb3d",
+    "hard_negatives": {
+      "de": [
+        "Authorization: Bearer HIER_TOKEN_EINTRAGEN",
+        "Authorization: Bearer __ZUGRIFFSTOKEN__",
+        "AUTHORIZATION=Bearer ${LAGER_TOKEN}"
+      ],
+      "en": [
+        "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE",
+        "Authorization: Bearer secret_token",
+        "curl -H \"Authorization: Bearer abc123.xyz.789\""
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_basic_auth",
+    "de": "Proxy-Zugangsdaten: Basic YWRhOnNlY3JldC04ODQy",
+    "en": "proxy_authorization: \"Basic YWRhOnNlY3JldC04ODQy\"",
+    "hard_negatives": {
+      "de": [
+        "PROXY_AUTHORIZATION=Basic SGFsbG8gV2VsdCBkYXMgaXN0IGVpbg==",
+        "expect(header).toBe(\"Basic YmVudXR6ZXI6cGFzc3dvcnQ=\")"
+      ],
+      "en": [
+        ".should(\"equal\", \"Basic YXBwbGljYXRpb246c2VjcmV0\")",
+        "Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ=="
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_signed_url_signature",
+    "de": "https://example.test?X-Amz-Signature=9f3a1c7e4b20d86f5ea9c3172b4d08e6",
+    "en": "https://example.test?X-Amz-Signature=9f3a1c7e4b20d86f5ea9c3172b4d08e6",
+    "hard_negatives": {
+      "de": [
+        "https://example.test/a.zip?Signature=HIER_SIGNATUR_EINTRAGEN"
+      ],
+      "en": [
+        "https://example.test/a.zip?X-Amz-Signature=YOUR_URL_SIGNATURE_HERE"
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_session_cookie",
+    "de": "Sitzungs-Cookie aus dem Browser: JSESSIONID=8F3A1C7E4B20D86F5EA9C3172B4D08E6",
+    "en": "Cookie: sessionid=kQ7vRz2mXp9TsW4nYb3",
+    "hard_negatives": {
+      "de": [
+        "SESSION_COOKIE=PHPSESSID=HIER_SITZUNG_EINTRAGEN"
+      ],
+      "en": [
+        "Set-Cookie: __Host-session=${SESSION_ID}; Path=/"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_csrf_token",
+    "de": "X-CSRF-Token: abcDEF0123456789xyz",
+    "en": "X-CSRF-Token: abcDEF0123456789xyz",
+    "hard_negatives": {
+      "de": [
+        "X-CSRF-Token: HIER_CSRF_TOKEN_EINTRAGEN",
+        "csrf_token = System.getenv(\"CSRF_TOKEN\")",
+        "<meta name=\"csrf-token\" content=\"{{ csrf_token() }}\">"
+      ],
+      "en": [
+        "X-CSRF-Token: YOUR_CSRF_TOKEN_HERE",
+        "csrf_token = os.environ[\"CSRF_TOKEN\"]",
+        "{\"csrf_token\": \"X-CSRF-Token\"}"
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_password_hash",
+    "de": "Passwort-Hash: 5d41c8e07b2a96f3e18d4c7a0b9f62e5",
+    "en": "Password hash: 5d41c8e07b2a96f3e18d4c7a0b9f62e5",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_url_userinfo_password",
+    "de": "postgres://dbuser:s3cr3t-value@db.internal/app",
+    "en": "postgres://dbuser:s3cr3t-value@db.internal/app",
+    "hard_negatives": {
+      "de": [
+        "postgres://dbuser:BITTE_AENDERN@db.internal/app",
+        "postgresql://lager:%(passwort)s@db.intern/lager",
+        "DATABASE_URL=postgres://lager@db.intern:5432/lager",
+        "$fs->get('https://user:pass@github.com/composer/composer/404');",
+        "'http_proxy' => 'http://benutzer:geheimnis@proxy.intern:3128',"
+      ],
+      "en": [
+        "postgres://dbuser:TODO@db.internal/app",
+        "mysql://report:$DB_PASSWORD@db1/app",
+        "https://x-token-auth:my-access-token@bitbucket.org/acme/repo.git",
+        "DATABASE_URL=postgres://warehouse@db.internal:5432/warehouse",
+        "$this->git->syncMirror('https://user:secret@example.com/repo.git', $dir);",
+        "['https://token:MY_GITHUB_TOKEN@github.com/acme/repo.git', 1],"
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_url_userinfo_token",
+    "de": "Spiegel des Lager-Repos: https://<<secret\u003a0>>:x-oauth-basic@github.com/acme/lager.git",
+    "en": "$ git clone https://<<secret\u003a0>>:x-oauth-basic@github.com/acme/app.git",
+    "secrets": [
+      {
+        "gen": "generic_api_secret",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "git clone https://$GITHUB_TOKEN:x-oauth-basic@github.com/acme/lager.git",
+        "https://<token>:x-oauth-basic@github.com/acme/lager.git"
+      ],
+      "en": [
+        "https://myusername:x-oauth-basic@github.com/acme/app.git",
+        "git clone https://${{ secrets.GITHUB_TOKEN }}:x-oauth-basic@github.com/acme/app.git"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_connection_string_password",
+    "de": "Verbindungszeichenfolge der Lager-DB: Server=sql01.lager.intern;Database=lager;User Id=lager_app;Password=<<secret\u003a0>>;",
+    "en": "spring.datasource.url=jdbc:postgresql://db.internal:5432/orders?user=orders&password=<<secret\u003a0>>&sslmode=require",
+    "secrets": [
+      {
+        "gen": "password",
+        "seed": 3
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "Server=sql01.lager.intern;Database=lager;User Id=lager_app;Password=${LAGER_DB_PASSWORT};",
+        "Data Source=sql01;Initial Catalog=lager;Integrated Security=SSPI;"
+      ],
+      "en": [
+        "jdbc:postgresql://db.internal:5432/orders?user=orders&password=<your-password>",
+        "Server=myServerAddress;Database=myDataBase;User Id=myUsername;Password=myPassword;"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_ldap_bind_password",
+    "de": "# /etc/nslcd.conf\nbinddn cn=nslcd,ou=dienste,dc=lager,dc=de\nbindpw <<secret\u003a0>>",
+    "en": "$ ldapsearch -x -H ldaps://ldap.internal -D \"cn=admin,dc=acme,dc=org\" -w <<secret\u003a0>> -b \"dc=acme,dc=org\"",
+    "secrets": [
+      {
+        "gen": "url_userinfo_password",
+        "seed": 3
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "$ ldapsearch -x -D \"cn=admin,dc=lager,dc=de\" -W -b \"dc=lager,dc=de\"",
+        "Aufruf: ldapsearch -x -D <bind-dn> -w <passwort> -b <basis-dn>"
+      ],
+      "en": [
+        "$ ldapsearch -x -D \"cn=admin,dc=acme,dc=org\" -w \"$LDAP_BIND_PW\" -b \"dc=acme,dc=org\"",
+        "The bindpw option sets the password that nslcd uses for the simple bind."
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_de_vat_id",
+    "de": "USt-IdNr: DE123456789",
+    "en": "VAT-ID: DE123456789",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_de_commercial_register_number",
+    "de": "Handelsregister: HRB 12345",
+    "en": "Commercial register: HRB 12345",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_de_facility_number_bsnr",
+    "de": "Betriebsstättennummer: 123456789",
+    "en": "Medical facility number: 123456789",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_record_case_id",
+    "de": "Fallnummer: CASE-2048",
+    "en": "Case ID: CASE-2048",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_record_contract_id",
+    "de": "Vertragsnummer: CTR-2048",
+    "en": "Contract ID: CTR-2048",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_record_claim_id",
+    "de": "Schadennummer: CLM-2048",
+    "en": "Claim ID: CLM-2048",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_record_order_id",
+    "de": "Bestellnummer: ORD-2048",
+    "en": "Order ID: ORD-2048",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_record_invoice_id",
+    "de": "Rechnungsnummer: INV-2048",
+    "en": "Invoice ID: INV-2048",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_project_id",
+    "de": "Projektnummer: PRJ-2048",
+    "en": "Project ID: PRJ-2048",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_organization_id",
+    "de": "Unternehmens-ID: ORG-2048",
+    "en": "Organization ID: ORG-2048",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_internal_business_metric",
+    "de": "Jahresgehalt: 85000 EUR",
+    "en": "Annual salary: 85000 EUR",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_database_dump_insert",
+    "de": "INSERT INTO kunden VALUES (1, 'Ada');",
+    "en": "INSERT INTO customers VALUES (1, 'Ada');",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_source_code_fence",
+    "de": "```python\nwert = 42\n```",
+    "en": "```python\nvalue = 42\n```",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_source_code_statement",
+    "de": "const wert = berechnen(42);",
+    "en": "const value = compute(42);",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_source_code_python_rust_assignment",
+    "de": "wert = berechnen(42)",
+    "en": "value = compute(42)",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_source_code_declaration",
+    "de": "def berechnen(wert):",
+    "en": "def compute(value):",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_source_code_import",
+    "de": "from projekt import berechnen",
+    "en": "from project import compute",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_sql_statement",
+    "de": "SELECT name FROM kunden;",
+    "en": "SELECT name FROM customers;",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_sql_multiline_statement",
+    "de": "SELECT name\nFROM kunden;",
+    "en": "SELECT name\nFROM customers;",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_database_dump_header",
+    "de": "-- PostgreSQL database dump",
+    "en": "-- PostgreSQL database dump",
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_stacktrace_block",
+    "de": "Fehler\n  File \"projekt.py\", line 7\n",
+    "en": "Error\n  File \"project.py\", line 7\n",
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_structured_system_log",
+    "de": "2026-09-03T12:00:00 FEHLER Zugriff fehlgeschlagen",
+    "en": "2026-09-03T12:00:00 ERROR Access failed",
+    "language_neutral": false
+  }
+]

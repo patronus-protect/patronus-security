@@ -681,7 +681,10 @@ fn validator_vectors_are_language_independent() {
 }
 
 fn lexicon() -> Vec<Value> {
-    serde_json::from_str(include_str!("../src/detectors/anchor_lexicons/pii.json")).unwrap()
+    serde_json::from_str(include_str!(
+        "../../ark-core/src/detectors/anchor_lexicons/pii.json"
+    ))
+    .unwrap()
 }
 
 /// Lexicon ids of the anchor rules this task extends.

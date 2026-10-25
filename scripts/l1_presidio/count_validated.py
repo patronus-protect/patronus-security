@@ -10,7 +10,7 @@ the ``presidio_version`` of the entity map (2.2.364). M3 holds when ARK has at l
 ``M3_FACTOR`` times as many units as Presidio.
 
 Both sides come from ``research/l1-pii/entity_map.yaml`` (section ``checksums``): ARK by validator
-function of the ``PII_PATTERNS`` registry in ``rust/src/detectors/pii/pii.rs``, Presidio by entity
+function of the ``PII_PATTERNS`` registry in ``ark-core/src/detectors/pii/pii.rs``, Presidio by entity
 of every pattern recognizer with ``validate_result``. ``--presidio`` compares the Presidio side with
 the installed registry and version.
 

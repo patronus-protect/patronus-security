@@ -12,7 +12,7 @@ pub mod assets;
 #[allow(dead_code, unused_imports)]
 mod cache;
 pub mod detectors;
-mod diagnostics;
+pub use patronus_ark_core::diagnostics;
 pub mod dynamic_pii;
 pub mod external_l1;
 pub mod gliner_onnx_engine;
@@ -20,10 +20,10 @@ pub mod gliner_onnx_engine;
 #[doc(hidden)]
 pub mod golden_recipes;
 pub mod ml;
-pub mod normalization;
+pub use patronus_ark_core::normalization;
 pub mod pipeline;
 pub mod post_prediction;
-pub mod threat;
+pub use patronus_ark_core::threat;
 pub mod types;
 
 pub use cache::{
@@ -793,20 +793,6 @@ pub fn validated(mut self) -> Result<Self, String>;
 
 Validate and normalize this configuration.
 
-```rust
-pub struct EvidenceSpan {
-    pub label: String,
-    pub text: String,
-    pub score: f64,
-    pub start_byte: usize,
-    pub end_byte: usize,
-    pub start_char: usize,
-    pub end_char: usize,
-}
-```
-
-Exact evidence span returned by an entity-producing pipeline.
-
 ## Result And Category Types
 
 ```rust
@@ -1004,42 +990,6 @@ pub struct QueuedSecurityScanResult {
 A completed queued scan result together with the request that produced it.
 
 ```rust
-pub struct EvaluationResult {
-    /// Stable class label returned by the scanner.
-    pub class_name: String,
-    /// Confidence score in the inclusive range `0.0..=1.0` when available.
-    pub confidence: f64,
-    /// Security level that produced the decision.
-    pub level: String,
-}
-```
-
-A single classifier decision before it is wrapped in a public scan result.
-
-```rust
-pub struct LayerResult {
-    /// Security level for this layer, for example `L1` or `L2`.
-    pub level: String,
-    /// Layer implementation type such as `native`, `l2`, or `l3`.
-    pub layer_type: String,
-    /// Stable class label returned by this layer.
-    pub class_name: String,
-    /// Confidence score in the inclusive range `0.0..=1.0` when available.
-    pub confidence: f64,
-    /// Whether the layer produced a matched decision.
-    pub matched: bool,
-    /// Wall-clock time spent in this layer, in milliseconds.
-    pub duration_ms: f64,
-    /// Threshold values that were applied by the layer.
-    pub thresholds: HashMap<String, f64>,
-    /// Layer-specific metadata, kept as JSON values for forward compatibility.
-    pub details: HashMap<String, serde_json::Value>,
-}
-```
-
-Per-layer evidence for a scan result.
-
-```rust
 pub struct SecurityScanResult {
     /// Category that was scanned, for example `injection` or `dlp`.
     pub category: String,
@@ -1069,87 +1019,6 @@ pub struct SecurityScanResult {
 ```
 
 Public scan result returned by `SecurityGateway` methods.
-
-```rust
-pub struct DecisionEnvelope {
-    pub schema_version: String,
-    pub final_result: DecisionResult,
-    pub decision_candidate: Option<DecisionCandidate>,
-    pub recommendation: DecisionRecommendation,
-    pub candidates: Vec<DecisionCandidate>,
-    pub terminality: DecisionTerminality,
-    pub provenance: DecisionProvenance,
-}
-```
-
-Stable classifier decision envelope for downstream policy evaluation.
-
-```rust
-pub struct DecisionResult {
-    pub class_name: String,
-    pub confidence: f64,
-    pub source: String,
-}
-```
-
-Final Ark verdict recorded inside a decision envelope.
-
-```rust
-pub struct DecisionCandidate {
-    pub source: String,
-    pub class_name: String,
-    pub confidence: f64,
-    pub acceptance_threshold: f64,
-    pub accepted: bool,
-    pub evidence: Option<HashMap<String, f64>>,
-    /// Chunk-level evidence for the single final document decision.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub chunk_evidence: Option<serde_json::Value>,
-}
-```
-
-One typed classifier candidate considered by final-decision arbitration.
-
-```rust
-pub struct DecisionRecommendation {
-    pub accepted: bool,
-    pub final_arbitration: String,
-    pub operating_point: String,
-    pub acceptance_threshold: Option<f64>,
-}
-```
-
-Ark's calibrated default recommendation for a classifier result.
-
-```rust
-pub struct DecisionTerminality {
-    pub completion: String,
-    pub degraded: bool,
-    pub degradation_reason: Option<String>,
-}
-```
-
-Terminal request state relevant to decision consumers.
-
-```rust
-pub struct DecisionProvenance {
-    pub ark_version: String,
-    pub schema_version: String,
-    pub model: String,
-}
-```
-
-Minimal provenance for a classifier decision envelope.
-
-```rust
-pub struct LabelScore {
-    pub label: String,
-    pub confidence: f64,
-    pub matched: bool,
-}
-```
-
-One scored label returned by a multi-label classifier head.
 
 ```rust
 pub enum SecurityLevel {
@@ -1211,28 +1080,6 @@ pub fn as_str(self) -> &'static str;
 Return the manifest key for this operating point.
 
 ```rust
-pub enum ExecutionBackend {
-    /// Keep conservative CPU defaults unless a caller overrides execution mode.
-    #[default]
-    Auto,
-    /// CPU execution: prefer lazy L3 execution and low concurrency.
-    Cpu,
-    /// Platform GPU alias: DirectML on Windows, CUDA on Linux, unsupported on macOS.
-    Gpu,
-    /// CoreML execution provider.
-    CoreMl,
-    /// CUDA execution provider.
-    Cuda,
-    /// DirectML execution provider.
-    DirectMl,
-    /// TensorRT execution provider.
-    TensorRt,
-}
-```
-
-Runtime backend profile used to choose default L3 execution behavior.
-
-```rust
 pub enum L3Strategy {
     /// Each promoted pipeline executes its own L3 model.
     #[default]
@@ -1246,28 +1093,6 @@ Physical L3 classifier topology.
 
 ```rust
 pub fn as_str(self) -> &'static str;
-```
-
-No public documentation is available yet.
-
-```rust
-pub fn as_str(self) -> &'static str;
-```
-
-Return the canonical snake_case backend string.
-
-```rust
-pub struct OnnxRuntimeOptions {
-    pub intra_threads: Option<usize>,
-    pub inter_threads: Option<usize>,
-    pub spinning: Option<bool>,
-}
-```
-
-Caller-provided ONNX Runtime session options.
-
-```rust
-pub fn normalized(self) -> Self;
 ```
 
 No public documentation is available yet.
@@ -1773,6 +1598,213 @@ pub fn max_level(&self) -> SecurityLevel;
 
 Return the max-level cap backing this execution.
 
+## Synchronous Core API
+
+```rust
+pub enum Category {
+    Pii,
+    Dlp,
+    Injection,
+}
+```
+
+No public documentation is available yet.
+
+```rust
+pub struct ScannerConfig {
+    pub categories: Vec<Category>,
+    pub rules: HashMap<String, bool>,
+    pub models: HashMap<String, bool>,
+    pub pii_mode: PiiMode,
+    pub dlp_mode: DlpMode,
+    pub explain: bool,
+    /// Maximum UTF-8 input size; exceeding it is an error. Default: 1 MiB.
+    pub max_input_bytes: usize,
+    /// Maximum actionable evidence spans; reports are never silently truncated.
+    pub max_findings: usize,
+    #[cfg(feature = "wolf")]
+    pub wolf: Option<crate::wolf::WolfConfig>,
+}
+```
+
+Queue-free scanner policy. Defaults to all three native categories and no Wolf.
+
+```rust
+pub enum ScanError {
+    #[error("invalid scanner configuration: {0}")]
+    Config(String),
+    #[error("input exceeds {limit} bytes")]
+    InputLimit { limit: usize },
+    #[error("findings exceed {limit}")]
+    FindingLimit { limit: usize },
+    #[error("native detector failed: {0}")]
+    Detector(String),
+    #[error("Wolf asset error: {0}")]
+    Asset(String),
+    #[error("Wolf inference failed: {0}")]
+    Inference(String),
+}
+```
+
+No public documentation is available yet.
+
+```rust
+pub struct ScanReport {
+    pub input_bytes: usize,
+    pub native: Vec<NativeResult>,
+    #[cfg(feature = "wolf")]
+    pub wolf: Option<crate::wolf::WolfResult>,
+}
+```
+
+Complete scan output; native decisions and model probabilities remain separate.
+
+```rust
+pub struct Scanner {
+    config: ScannerConfig,
+    pii: PiiPipeline,
+    dlp: DlpPipeline,
+    catalog: rule_catalog::InjectionRuleCatalogPipeline,
+    structural: structural::InjectionStructuralPipeline,
+    producers: Vec<(&'static str, Producer)>,
+    #[cfg(feature = "wolf")]
+    wolf: Option<crate::wolf::WolfRunner>,
+}
+```
+
+No public documentation is available yet.
+
+```rust
+pub fn new(config: ScannerConfig) -> Result<Self, ScanError>;
+```
+
+Initialize native detectors and warm/verify an explicitly configured local Wolf bundle.
+
+```rust
+pub fn scan(&mut self, text: &str) -> Result<ScanReport, ScanError>;
+```
+
+Run all configured stages synchronously. Any incomplete stage returns an error.
+
+## Shared Native Types
+
+```rust
+pub struct EvaluationResult {
+    /// Stable class label returned by the scanner.
+    pub class_name: String,
+    /// Confidence score in the inclusive range `0.0..=1.0` when available.
+    pub confidence: f64,
+    /// Security level that produced the decision.
+    pub level: String,
+}
+```
+
+A single classifier decision before it is wrapped in a public scan result.
+
+```rust
+pub struct LayerResult {
+    /// Security level for this layer, for example `L1` or `L2`.
+    pub level: String,
+    /// Layer implementation type such as `native`, `l2`, or `l3`.
+    pub layer_type: String,
+    /// Stable class label returned by this layer.
+    pub class_name: String,
+    /// Confidence score in the inclusive range `0.0..=1.0` when available.
+    pub confidence: f64,
+    /// Whether the layer produced a matched decision.
+    pub matched: bool,
+    /// Wall-clock time spent in this layer, in milliseconds.
+    pub duration_ms: f64,
+    /// Threshold values that were applied by the layer.
+    pub thresholds: HashMap<String, f64>,
+    /// Layer-specific metadata, kept as JSON values for forward compatibility.
+    pub details: HashMap<String, serde_json::Value>,
+}
+```
+
+Per-layer evidence for a scan result.
+
+```rust
+pub struct DecisionEnvelope {
+    pub schema_version: String,
+    pub final_result: DecisionResult,
+    pub decision_candidate: Option<DecisionCandidate>,
+    pub recommendation: DecisionRecommendation,
+    pub candidates: Vec<DecisionCandidate>,
+    pub terminality: DecisionTerminality,
+    pub provenance: DecisionProvenance,
+}
+```
+
+Stable classifier decision envelope for downstream policy evaluation.
+
+```rust
+pub struct DecisionResult {
+    pub class_name: String,
+    pub confidence: f64,
+    pub source: String,
+}
+```
+
+Final Ark verdict recorded inside a decision envelope.
+
+```rust
+pub struct DecisionCandidate {
+    pub source: String,
+    pub class_name: String,
+    pub confidence: f64,
+    pub acceptance_threshold: f64,
+    pub accepted: bool,
+    pub evidence: Option<HashMap<String, f64>>,
+    /// Chunk-level evidence for the single final document decision.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chunk_evidence: Option<serde_json::Value>,
+}
+```
+
+One typed classifier candidate considered by final-decision arbitration.
+
+```rust
+pub struct DecisionRecommendation {
+    pub accepted: bool,
+    pub final_arbitration: String,
+    pub operating_point: String,
+    pub acceptance_threshold: Option<f64>,
+}
+```
+
+Ark's calibrated default recommendation for a classifier result.
+
+```rust
+pub struct DecisionTerminality {
+    pub completion: String,
+    pub degraded: bool,
+    pub degradation_reason: Option<String>,
+}
+```
+
+Terminal request state relevant to decision consumers.
+
+```rust
+pub struct DecisionProvenance {
+    pub ark_version: String,
+    pub schema_version: String,
+    pub model: String,
+}
+```
+
+Minimal provenance for a classifier decision envelope.
+
+```rust
+pub struct LabelScore {
+    pub label: String,
+    pub confidence: f64,
+    pub matched: bool,
+}
+```
+
+One scored label returned by a multi-label classifier head.
+
 ```rust
 pub enum SecurityCategory {
     /// Prompt injection and instruction hierarchy attacks.
@@ -1813,6 +1845,234 @@ pub fn is_unified_classifier(self) -> bool;
 ```
 
 Return whether this category is backed by one head of the unified classifier.
+
+```rust
+pub struct EvidenceSpan {
+    pub label: String,
+    pub text: String,
+    pub score: f64,
+    pub start_byte: usize,
+    pub end_byte: usize,
+    pub start_char: usize,
+    pub end_char: usize,
+}
+```
+
+Exact evidence span returned by an entity-producing pipeline.
+
+```rust
+pub struct NativeResult {
+    /// Category that was scanned, for example `injection` or `dlp`.
+    pub category: String,
+    /// Stable class label for the final decision.
+    pub class_name: String,
+    /// Final confidence score in the inclusive range `0.0..=1.0` when available.
+    pub confidence: f64,
+    /// Highest layer that contributed the final decision.
+    pub level: String,
+    /// Model or native scanner name that produced the final decision.
+    pub model: String,
+    /// Sum of recorded layer durations, in milliseconds.
+    pub duration_ms: f64,
+    /// Ordered layer evidence that explains the final decision.
+    pub layers: Vec<LayerResult>,
+    /// Exact entity evidence returned by span-producing pipelines.
+    pub evidence_spans: Vec<EvidenceSpan>,
+    /// Per-label scores for multi-label classifier outputs.
+    pub label_scores: Vec<LabelScore>,
+    /// Structured classifier decision contract for policy consumers.
+    pub decision: Option<DecisionEnvelope>,
+}
+```
+
+Public scan result returned by `SecurityGateway` methods.
+
+```rust
+pub enum ExecutionBackend {
+    /// Keep conservative CPU defaults unless a caller overrides execution mode.
+    #[default]
+    Auto,
+    /// CPU execution: prefer lazy L3 execution and low concurrency.
+    Cpu,
+    /// Platform GPU alias: DirectML on Windows, CUDA on Linux, unsupported on macOS.
+    Gpu,
+    /// CoreML execution provider.
+    #[serde(rename = "coreml", alias = "core_ml")]
+    CoreMl,
+    /// CUDA execution provider.
+    Cuda,
+    /// DirectML execution provider.
+    DirectMl,
+    /// TensorRT execution provider.
+    #[serde(rename = "tensorrt", alias = "tensor_rt")]
+    TensorRt,
+}
+```
+
+Runtime backend profile used to choose default L3 execution behavior.
+
+```rust
+pub fn as_str(self) -> &'static str;
+```
+
+Return the canonical snake_case backend string.
+
+```rust
+pub struct OnnxRuntimeOptions {
+    pub intra_threads: Option<usize>,
+    pub inter_threads: Option<usize>,
+    pub spinning: Option<bool>,
+}
+```
+
+Caller-provided ONNX Runtime session options.
+
+```rust
+pub fn normalized(self) -> Self;
+```
+
+No public documentation is available yet.
+
+## Wolf FP16 Bundle Contract
+
+```rust
+pub struct WolfConfig {
+    pub bundle_dir: PathBuf,
+    pub threshold: f64,
+    #[serde(default)]
+    pub backend: crate::ExecutionBackend,
+    #[serde(default)]
+    pub runtime_options: crate::OnnxRuntimeOptions,
+}
+```
+
+No public documentation is available yet.
+
+```rust
+pub struct BundleFile {
+    pub path: String,
+    pub blake3: String,
+}
+```
+
+No public documentation is available yet.
+
+```rust
+pub enum LogitOutput {
+    Scalar,
+    BinaryMargin,
+}
+```
+
+No public documentation is available yet.
+
+```rust
+pub struct ParityCase {
+    #[serde(default)]
+    pub text: Option<String>,
+    pub token_ids: Vec<u32>,
+    pub expected_logit: f64,
+}
+```
+
+No public documentation is available yet.
+
+```rust
+pub struct DocumentCase {
+    pub text: String,
+    pub expected_logit: f64,
+    pub windows: u64,
+}
+```
+
+No public documentation is available yet.
+
+```rust
+pub struct WolfManifest {
+    pub schema_version: u32,
+    pub model_id: String,
+    pub revision: String,
+    pub precision: String,
+    pub model: BundleFile,
+    pub tokenizer: BundleFile,
+    pub output_name: String,
+    pub output: LogitOutput,
+    pub content_tokens: usize,
+    pub sequence_tokens: usize,
+    #[serde(default)]
+    pub dynamic_sequence: bool,
+    pub pad_id: u32,
+    pub reference: String,
+    pub parity_cases: Vec<ParityCase>,
+    #[serde(default)]
+    pub document_cases: Vec<DocumentCase>,
+    pub logit_tolerance: f64,
+    #[serde(default)]
+    pub relative_tolerance: f64,
+    #[serde(default = "default_probability_tolerance")]
+    pub probability_tolerance: f64,
+}
+```
+
+An export contract produced alongside a training-verified FP16 export.
+
+```rust
+pub struct WolfResult {
+    pub document_logit: f64,
+    pub attack_probability: f64,
+    pub threshold: f64,
+    pub matched: bool,
+    pub windows: u64,
+    pub model_id: String,
+    pub revision: String,
+    pub precision: String,
+}
+```
+
+No public documentation is available yet.
+
+```rust
+pub struct WolfRunner {
+    session: Session,
+    tokenizer: Arc<MmbertPairTokenizer>,
+    manifest: WolfManifest,
+    threshold: f64,
+    model_path: PathBuf,
+    execution_provider: String,
+}
+```
+
+No public documentation is available yet.
+
+```rust
+pub fn new(config: &WolfConfig) -> Result<Self, ScanError>;
+```
+
+No public documentation is available yet.
+
+```rust
+pub fn execution_provider(&self) -> &str;
+```
+
+No public documentation is available yet.
+
+```rust
+pub fn model_path(&self) -> &Path;
+```
+
+No public documentation is available yet.
+
+```rust
+pub fn scan(&mut self, text: &str) -> Result<WolfResult, ScanError>;
+```
+
+No public documentation is available yet.
+
+```rust
+pub fn new(bundle_dir: impl Into<PathBuf>, threshold: f64) -> Self;
+```
+
+No public documentation is available yet.
 
 ## Asset Manifest Helpers
 

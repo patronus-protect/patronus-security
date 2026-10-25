@@ -180,7 +180,7 @@ def measure_l1(rows: list[dict]) -> dict:
     gateway = SecurityGateway(categories=["pii", "dlp"], max_level="l1", download_files=False)
     # This benchmark measures the full detector inventory, not the default profile.
     source = "".join(
-        path.read_text() for path in sorted((ROOT / "rust/src/detectors/dlp/rules").glob("*.rs"))
+        path.read_text() for path in sorted((ROOT / "ark-core/src/detectors/dlp/rules").glob("*.rs"))
     )
     gateway.set_execution_gates({"rules": {
         rule_id: True for rule_id in re.findall(r'name: "(dlp_[^"]+)"', source)

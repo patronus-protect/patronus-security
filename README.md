@@ -45,6 +45,11 @@ sending anything to a cloud service.
 - **Built-in benchmark** — every gateway can measure itself on the validation samples shipped with
   the package: accuracy, macro-F1, latency, throughput, and peak RSS.
 
+## Synchronous core
+
+The `patronus-ark-core` workspace crate provides queue-free PII, DLP and PI scanning,
+with optional offline Wolf FP16 inference. See [its API and bundle contract](ark-core/README.md).
+
 ## Installation
 
 ```bash

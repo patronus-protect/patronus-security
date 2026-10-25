@@ -326,7 +326,7 @@ fn download_pipeline_model_assets(
 }
 
 pub(crate) fn selected_pipeline_model_files(asset: PipelineModelAssetSpec) -> Vec<&'static str> {
-    let fp16 = prefer_fp16_l3();
+    let fp16 = asset.model == "wolf-defender-small" || prefer_fp16_l3();
     let fp16_path = if asset.files.contains(&"onnx/onnx_fp16/model_fp16.onnx") {
         Some("onnx/onnx_fp16/model_fp16.onnx")
     } else if asset.files.contains(&"onnx/fp16/model_fp16.onnx") {
@@ -384,12 +384,26 @@ fn prepare_pipeline_model_compact_tokenizer(asset: PipelineModelAssetSpec, bundl
         return;
     }
     match ensure_mmbert_compact_tokenizer(asset.model, &tokenizer_json) {
-        Ok(Some(compact_path)) => log::debug!(
-            "compact mmBERT tokenizer ready; model={}; compact_path={}; compact_exists={}",
-            asset.model,
-            compact_path.display(),
-            compact_path.is_file()
-        ),
+        Ok(Some(compact_path)) => {
+            log::debug!(
+                "compact mmBERT tokenizer ready; model={}; compact_path={}",
+                asset.model,
+                compact_path.display()
+            );
+            if asset.model == "wolf-defender-small"
+                && asset.revision == patronus_ark_core::wolf::PUBLISHED_REVISION
+            {
+                let contract: serde_json::Value =
+                    serde_json::from_str(patronus_ark_core::wolf::PUBLISHED_MANIFEST)
+                        .expect("embedded Wolf contract must be valid JSON");
+                if let Err(error) = super::compact_tokenizer::write_json_atomic(
+                    &bundle_dir.join("wolf.manifest.json"),
+                    &contract,
+                ) {
+                    log::warn!("failed to prepare verified Wolf bundle manifest: {error}");
+                }
+            }
+        }
         Ok(None) => log::debug!(
             "compact mmBERT tokenizer unsupported; model={}; tokenizer_json={}",
             asset.model,

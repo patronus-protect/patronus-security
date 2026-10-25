@@ -1,0 +1,28 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+pub(super) fn text_windows(text: &str, window_bytes: usize) -> impl Iterator<Item = &str> {
+    text.split('\n').flat_map(move |paragraph| {
+        if paragraph.len() <= window_bytes {
+            return vec![paragraph];
+        }
+
+        let mut windows = Vec::new();
+        let mut start = 0;
+        while start < paragraph.len() {
+            let mut end = (start + window_bytes).min(paragraph.len());
+            while !paragraph.is_char_boundary(end) {
+                end -= 1;
+            }
+            windows.push(&paragraph[start..end]);
+            if end == paragraph.len() {
+                break;
+            }
+
+            start = end.saturating_sub(window_bytes / 3);
+            while !paragraph.is_char_boundary(start) {
+                start += 1;
+            }
+        }
+        windows
+    })
+}

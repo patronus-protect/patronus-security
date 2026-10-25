@@ -442,6 +442,133 @@ fn test_delay_result(
     result
 }
 
+fn run_wolf_document_job(
+    job: L3WorkerJob,
+    model: L3ModelHandle,
+    worker: Arc<L3WorkerState>,
+) -> Result<SecurityScanResult, String> {
+    let started = Instant::now();
+    let policy = job
+        .execution
+        .l3_policy()
+        .pipeline_policy(&job.category, &job.model);
+    let threshold = match policy.aggregation {
+        Some(crate::L3AggregationStrategy::AnyPositiveOrHighest { threshold, .. })
+        | Some(crate::L3AggregationStrategy::HighestRiskAboveThresholdOrConfidence { threshold }) => {
+            threshold
+        }
+        Some(crate::L3AggregationStrategy::MajorityVoteOrHighest) => {
+            return Err("Wolf requires a probability threshold, not majority voting".into())
+        }
+        None => 0.93, // Preserve the legacy gateway default; the new Core requires an explicit threshold.
+    };
+    let output = model
+        .lock()
+        .map_err(|e| e.to_string())?
+        .infer_wolf_document(
+            &job.source_text,
+            threshold,
+            job.execution.backend(),
+            job.execution.onnx_runtime_options(),
+        )
+        .map_err(|e| e.to_string())?;
+    let class = if output.matched { "attack" } else { "benign" };
+    let confidence = if output.matched {
+        output.attack_probability
+    } else {
+        1.0 - output.attack_probability
+    };
+    let mut result = job.fallback.clone();
+    result.class_name = class.into();
+    result.confidence = confidence;
+    result.level = "L3".into();
+    let mut layer = l3_metadata_layer(
+        class,
+        &job.model,
+        confidence,
+        started.elapsed().as_secs_f64() * 1000.0,
+    );
+    layer.matched = output.matched;
+    layer
+        .thresholds
+        .insert("attack_probability".into(), threshold);
+    layer.details.insert(
+        "wolf".into(),
+        serde_json::to_value(&output).map_err(|e| e.to_string())?,
+    );
+    layer
+        .details
+        .insert("aggregation".into(), serde_json::json!("logit_smooth_max"));
+    layer
+        .details
+        .insert("temperature".into(), serde_json::json!(0.1));
+    layer
+        .details
+        .insert("coverage".into(), serde_json::json!(1.0));
+    result.layers = vec![layer];
+    result.duration_ms = started.elapsed().as_secs_f64() * 1000.0;
+    result.internal_l2_chunk_outputs.clear();
+    result.label_scores = vec![
+        LabelScore {
+            label: "attack".into(),
+            confidence: output.attack_probability,
+            matched: output.matched,
+        },
+        LabelScore {
+            label: "benign".into(),
+            confidence: 1.0 - output.attack_probability,
+            matched: !output.matched,
+        },
+    ];
+    result.decision = Some(crate::DecisionEnvelope {
+        schema_version: "ark.decision.v1".into(),
+        final_result: crate::DecisionResult {
+            class_name: class.into(),
+            confidence,
+            source: "l3".into(),
+        },
+        decision_candidate: Some(crate::DecisionCandidate {
+            source: "l3".into(),
+            class_name: "attack".into(),
+            confidence: output.attack_probability,
+            acceptance_threshold: threshold,
+            accepted: output.matched,
+            evidence: None,
+            chunk_evidence: None,
+        }),
+        recommendation: crate::DecisionRecommendation {
+            accepted: output.matched,
+            final_arbitration: "l3".into(),
+            operating_point: "wolf-single-smooth-max-t0.1".into(),
+            acceptance_threshold: Some(threshold),
+        },
+        candidates: Vec::new(),
+        terminality: crate::DecisionTerminality {
+            completion: "complete".into(),
+            degraded: false,
+            degradation_reason: None,
+        },
+        provenance: crate::DecisionProvenance {
+            ark_version: env!("CARGO_PKG_VERSION").into(),
+            schema_version: "ark.decision.v1".into(),
+            model: job.model.clone(),
+        },
+    });
+    let count = usize::try_from(output.windows).map_err(|e| e.to_string())?;
+    publish_l3_progress(
+        &worker,
+        &job,
+        "l3_complete",
+        count,
+        count,
+        count,
+        0,
+        0,
+        false,
+    );
+    Ok(result)
+}
+
 fn run_model_job(
     job: L3WorkerJob,
     model: L3ModelHandle,
@@ -450,6 +577,9 @@ fn run_model_job(
     similarity_cache: Arc<HistoricalSimilarityCache>,
     worker_state: Arc<L3WorkerState>,
 ) -> Result<SecurityScanResult, String> {
+    if job.model == "wolf-defender-small" {
+        return run_wolf_document_job(job, model, worker_state);
+    }
     let queue_wait_ms = elapsed_ms(job.enqueued_at);
     let job_started = Instant::now();
     let l3_policy = job.execution.l3_policy();
@@ -1740,6 +1870,7 @@ mod tests {
     #[test]
     fn threat_l3_safe_class_is_benign() {
         let job = L3WorkerJob {
+            source_text: std::sync::Arc::from("text"),
             job_id: 1,
             request_id: "request-1".to_string(),
             category: "threat".to_string(),

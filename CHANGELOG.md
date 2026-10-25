@@ -7,6 +7,13 @@ All notable changes to this project are documented here. The format is based on
 This project is **pre-1.0**: any change to detection thresholds, the asset manifest, or public
 result shapes may be breaking for downstream users, and is called out explicitly below.
 
+## Unreleased — synchronous core
+
+- Extract shared native PII/DLP/PI implementations into the MIT OR Apache-2.0 `patronus-ark-core` crate.
+- Add queue-free scans, explicit resource limits and optional offline Wolf Single FP16.
+- Correct dedicated Wolf document pooling to training-normalized logit Smooth Max (temperature 0.1); thresholds remain application policy.
+- Dedicated Wolf now requires a checksummed 256-content-token Single bundle with reference logits; existing unverified bundles need migration.
+
 ## [Unreleased]
 
 ### Changed

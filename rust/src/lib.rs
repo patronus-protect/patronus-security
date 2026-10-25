@@ -3,7 +3,7 @@ pub mod assets;
 #[allow(dead_code, unused_imports)]
 mod cache;
 pub mod detectors;
-mod diagnostics;
+pub use patronus_ark_core::diagnostics;
 pub mod dynamic_pii;
 pub mod external_l1;
 pub mod gliner_onnx_engine;
@@ -11,10 +11,10 @@ pub mod gliner_onnx_engine;
 #[doc(hidden)]
 pub mod golden_recipes;
 pub mod ml;
-pub mod normalization;
+pub use patronus_ark_core::normalization;
 pub mod pipeline;
 pub mod post_prediction;
-pub mod threat;
+pub use patronus_ark_core::threat;
 pub mod types;
 
 pub use cache::{

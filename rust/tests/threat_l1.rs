@@ -27,8 +27,10 @@ fn cases() -> Vec<Case> {
 
 #[test]
 fn every_threat_rule_has_bilingual_positive_negative_and_exact_evidence_tests() {
-    let catalog: serde_json::Value =
-        serde_json::from_str(include_str!("../src/detectors/threat/rules.json")).unwrap();
+    let catalog: serde_json::Value = serde_json::from_str(include_str!(
+        "../../ark-core/src/detectors/threat/rules.json"
+    ))
+    .unwrap();
     let expected: BTreeSet<_> = catalog["rules"]
         .as_array()
         .unwrap()

@@ -27,7 +27,7 @@ def test_page_is_up_to_date():
 
 def test_every_registry_label_and_rule_appears():
     page = PAGE.read_text(encoding="utf-8")
-    pii = GENERATE_DOCS.parse_native_patterns(ROOT / "rust/src/detectors/pii/pii.rs", "PiiPattern")
+    pii = GENERATE_DOCS.parse_native_patterns(ROOT / "ark-core/src/detectors/pii/pii.rs", "PiiPattern")
     dlp = GENERATE_DOCS.parse_dlp_patterns()
     for rule in pii + dlp:
         assert f"`{rule['entity_group']}`" in page, rule["entity_group"]

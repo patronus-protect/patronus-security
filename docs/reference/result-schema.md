@@ -228,7 +228,7 @@ The model score of a finding is the sum of three parts, capped at 100 and divide
   `format` +15 (length, alphabet, ranges, dates, prefixes), `none` +0 (no validator).
 - **Context**: +25 when the rule binds the value to a field name such as `IBAN:` or
   `Steuer-ID`. Otherwise the context engine looks at both sides of the value, on the same line,
-  for a term of the DE/EN lexicon in `rust/src/detectors/anchor_lexicons/pii.json` that belongs
+  for a term of the DE/EN lexicon in `ark-core/src/detectors/anchor_lexicons/pii.json` that belongs
   to the label (`Telefon`, `erreichbar`, `call me at`, `Kreditkarte`, `IBAN`, `client IP` …):
   +25 up to 16 characters away, +20 up to 32, +15 up to 48 before or 32 after the value.
   A counter-context term (order, invoice, tracking, ticket, reference or serial number:
@@ -537,7 +537,7 @@ The model score is the PII score model applied to the DLP rules, capped at 100 a
   `aws_secret_access_key`, business identifiers). A secret without a field name (provider
   tokens, wallet keys, PEM keys, JWTs) takes the nearest DE/EN term on its line with the windows
   and boundaries of the PII context engine: a credential term of
-  `rust/src/detectors/anchor_lexicons/dlp.json` (`private key`, `privater Schlüssel`,
+  `ark-core/src/detectors/anchor_lexicons/dlp.json` (`private key`, `privater Schlüssel`,
   `access token`, `API-Schlüssel`, `GITHUB_TOKEN` …) adds +25/+20/+15, a strictly nearer digest,
   hash or ID term (`dlp.digest_reference`: `checksum`, `tx hash`, `Transaktionshash`,
   `Prüfsumme`, `commit sha`, `sha256`, `UUID`, `request id` …) subtracts 30. Content classes
