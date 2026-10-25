@@ -31,7 +31,9 @@ use crate::detectors::NativeDetection;
 /// `HR 57419348408`, `LV 71890053205`), and the twelve digits of a Lithuanian one
 /// can be a card number (`LT 621223427710`); the others are shorter or end in letters.
 /// An NHS number in 3-3-4 groups is also a US phone number (`943 476 5919`, B-UK).
-pub const COMPETING_LABELS: [&str; 11] = [
+/// An ABN in 2-3-3-3 groups or as eleven digits can be a Steuer-ID (`52 842 296 017`,
+/// B-APAC).
+pub const COMPETING_LABELS: [&str; 12] = [
     "IBAN",
     "CREDITCARD",
     "FINANCIAL_ACCOUNT_NUMBER",
@@ -43,6 +45,7 @@ pub const COMPETING_LABELS: [&str; 11] = [
     "VAT_ID_LT",
     "VAT_ID_LV",
     "NHS_NUMBER",
+    "AU_ABN",
 ];
 
 /// Labels whose findings compete with an overlapping finding of any other label

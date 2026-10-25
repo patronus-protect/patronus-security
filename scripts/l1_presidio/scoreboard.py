@@ -823,12 +823,96 @@ def de_identity_card_number(value: str) -> bool:
     return _de_document_check_digit(value, "LMNPRTVWXY")
 
 
+def _grouped_digits(value: str, length: int) -> list[int] | None:
+    """The digits of ``value`` without spaces and hyphens, if there are exactly ``length`` ASCII digits."""
+    body = value.replace(" ", "").replace("-", "")
+    if len(body) != length or not body.isascii() or not body.isdigit():
+        return None
+    return [int(ch) for ch in body]
+
+
 def uk_nhs_number(value: str) -> bool:
     """Port of ``validators::uk_nhs_number`` (ten digits, weights 10…1 mod 11 = 0, not one repeated digit)."""
-    body = value.replace(" ", "").replace("-", "")
-    if len(body) != 10 or not body.isascii() or not body.isdigit() or len(set(body)) == 1:
+    digits = _grouped_digits(value, 10)
+    if digits is None or len(set(digits)) == 1:
         return False
-    return _weighted_sum([int(ch) for ch in body], range(10, 0, -1)) % 11 == 0
+    return _weighted_sum(digits, range(10, 0, -1)) % 11 == 0
+
+
+def au_abn(value: str) -> bool:
+    """Port of ``validators::au_abn`` (eleven digits, first minus one, weights 10 1 3 … 19 mod 89)."""
+    digits = _grouped_digits(value, 11)
+    if digits is None or digits[0] == 0:
+        return False
+    digits[0] -= 1
+    return _weighted_sum(digits, (10, 1, 3, 5, 7, 9, 11, 13, 15, 17, 19)) % 89 == 0
+
+
+def au_acn(value: str) -> bool:
+    """Port of ``validators::au_acn`` (nine digits, complement of weights 8…1 mod 10, not one repeated digit)."""
+    digits = _grouped_digits(value, 9)
+    if digits is None or len(set(digits)) == 1:
+        return False
+    return (10 - _weighted_sum(digits[:8], range(8, 0, -1)) % 10) % 10 == digits[8]
+
+
+def au_tfn(value: str) -> bool:
+    """Port of ``validators::au_tfn`` (nine digits, weights 1 4 3 7 5 8 6 9 10 mod 11, not one repeated digit)."""
+    digits = _grouped_digits(value, 9)
+    if digits is None or len(set(digits)) == 1:
+        return False
+    return _weighted_sum(digits, (1, 4, 3, 7, 5, 8, 6, 9, 10)) % 11 == 0
+
+
+def au_medicare(value: str) -> bool:
+    """Port of ``validators::au_medicare`` (ten digits from 2 to 6, ninth = weights 1 3 7 9 mod 10)."""
+    digits = _grouped_digits(value, 10)
+    if digits is None or not 2 <= digits[0] <= 6:
+        return False
+    return _weighted_sum(digits[:8], (1, 3, 7, 9, 1, 3, 7, 9)) % 10 == digits[8]
+
+
+_NRIC_SERIES = {"S": (0, "JZIHGFEDCBA"), "T": (4, "JZIHGFEDCBA"), "F": (0, "XWUTRQPNMLK"),
+                "G": (4, "XWUTRQPNMLK"), "M": (3, "XWUTRQPNJLK")}
+
+
+def sg_nric_fin(value: str) -> bool:
+    """Port of ``validators::sg_nric_fin`` (series letter, seven digits, check letter mod 11, either case)."""
+    value = value.upper()
+    series = _NRIC_SERIES.get(value[:1])
+    if len(value) != 9 or series is None or not value[1:8].isascii() or not value[1:8].isdigit():
+        return False
+    offset, letters = series
+    return letters[(_weighted_sum([int(ch) for ch in value[1:8]], (2, 7, 6, 5, 4, 3, 2)) + offset) % 11] == value[8]
+
+
+_UEN_ENTITY_TYPES = set(
+    "LP LL FC PF RF MQ MM NB CC CS MB FM GS DP CP NR CM CD MD HS VH CH MH CL XL CX HC RP TU TC FB FN PA PB SS "
+    "MC SM GA GB".split()
+)
+_UEN_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWX0123456789"
+
+
+def sg_uen(value: str) -> bool:
+    """Port of ``validators::sg_uen`` (formats A, B with year 1800–2099, C; check letter mod 11; uppercase)."""
+    body, check = value[:-1], value[-1:]
+    numeric = body.isascii() and body.isdigit()
+    if len(body) == 8 and numeric:
+        return "XMKECAWLJDB"[_weighted_sum([int(ch) for ch in body], (10, 4, 9, 3, 8, 2, 7, 1)) % 11] == check
+    if len(body) == 9 and numeric:
+        return body[:2] in ("18", "19", "20") and (
+            "ZKCMDNERGWH"[_weighted_sum([int(ch) for ch in body], (10, 8, 6, 4, 9, 7, 5, 3, 1)) % 11] == check
+        )
+    if (
+        len(body) != 9
+        or body[0] not in "TSR"
+        or not (body[1:3].isascii() and body[1:3].isdigit())
+        or body[3:5] not in _UEN_ENTITY_TYPES
+        or not (body[5:9].isascii() and body[5:9].isdigit())
+    ):
+        return False
+    total = sum(_UEN_ALPHABET.index(ch) * weight for ch, weight in zip(body, (4, 3, 5, 3, 10, 2, 2, 5, 7)))
+    return _UEN_ALPHABET[(total - 5) % 11] == check
 
 
 # Python ports of every checksum validator (``checksums.ark`` with an algorithm in entity_map.yaml);
@@ -872,6 +956,12 @@ CHECKSUM_PORTS: dict[str, Callable[[str], bool]] = {
     "de_passport_number": de_passport_number,
     "de_identity_card_number": de_identity_card_number,
     "uk_nhs_number": uk_nhs_number,
+    "au_abn": au_abn,
+    "au_acn": au_acn,
+    "au_tfn": au_tfn,
+    "au_medicare": au_medicare,
+    "sg_nric_fin": sg_nric_fin,
+    "sg_uen": sg_uen,
 }
 
 
