@@ -9,6 +9,25 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ## [Unreleased]
 
+## [0.1.12] - 2026-10-25
+
+### Detection changes
+
+- PII L1: new DE, UK, AU and SG identifiers; stronger German check-digit validation;
+  broader SSN context handling; NANP phone extensions included in findings. Eleven further
+  VAT-country labels are available in `balanced`/`recall`. Mode-specific gates and exceptions
+  are documented below.
+- DLP L1: credential values in nested YAML/JSON/TOML and HCL/XML are detected with
+  structure-aware spans, plus connection-string, LDAP-bind and Redis passwords. Connection
+  passwords have more precise spans and overlap ownership; mixed non-secret lists and
+  digest-like values are excluded.
+- Dedicated Wolf: document decisions now use normalized logit Smooth Max at temperature
+  0.1. Existing 254-content-token windows and model assets remain supported. Applications
+  should review their configured probability thresholds for this intentional behavior change.
+- Shell risk: the updated model distinguishes download-and-execute commands from plain
+  downloads into files or filters. Its model revision and calibrated thresholds change;
+  the detailed entry below documents the detection and block-level recall changes.
+
 ### Synchronous Core
 
 - Extract shared native PII/DLP/PI implementations into the MIT OR Apache-2.0 `patronus-ark-core` crate.
