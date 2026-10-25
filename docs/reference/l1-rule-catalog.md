@@ -6,7 +6,7 @@ These are the stable rule IDs accepted by execution-gate `rules`. Missing IDs in
 
 For coverage per benchmark entity, the comparison with Presidio and the secret scanners, and latency, see [L1 capabilities](l1-capabilities.md).
 
-## PII rules (96)
+## PII rules (100)
 
 All PII rules are eligible by default when PII L1 is enabled.
 
@@ -46,9 +46,9 @@ In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `
 | `pii_steuer_id_de` | `STEUERID` | yes | checksum | 40 | field or key | 1.00 |
 | `pii_steuer_id_de_context_free` | `STEUERID` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
 | `pii_steuernummer_de` | `TAX_NUMBER_DE` | yes | format | 35 | field or key | 0.75 |
-| `pii_rentenversicherung_de` | `SOCIALID` | yes | format | 50 | field or key | 0.90 |
-| `pii_health_insurance_number_de` | `HEALTH_INSURANCE_NUMBER` | yes | format | 45 | field or key | 0.85 |
-| `pii_physician_number_lanr_de` | `PHYSICIAN_NUMBER_LANR` | yes | format | 30 | field or key | 0.70 |
+| `pii_rentenversicherung_de` | `SOCIALID` | yes | checksum | 30 | field or key | 0.90 |
+| `pii_health_insurance_number_de` | `HEALTH_INSURANCE_NUMBER` | yes | checksum | 25 | field or key | 0.85 |
+| `pii_physician_number_lanr_de` | `PHYSICIAN_NUMBER_LANR` | yes | checksum | 10 | field or key | 0.70 |
 | `pii_passport_number_de` | `PASSPORT_NUMBER` | yes | format | 40 | field or key | 0.80 |
 | `pii_identity_card_number_de` | `IDENTITY_CARD_NUMBER` | yes | format | 40 | field or key | 0.80 |
 | `pii_driver_license_number_de` | `DRIVER_LICENSE_NUMBER` | yes | format | 35 | field or key | 0.75 |
@@ -110,6 +110,10 @@ In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `
 | `pii_nric_fin_sg_context_free` | `SG_NRIC_FIN` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
 | `pii_uen_sg` | `SG_UEN` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |
 | `pii_uen_sg_context_free` | `SG_UEN` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
+| `pii_rentenversicherung_de_context_free` | `SOCIALID` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
+| `pii_health_insurance_number_de_context_free` | `HEALTH_INSURANCE_NUMBER` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
+| `pii_physician_number_lanr_de_proximity` | `PHYSICIAN_NUMBER_LANR` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.70–0.80 |
+| `pii_facility_number_bsnr_de` | `FACILITY_NUMBER_BSNR` | yes | format | 20 | key or proximity (required) | 0.50–0.60 |
 
 ### PII context lexicon
 
@@ -182,6 +186,7 @@ The context engine reads these DE/EN entries of `rust/src/detectors/anchor_lexic
 | `AU_MEDICARE` | `pii.au_medicare_number` |
 | `SG_NRIC_FIN` | `pii.sg_nric_fin` |
 | `SG_UEN` | `pii.sg_unique_entity_number` |
+| `FACILITY_NUMBER_BSNR` | `pii.facility_number` |
 
 | Counter-context anchor | DE | EN |
 | --- | --- | --- |

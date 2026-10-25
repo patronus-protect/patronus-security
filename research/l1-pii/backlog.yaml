@@ -532,6 +532,7 @@ tasks:
 
   # M3 +3 (45)
   - id: B-DE1
+    status: done
     title: "DE check digits: KVNR, pension insurance number (RVNR), LANR (+ BSNR format)"
     type: precision-fix
     deps: [K02, K05]

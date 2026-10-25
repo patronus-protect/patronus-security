@@ -78,8 +78,8 @@ fn pattern(rule_id: &str) -> &'static PiiPattern {
 const SCORED: [PiiMode; 2] = [PiiMode::Balanced, PiiMode::Recall];
 const STEUER_ID: &str = "pii_steuer_id_de_context_free";
 /// The checksum labels without a context-free rule: the NHS number (B-UK), the
-/// Australian Company Number and the Tax File Number (B-APAC).
-const CONTEXT_BOUND_LABELS: [&str; 3] = ["NHS_NUMBER", "AU_ACN", "AU_TFN"];
+/// Australian Company Number and the Tax File Number (B-APAC), the LANR (B-DE1).
+const CONTEXT_BOUND_LABELS: [&str; 4] = ["NHS_NUMBER", "AU_ACN", "AU_TFN", "PHYSICIAN_NUMBER_LANR"];
 /// Scored-only rules whose validator checks a form, not a check digit.
 const FORMAT_RULES: [&str; 3] = [
     "pii_driver_license_number_uk_context_free",
@@ -161,6 +161,9 @@ fn scored_only_rules_are_unbound_checksum_rules() {
             "pii_medicare_au_context_free",
             "pii_nric_fin_sg_context_free",
             "pii_uen_sg_context_free",
+            "pii_rentenversicherung_de_context_free",
+            "pii_health_insurance_number_de_context_free",
+            "pii_physician_number_lanr_de_proximity",
         ]
     );
     for pattern in scored_only {
@@ -171,15 +174,17 @@ fn scored_only_rules_are_unbound_checksum_rules() {
         };
         assert_eq!(pattern.strength, strength, "{}", pattern.name);
         assert!(!pattern.captured_value, "{}", pattern.name);
-        // The bare Partita IVA (B01) and the old numeric document serial (F08) are
-        // the unbound checksum rules that need a term; 11 bare digits with a Luhn
-        // digit or 10 with a 7-3-1 digit prove too little alone.
+        // The bare Partita IVA (B01), the old numeric document serial (F08) and the
+        // LANR (B-DE1) are the unbound checksum rules that need a term; 11 bare
+        // digits with a Luhn digit, 10 with a 7-3-1 digit or 9 with a mod-10 digit
+        // prove too little alone.
         assert_eq!(
             pattern.requires_context,
             [
                 "pii_vat_id_it_proximity",
                 "pii_passport_number_de_legacy",
                 "pii_identity_card_number_de_legacy",
+                "pii_physician_number_lanr_de_proximity",
             ]
             .contains(&pattern.name),
             "{}",
@@ -199,10 +204,11 @@ fn scored_only_rules_are_unbound_checksum_rules() {
         );
     }
     // Every checksum label has an unbound rule: a checksum value never needs its
-    // field name in the scored modes. Only three need a term in every mode: ten
-    // digits in phone groups (3-3-4) pass the mod-11 digit of the NHS number (B-UK)
-    // one time in eleven, nine digits in 3-3-3 groups the ACN mod-10 digit one time
-    // in ten and the TFN mod-11 sum one time in eleven (B-APAC).
+    // field name in the scored modes. Only four need a term: ten digits in phone
+    // groups (3-3-4) pass the mod-11 digit of the NHS number (B-UK) one time in
+    // eleven, nine digits in 3-3-3 groups the ACN mod-10 digit one time in ten and
+    // the TFN mod-11 sum one time in eleven (B-APAC), nine bare digits the LANR
+    // mod-10 digit one time in ten (B-DE1).
     for bound in PII_PATTERNS
         .iter()
         .filter(|pattern| pattern.strength == ValidatorStrength::Checksum)
@@ -268,6 +274,9 @@ fn every_checksum_label_reports_a_bare_value_in_the_scored_modes() {
         ("SG_NRIC_FIN", "S0642712Z", 0.55),
         ("SG_UEN", "201434292D", 0.55),
         ("SG_UEN", "S57TU0392K", 0.55),
+        ("SOCIALID", "15070649C103", 0.55),
+        ("SOCIALID", "65 230109 Z 872", 0.55),
+        ("HEALTH_INSURANCE_NUMBER", "A123456780", 0.55),
     ];
     for label in PII_PATTERNS
         .iter()

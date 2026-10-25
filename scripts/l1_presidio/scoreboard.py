@@ -872,6 +872,50 @@ def au_medicare(value: str) -> bool:
     return _weighted_sum(digits[:8], (1, 3, 7, 9, 1, 3, 7, 9)) % 10 == digits[8]
 
 
+def _letter_digits(letter: str) -> list[int]:
+    """The alphabet position of an ASCII letter as two digits (``A`` = 0 1 … ``Z`` = 2 6)."""
+    position = ord(letter.upper()) - ord("A") + 1
+    return [position // 10, position % 10]
+
+
+def _weighted_cross_sum(digits: list[int], weights: tuple[int, ...]) -> int:
+    return sum(digit * weight // 10 + digit * weight % 10 for digit, weight in zip(digits, weights))
+
+
+def de_social_security_number(value: str) -> bool:
+    """Port of ``validators::de_social_security_number`` (VKVV § 4, birth day 01–31/51–81, month 01–12)."""
+    body = value.replace(" ", "").replace("\t", "")
+    if (
+        len(body) != 12
+        or not body.isascii()
+        or not body[8].isalpha()
+        or not (body[:8] + body[9:]).isdigit()
+        or not (1 <= int(body[2:4]) <= 31 or 51 <= int(body[2:4]) <= 81)
+        or not 1 <= int(body[4:6]) <= 12
+    ):
+        return False
+    digits = [int(ch) for ch in body[:8]] + _letter_digits(body[8]) + [int(ch) for ch in body[9:11]]
+    return _weighted_cross_sum(digits, (2, 1, 2, 5, 7, 1, 2, 1, 2, 1, 2, 1)) % 10 == int(body[11])
+
+
+def de_health_insurance_number(value: str) -> bool:
+    """Port of ``validators::de_health_insurance_number`` (§ 290 SGB V, not nine zeros)."""
+    if len(value) != 10 or not value.isascii() or not value[0].isalpha() or not value[1:].isdigit():
+        return False
+    if set(value[1:]) == {"0"}:
+        return False
+    digits = _letter_digits(value[0]) + [int(ch) for ch in value[1:9]]
+    return _weighted_cross_sum(digits, (1, 2) * 5) % 10 == int(value[9])
+
+
+def lanr(value: str) -> bool:
+    """Port of ``validators::lanr`` (nine digits, seventh = complement of weights 4 9 mod 10, not one repeated digit)."""
+    digits = _grouped_digits(value, 9)
+    if digits is None or len(set(digits)) == 1:
+        return False
+    return (10 - _weighted_sum(digits[:6], (4, 9, 4, 9, 4, 9)) % 10) % 10 == digits[6]
+
+
 _NRIC_SERIES = {"S": (0, "JZIHGFEDCBA"), "T": (4, "JZIHGFEDCBA"), "F": (0, "XWUTRQPNMLK"),
                 "G": (4, "XWUTRQPNMLK"), "M": (3, "XWUTRQPNJLK")}
 
@@ -962,6 +1006,9 @@ CHECKSUM_PORTS: dict[str, Callable[[str], bool]] = {
     "au_medicare": au_medicare,
     "sg_nric_fin": sg_nric_fin,
     "sg_uen": sg_uen,
+    "de_social_security_number": de_social_security_number,
+    "de_health_insurance_number": de_health_insurance_number,
+    "lanr": lanr,
 }
 
 

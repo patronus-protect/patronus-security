@@ -109,6 +109,16 @@ const EXPECTED_ORDER: &[(&str, &str)] = &[
     ("pii_nric_fin_sg_context_free", "SG_NRIC_FIN"),
     ("pii_uen_sg", "SG_UEN"),
     ("pii_uen_sg_context_free", "SG_UEN"),
+    ("pii_rentenversicherung_de_context_free", "SOCIALID"),
+    (
+        "pii_health_insurance_number_de_context_free",
+        "HEALTH_INSURANCE_NUMBER",
+    ),
+    (
+        "pii_physician_number_lanr_de_proximity",
+        "PHYSICIAN_NUMBER_LANR",
+    ),
+    ("pii_facility_number_bsnr_de", "FACILITY_NUMBER_BSNR"),
 ];
 
 #[test]
