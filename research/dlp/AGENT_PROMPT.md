@@ -7,6 +7,7 @@ auf den Klon, den Cargo-Cache und `~/.claude`; kein sudo, kein GitHub-Zugang, ke
 ---
 
 > Seit #172 (2026-10-25) liegt der Detektor-Code im Crate `patronus-ark-core` unter `ark-core/src/` (z. B. `ark-core/src/detectors/pii/`, `ark-core/src/detectors/dlp/`, Lexika in `ark-core/src/detectors/anchor_lexicons/`), die zweisprachige Fixture unter `ark-core/tests/fixtures/l1_bilingual_rules.json`. Die PII/DLP-Integrationstests bleiben in `rust/tests/`. Ältere Pfadangaben in `backlog.yaml` (`rust/src/detectors/...`) entsprechen den neuen Orten.
+> Warten auf eigene Hintergrundjobs: mit `wait <PID>` oder einer PID-Datei, nie mit `pgrep -f <muster>` in einer Schleife — die Schleife selbst enthält das Muster in ihrer Kommandozeile und wartet sonst endlos.
 
 Du arbeitest an Patronus ARK (Rust-Scanner). Programmziel: den L1-DLP-Detektor besser als gitleaks,
 TruffleHog und detect-secrets machen und deutlich mehr Kategorien abdecken (Secrets, Zugangsdaten,
