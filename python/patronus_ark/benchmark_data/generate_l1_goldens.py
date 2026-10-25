@@ -2924,11 +2924,11 @@ B_DE1_CASES = [
     n("HEALTH_INSURANCE_NUMBER", "de", "pii_health_insurance_number_de_context_free", "Bitte A123456789 prüfen.", "check digit fails", carrier="prose", mode="balanced"),
     n("HEALTH_INSURANCE_NUMBER", "de", "pii_health_insurance_number_de_context_free", "Rechnungsnummer A123456780", "counter-context nearer", mode="balanced"),
     n("HEALTH_INSURANCE_NUMBER", "de", "pii_health_insurance_number_de_context_free", "Auftragscode: A123456780", "the field names another value", mode="balanced"),
-    n("HEALTH_INSURANCE_NUMBER", "de", "pii_health_insurance_number_de_context_free", "Code a123456780 eingegeben.", "lowercase letter without a field name", carrier="prose", mode="recall"),
+    n("HEALTH_INSURANCE_NUMBER", "de", "pii_health_insurance_number_de_context_free", "Code a123456781 eingegeben.", "check digit fails", carrier="prose", mode="recall"),
     n("HEALTH_INSURANCE_NUMBER", "de", "pii_health_insurance_number_de_context_free", "Teil AB123456780 geliefert.", "part of a longer value", carrier="prose", mode="balanced"),
     n("HEALTH_INSURANCE_NUMBER", "en", "pii_health_insurance_number_de_context_free", "Order number Z987654321", "counter-context nearer", mode="balanced"),
     n("HEALTH_INSURANCE_NUMBER", "en", "pii_health_insurance_number_de_context_free", "Batch M123456789 shipped.", "check digit fails", carrier="prose", mode="balanced"),
-    n("HEALTH_INSURANCE_NUMBER", "en", "pii_health_insurance_number_de_context_free", "Code a123456780 entered.", "lowercase letter without a field name", carrier="prose", mode="balanced"),
+    n("HEALTH_INSURANCE_NUMBER", "en", "pii_health_insurance_number_de_context_free", "Code a123456781 entered.", "check digit fails", carrier="prose", mode="balanced"),
     n("HEALTH_INSURANCE_NUMBER", "en", "pii_health_insurance_number_de_context_free", '{"order_code": "B123456782"}', "the key names another value", carrier="json", mode="balanced"),
     n("HEALTH_INSURANCE_NUMBER", "en", "pii_health_insurance_number_de_context_free", "Value S000000000 logged.", "nine zeros are never issued", carrier="prose", mode="balanced"),
     # ── LANR with a term (balanced/recall) ────────────────────────────────
@@ -3146,6 +3146,58 @@ T28_IP_CASES = [
 ]
 for _row in T28_IP_CASES:
     PII_CASES[_row["target_label"]].append(_row)
+
+# Q-DE: in `balanced`/`recall` a bare KVNR may carry a lowercase letter (the check digit counts
+# it like the uppercase one, as the presidio-analyzer tests do), and a bare Steuernummer in the
+# slashed groups of the Länder (2/3/5, 3/3/5, 3/4/4) needs no field name. The 13-digit ELSTER
+# form stays field-bound: bare, it is as often a timestamp in milliseconds. Appended so existing
+# ids stay stable.
+Q_DE_CASES = [
+    # ── KVNR with a lowercase letter, no field name ────────────────────────
+    p("HEALTH_INSURANCE_NUMBER", "de", "pii_health_insurance_number_de_context_free", "", "a123456780", "", tags=("no_context",), mode="balanced"),
+    p("HEALTH_INSURANCE_NUMBER", "de", "pii_health_insurance_number_de_context_free", "Code ", "m234567898", " eingegeben.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("HEALTH_INSURANCE_NUMBER", "de", "pii_health_insurance_number_de_context_free", "Die Versichertennummer lautet ", "k987654329", ".", carrier="prose", mode="balanced"),
+    p("HEALTH_INSURANCE_NUMBER", "de", "pii_health_insurance_number_de_context_free", "Name;Versichertennummer\nJonas Weber;", "t345678916", "", carrier="csv", mode="recall"),
+    p("HEALTH_INSURANCE_NUMBER", "de", "pii_health_insurance_number_de_context_free", "Neue Angabe ", "h204816321", " bitte übernehmen.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("HEALTH_INSURANCE_NUMBER", "en", "pii_health_insurance_number_de_context_free", "", "b123456782", "", tags=("no_context",), mode="balanced"),
+    p("HEALTH_INSURANCE_NUMBER", "en", "pii_health_insurance_number_de_context_free", "Code ", "w564738296", " entered.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("HEALTH_INSURANCE_NUMBER", "en", "pii_health_insurance_number_de_context_free", "Her health insurance number is ", "l654321095", ".", carrier="prose", mode="balanced"),
+    p("HEALTH_INSURANCE_NUMBER", "en", "pii_health_insurance_number_de_context_free", "Record 7 lists ", "r123405676", " for the patient.", carrier="prose", tags=("no_context",), mode="recall"),
+    p("HEALTH_INSURANCE_NUMBER", "en", "pii_health_insurance_number_de_context_free", "Ada Weber brought ", "p102938475", " to the desk.", carrier="prose", tags=("no_context",), mode="balanced"),
+    n("HEALTH_INSURANCE_NUMBER", "de", "pii_health_insurance_number_de_context_free", "m234567899", "check digit fails", mode="balanced"),
+    n("HEALTH_INSURANCE_NUMBER", "de", "pii_health_insurance_number_de_context_free", "Rechnungsnummer k987654329", "counter-context nearer", mode="balanced"),
+    n("HEALTH_INSURANCE_NUMBER", "de", "pii_health_insurance_number_de_context_free", "Auftragscode: t345678916", "the field names another value", mode="balanced"),
+    n("HEALTH_INSURANCE_NUMBER", "de", "pii_health_insurance_number_de_context_free", "Teil ab123456780 geliefert.", "part of a longer value", carrier="prose", mode="balanced"),
+    n("HEALTH_INSURANCE_NUMBER", "de", "pii_health_insurance_number_de_context_free", "Wert s000000000 protokolliert.", "nine zeros are never issued", carrier="prose", mode="recall"),
+    n("HEALTH_INSURANCE_NUMBER", "en", "pii_health_insurance_number_de_context_free", "b123456783", "check digit fails", mode="balanced"),
+    n("HEALTH_INSURANCE_NUMBER", "en", "pii_health_insurance_number_de_context_free", "Order number w564738296", "counter-context nearer", mode="balanced"),
+    n("HEALTH_INSURANCE_NUMBER", "en", "pii_health_insurance_number_de_context_free", '{"order_code": "r123405676"}', "the key names another value", carrier="json", mode="balanced"),
+    n("HEALTH_INSURANCE_NUMBER", "en", "pii_health_insurance_number_de_context_free", "Hash 3fa123456780e9 logged.", "part of a longer value", carrier="prose", mode="balanced"),
+    n("HEALTH_INSURANCE_NUMBER", "en", "pii_health_insurance_number_de_context_free", "Build x123456789 shipped.", "check digit fails", carrier="prose", mode="recall"),
+    # ── Steuernummer in slashed groups, no field name ──────────────────────
+    p("TAX_NUMBER_DE", "de", "pii_steuernummer_de_context_free", "", "123/456/78901", "", tags=("no_context",), mode="balanced"),
+    p("TAX_NUMBER_DE", "de", "pii_steuernummer_de_context_free", "Bitte ", "151/815/08156", " im Formular eintragen.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("TAX_NUMBER_DE", "de", "pii_steuernummer_de_context_free", "Die Steuernummer der Praxis ist ", "143/208/30142", ".", carrier="prose", mode="balanced"),
+    p("TAX_NUMBER_DE", "de", "pii_steuernummer_de_context_free", "Name;Steuernummer\nJonas Weber;", "133/8150/8159", "", carrier="csv", mode="recall"),
+    p("TAX_NUMBER_DE", "de", "pii_steuernummer_de_context_free", "Neue Angabe (", "21/815/08150", ") bitte übernehmen.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("TAX_NUMBER_DE", "en", "pii_steuernummer_de_context_free", "Please file ", "21/815/08150", " with the return.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("TAX_NUMBER_DE", "en", "pii_steuernummer_de_context_free", "", "048/815/08153", "", tags=("no_context",), mode="balanced"),
+    p("TAX_NUMBER_DE", "en", "pii_steuernummer_de_context_free", "The German tax number on file is ", "133/8150/8159", ".", carrier="prose", mode="balanced"),
+    p("TAX_NUMBER_DE", "en", "pii_steuernummer_de_context_free", "name,tax_number\nAda Weber,", "22/943/46701", "", carrier="csv", mode="recall"),
+    p("TAX_NUMBER_DE", "en", "pii_steuernummer_de_context_free", "Record 7 lists ", "166/492/23547", " for the branch.", carrier="prose", tags=("no_context",), mode="balanced"),
+    n("TAX_NUMBER_DE", "de", "pii_steuernummer_de_context_free", "Aktenzeichen: 123/456/78901", "the field names another value", mode="balanced"),
+    n("TAX_NUMBER_DE", "de", "pii_steuernummer_de_context_free", "Rechnungsnummer 151/815/08156", "counter-context nearer", mode="balanced"),
+    n("TAX_NUMBER_DE", "de", "pii_steuernummer_de_context_free", "Bitte 111/111/11111 prüfen.", "repeated digits are never issued", carrier="prose", mode="balanced"),
+    n("TAX_NUMBER_DE", "de", "pii_steuernummer_de_context_free", "Pfad 2026/123/456/78901", "part of a longer path", carrier="prose", mode="recall"),
+    n("TAX_NUMBER_DE", "de", "pii_steuernummer_de_context_free", "0181508150000", "13 digits without slashes", mode="balanced"),
+    n("TAX_NUMBER_DE", "en", "pii_steuernummer_de_context_free", "Case number: 21/815/08150", "the field names another value", mode="balanced"),
+    n("TAX_NUMBER_DE", "en", "pii_steuernummer_de_context_free", "Invoice number 048/815/08153", "counter-context nearer", mode="balanced"),
+    n("TAX_NUMBER_DE", "en", "pii_steuernummer_de_context_free", "Please check 123/456/7890.", "too few digits in the last group", carrier="prose", mode="balanced"),
+    n("TAX_NUMBER_DE", "en", "pii_steuernummer_de_context_free", "Ref 123/456/78901-2 archived.", "part of a longer value", carrier="prose", mode="balanced"),
+    n("TAX_NUMBER_DE", "en", "pii_steuernummer_de_context_free", "Timestamp 1698234567890", "13 digits without slashes", mode="recall"),
+]
+for _row in Q_DE_CASES:
+    PII_CASES.setdefault(_row["target_label"], []).append(_row)
 
 # DLP golden schema v2 (E13). Every DLP row names the rule it exercises (`rule_id`), the
 # document that carries the value (`carrier`), its difficulty `tags` and whether it is a

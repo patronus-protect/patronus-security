@@ -127,6 +127,7 @@ const EXPECTED_ORDER: &[(&str, &str)] = &[
     ("pii_fodselsnummer_no_context_free", "NO_FODSELSNUMMER"),
     ("pii_hetu_fi", "FI_PERSONAL_IDENTITY_CODE"),
     ("pii_hetu_fi_context_free", "FI_PERSONAL_IDENTITY_CODE"),
+    ("pii_steuernummer_de_context_free", "TAX_NUMBER_DE"),
 ];
 
 #[test]

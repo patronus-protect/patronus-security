@@ -1739,6 +1739,28 @@
     }
   },
   {
+    "category": "pii",
+    "rule_id": "pii_steuernummer_de_context_free",
+    "de": "Bitte 123/456/78901 im Formular eintragen.",
+    "en": "Please file 21/815/08150 with the return.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die Steuernummer der Praxis ist 143/208/30142.",
+        "en": "The German tax number on file is 133/8150/8159."
+      }
+    },
+    "hard_negatives": {
+      "de": [
+        "Aktenzeichen: 123/456/78901"
+      ],
+      "en": [
+        "Invoice number 123/456/78901"
+      ]
+    }
+  },
+  {
     "category": "dlp",
     "rule_id": "dlp_anthropic_key",
     "de": "<<secret\u003a0>>",
