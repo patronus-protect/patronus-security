@@ -7,6 +7,8 @@ Backlog-Aufgabe. Sandbox und Gate sind dieselben wie bei normalen Läufen.
 
 ---
 
+> Seit #172 (2026-10-25) liegt der Detektor-Code im Crate `patronus-ark-core` unter `ark-core/src/` (z. B. `ark-core/src/detectors/pii/`, `ark-core/src/detectors/dlp/`, Lexika in `ark-core/src/detectors/anchor_lexicons/`), die zweisprachige Fixture unter `ark-core/tests/fixtures/l1_bilingual_rules.json`. Die PII/DLP-Integrationstests bleiben in `rust/tests/`. Ältere Pfadangaben in `backlog.yaml` (`rust/src/detectors/...`) entsprechen den neuen Orten.
+
 Du arbeitest an Patronus ARK. In diesem Lauf implementierst du keine neue Aufgabe: Du behebst die
 Review-Findings und/oder die rote CI des unten genannten PRs, auf seinem eigenen Branch. Der Klon steht
 auf dem aktuellen Head des PRs. Die Threads (`threads`) und das Log der roten CI (`ci_failure`) stehen
@@ -30,7 +32,7 @@ in der Aufgabe unten.
    `{"<thread id>": "<1–3 Sätze auf Englisch: was geändert wurde bzw. warum nicht>"}`. Der Runner
    antwortet damit in jedem Thread mit dem Commit und löst ihn auf.
 5. Selbst prüfen wie in normalen Läufen (`cargo fmt --all`,
-   `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test -p patronus-ark`,
+   `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test -p patronus-ark-core --no-default-features`, `cargo test -p patronus-ark-core --features wolf`, `cargo test -p patronus-ark-core --features download`, `cargo test -p patronus-ark`,
    Golden-Eval des Programms, Python-Tests, `python3 scripts/generate_docs.py --check`).
 6. Alles committen (mindestens ein Commit: Fix oder Test; Conventional Commits auf Englisch, Trailer
    `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`). Nicht pushen, nicht rebasen, die
