@@ -194,6 +194,14 @@ class ProfileTests(unittest.TestCase):
         for family in carriers.families():
             self.assertLessEqual(set(family.content), content, family.id)
 
+    def test_entity_families_with_synthetic_gold_have_a_profile_for_every_entity(self):
+        # GOLD-D2/D3: every entity of these families gets carrier gold, with or without an ARK rule.
+        families = {"comm", "identity", "commerce", "devops", "ci", "vcs", "registry"}
+        entity_map = yaml.safe_load(ENTITY_MAP.read_text(encoding="utf-8"))
+        expected = {entity["id"] for entity in entity_map["entities"] if entity["id"].split(".")[0] in families}
+        covered = {profile.entity for profile in carriers.profiles().values()}
+        self.assertEqual(expected - covered, set())
+
     def test_key_forms(self):
         self.assertEqual(
             carriers.key_forms("openai_api_key"),
