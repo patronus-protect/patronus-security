@@ -14,6 +14,12 @@ detector should report.
     python3 scripts/l1_presidio/synth_goldset.py --dev-out DIR
     python3 scripts/l1_presidio/synth_goldset.py --dev-out DIR --holdout-out DIR
     python3 scripts/l1_presidio/synth_goldset.py --check DIR
+    python3 scripts/l1_presidio/synth_goldset.py --goldset vat-1 --dev-out DIR --holdout-out DIR
+
+``--goldset`` picks one of ``GOLDSETS``, each with its own corpus, seeds and output directory:
+``de-eu`` (default) is the E05 set above; ``vat-1`` (GOLD-VAT1, corpus ``ark-synthetic-vat-1``)
+carries the VAT IDs added after E05 was frozen, in letters, forms, JSON and CSV with
+checksum-valid values and VAT look-alikes as hard negatives.
 
 Dev and holdout use separate seeds. The dev seed is public (``DEV_SEED``); the holdout seed
 is secret and lives in a seed file (default ``HOLDOUT/.seed``), created from ``secrets`` on
@@ -140,16 +146,21 @@ def ascii_fold(value: str) -> str:
 # ── checksums ────────────────────────────────────────────────────────────────
 
 
-def luhn_check_digit(payload: str) -> str:
+def luhn_sum(number: str) -> int:
+    """Luhn checksum mod 10 with the last digit undoubled (0 for a valid Luhn number)."""
     total = 0
-    for index, char in enumerate(reversed(payload)):
+    for index, char in enumerate(reversed(number)):
         digit = int(char)
-        if index % 2 == 0:
+        if index % 2:
             digit *= 2
             if digit > 9:
                 digit -= 9
         total += digit
-    return str((10 - total % 10) % 10)
+    return total % 10
+
+
+def luhn_check_digit(payload: str) -> str:
+    return str((10 - luhn_sum(payload + "0")) % 10)
 
 
 def luhn_valid(number: str) -> bool:
@@ -1925,17 +1936,21 @@ def render_csv(doc: Doc, r: Rng, lang: str, p: Persona, fields: list[Field]) -> 
             value = fields[index - 1].value if row == 0 and index else item.gen(r, holder, lang)
             cells.append(Span(item.entity, value))
         cells.append(Neg("amount", neg_amount(r, lang)))
-        for index, cell in enumerate(cells):
-            if index:
-                doc.raw(delimiter)
-            value = cell if isinstance(cell, str) else cell.value
-            if '"' in value:
-                raise ValueError(f"CSV value contains a quote: {value!r}")
-            quoted = delimiter in value or "\n" in value
-            doc.raw('"' if quoted else "")
-            doc.put(cell)
-            doc.raw('"' if quoted else "")
-        doc.raw("\n")
+        csv_row(doc, cells, delimiter)
+
+
+def csv_row(doc: Doc, cells: Sequence[str | Span | Neg], delimiter: str) -> None:
+    for index, cell in enumerate(cells):
+        if index:
+            doc.raw(delimiter)
+        value = cell if isinstance(cell, str) else cell.value
+        if '"' in value:
+            raise ValueError(f"CSV value contains a quote: {value!r}")
+        quoted = delimiter in value or "\n" in value
+        doc.raw('"' if quoted else "")
+        doc.put(cell)
+        doc.raw('"' if quoted else "")
+    doc.raw("\n")
 
 
 TICKET_MOOD = ("🙏", "😊", "😟", "🤔", "👍", "🚀", "⚠️")
@@ -2056,37 +2071,409 @@ def generate(seed: str, split: str, docs: int) -> list[dict[str, Any]]:
         fields = [Field(item, item.gen(r, p, lang)) for item in kinds]
         doc = Doc()
         RENDERERS[doc_type](doc, r, lang, p, fields)
-        identifier = f"synth-{split}-{number:04d}"
-        rows.append(
-            {
-                "id": identifier,
-                "group_id": identifier,
-                "corpus": CORPUS_ID,
-                "language": lang,
-                "doc_type": doc_type,
-                "text": doc.text(),
-                "entities": sorted(doc.entities, key=lambda item: (item["start"], item["end"], item["entity_type"])),
-                "hard_negatives": sorted(doc.negatives, key=lambda item: (item["start"], item["end"], item["kind"])),
-            }
-        )
+        rows.append(gold_row(f"synth-{split}-{number:04d}", CORPUS_ID, lang, doc_type, doc))
     return rows
+
+
+def gold_row(identifier: str, corpus: str, lang: str, doc_type: str, doc: Doc) -> dict[str, Any]:
+    return {
+        "id": identifier,
+        "group_id": identifier,
+        "corpus": corpus,
+        "language": lang,
+        "doc_type": doc_type,
+        "text": doc.text(),
+        "entities": sorted(doc.entities, key=lambda item: (item["start"], item["end"], item["entity_type"])),
+        "hard_negatives": sorted(doc.negatives, key=lambda item: (item["start"], item["end"], item["kind"])),
+    }
 
 
 def coverage(rows: list[dict[str, Any]]) -> Counter:
     return Counter((row["language"], entity["entity_type"]) for row in rows for entity in row["entities"])
 
 
-# Entity-map ids added after the goldset was frozen: the B01 VAT IDs of AT, CH, FR, NL, BE and ES
-# and the B02 VAT IDs of BG, CY, CZ, DK, EE, GR (prefix EL), FI, HR, HU, IE and LT, and the B16 VAT
-# IDs of LU, LV, MT, PL, PT, RO, SE, SI, SK, NO and GB/XI. The generator stays unchanged so that dev
-# and holdout reproduce byte for byte; these ids have no gold here (DE and IT VAT IDs are generated
-# since E05).
-NOT_GENERATED = frozenset(
-    {"pii.at.vat_id", "pii.ch.vat_id", "pii.fr.vat_id", "pii.nl.vat_id", "pii.be.vat_id", "pii.es.vat_id"}
-    | {
-        "pii.bg.vat_id", "pii.cy.vat_id", "pii.cz.vat_id", "pii.dk.vat_id", "pii.ee.vat_id", "pii.gr.vat_id",
-        "pii.fi.vat_id", "pii.hr.vat_id", "pii.hu.vat_id", "pii.ie.vat_id", "pii.lt.vat_id",
+# ── VAT goldset part 1 (GOLD-VAT1) ───────────────────────────────────────────
+#
+# The B01/B02 VAT IDs of AT, BE, BG, CH, CY, CZ, DK, EE, ES, FI, FR, GR, HR and HU came after E05 was
+# frozen. A goldset of their own (corpus ``ark-synthetic-vat-1``, own seeds and directory) carries
+# them, so ``ark-synthetic-de-eu`` stays byte for byte. Per id and language there is one document per
+# carrier (prose letter, form, JSON, CSV) with two checksum-valid values and the hard negatives a VAT
+# rule must leave alone: the same form with a wrong check character, a wrong length and the
+# country-prefixed postcode (``DK-8000``).
+
+VAT_CORPUS_ID = "ark-synthetic-vat-1"
+VAT_DEV_SEED = "ark-l1-gold-vat1-synthetic-dev-v1"
+VAT_GENERATOR_VERSION = 1
+VAT_DOC_TYPES = ("letter", "form", "json", "csv")
+
+
+def weighted_sum(digits: str, weights: Sequence[int]) -> int:
+    return sum(int(char) * weight for char, weight in zip(digits, weights))
+
+
+def vat_at(r: Rng) -> str:
+    body = r.digits(7)
+    return f"ATU{body}{(6 - luhn_sum(body)) % 10}"
+
+
+def vat_be(r: Rng) -> str:
+    body = r.choice("01") + str(r.randint(1, 9)) + r.digits(6)
+    return f"BE{body}{97 - int(body) % 97:02d}"
+
+
+def vat_bg(r: Rng) -> str:
+    body = str(r.randint(1, 9)) + r.digits(7)
+    check = weighted_sum(body, range(1, 9)) % 11
+    if check == 10:
+        check = weighted_sum(body, range(3, 11)) % 11
+    return f"BG{body}{check % 10}"
+
+
+def vat_bg_person(r: Rng, p: Persona) -> str:
+    """ЕГН: birth date (month + 40 after 1999), region and serial, weighted check digit."""
+    month = p.dob.month + (40 if p.dob.year >= 2000 else 0)
+    body = f"{p.dob.year % 100:02d}{month:02d}{p.dob.day:02d}{r.digits(3)}"
+    return f"BG{body}{weighted_sum(body, (2, 4, 8, 5, 10, 9, 7, 3, 6)) % 11 % 10}"
+
+
+def vat_ch(r: Rng) -> str:
+    while True:
+        body = str(r.randint(1, 9)) + r.digits(7)
+        check = (11 - weighted_sum(body, (5, 4, 3, 2, 7, 6, 5, 4)) % 11) % 11
+        if check != 10:
+            return f"CHE{body}{check}"
+
+
+def vat_cy(r: Rng) -> str:
+    while True:
+        body = r.choice("01359") + r.digits(7)
+        if not body.startswith("12"):
+            total = sum(CF_ODD[char] for char in body[::2]) + sum(int(char) for char in body[1::2])
+            return f"CY{body}{UPPER[total % 26]}"
+
+
+def vat_cz(r: Rng) -> str:
+    body = str(r.randint(1, 8)) + r.digits(6)
+    check = (11 - weighted_sum(body, range(8, 1, -1)) % 11) % 11
+    return f"CZ{body}{(check or 1) % 10}"
+
+
+def vat_cz_person(r: Rng, p: Persona) -> str:
+    """Rodné číslo of a sole trader: birth date (month + 50 for women), serial, number mod 11."""
+    if p.dob.year < 1954:  # nine digits without a check digit before 1954
+        return vat_cz(r)
+    body = f"{p.dob.year % 100:02d}{p.dob.month + (50 if p.female else 0):02d}{p.dob.day:02d}{r.digits(3)}"
+    return f"CZ{body}{int(body) % 11 % 10}"
+
+
+def vat_dk(r: Rng) -> str:
+    while True:
+        body = str(r.randint(1, 9)) + r.digits(6)
+        check = -weighted_sum(body, (2, 7, 6, 5, 4, 3, 2)) % 11
+        if check < 10:
+            return f"DK{body}{check}"
+
+
+def vat_ee(r: Rng) -> str:
+    body = "10" + r.digits(6)
+    return f"EE{body}{-weighted_sum(body, (3, 7, 1) * 3) % 10}"
+
+
+def vat_es(r: Rng) -> str:
+    """CIF: entity letter, seven digits, control digit (companies) or letter (public bodies, foreign)."""
+    letter, middle = r.choice("AAABBBBEGHJNPQRSUVW"), r.digits(7)
+    total = sum(int(char) for char in middle[1::2]) + sum(cross_sum(2 * int(char)) for char in middle[0::2])
+    check = (10 - total % 10) % 10
+    return f"ES{letter}{middle}{'JABCDEFGHI'[check] if letter in 'NPQRSW' else check}"
+
+
+def vat_es_person(r: Rng, p: Persona) -> str:
+    return "ES" + r.choice((gen_nif, gen_nie))(r, p, "")
+
+
+def vat_fi(r: Rng) -> str:
+    while True:
+        body = str(r.randint(0, 3)) + r.digits(6)
+        check = -weighted_sum(body, (7, 9, 10, 5, 8, 4, 2)) % 11
+        if check < 10:
+            return f"FI{body}{check}"
+
+
+def vat_fr(r: Rng) -> str:
+    stem = str(r.randint(3, 9)) + r.digits(7)
+    siren = stem + luhn_check_digit(stem)
+    return f"FR{(12 + 3 * (int(siren) % 97)) % 97:02d}{siren}"
+
+
+def vat_gr(r: Rng) -> str:
+    body, total = r.choice("0189") + r.digits(7), 0
+    for char in body:
+        total = total * 2 + int(char)
+    return f"EL{body}{total * 2 % 11 % 10}"
+
+
+def vat_hr(r: Rng) -> str:
+    body = str(r.randint(1, 9)) + r.digits(9)
+    return f"HR{body}{iso7064_mod11_10(body)}"
+
+
+def vat_hu(r: Rng) -> str:
+    body = str(r.randint(1, 9)) + r.digits(6)
+    return f"HU{body}{-weighted_sum(body, (9, 7, 3, 1) * 2) % 10}"
+
+
+class VatCountry(NamedTuple):
+    entity: str
+    prefix: str  # prefix of the compact value; the body follows it
+    lengths: tuple[int, ...]  # body lengths the country issues
+    legal: Callable[[Rng], str]  # compact legal-entity number, the base of every hard negative
+    check: slice  # check characters in the compact legal number
+    layouts: tuple[Callable[[str], str], ...]  # printed forms of a body, compact first (any length)
+    names: dict[str, str]
+    city: str
+    postcodes: tuple[int, int]  # range of the city's postcodes
+    legal_form: str
+    person: Callable[[Rng, Persona], str] | None = None  # number of a natural person, if issued
+
+
+LAST = slice(-1, None)
+VAT_COUNTRIES: tuple[VatCountry, ...] = (
+    VatCountry(
+        "pii.at.vat_id", "ATU", (8,), vat_at, LAST, (lambda b: f"ATU{b}", lambda b: f"ATU {b}"),
+        {"de": "Österreich", "en": "Austria"}, "Graz", (8010, 8063), "GmbH",
+    ),
+    VatCountry(
+        "pii.be.vat_id", "BE", (10,), vat_be, slice(-2, None),
+        (lambda b: f"BE{b}", lambda b: f"BE {b[:4]}.{b[4:7]}.{b[7:]}", lambda b: f"BE{b[:4]} {b[4:7]} {b[7:]}"),
+        {"de": "Belgien", "en": "Belgium"}, "Antwerpen", (2000, 2660), "BV",
+    ),
+    VatCountry(
+        "pii.bg.vat_id", "BG", (9, 10), vat_bg, LAST, (lambda b: f"BG{b}", lambda b: f"BG {b}"),
+        {"de": "Bulgarien", "en": "Bulgaria"}, "Plovdiv", (4000, 4023), "EOOD", vat_bg_person,
+    ),
+    VatCountry(
+        "pii.ch.vat_id", "CHE", (9,), vat_ch, LAST,
+        (lambda b: f"CHE{b}", lambda b: f"CHE-{b[:3]}.{b[3:6]}.{b[6:]}", lambda b: f"CHE {b[:3]} {b[3:6]} {b[6:]}"),
+        {"de": "Schweiz", "en": "Switzerland"}, "Basel", (4001, 4059), "AG",
+    ),
+    VatCountry(
+        "pii.cy.vat_id", "CY", (9,), vat_cy, LAST, (lambda b: f"CY{b}", lambda b: f"CY-{b}", lambda b: f"CY {b}"),
+        {"de": "Zypern", "en": "Cyprus"}, "Limassol", (3010, 3120), "Ltd",
+    ),
+    VatCountry(
+        "pii.cz.vat_id", "CZ", (8, 9, 10), vat_cz, LAST, (lambda b: f"CZ{b}", lambda b: f"CZ {b}"),
+        {"de": "Tschechien", "en": "Czech Republic"}, "Brno", (60200, 62800), "s.r.o.", vat_cz_person,
+    ),
+    VatCountry(
+        "pii.dk.vat_id", "DK", (8,), vat_dk, LAST,
+        (lambda b: f"DK{b}", lambda b: f"DK {b[:2]} {b[2:4]} {b[4:6]} {b[6:]}", lambda b: f"DK {b}"),
+        {"de": "Dänemark", "en": "Denmark"}, "Aarhus", (8000, 8270), "ApS",
+    ),
+    VatCountry(
+        "pii.ee.vat_id", "EE", (9,), vat_ee, LAST, (lambda b: f"EE{b}", lambda b: f"EE {b}"),
+        {"de": "Estland", "en": "Estonia"}, "Tartu", (50050, 51014), "OÜ",
+    ),
+    VatCountry(
+        "pii.es.vat_id", "ES", (9,), vat_es, LAST, (lambda b: f"ES{b}", lambda b: f"ES {b}"),
+        {"de": "Spanien", "en": "Spain"}, "Valencia", (46001, 46026), "S.L.", vat_es_person,
+    ),
+    VatCountry(
+        "pii.fi.vat_id", "FI", (8,), vat_fi, LAST, (lambda b: f"FI{b}", lambda b: f"FI {b}"),
+        {"de": "Finnland", "en": "Finland"}, "Tampere", (33100, 33900), "Oy",
+    ),
+    VatCountry(
+        "pii.fr.vat_id", "FR", (11,), vat_fr, slice(2, 4),
+        (lambda b: f"FR{b}", lambda b: f"FR {b[:2]} {b[2:5]} {b[5:8]} {b[8:]}", lambda b: f"FR{b[:2]} {b[2:]}"),
+        {"de": "Frankreich", "en": "France"}, "Lyon", (69001, 69009), "SARL",
+    ),
+    VatCountry(
+        "pii.gr.vat_id", "EL", (9,), vat_gr, LAST, (lambda b: f"EL{b}", lambda b: f"EL {b}", lambda b: f"GR{b}"),
+        {"de": "Griechenland", "en": "Greece"}, "Thessaloniki", (54621, 56430), "A.E.",
+    ),
+    VatCountry(
+        "pii.hr.vat_id", "HR", (11,), vat_hr, LAST, (lambda b: f"HR{b}", lambda b: f"HR {b}"),
+        {"de": "Kroatien", "en": "Croatia"}, "Split", (21000, 21220), "d.o.o.",
+    ),
+    VatCountry(
+        "pii.hu.vat_id", "HU", (8,), vat_hu, LAST, (lambda b: f"HU{b}", lambda b: f"HU-{b}", lambda b: f"HU {b}"),
+        {"de": "Ungarn", "en": "Hungary"}, "Debrecen", (4024, 4032), "Kft.",
+    ),
+)
+VAT_ORG_STEMS = ("Meridian", "Atlas", "Helios", "Polaris", "Orion", "Vega", "Aurora", "Kronos", "Lumen", "Sirius")
+VAT_ORG_SECTORS = ("Trading", "Logistics", "Systems", "Foods", "Components", "Textiles", "Pharma", "Energy")
+VAT_LABELS = {
+    "de": ("USt-IdNr.", "Umsatzsteuer-Identifikationsnummer", "UID-Nummer"),
+    "en": ("VAT number", "VAT ID", "VAT reg. no."),
+}
+
+
+def vat_org(r: Rng, country: VatCountry) -> Span:
+    return span("entity.organization", f"{r.choice(VAT_ORG_STEMS)} {r.choice(VAT_ORG_SECTORS)} {country.legal_form}")
+
+
+def vat_value(r: Rng, country: VatCountry, p: Persona) -> Span:
+    """A checksum-valid number in one of the country's printed forms."""
+    compact = country.person(r, p) if country.person and r.chance(30) else country.legal(r)
+    return span(country.entity, r.choice(country.layouts)(compact[len(country.prefix) :]))
+
+
+def vat_wrong_check(r: Rng, country: VatCountry) -> Neg:
+    """The legal form with every check character replaced, printed like a valid number."""
+    compact = country.legal(r)
+    check = compact[country.check]
+    while True:
+        other = "".join(r.choice(UPPER if char.isalpha() else "0123456789") for char in check)
+        if other != check:
+            break
+    start, stop, _ = country.check.indices(len(compact))
+    body = (compact[:start] + other + compact[stop:])[len(country.prefix) :]
+    return Neg("vat_check_digit", r.choice(country.layouts)(body))
+
+
+def vat_wrong_length(r: Rng, country: VatCountry) -> Neg:
+    """The legal form one digit shorter than the shortest or longer than the longest issued body."""
+    body = country.legal(r)[len(country.prefix) :]
+    shorter = r.chance(50)
+    target = min(country.lengths) - 1 if shorter else max(country.lengths) + 1
+    while len(body) != target:
+        positions = [index for index, char in enumerate(body) if char.isdigit()]
+        index = r.choice(positions)
+        body = body[:index] + body[index + 1 :] if shorter else body[:index] + r.digits(1) + body[index:]
+    return Neg("vat_length", country.layouts[0](body))
+
+
+def vat_postcode(r: Rng, country: VatCountry) -> Neg:
+    """Country code and postcode (``DK-8000``, ``CZ-602 00``): a prefix with digits, but no VAT ID."""
+    low, high = country.postcodes
+    code = str(r.randint(low, high) // 100 * 100 if country.entity == "pii.cz.vat_id" else r.randint(low, high))
+    if country.entity in ("pii.cz.vat_id", "pii.gr.vat_id"):
+        code = f"{code[:3]} {code[3:]}"
+    return Neg("vat_postcode", f"{country.entity.split('.')[1].upper()}-{code}")
+
+
+def render_vat_letter(doc: Doc, r: Rng, lang: str, country: VatCountry, p: Persona) -> None:
+    org, branch = vat_org(r, country), vat_org(r, country)
+    land = country.names[lang]
+    if lang == "de":
+        doc.add("Betreff: Lieferantendaten {org}\n\nSehr geehrte Damen und Herren,\n\n", org=org)
+        doc.add(
+            r.choice(("als {label} der {org} ist {v} hinterlegt. ", "die {org} führt die {label} {v}. ")),
+            label=r.choice(VAT_LABELS[lang]), org=org, v=vat_value(r, country, p),
+        )
+        doc.add(f"Unsere Niederlassung {{branch}} in {land} ist unter {{v}} registriert. ", branch=branch,
+                v=vat_value(r, country, p))
+        doc.add("Die Angabe {hn} aus Ihrem letzten Schreiben besteht die Prüfziffernkontrolle nicht. ",
+                hn=vat_wrong_check(r, country))
+        doc.add("Auch {hn} hat nicht die richtige Länge. ", hn=vat_wrong_length(r, country))
+        doc.add("Die Ware geht an unser Lager in {pc} {city}.\n\nMit freundlichen Grüßen\n{name}\n",
+                pc=vat_postcode(r, country), city=span("entity.location", country.city), name=name_span(p))
+    else:
+        doc.add("Subject: Supplier details for {org}\n\nDear Sir or Madam,\n\n", org=org)
+        doc.add(
+            r.choice(("the {label} of {org} on file is {v}. ", "{org} is registered under {label} {v}. ")),
+            label=r.choice(VAT_LABELS[lang]), org=org, v=vat_value(r, country, p),
+        )
+        doc.add(f"Our branch {{branch}} in {land} is registered as {{v}}. ", branch=branch,
+                v=vat_value(r, country, p))
+        doc.add("The number {hn} quoted in your last letter fails the check digit test. ",
+                hn=vat_wrong_check(r, country))
+        doc.add("{hn} does not have the right length either. ", hn=vat_wrong_length(r, country))
+        doc.add("Please deliver to our warehouse at {pc} {city}.\n\nKind regards\n{name}\n",
+                pc=vat_postcode(r, country), city=span("entity.location", country.city), name=name_span(p))
+
+
+def render_vat_form(doc: Doc, r: Rng, lang: str, country: VatCountry, p: Persona) -> None:
+    separator = r.choice((": ", ":\t", " | "))
+    vat = r.choice(VAT_LABELS[lang])
+    keys = (
+        ("Lieferantenstammblatt", "Firma", "Land", vat, "Lieferanschrift", "Niederlassung", f"{vat} Niederlassung",
+         "Abgelehnt (Prüfziffer)", "Abgelehnt (Länge)", "Bearbeiter")
+        if lang == "de"
+        else ("Supplier master data", "Company", "Country", vat, "Delivery address", "Branch", f"Branch {vat}",
+              "Rejected (check digit)", "Rejected (length)", "Processed by")
+    )
+    doc.raw(f"{keys[0]}\n{'=' * 24}\n\n")
+    line = "{key}" + separator + "{v}\n"
+    doc.add(line, key=keys[1], v=vat_org(r, country))
+    doc.add(line, key=keys[2], v=country.names[lang])
+    doc.add(line, key=keys[3], v=vat_value(r, country, p))
+    doc.add("{key}" + separator + "{pc} {city}\n", key=keys[4], pc=vat_postcode(r, country),
+            city=span("entity.location", country.city))
+    doc.add(line, key=keys[5], v=vat_org(r, country))
+    doc.add(line, key=keys[6], v=vat_value(r, country, p))
+    doc.add(line, key=keys[7], v=vat_wrong_check(r, country))
+    doc.add(line, key=keys[8], v=vat_wrong_length(r, country))
+    doc.add(line, key=keys[9], v=name_span(p))
+
+
+def render_vat_json(doc: Doc, r: Rng, lang: str, country: VatCountry, p: Persona) -> None:
+    de = lang == "de"
+    code = country.entity.split(".")[1].upper()
+    record = {
+        ("lieferant" if de else "supplier"): {
+            "name": vat_org(r, country),
+            ("land" if de else "country"): code,
+            ("ust_id" if de else "vat_id"): vat_value(r, country, p),
+            ("anschrift" if de else "address"): {
+                ("plz" if de else "postcode"): vat_postcode(r, country),
+                ("ort" if de else "city"): span("entity.location", country.city),
+            },
+        },
+        ("niederlassung" if de else "branch"): {
+            "name": vat_org(r, country),
+            ("ust_id" if de else "vat_id"): vat_value(r, country, p),
+        },
+        ("abgelehnt" if de else "rejected"): [vat_wrong_check(r, country), vat_wrong_length(r, country)],
+        ("bearbeiter" if de else "processed_by"): name_span(p),
     }
+    json_value(doc, record, 0)
+    doc.raw("\n")
+
+
+def render_vat_csv(doc: Doc, r: Rng, lang: str, country: VatCountry, p: Persona) -> None:
+    de = lang == "de"
+    delimiter = ";" if de else ","
+    doc.raw(delimiter.join(("nr", "firma", "ust_id", "plz", "status") if de else
+                           ("row", "company", "vat_number", "postcode", "status")) + "\n")
+    valid, invalid = ("gültig", "ungültig") if de else ("valid", "invalid")
+    entries = [
+        (vat_value(r, country, p), valid), (vat_value(r, country, p), valid),
+        (vat_wrong_check(r, country), invalid), (vat_wrong_length(r, country), invalid),
+    ]
+    for number, (value, status) in enumerate(r.shuffle(entries), 1):
+        csv_row(doc, [str(number), vat_org(r, country), value, vat_postcode(r, country), status], delimiter)
+
+
+VAT_RENDERERS: dict[str, Callable[[Doc, Rng, str, VatCountry, Persona], None]] = {
+    "letter": render_vat_letter, "form": render_vat_form, "json": render_vat_json, "csv": render_vat_csv,
+}
+
+
+def generate_vat(seed: str, split: str, docs: int) -> list[dict[str, Any]]:
+    """Document ``n``: carrier ``n mod 4``, language ``n // 4 mod 2``, country ``n // 8``, cycling."""
+    if split not in SPLITS:
+        raise ValueError(f"unknown split {split!r}")
+    rows = []
+    for number in range(docs):
+        doc_type = VAT_DOC_TYPES[number % len(VAT_DOC_TYPES)]
+        lang = LANGUAGES[(number // len(VAT_DOC_TYPES)) % len(LANGUAGES)]
+        country = VAT_COUNTRIES[(number // (len(VAT_DOC_TYPES) * len(LANGUAGES))) % len(VAT_COUNTRIES)]
+        r = Rng(f"{SCHEMA}:{VAT_CORPUS_ID}:{VAT_GENERATOR_VERSION}:{seed}:{split}:{number}")
+        doc = Doc()
+        VAT_RENDERERS[doc_type](doc, r, lang, country, persona(r, lang))
+        rows.append(gold_row(f"synth-vat1-{split}-{number:04d}", VAT_CORPUS_ID, lang, doc_type, doc))
+    return rows
+
+
+def vat_entity_ids() -> list[str]:
+    return sorted(country.entity for country in VAT_COUNTRIES)
+
+
+# Entity-map ids that no goldset generates. E05 is frozen: ids added to the map later get a goldset
+# of their own (``vat-1`` for the B01/B02 VAT IDs of GOLD-VAT1) so that ``de-eu`` reproduces byte for
+# byte. Still without synthetic gold: the VAT IDs of IE, LT, NL and the B16 countries (GOLD-VAT2).
+NOT_GENERATED = frozenset(
+    {"pii.ie.vat_id", "pii.lt.vat_id", "pii.nl.vat_id"}
     | {"pii.lu.vat_id", "pii.lv.vat_id", "pii.mt.vat_id", "pii.pl.vat_id", "pii.pt.vat_id", "pii.ro.vat_id"}
     | {"pii.se.vat_id", "pii.si.vat_id", "pii.sk.vat_id", "pii.no.vat_id", "pii.uk.vat_id"}
 )
@@ -2096,8 +2483,10 @@ def entity_ids() -> list[str]:
     return sorted({item.entity for item in KINDS})
 
 
-def validate_rows(rows: list[dict[str, Any]], min_per_language: int = MIN_PER_LANGUAGE) -> list[str]:
-    """Problems of generated rows: span bounds, overlaps, and per-language coverage."""
+def validate_rows(
+    rows: list[dict[str, Any]], ids: Sequence[str] | None = None, min_per_language: int = MIN_PER_LANGUAGE
+) -> list[str]:
+    """Problems of generated rows: span bounds, overlaps, and per-language coverage of ``ids`` (E05's)."""
     problems = []
     for row in rows:
         text = row["text"]
@@ -2112,10 +2501,35 @@ def validate_rows(rows: list[dict[str, Any]], min_per_language: int = MIN_PER_LA
                 problems.append(f"{row['id']}: overlapping spans {name} and {other}")
     counts = coverage(rows)
     for lang in LANGUAGES:
-        for entity in entity_ids():
+        for entity in entity_ids() if ids is None else ids:
             if counts[(lang, entity)] < min_per_language:
                 problems.append(f"{lang} {entity}: {counts[(lang, entity)]} spans, need {min_per_language}")
     return problems
+
+
+class Goldset(NamedTuple):
+    """One frozen goldset: its corpus (and file), public dev seed, size per split and generator."""
+
+    corpus: str
+    dev_seed: str
+    version: int
+    docs: dict[str, int]
+    generate: Callable[[str, str, int], list[dict[str, Any]]]
+    entity_ids: Callable[[], list[str]]
+
+    @property
+    def file_name(self) -> str:
+        return f"{self.corpus}.jsonl"
+
+
+# One directory per goldset (the gate freezes each once): ``de-eu`` is E05, ``vat-1`` GOLD-VAT1.
+GOLDSETS = {
+    "de-eu": Goldset(CORPUS_ID, DEV_SEED, GENERATOR_VERSION, DEFAULT_DOCS, generate, entity_ids),
+    "vat-1": Goldset(
+        VAT_CORPUS_ID, VAT_DEV_SEED, VAT_GENERATOR_VERSION, {"dev": 112, "holdout": 224}, generate_vat,
+        vat_entity_ids,
+    ),
+}
 
 
 def _sha256(data: bytes) -> str:
@@ -2126,19 +2540,19 @@ def _jsonl(rows: list[dict[str, Any]]) -> bytes:
     return "".join(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in rows).encode("utf-8")
 
 
-def build_split(seed: str, split: str, docs: int) -> dict[str, bytes]:
+def build_split(seed: str, split: str, docs: int, goldset: Goldset = GOLDSETS["de-eu"]) -> dict[str, bytes]:
     """``{file name: content}`` of one split including ``manifest.json`` and ``.ready``."""
-    rows = generate(seed, split, docs)
-    problems = validate_rows(rows)
+    rows = goldset.generate(seed, split, docs)
+    problems = validate_rows(rows, goldset.entity_ids())
     if problems:
         raise ValueError("generated rows are invalid: " + "; ".join(problems[:5]))
     data = _jsonl(rows)
     manifest = {
         "schema": SCHEMA,
         "split": split,
-        "corpus": CORPUS_ID,
-        "generator_version": GENERATOR_VERSION,
-        "file": FILE_NAME,
+        "corpus": goldset.corpus,
+        "generator_version": goldset.version,
+        "file": goldset.file_name,
         "sha256": _sha256(data),
         "bytes": len(data),
         "rows": len(rows),
@@ -2152,7 +2566,7 @@ def build_split(seed: str, split: str, docs: int) -> dict[str, bytes]:
     manifest.update({"seed": seed} if split == "dev" else {"seed_sha256": _sha256(seed.encode("utf-8"))})
     manifest_bytes = (json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8")
     return {
-        FILE_NAME: data,
+        goldset.file_name: data,
         "manifest.json": manifest_bytes,
         READY: f"{_sha256(manifest_bytes)}  manifest.json\n".encode("utf-8"),
     }
@@ -2191,15 +2605,15 @@ def holdout_seed(path: Path) -> str:
     seed = path.read_text(encoding="utf-8").strip()
     if len(seed) < 16:
         raise ValueError(f"{path}: holdout seed must have at least 16 characters")
-    if seed == DEV_SEED:
-        raise ValueError(f"{path}: holdout seed must differ from the dev seed")
+    if seed in {goldset.dev_seed for goldset in GOLDSETS.values()}:
+        raise ValueError(f"{path}: holdout seed must differ from the dev seeds")
     return seed
 
 
 def _write(directory: Path, files: dict[str, bytes]) -> None:
     directory.mkdir(parents=True, exist_ok=True)
     (directory / READY).unlink(missing_ok=True)
-    for name in [FILE_NAME, "manifest.json", READY]:
+    for name in files:  # gold file, manifest.json, .ready last (build_split's order)
         partial = directory / f"{name}.part"
         partial.write_bytes(files[name])
         os.replace(partial, directory / name)
@@ -2211,9 +2625,10 @@ def write_splits(
     seed_file: Path | None = None,
     force: bool = False,
     docs: dict[str, int] | None = None,
+    goldset: Goldset = GOLDSETS["de-eu"],
 ) -> int:
     """Write the requested splits; 0 on success or unchanged frozen splits, 1 on any problem."""
-    docs = {**DEFAULT_DOCS, **(docs or {})}
+    docs = {**goldset.docs, **(docs or {})}
     targets: dict[str, tuple[Path, str]] = {}
     try:
         if dev_out is None and holdout_out is None:
@@ -2225,10 +2640,10 @@ def write_splits(
         if seed_file is not None and dev_out is not None and seed_file.resolve().is_relative_to(dev_out.resolve()):
             raise ValueError("--holdout-seed-file must not be inside --dev-out")
         if dev_out is not None:
-            targets["dev"] = (dev_out, DEV_SEED)
+            targets["dev"] = (dev_out, goldset.dev_seed)
         if holdout_out is not None:
             targets["holdout"] = (holdout_out, holdout_seed(seed_file or holdout_out / SEED_FILE))
-        outputs = {split: build_split(seed, split, docs[split]) for split, (_, seed) in targets.items()}
+        outputs = {split: build_split(seed, split, docs[split], goldset) for split, (_, seed) in targets.items()}
     except (ValueError, OSError) as error:
         print(f"synth_goldset: {error}", file=sys.stderr)
         return 1
@@ -2266,6 +2681,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--holdout-seed-file", type=Path, help=f"secret holdout seed (default: HOLDOUT/{SEED_FILE}, created if missing)"
     )
+    parser.add_argument(
+        "--goldset", choices=sorted(GOLDSETS), default="de-eu", help="goldset to write (default: E05 de-eu)"
+    )
     parser.add_argument("--force", action="store_true", help="replace a frozen goldset that differs")
     parser.add_argument("--check", type=Path, metavar="DIR", help="only verify a written goldset directory")
     args = parser.parse_args(argv)
@@ -2278,7 +2696,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1 if problems else 0
     if args.holdout_seed_file is not None and args.holdout_out is None:
         parser.error("--holdout-seed-file needs --holdout-out")
-    return write_splits(args.dev_out, args.holdout_out, args.holdout_seed_file, args.force)
+    return write_splits(
+        args.dev_out, args.holdout_out, args.holdout_seed_file, args.force, goldset=GOLDSETS[args.goldset]
+    )
 
 
 if __name__ == "__main__":

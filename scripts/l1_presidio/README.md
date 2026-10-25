@@ -205,10 +205,41 @@ einmalig nach `~/ark-l1/data/dev/synthetic` und `~/ark-l1/holdout/synthetic`, so
 `.ready` liegt. Später ändert ein Agent-Branch den eingefrorenen Holdout also nicht mehr. Ein neu
 eingefrorener Holdout nach einer Generator-Änderung ist ein bewusster Handgriff (`--force`).
 
+### VAT-Goldset, Teil 1 (GOLD-VAT1)
+
+Das E05-Goldset ist eingefroren; IDs, die die Entity-Map später bekam, erzeugt es nicht
+(`NOT_GENERATED`). Für die USt-IdNr. von AT, BE, BG, CH, CY, CZ, DK, EE, ES, FI, FR, GR, HR und HU
+schreibt derselbe Generator mit `--goldset vat-1` ein eigenes Goldset: Korpus `ark-synthetic-vat-1`
+(Familie `ark_authored`), eigener öffentlicher Dev-Seed (`VAT_DEV_SEED`), eigener geheimer
+Holdout-Seed, eigenes Verzeichnis. `ark-synthetic-de-eu` bleibt dadurch bytegleich.
+
+```bash
+python3 scripts/l1_presidio/synth_goldset.py --goldset vat-1 --dev-out DIR --holdout-out DIR
+```
+
+- **Aufbau:** je ID und Sprache (DE, EN) ein Dokument je Träger: Brief (Fließtext, mit und ohne
+  Feldnamen), Formular (Schlüssel/Wert), JSON und CSV; Dev 112 Zeilen (je Kombination eine),
+  Holdout 224 (je Kombination zwei).
+- **Positive:** je Dokument zwei prüfziffergültige Nummern in den gedruckten Formen der ARK-Regeln
+  (`ATU 12345678`, `BE 0403.019.261`, `CHE-123.456.789`, `DK 13 58 56 28`, `EL…`/`GR…`, …), bei BG,
+  CZ und ES auch Nummern natürlicher Personen (ЕГН, Rodné číslo, DNI/NIE); je Split und ID mindestens
+  16, je Sprache mindestens 8. Firmen, Orte und Bearbeiter sind als `entity.*` annotiert.
+- **Hard Negatives** (`hard_negatives`, ohne `entity_type`, gelten also für jede L1-ID):
+  `vat_check_digit` (dieselbe Form mit falschem Prüfzeichen), `vat_length` (eine Stelle kürzer als die
+  kürzeste oder länger als die längste vergebene Form) und `vat_postcode` (Ländercode mit
+  Postleitzahl, `DK-8000`, `CZ-602 00`); je Split, ID und Sprache mindestens 4 von jeder Art.
+- **Prüfung:** `scripts/tests/test_l1_synth_goldset.py` prüft jedes Positiv gegen die Python-Ports
+  der Rust-Validatoren (`CHECKSUM_PORTS` in `scoreboard.py`) und jedes Hard Negative dagegen; die
+  Dev-Ausgabe ist je `VAT_GENERATOR_VERSION` gepinnt.
+- **Gate:** Der Runner friert das Goldset wie E05 einmalig ein (Schritt `synthetic-goldset-vat-1`,
+  `~/ark-l1/data/dev/synthetic-vat-1`, `~/ark-l1/holdout/synthetic-vat-1`, Seed in dessen `.seed`),
+  erst nach Neuinstallation des Runners.
+
 ## Scoreboard
 
 `scoreboard.py gate` vergleicht den ARK-Build eines Checkouts mit seinem Basis-Commit auf allen
-eingefrorenen Goldsets (Verzeichnisse mit `.ready`: `DIR/*.jsonl`, `DIR/synthetic/*.jsonl`), je Seite
+eingefrorenen Goldsets (Verzeichnisse mit `.ready`: `DIR/*.jsonl`, `DIR/synthetic/*.jsonl`,
+`DIR/synthetic-vat-1/*.jsonl`), je Seite
 in den PII-Modi `strict` und `balanced` (`run_ark.py --pii-mode`, Entscheidung T15 in
 [`research/l1-pii/README.md`](../../research/l1-pii/README.md)):
 

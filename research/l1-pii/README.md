@@ -18,6 +18,7 @@ Stand: 2026-10-11. Aufgabenliste: [`backlog.yaml`](backlog.yaml). Agent-Prompt:
 ## Gold und Qualitätsuntergrenze (seit 2026-10-25)
 
 - **Gold überall:** Jede implementierte Entität braucht Gold in mindestens einer Quellfamilie. Neue Entitäten bringen ihr Gold in derselben Aufgabe mit (synthetisch, prüfziffergültig, ≥ 10 Positive und ≥ 5 Hard Negatives je Entität, DE + EN). Lücken stehen auf der Seite `docs/reference/l1-capabilities.md` als „no gold“.
+- **Gold für Entitäten nach dem E05-Freeze:** Das E05-Goldset bleibt bytegleich; nachgereichtes synthetisches Gold bekommt ein eigenes Goldset desselben Generators mit eigenem Korpus, eigenen Seeds und eigenem Verzeichnis (`--goldset`, Familie `ark_authored`). GOLD-VAT1: `ark-synthetic-vat-1` für die USt-IdNr. von AT, BE, BG, CH, CY, CZ, DK, EE, ES, FI, FR, GR, HR und HU (Aufbau in [`scripts/l1_presidio/README.md`](../../scripts/l1_presidio/README.md)); ohne Gold bleiben bis GOLD-VAT2 die übrigen VAT-IDs (`NOT_GENERATED`).
 - **Untergrenze F1 ≥ 80:** Jede implementierte Entität mit Gold erreicht exakten F1 ≥ 80 auf jeder Familie mit Gold (PII: `balanced`; DLP: im Profil, in dem sie läuft, auch Opt-in). Darunter wird eine `Q-…`-Aufgabe angelegt; TRIAGE prüft das bei jeder Messung. Ausnahmen nur mit dokumentierter Entscheidung.
 
 ## Definition „besser als Presidio“
@@ -514,6 +515,9 @@ run.sh
   Dazu kommt das synthetische DE/EU-Goldset aus `scripts/l1_presidio/synth_goldset.py` unter
   `…/synthetic/`: Dev mit öffentlichem Seed, Holdout mit geheimem Seed (`~/ark-l1/holdout/synthetic/.seed`),
   ebenfalls einmalig vom Gate erzeugt (Schritt `synthetic-goldset`, erst nach Neuinstallation des Runners).
+  Das VAT-Goldset aus GOLD-VAT1 (`--goldset vat-1`) friert der Schritt `synthetic-goldset-vat-1` genauso
+  nach `…/synthetic-vat-1/` ein (Holdout-Seed in `~/ark-l1/holdout/synthetic-vat-1/.seed`), erst nach
+  Neuinstallation des Runners.
 - **Scoreboard:** `scripts/l1_presidio/scoreboard.py gate` rechnet Head und Basis in den PII-Modi
   `strict` und `balanced` (exakt und überlappend, je Entität, DE/EN, je Quellfamilie, Hard-Negative-FP)
   auf Dev und Holdout; Exit 1 bei > 0,5 pp F1-Verlust oder neuem Hard-Negative-Treffer in einem der
