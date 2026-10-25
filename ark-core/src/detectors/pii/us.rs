@@ -6,6 +6,12 @@
 //! mode when an SSN term stands near the value or is its structural key (T25);
 //! `pii_ssn_us_context_free` reports the grouped form without a term in `balanced`
 //! and `recall`. The SSA ranges are the only validator; no form carries a check digit.
+//!
+//! The ABA routing number (B-ACCT) carries a 3-7-1 check digit, which nine bare
+//! digits pass one time in ten: `pii_aba_routing_number_us` reports it in every mode
+//! with a routing or account term near the value or as its key; only the printed
+//! 4-4-1 form is reported bare, in `balanced` and `recall`. A routing number under
+//! its field name is also an account value of `pii_financial_account_number`.
 use super::{pii::PiiPattern, score::ValidatorStrength, validators};
 
 // ── Telefon ──────────────────────────────────────────────────────────────────
@@ -80,6 +86,36 @@ pub(super) const SSN_CONTEXT_FREE: PiiPattern = PiiPattern {
     validator: Some(validators::us_ssn_context_free),
     strength: ValidatorStrength::Format,
     base_score: 35,
+    captured_value: false,
+    requires_context: false,
+    scored_only: true,
+};
+
+// ── Bankverbindung ───────────────────────────────────────────────────────────
+
+/// ABA routing number, nine digits or 4-4-1 (`0711-0130-7`), with a routing or
+/// account term near the value or as its key.
+pub(super) const ABA_ROUTING_NUMBER: PiiPattern = PiiPattern {
+    name: "pii_aba_routing_number_us",
+    pattern: r"(?-u:\b)(?:[0-9]{4}-[0-9]{4}-[0-9]|[0-9]{9})(?-u:\b)",
+    entity_group: "FINANCIAL_ACCOUNT_NUMBER",
+    validator: Some(validators::aba_routing_number),
+    strength: ValidatorStrength::Checksum,
+    base_score: 25,
+    captured_value: false,
+    requires_context: true,
+    scored_only: false,
+};
+
+/// A bare ABA routing number in its printed 4-4-1 groups, in `balanced` and
+/// `recall` only, as presidio-analyzer scores this form above the bare digits.
+pub(super) const ABA_ROUTING_NUMBER_CONTEXT_FREE: PiiPattern = PiiPattern {
+    name: "pii_aba_routing_number_us_context_free",
+    pattern: r"(?-u:\b)[0-9]{4}-[0-9]{4}-[0-9](?-u:\b)",
+    entity_group: "FINANCIAL_ACCOUNT_NUMBER",
+    validator: Some(validators::aba_routing_number),
+    strength: ValidatorStrength::Checksum,
+    base_score: 20,
     captured_value: false,
     requires_context: false,
     scored_only: true,

@@ -6,7 +6,7 @@ These are the stable rule IDs accepted by execution-gate `rules`. Missing IDs in
 
 For coverage per benchmark entity, the comparison with Presidio and the secret scanners, and latency, see [L1 capabilities](l1-capabilities.md).
 
-## PII rules (109)
+## PII rules (111)
 
 All PII rules are eligible by default when PII L1 is enabled.
 
@@ -123,6 +123,8 @@ In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `
 | `pii_hetu_fi` | `FI_PERSONAL_IDENTITY_CODE` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |
 | `pii_hetu_fi_context_free` | `FI_PERSONAL_IDENTITY_CODE` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
 | `pii_steuernummer_de_context_free` | `TAX_NUMBER_DE` | yes | format | 35 | key or proximity, `balanced`/`recall` only | 0.50–0.75 |
+| `pii_aba_routing_number_us` | `FINANCIAL_ACCOUNT_NUMBER` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |
+| `pii_aba_routing_number_us_context_free` | `FINANCIAL_ACCOUNT_NUMBER` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
 
 ### PII context lexicon
 
@@ -146,7 +148,7 @@ The context engine reads these DE/EN entries of `ark-core/src/detectors/anchor_l
 | `APPLICANT_ID` | `pii.applicant_identifier` |
 | `USERNAME` | `pii.user_account` |
 | `DOB` | `pii.date_of_birth` |
-| `FINANCIAL_ACCOUNT_NUMBER` | `pii.bank_account`, `pii.brokerage_account` |
+| `FINANCIAL_ACCOUNT_NUMBER` | `pii.bank_account`, `pii.brokerage_account`, `pii.bank_routing_number` |
 | `STEUERID` | `pii.tax_identifier` |
 | `TAX_NUMBER_DE` | `pii.tax_number` |
 | `SOCIALID` | `pii.social_insurance_number` |

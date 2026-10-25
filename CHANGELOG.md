@@ -33,6 +33,34 @@ result shapes may be breaking for downstream users, and is called out explicitly
   138.9 → 141.7 ms (+2.0 %), both PASS. Golden eval: 1233/1233 positives, 1143/1143 hard
   negatives.
 
+### Added
+
+- Account numbers (B-ACCT: A04, F14). The US ABA routing number gets its check digit
+  (`validators::aba_routing_number`: Federal Reserve routing symbol 00–12, 21–32, 61–72 or 80,
+  weights 3-7-1 mod 10, not one repeated digit) and reports `FINANCIAL_ACCOUNT_NUMBER`.
+  `pii_aba_routing_number_us` reports nine digits or the 4-4-1 form in every mode with a routing
+  or account term near the value or as its key (new lexicon entry `pii.bank_routing_number`:
+  `ABA`, `RTN`, `routing number`, `Routingnummer`, `numéro de routage` …), never as part of a longer
+  number; `pii_aba_routing_number_us_context_free` reports the bare 4-4-1 form (`0711-0130-7`) in
+  `balanced`/`recall` at 0.55. Nine bare digits pass the check one time in ten and stay silent. The
+  field-bound `pii_financial_account_number` also binds `BBAN`, `Bank Routing Number`,
+  `Routing-Nummer`, `ABA number`, `Acct No`/`Acct ID` and FR/ES/IT routing field names, before the
+  value and as structural keys (JSON `bban`, CSV `bank_routing_number`, XML `<AcctNumber>`,
+  `<RoutingNumber>`, `<AcctId>`, `numeroCuentaBancaria`), with the form check as for `Kontonummer`;
+  `pii_customer_id` takes `customer_id`/`customer-number` in running text. M3 count
+  (`count_validated.py`) ARK 49 → 50 (`pii.financial_account_number`, `us`, shared with Presidio's
+  `ABA_ROUTING_NUMBER`); the scoreboard ports the validator. New `rust/tests/pii_account_numbers.rs`
+  (vectors incl. the presidio-analyzer values), 77 new `pii_l1` rows (DE + EN), two rule fixtures.
+  **Detection change:** in every mode a routing number with its term or key, and BBAN, routing and
+  `acct` fields (also as keys), are new `FINANCIAL_ACCOUNT_NUMBER` findings, and `customer_id:`
+  values new `CUSTOMER_ID` findings; in `balanced`/`recall` the bare 4-4-1 routing number is new.
+  Dev scoreboard vs. 84c8f5a (PASS in strict and balanced, no new hard-negative FP): account
+  number exact F1 balanced neutral 8.2 → 46.7 (Presidio tuned 12.5), presidio_favored 0.0 → 57.1,
+  ark_authored 72.2 → 75.7; customer ID neutral 46.7 → 51.1; employee ID and username unchanged;
+  L1 F1 strict +0.7, balanced +0.7 pp (neutral +1.6). Latency (`latency.py compare --engine ark-native`): 100 KiB p95
+  160.9 → 150.5 ms (−6.5 %, PASS), 4 KiB −4.7 %, short 0.234 → 0.261 ms (+11.6 %, not gated). Golden eval: 1256/1256
+  positives, 1157/1157 hard negatives.
+
 ## [0.1.13] - 2026-10-26
 
 ### Fixed

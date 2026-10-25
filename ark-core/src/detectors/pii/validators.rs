@@ -771,6 +771,19 @@ pub fn us_ssn_context_free(s: &str) -> bool {
     us_ssn(s) && digits.iter().any(|&digit| digit != digits[0]) && digits != b"123456789"
 }
 
+/// ABA routing transit number (B-ACCT): nine digits, also printed 4-4-1 with
+/// hyphens. The first two are a Federal Reserve routing symbol (00 government,
+/// 01–12, thrifts 21–32, electronic 61–72, traveller's cheques 80) and the sum
+/// weighted 3 7 1 3 7 1 3 7 1 is divisible by 10. One repeated digit passes the
+/// sum but is no number.
+pub fn aba_routing_number(s: &str) -> bool {
+    grouped_digits::<9>(s).is_some_and(|digits| {
+        matches!(digits[0] * 10 + digits[1], 0..=12 | 21..=32 | 61..=72 | 80)
+            && !one_repeated_digit(&digits)
+            && weighted_sum(&digits, &[3, 7, 1, 3, 7, 1, 3, 7, 1]).is_multiple_of(10)
+    })
+}
+
 pub fn uk_nino(s: &str) -> bool {
     let normalized = s.replace(' ', "").to_ascii_uppercase();
     if normalized.len() != 9 {

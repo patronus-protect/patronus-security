@@ -499,6 +499,7 @@ checksums:
     passport_number_two_letters: null   # zwei Buchstaben + sieben Ziffern (Irland, Japan), keine Prüfziffer
     uk_driver_license_number: null      # B-UK, Nachname, Geburtsdatum, Initialen; DVLA-Prüfzeichen unveröffentlicht
     us_ssn: null                        # Bereichsprüfung
+    aba_routing_number: {algorithm: "ABA 3-7-1 mod 10", country: us}  # B-ACCT, plus Routing-Symbol 00–12/21–32/61–72/80
     us_ssn_context_free: null           # B-SSN, Bereichsprüfung ohne Platzhalter, keine Prüfziffer
     uk_nino: null                       # Präfix-/Suffixprüfung
     uk_nino_context_free: null          # B-UK, wie uk_nino in einer Schreibweise (groß oder klein)

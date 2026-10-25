@@ -917,6 +917,17 @@ def lanr(value: str) -> bool:
     return (10 - _weighted_sum(digits[:6], (4, 9, 4, 9, 4, 9)) % 10) % 10 == digits[6]
 
 
+def aba_routing_number(value: str) -> bool:
+    """Port of ``validators::aba_routing_number`` (routing symbol 00–12/21–32/61–72/80, weights 3 7 1 mod 10)."""
+    digits = _grouped_digits(value, 9)
+    if digits is None or len(set(digits)) == 1:
+        return False
+    symbol = digits[0] * 10 + digits[1]
+    if not (symbol <= 12 or 21 <= symbol <= 32 or 61 <= symbol <= 72 or symbol == 80):
+        return False
+    return _weighted_sum(digits, (3, 7, 1) * 3) % 10 == 0
+
+
 _NRIC_SERIES = {"S": (0, "JZIHGFEDCBA"), "T": (4, "JZIHGFEDCBA"), "F": (0, "XWUTRQPNMLK"),
                 "G": (4, "XWUTRQPNMLK"), "M": (3, "XWUTRQPNJLK")}
 
@@ -1090,6 +1101,7 @@ CHECKSUM_PORTS: dict[str, Callable[[str], bool]] = {
     "fi_hetu": fi_hetu,
     "dk_cpr": dk_cpr,
     "no_fodselsnummer": no_fodselsnummer,
+    "aba_routing_number": aba_routing_number,
 }
 
 
