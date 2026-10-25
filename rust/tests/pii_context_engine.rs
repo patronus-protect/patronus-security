@@ -425,7 +425,9 @@ fn context_bound_rules_score_at_least_the_balanced_threshold_with_support() {
             "pii_tfn_au",
             "pii_medicare_au",
             "pii_nric_fin_sg",
-            "pii_uen_sg"
+            "pii_uen_sg",
+            "pii_physician_number_lanr_de_proximity",
+            "pii_facility_number_bsnr_de"
         ]
     );
     for pattern in bound {

@@ -431,26 +431,106 @@ pub fn de_tax_number(s: &str) -> bool {
     (10..=13).contains(&digits.len()) && !digits.iter().all(|digit| *digit == digits[0])
 }
 
+/// German pension insurance number (Rentenversicherungsnummer, VKVV § 4; B-DE1):
+/// area (two digits), birth day (01–31, or 51–81 with the supplementary mark),
+/// birth month (01–12), birth year, the initial of the birth name, a serial of two
+/// digits and the check digit. The check digit is the sum of the cross sums of the
+/// eleven digits, the letter as 01…26 after the eighth, weighted
+/// 2-1-2-5-7-1-2-1-2-1-2-1, mod 10. Spaces or tabs may group the value
+/// (`15 070649 C 103`); the letter may be lower case after a field name.
 pub fn de_social_security_number(s: &str) -> bool {
-    let normalized = s
-        .chars()
-        .filter(|ch| !ch.is_whitespace())
-        .collect::<String>();
-    normalized.len() == 12
-        && normalized[..8].chars().all(|ch| ch.is_ascii_digit())
-        && normalized[8..9].chars().all(|ch| ch.is_ascii_alphabetic())
-        && normalized[9..].chars().all(|ch| ch.is_ascii_digit())
+    let mut value = [0u8; 12];
+    let mut len = 0;
+    for byte in s.bytes().filter(|byte| !matches!(byte, b' ' | b'\t')) {
+        if len == value.len() {
+            return false;
+        }
+        value[len] = byte;
+        len += 1;
+    }
+    if len != value.len()
+        || !value[8].is_ascii_alphabetic()
+        || !value
+            .iter()
+            .enumerate()
+            .all(|(index, byte)| index == 8 || byte.is_ascii_digit())
+    {
+        return false;
+    }
+    let digit = |index: usize| u32::from(value[index] - b'0');
+    let (day, month) = (digit(2) * 10 + digit(3), digit(4) * 10 + digit(5));
+    if !matches!(day, 1..=31 | 51..=81) || !(1..=12).contains(&month) {
+        return false;
+    }
+    let [tens, ones] = letter_digits(value[8]);
+    let digits = [
+        digit(0),
+        digit(1),
+        digit(2),
+        digit(3),
+        digit(4),
+        digit(5),
+        digit(6),
+        digit(7),
+        tens,
+        ones,
+        digit(9),
+        digit(10),
+    ];
+    weighted_cross_sum(&digits, &[2, 1, 2, 5, 7, 1, 2, 1, 2, 1, 2, 1]) % 10 == digit(11)
 }
 
+/// German health insurance number (Krankenversichertennummer, KVNR, § 290 SGB V;
+/// B-DE1): the initial of the birth name, eight digits and the check digit. The
+/// check digit is the sum of the cross sums of the letter as 01…26 and the eight
+/// digits, weighted 1-2-1-2…, mod 10. Nine zeros are never issued; the letter may
+/// be lower case after a field name.
 pub fn de_health_insurance_number(s: &str) -> bool {
-    s.len() == 10
-        && s[..1].chars().all(|ch| ch.is_ascii_alphabetic())
-        && s[1..].chars().all(|ch| ch.is_ascii_digit())
-        && !s[1..].chars().all(|ch| ch == '0')
+    let bytes = s.as_bytes();
+    if bytes.len() != 10
+        || !bytes[0].is_ascii_alphabetic()
+        || !bytes[1..].iter().all(u8::is_ascii_digit)
+        || bytes[1..].iter().all(|&byte| byte == b'0')
+    {
+        return false;
+    }
+    let mut digits = [0; 10];
+    digits[..2].copy_from_slice(&letter_digits(bytes[0]));
+    for (digit, byte) in digits[2..].iter_mut().zip(&bytes[1..9]) {
+        *digit = u32::from(byte - b'0');
+    }
+    weighted_cross_sum(&digits, &[1, 2, 1, 2, 1, 2, 1, 2, 1, 2]) % 10 == u32::from(bytes[9] - b'0')
 }
 
+/// The alphabet position of an ASCII letter as two digits (`A` = 0 1 … `Z` = 2 6),
+/// the way the KVNR and the pension insurance number weigh their letter.
+fn letter_digits(letter: u8) -> [u32; 2] {
+    let position = u32::from(letter.to_ascii_uppercase() - b'A' + 1);
+    [position / 10, position % 10]
+}
+
+/// Sum of the cross sums of `digits` times `weights`, pairwise.
+fn weighted_cross_sum(digits: &[u32], weights: &[u32]) -> u32 {
+    digits
+        .iter()
+        .zip(weights)
+        .map(|(digit, weight)| {
+            let product = digit * weight;
+            product / 10 + product % 10
+        })
+        .sum()
+}
+
+/// Lifelong physician number (Lebenslange Arztnummer, LANR, KBV Arztnummern-
+/// Richtlinie; B-DE1): six digits of the physician, the check digit and two digits
+/// of the specialty group. The check digit complements the sum of the six digits,
+/// weighted 4-9-4-9-4-9, to the next multiple of ten. One repeated digit passes the
+/// check but is never issued.
 pub fn lanr(s: &str) -> bool {
-    s.len() == 9 && s.chars().all(|ch| ch.is_ascii_digit()) && !s.chars().all(|ch| ch == '0')
+    grouped_digits::<9>(s).is_some_and(|digits| {
+        !one_repeated_digit(&digits)
+            && (10 - weighted_sum(&digits[..6], &[4, 9, 4, 9, 4, 9]) % 10) % 10 == digits[6]
+    })
 }
 
 pub fn de_document_number(s: &str) -> bool {
@@ -582,9 +662,10 @@ pub fn it_driver_license_number(s: &str) -> bool {
     card || paper
 }
 
-/// UK passport number (B-UK): nine digits, as HM Passport Office numbers the 2015
-/// and later designs (`925665416`). No check digit; one repeated digit is no number.
-pub fn uk_passport_number(s: &str) -> bool {
+/// Nine digits, not one repeated digit: the form of a UK passport number (B-UK), as
+/// HM Passport Office numbers the 2015 and later designs (`925665416`), and of a BSNR
+/// (B-DE1, `721234567`). Neither carries a check digit.
+pub fn nine_digits(s: &str) -> bool {
     let bytes = s.as_bytes();
     bytes.len() == 9
         && bytes.iter().all(u8::is_ascii_digit)

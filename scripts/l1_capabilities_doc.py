@@ -107,10 +107,68 @@ def _pii_default(rules: list[dict]) -> str:
     return "on"
 
 
-def _f1_cell(values: dict | None) -> str:
+NOT_MEASURED = "–"
+NO_GOLD = "no gold"
+PLANNED = "planned / not implemented"
+PII_FAMILIES = ["neutral", "presidio_favored", "ark_authored"]
+DLP_TOOL_NAMES = {"ark": "ARK", "gitleaks": "gitleaks", "trufflehog": "TruffleHog", "detect-secrets": "detect-secrets"}
+
+
+def _engine(name: str) -> str:
+    """Report engine key of a display name (`Presidio tuned` -> `presidio-tuned`)."""
+    return name.strip().lower().replace(" ", "-")
+
+
+def pii_gold_cell(entry: dict | None) -> str:
+    if not entry:
+        return NOT_MEASURED
+    return " / ".join(str(entry.get(family, {}).get("gold", 0)) for family in PII_FAMILIES)
+
+
+def pii_f1_cell(entry: dict | None, family: str, ark_engine: str, baseline_engine: str) -> str:
+    """`ARK x / Presidio y` (exact F1), `no gold`, or `–` for an id outside the measurement."""
+    values = (entry or {}).get(family)
     if not values:
-        return "–"
-    return f"{values['ark']:.1f} vs {values['presidio']:.1f}"
+        return NOT_MEASURED
+    if not values.get("gold"):
+        return NO_GOLD
+    f1 = values["f1"]
+    return f"ARK {f1[ark_engine]:.1f} / Presidio {f1[baseline_engine]:.1f}"
+
+
+def dlp_cell(entry: dict | None, metric: str = "f1") -> str:
+    """`ARK x / best baseline y (name)`, `ARK x (opt-in profile)`, `no gold` or `–`."""
+    if entry is None:
+        return NOT_MEASURED
+    if not entry.get("gold"):
+        return NO_GOLD
+    if "extended" in entry:
+        return f"ARK {entry['extended']['ark'][metric]:.1f} (opt-in profile)"
+    default = entry["default"]
+    ark = f"ARK {default['ark'][metric]:.1f}"
+    baselines = [(values[metric], tool) for tool, values in default.items() if tool != "ark"]
+    if not baselines:
+        return f"{ark} / no baseline"
+    best = max(value for value, _ in baselines)
+    names = ", ".join(DLP_TOOL_NAMES.get(tool, tool) for value, tool in baselines if value == best)
+    return f"{ark} / best baseline {best:.1f} ({names})"
+
+
+def dlp_gold_cell(entry: dict | None) -> str:
+    if entry is None:
+        return NOT_MEASURED
+    if entry.get("level") == "document":
+        return f"{entry['gold']} documents"
+    return str(entry["gold"])
+
+
+def _baseline_rules(entity: dict) -> str:
+    parts = [
+        f"{name}: {_code(entity.get(key))}"
+        for key, name in (("gitleaks", "gitleaks"), ("trufflehog", "TruffleHog"), ("detect_secrets", "detect-secrets"))
+        if entity.get(key)
+    ]
+    return "; ".join(parts) or "–"
 
 
 def _met(flag: bool) -> str:
@@ -201,22 +259,20 @@ def generate(
         "(NER entities; L1 never reports them, see [Dynamic PII](configuration.md#dynamic-pii)). "
         "Check: the strongest validator of the entity's rules (`checksum`: check digits computed; "
         "`format`: length, alphabet, range or date; `pattern`: regex shape only; `context`: regex shape "
-        "plus a field name or nearby term). "
-        f"F1 is ARK vs Presidio tuned in `{pii['decision_mode']}` on the {splits} split, measured {date}, "
-        "and listed where the milestone report names it.",
+        "plus a field name or nearby term).",
         "",
-        "| Benchmark id | Scope | ARK label(s) | Rule ID(s) | Check | Default | Presidio entities | F1 neutral | F1 presidio_favored |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+        "### Coverage",
+        "",
+        "| Benchmark id | Scope | ARK label(s) | Rule ID(s) | Check | Default | Presidio entities |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
     ])
     for scope in SCOPE_ORDER_PII:
         for entity in (e for e in entities if e["scope"] == scope):
             rules = [rule for label in entity.get("ark") or [] for rule in pii_by_label.get(label, [])]
-            f1 = pii["entities"].get(entity["id"], {})
             lines.append(
                 f"| `{entity['id']}` | {scope} | {_code(entity.get('ark'))} "
                 f"| {_code([rule['id'] for rule in rules])} | {_pii_check(rules) if rules else '–'} "
-                f"| {_pii_default(rules)} | {_code(entity.get('presidio'))} "
-                f"| {_f1_cell(f1.get('neutral'))} | {_f1_cell(f1.get('presidio_favored'))} |"
+                f"| {_pii_default(rules)} | {_code(entity.get('presidio'))} |"
             )
     counts = {scope: sum(e["scope"] == scope for e in entities) for scope in SCOPE_ORDER_PII}
     lines.extend([
@@ -224,6 +280,39 @@ def generate(
         f"Entities: {counts['shared']} shared, {counts['ark_only']} ARK only, "
         f"{counts['presidio_only']} Presidio only, {counts['semantic']} semantic. Hard-negative false "
         f"positives ({date}): ARK {pii['hard_negative_fp']['ark']}, Presidio {pii['hard_negative_fp']['presidio']}.",
+    ])
+
+    ark_engine, baseline_engine = f"ark-{pii['decision_mode']}", _engine(pii["baseline"])
+    measured = pii["entities"]
+    lines.extend([
+        "",
+        "### F1 per entity",
+        "",
+        f"Exact F1 in percent on the {splits} split, measured {date}, per source family: ARK in "
+        f"`{pii['decision_mode']}` vs {pii['baseline']}, over all rows of the family (EN and DE; M1 counts "
+        "EN rows only). Gold: gold spans in neutral / presidio_favored / ark_authored.",
+        "",
+        f"Legend: `ARK x / Presidio y` = exact F1 of both; `{NO_GOLD}` = measured, but the family has no "
+        f"gold span for the id; `{NOT_MEASURED}` = the id was not part of the measurement (added later, or "
+        "`semantic`).",
+        "",
+        "| Benchmark id | Scope | Gold | F1 neutral | F1 presidio_favored | F1 ark_authored ¹ |",
+        "| --- | --- | --- | --- | --- | --- |",
+    ])
+    for scope in SCOPE_ORDER_PII:
+        for entity in (e for e in entities if e["scope"] == scope):
+            entry = measured.get(entity["id"])
+            lines.append(
+                f"| `{entity['id']}` | {scope} | {pii_gold_cell(entry)} | "
+                + " | ".join(pii_f1_cell(entry, family, ark_engine, baseline_engine) for family in PII_FAMILIES)
+                + " |"
+            )
+    with_gold = sum(any(v.get("gold") for v in entry.values()) for entry in measured.values())
+    lines.extend([
+        "",
+        f"¹ `ark_authored` (ARK's own synthetic DE/EU goldset) is reported and decides no milestone. "
+        f"Measured ids: {len(measured)}, {with_gold} with gold in at least one family, "
+        f"{len(measured) - with_gold} without gold.",
     ])
 
     # ── DLP ──
@@ -236,23 +325,33 @@ def generate(
         "### Groups",
         "",
         "Credential/secret groups are on by default; business identifiers, metrics and content classes "
-        "are opt-in per rule. Group F1 is the default profile on the "
-        f"{splits} split, measured {date}.",
+        "are opt-in per rule. Exact F1 in percent on the "
+        f"{splits} split, measured {date}: default-on groups in the {dlp['decision_profile']} profile against "
+        "the best of " + ", ".join(DLP_TOOL_NAMES[tool] for tool in dlp["tools"] if tool != "ark")
+        + f"; default-off groups with their rules switched on (ARK's `{dlp['opt_in_profile']}` profile, "
+        "marked `opt-in profile`; no baseline has these classes). Content classes are judged per document "
+        "on external corpora.",
         "",
-        "| Result label | Family | Default | Rules | Entities | F1 |",
-        "| --- | --- | --- | --- | --- | --- |",
+        f"Legend: `ARK x / best baseline y (name)` = exact F1 of ARK and of the best baseline; `{NO_GOLD}` = "
+        f"measured, but no gold for it; `{NOT_MEASURED}` = not part of the measurement; `{PLANNED}` = "
+        "planned class without rules.",
+        "",
+        "| Result label | Family | Default | Rules | Entities | Gold | F1 |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
     ])
     groups = list(dict.fromkeys(list(taxonomy) + dlp_labels))
     for group in groups:
         family = (taxonomy.get(group) or {}).get("family", "–")
-        if (taxonomy.get(group) or {}).get("planned"):
+        planned = (taxonomy.get(group) or {}).get("planned")
+        if planned:
             family += " (planned)"
         rule_count = sum(rule["entity_group"] == group for rule in dlp_rules)
         entity_count = sum(e.get("group") == group and e["scope"] in ("shared", "ark_only") for e in dlp_entities)
-        f1 = dlp["group_f1"].get(group)
+        entry = dlp["groups"].get(group)
         lines.append(
             f"| `{group}` | {family} | {'on' if group in credential_groups else 'off'} | {rule_count} "
-            f"| {entity_count} | {f'{f1:.1f}' if f1 is not None else '–'} |"
+            f"| {entity_count} | {PLANNED if planned and not rule_count else dlp_gold_cell(entry)} "
+            f"| {PLANNED if planned and not rule_count else dlp_cell(entry)} |"
         )
 
     lines.extend([
@@ -262,10 +361,13 @@ def generate(
         "One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and at least one "
         "baseline), `ark_only`, `baseline_only` (a gap in ARK L1), `out_of_scope` (action or policy "
         "rules, not a secret value). Structure check: the strongest `validator_strength` of the "
-        "entity's rules (`checksum`, `structure`: decoded or parsed, `format`, `none`).",
+        "entity's rules (`checksum`, `structure`: decoded or parsed, `format`, `none`). Baseline rules: "
+        "the gitleaks, TruffleHog and detect-secrets rules mapped to the entity.",
         "",
-        "| Entity | Scope | Group | Rule ID(s) | Structure check | Default | gitleaks | TruffleHog | detect-secrets |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+        "#### Coverage",
+        "",
+        "| Entity | Scope | Group | Rule ID(s) | Structure check | Default | Baseline rules |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
     ])
     relationship_defaults = {rule_id: default for rule_id, _, default in relationship_rules}
     for scope in SCOPE_ORDER_DLP:
@@ -281,14 +383,44 @@ def generate(
                 default = "–"
             lines.append(
                 f"| `{entity['id']}` | {scope} | {_code([entity['group']] if entity.get('group') else [])} "
-                f"| {_code(ark)} | {check} | {default} | {_code(entity.get('gitleaks'))} "
-                f"| {_code(entity.get('trufflehog'))} | {_code(entity.get('detect_secrets'))} |"
+                f"| {_code(ark)} | {check} | {default} | {_baseline_rules(entity)} |"
             )
     dlp_counts = {scope: sum(e["scope"] == scope for e in dlp_entities) for scope in SCOPE_ORDER_DLP}
     lines.extend([
         "",
         f"Entities: {dlp_counts['shared']} shared, {dlp_counts['ark_only']} ARK only, "
         f"{dlp_counts['baseline_only']} baseline only, {dlp_counts['out_of_scope']} out of scope.",
+    ])
+
+    measured_dlp = dlp["entities"]
+    lines.extend([
+        "",
+        "#### F1 and recall per entity",
+        "",
+        f"Exact F1 and recall in percent on the {splits} split, measured {date}; same cells and legend as the "
+        "group table (M1 judges recall). A baseline counts for an entity when it reported a typed span for it. "
+        "`out_of_scope` entities are not measured and not listed.",
+        "",
+        "| Entity | Scope | Group | Gold | F1 | Recall |",
+        "| --- | --- | --- | --- | --- | --- |",
+    ])
+    for scope in SCOPE_ORDER_DLP[:-1]:
+        for entity in (e for e in dlp_entities if e["scope"] == scope):
+            group = entity.get("group")
+            if (taxonomy.get(group or "") or {}).get("planned") and not entity.get("ark"):
+                gold = f1_cell = recall_cell = PLANNED
+            else:
+                entry = measured_dlp.get(entity["id"])
+                gold, f1_cell, recall_cell = dlp_gold_cell(entry), dlp_cell(entry), dlp_cell(entry, "recall")
+            lines.append(
+                f"| `{entity['id']}` | {scope} | {_code([group] if group else [])} | {gold} | {f1_cell} "
+                f"| {recall_cell} |"
+            )
+    dlp_with_gold = sum(bool(entry.get("gold")) for entry in measured_dlp.values())
+    lines.extend([
+        "",
+        f"Measured entities: {len(measured_dlp)}, {dlp_with_gold} with gold, "
+        f"{len(measured_dlp) - dlp_with_gold} without gold.",
     ])
 
     # ── Latency ──

@@ -22,6 +22,7 @@ PII_LABELS = {
     "DRIVER_LICENSE_NUMBER",
     "EMAIL",
     "EMPLOYEE_ID",
+    "FACILITY_NUMBER_BSNR",
     "FINANCIAL_ACCOUNT_NUMBER",
     "HEALTH_INSURANCE_NUMBER",
     "IBAN",
@@ -353,18 +354,21 @@ class SecondaryEntityGoldTests(unittest.TestCase):
 
 
 class DynamicPiiChecksumGoldTests(unittest.TestCase):
-    def test_only_checksum_invalid_card_numbers_are_marked(self):
-        # Luhn validity of each marked value is checked against the Rust validator in
-        # rust/examples/12_l1_pii_fixture_eval.rs; the L1 evaluation skips marked spans.
+    def test_only_checksum_invalid_card_and_health_insurance_numbers_are_marked(self):
+        # The validity of each marked value is checked against the Rust validator (Luhn,
+        # KVNR since B-DE1) in rust/examples/12_l1_pii_fixture_eval.rs; the L1 evaluation
+        # skips marked spans.
         marked = [
             entity
             for row in load("dynamic_pii")
             for entity in row["entities"]
             if "checksum_valid" in entity
         ]
-        self.assertEqual(len(marked), 7)
+        self.assertEqual(
+            sorted(entity["label"] for entity in marked),
+            ["credit_card"] * 7 + ["health_insurance_number"],
+        )
         for entity in marked:
-            self.assertEqual(entity["label"], "credit_card")
             self.assertIs(entity["checksum_valid"], False)
 
 

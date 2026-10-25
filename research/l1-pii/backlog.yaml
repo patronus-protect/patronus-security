@@ -357,6 +357,44 @@ tasks:
       Convention in research/l1-pii/README.md; gold and validator consistent with it; presidio_favored IP
       F1 >= tuned in balanced
 
+  - id: GOLD-VAT1
+    title: "Gold for VAT IDs without gold, part 1: AT, BE, BG, CH, CY, CZ, DK, EE, ES, FI, FR, GR, HR, HU"
+    type: eval-infra
+    deps: []
+    source: "Gold/quality pass 2026-10-25 (capabilities page, snapshot 2026-10-24)"
+    accept: >-
+      Synthetic gold for entities that are implemented but have no gold in any source family. Per id: >= 
+      10 positives (DE + EN carriers: prose, form/key-value, JSON, CSV), >= 5 hard negatives 
+      (checksum-invalid, wrong length, look-alike numbers), generated with checksum-valid values by the 
+      E05 synthetic goldset generator (family ark_authored; new dev and holdout seeds, never real data). 
+      The next measurement shows gold > 0 for every listed id. Ids: pii.<cc>.vat_id for AT, BE, BG, CH, 
+      CY, CZ, DK, EE, ES, FI, FR, GR, HR, HU.
+
+  - id: GOLD-VAT2
+    title: "Gold for VAT IDs without gold, part 2: IE, LT, LU, LV, MT, NL, NO, PL, PT, RO, SE, SI, SK, UK"
+    type: eval-infra
+    deps: [GOLD-VAT1]
+    source: "Gold/quality pass 2026-10-25 (capabilities page, snapshot 2026-10-24)"
+    accept: >-
+      Synthetic gold for entities that are implemented but have no gold in any source family. Per id: >= 
+      10 positives (DE + EN carriers: prose, form/key-value, JSON, CSV), >= 5 hard negatives 
+      (checksum-invalid, wrong length, look-alike numbers), generated with checksum-valid values by the 
+      E05 synthetic goldset generator (family ark_authored; new dev and holdout seeds, never real data). 
+      The next measurement shows gold > 0 for every listed id. Ids: pii.<cc>.vat_id for IE, LT, LU, LV, 
+      MT, NL, NO, PL, PT, RO, SE, SI, SK, UK.
+
+  - id: Q-DE
+    title: "Quality: German IDs at F1 0 on presidio_favored (health insurance number, LANR, social security number, tax ID, tax number) and DE VAT ID 75"
+    type: precision-fix
+    deps: []
+    source: "Gold/quality pass 2026-10-25 (capabilities page, snapshot 2026-10-24)"
+    accept: >-
+      Analyse why presidio_favored gold for these ids is missed (formats, separators, context) and fix the 
+      rules. Quality floor (decided 2026-10-25): every listed entity reaches exact F1 >= 80 in balanced on 
+      every source family where it has gold (snapshot research/scoreboard/*.json); strict shows no 
+      regression; validators are never loosened; an entity that cannot reach 80 by a recorded decision is 
+      documented in the README
+
   # M1 IBAN (presidio_favored 63.9 vs 100; 35 of 66 FN are grouped non-DE IBAN)
   - id: B-IBAN
     title: "IBAN: grouped and lowercase variants for all countries in strict, length per country from the SWIFT IBAN registry, SEPA creditor IDs are no IBAN"
@@ -460,6 +498,17 @@ tasks:
       A07 scope plus baseline C4 (NINO variants, invalid prefixes stay negative, validator not relaxed);
       presidio_favored NINO and driver's licence F1 >= tuned in balanced; count_validated.py count rises by 1
 
+  - id: Q-ID
+    title: "Quality: driver licence 37/53/72, passport 38/34/77, identity card 43/78, UK NINO 67 (neutral/presidio_favored/ark_authored)"
+    type: recall-fix
+    deps: [B-PASS, B-UK]
+    source: "Gold/quality pass 2026-10-25 (capabilities page, snapshot 2026-10-24)"
+    accept: >-
+      Quality floor (decided 2026-10-25): every listed entity reaches exact F1 >= 80 in balanced on every 
+      source family where it has gold (snapshot research/scoreboard/*.json); strict shows no regression; 
+      validators are never loosened; an entity that cannot reach 80 by a recorded decision is documented 
+      in the README
+
   # M3 +6 (42)
   - id: B-APAC
     status: done
@@ -483,6 +532,7 @@ tasks:
 
   # M3 +3 (45)
   - id: B-DE1
+    status: done
     title: "DE check digits: KVNR, pension insurance number (RVNR), LANR (+ BSNR format)"
     type: precision-fix
     deps: [K02, K05]
@@ -502,6 +552,17 @@ tasks:
       (JSON keys, CSV headers, key-value); neutral account number F1 >= tuned in balanced; username and
       customer/employee IDs (ark_only) must not regress; count_validated.py count rises by 1
 
+  - id: Q-FIN
+    title: "Quality: card PAN 48 (neutral), CVV 0/68, expiry 0, IBAN 64/68, SWIFT/BIC 39/35, financial account number 8/0/72"
+    type: recall-fix
+    deps: [B-IBAN, B-ACCT]
+    source: "Gold/quality pass 2026-10-25 (capabilities page, snapshot 2026-10-24)"
+    accept: >-
+      Quality floor (decided 2026-10-25): every listed entity reaches exact F1 >= 80 in balanced on every 
+      source family where it has gold (snapshot research/scoreboard/*.json); strict shows no regression; 
+      validators are never loosened; an entity that cannot reach 80 by a recorded decision is documented 
+      in the README
+
   # M3 +4 (50)
   - id: B-EU1
     title: "FR NIR (mod 97) + SIREN/SIRET (Luhn), NL BSN (11-proof), BE national register number (mod 97)"
@@ -520,6 +581,17 @@ tasks:
     accept: >-
       T06 and T23 accept in full; IDN TLDs (xn--) inside the span (P7); IANA TLD list only if it keeps
       the T01 placeholder TLDs positive; neutral and presidio_favored email F1 >= tuned in balanced
+
+  - id: Q-CONTACT
+    title: "Quality: email 67 (neutral), phone 69 (presidio_favored), username 9/35, customer ID 47, employee ID 79, date of birth 67/71"
+    type: recall-fix
+    deps: [B-EMAIL]
+    source: "Gold/quality pass 2026-10-25 (capabilities page, snapshot 2026-10-24)"
+    accept: >-
+      Quality floor (decided 2026-10-25): every listed entity reaches exact F1 >= 80 in balanced on every 
+      source family where it has gold (snapshot research/scoreboard/*.json); strict shows no regression; 
+      validators are never loosened; an entity that cannot reach 80 by a recorded decision is documented 
+      in the README
 
   # M3 +3 (53)
   - id: B-NORD

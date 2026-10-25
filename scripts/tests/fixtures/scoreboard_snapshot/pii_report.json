@@ -1,0 +1,17 @@
+{
+  "schema": "ark-l1-scoreboard-v1",
+  "scopes": {"pii.email": "shared", "pii.iban": "shared", "pii.us.itin": "shared"},
+  "engines": {
+    "ark-balanced": {"buckets": {
+      "family/neutral": {"gold": 10, "predicted": 8, "exact": 6, "gold_found": 6, "predicted_correct": 6},
+      "family/presidio_favored": {"gold": 4, "predicted": 4, "exact": 4, "gold_found": 4, "predicted_correct": 4},
+      "family_entity/neutral/pii.email": {"gold": 10, "predicted": 8, "exact": 6, "gold_found": 6, "predicted_correct": 6},
+      "family_entity/presidio_favored/pii.iban": {"gold": 4, "predicted": 4, "exact": 4, "gold_found": 4, "predicted_correct": 4},
+      "family_entity/ark_authored/pii.iban": {"gold": 0, "predicted": 2, "exact": 0, "gold_found": 0, "predicted_correct": 0}
+    }},
+    "presidio-tuned": {"buckets": {
+      "family/neutral": {"gold": 10, "predicted": 10, "exact": 5, "gold_found": 5, "predicted_correct": 5},
+      "family_entity/neutral/pii.email": {"gold": 10, "predicted": 10, "exact": 5, "gold_found": 5, "predicted_correct": 5}
+    }}
+  }
+}

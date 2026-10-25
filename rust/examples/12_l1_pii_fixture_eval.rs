@@ -323,33 +323,40 @@ mod tests {
         );
     }
 
-    /// T02: the fixture also feeds L3 NER, so Luhn-invalid card numbers stay in it but
-    /// carry `"checksum_valid": false`; a mark on a valid number would hide a real FN.
+    /// T02: the fixture also feeds L3 NER, so values with a wrong check digit stay in
+    /// it but carry `"checksum_valid": false` (Luhn-invalid cards, B-DE1: a KVNR whose
+    /// check digit fails); a mark on a valid number would hide a real FN.
     #[test]
-    fn bundled_fixture_marks_exactly_the_luhn_invalid_cards() {
+    fn bundled_fixture_marks_exactly_the_checksum_invalid_values() {
         let path = concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/../python/patronus_ark/benchmark_data/dynamic_pii.jsonl"
         );
         let content = std::fs::read_to_string(path).expect("fixture");
-        let mut cards = 0;
+        let mut checked = BTreeSet::new();
         for line in content.lines() {
             let row: serde_json::Value = serde_json::from_str(line).expect("fixture row");
             for entity in row["entities"].as_array().expect("entities") {
-                if entity["label"] != "credit_card" {
-                    continue;
-                }
-                cards += 1;
+                let label = entity["label"].as_str().expect("entity label");
+                let validator: fn(&str) -> bool = match label {
+                    "credit_card" => patronus_ark::detectors::pii::validators::luhn,
+                    "health_insurance_number" => {
+                        patronus_ark::detectors::pii::validators::de_health_insurance_number
+                    }
+                    _ => {
+                        assert!(entity.get("checksum_valid").is_none(), "{}", row["id"]);
+                        continue;
+                    }
+                };
+                checked.insert(label.to_owned());
                 let value = entity["text"].as_str().expect("entity text");
                 let marked_invalid = entity["checksum_valid"] == false;
-                assert_eq!(
-                    marked_invalid,
-                    !patronus_ark::detectors::pii::validators::luhn(value),
-                    "{} {value}",
-                    row["id"]
-                );
+                assert_eq!(marked_invalid, !validator(value), "{} {value}", row["id"]);
             }
         }
-        assert!(cards > 0, "fixture must keep credit_card spans");
+        assert!(
+            checked.len() == 2,
+            "fixture must keep credit_card and health_insurance_number spans"
+        );
     }
 }

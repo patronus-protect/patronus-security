@@ -400,6 +400,9 @@ fn checksum_strength_is_reserved_for_real_check_digits() {
             "pii_credit_card",
             "pii_steuer_id_de",
             "pii_steuer_id_de_context_free",
+            "pii_rentenversicherung_de",
+            "pii_health_insurance_number_de",
+            "pii_physician_number_lanr_de",
             "pii_nhs_number_uk",
             "pii_vat_id_de",
             "pii_vat_id_at",
@@ -445,7 +448,10 @@ fn checksum_strength_is_reserved_for_real_check_digits() {
             "pii_nric_fin_sg",
             "pii_nric_fin_sg_context_free",
             "pii_uen_sg",
-            "pii_uen_sg_context_free"
+            "pii_uen_sg_context_free",
+            "pii_rentenversicherung_de_context_free",
+            "pii_health_insurance_number_de_context_free",
+            "pii_physician_number_lanr_de_proximity"
         ]
     );
 }
@@ -464,6 +470,12 @@ fn reference_scores_per_rule() {
         ("pii_steuer_id_de", 1.00),
         ("pii_steuer_id_de_context_free", 0.55),
         ("pii_rentenversicherung_de", 0.90),
+        ("pii_rentenversicherung_de_context_free", 0.55),
+        ("pii_health_insurance_number_de", 0.85),
+        ("pii_health_insurance_number_de_context_free", 0.55),
+        ("pii_physician_number_lanr_de", 0.70),
+        ("pii_physician_number_lanr_de_proximity", 0.55),
+        ("pii_facility_number_bsnr_de", 0.35),
         ("pii_kfz_kennzeichen_de", 0.65),
         ("pii_ssn_us", 0.85),
         ("pii_ssn_us_context_free", 0.50),
@@ -507,6 +519,24 @@ fn checksum_vectors_decide_emission_in_every_mode() {
             "Steuer-ID: 86095742718",
             "STEUERID",
             validators::steuer_id,
+        ),
+        (
+            "Sozialversicherungsnummer: 15070649C103",
+            "Sozialversicherungsnummer: 15070649C100",
+            "SOCIALID",
+            validators::de_social_security_number,
+        ),
+        (
+            "Versichertennummer: A123456780",
+            "Versichertennummer: A123456789",
+            "HEALTH_INSURANCE_NUMBER",
+            validators::de_health_insurance_number,
+        ),
+        (
+            "LANR: 123456601",
+            "LANR: 123456789",
+            "PHYSICIAN_NUMBER_LANR",
+            validators::lanr,
         ),
     ] {
         let value = |text: &str| text.split_once(": ").unwrap().1.to_string();

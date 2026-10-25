@@ -59,6 +59,7 @@ pub static SUPPORT_LEXICON: &[(&str, &[&str])] = &[
     ("SOCIALID", &["pii.social_insurance_number"]),
     ("HEALTH_INSURANCE_NUMBER", &["pii.health_insurance_number"]),
     ("PHYSICIAN_NUMBER_LANR", &["pii.physician_number"]),
+    ("FACILITY_NUMBER_BSNR", &["pii.facility_number"]),
     ("PASSPORT_NUMBER", &["pii.passport"]),
     ("IDENTITY_CARD_NUMBER", &["pii.identity_card"]),
     ("DRIVER_LICENSE_NUMBER", &["pii.driver_license"]),

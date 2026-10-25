@@ -367,7 +367,14 @@ bare, in `balanced`/`recall` only and at `0.55`, the forms whose shape adds to t
 in 2-3-3-3 groups (`51 824 753 556`), a Medicare number in 4-5-1 groups (`2123 45670 1`), an
 uppercase NRIC/FIN (`S0642712Z`) and a UEN with a registration year or entity type (`201434292D`,
 `S57TU0392K`). ACN, TFN (`876 543 210`), the bare digit runs and a UEN of eight digits and a letter
-(`53125226D`) need the term in every mode. The field-bound rules keep
+(`53125226D`) need the term in every mode. German health care numbers (B-DE1) are reported only
+with their check digit, in every mode: the health insurance number (`HEALTH_INSURANCE_NUMBER`,
+KVNR, `A123456780`), the pension insurance number (`SOCIALID`, `15070649C103`, with a possible birth
+day and month) and the LANR (`PHYSICIAN_NUMBER_LANR`, `123456601`). In `balanced`/`recall` an
+uppercase KVNR and an RVNR (also `15 070649 C 103`) are reported bare at `0.55`; a LANR needs a term
+such as `Arztnummer` near it or as its key there. The BSNR (`FACILITY_NUMBER_BSNR`, nine digits, no
+check digit) needs a BSNR term or key (`BSNR`, `Betriebsstättennummer`, `practice number`) in every
+mode. The German document number rules keep
 their format check in every mode, since a printed nine-character serial carries no check digit. A context-bound rule (`pii_phone_de_national_proximity`: a national number such as
 `ist unter 0176 90817263 erreichbar`) reports only with a support term and no nearer counter term,
 in every mode including `strict`, and then scores at least `0.50`. Validators decide in every

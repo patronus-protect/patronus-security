@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! German national identifiers: phone numbers, Steuer-ID, Steuernummer, social and health
-//! insurance numbers, LANR, passport, identity card, vehicle registration. The driving
-//! licence lives in `driver_license` with the other licence formats.
+//! insurance numbers, LANR, BSNR, passport, identity card, vehicle registration. The
+//! driving licence lives in `driver_license` with the other licence formats.
 use super::{pii::PiiPattern, score::ValidatorStrength, validators};
 
 // ── Telefon ──────────────────────────────────────────────────────────────────
@@ -91,8 +91,8 @@ pub(super) const RENTENVERSICHERUNG: PiiPattern = PiiPattern {
     pattern: r"(?i)\b(?:sozialversicherungsnummer|rentenversicherungsnummer|sv[-_ \t]*nr|(?:german[ \t]+)?(?:pension[ \t]+insurance|social[ \t]+security)[ \t]+number)\b\.?\s*(?:is[ \t]*)?[:#=\-]?[ \t]*(?P<value>\d{2}[ \t]?\d{6}[ \t]?[A-Z][ \t]?\d{3})\b",
     entity_group: "SOCIALID",
     validator: Some(validators::de_social_security_number),
-    strength: ValidatorStrength::Format,
-    base_score: 50,
+    strength: ValidatorStrength::Checksum,
+    base_score: 30,
     captured_value: true,
     requires_context: false,
     scored_only: false,
@@ -103,8 +103,8 @@ pub(super) const HEALTH_INSURANCE_NUMBER: PiiPattern = PiiPattern {
     pattern: r"(?i)\b(?:versichertennummer|krankenversicherungsnummer|kvnr|health[ \t]+insurance[ \t]+number)\b[ \t]*(?:is[ \t]*)?[:#=\-]?[ \t]*(?P<value>[A-Z]\d{9})\b",
     entity_group: "HEALTH_INSURANCE_NUMBER",
     validator: Some(validators::de_health_insurance_number),
-    strength: ValidatorStrength::Format,
-    base_score: 45,
+    strength: ValidatorStrength::Checksum,
+    base_score: 25,
     captured_value: true,
     requires_context: false,
     scored_only: false,
@@ -115,10 +115,72 @@ pub(super) const PHYSICIAN_NUMBER_LANR: PiiPattern = PiiPattern {
     pattern: r"(?i)\b(?:lanr|lebenslange[ \t]+arztnummer|(?:lifelong[ \t]+)?physician[ \t]+number)\b[ \t]*(?:is[ \t]*)?[:#=\-]?[ \t]*(?P<value>\d{9})\b",
     entity_group: "PHYSICIAN_NUMBER_LANR",
     validator: Some(validators::lanr),
-    strength: ValidatorStrength::Format,
-    base_score: 30,
+    strength: ValidatorStrength::Checksum,
+    base_score: 10,
     captured_value: true,
     requires_context: false,
+    scored_only: false,
+};
+
+/// A bare pension insurance number with its VKVV check digit and birth date, in
+/// `balanced` and `recall` only (B-DE1, K05): twelve characters (`15070649C103`) or
+/// the printed groups 2-6-1-3 (`15 070649 C 103`), the letter in upper case. Strict
+/// keeps the field name of [`RENTENVERSICHERUNG`].
+pub(super) const RENTENVERSICHERUNG_CONTEXT_FREE: PiiPattern = PiiPattern {
+    name: "pii_rentenversicherung_de_context_free",
+    pattern: r"(?-u:\b)[0-9]{2}(?:[0-9]{6}[A-Z][0-9]{3}| [0-9]{6} [A-Z] [0-9]{3})(?-u:\b)",
+    entity_group: "SOCIALID",
+    validator: Some(validators::de_social_security_number),
+    strength: ValidatorStrength::Checksum,
+    base_score: 20,
+    captured_value: false,
+    requires_context: false,
+    scored_only: true,
+};
+
+/// A bare health insurance number (`A123456780`) with its check digit, in
+/// `balanced` and `recall` only (B-DE1, K05), the letter in upper case. A mod-10
+/// digit fits one in ten letter-led codes: a field that names another value keeps
+/// it silent, as for the bare document numbers (F08).
+pub(super) const HEALTH_INSURANCE_NUMBER_CONTEXT_FREE: PiiPattern = PiiPattern {
+    name: "pii_health_insurance_number_de_context_free",
+    pattern: r"(?-u:\b)[A-Z][0-9]{9}(?-u:\b)",
+    entity_group: "HEALTH_INSURANCE_NUMBER",
+    validator: Some(validators::de_health_insurance_number),
+    strength: ValidatorStrength::Checksum,
+    base_score: 20,
+    captured_value: false,
+    requires_context: false,
+    scored_only: true,
+};
+
+/// A LANR with a LANR term near it or as its key, without the field name right
+/// before it (`Arztnummer 987654401 auf dem Rezept`), in `balanced` and `recall`
+/// only (B-DE1). Nine bare digits pass its mod-10 check one time in ten: never bare.
+pub(super) const PHYSICIAN_NUMBER_LANR_PROXIMITY: PiiPattern = PiiPattern {
+    name: "pii_physician_number_lanr_de_proximity",
+    pattern: r"(?-u:\b)[0-9]{9}(?-u:\b)",
+    entity_group: "PHYSICIAN_NUMBER_LANR",
+    validator: Some(validators::lanr),
+    strength: ValidatorStrength::Checksum,
+    base_score: 20,
+    captured_value: false,
+    requires_context: true,
+    scored_only: true,
+};
+
+/// Betriebsstättennummer (BSNR, B-DE1): nine digits, the first two the region of the
+/// Kassenärztliche Vereinigung, without a check digit. Reported in every mode with a
+/// BSNR term near the value or as its key.
+pub(super) const FACILITY_NUMBER_BSNR: PiiPattern = PiiPattern {
+    name: "pii_facility_number_bsnr_de",
+    pattern: r"(?-u:\b)[0-9]{9}(?-u:\b)",
+    entity_group: "FACILITY_NUMBER_BSNR",
+    validator: Some(validators::nine_digits),
+    strength: ValidatorStrength::Format,
+    base_score: 20,
+    captured_value: false,
+    requires_context: true,
     scored_only: false,
 };
 

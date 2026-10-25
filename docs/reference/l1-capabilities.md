@@ -11,10 +11,10 @@ What ARK L1 detects (PII and DLP), how it compares with Presidio and the secret 
 
 | | PII | DLP |
 | --- | --- | --- |
-| Result labels (entity groups) | 65 | 23 |
-| Regex rules | 96 | 64 (+5 relationship rules) |
-| Checksum-validated units (count rule T03) | 42 (Presidio 2.2.364: 35) | – |
-| Rules with a `checksum` or `structure` check | 51 | 6 |
+| Result labels (entity groups) | 66 | 23 |
+| Regex rules | 100 | 64 (+5 relationship rules) |
+| Checksum-validated units (count rule T03) | 45 (Presidio 2.2.364: 35) | – |
+| Rules with a `checksum` or `structure` check | 57 | 6 |
 | Default state | all rules on | credential/secret groups on, broader families opt-in |
 | Compared with | Presidio 2.2.364 (tuned) | gitleaks 8.30.1, TruffleHog 3.97.9, detect-secrets 1.5.0 |
 | Overall F1 (2026-10-24) | `balanced`: neutral 63.2, presidio_favored 54.3 | default profile: 88.6 (P 99.3, R 80.0) |
@@ -35,335 +35,629 @@ What ARK L1 detects (PII and DLP), how it compares with Presidio and the secret 
 
 ## PII
 
-One row per benchmark entity of `research/l1-pii/entity_map.yaml`. Scope: `shared` (ARK and Presidio match it by pattern), `ark_only`, `presidio_only` (a gap in ARK L1), `semantic` (NER entities; L1 never reports them, see [Dynamic PII](configuration.md#dynamic-pii)). Check: the strongest validator of the entity's rules (`checksum`: check digits computed; `format`: length, alphabet, range or date; `pattern`: regex shape only; `context`: regex shape plus a field name or nearby term). F1 is ARK vs Presidio tuned in `balanced` on the dev split, measured 2026-10-24, and listed where the milestone report names it.
+One row per benchmark entity of `research/l1-pii/entity_map.yaml`. Scope: `shared` (ARK and Presidio match it by pattern), `ark_only`, `presidio_only` (a gap in ARK L1), `semantic` (NER entities; L1 never reports them, see [Dynamic PII](configuration.md#dynamic-pii)). Check: the strongest validator of the entity's rules (`checksum`: check digits computed; `format`: length, alphabet, range or date; `pattern`: regex shape only; `context`: regex shape plus a field name or nearby term).
 
-| Benchmark id | Scope | ARK label(s) | Rule ID(s) | Check | Default | Presidio entities | F1 neutral | F1 presidio_favored |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `pii.email` | shared | `EMAIL` | `pii_email` | pattern | on | `EMAIL_ADDRESS` | – | 93.8 vs 100.0 |
-| `pii.phone` | shared | `PHONE` | `pii_phone_international`, `pii_phone_de`, `pii_phone_de_national_context`, `pii_phone_de_national_proximity`, `pii_phone_us` | format | on | `PHONE_NUMBER` | – | – |
-| `pii.ip_address` | shared | `IP_ADDRESS` | `pii_ipv4`, `pii_ipv6_full`, `pii_ipv6_compressed`, `pii_ipv6_loopback` | format | on | `IP_ADDRESS` | 96.0 vs 92.2 | 84.9 vs 96.2 |
-| `pii.mac_address` | shared | `MAC_ADDRESS` | `pii_mac_address` | format | on | `MAC_ADDRESS` | – | – |
-| `pii.iban` | shared | `IBAN` | `pii_iban_de`, `pii_iban_generic` | checksum | on | `IBAN_CODE` | – | 63.9 vs 100.0 |
-| `pii.credit_card.pan` | shared | `CREDITCARD` | `pii_credit_card` | checksum | on | `CREDIT_CARD` | – | – |
-| `pii.financial_account_number` | shared | `FINANCIAL_ACCOUNT_NUMBER` | `pii_financial_account_number` | format | on | `US_BANK_NUMBER`, `ABA_ROUTING_NUMBER` | 1.8 vs 13.2 | – |
-| `pii.us.social_security_number` | shared | `SSN` | `pii_ssn_us`, `pii_ssn_us_proximity`, `pii_ssn_us_context_free` | format | on (1 of 3 rules `balanced`/`recall` only) | `US_SSN` | 54.5 vs 79.3 | 57.1 vs 88.9 |
-| `pii.uk.national_insurance_number` | shared | `NATIONALID` | `pii_ni_uk`, `pii_ni_uk_context_free` | format | on (1 of 2 rules `balanced`/`recall` only) | `UK_NINO` | – | 0.0 vs 100.0 |
-| `pii.de.tax_id` | shared | `STEUERID` | `pii_steuer_id_de`, `pii_steuer_id_de_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `DE_TAX_ID` | – | – |
-| `pii.de.tax_number` | shared | `TAX_NUMBER_DE` | `pii_steuernummer_de` | format | on | `DE_TAX_NUMBER` | – | – |
-| `pii.de.social_security_number` | shared | `SOCIALID` | `pii_rentenversicherung_de` | format | on | `DE_SOCIAL_SECURITY` | – | – |
-| `pii.de.health_insurance_number` | shared | `HEALTH_INSURANCE_NUMBER` | `pii_health_insurance_number_de` | format | on | `DE_HEALTH_INSURANCE` | – | – |
-| `pii.de.lanr` | shared | `PHYSICIAN_NUMBER_LANR` | `pii_physician_number_lanr_de` | format | on | `DE_LANR` | – | – |
-| `pii.uk.nhs_number` | shared | `NHS_NUMBER` | `pii_nhs_number_uk` | checksum | on | `UK_NHS` | – | – |
-| `pii.au.abn` | shared | `AU_ABN` | `pii_abn_au`, `pii_abn_au_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `AU_ABN` | – | – |
-| `pii.au.acn` | shared | `AU_ACN` | `pii_acn_au` | checksum | on | `AU_ACN` | – | – |
-| `pii.au.tfn` | shared | `AU_TFN` | `pii_tfn_au` | checksum | on | `AU_TFN` | – | – |
-| `pii.au.medicare` | shared | `AU_MEDICARE` | `pii_medicare_au`, `pii_medicare_au_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `AU_MEDICARE` | – | – |
-| `pii.sg.nric_fin` | shared | `SG_NRIC_FIN` | `pii_nric_fin_sg`, `pii_nric_fin_sg_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `SG_NRIC_FIN` | – | – |
-| `pii.sg.uen` | shared | `SG_UEN` | `pii_uen_sg`, `pii_uen_sg_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `SG_UEN` | – | – |
-| `entity.passport_number` | shared | `PASSPORT_NUMBER` | `pii_passport_number_de`, `pii_passport_number_uk`, `pii_passport_number_two_letters`, `pii_passport_number_de_context_free`, `pii_passport_number_de_legacy` | checksum | on (2 of 5 rules `balanced`/`recall` only) | `US_PASSPORT`, `UK_PASSPORT`, `DE_PASSPORT`, `ES_PASSPORT`, `IT_PASSPORT`, `IN_PASSPORT`, `KR_PASSPORT` | 48.0 vs 53.2 | 0.0 vs 40.0 |
-| `pii.identity_card_number` | shared | `IDENTITY_CARD_NUMBER` | `pii_identity_card_number_de`, `pii_identity_card_number_de_context_free`, `pii_identity_card_number_de_legacy` | checksum | on (2 of 3 rules `balanced`/`recall` only) | `DE_ID_CARD`, `IT_IDENTITY_CARD` | – | – |
-| `entity.driver_license_number` | shared | `DRIVER_LICENSE_NUMBER` | `pii_driver_license_number_de`, `pii_driver_license_number_us`, `pii_driver_license_number_it`, `pii_driver_license_number_uk`, `pii_driver_license_number_uk_context_free` | format | on (1 of 5 rules `balanced`/`recall` only) | `US_DRIVER_LICENSE`, `UK_DRIVING_LICENCE`, `DE_FUEHRERSCHEIN`, `IT_DRIVER_LICENSE`, `KR_DRIVER_LICENSE` | 43.9 vs 7.8 | 62.5 vs 90.0 |
-| `pii.de.vat_id` | shared | `VAT_ID_DE` | `pii_vat_id_de` | checksum | on (`balanced`/`recall` only) | `DE_VAT_ID` | – | – |
-| `pii.it.vat_code` | shared | `VAT_ID_IT` | `pii_vat_id_it`, `pii_vat_id_it_proximity` | checksum | on (`balanced`/`recall` only) | `IT_VAT_CODE` | – | – |
-| `pii.license_plate` | shared | `LICENSEPLATE` | `pii_kfz_kennzeichen_de` | context | on | `DE_KFZ`, `UK_VEHICLE_REGISTRATION`, `IN_VEHICLE_REGISTRATION`, `NG_VEHICLE_REGISTRATION`, `TR_LICENSE_PLATE` | – | – |
-| `pii.swift_bic` | ark_only | `SWIFT_CODE` | `pii_swift_bic_context` | format | on | – | – | – |
-| `pii.credit_card.cvv` | ark_only | `CREDITCARD_CVV` | `pii_credit_card_cvv` | format | on | – | – | – |
-| `pii.credit_card.expiry` | ark_only | `CREDITCARD_EXPIRY` | `pii_credit_card_expiry` | format | on | – | – | – |
-| `pii.date_of_birth` | ark_only | `DOB` | `pii_date_of_birth`, `pii_date_of_birth_written_day_first`, `pii_date_of_birth_written_month_first` | format | on | – | – | – |
-| `pii.employee_id` | ark_only | `EMPLOYEE_ID` | `pii_employee_id`, `pii_employee_id_ocr_field`, `pii_employee_id_prefixed` | format | on | – | – | – |
-| `pii.customer_id` | ark_only | `CUSTOMER_ID` | `pii_customer_id` | format | on | – | – | – |
-| `pii.patient_id` | ark_only | `PATIENT_ID` | `pii_patient_id` | format | on | – | – | – |
-| `pii.student_id` | ark_only | `STUDENT_ID` | `pii_student_id` | format | on | – | – | – |
-| `pii.applicant_id` | ark_only | `APPLICANT_ID` | `pii_applicant_id` | format | on | – | – | – |
-| `pii.username` | ark_only | `USERNAME` | `pii_username` | format | on | – | – | – |
-| `pii.at.vat_id` | ark_only | `VAT_ID_AT` | `pii_vat_id_at` | checksum | on (`balanced`/`recall` only) | – | – | – |
-| `pii.ch.vat_id` | ark_only | `VAT_ID_CH` | `pii_vat_id_ch` | checksum | on (`balanced`/`recall` only) | – | – | – |
-| `pii.fr.vat_id` | ark_only | `VAT_ID_FR` | `pii_vat_id_fr` | checksum | on (`balanced`/`recall` only) | – | – | – |
-| `pii.nl.vat_id` | ark_only | `VAT_ID_NL` | `pii_vat_id_nl` | checksum | on (`balanced`/`recall` only) | – | – | – |
-| `pii.be.vat_id` | ark_only | `VAT_ID_BE` | `pii_vat_id_be` | checksum | on (`balanced`/`recall` only) | – | – | – |
-| `pii.es.vat_id` | ark_only | `VAT_ID_ES` | `pii_vat_id_es` | checksum | on (`balanced`/`recall` only) | – | – | – |
-| `pii.bg.vat_id` | ark_only | `VAT_ID_BG` | `pii_vat_id_bg` | checksum | on (`balanced`/`recall` only) | – | – | – |
-| `pii.cy.vat_id` | ark_only | `VAT_ID_CY` | `pii_vat_id_cy` | checksum | on (`balanced`/`recall` only) | – | – | – |
-| `pii.cz.vat_id` | ark_only | `VAT_ID_CZ` | `pii_vat_id_cz` | checksum | on (`balanced`/`recall` only) | – | – | – |
-| `pii.dk.vat_id` | ark_only | `VAT_ID_DK` | `pii_vat_id_dk` | checksum | on (`balanced`/`recall` only) | – | – | – |
-| `pii.ee.vat_id` | ark_only | `VAT_ID_EE` | `pii_vat_id_ee` | checksum | on (`balanced`/`recall` only) | – | – | – |
-| `pii.gr.vat_id` | ark_only | `VAT_ID_EL` | `pii_vat_id_el` | checksum | on (`balanced`/`recall` only) | – | – | – |
-| `pii.fi.vat_id` | ark_only | `VAT_ID_FI` | `pii_vat_id_fi` | checksum | on (`balanced`/`recall` only) | – | – | – |
-| `pii.hr.vat_id` | ark_only | `VAT_ID_HR` | `pii_vat_id_hr` | checksum | on (`balanced`/`recall` only) | – | – | – |
-| `pii.hu.vat_id` | ark_only | `VAT_ID_HU` | `pii_vat_id_hu` | checksum | on (`balanced`/`recall` only) | – | – | – |
-| `pii.ie.vat_id` | ark_only | `VAT_ID_IE` | `pii_vat_id_ie` | checksum | on (`balanced`/`recall` only) | – | – | – |
-| `pii.lt.vat_id` | ark_only | `VAT_ID_LT` | `pii_vat_id_lt` | checksum | on (`balanced`/`recall` only) | – | – | – |
-| `pii.lu.vat_id` | ark_only | `VAT_ID_LU` | `pii_vat_id_lu` | checksum | on (`balanced`/`recall` only) | – | – | – |
-| `pii.lv.vat_id` | ark_only | `VAT_ID_LV` | `pii_vat_id_lv` | checksum | on (`balanced`/`recall` only) | – | – | – |
-| `pii.mt.vat_id` | ark_only | `VAT_ID_MT` | `pii_vat_id_mt` | checksum | on (`balanced`/`recall` only) | – | – | – |
-| `pii.pl.vat_id` | ark_only | `VAT_ID_PL` | `pii_vat_id_pl` | checksum | on (`balanced`/`recall` only) | – | – | – |
-| `pii.pt.vat_id` | ark_only | `VAT_ID_PT` | `pii_vat_id_pt` | checksum | on (`balanced`/`recall` only) | – | – | – |
-| `pii.ro.vat_id` | ark_only | `VAT_ID_RO` | `pii_vat_id_ro` | checksum | on (`balanced`/`recall` only) | – | – | – |
-| `pii.se.vat_id` | ark_only | `VAT_ID_SE` | `pii_vat_id_se` | checksum | on (`balanced`/`recall` only) | – | – | – |
-| `pii.si.vat_id` | ark_only | `VAT_ID_SI` | `pii_vat_id_si` | checksum | on (`balanced`/`recall` only) | – | – | – |
-| `pii.sk.vat_id` | ark_only | `VAT_ID_SK` | `pii_vat_id_sk` | checksum | on (`balanced`/`recall` only) | – | – | – |
-| `pii.no.vat_id` | ark_only | `VAT_ID_NO` | `pii_vat_id_no` | checksum | on (`balanced`/`recall` only) | – | – | – |
-| `pii.uk.vat_id` | ark_only | `VAT_ID_GB` | `pii_vat_id_gb` | checksum | on (`balanced`/`recall` only) | – | – | – |
-| `pii.url` | presidio_only | – | – | – | – | `URL` | – | – |
-| `pii.crypto_wallet` | presidio_only | – | – | – | – | `CRYPTO` | – | – |
-| `pii.us.medical_license` | presidio_only | – | – | – | – | `MEDICAL_LICENSE` | – | – |
-| `pii.us.itin` | presidio_only | – | – | – | – | `US_ITIN` | – | – |
-| `pii.us.mbi` | presidio_only | – | – | – | – | `US_MBI` | – | – |
-| `pii.us.npi` | presidio_only | – | – | – | – | `US_NPI` | – | – |
-| `pii.uk.postcode` | presidio_only | – | – | – | – | `UK_POSTCODE` | – | – |
-| `pii.de.bsnr` | presidio_only | – | – | – | – | `DE_BSNR` | – | – |
-| `pii.de.commercial_register` | presidio_only | – | – | – | – | `DE_HANDELSREGISTER` | – | – |
-| `pii.de.postal_code` | presidio_only | – | – | – | – | `DE_PLZ` | – | – |
-| `pii.es.nie` | presidio_only | – | – | – | – | `ES_NIE` | – | – |
-| `pii.es.nif` | presidio_only | – | – | – | – | `ES_NIF` | – | – |
-| `pii.it.fiscal_code` | presidio_only | – | – | – | – | `IT_FISCAL_CODE` | – | – |
-| `pii.fi.personal_identity_code` | presidio_only | – | – | – | – | `FI_PERSONAL_IDENTITY_CODE` | – | – |
-| `pii.pl.pesel` | presidio_only | – | – | – | – | `PL_PESEL` | – | – |
-| `pii.se.personnummer` | presidio_only | – | – | – | – | `SE_PERSONNUMMER` | – | – |
-| `pii.se.organisationsnummer` | presidio_only | – | – | – | – | `SE_ORGANISATIONSNUMMER` | – | – |
-| `pii.tr.national_id` | presidio_only | – | – | – | – | `TR_NATIONAL_ID` | – | – |
-| `pii.ca.sin` | presidio_only | – | – | – | – | `CA_SIN` | – | – |
-| `pii.in.aadhaar` | presidio_only | – | – | – | – | `IN_AADHAAR` | – | – |
-| `pii.in.gstin` | presidio_only | – | – | – | – | `IN_GSTIN` | – | – |
-| `pii.in.pan` | presidio_only | – | – | – | – | `IN_PAN` | – | – |
-| `pii.in.voter_id` | presidio_only | – | – | – | – | `IN_VOTER` | – | – |
-| `pii.kr.brn` | presidio_only | – | – | – | – | `KR_BRN` | – | – |
-| `pii.kr.frn` | presidio_only | – | – | – | – | `KR_FRN` | – | – |
-| `pii.kr.rrn` | presidio_only | – | – | – | – | `KR_RRN` | – | – |
-| `pii.ng.nin` | presidio_only | – | – | – | – | `NG_NIN` | – | – |
-| `pii.ph.tin` | presidio_only | – | – | – | – | `PH_TIN` | – | – |
-| `pii.ph.umid` | presidio_only | – | – | – | – | `PH_UMID` | – | – |
-| `pii.th.tnin` | presidio_only | – | – | – | – | `TH_TNIN` | – | – |
-| `pii.za.id_number` | presidio_only | – | – | – | – | `ZA_ID_NUMBER` | – | – |
-| `entity.person_name` | semantic | – | – | – | – | `PERSON` | – | – |
-| `entity.organization` | semantic | – | – | – | – | `ORGANIZATION` | – | – |
-| `entity.location` | semantic | – | – | – | – | `LOCATION` | – | – |
-| `entity.nrp` | semantic | – | – | – | – | `NRP` | – | – |
-| `entity.date` | semantic | – | – | – | – | `DATE_TIME` | – | – |
-| `entity.street_address` | semantic | – | – | – | – | – | – | – |
+### Coverage
 
-Entities: 27 shared, 38 ARK only, 31 Presidio only, 6 semantic. Hard-negative false positives (2026-10-24): ARK 0, Presidio 0.
+| Benchmark id | Scope | ARK label(s) | Rule ID(s) | Check | Default | Presidio entities |
+| --- | --- | --- | --- | --- | --- | --- |
+| `pii.email` | shared | `EMAIL` | `pii_email` | pattern | on | `EMAIL_ADDRESS` |
+| `pii.phone` | shared | `PHONE` | `pii_phone_international`, `pii_phone_de`, `pii_phone_de_national_context`, `pii_phone_de_national_proximity`, `pii_phone_us` | format | on | `PHONE_NUMBER` |
+| `pii.ip_address` | shared | `IP_ADDRESS` | `pii_ipv4`, `pii_ipv6_full`, `pii_ipv6_compressed`, `pii_ipv6_loopback` | format | on | `IP_ADDRESS` |
+| `pii.mac_address` | shared | `MAC_ADDRESS` | `pii_mac_address` | format | on | `MAC_ADDRESS` |
+| `pii.iban` | shared | `IBAN` | `pii_iban_de`, `pii_iban_generic` | checksum | on | `IBAN_CODE` |
+| `pii.credit_card.pan` | shared | `CREDITCARD` | `pii_credit_card` | checksum | on | `CREDIT_CARD` |
+| `pii.financial_account_number` | shared | `FINANCIAL_ACCOUNT_NUMBER` | `pii_financial_account_number` | format | on | `US_BANK_NUMBER`, `ABA_ROUTING_NUMBER` |
+| `pii.us.social_security_number` | shared | `SSN` | `pii_ssn_us`, `pii_ssn_us_proximity`, `pii_ssn_us_context_free` | format | on (1 of 3 rules `balanced`/`recall` only) | `US_SSN` |
+| `pii.uk.national_insurance_number` | shared | `NATIONALID` | `pii_ni_uk`, `pii_ni_uk_context_free` | format | on (1 of 2 rules `balanced`/`recall` only) | `UK_NINO` |
+| `pii.de.tax_id` | shared | `STEUERID` | `pii_steuer_id_de`, `pii_steuer_id_de_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `DE_TAX_ID` |
+| `pii.de.tax_number` | shared | `TAX_NUMBER_DE` | `pii_steuernummer_de` | format | on | `DE_TAX_NUMBER` |
+| `pii.de.social_security_number` | shared | `SOCIALID` | `pii_rentenversicherung_de`, `pii_rentenversicherung_de_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `DE_SOCIAL_SECURITY` |
+| `pii.de.health_insurance_number` | shared | `HEALTH_INSURANCE_NUMBER` | `pii_health_insurance_number_de`, `pii_health_insurance_number_de_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `DE_HEALTH_INSURANCE` |
+| `pii.de.lanr` | shared | `PHYSICIAN_NUMBER_LANR` | `pii_physician_number_lanr_de`, `pii_physician_number_lanr_de_proximity` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `DE_LANR` |
+| `pii.de.bsnr` | shared | `FACILITY_NUMBER_BSNR` | `pii_facility_number_bsnr_de` | format | on | `DE_BSNR` |
+| `pii.uk.nhs_number` | shared | `NHS_NUMBER` | `pii_nhs_number_uk` | checksum | on | `UK_NHS` |
+| `pii.au.abn` | shared | `AU_ABN` | `pii_abn_au`, `pii_abn_au_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `AU_ABN` |
+| `pii.au.acn` | shared | `AU_ACN` | `pii_acn_au` | checksum | on | `AU_ACN` |
+| `pii.au.tfn` | shared | `AU_TFN` | `pii_tfn_au` | checksum | on | `AU_TFN` |
+| `pii.au.medicare` | shared | `AU_MEDICARE` | `pii_medicare_au`, `pii_medicare_au_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `AU_MEDICARE` |
+| `pii.sg.nric_fin` | shared | `SG_NRIC_FIN` | `pii_nric_fin_sg`, `pii_nric_fin_sg_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `SG_NRIC_FIN` |
+| `pii.sg.uen` | shared | `SG_UEN` | `pii_uen_sg`, `pii_uen_sg_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `SG_UEN` |
+| `entity.passport_number` | shared | `PASSPORT_NUMBER` | `pii_passport_number_de`, `pii_passport_number_uk`, `pii_passport_number_two_letters`, `pii_passport_number_de_context_free`, `pii_passport_number_de_legacy` | checksum | on (2 of 5 rules `balanced`/`recall` only) | `US_PASSPORT`, `UK_PASSPORT`, `DE_PASSPORT`, `ES_PASSPORT`, `IT_PASSPORT`, `IN_PASSPORT`, `KR_PASSPORT` |
+| `pii.identity_card_number` | shared | `IDENTITY_CARD_NUMBER` | `pii_identity_card_number_de`, `pii_identity_card_number_de_context_free`, `pii_identity_card_number_de_legacy` | checksum | on (2 of 3 rules `balanced`/`recall` only) | `DE_ID_CARD`, `IT_IDENTITY_CARD` |
+| `entity.driver_license_number` | shared | `DRIVER_LICENSE_NUMBER` | `pii_driver_license_number_de`, `pii_driver_license_number_us`, `pii_driver_license_number_it`, `pii_driver_license_number_uk`, `pii_driver_license_number_uk_context_free` | format | on (1 of 5 rules `balanced`/`recall` only) | `US_DRIVER_LICENSE`, `UK_DRIVING_LICENCE`, `DE_FUEHRERSCHEIN`, `IT_DRIVER_LICENSE`, `KR_DRIVER_LICENSE` |
+| `pii.de.vat_id` | shared | `VAT_ID_DE` | `pii_vat_id_de` | checksum | on (`balanced`/`recall` only) | `DE_VAT_ID` |
+| `pii.it.vat_code` | shared | `VAT_ID_IT` | `pii_vat_id_it`, `pii_vat_id_it_proximity` | checksum | on (`balanced`/`recall` only) | `IT_VAT_CODE` |
+| `pii.license_plate` | shared | `LICENSEPLATE` | `pii_kfz_kennzeichen_de` | context | on | `DE_KFZ`, `UK_VEHICLE_REGISTRATION`, `IN_VEHICLE_REGISTRATION`, `NG_VEHICLE_REGISTRATION`, `TR_LICENSE_PLATE` |
+| `pii.swift_bic` | ark_only | `SWIFT_CODE` | `pii_swift_bic_context` | format | on | – |
+| `pii.credit_card.cvv` | ark_only | `CREDITCARD_CVV` | `pii_credit_card_cvv` | format | on | – |
+| `pii.credit_card.expiry` | ark_only | `CREDITCARD_EXPIRY` | `pii_credit_card_expiry` | format | on | – |
+| `pii.date_of_birth` | ark_only | `DOB` | `pii_date_of_birth`, `pii_date_of_birth_written_day_first`, `pii_date_of_birth_written_month_first` | format | on | – |
+| `pii.employee_id` | ark_only | `EMPLOYEE_ID` | `pii_employee_id`, `pii_employee_id_ocr_field`, `pii_employee_id_prefixed` | format | on | – |
+| `pii.customer_id` | ark_only | `CUSTOMER_ID` | `pii_customer_id` | format | on | – |
+| `pii.patient_id` | ark_only | `PATIENT_ID` | `pii_patient_id` | format | on | – |
+| `pii.student_id` | ark_only | `STUDENT_ID` | `pii_student_id` | format | on | – |
+| `pii.applicant_id` | ark_only | `APPLICANT_ID` | `pii_applicant_id` | format | on | – |
+| `pii.username` | ark_only | `USERNAME` | `pii_username` | format | on | – |
+| `pii.at.vat_id` | ark_only | `VAT_ID_AT` | `pii_vat_id_at` | checksum | on (`balanced`/`recall` only) | – |
+| `pii.ch.vat_id` | ark_only | `VAT_ID_CH` | `pii_vat_id_ch` | checksum | on (`balanced`/`recall` only) | – |
+| `pii.fr.vat_id` | ark_only | `VAT_ID_FR` | `pii_vat_id_fr` | checksum | on (`balanced`/`recall` only) | – |
+| `pii.nl.vat_id` | ark_only | `VAT_ID_NL` | `pii_vat_id_nl` | checksum | on (`balanced`/`recall` only) | – |
+| `pii.be.vat_id` | ark_only | `VAT_ID_BE` | `pii_vat_id_be` | checksum | on (`balanced`/`recall` only) | – |
+| `pii.es.vat_id` | ark_only | `VAT_ID_ES` | `pii_vat_id_es` | checksum | on (`balanced`/`recall` only) | – |
+| `pii.bg.vat_id` | ark_only | `VAT_ID_BG` | `pii_vat_id_bg` | checksum | on (`balanced`/`recall` only) | – |
+| `pii.cy.vat_id` | ark_only | `VAT_ID_CY` | `pii_vat_id_cy` | checksum | on (`balanced`/`recall` only) | – |
+| `pii.cz.vat_id` | ark_only | `VAT_ID_CZ` | `pii_vat_id_cz` | checksum | on (`balanced`/`recall` only) | – |
+| `pii.dk.vat_id` | ark_only | `VAT_ID_DK` | `pii_vat_id_dk` | checksum | on (`balanced`/`recall` only) | – |
+| `pii.ee.vat_id` | ark_only | `VAT_ID_EE` | `pii_vat_id_ee` | checksum | on (`balanced`/`recall` only) | – |
+| `pii.gr.vat_id` | ark_only | `VAT_ID_EL` | `pii_vat_id_el` | checksum | on (`balanced`/`recall` only) | – |
+| `pii.fi.vat_id` | ark_only | `VAT_ID_FI` | `pii_vat_id_fi` | checksum | on (`balanced`/`recall` only) | – |
+| `pii.hr.vat_id` | ark_only | `VAT_ID_HR` | `pii_vat_id_hr` | checksum | on (`balanced`/`recall` only) | – |
+| `pii.hu.vat_id` | ark_only | `VAT_ID_HU` | `pii_vat_id_hu` | checksum | on (`balanced`/`recall` only) | – |
+| `pii.ie.vat_id` | ark_only | `VAT_ID_IE` | `pii_vat_id_ie` | checksum | on (`balanced`/`recall` only) | – |
+| `pii.lt.vat_id` | ark_only | `VAT_ID_LT` | `pii_vat_id_lt` | checksum | on (`balanced`/`recall` only) | – |
+| `pii.lu.vat_id` | ark_only | `VAT_ID_LU` | `pii_vat_id_lu` | checksum | on (`balanced`/`recall` only) | – |
+| `pii.lv.vat_id` | ark_only | `VAT_ID_LV` | `pii_vat_id_lv` | checksum | on (`balanced`/`recall` only) | – |
+| `pii.mt.vat_id` | ark_only | `VAT_ID_MT` | `pii_vat_id_mt` | checksum | on (`balanced`/`recall` only) | – |
+| `pii.pl.vat_id` | ark_only | `VAT_ID_PL` | `pii_vat_id_pl` | checksum | on (`balanced`/`recall` only) | – |
+| `pii.pt.vat_id` | ark_only | `VAT_ID_PT` | `pii_vat_id_pt` | checksum | on (`balanced`/`recall` only) | – |
+| `pii.ro.vat_id` | ark_only | `VAT_ID_RO` | `pii_vat_id_ro` | checksum | on (`balanced`/`recall` only) | – |
+| `pii.se.vat_id` | ark_only | `VAT_ID_SE` | `pii_vat_id_se` | checksum | on (`balanced`/`recall` only) | – |
+| `pii.si.vat_id` | ark_only | `VAT_ID_SI` | `pii_vat_id_si` | checksum | on (`balanced`/`recall` only) | – |
+| `pii.sk.vat_id` | ark_only | `VAT_ID_SK` | `pii_vat_id_sk` | checksum | on (`balanced`/`recall` only) | – |
+| `pii.no.vat_id` | ark_only | `VAT_ID_NO` | `pii_vat_id_no` | checksum | on (`balanced`/`recall` only) | – |
+| `pii.uk.vat_id` | ark_only | `VAT_ID_GB` | `pii_vat_id_gb` | checksum | on (`balanced`/`recall` only) | – |
+| `pii.url` | presidio_only | – | – | – | – | `URL` |
+| `pii.crypto_wallet` | presidio_only | – | – | – | – | `CRYPTO` |
+| `pii.us.medical_license` | presidio_only | – | – | – | – | `MEDICAL_LICENSE` |
+| `pii.us.itin` | presidio_only | – | – | – | – | `US_ITIN` |
+| `pii.us.mbi` | presidio_only | – | – | – | – | `US_MBI` |
+| `pii.us.npi` | presidio_only | – | – | – | – | `US_NPI` |
+| `pii.uk.postcode` | presidio_only | – | – | – | – | `UK_POSTCODE` |
+| `pii.de.commercial_register` | presidio_only | – | – | – | – | `DE_HANDELSREGISTER` |
+| `pii.de.postal_code` | presidio_only | – | – | – | – | `DE_PLZ` |
+| `pii.es.nie` | presidio_only | – | – | – | – | `ES_NIE` |
+| `pii.es.nif` | presidio_only | – | – | – | – | `ES_NIF` |
+| `pii.it.fiscal_code` | presidio_only | – | – | – | – | `IT_FISCAL_CODE` |
+| `pii.fi.personal_identity_code` | presidio_only | – | – | – | – | `FI_PERSONAL_IDENTITY_CODE` |
+| `pii.pl.pesel` | presidio_only | – | – | – | – | `PL_PESEL` |
+| `pii.se.personnummer` | presidio_only | – | – | – | – | `SE_PERSONNUMMER` |
+| `pii.se.organisationsnummer` | presidio_only | – | – | – | – | `SE_ORGANISATIONSNUMMER` |
+| `pii.tr.national_id` | presidio_only | – | – | – | – | `TR_NATIONAL_ID` |
+| `pii.ca.sin` | presidio_only | – | – | – | – | `CA_SIN` |
+| `pii.in.aadhaar` | presidio_only | – | – | – | – | `IN_AADHAAR` |
+| `pii.in.gstin` | presidio_only | – | – | – | – | `IN_GSTIN` |
+| `pii.in.pan` | presidio_only | – | – | – | – | `IN_PAN` |
+| `pii.in.voter_id` | presidio_only | – | – | – | – | `IN_VOTER` |
+| `pii.kr.brn` | presidio_only | – | – | – | – | `KR_BRN` |
+| `pii.kr.frn` | presidio_only | – | – | – | – | `KR_FRN` |
+| `pii.kr.rrn` | presidio_only | – | – | – | – | `KR_RRN` |
+| `pii.ng.nin` | presidio_only | – | – | – | – | `NG_NIN` |
+| `pii.ph.tin` | presidio_only | – | – | – | – | `PH_TIN` |
+| `pii.ph.umid` | presidio_only | – | – | – | – | `PH_UMID` |
+| `pii.th.tnin` | presidio_only | – | – | – | – | `TH_TNIN` |
+| `pii.za.id_number` | presidio_only | – | – | – | – | `ZA_ID_NUMBER` |
+| `entity.person_name` | semantic | – | – | – | – | `PERSON` |
+| `entity.organization` | semantic | – | – | – | – | `ORGANIZATION` |
+| `entity.location` | semantic | – | – | – | – | `LOCATION` |
+| `entity.nrp` | semantic | – | – | – | – | `NRP` |
+| `entity.date` | semantic | – | – | – | – | `DATE_TIME` |
+| `entity.street_address` | semantic | – | – | – | – | – |
+
+Entities: 28 shared, 38 ARK only, 30 Presidio only, 6 semantic. Hard-negative false positives (2026-10-24): ARK 0, Presidio 0.
+
+### F1 per entity
+
+Exact F1 in percent on the dev split, measured 2026-10-24, per source family: ARK in `balanced` vs Presidio tuned, over all rows of the family (EN and DE; M1 counts EN rows only). Gold: gold spans in neutral / presidio_favored / ark_authored.
+
+Legend: `ARK x / Presidio y` = exact F1 of both; `no gold` = measured, but the family has no gold span for the id; `–` = the id was not part of the measurement (added later, or `semantic`).
+
+| Benchmark id | Scope | Gold | F1 neutral | F1 presidio_favored | F1 ark_authored ¹ |
+| --- | --- | --- | --- | --- | --- |
+| `pii.email` | shared | 417 / 16 / 144 | ARK 67.4 / Presidio 67.9 | ARK 93.8 / Presidio 100.0 | ARK 100.0 / Presidio 100.0 |
+| `pii.phone` | shared | 504 / 46 / 85 | ARK 81.8 / Presidio 36.7 | ARK 68.5 / Presidio 65.1 | ARK 83.0 / Presidio 27.8 |
+| `pii.ip_address` | shared | 88 / 41 / 84 | ARK 96.7 / Presidio 94.6 | ARK 84.9 / Presidio 96.2 | ARK 100.0 / Presidio 100.0 |
+| `pii.mac_address` | shared | 0 / 6 / 22 | no gold | ARK 100.0 / Presidio 100.0 | ARK 100.0 / Presidio 100.0 |
+| `pii.iban` | shared | 70 / 66 / 81 | ARK 80.6 / Presidio 81.6 | ARK 63.9 / Presidio 100.0 | ARK 68.3 / Presidio 100.0 |
+| `pii.credit_card.pan` | shared | 135 / 49 / 19 | ARK 47.9 / Presidio 35.6 | ARK 100.0 / Presidio 91.1 | ARK 100.0 / Presidio 79.2 |
+| `pii.financial_account_number` | shared | 126 / 5 / 20 | ARK 8.2 / Presidio 12.5 | ARK 0.0 / Presidio 0.0 | ARK 72.2 / Presidio 46.2 |
+| `pii.us.social_security_number` | shared | 44 / 15 / 29 | ARK 43.3 / Presidio 66.7 | ARK 57.1 / Presidio 88.9 | ARK 90.6 / Presidio 55.6 |
+| `pii.uk.national_insurance_number` | shared | 0 / 3 / 22 | no gold | ARK 0.0 / Presidio 100.0 | ARK 66.7 / Presidio 50.0 |
+| `pii.de.tax_id` | shared | 0 / 1 / 27 | no gold | ARK 0.0 / Presidio 100.0 | ARK 100.0 / Presidio 32.4 |
+| `pii.de.tax_number` | shared | 0 / 2 / 55 | no gold | ARK 0.0 / Presidio 100.0 | ARK 94.2 / Presidio 84.5 |
+| `pii.de.social_security_number` | shared | 0 / 1 / 25 | no gold | ARK 0.0 / Presidio 100.0 | ARK 81.0 / Presidio 27.6 |
+| `pii.de.health_insurance_number` | shared | 0 / 3 / 55 | no gold | ARK 0.0 / Presidio 100.0 | ARK 96.2 / Presidio 86.6 |
+| `pii.de.lanr` | shared | 0 / 3 / 53 | no gold | ARK 0.0 / Presidio 100.0 | ARK 95.0 / Presidio 82.5 |
+| `pii.de.bsnr` | shared | 0 / 5 / 50 | no gold | ARK 0.0 / Presidio 57.1 | ARK 0.0 / Presidio 65.0 |
+| `pii.uk.nhs_number` | shared | 0 / 0 / 53 | no gold | no gold | ARK 0.0 / Presidio 83.0 |
+| `pii.au.abn` | shared | 0 / 1 / 18 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
+| `pii.au.acn` | shared | 0 / 3 / 24 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
+| `pii.au.tfn` | shared | 0 / 0 / 20 | no gold | no gold | ARK 0.0 / Presidio 0.0 |
+| `pii.au.medicare` | shared | 0 / 1 / 19 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
+| `pii.sg.nric_fin` | shared | 0 / 3 / 21 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
+| `pii.sg.uen` | shared | 0 / 4 / 24 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
+| `entity.passport_number` | shared | 98 / 29 / 24 | ARK 37.7 / Presidio 38.4 | ARK 34.3 / Presidio 51.3 | ARK 76.9 / Presidio 54.5 |
+| `pii.identity_card_number` | shared | 0 / 11 / 31 | no gold | ARK 42.9 / Presidio 84.2 | ARK 78.4 / Presidio 38.5 |
+| `entity.driver_license_number` | shared | 120 / 14 / 23 | ARK 37.1 / Presidio 6.2 | ARK 52.6 / Presidio 78.3 | ARK 72.2 / Presidio 48.1 |
+| `pii.de.vat_id` | shared | 0 / 5 / 87 | no gold | ARK 75.0 / Presidio 100.0 | ARK 100.0 / Presidio 65.1 |
+| `pii.it.vat_code` | shared | 0 / 1 / 28 | no gold | ARK 0.0 / Presidio 0.0 | ARK 98.2 / Presidio 0.0 |
+| `pii.license_plate` | shared | 0 / 21 / 19 | no gold | ARK 0.0 / Presidio 0.0 | ARK 34.8 / Presidio 69.0 |
+| `pii.swift_bic` | ark_only | 79 / 0 / 84 | ARK 38.5 / Presidio 0.0 | no gold | ARK 35.3 / Presidio 0.0 |
+| `pii.credit_card.cvv` | ark_only | 47 / 0 / 27 | ARK 0.0 / Presidio 0.0 | no gold | ARK 68.3 / Presidio 0.0 |
+| `pii.credit_card.expiry` | ark_only | 0 / 0 / 26 | no gold | no gold | ARK 0.0 / Presidio 0.0 |
+| `pii.date_of_birth` | ark_only | 82 / 0 / 144 | ARK 66.7 / Presidio 0.0 | no gold | ARK 71.4 / Presidio 0.0 |
+| `pii.employee_id` | ark_only | 75 / 0 / 27 | ARK 79.0 / Presidio 0.0 | no gold | ARK 87.5 / Presidio 0.0 |
+| `pii.customer_id` | ark_only | 90 / 0 / 93 | ARK 46.7 / Presidio 0.0 | no gold | ARK 98.9 / Presidio 0.0 |
+| `pii.patient_id` | ark_only | 0 / 0 / 22 | no gold | no gold | ARK 90.0 / Presidio 0.0 |
+| `pii.student_id` | ark_only | 0 / 0 / 30 | no gold | no gold | ARK 96.6 / Presidio 0.0 |
+| `pii.applicant_id` | ark_only | 0 / 0 / 24 | no gold | no gold | ARK 95.7 / Presidio 0.0 |
+| `pii.username` | ark_only | 26 / 0 / 84 | ARK 8.8 / Presidio 0.0 | no gold | ARK 35.3 / Presidio 0.0 |
+| `pii.at.vat_id` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
+| `pii.ch.vat_id` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
+| `pii.fr.vat_id` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
+| `pii.nl.vat_id` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
+| `pii.be.vat_id` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
+| `pii.es.vat_id` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
+| `pii.bg.vat_id` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
+| `pii.cy.vat_id` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
+| `pii.cz.vat_id` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
+| `pii.dk.vat_id` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
+| `pii.ee.vat_id` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
+| `pii.gr.vat_id` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
+| `pii.fi.vat_id` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
+| `pii.hr.vat_id` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
+| `pii.hu.vat_id` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
+| `pii.ie.vat_id` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
+| `pii.lt.vat_id` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
+| `pii.lu.vat_id` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
+| `pii.lv.vat_id` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
+| `pii.mt.vat_id` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
+| `pii.pl.vat_id` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
+| `pii.pt.vat_id` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
+| `pii.ro.vat_id` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
+| `pii.se.vat_id` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
+| `pii.si.vat_id` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
+| `pii.sk.vat_id` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
+| `pii.no.vat_id` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
+| `pii.uk.vat_id` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
+| `pii.url` | presidio_only | 0 / 21 / 20 | no gold | ARK 0.0 / Presidio 77.8 | ARK 0.0 / Presidio 8.2 |
+| `pii.crypto_wallet` | presidio_only | 0 / 1 / 21 | no gold | ARK 0.0 / Presidio 100.0 | ARK 0.0 / Presidio 100.0 |
+| `pii.us.medical_license` | presidio_only | 0 / 0 / 22 | no gold | no gold | ARK 0.0 / Presidio 52.6 |
+| `pii.us.itin` | presidio_only | 0 / 2 / 22 | no gold | ARK 0.0 / Presidio 100.0 | ARK 0.0 / Presidio 58.1 |
+| `pii.us.mbi` | presidio_only | 0 / 5 / 24 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
+| `pii.us.npi` | presidio_only | 0 / 5 / 22 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
+| `pii.uk.postcode` | presidio_only | 0 / 4 / 235 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
+| `pii.de.commercial_register` | presidio_only | 0 / 1 / 56 | no gold | ARK 0.0 / Presidio 100.0 | ARK 0.0 / Presidio 88.0 |
+| `pii.de.postal_code` | presidio_only | 0 / 0 / 231 | no gold | no gold | ARK 0.0 / Presidio 85.2 |
+| `pii.es.nie` | presidio_only | 0 / 5 / 26 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
+| `pii.es.nif` | presidio_only | 0 / 3 / 26 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
+| `pii.it.fiscal_code` | presidio_only | 0 / 3 / 23 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
+| `pii.fi.personal_identity_code` | presidio_only | 0 / 14 / 28 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
+| `pii.pl.pesel` | presidio_only | 0 / 3 / 22 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
+| `pii.se.personnummer` | presidio_only | 0 / 2 / 19 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
+| `pii.se.organisationsnummer` | presidio_only | 0 / 3 / 20 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
+| `pii.tr.national_id` | presidio_only | 0 / 4 / 21 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
+| `pii.ca.sin` | presidio_only | 0 / 5 / 23 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
+| `pii.in.aadhaar` | presidio_only | 0 / 4 / 22 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
+| `pii.in.gstin` | presidio_only | 0 / 3 / 24 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
+| `pii.in.pan` | presidio_only | 0 / 3 / 19 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
+| `pii.in.voter_id` | presidio_only | 0 / 3 / 23 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
+| `pii.kr.brn` | presidio_only | 0 / 2 / 27 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
+| `pii.kr.frn` | presidio_only | 0 / 3 / 23 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
+| `pii.kr.rrn` | presidio_only | 0 / 5 / 24 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
+| `pii.ng.nin` | presidio_only | 0 / 0 / 28 | no gold | no gold | ARK 0.0 / Presidio 0.0 |
+| `pii.ph.tin` | presidio_only | 0 / 3 / 24 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
+| `pii.ph.umid` | presidio_only | 0 / 8 / 24 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
+| `pii.th.tnin` | presidio_only | 0 / 6 / 24 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
+| `pii.za.id_number` | presidio_only | 0 / 3 / 23 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
+| `entity.person_name` | semantic | – | – | – | – |
+| `entity.organization` | semantic | – | – | – | – |
+| `entity.location` | semantic | – | – | – | – |
+| `entity.nrp` | semantic | – | – | – | – |
+| `entity.date` | semantic | – | – | – | – |
+| `entity.street_address` | semantic | – | – | – | – |
+
+¹ `ark_authored` (ARK's own synthetic DE/EU goldset) is reported and decides no milestone. Measured ids: 96, 68 with gold in at least one family, 28 without gold.
 
 ## DLP
 
 ### Groups
 
-Credential/secret groups are on by default; business identifiers, metrics and content classes are opt-in per rule. Group F1 is the default profile on the dev split, measured 2026-10-24.
+Credential/secret groups are on by default; business identifiers, metrics and content classes are opt-in per rule. Exact F1 in percent on the dev split, measured 2026-10-24: default-on groups in the default profile against the best of gitleaks, TruffleHog, detect-secrets; default-off groups with their rules switched on (ARK's `extended` profile, marked `opt-in profile`; no baseline has these classes). Content classes are judged per document on external corpora.
 
-| Result label | Family | Default | Rules | Entities | F1 |
-| --- | --- | --- | --- | --- | --- |
-| `API_KEY` | provider_secret | on | 9 | 7 | 100.0 |
-| `CLOUD_KEY` | provider_secret | on | 5 | 5 | 100.0 |
-| `PAYMENT_KEY` | provider_secret | on | 2 | 2 | 100.0 |
-| `SECRET_TOKEN` | provider_secret | on | 11 | 11 | 99.2 |
-| `CREDENTIAL` | generic_credential | on | 10 | 9 | 96.8 |
-| `PASSWORD_HASH` | generic_credential | on | 1 | 1 | 91.9 |
-| `PRIVATE_KEY` | key_material | on | 2 | 1 | – |
-| `CRYPTO_KEY` | key_material | on | 2 | 2 | 100.0 |
-| `dlp.de.vat_id` | business_identifier | off | 1 | 1 | – |
-| `dlp.de.commercial_register_number` | business_identifier | off | 1 | 1 | – |
-| `dlp.de.facility_number_bsnr` | business_identifier | off | 1 | 1 | – |
-| `dlp.record.case_id` | business_identifier | off | 1 | 1 | – |
-| `dlp.record.contract_id` | business_identifier | off | 1 | 1 | – |
-| `dlp.record.claim_id` | business_identifier | off | 1 | 1 | – |
-| `dlp.record.order_id` | business_identifier | off | 1 | 1 | – |
-| `dlp.record.invoice_id` | business_identifier | off | 1 | 1 | – |
-| `dlp.project_id` | business_identifier | off | 1 | 1 | – |
-| `dlp.organization_id` | business_identifier | off | 1 | 1 | – |
-| `dlp.internal.business_metric` | content_class | off | 1 | 1 | – |
-| `dlp.content.source_code` | content_class | off | 5 | 1 | – |
-| `dlp.content.sql` | content_class | off | 2 | 1 | – |
-| `dlp.content.database_dump` | content_class | off | 2 | 1 | – |
-| `dlp.content.system_log` | content_class | off | 2 | 1 | – |
-| `dlp.document.legal_privileged` | document_class (planned) | off | 0 | 0 | – |
-| `dlp.document.hr` | document_class (planned) | off | 0 | 0 | – |
-| `dlp.document.rnd_ip` | document_class (planned) | off | 0 | 0 | – |
+Legend: `ARK x / best baseline y (name)` = exact F1 of ARK and of the best baseline; `no gold` = measured, but no gold for it; `–` = not part of the measurement; `planned / not implemented` = planned class without rules.
+
+| Result label | Family | Default | Rules | Entities | Gold | F1 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `API_KEY` | provider_secret | on | 9 | 7 | 320 | ARK 100.0 / best baseline 99.5 (TruffleHog) |
+| `CLOUD_KEY` | provider_secret | on | 5 | 5 | 200 | ARK 100.0 / best baseline 49.1 (gitleaks) |
+| `PAYMENT_KEY` | provider_secret | on | 2 | 2 | 80 | ARK 100.0 / best baseline 39.2 (gitleaks) |
+| `SECRET_TOKEN` | provider_secret | on | 11 | 11 | 360 | ARK 99.2 / best baseline 71.7 (TruffleHog) |
+| `CREDENTIAL` | generic_credential | on | 10 | 9 | 320 | ARK 96.8 / best baseline 23.7 (gitleaks) |
+| `PASSWORD_HASH` | generic_credential | on | 1 | 1 | 40 | ARK 91.9 / best baseline 0.0 (gitleaks, TruffleHog, detect-secrets) |
+| `PRIVATE_KEY` | key_material | on | 2 | 1 | 37 | ARK 88.1 / best baseline 56.1 (detect-secrets) |
+| `CRYPTO_KEY` | key_material | on | 2 | 2 | 80 | ARK 100.0 / best baseline 0.0 (gitleaks, TruffleHog, detect-secrets) |
+| `dlp.de.vat_id` | business_identifier | off | 1 | 1 | 32 | ARK 18.2 (opt-in profile) |
+| `dlp.de.commercial_register_number` | business_identifier | off | 1 | 1 | 32 | ARK 50.0 (opt-in profile) |
+| `dlp.de.facility_number_bsnr` | business_identifier | off | 1 | 1 | 32 | ARK 28.6 (opt-in profile) |
+| `dlp.record.case_id` | business_identifier | off | 1 | 1 | 32 | ARK 18.2 (opt-in profile) |
+| `dlp.record.contract_id` | business_identifier | off | 1 | 1 | 32 | ARK 18.2 (opt-in profile) |
+| `dlp.record.claim_id` | business_identifier | off | 1 | 1 | 32 | ARK 18.2 (opt-in profile) |
+| `dlp.record.order_id` | business_identifier | off | 1 | 1 | 32 | ARK 18.2 (opt-in profile) |
+| `dlp.record.invoice_id` | business_identifier | off | 1 | 1 | 32 | ARK 18.2 (opt-in profile) |
+| `dlp.project_id` | business_identifier | off | 1 | 1 | 32 | ARK 18.2 (opt-in profile) |
+| `dlp.organization_id` | business_identifier | off | 1 | 1 | 32 | ARK 18.2 (opt-in profile) |
+| `dlp.internal.business_metric` | content_class | off | 1 | 1 | 0 | no gold |
+| `dlp.content.source_code` | content_class | off | 5 | 1 | 214 documents | ARK 99.1 (opt-in profile) |
+| `dlp.content.sql` | content_class | off | 2 | 1 | 10 documents | ARK 90.9 (opt-in profile) |
+| `dlp.content.database_dump` | content_class | off | 2 | 1 | 0 | no gold |
+| `dlp.content.system_log` | content_class | off | 2 | 1 | 0 | no gold |
+| `dlp.document.legal_privileged` | document_class (planned) | off | 0 | 0 | planned / not implemented | planned / not implemented |
+| `dlp.document.hr` | document_class (planned) | off | 0 | 0 | planned / not implemented | planned / not implemented |
+| `dlp.document.rnd_ip` | document_class (planned) | off | 0 | 0 | planned / not implemented | planned / not implemented |
 
 ### Entities
 
-One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and at least one baseline), `ark_only`, `baseline_only` (a gap in ARK L1), `out_of_scope` (action or policy rules, not a secret value). Structure check: the strongest `validator_strength` of the entity's rules (`checksum`, `structure`: decoded or parsed, `format`, `none`).
+One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and at least one baseline), `ark_only`, `baseline_only` (a gap in ARK L1), `out_of_scope` (action or policy rules, not a secret value). Structure check: the strongest `validator_strength` of the entity's rules (`checksum`, `structure`: decoded or parsed, `format`, `none`). Baseline rules: the gitleaks, TruffleHog and detect-secrets rules mapped to the entity.
 
-| Entity | Scope | Group | Rule ID(s) | Structure check | Default | gitleaks | TruffleHog | detect-secrets |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `llm.anthropic.api_key` | shared | `API_KEY` | `dlp_anthropic_key` | format | on | `anthropic-api-key`, `anthropic-admin-api-key` | `Anthropic` | – |
-| `llm.openai.api_key` | shared | `API_KEY` | `dlp_openai_key`, `dlp_openai_legacy`, `dlp_openai_svc` | format | on | `openai-api-key` | `OpenAI` | `OpenAIDetector` |
-| `llm.huggingface.token` | shared | `API_KEY` | `dlp_huggingface` | format | on | `huggingface-access-token`, `huggingface-organization-api-token` | `HuggingFace` | – |
-| `llm.xai.api_key` | shared | `API_KEY` | `dlp_xai_key` | format | on | – | `XAI` | – |
-| `llm.groq.api_key` | shared | `API_KEY` | `dlp_groq_key` | format | on | – | `Groq` | – |
-| `llm.replicate.api_token` | shared | `API_KEY` | `dlp_replicate` | format | on | – | `Replicate` | – |
-| `cloud.aws.access_key_id` | shared | `CLOUD_KEY` | `dlp_aws_access_key` | format | on | `aws-access-token` | `AWS` | `AWSKeyDetector` |
-| `cloud.aws.secret_access_key` | shared | `CLOUD_KEY` | `dlp_aws_secret_key` | format | on | – | `AWS` | `AWSKeyDetector` |
-| `cloud.gcp.api_key` | shared | `CLOUD_KEY` | `dlp_google_api_key` | format | on | `gcp-api-key` | – | – |
-| `cloud.gcp.oauth_access_token` | shared | `CLOUD_KEY` | `dlp_google_oauth_token` | format | on | – | `GoogleOauth2` | – |
-| `cloud.gcp.oauth_client_secret` | shared | `CLOUD_KEY` | `dlp_gcp_client_secret` | format | on | – | – | – |
-| `vcs.github.token` | shared | `SECRET_TOKEN` | `dlp_github_token` | checksum | on | `github-pat`, `github-oauth`, `github-app-token`, `github-refresh-token` | `Github` | `GitHubTokenDetector` |
-| `vcs.github.fine_grained_pat` | shared | `SECRET_TOKEN` | `dlp_github_pat` | format | on | `github-fine-grained-pat` | `Github` | `GitHubTokenDetector` |
-| `vcs.gitlab.pat` | shared | `SECRET_TOKEN` | `dlp_gitlab_pat` | format | on | `gitlab-pat`, `gitlab-pat-routable` | `Gitlab` | `GitLabTokenDetector` |
-| `vcs.gitlab.token` | shared | `SECRET_TOKEN` | `dlp_gitlab_token` | format | on | `gitlab-cicd-job-token`, `gitlab-deploy-token`, `gitlab-feature-flag-client-token`, `gitlab-feed-token`, `gitlab-incoming-mail-token`, `gitlab-kubernetes-agent-token`, `gitlab-ptt`, `gitlab-rrt`, `gitlab-runner-authentication-token`, `gitlab-runner-authentication-token-routable`, `gitlab-scim-token` | `Gitlab` | – |
-| `vcs.gitlab.oauth_app_secret` | shared | `API_KEY` | `dlp_gitlab_oauth_secret` | format | on | `gitlab-oauth-app-secret` | – | – |
-| `registry.npm.access_token` | shared | `SECRET_TOKEN` | `dlp_npm_token` | checksum | on | `npm-access-token` | `NpmToken` | `NpmDetector` |
-| `payment.stripe.secret_key` | shared | `PAYMENT_KEY` | `dlp_stripe_key` | format | on | `stripe-access-token` | `Stripe` | `StripeDetector` |
-| `comm.slack.token` | shared | `SECRET_TOKEN` | `dlp_slack_token` | format | on | `slack-bot-token`, `slack-user-token`, `slack-legacy-bot-token`, `slack-legacy-token`, `slack-legacy-workspace-token` | `Slack` | `SlackDetector` |
-| `comm.discord.bot_token` | shared | `SECRET_TOKEN` | `dlp_discord_token` | format | on | – | `DiscordBotToken` | `DiscordBotTokenDetector` |
-| `key.pem_private_key` | shared | `PRIVATE_KEY` | `dlp_private_key_block`, `dlp_private_key_header` | format | on | `private-key` | `PrivateKey` | `PrivateKeyDetector` |
-| `token.jwt` | shared | `SECRET_TOKEN` | `dlp_jwt_token` | format | on | `jwt`, `jwt-base64` | `JWT` | `JwtTokenDetector` |
-| `credential.secret_assignment` | shared | `CREDENTIAL` | `dlp_env_var_secret`, `dlp_generic_credential_assignment` | none | on | `generic-api-key` | – | `KeywordDetector` |
-| `credential.password_assignment` | shared | `CREDENTIAL` | `dlp_password_assignment` | none | on | – | – | `KeywordDetector` |
-| `credential.http_bearer` | shared | `SECRET_TOKEN` | `dlp_bearer_token` | format | on | `curl-auth-header` | – | – |
-| `credential.http_basic_auth` | shared | `CREDENTIAL` | `dlp_basic_auth` | structure | on | – | – | – |
-| `credential.url_userinfo` | shared | `CREDENTIAL` | `dlp_url_userinfo_password` | none | on | – | `URI`, `Postgres`, `MongoDB`, `Redis`, `FTP`, `RabbitMQ`, `JDBC` | `BasicAuthDetector` |
-| `credential.connection_string` | shared | `CREDENTIAL` | `dlp_connection_string_password` | structure | on | – | `JDBC`, `SQLServer` | – |
-| `credential.ldap_bind_password` | shared | `CREDENTIAL` | `dlp_ldap_bind_password` | format | on | – | `LDAP` | – |
-| `credential.signed_url_signature` | shared | `CREDENTIAL` | `dlp_signed_url_signature` | none | on | – | – | – |
-| `credential.session_cookie` | shared | `CREDENTIAL` | `dlp_session_cookie` | none | on | – | – | – |
-| `credential.csrf_token` | shared | `SECRET_TOKEN` | `dlp_csrf_token` | none | on | – | – | – |
-| `credential.password_hash` | shared | `PASSWORD_HASH` | `dlp_password_hash` | format | on | – | – | – |
-| `content.source_code` | shared | `dlp.content.source_code` | `dlp_source_code_fence`, `dlp_source_code_statement`, `dlp_source_code_python_rust_assignment`, `dlp_source_code_declaration`, `dlp_source_code_import` | format | off | – | – | – |
-| `content.database_dump` | shared | `dlp.content.database_dump` | `dlp_database_dump_insert`, `dlp_database_dump_header` | format | off | – | – | – |
-| `content.system_log` | shared | `dlp.content.system_log` | `dlp_stacktrace_block`, `dlp_structured_system_log` | format | off | – | – | – |
-| `payment.stripe.webhook_secret` | ark_only | `PAYMENT_KEY` | `dlp_stripe_webhook` | format | on | – | – | – |
-| `crypto.ethereum.private_key` | ark_only | `CRYPTO_KEY` | `dlp_eth_private_key` | format | on | – | – | – |
-| `crypto.bitcoin.wif` | ark_only | `CRYPTO_KEY` | `dlp_btc_wif` | checksum | on | – | – | – |
-| `credential.url_userinfo_token` | ark_only | `SECRET_TOKEN` | `dlp_url_userinfo_token` | none | on | – | – | – |
-| `credential.url_query_secret` | ark_only | `CREDENTIAL` | `dlp_credential_in_url` | none | on | – | – | – |
-| `identifier.de.vat_id` | ark_only | `dlp.de.vat_id` | `dlp_de_vat_id` | format | off | – | – | – |
-| `identifier.de.commercial_register` | ark_only | `dlp.de.commercial_register_number` | `dlp_de_commercial_register_number` | format | off | – | – | – |
-| `identifier.de.bsnr` | ark_only | `dlp.de.facility_number_bsnr` | `dlp_de_facility_number_bsnr` | format | off | – | – | – |
-| `identifier.record.case` | ark_only | `dlp.record.case_id` | `dlp_record_case_id` | none | off | – | – | – |
-| `identifier.record.contract` | ark_only | `dlp.record.contract_id` | `dlp_record_contract_id` | none | off | – | – | – |
-| `identifier.record.claim` | ark_only | `dlp.record.claim_id` | `dlp_record_claim_id` | none | off | – | – | – |
-| `identifier.record.order` | ark_only | `dlp.record.order_id` | `dlp_record_order_id` | none | off | – | – | – |
-| `identifier.record.invoice` | ark_only | `dlp.record.invoice_id` | `dlp_record_invoice_id` | none | off | – | – | – |
-| `identifier.project` | ark_only | `dlp.project_id` | `dlp_project_id` | none | off | – | – | – |
-| `identifier.organization` | ark_only | `dlp.organization_id` | `dlp_organization_id` | none | off | – | – | – |
-| `content.business_metric` | ark_only | `dlp.internal.business_metric` | `dlp_internal_business_metric` | format | off | – | – | – |
-| `content.sql` | ark_only | `dlp.content.sql` | `dlp_sql_statement`, `dlp_sql_multiline_statement` | structure | off | – | – | – |
-| `vcs.gitlab.session_cookie` | baseline_only | `CREDENTIAL` | – | – | – | `gitlab-session-cookie` | – | – |
-| `comm.slack.app_config_token` | baseline_only | `SECRET_TOKEN` | – | – | – | `slack-app-token`, `slack-config-access-token`, `slack-config-refresh-token` | `Slack` | – |
-| `llm.cohere.api_key` | baseline_only | `API_KEY` | – | – | – | `cohere-api-token` | – | – |
-| `llm.perplexity.api_key` | baseline_only | `API_KEY` | – | – | – | `perplexity-api-key` | – | – |
-| `llm.privateai.api_key` | baseline_only | `API_KEY` | – | – | – | `privateai-api-token` | – | – |
-| `cloud.aws.bedrock_api_key` | baseline_only | `CLOUD_KEY` | – | – | – | `aws-amazon-bedrock-api-key-long-lived`, `aws-amazon-bedrock-api-key-short-lived` | – | – |
-| `cloud.alibaba.access_key` | baseline_only | `CLOUD_KEY` | – | – | – | `alibaba-access-key-id`, `alibaba-secret-key` | – | – |
-| `cloud.azure.entra_client_secret` | baseline_only | `CLOUD_KEY` | – | – | – | `azure-ad-client-secret` | – | – |
-| `cloud.azure.storage_account_key` | baseline_only | `CLOUD_KEY` | – | – | – | – | – | `AzureStorageKeyDetector` |
-| `cloud.gcp.service_account_key` | baseline_only | `CLOUD_KEY` | – | – | – | – | `GCP` | – |
-| `cloud.ibm.credentials` | baseline_only | `CLOUD_KEY` | – | – | – | – | – | `IbmCloudIamDetector`, `IbmCosHmacDetector`, `SoftlayerDetector` |
-| `cloud.yandex.credentials` | baseline_only | `CLOUD_KEY` | – | – | – | `yandex-access-token`, `yandex-api-key`, `yandex-aws-access-token` | – | – |
-| `cloud.scalingo.api_token` | baseline_only | `CLOUD_KEY` | – | – | – | `scalingo-api-token` | – | – |
-| `registry.jfrog.artifactory` | baseline_only | `SECRET_TOKEN` | – | – | – | `artifactory-api-key`, `artifactory-reference-token`, `jfrog-api-key`, `jfrog-identity-token` | – | `ArtifactoryDetector` |
-| `registry.pypi.upload_token` | baseline_only | `SECRET_TOKEN` | – | – | – | `pypi-upload-token` | – | `PypiTokenDetector` |
-| `registry.rubygems.api_token` | baseline_only | `SECRET_TOKEN` | – | – | – | `rubygems-api-token` | – | – |
-| `registry.clojars.api_token` | baseline_only | `SECRET_TOKEN` | – | – | – | `clojars-api-token` | – | – |
-| `devops.terraform_cloud.token` | baseline_only | `SECRET_TOKEN` | – | – | – | `hashicorp-tf-api-token`, `hashicorp-tf-password` | – | – |
-| `devops.pulumi.api_token` | baseline_only | `SECRET_TOKEN` | – | – | – | `pulumi-api-token` | – | – |
-| `devops.vault.token` | baseline_only | `SECRET_TOKEN` | – | – | – | `vault-batch-token`, `vault-service-token` | – | – |
-| `devops.doppler.api_token` | baseline_only | `SECRET_TOKEN` | – | – | – | `doppler-api-token` | – | – |
-| `devops.prefect.api_token` | baseline_only | `SECRET_TOKEN` | – | – | – | `prefect-api-token` | – | – |
-| `devops.infracost.api_token` | baseline_only | `SECRET_TOKEN` | – | – | – | `infracost-api-token` | – | – |
-| `devops.octopus_deploy.api_key` | baseline_only | `SECRET_TOKEN` | – | – | – | `octopus-deploy-api-key` | – | – |
-| `devops.harness.api_key` | baseline_only | `SECRET_TOKEN` | – | – | – | `harness-api-key` | – | – |
-| `devops.snyk.api_token` | baseline_only | `SECRET_TOKEN` | – | – | – | `snyk-api-token` | – | – |
-| `devops.sonar.api_token` | baseline_only | `SECRET_TOKEN` | – | – | – | `sonar-api-token` | – | – |
-| `devops.codecov.access_token` | baseline_only | `SECRET_TOKEN` | – | – | – | `codecov-access-token` | – | – |
-| `devops.sourcegraph.access_token` | baseline_only | `SECRET_TOKEN` | – | – | – | `sourcegraph-access-token` | – | – |
-| `vcs.bitbucket.client_secret` | baseline_only | `SECRET_TOKEN` | – | – | – | `bitbucket-client-secret` | – | – |
-| `ci.droneci.access_token` | baseline_only | `SECRET_TOKEN` | – | – | – | `droneci-access-token` | – | – |
-| `ci.travisci.access_token` | baseline_only | `SECRET_TOKEN` | – | – | – | `travisci-access-token` | – | – |
-| `hosting.flyio.access_token` | baseline_only | `CLOUD_KEY` | – | – | – | `flyio-access-token` | – | – |
-| `hosting.netlify.access_token` | baseline_only | `CLOUD_KEY` | – | – | – | `netlify-access-token` | – | – |
-| `hosting.heroku.api_key` | baseline_only | `CLOUD_KEY` | – | – | – | `heroku-api-key`, `heroku-api-key-v2` | – | – |
-| `hosting.cloudflare.api_key` | baseline_only | `CLOUD_KEY` | – | – | – | `cloudflare-api-key`, `cloudflare-global-api-key`, `cloudflare-origin-ca-key` | – | – |
-| `hosting.digitalocean.token` | baseline_only | `CLOUD_KEY` | – | – | – | `digitalocean-access-token`, `digitalocean-pat`, `digitalocean-refresh-token` | – | – |
-| `hosting.openshift.user_token` | baseline_only | `CLOUD_KEY` | – | – | – | `openshift-user-token` | – | – |
-| `hosting.defined_networking.api_token` | baseline_only | `CLOUD_KEY` | – | – | – | `defined-networking-api-token` | – | – |
-| `hosting.fastly.api_token` | baseline_only | `CLOUD_KEY` | – | – | – | `fastly-api-token` | – | – |
-| `hosting.settlemint.access_token` | baseline_only | `CLOUD_KEY` | – | – | – | `settlemint-application-access-token`, `settlemint-personal-access-token`, `settlemint-service-access-token` | – | – |
-| `observability.datadog.access_token` | baseline_only | `API_KEY` | – | – | – | `datadog-access-token` | – | – |
-| `observability.newrelic.key` | baseline_only | `API_KEY` | – | – | – | `new-relic-insert-key`, `new-relic-user-api-key` | – | – |
-| `observability.sentry.token` | baseline_only | `API_KEY` | – | – | – | `sentry-access-token`, `sentry-org-token`, `sentry-user-token` | – | – |
-| `observability.grafana.token` | baseline_only | `API_KEY` | – | – | – | `grafana-api-key`, `grafana-cloud-api-token`, `grafana-service-account-token` | – | – |
-| `observability.dynatrace.api_token` | baseline_only | `API_KEY` | – | – | – | `dynatrace-api-token` | – | – |
-| `observability.sumologic.access_token` | baseline_only | `API_KEY` | – | – | – | `sumologic-access-token` | – | – |
-| `comm.webhook_url` | baseline_only | `SECRET_TOKEN` | – | – | – | `slack-webhook-url`, `microsoft-teams-webhook` | – | – |
-| `comm.discord.api_credentials` | baseline_only | `API_KEY` | – | – | – | `discord-api-token`, `discord-client-secret` | – | – |
-| `comm.telegram.bot_token` | baseline_only | `SECRET_TOKEN` | – | – | – | `telegram-bot-api-token` | – | `TelegramBotTokenDetector` |
-| `comm.twilio.api_key` | baseline_only | `API_KEY` | – | – | – | `twilio-api-key` | – | `TwilioKeyDetector` |
-| `comm.sendgrid.api_key` | baseline_only | `API_KEY` | – | – | – | `sendgrid-api-token` | – | `SendGridDetector` |
-| `comm.brevo.api_key` | baseline_only | `API_KEY` | – | – | – | `sendinblue-api-token` | – | – |
-| `comm.mailgun.key` | baseline_only | `API_KEY` | – | – | – | `mailgun-private-api-token`, `mailgun-signing-key` | – | – |
-| `comm.mailchimp.api_key` | baseline_only | `API_KEY` | – | – | – | `mailchimp-api-key` | – | `MailchimpDetector` |
-| `comm.messagebird.api_token` | baseline_only | `API_KEY` | – | – | – | `messagebird-api-token` | – | – |
-| `comm.mattermost.access_token` | baseline_only | `API_KEY` | – | – | – | `mattermost-access-token` | – | – |
-| `comm.sendbird.access_token` | baseline_only | `API_KEY` | – | – | – | `sendbird-access-token` | – | – |
-| `comm.gitter.access_token` | baseline_only | `API_KEY` | – | – | – | `gitter-access-token` | – | – |
-| `payment.square.access_token` | baseline_only | `PAYMENT_KEY` | – | – | – | `square-access-token` | – | `SquareOAuthDetector` |
-| `payment.shopify.token` | baseline_only | `PAYMENT_KEY` | – | – | – | `shopify-access-token`, `shopify-custom-access-token`, `shopify-private-app-access-token`, `shopify-shared-secret` | – | – |
-| `payment.coinbase.access_token` | baseline_only | `PAYMENT_KEY` | – | – | – | `coinbase-access-token` | – | – |
-| `payment.plaid.secret` | baseline_only | `PAYMENT_KEY` | – | – | – | `plaid-api-token`, `plaid-secret-key` | – | – |
-| `payment.gocardless.api_token` | baseline_only | `PAYMENT_KEY` | – | – | – | `gocardless-api-token` | – | – |
-| `payment.flutterwave.secret` | baseline_only | `PAYMENT_KEY` | – | – | – | `flutterwave-secret-key`, `flutterwave-encryption-key` | – | – |
-| `payment.finicity.secret` | baseline_only | `PAYMENT_KEY` | – | – | – | `finicity-api-token`, `finicity-client-secret` | – | – |
-| `payment.crypto_exchange.secret` | baseline_only | `PAYMENT_KEY` | – | – | – | `kraken-access-token`, `kucoin-access-token`, `kucoin-secret-key`, `bittrex-access-key`, `bittrex-secret-key` | – | – |
-| `payment.freemius.secret_key` | baseline_only | `PAYMENT_KEY` | – | – | – | `freemius-secret-key` | – | – |
-| `commerce.shipping.api_token` | baseline_only | `API_KEY` | – | – | – | `duffel-api-token`, `easypost-api-token`, `shippo-api-token`, `lob-api-key` | – | – |
-| `saas.atlassian.api_token` | baseline_only | `API_KEY` | – | – | – | `atlassian-api-token` | – | – |
-| `saas.notion.api_token` | baseline_only | `API_KEY` | – | – | – | `notion-api-token` | – | – |
-| `saas.linear.secret` | baseline_only | `API_KEY` | – | – | – | `linear-api-key`, `linear-client-secret` | – | – |
-| `saas.airtable.token` | baseline_only | `API_KEY` | – | – | – | `airtable-api-key`, `airtable-personnal-access-token` | – | – |
-| `saas.asana.client_secret` | baseline_only | `API_KEY` | – | – | – | `asana-client-secret` | – | – |
-| `saas.hubspot.api_key` | baseline_only | `API_KEY` | – | – | – | `hubspot-api-key` | – | – |
-| `saas.zendesk.secret_key` | baseline_only | `API_KEY` | – | – | – | `zendesk-secret-key` | – | – |
-| `saas.intercom.api_key` | baseline_only | `API_KEY` | – | – | – | `intercom-api-key` | – | – |
-| `saas.postman.api_token` | baseline_only | `API_KEY` | – | – | – | `postman-api-token` | – | – |
-| `saas.mapbox.secret_token` | baseline_only | `API_KEY` | – | – | – | `mapbox-api-token` | – | – |
-| `saas.launchdarkly.access_token` | baseline_only | `API_KEY` | – | – | – | `launchdarkly-access-token` | – | – |
-| `saas.typeform.api_token` | baseline_only | `API_KEY` | – | – | – | `typeform-api-token` | – | – |
-| `saas.contentful.delivery_token` | baseline_only | `API_KEY` | – | – | – | `contentful-delivery-api-token` | – | – |
-| `saas.dropbox.api_token` | baseline_only | `API_KEY` | – | – | – | `dropbox-api-token`, `dropbox-long-lived-api-token`, `dropbox-short-lived-api-token` | – | – |
-| `saas.adobe.client_secret` | baseline_only | `API_KEY` | – | – | – | `adobe-client-secret` | – | – |
-| `saas.facebook.secret` | baseline_only | `API_KEY` | – | – | – | `facebook-access-token`, `facebook-page-access-token`, `facebook-secret` | – | – |
-| `saas.twitter.secret` | baseline_only | `API_KEY` | – | – | – | `twitter-access-secret`, `twitter-access-token`, `twitter-api-key`, `twitter-api-secret`, `twitter-bearer-token` | – | – |
-| `saas.linkedin.client_secret` | baseline_only | `API_KEY` | – | – | – | `linkedin-client-secret` | – | – |
-| `saas.looker.client_secret` | baseline_only | `API_KEY` | – | – | – | `looker-client-secret` | – | – |
-| `saas.twitch.api_token` | baseline_only | `API_KEY` | – | – | – | `twitch-api-token` | – | – |
-| `saas.etsy.access_token` | baseline_only | `API_KEY` | – | – | – | `etsy-access-token` | – | – |
-| `saas.freshbooks.access_token` | baseline_only | `API_KEY` | – | – | – | `freshbooks-access-token` | – | – |
-| `saas.squarespace.access_token` | baseline_only | `API_KEY` | – | – | – | `squarespace-access-token` | – | – |
-| `saas.misc.api_token` | baseline_only | `API_KEY` | – | – | – | `adafruit-api-key`, `beamer-api-token`, `cisco-meraki-api-key`, `finnhub-access-token`, `flickr-access-token`, `frameio-api-token`, `intra42-client-secret`, `maxmind-license-key`, `nytimes-access-token`, `rapidapi-access-token`, `readme-api-token` | – | – |
-| `saas.sidekiq.credentials` | baseline_only | `CREDENTIAL` | – | – | – | `sidekiq-secret`, `sidekiq-sensitive-url` | – | – |
-| `identity.okta.access_token` | baseline_only | `SECRET_TOKEN` | – | – | – | `okta-access-token` | – | – |
-| `identity.authress.access_key` | baseline_only | `SECRET_TOKEN` | – | – | – | `authress-service-client-access-key` | – | – |
-| `identity.onepassword.secret` | baseline_only | `SECRET_TOKEN` | – | – | – | `1password-secret-key`, `1password-service-account-token` | – | – |
-| `key.age_secret_key` | baseline_only | `PRIVATE_KEY` | – | – | – | `age-secret-key` | – | – |
-| `data.databricks.api_token` | baseline_only | `API_KEY` | – | – | – | `databricks-api-token` | – | – |
-| `data.planetscale.secret` | baseline_only | `API_KEY` | – | – | – | `planetscale-api-token`, `planetscale-oauth-token`, `planetscale-password` | – | – |
-| `data.confluent.secret` | baseline_only | `API_KEY` | – | – | – | `confluent-access-token`, `confluent-secret-key` | – | – |
-| `data.algolia.api_key` | baseline_only | `API_KEY` | – | – | – | `algolia-api-key` | – | – |
-| `data.clickhouse.api_secret` | baseline_only | `API_KEY` | – | – | – | `clickhouse-cloud-api-secret-key` | – | – |
-| `data.cloudant.credentials` | baseline_only | `API_KEY` | – | – | – | – | – | `CloudantDetector` |
-| `credential.cli_password` | baseline_only | `CREDENTIAL` | – | – | – | `curl-auth-user` | – | – |
-| `credential.file.nuget_config` | baseline_only | `CREDENTIAL` | – | – | – | `nuget-config-password` | – | – |
-| `credential.kubernetes_secret` | baseline_only | `CREDENTIAL` | – | – | – | `kubernetes-secret-yaml` | – | – |
-| `credential.high_entropy_string` | baseline_only | `CREDENTIAL` | – | – | – | – | – | `Base64HighEntropyString`, `HexHighEntropyString` |
-| `key.pkcs12_file` | baseline_only | `PRIVATE_KEY` | – | – | – | `pkcs12-file` | – | – |
-| `key.symmetric_key` | baseline_only | `CRYPTO_KEY` | – | – | – | – | – | – |
-| `document.legal_privileged` | baseline_only | `dlp.document.legal_privileged` | – | – | – | – | – | – |
-| `document.hr` | baseline_only | `dlp.document.hr` | – | – | – | – | – | – |
-| `document.rnd_ip` | baseline_only | `dlp.document.rnd_ip` | – | – | – | – | – | – |
-| `action.sensitive_material` | out_of_scope | – | `dlp_sensitive_material` | – | on | – | – | – |
-| `action.secret_transfer` | out_of_scope | – | `dlp_secret_transfer` | – | on | – | – | – |
-| `action.destructive_operation` | out_of_scope | – | `dlp_destructive_operation` | – | off | – | – | – |
-| `action.mcp_runtime_risk` | out_of_scope | – | `dlp_mcp_runtime_risk` | – | off | – | – | – |
-| `action.mcp_policy` | out_of_scope | – | `dlp_mcp_policy` | – | off | – | – | – |
-| `public.client_identifier` | out_of_scope | – | – | – | – | `adobe-client-id`, `asana-client-id`, `bitbucket-client-id`, `discord-client-id`, `linkedin-client-id`, `looker-client-id`, `messagebird-client-id`, `plaid-client-id`, `sendbird-access-id`, `sumologic-access-id`, `new-relic-user-api-id` | – | – |
-| `public.publishable_key` | out_of_scope | – | – | – | – | `flutterwave-public-key`, `lob-pub-api-key`, `mailgun-pub-key`, `new-relic-browser-api-token` | – | – |
-| `public.test_key` | out_of_scope | – | – | – | – | `easypost-test-api-token` | – | – |
-| `public.ssl_certificate` | out_of_scope | – | – | – | – | – | – | – |
-| `public.ip_address` | out_of_scope | – | – | – | – | – | – | `IPPublicDetector` |
-| `public.legal_finance_document` | out_of_scope | – | – | – | – | – | – | – |
+#### Coverage
+
+| Entity | Scope | Group | Rule ID(s) | Structure check | Default | Baseline rules |
+| --- | --- | --- | --- | --- | --- | --- |
+| `llm.anthropic.api_key` | shared | `API_KEY` | `dlp_anthropic_key` | format | on | gitleaks: `anthropic-api-key`, `anthropic-admin-api-key`; TruffleHog: `Anthropic` |
+| `llm.openai.api_key` | shared | `API_KEY` | `dlp_openai_key`, `dlp_openai_legacy`, `dlp_openai_svc` | format | on | gitleaks: `openai-api-key`; TruffleHog: `OpenAI`; detect-secrets: `OpenAIDetector` |
+| `llm.huggingface.token` | shared | `API_KEY` | `dlp_huggingface` | format | on | gitleaks: `huggingface-access-token`, `huggingface-organization-api-token`; TruffleHog: `HuggingFace` |
+| `llm.xai.api_key` | shared | `API_KEY` | `dlp_xai_key` | format | on | TruffleHog: `XAI` |
+| `llm.groq.api_key` | shared | `API_KEY` | `dlp_groq_key` | format | on | TruffleHog: `Groq` |
+| `llm.replicate.api_token` | shared | `API_KEY` | `dlp_replicate` | format | on | TruffleHog: `Replicate` |
+| `cloud.aws.access_key_id` | shared | `CLOUD_KEY` | `dlp_aws_access_key` | format | on | gitleaks: `aws-access-token`; TruffleHog: `AWS`; detect-secrets: `AWSKeyDetector` |
+| `cloud.aws.secret_access_key` | shared | `CLOUD_KEY` | `dlp_aws_secret_key` | format | on | TruffleHog: `AWS`; detect-secrets: `AWSKeyDetector` |
+| `cloud.gcp.api_key` | shared | `CLOUD_KEY` | `dlp_google_api_key` | format | on | gitleaks: `gcp-api-key` |
+| `cloud.gcp.oauth_access_token` | shared | `CLOUD_KEY` | `dlp_google_oauth_token` | format | on | TruffleHog: `GoogleOauth2` |
+| `cloud.gcp.oauth_client_secret` | shared | `CLOUD_KEY` | `dlp_gcp_client_secret` | format | on | – |
+| `vcs.github.token` | shared | `SECRET_TOKEN` | `dlp_github_token` | checksum | on | gitleaks: `github-pat`, `github-oauth`, `github-app-token`, `github-refresh-token`; TruffleHog: `Github`; detect-secrets: `GitHubTokenDetector` |
+| `vcs.github.fine_grained_pat` | shared | `SECRET_TOKEN` | `dlp_github_pat` | format | on | gitleaks: `github-fine-grained-pat`; TruffleHog: `Github`; detect-secrets: `GitHubTokenDetector` |
+| `vcs.gitlab.pat` | shared | `SECRET_TOKEN` | `dlp_gitlab_pat` | format | on | gitleaks: `gitlab-pat`, `gitlab-pat-routable`; TruffleHog: `Gitlab`; detect-secrets: `GitLabTokenDetector` |
+| `vcs.gitlab.token` | shared | `SECRET_TOKEN` | `dlp_gitlab_token` | format | on | gitleaks: `gitlab-cicd-job-token`, `gitlab-deploy-token`, `gitlab-feature-flag-client-token`, `gitlab-feed-token`, `gitlab-incoming-mail-token`, `gitlab-kubernetes-agent-token`, `gitlab-ptt`, `gitlab-rrt`, `gitlab-runner-authentication-token`, `gitlab-runner-authentication-token-routable`, `gitlab-scim-token`; TruffleHog: `Gitlab` |
+| `vcs.gitlab.oauth_app_secret` | shared | `API_KEY` | `dlp_gitlab_oauth_secret` | format | on | gitleaks: `gitlab-oauth-app-secret` |
+| `registry.npm.access_token` | shared | `SECRET_TOKEN` | `dlp_npm_token` | checksum | on | gitleaks: `npm-access-token`; TruffleHog: `NpmToken`; detect-secrets: `NpmDetector` |
+| `payment.stripe.secret_key` | shared | `PAYMENT_KEY` | `dlp_stripe_key` | format | on | gitleaks: `stripe-access-token`; TruffleHog: `Stripe`; detect-secrets: `StripeDetector` |
+| `comm.slack.token` | shared | `SECRET_TOKEN` | `dlp_slack_token` | format | on | gitleaks: `slack-bot-token`, `slack-user-token`, `slack-legacy-bot-token`, `slack-legacy-token`, `slack-legacy-workspace-token`; TruffleHog: `Slack`; detect-secrets: `SlackDetector` |
+| `comm.discord.bot_token` | shared | `SECRET_TOKEN` | `dlp_discord_token` | format | on | TruffleHog: `DiscordBotToken`; detect-secrets: `DiscordBotTokenDetector` |
+| `key.pem_private_key` | shared | `PRIVATE_KEY` | `dlp_private_key_block`, `dlp_private_key_header` | format | on | gitleaks: `private-key`; TruffleHog: `PrivateKey`; detect-secrets: `PrivateKeyDetector` |
+| `token.jwt` | shared | `SECRET_TOKEN` | `dlp_jwt_token` | format | on | gitleaks: `jwt`, `jwt-base64`; TruffleHog: `JWT`; detect-secrets: `JwtTokenDetector` |
+| `credential.secret_assignment` | shared | `CREDENTIAL` | `dlp_env_var_secret`, `dlp_generic_credential_assignment` | none | on | gitleaks: `generic-api-key`; detect-secrets: `KeywordDetector` |
+| `credential.password_assignment` | shared | `CREDENTIAL` | `dlp_password_assignment` | none | on | detect-secrets: `KeywordDetector` |
+| `credential.http_bearer` | shared | `SECRET_TOKEN` | `dlp_bearer_token` | format | on | gitleaks: `curl-auth-header` |
+| `credential.http_basic_auth` | shared | `CREDENTIAL` | `dlp_basic_auth` | structure | on | – |
+| `credential.url_userinfo` | shared | `CREDENTIAL` | `dlp_url_userinfo_password` | none | on | TruffleHog: `URI`, `Postgres`, `MongoDB`, `Redis`, `FTP`, `RabbitMQ`, `JDBC`; detect-secrets: `BasicAuthDetector` |
+| `credential.connection_string` | shared | `CREDENTIAL` | `dlp_connection_string_password` | structure | on | TruffleHog: `JDBC`, `SQLServer` |
+| `credential.ldap_bind_password` | shared | `CREDENTIAL` | `dlp_ldap_bind_password` | format | on | TruffleHog: `LDAP` |
+| `credential.signed_url_signature` | shared | `CREDENTIAL` | `dlp_signed_url_signature` | none | on | – |
+| `credential.session_cookie` | shared | `CREDENTIAL` | `dlp_session_cookie` | none | on | – |
+| `credential.csrf_token` | shared | `SECRET_TOKEN` | `dlp_csrf_token` | none | on | – |
+| `credential.password_hash` | shared | `PASSWORD_HASH` | `dlp_password_hash` | format | on | – |
+| `content.source_code` | shared | `dlp.content.source_code` | `dlp_source_code_fence`, `dlp_source_code_statement`, `dlp_source_code_python_rust_assignment`, `dlp_source_code_declaration`, `dlp_source_code_import` | format | off | – |
+| `content.database_dump` | shared | `dlp.content.database_dump` | `dlp_database_dump_insert`, `dlp_database_dump_header` | format | off | – |
+| `content.system_log` | shared | `dlp.content.system_log` | `dlp_stacktrace_block`, `dlp_structured_system_log` | format | off | – |
+| `payment.stripe.webhook_secret` | ark_only | `PAYMENT_KEY` | `dlp_stripe_webhook` | format | on | – |
+| `crypto.ethereum.private_key` | ark_only | `CRYPTO_KEY` | `dlp_eth_private_key` | format | on | – |
+| `crypto.bitcoin.wif` | ark_only | `CRYPTO_KEY` | `dlp_btc_wif` | checksum | on | – |
+| `credential.url_userinfo_token` | ark_only | `SECRET_TOKEN` | `dlp_url_userinfo_token` | none | on | – |
+| `credential.url_query_secret` | ark_only | `CREDENTIAL` | `dlp_credential_in_url` | none | on | – |
+| `identifier.de.vat_id` | ark_only | `dlp.de.vat_id` | `dlp_de_vat_id` | format | off | – |
+| `identifier.de.commercial_register` | ark_only | `dlp.de.commercial_register_number` | `dlp_de_commercial_register_number` | format | off | – |
+| `identifier.de.bsnr` | ark_only | `dlp.de.facility_number_bsnr` | `dlp_de_facility_number_bsnr` | format | off | – |
+| `identifier.record.case` | ark_only | `dlp.record.case_id` | `dlp_record_case_id` | none | off | – |
+| `identifier.record.contract` | ark_only | `dlp.record.contract_id` | `dlp_record_contract_id` | none | off | – |
+| `identifier.record.claim` | ark_only | `dlp.record.claim_id` | `dlp_record_claim_id` | none | off | – |
+| `identifier.record.order` | ark_only | `dlp.record.order_id` | `dlp_record_order_id` | none | off | – |
+| `identifier.record.invoice` | ark_only | `dlp.record.invoice_id` | `dlp_record_invoice_id` | none | off | – |
+| `identifier.project` | ark_only | `dlp.project_id` | `dlp_project_id` | none | off | – |
+| `identifier.organization` | ark_only | `dlp.organization_id` | `dlp_organization_id` | none | off | – |
+| `content.business_metric` | ark_only | `dlp.internal.business_metric` | `dlp_internal_business_metric` | format | off | – |
+| `content.sql` | ark_only | `dlp.content.sql` | `dlp_sql_statement`, `dlp_sql_multiline_statement` | structure | off | – |
+| `vcs.gitlab.session_cookie` | baseline_only | `CREDENTIAL` | – | – | – | gitleaks: `gitlab-session-cookie` |
+| `comm.slack.app_config_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `slack-app-token`, `slack-config-access-token`, `slack-config-refresh-token`; TruffleHog: `Slack` |
+| `llm.cohere.api_key` | baseline_only | `API_KEY` | – | – | – | gitleaks: `cohere-api-token` |
+| `llm.perplexity.api_key` | baseline_only | `API_KEY` | – | – | – | gitleaks: `perplexity-api-key` |
+| `llm.privateai.api_key` | baseline_only | `API_KEY` | – | – | – | gitleaks: `privateai-api-token` |
+| `cloud.aws.bedrock_api_key` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `aws-amazon-bedrock-api-key-long-lived`, `aws-amazon-bedrock-api-key-short-lived` |
+| `cloud.alibaba.access_key` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `alibaba-access-key-id`, `alibaba-secret-key` |
+| `cloud.azure.entra_client_secret` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `azure-ad-client-secret` |
+| `cloud.azure.storage_account_key` | baseline_only | `CLOUD_KEY` | – | – | – | detect-secrets: `AzureStorageKeyDetector` |
+| `cloud.gcp.service_account_key` | baseline_only | `CLOUD_KEY` | – | – | – | TruffleHog: `GCP` |
+| `cloud.ibm.credentials` | baseline_only | `CLOUD_KEY` | – | – | – | detect-secrets: `IbmCloudIamDetector`, `IbmCosHmacDetector`, `SoftlayerDetector` |
+| `cloud.yandex.credentials` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `yandex-access-token`, `yandex-api-key`, `yandex-aws-access-token` |
+| `cloud.scalingo.api_token` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `scalingo-api-token` |
+| `registry.jfrog.artifactory` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `artifactory-api-key`, `artifactory-reference-token`, `jfrog-api-key`, `jfrog-identity-token`; detect-secrets: `ArtifactoryDetector` |
+| `registry.pypi.upload_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `pypi-upload-token`; detect-secrets: `PypiTokenDetector` |
+| `registry.rubygems.api_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `rubygems-api-token` |
+| `registry.clojars.api_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `clojars-api-token` |
+| `devops.terraform_cloud.token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `hashicorp-tf-api-token`, `hashicorp-tf-password` |
+| `devops.pulumi.api_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `pulumi-api-token` |
+| `devops.vault.token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `vault-batch-token`, `vault-service-token` |
+| `devops.doppler.api_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `doppler-api-token` |
+| `devops.prefect.api_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `prefect-api-token` |
+| `devops.infracost.api_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `infracost-api-token` |
+| `devops.octopus_deploy.api_key` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `octopus-deploy-api-key` |
+| `devops.harness.api_key` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `harness-api-key` |
+| `devops.snyk.api_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `snyk-api-token` |
+| `devops.sonar.api_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `sonar-api-token` |
+| `devops.codecov.access_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `codecov-access-token` |
+| `devops.sourcegraph.access_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `sourcegraph-access-token` |
+| `vcs.bitbucket.client_secret` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `bitbucket-client-secret` |
+| `ci.droneci.access_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `droneci-access-token` |
+| `ci.travisci.access_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `travisci-access-token` |
+| `hosting.flyio.access_token` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `flyio-access-token` |
+| `hosting.netlify.access_token` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `netlify-access-token` |
+| `hosting.heroku.api_key` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `heroku-api-key`, `heroku-api-key-v2` |
+| `hosting.cloudflare.api_key` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `cloudflare-api-key`, `cloudflare-global-api-key`, `cloudflare-origin-ca-key` |
+| `hosting.digitalocean.token` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `digitalocean-access-token`, `digitalocean-pat`, `digitalocean-refresh-token` |
+| `hosting.openshift.user_token` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `openshift-user-token` |
+| `hosting.defined_networking.api_token` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `defined-networking-api-token` |
+| `hosting.fastly.api_token` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `fastly-api-token` |
+| `hosting.settlemint.access_token` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `settlemint-application-access-token`, `settlemint-personal-access-token`, `settlemint-service-access-token` |
+| `observability.datadog.access_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `datadog-access-token` |
+| `observability.newrelic.key` | baseline_only | `API_KEY` | – | – | – | gitleaks: `new-relic-insert-key`, `new-relic-user-api-key` |
+| `observability.sentry.token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `sentry-access-token`, `sentry-org-token`, `sentry-user-token` |
+| `observability.grafana.token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `grafana-api-key`, `grafana-cloud-api-token`, `grafana-service-account-token` |
+| `observability.dynatrace.api_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `dynatrace-api-token` |
+| `observability.sumologic.access_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `sumologic-access-token` |
+| `comm.webhook_url` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `slack-webhook-url`, `microsoft-teams-webhook` |
+| `comm.discord.api_credentials` | baseline_only | `API_KEY` | – | – | – | gitleaks: `discord-api-token`, `discord-client-secret` |
+| `comm.telegram.bot_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `telegram-bot-api-token`; detect-secrets: `TelegramBotTokenDetector` |
+| `comm.twilio.api_key` | baseline_only | `API_KEY` | – | – | – | gitleaks: `twilio-api-key`; detect-secrets: `TwilioKeyDetector` |
+| `comm.sendgrid.api_key` | baseline_only | `API_KEY` | – | – | – | gitleaks: `sendgrid-api-token`; detect-secrets: `SendGridDetector` |
+| `comm.brevo.api_key` | baseline_only | `API_KEY` | – | – | – | gitleaks: `sendinblue-api-token` |
+| `comm.mailgun.key` | baseline_only | `API_KEY` | – | – | – | gitleaks: `mailgun-private-api-token`, `mailgun-signing-key` |
+| `comm.mailchimp.api_key` | baseline_only | `API_KEY` | – | – | – | gitleaks: `mailchimp-api-key`; detect-secrets: `MailchimpDetector` |
+| `comm.messagebird.api_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `messagebird-api-token` |
+| `comm.mattermost.access_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `mattermost-access-token` |
+| `comm.sendbird.access_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `sendbird-access-token` |
+| `comm.gitter.access_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `gitter-access-token` |
+| `payment.square.access_token` | baseline_only | `PAYMENT_KEY` | – | – | – | gitleaks: `square-access-token`; detect-secrets: `SquareOAuthDetector` |
+| `payment.shopify.token` | baseline_only | `PAYMENT_KEY` | – | – | – | gitleaks: `shopify-access-token`, `shopify-custom-access-token`, `shopify-private-app-access-token`, `shopify-shared-secret` |
+| `payment.coinbase.access_token` | baseline_only | `PAYMENT_KEY` | – | – | – | gitleaks: `coinbase-access-token` |
+| `payment.plaid.secret` | baseline_only | `PAYMENT_KEY` | – | – | – | gitleaks: `plaid-api-token`, `plaid-secret-key` |
+| `payment.gocardless.api_token` | baseline_only | `PAYMENT_KEY` | – | – | – | gitleaks: `gocardless-api-token` |
+| `payment.flutterwave.secret` | baseline_only | `PAYMENT_KEY` | – | – | – | gitleaks: `flutterwave-secret-key`, `flutterwave-encryption-key` |
+| `payment.finicity.secret` | baseline_only | `PAYMENT_KEY` | – | – | – | gitleaks: `finicity-api-token`, `finicity-client-secret` |
+| `payment.crypto_exchange.secret` | baseline_only | `PAYMENT_KEY` | – | – | – | gitleaks: `kraken-access-token`, `kucoin-access-token`, `kucoin-secret-key`, `bittrex-access-key`, `bittrex-secret-key` |
+| `payment.freemius.secret_key` | baseline_only | `PAYMENT_KEY` | – | – | – | gitleaks: `freemius-secret-key` |
+| `commerce.shipping.api_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `duffel-api-token`, `easypost-api-token`, `shippo-api-token`, `lob-api-key` |
+| `saas.atlassian.api_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `atlassian-api-token` |
+| `saas.notion.api_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `notion-api-token` |
+| `saas.linear.secret` | baseline_only | `API_KEY` | – | – | – | gitleaks: `linear-api-key`, `linear-client-secret` |
+| `saas.airtable.token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `airtable-api-key`, `airtable-personnal-access-token` |
+| `saas.asana.client_secret` | baseline_only | `API_KEY` | – | – | – | gitleaks: `asana-client-secret` |
+| `saas.hubspot.api_key` | baseline_only | `API_KEY` | – | – | – | gitleaks: `hubspot-api-key` |
+| `saas.zendesk.secret_key` | baseline_only | `API_KEY` | – | – | – | gitleaks: `zendesk-secret-key` |
+| `saas.intercom.api_key` | baseline_only | `API_KEY` | – | – | – | gitleaks: `intercom-api-key` |
+| `saas.postman.api_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `postman-api-token` |
+| `saas.mapbox.secret_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `mapbox-api-token` |
+| `saas.launchdarkly.access_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `launchdarkly-access-token` |
+| `saas.typeform.api_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `typeform-api-token` |
+| `saas.contentful.delivery_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `contentful-delivery-api-token` |
+| `saas.dropbox.api_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `dropbox-api-token`, `dropbox-long-lived-api-token`, `dropbox-short-lived-api-token` |
+| `saas.adobe.client_secret` | baseline_only | `API_KEY` | – | – | – | gitleaks: `adobe-client-secret` |
+| `saas.facebook.secret` | baseline_only | `API_KEY` | – | – | – | gitleaks: `facebook-access-token`, `facebook-page-access-token`, `facebook-secret` |
+| `saas.twitter.secret` | baseline_only | `API_KEY` | – | – | – | gitleaks: `twitter-access-secret`, `twitter-access-token`, `twitter-api-key`, `twitter-api-secret`, `twitter-bearer-token` |
+| `saas.linkedin.client_secret` | baseline_only | `API_KEY` | – | – | – | gitleaks: `linkedin-client-secret` |
+| `saas.looker.client_secret` | baseline_only | `API_KEY` | – | – | – | gitleaks: `looker-client-secret` |
+| `saas.twitch.api_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `twitch-api-token` |
+| `saas.etsy.access_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `etsy-access-token` |
+| `saas.freshbooks.access_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `freshbooks-access-token` |
+| `saas.squarespace.access_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `squarespace-access-token` |
+| `saas.misc.api_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `adafruit-api-key`, `beamer-api-token`, `cisco-meraki-api-key`, `finnhub-access-token`, `flickr-access-token`, `frameio-api-token`, `intra42-client-secret`, `maxmind-license-key`, `nytimes-access-token`, `rapidapi-access-token`, `readme-api-token` |
+| `saas.sidekiq.credentials` | baseline_only | `CREDENTIAL` | – | – | – | gitleaks: `sidekiq-secret`, `sidekiq-sensitive-url` |
+| `identity.okta.access_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `okta-access-token` |
+| `identity.authress.access_key` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `authress-service-client-access-key` |
+| `identity.onepassword.secret` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `1password-secret-key`, `1password-service-account-token` |
+| `key.age_secret_key` | baseline_only | `PRIVATE_KEY` | – | – | – | gitleaks: `age-secret-key` |
+| `data.databricks.api_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `databricks-api-token` |
+| `data.planetscale.secret` | baseline_only | `API_KEY` | – | – | – | gitleaks: `planetscale-api-token`, `planetscale-oauth-token`, `planetscale-password` |
+| `data.confluent.secret` | baseline_only | `API_KEY` | – | – | – | gitleaks: `confluent-access-token`, `confluent-secret-key` |
+| `data.algolia.api_key` | baseline_only | `API_KEY` | – | – | – | gitleaks: `algolia-api-key` |
+| `data.clickhouse.api_secret` | baseline_only | `API_KEY` | – | – | – | gitleaks: `clickhouse-cloud-api-secret-key` |
+| `data.cloudant.credentials` | baseline_only | `API_KEY` | – | – | – | detect-secrets: `CloudantDetector` |
+| `credential.cli_password` | baseline_only | `CREDENTIAL` | – | – | – | gitleaks: `curl-auth-user` |
+| `credential.file.nuget_config` | baseline_only | `CREDENTIAL` | – | – | – | gitleaks: `nuget-config-password` |
+| `credential.kubernetes_secret` | baseline_only | `CREDENTIAL` | – | – | – | gitleaks: `kubernetes-secret-yaml` |
+| `credential.high_entropy_string` | baseline_only | `CREDENTIAL` | – | – | – | detect-secrets: `Base64HighEntropyString`, `HexHighEntropyString` |
+| `key.pkcs12_file` | baseline_only | `PRIVATE_KEY` | – | – | – | gitleaks: `pkcs12-file` |
+| `key.symmetric_key` | baseline_only | `CRYPTO_KEY` | – | – | – | – |
+| `document.legal_privileged` | baseline_only | `dlp.document.legal_privileged` | – | – | – | – |
+| `document.hr` | baseline_only | `dlp.document.hr` | – | – | – | – |
+| `document.rnd_ip` | baseline_only | `dlp.document.rnd_ip` | – | – | – | – |
+| `action.sensitive_material` | out_of_scope | – | `dlp_sensitive_material` | – | on | – |
+| `action.secret_transfer` | out_of_scope | – | `dlp_secret_transfer` | – | on | – |
+| `action.destructive_operation` | out_of_scope | – | `dlp_destructive_operation` | – | off | – |
+| `action.mcp_runtime_risk` | out_of_scope | – | `dlp_mcp_runtime_risk` | – | off | – |
+| `action.mcp_policy` | out_of_scope | – | `dlp_mcp_policy` | – | off | – |
+| `public.client_identifier` | out_of_scope | – | – | – | – | gitleaks: `adobe-client-id`, `asana-client-id`, `bitbucket-client-id`, `discord-client-id`, `linkedin-client-id`, `looker-client-id`, `messagebird-client-id`, `plaid-client-id`, `sendbird-access-id`, `sumologic-access-id`, `new-relic-user-api-id` |
+| `public.publishable_key` | out_of_scope | – | – | – | – | gitleaks: `flutterwave-public-key`, `lob-pub-api-key`, `mailgun-pub-key`, `new-relic-browser-api-token` |
+| `public.test_key` | out_of_scope | – | – | – | – | gitleaks: `easypost-test-api-token` |
+| `public.ssl_certificate` | out_of_scope | – | – | – | – | – |
+| `public.ip_address` | out_of_scope | – | – | – | – | detect-secrets: `IPPublicDetector` |
+| `public.legal_finance_document` | out_of_scope | – | – | – | – | – |
 
 Entities: 36 shared, 17 ARK only, 113 baseline only, 11 out of scope.
+
+#### F1 and recall per entity
+
+Exact F1 and recall in percent on the dev split, measured 2026-10-24; same cells and legend as the group table (M1 judges recall). A baseline counts for an entity when it reported a typed span for it. `out_of_scope` entities are not measured and not listed.
+
+| Entity | Scope | Group | Gold | F1 | Recall |
+| --- | --- | --- | --- | --- | --- |
+| `llm.anthropic.api_key` | shared | `API_KEY` | 40 | ARK 100.0 / best baseline 100.0 (TruffleHog) | ARK 100.0 / best baseline 100.0 (TruffleHog) |
+| `llm.openai.api_key` | shared | `API_KEY` | 120 | ARK 100.0 / best baseline 98.7 (TruffleHog) | ARK 100.0 / best baseline 98.3 (TruffleHog) |
+| `llm.huggingface.token` | shared | `API_KEY` | 40 | ARK 100.0 / best baseline 100.0 (TruffleHog) | ARK 100.0 / best baseline 100.0 (TruffleHog) |
+| `llm.xai.api_key` | shared | `API_KEY` | 40 | ARK 100.0 / best baseline 100.0 (TruffleHog) | ARK 100.0 / best baseline 100.0 (TruffleHog) |
+| `llm.groq.api_key` | shared | `API_KEY` | 40 | ARK 100.0 / best baseline 100.0 (TruffleHog) | ARK 100.0 / best baseline 100.0 (TruffleHog) |
+| `llm.replicate.api_token` | shared | `API_KEY` | 40 | ARK 100.0 / best baseline 100.0 (TruffleHog) | ARK 100.0 / best baseline 100.0 (TruffleHog) |
+| `cloud.aws.access_key_id` | shared | `CLOUD_KEY` | 40 | ARK 100.0 / best baseline 66.7 (gitleaks) | ARK 100.0 / best baseline 100.0 (gitleaks, detect-secrets) |
+| `cloud.aws.secret_access_key` | shared | `CLOUD_KEY` | 40 | ARK 100.0 / best baseline 21.3 (detect-secrets) | ARK 100.0 / best baseline 62.5 (detect-secrets) |
+| `cloud.gcp.api_key` | shared | `CLOUD_KEY` | 40 | ARK 100.0 / best baseline 97.4 (gitleaks) | ARK 100.0 / best baseline 95.0 (gitleaks) |
+| `cloud.gcp.oauth_access_token` | shared | `CLOUD_KEY` | 40 | ARK 100.0 / best baseline 98.7 (TruffleHog) | ARK 100.0 / best baseline 97.5 (TruffleHog) |
+| `cloud.gcp.oauth_client_secret` | shared | `CLOUD_KEY` | 40 | ARK 100.0 / no baseline | ARK 100.0 / no baseline |
+| `vcs.github.token` | shared | `SECRET_TOKEN` | 40 | ARK 100.0 / best baseline 66.7 (gitleaks, TruffleHog) | ARK 100.0 / best baseline 100.0 (gitleaks, TruffleHog, detect-secrets) |
+| `vcs.github.fine_grained_pat` | shared | `SECRET_TOKEN` | 40 | ARK 100.0 / best baseline 66.7 (gitleaks, TruffleHog) | ARK 100.0 / best baseline 100.0 (gitleaks, TruffleHog) |
+| `vcs.gitlab.pat` | shared | `SECRET_TOKEN` | 40 | ARK 100.0 / best baseline 100.0 (TruffleHog) | ARK 100.0 / best baseline 100.0 (gitleaks, TruffleHog, detect-secrets) |
+| `vcs.gitlab.token` | shared | `SECRET_TOKEN` | 0 | no gold | no gold |
+| `vcs.gitlab.oauth_app_secret` | shared | `API_KEY` | 0 | no gold | no gold |
+| `registry.npm.access_token` | shared | `SECRET_TOKEN` | 40 | ARK 100.0 / best baseline 97.6 (TruffleHog) | ARK 100.0 / best baseline 100.0 (TruffleHog) |
+| `payment.stripe.secret_key` | shared | `PAYMENT_KEY` | 40 | ARK 100.0 / best baseline 49.4 (gitleaks) | ARK 100.0 / best baseline 95.0 (gitleaks) |
+| `comm.slack.token` | shared | `SECRET_TOKEN` | 40 | ARK 100.0 / best baseline 72.7 (TruffleHog) | ARK 100.0 / best baseline 100.0 (gitleaks, TruffleHog, detect-secrets) |
+| `comm.discord.bot_token` | shared | `SECRET_TOKEN` | 40 | ARK 100.0 / best baseline 50.0 (detect-secrets) | ARK 100.0 / best baseline 100.0 (detect-secrets) |
+| `key.pem_private_key` | shared | `PRIVATE_KEY` | 37 | ARK 88.1 / best baseline 56.1 (detect-secrets) | ARK 100.0 / best baseline 100.0 (detect-secrets) |
+| `token.jwt` | shared | `SECRET_TOKEN` | 40 | ARK 100.0 / best baseline 100.0 (detect-secrets) | ARK 100.0 / best baseline 100.0 (gitleaks, detect-secrets) |
+| `credential.secret_assignment` | shared | `CREDENTIAL` | 80 | ARK 85.0 / best baseline 17.9 (gitleaks) | ARK 85.0 / best baseline 60.0 (gitleaks, detect-secrets) |
+| `credential.password_assignment` | shared | `CREDENTIAL` | 40 | ARK 75.0 / best baseline 3.3 (detect-secrets) | ARK 60.0 / best baseline 52.5 (detect-secrets) |
+| `credential.http_bearer` | shared | `SECRET_TOKEN` | 40 | ARK 100.0 / best baseline 4.8 (gitleaks) | ARK 100.0 / best baseline 2.5 (gitleaks) |
+| `credential.http_basic_auth` | shared | `CREDENTIAL` | 40 | ARK 100.0 / no baseline | ARK 100.0 / no baseline |
+| `credential.url_userinfo` | shared | `CREDENTIAL` | 40 | ARK 100.0 / best baseline 44.0 (detect-secrets) | ARK 100.0 / best baseline 100.0 (TruffleHog, detect-secrets) |
+| `credential.connection_string` | shared | `CREDENTIAL` | – | – | – |
+| `credential.ldap_bind_password` | shared | `CREDENTIAL` | – | – | – |
+| `credential.signed_url_signature` | shared | `CREDENTIAL` | 40 | ARK 97.4 / no baseline | ARK 95.0 / no baseline |
+| `credential.session_cookie` | shared | `CREDENTIAL` | 40 | ARK 100.0 / no baseline | ARK 100.0 / no baseline |
+| `credential.csrf_token` | shared | `SECRET_TOKEN` | 40 | ARK 91.9 / no baseline | ARK 85.0 / no baseline |
+| `credential.password_hash` | shared | `PASSWORD_HASH` | 40 | ARK 91.9 / no baseline | ARK 85.0 / no baseline |
+| `content.source_code` | shared | `dlp.content.source_code` | 214 documents | ARK 99.1 (opt-in profile) | ARK 99.5 (opt-in profile) |
+| `content.database_dump` | shared | `dlp.content.database_dump` | 0 | no gold | no gold |
+| `content.system_log` | shared | `dlp.content.system_log` | 0 | no gold | no gold |
+| `payment.stripe.webhook_secret` | ark_only | `PAYMENT_KEY` | 40 | ARK 100.0 / no baseline | ARK 100.0 / no baseline |
+| `crypto.ethereum.private_key` | ark_only | `CRYPTO_KEY` | 40 | ARK 100.0 / no baseline | ARK 100.0 / no baseline |
+| `crypto.bitcoin.wif` | ark_only | `CRYPTO_KEY` | 40 | ARK 100.0 / no baseline | ARK 100.0 / no baseline |
+| `credential.url_userinfo_token` | ark_only | `SECRET_TOKEN` | 0 | no gold | no gold |
+| `credential.url_query_secret` | ark_only | `CREDENTIAL` | 40 | ARK 97.4 / no baseline | ARK 95.0 / no baseline |
+| `identifier.de.vat_id` | ark_only | `dlp.de.vat_id` | 32 | ARK 18.2 (opt-in profile) | ARK 12.5 (opt-in profile) |
+| `identifier.de.commercial_register` | ark_only | `dlp.de.commercial_register_number` | 32 | ARK 50.0 (opt-in profile) | ARK 100.0 (opt-in profile) |
+| `identifier.de.bsnr` | ark_only | `dlp.de.facility_number_bsnr` | 32 | ARK 28.6 (opt-in profile) | ARK 25.0 (opt-in profile) |
+| `identifier.record.case` | ark_only | `dlp.record.case_id` | 32 | ARK 18.2 (opt-in profile) | ARK 12.5 (opt-in profile) |
+| `identifier.record.contract` | ark_only | `dlp.record.contract_id` | 32 | ARK 18.2 (opt-in profile) | ARK 12.5 (opt-in profile) |
+| `identifier.record.claim` | ark_only | `dlp.record.claim_id` | 32 | ARK 18.2 (opt-in profile) | ARK 12.5 (opt-in profile) |
+| `identifier.record.order` | ark_only | `dlp.record.order_id` | 32 | ARK 18.2 (opt-in profile) | ARK 12.5 (opt-in profile) |
+| `identifier.record.invoice` | ark_only | `dlp.record.invoice_id` | 32 | ARK 18.2 (opt-in profile) | ARK 12.5 (opt-in profile) |
+| `identifier.project` | ark_only | `dlp.project_id` | 32 | ARK 18.2 (opt-in profile) | ARK 12.5 (opt-in profile) |
+| `identifier.organization` | ark_only | `dlp.organization_id` | 32 | ARK 18.2 (opt-in profile) | ARK 12.5 (opt-in profile) |
+| `content.business_metric` | ark_only | `dlp.internal.business_metric` | 0 | no gold | no gold |
+| `content.sql` | ark_only | `dlp.content.sql` | 10 documents | ARK 90.9 (opt-in profile) | ARK 100.0 (opt-in profile) |
+| `vcs.gitlab.session_cookie` | baseline_only | `CREDENTIAL` | 0 | no gold | no gold |
+| `comm.slack.app_config_token` | baseline_only | `SECRET_TOKEN` | 0 | no gold | no gold |
+| `llm.cohere.api_key` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `llm.perplexity.api_key` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `llm.privateai.api_key` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `cloud.aws.bedrock_api_key` | baseline_only | `CLOUD_KEY` | 0 | no gold | no gold |
+| `cloud.alibaba.access_key` | baseline_only | `CLOUD_KEY` | 0 | no gold | no gold |
+| `cloud.azure.entra_client_secret` | baseline_only | `CLOUD_KEY` | 0 | no gold | no gold |
+| `cloud.azure.storage_account_key` | baseline_only | `CLOUD_KEY` | 0 | no gold | no gold |
+| `cloud.gcp.service_account_key` | baseline_only | `CLOUD_KEY` | 0 | no gold | no gold |
+| `cloud.ibm.credentials` | baseline_only | `CLOUD_KEY` | 0 | no gold | no gold |
+| `cloud.yandex.credentials` | baseline_only | `CLOUD_KEY` | 0 | no gold | no gold |
+| `cloud.scalingo.api_token` | baseline_only | `CLOUD_KEY` | 0 | no gold | no gold |
+| `registry.jfrog.artifactory` | baseline_only | `SECRET_TOKEN` | 0 | no gold | no gold |
+| `registry.pypi.upload_token` | baseline_only | `SECRET_TOKEN` | 0 | no gold | no gold |
+| `registry.rubygems.api_token` | baseline_only | `SECRET_TOKEN` | 0 | no gold | no gold |
+| `registry.clojars.api_token` | baseline_only | `SECRET_TOKEN` | 0 | no gold | no gold |
+| `devops.terraform_cloud.token` | baseline_only | `SECRET_TOKEN` | 0 | no gold | no gold |
+| `devops.pulumi.api_token` | baseline_only | `SECRET_TOKEN` | 0 | no gold | no gold |
+| `devops.vault.token` | baseline_only | `SECRET_TOKEN` | 0 | no gold | no gold |
+| `devops.doppler.api_token` | baseline_only | `SECRET_TOKEN` | 0 | no gold | no gold |
+| `devops.prefect.api_token` | baseline_only | `SECRET_TOKEN` | 0 | no gold | no gold |
+| `devops.infracost.api_token` | baseline_only | `SECRET_TOKEN` | 0 | no gold | no gold |
+| `devops.octopus_deploy.api_key` | baseline_only | `SECRET_TOKEN` | 0 | no gold | no gold |
+| `devops.harness.api_key` | baseline_only | `SECRET_TOKEN` | 0 | no gold | no gold |
+| `devops.snyk.api_token` | baseline_only | `SECRET_TOKEN` | 0 | no gold | no gold |
+| `devops.sonar.api_token` | baseline_only | `SECRET_TOKEN` | 0 | no gold | no gold |
+| `devops.codecov.access_token` | baseline_only | `SECRET_TOKEN` | 0 | no gold | no gold |
+| `devops.sourcegraph.access_token` | baseline_only | `SECRET_TOKEN` | 0 | no gold | no gold |
+| `vcs.bitbucket.client_secret` | baseline_only | `SECRET_TOKEN` | 0 | no gold | no gold |
+| `ci.droneci.access_token` | baseline_only | `SECRET_TOKEN` | 0 | no gold | no gold |
+| `ci.travisci.access_token` | baseline_only | `SECRET_TOKEN` | 0 | no gold | no gold |
+| `hosting.flyio.access_token` | baseline_only | `CLOUD_KEY` | 0 | no gold | no gold |
+| `hosting.netlify.access_token` | baseline_only | `CLOUD_KEY` | 0 | no gold | no gold |
+| `hosting.heroku.api_key` | baseline_only | `CLOUD_KEY` | 0 | no gold | no gold |
+| `hosting.cloudflare.api_key` | baseline_only | `CLOUD_KEY` | 0 | no gold | no gold |
+| `hosting.digitalocean.token` | baseline_only | `CLOUD_KEY` | 0 | no gold | no gold |
+| `hosting.openshift.user_token` | baseline_only | `CLOUD_KEY` | 0 | no gold | no gold |
+| `hosting.defined_networking.api_token` | baseline_only | `CLOUD_KEY` | 0 | no gold | no gold |
+| `hosting.fastly.api_token` | baseline_only | `CLOUD_KEY` | 0 | no gold | no gold |
+| `hosting.settlemint.access_token` | baseline_only | `CLOUD_KEY` | 0 | no gold | no gold |
+| `observability.datadog.access_token` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `observability.newrelic.key` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `observability.sentry.token` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `observability.grafana.token` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `observability.dynatrace.api_token` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `observability.sumologic.access_token` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `comm.webhook_url` | baseline_only | `SECRET_TOKEN` | 0 | no gold | no gold |
+| `comm.discord.api_credentials` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `comm.telegram.bot_token` | baseline_only | `SECRET_TOKEN` | 0 | no gold | no gold |
+| `comm.twilio.api_key` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `comm.sendgrid.api_key` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `comm.brevo.api_key` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `comm.mailgun.key` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `comm.mailchimp.api_key` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `comm.messagebird.api_token` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `comm.mattermost.access_token` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `comm.sendbird.access_token` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `comm.gitter.access_token` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `payment.square.access_token` | baseline_only | `PAYMENT_KEY` | 0 | no gold | no gold |
+| `payment.shopify.token` | baseline_only | `PAYMENT_KEY` | 0 | no gold | no gold |
+| `payment.coinbase.access_token` | baseline_only | `PAYMENT_KEY` | 0 | no gold | no gold |
+| `payment.plaid.secret` | baseline_only | `PAYMENT_KEY` | 0 | no gold | no gold |
+| `payment.gocardless.api_token` | baseline_only | `PAYMENT_KEY` | 0 | no gold | no gold |
+| `payment.flutterwave.secret` | baseline_only | `PAYMENT_KEY` | 0 | no gold | no gold |
+| `payment.finicity.secret` | baseline_only | `PAYMENT_KEY` | 0 | no gold | no gold |
+| `payment.crypto_exchange.secret` | baseline_only | `PAYMENT_KEY` | 0 | no gold | no gold |
+| `payment.freemius.secret_key` | baseline_only | `PAYMENT_KEY` | 0 | no gold | no gold |
+| `commerce.shipping.api_token` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `saas.atlassian.api_token` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `saas.notion.api_token` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `saas.linear.secret` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `saas.airtable.token` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `saas.asana.client_secret` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `saas.hubspot.api_key` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `saas.zendesk.secret_key` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `saas.intercom.api_key` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `saas.postman.api_token` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `saas.mapbox.secret_token` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `saas.launchdarkly.access_token` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `saas.typeform.api_token` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `saas.contentful.delivery_token` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `saas.dropbox.api_token` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `saas.adobe.client_secret` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `saas.facebook.secret` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `saas.twitter.secret` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `saas.linkedin.client_secret` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `saas.looker.client_secret` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `saas.twitch.api_token` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `saas.etsy.access_token` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `saas.freshbooks.access_token` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `saas.squarespace.access_token` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `saas.misc.api_token` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `saas.sidekiq.credentials` | baseline_only | `CREDENTIAL` | 0 | no gold | no gold |
+| `identity.okta.access_token` | baseline_only | `SECRET_TOKEN` | 0 | no gold | no gold |
+| `identity.authress.access_key` | baseline_only | `SECRET_TOKEN` | 0 | no gold | no gold |
+| `identity.onepassword.secret` | baseline_only | `SECRET_TOKEN` | 0 | no gold | no gold |
+| `key.age_secret_key` | baseline_only | `PRIVATE_KEY` | 0 | no gold | no gold |
+| `data.databricks.api_token` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `data.planetscale.secret` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `data.confluent.secret` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `data.algolia.api_key` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `data.clickhouse.api_secret` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `data.cloudant.credentials` | baseline_only | `API_KEY` | 0 | no gold | no gold |
+| `credential.cli_password` | baseline_only | `CREDENTIAL` | 0 | no gold | no gold |
+| `credential.file.nuget_config` | baseline_only | `CREDENTIAL` | 0 | no gold | no gold |
+| `credential.kubernetes_secret` | baseline_only | `CREDENTIAL` | 0 | no gold | no gold |
+| `credential.high_entropy_string` | baseline_only | `CREDENTIAL` | 0 | no gold | no gold |
+| `key.pkcs12_file` | baseline_only | `PRIVATE_KEY` | 0 | no gold | no gold |
+| `key.symmetric_key` | baseline_only | `CRYPTO_KEY` | 0 | no gold | no gold |
+| `document.legal_privileged` | baseline_only | `dlp.document.legal_privileged` | planned / not implemented | planned / not implemented | planned / not implemented |
+| `document.hr` | baseline_only | `dlp.document.hr` | planned / not implemented | planned / not implemented | planned / not implemented |
+| `document.rnd_ip` | baseline_only | `dlp.document.rnd_ip` | planned / not implemented | planned / not implemented | planned / not implemented |
+
+Measured entities: 161, 45 with gold, 116 without gold.
 
 ## Latency
 

@@ -1,0 +1,14 @@
+{
+  "opt_in_classes": ["content.sql", "identifier.de.vat_id"],
+  "synthetic": {
+    "overall": {"gold": 40, "predicted": 40, "exact": {"f1": 0.9, "precision": 0.9, "recall": 0.9, "tp": 36}},
+    "groups": {
+      "API_KEY": {"gold": 40, "predicted": 40, "exact": {"f1": 0.9, "precision": 0.9, "recall": 0.9, "tp": 36}},
+      "dlp.de.vat_id": {"gold": 8, "predicted": 0, "exact": {"f1": 0.0, "precision": 0.0, "recall": 0.0, "tp": 0}}
+    },
+    "providers": {
+      "llm.openai.api_key": {"gold": 40, "predicted": 40, "exact": {"f1": 0.9, "precision": 0.9, "recall": 0.9, "tp": 36}},
+      "identifier.de.vat_id": {"gold": 8, "predicted": 0, "exact": {"f1": 0.0, "precision": 0.0, "recall": 0.0, "tp": 0}}
+    }
+  }
+}
