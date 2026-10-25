@@ -77,8 +77,9 @@ fn pattern(rule_id: &str) -> &'static PiiPattern {
 
 const SCORED: [PiiMode; 2] = [PiiMode::Balanced, PiiMode::Recall];
 const STEUER_ID: &str = "pii_steuer_id_de_context_free";
-/// The checksum label without a context-free rule (B-UK).
-const CONTEXT_BOUND_LABEL: &str = "NHS_NUMBER";
+/// The checksum labels without a context-free rule: the NHS number (B-UK), the
+/// Australian Company Number and the Tax File Number (B-APAC).
+const CONTEXT_BOUND_LABELS: [&str; 3] = ["NHS_NUMBER", "AU_ACN", "AU_TFN"];
 /// Scored-only rules whose validator checks a form, not a check digit.
 const FORMAT_RULES: [&str; 3] = [
     "pii_driver_license_number_uk_context_free",
@@ -156,6 +157,10 @@ fn scored_only_rules_are_unbound_checksum_rules() {
             "pii_vat_id_hu",
             "pii_vat_id_ie",
             "pii_vat_id_lt",
+            "pii_abn_au_context_free",
+            "pii_medicare_au_context_free",
+            "pii_nric_fin_sg_context_free",
+            "pii_uen_sg_context_free",
         ]
     );
     for pattern in scored_only {
@@ -194,13 +199,14 @@ fn scored_only_rules_are_unbound_checksum_rules() {
         );
     }
     // Every checksum label has an unbound rule: a checksum value never needs its
-    // field name in the scored modes. Only the NHS number (B-UK) needs a term in
-    // every mode: ten digits in phone groups (3-3-4) pass its mod-11 digit one
-    // time in eleven.
+    // field name in the scored modes. Only three need a term in every mode: ten
+    // digits in phone groups (3-3-4) pass the mod-11 digit of the NHS number (B-UK)
+    // one time in eleven, nine digits in 3-3-3 groups the ACN mod-10 digit one time
+    // in ten and the TFN mod-11 sum one time in eleven (B-APAC).
     for bound in PII_PATTERNS
         .iter()
         .filter(|pattern| pattern.strength == ValidatorStrength::Checksum)
-        .filter(|pattern| pattern.entity_group != CONTEXT_BOUND_LABEL)
+        .filter(|pattern| !CONTEXT_BOUND_LABELS.contains(&pattern.entity_group))
     {
         assert!(
             PII_PATTERNS.iter().any(|pattern| {
@@ -257,12 +263,17 @@ fn every_checksum_label_reports_a_bare_value_in_the_scored_modes() {
         ("PASSPORT_NUMBER", "C01X00T478", 0.55),
         ("IDENTITY_CARD_NUMBER", "L01X00T44", 0.55),
         ("IDENTITY_CARD_NUMBER", "T220001293", 0.55),
+        ("AU_ABN", "51 824 753 556", 0.55),
+        ("AU_MEDICARE", "2123 45670 1", 0.55),
+        ("SG_NRIC_FIN", "S0642712Z", 0.55),
+        ("SG_UEN", "201434292D", 0.55),
+        ("SG_UEN", "S57TU0392K", 0.55),
     ];
     for label in PII_PATTERNS
         .iter()
         .filter(|pattern| pattern.strength == ValidatorStrength::Checksum)
         .map(|pattern| pattern.entity_group)
-        .filter(|label| *label != CONTEXT_BOUND_LABEL)
+        .filter(|label| !CONTEXT_BOUND_LABELS.contains(label))
     {
         assert!(
             bare.iter().any(|(known, _, _)| *known == label),

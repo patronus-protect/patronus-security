@@ -82,6 +82,39 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Australian and Singaporean identifiers (B-APAC: A08, A10), one label each with a check digit
+  or letter: `AU_ABN` (`validators::au_abn`, mod 89), `AU_ACN` (`au_acn`, weighted mod 10),
+  `AU_TFN` (`au_tfn`, weighted mod 11), `AU_MEDICARE` (`au_medicare`, first digit 2-6, weights
+  1-3-7-9 mod 10), `SG_NRIC_FIN` (`sg_nric_fin`, check letter per series `S T F G M`, either case)
+  and `SG_UEN` (`sg_uen`, check letter per format A, B with a registration year 1800-2099, C with
+  an ACRA entity type). `pii_abn_au`, `pii_acn_au`, `pii_tfn_au`, `pii_medicare_au`,
+  `pii_nric_fin_sg` and `pii_uen_sg` report the value in every mode when a term of its label
+  (`ABN`, `Australian Company Number`, `TFN`, `Tax File Number`, `Medicare-Nummer`, `NRIC`,
+  `FIN`, `UEN`; new lexicon entries `pii.au_*`, `pii.sg_*`) stands near it or is its key, not as
+  part of a longer number and not behind a nearer counter-context term. In `balanced`/`recall`
+  the forms whose shape adds to the check digit are reported bare at 0.55 (K05):
+  `pii_abn_au_context_free` (2-3-3-3, `51 824 753 556`), `pii_medicare_au_context_free` (4-5-1,
+  `2123 45670 1`), `pii_nric_fin_sg_context_free` (uppercase, `S0642712Z`) and
+  `pii_uen_sg_context_free` (formats B and C, `201434292D`, `S57TU0392K`). ACN and TFN (nine
+  digits pass mod 10/11 one time in ten/eleven), bare digit runs and a UEN of format A (eight
+  digits and a letter, the form of a Spanish DNI) need the term in every mode, as the NHS number
+  does. `AU_ABN` competes with `STEUERID` in the scored modes (K07: the same 2-3-3-3 grouping).
+  The six IDs become `shared`; M3 count (`count_validated.py`) ARK 36 → 42. `uk_nhs_number` and
+  its scoreboard port share the new digit helper; validators are otherwise unchanged.
+  **Detection change:** in `strict` the six values with a term or key are new findings; in
+  `balanced`/`recall` also the bare forms above. Dev scoreboard vs. 95a4edc (PASS in strict and
+  balanced, no new hard-negative FP, precision 100.0 on all six IDs): L1 F1 strict +1.8, balanced
+  +2.0 pp (presidio_favored +1.3, neutral ±0.0); balanced F1 ABN 100.0, ACN 82.6, TFN 91.9,
+  Medicare 91.9, NRIC/FIN 95.7, UEN 96.3 (all 0.0 before). Latency (`latency.py compare
+  --engine ark-native`): 100 KiB p95 146.9 → 143.4 ms (−2.4 %, PASS, noise); the regexes use ASCII
+  boundaries, the context-bound rules reuse the K03 lexicon gate. Golden eval: 1160/1160
+  positives, 1060/1060 hard negatives; `pii_l1.jsonl` gains 124 rows.
+- **Detection change:** (PII L1, all modes) the six AU/SG context-bound rules keep a value whose
+  structural cell is exactly the value and whose key names the label, also next to numeric cells
+  (`tfn,age\n876543210,42`, `uen,postcode\n53125226D,123456`); before, the comma before a digit
+  read as a thousands separator and dropped it. Outside such a cell a value still has to stand
+  alone (PR #166 review).
+
 - United Kingdom identifiers (B-UK: A07, baseline P6, candidate C4). New label `NHS_NUMBER`:
   `pii_nhs_number_uk` reports ten digits with the NHS mod-11 check digit (`943 476 5919`,
   `943-476-5919`, `9434765919`; `validators::uk_nhs_number`, which also rejects check digit 10

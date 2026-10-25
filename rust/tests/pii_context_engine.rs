@@ -419,7 +419,13 @@ fn context_bound_rules_score_at_least_the_balanced_threshold_with_support() {
             "pii_passport_number_two_letters",
             "pii_vat_id_it_proximity",
             "pii_passport_number_de_legacy",
-            "pii_identity_card_number_de_legacy"
+            "pii_identity_card_number_de_legacy",
+            "pii_abn_au",
+            "pii_acn_au",
+            "pii_tfn_au",
+            "pii_medicare_au",
+            "pii_nric_fin_sg",
+            "pii_uen_sg"
         ]
     );
     for pattern in bound {

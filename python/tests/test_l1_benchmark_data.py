@@ -10,6 +10,10 @@ from patronus_ark.dlp_synth import recipes
 
 PII_LABELS = {
     "APPLICANT_ID",
+    "AU_ABN",
+    "AU_ACN",
+    "AU_MEDICARE",
+    "AU_TFN",
     "CREDITCARD",
     "CREDITCARD_CVV",
     "CREDITCARD_EXPIRY",
@@ -31,6 +35,8 @@ PII_LABELS = {
     "PATIENT_ID",
     "PHONE",
     "PHYSICIAN_NUMBER_LANR",
+    "SG_NRIC_FIN",
+    "SG_UEN",
     "SOCIALID",
     "SSN",
     "STEUERID",

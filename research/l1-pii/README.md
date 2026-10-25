@@ -198,6 +198,22 @@ ersetzen die Prüfziffer. Dev `presidio_favored` balanced: Führerschein 62,5 �
 NINO 0,0 → 66,7 exakt und 100,0 überlappend (tuned 100,0); exakt bleibt NINO unter tuned, weil
 der Gold-Span ` YZ 61 48 68 B` das führende Leerzeichen aus Presidios Regex trägt (P10).
 
+Stand B-APAC: ARK 42, gemeinsam 13 (A08, A10; NRIC/FIN prüft nur ARK). Sechs Labels mit Prüfziffer oder Prüfbuchstabe:
+`AU_ABN` (mod 89), `AU_ACN` (mod 10), `AU_TFN` (mod 11), `AU_MEDICARE` (1-3-7-9 mod 10),
+`SG_NRIC_FIN` (Prüfbuchstabe je Serie `S T F G M`) und `SG_UEN` (Prüfbuchstabe je Format A/B/C);
+alle sechs IDs sind jetzt `shared`. In jedem Modus meldet je eine Regel den Wert mit einem Begriff
+des Labels in der Nähe oder als Schlüssel (`pii_abn_au` …, `requires_context`). Kontextfrei in
+`balanced`/`recall` (K05, 0,55) nur die Formen, deren Gestalt die Prüfziffer stützt: ABN 2-3-3-3,
+Medicare 4-5-1, NRIC/FIN in Großbuchstaben, UEN Format B (Registrierungsjahr) und C (Entitätstyp).
+ACN und TFN (neun Ziffern bestehen mod 10/11 jedes zehnte/elfte Mal), blanke Ziffernfolgen
+(Bestellnummern `45…` im E05-Hard-Negative-Set) und UEN Format A (Form einer spanischen DNI) brauchen
+wie die NHS-Nummer in jedem Modus den Begriff (`CONTEXT_BOUND_LABELS` in
+`rust/tests/pii_context_free.rs`). `AU_ABN` konkurriert in den Score-Modi mit `STEUERID` (K07). Die
+presidio-analyzer-Gold-Werte `G1122144L` und `B1234567Z` bestehen den NRIC-Prüfbuchstaben nicht und
+bleiben FN; Presidio rechnet für NRIC/FIN keine Prüfziffer. Dev balanced: ABN 100,0, ACN 82,6,
+TFN 91,9, Medicare 91,9, NRIC/FIN 95,7, UEN 96,3 (vorher 0); offen bleiben Werte in Pipe-Tabellen
+ohne Randstriche und mehrspaltigen CSV-Zeilen, die die Struktur-Erkennung (K04) nicht liest.
+
 Stand B02: ARK 24, gemeinsam 7. Dazu kommen die USt-IdNr. von BG, CY, CZ, DK, EE, EL, FI, HR, HU, IE
 und LT, gleiche Struktur wie B01 (je Land ein Label `VAT_ID_BG` … und ein Validator mit Prüfziffer,
 nur in `balanced`/`recall`), alle `ark_only`; Griechenland trägt im Label das MwSt.-Präfix `EL`, in

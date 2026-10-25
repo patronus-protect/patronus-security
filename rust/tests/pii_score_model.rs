@@ -433,7 +433,17 @@ fn checksum_strength_is_reserved_for_real_check_digits() {
             "pii_vat_id_hr",
             "pii_vat_id_hu",
             "pii_vat_id_ie",
-            "pii_vat_id_lt"
+            "pii_vat_id_lt",
+            "pii_abn_au",
+            "pii_abn_au_context_free",
+            "pii_acn_au",
+            "pii_tfn_au",
+            "pii_medicare_au",
+            "pii_medicare_au_context_free",
+            "pii_nric_fin_sg",
+            "pii_nric_fin_sg_context_free",
+            "pii_uen_sg",
+            "pii_uen_sg_context_free"
         ]
     );
 }
@@ -459,6 +469,16 @@ fn reference_scores_per_rule() {
         ("pii_ni_uk_context_free", 0.50),
         ("pii_driver_license_number_uk", 0.75),
         ("pii_driver_license_number_uk_context_free", 0.50),
+        ("pii_abn_au", 0.60),
+        ("pii_abn_au_context_free", 0.55),
+        ("pii_acn_au", 0.60),
+        ("pii_tfn_au", 0.60),
+        ("pii_medicare_au", 0.60),
+        ("pii_medicare_au_context_free", 0.55),
+        ("pii_nric_fin_sg", 0.60),
+        ("pii_nric_fin_sg_context_free", 0.55),
+        ("pii_uen_sg", 0.60),
+        ("pii_uen_sg_context_free", 0.55),
     ] {
         assert_eq!(rule_score(rule_id), expected, "{rule_id}");
     }

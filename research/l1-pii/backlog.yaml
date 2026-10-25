@@ -462,6 +462,7 @@ tasks:
 
   # M3 +6 (42)
   - id: B-APAC
+    status: done
     title: "AU ABN, ACN, TFN, Medicare + SG NRIC/FIN and UEN with checksums"
     type: new-entity
     deps: [K05]

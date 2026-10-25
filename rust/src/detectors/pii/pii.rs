@@ -9,7 +9,7 @@ use crate::{
 use super::context::Evidence;
 use super::context_anchors::PII_ANCHOR_PATTERNS;
 use super::score::{self, PiiMode, ValidatorStrength};
-use super::{common, context, de, driver_license, identifiers, intl, overlap, uk, us, vat};
+use super::{au, common, context, de, driver_license, identifiers, intl, overlap, sg, uk, us, vat};
 use crate::detectors::anchors;
 use crate::detectors::obfuscation::{Deobfuscated, Level};
 use crate::EvidenceSpan;
@@ -134,6 +134,16 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     vat::VAT_ID_HU,
     vat::VAT_ID_IE,
     vat::VAT_ID_LT,
+    au::ABN,
+    au::ABN_CONTEXT_FREE,
+    au::ACN,
+    au::TFN,
+    au::MEDICARE,
+    au::MEDICARE_CONTEXT_FREE,
+    sg::NRIC_FIN,
+    sg::NRIC_FIN_CONTEXT_FREE,
+    sg::UEN,
+    sg::UEN_CONTEXT_FREE,
 ];
 
 pub struct PiiPipeline {
@@ -556,12 +566,25 @@ impl NativeRegexDetector for PiiPipeline {
             }
             "pii_credit_card" => context::card_position(text, captures.get(0).unwrap().range()),
             // A term near the value does not make a fragment of a longer number
-            // (`401127789-0`) an SSN, an NHS or a passport number.
+            // (`401127789-0`) an SSN, an NHS, a passport or an AU/SG number.
             "pii_ssn_us_proximity"
             | "pii_nhs_number_uk"
             | "pii_passport_number_uk"
             | "pii_passport_number_two_letters" => {
                 context::stands_alone(text, captures.get(0).unwrap().range())
+            }
+            // A cell whose key names the label is the whole value, also between
+            // numeric cells (`tfn,age\n876543210,42`).
+            "pii_abn_au" | "pii_acn_au" | "pii_tfn_au" | "pii_medicare_au" | "pii_nric_fin_sg"
+            | "pii_uen_sg" => {
+                let value = captures.get(0).unwrap().range();
+                context::structure_evidence(
+                    prepared.structure(),
+                    value.clone(),
+                    pattern.entity_group,
+                )
+                .is_some_and(|evidence| evidence.context.supports())
+                    || context::stands_alone(text, value)
             }
             "pii_passport_number_de_context_free" | "pii_identity_card_number_de_context_free" => {
                 !context::foreign_field(

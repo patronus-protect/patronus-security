@@ -2106,6 +2106,151 @@
     ]
   },
   {
+    "id": "pii.au_business_number",
+    "description": "Australische Unternehmensnummer (ABN)",
+    "en": [
+      "australian business number",
+      "australian-business-number",
+      "australian_business_number",
+      "abn number",
+      "abn no"
+    ],
+    "de": [
+      "australische unternehmensnummer",
+      "australische abn",
+      "abn-nummer",
+      "abn nummer"
+    ],
+    "shared": [
+      "abn"
+    ],
+    "sources": [
+      "rust/src/detectors/pii/au.rs"
+    ]
+  },
+  {
+    "id": "pii.au_company_number",
+    "description": "Australische Gesellschaftsnummer (ACN)",
+    "en": [
+      "australian company number",
+      "australian-company-number",
+      "australian_company_number",
+      "acn number",
+      "acn no"
+    ],
+    "de": [
+      "australische gesellschaftsnummer",
+      "australische firmennummer",
+      "australische acn",
+      "acn-nummer",
+      "acn nummer"
+    ],
+    "shared": [
+      "acn"
+    ],
+    "sources": [
+      "rust/src/detectors/pii/au.rs"
+    ]
+  },
+  {
+    "id": "pii.au_tax_file_number",
+    "description": "Australische Steuerdateinummer (TFN)",
+    "en": [
+      "tax file number",
+      "tax-file-number",
+      "tax_file_number",
+      "tax file no",
+      "tfn number"
+    ],
+    "de": [
+      "australische steuerdateinummer",
+      "steuerdateinummer",
+      "australische tfn",
+      "tfn-nummer",
+      "tfn nummer"
+    ],
+    "shared": [
+      "tfn"
+    ],
+    "sources": [
+      "rust/src/detectors/pii/au.rs"
+    ]
+  },
+  {
+    "id": "pii.au_medicare_number",
+    "description": "Australische Medicare-Nummer",
+    "en": [
+      "medicare number",
+      "medicare-number",
+      "medicare_number",
+      "medicare no",
+      "medicare card",
+      "medicare card number"
+    ],
+    "de": [
+      "medicare-nummer",
+      "medicare nummer",
+      "medicare_nummer",
+      "medicarenummer",
+      "medicare-nr",
+      "medicare-karte",
+      "australische medicare",
+      "australische medicare-nummer"
+    ],
+    "shared": [
+      "medicare"
+    ],
+    "sources": [
+      "rust/src/detectors/pii/au.rs"
+    ]
+  },
+  {
+    "id": "pii.sg_nric_fin",
+    "description": "Singapurische NRIC/FIN",
+    "en": [
+      "nric number",
+      "nric no",
+      "fin number",
+      "foreign identification number",
+      "national registration identity card"
+    ],
+    "de": [
+      "singapurische nric",
+      "nric-nummer",
+      "nric nummer",
+      "fin-nummer"
+    ],
+    "shared": [
+      "nric",
+      "fin"
+    ],
+    "sources": [
+      "rust/src/detectors/pii/sg.rs"
+    ]
+  },
+  {
+    "id": "pii.sg_unique_entity_number",
+    "description": "Singapurische Unternehmensnummer (UEN)",
+    "en": [
+      "unique entity number",
+      "unique-entity-number",
+      "unique_entity_number",
+      "uen number",
+      "uen no"
+    ],
+    "de": [
+      "singapurische uen",
+      "uen-nummer",
+      "uen nummer"
+    ],
+    "shared": [
+      "uen"
+    ],
+    "sources": [
+      "rust/src/detectors/pii/sg.rs"
+    ]
+  },
+  {
     "id": "pii.health_insurance_number",
     "description": "Krankenversicherungsnummer",
     "en": [

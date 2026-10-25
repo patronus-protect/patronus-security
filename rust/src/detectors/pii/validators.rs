@@ -683,24 +683,154 @@ pub fn uk_nino_context_free(s: &str) -> bool {
 /// whose sum weighted 10 down to 1 is divisible by 11. A number whose check digit
 /// would be 10 is never issued; one repeated digit passes the sum but is no number.
 pub fn uk_nhs_number(s: &str) -> bool {
-    let mut digits = [0u32; 10];
+    grouped_digits::<10>(s).is_some_and(|digits| {
+        !one_repeated_digit(&digits)
+            && weighted_sum(&digits, &[10, 9, 8, 7, 6, 5, 4, 3, 2, 1]).is_multiple_of(11)
+    })
+}
+
+/// The `N` digits of `s` with spaces and hyphens removed, if `s` holds exactly
+/// `N` ASCII digits besides them.
+fn grouped_digits<const N: usize>(s: &str) -> Option<[u32; N]> {
+    let mut digits = [0u32; N];
     let mut count = 0;
     for byte in s.bytes().filter(|byte| !matches!(byte, b' ' | b'-')) {
-        if !byte.is_ascii_digit() || count == digits.len() {
-            return false;
+        if !byte.is_ascii_digit() || count == N {
+            return None;
         }
         digits[count] = u32::from(byte - b'0');
         count += 1;
     }
-    count == digits.len()
-        && digits.iter().any(|&digit| digit != digits[0])
-        && digits
+    (count == N).then_some(digits)
+}
+
+/// Whether every digit equals the first: such a value passes many weighted sums
+/// but is never issued.
+fn one_repeated_digit(digits: &[u32]) -> bool {
+    digits.iter().all(|&digit| digit == digits[0])
+}
+
+/// Australian Business Number (B-APAC): eleven digits, no leading zero; with one
+/// subtracted from the first digit, the sum weighted 10 1 3 5 … 19 is divisible
+/// by 89 (the two leading digits are its check digits).
+pub fn au_abn(s: &str) -> bool {
+    grouped_digits::<11>(s).is_some_and(|mut digits| {
+        digits[0] != 0 && {
+            digits[0] -= 1;
+            weighted_sum(&digits, &[10, 1, 3, 5, 7, 9, 11, 13, 15, 17, 19]).is_multiple_of(89)
+        }
+    })
+}
+
+/// Australian Company Number (B-APAC): nine digits, the last
+/// `(10 − sum of the first eight weighted 8…1 mod 10) mod 10`; one repeated digit
+/// is never issued.
+pub fn au_acn(s: &str) -> bool {
+    grouped_digits::<9>(s).is_some_and(|digits| {
+        !one_repeated_digit(&digits)
+            && (10 - weighted_sum(&digits[..8], &[8, 7, 6, 5, 4, 3, 2, 1]) % 10) % 10 == digits[8]
+    })
+}
+
+/// Australian Tax File Number (B-APAC): nine digits whose sum weighted
+/// 1 4 3 7 5 8 6 9 10 is divisible by 11; one repeated digit is never issued.
+pub fn au_tfn(s: &str) -> bool {
+    grouped_digits::<9>(s).is_some_and(|digits| {
+        !one_repeated_digit(&digits)
+            && weighted_sum(&digits, &[1, 4, 3, 7, 5, 8, 6, 9, 10]).is_multiple_of(11)
+    })
+}
+
+/// Australian Medicare card number (B-APAC): ten digits starting with 2 to 6; the
+/// ninth is the first eight weighted 1 3 7 9 1 3 7 9 mod 10, the tenth the card's
+/// issue number.
+pub fn au_medicare(s: &str) -> bool {
+    grouped_digits::<10>(s).is_some_and(|digits| {
+        (2..=6).contains(&digits[0])
+            && weighted_sum(&digits[..8], &[1, 3, 7, 9, 1, 3, 7, 9]) % 10 == digits[8]
+    })
+}
+
+/// Singapore NRIC/FIN (B-APAC): series letter, seven digits, check letter, in
+/// either case. The digits weighted 2 7 6 5 4 3 2, plus 4 for the 2000s series
+/// `T` and `G` and 3 for `M`, mod 11 index the check letters of the series:
+/// `S`/`T` for citizens and permanent residents, `F`/`G`/`M` for foreigners.
+pub fn sg_nric_fin(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    if bytes.len() != 9 || !bytes[1..8].iter().all(u8::is_ascii_digit) {
+        return false;
+    }
+    let (offset, letters): (u32, &[u8; 11]) = match bytes[0].to_ascii_uppercase() {
+        b'S' => (0, b"JZIHGFEDCBA"),
+        b'T' => (4, b"JZIHGFEDCBA"),
+        b'F' => (0, b"XWUTRQPNMLK"),
+        b'G' => (4, b"XWUTRQPNMLK"),
+        b'M' => (3, b"XWUTRQPNJLK"),
+        _ => return false,
+    };
+    let sum: u32 = bytes[1..8]
+        .iter()
+        .zip([2, 7, 6, 5, 4, 3, 2])
+        .map(|(byte, weight)| u32::from(byte - b'0') * weight)
+        .sum();
+    let index = (sum + offset) % 11;
+    letters[index as usize] == bytes[8].to_ascii_uppercase()
+}
+
+/// Entity types of a format-C UEN (`T08LL0001A`), as ACRA issues them.
+const UEN_ENTITY_TYPES: [&[u8; 2]; 39] = [
+    b"LP", b"LL", b"FC", b"PF", b"RF", b"MQ", b"MM", b"NB", b"CC", b"CS", b"MB", b"FM", b"GS",
+    b"DP", b"CP", b"NR", b"CM", b"CD", b"MD", b"HS", b"VH", b"CH", b"MH", b"CL", b"XL", b"CX",
+    b"HC", b"RP", b"TU", b"TC", b"FB", b"FN", b"PA", b"PB", b"SS", b"MC", b"SM", b"GA", b"GB",
+];
+
+/// Singapore Unique Entity Number (B-APAC), uppercase, in one of three formats
+/// with a check letter mod 11: A, businesses, eight digits (weights
+/// 10 4 9 3 8 2 7 1, letters `XMKECAWLJDB`); B, local companies, a registration
+/// year from 1800 to 2099 and five digits (weights 10 8 6 4 9 7 5 3 1, letters
+/// `ZKCMDNERGWH`); C, other entities, `T`/`S`/`R` for the century, two year
+/// digits, an entity type and four digits (characters indexed in
+/// `ABCDEFGHJKLMNPQRSTUVWX0123456789`, weights 4 3 5 3 10 2 2 5 7, the sum minus 5).
+pub fn sg_uen(s: &str) -> bool {
+    const ALPHABET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWX0123456789";
+    let bytes = s.as_bytes();
+    let Some((&check, body)) = bytes.split_last() else {
+        return false;
+    };
+    let numeric = |part: &[u8]| part.iter().all(u8::is_ascii_digit);
+    let letter = |letters: &[u8; 11], weights: &[u32]| {
+        let sum: u32 = body
             .iter()
-            .zip((1..=10).rev())
-            .map(|(digit, weight)| digit * weight)
-            .sum::<u32>()
-            % 11
-            == 0
+            .zip(weights)
+            .map(|(byte, weight)| u32::from(byte - b'0') * weight)
+            .sum();
+        letters[(sum % 11) as usize] == check
+    };
+    match body.len() {
+        8 if numeric(body) => letter(b"XMKECAWLJDB", &[10, 4, 9, 3, 8, 2, 7, 1]),
+        9 if numeric(body) => {
+            matches!(&body[..2], b"18" | b"19" | b"20")
+                && letter(b"ZKCMDNERGWH", &[10, 8, 6, 4, 9, 7, 5, 3, 1])
+        }
+        9 => {
+            if !matches!(body[0], b'T' | b'S' | b'R')
+                || !numeric(&body[1..3])
+                || !UEN_ENTITY_TYPES.iter().any(|kind| body[3..5] == kind[..])
+                || !numeric(&body[5..9])
+            {
+                return false;
+            }
+            body.iter()
+                .zip([4, 3, 5, 3, 10, 2, 2, 5, 7])
+                .map(|(byte, weight)| {
+                    let index = ALPHABET.iter().position(|known| known == byte)?;
+                    Some(index as u32 * weight)
+                })
+                .sum::<Option<u32>>()
+                .is_some_and(|sum| ALPHABET[((sum + 11 - 5) % 11) as usize] == check)
+        }
+        _ => false,
+    }
 }
 
 /// ISO 13616 Mod-97 check — IBAN validation.

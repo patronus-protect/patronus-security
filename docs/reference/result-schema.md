@@ -280,9 +280,10 @@ be a valid card number, and an account field can hold an IBAN or a card-shaped n
 a card needs Luhn plus the IIN prefix and a length of its brand and never starts right after `+`,
 so phone digits no longer compete as a card. In `balanced` and `recall` one value yields one label among `IBAN`,
 `CREDITCARD`, `FINANCIAL_ACCOUNT_NUMBER`, `STEUERID`, `PHONE`, `VAT_ID_IT`, `VAT_ID_FR`, `VAT_ID_HR`,
-`VAT_ID_LT`, `VAT_ID_LV` and `NHS_NUMBER` (a bare Partita IVA and the digits of a spaced French or
-Croatian VAT ID have 11 digits like a Steuer-ID, B01/B02; the twelve digits of a Lithuanian one can be
-card-shaped, B02; an NHS number in 3-3-4 groups is also a US phone number, B-UK).
+`VAT_ID_LT`, `VAT_ID_LV`, `NHS_NUMBER` and `AU_ABN` (a bare Partita IVA and the digits of a spaced
+French or Croatian VAT ID have 11 digits like a Steuer-ID, B01/B02; the twelve digits of a Lithuanian
+one can be card-shaped, B02; an NHS number in 3-3-4 groups is also a US phone number, B-UK; an ABN in
+2-3-3-3 groups or as eleven digits can be a Steuer-ID, B-APAC).
 Of two overlapping findings
 with different labels the first criterion that differs decides: an IBAN (`iban`), the longer
 value (`longer_value`: a card-shaped part of a longer value), context that supports the finding's
@@ -357,7 +358,16 @@ letter case (`AB123456C`, `AB 12 34 56 C`, `hh 01 02 03 d`; `NATIONALID`) and a 
 (`MORGA657054SM9IJ`: surname, birth date, initials; `DRIVER_LICENSE_NUMBER`). The UK NHS number
 (`NHS_NUMBER`, mod-11 check digit: `943 476 5919`, `943-476-5919`, `9434765919`), a UK passport
 number (`925665416`) and a passport number of two letters and seven digits (`PA1234567`) need an NHS
-or passport term or key in every mode. The field-bound rules keep
+or passport term or key in every mode. Australian and Singaporean numbers (B-APAC) have one label
+each and a check digit or letter: `AU_ABN` (mod 89), `AU_ACN` (mod 10), `AU_TFN` (mod 11),
+`AU_MEDICARE` (1-3-7-9 mod 10), `SG_NRIC_FIN` (check letter per series `S T F G M`) and `SG_UEN`
+(check letter per format). With a term of the label near the value or as its key (`ABN`, `TFN`,
+`Medicare-Nummer`, `NRIC`, `FIN`, `UEN`, a `tfn` key) they are reported in every mode, `0.75`–`0.85`;
+bare, in `balanced`/`recall` only and at `0.55`, the forms whose shape adds to the check digit: an ABN
+in 2-3-3-3 groups (`51 824 753 556`), a Medicare number in 4-5-1 groups (`2123 45670 1`), an
+uppercase NRIC/FIN (`S0642712Z`) and a UEN with a registration year or entity type (`201434292D`,
+`S57TU0392K`). ACN, TFN (`876 543 210`), the bare digit runs and a UEN of eight digits and a letter
+(`53125226D`) need the term in every mode. The field-bound rules keep
 their format check in every mode, since a printed nine-character serial carries no check digit. A context-bound rule (`pii_phone_de_national_proximity`: a national number such as
 `ist unter 0176 90817263 erreichbar`) reports only with a support term and no nearer counter term,
 in every mode including `strict`, and then scores at least `0.50`. Validators decide in every

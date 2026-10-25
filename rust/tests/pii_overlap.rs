@@ -193,6 +193,7 @@ fn competing_labels_are_the_number_labels() {
     assert_eq!(
         labels,
         BTreeSet::from([
+            "AU_ABN",
             "CREDITCARD",
             "FINANCIAL_ACCOUNT_NUMBER",
             "IBAN",
