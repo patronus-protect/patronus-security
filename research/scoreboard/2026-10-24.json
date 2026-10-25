@@ -1,0 +1,120 @@
+{
+  "schema": "ark-l1-scoreboard-snapshot-v1",
+  "description": "Milestone measurement of the L1 PII and DLP programmes (research/l1-pii/README.md, research/dlp/README.md). Read by scripts/generate_docs.py for docs/reference/l1-capabilities.md; the newest file in research/scoreboard/ wins. F1, precision and recall in percent.",
+  "date": "2026-10-24",
+  "commit": "3e7c342",
+  "splits": "dev",
+  "pii": {
+    "baseline": "Presidio tuned",
+    "decision_mode": "balanced",
+    "overall_f1": {"neutral": 63.2, "presidio_favored": 54.3},
+    "hard_negative_fp": {"ark": 0, "presidio": 0},
+    "milestones": [
+      {
+        "id": "M1",
+        "name": "EN parity",
+        "value": "neutral 6/9, presidio_favored 5/12 shared ids with F1 >= Presidio tuned",
+        "target": "every shared id F1 >= Presidio tuned",
+        "met": false
+      },
+      {
+        "id": "M2",
+        "name": "DE/EU macro-F1",
+        "value": "neutral 54.1, presidio_favored 24.7",
+        "target": "neutral >= 33.6 (Presidio tuned + 15 pp), presidio_favored >= 88.9",
+        "met": false,
+        "note": "neutral met, presidio_favored not met"
+      },
+      {
+        "id": "M3",
+        "name": "Checksum-validated breadth",
+        "value": "ARK 35, Presidio 35 checksum-validated units",
+        "target": "70 (2x Presidio 2.2.364)",
+        "met": false
+      },
+      {
+        "id": "M4",
+        "name": "Latency",
+        "value": "100 KiB p95 145.9 ms (bindings), 150.0 ms (native)",
+        "target": "100 KiB p95 <= 10 ms",
+        "met": false,
+        "note": "decision 2026-10-24: latency work last"
+      },
+      {
+        "id": "Always",
+        "name": "Hard negatives",
+        "value": "FP 0 (Presidio 0)",
+        "target": "FP <= Presidio",
+        "met": true
+      }
+    ],
+    "entities": {
+      "entity.passport_number": {"neutral": {"ark": 48.0, "presidio": 53.2}, "presidio_favored": {"ark": 0.0, "presidio": 40.0}},
+      "pii.financial_account_number": {"neutral": {"ark": 1.8, "presidio": 13.2}},
+      "pii.us.social_security_number": {"neutral": {"ark": 54.5, "presidio": 79.3}, "presidio_favored": {"ark": 57.1, "presidio": 88.9}},
+      "entity.driver_license_number": {"neutral": {"ark": 43.9, "presidio": 7.8}, "presidio_favored": {"ark": 62.5, "presidio": 90.0}},
+      "pii.email": {"presidio_favored": {"ark": 93.8, "presidio": 100.0}},
+      "pii.iban": {"presidio_favored": {"ark": 63.9, "presidio": 100.0}},
+      "pii.ip_address": {"neutral": {"ark": 96.0, "presidio": 92.2}, "presidio_favored": {"ark": 84.9, "presidio": 96.2}},
+      "pii.uk.national_insurance_number": {"presidio_favored": {"ark": 0.0, "presidio": 100.0}}
+    },
+    "latency": {
+      "size": "100 KiB",
+      "p95_ms": {"bindings": 145.9, "native": 150.0, "native_de": 155.0, "native_en": 38.0},
+      "target_p95_ms": 10.0,
+      "note": "decision 2026-10-24: latency work last"
+    }
+  },
+  "dlp": {
+    "baselines": ["gitleaks", "TruffleHog", "detect-secrets"],
+    "decision_profile": "default",
+    "overall": {"f1": 88.6, "precision": 99.3, "recall": 80.0},
+    "group_f1": {
+      "CREDENTIAL": 96.8,
+      "CRYPTO_KEY": 100.0,
+      "API_KEY": 100.0,
+      "CLOUD_KEY": 100.0,
+      "PAYMENT_KEY": 100.0,
+      "SECRET_TOKEN": 99.2,
+      "PASSWORD_HASH": 91.9
+    },
+    "milestones": [
+      {
+        "id": "M1",
+        "name": "Provider parity",
+        "value": "recall >= max(gitleaks, TruffleHog) on all shared entities; FP/MB benign code 0.13 (gitleaks 0.21)",
+        "target": "recall >= max(gitleaks, TruffleHog) at FP/MB <= gitleaks",
+        "met": true
+      },
+      {
+        "id": "M2",
+        "name": "Generic secrets",
+        "value": "CREDENTIAL F1 96.8 (gitleaks 23.7)",
+        "target": "F1 >= 43.7 (best baseline + 20 pp)",
+        "met": true
+      },
+      {
+        "id": "M3",
+        "name": "Breadth",
+        "value": "38/206 gitleaks default rules mapped (18.4 %); 40 secret rules / 36 entities; 4 offline structure checks; 15 classes without baseline counterpart",
+        "target": ">= 90 % gitleaks rules mapped; >= 150 secret formats; >= 30 offline structure checks; >= 20 classes without baseline counterpart",
+        "met": false
+      },
+      {
+        "id": "M4",
+        "name": "Latency",
+        "value": "100 KiB p95 14.0 ms; throughput 8.18 MiB/s (gitleaks 4.16 MiB/s)",
+        "target": "throughput >= gitleaks and 100 KiB p95 <= ~15 ms",
+        "met": true,
+        "note": "rule decided 2026-10-24; previously p95 <= 10 ms"
+      }
+    ],
+    "latency": {
+      "size": "100 KiB",
+      "p95_ms": 14.0,
+      "throughput_mib_s": 8.18,
+      "gitleaks_throughput_mib_s": 4.16,
+      "target": "throughput >= gitleaks and 100 KiB p95 <= ~15 ms"
+    }
+  }
+}

@@ -1,0 +1,343 @@
+"""Generate docs/reference/l1-capabilities.md (called by scripts/generate_docs.py).
+
+Sources: the PII and DLP rule registries (parsed by generate_docs.py, as for the rule catalog),
+research/l1-pii/entity_map.yaml, research/dlp/entity_map.yaml, the checksum count of
+scripts/l1_presidio/count_validated.py and the newest milestone snapshot in research/scoreboard/.
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import json
+from pathlib import Path
+from typing import Any, Callable
+
+import yaml
+
+
+ROOT = Path(__file__).resolve().parents[1]
+PII_ENTITY_MAP_PATH = ROOT / "research/l1-pii/entity_map.yaml"
+DLP_ENTITY_MAP_PATH = ROOT / "research/dlp/entity_map.yaml"
+SCOREBOARD_DIR = ROOT / "research/scoreboard"
+COUNT_VALIDATED_PATH = ROOT / "scripts/l1_presidio/count_validated.py"
+
+PII_STRENGTH_ORDER = ["checksum", "format", "none"]
+DLP_STRENGTH_ORDER = ["checksum", "structure", "format", "none"]
+SCOPE_ORDER_PII = ["shared", "ark_only", "presidio_only", "semantic"]
+SCOPE_ORDER_DLP = ["shared", "ark_only", "baseline_only", "out_of_scope"]
+SPLIT_NAMES = {"neutral": "neutral", "presidio_favored": "presidio_favored"}
+
+CONFIG_PYTHON = """```python
+scanner.set_execution_gates({
+    "levels": {"l1": True, "l2": False, "l3": False},
+    "models": {"native:mcp_runtime_risk": False, "external:internal_token": False},
+    "rules": {"pii_email": False, "dlp_password_assignment": False},
+})
+```"""
+
+CONFIG_RUST = """```rust
+scanner.set_execution_gates(
+    ScanGateMatrix::levels(true, false, false)
+        .with_model("native:mcp_runtime_risk", false)
+        .with_rule("pii_email", false),
+);
+```"""
+
+CONFIG_YAML = """```yaml
+gates:
+  l1: true
+  l2: false
+  l3: false
+  pii_mode: strict
+  dlp_mode: strict
+  rules:
+    pii_employee_id: true
+    dlp_sql_statement: false
+  models:
+    native:mcp_runtime_risk: false
+```"""
+
+
+def latest_snapshot(directory: Path = SCOREBOARD_DIR) -> tuple[Path, dict[str, Any]]:
+    """The newest `YYYY-MM-DD.json` milestone snapshot."""
+    paths = sorted(directory.glob("????-??-??.json"))
+    if not paths:
+        raise ValueError(f"No milestone snapshot in {directory}")
+    return paths[-1], json.loads(paths[-1].read_text(encoding="utf-8"))
+
+
+def checksum_counts() -> tuple[int, int]:
+    """ARK and Presidio checksum-validated units of the current registry (count rule T03)."""
+    spec = importlib.util.spec_from_file_location("_ark_count_validated", COUNT_VALIDATED_PATH)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    counts = module.count(module.ENTITY_MAP_MODULE.load(), module.load_rules())
+    return len(counts.ark), len(counts.presidio)
+
+
+def _code(values: list[str] | None) -> str:
+    return ", ".join(f"`{value}`" for value in values or []) or "–"
+
+
+def _strongest(strengths: list[str | None], order: list[str]) -> str:
+    present = [strength or "none" for strength in strengths]
+    for strength in order:
+        if strength in present:
+            return strength
+    return "–"
+
+
+def _pii_check(rules: list[dict]) -> str:
+    strength = _strongest([rule["strength"] for rule in rules], PII_STRENGTH_ORDER)
+    if strength != "none":
+        return strength
+    bound = all(rule["field_context"] or rule["requires_context"] for rule in rules)
+    return "context" if bound else "pattern"
+
+
+def _pii_default(rules: list[dict]) -> str:
+    if not rules:
+        return "–"
+    scored = [rule for rule in rules if rule["scored_only"]]
+    if len(scored) == len(rules):
+        return "on (`balanced`/`recall` only)"
+    if scored:
+        return f"on ({len(scored)} of {len(rules)} rules `balanced`/`recall` only)"
+    return "on"
+
+
+def _f1_cell(values: dict | None) -> str:
+    if not values:
+        return "–"
+    return f"{values['ark']:.1f} vs {values['presidio']:.1f}"
+
+
+def _met(flag: bool) -> str:
+    return "met" if flag else "not met"
+
+
+def generate(
+    pii_rules: list[dict],
+    dlp_rules: list[dict],
+    credential_groups: set[str],
+    relationship_rules: list[tuple[str, str, bool]],
+) -> str:
+    pii_map = yaml.safe_load(PII_ENTITY_MAP_PATH.read_text(encoding="utf-8"))
+    dlp_map = yaml.safe_load(DLP_ENTITY_MAP_PATH.read_text(encoding="utf-8"))
+    snapshot_path, snapshot = latest_snapshot()
+    ark_units, presidio_units = checksum_counts()
+    date, commit, splits = snapshot["date"], snapshot["commit"], snapshot["splits"]
+    pii, dlp = snapshot["pii"], snapshot["dlp"]
+    snapshot_rel = snapshot_path.relative_to(ROOT).as_posix()
+
+    pii_labels = list(dict.fromkeys(rule["entity_group"] for rule in pii_rules))
+    dlp_labels = list(dict.fromkeys(rule["entity_group"] for rule in dlp_rules))
+    pii_by_label: dict[str, list[dict]] = {}
+    for rule in pii_rules:
+        pii_by_label.setdefault(rule["entity_group"], []).append(rule)
+    dlp_by_id = {rule["id"]: rule for rule in dlp_rules}
+
+    lines = [
+        "# L1 capabilities",
+        "",
+        "<!-- Generated by scripts/generate_docs.py. Do not edit by hand. -->",
+        "",
+        "What ARK L1 detects (PII and DLP), how it compares with Presidio and the secret scanners "
+        "gitleaks, TruffleHog and detect-secrets, how fast it is and how it is configured. Rule data "
+        "comes from the rule registries (as in the [L1 rule catalog](l1-rule-catalog.md)), coverage "
+        "from `research/l1-pii/entity_map.yaml` and `research/dlp/entity_map.yaml`, measurements from "
+        f"`{snapshot_rel}`.",
+        "",
+        f"!!! note \"Measurements\"\n    All F1, latency and milestone values are from the milestone measurement of {date} "
+        f"on `main` {commit} ({splits} splits). Rule counts, labels and coverage reflect the current "
+        "registries and entity maps, so they can be ahead of the measurement.",
+        "",
+        "## Summary",
+        "",
+        "| | PII | DLP |",
+        "| --- | --- | --- |",
+        f"| Result labels (entity groups) | {len(pii_labels)} | {len(dlp_labels)} |",
+        f"| Regex rules | {len(pii_rules)} | {len(dlp_rules)} (+{len(relationship_rules)} relationship rules) |",
+        f"| Checksum-validated units (count rule T03) | {ark_units} (Presidio 2.2.364: {presidio_units}) | – |",
+        f"| Rules with a `checksum` or `structure` check | "
+        f"{sum(rule['strength'] == 'checksum' for rule in pii_rules)} | "
+        f"{sum(rule['validator_strength'] in ('checksum', 'structure') for rule in dlp_rules)} |",
+        f"| Default state | all rules on | credential/secret groups on, broader families opt-in |",
+        f"| Compared with | Presidio {pii_map['presidio_version']} (tuned) | "
+        + ", ".join(
+            f"{name} {dlp_map['baselines'][key]['version']}"
+            for key, name in (("gitleaks", "gitleaks"), ("trufflehog", "TruffleHog"), ("detect_secrets", "detect-secrets"))
+        )
+        + " |",
+        f"| Overall F1 ({date}) | `{pii['decision_mode']}`: neutral {pii['overall_f1']['neutral']:.1f}, "
+        f"presidio_favored {pii['overall_f1']['presidio_favored']:.1f} | "
+        f"{dlp['decision_profile']} profile: {dlp['overall']['f1']:.1f} (P {dlp['overall']['precision']:.1f}, "
+        f"R {dlp['overall']['recall']:.1f}) |",
+        "",
+        "### Milestone status",
+        "",
+        "| Programme | Milestone | Value | Target | Status | Measured |",
+        "| --- | --- | --- | --- | --- | --- |",
+    ]
+    for programme, data in (("PII", pii), ("DLP", dlp)):
+        for milestone in data["milestones"]:
+            status = _met(milestone["met"])
+            if milestone.get("note"):
+                status += f" ({milestone['note']})"
+            lines.append(
+                f"| {programme} | {milestone['id']} {milestone['name']} | {milestone['value']} "
+                f"| {milestone['target']} | {status} | {date} |"
+            )
+
+    # ── PII ──
+    entities = pii_map["entities"]
+    lines.extend([
+        "",
+        "## PII",
+        "",
+        "One row per benchmark entity of `research/l1-pii/entity_map.yaml`. Scope: `shared` (ARK and "
+        "Presidio match it by pattern), `ark_only`, `presidio_only` (a gap in ARK L1), `semantic` "
+        "(NER entities; L1 never reports them, see [Dynamic PII](configuration.md#dynamic-pii)). "
+        "Check: the strongest validator of the entity's rules (`checksum`: check digits computed; "
+        "`format`: length, alphabet, range or date; `pattern`: regex shape only; `context`: regex shape "
+        "plus a field name or nearby term). "
+        f"F1 is ARK vs Presidio tuned in `{pii['decision_mode']}` on the {splits} split, measured {date}, "
+        "and listed where the milestone report names it.",
+        "",
+        "| Benchmark id | Scope | ARK label(s) | Rule ID(s) | Check | Default | Presidio entities | F1 neutral | F1 presidio_favored |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+    ])
+    for scope in SCOPE_ORDER_PII:
+        for entity in (e for e in entities if e["scope"] == scope):
+            rules = [rule for label in entity.get("ark") or [] for rule in pii_by_label.get(label, [])]
+            f1 = pii["entities"].get(entity["id"], {})
+            lines.append(
+                f"| `{entity['id']}` | {scope} | {_code(entity.get('ark'))} "
+                f"| {_code([rule['id'] for rule in rules])} | {_pii_check(rules) if rules else '–'} "
+                f"| {_pii_default(rules)} | {_code(entity.get('presidio'))} "
+                f"| {_f1_cell(f1.get('neutral'))} | {_f1_cell(f1.get('presidio_favored'))} |"
+            )
+    counts = {scope: sum(e["scope"] == scope for e in entities) for scope in SCOPE_ORDER_PII}
+    lines.extend([
+        "",
+        f"Entities: {counts['shared']} shared, {counts['ark_only']} ARK only, "
+        f"{counts['presidio_only']} Presidio only, {counts['semantic']} semantic. Hard-negative false "
+        f"positives ({date}): ARK {pii['hard_negative_fp']['ark']}, Presidio {pii['hard_negative_fp']['presidio']}.",
+    ])
+
+    # ── DLP ──
+    taxonomy = dlp_map["taxonomy"]
+    dlp_entities = dlp_map["entities"]
+    lines.extend([
+        "",
+        "## DLP",
+        "",
+        "### Groups",
+        "",
+        "Credential/secret groups are on by default; business identifiers, metrics and content classes "
+        "are opt-in per rule. Group F1 is the default profile on the "
+        f"{splits} split, measured {date}.",
+        "",
+        "| Result label | Family | Default | Rules | Entities | F1 |",
+        "| --- | --- | --- | --- | --- | --- |",
+    ])
+    groups = list(dict.fromkeys(list(taxonomy) + dlp_labels))
+    for group in groups:
+        family = (taxonomy.get(group) or {}).get("family", "–")
+        if (taxonomy.get(group) or {}).get("planned"):
+            family += " (planned)"
+        rule_count = sum(rule["entity_group"] == group for rule in dlp_rules)
+        entity_count = sum(e.get("group") == group and e["scope"] in ("shared", "ark_only") for e in dlp_entities)
+        f1 = dlp["group_f1"].get(group)
+        lines.append(
+            f"| `{group}` | {family} | {'on' if group in credential_groups else 'off'} | {rule_count} "
+            f"| {entity_count} | {f'{f1:.1f}' if f1 is not None else '–'} |"
+        )
+
+    lines.extend([
+        "",
+        "### Entities",
+        "",
+        "One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and at least one "
+        "baseline), `ark_only`, `baseline_only` (a gap in ARK L1), `out_of_scope` (action or policy "
+        "rules, not a secret value). Structure check: the strongest `validator_strength` of the "
+        "entity's rules (`checksum`, `structure`: decoded or parsed, `format`, `none`).",
+        "",
+        "| Entity | Scope | Group | Rule ID(s) | Structure check | Default | gitleaks | TruffleHog | detect-secrets |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+    ])
+    relationship_defaults = {rule_id: default for rule_id, _, default in relationship_rules}
+    for scope in SCOPE_ORDER_DLP:
+        for entity in (e for e in dlp_entities if e["scope"] == scope):
+            ark = entity.get("ark") or []
+            regex = [dlp_by_id[rule_id] for rule_id in ark if rule_id in dlp_by_id]
+            check = _strongest([rule["validator_strength"] for rule in regex], DLP_STRENGTH_ORDER) if regex else "–"
+            if regex:
+                default = "on" if any(rule["entity_group"] in credential_groups for rule in regex) else "off"
+            elif ark:
+                default = "on" if any(relationship_defaults.get(rule_id) for rule_id in ark) else "off"
+            else:
+                default = "–"
+            lines.append(
+                f"| `{entity['id']}` | {scope} | {_code([entity['group']] if entity.get('group') else [])} "
+                f"| {_code(ark)} | {check} | {default} | {_code(entity.get('gitleaks'))} "
+                f"| {_code(entity.get('trufflehog'))} | {_code(entity.get('detect_secrets'))} |"
+            )
+    dlp_counts = {scope: sum(e["scope"] == scope for e in dlp_entities) for scope in SCOPE_ORDER_DLP}
+    lines.extend([
+        "",
+        f"Entities: {dlp_counts['shared']} shared, {dlp_counts['ark_only']} ARK only, "
+        f"{dlp_counts['baseline_only']} baseline only, {dlp_counts['out_of_scope']} out of scope.",
+    ])
+
+    # ── Latency ──
+    pii_latency, dlp_latency = pii["latency"], dlp["latency"]
+    lines.extend([
+        "",
+        "## Latency",
+        "",
+        f"Measured {date} on `main` {commit}.",
+        "",
+        "| Programme | Measurement | Value | Target |",
+        "| --- | --- | --- | --- |",
+        f"| PII | {pii_latency['size']} p95, Python bindings | {pii_latency['p95_ms']['bindings']:.1f} ms "
+        f"| ≤ {pii_latency['target_p95_ms']:.0f} ms |",
+        f"| PII | {pii_latency['size']} p95, native (DE {pii_latency['p95_ms']['native_de']:.0f} ms, "
+        f"EN {pii_latency['p95_ms']['native_en']:.0f} ms) | {pii_latency['p95_ms']['native']:.1f} ms "
+        f"| ≤ {pii_latency['target_p95_ms']:.0f} ms |",
+        f"| DLP | {dlp_latency['size']} p95 | {dlp_latency['p95_ms']:.1f} ms | {dlp_latency['target']} |",
+        f"| DLP | scan throughput | {dlp_latency['throughput_mib_s']:.2f} MiB/s "
+        f"(gitleaks {dlp_latency['gitleaks_throughput_mib_s']:.2f} MiB/s) | ≥ gitleaks |",
+        "",
+        f"PII latency is not yet at target ({pii_latency['note']}).",
+    ])
+
+    # ── Configuration ──
+    lines.extend([
+        "",
+        "## Configuration",
+        "",
+        "Every rule above can be switched on or off on its own with the `rules` execution gate; missing "
+        "IDs inherit the shared defaults (all PII rules on; credential/secret DLP rules on, broader DLP "
+        "families opt-in). `levels` (`l1`, `l2`, `l3`) switch layers, `models` switch whole producers "
+        "(`native:pii`, `native:dlp`, …). `pii_mode` and `dlp_mode` choose the output mode: `strict` "
+        "(default; every finding scores `1.0`), `balanced` or `recall` (model scores with thresholds "
+        "0.50 and 0.30).",
+        "",
+        "Python:",
+        "",
+        CONFIG_PYTHON,
+        "",
+        "Rust:",
+        "",
+        CONFIG_RUST,
+        "",
+        "Ark API YAML:",
+        "",
+        CONFIG_YAML,
+        "",
+        "See the [configuration reference](configuration.md#execution-gates) for all gates and the "
+        "[L1 rule catalog](l1-rule-catalog.md) for every rule ID, score and default.",
+    ])
+    return "\n".join(lines) + "\n"

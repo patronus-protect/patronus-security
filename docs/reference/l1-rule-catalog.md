@@ -4,6 +4,8 @@
 
 These are the stable rule IDs accepted by execution-gate `rules`. Missing IDs inherit the shared Rust/Python/API defaults below. Model gates such as `native:pii`, `native:dlp`, `native:injection_l1`, and `native:threat_l1` control complete producers; rule gates control individual entries below.
 
+For coverage per benchmark entity, the comparison with Presidio and the secret scanners, and latency, see [L1 capabilities](l1-capabilities.md).
+
 ## PII rules (96)
 
 All PII rules are eligible by default when PII L1 is enabled.
