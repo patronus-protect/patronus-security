@@ -823,6 +823,14 @@ def de_identity_card_number(value: str) -> bool:
     return _de_document_check_digit(value, "LMNPRTVWXY")
 
 
+def uk_nhs_number(value: str) -> bool:
+    """Port of ``validators::uk_nhs_number`` (ten digits, weights 10…1 mod 11 = 0, not one repeated digit)."""
+    body = value.replace(" ", "").replace("-", "")
+    if len(body) != 10 or not body.isascii() or not body.isdigit() or len(set(body)) == 1:
+        return False
+    return _weighted_sum([int(ch) for ch in body], range(10, 0, -1)) % 11 == 0
+
+
 # Python ports of every checksum validator (``checksums.ark`` with an algorithm in entity_map.yaml);
 # a task that adds one ports it here, or scripts/tests/test_l1_scoreboard.py is red.
 CHECKSUM_PORTS: dict[str, Callable[[str], bool]] = {
@@ -863,6 +871,7 @@ CHECKSUM_PORTS: dict[str, Callable[[str], bool]] = {
     "gb_vat_id": gb_vat_id,
     "de_passport_number": de_passport_number,
     "de_identity_card_number": de_identity_card_number,
+    "uk_nhs_number": uk_nhs_number,
 }
 
 

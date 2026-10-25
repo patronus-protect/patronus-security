@@ -16,9 +16,19 @@ use serde::Deserialize;
 /// gaps: `(row id, label, value)`. Fixing the detector must remove the entry. Since T07 the
 /// PAN-shaped part of a valid IBAN and an account finding on an IBAN value are secondary
 /// evidence (`details.secondary_evidence`) and not checked here.
-/// Since B-PAN none is left: phone digits after `+` that pass Luhn (`49 89 2019 4400`) and
-/// the BBAN of a grouped IBAN outside DE (`1904 3002 3457 3201`, no card IIN) are no card.
-const KNOWN_DETECTOR_FP: &[(&str, &str, &str)] = &[];
+/// Since B-PAN no card FP is left: phone digits after `+` that pass Luhn (`49 89 2019 4400`)
+/// and the BBAN of a grouped IBAN outside DE (`1904 3002 3457 3201`, no card IIN) are no card.
+/// B-UK: `strict` keeps both labels (decision T07), so a US phone rule match on an NHS number
+/// in 3-3-4 groups stays; `balanced` and `recall` resolve it to the NHS number (K07).
+const KNOWN_DETECTOR_FP: &[(&str, &str, &str)] = &[
+    ("pii_l1-nhs-number-pos-02", "PHONE", "943-476-5919"),
+    ("pii_l1-nhs-number-pos-03", "PHONE", "490 830 1662"),
+    ("pii_l1-nhs-number-pos-06", "PHONE", "452 601 8155"),
+    ("pii_l1-nhs-number-pos-07", "PHONE", "635-181-9091"),
+    ("pii_l1-nhs-number-pos-09", "PHONE", "737 865 7972"),
+    ("pii_l1-nhs-number-pos-11", "PHONE", "485-432-3191"),
+    ("pii_l1-nhs-number-pos-14", "PHONE", "727 601 8954"),
+];
 
 /// Labels whose validators are checksums: they hold for every gold value, known gaps included.
 const CHECKSUM_LABELS: [&str; 3] = ["CREDITCARD", "IBAN", "STEUERID"];

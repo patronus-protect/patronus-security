@@ -450,6 +450,7 @@ tasks:
 
   # M1 UK NINO (presidio_favored 0 vs 100) + UK driving licence (P6) + M3 +1 (36)
   - id: B-UK
+    status: done
     title: "UK: NHS number (mod 11), passport and driving licence, NINO without spaces / in pairs / lowercase after a field name"
     type: new-entity
     deps: [K03, K05]

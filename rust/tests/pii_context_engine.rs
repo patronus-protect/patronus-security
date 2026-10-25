@@ -414,6 +414,9 @@ fn context_bound_rules_score_at_least_the_balanced_threshold_with_support() {
         [
             PROXIMITY_RULE,
             "pii_ssn_us_proximity",
+            "pii_nhs_number_uk",
+            "pii_passport_number_uk",
+            "pii_passport_number_two_letters",
             "pii_vat_id_it_proximity",
             "pii_passport_number_de_legacy",
             "pii_identity_card_number_de_legacy"

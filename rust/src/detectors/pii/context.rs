@@ -65,6 +65,7 @@ pub static SUPPORT_LEXICON: &[(&str, &[&str])] = &[
     ("LICENSEPLATE", &["pii.vehicle_registration"]),
     ("SSN", &["pii.social_insurance_number"]),
     ("NATIONALID", &["pii.national_insurance_number"]),
+    ("NHS_NUMBER", &["pii.nhs_number"]),
     ("VAT_ID_DE", &["pii.vat_identifier"]),
     ("VAT_ID_AT", &["pii.vat_identifier"]),
     ("VAT_ID_CH", &["pii.vat_identifier"]),

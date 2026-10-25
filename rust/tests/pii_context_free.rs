@@ -9,8 +9,11 @@
 //! of a longer number, range or date) and drops below both thresholds when a
 //! counter-context term is nearer than any support term. A bare Steuer-ID also
 //! has to follow the digit distribution of issued IDs; validators are never
-//! relaxed. The grouped US SSN (`AAA-GG-SSSS`, B-SSN) is the one format-only
-//! scored-only rule: its SSA ranges and separators stand in for a check digit.
+//! relaxed. Three scored-only rules check a form without a check digit
+//! (`FORMAT_RULES`): the grouped US SSN (`AAA-GG-SSSS`, B-SSN), whose SSA ranges
+//! and separators stand in for one, and the UK NINO and driving licence (B-UK),
+//! whose issuing rules (prefix and suffix letters; surname, birth date and
+//! initials) do.
 
 use patronus_ark::detectors::pii::{
     pii::{PiiPattern, PII_PATTERNS},
@@ -74,6 +77,14 @@ fn pattern(rule_id: &str) -> &'static PiiPattern {
 
 const SCORED: [PiiMode; 2] = [PiiMode::Balanced, PiiMode::Recall];
 const STEUER_ID: &str = "pii_steuer_id_de_context_free";
+/// The checksum label without a context-free rule (B-UK).
+const CONTEXT_BOUND_LABEL: &str = "NHS_NUMBER";
+/// Scored-only rules whose validator checks a form, not a check digit.
+const FORMAT_RULES: [&str; 3] = [
+    "pii_driver_license_number_uk_context_free",
+    "pii_ssn_us_context_free",
+    "pii_ni_uk_context_free",
+];
 
 /// Issued Steuer-IDs: check digit valid, one digit twice or three times (not
 /// three in a row) in the first ten digits, every other digit at most once.
@@ -107,7 +118,9 @@ fn scored_only_rules_are_unbound_checksum_rules() {
             .collect::<Vec<_>>(),
         [
             STEUER_ID,
+            "pii_driver_license_number_uk_context_free",
             "pii_ssn_us_context_free",
+            "pii_ni_uk_context_free",
             "pii_vat_id_de",
             "pii_vat_id_at",
             "pii_vat_id_ch",
@@ -146,7 +159,7 @@ fn scored_only_rules_are_unbound_checksum_rules() {
         ]
     );
     for pattern in scored_only {
-        let strength = if pattern.name == "pii_ssn_us_context_free" {
+        let strength = if FORMAT_RULES.contains(&pattern.name) {
             ValidatorStrength::Format
         } else {
             ValidatorStrength::Checksum
@@ -181,10 +194,13 @@ fn scored_only_rules_are_unbound_checksum_rules() {
         );
     }
     // Every checksum label has an unbound rule: a checksum value never needs its
-    // field name in the scored modes.
+    // field name in the scored modes. Only the NHS number (B-UK) needs a term in
+    // every mode: ten digits in phone groups (3-3-4) pass its mod-11 digit one
+    // time in eleven.
     for bound in PII_PATTERNS
         .iter()
         .filter(|pattern| pattern.strength == ValidatorStrength::Checksum)
+        .filter(|pattern| pattern.entity_group != CONTEXT_BOUND_LABEL)
     {
         assert!(
             PII_PATTERNS.iter().any(|pattern| {
@@ -246,6 +262,7 @@ fn every_checksum_label_reports_a_bare_value_in_the_scored_modes() {
         .iter()
         .filter(|pattern| pattern.strength == ValidatorStrength::Checksum)
         .map(|pattern| pattern.entity_group)
+        .filter(|label| *label != CONTEXT_BOUND_LABEL)
     {
         assert!(
             bare.iter().any(|(known, _, _)| *known == label),

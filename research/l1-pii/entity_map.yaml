@@ -155,6 +155,13 @@ entities:
     corpora:
       presidio-analyzer-recognizer-tests: [DE_LANR]
 
+  - id: pii.uk.nhs_number
+    scope: shared
+    ark: [NHS_NUMBER]
+    presidio: [UK_NHS]
+    corpora:
+      presidio-analyzer-recognizer-tests: [UK_NHS]
+
   - id: entity.passport_number
     scope: shared
     ark: [PASSPORT_NUMBER]
@@ -309,7 +316,6 @@ entities:
   - {id: pii.us.itin, scope: presidio_only, ark: [], presidio: [US_ITIN], corpora: {presidio-analyzer-recognizer-tests: [US_ITIN]}}
   - {id: pii.us.mbi, scope: presidio_only, ark: [], presidio: [US_MBI], corpora: {presidio-analyzer-recognizer-tests: [US_MBI]}}
   - {id: pii.us.npi, scope: presidio_only, ark: [], presidio: [US_NPI], corpora: {presidio-analyzer-recognizer-tests: [US_NPI]}}
-  - {id: pii.uk.nhs_number, scope: presidio_only, ark: [], presidio: [UK_NHS], corpora: {presidio-analyzer-recognizer-tests: [UK_NHS]}}
   - {id: pii.uk.postcode, scope: presidio_only, ark: [], presidio: [UK_POSTCODE], corpora: {presidio-analyzer-recognizer-tests: [UK_POSTCODE]}}
   - {id: pii.de.bsnr, scope: presidio_only, ark: [], presidio: [DE_BSNR], corpora: {presidio-analyzer-recognizer-tests: [DE_BSNR]}}
   - {id: pii.de.commercial_register, scope: presidio_only, ark: [], presidio: [DE_HANDELSREGISTER], corpora: {presidio-analyzer-recognizer-tests: [DE_HANDELSREGISTER]}}
@@ -431,9 +437,14 @@ checksums:
     de_driver_license_number: null      # 11 Zeichen, keine Prüfziffer
     us_driver_license_number: null      # F15, Formate der Bundesstaaten, keine Prüfziffer
     it_driver_license_number: null      # F15, Patente-Form, keine Prüfziffer
+    uk_passport_number: null            # B-UK, neun Ziffern, keine Prüfziffer
+    passport_number_two_letters: null   # zwei Buchstaben + sieben Ziffern (Irland, Japan), keine Prüfziffer
+    uk_driver_license_number: null      # B-UK, Nachname, Geburtsdatum, Initialen; DVLA-Prüfzeichen unveröffentlicht
     us_ssn: null                        # Bereichsprüfung
     us_ssn_context_free: null           # B-SSN, Bereichsprüfung ohne Platzhalter, keine Prüfziffer
     uk_nino: null                       # Präfix-/Suffixprüfung
+    uk_nino_context_free: null          # B-UK, wie uk_nino in einer Schreibweise (groß oder klein)
+    uk_nhs_number: {algorithm: gewichtet 10…1 mod 11}       # B-UK, NHS-Nummer
     de_vat_id: {algorithm: "ISO 7064 MOD 11,10"}            # B01, USt-IdNr.
     at_vat_id: {algorithm: Luhn-Variante (6 − Summe) mod 10}  # B01, UID ATU
     ch_vat_id: {algorithm: gewichtet 5-4-3-2-7-6-5-4 mod 11}   # B01, UID CHE

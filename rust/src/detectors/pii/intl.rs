@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-//! International payment identifiers: IBAN, payment card number, CVV, card expiry, SWIFT/BIC.
+//! International payment identifiers: IBAN, payment card number, CVV, card expiry, SWIFT/BIC;
+//! passport numbers of two letters and seven digits.
 use super::{pii::PiiPattern, score::ValidatorStrength, validators};
 
 // ── IBAN ─────────────────────────────────────────────────────────────────
@@ -80,5 +81,21 @@ pub(super) const SWIFT_BIC_CONTEXT: PiiPattern = PiiPattern {
     base_score: 40,
     captured_value: true,
     requires_context: false,
+    scored_only: false,
+};
+
+// ── Reisepass ───────────────────────────────────────────────────────────
+/// A passport number of two letters and seven digits (`PA1234567` Ireland,
+/// `TK1234567` Japan), with a passport term near the value or as its key. The UK
+/// numbers its passports with nine digits (`uk::PASSPORT_NUMBER`).
+pub(super) const PASSPORT_NUMBER_TWO_LETTERS: PiiPattern = PiiPattern {
+    name: "pii_passport_number_two_letters",
+    pattern: r"(?-u:\b)[A-Z]{2}[0-9]{7}(?-u:\b)",
+    entity_group: "PASSPORT_NUMBER",
+    validator: Some(validators::passport_number_two_letters),
+    strength: ValidatorStrength::Format,
+    base_score: 20,
+    captured_value: false,
+    requires_context: true,
     scored_only: false,
 };

@@ -577,6 +577,51 @@ pub fn it_driver_license_number(s: &str) -> bool {
     card || paper
 }
 
+/// UK passport number (B-UK): nine digits, as HM Passport Office numbers the 2015
+/// and later designs (`925665416`). No check digit; one repeated digit is no number.
+pub fn uk_passport_number(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    bytes.len() == 9
+        && bytes.iter().all(u8::is_ascii_digit)
+        && bytes.iter().any(|&byte| byte != bytes[0])
+}
+
+/// Passport number of two letters and seven digits (`PA1234567` Ireland,
+/// `TK1234567` Japan). Format only.
+pub fn passport_number_two_letters(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    bytes.len() == 9
+        && bytes[..2].iter().all(u8::is_ascii_uppercase)
+        && bytes[2..].iter().all(u8::is_ascii_digit)
+}
+
+/// UK driving licence number (B-UK): the first five letters of the surname padded
+/// with `9`, the decade digit of the birth year, the birth month (plus 50 for
+/// women), the day, the year digit, two initials (`9` for none), a digit or letter
+/// and two check letters (`MORGA657054SM9IJ`). The DVLA does not publish the
+/// check algorithm: format only.
+pub fn uk_driver_license_number(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    if bytes.len() != 16 {
+        return false;
+    }
+    let letters = bytes[..5]
+        .iter()
+        .take_while(|byte| byte.is_ascii_uppercase())
+        .count();
+    let number = |at: usize| (bytes[at] - b'0') * 10 + (bytes[at + 1] - b'0');
+    letters > 0
+        && bytes[letters..5].iter().all(|&byte| byte == b'9')
+        && bytes[5..11].iter().all(u8::is_ascii_digit)
+        && matches!(number(6), 1..=12 | 51..=62)
+        && matches!(number(8), 1..=31)
+        && bytes[11..13]
+            .iter()
+            .all(|&byte| byte.is_ascii_uppercase() || byte == b'9')
+        && (bytes[13].is_ascii_uppercase() || bytes[13].is_ascii_digit())
+        && bytes[14..].iter().all(u8::is_ascii_uppercase)
+}
+
 pub fn us_ssn(s: &str) -> bool {
     let digits = s
         .chars()
@@ -623,6 +668,39 @@ pub fn uk_nino(s: &str) -> bool {
         )
         && normalized[2..8].chars().all(|ch| ch.is_ascii_digit())
         && matches!(bytes[8] as char, 'A' | 'B' | 'C' | 'D')
+}
+
+/// A NINO without a field name (B-UK): [`uk_nino`] in one letter case, as a bare
+/// identifier is written (`AB123456C`, `hh 01 02 03 d`).
+pub fn uk_nino_context_free(s: &str) -> bool {
+    let letters = || s.bytes().filter(u8::is_ascii_alphabetic);
+    uk_nino(s)
+        && (letters().all(|byte| byte.is_ascii_uppercase())
+            || letters().all(|byte| byte.is_ascii_lowercase()))
+}
+
+/// NHS number (B-UK): ten digits, grouped by spaces or hyphens or not at all,
+/// whose sum weighted 10 down to 1 is divisible by 11. A number whose check digit
+/// would be 10 is never issued; one repeated digit passes the sum but is no number.
+pub fn uk_nhs_number(s: &str) -> bool {
+    let mut digits = [0u32; 10];
+    let mut count = 0;
+    for byte in s.bytes().filter(|byte| !matches!(byte, b' ' | b'-')) {
+        if !byte.is_ascii_digit() || count == digits.len() {
+            return false;
+        }
+        digits[count] = u32::from(byte - b'0');
+        count += 1;
+    }
+    count == digits.len()
+        && digits.iter().any(|&digit| digit != digits[0])
+        && digits
+            .iter()
+            .zip((1..=10).rev())
+            .map(|(digit, weight)| digit * weight)
+            .sum::<u32>()
+            % 11
+            == 0
 }
 
 /// ISO 13616 Mod-97 check — IBAN validation.

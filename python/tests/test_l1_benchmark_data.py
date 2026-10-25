@@ -26,6 +26,7 @@ PII_LABELS = {
     "LICENSEPLATE",
     "MAC_ADDRESS",
     "NATIONALID",
+    "NHS_NUMBER",
     "PASSPORT_NUMBER",
     "PATIENT_ID",
     "PHONE",

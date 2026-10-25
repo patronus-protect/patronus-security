@@ -179,6 +179,25 @@ Teilenummer) unterdrückt beide in jedem Modus. Der SSA-Validator ist unverände
 `context::stands_alone` lässt ein `+` nach Buchstabe oder `+` als EDIFACT-Trenner gelten
 (`NAD+SU+341-33-4328`).
 
+Stand B-UK: ARK 36, gemeinsam 8 (A07, Baseline P6, Kandidat C4). Die NHS-Nummer bekommt das Label
+`NHS_NUMBER` und die Prüfziffer mod 11 (`validators::uk_nhs_number`, Gewichte 10…1; Prüfziffer 10
+und eine wiederholte Ziffer sind ungültig); `pii.uk.nhs_number` ist jetzt `shared`. Zehn Ziffern in
+Telefongruppen (3-3-4) bestehen mod 11 jedes elfte Mal, deshalb braucht `pii_nhs_number_uk` in jedem
+Modus einen NHS-Begriff nah am Wert oder als Schlüssel und hat keine kontextfreie Form; in den
+Score-Modi konkurriert `NHS_NUMBER` mit `PHONE` (K07), `strict` behält beide Labels. Die NINO-Regel
+liest den Wert auch in Zweiergruppen (`AB 12 34 56 C`) und nach `NI number`, `NI No.`, `National
+insurance no`, `NI-Nummer`, in jeder Schreibweise; `validators::uk_nino` ist unverändert, nie
+vergebene Präfixe (`BG`, `NT`, `FQ`, `UV`) bleiben negativ. `pii_ni_uk_context_free` meldet eine
+blanke NINO in einer Schreibweise (`hh 01 02 03 d`, `tw987654a`) nur in `balanced`/`recall` (0,50).
+Der UK-Pass (neun Ziffern) und ein Pass aus zwei Buchstaben und sieben Ziffern (Irland, Japan;
+`pii_passport_number_two_letters`) brauchen einen Pass-Begriff, der UK-Führerschein
+(`MORGA657054SM9IJ`) ist feldgebunden (`pii_driver_license_number_uk`) und blank in den Score-Modi
+(`…_context_free`, 0,50). NINO und UK-Führerschein sind damit neben der gruppierten SSN die
+`scored_only`-Formatregeln: Vergaberegeln (Präfixe/Suffixe bzw. Nachname, Geburtsdatum, Initialen)
+ersetzen die Prüfziffer. Dev `presidio_favored` balanced: Führerschein 62,5 → 95,2 (tuned 90,0),
+NINO 0,0 → 66,7 exakt und 100,0 überlappend (tuned 100,0); exakt bleibt NINO unter tuned, weil
+der Gold-Span ` YZ 61 48 68 B` das führende Leerzeichen aus Presidios Regex trägt (P10).
+
 Stand B02: ARK 24, gemeinsam 7. Dazu kommen die USt-IdNr. von BG, CY, CZ, DK, EE, EL, FI, HR, HU, IE
 und LT, gleiche Struktur wie B01 (je Land ein Label `VAT_ID_BG` … und ein Validator mit Prüfziffer,
 nur in `balanced`/`recall`), alle `ark_only`; Griechenland trägt im Label das MwSt.-Präfix `EL`, in

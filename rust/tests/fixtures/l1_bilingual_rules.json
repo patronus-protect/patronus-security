@@ -685,6 +685,39 @@
   },
   {
     "category": "pii",
+    "rule_id": "pii_driver_license_number_uk",
+    "de": "Führerscheinnummer: SMITH851010AB1CD",
+    "en": "Driving licence number: MORGA657054SM9IJ",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Führerscheinnummer: SMITH851000AB1CD"
+      ],
+      "en": [
+        "Driving licence number: SMITH813010AB1CD"
+      ]
+    },
+    "structure": {
+      "de": "{\"fuehrerschein\": \"LEE99802123JA9MN\"}",
+      "en": "{\"driving_licence\": \"JONES710238HA3DX\"}"
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_driver_license_number_uk_context_free",
+    "de": "Fahrer LEE99802123JA9MN, Depot Leeds",
+    "en": "Licence: MORGA607054SM9IJ ok",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Den Führerschein MORGA657054SM9IJ hat der Fahrer vorgelegt.",
+        "en": "SMIT9801015JK2CD is her UK driving licence."
+      }
+    }
+  },
+  {
+    "category": "pii",
     "rule_id": "pii_kfz_kennzeichen_de",
     "de": "Kennzeichen: B-AB 1234E",
     "en": "Vehicle registration: B-AB 1234E",
@@ -749,7 +782,82 @@
     "rule_id": "pii_ni_uk",
     "de": "Britische Sozialversicherungsnummer: AB123456C",
     "en": "National insurance number: AB123456C",
-    "language_neutral": false
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "NINO: bg 12 34 56 a",
+        "NI-Nummer: AB 12 34 56 F"
+      ],
+      "en": [
+        "NI number: NT 12 34 56 A",
+        "This isn't a valid national insurance number UV 98 76 54 B"
+      ]
+    },
+    "structure": {
+      "de": "{\"ni_nummer\": \"WL 30 41 15 C\"}",
+      "en": "{\"ni_number\": \"CE 12 34 56 A\"}"
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_ni_uk_context_free",
+    "de": "Mitarbeiterin PR 482917 A, Standort London",
+    "en": "hh 01 02 03 d",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die NINO der Mitarbeiterin ist PR 482917 A.",
+        "en": "tw987654a is my national insurance number."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_nhs_number_uk",
+    "de": "NHS-Nr. 4014710491",
+    "en": "NHS number: 9434765919",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "NHS-Nummer: 4526018156",
+        "Vorgang 4908301662 wurde abgeschlossen."
+      ],
+      "en": [
+        "NHS number: 9434765918",
+        "Reference 4526018155 was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_passport_number_uk",
+    "de": "Der britische Reisepass 533401372 ist gültig.",
+    "en": "Her UK passport 123456789 expires in 2031.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Vorgang 925665416 abgeschlossen."
+      ],
+      "en": [
+        "Ticket 925665416 was closed."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_passport_number_two_letters",
+    "de": "Der irische Reisepass PA1234567 ist gültig.",
+    "en": "Her passport number is TK1234567.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Vorgang PA1234567 abgeschlossen."
+      ],
+      "en": [
+        "Ticket PA1234567 was closed."
+      ]
+    }
   },
   {
     "category": "pii",

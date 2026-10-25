@@ -8,7 +8,8 @@
 //! (`pii_driver_license_number_us`, digit groups optionally joined by hyphens) or the
 //! patente (`pii_driver_license_number_it`). No format carries a check digit, so a number
 //! without a licence field name stays negative in every mode, and the validators only
-//! check the form.
+//! check the form. The UK licence (B-UK) encodes surname, birth date and initials and is
+//! also reported bare in `balanced`/`recall`; its rules are tested in `pii_uk.rs`.
 
 use patronus_ark::detectors::pii::{
     pii::{PiiPattern, PII_PATTERNS},
