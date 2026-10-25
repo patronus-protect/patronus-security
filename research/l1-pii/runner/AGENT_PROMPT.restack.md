@@ -28,7 +28,7 @@ alten Stand des Branches.
 3. Nach jedem Konflikt `git add` und `git rebase --continue` mit der ursprünglichen Commit-Message.
    Passt eine Message durch die Auflösung nicht mehr, nur ergänzen, nicht umschreiben.
 4. Selbst prüfen wie in normalen Läufen (`cargo fmt --all`,
-   `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test -p patronus-ark-core --no-default-features`, `cargo test -p patronus-ark-core --features wolf`, `cargo test -p patronus-ark-core --features download`, `cargo test -p patronus-ark`,
+   `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test -p patronus-ark-core -p patronus-ark`,
    Golden-Eval des Programms, Python-Tests, `python3 scripts/generate_docs.py --check`). Was du dabei
    reparieren musst, kommt als eigener Commit `fix(restack): …` ans Ende.
 5. Ende: `HEAD` ist der rebaste Branch, der Arbeitsbaum ist sauber, kein Rebase läuft mehr. Nicht

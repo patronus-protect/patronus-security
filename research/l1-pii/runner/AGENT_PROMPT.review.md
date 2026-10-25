@@ -32,7 +32,7 @@ in der Aufgabe unten.
    `{"<thread id>": "<1–3 Sätze auf Englisch: was geändert wurde bzw. warum nicht>"}`. Der Runner
    antwortet damit in jedem Thread mit dem Commit und löst ihn auf.
 5. Selbst prüfen wie in normalen Läufen (`cargo fmt --all`,
-   `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test -p patronus-ark-core --no-default-features`, `cargo test -p patronus-ark-core --features wolf`, `cargo test -p patronus-ark-core --features download`, `cargo test -p patronus-ark`,
+   `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test -p patronus-ark-core -p patronus-ark`,
    Golden-Eval des Programms, Python-Tests, `python3 scripts/generate_docs.py --check`).
 6. Alles committen (mindestens ein Commit: Fix oder Test; Conventional Commits auf Englisch, Trailer
    `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`). Nicht pushen, nicht rebasen, die

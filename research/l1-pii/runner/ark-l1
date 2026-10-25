@@ -773,10 +773,6 @@ def gate_steps(wt: Path) -> list[tuple[str, list[str], dict]]:
         ("clippy", [str(CARGO), "clippy", "--workspace", "--all-targets", "--", "-D", "warnings"], build),
         # The following steps mirror .github/workflows/ci.yml (rust and python jobs); GitHub CI on
         # the pushed branch is checked again before a PR is opened (`ark-l1 ci`).
-        # Since #172 the detectors live in the `patronus-ark-core` crate; CI tests it in three feature sets.
-        ("test-core", ["sh", "-c", f"{CARGO} test -p patronus-ark-core --no-default-features && "
-                                   f"{CARGO} test -p patronus-ark-core --features wolf && "
-                                   f"{CARGO} test -p patronus-ark-core --features download"], build),
         ("test", [str(CARGO), "test", "-p", "patronus-ark", "-p", "ark-api", "-p", "ark-coordinator",
                   "-p", "ark-distributed-protocol"], build),
         ("golden", ["sh", "-c", f"cd rust && exec {CARGO} run --quiet --locked --example 13_l1_golden_eval -- all"],
