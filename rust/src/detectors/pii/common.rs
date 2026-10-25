@@ -80,7 +80,14 @@ pub(super) const IPV6_LOOPBACK: PiiPattern = PiiPattern {
 pub(super) const PHONE_INTERNATIONAL: PiiPattern = PiiPattern {
     name: "pii_phone_international",
     // No separator is a line break (T18): `+1-123-456-7890\n\n2` ends before it.
-    pattern: r"\+[1-9](?:[\s./()\-&&[^\n-\r\x85\x{2028}\x{2029}]]*\d){6,14}\b",
+    // A `+1` and ten digits take a NANP extension like `pii_phone_us` (F18), so the
+    // earlier rule does not keep `+1-604-696` of `+1-604-696-5272x565`; without an
+    // extension the second branch matches as before.
+    pattern: concat!(
+        r"\+(?:1(?:[\s./()\-&&[^\n-\r\x85\x{2028}\x{2029}]]*\d){10}",
+        nanp_extension!(),
+        r"|[1-9](?:[\s./()\-&&[^\n-\r\x85\x{2028}\x{2029}]]*\d){6,14})\b"
+    ),
     entity_group: "PHONE",
     validator: Some(validators::unanchored_phone),
     strength: ValidatorStrength::Format,

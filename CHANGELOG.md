@@ -11,6 +11,29 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Changed
 
+- NANP extensions inside the phone span (F18, baseline bucket P5, candidate C3). `pii_phone_us`
+  ended with `\d{4}\b`, which never holds before an attached `x`, so `345-899-3560x4587` was no
+  match, and `pii_phone_international`, the earlier rule, cut `+1-604-696-5272x565` to
+  `+1-604-696`. An extension right after a NANP number (`x4587`, `ext 123`, `ext. 123`,
+  `extension 12`, any letter case, one blank before it) now belongs to the span of
+  `pii_phone_us`; `pii_phone_international` takes it only after `+1` and ten digits, so other
+  country codes end where they ended before (`+49 30 1234567 x12` → `+49 30 1234567`). A bare
+  `x` or `ext` without digits ends the span before it (`212-555-0147 ext (ask reception)`),
+  and letters attached to the number (`212-555-0147xl`) still yield no match.
+  `validators::unanchored_phone` checks the number without its extension, so repeated digits
+  (`999-999-9999 ext. 12`) stay rejected and extension digits never push a number past 15
+  digits. `pii_l1.jsonl` gains 22 rows (12 positives, 10 hard negatives, DE and EN), the rule
+  fixture two hard negatives; the new `rust/tests/pii_phone_extension.rs` covers spans, bare
+  `x`/`ext`, silent lookalikes and other country codes. **Detection change:** (PII L1, all
+  modes) NANP numbers with an extension are new findings or longer spans that include the
+  extension; `+1` numbers with an attached extension no longer yield the fragment before the
+  last digit group. Dev scoreboard vs. base (PASS in strict and balanced, no new hard-negative
+  FP, no other entity changes): phone exact F1 presidio_favored 68.5 → 80.5 in strict and
+  balanced, neutral 81.8 → 82.0 (EN 84.9 → 85.3), ark_authored unchanged; L1 F1 balanced
+  +0.1 pp (presidio_favored +1.4). Both regexes only gain an optional tail after the last digit
+  group and stay linear; the prefilter and anchor gate are unchanged. `latency.py compare
+  --engine ark-native` 100 KiB p95 135.9 → 147.5 / 134.6 ms in two head runs (PASS, noise),
+  4 KiB 6.15 → 5.94 / 5.75 ms.
 - Read HCL and XML values under credential keys (K05, part 3: K05C).
   `dlp_env_var_secret`, `dlp_password_assignment` and `dlp_generic_credential_assignment` bind
   an attribute in an HCL block (`resource "…" "…" {`, `provider`, `locals`, also nested blocks,

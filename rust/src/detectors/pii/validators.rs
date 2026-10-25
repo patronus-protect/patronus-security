@@ -223,12 +223,17 @@ pub fn phone(s: &str) -> bool {
 }
 
 /// Validate an unanchored phone candidate without treating bare numeric IDs or
-/// Unix timestamps as phone numbers.
+/// Unix timestamps as phone numbers. A NANP extension (`x4587`, `ext. 123`, F18)
+/// is not part of the number the checks count.
 pub fn unanchored_phone(s: &str) -> bool {
-    phone(s)
-        && (s.starts_with('+')
-            || s.starts_with("00")
-            || s.chars()
+    let number = s
+        .find(|ch: char| ch.is_ascii_alphabetic())
+        .map_or(s, |extension| s[..extension].trim_end());
+    phone(number)
+        && (number.starts_with('+')
+            || number.starts_with("00")
+            || number
+                .chars()
                 .any(|ch| matches!(ch, ' ' | '-' | '.' | '/' | '(' | ')')))
 }
 

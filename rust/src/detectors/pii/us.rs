@@ -17,8 +17,13 @@ pub(super) const PHONE: PiiPattern = PiiPattern {
     // `0000012345` have no NANP grouping. A trunk `1`/`+1` or a `00` international
     // prefix belongs to the span (T18: `1-800-123-4567`, `1 (800) 123-4567`,
     // `001 415 555 2671`); it is optional, so it only widens a number found without it.
-    // No separator is a line break.
-    pattern: r"(?:(?:\+1|\b(?:00[1-9]\d{0,2}|1))[\s\-\.&&[^\n-\r\x85\x{2028}\x{2029}]])?(?:\(\d{3}\)[\s\-\.&&[^\n-\r\x85\x{2028}\x{2029}]]?|\b\(?\d{3}(?:\)[\s\-\.&&[^\n-\r\x85\x{2028}\x{2029}]]?|[\s\-\.&&[^\n-\r\x85\x{2028}\x{2029}]]))\d{3}[\s\-\.&&[^\n-\r\x85\x{2028}\x{2029}]]?\d{4}\b",
+    // No separator is a line break. An extension belongs to the span (F18:
+    // `345-899-3560x4587`, `212-555-0147 ext. 123`).
+    pattern: concat!(
+        r"(?:(?:\+1|\b(?:00[1-9]\d{0,2}|1))[\s\-\.&&[^\n-\r\x85\x{2028}\x{2029}]])?(?:\(\d{3}\)[\s\-\.&&[^\n-\r\x85\x{2028}\x{2029}]]?|\b\(?\d{3}(?:\)[\s\-\.&&[^\n-\r\x85\x{2028}\x{2029}]]?|[\s\-\.&&[^\n-\r\x85\x{2028}\x{2029}]]))\d{3}[\s\-\.&&[^\n-\r\x85\x{2028}\x{2029}]]?\d{4}(?:",
+        nanp_extension!(),
+        r")?\b"
+    ),
     entity_group: "PHONE",
     validator: Some(validators::unanchored_phone),
     strength: ValidatorStrength::Format,
