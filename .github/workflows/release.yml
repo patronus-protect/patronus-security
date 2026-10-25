@@ -38,6 +38,7 @@ jobs:
         with:
           command: check licenses
       - run: cargo publish -p patronus-ark --dry-run
+      - run: python -m pip install "PyYAML>=6,<7"
       - run: python scripts/generate_docs.py --check
       - name: Verify packaged legal files are current
         run: |

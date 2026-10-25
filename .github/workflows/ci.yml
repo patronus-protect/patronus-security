@@ -26,6 +26,7 @@ jobs:
       - run: cargo test -p ark-api
       - run: cargo test -p ark-coordinator
       - run: cargo test -p ark-distributed-protocol
+      - run: python -m pip install "PyYAML>=6,<7"
       - run: python scripts/generate_docs.py --check
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
