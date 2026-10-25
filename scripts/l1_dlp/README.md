@@ -305,7 +305,8 @@ gitleaks und detect-secrets gehören nie zum Holdout.
 `.ready`. Das `manifest.json` des Zielverzeichnisses pinnt je Komponente Schema, SHA-256 des
 Komponenten-Manifests und SHA-256 jeder JSONL. `synthetic/manifest.json` pinnt zusätzlich die
 SHA-256 der Generator-Dateien (`carrier_templates.py`, `generators.json`, `rules.json` …), die
-Familien und Zähler je Variante, Sprache, Format und Regel. Das oberste `.ready` (SHA-256 des
+Familien und Zähler je Variante, Sprache, Format, Regel und Entität (Baseline-Entitäten ohne
+ARK-Regel, GOLD-D2, nur unter `entities`). Das oberste `.ready` (SHA-256 des
 Manifests) entsteht zuletzt, nach allen Komponenten. Scheitert eine Komponente, fehlt es, und das
 Gate versucht es beim nächsten Mal erneut. Ein Verzeichnis mit `.ready` ist eingefroren: Ein
 weiterer Lauf muss es byte-identisch reproduzieren, sonst schreibt er nichts und endet mit Exit 1.
@@ -408,7 +409,7 @@ Vorhersagen gelöscht.
   (davon mit der richtigen Entität), `rule_attributed` (mit der Generator-Regel `rule_id`) und
   `attribution`. `synthetic.attribution` fasst das über alle Provider zusammen.
 - `synthetic.hard_negatives`: Jeder Wert-Span auf einer Hard-Negative-Zeile ist ein FP, gesamt,
-  je Variante (`placeholder`, `env_ref`, `doc_example`, `test_key`) und Sprache, dazu die Liste
+  je Variante (`placeholder`, `env_ref`, `doc_example`, `test_key`, `lookalike`) und Sprache, dazu die Liste
   der FP-Spans (Zeilen-ID und Offsets, kein Text).
 - `synthetic.documents`: P/R/F1 je Content-Klasse auf Dokumentebene. Gold sind die
   `content_labels` der Zeile, Vorhersage ist jede Klasse, deren Regel in der Zeile einen Span

@@ -6,7 +6,10 @@ one split (``carrier_templates.FAMILIES``): config files, code in eight language
 notebooks, logs, HTTP and DE/EN chat, tickets and mail. Dev and holdout use disjoint
 families; the holdout additionally uses a secret seed (E09).
 
-For each family and value rule (``rules.json``) a row is produced per variant:
+For each family and value rule (``rules.json``) a row is produced per variant. Baseline
+entities (``baseline_entities`` in ``rules.json``, GOLD-D2: entities that only gitleaks,
+TruffleHog or detect-secrets detect today) get the same rows with ``rule_id`` None, so
+every tool is measured on them before ARK has a rule:
 
 * ``positive``: the generated value, wrapped by the rule profile (``Bearer …``, URL
   userinfo …) and escaped by the family. The entity span covers only the value, in
@@ -16,7 +19,9 @@ For each family and value rule (``rules.json``) a row is produced per variant:
   ``env_ref`` (``${KEY}``, ``os.environ[…]``, ``${{ secrets.KEY }}`` …), ``doc_example``
   and ``test_key`` (the generator shape filled with ``EXAMPLE``/``TEST`` words, checksums
   zeroed; encoded values keep their encoded prefix and length and only break checksum or
-  decoded structure, so the rule pattern still matches while validation fails).
+  decoded structure, so the rule pattern still matches while validation fails), and for
+  baseline entities ``lookalike`` (the entity's shape with a wrong prefix, length or
+  character set, such as a public sibling ID).
 
 Rows only exist in memory or in files written outside the repository; never commit
 them, they contain checksum-valid synthetic tokens.
@@ -34,13 +39,13 @@ from functools import lru_cache
 from typing import Iterable, Iterator
 
 from . import recipes, rules
-from .carrier_templates import FAMILIES, FILL_WORDS, PLACEHOLDERS, PROFILES, Family, Profile
+from .carrier_templates import FAMILIES, FILL_WORDS, LOOKALIKE_KEY, PLACEHOLDERS, PROFILES, Family, Profile
 
 
 CARRIER_VERSION = 1
 SPLITS = ("dev", "holdout")
 LANGUAGES = ("de", "en")
-VARIANTS = ("positive", "placeholder", "env_ref", "doc_example", "test_key")
+VARIANTS = ("positive", "placeholder", "env_ref", "doc_example", "test_key", "lookalike")
 FORMATS = (
     "env", "yaml", "json", "toml", "hcl", "xml", "properties", "shell", "dockerfile",
     "ci_yaml", "jupyter", "log", "http", "code", "chat", "ticket", "mail",
@@ -112,16 +117,25 @@ def _family(family_id: str) -> Family:
 
 
 @lru_cache(maxsize=1)
+def _baseline_entities() -> frozenset[str]:
+    return frozenset(rules.baseline_entities())
+
+
+@lru_cache(maxsize=1)
 def _profiles() -> dict[str, Profile]:
-    value_rules = set(rules.load_rule_map())
-    if set(PROFILES) != value_rules:
-        raise CarrierError(f"profiles must cover exactly the value rules: {sorted(set(PROFILES) ^ value_rules)}")
-    for rule_id, profile in PROFILES.items():
+    keys = set(rules.load_rule_map()) | _baseline_entities()
+    if set(PROFILES) != keys:
+        raise CarrierError(
+            f"profiles must cover exactly the value rules and baseline entities: {sorted(set(PROFILES) ^ keys)}"
+        )
+    for key, profile in PROFILES.items():
+        if key in _baseline_entities() and profile.entity != key:
+            raise CarrierError(f"{key}: a baseline entity profile must name its own entity")
         if profile.kind not in KINDS:
-            raise CarrierError(f"{rule_id}: unknown kind {profile.kind!r}")
+            raise CarrierError(f"{key}: unknown kind {profile.kind!r}")
         wraps = profile.wrap.values() if isinstance(profile.wrap, dict) else [profile.wrap or "<<value>>"]
         if any(wrap.count("<<value>>") != 1 for wrap in wraps):
-            raise CarrierError(f"{rule_id}: wrap needs exactly one <<value>>")
+            raise CarrierError(f"{key}: wrap needs exactly one <<value>>")
     return PROFILES
 
 
@@ -274,39 +288,47 @@ def _substitute(text: str, forms: dict[str, str]) -> str:
     return MARKER_RE.sub(lambda match: forms.get(match.group(1), match.group(0)), text)
 
 
-def render(family_id: str, rule_id: str, variant: str, seed: int) -> dict | None:
-    """One carrier row, or ``None`` if the family does not take this rule's values."""
+def render(family_id: str, key: str, variant: str, seed: int) -> dict | None:
+    """One carrier row, or ``None`` if the family does not take the values of ``key``.
+
+    ``key`` is a value rule or a baseline entity; ``lookalike`` rows exist only for
+    baseline entities.
+    """
     family = _family(family_id)
     try:
-        profile = _profiles()[rule_id]
+        profile = _profiles()[key]
     except KeyError:
-        raise CarrierError(f"no carrier profile for rule {rule_id!r}") from None
+        raise CarrierError(f"no carrier profile for rule {key!r}") from None
     if variant not in VARIANTS:
         raise CarrierError(f"unknown variant {variant!r}")
     if profile.kind not in family.accepts:
         return None
-    generators = [
-        name for name in rules.generators_for(rule_id) if family.multiline or not _is_multiline(name)
-    ]
+    candidates = rules.baseline_lookalikes(key) if variant == "lookalike" else rules.generators_for(key)
+    generators = [name for name in candidates if family.multiline or not _is_multiline(name)]
     if variant in FILL_WORDS:
         # A constant value (a bare PEM header) has no example or test form of its own.
         generators = [name for name in generators if recipes.is_random(name)]
     if not generators:
         return None
-    generator = generators[_derive("generator", seed, family.id, rule_id) % len(generators)]
-    value_seed = _derive("value", seed, family.id, rule_id)
-    forms = key_forms(profile.key)
-    forms["label"] = profile.label_de if family.language == "de" else profile.label_en
+    # A lookalike draws from its own seed, so it shares no run with the positive of the row.
+    lookalike = variant == "lookalike"
+    generator = generators[_derive("lookalike" if lookalike else "generator", seed, family.id, key) % len(generators)]
+    value_seed = _derive("lookalike-value" if lookalike else "value", seed, family.id, key)
+    # A lookalike sits under a neutral key: under the entity's own key a value of the wrong
+    # shape is still a credential of unknown format, so only the shape tells it apart.
+    key_name, label_en, label_de = LOOKALIKE_KEY if lookalike else (profile.key, profile.label_en, profile.label_de)
+    forms = key_forms(key_name)
+    forms["label"] = label_de if family.language == "de" else label_en
 
     template = family.template
     if variant == "env_ref":
         old, new = family.env_ref
         template = template.replace(old, new, 1)
-    if variant == "positive":
+    if variant == "positive" or lookalike:
         value = recipes.generate(generator, value_seed)
     elif variant == "placeholder":
         options = PLACEHOLDERS[family.language]
-        value = _substitute(options[_derive("placeholder", seed, family.id, rule_id) % len(options)], forms)
+        value = _substitute(options[_derive("placeholder", seed, family.id, key) % len(options)], forms)
     elif variant != "env_ref":
         value = hard_negative_value(generator, variant)
     prefix, suffix = _wrap(profile, generator)
@@ -335,6 +357,7 @@ def render(family_id: str, rule_id: str, variant: str, seed: int) -> dict | None
     pieces.append(template[cursor:])
     text = "".join(pieces)
 
+    rule_id = None if key in _baseline_entities() else key
     entities = []
     if variant == "positive":
         entities.append(
@@ -349,7 +372,7 @@ def render(family_id: str, rule_id: str, variant: str, seed: int) -> dict | None
             }
         )
     return {
-        "id": f"dlp_carrier-{family.id}-{rule_id}-{variant}",
+        "id": f"dlp_carrier-{family.id}-{key}-{variant}",
         "suite": "dlp_carrier",
         "split": family.split,
         "family": family.id,
@@ -380,9 +403,9 @@ def iter_rows(
     selected = list(_profiles()) if rules is None else list(rules)
     variants = list(variants)
     for family in families(split):
-        for rule_id in selected:
+        for key in selected:
             for variant in variants:
-                row = render(family.id, rule_id, variant, seed)
+                row = render(family.id, key, variant, seed)
                 if row is not None:
                     yield row
 
@@ -390,7 +413,7 @@ def iter_rows(
 def build(
     split: str, seed: int, rules: Iterable[str] | None = None, variants: Iterable[str] = VARIANTS
 ) -> list[dict]:
-    """All rows of one split, ordered by family, rule and variant."""
+    """All rows of one split, ordered by family, rule (then baseline entity) and variant."""
     return list(iter_rows(split, seed, rules, variants))
 
 
@@ -398,7 +421,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--split", choices=SPLITS, required=True)
     parser.add_argument("--seed", type=int, required=True)
-    parser.add_argument("--rule", action="append", help="limit to these value rules (repeatable)")
+    parser.add_argument("--rule", action="append", help="limit to these value rules or baseline entities (repeatable)")
     parser.add_argument("--variant", action="append", choices=VARIANTS, help="limit to these variants")
     parser.add_argument("--out", help="JSONL output file (default: stdout)")
     args = parser.parse_args(argv)

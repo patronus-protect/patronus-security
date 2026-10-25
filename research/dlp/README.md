@@ -7,6 +7,7 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
 ## Gold und Qualitätsuntergrenze (seit 2026-10-25)
 
 - **Gold überall:** Jede implementierte Entität braucht Gold in mindestens einer Quellfamilie. Neue Entitäten bringen ihr Gold in derselben Aufgabe mit (synthetisch, prüfziffergültig, ≥ 10 Positive und ≥ 5 Hard Negatives je Entität, DE + EN). Lücken stehen auf der Seite `docs/reference/l1-capabilities.md` als „no gold“.
+- **Gold vor der Regel (GOLD-D2):** Entitäten ohne ARK-Regel (`scope: baseline_only`) bekommen ihr Gold über `baseline_entities` in `python/patronus_ark/dlp_synth/rules.json`: Generatoren im Format der gitleaks-Regel der Entität, Carrier-Zeilen mit `rule_id` null und als zusätzliches Hard Negative `lookalike` (falsches Präfix, Länge oder Zeichensatz unter dem neutralen Schlüssel `correlation_id`). So haben ARK und jede Baseline eine Zahl, bevor das Provider-Paket die Regel bringt; mit der Regel wandert der Eintrag nach `rules`. Abgedeckt: comm, identity, commerce.
 - **Untergrenze F1 ≥ 80:** Jede implementierte Entität mit Gold erreicht exakten F1 ≥ 80 auf jeder Familie mit Gold (PII: `balanced`; DLP: im Profil, in dem sie läuft, auch Opt-in). Darunter wird eine `Q-…`-Aufgabe angelegt; TRIAGE prüft das bei jeder Messung. Ausnahmen nur mit dokumentierter Entscheidung.
 
 ## Ausgangslage

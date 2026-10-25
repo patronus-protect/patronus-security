@@ -404,18 +404,18 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `observability.grafana.token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `grafana-api-key`, `grafana-cloud-api-token`, `grafana-service-account-token` |
 | `observability.dynatrace.api_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `dynatrace-api-token` |
 | `observability.sumologic.access_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `sumologic-access-token` |
-| `comm.webhook_url` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `slack-webhook-url`, `microsoft-teams-webhook` |
+| `comm.webhook_url` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `slack-webhook-url`, `microsoft-teams-webhook`; TruffleHog: `SlackWebhook`, `MicrosoftTeamsWebhook`; detect-secrets: `SlackDetector` |
 | `comm.discord.api_credentials` | baseline_only | `API_KEY` | – | – | – | gitleaks: `discord-api-token`, `discord-client-secret` |
-| `comm.telegram.bot_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `telegram-bot-api-token`; detect-secrets: `TelegramBotTokenDetector` |
-| `comm.twilio.api_key` | baseline_only | `API_KEY` | – | – | – | gitleaks: `twilio-api-key`; detect-secrets: `TwilioKeyDetector` |
-| `comm.sendgrid.api_key` | baseline_only | `API_KEY` | – | – | – | gitleaks: `sendgrid-api-token`; detect-secrets: `SendGridDetector` |
+| `comm.telegram.bot_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `telegram-bot-api-token`; TruffleHog: `TelegramBotToken`; detect-secrets: `TelegramBotTokenDetector` |
+| `comm.twilio.api_key` | baseline_only | `API_KEY` | – | – | – | gitleaks: `twilio-api-key`; TruffleHog: `TwilioApiKey`; detect-secrets: `TwilioKeyDetector` |
+| `comm.sendgrid.api_key` | baseline_only | `API_KEY` | – | – | – | gitleaks: `sendgrid-api-token`; TruffleHog: `SendGrid`; detect-secrets: `SendGridDetector` |
 | `comm.brevo.api_key` | baseline_only | `API_KEY` | – | – | – | gitleaks: `sendinblue-api-token` |
-| `comm.mailgun.key` | baseline_only | `API_KEY` | – | – | – | gitleaks: `mailgun-private-api-token`, `mailgun-signing-key` |
-| `comm.mailchimp.api_key` | baseline_only | `API_KEY` | – | – | – | gitleaks: `mailchimp-api-key`; detect-secrets: `MailchimpDetector` |
-| `comm.messagebird.api_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `messagebird-api-token` |
-| `comm.mattermost.access_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `mattermost-access-token` |
-| `comm.sendbird.access_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `sendbird-access-token` |
-| `comm.gitter.access_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `gitter-access-token` |
+| `comm.mailgun.key` | baseline_only | `API_KEY` | – | – | – | gitleaks: `mailgun-private-api-token`, `mailgun-signing-key`; TruffleHog: `Mailgun` |
+| `comm.mailchimp.api_key` | baseline_only | `API_KEY` | – | – | – | gitleaks: `mailchimp-api-key`; TruffleHog: `Mailchimp`; detect-secrets: `MailchimpDetector` |
+| `comm.messagebird.api_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `messagebird-api-token`; TruffleHog: `MessageBird` |
+| `comm.mattermost.access_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `mattermost-access-token`; TruffleHog: `MattermostPersonalToken` |
+| `comm.sendbird.access_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `sendbird-access-token`; TruffleHog: `Sendbird`, `SendbirdOrganizationAPI` |
+| `comm.gitter.access_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `gitter-access-token`; TruffleHog: `Gitter` |
 | `payment.square.access_token` | baseline_only | `PAYMENT_KEY` | – | – | – | gitleaks: `square-access-token`; detect-secrets: `SquareOAuthDetector` |
 | `payment.shopify.token` | baseline_only | `PAYMENT_KEY` | – | – | – | gitleaks: `shopify-access-token`, `shopify-custom-access-token`, `shopify-private-app-access-token`, `shopify-shared-secret` |
 | `payment.coinbase.access_token` | baseline_only | `PAYMENT_KEY` | – | – | – | gitleaks: `coinbase-access-token` |
@@ -425,7 +425,7 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `payment.finicity.secret` | baseline_only | `PAYMENT_KEY` | – | – | – | gitleaks: `finicity-api-token`, `finicity-client-secret` |
 | `payment.crypto_exchange.secret` | baseline_only | `PAYMENT_KEY` | – | – | – | gitleaks: `kraken-access-token`, `kucoin-access-token`, `kucoin-secret-key`, `bittrex-access-key`, `bittrex-secret-key` |
 | `payment.freemius.secret_key` | baseline_only | `PAYMENT_KEY` | – | – | – | gitleaks: `freemius-secret-key` |
-| `commerce.shipping.api_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `duffel-api-token`, `easypost-api-token`, `shippo-api-token`, `lob-api-key` |
+| `commerce.shipping.api_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `duffel-api-token`, `easypost-api-token`, `shippo-api-token`, `lob-api-key`; TruffleHog: `DuffelToken`, `Shippo`, `Lob` |
 | `saas.atlassian.api_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `atlassian-api-token` |
 | `saas.notion.api_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `notion-api-token` |
 | `saas.linear.secret` | baseline_only | `API_KEY` | – | – | – | gitleaks: `linear-api-key`, `linear-client-secret` |
@@ -451,7 +451,7 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `saas.squarespace.access_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `squarespace-access-token` |
 | `saas.misc.api_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `adafruit-api-key`, `beamer-api-token`, `cisco-meraki-api-key`, `finnhub-access-token`, `flickr-access-token`, `frameio-api-token`, `intra42-client-secret`, `maxmind-license-key`, `nytimes-access-token`, `rapidapi-access-token`, `readme-api-token` |
 | `saas.sidekiq.credentials` | baseline_only | `CREDENTIAL` | – | – | – | gitleaks: `sidekiq-secret`, `sidekiq-sensitive-url` |
-| `identity.okta.access_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `okta-access-token` |
+| `identity.okta.access_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `okta-access-token`; TruffleHog: `Okta` |
 | `identity.authress.access_key` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `authress-service-client-access-key` |
 | `identity.onepassword.secret` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `1password-secret-key`, `1password-service-account-token` |
 | `key.age_secret_key` | baseline_only | `PRIVATE_KEY` | – | – | – | gitleaks: `age-secret-key` |

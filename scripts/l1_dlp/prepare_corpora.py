@@ -152,7 +152,8 @@ def build_synthetic(split: str, seed: int, seed_commitment: dict[str, Any]) -> d
             "variants": _counts(rows, "variant"),
             "languages": _counts(rows, "language"),
             "formats": _counts(rows, "format"),
-            "rules": _counts(rows, "rule_id"),
+            "rules": _counts([row for row in rows if row["rule_id"]], "rule_id"),
+            "entities": _counts(rows, "entity"),
             **seed_commitment,
         }
     )

@@ -105,6 +105,39 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Synthetic DLP gold for the 17 comm, identity and commerce entities without gold (GOLD-D2):
+  `comm.slack.app_config_token`, `comm.webhook_url`, `comm.discord.api_credentials`,
+  `comm.telegram.bot_token`, `comm.twilio.api_key`, `comm.sendgrid.api_key`,
+  `comm.brevo.api_key`, `comm.mailgun.key`, `comm.mailchimp.api_key`,
+  `comm.messagebird.api_token`, `comm.mattermost.access_token`, `comm.sendbird.access_token`,
+  `comm.gitter.access_token`, `identity.okta.access_token`, `identity.authress.access_key`,
+  `identity.onepassword.secret`, `commerce.shipping.api_token`. ARK has no rule for them yet
+  (scope `baseline_only`, packages P08, P09, P11). `dlp_synth/rules.json` gains
+  `baseline_entities`: 25 generators in the format of each entity's gitleaks rule (source in
+  `generators.json`; the Authress key ends in a base64 PKCS#8 Ed25519 key, the 1Password
+  service account token is `ops_` + base64 of the account JSON) and one lookalike per entity
+  (wrong prefix, length or character set, e.g. a Twilio account SID `AC…`, a Mailgun
+  `pubkey-`). The E04 carriers render them like the value rules, with `rule_id` null, in every
+  family: per split and entity 40 positives (20 DE, 20 EN) and 200 hard negatives, including
+  the new variant `lookalike` under the neutral key `correlation_id` (under the entity's own
+  key a wrong-shaped value is still a credential). `entity_map.yaml` maps the TruffleHog
+  detectors that report these formats (`TelegramBotToken`, `SendGrid`, `Mailgun`,
+  `Mailchimp`, `MessageBird`, `Gitter`, `SlackWebhook`, `MicrosoftTeamsWebhook`, `Okta`,
+  `DuffelToken`, `Shippo` …) and detect-secrets' `SlackDetector` for webhook URLs, so every
+  tool gets a per-entity number (`check-entity-map` passes on the pinned binaries). The
+  synthetic manifest counts rows per `entities` too; `baseline_report.py` files missed gold
+  of a baseline entity under its entity id. **Detection change:** none (evaluation data
+  only); the frozen dev and holdout corpora are unchanged until the operator re-freezes them.
+  Dev rows of the new entities, exact F1 (best baseline): ARK 0 on all 17 (generic rules find
+  up to 34 of 40 values, attributed to `credential.*`), TruffleHog 97.4 MessageBird, 96.1
+  Telegram, 66.7 SendGrid, 57.9 shipping, 50.0 Mailgun/Mailchimp, 49.4 Gitter, 43.5 webhook
+  URLs; gitleaks 84.1 Okta, 71.4 1Password, 66.7 Twilio, 50.0 Slack app/config tokens, 49.4
+  Brevo/Authress, 45.7 Discord/Mattermost/Sendbird. Baseline precision suffers mostly from
+  `doc_example`/`test_key` values. After a re-freeze, ARK recall of `API_KEY` and
+  `SECRET_TOKEN` drops by the uncovered gold, ARK reports 230 hard-negative spans on these rows
+  (generic rules on example values whose prefix or suffix hides the example run, such as
+  `SK` + `deadbeef…`; no `lookalike` hit), and `dlp_slack_token` reports the `xoxp-…` part of
+  `xoxe.xoxp-1-…` configuration tokens (overlap, not exact) — findings for P08.
 - Synthetic gold for the VAT IDs of AT, BE, BG, CH, CY, CZ, DK, EE, ES, FI, FR, GR, HR and HU
   (GOLD-VAT1). These ids were implemented (B01, B02) but had gold in no source family. The E05
   generator `scripts/l1_presidio/synth_goldset.py` gains `--goldset vat-1`: a goldset of its own
