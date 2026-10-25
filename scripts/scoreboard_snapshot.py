@@ -87,21 +87,21 @@ def _covers(m: dict[str, Any] | None) -> bool:
 def dlp_results(reports: dict[str, dict[str, Any]], extended: dict[str, Any] | None,
                 entity_map: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     """Per-entity and per-group results: default profile for every tool, ARK's opt-in profile for
-    default-off families."""
+    default-off families. Without ``extended`` (no opt-in run) those families stay unmeasured."""
     taxonomy = entity_map["taxonomy"]
 
     def family(group: str | None) -> str:
         return (taxonomy.get(group or "") or {}).get("family", "")
 
     ark = reports["ark"]["synthetic"]
-    opt_in_classes = set((extended or reports["ark"]).get("opt_in_classes") or [])
+    opt_in_classes = set((extended or {}).get("opt_in_classes") or [])
     ext_groups = (extended or {}).get("synthetic", {}).get("groups", {})
     ext_documents = ((extended or {}).get("external") or {}).get("documents", {})
 
     groups: dict[str, Any] = {}
     for group, meta in taxonomy.items():
         if family(group) in OPT_IN_FAMILIES:
-            if meta.get("planned"):
+            if meta.get("planned") or extended is None:
                 continue
             entry: dict[str, Any] = {"gold": 0, "profile": "extended"}
             if ext_groups.get(group, {}).get("gold"):

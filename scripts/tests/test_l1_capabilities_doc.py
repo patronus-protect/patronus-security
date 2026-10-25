@@ -155,3 +155,21 @@ def test_converter_round_trip(tmp_path):
     assert again.read_text(encoding="utf-8") == output.read_text(encoding="utf-8")
     assert l1_capabilities_doc.dlp_cell(dlp["entities"]["llm.openai.api_key"], "recall") == (
         "ARK 90.0 / best baseline 25.0 (gitleaks)")
+
+
+def test_converter_without_opt_in_run_leaves_opt_in_families_unmeasured(tmp_path):
+    reports = tmp_path / "dlp"
+    reports.mkdir()
+    for name in ("ark.json", "gitleaks.json"):
+        (reports / name).write_text((FIXTURES / "dlp" / name).read_text(encoding="utf-8"), encoding="utf-8")
+    output = tmp_path / "snapshot.json"
+    assert scoreboard_snapshot.main([
+        "from-reports", "--snapshot", str(FIXTURES / "snapshot.json"),
+        "--dlp-reports", str(reports), "--dlp-entity-map", str(FIXTURES / "entity_map.yaml"),
+        "--output", str(output),
+    ]) == 0
+    dlp = json.loads(output.read_text(encoding="utf-8"))["dlp"]
+    assert "identifier.de.vat_id" not in dlp["entities"] and "content.sql" not in dlp["entities"]
+    assert "dlp.de.vat_id" not in dlp["groups"] and "dlp.content.sql" not in dlp["groups"]
+    assert l1_capabilities_doc.dlp_cell(dlp["entities"].get("identifier.de.vat_id")) == "–"
+    assert dlp["entities"]["llm.openai.api_key"]["gold"] == 40
