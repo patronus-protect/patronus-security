@@ -94,6 +94,8 @@ DEFAULT_FILENAME = "document.txt"
 TAIL_RULES = {("detect-secrets", "JwtTokenDetector"): re.compile(r"[A-Za-z0-9_\-.+/=]+")}
 # Rules whose reported secret is ``user:password``; the value is the password.
 USERPASS_RULES = {("gitleaks", "curl-auth-user")}
+# Rules whose reported secret starts with the cookie name; the value is the cookie value.
+COOKIE_RULES = {("gitleaks", "gitlab-session-cookie"): "_gitlab_session="}
 QUOTES = ("\"", "'", "`")
 LEADING_TRIM = " \t\r\n\"'`=:"
 TRAILING_TRIM = " \t\r\n\"'`"
@@ -588,6 +590,9 @@ def refine(text: str, start: int, end: int, tool: str, rule_id: str) -> tuple[in
     elif (tool, rule_id) in USERPASS_RULES and ":" in value:
         start += value.index(":") + 1
         steps.append("user_password")
+    elif (tool, rule_id) in COOKIE_RULES and value.startswith(COOKIE_RULES[(tool, rule_id)]):
+        start += len(COOKIE_RULES[(tool, rule_id)])
+        steps.append("cookie_name")
     line_start = text.rfind("\n", 0, start) + 1
     line_end = text.find("\n", start)
     line_end = len(text) if line_end < 0 else line_end

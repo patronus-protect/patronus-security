@@ -270,8 +270,8 @@ TypeScript, Go, Java, C#, Rust and Ruby, and DE/EN chat, tickets and mail.
 - Each value rule of `rules.json` has a profile with its entity, group and key
   name (`OPENAI_API_KEY`, `openaiApiKey`, `Openai-Api-Key` …), a DE/EN label and
   an optional wrapper (`Bearer …`, `postgres://app:…@db…`, `JSESSIONID=…`).
-- Each baseline entity of `rules.json` (GOLD-D2: an entity map entity with scope
-  `baseline_only`, such as `comm.telegram.bot_token`) has a profile under its
+- Each baseline entity of `rules.json` (GOLD-D2, GOLD-D3: an entity map entity with
+  scope `baseline_only`, such as `comm.telegram.bot_token`) has a profile under its
   entity id. Its generators follow the gitleaks rule of the entity (`source` in
   `generators.json`), so ARK and every baseline are measured on it before ARK has
   a rule; its rows carry `rule_id` null.
@@ -292,9 +292,9 @@ TypeScript, Go, Java, C#, Rust and Ruby, and DE/EN chat, tickets and mail.
   pattern, so only structural validation tells them from a real value.
   Baseline entities add `lookalike`: the entity's shape with a wrong prefix,
   length or character set (a Twilio account SID `AC…` for an API key `SK…`, a
-  Mailgun `pubkey-`, a short Telegram secret) under the neutral key
-  `correlation_id`. Under the entity's own key such a value would still be a
-  credential of unknown format.
+  Mailgun `pubkey-`, a short Telegram secret, an Octopus `API-` key in lower case)
+  under the neutral key `correlation_id`. Under the entity's own key such a value
+  would still be a credential of unknown format.
 - Code and notebook families carry the document label `content.source_code`,
   logs `content.system_log`.
 

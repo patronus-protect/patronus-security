@@ -371,24 +371,24 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `cloud.yandex.credentials` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `yandex-access-token`, `yandex-api-key`, `yandex-aws-access-token` |
 | `cloud.scalingo.api_token` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `scalingo-api-token` |
 | `registry.jfrog.artifactory` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `artifactory-api-key`, `artifactory-reference-token`, `jfrog-api-key`, `jfrog-identity-token`; detect-secrets: `ArtifactoryDetector` |
-| `registry.pypi.upload_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `pypi-upload-token`; detect-secrets: `PypiTokenDetector` |
-| `registry.rubygems.api_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `rubygems-api-token` |
+| `registry.pypi.upload_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `pypi-upload-token`; TruffleHog: `PyPI`; detect-secrets: `PypiTokenDetector` |
+| `registry.rubygems.api_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `rubygems-api-token`; TruffleHog: `RubyGems` |
 | `registry.clojars.api_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `clojars-api-token` |
-| `devops.terraform_cloud.token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `hashicorp-tf-api-token`, `hashicorp-tf-password` |
-| `devops.pulumi.api_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `pulumi-api-token` |
+| `devops.terraform_cloud.token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `hashicorp-tf-api-token`, `hashicorp-tf-password`; TruffleHog: `TerraformCloudPersonalToken` |
+| `devops.pulumi.api_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `pulumi-api-token`; TruffleHog: `Pulumi` |
 | `devops.vault.token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `vault-batch-token`, `vault-service-token` |
-| `devops.doppler.api_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `doppler-api-token` |
-| `devops.prefect.api_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `prefect-api-token` |
+| `devops.doppler.api_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `doppler-api-token`; TruffleHog: `Doppler` |
+| `devops.prefect.api_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `prefect-api-token`; TruffleHog: `Prefect` |
 | `devops.infracost.api_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `infracost-api-token` |
 | `devops.octopus_deploy.api_key` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `octopus-deploy-api-key` |
 | `devops.harness.api_key` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `harness-api-key` |
-| `devops.snyk.api_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `snyk-api-token` |
+| `devops.snyk.api_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `snyk-api-token`; TruffleHog: `SnykKey` |
 | `devops.sonar.api_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `sonar-api-token` |
 | `devops.codecov.access_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `codecov-access-token` |
-| `devops.sourcegraph.access_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `sourcegraph-access-token` |
+| `devops.sourcegraph.access_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `sourcegraph-access-token`; TruffleHog: `Sourcegraph` |
 | `vcs.bitbucket.client_secret` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `bitbucket-client-secret` |
-| `ci.droneci.access_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `droneci-access-token` |
-| `ci.travisci.access_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `travisci-access-token` |
+| `ci.droneci.access_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `droneci-access-token`; TruffleHog: `DroneCI` |
+| `ci.travisci.access_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `travisci-access-token`; TruffleHog: `TravisCI` |
 | `hosting.flyio.access_token` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `flyio-access-token` |
 | `hosting.netlify.access_token` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `netlify-access-token` |
 | `hosting.heroku.api_key` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `heroku-api-key`, `heroku-api-key-v2` |

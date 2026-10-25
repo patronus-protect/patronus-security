@@ -1406,6 +1406,75 @@ PROFILES = {
     "commerce.shipping.api_token": Profile(
         "commerce.shipping.api_token", "API_KEY", "secret", "shipping_api_key", "shipping API key", "Versand-API-Schlüssel"
     ),
+    # GOLD-D3: devops, ci, vcs and registry entities without an ARK rule.
+    "vcs.gitlab.session_cookie": Profile(
+        "vcs.gitlab.session_cookie", "CREDENTIAL", "secret", "gitlab_session_cookie", "GitLab session cookie",
+        "GitLab-Session-Cookie", {"gitlab_session_cookie": "_gitlab_session=<<value>>"},
+    ),
+    "vcs.bitbucket.client_secret": Profile(
+        "vcs.bitbucket.client_secret", "SECRET_TOKEN", "secret", "bitbucket_client_secret", "Bitbucket client secret",
+        "Bitbucket-Client-Secret",
+    ),
+    "ci.droneci.access_token": Profile(
+        "ci.droneci.access_token", "SECRET_TOKEN", "secret", "droneci_token", "Drone CI token", "Drone-CI-Token"
+    ),
+    "ci.travisci.access_token": Profile(
+        "ci.travisci.access_token", "SECRET_TOKEN", "secret", "travis_api_token", "Travis CI API token", "Travis-CI-API-Token"
+    ),
+    "registry.jfrog.artifactory": Profile(
+        "registry.jfrog.artifactory", "SECRET_TOKEN", "secret", "artifactory_api_key", "Artifactory API key",
+        "Artifactory-API-Schlüssel",
+    ),
+    "registry.pypi.upload_token": Profile(
+        "registry.pypi.upload_token", "SECRET_TOKEN", "secret", "pypi_api_token", "PyPI API token", "PyPI-API-Token"
+    ),
+    "registry.rubygems.api_token": Profile(
+        "registry.rubygems.api_token", "SECRET_TOKEN", "secret", "gem_host_api_key", "RubyGems API key",
+        "RubyGems-API-Schlüssel",
+    ),
+    "registry.clojars.api_token": Profile(
+        "registry.clojars.api_token", "SECRET_TOKEN", "secret", "clojars_deploy_token", "Clojars deploy token",
+        "Clojars-Deploy-Token",
+    ),
+    "devops.terraform_cloud.token": Profile(
+        "devops.terraform_cloud.token", "SECRET_TOKEN", "secret", "tfe_token", "Terraform Cloud API token",
+        "Terraform-Cloud-API-Token",
+    ),
+    "devops.pulumi.api_token": Profile(
+        "devops.pulumi.api_token", "SECRET_TOKEN", "secret", "pulumi_access_token", "Pulumi access token",
+        "Pulumi-Zugriffstoken",
+    ),
+    "devops.vault.token": Profile("devops.vault.token", "SECRET_TOKEN", "secret", "vault_token", "Vault token", "Vault-Token"),
+    "devops.doppler.api_token": Profile(
+        "devops.doppler.api_token", "SECRET_TOKEN", "secret", "doppler_token", "Doppler token", "Doppler-Token"
+    ),
+    "devops.prefect.api_token": Profile(
+        "devops.prefect.api_token", "SECRET_TOKEN", "secret", "prefect_api_key", "Prefect API key", "Prefect-API-Schlüssel"
+    ),
+    "devops.infracost.api_token": Profile(
+        "devops.infracost.api_token", "SECRET_TOKEN", "secret", "infracost_api_key", "Infracost API key",
+        "Infracost-API-Schlüssel",
+    ),
+    "devops.octopus_deploy.api_key": Profile(
+        "devops.octopus_deploy.api_key", "SECRET_TOKEN", "secret", "octopus_api_key", "Octopus Deploy API key",
+        "Octopus-Deploy-API-Schlüssel",
+    ),
+    "devops.harness.api_key": Profile(
+        "devops.harness.api_key", "SECRET_TOKEN", "secret", "harness_api_key", "Harness API key", "Harness-API-Schlüssel"
+    ),
+    "devops.snyk.api_token": Profile(
+        "devops.snyk.api_token", "SECRET_TOKEN", "secret", "snyk_token", "Snyk API token", "Snyk-API-Token"
+    ),
+    "devops.sonar.api_token": Profile(
+        "devops.sonar.api_token", "SECRET_TOKEN", "secret", "sonar_token", "SonarQube token", "SonarQube-Token"
+    ),
+    "devops.codecov.access_token": Profile(
+        "devops.codecov.access_token", "SECRET_TOKEN", "secret", "codecov_token", "Codecov token", "Codecov-Token"
+    ),
+    "devops.sourcegraph.access_token": Profile(
+        "devops.sourcegraph.access_token", "SECRET_TOKEN", "secret", "src_access_token", "Sourcegraph access token",
+        "Sourcegraph-Zugriffstoken",
+    ),
 }
 
 
