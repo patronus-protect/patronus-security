@@ -776,7 +776,7 @@ impl ShellRiskPipeline {
         )
     }
 
-    pub(crate) fn detect(&self, text: &str) -> NativeDetection {
+    pub fn detect(&self, text: &str) -> NativeDetection {
         let (score, stripped) = self.score_with_variant(text);
         let scored_text = match score.variant {
             "comments_stripped" => stripped.as_deref().unwrap_or(text),

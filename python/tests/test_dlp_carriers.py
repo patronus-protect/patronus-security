@@ -54,7 +54,7 @@ STRUCTURAL = {
         checks.is_valid_openssh_ed25519(b) for _, b in checks.pem_blocks(v)
     ),
 }
-# Value patterns of rules without a validator (mirrors rust/src/detectors/dlp/rules/): a
+# Value patterns of rules without a validator (mirrors ark-core/src/detectors/dlp/rules/): a
 # doc-example or test-key value must still match them, so only structural validation
 # can tell it from a real value.
 SHAPE = {

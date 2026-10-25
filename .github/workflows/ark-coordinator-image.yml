@@ -3,6 +3,7 @@ name: ARK Coordinator image
 on:
   pull_request:
     paths:
+      - "ark-core/**"
       - "ark-coordinator/**"
       - "Cargo.*"
       - ".dockerignore"
@@ -11,6 +12,7 @@ on:
   push:
     branches: [main, "release/**", codex/ionos-ark-api-0.1.6]
     paths:
+      - "ark-core/**"
       - "ark-coordinator/**"
       - "Cargo.*"
       - ".dockerignore"

@@ -456,8 +456,10 @@ struct ObfuscatedProbe {
 
 #[test]
 fn bilingual_obfuscated_probes_report_in_strict() {
-    let probes: Vec<Probe> =
-        serde_json::from_str(include_str!("fixtures/l1_bilingual_rules.json")).unwrap();
+    let probes: Vec<Probe> = serde_json::from_str(include_str!(
+        "../../ark-core/tests/fixtures/l1_bilingual_rules.json"
+    ))
+    .unwrap();
     let mut probed = 0;
     for probe in probes.iter().filter(|probe| probe.category == "pii") {
         let Some(obfuscated) = &probe.obfuscated else {

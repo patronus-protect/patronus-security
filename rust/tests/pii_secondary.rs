@@ -431,8 +431,10 @@ struct SecondaryProbe {
 
 #[test]
 fn bilingual_secondary_probes_mark_their_rule() {
-    let probes: Vec<Probe> =
-        serde_json::from_str(include_str!("fixtures/l1_bilingual_rules.json")).unwrap();
+    let probes: Vec<Probe> = serde_json::from_str(include_str!(
+        "../../ark-core/tests/fixtures/l1_bilingual_rules.json"
+    ))
+    .unwrap();
     let scanner = scanner(PiiMode::Strict);
     let mut probed = BTreeSet::new();
     for probe in probes.iter().filter(|probe| probe.category == "pii") {

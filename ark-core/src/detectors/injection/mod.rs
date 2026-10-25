@@ -1,0 +1,27 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+pub mod agentic_control_abuse;
+pub mod authority_escalation;
+pub mod binary_smuggling;
+pub mod candidate;
+pub mod covert_instruction;
+pub mod cross_tool_instruction;
+pub mod encoded_instruction;
+pub mod guardrail_tamper;
+pub mod hidden_html_instruction;
+pub mod instruction_boundary;
+pub mod instruction_leak;
+pub mod instruction_override;
+pub mod jailbreak_framing;
+pub mod multi_turn_escalation;
+pub mod output_manipulation;
+pub mod rule_catalog;
+pub mod scorer;
+pub mod signal;
+pub mod structural;
+mod token_relations;
+pub mod tool_call_injection;
+pub mod tool_output_instruction;
+pub mod unicode_confusable;
+pub mod zero_width_obfuscation;
+
+pub mod unicode_tags;

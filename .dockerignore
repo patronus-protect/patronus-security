@@ -1,6 +1,8 @@
 **
 !Cargo.toml
 !Cargo.lock
+!ark-core/
+!ark-core/**
 !rust/
 !rust/**
 !python/

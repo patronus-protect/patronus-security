@@ -519,17 +519,7 @@ fn validate_threshold(name: &str, threshold: f32) -> Result<(), String> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-/// Exact evidence span returned by an entity-producing pipeline.
-pub struct EvidenceSpan {
-    pub label: String,
-    pub text: String,
-    pub score: f64,
-    pub start_byte: usize,
-    pub end_byte: usize,
-    pub start_char: usize,
-    pub end_char: usize,
-}
+pub use patronus_ark_core::EvidenceSpan;
 
 #[cfg(test)]
 mod tests {

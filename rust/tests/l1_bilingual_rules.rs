@@ -50,8 +50,10 @@ impl Case {
 
 #[test]
 fn every_pii_and_dlp_rule_is_reachable_with_bilingual_source_evidence() {
-    let cases: Vec<Case> =
-        serde_json::from_str(include_str!("fixtures/l1_bilingual_rules.json")).unwrap();
+    let cases: Vec<Case> = serde_json::from_str(include_str!(
+        "../../ark-core/tests/fixtures/l1_bilingual_rules.json"
+    ))
+    .unwrap();
     let expected: BTreeSet<_> = PII_PATTERNS
         .iter()
         .map(|p| p.name)
@@ -126,8 +128,10 @@ fn every_pii_and_dlp_rule_is_reachable_with_bilingual_source_evidence() {
 
 #[test]
 fn hard_negatives_are_silent_in_de_and_en() {
-    let cases: Vec<Case> =
-        serde_json::from_str(include_str!("fixtures/l1_bilingual_rules.json")).unwrap();
+    let cases: Vec<Case> = serde_json::from_str(include_str!(
+        "../../ark-core/tests/fixtures/l1_bilingual_rules.json"
+    ))
+    .unwrap();
     let gateway = SecurityGateway::with_max_level(
         vec![SecurityCategory::Dlp, SecurityCategory::Pii],
         SecurityLevel::L1,

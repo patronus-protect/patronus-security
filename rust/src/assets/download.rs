@@ -4,7 +4,6 @@ use std::fs::{self, File};
 use std::io;
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
-use std::time::Duration;
 
 use rayon::prelude::*;
 
@@ -31,12 +30,9 @@ struct SharedEmbedderFile {
 }
 
 const ASSET_DOWNLOAD_CONCURRENCY: usize = 6;
-const ASSET_DOWNLOAD_ATTEMPTS: usize = 4;
-
-fn download_agent() -> &'static ureq::Agent {
-    static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
-    AGENT.get_or_init(|| ureq::AgentBuilder::new().build())
-}
+#[cfg(test)]
+use patronus_ark_core::assets::download::download_error_is_retryable;
+use patronus_ark_core::assets::download::{download_hf_file_at_revision, get_hf_token as hf_token};
 
 fn asset_download_pool() -> &'static rayon::ThreadPool {
     static POOL: OnceLock<rayon::ThreadPool> = OnceLock::new();
@@ -279,6 +275,13 @@ pub fn download_dedicated_l3_assets(
 
 fn pipeline_model_assets_present(asset: PipelineModelAssetSpec, target_dir: &Path) -> bool {
     let bundle_dir = target_dir.join(asset.destination_path);
+    if asset.model == patronus_ark_core::warmup::WOLF_MODEL_ID {
+        return patronus_ark_core::warmup::wolf_assets_present(
+            &bundle_dir,
+            patronus_ark_core::wolf::WolfPrecision::Auto,
+        )
+        .unwrap_or(false);
+    }
     bundle_revision_matches(&bundle_dir, asset.revision)
         && selected_pipeline_model_files(asset)
             .iter()
@@ -290,8 +293,31 @@ fn download_pipeline_model_assets(
     target_dir: &Path,
     progress: Option<&SecurityAssetProgressCallback>,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let token = hf_token();
     let bundle_dir = target_dir.join(asset.destination_path);
+    if asset.model == patronus_ark_core::warmup::WOLF_MODEL_ID {
+        let callback = |completed_files, total_files| {
+            if let Some(progress) = progress {
+                progress(SecurityAssetProgress {
+                    category: asset.category,
+                    model: asset.model.to_owned(),
+                    completed_files,
+                    total_files,
+                });
+            }
+        };
+        patronus_ark_core::warmup::prepare_wolf_cache(
+            &bundle_dir,
+            patronus_ark_core::wolf::WolfPrecision::Auto,
+            &patronus_ark_core::warmup::WarmupOptions {
+                download: patronus_ark_core::warmup::DownloadPolicy::Missing,
+                ..Default::default()
+            },
+            Some(&callback),
+        )?;
+        prepare_pipeline_model_compact_tokenizer(asset, &bundle_dir);
+        return Ok(bundle_dir);
+    }
+    let token = hf_token();
     let revision_matches = bundle_revision_matches(&bundle_dir, asset.revision);
     let selected_files = selected_pipeline_model_files(asset);
     let missing_files = selected_files
@@ -326,7 +352,21 @@ fn download_pipeline_model_assets(
 }
 
 pub(crate) fn selected_pipeline_model_files(asset: PipelineModelAssetSpec) -> Vec<&'static str> {
-    let fp16 = prefer_fp16_l3();
+    selected_pipeline_model_files_with_precision(asset, prefer_fp16_l3())
+}
+
+fn selected_pipeline_model_files_with_precision(
+    asset: PipelineModelAssetSpec,
+    fp16: bool,
+) -> Vec<&'static str> {
+    if asset.model == patronus_ark_core::warmup::WOLF_MODEL_ID {
+        let precision = if fp16 {
+            patronus_ark_core::wolf::WolfPrecision::Fp16
+        } else {
+            patronus_ark_core::wolf::WolfPrecision::Int8Int4
+        };
+        return patronus_ark_core::warmup::wolf_files(precision).to_vec();
+    }
     let fp16_path = if asset.files.contains(&"onnx/onnx_fp16/model_fp16.onnx") {
         Some("onnx/onnx_fp16/model_fp16.onnx")
     } else if asset.files.contains(&"onnx/fp16/model_fp16.onnx") {
@@ -384,12 +424,13 @@ fn prepare_pipeline_model_compact_tokenizer(asset: PipelineModelAssetSpec, bundl
         return;
     }
     match ensure_mmbert_compact_tokenizer(asset.model, &tokenizer_json) {
-        Ok(Some(compact_path)) => log::debug!(
-            "compact mmBERT tokenizer ready; model={}; compact_path={}; compact_exists={}",
-            asset.model,
-            compact_path.display(),
-            compact_path.is_file()
-        ),
+        Ok(Some(compact_path)) => {
+            log::debug!(
+                "compact mmBERT tokenizer ready; model={}; compact_path={}",
+                asset.model,
+                compact_path.display()
+            );
+        }
         Ok(None) => log::debug!(
             "compact mmBERT tokenizer unsupported; model={}; tokenizer_json={}",
             asset.model,
@@ -1145,7 +1186,7 @@ fn normalize_manifest_file_path(path: &str) -> Result<String, Box<dyn std::error
             Component::Normal(part) => parts.push(part.to_string_lossy().to_string()),
             Component::CurDir => {}
             Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
-                return Err(format!("invalid NTDB manifest file path: {path:?}").into())
+                return Err(format!("invalid NTDB manifest file path: {path:?}").into());
             }
         }
     }
@@ -1165,146 +1206,26 @@ fn prefixed_source_path(prefix: &str, relative_path: &str) -> String {
     }
 }
 
-fn download_hf_file_at_revision(
-    token: Option<&str>,
-    repo: &str,
-    revision: &str,
-    source_path: &str,
-    dest_file: &Path,
-    required: bool,
-    label: &str,
-) -> Result<bool, Box<dyn std::error::Error>> {
-    if let Some(parent) = dest_file.parent() {
-        fs::create_dir_all(parent)?;
-    }
-
-    let file_url = format!("https://huggingface.co/{repo}/resolve/{revision}/{source_path}");
-
-    log::info!(
-        "Downloading {label} {source_path} from Hugging Face -> {:?}",
-        dest_file
-    );
-
-    let mut last_error = None;
-    let mut response = None;
-    for attempt in 1..=ASSET_DOWNLOAD_ATTEMPTS {
-        let mut request = download_agent().get(&file_url);
-        if let Some(tk) = token {
-            request = request.set("Authorization", &format!("Bearer {}", tk));
-        }
-        match request.call() {
-            Ok(value) => {
-                response = Some(value);
-                break;
-            }
-            Err(error) => {
-                let retryable = download_error_is_retryable(&error);
-                last_error = Some(error);
-                if !retryable || attempt == ASSET_DOWNLOAD_ATTEMPTS {
-                    break;
-                }
-                log::warn!(
-                    "transient asset download failure for {} (attempt {}/{}); retrying",
-                    file_url,
-                    attempt,
-                    ASSET_DOWNLOAD_ATTEMPTS
-                );
-                std::thread::sleep(Duration::from_millis(250 * attempt as u64));
-            }
-        }
-    }
-    let response = match response {
-        Some(response) => response,
-        None if !required => {
-            log::warn!(
-                "optional asset {} unavailable: {}",
-                file_url,
-                last_error.expect("a failed download has an error")
-            );
-            return Ok(false);
-        }
-        None => {
-            return Err(format!(
-                "Request to {} failed after {} attempts: {}",
-                file_url,
-                ASSET_DOWNLOAD_ATTEMPTS,
-                last_error.expect("a failed download has an error")
-            )
-            .into());
-        }
-    };
-
-    if response.status() != 200 {
-        if required {
-            return Err(format!(
-                "Failed to download {}: HTTP {}",
-                file_url,
-                response.status()
-            )
-            .into());
-        }
-        log::info!(
-            "Optional asset {} returned HTTP {}",
-            file_url,
-            response.status()
-        );
-        return Ok(false);
-    }
-
-    let temp_file = dest_file.with_extension(format!("patronus-download-{}", std::process::id()));
-    let copy_result = (|| -> Result<(), Box<dyn std::error::Error>> {
-        let mut reader = response.into_reader();
-        let mut out_file = File::create(&temp_file)?;
-        io::copy(&mut reader, &mut out_file)?;
-        out_file.sync_all()?;
-        if fs::symlink_metadata(dest_file).is_ok() {
-            fs::remove_file(dest_file)?;
-        }
-        fs::rename(&temp_file, dest_file)?;
-        Ok(())
-    })();
-    if copy_result.is_err() {
-        let _ = fs::remove_file(&temp_file);
-    }
-    copy_result?;
-    Ok(true)
-}
-
-fn download_error_is_retryable(error: &ureq::Error) -> bool {
-    match error {
-        ureq::Error::Status(status, _) => *status == 429 || (500..=599).contains(status),
-        ureq::Error::Transport(_) => true,
-    }
-}
-
-fn hf_token() -> Option<String> {
-    std::env::var("HF_TOKEN")
-        .ok()
-        .or_else(|| std::env::var("HUGGINGFACE_HUB_TOKEN").ok())
-        .or_else(|| std::env::var("HUGGING_FACE_HUB_TOKEN").ok())
-        .or_else(read_hf_token_file)
-        .map(|token| token.trim().to_string())
-        .filter(|token| !token.is_empty())
-}
-
 fn download_optional_assets() -> bool {
     std::env::var("PATRONUS_DOWNLOAD_OPTIONAL_ASSETS").as_deref() == Ok("1")
 }
 
-fn read_hf_token_file() -> Option<String> {
-    let path = hf_token_path()?;
-    fs::read_to_string(path).ok()
-}
-
-fn hf_token_path() -> Option<PathBuf> {
-    if let Ok(hf_home) = std::env::var("HF_HOME") {
-        return Some(PathBuf::from(hf_home).join("token"));
-    }
-    dirs::home_dir().map(|home| home.join(".cache").join("huggingface").join("token"))
-}
-
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn wolf_download_selection_respects_both_legacy_precisions() {
+        let asset = *crate::assets::specs::DEDICATED_L3_ASSETS
+            .iter()
+            .find(|asset| asset.model == "wolf-defender-small")
+            .unwrap();
+        let quantized = super::selected_pipeline_model_files_with_precision(asset, false);
+        assert!(quantized.contains(&"onnx/int8_int4_embeddings/model.onnx"));
+        assert!(!quantized.contains(&"onnx/onnx_fp16/model_fp16.onnx"));
+        let fp16 = super::selected_pipeline_model_files_with_precision(asset, true);
+        assert!(fp16.contains(&"onnx/onnx_fp16/model_fp16.onnx"));
+        assert!(!fp16.contains(&"onnx/int8_int4_embeddings/model.onnx"));
+        assert_eq!(asset.revision, "142fadc5474163d4c483cb761d5a6b02e3aa1741");
+    }
     use std::{
         fs,
         sync::{
@@ -1357,11 +1278,6 @@ mod tests {
         manifest["minilm"]["vocab_size"] = serde_json::json!(1);
         manifest["minilm"]["embedding_dim"] = serde_json::json!(1);
         manifest.to_string()
-    }
-
-    #[test]
-    fn download_agent_is_reused() {
-        assert!(std::ptr::eq(download_agent(), download_agent()));
     }
 
     #[test]

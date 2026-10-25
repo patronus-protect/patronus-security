@@ -88,7 +88,7 @@ SECRET_FAMILIES = ("provider_secret", "generic_credential", "key_material")
 CONTENT_FAMILIES = ("content_class", "document_class")
 UNMAPPED = "(unmapped)"
 # Everything that changes the native module, the Python package or the rule-to-entity map.
-BUILD_PATHS = ("Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "rust", "python", str(ENTITY_MAP))
+BUILD_PATHS = ("Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "rust", "ark-core", "python", str(ENTITY_MAP))
 # Prediction code of the head that runs against every build.
 PREDICTOR_FILES = ("run_ark.py", "run_baselines.py", "scoreboard.py")
 PROFILES = ("default", "extended", "recall")

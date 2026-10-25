@@ -21,7 +21,7 @@ V2_FIELDS = (
 )
 # The rule fixture lists every registered rule; rust/tests/l1_bilingual_rules.rs ties it
 # to PII_PATTERNS.
-RULE_FIXTURE = benchmark.DATA_DIR.parents[2] / "rust" / "tests" / "fixtures" / "l1_bilingual_rules.json"
+RULE_FIXTURE = benchmark.DATA_DIR.parents[2] / "ark-core" / "tests" / "fixtures" / "l1_bilingual_rules.json"
 
 
 def load_rows():

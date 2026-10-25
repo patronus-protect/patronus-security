@@ -19,6 +19,9 @@ jobs:
           python-version: "3.12"
       - run: cargo fmt --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test -p patronus-ark-core --no-default-features
+      - run: cargo test -p patronus-ark-core --features wolf
+      - run: cargo test -p patronus-ark-core --features download
       - run: cargo test -p patronus-ark
       - name: L1 golden evaluation (pii_l1 + dlp_l1)
         run: cargo run --locked --example 13_l1_golden_eval -- all

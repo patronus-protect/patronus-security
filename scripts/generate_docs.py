@@ -21,14 +21,14 @@ DOCS_DIR = ROOT / "docs"
 SNAPSHOT_PATH = DOCS_DIR / "asset-size-snapshot.json"
 
 INJECTION_CATALOG_PATHS = [
-    ROOT / "rust/src/detectors/injection/rules/skillspector_0_1_7.json",
-    ROOT / "rust/src/detectors/injection/rules/prompt_armor_95e532e.json",
-    ROOT / "rust/src/detectors/injection/rules/source_derived_p0_0_1_6.json",
-    ROOT / "rust/src/detectors/injection/rules/source_derived_coverage_0_1_6.json",
-    ROOT / "rust/src/detectors/injection/rules/prompt_armor_canonical_lexicons_0_1_6.json",
+    ROOT / "ark-core/src/detectors/injection/rules/skillspector_0_1_7.json",
+    ROOT / "ark-core/src/detectors/injection/rules/prompt_armor_95e532e.json",
+    ROOT / "ark-core/src/detectors/injection/rules/source_derived_p0_0_1_6.json",
+    ROOT / "ark-core/src/detectors/injection/rules/source_derived_coverage_0_1_6.json",
+    ROOT / "ark-core/src/detectors/injection/rules/prompt_armor_canonical_lexicons_0_1_6.json",
 ]
 INJECTION_NATIVE_REGISTRY_PATH = (
-    ROOT / "rust/src/detectors/injection/rules/ark_native_71ff48e.json"
+    ROOT / "ark-core/src/detectors/injection/rules/ark_native_71ff48e.json"
 )
 
 CATEGORY_NAMES = {
@@ -148,7 +148,13 @@ def _field(block: str, name: str) -> str:
     match = re.search(rf"{name}:\s*([^,\n]+)", block)
     if not match:
         raise ValueError(f"Missing {name} in AssetSpec block")
-    return match.group(1).strip()
+    value = match.group(1).strip()
+    # Runtime and documentation use the same official model metadata.
+    if "patronus_ark_core::warmup::" in value:
+        constants = (ROOT / "ark-core/src/warmup.rs").read_text()
+        for constant, literal in re.findall(r'pub const (WOLF_\w+): &str\s*=\s*"([^"\n]+)";', constants):
+            value = value.replace(f"patronus_ark_core::warmup::{constant}", json.dumps(literal))
+    return value
 
 
 def parse_native_patterns(
@@ -215,7 +221,7 @@ def parse_native_patterns(
 
 def parse_dlp_patterns() -> list[dict[str, str]]:
     """DLP rules from the family modules, in the registry order of `rules/mod.rs`."""
-    rules_dir = ROOT / "rust/src/detectors/dlp/rules"
+    rules_dir = ROOT / "ark-core/src/detectors/dlp/rules"
     parts = re.search(r"const PARTS:[^=]*=\s*&\[(.*?)\];", (rules_dir / "mod.rs").read_text(), re.S)
     if not parts:
         raise ValueError(f"Missing DLP rule registry in {rules_dir / 'mod.rs'}")
@@ -247,7 +253,7 @@ def _native_pattern_const(directory: Path, struct_name: str, module: str, const:
     return match.group(1)
 
 
-def pii_score_points(path: Path = ROOT / "rust/src/detectors/pii/score.rs") -> tuple[dict[str, int], int, list[int], int]:
+def pii_score_points(path: Path = ROOT / "ark-core/src/detectors/pii/score.rs") -> tuple[dict[str, int], int, list[int], int]:
     """Validator strength, field bonus, proximity tiers and counter-context penalty of the PII score model."""
     source = path.read_text()
     body = re.search(r"pub const fn points\(self\) -> u8 \{(.*?)\n    \}", source, flags=re.S)
@@ -261,7 +267,7 @@ def pii_score_points(path: Path = ROOT / "rust/src/detectors/pii/score.rs") -> t
     return strength, int(context.group(1)), tiers, int(counter.group(1))
 
 
-def pii_competing_labels(path: Path = ROOT / "rust/src/detectors/pii/overlap.rs") -> list[str]:
+def pii_competing_labels(path: Path = ROOT / "ark-core/src/detectors/pii/overlap.rs") -> list[str]:
     """Labels whose overlapping findings `balanced` and `recall` resolve to one (K07)."""
     match = re.search(r"pub const COMPETING_LABELS: \[&str; \d+\] = \[(.*?)\];", path.read_text(), re.S)
     if not match:
@@ -269,7 +275,7 @@ def pii_competing_labels(path: Path = ROOT / "rust/src/detectors/pii/overlap.rs"
     return re.findall(r'"([A-Z_]+)"', match.group(1))
 
 
-def pii_secondary_labels(path: Path = ROOT / "rust/src/detectors/pii/overlap.rs") -> list[str]:
+def pii_secondary_labels(path: Path = ROOT / "ark-core/src/detectors/pii/overlap.rs") -> list[str]:
     """Labels whose findings inside a reported IBAN `strict` marks as secondary evidence (T07)."""
     match = re.search(r"pub const SECONDARY_IN_IBAN: \[&str; \d+\] = \[(.*?)\];", path.read_text(), re.S)
     if not match:
@@ -277,7 +283,7 @@ def pii_secondary_labels(path: Path = ROOT / "rust/src/detectors/pii/overlap.rs"
     return re.findall(r'"([A-Z_]+)"', match.group(1))
 
 
-def pii_spelled_out_penalty(path: Path = ROOT / "rust/src/detectors/pii/score.rs") -> int:
+def pii_spelled_out_penalty(path: Path = ROOT / "ark-core/src/detectors/pii/score.rs") -> int:
     """Points a finding loses when only the `recall` obfuscation normalization reveals it (K06)."""
     match = re.search(r"pub const SPELLED_OUT_PENALTY_POINTS: u8 = (\d+);", path.read_text())
     if not match:
@@ -285,8 +291,8 @@ def pii_spelled_out_penalty(path: Path = ROOT / "rust/src/detectors/pii/score.rs
     return int(match.group(1))
 
 
-PII_LEXICON_PATH = ROOT / "rust/src/detectors/anchor_lexicons/pii.json"
-PII_CONTEXT_PATH = ROOT / "rust/src/detectors/pii/context.rs"
+PII_LEXICON_PATH = ROOT / "ark-core/src/detectors/anchor_lexicons/pii.json"
+PII_CONTEXT_PATH = ROOT / "ark-core/src/detectors/pii/context.rs"
 
 
 def pii_context_lexicon(path: Path = PII_CONTEXT_PATH) -> tuple[dict[str, list[str]], list[str]]:
@@ -311,9 +317,9 @@ def pii_context_lexicon_lines(labels: list[str], path: Path = PII_LEXICON_PATH) 
         "",
         "### PII context lexicon",
         "",
-        "The context engine reads these DE/EN entries of `rust/src/detectors/anchor_lexicons/pii.json` "
+        "The context engine reads these DE/EN entries of `ark-core/src/detectors/anchor_lexicons/pii.json` "
         "(with their FR/ES/IT/NL field names where an entry lists them, T26); "
-        "`rust/src/detectors/pii/context.rs` maps them to labels. Support terms of a label count for "
+        "`ark-core/src/detectors/pii/context.rs` maps them to labels. Support terms of a label count for "
         "rules without a field name of their own, a counter-context term counts for every label when it "
         "is nearer than every support term. As a structural key (a JSON key, CSV or table header, XML "
         "element), a term of either kind names the value it holds; keys are compared lowercased, with "
@@ -358,7 +364,7 @@ def pii_rule_score_range(rule: dict, strength_points: dict[str, int], context_po
     return f"{min(low, 100) / 100:.2f}–{min(points + max(tiers), 100) / 100:.2f}"
 
 
-def dlp_strength_points(path: Path = ROOT / "rust/src/detectors/dlp/score.rs") -> dict[str, int]:
+def dlp_strength_points(path: Path = ROOT / "ark-core/src/detectors/dlp/score.rs") -> dict[str, int]:
     """Validator strength points of the DLP score model (K04)."""
     body = re.search(r"pub const fn points\(self\) -> u8 \{(.*?)\n    \}", path.read_text(), flags=re.S)
     if not body:
@@ -366,7 +372,7 @@ def dlp_strength_points(path: Path = ROOT / "rust/src/detectors/dlp/score.rs") -
     return {name.lower(): int(points) for name, points in re.findall(r"Self::(\w+) => (\d+),", body.group(1))}
 
 
-def dlp_context_lexicon(path: Path = ROOT / "rust/src/detectors/dlp/context.rs") -> tuple[list[str], list[str]]:
+def dlp_context_lexicon(path: Path = ROOT / "ark-core/src/detectors/dlp/context.rs") -> tuple[list[str], list[str]]:
     """Support and counter-context lexicon IDs of the DLP score model (K04)."""
     source = path.read_text()
     lists = []
@@ -412,7 +418,7 @@ DLP_RELATIONSHIP_RULES = [
 
 
 def generate_l1_rule_catalog_doc() -> str:
-    pii = parse_native_patterns(ROOT / "rust/src/detectors/pii/pii.rs", "PiiPattern")
+    pii = parse_native_patterns(ROOT / "ark-core/src/detectors/pii/pii.rs", "PiiPattern")
     strength_points, context_points, proximity_tiers, counter_points = pii_score_points()
     dlp = parse_dlp_patterns()
     dlp_points = dlp_strength_points()
@@ -876,6 +882,11 @@ def generate_rust_api_doc() -> str:
         ("External L1 API", ROOT / "rust/src/external_l1.rs"),
         ("Dynamic PII Types", ROOT / "rust/src/dynamic_pii.rs"),
         ("Result And Category Types", ROOT / "rust/src/types.rs"),
+        ("Synchronous Core API", ROOT / "ark-core/src/scanner.rs"),
+        ("Core Asset Preparation And Warmup", ROOT / "ark-core/src/warmup.rs"),
+        ("Core Cancellation And Deadlines", ROOT / "ark-core/src/control.rs"),
+        ("Shared Native Types", ROOT / "ark-core/src/types.rs"),
+        ("Wolf Defender Runtime", ROOT / "ark-core/src/wolf.rs"),
         ("Asset Manifest Helpers", ROOT / "rust/src/assets/specs.rs"),
         ("Asset Download Helpers", ROOT / "rust/src/assets/download.rs"),
     ]
@@ -968,7 +979,7 @@ def generate_l1_capabilities_doc() -> str:
     import l1_capabilities_doc
 
     return l1_capabilities_doc.generate(
-        parse_native_patterns(ROOT / "rust/src/detectors/pii/pii.rs", "PiiPattern"),
+        parse_native_patterns(ROOT / "ark-core/src/detectors/pii/pii.rs", "PiiPattern"),
         parse_dlp_patterns(),
         DLP_CREDENTIAL_GROUPS,
         DLP_RELATIONSHIP_RULES,

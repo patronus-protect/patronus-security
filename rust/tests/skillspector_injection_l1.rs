@@ -18,7 +18,7 @@ fn bilingual_skillspector_rules_are_accepted_and_gated_with_evidence() {
     ))
     .unwrap();
     let catalog: serde_json::Value = serde_json::from_str(include_str!(
-        "../src/detectors/injection/rules/skillspector_0_1_7.json"
+        "../../ark-core/src/detectors/injection/rules/skillspector_0_1_7.json"
     ))
     .unwrap();
     let actual: BTreeSet<_> = cases.iter().map(|c| c.rule_id.as_str()).collect();

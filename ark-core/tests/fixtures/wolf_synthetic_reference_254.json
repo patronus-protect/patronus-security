@@ -1,0 +1,25 @@
+{
+  "reference": "Synthetic ONNX runtime checks for the 254-content + 2-special profile; unchanged short-window scalar references only, not trained Wolf accuracy evidence.",
+  "pad_id": 0,
+  "output_name": "logits",
+  "output": "scalar",
+  "parity_cases": [
+    {
+      "token_ids": [],
+      "expected_logit": 0.003002166748046875
+    },
+    {
+      "token_ids": [
+        400
+      ],
+      "expected_logit": 0.403076171875
+    },
+    {
+      "token_ids": [
+        400,
+        401
+      ],
+      "expected_logit": 0.80419921875
+    }
+  ]
+}

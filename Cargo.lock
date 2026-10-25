@@ -712,6 +712,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fs2"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9564fc758e15025b46aa6643b1b77d047d1a56a1aea6e01002ac0c7026876213"
+dependencies = [
+ "libc",
+ "winapi",
+]
+
+[[package]]
 name = "futures"
 version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1499,6 +1509,7 @@ dependencies = [
  "memmap2",
  "ort",
  "patronus-ark",
+ "patronus-ark-core",
  "rayon",
  "redb",
  "regex",
@@ -1506,6 +1517,32 @@ dependencies = [
  "regex-syntax",
  "ring",
  "sentencepiece-rust",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "thiserror 1.0.69",
+ "tokenizers",
+ "unicode-normalization",
+ "ureq 2.12.1",
+ "url",
+]
+
+[[package]]
+name = "patronus-ark-core"
+version = "0.1.11"
+dependencies = [
+ "aho-corasick",
+ "blake3",
+ "dirs",
+ "fs2",
+ "half",
+ "log",
+ "ort",
+ "rayon",
+ "regex",
+ "regex-automata",
+ "regex-syntax",
+ "ring",
  "serde",
  "serde_json",
  "serde_yaml",

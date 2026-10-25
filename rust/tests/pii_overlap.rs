@@ -658,8 +658,10 @@ struct OverlapProbe {
 
 #[test]
 fn bilingual_overlap_probes_keep_their_rule() {
-    let probes: Vec<Probe> =
-        serde_json::from_str(include_str!("fixtures/l1_bilingual_rules.json")).unwrap();
+    let probes: Vec<Probe> = serde_json::from_str(include_str!(
+        "../../ark-core/tests/fixtures/l1_bilingual_rules.json"
+    ))
+    .unwrap();
     let mut probed = 0;
     for probe in probes.iter().filter(|probe| probe.category == "pii") {
         let Some(overlap) = &probe.overlap else {

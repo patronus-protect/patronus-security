@@ -100,6 +100,7 @@ KEY_PATHS = (
     "Cargo.lock",
     "rust-toolchain.toml",
     "rust",
+    "ark-core",
     "python",
     "scripts/l1_presidio/run_ark.py",
 )

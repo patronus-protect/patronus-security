@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
+COPY ark-core ./ark-core
 COPY rust ./rust
 COPY python ./python
 COPY ark-api ./ark-api

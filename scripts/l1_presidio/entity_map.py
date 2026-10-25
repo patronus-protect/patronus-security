@@ -4,7 +4,7 @@
 
 Every map entry is one benchmark id of ``patronus_ark.external_pii_eval`` with a scope
 (``shared``, ``ark_only``, ``presidio_only``, ``semantic``), the Ark labels
-(``entity_group`` in ``rust/src/detectors/pii/pii.rs``), the Presidio entities of the
+(``entity_group`` in ``ark-core/src/detectors/pii/pii.rs``), the Presidio entities of the
 pinned ``presidio_analyzer`` and the upstream labels per corpus of the external PII
 manifest. ``check`` verifies the map against those sources:
 
@@ -37,7 +37,7 @@ import yaml
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 ENTITY_MAP_PATH = ROOT / "research" / "l1-pii" / "entity_map.yaml"
-PII_SOURCE_PATH = ROOT / "rust" / "src" / "detectors" / "pii" / "pii.rs"
+PII_SOURCE_PATH = ROOT / "ark-core" / "src" / "detectors" / "pii" / "pii.rs"
 SCHEMA = "ark-l1-entity-map-v1"
 SCOPES = ("shared", "ark_only", "presidio_only", "semantic")
 ENTITY_KEYS = {"id", "scope", "ark", "presidio", "corpora"}
@@ -48,7 +48,7 @@ MILESTONE_FAMILIES = ("neutral", "presidio_favored")
 # Gold sets outside the external PII manifest; all of them are written by the Ark project.
 ARK_GOLD_SOURCES = {
     "pii_l1": ROOT / "python" / "patronus_ark" / "benchmark_data" / "pii_l1.jsonl",
-    "l1_bilingual_rules": ROOT / "rust" / "tests" / "fixtures" / "l1_bilingual_rules.json",
+    "l1_bilingual_rules": ROOT / "ark-core" / "tests" / "fixtures" / "l1_bilingual_rules.json",
     "ark-synthetic-de-eu": HERE / "synth_goldset.py",
     "ark-synthetic-vat-1": HERE / "synth_goldset.py",
 }

@@ -221,8 +221,10 @@ struct ExactSpan {
 
 #[test]
 fn bilingual_span_probes_report_the_exact_value() {
-    let probes: Vec<Probe> =
-        serde_json::from_str(include_str!("fixtures/l1_bilingual_rules.json")).unwrap();
+    let probes: Vec<Probe> = serde_json::from_str(include_str!(
+        "../../ark-core/tests/fixtures/l1_bilingual_rules.json"
+    ))
+    .unwrap();
     let mut probed = Vec::new();
     for probe in probes.iter().filter(|probe| probe.category == "pii") {
         let Some(span) = &probe.span else {

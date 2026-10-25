@@ -29,8 +29,9 @@ Re-run it after changing Rust code that the Python bindings touch.
 
 | Path | What lives here |
 | --- | --- |
-| `rust/src/` | The `patronus-ark` crate: gateway, pipelines, detectors, ml, assets, threat. |
-| `rust/src/detectors/` | Native L1 detectors (injection, dlp, pii, mcp). |
+| `rust/src/` | The `patronus-ark` crate: gateway, queues, model pipelines, assets and legacy shell scanning. |
+| `ark-core/` | Synchronous native scanner and optional offline Wolf FP16; shared with the gateway. |
+| `ark-core/src/detectors/` | Shared native L1 detectors (injection, dlp, pii, mcp). |
 | `rust/src/pipeline/` | Gateway, per-category pipelines, L3 worker, strategies, caching. |
 | `rust/src/ml/`, `rust/src/assets/` | ONNX/NTDB execution and asset download/verify/cache. |
 | `rust/examples/`, `python/examples/` | Runnable examples for the six core flows (+ stress harnesses). |

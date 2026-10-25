@@ -265,8 +265,10 @@ struct StructureProbe {
 
 #[test]
 fn bilingual_structure_probes_report_through_the_structure() {
-    let probes: Vec<Probe> =
-        serde_json::from_str(include_str!("fixtures/l1_bilingual_rules.json")).unwrap();
+    let probes: Vec<Probe> = serde_json::from_str(include_str!(
+        "../../ark-core/tests/fixtures/l1_bilingual_rules.json"
+    ))
+    .unwrap();
     let mut probed = 0;
     for probe in probes.iter().filter(|probe| probe.category == "pii") {
         let Some(structure) = &probe.structure else {
