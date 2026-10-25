@@ -62,6 +62,14 @@ def test_error_buckets_split_fp_missed_boundary_and_extra_spans_by_rule():
     assert buckets["extra_on_positives"] == {"dlp_password_assignment": 1}
 
 
+def test_error_buckets_count_baseline_entity_gold_under_the_entity_id():
+    # GOLD-D2: gold of an entity without an ARK rule has rule_id None.
+    telegram = gold(4, 50, "SECRET_TOKEN", "comm.telegram.bot_token", None)
+    rows = [dict(carrier("telegram-1", [telegram]), rule_id=None)]
+    buckets = MODULE.error_buckets(rows, [{"id": "telegram-1", "evidence_spans": []}], TAXONOMY)
+    assert buckets["missed"] == {"comm.telegram.bot_token": 1}
+
+
 def test_error_buckets_ignore_content_spans_and_unknown_rows():
     sql = ark(0, 30, SB_TESTS.SQL)
     predictions = [{"id": "openai-example", "evidence_spans": [sql]}, {"id": "elsewhere", "evidence_spans": [sql]}]

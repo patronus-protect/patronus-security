@@ -155,6 +155,25 @@ def test_baseline_predictions_use_their_mapped_groups_and_entities():
     assert report["overall"]["predicted"] == 2 and report["groups"]["(unmapped)"]["predicted"] == 1
 
 
+def test_baseline_entities_without_an_ark_rule_are_scored_for_every_tool():
+    # GOLD-D2: gold of an entity only baselines detect has rule_id None; a lookalike row is
+    # a hard negative of its own variant.
+    telegram = gold(4, 50, "SECRET_TOKEN", "comm.telegram.bot_token", None)
+    rows = [dict(carrier("telegram-1", [telegram]), rule_id=None),
+            dict(carrier("telegram-lookalike", [], variant="lookalike"), rule_id=None)]
+    gitleaks = [{"id": "telegram-1", "evidence_spans": [
+        {"start_char": 4, "end_char": 50, "rule_id": "telegram-bot-api-token", "label": "gitleaks.telegram-bot-api-token",
+         "entities": ["comm.telegram.bot_token"], "groups": ["SECRET_TOKEN"], "normalization": []}]}]
+    report = MODULE.score_synthetic(rows, gitleaks, TAXONOMY)
+    entity = report["providers"]["comm.telegram.bot_token"]
+    assert entity["gold"] == 1 and entity["exact"]["f1"] == 1.0 and entity["attributed"] == 1
+    assert entity["rule_attributed"] == 0  # no ARK rule to attribute to
+    ark_report = MODULE.score_synthetic(rows, [{"id": "telegram-lookalike", "evidence_spans": [ark(0, 9, PASSWORD)]}],
+                                        TAXONOMY)
+    assert ark_report["providers"]["comm.telegram.bot_token"]["exact"]["recall"] == 0.0
+    assert ark_report["hard_negatives"]["by_variant"]["lookalike"] == {"rows": 1, "rows_with_fp": 1, "fp": 1}
+
+
 def test_predictions_for_unknown_rows_are_rejected():
     with pytest.raises(ValueError, match="unknown"):
         MODULE.score_synthetic(carrier_rows(), [{"id": "nope", "evidence_spans": []}], TAXONOMY)

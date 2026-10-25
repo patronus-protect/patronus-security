@@ -31,7 +31,7 @@ FORMATS = {
     "ci_yaml", "jupyter", "log", "http", "code", "chat", "ticket", "mail",
 }
 CODE_LANGUAGES = {"python", "javascript", "typescript", "go", "java", "csharp", "rust", "ruby"}
-HARD_NEGATIVES = {"placeholder", "env_ref", "doc_example", "test_key"}
+HARD_NEGATIVES = {"placeholder", "env_ref", "doc_example", "test_key", "lookalike"}
 SEED = 20261013
 # Checksum or structure checks a doc-example or test-key value must never pass.
 STRUCTURAL = {
@@ -66,6 +66,11 @@ SHAPE = {
     "jwt_signed_rs256": r"(ey[a-zA-Z0-9_\-=]{10,}\.){2}[a-zA-Z0-9_\-=]{10,}",
     "discord_bot_token": r"[MN][A-Za-z0-9]{23,}\.[A-Za-z0-9\-_]{6}\.[A-Za-z0-9\-_]{27,}",
 }
+
+
+def key_of(row):
+    """The carrier key of a row: its value rule, or its entity for a baseline entity (GOLD-D2)."""
+    return row["rule_id"] or row["entity"]
 
 
 def unescape(text, family):
@@ -176,8 +181,9 @@ class ProfileTests(unittest.TestCase):
         for entity in entity_map["entities"]:
             for rule_id in entity.get("ark") or []:
                 by_rule[rule_id] = entity
+        by_rule.update({entity["id"]: entity for entity in entity_map["entities"] if entity["id"] in rules.baseline_entities()})
         profiles = carriers.profiles()
-        self.assertEqual(set(profiles), set(rules.load_rule_map()))
+        self.assertEqual(set(profiles), set(rules.load_rule_map()) | set(rules.baseline_entities()))
         for rule_id, profile in profiles.items():
             self.assertEqual(profile.entity, by_rule[rule_id]["id"], rule_id)
             self.assertEqual(profile.group, by_rule[rule_id].get("group"), rule_id)
@@ -243,7 +249,7 @@ class BuildTests(unittest.TestCase):
                 if row["variant"] != "positive":
                     continue
                 family = self.families[row["family"]]
-                profile = carriers.profiles()[row["rule_id"]]
+                profile = carriers.profiles()[key_of(row)]
                 (entity,) = row["entities"]
                 value = recipes.generate(row["generator"], row["seed"])
                 surface = row["text"][entity["start"] : entity["end"]]
@@ -254,7 +260,7 @@ class BuildTests(unittest.TestCase):
                     (entity["label"], entity["entity"], entity["rule_id"]),
                     (profile.group, profile.entity, row["rule_id"]),
                 )
-                self.assertIn(row["generator"], rules.generators_for(row["rule_id"]))
+                self.assertIn(row["generator"], rules.generators_for(key_of(row)))
                 self.assertEqual(row["case_type"], "positive")
                 prefix = row["text"][: entity["start"]]
                 if any(ord(char) > 0xFFFF for char in prefix):
@@ -282,7 +288,7 @@ class BuildTests(unittest.TestCase):
     def test_hard_negatives_have_no_spans_and_no_generated_value(self):
         for rows in self.rows.values():
             positives = {
-                (row["family"], row["rule_id"]): recipes.generate(row["generator"], row["seed"])
+                (row["family"], key_of(row)): recipes.generate(row["generator"], row["seed"])
                 for row in rows
                 if row["variant"] == "positive"
             }
@@ -292,9 +298,9 @@ class BuildTests(unittest.TestCase):
                 self.assertIn(row["variant"], HARD_NEGATIVES)
                 self.assertEqual(row["case_type"], "hard_negative")
                 self.assertEqual(row["entities"], [])
-                self.assertNotIn(positives[(row["family"], row["rule_id"])], row["text"], row["id"])
+                self.assertNotIn(positives[(row["family"], key_of(row))], row["text"], row["id"])
                 if row["variant"] == "env_ref":
-                    forms = carriers.key_forms(carriers.profiles()[row["rule_id"]].key)
+                    forms = carriers.key_forms(carriers.profiles()[key_of(row)].key)
                     self.assertTrue(any(form in row["text"] for form in forms.values()), row["id"])
 
     def test_doc_examples_and_test_keys_keep_the_shape_but_fail_structure(self):
@@ -344,7 +350,7 @@ class BuildTests(unittest.TestCase):
 
     def test_every_rule_and_variant_is_covered_per_split_and_language(self):
         for split, rows in self.rows.items():
-            positives = Counter((row["rule_id"], row["language"]) for row in rows if row["variant"] == "positive")
+            positives = Counter((key_of(row), row["language"]) for row in rows if row["variant"] == "positive")
             for rule_id in carriers.profiles():
                 for language in ("de", "en"):
                     self.assertGreaterEqual(positives[(rule_id, language)], 3, f"{split} {rule_id} {language}")
@@ -355,11 +361,39 @@ class BuildTests(unittest.TestCase):
             formats = Counter(row["format"] for row in rows if row["variant"] == "positive")
             self.assertEqual(set(formats), FORMATS, split)
 
+    def test_baseline_entities_get_gold_and_hard_negatives_in_both_languages(self):
+        # GOLD-D2: >= 10 positives and >= 5 hard negatives per entity, DE and EN, in every split.
+        baseline = rules.baseline_entities()
+        for split, rows in self.rows.items():
+            counts = Counter((row["entity"], row["case_type"], row["language"]) for row in rows if row["entity"] in baseline)
+            formats = Counter((row["entity"], row["format"]) for row in rows if row["variant"] == "positive")
+            for entity in baseline:
+                for language in ("de", "en"):
+                    self.assertGreaterEqual(counts[(entity, "positive", language)], 5, f"{split} {entity} {language}")
+                    self.assertGreaterEqual(counts[(entity, "hard_negative", language)], 5, f"{split} {entity} {language}")
+                self.assertGreaterEqual(sum(counts[(entity, "positive", language)] for language in ("de", "en")), 10)
+                self.assertLessEqual(
+                    {"env", "yaml", "json", "code", "log", "chat", "mail"}, {f for e, f in formats if e == entity}, entity
+                )
+            for row in rows:
+                if row["entity"] not in baseline:
+                    self.assertNotEqual(row["variant"], "lookalike", row["id"])
+                    continue
+                self.assertIsNone(row["rule_id"], row["id"])
+                if row["variant"] == "positive":
+                    self.assertIsNone(row["entities"][0]["rule_id"], row["id"])
+                    self.assertIn(row["generator"], baseline[row["entity"]]["generators"], row["id"])
+                if row["variant"] == "lookalike":
+                    # Neutral key: under the entity's own key the value would still be a credential.
+                    self.assertIn(row["generator"], baseline[row["entity"]]["lookalike"], row["id"])
+                    self.assertNotIn(carriers.profiles()[row["entity"]].key, row["text"].lower(), row["id"])
+                    self.assertIn(recipes.generate(row["generator"], row["seed"]), row["text"], row["id"])
+
     def test_family_kinds_and_multiline_values_are_respected(self):
         for rows in self.rows.values():
             for row in rows:
                 family = self.families[row["family"]]
-                profile = carriers.profiles()[row["rule_id"]]
+                profile = carriers.profiles()[key_of(row)]
                 self.assertIn(profile.kind, family.accepts, row["id"])
                 if row["variant"] == "positive" and not family.multiline:
                     self.assertNotIn("\n", recipes.generate(row["generator"], row["seed"]), row["id"])

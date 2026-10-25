@@ -20,8 +20,9 @@ SPEC.loader.exec_module(MODULE)
 CODE = MODULE.BENIGN_CODE
 DOCS = MODULE.BENIGN_DOCS
 
-# A few value rules keep the synthetic component small; the full build is covered by E04.
-RULES = ("dlp_github_pat", "dlp_openai_key", "dlp_password_assignment")
+# A few value rules and one baseline entity (GOLD-D2) keep the synthetic component small;
+# the full build is covered by E04.
+RULES = ("dlp_github_pat", "dlp_openai_key", "dlp_password_assignment", "comm.telegram.bot_token")
 DATA_URI = "data:image/png;base64," + "QUJD" * 30
 MINIFIED = "var a=1;" + ";".join(f"function f{i}(x){{return x+{i}}}" for i in range(80)) + "\n"
 PARAGRAPH = {
@@ -173,7 +174,9 @@ def test_synthetic_splits_use_disjoint_families_and_a_secret_holdout_seed(tmp_pa
     families = {split: {row["family"] for row in rows[split]} for split in MODULE.SPLITS}
     assert families["dev"] and families["holdout"] and not families["dev"] & families["holdout"]
     assert all(row["split"] == split for split in MODULE.SPLITS for row in rows[split])
-    assert {row["rule_id"] for row in rows["holdout"]} == set(RULES)
+    assert {row["rule_id"] or row["entity"] for row in rows["holdout"]} == set(RULES)
+    assert manifests["holdout"]["rules"].keys() == set(RULES) - {"comm.telegram.bot_token"}
+    assert manifests["holdout"]["entities"]["comm.telegram.bot_token"] > 0
     assert {row["variant"] for row in rows["holdout"]} == set(MODULE.CARRIERS.VARIANTS)
     assert {row["language"] for row in rows["holdout"]} == {"de", "en"}
     assert manifests["dev"]["seed"] == MODULE.DEV_SEED and "seed_sha256" not in manifests["dev"]
