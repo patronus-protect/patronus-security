@@ -358,6 +358,7 @@ tasks:
       F1 >= tuned in balanced
 
   - id: GOLD-VAT1
+    status: done
     title: "Gold for VAT IDs without gold, part 1: AT, BE, BG, CH, CY, CZ, DK, EE, ES, FI, FR, GR, HR, HU"
     type: eval-infra
     deps: []
