@@ -84,8 +84,9 @@ pub const SHELL_COMMAND_ASSET: PipelineModelAssetSpec = PipelineModelAssetSpec {
     category: SecurityCategory::ShellCommand,
     model: "cat-shell-risk-commander",
     repo: "patronus-studio/cat-shell-risk-commander",
-    // A1 (format_version 2): char_wb + shell_tokens two-block model.
-    revision: "2ba751f998dac81b00644fec3b7ca4bf57af08f4",
+    // A1 (format_version 2): char_wb + shell_tokens two-block model, with the
+    // issue #159 `DL->` relation markers in the shell_tokens block.
+    revision: "f6243388bd2970e5f5cf02b70549006a57d52f66",
     destination_path: "shell_command/cat_shell_risk_commander",
     files: &["manifest.json", "model.json", "LICENSE"],
 };

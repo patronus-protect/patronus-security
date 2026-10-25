@@ -11,6 +11,23 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Changed
 
+- **Shell risk: download-into-interpreter relations (#159).** `shell_command` now pins
+  `cat-shell-risk-commander` revision `f6243388` (still `format_version: 2`), whose shell-token block
+  adds five relation markers from a small, depth-limited parse of the command: `DL->PIPE->INTERP`
+  (`curl … | bash`, `irm … | iex`), `DL->SUBST->INTERP` (`bash <(curl …)`, `source <(…)`,
+  `sh -c "$(curl …)"`, `iex (iwr …)`, `.DownloadString(…)`), `DL->FILE->EXEC` (a downloaded file that
+  the same command runs), `DL->PIPE->FILTER` (`curl … | jq`) and `DL->FILE` (download to a file that is
+  never run). Nested `-c`/`-Command` scripts, backticks, newlines and `#` comments are followed;
+  nesting deeper than 32 levels yields no markers. `shell_tokens.rs` ports the reference bit for bit
+  (full-corpus feature parity on 36,391 texts; decision scores within 1e-6). **Detection change:**
+  on the issue #159 set all 27 download-and-execute commands flag (was 23; `bash <(curl …)`,
+  `source <(curl …)` and the IP variant of `curl … | bash` were missed) and none of the 22 plain
+  downloads to a file or filter does (was 8). New thresholds: `external_commands_1pct_fpr` 0.614926,
+  `block_0_1pct_fpr` 2.538794 (true 0.1 % FPR on held-out data; the old block threshold ran at
+  ~0.35 %, so block-level recall drops at that stricter operating point while recall at matched FPR
+  is unchanged or higher). Pure downloads without execution (`wget https://…/x.tar.gz`) no longer flag.
+  Older runtimes keep revision `2ba751f9`, which they pin.
+
 - NANP extensions inside the phone span (F18, baseline bucket P5, candidate C3). `pii_phone_us`
   ended with `\d{4}\b`, which never holds before an attached `x`, so `345-899-3560x4587` was no
   match, and `pii_phone_international`, the earlier rule, cut `+1-604-696-5272x565` to

