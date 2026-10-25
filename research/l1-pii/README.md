@@ -127,7 +127,8 @@ der Backlog kommt auf 60–80, deshalb gilt **2×**.
   `scripts/tests/test_l1_count_validated.py` rot.
 
 Stand T03: ARK 3 (PAN/Luhn, IBAN/MOD 97-10, Steuer-ID), Presidio 35, beide gemeinsam 3. Die
-DE-Validatoren für RVNR, KVNR, LANR, Pass/Ausweis prüfen heute nur die Form (siehe Ausgangslage).
+DE-Validatoren für RVNR, KVNR, LANR, Pass/Ausweis prüften damals nur die Form (Prüfziffern seit F08
+und B-DE1).
 
 Stand B01: ARK 11, gemeinsam 5. Dazu kommen die USt-IdNr. von DE, AT, CH, FR, NL, BE, IT und ES, je
 Land ein Label (`VAT_ID_DE` …) und ein Validator mit Prüfziffer (`rust/src/detectors/pii/vat.rs`), nur
@@ -213,6 +214,27 @@ presidio-analyzer-Gold-Werte `G1122144L` und `B1234567Z` bestehen den NRIC-Prüf
 bleiben FN; Presidio rechnet für NRIC/FIN keine Prüfziffer. Dev balanced: ABN 100,0, ACN 82,6,
 TFN 91,9, Medicare 91,9, NRIC/FIN 95,7, UEN 96,3 (vorher 0); offen bleiben Werte in Pipe-Tabellen
 ohne Randstriche und mehrspaltigen CSV-Zeilen, die die Struktur-Erkennung (K04) nicht liest.
+
+Stand B-DE1: ARK 45, gemeinsam 16 (F10, F11, F12). Die feldgebundenen Regeln für KVNR,
+Rentenversicherungsnummer und LANR rechnen jetzt die Prüfziffer statt nur der Form:
+`validators::de_health_insurance_number` (§ 290 SGB V: Buchstabe als 01…26 und acht Ziffern,
+Quersummen gewichtet 1-2, mod 10; nicht neun Nullen), `de_social_security_number` (VKVV § 4:
+Geburtstag 01–31 oder 51–81, Monat 01–12, Buchstabe als 01…26, Quersummen gewichtet
+2-1-2-5-7-1-2-1-2-1-2-1, mod 10) und `lanr` (KBV: sechs Ziffern gewichtet 4-9, die siebte ergänzt
+auf zehn; nicht eine wiederholte Ziffer). Ihre Basispunkte sinken um die 20 Punkte, die die
+Prüfziffer mehr gibt; die Scores in `balanced`/`recall` bleiben gleich. Kontextfrei in
+`balanced`/`recall` (K05, 0,55): die RVNR blank oder in den Druckgruppen 2-6-1-3
+(`pii_rentenversicherung_de_context_free`) und eine KVNR mit Großbuchstaben
+(`pii_health_insurance_number_de_context_free`, mit `context::foreign_field` wie Pass und Ausweis).
+Neun blanke Ziffern bestehen die LANR-Prüfziffer jedes zehnte Mal: `pii_physician_number_lanr_de_proximity`
+verlangt einen LANR-Begriff in der Nähe oder als Schlüssel (`Arztnummer 987654401 auf dem Rezept`),
+nur in den Score-Modi; LANR steht deshalb neben NHS, ACN und TFN in `CONTEXT_BOUND_LABELS`. Die BSNR
+hat keine Prüfziffer: neues Label `FACILITY_NUMBER_BSNR` (`pii_facility_number_bsnr_de`, neun
+Ziffern mit `validators::nine_digits`, den sie mit dem UK-Pass teilt, Lexikon `pii.facility_number`)
+mit BSNR-Begriff in jedem Modus, keine M3-Einheit; `pii.de.bsnr` ist jetzt `shared`. Die blanken
+BSNR-Werte der presidio-analyzer-Tests bleiben FN (Presidio meldet sie mit 0,2 ebenfalls nicht).
+Alle 140 Gold-Werte der drei IDs in den Dev-Korpora bestehen die Prüfziffern; `X123456789` in
+`dynamic_pii.jsonl` (L3) trägt `"checksum_valid": false`.
 
 Stand B02: ARK 24, gemeinsam 7. Dazu kommen die USt-IdNr. von BG, CY, CZ, DK, EE, EL, FI, HR, HU, IE
 und LT, gleiche Struktur wie B01 (je Land ein Label `VAT_ID_BG` … und ein Validator mit Prüfziffer,

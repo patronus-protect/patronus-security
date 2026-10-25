@@ -144,6 +144,10 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     sg::NRIC_FIN_CONTEXT_FREE,
     sg::UEN,
     sg::UEN_CONTEXT_FREE,
+    de::RENTENVERSICHERUNG_CONTEXT_FREE,
+    de::HEALTH_INSURANCE_NUMBER_CONTEXT_FREE,
+    de::PHYSICIAN_NUMBER_LANR_PROXIMITY,
+    de::FACILITY_NUMBER_BSNR,
 ];
 
 pub struct PiiPipeline {
@@ -575,8 +579,13 @@ impl NativeRegexDetector for PiiPipeline {
             }
             // A cell whose key names the label is the whole value, also between
             // numeric cells (`tfn,age\n876543210,42`).
-            "pii_abn_au" | "pii_acn_au" | "pii_tfn_au" | "pii_medicare_au" | "pii_nric_fin_sg"
-            | "pii_uen_sg" => {
+            "pii_abn_au"
+            | "pii_acn_au"
+            | "pii_tfn_au"
+            | "pii_medicare_au"
+            | "pii_nric_fin_sg"
+            | "pii_uen_sg"
+            | "pii_facility_number_bsnr_de" => {
                 let value = captures.get(0).unwrap().range();
                 context::structure_evidence(
                     prepared.structure(),
@@ -586,14 +595,14 @@ impl NativeRegexDetector for PiiPipeline {
                 .is_some_and(|evidence| evidence.context.supports())
                     || context::stands_alone(text, value)
             }
-            "pii_passport_number_de_context_free" | "pii_identity_card_number_de_context_free" => {
-                !context::foreign_field(
-                    prepared.structure(),
-                    text,
-                    captures.get(0).unwrap().range(),
-                    pattern.entity_group,
-                )
-            }
+            "pii_passport_number_de_context_free"
+            | "pii_identity_card_number_de_context_free"
+            | "pii_health_insurance_number_de_context_free" => !context::foreign_field(
+                prepared.structure(),
+                text,
+                captures.get(0).unwrap().range(),
+                pattern.entity_group,
+            ),
             "pii_passport_number_de_legacy" | "pii_identity_card_number_de_legacy" => {
                 // A key that names another value overrides a document term
                 // found by proximity; a document term inside the key keeps it.

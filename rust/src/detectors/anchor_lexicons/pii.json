@@ -2329,6 +2329,42 @@
     ]
   },
   {
+    "id": "pii.facility_number",
+    "description": "Betriebsstättennummer (BSNR)",
+    "en": [
+      "practice number",
+      "practice-number",
+      "practice_number",
+      "practice site number",
+      "medical facility number"
+    ],
+    "de": [
+      "betriebsstättennummer",
+      "betriebsstätten nummer",
+      "betriebsstätten-nummer",
+      "betriebsstätten_nummer",
+      "betriebsstaettennummer",
+      "betriebsstaetten nummer",
+      "betriebsstaetten-nummer",
+      "betriebsstaetten_nummer",
+      "betriebsstättennr",
+      "betriebsstätten nr",
+      "betriebsstätten-nr",
+      "praxisnummer",
+      "praxis nummer",
+      "praxis-nummer",
+      "praxis_nummer",
+      "praxisnr",
+      "praxis-nr"
+    ],
+    "shared": [
+      "bsnr"
+    ],
+    "sources": [
+      "rust/src/detectors/pii/de.rs"
+    ]
+  },
+  {
     "id": "pii.passport",
     "description": "Reisepass und Passnummer",
     "en": [

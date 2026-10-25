@@ -69,7 +69,7 @@ pub(super) const PASSPORT_NUMBER: PiiPattern = PiiPattern {
     name: "pii_passport_number_uk",
     pattern: r"(?-u:\b)[0-9]{9}(?-u:\b)",
     entity_group: "PASSPORT_NUMBER",
-    validator: Some(validators::uk_passport_number),
+    validator: Some(validators::nine_digits),
     strength: ValidatorStrength::Format,
     base_score: 20,
     captured_value: false,

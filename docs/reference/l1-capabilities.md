@@ -11,10 +11,10 @@ What ARK L1 detects (PII and DLP), how it compares with Presidio and the secret 
 
 | | PII | DLP |
 | --- | --- | --- |
-| Result labels (entity groups) | 65 | 23 |
-| Regex rules | 96 | 64 (+5 relationship rules) |
-| Checksum-validated units (count rule T03) | 42 (Presidio 2.2.364: 35) | – |
-| Rules with a `checksum` or `structure` check | 51 | 6 |
+| Result labels (entity groups) | 66 | 23 |
+| Regex rules | 100 | 64 (+5 relationship rules) |
+| Checksum-validated units (count rule T03) | 45 (Presidio 2.2.364: 35) | – |
+| Rules with a `checksum` or `structure` check | 57 | 6 |
 | Default state | all rules on | credential/secret groups on, broader families opt-in |
 | Compared with | Presidio 2.2.364 (tuned) | gitleaks 8.30.1, TruffleHog 3.97.9, detect-secrets 1.5.0 |
 | Overall F1 (2026-10-24) | `balanced`: neutral 63.2, presidio_favored 54.3 | default profile: 88.6 (P 99.3, R 80.0) |
@@ -52,9 +52,10 @@ One row per benchmark entity of `research/l1-pii/entity_map.yaml`. Scope: `share
 | `pii.uk.national_insurance_number` | shared | `NATIONALID` | `pii_ni_uk`, `pii_ni_uk_context_free` | format | on (1 of 2 rules `balanced`/`recall` only) | `UK_NINO` |
 | `pii.de.tax_id` | shared | `STEUERID` | `pii_steuer_id_de`, `pii_steuer_id_de_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `DE_TAX_ID` |
 | `pii.de.tax_number` | shared | `TAX_NUMBER_DE` | `pii_steuernummer_de` | format | on | `DE_TAX_NUMBER` |
-| `pii.de.social_security_number` | shared | `SOCIALID` | `pii_rentenversicherung_de` | format | on | `DE_SOCIAL_SECURITY` |
-| `pii.de.health_insurance_number` | shared | `HEALTH_INSURANCE_NUMBER` | `pii_health_insurance_number_de` | format | on | `DE_HEALTH_INSURANCE` |
-| `pii.de.lanr` | shared | `PHYSICIAN_NUMBER_LANR` | `pii_physician_number_lanr_de` | format | on | `DE_LANR` |
+| `pii.de.social_security_number` | shared | `SOCIALID` | `pii_rentenversicherung_de`, `pii_rentenversicherung_de_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `DE_SOCIAL_SECURITY` |
+| `pii.de.health_insurance_number` | shared | `HEALTH_INSURANCE_NUMBER` | `pii_health_insurance_number_de`, `pii_health_insurance_number_de_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `DE_HEALTH_INSURANCE` |
+| `pii.de.lanr` | shared | `PHYSICIAN_NUMBER_LANR` | `pii_physician_number_lanr_de`, `pii_physician_number_lanr_de_proximity` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `DE_LANR` |
+| `pii.de.bsnr` | shared | `FACILITY_NUMBER_BSNR` | `pii_facility_number_bsnr_de` | format | on | `DE_BSNR` |
 | `pii.uk.nhs_number` | shared | `NHS_NUMBER` | `pii_nhs_number_uk` | checksum | on | `UK_NHS` |
 | `pii.au.abn` | shared | `AU_ABN` | `pii_abn_au`, `pii_abn_au_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `AU_ABN` |
 | `pii.au.acn` | shared | `AU_ACN` | `pii_acn_au` | checksum | on | `AU_ACN` |
@@ -113,7 +114,6 @@ One row per benchmark entity of `research/l1-pii/entity_map.yaml`. Scope: `share
 | `pii.us.mbi` | presidio_only | – | – | – | – | `US_MBI` |
 | `pii.us.npi` | presidio_only | – | – | – | – | `US_NPI` |
 | `pii.uk.postcode` | presidio_only | – | – | – | – | `UK_POSTCODE` |
-| `pii.de.bsnr` | presidio_only | – | – | – | – | `DE_BSNR` |
 | `pii.de.commercial_register` | presidio_only | – | – | – | – | `DE_HANDELSREGISTER` |
 | `pii.de.postal_code` | presidio_only | – | – | – | – | `DE_PLZ` |
 | `pii.es.nie` | presidio_only | – | – | – | – | `ES_NIE` |
@@ -144,7 +144,7 @@ One row per benchmark entity of `research/l1-pii/entity_map.yaml`. Scope: `share
 | `entity.date` | semantic | – | – | – | – | `DATE_TIME` |
 | `entity.street_address` | semantic | – | – | – | – | – |
 
-Entities: 27 shared, 38 ARK only, 31 Presidio only, 6 semantic. Hard-negative false positives (2026-10-24): ARK 0, Presidio 0.
+Entities: 28 shared, 38 ARK only, 30 Presidio only, 6 semantic. Hard-negative false positives (2026-10-24): ARK 0, Presidio 0.
 
 ### F1 per entity
 
@@ -168,6 +168,7 @@ Legend: `ARK x / Presidio y` = exact F1 of both; `no gold` = measured, but the f
 | `pii.de.social_security_number` | shared | 0 / 1 / 25 | no gold | ARK 0.0 / Presidio 100.0 | ARK 81.0 / Presidio 27.6 |
 | `pii.de.health_insurance_number` | shared | 0 / 3 / 55 | no gold | ARK 0.0 / Presidio 100.0 | ARK 96.2 / Presidio 86.6 |
 | `pii.de.lanr` | shared | 0 / 3 / 53 | no gold | ARK 0.0 / Presidio 100.0 | ARK 95.0 / Presidio 82.5 |
+| `pii.de.bsnr` | shared | 0 / 5 / 50 | no gold | ARK 0.0 / Presidio 57.1 | ARK 0.0 / Presidio 65.0 |
 | `pii.uk.nhs_number` | shared | 0 / 0 / 53 | no gold | no gold | ARK 0.0 / Presidio 83.0 |
 | `pii.au.abn` | shared | 0 / 1 / 18 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
 | `pii.au.acn` | shared | 0 / 3 / 24 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
@@ -226,7 +227,6 @@ Legend: `ARK x / Presidio y` = exact F1 of both; `no gold` = measured, but the f
 | `pii.us.mbi` | presidio_only | 0 / 5 / 24 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
 | `pii.us.npi` | presidio_only | 0 / 5 / 22 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
 | `pii.uk.postcode` | presidio_only | 0 / 4 / 235 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
-| `pii.de.bsnr` | presidio_only | 0 / 5 / 50 | no gold | ARK 0.0 / Presidio 57.1 | ARK 0.0 / Presidio 65.0 |
 | `pii.de.commercial_register` | presidio_only | 0 / 1 / 56 | no gold | ARK 0.0 / Presidio 100.0 | ARK 0.0 / Presidio 88.0 |
 | `pii.de.postal_code` | presidio_only | 0 / 0 / 231 | no gold | no gold | ARK 0.0 / Presidio 85.2 |
 | `pii.es.nie` | presidio_only | 0 / 5 / 26 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |

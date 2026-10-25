@@ -105,6 +105,38 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- German health care check digits (B-DE1: F10, F11, F12). The field-bound rules
+  `pii_health_insurance_number_de`, `pii_rentenversicherung_de` and `pii_physician_number_lanr_de`
+  now compute the check digit instead of the form only: `validators::de_health_insurance_number`
+  (KVNR, § 290 SGB V: the letter as 01…26 and eight digits, cross sums weighted 1-2, mod 10; not
+  nine zeros), `de_social_security_number` (RVNR, VKVV § 4: birth day 01–31 or 51–81, month 01–12,
+  the letter as 01…26, cross sums weighted 2-1-2-5-7-1-2-1-2-1-2-1, mod 10) and `lanr` (KBV: six
+  digits weighted 4-9, the seventh digit completes the sum to ten; not one repeated digit). Their
+  base points drop by the 20 points the check digit adds, so `balanced`/`recall` scores stay the
+  same. In `balanced`/`recall` `pii_rentenversicherung_de_context_free` reports a bare RVNR
+  (`15070649C103`, `15 070649 C 103`) and `pii_health_insurance_number_de_context_free` a bare
+  uppercase KVNR (`A123456780`, silent under a field that names another value, like the bare
+  document numbers) at 0.55 (K05); nine bare digits pass the LANR check one time in ten, so
+  `pii_physician_number_lanr_de_proximity` needs a LANR term near the value or as its key
+  (`Arztnummer 987654401 auf dem Rezept`, `{"arztnummer": …}`). New label `FACILITY_NUMBER_BSNR`:
+  `pii_facility_number_bsnr_de` reports nine digits with a BSNR term or key (`BSNR`,
+  `Betriebsstättennummer`, `practice number`; lexicon `pii.facility_number`) in every mode; the
+  BSNR has no check digit and is no M3 unit. `uk_passport_number` becomes `nine_digits`, shared
+  by the UK passport and the BSNR. `pii.de.bsnr` becomes `shared`; M3 count
+  (`count_validated.py`) ARK 42 → 45, shared with Presidio 13 → 16. The invalid KVNR
+  `X123456789` in `dynamic_pii.jsonl` (L3) is marked `"checksum_valid": false`.
+  **Detection change:** in every mode a KVNR, RVNR or LANR after its field name with a wrong check
+  digit (or an impossible RVNR birth date, a LANR of one repeated digit) is no longer reported, and
+  a BSNR with its term or key is a new finding; in `balanced`/`recall` the bare KVNR and RVNR and
+  the LANR near its term are new findings. All 140 dev gold values of the three IDs pass the check
+  digits. Dev scoreboard vs. 2f019e4 (PASS in strict and balanced, no new hard-negative FP,
+  precision 100.0 on all four IDs): L1 F1 strict +0.8, balanced +1.1 pp (DE +2.5/+3.2,
+  presidio_favored +0.5/+1.2, neutral ±0.0); balanced F1 RVNR 79.1 → 100.0, KVNR 93.5 → 99.1,
+  LANR 92.3 → 96.3, BSNR 0.0 → 96.2. Latency (`latency.py compare --engine ark-native`, two base/head
+  pairs): 100 KiB p95 135.8 → 145.0 ms (+6.8 %) and 145.2 → 145.3 ms (+0.1 %), both PASS; 4 KiB
+  −7.6 % and −9.5 % (noise). Golden eval: 1201/1201 positives,
+  1113/1113 hard negatives.
+
 - Australian and Singaporean identifiers (B-APAC: A08, A10), one label each with a check digit
   or letter: `AU_ABN` (`validators::au_abn`, mod 89), `AU_ACN` (`au_acn`, weighted mod 10),
   `AU_TFN` (`au_tfn`, weighted mod 11), `AU_MEDICARE` (`au_medicare`, first digit 2-6, weights

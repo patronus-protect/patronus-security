@@ -155,6 +155,13 @@ entities:
     corpora:
       presidio-analyzer-recognizer-tests: [DE_LANR]
 
+  - id: pii.de.bsnr
+    scope: shared
+    ark: [FACILITY_NUMBER_BSNR]
+    presidio: [DE_BSNR]
+    corpora:
+      presidio-analyzer-recognizer-tests: [DE_BSNR]
+
   - id: pii.uk.nhs_number
     scope: shared
     ark: [NHS_NUMBER]
@@ -359,7 +366,6 @@ entities:
   - {id: pii.us.mbi, scope: presidio_only, ark: [], presidio: [US_MBI], corpora: {presidio-analyzer-recognizer-tests: [US_MBI]}}
   - {id: pii.us.npi, scope: presidio_only, ark: [], presidio: [US_NPI], corpora: {presidio-analyzer-recognizer-tests: [US_NPI]}}
   - {id: pii.uk.postcode, scope: presidio_only, ark: [], presidio: [UK_POSTCODE], corpora: {presidio-analyzer-recognizer-tests: [UK_POSTCODE]}}
-  - {id: pii.de.bsnr, scope: presidio_only, ark: [], presidio: [DE_BSNR], corpora: {presidio-analyzer-recognizer-tests: [DE_BSNR]}}
   - {id: pii.de.commercial_register, scope: presidio_only, ark: [], presidio: [DE_HANDELSREGISTER], corpora: {presidio-analyzer-recognizer-tests: [DE_HANDELSREGISTER]}}
   - {id: pii.de.postal_code, scope: presidio_only, ark: [], presidio: [DE_PLZ], corpora: {presidio-analyzer-recognizer-tests: [DE_PLZ]}}
   - {id: pii.es.nie, scope: presidio_only, ark: [], presidio: [ES_NIE], corpora: {presidio-analyzer-recognizer-tests: [ES_NIE]}}
@@ -466,14 +472,14 @@ checksums:
     calendar_date: null
     written_calendar_date: null
     de_tax_number: null                 # Länge 10–13, nicht alle Ziffern gleich
-    de_social_security_number: null     # Form 8 Ziffern + Buchstabe + 3 Ziffern, keine Prüfziffer
-    de_health_insurance_number: null    # Form Buchstabe + 9 Ziffern, keine Prüfziffer
-    lanr: null                          # 9 Ziffern, keine Prüfziffer
+    de_social_security_number: {algorithm: "VKVV § 4, Quersummen gewichtet 2-1-2-5-7-1-2-1-2-1-2-1 mod 10"}  # B-DE1, RVNR, plus Geburtstag/-monat
+    de_health_insurance_number: {algorithm: "§ 290 SGB V, Quersummen gewichtet 1-2 mod 10"}  # B-DE1, KVNR
+    lanr: {algorithm: "gewichtet 4-9 mod 10"}  # B-DE1, LANR
     de_document_number: null            # ICAO-Alphabet, keine Prüfziffer (gedruckte Serie, feldgebunden)
     de_driver_license_number: null      # 11 Zeichen, keine Prüfziffer
     us_driver_license_number: null      # F15, Formate der Bundesstaaten, keine Prüfziffer
     it_driver_license_number: null      # F15, Patente-Form, keine Prüfziffer
-    uk_passport_number: null            # B-UK, neun Ziffern, keine Prüfziffer
+    nine_digits: null                   # B-UK/B-DE1, neun Ziffern (UK-Pass, BSNR), keine Prüfziffer
     passport_number_two_letters: null   # zwei Buchstaben + sieben Ziffern (Irland, Japan), keine Prüfziffer
     uk_driver_license_number: null      # B-UK, Nachname, Geburtsdatum, Initialen; DVLA-Prüfzeichen unveröffentlicht
     us_ssn: null                        # Bereichsprüfung
