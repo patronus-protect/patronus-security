@@ -11,6 +11,8 @@ import json
 import unittest
 from pathlib import Path
 
+import yaml
+
 from patronus_ark import SecurityGateway
 from patronus_ark.dlp_synth import checks, recipes, rules
 
@@ -138,12 +140,89 @@ def record_reference(value):
     return letters.isupper() and len(letters) == 2 and year.startswith("20") and len(year) == 4 and len(number) == 6
 
 
+def onepassword_service_account(value):
+    """1Password service account token: ops_ + base64 of the account JSON (gitleaks
+    1password-service-account-token needs ops_eyJ and 250+ base64 characters)."""
+    try:
+        payload = json.loads(base64.b64decode(value.removeprefix("ops_"), validate=True))
+    except (ValueError, binascii.Error):
+        return False
+    return (
+        value.startswith("ops_eyJ")
+        and len(value) >= 257
+        and payload["signInAddress"] == "my.1password.com"
+        and payload["email"].endswith("@1passwordserviceaccounts.com")
+        and ONEPASSWORD_SECRET_KEY(payload["secretKey"])
+        and len(payload["srpX"]) == 64
+    )
+
+
+def onepassword_secret_key(prefix):
+    """1Password account Secret Key: version, six groups of upper-case alphanumerics."""
+
+    def check(value):
+        groups = value.split("-")
+        return groups[0] == prefix and [len(group) for group in groups[1:]] == [6, 6, 5, 5, 5, 5] and all(
+            set(group) <= set(UPPER_ALNUM) for group in groups[1:]
+        )
+
+    return check
+
+
+def uuid_shaped(value):
+    return [len(part) for part in value.split("-")] == [8, 4, 4, 4, 12] and set(value) <= set(HEX + "-")
+
+
+def teams_webhook(value):
+    head, _, rest = value.partition(".webhook.office.com/webhookb2/")
+    ids, _, tail = rest.partition("/IncomingWebhook/")
+    group, _, tenant = ids.partition("@")
+    secret, _, owner = tail.partition("/")
+    return (
+        head.startswith("https://")
+        and head[8:].isalpha()
+        and uuid_shaped(group)
+        and uuid_shaped(tenant)
+        and prefixed("", HEX, 32)(secret)
+        and uuid_shaped(owner)
+    )
+
+
+def slack_webhook(team, bot, secret):
+    def check(value):
+        path = value.removeprefix("https://hooks.slack.com/services/")
+        parts = path.split("/")
+        return (
+            value.startswith("https://hooks.slack.com/services/")
+            and len(parts) == 3
+            and prefixed("T", UPPER_ALNUM, team)(parts[0])
+            and prefixed("B", UPPER_ALNUM, bot)(parts[1])
+            and prefixed("", ALNUM, secret)(parts[2])
+        )
+
+    return check
+
+
+def authress(value, account="acc_"):
+    """Authress service client access key: sc_<client>.<key>.acc_<account>.<base64 PKCS#8 Ed25519>."""
+    parts = value.split(".")
+    return (
+        len(parts) == 4
+        and prefixed("sc_", ALNUM, 10)(parts[0])
+        and prefixed("", ALNUM, 5)(parts[1])
+        and prefixed(account, BASE36, 16)(parts[2])
+        and checks.is_valid_pkcs8_ed25519(base64.b64decode(parts[3]))
+    )
+
+
 ALNUM = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+UPPER_ALNUM = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 B64URL = ALNUM + "-_"
 B64 = ALNUM + "+/"
 HEX = "0123456789abcdef"
 DIGITS = "0123456789"
 BASE36 = DIGITS + "abcdefghijklmnopqrstuvwxyz"
+ONEPASSWORD_SECRET_KEY = onepassword_secret_key("A3")
 
 
 def gitlab_routable(value, prefix, length):
@@ -235,6 +314,36 @@ CHECKS = {
     "de_commercial_register_number": lambda v: v.startswith("HRB ") and v[4:].isdigit() and v[4] != "0",
     "de_bsnr": lambda v: len(v) == 9 and v.isdigit() and v[0] != "0",
     "record_reference": record_reference,
+    # GOLD-D2 baseline entities (formats of the gitleaks rules named in generators.json)
+    "slack_app_token": lambda v: v.startswith("xapp-1-A")
+    and [len(p) for p in v.split("-")] == [4, 1, 11, 13, 64]
+    and set(v.split("-")[4]) <= set(HEX),
+    "slack_config_access_token": prefixed("xoxe.xoxp-1-", ALNUM, 164),
+    "slack_config_refresh_token": prefixed("xoxe-1-", ALNUM, 146),
+    "slack_webhook_url": slack_webhook(10, 10, 24),
+    "teams_webhook_url": teams_webhook,
+    "discord_api_token": prefixed("", HEX, 64),
+    "discord_client_secret": prefixed("", B64URL, 32),
+    "telegram_bot_token": lambda v: v.split(":")[0].isdigit() and len(v.split(":")[0]) == 10 and v[0] != "0"
+    and prefixed("AA", B64URL, 33)(v.split(":")[1]),
+    "twilio_api_key": prefixed("SK", HEX, 32),
+    "sendgrid_api_key": lambda v: v[25] == "." and prefixed("SG.", B64URL, 22)(v[:25]) and prefixed("", B64URL, 43)(v[26:]),
+    "brevo_api_key": lambda v: prefixed("xkeysib-", HEX, 64)(v[:72]) and prefixed("-", ALNUM, 16)(v[72:]),
+    "mailgun_private_api_key": prefixed("key-", HEX, 32),
+    "mailgun_signing_key": lambda v: [len(p) for p in v.split("-")] == [32, 8, 8] and set(v) <= set(HEX + "-"),
+    "mailchimp_api_key": lambda v: prefixed("", HEX, 32)(v[:32]) and v[32:35] == "-us" and v[35:].isdigit()
+    and len(v) == 37 and v[35] != "0",
+    "messagebird_api_key": prefixed("", ALNUM, 25),
+    "mattermost_access_token": prefixed("", BASE36, 26),
+    "sendbird_api_token": prefixed("", HEX, 40),
+    "gitter_access_token": prefixed("", HEX, 40),
+    "okta_api_token": prefixed("00", B64URL, 40),
+    "authress_access_key": authress,
+    "onepassword_secret_key": ONEPASSWORD_SECRET_KEY,
+    "onepassword_service_account_token": onepassword_service_account,
+    "duffel_live_token": prefixed("duffel_live_", B64URL, 43),
+    "easypost_api_key": prefixed("EZAK", ALNUM, 54),
+    "shippo_live_token": prefixed("shippo_live_", HEX, 40),
 }
 
 # Pre-E03 shape generators that must not pass the structural check they lack.
@@ -272,12 +381,35 @@ LOOKALIKE_FAILURES = {
     "aws_secret_access_key_hex": lambda v: any(c.isupper() for c in v),
     # F-HTTP: random base64 that decodes to no user:password pair
     "http_basic_credentials": lambda v: checks.basic_auth_pair(v) is not None,
+    # GOLD-D2: wrong prefix, length or character set of a baseline entity's format
+    "slack_config_refresh_token_short": CHECKS["slack_config_refresh_token"],
+    "slack_webhook_url_short": CHECKS["slack_webhook_url"],
+    "discord_client_secret_short": CHECKS["discord_client_secret"],
+    "telegram_bot_token_short": CHECKS["telegram_bot_token"],
+    "twilio_account_sid": CHECKS["twilio_api_key"],
+    "sendgrid_api_key_short": CHECKS["sendgrid_api_key"],
+    "brevo_api_key_upper_hex": CHECKS["brevo_api_key"],
+    "mailgun_public_key": lambda v: CHECKS["mailgun_private_api_key"](v) or CHECKS["mailgun_signing_key"](v),
+    "mailchimp_api_key_no_dc": CHECKS["mailchimp_api_key"],
+    "messagebird_api_key_short": CHECKS["messagebird_api_key"],
+    "mattermost_access_token_short": CHECKS["mattermost_access_token"],
+    "sendbird_api_token_short": CHECKS["sendbird_api_token"],
+    "gitter_access_token_short": CHECKS["gitter_access_token"],
+    "okta_api_token_wrong_prefix": CHECKS["okta_api_token"],
+    "authress_access_key_wrong_account": lambda v: authress(v) or authress(v, "app_"),
+    "onepassword_secret_key_wrong_version": ONEPASSWORD_SECRET_KEY,
+    "shippo_live_token_short": CHECKS["shippo_live_token"],
 }
+
+
+def value_entries():
+    """Every value rule and baseline entity (GOLD-D2) of rules.json."""
+    return {**rules.load_rule_map(), **rules.baseline_entities()}
 
 
 def valid_generators():
     names = set()
-    for entry in rules.load_rule_map().values():
+    for entry in value_entries().values():
         names.update(entry["generators"])
     return names
 
@@ -309,7 +441,28 @@ class GeneratorSpecTests(unittest.TestCase):
                 entry.get("quoted", []),
                 entry.get("lookalike", []),
             )
+        for entity, entry in rules.baseline_entities().items():
+            self.assertTrue(entry["generators"] and entry["lookalike"], entity)
+            self.assertFalse(set(entry["generators"]) & set(entry["lookalike"]), entity)
+            self.assertFalse(set(entry["generators"] + entry["lookalike"]) & referenced, entity)
+            referenced.update(entry["generators"], entry["lookalike"])
         self.assertEqual(referenced, set(recipes.load_generators()))
+
+    def test_baseline_entities_are_baseline_only_entities_with_a_format_source(self):
+        # GOLD-D2: gold for entities without an ARK rule follows a baseline rule of the
+        # entity or vendor documentation; lookalikes name what they get wrong.
+        entity_map = yaml.safe_load((REPO / "research/dlp/entity_map.yaml").read_text(encoding="utf-8"))
+        by_id = {entity["id"]: entity for entity in entity_map["entities"]}
+        generators = recipes.load_generators()
+        for entity, entry in rules.baseline_entities().items():
+            self.assertEqual(by_id[entity]["scope"], "baseline_only", entity)
+            self.assertNotIn("ark", by_id[entity], entity)
+            for name in entry["generators"]:
+                tool, _, rule = generators[name]["source"].partition(":")
+                self.assertEqual(tool, "gitleaks", name)
+                self.assertIn(rule.split(";")[0], by_id[entity]["gitleaks"], name)
+            for name in entry["lookalike"]:
+                self.assertTrue(generators[name]["source"].startswith("GOLD-D2 lookalike: "), name)
 
     def test_every_valid_generator_has_an_independent_check(self):
         self.assertEqual(set(CHECKS), valid_generators())
@@ -358,7 +511,7 @@ class StructureTests(unittest.TestCase):
 
     def test_lookalike_generators_fail_their_check(self):
         lookalike = set()
-        for entry in rules.load_rule_map().values():
+        for entry in value_entries().values():
             lookalike.update(entry.get("lookalike", []))
         self.assertEqual(set(LOOKALIKE_FAILURES), lookalike)
         for name, check in LOOKALIKE_FAILURES.items():

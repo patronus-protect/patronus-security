@@ -93,7 +93,8 @@ def error_buckets(
     """Where a tool's value spans go wrong on the carrier rows, counted by rule.
 
     - ``hard_negative_fp``: spans on hard-negative rows per predicted rule and variant;
-    - ``missed``: gold spans no prediction touches, per gold rule and per carrier format;
+    - ``missed``: gold spans no prediction touches, per gold rule (entity id of a baseline
+      entity) and per carrier format;
     - ``boundary``: gold spans a prediction overlaps but none matches exactly, per gold rule;
     - ``extra_on_positives``: spans on positive rows that touch no gold span, per predicted rule.
     Content-class spans are ignored like in the scoreboard; gold spans of opt-in groups are
@@ -119,7 +120,8 @@ def error_buckets(
             for _, _, rule in set(found):
                 hard_negative[(rule, str(row.get("variant", "")))] += 1
             continue
-        gold = [(int(e["start"]), int(e["end"]), str(e.get("rule_id", ""))) for e in row.get("entities") or []
+        # Gold of a baseline entity (no ARK rule, GOLD-D2) is counted under its entity id.
+        gold = [(int(e["start"]), int(e["end"]), str(e.get("rule_id") or e["entity"])) for e in row.get("entities") or []
                 if not taxonomy.is_opt_in(str(e["label"]))]  # opt-in groups are off in this run
         for start, end, rule in gold:
             if any((s, e) == (start, end) for s, e, _ in found):

@@ -4,6 +4,8 @@
 Every ``dlp_*`` rule in ``DLP_PATTERNS`` is either a value rule with generators and
 probe carriers, or a content rule without a secret value. ``samples`` materializes a
 probe so a test can check that the rule reports exactly the generated value.
+Baseline entities (GOLD-D2) are entity-map entities without an ARK rule; their
+generators and lookalikes only feed carrier gold and hard negatives.
 """
 
 from __future__ import annotations
@@ -48,6 +50,14 @@ def _rules() -> dict:
             recipes.materialize(probe, [{"gen": entry["generators"][0], "seed": 0}])
     if set(spec["rules"]) & set(spec["content_rules"]):
         raise recipes.RecipeError("a rule cannot be both a value and a content rule")
+    for entity, entry in spec["baseline_entities"].items():
+        if set(entry) != {"generators", "lookalike"} or not entry["generators"] or not entry["lookalike"]:
+            raise recipes.RecipeError(f"{entity}: invalid baseline entity entry")
+        for name in entry["generators"] + entry["lookalike"]:
+            if name not in known:
+                raise recipes.RecipeError(f"{entity}: unknown generator {name!r}")
+    if set(spec["baseline_entities"]) & (set(spec["rules"]) | set(spec["content_rules"])):
+        raise recipes.RecipeError("a baseline entity cannot share a key with a rule")
     return spec
 
 
@@ -62,11 +72,23 @@ def content_rules() -> dict:
     return dict(_rules()["content_rules"])
 
 
-def generators_for(rule_id: str) -> list[str]:
-    try:
-        return list(_rules()["rules"][rule_id]["generators"])
-    except KeyError:
-        raise recipes.RecipeError(f"no generators for rule {rule_id!r}") from None
+def baseline_entities() -> dict:
+    """``{entity_id: {"generators": [...], "lookalike": [...]}}`` for entities without an ARK rule."""
+    return copy.deepcopy(_rules()["baseline_entities"])
+
+
+def generators_for(key: str) -> list[str]:
+    """Generators of a value rule or a baseline entity."""
+    spec = _rules()
+    entry = spec["rules"].get(key) or spec["baseline_entities"].get(key)
+    if entry is None:
+        raise recipes.RecipeError(f"no generators for rule {key!r}")
+    return list(entry["generators"])
+
+
+def baseline_lookalikes(key: str) -> list[str]:
+    """Lookalike generators of a baseline entity; empty for a rule (its lookalikes stay in the goldens)."""
+    return list(_rules()["baseline_entities"].get(key, {}).get("lookalike", []))
 
 
 def samples(rule_id: str, seeds: range | list[int], *, lookalike: bool = False) -> Iterator[Sample]:

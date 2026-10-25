@@ -3,7 +3,8 @@
 //! format-valid generators in `dlp_synth/rules.json` (or is a content rule),
 //! each rule alone reports exactly the generated value in every probe carrier,
 //! and the Rust materializer reproduces the Python generator output pinned in
-//! `fixtures/dlp_synth_vectors.json`.
+//! `fixtures/dlp_synth_vectors.json`. Baseline entities (GOLD-D2) have generators
+//! for carrier gold without an ARK rule.
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -25,6 +26,16 @@ struct RuleMap {
     note: String,
     rules: BTreeMap<String, RuleEntry>,
     content_rules: BTreeMap<String, String>,
+    /// Entities without an ARK rule (GOLD-D2): generators for carrier gold and lookalikes
+    /// for carrier hard negatives.
+    baseline_entities: BTreeMap<String, BaselineEntity>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BaselineEntity {
+    generators: Vec<String>,
+    lookalike: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -141,7 +152,27 @@ fn every_dlp_pattern_has_generators_or_is_a_content_rule() {
         mapped, patterns,
         "rules.json must list exactly DLP_PATTERNS"
     );
-    assert_eq!(referenced, known, "every generator belongs to a rule");
+    for (entity, entry) in &map.baseline_entities {
+        assert!(
+            !patterns.contains(entity),
+            "{entity}: a baseline entity is no rule"
+        );
+        assert!(
+            !entry.generators.is_empty() && !entry.lookalike.is_empty(),
+            "{entity}"
+        );
+        for name in entry.generators.iter().chain(&entry.lookalike) {
+            assert!(known.contains(name.as_str()), "{entity}: unknown {name}");
+            assert!(
+                referenced.insert(name.as_str()),
+                "{entity}: {name} already belongs to a rule"
+            );
+        }
+    }
+    assert_eq!(
+        referenced, known,
+        "every generator belongs to a rule or a baseline entity"
+    );
 }
 
 #[test]

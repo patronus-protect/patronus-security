@@ -555,24 +555,30 @@ entities:
   - {id: observability.sumologic.access_token, scope: baseline_only, group: API_KEY, gitleaks: [sumologic-access-token], backlog: P07}
   # P08: Kommunikation/Webhooks
   - {id: comm.webhook_url, scope: baseline_only, group: SECRET_TOKEN, subtype: webhook_url,
-     gitleaks: [slack-webhook-url, microsoft-teams-webhook], backlog: P08}
+     gitleaks: [slack-webhook-url, microsoft-teams-webhook], trufflehog: [SlackWebhook, MicrosoftTeamsWebhook],
+     detect_secrets: [SlackDetector], backlog: P08}
   - {id: comm.discord.api_credentials, scope: baseline_only, group: API_KEY,
      gitleaks: [discord-api-token, discord-client-secret], backlog: P08}
   - {id: comm.telegram.bot_token, scope: baseline_only, group: SECRET_TOKEN,
-     gitleaks: [telegram-bot-api-token], detect_secrets: [TelegramBotTokenDetector], backlog: P08}
+     gitleaks: [telegram-bot-api-token], trufflehog: [TelegramBotToken], detect_secrets: [TelegramBotTokenDetector],
+     backlog: P08}
   - {id: comm.twilio.api_key, scope: baseline_only, group: API_KEY,
-     gitleaks: [twilio-api-key], detect_secrets: [TwilioKeyDetector], backlog: P08}
+     gitleaks: [twilio-api-key], trufflehog: [TwilioApiKey], detect_secrets: [TwilioKeyDetector], backlog: P08}
   - {id: comm.sendgrid.api_key, scope: baseline_only, group: API_KEY,
-     gitleaks: [sendgrid-api-token], detect_secrets: [SendGridDetector], backlog: P08}
+     gitleaks: [sendgrid-api-token], trufflehog: [SendGrid], detect_secrets: [SendGridDetector], backlog: P08}
   - {id: comm.brevo.api_key, scope: baseline_only, group: API_KEY, gitleaks: [sendinblue-api-token], backlog: P08}
   - {id: comm.mailgun.key, scope: baseline_only, group: API_KEY,
-     gitleaks: [mailgun-private-api-token, mailgun-signing-key], backlog: P08}
+     gitleaks: [mailgun-private-api-token, mailgun-signing-key], trufflehog: [Mailgun], backlog: P08}
   - {id: comm.mailchimp.api_key, scope: baseline_only, group: API_KEY,
-     gitleaks: [mailchimp-api-key], detect_secrets: [MailchimpDetector], backlog: P08}
-  - {id: comm.messagebird.api_token, scope: baseline_only, group: API_KEY, gitleaks: [messagebird-api-token], backlog: P08}
-  - {id: comm.mattermost.access_token, scope: baseline_only, group: API_KEY, gitleaks: [mattermost-access-token], backlog: P08}
-  - {id: comm.sendbird.access_token, scope: baseline_only, group: API_KEY, gitleaks: [sendbird-access-token], backlog: P08}
-  - {id: comm.gitter.access_token, scope: baseline_only, group: API_KEY, gitleaks: [gitter-access-token], backlog: P08}
+     gitleaks: [mailchimp-api-key], trufflehog: [Mailchimp], detect_secrets: [MailchimpDetector], backlog: P08}
+  - {id: comm.messagebird.api_token, scope: baseline_only, group: API_KEY, gitleaks: [messagebird-api-token],
+     trufflehog: [MessageBird], backlog: P08}
+  - {id: comm.mattermost.access_token, scope: baseline_only, group: API_KEY, gitleaks: [mattermost-access-token],
+     trufflehog: [MattermostPersonalToken], backlog: P08}
+  - {id: comm.sendbird.access_token, scope: baseline_only, group: API_KEY, gitleaks: [sendbird-access-token],
+     trufflehog: [Sendbird, SendbirdOrganizationAPI], backlog: P08}
+  - {id: comm.gitter.access_token, scope: baseline_only, group: API_KEY, gitleaks: [gitter-access-token],
+     trufflehog: [Gitter], backlog: P08}
   # P09: Payment/Commerce
   - {id: payment.square.access_token, scope: baseline_only, group: PAYMENT_KEY,
      gitleaks: [square-access-token], detect_secrets: [SquareOAuthDetector], backlog: P09}
@@ -592,7 +598,8 @@ entities:
        bittrex-secret-key], backlog: P09}
   - {id: payment.freemius.secret_key, scope: baseline_only, group: PAYMENT_KEY, gitleaks: [freemius-secret-key], backlog: P09}
   - {id: commerce.shipping.api_token, scope: baseline_only, group: API_KEY,
-     gitleaks: [duffel-api-token, easypost-api-token, shippo-api-token, lob-api-key], backlog: P09}
+     gitleaks: [duffel-api-token, easypost-api-token, shippo-api-token, lob-api-key],
+     trufflehog: [DuffelToken, Shippo, Lob], backlog: P09}
   # P10: Produktivität/SaaS
   - {id: saas.atlassian.api_token, scope: baseline_only, group: API_KEY, gitleaks: [atlassian-api-token], backlog: P10}
   - {id: saas.notion.api_token, scope: baseline_only, group: API_KEY, gitleaks: [notion-api-token], backlog: P10}
@@ -631,7 +638,8 @@ entities:
   - {id: saas.sidekiq.credentials, scope: baseline_only, group: CREDENTIAL,
      gitleaks: [sidekiq-secret, sidekiq-sensitive-url], backlog: P10}
   # P11: Identity/Auth
-  - {id: identity.okta.access_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [okta-access-token], backlog: P11}
+  - {id: identity.okta.access_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [okta-access-token],
+     trufflehog: [Okta], backlog: P11}
   - {id: identity.authress.access_key, scope: baseline_only, group: SECRET_TOKEN,
      gitleaks: [authress-service-client-access-key], backlog: P11}
   - {id: identity.onepassword.secret, scope: baseline_only, group: SECRET_TOKEN,

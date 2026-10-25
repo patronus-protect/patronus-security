@@ -1357,6 +1357,55 @@ PROFILES = {
     ),
     "dlp_project_id": Profile("identifier.project", "dlp.project_id", "identifier", "project_id", "project ID", "Projekt-ID"),
     "dlp_organization_id": Profile("identifier.organization", "dlp.organization_id", "identifier", "tenant_id", "tenant ID", "Mandanten-ID"),
+    # Baseline entities (GOLD-D2): no ARK rule yet, keyed by their entity id.
+    "comm.slack.app_config_token": Profile(
+        "comm.slack.app_config_token", "SECRET_TOKEN", "secret", "slack_app_token", "Slack app token", "Slack-App-Token"
+    ),
+    "comm.webhook_url": Profile(
+        "comm.webhook_url", "SECRET_TOKEN", "secret", "notify_webhook_url", "chat webhook URL", "Chat-Webhook-URL"
+    ),
+    "comm.discord.api_credentials": Profile(
+        "comm.discord.api_credentials", "API_KEY", "secret", "discord_client_secret", "Discord client secret",
+        "Discord-Client-Secret",
+    ),
+    "comm.telegram.bot_token": Profile(
+        "comm.telegram.bot_token", "SECRET_TOKEN", "secret", "telegram_bot_token", "Telegram bot token", "Telegram-Bot-Token"
+    ),
+    "comm.twilio.api_key": Profile("comm.twilio.api_key", "API_KEY", "secret", "twilio_api_key", "Twilio API key", "Twilio-API-Key"),
+    "comm.sendgrid.api_key": Profile(
+        "comm.sendgrid.api_key", "API_KEY", "secret", "sendgrid_api_key", "SendGrid API key", "SendGrid-API-Key"
+    ),
+    "comm.brevo.api_key": Profile("comm.brevo.api_key", "API_KEY", "secret", "brevo_api_key", "Brevo API key", "Brevo-API-Key"),
+    "comm.mailgun.key": Profile("comm.mailgun.key", "API_KEY", "secret", "mailgun_api_key", "Mailgun API key", "Mailgun-API-Key"),
+    "comm.mailchimp.api_key": Profile(
+        "comm.mailchimp.api_key", "API_KEY", "secret", "mailchimp_api_key", "Mailchimp API key", "Mailchimp-API-Key"
+    ),
+    "comm.messagebird.api_token": Profile(
+        "comm.messagebird.api_token", "API_KEY", "secret", "messagebird_api_key", "MessageBird API key", "MessageBird-API-Key"
+    ),
+    "comm.mattermost.access_token": Profile(
+        "comm.mattermost.access_token", "API_KEY", "secret", "mattermost_access_token", "Mattermost access token",
+        "Mattermost-Zugriffstoken",
+    ),
+    "comm.sendbird.access_token": Profile(
+        "comm.sendbird.access_token", "API_KEY", "secret", "sendbird_api_token", "Sendbird API token", "Sendbird-API-Token"
+    ),
+    "comm.gitter.access_token": Profile(
+        "comm.gitter.access_token", "API_KEY", "secret", "gitter_token", "Gitter token", "Gitter-Token"
+    ),
+    "identity.okta.access_token": Profile(
+        "identity.okta.access_token", "SECRET_TOKEN", "secret", "okta_api_token", "Okta API token", "Okta-API-Token"
+    ),
+    "identity.authress.access_key": Profile(
+        "identity.authress.access_key", "SECRET_TOKEN", "secret", "authress_access_key", "Authress access key",
+        "Authress-Zugriffsschlüssel",
+    ),
+    "identity.onepassword.secret": Profile(
+        "identity.onepassword.secret", "SECRET_TOKEN", "secret", "op_secret", "1Password secret", "1Password-Secret"
+    ),
+    "commerce.shipping.api_token": Profile(
+        "commerce.shipping.api_token", "API_KEY", "secret", "shipping_api_key", "shipping API key", "Versand-API-Schlüssel"
+    ),
 }
 
 
@@ -1380,6 +1429,9 @@ PLACEHOLDERS = {
         "********",
     ),
 }
+
+# Key and labels (en, de) of the "lookalike" hard negative: a neutral identifier field.
+LOOKALIKE_KEY = ("correlation_id", "correlation ID", "Korrelations-ID")
 
 # Fill words for the "doc_example" and "test_key" hard negatives: the first word whose
 # characters all lie in a segment's alphabet is repeated over the segment.
