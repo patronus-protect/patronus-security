@@ -211,10 +211,22 @@ impl LazyOnnxTextClassifier {
             || self.loaded_backend != Some(backend)
             || self.loaded_options != Some(options)
         {
+            // Match the legacy lazy-loader lifetime: release the previous
+            // session before allocating a replacement or changing precision/path.
+            self.wolf_runner = None;
+            self.loaded = None;
+            self.loaded_backend = None;
+            self.loaded_options = None;
             self.wolf_runner = Some(patronus_ark_core::wolf::WolfRunner::new(
                 &patronus_ark_core::wolf::WolfConfig {
-                    bundle_dir: self.dir.clone(),
+                    bundle_dir: self
+                        .dir
+                        .join(&self.tokenizer_path)
+                        .parent()
+                        .ok_or("invalid Wolf tokenizer path")?
+                        .to_path_buf(),
                     threshold,
+                    precision: Default::default(),
                     backend,
                     runtime_options: options,
                 },
@@ -294,7 +306,7 @@ impl LazyOnnxTextClassifier {
     pub fn precision(&self) -> Option<&str> {
         self.wolf_runner
             .as_ref()
-            .map(|_| "fp16")
+            .map(|runner| runner.precision())
             .or_else(|| self.loaded.as_ref().map(|model| model.precision()))
     }
 
@@ -339,6 +351,7 @@ impl LazyOnnxTextClassifier {
             return Ok(());
         }
         self.loaded = None;
+        self.wolf_runner = None;
         self.loaded_backend = None;
         self.loaded_options = None;
 
@@ -716,6 +729,63 @@ mod tests {
         assert!(!classifier.is_loaded());
 
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn wolf_lazy_runner_resolves_nested_legacy_bundle_and_reuses_its_session() {
+        let dir = std::env::temp_dir().join(format!("ark-nested-wolf-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("l3/onnx/onnx_fp16")).unwrap();
+        struct Cleanup(std::path::PathBuf);
+        impl Drop for Cleanup {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+        let _cleanup = Cleanup(dir.clone());
+        std::fs::write(
+            dir.join("l3/onnx/onnx_fp16/model_fp16.onnx"),
+            include_bytes!("../../../ark-core/tests/fixtures/wolf_synthetic_fp16.onnx"),
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("l3/tokenizer.mmbpe"),
+            include_bytes!("../../../ark-core/tests/fixtures/tokenizer.mmbpe"),
+        )
+        .unwrap();
+        std::fs::write(dir.join("l3/config.json"), r#"{"num_labels":1}"#).unwrap();
+        let mut classifier = LazyOnnxTextClassifier::from_dir_with_paths(
+            &dir,
+            vec!["benign".into(), "attack".into()],
+            "wolf-defender-small",
+            &["l3/onnx/onnx_fp16/model_fp16.onnx"],
+            "l3/tokenizer.json",
+            256,
+        )
+        .unwrap()
+        .unwrap();
+        let output = classifier
+            .infer_wolf_document(
+                &" a".repeat(255),
+                0.8,
+                ExecutionBackend::Cpu,
+                OnnxRuntimeOptions::default(),
+            )
+            .unwrap();
+        assert_eq!(output.windows, 2);
+        assert_eq!(classifier.precision(), Some("fp16"));
+        assert!(classifier.loaded.is_none());
+        std::fs::remove_file(dir.join("l3/onnx/onnx_fp16/model_fp16.onnx")).unwrap();
+        classifier
+            .infer_wolf_document(
+                " a",
+                0.3,
+                ExecutionBackend::Cpu,
+                OnnxRuntimeOptions::default(),
+            )
+            .unwrap();
+        assert!(classifier.is_loaded());
+        classifier.force_unload();
+        assert!(!classifier.is_loaded());
     }
 
     fn fake_lazy_onnx_dir(name: &str) -> std::path::PathBuf {

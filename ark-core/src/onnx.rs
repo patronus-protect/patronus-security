@@ -70,13 +70,8 @@ pub fn warmup_runtime() -> bool {
     };
     let initialized = ort::init().with_global_thread_pool(threading).commit();
     #[cfg(ort_rc_10)]
-    {
-        initialized.unwrap_or(false)
-    }
-    #[cfg(not(ort_rc_10))]
-    {
-        initialized
-    }
+    let initialized = initialized.unwrap_or(false);
+    initialized
 }
 
 pub fn configured_session_builder(

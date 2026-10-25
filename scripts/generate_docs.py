@@ -877,8 +877,9 @@ def generate_rust_api_doc() -> str:
         ("Dynamic PII Types", ROOT / "rust/src/dynamic_pii.rs"),
         ("Result And Category Types", ROOT / "rust/src/types.rs"),
         ("Synchronous Core API", ROOT / "ark-core/src/scanner.rs"),
+        ("Core Cancellation And Deadlines", ROOT / "ark-core/src/control.rs"),
         ("Shared Native Types", ROOT / "ark-core/src/types.rs"),
-        ("Wolf FP16 Bundle Contract", ROOT / "ark-core/src/wolf.rs"),
+        ("Wolf Defender Runtime", ROOT / "ark-core/src/wolf.rs"),
         ("Asset Manifest Helpers", ROOT / "rust/src/assets/specs.rs"),
         ("Asset Download Helpers", ROOT / "rust/src/assets/download.rs"),
     ]

@@ -48,7 +48,8 @@ sending anything to a cloud service.
 ## Synchronous core
 
 The `patronus-ark-core` workspace crate provides queue-free PII, DLP and PI scanning,
-with optional offline Wolf FP16 inference. See [its API and bundle contract](ark-core/README.md).
+and supports local inference with Wolf Defender through the `wolf` Cargo feature.
+See [the Core API and model setup](ark-core/README.md).
 
 ## Installation
 

@@ -10,9 +10,10 @@ result shapes may be breaking for downstream users, and is called out explicitly
 ## Unreleased — synchronous core
 
 - Extract shared native PII/DLP/PI implementations into the MIT OR Apache-2.0 `patronus-ark-core` crate.
-- Add queue-free scans, explicit resource limits and optional offline Wolf Single FP16.
+- Add queue-free scans, explicit resource limits and local inference with Wolf Defender.
 - Correct dedicated Wolf document pooling to training-normalized logit Smooth Max (temperature 0.1); thresholds remain application policy.
-- Reuse existing dedicated Wolf FP16 assets and their pinned revision; an optional bundle manifest enables additional hash and reference checks.
+- Reuse existing Wolf assets and revisions, with selectable FP16 or INT8/INT4 exports. Preserve Ark's 254-content-token windows plus two boundary tokens; share the compact tokenizer cache and warm session.
+- Add typed cancellation and deadlines to Core scans, including cooperative termination of active ONNX Runtime runs. Existing scanner entry points remain available.
 
 ## [Unreleased]
 

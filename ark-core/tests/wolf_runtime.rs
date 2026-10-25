@@ -1,6 +1,6 @@
 #![cfg(feature = "wolf")]
 use patronus_ark_core::wolf::WolfConfig;
-use patronus_ark_core::{ScanError, Scanner, ScannerConfig};
+use patronus_ark_core::{ScanChecks, ScanError, Scanner, ScannerConfig};
 use std::{
     fs,
     path::PathBuf,
@@ -24,11 +24,11 @@ impl Bundle {
         .unwrap();
         fs::copy(source.join("tokenizer.mmbpe"), path.join("tokenizer.mmbpe")).unwrap();
         let reference: serde_json::Value = serde_json::from_str(
-            &fs::read_to_string(source.join("wolf_synthetic_reference.json")).unwrap(),
+            &fs::read_to_string(source.join("wolf_synthetic_reference_254.json")).unwrap(),
         )
         .unwrap();
         let entry = |name: &str| serde_json::json!({"path":name,"blake3":blake3::hash(&fs::read(path.join(name)).unwrap()).to_hex().to_string()});
-        let manifest = serde_json::json!({"schema_version":1,"model_id":"wolf-defender-small","revision":"synthetic-test-only","precision":"fp16","model":entry("model_fp16.onnx"),"tokenizer":entry("tokenizer.mmbpe"),"content_tokens":256,"sequence_tokens":258,"pad_id":0,"output_name":"logits","output":"scalar","reference":reference["reference"],"parity_cases":reference["parity_cases"],"logit_tolerance":0.02});
+        let manifest = serde_json::json!({"schema_version":1,"model_id":"wolf-defender-small","revision":"synthetic-test-only","precision":"fp16","model":entry("model_fp16.onnx"),"tokenizer":entry("tokenizer.mmbpe"),"content_tokens":254,"sequence_tokens":256,"pad_id":0,"output_name":"logits","output":"scalar","reference":reference["reference"],"parity_cases":reference["parity_cases"],"logit_tolerance":0.02});
         fs::write(
             path.join("wolf.manifest.json"),
             serde_json::to_vec(&manifest).unwrap(),
@@ -41,6 +41,7 @@ impl Bundle {
             wolf: Some(WolfConfig {
                 bundle_dir: self.0.clone(),
                 threshold,
+                precision: Default::default(),
                 backend: Default::default(),
                 runtime_options: Default::default(),
             }),
@@ -180,4 +181,114 @@ fn absent_manifest_does_not_accept_missing_or_broken_assets() {
         Scanner::new(bundle.config(0.5)),
         Err(ScanError::Asset(_))
     ));
+}
+
+#[test]
+fn sensitive_data_scope_never_runs_enabled_wolf_inference() {
+    let bundle = Bundle::new();
+    let mut scanner = Scanner::new(bundle.config(0.0)).unwrap();
+    let scoped = scanner
+        .scan_with_checks(
+            " a",
+            ScanChecks {
+                pii: true,
+                dlp: true,
+                injection: false,
+            },
+        )
+        .unwrap();
+    assert!(scoped.wolf.is_none());
+    assert!(scoped.native.iter().all(|r| r.category != "injection"));
+    let full = scanner.scan(" a").unwrap();
+    assert!(full.wolf.unwrap().matched);
+    assert!(scanner
+        .scan_with_checks(
+            " a",
+            ScanChecks {
+                pii: true,
+                dlp: true,
+                injection: false
+            }
+        )
+        .unwrap()
+        .wolf
+        .is_none());
+}
+
+#[test]
+fn legacy_manifest_keeps_integrity_without_overriding_254_content_profile() {
+    let bundle = Bundle::new();
+    let path = bundle.0.join("wolf.manifest.json");
+    let mut manifest: serde_json::Value =
+        serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    manifest["content_tokens"] = serde_json::json!(256);
+    manifest["sequence_tokens"] = serde_json::json!(258);
+    fs::write(&path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+    let mut runner =
+        patronus_ark_core::wolf::WolfRunner::new(&WolfConfig::new(&bundle.0, 0.8)).unwrap();
+    assert_eq!(runner.scan(&" a".repeat(254)).unwrap().windows, 1);
+    assert_eq!(runner.scan(&" a".repeat(255)).unwrap().windows, 2);
+    // Compatibility must not erase the manifest's file integrity check.
+    fs::write(bundle.0.join("model_fp16.onnx"), b"corrupt").unwrap();
+    assert!(matches!(
+        patronus_ark_core::wolf::WolfRunner::new(&WolfConfig::new(&bundle.0, 0.8)),
+        Err(ScanError::Asset(_))
+    ));
+}
+
+#[test]
+fn cancelled_or_expired_wolf_work_stops_with_typed_error_and_runner_is_reusable() {
+    use patronus_ark_core::{wolf::WolfRunner, ScanControl};
+    let bundle = Bundle::new();
+    let mut runner = WolfRunner::new(&WolfConfig::new(&bundle.0, 0.8)).unwrap();
+    let cancelled = ScanControl::default();
+    cancelled.cancel();
+    assert!(matches!(
+        runner.scan_with_control(" a", &cancelled),
+        Err(ScanError::Cancelled)
+    ));
+    let expired = ScanControl::with_timeout(std::time::Duration::ZERO).unwrap();
+    assert!(matches!(
+        runner.scan_with_control(" a", &expired),
+        Err(ScanError::DeadlineExceeded)
+    ));
+    let control = ScanControl::default();
+    let mut completed = 0;
+    let result =
+        runner.scan_with_progress_and_control(&" a".repeat(763), &control, &mut |update| {
+            if update.windows > 0 {
+                completed = update.windows;
+                control.cancel();
+            }
+        });
+    assert!(matches!(result, Err(ScanError::Cancelled)));
+    assert_eq!(completed, 1);
+    assert_eq!(runner.scan(" a").unwrap().windows, 1);
+}
+
+#[test]
+fn deadline_terminates_active_onnx_loop_and_same_runner_remains_usable() {
+    use patronus_ark_core::{wolf::WolfRunner, ScanControl};
+    let bundle = Bundle::new();
+    fs::remove_file(bundle.0.join("wolf.manifest.json")).unwrap();
+    fs::write(
+        bundle.0.join("model_fp16.onnx"),
+        include_bytes!("fixtures/wolf_cancellable.onnx"),
+    )
+    .unwrap();
+    fs::write(bundle.0.join("config.json"), r#"{"num_labels":1}"#).unwrap();
+    let mut runner = WolfRunner::new(&WolfConfig::new(&bundle.0, 0.8)).unwrap();
+    let control = ScanControl::with_timeout(std::time::Duration::from_millis(30)).unwrap();
+    assert!(matches!(
+        runner.scan_with_control(" a", &control),
+        Err(ScanError::DeadlineExceeded)
+    ));
+    // A fresh RunOptions must not inherit the previous invocation's terminate bit.
+    assert_eq!(
+        runner
+            .scan_with_control("", &ScanControl::default())
+            .unwrap()
+            .document_logit,
+        0.0
+    );
 }

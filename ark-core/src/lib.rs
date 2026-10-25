@@ -7,9 +7,11 @@ pub mod normalization;
 pub mod threat;
 mod types;
 pub use types::*;
+mod control;
 #[doc(hidden)]
 pub mod injection_l1;
 pub mod post_prediction;
+pub use control::ScanControl;
 mod scanner;
 pub use scanner::*;
 pub mod aggregation;

@@ -1611,6 +1611,17 @@ pub enum Category {
 No public documentation is available yet.
 
 ```rust
+pub struct ScanChecks {
+    pub pii: bool,
+    pub dlp: bool,
+    pub injection: bool,
+}
+```
+
+Per-call checks, intersected with the scanner's configured native categories.
+Wolf runs only when `injection` is enabled.
+
+```rust
 pub struct ScannerConfig {
     pub categories: Vec<Category>,
     pub rules: HashMap<String, bool>,
@@ -1639,6 +1650,10 @@ pub enum ScanError {
     FindingLimit { limit: usize },
     #[error("native detector failed: {0}")]
     Detector(String),
+    #[error("scan cancelled")]
+    Cancelled,
+    #[error("scan deadline exceeded")]
+    DeadlineExceeded,
     #[error("Wolf asset error: {0}")]
     Asset(String),
     #[error("Wolf inference failed: {0}")]
@@ -1685,6 +1700,67 @@ pub fn scan(&mut self, text: &str) -> Result<ScanReport, ScanError>;
 ```
 
 Run all configured stages synchronously. Any incomplete stage returns an error.
+
+```rust
+pub fn scan_with_checks(
+    &mut self,
+    text: &str,
+    checks: ScanChecks,
+) -> Result<ScanReport, ScanError>;
+```
+
+Run selected checks with the existing scanner and the same resource limits.
+Disabled checks do not invoke their native producers or Wolf inference.
+
+```rust
+pub fn scan_with_control(
+    &mut self,
+    text: &str,
+    checks: ScanChecks,
+    control: &crate::ScanControl,
+) -> Result<ScanReport, ScanError>;
+```
+
+Run selected checks under a shared cancellation/deadline budget.
+
+## Core Cancellation And Deadlines
+
+```rust
+pub struct ScanControl(Arc<State>);
+```
+
+A cloneable work budget. Cancellation also signals any registered native model run.
+Checkpoints stop further work; an ONNX kernel acknowledges termination cooperatively.
+
+```rust
+pub fn with_timeout(timeout: Duration) -> Result<Self, ScanError>;
+```
+
+No public documentation is available yet.
+
+```rust
+pub fn deadline(&self) -> Option<Instant>;
+```
+
+No public documentation is available yet.
+
+```rust
+pub fn cancel(&self);
+```
+
+No public documentation is available yet.
+
+```rust
+pub fn cancel_deadline(&self);
+```
+
+No public documentation is available yet.
+
+```rust
+pub fn check(&self) -> Result<(), ScanError>;
+```
+
+No public documentation is available yet.
 
 ## Shared Native Types
 
@@ -1933,12 +2009,25 @@ pub fn normalized(self) -> Self;
 
 No public documentation is available yet.
 
-## Wolf FP16 Bundle Contract
+## Wolf Defender Runtime
+
+```rust
+pub enum WolfPrecision {
+    #[default]
+    Auto,
+    Fp16,
+    Int8Int4,
+}
+```
+
+No public documentation is available yet.
 
 ```rust
 pub struct WolfConfig {
     pub bundle_dir: PathBuf,
     pub threshold: f64,
+    #[serde(default)]
+    pub precision: WolfPrecision,
     #[serde(default)]
     pub backend: crate::ExecutionBackend,
     #[serde(default)]
@@ -2068,6 +2157,12 @@ pub fn execution_provider(&self) -> &str;
 No public documentation is available yet.
 
 ```rust
+pub fn precision(&self) -> &str;
+```
+
+No public documentation is available yet.
+
+```rust
 pub fn model_path(&self) -> &Path;
 ```
 
@@ -2080,6 +2175,16 @@ pub fn scan(&mut self, text: &str) -> Result<WolfResult, ScanError>;
 No public documentation is available yet.
 
 ```rust
+pub fn scan_with_control(
+    &mut self,
+    text: &str,
+    control: &ScanControl,
+) -> Result<WolfResult, ScanError>;
+```
+
+Scan with cooperative cancellation and termination of active ONNX runs.
+
+```rust
 pub fn scan_with_progress(
     &mut self,
     text: &str,
@@ -2089,6 +2194,17 @@ pub fn scan_with_progress(
 
 Emit a start update and one update per window without retaining chunk outputs.
 Counting tokens first provides exact totals and uses bounded tokenizer memory.
+
+```rust
+pub fn scan_with_progress_and_control(
+    &mut self,
+    text: &str,
+    control: &ScanControl,
+    progress: &mut dyn FnMut(WolfProgress),
+) -> Result<WolfResult, ScanError>;
+```
+
+No public documentation is available yet.
 
 ```rust
 pub fn new(bundle_dir: impl Into<PathBuf>, threshold: f64) -> Self;

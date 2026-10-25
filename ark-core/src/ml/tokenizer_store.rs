@@ -31,7 +31,14 @@ impl TokenizerStore {
         if let Some(tok) = cache.get(&path) {
             return Ok(Arc::clone(tok));
         }
-        let tok = Arc::new(MmbertPairTokenizer::from_file(&path)?);
+        let tokenizer = if path.extension().is_some_and(|ext| ext == "json") {
+            let bytes = crate::assets::mmbert_tokenizer::compact_tokenizer_bytes(&path)
+                .map_err(|error| std::io::Error::other(error.to_string()))?;
+            MmbertPairTokenizer::from_bytes(&bytes)?
+        } else {
+            MmbertPairTokenizer::from_file(&path)?
+        };
+        let tok = Arc::new(tokenizer);
         cache.insert(path, Arc::clone(&tok));
         Ok(tok)
     }

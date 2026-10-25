@@ -1,8 +1,9 @@
 # Patronus Ark Core
 
 Synchronous local PII, DLP and prompt-injection scanning. The default build
-contains native detectors only; `wolf` adds offline Wolf Small FP16 inference.
-There is no request queue, L2 runtime, promotion router or background worker.
+contains native detectors only; the `wolf` feature enables local inference with
+Wolf Defender.
+There is no request queue, L2 runtime or promotion router.
 
 ```rust
 use patronus_ark_core::{Scanner, ScannerConfig};
@@ -16,6 +17,17 @@ post-prediction evidence filtering are shared with `patronus-ark`. Reports
 keep native findings and model results separate. A `Scanner` owns one warm
 session and takes `&mut self`; the host controls parallelism.
 
+`scan()` runs the configured stages. Hosts selecting checks per input can use
+`scan_with_checks(text, ScanChecks { pii, dlp, injection })` on the same scanner.
+Disabling `injection` skips both native PI producers and model inference; native
+checks still respect the configured categories, rule gates and resource limits.
+
+`scan_with_control(text, checks, &control)` accepts a shared `ScanControl` for
+cancellation and a configurable deadline. An active ONNX run receives Runtime
+termination; native stages stop at their next checkpoint. No partial report is
+returned on cancellation. A finite ONNX deadline uses a short-lived timer thread
+only while inference is active; ordinary scans create no timer.
+
 Default limits: 1 MiB per input and 10,000 actionable evidence spans. Limits
 are configurable; exceeding either returns an error, never a truncated clean
 report. Native text views and findings grow with input size. Wolf's working
@@ -24,7 +36,7 @@ model weights and the bounded tokenizer cache remain loaded. Individual
 unsplittable BPE pieces larger than 128 KiB are refused. They are never split
 at arbitrary byte positions, which would change training tokenization.
 
-## Wolf Single FP16
+## Wolf Defender
 
 Enable `wolf` and configure `WolfConfig::new(bundle_dir, threshold)`. The
 threshold is required, finite and in `[0,1]`, and applies to attack probability.
@@ -32,10 +44,13 @@ Loading and scanning never download assets. The default CPU profile uses one int
 `backend` and `runtime_options` share Ark's existing ONNX Runtime configuration;
 provider features are optional. Real export parity was verified on CPU.
 
-Use an existing local FP16 ONNX artifact with `tokenizer.mmbpe` or
+Use an existing local ONNX artifact with `tokenizer.mmbpe` or
 `tokenizer.json`. The JSON fallback uses the same converter in memory and
 writes no cache or metadata into the existing asset directory.
-Known FP16 directory layouts are discovered automatically; `config.json` supplies
+Set `precision` to `auto`, `fp16` or `int8_int4`. Auto retains Ark's preference
+for INT8/INT4, or FP16 when `PATRONUS_L3_PRECISION=fp16`; it falls back to the
+other available export. Explicit choices require that export. Existing directory
+layouts are discovered automatically; `config.json` supplies
 label and padding metadata, and `.patronus-revision` records asset provenance
 when available. Existing Ark assets keep their current revision and need no
 manifest migration. A short inference warms the configured backend on load.
@@ -44,7 +59,8 @@ An optional `wolf.manifest.json` can explicitly pin BLAKE3 hashes, model revisio
 output semantics, tokenization settings and numerical reference cases. When
 present, its constraints are validated. Missing required assets, incompatible
 inputs, non-finite outputs and failed optional reference checks are errors.
-The Single profile uses 256 content tokens plus BOS and EOS, overlap zero.
+The Ark profile uses 254 content tokens plus BOS and EOS (256 total), overlap zero.
+Old optional manifests cannot change this window width.
 Scalar outputs are binary attack logits; two-class outputs use the declared
 `[benign, attack]` margin.
 
@@ -73,21 +89,22 @@ a local ONNX Runtime inference. It generates no mandatory manifest, does not
 repin or download assets, and never overwrites an existing output directory.
 The helper leaves the application's explicit threshold unchanged.
 
-Run all published raw-logit, tokenizer and long-document reference cases explicitly:
+Compare the 254-token profile against an independent Hugging Face tokenizer and
+direct Rust ONNX Runtime oracle, including long documents:
 
 ```sh
 ARK_WOLF_BUNDLE=/path/to/bundle cargo test -p patronus-ark-core --features wolf \
-  published_fp16_matches_all_training_references -- --ignored
+  published_fp16_254_profile_matches_independent_hf_ort_oracle -- --ignored
 ```
 
-Those regression values live only in `tests/fixtures/wolf_published_reference.json`;
-they are not run on every production scanner startup.
+Historical 256-content-token reference values remain identified as that profile;
+they are not relabeled as 254-token references or run at production startup.
 
 Reference checks use absolute logit tolerance 0.02 plus relative tolerance
 0.005, and independently require at most 0.005 absolute probability error for the published FP16 artifact versus its FP32 reference.
 These are numerical export tolerances, not blocking thresholds. Dynamic
 sequence length avoids computing padding positions on short windows while
-retaining the 256-content-token maximum.
+retaining the 254-content-token maximum.
 
 MCP policy/runtime checks remain shared because they are part of Ark's existing
 DLP-L1 behavior. The separate Threat-category detector remains in full Ark.
@@ -101,7 +118,7 @@ not a Wolf checkpoint or evidence of classifier quality. Pooling reference
 values were generated from the supplied PyTorch Single training function.
 
 Existing Ark public imports are retained through re-exports. Dedicated Wolf
-uses the same Core document runner and selects the FP16 artifact from the
+uses the same Core document runner and precision selection from the
 existing pinned asset bundle. Compact-tokenizer preparation stays shared;
 no new manifest or asset revision is required. Other classifiers and the
 unified model keep their execution paths.

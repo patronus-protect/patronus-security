@@ -326,7 +326,13 @@ fn download_pipeline_model_assets(
 }
 
 pub(crate) fn selected_pipeline_model_files(asset: PipelineModelAssetSpec) -> Vec<&'static str> {
-    let fp16 = asset.model == "wolf-defender-small" || prefer_fp16_l3();
+    selected_pipeline_model_files_with_precision(asset, prefer_fp16_l3())
+}
+
+fn selected_pipeline_model_files_with_precision(
+    asset: PipelineModelAssetSpec,
+    fp16: bool,
+) -> Vec<&'static str> {
     let fp16_path = if asset.files.contains(&"onnx/onnx_fp16/model_fp16.onnx") {
         Some("onnx/onnx_fp16/model_fp16.onnx")
     } else if asset.files.contains(&"onnx/fp16/model_fp16.onnx") {
@@ -1306,6 +1312,20 @@ fn hf_token_path() -> Option<PathBuf> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn wolf_download_selection_respects_both_legacy_precisions() {
+        let asset = *crate::assets::specs::DEDICATED_L3_ASSETS
+            .iter()
+            .find(|asset| asset.model == "wolf-defender-small")
+            .unwrap();
+        let quantized = super::selected_pipeline_model_files_with_precision(asset, false);
+        assert!(quantized.contains(&"onnx/int8_int4_embeddings/model.onnx"));
+        assert!(!quantized.contains(&"onnx/onnx_fp16/model_fp16.onnx"));
+        let fp16 = super::selected_pipeline_model_files_with_precision(asset, true);
+        assert!(fp16.contains(&"onnx/onnx_fp16/model_fp16.onnx"));
+        assert!(!fp16.contains(&"onnx/int8_int4_embeddings/model.onnx"));
+        assert_eq!(asset.revision, "142fadc5474163d4c483cb761d5a6b02e3aa1741");
+    }
     use std::{
         fs,
         sync::{
