@@ -10,6 +10,9 @@ mod key_context;
 mod overlap;
 pub mod prefilter;
 mod rules;
+#[cfg(feature = "test-util")]
+#[doc(hidden)]
+pub use rules::documented_reference_metadata;
 pub mod score;
 pub mod secret_transfer;
 pub mod sensitive_material;

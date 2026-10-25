@@ -18,9 +18,9 @@ pub enum DocumentedKind {
 
 struct DocumentedValue {
     /// Entry id and rule of the YAML entry; read by the mirror test only.
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg_attr(not(feature = "test-util"), allow(dead_code))]
     id: &'static str,
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg_attr(not(feature = "test-util"), allow(dead_code))]
     rule_id: &'static str,
     kind: DocumentedKind,
     /// SHA-256 of [`normalize`]d value, lower-case hex.
@@ -187,47 +187,46 @@ fn is_documented_jwt(value: &str) -> bool {
     })
 }
 
+/// Metadata for the repository-level provenance mirror test.
+#[cfg(feature = "test-util")]
+#[doc(hidden)]
+pub fn documented_reference_metadata() -> Value {
+    let values: Vec<Value> = DOCUMENTED_VALUES
+        .iter()
+        .map(|value| {
+            serde_json::json!({
+                "id": value.id,
+                "rule_id": value.rule_id,
+                "sha256": value.sha256,
+                "kind": match value.kind {
+                    DocumentedKind::Example => "example",
+                    DocumentedKind::Test => "test",
+                },
+            })
+        })
+        .collect();
+    let claims: Vec<Value> = JWT_EXAMPLE_CLAIMS
+        .iter()
+        .map(|(id, claims)| {
+            let fields: serde_json::Map<String, Value> = claims
+                .iter()
+                .map(|(name, value)| {
+                    let value = match value {
+                        Claim::Str(value) => serde_json::json!(value),
+                        Claim::Int(value) => serde_json::json!(value),
+                    };
+                    (name.to_string(), value)
+                })
+                .collect();
+            serde_json::json!({"id": id, "claims": fields})
+        })
+        .collect();
+    serde_json::json!({"values": values, "jwt_claims": claims})
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{
-        documented_kind, normalize, Claim, DocumentedKind, DOCUMENTED_VALUES, JWT_EXAMPLE_CLAIMS,
-    };
-
-    #[test]
-    fn table_mirrors_research_documented_values_yaml() {
-        let path = concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../research/dlp/documented_values.yaml"
-        );
-        let yaml: serde_yaml::Value =
-            serde_yaml::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
-        let values = yaml["values"].as_sequence().unwrap();
-        assert_eq!(values.len(), DOCUMENTED_VALUES.len());
-        for (entry, documented) in values.iter().zip(DOCUMENTED_VALUES) {
-            assert_eq!(entry["id"].as_str(), Some(documented.id));
-            assert_eq!(entry["rule_id"].as_str(), Some(documented.rule_id));
-            assert_eq!(entry["sha256"].as_str(), Some(documented.sha256));
-            let kind = match documented.kind {
-                DocumentedKind::Example => "example",
-                DocumentedKind::Test => "test",
-            };
-            assert_eq!(entry["kind"].as_str(), Some(kind), "{}", documented.id);
-        }
-        let claims = yaml["jwt_claims"].as_sequence().unwrap();
-        assert_eq!(claims.len(), JWT_EXAMPLE_CLAIMS.len());
-        for (entry, (id, set)) in claims.iter().zip(JWT_EXAMPLE_CLAIMS) {
-            assert_eq!(entry["id"].as_str(), Some(*id));
-            let listed = entry["claims"].as_mapping().unwrap();
-            assert_eq!(listed.len(), set.len(), "{id}");
-            for (name, expected) in *set {
-                let found = &listed[*name];
-                match expected {
-                    Claim::Str(expected) => assert_eq!(found.as_str(), Some(*expected), "{id}"),
-                    Claim::Int(expected) => assert_eq!(found.as_i64(), Some(*expected), "{id}"),
-                }
-            }
-        }
-    }
+    use super::{documented_kind, normalize};
 
     #[test]
     fn normalization_of_hex_quotes_and_pem_bodies() {

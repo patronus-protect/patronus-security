@@ -103,3 +103,30 @@ def test_managed_redis_url_must_be_tls_authenticated_and_bounded():
             pass
         else:
             raise AssertionError(f"accepted invalid Redis URL: {value}")
+
+
+def test_image_build_context_contains_every_workspace_manifest():
+    """A new workspace crate must be both admitted and copied into each builder."""
+    import shlex
+    import tomllib
+
+    members = tomllib.loads((ROOT / "Cargo.toml").read_text())["workspace"]["members"]
+    ignore_rules = set((ROOT / ".dockerignore").read_text().splitlines())
+    for member in members:
+        assert f"!{member}/" in ignore_rules, f"{member} is excluded from Docker context"
+        assert (
+            f"!{member}/**" in ignore_rules
+            or f"!{member}/Cargo.toml" in ignore_rules
+        ), f"{member}/Cargo.toml is excluded from Docker context"
+    for image in ("ark-api", "ark-coordinator"):
+        sources = set()
+        for line in (ROOT / image / "Dockerfile").read_text().splitlines():
+            if not line.startswith("COPY "):
+                continue
+            words = shlex.split(line)
+            if not words[1].startswith("--from="):
+                sources.update(words[1:-1])
+        for member in members:
+            assert member in sources or f"{member}/Cargo.toml" in sources, (
+                f"{image} builder omits workspace manifest {member}/Cargo.toml"
+            )

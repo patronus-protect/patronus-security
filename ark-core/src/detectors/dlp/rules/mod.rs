@@ -35,6 +35,9 @@ mod content;
 mod credentials;
 mod crypto;
 mod documented;
+#[cfg(feature = "test-util")]
+#[doc(hidden)]
+pub use documented::documented_reference_metadata;
 mod hashes;
 mod http_auth;
 mod identifiers;
