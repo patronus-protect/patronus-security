@@ -99,6 +99,16 @@ const EXPECTED_ORDER: &[(&str, &str)] = &[
     ("pii_vat_id_hu", "VAT_ID_HU"),
     ("pii_vat_id_ie", "VAT_ID_IE"),
     ("pii_vat_id_lt", "VAT_ID_LT"),
+    ("pii_abn_au", "AU_ABN"),
+    ("pii_abn_au_context_free", "AU_ABN"),
+    ("pii_acn_au", "AU_ACN"),
+    ("pii_tfn_au", "AU_TFN"),
+    ("pii_medicare_au", "AU_MEDICARE"),
+    ("pii_medicare_au_context_free", "AU_MEDICARE"),
+    ("pii_nric_fin_sg", "SG_NRIC_FIN"),
+    ("pii_nric_fin_sg_context_free", "SG_NRIC_FIN"),
+    ("pii_uen_sg", "SG_UEN"),
+    ("pii_uen_sg_context_free", "SG_UEN"),
 ];
 
 #[test]

@@ -1350,6 +1350,168 @@
     }
   },
   {
+    "category": "pii",
+    "rule_id": "pii_abn_au",
+    "de": "Die ABN lautet 98 340 661 317.",
+    "en": "ABN: 51 824 753 556",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "ABN: 51 824 753 557",
+        "Vorgang 51824753556 wurde abgeschlossen."
+      ],
+      "en": [
+        "ABN: 52 824 753 556",
+        "Reference 51824753556 was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_abn_au_context_free",
+    "de": "Bitte an 53 004 085 616 fakturieren.",
+    "en": "Please invoice 51 824 753 556 by Friday.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die australische ABN ist 28 141 006 888.",
+        "en": "51 824 753 556 is our ABN."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_acn_au",
+    "de": "Als ACN ist 445 637 310 hinterlegt.",
+    "en": "ACN: 006 249 976",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "ACN: 824 753 557",
+        "Vorgang 135 506 071 wurde abgeschlossen."
+      ],
+      "en": [
+        "ACN: 135 506 072",
+        "Order 006249976 shipped."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_tfn_au",
+    "de": "Die TFN lautet 865 414 088.",
+    "en": "Tax File Number: 842781633",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "TFN: 876 543 211",
+        "Vorgang 842781633 wurde abgeschlossen."
+      ],
+      "en": [
+        "TFN: 111 111 111",
+        "Reference 842781633 was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_medicare_au",
+    "de": "Australische Medicare-Nummer: 4762228909",
+    "en": "Medicare number: 2123 45670 1",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Medicare-Nummer: 2123 25870 1",
+        "Vorgang 6431309681 wurde abgeschlossen."
+      ],
+      "en": [
+        "Medicare number: 7123456701",
+        "Reference 6431309681 was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_medicare_au_context_free",
+    "de": "Karte 5309 78617 6 liegt vor.",
+    "en": "Card 2123 45670 1 is on file.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die Medicare-Karte 5309 78617 6 liegt vor.",
+        "en": "2123 45670 1 is my Medicare card."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_nric_fin_sg",
+    "de": "NRIC: T1092579C",
+    "en": "The FIN on file is G0228472W.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "NRIC: G1122144L",
+        "Vorgang B1234567Z abgeschlossen."
+      ],
+      "en": [
+        "NRIC: S0642712A",
+        "Ticket B1234567Z was closed."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_nric_fin_sg_context_free",
+    "de": "Antragsteller T1092579C wurde genehmigt.",
+    "en": "Applicant F2346401L has been approved.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die NRIC des Antragstellers ist S0642712Z.",
+        "en": "M2570575T is her FIN."
+      },
+      "counter": {
+        "de": "Bestellnummer F2346401L",
+        "en": "Order number F2346401L"
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_uen_sg",
+    "de": "UEN: 21332689B",
+    "en": "The Unique Entity Number on file is 53125226D.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "UEN: 53125226E",
+        "Vorgang 53125226D abgeschlossen."
+      ],
+      "en": [
+        "UEN: 201434292E",
+        "Ticket 53125226D was closed."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_uen_sg_context_free",
+    "de": "Firma 201434292D, Singapur",
+    "en": "Supplier S57TU0392K, Singapore",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die UEN der Firma ist 201927806H.",
+        "en": "T61CH8475D is the supplier's UEN."
+      }
+    }
+  },
+  {
     "category": "dlp",
     "rule_id": "dlp_anthropic_key",
     "de": "<<secret\u003a0>>",

@@ -182,6 +182,22 @@ def test_uk_nhs_number_is_shared_with_presidio():
     assert entity_map.ark_label("NATIONALID") == "pii.uk.national_insurance_number"
 
 
+def test_au_and_sg_identifiers_are_shared_with_presidio():
+    # B-APAC: one label per numbering system, named like the Presidio entity.
+    entity_map = MODULE.load()
+    for entity_id, label in [
+        ("pii.au.abn", "AU_ABN"),
+        ("pii.au.acn", "AU_ACN"),
+        ("pii.au.tfn", "AU_TFN"),
+        ("pii.au.medicare", "AU_MEDICARE"),
+        ("pii.sg.nric_fin", "SG_NRIC_FIN"),
+        ("pii.sg.uen", "SG_UEN"),
+    ]:
+        assert entity_map.ark_label(label) == entity_id
+        assert entity_map.presidio_entity(label) == entity_id
+        assert entity_map.scope(entity_id) == "shared"
+
+
 # ── validation of malformed maps ─────────────────────────────────────────────
 
 
@@ -415,7 +431,7 @@ def test_checked_in_registry_order_matches_the_rust_order_test():
     expected = re.findall(r'\(\s*"(pii_\w+)",\s*"(\w+)",?\s*\)', rust_test)
     rules = _generate_docs().parse_native_patterns(MODULE.PII_SOURCE_PATH, "PiiPattern")
     assert [(rule["id"], rule["entity_group"]) for rule in rules] == expected
-    assert len(expected) == 86
+    assert len(expected) == 96
 
 
 def test_cli_check_succeeds_and_fails(tmp_path):
