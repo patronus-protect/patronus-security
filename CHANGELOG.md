@@ -109,6 +109,11 @@ result shapes may be breaking for downstream users, and is called out explicitly
   --engine ark-native`): 100 KiB p95 146.9 → 143.4 ms (−2.4 %, PASS, noise); the regexes use ASCII
   boundaries, the context-bound rules reuse the K03 lexicon gate. Golden eval: 1160/1160
   positives, 1060/1060 hard negatives; `pii_l1.jsonl` gains 124 rows.
+- **Detection change:** (PII L1, all modes) the six AU/SG context-bound rules keep a value whose
+  structural cell is exactly the value and whose key names the label, also next to numeric cells
+  (`tfn,age\n876543210,42`, `uen,postcode\n53125226D,123456`); before, the comma before a digit
+  read as a thousands separator and dropped it. Outside such a cell a value still has to stand
+  alone (PR #166 review).
 
 - United Kingdom identifiers (B-UK: A07, baseline P6, candidate C4). New label `NHS_NUMBER`:
   `pii_nhs_number_uk` reports ten digits with the NHS mod-11 check digit (`943 476 5919`,

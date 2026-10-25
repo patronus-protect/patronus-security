@@ -432,6 +432,25 @@ fn values_with_a_term_or_key_are_reported_in_every_mode() {
 }
 
 #[test]
+fn a_structural_cell_is_a_value_of_its_own_next_to_numeric_cells() {
+    // A CSV comma before a digit is a field boundary, not a thousands separator:
+    // the cell the key names is the whole value.
+    for (rule_id, text, value) in [
+        (ABN, "abn,age\n51824753556,42", "51824753556"),
+        (ACN, "acn,postcode\n006249976,2000", "006249976"),
+        (TFN, "tfn,age\n876543210,42", "876543210"),
+        (TFN, "age,tfn\n42,876543210", "876543210"),
+        (MEDICARE, "medicare_number,age\n6431309681,42", "6431309681"),
+        (NRIC_FIN, "nric,age\nS0642712Z,42", "S0642712Z"),
+        (UEN, "uen,postcode\n53125226D,123456", "53125226D"),
+    ] {
+        assert_reports(rule_id, text, value, &MODES);
+    }
+    // A cell that holds more than the value is still part of a longer number.
+    assert_silent("tfn,age\n876543210-4,42", "AU_TFN", &MODES);
+}
+
+#[test]
 fn values_need_a_term_a_valid_check_and_a_value_of_their_own() {
     for (label, text) in [
         // no term: the bare forms that are never context-free

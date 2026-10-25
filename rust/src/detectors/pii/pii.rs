@@ -570,13 +570,22 @@ impl NativeRegexDetector for PiiPipeline {
             "pii_ssn_us_proximity"
             | "pii_nhs_number_uk"
             | "pii_passport_number_uk"
-            | "pii_passport_number_two_letters"
-            | "pii_abn_au"
-            | "pii_acn_au"
-            | "pii_tfn_au"
-            | "pii_medicare_au"
-            | "pii_nric_fin_sg"
-            | "pii_uen_sg" => context::stands_alone(text, captures.get(0).unwrap().range()),
+            | "pii_passport_number_two_letters" => {
+                context::stands_alone(text, captures.get(0).unwrap().range())
+            }
+            // A cell whose key names the label is the whole value, also between
+            // numeric cells (`tfn,age\n876543210,42`).
+            "pii_abn_au" | "pii_acn_au" | "pii_tfn_au" | "pii_medicare_au" | "pii_nric_fin_sg"
+            | "pii_uen_sg" => {
+                let value = captures.get(0).unwrap().range();
+                context::structure_evidence(
+                    prepared.structure(),
+                    value.clone(),
+                    pattern.entity_group,
+                )
+                .is_some_and(|evidence| evidence.context.supports())
+                    || context::stands_alone(text, value)
+            }
             "pii_passport_number_de_context_free" | "pii_identity_card_number_de_context_free" => {
                 !context::foreign_field(
                     prepared.structure(),
