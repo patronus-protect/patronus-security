@@ -2837,6 +2837,39 @@ B_APAC_CASES = [
 for _row in B_APAC_CASES:
     PII_CASES.setdefault(_row["target_label"], []).append(_row)
 
+# F18 NANP extensions (baseline bucket P5, candidate C3): an extension right after a NANP
+# number (`345-899-3560x4587`, `ext. 123`, `extension 12`) belongs to the span of
+# `pii_phone_us`, and a `+1` number with ten digits keeps it in `pii_phone_international`
+# (`+1-604-696-5272x565` was cut to `+1-604-696`). A bare `x` or `ext` without digits ends
+# the span before it. Hard negatives are letters attached to a number, extensions without a
+# number and numbers the unchanged validator rejects. Appended so existing ids stay stable.
+F18_PHONE_EXTENSION_CASES = [
+    p("PHONE", "de", "pii_phone_us", "Telefon (USA): ", "345-899-3560x4587"),
+    p("PHONE", "de", "pii_phone_us", "Büro New York: ", "212-736-4410 Ext. 123"),
+    p("PHONE", "de", "pii_phone_us", "Rückruf unter ", "+1-604-696-5272x565", " erbeten.", carrier="prose"),
+    p("PHONE", "de", "pii_phone_us", '{"telefon_us": "', "(303) 499-7111 ext 42", '"}', carrier="json"),
+    p("PHONE", "de", "pii_phone_us", "Name;Telefon\nMiller;", "206-386-4636x7", "", carrier="csv"),
+    p("PHONE", "de", "pii_phone_us", "US-Hotline: ", "1-800-123-4567", " Ext. bitte erfragen"),
+    p("PHONE", "en", "pii_phone_us", "Phone: ", "345-899-3560x4587"),
+    p("PHONE", "en", "pii_phone_us", "Call me at ", "+1-604-696-5272x565", " tomorrow.", carrier="prose", tags=("no_context",)),
+    p("PHONE", "en", "pii_phone_us", "Office: ", "(212) 736-4410 ext 204"),
+    p("PHONE", "en", "pii_phone_us", "Support line ", "1-800-959-5525 extension 12", " is open 24/7.", carrier="prose"),
+    p("PHONE", "en", "pii_phone_us", "Fax: ", "(579)888-3058x12"),
+    p("PHONE", "en", "pii_phone_us", "Phone: ", "646-273-9915", " ext (ask reception)"),
+    n("PHONE", "de", "pii_phone_us", "Artikelcode 212-736-4410XL", "size suffix attached to a number"),
+    n("PHONE", "de", "pii_phone_us", "Durchwahl: ext. 4587", "extension without a number"),
+    n("PHONE", "de", "pii_phone_us", "Telefon: (111) 111-1111 x12", "repeated digits with an extension"),
+    n("PHONE", "de", "pii_phone_us", "Bestellnummer 2026-104-88x12", "order number with too few digits and a suffix"),
+    n("PHONE", "de", "pii_phone_us", "Bildschirm mit 1920x1080 Pixeln", "resolution, not an extension", carrier="prose"),
+    n("PHONE", "en", "pii_phone_us", "SKU 646-273-9915xl", "size suffix attached to a number"),
+    n("PHONE", "en", "pii_phone_us", "Extension x4587 only", "extension without a number"),
+    n("PHONE", "en", "pii_phone_us", "Phone: 999-999-9999 ext. 12", "repeated digits with an extension"),
+    n("PHONE", "en", "pii_phone_us", "Phone: XXX-XXX-XXXX x123", "masked number with an extension", tags=("obfuscated",)),
+    n("PHONE", "en", "pii_phone_us", "Ticket 1800-123-4567x5", "ticket number without NANP grouping"),
+]
+for _row in F18_PHONE_EXTENSION_CASES:
+    PII_CASES[_row["target_label"]].append(_row)
+
 # DLP golden schema v2 (E13). Every DLP row names the rule it exercises (`rule_id`), the
 # document that carries the value (`carrier`), its difficulty `tags` and whether it is a
 # `known_gap`: a positive the detector misses today, reported by 13_l1_golden_eval but
