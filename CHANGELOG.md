@@ -7,15 +7,16 @@ All notable changes to this project are documented here. The format is based on
 This project is **pre-1.0**: any change to detection thresholds, the asset manifest, or public
 result shapes may be breaking for downstream users, and is called out explicitly below.
 
-## Unreleased — synchronous core
+## [Unreleased]
+
+### Synchronous Core
 
 - Extract shared native PII/DLP/PI implementations into the MIT OR Apache-2.0 `patronus-ark-core` crate.
 - Add queue-free scans, explicit resource limits and local inference with Wolf Defender.
-- Correct dedicated Wolf document pooling to training-normalized logit Smooth Max (temperature 0.1); thresholds remain application policy.
-- Reuse existing Wolf assets and revisions, with selectable FP16 or INT8/INT4 exports. Preserve Ark's 254-content-token windows plus two boundary tokens; share the compact tokenizer cache and warm session.
+- Correct dedicated Wolf document pooling to normalized logit Smooth Max (temperature 0.1); thresholds remain application policy. The 254-content-token profile is checked against an independent tokenizer/direct-ORT oracle; archived 256-content-token PyTorch document references do not establish parity for that profile.
+- Reuse existing Wolf assets and revisions, with selectable FP16 or INT8/INT4 exports. Preserve Ark's 254-content-token windows plus two boundary tokens; share the process-wide compact tokenizer cache and reuse each scanner's own warmed Wolf session.
 - Add typed cancellation and deadlines to Core scans, including cooperative termination of active ONNX Runtime runs. Existing scanner entry points remain available.
-
-## [Unreleased]
+- Add explicit asset preparation through `warmup::prepare_assets` and `Scanner::warmup`, using the Wolf cache preparation shared with full Ark. `DownloadPolicy::Never` is the default; `Missing` requires the `download` feature to fetch absent files from the existing pinned revision. Preparation creates no tokenizer or ONNX session; warmup constructs the reusable scanner and verifies the configured backend with an initial inference. Subsequent scans remain offline. The preparation timeout covers cache-lock waiting, downloads and retries, not model construction.
 
 ### Changed
 
@@ -211,7 +212,7 @@ result shapes may be breaking for downstream users, and is called out explicitly
   `pii_l1.jsonl` gains 128 rows and the known gap `NI number: JK 55 66 77 B` closes.
 
 - UK passport numbers are nine digits (B-UK review, PR #165): `pii_passport_number_uk` and
-  `validators::uk_passport_number` now read nine digits as HM Passport Office numbers the 2015 and
+  `validators::nine_digits` now read nine digits as HM Passport Office numbers the 2015 and
   later designs (`Her UK passport 123456789 expires in 2031.`) instead of two letters and seven
   digits, and reject one repeated digit. The two-letter form moves to its own rule,
   `pii_passport_number_two_letters` (`validators::passport_number_two_letters`; Irish and Japanese
@@ -221,13 +222,13 @@ result shapes may be breaking for downstream users, and is called out explicitly
   under `pii_passport_number_two_letters`.
 
 - US Social Security Numbers beyond the field name (B-SSN: T25, F07; baseline P1). Two rules join
-  the field-bound `pii_ssn_us` in `rust/src/detectors/pii/us.rs`. `pii_ssn_us_proximity` reports
+  the field-bound `pii_ssn_us` in `ark-core/src/detectors/pii/us.rs`. `pii_ssn_us_proximity` reports
   `AAA-GG-SSSS` (hyphens, dots or spaces) and nine digits without separators in every mode when an
   SSN term stands near the value (`Social Security Number (SSN) 861-18-8883`, `… Social Security
   Number (800-40-3880)`, `Als SSN ist … hinterlegt`, `536-90-4421 is my SSN`) or is its structural
   key (`"ssn": …`, `ssn=…`, `<SSN>`, a CSV column); `pii_ssn_us_context_free` reports the grouped
   form without a term in `balanced` and `recall` only (score 0.50, as presidio-analyzer reports it
-  context-free). It is the one format-only `scored_only` rule: the separators and SSA ranges stand
+  context-free). It is a format-only `scored_only` rule: the separators and SSA ranges stand
   in for a check digit, and without a term `validators::us_ssn_context_free` also rejects the
   placeholders presidio-analyzer rejects in any context (one repeated digit as in `111-11-1111`, the
   counting sequence `123-45-6789`). A nearer counter-context term (order, reference, invoice, tracking, part or
@@ -291,7 +292,7 @@ result shapes may be breaking for downstream users, and is called out explicitly
   that case is now dropped. A bare value after a `;` runs to the next `;` even past a ` key=`
   (`Server=db;Password=Kx7pQ2vL9! part=Wm3zR8tQ4yN1;`). It is no longer cut at the libpq key.
 - Add VAT identification numbers for LU, LV, MT, PL, PT, RO, SE, SI, SK, NO and GB (B16), one label
-  and one check-digit validator per country in `rust/src/detectors/pii/vat.rs`, built like B01:
+  and one check-digit validator per country in `ark-core/src/detectors/pii/vat.rs`, built like B01:
   `VAT_ID_LU` (first six mod 89), `VAT_ID_LV` (legal entities, weighted mod 11), `VAT_ID_MT`
   (weighted mod 37), `VAT_ID_PL` (NIP, weighted mod 11), `VAT_ID_PT` (NIF, weighted mod 11),
   `VAT_ID_RO` (CUI, weighted mod 11, six to ten digits), `VAT_ID_SE` (organisation number with Luhn

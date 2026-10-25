@@ -148,7 +148,13 @@ def _field(block: str, name: str) -> str:
     match = re.search(rf"{name}:\s*([^,\n]+)", block)
     if not match:
         raise ValueError(f"Missing {name} in AssetSpec block")
-    return match.group(1).strip()
+    value = match.group(1).strip()
+    # Runtime and documentation use the same official model metadata.
+    if "patronus_ark_core::warmup::" in value:
+        constants = (ROOT / "ark-core/src/warmup.rs").read_text()
+        for constant, literal in re.findall(r'pub const (WOLF_\w+): &str\s*=\s*"([^"\n]+)";', constants):
+            value = value.replace(f"patronus_ark_core::warmup::{constant}", json.dumps(literal))
+    return value
 
 
 def parse_native_patterns(
@@ -877,6 +883,7 @@ def generate_rust_api_doc() -> str:
         ("Dynamic PII Types", ROOT / "rust/src/dynamic_pii.rs"),
         ("Result And Category Types", ROOT / "rust/src/types.rs"),
         ("Synchronous Core API", ROOT / "ark-core/src/scanner.rs"),
+        ("Core Asset Preparation And Warmup", ROOT / "ark-core/src/warmup.rs"),
         ("Core Cancellation And Deadlines", ROOT / "ark-core/src/control.rs"),
         ("Shared Native Types", ROOT / "ark-core/src/types.rs"),
         ("Wolf Defender Runtime", ROOT / "ark-core/src/wolf.rs"),

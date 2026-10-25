@@ -36,11 +36,52 @@ model weights and the bounded tokenizer cache remain loaded. Individual
 unsplittable BPE pieces larger than 128 KiB are refused. They are never split
 at arbitrary byte positions, which would change training tokenization.
 
+## Asset preparation and warmup
+
+The `download` feature enables the shared Ark asset downloader and includes Wolf
+inference. Native-only builds retain no HTTP client or ONNX dependency.
+
+```rust
+use patronus_ark_core::{DownloadPolicy, Scanner, ScannerConfig, WarmupOptions};
+use patronus_ark_core::wolf::WolfConfig;
+
+let mut config = ScannerConfig::default();
+config.wolf = Some(WolfConfig::new("/srv/models/wolf-defender", 0.8));
+let mut scanner = Scanner::warmup(config, WarmupOptions {
+    download: DownloadPolicy::Missing,
+    ..WarmupOptions::default()
+})?;
+let report = scanner.scan("Please summarize the meeting agenda.")?;
+# Ok::<(), patronus_ark_core::ScanError>(())
+```
+
+`Scanner::warmup` prepares missing official files, then creates one warm scanner.
+Subsequent scans reuse that session. Client/provider guards can share the scanner;
+requests, tool steps and token windows do not create sessions or rerun warmup.
+Restarting or creating a new scanner warms its own session; assets stay cached.
+
+`WarmupOptions::default()` uses `download = "never"`. Existing complete local
+bundles are accepted without a new pin, manifest or writes to the bundle.
+`download = "missing"` uses the existing official Wolf revision when an empty or
+trusted managed cache needs files. Unknown incomplete local bundles are rejected
+rather than mixed with official files: supply their matching assets or use an
+empty cache directory. Managed preparation uses file locks and atomically
+publishes completion metadata; partial downloads are not ready assets.
+
+`download_timeout_ms` defaults to `600000`. It budgets preparation lock waiting,
+HTTP retries and reads, not ONNX session construction. OS DNS and filesystem
+operations follow their system behavior. Errors prevent scanner startup.
+
+For separate delivery/startup phases, call
+`warmup::prepare_assets(&config, &options)` first, then `Scanner::new(config)`.
+Preparation creates no tokenizer or model session. Full Ark's existing
+`prepare_assets()` and `warmup()` reuse the same Wolf preparation and transport.
+
 ## Wolf Defender
 
 Enable `wolf` and configure `WolfConfig::new(bundle_dir, threshold)`. The
 threshold is required, finite and in `[0,1]`, and applies to attack probability.
-Loading and scanning never download assets. The default CPU profile uses one intra-op and one inter-op thread.
+`Scanner::new` and scanning never download assets. The default CPU profile uses one intra-op and one inter-op thread.
 `backend` and `runtime_options` share Ark's existing ONNX Runtime configuration;
 provider features are optional. Real export parity was verified on CPU.
 

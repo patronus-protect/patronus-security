@@ -11,7 +11,8 @@ repository = "https://github.com/patronus-protect/patronus-security"
 [features]
 default = []
 test-util = []
-wolf = ["dep:ort", "dep:half", "dep:blake3"]
+wolf = ["dep:ort", "dep:half", "dep:blake3", "dep:fs2"]
+download = ["wolf", "dep:ureq", "dep:dirs"]
 onnx-coreml = ["wolf", "ort/coreml"]
 onnx-cuda = ["wolf", "ort/cuda"]
 onnx-directml = ["wolf", "ort/directml"]
@@ -33,6 +34,9 @@ thiserror = "1"
 ort = { version = "2.0.0-rc.13", optional = true, default-features = false, features = ["std", "ndarray", "tracing", "download-binaries", "tls-rustls", "copy-dylibs", "api-24", "half"] }
 half = { version = "2.1", optional = true }
 blake3 = { version = "1.5", optional = true }
+ureq = { version = "2.12", optional = true }
+dirs = { version = "5", optional = true }
+fs2 = { version = "0.4", optional = true }
 
 [dev-dependencies]
 serde_yaml = "0.9"

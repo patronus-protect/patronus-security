@@ -130,27 +130,8 @@ pub struct WolfRunner {
 }
 impl WolfRunner {
     pub fn new(config: &WolfConfig) -> Result<Self, ScanError> {
-        if !config.threshold.is_finite() || !(0.0..=1.0).contains(&config.threshold) {
-            return Err(ScanError::Config("Wolf threshold must be in [0,1]".into()));
-        }
-        let manifest_path = config.bundle_dir.join("wolf.manifest.json");
-        let supplied_manifest = match fs::File::open(&manifest_path) {
-            Ok(file) => {
-                if file.metadata().map_err(asset)?.len() > 1024 * 1024 {
-                    return Err(asset("Wolf manifest exceeds 1 MiB"));
-                }
-                let manifest: WolfManifest = serde_json::from_reader(file).map_err(asset)?;
-                validate_manifest(&manifest)?;
-                Some(manifest)
-            }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
-            Err(error) => return Err(asset(error)),
-        };
-        let manifest = existing_assets(
-            &config.bundle_dir,
-            config.precision,
-            supplied_manifest.as_ref(),
-        )?;
+        config.validate()?;
+        let manifest = asset_manifest(config)?;
         let optional_integrity = !manifest.model.blake3.is_empty();
         let model = if optional_integrity {
             verified_file(&config.bundle_dir, &manifest.model)?
@@ -483,7 +464,49 @@ fn validate_manifest(manifest: &WolfManifest) -> Result<(), ScanError> {
     Ok(())
 }
 
-fn precision_order(requested: WolfPrecision, prefer_fp16: bool) -> &'static [WolfPrecision] {
+pub(crate) fn asset_manifest(config: &WolfConfig) -> Result<WolfManifest, ScanError> {
+    asset_manifest_at(&config.bundle_dir, config.precision)
+}
+
+pub(crate) fn asset_manifest_at(
+    bundle_dir: &Path,
+    precision: WolfPrecision,
+) -> Result<WolfManifest, ScanError> {
+    let manifest_path = bundle_dir.join("wolf.manifest.json");
+    let supplied_manifest = match fs::File::open(&manifest_path) {
+        Ok(file) => {
+            if file.metadata().map_err(asset)?.len() > 1024 * 1024 {
+                return Err(asset("Wolf manifest exceeds 1 MiB"));
+            }
+            let manifest: WolfManifest = serde_json::from_reader(file).map_err(asset)?;
+            validate_manifest(&manifest)?;
+            Some(manifest)
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => return Err(asset(error)),
+    };
+    existing_assets(bundle_dir, precision, supplied_manifest.as_ref())
+}
+
+pub(crate) fn model_paths(precision: WolfPrecision) -> &'static [&'static str] {
+    match precision {
+        WolfPrecision::Fp16 => &[
+            crate::warmup::WOLF_FP16_FILE,
+            "onnx/fp16/model_fp16.onnx",
+            "model_fp16.onnx",
+        ],
+        WolfPrecision::Int8Int4 => &[
+            crate::warmup::WOLF_QUANTIZED_FILE,
+            "model_int4_embeddings_int8.onnx",
+        ],
+        WolfPrecision::Auto => &[],
+    }
+}
+
+pub(crate) fn precision_order(
+    requested: WolfPrecision,
+    prefer_fp16: bool,
+) -> &'static [WolfPrecision] {
     match requested {
         WolfPrecision::Fp16 => &[WolfPrecision::Fp16],
         WolfPrecision::Int8Int4 => &[WolfPrecision::Int8Int4],
@@ -508,18 +531,7 @@ fn existing_assets(
             // missing or corrupt declared files must not silently bypass integrity.
             return Ok(manifest.clone());
         }
-        let paths: &[&str] = match precision {
-            WolfPrecision::Fp16 => &[
-                "onnx/onnx_fp16/model_fp16.onnx",
-                "onnx/fp16/model_fp16.onnx",
-                "model_fp16.onnx",
-            ],
-            WolfPrecision::Int8Int4 => &[
-                "onnx/int8_int4_embeddings/model.onnx",
-                "model_int4_embeddings_int8.onnx",
-            ],
-            WolfPrecision::Auto => unreachable!(),
-        };
+        let paths = model_paths(precision);
         if let Some(path) = paths.iter().find(|path| base.join(path).is_file()) {
             selected = Some((*path, precision));
             break;
@@ -612,6 +624,13 @@ fn session_input_names(session: &Session) -> Vec<String> {
 }
 
 impl WolfConfig {
+    pub(crate) fn validate(&self) -> Result<(), ScanError> {
+        if !self.threshold.is_finite() || !(0.0..=1.0).contains(&self.threshold) {
+            return Err(ScanError::Config("Wolf threshold must be in [0,1]".into()));
+        }
+        Ok(())
+    }
+
     pub fn new(bundle_dir: impl Into<PathBuf>, threshold: f64) -> Self {
         Self {
             bundle_dir: bundle_dir.into(),

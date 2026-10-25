@@ -1723,6 +1723,82 @@ pub fn scan_with_control(
 
 Run selected checks under a shared cancellation/deadline budget.
 
+## Core Asset Preparation And Warmup
+
+```rust
+pub fn wolf_files(precision: crate::wolf::WolfPrecision) -> &'static [&'static str];
+```
+
+Required files for an official export, also used by Ark's category preparation.
+
+```rust
+pub enum DownloadPolicy {
+    #[default]
+    Never,
+    Missing,
+}
+```
+
+No public documentation is available yet.
+
+```rust
+pub struct WarmupOptions {
+    pub download: DownloadPolicy,
+    /// Budget for asset lock waiting, downloads and retries; not model construction.
+    pub download_timeout_ms: u64,
+}
+```
+
+No public documentation is available yet.
+
+```rust
+pub fn warmup(config: ScannerConfig, options: WarmupOptions) -> Result<Self, ScanError>;
+```
+
+Prepare configured assets, then construct one warm scanner used by subsequent scans.
+
+```rust
+pub fn prepare_assets(config: &ScannerConfig, options: &WarmupOptions) -> Result<(), ScanError>;
+```
+
+Prepare model files without creating a tokenizer, ONNX session or scanner.
+
+```rust
+pub fn wolf_assets_present(dir: &Path, precision: WolfPrecision) -> Result<bool, ScanError>;
+```
+
+Nonblocking readiness. A cache being prepared, or an unfinished managed cache, is not ready.
+
+```rust
+pub fn prepare_wolf_cache(
+    dir: &Path,
+    precision: WolfPrecision,
+    options: &WarmupOptions,
+    progress: Option<&(dyn Fn(usize, usize) + Send + Sync)>,
+) -> Result<(), ScanError>;
+```
+
+Prepare a cache without constructing a decision policy, tokenizer or ONNX session.
+
+```rust
+pub fn prepare_wolf_assets(
+    config: &crate::wolf::WolfConfig,
+    options: &WarmupOptions,
+) -> Result<(), ScanError>;
+```
+
+No public documentation is available yet.
+
+```rust
+pub fn prepare_wolf_assets_with_progress(
+    config: &crate::wolf::WolfConfig,
+    options: &WarmupOptions,
+    progress: Option<&(dyn Fn(usize, usize) + Send + Sync)>,
+) -> Result<(), ScanError>;
+```
+
+No public documentation is available yet.
+
 ## Core Cancellation And Deadlines
 
 ```rust

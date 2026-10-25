@@ -87,6 +87,26 @@ impl Default for ScannerConfig {
     }
 }
 impl ScannerConfig {
+    pub(crate) fn validate(&self) -> Result<(), ScanError> {
+        if self.max_input_bytes == 0 || self.max_findings == 0 || self.categories.is_empty() {
+            return Err(ScanError::Config(
+                "categories and positive resource limits are required".into(),
+            ));
+        }
+        if self
+            .categories
+            .iter()
+            .enumerate()
+            .any(|(i, c)| self.categories[..i].contains(c))
+        {
+            return Err(ScanError::Config("duplicate category".into()));
+        }
+        #[cfg(feature = "wolf")]
+        if let Some(wolf) = &self.wolf {
+            wolf.validate()?;
+        }
+        Ok(())
+    }
     fn allows_rule(&self, id: &str) -> bool {
         self.rules
             .get(id)
@@ -138,19 +158,7 @@ pub struct Scanner {
 impl Scanner {
     /// Initialize native detectors and warm/verify an explicitly configured local Wolf bundle.
     pub fn new(config: ScannerConfig) -> Result<Self, ScanError> {
-        if config.max_input_bytes == 0 || config.max_findings == 0 || config.categories.is_empty() {
-            return Err(ScanError::Config(
-                "categories and positive resource limits are required".into(),
-            ));
-        }
-        if config
-            .categories
-            .iter()
-            .enumerate()
-            .any(|(i, c)| config.categories[..i].contains(c))
-        {
-            return Err(ScanError::Config("duplicate category".into()));
-        }
+        config.validate()?;
         let mut producers: Vec<(&'static str, Producer)> = Vec::new();
         macro_rules! add {
             ($ty:path,$id:literal) => {{

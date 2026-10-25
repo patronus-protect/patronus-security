@@ -22,16 +22,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@1.98.0
         with:
           components: clippy, rustfmt
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Validate release branch and tag
+        env:
+          RELEASE_CHANNEL: ${{ inputs.channel }}
+        run: python scripts/check_release_source.py
       - run: cargo fmt --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test -p patronus-ark-core --no-default-features
       - run: cargo test -p patronus-ark-core --features wolf
+      - run: cargo test -p patronus-ark-core --features download
       - run: cargo test -p patronus-ark
       - run: cargo test -p ark-api
       - run: cargo test -p ark-coordinator
