@@ -2,7 +2,8 @@
 //! Field-bound personal identifiers in German and English documents: employee, customer,
 //! patient, student and applicant IDs, usernames, dates of birth, account numbers. Employee
 //! and customer IDs, usernames, dates of birth and account numbers also accept FR/ES/IT/NL
-//! field names (T26).
+//! field names (T26). Account numbers include the BBAN and the US routing number under
+//! its field name, with or without its ABA check digit (B-ACCT).
 use super::{pii::PiiPattern, score::ValidatorStrength, validators};
 
 // ── Anchor-gebundene Personenkennungen ─────────────────────────────────
@@ -44,7 +45,7 @@ pub(super) const EMPLOYEE_ID_PREFIXED: PiiPattern = PiiPattern {
 
 pub(super) const CUSTOMER_ID: PiiPattern = PiiPattern {
     name: "pii_customer_id",
-    pattern: r"(?i)\b(?:kundennummer|kunden[-_ ]?id|debitor(?:ennummer)?|customer[ \t]+(?:id|number)|(?:num(?:é|e)ro|id|identifiant)[ \t]+(?:de[ \t]+|du[ \t]+)?client|r(?:é|e)f(?:é|e)rence[ \t]+client|(?:n(?:ú|u)mero|id|c(?:ó|o)digo|codice|identificador)[ \t]+(?:del?[ \t]+)?cliente|klant(?:en)?nummer|klant[-_ \t]?id)\b[ \t]*(?:is[ \t]*)?[:#=\-]?[ \t]*(?P<value>[A-Z0-9](?:[A-Z0-9._/-]{1,30}[A-Z0-9])?)\b",
+    pattern: r"(?i)\b(?:kundennummer|kunden[-_ ]?id|debitor(?:ennummer)?|customer[ \t_-]+(?:id|number)|(?:num(?:é|e)ro|id|identifiant)[ \t]+(?:de[ \t]+|du[ \t]+)?client|r(?:é|e)f(?:é|e)rence[ \t]+client|(?:n(?:ú|u)mero|id|c(?:ó|o)digo|codice|identificador)[ \t]+(?:del?[ \t]+)?cliente|klant(?:en)?nummer|klant[-_ \t]?id)\b[ \t]*(?:is[ \t]*)?[:#=\-]?[ \t]*(?P<value>[A-Z0-9](?:[A-Z0-9._/-]{1,30}[A-Z0-9])?)\b",
     entity_group: "CUSTOMER_ID",
     validator: Some(validators::bounded_identifier),
     strength: ValidatorStrength::Format,
@@ -142,7 +143,7 @@ pub(super) const DATE_OF_BIRTH_WRITTEN_MONTH_FIRST: PiiPattern = PiiPattern {
 
 pub(super) const FINANCIAL_ACCOUNT_NUMBER: PiiPattern = PiiPattern {
     name: "pii_financial_account_number",
-    pattern: r"(?i)\b(?:kontonummer|konto[-_ ]?nr|depotnummer|depot[-_ ]?nr|account[ \t]+number|bank[ \t]+account|num(?:é|e)ro[ \t]+de[ \t]+compte(?:[ \t]+bancaire)?|compte[ \t]+bancaire|n(?:ú|u)mero[ \t]+de[ \t]+cuenta(?:[ \t]+bancaria)?|cuenta[ \t]+bancaria|numero[ \t]+(?:di|del)[ \t]+conto(?:[ \t]+corrente)?|conto[ \t]+corrente|(?:bank)?rekening[-_ \t]?(?:nummer|nr))\b[ \t]*(?:is[ \t]*)?[:#=\-]?[ \t]*(?P<value>[A-Z0-9](?:[A-Z0-9._/-]{1,30}[A-Z0-9])?)\b",
+    pattern: r"(?i)\b(?:kontonummer|konto[-_ ]?nr|depotnummer|depot[-_ ]?nr|account[ \t]+number|bank[ \t]+account|bban(?:[ \t]+number)?|acct[ \t]*(?:number|no|id)|(?:(?:bank|aba)[ \t]+)?routing[ \t]+(?:transit[ \t]+)?(?:number|no)|aba[ \t]+number|(?:routing|aba)[-_ ]?nummer|num(?:é|e)ro[ \t]+de[ \t]+compte(?:[ \t]+bancaire)?|compte[ \t]+bancaire|num(?:é|e)ro[ \t]+(?:de[ \t]+routage|d['’]acheminement)(?:[ \t]+de[ \t]+la[ \t]+banque)?|n(?:ú|u)mero[ \t]+(?:de[ \t]+)?cuenta(?:[ \t]+bancaria)?|cuenta[ \t]+bancaria|n(?:ú|u)mero[ \t]+de[ \t]+ruta(?:[ \t]+bancaria)?|numero[ \t]+(?:di|del)[ \t]+conto(?:[ \t]+corrente)?|conto[ \t]+corrente|numero[ \t]+di[ \t]+routing(?:[ \t]+bancario)?|(?:bank)?rekening[-_ \t]?(?:nummer|nr))\b[ \t]*(?:is[ \t]*)?[:#=\-]?[ \t]*(?P<value>[A-Z0-9](?:[A-Z0-9._/-]{1,30}[A-Z0-9])?)\b",
     entity_group: "FINANCIAL_ACCOUNT_NUMBER",
     validator: Some(validators::bounded_identifier),
     strength: ValidatorStrength::Format,

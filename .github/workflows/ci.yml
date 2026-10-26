@@ -2,12 +2,93 @@ name: CI
 
 on:
   pull_request:
+    paths:
+      - "Cargo.*"
+      - "rust-toolchain.toml"
+      - ".cargo/**"
+      - "**/*.rs"
+      - "ark-core/**"
+      - "ark-api/**"
+      - "ark-coordinator/**"
+      - "ark-distributed-protocol/**"
+      - "rust/**"
+      - "python/**"
+      - "scripts/**"
+      - "research/**"
+      - "deny.toml"
+      - "requirements-test.txt"
+      - ".python-version"
+      - ".github/workflows/ci.yml"
+      - ".github/ci-paths.yml"
+      - ".github/workflows/release.yml"
+      - "!**/*.md"
+      - "LICENSE*"
+      - "NOTICE"
   push:
     # l1/** and dlp/**: the scheduled runners open a PR only after CI is green on the pushed branch.
     branches: [main, "release/**", "l1/**", "dlp/**"]
+    paths:
+      - "Cargo.*"
+      - "rust-toolchain.toml"
+      - ".cargo/**"
+      - "**/*.rs"
+      - "ark-core/**"
+      - "ark-api/**"
+      - "ark-coordinator/**"
+      - "ark-distributed-protocol/**"
+      - "rust/**"
+      - "python/**"
+      - "scripts/**"
+      - "research/**"
+      - "deny.toml"
+      - "requirements-test.txt"
+      - ".python-version"
+      - ".github/workflows/ci.yml"
+      - ".github/ci-paths.yml"
+      - ".github/workflows/release.yml"
+      - "!**/*.md"
+      - "LICENSE*"
+      - "NOTICE"
+
+permissions:
+  contents: read
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      rust: ${{ steps.filter.outputs.shared == 'true' || steps.filter.outputs.rust == 'true' || steps.filter.outputs.api == 'true' || steps.filter.outputs.coordinator == 'true' || steps.filter.outputs.protocol == 'true' || steps.filter.outputs.bindings == 'true' }}
+      core: ${{ steps.filter.outputs.shared == 'true' || steps.filter.outputs.core == 'true' }}
+      core_features: ${{ steps.filter.outputs.shared == 'true' || steps.filter.outputs.core_features == 'true' }}
+      pii: ${{ steps.filter.outputs.shared == 'true' || steps.filter.outputs.core_shared == 'true' || steps.filter.outputs.l1_shared == 'true' || steps.filter.outputs.pii == 'true' || steps.filter.outputs.golden == 'true' }}
+      dlp: ${{ steps.filter.outputs.shared == 'true' || steps.filter.outputs.core_shared == 'true' || steps.filter.outputs.l1_shared == 'true' || steps.filter.outputs.dlp == 'true' || steps.filter.outputs.golden == 'true' }}
+      wrapper_base: ${{ steps.filter.outputs.shared == 'true' || steps.filter.outputs.core == 'true' || steps.filter.outputs.wrapper == 'true' }}
+      wrapper: ${{ steps.filter.outputs.shared == 'true' || steps.filter.outputs.core == 'true' || steps.filter.outputs.wrapper == 'true' || steps.filter.outputs.core_shared == 'true' || steps.filter.outputs.l1_shared == 'true' || steps.filter.outputs.pii == 'true' || steps.filter.outputs.golden == 'true' || steps.filter.outputs.dlp == 'true' }}
+      api: ${{ steps.filter.outputs.shared == 'true' || steps.filter.outputs.engine == 'true' || steps.filter.outputs.api == 'true' || steps.filter.outputs.protocol == 'true' }}
+      coordinator: ${{ steps.filter.outputs.shared == 'true' || steps.filter.outputs.coordinator == 'true' }}
+      protocol: ${{ steps.filter.outputs.shared == 'true' || steps.filter.outputs.protocol == 'true' }}
+      bindings: ${{ steps.filter.outputs.shared == 'true' || steps.filter.outputs.engine == 'true' || steps.filter.outputs.bindings == 'true' }}
+      python: ${{ steps.filter.outputs.shared == 'true' || steps.filter.outputs.engine == 'true' || steps.filter.outputs.python == 'true' || steps.filter.outputs.api == 'true' || steps.filter.outputs.protocol == 'true' }}
+      throughput: ${{ steps.filter.outputs.shared == 'true' || steps.filter.outputs.throughput == 'true' }}
+      licenses: ${{ steps.filter.outputs.shared == 'true' || steps.filter.outputs.licenses == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          # PRs compare against their base; pushes compare against the previous head.
+          base: ${{ github.ref }}
+          predicate-quantifier: some-with-excludes
+          filters: .github/ci-paths.yml
+
   rust:
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' || needs.changes.outputs.pii == 'true' || needs.changes.outputs.dlp == 'true' || needs.changes.outputs.licenses == 'true' }}
+    env:
+      CI_RUST_CHANGES: ${{ toJSON(needs.changes.outputs) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,25 +97,45 @@ jobs:
           components: clippy, rustfmt
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-      - run: cargo fmt --check
-      - run: cargo clippy --workspace --all-targets -- -D warnings
-      - run: cargo test -p patronus-ark-core --no-default-features
-      - run: cargo test -p patronus-ark-core --features wolf
-      - run: cargo test -p patronus-ark-core --features download
-      - run: cargo test -p patronus-ark
+          python-version: "3.12.16"
+      - if: needs.changes.outputs.rust == 'true'
+        run: cargo fmt --check
+      - name: Clippy for affected crates
+        if: needs.changes.outputs.rust == 'true'
+        run: python scripts/ci_rust_tests.py clippy
+      - name: Core tests for affected domains
+        if: needs.changes.outputs.core == 'true'
+        run: python scripts/ci_rust_tests.py core
+      - name: Core feature variants
+        if: needs.changes.outputs.core_features == 'true'
+        run: python scripts/ci_rust_tests.py core-features
+      - name: Ark unit and selected integration tests
+        if: needs.changes.outputs.wrapper == 'true'
+        run: python scripts/ci_rust_tests.py wrapper
       - name: L1 golden evaluation (pii_l1 + dlp_l1)
+        if: needs.changes.outputs.pii == 'true' && needs.changes.outputs.dlp == 'true'
         run: cargo run --locked --example 13_l1_golden_eval -- all
         working-directory: rust
-      - run: cargo test -p ark-api
-      - run: cargo test -p ark-coordinator
-      - run: cargo test -p ark-distributed-protocol
-      - run: python -m pip install "PyYAML>=6,<7"
-      - run: python scripts/generate_docs.py --check
+      - name: L1 golden evaluation (PII only)
+        if: needs.changes.outputs.pii == 'true' && needs.changes.outputs.dlp != 'true'
+        run: cargo run --locked --example 13_l1_golden_eval -- pii
+        working-directory: rust
+      - name: L1 golden evaluation (DLP only)
+        if: needs.changes.outputs.dlp == 'true' && needs.changes.outputs.pii != 'true'
+        run: cargo run --locked --example 13_l1_golden_eval -- dlp
+        working-directory: rust
+      - if: needs.changes.outputs.api == 'true'
+        run: cargo test --locked -p ark-api
+      - if: needs.changes.outputs.coordinator == 'true'
+        run: cargo test --locked -p ark-coordinator
+      - if: needs.changes.outputs.protocol == 'true'
+        run: cargo test --locked -p ark-distributed-protocol
       - uses: EmbarkStudios/cargo-deny-action@v2
+        if: needs.changes.outputs.licenses == 'true'
         with:
           command: check licenses
       - name: Check Core downstream license compatibility
+        if: needs.changes.outputs.licenses == 'true'
         uses: EmbarkStudios/cargo-deny-action@v2
         with:
           manifest-path: ark-core/Cargo.toml
@@ -42,7 +143,11 @@ jobs:
           command: check licenses
 
   core-features:
+    needs: changes
+    if: needs.changes.outputs.core_features == 'true'
     name: Core all features (${{ matrix.os }})
+    env:
+      CI_RUST_CHANGES: ${{ toJSON(needs.changes.outputs) }}
     permissions:
       contents: read
     strategy:
@@ -52,14 +157,22 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          # This helper only invokes Cargo; it does not use Python TLS or pip.
+          # Security-only CPython patch builds can arrive later on macOS/Windows.
+          python-version: "3.12"
+          check-latest: true
       - uses: dtolnay/rust-toolchain@1.98.0
         with:
           components: clippy, rustfmt
       - run: cargo clippy -p patronus-ark-core --no-default-features --lib -- -D warnings
       - run: cargo clippy -p patronus-ark-core --all-targets --all-features -- -D warnings
-      - run: cargo test -p patronus-ark-core --all-features --lib
+      - run: python scripts/ci_rust_tests.py core-all-features
 
   python:
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -68,8 +181,9 @@ jobs:
           components: clippy, rustfmt
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.12.16"
       - run: python -m venv .venv
+      - run: .venv/bin/python scripts/bootstrap_python_tls.py
       - run: .venv/bin/python -m pip install -r requirements-test.txt
       - run: .venv/bin/python -m maturin develop --manifest-path python/Cargo.toml
         env:
@@ -79,6 +193,8 @@ jobs:
       - run: .venv/bin/python -m pytest scripts/tests -q
 
   native-throughput:
+    needs: changes
+    if: needs.changes.outputs.throughput == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -88,16 +204,18 @@ jobs:
           components: clippy, rustfmt
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.12.16"
           cache: pip
       - uses: actions/cache@v4
         with:
           path: ~/.cache/patronus_ark
           key: ark-models-${{ runner.os }}-${{ hashFiles('rust/src/assets/specs.rs') }}
       - run: python -m venv .build-venv
+      - run: .build-venv/bin/python scripts/bootstrap_python_tls.py
       - run: .build-venv/bin/python -m pip install maturin
       - run: .build-venv/bin/python -m maturin build --release --manifest-path python/Cargo.toml --interpreter .build-venv/bin/python --out dist
       - run: python -m venv .perf-venv
+      - run: .perf-venv/bin/python scripts/bootstrap_python_tls.py
       - run: .perf-venv/bin/python -m pip install dist/*.whl
       - name: Full gated unified native throughput regression (without GLiNER)
         run: >-

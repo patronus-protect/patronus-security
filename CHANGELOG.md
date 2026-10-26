@@ -60,6 +60,62 @@ result shapes may be breaking for downstream users, and is called out explicitly
   138.9 → 141.7 ms (+2.0 %), both PASS. Golden eval: 1233/1233 positives, 1143/1143 hard
   negatives.
 
+### Added
+
+- Account numbers (B-ACCT: A04, F14). The US ABA routing number gets its check digit
+  (`validators::aba_routing_number`: Federal Reserve routing symbol 00–12, 21–32, 61–72 or 80,
+  weights 3-7-1 mod 10, not one repeated digit) and reports `FINANCIAL_ACCOUNT_NUMBER`.
+  `pii_aba_routing_number_us` reports nine digits or the 4-4-1 form in every mode with a routing
+  or account term near the value or as its key (new lexicon entry `pii.bank_routing_number`:
+  `ABA`, `RTN`, `routing number`, `Routingnummer`, `numéro de routage` …), never as part of a longer
+  number; `pii_aba_routing_number_us_context_free` reports the bare 4-4-1 form (`0711-0130-7`) in
+  `balanced`/`recall` at 0.55. Nine bare digits pass the check one time in ten and stay silent. The
+  field-bound `pii_financial_account_number` also binds `BBAN`, `Bank Routing Number`,
+  `Routing-Nummer`, `ABA number`, `Acct No`/`Acct ID` and FR/ES/IT routing field names, before the
+  value and as structural keys (JSON `bban`, CSV `bank_routing_number`, XML `<AcctNumber>`,
+  `<RoutingNumber>`, `<AcctId>`, `numeroCuentaBancaria`), with the form check as for `Kontonummer`;
+  `pii_customer_id` takes `customer_id`/`customer-number` in running text. M3 count
+  (`count_validated.py`) ARK 49 → 50 (`pii.financial_account_number`, `us`, shared with Presidio's
+  `ABA_ROUTING_NUMBER`); the scoreboard ports the validator. New `rust/tests/pii_account_numbers.rs`
+  (vectors incl. the presidio-analyzer values), 77 new `pii_l1` rows (DE + EN), two rule fixtures.
+  **Detection change:** in every mode a routing number with its term or key, and BBAN, routing and
+  `acct` fields (also as keys), are new `FINANCIAL_ACCOUNT_NUMBER` findings, and `customer_id:`
+  values new `CUSTOMER_ID` findings; in `balanced`/`recall` the bare 4-4-1 routing number is new.
+  Dev scoreboard vs. 84c8f5a (PASS in strict and balanced, no new hard-negative FP): account
+  number exact F1 balanced neutral 8.2 → 46.7 (Presidio tuned 12.5), presidio_favored 0.0 → 57.1,
+  ark_authored 72.2 → 75.7; customer ID neutral 46.7 → 51.1; employee ID and username unchanged;
+  L1 F1 strict +0.7, balanced +0.7 pp (neutral +1.6). Latency (`latency.py compare --engine ark-native`): 100 KiB p95
+  160.9 → 150.5 ms (−6.5 %, PASS), 4 KiB −4.7 %, short 0.234 → 0.261 ms (+11.6 %, not gated). Golden eval: 1256/1256
+  positives, 1157/1157 hard negatives.
+- French, Dutch and Belgian national numbers (B-EU1: B09, B10, B11), one label each with a check
+  digit: `FR_NIR` (`validators::fr_nir`, numéro de sécurité sociale: key 97 − (first thirteen mod 97)
+  with Corsica `2A`/`2B` read as 19/18, plus sex, birth month and département), `FR_SIREN`
+  (`fr_siren`, Luhn), `FR_SIRET` (`fr_siret`, a valid SIREN and Luhn over fourteen digits, La Poste
+  `356 000 000` by digit sum mod 5), `NL_BSN` (`nl_bsn`, burgerservicenummer, 11-proof, shared with
+  the former Dutch btw-id check) and `BE_NATIONAL_NUMBER` (`be_national_number`, rijksregisternummer /
+  numéro de registre national: birth date incl. BIS months, serial 001–998, 97 − (first nine mod 97),
+  births since 2000 with a `2` in front). `pii_nir_fr`, `pii_siren_fr`, `pii_siret_fr`, `pii_bsn_nl`
+  and `pii_national_number_be` report the value in every mode when a term of the label stands near
+  it or is its key (new lexicon entries `pii.fr_social_security_number`, `pii.fr_siren`,
+  `pii.fr_siret`, `pii.nl_citizen_service_number`, `pii.be_national_number` with FR and NL terms),
+  never as part of a longer number. In `balanced`/`recall` the forms whose shape adds to the check
+  digit are also reported bare at 0.55 (K05): a NIR printed 1-2-2-2-3-3-2 or as fifteen characters of
+  sex 1 or 2 (`pii_nir_fr_context_free`), a SIRET in 3-3-3-5 groups (`pii_siret_fr_context_free`), a
+  BSN printed `1234.56.782` (`pii_bsn_nl_context_free`) and a national number printed
+  `85.07.30-033.28` (`pii_national_number_be_context_free`). The SIREN and bare runs of nine, eleven
+  or fourteen digits need the term in every mode. `FR_NIR`, `FR_SIRET` and `BE_NATIONAL_NUMBER`
+  compete with card numbers and the Steuer-ID in the scored modes (K07); a SIRET in its 3-3-3-5 print
+  groups is never a card number (`context::card_position`: no card scheme prints that grouping, while
+  a quarter of all SIRETs pass Luhn with a Maestro or Diners prefix). Five new `ark_only`
+  benchmark IDs; M3 count (`count_validated.py`) ARK 50 → 55.
+  **Detection change:** new findings of the five labels (strict: values with a term or key;
+  balanced/recall: also the bare printed forms); `pii_credit_card` no longer reports fourteen digits
+  in 3-3-3-5 groups.
+  Dev scoreboard vs. 81ecc0e: PASS in strict and balanced, no new hard-negative FP, every F1 ±0.0
+  (the dev corpora carry no gold for the five IDs and none of the rules fires there). Golden eval:
+  1282/1282 positives, 1183/1183 hard negatives. Latency (`latency.py compare --engine ark-native`):
+  100 KiB p95 159.3 → 159.0 ms (−0.2 %, PASS); 4 KiB p50 1.88 → 1.80 ms.
+
 ## [0.1.13] - 2026-10-26
 
 ### Fixed
@@ -123,6 +179,23 @@ result shapes may be breaking for downstream users, and is called out explicitly
   still prefilters it: on 100 KiB without `@` a scan takes 1.3 µs before and after, with about
   1,700 addresses per 100 KiB 133 → 195 µs. `latency.py compare --engine ark-native` 100 KiB p95
   147.1 → 146.9 / 157.9 ms in two head runs (PASS, noise), 4 KiB 7.66 → 6.80 / 6.62 ms.
+### Detection changes
+
+- DLP L1 (T17, all modes): `dlp_url_userinfo_password` reads the matched userinfo password
+  percent-decoded before the F-GEN1 likeness check and also drops credential nouns masked with
+  leetspeak digits and symbols, as Basic auth and connection strings already do. Test
+  credentials such as `http://user:p%40ss@proxy.com` and `scheme://me%40company:p%40ssw%24rd@…`
+  (composer docs and tests) are no longer reported; chosen passwords with the reserved
+  characters `%40` `%24` `%3A` stay findings with the encoded span. **Detection change:** dev
+  benign-code FP 5 → 2 (FP/MB 0.1324 → 0.053), exact F1 87.2 and hard-negative FP 154 unchanged;
+  the decode runs only on a matched value containing `%`, 100 KiB p95 12.45 → 12.19 ms (noise).
+  New synthetic generator `reserved_char_password` (inserted URL-encoded through the new
+  `url_encoded` key in `dlp_synth/rules.json`, not used by carriers) and 20 golden rows.
+- DLP L1 (T17 review, all modes): `dlp_url_userinfo_password` checks for the `x-oauth-basic`
+  pseudo-password on the encoded password, so an encoded `%3A` stays password data
+  (`postgres://app:Kx7pQ2vL%3Ax-oauth-basic@…` is reported again, as before T17). **Detection
+  change:** restores findings the decode had dropped; the pseudo-password check now runs before
+  the decode.
 
 - **Shell risk: agent-shell robustness and heredoc handling.** Pin `cat-shell-risk-commander`
   revision `30d77a80f1ddb3c5c63d9b24c6f5083b15057813` (`format_version: 2`, about 4.4 MB).

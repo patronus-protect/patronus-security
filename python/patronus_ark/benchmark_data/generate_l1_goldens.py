@@ -3199,6 +3199,247 @@ Q_DE_CASES = [
 for _row in Q_DE_CASES:
     PII_CASES.setdefault(_row["target_label"], []).append(_row)
 
+# B-ACCT (A04, F14): the ABA routing number (Federal Reserve routing symbol, 3-7-1 check digit) is
+# reported in every mode with a routing or account term near it or as its key; nine bare digits pass
+# the check one time in ten. Only the printed 4-4-1 form is reported bare, in `balanced`/`recall`
+# (K05). The field-bound account rule also binds the BBAN, the routing number (with or without its
+# check digit) and `acct` fields, before the value and as structural keys, and the customer ID rule
+# takes `customer_id`/`customer-number`. Appended so existing ids stay stable.
+B_ACCT_CASES = [
+    # ── ABA routing number with a term, every mode ────────────────────────
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us", "Die Routingnummer der US-Bank lautet ", "021000021", ".", carrier="prose"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us", "Überweisung über ABA ", "121000358", " an die Filiale in Boston.", carrier="prose"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us", "Bitte ", "011000015", " (ABA-Nummer) für die Gutschrift verwenden.", carrier="prose"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us", '{"aba": "', "053000196", '"}', carrier="json"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us", "rtn;betrag\n", "061000052", ";42,00", carrier="csv"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us", "Für die Lastschrift gilt die ABA ", "0711-0130-7", ".", carrier="prose", mode="balanced"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us", "The bank's ABA routing number is ", "026009593", ".", carrier="prose"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us", "Wire to ", "111000025", " (bank routing number) by Friday.", carrier="prose"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us", "We may also collect bank routing numbers, such as ", "322271627", ".", carrier="prose"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us", "rtn,amount\n", "091000019", ",42", carrier="csv"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us", "Lender: First Bank, ABA ", "256074974", ", Boston", carrier="prose"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us", "Payments clear through RTN ", "3222-7162-7", " only.", carrier="prose", mode="recall"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us", "Bestellnummer 121000358", "valid check digit without a routing term"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us", "Vorgang 021000021 wurde abgeschlossen.", "valid check digit without a routing term", carrier="prose", mode="balanced"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us", "ABA 121000359", "check digit fails"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us", "ABA 901000358", "check digit valid, but 90 is no routing symbol", mode="balanced"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us", "ABA 1210003580", "ten digits"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us", "Order 021000021 shipped.", "valid check digit without a routing term", carrier="prose"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us", "ABA 421042111", "check digit and routing symbol fail (presidio-analyzer negative)", mode="balanced"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us", "ABA, order number 121000358", "order number nearer than the routing term", mode="balanced"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us", "ABA 000000000", "one repeated digit"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us", "ABA 121000358-2", "part of a longer number"),
+    # ── bare 4-4-1 form (balanced/recall) ─────────────────────────────────
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us_context_free", "Bitte überweisen Sie an ", "0260-0959-3", ".", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us_context_free", "", "0711-0130-7", "", tags=("no_context",), mode="balanced"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us_context_free", "Gutschrift über ", "0210-0002-1", " ist erfolgt.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us_context_free", "Neue Angabe: ", "1110-0002-5", "", tags=("no_context",), mode="recall"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us_context_free", "Die ABA-Nummer ", "0530-0019-6", " liegt vor.", carrier="prose", mode="balanced"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us_context_free", "Please send the wire to ", "1210-0035-8", " today.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us_context_free", "", "3222-7162-7", "", tags=("no_context",), mode="balanced"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us_context_free", "Transfer via ", "0110-0001-5", ", thanks.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us_context_free", "Record 7 lists ", "0610-0005-2", " for the payee.", carrier="prose", tags=("no_context",), mode="recall"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us_context_free", "", "0910-0001-9", " is the routing number.", carrier="prose", mode="balanced"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us_context_free", "Rechnungsnummer 0711-0130-7", "counter-context nearer", mode="balanced"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us_context_free", "Bitte 0711-0130-8 prüfen.", "check digit fails", carrier="prose", mode="balanced"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us_context_free", "Teil 4210-4211-3 geliefert.", "check digit valid, but 42 is no routing symbol", carrier="prose", mode="balanced"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us_context_free", "Serie 0711-0130-75 gesperrt.", "part of a longer value", carrier="prose", mode="recall"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_aba_routing_number_us_context_free", "121000358", "nine bare digits", mode="balanced"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us_context_free", "Ticket number 3222-7162-7", "counter-context nearer", mode="balanced"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us_context_free", "Batch 1210-0035-9 shipped.", "check digit fails", carrier="prose", mode="balanced"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us_context_free", "Part X0711-0130-7 ordered.", "part of a longer value", carrier="prose", mode="balanced"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us_context_free", "Lot 9010-0035-8 recalled.", "check digit valid, but 90 is no routing symbol", carrier="prose", mode="recall"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_aba_routing_number_us_context_free", "0711-0130-7", "strict never reports the bare form"),
+    # ── BBAN, routing and acct fields, every mode ─────────────────────────
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_financial_account_number", "BBAN: ", "19617962324057605069"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_financial_account_number", "Routing-Nummer: ", "512345678"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_financial_account_number", '{"bban": "', "ADXO08034447307440", '"}', carrier="json"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_financial_account_number", "name;bank_routing_number\nIsidora Cordero;", "577522835", "", carrier="csv"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_financial_account_number", "<Konto>\n<AcctNumber>", "823754616", "</AcctNumber>\n</Konto>", carrier="xml"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_financial_account_number", "konto:\n  bban: ", "36641600086542880045", "\n", carrier="yaml"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_financial_account_number", "| Name | BBAN |\n|---|---|\n| Jonas Weber | ", "147235766578281277", " |", carrier="table"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_financial_account_number", "BBAN: ", "ZFJR88590163492773"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_financial_account_number", "Bank Routing Number: ", "932049652"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_financial_account_number", "My bank routing number is ", "885327936", ", as requested.", carrier="prose"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_financial_account_number", "Carr, with the BBAN number ", "NQTZ73395804946160", ", resides here.", carrier="prose"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_financial_account_number", "<RoutingNumber>", "174518479", "</RoutingNumber>", carrier="xml"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_financial_account_number", "Acct No: ", "55120443"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_financial_account_number", "routing_number: ", "259255680", "", carrier="kv"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_financial_account_number", "<AcctId>", "H0873491448510040803748", "</AcctId>", carrier="xml"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_financial_account_number", "BBAN: siehe Anlage", "field without a value"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_financial_account_number", "Die BBAN ist Teil der IBAN.", "field name without a value", carrier="prose"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_financial_account_number", "Routing-Nummer: ****", "masked value", tags=("obfuscated",)),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_financial_account_number", "Bestellnummer: 932049652", "wrong identifier anchor"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_financial_account_number", "Die Routing-Tabelle wurde für 10 Hosts aktualisiert.", "network routing, no field", carrier="prose"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_financial_account_number", "Bank routing number: on file", "field without a value"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_financial_account_number", "Routing number: ****", "masked value", tags=("obfuscated",)),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_financial_account_number", "Enter the routing number without dashes.", "field name without a value", carrier="prose"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_financial_account_number", "Network routing table updated for 10 hosts.", "network routing, no field", carrier="prose"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_financial_account_number", "Routing number for direct deposit is printed on the cheque.", "field name without a value", carrier="prose"),
+    # ── customer IDs under customer_id / customer-number ──────────────────
+    p("CUSTOMER_ID", "de", "pii_customer_id", "Datensatz: customer_id: ", "K7430771", ""),
+    p("CUSTOMER_ID", "de", "pii_customer_id", "57=customer_id:", "Xt70626-Z", "|57=passwort:x", carrier="kv"),
+    p("CUSTOMER_ID", "de", "pii_customer_id", "Laut Export customer-number = ", "C150-5439-416", "", carrier="kv"),
+    p("CUSTOMER_ID", "en", "pii_customer_id", "Services: braces. Customer_ID: ", "T-397878-G", ""),
+    p("CUSTOMER_ID", "en", "pii_customer_id", "57=customer_id:", "K7430771", "|57=password:x", carrier="kv"),
+    p("CUSTOMER_ID", "en", "pii_customer_id", "customer-number = ", "C150-5439-416", "", carrier="kv"),
+    n("CUSTOMER_ID", "de", "pii_customer_id", "customer_id: keine Angabe", "field without a value"),
+    n("CUSTOMER_ID", "de", "pii_customer_id", "customer_id=42", "value too short", carrier="kv"),
+    n("CUSTOMER_ID", "en", "pii_customer_id", "customer_id: none", "field without a value"),
+    n("CUSTOMER_ID", "en", "pii_customer_id", "customer-number = ****", "masked value", carrier="kv", tags=("obfuscated",)),
+]
+for _row in B_ACCT_CASES:
+    PII_CASES.setdefault(_row["target_label"], []).append(_row)
+
+# B-EU1 (B09, B10, B11): French NIR (key mod 97), SIREN and SIRET (Luhn, La Poste by digit
+# sum), Dutch BSN (11-proof) and Belgian national number (mod 97), one label each.
+# `pii_*_fr`/`_nl`/`_be` report the value in every mode when a term of the label stands near
+# it or is its key. In balanced and recall the forms whose shape adds to the check digit are
+# reported bare (K05): the NIR printed 1-2-2-2-3-3-2 or as fifteen characters of sex 1 or 2,
+# the SIRET in 3-3-3-5 groups, the BSN printed 1234.56.782, the national number printed
+# 85.07.30-033.28. The SIREN, nine bare digits (BSN), eleven (national number) and fourteen
+# (SIRET) always need a term. FR and NL rows add the national field names. Hard negatives:
+# failed checks, impossible fields, values without a term, counter-context and parts of
+# longer values. Appended so existing ids stay stable.
+B_EU1_CASES = [
+    # ── FR NIR ─────────────────────────────────────────────────────────────
+    p("FR_NIR", "en", "pii_nir_fr", "NIR: ", "250092B86543121"),
+    p("FR_NIR", "en", "pii_nir_fr", "Her French social security number is ", "2 65 09 75 590 230 87", ".", carrier="prose"),
+    p("FR_NIR", "en", "pii_nir_fr", '{"nir": "', "106124490968794", '"}', carrier="json"),
+    p("FR_NIR", "en", "pii_nir_fr", "name,insee_number\nLuc Martin,", "191105948214616", "", carrier="csv", mode="balanced"),
+    p("FR_NIR", "en", "pii_nir_fr_context_free", "Patient ", "2 29 02 31 691 481 34", " was admitted.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("FR_NIR", "en", "pii_nir_fr_context_free", "", "271072B56281996", "", tags=("no_context",), mode="recall"),
+    p("FR_NIR", "de", "pii_nir_fr", "Die französische Sozialversicherungsnummer lautet ", "2 51 07 2A 302 852 86", ".", carrier="prose"),
+    p("FR_NIR", "de", "pii_nir_fr", "NIR-Nummer: ", "201011367290483"),
+    p("FR_NIR", "de", "pii_nir_fr", '{"insee": "', "266083394420567", '"}', carrier="json", mode="balanced"),
+    p("FR_NIR", "de", "pii_nir_fr_context_free", "Versicherte ", "2 88 08 31 524 786 04", " wurde aufgenommen.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("FR_NIR", "de", "pii_nir_fr_context_free", "Patientin aus Lyon, ", "255097585229821", "", tags=("no_context",), mode="balanced"),
+    p("FR_NIR", "fr", "pii_nir_fr", "Numéro de sécurité sociale : ", "2 58 02 31 706 734 44"),
+    p("FR_NIR", "fr", "pii_nir_fr", "N° INSEE ", "257035986374663", ""),
+    p("FR_NIR", "fr", "pii_nir_fr", "Merci d'indiquer votre numéro de sécu : ", "2 08 11 2B 925 511 37", ".", carrier="prose"),
+    n("FR_NIR", "en", "pii_nir_fr", "NIR: 250092B86543122", "key fails"),
+    n("FR_NIR", "en", "pii_nir_fr", "NIR: 185137800608425", "key valid, but month 13 is no birth month"),
+    n("FR_NIR", "en", "pii_nir_fr", "Reference 385057800608488 was archived.", "sex 3 needs a NIR term", carrier="prose", mode="balanced"),
+    n("FR_NIR", "en", "pii_nir_fr_context_free", "Order number 2 29 02 31 691 481 34", "counter-context nearer", mode="balanced"),
+    n("FR_NIR", "en", "pii_nir_fr_context_free", "Batch 265097559023087-2 was archived.", "part of a longer number", carrier="prose", mode="balanced"),
+    n("FR_NIR", "de", "pii_nir_fr", "NIR: 2 51 07 2A 302 852 87", "key fails"),
+    n("FR_NIR", "de", "pii_nir_fr", "NIR: 585057800608485", "key valid, but sex 5 does not exist"),
+    n("FR_NIR", "de", "pii_nir_fr", "NIR: 185050000608463", "key valid, but département 00 does not exist"),
+    n("FR_NIR", "de", "pii_nir_fr_context_free", "Bestellnummer 255097585229821", "counter-context nearer", mode="balanced"),
+    n("FR_NIR", "de", "pii_nir_fr_context_free", "Versicherte 2 51 07 2a 302 852 86 wurde aufgenommen.", "lowercase Corsica code", carrier="prose", mode="balanced"),
+    n("FR_NIR", "fr", "pii_nir_fr", "Numéro de sécurité sociale : 2 58 02 31 706 734 45", "key fails"),
+    n("FR_NIR", "fr", "pii_nir_fr", "N° INSEE 18545780060845", "fourteen characters"),
+    # ── FR SIREN ───────────────────────────────────────────────────────────
+    p("FR_SIREN", "en", "pii_siren_fr", "SIREN: ", "259 880 003"),
+    p("FR_SIREN", "en", "pii_siren_fr", "The SIREN of the supplier is ", "528804834", ".", carrier="prose"),
+    p("FR_SIREN", "en", "pii_siren_fr", '{"siren": "', "774465223", '"}', carrier="json"),
+    p("FR_SIREN", "en", "pii_siren_fr", "company,siren\nAcme SAS,", "786 956 813", "", carrier="csv", mode="balanced"),
+    p("FR_SIREN", "en", "pii_siren_fr", "French company number (SIREN) ", "968654681", "", mode="recall"),
+    p("FR_SIREN", "en", "pii_siren_fr", "Please register SIREN ", "237 756 846", " for the contract.", carrier="prose", mode="balanced"),
+    p("FR_SIREN", "de", "pii_siren_fr", "Die SIREN-Nummer lautet ", "399687458", ".", carrier="prose"),
+    p("FR_SIREN", "de", "pii_siren_fr", "SIREN: ", "906 689 682"),
+    p("FR_SIREN", "de", "pii_siren_fr", "| Firma | SIREN |\n|---|---|\n| Acme SAS | ", "934141847", " |", carrier="table"),
+    p("FR_SIREN", "de", "pii_siren_fr", '{"siren": "', "847 000 874", '"}', carrier="json", mode="balanced"),
+    p("FR_SIREN", "de", "pii_siren_fr", "Als SIREN ist ", "664539830", " hinterlegt.", carrier="prose", mode="balanced"),
+    p("FR_SIREN", "fr", "pii_siren_fr", "Numéro SIREN : ", "868 488 842"),
+    p("FR_SIREN", "fr", "pii_siren_fr", "La société est immatriculée sous le n° SIREN ", "835260084", ".", carrier="prose"),
+    n("FR_SIREN", "en", "pii_siren_fr", "SIREN: 259 880 004", "Luhn fails"),
+    n("FR_SIREN", "en", "pii_siren_fr", "Order 528804834 shipped.", "valid Luhn without a SIREN term", carrier="prose", mode="balanced"),
+    n("FR_SIREN", "en", "pii_siren_fr", "SIREN: 000 000 000", "one repeated digit"),
+    n("FR_SIREN", "en", "pii_siren_fr", "SIREN letter, invoice number 774465223", "invoice number nearer than the SIREN term", mode="balanced"),
+    n("FR_SIREN", "en", "pii_siren_fr", "SIREN: 786 956 813 5", "part of a longer number"),
+    n("FR_SIREN", "de", "pii_siren_fr", "SIREN: 399687459", "Luhn fails"),
+    n("FR_SIREN", "de", "pii_siren_fr", "Vorgang 906 689 682 wurde abgeschlossen.", "valid Luhn without a SIREN term", carrier="prose", mode="balanced"),
+    n("FR_SIREN", "de", "pii_siren_fr", "SIREN-Gruppe, Bestellnummer 934141847", "order number nearer than the SIREN term", mode="balanced"),
+    n("FR_SIREN", "de", "pii_siren_fr", "SIREN: 84700087", "eight digits"),
+    n("FR_SIREN", "de", "pii_siren_fr", "Artikel 664 539 830", "valid Luhn without a SIREN term", mode="recall"),
+    n("FR_SIREN", "fr", "pii_siren_fr", "Numéro SIREN : 868 488 843", "Luhn fails"),
+    n("FR_SIREN", "fr", "pii_siren_fr", "SIREN/SIRET : 868 488 842 00017", "a valid SIREN inside a longer number"),
+    # ── FR SIRET ───────────────────────────────────────────────────────────
+    p("FR_SIRET", "en", "pii_siret_fr", "SIRET: ", "887 214 955 72261"),
+    p("FR_SIRET", "en", "pii_siret_fr", "Our SIRET number is ", "42203407400415", ".", carrier="prose"),
+    p("FR_SIRET", "en", "pii_siret_fr", '{"siret": "', "92437103213222", '"}', carrier="json", mode="balanced"),
+    p("FR_SIRET", "en", "pii_siret_fr_context_free", "Supplier ", "248 628 075 47067", ", Paris", tags=("no_context",), mode="balanced"),
+    p("FR_SIRET", "en", "pii_siret_fr_context_free", "", "231 602 657 73676", "", tags=("no_context",), mode="recall"),
+    p("FR_SIRET", "en", "pii_siret_fr", "branch,siret\nLyon,", "11542004480321", "", carrier="csv"),
+    p("FR_SIRET", "de", "pii_siret_fr", "Als SIRET ist ", "52175656934442", " hinterlegt.", carrier="prose"),
+    p("FR_SIRET", "de", "pii_siret_fr", "SIRET-Nummer: ", "633 136 171 41206"),
+    p("FR_SIRET", "de", "pii_siret_fr", "Die SIRET der Filiale (La Poste) lautet ", "35600000049837", ".", carrier="prose", mode="balanced"),
+    p("FR_SIRET", "de", "pii_siret_fr_context_free", "Lieferant ", "566 618 468 58431", ", Paris", tags=("no_context",), mode="balanced"),
+    p("FR_SIRET", "de", "pii_siret_fr_context_free", "Neue Filiale ", "605 121 029 84144", " bitte anlegen.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("FR_SIRET", "fr", "pii_siret_fr", "N° SIRET : ", "955 929 880 12508"),
+    p("FR_SIRET", "fr", "pii_siret_fr", "Établissement enregistré sous le numéro SIRET ", "55686986514693", ".", carrier="prose"),
+    n("FR_SIRET", "en", "pii_siret_fr", "SIRET: 887 214 955 72262", "Luhn fails"),
+    n("FR_SIRET", "en", "pii_siret_fr", "SIRET: 12345678901234", "form placeholder, Luhn fails"),
+    n("FR_SIRET", "en", "pii_siret_fr", "Reference 42203407400415 was archived.", "fourteen bare digits without a SIRET term", carrier="prose", mode="balanced"),
+    n("FR_SIRET", "en", "pii_siret_fr_context_free", "Invoice number 248 628 075 47067", "counter-context nearer", mode="balanced"),
+    n("FR_SIRET", "en", "pii_siret_fr_context_free", "Dial 1 248 628 075 47067 now.", "part of a longer number", carrier="prose", mode="balanced"),
+    n("FR_SIRET", "de", "pii_siret_fr", "SIRET: 73282932100064", "the fourteen digits pass Luhn, the SIREN part does not"),
+    n("FR_SIRET", "de", "pii_siret_fr", "SIRET: 35600000010013", "La Poste: Luhn without the digit sum"),
+    n("FR_SIRET", "de", "pii_siret_fr", "Vorgang 52175656934442 wurde abgeschlossen.", "fourteen bare digits without a SIRET term", carrier="prose", mode="balanced"),
+    n("FR_SIRET", "de", "pii_siret_fr_context_free", "Rechnungsnummer 566 618 468 58431", "counter-context nearer", mode="balanced"),
+    n("FR_SIRET", "de", "pii_siret_fr_context_free", "Lieferant 566 618 468 58432, Paris", "Luhn fails", mode="balanced"),
+    n("FR_SIRET", "fr", "pii_siret_fr", "N° SIRET : 955 929 880 12509", "Luhn fails"),
+    n("FR_SIRET", "fr", "pii_siret_fr", "N° SIRET : 9559298801250", "thirteen digits"),
+    # ── NL BSN ─────────────────────────────────────────────────────────────
+    p("NL_BSN", "en", "pii_bsn_nl", "BSN: ", "713976044"),
+    p("NL_BSN", "en", "pii_bsn_nl", "Her citizen service number is ", "289 097 149", ".", carrier="prose"),
+    p("NL_BSN", "en", "pii_bsn_nl", '{"bsn": "', "965429258", '"}', carrier="json", mode="balanced"),
+    p("NL_BSN", "en", "pii_bsn_nl_context_free", "Applicant ", "8750.04.519", " has been approved.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("NL_BSN", "en", "pii_bsn_nl_context_free", "", "5147.31.047", "", tags=("no_context",), mode="recall"),
+    p("NL_BSN", "en", "pii_bsn_nl", "name,bsn\nJan de Vries,", "133204522", "", carrier="csv"),
+    p("NL_BSN", "de", "pii_bsn_nl", "Die BSN lautet ", "595054845", ".", carrier="prose"),
+    p("NL_BSN", "de", "pii_bsn_nl", "Niederländische Bürgerservicenummer: ", "5879.38.122"),
+    p("NL_BSN", "de", "pii_bsn_nl", '{"bsn": "', "718 841 062", '"}', carrier="json", mode="balanced"),
+    p("NL_BSN", "de", "pii_bsn_nl_context_free", "Antragsteller ", "2217.14.273", " wurde genehmigt.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("NL_BSN", "de", "pii_bsn_nl_context_free", "Mieterin aus Utrecht, ", "6352.24.495", "", tags=("no_context",), mode="balanced"),
+    p("NL_BSN", "nl", "pii_bsn_nl", "Burgerservicenummer: ", "886137147"),
+    p("NL_BSN", "nl", "pii_bsn_nl", "Mijn BSN is ", "8441.68.890", ".", carrier="prose"),
+    p("NL_BSN", "nl", "pii_bsn_nl", "naam;bsn;woonplaats\nJan de Vries;", "769015086", ";Utrecht", carrier="csv", mode="balanced"),
+    n("NL_BSN", "en", "pii_bsn_nl", "BSN: 713976045", "11-proof fails"),
+    n("NL_BSN", "en", "pii_bsn_nl", "Call 289 097 149 today.", "valid 11-proof without a BSN term", carrier="prose", mode="balanced"),
+    n("NL_BSN", "en", "pii_bsn_nl", "BSN: 111111111", "one repeated digit"),
+    n("NL_BSN", "en", "pii_bsn_nl_context_free", "Order number 8750.04.519", "counter-context nearer", mode="balanced"),
+    n("NL_BSN", "en", "pii_bsn_nl_context_free", "Version 5147.31.047.2 released.", "part of a longer value", carrier="prose", mode="balanced"),
+    n("NL_BSN", "de", "pii_bsn_nl", "BSN: 595054846", "11-proof fails"),
+    n("NL_BSN", "de", "pii_bsn_nl", "Vorgang 718841062 wurde abgeschlossen.", "valid 11-proof without a BSN term", carrier="prose", mode="balanced"),
+    n("NL_BSN", "de", "pii_bsn_nl", "BSN-Schreiben, Rechnungsnummer 133204522", "invoice number nearer than the BSN term", mode="balanced"),
+    n("NL_BSN", "de", "pii_bsn_nl", "BSN: 59505484", "eight digits"),
+    n("NL_BSN", "de", "pii_bsn_nl_context_free", "Antragsteller 2217.14.274 wurde genehmigt.", "11-proof fails", carrier="prose", mode="balanced"),
+    n("NL_BSN", "nl", "pii_bsn_nl", "Burgerservicenummer: 886137148", "11-proof fails"),
+    n("NL_BSN", "nl", "pii_bsn_nl", "Ordernummer 886137147 is verzonden.", "valid 11-proof without a BSN term", carrier="prose", mode="balanced"),
+    # ── BE national number ─────────────────────────────────────────────────
+    p("BE_NATIONAL_NUMBER", "en", "pii_national_number_be", "National register number: ", "45102620431"),
+    p("BE_NATIONAL_NUMBER", "en", "pii_national_number_be", "His Belgian national number is ", "190125-560.95", ".", carrier="prose"),
+    p("BE_NATIONAL_NUMBER", "en", "pii_national_number_be", '{"insz": "', "82111215919", '"}', carrier="json", mode="balanced"),
+    p("BE_NATIONAL_NUMBER", "en", "pii_national_number_be_context_free", "Client ", "21.10.19-788.55", ", Brussels", tags=("no_context",), mode="balanced"),
+    p("BE_NATIONAL_NUMBER", "en", "pii_national_number_be_context_free", "", "95.08.23-738.41", "", tags=("no_context",), mode="recall"),
+    p("BE_NATIONAL_NUMBER", "en", "pii_national_number_be", "name,national_number\nLuc Peeters,", "74041660314", "", carrier="csv"),
+    p("BE_NATIONAL_NUMBER", "de", "pii_national_number_be", "Belgische Nationalregisternummer: ", "19121729892"),
+    p("BE_NATIONAL_NUMBER", "de", "pii_national_number_be", "Die Nationalnummer lautet ", "21.03.05-803.23", ".", carrier="prose"),
+    p("BE_NATIONAL_NUMBER", "de", "pii_national_number_be", '{"rijksregisternummer": "', "77051742241", '"}', carrier="json", mode="balanced"),
+    p("BE_NATIONAL_NUMBER", "de", "pii_national_number_be_context_free", "Kunde ", "49.09.26-202.13", ", Brüssel", tags=("no_context",), mode="balanced"),
+    p("BE_NATIONAL_NUMBER", "de", "pii_national_number_be_context_free", "Antrag von ", "46.07.03-053.96", " liegt vor.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("BE_NATIONAL_NUMBER", "fr", "pii_national_number_be", "Numéro de registre national : ", "81.06.25-968.25"),
+    p("BE_NATIONAL_NUMBER", "fr", "pii_national_number_be", "NISS ", "16081170070", ""),
+    p("BE_NATIONAL_NUMBER", "nl", "pii_national_number_be", "Rijksregisternummer: ", "60.02.16-972.16"),
+    p("BE_NATIONAL_NUMBER", "nl", "pii_national_number_be", "Mijn rijksregisternummer is ", "79030560651", ".", carrier="prose"),
+    n("BE_NATIONAL_NUMBER", "en", "pii_national_number_be", "National register number: 45102620432", "check fails"),
+    n("BE_NATIONAL_NUMBER", "en", "pii_national_number_be", "Reference 82111215919 was archived.", "eleven bare digits without a term", carrier="prose", mode="balanced"),
+    n("BE_NATIONAL_NUMBER", "en", "pii_national_number_be", "National register number: 85133003370", "check valid, but month 13 is no birth month"),
+    n("BE_NATIONAL_NUMBER", "en", "pii_national_number_be_context_free", "Order number 21.10.19-788.55", "counter-context nearer", mode="balanced"),
+    n("BE_NATIONAL_NUMBER", "en", "pii_national_number_be_context_free", "Client 21.10.19-788.55-2, Brussels", "part of a longer value", mode="balanced"),
+    n("BE_NATIONAL_NUMBER", "de", "pii_national_number_be", "Nationalregisternummer: 19121729893", "check fails"),
+    n("BE_NATIONAL_NUMBER", "de", "pii_national_number_be", "Nationalregisternummer: 85073000061", "check valid, but serial 000 is never issued"),
+    n("BE_NATIONAL_NUMBER", "de", "pii_national_number_be", "Vorgang 77051742241 wurde abgeschlossen.", "eleven bare digits without a term", carrier="prose", mode="balanced"),
+    n("BE_NATIONAL_NUMBER", "de", "pii_national_number_be_context_free", "Rechnungsnummer 49.09.26-202.13", "counter-context nearer", mode="balanced"),
+    n("BE_NATIONAL_NUMBER", "de", "pii_national_number_be_context_free", "Kunde 49.09.32-202.13, Brüssel", "day 32 is no birth day", mode="balanced"),
+    n("BE_NATIONAL_NUMBER", "fr", "pii_national_number_be", "Numéro de registre national : 81.06.25-968.26", "check fails"),
+    n("BE_NATIONAL_NUMBER", "nl", "pii_national_number_be", "Rijksregisternummer: 60.02.16-972.17", "check fails"),
+]
+for _row in B_EU1_CASES:
+    PII_CASES.setdefault(_row["target_label"], []).append(_row)
+
 # DLP golden schema v2 (E13). Every DLP row names the rule it exercises (`rule_id`), the
 # document that carries the value (`carrier`), its difficulty `tags` and whether it is a
 # `known_gap`: a positive the detector misses today, reported by 13_l1_golden_eval but
@@ -8852,6 +9093,118 @@ DLP_G01_CASES = {
     ],
 }
 for _label, _rows in DLP_G01_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+# T17: `dlp_url_userinfo_password` reads the userinfo password percent-decoded before the F-GEN1
+# likeness check, so test credentials whose reserved characters are encoded (`p%40ss`,
+# `p%40ssw%24rd`, `s%33cr%33t`) are stand-ins as in plain text: composer documentation, PHP data
+# providers and Python tests. Chosen passwords with the reserved characters @ $ : stay findings
+# with the encoded span.
+DLP_T17_CASES = {
+    "CREDENTIAL": [
+        ds(
+            "CREDENTIAL", "de", "dlp_url_userinfo_password",
+            "LAGER_DB_URL=postgres://lager:<<secret:0|url>>@db.lager.intern:5432/lager\n",
+            "reserved_char_password", 17001, carrier="env",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_url_userinfo_password",
+            "proxy:\n  # Filial-Proxy, Sonderzeichen im Passwort kodiert\n  url: http://filiale:<<secret:0|url>>@proxy.intern:3128\n",
+            "reserved_char_password", 17002, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_url_userinfo_password",
+            "{\n  \"warteschlange\": \"amqp://lager:<<secret:0|url>>@mq.intern:5672/belege\"\n}\n",
+            "reserved_char_password", 17003, carrier="json",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_url_userinfo_password",
+            "$ git clone https://bauer:<<secret:0|url>>@git.example.de/team/abgleich.git\nKlone nach 'abgleich' …\n",
+            "reserved_char_password", 17004, carrier="cli",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_url_userinfo_password",
+            "Hallo Team, die neue Replik ist erreichbar unter mysql://bericht:<<secret:0|url>>@db2.intern/bericht – bitte nicht weitergeben.",
+            "reserved_char_password", 17005, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_url_userinfo_password",
+            "DATABASE_URL=postgres://app:<<secret:0|url>>@db.internal:5432/app\n",
+            "reserved_char_password", 17006, carrier="env",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_url_userinfo_password",
+            "services:\n  worker:\n    environment:\n      BROKER_URL: amqp://worker:<<secret:0|url>>@mq.internal:5672/jobs\n",
+            "reserved_char_password", 17007, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_url_userinfo_password",
+            "engine = create_engine(\"postgresql://report:<<secret:0|url>>@db1.internal/report\")\n",
+            "reserved_char_password", 17008, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_url_userinfo_password",
+            "2026-10-26T08:14:02Z INFO connecting to redis://cache:<<secret:0|url>>@cache.internal:6379/0\n",
+            "reserved_char_password", 17009, carrier="log",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_url_userinfo_password",
+            "[http]\n  proxy = http://build:<<secret:0|url>>@proxy.internal:3128\n",
+            "reserved_char_password", 17010, carrier="ini",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_url_userinfo_password",
+            "### Autorisierung\n\nReservierte Zeichen in Benutzername und Passwort werden prozentkodiert:\n\n```\nuser: ich@firma\npass: p@ssw$rd\n\nhttp://ich%40firma:p%40ssw%24rd@proxy.example.de:3128\n```\n",
+            "percent-encoded documentation example p@ssw$rd", carrier="markdown",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_url_userinfo_password",
+            "Beispiel für einen anonymen Zugang: ftp://anonym:%24ecret@ftp.example.de/pub",
+            "percent-encoded stand-in $ecret in prose", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_url_userinfo_password",
+            "$server = [\n    'http_proxy' => 'http://benutzer:p%40ss@proxy.example.de',\n    'no_proxy' => 'intern.example.de',\n];\n",
+            "PHP test array with percent-encoded test credential p@ss", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_url_userinfo_password",
+            "# Testfall: Passwort wird maskiert\nassert maskiere(\"https://admin:p%40ssw%30rd@db.intern/app\") == \"https://admin:***@db.intern/app\"\n",
+            "Python test with percent-encoded test credential p@ssw0rd", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_url_userinfo_password",
+            "PROXY_URL=http://pruefer:s%33cr%33t@proxy.intern:3128\n",
+            "percent-encoded leetspeak stand-in s3cr3t", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_url_userinfo_password",
+            "### Authorization\n\nReserved URL characters in the user name or password must be percent-encoded:\n\n```\nuser:  me@company\npass:  p@ssw$rd\n\nscheme://me%40company:p%40ssw%24rd@proxy.com:80\n```\n",
+            "percent-encoded documentation example p@ssw$rd", carrier="markdown",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_url_userinfo_password",
+            "            'removes-user-pass' => ['http://user:p%40ss@proxy.com:6180', 'http://***:***@proxy.com:6180'],\n",
+            "PHP data provider with percent-encoded test credential p@ss", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_url_userinfo_password",
+            "PROXIES = {\"https\": \"http://user:s%33cr%33t@proxy.internal:3128\"}\n",
+            "Python test proxy with percent-encoded stand-in s3cr3t", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_url_userinfo_password",
+            "def test_redacts_password():\n    assert redact(\"https://admin:p%40ssw%30rd@db.internal/app\") == \"https://admin:***@db.internal/app\"\n",
+            "Python test with percent-encoded test credential p@ssw0rd", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_url_userinfo_password",
+            "For anonymous access use ftp://anonymous:%24ecret@ftp.example.com/pub as shown in the setup guide.",
+            "percent-encoded stand-in $ecret in prose", carrier="prose",
+        ),
+    ],
+}
+for _label, _rows in DLP_T17_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
 def flatten(suite: str, cases: dict[str, list[dict]]) -> list[dict]:

@@ -771,6 +771,19 @@ pub fn us_ssn_context_free(s: &str) -> bool {
     us_ssn(s) && digits.iter().any(|&digit| digit != digits[0]) && digits != b"123456789"
 }
 
+/// ABA routing transit number (B-ACCT): nine digits, also printed 4-4-1 with
+/// hyphens. The first two are a Federal Reserve routing symbol (00 government,
+/// 01–12, thrifts 21–32, electronic 61–72, traveller's cheques 80) and the sum
+/// weighted 3 7 1 3 7 1 3 7 1 is divisible by 10. One repeated digit passes the
+/// sum but is no number.
+pub fn aba_routing_number(s: &str) -> bool {
+    grouped_digits::<9>(s).is_some_and(|digits| {
+        matches!(digits[0] * 10 + digits[1], 0..=12 | 21..=32 | 61..=72 | 80)
+            && !one_repeated_digit(&digits)
+            && weighted_sum(&digits, &[3, 7, 1, 3, 7, 1, 3, 7, 1]).is_multiple_of(10)
+    })
+}
+
 pub fn uk_nino(s: &str) -> bool {
     let normalized = s.replace(' ', "").to_ascii_uppercase();
     if normalized.len() != 9 {
@@ -813,9 +826,15 @@ pub fn uk_nhs_number(s: &str) -> bool {
 /// The `N` digits of `s` with spaces and hyphens removed, if `s` holds exactly
 /// `N` ASCII digits besides them.
 fn grouped_digits<const N: usize>(s: &str) -> Option<[u32; N]> {
+    separated_digits(s, b" -")
+}
+
+/// The `N` digits of `s` with the bytes of `separators` removed, if `s` holds
+/// exactly `N` ASCII digits besides them.
+fn separated_digits<const N: usize>(s: &str, separators: &[u8]) -> Option<[u32; N]> {
     let mut digits = [0u32; N];
     let mut count = 0;
-    for byte in s.bytes().filter(|byte| !matches!(byte, b' ' | b'-')) {
+    for byte in s.bytes().filter(|byte| !separators.contains(byte)) {
         if !byte.is_ascii_digit() || count == N {
             return None;
         }
@@ -1084,6 +1103,101 @@ pub fn no_fodselsnummer(s: &str) -> bool {
     })
 }
 
+/// French NIR, the numéro de sécurité sociale (B-EU1): fifteen characters, grouped
+/// by spaces or not: sex (`1`/`2`, `3`/`4` while registration runs, `7`/`8` for a
+/// provisional number), birth year, birth month (`01`–`12`, `20`–`42` or `50`–`99`
+/// when the month is unknown), département (`01`–`99`, Corsica `2A`/`2B`), commune,
+/// order number and a key `97 − (first thirteen mod 97)`, with `2A` and `2B` read
+/// as `19` and `18`.
+pub fn fr_nir(s: &str) -> bool {
+    let mut bytes = [0u8; 15];
+    let mut count = 0;
+    for byte in s.bytes().filter(|&byte| byte != b' ') {
+        if count == bytes.len() {
+            return false;
+        }
+        bytes[count] = byte;
+        count += 1;
+    }
+    let digits = |range: std::ops::Range<usize>| bytes[range].iter().all(u8::is_ascii_digit);
+    if count != bytes.len() || !digits(0..5) || !digits(7..15) {
+        return false;
+    }
+    let number = |range: std::ops::Range<usize>| {
+        bytes[range]
+            .iter()
+            .fold(0u64, |number, byte| number * 10 + u64::from(byte - b'0'))
+    };
+    let department = match &bytes[5..7] {
+        b"2A" => 19,
+        b"2B" => 18,
+        b"00" => return false,
+        _ if digits(5..7) => number(5..7),
+        _ => return false,
+    };
+    matches!(bytes[0], b'1' | b'2' | b'3' | b'4' | b'7' | b'8')
+        && matches!(number(3..5), 1..=12 | 20..=42 | 50..=99)
+        && 97 - (number(0..5) * 100_000_000 + department * 1_000_000 + number(7..13)) % 97
+            == number(13..15)
+}
+
+/// French SIREN (B-EU1): nine digits, grouped 3-3-3 by spaces or not, passing
+/// Luhn; one repeated digit is never issued.
+pub fn fr_siren(s: &str) -> bool {
+    grouped_digits::<9>(s).is_some_and(|digits| siren(&digits))
+}
+
+/// Whether nine digits are a SIREN: Luhn, not one repeated digit.
+fn siren(digits: &[u32]) -> bool {
+    !one_repeated_digit(digits) && luhn_checksum(digits) == 0
+}
+
+/// French SIRET (B-EU1): a SIREN and a five-digit establishment number (NIC),
+/// grouped 3-3-3-5 by spaces or not. The fourteen digits pass Luhn, except for
+/// the establishments of La Poste (SIREN `356 000 000`), whose digit sum is a
+/// multiple of five.
+pub fn fr_siret(s: &str) -> bool {
+    grouped_digits::<14>(s).is_some_and(|digits| {
+        siren(&digits[..9])
+            && if decimal(&digits[..9]) == 356_000_000 {
+                digits.iter().sum::<u32>().is_multiple_of(5)
+            } else {
+                luhn_checksum(&digits) == 0
+            }
+    })
+}
+
+/// Dutch BSN, the burgerservicenummer (B-EU1): nine digits, plain, grouped 3-3-3
+/// by spaces or printed `1234.56.782`, passing the 11-proof; one repeated digit
+/// is never issued.
+pub fn nl_bsn(s: &str) -> bool {
+    separated_digits::<9>(s, b" .")
+        .is_some_and(|digits| !one_repeated_digit(&digits) && eleven_proof(&digits))
+}
+
+/// The Dutch 11-proof of nine digits (BSN, former btw-id): the first eight
+/// weighted 9…2 minus the last is divisible by 11.
+fn eleven_proof(digits: &[u32]) -> bool {
+    (weighted_sum(&digits[..8], &[9, 8, 7, 6, 5, 4, 3, 2]) + 11 * 9 - digits[8]).is_multiple_of(11)
+}
+
+/// Belgian national number, the rijksregisternummer / numéro de registre national
+/// (B-EU1): eleven digits, plain or printed `85.07.30-033.28`: birth date `YYMMDD`
+/// (month and day `00` when unknown, month plus 20 or 40 for a BIS number), a
+/// serial number `001`–`998` and a check `97 − (first nine mod 97)`, for births
+/// since 2000 with a `2` before the nine.
+pub fn be_national_number(s: &str) -> bool {
+    separated_digits::<11>(s, b" .-").is_some_and(|digits| {
+        let number = decimal(&digits[..9]);
+        let month = two_digits(&digits, 2);
+        let check = decimal(&digits[9..]);
+        matches!(month, 0..=12 | 20..=32 | 40..=52)
+            && two_digits(&digits, 4) <= 31
+            && (1..=998).contains(&(number % 1000))
+            && (97 - number % 97 == check || 97 - (2_000_000_000 + number) % 97 == check)
+    })
+}
+
 /// ISO 13616 Mod-97 check — IBAN validation.
 /// Strips whitespace before checking.
 pub fn mod97(s: &str) -> bool {
@@ -1297,12 +1411,7 @@ pub fn nl_vat_id(s: &str) -> bool {
     if digits.iter().all(|&digit| digit == 0) || branch == [0, 0] {
         return false;
     }
-    let weighted = digits[..8]
-        .iter()
-        .zip((2..=9).rev())
-        .map(|(digit, weight)| digit * weight)
-        .sum::<u32>();
-    let mod11 = (weighted + 11 * 9 - digits[8]) % 11 == 0;
+    let mod11 = eleven_proof(&digits);
     let mod97 = format!("NL{body}")
         .chars()
         .filter_map(|ch| ch.to_digit(36))

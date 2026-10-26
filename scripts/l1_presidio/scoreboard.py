@@ -509,7 +509,7 @@ def nl_vat_id(value: str) -> bool:
     digits, branch = _vat_digits(body[:9], 9), _vat_digits(body[10:], 2)
     if digits is None or branch is None or not any(digits) or branch == [0, 0]:
         return False
-    mod11 = (sum(d * w for d, w in zip(digits[:8], range(9, 1, -1))) - digits[8]) % 11 == 0
+    mod11 = _eleven_proof(digits)
     mod97 = int("".join(str(int(ch, 36)) for ch in "NL" + body)) % 97 == 1
     return mod11 or mod97
 
@@ -917,6 +917,17 @@ def lanr(value: str) -> bool:
     return (10 - _weighted_sum(digits[:6], (4, 9, 4, 9, 4, 9)) % 10) % 10 == digits[6]
 
 
+def aba_routing_number(value: str) -> bool:
+    """Port of ``validators::aba_routing_number`` (routing symbol 00–12/21–32/61–72/80, weights 3 7 1 mod 10)."""
+    digits = _grouped_digits(value, 9)
+    if digits is None or len(set(digits)) == 1:
+        return False
+    symbol = digits[0] * 10 + digits[1]
+    if not (symbol <= 12 or 21 <= symbol <= 32 or 61 <= symbol <= 72 or symbol == 80):
+        return False
+    return _weighted_sum(digits, (3, 7, 1) * 3) % 10 == 0
+
+
 _NRIC_SERIES = {"S": (0, "JZIHGFEDCBA"), "T": (4, "JZIHGFEDCBA"), "F": (0, "XWUTRQPNMLK"),
                 "G": (4, "XWUTRQPNMLK"), "M": (3, "XWUTRQPNJLK")}
 
@@ -1036,6 +1047,73 @@ def no_fodselsnummer(value: str) -> bool:
     )
 
 
+def _separated_digits(value: str, length: int, separators: str) -> list[int] | None:
+    """The digits of ``value`` without ``separators``, if there are exactly ``length`` ASCII digits."""
+    body = "".join(ch for ch in value if ch not in separators)
+    if len(body) != length or not body.isascii() or not body.isdigit():
+        return None
+    return [int(ch) for ch in body]
+
+
+def fr_nir(value: str) -> bool:
+    """Port of ``validators::fr_nir`` (sex, month, département incl. 2A/2B, key 97 − first thirteen mod 97)."""
+    body = value.replace(" ", "")
+    if len(body) != 15 or not body.isascii() or not (body[:5] + body[7:]).isdigit():
+        return False
+    department = {"2A": "19", "2B": "18"}.get(body[5:7], body[5:7])
+    if not department.isdigit() or department == "00":
+        return False
+    month = int(body[3:5])
+    if body[0] not in "123478" or not (1 <= month <= 12 or 20 <= month <= 42 or 50 <= month <= 99):
+        return False
+    return 97 - int(body[:5] + department + body[7:13]) % 97 == int(body[13:])
+
+
+def _siren(digits: list[int]) -> bool:
+    return len(set(digits)) > 1 and _luhn_checksum(digits) == 0
+
+
+def fr_siren(value: str) -> bool:
+    """Port of ``validators::fr_siren`` (nine digits, Luhn, not one repeated digit)."""
+    digits = _grouped_digits(value, 9)
+    return digits is not None and _siren(digits)
+
+
+def fr_siret(value: str) -> bool:
+    """Port of ``validators::fr_siret`` (SIREN + NIC, Luhn; La Poste 356000000 by digit sum mod 5)."""
+    digits = _grouped_digits(value, 14)
+    if digits is None or not _siren(digits[:9]):
+        return False
+    if _number(digits[:9]) == 356_000_000:
+        return sum(digits) % 5 == 0
+    return _luhn_checksum(digits) == 0
+
+
+def _eleven_proof(digits: list[int]) -> bool:
+    """The Dutch 11-proof of nine digits: the first eight weighted 9…2 minus the last, mod 11."""
+    return (_weighted_sum(digits[:8], range(9, 1, -1)) - digits[8]) % 11 == 0
+
+
+def nl_bsn(value: str) -> bool:
+    """Port of ``validators::nl_bsn`` (nine digits, plain, 3-3-3 or 1234.56.782, 11-proof, not one repeated digit)."""
+    digits = _separated_digits(value, 9, " .")
+    return digits is not None and len(set(digits)) > 1 and _eleven_proof(digits)
+
+
+def be_national_number(value: str) -> bool:
+    """Port of ``validators::be_national_number`` (YYMMDD, serial 001–998, 97 − mod 97, 2000s with a 2 before)."""
+    digits = _separated_digits(value, 11, " .-")
+    if digits is None:
+        return False
+    number, check = _number(digits[:9]), _number(digits[9:])
+    month = digits[2] * 10 + digits[3]
+    if not (month <= 12 or 20 <= month <= 32 or 40 <= month <= 52) or digits[4] * 10 + digits[5] > 31:
+        return False
+    if not 1 <= number % 1000 <= 998:
+        return False
+    return 97 - number % 97 == check or 97 - (2_000_000_000 + number) % 97 == check
+
+
 # Python ports of every checksum validator (``checksums.ark`` with an algorithm in entity_map.yaml);
 # a task that adds one ports it here, or scripts/tests/test_l1_scoreboard.py is red.
 CHECKSUM_PORTS: dict[str, Callable[[str], bool]] = {
@@ -1090,6 +1168,12 @@ CHECKSUM_PORTS: dict[str, Callable[[str], bool]] = {
     "fi_hetu": fi_hetu,
     "dk_cpr": dk_cpr,
     "no_fodselsnummer": no_fodselsnummer,
+    "aba_routing_number": aba_routing_number,
+    "fr_nir": fr_nir,
+    "fr_siren": fr_siren,
+    "fr_siret": fr_siret,
+    "nl_bsn": nl_bsn,
+    "be_national_number": be_national_number,
 }
 
 

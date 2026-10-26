@@ -11,10 +11,10 @@ What ARK L1 detects (PII and DLP), how it compares with Presidio and the secret 
 
 | | PII | DLP |
 | --- | --- | --- |
-| Result labels (entity groups) | 70 | 23 |
-| Regex rules | 109 | 64 (+5 relationship rules) |
-| Checksum-validated units (count rule T03) | 49 (Presidio 2.2.364: 35) | – |
-| Rules with a `checksum` or `structure` check | 65 | 6 |
+| Result labels (entity groups) | 75 | 23 |
+| Regex rules | 120 | 64 (+5 relationship rules) |
+| Checksum-validated units (count rule T03) | 55 (Presidio 2.2.364: 35) | – |
+| Rules with a `checksum` or `structure` check | 76 | 6 |
 | Default state | all rules on | credential/secret groups on, broader families opt-in |
 | Compared with | Presidio 2.2.364 (tuned) | gitleaks 8.30.1, TruffleHog 3.97.9, detect-secrets 1.5.0 |
 | Overall F1 (2026-10-24) | `balanced`: neutral 63.2, presidio_favored 54.3 | default profile: 88.6 (P 99.3, R 80.0) |
@@ -47,7 +47,7 @@ One row per benchmark entity of `research/l1-pii/entity_map.yaml`. Scope: `share
 | `pii.mac_address` | shared | `MAC_ADDRESS` | `pii_mac_address` | format | on | `MAC_ADDRESS` |
 | `pii.iban` | shared | `IBAN` | `pii_iban_de`, `pii_iban_generic` | checksum | on | `IBAN_CODE` |
 | `pii.credit_card.pan` | shared | `CREDITCARD` | `pii_credit_card` | checksum | on | `CREDIT_CARD` |
-| `pii.financial_account_number` | shared | `FINANCIAL_ACCOUNT_NUMBER` | `pii_financial_account_number` | format | on | `US_BANK_NUMBER`, `ABA_ROUTING_NUMBER` |
+| `pii.financial_account_number` | shared | `FINANCIAL_ACCOUNT_NUMBER` | `pii_financial_account_number`, `pii_aba_routing_number_us`, `pii_aba_routing_number_us_context_free` | checksum | on (1 of 3 rules `balanced`/`recall` only) | `US_BANK_NUMBER`, `ABA_ROUTING_NUMBER` |
 | `pii.us.social_security_number` | shared | `SSN` | `pii_ssn_us`, `pii_ssn_us_proximity`, `pii_ssn_us_context_free` | format | on (1 of 3 rules `balanced`/`recall` only) | `US_SSN` |
 | `pii.uk.national_insurance_number` | shared | `NATIONALID` | `pii_ni_uk`, `pii_ni_uk_context_free` | format | on (1 of 2 rules `balanced`/`recall` only) | `UK_NINO` |
 | `pii.de.tax_id` | shared | `STEUERID` | `pii_steuer_id_de`, `pii_steuer_id_de_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `DE_TAX_ID` |
@@ -111,6 +111,11 @@ One row per benchmark entity of `research/l1-pii/entity_map.yaml`. Scope: `share
 | `pii.uk.vat_id` | ark_only | `VAT_ID_GB` | `pii_vat_id_gb` | checksum | on (`balanced`/`recall` only) | – |
 | `pii.dk.cpr` | ark_only | `DK_CPR` | `pii_cpr_dk`, `pii_cpr_dk_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | – |
 | `pii.no.fodselsnummer` | ark_only | `NO_FODSELSNUMMER` | `pii_fodselsnummer_no`, `pii_fodselsnummer_no_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | – |
+| `pii.fr.nir` | ark_only | `FR_NIR` | `pii_nir_fr`, `pii_nir_fr_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | – |
+| `pii.fr.siren` | ark_only | `FR_SIREN` | `pii_siren_fr` | checksum | on | – |
+| `pii.fr.siret` | ark_only | `FR_SIRET` | `pii_siret_fr`, `pii_siret_fr_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | – |
+| `pii.nl.bsn` | ark_only | `NL_BSN` | `pii_bsn_nl`, `pii_bsn_nl_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | – |
+| `pii.be.national_number` | ark_only | `BE_NATIONAL_NUMBER` | `pii_national_number_be`, `pii_national_number_be_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | – |
 | `pii.url` | presidio_only | – | – | – | – | `URL` |
 | `pii.crypto_wallet` | presidio_only | – | – | – | – | `CRYPTO` |
 | `pii.us.medical_license` | presidio_only | – | – | – | – | `MEDICAL_LICENSE` |
@@ -146,7 +151,7 @@ One row per benchmark entity of `research/l1-pii/entity_map.yaml`. Scope: `share
 | `entity.date` | semantic | – | – | – | – | `DATE_TIME` |
 | `entity.street_address` | semantic | – | – | – | – | – |
 
-Entities: 30 shared, 40 ARK only, 28 Presidio only, 6 semantic. Hard-negative false positives (2026-10-24): ARK 0, Presidio 0.
+Entities: 30 shared, 45 ARK only, 28 Presidio only, 6 semantic. Hard-negative false positives (2026-10-24): ARK 0, Presidio 0.
 
 ### F1 per entity
 
@@ -226,6 +231,11 @@ Legend: `ARK x / Presidio y` = exact F1 of both; `no gold` = measured, but the f
 | `pii.uk.vat_id` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
 | `pii.dk.cpr` | ark_only | – | – | – | – |
 | `pii.no.fodselsnummer` | ark_only | – | – | – | – |
+| `pii.fr.nir` | ark_only | – | – | – | – |
+| `pii.fr.siren` | ark_only | – | – | – | – |
+| `pii.fr.siret` | ark_only | – | – | – | – |
+| `pii.nl.bsn` | ark_only | – | – | – | – |
+| `pii.be.national_number` | ark_only | – | – | – | – |
 | `pii.url` | presidio_only | 0 / 21 / 20 | no gold | ARK 0.0 / Presidio 77.8 | ARK 0.0 / Presidio 8.2 |
 | `pii.crypto_wallet` | presidio_only | 0 / 1 / 21 | no gold | ARK 0.0 / Presidio 100.0 | ARK 0.0 / Presidio 100.0 |
 | `pii.us.medical_license` | presidio_only | 0 / 0 / 22 | no gold | no gold | ARK 0.0 / Presidio 52.6 |

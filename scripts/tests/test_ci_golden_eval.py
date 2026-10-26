@@ -1,42 +1,37 @@
-"""CI runs the L1 golden evaluation (13_l1_golden_eval) for both PII and DLP."""
+"""Golden CI preserves both suites while selecting only affected domains."""
 from pathlib import Path
 import shlex
 
+import pytest
 import yaml
 
 
 ROOT = Path(__file__).resolve().parents[2]
 EXAMPLE = "13_l1_golden_eval"
+CONDITIONS = {
+    "all": "needs.changes.outputs.pii == 'true' && needs.changes.outputs.dlp == 'true'",
+    "pii": "needs.changes.outputs.pii == 'true' && needs.changes.outputs.dlp != 'true'",
+    "dlp": "needs.changes.outputs.dlp == 'true' && needs.changes.outputs.pii != 'true'",
+}
 
 
 def _golden_steps():
     workflow = yaml.safe_load((ROOT / ".github" / "workflows" / "ci.yml").read_text())
-    return [
-        step
-        for step in workflow["jobs"]["rust"]["steps"]
-        if EXAMPLE in step.get("run", "")
-    ]
+    return [step for step in workflow["jobs"]["rust"]["steps"] if EXAMPLE in step.get("run", "")]
 
 
-def test_rust_job_runs_the_golden_eval_once():
-    assert len(_golden_steps()) == 1, f"ci.yml rust job must run {EXAMPLE} exactly once"
+def test_golden_eval_has_one_step_per_selection():
+    suites = [shlex.split(step["run"])[-1] for step in _golden_steps()]
+    assert sorted(suites) == ["all", "dlp", "pii"]
 
 
-def test_golden_eval_covers_both_suites_with_the_locked_lockfile():
-    (step,) = _golden_steps()
+@pytest.mark.parametrize("suite", CONDITIONS)
+def test_golden_eval_keeps_locked_execution_and_correct_condition(suite):
+    (step,) = [step for step in _golden_steps() if shlex.split(step["run"])[-1] == suite]
     argv = shlex.split(step["run"])
-    assert argv[:2] == ["cargo", "run"], step["run"]
-    assert "--locked" in argv
-    assert argv[argv.index("--example") + 1] == EXAMPLE
-    suite = argv[argv.index("--") + 1:] if "--" in argv else []
-    # No suite argument means `all`; `pii` or `dlp` alone would skip a fixture.
-    assert suite in ([], ["all"]), f"golden eval must cover pii and dlp, got {suite}"
-
-
-def test_golden_eval_runs_from_the_rust_package():
-    (step,) = _golden_steps()
-    # The example resolves fixtures relative to rust/.
-    assert step.get("working-directory") == "rust"
+    assert argv == ["cargo", "run", "--locked", "--example", EXAMPLE, "--", suite]
+    assert step["working-directory"] == "rust"
+    assert step["if"] == CONDITIONS[suite]
 
 
 def test_golden_eval_fixtures_exist():

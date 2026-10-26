@@ -5,6 +5,7 @@
 <p align="center">
   <a href="https://crates.io/crates/patronus-ark"><img src="https://img.shields.io/crates/v/patronus-ark.svg?style=flat-square&logo=rust&logoColor=white" alt="crates.io"></a>
   <a href="https://pypi.org/project/patronus-ark/"><img src="https://img.shields.io/pypi/v/patronus-ark.svg?style=flat-square&logo=pypi&logoColor=white" alt="PyPI"></a>
+  <a href="https://pepy.tech/projects/patronus-ark?timeRange=threeMonths&amp;category=version&amp;includeCIDownloads=true&amp;granularity=weekly&amp;viewType=line&amp;versions=Total%2C0.*"><img src="https://img.shields.io/pepy/dt/patronus-ark?style=flat-square&amp;label=downloads" alt="PyPI downloads (Pepy)"></a>
   <a href="https://pypi.org/project/patronus-ark/"><img src="https://img.shields.io/pypi/pyversions/patronus-ark.svg?style=flat-square&logo=python&logoColor=white" alt="Python 3.11+"></a>
   <a href="https://patronus-protect.github.io/patronus-security/"><img src="https://img.shields.io/badge/docs-patronus--ark-38bdf8?style=flat-square" alt="Documentation"></a>
   <a href="https://github.com/patronus-protect/patronus-security/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/patronus-protect/patronus-security/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>

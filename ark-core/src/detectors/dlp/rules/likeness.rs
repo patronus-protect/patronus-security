@@ -20,13 +20,16 @@
 //! Character classes decide which checks apply: a value with a digit or a
 //! symbol other than an identifier separator is never a word or a name, so
 //! weak but real passwords such as `Sommer2026!`, `hunter2`, `P@ssw0rd` or
-//! `letmein` (no dictionary word) stay secrets. A token in the username of a
+//! `letmein` (no dictionary word) stay secrets. A URL userinfo password is read
+//! percent-decoded and, as for Basic auth and connection strings, a masked
+//! credential noun (`p@ss`, `s3cr3t`) is a stand-in there. A token in the username of a
 //! URL (`https://<token>:x-oauth-basic@…`) needs two character classes and
 //! token entropy as well.
 use super::credentials::{low_variety, LowVariety};
 use crate::detectors::dlp::config_keys;
 use crate::detectors::structure;
 use crate::detectors::validators::{shannon_entropy, CharClasses};
+use crate::threat::percent_decode_lossy;
 use regex::Regex;
 use std::{ops::Range, sync::LazyLock};
 
@@ -983,19 +986,47 @@ const FUNCTION_WORDS: &[&str] = &[
 /// T10: whether the password of a URL userinfo (`scheme://user:<value>@`)
 /// looks like a chosen secret: no pseudo-password of a token-in-username
 /// URL, no credential name or stand-in (`user:pass`, `user:secret`,
-/// `token:MY_GITHUB_TOKEN`, `foo001:bar002`, `gitlab-ci-token:realtoken`).
+/// `token:MY_GITHUB_TOKEN`, `foo001:bar002`, `gitlab-ci-token:realtoken`),
+/// also masked (`p@ss`, `s3cr3t`). T17: a userinfo percent-encodes reserved
+/// characters, so the checks read the decoded password (`p%40ss` is `p@ss`);
+/// an encoded `%3A` is password data, not the separator.
 pub fn is_userinfo_password(text: &str, range: Range<usize>) -> bool {
-    let value = &text[range];
-    // The password is the part after the last `:` of the userinfo.
-    let password = value.rsplit(':').next().unwrap_or(value);
+    let encoded = &text[range];
+    // The password is the part after the last literal `:` of the userinfo.
+    let password = encoded.rsplit(':').next().unwrap_or(encoded);
     if PSEUDO_PASSWORDS
         .iter()
         .any(|pseudo| password.eq_ignore_ascii_case(pseudo))
     {
         return false;
     }
+    let decoded;
+    let value = if encoded.contains('%') {
+        decoded = percent_decode_lossy(encoded);
+        decoded.as_str()
+    } else {
+        encoded
+    };
     !is_metasyntactic(value)
+        && !is_masked_credential_noun(value)
         && (!is_word_like(value) || !(is_stand_in(value) || names_a_credential(value)))
+}
+
+/// T17: a credential noun with leetspeak digits and symbols for some of its
+/// letters (`p@ss`, `s3cr3t`, `p@ssw$rd`): every character is the noun's
+/// letter, its leetspeak letter or a symbol standing in for it, and letters
+/// are at least half of the value.
+fn is_masked_credential_noun(value: &str) -> bool {
+    let letters = value.chars().filter(|c| c.is_alphabetic()).count();
+    letters * 2 >= value.chars().count()
+        && CREDENTIAL_NOUNS.iter().any(|noun| {
+            noun.chars().count() == value.chars().count()
+                && noun.chars().zip(value.chars()).all(|(letter, c)| {
+                    c.to_lowercase().eq(std::iter::once(letter))
+                        || leet_letter(c) == letter
+                        || c.is_ascii_punctuation()
+                })
+        })
 }
 
 /// T10: whether the username of a token-in-username URL
@@ -1068,21 +1099,23 @@ pub fn is_connection_password(text: &str, range: Range<usize>) -> bool {
 
 /// [`is_chosen_password`] without the user-id.
 fn is_chosen_secret(value: &str) -> bool {
-    let plain: String = value
-        .chars()
-        .map(|c| match c {
-            '@' | '4' => 'a',
-            '3' => 'e',
-            '1' | '!' => 'i',
-            '0' => 'o',
-            '$' | '5' => 's',
-            '7' => 't',
-            c => c,
-        })
-        .collect();
+    let plain: String = value.chars().map(leet_letter).collect();
     !is_metasyntactic(value)
         && !(is_word_like(&plain)
             && (is_stand_in(&plain) || names_a_credential(&plain) || is_word_sequence(&plain)))
+}
+
+/// The letter a leetspeak digit or symbol stands for; other characters stay.
+fn leet_letter(c: char) -> char {
+    match c {
+        '@' | '4' => 'a',
+        '3' => 'e',
+        '1' | '!' => 'i',
+        '0' => 'o',
+        '$' | '5' => 's',
+        '7' => 't',
+        c => c,
+    }
 }
 
 /// The separator before a value and the byte offset where the key ends, or
@@ -1292,8 +1325,9 @@ fn trim_trailing_punctuation(value: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::{
-        closes_string, is_assignment_value, is_connection_password, is_env_value, is_passphrase,
-        is_userinfo_password, is_userinfo_token, key_shape, suits_field_key, KeyShape,
+        closes_string, is_assignment_value, is_connection_password, is_env_value,
+        is_masked_credential_noun, is_passphrase, is_userinfo_password, is_userinfo_token,
+        key_shape, suits_field_key, KeyShape,
     };
 
     /// The value after the last `{v}` marker position of `template`.
@@ -1465,6 +1499,55 @@ mod tests {
                 userinfo("https://user:{v}@example.org/", value, is_userinfo_password),
                 "{value}"
             );
+        }
+    }
+
+    #[test]
+    fn userinfo_passwords_are_read_percent_decoded() {
+        for value in [
+            "p%40ss",
+            "p%40ssw%24rd",
+            "p%40ssw%30rd",
+            "s%33cr%33t",
+            "%24ecret",
+            "P%40SS",
+            "fo%6F",
+        ] {
+            assert!(
+                !userinfo("http://user:{v}@proxy.com/", value, is_userinfo_password),
+                "{value}"
+            );
+        }
+        for value in [
+            "Vkrq%40Tz82%24mLw%3A41",
+            "Hmt%24pn%3A7731%40qe",
+            "Kx7pQ2vL9rT4%40",
+            "Kx7pQ2vL%3Ax-oauth-basic",
+            "x-oauth-basic%3AKx7pQ2vL",
+        ] {
+            assert!(
+                userinfo("http://user:{v}@proxy.com/", value, is_userinfo_password),
+                "{value}"
+            );
+        }
+    }
+
+    #[test]
+    fn masked_credential_nouns_need_their_letters() {
+        for value in [
+            "p@ss", "P@SS", "p@ssw$rd", "s3cr3t", "$ecret", "t0k3n", "passw*rd",
+        ] {
+            assert!(is_masked_credential_noun(value), "{value}");
+        }
+        for value in [
+            "@@@@",
+            "p$$$",
+            "p@sx",
+            "Kx7pQ2vL",
+            "p@ssw0rd2026",
+            "s3cr3t-value",
+        ] {
+            assert!(!is_masked_credential_noun(value), "{value}");
         }
     }
 

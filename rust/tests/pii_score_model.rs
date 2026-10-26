@@ -459,7 +459,18 @@ fn checksum_strength_is_reserved_for_real_check_digits() {
             "pii_fodselsnummer_no",
             "pii_fodselsnummer_no_context_free",
             "pii_hetu_fi",
-            "pii_hetu_fi_context_free"
+            "pii_hetu_fi_context_free",
+            "pii_aba_routing_number_us",
+            "pii_aba_routing_number_us_context_free",
+            "pii_nir_fr",
+            "pii_nir_fr_context_free",
+            "pii_siren_fr",
+            "pii_siret_fr",
+            "pii_siret_fr_context_free",
+            "pii_bsn_nl",
+            "pii_bsn_nl_context_free",
+            "pii_national_number_be",
+            "pii_national_number_be_context_free"
         ]
     );
 }
@@ -510,6 +521,18 @@ fn reference_scores_per_rule() {
         ("pii_nric_fin_sg_context_free", 0.55),
         ("pii_uen_sg", 0.60),
         ("pii_uen_sg_context_free", 0.55),
+        ("pii_financial_account_number", 0.70),
+        ("pii_aba_routing_number_us", 0.60),
+        ("pii_aba_routing_number_us_context_free", 0.55),
+        ("pii_nir_fr", 0.60),
+        ("pii_nir_fr_context_free", 0.55),
+        ("pii_siren_fr", 0.60),
+        ("pii_siret_fr", 0.60),
+        ("pii_siret_fr_context_free", 0.55),
+        ("pii_bsn_nl", 0.60),
+        ("pii_bsn_nl_context_free", 0.55),
+        ("pii_national_number_be", 0.60),
+        ("pii_national_number_be_context_free", 0.55),
     ] {
         assert_eq!(rule_score(rule_id), expected, "{rule_id}");
     }
@@ -554,6 +577,12 @@ fn checksum_vectors_decide_emission_in_every_mode() {
             "LANR: 123456789",
             "PHYSICIAN_NUMBER_LANR",
             validators::lanr,
+        ),
+        (
+            "ABA: 121000358",
+            "ABA: 121000359",
+            "FINANCIAL_ACCOUNT_NUMBER",
+            validators::aba_routing_number,
         ),
     ] {
         let value = |text: &str| text.split_once(": ").unwrap().1.to_string();

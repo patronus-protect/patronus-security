@@ -219,6 +219,18 @@ def test_nordic_personal_numbers_have_one_label_per_country():
         assert entity_map.scope(entity_id) == scope
     assert entity_map.presidio_entity("SE_PERSONNUMMER") == "pii.se.personnummer"
     assert entity_map.presidio_entity("FI_PERSONAL_IDENTITY_CODE") == "pii.fi.personal_identity_code"
+def test_fr_nl_be_national_numbers_are_ark_only():
+    # B-EU1: one label per numbering system; Presidio 2.2.364 has no recognizer for them.
+    entity_map = MODULE.load()
+    for entity_id, label in [
+        ("pii.fr.nir", "FR_NIR"),
+        ("pii.fr.siren", "FR_SIREN"),
+        ("pii.fr.siret", "FR_SIRET"),
+        ("pii.nl.bsn", "NL_BSN"),
+        ("pii.be.national_number", "BE_NATIONAL_NUMBER"),
+    ]:
+        assert entity_map.ark_label(label) == entity_id
+        assert entity_map.scope(entity_id) == "ark_only"
 
 
 # ── validation of malformed maps ─────────────────────────────────────────────
@@ -457,7 +469,7 @@ def test_checked_in_registry_order_matches_the_rust_order_test():
     expected = re.findall(r'\(\s*"(pii_\w+)",\s*"(\w+)",?\s*\)', rust_test)
     rules = _generate_docs().parse_native_patterns(MODULE.PII_SOURCE_PATH, "PiiPattern")
     assert [(rule["id"], rule["entity_group"]) for rule in rules] == expected
-    assert len(expected) == 109
+    assert len(expected) == 120
 
 
 def test_cli_check_succeeds_and_fails(tmp_path):

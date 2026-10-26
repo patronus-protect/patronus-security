@@ -545,8 +545,13 @@ class GeneratorSpecTests(unittest.TestCase):
             self.assertFalse(set(entry["generators"]) & set(entry.get("weak", [])), rule_id)
             self.assertFalse(set(entry["generators"] + entry.get("weak", [])) & set(entry.get("quoted", [])), rule_id)
             self.assertFalse(
+                set(entry["generators"] + entry.get("weak", []) + entry.get("quoted", []))
+                & set(entry.get("url_encoded", [])),
+                rule_id,
+            )
+            self.assertFalse(
                 set(entry.get("lookalike", []))
-                & set(entry["generators"] + entry.get("weak", []) + entry.get("quoted", [])),
+                & set(entry["generators"] + entry.get("weak", []) + entry.get("quoted", []) + entry.get("url_encoded", [])),
                 rule_id,
             )
             referenced.update(
@@ -554,6 +559,7 @@ class GeneratorSpecTests(unittest.TestCase):
                 entry.get("shape_only", []),
                 entry.get("weak", []),
                 entry.get("quoted", []),
+                entry.get("url_encoded", []),
                 entry.get("lookalike", []),
             )
         for entity, entry in rules.baseline_entities().items():

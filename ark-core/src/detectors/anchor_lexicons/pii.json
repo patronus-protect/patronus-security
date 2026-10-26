@@ -1669,7 +1669,10 @@
       "bank account number",
       "bank-account-number",
       "bank_account_number",
-      "banking account"
+      "banking account",
+      "acct number",
+      "acct no",
+      "acct id"
     ],
     "de": [
       "kontonummer",
@@ -1692,7 +1695,8 @@
       "bankkontokennung"
     ],
     "shared": [
-      "iban"
+      "iban",
+      "bban"
     ],
     "fr": [
       "numéro de compte",
@@ -1754,6 +1758,60 @@
     "shared": [],
     "sources": [
       "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.bank_routing_number",
+    "description": "US-Bankleitzahl (ABA Routing Number)",
+    "en": [
+      "routing number",
+      "routing numbers",
+      "routing-number",
+      "routing_number",
+      "routing no",
+      "bank routing number",
+      "bank routing numbers",
+      "bank-routing-number",
+      "bank_routing_number",
+      "routing transit number",
+      "routing and transit number",
+      "aba number",
+      "aba-number",
+      "aba_number",
+      "aba routing number",
+      "aba-routing-number",
+      "aba_routing_number"
+    ],
+    "de": [
+      "routingnummer",
+      "routing nummer",
+      "routing-nummer",
+      "aba-nummer",
+      "aba nummer"
+    ],
+    "shared": [
+      "aba",
+      "rtn"
+    ],
+    "fr": [
+      "numéro de routage",
+      "numero de routage",
+      "numéro d'acheminement",
+      "numéro d’acheminement",
+      "numero d'acheminement"
+    ],
+    "es": [
+      "número de ruta",
+      "numero de ruta",
+      "número de ruta bancaria",
+      "numero de ruta bancaria"
+    ],
+    "it": [
+      "numero di routing",
+      "numero di routing bancario"
+    ],
+    "sources": [
+      "rust/src/detectors/pii/us.rs"
     ]
   },
   {
@@ -2368,6 +2426,194 @@
     ],
     "sources": [
       "ark-core/src/detectors/pii/nordic.rs"
+    ]
+  },
+  {
+    "id": "pii.fr_social_security_number",
+    "description": "Französische Sozialversicherungsnummer (NIR, numéro INSEE)",
+    "en": [
+      "french social security number",
+      "french social-security number",
+      "nir number",
+      "nir no",
+      "insee number",
+      "insee no"
+    ],
+    "de": [
+      "französische sozialversicherungsnummer",
+      "französische versicherungsnummer",
+      "nir-nummer",
+      "nir nummer",
+      "insee-nummer",
+      "insee nummer"
+    ],
+    "shared": [
+      "nir",
+      "insee"
+    ],
+    "fr": [
+      "n° de sécurité sociale",
+      "n° sécurité sociale",
+      "no de sécurité sociale",
+      "numéro de sécu",
+      "n° de sécu",
+      "sécurité sociale",
+      "securite sociale",
+      "numéro insee",
+      "numero insee",
+      "n° insee",
+      "numéro d'inscription au répertoire",
+      "numéro d’inscription au répertoire",
+      "numéro ss",
+      "n° ss",
+      "carte vitale"
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/fr.rs"
+    ]
+  },
+  {
+    "id": "pii.fr_siren",
+    "description": "Französische Unternehmensnummer (SIREN)",
+    "en": [
+      "siren number",
+      "siren no",
+      "french company number"
+    ],
+    "de": [
+      "siren-nummer",
+      "siren nummer",
+      "französische unternehmensnummer"
+    ],
+    "shared": [
+      "siren"
+    ],
+    "fr": [
+      "numéro siren",
+      "numero siren",
+      "n° siren",
+      "no siren",
+      "code siren"
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/fr.rs"
+    ]
+  },
+  {
+    "id": "pii.fr_siret",
+    "description": "Französische Betriebsnummer (SIRET)",
+    "en": [
+      "siret number",
+      "siret no",
+      "french establishment number"
+    ],
+    "de": [
+      "siret-nummer",
+      "siret nummer",
+      "französische betriebsnummer"
+    ],
+    "shared": [
+      "siret"
+    ],
+    "fr": [
+      "numéro siret",
+      "numero siret",
+      "n° siret",
+      "no siret",
+      "code siret"
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/fr.rs"
+    ]
+  },
+  {
+    "id": "pii.nl_citizen_service_number",
+    "description": "Niederländische Bürgerservicenummer (BSN)",
+    "en": [
+      "citizen service number",
+      "citizen-service-number",
+      "citizen_service_number",
+      "dutch citizen service number",
+      "dutch social security number",
+      "bsn number",
+      "bsn no"
+    ],
+    "de": [
+      "bürgerservicenummer",
+      "buergerservicenummer",
+      "niederländische bürgerservicenummer",
+      "niederländische sozialversicherungsnummer",
+      "bsn-nummer",
+      "bsn nummer"
+    ],
+    "shared": [
+      "bsn"
+    ],
+    "nl": [
+      "burgerservicenummer",
+      "burger service nummer",
+      "burger-servicenummer",
+      "burgerservice nummer",
+      "bsn-nummer",
+      "bsn nummer",
+      "bsn-nr",
+      "sofinummer",
+      "sofi-nummer",
+      "sofi nummer"
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/nl.rs"
+    ]
+  },
+  {
+    "id": "pii.be_national_number",
+    "description": "Belgische Nationalregisternummer (Rijksregisternummer, numéro de registre national)",
+    "en": [
+      "belgian national number",
+      "national number",
+      "national-number",
+      "national_number",
+      "national register number",
+      "national registry number",
+      "national registration number",
+      "belgian national register number",
+      "belgian id number"
+    ],
+    "de": [
+      "belgische nationalregisternummer",
+      "nationalregisternummer",
+      "nationalregister-nummer",
+      "nationalnummer",
+      "belgische nationalnummer"
+    ],
+    "shared": [
+      "insz",
+      "niss",
+      "rrn"
+    ],
+    "fr": [
+      "numéro de registre national",
+      "numero de registre national",
+      "n° de registre national",
+      "n° registre national",
+      "registre national",
+      "numéro national",
+      "numero national",
+      "numéro niss",
+      "numéro d'identification de la sécurité sociale"
+    ],
+    "nl": [
+      "rijksregisternummer",
+      "rijksregister nummer",
+      "rijksregister-nummer",
+      "rijksregisternr",
+      "rijksregister",
+      "insz-nummer",
+      "insz nummer",
+      "identificatienummer van de sociale zekerheid"
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/be.rs"
     ]
   },
   {
