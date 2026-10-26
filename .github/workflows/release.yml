@@ -36,6 +36,7 @@ jobs:
         run: python scripts/check_release_source.py
       - run: cargo fmt --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo clippy -p patronus-ark-core --all-targets --all-features -- -D warnings
       - run: cargo test -p patronus-ark-core --no-default-features
       - run: cargo test -p patronus-ark-core --features wolf
       - run: cargo test -p patronus-ark-core --features download
@@ -45,6 +46,12 @@ jobs:
       - run: cargo test -p ark-distributed-protocol
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
+          command: check licenses
+      - name: Check Core downstream license compatibility
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          manifest-path: ark-core/Cargo.toml
+          arguments: --all-features --exclude-dev --config ark-core/deny.toml
           command: check licenses
       - run: cargo package -p patronus-ark-core -p patronus-ark
       - run: python -m pip install "PyYAML>=6,<7"

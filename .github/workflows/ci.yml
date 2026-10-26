@@ -34,6 +34,26 @@ jobs:
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check licenses
+      - name: Check Core downstream license compatibility
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          manifest-path: ark-core/Cargo.toml
+          arguments: --all-features --exclude-dev --config ark-core/deny.toml
+          command: check licenses
+
+  core-features:
+    name: Core all features (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.98.0
+        with:
+          components: clippy
+      - run: cargo clippy -p patronus-ark-core --all-targets --all-features -- -D warnings
 
   python:
     runs-on: ubuntu-latest

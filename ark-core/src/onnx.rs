@@ -6,25 +6,39 @@ use crate::{ExecutionBackend, OnnxRuntimeOptions};
     feature = "onnx-directml",
     feature = "onnx-tensorrt"
 ))]
-use ort::ep::ExecutionProvider;
-#[cfg(feature = "onnx-cuda")]
-use ort::execution_providers::CUDAExecutionProvider;
-#[cfg(feature = "onnx-directml")]
-use ort::execution_providers::DirectMLExecutionProvider;
-#[cfg(feature = "onnx-tensorrt")]
-use ort::execution_providers::TensorRTExecutionProvider;
-#[cfg(feature = "onnx-coreml")]
-#[allow(deprecated)]
-use ort::execution_providers::{ArbitrarilyConfigurableExecutionProvider, CoreMLExecutionProvider};
-#[allow(deprecated)]
+use provider_api::ExecutionProvider;
+// ORT rc.13 moved provider builders into `ep` and shortened their names.
+// The rc.10 wheel path still uses the previous public module and names.
+#[cfg(not(ort_rc_10))]
+use ort::ep as provider_api;
+#[cfg(ort_rc_10)]
+use ort::execution_providers as provider_api;
 use ort::{
     environment::GlobalThreadPoolOptions,
-    execution_providers::ExecutionProviderDispatch,
     session::{
         builder::{GraphOptimizationLevel, SessionBuilder},
         Session,
     },
 };
+#[cfg(feature = "onnx-coreml")]
+use provider_api::ArbitrarilyConfigurableExecutionProvider;
+#[cfg(all(feature = "onnx-cuda", ort_rc_10))]
+use provider_api::CUDAExecutionProvider;
+#[cfg(all(feature = "onnx-coreml", not(ort_rc_10)))]
+use provider_api::CoreML as CoreMLExecutionProvider;
+#[cfg(all(feature = "onnx-coreml", ort_rc_10))]
+use provider_api::CoreMLExecutionProvider;
+#[cfg(all(feature = "onnx-directml", not(ort_rc_10)))]
+use provider_api::DirectML as DirectMLExecutionProvider;
+#[cfg(all(feature = "onnx-directml", ort_rc_10))]
+use provider_api::DirectMLExecutionProvider;
+use provider_api::ExecutionProviderDispatch;
+#[cfg(all(feature = "onnx-tensorrt", not(ort_rc_10)))]
+use provider_api::TensorRT as TensorRTExecutionProvider;
+#[cfg(all(feature = "onnx-tensorrt", ort_rc_10))]
+use provider_api::TensorRTExecutionProvider;
+#[cfg(all(feature = "onnx-cuda", not(ort_rc_10)))]
+use provider_api::CUDA as CUDAExecutionProvider;
 use std::collections::BTreeSet;
 use std::path::Path;
 use std::sync::{Mutex, OnceLock};
