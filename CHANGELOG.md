@@ -352,6 +352,45 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Synthetic DLP gold for the 23 hosting, cloud and data entities without an ARK rule and without
+  gold (GOLD-D4): `cloud.aws.bedrock_api_key`, `cloud.alibaba.access_key`,
+  `cloud.azure.entra_client_secret`, `cloud.azure.storage_account_key`,
+  `cloud.gcp.service_account_key`, `cloud.ibm.credentials`, `cloud.yandex.credentials`,
+  `cloud.scalingo.api_token`, `hosting.flyio.access_token`, `hosting.netlify.access_token`,
+  `hosting.heroku.api_key`, `hosting.cloudflare.api_key`, `hosting.digitalocean.token`,
+  `hosting.openshift.user_token`, `hosting.defined_networking.api_token`,
+  `hosting.fastly.api_token`, `hosting.settlemint.access_token`, `data.databricks.api_token`,
+  `data.planetscale.secret`, `data.confluent.secret`, `data.algolia.api_key`,
+  `data.clickhouse.api_secret`, `data.cloudant.credentials` (packages P03, P04, P06, P12).
+  `baseline_entities` in `dlp_synth/rules.json` gains 37 generators in the format of each
+  entity's gitleaks rule, or, for the four entities without one, of its TruffleHog detector
+  (`GCP`) or detect-secrets plugin (`AzureStorageKeyDetector`, `IbmCloudIamDetector`,
+  `CloudantDetector`): the Bedrock key is `ABSK` + base64 of `BedrockAPIKey-…-at-<account>:…`,
+  the Azure storage key is base64 of 64 bytes inside a connection string, the GCP service
+  account key is a one-line key file with a PKCS#8 RSA 2048 private key (random integers, not
+  a usable key), OpenShift tokens are `sha256~` + base64url of 32 bytes. Each entity has one
+  lookalike (wrong length, or a GCP workload identity federation config without a private
+  key). Per split and entity the carriers give 40 positives (20 DE, 20 EN) and 200 hard
+  negatives. The baseline test accepts TruffleHog and detect-secrets format sources for
+  entities without a gitleaks rule, and the profile test covers the hosting, cloud and data
+  families. `entity_map.yaml` maps the TruffleHog detectors that report these formats
+  (`Azure`, `AzureStorage`, `Netlify`, `Heroku`, `CloudflareApiToken`, `CloudflareCaKey`,
+  `DigitalOceanV2`, `FastlyPersonalToken`; `check-entity-map` passes on the pinned binaries).
+  `run_baselines.py` cuts `AccountKey=` from detect-secrets `AzureStorageKeyDetector` findings
+  (step `key_name`, sharing the name-prefix table with `cookie_name`) and widens TruffleHog
+  `GCP` findings, which report the `client_email`, to the key file the detector matched (step
+  `key_file`). **Detection change:** none (evaluation data only, no latency effect); the frozen
+  corpora change only when the operator re-freezes them. Dev rows, exact F1: ARK 0 on all 23
+  (no rule; generic rules find up to 34 of 40 values); best baseline 100 Entra client secret
+  (TruffleHog) and OpenShift (gitleaks), 98.7 Azure storage key, 96.1 Fastly, 94.7 Netlify
+  (TruffleHog), 97.4 Fly.io, 66.7 ClickHouse, 65.5 Databricks (gitleaks), 63.9 Heroku, 60.7
+  Cloudflare (TruffleHog), 60.3 DigitalOcean (gitleaks), 49.7 GCP service account key
+  (TruffleHog), 49.4 Bedrock, Scalingo, PlanetScale and SettleMint, 47.5 Alibaba, 45.7 Yandex,
+  Algolia, Confluent and Defined Networking (gitleaks), 45.7 IBM Cloud and 45.0 Cloudant
+  (detect-secrets). Baseline precision suffers mostly from `doc_example`/`test_key` values.
+  After a re-freeze ARK reports 119 hard-negative spans on these rows
+  (`dlp_generic_credential_assignment` and `dlp_env_var_secret` on example and test values; no
+  `lookalike` hit) — findings for P03/P04/P06/P12.
 - Synthetic DLP gold for the 20 devops, ci, vcs and registry entities without an ARK rule and
   without gold (GOLD-D3): `vcs.gitlab.session_cookie`, `vcs.bitbucket.client_secret`,
   `ci.droneci.access_token`, `ci.travisci.access_token`, `registry.jfrog.artifactory`,

@@ -1475,6 +1475,98 @@ PROFILES = {
         "devops.sourcegraph.access_token", "SECRET_TOKEN", "secret", "src_access_token", "Sourcegraph access token",
         "Sourcegraph-Zugriffstoken",
     ),
+    # GOLD-D4: hosting, cloud and data entities without an ARK rule.
+    "cloud.aws.bedrock_api_key": Profile(
+        "cloud.aws.bedrock_api_key", "CLOUD_KEY", "secret", "aws_bearer_token_bedrock", "Amazon Bedrock API key",
+        "Amazon-Bedrock-API-Schlüssel",
+    ),
+    "cloud.alibaba.access_key": Profile(
+        "cloud.alibaba.access_key", "CLOUD_KEY", "secret", "alibaba_cloud_access_key", "Alibaba Cloud AccessKey",
+        "Alibaba-Cloud-AccessKey",
+    ),
+    "cloud.azure.entra_client_secret": Profile(
+        "cloud.azure.entra_client_secret", "CLOUD_KEY", "secret", "azure_client_secret", "Entra ID client secret",
+        "Entra-ID-Client-Secret",
+    ),
+    "cloud.azure.storage_account_key": Profile(
+        "cloud.azure.storage_account_key", "CLOUD_KEY", "secret", "azure_storage_connection_string",
+        "Azure Storage connection string", "Azure-Storage-Verbindungszeichenfolge",
+        {
+            "azure_storage_account_key": (
+                "DefaultEndpointsProtocol=https;AccountName=stacmedata01;AccountKey=<<value>>;"
+                "EndpointSuffix=core.windows.net"
+            )
+        },
+    ),
+    "cloud.gcp.service_account_key": Profile(
+        "cloud.gcp.service_account_key", "CLOUD_KEY", "secret", "google_credentials", "GCP service account key",
+        "GCP-Dienstkontoschlüssel",
+    ),
+    "cloud.ibm.credentials": Profile(
+        "cloud.ibm.credentials", "CLOUD_KEY", "secret", "ibm_cloud_apikey", "IBM Cloud API key",
+        "IBM-Cloud-API-Schlüssel",
+    ),
+    "cloud.yandex.credentials": Profile(
+        "cloud.yandex.credentials", "CLOUD_KEY", "secret", "yandex_cloud_api_key", "Yandex Cloud API key",
+        "Yandex-Cloud-API-Schlüssel",
+    ),
+    "cloud.scalingo.api_token": Profile(
+        "cloud.scalingo.api_token", "CLOUD_KEY", "secret", "scalingo_api_token", "Scalingo API token",
+        "Scalingo-API-Token",
+    ),
+    "hosting.flyio.access_token": Profile(
+        "hosting.flyio.access_token", "CLOUD_KEY", "secret", "fly_api_token", "Fly.io API token", "Fly.io-API-Token",
+    ),
+    "hosting.netlify.access_token": Profile(
+        "hosting.netlify.access_token", "CLOUD_KEY", "secret", "netlify_auth_token", "Netlify access token",
+        "Netlify-Zugriffstoken",
+    ),
+    "hosting.heroku.api_key": Profile(
+        "hosting.heroku.api_key", "CLOUD_KEY", "secret", "heroku_api_key", "Heroku API key", "Heroku-API-Schlüssel",
+    ),
+    "hosting.cloudflare.api_key": Profile(
+        "hosting.cloudflare.api_key", "CLOUD_KEY", "secret", "cloudflare_api_token", "Cloudflare API token",
+        "Cloudflare-API-Token",
+    ),
+    "hosting.digitalocean.token": Profile(
+        "hosting.digitalocean.token", "CLOUD_KEY", "secret", "digitalocean_access_token", "DigitalOcean access token",
+        "DigitalOcean-Zugriffstoken",
+    ),
+    "hosting.openshift.user_token": Profile(
+        "hosting.openshift.user_token", "CLOUD_KEY", "secret", "openshift_token", "OpenShift token", "OpenShift-Token",
+    ),
+    "hosting.defined_networking.api_token": Profile(
+        "hosting.defined_networking.api_token", "CLOUD_KEY", "secret", "dnkey_api_token", "Defined Networking API key",
+        "Defined-Networking-API-Schlüssel",
+    ),
+    "hosting.fastly.api_token": Profile(
+        "hosting.fastly.api_token", "CLOUD_KEY", "secret", "fastly_api_token", "Fastly API token", "Fastly-API-Token",
+    ),
+    "hosting.settlemint.access_token": Profile(
+        "hosting.settlemint.access_token", "CLOUD_KEY", "secret", "settlemint_access_token", "SettleMint access token",
+        "SettleMint-Zugriffstoken",
+    ),
+    "data.databricks.api_token": Profile(
+        "data.databricks.api_token", "API_KEY", "secret", "databricks_token", "Databricks token", "Databricks-Token",
+    ),
+    "data.planetscale.secret": Profile(
+        "data.planetscale.secret", "API_KEY", "secret", "planetscale_token", "PlanetScale token", "PlanetScale-Token",
+    ),
+    "data.confluent.secret": Profile(
+        "data.confluent.secret", "API_KEY", "secret", "confluent_credentials", "Confluent Cloud API credentials",
+        "Confluent-Cloud-API-Zugangsdaten",
+    ),
+    "data.algolia.api_key": Profile(
+        "data.algolia.api_key", "API_KEY", "secret", "algolia_admin_api_key", "Algolia admin API key",
+        "Algolia-Admin-API-Schlüssel",
+    ),
+    "data.clickhouse.api_secret": Profile(
+        "data.clickhouse.api_secret", "API_KEY", "secret", "clickhouse_api_secret", "ClickHouse Cloud API secret",
+        "ClickHouse-Cloud-API-Secret",
+    ),
+    "data.cloudant.credentials": Profile(
+        "data.cloudant.credentials", "API_KEY", "secret", "cloudant_password", "Cloudant password", "Cloudant-Passwort",
+    ),
 }
 
 
