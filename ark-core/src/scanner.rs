@@ -1,13 +1,9 @@
 use crate::{
     detectors::{
-        dlp::{
-            dlp::{default_rule_enabled, DlpPipeline},
-            score::DlpMode,
-        },
-        injection::*,
-        pii::{pii::PiiPipeline, score::PiiMode},
-        NativeDetection,
+        dlp::{dlp::default_rule_enabled, score::DlpMode},
+        pii::score::PiiMode,
     },
+    native::{NativeEngine, NativePolicy, NativeProducerOutcome},
     threat::NativeText,
     LayerResult, NativeResult, SecurityCategory,
 };
@@ -15,7 +11,6 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     panic::{catch_unwind, AssertUnwindSafe},
-    time::Instant,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -107,6 +102,8 @@ impl ScannerConfig {
         }
         Ok(())
     }
+}
+impl NativePolicy for ScannerConfig {
     fn allows_rule(&self, id: &str) -> bool {
         self.rules
             .get(id)
@@ -115,6 +112,15 @@ impl ScannerConfig {
     }
     fn allows_model(&self, id: &str) -> bool {
         self.models.get(id).copied().unwrap_or(true)
+    }
+    fn explain(&self) -> bool {
+        self.explain
+    }
+    fn pii_mode(&self) -> PiiMode {
+        self.pii_mode
+    }
+    fn dlp_mode(&self) -> DlpMode {
+        self.dlp_mode
     }
 }
 #[derive(Debug, thiserror::Error)]
@@ -144,14 +150,9 @@ pub struct ScanReport {
     #[cfg(feature = "wolf")]
     pub wolf: Option<crate::wolf::WolfResult>,
 }
-type Producer = Box<dyn for<'a> Fn(&NativeText<'a>) -> NativeDetection + Send + Sync>;
 pub struct Scanner {
     config: ScannerConfig,
-    pii: PiiPipeline,
-    dlp: DlpPipeline,
-    catalog: rule_catalog::InjectionRuleCatalogPipeline,
-    structural: structural::InjectionStructuralPipeline,
-    producers: Vec<(&'static str, Producer)>,
+    native: NativeEngine,
     #[cfg(feature = "wolf")]
     wolf: Option<crate::wolf::WolfRunner>,
 }
@@ -168,94 +169,8 @@ impl Scanner {
     ) -> Result<Self, ScanError> {
         options.validate()?;
         config.validate()?;
-        let mut producers: Vec<(&'static str, Producer)> = Vec::new();
-        macro_rules! add {
-            ($ty:path,$id:literal) => {{
-                let pipeline = <$ty>::new();
-                producers.push((
-                    $id,
-                    Box::new(move |prepared| pipeline.detect_prepared(prepared)),
-                ));
-            }};
-        }
-        add!(
-            cross_tool_instruction::CrossToolInstructionPipeline,
-            "native:cross_tool_instruction"
-        );
-        add!(
-            instruction_leak::InstructionLeakPipeline,
-            "native:instruction_leak"
-        );
-        add!(
-            encoded_instruction::EncodedInstructionPipeline,
-            "native:encoded_instruction"
-        );
-        add!(
-            multi_turn_escalation::MultiTurnEscalationPipeline,
-            "native:multi_turn_escalation"
-        );
-        add!(
-            guardrail_tamper::GuardrailTamperPipeline,
-            "native:guardrail_tamper"
-        );
-        add!(
-            tool_output_instruction::ToolOutputInstructionPipeline,
-            "native:tool_output_instruction"
-        );
-        add!(
-            hidden_html_instruction::HiddenHtmlInstructionPipeline,
-            "native:hidden_html_instruction"
-        );
-        add!(
-            unicode_confusable::UnicodeConfusablePipeline,
-            "native:unicode_confusable"
-        );
-        add!(
-            zero_width_obfuscation::ZeroWidthObfuscationPipeline,
-            "native:zero_width_obfuscation"
-        );
-        add!(
-            agentic_control_abuse::AgenticControlAbusePipeline,
-            "native:agentic_control_abuse"
-        );
-        add!(
-            binary_smuggling::BinarySmugglingPipeline,
-            "native:binary_smuggling"
-        );
-        add!(
-            instruction_override::InstructionOverridePipeline,
-            "native:instruction_override"
-        );
-        add!(
-            jailbreak_framing::JailbreakFramingPipeline,
-            "native:jailbreak_framing"
-        );
-        add!(
-            covert_instruction::CovertInstructionPipeline,
-            "native:covert_instruction"
-        );
-        add!(
-            instruction_boundary::InstructionBoundaryPipeline,
-            "native:instruction_boundary"
-        );
-        add!(
-            authority_escalation::AuthorityEscalationPipeline,
-            "native:authority_escalation"
-        );
-        add!(
-            tool_call_injection::ToolCallInjectionPipeline,
-            "native:tool_call_injection"
-        );
-        add!(
-            output_manipulation::OutputManipulationPipeline,
-            "native:output_manipulation"
-        );
         Ok(Self {
-            pii: PiiPipeline::new(),
-            dlp: DlpPipeline::new(),
-            catalog: rule_catalog::InjectionRuleCatalogPipeline::new(),
-            structural: structural::InjectionStructuralPipeline::new(),
-            producers,
+            native: NativeEngine::new(&config.categories),
             #[cfg(feature = "wolf")]
             wolf: config
                 .wolf
@@ -319,107 +234,39 @@ impl Scanner {
     ) -> Result<Vec<NativeResult>, ScanError> {
         let prepared = NativeText::new(text);
         let mut results = Vec::new();
-        for category in &self.config.categories {
+        for &category in &self.config.categories {
             control.check()?;
-            match category {
-                Category::Pii if checks.pii && self.config.allows_model("native:pii") => results
-                    .push(measure(category.legacy(), "native:pii", text, || {
-                        self.pii.detect_prepared_with_mode(
-                            &prepared,
-                            |id| self.config.allows_rule(id),
-                            self.config.explain,
-                            self.config.pii_mode,
-                        )
-                    })),
-                Category::Dlp if checks.dlp => {
-                    if self.config.allows_model("native:dlp") {
-                        results.push(measure(category.legacy(), "native:dlp", text, || {
-                            self.dlp.detect_prepared_with_mode(
-                                &prepared,
-                                |id| self.config.allows_rule(id),
-                                self.config.explain,
-                                self.config.dlp_mode,
-                            )
-                        }));
-                    }
-                    macro_rules! extra {
-                        ($ty:path,$id:literal,$rule:literal) => {
-                            if self.config.allows_model($id) && self.config.allows_rule($rule) {
-                                control.check()?;
-                                let pipe = <$ty>::new();
-                                results.push(measure(category.legacy(), $id, text, || {
-                                    pipe.detect_prepared(&prepared)
-                                }));
-                            }
-                        };
-                    }
-                    extra!(
-                        crate::detectors::dlp::sensitive_material::SensitiveMaterialPipeline,
-                        "native:sensitive_material",
-                        "dlp_sensitive_material"
-                    );
-                    extra!(
-                        crate::detectors::dlp::secret_transfer::SecretTransferPipeline,
-                        "native:secret_transfer",
-                        "dlp_secret_transfer"
-                    );
-                    extra!(
-                        crate::detectors::mcp::mcp_runtime_risk::McpRuntimeRiskPipeline,
-                        "native:mcp_runtime_risk",
-                        "dlp_mcp_runtime_risk"
-                    );
-                    extra!(
-                        crate::detectors::mcp::mcp_policy::McpPolicyPipeline,
-                        "native:mcp_policy",
-                        "dlp_mcp_policy"
-                    );
-                    extra!(
-                        crate::detectors::dlp::destructive_operation::DestructiveOperationPipeline,
-                        "native:destructive_operation",
-                        "dlp_destructive_operation"
-                    );
+            let selected = match category {
+                Category::Pii => checks.pii,
+                Category::Dlp => checks.dlp,
+                Category::Injection => checks.injection,
+            };
+            if !selected {
+                continue;
+            }
+            let mut outputs = Vec::new();
+            for producer in self.native.producers(category) {
+                control.check()?;
+                if !producer.enabled(&self.config) {
+                    continue;
                 }
-                Category::Injection
-                    if checks.injection && self.config.allows_model("native:injection_l1") =>
-                {
-                    let mut outputs = Vec::new();
-                    if self.config.allows_model("native:injection_rule_catalog") {
-                        outputs.push(measure(
-                            category.legacy(),
-                            "native:injection_rule_catalog",
-                            text,
-                            || {
-                                self.catalog
-                                    .detect_prepared(&prepared, |id| self.config.allows_rule(id))
-                            },
-                        ));
-                    }
-                    if self.config.allows_model("native:injection_structural")
-                        && self
-                            .config
-                            .allows_rule("ark.injection.structure.override_sensitive_disclosure")
-                    {
-                        outputs.push(measure(
-                            category.legacy(),
-                            "native:injection_structural",
-                            text,
-                            || self.structural.detect_prepared(&prepared),
-                        ));
-                    }
-                    for (id, produce) in &self.producers {
-                        control.check()?;
-                        if self.config.allows_model(id)
-                            && self.config.allows_rule(signal::native_rule_id(id))
-                        {
-                            outputs
-                                .push(measure(category.legacy(), id, text, || produce(&prepared)));
+                let outcome = self
+                    .native
+                    .run_producer(producer, &prepared, &self.config, control)
+                    .map_err(|error| match error {
+                        ScanError::Detector(_) => {
+                            ScanError::Detector("native scanner panicked".into())
                         }
-                    }
-                    if !outputs.is_empty() {
-                        results.push(crate::injection_l1::aggregate(text, outputs));
-                    }
+                        other => other,
+                    })?;
+                outputs.push(measure(category.legacy(), producer.id(), text, outcome));
+            }
+            if category == Category::Injection {
+                if !outputs.is_empty() {
+                    results.push(crate::injection_l1::aggregate(text, outputs));
                 }
-                _ => {}
+            } else {
+                results.extend(outputs);
             }
         }
         control.check()?;
@@ -463,11 +310,12 @@ fn measure(
     category: SecurityCategory,
     model: &str,
     text: &str,
-    detect: impl FnOnce() -> NativeDetection,
+    outcome: NativeProducerOutcome,
 ) -> NativeResult {
-    let start = Instant::now();
-    let detection = detect();
-    let duration_ms = start.elapsed().as_secs_f64() * 1000.0;
+    let NativeProducerOutcome {
+        detection,
+        duration_ms,
+    } = outcome;
     let spans = crate::post_prediction::filter_evidence(category, text, detection.evidence_spans);
     let confidence = spans
         .iter()

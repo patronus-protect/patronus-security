@@ -2,6 +2,7 @@
 pub mod detectors;
 #[doc(hidden)]
 pub mod diagnostics;
+pub mod native;
 pub mod normalization;
 #[doc(hidden)]
 pub mod threat;
