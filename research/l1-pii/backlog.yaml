@@ -357,6 +357,48 @@ tasks:
       Convention in research/l1-pii/README.md; gold and validator consistent with it; presidio_favored IP
       F1 >= tuned in balanced
 
+  # M1/M2 on presidio_favored and the F1 >= 80 floor are out of reach under the current decisions
+  - id: T27
+    title: "Reachability of M1/M2 on presidio_favored and exceptions to the F1 >= 80 quality floor (gold failing validators, decided known gaps)"
+    type: eval-infra
+    deps: [B-EVAL, D-M2]
+    needs_decision: true
+    source: "TRIAGE 2026-W44 (research/l1-pii/triage/2026-W44.md, buckets 1-4, 10, 15)"
+    question: >-
+      Dev, balanced, with every open task assumed to succeed: M1 IP on presidio_favored is capped at 87.7 vs
+      tuned 96.2 (9 of 41 gold values are loopback/unspecified, rejected by D-IP), M1 NINO at 80.0 vs 100 (gold
+      span ' YZ 61 48 68 B' carries a leading space), M1 SSN at 75.0 vs 88.9 (987-65-4322, 987-65-4329,
+      219-09-9999 fail validators::us_ssn; bare 078051121 stays negative per B-SSN), and M2 presidio_favored at
+      about 63.7 vs 85.7 (identity card 8/11 and DE VAT ID 2/5 gold values fail the check digit; bare BSNR, LANR,
+      driver's licence and tax ID stay negative per B-DE1, F15, K05). The floor cannot be reached for neutral PAN
+      (86 of 90 FN are Luhn/IIN-invalid gold, cap 53.3), neutral email (259 unannotated real addresses, cap about
+      76), neutral US SSN (Gretel's `ssn` gold holds SE, IT, UK, NL national IDs, cap about 79) and on
+      presidio_favored for AU ACN, BSNR, LANR, SG NRIC/FIN, IT VAT ID, DE tax ID, identity card, NINO and licence
+      plates (bare TR/IN/NG values). Options: (a) record each case as a floor exception in the README and accept
+      that M1/M2 stay NOT MET on presidio_favored; (b) judge milestones and the floor on attainable gold: for both
+      engines, leave out gold values that fail every validator of their id or fall under a recorded decision
+      (known-gap list in entity_map.yaml), and keep reporting the raw numbers; (c) revisit single decisions
+      (e.g. bare LANR/BSNR/SSN in balanced at a low score like Presidio) at the risk of new hard-negative hits.
+      Which applies, and per family or globally?
+    accept: >-
+      Decision recorded in research/l1-pii/README.md (milestone and floor sections); if (b): scoreboard.py m1,
+      m2 and report score the attainable view next to the raw view, the known-gap list lives in entity_map.yaml
+      and is checked by entity_map.py check, the gold-gap report checks passport and identity card gold only
+      against the validator of the document's country (today every passport counts as failing
+      de_passport_number); Q-task targets updated to the decided view; tests
+
+  - id: T28
+    title: "IPv6: no sub-span after a further `:` group (foo2001:db8::10.0.0.1 reports db8::10.0.0.1)"
+    type: precision-fix
+    deps: [B-IP]
+    source: "TRIAGE 2026-W44 (research/l1-pii/triage/2026-W44.md, bucket 5)"
+    accept: >-
+      The B-IP convention "no partial match" holds when the run before the address starts with word
+      characters: `foo2001:db8::10.0.0.1` yields no span, neither IPv6 nor the IPv4 tail (README IP span
+      rules; the presidio_favored gold `10.0.0.1` stays a known FN, the FP goes); hard negatives DE + EN for
+      `<word>2001:db8::…` shapes; `2001:db8::10.0.0.1`, `::ffff:10.0.0.1`, `fe80::1%eth0` and every
+      IP gold value found today stay found; presidio_favored IP precision rises in balanced and strict
+
   - id: GOLD-VAT1
     status: done
     title: "Gold for VAT IDs without gold, part 1: AT, BE, BG, CH, CY, CZ, DK, EE, ES, FI, FR, GR, HR, HU"
@@ -553,6 +595,19 @@ tasks:
       (JSON keys, CSV headers, key-value); neutral account number F1 >= tuned in balanced; username and
       customer/employee IDs (ark_only) must not regress; count_validated.py count rises by 1
 
+  - id: T29
+    title: "Account number: GB BBAN (4 letters + 14 digits) after BBAN and account-number field names"
+    type: recall-fix
+    deps: [K03, K04]
+    source: "TRIAGE 2026-W44 (research/l1-pii/triage/2026-W44.md, bucket 6)"
+    accept: >-
+      Gretel dev has 51 FINANCIAL_ACCOUNT_NUMBER FN in the GB BBAN shape (bank code, sort code, account:
+      `ZFJR88590163492773`), 21 of them after `BBAN:`, `(BBAN)`, `bank account number` or as a structural key;
+      those are found in every mode as a field-bound rule (K03 lexicon, K04 keys), values without such a field
+      name stay negative (no context-free form, the shape has no check digit); hard negatives DE + EN for
+      18-character codes after other field names (order, reference, tracking, VIN); username, customer and
+      employee IDs do not regress; neutral account number F1 rises in balanced
+
   - id: Q-FIN
     title: "Quality: card PAN 48 (neutral), CVV 0/68, expiry 0, IBAN 64/68, SWIFT/BIC 39/35, financial account number 8/0/72"
     type: recall-fix
@@ -593,6 +648,19 @@ tasks:
       source family where it has gold (snapshot research/scoreboard/*.json); strict shows no regression; 
       validators are never loosened; an entity that cannot reach 80 by a recorded decision is documented 
       in the README
+
+  - id: T30
+    title: "Quality: licence plate 35 (ark_authored): plate field names and structural keys, DE plates with dash before the digits and E/H suffix, UK plates with context"
+    type: recall-fix
+    deps: [K03, K04]
+    source: "TRIAGE 2026-W44 (research/l1-pii/triage/2026-W44.md, buckets 9 + 10); quality floor 2026-10-25"
+    accept: >-
+      ark_authored dev has 15 plate FN: keys `kennzeichen`, `license_plate`, `Number plate`, `Kfz-Kennzeichen:`,
+      prose `Vehicle registration on file is`, `My car, registration …`; DE forms `K-MH-2476`, `H-J-6815E`,
+      `FÜ-EJ 3281H`; UK forms `LW02 ULF`, `KS54 WLS` (format + plate context, as the presidio_favored case
+      `My car reg is AB51 ABC`). Plate F1 >= 80 in balanced on ark_authored; bare values without a plate term stay
+      negative in strict; the presidio_favored TR/IN/NG bare values follow the T27 decision; strict shows no
+      regression; no district-code list (F16 stays deferred)
 
   # M3 +3 (53)
   - id: B-NORD
