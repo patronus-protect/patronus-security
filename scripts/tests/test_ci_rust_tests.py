@@ -164,3 +164,19 @@ def test_runner_uses_checked_subprocesses(monkeypatch):
     MODULE.main()
     assert calls
     assert all(options == {"cwd": ROOT, "check": True} for _, options in calls)
+
+
+def test_core_matrix_uses_available_minor_series_for_cargo_helper_only():
+    job = WORKFLOW["jobs"]["core-features"]
+    (setup,) = [step for step in job["steps"] if step.get("uses", "").startswith("actions/setup-python@")]
+    assert setup["with"]["python-version"] == "3.12"
+    assert setup["with"]["check-latest"] == "true"
+    assert not any("pip" in step.get("run", "") for step in job["steps"])
+    assert any(step.get("run") == "python scripts/ci_rust_tests.py core-all-features" for step in job["steps"])
+
+
+def test_ci_token_permissions_are_read_only_except_change_listing():
+    assert WORKFLOW["permissions"] == {"contents": "read"}
+    assert WORKFLOW["jobs"]["changes"]["permissions"] == {"contents": "read", "pull-requests": "read"}
+    for job in WORKFLOW["jobs"].values():
+        assert all(level == "read" for level in job.get("permissions", {}).values())
