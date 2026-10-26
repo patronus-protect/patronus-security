@@ -243,3 +243,9 @@ size, overlap, batch size and short-input sample count after the threshold:
 cargo run --release -p patronus-ark-core --features wolf --example wolf_benchmark -- \
   /path/to/bundle 0.8 2048 256 4 16
 ```
+
+
+The opt-in tokenizer parity test uses the repository fixture materializer, including
+DLP generator recipes. Set `PATRONUS_TEST_PYTHON` to the project's virtual-environment
+Python when running it, alongside `PATRONUS_TEST_MMBERT_TOKENIZER_JSON` and
+`PATRONUS_TEST_MMBERT_TOKENIZER_MMBPE`. This fixture tooling is test-only.
