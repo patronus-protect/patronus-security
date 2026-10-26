@@ -4,7 +4,8 @@
 //! `dlp_generic_credential_assignment` runs to its closing quote (spaces,
 //! `;`, `,`, `}` inside, two characters before the first `;`).
 //! `dlp_env_var_secret` reports the value without its quotes and without a
-//! trailing `;`, also after `KEY:` in YAML/compose env maps. Code constants,
+//! trailing `;`, also after `KEY:` in YAML/compose env maps; on the same span a
+//! password variable belongs to `dlp_password_assignment` (T15). Code constants,
 //! the closing quote of a label, messages and references are no values.
 //! Values are synthetic.
 
@@ -146,36 +147,60 @@ fn bare_values_still_stop_at_separators() {
 
 #[test]
 fn env_var_values_have_no_quotes_or_trailing_terminator() {
+    // T15: a password variable whose value both rules report on the same span
+    // is attributed to the password rule; the span is the env value either way.
     let value = "Kx7!pQ2#vL9@rT4$";
-    for template in [
-        "DB_PASSWORD={v}\n",
-        "DB_PASSWORD=\"{v}\"\n",
-        "$ export DB_PASSWORD='{v}'\n$ ./bin/sync\n",
-        "ENV DB_PASSWORD=\"{v}\"\nENTRYPOINT [\"java\"]\n",
-        "import requests\n\nDB_PASSWORD = \"{v}\"\n",
-        "    private static final String SERVICE_SECRET = \"{v}\";\n",
-        "    SERVICE_SECRET = \"{v}\"\n\n    def call(env)\n",
-        "services:\n  app:\n    environment:\n      DB_PASSWORD: \"{v}\"\n",
-        "    env:\n      SERVICE_SECRET: '{v}'\n    steps:\n",
+    for (template, rule_id) in [
+        ("DB_PASSWORD={v}\n", "dlp_password_assignment"),
+        ("DB_PASSWORD=\"{v}\"\n", "dlp_password_assignment"),
+        (
+            "$ export DB_PASSWORD='{v}'\n$ ./bin/sync\n",
+            "dlp_password_assignment",
+        ),
+        (
+            "ENV DB_PASSWORD=\"{v}\"\nENTRYPOINT [\"java\"]\n",
+            "dlp_password_assignment",
+        ),
+        (
+            "import requests\n\nDB_PASSWORD = \"{v}\"\n",
+            "dlp_password_assignment",
+        ),
+        (
+            "    private static final String SERVICE_SECRET = \"{v}\";\n",
+            "dlp_env_var_secret",
+        ),
+        (
+            "    SERVICE_SECRET = \"{v}\"\n\n    def call(env)\n",
+            "dlp_env_var_secret",
+        ),
+        (
+            "services:\n  app:\n    environment:\n      DB_PASSWORD: \"{v}\"\n",
+            "dlp_password_assignment",
+        ),
+        (
+            "    env:\n      SERVICE_SECRET: '{v}'\n    steps:\n",
+            "dlp_env_var_secret",
+        ),
     ] {
-        assert_exact(template, value, "dlp_env_var_secret");
+        assert_exact(template, value, rule_id);
     }
     assert_exact(
         "      DB_PASSWORD: {v}\n      DB_HOST: db\n",
         "Kx7pQ2vL9rT4",
-        "dlp_env_var_secret",
+        "dlp_password_assignment",
     );
     assert_exact(
         "$ SERVICE_SECRET={v}; ./bin/report\n",
         "Kx7pQ2vL9rT4",
         "dlp_env_var_secret",
     );
-    // `;` inside a bare `.env` value belongs to it.
+    // `;` inside a bare `.env` value belongs to it; the password rule stops
+    // there, so the spans differ and the env rule keeps its own.
     assert_exact("DB_PASSWORD={v}\n", "Kx7;pQ2vL9", "dlp_env_var_secret");
     assert_exact(
         "DB_PASSWORD=\"{v}\"\n",
         "blau Drache 47 Zaun",
-        "dlp_env_var_secret",
+        "dlp_password_assignment",
     );
 }
 
@@ -183,13 +208,25 @@ fn env_var_values_have_no_quotes_or_trailing_terminator() {
 fn env_var_escaped_quoted_values_are_detected() {
     // Serialized source or log text escapes the quotes (`\"`, `\'`).
     let value = "Kx7!pQ2#vL9@rT4$";
-    for template in [
-        "{\"cmd\": \"DB_PASSWORD=\\\"{v}\\\" ./bin/sync\"}\n",
-        "log: export SERVICE_SECRET=\\'{v}\\'\n",
-        "\"    SERVICE_SECRET = \\\"{v}\\\"\\n\"\n",
-        "\"      DB_PASSWORD: \\\"{v}\\\"\\n\"\n",
+    for (template, rule_id) in [
+        (
+            "{\"cmd\": \"DB_PASSWORD=\\\"{v}\\\" ./bin/sync\"}\n",
+            "dlp_password_assignment",
+        ),
+        (
+            "log: export SERVICE_SECRET=\\'{v}\\'\n",
+            "dlp_env_var_secret",
+        ),
+        (
+            "\"    SERVICE_SECRET = \\\"{v}\\\"\\n\"\n",
+            "dlp_env_var_secret",
+        ),
+        (
+            "\"      DB_PASSWORD: \\\"{v}\\\"\\n\"\n",
+            "dlp_password_assignment",
+        ),
     ] {
-        assert_exact(template, value, "dlp_env_var_secret");
+        assert_exact(template, value, rule_id);
     }
 }
 
@@ -263,7 +300,11 @@ fn marker_words_cut_to_the_field_length_are_examples() {
         "password: Eexampl0123!\n",
     ]);
     // Words that merely contain the letters stay passwords.
-    assert_exact("DB_PASSWORD={v}\n", "Testkeller2026!", "dlp_env_var_secret");
+    assert_exact(
+        "DB_PASSWORD={v}\n",
+        "Testkeller2026!",
+        "dlp_password_assignment",
+    );
 }
 
 #[test]
