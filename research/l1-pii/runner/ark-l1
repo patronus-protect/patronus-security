@@ -234,6 +234,16 @@ def sha(ref: str) -> str:
     return git("rev-parse", ref)
 
 
+def conflicts_with(base: str, head: str) -> bool:
+    """True when `head` does not merge cleanly into `base`. Checked locally: GitHub reports
+    `mergeable` as UNKNOWN for a while after every push to main, which hid real conflicts."""
+    proc = subprocess.run(["git", *GIT_SAFE, "merge-tree", "--write-tree", base, head],
+                          cwd=REPO, capture_output=True, text=True)
+    if proc.returncode > 1:
+        raise RuntimeError(f"git merge-tree failed: {proc.stderr.strip()}")
+    return proc.returncode == 1
+
+
 def nothing(reason: str) -> int:
     print(f"RESULT={reason}")
     return NOTHING
@@ -262,9 +272,9 @@ def restack(open_prs: list[dict]) -> tuple[tuple[str, str], dict | None]:
             # only record the new base; replaying from the stale base would duplicate the parent's commits.
             stack[name] = {"base": prev_name, "base_sha": prev_sha}
             print(f"RECORDED={name} already on {prev_name}")
-        elif (pr.get("mergeable") == "CONFLICTING" if prev_name == "main" and rec["base"] == "main"
+        elif (conflicts_with(prev_sha, head) if prev_name == "main" and rec["base"] == "main"
               else rec["base_sha"] != prev_sha):
-            # The bottom branch stays on its main commit until GitHub reports a conflict with main;
+            # The bottom branch stays on its main commit until it conflicts with main;
             # its old base is where it forks from main, whatever stack.json still says.
             old_base = (git("merge-base", head, prev_sha) if prev_name == "main" and rec["base"] == "main"
                         else rec["base_sha"])
@@ -310,7 +320,7 @@ def restack(open_prs: list[dict]) -> tuple[tuple[str, str], dict | None]:
                       f"{str(err).strip().splitlines()[-1]}")
                 move_stale_base(pr, prev_name, prev_sha, {p["headRefName"] for p in open_prs})
         # Flat since 2026-10-23: every task PR targets main, none builds on another one; a PR is
-        # rebased only when GitHub reports a conflict with main (or its recorded base is a branch).
+        # rebased only when it conflicts with main (or its recorded base is a branch).
     for name in list(stack):
         if name not in {p["headRefName"] for p in open_prs}:
             del stack[name]
