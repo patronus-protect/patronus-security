@@ -53,6 +53,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.98.0
         with:
           components: clippy
+      - run: cargo clippy -p patronus-ark-core --no-default-features --lib -- -D warnings
       - run: cargo clippy -p patronus-ark-core --all-targets --all-features -- -D warnings
 
   python:

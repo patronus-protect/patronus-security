@@ -74,16 +74,15 @@ impl ScanControl {
         }
     }
     fn signal(&self, reason: u8) {
-        if self
+        let first_signal = self
             .0
             .reason
             .compare_exchange(0, reason, Ordering::AcqRel, Ordering::Acquire)
-            .is_err()
-        {
-            return;
-        }
+            .is_ok();
+        #[cfg(not(feature = "wolf"))]
+        let _ = first_signal;
         #[cfg(feature = "wolf")]
-        {
+        if first_signal {
             let callbacks: Vec<_> = self
                 .0
                 .aborts
