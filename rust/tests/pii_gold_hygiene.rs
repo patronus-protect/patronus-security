@@ -8,6 +8,7 @@
 
 use std::{collections::BTreeSet, path::Path};
 
+use patronus_ark::detectors::obfuscation::{Deobfuscated, Level};
 use patronus_ark::detectors::pii::pii::PII_PATTERNS;
 use patronus_ark::{SecurityCategory, SecurityGateway, SecurityLevel, SecurityScanResult};
 use serde::Deserialize;
@@ -66,19 +67,11 @@ fn char_slice(text: &str, start: usize, end: usize) -> String {
     text.chars().skip(start).take(end - start).collect()
 }
 
-/// Undo the `obfuscated` tag's tricks (zero-width and full-width characters, defanged
-/// `[.]`) so the value under the obfuscation is checked; the detector never sees this.
+/// Undo the `obfuscated` tag's tricks with the detector's own normalization at its
+/// widest level (K06: zero-width and full-width characters, defanged `[.]`, spelled-out
+/// separators, spaced digits) so the value under the obfuscation is checked.
 fn deobfuscate(value: &str) -> String {
-    value
-        .replace("[.]", ".")
-        .chars()
-        .filter(|ch| !matches!(ch, '\u{200B}'..='\u{200D}' | '\u{2060}' | '\u{FEFF}'))
-        .map(|ch| match ch {
-            '\u{FF01}'..='\u{FF5E}' => char::from_u32(ch as u32 - 0xFEE0).unwrap_or(ch),
-            '\u{3000}' => ' ',
-            _ => ch,
-        })
-        .collect()
+    Deobfuscated::new(value, Level::SpelledOut).map_or_else(|| value.to_owned(), |view| view.text)
 }
 
 #[test]

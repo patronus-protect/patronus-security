@@ -460,6 +460,7 @@ checksums:
     steuer_id: {algorithm: "ISO 7064 MOD 11,10"}
     steuer_id_issued: {algorithm: "ISO 7064 MOD 11,10"}   # plus BZSt-Ziffernverteilung (K05, kontextfrei)
     ip_address: null
+    email_domain: null                  # B-EMAIL, Top-Level-Domain laut IANA oder Platzhalter (T01)
     unanchored_phone: null
     phone: null
     mac_address: null

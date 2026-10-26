@@ -22,7 +22,7 @@
         "Schreiben Sie an anna.berg@firma.intern"
       ],
       "en": [
-        "Mirror: ftp://deploy@files.example.net/releases/",
+        "Mirror: ftp://deploy@files.northwind.net/releases/",
         "if address.endswith(\"'@example.com\"):",
         "Sent from alice.williams@email.note"
       ]

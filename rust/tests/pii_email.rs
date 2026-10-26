@@ -48,7 +48,10 @@ const MODES: [PiiMode; 3] = [PiiMode::Strict, PiiMode::Balanced, PiiMode::Recall
 
 /// `(text, value)`: `value` is the only EMAIL span in every mode.
 const FOUND: [(&str, &str); 16] = [
-    ("E-Mail: jürgen.müller@beispiel.de", "jürgen.müller@beispiel.de"),
+    (
+        "E-Mail: jürgen.müller@beispiel.de",
+        "jürgen.müller@beispiel.de",
+    ),
     (
         "Please confirm by emailing moeleprêtr@outlook.com today.",
         "moeleprêtr@outlook.com",
@@ -60,19 +63,25 @@ const FOUND: [(&str, &str); 16] = [
     ("Contact: o'neil@example.com", "o'neil@example.com"),
     ("correo electrónico ÐA@gmail.com, gracias", "ÐA@gmail.com"),
     ("Пишите: иван.петров@почта.com", "иван.петров@почта.com"),
-    ("Bitte an info@müller-bau.de schreiben.", "info@müller-bau.de"),
-    ("Email: a@xn--d1acufc.xn--p1ai", "a@xn--d1acufc.xn--p1ai"),
-    ("Mail POST@XN--E1AFMKFD.XN--P1AI now", "POST@XN--E1AFMKFD.XN--P1AI"),
     (
-        "通过电子邮件 诗向@yahoo.com 发送。",
-        "诗向@yahoo.com",
+        "Bitte an info@müller-bau.de schreiben.",
+        "info@müller-bau.de",
     ),
+    ("Email: a@xn--d1acufc.xn--p1ai", "a@xn--d1acufc.xn--p1ai"),
+    (
+        "Mail POST@XN--E1AFMKFD.XN--P1AI now",
+        "POST@XN--E1AFMKFD.XN--P1AI",
+    ),
+    ("通过电子邮件 诗向@yahoo.com 发送。", "诗向@yahoo.com"),
     // Without word spacing the local part is at most three ideographs or katakana.
     ("联系邮箱伟伟许@aol.com，联系电话", "伟伟许@aol.com"),
     ("と田@yahoo.comを共有", "田@yahoo.com"),
     ("Testkonto: qa.bot@shop.test", "qa.bot@shop.test"),
     ("Bounce: noreply@mailer.invalid.", "noreply@mailer.invalid"),
-    ("Ping dev.lead@northwind.example now", "dev.lead@northwind.example"),
+    (
+        "Ping dev.lead@northwind.example now",
+        "dev.lead@northwind.example",
+    ),
     (
         "https://shop.example.com/contact?email=anna.berg@firma.de",
         "anna.berg@firma.de",

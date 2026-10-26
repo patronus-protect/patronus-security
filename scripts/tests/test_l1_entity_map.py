@@ -409,7 +409,8 @@ def test_registry_parse_reports_score_model_fields():
     by_id = {rule["id"]: rule for rule in rules}
     assert by_id["pii_credit_card"]["strength"] == "checksum"
     assert by_id["pii_ipv4"]["strength"] == "format"
-    assert by_id["pii_email"]["strength"] == "none"
+    assert by_id["pii_email"]["strength"] == "format"
+    assert by_id["pii_kfz_kennzeichen_de"]["strength"] == "none"
     for rule in rules:
         assert rule["strength"] in {"checksum", "format", "none"}, rule
         assert isinstance(rule["base_score"], int) and 1 <= rule["base_score"] <= 100, rule

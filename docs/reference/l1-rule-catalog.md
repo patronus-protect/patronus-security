@@ -14,7 +14,7 @@ In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `
 
 | Rule ID | Result entity group | Extra validator | Validator strength | Base | Context | Score (`balanced`/`recall`) |
 | --- | --- | --- | --- | --- | --- | --- |
-| `pii_email` | `EMAIL` | no | none | 70 | key or proximity | 0.70–0.95 |
+| `pii_email` | `EMAIL` | yes | format | 55 | key or proximity | 0.70–0.95 |
 | `pii_ipv4` | `IP_ADDRESS` | yes | format | 50 | key or proximity | 0.65–0.90 |
 | `pii_ipv6_full` | `IP_ADDRESS` | yes | format | 50 | key or proximity | 0.65–0.90 |
 | `pii_ipv6_compressed` | `IP_ADDRESS` | yes | format | 50 | key or proximity | 0.65–0.90 |

@@ -106,8 +106,9 @@ DLP_LABELS = {
 
 # Gold convention T01 (research/l1-pii/README.md): well-formed values on reserved
 # placeholder domains (RFC 2606/6761) and NANP placeholder numbers are PII positives.
+# A local part may hold apostrophes between its characters (`o'neil`, B-EMAIL).
 PLACEHOLDER_EMAIL = re.compile(
-    r"(?<![\w.+-])[\w.+-]+@(?:[\w-]+\.)*"
+    r"(?<![\w.+'-])[\w.+-]+(?:'[\w.+-]+)*@(?:[\w-]+\.)*"
     r"(?:example\.(?:com|net|org)|[\w-]+\.(?:example|invalid|localhost|test))(?![\w-]|\.\w)"
 )
 PLACEHOLDER_PHONE = re.compile(
