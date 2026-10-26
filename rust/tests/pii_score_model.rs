@@ -451,7 +451,15 @@ fn checksum_strength_is_reserved_for_real_check_digits() {
             "pii_uen_sg_context_free",
             "pii_rentenversicherung_de_context_free",
             "pii_health_insurance_number_de_context_free",
-            "pii_physician_number_lanr_de_proximity"
+            "pii_physician_number_lanr_de_proximity",
+            "pii_personnummer_se",
+            "pii_personnummer_se_context_free",
+            "pii_cpr_dk",
+            "pii_cpr_dk_context_free",
+            "pii_fodselsnummer_no",
+            "pii_fodselsnummer_no_context_free",
+            "pii_hetu_fi",
+            "pii_hetu_fi_context_free"
         ]
     );
 }
@@ -476,6 +484,14 @@ fn reference_scores_per_rule() {
         ("pii_physician_number_lanr_de", 0.70),
         ("pii_physician_number_lanr_de_proximity", 0.55),
         ("pii_facility_number_bsnr_de", 0.35),
+        ("pii_personnummer_se", 0.60),
+        ("pii_personnummer_se_context_free", 0.55),
+        ("pii_cpr_dk", 0.60),
+        ("pii_cpr_dk_context_free", 0.55),
+        ("pii_fodselsnummer_no", 0.60),
+        ("pii_fodselsnummer_no_context_free", 0.55),
+        ("pii_hetu_fi", 0.60),
+        ("pii_hetu_fi_context_free", 0.55),
         ("pii_kfz_kennzeichen_de", 0.65),
         ("pii_ssn_us", 0.85),
         ("pii_ssn_us_context_free", 0.50),

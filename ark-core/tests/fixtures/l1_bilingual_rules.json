@@ -255,13 +255,13 @@
     "hard_negatives": {
       "de": [
         "X12-Bestellung: ST*850*0000012345~",
-        "Personnummer: 811228-9874",
+        "Personnummer: 811228-9875",
         "Lagerbestand je Regal:\n415\n555-2671",
         "Artikelcode 212-736-4410XL"
       ],
       "en": [
         "Closing balance field: :62F:/0000001234/",
-        "Swedish personal identity number: 811228-9874",
+        "Swedish personal identity number: 811228-9875",
         "Units per shelf:\n212\n555 0100",
         "SKU 646-273-9915xl"
       ]
@@ -1610,6 +1610,130 @@
       "en": [
         "Order 721234567 shipped."
       ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_personnummer_se",
+    "de": "Die schwedische Personennummer lautet 870928-9469.",
+    "en": "Personnummer: 811228-9874",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Personnummer: 870928-9468",
+        "Vorgang 8709289469 abgeschlossen."
+      ],
+      "en": [
+        "Personnummer: 811228-9875",
+        "Ticket 8112289874 was closed."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_personnummer_se_context_free",
+    "de": "Kunde 540326-5241 aus Malmö",
+    "en": "Customer 901120-8122 from Malmö",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die Personnummer der Kundin ist 530215-3100.",
+        "en": "871220-2384 is her Swedish personnummer."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_cpr_dk",
+    "de": "CPR-nummer: 280751-3187",
+    "en": "Her Danish CPR number is 080572-3300.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "CPR-nummer: 280751-3188",
+        "Vorgang 2807513187 abgeschlossen."
+      ],
+      "en": [
+        "CPR: 080572-3301",
+        "Ticket 0805723300 was closed."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_cpr_dk_context_free",
+    "de": "Patient 240373-1490 aus Aarhus",
+    "en": "Patient 281175-1939 from Aarhus",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die CPR-Nummer des Patienten ist 240498-1288.",
+        "en": "190963-2141 is his CPR number."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_fodselsnummer_no",
+    "de": "Fødselsnummer: 11089733660",
+    "en": "My Norwegian national identity number is 02104847288.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Fødselsnummer: 11089733661",
+        "Vorgang 11089733660 abgeschlossen."
+      ],
+      "en": [
+        "Fødselsnummer: 02104847289",
+        "Ticket 02104847288 was closed."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_fodselsnummer_no_context_free",
+    "de": "Mitglied 120841 35826 aus Bergen",
+    "en": "Member 150244 27975 from Bergen",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Das Fødselsnummer des Mitglieds ist 011141 35581.",
+        "en": "190766 04706 is his fødselsnummer."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_hetu_fi",
+    "de": "Finnische Personenkennung: 020108B196F",
+    "en": "HETU: 131052-308T",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "HETU: 020108B196G",
+        "Finnische Personenkennung: 131052+308T"
+      ],
+      "en": [
+        "HETU: 131052-308U",
+        "Henkilötunnus: 111111-111A"
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_hetu_fi_context_free",
+    "de": "Antragsteller 200383V0179 wurde genehmigt.",
+    "en": "Applicant 010594Y9032 has been approved.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die HETU des Antragstellers ist 160828Y568A.",
+        "en": "220444W2262 is my hetu."
+      }
     }
   },
   {

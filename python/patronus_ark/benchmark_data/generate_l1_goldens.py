@@ -1380,7 +1380,7 @@ for _row in T04_PARENTHESIZED_AREA_CODE_CASES:
 # T17 phone precision (TRIAGE 2026-W43 buckets 1 + 2): `pii_phone_international` and the `+49`
 # form of `pii_phone_de` do not start inside an EDIFACT element run (`NAD+BY+987654321`) or a
 # SWIFT MT tag (`{86:+33…}`), and `pii_phone_us` needs the area code set off, so zero-padded
-# IDs (`0000012345`) and 6-4 groups (`811228-9874`) are no NANP number. Positives keep `+49 …`,
+# IDs (`0000012345`) and 6-4 groups (`811228-9875`) are no NANP number. Positives keep `+49 …`,
 # `+1 …` and the placeholder numbers of T01 after a field name, also directly after `:`.
 # Appended so existing ids stay stable.
 T17_PHONE_ELEMENT_RUN_CASES = [
@@ -1403,7 +1403,7 @@ T17_PHONE_ELEMENT_RUN_CASES = [
     n("PHONE", "de", "pii_phone_us", "X12-Bestellung: ST*850*0000012345~", "zero-padded X12 control number"),
     n("PHONE", "de", "pii_phone_us", "Schlusssaldo im Kontoauszug: :62F:/0000001234/", "zero-padded account in a SWIFT MT field"),
     n("PHONE", "de", "pii_phone_us", "Belegnummer: 0012345678", "zero-padded document number"),
-    n("PHONE", "de", "pii_phone_us", "Personnummer: 811228-9874", "Swedish personal number, 6-4 groups"),
+    n("PHONE", "de", "pii_phone_us", "Personnummer: 811228-9875", "6-4 groups of a Swedish personal number whose Luhn digit fails (B-NORD reports valid ones)"),
     n("PHONE", "en", "pii_phone_international", "Interchange header: UNB+UNOC:3+520173321::2+520173321::4+202202150830+1323327835++STA'", "EDIFACT interchange header, element run"),
     n("PHONE", "en", "pii_phone_international", "Buyer party segment: NAD+BY+987654321::9'", "EDIFACT party ID after a qualifier"),
     n("PHONE", "en", "pii_phone_international", "SWIFT narrative block {86:+330105789456}", "number after a SWIFT MT tag"),
@@ -1411,7 +1411,7 @@ T17_PHONE_ELEMENT_RUN_CASES = [
     n("PHONE", "en", "pii_phone_us", "X12 purchase order: ST*850*0000012345~\nSE*13*0000012345~", "zero-padded X12 control numbers"),
     n("PHONE", "en", "pii_phone_us", "Closing balance field: :62F:/0000001234/", "zero-padded account in a SWIFT MT field"),
     n("PHONE", "en", "pii_phone_us", '<xbrli:identifier scheme="http://www.sec.gov/CIK">0001234567</xbrli:identifier>', "zero-padded SEC CIK", carrier="xml"),
-    n("PHONE", "en", "pii_phone_us", "Swedish personal identity number: 811228-9874", "Swedish personal number, 6-4 groups"),
+    n("PHONE", "en", "pii_phone_us", "Swedish personal identity number: 811228-9875", "6-4 groups of a Swedish personal number whose Luhn digit fails (B-NORD reports valid ones)"),
     n("PHONE", "en", "pii_phone_us", "My SSN is 600427-7817, issued in Sweden.", "Swedish personal number, 6-4 groups", carrier="prose"),
 ]
 for _row in T17_PHONE_ELEMENT_RUN_CASES:
@@ -3012,6 +3012,111 @@ B_EMAIL_CASES = [
 ]
 for _row in B_EMAIL_CASES:
     PII_CASES[_row["target_label"]].append(_row)
+
+# B-NORD (B12, B13) Nordic personal identity numbers, one label each: the Swedish personnummer
+# (Luhn), the Danish CPR number (weighted mod 11), the Norwegian fødselsnummer (two digits mod 11)
+# and the Finnish personal identity code (check character mod 31), all starting with the birth date.
+# `pii_*_se`/`_dk`/`_no`/`_fi` report the value in every mode when a term of the label stands near
+# it or is its key. In balanced and recall the printed forms are reported bare (K05):
+# `YYMMDD-NNNC`, `DDMMYY-SSSS`, `DDMMYY NNNKK` and the henkilötunnus with its century sign. Bare
+# digit runs always need a term. Hard negatives: failed checks, impossible dates, values without
+# a term, counter-context and parts of longer values. Appended so existing ids stay stable.
+B_NORD_CASES = [
+    # ── SE personnummer ────────────────────────────────────────────────────
+    p("SE_PERSONNUMMER", "en", "pii_personnummer_se", "Personnummer: ", "510723-4287"),
+    p("SE_PERSONNUMMER", "en", "pii_personnummer_se", "Here's my personnummer ", "200109022392", ".", carrier="prose"),
+    p("SE_PERSONNUMMER", "en", "pii_personnummer_se", '{"personnummer": "', "6608272214", '"}', carrier="json"),
+    p("SE_PERSONNUMMER", "en", "pii_personnummer_se", "name,personnummer\nAstrid Berg,", "19900906-5179", "", carrier="csv", mode="balanced"),
+    p("SE_PERSONNUMMER", "en", "pii_personnummer_se_context_free", "Customer ", "970426-0034", " from Malmö", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("SE_PERSONNUMMER", "en", "pii_personnummer_se_context_free", "", "310619-4388", "", tags=("no_context",), mode="recall"),
+    p("SE_PERSONNUMMER", "de", "pii_personnummer_se", "Die schwedische Personennummer lautet ", "380326-7693", ".", carrier="prose"),
+    p("SE_PERSONNUMMER", "de", "pii_personnummer_se", "Personnummer: ", "5904230439"),
+    p("SE_PERSONNUMMER", "de", "pii_personnummer_se", "| Name | Personnummer |\n|---|---|\n| Astrid Berg | ", "851225-8966", " |", carrier="table"),
+    p("SE_PERSONNUMMER", "de", "pii_personnummer_se", "Als Personnummer ist ", "470401-6270", " hinterlegt.", carrier="prose", mode="balanced"),
+    p("SE_PERSONNUMMER", "de", "pii_personnummer_se_context_free", "Kunde ", "870323-1236", " aus Malmö", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("SE_PERSONNUMMER", "de", "pii_personnummer_se_context_free", "Neue Angabe: ", "740208-2759", "", tags=("no_context",), mode="recall"),
+    n("SE_PERSONNUMMER", "en", "pii_personnummer_se", "Personnummer: 510723-4288", "Luhn check digit fails"),
+    n("SE_PERSONNUMMER", "en", "pii_personnummer_se", "Personnummer: 19001309-2393", "month 13 is no birth month"),
+    n("SE_PERSONNUMMER", "en", "pii_personnummer_se", "Reference 6608272214 was archived.", "ten bare digits without a personnummer term", carrier="prose", mode="balanced"),
+    n("SE_PERSONNUMMER", "en", "pii_personnummer_se_context_free", "Invoice number 970426-0034", "counter-context nearer", mode="balanced"),
+    n("SE_PERSONNUMMER", "en", "pii_personnummer_se_context_free", "Build 20241026-1529 is out.", "date stamp and time (Luhn-valid) without a term", carrier="prose", mode="balanced"),
+    n("SE_PERSONNUMMER", "de", "pii_personnummer_se", "Personnummer: 380326-7694", "Luhn check digit fails"),
+    n("SE_PERSONNUMMER", "de", "pii_personnummer_se", "Personnummer: 200504422381", "day 42 is no birth day"),
+    n("SE_PERSONNUMMER", "de", "pii_personnummer_se", "Vorgang 5904230439 wurde abgeschlossen.", "ten bare digits without a personnummer term", carrier="prose", mode="balanced"),
+    n("SE_PERSONNUMMER", "de", "pii_personnummer_se_context_free", "Rechnungsnummer 870323-1236", "counter-context nearer", mode="balanced"),
+    n("SE_PERSONNUMMER", "de", "pii_personnummer_se_context_free", "Teil 870323-1236-2 ist lieferbar.", "part of a longer value", carrier="prose", mode="balanced"),
+    # ── DK CPR ─────────────────────────────────────────────────────────────
+    p("DK_CPR", "en", "pii_cpr_dk", "CPR number: ", "180875-3002"),
+    p("DK_CPR", "en", "pii_cpr_dk", "Her Danish CPR number is ", "1802712053", ".", carrier="prose"),
+    p("DK_CPR", "en", "pii_cpr_dk", '{"cpr": "', "220594-0270", '"}', carrier="json"),
+    p("DK_CPR", "en", "pii_cpr_dk", "name,cpr\nMads Jensen,", "210677-1025", "", carrier="csv", mode="balanced"),
+    p("DK_CPR", "en", "pii_cpr_dk_context_free", "Patient ", "260881-0407", " from Aarhus", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("DK_CPR", "en", "pii_cpr_dk_context_free", "", "061088-1025", "", tags=("no_context",), mode="recall"),
+    p("DK_CPR", "de", "pii_cpr_dk", "CPR-Nummer: ", "141143-1408"),
+    p("DK_CPR", "de", "pii_cpr_dk", "Die dänische Personennummer lautet ", "1606642896", ".", carrier="prose"),
+    p("DK_CPR", "de", "pii_cpr_dk", "patient:\n  cpr_nr: ", "181076-3775", "\n", carrier="yaml"),
+    p("DK_CPR", "de", "pii_cpr_dk", "Als CPR-Nr. ist ", "060664-2644", " hinterlegt.", carrier="prose", mode="balanced"),
+    p("DK_CPR", "de", "pii_cpr_dk_context_free", "Patientin ", "020852-2965", " aus Aarhus", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("DK_CPR", "de", "pii_cpr_dk_context_free", "Neue Angabe: ", "060147-0594", "", tags=("no_context",), mode="recall"),
+    n("DK_CPR", "en", "pii_cpr_dk", "CPR number: 180875-3003", "mod-11 sum fails"),
+    n("DK_CPR", "en", "pii_cpr_dk", "CPR number: 300275-3002", "30 February is no birth date"),
+    n("DK_CPR", "en", "pii_cpr_dk", "Order 1802712053 shipped.", "ten bare digits without a CPR term", carrier="prose", mode="balanced"),
+    n("DK_CPR", "en", "pii_cpr_dk_context_free", "Order number 260881-0407", "counter-context nearer", mode="balanced"),
+    n("DK_CPR", "en", "pii_cpr_dk_context_free", "Ref 1/260881-0407 archived.", "part of a slash path", carrier="prose", mode="balanced"),
+    n("DK_CPR", "de", "pii_cpr_dk", "CPR-Nummer: 141143-1409", "mod-11 sum fails"),
+    n("DK_CPR", "de", "pii_cpr_dk", "CPR-Nummer: 141343-1408", "month 13 is no birth month"),
+    n("DK_CPR", "de", "pii_cpr_dk", "Vorgang 1606642896 wurde abgeschlossen.", "ten bare digits without a CPR term", carrier="prose", mode="balanced"),
+    n("DK_CPR", "de", "pii_cpr_dk_context_free", "Bestellnummer 020852-2965", "counter-context nearer", mode="balanced"),
+    n("DK_CPR", "de", "pii_cpr_dk_context_free", "Teil 020852-2965-1 ist lieferbar.", "part of a longer value", carrier="prose", mode="balanced"),
+    # ── NO fødselsnummer ───────────────────────────────────────────────────
+    p("NO_FODSELSNUMMER", "en", "pii_fodselsnummer_no", "Fødselsnummer: ", "05126504685"),
+    p("NO_FODSELSNUMMER", "en", "pii_fodselsnummer_no", "My Norwegian national identity number is ", "131059 38068", ".", carrier="prose"),
+    p("NO_FODSELSNUMMER", "en", "pii_fodselsnummer_no", '{"fodselsnummer": "', "04088748951", '"}', carrier="json"),
+    p("NO_FODSELSNUMMER", "en", "pii_fodselsnummer_no", "name,fnr\nIngrid Dahl,", "14125010564", "", carrier="csv", mode="balanced"),
+    p("NO_FODSELSNUMMER", "en", "pii_fodselsnummer_no_context_free", "Member ", "120683 32824", " from Bergen", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("NO_FODSELSNUMMER", "en", "pii_fodselsnummer_no_context_free", "", "071177 13398", "", tags=("no_context",), mode="recall"),
+    p("NO_FODSELSNUMMER", "de", "pii_fodselsnummer_no", "Fødselsnummer: ", "11014526309"),
+    p("NO_FODSELSNUMMER", "de", "pii_fodselsnummer_no", "Die norwegische Personennummer lautet ", "22035625988", ".", carrier="prose"),
+    p("NO_FODSELSNUMMER", "de", "pii_fodselsnummer_no", "Als D-Nummer ist ", "53077117233", " hinterlegt.", carrier="prose"),
+    p("NO_FODSELSNUMMER", "de", "pii_fodselsnummer_no", '{"foedselsnummer": "', "280973 07840", '"}', carrier="json", mode="balanced"),
+    p("NO_FODSELSNUMMER", "de", "pii_fodselsnummer_no_context_free", "Mitglied ", "120952 44287", " aus Bergen", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("NO_FODSELSNUMMER", "de", "pii_fodselsnummer_no_context_free", "Neue Angabe: ", "170178 16489", "", tags=("no_context",), mode="recall"),
+    n("NO_FODSELSNUMMER", "en", "pii_fodselsnummer_no", "Fødselsnummer: 05126504686", "second check digit fails"),
+    n("NO_FODSELSNUMMER", "en", "pii_fodselsnummer_no", "Fødselsnummer: 05126504675", "first check digit fails"),
+    n("NO_FODSELSNUMMER", "en", "pii_fodselsnummer_no", "Reference 04088748951 was archived.", "eleven bare digits without a fødselsnummer term", carrier="prose", mode="balanced"),
+    n("NO_FODSELSNUMMER", "en", "pii_fodselsnummer_no_context_free", "Invoice number 120683 32824", "counter-context nearer", mode="balanced"),
+    n("NO_FODSELSNUMMER", "en", "pii_fodselsnummer_no_context_free", "Lot 120683 32824-7 was recalled.", "part of a longer value", carrier="prose", mode="balanced"),
+    n("NO_FODSELSNUMMER", "de", "pii_fodselsnummer_no", "Fødselsnummer: 11014526308", "second check digit fails"),
+    n("NO_FODSELSNUMMER", "de", "pii_fodselsnummer_no", "Fødselsnummer: 32014526309", "day 32 is no birth day"),
+    n("NO_FODSELSNUMMER", "de", "pii_fodselsnummer_no", "Vorgang 22035625988 wurde abgeschlossen.", "eleven bare digits without a fødselsnummer term", carrier="prose", mode="balanced"),
+    n("NO_FODSELSNUMMER", "de", "pii_fodselsnummer_no_context_free", "Bestellnummer 120952 44287", "counter-context nearer", mode="balanced"),
+    n("NO_FODSELSNUMMER", "de", "pii_fodselsnummer_no_context_free", "Teil 120952 44287 1 ist lieferbar.", "part of a longer number", carrier="prose", mode="balanced"),
+    # ── FI personal identity code ──────────────────────────────────────────
+    p("FI_PERSONAL_IDENTITY_CODE", "en", "pii_hetu_fi", "HETU: ", "151052X036A"),
+    p("FI_PERSONAL_IDENTITY_CODE", "en", "pii_hetu_fi", "Here's my henkilötunnus ", "230869U120Y", ".", carrier="prose"),
+    p("FI_PERSONAL_IDENTITY_CODE", "en", "pii_hetu_fi", "hetu ", "050147-760n", ""),
+    p("FI_PERSONAL_IDENTITY_CODE", "en", "pii_hetu_fi", "row,amount,hetu\n1,42,", "150115E166P", "", carrier="csv", mode="balanced"),
+    p("FI_PERSONAL_IDENTITY_CODE", "en", "pii_hetu_fi_context_free", "Applicant ", "130693Y4989", " has been approved.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("FI_PERSONAL_IDENTITY_CODE", "en", "pii_hetu_fi_context_free", "", "021123B483N", "", tags=("no_context",), mode="recall"),
+    p("FI_PERSONAL_IDENTITY_CODE", "de", "pii_hetu_fi", "Finnische Personenkennung: ", "070409F691B"),
+    p("FI_PERSONAL_IDENTITY_CODE", "de", "pii_hetu_fi", "Die HETU lautet ", "241096-074P", ".", carrier="prose"),
+    p("FI_PERSONAL_IDENTITY_CODE", "de", "pii_hetu_fi", '{"hetu": "', "021093X717F", '"}', carrier="json"),
+    p("FI_PERSONAL_IDENTITY_CODE", "de", "pii_hetu_fi", "nr;name;hetu;betrag\n1;Aino Virtanen;", "090678W190W", ";5,00 €", carrier="csv", mode="balanced"),
+    p("FI_PERSONAL_IDENTITY_CODE", "de", "pii_hetu_fi_context_free", "Antragsteller ", "171139X147M", " wurde genehmigt.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("FI_PERSONAL_IDENTITY_CODE", "de", "pii_hetu_fi_context_free", "Neue Angabe: ", "231134W191M", "", tags=("no_context",), mode="recall"),
+    n("FI_PERSONAL_IDENTITY_CODE", "en", "pii_hetu_fi", "HETU: 151052X036B", "check character fails"),
+    n("FI_PERSONAL_IDENTITY_CODE", "en", "pii_hetu_fi", "HETU: 111111-111A", "check character fails"),
+    n("FI_PERSONAL_IDENTITY_CODE", "en", "pii_hetu_fi", "HETU: 151052+036A", "the 1800s sign names nobody alive"),
+    n("FI_PERSONAL_IDENTITY_CODE", "en", "pii_hetu_fi_context_free", "Order number 130693Y4989", "counter-context nearer", mode="balanced"),
+    n("FI_PERSONAL_IDENTITY_CODE", "en", "pii_hetu_fi_context_free", "Build X130693Y4989 is out.", "part of a longer token", carrier="prose", mode="balanced"),
+    n("FI_PERSONAL_IDENTITY_CODE", "de", "pii_hetu_fi", "HETU: 070409F691C", "check character fails"),
+    n("FI_PERSONAL_IDENTITY_CODE", "de", "pii_hetu_fi", "HETU: 311109F691B", "31 November is no birth date"),
+    n("FI_PERSONAL_IDENTITY_CODE", "de", "pii_hetu_fi", "HETU: 070409G691B", "no century sign"),
+    n("FI_PERSONAL_IDENTITY_CODE", "de", "pii_hetu_fi_context_free", "Bestellnummer 171139X147M", "counter-context nearer", mode="balanced"),
+    n("FI_PERSONAL_IDENTITY_CODE", "de", "pii_hetu_fi_context_free", "Teil 171139X147M-2 ist lieferbar.", "part of a hyphenated token", carrier="prose", mode="balanced"),
+]
+for _row in B_NORD_CASES:
+    PII_CASES.setdefault(_row["target_label"], []).append(_row)
 
 # DLP golden schema v2 (E13). Every DLP row names the rule it exercises (`rule_id`), the
 # document that carries the value (`carrier`), its difficulty `tags` and whether it is a
