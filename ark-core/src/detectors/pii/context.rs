@@ -90,6 +90,17 @@ pub static SUPPORT_LEXICON: &[(&str, &[&str])] = &[
         "FI_PERSONAL_IDENTITY_CODE",
         &["pii.fi_personal_identity_code"],
     ),
+    (
+        "FR_NIR",
+        &[
+            "pii.fr_social_security_number",
+            "pii.social_insurance_number",
+        ],
+    ),
+    ("FR_SIREN", &["pii.fr_siren"]),
+    ("FR_SIRET", &["pii.fr_siret"]),
+    ("NL_BSN", &["pii.nl_citizen_service_number"]),
+    ("BE_NATIONAL_NUMBER", &["pii.be_national_number"]),
     ("VAT_ID_DE", &["pii.vat_identifier"]),
     ("VAT_ID_AT", &["pii.vat_identifier"]),
     ("VAT_ID_CH", &["pii.vat_identifier"]),
@@ -682,9 +693,17 @@ pub(super) fn stands_alone(text: &str, value: Range<usize>) -> bool {
 /// position (B-PAN): not the digits after the `+` of a phone number
 /// (`+44 20 1234 5678`), and not a segment of a token, i.e. joined by `-` or `_`
 /// to alphanumerics on both sides (`xoxb-…-485275870833-…`) or, without a space
-/// inside, to a run with a letter (`xoxb-249332005873`, `pkg-…`).
+/// inside, to a run with a letter (`xoxb-249332005873`, `pkg-…`). No card scheme
+/// prints 3-3-3-5 groups: that is a French SIRET (`566 618 468 58431`, B-EU1).
 pub(super) fn card_position(text: &str, value: Range<usize>) -> bool {
     let joins = |ch: char| matches!(ch, '-' | '_');
+    if text[value.clone()]
+        .split(' ')
+        .map(str::len)
+        .eq([3, 3, 3, 5])
+    {
+        return false;
+    }
     let head = &text[..value.start];
     let tail = &text[value.end..];
     if head.ends_with('+') {

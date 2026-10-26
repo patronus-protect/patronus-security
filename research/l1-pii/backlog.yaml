@@ -625,6 +625,7 @@ tasks:
 
   # M3 +4 (50)
   - id: B-EU1
+    status: done
     title: "FR NIR (mod 97) + SIREN/SIRET (Luhn), NL BSN (11-proof), BE national register number (mod 97)"
     type: new-entity
     deps: [K05]

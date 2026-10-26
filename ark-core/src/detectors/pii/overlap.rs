@@ -34,8 +34,9 @@ use crate::detectors::NativeDetection;
 /// An ABN in 2-3-3-3 groups or as eleven digits can be a Steuer-ID (`52 842 296 017`,
 /// B-APAC). The Nordic personal numbers share `DDDDDD-DDDD` (a personnummer, a CPR
 /// number or a henkilötunnus) and eleven digits (a fødselsnummer or a Steuer-ID),
-/// B-NORD.
-pub const COMPETING_LABELS: [&str; 16] = [
+/// B-NORD. Of the B-EU1 numbers the eleven digits of a Belgian national number can
+/// be a Steuer-ID, the fourteen of a SIRET and the fifteen of a NIR a card number.
+pub const COMPETING_LABELS: [&str; 19] = [
     "IBAN",
     "CREDITCARD",
     "FINANCIAL_ACCOUNT_NUMBER",
@@ -52,6 +53,9 @@ pub const COMPETING_LABELS: [&str; 16] = [
     "DK_CPR",
     "NO_FODSELSNUMMER",
     "FI_PERSONAL_IDENTITY_CODE",
+    "FR_NIR",
+    "FR_SIRET",
+    "BE_NATIONAL_NUMBER",
 ];
 
 /// Labels whose findings compete with an overlapping finding of any other label

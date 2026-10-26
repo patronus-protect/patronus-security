@@ -1800,6 +1800,147 @@
     }
   },
   {
+    "category": "pii",
+    "rule_id": "pii_nir_fr",
+    "de": "Die französische Sozialversicherungsnummer lautet 1 70 01 75 115 012 70.",
+    "en": "NIR: 185057800608491",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "NIR: 2 95 10 99 126 111 94",
+        "Vorgang 385057800608488 wurde abgeschlossen."
+      ],
+      "en": [
+        "NIR: 185137800608425",
+        "Reference 385057800608488 was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_nir_fr_context_free",
+    "de": "Versicherte 2 93 11 2A 004 123 01 wurde aufgenommen.",
+    "en": "Patient 2 95 10 99 126 111 93 admitted.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die NIR der Versicherten ist 199122B03300716.",
+        "en": "185057800608491 is her French social security number."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_siren_fr",
+    "de": "Die SIREN-Nummer lautet 724984943.",
+    "en": "SIREN: 732 829 320",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "SIREN: 732 829 321",
+        "Vorgang 732829320 wurde abgeschlossen."
+      ],
+      "en": [
+        "SIREN: 404 833 049",
+        "Order 732 829 320 shipped."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_siret_fr",
+    "de": "Als SIRET ist 69940718549707 hinterlegt.",
+    "en": "SIRET: 732 829 320 00074",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "SIRET: 732 829 320 00075",
+        "Vorgang 73282932000074 wurde abgeschlossen."
+      ],
+      "en": [
+        "SIRET: 12345678901234",
+        "Reference 73282932000074 was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_siret_fr_context_free",
+    "de": "Lieferant 823 022 181 06863, Paris",
+    "en": "Supplier 732 829 320 00074, Paris",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die SIRET des Lieferanten ist 699 407 185 49707.",
+        "en": "356 000 000 49837 is the SIRET of the branch."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_bsn_nl",
+    "de": "Die BSN lautet 645969175.",
+    "en": "BSN: 123456782",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "BSN: 123456783",
+        "Vorgang 123456782 wurde abgeschlossen."
+      ],
+      "en": [
+        "BSN: 111111111",
+        "Call 214 069 989 today."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_bsn_nl_context_free",
+    "de": "Antragsteller 6459.69.175 wurde genehmigt.",
+    "en": "Applicant 1234.56.782 has been approved.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die Bürgerservicenummer ist 1061.65.653.",
+        "en": "2140.69.989 is her citizen service number."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_national_number_be",
+    "de": "Belgische Nationalregisternummer: 75042297367",
+    "en": "Her Belgian national number is 030117-986.58.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Nationalregisternummer: 85.07.30-033.29",
+        "Vorgang 85073003328 wurde abgeschlossen."
+      ],
+      "en": [
+        "National register number: 85133003370",
+        "Reference 85073003328 was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_national_number_be_context_free",
+    "de": "Kunde 17.11.28-631.59, Brüssel",
+    "en": "Client 85.07.30-033.28, Brussels",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die Nationalregisternummer des Kunden ist 75.04.22-973.67.",
+        "en": "70.10.03-432.48 is his Belgian national number."
+      }
+    }
+  },
+  {
     "category": "dlp",
     "rule_id": "dlp_anthropic_key",
     "de": "<<secret\u003a0>>",

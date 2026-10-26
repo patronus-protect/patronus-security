@@ -194,9 +194,12 @@ fn competing_labels_are_the_number_labels() {
         labels,
         BTreeSet::from([
             "AU_ABN",
+            "BE_NATIONAL_NUMBER",
             "CREDITCARD",
             "DK_CPR",
             "FI_PERSONAL_IDENTITY_CODE",
+            "FR_NIR",
+            "FR_SIRET",
             "FINANCIAL_ACCOUNT_NUMBER",
             "IBAN",
             "NHS_NUMBER",
