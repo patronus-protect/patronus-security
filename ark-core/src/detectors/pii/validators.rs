@@ -954,6 +954,136 @@ pub fn sg_uen(s: &str) -> bool {
     }
 }
 
+/// The two-digit number at `digits[at..at + 2]`.
+fn two_digits(digits: &[u32], at: usize) -> u32 {
+    digits[at] * 10 + digits[at + 1]
+}
+
+/// Whether `day`.`month`.`year` (two-digit day and month) is a calendar date.
+fn birth_date(day: u32, month: u32, year: u32) -> bool {
+    valid_date(day as u8, month as u8, year as u16)
+}
+
+/// Swedish personnummer (B-NORD): birth date `YYMMDD` or `YYYYMMDD`, `-` (`+` from
+/// the 100th birthday on) or nothing, three serial digits and a Luhn check digit
+/// over the ten digits from `YYMMDD` on. A coordination number (samordningsnummer)
+/// adds 60 to the day. Without the century the date must exist in the 1900s or
+/// the 2000s.
+pub fn se_personnummer(s: &str) -> bool {
+    let mut digits = [0u32; 12];
+    let mut count = 0;
+    for (index, byte) in s.bytes().enumerate() {
+        match byte {
+            b'0'..=b'9' if count < digits.len() => {
+                digits[count] = u32::from(byte - b'0');
+                count += 1;
+            }
+            b'-' | b'+' if index + 5 == s.len() => {}
+            _ => return false,
+        }
+    }
+    let (centuries, ten) = match count {
+        10 => ([1900, 2000], &digits[..10]),
+        12 if matches!(two_digits(&digits, 0), 19 | 20) => {
+            let century = two_digits(&digits, 0) * 100;
+            ([century; 2], &digits[2..])
+        }
+        _ => return false,
+    };
+    let (year, month, day) = (two_digits(ten, 0), two_digits(ten, 2), two_digits(ten, 4));
+    let day = if day > 60 { day - 60 } else { day };
+    centuries
+        .iter()
+        .any(|century| birth_date(day, month, century + year))
+        && luhn_checksum(ten) == 0
+}
+
+/// Check characters of the Finnish personal identity code, indexed by the nine
+/// digits mod 31.
+const HETU_CHECK: &[u8; 31] = b"0123456789ABCDEFHJKLMNPRSTUVWXY";
+
+/// Finnish personal identity code, henkilötunnus (B-NORD): birth date `DDMMYY`, the
+/// century sign (`-` `Y` `X` `W` `V` `U` for the 1900s, `A` to `F` for the 2000s),
+/// an individual number from 002 to 999 (900 and up are temporary) and a check
+/// character, the nine digits mod 31; in either letter case. The 1800s sign `+`
+/// names nobody alive and is not accepted.
+pub fn fi_hetu(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    if bytes.len() != 11 {
+        return false;
+    }
+    let century = match bytes[6].to_ascii_uppercase() {
+        b'-' | b'Y' | b'X' | b'W' | b'V' | b'U' => 1900,
+        b'A'..=b'F' => 2000,
+        _ => return false,
+    };
+    let mut digits = [0u32; 9];
+    for (slot, &byte) in digits
+        .iter_mut()
+        .zip(bytes[..6].iter().chain(&bytes[7..10]))
+    {
+        if !byte.is_ascii_digit() {
+            return false;
+        }
+        *slot = u32::from(byte - b'0');
+    }
+    let individual = decimal(&digits[6..]);
+    birth_date(
+        two_digits(&digits, 0),
+        two_digits(&digits, 2),
+        century + two_digits(&digits, 4),
+    ) && individual >= 2
+        && HETU_CHECK[(decimal(&digits) % 31) as usize] == bytes[10].to_ascii_uppercase()
+}
+
+/// Danish CPR number (B-NORD): birth date `DDMMYY`, `-` or nothing, four serial
+/// digits whose first gives the century with the year (0–3: 1900s; 4 and 9: 2000s
+/// up to year 36, else 1900s; 5–8: 2000s up to year 57, else 1800s, which names
+/// nobody alive and is not accepted), and a sum weighted 4 3 2 7 6 5 4 3 2 1
+/// divisible by 11. Since 2007 the CPR office also issues numbers that fail the
+/// sum; they are not accepted: without it the value has no check digit.
+pub fn dk_cpr(s: &str) -> bool {
+    grouped_digits::<10>(s).is_some_and(|digits| {
+        let year = two_digits(&digits, 4);
+        let century = match (digits[6], year) {
+            (0..=3, _) | (4 | 9, 37..) => 1900,
+            (4 | 9, _) | (5..=8, ..=57) => 2000,
+            _ => return false,
+        };
+        birth_date(
+            two_digits(&digits, 0),
+            two_digits(&digits, 2),
+            century + year,
+        ) && weighted_sum(&digits, &[4, 3, 2, 7, 6, 5, 4, 3, 2, 1]).is_multiple_of(11)
+    })
+}
+
+/// Norwegian fødselsnummer (B-NORD): birth date `DDMMYY` (a D-number adds 40 to
+/// the day, an H-number 40 to the month), an individual number whose range gives
+/// the century with the year (000–499: 1900s; 500–999: 2000s up to year 39;
+/// 900–999: 1900s from year 40; 500–749 from year 54: 1800s, not accepted) and two
+/// check digits mod 11: the digits weighted 3 7 6 1 8 9 4 5 2 1 and
+/// 5 4 3 2 7 6 5 4 3 2 1 both sum to multiples of 11.
+pub fn no_fodselsnummer(s: &str) -> bool {
+    grouped_digits::<11>(s).is_some_and(|digits| {
+        let (day, month, year) = (
+            two_digits(&digits, 0),
+            two_digits(&digits, 2),
+            two_digits(&digits, 4),
+        );
+        let century = match (decimal(&digits[6..9]), year) {
+            (0..=499, _) | (900.., 40..) => 1900,
+            (500.., ..=39) => 2000,
+            _ => return false,
+        };
+        let day = if day > 40 { day - 40 } else { day };
+        let month = if month > 40 { month - 40 } else { month };
+        birth_date(day, month, century + year)
+            && weighted_sum(&digits, &[3, 7, 6, 1, 8, 9, 4, 5, 2, 1]).is_multiple_of(11)
+            && weighted_sum(&digits, &[5, 4, 3, 2, 7, 6, 5, 4, 3, 2, 1]).is_multiple_of(11)
+    })
+}
+
 /// ISO 13616 Mod-97 check — IBAN validation.
 /// Strips whitespace before checking.
 pub fn mod97(s: &str) -> bool {

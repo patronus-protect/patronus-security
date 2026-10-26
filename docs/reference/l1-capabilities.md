@@ -11,10 +11,10 @@ What ARK L1 detects (PII and DLP), how it compares with Presidio and the secret 
 
 | | PII | DLP |
 | --- | --- | --- |
-| Result labels (entity groups) | 66 | 23 |
-| Regex rules | 100 | 64 (+5 relationship rules) |
-| Checksum-validated units (count rule T03) | 45 (Presidio 2.2.364: 35) | – |
-| Rules with a `checksum` or `structure` check | 57 | 6 |
+| Result labels (entity groups) | 70 | 23 |
+| Regex rules | 108 | 64 (+5 relationship rules) |
+| Checksum-validated units (count rule T03) | 49 (Presidio 2.2.364: 35) | – |
+| Rules with a `checksum` or `structure` check | 65 | 6 |
 | Default state | all rules on | credential/secret groups on, broader families opt-in |
 | Compared with | Presidio 2.2.364 (tuned) | gitleaks 8.30.1, TruffleHog 3.97.9, detect-secrets 1.5.0 |
 | Overall F1 (2026-10-24) | `balanced`: neutral 63.2, presidio_favored 54.3 | default profile: 88.6 (P 99.3, R 80.0) |
@@ -63,6 +63,8 @@ One row per benchmark entity of `research/l1-pii/entity_map.yaml`. Scope: `share
 | `pii.au.medicare` | shared | `AU_MEDICARE` | `pii_medicare_au`, `pii_medicare_au_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `AU_MEDICARE` |
 | `pii.sg.nric_fin` | shared | `SG_NRIC_FIN` | `pii_nric_fin_sg`, `pii_nric_fin_sg_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `SG_NRIC_FIN` |
 | `pii.sg.uen` | shared | `SG_UEN` | `pii_uen_sg`, `pii_uen_sg_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `SG_UEN` |
+| `pii.se.personnummer` | shared | `SE_PERSONNUMMER` | `pii_personnummer_se`, `pii_personnummer_se_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `SE_PERSONNUMMER` |
+| `pii.fi.personal_identity_code` | shared | `FI_PERSONAL_IDENTITY_CODE` | `pii_hetu_fi`, `pii_hetu_fi_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `FI_PERSONAL_IDENTITY_CODE` |
 | `entity.passport_number` | shared | `PASSPORT_NUMBER` | `pii_passport_number_de`, `pii_passport_number_uk`, `pii_passport_number_two_letters`, `pii_passport_number_de_context_free`, `pii_passport_number_de_legacy` | checksum | on (2 of 5 rules `balanced`/`recall` only) | `US_PASSPORT`, `UK_PASSPORT`, `DE_PASSPORT`, `ES_PASSPORT`, `IT_PASSPORT`, `IN_PASSPORT`, `KR_PASSPORT` |
 | `pii.identity_card_number` | shared | `IDENTITY_CARD_NUMBER` | `pii_identity_card_number_de`, `pii_identity_card_number_de_context_free`, `pii_identity_card_number_de_legacy` | checksum | on (2 of 3 rules `balanced`/`recall` only) | `DE_ID_CARD`, `IT_IDENTITY_CARD` |
 | `entity.driver_license_number` | shared | `DRIVER_LICENSE_NUMBER` | `pii_driver_license_number_de`, `pii_driver_license_number_us`, `pii_driver_license_number_it`, `pii_driver_license_number_uk`, `pii_driver_license_number_uk_context_free` | format | on (1 of 5 rules `balanced`/`recall` only) | `US_DRIVER_LICENSE`, `UK_DRIVING_LICENCE`, `DE_FUEHRERSCHEIN`, `IT_DRIVER_LICENSE`, `KR_DRIVER_LICENSE` |
@@ -107,6 +109,8 @@ One row per benchmark entity of `research/l1-pii/entity_map.yaml`. Scope: `share
 | `pii.sk.vat_id` | ark_only | `VAT_ID_SK` | `pii_vat_id_sk` | checksum | on (`balanced`/`recall` only) | – |
 | `pii.no.vat_id` | ark_only | `VAT_ID_NO` | `pii_vat_id_no` | checksum | on (`balanced`/`recall` only) | – |
 | `pii.uk.vat_id` | ark_only | `VAT_ID_GB` | `pii_vat_id_gb` | checksum | on (`balanced`/`recall` only) | – |
+| `pii.dk.cpr` | ark_only | `DK_CPR` | `pii_cpr_dk`, `pii_cpr_dk_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | – |
+| `pii.no.fodselsnummer` | ark_only | `NO_FODSELSNUMMER` | `pii_fodselsnummer_no`, `pii_fodselsnummer_no_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | – |
 | `pii.url` | presidio_only | – | – | – | – | `URL` |
 | `pii.crypto_wallet` | presidio_only | – | – | – | – | `CRYPTO` |
 | `pii.us.medical_license` | presidio_only | – | – | – | – | `MEDICAL_LICENSE` |
@@ -119,9 +123,7 @@ One row per benchmark entity of `research/l1-pii/entity_map.yaml`. Scope: `share
 | `pii.es.nie` | presidio_only | – | – | – | – | `ES_NIE` |
 | `pii.es.nif` | presidio_only | – | – | – | – | `ES_NIF` |
 | `pii.it.fiscal_code` | presidio_only | – | – | – | – | `IT_FISCAL_CODE` |
-| `pii.fi.personal_identity_code` | presidio_only | – | – | – | – | `FI_PERSONAL_IDENTITY_CODE` |
 | `pii.pl.pesel` | presidio_only | – | – | – | – | `PL_PESEL` |
-| `pii.se.personnummer` | presidio_only | – | – | – | – | `SE_PERSONNUMMER` |
 | `pii.se.organisationsnummer` | presidio_only | – | – | – | – | `SE_ORGANISATIONSNUMMER` |
 | `pii.tr.national_id` | presidio_only | – | – | – | – | `TR_NATIONAL_ID` |
 | `pii.ca.sin` | presidio_only | – | – | – | – | `CA_SIN` |
@@ -144,7 +146,7 @@ One row per benchmark entity of `research/l1-pii/entity_map.yaml`. Scope: `share
 | `entity.date` | semantic | – | – | – | – | `DATE_TIME` |
 | `entity.street_address` | semantic | – | – | – | – | – |
 
-Entities: 28 shared, 38 ARK only, 30 Presidio only, 6 semantic. Hard-negative false positives (2026-10-24): ARK 0, Presidio 0.
+Entities: 30 shared, 40 ARK only, 28 Presidio only, 6 semantic. Hard-negative false positives (2026-10-24): ARK 0, Presidio 0.
 
 ### F1 per entity
 
@@ -176,6 +178,8 @@ Legend: `ARK x / Presidio y` = exact F1 of both; `no gold` = measured, but the f
 | `pii.au.medicare` | shared | 0 / 1 / 19 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
 | `pii.sg.nric_fin` | shared | 0 / 3 / 21 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
 | `pii.sg.uen` | shared | 0 / 4 / 24 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
+| `pii.se.personnummer` | shared | 0 / 2 / 19 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
+| `pii.fi.personal_identity_code` | shared | 0 / 14 / 28 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
 | `entity.passport_number` | shared | 98 / 29 / 24 | ARK 37.7 / Presidio 38.4 | ARK 34.3 / Presidio 51.3 | ARK 76.9 / Presidio 54.5 |
 | `pii.identity_card_number` | shared | 0 / 11 / 31 | no gold | ARK 42.9 / Presidio 84.2 | ARK 78.4 / Presidio 38.5 |
 | `entity.driver_license_number` | shared | 120 / 14 / 23 | ARK 37.1 / Presidio 6.2 | ARK 52.6 / Presidio 78.3 | ARK 72.2 / Presidio 48.1 |
@@ -220,6 +224,8 @@ Legend: `ARK x / Presidio y` = exact F1 of both; `no gold` = measured, but the f
 | `pii.sk.vat_id` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
 | `pii.no.vat_id` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
 | `pii.uk.vat_id` | ark_only | 0 / 0 / 0 | no gold | no gold | no gold |
+| `pii.dk.cpr` | ark_only | – | – | – | – |
+| `pii.no.fodselsnummer` | ark_only | – | – | – | – |
 | `pii.url` | presidio_only | 0 / 21 / 20 | no gold | ARK 0.0 / Presidio 77.8 | ARK 0.0 / Presidio 8.2 |
 | `pii.crypto_wallet` | presidio_only | 0 / 1 / 21 | no gold | ARK 0.0 / Presidio 100.0 | ARK 0.0 / Presidio 100.0 |
 | `pii.us.medical_license` | presidio_only | 0 / 0 / 22 | no gold | no gold | ARK 0.0 / Presidio 52.6 |
@@ -232,9 +238,7 @@ Legend: `ARK x / Presidio y` = exact F1 of both; `no gold` = measured, but the f
 | `pii.es.nie` | presidio_only | 0 / 5 / 26 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
 | `pii.es.nif` | presidio_only | 0 / 3 / 26 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
 | `pii.it.fiscal_code` | presidio_only | 0 / 3 / 23 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
-| `pii.fi.personal_identity_code` | presidio_only | 0 / 14 / 28 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
 | `pii.pl.pesel` | presidio_only | 0 / 3 / 22 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
-| `pii.se.personnummer` | presidio_only | 0 / 2 / 19 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
 | `pii.se.organisationsnummer` | presidio_only | 0 / 3 / 20 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
 | `pii.tr.national_id` | presidio_only | 0 / 4 / 21 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
 | `pii.ca.sin` | presidio_only | 0 / 5 / 23 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |

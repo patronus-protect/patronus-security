@@ -18,7 +18,7 @@ Stand: 2026-10-11. Aufgabenliste: [`backlog.yaml`](backlog.yaml). Agent-Prompt:
 ## Gold und Qualitätsuntergrenze (seit 2026-10-25)
 
 - **Gold überall:** Jede implementierte Entität braucht Gold in mindestens einer Quellfamilie. Neue Entitäten bringen ihr Gold in derselben Aufgabe mit (synthetisch, prüfziffergültig, ≥ 10 Positive und ≥ 5 Hard Negatives je Entität, DE + EN). Lücken stehen auf der Seite `docs/reference/l1-capabilities.md` als „no gold“.
-- **Gold für Entitäten nach dem E05-Freeze:** Das E05-Goldset bleibt bytegleich; nachgereichtes synthetisches Gold bekommt ein eigenes Goldset desselben Generators mit eigenem Korpus, eigenen Seeds und eigenem Verzeichnis (`--goldset`, Familie `ark_authored`). GOLD-VAT1: `ark-synthetic-vat-1` für die USt-IdNr. von AT, BE, BG, CH, CY, CZ, DK, EE, ES, FI, FR, GR, HR und HU; GOLD-VAT2: `ark-synthetic-vat-2` für IE, LT, LU, LV, MT, NL, NO, PL, PT, RO, SE, SI, SK und UK (Aufbau in [`scripts/l1_presidio/README.md`](../../scripts/l1_presidio/README.md)). Damit erzeugen die drei Goldsets zusammen jede ID der Entity-Map.
+- **Gold für Entitäten nach dem E05-Freeze:** Das E05-Goldset bleibt bytegleich; nachgereichtes synthetisches Gold bekommt ein eigenes Goldset desselben Generators mit eigenem Korpus, eigenen Seeds und eigenem Verzeichnis (`--goldset`, Familie `ark_authored`). GOLD-VAT1: `ark-synthetic-vat-1` für die USt-IdNr. von AT, BE, BG, CH, CY, CZ, DK, EE, ES, FI, FR, GR, HR und HU; GOLD-VAT2: `ark-synthetic-vat-2` für IE, LT, LU, LV, MT, NL, NO, PL, PT, RO, SE, SI, SK und UK (Aufbau in [`scripts/l1_presidio/README.md`](../../scripts/l1_presidio/README.md)). Damit erzeugen die drei Goldsets zusammen jede ID der Entity-Map außer DK CPR und NO fødselsnummer aus B-NORD (`NOT_GENERATED`).
 - **Untergrenze F1 ≥ 80:** Jede implementierte Entität mit Gold erreicht exakten F1 ≥ 80 auf jeder Familie mit Gold (PII: `balanced`; DLP: im Profil, in dem sie läuft, auch Opt-in). Darunter wird eine `Q-…`-Aufgabe angelegt; TRIAGE prüft das bei jeder Messung. Ausnahmen nur mit dokumentierter Entscheidung.
 
 ## Definition „besser als Presidio“
@@ -241,6 +241,23 @@ mit BSNR-Begriff in jedem Modus, keine M3-Einheit; `pii.de.bsnr` ist jetzt `shar
 BSNR-Werte der presidio-analyzer-Tests bleiben FN (Presidio meldet sie mit 0,2 ebenfalls nicht).
 Alle 140 Gold-Werte der drei IDs in den Dev-Korpora bestehen die Prüfziffern; `X123456789` in
 `dynamic_pii.jsonl` (L3) trägt `"checksum_valid": false`.
+
+Stand B-NORD: ARK 49, gemeinsam 18 (B12, B13). Vier nordische Personennummern, je ein Label mit
+Prüfziffer, alle beginnend mit dem Geburtsdatum: `SE_PERSONNUMMER` (Luhn, `YYMMDD-NNNC`, `+` ab dem
+100. Geburtstag, 10 oder 12 Ziffern, samordningsnummer mit Tag + 60), `DK_CPR` (gewichtet
+4-3-2-7-6-5-4-3-2-1 mod 11, Jahrhundert aus der 7. Ziffer), `NO_FODSELSNUMMER` (zwei Prüfziffern mod 11,
+auch D- und H-Nummer) und `FI_PERSONAL_IDENTITY_CODE` (henkilötunnus, Kontrollzeichen mod 31,
+Jahrhundertzeichen `-`/`Y`–`U`/`A`–`F`, Einzelnummer 002–999, auch temporäre ab 900). Geburten vor 1900
+(HETU `+`, CPR und fødselsnummer mit 1800er-Bereich) gelten als ungültig. `pii.se.personnummer` und
+`pii.fi.personal_identity_code` sind jetzt `shared`, `pii.dk.cpr` und `pii.no.fodselsnummer` neu und
+`ark_only`. In jedem Modus meldet je eine Regel den Wert mit einem Begriff des Labels in der Nähe oder als
+Schlüssel (`requires_context`; `Personnummer` stützt SE, DK und NO); kontextfrei in `balanced`/`recall`
+(K05, 0,55) nur die gedruckten Formen `YYMMDD-NNNC`, `DDMMYY-SSSS`, `DDMMYY NNNKK` und die HETU mit
+Jahrhundertzeichen. Blanke Ziffernfolgen und zwölf Ziffern mit Bindestrich (Zeitstempel `20241026-1529`)
+brauchen den Begriff. **DK CPR zählt nur, wo die mod-11-Prüfung gilt:** `dk_cpr` verlangt sie; CPR-Nummern
+ohne mod 11 (seit 2007 vergeben) bleiben FN, sonst wäre die Einheit reine Formprüfung. Die vier Labels
+konkurrieren in den Score-Modi untereinander und mit `STEUERID` (K07). Gold für DK und NO gibt es bisher
+nur in `pii_l1` und der Rule-Fixture; ein synthetisches Goldset fehlt (`NOT_GENERATED`).
 
 Stand B02: ARK 24, gemeinsam 7. Dazu kommen die USt-IdNr. von BG, CY, CZ, DK, EE, EL, FI, HR, HU, IE
 und LT, gleiche Struktur wie B01 (je Land ein Label `VAT_ID_BG` … und ein Validator mit Prüfziffer,

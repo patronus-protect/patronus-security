@@ -9,7 +9,9 @@ use crate::{
 use super::context::Evidence;
 use super::context_anchors::PII_ANCHOR_PATTERNS;
 use super::score::{self, PiiMode, ValidatorStrength};
-use super::{au, common, context, de, driver_license, identifiers, intl, overlap, sg, uk, us, vat};
+use super::{
+    au, common, context, de, driver_license, identifiers, intl, nordic, overlap, sg, uk, us, vat,
+};
 use crate::detectors::anchors;
 use crate::detectors::obfuscation::{Deobfuscated, Level};
 use crate::EvidenceSpan;
@@ -148,6 +150,14 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     de::HEALTH_INSURANCE_NUMBER_CONTEXT_FREE,
     de::PHYSICIAN_NUMBER_LANR_PROXIMITY,
     de::FACILITY_NUMBER_BSNR,
+    nordic::PERSONNUMMER,
+    nordic::PERSONNUMMER_CONTEXT_FREE,
+    nordic::CPR,
+    nordic::CPR_CONTEXT_FREE,
+    nordic::FODSELSNUMMER,
+    nordic::FODSELSNUMMER_CONTEXT_FREE,
+    nordic::HETU,
+    nordic::HETU_CONTEXT_FREE,
 ];
 
 pub struct PiiPipeline {
@@ -570,7 +580,7 @@ impl NativeRegexDetector for PiiPipeline {
             }
             "pii_credit_card" => context::card_position(text, captures.get(0).unwrap().range()),
             // A term near the value does not make a fragment of a longer number
-            // (`401127789-0`) an SSN, an NHS, a passport or an AU/SG number.
+            // (`401127789-0`) an SSN, an NHS, a passport, an AU/SG or a Nordic number.
             "pii_ssn_us_proximity"
             | "pii_nhs_number_uk"
             | "pii_passport_number_uk"
@@ -585,7 +595,11 @@ impl NativeRegexDetector for PiiPipeline {
             | "pii_medicare_au"
             | "pii_nric_fin_sg"
             | "pii_uen_sg"
-            | "pii_facility_number_bsnr_de" => {
+            | "pii_facility_number_bsnr_de"
+            | "pii_personnummer_se"
+            | "pii_cpr_dk"
+            | "pii_fodselsnummer_no"
+            | "pii_hetu_fi" => {
                 let value = captures.get(0).unwrap().range();
                 context::structure_evidence(
                     prepared.structure(),

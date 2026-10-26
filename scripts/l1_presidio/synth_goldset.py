@@ -2758,6 +2758,11 @@ def generate_vat(
     return rows
 
 
+# Entity-map ids that no goldset generates: the B-NORD DK CPR number and NO fødselsnummer (gold so
+# far only in pii_l1 and the rule fixture).
+NOT_GENERATED = frozenset({"pii.dk.cpr", "pii.no.fodselsnummer"})
+
+
 def entity_ids() -> list[str]:
     return sorted({item.entity for item in KINDS})
 
@@ -2811,7 +2816,7 @@ def vat_goldset(corpus: str, dev_seed: str, version: int, tag: str, countries: S
 
 
 # One directory per goldset (the gate freezes each once): ``de-eu`` is E05, ``vat-1`` GOLD-VAT1 and
-# ``vat-2`` GOLD-VAT2. Together they cover every id of the entity map.
+# ``vat-2`` GOLD-VAT2. Together they cover every id of the entity map except ``NOT_GENERATED``.
 GOLDSETS = {
     "de-eu": Goldset(CORPUS_ID, DEV_SEED, GENERATOR_VERSION, DEFAULT_DOCS, generate, entity_ids),
     "vat-1": vat_goldset(VAT1_CORPUS_ID, VAT1_DEV_SEED, VAT1_GENERATOR_VERSION, "vat1", VAT1_COUNTRIES),

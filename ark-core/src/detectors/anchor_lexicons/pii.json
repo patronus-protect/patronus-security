@@ -2251,6 +2251,126 @@
     ]
   },
   {
+    "id": "pii.se_personnummer",
+    "description": "Schwedische Personennummer (personnummer)",
+    "en": [
+      "swedish personal identity number",
+      "swedish personal number",
+      "swedish personnummer",
+      "swedish id number",
+      "samordningsnummer",
+      "coordination number"
+    ],
+    "de": [
+      "schwedische personennummer",
+      "schwedische personnummer",
+      "schwedische identitätsnummer"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/pii/nordic.rs"
+    ]
+  },
+  {
+    "id": "pii.dk_cpr",
+    "description": "Dänische Personennummer (CPR-nummer)",
+    "en": [
+      "cpr number",
+      "cpr no",
+      "cpr-number",
+      "cpr_number",
+      "danish personal identification number",
+      "danish civil registration number",
+      "danish personal number",
+      "civil registration number"
+    ],
+    "de": [
+      "cpr-nummer",
+      "cpr nummer",
+      "cpr_nummer",
+      "dänische personennummer",
+      "dänische personnummer"
+    ],
+    "shared": [
+      "cpr",
+      "cpr-nr",
+      "cpr nr",
+      "cpr_nr"
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/nordic.rs"
+    ]
+  },
+  {
+    "id": "pii.no_fodselsnummer",
+    "description": "Norwegische Personennummer (fødselsnummer, D-nummer)",
+    "en": [
+      "norwegian national identity number",
+      "norwegian identity number",
+      "norwegian birth number",
+      "norwegian personal number"
+    ],
+    "de": [
+      "norwegische personennummer",
+      "norwegische personnummer",
+      "norwegische identifikationsnummer"
+    ],
+    "shared": [
+      "fødselsnummer",
+      "fodselsnummer",
+      "foedselsnummer",
+      "d-nummer",
+      "fnr"
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/nordic.rs"
+    ]
+  },
+  {
+    "id": "pii.nordic_personal_number",
+    "description": "Personennummer in Schweden, Dänemark und Norwegen (personnummer)",
+    "en": [],
+    "de": [],
+    "shared": [
+      "personnummer",
+      "personnummeret",
+      "personnr",
+      "person-nr"
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/nordic.rs"
+    ]
+  },
+  {
+    "id": "pii.fi_personal_identity_code",
+    "description": "Finnische Personenkennung (henkilötunnus, HETU)",
+    "en": [
+      "finnish personal identity code",
+      "finnish personal identity number",
+      "personal identity code",
+      "finnish identity code",
+      "finnish id code",
+      "finnish national id"
+    ],
+    "de": [
+      "finnische personenkennung",
+      "finnische personenkennziffer",
+      "finnische identitätsnummer",
+      "finnische sozialversicherungsnummer"
+    ],
+    "shared": [
+      "hetu",
+      "henkilötunnus",
+      "henkilotunnus",
+      "personbeteckning",
+      "sotu",
+      "sosiaaliturvatunnus"
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/nordic.rs"
+    ]
+  },
+  {
     "id": "pii.health_insurance_number",
     "description": "Krankenversicherungsnummer",
     "en": [

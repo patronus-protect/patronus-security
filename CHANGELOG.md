@@ -42,6 +42,35 @@ result shapes may be breaking for downstream users, and is called out explicitly
   still prefilters it: on 100 KiB without `@` a scan takes 1.3 µs before and after, with about
   1,700 addresses per 100 KiB 133 → 195 µs. `latency.py compare --engine ark-native` 100 KiB p95
   147.1 → 146.9 / 157.9 ms in two head runs (PASS, noise), 4 KiB 7.66 → 6.80 / 6.62 ms.
+### Added
+
+- Nordic personal identity numbers (B-NORD: B12, B13), one label each with a check digit or
+  character: `SE_PERSONNUMMER` (`validators::se_personnummer`, Luhn over `YYMMDD-NNNC`, `+` from the
+  100th birthday, ten or twelve digits, coordination numbers with day + 60), `DK_CPR` (`dk_cpr`,
+  weights 4-3-2-7-6-5-4-3-2-1 mod 11, century from the seventh digit), `NO_FODSELSNUMMER`
+  (`no_fodselsnummer`, two check digits mod 11, D- and H-numbers) and `FI_PERSONAL_IDENTITY_CODE`
+  (`fi_hetu`, check character mod 31 with the century signs `-`, `Y`–`U`, `A`–`F`, either case).
+  Births before 1900 are rejected. `pii_personnummer_se`, `pii_cpr_dk`, `pii_fodselsnummer_no` and
+  `pii_hetu_fi` report the value in every mode when a term of the label (`Personnummer`, `CPR`,
+  `Fødselsnummer`, `fnr`, `HETU`, `henkilötunnus`; new lexicon entries `pii.se_personnummer`,
+  `pii.dk_cpr`, `pii.no_fodselsnummer`, `pii.nordic_personal_number`, `pii.fi_personal_identity_code`)
+  stands near it or is its key, also as a CSV cell next to numeric cells. In `balanced`/`recall` the
+  printed forms are reported bare at 0.55 (K05): `YYMMDD-NNNC` (`811228-9874`), `DDMMYY-SSSS`
+  (`080572-3300`), `DDMMYY NNNKK` (`110897 33660`) and the henkilötunnus (`131052-308T`). Bare digit
+  runs and twelve digits with a dash (date stamps such as `20241026-1529`) need the term. The CPR
+  validator requires the mod-11 sum, so CPR numbers issued without it since 2007 stay unreported and
+  the unit counts as checksum-validated. The four labels compete with each other and with `STEUERID`
+  in the scored modes (K07). `pii.se.personnummer` and `pii.fi.personal_identity_code` become
+  `shared`; `pii.dk.cpr` and `pii.no.fodselsnummer` are new `ark_only` ids; M3 count
+  (`count_validated.py`) ARK 45 → 49. The PHONE hard negative `811228-9874` (a valid personnummer)
+  becomes `811228-9875`. **Detection change:** in `strict` the four values with a term or key are
+  new findings; in `balanced`/`recall` also the bare forms above. Dev scoreboard vs. a202253 (PASS
+  in strict and balanced, no new hard-negative FP, precision 100.0 on both measured ids): L1 F1
+  strict +0.7, balanced +0.9 pp (presidio_favored +3.0, neutral ±0.0); balanced F1 personnummer
+  100.0, henkilötunnus 98.8, strict 89.5 and 80.0 (all 0.0 before). Latency (`latency.py compare
+  --engine ark-native`): 100 KiB p95 147.0 → 154.0 ms (+4.8 %, PASS), from eight more regex rules
+  over the text; 4 KiB p95 6.9 → 5.6 ms (noise). Golden eval: all gated positives and hard negatives
+  pass; `pii_l1.jsonl` gains 88 rows.
 
 ## [0.1.12] - 2026-10-25
 

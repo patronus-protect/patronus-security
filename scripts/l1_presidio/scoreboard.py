@@ -960,6 +960,82 @@ def sg_uen(value: str) -> bool:
     return _UEN_ALPHABET[(total - 5) % 11] == check
 
 
+def se_personnummer(value: str) -> bool:
+    """Port of ``validators::se_personnummer`` (YYMMDD or YYYYMMDD, ``-``/``+`` before the last four, Luhn)."""
+    body = value[:-5] + value[-4:] if value[-5:-4] in ("-", "+") else value
+    if not body.isascii() or not body.isdigit() or len(body) not in (10, 12):
+        return False
+    if len(body) == 12:
+        if body[:2] not in ("19", "20"):
+            return False
+        centuries, body = (int(body[:2]) * 100,), body[2:]
+    else:
+        centuries = (1900, 2000)
+    day = int(body[4:6])
+    day = day - 60 if day > 60 else day
+    if not any(_valid_date(century + int(body[:2]), int(body[2:4]), day) for century in centuries):
+        return False
+    return _luhn_checksum([int(ch) for ch in body]) == 0
+
+
+_HETU_CHECK = "0123456789ABCDEFHJKLMNPRSTUVWXY"
+
+
+def fi_hetu(value: str) -> bool:
+    """Port of ``validators::fi_hetu`` (DDMMYY, century sign, individual number 002–999, check mod 31)."""
+    value = value.upper()
+    digits = value[:6] + value[7:10]
+    if len(value) != 11 or not digits.isascii() or not digits.isdigit():
+        return False
+    if value[6] in "-YXWVU":
+        century = 1900
+    elif value[6] in "ABCDEF":
+        century = 2000
+    else:
+        return False
+    if not _valid_date(century + int(value[4:6]), int(value[2:4]), int(value[:2])) or int(value[7:10]) < 2:
+        return False
+    return _HETU_CHECK[int(digits) % 31] == value[10]
+
+
+def dk_cpr(value: str) -> bool:
+    """Port of ``validators::dk_cpr`` (DDMMYY, century from the 7th digit, weights 4 3 2 7 6 5 4 3 2 1 mod 11)."""
+    digits = _grouped_digits(value, 10)
+    if digits is None:
+        return False
+    year = digits[4] * 10 + digits[5]
+    if digits[6] <= 3 or (digits[6] in (4, 9) and year >= 37):
+        century = 1900
+    elif digits[6] in (4, 9) or year <= 57:
+        century = 2000
+    else:
+        return False
+    if not _valid_date(century + year, digits[2] * 10 + digits[3], digits[0] * 10 + digits[1]):
+        return False
+    return _weighted_sum(digits, (4, 3, 2, 7, 6, 5, 4, 3, 2, 1)) % 11 == 0
+
+
+def no_fodselsnummer(value: str) -> bool:
+    """Port of ``validators::no_fodselsnummer`` (DDMMYY with D/H-number offsets, individual number, two mod 11)."""
+    digits = _grouped_digits(value, 11)
+    if digits is None:
+        return False
+    day, month, year = (digits[i] * 10 + digits[i + 1] for i in (0, 2, 4))
+    individual = _number(digits[6:9])
+    if individual <= 499 or (individual >= 900 and year >= 40):
+        century = 1900
+    elif individual >= 500 and year <= 39:
+        century = 2000
+    else:
+        return False
+    day, month = (day - 40 if day > 40 else day), (month - 40 if month > 40 else month)
+    return (
+        _valid_date(century + year, month, day)
+        and _weighted_sum(digits, (3, 7, 6, 1, 8, 9, 4, 5, 2, 1)) % 11 == 0
+        and _weighted_sum(digits, (5, 4, 3, 2, 7, 6, 5, 4, 3, 2, 1)) % 11 == 0
+    )
+
+
 # Python ports of every checksum validator (``checksums.ark`` with an algorithm in entity_map.yaml);
 # a task that adds one ports it here, or scripts/tests/test_l1_scoreboard.py is red.
 CHECKSUM_PORTS: dict[str, Callable[[str], bool]] = {
@@ -1010,6 +1086,10 @@ CHECKSUM_PORTS: dict[str, Callable[[str], bool]] = {
     "de_social_security_number": de_social_security_number,
     "de_health_insurance_number": de_health_insurance_number,
     "lanr": lanr,
+    "se_personnummer": se_personnummer,
+    "fi_hetu": fi_hetu,
+    "dk_cpr": dk_cpr,
+    "no_fodselsnummer": no_fodselsnummer,
 }
 
 

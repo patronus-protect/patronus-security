@@ -73,6 +73,19 @@ pub static SUPPORT_LEXICON: &[(&str, &[&str])] = &[
     ("AU_MEDICARE", &["pii.au_medicare_number"]),
     ("SG_NRIC_FIN", &["pii.sg_nric_fin"]),
     ("SG_UEN", &["pii.sg_unique_entity_number"]),
+    (
+        "SE_PERSONNUMMER",
+        &["pii.se_personnummer", "pii.nordic_personal_number"],
+    ),
+    ("DK_CPR", &["pii.dk_cpr", "pii.nordic_personal_number"]),
+    (
+        "NO_FODSELSNUMMER",
+        &["pii.no_fodselsnummer", "pii.nordic_personal_number"],
+    ),
+    (
+        "FI_PERSONAL_IDENTITY_CODE",
+        &["pii.fi_personal_identity_code"],
+    ),
     ("VAT_ID_DE", &["pii.vat_identifier"]),
     ("VAT_ID_AT", &["pii.vat_identifier"]),
     ("VAT_ID_CH", &["pii.vat_identifier"]),

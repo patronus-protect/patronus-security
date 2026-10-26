@@ -32,8 +32,10 @@ use crate::detectors::NativeDetection;
 /// can be a card number (`LT 621223427710`); the others are shorter or end in letters.
 /// An NHS number in 3-3-4 groups is also a US phone number (`943 476 5919`, B-UK).
 /// An ABN in 2-3-3-3 groups or as eleven digits can be a Steuer-ID (`52 842 296 017`,
-/// B-APAC).
-pub const COMPETING_LABELS: [&str; 12] = [
+/// B-APAC). The Nordic personal numbers share `DDDDDD-DDDD` (a personnummer, a CPR
+/// number or a henkilötunnus) and eleven digits (a fødselsnummer or a Steuer-ID),
+/// B-NORD.
+pub const COMPETING_LABELS: [&str; 16] = [
     "IBAN",
     "CREDITCARD",
     "FINANCIAL_ACCOUNT_NUMBER",
@@ -46,6 +48,10 @@ pub const COMPETING_LABELS: [&str; 12] = [
     "VAT_ID_LV",
     "NHS_NUMBER",
     "AU_ABN",
+    "SE_PERSONNUMMER",
+    "DK_CPR",
+    "NO_FODSELSNUMMER",
+    "FI_PERSONAL_IDENTITY_CODE",
 ];
 
 /// Labels whose findings compete with an overlapping finding of any other label
