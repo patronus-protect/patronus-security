@@ -175,7 +175,7 @@ def test_checked_in_ark_count():
     # NHS number (mod 11), B-APAC the AU ABN, ACN, TFN and Medicare number and the SG NRIC/FIN and UEN,
     # B-DE1 the German pension and health insurance numbers and the LANR, B-NORD the SE personnummer,
     # the DK CPR number, the NO fødselsnummer and the FI personal identity code, B-ACCT the ABA
-    # routing number.
+    # routing number, B-EU1 the FR NIR, SIREN and SIRET, the NL BSN and the BE national number.
     assert set(counts.ark) == {
         Unit("pii.credit_card.pan", None),
         Unit("pii.iban", None),
@@ -227,8 +227,13 @@ def test_checked_in_ark_count():
         Unit("pii.no.fodselsnummer", "no"),
         Unit("pii.fi.personal_identity_code", "fi"),
         Unit("pii.financial_account_number", "us"),
+        Unit("pii.fr.nir", "fr"),
+        Unit("pii.fr.siren", "fr"),
+        Unit("pii.fr.siret", "fr"),
+        Unit("pii.nl.bsn", "nl"),
+        Unit("pii.be.national_number", "be"),
     }
-    assert len(counts.ark) == 50
+    assert len(counts.ark) == 55
     assert counts.m3_met is False
 
 
@@ -437,6 +442,22 @@ def test_cli_count_json_and_check(tmp_path):
             "pii_aba_routing_number_us_context_free: aba_routing_number",
         ],
     } in payload["ark"]["units"]
+    # B-EU1: one unit per numbering system; the context-free rules share the validator.
+    eu1 = {
+        unit["entity_id"]: unit["sources"]
+        for unit in payload["ark"]["units"]
+        if unit["entity_id"] in ("pii.fr.nir", "pii.fr.siren", "pii.fr.siret", "pii.nl.bsn", "pii.be.national_number")
+    }
+    assert eu1 == {
+        "pii.fr.nir": ["pii_nir_fr: fr_nir", "pii_nir_fr_context_free: fr_nir"],
+        "pii.fr.siren": ["pii_siren_fr: fr_siren"],
+        "pii.fr.siret": ["pii_siret_fr: fr_siret", "pii_siret_fr_context_free: fr_siret"],
+        "pii.nl.bsn": ["pii_bsn_nl: nl_bsn", "pii_bsn_nl_context_free: nl_bsn"],
+        "pii.be.national_number": [
+            "pii_national_number_be: be_national_number",
+            "pii_national_number_be_context_free: be_national_number",
+        ],
+    }
     # B02: the Greek rule keeps the VIES prefix EL, the benchmark ID follows ISO 3166 (gr).
     assert vat["pii.gr.vat_id"]["sources"] == ["pii_vat_id_el: el_vat_id"]
     assert vat["pii.it.vat_code"]["sources"] == ["pii_vat_id_it: it_vat_id", "pii_vat_id_it_proximity: it_vat_id"]

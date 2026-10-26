@@ -374,6 +374,12 @@ entities:
   # B-NORD: Danish CPR number and Norwegian fødselsnummer (Presidio has neither).
   - {id: pii.dk.cpr, scope: ark_only, ark: [DK_CPR], presidio: [], corpora: {}}
   - {id: pii.no.fodselsnummer, scope: ark_only, ark: [NO_FODSELSNUMMER], presidio: [], corpora: {}}
+  # B-EU1: national numbers of FR, NL and BE, one ID and one ARK label per numbering system.
+  - {id: pii.fr.nir, scope: ark_only, ark: [FR_NIR], presidio: [], corpora: {}}
+  - {id: pii.fr.siren, scope: ark_only, ark: [FR_SIREN], presidio: [], corpora: {}}
+  - {id: pii.fr.siret, scope: ark_only, ark: [FR_SIRET], presidio: [], corpora: {}}
+  - {id: pii.nl.bsn, scope: ark_only, ark: [NL_BSN], presidio: [], corpora: {}}
+  - {id: pii.be.national_number, scope: ark_only, ark: [BE_NATIONAL_NUMBER], presidio: [], corpora: {}}
 
   # ── presidio_only ──────────────────────────────────────────────────────
   - {id: pii.url, scope: presidio_only, ark: [], presidio: [URL], corpora: {presidio-evaluator-synth-v2: [DOMAIN_NAME], presidio-analyzer-recognizer-tests: [URL]}}
@@ -514,6 +520,11 @@ checksums:
     dk_cpr: {algorithm: "gewichtet 4-3-2-7-6-5-4-3-2-1 mod 11"}        # B-NORD, nur Nummern mit Prüfsumme (seit 2007 nicht mehr jede)
     no_fodselsnummer: {algorithm: "zwei Prüfziffern mod 11 (3-7-6-1-8-9-4-5-2-1, 5-4-3-2-7-6-5-4-3-2-1)"}  # B-NORD, auch D-/H-Nummer
     fi_hetu: {algorithm: Kontrollzeichen mod 31}                       # B-NORD, henkilötunnus
+    fr_nir: {algorithm: "Schlüssel 97 − (13 Stellen mod 97), 2A/2B als 19/18"}  # B-EU1, NIR (numéro de sécurité sociale)
+    fr_siren: {algorithm: Luhn}                                         # B-EU1, SIREN
+    fr_siret: {algorithm: "Luhn (La Poste: Quersumme mod 5)"}           # B-EU1, SIRET
+    nl_bsn: {algorithm: "11-Probe, gewichtet 9…2 und −1 mod 11"}         # B-EU1, BSN
+    be_national_number: {algorithm: "97 − (9 Stellen mod 97), ab 2000 mit vorangestellter 2"}  # B-EU1, Nationalregisternummer
     de_vat_id: {algorithm: "ISO 7064 MOD 11,10"}            # B01, USt-IdNr.
     at_vat_id: {algorithm: Luhn-Variante (6 − Summe) mod 10}  # B01, UID ATU
     ch_vat_id: {algorithm: gewichtet 5-4-3-2-7-6-5-4 mod 11}   # B01, UID CHE
