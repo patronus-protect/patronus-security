@@ -3,6 +3,8 @@
 !Cargo.lock
 !ark-core/
 !ark-core/**
+!ark-core/python/
+!ark-core/python/Cargo.toml
 !rust/
 !rust/**
 !python/

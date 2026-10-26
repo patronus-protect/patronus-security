@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /src
 # Resolve the shared lockfile against the complete workspace, as CI does.
 COPY Cargo.toml Cargo.lock ./
+COPY ark-core/python/Cargo.toml ./ark-core/python/Cargo.toml
 COPY ark-core ./ark-core
 COPY rust ./rust
 COPY python ./python
