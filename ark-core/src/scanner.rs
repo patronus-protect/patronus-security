@@ -270,20 +270,18 @@ impl Scanner {
             }
         }
         control.check()?;
-        let secrets = results
-            .iter()
-            .filter(|r| r.category == "dlp")
-            .flat_map(|r| &r.evidence_spans)
-            .filter(|s| crate::detectors::dlp::dlp::SECRET_GROUPS.contains(&s.label.as_str()))
-            .map(|s| (s.start_byte, s.end_byte))
-            .collect::<Vec<_>>();
+        let secrets = crate::post_prediction::dlp_secret_ranges(
+            results
+                .iter()
+                .filter(|r| r.category == "dlp")
+                .flat_map(|r| &r.evidence_spans),
+        );
         for result in &mut results {
             if result.category == "pii" {
-                result.evidence_spans.retain(|s| {
-                    !secrets
-                        .iter()
-                        .any(|&(start, end)| s.start_byte < end && s.end_byte > start)
-                });
+                crate::post_prediction::retain_pii_outside_secret_ranges(
+                    &mut result.evidence_spans,
+                    &secrets,
+                );
             }
         }
         if results
