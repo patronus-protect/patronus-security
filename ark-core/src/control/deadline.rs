@@ -144,4 +144,14 @@ mod tests {
             Err(mpsc::RecvTimeoutError::Disconnected)
         ));
     }
+
+    #[test]
+    fn completed_runs_release_control_without_waiting_for_the_deadline() {
+        let control = ScanControl::with_timeout(Duration::from_secs(60)).unwrap();
+        let state = Arc::downgrade(&control.0);
+        let active = control.register_abort(|| {}).unwrap();
+        drop(active);
+        drop(control);
+        assert!(state.upgrade().is_none());
+    }
 }
