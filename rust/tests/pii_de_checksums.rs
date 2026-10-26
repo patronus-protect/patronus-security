@@ -8,8 +8,8 @@
 //! 51–81 and month 01–12, the letter as 01…26, weights 2-1-2-5-7-1-2-1-2-1-2-1,
 //! cross sums, mod 10) and the lifelong physician number (LANR, KBV: six digits
 //! weighted 4-9, the seventh digit is the complement to 10). In `balanced` and
-//! `recall` the KVNR (uppercase letter) and the RVNR (bare or in its printed
-//! 2-6-1-3 groups) are also reported without a field name (K05). Nine bare digits
+//! `recall` the KVNR (in either letter case since Q-DE) and the RVNR (bare or in
+//! its printed 2-6-1-3 groups) are also reported without a field name (K05). Nine bare digits
 //! pass the LANR check one time in ten: the scored modes add the LANR with a term
 //! near it or as its key, never bare. The BSNR (Betriebsstättennummer) has no check
 //! digit: a new label, nine digits with a BSNR term in every mode (format, no M3
@@ -368,6 +368,9 @@ fn bare_kvnr_and_rvnr_are_reported_in_the_scored_modes_only() {
             "A123456780",
         ),
         (KVNR_CONTEXT_FREE, "B123456782", "B123456782"),
+        // a lowercase letter, as in the presidio-analyzer tests (Q-DE)
+        (KVNR_CONTEXT_FREE, "a123456780", "a123456780"),
+        (KVNR_CONTEXT_FREE, "Code b123456782 entered.", "b123456782"),
         (
             KVNR_CONTEXT_FREE,
             "Please add Z987654321 to the claim.",
@@ -418,6 +421,7 @@ fn bare_kvnr_and_rvnr_lookalikes_stay_silent() {
     for (label, text) in [
         // check digit or birth date fails
         ("HEALTH_INSURANCE_NUMBER", "Bitte A123456789 prüfen."),
+        ("HEALTH_INSURANCE_NUMBER", "Code a123456789 entered."),
         ("SOCIALID", "Bitte 15070649C100 prüfen."),
         ("SOCIALID", "Batch 15070049C103 shipped."),
         // a nearer counter-context term
@@ -426,13 +430,15 @@ fn bare_kvnr_and_rvnr_lookalikes_stay_silent() {
         ("SOCIALID", "Rechnungsnummer 15070649C103"),
         ("SOCIALID", "Ticket number 65070803A019"),
         // lowercase without a field name
-        ("HEALTH_INSURANCE_NUMBER", "Code a123456780 entered."),
         ("SOCIALID", "Code 15070649c103 entered."),
         // part of a longer value
         ("HEALTH_INSURANCE_NUMBER", "AB123456780"),
+        ("HEALTH_INSURANCE_NUMBER", "ab123456780"),
+        ("HEALTH_INSURANCE_NUMBER", "Hash 3fa123456780e9"),
         ("SOCIALID", "Ref 15070649C103-2"),
         // a field that names another value
         ("HEALTH_INSURANCE_NUMBER", "Auftragscode: A123456780"),
+        ("HEALTH_INSURANCE_NUMBER", "Auftragscode: a123456780"),
     ] {
         assert_silent(text, label, &MODES);
     }

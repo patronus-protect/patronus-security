@@ -20,6 +20,29 @@ result shapes may be breaking for downstream users, and is called out explicitly
   and Wolf, and remove Ark's redundant pre-tokenization/chunk planning for
   dedicated Wolf documents.
 
+### Changed
+
+- German IDs on `presidio_favored` (Q-DE, quality floor F1 ≥ 80). The bare KVNR rule
+  `pii_health_insurance_number_de_context_free` now reads the letter in either case
+  (`a123456780`; the check digit counts it like the uppercase one), like the bare passport and
+  identity card rules. New scored-only format rule `pii_steuernummer_de_context_free`: a bare
+  Steuernummer in the slashed groups of the Länder (2/3/5, 3/3/5, 3/4/4: `21/815/08150`,
+  `123/456/78901`, `133/8150/8159`, `validators::de_tax_number`) in `balanced`/`recall` at 0.50
+  (0.75 near a tax number term), silent under a field that names another value and when a
+  counter-context term is nearer. The 13-digit ELSTER form stays field-bound. LANR (bare nine
+  digits), Steuer-ID (`98765432106`, never issued) and DE VAT ID (`DE987654321`, `DE100000001`,
+  failed check digit) stay below 80 on `presidio_favored` by recorded decision
+  (`research/l1-pii/README.md`, Stand Q-DE); no validator changes. `pii_l1.jsonl` gains 40 rows
+  (20 positives, 20 hard negatives, DE and EN); two B-DE1 hard negatives that named a lowercase
+  KVNR now carry a failed check digit. **Detection change** (`balanced`/`recall` only; `strict`
+  output is byte-identical): bare lowercase KVNRs and bare slashed Steuernummern are new
+  findings. Dev scoreboard vs. cdacd9a (PASS in strict and balanced, no new hard-negative FP,
+  precision 100.0 on both IDs): balanced `presidio_favored` KVNR 80.0 → 100.0, Steuernummer
+  0.0 → 66.7; `ark_authored` Steuernummer 94.2 → 98.1; L1 F1 balanced +0.1 pp (DE +0.2). The
+  new regex is linear and bounded (fixed group lengths, `/` literal for the anchor gate).
+  `latency.py compare --engine ark-native` 100 KiB p95 145.4 → 148.9 ms (+2.4 %) and
+  138.9 → 141.7 ms (+2.0 %), both PASS. Golden eval: 1233/1233 positives, 1143/1143 hard
+  negatives.
 
 ## [0.1.13] - 2026-10-26
 

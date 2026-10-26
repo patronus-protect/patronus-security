@@ -6,7 +6,7 @@ These are the stable rule IDs accepted by execution-gate `rules`. Missing IDs in
 
 For coverage per benchmark entity, the comparison with Presidio and the secret scanners, and latency, see [L1 capabilities](l1-capabilities.md).
 
-## PII rules (108)
+## PII rules (109)
 
 All PII rules are eligible by default when PII L1 is enabled.
 
@@ -122,6 +122,7 @@ In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `
 | `pii_fodselsnummer_no_context_free` | `NO_FODSELSNUMMER` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
 | `pii_hetu_fi` | `FI_PERSONAL_IDENTITY_CODE` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |
 | `pii_hetu_fi_context_free` | `FI_PERSONAL_IDENTITY_CODE` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
+| `pii_steuernummer_de_context_free` | `TAX_NUMBER_DE` | yes | format | 35 | key or proximity, `balanced`/`recall` only | 0.50–0.75 |
 
 ### PII context lexicon
 

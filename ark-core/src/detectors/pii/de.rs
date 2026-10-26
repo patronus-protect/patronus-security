@@ -85,6 +85,24 @@ pub(super) const STEUERNUMMER: PiiPattern = PiiPattern {
     scored_only: false,
 };
 
+/// A bare Steuernummer in the slashed groups the Länder print (`123/456/78901`
+/// 3/3/5, `21/815/08150` 2/3/5, `133/8150/8159` 3/4/4), in `balanced` and `recall`
+/// only (Q-DE, K05). The value has no check digit common to all Länder; the slashed
+/// grouping stands in for one. A field that names another value keeps it silent
+/// (`Aktenzeichen: 123/456/78901`). The 13-digit ELSTER form stays field-bound:
+/// bare, it is as often a timestamp in milliseconds.
+pub(super) const STEUERNUMMER_CONTEXT_FREE: PiiPattern = PiiPattern {
+    name: "pii_steuernummer_de_context_free",
+    pattern: r"(?-u:\b)(?:[0-9]{2,3}/[0-9]{3}/[0-9]{5}|[0-9]{3}/[0-9]{4}/[0-9]{4})(?-u:\b)",
+    entity_group: "TAX_NUMBER_DE",
+    validator: Some(validators::de_tax_number),
+    strength: ValidatorStrength::Format,
+    base_score: 35,
+    captured_value: false,
+    requires_context: false,
+    scored_only: true,
+};
+
 // ── Deutsche Ausweise / Sozialversicherung ───────────────────────────────
 pub(super) const RENTENVERSICHERUNG: PiiPattern = PiiPattern {
     name: "pii_rentenversicherung_de",
@@ -138,13 +156,13 @@ pub(super) const RENTENVERSICHERUNG_CONTEXT_FREE: PiiPattern = PiiPattern {
     scored_only: true,
 };
 
-/// A bare health insurance number (`A123456780`) with its check digit, in
-/// `balanced` and `recall` only (B-DE1, K05), the letter in upper case. A mod-10
-/// digit fits one in ten letter-led codes: a field that names another value keeps
-/// it silent, as for the bare document numbers (F08).
+/// A bare health insurance number (`A123456780`, `a123456780`) with its check
+/// digit, in `balanced` and `recall` only (B-DE1, K05); the letter counts the same
+/// in either case (Q-DE). A mod-10 digit fits one in ten letter-led codes: a field
+/// that names another value keeps it silent, as for the bare document numbers (F08).
 pub(super) const HEALTH_INSURANCE_NUMBER_CONTEXT_FREE: PiiPattern = PiiPattern {
     name: "pii_health_insurance_number_de_context_free",
-    pattern: r"(?-u:\b)[A-Z][0-9]{9}(?-u:\b)",
+    pattern: r"(?-u:\b)[A-Za-z][0-9]{9}(?-u:\b)",
     entity_group: "HEALTH_INSURANCE_NUMBER",
     validator: Some(validators::de_health_insurance_number),
     strength: ValidatorStrength::Checksum,
