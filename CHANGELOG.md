@@ -22,6 +22,23 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Changed
 
+- No IPv6 sub-span after a word that ends in a hex group (T28, TRIAGE 2026-W44 bucket 5). The
+  IPv6 rules took any word before `:` as a field name, so `foo2001:db8::10.0.0.1` reported
+  `db8::10.0.0.1`, against the B-IP convention "no partial match". A field name before an
+  IPv6 address (`ipv6_opener!` in `ark-core/src/detectors/pii/common.rs`, shared by the three
+  IPv6 rules) no longer ends in a hex run of three or more characters with a digit; such a run
+  is a further `:`-group glued to the word (`foo2001`, `host2001`, `sku4f00`). `IPv6:`,
+  `inet6:`, `eth0:`, `ens33:` and `IP-Adresse:` still open the value; the IPv4 tail stays
+  rejected as before. `pii_l1.jsonl` gains 20 rows (`T28_IP_CASES`, five positives and five
+  hard negatives per language), the rule fixture a DE and an EN hard negative. **Detection
+  change:** (PII L1, all modes) an IPv6 candidate behind such a word is no longer reported.
+  Dev scoreboard vs. base (PASS in strict and balanced, no new hard-negative FP): presidio_favored
+  IP exact precision 96.9 → 100.0 and exact F1 84.9 → 86.1 in both modes; the gold `10.0.0.1`
+  of `foo2001:db8::10.0.0.1` stays a known FN, so overlap F1 there drops by the one overlapping
+  hit (IP over all families exact +0.2, overlap −0.2 pp); every other entity unchanged.
+  The opener stays linear and adds no rule. `latency.py compare --engine ark-native`, three
+  head/base runs: 100 KiB p95 147.7 → 157.8 (+6.8 %, during a parallel build), 139.4 → 151.1
+  (+8.4 %) and 147.0 → 145.6 ms (−1.0 %), all PASS; the spread is noise.
 - E-mail addresses with Unicode local parts, apostrophes and IDN domains; no address in URL
   userinfo; IANA top-level domains (B-EMAIL: T06, T23, F05, baseline bucket P7). `pii_email`
   took ASCII local parts only, so `moeleprêtr@outlook.com` became `tr@outlook.com`,

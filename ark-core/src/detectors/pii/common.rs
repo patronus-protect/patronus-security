@@ -29,14 +29,22 @@ pub(super) const EMAIL: PiiPattern = PiiPattern {
 // (`192.0.2.0/24`, `fe80::1%eth0`, `2001:db8::%eth0/128`); an IPv4-mapped or
 // embedded IPv6 address is one span (`::ffff:192.0.2.1`, `64:ff9b::198.51.100.1`).
 // `validators::ip_address` checks the whole span. The IPv6 rules capture `value`
-// after what opens it: the start of the text or a character that is no word
-// character, `.`, `:`, `+` (EDIFACT) or `-`, optionally followed by a field name
-// and `:` (`IPv6:`, `IP-Adresse:`), or a SWIFT MT tag at the start of a line
-// (`:25:`, ` :52A:`). They never start inside a colon chain (`:28C::52D:`,
-// `BGM+380:21:3::90:FRET`); `context::ipv6_position` rejects a value that a
+// after what opens it (`ipv6_opener!`): the start of the text or a character that
+// is no word character, `.`, `:`, `+` (EDIFACT) or `-`, optionally followed by a
+// field name and `:` (`IPv6:`, `IP-Adresse:`, `eth0:`), or a SWIFT MT tag at the
+// start of a line (`:25:`, ` :52A:`). A field name does not end in a hex run of
+// three or more characters with a digit: that run is a further `:`-group glued to
+// a word (`foo2001:db8::10.0.0.1`, T28). They never start inside a colon chain
+// (`:28C::52D:`, `BGM+380:21:3::90:FRET`); `context::ipv6_position` rejects a value that a
 // further `:`-group or `.`-group continues, so an invalid chain or mixed address
 // (`2001:db8::256.1.1.1`) yields no sub-span. A prefix length out of range is not
 // part of the span (`10.0.0.0/123` → `10.0.0.0`, as in the presidio-analyzer tests).
+macro_rules! ipv6_opener {
+    () => {
+        r"(?:(?:^|[^\w.:+\-])(?:[0-9A-Za-z\-]*[G-Zg-z](?:[0-9A-Za-z\-]*[G-Zg-z\-])?(?:[A-Fa-f]+|[0-9A-Fa-f]{1,2})?:)?|(?m:^)[ \t]*:\d{2}[A-Za-z]?:)"
+    };
+}
+
 pub(super) const IPV4: PiiPattern = PiiPattern {
     name: "pii_ipv4",
     pattern: r"\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:/(?:3[0-2]|[12]?\d))?\b",
@@ -51,7 +59,10 @@ pub(super) const IPV4: PiiPattern = PiiPattern {
 
 pub(super) const IPV6_FULL: PiiPattern = PiiPattern {
     name: "pii_ipv6_full",
-    pattern: r"(?:(?:^|[^\w.:+\-])(?:[0-9A-Za-z\-]*[G-Zg-z][0-9A-Za-z\-]*:)?|(?m:^)[ \t]*:\d{2}[A-Za-z]?:)(?P<value>(?:(?:[0-9A-Fa-f]{1,4}:){6}(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)|[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){7})(?:%[0-9A-Za-z]+(?:[._\-][0-9A-Za-z]+)*)?(?:/(?:12[0-8]|1[01]\d|[1-9]?\d)\b)?)",
+    pattern: concat!(
+        ipv6_opener!(),
+        r"(?P<value>(?:(?:[0-9A-Fa-f]{1,4}:){6}(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)|[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){7})(?:%[0-9A-Za-z]+(?:[._\-][0-9A-Za-z]+)*)?(?:/(?:12[0-8]|1[01]\d|[1-9]?\d)\b)?)"
+    ),
     entity_group: "IP_ADDRESS",
     validator: Some(validators::ip_address),
     strength: ValidatorStrength::Format,
@@ -63,7 +74,10 @@ pub(super) const IPV6_FULL: PiiPattern = PiiPattern {
 
 pub(super) const IPV6_COMPRESSED: PiiPattern = PiiPattern {
     name: "pii_ipv6_compressed",
-    pattern: r"(?:(?:^|[^\w.:+\-])(?:[0-9A-Za-z\-]*[G-Zg-z][0-9A-Za-z\-]*:)?|(?m:^)[ \t]*:\d{2}[A-Za-z]?:)(?P<value>[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){0,6}::(?:(?:[0-9A-Fa-f]{1,4}:){0,5}(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)|[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){0,5})?(?:%[0-9A-Za-z]+(?:[._\-][0-9A-Za-z]+)*)?(?:/(?:12[0-8]|1[01]\d|[1-9]?\d)\b)?)",
+    pattern: concat!(
+        ipv6_opener!(),
+        r"(?P<value>[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){0,6}::(?:(?:[0-9A-Fa-f]{1,4}:){0,5}(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)|[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){0,5})?(?:%[0-9A-Za-z]+(?:[._\-][0-9A-Za-z]+)*)?(?:/(?:12[0-8]|1[01]\d|[1-9]?\d)\b)?)"
+    ),
     entity_group: "IP_ADDRESS",
     validator: Some(validators::ip_address),
     strength: ValidatorStrength::Format,
@@ -75,7 +89,10 @@ pub(super) const IPV6_COMPRESSED: PiiPattern = PiiPattern {
 
 pub(super) const IPV6_LOOPBACK: PiiPattern = PiiPattern {
     name: "pii_ipv6_loopback",
-    pattern: r"(?:(?:^|[^\w.:+\-])(?:[0-9A-Za-z\-]*[G-Zg-z][0-9A-Za-z\-]*:)?|(?m:^)[ \t]*:\d{2}[A-Za-z]?:)(?P<value>::(?:(?:[0-9A-Fa-f]{1,4}:){0,5}(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)|[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){0,6})?(?:%[0-9A-Za-z]+(?:[._\-][0-9A-Za-z]+)*)?(?:/(?:12[0-8]|1[01]\d|[1-9]?\d)\b)?)",
+    pattern: concat!(
+        ipv6_opener!(),
+        r"(?P<value>::(?:(?:[0-9A-Fa-f]{1,4}:){0,5}(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)|[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{1,4}){0,6})?(?:%[0-9A-Za-z]+(?:[._\-][0-9A-Za-z]+)*)?(?:/(?:12[0-8]|1[01]\d|[1-9]?\d)\b)?)"
+    ),
     entity_group: "IP_ADDRESS",
     validator: Some(validators::ip_address),
     strength: ValidatorStrength::Format,

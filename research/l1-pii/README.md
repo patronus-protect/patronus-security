@@ -314,7 +314,11 @@ presidio-analyzer-IP-Tests:
   und EDIFACT (`:28C::52D:`, `:60F::61F::62F:`, `BGM+380:21:3::90:FRET`, `LIN+1::1:550:::EA:20`).
   Eine IPv6-Adresse beginnt nicht nach einer weiteren `:`-Gruppe, nach `.`, `-`, `+` oder einem
   Wortzeichen und endet nicht vor einer weiteren `:`- oder `.`-Gruppe; ein SWIFT-MT-Tag am
-  Zeilenanfang (`:25:`, ` :52A:`) und ein Feldname (`IPv6:`) eröffnen den Wert.
+  Zeilenanfang (`:25:`, ` :52A:`) und ein Feldname (`IPv6:`, `inet6:`, `eth0:`) eröffnen den Wert.
+  Endet das Wort vor dem `:` auf eine Hex-Folge aus drei oder mehr Zeichen mit einer Ziffer, ist
+  diese Folge eine weitere `:`-Gruppe und das Wort kein Feldname (T28): `foo2001:db8::10.0.0.1`
+  ergibt keinen Span, weder IPv6 noch den IPv4-Teil; der `presidio_favored`-Gold-Wert `10.0.0.1`
+  dieser Zeile bleibt ein bekanntes FN.
 - **Loopback und unspezifiziert bleiben negativ** (D-IP, 2026-10-21), auch gemappt und mit
   Präfixlänge: `::ffff:127.0.0.1`, `::ffff:0.0.0.0`, `::/0`, `::1/128`. Die neun
   `presidio_favored`-Gold-Werte dieser Art (`127.0.0.1`, `0.0.0.0`, `::` zweimal, `::1`,
@@ -322,7 +326,7 @@ presidio-analyzer-IP-Tests:
 
 `validators::ip_address` prüft den ganzen Span (Präfixlänge, Zonen-ID nur bei IPv6). Der
 Netzwerkdiagnose-Filter (`post_prediction.rs`) wertet private Adressen auch mit Zonen-ID, Präfixlänge
-und in gemappter Form. Tests: `rust/tests/pii_ip_spans.rs`, Goldens `B_IP_SPAN_CASES`.
+und in gemappter Form. Tests: `rust/tests/pii_ip_spans.rs`, Goldens `B_IP_SPAN_CASES` und `T28_IP_CASES`.
 
 ## Gold-Hygiene: Nebenentitäten und Prüfziffern
 
