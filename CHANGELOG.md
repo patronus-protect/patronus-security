@@ -41,6 +41,14 @@ result shapes may be breaking for downstream users, and is called out explicitly
   interpreter word on the line), so `echo python; cat f <<EOF` and a cat/tee heredoc to a
   non-code file stay shell, while a code-substitution into an interpreter (`python … "$(cat
   <<OLD …)"`) is still masked; this is a tokenizer-only refinement with no model change.
+- **Shell risk: routine gh/git publish commands no longer flag.** The model was retrained with benign
+  `gh pr/issue/release create`, `gh pr merge` and `git push`/`git tag` negatives, which the SWE agent
+  traces it learned benign shell from barely contain. **Detection change:** `gh pr create` and its
+  siblings no longer flag (the live model scored `gh pr create` at +6.4 over threshold). `git push
+  --force*` stays flagged (it overlaps history-rewriting attacks). Pins revision `run G`; thresholds
+  recalibrated on the fixed classic validation mixture (external_commands_1pct_fpr 0.475,
+  block_0_1pct_fpr 2.518). Same shell_tokens tokenizer; #159, the ops-shaped attack positives and the
+  issue #128 regression are held (issue128 AUC 0.901, unchanged from the previous model).
 - **Shell risk: download-into-interpreter relations (#159).** `shell_command` now pins
   `cat-shell-risk-commander` revision `f6243388` (still `format_version: 2`), whose shell-token block
   adds five relation markers from a small, depth-limited parse of the command: `DL->PIPE->INTERP`
