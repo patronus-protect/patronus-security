@@ -121,6 +121,10 @@ mod cache {
             .filter(|d| !d.is_zero())
             .ok_or_else(|| asset("Wolf asset preparation deadline exceeded"))
     }
+    fn lock_contended(error: &std::io::Error) -> bool {
+        error.kind() == std::io::ErrorKind::WouldBlock
+            || error.raw_os_error() == fs2::lock_contended_error().raw_os_error()
+    }
     fn wait_lock(file: &File, exclusive: bool, deadline: Instant) -> Result<(), ScanError> {
         loop {
             remaining(deadline)?;
@@ -131,7 +135,7 @@ mod cache {
             };
             match result {
                 Ok(()) => return Ok(()),
-                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                Err(e) if lock_contended(&e) => {
                     std::thread::sleep(remaining(deadline)?.min(Duration::from_millis(10)))
                 }
                 Err(e) => return Err(asset(e)),
@@ -179,7 +183,7 @@ mod cache {
         if let Some(lock) = &lock {
             match fs2::FileExt::try_lock_shared(lock) {
                 Ok(()) => {}
-                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => return Ok(false),
+                Err(e) if lock_contended(&e) => return Ok(false),
                 Err(e) => return Err(asset(e)),
             }
         }
