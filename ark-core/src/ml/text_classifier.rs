@@ -56,6 +56,9 @@ impl OnnxTextClassifier {
         backend: ExecutionBackend,
         options: OnnxRuntimeOptions,
     ) -> Result<Option<Self>, Box<dyn std::error::Error>> {
+        if class_names.is_empty() {
+            return Err("classifier class names must not be empty".into());
+        }
         let dir = dir.as_ref();
         let tokenizer_file = dir.join(tokenizer_path);
         let compact_tokenizer_file = tokenizer_file.with_extension("mmbpe");
@@ -244,43 +247,53 @@ fn first_logits_batch<'run>(
     expected_classes: usize,
     batch_size: usize,
 ) -> Result<Vec<Vec<f32>>, Box<dyn std::error::Error>> {
-    let min_classes = expected_classes.max(2);
-    let required = min_classes * batch_size;
     for (_name, value) in outputs.iter() {
-        if let Ok((_shape, data)) = value.try_extract_tensor::<f32>() {
-            if data.len() >= required {
-                return Ok(rows_from_logits(
-                    data.iter().copied(),
-                    expected_classes,
-                    batch_size,
-                ));
+        if let Ok((shape, data)) = value.try_extract_tensor::<f32>() {
+            if logits_shape_matches(shape, expected_classes, batch_size) {
+                return rows_from_logits(data.iter().copied(), expected_classes, batch_size);
             }
         }
-        if let Ok((_shape, data)) = value.try_extract_tensor::<f16>() {
-            if data.len() >= required {
-                return Ok(rows_from_logits(
+        if let Ok((shape, data)) = value.try_extract_tensor::<f16>() {
+            if logits_shape_matches(shape, expected_classes, batch_size) {
+                return rows_from_logits(
                     data.iter().map(|value| value.to_f32()),
                     expected_classes,
                     batch_size,
-                ));
+                );
             }
         }
     }
-    Err("ONNX model did not return f32/f16 logits".into())
+    Err("ONNX model did not return f32/f16 logits matching batch and class dimensions".into())
 }
 
-fn rows_from_logits<I>(values: I, expected_classes: usize, batch_size: usize) -> Vec<Vec<f32>>
+fn logits_shape_matches(shape: &[i64], classes: usize, batch: usize) -> bool {
+    classes > 0
+        && batch > 0
+        && (shape == [batch as i64, classes as i64] || (batch == 1 && shape == [classes as i64]))
+}
+
+fn rows_from_logits<I>(
+    values: I,
+    expected_classes: usize,
+    batch_size: usize,
+) -> Result<Vec<Vec<f32>>, Box<dyn std::error::Error>>
 where
     I: IntoIterator<Item = f32>,
 {
-    let flat: Vec<f32> = values
-        .into_iter()
-        .take(batch_size * expected_classes)
-        .collect();
-    flat.chunks(expected_classes)
-        .take(batch_size)
+    if expected_classes == 0 || batch_size == 0 {
+        return Err("classifier batch and class counts must be positive".into());
+    }
+    let required = batch_size
+        .checked_mul(expected_classes)
+        .ok_or("classifier dimensions overflow")?;
+    let flat: Vec<f32> = values.into_iter().collect();
+    if flat.len() != required || flat.iter().any(|value| !value.is_finite()) {
+        return Err("classifier logits must be finite and match batch and class counts".into());
+    }
+    Ok(flat
+        .chunks_exact(expected_classes)
         .map(|chunk| chunk.to_vec())
-        .collect()
+        .collect())
 }
 
 fn result_from_logits(logits: &[f32], class_names: &[String]) -> EvaluationResult {
@@ -314,6 +327,20 @@ fn softmax(logits: &[f32]) -> Vec<f32> {
 }
 
 impl RawClassifierOutput {
+    /// Checked decoding for manually constructed logits; existing methods remain available.
+    pub fn try_decode(
+        &self,
+        class_names: &[String],
+    ) -> Result<EvaluationResult, Box<dyn std::error::Error>> {
+        rows_from_logits(self.logits.iter().copied(), class_names.len(), 1)?;
+        Ok(self.decode(class_names))
+    }
+
+    pub fn try_probabilities(&self) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
+        rows_from_logits(self.logits.iter().copied(), self.logits.len(), 1)?;
+        Ok(self.probabilities())
+    }
+
     #[doc(hidden)]
     pub fn decode(&self, class_names: &[String]) -> EvaluationResult {
         result_from_logits(&self.logits, class_names)
@@ -323,3 +350,6 @@ impl RawClassifierOutput {
         softmax(&self.logits)
     }
 }
+
+#[cfg(test)]
+mod tests;
