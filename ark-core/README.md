@@ -5,6 +5,10 @@ contains native detectors only; the `wolf` feature enables local inference with
 Wolf Defender.
 There is no request queue, L2 runtime or promotion router.
 
+The independently licensed [Python package](python/README.md),
+`patronus-ark-core`, exposes the same scanner and optional Wolf runtime through
+PyO3 bindings. It does not depend on the full Ark runtime.
+
 ```rust
 use patronus_ark_core::{Scanner, ScannerConfig};
 let mut scanner = Scanner::new(ScannerConfig::default())?;

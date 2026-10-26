@@ -1563,6 +1563,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "patronus-ark-core-python"
+version = "0.1.13"
+dependencies = [
+ "patronus-ark-core",
+ "pyo3",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "patronus-ark-python"
 version = "0.1.13"
 dependencies = [

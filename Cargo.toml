@@ -2,6 +2,7 @@
 members = [
     "rust",
     "ark-core",
+    "ark-core/python",
     "python",
     "ark-api",
     "ark-distributed-protocol",

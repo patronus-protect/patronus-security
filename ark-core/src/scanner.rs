@@ -136,7 +136,7 @@ pub enum ScanError {
     #[error("Wolf inference failed: {0}")]
     Inference(String),
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 /// Complete scan output; native decisions and model probabilities remain separate.
 pub struct ScanReport {
     pub input_bytes: usize,
