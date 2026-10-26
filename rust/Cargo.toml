@@ -1,6 +1,6 @@
 [package]
 name = "patronus-ark"
-version = "0.1.12"
+version = "0.1.13"
 edition = "2021"
 authors = ["Casdo Labs GmbH <team@patronus.studio>"]
 description = "Hybrid Rust security scanners for prompt injection, DLP, PII, and agentic tool risks."
@@ -13,7 +13,7 @@ keywords = ["security", "prompt-injection", "dlp", "pii"]
 categories = ["authentication", "text-processing"]
 
 [dependencies]
-patronus-ark-core = { path = "../ark-core", version = "0.1.12", features = ["wolf", "download"] }
+patronus-ark-core = { path = "../ark-core", version = "0.1.13", features = ["wolf", "download"] }
 log = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
