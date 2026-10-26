@@ -180,6 +180,7 @@ impl LazyOnnxTextClassifier {
     }
 
     /// Dedicated Wolf reuses existing FP16 assets through the synchronous Core runner.
+    #[cfg(test)]
     pub(crate) fn infer_wolf_document(
         &mut self,
         text: &str,
@@ -254,9 +255,10 @@ impl LazyOnnxTextClassifier {
         &mut self,
         backend: ExecutionBackend,
         options: OnnxRuntimeOptions,
+        execution: crate::WolfExecutionOptions,
     ) -> Result<(), Box<dyn std::error::Error>> {
         if self.model_name == "wolf-defender-small" {
-            self.infer_wolf_document("", 0.5, backend, options)?;
+            self.infer_wolf_document_with_progress("", 0.5, backend, options, execution, None)?;
         } else {
             self.ensure_loaded(backend, options)?;
         }
@@ -475,11 +477,82 @@ mod tests {
         .expect("fake lazy metadata should be accepted");
 
         assert!(classifier
-            .warmup_session(ExecutionBackend::Cpu, OnnxRuntimeOptions::default())
+            .warmup_session(
+                ExecutionBackend::Cpu,
+                OnnxRuntimeOptions::default(),
+                crate::WolfExecutionOptions::default(),
+            )
             .is_err());
         assert!(!classifier.is_loaded());
 
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn wolf_warmup_validates_profile_and_first_scan_reuses_warmed_session() {
+        let dir = fake_lazy_onnx_dir("wolf-warmup-profile");
+        let model = dir.join("model_fp16.onnx");
+        std::fs::write(
+            &model,
+            include_bytes!("../../../ark-core/tests/fixtures/wolf_synthetic_fp16.onnx"),
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("tokenizer.mmbpe"),
+            include_bytes!("../../../ark-core/tests/fixtures/tokenizer.mmbpe"),
+        )
+        .unwrap();
+        std::fs::write(dir.join("config.json"), r#"{"num_labels":1}"#).unwrap();
+        let mut classifier = LazyOnnxTextClassifier::from_dir_with_paths(
+            &dir,
+            vec!["benign".into(), "attack".into()],
+            "wolf-defender-small",
+            &["model_fp16.onnx"],
+            "tokenizer.json",
+            256,
+        )
+        .unwrap()
+        .unwrap();
+        let execution = crate::WolfExecutionOptions {
+            window_tokens: 32,
+            overlap_tokens: 10,
+            batch_size: 4,
+        };
+        // This export has a static batch-one dimension. Reject the requested
+        // profile during warmup rather than loading a different default profile.
+        assert!(classifier
+            .warmup_session(
+                ExecutionBackend::Cpu,
+                OnnxRuntimeOptions::default(),
+                execution
+            )
+            .is_err());
+        assert!(!classifier.is_loaded());
+        std::fs::write(
+            &model,
+            include_bytes!("../../../ark-core/tests/fixtures/wolf_batch_scalar.onnx"),
+        )
+        .unwrap();
+        classifier
+            .warmup_session(
+                ExecutionBackend::Cpu,
+                OnnxRuntimeOptions::default(),
+                execution,
+            )
+            .unwrap();
+        std::fs::remove_file(&model).unwrap();
+        let output = classifier
+            .infer_wolf_document_with_progress(
+                &" a".repeat(100),
+                0.8,
+                ExecutionBackend::Cpu,
+                OnnxRuntimeOptions::default(),
+                execution,
+                None,
+            )
+            .unwrap();
+        assert_eq!(output.windows, 5);
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]
