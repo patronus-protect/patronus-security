@@ -574,6 +574,7 @@ tasks:
 
   # M1 email (presidio_favored 93.8 vs 100, neutral tie 57.0 vs 57.0)
   - id: B-EMAIL
+    status: done
     title: "Email: no match in URL userinfo, Unicode local parts (RFC 6531) and apostrophes, IDN/punycode TLDs"
     type: recall-fix
     deps: [E06, K06]
