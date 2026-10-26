@@ -9,11 +9,12 @@
 //! of a longer number, range or date) and drops below both thresholds when a
 //! counter-context term is nearer than any support term. A bare Steuer-ID also
 //! has to follow the digit distribution of issued IDs; validators are never
-//! relaxed. Three scored-only rules check a form without a check digit
+//! relaxed. Four scored-only rules check a form without a check digit
 //! (`FORMAT_RULES`): the grouped US SSN (`AAA-GG-SSSS`, B-SSN), whose SSA ranges
-//! and separators stand in for one, and the UK NINO and driving licence (B-UK),
+//! and separators stand in for one, the UK NINO and driving licence (B-UK),
 //! whose issuing rules (prefix and suffix letters; surname, birth date and
-//! initials) do.
+//! initials) do, and the German Steuernummer in the slashed groups of the
+//! Länder (`123/456/78901`, Q-DE).
 
 use patronus_ark::detectors::pii::{
     pii::{PiiPattern, PII_PATTERNS},
@@ -77,14 +78,16 @@ fn pattern(rule_id: &str) -> &'static PiiPattern {
 
 const SCORED: [PiiMode; 2] = [PiiMode::Balanced, PiiMode::Recall];
 const STEUER_ID: &str = "pii_steuer_id_de_context_free";
+const TAX_NUMBER: &str = "pii_steuernummer_de_context_free";
 /// The checksum labels without a context-free rule: the NHS number (B-UK), the
 /// Australian Company Number and the Tax File Number (B-APAC), the LANR (B-DE1).
 const CONTEXT_BOUND_LABELS: [&str; 4] = ["NHS_NUMBER", "AU_ACN", "AU_TFN", "PHYSICIAN_NUMBER_LANR"];
 /// Scored-only rules whose validator checks a form, not a check digit.
-const FORMAT_RULES: [&str; 3] = [
+const FORMAT_RULES: [&str; 4] = [
     "pii_driver_license_number_uk_context_free",
     "pii_ssn_us_context_free",
     "pii_ni_uk_context_free",
+    TAX_NUMBER,
 ];
 
 /// Issued Steuer-IDs: check digit valid, one digit twice or three times (not
@@ -168,6 +171,7 @@ fn scored_only_rules_are_unbound_checksum_rules() {
             "pii_cpr_dk_context_free",
             "pii_fodselsnummer_no_context_free",
             "pii_hetu_fi_context_free",
+            TAX_NUMBER,
         ]
     );
     for pattern in scored_only {
@@ -285,6 +289,7 @@ fn every_checksum_label_reports_a_bare_value_in_the_scored_modes() {
         ("DK_CPR", "080572-3300", 0.55),
         ("NO_FODSELSNUMMER", "110897 33660", 0.55),
         ("FI_PERSONAL_IDENTITY_CODE", "131052-308T", 0.55),
+        ("HEALTH_INSURANCE_NUMBER", "a123456780", 0.55),
     ];
     for label in PII_PATTERNS
         .iter()
@@ -470,6 +475,96 @@ fn issued_steuer_id_checksum_vectors() {
             assert!(
                 !validators::steuer_id_issued(&value) || validators::steuer_id(&value),
                 "{value}"
+            );
+        }
+    }
+}
+
+// ── bare Steuernummer in the slashed groups of the Länder (Q-DE) ────────────
+
+#[test]
+fn bare_slashed_tax_number_is_reported_in_the_scored_modes_only() {
+    let rule = pattern(TAX_NUMBER);
+    assert_eq!(rule.entity_group, "TAX_NUMBER_DE");
+    assert_eq!(rule.strength, ValidatorStrength::Format);
+    assert_eq!(
+        rule.validator.map(|validator| validator as usize),
+        Some(validators::de_tax_number as fn(&str) -> bool as usize)
+    );
+    for (text, value) in [
+        // 3/3/5 (BW, BY, BB, MV, SN, ST, TH), the presidio-analyzer value
+        ("123/456/78901", "123/456/78901"),
+        (
+            "Bitte 151/815/08156 im Formular eintragen.",
+            "151/815/08156",
+        ),
+        // 2/3/5 (BE, HB, HH, NI, SH)
+        ("Please file 21/815/08150 with the return.", "21/815/08150"),
+        // 3/4/4 (NW)
+        ("Bitte 133/8150/8159 übernehmen.", "133/8150/8159"),
+        ("(048/815/08153)", "048/815/08153"),
+    ] {
+        for mode in SCORED {
+            assert_eq!(
+                spans(text, mode, "TAX_NUMBER_DE"),
+                [(value.to_string(), 0.50)],
+                "{mode:?}: {text}"
+            );
+        }
+        assert!(
+            spans(text, PiiMode::Strict, "TAX_NUMBER_DE").is_empty(),
+            "{text}"
+        );
+    }
+    // A tax number term near the value raises it; after its field name the
+    // field-bound rule keeps the span in every mode.
+    for mode in SCORED {
+        assert_eq!(
+            spans(
+                "Die Steuernummer der Praxis ist 143/208/30142.",
+                mode,
+                "TAX_NUMBER_DE"
+            ),
+            [("143/208/30142".to_string(), 0.75)],
+            "{mode:?}"
+        );
+        assert_eq!(
+            spans("Steuernummer: 123/456/78901", mode, "TAX_NUMBER_DE"),
+            [("123/456/78901".to_string(), 0.75)],
+            "{mode:?}"
+        );
+    }
+}
+
+#[test]
+fn bare_tax_number_lookalikes_stay_silent() {
+    for text in [
+        // the field names another value
+        "Aktenzeichen: 123/456/78901",
+        "Case number: 123/456/78901",
+        r#"{"order_id": "123/456/78901"}"#,
+        // a nearer counter-context term
+        "Rechnungsnummer 123/456/78901",
+        "Invoice number 21/815/08150",
+        // other group lengths
+        "Version 12/34/56789",
+        "Bitte 123/456/7890 prüfen.",
+        "Bitte 1234/567/89012 prüfen.",
+        "Datum 12/03/2026",
+        // repeated digits are never issued
+        "Bitte 111/111/11111 prüfen.",
+        // part of a longer number or path
+        "Pfad 2026/123/456/78901",
+        "Ref 123/456/78901/2",
+        "Ref 123/456/78901-2",
+        // no ELSTER form without slashes: 13 digits are as often a timestamp
+        "0181508150000",
+        "Zeitstempel 1698234567890",
+    ] {
+        for mode in SCORED {
+            assert!(
+                spans(text, mode, "TAX_NUMBER_DE").is_empty(),
+                "{mode:?}: {text}"
             );
         }
     }

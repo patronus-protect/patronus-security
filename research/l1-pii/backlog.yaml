@@ -429,6 +429,7 @@ tasks:
       MT, NL, NO, PL, PT, RO, SE, SI, SK, UK.
 
   - id: Q-DE
+    status: done
     title: "Quality: German IDs at F1 0 on presidio_favored (health insurance number, LANR, social security number, tax ID, tax number) and DE VAT ID 75"
     type: precision-fix
     deps: []
