@@ -1,4 +1,4 @@
-from .types import ScanReport
+from .types import ScanReport, ScannerConfig, WarmupOptions, WolfExecutionOptions
 
 __version__: str
 
@@ -11,8 +11,8 @@ class ScanControl:
 
 class Scanner:
     def __init__(
-        self, config: dict[str, object] | None = None, *,
-        warmup: dict[str, object] | None = None, wolf_options: dict[str, int] | None = None,
+        self, config: dict[str, object] | ScannerConfig | None = None, *,
+        warmup: dict[str, object] | WarmupOptions | None = None, wolf_options: dict[str, int] | WolfExecutionOptions | None = None,
     ) -> None: ...
     def scan(
         self, text: str, *, pii: bool = True, dlp: bool = True,

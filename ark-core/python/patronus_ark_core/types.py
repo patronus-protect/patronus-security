@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MIT OR Apache-2.0
-"""Python shapes of Core's serialized reports."""
-from typing import Literal, TypedDict
+"""Python shapes of Core configuration and serialized reports."""
+from typing import Literal, NotRequired, TypedDict
 
 
 class EvidenceSpan(TypedDict):
@@ -58,3 +58,40 @@ class ScanReport(TypedDict):
     input_bytes: int
     native: list[NativeResult]
     wolf: WolfResult | None
+
+
+class OnnxRuntimeOptions(TypedDict, total=False):
+    intra_threads: int | None
+    inter_threads: int | None
+    spinning: bool | None
+
+
+class WolfConfig(TypedDict):
+    bundle_dir: str
+    threshold: float
+    precision: NotRequired[Literal["auto", "fp16", "int8_int4"]]
+    backend: NotRequired[Literal["auto", "cpu", "gpu", "coreml", "core_ml", "cuda", "direct_ml", "tensorrt", "tensor_rt"]]
+    runtime_options: NotRequired[OnnxRuntimeOptions]
+
+
+class ScannerConfig(TypedDict, total=False):
+    categories: list[Literal["pii", "dlp", "injection"]]
+    rules: dict[str, bool]
+    models: dict[str, bool]
+    pii_mode: Literal["strict", "balanced", "recall"]
+    dlp_mode: Literal["strict", "balanced", "recall"]
+    explain: bool
+    max_input_bytes: int
+    max_findings: int
+    wolf: WolfConfig | None
+
+
+class WarmupOptions(TypedDict, total=False):
+    download: Literal["never", "missing"]
+    download_timeout_ms: int
+
+
+class WolfExecutionOptions(TypedDict, total=False):
+    window_tokens: int
+    overlap_tokens: int
+    batch_size: int
