@@ -212,7 +212,7 @@ USt-IdNr. schreibt derselbe Generator mit `--goldset` zwei eigene Goldsets, je m
 (Familie `ark_authored`), eigenem öffentlichem Dev-Seed (`VAT1_DEV_SEED`, `VAT2_DEV_SEED`), eigenem
 geheimem Holdout-Seed und eigenem Verzeichnis. `ark-synthetic-de-eu` und das zuerst eingefrorene
 `ark-synthetic-vat-1` bleiben dadurch bytegleich. Zusammen erzeugen die drei Goldsets jede ID der
-Entity-Map.
+Entity-Map außer `NOT_GENERATED` (DK CPR und NO fødselsnummer aus B-NORD).
 
 | Goldset | Korpus | IDs |
 |---|---|---|

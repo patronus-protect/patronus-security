@@ -211,6 +211,20 @@ entities:
     corpora:
       presidio-analyzer-recognizer-tests: [SG_UEN]
 
+  - id: pii.se.personnummer
+    scope: shared
+    ark: [SE_PERSONNUMMER]
+    presidio: [SE_PERSONNUMMER]
+    corpora:
+      presidio-analyzer-recognizer-tests: [SE_PERSONNUMMER]
+
+  - id: pii.fi.personal_identity_code
+    scope: shared
+    ark: [FI_PERSONAL_IDENTITY_CODE]
+    presidio: [FI_PERSONAL_IDENTITY_CODE]
+    corpora:
+      presidio-analyzer-recognizer-tests: [FI_PERSONAL_IDENTITY_CODE]
+
   - id: entity.passport_number
     scope: shared
     ark: [PASSPORT_NUMBER]
@@ -357,6 +371,9 @@ entities:
   - {id: pii.sk.vat_id, scope: ark_only, ark: [VAT_ID_SK], presidio: [], corpora: {}}
   - {id: pii.no.vat_id, scope: ark_only, ark: [VAT_ID_NO], presidio: [], corpora: {}}
   - {id: pii.uk.vat_id, scope: ark_only, ark: [VAT_ID_GB], presidio: [], corpora: {}}
+  # B-NORD: Danish CPR number and Norwegian fødselsnummer (Presidio has neither).
+  - {id: pii.dk.cpr, scope: ark_only, ark: [DK_CPR], presidio: [], corpora: {}}
+  - {id: pii.no.fodselsnummer, scope: ark_only, ark: [NO_FODSELSNUMMER], presidio: [], corpora: {}}
 
   # ── presidio_only ──────────────────────────────────────────────────────
   - {id: pii.url, scope: presidio_only, ark: [], presidio: [URL], corpora: {presidio-evaluator-synth-v2: [DOMAIN_NAME], presidio-analyzer-recognizer-tests: [URL]}}
@@ -371,9 +388,7 @@ entities:
   - {id: pii.es.nie, scope: presidio_only, ark: [], presidio: [ES_NIE], corpora: {presidio-analyzer-recognizer-tests: [ES_NIE]}}
   - {id: pii.es.nif, scope: presidio_only, ark: [], presidio: [ES_NIF], corpora: {presidio-analyzer-recognizer-tests: [ES_NIF]}}
   - {id: pii.it.fiscal_code, scope: presidio_only, ark: [], presidio: [IT_FISCAL_CODE], corpora: {presidio-analyzer-recognizer-tests: [IT_FISCAL_CODE]}}
-  - {id: pii.fi.personal_identity_code, scope: presidio_only, ark: [], presidio: [FI_PERSONAL_IDENTITY_CODE], corpora: {presidio-analyzer-recognizer-tests: [FI_PERSONAL_IDENTITY_CODE]}}
   - {id: pii.pl.pesel, scope: presidio_only, ark: [], presidio: [PL_PESEL], corpora: {presidio-analyzer-recognizer-tests: [PL_PESEL]}}
-  - {id: pii.se.personnummer, scope: presidio_only, ark: [], presidio: [SE_PERSONNUMMER], corpora: {presidio-analyzer-recognizer-tests: [SE_PERSONNUMMER]}}
   - {id: pii.se.organisationsnummer, scope: presidio_only, ark: [], presidio: [SE_ORGANISATIONSNUMMER], corpora: {presidio-analyzer-recognizer-tests: [SE_ORGANISATIONSNUMMER]}}
   - {id: pii.tr.national_id, scope: presidio_only, ark: [], presidio: [TR_NATIONAL_ID], corpora: {presidio-analyzer-recognizer-tests: [TR_NATIONAL_ID]}}
   - {id: pii.ca.sin, scope: presidio_only, ark: [], presidio: [CA_SIN], corpora: {presidio-analyzer-recognizer-tests: [CA_SIN]}}
@@ -494,6 +509,10 @@ checksums:
     au_medicare: {algorithm: "gewichtet 1-3-7-9 mod 10"}               # B-APAC, Medicare
     sg_nric_fin: {algorithm: "Prüfbuchstabe gewichtet 2-7-6-5-4-3-2 mod 11 je Serie"}  # B-APAC, NRIC/FIN
     sg_uen: {algorithm: "Prüfbuchstabe mod 11 je Format A/B/C"}        # B-APAC, UEN
+    se_personnummer: {algorithm: Luhn}                                 # B-NORD, plus Geburtsdatum (Tag + 60: samordningsnummer)
+    dk_cpr: {algorithm: "gewichtet 4-3-2-7-6-5-4-3-2-1 mod 11"}        # B-NORD, nur Nummern mit Prüfsumme (seit 2007 nicht mehr jede)
+    no_fodselsnummer: {algorithm: "zwei Prüfziffern mod 11 (3-7-6-1-8-9-4-5-2-1, 5-4-3-2-7-6-5-4-3-2-1)"}  # B-NORD, auch D-/H-Nummer
+    fi_hetu: {algorithm: Kontrollzeichen mod 31}                       # B-NORD, henkilötunnus
     de_vat_id: {algorithm: "ISO 7064 MOD 11,10"}            # B01, USt-IdNr.
     at_vat_id: {algorithm: Luhn-Variante (6 − Summe) mod 10}  # B01, UID ATU
     ch_vat_id: {algorithm: gewichtet 5-4-3-2-7-6-5-4 mod 11}   # B01, UID CHE

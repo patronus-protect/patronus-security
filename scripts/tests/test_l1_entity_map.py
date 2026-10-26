@@ -206,6 +206,21 @@ def test_au_and_sg_identifiers_are_shared_with_presidio():
         assert entity_map.scope(entity_id) == "shared"
 
 
+def test_nordic_personal_numbers_have_one_label_per_country():
+    # B-NORD: SE and FI are shared with Presidio; Presidio has no DK CPR or NO fødselsnummer.
+    entity_map = MODULE.load()
+    for entity_id, label, scope in [
+        ("pii.se.personnummer", "SE_PERSONNUMMER", "shared"),
+        ("pii.fi.personal_identity_code", "FI_PERSONAL_IDENTITY_CODE", "shared"),
+        ("pii.dk.cpr", "DK_CPR", "ark_only"),
+        ("pii.no.fodselsnummer", "NO_FODSELSNUMMER", "ark_only"),
+    ]:
+        assert entity_map.ark_label(label) == entity_id
+        assert entity_map.scope(entity_id) == scope
+    assert entity_map.presidio_entity("SE_PERSONNUMMER") == "pii.se.personnummer"
+    assert entity_map.presidio_entity("FI_PERSONAL_IDENTITY_CODE") == "pii.fi.personal_identity_code"
+
+
 # ── validation of malformed maps ─────────────────────────────────────────────
 
 
@@ -442,7 +457,7 @@ def test_checked_in_registry_order_matches_the_rust_order_test():
     expected = re.findall(r'\(\s*"(pii_\w+)",\s*"(\w+)",?\s*\)', rust_test)
     rules = _generate_docs().parse_native_patterns(MODULE.PII_SOURCE_PATH, "PiiPattern")
     assert [(rule["id"], rule["entity_group"]) for rule in rules] == expected
-    assert len(expected) == 100
+    assert len(expected) == 108
 
 
 def test_cli_check_succeeds_and_fails(tmp_path):

@@ -17,6 +17,7 @@ mod de;
 mod driver_license;
 mod identifiers;
 mod intl;
+mod nordic;
 pub mod overlap;
 #[allow(clippy::module_inception)]
 pub mod pii;

@@ -280,10 +280,12 @@ be a valid card number, and an account field can hold an IBAN or a card-shaped n
 a card needs Luhn plus the IIN prefix and a length of its brand and never starts right after `+`,
 so phone digits no longer compete as a card. In `balanced` and `recall` one value yields one label among `IBAN`,
 `CREDITCARD`, `FINANCIAL_ACCOUNT_NUMBER`, `STEUERID`, `PHONE`, `VAT_ID_IT`, `VAT_ID_FR`, `VAT_ID_HR`,
-`VAT_ID_LT`, `VAT_ID_LV`, `NHS_NUMBER` and `AU_ABN` (a bare Partita IVA and the digits of a spaced
-French or Croatian VAT ID have 11 digits like a Steuer-ID, B01/B02; the twelve digits of a Lithuanian
-one can be card-shaped, B02; an NHS number in 3-3-4 groups is also a US phone number, B-UK; an ABN in
-2-3-3-3 groups or as eleven digits can be a Steuer-ID, B-APAC).
+`VAT_ID_LT`, `VAT_ID_LV`, `NHS_NUMBER`, `AU_ABN`, `SE_PERSONNUMMER`, `DK_CPR`, `NO_FODSELSNUMMER` and
+`FI_PERSONAL_IDENTITY_CODE` (a bare Partita IVA and the digits of a spaced French or Croatian VAT ID
+have 11 digits like a Steuer-ID, B01/B02; the twelve digits of a Lithuanian one can be card-shaped,
+B02; an NHS number in 3-3-4 groups is also a US phone number, B-UK; an ABN in 2-3-3-3 groups or as
+eleven digits can be a Steuer-ID, B-APAC; a personnummer, a CPR number and a henkilötunnus share
+`DDDDDD-DDDD`, and a fødselsnummer has eleven digits like a Steuer-ID, B-NORD).
 Of two overlapping findings
 with different labels the first criterion that differs decides: an IBAN (`iban`), the longer
 value (`longer_value`: a card-shaped part of a longer value), context that supports the finding's
@@ -374,7 +376,17 @@ day and month) and the LANR (`PHYSICIAN_NUMBER_LANR`, `123456601`). In `balanced
 uppercase KVNR and an RVNR (also `15 070649 C 103`) are reported bare at `0.55`; a LANR needs a term
 such as `Arztnummer` near it or as its key there. The BSNR (`FACILITY_NUMBER_BSNR`, nine digits, no
 check digit) needs a BSNR term or key (`BSNR`, `Betriebsstättennummer`, `practice number`) in every
-mode. The German document number rules keep
+mode. Nordic personal identity numbers (B-NORD) start with the birth date and have one label
+each: the Swedish personnummer (`SE_PERSONNUMMER`, Luhn; `811228-9874`, `+` from the 100th birthday,
+ten or twelve digits, a coordination number adds 60 to the day), the Danish CPR number (`DK_CPR`,
+weights 4-3-2-7-6-5-4-3-2-1 mod 11; `080572-3300`), the Norwegian fødselsnummer (`NO_FODSELSNUMMER`,
+two check digits mod 11, also D- and H-numbers; `11089733660`) and the Finnish personal identity code
+(`FI_PERSONAL_IDENTITY_CODE`, check character mod 31 with a century sign; `131052-308T`,
+`010594Y9032`). With a term of the label near the value or as its key (`Personnummer`, `CPR`,
+`Fødselsnummer`, `fnr`, `HETU`, `henkilötunnus`) they are reported in every mode, `0.75`–`0.85`; bare,
+in `balanced`/`recall` only and at `0.55`, the printed forms `YYMMDD-NNNC`, `DDMMYY-SSSS`,
+`DDMMYY NNNKK` and the henkilötunnus. Bare digit runs need the term in every mode. CPR numbers issued
+without the mod-11 check (since 2007) are not reported. The German document number rules keep
 their format check in every mode, since a printed nine-character serial carries no check digit. A context-bound rule (`pii_phone_de_national_proximity`: a national number such as
 `ist unter 0176 90817263 erreichbar`) reports only with a support term and no nearer counter term,
 in every mode including `strict`, and then scores at least `0.50`. Validators decide in every

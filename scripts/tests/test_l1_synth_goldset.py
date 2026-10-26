@@ -60,11 +60,13 @@ def compact(value: str) -> str:
 
 
 def test_goldsets_cover_exactly_the_entity_map_ids():
-    # Ids added to the map after the E05 freeze get a goldset of their own (GOLD-VAT1, GOLD-VAT2).
+    # Ids added to the map after the E05 freeze get a goldset of their own (GOLD-VAT1, GOLD-VAT2)
+    # or are listed as not generated.
     ids = {name: goldset.entity_ids() for name, goldset in MODULE.GOLDSETS.items()}
     assert ids["de-eu"] == MODULE.entity_ids() and set(ids) == {"de-eu", "vat-1", "vat-2"}
-    assert set().union(*ids.values()) == map_ids()
-    assert sum(len(entities) for entities in ids.values()) == len(map_ids())
+    assert MODULE.NOT_GENERATED <= map_ids()
+    assert set().union(*ids.values()) == map_ids() - MODULE.NOT_GENERATED
+    assert sum(len(entities) for entities in ids.values()) == len(map_ids() - MODULE.NOT_GENERATED)
 
 
 @pytest.mark.parametrize("rows", [dev_rows, holdout_rows], ids=["dev", "holdout"])

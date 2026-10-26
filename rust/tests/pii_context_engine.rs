@@ -427,7 +427,11 @@ fn context_bound_rules_score_at_least_the_balanced_threshold_with_support() {
             "pii_nric_fin_sg",
             "pii_uen_sg",
             "pii_physician_number_lanr_de_proximity",
-            "pii_facility_number_bsnr_de"
+            "pii_facility_number_bsnr_de",
+            "pii_personnummer_se",
+            "pii_cpr_dk",
+            "pii_fodselsnummer_no",
+            "pii_hetu_fi"
         ]
     );
     for pattern in bound {

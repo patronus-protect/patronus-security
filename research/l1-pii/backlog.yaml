@@ -666,6 +666,7 @@ tasks:
 
   # M3 +3 (53)
   - id: B-NORD
+    status: done
     title: "SE personnummer (Luhn), DK CPR, NO fødselsnummer, FI HETU"
     type: new-entity
     deps: [K05]

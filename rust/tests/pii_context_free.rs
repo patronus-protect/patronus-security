@@ -164,6 +164,10 @@ fn scored_only_rules_are_unbound_checksum_rules() {
             "pii_rentenversicherung_de_context_free",
             "pii_health_insurance_number_de_context_free",
             "pii_physician_number_lanr_de_proximity",
+            "pii_personnummer_se_context_free",
+            "pii_cpr_dk_context_free",
+            "pii_fodselsnummer_no_context_free",
+            "pii_hetu_fi_context_free",
         ]
     );
     for pattern in scored_only {
@@ -277,6 +281,10 @@ fn every_checksum_label_reports_a_bare_value_in_the_scored_modes() {
         ("SOCIALID", "15070649C103", 0.55),
         ("SOCIALID", "65 230109 Z 872", 0.55),
         ("HEALTH_INSURANCE_NUMBER", "A123456780", 0.55),
+        ("SE_PERSONNUMMER", "811228-9874", 0.55),
+        ("DK_CPR", "080572-3300", 0.55),
+        ("NO_FODSELSNUMMER", "110897 33660", 0.55),
+        ("FI_PERSONAL_IDENTITY_CODE", "131052-308T", 0.55),
     ];
     for label in PII_PATTERNS
         .iter()
