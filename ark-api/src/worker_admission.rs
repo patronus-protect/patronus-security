@@ -106,6 +106,8 @@ mod tests {
                 default_gates: ScanGateMatrix::default(),
                 dynamic_pii: None,
                 onnx_runtime: Default::default(),
+                l3_strategy: patronus_ark::L3Strategy::Multi,
+                wolf_options: Default::default(),
             },
             SecurityGateway::with_max_level(categories, SecurityLevel::L1, None, false),
         );
@@ -209,6 +211,8 @@ mod tests {
             default_gates: ScanGateMatrix::default(),
             dynamic_pii: None,
             onnx_runtime: Default::default(),
+            l3_strategy: patronus_ark::L3Strategy::Multi,
+            wolf_options: Default::default(),
         };
         let state = AppState::new(
             config,

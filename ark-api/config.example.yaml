@@ -30,6 +30,15 @@ pipeline:
   # instead of silently downloading models at request time.
   download_files: false
 
+  # Existing deployment default: one shared multi-head L3 classifier.
+  # Opt in to dedicated models only with the matching assets installed.
+  l3_strategy: multi
+  # Applies only to dedicated Wolf; these omitted values retain 256/0/1.
+  # wolf_options:
+  #   window_tokens: 256 # Includes BOS/EOS.
+  #   overlap_tokens: 0
+  #   batch_size: 1
+
   # Optional ONNX Runtime CPU tuning. Defaults are 1/1/false, which avoid
   # oversubscription when several API containers share one VPS.
   onnx_runtime:

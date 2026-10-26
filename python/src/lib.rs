@@ -8,7 +8,7 @@ use patronus_ark::{
     PersistentCacheConfig, QueuedSecurityEvent, QueuedSecurityScanResult, ScanGateMatrix,
     SecurityCategory, SecurityFailure, SecurityGateway as RustSecurityGateway, SecurityLevel,
     SecurityLevelReadiness, SecurityRequestCompletion, SecurityRequestState,
-    SecurityRuntimeReadiness, TextNormalizationConfig, WriteBehindConfig,
+    SecurityRuntimeReadiness, TextNormalizationConfig, WolfExecutionOptions, WriteBehindConfig,
 };
 use pyo3::prelude::*;
 use std::path::PathBuf;
@@ -30,7 +30,7 @@ struct SecurityGateway {
 impl SecurityGateway {
     #[new]
     #[allow(clippy::too_many_arguments)] // Public Python constructor signature.
-    #[pyo3(signature = (categories, max_level="l2", model_dir=None, download_files=true, download_categories=None, execution_gates_json=None, onnx_batch_mode="backend_default", execution_backend="auto", ntdb_operating_point="best_f1", l3_strategy="dedicated", dynamic_pii_config_json=None, cache_storage_location=None, cache_encryption_key_hex=None, cache_entry_ttl_seconds=2_592_000, cache_memory_max_entries=100_000, cache_memory_max_bytes=134_217_728))]
+    #[pyo3(signature = (categories, max_level="l2", model_dir=None, download_files=true, download_categories=None, execution_gates_json=None, onnx_batch_mode="backend_default", execution_backend="auto", ntdb_operating_point="best_f1", l3_strategy="dedicated", dynamic_pii_config_json=None, cache_storage_location=None, cache_encryption_key_hex=None, cache_entry_ttl_seconds=2_592_000, cache_memory_max_entries=100_000, cache_memory_max_bytes=134_217_728, *, wolf_options_json=None))]
     fn new(
         categories: Vec<String>,
         max_level: &str,
@@ -48,7 +48,9 @@ impl SecurityGateway {
         cache_entry_ttl_seconds: u64,
         cache_memory_max_entries: usize,
         cache_memory_max_bytes: usize,
+        wolf_options_json: Option<&str>,
     ) -> PyResult<Self> {
+        let wolf_options = parse_wolf_options_json(wolf_options_json)?;
         if cache_entry_ttl_seconds == 0 {
             return Err(pyo3::exceptions::PyValueError::new_err(
                 "cache_entry_ttl_seconds must be positive",
@@ -93,6 +95,11 @@ impl SecurityGateway {
         inner.set_execution_backend(parse_execution_backend(execution_backend)?);
         inner.set_ntdb_decision_threshold_point(parse_ntdb_operating_point(ntdb_operating_point)?);
         inner.set_l3_strategy(parse_l3_strategy(l3_strategy)?);
+        if let Some(options) = wolf_options {
+            inner
+                .set_wolf_execution_options(options)
+                .map_err(pyo3::exceptions::PyValueError::new_err)?;
+        }
         if onnx_batch_mode != "backend_default" {
             inner.set_onnx_batch_mode(parse_onnx_batch_mode(onnx_batch_mode)?);
         }
@@ -291,6 +298,18 @@ impl SecurityGateway {
     }
 
     #[getter]
+    fn wolf_options(&self) -> std::collections::HashMap<&'static str, usize> {
+        let options = self.inner.distributed_execution().wolf_execution_options();
+        [
+            ("window_tokens", options.window_tokens),
+            ("overlap_tokens", options.overlap_tokens),
+            ("batch_size", options.batch_size),
+        ]
+        .into_iter()
+        .collect()
+    }
+
+    #[getter]
     fn l3_strategy(&self) -> String {
         self.inner.l3_strategy().as_str().to_string()
     }
@@ -358,6 +377,19 @@ fn hex_nibble(value: u8) -> PyResult<u8> {
             "cache_encryption_key_hex must contain only hex characters",
         )),
     }
+}
+
+fn parse_wolf_options_json(value: Option<&str>) -> PyResult<Option<WolfExecutionOptions>> {
+    value
+        .map(|value| {
+            let options: WolfExecutionOptions = serde_json::from_str(value)
+                .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
+            options
+                .validate()
+                .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
+            Ok(options)
+        })
+        .transpose()
 }
 
 fn parse_dynamic_pii_config_json(value: Option<&str>) -> PyResult<Option<DynamicPiiConfig>> {
