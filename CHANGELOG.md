@@ -54,6 +54,11 @@ result shapes may be breaking for downstream users, and is called out explicitly
   the decode runs only on a matched value containing `%`, 100 KiB p95 12.45 → 12.19 ms (noise).
   New synthetic generator `reserved_char_password` (inserted URL-encoded through the new
   `url_encoded` key in `dlp_synth/rules.json`, not used by carriers) and 20 golden rows.
+- DLP L1 (T17 review, all modes): `dlp_url_userinfo_password` checks for the `x-oauth-basic`
+  pseudo-password on the encoded password, so an encoded `%3A` stays password data
+  (`postgres://app:Kx7pQ2vL%3Ax-oauth-basic@…` is reported again, as before T17). **Detection
+  change:** restores findings the decode had dropped; the pseudo-password check now runs before
+  the decode.
 
 ## [0.1.12] - 2026-10-25
 

@@ -988,9 +988,18 @@ const FUNCTION_WORDS: &[&str] = &[
 /// URL, no credential name or stand-in (`user:pass`, `user:secret`,
 /// `token:MY_GITHUB_TOKEN`, `foo001:bar002`, `gitlab-ci-token:realtoken`),
 /// also masked (`p@ss`, `s3cr3t`). T17: a userinfo percent-encodes reserved
-/// characters, so the checks read the decoded password (`p%40ss` is `p@ss`).
+/// characters, so the checks read the decoded password (`p%40ss` is `p@ss`);
+/// an encoded `%3A` is password data, not the separator.
 pub fn is_userinfo_password(text: &str, range: Range<usize>) -> bool {
     let encoded = &text[range];
+    // The password is the part after the last literal `:` of the userinfo.
+    let password = encoded.rsplit(':').next().unwrap_or(encoded);
+    if PSEUDO_PASSWORDS
+        .iter()
+        .any(|pseudo| password.eq_ignore_ascii_case(pseudo))
+    {
+        return false;
+    }
     let decoded;
     let value = if encoded.contains('%') {
         decoded = percent_decode_lossy(encoded);
@@ -998,14 +1007,6 @@ pub fn is_userinfo_password(text: &str, range: Range<usize>) -> bool {
     } else {
         encoded
     };
-    // The password is the part after the last `:` of the userinfo.
-    let password = value.rsplit(':').next().unwrap_or(value);
-    if PSEUDO_PASSWORDS
-        .iter()
-        .any(|pseudo| password.eq_ignore_ascii_case(pseudo))
-    {
-        return false;
-    }
     !is_metasyntactic(value)
         && !is_masked_credential_noun(value)
         && (!is_word_like(value) || !(is_stand_in(value) || names_a_credential(value)))
@@ -1521,6 +1522,8 @@ mod tests {
             "Vkrq%40Tz82%24mLw%3A41",
             "Hmt%24pn%3A7731%40qe",
             "Kx7pQ2vL9rT4%40",
+            "Kx7pQ2vL%3Ax-oauth-basic",
+            "x-oauth-basic%3AKx7pQ2vL",
         ] {
             assert!(
                 userinfo("http://user:{v}@proxy.com/", value, is_userinfo_password),

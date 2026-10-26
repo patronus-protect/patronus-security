@@ -244,6 +244,16 @@ fn percent_encoded_chosen_passwords_keep_the_encoded_span() {
             "amqp://worker:Wq9%40ss%24Lr%3Az@mq.internal:5672/jobs",
             "Wq9%40ss%24Lr%3Az",
         ),
+        // An encoded `:` is password data, not the userinfo separator, so
+        // the pseudo-password check reads the whole password.
+        (
+            "DATABASE_URL=postgres://app:Kx7pQ2vL%3Ax-oauth-basic@db.internal/app",
+            "Kx7pQ2vL%3Ax-oauth-basic",
+        ),
+        (
+            "Verbindung zur Datenbank: postgres://dienst:Wz4mR8tN%3Ax-oauth-basic@db.intern/app",
+            "Wz4mR8tN%3Ax-oauth-basic",
+        ),
     ] {
         assert_reported(text, "dlp_url_userinfo_password", value);
     }
