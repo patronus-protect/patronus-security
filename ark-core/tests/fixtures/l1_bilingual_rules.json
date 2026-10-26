@@ -14,6 +14,28 @@
     "obfuscated": {
       "de": "E-Mail: lena.vogt＠beispiel.de",
       "en": "Email: ada.wong@north​wind.com"
+    },
+    "hard_negatives": {
+      "de": [
+        "Datenbank: postgres://lager:Sommer2026@db.firma.de:5432/lager",
+        "Die Adresse wird mit adresse.split('@') zerlegt.",
+        "Schreiben Sie an anna.berg@firma.intern"
+      ],
+      "en": [
+        "Mirror: ftp://deploy@files.example.net/releases/",
+        "if address.endswith(\"'@example.com\"):",
+        "Sent from alice.williams@email.note"
+      ]
+    },
+    "span": {
+      "de": {
+        "text": "Grüße an jürgen.müller@beispiel.de",
+        "value": "jürgen.müller@beispiel.de"
+      },
+      "en": {
+        "text": "Reply to a@xn--d1acufc.xn--p1ai today.",
+        "value": "a@xn--d1acufc.xn--p1ai"
+      }
     }
   },
   {
