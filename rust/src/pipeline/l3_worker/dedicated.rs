@@ -30,6 +30,7 @@ use super::super::long_text::aggregate_chunk_outputs;
 use super::super::{
     degraded_error_result, degraded_timeout_result, l3_metadata_layer, PipelineStrategy,
 };
+use super::active_run::{ActiveRunGuard, Stopped};
 use super::{
     elapsed_ms, publish_progress, publish_provisional, DynamicPiiHandle, L3ModelHandle,
     L3WorkerInput, L3WorkerJob, L3WorkerState,
@@ -442,6 +443,18 @@ fn test_delay_result(
     result
 }
 
+fn stopped_wolf_result(job: &L3WorkerJob, stopped: Stopped) -> Result<SecurityScanResult, String> {
+    match stopped {
+        Stopped::EarlyExit(reason) => Ok(super::request_wide_skip_result(
+            job.fallback.clone(),
+            &job.execution,
+            job.degraded_factor,
+            &reason,
+        )),
+        Stopped::Inactive => Err("Wolf request is no longer active".into()),
+    }
+}
+
 fn run_wolf_document_job(
     job: L3WorkerJob,
     model: L3ModelHandle,
@@ -464,6 +477,34 @@ fn run_wolf_document_job(
             return Err("Wolf requires a probability threshold, not majority voting".into())
         }
         None => 0.93, // Preserve the legacy gateway default; the new Core requires an explicit threshold.
+    };
+    let allows_fallback = job.execution.allows_level(SecurityLevel::L2);
+    let mut model = model.lock().map_err(|error| error.to_string())?;
+    if let Err(stopped) = ActiveRunGuard::check_request(
+        &worker.requests,
+        &job.request_id,
+        job.job_id,
+        allows_fallback,
+    ) {
+        return stopped_wolf_result(&job, stopped);
+    }
+    // Startup is separate from the active document run, including lazy profile changes.
+    model
+        .ensure_wolf_loaded(
+            threshold,
+            job.execution.backend(),
+            job.execution.onnx_runtime_options(),
+            job.execution.wolf_execution_options(),
+        )
+        .map_err(|error| error.to_string())?;
+    let active = match ActiveRunGuard::register(
+        Arc::clone(&worker.requests),
+        &job.request_id,
+        job.job_id,
+        allows_fallback,
+    ) {
+        Ok(active) => active,
+        Err(stopped) => return stopped_wolf_result(&job, stopped),
     };
     let mut progress = |update: patronus_ark_core::wolf::WolfProgress| {
         let completed = update.windows as usize;
@@ -535,18 +576,31 @@ fn run_wolf_document_job(
     } else {
         Some(&mut progress as &mut dyn FnMut(patronus_ark_core::wolf::WolfProgress))
     };
-    let output = model
-        .lock()
-        .map_err(|e| e.to_string())?
-        .infer_wolf_document_with_progress(
-            source_text,
-            threshold,
-            job.execution.backend(),
-            job.execution.onnx_runtime_options(),
-            job.execution.wolf_execution_options(),
-            callback,
-        )
-        .map_err(|e| e.to_string())?;
+    let output = model.infer_wolf_document_with_progress_and_control(
+        source_text,
+        threshold,
+        job.execution.backend(),
+        job.execution.onnx_runtime_options(),
+        job.execution.wolf_execution_options(),
+        active.control(),
+        callback,
+    );
+    let output = match output {
+        Ok(output) => output,
+        Err(error) => {
+            if allows_fallback
+                && matches!(
+                    error.downcast_ref::<patronus_ark_core::ScanError>(),
+                    Some(patronus_ark_core::ScanError::Cancelled)
+                )
+            {
+                if let Some(reason) = active.early_exit_reason() {
+                    return stopped_wolf_result(&job, Stopped::EarlyExit(reason));
+                }
+            }
+            return Err(error.to_string());
+        }
+    };
     let class = if output.matched { "attack" } else { "benign" };
     let confidence = if output.matched {
         output.attack_probability

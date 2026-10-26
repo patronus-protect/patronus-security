@@ -302,6 +302,8 @@ impl SecurityGateway {
             }
             finish_request_if_ready(&mut registry, &request_id);
             self.requests.available.notify_all();
+            drop(registry);
+            self.requests.cancel_finished_runs(&request_id);
         }
         request_id
     }
@@ -483,6 +485,7 @@ impl SecurityGateway {
         finish_request_if_ready(&mut registry, &request_id);
         self.requests.available.notify_all();
         drop(registry);
+        self.requests.cancel_finished_runs(&request_id);
         metrics.checkpoint("after_publish_l2", format!("request_id={request_id}"));
 
         for job in l3_jobs {
@@ -534,6 +537,8 @@ impl SecurityGateway {
         }
         finish_request_if_ready(&mut registry, request_id);
         self.requests.available.notify_all();
+        drop(registry);
+        self.requests.cancel_finished_runs(request_id);
     }
 
     /// Consume the next result or terminal event published by the queue.
@@ -567,6 +572,8 @@ impl SecurityGateway {
                     .expect("ready index disappeared");
                 if matches!(event, QueuedSecurityEvent::Finished { .. }) {
                     registry.requests.remove(event.request_id());
+                    drop(registry);
+                    self.requests.cancel_finished_runs(event.request_id());
                     self.l3_worker.remove_request(event.request_id());
                     self.requests.available.notify_all();
                 }

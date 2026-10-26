@@ -23,6 +23,7 @@ use super::decision_cache::DecisionCache;
 use super::l3_routing::estimated_cost_ms;
 use super::{degraded_error_result, degraded_timeout_result};
 
+mod active_run;
 mod dedicated;
 mod unified;
 
@@ -52,6 +53,8 @@ pub(crate) struct RequestRegistry {
 pub(crate) struct RequestRegistryState {
     pub requests: HashMap<RequestId, RequestState>,
     pub ready: VecDeque<QueuedSecurityEvent>,
+    active_runs: HashMap<(RequestId, u64), active_run::ActiveRun>,
+    early_exit_reasons: HashMap<RequestId, String>,
 }
 
 impl Default for RequestRegistry {
@@ -60,6 +63,8 @@ impl Default for RequestRegistry {
             state: Mutex::new(RequestRegistryState {
                 requests: HashMap::new(),
                 ready: VecDeque::new(),
+                active_runs: HashMap::new(),
+                early_exit_reasons: HashMap::new(),
             }),
             available: Condvar::new(),
         }
@@ -1018,6 +1023,7 @@ fn finish_job(
     }
     drop(registry);
     if let Some(reason) = request_wide_stop {
+        worker.requests.cancel_early_exit_runs(&request_id, &reason);
         abort_queued_l3_jobs_for_request(worker, &request_id, &reason);
     }
     resolve_dynamic_pii(worker, &request_id);
@@ -1028,6 +1034,8 @@ fn finish_job(
         .expect("request registry mutex poisoned");
     finish_request_if_ready(&mut registry, &request_id);
     worker.requests.available.notify_all();
+    drop(registry);
+    worker.requests.cancel_finished_runs(&request_id);
 }
 
 fn dynamic_pii_source_chunks(result: &SecurityScanResult) -> Vec<DynamicPiiSourceChunk> {
@@ -1385,6 +1393,7 @@ fn resolve_dynamic_pii(worker: &Arc<L3WorkerState>, request_id: &str) {
             }
         }
     };
+    worker.requests.cancel_finished_runs(request_id);
     if let Some(job) = job {
         L3Worker {
             state: Arc::clone(worker),
@@ -2043,7 +2052,7 @@ mod tests {
             .all(|failure| failure.message == "expired_before_inference"));
     }
 
-    fn test_worker_state(requests: Arc<RequestRegistry>) -> L3WorkerState {
+    pub(super) fn test_worker_state(requests: Arc<RequestRegistry>) -> L3WorkerState {
         L3WorkerState {
             jobs: Mutex::new(Vec::new()),
             scheduler: Mutex::new(FairSchedulerState::default()),
@@ -2222,7 +2231,12 @@ mod tests {
         }
     }
 
-    fn test_job(request_id: &str, category: &str, priority: usize, sequence: u64) -> L3WorkerJob {
+    pub(super) fn test_job(
+        request_id: &str,
+        category: &str,
+        priority: usize,
+        sequence: u64,
+    ) -> L3WorkerJob {
         L3WorkerJob {
             job_id: sequence,
             request_id: request_id.to_string(),
@@ -2273,7 +2287,7 @@ mod tests {
         }
     }
 
-    fn test_result(
+    pub(super) fn test_result(
         category: &str,
         class_name: &str,
         confidence: f64,

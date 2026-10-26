@@ -207,6 +207,45 @@ impl LazyOnnxTextClassifier {
         execution: crate::WolfExecutionOptions,
         progress: Option<&mut dyn FnMut(patronus_ark_core::wolf::WolfProgress)>,
     ) -> Result<patronus_ark_core::wolf::WolfResult, Box<dyn std::error::Error>> {
+        self.infer_wolf_document_with_progress_and_control(
+            text,
+            threshold,
+            backend,
+            options,
+            execution,
+            &patronus_ark_core::ScanControl::default(),
+            progress,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn infer_wolf_document_with_progress_and_control(
+        &mut self,
+        text: &str,
+        threshold: f64,
+        backend: ExecutionBackend,
+        options: OnnxRuntimeOptions,
+        execution: crate::WolfExecutionOptions,
+        control: &patronus_ark_core::ScanControl,
+        progress: Option<&mut dyn FnMut(patronus_ark_core::wolf::WolfProgress)>,
+    ) -> Result<patronus_ark_core::wolf::WolfResult, Box<dyn std::error::Error>> {
+        control.check()?;
+        self.ensure_wolf_loaded(threshold, backend, options, execution)?;
+        control.check()?;
+        let runner = self.wolf_runner.as_mut().ok_or("Wolf runner not loaded")?;
+        Ok(match progress {
+            Some(callback) => runner.scan_with_progress_and_control(text, control, callback)?,
+            None => runner.scan_with_control(text, control)?,
+        })
+    }
+
+    pub(crate) fn ensure_wolf_loaded(
+        &mut self,
+        threshold: f64,
+        backend: ExecutionBackend,
+        options: OnnxRuntimeOptions,
+        execution: crate::WolfExecutionOptions,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         if let Some(runner) = self.wolf_runner.as_mut() {
             runner.set_threshold(threshold)?;
         }
@@ -244,11 +283,7 @@ impl LazyOnnxTextClassifier {
             self.loaded_options = Some(options);
         }
         self.last_used = Some(Instant::now());
-        let runner = self.wolf_runner.as_mut().ok_or("Wolf runner not loaded")?;
-        Ok(match progress {
-            Some(callback) => runner.scan_with_progress(text, callback)?,
-            None => runner.scan(text)?,
-        })
+        Ok(())
     }
 
     pub(crate) fn warmup_session(
