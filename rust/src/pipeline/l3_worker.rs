@@ -135,7 +135,7 @@ struct L3WorkerJob {
     category: String,
     model: String,
     input: L3WorkerInput,
-    source_text: Arc<str>,
+
     fallback: SecurityScanResult,
     priority: usize,
     ttl_ms: u64,
@@ -515,7 +515,6 @@ impl L3Worker {
             }
         };
         Ok(L3WorkerJob {
-            source_text: spec.text.clone(),
             job_id: spec.job_id,
             request_id: spec.request_id,
             category: spec.category,
@@ -545,7 +544,11 @@ impl L3Worker {
     }
 
     fn input_for_spec(&self, spec: &L3JobSpec) -> Result<L3WorkerInput, String> {
-        if spec.dynamic_pii_config.is_some() {
+        if spec.dynamic_pii_config.is_some()
+            || (spec.execution.l3_strategy() == L3Strategy::Dedicated
+                && spec.model == "wolf-defender-small")
+        {
+            // Wolf owns its complete document tokenization/windowing in Core.
             return Ok(L3WorkerInput::Text(spec.text.clone()));
         }
         self.plan_chunks_for_spec(spec)
@@ -589,7 +592,6 @@ impl L3Worker {
         for (spec, delay_ms) in specs {
             let (estimated_cost_ms, fairness_quantum_ms, max_wait_ms) = scheduling_values(&spec);
             jobs.push(L3WorkerJob {
-                source_text: spec.text.clone(),
                 job_id: spec.job_id,
                 request_id: spec.request_id,
                 category: spec.category,
@@ -1735,6 +1737,33 @@ mod tests {
     }
 
     #[test]
+    fn dedicated_wolf_job_passes_source_document_without_chunk_planning() {
+        let worker = L3Worker {
+            state: Arc::new(test_worker_state(Arc::new(RequestRegistry::default()))),
+        };
+        let mut spec = test_l3_spec(
+            "wolf-document",
+            "injection",
+            1,
+            ScanExecution::new(SecurityLevel::L3),
+        );
+        spec.model = "wolf-defender-small".into();
+        spec.text = Arc::from(" a".repeat(2000));
+        spec.l2_chunk_outputs = Vec::new().into();
+        spec.l3_candidates.clear();
+        let job = worker.build_physical_job(spec.clone(), None, None).unwrap();
+        let L3WorkerInput::Text(text) = job.input else {
+            panic!("Wolf must receive its source document");
+        };
+        assert!(Arc::ptr_eq(&text, &spec.text));
+        assert!(job.l2_chunk_outputs.is_empty());
+
+        // Other classifiers still require their original canonical token handoff.
+        spec.model = "other-classifier".into();
+        assert!(worker.build_physical_job(spec, None, None).is_err());
+    }
+
+    #[test]
     fn token_pipeline_e2e_preserves_v4_chunks_through_promotion_and_l3_inputs() {
         use crate::ml::{
             ntdb_executor::token_outputs_for_test,
@@ -2195,7 +2224,6 @@ mod tests {
 
     fn test_job(request_id: &str, category: &str, priority: usize, sequence: u64) -> L3WorkerJob {
         L3WorkerJob {
-            source_text: Arc::from("test"),
             job_id: sequence,
             request_id: request_id.to_string(),
             category: category.to_string(),

@@ -448,6 +448,9 @@ fn run_wolf_document_job(
     worker: Arc<L3WorkerState>,
 ) -> Result<SecurityScanResult, String> {
     let started = Instant::now();
+    let L3WorkerInput::Text(source_text) = &job.input else {
+        return Err("Wolf requires the original source document".into());
+    };
     let policy = job
         .execution
         .l3_policy()
@@ -536,10 +539,11 @@ fn run_wolf_document_job(
         .lock()
         .map_err(|e| e.to_string())?
         .infer_wolf_document_with_progress(
-            &job.source_text,
+            source_text,
             threshold,
             job.execution.backend(),
             job.execution.onnx_runtime_options(),
+            job.execution.wolf_execution_options(),
             callback,
         )
         .map_err(|e| e.to_string())?;
@@ -1940,7 +1944,6 @@ mod tests {
 
     fn lifecycle_test_job() -> L3WorkerJob {
         L3WorkerJob {
-            source_text: std::sync::Arc::from("text"),
             job_id: 1,
             request_id: "request-1".to_string(),
             category: "threat".to_string(),
@@ -2070,7 +2073,7 @@ mod tests {
             let mut job = lifecycle_test_job();
             job.category = "injection".into();
             job.model = "wolf-defender-small".into();
-            job.source_text = Arc::from(" a".repeat(257));
+            job.input = L3WorkerInput::Text(Arc::from(" a".repeat(257)));
             job.fallback.category = "injection".into();
             let mut gates = crate::ScanGateMatrix::default();
             gates.set_l3_policy(L3SchedulerPolicy {

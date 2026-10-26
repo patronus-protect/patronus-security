@@ -77,8 +77,18 @@ impl WarmupOptions {
 impl Scanner {
     /// Prepare configured assets, then construct one warm scanner used by subsequent scans.
     pub fn warmup(config: ScannerConfig, options: WarmupOptions) -> Result<Self, ScanError> {
+        Self::warmup_with_wolf_options(config, options, crate::WolfExecutionOptions::default())
+    }
+
+    /// Prepare assets and warm one reusable scanner with explicit Wolf execution options.
+    pub fn warmup_with_wolf_options(
+        config: ScannerConfig,
+        options: WarmupOptions,
+        execution: crate::WolfExecutionOptions,
+    ) -> Result<Self, ScanError> {
+        execution.validate()?;
         prepare_assets(&config, &options)?;
-        Self::new(config)
+        Self::new_with_wolf_options(config, execution)
     }
 }
 /// Prepare model files without creating a tokenizer, ONNX session or scanner.

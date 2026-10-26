@@ -9,6 +9,18 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ## [Unreleased]
 
+### Added
+
+- Shared `WolfExecutionOptions` for configurable total window tokens, content overlap,
+  and actual ONNX window batching. Existing constructors retain 256 total tokens,
+  no overlap, and batch size 1. Core owns streaming windows, masks, per-row logits,
+  cancellation, and Smooth Max; Ark delegates through its execution options.
+- Move the synchronous ONNX text classifier into Core and preserve Ark's public
+  type through a re-export. Reuse one batch-input assembler for the classifier
+  and Wolf, and remove Ark's redundant pre-tokenization/chunk planning for
+  dedicated Wolf documents.
+
+
 ## [0.1.13] - 2026-10-26
 
 ### Fixed

@@ -470,6 +470,17 @@ impl SecurityGateway {
             .store(worker_count.max(1), Ordering::Relaxed);
     }
 
+    /// Configure dedicated Wolf windowing and batching for subsequent scans.
+    pub fn set_wolf_execution_options(
+        &self,
+        options: crate::WolfExecutionOptions,
+    ) -> Result<(), String> {
+        self.execution
+            .lock()
+            .expect("execution mutex poisoned")
+            .set_wolf_execution_options(options)
+    }
+
     /// Set ONNX Runtime session options for subsequent scans.
     pub fn set_onnx_runtime_options(&self, options: crate::OnnxRuntimeOptions) {
         self.execution

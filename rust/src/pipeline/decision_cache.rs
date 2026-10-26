@@ -200,6 +200,10 @@ fn cache_key(namespace: &str, text: &str, execution: &ScanExecution) -> Decision
     );
     scope.update(execution.l3_strategy().as_str().as_bytes());
     scope.update(&execution.chunk_overlap_tokens().to_le_bytes());
+    let wolf = execution.wolf_execution_options();
+    for value in [wolf.window_tokens, wolf.overlap_tokens, wolf.batch_size] {
+        scope.update(&value.to_le_bytes());
+    }
     DecisionCacheKey {
         scope_hash: *scope.finalize().as_bytes(),
         text_hash: *blake3::hash(text.as_bytes()).as_bytes(),
@@ -373,6 +377,32 @@ mod tests {
             .expect("the scan should be cached");
 
         assert_eq!(parts.label_scores, label_scores);
+    }
+
+    #[test]
+    fn cache_key_separates_wolf_execution_profiles() {
+        let baseline = ScanExecution::default();
+        for options in [
+            crate::WolfExecutionOptions {
+                window_tokens: 2048,
+                ..Default::default()
+            },
+            crate::WolfExecutionOptions {
+                overlap_tokens: 64,
+                ..Default::default()
+            },
+            crate::WolfExecutionOptions {
+                batch_size: 4,
+                ..Default::default()
+            },
+        ] {
+            let mut changed = baseline.clone();
+            changed.set_wolf_execution_options(options).unwrap();
+            assert_ne!(
+                cache_key("injection", "same text", &baseline),
+                cache_key("injection", "same text", &changed)
+            );
+        }
     }
 
     #[test]

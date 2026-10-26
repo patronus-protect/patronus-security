@@ -158,6 +158,15 @@ pub struct Scanner {
 impl Scanner {
     /// Initialize native detectors and warm/verify an explicitly configured local Wolf bundle.
     pub fn new(config: ScannerConfig) -> Result<Self, ScanError> {
+        Self::new_with_wolf_options(config, crate::WolfExecutionOptions::default())
+    }
+
+    /// Initialize with explicit Wolf windowing and batching; native stages are unchanged.
+    pub fn new_with_wolf_options(
+        config: ScannerConfig,
+        options: crate::WolfExecutionOptions,
+    ) -> Result<Self, ScanError> {
+        options.validate()?;
         config.validate()?;
         let mut producers: Vec<(&'static str, Producer)> = Vec::new();
         macro_rules! add {
@@ -251,7 +260,7 @@ impl Scanner {
             wolf: config
                 .wolf
                 .as_ref()
-                .map(crate::wolf::WolfRunner::new)
+                .map(|config| crate::wolf::WolfRunner::new_with_options(config, options))
                 .transpose()?,
             config,
         })
