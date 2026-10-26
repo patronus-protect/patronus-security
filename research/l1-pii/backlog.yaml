@@ -589,6 +589,7 @@ tasks:
 
   # M1 account number (neutral 1.9 vs 13.2) + M3 +1 (46)
   - id: B-ACCT
+    status: done
     title: "Account numbers: US bank account (context) + ABA routing number (checksum), account/customer/employee IDs via structural context"
     type: recall-fix
     deps: [K03, K04]

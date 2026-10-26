@@ -160,6 +160,8 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     nordic::HETU,
     nordic::HETU_CONTEXT_FREE,
     de::STEUERNUMMER_CONTEXT_FREE,
+    us::ABA_ROUTING_NUMBER,
+    us::ABA_ROUTING_NUMBER_CONTEXT_FREE,
 ];
 
 pub struct PiiPipeline {
@@ -601,7 +603,8 @@ impl NativeRegexDetector for PiiPipeline {
             | "pii_personnummer_se"
             | "pii_cpr_dk"
             | "pii_fodselsnummer_no"
-            | "pii_hetu_fi" => {
+            | "pii_hetu_fi"
+            | "pii_aba_routing_number_us" => {
                 let value = captures.get(0).unwrap().range();
                 context::structure_evidence(
                     prepared.structure(),

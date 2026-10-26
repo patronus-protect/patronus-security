@@ -52,7 +52,11 @@ pub static SUPPORT_LEXICON: &[(&str, &[&str])] = &[
     ("DOB", &["pii.date_of_birth"]),
     (
         "FINANCIAL_ACCOUNT_NUMBER",
-        &["pii.bank_account", "pii.brokerage_account"],
+        &[
+            "pii.bank_account",
+            "pii.brokerage_account",
+            "pii.bank_routing_number",
+        ],
     ),
     ("STEUERID", &["pii.tax_identifier"]),
     ("TAX_NUMBER_DE", &["pii.tax_number"]),

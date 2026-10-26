@@ -1669,7 +1669,10 @@
       "bank account number",
       "bank-account-number",
       "bank_account_number",
-      "banking account"
+      "banking account",
+      "acct number",
+      "acct no",
+      "acct id"
     ],
     "de": [
       "kontonummer",
@@ -1692,7 +1695,8 @@
       "bankkontokennung"
     ],
     "shared": [
-      "iban"
+      "iban",
+      "bban"
     ],
     "fr": [
       "numéro de compte",
@@ -1754,6 +1758,60 @@
     "shared": [],
     "sources": [
       "rust/src/detectors/pii/pii.rs"
+    ]
+  },
+  {
+    "id": "pii.bank_routing_number",
+    "description": "US-Bankleitzahl (ABA Routing Number)",
+    "en": [
+      "routing number",
+      "routing numbers",
+      "routing-number",
+      "routing_number",
+      "routing no",
+      "bank routing number",
+      "bank routing numbers",
+      "bank-routing-number",
+      "bank_routing_number",
+      "routing transit number",
+      "routing and transit number",
+      "aba number",
+      "aba-number",
+      "aba_number",
+      "aba routing number",
+      "aba-routing-number",
+      "aba_routing_number"
+    ],
+    "de": [
+      "routingnummer",
+      "routing nummer",
+      "routing-nummer",
+      "aba-nummer",
+      "aba nummer"
+    ],
+    "shared": [
+      "aba",
+      "rtn"
+    ],
+    "fr": [
+      "numéro de routage",
+      "numero de routage",
+      "numéro d'acheminement",
+      "numéro d’acheminement",
+      "numero d'acheminement"
+    ],
+    "es": [
+      "número de ruta",
+      "numero de ruta",
+      "número de ruta bancaria",
+      "numero de ruta bancaria"
+    ],
+    "it": [
+      "numero di routing",
+      "numero di routing bancario"
+    ],
+    "sources": [
+      "rust/src/detectors/pii/us.rs"
     ]
   },
   {

@@ -289,6 +289,26 @@ und KVNR bei 80,0. Dev `presidio_favored` balanced, exakt, vorher → nachher:
 
 `strict` bleibt bitgleich. Auf `ark_authored` (Dev-Goldset E05, balanced) liegen alle sechs IDs über 80:
 KVNR 100,0, LANR 98,1, RVNR 100,0, Steuer-ID 100,0, Steuernummer 94,2 → 98,1, USt-IdNr. DE 100,0.
+Stand B-ACCT: ARK 50, gemeinsam 19 (A04, F14). Die ABA-Routing-Nummer (US) rechnet die Prüfziffer
+(`validators::aba_routing_number`: Routing-Symbol 00–12, 21–32, 61–72 oder 80, Gewichte 3-7-1 mod 10,
+nicht eine wiederholte Ziffer) und meldet `FINANCIAL_ACCOUNT_NUMBER`; die Einheit ist
+`pii.financial_account_number` mit Land `us`, wie Presidios `ABA_ROUTING_NUMBER`. Neun blanke Ziffern
+bestehen die Prüfziffer jedes zehnte Mal: `pii_aba_routing_number_us` verlangt in jedem Modus einen
+Routing- oder Kontobegriff nah am Wert oder als Schlüssel (neues Lexikon `pii.bank_routing_number`:
+`ABA`, `RTN`, `routing number`, `Routingnummer`, `numéro de routage` …), kontextfrei meldet nur
+`pii_aba_routing_number_us_context_free` die gedruckte 4-4-1-Form (`0711-0130-7`, 0,55, nur
+`balanced`/`recall`). Die feldgebundene Kontoregel kennt zusätzlich `BBAN`, `Bank Routing Number`,
+`Routing-Nummer`, `ABA number`, `Acct No`/`Acct ID` und FR/ES/IT-Routing-Feldnamen, vor dem Wert und
+als Strukturschlüssel (JSON `bban`, CSV `bank_routing_number`, XML `<AcctNumber>`, `<RoutingNumber>`,
+`<AcctId>`, `numeroCuentaBancaria`); unter dem Feldnamen gilt wie bei `Kontonummer` nur die Form,
+weil Gretels neunstelliges Konto- und Routing-Gold selten die Prüfziffer besteht (7 von 61 Dev-Werten). Die Kundennummer-Regel
+nimmt `customer_id`/`customer-number` auch im Fließtext. Dev balanced, exakter F1: Kontonummer neutral
+8,2 → 46,7 (tuned 12,5), presidio_favored 0,0 → 57,1 (tuned 0,0; die blanken neun Ziffern `121000358`
+und die US-Kontonummer `945456787654` bleiben FN), Kundennummer neutral 46,7 → 51,1; Mitarbeiter-ID
+und Benutzername unverändert. Offen (Q-FIN): Werte in SWIFT-MT-, FIX- und EDIFACT-Feldern ohne
+Feldnamen, Feldnamen mit Zusatz (`Bank Routing Number for Direct Deposit:`) und nicht annotierte
+Platzhalter (`Account Number: 123456789`), die Gretel nicht als Gold führt. Der Gold-Lücken-Bericht
+(T16) wertet Konto-Gold jetzt mit dem ABA-Port und zählt BBANs dort als prüfzifferungültig.
 
 Stand B02: ARK 24, gemeinsam 7. Dazu kommen die USt-IdNr. von BG, CY, CZ, DK, EE, EL, FI, HR, HU, IE
 und LT, gleiche Struktur wie B01 (je Land ein Label `VAT_ID_BG` … und ein Validator mit Prüfziffer,
