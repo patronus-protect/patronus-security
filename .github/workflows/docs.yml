@@ -10,7 +10,15 @@ on:
       - "mkdocs.yml"
       - "CHANGELOG.md"
       - "ark-api/README.md"
-      - "rust/src/assets/specs.rs"
+      - "rust/src/**"
+      - "ark-core/src/**"
+      - "python/patronus_ark/__init__.py"
+      - "research/l1-pii/entity_map.yaml"
+      - "research/dlp/entity_map.yaml"
+      - "research/scoreboard/**"
+      - "scripts/l1_presidio/**"
+      - "scripts/l1_capabilities_doc.py"
+      - "scripts/bootstrap_python_tls.py"
       - "scripts/generate_docs.py"
       - ".github/workflows/docs.yml"
   pull_request:
@@ -19,7 +27,15 @@ on:
       - "mkdocs.yml"
       - "CHANGELOG.md"
       - "ark-api/README.md"
-      - "rust/src/assets/specs.rs"
+      - "rust/src/**"
+      - "ark-core/src/**"
+      - "python/patronus_ark/__init__.py"
+      - "research/l1-pii/entity_map.yaml"
+      - "research/dlp/entity_map.yaml"
+      - "research/scoreboard/**"
+      - "scripts/l1_presidio/**"
+      - "scripts/l1_capabilities_doc.py"
+      - "scripts/bootstrap_python_tls.py"
       - "scripts/generate_docs.py"
       - ".github/workflows/docs.yml"
   workflow_dispatch:
@@ -45,6 +61,8 @@ jobs:
       - run: python scripts/bootstrap_python_tls.py
       - name: Install MkDocs Material
         run: pip install "mkdocs-material>=9.5"
+      - name: Check generated documentation
+        run: python scripts/generate_docs.py --check
       - name: Build site (strict)
         run: mkdocs build --strict
       - name: Upload artifact

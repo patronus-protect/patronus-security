@@ -3,21 +3,33 @@ name: ARK Coordinator image
 on:
   pull_request:
     paths:
-      - "ark-core/**"
       - "ark-coordinator/**"
-      - "Cargo.*"
+      - "**/Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
       - ".dockerignore"
       - ".github/workflows/ark-coordinator-image.yml"
       - "scripts/tests/test_coordinator_deploy.py"
+      - "scripts/release_version.py"
+      - "scripts/bootstrap_python_tls.py"
+      - "!**/*.md"
+      - "LICENSE*"
+      - "NOTICE"
   push:
     branches: [main, "release/**", codex/ionos-ark-api-0.1.6]
     paths:
-      - "ark-core/**"
       - "ark-coordinator/**"
-      - "Cargo.*"
+      - "**/Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
       - ".dockerignore"
       - ".github/workflows/ark-coordinator-image.yml"
       - "scripts/tests/test_coordinator_deploy.py"
+      - "scripts/release_version.py"
+      - "scripts/bootstrap_python_tls.py"
+      - "!**/*.md"
+      - "LICENSE*"
+      - "NOTICE"
   workflow_dispatch:
 
 permissions:

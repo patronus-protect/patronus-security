@@ -2,10 +2,46 @@ name: ARK API image
 
 on:
   pull_request:
-    paths: ["ark-core/**", "ark-api/**", "ark-distributed-protocol/**", "rust/**", "Cargo.*", ".dockerignore", ".github/workflows/ark-api-image.yml", "scripts/tests/test_cube*.py", "scripts/tests/test_entrypoint_runtime.py", "scripts/tests/entrypoint_peers.py", "scripts/ark_api_entrypoint_benchmark.py"]
+    paths:
+      - "ark-core/**"
+      - "ark-api/**"
+      - "ark-distributed-protocol/**"
+      - "rust/**"
+      - "**/Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - ".dockerignore"
+      - ".github/workflows/ark-api-image.yml"
+      - "scripts/tests/test_cube*.py"
+      - "scripts/tests/test_entrypoint_runtime.py"
+      - "scripts/tests/entrypoint_peers.py"
+      - "scripts/ark_api_entrypoint_benchmark.py"
+      - "scripts/release_version.py"
+      - "scripts/bootstrap_python_tls.py"
+      - "!**/*.md"
+      - "LICENSE*"
+      - "NOTICE"
   push:
     branches: [main, "release/**", codex/ionos-ark-api-0.1.6]
-    paths: ["ark-core/**", "ark-api/**", "ark-distributed-protocol/**", "rust/**", "Cargo.*", ".dockerignore", ".github/workflows/ark-api-image.yml", "scripts/tests/test_cube*.py", "scripts/tests/test_entrypoint_runtime.py", "scripts/tests/entrypoint_peers.py", "scripts/ark_api_entrypoint_benchmark.py"]
+    paths:
+      - "ark-core/**"
+      - "ark-api/**"
+      - "ark-distributed-protocol/**"
+      - "rust/**"
+      - "**/Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - ".dockerignore"
+      - ".github/workflows/ark-api-image.yml"
+      - "scripts/tests/test_cube*.py"
+      - "scripts/tests/test_entrypoint_runtime.py"
+      - "scripts/tests/entrypoint_peers.py"
+      - "scripts/ark_api_entrypoint_benchmark.py"
+      - "scripts/release_version.py"
+      - "scripts/bootstrap_python_tls.py"
+      - "!**/*.md"
+      - "LICENSE*"
+      - "NOTICE"
   workflow_dispatch:
 
 permissions:
