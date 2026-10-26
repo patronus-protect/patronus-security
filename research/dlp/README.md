@@ -36,6 +36,11 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   dem Wert, in dem er liegt. Unterdrückte Treffer nennen in `matched_rules` den Gewinner
   (`suppressed_by`). Scannen DLP und PII denselben Text, gehört der Bereich eines Secret-Spans
   DLP; überlappende PII-Spans (URL-Passwort als E-Mail-Lokalteil) entfallen.
+  Seit T15 entscheidet auf einem identischen Span derselben Stufe der spezifischere Subtyp:
+  `DB_PASSWORD=…`, `ENV POSTGRES_PASSWORD=…`, `export`, CI-`env:` und Code-Konstanten gehören
+  `dlp_password_assignment` (`password`), nicht `dlp_env_var_secret` (`generic_secret`).
+  Variablen ohne Passwort-Nomen (`API_KEY`, `CLIENT_SECRET`) bleiben bei `dlp_env_var_secret`;
+  verschiedene Spans entscheidet weiter die Reihenfolge.
   Seit T01 haben die Präfix-Regeln (Provider-Token, ETH/WIF, JWT) eine Token-Grenze
   (`RuleMeta::boundary`): Vor und nach dem Wert steht kein `[A-Za-z0-9_]` und kein Zeichen des
   Provider-Alphabets, und der Wert liegt in keinem Base64-Blob. Escapes wie `\n` oder `%3D`
