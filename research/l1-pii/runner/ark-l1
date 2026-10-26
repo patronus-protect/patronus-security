@@ -108,6 +108,7 @@ NOTHING = 10
 # Squash-merge the bottom stack PR once its GitHub CI is green (decided 2026-10-21); 0 turns it off.
 AUTO_MERGE = os.environ.get("ARK_L1_AUTO_MERGE", "1") != "0"
 MERGE_TIMEOUT = 300      # seconds to wait for an asynchronous merge result
+LAND_CI_WAIT = 45 * 60   # seconds `land` waits for the PR's own CI runs (pull_request event)
 RETARGET_TIMEOUT = 300   # seconds to wait for GitHub to move the PRs above onto main
 MERGE_PENDING = -1       # auto_merge result: GitHub is still merging, the run must stop
 
@@ -612,6 +613,13 @@ def land(number: int, head: str, wait_for_codex: bool = True) -> None:
     if threads:
         print(f"LAND_WAIT={label} {threads} unresolved review thread(s); the next run reviews them")
         return
+    # Opening the PR starts a second CI run on the same head; main requires it, so wait for it.
+    deadline = dt.datetime.now() + dt.timedelta(seconds=LAND_CI_WAIT)
+    while (state := ci_state(head)) == "pending" and dt.datetime.now() < deadline:
+        subprocess.run(["sleep", str(CODEX_POLL)])
+    if state != "green":
+        print(f"LAND_WAIT={label} CI {state}; the next run's auto-merge retries")
+        return
     # Only ever merge into main: a legacy stacked PR may still target an old task branch.
     base = run(["gh", "pr", "view", str(number), "--repo", GH_REPO, "--json", "baseRefName", "--jq", ".baseRefName"])
     if base != "main":
@@ -639,25 +647,27 @@ def wait_for_retarget(merged_branch: str) -> None:
 
 
 def auto_merge(open_prs: list[dict]) -> int | None:  # PR number, MERGE_PENDING or None
-    """Squash-merge the bottom stack PR when it targets main, is mergeable and its CI is green.
+    """Squash-merge the oldest open PR that targets main, is mergeable and has green CI.
 
-    At most one per run: the PR above it is rebased onto the squash commit by `restack` and needs
-    a fresh CI run before it can follow. The repository deletes merged branches, so GitHub moves
-    the next PR to main by itself. Returns the merged PR number, else None."""
+    At most one per run; a PR with conflicts or pending CI does not hold back the ones after it
+    (restack fixes its conflicts). Returns the merged PR number, else None."""
     if not AUTO_MERGE or not open_prs:
         return None
-    bottom = min(open_prs, key=lambda p: branch_number(p["headRefName"]))
+    bottom = None
+    for pr in sorted(open_prs, key=lambda p: branch_number(p["headRefName"])):
+        label = f"#{pr['number']} {pr['headRefName']}"
+        if pr["baseRefName"] != "main" or pr.get("isDraft"):
+            print(f"AUTO_MERGE_SKIP={label} (base {pr['baseRefName']}, draft {pr.get('isDraft')})")
+        elif pr.get("mergeable") != "MERGEABLE":
+            print(f"AUTO_MERGE_WAIT={label} mergeable={pr.get('mergeable')}")
+        elif (state := ci_state(pr["headRefOid"])) != "green":
+            print(f"AUTO_MERGE_WAIT={label} CI {state}")
+        else:
+            bottom = pr
+            break
+    if bottom is None:
+        return None
     label = f"#{bottom['number']} {bottom['headRefName']}"
-    if bottom["baseRefName"] != "main" or bottom.get("isDraft"):
-        print(f"AUTO_MERGE_SKIP={label} (base {bottom['baseRefName']}, draft {bottom.get('isDraft')})")
-        return None
-    if bottom.get("mergeable") != "MERGEABLE":
-        print(f"AUTO_MERGE_WAIT={label} mergeable={bottom.get('mergeable')}")
-        return None
-    state = ci_state(bottom["headRefOid"])
-    if state != "green":
-        print(f"AUTO_MERGE_WAIT={label} CI {state}")
-        return None
     try:
         threads = open_review_threads(bottom["number"])
         if threads:
