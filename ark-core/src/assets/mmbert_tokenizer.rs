@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 use std::{
     collections::HashMap,
-    fs::{self, File},
+    fs::{self, File, OpenOptions},
     io::{BufWriter, Write},
     path::{Path, PathBuf},
 };
@@ -139,7 +139,10 @@ pub fn ensure_mmbert_compact_tokenizer_with(
         );
         return Err(format!("mmBERT tokenizer conversion failed: {err}").into());
     }
-    File::open(compact_temp.path())?.sync_all()?;
+    OpenOptions::new()
+        .write(true)
+        .open(compact_temp.path())?
+        .sync_all()?;
     let mmbpe_hash = file_blake3(compact_temp.path())?;
 
     compact_temp.persist(&compact_path)?;

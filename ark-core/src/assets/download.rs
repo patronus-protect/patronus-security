@@ -204,7 +204,7 @@ pub fn get_hf_token() -> Option<String> {
             let path = std::env::var("HF_HOME")
                 .ok()
                 .map(|p| PathBuf::from(p).join("token"))
-                .or_else(|| dirs::home_dir().map(|p| p.join(".cache/huggingface/token")))?;
+                .or_else(|| home::home_dir().map(|p| p.join(".cache/huggingface/token")))?;
             fs::read_to_string(path).ok()
         })
         .map(|token| token.trim().to_owned())
