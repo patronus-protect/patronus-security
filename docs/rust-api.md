@@ -12,7 +12,7 @@ pub mod assets;
 #[allow(dead_code, unused_imports)]
 mod cache;
 pub mod detectors;
-pub use patronus_ark_core::diagnostics;
+pub use patronus_ark_core::{diagnostics, WolfExecutionOptions};
 pub mod dynamic_pii;
 pub mod external_l1;
 pub mod gliner_onnx_engine;
@@ -134,6 +134,15 @@ pub fn set_queue_worker_count(&self, worker_count: usize);
 ```
 
 Set the number of Ark queue workers spawned on first queued request.
+
+```rust
+pub fn set_wolf_execution_options(
+    &self,
+    options: crate::WolfExecutionOptions,
+) -> Result<(), String>;
+```
+
+Configure dedicated Wolf windowing and batching for subsequent scans.
 
 ```rust
 pub fn set_onnx_runtime_options(&self, options: crate::OnnxRuntimeOptions);
@@ -1436,6 +1445,7 @@ pub struct ScanExecution {
     l3_strategy: L3Strategy,
     defer_l3: bool,
     chunk_overlap_tokens: usize,
+    wolf_execution_options: crate::WolfExecutionOptions,
 }
 ```
 
@@ -1452,6 +1462,21 @@ pub fn with_gates(max_level: SecurityLevel, gates: ScanGateMatrix) -> Self;
 ```
 
 Create an execution with explicit gates up to `max_level`.
+
+```rust
+pub fn set_wolf_execution_options(
+    &mut self,
+    options: crate::WolfExecutionOptions,
+) -> Result<(), String>;
+```
+
+Configure dedicated Wolf execution using the shared Core validation.
+
+```rust
+pub fn wolf_execution_options(&self) -> crate::WolfExecutionOptions;
+```
+
+No public documentation is available yet.
 
 ```rust
 pub fn set_gates(&mut self, gates: ScanGateMatrix);
@@ -1696,6 +1721,15 @@ pub fn new(config: ScannerConfig) -> Result<Self, ScanError>;
 Initialize native detectors and warm/verify an explicitly configured local Wolf bundle.
 
 ```rust
+pub fn new_with_wolf_options(
+    config: ScannerConfig,
+    options: crate::WolfExecutionOptions,
+) -> Result<Self, ScanError>;
+```
+
+Initialize with explicit Wolf windowing and batching; native stages are unchanged.
+
+```rust
 pub fn scan(&mut self, text: &str) -> Result<ScanReport, ScanError>;
 ```
 
@@ -1756,6 +1790,16 @@ pub fn warmup(config: ScannerConfig, options: WarmupOptions) -> Result<Self, Sca
 ```
 
 Prepare configured assets, then construct one warm scanner used by subsequent scans.
+
+```rust
+pub fn warmup_with_wolf_options(
+    config: ScannerConfig,
+    options: WarmupOptions,
+    execution: crate::WolfExecutionOptions,
+) -> Result<Self, ScanError>;
+```
+
+Prepare assets and warm one reusable scanner with explicit Wolf execution options.
 
 ```rust
 pub fn prepare_assets(config: &ScannerConfig, options: &WarmupOptions) -> Result<(), ScanError>;
@@ -2215,6 +2259,8 @@ pub struct WolfRunner {
     threshold: f64,
     model_path: PathBuf,
     execution_provider: String,
+    options: WolfExecutionOptions,
+    fixed_width: Option<usize>,
 }
 ```
 
@@ -2225,6 +2271,21 @@ pub fn new(config: &WolfConfig) -> Result<Self, ScanError>;
 ```
 
 No public documentation is available yet.
+
+```rust
+pub fn new_with_options(
+    config: &WolfConfig,
+    options: WolfExecutionOptions,
+) -> Result<Self, ScanError>;
+```
+
+Construct and warm a runner; execution sizes are validated against the local export.
+
+```rust
+pub fn set_threshold(&mut self, threshold: f64) -> Result<(), ScanError>;
+```
+
+Change the decision threshold without loading or warming another session.
 
 ```rust
 pub fn execution_provider(&self) -> &str;
@@ -2281,6 +2342,12 @@ pub fn scan_with_progress_and_control(
 ```
 
 No public documentation is available yet.
+
+```rust
+pub fn execution_options(&self) -> WolfExecutionOptions;
+```
+
+The effective window and batch configuration of this reusable session.
 
 ```rust
 pub fn new(bundle_dir: impl Into<PathBuf>, threshold: f64) -> Self;
