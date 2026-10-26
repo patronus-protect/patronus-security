@@ -237,6 +237,41 @@ pub fn unanchored_phone(s: &str) -> bool {
                 .any(|ch| matches!(ch, ' ' | '-' | '.' | '/' | '(' | ')')))
 }
 
+/// Top-level domains delegated by IANA, verbatim from
+/// <https://data.iana.org/TLD/tlds-alpha-by-domain.txt>: a version comment, then
+/// one uppercase domain per line in byte order (punycode as `XN--…`).
+const IANA_TLDS: &str = include_str!("iana_tlds.txt");
+
+/// Reserved placeholder TLDs (RFC 2606/6761); gold convention T01 counts their
+/// addresses as PII.
+const PLACEHOLDER_TLDS: [&str; 4] = ["example", "invalid", "localhost", "test"];
+
+/// Validate an e-mail candidate by its top-level domain (F05): delegated by IANA
+/// or a reserved placeholder, in any letter case. `alice@email.note` and
+/// `anna@firma.intern` are no addresses.
+pub fn email_domain(s: &str) -> bool {
+    static TLDS: LazyLock<Vec<&str>> = LazyLock::new(|| {
+        IANA_TLDS
+            .lines()
+            .filter(|line| !line.starts_with('#'))
+            .collect()
+    });
+    let Some((address, tld)) = s.rsplit_once('.') else {
+        return false;
+    };
+    address.contains('@')
+        && (TLDS
+            .binary_search_by(|probe| {
+                probe
+                    .bytes()
+                    .cmp(tld.bytes().map(|byte| byte.to_ascii_uppercase()))
+            })
+            .is_ok()
+            || PLACEHOLDER_TLDS
+                .iter()
+                .any(|placeholder| placeholder.eq_ignore_ascii_case(tld)))
+}
+
 pub fn mac_address(s: &str) -> bool {
     let separator = if s.contains(':') {
         ':'
@@ -1610,7 +1645,19 @@ pub fn postal_address_de(s: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{ip_address, postal_address_de};
+    use super::{ip_address, postal_address_de, IANA_TLDS};
+
+    #[test]
+    fn iana_tlds_are_uppercase_and_sorted_for_binary_search() {
+        let mut lines = IANA_TLDS.lines();
+        assert!(lines.next().unwrap().starts_with("# Version "));
+        let tlds: Vec<_> = lines.collect();
+        assert!(tlds.len() > 1000);
+        assert!(tlds.windows(2).all(|pair| pair[0] < pair[1]));
+        assert!(tlds.iter().all(|tld| tld
+            .bytes()
+            .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit() || byte == b'-')));
+    }
 
     #[test]
     fn ip_address_rejects_local_and_tiny_ipv6_literals() {

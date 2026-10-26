@@ -2979,6 +2979,40 @@ B_DE1_CASES = [
 for _row in B_DE1_CASES:
     PII_CASES.setdefault(_row["target_label"], []).append(_row)
 
+# B-EMAIL (T06, T23, F05): a local part holds Unicode letters (RFC 6531) and inner apostrophes
+# (`jürgen.müller`, `moeleprêtr`, `o'neil`); in text without word spacing it is at most three
+# ideographs or katakana, so the words before it stay outside (`联系邮箱伟伟许@aol.com`). Domain
+# labels hold Unicode letters, the top-level domain is ASCII or punycode (`xn--p1ai`) and must be
+# delegated by IANA or reserved as a placeholder (RFC 2606/6761: `.test`, `.example`, `.invalid`,
+# `.localhost`, gold convention T01). The userinfo of a URL (`scheme://user:pass@host`) is no
+# address; credentials there stay DLP. Appended so existing ids stay stable.
+B_EMAIL_CASES = [
+    p("EMAIL", "de", "pii_email", "E-Mail: ", "jürgen.müller@beispiel.de"),
+    p("EMAIL", "de", "pii_email", "Bitte antworten Sie an ", "info@müller-bau.de", ".", carrier="prose"),
+    p("EMAIL", "de", "pii_email", "Kontakt: ", "d'souza.anita@praxis-nord.de"),
+    p("EMAIL", "de", "pii_email", "E-Mail (Moskau): ", "post@xn--e1afmkfd.xn--p1ai"),
+    p("EMAIL", "de", "pii_email", "Ansprechpartnerin in Peking: ", "王芳@163.com", ", Telefon folgt.", carrier="prose"),
+    p("EMAIL", "de", "pii_email", "Testkonto: ", "qa.bot@shop.test"),
+    n("EMAIL", "de", "pii_email", "Datenbank: postgres://lager:Sommer2026@db.firma.de:5432/lager", "credentials in URL userinfo stay DLP"),
+    n("EMAIL", "de", "pii_email", "Repository: ssh://git@git.firma.de/team/app.git", "user in URL userinfo"),
+    n("EMAIL", "de", "pii_email", "Die Adresse wird mit adresse.split('@') zerlegt.", "quoted at sign in code", carrier="prose"),
+    n("EMAIL", "de", "pii_email", "Schreiben Sie an anna.berg@firma.intern", "top-level domain not delegated by IANA"),
+    n("EMAIL", "de", "pii_email", "Benutzer 'admin'@'localhost' anlegen.", "quoted MySQL account, not an address", carrier="prose"),
+    p("EMAIL", "en", "pii_email", "Contact: ", "o'neil@example.com"),
+    p("EMAIL", "en", "pii_email", "Please confirm by emailing ", "moeleprêtr@outlook.com", " or calling us.", carrier="prose", tags=("no_context",)),
+    p("EMAIL", "en", "pii_email", "Email: ", "a@xn--d1acufc.xn--p1ai"),
+    p("EMAIL", "en", "pii_email", "The card will be sent by email to ", "诗向@yahoo.com", ".", carrier="prose"),
+    p("EMAIL", "en", "pii_email", "Chinese form, field 联系邮箱", "伟伟许@aol.com", "，phone to follow.", carrier="prose"),
+    p("EMAIL", "en", "pii_email", "Bounce address: ", "noreply@mailer.invalid"),
+    n("EMAIL", "en", "pii_email", "DATABASE_URL=postgres://app:Winter2026@db.northwind.com:5432/orders", "credentials in URL userinfo stay DLP"),
+    n("EMAIL", "en", "pii_email", "Mirror: ftp://deploy@files.northwind.net/releases/", "user in URL userinfo"),
+    n("EMAIL", "en", "pii_email", "if address.endswith(\"'@example.com\"):", "quoted at sign in code"),
+    n("EMAIL", "en", "pii_email", "Sent from alice.williams@email.note", "top-level domain not delegated by IANA"),
+    n("EMAIL", "en", "pii_email", "Tag the playlist rock'n'@roll.com today.", "apostrophe before the at sign", carrier="prose"),
+]
+for _row in B_EMAIL_CASES:
+    PII_CASES[_row["target_label"]].append(_row)
+
 # DLP golden schema v2 (E13). Every DLP row names the rule it exercises (`rule_id`), the
 # document that carries the value (`carrier`), its difficulty `tags` and whether it is a
 # `known_gap`: a positive the detector misses today, reported by 13_l1_golden_eval but

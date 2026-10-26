@@ -728,6 +728,16 @@ pub(super) fn has_payment_card(text: &str, within: Range<usize>, card_regex: &Re
     })
 }
 
+/// Whether an e-mail candidate at `start` opens inside the userinfo of a URL
+/// (`postgres://user:pass@host`, `ssh://git@host`, T06): the run before it holds
+/// only userinfo characters (RFC 3986) and follows `://`. Credentials there are
+/// DLP findings; an address in a path or query (`/contact?email=a@b.de`) stays.
+pub(super) fn url_userinfo(text: &str, start: usize) -> bool {
+    text[..start]
+        .trim_end_matches(|ch: char| ch.is_alphanumeric() || "-._~!$&'()*+,;=:%".contains(ch))
+        .ends_with("://")
+}
+
 /// Whether an IPv4 candidate at `start` stands for itself rather than ending an
 /// IPv6 address (B-IP): the `:`-run before it is no IPv6 head (`::ffff:`,
 /// `64:ff9b::`, `2001:db8:1:2:3:4:`), so an IPv4-mapped or embedded address is one

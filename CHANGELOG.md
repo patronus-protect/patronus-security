@@ -9,6 +9,40 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ## [Unreleased]
 
+### Changed
+
+- E-mail addresses with Unicode local parts, apostrophes and IDN domains; no address in URL
+  userinfo; IANA top-level domains (B-EMAIL: T06, T23, F05, baseline bucket P7). `pii_email`
+  took ASCII local parts only, so `moeleprêtr@outlook.com` became `tr@outlook.com`,
+  `jürgen.müller@beispiel.de` became `ller@beispiel.de`, `o'neil@example.com` became
+  `neil@example.com` and `诗向@yahoo.com` was no match; it cut `a@xn--d1acufc.xn--p1ai` after
+  `.xn`, took any letter run as top-level domain (`alicewilliams@email.note`) and reported the
+  password of `postgres://user:pass@host` as an address. A local part now holds Unicode letters,
+  digits and marks (RFC 6531) and apostrophes between them (never `'@`); Han, hiragana and
+  katakana separate no words, so a local part of their own is at most three ideographs or
+  katakana (`联系邮箱伟伟许@aol.com` → `伟伟许@aol.com`). Domain labels hold Unicode letters
+  (`info@müller-bau.de`), the top-level domain is ASCII letters or punycode (`xn--p1ai`), and the
+  new validator `validators::email_domain` accepts it only if IANA delegates it
+  (`ark-core/src/detectors/pii/iana_tlds.txt`, version 2026102500) or it is a reserved
+  placeholder of the gold convention T01 (`.test`, `.example`, `.invalid`, `.localhost`).
+  `context::url_userinfo` rejects a candidate inside the userinfo of a URL
+  (`scheme://user:pass@host`, `ssh://git@host`); credentials there stay DLP findings, an address
+  in a URL path or query stays. The rule has format strength now; its base score drops from 70
+  to 55, so the score without context stays 0.70. `pii_l1.jsonl` gains 22 rows (12 positives,
+  10 hard negatives, DE and EN), the rule fixture six hard negatives and a span per language;
+  the new `rust/tests/pii_email.rs` covers spans, code-point offsets, userinfo, quoted at signs,
+  the TLD list and placeholders. **Detection change:** (PII L1, all modes) addresses with
+  non-ASCII or apostrophe local parts and punycode TLDs are new findings or longer spans;
+  addresses with a TLD that IANA does not delegate (`.note`, `.intern`, `.internal`, `.local`)
+  and candidates in URL userinfo are no longer reported. Dev scoreboard vs. base (PASS in strict
+  and balanced, no new hard-negative FP, no other entity changes): email exact F1 in balanced
+  neutral 67.4 → 68.8 (Presidio tuned 67.9; OpenPII Nano 94.5 → 97.7, Gretel 52.2 → 52.4),
+  presidio_favored 93.8 → 100.0 (tuned 100.0), ark_authored unchanged at 100.0; L1 F1 +0.2 pp in
+  both modes (neutral +0.4, presidio_favored +0.3). The regex stays linear and its literal `@`
+  still prefilters it: on 100 KiB without `@` a scan takes 1.3 µs before and after, with about
+  1,700 addresses per 100 KiB 133 → 195 µs. `latency.py compare --engine ark-native` 100 KiB p95
+  147.1 → 146.9 / 157.9 ms in two head runs (PASS, noise), 4 KiB 7.66 → 6.80 / 6.62 ms.
+
 ## [0.1.12] - 2026-10-25
 
 ### Detection changes

@@ -3,13 +3,22 @@
 use super::{pii::PiiPattern, score::ValidatorStrength, validators};
 
 // ── Email ────────────────────────────────────────────────────────────────
+// B-EMAIL: a local part holds Unicode letters, digits and marks (RFC 6531) and
+// apostrophes between them (`jürgen.müller`, `moeleprêtr`, `o'neil`, never `'@`).
+// Chinese and Japanese text puts no spaces between words, so Han, hiragana and
+// katakana are no part of such a run; a local part of their own is at most
+// three ideographs or katakana (`伟伟许` in `联系邮箱伟伟许@aol.com`). Domain labels hold Unicode letters
+// except those scripts, the top-level domain is ASCII letters or punycode
+// (`xn--p1ai`) and `validators::email_domain` checks it against IANA (F05). The
+// userinfo of a URL is no address (`context::url_userinfo`, T06). Format
+// strength plus base 55 keeps the score of 0.70 without context.
 pub(super) const EMAIL: PiiPattern = PiiPattern {
     name: "pii_email",
-    pattern: r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}",
+    pattern: r"(?:[\p{L}\p{N}\p{M}._%+\-&&[^\p{Han}\p{Hiragana}\p{Katakana}]]+(?:'[\p{L}\p{N}\p{M}._%+\-&&[^\p{Han}\p{Hiragana}\p{Katakana}]]+)*|[\p{Han}\p{Katakana}]{1,3})@[\p{L}\p{N}\p{M}.\-&&[^\p{Han}\p{Hiragana}\p{Katakana}]]+\.(?:[xX][nN]--[a-zA-Z0-9]+(?:-[a-zA-Z0-9]+)*|[a-zA-Z]{2,})",
     entity_group: "EMAIL",
-    validator: None,
-    strength: ValidatorStrength::None,
-    base_score: 70,
+    validator: Some(validators::email_domain),
+    strength: ValidatorStrength::Format,
+    base_score: 55,
     captured_value: false,
     requires_context: false,
     scored_only: false,
