@@ -20,6 +20,24 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Changed
 
+- **Shell risk: heredoc masking + agent-shell robustness.** `shell_command` now pins
+  `cat-shell-risk-commander` revision `d9f4509c` (still `format_version: 2`). `shell_tokens.features()`
+  no longer tokenises a heredoc body as shell when the heredoc feeds a non-shell interpreter
+  (`python`/`node`/`ruby`/`perl`, path-qualified too) or `cat`/`tee` writes it to a code or data file
+  (`.py .js .ts .rb .pl .php .json .yaml …`); the body becomes one `heredoc_body` token, while the
+  char_wb block still sees the raw text. Shell heredocs (`bash <<EOF`, `cat <<EOF > run.sh`) and
+  here-strings stay shell. The model was retrained with benign agent command negatives mined from
+  public SWE/OpenHands traces (embedded code and compound shell, offensive patterns filtered), plus
+  synthetic ops-scripting negatives and matching ops-shaped attack positives, so loops, `ssh host '…'`,
+  polling and retries no longer read as risky while the attack signal is kept. **Detection change:**
+  agent tool calls such as `python - <<'PY' … subprocess.run(['ssh',…]) … PY` and
+  `for i in $(seq 1 60); do … ssh … systemctl is-active … done` no longer flag; on 16,456 held-out
+  real agent commands from unseen datasets the flag rate is unchanged from the previous model (1 in
+  16,456). Thresholds recalibrated on a fixed classic validation mixture:
+  `external_commands_1pct_fpr` 0.519063, `block_0_1pct_fpr` 2.697449. `shell_tokens.rs` ports the
+  heredoc masking bit for bit (full-corpus feature parity; decision scores within 1e-6). Builds on
+  the download-into-interpreter relation markers below; older runtimes keep the previous revision,
+  which they pin.
 - **Shell risk: download-into-interpreter relations (#159).** `shell_command` now pins
   `cat-shell-risk-commander` revision `f6243388` (still `format_version: 2`), whose shell-token block
   adds five relation markers from a small, depth-limited parse of the command: `DL->PIPE->INTERP`

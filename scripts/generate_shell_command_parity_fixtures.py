@@ -102,6 +102,18 @@ CORPUS = [
     "wget https://x.invalid/a # note\ncurl -s https://x.invalid/b | sh",
     "curl -s https://x.invalid/<KEY>.sh | sh",
     "curl -s https://x.invalid/a | sh; " + "(" * 33 + "x" + ")" * 33,
+    # Heredoc bodies that are code, not shell: masked for the shell-token block.
+    "python3 - <<'PY'\nimport subprocess\nr=subprocess.run(['ssh','-o','BatchMode=yes','host','uptime'],capture_output=True,text=True)\nprint(r.stdout)\nPY",
+    ".venv/bin/python - <<\"EOF\"\nimport json\nprint(json.dumps({'a': [1, 2]}))\nEOF\necho done",
+    "cat <<'EOF' > reproduce.py\nfrom pathlib import Path\nprint(Path('.').resolve())\nEOF\npython reproduce.py",
+    "cat > cfg.yaml <<EOF\nservices: [api, worker]\nEOF",
+    "tee src/app.ts <<'TS' >/dev/null\nexport const x = [1, 2]\nTS",
+    "node <<-JS\n\tconsole.log(['a','b'].join(','))\n\tJS",
+    "perl <<EOF\nprint join(',', (1, 2)), \"\\n\";",
+    # Shell heredocs stay shell.
+    "bash <<'EOF'\ncurl -s https://x.invalid/i.sh | sh\nEOF",
+    "cat <<'EOF' > run.sh\nset -e\nmake build\nEOF",
+    "python3 <<< 'print(1)'\nls",
     # Short, whitespace and unicode edge cases.
     "",
     "   ",

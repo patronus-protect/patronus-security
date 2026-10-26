@@ -10,7 +10,9 @@ Text is never executed: it is tokenised, normalised and turned into TF-IDF
 feature strings only. Kept deliberately small so the Rust port can match it
 exactly: one regex tokenizer, a fixed normalisation table, unigrams + bigrams +
 three structural markers (command head, pipe target, redirect target), plus the
-issue #159 relation markers (does a download flow into an interpreter?).
+issue #159 relation markers (does a download flow into an interpreter?), with
+heredoc bodies that are code (python/node/ruby/perl, or cat/tee into a code file)
+masked before tokenising.
 """
 import re
 
@@ -47,7 +49,53 @@ def head(token):
     return token.rsplit('/', 1)[-1]
 
 
+# ---- Heredoc bodies for non-shell interpreters (issue: Python read as shell) ----
+# `python - <<'PY' … PY` feeds Python, not shell, so its body must not be tokenised as
+# shell: list syntax like ['ssh','-o',…] would turn into `[`, `,`, `CMD=[` tokens that only
+# attacks carried in training. The body is replaced by one `heredoc_body` line for this
+# block; the char_wb block still sees the raw text.
+HEREDOC_INTERPRETER = re.compile(
+    r'(?:^|[\s;&|(])(?:[^\s;&|()<>\'"]*/)?(?:python[0-9.]*|node|ruby|perl)(?=[\s;&|()<>]|$)')
+HEREDOC_OP = re.compile(r'<<-?[ \t]*([\'"]?)([A-Za-z_][A-Za-z0-9_]*)\1')
+# `cat <<'EOF' > fix.py` writes code or data, not shell: same treatment when the line's
+# output file has one of these extensions. Shell scripts (`> run.sh`) stay shell.
+HEREDOC_WRITER = re.compile(r'(?:^|[\s;&|(])(?:cat|tee)(?=[\s;&|()<>]|$)')
+HEREDOC_FILE = re.compile(
+    r'(?:>>?|\btee(?:\s+-a)?)\s*[\'"]?[^\s;&|()<>\'"]+\.(?:py|pyi|js|mjs|cjs|ts|tsx|jsx|rb|pl|pm|php|r|jl|json|ya?ml|toml|ini|cfg)'
+    r'[\'"]?(?=[\s;&|()<>]|$)', re.I)
+HEREDOC_MASK = 'heredoc_body'
+
+
+def heredoc_delimiter(line):
+    """Delimiter of the first `<<` heredoc that feeds a non-shell interpreter, or that cat/tee
+    write to a code or data file, on `line`."""
+    word = HEREDOC_INTERPRETER.search(line)
+    if not word:
+        word = HEREDOC_WRITER.search(line)
+        if not word or not HEREDOC_FILE.search(line, word.start()):
+            return None
+    for op in HEREDOC_OP.finditer(line, word.end()):
+        if line[op.start() - 1:op.start()] != '<':
+            return op.group(2)
+    return None
+
+
+def mask_heredocs(text):
+    out, delimiter = [], None
+    for line in text.split('\n'):
+        if delimiter is not None:
+            if line.strip(' \t\r') == delimiter:
+                out.append(line); delimiter = None
+            continue
+        out.append(line)
+        delimiter = heredoc_delimiter(line)
+        if delimiter is not None:
+            out.append(HEREDOC_MASK)
+    return '\n'.join(out)
+
+
 def features(text):
+    text = mask_heredocs(text)
     raw = tokens(text)
     norm = [normalise(t) for t in raw]
     out = list(norm)
