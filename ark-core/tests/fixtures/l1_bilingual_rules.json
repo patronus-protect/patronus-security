@@ -102,13 +102,15 @@
       "de": [
         ":20:MT940 STMT\n:28C::52D:20220920\n:60F::STP",
         "Belegkopf: BGM+380:21:3::90:FRET:FRCOMPAGNIE'",
-        "Ungültige Adresse 2001:db8::256.1.1.1"
+        "Ungültige Adresse 2001:db8::256.1.1.1",
+        "Gerät host2001:db8:85a3::8a2e:370:7334 gesperrt"
       ],
       "en": [
         "Balance :60F::61F::62F::63F::64F::70:3/31/2022",
         "Document: BGM+380:21:3::90:FRET:FRCOMPAGNIE'",
         "2001:db8::256.1.1.1",
-        "text2001:db8::1"
+        "text2001:db8::1",
+        "foo2001:db8::10.0.0.1"
       ]
     },
     "span": {

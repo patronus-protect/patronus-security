@@ -3118,6 +3118,35 @@ B_NORD_CASES = [
 for _row in B_NORD_CASES:
     PII_CASES.setdefault(_row["target_label"], []).append(_row)
 
+# T28 (TRIAGE 2026-W44 bucket 5): a field name opens an IPv6 address (`IPv6:`, `inet6:`,
+# `eth0:`) unless it ends in a hex run of three or more characters with a digit; such a run is
+# a further `:`-group glued to a word (`foo2001:db8::10.0.0.1`), and the address yields no span,
+# neither IPv6 nor its IPv4 tail (B-IP "no partial match"). Appended so existing ids stay stable.
+T28_IP_CASES = [
+    p("IP_ADDRESS", "de", "pii_ipv6_compressed", "Gegenstelle ", "2001:db8::10.0.0.1", " antwortet.", carrier="prose"),
+    p("IP_ADDRESS", "de", "pii_ipv6_loopback", "Gemappte Adresse: ", "::ffff:10.0.0.1"),
+    p("IP_ADDRESS", "de", "pii_ipv6_compressed", "Schnittstelle ", "fe80::1%eth0", " ist aktiv.", carrier="prose"),
+    p("IP_ADDRESS", "de", "pii_ipv6_compressed", "inet6:", "2001:db8:85a3::8a2e:370:7334", carrier="kv"),
+    p("IP_ADDRESS", "de", "pii_ipv6_compressed", "eth0:", "fe80::a1b2:3c4d", carrier="kv", mode="balanced"),
+    n("IP_ADDRESS", "de", "pii_ipv6_compressed", "Kennung foo2001:db8::10.0.0.1 ungültig", "IPv6 group glued to a word"),
+    n("IP_ADDRESS", "de", "pii_ipv6_compressed", "Gerät host2001:db8:85a3::8a2e:370:7334 gesperrt", "IPv6 group glued to a word"),
+    n("IP_ADDRESS", "de", "pii_ipv6_compressed", "Artikel sku4f00:db8::1:2:3 vergriffen", "IPv6 group glued to a word"),
+    n("IP_ADDRESS", "de", "pii_ipv6_compressed", "Knoten xyz2a02:810d:4b40::52d7 entfernt", "IPv6 group glued to a word"),
+    n("IP_ADDRESS", "de", "pii_ipv6_compressed", "Kennung foo2001:db8::10.0.0.1 ungültig", "IPv6 group glued to a word", mode="balanced"),
+    p("IP_ADDRESS", "en", "pii_ipv6_compressed", "", "2001:db8::10.0.0.1"),
+    p("IP_ADDRESS", "en", "pii_ipv6_loopback", "Peer ", "::ffff:10.0.0.1", " connected.", carrier="prose"),
+    p("IP_ADDRESS", "en", "pii_ipv6_compressed", "", "fe80::1%eth0"),
+    p("IP_ADDRESS", "en", "pii_ipv6_compressed", "IPv6:", "2001:db8::10.0.0.1", carrier="kv"),
+    p("IP_ADDRESS", "en", "pii_ipv6_compressed", "inet6:", "2001:db8:4f00::17", carrier="kv", mode="balanced"),
+    n("IP_ADDRESS", "en", "pii_ipv6_compressed", "foo2001:db8::10.0.0.1", "IPv6 group glued to a word (presidio-analyzer IP test)"),
+    n("IP_ADDRESS", "en", "pii_ipv6_compressed", "Device host2001:db8:85a3::8a2e:370:7334 blocked", "IPv6 group glued to a word"),
+    n("IP_ADDRESS", "en", "pii_ipv6_compressed", "Item sku4f00:db8::1:2:3 sold out", "IPv6 group glued to a word"),
+    n("IP_ADDRESS", "en", "pii_ipv6_compressed", "Node xyz2a02:810d:4b40::52d7 removed", "IPv6 group glued to a word"),
+    n("IP_ADDRESS", "en", "pii_ipv6_compressed", "foo2001:db8::10.0.0.1", "IPv6 group glued to a word (presidio-analyzer IP test)", mode="balanced"),
+]
+for _row in T28_IP_CASES:
+    PII_CASES[_row["target_label"]].append(_row)
+
 # DLP golden schema v2 (E13). Every DLP row names the rule it exercises (`rule_id`), the
 # document that carries the value (`carrier`), its difficulty `tags` and whether it is a
 # `known_gap`: a positive the detector misses today, reported by 13_l1_golden_eval but

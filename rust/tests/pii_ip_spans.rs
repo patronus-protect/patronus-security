@@ -9,7 +9,9 @@
 //! (research README, gold section): an address span holds its zone ID and prefix length,
 //! a mapped or embedded IPv6 address is one span, and an invalid chain or mixed form yields
 //! no span at all. Loopback and unspecified addresses stay rejected (D-IP, 2026-10-21),
-//! also in mapped form and with a prefix length.
+//! also in mapped form and with a prefix length. T28 (TRIAGE 2026-W44 bucket 5): a word
+//! ending in a hex group (`foo2001:db8::10.0.0.1`) is a further `:`-group, not a field name,
+//! so the address yields no span; `IPv6:`, `inet6:` and `eth0:` still open one.
 
 use patronus_ark::detectors::pii::{score::PiiMode, validators::ip_address};
 use patronus_ark::{
@@ -129,6 +131,29 @@ const ONE_SPAN: &[(&str, &str, &str)] = &[
         "pii_ipv6_compressed",
         "2001:db8:85a3::8a2e:198.51.100.23",
     ),
+    // A field name ending in at most two hex characters or only hex letters is no
+    // `:`-group (T28).
+    (
+        "inet6:2001:db8:85a3::8a2e:370:7334",
+        "pii_ipv6_compressed",
+        "2001:db8:85a3::8a2e:370:7334",
+    ),
+    (
+        "eth0:fe80::a1b2:3c4d",
+        "pii_ipv6_compressed",
+        "fe80::a1b2:3c4d",
+    ),
+    ("ens33:2001:db8::42", "pii_ipv6_compressed", "2001:db8::42"),
+    (
+        "IP-Adresse:2001:db8::10.0.0.1",
+        "pii_ipv6_compressed",
+        "2001:db8::10.0.0.1",
+    ),
+    (
+        "2001:db8::10.0.0.1",
+        "pii_ipv6_compressed",
+        "2001:db8::10.0.0.1",
+    ),
     ("IP:203.0.113.42", "pii_ipv4", "203.0.113.42"),
     ("web:203.0.113.42", "pii_ipv4", "203.0.113.42"),
     (":25:203.0.113.42", "pii_ipv4", "203.0.113.42"),
@@ -221,6 +246,14 @@ const NO_SPAN: &[&str] = &[
     "2001:db8::12345",
     // Glued to a word, a dot or a hyphen.
     "text2001:db8::1",
+    // A word that ends in a hex group of three or more characters with a digit is a
+    // further `:`-group, not a field name (T28): no IPv6 span, no IPv4 tail.
+    "foo2001:db8::10.0.0.1",
+    "Device host2001:db8:85a3::8a2e:370:7334 blocked",
+    "Artikel sku4f00:db8::1:2:3 vergriffen",
+    "Node xyz2a02:810d:4b40::52d7 removed",
+    "Präfix gwfe80:1::a1b2:3c4d%eth0",
+    "Kennung id-2001:db8:85a3::8a2e:370:7334",
     "exchange rate between the U.9101:8c5c:e9b4:50ce:7e5d:ce61:c1d2:d092",
     "ID 341-33-4328::735",
     // Loopback and unspecified stay rejected (D-IP), also mapped and with a prefix.
