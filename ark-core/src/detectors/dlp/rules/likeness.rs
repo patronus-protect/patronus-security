@@ -1292,8 +1292,9 @@ fn trim_trailing_punctuation(value: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::{
-        closes_string, is_assignment_value, is_connection_password, is_env_value, is_passphrase,
-        is_userinfo_password, is_userinfo_token, key_shape, suits_field_key, KeyShape,
+        closes_string, is_assignment_value, is_connection_password, is_env_value,
+        is_masked_credential_noun, is_passphrase, is_userinfo_password, is_userinfo_token,
+        key_shape, suits_field_key, KeyShape,
     };
 
     /// The value after the last `{v}` marker position of `template`.
@@ -1465,6 +1466,53 @@ mod tests {
                 userinfo("https://user:{v}@example.org/", value, is_userinfo_password),
                 "{value}"
             );
+        }
+    }
+
+    #[test]
+    fn userinfo_passwords_are_read_percent_decoded() {
+        for value in [
+            "p%40ss",
+            "p%40ssw%24rd",
+            "p%40ssw%30rd",
+            "s%33cr%33t",
+            "%24ecret",
+            "P%40SS",
+            "fo%6F",
+        ] {
+            assert!(
+                !userinfo("http://user:{v}@proxy.com/", value, is_userinfo_password),
+                "{value}"
+            );
+        }
+        for value in [
+            "Vkrq%40Tz82%24mLw%3A41",
+            "Hmt%24pn%3A7731%40qe",
+            "Kx7pQ2vL9rT4%40",
+        ] {
+            assert!(
+                userinfo("http://user:{v}@proxy.com/", value, is_userinfo_password),
+                "{value}"
+            );
+        }
+    }
+
+    #[test]
+    fn masked_credential_nouns_need_their_letters() {
+        for value in [
+            "p@ss", "P@SS", "p@ssw$rd", "s3cr3t", "$ecret", "t0k3n", "passw*rd",
+        ] {
+            assert!(is_masked_credential_noun(value), "{value}");
+        }
+        for value in [
+            "@@@@",
+            "p$$$",
+            "p@sx",
+            "Kx7pQ2vL",
+            "p@ssw0rd2026",
+            "s3cr3t-value",
+        ] {
+            assert!(!is_masked_credential_noun(value), "{value}");
         }
     }
 

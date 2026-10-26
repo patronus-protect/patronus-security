@@ -51,6 +51,10 @@ struct RuleEntry {
     /// to the closing quote, so each probe wraps them in double quotes.
     #[serde(default)]
     quoted: Vec<String>,
+    /// Real values with RFC 3986 reserved characters (T17); each probe inserts them
+    /// percent-encoded and the rule reports the encoded span.
+    #[serde(default)]
+    url_encoded: Vec<String>,
     /// Values in the rule's shape with a wrong check value or length (F03); the rule must
     /// not report them.
     #[serde(default)]
@@ -118,6 +122,7 @@ fn every_dlp_pattern_has_generators_or_is_a_content_rule() {
             .chain(&entry.shape_only)
             .chain(&entry.weak)
             .chain(&entry.quoted)
+            .chain(&entry.url_encoded)
             .chain(&entry.lookalike)
         {
             assert!(known.contains(name.as_str()), "{rule}: unknown {name}");
@@ -227,15 +232,17 @@ fn each_rule_reports_exactly_its_generated_values() {
             .generators
             .iter()
             .chain(&entry.weak)
-            .map(|name| (name, false))
-            .chain(entry.quoted.iter().map(|name| (name, true)));
-        for (name, quoted) in values {
+            .map(|name| (name, "<<secret:0>>"))
+            .chain(entry.quoted.iter().map(|name| (name, "\"<<secret:0>>\"")))
+            .chain(
+                entry
+                    .url_encoded
+                    .iter()
+                    .map(|name| (name, "<<secret:0|url>>")),
+            );
+        for (name, placeholder) in values {
             for probe in &entry.probes {
-                let probe = if quoted {
-                    probe.replace("<<secret:0>>", "\"<<secret:0>>\"")
-                } else {
-                    probe.clone()
-                };
+                let probe = probe.replace("<<secret:0>>", placeholder);
                 for seed in 0..32 {
                     let recipes = [SecretRecipe::new(name, seed)];
                     let (text, spans) = materialize(&generators, &probe, &recipes).unwrap();

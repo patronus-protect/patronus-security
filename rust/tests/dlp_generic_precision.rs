@@ -213,6 +213,42 @@ fn test_suite_urls_are_silent() {
     ]);
 }
 
+/// T17: reserved characters of a URL userinfo are percent-encoded, so test
+/// credentials such as `p@ss` and `p@ssw$rd` appear as `p%40ss` and
+/// `p%40ssw%24rd`; the likeness check reads the decoded password.
+#[test]
+fn percent_encoded_test_credentials_in_urls_are_silent() {
+    assert_silent(&[
+        "# percent-encoded authorization\nme%40company:p%40ssw%24rd\n\nscheme://me%40company:p%40ssw%24rd@proxy.com:80\n",
+        "Reservierte Zeichen in Benutzer und Passwort werden kodiert:\n\n    http://ich%40firma:p%40ssw%24rd@proxy.example.de:3128\n",
+        "'removes-user-pass' => ['http://user:p%40ss@proxy.com:6180', 'http://***:***@proxy.com:6180'],",
+        "$server = [\n    'http_proxy' => 'http://user:p%40ss@proxy.com',\n    'no_proxy' => 'other.repo.org',\n];\n",
+        "PROXIES = {\"https\": \"http://user:s%33cr%33t@proxy.internal:3128\"}\n",
+        "assert redact(\"https://admin:p%40ssw%30rd@db.internal/app\") == \"https://admin:***@db.internal/app\"\n",
+        "Beispiel: ftp://anonym:%24ecret@ftp.example.de/pub",
+    ]);
+}
+
+#[test]
+fn percent_encoded_chosen_passwords_keep_the_encoded_span() {
+    for (text, value) in [
+        (
+            "DATABASE_URL=postgres://app:Vkrq%40Tz82%24mLw%3A41@db.internal:5432/app",
+            "Vkrq%40Tz82%24mLw%3A41",
+        ),
+        (
+            "Proxy der Filiale: http://lager:Hmt%24pn%3A7731%40qe@proxy.intern:3128",
+            "Hmt%24pn%3A7731%40qe",
+        ),
+        (
+            "amqp://worker:Wq9%40ss%24Lr%3Az@mq.internal:5672/jobs",
+            "Wq9%40ss%24Lr%3Az",
+        ),
+    ] {
+        assert_reported(text, "dlp_url_userinfo_password", value);
+    }
+}
+
 #[test]
 fn weak_but_real_passwords_stay_detected() {
     for (text, rule_id, value) in [
