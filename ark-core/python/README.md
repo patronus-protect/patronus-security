@@ -36,7 +36,9 @@ Core's 256 total tokens / overlap 0 / batch 1 behavior. Downloads require explic
 `warmup={"download": "missing"}` during construction; scans never download.
 Scanner construction warms the configured model and subsequent calls reuse it.
 
-Calls release the GIL. Serialize calls to a scanner or use a bounded pool of
+Calls release the GIL and run synchronously on the calling thread. Async hosts
+should use a reusable worker pool. Finite ONNX deadlines share Core's timer thread.
+Serialize calls to a scanner or use a bounded pool of
 scanners; simultaneous use raises `ScannerBusyError`. `ScanControl.cancel()` can
 be called from another thread and propagates into Core/ONNX. Expired deadlines
 raise `TimeoutError`, explicit cancellation raises `CancelledError`, invalid

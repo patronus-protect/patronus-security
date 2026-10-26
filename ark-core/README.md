@@ -29,8 +29,9 @@ checks still respect the configured categories, rule gates and resource limits.
 `scan_with_control(text, checks, &control)` accepts a shared `ScanControl` for
 cancellation and a configurable deadline. An active ONNX run receives Runtime
 termination; native stages stop at their next checkpoint. No partial report is
-returned on cancellation. A finite ONNX deadline uses a short-lived timer thread
-only while inference is active; ordinary scans create no timer.
+returned on cancellation. Scans execute on the calling thread. Active ONNX runs
+with finite deadlines share one process-wide timer thread; registrations are removed
+when a run finishes. Scans never create a timer thread per call or batch.
 
 Default limits: 1 MiB per input and 10,000 actionable evidence spans. Limits
 are configurable; exceeding either returns an error, never a truncated clean

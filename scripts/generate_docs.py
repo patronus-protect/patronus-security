@@ -884,6 +884,7 @@ def generate_rust_api_doc() -> str:
         ("Result And Category Types", ROOT / "rust/src/types.rs"),
         ("Synchronous Core API", ROOT / "ark-core/src/scanner.rs"),
         ("Core Asset Preparation And Warmup", ROOT / "ark-core/src/warmup.rs"),
+        ("Core Asset Cache", ROOT / "ark-core/src/warmup/cache.rs"),
         ("Core Cancellation And Deadlines", ROOT / "ark-core/src/control.rs"),
         ("Shared Native Types", ROOT / "ark-core/src/types.rs"),
         ("Wolf Defender Runtime", ROOT / "ark-core/src/wolf.rs"),
