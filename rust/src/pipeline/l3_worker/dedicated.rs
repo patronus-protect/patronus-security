@@ -497,15 +497,6 @@ fn run_wolf_document_job(
             job.execution.wolf_execution_options(),
         )
         .map_err(|error| error.to_string())?;
-    let active = match ActiveRunGuard::register(
-        Arc::clone(&worker.requests),
-        &job.request_id,
-        job.job_id,
-        allows_fallback,
-    ) {
-        Ok(active) => active,
-        Err(stopped) => return stopped_wolf_result(&job, stopped),
-    };
     let mut progress = |update: patronus_ark_core::wolf::WolfProgress| {
         let completed = update.windows as usize;
         let total = update.total_windows as usize;
@@ -576,6 +567,23 @@ fn run_wolf_document_job(
     } else {
         Some(&mut progress as &mut dyn FnMut(patronus_ark_core::wolf::WolfProgress))
     };
+    // Queue waiting and lazy startup are excluded. This job owns one finite
+    // document-run control, shared by request cancellation and ONNX termination.
+    let inference_started = Instant::now();
+    let control = patronus_ark_core::ScanControl::with_timeout(std::time::Duration::from_millis(
+        job.inference_timeout_ms,
+    ))
+    .map_err(|error| error.to_string())?;
+    let active = match ActiveRunGuard::register(
+        Arc::clone(&worker.requests),
+        &job.request_id,
+        job.job_id,
+        allows_fallback,
+        control,
+    ) {
+        Ok(active) => active,
+        Err(stopped) => return stopped_wolf_result(&job, stopped),
+    };
     let output = model.infer_wolf_document_with_progress_and_control(
         source_text,
         threshold,
@@ -588,6 +596,33 @@ fn run_wolf_document_job(
     let output = match output {
         Ok(output) => output,
         Err(error) => {
+            if matches!(
+                error.downcast_ref::<patronus_ark_core::ScanError>(),
+                Some(patronus_ark_core::ScanError::DeadlineExceeded)
+            ) {
+                let mut result = timeout_result(
+                    &job,
+                    "inference_timeout",
+                    inference_started
+                        .duration_since(job.enqueued_at)
+                        .as_secs_f64()
+                        * 1000.0,
+                );
+                if let Some(layer) = result
+                    .layers
+                    .iter_mut()
+                    .find(|layer| layer.layer_type == "degraded_timeout")
+                {
+                    layer
+                        .details
+                        .insert("ttl_ms".into(), serde_json::json!(job.inference_timeout_ms));
+                    layer.details.insert(
+                        "inference_elapsed_ms".into(),
+                        serde_json::json!(elapsed_ms(inference_started)),
+                    );
+                }
+                return Ok(result);
+            }
             if allows_fallback
                 && matches!(
                     error.downcast_ref::<patronus_ark_core::ScanError>(),

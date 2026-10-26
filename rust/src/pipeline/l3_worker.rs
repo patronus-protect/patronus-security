@@ -975,13 +975,19 @@ fn finish_job(
     request_id: RequestId,
     result: SecurityScanResult,
 ) {
-    let request_wide_stop = request_wide_early_exit(&result);
+    let failure = failure_from_scan_result(&result);
+    // A degraded timeout/error may retain a positive fallback. It must never
+    // turn one failed job into a request-wide stop of otherwise healthy jobs.
+    let request_wide_stop = if failure.is_none() {
+        request_wide_early_exit(&result)
+    } else {
+        None
+    };
     let mut registry = worker
         .requests
         .state
         .lock()
         .expect("request registry mutex poisoned");
-    let failure = failure_from_scan_result(&result);
     let publish_result = if let Some(state) = registry.requests.get_mut(&request_id) {
         if state.completion.is_some() || !state.pending_l3_job_ids.remove(&job_id) {
             return;

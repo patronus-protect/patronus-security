@@ -65,8 +65,8 @@ impl ActiveRunGuard {
         request_id: &str,
         job_id: u64,
         allows_fallback: bool,
+        control: ScanControl,
     ) -> Result<Self, Stopped> {
-        let control = ScanControl::default();
         {
             let mut registry = requests
                 .state
