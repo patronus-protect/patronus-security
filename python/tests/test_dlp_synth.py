@@ -280,6 +280,92 @@ def sourcegraph(value):
     )
 
 
+def bedrock(secret_length):
+    """Long-term Amazon Bedrock API key: ABSK + base64 of BedrockAPIKey-<id>-at-<account>:<secret>."""
+
+    def check(value):
+        raw = checks.b64decode(value.removeprefix("ABSK"))
+        if not value.startswith("ABSK") or raw is None or not raw.isascii():
+            return False
+        head, _, secret = raw.decode("ascii").partition(":")
+        name, _, account = head.partition("-at-")
+        return (
+            prefixed("BedrockAPIKey-", BASE36, 4)(name)
+            and prefixed("", DIGITS, 12)(account)
+            and prefixed("", B64, secret_length)(secret)
+        )
+
+    return check
+
+
+def azure_entra_client_secret(value):
+    return (
+        prefixed("", ALNUM, 3)(value[:3])
+        and value[3:4].isdigit()
+        and prefixed("Q~", ALNUM + "_~.-", 34)(value[4:])
+    )
+
+
+def base64_bytes(prefix, length):
+    def check(value):
+        raw = checks.b64decode(value.removeprefix(prefix))
+        return value.startswith(prefix) and raw is not None and len(raw) == length
+
+    return check
+
+
+GCP_SERVICE_ACCOUNT_FIELDS = {
+    "type", "project_id", "private_key_id", "private_key", "client_email", "client_id", "auth_uri", "token_uri",
+    "auth_provider_x509_cert_url", "client_x509_cert_url", "universe_domain",
+}
+
+
+def pkcs8_rsa(der):
+    """PKCS#8 PrivateKeyInfo with rsaEncryption and an RSAPrivateKey of a 2048-bit modulus."""
+    outer = checks.der_parse(der)
+    if not outer or len(outer) != 1 or outer[0][0] != 0x30:
+        return False
+    fields = checks.der_parse(outer[0][1])
+    if not fields or [tag for tag, _ in fields] != [0x02, 0x30, 0x04] or fields[0][1] != b"\0":
+        return False
+    key = checks.der_parse(fields[2][1])
+    return (
+        checks.der_parse(fields[1][1]) == [(0x06, OID_RSA_ENCRYPTION), (0x05, b"")]
+        and checks.is_valid_pkcs1_rsa(fields[2][1])
+        and len(checks.der_parse(key[0][1])[1][1]) == 257
+    )
+
+
+def gcp_service_account_key(value):
+    """Service account key file: JSON with the documented fields and a PKCS#8 RSA private key."""
+    try:
+        key = json.loads(value)
+    except ValueError:
+        return False
+    if not isinstance(key, dict) or set(key) != GCP_SERVICE_ACCOUNT_FIELDS or key["type"] != "service_account":
+        return False
+    blocks = checks.pem_blocks(key["private_key"])
+    return (
+        prefixed("", HEX, 40)(key["private_key_id"])
+        and key["client_email"].endswith(".iam.gserviceaccount.com")
+        and prefixed("1", DIGITS, 20)(key["client_id"])
+        and key["auth_provider_x509_cert_url"] == "https://www.googleapis.com/oauth2/v1/certs"
+        and len(blocks) == 1
+        and blocks[0][0] == "PRIVATE KEY"
+        and pkcs8_rsa(blocks[0][1])
+    )
+
+
+def cloudflare_origin_ca_key(value):
+    head, _, tail = value.removeprefix("v1.0-").partition("-")
+    return value.startswith("v1.0-") and prefixed("", HEX, 24)(head) and prefixed("", HEX, 146)(tail)
+
+
+def defined_networking(value):
+    head, _, tail = value.removeprefix("dnkey-").partition("-")
+    return value.startswith("dnkey-") and prefixed("", BASE32, 26)(head) and prefixed("", BASE32, 52)(tail)
+
+
 ALNUM = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 UPPER_ALNUM = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 B64URL = ALNUM + "-_"
@@ -287,6 +373,9 @@ B64 = ALNUM + "+/"
 HEX = "0123456789abcdef"
 DIGITS = "0123456789"
 BASE36 = DIGITS + "abcdefghijklmnopqrstuvwxyz"
+LOWER = "abcdefghijklmnopqrstuvwxyz"
+BASE32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
+OID_RSA_ENCRYPTION = bytes.fromhex("2a864886f70d010101")
 ONEPASSWORD_SECRET_KEY = onepassword_secret_key("A3")
 
 
@@ -436,6 +525,44 @@ CHECKS = {
     "codecov_access_token": prefixed("", HEX, 32),
     "sourcegraph_access_token": sourcegraph,
     "sourcegraph_local_access_token": sourcegraph,
+    # GOLD-D4 baseline entities (hosting, cloud, data)
+    "bedrock_api_key": bedrock(60),
+    "alibaba_access_key_id": prefixed("LTAI", ALNUM, 20),
+    "alibaba_secret_key": prefixed("", ALNUM, 30),
+    "azure_entra_client_secret": azure_entra_client_secret,
+    "azure_storage_account_key": base64_bytes("", 64),
+    "gcp_service_account_key": gcp_service_account_key,
+    "ibm_cloud_iam_api_key": prefixed("", B64URL, 44),
+    "yandex_api_key": prefixed("AQVN", B64URL, 36),
+    "yandex_static_access_key_secret": prefixed("YC", B64URL, 38),
+    "scalingo_api_token": prefixed("tk-us-", B64URL, 48),
+    "flyio_oauth_token": prefixed("fo1_", B64URL, 43),
+    "flyio_macaroon_token": base64_bytes("fm2_", 96),
+    "netlify_access_token": prefixed("", B64URL, 43),
+    "heroku_api_key": uuid_shaped,
+    "heroku_api_key_v2": prefixed("HRKU-AA", B64URL, 58),
+    "cloudflare_api_token": prefixed("", B64URL, 40),
+    "cloudflare_global_api_key": prefixed("", HEX, 37),
+    "cloudflare_origin_ca_key": cloudflare_origin_ca_key,
+    "digitalocean_pat": prefixed("dop_v1_", HEX, 64),
+    "digitalocean_oauth_token": prefixed("doo_v1_", HEX, 64),
+    "digitalocean_refresh_token": prefixed("dor_v1_", HEX, 64),
+    "openshift_user_token": lambda v: prefixed("sha256~", B64URL, 43)(v) and base64url_bytes(32)(v[7:]),
+    "defined_networking_api_token": defined_networking,
+    "fastly_api_token": prefixed("", B64URL, 32),
+    "settlemint_personal_access_token": prefixed("sm_pat_", ALNUM, 16),
+    "settlemint_application_access_token": prefixed("sm_aat_", ALNUM, 16),
+    "settlemint_service_access_token": prefixed("sm_sat_", ALNUM, 16),
+    "databricks_api_token": prefixed("dapi", HEX, 32),
+    "planetscale_service_token": prefixed("pscale_tkn_", B64URL, 43),
+    "planetscale_oauth_token": prefixed("pscale_oauth_", B64URL, 43),
+    "planetscale_password": prefixed("pscale_pw_", B64URL, 43),
+    "confluent_api_key": prefixed("", UPPER_ALNUM, 16),
+    "confluent_api_secret": prefixed("", ALNUM, 64),
+    "algolia_admin_api_key": prefixed("", HEX, 32),
+    "clickhouse_cloud_api_secret": prefixed("4b1d", ALNUM, 38),
+    "cloudant_password": prefixed("", HEX, 64),
+    "cloudant_api_key": prefixed("", LOWER, 24),
 }
 
 # Pre-E03 shape generators that must not pass the structural check they lack.
@@ -514,6 +641,41 @@ LOOKALIKE_FAILURES = {
     "sonar_user_token_short": lambda v: CHECKS["sonar_user_token"](v) or CHECKS["sonar_project_token"](v),
     "codecov_access_token_short": CHECKS["codecov_access_token"],
     "sourcegraph_access_token_short": sourcegraph,
+    # GOLD-D4
+    "bedrock_api_key_short": CHECKS["bedrock_api_key"],
+    "alibaba_access_key_id_short": lambda v: CHECKS["alibaba_access_key_id"](v) or CHECKS["alibaba_secret_key"](v),
+    "azure_entra_client_secret_short": CHECKS["azure_entra_client_secret"],
+    "azure_storage_account_key_short": CHECKS["azure_storage_account_key"],
+    "gcp_external_account_config": CHECKS["gcp_service_account_key"],
+    "ibm_cloud_iam_api_key_short": CHECKS["ibm_cloud_iam_api_key"],
+    "yandex_api_key_short": lambda v: CHECKS["yandex_api_key"](v) or CHECKS["yandex_static_access_key_secret"](v),
+    "scalingo_api_token_short": CHECKS["scalingo_api_token"],
+    "flyio_oauth_token_short": lambda v: CHECKS["flyio_oauth_token"](v) or CHECKS["flyio_macaroon_token"](v),
+    "netlify_access_token_short": CHECKS["netlify_access_token"],
+    "heroku_api_key_v2_short": lambda v: CHECKS["heroku_api_key"](v) or CHECKS["heroku_api_key_v2"](v),
+    "cloudflare_origin_ca_key_short": lambda v: any(
+        CHECKS[name](v) for name in ("cloudflare_api_token", "cloudflare_global_api_key", "cloudflare_origin_ca_key")
+    ),
+    "digitalocean_pat_short": lambda v: any(
+        CHECKS[name](v) for name in ("digitalocean_pat", "digitalocean_oauth_token", "digitalocean_refresh_token")
+    ),
+    "openshift_user_token_short": CHECKS["openshift_user_token"],
+    "defined_networking_api_token_short": CHECKS["defined_networking_api_token"],
+    "fastly_api_token_short": CHECKS["fastly_api_token"],
+    "settlemint_personal_access_token_short": lambda v: any(
+        CHECKS[name](v)
+        for name in (
+            "settlemint_personal_access_token", "settlemint_application_access_token", "settlemint_service_access_token"
+        )
+    ),
+    "databricks_api_token_short": CHECKS["databricks_api_token"],
+    "planetscale_service_token_short": lambda v: any(
+        CHECKS[name](v) for name in ("planetscale_service_token", "planetscale_oauth_token", "planetscale_password")
+    ),
+    "confluent_api_secret_short": lambda v: CHECKS["confluent_api_key"](v) or CHECKS["confluent_api_secret"](v),
+    "algolia_admin_api_key_short": CHECKS["algolia_admin_api_key"],
+    "clickhouse_cloud_api_secret_short": CHECKS["clickhouse_cloud_api_secret"],
+    "cloudant_password_short": lambda v: CHECKS["cloudant_password"](v) or CHECKS["cloudant_api_key"](v),
 }
 
 
@@ -570,20 +732,24 @@ class GeneratorSpecTests(unittest.TestCase):
         self.assertEqual(referenced, set(recipes.load_generators()))
 
     def test_baseline_entities_are_baseline_only_entities_with_a_format_source(self):
-        # GOLD-D2/D3: gold for entities without an ARK rule follows a baseline rule of the
-        # entity or vendor documentation; lookalikes name what they get wrong.
+        # GOLD-D2/D3/D4: gold for entities without an ARK rule follows a baseline rule of the
+        # entity (gitleaks, or the TruffleHog detector or detect-secrets plugin of an entity
+        # without a gitleaks rule); lookalikes name what they get wrong.
         entity_map = yaml.safe_load((REPO / "research/dlp/entity_map.yaml").read_text(encoding="utf-8"))
         by_id = {entity["id"]: entity for entity in entity_map["entities"]}
+        fields = {"gitleaks": "gitleaks", "trufflehog": "trufflehog", "detect-secrets": "detect_secrets"}
         generators = recipes.load_generators()
         for entity, entry in rules.baseline_entities().items():
             self.assertEqual(by_id[entity]["scope"], "baseline_only", entity)
             self.assertNotIn("ark", by_id[entity], entity)
             for name in entry["generators"]:
                 tool, _, rule = generators[name]["source"].partition(":")
-                self.assertEqual(tool, "gitleaks", name)
-                self.assertIn(rule.split(";")[0], by_id[entity]["gitleaks"], name)
+                self.assertIn(tool, fields, name)
+                self.assertIn(rule.split(";")[0], by_id[entity].get(fields[tool], []), name)
+                if tool != "gitleaks":
+                    self.assertNotIn("gitleaks", by_id[entity], name)
             for name in entry["lookalike"]:
-                self.assertRegex(generators[name]["source"], r"^GOLD-D[23] lookalike: ", name)
+                self.assertRegex(generators[name]["source"], r"^GOLD-D[234] lookalike: ", name)
 
     def test_every_valid_generator_has_an_independent_check(self):
         self.assertEqual(set(CHECKS), valid_generators())
