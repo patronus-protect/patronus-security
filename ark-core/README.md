@@ -32,6 +32,8 @@ termination; native stages stop at their next checkpoint. No partial report is
 returned on cancellation. Scans execute on the calling thread. Active ONNX runs
 with finite deadlines share one process-wide timer thread; registrations are removed
 when a run finishes. Scans never create a timer thread per call or batch.
+`ScanControl::with_timeout` starts its budget when the control is constructed,
+not when inference starts. Reusing a control shares its remaining budget across calls.
 
 Default limits: 1 MiB per input and 10,000 actionable evidence spans. Limits
 are configurable; exceeding either returns an error, never a truncated clean
@@ -40,6 +42,24 @@ set uses bounded BPE pieces, configured windows/batches and constant-size poolin
 model weights and the bounded tokenizer cache remain loaded. Individual
 unsplittable BPE pieces larger than 128 KiB are refused. They are never split
 at arbitrary byte positions, which would change training tokenization.
+
+## Shared native execution
+
+`Scanner` remains the public queue-free facade used by embedded integrations.
+Full Ark uses the same initialized detector state through `native::NativeEngine`,
+while keeping its own levels, conditional gates, request queues and result mapping.
+The engine initializes only selected categories and creates no worker threads.
+
+`NativeEngine::producers(category)` returns opaque descriptors in the established
+order. Call `producer.enabled(policy)` before `run_producer`; this centralizes
+parent-model, model and required-rule gates. `NativePolicy` supplies existing rule
+choices, explain mode and PII/DLP scoring modes without copying host configuration.
+The engine returns raw `NativeDetection` and elapsed time. The host retains its
+error policy, evidence filtering, confidence mapping and final aggregation.
+
+Existing `Scanner`, `WolfRunner`, configuration, report and error interfaces stay
+available. Core stops a native scan on detector failure; Ark can preserve its
+per-producer degradation. A host must not silently substitute one policy for the other.
 
 ## Asset preparation and warmup
 
@@ -253,3 +273,21 @@ The opt-in tokenizer parity test uses the repository fixture materializer, inclu
 DLP generator recipes. Set `PATRONUS_TEST_PYTHON` to the project's virtual-environment
 Python when running it, alongside `PATRONUS_TEST_MMBERT_TOKENIZER_JSON` and
 `PATRONUS_TEST_MMBERT_TOKENIZER_MMBPE`. This fixture tooling is test-only.
+
+## General ONNX classification
+
+`ml::text_classifier::OnnxTextClassifier` is the synchronous sequence classifier
+also re-exported by Ark. Its existing constructors and inference methods remain
+available. Class names must be nonempty, and model logits must have matching
+`[batch, classes]` dimensions (`[classes]` is accepted for batch one). Float32 and
+Float16 outputs are supported; inconsistent shapes and non-finite values are errors.
+Wolf scalar/margin decoding uses the separate `WolfRunner` contract.
+
+Model-produced raw outputs are validated before return. For manually constructed
+`RawClassifierOutput`, use the additive `try_decode` and `try_probabilities`
+methods. Existing unchecked methods remain available for compatibility.
+
+For native L1 layers, the legacy `LayerResult.matched` flag may be true even when
+`class_name` is `safe`; it is not a universal attack flag. Hosts should interpret
+the class, evidence and decision for their policy. `WolfResult.matched` specifically
+means that attack probability meets the configured Wolf threshold.

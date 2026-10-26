@@ -22,6 +22,22 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Changed
 
+- Share the initialized native producer registry and secret/PII overlap filtering
+  between Core and Ark, removing Ark's duplicate dispatch. Ark retains scheduling,
+  result policy and aggregation; existing Core, Respan and LiteLLM contracts stay
+  unchanged. Core-owned rule catalogs declare MIT OR Apache-2.0 while retaining
+  upstream source-license provenance.
+- Expose optional Wolf startup profiles in Full-Ark Python and HTTP configuration;
+  existing strategy and profile defaults remain unchanged. Warmup uses the actual
+  configured profile. Core Python adds optional typed configuration dictionaries.
+- Terminate active eligible Wolf inference on Ark request early exit, and enforce
+  the existing dedicated-Wolf inference budget after model loading and locking.
+  Inference timeouts retain degraded-timeout behavior and cannot cause sibling-job
+  cancellation through a positive fallback. Core deadlines still start when the
+  caller constructs its `ScanControl`.
+- Validate generic classifier output shapes and finite values before interpreting
+  predictions; preserve existing public methods and add checked decoding helpers.
+
 - German IDs on `presidio_favored` (Q-DE, quality floor F1 ≥ 80). The bare KVNR rule
   `pii_health_insurance_number_de_context_free` now reads the letter in either case
   (`a123456780`; the check digit counts it like the uppercase one), like the bare passport and

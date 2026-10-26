@@ -3,21 +3,33 @@
 Local PII, DLP and prompt-injection scanning with optional Wolf Defender.
 This package binds only `patronus-ark-core`, under MIT OR Apache-2.0.
 
+Before the Core Python release is available on PyPI, install the matching built
+wheel into your application environment. Set `PATRONUS_ARK_CORE_WHEEL` to its path:
+
 ```sh
-pip install patronus-ark-core
+python -m pip install "$PATRONUS_ARK_CORE_WHEEL"
 ```
+
+After publication, install with `python -m pip install patronus-ark-core`.
 
 ```python
-from patronus_ark_core import Scanner, ScanControl
+from patronus_ark_core import Scanner, ScanControl, ScannerConfig
 
-scanner = Scanner({"categories": ["pii", "dlp", "injection"]})
+config: ScannerConfig = {"categories": ["pii", "dlp", "injection"]}
+scanner = Scanner(config)
 report = scanner.scan("Text to inspect", control=ScanControl(timeout_ms=1000))
 ```
+
+Optional `ScannerConfig`, `WolfConfig`, `WarmupOptions`, `WolfExecutionOptions`
+and `OnnxRuntimeOptions` TypedDicts describe accepted settings. Plain dictionary
+arguments remain supported; runtime validation stays in Core.
 
 `report` contains `input_bytes`, `native` (Core results including layers and
 original UTF-8 byte/character evidence spans), and `wolf` (a separate model
 result, or `None`). Native results preserve Core labels and policy evidence;
-the host decides whether to block or redact.
+the host decides whether to block or redact. Native layer `matched` may be true
+for a `safe` classification; use class/evidence/decision for native policy.
+`wolf["matched"]` means the model attack probability met its threshold.
 
 For local Wolf, configure existing assets explicitly:
 
@@ -43,7 +55,9 @@ scanners; simultaneous use raises `ScannerBusyError`. `ScanControl.cancel()` can
 be called from another thread and propagates into Core/ONNX. Expired deadlines
 raise `TimeoutError`, explicit cancellation raises `CancelledError`, invalid
 configuration raises `ValueError`, and scanner/resource failures raise
-`RuntimeError`. No partial report is returned on failure.
+`RuntimeError`. No partial report is returned on failure. The timeout starts when
+`ScanControl` is constructed, so sharing it across fields shares one remaining
+budget, including time spent waiting before the scan.
 
 Build from the repository using a virtual environment:
 

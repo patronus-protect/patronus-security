@@ -20,6 +20,7 @@ Set at gateway construction:
 | `cache_entry_ttl_seconds` | positive integer | Shared hot/persistent TTL; defaults to 30 days (`2_592_000`). | `ExactCacheConfig.entry_ttl` |
 | `cache_memory_max_entries` | non-negative integer | Per-hot-tier entry bound; `0` disables hot retention. | `ExactCacheConfig.memory.max_entries` |
 | `cache_memory_max_bytes` | non-negative integer | Per-hot-tier byte bound; `0` disables hot retention. | `ExactCacheConfig.memory.max_bytes` |
+| `wolf_options` | dict or `None` | Dedicated-Wolf startup profile: total window tokens, content overlap and batch size; default `256/0/1`. | `set_wolf_execution_options` |
 | `l3_strategy` | `"dedicated"` \| `"multi"` | One model per category, or one coalesced multi-head model. | setter |
 | `execution_gates` | dict / matrix | Initial [execution gates](#execution-gates). | setter |
 | `dynamic_pii_config` | dict | Configuration for the [`dynamic-pii`](#dynamic-pii) pipeline. | setter |
@@ -33,6 +34,7 @@ download_files)` takes four arguments (it always downloads for every configured 
 `with_download_categories(...)` adds the fifth, `download_categories`. Every other option is
 applied after construction with its setter (`set_l3_strategy`, `set_execution_gates`,
 `set_dynamic_pii_config`, `set_execution_backend`, `set_onnx_runtime_options`,
+`set_wolf_execution_options`,
 `set_onnx_batch_mode`). Rust persistent caching uses
 `try_with_download_categories_and_cache(...)` with `ExactCacheConfig`; the path is fixed for
 the gateway lifecycle and cannot be overridden per request.
@@ -41,6 +43,47 @@ Python persistent writes are asynchronous. Call `flush_cache()` when shutdown or
 boundary must wait for all queued writes. See
 [Configure and understand caching](../how-to/configure-caching.md) for storage variants,
 cache-hit behavior, Dynamic PII events, metadata, and measured latencies.
+
+## Dedicated Wolf profile
+
+Full-Ark Python accepts optional startup `wolf_options`, using the same
+`WolfExecutionOptions` validation as Core:
+
+```python
+from patronus_ark import SecurityGateway
+
+gateway = SecurityGateway(
+    ["injection"], max_level="l3", model_dir="/srv/models",
+    download_files=False, l3_strategy="dedicated",
+    wolf_options={"window_tokens": 256, "overlap_tokens": 0, "batch_size": 1},
+)
+gateway.warmup()
+assert gateway.wolf_options["window_tokens"] == 256
+```
+
+`window_tokens` includes BOS/EOS; `overlap_tokens` counts content tokens and must
+be smaller than `window_tokens - 2`. The export must support the chosen window
+and batch size. Warmup validates and loads that actual profile; unchanged profiles
+reuse the warmed session. The profile is also retained by benchmark workers.
+
+The HTTP server keeps its previous `multi` default. Dedicated Wolf is an explicit
+server-start choice and needs the corresponding installed assets. Add this fragment
+to the server configuration:
+
+```yaml
+pipeline:
+  l3_strategy: dedicated
+  wolf_options:
+    window_tokens: 256
+    overlap_tokens: 0
+    batch_size: 1
+```
+
+These are server defaults, not request overrides. Wolf options do not configure
+the shared `multi` model. Existing HTTP configs without these fields keep `multi`
+and the `256/0/1` Wolf profile. Existing Full-Ark Python calls retain `dedicated`.
+The generic request `chunk_overlap_tokens` setting remains separate from Wolf's
+content-token overlap.
 
 ## Runtime setters
 
@@ -219,6 +262,19 @@ that pipeline's scope explicitly:
 Independently of the per-pipeline `early_exit` scope above, a fixed cross-pipeline guard cancels
 the rest of a request's queued (or coalesced) L3 jobs once any Injection or Threat result crosses
 `0.93` confidence on a non-safe class. That threshold is not configurable.
+Eligible dedicated Wolf jobs that are already running are now signalled through
+Core cancellation and return the same policy skip result as queued jobs. This
+does not introduce a public request-cancellation endpoint. Core and external
+adapters keep their existing `ScanControl` creation-time deadline semantics.
+
+Dedicated Wolf also enforces the job's existing `inference_timeout_ms` during
+the active document run, including ONNX execution. Its countdown starts after
+acquiring the model lock and loading the model; the queue TTL remains a separate
+check before inference. Injection currently uses the same configured duration
+for both budgets (15 seconds by default). A zero active budget expires immediately.
+An inference timeout follows the existing degraded-timeout result policy; even a
+positive fallback does not trigger request-wide early exit or cancel sibling jobs.
+This active timeout applies to dedicated Wolf, not the shared `multi` model.
 
 `progress` controls streaming status while L3 resolves: `disabled` (default), `progress`
 (non-terminal `progress` events carrying chunk counters), or `provisional` (also emits interim

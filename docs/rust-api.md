@@ -1702,11 +1702,7 @@ Complete scan output; native decisions and model probabilities remain separate.
 ```rust
 pub struct Scanner {
     config: ScannerConfig,
-    pii: PiiPipeline,
-    dlp: DlpPipeline,
-    catalog: rule_catalog::InjectionRuleCatalogPipeline,
-    structural: structural::InjectionStructuralPipeline,
-    producers: Vec<(&'static str, Producer)>,
+    native: NativeEngine,
     #[cfg(feature = "wolf")]
     wolf: Option<crate::wolf::WolfRunner>,
 }
@@ -1756,6 +1752,215 @@ pub fn scan_with_control(
 ```
 
 Run selected checks under a shared cancellation/deadline budget.
+
+## Shared Native Engine
+
+```rust
+pub struct NativeProducerOutcome {
+    pub detection: NativeDetection,
+    pub duration_ms: f64,
+}
+```
+
+Raw producer output; result/decision mapping remains the host's responsibility.
+
+```rust
+pub struct NativeEngine {
+    groups: [Vec<NativeProducerSpec>; 3],
+}
+```
+
+Owns each selected category's detector state once, without worker threads.
+
+```rust
+pub fn new(categories: &[Category]) -> Self;
+```
+
+Initialize only configured categories. An empty selection creates no pipelines.
+
+```rust
+pub fn producers(&self, category: Category) -> &[NativeProducerSpec];
+```
+
+Producers in the established category order, or empty for an unselected category.
+
+```rust
+pub fn run_producer(
+    &self,
+    producer: &NativeProducerSpec,
+    prepared: &NativeText<'_>,
+    policy: &dyn NativePolicy,
+    control: &ScanControl,
+) -> Result<NativeProducerOutcome, ScanError>;
+```
+
+Execute an active producer. Call `producer.enabled(policy)` before this method.
+Cancellation is checked before and after detection; panics become detector errors.
+
+## Native Policy
+
+```rust
+pub trait NativePolicy {
+    fn allows_model(&self, id: &str) -> bool;
+    fn allows_rule(&self, id: &str) -> bool;
+    fn explain(&self) -> bool;
+    fn pii_mode(&self) -> PiiMode;
+    fn dlp_mode(&self) -> DlpMode;
+}
+```
+
+Per-call native policy. Hosts can adapt their existing gates without copying them.
+
+## Native Producer Descriptors
+
+```rust
+pub struct NativeProducerSpec {
+    category: Category,
+    id: &'static str,
+    parent: Option<&'static str>,
+    rule: Option<&'static str>,
+    detect: Detect,
+}
+```
+
+An opaque producer and its shared outer gates. Pipeline state lives with the spec.
+
+```rust
+pub fn id(&self) -> &'static str;
+```
+
+No public documentation is available yet.
+
+```rust
+pub fn category(&self) -> Category;
+```
+
+No public documentation is available yet.
+
+```rust
+pub fn enabled(&self, policy: &dyn NativePolicy) -> bool;
+```
+
+Parent/model/required-rule gates, independent of host level or conditional gates.
+
+## Wolf Execution Options
+
+```rust
+pub struct WolfExecutionOptions {
+    /// Maximum sequence length, including BOS and EOS.
+    pub window_tokens: usize,
+    /// Content tokens retained between adjacent windows.
+    pub overlap_tokens: usize,
+    /// Maximum windows in a single ONNX call (not concurrent requests).
+    pub batch_size: usize,
+}
+```
+
+Wolf document execution. Sizes count tokens, batches count document windows.
+The defaults preserve the existing 254-content-token inference profile.
+
+```rust
+pub fn validate(self) -> Result<(), ScanError>;
+```
+
+No public documentation is available yet.
+
+## Core ONNX Classification
+
+```rust
+pub struct OnnxTextClassifier {
+    tokenizer: RuntimeTokenizer,
+    session: Session,
+    input_names: Vec<String>,
+    class_names: Vec<String>,
+    max_len: usize,
+    model_name: String,
+    model_path: PathBuf,
+    precision: String,
+    execution_provider: String,
+}
+```
+
+No public documentation is available yet.
+
+```rust
+pub fn from_dir<P: AsRef<Path>>(
+    dir: P,
+    class_names: Vec<String>,
+    model_name: impl Into<String>,
+) -> Result<Option<Self>, Box<dyn std::error::Error>>;
+```
+
+No public documentation is available yet.
+
+```rust
+pub fn from_dir_with_paths<P: AsRef<Path>>(
+    dir: P,
+    class_names: Vec<String>,
+    model_name: impl Into<String>,
+    onnx_candidates: &[&str],
+    tokenizer_path: &str,
+    max_len: usize,
+    backend: ExecutionBackend,
+    options: OnnxRuntimeOptions,
+) -> Result<Option<Self>, Box<dyn std::error::Error>>;
+```
+
+No public documentation is available yet.
+
+```rust
+pub fn infer(&mut self, text: &str) -> Result<EvaluationResult, Box<dyn std::error::Error>>;
+```
+
+No public documentation is available yet.
+
+```rust
+pub fn infer_batch(
+    &mut self,
+    texts: &[String],
+) -> Result<Vec<EvaluationResult>, Box<dyn std::error::Error>>;
+```
+
+No public documentation is available yet.
+
+```rust
+pub fn model_name(&self) -> &str;
+```
+
+No public documentation is available yet.
+
+```rust
+pub fn model_path(&self) -> &Path;
+```
+
+No public documentation is available yet.
+
+```rust
+pub fn precision(&self) -> &str;
+```
+
+No public documentation is available yet.
+
+```rust
+pub fn execution_provider(&self) -> &str;
+```
+
+No public documentation is available yet.
+
+```rust
+pub fn try_decode(
+    &self,
+    class_names: &[String],
+) -> Result<EvaluationResult, Box<dyn std::error::Error>>;
+```
+
+Checked decoding for manually constructed logits; existing methods remain available.
+
+```rust
+pub fn try_probabilities(&self) -> Result<Vec<f32>, Box<dyn std::error::Error>>;
+```
+
+No public documentation is available yet.
 
 ## Core Asset Preparation And Warmup
 
