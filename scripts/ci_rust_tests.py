@@ -53,6 +53,8 @@ def plan(group: str, changes: dict[str, str], root: Path = ROOT) -> list[list[st
         ):
             if enabled(changes, key):
                 packages.extend(["-p", package])
+        if enabled(changes, "core") or enabled(changes, "bindings"):
+            packages.extend(["-p", "patronus-ark-core-python"])
         return [["cargo", "clippy", "--locked", *packages, "--all-targets", "--", "-D", "warnings"]] if packages else []
     if group != "wrapper":
         raise ValueError(f"unknown group: {group}")
