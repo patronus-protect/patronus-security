@@ -9,4 +9,4 @@ pub use detection::*;
 
 pub use prepared::NativeText;
 
-pub use obfuscation::{base64_decode_text, slash_unicode_decode_lossy};
+pub use obfuscation::{base64_decode_text, percent_decode_lossy, slash_unicode_decode_lossy};
