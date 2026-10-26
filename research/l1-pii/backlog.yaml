@@ -388,6 +388,7 @@ tasks:
       de_passport_number); Q-task targets updated to the decided view; tests
 
   - id: T28
+    status: done
     title: "IPv6: no sub-span after a further `:` group (foo2001:db8::10.0.0.1 reports db8::10.0.0.1)"
     type: precision-fix
     deps: [B-IP]
