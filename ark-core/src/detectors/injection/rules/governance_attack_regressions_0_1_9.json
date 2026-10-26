@@ -3,7 +3,7 @@
   "catalog_id": "governance-attack-regressions-0.1.9",
   "source": "ark-governance-goldens",
   "source_revision": "0.1.9",
-  "license": "GPL-3.0-only",
+  "license": "MIT OR Apache-2.0",
   "rules": [
     {
       "id": "ark.injection.governance.cross_tool_next_request",

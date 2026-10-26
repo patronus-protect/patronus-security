@@ -221,8 +221,12 @@ unified model keep their execution paths.
 
 ## License
 
-MIT OR Apache-2.0. Embedded rule sources retain their provenance and license
-metadata. The consuming `patronus-ark` package retains its existing license.
+Core implementations and Core-authored rule definitions are licensed under
+MIT OR Apache-2.0. The bundled Core-authored catalogs carry that same declaration.
+Per-rule `source_license` fields describe referenced upstream provenance and are
+retained as such; they do not change the license of the Core-authored implementation.
+Existing third-party catalog notices remain intact. The consuming `patronus-ark`
+package retains its existing license.
 
 Real-export profile tests (repeat with `int8_int4` and its existing asset directory):
 
