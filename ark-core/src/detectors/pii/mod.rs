@@ -10,13 +10,16 @@ macro_rules! nanp_extension {
 }
 
 mod au;
+mod be;
 mod common;
 pub mod context;
 mod context_anchors;
 mod de;
 mod driver_license;
+mod fr;
 mod identifiers;
 mod intl;
+mod nl;
 mod nordic;
 pub mod overlap;
 #[allow(clippy::module_inception)]

@@ -280,10 +280,12 @@ be a valid card number, and an account field can hold an IBAN or a card-shaped n
 a card needs Luhn plus the IIN prefix and a length of its brand and never starts right after `+`,
 so phone digits no longer compete as a card. In `balanced` and `recall` one value yields one label among `IBAN`,
 `CREDITCARD`, `FINANCIAL_ACCOUNT_NUMBER`, `STEUERID`, `PHONE`, `VAT_ID_IT`, `VAT_ID_FR`, `VAT_ID_HR`,
-`VAT_ID_LT`, `VAT_ID_LV`, `NHS_NUMBER` and `AU_ABN` (a bare Partita IVA and the digits of a spaced
-French or Croatian VAT ID have 11 digits like a Steuer-ID, B01/B02; the twelve digits of a Lithuanian
-one can be card-shaped, B02; an NHS number in 3-3-4 groups is also a US phone number, B-UK; an ABN in
-2-3-3-3 groups or as eleven digits can be a Steuer-ID, B-APAC).
+`VAT_ID_LT`, `VAT_ID_LV`, `NHS_NUMBER`, `AU_ABN`, `FR_NIR`, `FR_SIRET` and `BE_NATIONAL_NUMBER` (a
+bare Partita IVA and the digits of a spaced French or Croatian VAT ID have 11 digits like a
+Steuer-ID, B01/B02; the twelve digits of a Lithuanian one can be card-shaped, B02; an NHS number in
+3-3-4 groups is also a US phone number, B-UK; an ABN in 2-3-3-3 groups or as eleven digits can be a
+Steuer-ID, B-APAC; a Belgian national number can be a Steuer-ID, a SIRET or a NIR a card number,
+B-EU1).
 Of two overlapping findings
 with different labels the first criterion that differs decides: an IBAN (`iban`), the longer
 value (`longer_value`: a card-shaped part of a longer value), context that supports the finding's
@@ -379,7 +381,17 @@ and 3-7-1 check digit, `121000358`, `0711-0130-7`) is reported in every mode wit
 account term near it or as its key (`ABA`, `RTN`, `routing number`, `Routingnummer`, a
 `routing_number` key), `0.75`–`0.85`; bare, only the printed 4-4-1 form in `balanced`/`recall` at
 `0.55`. Under a field name (`BBAN:`, `Bank Routing Number:`, `Acct No:`, a `bban` key or an
-`<AcctNumber>` element) the account rule reports the value without a check digit. The German document number rules keep
+`<AcctNumber>` element) the account rule reports the value without a check digit.
+French, Dutch and Belgian national numbers (B-EU1) have one label each and a check digit:
+`FR_NIR` (numéro de sécurité sociale, key mod 97), `FR_SIREN` and `FR_SIRET` (Luhn; La Poste SIRETs
+by digit sum), `NL_BSN` (burgerservicenummer, 11-proof) and `BE_NATIONAL_NUMBER` (rijksregisternummer /
+numéro de registre national, mod 97). With a term of the label near the value or as its key (`NIR`,
+`numéro de sécurité sociale`, `SIREN`, `SIRET`, `BSN`, `burgerservicenummer`, `rijksregisternummer`,
+`INSZ`, a `bsn` key) they are reported in every mode; bare, in `balanced`/`recall` only and at
+`0.55`, the forms whose shape adds to the check digit: a NIR printed `2 95 10 99 126 111 93` or as
+fifteen characters of sex 1 or 2, a SIRET in 3-3-3-5 groups (`732 829 320 00074`), a BSN printed
+`1234.56.782` and a national number printed `85.07.30-033.28`. The SIREN (`732 829 320`) and bare
+runs of nine, eleven or fourteen digits need the term in every mode. The German document number rules keep
 their format check in every mode, since a printed nine-character serial carries no check digit. A context-bound rule (`pii_phone_de_national_proximity`: a national number such as
 `ist unter 0176 90817263 erreichbar`) reports only with a support term and no nearer counter term,
 in every mode including `strict`, and then scores at least `0.50`. Validators decide in every
