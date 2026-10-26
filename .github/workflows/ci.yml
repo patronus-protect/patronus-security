@@ -55,6 +55,7 @@ jobs:
           components: clippy
       - run: cargo clippy -p patronus-ark-core --no-default-features --lib -- -D warnings
       - run: cargo clippy -p patronus-ark-core --all-targets --all-features -- -D warnings
+      - run: cargo test -p patronus-ark-core --all-features --lib
 
   python:
     runs-on: ubuntu-latest

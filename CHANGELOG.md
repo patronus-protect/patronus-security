@@ -13,6 +13,8 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 - Restore accelerator feature builds with ORT rc.13 by using its current execution-provider
   API, while preserving the rc.10 compatibility path used for macOS Intel wheels.
+- Allow combined accelerator-feature builds to link against an available ORT distribution;
+  explicitly requested unavailable backends still fail during scanner initialization.
 - Replace Core's `dirs` dependency with MIT OR Apache-2.0 `home` for the same Hugging Face
   token-cache lookup. Core download support no longer pulls in MPL-2.0 `option-ext`.
 
