@@ -90,6 +90,10 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   und das Pseudo-Passwort `x-oauth-basic`; `dlp_url_userinfo_token` meldet das Token im
   Benutzernamen von `https://<token>:x-oauth-basic@…` (zwei Zeichenklassen, Entropie ≥ 3 Bit,
   keine Folgen/Wiederholungen).
+  Seit T17 liest `dlp_url_userinfo_password` das Passwort prozentdekodiert (`p%40ss` ist
+  `p@ss`) und verwirft auch maskierte Credential-Nomen (`p@ss`, `p@ssw$rd`, `s3cr3t`: Leetspeak-
+  Ziffern und Sonderzeichen statt Buchstaben, wie bei Basic Auth und Connection-Strings); ein
+  gewähltes Passwort behält den kodierten Span. Dekodiert wird nur der gefundene Wert.
   Seit F-GEN2 nehmen `dlp_password_assignment` und `dlp_generic_credential_assignment` einen
   Wert in Anführungszeichen bis zum schließenden Zeichen, mit Leerzeichen, `;`, `,` und `}` darin;
   ein Wert ohne Anführungszeichen endet weiter daran. `dlp_env_var_secret` meldet den Wert ohne

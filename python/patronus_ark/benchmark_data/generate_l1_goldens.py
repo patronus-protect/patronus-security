@@ -8946,6 +8946,118 @@ DLP_G01_CASES = {
 for _label, _rows in DLP_G01_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
+# T17: `dlp_url_userinfo_password` reads the userinfo password percent-decoded before the F-GEN1
+# likeness check, so test credentials whose reserved characters are encoded (`p%40ss`,
+# `p%40ssw%24rd`, `s%33cr%33t`) are stand-ins as in plain text: composer documentation, PHP data
+# providers and Python tests. Chosen passwords with the reserved characters @ $ : stay findings
+# with the encoded span.
+DLP_T17_CASES = {
+    "CREDENTIAL": [
+        ds(
+            "CREDENTIAL", "de", "dlp_url_userinfo_password",
+            "LAGER_DB_URL=postgres://lager:<<secret:0|url>>@db.lager.intern:5432/lager\n",
+            "reserved_char_password", 17001, carrier="env",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_url_userinfo_password",
+            "proxy:\n  # Filial-Proxy, Sonderzeichen im Passwort kodiert\n  url: http://filiale:<<secret:0|url>>@proxy.intern:3128\n",
+            "reserved_char_password", 17002, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_url_userinfo_password",
+            "{\n  \"warteschlange\": \"amqp://lager:<<secret:0|url>>@mq.intern:5672/belege\"\n}\n",
+            "reserved_char_password", 17003, carrier="json",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_url_userinfo_password",
+            "$ git clone https://bauer:<<secret:0|url>>@git.example.de/team/abgleich.git\nKlone nach 'abgleich' …\n",
+            "reserved_char_password", 17004, carrier="cli",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_url_userinfo_password",
+            "Hallo Team, die neue Replik ist erreichbar unter mysql://bericht:<<secret:0|url>>@db2.intern/bericht – bitte nicht weitergeben.",
+            "reserved_char_password", 17005, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_url_userinfo_password",
+            "DATABASE_URL=postgres://app:<<secret:0|url>>@db.internal:5432/app\n",
+            "reserved_char_password", 17006, carrier="env",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_url_userinfo_password",
+            "services:\n  worker:\n    environment:\n      BROKER_URL: amqp://worker:<<secret:0|url>>@mq.internal:5672/jobs\n",
+            "reserved_char_password", 17007, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_url_userinfo_password",
+            "engine = create_engine(\"postgresql://report:<<secret:0|url>>@db1.internal/report\")\n",
+            "reserved_char_password", 17008, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_url_userinfo_password",
+            "2026-10-26T08:14:02Z INFO connecting to redis://cache:<<secret:0|url>>@cache.internal:6379/0\n",
+            "reserved_char_password", 17009, carrier="log",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_url_userinfo_password",
+            "[http]\n  proxy = http://build:<<secret:0|url>>@proxy.internal:3128\n",
+            "reserved_char_password", 17010, carrier="ini",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_url_userinfo_password",
+            "### Autorisierung\n\nReservierte Zeichen in Benutzername und Passwort werden prozentkodiert:\n\n```\nuser: ich@firma\npass: p@ssw$rd\n\nhttp://ich%40firma:p%40ssw%24rd@proxy.example.de:3128\n```\n",
+            "percent-encoded documentation example p@ssw$rd", carrier="markdown",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_url_userinfo_password",
+            "Beispiel für einen anonymen Zugang: ftp://anonym:%24ecret@ftp.example.de/pub",
+            "percent-encoded stand-in $ecret in prose", carrier="prose",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_url_userinfo_password",
+            "$server = [\n    'http_proxy' => 'http://benutzer:p%40ss@proxy.example.de',\n    'no_proxy' => 'intern.example.de',\n];\n",
+            "PHP test array with percent-encoded test credential p@ss", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_url_userinfo_password",
+            "# Testfall: Passwort wird maskiert\nassert maskiere(\"https://admin:p%40ssw%30rd@db.intern/app\") == \"https://admin:***@db.intern/app\"\n",
+            "Python test with percent-encoded test credential p@ssw0rd", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_url_userinfo_password",
+            "PROXY_URL=http://pruefer:s%33cr%33t@proxy.intern:3128\n",
+            "percent-encoded leetspeak stand-in s3cr3t", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_url_userinfo_password",
+            "### Authorization\n\nReserved URL characters in the user name or password must be percent-encoded:\n\n```\nuser:  me@company\npass:  p@ssw$rd\n\nscheme://me%40company:p%40ssw%24rd@proxy.com:80\n```\n",
+            "percent-encoded documentation example p@ssw$rd", carrier="markdown",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_url_userinfo_password",
+            "            'removes-user-pass' => ['http://user:p%40ss@proxy.com:6180', 'http://***:***@proxy.com:6180'],\n",
+            "PHP data provider with percent-encoded test credential p@ss", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_url_userinfo_password",
+            "PROXIES = {\"https\": \"http://user:s%33cr%33t@proxy.internal:3128\"}\n",
+            "Python test proxy with percent-encoded stand-in s3cr3t", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_url_userinfo_password",
+            "def test_redacts_password():\n    assert redact(\"https://admin:p%40ssw%30rd@db.internal/app\") == \"https://admin:***@db.internal/app\"\n",
+            "Python test with percent-encoded test credential p@ssw0rd", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_url_userinfo_password",
+            "For anonymous access use ftp://anonymous:%24ecret@ftp.example.com/pub as shown in the setup guide.",
+            "percent-encoded stand-in $ecret in prose", carrier="prose",
+        ),
+    ],
+}
+for _label, _rows in DLP_T17_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
 def flatten(suite: str, cases: dict[str, list[dict]]) -> list[dict]:
     rows = []
     for label, label_cases in cases.items():

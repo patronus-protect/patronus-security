@@ -159,7 +159,7 @@ pub(super) fn remove_zero_width(text: &str) -> String {
         .collect()
 }
 
-pub(super) fn percent_decode_lossy(text: &str) -> String {
+pub fn percent_decode_lossy(text: &str) -> String {
     let bytes = text.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
     let mut idx = 0;

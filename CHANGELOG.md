@@ -124,6 +124,23 @@ result shapes may be breaking for downstream users, and is called out explicitly
   still prefilters it: on 100 KiB without `@` a scan takes 1.3 µs before and after, with about
   1,700 addresses per 100 KiB 133 → 195 µs. `latency.py compare --engine ark-native` 100 KiB p95
   147.1 → 146.9 / 157.9 ms in two head runs (PASS, noise), 4 KiB 7.66 → 6.80 / 6.62 ms.
+### Detection changes
+
+- DLP L1 (T17, all modes): `dlp_url_userinfo_password` reads the matched userinfo password
+  percent-decoded before the F-GEN1 likeness check and also drops credential nouns masked with
+  leetspeak digits and symbols, as Basic auth and connection strings already do. Test
+  credentials such as `http://user:p%40ss@proxy.com` and `scheme://me%40company:p%40ssw%24rd@…`
+  (composer docs and tests) are no longer reported; chosen passwords with the reserved
+  characters `%40` `%24` `%3A` stay findings with the encoded span. **Detection change:** dev
+  benign-code FP 5 → 2 (FP/MB 0.1324 → 0.053), exact F1 87.2 and hard-negative FP 154 unchanged;
+  the decode runs only on a matched value containing `%`, 100 KiB p95 12.45 → 12.19 ms (noise).
+  New synthetic generator `reserved_char_password` (inserted URL-encoded through the new
+  `url_encoded` key in `dlp_synth/rules.json`, not used by carriers) and 20 golden rows.
+- DLP L1 (T17 review, all modes): `dlp_url_userinfo_password` checks for the `x-oauth-basic`
+  pseudo-password on the encoded password, so an encoded `%3A` stays password data
+  (`postgres://app:Kx7pQ2vL%3Ax-oauth-basic@…` is reported again, as before T17). **Detection
+  change:** restores findings the decode had dropped; the pseudo-password check now runs before
+  the decode.
 
 - **Shell risk: agent-shell robustness and heredoc handling.** Pin `cat-shell-risk-commander`
   revision `30d77a80f1ddb3c5c63d9b24c6f5083b15057813` (`format_version: 2`, about 4.4 MB).

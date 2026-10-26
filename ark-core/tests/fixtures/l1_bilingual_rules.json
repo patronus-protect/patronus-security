@@ -2581,7 +2581,8 @@
         "postgresql://lager:%(passwort)s@db.intern/lager",
         "DATABASE_URL=postgres://lager@db.intern:5432/lager",
         "$fs->get('https://user:pass@github.com/composer/composer/404');",
-        "'http_proxy' => 'http://benutzer:geheimnis@proxy.intern:3128',"
+        "'http_proxy' => 'http://benutzer:geheimnis@proxy.intern:3128',",
+        "Reservierte Zeichen werden kodiert: http://ich%40firma:p%40ssw%24rd@proxy.example.de:3128"
       ],
       "en": [
         "postgres://dbuser:TODO@db.internal/app",
@@ -2589,7 +2590,8 @@
         "https://x-token-auth:my-access-token@bitbucket.org/acme/repo.git",
         "DATABASE_URL=postgres://warehouse@db.internal:5432/warehouse",
         "$this->git->syncMirror('https://user:secret@example.com/repo.git', $dir);",
-        "['https://token:MY_GITHUB_TOKEN@github.com/acme/repo.git', 1],"
+        "['https://token:MY_GITHUB_TOKEN@github.com/acme/repo.git', 1],",
+        "'removes-user-pass' => ['http://user:p%40ss@proxy.com:6180', 'http://***:***@proxy.com:6180'],"
       ]
     },
     "language_neutral": true

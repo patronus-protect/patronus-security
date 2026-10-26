@@ -38,11 +38,11 @@ def _rules() -> dict:
         raise recipes.RecipeError("unsupported rules spec")
     known = set(recipes.load_generators())
     for rule_id, entry in spec["rules"].items():
-        if set(entry) - {"generators", "shape_only", "weak", "quoted", "lookalike", "probes"} or not entry.get("generators"):
+        if set(entry) - {"generators", "shape_only", "weak", "quoted", "url_encoded", "lookalike", "probes"} or not entry.get("generators"):
             raise recipes.RecipeError(f"{rule_id}: invalid rule entry")
         for name in (
             entry["generators"] + entry.get("shape_only", []) + entry.get("weak", []) + entry.get("quoted", [])
-            + entry.get("lookalike", [])
+            + entry.get("url_encoded", []) + entry.get("lookalike", [])
         ):
             if name not in known:
                 raise recipes.RecipeError(f"{rule_id}: unknown generator {name!r}")
@@ -62,8 +62,8 @@ def _rules() -> dict:
 
 
 def load_rule_map() -> dict:
-    """``{rule_id: {"generators": [...], "shape_only": [...], "weak": [...], "quoted": [...], "lookalike": [...],
-    "probes": [...]}}``."""
+    """``{rule_id: {"generators": [...], "shape_only": [...], "weak": [...], "quoted": [...], "url_encoded": [...],
+    "lookalike": [...], "probes": [...]}}``."""
     return copy.deepcopy(_rules()["rules"])
 
 
@@ -92,22 +92,24 @@ def baseline_lookalikes(key: str) -> list[str]:
 
 
 def samples(rule_id: str, seeds: range | list[int], *, lookalike: bool = False) -> Iterator[Sample]:
-    """Yield every (generator, probe, seed) carrier of ``rule_id``, weak and quoted values included.
+    """Yield every (generator, probe, seed) carrier of ``rule_id``, weak, quoted and url-encoded
+    values included.
 
-    Quoted values (F-GEN2) sit in double quotes in each probe. With ``lookalike`` the
-    carriers hold the rule's lookalike values instead (F03)."""
+    Quoted values (F-GEN2) sit in double quotes in each probe, url-encoded values (T17) are
+    percent-encoded. With ``lookalike`` the carriers hold the rule's lookalike values instead
+    (F03)."""
     entry = _rules()["rules"].get(rule_id)
     if entry is None:
         raise recipes.RecipeError(f"no generators for rule {rule_id!r}")
     if lookalike:
-        names = [(name, False) for name in entry.get("lookalike", [])]
+        names = [(name, "<<secret:0>>") for name in entry.get("lookalike", [])]
     else:
-        names = [(name, False) for name in entry["generators"] + entry.get("weak", [])]
-        names += [(name, True) for name in entry.get("quoted", [])]
-    for generator, quoted in names:
+        names = [(name, "<<secret:0>>") for name in entry["generators"] + entry.get("weak", [])]
+        names += [(name, '"<<secret:0>>"') for name in entry.get("quoted", [])]
+        names += [(name, "<<secret:0|url>>") for name in entry.get("url_encoded", [])]
+    for generator, placeholder in names:
         for probe_index, probe in enumerate(entry["probes"]):
-            if quoted:
-                probe = probe.replace("<<secret:0>>", '"<<secret:0>>"')
+            probe = probe.replace("<<secret:0>>", placeholder)
             for seed in seeds:
                 text, spans = recipes.materialize(probe, [{"gen": generator, "seed": seed}])
                 yield Sample(rule_id, generator, seed, probe_index, text, spans[0])
