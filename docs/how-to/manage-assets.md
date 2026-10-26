@@ -52,8 +52,8 @@ skipped unless the environment variable is set.
 
 `shell_command` is the one L1 category with a model file. `prepare_assets()` / `warmup()` fetch
 `patronus-studio/cat-shell-risk-commander` (Apache-2.0) at pinned revision
-`5f30ad137469fd3525fa7721824ac68675360d12` into
-`<model_dir>/shell_command/cat_shell_risk_commander/` (`manifest.json`, `model.json` ~2.5 MB,
+`30d77a80f1ddb3c5c63d9b24c6f5083b15057813` into
+`<model_dir>/shell_command/cat_shell_risk_commander/` (`manifest.json`, `model.json` ~4.4 MB,
 `LICENSE`, `.patronus-revision`). It honours `download_files` / `download_categories`; with
 downloads disabled and files missing, warmup fails with `missing shell_command assets ...
 downloads disabled`. At load, the SHA-256 of `model.json` is verified against `manifest.json`.
