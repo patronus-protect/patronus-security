@@ -29,6 +29,7 @@ def token(prefix: str, body: str, length: int) -> str:
 
 GH = token("ghp_", "Zq7Xw2Vt", 36)
 PASSWORD = "Qw7" + "zX4" + "Lp9" + "Vb2"
+SESSION = token("", "7d0c4e2a", 32)
 PEM_LABEL = "RSA " + "PRIVATE KEY"
 PEM = f"-----BEGIN {PEM_LABEL}-----\nMIIBOgIBAAJBAK\nq7Xw2Vt9Zq\n-----END {PEM_LABEL}-----"
 JWT_HEAD = "eyJ" + "hbGciOiJub25lIn0" + "." + "eyJ" + "zdWIiOiJ4In0"
@@ -197,6 +198,10 @@ def test_locate_secret_inside_match_and_fallbacks():
         (f"k: \"{PASSWORD}\" ", f": \"{PASSWORD}\" ", "detect-secrets", "ArtifactoryDetector", PASSWORD, ["trim"]),
         (f"DB=postgres://app:{PASSWORD}@db:5432/x", f"postgres://app:{PASSWORD}@db:5432", "trufflehog", "Postgres", PASSWORD, ["url_password"]),
         (f"curl -u admin:{PASSWORD} https://h", f"admin:{PASSWORD}", "gitleaks", "curl-auth-user", PASSWORD, ["user_password"]),
+        # GOLD-D3: the gitleaks regex has no secret group and reports the cookie name too.
+        (f"Cookie: _gitlab_session={SESSION}; path=/", f"_gitlab_session={SESSION}", "gitleaks", "gitlab-session-cookie", SESSION,
+         ["cookie_name"]),
+        (f"_gitlab_session={SESSION}", SESSION, "trufflehog", "Gitlab", SESSION, []),
         (f"key:\n{PEM}\n", PEM_LABEL, "detect-secrets", "PrivateKeyDetector", PEM, ["pem_block"]),
         (f"-----BEGIN {PEM_LABEL}-----\n(cut)", PEM_LABEL, "detect-secrets", "PrivateKeyDetector", f"-----BEGIN {PEM_LABEL}-----", ["pem_header"]),
         (f"key:\n{PEM}\n", PEM, "gitleaks", "private-key", PEM, []),

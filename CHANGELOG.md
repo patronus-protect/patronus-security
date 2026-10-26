@@ -150,6 +150,40 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Synthetic DLP gold for the 20 devops, ci, vcs and registry entities without an ARK rule and
+  without gold (GOLD-D3): `vcs.gitlab.session_cookie`, `vcs.bitbucket.client_secret`,
+  `ci.droneci.access_token`, `ci.travisci.access_token`, `registry.jfrog.artifactory`,
+  `registry.pypi.upload_token`, `registry.rubygems.api_token`, `registry.clojars.api_token`,
+  `devops.terraform_cloud.token`, `devops.pulumi.api_token`, `devops.vault.token`,
+  `devops.doppler.api_token`, `devops.prefect.api_token`, `devops.infracost.api_token`,
+  `devops.octopus_deploy.api_key`, `devops.harness.api_key`, `devops.snyk.api_token`,
+  `devops.sonar.api_token`, `devops.codecov.access_token`, `devops.sourcegraph.access_token`
+  (packages P05, P06, F13). `baseline_entities` in `dlp_synth/rules.json` gains 26 generators in
+  the format of each entity's gitleaks rule (the PyPI token is `pypi-` + base64url of a macaroon
+  v2 with location `pypi.org`, UUID identifier, caveat and 32-byte signature; Vault has
+  `hvs.`, legacy `s.` and batch `hvb.` tokens; the GitLab session cookie sits in a
+  `_gitlab_session=` wrapper) and one lookalike per entity (wrong length or character set, e.g.
+  an Octopus `API-` key in lower case, a RubyGems key in upper-case hex, a truncated PyPI token).
+  Per split and entity the carriers give 40 positives (20 DE, 20 EN) and 200 hard negatives.
+  `vcs.gitlab.token` and `vcs.gitlab.oauth_app_secret` already have carrier gold through their
+  ARK rules; the snapshot of 2026-10-24 shows 0 only because the frozen corpora predate it. A
+  new test keeps a carrier profile for every entity of the comm, identity, commerce, devops, ci,
+  vcs and registry families. `entity_map.yaml` maps the TruffleHog detectors that report these
+  formats (`PyPI`, `RubyGems`, `TerraformCloudPersonalToken`, `Pulumi`, `Doppler`, `Prefect`,
+  `SnykKey`, `Sourcegraph`, `DroneCI`, `TravisCI`; `check-entity-map` passes on the pinned
+  binaries). `run_baselines.py` cuts the cookie name from gitleaks `gitlab-session-cookie`
+  findings (step `cookie_name`), whose regex has no secret group. **Detection change:** none
+  (evaluation data only, no latency effect); the frozen corpora change only when the operator
+  re-freezes them. Dev rows, exact F1: ARK 0 on all 20 (no rule; generic rules find up to 34 of
+  40 values); best baseline 100 PyPI (all three tools), Terraform Cloud (gitleaks, TruffleHog),
+  Doppler and Prefect (TruffleHog), 97.4 Vault (gitleaks), 96.1 Travis CI, 91.9 Drone CI
+  (TruffleHog), 65.5 Infracost/Octopus/Sourcegraph, 58.0 Artifactory, 50.0 Clojars, Harness and
+  the GitLab session cookie, 49.4 Pulumi/RubyGems (TruffleHog 50.0), 48.4 Snyk (TruffleHog),
+  45.7 Bitbucket, Codecov and Sonar (gitleaks). Baseline precision suffers mostly from
+  `doc_example`/`test_key` values. After a re-freeze ARK reports 284 hard-negative spans on
+  these rows (`dlp_generic_credential_assignment` and `dlp_env_var_secret` on example values
+  behind a prefix such as `CLOJARS_`, `pul-`, `squ_`, `sgp_`, `rubygems_`; no `lookalike` hit)
+  — findings for P05/P06.
 - Synthetic DLP gold for the 17 comm, identity and commerce entities without gold (GOLD-D2):
   `comm.slack.app_config_token`, `comm.webhook_url`, `comm.discord.api_credentials`,
   `comm.telegram.bot_token`, `comm.twilio.api_key`, `comm.sendgrid.api_key`,

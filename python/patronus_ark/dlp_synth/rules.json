@@ -264,6 +264,26 @@
     "identity.okta.access_token": {"generators": ["okta_api_token"], "lookalike": ["okta_api_token_wrong_prefix"]},
     "identity.authress.access_key": {"generators": ["authress_access_key"], "lookalike": ["authress_access_key_wrong_account"]},
     "identity.onepassword.secret": {"generators": ["onepassword_secret_key", "onepassword_service_account_token"], "lookalike": ["onepassword_secret_key_wrong_version"]},
-    "commerce.shipping.api_token": {"generators": ["duffel_live_token", "easypost_api_key", "shippo_live_token"], "lookalike": ["shippo_live_token_short"]}
+    "commerce.shipping.api_token": {"generators": ["duffel_live_token", "easypost_api_key", "shippo_live_token"], "lookalike": ["shippo_live_token_short"]},
+    "vcs.gitlab.session_cookie": {"generators": ["gitlab_session_cookie"], "lookalike": ["gitlab_session_cookie_short"]},
+    "vcs.bitbucket.client_secret": {"generators": ["bitbucket_client_secret"], "lookalike": ["bitbucket_client_secret_short"]},
+    "ci.droneci.access_token": {"generators": ["droneci_access_token"], "lookalike": ["droneci_access_token_short"]},
+    "ci.travisci.access_token": {"generators": ["travisci_access_token"], "lookalike": ["travisci_access_token_short"]},
+    "registry.jfrog.artifactory": {"generators": ["artifactory_api_key", "artifactory_reference_token"], "lookalike": ["artifactory_api_key_short"]},
+    "registry.pypi.upload_token": {"generators": ["pypi_upload_token"], "lookalike": ["pypi_upload_token_truncated"]},
+    "registry.rubygems.api_token": {"generators": ["rubygems_api_key"], "lookalike": ["rubygems_api_key_upper_hex"]},
+    "registry.clojars.api_token": {"generators": ["clojars_deploy_token"], "lookalike": ["clojars_deploy_token_short"]},
+    "devops.terraform_cloud.token": {"generators": ["terraform_cloud_token"], "lookalike": ["terraform_cloud_token_short"]},
+    "devops.pulumi.api_token": {"generators": ["pulumi_access_token"], "lookalike": ["pulumi_access_token_short"]},
+    "devops.vault.token": {"generators": ["vault_service_token", "vault_legacy_service_token", "vault_batch_token"], "lookalike": ["vault_legacy_service_token_short"]},
+    "devops.doppler.api_token": {"generators": ["doppler_personal_token"], "lookalike": ["doppler_personal_token_short"]},
+    "devops.prefect.api_token": {"generators": ["prefect_api_key"], "lookalike": ["prefect_api_key_short"]},
+    "devops.infracost.api_token": {"generators": ["infracost_api_key"], "lookalike": ["infracost_api_key_short"]},
+    "devops.octopus_deploy.api_key": {"generators": ["octopus_deploy_api_key"], "lookalike": ["octopus_deploy_api_key_lower"]},
+    "devops.harness.api_key": {"generators": ["harness_personal_access_token", "harness_service_account_token"], "lookalike": ["harness_personal_access_token_short"]},
+    "devops.snyk.api_token": {"generators": ["snyk_api_token"], "lookalike": ["snyk_api_token_short"]},
+    "devops.sonar.api_token": {"generators": ["sonar_user_token", "sonar_project_token"], "lookalike": ["sonar_user_token_short"]},
+    "devops.codecov.access_token": {"generators": ["codecov_access_token"], "lookalike": ["codecov_access_token_short"]},
+    "devops.sourcegraph.access_token": {"generators": ["sourcegraph_access_token", "sourcegraph_local_access_token"], "lookalike": ["sourcegraph_access_token_short"]}
   }
 }

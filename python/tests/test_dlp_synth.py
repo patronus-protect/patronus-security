@@ -215,6 +215,71 @@ def authress(value, account="acc_"):
     )
 
 
+def pypi_macaroon(value):
+    """PyPI API token: pypi- + unpadded base64url of a macaroon v2 (location pypi.org, UUID
+    identifier, one caveat, 32-byte signature; gitleaks pypi-upload-token needs
+    pypi-AgEIcHlwaS5vcmc and 50+ characters after it)."""
+    body = value.removeprefix("pypi-")
+    raw = checks.b64url_decode(body)
+    if not value.startswith("pypi-") or raw is None or not body.startswith("AgEIcHlwaS5vcmc"):
+        return False
+    # Version 2, then fields of type, length and data; None marks an end-of-section byte.
+    fields, offset = [], 1
+    while offset < len(raw) and raw[0] == 2:
+        if raw[offset] == 0:
+            fields.append(None)
+            offset += 1
+            continue
+        length = raw[offset + 1] if offset + 1 < len(raw) else len(raw)
+        fields.append((raw[offset], raw[offset + 2 : offset + 2 + length]))
+        offset += 2 + length
+    return (
+        offset == len(raw)
+        and len(fields) == 7
+        and fields[0] == (1, b"pypi.org")
+        and fields[1][0] == 2
+        and uuid_shaped(fields[1][1].decode("ascii"))
+        and fields[2] is None
+        and fields[3][0] == 2
+        and json.loads(fields[3][1])["version"] == 1
+        and fields[4] is None
+        and fields[5] is None
+        and fields[6][0] == 6
+        and len(fields[6][1]) == 32
+    )
+
+
+def terraform_cloud(body_length):
+    def check(value):
+        head, _, body = value.partition(".atlasv1.")
+        return prefixed("", ALNUM, 14)(head) and prefixed("", ALNUM, body_length)(body)
+
+    return check
+
+
+def harness(secret_length):
+    def check(value):
+        parts = value.split(".")
+        return (
+            len(parts) == 4
+            and parts[0] in ("pat", "sat")
+            and prefixed("", B64URL, 22)(parts[1])
+            and prefixed("", ALNUM, 24)(parts[2])
+            and prefixed("", ALNUM, secret_length)(parts[3])
+        )
+
+    return check
+
+
+def sourcegraph(value):
+    instance, _, secret = value.removeprefix("sgp_").partition("_")
+    return (
+        value.startswith("sgp_")
+        and (instance == "local" or prefixed("", HEX, 16)(instance))
+        and prefixed("", HEX, 40)(secret)
+    )
+
+
 ALNUM = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 UPPER_ALNUM = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 B64URL = ALNUM + "-_"
@@ -344,6 +409,33 @@ CHECKS = {
     "duffel_live_token": prefixed("duffel_live_", B64URL, 43),
     "easypost_api_key": prefixed("EZAK", ALNUM, 54),
     "shippo_live_token": prefixed("shippo_live_", HEX, 40),
+    # GOLD-D3 baseline entities (devops, ci, vcs, registry)
+    "gitlab_session_cookie": prefixed("", HEX, 32),
+    "bitbucket_client_secret": prefixed("", ALNUM, 64),
+    "droneci_access_token": prefixed("", ALNUM, 32),
+    "travisci_access_token": prefixed("", ALNUM, 22),
+    "artifactory_api_key": prefixed("AKCp", ALNUM, 69),
+    "artifactory_reference_token": prefixed("cmVmd", ALNUM, 59),
+    "pypi_upload_token": pypi_macaroon,
+    "rubygems_api_key": prefixed("rubygems_", HEX, 48),
+    "clojars_deploy_token": prefixed("CLOJARS_", HEX, 60),
+    "terraform_cloud_token": terraform_cloud(67),
+    "pulumi_access_token": prefixed("pul-", HEX, 40),
+    "vault_service_token": prefixed("hvs.", B64URL, 91),
+    "vault_legacy_service_token": prefixed("s.", ALNUM, 24),
+    "vault_batch_token": prefixed("hvb.", B64URL, 138),
+    "doppler_personal_token": prefixed("dp.pt.", ALNUM, 43),
+    "prefect_api_key": prefixed("pnu_", ALNUM, 36),
+    "infracost_api_key": prefixed("ico-", ALNUM, 32),
+    "octopus_deploy_api_key": prefixed("API-", UPPER_ALNUM, 26),
+    "harness_personal_access_token": harness(20),
+    "harness_service_account_token": harness(20),
+    "snyk_api_token": uuid_shaped,
+    "sonar_user_token": prefixed("squ_", HEX, 40),
+    "sonar_project_token": prefixed("sqp_", HEX, 40),
+    "codecov_access_token": prefixed("", HEX, 32),
+    "sourcegraph_access_token": sourcegraph,
+    "sourcegraph_local_access_token": sourcegraph,
 }
 
 # Pre-E03 shape generators that must not pass the structural check they lack.
@@ -399,6 +491,29 @@ LOOKALIKE_FAILURES = {
     "authress_access_key_wrong_account": lambda v: authress(v) or authress(v, "app_"),
     "onepassword_secret_key_wrong_version": ONEPASSWORD_SECRET_KEY,
     "shippo_live_token_short": CHECKS["shippo_live_token"],
+    # GOLD-D3
+    "gitlab_session_cookie_short": CHECKS["gitlab_session_cookie"],
+    "bitbucket_client_secret_short": CHECKS["bitbucket_client_secret"],
+    "droneci_access_token_short": CHECKS["droneci_access_token"],
+    "travisci_access_token_short": CHECKS["travisci_access_token"],
+    "artifactory_api_key_short": lambda v: CHECKS["artifactory_api_key"](v) or CHECKS["artifactory_reference_token"](v),
+    "pypi_upload_token_truncated": pypi_macaroon,
+    "rubygems_api_key_upper_hex": CHECKS["rubygems_api_key"],
+    "clojars_deploy_token_short": CHECKS["clojars_deploy_token"],
+    "terraform_cloud_token_short": CHECKS["terraform_cloud_token"],
+    "pulumi_access_token_short": CHECKS["pulumi_access_token"],
+    "vault_legacy_service_token_short": lambda v: any(
+        CHECKS[name](v) for name in ("vault_service_token", "vault_legacy_service_token", "vault_batch_token")
+    ),
+    "doppler_personal_token_short": CHECKS["doppler_personal_token"],
+    "prefect_api_key_short": CHECKS["prefect_api_key"],
+    "infracost_api_key_short": CHECKS["infracost_api_key"],
+    "octopus_deploy_api_key_lower": CHECKS["octopus_deploy_api_key"],
+    "harness_personal_access_token_short": harness(20),
+    "snyk_api_token_short": CHECKS["snyk_api_token"],
+    "sonar_user_token_short": lambda v: CHECKS["sonar_user_token"](v) or CHECKS["sonar_project_token"](v),
+    "codecov_access_token_short": CHECKS["codecov_access_token"],
+    "sourcegraph_access_token_short": sourcegraph,
 }
 
 
@@ -449,7 +564,7 @@ class GeneratorSpecTests(unittest.TestCase):
         self.assertEqual(referenced, set(recipes.load_generators()))
 
     def test_baseline_entities_are_baseline_only_entities_with_a_format_source(self):
-        # GOLD-D2: gold for entities without an ARK rule follows a baseline rule of the
+        # GOLD-D2/D3: gold for entities without an ARK rule follows a baseline rule of the
         # entity or vendor documentation; lookalikes name what they get wrong.
         entity_map = yaml.safe_load((REPO / "research/dlp/entity_map.yaml").read_text(encoding="utf-8"))
         by_id = {entity["id"]: entity for entity in entity_map["entities"]}
@@ -462,7 +577,7 @@ class GeneratorSpecTests(unittest.TestCase):
                 self.assertEqual(tool, "gitleaks", name)
                 self.assertIn(rule.split(";")[0], by_id[entity]["gitleaks"], name)
             for name in entry["lookalike"]:
-                self.assertTrue(generators[name]["source"].startswith("GOLD-D2 lookalike: "), name)
+                self.assertRegex(generators[name]["source"], r"^GOLD-D[23] lookalike: ", name)
 
     def test_every_valid_generator_has_an_independent_check(self):
         self.assertEqual(set(CHECKS), valid_generators())

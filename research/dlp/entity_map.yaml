@@ -506,28 +506,35 @@ entities:
      gitleaks: [artifactory-api-key, artifactory-reference-token, jfrog-api-key, jfrog-identity-token],
      detect_secrets: [ArtifactoryDetector], backlog: P05}
   - {id: registry.pypi.upload_token, scope: baseline_only, group: SECRET_TOKEN,
-     gitleaks: [pypi-upload-token], detect_secrets: [PypiTokenDetector], backlog: P05}
-  - {id: registry.rubygems.api_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [rubygems-api-token], backlog: P05}
+     gitleaks: [pypi-upload-token], trufflehog: [PyPI], detect_secrets: [PypiTokenDetector], backlog: P05}
+  - {id: registry.rubygems.api_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [rubygems-api-token],
+     trufflehog: [RubyGems], backlog: P05}
   - {id: registry.clojars.api_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [clojars-api-token], backlog: P05}
   - {id: devops.terraform_cloud.token, scope: baseline_only, group: SECRET_TOKEN,
-     gitleaks: [hashicorp-tf-api-token, hashicorp-tf-password], backlog: P05}
-  - {id: devops.pulumi.api_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [pulumi-api-token], backlog: P05}
+     gitleaks: [hashicorp-tf-api-token, hashicorp-tf-password], trufflehog: [TerraformCloudPersonalToken], backlog: P05}
+  - {id: devops.pulumi.api_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [pulumi-api-token],
+     trufflehog: [Pulumi], backlog: P05}
   - {id: devops.vault.token, scope: baseline_only, group: SECRET_TOKEN,
      gitleaks: [vault-batch-token, vault-service-token], backlog: P05}
-  - {id: devops.doppler.api_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [doppler-api-token], backlog: P05}
-  - {id: devops.prefect.api_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [prefect-api-token], backlog: P05}
+  - {id: devops.doppler.api_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [doppler-api-token],
+     trufflehog: [Doppler], backlog: P05}
+  - {id: devops.prefect.api_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [prefect-api-token],
+     trufflehog: [Prefect], backlog: P05}
   - {id: devops.infracost.api_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [infracost-api-token], backlog: P05}
   - {id: devops.octopus_deploy.api_key, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [octopus-deploy-api-key], backlog: P05}
   - {id: devops.harness.api_key, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [harness-api-key], backlog: P05}
-  - {id: devops.snyk.api_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [snyk-api-token], backlog: P05}
+  - {id: devops.snyk.api_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [snyk-api-token],
+     trufflehog: [SnykKey], backlog: P05}
   - {id: devops.sonar.api_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [sonar-api-token], backlog: P05}
   - {id: devops.codecov.access_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [codecov-access-token], backlog: P05}
   - {id: devops.sourcegraph.access_token, scope: baseline_only, group: SECRET_TOKEN,
-     gitleaks: [sourcegraph-access-token], backlog: P05}
+     gitleaks: [sourcegraph-access-token], trufflehog: [Sourcegraph], backlog: P05}
   # P06: CI/Hosting
   - {id: vcs.bitbucket.client_secret, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [bitbucket-client-secret], backlog: P06}
-  - {id: ci.droneci.access_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [droneci-access-token], backlog: P06}
-  - {id: ci.travisci.access_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [travisci-access-token], backlog: P06}
+  - {id: ci.droneci.access_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [droneci-access-token],
+     trufflehog: [DroneCI], backlog: P06}
+  - {id: ci.travisci.access_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [travisci-access-token],
+     trufflehog: [TravisCI], backlog: P06}
   - {id: hosting.flyio.access_token, scope: baseline_only, group: CLOUD_KEY, gitleaks: [flyio-access-token], backlog: P06}
   - {id: hosting.netlify.access_token, scope: baseline_only, group: CLOUD_KEY, gitleaks: [netlify-access-token], backlog: P06}
   - {id: hosting.heroku.api_key, scope: baseline_only, group: CLOUD_KEY,
