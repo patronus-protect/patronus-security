@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-//! United Kingdom identifiers: National Insurance number, NHS number, passport.
+//! United Kingdom identifiers: National Insurance number, NHS number, passport, BBAN.
 //!
 //! The NINO rule binds a value to its field name, alone or in pairs
 //! (`AB 12 34 56 C`), in any case; a bare NINO in one case is reported in `balanced`
@@ -8,6 +8,10 @@
 //! pass it one time in eleven: it needs an NHS term near the value or as its key in
 //! every mode, like the UK passport number, whose form has no check digit at all. The UK
 //! driving licence lives with the other licences in `driver_license`.
+//!
+//! The GB BBAN (T29: bank code, sort code, account, `ZFJR88590163492773`) has no check
+//! digit either: it is an account number only with a BBAN or account term near the
+//! value or as its key, in every mode, and never bare.
 use super::{pii::PiiPattern, score::ValidatorStrength, validators};
 
 /// The NINO forms: one block (`AB123456C`, `AB 123456 C`) or pairs (`AB 12 34 56 C`).
@@ -72,6 +76,21 @@ pub(super) const PASSPORT_NUMBER: PiiPattern = PiiPattern {
     validator: Some(validators::nine_digits),
     strength: ValidatorStrength::Format,
     base_score: 20,
+    captured_value: false,
+    requires_context: true,
+    scored_only: false,
+};
+
+/// A GB BBAN, four letters of the bank code, the six-digit sort code and the
+/// eight-digit account (`ZFJR88590163492773`), with a BBAN or account term near the
+/// value or as its key.
+pub(super) const BBAN: PiiPattern = PiiPattern {
+    name: "pii_bban_gb",
+    pattern: r"(?-u:\b)[A-Z]{4}[0-9]{14}(?-u:\b)",
+    entity_group: "FINANCIAL_ACCOUNT_NUMBER",
+    validator: Some(validators::uk_bban),
+    strength: ValidatorStrength::Format,
+    base_score: 35,
     captured_value: false,
     requires_context: true,
     scored_only: false,

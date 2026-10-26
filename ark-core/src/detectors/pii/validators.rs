@@ -836,6 +836,18 @@ pub fn uk_nhs_number(s: &str) -> bool {
     })
 }
 
+/// GB BBAN (T29): four uppercase letters of the bank code, a six-digit sort code
+/// and an eight-digit account number. No check digit; an account of zeros or one
+/// repeated digit throughout is a placeholder.
+pub fn uk_bban(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    bytes.len() == 18
+        && bytes[..4].iter().all(u8::is_ascii_uppercase)
+        && bytes[4..].iter().all(u8::is_ascii_digit)
+        && bytes[10..].iter().any(|&digit| digit != b'0')
+        && bytes[4..].iter().any(|&digit| digit != bytes[4])
+}
+
 /// The `N` digits of `s` with spaces and hyphens removed, if `s` holds exactly
 /// `N` ASCII digits besides them.
 fn grouped_digits<const N: usize>(s: &str) -> Option<[u32; N]> {
