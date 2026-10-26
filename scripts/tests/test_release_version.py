@@ -60,3 +60,12 @@ def test_new_workspace_member_cannot_silently_escape_version_check(tmp_path):
     )
     with pytest.raises(ValueError, match="new-crate/Cargo.toml"):
         RELEASE_VERSION.release_version(tmp_path)
+
+
+def test_stale_core_python_distribution_version_is_rejected(tmp_path):
+    write_sources(tmp_path, {})
+    (tmp_path / "ark-core/python/pyproject.toml").write_text(
+        '[project]\nname = "patronus-ark-core"\nversion = "1.2.2"\n'
+    )
+    with pytest.raises(ValueError, match="ark-core/python/pyproject.toml"):
+        RELEASE_VERSION.release_version(tmp_path)
