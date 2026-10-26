@@ -16,7 +16,7 @@
 #   - jedes ARK-Label der Registry genau einmal, keine Labels, die die Registry nicht kennt;
 #   - jede Presidio-Entität höchstens einmal (mit installiertem Presidio: genau die Registry);
 #   - jedes Korpus-Label genau so wie im Manifest;
-#   - jede Gold-Quelle (Manifest-Korpora, pii_l1, l1_bilingual_rules, E05- und VAT-Goldset) hat genau eine
+#   - jede Gold-Quelle (Manifest-Korpora, pii_l1, l1_bilingual_rules, E05- und VAT-Goldsets) hat genau eine
 #     Quellfamilie (source_families);
 #   - ARK_OUTPUT_MAP (external_pii_eval) und PRESIDIO_OUTPUT_MAP (run_presidio.py) widersprechen
 #     der Tabelle nicht. Sie dürfen Teilmengen sein: dort fehlende Labels bleiben ark.<LABEL> bzw.
@@ -34,7 +34,7 @@ presidio_version: 2.2.364
 # Quellfamilien (Fairness-Regel in research/l1-pii/README.md): jede Gold-Quelle genau einmal.
 # Meilensteine entscheiden nur neutral und presidio_favored; ark_authored wird nur berichtet.
 source_families:
-  ark_authored: [pii_l1, l1_bilingual_rules, ark-synthetic-de-eu, ark-synthetic-vat-1]
+  ark_authored: [pii_l1, l1_bilingual_rules, ark-synthetic-de-eu, ark-synthetic-vat-1, ark-synthetic-vat-2]
   neutral: [gretel-synthetic-pii-finance, ai4privacy-openpii-nano-1k, tab]
   presidio_favored: [presidio-evaluator-synth-v2, presidio-analyzer-recognizer-tests]
 

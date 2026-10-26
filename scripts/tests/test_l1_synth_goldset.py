@@ -60,15 +60,11 @@ def compact(value: str) -> str:
 
 
 def test_goldsets_cover_exactly_the_entity_map_ids():
-    # Ids added to the map after the E05 freeze get a goldset of their own or are listed as not generated.
-    de_eu, vat = set(MODULE.entity_ids()), set(MODULE.vat_entity_ids())
-    assert de_eu | vat == map_ids() - MODULE.NOT_GENERATED
-    assert MODULE.NOT_GENERATED <= map_ids()
-    assert not de_eu & vat and not MODULE.NOT_GENERATED & (de_eu | vat)
-    assert {name: goldset.entity_ids() for name, goldset in MODULE.GOLDSETS.items()} == {
-        "de-eu": MODULE.entity_ids(),
-        "vat-1": MODULE.vat_entity_ids(),
-    }
+    # Ids added to the map after the E05 freeze get a goldset of their own (GOLD-VAT1, GOLD-VAT2).
+    ids = {name: goldset.entity_ids() for name, goldset in MODULE.GOLDSETS.items()}
+    assert ids["de-eu"] == MODULE.entity_ids() and set(ids) == {"de-eu", "vat-1", "vat-2"}
+    assert set().union(*ids.values()) == map_ids()
+    assert sum(len(entities) for entities in ids.values()) == len(map_ids())
 
 
 @pytest.mark.parametrize("rows", [dev_rows, holdout_rows], ids=["dev", "holdout"])
@@ -213,9 +209,10 @@ def test_holdout_seed_must_differ_from_the_dev_seed(tmp_path):
     seed_file.write_text(MODULE.DEV_SEED + "\n", encoding="utf-8")
     with pytest.raises(ValueError, match="differ"):
         MODULE.holdout_seed(seed_file)
-    seed_file.write_text(MODULE.VAT_DEV_SEED + "\n", encoding="utf-8")
-    with pytest.raises(ValueError, match="differ"):
-        MODULE.holdout_seed(seed_file)
+    for goldset in VAT_GOLDSETS:
+        seed_file.write_text(goldset.dev_seed + "\n", encoding="utf-8")
+        with pytest.raises(ValueError, match="differ"):
+            MODULE.holdout_seed(seed_file)
     seed_file.write_text("short\n", encoding="utf-8")
     with pytest.raises(ValueError, match="16"):
         MODULE.holdout_seed(seed_file)
@@ -430,14 +427,23 @@ def test_generated_phone_numbers_are_valid():
             assert phonenumbers.is_valid_number(phonenumbers.parse(value, region)), value
 
 
-# ── VAT goldset part 1 (GOLD-VAT1) ───────────────────────────────────────────
+# ── VAT goldsets (GOLD-VAT1, GOLD-VAT2) ──────────────────────────────────────
 
-VAT = MODULE.GOLDSETS["vat-1"]
 VAT_IDS = {
-    f"pii.{country}.vat_id"
-    for country in ("at", "be", "bg", "ch", "cy", "cz", "dk", "ee", "es", "fi", "fr", "gr", "hr", "hu")
+    "vat-1": {
+        f"pii.{country}.vat_id"
+        for country in ("at", "be", "bg", "ch", "cy", "cz", "dk", "ee", "es", "fi", "fr", "gr", "hr", "hu")
+    },
+    "vat-2": {
+        f"pii.{country}.vat_id"
+        for country in ("ie", "lt", "lu", "lv", "mt", "nl", "no", "pl", "pt", "ro", "se", "si", "sk", "uk")
+    },
 }
+VAT_GOLDSETS = [MODULE.GOLDSETS[name] for name in VAT_IDS]
+VAT_COUNTRIES = {"vat-1": MODULE.VAT1_COUNTRIES, "vat-2": MODULE.VAT2_COUNTRIES}
 VAT_NEGATIVES = {"vat_check_digit", "vat_length", "vat_postcode"}
+# UK postcodes are no look-alike but gold of their own (pii.uk.postcode, as in E05).
+VAT_POSTCODE_GOLD = {"pii.uk.vat_id": "pii.uk.postcode"}
 
 # Loaded by path like test_l1_scoreboard.py: the Python ports of the Rust VAT validators.
 SCOREBOARD_SPEC = importlib.util.spec_from_file_location("scoreboard", ROOT / "scripts" / "l1_presidio" / "scoreboard.py")
@@ -449,13 +455,9 @@ if "scoreboard" not in sys.modules:
 
 
 @lru_cache(maxsize=None)
-def vat_dev_rows() -> tuple[dict, ...]:
-    return tuple(VAT.generate(VAT.dev_seed, "dev", VAT.docs["dev"]))
-
-
-@lru_cache(maxsize=None)
-def vat_holdout_rows() -> tuple[dict, ...]:
-    return tuple(VAT.generate(HOLDOUT_SEED, "holdout", VAT.docs["holdout"]))
+def vat_rows(name: str, split: str) -> tuple[dict, ...]:
+    goldset = MODULE.GOLDSETS[name]
+    return tuple(goldset.generate(goldset.dev_seed if split == "dev" else HOLDOUT_SEED, split, goldset.docs[split]))
 
 
 @lru_cache(maxsize=None)
@@ -464,7 +466,7 @@ def vat_validators() -> dict:
     names = scoreboard.gold_validators(scoreboard.entity_map_module.load())
     return {
         entity: [scoreboard.CHECKSUM_PORTS[name] for name in names[entity]]
-        for entity in VAT_IDS
+        for entity in set().union(*VAT_IDS.values())
     }
 
 
@@ -477,36 +479,51 @@ def vat_id_of(row: dict) -> str:
     return entity
 
 
-def test_vat_goldset_lists_exactly_the_part_one_ids():
-    assert set(MODULE.vat_entity_ids()) == VAT_IDS
-    assert VAT.corpus == "ark-synthetic-vat-1" != MODULE.CORPUS_ID
-    assert VAT.dev_seed != MODULE.DEV_SEED and VAT.file_name == "ark-synthetic-vat-1.jsonl"
+def vat_negative_kinds(entity: str) -> set[str]:
+    return VAT_NEGATIVES - ({"vat_postcode"} if entity in VAT_POSTCODE_GOLD else set())
 
 
-@pytest.mark.parametrize("rows", [vat_dev_rows, vat_holdout_rows], ids=["dev", "holdout"])
-def test_vat_ids_have_positives_and_hard_negatives_in_every_carrier_and_language(rows):
+VAT_SPLITS = [(name, split) for name in VAT_IDS for split in ("dev", "holdout")]
+
+
+def test_vat_goldsets_list_exactly_their_ids():
+    for number, (name, ids) in enumerate(VAT_IDS.items(), 1):
+        goldset = MODULE.GOLDSETS[name]
+        assert set(goldset.entity_ids()) == ids == {country.entity for country in VAT_COUNTRIES[name]}
+        assert goldset.corpus == f"ark-synthetic-vat-{number}" != MODULE.CORPUS_ID
+        assert goldset.file_name == f"ark-synthetic-vat-{number}.jsonl"
+        assert goldset.docs == {"dev": 112, "holdout": 224}
+    assert len({goldset.dev_seed for goldset in MODULE.GOLDSETS.values()}) == len(MODULE.GOLDSETS)
+    assert not VAT_IDS["vat-1"] & VAT_IDS["vat-2"]
+
+
+@pytest.mark.parametrize(("name", "split"), VAT_SPLITS)
+def test_vat_ids_have_positives_and_hard_negatives_in_every_carrier_and_language(name, split):
     positives, negatives, carriers = Counter(), Counter(), set()
-    for row in rows():
+    for row in vat_rows(name, split):
         entity = vat_id_of(row)
         carriers.add((entity, row["language"], row["doc_type"]))
         positives[(entity, row["language"])] += sum(e["entity_type"] == entity for e in row["entities"])
         for item in row["hard_negatives"]:
             negatives[(entity, row["language"], item["kind"])] += 1
     assert carriers == {
-        (entity, language, doc_type) for entity in VAT_IDS for language in ("de", "en") for doc_type in MODULE.VAT_DOC_TYPES
+        (entity, language, doc_type)
+        for entity in VAT_IDS[name]
+        for language in ("de", "en")
+        for doc_type in MODULE.VAT_DOC_TYPES
     }
-    for entity in VAT_IDS:
+    for entity in VAT_IDS[name]:
         assert positives[(entity, "de")] + positives[(entity, "en")] >= 10
         for language in ("de", "en"):
             assert positives[(entity, language)] >= MODULE.MIN_PER_LANGUAGE
             assert sum(negatives[(entity, language, kind)] for kind in VAT_NEGATIVES) >= MODULE.MIN_PER_LANGUAGE
-            assert all(negatives[(entity, language, kind)] for kind in VAT_NEGATIVES), (entity, language)
-    assert {kind for _, _, kind in negatives} == VAT_NEGATIVES
+            kinds = {kind for kind in VAT_NEGATIVES if negatives[(entity, language, kind)]}
+            assert kinds == vat_negative_kinds(entity), (entity, language)
 
 
-@pytest.mark.parametrize("rows", [vat_dev_rows, vat_holdout_rows], ids=["dev", "holdout"])
-def test_vat_positives_pass_and_hard_negatives_fail_the_validator_ports(rows):
-    for row in rows():
+@pytest.mark.parametrize(("name", "split"), VAT_SPLITS)
+def test_vat_positives_pass_and_hard_negatives_fail_the_validator_ports(name, split):
+    for row in vat_rows(name, split):
         entity = vat_id_of(row)
         for value in values([row], entity):
             assert vat_valid(entity, value), value
@@ -514,8 +531,17 @@ def test_vat_positives_pass_and_hard_negatives_fail_the_validator_ports(rows):
             assert not vat_valid(entity, row["text"][item["start"] : item["end"]]), item
 
 
-def test_vat_generators_issue_valid_numbers_and_hard_negatives_miss_them():
-    for country in MODULE.VAT_COUNTRIES:
+def test_uk_postcodes_are_gold_of_their_own():
+    for split in ("dev", "holdout"):
+        rows = [row for row in vat_rows("vat-2", split) if vat_id_of(row) == "pii.uk.vat_id"]
+        postcodes = values(rows, "pii.uk.postcode")
+        assert len(postcodes) == len(rows) + sum(row["doc_type"] == "csv" for row in rows) * 3
+        assert all(re.fullmatch(r"M[1-9] [1-9][A-Z]{2}", value) for value in postcodes), postcodes
+
+
+@pytest.mark.parametrize("name", VAT_IDS)
+def test_vat_generators_issue_valid_numbers_and_hard_negatives_miss_them(name):
+    for country in VAT_COUNTRIES[name]:
         for number in range(200):
             rng = MODULE.Rng(f"vector:{country.entity}:{number}")
             person = MODULE.persona(rng, ("de", "en")[number % 2])
@@ -523,13 +549,52 @@ def test_vat_generators_issue_valid_numbers_and_hard_negatives_miss_them():
             assert compact.startswith(country.prefix) and len(compact) - len(country.prefix) in country.lengths
             assert vat_valid(country.entity, compact), compact
             assert vat_valid(country.entity, MODULE.vat_value(rng, country, person).value)
-            if country.person:
-                assert vat_valid(country.entity, country.person(rng, person))
+            if country.variant:
+                other = country.variant(rng, person)
+                assert vat_valid(country.entity, other), other
+                assert len(other) - len(country.prefix) in country.lengths
             wrong = MODULE.vat_wrong_check(rng, country).value
             assert not vat_valid(country.entity, wrong), wrong
             short_or_long = MODULE.vat_wrong_length(rng, country).value
             assert len(short_or_long) - len(country.prefix) in (min(country.lengths) - 1, max(country.lengths) + 1)
-            assert not vat_valid(country.entity, short_or_long)
+            assert not vat_valid(country.entity, short_or_long), short_or_long
+            postcode = country.postcode(rng)
+            if country.entity in VAT_POSTCODE_GOLD:
+                assert postcode.entity == VAT_POSTCODE_GOLD[country.entity]
+            else:
+                assert postcode.kind == "vat_postcode" and not vat_valid(country.entity, postcode.value), postcode
+
+
+def test_vat_wrong_check_also_fails_a_second_check():
+    # NL accepts mod 11 or MOD 97-10: a wrong mod 11 check digit must not land on a valid MOD 97-10 id.
+    (netherlands,) = [country for country in MODULE.VAT2_COUNTRIES if country.entity == "pii.nl.vat_id"]
+    assert netherlands.rejects("NL000099998B57") and not netherlands.rejects("NL004495445B01")
+    for number in range(2000):
+        wrong = MODULE.vat_wrong_check(MODULE.Rng(f"nl:{number}"), netherlands).value
+        assert MODULE.nl_mod97(compact(wrong)) != 1, wrong
+
+
+def test_other_l1_values_are_ibans_card_numbers_and_german_document_numbers():
+    assert MODULE.other_l1_value("SE5871105914201")  # mod 97 like an IBAN, a 13-digit SE VAT body
+    assert MODULE.other_l1_value("SE 592751-202801") and not MODULE.other_l1_value("SE 592751-202802")  # Luhn
+    assert MODULE.other_l1_value("PT57108430") and MODULE.other_l1_value("T220001293")  # ICAO check digit
+    assert MODULE.other_l1_value("GB 67 1241 0047 295")
+    assert not MODULE.other_l1_value("PT57108431") and not MODULE.other_l1_value("SE5871105914202")
+    assert not MODULE.other_l1_value("IE6433435F") and not MODULE.other_l1_value("NL004495445B01")
+
+
+@pytest.mark.parametrize("split", ["dev", "holdout"])
+def test_vat_part_two_hard_negatives_are_no_other_l1_value(split):
+    rows = vat_rows("vat-2", split)
+    negatives = [row["text"][item["start"] : item["end"]] for row in rows for item in row["hard_negatives"]]
+    assert negatives and not [value for value in negatives if MODULE.other_l1_value(value)]
+    assert all(country.rejects for country in MODULE.VAT2_COUNTRIES)
+
+
+def test_vat_wrong_length_stays_longer_where_the_shortest_body_has_two_digits():
+    (romania,) = [country for country in MODULE.VAT2_COUNTRIES if country.entity == "pii.ro.vat_id"]
+    lengths = {len(MODULE.vat_wrong_length(MODULE.Rng(f"ro:{number}"), romania).value) for number in range(50)}
+    assert lengths == {len("RO") + 11}
 
 
 def test_vat_checksum_vectors():
@@ -542,19 +607,36 @@ def test_vat_checksum_vectors():
     assert MODULE.weighted_sum("100931558", (3, 7, 1) * 3) % 10 == 0  # EE100931558
     assert MODULE.iso7064_mod11_10("3339200596") == 1  # HR33392005961
     assert MODULE.luhn_sum("303265045") == 0 and (12 + 3 * (303265045 % 97)) % 97 == 40  # FR40303265045
+    assert MODULE.IE_CHECK_LETTERS[MODULE.weighted_sum("6433435", range(8, 1, -1)) % 23] == "F"  # IE6433435F
+    assert MODULE.lt_check_digit("11951151") == 5 and MODULE.lt_check_digit("10000191901") == 7  # LT…
+    assert 150274 % 89 == 42  # LU15027442
+    assert 37 - MODULE.weighted_sum("116791", (3, 4, 6, 7, 8, 9)) % 37 == 12  # MT11679112
+    assert MODULE.ro_check_digit("1854729") == 0  # RO18547290
+    assert MODULE.luhn_check_digit("556677889") == "9"  # SE556677889901
+    assert MODULE.nl_mod97("NL000099998B57") == 1  # btw-id of a sole trader (MOD 97-10)
     for value in ("ATU13585627", "BE0403019261", "BG175074752", "CHE-100.155.212", "CY10259033P", "CZ25123891",
                   "DK13585628", "EE100931558", "ESA13585625", "FI20774740", "FR40303265045", "EL094259216",
-                  "HR33392005961", "HU12892312"):
-        entity = next(country.entity for country in MODULE.VAT_COUNTRIES if value.startswith(country.prefix[:2]))
+                  "HR33392005961", "HU12892312", "IE6433435F", "IE6433435OA", "IE8D79739I", "LT119511515",
+                  "LT100001919017", "LU15027442", "LV40003521600", "MT11679112", "NL004495445B01",
+                  "NL000099998B57", "NO995525828MVA", "PL8567346215", "PT501964843", "RO18547290",
+                  "SE556677889901", "SI50223054", "SK2022749619", "GB980780684", "XI980780684"):
+        entity = next(
+            country.entity
+            for country in MODULE.VAT1_COUNTRIES + MODULE.VAT2_COUNTRIES
+            if value[:2] in (country.prefix[:2], "XI" if country.prefix == "GB" else "")
+        )
         assert vat_valid(entity, value), value
 
 
-def test_vat_rows_follow_the_schema_and_carriers_parse():
-    rows = list(vat_dev_rows())
-    assert MODULE.validate_rows(rows, MODULE.vat_entity_ids()) == []
-    assert len({row["id"] for row in rows}) == len(rows) == VAT.docs["dev"]
+@pytest.mark.parametrize("name", VAT_IDS)
+def test_vat_rows_follow_the_schema_and_carriers_parse(name):
+    goldset = MODULE.GOLDSETS[name]
+    rows = list(vat_rows(name, "dev"))
+    assert MODULE.validate_rows(rows, goldset.entity_ids()) == []
+    assert len({row["id"] for row in rows}) == len(rows) == goldset.docs["dev"]
     for row in rows:
-        assert row["corpus"] == VAT.corpus and row["group_id"] == row["id"] and row["id"].startswith("synth-vat1-dev-")
+        assert row["corpus"] == goldset.corpus and row["group_id"] == row["id"]
+        assert row["id"].startswith(f"synth-{name.replace('-', '')}-dev-")
         assert set(row) == {"id", "group_id", "corpus", "language", "doc_type", "text", "entities", "hard_negatives"}
         if row["doc_type"] == "json":
             json.loads(row["text"])
@@ -566,47 +648,59 @@ def test_vat_rows_follow_the_schema_and_carriers_parse():
             assert value == value.strip() and not value.startswith('"') and not value.endswith('"')
 
 
-def test_vat_generation_is_pinned_and_split_by_seed():
-    assert VAT.generate(VAT.dev_seed, "dev", 16) == list(vat_dev_rows())[:16]
-    assert MODULE._sha256(MODULE._jsonl(list(vat_dev_rows()))) == PINNED_VAT_DEV[1]
-    assert VAT.version == PINNED_VAT_DEV[0]
-    dev = {compact(value) for entity in VAT_IDS for value in values(vat_dev_rows(), entity)}
-    holdout = {compact(value) for entity in VAT_IDS for value in values(vat_holdout_rows(), entity)}
+@pytest.mark.parametrize("name", VAT_IDS)
+def test_vat_generation_is_pinned_and_split_by_seed(name):
+    goldset = MODULE.GOLDSETS[name]
+    dev_split, holdout_split = vat_rows(name, "dev"), vat_rows(name, "holdout")
+    assert goldset.generate(goldset.dev_seed, "dev", 16) == list(dev_split)[:16]
+    assert (goldset.version, MODULE._sha256(MODULE._jsonl(list(dev_split)))) == PINNED_VAT_DEV[name]
+    dev = {compact(value) for entity in VAT_IDS[name] for value in values(dev_split, entity)}
+    holdout = {compact(value) for entity in VAT_IDS[name] for value in values(holdout_split, entity)}
     assert dev and holdout and not dev & holdout
-    assert not {row["text"] for row in vat_dev_rows()} & {row["text"] for row in vat_holdout_rows()}
+    assert not {row["text"] for row in dev_split} & {row["text"] for row in holdout_split}
 
 
-# Any output change needs a new VAT_GENERATOR_VERSION and a deliberately re-frozen holdout.
-PINNED_VAT_DEV = (1, "2abe305d33559fe4c17c7f8b12d9da60e8a1b8fbbf293be41cab34e5628ddaf4")
+# Any output change needs a new generator version and a deliberately re-frozen holdout.
+PINNED_VAT_DEV = {
+    "vat-1": (1, "2abe305d33559fe4c17c7f8b12d9da60e8a1b8fbbf293be41cab34e5628ddaf4"),
+    "vat-2": (1, "ffbea2b54e2e7f282b8781cfd73fe28c86279cf8267f098d9866c7f3695095bc"),
+}
 
 
-def test_vat_hard_negatives_never_hold_reserved_placeholder_values():
-    for row in vat_dev_rows():
+@pytest.mark.parametrize("name", VAT_IDS)
+def test_vat_hard_negatives_never_hold_reserved_placeholder_values(name):
+    for row in vat_rows(name, "dev"):
         for item in row["hard_negatives"]:
             assert not re.search(r"@|555[ -]?01\d\d", row["text"][item["start"] : item["end"]])
 
 
-def test_write_splits_freezes_the_vat_goldset(tmp_path, capsys):
-    dev, holdout = tmp_path / "synthetic-vat-1" / "dev", tmp_path / "synthetic-vat-1" / "holdout"
-    assert MODULE.write_splits(dev, holdout, seed_file(tmp_path), goldset=VAT) == 0
+@pytest.mark.parametrize("name", VAT_IDS)
+def test_write_splits_freezes_the_vat_goldset(name, tmp_path, capsys):
+    goldset = MODULE.GOLDSETS[name]
+    dev, holdout = tmp_path / f"synthetic-{name}" / "dev", tmp_path / f"synthetic-{name}" / "holdout"
+    assert MODULE.write_splits(dev, holdout, seed_file(tmp_path), goldset=goldset) == 0
     for directory in (dev, holdout):
-        assert sorted(path.name for path in directory.iterdir()) == [".ready", VAT.file_name, "manifest.json"]
+        assert sorted(path.name for path in directory.iterdir()) == [".ready", goldset.file_name, "manifest.json"]
         assert MODULE.check_split(directory) == []
     manifest = json.loads((dev / "manifest.json").read_text(encoding="utf-8"))
-    assert (manifest["corpus"], manifest["file"], manifest["seed"]) == (VAT.corpus, VAT.file_name, VAT.dev_seed)
-    assert (manifest["rows"], manifest["generator_version"]) == (VAT.docs["dev"], VAT.version)
-    assert set(manifest["entities"]) == VAT_IDS | {"entity.organization", "entity.location", "entity.person_name"}
+    assert (manifest["corpus"], manifest["file"], manifest["seed"]) == (goldset.corpus, goldset.file_name, goldset.dev_seed)
+    assert (manifest["rows"], manifest["generator_version"]) == (goldset.docs["dev"], goldset.version)
+    postcodes = {VAT_POSTCODE_GOLD[entity] for entity in VAT_IDS[name] if entity in VAT_POSTCODE_GOLD}
+    names = {"entity.organization", "entity.location", "entity.person_name"}
+    assert set(manifest["entities"]) == VAT_IDS[name] | postcodes | names
     assert set(manifest["hard_negatives"]) == VAT_NEGATIVES
-    assert json.loads((holdout / "manifest.json").read_text(encoding="utf-8"))["rows"] == VAT.docs["holdout"]
-    assert MODULE.write_splits(dev, holdout, seed_file(tmp_path), goldset=VAT) == 0
+    assert json.loads((holdout / "manifest.json").read_text(encoding="utf-8"))["rows"] == goldset.docs["holdout"]
+    assert MODULE.write_splits(dev, holdout, seed_file(tmp_path), goldset=goldset) == 0
     assert "unchanged (frozen)" in capsys.readouterr().out
 
 
-def test_cli_writes_the_vat_goldset(tmp_path):
+@pytest.mark.parametrize("name", VAT_IDS)
+def test_cli_writes_the_vat_goldset(name, tmp_path):
+    goldset = MODULE.GOLDSETS[name]
     dev = tmp_path / "dev"
     run = subprocess.run(
-        [sys.executable, str(SCRIPT), "--goldset", "vat-1", "--dev-out", str(dev)], capture_output=True, text=True, check=False
+        [sys.executable, str(SCRIPT), "--goldset", name, "--dev-out", str(dev)], capture_output=True, text=True, check=False
     )
     assert run.returncode == 0, run.stderr
-    assert f"{VAT.docs['dev']} rows" in run.stdout
-    assert (dev / VAT.file_name).is_file() and not (dev / MODULE.FILE_NAME).exists()
+    assert f"{goldset.docs['dev']} rows" in run.stdout
+    assert (dev / goldset.file_name).is_file() and not (dev / MODULE.FILE_NAME).exists()

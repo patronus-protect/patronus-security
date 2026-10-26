@@ -251,6 +251,26 @@ result shapes may be breaking for downstream users, and is called out explicitly
   (generic rules on example values whose prefix or suffix hides the example run, such as
   `SK` + `deadbeef…`; no `lookalike` hit), and `dlp_slack_token` reports the `xoxp-…` part of
   `xoxe.xoxp-1-…` configuration tokens (overlap, not exact) — findings for P08.
+- Synthetic gold for the VAT IDs of IE, LT, LU, LV, MT, NL, NO, PL, PT, RO, SE, SI, SK and UK
+  (GOLD-VAT2), the last implemented ids without gold: the E05 and VAT goldsets now generate every
+  id of the entity map, and `NOT_GENERATED` is gone. `synth_goldset.py --goldset vat-2` writes a
+  third goldset (corpus `ark-synthetic-vat-2`, family `ark_authored`, own public dev seed, secret
+  holdout seed and directory `synthetic-vat-2`); `ark-synthetic-de-eu` and `ark-synthetic-vat-1`
+  stay byte-identical (pinned digests unchanged). It has the same layout as part 1: per id and
+  language one letter, form, JSON and CSV document with two checksum-valid numbers in the printed
+  forms of the ARK rules, also the other issued forms (twelve-digit LT, the NL sole-trader btw-id
+  with MOD 97-10, PT and SE natural persons, the IE second-letter and old forms, GB branches and
+  `XI`), and the hard negatives `vat_check_digit`, `vat_length` and `vat_postcode`; UK postcodes
+  are gold `pii.uk.postcode` as in E05 instead of a look-alike. No hard negative of part 2 takes a
+  value that another L1 rule reports by chance (IBAN mod 97, Luhn card number, German passport or
+  identity card check digit), and a wrong NL mod 11 check digit never lands on a valid MOD 97-10
+  id. Dev: 112 rows, 16 positives per id; holdout: 224 rows. The runner freezes it once (gate step
+  `synthetic-goldset-vat-2`, after the runner is reinstalled). **Detection change:** none
+  (evaluation data only; Rust and every other goldset are unchanged). On the new dev set and ten
+  random holdout seeds `balanced` reaches exact F1 100 for all 14 ids with no hard-negative hit;
+  `strict` reports none of them (scored-only rules). One holdout seed of ten also showed a GB
+  branch VAT ID that is a Luhn-valid Maestro-shaped number reported as a card as well; that gold
+  stays (a real ARK ambiguity, not filtered out of the data).
 - Synthetic gold for the VAT IDs of AT, BE, BG, CH, CY, CZ, DK, EE, ES, FI, FR, GR, HR and HU
   (GOLD-VAT1). These ids were implemented (B01, B02) but had gold in no source family. The E05
   generator `scripts/l1_presidio/synth_goldset.py` gains `--goldset vat-1`: a goldset of its own

@@ -18,8 +18,9 @@ detector should report.
 
 ``--goldset`` picks one of ``GOLDSETS``, each with its own corpus, seeds and output directory:
 ``de-eu`` (default) is the E05 set above; ``vat-1`` (GOLD-VAT1, corpus ``ark-synthetic-vat-1``)
-carries the VAT IDs added after E05 was frozen, in letters, forms, JSON and CSV with
-checksum-valid values and VAT look-alikes as hard negatives.
+and ``vat-2`` (GOLD-VAT2, corpus ``ark-synthetic-vat-2``) carry the VAT IDs added after E05 was
+frozen, in letters, forms, JSON and CSV with checksum-valid values and VAT look-alikes as hard
+negatives.
 
 Dev and holdout use separate seeds. The dev seed is public (``DEV_SEED``); the holdout seed
 is secret and lives in a seed file (default ``HOLDOUT/.seed``), created from ``secrets`` on
@@ -43,6 +44,7 @@ import sys
 import unicodedata
 from collections import Counter
 from datetime import date, timedelta
+from functools import partial
 from pathlib import Path
 from typing import Any, Callable, NamedTuple, Sequence
 
@@ -2092,18 +2094,22 @@ def coverage(rows: list[dict[str, Any]]) -> Counter:
     return Counter((row["language"], entity["entity_type"]) for row in rows for entity in row["entities"])
 
 
-# ── VAT goldset part 1 (GOLD-VAT1) ───────────────────────────────────────────
+# ── VAT goldsets (GOLD-VAT1, GOLD-VAT2) ──────────────────────────────────────
 #
-# The B01/B02 VAT IDs of AT, BE, BG, CH, CY, CZ, DK, EE, ES, FI, FR, GR, HR and HU came after E05 was
-# frozen. A goldset of their own (corpus ``ark-synthetic-vat-1``, own seeds and directory) carries
-# them, so ``ark-synthetic-de-eu`` stays byte for byte. Per id and language there is one document per
-# carrier (prose letter, form, JSON, CSV) with two checksum-valid values and the hard negatives a VAT
-# rule must leave alone: the same form with a wrong check character, a wrong length and the
-# country-prefixed postcode (``DK-8000``).
+# The VAT IDs of B01, B02 and B16 came after E05 was frozen. Two goldsets of their own carry them, so
+# ``ark-synthetic-de-eu`` stays byte for byte: part 1 (corpus ``ark-synthetic-vat-1``) AT, BE, BG,
+# CH, CY, CZ, DK, EE, ES, FI, FR, GR, HR and HU; part 2 (``ark-synthetic-vat-2``, frozen after part
+# 1) IE, LT, LU, LV, MT, NL, NO, PL, PT, RO, SE, SI, SK and UK, each with own seeds and directory.
+# Per id and language there is one document per carrier (prose letter, form, JSON, CSV) with two
+# checksum-valid values and the hard negatives a VAT rule must leave alone: the same form with a
+# wrong check character, a wrong length and the country-prefixed postcode (``DK-8000``).
 
-VAT_CORPUS_ID = "ark-synthetic-vat-1"
-VAT_DEV_SEED = "ark-l1-gold-vat1-synthetic-dev-v1"
-VAT_GENERATOR_VERSION = 1
+VAT1_CORPUS_ID = "ark-synthetic-vat-1"
+VAT1_DEV_SEED = "ark-l1-gold-vat1-synthetic-dev-v1"
+VAT1_GENERATOR_VERSION = 1
+VAT2_CORPUS_ID = "ark-synthetic-vat-2"
+VAT2_DEV_SEED = "ark-l1-gold-vat2-synthetic-dev-v1"
+VAT2_GENERATOR_VERSION = 1
 VAT_DOC_TYPES = ("letter", "form", "json", "csv")
 
 
@@ -2222,6 +2228,170 @@ def vat_hu(r: Rng) -> str:
     return f"HU{body}{-weighted_sum(body, (9, 7, 3, 1) * 2) % 10}"
 
 
+IE_CHECK_LETTERS = "WABCDEFGHIJKLMNOPQRSTUV"
+
+
+def vat_ie(r: Rng) -> str:
+    body = r.digits(7)
+    return f"IE{body}{IE_CHECK_LETTERS[weighted_sum(body, range(8, 1, -1)) % 23]}"
+
+
+def vat_ie_other(r: Rng, p: Persona) -> str:
+    """The form since 2013 with a second letter (``A``, ``H``) or the old form ``8D79739I``."""
+    body = r.digits(7)
+    if r.chance(50):
+        second = r.choice("AH")
+        total = weighted_sum(body, range(8, 1, -1)) + 9 * IE_CHECK_LETTERS.index(second)
+        return f"IE{body}{IE_CHECK_LETTERS[total % 23]}{second}"
+    first, tail = str(r.randint(1, 9)), body[2:]  # old form: weighted like 0, the five digits, the first
+    check = IE_CHECK_LETTERS[weighted_sum(f"0{tail}{first}", range(8, 1, -1)) % 23]
+    return f"IE{first}{r.choice(UPPER)}{tail}{check}"
+
+
+def lt_check_digit(number: str) -> int:
+    """Weights 1…9 cycling mod 11; a remainder of 10 repeats with the weights shifted by two (10 → 0)."""
+    remainder = sum((1 + index % 9) * int(char) for index, char in enumerate(number)) % 11
+    if remainder == 10:
+        remainder = sum((1 + (index + 2) % 9) * int(char) for index, char in enumerate(number)) % 11
+    return remainder % 10
+
+
+def vat_lt(r: Rng) -> str:
+    """Legal person: nine digits, the eighth is 1."""
+    body = r.digits(7) + "1"
+    return f"LT{body}{lt_check_digit(body)}"
+
+
+def vat_lt_person(r: Rng, p: Persona) -> str:
+    """Natural person or temporary taxpayer: twelve digits, the eleventh is 1."""
+    body = str(r.randint(1, 9)) + r.digits(9) + "1"
+    return f"LT{body}{lt_check_digit(body)}"
+
+
+def vat_lu(r: Rng) -> str:
+    body = str(r.randint(1, 9)) + r.digits(5)
+    return f"LU{body}{int(body) % 89:02d}"
+
+
+def vat_lv(r: Rng) -> str:
+    while True:
+        body = r.choice("45") + "000" + r.digits(6)
+        check = (3 - weighted_sum(body, (9, 1, 4, 8, 3, 10, 2, 5, 7, 6))) % 11
+        if check < 10:
+            return f"LV{body}{check}"
+
+
+def vat_mt(r: Rng) -> str:
+    body = str(r.randint(1, 9)) + r.digits(5)
+    return f"MT{body}{37 - weighted_sum(body, (3, 4, 6, 7, 8, 9)) % 37:02d}"
+
+
+def nl_mod97(compact: str) -> int:
+    """ISO 7064 MOD 97-10 of a btw-id with its letters (``NL``, ``B``) as numbers."""
+    return int("".join(str(int(char, 36)) for char in compact)) % 97
+
+
+def nl_branch(r: Rng) -> str:
+    return r.choice(("01", "01", "01", "02", "03", "12"))
+
+
+def vat_nl(r: Rng) -> str:
+    """btw-id of a company: RSIN with the mod 11 check digit, ``B`` and the branch."""
+    while True:
+        body = r.digits(8)
+        check = weighted_sum(body, range(9, 1, -1)) % 11
+        if check < 10 and body.strip("0"):
+            return f"NL{body}{check}B{nl_branch(r)}"
+
+
+def vat_nl_person(r: Rng, p: Persona) -> str:
+    """btw-id of a sole trader since 2020: two check digits make the whole id MOD 97-10 valid."""
+    body, branch = str(r.randint(1, 9)) + r.digits(6), nl_branch(r)
+    return next(
+        compact for check in range(97) if nl_mod97(compact := f"NL{body}{check:02d}B{branch}") == 1
+    )
+
+
+def vat_no(r: Rng) -> str:
+    while True:
+        body = r.choice("89") + r.digits(7)
+        check = -weighted_sum(body, (3, 2, 7, 6, 5, 4, 3, 2)) % 11
+        if check < 10:
+            return f"NO{body}{check}MVA"
+
+
+def vat_pl(r: Rng) -> str:
+    """NIP: tax office code 101–998, six digits, weighted mod 11 (remainder 10 never issued)."""
+    while True:
+        body = str(r.randint(101, 998)) + r.digits(6)
+        check = weighted_sum(body, (6, 5, 7, 2, 3, 4, 5, 6, 7)) % 11
+        if check < 10:
+            return f"PL{body}{check}"
+
+
+def pt_nif(first: str, r: Rng) -> str:
+    body = first + r.digits(7)
+    return f"PT{body}{(11 - weighted_sum(body, range(9, 1, -1)) % 11) % 11 % 10}"
+
+
+def vat_pt(r: Rng) -> str:
+    return pt_nif(r.choice("5569"), r)
+
+
+def vat_pt_person(r: Rng, p: Persona) -> str:
+    return pt_nif(r.choice("123"), r)
+
+
+def ro_check_digit(body: str) -> int:
+    """CUI: weights 7-5-3-2-1-7-5-3-2 aligned right on the digits before the check digit."""
+    return 10 * weighted_sum(body, (7, 5, 3, 2, 1, 7, 5, 3, 2)[9 - len(body) :]) % 11 % 10
+
+
+def vat_ro(r: Rng) -> str:
+    """Six to ten digits, the lengths the rule reads without a field name."""
+    body = str(r.randint(1, 9)) + r.digits(r.randint(4, 8))
+    return f"RO{body}{ro_check_digit(body)}"
+
+
+def vat_se(r: Rng) -> str:
+    """Organisation number (third digit 2 or more), Luhn check digit, then ``01``."""
+    body = r.choice("25789") + r.digits(1) + str(r.randint(2, 9)) + r.digits(6)
+    return f"SE{body}{luhn_check_digit(body)}01"
+
+
+def vat_se_person(r: Rng, p: Persona) -> str:
+    """Sole trader: the personnummer (birth date, serial, Luhn), then ``01``."""
+    body = f"{p.dob.year % 100:02d}{p.dob.month:02d}{p.dob.day:02d}{r.digits(3)}"
+    return f"SE{body}{luhn_check_digit(body)}01"
+
+
+def vat_si(r: Rng) -> str:
+    while True:
+        body = str(r.randint(1, 9)) + r.digits(6)
+        check = 11 - weighted_sum(body, range(8, 1, -1)) % 11
+        if check != 11:
+            return f"SI{body}{check % 10}"
+
+
+def vat_sk(r: Rng) -> str:
+    while True:
+        body = str(r.randint(1, 9)) + r.digits(1) + r.choice("234789") + r.digits(6)
+        check = -10 * int(body) % 11
+        if check < 10:
+            return f"SK{body}{check}"
+
+
+def vat_gb(r: Rng) -> str:
+    """Seven digits and two check digits: the weighted sum mod 97 is 0, or 42 (the newer series)."""
+    body = str(r.randint(1, 9)) + r.digits(6)
+    total = weighted_sum(body, range(8, 1, -1))
+    return f"GB{body}{(r.choice((0, 42)) - total) % 97:02d}"
+
+
+def vat_gb_branch(r: Rng, p: Persona) -> str:
+    return vat_gb(r) + r.choice(("001", "002", "003", "010"))
+
+
 class VatCountry(NamedTuple):
     entity: str
     prefix: str  # prefix of the compact value; the body follows it
@@ -2231,72 +2401,200 @@ class VatCountry(NamedTuple):
     layouts: tuple[Callable[[str], str], ...]  # printed forms of a body, compact first (any length)
     names: dict[str, str]
     city: str
-    postcodes: tuple[int, int]  # range of the city's postcodes
+    postcode: Callable[[Rng], Neg | Span]  # a postcode of the city, a look-alike (or gold of its own)
     legal_form: str
-    person: Callable[[Rng, Persona], str] | None = None  # number of a natural person, if issued
+    variant: Callable[[Rng, Persona], str] | None = None  # another issued form: natural person, branch
+    rejects: Callable[[str], bool] | None = None  # compact values no hard negative may take
+
+
+def other_l1_value(value: str) -> bool:
+    """An IBAN (mod 97, also grouped), a card number (12 to 19 digits, Luhn) or a German passport or
+    identity card number (ICAO check digit).
+
+    Another L1 rule reports such a value, so a VAT hard negative of part 2 never takes it by chance.
+    """
+    digits = "".join(char for char in value if char.isdigit())
+    if 12 <= len(digits) <= 19 and luhn_valid(digits):
+        return True
+    compact = value.replace(" ", "")
+    iban_shape = compact.isascii() and compact[:2].isalpha() and compact[2:4].isdigit() and compact.isalnum()
+    if iban_shape and 15 <= len(compact) <= 34 and iban_valid(compact):
+        return True
+    return (
+        len(value) in (9, 10)
+        and value[0] in "CFGHJKLMNPRTVWXY"
+        and all(char in DOC_CHARS for char in value)
+        and mrz_check_digit(value[:-1]) == value[-1]
+    )
+
+
+def vat_postcode(code: str, low: int, high: int, layout: Callable[[int], str] = str) -> Callable[[Rng], Neg]:
+    """Country code and postcode (``DK-8000``, ``CZ-602 00``): a prefix with digits, but no VAT ID."""
+    return lambda r: Neg("vat_postcode", f"{code}-{layout(r.randint(low, high))}")
+
+
+def ro_postcode(r: Rng) -> Neg:
+    """``RO-400123``: six digits that never pass the CUI check (the RO validator reads any length)."""
+    while True:
+        code = str(r.randint(400001, 400699))
+        if ro_check_digit(code[:-1]) != int(code[-1]):
+            return Neg("vat_postcode", f"RO-{code}")
 
 
 LAST = slice(-1, None)
-VAT_COUNTRIES: tuple[VatCountry, ...] = (
+VAT1_COUNTRIES: tuple[VatCountry, ...] = (
     VatCountry(
         "pii.at.vat_id", "ATU", (8,), vat_at, LAST, (lambda b: f"ATU{b}", lambda b: f"ATU {b}"),
-        {"de": "Österreich", "en": "Austria"}, "Graz", (8010, 8063), "GmbH",
+        {"de": "Österreich", "en": "Austria"}, "Graz", vat_postcode("AT", 8010, 8063), "GmbH",
     ),
     VatCountry(
         "pii.be.vat_id", "BE", (10,), vat_be, slice(-2, None),
         (lambda b: f"BE{b}", lambda b: f"BE {b[:4]}.{b[4:7]}.{b[7:]}", lambda b: f"BE{b[:4]} {b[4:7]} {b[7:]}"),
-        {"de": "Belgien", "en": "Belgium"}, "Antwerpen", (2000, 2660), "BV",
+        {"de": "Belgien", "en": "Belgium"}, "Antwerpen", vat_postcode("BE", 2000, 2660), "BV",
     ),
     VatCountry(
         "pii.bg.vat_id", "BG", (9, 10), vat_bg, LAST, (lambda b: f"BG{b}", lambda b: f"BG {b}"),
-        {"de": "Bulgarien", "en": "Bulgaria"}, "Plovdiv", (4000, 4023), "EOOD", vat_bg_person,
+        {"de": "Bulgarien", "en": "Bulgaria"}, "Plovdiv", vat_postcode("BG", 4000, 4023), "EOOD", vat_bg_person,
     ),
     VatCountry(
         "pii.ch.vat_id", "CHE", (9,), vat_ch, LAST,
         (lambda b: f"CHE{b}", lambda b: f"CHE-{b[:3]}.{b[3:6]}.{b[6:]}", lambda b: f"CHE {b[:3]} {b[3:6]} {b[6:]}"),
-        {"de": "Schweiz", "en": "Switzerland"}, "Basel", (4001, 4059), "AG",
+        {"de": "Schweiz", "en": "Switzerland"}, "Basel", vat_postcode("CH", 4001, 4059), "AG",
     ),
     VatCountry(
         "pii.cy.vat_id", "CY", (9,), vat_cy, LAST, (lambda b: f"CY{b}", lambda b: f"CY-{b}", lambda b: f"CY {b}"),
-        {"de": "Zypern", "en": "Cyprus"}, "Limassol", (3010, 3120), "Ltd",
+        {"de": "Zypern", "en": "Cyprus"}, "Limassol", vat_postcode("CY", 3010, 3120), "Ltd",
     ),
     VatCountry(
         "pii.cz.vat_id", "CZ", (8, 9, 10), vat_cz, LAST, (lambda b: f"CZ{b}", lambda b: f"CZ {b}"),
-        {"de": "Tschechien", "en": "Czech Republic"}, "Brno", (60200, 62800), "s.r.o.", vat_cz_person,
+        {"de": "Tschechien", "en": "Czech Republic"}, "Brno",
+        vat_postcode("CZ", 60200, 62800, lambda code: f"{code // 100} 00"), "s.r.o.", vat_cz_person,
     ),
     VatCountry(
         "pii.dk.vat_id", "DK", (8,), vat_dk, LAST,
         (lambda b: f"DK{b}", lambda b: f"DK {b[:2]} {b[2:4]} {b[4:6]} {b[6:]}", lambda b: f"DK {b}"),
-        {"de": "Dänemark", "en": "Denmark"}, "Aarhus", (8000, 8270), "ApS",
+        {"de": "Dänemark", "en": "Denmark"}, "Aarhus", vat_postcode("DK", 8000, 8270), "ApS",
     ),
     VatCountry(
         "pii.ee.vat_id", "EE", (9,), vat_ee, LAST, (lambda b: f"EE{b}", lambda b: f"EE {b}"),
-        {"de": "Estland", "en": "Estonia"}, "Tartu", (50050, 51014), "OÜ",
+        {"de": "Estland", "en": "Estonia"}, "Tartu", vat_postcode("EE", 50050, 51014), "OÜ",
     ),
     VatCountry(
         "pii.es.vat_id", "ES", (9,), vat_es, LAST, (lambda b: f"ES{b}", lambda b: f"ES {b}"),
-        {"de": "Spanien", "en": "Spain"}, "Valencia", (46001, 46026), "S.L.", vat_es_person,
+        {"de": "Spanien", "en": "Spain"}, "Valencia", vat_postcode("ES", 46001, 46026), "S.L.", vat_es_person,
     ),
     VatCountry(
         "pii.fi.vat_id", "FI", (8,), vat_fi, LAST, (lambda b: f"FI{b}", lambda b: f"FI {b}"),
-        {"de": "Finnland", "en": "Finland"}, "Tampere", (33100, 33900), "Oy",
+        {"de": "Finnland", "en": "Finland"}, "Tampere", vat_postcode("FI", 33100, 33900), "Oy",
     ),
     VatCountry(
         "pii.fr.vat_id", "FR", (11,), vat_fr, slice(2, 4),
         (lambda b: f"FR{b}", lambda b: f"FR {b[:2]} {b[2:5]} {b[5:8]} {b[8:]}", lambda b: f"FR{b[:2]} {b[2:]}"),
-        {"de": "Frankreich", "en": "France"}, "Lyon", (69001, 69009), "SARL",
+        {"de": "Frankreich", "en": "France"}, "Lyon", vat_postcode("FR", 69001, 69009), "SARL",
     ),
     VatCountry(
         "pii.gr.vat_id", "EL", (9,), vat_gr, LAST, (lambda b: f"EL{b}", lambda b: f"EL {b}", lambda b: f"GR{b}"),
-        {"de": "Griechenland", "en": "Greece"}, "Thessaloniki", (54621, 56430), "A.E.",
+        {"de": "Griechenland", "en": "Greece"}, "Thessaloniki",
+        vat_postcode("GR", 54621, 56430, lambda code: f"{code // 100} {code % 100:02d}"), "A.E.",
     ),
     VatCountry(
         "pii.hr.vat_id", "HR", (11,), vat_hr, LAST, (lambda b: f"HR{b}", lambda b: f"HR {b}"),
-        {"de": "Kroatien", "en": "Croatia"}, "Split", (21000, 21220), "d.o.o.",
+        {"de": "Kroatien", "en": "Croatia"}, "Split", vat_postcode("HR", 21000, 21220), "d.o.o.",
     ),
     VatCountry(
         "pii.hu.vat_id", "HU", (8,), vat_hu, LAST, (lambda b: f"HU{b}", lambda b: f"HU-{b}", lambda b: f"HU {b}"),
-        {"de": "Ungarn", "en": "Hungary"}, "Debrecen", (4024, 4032), "Kft.",
+        {"de": "Ungarn", "en": "Hungary"}, "Debrecen", vat_postcode("HU", 4024, 4032), "Kft.",
+    ),
+)
+VAT2_COUNTRIES: tuple[VatCountry, ...] = (
+    VatCountry(
+        "pii.ie.vat_id", "IE", (8, 9), vat_ie, slice(9, 10), (lambda b: f"IE{b}", lambda b: f"IE {b}"),
+        {"de": "Irland", "en": "Ireland"}, "Cork",
+        lambda r: Neg("vat_postcode", f"IE-T{r.randint(12, 23)} {r.chars('ACDEFHKNPRTVWXY0123456789', 4)}"),
+        "DAC", vat_ie_other,
+        rejects=other_l1_value,
+    ),
+    VatCountry(
+        "pii.lt.vat_id", "LT", (9, 12), vat_lt, LAST, (lambda b: f"LT{b}", lambda b: f"LT {b}"),
+        {"de": "Litauen", "en": "Lithuania"}, "Kaunas", vat_postcode("LT", 44001, 52999), "UAB", vat_lt_person,
+        rejects=other_l1_value,
+    ),
+    VatCountry(
+        "pii.lu.vat_id", "LU", (8,), vat_lu, slice(-2, None), (lambda b: f"LU{b}", lambda b: f"LU {b}"),
+        {"de": "Luxemburg", "en": "Luxembourg"}, "Esch-sur-Alzette", vat_postcode("L", 4001, 4499), "S.à r.l.",
+        rejects=other_l1_value,
+    ),
+    VatCountry(
+        "pii.lv.vat_id", "LV", (11,), vat_lv, LAST, (lambda b: f"LV{b}", lambda b: f"LV {b}"),
+        {"de": "Lettland", "en": "Latvia"}, "Daugavpils", vat_postcode("LV", 5401, 5422), "SIA",
+        rejects=other_l1_value,
+    ),
+    VatCountry(
+        "pii.mt.vat_id", "MT", (8,), vat_mt, LAST,
+        (lambda b: f"MT{b}", lambda b: f"MT {b[:4]} {b[4:]}", lambda b: f"MT {b[:4]}-{b[4:]}"),
+        {"de": "Malta", "en": "Malta"}, "Sliema", lambda r: Neg("vat_postcode", f"SLM {r.randint(1000, 3999)}"),
+        "Ltd",
+        rejects=other_l1_value,
+    ),
+    VatCountry(
+        "pii.nl.vat_id", "NL", (12,), vat_nl, slice(10, 11), (lambda b: f"NL{b}", lambda b: f"NL {b}"),
+        {"de": "Niederlande", "en": "Netherlands"}, "Rotterdam",
+        lambda r: Neg("vat_postcode", f"NL-{r.randint(3011, 3089)} {r.chars('ABEGHJKLNPRSTVWXZ', 2)}"),
+        "B.V.", vat_nl_person, lambda compact: nl_mod97(compact) == 1 or other_l1_value(compact),
+    ),
+    VatCountry(
+        "pii.no.vat_id", "NO", (12,), vat_no, slice(-4, -3),
+        (lambda b: f"NO{b}", lambda b: f"NO {b[:3]} {b[3:6]} {b[6:-3]} {b[-3:]}", lambda b: f"NO {b}"),
+        {"de": "Norwegen", "en": "Norway"}, "Bergen", vat_postcode("NO", 5003, 5099), "AS",
+        rejects=other_l1_value,
+    ),
+    VatCountry(
+        "pii.pl.vat_id", "PL", (10,), vat_pl, LAST,
+        (lambda b: f"PL{b}", lambda b: f"PL {b[:3]}-{b[3:6]}-{b[6:8]}-{b[8:]}",
+         lambda b: f"PL {b[:3]}-{b[3:5]}-{b[5:7]}-{b[7:]}"),
+        {"de": "Polen", "en": "Poland"}, "Kraków",
+        vat_postcode("PL", 30001, 31999, lambda code: f"{code // 1000}-{code % 1000:03d}"), "sp. z o.o.",
+        rejects=other_l1_value,
+    ),
+    VatCountry(
+        "pii.pt.vat_id", "PT", (9,), vat_pt, LAST, (lambda b: f"PT{b}", lambda b: f"PT {b[:3]} {b[3:6]} {b[6:]}"),
+        {"de": "Portugal", "en": "Portugal"}, "Porto",
+        vat_postcode("PT", 4000001, 4469999, lambda code: f"{code // 1000}-{code % 1000:03d}"), "Lda.",
+        vat_pt_person,
+        rejects=other_l1_value,
+    ),
+    VatCountry(
+        "pii.ro.vat_id", "RO", tuple(range(2, 11)), vat_ro, LAST, (lambda b: f"RO{b}", lambda b: f"RO {b}"),
+        {"de": "Rumänien", "en": "Romania"}, "Cluj-Napoca", ro_postcode, "S.R.L.",
+        rejects=other_l1_value,
+    ),
+    VatCountry(
+        "pii.se.vat_id", "SE", (12,), vat_se, slice(11, 12), (lambda b: f"SE{b}", lambda b: f"SE {b[:6]}-{b[6:]}"),
+        {"de": "Schweden", "en": "Sweden"}, "Göteborg",
+        vat_postcode("SE", 41101, 41879, lambda code: f"{code // 100} {code % 100:02d}"), "AB", vat_se_person,
+        rejects=other_l1_value,
+    ),
+    VatCountry(
+        "pii.si.vat_id", "SI", (8,), vat_si, LAST, (lambda b: f"SI{b}", lambda b: f"SI {b[:4]} {b[4:]}"),
+        {"de": "Slowenien", "en": "Slovenia"}, "Maribor", vat_postcode("SI", 2000, 2354), "d.o.o.",
+        rejects=other_l1_value,
+    ),
+    VatCountry(
+        "pii.sk.vat_id", "SK", (10,), vat_sk, LAST,
+        (lambda b: f"SK{b}", lambda b: f"SK {b[:3]} {b[3:6]} {b[6:8]} {b[8:]}"),
+        {"de": "Slowakei", "en": "Slovakia"}, "Košice",
+        vat_postcode("SK", 4001, 4499, lambda code: f"{code // 100:03d} {code % 100:02d}"), "s.r.o.",
+        rejects=other_l1_value,
+    ),
+    # UK postcodes are no look-alike but an entity of their own (pii.uk.postcode, gold as in E05).
+    VatCountry(
+        "pii.uk.vat_id", "GB", (9, 12), vat_gb, LAST,
+        (lambda b: f"GB{b}", lambda b: " ".join(filter(None, ("GB", b[:3], b[3:7], b[7:9], b[9:]))),
+         lambda b: f"XI{b}"),
+        {"de": "Vereinigtes Königreich", "en": "United Kingdom"}, "Manchester",
+        lambda r: span("pii.uk.postcode", f"M{r.randint(1, 9)} {r.randint(1, 9)}{r.chars('ABDEFGHJLNPQRSTUWXYZ', 2)}"),
+        "Ltd", vat_gb_branch,
+        rejects=other_l1_value,
     ),
 )
 VAT_ORG_STEMS = ("Meridian", "Atlas", "Helios", "Polaris", "Orion", "Vega", "Aurora", "Kronos", "Lumen", "Sirius")
@@ -2313,7 +2611,7 @@ def vat_org(r: Rng, country: VatCountry) -> Span:
 
 def vat_value(r: Rng, country: VatCountry, p: Persona) -> Span:
     """A checksum-valid number in one of the country's printed forms."""
-    compact = country.person(r, p) if country.person and r.chance(30) else country.legal(r)
+    compact = country.variant(r, p) if country.variant and r.chance(30) else country.legal(r)
     return span(country.entity, r.choice(country.layouts)(compact[len(country.prefix) :]))
 
 
@@ -2321,34 +2619,27 @@ def vat_wrong_check(r: Rng, country: VatCountry) -> Neg:
     """The legal form with every check character replaced, printed like a valid number."""
     compact = country.legal(r)
     check = compact[country.check]
+    start, stop, _ = country.check.indices(len(compact))
     while True:
         other = "".join(r.choice(UPPER if char.isalpha() else "0123456789") for char in check)
-        if other != check:
+        wrong = compact[:start] + other + compact[stop:]
+        if other != check and not (country.rejects and country.rejects(wrong)):
             break
-    start, stop, _ = country.check.indices(len(compact))
-    body = (compact[:start] + other + compact[stop:])[len(country.prefix) :]
-    return Neg("vat_check_digit", r.choice(country.layouts)(body))
+    return Neg("vat_check_digit", r.choice(country.layouts)(wrong[len(country.prefix) :]))
 
 
 def vat_wrong_length(r: Rng, country: VatCountry) -> Neg:
-    """The legal form one digit shorter than the shortest or longer than the longest issued body."""
-    body = country.legal(r)[len(country.prefix) :]
-    shorter = r.chance(50)
-    target = min(country.lengths) - 1 if shorter else max(country.lengths) + 1
-    while len(body) != target:
-        positions = [index for index, char in enumerate(body) if char.isdigit()]
-        index = r.choice(positions)
-        body = body[:index] + body[index + 1 :] if shorter else body[:index] + r.digits(1) + body[index:]
-    return Neg("vat_length", country.layouts[0](body))
-
-
-def vat_postcode(r: Rng, country: VatCountry) -> Neg:
-    """Country code and postcode (``DK-8000``, ``CZ-602 00``): a prefix with digits, but no VAT ID."""
-    low, high = country.postcodes
-    code = str(r.randint(low, high) // 100 * 100 if country.entity == "pii.cz.vat_id" else r.randint(low, high))
-    if country.entity in ("pii.cz.vat_id", "pii.gr.vat_id"):
-        code = f"{code[:3]} {code[3:]}"
-    return Neg("vat_postcode", f"{country.entity.split('.')[1].upper()}-{code}")
+    """The legal form one digit shorter than the shortest issued body (if two remain) or longer than the longest."""
+    while True:
+        body = country.legal(r)[len(country.prefix) :]
+        shorter = r.chance(50) and min(country.lengths) > 2
+        target = min(country.lengths) - 1 if shorter else max(country.lengths) + 1
+        while len(body) != target:
+            positions = [index for index, char in enumerate(body) if char.isdigit()]
+            index = r.choice(positions)
+            body = body[:index] + body[index + 1 :] if shorter else body[:index] + r.digits(1) + body[index:]
+        if not (country.rejects and country.rejects(country.prefix + body)):
+            return Neg("vat_length", country.layouts[0](body))
 
 
 def render_vat_letter(doc: Doc, r: Rng, lang: str, country: VatCountry, p: Persona) -> None:
@@ -2366,7 +2657,7 @@ def render_vat_letter(doc: Doc, r: Rng, lang: str, country: VatCountry, p: Perso
                 hn=vat_wrong_check(r, country))
         doc.add("Auch {hn} hat nicht die richtige Länge. ", hn=vat_wrong_length(r, country))
         doc.add("Die Ware geht an unser Lager in {pc} {city}.\n\nMit freundlichen Grüßen\n{name}\n",
-                pc=vat_postcode(r, country), city=span("entity.location", country.city), name=name_span(p))
+                pc=country.postcode(r), city=span("entity.location", country.city), name=name_span(p))
     else:
         doc.add("Subject: Supplier details for {org}\n\nDear Sir or Madam,\n\n", org=org)
         doc.add(
@@ -2379,7 +2670,7 @@ def render_vat_letter(doc: Doc, r: Rng, lang: str, country: VatCountry, p: Perso
                 hn=vat_wrong_check(r, country))
         doc.add("{hn} does not have the right length either. ", hn=vat_wrong_length(r, country))
         doc.add("Please deliver to our warehouse at {pc} {city}.\n\nKind regards\n{name}\n",
-                pc=vat_postcode(r, country), city=span("entity.location", country.city), name=name_span(p))
+                pc=country.postcode(r), city=span("entity.location", country.city), name=name_span(p))
 
 
 def render_vat_form(doc: Doc, r: Rng, lang: str, country: VatCountry, p: Persona) -> None:
@@ -2397,7 +2688,7 @@ def render_vat_form(doc: Doc, r: Rng, lang: str, country: VatCountry, p: Persona
     doc.add(line, key=keys[1], v=vat_org(r, country))
     doc.add(line, key=keys[2], v=country.names[lang])
     doc.add(line, key=keys[3], v=vat_value(r, country, p))
-    doc.add("{key}" + separator + "{pc} {city}\n", key=keys[4], pc=vat_postcode(r, country),
+    doc.add("{key}" + separator + "{pc} {city}\n", key=keys[4], pc=country.postcode(r),
             city=span("entity.location", country.city))
     doc.add(line, key=keys[5], v=vat_org(r, country))
     doc.add(line, key=keys[6], v=vat_value(r, country, p))
@@ -2415,7 +2706,7 @@ def render_vat_json(doc: Doc, r: Rng, lang: str, country: VatCountry, p: Persona
             ("land" if de else "country"): code,
             ("ust_id" if de else "vat_id"): vat_value(r, country, p),
             ("anschrift" if de else "address"): {
-                ("plz" if de else "postcode"): vat_postcode(r, country),
+                ("plz" if de else "postcode"): country.postcode(r),
                 ("ort" if de else "city"): span("entity.location", country.city),
             },
         },
@@ -2441,7 +2732,7 @@ def render_vat_csv(doc: Doc, r: Rng, lang: str, country: VatCountry, p: Persona)
         (vat_wrong_check(r, country), invalid), (vat_wrong_length(r, country), invalid),
     ]
     for number, (value, status) in enumerate(r.shuffle(entries), 1):
-        csv_row(doc, [str(number), vat_org(r, country), value, vat_postcode(r, country), status], delimiter)
+        csv_row(doc, [str(number), vat_org(r, country), value, country.postcode(r), status], delimiter)
 
 
 VAT_RENDERERS: dict[str, Callable[[Doc, Rng, str, VatCountry, Persona], None]] = {
@@ -2449,7 +2740,9 @@ VAT_RENDERERS: dict[str, Callable[[Doc, Rng, str, VatCountry, Persona], None]] =
 }
 
 
-def generate_vat(seed: str, split: str, docs: int) -> list[dict[str, Any]]:
+def generate_vat(
+    countries: Sequence[VatCountry], corpus: str, version: int, tag: str, seed: str, split: str, docs: int
+) -> list[dict[str, Any]]:
     """Document ``n``: carrier ``n mod 4``, language ``n // 4 mod 2``, country ``n // 8``, cycling."""
     if split not in SPLITS:
         raise ValueError(f"unknown split {split!r}")
@@ -2457,26 +2750,12 @@ def generate_vat(seed: str, split: str, docs: int) -> list[dict[str, Any]]:
     for number in range(docs):
         doc_type = VAT_DOC_TYPES[number % len(VAT_DOC_TYPES)]
         lang = LANGUAGES[(number // len(VAT_DOC_TYPES)) % len(LANGUAGES)]
-        country = VAT_COUNTRIES[(number // (len(VAT_DOC_TYPES) * len(LANGUAGES))) % len(VAT_COUNTRIES)]
-        r = Rng(f"{SCHEMA}:{VAT_CORPUS_ID}:{VAT_GENERATOR_VERSION}:{seed}:{split}:{number}")
+        country = countries[(number // (len(VAT_DOC_TYPES) * len(LANGUAGES))) % len(countries)]
+        r = Rng(f"{SCHEMA}:{corpus}:{version}:{seed}:{split}:{number}")
         doc = Doc()
         VAT_RENDERERS[doc_type](doc, r, lang, country, persona(r, lang))
-        rows.append(gold_row(f"synth-vat1-{split}-{number:04d}", VAT_CORPUS_ID, lang, doc_type, doc))
+        rows.append(gold_row(f"synth-{tag}-{split}-{number:04d}", corpus, lang, doc_type, doc))
     return rows
-
-
-def vat_entity_ids() -> list[str]:
-    return sorted(country.entity for country in VAT_COUNTRIES)
-
-
-# Entity-map ids that no goldset generates. E05 is frozen: ids added to the map later get a goldset
-# of their own (``vat-1`` for the B01/B02 VAT IDs of GOLD-VAT1) so that ``de-eu`` reproduces byte for
-# byte. Still without synthetic gold: the VAT IDs of IE, LT, NL and the B16 countries (GOLD-VAT2).
-NOT_GENERATED = frozenset(
-    {"pii.ie.vat_id", "pii.lt.vat_id", "pii.nl.vat_id"}
-    | {"pii.lu.vat_id", "pii.lv.vat_id", "pii.mt.vat_id", "pii.pl.vat_id", "pii.pt.vat_id", "pii.ro.vat_id"}
-    | {"pii.se.vat_id", "pii.si.vat_id", "pii.sk.vat_id", "pii.no.vat_id", "pii.uk.vat_id"}
-)
 
 
 def entity_ids() -> list[str]:
@@ -2522,13 +2801,21 @@ class Goldset(NamedTuple):
         return f"{self.corpus}.jsonl"
 
 
-# One directory per goldset (the gate freezes each once): ``de-eu`` is E05, ``vat-1`` GOLD-VAT1.
+def vat_goldset(corpus: str, dev_seed: str, version: int, tag: str, countries: Sequence[VatCountry]) -> Goldset:
+    """A VAT goldset: one document per country, language and carrier in dev, two in holdout."""
+    combinations = len(countries) * len(LANGUAGES) * len(VAT_DOC_TYPES)
+    return Goldset(
+        corpus, dev_seed, version, {"dev": combinations, "holdout": 2 * combinations},
+        partial(generate_vat, countries, corpus, version, tag), lambda: sorted(country.entity for country in countries),
+    )
+
+
+# One directory per goldset (the gate freezes each once): ``de-eu`` is E05, ``vat-1`` GOLD-VAT1 and
+# ``vat-2`` GOLD-VAT2. Together they cover every id of the entity map.
 GOLDSETS = {
     "de-eu": Goldset(CORPUS_ID, DEV_SEED, GENERATOR_VERSION, DEFAULT_DOCS, generate, entity_ids),
-    "vat-1": Goldset(
-        VAT_CORPUS_ID, VAT_DEV_SEED, VAT_GENERATOR_VERSION, {"dev": 112, "holdout": 224}, generate_vat,
-        vat_entity_ids,
-    ),
+    "vat-1": vat_goldset(VAT1_CORPUS_ID, VAT1_DEV_SEED, VAT1_GENERATOR_VERSION, "vat1", VAT1_COUNTRIES),
+    "vat-2": vat_goldset(VAT2_CORPUS_ID, VAT2_DEV_SEED, VAT2_GENERATOR_VERSION, "vat2", VAT2_COUNTRIES),
 }
 
 
@@ -2614,9 +2901,9 @@ def _write(directory: Path, files: dict[str, bytes]) -> None:
     directory.mkdir(parents=True, exist_ok=True)
     (directory / READY).unlink(missing_ok=True)
     for name in files:  # gold file, manifest.json, .ready last (build_split's order)
-        partial = directory / f"{name}.part"
-        partial.write_bytes(files[name])
-        os.replace(partial, directory / name)
+        part = directory / f"{name}.part"
+        part.write_bytes(files[name])
+        os.replace(part, directory / name)
 
 
 def write_splits(

@@ -60,7 +60,7 @@ def minimal_map():
             },
         ],
         "source_families": {
-            "ark_authored": ["pii_l1", "l1_bilingual_rules", "ark-synthetic-de-eu", "ark-synthetic-vat-1"],
+            "ark_authored": ["pii_l1", "l1_bilingual_rules", "ark-synthetic-de-eu", "ark-synthetic-vat-1", "ark-synthetic-vat-2"],
             "neutral": ["gretel-synthetic-pii-finance", "tab"],
         },
     }
@@ -216,6 +216,7 @@ def test_every_gold_source_has_its_family():
         "l1_bilingual_rules": "ark_authored",
         "ark-synthetic-de-eu": "ark_authored",
         "ark-synthetic-vat-1": "ark_authored",
+        "ark-synthetic-vat-2": "ark_authored",
         "gretel-synthetic-pii-finance": "neutral",
         "ai4privacy-openpii-nano-1k": "neutral",
         "tab": "neutral",
