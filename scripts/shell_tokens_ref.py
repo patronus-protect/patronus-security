@@ -55,7 +55,7 @@ def head(token):
 # attacks carried in training. The body is replaced by one `heredoc_body` line for this
 # block; the char_wb block still sees the raw text.
 HEREDOC_INTERPRETERS = ('node', 'ruby', 'perl')
-HEREDOC_OP = re.compile(r'<<-?[ \t]*([\'"]?)([A-Za-z_][A-Za-z0-9_]*)\1')
+HEREDOC_OP = re.compile(r"<<-?[ \t]*(?:'([^'\\\n]+)'|\"([^\"\\\n]+)\"|([^\s;&|()<>'\"\\]+))(?=$|[\s;&|()<>])")
 # `cat <<'EOF' > fix.py` writes code or data, not shell: same treatment when the owning
 # command's output file has one of these extensions. Shell scripts (`> run.sh`) stay shell.
 HEREDOC_WRITERS = ('cat', 'tee')
@@ -126,21 +126,34 @@ def heredoc_delimiter(line):
             continue
         for s, e, head in segments:
             if s <= op.start() < e and head and _head_masks(head, line[s:e]):
-                return op.group(2)
+                return (op.group(1) or op.group(2) or op.group(3), op.group(3) is None)
     return None
 
 
 def mask_heredocs(text):
-    out, delimiter = [], None
-    for line in text.split('\n'):
-        if delimiter is not None:
-            if line.strip(' \t\r') == delimiter:
-                out.append(line); delimiter = None
-            continue
+    out = []
+    lines = text.split('\n')
+    i = 0
+    while i < len(lines):
+        line = lines[i]
         out.append(line)
-        delimiter = heredoc_delimiter(line)
-        if delimiter is not None:
+        i += 1
+        opened = heredoc_delimiter(line)
+        if opened is None:
+            continue
+        delimiter, quoted = opened
+        start = i
+        while i < len(lines) and lines[i].strip(' \t\r') != delimiter:
+            i += 1
+        body = lines[start:i]
+        # Unquoted bodies expand shell commands; preserve multiline substitutions too.
+        if not quoted and any('$' in line or '`' in line for line in body):
+            out.extend(body)
+        else:
             out.append(HEREDOC_MASK)
+        if i < len(lines):
+            out.append(lines[i])
+            i += 1
     return '\n'.join(out)
 
 

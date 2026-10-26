@@ -20,6 +20,8 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Changed
 
+- Shell heredoc masking preserves unquoted bodies containing shell expansions and reads complete punctuated delimiters, so executable substitutions and commands after the closing delimiter retain their download-to-interpreter features. Quoted code/data bodies remain masked.
+
 - **Shell risk: heredoc masking + agent-shell robustness.** `shell_command` now pins
   `cat-shell-risk-commander` revision `d9f4509c` (still `format_version: 2`). `shell_tokens.features()`
   no longer tokenises a heredoc body as shell when the heredoc feeds a non-shell interpreter

