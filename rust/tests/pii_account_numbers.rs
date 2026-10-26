@@ -10,6 +10,11 @@
 //! and `acct` fields too, with their name before the value or as a structural key
 //! (JSON, XML, CSV, key-value), and does not check a digit. All of them report
 //! `FINANCIAL_ACCOUNT_NUMBER`.
+//!
+//! The GB BBAN (T29: four letters of the bank code, sort code, account) has no
+//! check digit: `pii_bban_gb` reports it in every mode with a BBAN or account
+//! term near the value or as its key, also in prose the field-bound rule does
+//! not bind, and never bare.
 
 use patronus_ark::detectors::pii::{
     pii::{PiiPattern, PII_PATTERNS},
@@ -24,6 +29,7 @@ use serde_json::Value;
 const ABA: &str = "pii_aba_routing_number_us";
 const ABA_CONTEXT_FREE: &str = "pii_aba_routing_number_us_context_free";
 const ACCOUNT: &str = "pii_financial_account_number";
+const BBAN: &str = "pii_bban_gb";
 const LABEL: &str = "FINANCIAL_ACCOUNT_NUMBER";
 const MODES: [PiiMode; 3] = [PiiMode::Strict, PiiMode::Balanced, PiiMode::Recall];
 const SCORED: [PiiMode; 2] = [PiiMode::Balanced, PiiMode::Recall];
@@ -370,5 +376,128 @@ fn customer_id_fields_with_an_underscore_bind_their_value() {
     }
     for text in ["customer_id: none", "customer_id=42"] {
         assert_silent(text, "CUSTOMER_ID", &MODES);
+    }
+}
+
+// ── GB BBAN with a term, every mode (T29) ────────────────────────────────────
+
+#[test]
+fn uk_bban_validator_checks_the_form_only() {
+    for valid in [
+        // Gretel Finance account numbers in the Faker GB BBAN form
+        "ZFJR88590163492773",
+        "SIWP73662924611856",
+        "SBMJ80180092602358",
+        "SYIL09843639680686",
+        "ADXO08034447307440",
+        // a bank code, sort code 60-16-13 and account 31926819
+        "NWBK60161331926819",
+    ] {
+        assert!(validators::uk_bban(valid), "{valid}");
+    }
+    for invalid in [
+        // an account of zeros or one repeated digit throughout
+        "ZFJR88590100000000",
+        "ZFJR00000000000000",
+        "ZFJR11111111111111",
+        // letter case, length and alphabet
+        "zfjr88590163492773",
+        "ZFJ888590163492773",
+        "ZFJR8859016349277",
+        "ZFJR885901634927731",
+        "ZFJR8859016349277X",
+        "GB29NWBK60161331926819",
+    ] {
+        assert!(!validators::uk_bban(invalid), "{invalid}");
+    }
+}
+
+#[test]
+fn the_bban_rule_is_context_bound_without_a_check_digit() {
+    let rule = pattern(BBAN);
+    assert_eq!(rule.entity_group, LABEL);
+    assert_eq!(rule.strength, ValidatorStrength::Format);
+    let check = validators::uk_bban as fn(&str) -> bool;
+    assert_eq!(
+        rule.validator.map(|validator| validator as usize),
+        Some(check as usize)
+    );
+    assert!(rule.requires_context && !rule.captured_value && !rule.scored_only);
+    // The farthest term still clears the balanced threshold.
+    assert!(
+        score::score(rule, Context::Support { gap: 48 }) >= PiiMode::Balanced.min_score().unwrap()
+    );
+}
+
+#[test]
+fn a_bban_near_an_account_term_or_under_its_key_is_reported_in_every_mode() {
+    for (text, value) in [
+        (
+            "Our bank account number, SIWP73662924611856, reflects our growth.",
+            "SIWP73662924611856",
+        ),
+        (
+            "Heather_223, with the bank account number SBMJ80180092602358.",
+            "SBMJ80180092602358",
+        ),
+        (
+            "such as the bank account number (BBAN) SYIL09843639680686 of the payee",
+            "SYIL09843639680686",
+        ),
+        (
+            "Refunds go to ULHM05476453653182 (BBAN) within five days.",
+            "ULHM05476453653182",
+        ),
+        (
+            "Unsere Bankverbindung (BBAN) lautet ZFJR88590163492773.",
+            "ZFJR88590163492773",
+        ),
+        (
+            "Bankkonto des Mieters: KALL90112673253892",
+            "KALL90112673253892",
+        ),
+        (
+            "Numéro de compte bancaire pour le traitement de cette demande : RGSS60795253764996",
+            "RGSS60795253764996",
+        ),
+        (
+            "{\"bankkonto\": \"RVHC19892216923275\"}",
+            "RVHC19892216923275",
+        ),
+        (
+            "payee,banking account\nAda Weber,VAEZ76028829777902",
+            "VAEZ76028829777902",
+        ),
+    ] {
+        assert_reports(BBAN, text, value, &MODES);
+    }
+}
+
+#[test]
+fn a_bban_without_an_account_term_stays_silent() {
+    for text in [
+        // bare: the form has no check digit
+        "ZFJR88590163492773",
+        "Consignee: Katy Thompson CECS05573529734512",
+        // 18-character codes after other field names
+        "Order number: ABCD12345678901234",
+        "Bestellnummer: ABCD12345678901234",
+        "Please quote reference number QWER55501234567890.",
+        "Referenznummer QWER55501234567890 bitte angeben.",
+        "Tracking number: DHLP00340434161094",
+        "Sendungsnummer: DHLP00340434161094",
+        "VIN: WDBA12345678901234",
+        "Fahrgestellnummer (VIN): WDBA12345678901234",
+        "Policy Number: ZQYZ73386259327318",
+        // a nearer counter-context term
+        "Bank account verified, order number ABCD12345678901234",
+        "Bankkonto geprüft, Bestellnummer ABCD12345678901234",
+        // placeholders and parts of longer values
+        "The bank account number (BBAN) ZFJR11111111111111 is a placeholder.",
+        "Die Bankverbindung (BBAN) ZFJR00000000000000 ist ein Platzhalter.",
+        "bank account number (BBAN) XZFJR88590163492773",
+        "bank account number (BBAN) ZFJR885901634927731",
+    ] {
+        assert_silent(text, LABEL, &MODES);
     }
 }

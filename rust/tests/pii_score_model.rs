@@ -524,6 +524,7 @@ fn reference_scores_per_rule() {
         ("pii_financial_account_number", 0.70),
         ("pii_aba_routing_number_us", 0.60),
         ("pii_aba_routing_number_us_context_free", 0.55),
+        ("pii_bban_gb", 0.50),
         ("pii_nir_fr", 0.60),
         ("pii_nir_fr_context_free", 0.55),
         ("pii_siren_fr", 0.60),
