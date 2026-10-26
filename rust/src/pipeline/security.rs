@@ -12,22 +12,7 @@ use std::time::Instant;
 use super::decision_cache::DecisionCache;
 use crate::{
     assets::{DYNAMIC_PII_ASSET, SHELL_COMMAND_ASSET},
-    detectors::{
-        dlp::{destructive_operation, dlp, secret_transfer, sensitive_material},
-        injection::{
-            agentic_control_abuse, authority_escalation, binary_smuggling, covert_instruction,
-            cross_tool_instruction, encoded_instruction, guardrail_tamper, hidden_html_instruction,
-            instruction_boundary, instruction_leak, instruction_override, jailbreak_framing,
-            multi_turn_escalation, output_manipulation, rule_catalog, signal, structural,
-            tool_call_injection, tool_output_instruction, unicode_confusable,
-            zero_width_obfuscation,
-        },
-        mcp::{mcp_policy, mcp_runtime_risk},
-        pii::pii,
-        shell::shell_risk::ShellRiskPipeline,
-        threat::ThreatPipeline,
-        NativeDetection, NativeRegexDetector,
-    },
+    detectors::{shell::shell_risk::ShellRiskPipeline, threat::ThreatPipeline, NativeDetection},
     diagnostics::PhaseMetricScope,
     ml::ntdb_executor::{NtdbExecutor, NtdbModelChunkInferences, PreparedNtdbChunk},
     pipeline::{L3Worker, RequestRegistry},
@@ -36,6 +21,10 @@ use crate::{
     LayerResult, NtdbOperatingPoint, OnnxBatchMode, ScanExecution, ScanGateMatrix,
     SecurityCategory, SecurityFailure, SecurityFailureKind, SecurityFailureStage, SecurityLevel,
     SecurityLevelReadiness, SecurityRuntimeReadiness, SecurityScanResult,
+};
+use patronus_ark_core::{
+    native::{NativeEngine, NativePolicy, NativeProducerOutcome},
+    Category as NativeCategory, ScanControl, ScanError,
 };
 
 mod direct_l3;
@@ -50,6 +39,33 @@ pub use ntdb_l2::{ntdb_l2_enabled_for_category, ntdb_l2_model_config_for_id, Ntd
 pub use ntdb_l2::{ntdb_l2_model_configs_for_category, ntdb_l2_scan_result, restore_l2_decision};
 
 const DEFAULT_QUEUE_WORKER_COUNT: usize = 2;
+
+fn native_category(category: SecurityCategory) -> Option<NativeCategory> {
+    match category {
+        SecurityCategory::Pii => Some(NativeCategory::Pii),
+        SecurityCategory::Dlp => Some(NativeCategory::Dlp),
+        SecurityCategory::Injection => Some(NativeCategory::Injection),
+        _ => None,
+    }
+}
+
+impl NativePolicy for ScanExecution {
+    fn allows_model(&self, id: &str) -> bool {
+        ScanExecution::allows_model(self, id)
+    }
+    fn allows_rule(&self, id: &str) -> bool {
+        ScanExecution::allows_rule(self, id)
+    }
+    fn explain(&self) -> bool {
+        self.gates().explain
+    }
+    fn pii_mode(&self) -> crate::PiiMode {
+        self.gates().pii_mode
+    }
+    fn dlp_mode(&self) -> crate::DlpMode {
+        self.gates().dlp_mode
+    }
+}
 
 fn distributed_unified_l3_fingerprint(base_dir: &std::path::Path) -> Result<String, String> {
     use std::io::Read;
@@ -253,37 +269,9 @@ pub struct SecurityGatewayCore {
     ntdb_executor: Option<Mutex<NtdbExecutor>>,
     distributed_fingerprints: OnceLock<(String, String)>,
 
-    // Instantiated native rule-based pipelines
-    dlp_pipeline: Option<dlp::DlpPipeline>,
-    pii_pipeline: Option<pii::PiiPipeline>,
+    // Shared native producer state, initialized only for configured categories.
+    native_engine: NativeEngine,
     threat_pipeline: Option<ThreatPipeline>,
-    cross_tool_instruction_pipeline: Option<cross_tool_instruction::CrossToolInstructionPipeline>,
-    instruction_leak_pipeline: Option<instruction_leak::InstructionLeakPipeline>,
-    secret_transfer_pipeline: Option<secret_transfer::SecretTransferPipeline>,
-    sensitive_material_pipeline: Option<sensitive_material::SensitiveMaterialPipeline>,
-    encoded_instruction_pipeline: Option<encoded_instruction::EncodedInstructionPipeline>,
-    multi_turn_escalation_pipeline: Option<multi_turn_escalation::MultiTurnEscalationPipeline>,
-    guardrail_tamper_pipeline: Option<guardrail_tamper::GuardrailTamperPipeline>,
-    destructive_operation_pipeline: Option<destructive_operation::DestructiveOperationPipeline>,
-    agentic_control_abuse_pipeline: Option<agentic_control_abuse::AgenticControlAbusePipeline>,
-    binary_smuggling_pipeline: Option<binary_smuggling::BinarySmugglingPipeline>,
-    tool_output_instruction_pipeline:
-        Option<tool_output_instruction::ToolOutputInstructionPipeline>,
-    mcp_runtime_risk_pipeline: Option<mcp_runtime_risk::McpRuntimeRiskPipeline>,
-    hidden_html_instruction_pipeline:
-        Option<hidden_html_instruction::HiddenHtmlInstructionPipeline>,
-    unicode_confusable_pipeline: Option<unicode_confusable::UnicodeConfusablePipeline>,
-    zero_width_obfuscation_pipeline: Option<zero_width_obfuscation::ZeroWidthObfuscationPipeline>,
-    injection_rule_catalog_pipeline: Option<rule_catalog::InjectionRuleCatalogPipeline>,
-    injection_structural_pipeline: Option<structural::InjectionStructuralPipeline>,
-    instruction_override_pipeline: Option<instruction_override::InstructionOverridePipeline>,
-    jailbreak_framing_pipeline: Option<jailbreak_framing::JailbreakFramingPipeline>,
-    covert_instruction_pipeline: Option<covert_instruction::CovertInstructionPipeline>,
-    instruction_boundary_pipeline: Option<instruction_boundary::InstructionBoundaryPipeline>,
-    authority_escalation_pipeline: Option<authority_escalation::AuthorityEscalationPipeline>,
-    tool_call_injection_pipeline: Option<tool_call_injection::ToolCallInjectionPipeline>,
-    output_manipulation_pipeline: Option<output_manipulation::OutputManipulationPipeline>,
-    mcp_policy_pipeline: Option<mcp_policy::McpPolicyPipeline>,
     /// Shell command risk model, loaded from local assets during warmup.
     shell_command_pipeline: Option<ShellRiskPipeline>,
 
@@ -363,23 +351,6 @@ fn l1_scan_result_with_duration(
     scan_result(category, model, result, vec![layer])
 }
 
-fn timed_native_regex_scan_result<T: NativeRegexDetector>(
-    category: SecurityCategory,
-    model: impl Into<String>,
-    detector: &T,
-    prepared: &crate::threat::NativeText<'_>,
-    execution: &ScanExecution,
-) -> SecurityScanResult {
-    let text = prepared.text();
-    timed_native_detection_scan_result(category, model, text, || {
-        detector.detect_prepared_with_options(
-            prepared,
-            |rule_id| execution.allows_rule(rule_id),
-            execution.gates().explain,
-        )
-    })
-}
-
 fn timed_native_detection_scan_result<F>(
     category: SecurityCategory,
     model: impl Into<String>,
@@ -392,20 +363,71 @@ where
     let model = model.into();
     let started = Instant::now();
     match catch_unwind(AssertUnwindSafe(detect)) {
-        Ok(detection) => {
-            let mut result = l1_scan_result_with_duration(
-                category,
-                model,
-                "native",
-                detection.result,
-                started.elapsed().as_secs_f64() * 1000.0,
-            );
-            result.evidence_spans = filter_evidence(category, text, detection.evidence_spans);
-            result.layers[0].details = detection.details;
-            result
-        }
+        Ok(detection) => native_detection_scan_result(
+            category,
+            model,
+            text,
+            detection,
+            started.elapsed().as_secs_f64() * 1000.0,
+        ),
         Err(payload) => scanner_error_scan_result(category, model, panic_message(payload)),
     }
+}
+
+fn native_detection_scan_result(
+    category: SecurityCategory,
+    model: String,
+    text: &str,
+    detection: NativeDetection,
+    duration_ms: f64,
+) -> SecurityScanResult {
+    let mut result =
+        l1_scan_result_with_duration(category, model, "native", detection.result, duration_ms);
+    result.evidence_spans = filter_evidence(category, text, detection.evidence_spans);
+    result.layers[0].details = detection.details;
+    result
+}
+
+fn native_engine_scan_result(
+    category: SecurityCategory,
+    model: &str,
+    text: &str,
+    outcome: Result<NativeProducerOutcome, ScanError>,
+    execution: &ScanExecution,
+) -> SecurityScanResult {
+    let outcome = match outcome {
+        Ok(outcome) => outcome,
+        Err(ScanError::Detector(message)) => {
+            return scanner_error_scan_result(category, model, message);
+        }
+        Err(error) => return scanner_error_scan_result(category, model, error.to_string()),
+    };
+    let mut result = native_detection_scan_result(
+        category,
+        model.into(),
+        text,
+        outcome.detection,
+        outcome.duration_ms,
+    );
+    // Keep Ark's existing result policy: only scored native PII/DLP update
+    // confidence after evidence filtering. Other producer scores stay untouched.
+    let scored = match model {
+        "native:pii" => execution.gates().pii_mode.min_score().is_some(),
+        "native:dlp" => execution.gates().dlp_mode.min_score().is_some(),
+        _ => false,
+    };
+    if scored {
+        if let Some(best) = result
+            .evidence_spans
+            .iter()
+            .map(|span| span.score)
+            .reduce(f64::max)
+        {
+            result.confidence = best;
+            result.layers[0].confidence = best;
+        }
+    }
+    result
 }
 
 fn scanner_error_scan_result(
@@ -439,6 +461,52 @@ fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
         message.clone()
     } else {
         "scanner panicked".to_string()
+    }
+}
+
+#[cfg(test)]
+mod native_adapter_tests {
+    use super::*;
+
+    #[test]
+    fn engine_detector_errors_preserve_the_legacy_producer_error_result() {
+        let legacy = timed_native_detection_scan_result(
+            SecurityCategory::Injection,
+            "native:injection_rule_catalog",
+            "hello",
+            || panic!("detector fixture failure"),
+        );
+        let migrated = native_engine_scan_result(
+            SecurityCategory::Injection,
+            "native:injection_rule_catalog",
+            "hello",
+            Err(ScanError::Detector("detector fixture failure".into())),
+            &ScanExecution::new(SecurityLevel::L1),
+        );
+        let legacy: patronus_ark_core::NativeResult = legacy.into();
+        let migrated: patronus_ark_core::NativeResult = migrated.into();
+        assert_eq!(
+            serde_json::to_value(legacy).unwrap(),
+            serde_json::to_value(migrated).unwrap(),
+        );
+    }
+
+    #[test]
+    fn ark_only_categories_do_not_initialize_shared_native_producers() {
+        let gateway = SecurityGateway::with_max_level(
+            vec![SecurityCategory::ShellCommand, SecurityCategory::Threat],
+            SecurityLevel::L1,
+            None,
+            false,
+        );
+        for category in [
+            NativeCategory::Pii,
+            NativeCategory::Dlp,
+            NativeCategory::Injection,
+        ] {
+            assert!(gateway.native_engine.producers(category).is_empty());
+        }
+        assert!(gateway.threat_pipeline.is_some());
     }
 }
 
@@ -544,7 +612,15 @@ impl SecurityGateway {
     ) -> Result<Self, crate::CacheError> {
         let requests = Arc::new(RequestRegistry::default());
         let l3_worker = L3Worker::start_with_cache(Arc::clone(&requests), cache_config)?;
-        let mut core = SecurityGatewayCore {
+        let native_categories: Vec<_> = categories
+            .iter()
+            .copied()
+            .filter_map(native_category)
+            .collect();
+        let threat_pipeline = categories
+            .contains(&SecurityCategory::Threat)
+            .then(ThreatPipeline::new);
+        let core = SecurityGatewayCore {
             categories,
             max_level,
             model_dir,
@@ -556,107 +632,14 @@ impl SecurityGateway {
             queue_worker_count: AtomicUsize::new(DEFAULT_QUEUE_WORKER_COUNT),
             ntdb_executor: None,
             distributed_fingerprints: OnceLock::new(),
-            dlp_pipeline: None,
-            pii_pipeline: None,
-            threat_pipeline: None,
-            cross_tool_instruction_pipeline: None,
-            instruction_leak_pipeline: None,
-            secret_transfer_pipeline: None,
-            sensitive_material_pipeline: None,
-            encoded_instruction_pipeline: None,
-            multi_turn_escalation_pipeline: None,
-            guardrail_tamper_pipeline: None,
-            destructive_operation_pipeline: None,
-            agentic_control_abuse_pipeline: None,
-            binary_smuggling_pipeline: None,
-            tool_output_instruction_pipeline: None,
-            mcp_runtime_risk_pipeline: None,
-            hidden_html_instruction_pipeline: None,
-            unicode_confusable_pipeline: None,
-            zero_width_obfuscation_pipeline: None,
-            injection_rule_catalog_pipeline: None,
-            injection_structural_pipeline: None,
-            instruction_override_pipeline: None,
-            jailbreak_framing_pipeline: None,
-            covert_instruction_pipeline: None,
-            instruction_boundary_pipeline: None,
-            authority_escalation_pipeline: None,
-            tool_call_injection_pipeline: None,
-            output_manipulation_pipeline: None,
-            mcp_policy_pipeline: None,
+            native_engine: NativeEngine::new(&native_categories),
+            threat_pipeline,
             shell_command_pipeline: None,
             request_counter: AtomicU64::new(1),
             requests,
             l3_worker,
             ntdb_decision_cache: DecisionCache::default(),
         };
-
-        // Immediately instantiate native rule pipelines for configured categories
-        for cat in &core.categories {
-            match cat {
-                SecurityCategory::Injection => {
-                    core.cross_tool_instruction_pipeline =
-                        Some(cross_tool_instruction::CrossToolInstructionPipeline::new());
-                    core.instruction_leak_pipeline =
-                        Some(instruction_leak::InstructionLeakPipeline::new());
-                    core.encoded_instruction_pipeline =
-                        Some(encoded_instruction::EncodedInstructionPipeline::new());
-                    core.multi_turn_escalation_pipeline =
-                        Some(multi_turn_escalation::MultiTurnEscalationPipeline::new());
-                    core.guardrail_tamper_pipeline =
-                        Some(guardrail_tamper::GuardrailTamperPipeline::new());
-                    core.tool_output_instruction_pipeline =
-                        Some(tool_output_instruction::ToolOutputInstructionPipeline::new());
-                    core.hidden_html_instruction_pipeline =
-                        Some(hidden_html_instruction::HiddenHtmlInstructionPipeline::new());
-                    core.unicode_confusable_pipeline =
-                        Some(unicode_confusable::UnicodeConfusablePipeline::new());
-                    core.zero_width_obfuscation_pipeline =
-                        Some(zero_width_obfuscation::ZeroWidthObfuscationPipeline::new());
-                    core.injection_rule_catalog_pipeline =
-                        Some(rule_catalog::InjectionRuleCatalogPipeline::new());
-                    core.injection_structural_pipeline =
-                        Some(structural::InjectionStructuralPipeline::new());
-                    core.agentic_control_abuse_pipeline =
-                        Some(agentic_control_abuse::AgenticControlAbusePipeline::new());
-                    core.binary_smuggling_pipeline =
-                        Some(binary_smuggling::BinarySmugglingPipeline::new());
-                    core.instruction_override_pipeline =
-                        Some(instruction_override::InstructionOverridePipeline::new());
-                    core.jailbreak_framing_pipeline =
-                        Some(jailbreak_framing::JailbreakFramingPipeline::new());
-                    core.covert_instruction_pipeline =
-                        Some(covert_instruction::CovertInstructionPipeline::new());
-                    core.instruction_boundary_pipeline =
-                        Some(instruction_boundary::InstructionBoundaryPipeline::new());
-                    core.authority_escalation_pipeline =
-                        Some(authority_escalation::AuthorityEscalationPipeline::new());
-                    core.tool_call_injection_pipeline =
-                        Some(tool_call_injection::ToolCallInjectionPipeline::new());
-                    core.output_manipulation_pipeline =
-                        Some(output_manipulation::OutputManipulationPipeline::new());
-                }
-                SecurityCategory::Dlp => {
-                    core.dlp_pipeline = Some(dlp::DlpPipeline::new());
-                    core.sensitive_material_pipeline =
-                        Some(sensitive_material::SensitiveMaterialPipeline::new());
-                    core.secret_transfer_pipeline =
-                        Some(secret_transfer::SecretTransferPipeline::new());
-                    core.mcp_runtime_risk_pipeline =
-                        Some(mcp_runtime_risk::McpRuntimeRiskPipeline::new());
-                    core.mcp_policy_pipeline = Some(mcp_policy::McpPolicyPipeline::new());
-                    core.destructive_operation_pipeline =
-                        Some(destructive_operation::DestructiveOperationPipeline::new());
-                }
-                SecurityCategory::Threat => {
-                    core.threat_pipeline = Some(ThreatPipeline::new());
-                }
-                SecurityCategory::Pii => {
-                    core.pii_pipeline = Some(pii::PiiPipeline::new());
-                }
-                _ => {}
-            }
-        }
 
         Ok(SecurityGateway {
             core: Arc::new(core),
@@ -1255,311 +1238,37 @@ impl SecurityGateway {
         let category = input.category;
         let text = input.text.as_ref();
         let mut results = Vec::new();
-        macro_rules! push_native {
-            ($pipeline:expr, $model:literal, $rule:literal) => {
-                if self.level_enabled(&execution, SecurityLevel::L1)
-                    && self.model_enabled(&execution, $model)
-                    && execution.allows_rule($rule)
-                {
-                    if let Some(ref pipe) = $pipeline {
-                        results.push(run_measured_l1_detector(
-                            category,
-                            $model,
-                            text.len(),
-                            || {
-                                timed_native_detection_scan_result(category, $model, text, || {
-                                    pipe.detect_prepared(prepared)
-                                })
-                            },
-                        ));
+        if let Some(native_category) = native_category(category) {
+            if self.level_enabled(execution, SecurityLevel::L1) {
+                let control = ScanControl::default();
+                let native_results = self
+                    .native_engine
+                    .producers(native_category)
+                    .iter()
+                    .filter(|producer| producer.enabled(execution))
+                    .map(|producer| {
+                        run_measured_l1_detector(category, producer.id(), text.len(), || {
+                            native_engine_scan_result(
+                                category,
+                                producer.id(),
+                                text,
+                                self.native_engine
+                                    .run_producer(producer, prepared, execution, &control),
+                                execution,
+                            )
+                        })
+                    })
+                    .collect::<Vec<_>>();
+                if category == SecurityCategory::Injection {
+                    if !native_results.is_empty() {
+                        results.push(injection_l1::aggregate(text, native_results));
                     }
+                } else {
+                    results.extend(native_results);
                 }
-            };
+            }
         }
-        macro_rules! push_native_injection {
-            ($target:expr, $pipeline:expr, $model:literal) => {
-                if self.level_enabled(&execution, SecurityLevel::L1)
-                    && self.model_enabled(&execution, "native:injection_l1")
-                    && self.model_enabled(&execution, $model)
-                    && execution.allows_rule(signal::native_rule_id($model))
-                {
-                    if let Some(ref pipe) = $pipeline {
-                        $target.push(run_measured_l1_detector(
-                            category,
-                            $model,
-                            text.len(),
-                            || {
-                                timed_native_detection_scan_result(category, $model, text, || {
-                                    pipe.detect_prepared(prepared)
-                                })
-                            },
-                        ));
-                    }
-                }
-            };
-        }
-
         match category {
-            SecurityCategory::Injection => {
-                let mut native_results = Vec::new();
-                if self.level_enabled(execution, SecurityLevel::L1)
-                    && self.model_enabled(execution, "native:injection_l1")
-                    && self.model_enabled(execution, "native:injection_rule_catalog")
-                {
-                    if let Some(ref catalog) = self.injection_rule_catalog_pipeline {
-                        native_results.push(run_measured_l1_detector(
-                            category,
-                            "native:injection_rule_catalog",
-                            text.len(),
-                            || {
-                                timed_native_detection_scan_result(
-                                    category,
-                                    "native:injection_rule_catalog",
-                                    text,
-                                    || {
-                                        catalog.detect_prepared(prepared, |rule_id| {
-                                            execution.allows_rule(rule_id)
-                                        })
-                                    },
-                                )
-                            },
-                        ));
-                    }
-                }
-                if self.level_enabled(execution, SecurityLevel::L1)
-                    && self.model_enabled(execution, "native:injection_l1")
-                    && self.model_enabled(execution, "native:injection_structural")
-                    && execution
-                        .allows_rule("ark.injection.structure.override_sensitive_disclosure")
-                {
-                    if let Some(ref structural) = self.injection_structural_pipeline {
-                        native_results.push(run_measured_l1_detector(
-                            category,
-                            "native:injection_structural",
-                            text.len(),
-                            || {
-                                timed_native_detection_scan_result(
-                                    category,
-                                    "native:injection_structural",
-                                    text,
-                                    || structural.detect_prepared(prepared),
-                                )
-                            },
-                        ));
-                    }
-                }
-                push_native_injection!(
-                    native_results,
-                    self.cross_tool_instruction_pipeline,
-                    "native:cross_tool_instruction"
-                );
-                push_native_injection!(
-                    native_results,
-                    self.instruction_leak_pipeline,
-                    "native:instruction_leak"
-                );
-                push_native_injection!(
-                    native_results,
-                    self.encoded_instruction_pipeline,
-                    "native:encoded_instruction"
-                );
-                push_native_injection!(
-                    native_results,
-                    self.multi_turn_escalation_pipeline,
-                    "native:multi_turn_escalation"
-                );
-                push_native_injection!(
-                    native_results,
-                    self.guardrail_tamper_pipeline,
-                    "native:guardrail_tamper"
-                );
-                push_native_injection!(
-                    native_results,
-                    self.tool_output_instruction_pipeline,
-                    "native:tool_output_instruction"
-                );
-                push_native_injection!(
-                    native_results,
-                    self.hidden_html_instruction_pipeline,
-                    "native:hidden_html_instruction"
-                );
-                push_native_injection!(
-                    native_results,
-                    self.unicode_confusable_pipeline,
-                    "native:unicode_confusable"
-                );
-                push_native_injection!(
-                    native_results,
-                    self.zero_width_obfuscation_pipeline,
-                    "native:zero_width_obfuscation"
-                );
-                push_native_injection!(
-                    native_results,
-                    self.agentic_control_abuse_pipeline,
-                    "native:agentic_control_abuse"
-                );
-                push_native_injection!(
-                    native_results,
-                    self.binary_smuggling_pipeline,
-                    "native:binary_smuggling"
-                );
-                push_native_injection!(
-                    native_results,
-                    self.instruction_override_pipeline,
-                    "native:instruction_override"
-                );
-                push_native_injection!(
-                    native_results,
-                    self.jailbreak_framing_pipeline,
-                    "native:jailbreak_framing"
-                );
-                push_native_injection!(
-                    native_results,
-                    self.covert_instruction_pipeline,
-                    "native:covert_instruction"
-                );
-                push_native_injection!(
-                    native_results,
-                    self.instruction_boundary_pipeline,
-                    "native:instruction_boundary"
-                );
-                push_native_injection!(
-                    native_results,
-                    self.authority_escalation_pipeline,
-                    "native:authority_escalation"
-                );
-                push_native_injection!(
-                    native_results,
-                    self.tool_call_injection_pipeline,
-                    "native:tool_call_injection"
-                );
-                push_native_injection!(
-                    native_results,
-                    self.output_manipulation_pipeline,
-                    "native:output_manipulation"
-                );
-                if !native_results.is_empty() {
-                    results.push(injection_l1::aggregate(text, native_results));
-                }
-            }
-            SecurityCategory::Dlp => {
-                if self.level_enabled(execution, SecurityLevel::L1)
-                    && self.model_enabled(execution, "native:dlp")
-                {
-                    if let Some(ref native) = self.dlp_pipeline {
-                        results.push(run_measured_l1_detector(
-                            category,
-                            "native:dlp",
-                            text.len(),
-                            || {
-                                let dlp_mode = execution.gates().dlp_mode;
-                                if dlp_mode.min_score().is_none() {
-                                    return timed_native_regex_scan_result(
-                                        category,
-                                        "native:dlp",
-                                        native,
-                                        prepared,
-                                        execution,
-                                    );
-                                }
-                                let mut result = timed_native_detection_scan_result(
-                                    category,
-                                    "native:dlp",
-                                    prepared.text(),
-                                    || {
-                                        native.detect_prepared_with_mode(
-                                            prepared,
-                                            |rule_id| execution.allows_rule(rule_id),
-                                            execution.gates().explain,
-                                            dlp_mode,
-                                        )
-                                    },
-                                );
-                                // Scored modes report the best span that survives
-                                // post-prediction filtering, as for PII.
-                                if let Some(best) = result
-                                    .evidence_spans
-                                    .iter()
-                                    .map(|span| span.score)
-                                    .reduce(f64::max)
-                                {
-                                    result.confidence = best;
-                                    result.layers[0].confidence = best;
-                                }
-                                result
-                            },
-                        ));
-                    }
-                }
-                push_native!(
-                    self.sensitive_material_pipeline,
-                    "native:sensitive_material",
-                    "dlp_sensitive_material"
-                );
-                push_native!(
-                    self.secret_transfer_pipeline,
-                    "native:secret_transfer",
-                    "dlp_secret_transfer"
-                );
-                push_native!(
-                    self.mcp_runtime_risk_pipeline,
-                    "native:mcp_runtime_risk",
-                    "dlp_mcp_runtime_risk"
-                );
-                push_native!(
-                    self.mcp_policy_pipeline,
-                    "native:mcp_policy",
-                    "dlp_mcp_policy"
-                );
-                push_native!(
-                    self.destructive_operation_pipeline,
-                    "native:destructive_operation",
-                    "dlp_destructive_operation"
-                );
-            }
-            SecurityCategory::Pii => {
-                let native_enabled = self.level_enabled(execution, SecurityLevel::L1)
-                    && self.model_enabled(execution, "native:pii");
-                if native_enabled {
-                    if let Some(ref native) = self.pii_pipeline {
-                        results.push(run_measured_l1_detector(
-                            category,
-                            "native:pii",
-                            text.len(),
-                            || {
-                                let pii_mode = execution.gates().pii_mode;
-                                let mut result = timed_native_detection_scan_result(
-                                    category,
-                                    "native:pii",
-                                    prepared.text(),
-                                    || {
-                                        native.detect_prepared_with_mode(
-                                            prepared,
-                                            |rule_id| execution.allows_rule(rule_id),
-                                            execution.gates().explain,
-                                            pii_mode,
-                                        )
-                                    },
-                                );
-                                // Scored modes report the best span that survives
-                                // post-prediction filtering; strict stays at 1.0.
-                                if pii_mode.min_score().is_some() {
-                                    if let Some(best) = result
-                                        .evidence_spans
-                                        .iter()
-                                        .map(|span| span.score)
-                                        .reduce(f64::max)
-                                    {
-                                        result.confidence = best;
-                                        result.layers[0].confidence = best;
-                                    }
-                                }
-                                result
-                            },
-                        ));
-                    }
-                }
-            }
             SecurityCategory::Threat => {
                 if self.level_enabled(execution, SecurityLevel::L1)
                     && self.model_enabled(execution, "native:threat_l1")
@@ -1609,7 +1318,10 @@ impl SecurityGateway {
                     ));
                 }
             }
-            SecurityCategory::DynamicPii => {}
+            SecurityCategory::Pii
+            | SecurityCategory::Dlp
+            | SecurityCategory::Injection
+            | SecurityCategory::DynamicPii => {}
             SecurityCategory::SensitiveDocument
             | SecurityCategory::ToolClass
             | SecurityCategory::ToolAction
