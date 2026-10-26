@@ -37,7 +37,10 @@ result shapes may be breaking for downstream users, and is called out explicitly
   `external_commands_1pct_fpr` 0.519063, `block_0_1pct_fpr` 2.697449. `shell_tokens.rs` ports the
   heredoc masking bit for bit (full-corpus feature parity; decision scores within 1e-6). Builds on
   the download-into-interpreter relation markers below; older runtimes keep the previous revision,
-  which they pin.
+  which they pin. A heredoc is attributed to the command that owns its `<<` (not any earlier
+  interpreter word on the line), so `echo python; cat f <<EOF` and a cat/tee heredoc to a
+  non-code file stay shell, while a code-substitution into an interpreter (`python … "$(cat
+  <<OLD …)"`) is still masked; this is a tokenizer-only refinement with no model change.
 - **Shell risk: download-into-interpreter relations (#159).** `shell_command` now pins
   `cat-shell-risk-commander` revision `f6243388` (still `format_version: 2`), whose shell-token block
   adds five relation markers from a small, depth-limited parse of the command: `DL->PIPE->INTERP`

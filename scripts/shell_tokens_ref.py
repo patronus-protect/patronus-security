@@ -54,29 +54,79 @@ def head(token):
 # shell: list syntax like ['ssh','-o',…] would turn into `[`, `,`, `CMD=[` tokens that only
 # attacks carried in training. The body is replaced by one `heredoc_body` line for this
 # block; the char_wb block still sees the raw text.
-HEREDOC_INTERPRETER = re.compile(
-    r'(?:^|[\s;&|(])(?:[^\s;&|()<>\'"]*/)?(?:python[0-9.]*|node|ruby|perl)(?=[\s;&|()<>]|$)')
+HEREDOC_INTERPRETERS = ('node', 'ruby', 'perl')
 HEREDOC_OP = re.compile(r'<<-?[ \t]*([\'"]?)([A-Za-z_][A-Za-z0-9_]*)\1')
-# `cat <<'EOF' > fix.py` writes code or data, not shell: same treatment when the line's
-# output file has one of these extensions. Shell scripts (`> run.sh`) stay shell.
-HEREDOC_WRITER = re.compile(r'(?:^|[\s;&|(])(?:cat|tee)(?=[\s;&|()<>]|$)')
+# `cat <<'EOF' > fix.py` writes code or data, not shell: same treatment when the owning
+# command's output file has one of these extensions. Shell scripts (`> run.sh`) stay shell.
+HEREDOC_WRITERS = ('cat', 'tee')
+HEREDOC_PREFIXES = ('sudo', 'doas', 'env', 'exec', 'command', 'nohup', 'time')
 HEREDOC_FILE = re.compile(
     r'(?:>>?|\btee(?:\s+-a)?)\s*[\'"]?[^\s;&|()<>\'"]+\.(?:py|pyi|js|mjs|cjs|ts|tsx|jsx|rb|pl|pm|php|r|jl|json|ya?ml|toml|ini|cfg)'
     r'[\'"]?(?=[\s;&|()<>]|$)', re.I)
 HEREDOC_MASK = 'heredoc_body'
 
 
+def heredoc_segments(line):
+    """Top-level command segments as (start, end), splitting on `; | & && ||` outside any
+    `$( … )` / `( … )` / backticks / quotes. A heredoc belongs to the segment that contains
+    its `<<`, so `echo python; cat f <<EOF` attributes `<<EOF` to `cat f`, not the earlier
+    `python`, and `python -- "$(cat <<OLD)"` keeps `<<OLD` with `python`."""
+    depth = 0; backtick = False; quote = None; start = 0; i = 0; n = len(line)
+    while i < n:
+        c = line[i]
+        if quote is not None:
+            if c == quote:
+                quote = None
+            i += 1; continue
+        if c in '\'"':
+            quote = c; i += 1; continue
+        if c == '`':
+            backtick = not backtick; i += 1; continue
+        if line[i:i + 2] == '$(' or c == '(':
+            depth += 1; i += 2 if c == '$' else 1; continue
+        if c == ')':
+            depth = max(0, depth - 1); i += 1; continue
+        if depth == 0 and not backtick:
+            if line[i:i + 2] in ('&&', '||'):
+                yield start, i; start = i + 2; i += 2; continue
+            if c in ';|&':
+                yield start, i; start = i + 1; i += 1; continue
+        i += 1
+    yield start, n
+
+
+def _segment_head(segment):
+    """Lowercase basename of the command head of `segment`, skipping assignments, flags and
+    sudo/env prefixes; '' when it has none."""
+    for token in segment.split():
+        if re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*=.*', token) or token.startswith('-'):
+            continue
+        name = re.split(r'[\\/]', token.strip('\'"'))[-1].lower()
+        if name in HEREDOC_PREFIXES:
+            continue
+        return name
+    return ''
+
+
+def _is_heredoc_interpreter(name):
+    return name in HEREDOC_INTERPRETERS or (
+        name.startswith('python') and re.fullmatch(r'[0-9.]*', name[len('python'):]) is not None)
+
+
+def _head_masks(head, segment):
+    return _is_heredoc_interpreter(head) or (head in HEREDOC_WRITERS and bool(HEREDOC_FILE.search(segment)))
+
+
 def heredoc_delimiter(line):
-    """Delimiter of the first `<<` heredoc that feeds a non-shell interpreter, or that cat/tee
-    write to a code or data file, on `line`."""
-    word = HEREDOC_INTERPRETER.search(line)
-    if not word:
-        word = HEREDOC_WRITER.search(line)
-        if not word or not HEREDOC_FILE.search(line, word.start()):
-            return None
-    for op in HEREDOC_OP.finditer(line, word.end()):
-        if line[op.start() - 1:op.start()] != '<':
-            return op.group(2)
+    """Delimiter of the first `<<` heredoc on `line` whose owning command feeds a non-shell
+    interpreter, or is a cat/tee writing a code or data file."""
+    segments = [(s, e, _segment_head(line[s:e])) for s, e in heredoc_segments(line)]
+    for op in HEREDOC_OP.finditer(line):
+        if line[op.start() - 1:op.start()] == '<':
+            continue
+        for s, e, head in segments:
+            if s <= op.start() < e and head and _head_masks(head, line[s:e]):
+                return op.group(2)
     return None
 
 

@@ -349,56 +349,12 @@ fn is_heredoc_boundary(line: &str, at: usize) -> bool {
     })
 }
 
-/// Start and end of every word that begins the line or follows `[\s;&|(]`.
-fn heredoc_words(line: &str) -> impl Iterator<Item = (usize, usize)> + '_ {
-    line.char_indices().filter_map(move |(start, c)| {
-        let follows_separator = line[..start]
-            .chars()
-            .next_back()
-            .is_none_or(|prev| is_shell_whitespace(prev) || matches!(prev, ';' | '&' | '|' | '('));
-        if !follows_separator || is_heredoc_word_end(c) {
-            return None;
-        }
-        let end = line[start..]
-            .char_indices()
-            .find(|&(_, c)| is_heredoc_word_end(c))
-            .map_or(line.len(), |(offset, _)| start + offset);
-        Some((start, end))
-    })
-}
-
-/// `python[0-9.]*`, `node`, `ruby` or `perl`, after an optional `…/` path.
-fn is_heredoc_interpreter(word: &str) -> bool {
-    let name = word.rsplit('/').next().unwrap_or(word);
+/// `node`, `ruby`, `perl` or `python[0-9.]*` (the command basename, already lowercased).
+fn is_heredoc_interpreter(name: &str) -> bool {
     matches!(name, "node" | "ruby" | "perl")
         || name
             .strip_prefix("python")
             .is_some_and(|rest| rest.bytes().all(|b| b.is_ascii_digit() || b == b'.'))
-}
-
-/// End of the first word matching `(?:^|[\s;&|(])(?:[^\s;&|()<>'"]*/)?(?:python[0-9.]*|node|ruby|perl)(?=…)`.
-fn heredoc_interpreter_end(line: &str) -> Option<usize> {
-    heredoc_words(line)
-        .find(|&(start, end)| {
-            is_heredoc_boundary(line, end) && is_heredoc_interpreter(&line[start..end])
-        })
-        .map(|(_, end)| end)
-}
-
-/// The first `(?:^|[\s;&|(])(?:cat|tee)(?=…)`: (match start, word end). The
-/// match starts at the separator before the word, or at 0 for the line start.
-fn heredoc_writer(line: &str) -> Option<(usize, usize)> {
-    heredoc_words(line)
-        .find(|&(start, end)| {
-            matches!(&line[start..end], "cat" | "tee") && is_heredoc_boundary(line, end)
-        })
-        .map(|(start, end)| {
-            let separator = line[..start]
-                .char_indices()
-                .next_back()
-                .map_or(0, |(i, _)| i);
-            (separator, end)
-        })
 }
 
 const HEREDOC_FILE_EXTENSIONS: [&str; 20] = [
@@ -511,23 +467,128 @@ fn heredoc_op_at(line: &str, k: usize) -> Option<(usize, &str)> {
     }
 }
 
-/// Delimiter of the first `<<` heredoc that feeds a non-shell interpreter, or
-/// that cat/tee write to a code or data file, on `line`.
-fn heredoc_delimiter(line: &str) -> Option<&str> {
-    let from = match heredoc_interpreter_end(line) {
-        Some(end) => end,
-        None => {
-            let (start, end) = heredoc_writer(line)?;
-            if !heredoc_writes_code_file(line, start) {
-                return None;
+/// Top-level command segments as (start, end), splitting on `; | & && ||` outside any
+/// `$( … )` / `( … )` / backticks / quotes. A heredoc belongs to the segment that contains
+/// its `<<`, so `echo python; cat f <<EOF` attributes `<<EOF` to `cat f`, and
+/// `python -- "$(cat <<OLD)"` keeps `<<OLD` with `python`. Mirrors `heredoc_segments`.
+fn heredoc_segments(line: &str) -> Vec<(usize, usize)> {
+    let bytes = line.as_bytes();
+    let (mut depth, mut backtick): (i32, bool) = (0, false);
+    let mut quote: Option<u8> = None;
+    let (mut start, mut i, n) = (0usize, 0usize, line.len());
+    let mut segments = Vec::new();
+    while i < n {
+        let c = bytes[i];
+        if let Some(q) = quote {
+            if c == q {
+                quote = None;
             }
-            end
+            i += 1;
+            continue;
         }
-    };
-    let mut k = from;
+        match c {
+            b'\'' | b'"' => {
+                quote = Some(c);
+                i += 1;
+            }
+            b'`' => {
+                backtick = !backtick;
+                i += 1;
+            }
+            b'(' => {
+                depth += 1;
+                i += 1;
+            }
+            b'$' if bytes.get(i + 1) == Some(&b'(') => {
+                depth += 1;
+                i += 2;
+            }
+            b')' => {
+                depth = (depth - 1).max(0);
+                i += 1;
+            }
+            _ if depth == 0 && !backtick => {
+                if line[i..].starts_with("&&") || line[i..].starts_with("||") {
+                    segments.push((start, i));
+                    i += 2;
+                    start = i;
+                } else if matches!(c, b';' | b'|' | b'&') {
+                    segments.push((start, i));
+                    i += 1;
+                    start = i;
+                } else {
+                    i += line[i..].chars().next().map_or(1, char::len_utf8);
+                }
+            }
+            _ => i += line[i..].chars().next().map_or(1, char::len_utf8),
+        }
+    }
+    segments.push((start, n));
+    segments
+}
+
+/// Lowercase basename of the command head of `segment`, skipping assignments, flags and
+/// sudo/env prefixes; empty when it has none. Mirrors `_segment_head`.
+fn heredoc_segment_head(segment: &str) -> String {
+    for token in segment.split_whitespace() {
+        if token.starts_with('-') || is_heredoc_assignment(token) {
+            continue;
+        }
+        let name = token
+            .trim_matches(|c| c == '\'' || c == '"')
+            .rsplit(['\\', '/'])
+            .next()
+            .unwrap_or("")
+            .to_lowercase();
+        if matches!(
+            name.as_str(),
+            "sudo" | "doas" | "env" | "exec" | "command" | "nohup" | "time"
+        ) {
+            continue;
+        }
+        return name;
+    }
+    String::new()
+}
+
+/// `[A-Za-z_][A-Za-z0-9_]*=.*` (full match).
+fn is_heredoc_assignment(token: &str) -> bool {
+    let bytes = token.as_bytes();
+    if bytes
+        .first()
+        .is_none_or(|b| !(b.is_ascii_alphabetic() || *b == b'_'))
+    {
+        return false;
+    }
+    let mut index = 1;
+    while index < bytes.len() && (bytes[index].is_ascii_alphanumeric() || bytes[index] == b'_') {
+        index += 1;
+    }
+    bytes.get(index) == Some(&b'=')
+}
+
+/// Whether a heredoc owned by this command segment masks: an interpreter head, or a cat/tee
+/// head writing a code or data file somewhere in the segment. Mirrors `_head_masks`.
+fn heredoc_head_masks(head: &str, segment: &str) -> bool {
+    is_heredoc_interpreter(head)
+        || (matches!(head, "cat" | "tee") && heredoc_writes_code_file(segment, 0))
+}
+
+/// Delimiter of the first `<<` heredoc on `line` whose owning command feeds a non-shell
+/// interpreter, or is a cat/tee writing a code or data file. Mirrors `heredoc_delimiter`.
+fn heredoc_delimiter(line: &str) -> Option<&str> {
+    let segments: Vec<(usize, usize, String)> = heredoc_segments(line)
+        .into_iter()
+        .map(|(s, e)| (s, e, heredoc_segment_head(&line[s..e])))
+        .collect();
+    let mut k = 0;
     while k < line.len() {
         if let Some((end, delimiter)) = heredoc_op_at(line, k) {
-            if !line[..k].ends_with('<') {
+            let masks = !line[..k].ends_with('<')
+                && segments.iter().any(|(s, e, head)| {
+                    *s <= k && k < *e && !head.is_empty() && heredoc_head_masks(head, &line[*s..*e])
+                });
+            if masks {
                 return Some(delimiter);
             }
             k = end;
@@ -1445,6 +1506,34 @@ mod tests {
         assert_eq!(
             mask_heredocs("tee src/app.ts <<'TS' >/dev/null\nexport const x = 1\nTS"),
             "tee src/app.ts <<'TS' >/dev/null\nheredoc_body\nTS"
+        );
+    }
+
+    #[test]
+    fn heredoc_belongs_to_its_owning_command() {
+        // An interpreter that is only an earlier/arg word does not mask a later command's heredoc.
+        assert_eq!(
+            mask_heredocs("echo python; cat f <<EOF\nx\nEOF"),
+            "echo python; cat f <<EOF\nx\nEOF"
+        );
+        assert_eq!(
+            mask_heredocs("grep python a.txt && cat note <<E\ny\nE"),
+            "grep python a.txt && cat note <<E\ny\nE"
+        );
+        // Still masked: interpreter head, code-substitution into an interpreter, cat writing a code file.
+        assert!(mask_heredocs("sudo python <<'PY'\nx=[1]\nPY").contains("heredoc_body"));
+        assert!(
+            mask_heredocs("python edit.py -- \"$(cat <<'OLD'\nx=[1]\nOLD)\"")
+                .contains("heredoc_body")
+        );
+        assert!(
+            mask_heredocs("python --version && cat <<'EOF' > test.py\nimport os\nEOF")
+                .contains("heredoc_body")
+        );
+        // A cat/tee heredoc to a non-code file stays shell.
+        assert_eq!(
+            mask_heredocs("wc; cat > notes.md <<'EOF'\n#!/bin/sh\nEOF"),
+            "wc; cat > notes.md <<'EOF'\n#!/bin/sh\nEOF"
         );
     }
 

@@ -86,7 +86,7 @@ pub const SHELL_COMMAND_ASSET: PipelineModelAssetSpec = PipelineModelAssetSpec {
     repo: "patronus-studio/cat-shell-risk-commander",
     // A1 (format_version 2): char_wb + shell_tokens two-block model, with the
     // issue #159 `DL->` relation markers and heredoc masking in the shell_tokens block (run F).
-    revision: "d9f4509cac7f41f01de3494d2b0d9cc3b9da0824",
+    revision: "5e93f08565b7c1f04f62adebe6faf98acb708c6d",
     destination_path: "shell_command/cat_shell_risk_commander",
     files: &["manifest.json", "model.json", "LICENSE"],
 };
