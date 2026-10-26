@@ -8,7 +8,7 @@ ARG L3_PRECISION=fp16
 FROM rust:1.98-trixie AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential cmake pkg-config protobuf-compiler libssl-dev \
+    build-essential ca-certificates cmake pkg-config protobuf-compiler libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
