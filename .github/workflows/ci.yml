@@ -16,7 +16,7 @@ jobs:
           components: clippy, rustfmt
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.12.16"
       - run: cargo fmt --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test -p patronus-ark-core --no-default-features
@@ -29,6 +29,7 @@ jobs:
       - run: cargo test -p ark-api
       - run: cargo test -p ark-coordinator
       - run: cargo test -p ark-distributed-protocol
+      - run: python scripts/bootstrap_python_tls.py
       - run: python -m pip install "PyYAML>=6,<7"
       - run: python scripts/generate_docs.py --check
       - uses: EmbarkStudios/cargo-deny-action@v2
@@ -68,8 +69,9 @@ jobs:
           components: clippy, rustfmt
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.12.16"
       - run: python -m venv .venv
+      - run: .venv/bin/python scripts/bootstrap_python_tls.py
       - run: .venv/bin/python -m pip install -r requirements-test.txt
       - run: .venv/bin/python -m maturin develop --manifest-path python/Cargo.toml
         env:
@@ -88,16 +90,18 @@ jobs:
           components: clippy, rustfmt
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.12.16"
           cache: pip
       - uses: actions/cache@v4
         with:
           path: ~/.cache/patronus_ark
           key: ark-models-${{ runner.os }}-${{ hashFiles('rust/src/assets/specs.rs') }}
       - run: python -m venv .build-venv
+      - run: .build-venv/bin/python scripts/bootstrap_python_tls.py
       - run: .build-venv/bin/python -m pip install maturin
       - run: .build-venv/bin/python -m maturin build --release --manifest-path python/Cargo.toml --interpreter .build-venv/bin/python --out dist
       - run: python -m venv .perf-venv
+      - run: .perf-venv/bin/python scripts/bootstrap_python_tls.py
       - run: .perf-venv/bin/python -m pip install dist/*.whl
       - name: Full gated unified native throughput regression (without GLiNER)
         run: >-

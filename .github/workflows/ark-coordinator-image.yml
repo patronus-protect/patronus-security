@@ -38,9 +38,10 @@ jobs:
           components: rustfmt, clippy
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.12.16"
       - run: |
           python -m venv .venv
+          .venv/bin/python scripts/bootstrap_python_tls.py
           .venv/bin/pip install pytest pyyaml
           bash -n ark-coordinator/deploy/bootstrap.sh
           shellcheck ark-coordinator/deploy/bootstrap.sh
@@ -60,7 +61,7 @@ jobs:
 
       - name: Build Coordinator image for pull requests
         if: github.event_name == 'pull_request'
-        run: docker build --file ark-coordinator/Dockerfile --tag ark-coordinator:validation .
+        run: docker build --pull --no-cache --file ark-coordinator/Dockerfile --tag ark-coordinator:validation .
 
   publish:
     if: github.event_name != 'pull_request'
@@ -94,7 +95,8 @@ jobs:
             org.opencontainers.image.source=https://github.com/patronus-protect/patronus-security
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ env.ARK_VERSION }}
-          cache-from: type=gha
+          pull: true
+          no-cache: true
           cache-to: type=gha,mode=max
       - name: Package immutable Coordinator bootstrap
         env:
