@@ -123,6 +123,24 @@ pub(super) const PHONE_INTERNATIONAL: PiiPattern = PiiPattern {
     scored_only: false,
 };
 
+// A national number without a trunk or country prefix of its own form (F01): `Mobile:
+// 416 60 039`, `call me on 03.93.92.16.85`, `0688 843 79 56 office`. Grouped digits
+// alone are as often an order, account or date, so a phone term of the lexicon or a
+// structural key must support the value, and the number must be valid in one of the
+// `validators::PHONE_REGIONS` numbering plans. Runs after the other phone rules, which
+// keep their spans; scored modes only, `strict` stays unchanged.
+pub(super) const PHONE_REGIONAL: PiiPattern = PiiPattern {
+    name: "pii_phone_regional",
+    pattern: r"(?:\([0-9]{2,5}\)[ ]?|(?-u:\b))[0-9]{2,5}(?:[ .\-/][0-9]{2,6}){1,4}(?-u:\b)",
+    entity_group: "PHONE",
+    validator: Some(validators::regional_phone),
+    strength: ValidatorStrength::Format,
+    base_score: 20,
+    captured_value: false,
+    requires_context: true,
+    scored_only: true,
+};
+
 // ── MAC-Adresse ─────────────────────────────────────────────────────────
 pub(super) const MAC_ADDRESS: PiiPattern = PiiPattern {
     name: "pii_mac_address",

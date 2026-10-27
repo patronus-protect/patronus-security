@@ -237,6 +237,34 @@ pub fn unanchored_phone(s: &str) -> bool {
                 .any(|ch| matches!(ch, ' ' | '-' | '.' | '/' | '(' | ')')))
 }
 
+/// Numbering plans `pii_phone_regional` checks a national number against (F01): the
+/// DACH and the other EU/EEA plans of the corpora, UK, NANP and the extra regions of
+/// the Presidio phone recognizer (BR, IL, IN, JP).
+pub const PHONE_REGIONS: &[phonenumber::country::Id] = {
+    use phonenumber::country::Id::*;
+    &[
+        DE, AT, CH, FR, BE, NL, LU, IT, ES, PT, IE, GB, DK, NO, SE, FI, PL, CZ, US, CA, BR,
+        IL, IN, JP,
+    ]
+};
+
+/// Validate a national phone number without a country prefix (F01): seven to twelve
+/// digits, not a date (`31.12.2024`, `2024-12-31`), and a valid number of a
+/// `PHONE_REGIONS` plan per the libphonenumber metadata of the `phonenumber` crate.
+pub fn regional_phone(s: &str) -> bool {
+    static DATE: LazyLock<regex::Regex> = LazyLock::new(|| {
+        regex::Regex::new(r"^(?:[0-9]{1,2}[./\-][0-9]{1,2}[./\-][0-9]{2,4}|[0-9]{4}[./\-][0-9]{1,2}[./\-][0-9]{1,2})$")
+            .unwrap()
+    });
+    let digits = s.bytes().filter(u8::is_ascii_digit).count();
+    (7..=12).contains(&digits)
+        && phone(s)
+        && !DATE.is_match(s)
+        && PHONE_REGIONS.iter().any(|region| {
+            phonenumber::parse(Some(*region), s).is_ok_and(|number| phonenumber::is_valid(&number))
+        })
+}
+
 /// Top-level domains delegated by IANA, verbatim from
 /// <https://data.iana.org/TLD/tlds-alpha-by-domain.txt>: a version comment, then
 /// one uppercase domain per line in byte order (punycode as `XN--…`).

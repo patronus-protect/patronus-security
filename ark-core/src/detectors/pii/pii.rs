@@ -62,6 +62,7 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     de::PHONE_NATIONAL_CONTEXT,
     de::PHONE_NATIONAL_PROXIMITY,
     us::PHONE,
+    common::PHONE_REGIONAL,
     common::MAC_ADDRESS,
     intl::IBAN_DE,
     intl::IBAN_GENERIC,
