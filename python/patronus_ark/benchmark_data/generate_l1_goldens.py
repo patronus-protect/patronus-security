@@ -3588,6 +3588,42 @@ Q_CONTACT_CASES = [
 for _row in Q_CONTACT_CASES:
     PII_CASES.setdefault(_row["target_label"], []).append(_row)
 
+# T29: the GB BBAN (four letters of the bank code, sort code, account: `ZFJR88590163492773`) has
+# no check digit. `pii_bban_gb` reports it in every mode with a BBAN or account term near it or as
+# its structural key, also where the field-bound account rule does not bind the value (prose such
+# as `bank account number (BBAN) …`, a term after the value, keys like `bankkonto`); a value
+# without such a term stays negative in every mode. Appended so existing ids stay stable.
+T29_CASES = [
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_bban_gb", "Unsere Bankverbindung (BBAN) lautet ", "ZFJR88590163492773", ".", carrier="prose"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_bban_gb", "Bankkonto des Mieters: ", "KALL90112673253892"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_bban_gb", "Die Miete geht auf ", "GJVV72375316777262", " (BBAN) der Hausverwaltung.", carrier="prose"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_bban_gb", '{"bankkonto": "', "RVHC19892216923275", '"}', carrier="json"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_bban_gb", "name;bankkonto\nJonas Weber;", "YANH21973098530363", "", carrier="csv"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_bban_gb", "Laut Vertrag ist das Bankkonto, ", "JAID26257597742110", ", zu belasten.", carrier="prose", mode="balanced"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_bban_gb", "Our bank account number, ", "SIWP73662924611856", ", reflects our growth.", carrier="prose"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_bban_gb", "The premium is debited from the bank account number ", "SBMJ80180092602358", ".", carrier="prose"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_bban_gb", "We store the bank account number (BBAN) ", "SYIL09843639680686", " of the payee.", carrier="prose"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_bban_gb", "Refunds go to ", "ULHM05476453653182", " (BBAN) within five days.", carrier="prose"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_bban_gb", '{"bankingAccount": "', "OLYQ16400516534625", '"}', carrier="json"),
+    p("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_bban_gb", "payee,banking account\nAda Weber,", "VAEZ76028829777902", "", carrier="csv", mode="recall"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_bban_gb", "Bestellnummer: ABCD12345678901234", "order number, no account term"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_bban_gb", "Referenznummer QWER55501234567890 bitte angeben.", "reference number, no account term", carrier="prose", mode="balanced"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_bban_gb", "Sendungsnummer: DHLP00340434161094", "tracking number, no account term"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_bban_gb", "Fahrgestellnummer (VIN): WDBA12345678901234", "vehicle identification, no account term", mode="balanced"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_bban_gb", "Bankkonto geprüft, Bestellnummer ABCD12345678901234", "order number nearer than the account term", carrier="prose"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_bban_gb", "Die Bankverbindung (BBAN) ZFJR00000000000000 ist ein Platzhalter.", "account of zeros", carrier="prose", mode="balanced"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "de", "pii_bban_gb", "ZFJR88590163492773", "bare value without an account term", mode="balanced"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_bban_gb", "Order number: ABCD12345678901234", "order number, no account term"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_bban_gb", "Please quote reference number QWER55501234567890.", "reference number, no account term", carrier="prose", mode="balanced"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_bban_gb", "Tracking number: DHLP00340434161094", "tracking number, no account term"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_bban_gb", "VIN: WDBA12345678901234", "vehicle identification, no account term", mode="balanced"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_bban_gb", "Bank account verified, order number ABCD12345678901234", "order number nearer than the account term", carrier="prose", mode="balanced"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_bban_gb", "The bank account number (BBAN) ZFJR11111111111111 is a placeholder.", "one repeated digit", carrier="prose"),
+    n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_bban_gb", "Consignee: Katy Thompson CECS05573529734512", "bare value without an account term", carrier="prose", mode="recall"),
+]
+for _row in T29_CASES:
+    PII_CASES.setdefault(_row["target_label"], []).append(_row)
+
 # DLP golden schema v2 (E13). Every DLP row names the rule it exercises (`rule_id`), the
 # document that carries the value (`carrier`), its difficulty `tags` and whether it is a
 # `known_gap`: a positive the detector misses today, reported by 13_l1_golden_eval but

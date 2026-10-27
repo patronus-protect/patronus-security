@@ -600,6 +600,7 @@ tasks:
       customer/employee IDs (ark_only) must not regress; count_validated.py count rises by 1
 
   - id: T29
+    status: done
     title: "Account number: GB BBAN (4 letters + 14 digits) after BBAN and account-number field names"
     type: recall-fix
     deps: [K03, K04]

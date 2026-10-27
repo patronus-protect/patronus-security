@@ -93,6 +93,28 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- GB BBAN as account number (T29). New context-bound rule `pii_bban_gb` reports four letters of
+  the bank code, the sort code and the account (`ZFJR88590163492773`, `validators::uk_bban`: form
+  only, no account of zeros or one repeated digit) as `FINANCIAL_ACCOUNT_NUMBER` in every mode
+  when a BBAN or account term of the K03 lexicon stands near the value or is its structural key
+  (K04): `bank account number (BBAN) …`, `our bank account number, …`, `… (BBAN)`,
+  `Bankkonto des Mieters: …`, JSON/CSV keys such as `bankkonto` or `bankingAccount`, which the
+  field-bound account rule does not bind. The form has no check digit, so there is no
+  context-free form: a bare value and 18-character codes after order, reference, tracking or
+  VIN field names stay silent, as does a value with a nearer counter-context term. M3 unchanged
+  (`uk_bban` is classified as form only). New `pii_l1` rows (12 positives, 14 hard negatives,
+  DE + EN), one rule fixture, tests in `rust/tests/pii_account_numbers.rs`. **Detection change**
+  (every mode): BBAN-shaped values near a BBAN or account term are new
+  `FINANCIAL_ACCOUNT_NUMBER` findings. Dev scoreboard vs. 94aca75 (PASS in strict and balanced,
+  no new hard-negative FP): Gretel (neutral) account number exact F1 balanced 46.7 → 49.2
+  (4 new TP, 0 new FP), all families +2.0 pp in strict and balanced; customer ID, employee ID
+  and username unchanged; L1 F1 +0.1 pp in both modes. The remaining BBAN-shaped FN have no
+  account term (addresses, SWIFT MT tags, EDIFACT, XBRL), a misspelled field (`Mother' BBN:`) or
+  sit in a truncated CSV row. The regex is linear and bounded (fixed lengths, ASCII
+  boundaries); the context check only runs on the rare shape matches. `latency.py compare
+  --engine ark-native`: 100 KiB p95 165.1 → 165.9 ms (+0.5 %, PASS). Golden eval:
+  `pii_bban_gb` 6/6 DE, 6/6 EN.
+
 - Account numbers (B-ACCT: A04, F14). The US ABA routing number gets its check digit
   (`validators::aba_routing_number`: Federal Reserve routing symbol 00–12, 21–32, 61–72 or 80,
   weights 3-7-1 mod 10, not one repeated digit) and reports `FINANCIAL_ACCOUNT_NUMBER`.

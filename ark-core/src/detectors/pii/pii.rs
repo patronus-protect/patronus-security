@@ -163,6 +163,7 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     de::STEUERNUMMER_CONTEXT_FREE,
     us::ABA_ROUTING_NUMBER,
     us::ABA_ROUTING_NUMBER_CONTEXT_FREE,
+    uk::BBAN,
     fr::NIR,
     fr::NIR_CONTEXT_FREE,
     fr::SIREN,
@@ -615,6 +616,7 @@ impl NativeRegexDetector for PiiPipeline {
             | "pii_fodselsnummer_no"
             | "pii_hetu_fi"
             | "pii_aba_routing_number_us"
+            | "pii_bban_gb"
             | "pii_nir_fr"
             | "pii_siren_fr"
             | "pii_siret_fr"

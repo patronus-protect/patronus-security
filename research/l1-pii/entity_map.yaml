@@ -509,6 +509,7 @@ checksums:
     us_ssn_context_free: null           # B-SSN, Bereichsprüfung ohne Platzhalter, keine Prüfziffer
     uk_nino: null                       # Präfix-/Suffixprüfung
     uk_nino_context_free: null          # B-UK, wie uk_nino in einer Schreibweise (groß oder klein)
+    uk_bban: null                       # T29, GB-BBAN (Bankcode, Sort Code, Konto), keine Prüfziffer
     uk_nhs_number: {algorithm: gewichtet 10…1 mod 11}       # B-UK, NHS-Nummer
     au_abn: {algorithm: "gewichtet 10-1-3-5-…-19 mod 89 (erste Ziffer − 1)"}  # B-APAC, ABN
     au_acn: {algorithm: "(10 − gewichtet 8…1 mod 10) mod 10"}          # B-APAC, ACN

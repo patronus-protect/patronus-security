@@ -375,6 +375,18 @@ annotiert meist nur den einen eingesetzten Wert eines Dokuments, die Korpora wer
   Zeilen ohne Gold. Ohne CSV-Bindung der ISO-Daten stünde `neutral` bei 75,0, ein Geburtsdatum in
   einer `date_of_birth`-Spalte bliebe aber unerkannt; die Spaltenbindung gilt wie für `TT.MM.JJJJ`.
 
+Stand T29: ARK 55, gemeinsam 19. Die GB-BBAN (Bankcode aus vier Buchstaben, Sort Code, Konto:
+`ZFJR88590163492773`) hat keine Prüfziffer (`validators::uk_bban`, nur Form, kein Konto aus Nullen
+oder einer wiederholten Ziffer, M3 unverändert). `pii_bban_gb` meldet sie als
+`FINANCIAL_ACCOUNT_NUMBER` in jedem Modus, wenn ein BBAN- oder Kontobegriff des K03-Lexikons nah am
+Wert steht oder sein Strukturschlüssel ist (K04): `bank account number (BBAN) …`, `our bank account
+number, …`, `… (BBAN)`, `Bankkonto des Mieters: …`, Schlüssel `bankkonto`, `bankingAccount`. Eine
+kontextfreie Form gibt es nicht; blanke Werte und gleich geformte Codes hinter Bestell-, Referenz-,
+Sendungs- oder VIN-Feldern bleiben negativ. Dev balanced, exakter F1: Kontonummer neutral 46,7 →
+49,2 (4 neue TP, kein neuer FP); Kunden-, Mitarbeiter-ID und Benutzername unverändert. Von den
+BBAN-förmigen FN auf Gretel bleiben Werte ohne Begriff (Adressen, SWIFT-MT-Tags, EDIFACT, XBRL),
+der verschriebene Feldname `Mother' BBN:` und eine abgeschnittene CSV-Zeile offen.
+
 Stand B02: ARK 24, gemeinsam 7. Dazu kommen die USt-IdNr. von BG, CY, CZ, DK, EE, EL, FI, HR, HU, IE
 und LT, gleiche Struktur wie B01 (je Land ein Label `VAT_ID_BG` … und ein Validator mit Prüfziffer,
 nur in `balanced`/`recall`), alle `ark_only`; Griechenland trägt im Label das MwSt.-Präfix `EL`, in
