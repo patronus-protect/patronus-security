@@ -251,6 +251,30 @@
   },
   {
     "category": "pii",
+    "rule_id": "pii_phone_regional",
+    "de": "Handy: 0688 843 79 56",
+    "en": "Can someone call me on 9472 7916? I have some questions.",
+    "hard_negatives": {
+      "de": [
+        "Rechnung 0494 92 82 32 vom Mai",
+        "Handy gekauft am 31.12.2024"
+      ],
+      "en": [
+        "Order 416 60 039 shipped today.",
+        "Mobile: 2024-12-31"
+      ]
+    },
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Telefon (Zürich): 044 668 18 00",
+        "en": "Mobile: 03.93.92.16.85"
+      }
+    }
+  },
+  {
+    "category": "pii",
     "rule_id": "pii_phone_us",
     "de": "Telefon: 212-555-1234",
     "en": "Phone: 212-555-1234",
