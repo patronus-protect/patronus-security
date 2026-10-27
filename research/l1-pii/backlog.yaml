@@ -695,6 +695,7 @@ tasks:
 
   # M3 +3 (60)
   - id: B-EU2
+    status: done
     title: "AT social insurance number, CH AHV (EAN-13), PT NIF, IE PPSN"
     type: new-entity
     deps: [K05]
