@@ -1,12 +1,16 @@
 {
-  "opt_in_classes": ["content.sql", "identifier.de.vat_id"],
+  "opt_in_classes": ["content.sql", "content.system_log", "identifier.de.vat_id"],
   "synthetic": {
     "overall": {"gold": 48, "predicted": 44, "exact": {"f1": 0.9, "precision": 0.9, "recall": 0.9, "tp": 40}},
     "groups": {
       "API_KEY": {"gold": 40, "predicted": 40, "exact": {"f1": 0.9, "precision": 0.9, "recall": 0.9, "tp": 36}},
       "dlp.de.vat_id": {"gold": 8, "predicted": 4, "exact": {"f1": 0.5, "precision": 0.75, "recall": 0.375, "tp": 3}}
     },
-    "providers": {}
+    "providers": {},
+    "documents": {
+      "content.sql": {"gold": 4, "predicted": 4, "tp": 4, "f1": 1.0, "precision": 1.0, "recall": 1.0},
+      "content.system_log": {"gold": 30, "predicted": 20, "tp": 18, "f1": 0.72, "precision": 0.9, "recall": 0.6}
+    }
   },
   "external": {"documents": {"content.sql": {"documents": 20, "gold": 10, "predicted": 12, "tp": 10,
                                              "f1": 0.909091, "precision": 0.833333, "recall": 1.0}}}

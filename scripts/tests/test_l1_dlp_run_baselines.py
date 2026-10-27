@@ -107,6 +107,7 @@ def test_read_rows_requires_unique_ids_and_text(tmp_path):
         ({"format": "yaml"}, "config.yaml"),
         ({"format": "code", "code_language": "go"}, "main.go"),
         ({"format": "chat"}, "chat.txt"),
+        ({"format": "sql"}, "dump.sql"),
         ({}, "document.txt"),
     ],
 )
@@ -216,6 +217,13 @@ def test_locate_secret_inside_match_and_fallbacks():
         (f"GOOGLE_CREDENTIALS='{SA_KEY_FILE}'\n", SA_EMAIL, "trufflehog", "GCP", SA_KEY_FILE, ["key_file"]),
         (f"x = \"{SA_KEY_FILE_ESCAPED}\";", SA_EMAIL, "trufflehog", "GCP", SA_KEY_FILE_ESCAPED, ["key_file"]),
         (f"owner: {SA_EMAIL}", SA_EMAIL, "trufflehog", "GCP", SA_EMAIL, []),
+        # GOLD-D6: gitleaks kubernetes-secret-yaml reports the whole data entry.
+        (f"kind: Secret\ndata:\n  password: {PASSWORD}\n", f"password: {PASSWORD}", "gitleaks", "kubernetes-secret-yaml",
+         PASSWORD, ["yaml_entry"]),
+        (f"{{kind: Secret, data: {{ db.password: '{PASSWORD}' }}}}", f"db.password: '{PASSWORD}'", "gitleaks",
+         "kubernetes-secret-yaml", PASSWORD, ["trim", "yaml_entry"]),
+        (f"data:\n  tls.key: |\n    {PASSWORD}\nkind: Secret", f"tls.key: |\n    {PASSWORD}", "gitleaks", "kubernetes-secret-yaml",
+         PASSWORD, ["yaml_entry"]),
         (f"key:\n{PEM}\n", PEM_LABEL, "detect-secrets", "PrivateKeyDetector", PEM, ["pem_block"]),
         (f"-----BEGIN {PEM_LABEL}-----\n(cut)", PEM_LABEL, "detect-secrets", "PrivateKeyDetector", f"-----BEGIN {PEM_LABEL}-----", ["pem_header"]),
         (f"key:\n{PEM}\n", PEM, "gitleaks", "private-key", PEM, []),

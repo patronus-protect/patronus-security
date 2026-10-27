@@ -8,7 +8,9 @@ by exactly that rule with exactly the value span. Generated values exist only in
 import base64
 import binascii
 import json
+import math
 import unittest
+from collections import Counter
 from pathlib import Path
 
 import yaml
@@ -376,7 +378,82 @@ BASE36 = DIGITS + "abcdefghijklmnopqrstuvwxyz"
 LOWER = "abcdefghijklmnopqrstuvwxyz"
 BASE32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
 OID_RSA_ENCRYPTION = bytes.fromhex("2a864886f70d010101")
+OID_PKCS7_DATA = bytes.fromhex("2a864886f70d010701")
+OID_PKCS7_ENCRYPTED_DATA = bytes.fromhex("2a864886f70d010706")
+OID_SHROUDED_KEY_BAG = bytes.fromhex("2a864886f70d010c0a0102")
+OID_PBE_SHA_RC2_40 = bytes.fromhex("2a864886f70d010c0106")
+OID_PBE_SHA_3DES = bytes.fromhex("2a864886f70d010c0103")
+OID_SHA1 = bytes.fromhex("2b0e03021a")
 ONEPASSWORD_SECRET_KEY = onepassword_secret_key("A3")
+
+
+def age_secret_key(value):
+    """age X25519 identity: upper-case Bech32 under AGE-SECRET-KEY- carrying 32 bytes."""
+    decoded = checks.bech32_decode(value)
+    return value.isupper() and decoded is not None and decoded[0] == "age-secret-key-" and len(decoded[1]) == 32
+
+
+def der_children(der, tag=0x30):
+    """The children of one DER element with ``tag`` that spans all of ``der``."""
+    outer = checks.der_parse(der)
+    if not outer or len(outer) != 1 or outer[0][0] != tag:
+        return None
+    return checks.der_parse(outer[0][1])
+
+
+def pbe_parameters(algorithm, oid):
+    """AlgorithmIdentifier of a PKCS#12 PBE scheme with an 8-byte salt and 2048 iterations."""
+    fields = checks.der_parse(algorithm)
+    params = fields and len(fields) == 2 and fields[0] == (0x06, oid) and checks.der_parse(fields[1][1])
+    return bool(params) and [tag for tag, _ in params] == [0x04, 0x02] and len(params[0][1]) == 8 and params[1][1] == b"\x08\x00"
+
+
+def pkcs12_keystore(value):
+    """RFC 7292 PFX v3 in the OpenSSL layout: encrypted certificate bag, shrouded key bag, SHA-1 MAC."""
+    pfx = der_children(checks.b64decode(value) or b"")
+    if not pfx or [tag for tag, _ in pfx] != [0x02, 0x30, 0x30] or pfx[0][1] != b"\x03":
+        return False
+    auth_safe = checks.der_parse(pfx[1][1])
+    if not auth_safe or auth_safe[0] != (0x06, OID_PKCS7_DATA) or auth_safe[1][0] != 0xA0:
+        return False
+    octets = checks.der_parse(auth_safe[1][1])
+    contents = octets and octets[0][0] == 0x04 and der_children(octets[0][1])
+    if not contents or [checks.der_parse(info)[0] for _, info in contents] != [
+        (0x06, OID_PKCS7_ENCRYPTED_DATA), (0x06, OID_PKCS7_DATA)
+    ]:
+        return False
+    encrypted_data = der_children(checks.der_parse(contents[0][1])[1][1])
+    if not encrypted_data or encrypted_data[0] != (0x02, b"\x00"):
+        return False
+    info = checks.der_parse(encrypted_data[1][1])
+    if not info or info[0] != (0x06, OID_PKCS7_DATA) or not pbe_parameters(info[1][1], OID_PBE_SHA_RC2_40) or info[2][0] != 0x80:
+        return False
+    bags = checks.der_parse(checks.der_parse(contents[1][1])[1][1])
+    bag = bags and bags[0][0] == 0x04 and der_children(bags[0][1])
+    key_bag = bag and len(bag) == 1 and checks.der_parse(bag[0][1])
+    if not key_bag or key_bag[0] != (0x06, OID_SHROUDED_KEY_BAG):
+        return False
+    shrouded = der_children(key_bag[1][1])
+    if not shrouded or not pbe_parameters(shrouded[0][1], OID_PBE_SHA_3DES) or shrouded[1][0] != 0x04:
+        return False
+    mac = checks.der_parse(pfx[2][1])
+    digest = mac and checks.der_parse(mac[0][1])
+    return (
+        bool(digest)
+        and checks.der_parse(digest[0][1]) == [(0x06, OID_SHA1), (0x05, b"")]
+        and len(digest[1][1]) == 20
+        and len(mac[1][1]) == 8
+        and mac[2][1] == b"\x08\x00"
+    )
+
+
+def shannon_entropy(value):
+    """Shannon entropy in bits per character, as detect-secrets computes it."""
+    return -sum(count / len(value) * math.log2(count / len(value)) for count in Counter(value).values())
+
+
+def high_entropy(check, limit):
+    return lambda value: check(value) and shannon_entropy(value) > limit
 
 
 def gitlab_routable(value, prefix, length):
@@ -563,6 +640,17 @@ CHECKS = {
     "clickhouse_cloud_api_secret": prefixed("4b1d", ALNUM, 38),
     "cloudant_password": prefixed("", HEX, 64),
     "cloudant_api_key": prefixed("", LOWER, 24),
+    # GOLD-D6 baseline entities (credential, key)
+    "curl_user_password": prefixed("", ALNUM + "._@-", 20),
+    "nuget_cleartext_password": prefixed("", ALNUM, 24),
+    "kubernetes_secret_data": lambda v: (raw := checks.b64decode(v)) is not None and len(raw) == 24 and raw.isalnum(),
+    "base64_high_entropy_string": high_entropy(base64_bytes("", 33), 4.5),
+    "hex_high_entropy_string": high_entropy(prefixed("", HEX, 48), 3.0),
+    "age_secret_key": age_secret_key,
+    "pkcs12_keystore": pkcs12_keystore,
+    "laravel_app_key": base64_bytes("base64:", 32),
+    "fernet_key": lambda v: v.endswith("=") and base64url_bytes(32)(v[:-1]),
+    "aes256_hex_key": prefixed("", HEX, 64),
 }
 
 # Pre-E03 shape generators that must not pass the structural check they lack.
@@ -676,6 +764,15 @@ LOOKALIKE_FAILURES = {
     "algolia_admin_api_key_short": CHECKS["algolia_admin_api_key"],
     "clickhouse_cloud_api_secret_short": CHECKS["clickhouse_cloud_api_secret"],
     "cloudant_password_short": lambda v: CHECKS["cloudant_password"](v) or CHECKS["cloudant_api_key"](v),
+    # GOLD-D6
+    "curl_user_only": lambda v: ":" in v or CHECKS["curl_user_password"](v),
+    "nuget_username": CHECKS["nuget_cleartext_password"],
+    "kubernetes_configmap_binary": CHECKS["kubernetes_secret_data"],
+    "uuid_v4": lambda v: CHECKS["base64_high_entropy_string"](v) or CHECKS["hex_high_entropy_string"](v)
+    or shannon_entropy(v) > 4.5,
+    "age_public_key": lambda v: CHECKS["age_secret_key"](v) or checks.bech32_decode(v)[0] != "age",
+    "x509_certificate": CHECKS["pkcs12_keystore"],
+    "sha1_hex_digest": lambda v: any(CHECKS[name](v) for name in ("laravel_app_key", "fernet_key", "aes256_hex_key")),
 }
 
 
@@ -732,9 +829,10 @@ class GeneratorSpecTests(unittest.TestCase):
         self.assertEqual(referenced, set(recipes.load_generators()))
 
     def test_baseline_entities_are_baseline_only_entities_with_a_format_source(self):
-        # GOLD-D2/D3/D4: gold for entities without an ARK rule follows a baseline rule of the
+        # GOLD-D2/D3/D4/D6: gold for entities without an ARK rule follows a baseline rule of the
         # entity (gitleaks, or the TruffleHog detector or detect-secrets plugin of an entity
-        # without a gitleaks rule); lookalikes name what they get wrong.
+        # without a gitleaks rule) or, for an entity no baseline detects, vendor documentation
+        # (docs:<url>); lookalikes name what they get wrong.
         entity_map = yaml.safe_load((REPO / "research/dlp/entity_map.yaml").read_text(encoding="utf-8"))
         by_id = {entity["id"]: entity for entity in entity_map["entities"]}
         fields = {"gitleaks": "gitleaks", "trufflehog": "trufflehog", "detect-secrets": "detect_secrets"}
@@ -744,12 +842,16 @@ class GeneratorSpecTests(unittest.TestCase):
             self.assertNotIn("ark", by_id[entity], entity)
             for name in entry["generators"]:
                 tool, _, rule = generators[name]["source"].partition(":")
+                if tool == "docs":
+                    self.assertFalse(set(fields.values()) & set(by_id[entity]), name)
+                    self.assertRegex(rule, r"^[a-z0-9.-]+\.[a-z]+/\S*; ", name)
+                    continue
                 self.assertIn(tool, fields, name)
                 self.assertIn(rule.split(";")[0], by_id[entity].get(fields[tool], []), name)
                 if tool != "gitleaks":
                     self.assertNotIn("gitleaks", by_id[entity], name)
             for name in entry["lookalike"]:
-                self.assertRegex(generators[name]["source"], r"^GOLD-D[234] lookalike: ", name)
+                self.assertRegex(generators[name]["source"], r"^GOLD-D[2-6] lookalike: ", name)
 
     def test_every_valid_generator_has_an_independent_check(self):
         self.assertEqual(set(CHECKS), valid_generators())
@@ -821,6 +923,7 @@ class StructureTests(unittest.TestCase):
             "btc_wif_testnet_compressed": checks.is_valid_btc_wif,
             "btc_wif_testnet_uncompressed": checks.is_valid_btc_wif,
             "de_vat_id": checks.is_valid_de_vat_id,
+            "age_secret_key": age_secret_key,
         }
         for name, check in cases.items():
             for seed in range(8):
@@ -861,6 +964,12 @@ class StructureTests(unittest.TestCase):
         # RFC 7617, section 2: "Aladdin:open sesame".
         self.assertEqual(checks.basic_auth_pair("QWxhZGRpbjpvcGVuIHNlc2FtZQ=="), ("Aladdin", "open sesame"))
         self.assertIsNone(checks.b64url_decode("QR"))  # non-canonical trailing bits
+        # BIP 173 valid and invalid Bech32 strings.
+        self.assertEqual(checks.bech32_decode("A12UEL5L"), ("a", b""))
+        self.assertEqual(checks.bech32_decode("abcdef1qpzry9x8gf2tvdw0s3jn54khce6mua7lmqqqxw")[0], "abcdef")
+        self.assertEqual(recipes.bech32_checksum("abcdef1", "qpzry9x8gf2tvdw0s3jn54khce6mua7l"), "mqqqxw")
+        self.assertIsNone(checks.bech32_decode("A12UEl5L"))  # mixed case
+        self.assertIsNone(checks.bech32_decode("a12uel5m"))  # wrong checksum
         self.assertEqual(recipes.crc32_base62(""), "000000")
 
     def test_python_and_rust_generators_match_pinned_vectors(self):

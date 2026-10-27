@@ -2,11 +2,13 @@ taxonomy:
   API_KEY: {family: provider_secret}
   dlp.de.vat_id: {family: business_identifier}
   dlp.content.sql: {family: content_class}
+  dlp.content.system_log: {family: content_class}
   dlp.document.hr: {family: document_class, planned: true}
 entities:
   - {id: llm.openai.api_key, scope: shared, group: API_KEY, ark: [dlp_openai_api_key], gitleaks: [openai-api-key]}
   - {id: saas.misc.api_token, scope: baseline_only, group: API_KEY, gitleaks: [misc]}
   - {id: identifier.de.vat_id, scope: ark_only, group: dlp.de.vat_id, ark: [dlp_de_vat_id]}
   - {id: content.sql, scope: ark_only, group: dlp.content.sql, ark: [dlp_sql_statement]}
+  - {id: content.system_log, scope: shared, group: dlp.content.system_log, ark: [dlp_structured_system_log]}
   - {id: document.hr, scope: baseline_only, group: dlp.document.hr}
   - {id: action.secret_transfer, scope: out_of_scope, ark: [dlp_secret_transfer]}
