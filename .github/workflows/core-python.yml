@@ -1,0 +1,91 @@
+name: Core Python
+
+on:
+  pull_request:
+    paths:
+      - ark-core/**
+      - Cargo.toml
+      - Cargo.lock
+      - .github/workflows/core-python.yml
+      - scripts/bootstrap_python_tls.py
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish built distributions to PyPI
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  wheels:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.98.0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11.9'
+      - uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          args: --manifest-path ark-core/python/Cargo.toml --release --out dist --interpreter python3.11
+          manylinux: '2_28'
+          before-script-linux: python3.11 scripts/bootstrap_python_tls.py
+      - name: Install and test the wheel
+        shell: bash
+        run: |
+          python -m venv .core-python-venv
+          if [ "$RUNNER_OS" = Windows ]; then
+            PYTHON=.core-python-venv/Scripts/python
+          else
+            PYTHON=.core-python-venv/bin/python
+          fi
+          "$PYTHON" scripts/bootstrap_python_tls.py
+          "$PYTHON" -m pip install --no-index --find-links dist patronus-ark-core
+          "$PYTHON" -m pip install pytest
+          "$PYTHON" -m pytest ark-core/python/tests -q
+      - uses: actions/upload-artifact@v4
+        with:
+          name: core-python-${{ matrix.os }}
+          path: dist/*.whl
+  sdist:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.98.0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11.9'
+      - uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --manifest-path ark-core/python/Cargo.toml --out dist
+      - name: Rebuild source distribution
+        run: |
+          python -m venv .core-python-venv
+          .core-python-venv/bin/python scripts/bootstrap_python_tls.py
+          .core-python-venv/bin/python -m pip wheel --no-deps --wheel-dir rebuilt dist/*.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: core-python-sdist
+          path: dist/*.tar.gz
+  publish:
+    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    needs: [wheels, sdist]
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: core-python-*
+          path: dist
+          merge-multiple: true
+      - uses: pypa/gh-action-pypi-publish@release/v1

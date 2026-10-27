@@ -35,7 +35,7 @@ sending anything to a cloud service.
 - **Eleven categories** — prompt injection, DLP, PII, dynamic PII (GLiNER spans), sensitive
   documents, the agentic tool trio (class/action/tags), routing intent, threat type, and shell
   command risk.
-- **Rust core, first-class Python** — one crate (`patronus-ark`) plus `abi3-py311` wheels
+- **Rust core, first-class Python** — the full `patronus-ark` runtime plus `abi3-py311` wheels
   (import `patronus_ark`); no Rust toolchain needed to use the Python package.
 - **Asynchronous by default** — `enqueue()` returns immediately, results stream back through one
   shared queue, and promoted L3 work never blocks ready L1/L2 results.
@@ -50,6 +50,9 @@ sending anything to a cloud service.
 
 The `patronus-ark-core` workspace crate provides queue-free PII, DLP and PI scanning,
 and supports local inference with Wolf Defender through the `wolf` Cargo feature.
+The standalone [Core Python package](ark-core/python/README.md) imports as
+`patronus_ark_core` and does not load the full Ark runtime. Core-owned code and
+rule definitions use MIT OR Apache-2.0; the full Ark runtime keeps its own license.
 See [the Core API and model setup](ark-core/README.md).
 
 ## Installation

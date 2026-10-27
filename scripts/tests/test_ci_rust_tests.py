@@ -141,6 +141,39 @@ def test_full_clippy_plan_covers_every_workspace_package():
     assert selected == expected
 
 
+@pytest.mark.parametrize("changes,expected", [
+    ({"core": "true"}, {"patronus-ark-core", "patronus-ark-core-python"}),
+    ({"bindings": "true"}, {"patronus-ark-python", "patronus-ark-core-python"}),
+    ({"core": "true", "bindings": "true"}, {
+        "patronus-ark-core", "patronus-ark-python", "patronus-ark-core-python",
+    }),
+])
+def test_core_python_clippy_follows_core_or_bindings_without_duplicate_packages(changes, expected):
+    (command,) = MODULE.plan("clippy", changes)
+    selected = [command[i + 1] for i, value in enumerate(command) if value == "-p"]
+    assert set(selected) == expected
+    assert selected.count("patronus-ark-core-python") == 1
+
+
+@pytest.mark.parametrize("path", [
+    "ark-core/python/src/lib.rs",
+    "ark-core/python/patronus_ark_core/types.py",
+    "ark-core/python/patronus_ark_core/_patronus_ark_core.pyi",
+    "ark-core/python/tests/test_concurrency.py",
+])
+def test_core_python_paths_select_binding_clippy(path):
+    flags = route(path)
+    assert flags["rust"] == flags["core"] == flags["bindings"] == "true"
+    (command,) = MODULE.plan("clippy", flags)
+    assert command.count("patronus-ark-core-python") == 1
+
+
+def test_core_python_markdown_does_not_select_rust_or_bindings():
+    flags = route("ark-core/python/README.md")
+    assert flags["rust"] == flags["core"] == flags["bindings"] == "false"
+    assert MODULE.plan("clippy", flags) == []
+
+
 def test_workflow_uses_exclusion_aware_filters_and_conditional_jobs():
     jobs = WORKFLOW["jobs"]
     (filter_step,) = [step for step in jobs["changes"]["steps"] if step.get("id") == "filter"]

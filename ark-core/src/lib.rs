@@ -2,6 +2,7 @@
 pub mod detectors;
 #[doc(hidden)]
 pub mod diagnostics;
+pub mod native;
 pub mod normalization;
 #[doc(hidden)]
 pub mod threat;
@@ -17,6 +18,8 @@ pub use scanner::*;
 pub mod warmup;
 pub use warmup::{DownloadPolicy, WarmupOptions};
 pub mod aggregation;
+mod wolf_options;
+pub use wolf_options::WolfExecutionOptions;
 #[cfg(feature = "wolf")]
 pub mod ml;
 #[cfg(feature = "wolf")]

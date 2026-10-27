@@ -3,7 +3,7 @@
   "catalog_id": "source-derived-p0-0.1.6",
   "source": "ark-source-derived",
   "source_revision": "0.1.6",
-  "license": "mixed-per-rule",
+  "license": "MIT OR Apache-2.0",
   "rules": [
     {
       "id": "ark.injection.exfil.sensitive_path_to_sink",

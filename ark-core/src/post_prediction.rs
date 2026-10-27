@@ -3,6 +3,33 @@ use std::net::{IpAddr, Ipv4Addr};
 
 use crate::{EvidenceSpan, SecurityCategory};
 
+/// Extract DLP secret byte ranges, sorted by start/end, without cloning evidence.
+/// The host selects the DLP results belonging to the same source text.
+pub fn dlp_secret_ranges<'a>(
+    spans: impl IntoIterator<Item = &'a EvidenceSpan>,
+) -> Vec<(usize, usize)> {
+    let mut ranges = spans
+        .into_iter()
+        .filter(|span| crate::detectors::dlp::dlp::SECRET_GROUPS.contains(&span.label.as_str()))
+        .map(|span| (span.start_byte, span.end_byte))
+        .collect::<Vec<_>>();
+    ranges.sort_unstable();
+    ranges
+}
+
+/// Retain PII evidence outside secret ranges returned by [`dlp_secret_ranges`].
+/// Ranges must be sorted by start/end. Touching end-exclusive byte ranges do not
+/// overlap. This operation changes only evidence, never a classifier decision.
+pub fn retain_pii_outside_secret_ranges(spans: &mut Vec<EvidenceSpan>, secrets: &[(usize, usize)]) {
+    debug_assert!(secrets.is_sorted());
+    spans.retain(|span| {
+        let after = secrets.partition_point(|&(start, _)| start < span.end_byte);
+        !secrets[..after]
+            .iter()
+            .any(|&(_, end)| end > span.start_byte)
+    });
+}
+
 /// Post-prediction evidence filter. Predictions remain available for diagnostics;
 /// the hook only decides which spans are actionable evidence.
 pub trait PostPredictionHook: Send + Sync {
@@ -175,4 +202,54 @@ fn shannon_entropy(value: &[u8]) -> f64 {
             -probability * probability.log2()
         })
         .sum()
+}
+
+#[cfg(test)]
+mod overlap_tests {
+    use super::*;
+
+    fn span(label: &str, start: usize, end: usize) -> EvidenceSpan {
+        EvidenceSpan {
+            label: label.into(),
+            text: String::new(),
+            score: 0.73,
+            start_byte: start,
+            end_byte: end,
+            start_char: 0,
+            end_char: 0,
+        }
+    }
+
+    #[test]
+    fn only_secret_labels_produce_sorted_ranges() {
+        let dlp = [
+            span("SECRET_TOKEN", 20, 30),
+            span("SENSITIVE_DOCUMENT", 0, 40),
+            span("CREDENTIAL", 4, 12),
+        ];
+        assert_eq!(dlp_secret_ranges(&dlp), [(4, 12), (20, 30)]);
+    }
+
+    #[test]
+    fn strict_byte_overlap_removes_nested_and_partial_spans_but_not_touching_spans() {
+        let secrets = dlp_secret_ranges(&[span("CREDENTIAL", 4, 12), span("API_KEY", 8, 16)]);
+        let mut pii = vec![
+            span("EMAIL", 0, 4),
+            span("EMAIL", 3, 5),
+            span("EMAIL", 5, 7),
+            span("EMAIL", 12, 17),
+            span("EMAIL", 16, 20),
+            span("EMAIL", 0, 20),
+        ];
+        retain_pii_outside_secret_ranges(&mut pii, &secrets);
+        assert_eq!(
+            pii.iter()
+                .map(|s| (s.start_byte, s.end_byte))
+                .collect::<Vec<_>>(),
+            [(0, 4), (16, 20)]
+        );
+        assert!(pii.iter().all(|s| s.score == 0.73));
+        retain_pii_outside_secret_ranges(&mut pii, &[]);
+        assert_eq!(pii.len(), 2);
+    }
 }

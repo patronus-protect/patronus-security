@@ -48,18 +48,41 @@ impl SecurityGateway {
             if configs.is_empty() {
                 continue;
             }
-            let tokenizer = self.model_base_dir().and_then(|base| {
-                let dir = if execution.l3_strategy() == crate::L3Strategy::Multi {
-                    base.join(crate::assets::UNIFIED_L3_ASSET.destination_path)
-                } else {
-                    crate::assets::dedicated_l3_asset(input.category)
-                        .map(|asset| base.join(asset.destination_path))
-                        .unwrap_or_else(|| base.join(input.category.as_str()))
-                };
-                RuntimeTokenizer::load(dir).map_err(Into::into)
-            });
+            let mut tokenizer = None;
             for config in configs {
-                let tokenizer = match &tokenizer {
+                let evaluation = EvaluationResult {
+                    class_name: "pending".to_string(),
+                    confidence: 0.0,
+                    level: "L3".to_string(),
+                };
+                let pending = crate::pipeline::l3_pending_layer(&evaluation, execution);
+                let mut result = scan_result(
+                    input.category,
+                    config.public_model,
+                    evaluation,
+                    vec![pending],
+                );
+                if execution.l3_strategy() == crate::L3Strategy::Dedicated
+                    && config.public_model == "wolf-defender-small"
+                {
+                    // Core receives the original document; no throwaway token
+                    // handoff or second chunk plan is needed for Wolf.
+                    results.push(result);
+                    continue;
+                }
+                let tokenizer = tokenizer.get_or_insert_with(|| {
+                    self.model_base_dir().and_then(|base| {
+                        let dir = if execution.l3_strategy() == crate::L3Strategy::Multi {
+                            base.join(crate::assets::UNIFIED_L3_ASSET.destination_path)
+                        } else {
+                            crate::assets::dedicated_l3_asset(input.category)
+                                .map(|asset| base.join(asset.destination_path))
+                                .unwrap_or_else(|| base.join(input.category.as_str()))
+                        };
+                        RuntimeTokenizer::load(dir).map_err(Into::into)
+                    })
+                });
+                let tokenizer = match tokenizer {
                     Ok(tokenizer) => tokenizer,
                     Err(error) => {
                         let mut failure = super::scanner_error_scan_result(
@@ -73,18 +96,6 @@ impl SecurityGateway {
                         continue;
                     }
                 };
-                let evaluation = EvaluationResult {
-                    class_name: "pending".to_string(),
-                    confidence: 0.0,
-                    level: "L3".to_string(),
-                };
-                let pending = crate::pipeline::l3_pending_layer(&evaluation, execution);
-                let mut result = scan_result(
-                    input.category,
-                    config.public_model,
-                    evaluation,
-                    vec![pending],
-                );
                 // Reuse the token handoff transport, without inventing L2 scores or embeddings.
                 result.internal_l2_chunk_outputs = tokenizer
                     .token_chunks_with_overlap(&input.text, execution.chunk_overlap_tokens())
@@ -146,6 +157,29 @@ mod tests {
         gateway.set_l3_strategy(L3Strategy::Multi);
         gateway.set_execution_gates(ScanGateMatrix::levels(false, false, true));
         gateway
+    }
+
+    #[test]
+    fn dedicated_wolf_leaves_document_tokenization_to_core() {
+        let gateway = gateway();
+        gateway.set_l3_strategy(L3Strategy::Dedicated);
+        // The fixture has only unified assets, so any attempt to load a
+        // dedicated tokenizer here would fail before Core gets the document.
+        let inputs = vec![ExternalL1Input::new(
+            SecurityCategory::Injection,
+            " a".repeat(2000),
+        )];
+        let results = gateway.direct_l3_results(
+            &inputs,
+            &gateway.scan_execution(),
+            &serde_json::json!({}),
+            &[],
+        );
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].model, "wolf-defender-small");
+        assert!(crate::pipeline::has_l3_pending(&results[0]));
+        assert!(results[0].internal_l2_chunk_outputs.is_empty());
+        assert!(super::super::request_queue::l3_candidates(&results[0]).is_empty());
     }
 
     #[test]

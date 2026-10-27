@@ -79,7 +79,6 @@ plugins:
 exclude_docs: |
   research/**
   *-plan.md
-  gliner-education-evaluation.md
   asset-size-snapshot.json
 
 nav:

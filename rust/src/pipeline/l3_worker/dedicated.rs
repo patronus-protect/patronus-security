@@ -30,6 +30,7 @@ use super::super::long_text::aggregate_chunk_outputs;
 use super::super::{
     degraded_error_result, degraded_timeout_result, l3_metadata_layer, PipelineStrategy,
 };
+use super::active_run::{ActiveRunGuard, Stopped};
 use super::{
     elapsed_ms, publish_progress, publish_provisional, DynamicPiiHandle, L3ModelHandle,
     L3WorkerInput, L3WorkerJob, L3WorkerState,
@@ -442,12 +443,27 @@ fn test_delay_result(
     result
 }
 
+fn stopped_wolf_result(job: &L3WorkerJob, stopped: Stopped) -> Result<SecurityScanResult, String> {
+    match stopped {
+        Stopped::EarlyExit(reason) => Ok(super::request_wide_skip_result(
+            job.fallback.clone(),
+            &job.execution,
+            job.degraded_factor,
+            &reason,
+        )),
+        Stopped::Inactive => Err("Wolf request is no longer active".into()),
+    }
+}
+
 fn run_wolf_document_job(
     job: L3WorkerJob,
     model: L3ModelHandle,
     worker: Arc<L3WorkerState>,
 ) -> Result<SecurityScanResult, String> {
     let started = Instant::now();
+    let L3WorkerInput::Text(source_text) = &job.input else {
+        return Err("Wolf requires the original source document".into());
+    };
     let policy = job
         .execution
         .l3_policy()
@@ -462,6 +478,25 @@ fn run_wolf_document_job(
         }
         None => 0.93, // Preserve the legacy gateway default; the new Core requires an explicit threshold.
     };
+    let allows_fallback = job.execution.allows_level(SecurityLevel::L2);
+    let mut model = model.lock().map_err(|error| error.to_string())?;
+    if let Err(stopped) = ActiveRunGuard::check_request(
+        &worker.requests,
+        &job.request_id,
+        job.job_id,
+        allows_fallback,
+    ) {
+        return stopped_wolf_result(&job, stopped);
+    }
+    // Startup is separate from the active document run, including lazy profile changes.
+    model
+        .ensure_wolf_loaded(
+            threshold,
+            job.execution.backend(),
+            job.execution.onnx_runtime_options(),
+            job.execution.wolf_execution_options(),
+        )
+        .map_err(|error| error.to_string())?;
     let mut progress = |update: patronus_ark_core::wolf::WolfProgress| {
         let completed = update.windows as usize;
         let total = update.total_windows as usize;
@@ -532,17 +567,75 @@ fn run_wolf_document_job(
     } else {
         Some(&mut progress as &mut dyn FnMut(patronus_ark_core::wolf::WolfProgress))
     };
-    let output = model
-        .lock()
-        .map_err(|e| e.to_string())?
-        .infer_wolf_document_with_progress(
-            &job.source_text,
-            threshold,
-            job.execution.backend(),
-            job.execution.onnx_runtime_options(),
-            callback,
-        )
-        .map_err(|e| e.to_string())?;
+    // Queue waiting and lazy startup are excluded. This job owns one finite
+    // document-run control, shared by request cancellation and ONNX termination.
+    let inference_started = Instant::now();
+    let control = patronus_ark_core::ScanControl::with_timeout(std::time::Duration::from_millis(
+        job.inference_timeout_ms,
+    ))
+    .map_err(|error| error.to_string())?;
+    let active = match ActiveRunGuard::register(
+        Arc::clone(&worker.requests),
+        &job.request_id,
+        job.job_id,
+        allows_fallback,
+        control,
+    ) {
+        Ok(active) => active,
+        Err(stopped) => return stopped_wolf_result(&job, stopped),
+    };
+    let output = model.infer_wolf_document_with_progress_and_control(
+        source_text,
+        threshold,
+        job.execution.backend(),
+        job.execution.onnx_runtime_options(),
+        job.execution.wolf_execution_options(),
+        active.control(),
+        callback,
+    );
+    let output = match output {
+        Ok(output) => output,
+        Err(error) => {
+            if matches!(
+                error.downcast_ref::<patronus_ark_core::ScanError>(),
+                Some(patronus_ark_core::ScanError::DeadlineExceeded)
+            ) {
+                let mut result = timeout_result(
+                    &job,
+                    "inference_timeout",
+                    inference_started
+                        .duration_since(job.enqueued_at)
+                        .as_secs_f64()
+                        * 1000.0,
+                );
+                if let Some(layer) = result
+                    .layers
+                    .iter_mut()
+                    .find(|layer| layer.layer_type == "degraded_timeout")
+                {
+                    layer
+                        .details
+                        .insert("ttl_ms".into(), serde_json::json!(job.inference_timeout_ms));
+                    layer.details.insert(
+                        "inference_elapsed_ms".into(),
+                        serde_json::json!(elapsed_ms(inference_started)),
+                    );
+                }
+                return Ok(result);
+            }
+            if allows_fallback
+                && matches!(
+                    error.downcast_ref::<patronus_ark_core::ScanError>(),
+                    Some(patronus_ark_core::ScanError::Cancelled)
+                )
+            {
+                if let Some(reason) = active.early_exit_reason() {
+                    return stopped_wolf_result(&job, Stopped::EarlyExit(reason));
+                }
+            }
+            return Err(error.to_string());
+        }
+    };
     let class = if output.matched { "attack" } else { "benign" };
     let confidence = if output.matched {
         output.attack_probability
@@ -1940,7 +2033,6 @@ mod tests {
 
     fn lifecycle_test_job() -> L3WorkerJob {
         L3WorkerJob {
-            source_text: std::sync::Arc::from("text"),
             job_id: 1,
             request_id: "request-1".to_string(),
             category: "threat".to_string(),
@@ -2070,7 +2162,7 @@ mod tests {
             let mut job = lifecycle_test_job();
             job.category = "injection".into();
             job.model = "wolf-defender-small".into();
-            job.source_text = Arc::from(" a".repeat(257));
+            job.input = L3WorkerInput::Text(Arc::from(" a".repeat(257)));
             job.fallback.category = "injection".into();
             let mut gates = crate::ScanGateMatrix::default();
             gates.set_l3_policy(L3SchedulerPolicy {

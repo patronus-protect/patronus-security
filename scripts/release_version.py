@@ -8,6 +8,7 @@ import tomllib
 ROOT = Path(__file__).resolve().parents[1]
 CARGO_MANIFESTS = (
     "ark-core/Cargo.toml",
+    "ark-core/python/Cargo.toml",
     "rust/Cargo.toml",
     "python/Cargo.toml",
     "ark-api/Cargo.toml",
@@ -41,6 +42,11 @@ def versions(root: Path = ROOT) -> dict[str, str]:
     found = {}
     for path in CARGO_MANIFESTS:
         found[path] = tomllib.loads((root / path).read_text())["package"]["version"]
+        python_manifest = Path(path).with_name("pyproject.toml")
+        if (root / python_manifest).is_file():
+            found[python_manifest.as_posix()] = tomllib.loads(
+                (root / python_manifest).read_text()
+            )["project"]["version"]
     found[PYPROJECT] = tomllib.loads((root / PYPROJECT).read_text())["project"]["version"]
     return found
 

@@ -36,6 +36,9 @@ Args:
         `best_f1` (default), `best_promote`, `best_fpr_in_f1`,
         `best_fnr_in_f1`, or `best_latency_in_f1`. This does not change
         L3 promote thresholds.
+    wolf_options: Optional dedicated-Wolf startup defaults: `window_tokens`
+        (including BOS/EOS), `overlap_tokens` and `batch_size`. Missing values
+        retain 256/0/1. Validated before gateway construction; applied before warmup.
     l3_strategy: `dedicated` for one L3 model per classifier pipeline or
         `multi` for the shared unified multi-head ONNX model.
     dynamic_pii_config: Pipeline-specific labels, result gates,
@@ -48,6 +51,10 @@ Args:
     cache_entry_ttl_seconds: Cache entry TTL shared by hot and persistent tiers.
     cache_memory_max_entries: Maximum entries retained by a hot cache tier.
     cache_memory_max_bytes: Maximum bytes retained by a hot cache tier.
+
+### `wolf_options() -> dict[str, int]`
+
+Effective dedicated-Wolf startup profile; returned as an independent copy.
 
 ### `categories() -> list[str]`
 

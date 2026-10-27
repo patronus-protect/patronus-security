@@ -1,11 +1,15 @@
 """Generate a tiny, bounded Loop model for testing actual ORT run termination.
 
 No learned weights or classifier-quality claim. Empty BOS/EOS input runs zero
-iterations; content runs 500,000 cheap scalar iterations, allowing cancellation.
+iterations; content runs 500,000,000 cheap scalar iterations, allowing cancellation
+even in optimized release builds. Normalize before FP16 conversion so the
+bounded loop's completed output also remains finite.
 """
 from pathlib import Path
 import onnx
 from onnx import TensorProto, helper
+
+ITERATIONS = 500_000_000
 
 scalar = lambda name, dtype: helper.make_tensor_value_info(name, dtype, [])
 body = helper.make_graph(
@@ -23,12 +27,14 @@ graph = helper.make_graph(
      helper.make_node("Cast", ["has_content"], ["content_count"], to=TensorProto.INT64),
      helper.make_node("Mul", ["content_count", "iterations"], ["trip_count"]),
      helper.make_node("Loop", ["trip_count", "condition", "zero"], ["result"], body=body),
-     helper.make_node("Cast", ["result"], ["logits"], to=TensorProto.FLOAT16)],
+     helper.make_node("Div", ["result", "iterations_float"], ["normalized_result"]),
+     helper.make_node("Cast", ["normalized_result"], ["logits"], to=TensorProto.FLOAT16)],
     "wolf_cancellation_test_only",
     [helper.make_tensor_value_info("input_ids", TensorProto.INT64, [1, "sequence"])],
     [scalar("logits", TensorProto.FLOAT16)],
     [helper.make_tensor("special_sum", TensorProto.INT64, [], [3]),
-     helper.make_tensor("iterations", TensorProto.INT64, [], [500000]),
+     helper.make_tensor("iterations", TensorProto.INT64, [], [ITERATIONS]),
+     helper.make_tensor("iterations_float", TensorProto.FLOAT, [], [float(ITERATIONS)]),
      helper.make_tensor("condition", TensorProto.BOOL, [], [True]),
      helper.make_tensor("zero", TensorProto.FLOAT, [], [0.0])],
 )

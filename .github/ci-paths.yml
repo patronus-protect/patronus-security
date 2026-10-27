@@ -95,6 +95,8 @@ protocol:
   - '!**/*.md'
 bindings:
   - 'python/src/**'
+  - 'ark-core/python/**'
+  - '!**/*.md'
 python:
   - 'python/**'
   - 'scripts/**'

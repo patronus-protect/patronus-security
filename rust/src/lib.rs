@@ -3,7 +3,7 @@ pub mod assets;
 #[allow(dead_code, unused_imports)]
 mod cache;
 pub mod detectors;
-pub use patronus_ark_core::diagnostics;
+pub use patronus_ark_core::{diagnostics, WolfExecutionOptions};
 pub mod dynamic_pii;
 pub mod external_l1;
 pub mod gliner_onnx_engine;

@@ -23,6 +23,7 @@ use super::decision_cache::DecisionCache;
 use super::l3_routing::estimated_cost_ms;
 use super::{degraded_error_result, degraded_timeout_result};
 
+mod active_run;
 mod dedicated;
 mod unified;
 
@@ -52,6 +53,8 @@ pub(crate) struct RequestRegistry {
 pub(crate) struct RequestRegistryState {
     pub requests: HashMap<RequestId, RequestState>,
     pub ready: VecDeque<QueuedSecurityEvent>,
+    active_runs: HashMap<(RequestId, u64), active_run::ActiveRun>,
+    early_exit_reasons: HashMap<RequestId, String>,
 }
 
 impl Default for RequestRegistry {
@@ -60,6 +63,8 @@ impl Default for RequestRegistry {
             state: Mutex::new(RequestRegistryState {
                 requests: HashMap::new(),
                 ready: VecDeque::new(),
+                active_runs: HashMap::new(),
+                early_exit_reasons: HashMap::new(),
             }),
             available: Condvar::new(),
         }
@@ -135,7 +140,7 @@ struct L3WorkerJob {
     category: String,
     model: String,
     input: L3WorkerInput,
-    source_text: Arc<str>,
+
     fallback: SecurityScanResult,
     priority: usize,
     ttl_ms: u64,
@@ -515,7 +520,6 @@ impl L3Worker {
             }
         };
         Ok(L3WorkerJob {
-            source_text: spec.text.clone(),
             job_id: spec.job_id,
             request_id: spec.request_id,
             category: spec.category,
@@ -545,7 +549,11 @@ impl L3Worker {
     }
 
     fn input_for_spec(&self, spec: &L3JobSpec) -> Result<L3WorkerInput, String> {
-        if spec.dynamic_pii_config.is_some() {
+        if spec.dynamic_pii_config.is_some()
+            || (spec.execution.l3_strategy() == L3Strategy::Dedicated
+                && spec.model == "wolf-defender-small")
+        {
+            // Wolf owns its complete document tokenization/windowing in Core.
             return Ok(L3WorkerInput::Text(spec.text.clone()));
         }
         self.plan_chunks_for_spec(spec)
@@ -589,7 +597,6 @@ impl L3Worker {
         for (spec, delay_ms) in specs {
             let (estimated_cost_ms, fairness_quantum_ms, max_wait_ms) = scheduling_values(&spec);
             jobs.push(L3WorkerJob {
-                source_text: spec.text.clone(),
                 job_id: spec.job_id,
                 request_id: spec.request_id,
                 category: spec.category,
@@ -968,13 +975,19 @@ fn finish_job(
     request_id: RequestId,
     result: SecurityScanResult,
 ) {
-    let request_wide_stop = request_wide_early_exit(&result);
+    let failure = failure_from_scan_result(&result);
+    // A degraded timeout/error may retain a positive fallback. It must never
+    // turn one failed job into a request-wide stop of otherwise healthy jobs.
+    let request_wide_stop = if failure.is_none() {
+        request_wide_early_exit(&result)
+    } else {
+        None
+    };
     let mut registry = worker
         .requests
         .state
         .lock()
         .expect("request registry mutex poisoned");
-    let failure = failure_from_scan_result(&result);
     let publish_result = if let Some(state) = registry.requests.get_mut(&request_id) {
         if state.completion.is_some() || !state.pending_l3_job_ids.remove(&job_id) {
             return;
@@ -1016,6 +1029,7 @@ fn finish_job(
     }
     drop(registry);
     if let Some(reason) = request_wide_stop {
+        worker.requests.cancel_early_exit_runs(&request_id, &reason);
         abort_queued_l3_jobs_for_request(worker, &request_id, &reason);
     }
     resolve_dynamic_pii(worker, &request_id);
@@ -1026,6 +1040,8 @@ fn finish_job(
         .expect("request registry mutex poisoned");
     finish_request_if_ready(&mut registry, &request_id);
     worker.requests.available.notify_all();
+    drop(registry);
+    worker.requests.cancel_finished_runs(&request_id);
 }
 
 fn dynamic_pii_source_chunks(result: &SecurityScanResult) -> Vec<DynamicPiiSourceChunk> {
@@ -1383,6 +1399,7 @@ fn resolve_dynamic_pii(worker: &Arc<L3WorkerState>, request_id: &str) {
             }
         }
     };
+    worker.requests.cancel_finished_runs(request_id);
     if let Some(job) = job {
         L3Worker {
             state: Arc::clone(worker),
@@ -1735,6 +1752,33 @@ mod tests {
     }
 
     #[test]
+    fn dedicated_wolf_job_passes_source_document_without_chunk_planning() {
+        let worker = L3Worker {
+            state: Arc::new(test_worker_state(Arc::new(RequestRegistry::default()))),
+        };
+        let mut spec = test_l3_spec(
+            "wolf-document",
+            "injection",
+            1,
+            ScanExecution::new(SecurityLevel::L3),
+        );
+        spec.model = "wolf-defender-small".into();
+        spec.text = Arc::from(" a".repeat(2000));
+        spec.l2_chunk_outputs = Vec::new().into();
+        spec.l3_candidates.clear();
+        let job = worker.build_physical_job(spec.clone(), None, None).unwrap();
+        let L3WorkerInput::Text(text) = job.input else {
+            panic!("Wolf must receive its source document");
+        };
+        assert!(Arc::ptr_eq(&text, &spec.text));
+        assert!(job.l2_chunk_outputs.is_empty());
+
+        // Other classifiers still require their original canonical token handoff.
+        spec.model = "other-classifier".into();
+        assert!(worker.build_physical_job(spec, None, None).is_err());
+    }
+
+    #[test]
     fn token_pipeline_e2e_preserves_v4_chunks_through_promotion_and_l3_inputs() {
         use crate::ml::{
             ntdb_executor::token_outputs_for_test,
@@ -2014,7 +2058,7 @@ mod tests {
             .all(|failure| failure.message == "expired_before_inference"));
     }
 
-    fn test_worker_state(requests: Arc<RequestRegistry>) -> L3WorkerState {
+    pub(super) fn test_worker_state(requests: Arc<RequestRegistry>) -> L3WorkerState {
         L3WorkerState {
             jobs: Mutex::new(Vec::new()),
             scheduler: Mutex::new(FairSchedulerState::default()),
@@ -2193,9 +2237,13 @@ mod tests {
         }
     }
 
-    fn test_job(request_id: &str, category: &str, priority: usize, sequence: u64) -> L3WorkerJob {
+    pub(super) fn test_job(
+        request_id: &str,
+        category: &str,
+        priority: usize,
+        sequence: u64,
+    ) -> L3WorkerJob {
         L3WorkerJob {
-            source_text: Arc::from("test"),
             job_id: sequence,
             request_id: request_id.to_string(),
             category: category.to_string(),
@@ -2245,7 +2293,7 @@ mod tests {
         }
     }
 
-    fn test_result(
+    pub(super) fn test_result(
         category: &str,
         class_name: &str,
         confidence: f64,

@@ -1,4 +1,4 @@
-use crate::{EvidenceSpan, SecurityCategory};
+use crate::SecurityCategory;
 pub use patronus_ark_core::post_prediction::*;
 /// K08: DLP vs. PII double labels. When DLP and PII scan the same text, a
 /// DLP secret span owns its range: PII spans overlapping it (a URL password
@@ -26,29 +26,96 @@ pub(crate) fn resolve_dlp_pii_overlaps(
         if dlp_input.category != SecurityCategory::Dlp {
             continue;
         }
-        let mut secrets = results[dlp]
-            .iter()
-            .flat_map(|result| &result.evidence_spans)
-            .filter(|span| crate::detectors::dlp::dlp::SECRET_GROUPS.contains(&span.label.as_str()))
-            .map(|span| (span.start_byte, span.end_byte))
-            .collect::<Vec<_>>();
+        let secrets = dlp_secret_ranges(
+            results[dlp]
+                .iter()
+                .flat_map(|result| &result.evidence_spans),
+        );
         if secrets.is_empty() {
             continue;
         }
-        secrets.sort_unstable();
-        let overlaps_secret = |span: &EvidenceSpan| {
-            let after = secrets.partition_point(|&(start, _)| start < span.end_byte);
-            secrets[..after]
-                .iter()
-                .any(|&(_, end)| end > span.start_byte)
-        };
         for (pii, pii_input) in inputs.iter().enumerate() {
             if !is_pii(pii_input.category) || *pii_input.text != *dlp_input.text {
                 continue;
             }
             for result in &mut results[pii] {
-                result.evidence_spans.retain(|span| !overlaps_secret(span));
+                retain_pii_outside_secret_ranges(&mut result.evidence_spans, &secrets);
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod overlap_grouping_tests {
+    use super::resolve_dlp_pii_overlaps;
+    use crate::{EvidenceSpan, ExternalL1Input, SecurityCategory, SecurityScanResult};
+
+    fn span(text: &str, label: &str, start: usize, end: usize) -> EvidenceSpan {
+        EvidenceSpan {
+            label: label.into(),
+            text: text[start..end].into(),
+            score: 0.73,
+            start_byte: start,
+            end_byte: end,
+            start_char: text[..start].chars().count(),
+            end_char: text[..end].chars().count(),
+        }
+    }
+
+    fn result(category: &str, spans: Vec<EvidenceSpan>) -> SecurityScanResult {
+        patronus_ark_core::NativeResult {
+            category: category.into(),
+            model: "fixture".into(),
+            class_name: "found".into(),
+            confidence: 0.82,
+            level: "L1".into(),
+            duration_ms: 1.25,
+            layers: Vec::new(),
+            evidence_spans: spans,
+            label_scores: Vec::new(),
+            decision: None,
+        }
+        .into()
+    }
+
+    #[test]
+    fn equal_text_groups_pii_and_dynamic_pii_without_affecting_other_inputs_or_decisions() {
+        let text = "😀abcdefgh";
+        let other = "😀zyxwvuts";
+        let inputs = [
+            ExternalL1Input::new(SecurityCategory::Dlp, text),
+            ExternalL1Input::new(SecurityCategory::Pii, text.to_owned()),
+            ExternalL1Input::new(SecurityCategory::DynamicPii, text.to_owned()),
+            ExternalL1Input::new(SecurityCategory::Pii, other),
+        ];
+        let pii_spans = |text| {
+            vec![
+                span(text, "person", 0, 4),
+                span(text, "person", 4, 6),
+                span(text, "person", 8, 10),
+            ]
+        };
+        let mut results = vec![
+            vec![result("dlp", vec![span(text, "CREDENTIAL", 4, 8)])],
+            vec![result("pii", pii_spans(text))],
+            vec![result("dynamic-pii", pii_spans(text))],
+            vec![result("pii", pii_spans(other))],
+        ];
+        let mut expected = results.clone();
+        expected[1][0].evidence_spans.remove(1);
+        expected[2][0].evidence_spans.remove(1);
+        resolve_dlp_pii_overlaps(&inputs, &mut results);
+        for (actual, expected) in results
+            .into_iter()
+            .flatten()
+            .zip(expected.into_iter().flatten())
+        {
+            let actual: patronus_ark_core::NativeResult = actual.into();
+            let expected: patronus_ark_core::NativeResult = expected.into();
+            assert_eq!(
+                serde_json::to_value(actual).unwrap(),
+                serde_json::to_value(expected).unwrap()
+            );
         }
     }
 }
