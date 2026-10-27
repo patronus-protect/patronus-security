@@ -658,6 +658,7 @@ tasks:
       in the README
 
   - id: T30
+    status: done
     title: "Quality: licence plate 35 (ark_authored): plate field names and structural keys, DE plates with dash before the digits and E/H suffix, UK plates with context"
     type: recall-fix
     deps: [K03, K04]
