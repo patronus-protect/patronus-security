@@ -505,6 +505,7 @@ fn reference_scores_per_rule() {
         ("pii_hetu_fi_context_free", 0.55),
         ("pii_steuernummer_de_context_free", 0.50),
         ("pii_kfz_kennzeichen_de", 0.65),
+        ("pii_vehicle_registration_uk", 0.65),
         ("pii_ssn_us", 0.85),
         ("pii_ssn_us_context_free", 0.50),
         ("pii_ni_uk", 0.90),

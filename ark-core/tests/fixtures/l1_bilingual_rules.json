@@ -821,7 +821,42 @@
     "rule_id": "pii_kfz_kennzeichen_de",
     "de": "Kennzeichen: B-AB 1234E",
     "en": "Vehicle registration: B-AB 1234E",
-    "language_neutral": false
+    "language_neutral": false,
+    "structure": {
+      "de": "{\"kennzeichen\": \"K-MZ-2471\"}",
+      "en": "{\"license_plate\": \"F-RF-8364H\"}"
+    },
+    "hard_negatives": {
+      "de": [
+        "Bestellnummer: AB-CD-1234",
+        "Das Kennzeichen ist am 12. Mai abgelaufen."
+      ],
+      "en": [
+        "Order number: K-MZ-2471",
+        "Licence plate: K-MZ-24710"
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vehicle_registration_uk",
+    "de": "Kennzeichen: LW02 ULG",
+    "en": "My car reg is AB51 ABD and it expires in May.",
+    "language_neutral": false,
+    "structure": {
+      "de": "{\"kennzeichen\": \"KS54 WLT\"}",
+      "en": "{\"licensePlate\": \"KS54 WLT\"}"
+    },
+    "hard_negatives": {
+      "de": [
+        "Kennzeichen: AB00 ABC",
+        "Bestellnummer: AB51 ABC"
+      ],
+      "en": [
+        "Vehicle registration: AB80 ABC",
+        "Number plate: IB51 ABC"
+      ]
+    }
   },
   {
     "category": "pii",
