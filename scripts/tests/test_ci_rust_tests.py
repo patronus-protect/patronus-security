@@ -75,7 +75,7 @@ def test_pii_fixture_selects_only_pii_targets_and_example_tests():
     flags = route("python/patronus_ark/benchmark_data/pii_l1.jsonl")
     commands = MODULE.plan("wrapper", flags)
     selected = targets(commands)
-    assert selected == {p.stem for p in (ROOT / "rust/tests").glob("pii*.rs")}
+    assert selected == {p.stem for p in (ROOT / "rust/tests").glob("pii*.rs")} | MODULE.CROSS_DOMAIN_TESTS
     assert any(command[-2:] == ["--example", "12_l1_pii_fixture_eval"] for command in commands)
     assert not any("--lib" in command or "--bins" in command for command in commands)
     assert flags["throughput"] == flags["core_features"] == "false"
@@ -84,7 +84,7 @@ def test_pii_fixture_selects_only_pii_targets_and_example_tests():
 def test_dlp_fixture_selects_only_dlp_targets():
     flags = route("python/patronus_ark/benchmark_data/dlp_l1.jsonl")
     commands = MODULE.plan("wrapper", flags)
-    assert targets(commands) == {p.stem for p in (ROOT / "rust/tests").glob("dlp*.rs")}
+    assert targets(commands) == {p.stem for p in (ROOT / "rust/tests").glob("dlp*.rs")} | MODULE.CROSS_DOMAIN_TESTS
     assert len(commands) == 1
 
 
@@ -184,8 +184,9 @@ def test_workflow_uses_exclusion_aware_filters_and_conditional_jobs():
     for job in ("rust", "core-features", "python", "native-throughput"):
         assert jobs[job]["needs"] == "changes"
         assert "needs.changes.outputs." in jobs[job]["if"]
-    for event in ("pull_request", "push"):
-        assert ".github/ci-paths.yml" in WORKFLOW["on"][event]["paths"]
+    # Required checks must report on every PR, so only pushes are path-filtered.
+    assert not WORKFLOW["on"]["pull_request"]
+    assert ".github/ci-paths.yml" in WORKFLOW["on"]["push"]["paths"]
 
 
 def test_runner_uses_checked_subprocesses(monkeypatch):
@@ -213,3 +214,14 @@ def test_ci_token_permissions_are_read_only_except_change_listing():
     assert WORKFLOW["jobs"]["changes"]["permissions"] == {"contents": "read", "pull-requests": "read"}
     for job in WORKFLOW["jobs"].values():
         assert all(level == "read" for level in job.get("permissions", {}).values())
+
+
+@pytest.mark.parametrize("path", [
+    "python/patronus_ark/benchmark_data/pii_l1.jsonl",
+    "python/patronus_ark/benchmark_data/dlp_l1.jsonl",
+    "ark-core/src/detectors/dlp/rules/credentials.rs",
+    "ark-core/src/detectors/pii/de.rs",
+])
+def test_shared_fixture_tests_follow_domain_changes(path):
+    # synchronous_core counts the rows of both benchmark fixtures; a domain-only PR must run it.
+    assert "synchronous_core" in targets(MODULE.plan("wrapper", route(path)))

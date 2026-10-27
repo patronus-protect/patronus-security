@@ -1,29 +1,9 @@
 name: CI
 
 on:
+  # No path filter on pull_request: `rust` and `python` are required on main, so they must report on
+  # every PR. The `changes` job skips the work that a PR does not touch (a skipped job passes).
   pull_request:
-    paths:
-      - "Cargo.*"
-      - "rust-toolchain.toml"
-      - ".cargo/**"
-      - "**/*.rs"
-      - "ark-core/**"
-      - "ark-api/**"
-      - "ark-coordinator/**"
-      - "ark-distributed-protocol/**"
-      - "rust/**"
-      - "python/**"
-      - "scripts/**"
-      - "research/**"
-      - "deny.toml"
-      - "requirements-test.txt"
-      - ".python-version"
-      - ".github/workflows/ci.yml"
-      - ".github/ci-paths.yml"
-      - ".github/workflows/release.yml"
-      - "!**/*.md"
-      - "LICENSE*"
-      - "NOTICE"
   push:
     # l1/** and dlp/**: the scheduled runners open a PR only after CI is green on the pushed branch.
     branches: [main, "release/**", "l1/**", "dlp/**"]

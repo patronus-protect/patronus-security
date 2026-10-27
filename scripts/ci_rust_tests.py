@@ -12,6 +12,8 @@ import tomllib
 
 
 ROOT = Path(__file__).resolve().parents[1]
+# Wrapper tests that read python/patronus_ark/benchmark_data/{pii,dlp}_l1.jsonl.
+CROSS_DOMAIN_TESTS = {"synchronous_core"}
 
 
 def enabled(changes: dict[str, str], name: str) -> bool:
@@ -70,7 +72,9 @@ def plan(group: str, changes: dict[str, str], root: Path = ROOT) -> list[list[st
     targets = []
     for path in sorted((root / "rust" / "tests").glob("*.rs")):
         domain = next((name for name in ("pii", "dlp") if path.stem.startswith(name)), None)
-        if enabled(changes, domain or "wrapper_base"):
+        # Tests over the shared PII/DLP benchmark fixtures must follow changes to either domain.
+        cross = path.stem in CROSS_DOMAIN_TESTS and (enabled(changes, "pii") or enabled(changes, "dlp"))
+        if cross or enabled(changes, domain or "wrapper_base"):
             targets.extend(["--test", path.stem])
     if targets:
         commands.append([*wrapper, *targets])
