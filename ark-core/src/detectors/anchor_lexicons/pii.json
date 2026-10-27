@@ -2617,6 +2617,151 @@
     ]
   },
   {
+    "id": "pii.se_organisationsnummer",
+    "description": "Schwedische Organisationsnummer (Unternehmen, Vereine, Behörden)",
+    "en": [
+      "swedish organisation number",
+      "swedish organization number",
+      "swedish company number",
+      "swedish company registration number",
+      "swedish corporate identity number",
+      "corporate identity number",
+      "organisation number",
+      "organization number",
+      "organisation no",
+      "org number",
+      "org_number",
+      "org-number"
+    ],
+    "de": [
+      "schwedische organisationsnummer",
+      "schwedische unternehmensnummer",
+      "schwedische firmennummer"
+    ],
+    "shared": [
+      "organisationsnummer",
+      "organisationsnumret",
+      "organisationsnr",
+      "org.nr",
+      "orgnr",
+      "org nr",
+      "org-nr",
+      "org.-nr.",
+      "företagsnummer"
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/nordic.rs"
+    ]
+  },
+  {
+    "id": "pii.ca_social_insurance_number",
+    "description": "Kanadische Sozialversicherungsnummer (Social Insurance Number, SIN)",
+    "en": [
+      "social insurance number",
+      "social insurance no",
+      "social-insurance-number",
+      "social_insurance_number",
+      "canadian social insurance number",
+      "canadian sin",
+      "sin number",
+      "sin no",
+      "sin-number",
+      "sin_number"
+    ],
+    "de": [
+      "kanadische sin",
+      "kanadische sozialversicherungsnummer",
+      "kanadische sozialversicherungs-nummer"
+    ],
+    "shared": [
+      "sin"
+    ],
+    "fr": [
+      "numéro d'assurance sociale",
+      "numero d'assurance sociale",
+      "numéro d’assurance sociale",
+      "numero d’assurance sociale",
+      "n° d'assurance sociale",
+      "assurance sociale",
+      "numéro nas",
+      "nas"
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/ca.rs"
+    ]
+  },
+  {
+    "id": "pii.tr_national_id",
+    "description": "Türkische Identitätsnummer (T.C. Kimlik No, TCKN)",
+    "en": [
+      "turkish id number",
+      "turkish identity number",
+      "turkish national id",
+      "turkish national id number",
+      "turkish national identification number",
+      "turkish citizenship number",
+      "tr id",
+      "tr-id",
+      "tr_id"
+    ],
+    "de": [
+      "türkische identitätsnummer",
+      "türkische id-nummer",
+      "türkische personalausweisnummer",
+      "türkische bürgernummer"
+    ],
+    "shared": [
+      "t.c. kimlik no",
+      "t.c. kimlik numarası",
+      "t.c. kimlik",
+      "tc kimlik no",
+      "tc kimlik numarası",
+      "tc kimlik",
+      "tc_kimlik",
+      "tckimlik",
+      "kimlik no",
+      "kimlik numarası",
+      "kimlik numarasi",
+      "türk kimlik numarası",
+      "tckn",
+      "tc no",
+      "nüfus cüzdanı"
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/tr.rs"
+    ]
+  },
+  {
+    "id": "pii.za_id_number",
+    "description": "Südafrikanische Identitätsnummer (South African ID number)",
+    "en": [
+      "south african id number",
+      "south african identity number",
+      "south african id",
+      "rsa id number",
+      "rsa id",
+      "sa id number",
+      "sa id",
+      "sa_id",
+      "za id",
+      "za-id",
+      "za_id"
+    ],
+    "de": [
+      "südafrikanische id-nummer",
+      "südafrikanische id nummer",
+      "südafrikanische identitätsnummer",
+      "südafrikanische ausweisnummer"
+    ],
+    "shared": [
+      "id-nommer",
+      "identiteitsnommer"
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/za.rs"
+    ]
+  },
+  {
     "id": "pii.health_insurance_number",
     "description": "Krankenversicherungsnummer",
     "en": [

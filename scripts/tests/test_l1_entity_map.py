@@ -233,6 +233,21 @@ def test_fr_nl_be_national_numbers_are_ark_only():
         assert entity_map.scope(entity_id) == "ark_only"
 
 
+def test_luhn_identifiers_are_shared_with_presidio():
+    # B-LUHN: the checksum parts of T13 and T09, one label per numbering system, each matching the
+    # Presidio 2.2.364 entity of the same name.
+    entity_map = MODULE.load()
+    for entity_id, label in [
+        ("pii.se.organisationsnummer", "SE_ORGANISATIONSNUMMER"),
+        ("pii.ca.sin", "CA_SIN"),
+        ("pii.tr.national_id", "TR_NATIONAL_ID"),
+        ("pii.za.id_number", "ZA_ID_NUMBER"),
+    ]:
+        assert entity_map.ark_label(label) == entity_id
+        assert entity_map.presidio_entity(label) == entity_id
+        assert entity_map.scope(entity_id) == "shared"
+
+
 # ── validation of malformed maps ─────────────────────────────────────────────
 
 
@@ -469,7 +484,7 @@ def test_checked_in_registry_order_matches_the_rust_order_test():
     expected = re.findall(r'\(\s*"(pii_\w+)",\s*"(\w+)",?\s*\)', rust_test)
     rules = _generate_docs().parse_native_patterns(MODULE.PII_SOURCE_PATH, "PiiPattern")
     assert [(rule["id"], rule["entity_group"]) for rule in rules] == expected
-    assert len(expected) == 122
+    assert len(expected) == 129
 
 
 def test_cli_check_succeeds_and_fails(tmp_path):

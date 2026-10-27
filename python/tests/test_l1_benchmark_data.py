@@ -15,6 +15,7 @@ PII_LABELS = {
     "AU_MEDICARE",
     "AU_TFN",
     "BE_NATIONAL_NUMBER",
+    "CA_SIN",
     "CREDITCARD",
     "CREDITCARD_CVV",
     "CREDITCARD_EXPIRY",
@@ -44,6 +45,7 @@ PII_LABELS = {
     "PATIENT_ID",
     "PHONE",
     "PHYSICIAN_NUMBER_LANR",
+    "SE_ORGANISATIONSNUMMER",
     "SE_PERSONNUMMER",
     "SG_NRIC_FIN",
     "SG_UEN",
@@ -53,6 +55,7 @@ PII_LABELS = {
     "STUDENT_ID",
     "SWIFT_CODE",
     "TAX_NUMBER_DE",
+    "TR_NATIONAL_ID",
     "USERNAME",
     "VAT_ID_AT",
     "VAT_ID_BE",
@@ -84,7 +87,12 @@ PII_LABELS = {
     "VAT_ID_SE",
     "VAT_ID_SI",
     "VAT_ID_SK",
+    "ZA_ID_NUMBER",
 }
+# Languages of pii_l1: DE/EN, the FR/ES/IT/NL field names (T26) and the national languages of
+# country IDs (B-LUHN), whose rows only target the IDs of their country.
+NATIONAL_LANGUAGES = {"sv": "SE_", "tr": "TR_"}
+PII_LANGUAGES = {"de", "en", "fr", "es", "it", "nl", *NATIONAL_LANGUAGES}
 
 DLP_LABELS = {
     "API_KEY",
@@ -202,9 +210,14 @@ class L1BenchmarkDataTests(unittest.TestCase):
             for row in rows:
                 materialized = recipes.materialize_row(row)
                 self.assertEqual(row["suite"], name, row["id"])
-                # pii_l1 also carries FR/ES/IT/NL field names of the anchor rules (T26).
-                languages = {"de", "en", "fr", "es", "it", "nl"} if name == "pii_l1" else {"de", "en"}
+                # pii_l1 also carries FR/ES/IT/NL field names of the anchor rules (T26) and
+                # Swedish and Turkish rows of the country IDs (B-LUHN).
+                languages = PII_LANGUAGES if name == "pii_l1" else {"de", "en"}
                 self.assertIn(row["language"], languages, row["id"])
+                if row["language"] in NATIONAL_LANGUAGES:
+                    self.assertTrue(
+                        row["target_label"].startswith(NATIONAL_LANGUAGES[row["language"]]), row["id"]
+                    )
                 self.assertEqual(row["span_unit"], "unicode_code_point", row["id"])
                 self.assertIn(row["provenance"]["origin"], {"synthetic", "derived_existing_fixture"})
                 if row["case_type"] == "positive":
@@ -249,7 +262,7 @@ class L1BenchmarkDataTests(unittest.TestCase):
         pii = Counter(row["language"] for row in load("pii_l1"))
         for language in ("fr", "es", "it", "nl"):
             self.assertGreaterEqual(pii[language], 16, language)
-        self.assertLessEqual(set(pii), {"de", "en", "fr", "es", "it", "nl"})
+        self.assertLessEqual(set(pii), PII_LANGUAGES)
 
     def test_derived_cases_point_to_existing_dynamic_pii_values(self):
         dynamic_rows = {row["id"]: row for row in load("dynamic_pii")}
@@ -314,6 +327,12 @@ class SecondaryEntityGoldTests(unittest.TestCase):
                 # T26: a non-card security code next to a real card annotates that card.
                 self.assertEqual([e["label"] for e in row["entities"]], ["CREDITCARD"], row["id"])
                 continue
+            if [e["label"] for e in row["entities"]] == ["ZA_ID_NUMBER"]:
+                # B-LUHN: thirteen digits that open with a birth date are a South African ID
+                # number, no card.
+                self.assertEqual(row["target_label"], "CREDITCARD", row["id"])
+                annotated[("ZA_ID_NUMBER", row["language"])] += 1
+                continue
             if [e["label"] for e in row["entities"]] == ["PHONE"]:
                 # B-PAN: the Luhn-valid digits after the `+` of a phone number are no card.
                 self.assertEqual(row["target_label"], "CREDITCARD", row["id"])
@@ -343,6 +362,8 @@ class SecondaryEntityGoldTests(unittest.TestCase):
                 ("PHONE", "en"): 3,
                 ("PASSPORT_NUMBER", "de"): 1,
                 ("IDENTITY_CARD_NUMBER", "en"): 1,
+                ("ZA_ID_NUMBER", "de"): 3,
+                ("ZA_ID_NUMBER", "en"): 3,
             },
         )
 

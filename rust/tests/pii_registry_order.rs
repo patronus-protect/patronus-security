@@ -144,6 +144,16 @@ const EXPECTED_ORDER: &[(&str, &str)] = &[
     ("pii_bsn_nl_context_free", "NL_BSN"),
     ("pii_national_number_be", "BE_NATIONAL_NUMBER"),
     ("pii_national_number_be_context_free", "BE_NATIONAL_NUMBER"),
+    ("pii_organisationsnummer_se", "SE_ORGANISATIONSNUMMER"),
+    (
+        "pii_organisationsnummer_se_context_free",
+        "SE_ORGANISATIONSNUMMER",
+    ),
+    ("pii_sin_ca", "CA_SIN"),
+    ("pii_sin_ca_context_free", "CA_SIN"),
+    ("pii_national_id_tr", "TR_NATIONAL_ID"),
+    ("pii_id_number_za", "ZA_ID_NUMBER"),
+    ("pii_id_number_za_context_free", "ZA_ID_NUMBER"),
 ];
 
 #[test]

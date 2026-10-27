@@ -36,7 +36,8 @@ use crate::detectors::NativeDetection;
 /// number or a henkilötunnus) and eleven digits (a fødselsnummer or a Steuer-ID),
 /// B-NORD. Of the B-EU1 numbers the eleven digits of a Belgian national number can
 /// be a Steuer-ID, the fourteen of a SIRET and the fifteen of a NIR a card number.
-pub const COMPETING_LABELS: [&str; 19] = [
+/// The eleven digits of a T.C. Kimlik No can be a Steuer-ID, B-LUHN.
+pub const COMPETING_LABELS: [&str; 20] = [
     "IBAN",
     "CREDITCARD",
     "FINANCIAL_ACCOUNT_NUMBER",
@@ -56,6 +57,7 @@ pub const COMPETING_LABELS: [&str; 19] = [
     "FR_NIR",
     "FR_SIRET",
     "BE_NATIONAL_NUMBER",
+    "TR_NATIONAL_ID",
 ];
 
 /// Labels whose findings compete with an overlapping finding of any other label

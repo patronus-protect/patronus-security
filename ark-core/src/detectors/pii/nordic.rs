@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! Nordic personal identity numbers (B-NORD): Swedish personnummer, Danish CPR
-//! number, Norwegian fødselsnummer, Finnish personal identity code (henkilötunnus).
+//! number, Norwegian fødselsnummer, Finnish personal identity code (henkilötunnus);
+//! the Swedish organisationsnummer (B-LUHN).
 //!
 //! All four start with the birth date and end in a check digit or character: Luhn
 //! (SE), a weighted sum mod 11 (DK), two digits mod 11 (NO), the nine digits mod 31
@@ -12,6 +13,10 @@
 //! digits is an order, account or phone number too often and needs the term.
 //! The SE, DK and FI forms share `DDDDDD-DDDD`; a value that passes two of the
 //! checks competes in the scored modes (K07), where a term of a label decides.
+//!
+//! The Swedish organisationsnummer (B-LUHN) shares the form too, but its third
+//! digit is 2 or more where the personal numbers carry a birth month; it ends in a
+//! Luhn digit and follows the same two rules.
 use super::{pii::PiiPattern, score::ValidatorStrength, validators};
 
 /// Swedish personnummer, `YYMMDD-NNNC`, with `+` from the 100th birthday, or the
@@ -129,6 +134,37 @@ pub(super) const HETU_CONTEXT_FREE: PiiPattern = PiiPattern {
     pattern: hetu!(),
     entity_group: "FI_PERSONAL_IDENTITY_CODE",
     validator: Some(validators::fi_hetu),
+    strength: ValidatorStrength::Checksum,
+    base_score: 20,
+    captured_value: false,
+    requires_context: false,
+    scored_only: true,
+};
+
+/// Swedish organisationsnummer (B-LUHN), `NNNNNN-NNNN` or ten digits with a third
+/// digit of 2 or more, with an organisationsnummer term near the value or as its
+/// key.
+pub(super) const ORGANISATIONSNUMMER: PiiPattern = PiiPattern {
+    name: "pii_organisationsnummer_se",
+    pattern: r"(?-u:\b)[0-9]{2}[2-9][0-9]{3}-?[0-9]{4}(?-u:\b)",
+    entity_group: "SE_ORGANISATIONSNUMMER",
+    validator: Some(validators::se_organisationsnummer),
+    strength: ValidatorStrength::Checksum,
+    base_score: 25,
+    captured_value: false,
+    requires_context: true,
+    scored_only: false,
+};
+
+/// A bare organisationsnummer in its printed form `NNNNNN-NNNN`, in `balanced` and
+/// `recall` only. Its third digit keeps it apart from the personnummer, the CPR
+/// number and the henkilötunnus, whose month stands there; ten bare digits are a
+/// phone, order or account number too often and need the term.
+pub(super) const ORGANISATIONSNUMMER_CONTEXT_FREE: PiiPattern = PiiPattern {
+    name: "pii_organisationsnummer_se_context_free",
+    pattern: r"(?-u:\b)[0-9]{2}[2-9][0-9]{3}-[0-9]{4}(?-u:\b)",
+    entity_group: "SE_ORGANISATIONSNUMMER",
+    validator: Some(validators::se_organisationsnummer),
     strength: ValidatorStrength::Checksum,
     base_score: 20,
     captured_value: false,
