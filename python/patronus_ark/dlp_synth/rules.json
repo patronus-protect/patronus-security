@@ -308,6 +308,13 @@
     "data.confluent.secret": {"generators": ["confluent_api_key", "confluent_api_secret"], "lookalike": ["confluent_api_secret_short"]},
     "data.algolia.api_key": {"generators": ["algolia_admin_api_key"], "lookalike": ["algolia_admin_api_key_short"]},
     "data.clickhouse.api_secret": {"generators": ["clickhouse_cloud_api_secret"], "lookalike": ["clickhouse_cloud_api_secret_short"]},
-    "data.cloudant.credentials": {"generators": ["cloudant_password", "cloudant_api_key"], "lookalike": ["cloudant_password_short"]}
+    "data.cloudant.credentials": {"generators": ["cloudant_password", "cloudant_api_key"], "lookalike": ["cloudant_password_short"]},
+    "credential.cli_password": {"generators": ["curl_user_password"], "lookalike": ["curl_user_only"]},
+    "credential.file.nuget_config": {"generators": ["nuget_cleartext_password"], "lookalike": ["nuget_username"]},
+    "credential.kubernetes_secret": {"generators": ["kubernetes_secret_data"], "lookalike": ["kubernetes_configmap_binary"]},
+    "credential.high_entropy_string": {"generators": ["base64_high_entropy_string", "hex_high_entropy_string"], "lookalike": ["uuid_v4"]},
+    "key.age_secret_key": {"generators": ["age_secret_key"], "lookalike": ["age_public_key"]},
+    "key.pkcs12_file": {"generators": ["pkcs12_keystore"], "lookalike": ["x509_certificate"]},
+    "key.symmetric_key": {"generators": ["laravel_app_key", "fernet_key", "aes256_hex_key"], "lookalike": ["sha1_hex_digest"]}
   }
 }

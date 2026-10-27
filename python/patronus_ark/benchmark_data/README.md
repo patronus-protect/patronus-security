@@ -180,8 +180,8 @@ with a carrier `template` and a list of recipes:
 - Generators are defined once in
   [`dlp_synth/generators.json`](../dlp_synth/generators.json): literal segments,
   fixed-length random segments over a named alphabet, checksum segments
-  (`crc32_base62` for GitHub/npm tokens, `iso7064_mod11_10` for the USt-IdNr.)
-  and encoded segments that assemble bytes (hex constants, ASCII, random bytes)
+  (`crc32_base62` for GitHub/npm tokens, `iso7064_mod11_10` for the USt-IdNr.,
+  `bech32` for age keys) and encoded segments that assemble bytes (hex constants, ASCII, random bytes)
   and emit them as hex, base64 (PEM-wrapped), base64url, bcrypt radix-64 or
   Base58Check. Values are drawn with SplitMix64 seeded by `seed`
   (`alphabet[next_u64() % len]` per character, `next_u64() % 256` per byte),
@@ -233,7 +233,9 @@ Every other generator yields format-, structure- and checksum-valid fakes:
   DSA) and an `openssh-key-v1` Ed25519 body;
 - JWTs with JSON header and claims, RFC 7617 Basic credentials, bcrypt and
   Argon2id PHC hashes in canonical radix-64, Discord bot tokens with a
-  base64url snowflake, and a USt-IdNr. with a valid ISO 7064 check digit;
+  base64url snowflake, a USt-IdNr. with a valid ISO 7064 check digit, age keys
+  with a valid Bech32 checksum and a PKCS#12 key store with a parseable RFC 7292
+  PFX layout;
 - the provider prefix, length and alphabet tables cited in each generator's
   `source` (gitleaks rule ID, RFC or vendor format; `ark-rule:<id>` marks
   shapes that only follow today's ARK regex and still need a format source).
@@ -262,7 +264,8 @@ scoreboard (E10) and the frozen holdout (E09). The families live in
 `.env`, YAML (incl. a Kubernetes Secret), JSON, TOML, HCL (Terraform, Nomad), XML
 (app.config, Maven), properties/INI, shell/CLI, Dockerfile, CI YAML (GitHub
 Actions, GitLab), Jupyter, text and JSONL logs, HTTP, code in Python, JavaScript,
-TypeScript, Go, Java, C#, Rust and Ruby, and DE/EN chat, tickets and mail.
+TypeScript, Go, Java, C#, Rust and Ruby, SQL dumps (MySQL, MariaDB, PostgreSQL,
+SQLite), and DE/EN chat, tickets and mail.
 
 - Every family belongs to exactly one split. Dev and holdout share no family and
   no template, and each split has every format (each code language counted
@@ -270,13 +273,17 @@ TypeScript, Go, Java, C#, Rust and Ruby, and DE/EN chat, tickets and mail.
 - Each value rule of `rules.json` has a profile with its entity, group and key
   name (`OPENAI_API_KEY`, `openaiApiKey`, `Openai-Api-Key` …), a DE/EN label and
   an optional wrapper (`Bearer …`, `postgres://app:…@db…`, `JSESSIONID=…`).
-- Each baseline entity of `rules.json` (GOLD-D2, GOLD-D3, GOLD-D4: an entity map
-  entity with scope `baseline_only`, such as `comm.telegram.bot_token`) has a
-  profile under its entity id. Its generators follow the gitleaks rule of the
-  entity, or the TruffleHog detector or detect-secrets plugin of an entity without
-  one (`source` in `generators.json`; the GCP service account key is a whole
-  one-line key file), so ARK and every baseline are measured on it before ARK has
-  a rule; its rows carry `rule_id` null.
+- Each baseline entity of `rules.json` (GOLD-D2, GOLD-D3, GOLD-D4, GOLD-D6: an
+  entity map entity with scope `baseline_only`, such as `comm.telegram.bot_token`)
+  has a profile under its entity id. Its generators follow the gitleaks rule of
+  the entity, or the TruffleHog detector or detect-secrets plugin of an entity
+  without one, or vendor documentation (`docs:<url>`) for an entity no baseline
+  detects (`key.symmetric_key`) (`source` in `generators.json`; the GCP service
+  account key is a whole one-line key file, the PKCS#12 key store one line of
+  base64). Context the baseline rule needs comes from the profile wrapper: the
+  `curl -u user:…` command, the NuGet.Config `<add key="ClearTextPassword" …/>`
+  entry and a one-line Kubernetes Secret manifest. So ARK and every baseline are
+  measured on it before ARK has a rule; its rows carry `rule_id` null.
 - Positives carry one entity whose `start`/`end` are code points in `text` and
   cover only the value, without key, quotes or wrapper. `encoding` lists the
   escapes applied to the value (`json`, `xml`, `indent` for YAML block scalars;
@@ -295,11 +302,16 @@ TypeScript, Go, Java, C#, Rust and Ruby, and DE/EN chat, tickets and mail.
   Baseline entities add `lookalike`: the entity's shape with a wrong prefix,
   length or character set (a Twilio account SID `AC…` for an API key `SK…`, a
   Mailgun `pubkey-`, a short Telegram secret, an Octopus `API-` key in lower case,
-  a GCP workload identity federation config without a private key) under the
+  a GCP workload identity federation config without a private key, an age public
+  key, a public X.509 certificate, a ConfigMap instead of a Secret) under the
   neutral key `correlation_id`. Under the entity's own key such a value
   would still be a credential of unknown format.
 - Code and notebook families carry the document label `content.source_code`,
-  logs `content.system_log`.
+  logs `content.system_log`, SQL dumps `content.database_dump` and `content.sql`,
+  and the DE/EN mails, tickets and chats with internal revenue, margin, forecast
+  and salary figures `content.business_metric` (GOLD-D6). The scoreboard scores
+  these classes per document; every content class has families in DE and EN in
+  both splits.
 
 ```shell
 cd python

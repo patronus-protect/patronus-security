@@ -81,7 +81,7 @@ FORMAT_FILENAMES = {
     "hcl": "main.tf", "xml": "config.xml", "properties": "application.properties",
     "shell": "run.sh", "dockerfile": "Dockerfile", "ci_yaml": ".gitlab-ci.yml",
     "jupyter": "notebook.ipynb", "log": "app.log", "http": "request.http", "chat": "chat.txt",
-    "ticket": "ticket.txt", "mail": "mail.eml",
+    "ticket": "ticket.txt", "mail": "mail.eml", "sql": "dump.sql",
 }
 CODE_FILENAMES = {
     "python": "main.py", "javascript": "index.js", "typescript": "index.ts", "go": "main.go",
@@ -100,6 +100,9 @@ NAME_PREFIX_RULES = {
     ("gitleaks", "gitlab-session-cookie"): ("_gitlab_session=", "cookie_name"),
     ("detect-secrets", "AzureStorageKeyDetector"): ("AccountKey=", "key_name"),
 }
+# Rules whose reported secret is a YAML ``name: value`` entry; the value follows the
+# name, an optional block indicator and blanks (gitleaks kubernetes-secret-yaml).
+YAML_ENTRY_RULES = {("gitleaks", "kubernetes-secret-yaml"): re.compile(r"[\w.-]+:(?:[ \t]*(?:\||>[-+]?)\s+)?[ \t]*[\"']?")}
 # Rules whose reported secret is one field of a key file; the value is the whole file the
 # tool matched (TruffleHog ``GCP`` reports the ``client_email`` of a service account key).
 KEY_FILE_RULES = {("trufflehog", "GCP"): re.compile(r"\{[^{]+auth_provider_x509_cert_url[^}]+\}")}
@@ -601,6 +604,9 @@ def refine(text: str, start: int, end: int, tool: str, rule_id: str) -> tuple[in
         name, step = NAME_PREFIX_RULES[(tool, rule_id)]
         start += len(name)
         steps.append(step)
+    elif (tool, rule_id) in YAML_ENTRY_RULES and (entry := YAML_ENTRY_RULES[(tool, rule_id)].match(value)):
+        start += entry.end()
+        steps.append("yaml_entry")
     elif (tool, rule_id) in KEY_FILE_RULES:
         for key_file in KEY_FILE_RULES[(tool, rule_id)].finditer(text):
             if key_file.start() <= start and end <= key_file.end():

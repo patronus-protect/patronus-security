@@ -7,8 +7,8 @@
 //! `python/patronus_ark/dlp_synth/generators.json`: SplitMix64 seeded with the recipe
 //! seed, alphabets concatenated from their chunks, literal segments copied,
 //! alphabet segments drawing `alphabet[next_u64() % alphabet.len()]` per
-//! character, checksum segments (`crc32_base62`, `iso7064_mod11_10`) over the
-//! text since the last literal, and encoded segments that build bytes from
+//! character, checksum segments (`crc32_base62`, `iso7064_mod11_10`, `bech32`
+//! under the HRP of the last literal) over the text since the last literal, and encoded segments that build bytes from
 //! hex/ASCII/random/alphabet parts and emit them as hex, base64 (padded,
 //! optionally wrapped), unpadded base64, base64url, bcrypt radix-64 or
 //! Base58Check. Placeholders may encode (`<<secret:N|base64>>`, `hex`, `url`,
@@ -199,6 +199,7 @@ fn checksum_length(kind: &str) -> Option<usize> {
     match kind {
         "crc32_base62" => Some(6),
         "iso7064_mod11_10" => Some(1),
+        "bech32" => Some(6),
         _ => None,
     }
 }
@@ -252,6 +253,59 @@ fn iso7064_mod11_10(digits: &str) -> Result<String, RecipeError> {
         product = 2 * total % 11;
     }
     Ok(((11 - product) % 10).to_string())
+}
+
+const BECH32: &[u8] = b"qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+
+/// BIP 173 checksum of `data` (Bech32 characters) under the HRP that `literal`
+/// ends with (`AGE-SECRET-KEY-1`, `age1`); upper case if `literal` is.
+fn bech32_checksum(literal: &str, data: &str) -> Result<String, RecipeError> {
+    let hrp = literal
+        .strip_suffix('1')
+        .filter(|hrp| !hrp.is_empty())
+        .ok_or_else(|| {
+            RecipeError::Spec(format!(
+                "a bech32 checksum needs a preceding literal ending in HRP + '1', got {literal:?}"
+            ))
+        })?
+        .to_ascii_lowercase();
+    let mut values: Vec<u32> = hrp.bytes().map(|byte| u32::from(byte >> 5)).collect();
+    values.push(0);
+    values.extend(hrp.bytes().map(|byte| u32::from(byte & 31)));
+    for character in data.bytes() {
+        let index = BECH32
+            .iter()
+            .position(|&symbol| symbol == character.to_ascii_lowercase())
+            .ok_or_else(|| {
+                RecipeError::Spec(format!("bech32 data {data:?} leaves the Bech32 alphabet"))
+            })?;
+        values.push(index as u32);
+    }
+    values.extend([0; 6]);
+    const GENERATOR: [u32; 5] = [0x3B6A57B2, 0x26508E6D, 0x1EA119FA, 0x3D4233DD, 0x2A1462B3];
+    let mut check: u32 = 1;
+    for value in values {
+        let top = check >> 25;
+        check = ((check & 0x1FF_FFFF) << 5) ^ value;
+        for (bit, generator) in GENERATOR.iter().enumerate() {
+            if (top >> bit) & 1 == 1 {
+                check ^= generator;
+            }
+        }
+    }
+    check ^= 1;
+    let upper = literal.bytes().any(|byte| byte.is_ascii_uppercase())
+        && !literal.bytes().any(|byte| byte.is_ascii_lowercase());
+    Ok((0..6)
+        .map(|index| {
+            let symbol = BECH32[((check >> (5 * (5 - index))) & 31) as usize];
+            char::from(if upper {
+                symbol.to_ascii_uppercase()
+            } else {
+                symbol
+            })
+        })
+        .collect())
 }
 
 fn base58check(payload: &[u8]) -> String {
@@ -575,12 +629,14 @@ impl GeneratorSet {
         let mut filled = false;
         // Checksums cover the text emitted since the most recent literal.
         let mut since_literal = String::new();
+        let mut literal = "";
         for segment in &self.generator(name)?.segments {
             let mut part = String::new();
             match segment {
                 Segment::Literal(Literal { lit }) => {
                     value.push_str(lit);
                     since_literal.clear();
+                    literal = lit;
                     continue;
                 }
                 Segment::Random(Random { alphabet, len }) => match fill {
@@ -593,6 +649,7 @@ impl GeneratorSet {
                 Segment::Checksum(Checksum { checksum }) => {
                     match checksum.as_str() {
                         "crc32_base62" => part = crc32_base62(&since_literal),
+                        "bech32" => part = bech32_checksum(literal, &since_literal)?,
                         _ => part = iso7064_mod11_10(&since_literal)?,
                     }
                     if fill.is_some() {
@@ -836,4 +893,21 @@ pub fn materialize(
         spans[fragment.secret] = (fragment.start, fragment.end);
     }
     Ok((text, spans))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::bech32_checksum;
+
+    #[test]
+    fn bech32_checksum_matches_the_bip173_vectors() {
+        // BIP 173 valid strings: "A12UEL5L" and "abcdef1qpzry9x8gf2tvdw0s3jn54khce6mua7lmqqqxw".
+        assert_eq!(bech32_checksum("A1", "").unwrap(), "2UEL5L");
+        assert_eq!(
+            bech32_checksum("abcdef1", "qpzry9x8gf2tvdw0s3jn54khce6mua7l").unwrap(),
+            "mqqqxw"
+        );
+        assert!(bech32_checksum("age", "qq").is_err());
+        assert!(bech32_checksum("age1", "qb").is_err());
+    }
 }
