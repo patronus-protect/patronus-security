@@ -647,6 +647,9 @@ impl NativeRegexDetector for PiiPipeline {
                     || context::key_holds_term(fields, text, value, pattern.entity_group)
             }
             "pii_email" => !context::url_userinfo(text, captures.get(0).unwrap().start()),
+            "pii_username" => {
+                !context::continues_as_name(text, captures.name("value").unwrap().range())
+            }
             "pii_ipv4" => context::ipv4_position(text, captures.get(0).unwrap().start()),
             "pii_ipv6_full" | "pii_ipv6_compressed" | "pii_ipv6_loopback" => {
                 context::ipv6_position(text, captures.name("value").unwrap().end())

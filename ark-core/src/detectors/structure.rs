@@ -68,6 +68,7 @@ impl Fields {
         key_value_lines(text, &mut builder);
         xml(text, &mut builder);
         markdown_tables(text, &mut builder);
+        key_value_cells(text, &mut builder);
         html_tables(text, &mut builder);
         csv(text, &mut builder);
         builder.finish()
@@ -483,6 +484,33 @@ fn table_block(text: &str, rows: &[Vec<Range<usize>>], builder: &mut Builder) {
     }
 }
 
+/// A form printed as a table without edge pipes: two or more lines in a row of one
+/// key cell and one value cell (`Geburtsdatum | 21. Februar 1971`, Q-CONTACT).
+fn key_value_cells(text: &str, builder: &mut Builder) {
+    if !text.contains('|') {
+        return;
+    }
+    let mut block: Vec<(Range<usize>, Range<usize>)> = Vec::new();
+    let flush = |block: &mut Vec<(Range<usize>, Range<usize>)>, builder: &mut Builder| {
+        if block.len() >= 2 {
+            for (key, value) in block.drain(..) {
+                builder.push(text, key, None, value, Carrier::Table);
+            }
+        }
+        block.clear();
+    };
+    for line in lines(text) {
+        let cells = (!text[line.clone()].trim_start().starts_with('|'))
+            .then(|| split_cells(text, line, b'|'))
+            .filter(|cells| cells.len() == 2 && is_header_cell(text, &cells[0]));
+        match cells {
+            Some(cells) => block.push((cells[0].clone(), cells[1].clone())),
+            None => flush(&mut block, builder),
+        }
+    }
+    flush(&mut block, builder);
+}
+
 fn html_tables(text: &str, builder: &mut Builder) {
     static TABLE: LazyLock<Regex> =
         LazyLock::new(|| Regex::new(r"(?is)<table\b[^>]*>(.*?)</table>").unwrap());
@@ -668,6 +696,23 @@ mod tests {
         assert!(has(text, "kundennummer", "KD-99121", Carrier::Table));
         // The header row is not a key/value row.
         assert!(!has(text, "mrn", "Ward", Carrier::Table));
+    }
+
+    #[test]
+    fn key_value_cells_without_edge_pipes() {
+        let text = "Name, Vorname | Harrison, Olivia\nGeburtsdatum | 21. Februar 1971\nLogin | jwagner\n\nTotal | 42\n";
+        assert!(has(
+            text,
+            "geburtsdatum",
+            "21. Februar 1971",
+            Carrier::Table
+        ));
+        assert!(has(text, "login", "jwagner", Carrier::Table));
+        // A single line is no form; a key cell holds no digit.
+        assert!(!has(text, "total", "42", Carrier::Table));
+        assert!(!fields("Geburtsdatum | 21.02.1971\n2024 | 2025\n")
+            .iter()
+            .any(|(_, _, carrier)| *carrier == Carrier::Table));
     }
 
     #[test]

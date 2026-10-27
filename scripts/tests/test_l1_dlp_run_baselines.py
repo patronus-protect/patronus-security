@@ -30,6 +30,13 @@ def token(prefix: str, body: str, length: int) -> str:
 GH = token("ghp_", "Zq7Xw2Vt", 36)
 PASSWORD = "Qw7" + "zX4" + "Lp9" + "Vb2"
 SESSION = token("", "7d0c4e2a", 32)
+ACCOUNT_KEY = token("", "Zq7Xw2Vt", 86) + "=="
+SA_EMAIL = "runner@demo-project.iam.gserviceaccount.com"
+SA_KEY_FILE = (
+    "{\"type\": \"service_account\", \"client_email\": \"" + SA_EMAIL + "\", "
+    "\"auth_provider_x509_cert_url\": \"https://www.googleapis.com/oauth2/v1/certs\"}"
+)
+SA_KEY_FILE_ESCAPED = SA_KEY_FILE.replace("\"", "\\\"")
 PEM_LABEL = "RSA " + "PRIVATE KEY"
 PEM = f"-----BEGIN {PEM_LABEL}-----\nMIIBOgIBAAJBAK\nq7Xw2Vt9Zq\n-----END {PEM_LABEL}-----"
 JWT_HEAD = "eyJ" + "hbGciOiJub25lIn0" + "." + "eyJ" + "zdWIiOiJ4In0"
@@ -202,6 +209,13 @@ def test_locate_secret_inside_match_and_fallbacks():
         (f"Cookie: _gitlab_session={SESSION}; path=/", f"_gitlab_session={SESSION}", "gitleaks", "gitlab-session-cookie", SESSION,
          ["cookie_name"]),
         (f"_gitlab_session={SESSION}", SESSION, "trufflehog", "Gitlab", SESSION, []),
+        # GOLD-D4: detect-secrets reports the connection-string key name, TruffleHog GCP the
+        # client_email of a service account key file.
+        (f"Conn=AccountName=a;AccountKey={ACCOUNT_KEY};EndpointSuffix=x", f"AccountKey={ACCOUNT_KEY}", "detect-secrets",
+         "AzureStorageKeyDetector", ACCOUNT_KEY, ["key_name"]),
+        (f"GOOGLE_CREDENTIALS='{SA_KEY_FILE}'\n", SA_EMAIL, "trufflehog", "GCP", SA_KEY_FILE, ["key_file"]),
+        (f"x = \"{SA_KEY_FILE_ESCAPED}\";", SA_EMAIL, "trufflehog", "GCP", SA_KEY_FILE_ESCAPED, ["key_file"]),
+        (f"owner: {SA_EMAIL}", SA_EMAIL, "trufflehog", "GCP", SA_EMAIL, []),
         (f"key:\n{PEM}\n", PEM_LABEL, "detect-secrets", "PrivateKeyDetector", PEM, ["pem_block"]),
         (f"-----BEGIN {PEM_LABEL}-----\n(cut)", PEM_LABEL, "detect-secrets", "PrivateKeyDetector", f"-----BEGIN {PEM_LABEL}-----", ["pem_header"]),
         (f"key:\n{PEM}\n", PEM, "gitleaks", "private-key", PEM, []),

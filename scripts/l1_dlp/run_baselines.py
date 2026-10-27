@@ -94,8 +94,15 @@ DEFAULT_FILENAME = "document.txt"
 TAIL_RULES = {("detect-secrets", "JwtTokenDetector"): re.compile(r"[A-Za-z0-9_\-.+/=]+")}
 # Rules whose reported secret is ``user:password``; the value is the password.
 USERPASS_RULES = {("gitleaks", "curl-auth-user")}
-# Rules whose reported secret starts with the cookie name; the value is the cookie value.
-COOKIE_RULES = {("gitleaks", "gitlab-session-cookie"): "_gitlab_session="}
+# Rules whose reported secret starts with a fixed name (regex without a secret group); the
+# value follows the name: (name, normalization step).
+NAME_PREFIX_RULES = {
+    ("gitleaks", "gitlab-session-cookie"): ("_gitlab_session=", "cookie_name"),
+    ("detect-secrets", "AzureStorageKeyDetector"): ("AccountKey=", "key_name"),
+}
+# Rules whose reported secret is one field of a key file; the value is the whole file the
+# tool matched (TruffleHog ``GCP`` reports the ``client_email`` of a service account key).
+KEY_FILE_RULES = {("trufflehog", "GCP"): re.compile(r"\{[^{]+auth_provider_x509_cert_url[^}]+\}")}
 QUOTES = ("\"", "'", "`")
 LEADING_TRIM = " \t\r\n\"'`=:"
 TRAILING_TRIM = " \t\r\n\"'`"
@@ -590,9 +597,16 @@ def refine(text: str, start: int, end: int, tool: str, rule_id: str) -> tuple[in
     elif (tool, rule_id) in USERPASS_RULES and ":" in value:
         start += value.index(":") + 1
         steps.append("user_password")
-    elif (tool, rule_id) in COOKIE_RULES and value.startswith(COOKIE_RULES[(tool, rule_id)]):
-        start += len(COOKIE_RULES[(tool, rule_id)])
-        steps.append("cookie_name")
+    elif (tool, rule_id) in NAME_PREFIX_RULES and value.startswith(NAME_PREFIX_RULES[(tool, rule_id)][0]):
+        name, step = NAME_PREFIX_RULES[(tool, rule_id)]
+        start += len(name)
+        steps.append(step)
+    elif (tool, rule_id) in KEY_FILE_RULES:
+        for key_file in KEY_FILE_RULES[(tool, rule_id)].finditer(text):
+            if key_file.start() <= start and end <= key_file.end():
+                start, end = key_file.span()
+                steps.append("key_file")
+                break
     line_start = text.rfind("\n", 0, start) + 1
     line_end = text.find("\n", start)
     line_end = len(text) if line_end < 0 else line_end

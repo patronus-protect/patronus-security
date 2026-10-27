@@ -37,6 +37,37 @@ result shapes may be breaking for downstream users, and is called out explicitly
   caller constructs its `ScanControl`.
 - Validate generic classifier output shapes and finite values before interpreting
   predictions; preserve existing public methods and add checked decoding helpers.
+- Contact and account fields (Q-CONTACT, quality floor F1 ≥ 80). Field-bound values that the
+  rules missed: `pii_username` binds `user=<value>` in log and query lines (`auth failed
+  user=oeztuerk90`; `user` only with `=`), no longer reads `login issues` as `login is` + `sues`
+  and skips a name after its field (`Account Name: John Doe`, `ACME Inc.`; a credential line such
+  as `Username: JSmith Password: …` stays). The date-of-birth rules share one field part and add
+  the ISO order (`1980-11-26`, `validators::calendar_date`), `geb.`, `born on`, `DateOfBirth=`,
+  the connectives `of`/`del`/`el`, a no-break space and an example opener (`date of birth (e.g.,
+  …)`); written dates take ordinal days (`18th December 1983`) and the months of FR, ES, IT and NL
+  (`26 de marzo de 1990`, `1er mars 1990`, `validators::written_calendar_date`). `pii_employee_id`
+  takes `employé ID`, `ist`/`lautet`, a field closing a parenthesis and a short uppercase prefix
+  with digits (`PN 201033`); `pii_employee_id_prefixed` also `EMP821659`. `pii_customer_id` takes
+  `a customer ID of …`, `the customer with (the) ID …`, `ist`/`lautet` and `Kundennummer (z. B.
+  …)`. New structure carrier (K04): a form printed as a table without edge pipes (two or more
+  lines `Geburtsdatum | 21. Februar 1971`, key cell without digits) binds every field-bound rule.
+  The date validators still check the calendar (`1985-02-30`, `31 de abril de 1990` stay
+  negative); no checksum changes. Email (Gretel leaves 103 of 133 Markdown `mailto` links
+  unannotated), username, customer ID and date of birth stay below 80 on `neutral` by recorded
+  decision (gold gaps, `research/l1-pii/README.md`, Stand Q-CONTACT). New
+  `rust/tests/pii_contact_quality.rs`, 130 new `pii_l1` rows (69 positives, 61 hard negatives; DE + EN plus FR/ES/IT/NL), three
+  former known gaps closed, hard negatives in the rule fixture. **Detection change** (every mode):
+  the forms above are new `USERNAME`, `DOB`, `EMPLOYEE_ID` and `CUSTOMER_ID` findings, values in
+  edge-less key/value tables new findings of their field's rule, and `login is…` and names after
+  `Account Name:` are no longer `USERNAME`. Dev scoreboard vs. 94aca75 (every gated bucket up,
+  strict and balanced, no new hard-negative FP), exact F1 balanced: username ark_authored
+  35.3 → 98.2, neutral 8.8 → 10.3; DOB ark_authored 71.4 → 99.7, neutral 66.7 → 67.0; employee ID
+  neutral 79.0 → 88.2, ark_authored 87.5 → 100.0; customer ID neutral 51.1 → 60.9; phone
+  presidio_favored 80.5 (unchanged); L1 F1 neutral 65.8 → 66.7, ark_authored 54.4 → 59.6 (strict).
+  New regex parts are bounded alternations and fixed digit counts; the table carrier is one pass
+  over the lines that hold a `|`. `latency.py compare --engine ark-native` 100 KiB p95
+  161.6 → 167.9 ms (+3.9 %) and 161.6 → 157.7 ms (−2.4 %) in two head runs, both PASS. Golden eval
+  green.
 
 - German IDs on `presidio_favored` (Q-DE, quality floor F1 ≥ 80). The bare KVNR rule
   `pii_health_insurance_number_de_context_free` now reads the letter in either case
@@ -379,6 +410,45 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Synthetic DLP gold for the 23 hosting, cloud and data entities without an ARK rule and without
+  gold (GOLD-D4): `cloud.aws.bedrock_api_key`, `cloud.alibaba.access_key`,
+  `cloud.azure.entra_client_secret`, `cloud.azure.storage_account_key`,
+  `cloud.gcp.service_account_key`, `cloud.ibm.credentials`, `cloud.yandex.credentials`,
+  `cloud.scalingo.api_token`, `hosting.flyio.access_token`, `hosting.netlify.access_token`,
+  `hosting.heroku.api_key`, `hosting.cloudflare.api_key`, `hosting.digitalocean.token`,
+  `hosting.openshift.user_token`, `hosting.defined_networking.api_token`,
+  `hosting.fastly.api_token`, `hosting.settlemint.access_token`, `data.databricks.api_token`,
+  `data.planetscale.secret`, `data.confluent.secret`, `data.algolia.api_key`,
+  `data.clickhouse.api_secret`, `data.cloudant.credentials` (packages P03, P04, P06, P12).
+  `baseline_entities` in `dlp_synth/rules.json` gains 37 generators in the format of each
+  entity's gitleaks rule, or, for the four entities without one, of its TruffleHog detector
+  (`GCP`) or detect-secrets plugin (`AzureStorageKeyDetector`, `IbmCloudIamDetector`,
+  `CloudantDetector`): the Bedrock key is `ABSK` + base64 of `BedrockAPIKey-…-at-<account>:…`,
+  the Azure storage key is base64 of 64 bytes inside a connection string, the GCP service
+  account key is a one-line key file with a PKCS#8 RSA 2048 private key (random integers, not
+  a usable key), OpenShift tokens are `sha256~` + base64url of 32 bytes. Each entity has one
+  lookalike (wrong length, or a GCP workload identity federation config without a private
+  key). Per split and entity the carriers give 40 positives (20 DE, 20 EN) and 200 hard
+  negatives. The baseline test accepts TruffleHog and detect-secrets format sources for
+  entities without a gitleaks rule, and the profile test covers the hosting, cloud and data
+  families. `entity_map.yaml` maps the TruffleHog detectors that report these formats
+  (`Azure`, `AzureStorage`, `Netlify`, `Heroku`, `CloudflareApiToken`, `CloudflareCaKey`,
+  `DigitalOceanV2`, `FastlyPersonalToken`; `check-entity-map` passes on the pinned binaries).
+  `run_baselines.py` cuts `AccountKey=` from detect-secrets `AzureStorageKeyDetector` findings
+  (step `key_name`, sharing the name-prefix table with `cookie_name`) and widens TruffleHog
+  `GCP` findings, which report the `client_email`, to the key file the detector matched (step
+  `key_file`). **Detection change:** none (evaluation data only, no latency effect); the frozen
+  corpora change only when the operator re-freezes them. Dev rows, exact F1: ARK 0 on all 23
+  (no rule; generic rules find up to 34 of 40 values); best baseline 100 Entra client secret
+  (TruffleHog) and OpenShift (gitleaks), 98.7 Azure storage key, 96.1 Fastly, 94.7 Netlify
+  (TruffleHog), 97.4 Fly.io, 66.7 ClickHouse, 65.5 Databricks (gitleaks), 63.9 Heroku, 60.7
+  Cloudflare (TruffleHog), 60.3 DigitalOcean (gitleaks), 49.7 GCP service account key
+  (TruffleHog), 49.4 Bedrock, Scalingo, PlanetScale and SettleMint, 47.5 Alibaba, 45.7 Yandex,
+  Algolia, Confluent and Defined Networking (gitleaks), 45.7 IBM Cloud and 45.0 Cloudant
+  (detect-secrets). Baseline precision suffers mostly from `doc_example`/`test_key` values.
+  After a re-freeze ARK reports 119 hard-negative spans on these rows
+  (`dlp_generic_credential_assignment` and `dlp_env_var_secret` on example and test values; no
+  `lookalike` hit) — findings for P03/P04/P06/P12.
 - Synthetic DLP gold for the 20 devops, ci, vcs and registry entities without an ARK rule and
   without gold (GOLD-D3): `vcs.gitlab.session_cookie`, `vcs.bitbucket.client_secret`,
   `ci.droneci.access_token`, `ci.travisci.access_token`, `registry.jfrog.artifactory`,
