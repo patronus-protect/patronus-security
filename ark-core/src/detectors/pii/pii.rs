@@ -11,7 +11,7 @@ use super::context_anchors::PII_ANCHOR_PATTERNS;
 use super::score::{self, PiiMode, ValidatorStrength};
 use super::{
     at, au, be, ca, ch, common, context, de, driver_license, fr, identifiers, ie, intl,
-    licence_plate, nl, nordic, overlap, pt, sg, tr, uk, us, vat, za,
+    licence_plate, nl, nordic, overlap, pt, sg, tr, uk, us, validators, vat, za,
 };
 use crate::detectors::anchors;
 use crate::detectors::obfuscation::{Deobfuscated, Level};
@@ -608,6 +608,8 @@ impl NativeRegexDetector for PiiPipeline {
             "pii_phone_international" | "pii_phone_de" => {
                 context::opens_phone_number(text, captures.get(0).unwrap().start())
             }
+            // The numbering plan only after the context gate (F01): parsing is costly.
+            "pii_phone_regional" => validators::in_phone_region(captures.get(0).unwrap().as_str()),
             "pii_credit_card" => context::card_position(text, captures.get(0).unwrap().range()),
             // A term near the value does not make a fragment of a longer number
             // (`401127789-0`) an SSN, an NHS, a passport, an AU/SG or a Nordic number.

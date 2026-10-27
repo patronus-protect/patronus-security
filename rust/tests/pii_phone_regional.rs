@@ -4,7 +4,8 @@
 //! `pii_phone_regional` reports a grouped national number without a country prefix
 //! (`416 60 039`, `03.93.92.16.85`, `0688 843 79 56`) when a phone term or a
 //! structural key supports it and the number is valid in one of the numbering plans
-//! of `validators::PHONE_REGIONS`. It runs in `balanced` and `recall` only, after
+//! of `validators::PHONE_REGIONS` (`validators::in_phone_region`, checked after the
+//! context gate). It runs in `balanced` and `recall` only, after
 //! the other phone rules, which keep their spans; `strict` is unchanged. Reserved
 //! placeholder numbers (T01: NANP 555-01xx, `+1 000-000-0000`) stay positive.
 
@@ -172,6 +173,7 @@ fn regional_validator_vectors() {
         "(64) 3591-3246",
     ] {
         assert!(validators::regional_phone(valid), "{valid}");
+        assert!(validators::in_phone_region(valid), "{valid}");
     }
     for invalid in [
         "31.12.2024",
@@ -183,5 +185,10 @@ fn regional_validator_vectors() {
         "123 456 789 012 345",
     ] {
         assert!(!validators::regional_phone(invalid), "{invalid}");
+    }
+    // The right shape, but no valid number in any regional plan.
+    for outside in ["0000 1234567", "0001 234 567"] {
+        assert!(validators::regional_phone(outside), "{outside}");
+        assert!(!validators::in_phone_region(outside), "{outside}");
     }
 }
