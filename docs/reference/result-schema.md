@@ -280,12 +280,12 @@ be a valid card number, and an account field can hold an IBAN or a card-shaped n
 a card needs Luhn plus the IIN prefix and a length of its brand and never starts right after `+`,
 so phone digits no longer compete as a card. In `balanced` and `recall` one value yields one label among `IBAN`,
 `CREDITCARD`, `FINANCIAL_ACCOUNT_NUMBER`, `STEUERID`, `PHONE`, `VAT_ID_IT`, `VAT_ID_FR`, `VAT_ID_HR`,
-`VAT_ID_LT`, `VAT_ID_LV`, `NHS_NUMBER`, `AU_ABN`, `FR_NIR`, `FR_SIRET` and `BE_NATIONAL_NUMBER` (a
-bare Partita IVA and the digits of a spaced French or Croatian VAT ID have 11 digits like a
-Steuer-ID, B01/B02; the twelve digits of a Lithuanian one can be card-shaped, B02; an NHS number in
-3-3-4 groups is also a US phone number, B-UK; an ABN in 2-3-3-3 groups or as eleven digits can be a
-Steuer-ID, B-APAC; a Belgian national number can be a Steuer-ID, a SIRET or a NIR a card number,
-B-EU1).
+`VAT_ID_LT`, `VAT_ID_LV`, `NHS_NUMBER`, `AU_ABN`, `FR_NIR`, `FR_SIRET`, `BE_NATIONAL_NUMBER` and
+`TR_NATIONAL_ID` (a bare Partita IVA and the digits of a spaced French or Croatian VAT ID have 11
+digits like a Steuer-ID, B01/B02; the twelve digits of a Lithuanian one can be card-shaped, B02; an
+NHS number in 3-3-4 groups is also a US phone number, B-UK; an ABN in 2-3-3-3 groups or as eleven
+digits can be a Steuer-ID, B-APAC; a Belgian national number can be a Steuer-ID, a SIRET or a NIR a
+card number, B-EU1; a T.C. Kimlik No can be a Steuer-ID, B-LUHN).
 Of two overlapping findings
 with different labels the first criterion that differs decides: an IBAN (`iban`), the longer
 value (`longer_value`: a card-shaped part of a longer value), context that supports the finding's
@@ -391,7 +391,18 @@ numéro de registre national, mod 97). With a term of the label near the value o
 `0.55`, the forms whose shape adds to the check digit: a NIR printed `2 95 10 99 126 111 93` or as
 fifteen characters of sex 1 or 2, a SIRET in 3-3-3-5 groups (`732 829 320 00074`), a BSN printed
 `1234.56.782` and a national number printed `85.07.30-033.28`. The SIREN (`732 829 320`) and bare
-runs of nine, eleven or fourteen digits need the term in every mode. The German document number rules keep
+runs of nine, eleven or fourteen digits need the term in every mode. Four more national numbers
+(B-LUHN) have one label each: the Swedish organisationsnummer (`SE_ORGANISATIONSNUMMER`, third
+digit 2 or more, Luhn; `556703-7485`), the Canadian Social Insurance Number (`CA_SIN`, Luhn, first
+digit not 0 or 8; `130-692-544`), the Turkish T.C. Kimlik No (`TR_NATIONAL_ID`, two check digits;
+`10000000146`) and the South African identity number (`ZA_ID_NUMBER`, birth date, citizenship 0–2,
+an 8 or 9 and Luhn; `8001015009087`). With a term of the label near the value or as its key
+(`Organisationsnummer`, `org.nr`, `SIN`, `social insurance number`, `numéro d'assurance sociale`,
+`T.C. Kimlik No`, `TCKN`, `South African ID`, a `za_id` key) they are reported in every mode,
+`0.75`–`0.85`; bare, in `balanced`/`recall` only and at `0.55`, the organisationsnummer printed
+`NNNNNN-NNNN`, the SIN in hyphenated 3-3-3 groups and the thirteen digits of a South African ID
+number (also `800101 5009 087`). Ten bare digits, a SIN in 3-3-3 groups by spaces (the print form
+of a SIREN or a BSN) and the eleven digits of a T.C. Kimlik No need the term in every mode. The German document number rules keep
 their format check in every mode, since a printed nine-character serial carries no check digit. A context-bound rule (`pii_phone_de_national_proximity`: a national number such as
 `ist unter 0176 90817263 erreichbar`) reports only with a support term and no nearer counter term,
 in every mode including `strict`, and then scores at least `0.50`. Validators decide in every

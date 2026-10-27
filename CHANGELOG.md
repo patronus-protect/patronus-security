@@ -93,6 +93,42 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Swedish, Canadian, Turkish and South African national numbers (B-LUHN: the checksum parts of
+  T13 and T09), one label each with a check digit: `SE_ORGANISATIONSNUMMER`
+  (`validators::se_organisationsnummer`, third digit 2 or more, Luhn), `CA_SIN` (`ca_sin`, Luhn,
+  first digit not 0 or 8), `TR_NATIONAL_ID` (`tr_national_id`, T.C. Kimlik No: no leading zero,
+  tenth digit 7 × odd places − even places mod 10, eleventh the digit sum mod 10, ten repeated
+  digits rejected) and `ZA_ID_NUMBER` (`za_id_number`, birth date, citizenship 0–2, an 8 or 9 and
+  Luhn). `pii_organisationsnummer_se`, `pii_sin_ca`, `pii_national_id_tr` and `pii_id_number_za`
+  report the value in every mode when a term of the label stands near it or is its key, also as a
+  CSV cell next to numeric cells (new lexicon entries `pii.se_organisationsnummer`,
+  `pii.ca_social_insurance_number`, `pii.tr_national_id`, `pii.za_id_number` with Swedish, French,
+  Turkish and Afrikaans terms such as `org.nr`, `numéro d'assurance sociale`, `T.C. Kimlik No`,
+  `TCKN`). In `balanced`/`recall` the printed forms are also reported bare at 0.55 (K05): the
+  organisationsnummer `556703-7485`, the SIN in hyphenated 3-3-3 groups (`130-692-544`) and the
+  South African ID number (`8001015009087`, `800101 5009 087`). Ten bare digits, a SIN in 3-3-3
+  groups by spaces (the print form of a SIREN or a BSN) and the eleven digits of a T.C. Kimlik No
+  need the term in every mode; `TR_NATIONAL_ID` competes with the Steuer-ID in the scored modes
+  (K07). The four presidio-only ids `pii.se.organisationsnummer`, `pii.ca.sin`,
+  `pii.tr.national_id` and `pii.za.id_number` become `shared`; M3 count (`count_validated.py`) ARK
+  55 → 59, shared 19 → 22 (Presidio's CA SIN check is an `invalidate_result` and not counted). The
+  format-only parts of T13 and T09 (TR licence plate, US MBI) stay out of the programme. `pii_l1`
+  gains 106 rows (DE, EN, plus SV, TR and FR rows for the national field names; `sv` and `tr` are
+  new golden languages, allowed for the country ids only); the CREDITCARD hard negatives that are
+  South African ID numbers now annotate them, and the rule fixture uses Korean resident
+  registration numbers for that birth-date case instead. **Detection change:** in `strict` the
+  four labels with a term or key are new findings; in `balanced`/`recall` also the bare forms
+  above. Dev scoreboard vs. a742f80 (PASS in strict and balanced, no new hard-negative FP,
+  precision 100.0 on all four ids): L1 F1 strict +1.3 pp, balanced +1.2 pp (presidio_favored +0.9
+  / +1.5, neutral ±0.0, ark_authored +2.5 / +2.0); exact F1 `ark_authored` 100.0 for all four ids in
+  both modes; `presidio_favored` balanced organisationsnummer 50.0, SIN 57.1, T.C. Kimlik No 66.7,
+  ZA ID number 100.0 (the remaining FN are bare ten-, nine- and eleven-digit values and SINs in
+  spaced groups without a term). Latency (`latency.py compare --engine ark-native`, three
+  interleaved head/base pairs): 100 KiB p95 165.2 → 182.7, 177.9 → 172.3 and 183.2 → 169.2 ms
+  (+10.6 %, −3.2 %, −7.6 %; two base runs alone differ by 7.7 %), mean 175.4 → 174.7 ms (−0.4 %),
+  from seven more regex rules with fixed-length digit patterns. Golden eval: 1576/1576 positives,
+  1435/1435 hard negatives.
+
 - Licence plates: plate field names, DE hyphen forms and UK plates (T30). `pii_kfz_kennzeichen_de`
   and the new `pii_vehicle_registration_uk` share one field part
   (`ark-core/src/detectors/pii/licence_plate.rs`): DE/EN plate field names before the value

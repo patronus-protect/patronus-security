@@ -1069,20 +1069,20 @@ def fr_nir(value: str) -> bool:
     return 97 - int(body[:5] + department + body[7:13]) % 97 == int(body[13:])
 
 
-def _siren(digits: list[int]) -> bool:
+def _issued_luhn(digits: list[int]) -> bool:
     return len(set(digits)) > 1 and _luhn_checksum(digits) == 0
 
 
 def fr_siren(value: str) -> bool:
     """Port of ``validators::fr_siren`` (nine digits, Luhn, not one repeated digit)."""
     digits = _grouped_digits(value, 9)
-    return digits is not None and _siren(digits)
+    return digits is not None and _issued_luhn(digits)
 
 
 def fr_siret(value: str) -> bool:
     """Port of ``validators::fr_siret`` (SIREN + NIC, Luhn; La Poste 356000000 by digit sum mod 5)."""
     digits = _grouped_digits(value, 14)
-    if digits is None or not _siren(digits[:9]):
+    if digits is None or not _issued_luhn(digits[:9]):
         return False
     if _number(digits[:9]) == 356_000_000:
         return sum(digits) % 5 == 0
@@ -1112,6 +1112,43 @@ def be_national_number(value: str) -> bool:
     if not 1 <= number % 1000 <= 998:
         return False
     return 97 - number % 97 == check or 97 - (2_000_000_000 + number) % 97 == check
+
+
+def se_organisationsnummer(value: str) -> bool:
+    """Port of ``validators::se_organisationsnummer`` (ten digits, ``-`` before the last four, third ≥ 2, Luhn)."""
+    if len(value) == 11 and value[6] == "-":
+        value = value[:6] + value[7:]
+    digits = _separated_digits(value, 10, "")
+    return digits is not None and digits[2] >= 2 and _issued_luhn(digits)
+
+
+def ca_sin(value: str) -> bool:
+    """Port of ``validators::ca_sin`` (nine digits, 3-3-3 by spaces or hyphens, first not 0 or 8, Luhn)."""
+    digits = _grouped_digits(value, 9)
+    return digits is not None and digits[0] not in (0, 8) and _issued_luhn(digits)
+
+
+def tr_national_id(value: str) -> bool:
+    """Port of ``validators::tr_national_id`` (eleven digits, no leading zero, two check digits mod 10)."""
+    digits = _separated_digits(value, 11, "")
+    if digits is None or digits[0] == 0 or len(set(digits[:10])) == 1:
+        return False
+    odd, even = sum(digits[0:9:2]), sum(digits[1:8:2])
+    return (7 * odd - even) % 10 == digits[9] and sum(digits[:10]) % 10 == digits[10]
+
+
+def za_id_number(value: str) -> bool:
+    """Port of ``validators::za_id_number`` (YYMMDD, sequence, citizenship 0–2, 8 or 9, Luhn over thirteen)."""
+    digits = _separated_digits(value, 13, " ")
+    if digits is None:
+        return False
+    year, month, day = (digits[i] * 10 + digits[i + 1] for i in (0, 2, 4))
+    return (
+        any(_valid_date(century + year, month, day) for century in (1900, 2000))
+        and digits[10] <= 2
+        and digits[11] in (8, 9)
+        and _luhn_checksum(digits) == 0
+    )
 
 
 # Python ports of every checksum validator (``checksums.ark`` with an algorithm in entity_map.yaml);
@@ -1174,6 +1211,10 @@ CHECKSUM_PORTS: dict[str, Callable[[str], bool]] = {
     "fr_siret": fr_siret,
     "nl_bsn": nl_bsn,
     "be_national_number": be_national_number,
+    "se_organisationsnummer": se_organisationsnummer,
+    "ca_sin": ca_sin,
+    "tr_national_id": tr_national_id,
+    "za_id_number": za_id_number,
 }
 
 

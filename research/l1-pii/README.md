@@ -405,6 +405,27 @@ reg is AB51 ABC`), kein neuer FP. Die übrigen 20 `presidio_favored`-FN sind bla
 NG und den alten UK-Formen (Präfix, Suffix) ohne Kennzeichen-Begriff und folgen der offenen
 Entscheidung T27; `Plates: APP-456CV and KJA-999PZ` (NG) bleibt ebenfalls offen.
 
+Stand B-LUHN: ARK 59, gemeinsam 22 (T13, T09; nur die Prüfziffer-Teile, die reinen Formteile
+TR-Kennzeichen und US MBI fallen aus dem Programm). Vier Labels mit Prüfziffer, alle `shared`:
+`SE_ORGANISATIONSNUMMER` (`validators::se_organisationsnummer`, dritte Ziffer ≥ 2, wo die
+Personennummern den Geburtsmonat tragen, Luhn), `CA_SIN` (`ca_sin`, Luhn, erste Ziffer nicht 0 oder 8),
+`TR_NATIONAL_ID` (`tr_national_id`, T.C. Kimlik No: keine führende Null, zehnte Ziffer 7 × ungerade
+minus gerade Stellen mod 10, elfte Quersumme mod 10, zehn gleiche Ziffern ungültig) und `ZA_ID_NUMBER`
+(`za_id_number`, Geburtsdatum, Staatsangehörigkeit 0–2, 8 oder 9, Luhn über 13 Stellen). Presidio
+2.2.364 prüft die SIN nur per `invalidate_result`, deshalb zählt sie nicht als gemeinsame Einheit. In
+jedem Modus meldet je eine Regel den Wert mit einem Begriff des Labels in der Nähe oder als Schlüssel
+(`requires_context`; Lexika mit schwedischen, französischen, türkischen und Afrikaans-Begriffen);
+kontextfrei in `balanced`/`recall` (K05, 0,55) die Organisationsnummer `NNNNNN-NNNN`, die SIN in
+3-3-3-Gruppen mit Bindestrich und die südafrikanische ID-Nummer (13 Ziffern oder 6-4-3). Die SIN in
+3-3-3-Gruppen mit Leerzeichen ist auch die Druckform von SIREN und BSN (bestehende Hard Negatives
+`Vorgang 906 689 682`), blanke zehn, neun und elf Ziffern sind zu oft andere Nummern; sie brauchen in
+jedem Modus den Begriff, die T.C. Kimlik No hat keine kontextfreie Form und konkurriert mit der
+Steuer-ID (K07). Dev, exakter F1: `ark_authored` 100,0 für alle vier IDs in strict und balanced;
+`presidio_favored` balanced Organisationsnummer 50,0, SIN 57,1, T.C. Kimlik No 66,7, ZA 100,0, Präzision
+überall 100,0. Unter der Untergrenze 80 bleiben auf `presidio_favored` nur blanke Werte ohne Begriff
+(`2120000142`, `130692544`, `130 692 544`, `79059236630`), die nach der Regel oben FN bleiben.
+`pii_l1` führt dafür auch Zeilen in `sv` und `tr`, nur für die IDs des Landes.
+
 Stand B02: ARK 24, gemeinsam 7. Dazu kommen die USt-IdNr. von BG, CY, CZ, DK, EE, EL, FI, HR, HU, IE
 und LT, gleiche Struktur wie B01 (je Land ein Label `VAT_ID_BG` … und ein Validator mit Prüfziffer,
 nur in `balanced`/`recall`), alle `ark_only`; Griechenland trägt im Label das MwSt.-Präfix `EL`, in
