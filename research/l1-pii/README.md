@@ -426,6 +426,26 @@ Steuer-ID (K07). Dev, exakter F1: `ark_authored` 100,0 für alle vier IDs in str
 (`2120000142`, `130692544`, `130 692 544`, `79059236630`), die nach der Regel oben FN bleiben.
 `pii_l1` führt dafür auch Zeilen in `sv` und `tr`, nur für die IDs des Landes.
 
+Stand B-EU2: ARK 63, gemeinsam 22 (B06, B07, B14). Vier Labels mit Prüfziffer oder Prüfbuchstabe, alle
+`ark_only` (presidio-analyzer 2.2.364 kennt keine der Nummern): `AT_SOCIAL_SECURITY_NUMBER`
+(`validators::at_social_security_number`, Versicherungsnummer `LLLC DDMMYY`: Laufnummer ab 100, vierte
+Ziffer gewichtet 3-7-9-5-8-4-2-1-6 mod 11, Rest 10 wird nie vergeben; das Datum wird nicht geprüft, weil
+die Sozialversicherung bei erschöpften Laufnummern Tage über 31 und Monate über 12 vergibt),
+`CH_AHV_NUMBER` (`ch_ahv_number`, AHVN13: Präfix 756 und EAN-13-Prüfziffer), `PT_NIF` (`pt_nif`) und
+`IE_PPSN` (`ie_ppsn`, sieben Ziffern, Prüfbuchstabe mod 23, zweiter Buchstabe `A`/`B` gezählt, `W`/`T`/`X`
+nicht). **PT NIF zählt getrennt von der USt-IdNr. PT (B16):** eigene ID `pii.pt.nif` und eigener
+Validator; die Prüfung selbst ist mit `pt_vat_id` geteilt (`pt_nif_check`), ebenso der Prüfbuchstabe
+von PPSN und irischer USt-IdNr. (`ie_check_letter`). Neun Ziffern nach `PT ` sind der Körper einer
+USt-IdNr., keine NIF. In jedem Modus meldet je eine Regel den Wert mit einem Begriff des Labels in der
+Nähe oder als Schlüssel (`requires_context`; Lexika mit DE-, FR-, IT- und PT-Begriffen, die AT- und
+CH-Nummer auch mit `Sozialversicherungsnummer`); kontextfrei in `balanced`/`recall` (K05, 0,55) die
+österreichische Nummer in der Druckform `NNNN DDMMYY` mit Kalenderdatum und die AHV-Nummer
+`756.NNNN.NNNN.NN`. Zehn blanke Ziffern, 13 blanke Ziffern (eine EAN-13), die neun Ziffern der NIF
+und sieben Ziffern mit Buchstabe (PPSN, auch eine Referenz) brauchen in jedem Modus den Begriff; NIF und
+PPSN stehen in `CONTEXT_BOUND_LABELS`. Gold steht in `pii_l1` (DE, EN, dazu FR-Zeilen für die AHV- und
+`pt`-Zeilen für die NIF); das eingefrorene E05-Goldset erzeugt die vier IDs nicht (`NOT_GENERATED`).
+Dev-Scoreboard unverändert (kein Gold für die neuen IDs in den Dev-Korpora, keine neuen Funde).
+
 Stand B02: ARK 24, gemeinsam 7. Dazu kommen die USt-IdNr. von BG, CY, CZ, DK, EE, EL, FI, HR, HU, IE
 und LT, gleiche Struktur wie B01 (je Land ein Label `VAT_ID_BG` … und ein Validator mit Prüfziffer,
 nur in `balanced`/`recall`), alle `ark_only`; Griechenland trägt im Label das MwSt.-Präfix `EL`, in

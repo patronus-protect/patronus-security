@@ -682,8 +682,11 @@ def ie_vat_id(value: str) -> bool:
         if len(body) != 8 or not ("A" <= body[1] <= "Z" or body[1] in "+*") or tail is None or first is None:
             return False
         digits, second = [0, *tail, *first], 0
-    total = _weighted_sum(digits, range(8, 1, -1)) + 9 * second
-    return any(digits) and IE_CHECK_LETTERS[total % 23] == body[7]
+    return any(digits) and _ie_check_letter(digits, second) == body[7]
+
+
+def _ie_check_letter(digits: list[int], second: int) -> str:
+    return IE_CHECK_LETTERS[(_weighted_sum(digits, range(8, 1, -1)) + 9 * second) % 23]
 
 
 def lt_vat_id(value: str) -> bool:
@@ -728,9 +731,11 @@ def pl_vat_id(value: str) -> bool:
 def pt_vat_id(value: str) -> bool:
     """Port of ``validators::pt_vat_id`` (NIF: 9 digits, no leading zero, weighted 9…2 mod 11)."""
     digits = _vat_digits(_vat_body(value, "PT"), 9)
-    if digits is None or digits[0] == 0:
-        return False
-    return (11 - _weighted_sum(digits, (9, 8, 7, 6, 5, 4, 3, 2)) % 11) % 11 % 10 == digits[8]
+    return digits is not None and _pt_nif_check(digits)
+
+
+def _pt_nif_check(digits: list[int]) -> bool:
+    return digits[0] != 0 and (11 - _weighted_sum(digits, (9, 8, 7, 6, 5, 4, 3, 2)) % 11) % 11 % 10 == digits[8]
 
 
 def ro_vat_id(value: str) -> bool:
@@ -1151,6 +1156,41 @@ def za_id_number(value: str) -> bool:
     )
 
 
+def at_social_security_number(value: str) -> bool:
+    """Port of ``validators::at_social_security_number`` (ten digits or NNNN NNNNNN, serial ≥ 100, weighted mod 11)."""
+    if len(value) == 11 and value[4] == " ":
+        value = value[:4] + value[5:]
+    digits = _separated_digits(value, 10, "")
+    if digits is None or digits[0] == 0:
+        return False
+    return (_weighted_sum(digits[:3], (3, 7, 9)) + _weighted_sum(digits[4:], (5, 8, 4, 2, 1, 6))) % 11 == digits[3]
+
+
+def ch_ahv_number(value: str) -> bool:
+    """Port of ``validators::ch_ahv_number`` (thirteen digits by dots or spaces, prefix 756, EAN-13)."""
+    digits = _separated_digits(value, 13, ". ")
+    return (
+        digits is not None
+        and digits[:3] == [7, 5, 6]
+        and (10 - _weighted_sum(digits[:12], (1, 3) * 6) % 10) % 10 == digits[12]
+    )
+
+
+def pt_nif(value: str) -> bool:
+    """Port of ``validators::pt_nif`` (nine digits, 3-3-3 by spaces or hyphens, the check of the PT VAT ID)."""
+    digits = _grouped_digits(value, 9)
+    return digits is not None and _pt_nif_check(digits)
+
+
+def ie_ppsn(value: str) -> bool:
+    """Port of ``validators::ie_ppsn`` (seven digits, check letter mod 23, second letter A/B counted, W/T/X not)."""
+    if len(value) not in (8, 9) or (len(value) == 9 and value[8] not in "ABWTX"):
+        return False
+    digits = _separated_digits(value[:7], 7, "")
+    second = {"A": 1, "B": 2}.get(value[8:], 0)
+    return digits is not None and any(digits) and _ie_check_letter(digits, second) == value[7]
+
+
 # Python ports of every checksum validator (``checksums.ark`` with an algorithm in entity_map.yaml);
 # a task that adds one ports it here, or scripts/tests/test_l1_scoreboard.py is red.
 CHECKSUM_PORTS: dict[str, Callable[[str], bool]] = {
@@ -1215,6 +1255,10 @@ CHECKSUM_PORTS: dict[str, Callable[[str], bool]] = {
     "ca_sin": ca_sin,
     "tr_national_id": tr_national_id,
     "za_id_number": za_id_number,
+    "at_social_security_number": at_social_security_number,
+    "ch_ahv_number": ch_ahv_number,
+    "pt_nif": pt_nif,
+    "ie_ppsn": ie_ppsn,
 }
 
 

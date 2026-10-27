@@ -131,6 +131,37 @@ result shapes may be breaking for downstream users, and is called out explicitly
   (detect-secrets), 0 for PKCS#12 (a path-only gitleaks rule) and the symmetric key. ARK opt-in
   document F1: `content.business_metric` 100, `content.database_dump` 99.7, `content.sql` 100,
   `content.system_log` 0 (the log families hold no ERROR/FATAL line or stack trace).
+- Austrian, Swiss, Portuguese and Irish national numbers (B-EU2: B06, B07, B14), one label each
+  with a check digit or letter: `AT_SOCIAL_SECURITY_NUMBER` (`validators::at_social_security_number`,
+  Versicherungsnummer `LLLC DDMMYY`: serial from 100, the fourth digit the others weighted
+  3-7-9-5-8-4-2-1-6 mod 11, remainder 10 never issued; the date is not checked, since days above 31
+  and months above 12 are issued when a day runs out of serials), `CH_AHV_NUMBER` (`ch_ahv_number`,
+  AHVN13: 756 and an EAN-13 check digit), `PT_NIF` (`pt_nif`, nine digits with the mod-11 check of
+  the Portuguese VAT ID, now shared as `pt_nif_check`) and `IE_PPSN` (`ie_ppsn`, seven digits, the
+  check letter of the Irish VAT number, now shared as `ie_check_letter`, and an optional second
+  letter `A`/`B` counted or `W`/`T`/`X` not). `pii_social_security_number_at`, `pii_ahv_number_ch`,
+  `pii_nif_pt` and `pii_ppsn_ie` report the value in every mode when a term of the label stands near
+  it or is its key, also as a CSV cell next to numeric cells (new lexicon entries
+  `pii.at_social_security_number`, `pii.ch_ahv_number`, `pii.pt_nif`, `pii.ie_ppsn` with DE, FR, IT
+  and PT terms such as `VSNR`, `AHV-Nummer`, `numéro AVS`, `número de contribuinte`, `PPSN`; the AT
+  and CH numbers also take `Sozialversicherungsnummer`). In `balanced`/`recall` the printed forms are
+  also reported bare at 0.55 (K05): the Austrian number `1237 010180` with a calendar date and the
+  dotted AHV number `756.1234.5678.97`. Ten or thirteen bare digits, the nine digits of a NIF and
+  seven digits with a letter (PPSN) need the term in every mode; nine digits after `PT ` are the
+  body of a VAT ID and never a NIF. Four new `ark_only` benchmark ids
+  (`pii.at.social_security_number`, `pii.ch.ahv_number`, `pii.pt.nif`, `pii.ie.ppsn`); the PT NIF is
+  its own id and M3 unit apart from `pii.pt.vat_id` (B16). M3 count (`count_validated.py`) ARK 59 →
+  63, shared unchanged at 22. `pii_l1` gains 99 rows (DE, EN, plus FR rows for the AHV number and
+  `pt` rows for the NIF; `pt` is a new golden language, allowed for the PT ids only); the frozen E05
+  goldset does not generate the four ids (`NOT_GENERATED`). **Detection change:** in `strict` the
+  four labels with a term or key are new findings; in `balanced`/`recall` also the two bare forms
+  above. Dev scoreboard vs. cfb94cf: PASS in strict and balanced, no new hard-negative FP, every F1
+  ±0.0 (no dev gold for the new ids, no new findings on the dev corpora). Latency (`latency.py compare --engine ark-native`, three
+  interleaved head/base pairs): 100 KiB p95 171.2 → 183.8, 185.1 → 168.3 and 168.3 → 167.1 ms
+  (+7.4 %, −9.1 %, −0.7 %, all PASS), mean 94.1 → 92.2 ms (−2.0 %), from six more regex rules with
+  fixed-length patterns behind the existing digit gates; the workloads report the same spans.
+  Golden eval: 1630/1630 positives, 1480/1480 hard negatives. `rust/tests/synchronous_core.rs`
+  now counts the 1190 DLP rows and 529 recipes that DLP T15 checked in.
 
 - Swedish, Canadian, Turkish and South African national numbers (B-LUHN: the checksum parts of
   T13 and T09), one label each with a check digit: `SE_ORGANISATIONSNUMMER`

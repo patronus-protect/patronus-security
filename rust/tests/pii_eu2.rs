@@ -242,6 +242,8 @@ fn ppsn_validator_checks_the_letter_of_the_vat_number() {
         "12345678T",
         "1234567",
         "1234567t",
+        // a multibyte character across the seventh byte
+        "123456äT",
     ] {
         assert!(!validators::ie_ppsn(invalid), "{invalid}");
     }

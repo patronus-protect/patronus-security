@@ -11,10 +11,10 @@ What ARK L1 detects (PII and DLP), how it compares with Presidio and the secret 
 
 | | PII | DLP |
 | --- | --- | --- |
-| Result labels (entity groups) | 79 | 23 |
-| Regex rules | 129 | 64 (+5 relationship rules) |
-| Checksum-validated units (count rule T03) | 59 (Presidio 2.2.364: 35) | – |
-| Rules with a `checksum` or `structure` check | 83 | 6 |
+| Result labels (entity groups) | 83 | 23 |
+| Regex rules | 135 | 64 (+5 relationship rules) |
+| Checksum-validated units (count rule T03) | 63 (Presidio 2.2.364: 35) | – |
+| Rules with a `checksum` or `structure` check | 89 | 6 |
 | Default state | all rules on | credential/secret groups on, broader families opt-in |
 | Compared with | Presidio 2.2.364 (tuned) | gitleaks 8.30.1, TruffleHog 3.97.9, detect-secrets 1.5.0 |
 | Overall F1 (2026-10-24) | `balanced`: neutral 63.2, presidio_favored 54.3 | default profile: 88.6 (P 99.3, R 80.0) |
@@ -120,6 +120,10 @@ One row per benchmark entity of `research/l1-pii/entity_map.yaml`. Scope: `share
 | `pii.fr.siret` | ark_only | `FR_SIRET` | `pii_siret_fr`, `pii_siret_fr_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | – |
 | `pii.nl.bsn` | ark_only | `NL_BSN` | `pii_bsn_nl`, `pii_bsn_nl_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | – |
 | `pii.be.national_number` | ark_only | `BE_NATIONAL_NUMBER` | `pii_national_number_be`, `pii_national_number_be_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | – |
+| `pii.at.social_security_number` | ark_only | `AT_SOCIAL_SECURITY_NUMBER` | `pii_social_security_number_at`, `pii_social_security_number_at_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | – |
+| `pii.ch.ahv_number` | ark_only | `CH_AHV_NUMBER` | `pii_ahv_number_ch`, `pii_ahv_number_ch_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | – |
+| `pii.pt.nif` | ark_only | `PT_NIF` | `pii_nif_pt` | checksum | on | – |
+| `pii.ie.ppsn` | ark_only | `IE_PPSN` | `pii_ppsn_ie` | checksum | on | – |
 | `pii.url` | presidio_only | – | – | – | – | `URL` |
 | `pii.crypto_wallet` | presidio_only | – | – | – | – | `CRYPTO` |
 | `pii.us.medical_license` | presidio_only | – | – | – | – | `MEDICAL_LICENSE` |
@@ -151,7 +155,7 @@ One row per benchmark entity of `research/l1-pii/entity_map.yaml`. Scope: `share
 | `entity.date` | semantic | – | – | – | – | `DATE_TIME` |
 | `entity.street_address` | semantic | – | – | – | – | – |
 
-Entities: 34 shared, 45 ARK only, 24 Presidio only, 6 semantic. Hard-negative false positives (2026-10-24): ARK 0, Presidio 0.
+Entities: 34 shared, 49 ARK only, 24 Presidio only, 6 semantic. Hard-negative false positives (2026-10-24): ARK 0, Presidio 0.
 
 ### F1 per entity
 
@@ -240,6 +244,10 @@ Legend: `ARK x / Presidio y` = exact F1 of both; `no gold` = measured, but the f
 | `pii.fr.siret` | ark_only | – | – | – | – |
 | `pii.nl.bsn` | ark_only | – | – | – | – |
 | `pii.be.national_number` | ark_only | – | – | – | – |
+| `pii.at.social_security_number` | ark_only | – | – | – | – |
+| `pii.ch.ahv_number` | ark_only | – | – | – | – |
+| `pii.pt.nif` | ark_only | – | – | – | – |
+| `pii.ie.ppsn` | ark_only | – | – | – | – |
 | `pii.url` | presidio_only | 0 / 21 / 20 | no gold | ARK 0.0 / Presidio 77.8 | ARK 0.0 / Presidio 8.2 |
 | `pii.crypto_wallet` | presidio_only | 0 / 1 / 21 | no gold | ARK 0.0 / Presidio 100.0 | ARK 0.0 / Presidio 100.0 |
 | `pii.us.medical_license` | presidio_only | 0 / 0 / 22 | no gold | no gold | ARK 0.0 / Presidio 52.6 |

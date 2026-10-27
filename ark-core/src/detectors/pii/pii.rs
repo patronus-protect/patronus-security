@@ -10,8 +10,8 @@ use super::context::Evidence;
 use super::context_anchors::PII_ANCHOR_PATTERNS;
 use super::score::{self, PiiMode, ValidatorStrength};
 use super::{
-    au, be, ca, common, context, de, driver_license, fr, identifiers, intl, licence_plate, nl,
-    nordic, overlap, sg, tr, uk, us, vat, za,
+    at, au, be, ca, ch, common, context, de, driver_license, fr, identifiers, ie, intl,
+    licence_plate, nl, nordic, overlap, pt, sg, tr, uk, us, vat, za,
 };
 use crate::detectors::anchors;
 use crate::detectors::obfuscation::{Deobfuscated, Level};
@@ -181,6 +181,12 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     tr::NATIONAL_ID,
     za::ID_NUMBER,
     za::ID_NUMBER_CONTEXT_FREE,
+    at::SOCIAL_SECURITY_NUMBER,
+    at::SOCIAL_SECURITY_NUMBER_CONTEXT_FREE,
+    ch::AHV_NUMBER,
+    ch::AHV_NUMBER_CONTEXT_FREE,
+    pt::NIF,
+    ie::PPSN,
 ];
 
 pub struct PiiPipeline {
@@ -612,7 +618,7 @@ impl NativeRegexDetector for PiiPipeline {
             }
             // A cell whose key names the label is the whole value, also between
             // numeric cells (`tfn,age\n876543210,42`).
-            "pii_abn_au"
+            rule_id @ ("pii_abn_au"
             | "pii_acn_au"
             | "pii_tfn_au"
             | "pii_medicare_au"
@@ -633,8 +639,17 @@ impl NativeRegexDetector for PiiPipeline {
             | "pii_organisationsnummer_se"
             | "pii_sin_ca"
             | "pii_national_id_tr"
-            | "pii_id_number_za" => {
+            | "pii_id_number_za"
+            | "pii_social_security_number_at"
+            | "pii_ahv_number_ch"
+            | "pii_nif_pt"
+            | "pii_ppsn_ie") => {
                 let value = captures.get(0).unwrap().range();
+                // The digits after `PT ` are the body of a Portuguese VAT ID (B16),
+                // no NIF of their own.
+                if rule_id == "pii_nif_pt" && text[..value.start].ends_with("PT ") {
+                    return false;
+                }
                 context::structure_evidence(
                     prepared.structure(),
                     value.clone(),
