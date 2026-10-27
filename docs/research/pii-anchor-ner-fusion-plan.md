@@ -786,7 +786,7 @@ Repository-Evidenz:
 - `rust/src/post_prediction.rs`
 - `python/patronus_ark/gliner_category_map.py`
 - `python/patronus_ark/benchmark_data/README.md`
-- `docs/gliner-education-evaluation.md`
+- `docs/research/gliner-education-evaluation.md`
 
 Lokale Daten-Evidenz:
 
