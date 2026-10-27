@@ -12,7 +12,7 @@ What ARK L1 detects (PII and DLP), how it compares with Presidio and the secret 
 | | PII | DLP |
 | --- | --- | --- |
 | Result labels (entity groups) | 75 | 23 |
-| Regex rules | 120 | 64 (+5 relationship rules) |
+| Regex rules | 121 | 64 (+5 relationship rules) |
 | Checksum-validated units (count rule T03) | 55 (Presidio 2.2.364: 35) | – |
 | Rules with a `checksum` or `structure` check | 76 | 6 |
 | Default state | all rules on | credential/secret groups on, broader families opt-in |
@@ -47,7 +47,7 @@ One row per benchmark entity of `research/l1-pii/entity_map.yaml`. Scope: `share
 | `pii.mac_address` | shared | `MAC_ADDRESS` | `pii_mac_address` | format | on | `MAC_ADDRESS` |
 | `pii.iban` | shared | `IBAN` | `pii_iban_de`, `pii_iban_generic` | checksum | on | `IBAN_CODE` |
 | `pii.credit_card.pan` | shared | `CREDITCARD` | `pii_credit_card` | checksum | on | `CREDIT_CARD` |
-| `pii.financial_account_number` | shared | `FINANCIAL_ACCOUNT_NUMBER` | `pii_financial_account_number`, `pii_aba_routing_number_us`, `pii_aba_routing_number_us_context_free` | checksum | on (1 of 3 rules `balanced`/`recall` only) | `US_BANK_NUMBER`, `ABA_ROUTING_NUMBER` |
+| `pii.financial_account_number` | shared | `FINANCIAL_ACCOUNT_NUMBER` | `pii_financial_account_number`, `pii_aba_routing_number_us`, `pii_aba_routing_number_us_context_free`, `pii_bban_gb` | checksum | on (1 of 4 rules `balanced`/`recall` only) | `US_BANK_NUMBER`, `ABA_ROUTING_NUMBER` |
 | `pii.us.social_security_number` | shared | `SSN` | `pii_ssn_us`, `pii_ssn_us_proximity`, `pii_ssn_us_context_free` | format | on (1 of 3 rules `balanced`/`recall` only) | `US_SSN` |
 | `pii.uk.national_insurance_number` | shared | `NATIONALID` | `pii_ni_uk`, `pii_ni_uk_context_free` | format | on (1 of 2 rules `balanced`/`recall` only) | `UK_NINO` |
 | `pii.de.tax_id` | shared | `STEUERID` | `pii_steuer_id_de`, `pii_steuer_id_de_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `DE_TAX_ID` |

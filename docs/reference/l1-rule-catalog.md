@@ -6,7 +6,7 @@ These are the stable rule IDs accepted by execution-gate `rules`. Missing IDs in
 
 For coverage per benchmark entity, the comparison with Presidio and the secret scanners, and latency, see [L1 capabilities](l1-capabilities.md).
 
-## PII rules (120)
+## PII rules (121)
 
 All PII rules are eligible by default when PII L1 is enabled.
 
@@ -125,6 +125,7 @@ In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `
 | `pii_steuernummer_de_context_free` | `TAX_NUMBER_DE` | yes | format | 35 | key or proximity, `balanced`/`recall` only | 0.50–0.75 |
 | `pii_aba_routing_number_us` | `FINANCIAL_ACCOUNT_NUMBER` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |
 | `pii_aba_routing_number_us_context_free` | `FINANCIAL_ACCOUNT_NUMBER` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
+| `pii_bban_gb` | `FINANCIAL_ACCOUNT_NUMBER` | yes | format | 35 | key or proximity (required) | 0.65–0.75 |
 | `pii_nir_fr` | `FR_NIR` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |
 | `pii_nir_fr_context_free` | `FR_NIR` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
 | `pii_siren_fr` | `FR_SIREN` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |

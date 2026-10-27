@@ -133,6 +133,7 @@ const EXPECTED_ORDER: &[(&str, &str)] = &[
         "pii_aba_routing_number_us_context_free",
         "FINANCIAL_ACCOUNT_NUMBER",
     ),
+    ("pii_bban_gb", "FINANCIAL_ACCOUNT_NUMBER"),
     ("pii_nir_fr", "FR_NIR"),
     ("pii_nir_fr_context_free", "FR_NIR"),
     ("pii_siren_fr", "FR_SIREN"),

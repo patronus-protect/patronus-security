@@ -1991,6 +1991,23 @@
     }
   },
   {
+    "category": "pii",
+    "rule_id": "pii_bban_gb",
+    "de": "Unsere Bankverbindung (BBAN) lautet ZFJR88590163492773.",
+    "en": "We store the bank account number (BBAN) SYIL09843639680686 of the payee.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Bestellnummer: ABCD12345678901234",
+        "Die Bankverbindung (BBAN) ZFJR00000000000000 ist ein Platzhalter."
+      ],
+      "en": [
+        "VIN: WDBA12345678901234",
+        "Bank account verified, order number ABCD12345678901234"
+      ]
+    }
+  },
+  {
     "category": "dlp",
     "rule_id": "dlp_anthropic_key",
     "de": "<<secret\u003a0>>",
