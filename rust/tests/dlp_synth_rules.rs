@@ -212,6 +212,39 @@ fn rust_generators_match_the_pinned_python_vectors() {
     }
 }
 
+/// Shannon entropy in bits per character, as detect-secrets computes it.
+fn shannon_entropy(value: &str) -> f64 {
+    let mut counts = BTreeMap::<char, usize>::new();
+    for character in value.chars() {
+        *counts.entry(character).or_default() += 1;
+    }
+    let length = value.chars().count() as f64;
+    -counts
+        .values()
+        .map(|&count| count as f64 / length * (count as f64 / length).log2())
+        .sum::<f64>()
+}
+
+#[test]
+fn high_entropy_generators_stay_above_the_detect_secrets_limit() {
+    // Review of #205: base64 of 33 random bytes fell to 4.49887 bits at seed 896; the
+    // generator redraws until the value clears the limit, like the Python generator.
+    let generators = generators();
+    for (name, limit) in [
+        ("base64_high_entropy_string", 4.5),
+        ("hex_high_entropy_string", 3.0),
+    ] {
+        for seed in (0..4096).chain([u64::MAX]) {
+            let value = generators.generate(name, seed).unwrap();
+            assert!(
+                shannon_entropy(&value) > limit,
+                "{name} seed={seed} below {limit} bits"
+            );
+            assert_eq!(value.chars().count(), generators.length(name).unwrap());
+        }
+    }
+}
+
 #[test]
 fn each_rule_reports_exactly_its_generated_values() {
     let map = rule_map();

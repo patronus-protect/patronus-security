@@ -867,6 +867,15 @@ class GeneratorSpecTests(unittest.TestCase):
         for name in recipes.load_generators():
             self.assertEqual("".join(recipes.generate_segments(name, 5)), recipes.generate(name, 5), name)
 
+    def test_invalid_entropy_limits_are_rejected(self):
+        segments = [{"alphabet": "hex_lower", "len": 4}]
+        for limit in (0, -1.0, 2.0, 2.5, "4.5", True, None):
+            # 4 characters hold at most 2 bits each, so a limit of 2.0 or more is unreachable.
+            self.assertFalse(recipes._valid_entropy_limit({"segments": segments, "entropy_above": limit}), limit)
+        self.assertTrue(recipes._valid_entropy_limit({"segments": segments, "entropy_above": 1.5}))
+        self.assertTrue(recipes._valid_entropy_limit({"segments": segments}))
+        self.assertFalse(recipes._valid_entropy_limit({"segments": [{"lit": "abcd"}], "entropy_above": 1.0}))
+
     def test_invalid_segments_are_rejected(self):
         alphabets = recipes.load_alphabets()
         for segment in (
@@ -891,6 +900,15 @@ class StructureTests(unittest.TestCase):
             for seed in SEEDS:
                 value = recipes.generate(name, seed)
                 self.assertTrue(check(value), f"{name} seed={seed}")
+                self.assertEqual(len(value), recipes.generator_length(name), name)
+
+    def test_high_entropy_generators_stay_above_the_detect_secrets_limit(self):
+        # Review of #205: base64 of 33 random bytes fell to 4.49887 bits at seed 896 (305 of
+        # the first 100k seeds); the generator redraws until the value clears the limit.
+        for name, limit in (("base64_high_entropy_string", 4.5), ("hex_high_entropy_string", 3.0)):
+            for seed in (*range(4096), 2**64 - 1):
+                value = recipes.generate(name, seed)
+                self.assertGreater(shannon_entropy(value), limit, f"{name} seed={seed}")
                 self.assertEqual(len(value), recipes.generator_length(name), name)
 
     def test_shape_only_generators_fail_the_structural_check(self):

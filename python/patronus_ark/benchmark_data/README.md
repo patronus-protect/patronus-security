@@ -234,8 +234,9 @@ Every other generator yields format-, structure- and checksum-valid fakes:
 - JWTs with JSON header and claims, RFC 7617 Basic credentials, bcrypt and
   Argon2id PHC hashes in canonical radix-64, Discord bot tokens with a
   base64url snowflake, a USt-IdNr. with a valid ISO 7064 check digit, age keys
-  with a valid Bech32 checksum and a PKCS#12 key store with a parseable RFC 7292
-  PFX layout;
+  with a valid Bech32 checksum, a PKCS#12 key store with a parseable RFC 7292
+  PFX layout and base64 and hex strings above the detect-secrets entropy limits
+  (`entropy_above` redraws a value until it clears the limit);
 - the provider prefix, length and alphabet tables cited in each generator's
   `source` (gitleaks rule ID, RFC or vendor format; `ark-rule:<id>` marks
   shapes that only follow today's ARK regex and still need a format source).

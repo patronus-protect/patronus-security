@@ -14,8 +14,10 @@
 //! Base58Check. Placeholders may encode (`<<secret:N|base64>>`, `hex`, `url`,
 //! `json`) or split (`<<secret:N[a:b]>>`) the value they insert (golden schema
 //! v2). A recipe with `fill` yields the documented example/test variant of the
-//! generator's shape for hard negatives (T06). The Python module documents the
-//! format. Not public API.
+//! generator's shape for hard negatives (T06). A generator with `entropy_above`
+//! redraws its whole value from the same PRNG until the Shannon entropy exceeds
+//! that limit (fill recipes excepted). The Python module documents the format.
+//! Not public API.
 
 use std::{collections::BTreeMap, fmt, path::Path};
 
@@ -155,6 +157,7 @@ enum Segment {
 #[derive(Deserialize)]
 struct Generator {
     segments: Vec<Segment>,
+    entropy_above: Option<f64>,
 }
 
 #[derive(Deserialize)]
@@ -193,6 +196,20 @@ fn encoded_alphabet(encoding: &str) -> Option<&'static [u8]> {
 /// `word` repeated to `length` characters.
 fn repeat_word(word: &str, length: usize) -> String {
     word.chars().cycle().take(length).collect()
+}
+
+/// Shannon entropy in bits per character, summed in code point order like
+/// `recipes.shannon_entropy`.
+fn shannon_entropy(value: &str) -> f64 {
+    let mut counts = BTreeMap::<char, usize>::new();
+    for character in value.chars() {
+        *counts.entry(character).or_default() += 1;
+    }
+    let length = value.chars().count() as f64;
+    -counts
+        .values()
+        .map(|&count| count as f64 / length * (count as f64 / length).log2())
+        .sum::<f64>()
 }
 
 fn checksum_length(kind: &str) -> Option<usize> {
@@ -439,6 +456,14 @@ impl GeneratorSet {
                     return Err(RecipeError::Spec(format!("{name}: invalid segment")));
                 }
             }
+            if let Some(limit) = generator.entropy_above {
+                let length = Self::segments_length(&generator.segments) as f64;
+                if !(limit > 0.0 && limit < length.log2() && Self::draws_randomly(generator)) {
+                    return Err(RecipeError::Spec(format!(
+                        "{name}: invalid entropy_above {limit}"
+                    )));
+                }
+            }
         }
         Ok(Self {
             alphabets,
@@ -480,9 +505,22 @@ impl GeneratorSet {
 
     /// Fixed output length in characters (all generators are fixed-length).
     pub fn length(&self, name: &str) -> Result<usize, RecipeError> {
-        Ok(self
-            .generator(name)?
-            .segments
+        Ok(Self::segments_length(&self.generator(name)?.segments))
+    }
+
+    fn draws_randomly(generator: &Generator) -> bool {
+        generator.segments.iter().any(|segment| match segment {
+            Segment::Random(_) => true,
+            Segment::Encoded(encoded) => encoded
+                .bytes
+                .iter()
+                .any(|part| matches!(part, BytePart::RandomBytes(_) | BytePart::Chars(_))),
+            Segment::Literal(_) | Segment::Checksum(_) => false,
+        })
+    }
+
+    fn segments_length(segments: &[Segment]) -> usize {
+        segments
             .iter()
             .map(|segment| match segment {
                 Segment::Literal(Literal { lit }) => lit.chars().count(),
@@ -492,7 +530,7 @@ impl GeneratorSet {
                 }
                 Segment::Encoded(encoded) => encoded.length(),
             })
-            .sum())
+            .sum()
     }
 
     fn draw(&self, rng: &mut SplitMix64, alphabet: &str, len: usize, out: &mut String) {
@@ -624,13 +662,31 @@ impl GeneratorSet {
                 )));
             }
         }
+        let generator = self.generator(name)?;
         let mut rng = SplitMix64::new(seed);
+        let mut value = self.draw_value(name, generator, &mut rng, fill)?;
+        // Fill recipes are low-entropy hard negatives by design and are never redrawn.
+        if let Some(limit) = generator.entropy_above.filter(|_| fill.is_none()) {
+            while shannon_entropy(&value) <= limit {
+                value = self.draw_value(name, generator, &mut rng, fill)?;
+            }
+        }
+        Ok(value)
+    }
+
+    fn draw_value(
+        &self,
+        name: &str,
+        generator: &Generator,
+        rng: &mut SplitMix64,
+        fill: Option<&str>,
+    ) -> Result<String, RecipeError> {
         let mut value = String::new();
         let mut filled = false;
         // Checksums cover the text emitted since the most recent literal.
         let mut since_literal = String::new();
         let mut literal = "";
-        for segment in &self.generator(name)?.segments {
+        for segment in &generator.segments {
             let mut part = String::new();
             match segment {
                 Segment::Literal(Literal { lit }) => {
@@ -644,7 +700,7 @@ impl GeneratorSet {
                         part = repeat_word(word, *len);
                         filled = true;
                     }
-                    _ => self.draw(&mut rng, alphabet, *len, &mut part),
+                    _ => self.draw(rng, alphabet, *len, &mut part),
                 },
                 Segment::Checksum(Checksum { checksum }) => {
                     match checksum.as_str() {
@@ -663,12 +719,11 @@ impl GeneratorSet {
                 }
                 Segment::Encoded(encoded) => match fill {
                     Some(word) => {
-                        let (encoded, filled_segment) =
-                            self.encode_filled(encoded, &mut rng, word)?;
+                        let (encoded, filled_segment) = self.encode_filled(encoded, rng, word)?;
                         part = encoded;
                         filled |= filled_segment;
                     }
-                    None => part = self.encode(encoded, &mut rng),
+                    None => part = self.encode(encoded, rng),
                 },
             }
             value.push_str(&part);
@@ -897,7 +952,31 @@ pub fn materialize(
 
 #[cfg(test)]
 mod tests {
-    use super::bech32_checksum;
+    use super::{bech32_checksum, GeneratorSet};
+
+    fn spec(generator: &str) -> String {
+        format!(
+            r#"{{"version": 2, "prng": "splitmix64", "alphabets": {{"hex": ["0123456789abcdef"]}}, "generators": {{"g": {generator}}}}}"#
+        )
+    }
+
+    #[test]
+    fn entropy_limit_must_be_reachable() {
+        // Four characters hold at most 2 bits each.
+        let random = r#"[{"alphabet": "hex", "len": 4}]"#;
+        for limit in ["0", "-1.0", "2.0", "2.5"] {
+            let generator = format!(r#"{{"segments": {random}, "entropy_above": {limit}}}"#);
+            assert!(GeneratorSet::parse(&spec(&generator)).is_err(), "{limit}");
+        }
+        let literal = r#"{"segments": [{"lit": "abcd"}], "entropy_above": 1.0}"#;
+        assert!(GeneratorSet::parse(&spec(literal)).is_err());
+        let generator = format!(r#"{{"segments": {random}, "entropy_above": 1.5}}"#);
+        let generators = GeneratorSet::parse(&spec(&generator)).unwrap();
+        for seed in 0..256 {
+            let value = generators.generate("g", seed).unwrap();
+            assert!(super::shannon_entropy(&value) > 1.5, "seed={seed}");
+        }
+    }
 
     #[test]
     fn bech32_checksum_matches_the_bip173_vectors() {

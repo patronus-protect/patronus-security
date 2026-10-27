@@ -255,6 +255,17 @@ class BuildTests(unittest.TestCase):
         self.assertEqual([row["id"] for row in other], [row["id"] for row in same])
         self.assertFalse({row["text"] for row in other} & {row["text"] for row in same})
 
+    def test_high_entropy_positives_clear_the_detect_secrets_limit(self):
+        # Review of #205: dev seed 42 put a 4.46-bit value in ticket.de.schnittstelle.
+        for split in carriers.SPLITS:
+            for seed in (42, SEED):
+                rows = carriers.build(split, seed, rules=["credential.high_entropy_string"], variants=["positive"])
+                self.assertTrue(rows, split)
+                for row in rows:
+                    value = recipes.generate(row["generator"], row["seed"])
+                    limit = recipes.load_generators()[row["generator"]]["entropy_above"]
+                    self.assertGreater(recipes.shannon_entropy(value), limit, row["id"])
+
     def test_rows_only_use_families_of_their_split(self):
         for split, rows in self.rows.items():
             ids = [row["id"] for row in rows]

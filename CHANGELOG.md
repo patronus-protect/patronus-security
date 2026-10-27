@@ -100,7 +100,9 @@ result shapes may be breaking for downstream users, and is called out explicitly
   (`nuget-config-password`: `<add key="ClearTextPassword" value="…" />`),
   `credential.kubernetes_secret` (`kubernetes-secret-yaml`: base64 `data:` value of a one-line
   `kind: Secret` manifest), `credential.high_entropy_string` (detect-secrets
-  `Base64HighEntropyString`/`HexHighEntropyString`: base64 of 33 bytes, 48 hex digits),
+  `Base64HighEntropyString`/`HexHighEntropyString`: base64 of 33 bytes, 48 hex digits,
+  redrawn from the same seed until the Shannon entropy is above the plugin limit of 4.5 or 3.0
+  bits; generator field `entropy_above` in Python and Rust),
   `key.age_secret_key` (`age-secret-key`: `AGE-SECRET-KEY-1` + Bech32 of 32 bytes with a valid
   checksum), `key.pkcs12_file` (`pkcs12-file`: a one-line base64 RFC 7292 PFX in the OpenSSL
   layout, random salts, MAC and encrypted bags, not a usable key store) and

@@ -27,6 +27,13 @@ carrier ``template`` with ``<<secret:N>>`` placeholders. The generator spec live
     ``bcrypt64`` (OpenBSD radix-64, unpadded) or ``base58check`` (double SHA-256).
     ``wrap`` inserts a newline every ``n`` characters (base64 only, PEM bodies).
 
+A generator may set ``"entropy_above": h`` (a number below ``log2`` of its length): while
+the Shannon entropy of the value (bits per character, ``-sum(p * log2(p))`` over its
+characters in code point order) is not above ``h``, the generator draws the whole value
+again from the same PRNG. Values for an entropy-limited detector (detect-secrets
+``Base64HighEntropyString`` and ``HexHighEntropyString``) thus clear the limit for every
+seed. Fill recipes are not redrawn.
+
 Placeholders (golden schema v2, E13) may transform the value they insert:
 
 * ``<<secret:N>>`` inserts the value of ``secrets[N]`` once.
@@ -69,6 +76,7 @@ import json
 import math
 import re
 import zlib
+from collections import Counter
 from functools import lru_cache
 from pathlib import Path
 
@@ -141,6 +149,19 @@ def _valid_part(part, alphabets: dict) -> bool:
     return set(part) == {"alphabet", "len"} and part["alphabet"] in alphabets and _valid_count(part["len"])
 
 
+def _valid_entropy_limit(generator: dict) -> bool:
+    """An optional ``entropy_above`` is a positive number below ``log2`` of the length of a random generator."""
+    if "entropy_above" not in generator:
+        return True
+    limit = generator["entropy_above"]
+    length = sum(_segment_length(segment) for segment in generator["segments"])
+    return (
+        type(limit) in (int, float)
+        and 0 < limit < math.log2(length)
+        and _draws_randomly(generator["segments"])
+    )
+
+
 def _valid_segment(segment, alphabets: dict) -> bool:
     if not isinstance(segment, dict):
         return False
@@ -175,6 +196,8 @@ def _spec() -> dict:
         for segment in generator["segments"]:
             if not _valid_segment(segment, spec["alphabets"]):
                 raise RecipeError(f"{name}: invalid segment {segment!r}")
+        if not _valid_entropy_limit(generator):
+            raise RecipeError(f"{name}: invalid entropy_above {generator['entropy_above']!r}")
     alphabets = {}
     for name, chunks in spec["alphabets"].items():
         if not isinstance(chunks, list) or not all(isinstance(chunk, str) for chunk in chunks):
@@ -244,12 +267,22 @@ def generator_length(name: str) -> int:
     return sum(_segment_length(segment) for segment in _generator(name)["segments"])
 
 
-def is_random(name: str) -> bool:
+def _draws_randomly(segments: list[dict]) -> bool:
     return any(
         "alphabet" in segment
         or any("random" in part or "alphabet" in part for part in segment.get("bytes", []))
-        for segment in _generator(name)["segments"]
+        for segment in segments
     )
+
+
+def is_random(name: str) -> bool:
+    return _draws_randomly(_generator(name)["segments"])
+
+
+def shannon_entropy(value: str) -> float:
+    """Shannon entropy of ``value`` in bits per character (summed in code point order)."""
+    length = len(value)
+    return -sum(count / length * math.log2(count / length) for _, count in sorted(Counter(value).items()))
 
 
 def crc32_base62(text: str) -> str:
@@ -401,8 +434,17 @@ def generate_segments(name: str, seed: int, fill: str | None = None) -> list[str
     if fill is not None and not _valid_fill(fill):
         raise RecipeError(f"fill must be a non-empty ASCII alphanumeric word, got {fill!r}")
     generator = _generator(name)
-    alphabets = _spec()["alphabets"]
     rng = SplitMix64(seed)
+    parts = _draw_segments(name, generator, rng, fill)
+    # Fill recipes are low-entropy hard negatives by design and are never redrawn.
+    limit = None if fill is not None else generator.get("entropy_above")
+    while limit is not None and shannon_entropy("".join(parts)) <= limit:
+        parts = _draw_segments(name, generator, rng, fill)
+    return parts
+
+
+def _draw_segments(name: str, generator: dict, rng: SplitMix64, fill: str | None) -> list[str]:
+    alphabets = _spec()["alphabets"]
     parts: list[str] = []
     since_literal = literal = ""
     filled = False
