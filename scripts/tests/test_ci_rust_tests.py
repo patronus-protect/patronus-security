@@ -75,7 +75,7 @@ def test_pii_fixture_selects_only_pii_targets_and_example_tests():
     flags = route("python/patronus_ark/benchmark_data/pii_l1.jsonl")
     commands = MODULE.plan("wrapper", flags)
     selected = targets(commands)
-    assert selected == {p.stem for p in (ROOT / "rust/tests").glob("pii*.rs")}
+    assert selected == {p.stem for p in (ROOT / "rust/tests").glob("pii*.rs")} | MODULE.CROSS_DOMAIN_TESTS
     assert any(command[-2:] == ["--example", "12_l1_pii_fixture_eval"] for command in commands)
     assert not any("--lib" in command or "--bins" in command for command in commands)
     assert flags["throughput"] == flags["core_features"] == "false"
@@ -84,7 +84,7 @@ def test_pii_fixture_selects_only_pii_targets_and_example_tests():
 def test_dlp_fixture_selects_only_dlp_targets():
     flags = route("python/patronus_ark/benchmark_data/dlp_l1.jsonl")
     commands = MODULE.plan("wrapper", flags)
-    assert targets(commands) == {p.stem for p in (ROOT / "rust/tests").glob("dlp*.rs")}
+    assert targets(commands) == {p.stem for p in (ROOT / "rust/tests").glob("dlp*.rs")} | MODULE.CROSS_DOMAIN_TESTS
     assert len(commands) == 1
 
 
