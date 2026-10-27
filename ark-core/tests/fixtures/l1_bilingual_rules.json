@@ -446,7 +446,17 @@
     "rule_id": "pii_employee_id_prefixed",
     "de": "Kennung EMP-SYN-2048",
     "en": "Identifier EMP-SYN-2048",
-    "language_neutral": false
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Fühler TEMP12345 ausgefallen",
+        "EMP1234 reserviert"
+      ],
+      "en": [
+        "Sensor TEMP12345 offline",
+        "EMP12345678901 archived"
+      ]
+    }
   },
   {
     "category": "pii",
@@ -454,6 +464,16 @@
     "de": "Kundennummer: KD-88231",
     "en": "Customer ID: CUST-88231",
     "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Kundennummer (z. B. siehe Anlage)",
+        "Die Kundennummer ist unbekannt."
+      ],
+      "en": [
+        "Please bring the customer with the ID card.",
+        "Enter the customer ID of the account holder."
+      ]
+    },
     "structure": {
       "de": "Name;Kundennummer\nJana Roth;KD-55120",
       "en": "{\"customerId\": \"CUS-88412\"}"
@@ -504,6 +524,18 @@
     "de": "Benutzername: ada.lovelace",
     "en": "Username: ada.lovelace",
     "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Login isoliert die Sitzung.",
+        "Benutzername: Nicolas Lebrun",
+        "Prozess gestartet mit user=root"
+      ],
+      "en": [
+        "Troubleshoot the login issues for her accounts.",
+        "Account Name: John Doe",
+        "Account Name: ACME Inc."
+      ]
+    },
     "structure": {
       "de": "{\"benutzername\": \"p.lang\"}",
       "en": "user_name\tteam\nm.chen\tplatform"
@@ -521,6 +553,16 @@
     "de": "Geburtsdatum: 14.03.1985",
     "en": "Date of birth: 14/03/1985",
     "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Anna Schulz, geb. Müller",
+        "Geburtsdatum: 1985-02-30"
+      ],
+      "en": [
+        "Date of birth: 1985-13-01",
+        "Born on time, the release shipped."
+      ]
+    },
     "structure": {
       "de": "Name;Geburtsdatum\nJana Roth;14.03.1987",
       "en": "{\"date_of_birth\": \"02/11/1990\"}"
@@ -537,7 +579,15 @@
     "rule_id": "pii_date_of_birth_written_day_first",
     "de": "Geburtsdatum: 14. März 1985",
     "en": "Date of birth: 14 March 1985",
-    "language_neutral": false
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Geburtsdatum: 31. April 1990"
+      ],
+      "en": [
+        "Date of Birth: 31st February 1990"
+      ]
+    }
   },
   {
     "category": "pii",

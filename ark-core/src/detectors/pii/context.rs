@@ -890,3 +890,19 @@ pub(super) fn employee_identifier(text: &str, field_start: usize, value: &str) -
         .any(|marker| prefix.eq_ignore_ascii_case(marker))
         || EMPLOYMENT.is_match(preceding_clause(text, field_start))
 }
+
+/// Whether a field value of letters continues on its line with a capitalized word
+/// that is no further field name: a name, not an account (`Account Name: John Doe`,
+/// `Account Name: ACME Inc.`, `Benutzername: Nicolas Lebrun`; Q-CONTACT). An
+/// account in a credential line stays (`Username: JSmith Password: …`).
+pub(super) fn continues_as_name(text: &str, value: Range<usize>) -> bool {
+    let word = &text[value.clone()];
+    let rest = &text[value.end..];
+    let next = rest.trim_start_matches([' ', '\t']);
+    let following = next.split([' ', '\t', '\r', '\n']).next().unwrap_or("");
+    word.starts_with(char::is_uppercase)
+        && word.chars().all(|ch| ch.is_alphabetic() || ch == '-')
+        && next.len() < rest.len()
+        && following.starts_with(char::is_uppercase)
+        && !following.ends_with([':', '='])
+}
