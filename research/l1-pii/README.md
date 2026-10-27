@@ -331,6 +331,50 @@ vierzehn Ziffern (SIRET) brauchen in jedem Modus den Begriff. `FR_NIR`, `FR_SIRE
 `BE_NATIONAL_NUMBER` konkurrieren in den Score-Modi mit Karte bzw. Steuer-ID (K07). Gold steht in
 `pii_l1` (DE, EN, FR, NL); das eingefrorene E05-Goldset erzeugt die fünf IDs nicht (`NOT_GENERATED`).
 
+Stand Q-CONTACT (Qualitätsuntergrenze, 2026-10-25): Kontakt- und Kontofelder, die der Snapshot
+2026-10-24 unter F1 80 führt. Die Lücken waren Feldwerte, die die feldgebundenen Regeln nicht banden:
+`user=oeztuerk90` in Log- und Query-Zeilen (`user` nur mit `=`), ein Formular als Tabelle ohne
+Randstriche (`Geburtsdatum | 21. Februar 1971`: neuer Struktur-Träger in `structure.rs`, ab zwei
+Zeilen mit je einer Schlüssel- und einer Wertzelle, Schlüssel ohne Ziffer; er bindet jede
+feldgebundene Regel und hebt auch ABN, NINO, Personnummer, LANR …), Geburtsdaten in ISO-Reihenfolge
+(`1980-11-26`), nach `geb.`, `born on`, `date of birth of`, `DateOfBirth=`, einem geschützten
+Leerzeichen oder `(e.g., …)`, mit Ordinaltag (`18th December 1983`) und den Monaten von FR/ES/IT/NL
+(`26 de marzo de 1990`, `1er mars 1990`); `EMP821659` und `PN 201033` als Personalnummer, `ist`/
+`lautet` und `(Personalnummer):`; `a customer ID of …`, `the customer with the ID …` und
+`Kundennummer (z. B. …)`. Präziser: `login issues` ist keine Zuweisung, ein Name nach
+`Account Name:` (`John Doe`, `ACME Inc.`) kein Konto (`context::continues_as_name`). Die
+Datumsvalidatoren prüfen weiter den Kalender (`1985-02-30`, `31 de abril de 1990` bleiben negativ).
+Dev balanced, exakt, vorher → nachher (strict gleich):
+
+| Entität | neutral | presidio_favored | ark_authored |
+|---|---|---|---|
+| E-Mail | 68,8 → 68,8 | 100,0 | 100,0 |
+| Telefon | 82,0 → 82,0 | 80,5 → 80,5 | 97,1 → 98,2 |
+| Benutzername | 8,8 → 10,3 | – | 35,3 → 98,2 |
+| Kundennummer | 51,1 → 60,9 | – | 98,9 → 99,5 |
+| Personalnummer | 79,0 → 88,2 | – | 87,5 → 100,0 |
+| Geburtsdatum | 66,7 → 67,0 | – | 71,4 → 99,7 |
+
+Telefon lag auf `presidio_favored` schon vor Q-CONTACT über 80 (Snapshot 68,5). Vier Werte bleiben
+auf `neutral` (Gretel Finance) unter 80, **Entscheidung:** Gold-Lücken, kein Regelproblem; Gretel
+annotiert meist nur den einen eingesetzten Wert eines Dokuments, die Korpora werden nicht bearbeitet
+(Option a, T16), und Funde werden nicht unterdrückt, um ungelabelte Werte zu treffen.
+
+- **E-Mail 68,8.** Von 133 Markdown-Links `[x@y](mailto:x@y)` annotiert Gretel 103 gar nicht, 15 mit
+  den eckigen Klammern im Span (`[x@y]`) und nur 13 beide Kopien; 250 der 283 FP sind diese
+  Link-Adressen und ihre `mailto:`-Kopien. Presidio tuned liegt mit 67,9 gleichauf.
+- **Benutzername 10,3.** 26 Gold-Werte; 27 der 29 FP sind Zellen einer `Username`-Spalte in CSV-
+  Tabellen und `My username is vmccarthy`, die Gretel nicht annotiert. Die FN stehen ohne
+  Benutzerfeld (`Customer: maarten_64`, `Hello nhanson`, EDIFACT `PER+FR+charlotte68`, FIX `56=…`).
+- **Kundennummer 60,9.** Gretel führt Policen-, Produkt- und Steuernummern (`Policy Number:`,
+  `Codice Fiscale:`, `Produktidentifikator:`), Fondsnamen und Werte ohne Kundenfeld (SWIFT `:33B:`,
+  EDIFACT `RFF+ON:`) als `customer_id`; FP sind Werte unter `Klantnummer:`/`Customer ID:` und
+  Kundenspalten, die Gretel nicht annotiert.
+- **Geburtsdatum 67,0.** 37 FP, alle unter einem Geburtsdatum-Feld oder einer -Spalte: 24 in
+  CSV-Tabellen, deren erste Zeile Gretel annotiert und die übrigen nicht, dazu `Geboortedatum:`-
+  Zeilen ohne Gold. Ohne CSV-Bindung der ISO-Daten stünde `neutral` bei 75,0, ein Geburtsdatum in
+  einer `date_of_birth`-Spalte bliebe aber unerkannt; die Spaltenbindung gilt wie für `TT.MM.JJJJ`.
+
 Stand B02: ARK 24, gemeinsam 7. Dazu kommen die USt-IdNr. von BG, CY, CZ, DK, EE, EL, FI, HR, HU, IE
 und LT, gleiche Struktur wie B01 (je Land ein Label `VAT_ID_BG` … und ein Validator mit Prüfziffer,
 nur in `balanced`/`recall`), alle `ark_only`; Griechenland trägt im Label das MwSt.-Präfix `EL`, in

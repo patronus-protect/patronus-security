@@ -364,6 +364,7 @@ const PROSE_WORDS: &[&str] = &[
     "page",
     "password",
     "prompt",
+    "provided",
     "required",
     "screen",
     "seite",
@@ -377,10 +378,15 @@ const PROSE_WORDS: &[&str] = &[
     "wrong",
 ];
 
+/// A numeric date, day first (`21.02.1971`, `21/02/71`) or in the ISO order
+/// year-month-day (`1971-02-21`).
 pub fn calendar_date(s: &str) -> bool {
-    let parts = s.split(['.', '/', '-']).collect::<Vec<_>>();
+    let mut parts = s.split(['.', '/', '-']).collect::<Vec<_>>();
     if parts.len() != 3 {
         return false;
+    }
+    if parts[0].len() == 4 {
+        parts.reverse();
     }
     let (Ok(day), Ok(month), Ok(year)) = (
         parts[0].parse::<u8>(),
@@ -397,9 +403,14 @@ pub fn calendar_date(s: &str) -> bool {
     valid_date(day, month, year)
 }
 
+/// A date with a written month in DE, EN, FR, ES, IT or NL, day or month first:
+/// `21. Februar 1971`, `18th December 1983`, `26 de marzo de 1990`, `May 5, 1990`.
 pub fn written_calendar_date(s: &str) -> bool {
     let normalized = s.to_lowercase().replace([',', '.'], " ");
-    let parts = normalized.split_whitespace().collect::<Vec<_>>();
+    let parts = normalized
+        .split_whitespace()
+        .filter(|part| *part != "de")
+        .collect::<Vec<_>>();
     if parts.len() != 3 {
         return false;
     }
@@ -410,18 +421,20 @@ pub fn written_calendar_date(s: &str) -> bool {
             .ok()
     };
     let parse_month = |part: &str| match part {
-        "januar" | "january" => Some(1),
-        "februar" | "february" => Some(2),
-        "märz" | "maerz" | "march" => Some(3),
-        "april" => Some(4),
-        "mai" | "may" => Some(5),
-        "juni" | "june" => Some(6),
-        "juli" | "july" => Some(7),
-        "august" => Some(8),
-        "september" => Some(9),
-        "oktober" | "october" => Some(10),
-        "november" => Some(11),
-        "dezember" | "december" => Some(12),
+        "januar" | "january" | "janvier" | "enero" | "gennaio" | "januari" => Some(1),
+        "februar" | "february" | "février" | "fevrier" | "febrero" | "febbraio" | "februari" => {
+            Some(2)
+        }
+        "märz" | "maerz" | "march" | "mars" | "marzo" | "maart" => Some(3),
+        "april" | "avril" | "abril" | "aprile" => Some(4),
+        "mai" | "may" | "mayo" | "maggio" | "mei" => Some(5),
+        "juni" | "june" | "juin" | "junio" | "giugno" => Some(6),
+        "juli" | "july" | "juillet" | "julio" | "luglio" => Some(7),
+        "august" | "août" | "aout" | "agosto" | "augustus" => Some(8),
+        "september" | "septembre" | "septiembre" | "setiembre" | "settembre" => Some(9),
+        "oktober" | "october" | "octobre" | "octubre" | "ottobre" => Some(10),
+        "november" | "novembre" | "noviembre" => Some(11),
+        "dezember" | "december" | "décembre" | "decembre" | "diciembre" | "dicembre" => Some(12),
         _ => None,
     };
 

@@ -11,6 +11,38 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Changed
 
+- Contact and account fields (Q-CONTACT, quality floor F1 ≥ 80). Field-bound values that the
+  rules missed: `pii_username` binds `user=<value>` in log and query lines (`auth failed
+  user=oeztuerk90`; `user` only with `=`), no longer reads `login issues` as `login is` + `sues`
+  and skips a name after its field (`Account Name: John Doe`, `ACME Inc.`; a credential line such
+  as `Username: JSmith Password: …` stays). The date-of-birth rules share one field part and add
+  the ISO order (`1980-11-26`, `validators::calendar_date`), `geb.`, `born on`, `DateOfBirth=`,
+  the connectives `of`/`del`/`el`, a no-break space and an example opener (`date of birth (e.g.,
+  …)`); written dates take ordinal days (`18th December 1983`) and the months of FR, ES, IT and NL
+  (`26 de marzo de 1990`, `1er mars 1990`, `validators::written_calendar_date`). `pii_employee_id`
+  takes `employé ID`, `ist`/`lautet`, a field closing a parenthesis and a short uppercase prefix
+  with digits (`PN 201033`); `pii_employee_id_prefixed` also `EMP821659`. `pii_customer_id` takes
+  `a customer ID of …`, `the customer with (the) ID …`, `ist`/`lautet` and `Kundennummer (z. B.
+  …)`. New structure carrier (K04): a form printed as a table without edge pipes (two or more
+  lines `Geburtsdatum | 21. Februar 1971`, key cell without digits) binds every field-bound rule.
+  The date validators still check the calendar (`1985-02-30`, `31 de abril de 1990` stay
+  negative); no checksum changes. Email (Gretel leaves 103 of 133 Markdown `mailto` links
+  unannotated), username, customer ID and date of birth stay below 80 on `neutral` by recorded
+  decision (gold gaps, `research/l1-pii/README.md`, Stand Q-CONTACT). New
+  `rust/tests/pii_contact_quality.rs`, 130 new `pii_l1` rows (69 positives, 61 hard negatives; DE + EN plus FR/ES/IT/NL), three
+  former known gaps closed, hard negatives in the rule fixture. **Detection change** (every mode):
+  the forms above are new `USERNAME`, `DOB`, `EMPLOYEE_ID` and `CUSTOMER_ID` findings, values in
+  edge-less key/value tables new findings of their field's rule, and `login is…` and names after
+  `Account Name:` are no longer `USERNAME`. Dev scoreboard vs. 94aca75 (every gated bucket up,
+  strict and balanced, no new hard-negative FP), exact F1 balanced: username ark_authored
+  35.3 → 98.2, neutral 8.8 → 10.3; DOB ark_authored 71.4 → 99.7, neutral 66.7 → 67.0; employee ID
+  neutral 79.0 → 88.2, ark_authored 87.5 → 100.0; customer ID neutral 51.1 → 60.9; phone
+  presidio_favored 80.5 (unchanged); L1 F1 neutral 65.8 → 66.7, ark_authored 54.4 → 59.6 (strict).
+  New regex parts are bounded alternations and fixed digit counts; the table carrier is one pass
+  over the lines that hold a `|`. `latency.py compare --engine ark-native` 100 KiB p95
+  161.6 → 167.9 ms (+3.9 %) and 161.6 → 157.7 ms (−2.4 %) in two head runs, both PASS. Golden eval
+  green.
+
 - German IDs on `presidio_favored` (Q-DE, quality floor F1 ≥ 80). The bare KVNR rule
   `pii_health_insurance_number_de_context_free` now reads the letter in either case
   (`a123456780`; the check digit counts it like the uppercase one), like the bare passport and
