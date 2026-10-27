@@ -75,7 +75,7 @@ Semantik-Classifier: Das Modell markierte beispielsweise `Schülerin` oder
 Grenzen: statt eines vollständigen Felds entstehen etwa nur `A`, `87 points`,
 `GPA` oder die Zahl. Die bereits dokumentierte, größere Education-Sweep misst
 für `academic_grade` Exact-F1 `0.286` und führt das Label deshalb als
-abgelehnt (`docs/gliner-education-evaluation.md`).
+abgelehnt (`docs/research/gliner-education-evaluation.md`).
 
 Eine Presence-Aggregation darf diese Boundary-Schwäche daher nicht in ein
 Kontextsignal oder eine PII-Behauptung umdeuten. Sie würde insbesondere
