@@ -195,8 +195,8 @@ class ProfileTests(unittest.TestCase):
             self.assertLessEqual(set(family.content), content, family.id)
 
     def test_entity_families_with_synthetic_gold_have_a_profile_for_every_entity(self):
-        # GOLD-D2/D3: every entity of these families gets carrier gold, with or without an ARK rule.
-        families = {"comm", "identity", "commerce", "devops", "ci", "vcs", "registry"}
+        # GOLD-D2/D3/D4: every entity of these families gets carrier gold, with or without an ARK rule.
+        families = {"comm", "identity", "commerce", "devops", "ci", "vcs", "registry", "hosting", "cloud", "data"}
         entity_map = yaml.safe_load(ENTITY_MAP.read_text(encoding="utf-8"))
         expected = {entity["id"] for entity in entity_map["entities"] if entity["id"].split(".")[0] in families}
         covered = {profile.entity for profile in carriers.profiles().values()}
@@ -395,7 +395,9 @@ class BuildTests(unittest.TestCase):
                     # Neutral key: under the entity's own key the value would still be a credential.
                     self.assertIn(row["generator"], baseline[row["entity"]]["lookalike"], row["id"])
                     self.assertNotIn(carriers.profiles()[row["entity"]].key, row["text"].lower(), row["id"])
-                    self.assertIn(recipes.generate(row["generator"], row["seed"]), row["text"], row["id"])
+                    family = self.families[row["family"]]
+                    value = recipes.generate(row["generator"], row["seed"])
+                    self.assertIn(carriers.escape_value(value, family.escape, family.indent), row["text"], row["id"])
 
     def test_family_kinds_and_multiline_values_are_respected(self):
         for rows in self.rows.values():

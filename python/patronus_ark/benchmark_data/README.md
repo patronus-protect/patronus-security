@@ -270,10 +270,12 @@ TypeScript, Go, Java, C#, Rust and Ruby, and DE/EN chat, tickets and mail.
 - Each value rule of `rules.json` has a profile with its entity, group and key
   name (`OPENAI_API_KEY`, `openaiApiKey`, `Openai-Api-Key` …), a DE/EN label and
   an optional wrapper (`Bearer …`, `postgres://app:…@db…`, `JSESSIONID=…`).
-- Each baseline entity of `rules.json` (GOLD-D2, GOLD-D3: an entity map entity with
-  scope `baseline_only`, such as `comm.telegram.bot_token`) has a profile under its
-  entity id. Its generators follow the gitleaks rule of the entity (`source` in
-  `generators.json`), so ARK and every baseline are measured on it before ARK has
+- Each baseline entity of `rules.json` (GOLD-D2, GOLD-D3, GOLD-D4: an entity map
+  entity with scope `baseline_only`, such as `comm.telegram.bot_token`) has a
+  profile under its entity id. Its generators follow the gitleaks rule of the
+  entity, or the TruffleHog detector or detect-secrets plugin of an entity without
+  one (`source` in `generators.json`; the GCP service account key is a whole
+  one-line key file), so ARK and every baseline are measured on it before ARK has
   a rule; its rows carry `rule_id` null.
 - Positives carry one entity whose `start`/`end` are code points in `text` and
   cover only the value, without key, quotes or wrapper. `encoding` lists the
@@ -292,8 +294,9 @@ TypeScript, Go, Java, C#, Rust and Ruby, and DE/EN chat, tickets and mail.
   pattern, so only structural validation tells them from a real value.
   Baseline entities add `lookalike`: the entity's shape with a wrong prefix,
   length or character set (a Twilio account SID `AC…` for an API key `SK…`, a
-  Mailgun `pubkey-`, a short Telegram secret, an Octopus `API-` key in lower case)
-  under the neutral key `correlation_id`. Under the entity's own key such a value
+  Mailgun `pubkey-`, a short Telegram secret, an Octopus `API-` key in lower case,
+  a GCP workload identity federation config without a private key) under the
+  neutral key `correlation_id`. Under the entity's own key such a value
   would still be a credential of unknown format.
 - Code and notebook families carry the document label `content.source_code`,
   logs `content.system_log`.

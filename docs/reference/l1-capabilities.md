@@ -378,8 +378,8 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `llm.privateai.api_key` | baseline_only | `API_KEY` | – | – | – | gitleaks: `privateai-api-token` |
 | `cloud.aws.bedrock_api_key` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `aws-amazon-bedrock-api-key-long-lived`, `aws-amazon-bedrock-api-key-short-lived` |
 | `cloud.alibaba.access_key` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `alibaba-access-key-id`, `alibaba-secret-key` |
-| `cloud.azure.entra_client_secret` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `azure-ad-client-secret` |
-| `cloud.azure.storage_account_key` | baseline_only | `CLOUD_KEY` | – | – | – | detect-secrets: `AzureStorageKeyDetector` |
+| `cloud.azure.entra_client_secret` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `azure-ad-client-secret`; TruffleHog: `Azure` |
+| `cloud.azure.storage_account_key` | baseline_only | `CLOUD_KEY` | – | – | – | TruffleHog: `AzureStorage`; detect-secrets: `AzureStorageKeyDetector` |
 | `cloud.gcp.service_account_key` | baseline_only | `CLOUD_KEY` | – | – | – | TruffleHog: `GCP` |
 | `cloud.ibm.credentials` | baseline_only | `CLOUD_KEY` | – | – | – | detect-secrets: `IbmCloudIamDetector`, `IbmCosHmacDetector`, `SoftlayerDetector` |
 | `cloud.yandex.credentials` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `yandex-access-token`, `yandex-api-key`, `yandex-aws-access-token` |
@@ -404,13 +404,13 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `ci.droneci.access_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `droneci-access-token`; TruffleHog: `DroneCI` |
 | `ci.travisci.access_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `travisci-access-token`; TruffleHog: `TravisCI` |
 | `hosting.flyio.access_token` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `flyio-access-token` |
-| `hosting.netlify.access_token` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `netlify-access-token` |
-| `hosting.heroku.api_key` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `heroku-api-key`, `heroku-api-key-v2` |
-| `hosting.cloudflare.api_key` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `cloudflare-api-key`, `cloudflare-global-api-key`, `cloudflare-origin-ca-key` |
-| `hosting.digitalocean.token` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `digitalocean-access-token`, `digitalocean-pat`, `digitalocean-refresh-token` |
+| `hosting.netlify.access_token` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `netlify-access-token`; TruffleHog: `Netlify` |
+| `hosting.heroku.api_key` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `heroku-api-key`, `heroku-api-key-v2`; TruffleHog: `Heroku` |
+| `hosting.cloudflare.api_key` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `cloudflare-api-key`, `cloudflare-global-api-key`, `cloudflare-origin-ca-key`; TruffleHog: `CloudflareApiToken`, `CloudflareCaKey` |
+| `hosting.digitalocean.token` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `digitalocean-access-token`, `digitalocean-pat`, `digitalocean-refresh-token`; TruffleHog: `DigitalOceanV2` |
 | `hosting.openshift.user_token` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `openshift-user-token` |
 | `hosting.defined_networking.api_token` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `defined-networking-api-token` |
-| `hosting.fastly.api_token` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `fastly-api-token` |
+| `hosting.fastly.api_token` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `fastly-api-token`; TruffleHog: `FastlyPersonalToken` |
 | `hosting.settlemint.access_token` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `settlemint-application-access-token`, `settlemint-personal-access-token`, `settlemint-service-access-token` |
 | `observability.datadog.access_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `datadog-access-token` |
 | `observability.newrelic.key` | baseline_only | `API_KEY` | – | – | – | gitleaks: `new-relic-insert-key`, `new-relic-user-api-key` |
