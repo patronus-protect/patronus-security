@@ -684,6 +684,7 @@ tasks:
 
   # M3 +4 (57)
   - id: B-LUHN
+    status: done
     title: "SE organisationsnummer (Luhn), ZA ID (Luhn), CA SIN (Luhn), TR T.C. Kimlik No (check digits)"
     type: new-entity
     deps: [K05, B-NORD]

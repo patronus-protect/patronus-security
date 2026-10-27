@@ -10,8 +10,8 @@ use super::context::Evidence;
 use super::context_anchors::PII_ANCHOR_PATTERNS;
 use super::score::{self, PiiMode, ValidatorStrength};
 use super::{
-    au, be, common, context, de, driver_license, fr, identifiers, intl, licence_plate, nl, nordic,
-    overlap, sg, uk, us, vat,
+    au, be, ca, common, context, de, driver_license, fr, identifiers, intl, licence_plate, nl,
+    nordic, overlap, sg, tr, uk, us, vat, za,
 };
 use crate::detectors::anchors;
 use crate::detectors::obfuscation::{Deobfuscated, Level};
@@ -174,6 +174,13 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     nl::BSN_CONTEXT_FREE,
     be::NATIONAL_NUMBER,
     be::NATIONAL_NUMBER_CONTEXT_FREE,
+    nordic::ORGANISATIONSNUMMER,
+    nordic::ORGANISATIONSNUMMER_CONTEXT_FREE,
+    ca::SIN,
+    ca::SIN_CONTEXT_FREE,
+    tr::NATIONAL_ID,
+    za::ID_NUMBER,
+    za::ID_NUMBER_CONTEXT_FREE,
 ];
 
 pub struct PiiPipeline {
@@ -622,7 +629,11 @@ impl NativeRegexDetector for PiiPipeline {
             | "pii_siren_fr"
             | "pii_siret_fr"
             | "pii_bsn_nl"
-            | "pii_national_number_be" => {
+            | "pii_national_number_be"
+            | "pii_organisationsnummer_se"
+            | "pii_sin_ca"
+            | "pii_national_id_tr"
+            | "pii_id_number_za" => {
                 let value = captures.get(0).unwrap().range();
                 context::structure_evidence(
                     prepared.structure(),

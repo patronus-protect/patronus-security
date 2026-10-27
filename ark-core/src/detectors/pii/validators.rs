@@ -1199,11 +1199,12 @@ pub fn fr_nir(s: &str) -> bool {
 /// French SIREN (B-EU1): nine digits, grouped 3-3-3 by spaces or not, passing
 /// Luhn; one repeated digit is never issued.
 pub fn fr_siren(s: &str) -> bool {
-    grouped_digits::<9>(s).is_some_and(|digits| siren(&digits))
+    grouped_digits::<9>(s).is_some_and(|digits| issued_luhn(&digits))
 }
 
-/// Whether nine digits are a SIREN: Luhn, not one repeated digit.
-fn siren(digits: &[u32]) -> bool {
+/// Whether `digits` pass Luhn and are not one repeated digit, which passes it but
+/// is never issued (SIREN, SIN, organisationsnummer).
+fn issued_luhn(digits: &[u32]) -> bool {
     !one_repeated_digit(digits) && luhn_checksum(digits) == 0
 }
 
@@ -1213,7 +1214,7 @@ fn siren(digits: &[u32]) -> bool {
 /// multiple of five.
 pub fn fr_siret(s: &str) -> bool {
     grouped_digits::<14>(s).is_some_and(|digits| {
-        siren(&digits[..9])
+        issued_luhn(&digits[..9])
             && if decimal(&digits[..9]) == 356_000_000 {
                 digits.iter().sum::<u32>().is_multiple_of(5)
             } else {
@@ -1250,6 +1251,60 @@ pub fn be_national_number(s: &str) -> bool {
             && two_digits(&digits, 4) <= 31
             && (1..=998).contains(&(number % 1000))
             && (97 - number % 97 == check || 97 - (2_000_000_000 + number) % 97 == check)
+    })
+}
+
+/// Swedish organisationsnummer (B-LUHN): ten digits, with `-` before the last four
+/// or none. The third digit is 2 or more (a personnummer has its birth month
+/// there) and the tenth a Luhn check digit over the other nine.
+pub fn se_organisationsnummer(s: &str) -> bool {
+    let dashed = s.len() == 11 && s.as_bytes()[6] == b'-';
+    (dashed || s.len() == 10)
+        && separated_digits::<10>(s, b"-")
+            .is_some_and(|digits| digits[2] >= 2 && issued_luhn(&digits))
+}
+
+/// Canadian Social Insurance Number (B-LUHN): nine digits, plain or grouped 3-3-3
+/// by spaces or hyphens, passing Luhn. The first digit names the region of
+/// registration (1–7) or a temporary resident (9); 0 and 8 are not issued to
+/// persons.
+pub fn ca_sin(s: &str) -> bool {
+    grouped_digits::<9>(s).is_some_and(|digits| !matches!(digits[0], 0 | 8) && issued_luhn(&digits))
+}
+
+/// Turkish T.C. Kimlik No (B-LUHN): eleven digits without a leading zero. The
+/// tenth is 7 × (the sum of places 1, 3, 5, 7, 9) − (the sum of places 2, 4, 6, 8)
+/// mod 10, the eleventh the sum of the first ten mod 10. Ten repeated digits
+/// (`11111111110`) pass both but are never issued.
+pub fn tr_national_id(s: &str) -> bool {
+    separated_digits::<11>(s, b"").is_some_and(|digits| {
+        let odd: u32 = digits[..9].iter().step_by(2).sum();
+        let even: u32 = digits[1..9].iter().step_by(2).sum();
+        // `- even` mod 10 is `+ 9 * even`.
+        digits[0] != 0
+            && !one_repeated_digit(&digits[..10])
+            && (7 * odd + 9 * even) % 10 == digits[9]
+            && digits[..10].iter().sum::<u32>() % 10 == digits[10]
+    })
+}
+
+/// South African identity number (B-LUHN): thirteen digits, plain or grouped
+/// 6-4-3 by spaces: birth date `YYMMDD` (a date in the 1900s or the 2000s), four
+/// sequence digits, citizenship (0 citizen, 1 permanent resident, 2 refugee), an 8
+/// or 9 (formerly race) and a Luhn check digit over all thirteen.
+pub fn za_id_number(s: &str) -> bool {
+    separated_digits::<13>(s, b" ").is_some_and(|digits| {
+        let (year, month, day) = (
+            two_digits(&digits, 0),
+            two_digits(&digits, 2),
+            two_digits(&digits, 4),
+        );
+        [1900, 2000]
+            .iter()
+            .any(|century| birth_date(day, month, century + year))
+            && digits[10] <= 2
+            && matches!(digits[11], 8 | 9)
+            && luhn_checksum(&digits) == 0
     })
 }
 

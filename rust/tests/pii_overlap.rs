@@ -207,6 +207,7 @@ fn competing_labels_are_the_number_labels() {
             "PHONE",
             "SE_PERSONNUMMER",
             "STEUERID",
+            "TR_NATIONAL_ID",
             "VAT_ID_FR",
             "VAT_ID_HR",
             "VAT_ID_IT",

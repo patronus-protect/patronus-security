@@ -11,6 +11,7 @@ macro_rules! nanp_extension {
 
 mod au;
 mod be;
+mod ca;
 mod common;
 pub mod context;
 mod context_anchors;
@@ -27,7 +28,9 @@ pub mod overlap;
 pub mod pii;
 pub mod score;
 mod sg;
+mod tr;
 mod uk;
 mod us;
 pub mod validators;
 mod vat;
+mod za;

@@ -368,7 +368,7 @@
         "Belegdatum: DTM+137:202201010800'",
         "Handels-ID: 20220314-123456-ABC",
         "Paketversion: pkg-507314925862-485275870833-amd64",
-        "Südafrikanische ID-Nummer: 4506095123081",
+        "Koreanische Bürgernummer: 4506091234569",
         "Koreanische Registrierungsnummer: 470312-1081835",
         "Referenz 1748503543012"
       ],
@@ -376,7 +376,7 @@
         "Message date: DTM+137:202201010800'",
         "\"TradeID\": \"20220314-123456-ABC-IBK\"",
         "Package version: pkg-507314925862-485275870833-amd64",
-        "South African ID number: 6109240123185",
+        "Korean resident registration number: 6109242234568",
         "Resident Registration Number: 590724-1069401",
         "1748503543012"
       ]
@@ -2022,6 +2022,116 @@
       "context": {
         "de": "Die Nationalregisternummer des Kunden ist 75.04.22-973.67.",
         "en": "70.10.03-432.48 is his Belgian national number."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_organisationsnummer_se",
+    "de": "Die schwedische Organisationsnummer lautet 5785797548.",
+    "en": "Organisation number: 556703-7485",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Organisationsnummer: 823948-2197",
+        "Vorgang 5785797548 wurde abgeschlossen."
+      ],
+      "en": [
+        "Organisation number: 551303-7480",
+        "Reference 5567037485 was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_organisationsnummer_se_context_free",
+    "de": "Lieferant 593703-4238 aus Göteborg",
+    "en": "Supplier 285016-6139 from Gothenburg",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die Organisationsnummer des Lieferanten ist 525194-8757.",
+        "en": "862189-5559 is our Swedish company number."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_sin_ca",
+    "de": "Die kanadische SIN lautet 143 483 956.",
+    "en": "My social insurance number is 435418165.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Kanadische SIN: 813 069 259",
+        "Vorgang 386205793 wurde abgeschlossen."
+      ],
+      "en": [
+        "SIN: 130 692 545",
+        "Order 435418165 shipped."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_sin_ca_context_free",
+    "de": "Antragstellerin 279-180-582 wurde genehmigt.",
+    "en": "Employee 220-297-295 starts on Monday.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die kanadische SIN der Mitarbeiterin ist 587-180-332.",
+        "en": "731-530-150 is her social insurance number."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_national_id_tr",
+    "de": "Türkische Identitätsnummer: 53337761724",
+    "en": "T.C. Kimlik No: 10000000146",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Türkische Identitätsnummer: 53337761725",
+        "Vorgang 50931925408 wurde abgeschlossen."
+      ],
+      "en": [
+        "T.C. Kimlik No: 11111111110",
+        "Reference 79059236630 was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_id_number_za",
+    "de": "Südafrikanische ID-Nummer: 7204226952183",
+    "en": "South African ID number: 8001015009087",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Südafrikanische ID-Nummer: 7204226952175",
+        "Südafrikanische ID-Nummer: 7204226952184"
+      ],
+      "en": [
+        "South African ID number: 8001015009384",
+        "SA ID 80010150090870"
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_id_number_za_context_free",
+    "de": "Antragsteller 6608075107080 wurde genehmigt.",
+    "en": "Applicant 8011273970185 has been approved.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die südafrikanische ID-Nummer des Antragstellers ist 6908025538180.",
+        "en": "7809193140180 is his South African ID number."
       }
     }
   },

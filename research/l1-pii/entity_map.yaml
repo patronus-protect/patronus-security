@@ -225,6 +225,34 @@ entities:
     corpora:
       presidio-analyzer-recognizer-tests: [FI_PERSONAL_IDENTITY_CODE]
 
+  - id: pii.se.organisationsnummer
+    scope: shared
+    ark: [SE_ORGANISATIONSNUMMER]
+    presidio: [SE_ORGANISATIONSNUMMER]
+    corpora:
+      presidio-analyzer-recognizer-tests: [SE_ORGANISATIONSNUMMER]
+
+  - id: pii.ca.sin
+    scope: shared
+    ark: [CA_SIN]
+    presidio: [CA_SIN]
+    corpora:
+      presidio-analyzer-recognizer-tests: [CA_SIN]
+
+  - id: pii.tr.national_id
+    scope: shared
+    ark: [TR_NATIONAL_ID]
+    presidio: [TR_NATIONAL_ID]
+    corpora:
+      presidio-analyzer-recognizer-tests: [TR_NATIONAL_ID]
+
+  - id: pii.za.id_number
+    scope: shared
+    ark: [ZA_ID_NUMBER]
+    presidio: [ZA_ID_NUMBER]
+    corpora:
+      presidio-analyzer-recognizer-tests: [ZA_ID_NUMBER]
+
   - id: entity.passport_number
     scope: shared
     ark: [PASSPORT_NUMBER]
@@ -395,9 +423,6 @@ entities:
   - {id: pii.es.nif, scope: presidio_only, ark: [], presidio: [ES_NIF], corpora: {presidio-analyzer-recognizer-tests: [ES_NIF]}}
   - {id: pii.it.fiscal_code, scope: presidio_only, ark: [], presidio: [IT_FISCAL_CODE], corpora: {presidio-analyzer-recognizer-tests: [IT_FISCAL_CODE]}}
   - {id: pii.pl.pesel, scope: presidio_only, ark: [], presidio: [PL_PESEL], corpora: {presidio-analyzer-recognizer-tests: [PL_PESEL]}}
-  - {id: pii.se.organisationsnummer, scope: presidio_only, ark: [], presidio: [SE_ORGANISATIONSNUMMER], corpora: {presidio-analyzer-recognizer-tests: [SE_ORGANISATIONSNUMMER]}}
-  - {id: pii.tr.national_id, scope: presidio_only, ark: [], presidio: [TR_NATIONAL_ID], corpora: {presidio-analyzer-recognizer-tests: [TR_NATIONAL_ID]}}
-  - {id: pii.ca.sin, scope: presidio_only, ark: [], presidio: [CA_SIN], corpora: {presidio-analyzer-recognizer-tests: [CA_SIN]}}
   - {id: pii.in.aadhaar, scope: presidio_only, ark: [], presidio: [IN_AADHAAR], corpora: {presidio-analyzer-recognizer-tests: [IN_AADHAAR]}}
   - {id: pii.in.gstin, scope: presidio_only, ark: [], presidio: [IN_GSTIN], corpora: {presidio-analyzer-recognizer-tests: [IN_GSTIN]}}
   - {id: pii.in.pan, scope: presidio_only, ark: [], presidio: [IN_PAN], corpora: {presidio-analyzer-recognizer-tests: [IN_PAN]}}
@@ -409,7 +434,6 @@ entities:
   - {id: pii.ph.tin, scope: presidio_only, ark: [], presidio: [PH_TIN], corpora: {presidio-analyzer-recognizer-tests: [PH_TIN]}}
   - {id: pii.ph.umid, scope: presidio_only, ark: [], presidio: [PH_UMID], corpora: {presidio-analyzer-recognizer-tests: [PH_UMID]}}
   - {id: pii.th.tnin, scope: presidio_only, ark: [], presidio: [TH_TNIN], corpora: {presidio-analyzer-recognizer-tests: [TH_TNIN]}}
-  - {id: pii.za.id_number, scope: presidio_only, ark: [], presidio: [ZA_ID_NUMBER], corpora: {presidio-analyzer-recognizer-tests: [ZA_ID_NUMBER]}}
 
   # ── semantic ───────────────────────────────────────────────────────────
   - id: entity.person_name
@@ -528,6 +552,10 @@ checksums:
     fr_siret: {algorithm: "Luhn (La Poste: Quersumme mod 5)"}           # B-EU1, SIRET
     nl_bsn: {algorithm: "11-Probe, gewichtet 9…2 und −1 mod 11"}         # B-EU1, BSN
     be_national_number: {algorithm: "97 − (9 Stellen mod 97), ab 2000 mit vorangestellter 2"}  # B-EU1, Nationalregisternummer
+    se_organisationsnummer: {algorithm: Luhn}                          # B-LUHN, dritte Ziffer ≥ 2
+    ca_sin: {algorithm: Luhn}                                          # B-LUHN, erste Ziffer nicht 0 oder 8
+    tr_national_id: {algorithm: "zwei Prüfziffern mod 10"}             # B-LUHN, T.C. Kimlik No
+    za_id_number: {algorithm: Luhn}                                    # B-LUHN, plus Geburtsdatum, Staatsangehörigkeit 0–2, 8/9
     de_vat_id: {algorithm: "ISO 7064 MOD 11,10"}            # B01, USt-IdNr.
     at_vat_id: {algorithm: Luhn-Variante (6 − Summe) mod 10}  # B01, UID ATU
     ch_vat_id: {algorithm: gewichtet 5-4-3-2-7-6-5-4 mod 11}   # B01, UID CHE

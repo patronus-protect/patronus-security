@@ -470,7 +470,14 @@ fn checksum_strength_is_reserved_for_real_check_digits() {
             "pii_bsn_nl",
             "pii_bsn_nl_context_free",
             "pii_national_number_be",
-            "pii_national_number_be_context_free"
+            "pii_national_number_be_context_free",
+            "pii_organisationsnummer_se",
+            "pii_organisationsnummer_se_context_free",
+            "pii_sin_ca",
+            "pii_sin_ca_context_free",
+            "pii_national_id_tr",
+            "pii_id_number_za",
+            "pii_id_number_za_context_free"
         ]
     );
 }
@@ -535,6 +542,13 @@ fn reference_scores_per_rule() {
         ("pii_bsn_nl_context_free", 0.55),
         ("pii_national_number_be", 0.60),
         ("pii_national_number_be_context_free", 0.55),
+        ("pii_organisationsnummer_se", 0.60),
+        ("pii_organisationsnummer_se_context_free", 0.55),
+        ("pii_sin_ca", 0.60),
+        ("pii_sin_ca_context_free", 0.55),
+        ("pii_national_id_tr", 0.60),
+        ("pii_id_number_za", 0.60),
+        ("pii_id_number_za_context_free", 0.55),
     ] {
         assert_eq!(rule_score(rule_id), expected, "{rule_id}");
     }
