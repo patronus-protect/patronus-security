@@ -184,8 +184,9 @@ def test_workflow_uses_exclusion_aware_filters_and_conditional_jobs():
     for job in ("rust", "core-features", "python", "native-throughput"):
         assert jobs[job]["needs"] == "changes"
         assert "needs.changes.outputs." in jobs[job]["if"]
-    for event in ("pull_request", "push"):
-        assert ".github/ci-paths.yml" in WORKFLOW["on"][event]["paths"]
+    # Required checks must report on every PR, so only pushes are path-filtered.
+    assert not WORKFLOW["on"]["pull_request"]
+    assert ".github/ci-paths.yml" in WORKFLOW["on"]["push"]["paths"]
 
 
 def test_runner_uses_checked_subprocesses(monkeypatch):
