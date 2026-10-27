@@ -243,8 +243,8 @@ pub fn unanchored_phone(s: &str) -> bool {
 pub const PHONE_REGIONS: &[phonenumber::country::Id] = {
     use phonenumber::country::Id::*;
     &[
-        DE, AT, CH, FR, BE, NL, LU, IT, ES, PT, IE, GB, DK, NO, SE, FI, PL, CZ, US, CA, BR,
-        IL, IN, JP,
+        DE, AT, CH, FR, BE, NL, LU, IT, ES, PT, IE, GB, DK, NO, SE, FI, PL, CZ, US, CA, BR, IL, IN,
+        JP,
     ]
 };
 

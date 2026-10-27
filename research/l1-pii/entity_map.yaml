@@ -514,6 +514,7 @@ checksums:
     email_domain: null                  # B-EMAIL, Top-Level-Domain laut IANA oder Platzhalter (T01)
     unanchored_phone: null
     phone: null
+    regional_phone: null                # F01, Nummernplan laut libphonenumber (phonenumber-Crate), keine Prüfziffer
     mac_address: null
     cvv: null
     card_expiry: null

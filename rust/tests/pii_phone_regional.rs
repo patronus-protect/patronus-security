@@ -60,13 +60,19 @@ fn regional_rules(text: &str, mode: PiiMode) -> Vec<String> {
 /// `(text, value)`: a national number with a phone term, valid in a regional plan.
 const POSITIVES: &[(&str, &str)] = &[
     ("Mobile: 416 60 039\nDesk: n/a", "416 60 039"),
-    ("Can someone call me on 9472 7916? I have some questions.", "9472 7916"),
+    (
+        "Can someone call me on 9472 7916? I have some questions.",
+        "9472 7916",
+    ),
     ("Mobile: 03.93.92.16.85\nOrt: Paris", "03.93.92.16.85"),
     ("Please call me at 0494 92 82 32 tomorrow.", "0494 92 82 32"),
     ("Handy: 0688 843 79 56", "0688 843 79 56"),
     ("Mobil erreichbar unter 0699 868 88 55.", "0699 868 88 55"),
     ("Telefon: 044 668 18 00", "044 668 18 00"),
-    ("Can someone call me on (64) 3591-3246? Thanks.", "(64) 3591-3246"),
+    (
+        "Can someone call me on (64) 3591-3246? Thanks.",
+        "(64) 3591-3246",
+    ),
     ("My Japanese phone number is 090-1234-5678", "090-1234-5678"),
     ("Fax: 28-64-66-98", "28-64-66-98"),
 ];
