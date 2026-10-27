@@ -241,6 +241,9 @@ class SecurityGateway:
             `best_f1` (default), `best_promote`, `best_fpr_in_f1`,
             `best_fnr_in_f1`, or `best_latency_in_f1`. This does not change
             L3 promote thresholds.
+        wolf_options: Optional dedicated-Wolf startup defaults: `window_tokens`
+            (including BOS/EOS), `overlap_tokens` and `batch_size`. Missing values
+            retain 256/0/1. Validated before gateway construction; applied before warmup.
         l3_strategy: `dedicated` for one L3 model per classifier pipeline or
             `multi` for the shared unified multi-head ONNX model.
         dynamic_pii_config: Pipeline-specific labels, result gates,
@@ -273,6 +276,8 @@ class SecurityGateway:
         cache_entry_ttl_seconds: int = 30 * 24 * 60 * 60,
         cache_memory_max_entries: int = 100_000,
         cache_memory_max_bytes: int = 128 * 1024 * 1024,
+        *,
+        wolf_options: dict[str, int] | None = None,
     ):
         self._categories = list(categories)
         self._max_level = max_level
@@ -290,6 +295,7 @@ class SecurityGateway:
             "execution_backend": execution_backend,
             "ntdb_operating_point": ntdb_operating_point,
             "l3_strategy": l3_strategy,
+            "wolf_options": deepcopy(wolf_options),
             "dynamic_pii_config": deepcopy(dynamic_pii_config),
             "cache_storage_location": cache_storage_location,
             "cache_encryption_key_hex": cache_encryption_key_hex,
@@ -303,6 +309,7 @@ class SecurityGateway:
             "execution_backend": execution_backend,
             "ntdb_operating_point": ntdb_operating_point,
             "l3_strategy": l3_strategy,
+            "wolf_options": deepcopy(wolf_options),
         }
         self.rust_gateway = RustSecurityGateway(
             categories,
@@ -321,7 +328,13 @@ class SecurityGateway:
             cache_entry_ttl_seconds=cache_entry_ttl_seconds,
             cache_memory_max_entries=cache_memory_max_entries,
             cache_memory_max_bytes=cache_memory_max_bytes,
+            wolf_options_json=json.dumps(wolf_options) if wolf_options is not None else None,
         )
+
+    @property
+    def wolf_options(self) -> dict[str, int]:
+        """Effective dedicated-Wolf startup profile; returned as an independent copy."""
+        return dict(self.rust_gateway.wolf_options)
 
     @property
     def categories(self) -> list[str]:

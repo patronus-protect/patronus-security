@@ -1,11 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-use serde::Deserialize;
-use std::{fs, path::PathBuf};
-
-#[derive(Deserialize)]
-struct BenchmarkRow {
-    text: String,
-}
+use std::{path::PathBuf, process::Command};
 
 pub fn texts() -> Vec<String> {
     let mut texts: Vec<String> = serde_json::from_str(include_str!(
@@ -13,33 +7,23 @@ pub fn texts() -> Vec<String> {
     ))
     .expect("tokenizer adversarial fixture must be valid JSON");
 
-    let dataset_dir =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../python/patronus_ark/benchmark_data");
-    let mut paths = fs::read_dir(&dataset_dir)
-        .unwrap_or_else(|err| panic!("failed to read {}: {err}", dataset_dir.display()))
-        .filter_map(Result::ok)
-        .map(|entry| entry.path())
-        .filter(|path| {
-            path.extension()
-                .is_some_and(|extension| extension == "jsonl")
-        })
-        .collect::<Vec<_>>();
-    paths.sort();
-
-    for path in paths {
-        let contents = fs::read_to_string(&path)
-            .unwrap_or_else(|err| panic!("failed to read {}: {err}", path.display()));
-        texts.extend(
-            contents
-                .lines()
-                .filter(|line| !line.trim().is_empty())
-                .map(|line| {
-                    serde_json::from_str::<BenchmarkRow>(line)
-                        .unwrap_or_else(|err| panic!("failed to parse {}: {err}", path.display()))
-                        .text
-                }),
-        );
-    }
+    // Benchmark recipes are materialized by the repository's existing Python
+    // generator; no generator implementation is copied into the Core crate.
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+    let python = std::env::var_os("PATRONUS_TEST_PYTHON").unwrap_or_else(|| "python3".into());
+    let output = Command::new(python)
+        .arg(root.join("scripts/tokenizer_parity_texts.py"))
+        .output()
+        .expect("run the repository fixture materializer with PATRONUS_TEST_PYTHON");
+    assert!(
+        output.status.success(),
+        "fixture materialization failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    texts.extend(
+        serde_json::from_slice::<Vec<String>>(&output.stdout)
+            .expect("materializer must return every benchmark text as JSON"),
+    );
     texts
 }
 

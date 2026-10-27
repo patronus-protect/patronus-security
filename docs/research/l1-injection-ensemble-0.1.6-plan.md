@@ -60,7 +60,7 @@ The final Hard-Benign holdout stayed closed until the scorer, tests and release 
 The calibration artifact records the feature order, coefficients, threshold, input hashes and
 tool provenance. The detailed method and the distinction between candidate metrics and
 end-to-end document coverage are reported in
-[`research/injection-l1-calibration-0.1.6.md`](research/injection-l1-calibration-0.1.6.md).
+[`injection-l1-calibration-0.1.6.md`](injection-l1-calibration-0.1.6.md).
 
 ## Implementation sequence
 

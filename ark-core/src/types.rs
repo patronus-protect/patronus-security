@@ -11,7 +11,7 @@ pub struct EvaluationResult {
     pub level: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 /// Per-layer evidence for a scan result.
 pub struct LayerResult {
     /// Security level for this layer, for example `L1` or `L2`.
@@ -192,7 +192,7 @@ pub struct EvidenceSpan {
     pub end_char: usize,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 /// Public scan result returned by `SecurityGateway` methods.
 pub struct NativeResult {
     /// Category that was scanned, for example `injection` or `dlp`.

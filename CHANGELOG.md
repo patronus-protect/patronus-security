@@ -9,8 +9,34 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ## [Unreleased]
 
+### Added
+
+- Shared `WolfExecutionOptions` for configurable total window tokens, content overlap,
+  and actual ONNX window batching. Existing constructors retain 256 total tokens,
+  no overlap, and batch size 1. Core owns streaming windows, masks, per-row logits,
+  cancellation, and Smooth Max; Ark delegates through its execution options.
+- Move the synchronous ONNX text classifier into Core and preserve Ark's public
+  type through a re-export. Reuse one batch-input assembler for the classifier
+  and Wolf, and remove Ark's redundant pre-tokenization/chunk planning for
+  dedicated Wolf documents.
+
 ### Changed
 
+- Share the initialized native producer registry and secret/PII overlap filtering
+  between Core and Ark, removing Ark's duplicate dispatch. Ark retains scheduling,
+  result policy and aggregation; existing Core, Respan and LiteLLM contracts stay
+  unchanged. Core-owned rule catalogs declare MIT OR Apache-2.0 while retaining
+  upstream source-license provenance.
+- Expose optional Wolf startup profiles in Full-Ark Python and HTTP configuration;
+  existing strategy and profile defaults remain unchanged. Warmup uses the actual
+  configured profile. Core Python adds optional typed configuration dictionaries.
+- Terminate active eligible Wolf inference on Ark request early exit, and enforce
+  the existing dedicated-Wolf inference budget after model loading and locking.
+  Inference timeouts retain degraded-timeout behavior and cannot cause sibling-job
+  cancellation through a positive fallback. Core deadlines still start when the
+  caller constructs its `ScanControl`.
+- Validate generic classifier output shapes and finite values before interpreting
+  predictions; preserve existing public methods and add checked decoding helpers.
 - Contact and account fields (Q-CONTACT, quality floor F1 ≥ 80). Field-bound values that the
   rules missed: `pii_username` binds `user=<value>` in log and query lines (`auth failed
   user=oeztuerk90`; `user` only with `=`), no longer reads `login issues` as `login is` + `sues`

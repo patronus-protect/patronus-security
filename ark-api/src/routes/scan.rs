@@ -481,6 +481,8 @@ mod tests {
                 default_gates: ScanGateMatrix::default(),
                 dynamic_pii: None,
                 onnx_runtime: patronus_ark::OnnxRuntimeOptions::default(),
+                l3_strategy: patronus_ark::L3Strategy::Multi,
+                wolf_options: Default::default(),
             },
             key,
         )

@@ -3,7 +3,7 @@ use crate::ScanError;
 #[cfg(feature = "wolf")]
 use std::{
     collections::HashMap,
-    sync::{atomic::AtomicU64, Condvar, Mutex, Weak},
+    sync::{atomic::AtomicU64, Mutex, Weak},
 };
 use std::{
     sync::{
@@ -118,7 +118,7 @@ impl ScanControl {
         if self.check().is_err() {
             callback();
         } else if let Some(deadline) = self.0.deadline {
-            registration.watcher = Some(DeadlineWatcher::start(self.clone(), deadline)?);
+            registration.watcher = Some(deadline::Deadline::register(self.clone(), deadline)?);
         }
         Ok(registration)
     }
@@ -127,12 +127,12 @@ impl ScanControl {
 pub(crate) struct AbortRegistration {
     state: Weak<State>,
     id: u64,
-    watcher: Option<DeadlineWatcher>,
+    watcher: Option<deadline::Deadline>,
 }
 #[cfg(feature = "wolf")]
 impl Drop for AbortRegistration {
     fn drop(&mut self) {
-        // End the timer before removing its active native-run cancellation hook.
+        // Unregister the deadline and the active native-run cancellation hook.
         self.watcher.take();
         if let Some(state) = self.state.upgrade() {
             state
@@ -144,54 +144,8 @@ impl Drop for AbortRegistration {
     }
 }
 
-/// A deadline timer exists only for an active native run with a finite budget.
-/// It owns no scanner, work queue or model session, and is joined on teardown.
 #[cfg(feature = "wolf")]
-struct DeadlineWatcher {
-    stopped: Arc<(Mutex<bool>, Condvar)>,
-    thread: Option<std::thread::JoinHandle<()>>,
-}
-#[cfg(feature = "wolf")]
-impl DeadlineWatcher {
-    fn start(control: ScanControl, deadline: Instant) -> Result<Self, ScanError> {
-        let stopped = Arc::new((Mutex::new(false), Condvar::new()));
-        let signal = Arc::clone(&stopped);
-        let thread = std::thread::Builder::new()
-            .name("ark-scan-deadline".into())
-            .stack_size(128 * 1024)
-            .spawn(move || {
-                let (lock, wake) = &*signal;
-                let state = lock.lock().unwrap_or_else(|e| e.into_inner());
-                let (state, elapsed) = wake
-                    .wait_timeout_while(
-                        state,
-                        deadline.saturating_duration_since(Instant::now()),
-                        |stopped| !*stopped,
-                    )
-                    .unwrap_or_else(|e| e.into_inner());
-                if elapsed.timed_out() && !*state {
-                    drop(state);
-                    control.cancel_deadline();
-                }
-            })
-            .map_err(|e| ScanError::Inference(format!("cannot start scan deadline timer: {e}")))?;
-        Ok(Self {
-            stopped,
-            thread: Some(thread),
-        })
-    }
-}
-#[cfg(feature = "wolf")]
-impl Drop for DeadlineWatcher {
-    fn drop(&mut self) {
-        let (lock, wake) = &*self.stopped;
-        *lock.lock().unwrap_or_else(|e| e.into_inner()) = true;
-        wake.notify_one();
-        if let Some(thread) = self.thread.take() {
-            let _ = thread.join();
-        }
-    }
-}
+mod deadline;
 
 #[cfg(test)]
 mod tests {

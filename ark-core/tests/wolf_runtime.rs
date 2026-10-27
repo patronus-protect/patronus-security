@@ -8,6 +8,35 @@ use std::{
 };
 struct Bundle(PathBuf);
 impl Bundle {
+    fn batched(binary: bool) -> Self {
+        let bundle = Self::new();
+        let source = if binary {
+            "wolf_batch_binary.onnx"
+        } else {
+            "wolf_batch_scalar.onnx"
+        };
+        fs::copy(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/fixtures")
+                .join(source),
+            bundle.0.join("model_fp16.onnx"),
+        )
+        .unwrap();
+        let path = bundle.0.join("wolf.manifest.json");
+        let mut manifest: serde_json::Value =
+            serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        manifest["model"]["blake3"] = serde_json::json!(blake3::hash(
+            &fs::read(bundle.0.join("model_fp16.onnx")).unwrap()
+        )
+        .to_hex()
+        .to_string());
+        manifest["output"] = serde_json::json!(if binary { "binary_margin" } else { "scalar" });
+        manifest["dynamic_sequence"] = serde_json::json!(true);
+        manifest["pad_id"] = serde_json::json!(9999);
+        manifest["parity_cases"] = serde_json::json!([{"token_ids":[],"expected_logit":0.0023}]);
+        fs::write(path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+        bundle
+    }
     fn new() -> Self {
         static NEXT: AtomicU64 = AtomicU64::new(0);
         let path = std::env::temp_dir().join(format!(
@@ -48,6 +77,168 @@ impl Bundle {
             ..Default::default()
         }
     }
+}
+
+#[test]
+fn batches_overlap_padding_and_progress_match_independent_window_oracle() {
+    use patronus_ark_core::{
+        aggregation::SmoothMax, ml::mmbert_tokenizer::MmbertPairTokenizer, wolf::WolfRunner,
+        WolfExecutionOptions,
+    };
+    for binary in [false, true] {
+        let bundle = Bundle::batched(binary);
+        let tokenizer = MmbertPairTokenizer::from_file(&bundle.0.join("tokenizer.mmbpe")).unwrap();
+        let text = " a b c d a a b c d a b c d a a b c d";
+        let mut ids = Vec::new();
+        tokenizer
+            .visit_tokens(text, |t| {
+                ids.push(t.id);
+                Ok(())
+            })
+            .unwrap();
+        for batch_size in [1, 2, 4] {
+            let options = WolfExecutionOptions {
+                window_tokens: 8,
+                overlap_tokens: 2,
+                batch_size,
+            };
+            let mut runner =
+                WolfRunner::new_with_options(bundle.config(0.5).wolf.as_ref().unwrap(), options)
+                    .unwrap();
+            for tokens in [0, 1, 6, 7, 10, ids.len()] {
+                let prefix = if tokens == 0 {
+                    String::new()
+                } else {
+                    " a".repeat(tokens)
+                };
+                let input = if tokens == ids.len() {
+                    text.to_owned()
+                } else {
+                    prefix
+                };
+                let mut actual_ids = Vec::new();
+                tokenizer
+                    .visit_tokens(&input, |t| {
+                        actual_ids.push(t.id);
+                        Ok(())
+                    })
+                    .unwrap();
+                let mut oracle = SmoothMax::default();
+                let mut start = 0;
+                loop {
+                    let end = (start + 6).min(actual_ids.len());
+                    let sum = actual_ids[start..end]
+                        .iter()
+                        .map(|&i| i as f64)
+                        .sum::<f64>()
+                        + f64::from(tokenizer.bos() + tokenizer.eos());
+                    oracle
+                        .push(sum / 10000.0 + (end - start + 2) as f64 / 1000.0)
+                        .unwrap();
+                    if end == actual_ids.len() {
+                        break;
+                    }
+                    start += 4;
+                }
+                let mut updates = Vec::new();
+                let report = runner
+                    .scan_with_progress(&input, &mut |p| updates.push(p))
+                    .unwrap();
+                assert!((report.document_logit - oracle.logit().unwrap()).abs() < 1e-5);
+                assert!((report.attack_probability - oracle.probability().unwrap()).abs() < 1e-5);
+                assert_eq!(report.windows, oracle.count());
+                assert_eq!(updates.len() as u64, report.windows + 1);
+                assert!(updates.iter().all(|p| p.total_windows == report.windows));
+                assert_eq!(updates.last().unwrap().windows, report.windows);
+            }
+        }
+    }
+}
+
+#[test]
+fn execution_options_validate_export_dimensions_and_keep_default_api() {
+    use patronus_ark_core::{wolf::WolfRunner, WolfExecutionOptions};
+    let fixed = Bundle::new();
+    for options in [
+        WolfExecutionOptions {
+            window_tokens: 2048,
+            ..Default::default()
+        },
+        WolfExecutionOptions {
+            batch_size: 2,
+            ..Default::default()
+        },
+    ] {
+        assert!(matches!(
+            WolfRunner::new_with_options(fixed.config(0.5).wolf.as_ref().unwrap(), options),
+            Err(ScanError::Config(_))
+        ));
+    }
+    let dynamic = Bundle::batched(false);
+    let config = dynamic.config(0.5);
+    let mut old = Scanner::new(config.clone()).unwrap();
+    let mut explicit =
+        Scanner::new_with_wolf_options(config, WolfExecutionOptions::default()).unwrap();
+    let text = " a".repeat(600);
+    let a = old.scan(&text).unwrap().wolf.unwrap();
+    let b = explicit.scan(&text).unwrap().wolf.unwrap();
+    assert_eq!(a.document_logit, b.document_logit);
+    assert_eq!(a.windows, b.windows);
+    assert!(matches!(
+        WolfRunner::new_with_options(
+            dynamic.config(0.5).wolf.as_ref().unwrap(),
+            WolfExecutionOptions {
+                window_tokens: 8193,
+                ..Default::default()
+            }
+        ),
+        Err(ScanError::Config(_))
+    ));
+}
+
+#[test]
+fn threshold_changes_reuse_the_model_and_invalid_values_preserve_the_previous_threshold() {
+    use patronus_ark_core::wolf::WolfRunner;
+    let bundle = Bundle::batched(false);
+    let mut runner = WolfRunner::new(bundle.config(0.5).wolf.as_ref().unwrap()).unwrap();
+    fs::remove_file(bundle.0.join("model_fp16.onnx")).unwrap();
+    runner.set_threshold(0.0).unwrap();
+    assert!(runner.scan(" a").unwrap().matched);
+    runner.set_threshold(1.0).unwrap();
+    assert!(!runner.scan(" a").unwrap().matched);
+    for threshold in [f64::NAN, -0.1, 1.1] {
+        assert!(matches!(
+            runner.set_threshold(threshold),
+            Err(ScanError::Config(_))
+        ));
+    }
+    assert_eq!(runner.scan(" a").unwrap().threshold, 1.0);
+}
+
+#[test]
+fn cancellation_between_batched_rows_never_returns_partial_success() {
+    use patronus_ark_core::{wolf::WolfRunner, ScanControl, WolfExecutionOptions};
+    let bundle = Bundle::batched(true);
+    let mut runner = WolfRunner::new_with_options(
+        bundle.config(0.5).wolf.as_ref().unwrap(),
+        WolfExecutionOptions {
+            window_tokens: 8,
+            overlap_tokens: 2,
+            batch_size: 4,
+        },
+    )
+    .unwrap();
+    let control = ScanControl::default();
+    let mut completed = 0;
+    let result = runner.scan_with_progress_and_control(&" a".repeat(100), &control, &mut |p| {
+        completed = p.windows;
+        if completed == 1 {
+            control.cancel();
+        }
+    });
+    assert!(matches!(result, Err(ScanError::Cancelled)));
+    assert_eq!(completed, 1);
+    assert_eq!(runner.scan(" a").unwrap().windows, 1);
 }
 impl Drop for Bundle {
     fn drop(&mut self) {

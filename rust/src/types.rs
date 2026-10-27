@@ -935,6 +935,7 @@ pub struct ScanExecution {
     l3_strategy: L3Strategy,
     defer_l3: bool,
     chunk_overlap_tokens: usize,
+    wolf_execution_options: crate::WolfExecutionOptions,
 }
 
 impl ScanExecution {
@@ -951,6 +952,7 @@ impl ScanExecution {
             l3_strategy: L3Strategy::default(),
             defer_l3: false,
             chunk_overlap_tokens: 0,
+            wolf_execution_options: crate::WolfExecutionOptions::default(),
         }
     }
 
@@ -967,7 +969,22 @@ impl ScanExecution {
             l3_strategy: L3Strategy::default(),
             defer_l3: false,
             chunk_overlap_tokens: 0,
+            wolf_execution_options: crate::WolfExecutionOptions::default(),
         }
+    }
+
+    /// Configure dedicated Wolf execution using the shared Core validation.
+    pub fn set_wolf_execution_options(
+        &mut self,
+        options: crate::WolfExecutionOptions,
+    ) -> Result<(), String> {
+        options.validate().map_err(|e| e.to_string())?;
+        self.wolf_execution_options = options;
+        Ok(())
+    }
+
+    pub fn wolf_execution_options(&self) -> crate::WolfExecutionOptions {
+        self.wolf_execution_options
     }
 
     /// Replace the gate matrix.

@@ -88,6 +88,60 @@ def result_signature(results):
 
 
 class PublicApiTests(unittest.TestCase):
+    def test_wolf_startup_defaults_and_custom_profile_reach_native_gateway(self):
+        scanner = SecurityGateway(["pii"], "l1", download_files=False)
+        self.assertEqual(scanner.wolf_options, {
+            "window_tokens": 256, "overlap_tokens": 0, "batch_size": 1,
+        })
+        profile = {"window_tokens": 32, "overlap_tokens": 4, "batch_size": 2}
+        scanner = SecurityGateway(["pii"], "l1", download_files=False, wolf_options=profile)
+        profile["batch_size"] = 9
+        self.assertEqual(scanner.wolf_options["batch_size"], 2)
+        self.assertEqual(scanner.rust_gateway.wolf_options, scanner.wolf_options)
+        returned = scanner.wolf_options
+        returned["window_tokens"] = 999
+        self.assertEqual(scanner.wolf_options["window_tokens"], 32)
+        self.assertEqual(scanner._benchmark_worker_config["wolf_options"], scanner.wolf_options)
+        self.assertEqual(scanner._benchmark_gateway_config["wolf_options"], scanner.wolf_options)
+
+    def test_wolf_startup_invalid_profile_fails_before_cache_creation(self):
+        for profile in [
+            {"batch_size": 0}, {"window_tokens": 2},
+            {"overlap_tokens": 254}, {"unknown": 1},
+        ]:
+            with self.subTest(profile=profile), tempfile.TemporaryDirectory() as directory:
+                cache = Path(directory) / "not-created.redb"
+                with self.assertRaises(ValueError):
+                    SecurityGateway(
+                        ["pii"], "l1", download_files=False,
+                        wolf_options=profile, cache_storage_location=str(cache),
+                    )
+                self.assertFalse(cache.exists())
+
+    def test_wolf_startup_profile_is_forwarded_by_fresh_process_benchmark_worker(self):
+        import io
+        import json
+        from unittest.mock import patch
+        from patronus_ark import benchmark_worker
+
+        for profile in [None, {"window_tokens": 32, "overlap_tokens": 4, "batch_size": 2}]:
+            config = {
+                "model_dir": None, "onnx_batch_mode": "backend_default",
+                "execution_backend": "cpu", "ntdb_operating_point": "best_f1",
+                "l3_strategy": "dedicated",
+            }
+            if profile is not None:
+                config["wolf_options"] = profile
+            # Stop at construction: this test checks process-boundary forwarding,
+            # while the neighboring test checks the real native gateway settings.
+            with (
+                patch.object(benchmark_worker, "SecurityGateway", side_effect=RuntimeError("captured")) as factory,
+                patch.object(benchmark_worker.sys, "stdin", io.StringIO(json.dumps({"gateway": config}))),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "captured"):
+                    benchmark_worker.main()
+            self.assertEqual(factory.call_args.kwargs["wolf_options"], profile)
+
     def test_anchor_explain_is_explicit_and_can_be_reset(self):
         scanner = SecurityGateway(categories=["dlp"], max_level="l1", download_files=False)
         text = "token " * 64_000

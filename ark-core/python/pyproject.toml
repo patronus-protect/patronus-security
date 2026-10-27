@@ -1,0 +1,20 @@
+[build-system]
+requires = ["maturin>=1.5,<2"]
+build-backend = "maturin"
+
+[project]
+name = "patronus-ark-core"
+version = "0.1.13"
+description = "Local PII, DLP and prompt-injection scanning with optional Wolf Defender inference"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT OR Apache-2.0"
+license-files = ["LICENSE-MIT", "LICENSE-APACHE"]
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/patronus-protect/patronus-security"
+
+[tool.maturin]
+module-name = "patronus_ark_core._patronus_ark_core"
+python-source = "."

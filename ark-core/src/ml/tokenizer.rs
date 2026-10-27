@@ -11,6 +11,58 @@ pub const TOKENIZER_FAMILY: &str = "mmbert";
 
 pub type EncodedInputs = (Vec<i64>, Vec<i64>, Vec<i64>);
 
+/// Assemble fixed or dynamic-width mmBERT batches once for all Core runtimes.
+pub(crate) fn assemble_batch_inputs(
+    chunks: &[&[u32]],
+    width: usize,
+    special_tokens: (u32, u32, u32),
+    attention_mask: bool,
+    token_type_ids: bool,
+) -> io::Result<EncodedInputs> {
+    let total = chunks
+        .len()
+        .checked_mul(width)
+        .filter(|n| *n <= isize::MAX as usize / std::mem::size_of::<i64>())
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "model tensor size overflow"))?;
+    let content_tokens = width.checked_sub(2).ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "model width must include BOS/EOS",
+        )
+    })?;
+    let mut ids = Vec::with_capacity(total);
+    let mut mask = Vec::with_capacity(if attention_mask { total } else { 0 });
+    for tokens in chunks {
+        if tokens.len() > content_tokens {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!(
+                    "chunk has {} content tokens; maximum is {content_tokens}",
+                    tokens.len()
+                ),
+            ));
+        }
+        let start = ids.len();
+        ids.push(i64::from(special_tokens.0));
+        ids.extend(tokens.iter().copied().map(i64::from));
+        ids.push(i64::from(special_tokens.1));
+        if attention_mask {
+            mask.resize(ids.len(), 1);
+            mask.resize(start + width, 0);
+        }
+        ids.resize(start + width, i64::from(special_tokens.2));
+    }
+    Ok((
+        ids,
+        mask,
+        if token_type_ids {
+            vec![0; total]
+        } else {
+            Vec::new()
+        },
+    ))
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TokenChunk {
     pub token_ids: Vec<u32>,
@@ -160,38 +212,13 @@ impl RuntimeTokenizer {
         attention_mask: bool,
         token_type_ids: bool,
     ) -> io::Result<EncodedInputs> {
-        let total = chunks.len() * MODEL_TOKENS;
-        let mut ids = Vec::with_capacity(total);
-        let mut mask = Vec::with_capacity(if attention_mask { total } else { 0 });
-        for tokens in chunks {
-            if tokens.len() > CONTENT_TOKENS {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    format!(
-                        "chunk has {} content tokens; maximum is {CONTENT_TOKENS}",
-                        tokens.len()
-                    ),
-                ));
-            }
-            let start = ids.len();
-            ids.push(i64::from(self.0.bos()));
-            ids.extend(tokens.iter().copied().map(i64::from));
-            ids.push(i64::from(self.0.eos()));
-            if attention_mask {
-                mask.resize(ids.len(), 1);
-                mask.resize(start + MODEL_TOKENS, 0);
-            }
-            ids.resize(start + MODEL_TOKENS, 0);
-        }
-        Ok((
-            ids,
-            mask,
-            if token_type_ids {
-                vec![0; total]
-            } else {
-                Vec::new()
-            },
-        ))
+        assemble_batch_inputs(
+            chunks,
+            MODEL_TOKENS,
+            (self.0.bos(), self.0.eos(), 0),
+            attention_mask,
+            token_type_ids,
+        )
     }
 
     /// Convenience API for a single already-small text input. Long documents

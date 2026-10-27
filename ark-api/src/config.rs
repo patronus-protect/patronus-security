@@ -6,8 +6,8 @@ use std::str::FromStr;
 
 use patronus_ark::{
     ConditionalPipelineGate, DlpMode, DynamicPiiConfig, L3ClusteringStrategy, L3EarlyExitMode,
-    L3PipelinePolicy, L3ProgressMode, L3SchedulerPolicy, OnnxRuntimeOptions, PiiMode,
-    ScanGateMatrix, SecurityCategory, SecurityLevel,
+    L3PipelinePolicy, L3ProgressMode, L3SchedulerPolicy, L3Strategy, OnnxRuntimeOptions, PiiMode,
+    ScanGateMatrix, SecurityCategory, SecurityGateway, SecurityLevel, WolfExecutionOptions,
 };
 use serde::Deserialize;
 
@@ -57,6 +57,12 @@ struct RawPipeline {
     model_dir: Option<String>,
     #[serde(default)]
     download_files: bool,
+    /// The deployed shared classifier remains the default; dedicated models are opt-in.
+    #[serde(default = "default_l3_strategy")]
+    l3_strategy: String,
+    /// Dedicated Wolf startup defaults, separate from request chunk-overlap options.
+    #[serde(default)]
+    wolf_options: WolfExecutionOptions,
     /// Default execution gates applied to every scan unless a key overrides them.
     #[serde(default)]
     gates: Option<RawGates>,
@@ -73,6 +79,10 @@ struct RawPipeline {
     /// session is created with the same bounded thread policy.
     #[serde(default)]
     onnx_runtime: RawOnnxRuntime,
+}
+
+fn default_l3_strategy() -> String {
+    "multi".into()
 }
 
 #[derive(Debug, Deserialize)]
@@ -294,9 +304,20 @@ pub struct Config {
     /// `None` keeps the library's core Dynamic-PII bundle.
     pub dynamic_pii: Option<DynamicPiiConfig>,
     pub onnx_runtime: OnnxRuntimeOptions,
+    pub l3_strategy: L3Strategy,
+    pub wolf_options: WolfExecutionOptions,
 }
 
 impl Config {
+    /// Apply server startup defaults through the existing gateway configuration API.
+    pub fn apply_model_defaults(&self, gateway: &SecurityGateway) -> Result<(), ConfigError> {
+        gateway
+            .set_wolf_execution_options(self.wolf_options)
+            .map_err(|error| ConfigError::Invalid(format!("pipeline.wolf_options: {error}")))?;
+        gateway.set_l3_strategy(self.l3_strategy);
+        Ok(())
+    }
+
     /// Effective gate matrix for a given key: its own override, else the
     /// pipeline-wide default.
     pub fn gates_for(&self, key: &ApiKeyConfig) -> ScanGateMatrix {
@@ -364,6 +385,15 @@ impl Config {
 
 impl RawConfig {
     fn into_config(self) -> Result<Config, ConfigError> {
+        let l3_strategy = self
+            .pipeline
+            .l3_strategy
+            .parse::<L3Strategy>()
+            .map_err(|error| ConfigError::Invalid(format!("pipeline.l3_strategy: {error}")))?;
+        self.pipeline
+            .wolf_options
+            .validate()
+            .map_err(|error| ConfigError::Invalid(format!("pipeline.wolf_options: {error}")))?;
         let bind = self
             .server
             .bind
@@ -451,6 +481,8 @@ impl RawConfig {
             default_gates,
             dynamic_pii: self.pipeline.dynamic_pii,
             onnx_runtime: self.pipeline.onnx_runtime.into_options()?,
+            l3_strategy,
+            wolf_options: self.pipeline.wolf_options,
         })
     }
 }
@@ -474,6 +506,72 @@ mod tests {
     };
 
     use super::{Config, RawConfig, RawGates, RawOnnxRuntime};
+
+    fn startup_config() -> serde_json::Value {
+        serde_json::json!({
+            "server": {"bind": "127.0.0.1:0"},
+            "auth": {"keys": [{"name": "fixture", "key_hash": "0".repeat(64)}]},
+            "pipeline": {"categories": ["pii"], "max_level": "L1"}
+        })
+    }
+
+    #[test]
+    fn startup_wolf_settings_preserve_legacy_multi_and_default_profile() {
+        let raw: RawConfig = serde_json::from_value(startup_config()).unwrap();
+        let config = raw.into_config().unwrap();
+        assert_eq!(config.l3_strategy, patronus_ark::L3Strategy::Multi);
+        assert_eq!(
+            config.wolf_options,
+            patronus_ark::WolfExecutionOptions::default()
+        );
+    }
+
+    #[test]
+    fn startup_wolf_settings_reach_the_real_gateway_before_warmup() {
+        let mut value = startup_config();
+        value["pipeline"]["l3_strategy"] = serde_json::json!("dedicated");
+        value["pipeline"]["wolf_options"] = serde_json::json!({
+            "window_tokens": 32, "overlap_tokens": 4, "batch_size": 2
+        });
+        let raw: RawConfig = serde_json::from_value(value).unwrap();
+        let config = raw.into_config().unwrap();
+        let gateway = SecurityGateway::with_max_level(Vec::new(), SecurityLevel::L1, None, false);
+        config.apply_model_defaults(&gateway).unwrap();
+        assert_eq!(gateway.l3_strategy(), patronus_ark::L3Strategy::Dedicated);
+        assert_eq!(
+            gateway.distributed_execution().wolf_execution_options(),
+            config.wolf_options
+        );
+    }
+
+    #[test]
+    fn startup_wolf_settings_validate_profiles_and_strategy_during_config_loading() {
+        for profile in [
+            serde_json::json!({"batch_size": 0}),
+            serde_json::json!({"window_tokens": 2}),
+            serde_json::json!({"overlap_tokens": 254}),
+        ] {
+            let mut value = startup_config();
+            value["pipeline"]["wolf_options"] = profile;
+            let raw: RawConfig = serde_json::from_value(value).unwrap();
+            assert!(raw
+                .into_config()
+                .unwrap_err()
+                .to_string()
+                .contains("pipeline.wolf_options"));
+        }
+        let mut value = startup_config();
+        value["pipeline"]["l3_strategy"] = serde_json::json!("unknown");
+        let raw: RawConfig = serde_json::from_value(value).unwrap();
+        assert!(raw
+            .into_config()
+            .unwrap_err()
+            .to_string()
+            .contains("pipeline.l3_strategy"));
+        let mut value = startup_config();
+        value["pipeline"]["wolf_options"] = serde_json::json!({"unknown": 4});
+        assert!(serde_json::from_value::<RawConfig>(value).is_err());
+    }
 
     #[test]
     fn rejects_key_defaults_outside_allowed_categories() {

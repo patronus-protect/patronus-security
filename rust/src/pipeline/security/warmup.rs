@@ -577,7 +577,11 @@ impl SecurityGateway {
             return Ok(());
         };
         let execution = self.scan_execution();
-        model.warmup_session(execution.backend(), execution.onnx_runtime_options())?;
+        model.warmup_session(
+            execution.backend(),
+            execution.onnx_runtime_options(),
+            execution.wolf_execution_options(),
+        )?;
         self.l3_worker.register_model(config.public_model, model);
         Ok(())
     }

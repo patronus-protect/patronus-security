@@ -26,6 +26,7 @@ def main():
         execution_backend=config["execution_backend"],
         ntdb_operating_point=config["ntdb_operating_point"],
         l3_strategy=config["l3_strategy"],
+        wolf_options=config.get("wolf_options"),
     )
     gateway.warmup()
 

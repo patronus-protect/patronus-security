@@ -3,7 +3,7 @@
   "catalog_id": "ark-skillspector-derived-0.1.7",
   "source": "ark-native",
   "source_revision": "0.1.7",
-  "license": "GPL-3.0-only",
+  "license": "MIT OR Apache-2.0",
   "rules": [
     {
       "id": "ark.injection.skillspector.anti_refusal",
