@@ -12,7 +12,7 @@ What ARK L1 detects (PII and DLP), how it compares with Presidio and the secret 
 | | PII | DLP |
 | --- | --- | --- |
 | Result labels (entity groups) | 75 | 23 |
-| Regex rules | 121 | 64 (+5 relationship rules) |
+| Regex rules | 122 | 64 (+5 relationship rules) |
 | Checksum-validated units (count rule T03) | 55 (Presidio 2.2.364: 35) | – |
 | Rules with a `checksum` or `structure` check | 76 | 6 |
 | Default state | all rules on | credential/secret groups on, broader families opt-in |
@@ -70,7 +70,7 @@ One row per benchmark entity of `research/l1-pii/entity_map.yaml`. Scope: `share
 | `entity.driver_license_number` | shared | `DRIVER_LICENSE_NUMBER` | `pii_driver_license_number_de`, `pii_driver_license_number_us`, `pii_driver_license_number_it`, `pii_driver_license_number_uk`, `pii_driver_license_number_uk_context_free` | format | on (1 of 5 rules `balanced`/`recall` only) | `US_DRIVER_LICENSE`, `UK_DRIVING_LICENCE`, `DE_FUEHRERSCHEIN`, `IT_DRIVER_LICENSE`, `KR_DRIVER_LICENSE` |
 | `pii.de.vat_id` | shared | `VAT_ID_DE` | `pii_vat_id_de` | checksum | on (`balanced`/`recall` only) | `DE_VAT_ID` |
 | `pii.it.vat_code` | shared | `VAT_ID_IT` | `pii_vat_id_it`, `pii_vat_id_it_proximity` | checksum | on (`balanced`/`recall` only) | `IT_VAT_CODE` |
-| `pii.license_plate` | shared | `LICENSEPLATE` | `pii_kfz_kennzeichen_de` | context | on | `DE_KFZ`, `UK_VEHICLE_REGISTRATION`, `IN_VEHICLE_REGISTRATION`, `NG_VEHICLE_REGISTRATION`, `TR_LICENSE_PLATE` |
+| `pii.license_plate` | shared | `LICENSEPLATE` | `pii_kfz_kennzeichen_de`, `pii_vehicle_registration_uk` | format | on | `DE_KFZ`, `UK_VEHICLE_REGISTRATION`, `IN_VEHICLE_REGISTRATION`, `NG_VEHICLE_REGISTRATION`, `TR_LICENSE_PLATE` |
 | `pii.swift_bic` | ark_only | `SWIFT_CODE` | `pii_swift_bic_context` | format | on | – |
 | `pii.credit_card.cvv` | ark_only | `CREDITCARD_CVV` | `pii_credit_card_cvv` | format | on | – |
 | `pii.credit_card.expiry` | ark_only | `CREDITCARD_EXPIRY` | `pii_credit_card_expiry` | format | on | – |

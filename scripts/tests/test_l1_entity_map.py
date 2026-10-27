@@ -438,7 +438,7 @@ def test_registry_parse_reports_score_model_fields():
     assert by_id["pii_credit_card"]["strength"] == "checksum"
     assert by_id["pii_ipv4"]["strength"] == "format"
     assert by_id["pii_email"]["strength"] == "format"
-    assert by_id["pii_kfz_kennzeichen_de"]["strength"] == "none"
+    assert by_id["pii_kfz_kennzeichen_de"]["strength"] == "format"
     for rule in rules:
         assert rule["strength"] in {"checksum", "format", "none"}, rule
         assert isinstance(rule["base_score"], int) and 1 <= rule["base_score"] <= 100, rule
@@ -469,7 +469,7 @@ def test_checked_in_registry_order_matches_the_rust_order_test():
     expected = re.findall(r'\(\s*"(pii_\w+)",\s*"(\w+)",?\s*\)', rust_test)
     rules = _generate_docs().parse_native_patterns(MODULE.PII_SOURCE_PATH, "PiiPattern")
     assert [(rule["id"], rule["entity_group"]) for rule in rules] == expected
-    assert len(expected) == 121
+    assert len(expected) == 122
 
 
 def test_cli_check_succeeds_and_fails(tmp_path):

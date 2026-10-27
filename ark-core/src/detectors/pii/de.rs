@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! German national identifiers: phone numbers, Steuer-ID, Steuernummer, social and health
-//! insurance numbers, LANR, BSNR, passport, identity card, vehicle registration. The
-//! driving licence lives in `driver_license` with the other licence formats.
+//! insurance numbers, LANR, BSNR, passport, identity card. The driving licence lives in `driver_license`
+//! with the other licence formats, the plate in `licence_plate` with the UK plate.
 use super::{pii::PiiPattern, score::ValidatorStrength, validators};
 
 // ── Telefon ──────────────────────────────────────────────────────────────────
@@ -287,16 +287,4 @@ pub(super) const IDENTITY_CARD_NUMBER_LEGACY: PiiPattern = PiiPattern {
     captured_value: false,
     requires_context: true,
     scored_only: true,
-};
-
-pub(super) const KFZ_KENNZEICHEN: PiiPattern = PiiPattern {
-    name: "pii_kfz_kennzeichen_de",
-    pattern: r"(?i)\b(?:kfz[-_ ]?(?:kennzeichen)?|kennzeichen|nummernschild|vehicle[ \t]+registration)\b[ \t]*(?:is[ \t]*)?[:#=\-]?[ \t]*(?P<value>[A-ZÄÖÜ]{1,3}[- ][A-Z]{1,2}[ ]?\d{1,4}(?:[EH])?)\b",
-    entity_group: "LICENSEPLATE",
-    validator: None,
-    strength: ValidatorStrength::None,
-    base_score: 40,
-    captured_value: true,
-    requires_context: false,
-    scored_only: false,
 };
