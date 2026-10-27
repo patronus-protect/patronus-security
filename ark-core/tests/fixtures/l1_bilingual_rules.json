@@ -2137,6 +2137,102 @@
   },
   {
     "category": "pii",
+    "rule_id": "pii_social_security_number_at",
+    "de": "Die österreichische Versicherungsnummer lautet 4523080773.",
+    "en": "Austrian social security number: 4106 251295",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Sozialversicherungsnummer: 4520 080773",
+        "Vorgang 7273140596 wurde abgeschlossen."
+      ],
+      "en": [
+        "Austrian social security number: 7270 140596",
+        "Reference 9710020680 was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_social_security_number_at_context_free",
+    "de": "Patientin 6000 070495 wurde aufgenommen.",
+    "en": "Patient 8226 080759 was admitted.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die Sozialversicherungsnummer der Patientin ist 1237 010180.",
+        "en": "7488 280270 is her Austrian social security number."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_ahv_number_ch",
+    "de": "AHV-Nummer: 756.1221.2706.25",
+    "en": "Her Swiss social security number is 7561453135853.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "AHV-Nummer: 756.1221.2706.26",
+        "Artikelnummer 7567969558506 ist lieferbar."
+      ],
+      "en": [
+        "AHV number: 757.1221.2706.24",
+        "Item 7561453135853 is in stock."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_ahv_number_ch_context_free",
+    "de": "Mitarbeiterin 756.7362.9355.60 beginnt am Montag.",
+    "en": "Employee 756.9467.6038.25 starts on Monday.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die AHV-Nummer der Mitarbeiterin ist 756.6869.3403.10.",
+        "en": "756.3692.2461.16 is her AHV number."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_nif_pt",
+    "de": "Die NIF des Lieferanten lautet 307 709 809.",
+    "en": "NIF: 310664535",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Portugiesische Steuernummer: 134566514",
+        "Vorgang 307709809 wurde abgeschlossen."
+      ],
+      "en": [
+        "NIF: 310664536",
+        "Order 107595117 shipped."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_ppsn_ie",
+    "de": "Irische PPS-Nummer: 3218735P",
+    "en": "My PPSN is 6913752R.",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Irische PPS-Nummer: 3218735Q",
+        "Vorgang 4794814N wurde abgeschlossen."
+      ],
+      "en": [
+        "PPS Number: 8133989PA",
+        "Reference 6913752R was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
     "rule_id": "pii_bban_gb",
     "de": "Unsere Bankverbindung (BBAN) lautet ZFJR88590163492773.",
     "en": "We store the bank account number (BBAN) SYIL09843639680686 of the payee.",

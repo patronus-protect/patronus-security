@@ -3796,6 +3796,124 @@ B_LUHN_CASES = [
 for _row in B_LUHN_CASES:
     PII_CASES.setdefault(_row["target_label"], []).append(_row)
 
+# B-EU2 (B06, B07, B14): Austrian social security number (weighted mod 11), Swiss AHV number
+# (756 and EAN-13), Portuguese NIF (the mod-11 check of the PT VAT ID, a label of its own) and
+# Irish PPS number (the check letter of the IE VAT number), one label each. `pii_*_at`/`_ch`/
+# `_pt`/`_ie` report the value in every mode when a term of the label stands near it or is its
+# key. In balanced and recall the printed forms are also reported bare (K05): the Austrian
+# `NNNN DDMMYY` with a calendar date and the Swiss `756.NNNN.NNNN.NN`. Ten bare digits, thirteen
+# bare digits (an EAN-13), the nine of a NIF and seven digits with a letter (PPSN) always need a
+# term. FR rows add the Swiss and PT rows the Portuguese field names. Hard negatives: failed
+# checks, values without a term, counter-context, the digits of a PT VAT ID and parts of longer
+# values. Appended so existing ids stay stable.
+B_EU2_CASES = [
+    # ── AT social security number ──────────────────────────────────────────
+    p("AT_SOCIAL_SECURITY_NUMBER", "de", "pii_social_security_number_at", "Sozialversicherungsnummer: ", "1237 010180"),
+    p("AT_SOCIAL_SECURITY_NUMBER", "de", "pii_social_security_number_at", "Die österreichische Versicherungsnummer lautet ", "4523080773", ".", carrier="prose"),
+    p("AT_SOCIAL_SECURITY_NUMBER", "de", "pii_social_security_number_at", '{"svnr": "', "7273140596", '"}', carrier="json"),
+    p("AT_SOCIAL_SECURITY_NUMBER", "de", "pii_social_security_number_at", "| Name | SV-Nummer |\n|---|---|\n| Anna Huber | ", "9811 190881", " |", carrier="table"),
+    p("AT_SOCIAL_SECURITY_NUMBER", "de", "pii_social_security_number_at", "name,vsnr\nAnna Huber,", "4950260883", "", carrier="csv", mode="balanced"),
+    p("AT_SOCIAL_SECURITY_NUMBER", "de", "pii_social_security_number_at_context_free", "Patientin ", "6000 070495", " wurde aufgenommen.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("AT_SOCIAL_SECURITY_NUMBER", "de", "pii_social_security_number_at_context_free", "Neue Angabe: ", "7491 120462", "", tags=("no_context",), mode="recall"),
+    p("AT_SOCIAL_SECURITY_NUMBER", "en", "pii_social_security_number_at", "Austrian social security number: ", "4106 251295"),
+    p("AT_SOCIAL_SECURITY_NUMBER", "en", "pii_social_security_number_at", "My Austrian social insurance number is ", "6522240797", ".", carrier="prose"),
+    p("AT_SOCIAL_SECURITY_NUMBER", "en", "pii_social_security_number_at", '{"svnr": "', "9710020680", '"}', carrier="json"),
+    p("AT_SOCIAL_SECURITY_NUMBER", "en", "pii_social_security_number_at", "employee:\n  svnr: ", "7488 280270", "\n", carrier="yaml"),
+    p("AT_SOCIAL_SECURITY_NUMBER", "en", "pii_social_security_number_at", "The Austrian social security number on file is ", "7071070681", ".", carrier="prose", mode="balanced"),
+    p("AT_SOCIAL_SECURITY_NUMBER", "en", "pii_social_security_number_at_context_free", "Patient ", "8226 080759", " was admitted.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("AT_SOCIAL_SECURITY_NUMBER", "en", "pii_social_security_number_at_context_free", "", "4523 080773", "", tags=("no_context",), mode="recall"),
+    n("AT_SOCIAL_SECURITY_NUMBER", "de", "pii_social_security_number_at", "Sozialversicherungsnummer: 4520 080773", "check digit fails"),
+    n("AT_SOCIAL_SECURITY_NUMBER", "de", "pii_social_security_number_at", "Sozialversicherungsnummer: 1240 010180", "remainder 10 is never issued"),
+    n("AT_SOCIAL_SECURITY_NUMBER", "de", "pii_social_security_number_at", "Vorgang 7273140596 wurde abgeschlossen.", "ten bare digits without a social security term", carrier="prose", mode="balanced"),
+    n("AT_SOCIAL_SECURITY_NUMBER", "de", "pii_social_security_number_at_context_free", "Bestellnummer 6000 070495", "counter-context nearer", mode="balanced"),
+    n("AT_SOCIAL_SECURITY_NUMBER", "de", "pii_social_security_number_at_context_free", "Teil 6000 070495-2 ist lieferbar.", "part of a longer value", carrier="prose", mode="balanced"),
+    n("AT_SOCIAL_SECURITY_NUMBER", "de", "pii_social_security_number_at_context_free", "Vorgang 6788 320946 wurde abgeschlossen.", "day 32 is no calendar day without a term", carrier="prose", mode="balanced"),
+    n("AT_SOCIAL_SECURITY_NUMBER", "en", "pii_social_security_number_at", "Austrian social security number: 7270 140596", "check digit fails"),
+    n("AT_SOCIAL_SECURITY_NUMBER", "en", "pii_social_security_number_at", "Austrian social security number: 45230807731", "eleven digits"),
+    n("AT_SOCIAL_SECURITY_NUMBER", "en", "pii_social_security_number_at", "Reference 9710020680 was archived.", "ten bare digits without a social security term", carrier="prose", mode="balanced"),
+    n("AT_SOCIAL_SECURITY_NUMBER", "en", "pii_social_security_number_at_context_free", "Invoice number 8226 080759", "counter-context nearer", mode="balanced"),
+    n("AT_SOCIAL_SECURITY_NUMBER", "en", "pii_social_security_number_at_context_free", "Part 8226 080759-1 is in stock.", "part of a longer value", carrier="prose", mode="balanced"),
+    # ── CH AHV number ──────────────────────────────────────────────────────
+    p("CH_AHV_NUMBER", "de", "pii_ahv_number_ch", "AHV-Nummer: ", "756.1221.2706.25"),
+    p("CH_AHV_NUMBER", "de", "pii_ahv_number_ch", "Die AHV-Nr. der Mitarbeiterin lautet ", "7567969558506", ".", carrier="prose"),
+    p("CH_AHV_NUMBER", "de", "pii_ahv_number_ch", '{"ahv": "', "756 2502 4600 94", '"}', carrier="json"),
+    p("CH_AHV_NUMBER", "de", "pii_ahv_number_ch", "| Name | Sozialversicherungsnummer |\n|---|---|\n| Lea Meier | ", "756.6869.3403.10", " |", carrier="table"),
+    p("CH_AHV_NUMBER", "de", "pii_ahv_number_ch", "name,ahv\nLea Meier,", "7567846513666", "", carrier="csv", mode="balanced"),
+    p("CH_AHV_NUMBER", "de", "pii_ahv_number_ch_context_free", "Mitarbeiterin ", "756.7362.9355.60", " beginnt am Montag.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("CH_AHV_NUMBER", "de", "pii_ahv_number_ch_context_free", "Neue Angabe: ", "756.7363.2073.69", "", tags=("no_context",), mode="recall"),
+    p("CH_AHV_NUMBER", "en", "pii_ahv_number_ch", "AHV number: ", "756.1970.4597.08"),
+    p("CH_AHV_NUMBER", "en", "pii_ahv_number_ch", "Her Swiss social security number is ", "7561453135853", ".", carrier="prose"),
+    p("CH_AHV_NUMBER", "en", "pii_ahv_number_ch", '{"ahv_number": "', "756.3692.2461.16", '"}', carrier="json"),
+    p("CH_AHV_NUMBER", "en", "pii_ahv_number_ch", "employee:\n  ahvn13: ", "756 4660 4474 67", "\n", carrier="yaml"),
+    p("CH_AHV_NUMBER", "en", "pii_ahv_number_ch", "Please register AHV ", "7561506388854", " for the payroll.", carrier="prose", mode="balanced"),
+    p("CH_AHV_NUMBER", "en", "pii_ahv_number_ch_context_free", "Employee ", "756.9467.6038.25", " starts on Monday.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("CH_AHV_NUMBER", "en", "pii_ahv_number_ch_context_free", "", "756.8191.3878.10", "", tags=("no_context",), mode="recall"),
+    p("CH_AHV_NUMBER", "fr", "pii_ahv_number_ch", "Numéro AVS : ", "756.4525.2195.12"),
+    p("CH_AHV_NUMBER", "fr", "pii_ahv_number_ch", "Le numéro d'assuré de l'employée est le ", "7560296180723", ".", carrier="prose"),
+    p("CH_AHV_NUMBER", "fr", "pii_ahv_number_ch", "N° AVS ", "756 1221 2706 25", ""),
+    n("CH_AHV_NUMBER", "de", "pii_ahv_number_ch", "AHV-Nummer: 756.1221.2706.26", "EAN-13 check digit fails"),
+    n("CH_AHV_NUMBER", "de", "pii_ahv_number_ch", "AHV-Nummer: 757.1221.2706.24", "EAN-13 valid, but not the Swiss prefix 756"),
+    n("CH_AHV_NUMBER", "de", "pii_ahv_number_ch", "Artikelnummer 7567969558506 ist lieferbar.", "thirteen bare digits without an AHV term (an EAN-13)", carrier="prose", mode="balanced"),
+    n("CH_AHV_NUMBER", "de", "pii_ahv_number_ch_context_free", "Bestellnummer 756.7362.9355.60", "counter-context nearer", mode="balanced"),
+    n("CH_AHV_NUMBER", "de", "pii_ahv_number_ch_context_free", "Version 756.7362.9355.60.1 ist installiert.", "part of a longer value", carrier="prose", mode="balanced"),
+    n("CH_AHV_NUMBER", "en", "pii_ahv_number_ch", "AHV number: 756.1970.4597.09", "EAN-13 check digit fails"),
+    n("CH_AHV_NUMBER", "en", "pii_ahv_number_ch", "AHV number: 75619704597080", "fourteen digits"),
+    n("CH_AHV_NUMBER", "en", "pii_ahv_number_ch", "Item 7561453135853 is in stock.", "thirteen bare digits without an AHV term (an EAN-13)", carrier="prose", mode="balanced"),
+    n("CH_AHV_NUMBER", "en", "pii_ahv_number_ch", "Barcode 756 1453 1358 53 printed.", "digit groups by spaces without an AHV term", carrier="prose", mode="balanced"),
+    n("CH_AHV_NUMBER", "en", "pii_ahv_number_ch_context_free", "Order number 756.9467.6038.25", "counter-context nearer", mode="balanced"),
+    n("CH_AHV_NUMBER", "fr", "pii_ahv_number_ch", "Numéro AVS : 756.4525.2195.13", "EAN-13 check digit fails"),
+    n("CH_AHV_NUMBER", "fr", "pii_ahv_number_ch", "Article 7560296180723 en stock.", "thirteen bare digits without an AHV term", carrier="prose"),
+    # ── PT NIF ─────────────────────────────────────────────────────────────
+    p("PT_NIF", "de", "pii_nif_pt", "Portugiesische Steuernummer: ", "134566513"),
+    p("PT_NIF", "de", "pii_nif_pt", "Die NIF des Lieferanten lautet ", "307 709 809", ".", carrier="prose"),
+    p("PT_NIF", "de", "pii_nif_pt", '{"nif": "', "243676735", '"}', carrier="json"),
+    p("PT_NIF", "de", "pii_nif_pt", "| Name | NIF |\n|---|---|\n| João Silva | ", "350287317", " |", carrier="table"),
+    p("PT_NIF", "de", "pii_nif_pt", "Als portugiesische Steuernummer ist ", "236589075", " hinterlegt.", carrier="prose", mode="balanced"),
+    p("PT_NIF", "en", "pii_nif_pt", "NIF: ", "310664535"),
+    p("PT_NIF", "en", "pii_nif_pt", "The Portuguese tax number on file is ", "107595117", ".", carrier="prose"),
+    p("PT_NIF", "en", "pii_nif_pt", "name,nif\nJoão Silva,", "200576917", "", carrier="csv", mode="balanced"),
+    p("PT_NIF", "en", "pii_nif_pt", "customer:\n  nif: ", "227-812-069", "\n", carrier="yaml"),
+    p("PT_NIF", "en", "pii_nif_pt", "Portuguese taxpayer number ", "184785677", "", mode="recall"),
+    p("PT_NIF", "pt", "pii_nif_pt", "Número de contribuinte: ", "254369995"),
+    p("PT_NIF", "pt", "pii_nif_pt", "O NIF do cliente é ", "266 194 435", ".", carrier="prose"),
+    p("PT_NIF", "pt", "pii_nif_pt", "Contribuinte n.º ", "501964843", ""),
+    n("PT_NIF", "de", "pii_nif_pt", "Portugiesische Steuernummer: 134566514", "check digit fails"),
+    n("PT_NIF", "de", "pii_nif_pt", "Portugiesische Steuernummer: 034566513", "leading zero"),
+    n("PT_NIF", "de", "pii_nif_pt", "Vorgang 307709809 wurde abgeschlossen.", "nine bare digits without a NIF term", carrier="prose", mode="balanced"),
+    n("PT_NIF", "de", "pii_nif_pt", "NIF-Schreiben, Bestellnummer 243676735", "order number nearer than the NIF term", mode="balanced"),
+    n("PT_NIF", "de", "pii_nif_pt", "NIF: 350287317-1", "part of a longer value"),
+    n("PT_NIF", "en", "pii_nif_pt", "NIF: 310664536", "check digit fails"),
+    n("PT_NIF", "en", "pii_nif_pt", "NIF: 3106645351", "ten digits"),
+    n("PT_NIF", "en", "pii_nif_pt", "Order 107595117 shipped.", "nine bare digits without a NIF term", carrier="prose", mode="balanced"),
+    n("PT_NIF", "en", "pii_nif_pt", "NIF letter, invoice number 200576917", "invoice number nearer than the NIF term", mode="balanced"),
+    n("PT_NIF", "en", "pii_nif_pt", "NIF: PT 501 964 843", "the digits of a PT VAT ID after its country code", also=(("VAT_ID_PT", "PT 501 964 843"),), mode="balanced"),
+    n("PT_NIF", "pt", "pii_nif_pt", "Número de contribuinte: 254369996", "check digit fails"),
+    n("PT_NIF", "pt", "pii_nif_pt", "Encomenda 266194435 enviada.", "nine bare digits without a NIF term", carrier="prose"),
+    # ── IE PPSN ────────────────────────────────────────────────────────────
+    p("IE_PPSN", "de", "pii_ppsn_ie", "Irische PPS-Nummer: ", "3218735P"),
+    p("IE_PPSN", "de", "pii_ppsn_ie", "Die PPS-Nummer des Mitarbeiters lautet ", "6608166LA", ".", carrier="prose"),
+    p("IE_PPSN", "de", "pii_ppsn_ie", '{"ppsn": "', "4794814N", '"}', carrier="json"),
+    p("IE_PPSN", "de", "pii_ppsn_ie", "| Name | PPSN |\n|---|---|\n| Seán Murphy | ", "9299804DA", " |", carrier="table"),
+    p("IE_PPSN", "de", "pii_ppsn_ie", "Als PPS-Nummer ist ", "0343155FA", " hinterlegt.", carrier="prose", mode="balanced"),
+    p("IE_PPSN", "en", "pii_ppsn_ie", "PPS Number: ", "8133989PB"),
+    p("IE_PPSN", "en", "pii_ppsn_ie", "My PPSN is ", "6913752R", ".", carrier="prose"),
+    p("IE_PPSN", "en", "pii_ppsn_ie", "name,ppsn\nSeán Murphy,", "9002189HB", "", carrier="csv", mode="balanced"),
+    p("IE_PPSN", "en", "pii_ppsn_ie", "Personal Public Service Number ", "5805926N", ""),
+    p("IE_PPSN", "en", "pii_ppsn_ie", "Please quote your PPS number ", "3141592SW", " on the form.", carrier="prose", mode="recall"),
+    n("IE_PPSN", "de", "pii_ppsn_ie", "Irische PPS-Nummer: 3218735Q", "check letter fails"),
+    n("IE_PPSN", "de", "pii_ppsn_ie", "Irische PPS-Nummer: 6608166LC", "second letter C is never issued"),
+    n("IE_PPSN", "de", "pii_ppsn_ie", "Vorgang 4794814N wurde abgeschlossen.", "seven digits and a letter without a PPSN term", carrier="prose", mode="balanced"),
+    n("IE_PPSN", "de", "pii_ppsn_ie", "PPSN-Schreiben, Bestellnummer 9299804DA", "order number nearer than the PPSN term", mode="balanced"),
+    n("IE_PPSN", "de", "pii_ppsn_ie", "PPSN: AB0343155FA", "inside a code with letters"),
+    n("IE_PPSN", "en", "pii_ppsn_ie", "PPS Number: 8133989PA", "check letter fails"),
+    n("IE_PPSN", "en", "pii_ppsn_ie", "PPS Number: 69137520R", "eight digits"),
+    n("IE_PPSN", "en", "pii_ppsn_ie", "Reference 6913752R was archived.", "seven digits and a letter without a PPSN term", carrier="prose", mode="balanced"),
+    n("IE_PPSN", "en", "pii_ppsn_ie", "PPSN letter, order number 5805926N", "order number nearer than the PPSN term", mode="balanced"),
+    n("IE_PPSN", "en", "pii_ppsn_ie", "PPS Number: 0000000W", "seven zeros are never issued"),
+]
+for _row in B_EU2_CASES:
+    PII_CASES.setdefault(_row["target_label"], []).append(_row)
+
 # DLP golden schema v2 (E13). Every DLP row names the rule it exercises (`rule_id`), the
 # document that carries the value (`carrier`), its difficulty `tags` and whether it is a
 # `known_gap`: a positive the detector misses today, reported by 13_l1_golden_eval but

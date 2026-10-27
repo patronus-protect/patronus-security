@@ -176,7 +176,8 @@ def test_checked_in_ark_count():
     # B-DE1 the German pension and health insurance numbers and the LANR, B-NORD the SE personnummer,
     # the DK CPR number, the NO fødselsnummer and the FI personal identity code, B-ACCT the ABA
     # routing number, B-EU1 the FR NIR, SIREN and SIRET, the NL BSN and the BE national number, B-LUHN
-    # the SE organisationsnummer, the CA SIN, the TR T.C. Kimlik No and the ZA ID number.
+    # the SE organisationsnummer, the CA SIN, the TR T.C. Kimlik No and the ZA ID number, B-EU2 the AT social
+    # security number, the CH AHV number, the PT NIF (apart from the PT VAT ID) and the IE PPSN.
     assert set(counts.ark) == {
         Unit("pii.credit_card.pan", None),
         Unit("pii.iban", None),
@@ -237,8 +238,12 @@ def test_checked_in_ark_count():
         Unit("pii.ca.sin", "ca"),
         Unit("pii.tr.national_id", "tr"),
         Unit("pii.za.id_number", "za"),
+        Unit("pii.at.social_security_number", "at"),
+        Unit("pii.ch.ahv_number", "ch"),
+        Unit("pii.pt.nif", "pt"),
+        Unit("pii.ie.ppsn", "ie"),
     }
-    assert len(counts.ark) == 59
+    assert len(counts.ark) == 63
     assert counts.m3_met is False
 
 
@@ -369,7 +374,7 @@ def test_cli_count_json_and_check(tmp_path):
     payload = json.loads(result.stdout)
     assert payload["presidio_version"] == "2.2.364"
     assert payload["presidio"]["count"] == 35
-    assert payload["ark"]["count"] == 59
+    assert payload["ark"]["count"] == 63
     assert payload["m3"] == {"factor": 2, "target": 70, "met": False}
     assert {
         "entity_id": "pii.de.tax_id",
@@ -480,6 +485,23 @@ def test_cli_count_json_and_check(tmp_path):
         "pii.tr.national_id": ["pii_national_id_tr: tr_national_id"],
         "pii.za.id_number": ["pii_id_number_za: za_id_number", "pii_id_number_za_context_free: za_id_number"],
     }
+    # B-EU2: one unit per country; the PT NIF counts apart from the PT VAT ID, whose rule keeps its own
+    # validator; the NIF and the PPSN have no context-free rule.
+    eu2 = {
+        unit["entity_id"]: unit["sources"]
+        for unit in payload["ark"]["units"]
+        if unit["entity_id"] in ("pii.at.social_security_number", "pii.ch.ahv_number", "pii.pt.nif", "pii.ie.ppsn")
+    }
+    assert eu2 == {
+        "pii.at.social_security_number": [
+            "pii_social_security_number_at: at_social_security_number",
+            "pii_social_security_number_at_context_free: at_social_security_number",
+        ],
+        "pii.ch.ahv_number": ["pii_ahv_number_ch: ch_ahv_number", "pii_ahv_number_ch_context_free: ch_ahv_number"],
+        "pii.pt.nif": ["pii_nif_pt: pt_nif"],
+        "pii.ie.ppsn": ["pii_ppsn_ie: ie_ppsn"],
+    }
+    assert vat["pii.pt.vat_id"]["sources"] == ["pii_vat_id_pt: pt_vat_id"]
     # B02: the Greek rule keeps the VIES prefix EL, the benchmark ID follows ISO 3166 (gr).
     assert vat["pii.gr.vat_id"]["sources"] == ["pii_vat_id_el: el_vat_id"]
     assert vat["pii.it.vat_code"]["sources"] == ["pii_vat_id_it: it_vat_id", "pii_vat_id_it_proximity: it_vat_id"]

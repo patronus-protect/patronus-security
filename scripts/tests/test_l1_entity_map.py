@@ -233,6 +233,21 @@ def test_fr_nl_be_national_numbers_are_ark_only():
         assert entity_map.scope(entity_id) == "ark_only"
 
 
+def test_at_ch_pt_ie_national_numbers_are_ark_only():
+    # B-EU2: one label per numbering system; Presidio 2.2.364 has no recognizer for them. The PT NIF is
+    # an ID of its own, apart from the PT VAT ID (B16).
+    entity_map = MODULE.load()
+    for entity_id, label in [
+        ("pii.at.social_security_number", "AT_SOCIAL_SECURITY_NUMBER"),
+        ("pii.ch.ahv_number", "CH_AHV_NUMBER"),
+        ("pii.pt.nif", "PT_NIF"),
+        ("pii.ie.ppsn", "IE_PPSN"),
+    ]:
+        assert entity_map.ark_label(label) == entity_id
+        assert entity_map.scope(entity_id) == "ark_only"
+    assert entity_map.ark_label("VAT_ID_PT") == "pii.pt.vat_id"
+
+
 def test_luhn_identifiers_are_shared_with_presidio():
     # B-LUHN: the checksum parts of T13 and T09, one label per numbering system, each matching the
     # Presidio 2.2.364 entity of the same name.
@@ -484,7 +499,7 @@ def test_checked_in_registry_order_matches_the_rust_order_test():
     expected = re.findall(r'\(\s*"(pii_\w+)",\s*"(\w+)",?\s*\)', rust_test)
     rules = _generate_docs().parse_native_patterns(MODULE.PII_SOURCE_PATH, "PiiPattern")
     assert [(rule["id"], rule["entity_group"]) for rule in rules] == expected
-    assert len(expected) == 129
+    assert len(expected) == 135
 
 
 def test_cli_check_succeeds_and_fails(tmp_path):

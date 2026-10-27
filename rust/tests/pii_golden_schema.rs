@@ -11,9 +11,10 @@ use patronus_ark::detectors::pii::pii::PII_PATTERNS;
 use serde::Deserialize;
 
 const LANGUAGES: [&str; 2] = ["de", "en"];
-/// B-LUHN: national languages of country IDs outside FR/ES/IT/NL (Swedish
-/// organisationsnummer, Turkish T.C. Kimlik No); rows of the country ID only.
-const NATIONAL_LANGUAGES: [(&str, &str); 2] = [("sv", "SE_"), ("tr", "TR_")];
+/// B-LUHN, B-EU2: national languages of country IDs outside FR/ES/IT/NL (Swedish
+/// organisationsnummer, Turkish T.C. Kimlik No, Portuguese NIF); rows of the
+/// country ID only.
+const NATIONAL_LANGUAGES: [(&str, &str); 3] = [("sv", "SE_"), ("tr", "TR_"), ("pt", "PT_")];
 const MIN_PER_LANGUAGE: usize = 5;
 
 #[derive(Deserialize)]
@@ -140,9 +141,9 @@ fn fr_es_it_nl_field_names_have_n_gated_positives_and_hard_negatives() {
             .iter()
             .find(|pattern| pattern.name == row.rule_id)
             .unwrap();
-        // B01, B-EU1, B-LUHN: country IDs also have rows in their national language;
-        // they bind no field name and are counted per label above.
-        if ["VAT_ID_", "FR_", "NL_", "BE_", "CA_"]
+        // B01, B-EU1, B-LUHN, B-EU2: country IDs also have rows in their national
+        // language; they bind no field name and are counted per label above.
+        if ["VAT_ID_", "FR_", "NL_", "BE_", "CA_", "CH_"]
             .iter()
             .any(|prefix| pattern.entity_group.starts_with(prefix))
         {

@@ -442,7 +442,11 @@ fn context_bound_rules_score_at_least_the_balanced_threshold_with_support() {
             "pii_organisationsnummer_se",
             "pii_sin_ca",
             "pii_national_id_tr",
-            "pii_id_number_za"
+            "pii_id_number_za",
+            "pii_social_security_number_at",
+            "pii_ahv_number_ch",
+            "pii_nif_pt",
+            "pii_ppsn_ie"
         ]
     );
     for pattern in bound {

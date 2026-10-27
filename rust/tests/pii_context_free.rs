@@ -81,14 +81,17 @@ const STEUER_ID: &str = "pii_steuer_id_de_context_free";
 const TAX_NUMBER: &str = "pii_steuernummer_de_context_free";
 /// The checksum labels without a context-free rule: the NHS number (B-UK), the
 /// Australian Company Number and the Tax File Number (B-APAC), the LANR (B-DE1),
-/// the SIREN (B-EU1), the T.C. Kimlik No (B-LUHN).
-const CONTEXT_BOUND_LABELS: [&str; 6] = [
+/// the SIREN (B-EU1), the T.C. Kimlik No (B-LUHN), the PT NIF and the IE PPSN
+/// (B-EU2).
+const CONTEXT_BOUND_LABELS: [&str; 8] = [
     "NHS_NUMBER",
     "AU_ACN",
     "AU_TFN",
     "PHYSICIAN_NUMBER_LANR",
     "FR_SIREN",
     "TR_NATIONAL_ID",
+    "PT_NIF",
+    "IE_PPSN",
 ];
 /// Scored-only rules whose validator checks a form, not a check digit.
 const FORMAT_RULES: [&str; 4] = [
@@ -188,6 +191,8 @@ fn scored_only_rules_are_unbound_checksum_rules() {
             "pii_organisationsnummer_se_context_free",
             "pii_sin_ca_context_free",
             "pii_id_number_za_context_free",
+            "pii_social_security_number_at_context_free",
+            "pii_ahv_number_ch_context_free",
         ]
     );
     for pattern in scored_only {
@@ -228,13 +233,15 @@ fn scored_only_rules_are_unbound_checksum_rules() {
         );
     }
     // Every checksum label has an unbound rule: a checksum value never needs its
-    // field name in the scored modes. Only six need a term: ten digits in phone
+    // field name in the scored modes. Only eight need a term: ten digits in phone
     // groups (3-3-4) pass the mod-11 digit of the NHS number (B-UK) one time in
     // eleven, nine digits in 3-3-3 groups the ACN mod-10 digit one time in ten and
     // the TFN mod-11 sum one time in eleven (B-APAC), nine bare digits the LANR
     // mod-10 digit (B-DE1) and the SIREN Luhn digit (B-EU1) one time in ten, and
     // eleven bare digits, the only form of a T.C. Kimlik No, its two check digits
-    // one time in a hundred (B-LUHN).
+    // one time in a hundred (B-LUHN), nine bare digits the NIF mod-11 digit one
+    // time in eleven and seven digits with a letter the PPSN check letter one time
+    // in 23 (B-EU2).
     for bound in PII_PATTERNS
         .iter()
         .filter(|pattern| pattern.strength == ValidatorStrength::Checksum)
@@ -317,6 +324,8 @@ fn every_checksum_label_reports_a_bare_value_in_the_scored_modes() {
         ("SE_ORGANISATIONSNUMMER", "556703-7485", 0.55),
         ("CA_SIN", "731-530-150", 0.55),
         ("ZA_ID_NUMBER", "8001015009087", 0.55),
+        ("AT_SOCIAL_SECURITY_NUMBER", "1237 010180", 0.55),
+        ("CH_AHV_NUMBER", "756.1234.5678.97", 0.55),
     ];
     for label in PII_PATTERNS
         .iter()
