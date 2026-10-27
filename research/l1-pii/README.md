@@ -387,6 +387,24 @@ Sendungs- oder VIN-Feldern bleiben negativ. Dev balanced, exakter F1: Kontonumme
 BBAN-förmigen FN auf Gretel bleiben Werte ohne Begriff (Adressen, SWIFT-MT-Tags, EDIFACT, XBRL),
 der verschriebene Feldname `Mother' BBN:` und eine abgeschnittene CSV-Zeile offen.
 
+Stand T30: ARK 55, gemeinsam 19 (M3 unverändert). Kfz-Kennzeichen DE und UK teilen einen Feldteil
+(`ark-core/src/detectors/pii/licence_plate.rs`): DE/EN-Feldnamen vor dem Wert (`Kfz-Kennzeichen`,
+`Kennzeichen`, `Number plate`, `licence plate`, `vehicle registration`, `car reg`, `My car,
+registration …`), verbunden durch `:`, `|`, Tab, `is`, `ist`, `lautet`, `as` oder `on file is`,
+oder als Strukturschlüssel (`kennzeichen`, `license_plate`, `licensePlate`, CSV-Kopf). Der DE-Wert
+darf einen Bindestrich vor den Ziffern tragen (`K-MH-2476`) und das Suffix `E`/`H` und besteht eine
+Formprüfung (`validators::de_licence_plate`: höchstens acht Zeichen ohne Trenner und Suffix, Nummer
+ohne führende Null, FZV § 8); die UK-Form seit
+2001 (`AB51 ABC`, `pii_vehicle_registration_uk`) braucht einen vergebenen Altersbezeichner
+(`validators::uk_vehicle_registration`: 02–29, 51–79, wie presidio-analyzer). Beide sind reine
+Formprüfungen ohne Bezirksliste (F16 bleibt zurückgestellt), deshalb bleibt ein Wert ohne
+Kennzeichen-Feldnamen in jedem Modus negativ; ein allgemeines `registration number` nennt kein
+Kennzeichen. Werte zählen nur in Großbuchstaben, wie gedruckt. Dev, exakter F1 in strict und
+balanced: Kennzeichen `ark_authored` 34,8 → 100,0 (19 von 19), `presidio_favored` 0,0 → 9,1 (`My car
+reg is AB51 ABC`), kein neuer FP. Die übrigen 20 `presidio_favored`-FN sind blanke Werte aus TR, IN,
+NG und den alten UK-Formen (Präfix, Suffix) ohne Kennzeichen-Begriff und folgen der offenen
+Entscheidung T27; `Plates: APP-456CV and KJA-999PZ` (NG) bleibt ebenfalls offen.
+
 Stand B02: ARK 24, gemeinsam 7. Dazu kommen die USt-IdNr. von BG, CY, CZ, DK, EE, EL, FI, HR, HU, IE
 und LT, gleiche Struktur wie B01 (je Land ein Label `VAT_ID_BG` … und ein Validator mit Prüfziffer,
 nur in `balanced`/`recall`), alle `ark_only`; Griechenland trägt im Label das MwSt.-Präfix `EL`, in

@@ -241,7 +241,7 @@ def test_ark_rules_are_read_from_the_pii_registry():
     rules = {rule.name: rule for rule in MODULE.ark_rules_from_source()}
     assert rules["pii_credit_card"] == ArkRule("pii_credit_card", "CREDITCARD", "payment_card", "checksum")
     assert rules["pii_steuer_id_de"].validator == "steuer_id"
-    assert rules["pii_kfz_kennzeichen_de"].validator is None
+    assert rules["pii_kfz_kennzeichen_de"].validator == "de_licence_plate"
 
 
 def test_ark_rules_carry_the_score_model_strength():
@@ -251,8 +251,9 @@ def test_ark_rules_carry_the_score_model_strength():
     assert rules["pii_steuer_id_de"].strength == "checksum"
     assert rules["pii_swift_bic_context"].strength == "format"
     assert rules["pii_passport_number_de"].strength == "format"
-    assert rules["pii_kfz_kennzeichen_de"].strength == "none"
-    assert {rule.strength for rule in rules.values()} == {"checksum", "format", "none"}
+    assert rules["pii_kfz_kennzeichen_de"].strength == "format"
+    # T30: the plate was the last PII rule without a validator.
+    assert {rule.strength for rule in rules.values()} == {"checksum", "format"}
 
 
 # ── problems ─────────────────────────────────────────────────────────────────

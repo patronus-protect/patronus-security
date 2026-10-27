@@ -19,6 +19,7 @@ mod driver_license;
 mod fr;
 mod identifiers;
 mod intl;
+mod licence_plate;
 mod nl;
 mod nordic;
 pub mod overlap;

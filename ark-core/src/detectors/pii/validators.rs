@@ -756,6 +756,36 @@ pub fn uk_driver_license_number(s: &str) -> bool {
         && bytes[14..].iter().all(u8::is_ascii_uppercase)
 }
 
+/// German licence plate (T30): district code, recognition letters and number as the
+/// rule's regex splits them (`B-AB 1234E`, `K-MH-2476`), at most eight characters
+/// without separators and the `E`/`H` suffix, the number without a leading zero
+/// (FZV § 8: 1–9999). No district-code list (F16): format only.
+pub fn de_licence_plate(s: &str) -> bool {
+    let plate = s.strip_suffix(['E', 'H']).unwrap_or(s);
+    let number = plate.trim_start_matches(|ch: char| !ch.is_ascii_digit());
+    !number.starts_with('0') && plate.chars().filter(|ch| !matches!(ch, '-' | ' ')).count() <= 8
+}
+
+/// UK vehicle registration, current form since 2001 (T30): two area letters, the
+/// age identifier and three random letters, optionally split by a space or hyphen
+/// (`AB51 ABC`, `BD62XYZ`). Area and random letters are never `I` or `Q`, area
+/// letters never `Z`; the age identifier is the year of a March registration
+/// (02–29) or that plus 50 for September (51–79), as presidio-analyzer accepts it.
+/// No check digit: format only.
+pub fn uk_vehicle_registration(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    let random = match bytes.len() {
+        7 => &bytes[4..],
+        8 if matches!(bytes[4], b' ' | b'-') => &bytes[5..],
+        _ => return false,
+    };
+    let letter = |byte: &u8| byte.is_ascii_uppercase() && !matches!(byte, b'I' | b'Q');
+    bytes[..2].iter().all(|byte| letter(byte) && *byte != b'Z')
+        && bytes[2..4].iter().all(u8::is_ascii_digit)
+        && matches!((bytes[2] - b'0') * 10 + (bytes[3] - b'0'), 2..=29 | 51..=79)
+        && random.iter().all(letter)
+}
+
 pub fn us_ssn(s: &str) -> bool {
     let digits = s
         .chars()

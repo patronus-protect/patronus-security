@@ -10,8 +10,8 @@ use super::context::Evidence;
 use super::context_anchors::PII_ANCHOR_PATTERNS;
 use super::score::{self, PiiMode, ValidatorStrength};
 use super::{
-    au, be, common, context, de, driver_license, fr, identifiers, intl, nl, nordic, overlap, sg,
-    uk, us, vat,
+    au, be, common, context, de, driver_license, fr, identifiers, intl, licence_plate, nl, nordic,
+    overlap, sg, uk, us, vat,
 };
 use crate::detectors::anchors;
 use crate::detectors::obfuscation::{Deobfuscated, Level};
@@ -94,7 +94,8 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     driver_license::IT,
     driver_license::UK,
     driver_license::UK_CONTEXT_FREE,
-    de::KFZ_KENNZEICHEN,
+    licence_plate::DE,
+    licence_plate::UK,
     us::SSN,
     us::SSN_PROXIMITY,
     us::SSN_CONTEXT_FREE,

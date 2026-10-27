@@ -1022,7 +1022,7 @@ PII_CASES = {
         p("LICENSEPLATE", "en", "pii_kfz_kennzeichen_de", "vehicle:\n  kennzeichen: ", "M-QA 1800", "\n", carrier="yaml"),
         p("LICENSEPLATE", "en", "pii_kfz_kennzeichen_de", "vehicle registration=", "S-LG 3091", carrier="kv"),
         p("LICENSEPLATE", "en", "pii_kfz_kennzeichen_de", "Vehicle registration:", "F-EZ 66E", "   Page 1", tags=("ocr",)),
-        p("LICENSEPLATE", "en", "pii_kfz_kennzeichen_de", "License plate: ", "F-EZ 67E", "", gap=True),
+        p("LICENSEPLATE", "en", "pii_kfz_kennzeichen_de", "License plate: ", "F-EZ 67E", ""),
         n("LICENSEPLATE", "de", "pii_kfz_kennzeichen_de", "Kennzeichen: B-12 345", "letter group is missing"),
         n("LICENSEPLATE", "de", "pii_kfz_kennzeichen_de", "Kennzeichen: unbekannt", "field without a value"),
         n("LICENSEPLATE", "de", "pii_kfz_kennzeichen_de", "Das Kennzeichen muss gut lesbar sein.", "field name without a value", carrier="prose"),
@@ -3622,6 +3622,52 @@ T29_CASES = [
     n("FINANCIAL_ACCOUNT_NUMBER", "en", "pii_bban_gb", "Consignee: Katy Thompson CECS05573529734512", "bare value without an account term", carrier="prose", mode="recall"),
 ]
 for _row in T29_CASES:
+    PII_CASES.setdefault(_row["target_label"], []).append(_row)
+
+# T30: licence plates are format only (no check digit, no district-code list: F16 stays deferred).
+# Both plate rules share one field part: the DE/EN plate field names (`Kfz-Kennzeichen`,
+# `Number plate`, `licence plate`, `car reg`, `My car, registration …`) before the value or as its
+# structural key (`kennzeichen`, `license_plate`, `licensePlate`), joined by `:`, `|`, a tab, `is`,
+# `ist`, `as` or `on file is`. The DE value may carry a hyphen before the digits (`K-MH-2476`)
+# and the `E`/`H` suffix; the UK current form (`AB51 ABC`) needs an issued age identifier
+# (02–29, 51–79). A bare value without a plate term stays negative in every mode. Appended so
+# existing ids stay stable.
+T30_CASES = [
+    p("LICENSEPLATE", "de", "pii_kfz_kennzeichen_de", '{"kennzeichen": "', "K-MZ-2471", '"}', carrier="json"),
+    p("LICENSEPLATE", "de", "pii_kfz_kennzeichen_de", '{"fahrzeug": {"kfzKennzeichen": "', "H-J-6816E", '"}}', carrier="json"),
+    p("LICENSEPLATE", "de", "pii_kfz_kennzeichen_de", "Kennzeichen:\t", "E-L-3329", ""),
+    p("LICENSEPLATE", "de", "pii_kfz_kennzeichen_de", "Kfz-Kennzeichen | ", "HH-M 2329H", ""),
+    p("LICENSEPLATE", "de", "pii_kfz_kennzeichen_de", "Ich bestätige folgende Angabe (Kennzeichen): ", "AC-F-1472", ".", carrier="prose"),
+    p("LICENSEPLATE", "de", "pii_kfz_kennzeichen_de", "Als Kennzeichen ist ", "BÖ-GR-3109E", " hinterlegt.", carrier="prose", mode="balanced"),
+    p("LICENSEPLATE", "de", "pii_kfz_kennzeichen_de", "nr;name;kennzeichen;betrag\n1;Jonas Weber;", "DD-S-4935", ";12,50 €", carrier="csv"),
+    p("LICENSEPLATE", "de", "pii_vehicle_registration_uk", "Kennzeichen: ", "LW02 ULG", ""),
+    p("LICENSEPLATE", "de", "pii_vehicle_registration_uk", '{"kennzeichen": "', "KS54 WLT", '"}', carrier="json", mode="balanced"),
+    p("LICENSEPLATE", "en", "pii_kfz_kennzeichen_de", '{"license_plate": "', "F-RF-8364H", '"}', carrier="json"),
+    p("LICENSEPLATE", "en", "pii_kfz_kennzeichen_de", "My car, registration ", "FÜ-EJ 3282H", ", was parked outside.", carrier="prose"),
+    p("LICENSEPLATE", "en", "pii_kfz_kennzeichen_de", "Number plate: ", "FÜ-CB 3877", ""),
+    p("LICENSEPLATE", "en", "pii_kfz_kennzeichen_de", "Our records list the Number plate as ", "MA-A 1880H", ".", carrier="prose", mode="balanced"),
+    p("LICENSEPLATE", "en", "pii_kfz_kennzeichen_de", "row,name,license_plate,amount\n1,Ada Weber,", "HH AW 7915H", ",£12.50", carrier="csv"),
+    p("LICENSEPLATE", "en", "pii_vehicle_registration_uk", "The Vehicle registration on file is ", "LW02 ULG", ".", carrier="prose"),
+    p("LICENSEPLATE", "en", "pii_vehicle_registration_uk", "My car, registration ", "YB68 TXN", ", was parked outside.", carrier="prose"),
+    p("LICENSEPLATE", "en", "pii_vehicle_registration_uk", "My car reg is ", "AB51 ABD", " and it expires in May.", carrier="prose"),
+    p("LICENSEPLATE", "en", "pii_vehicle_registration_uk", '{"licensePlate": "', "KS54 WLT", '"}', carrier="json"),
+    p("LICENSEPLATE", "en", "pii_vehicle_registration_uk", "Number plate | ", "BD62XYZ", "", mode="balanced"),
+    n("LICENSEPLATE", "de", "pii_kfz_kennzeichen_de", "K-MZ-2471", "bare value without a plate term", mode="balanced"),
+    n("LICENSEPLATE", "de", "pii_kfz_kennzeichen_de", "Bestellnummer: AB-CD-1234", "order number, no plate term"),
+    n("LICENSEPLATE", "de", "pii_kfz_kennzeichen_de", "Das Kennzeichen ist am 12. Mai abgelaufen.", "words after the field name, no plate", carrier="prose", mode="balanced"),
+    n("LICENSEPLATE", "de", "pii_kfz_kennzeichen_de", "Kennzeichen: K-MZ-24710", "five digits"),
+    n("LICENSEPLATE", "de", "pii_vehicle_registration_uk", "Kennzeichen: AB00 ABC", "age identifier 00 is never issued"),
+    n("LICENSEPLATE", "de", "pii_vehicle_registration_uk", "Bestellnummer: AB51 ABC", "order number, no plate term", mode="balanced"),
+    n("LICENSEPLATE", "de", "pii_vehicle_registration_uk", "AB51 ABC", "bare value without a plate term", mode="recall"),
+    n("LICENSEPLATE", "en", "pii_vehicle_registration_uk", "AB51 ABC", "bare value without a plate term", mode="balanced"),
+    n("LICENSEPLATE", "en", "pii_vehicle_registration_uk", "Order number: AB51 ABC", "order number, no plate term"),
+    n("LICENSEPLATE", "en", "pii_vehicle_registration_uk", "Vehicle registration: AB80 ABC", "age identifier 80 is not issued yet", mode="balanced"),
+    n("LICENSEPLATE", "en", "pii_vehicle_registration_uk", "Number plate: IB51 ABC", "I is no area letter"),
+    n("LICENSEPLATE", "en", "pii_vehicle_registration_uk", "Licence plate: AB51 ABCD", "four random letters"),
+    n("LICENSEPLATE", "en", "pii_kfz_kennzeichen_de", "Order number: K-MZ-2471", "order number, no plate term", mode="balanced"),
+    n("LICENSEPLATE", "en", "pii_kfz_kennzeichen_de", "My car registration is overdue.", "plate term without a value", carrier="prose"),
+]
+for _row in T30_CASES:
     PII_CASES.setdefault(_row["target_label"], []).append(_row)
 
 # DLP golden schema v2 (E13). Every DLP row names the rule it exercises (`rule_id`), the

@@ -93,6 +93,39 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Licence plates: plate field names, DE hyphen forms and UK plates (T30). `pii_kfz_kennzeichen_de`
+  and the new `pii_vehicle_registration_uk` share one field part
+  (`ark-core/src/detectors/pii/licence_plate.rs`): DE/EN plate field names before the value
+  (`Kfz-Kennzeichen`, `Kennzeichen`, `Nummernschild`, `Number plate`, `licence plate`, `vehicle
+  registration`, `car reg`, `My car, registration …`) joined by `:`, `|`, a tab, `is`, `ist`,
+  `lautet`, `as` or `on file is` (also `(Kennzeichen): …`), or as the structural key of the value
+  (K04: `kennzeichen`, `kfzKennzeichen`, `license_plate`, `licensePlate`, CSV headers). The DE
+  value may carry a hyphen before the digits (`K-MH-2476`, `H-J-6815E`) and now has a form check
+  (`validators::de_licence_plate`: at most eight characters without separators and suffix, no
+  leading zero in the number, FZV § 8; base 25 + format 15 keeps its score at 0.65); the UK current form
+  (`AB51 ABC`, `BD62XYZ`) needs an issued age identifier (`validators::uk_vehicle_registration`:
+  02–29 or 51–79, no `I`/`Q`, no `Z` among the area letters, as presidio-analyzer validates it).
+  Neither form has a check digit and there is no district-code list (F16 stays deferred), so M3
+  is unchanged (`de_licence_plate` and `uk_vehicle_registration` classified as form only) and a value without a plate
+  field name stays silent in every mode, also the bare TR, IN and NG values of the
+  presidio-analyzer tests (T27 still open). A generic `registration number` names no plate. New
+  `pii_l1` rows (19 positives, 15 hard negatives, DE + EN; the known gap `License plate: F-EZ 67E`
+  is now gated), rule fixture with structure probes, tests in `rust/tests/pii_licence_plates.rs`.
+  **Detection change** (every mode): plate values after these field names and keys, DE plates
+  with a hyphen before the digits and UK plates are new `LICENSEPLATE` findings; plate values
+  must be uppercase as printed and pass the form check (`Kennzeichen: ab-cd 12`, `ABC-DE 1234`,
+  `B-AB 0123` are no longer reported in `strict`).
+  Dev scoreboard vs. c8d6cfe (PASS in strict and balanced, no new hard-negative FP): licence
+  plate exact F1 `ark_authored` 34.8 → 100.0 (19 of 19) and `presidio_favored` 0.0 → 9.1 (`My car
+  reg is AB51 ABC`) in both modes, all families 18.2 → 66.7; L1 F1 +0.2 pp in strict and
+  balanced. The other 20 `presidio_favored` FN are bare TR, IN, NG and old UK prefix/suffix values
+  without a plate term (T27). The regexes are linear and bounded (fixed repetition counts, ASCII
+  boundaries). `latency.py compare --engine ark-native`, two runs: 100 KiB p95 158.3 → 156.8 ms
+  (−1.0 %) and 162.4 → 158.4 ms (−2.4 %), PASS; 4 KiB p95 +8.7 % / +8.9 % (not gated), while an
+  in-process A/B on the 4 KiB DE workload with both plate rules disabled shows no measurable
+  difference (median 4.67 ms either way). Golden eval: `pii_kfz_kennzeichen_de` 14/14 DE,
+  12/12 EN, `pii_vehicle_registration_uk` 2/2 DE, 5/5 EN.
+
 - GB BBAN as account number (T29). New context-bound rule `pii_bban_gb` reports four letters of
   the bank code, the sort code and the account (`ZFJR88590163492773`, `validators::uk_bban`: form
   only, no account of zeros or one repeated digit) as `FINANCIAL_ACCOUNT_NUMBER` in every mode
