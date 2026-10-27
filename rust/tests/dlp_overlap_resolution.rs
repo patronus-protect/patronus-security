@@ -349,8 +349,8 @@ fn generic_rules_on_the_same_quoted_value_keep_one_span() {
 #[test]
 fn quoted_value_of_a_single_rule_is_the_value_span() {
     // env_var_secret reports the value without the quotes (F-GEN2); since T09
-    // password_assignment takes the compound key as well and yields to it on
-    // the same span.
+    // password_assignment takes the compound key as well, and since T15 it keeps
+    // the same span as the more specific subtype.
     let (text, value) = fill("export DB_PASSWORD='<<secret:0>>'\n", "password", 41);
     let result = scan(&text);
     let spans = secret_spans(&result);
@@ -360,13 +360,128 @@ fn quoted_value_of_a_single_rule_is_the_value_span() {
     for (rule_id, start, end, suppressed) in rule_matches(&result) {
         assert_eq!((start, end), (value.start, value.end), "{rule_id}");
         match rule_id.as_str() {
-            "dlp_env_var_secret" => assert_eq!(suppressed, None),
-            "dlp_password_assignment" => {
-                assert_eq!(suppressed.as_deref(), Some("dlp_env_var_secret"))
+            "dlp_password_assignment" => assert_eq!(suppressed, None),
+            "dlp_env_var_secret" => {
+                assert_eq!(suppressed.as_deref(), Some("dlp_password_assignment"))
             }
             other => panic!("unexpected rule {other}"),
         }
     }
+}
+
+/// T15: on the same value span in the generic tier the password subtype of
+/// `dlp_password_assignment` wins over the generic secret of
+/// `dlp_env_var_secret`, in every carrier of a password variable.
+#[test]
+fn password_variables_keep_the_password_rule_on_the_same_span() {
+    for (template, seed) in [
+        // .env
+        (
+            "# .env\nORDERS_DB_HOST=db.internal\nORDERS_DB_PASSWORD=<<secret:0>>\n",
+            1501,
+        ),
+        ("LAGER_DB_PASSWORT=\"<<secret:0>>\"\n", 1502),
+        // Dockerfile
+        (
+            "FROM postgres:16-alpine\nENV POSTGRES_PASSWORD=\"<<secret:0>>\"\nEXPOSE 5432\n",
+            1503,
+        ),
+        // shell export
+        (
+            "$ export SMTP_PASSWORD='<<secret:0>>'\n$ ./bin/send-digest\n",
+            1504,
+        ),
+        // CI YAML (GitHub Actions env, GitLab variables, compose environment)
+        (
+            "jobs:\n  it:\n    env:\n      ORDERS_DB_PASSWORD: \"<<secret:0>>\"\n    steps:\n",
+            1505,
+        ),
+        (
+            "abgleich:\n  variables:\n    LAGER_DB_PASSWORD: '<<secret:0>>'\n  script:\n",
+            1506,
+        ),
+        // code constants
+        (
+            "import psycopg\n\nORDERS_DB_PASSWORD = \"<<secret:0>>\"\n",
+            1507,
+        ),
+        (
+            "final class Zugang {\n    private static final String DB_KENNWORT = \"<<secret:0>>\";\n}\n",
+            1508,
+        ),
+    ] {
+        assert_resolved(
+            template,
+            "password",
+            seed,
+            "CREDENTIAL",
+            "dlp_password_assignment",
+            "dlp_env_var_secret",
+        );
+    }
+}
+
+/// T15: API keys, tokens and client secrets under a variable name have no
+/// password subtype and stay with `dlp_env_var_secret`; the generic
+/// assignment on the same span gives way to it by registry order as before.
+#[test]
+fn non_password_variables_stay_env_var_secrets() {
+    for (template, seed) in [
+        ("ORDERS_API_KEY=<<secret:0>>\n", 1511),
+        ("export OAUTH_CLIENT_SECRET='<<secret:0>>'\n", 1512),
+        (
+            "    env:\n      REPORTS_API_TOKEN: \"<<secret:0>>\"\n",
+            1513,
+        ),
+        ("ENV LAGER_SECRET_KEY=\"<<secret:0>>\"\n", 1514),
+    ] {
+        let (text, value) = fill(template, "generic_api_secret", seed);
+        let result = scan(&text);
+        let spans = secret_spans(&result);
+        assert_eq!(
+            spans
+                .iter()
+                .map(|span| (span.label.as_str(), span.start_byte..span.end_byte))
+                .collect::<Vec<_>>(),
+            vec![("CREDENTIAL", value.clone())],
+            "{text:?}"
+        );
+        let matches = rule_matches(&result);
+        assert!(
+            matches.iter().any(
+                |(rule, start, end, suppressed)| rule == "dlp_env_var_secret"
+                    && (*start..*end) == value
+                    && suppressed.is_none()
+            ),
+            "{text:?}: {matches:?}"
+        );
+        assert!(
+            matches
+                .iter()
+                .all(|(rule, ..)| rule != "dlp_password_assignment"),
+            "{text:?}: {matches:?}"
+        );
+    }
+}
+
+/// T15 changes attribution only: where the two rules report different spans of
+/// a password variable, the spans and their winner stay as before.
+#[test]
+fn password_variables_with_different_spans_keep_the_earlier_rule() {
+    // `;` inside a bare `.env` value belongs to it for env_var_secret; the
+    // password rule stops there and its shorter span gives way.
+    let text = "DB_PASSWORD=Kx7pQ;2vL9rT4\n";
+    let result = scan(text);
+    let spans = secret_spans(&result);
+    assert_eq!(spans.len(), 1, "{:#?}", result.evidence_spans);
+    assert_eq!(spans[0].text, "Kx7pQ;2vL9rT4");
+    let matches = rule_matches(&result);
+    assert!(
+        matches
+            .iter()
+            .any(|(rule, _, _, suppressed)| rule == "dlp_env_var_secret" && suppressed.is_none()),
+        "{matches:?}"
+    );
 }
 
 #[test]

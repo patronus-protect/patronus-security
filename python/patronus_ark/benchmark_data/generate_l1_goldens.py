@@ -4168,7 +4168,7 @@ DLP_CASES = {
         dn("CREDENTIAL", "de", "dlp_password_assignment", "Passwort = ${PASSWORD}", "environment reference"),
         dn("CREDENTIAL", "en", "dlp_generic_credential_assignment", "token = [REDACTED]", "redacted placeholder"),
         ds(
-            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "CREDENTIAL", "de", "dlp_password_assignment",
             "# Mailversand\nSMTP_HOST=mail.intern\nSMTP_PASSWORT=<<secret:0>>\n",
             "password", 3001, carrier="env",
         ),
@@ -4208,7 +4208,7 @@ DLP_CASES = {
             "password", 3008,
         ),
         ds(
-            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "CREDENTIAL", "de", "dlp_password_assignment",
             "apiVersion: v1\nkind: Secret\nmetadata:\n  name: datenbank\ndata:\n  DB_PASSWORD: <<secret:0|base64>>\n",
             "password", 3009, carrier="yaml",
         ),
@@ -6212,7 +6212,7 @@ DLP_T07_CASES = {
             "generic_api_secret", 7006, carrier="code",
         ),
         ds(
-            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "CREDENTIAL", "en", "dlp_password_assignment",
             "# replace YOUR_DB_PASSWORD_HERE before deploying\nDB_PASSWORD=<<secret:0>>\n",
             "weak_snake_case_password", 7007, carrier="env",
         ),
@@ -6504,7 +6504,7 @@ DLP_K06_CASES = {
             "mask around a placeholder word **None**", carrier="code",
         ),
         ds(
-            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "CREDENTIAL", "de", "dlp_password_assignment",
             "# PASSWORT_HIER_EINGEBEN wurde ersetzt\nDB_BENUTZER=__DB_BENUTZER__\nDB_PASSWORT=<<secret:0>>\n",
             "password", 9601, carrier="env",
         ),
@@ -6539,7 +6539,7 @@ DLP_K06_CASES = {
             "url_userinfo_password", 9607, carrier="code",
         ),
         ds(
-            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "CREDENTIAL", "en", "dlp_password_assignment",
             "DB_HOST=op://Production/postgres/host\nDB_PASSWORD=<<secret:0>>\n",
             "password", 9608, carrier="env",
         ),
@@ -7990,13 +7990,13 @@ DLP_FGEN2_CASES = {
             "generic_api_secret", 12005, carrier="cli",
         ),
         ds(
-            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "CREDENTIAL", "de", "dlp_password_assignment",
             "FROM eclipse-temurin:21-jre\nCOPY target/abgleich.jar /app/abgleich.jar\n"
             "ENV LAGER_DB_PASSWORD=\"<<secret:0>>\"\nENTRYPOINT [\"java\", \"-jar\", \"/app/abgleich.jar\"]\n",
             "password", 12006, carrier="code",
         ),
         ds(
-            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "CREDENTIAL", "de", "dlp_password_assignment",
             "services:\n  abgleich:\n    image: acme/abgleich:2.3\n    environment:\n"
             "      LAGER_DB_HOST: db.intern\n      LAGER_DB_PASSWORD: \"<<secret:0>>\"\n",
             "password", 12007, carrier="yaml",
@@ -8038,7 +8038,7 @@ DLP_FGEN2_CASES = {
             "generic_api_secret", 12015, carrier="env",
         ),
         ds(
-            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "CREDENTIAL", "en", "dlp_password_assignment",
             "jobs:\n  export:\n    runs-on: ubuntu-24.04\n    env:\n"
             "      REPORTS_DB_PASSWORD: \"<<secret:0>>\"\n    steps:\n      - run: ./export.sh\n",
             "password", 12016, carrier="yaml",
@@ -9436,6 +9436,135 @@ DLP_T17_CASES = {
 }
 for _label, _rows in DLP_T17_CASES.items():
     DLP_CASES[_label].extend(_rows)
+
+# T15: attribution in the generic tier. A password under an upper-case variable name
+# (`DB_PASSWORD=…`, `ENV DB_PASSWORD=…`, `export`, CI `env:`, code constants) matches both
+# `dlp_env_var_secret` (generic_secret) and `dlp_password_assignment` (password) on the same
+# value span; the password rule keeps it. API keys, tokens and client secrets under the same
+# kind of name stay `dlp_env_var_secret`. Hard negatives: references, placeholders, documented
+# stand-ins, vault lookups and UUIDs under password variables.
+DLP_T15_CASES = {
+    "CREDENTIAL": [
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "# .env Lagerverwaltung (lokal)\nLAGER_DB_HOST=db.lager.intern\nLAGER_DB_USER=lager_app\n"
+            "LAGER_DB_PASSWORD=<<secret:0>>\nLAGER_DB_PORT=5432\n",
+            "password", 17001, carrier="env",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "FROM postgres:16-alpine\nENV POSTGRES_USER=lager\nENV POSTGRES_PASSWORD=\"<<secret:0>>\"\n"
+            "COPY init.sql /docker-entrypoint-initdb.d/\n",
+            "password", 17002, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "# Migration gegen die Testdatenbank\n$ export LAGER_DB_PASSWORT='<<secret:0>>'\n$ ./bin/migrate --ziel test\n",
+            "password", 17003, carrier="cli",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "abgleich:\n  stage: test\n  variables:\n    LAGER_DB_HOST: db.lager.intern\n"
+            "    LAGER_DB_PASSWORD: \"<<secret:0>>\"\n  script:\n    - ./bin/abgleich --pruefen\n",
+            "password", 17004, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "public final class Lagerzugang {\n    private static final String DB_KENNWORT = \"<<secret:0>>\";\n}\n",
+            "password", 17005, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "# .env Lagerverwaltung (lokal)\nLAGER_DB_HOST=db.lager.intern\nLAGER_API_KEY=<<secret:0>>\n",
+            "generic_api_secret", 17006, carrier="env",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "# .env for the orders service\nORDERS_DB_HOST=db.internal\nORDERS_DB_USER=orders\n"
+            "ORDERS_DB_PASSWORD=<<secret:0>>\n",
+            "password", 17011, carrier="env",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "FROM mysql:8.4\nENV MYSQL_DATABASE=orders\nENV MYSQL_ROOT_PASSWORD=<<secret:0>>\nEXPOSE 3306\n",
+            "password", 17012, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "$ export SMTP_PASSWORD=\"<<secret:0>>\"\n$ ./bin/send-digest --dry-run\n",
+            "password", 17013, carrier="cli",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "jobs:\n  integration:\n    runs-on: ubuntu-24.04\n    env:\n      ORDERS_DB_USER: orders\n"
+            "      ORDERS_DB_PASSWORD: '<<secret:0>>'\n    steps:\n      - run: make it\n",
+            "password", 17014, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "import psycopg\n\nORDERS_DB_PASSWORD = \"<<secret:0>>\"\nconn = psycopg.connect(host=\"db.internal\")\n",
+            "password", 17015, carrier="code",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "# .env for the orders service\nORDERS_DB_HOST=db.internal\nOAUTH_CLIENT_SECRET=\"<<secret:0>>\"\n",
+            "generic_api_secret", 17016, carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "# .env Lagerverwaltung\nLAGER_DB_PASSWORD=${LAGER_DB_PASSWORD}\n",
+            "environment reference under a password variable", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "FROM postgres:16-alpine\nENV POSTGRES_PASSWORD=\"<hier-passwort-eintragen>\"\n",
+            "placeholder under a password variable", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "$ export LAGER_DB_PASSWORT=\"$(vault kv get -field=passwort secret/lager/db)\"\n",
+            "command substitution from a vault", carrier="cli",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "abgleich:\n  variables:\n    LAGER_DB_PASSWORD: $LAGER_DB_PASSWORD_CI\n",
+            "CI variable reference", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "de", "dlp_password_assignment",
+            "# .env Lagerverwaltung\nLAGER_DB_PASSWORD=3f2b8c1e-7d4a-4e9b-a6c2-91d0e5f4b7a8",
+            "UUID under a password variable", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "# .env.example\nORDERS_DB_PASSWORD=changeme\n",
+            "documented stand-in password", carrier="env",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "FROM mysql:8.4\nENV MYSQL_ROOT_PASSWORD=\"${MYSQL_ROOT_PASSWORD}\"\n",
+            "build argument reference", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "    env:\n      ORDERS_DB_PASSWORD: ${{ secrets.ORDERS_DB_PASSWORD }}\n",
+            "GitHub Actions secret reference", carrier="yaml",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "ORDERS_DB_PASSWORD = os.environ[\"ORDERS_DB_PASSWORD\"]\n",
+            "environment lookup in code", carrier="code",
+        ),
+        dn(
+            "CREDENTIAL", "en", "dlp_password_assignment",
+            "$ export SMTP_PASSWORD=<your-smtp-password>\n",
+            "placeholder under a password variable", carrier="cli",
+        ),
+    ],
+}
+for _label, _rows in DLP_T15_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
 
 def flatten(suite: str, cases: dict[str, list[dict]]) -> list[dict]:
     rows = []

@@ -11,6 +11,10 @@
 //!   match strictly inside a longer fixed-format value of another rule (a
 //!   WIF-shaped Base58 run inside a Stripe key or a JWT), or a match of a rule
 //!   without keywords strictly inside any longer secret value.
+//! - On an identical span of the same tier, a rule with a specific subtype
+//!   wins over one with `generic_secret` (T15): `DB_PASSWORD=value` is a
+//!   password of `dlp_password_assignment`, not a generic secret of
+//!   `dlp_env_var_secret`.
 //!
 //! Then the remaining spans are taken by tier ([`OverlapTier`]), validator
 //! strength and registry order; a span that overlaps a taken one is
@@ -24,7 +28,7 @@ use std::ops::Range;
 use crate::detectors::first_match_per_range;
 use crate::EvidenceSpan;
 
-use super::dlp::{RuleMeta, ValidatorStrength};
+use super::dlp::{RuleMeta, SecretSubtype, ValidatorStrength};
 
 /// Overlap tier of a secret rule; a lower tier keeps its span.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -148,6 +152,18 @@ fn resolve_secrets(
                 break;
             }
             let (first, second) = (&secrets[a], &secrets[b]);
+            if first.range == second.range && first.tier == second.tier {
+                let generic = |secret: &Secret| {
+                    rules.metas[secret.rule].subtype == Some(SecretSubtype::GenericSecret)
+                };
+                match (generic(first), generic(second)) {
+                    // The more specific subtype names the value better.
+                    (true, false) => suppress(suppressed_by, first.position, second.position),
+                    (false, true) => suppress(suppressed_by, second.position, first.position),
+                    _ => {}
+                }
+                continue;
+            }
             for (outer, inner) in [(first, second), (second, first)] {
                 if !contains(&outer.range, &inner.range) {
                     continue;

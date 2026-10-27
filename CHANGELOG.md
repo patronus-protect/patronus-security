@@ -323,6 +323,17 @@ result shapes may be breaking for downstream users, and is called out explicitly
   --engine ark-native`): 100 KiB p95 147.0 → 154.0 ms (+4.8 %, PASS), from eight more regex rules
   over the text; 4 KiB p95 6.9 → 5.6 ms (noise). Golden eval: all gated positives and hard negatives
   pass; `pii_l1.jsonl` gains 88 rows.
+- DLP L1 overlap attribution in the generic tier (T15): where `dlp_env_var_secret` (subtype
+  `generic_secret`) and `dlp_password_assignment` (subtype `password`) report the identical value
+  span of a password variable (`DB_PASSWORD=…`, `ENV POSTGRES_PASSWORD=…`, `export
+  SMTP_PASSWORD=…`, CI `env:`/`variables:`, compose `environment:`, code constants such as
+  `DB_PASSWORD = "…"`), the rule with the more specific subtype keeps the span
+  (`dlp::overlap`). **Detection change:** spans, labels and scores are unchanged; such values are
+  now attributed to `dlp_password_assignment` and `dlp_env_var_secret` stays in `matched_rules`
+  with `suppressed_by: dlp_password_assignment`. Variables without a password noun (`API_KEY`,
+  `CLIENT_SECRET`, `TOKEN`) stay `dlp_env_var_secret`, and where the two rules report different
+  spans the earlier rule keeps its span as before. `dlp_l1.jsonl` gains 22 rows (12 positives, 10
+  hard negatives, DE and EN) in env, Dockerfile, CLI, CI YAML and code carriers.
 
 ## [0.1.12] - 2026-10-25
 

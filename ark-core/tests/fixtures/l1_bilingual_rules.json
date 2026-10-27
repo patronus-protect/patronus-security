@@ -2576,8 +2576,8 @@
   {
     "category": "dlp",
     "rule_id": "dlp_env_var_secret",
-    "de": "DB_PASSWORT=Kx7!pQ2#vL9@rT4$",
-    "en": "DB_PASSWORD=Kx7!pQ2#vL9@rT4$",
+    "de": "LAGER_API_TOKEN=Kx7!pQ2#vL9@rT4$",
+    "en": "OAUTH_CLIENT_SECRET=Kx7!pQ2#vL9@rT4$",
     "hard_negatives": {
       "de": [
         "DB_PASSWORT=BITTE_AENDERN",
@@ -2641,7 +2641,10 @@
         "produktion:\n  passwort: *lager_standard_passwort",
         "<datenbank>\n  <passwort>@lager.passwort@</passwort>",
         "resource \"aws_db_instance\" \"lager\" {\n  password = var.lager_passwort",
-        "variable \"lager_passwort_sha256\" {\n  default = \"9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08\""
+        "variable \"lager_passwort_sha256\" {\n  default = \"9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08\"",
+        "ENV POSTGRES_PASSWORD=\"<hier-passwort-eintragen>\"",
+        "export LAGER_DB_PASSWORT=\"$(vault kv get -field=passwort secret/lager/db)\"",
+        "LAGER_DB_PASSWORD=3f2b8c1e-7d4a-4e9b-a6c2-91d0e5f4b7a8"
       ],
       "en": [
         "Password: TODO",
@@ -2664,7 +2667,10 @@
         "pub fn getpwnam_r(\n    name: *const c_char,\n    pwd: *mut passwd,",
         "<server>\n  <password>${env.NEXUS_PASSWORD}</password>",
         "<konto>\n  <hashed_password>5d41402abc4b2a76b9719d911017c592</hashed_password>",
-        "resource \"aws_db_instance\" \"orders\" {\n  password = random_password.orders.result"
+        "resource \"aws_db_instance\" \"orders\" {\n  password = random_password.orders.result",
+        "ENV MYSQL_ROOT_PASSWORD=\"${MYSQL_ROOT_PASSWORD}\"",
+        "export SMTP_PASSWORD=<your-smtp-password>",
+        "ORDERS_DB_PASSWORD=changeme"
       ]
     },
     "language_neutral": false
