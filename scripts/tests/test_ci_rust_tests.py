@@ -214,3 +214,14 @@ def test_ci_token_permissions_are_read_only_except_change_listing():
     assert WORKFLOW["jobs"]["changes"]["permissions"] == {"contents": "read", "pull-requests": "read"}
     for job in WORKFLOW["jobs"].values():
         assert all(level == "read" for level in job.get("permissions", {}).values())
+
+
+@pytest.mark.parametrize("path", [
+    "python/patronus_ark/benchmark_data/pii_l1.jsonl",
+    "python/patronus_ark/benchmark_data/dlp_l1.jsonl",
+    "ark-core/src/detectors/dlp/rules/credentials.rs",
+    "ark-core/src/detectors/pii/de.rs",
+])
+def test_shared_fixture_tests_follow_domain_changes(path):
+    # synchronous_core counts the rows of both benchmark fixtures; a domain-only PR must run it.
+    assert "synchronous_core" in targets(MODULE.plan("wrapper", route(path)))
