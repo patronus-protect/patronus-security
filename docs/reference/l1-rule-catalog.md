@@ -6,7 +6,7 @@ These are the stable rule IDs accepted by execution-gate `rules`. Missing IDs in
 
 For coverage per benchmark entity, the comparison with Presidio and the secret scanners, and latency, see [L1 capabilities](l1-capabilities.md).
 
-## PII rules (135)
+## PII rules (136)
 
 All PII rules are eligible by default when PII L1 is enabled.
 
@@ -24,6 +24,7 @@ In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `
 | `pii_phone_de_national_context` | `PHONE` | yes | format | 30 | field or key | 0.70 |
 | `pii_phone_de_national_proximity` | `PHONE` | yes | format | 20 | key or proximity (required) | 0.50–0.60 |
 | `pii_phone_us` | `PHONE` | yes | format | 35 | key or proximity | 0.50–0.75 |
+| `pii_phone_regional` | `PHONE` | yes | format | 20 | key or proximity, `balanced`/`recall` only | 0.50–0.60 |
 | `pii_mac_address` | `MAC_ADDRESS` | yes | format | 55 | key or proximity | 0.70–0.95 |
 | `pii_iban_de` | `IBAN` | yes | checksum | 55 | key or proximity | 0.90–1.00 |
 | `pii_iban_generic` | `IBAN` | yes | checksum | 45 | key or proximity | 0.80–1.00 |

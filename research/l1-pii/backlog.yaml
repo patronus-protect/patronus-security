@@ -706,6 +706,7 @@ tasks:
 
   # M1 phone remainder (FR/BE/AT formats, bucket P5)
   - id: F01
+    status: done
     title: "Phone regional via the phonenumber crate (DE/AT/CH/US/UK/FR/…), check cargo-deny"
     type: recall-fix
     deps: [K03, F18]
