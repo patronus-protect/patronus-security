@@ -46,6 +46,9 @@ PII_LABELS = {
     "PASSPORT_NUMBER",
     "PATIENT_ID",
     "IE_PPSN",
+    "KR_BRN",
+    "KR_FRN",
+    "KR_RRN",
     "PHONE",
     "PHYSICIAN_NUMBER_LANR",
     "PT_NIF",
@@ -94,8 +97,8 @@ PII_LABELS = {
     "ZA_ID_NUMBER",
 }
 # Languages of pii_l1: DE/EN, the FR/ES/IT/NL field names (T26) and the national languages of
-# country IDs (B-LUHN, B-EU2), whose rows only target the IDs of their country.
-NATIONAL_LANGUAGES = {"sv": "SE_", "tr": "TR_", "pt": "PT_"}
+# country IDs (B-LUHN, B-EU2, B-KR), whose rows only target the IDs of their country.
+NATIONAL_LANGUAGES = {"sv": "SE_", "tr": "TR_", "pt": "PT_", "ko": "KR_"}
 PII_LANGUAGES = {"de", "en", "fr", "es", "it", "nl", *NATIONAL_LANGUAGES}
 
 DLP_LABELS = {
@@ -215,7 +218,8 @@ class L1BenchmarkDataTests(unittest.TestCase):
                 materialized = recipes.materialize_row(row)
                 self.assertEqual(row["suite"], name, row["id"])
                 # pii_l1 also carries FR/ES/IT/NL field names of the anchor rules (T26) and
-                # Swedish, Turkish and Portuguese rows of the country IDs (B-LUHN, B-EU2).
+                # Swedish, Turkish, Portuguese and Korean rows of the country IDs (B-LUHN, B-EU2,
+                # B-KR).
                 languages = PII_LANGUAGES if name == "pii_l1" else {"de", "en"}
                 self.assertIn(row["language"], languages, row["id"])
                 if row["language"] in NATIONAL_LANGUAGES:
@@ -337,6 +341,12 @@ class SecondaryEntityGoldTests(unittest.TestCase):
                 self.assertEqual(row["target_label"], "CREDITCARD", row["id"])
                 annotated[("ZA_ID_NUMBER", row["language"])] += 1
                 continue
+            if [e["label"] for e in row["entities"]] == ["KR_RRN"]:
+                # B-KR: thirteen digits `YYMMDD-GHHSSSC` next to a resident registration term
+                # are a Korean RRN, no card.
+                self.assertEqual(row["target_label"], "CREDITCARD", row["id"])
+                annotated[("KR_RRN", row["language"])] += 1
+                continue
             if [e["label"] for e in row["entities"]] == ["VAT_ID_PT"]:
                 # B-EU2: nine digits after `PT ` are the body of a Portuguese VAT ID, no NIF.
                 self.assertEqual(row["target_label"], "PT_NIF", row["id"])
@@ -375,6 +385,8 @@ class SecondaryEntityGoldTests(unittest.TestCase):
                 ("ZA_ID_NUMBER", "de"): 3,
                 ("ZA_ID_NUMBER", "en"): 3,
                 ("VAT_ID_PT", "en"): 1,
+                ("KR_RRN", "de"): 2,
+                ("KR_RRN", "en"): 2,
             },
         )
 

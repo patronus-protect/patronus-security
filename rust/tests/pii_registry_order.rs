@@ -164,6 +164,12 @@ const EXPECTED_ORDER: &[(&str, &str)] = &[
     ("pii_ahv_number_ch_context_free", "CH_AHV_NUMBER"),
     ("pii_nif_pt", "PT_NIF"),
     ("pii_ppsn_ie", "IE_PPSN"),
+    ("pii_rrn_kr", "KR_RRN"),
+    ("pii_rrn_kr_context_free", "KR_RRN"),
+    ("pii_frn_kr", "KR_FRN"),
+    ("pii_frn_kr_context_free", "KR_FRN"),
+    ("pii_brn_kr", "KR_BRN"),
+    ("pii_brn_kr_context_free", "KR_BRN"),
 ];
 
 #[test]

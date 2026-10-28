@@ -196,6 +196,9 @@ fn scored_only_rules_are_unbound_checksum_rules() {
             "pii_id_number_za_context_free",
             "pii_social_security_number_at_context_free",
             "pii_ahv_number_ch_context_free",
+            "pii_rrn_kr_context_free",
+            "pii_frn_kr_context_free",
+            "pii_brn_kr_context_free",
         ]
     );
     for pattern in scored_only {
@@ -333,6 +336,9 @@ fn every_checksum_label_reports_a_bare_value_in_the_scored_modes() {
         ("ZA_ID_NUMBER", "8001015009087", 0.55),
         ("AT_SOCIAL_SECURITY_NUMBER", "1237 010180", 0.55),
         ("CH_AHV_NUMBER", "756.1234.5678.97", 0.55),
+        ("KR_RRN", "960121-1021413", 0.55),
+        ("KR_FRN", "911124-5678906", 0.55),
+        ("KR_BRN", "104-82-13138", 0.55),
     ];
     for label in PII_PATTERNS
         .iter()
