@@ -404,8 +404,9 @@ python3 scripts/generate_docs.py
 - `--dlp-reports`: `--output-dir` von `scripts/l1_dlp/baseline_report.py`. Secret-Entitäten und -Gruppen
   bekommen F1/Precision/Recall des Default-Profils für ARK und jede Baseline, die einen getypten Span
   meldet; standardmäßig aus geschaltete Familien (Business-Identifier, Content-Klassen) die Werte von
-  ARKs Opt-in-Lauf (`ark.extended.json`, `profile: extended`), Content-Klassen je Dokument auf den
-  externen Korpora (`level: document`). Geplante Dokumentklassen ohne Regeln und `out_of_scope`
+  ARKs Opt-in-Lauf (`ark.extended.json`, `profile: extended`), Content-Klassen je Dokument
+  (`level: document`) auf den externen Korpora, ohne dortiges Gold auf den Carrier-Zeilen
+  (`content_labels`). Geplante Dokumentklassen ohne Regeln und `out_of_scope`
   fehlen.
 - `--dlp-entity-map`: die Entity-Map des gemessenen Commits, damit später ergänzte IDs als „nicht
   gemessen“ (`–`) statt „kein Gold“ erscheinen.

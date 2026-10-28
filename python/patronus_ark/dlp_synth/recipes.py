@@ -15,14 +15,24 @@ carrier ``template`` with ``<<secret:N>>`` placeholders. The generator spec live
     ``alphabet[next_u64() % len(alphabet)]``.
   - ``{"checksum": kind}`` appends a check value computed over the text emitted since
     the most recent literal segment: ``crc32_base62`` (CRC-32/ISO-HDLC as 6 base62
-    digits ``0-9A-Za-z``, zero-padded; GitHub/npm token layout) or
-    ``iso7064_mod11_10`` (one check digit; German USt-IdNr.).
+    digits ``0-9A-Za-z``, zero-padded; GitHub/npm token layout),
+    ``iso7064_mod11_10`` (one check digit; German USt-IdNr.) or ``bech32`` (the six
+    BIP 173 checksum characters of that text as Bech32 data, with the human-readable part
+    taken from the most recent literal, which ends in the separator ``1``; upper case if
+    that literal is; age keys).
   - ``{"encode": enc, "bytes": [parts], "wrap"?: n}`` builds a byte string from parts
     (``{"hex": s}``, ``{"utf8": s}`` with ASCII ``s``, ``{"random": n}`` drawing
     ``next_u64() % 256`` per byte, ``{"alphabet": a, "len": n}`` as above) and encodes it
     as ``hex``, ``base64`` (padded), ``base64_unpadded``, ``base64url`` (unpadded),
     ``bcrypt64`` (OpenBSD radix-64, unpadded) or ``base58check`` (double SHA-256).
     ``wrap`` inserts a newline every ``n`` characters (base64 only, PEM bodies).
+
+A generator may set ``"entropy_above": h`` (a number below ``log2`` of its length): while
+the Shannon entropy of the value (bits per character, ``-sum(p * log2(p))`` over its
+characters in code point order) is not above ``h``, the generator draws the whole value
+again from the same PRNG. Values for an entropy-limited detector (detect-secrets
+``Base64HighEntropyString`` and ``HexHighEntropyString``) thus clear the limit for every
+seed. Fill recipes are not redrawn.
 
 Placeholders (golden schema v2, E13) may transform the value they insert:
 
@@ -66,6 +76,7 @@ import json
 import math
 import re
 import zlib
+from collections import Counter
 from functools import lru_cache
 from pathlib import Path
 
@@ -82,7 +93,9 @@ _JSON_ESCAPES = {'"': '\\"', "\\": "\\\\", "\n": "\\n", "\r": "\\r", "\t": "\\t"
 _MASK = (1 << 64) - 1
 BASE62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
-CHECKSUM_LENGTHS = {"crc32_base62": 6, "iso7064_mod11_10": 1}
+CHECKSUM_LENGTHS = {"crc32_base62": 6, "iso7064_mod11_10": 1, "bech32": 6}
+BECH32 = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
+_BECH32_GENERATOR = (0x3B6A57B2, 0x26508E6D, 0x1EA119FA, 0x3D4233DD, 0x2A1462B3)
 ENCODINGS = {"hex", "base64", "base64_unpadded", "base64url", "bcrypt64", "base58check"}
 _BCRYPT64 = str.maketrans(
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",
@@ -136,6 +149,19 @@ def _valid_part(part, alphabets: dict) -> bool:
     return set(part) == {"alphabet", "len"} and part["alphabet"] in alphabets and _valid_count(part["len"])
 
 
+def _valid_entropy_limit(generator: dict) -> bool:
+    """An optional ``entropy_above`` is a positive number below ``log2`` of the length of a random generator."""
+    if "entropy_above" not in generator:
+        return True
+    limit = generator["entropy_above"]
+    length = sum(_segment_length(segment) for segment in generator["segments"])
+    return (
+        type(limit) in (int, float)
+        and 0 < limit < math.log2(length)
+        and _draws_randomly(generator["segments"])
+    )
+
+
 def _valid_segment(segment, alphabets: dict) -> bool:
     if not isinstance(segment, dict):
         return False
@@ -170,6 +196,8 @@ def _spec() -> dict:
         for segment in generator["segments"]:
             if not _valid_segment(segment, spec["alphabets"]):
                 raise RecipeError(f"{name}: invalid segment {segment!r}")
+        if not _valid_entropy_limit(generator):
+            raise RecipeError(f"{name}: invalid entropy_above {generator['entropy_above']!r}")
     alphabets = {}
     for name, chunks in spec["alphabets"].items():
         if not isinstance(chunks, list) or not all(isinstance(chunk, str) for chunk in chunks):
@@ -239,12 +267,22 @@ def generator_length(name: str) -> int:
     return sum(_segment_length(segment) for segment in _generator(name)["segments"])
 
 
-def is_random(name: str) -> bool:
+def _draws_randomly(segments: list[dict]) -> bool:
     return any(
         "alphabet" in segment
         or any("random" in part or "alphabet" in part for part in segment.get("bytes", []))
-        for segment in _generator(name)["segments"]
+        for segment in segments
     )
+
+
+def is_random(name: str) -> bool:
+    return _draws_randomly(_generator(name)["segments"])
+
+
+def shannon_entropy(value: str) -> float:
+    """Shannon entropy of ``value`` in bits per character (summed in code point order)."""
+    length = len(value)
+    return -sum(count / length * math.log2(count / length) for _, count in sorted(Counter(value).items()))
 
 
 def crc32_base62(text: str) -> str:
@@ -262,6 +300,37 @@ def iso7064_mod11_10(digits: str) -> str:
         total = (int(digit) + product) % 10 or 10
         product = 2 * total % 11
     return str((11 - product) % 10)
+
+
+def bech32_checksum(literal: str, data: str) -> str:
+    """BIP 173 checksum of ``data`` (Bech32 characters) under the HRP that ``literal`` ends with."""
+    hrp, separator, rest = literal.rpartition("1")
+    if not separator or not hrp or rest:
+        raise RecipeError(f"a bech32 checksum needs a preceding literal ending in HRP + '1', got {literal!r}")
+    try:
+        values = [BECH32.index(char) for char in data.lower()]
+    except ValueError:
+        raise RecipeError(f"bech32 data {data!r} has a character outside the Bech32 alphabet") from None
+    hrp = hrp.lower()
+    check = 1
+    for value in [ord(char) >> 5 for char in hrp] + [0] + [ord(char) & 31 for char in hrp] + values + [0] * 6:
+        top = check >> 25
+        check = (check & 0x1FFFFFF) << 5 ^ value
+        for bit, generator in enumerate(_BECH32_GENERATOR):
+            if top >> bit & 1:
+                check ^= generator
+    check ^= 1
+    digits = "".join(BECH32[check >> 5 * (5 - index) & 31] for index in range(6))
+    return digits.upper() if literal.isupper() else digits
+
+
+def checksum(kind: str, data: str, literal: str) -> str:
+    """The check value of ``kind`` over ``data``, the text since ``literal`` (the most recent literal)."""
+    if kind == "crc32_base62":
+        return crc32_base62(data)
+    if kind == "iso7064_mod11_10":
+        return iso7064_mod11_10(data)
+    return bech32_checksum(literal, data)
 
 
 def base58check_sum(payload: bytes) -> bytes:
@@ -365,14 +434,23 @@ def generate_segments(name: str, seed: int, fill: str | None = None) -> list[str
     if fill is not None and not _valid_fill(fill):
         raise RecipeError(f"fill must be a non-empty ASCII alphanumeric word, got {fill!r}")
     generator = _generator(name)
-    alphabets = _spec()["alphabets"]
     rng = SplitMix64(seed)
+    parts = _draw_segments(name, generator, rng, fill)
+    # Fill recipes are low-entropy hard negatives by design and are never redrawn.
+    limit = None if fill is not None else generator.get("entropy_above")
+    while limit is not None and shannon_entropy("".join(parts)) <= limit:
+        parts = _draw_segments(name, generator, rng, fill)
+    return parts
+
+
+def _draw_segments(name: str, generator: dict, rng: SplitMix64, fill: str | None) -> list[str]:
+    alphabets = _spec()["alphabets"]
     parts: list[str] = []
-    since_literal = ""
+    since_literal = literal = ""
     filled = False
     for segment in generator["segments"]:
         if "lit" in segment:
-            part = segment["lit"]
+            part = literal = segment["lit"]
         elif "alphabet" in segment:
             alphabet = alphabets[segment["alphabet"]]
             if fill is not None and _fits(fill, alphabet):
@@ -381,10 +459,7 @@ def generate_segments(name: str, seed: int, fill: str | None = None) -> list[str
             else:
                 part = _draw(rng, alphabet, segment["len"])
         elif "checksum" in segment:
-            if segment["checksum"] == "crc32_base62":
-                part = crc32_base62(since_literal)
-            else:
-                part = iso7064_mod11_10(since_literal)
+            part = checksum(segment["checksum"], since_literal, literal)
             if fill is not None:
                 zeros = "0" * len(part)
                 part = zeros if zeros != part else "1" * len(part)

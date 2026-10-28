@@ -7,15 +7,17 @@
 //! `python/patronus_ark/dlp_synth/generators.json`: SplitMix64 seeded with the recipe
 //! seed, alphabets concatenated from their chunks, literal segments copied,
 //! alphabet segments drawing `alphabet[next_u64() % alphabet.len()]` per
-//! character, checksum segments (`crc32_base62`, `iso7064_mod11_10`) over the
-//! text since the last literal, and encoded segments that build bytes from
+//! character, checksum segments (`crc32_base62`, `iso7064_mod11_10`, `bech32`
+//! under the HRP of the last literal) over the text since the last literal, and encoded segments that build bytes from
 //! hex/ASCII/random/alphabet parts and emit them as hex, base64 (padded,
 //! optionally wrapped), unpadded base64, base64url, bcrypt radix-64 or
 //! Base58Check. Placeholders may encode (`<<secret:N|base64>>`, `hex`, `url`,
 //! `json`) or split (`<<secret:N[a:b]>>`) the value they insert (golden schema
 //! v2). A recipe with `fill` yields the documented example/test variant of the
-//! generator's shape for hard negatives (T06). The Python module documents the
-//! format. Not public API.
+//! generator's shape for hard negatives (T06). A generator with `entropy_above`
+//! redraws its whole value from the same PRNG until the Shannon entropy exceeds
+//! that limit (fill recipes excepted). The Python module documents the format.
+//! Not public API.
 
 use std::{collections::BTreeMap, fmt, path::Path};
 
@@ -155,6 +157,7 @@ enum Segment {
 #[derive(Deserialize)]
 struct Generator {
     segments: Vec<Segment>,
+    entropy_above: Option<f64>,
 }
 
 #[derive(Deserialize)]
@@ -195,10 +198,25 @@ fn repeat_word(word: &str, length: usize) -> String {
     word.chars().cycle().take(length).collect()
 }
 
+/// Shannon entropy in bits per character, summed in code point order like
+/// `recipes.shannon_entropy`.
+fn shannon_entropy(value: &str) -> f64 {
+    let mut counts = BTreeMap::<char, usize>::new();
+    for character in value.chars() {
+        *counts.entry(character).or_default() += 1;
+    }
+    let length = value.chars().count() as f64;
+    -counts
+        .values()
+        .map(|&count| count as f64 / length * (count as f64 / length).log2())
+        .sum::<f64>()
+}
+
 fn checksum_length(kind: &str) -> Option<usize> {
     match kind {
         "crc32_base62" => Some(6),
         "iso7064_mod11_10" => Some(1),
+        "bech32" => Some(6),
         _ => None,
     }
 }
@@ -252,6 +270,59 @@ fn iso7064_mod11_10(digits: &str) -> Result<String, RecipeError> {
         product = 2 * total % 11;
     }
     Ok(((11 - product) % 10).to_string())
+}
+
+const BECH32: &[u8] = b"qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+
+/// BIP 173 checksum of `data` (Bech32 characters) under the HRP that `literal`
+/// ends with (`AGE-SECRET-KEY-1`, `age1`); upper case if `literal` is.
+fn bech32_checksum(literal: &str, data: &str) -> Result<String, RecipeError> {
+    let hrp = literal
+        .strip_suffix('1')
+        .filter(|hrp| !hrp.is_empty())
+        .ok_or_else(|| {
+            RecipeError::Spec(format!(
+                "a bech32 checksum needs a preceding literal ending in HRP + '1', got {literal:?}"
+            ))
+        })?
+        .to_ascii_lowercase();
+    let mut values: Vec<u32> = hrp.bytes().map(|byte| u32::from(byte >> 5)).collect();
+    values.push(0);
+    values.extend(hrp.bytes().map(|byte| u32::from(byte & 31)));
+    for character in data.bytes() {
+        let index = BECH32
+            .iter()
+            .position(|&symbol| symbol == character.to_ascii_lowercase())
+            .ok_or_else(|| {
+                RecipeError::Spec(format!("bech32 data {data:?} leaves the Bech32 alphabet"))
+            })?;
+        values.push(index as u32);
+    }
+    values.extend([0; 6]);
+    const GENERATOR: [u32; 5] = [0x3B6A57B2, 0x26508E6D, 0x1EA119FA, 0x3D4233DD, 0x2A1462B3];
+    let mut check: u32 = 1;
+    for value in values {
+        let top = check >> 25;
+        check = ((check & 0x1FF_FFFF) << 5) ^ value;
+        for (bit, generator) in GENERATOR.iter().enumerate() {
+            if (top >> bit) & 1 == 1 {
+                check ^= generator;
+            }
+        }
+    }
+    check ^= 1;
+    let upper = literal.bytes().any(|byte| byte.is_ascii_uppercase())
+        && !literal.bytes().any(|byte| byte.is_ascii_lowercase());
+    Ok((0..6)
+        .map(|index| {
+            let symbol = BECH32[((check >> (5 * (5 - index))) & 31) as usize];
+            char::from(if upper {
+                symbol.to_ascii_uppercase()
+            } else {
+                symbol
+            })
+        })
+        .collect())
 }
 
 fn base58check(payload: &[u8]) -> String {
@@ -385,6 +456,14 @@ impl GeneratorSet {
                     return Err(RecipeError::Spec(format!("{name}: invalid segment")));
                 }
             }
+            if let Some(limit) = generator.entropy_above {
+                let length = Self::segments_length(&generator.segments) as f64;
+                if !(limit > 0.0 && limit < length.log2() && Self::draws_randomly(generator)) {
+                    return Err(RecipeError::Spec(format!(
+                        "{name}: invalid entropy_above {limit}"
+                    )));
+                }
+            }
         }
         Ok(Self {
             alphabets,
@@ -426,9 +505,22 @@ impl GeneratorSet {
 
     /// Fixed output length in characters (all generators are fixed-length).
     pub fn length(&self, name: &str) -> Result<usize, RecipeError> {
-        Ok(self
-            .generator(name)?
-            .segments
+        Ok(Self::segments_length(&self.generator(name)?.segments))
+    }
+
+    fn draws_randomly(generator: &Generator) -> bool {
+        generator.segments.iter().any(|segment| match segment {
+            Segment::Random(_) => true,
+            Segment::Encoded(encoded) => encoded
+                .bytes
+                .iter()
+                .any(|part| matches!(part, BytePart::RandomBytes(_) | BytePart::Chars(_))),
+            Segment::Literal(_) | Segment::Checksum(_) => false,
+        })
+    }
+
+    fn segments_length(segments: &[Segment]) -> usize {
+        segments
             .iter()
             .map(|segment| match segment {
                 Segment::Literal(Literal { lit }) => lit.chars().count(),
@@ -438,7 +530,7 @@ impl GeneratorSet {
                 }
                 Segment::Encoded(encoded) => encoded.length(),
             })
-            .sum())
+            .sum()
     }
 
     fn draw(&self, rng: &mut SplitMix64, alphabet: &str, len: usize, out: &mut String) {
@@ -570,17 +662,37 @@ impl GeneratorSet {
                 )));
             }
         }
+        let generator = self.generator(name)?;
         let mut rng = SplitMix64::new(seed);
+        let mut value = self.draw_value(name, generator, &mut rng, fill)?;
+        // Fill recipes are low-entropy hard negatives by design and are never redrawn.
+        if let Some(limit) = generator.entropy_above.filter(|_| fill.is_none()) {
+            while shannon_entropy(&value) <= limit {
+                value = self.draw_value(name, generator, &mut rng, fill)?;
+            }
+        }
+        Ok(value)
+    }
+
+    fn draw_value(
+        &self,
+        name: &str,
+        generator: &Generator,
+        rng: &mut SplitMix64,
+        fill: Option<&str>,
+    ) -> Result<String, RecipeError> {
         let mut value = String::new();
         let mut filled = false;
         // Checksums cover the text emitted since the most recent literal.
         let mut since_literal = String::new();
-        for segment in &self.generator(name)?.segments {
+        let mut literal = "";
+        for segment in &generator.segments {
             let mut part = String::new();
             match segment {
                 Segment::Literal(Literal { lit }) => {
                     value.push_str(lit);
                     since_literal.clear();
+                    literal = lit;
                     continue;
                 }
                 Segment::Random(Random { alphabet, len }) => match fill {
@@ -588,11 +700,12 @@ impl GeneratorSet {
                         part = repeat_word(word, *len);
                         filled = true;
                     }
-                    _ => self.draw(&mut rng, alphabet, *len, &mut part),
+                    _ => self.draw(rng, alphabet, *len, &mut part),
                 },
                 Segment::Checksum(Checksum { checksum }) => {
                     match checksum.as_str() {
                         "crc32_base62" => part = crc32_base62(&since_literal),
+                        "bech32" => part = bech32_checksum(literal, &since_literal)?,
                         _ => part = iso7064_mod11_10(&since_literal)?,
                     }
                     if fill.is_some() {
@@ -606,12 +719,11 @@ impl GeneratorSet {
                 }
                 Segment::Encoded(encoded) => match fill {
                     Some(word) => {
-                        let (encoded, filled_segment) =
-                            self.encode_filled(encoded, &mut rng, word)?;
+                        let (encoded, filled_segment) = self.encode_filled(encoded, rng, word)?;
                         part = encoded;
                         filled |= filled_segment;
                     }
-                    None => part = self.encode(encoded, &mut rng),
+                    None => part = self.encode(encoded, rng),
                 },
             }
             value.push_str(&part);
@@ -836,4 +948,45 @@ pub fn materialize(
         spans[fragment.secret] = (fragment.start, fragment.end);
     }
     Ok((text, spans))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{bech32_checksum, GeneratorSet};
+
+    fn spec(generator: &str) -> String {
+        format!(
+            r#"{{"version": 2, "prng": "splitmix64", "alphabets": {{"hex": ["0123456789abcdef"]}}, "generators": {{"g": {generator}}}}}"#
+        )
+    }
+
+    #[test]
+    fn entropy_limit_must_be_reachable() {
+        // Four characters hold at most 2 bits each.
+        let random = r#"[{"alphabet": "hex", "len": 4}]"#;
+        for limit in ["0", "-1.0", "2.0", "2.5"] {
+            let generator = format!(r#"{{"segments": {random}, "entropy_above": {limit}}}"#);
+            assert!(GeneratorSet::parse(&spec(&generator)).is_err(), "{limit}");
+        }
+        let literal = r#"{"segments": [{"lit": "abcd"}], "entropy_above": 1.0}"#;
+        assert!(GeneratorSet::parse(&spec(literal)).is_err());
+        let generator = format!(r#"{{"segments": {random}, "entropy_above": 1.5}}"#);
+        let generators = GeneratorSet::parse(&spec(&generator)).unwrap();
+        for seed in 0..256 {
+            let value = generators.generate("g", seed).unwrap();
+            assert!(super::shannon_entropy(&value) > 1.5, "seed={seed}");
+        }
+    }
+
+    #[test]
+    fn bech32_checksum_matches_the_bip173_vectors() {
+        // BIP 173 valid strings: "A12UEL5L" and "abcdef1qpzry9x8gf2tvdw0s3jn54khce6mua7lmqqqxw".
+        assert_eq!(bech32_checksum("A1", "").unwrap(), "2UEL5L");
+        assert_eq!(
+            bech32_checksum("abcdef1", "qpzry9x8gf2tvdw0s3jn54khce6mua7l").unwrap(),
+            "mqqqxw"
+        );
+        assert!(bech32_checksum("age", "qq").is_err());
+        assert!(bech32_checksum("age1", "qb").is_err());
+    }
 }

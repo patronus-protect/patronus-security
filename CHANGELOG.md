@@ -93,6 +93,45 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Synthetic DLP gold for the credential, key and content entities without gold (GOLD-D6).
+  Seven entities without an ARK rule join `baseline_entities` in `dlp_synth/rules.json`:
+  `credential.cli_password` (gitleaks `curl-auth-user`: the password of
+  `curl -u ci-deploy:… -T build.tgz https://…`), `credential.file.nuget_config`
+  (`nuget-config-password`: `<add key="ClearTextPassword" value="…" />`),
+  `credential.kubernetes_secret` (`kubernetes-secret-yaml`: base64 `data:` value of a one-line
+  `kind: Secret` manifest), `credential.high_entropy_string` (detect-secrets
+  `Base64HighEntropyString`/`HexHighEntropyString`: base64 of 33 bytes, 48 hex digits,
+  redrawn from the same seed until the Shannon entropy is above the plugin limit of 4.5 or 3.0
+  bits; generator field `entropy_above` in Python and Rust),
+  `key.age_secret_key` (`age-secret-key`: `AGE-SECRET-KEY-1` + Bech32 of 32 bytes with a valid
+  checksum), `key.pkcs12_file` (`pkcs12-file`: a one-line base64 RFC 7292 PFX in the OpenSSL
+  layout, random salts, MAC and encrypted bags, not a usable key store) and
+  `key.symmetric_key` (no baseline rule, vendor docs: Laravel `APP_KEY` `base64:…`, Fernet key,
+  `openssl rand -hex 32`). Each has one lookalike: a curl user without password, the NuGet
+  `Username` entry, a ConfigMap `binaryData` value, a UUID v4, an age public key, a public X.509
+  certificate, a 40-hex digest. Per split and entity the carriers give 44 positives (DE and EN)
+  and 220 hard negatives. Generators gain the `bech32` checksum segment (BIP 173, HRP from the
+  preceding literal; Python `recipes.checksum`, Rust `golden_recipes`), and a format source may
+  be `docs:<url>` for an entity no baseline detects. Content classes get document gold in new
+  carrier families, DE and EN in both splits: MySQL, PostgreSQL, MariaDB and SQLite dumps (format
+  `sql`, labels `content.database_dump` and `content.sql`) and mails, tickets and chats with
+  internal revenue, margin, forecast and salary figures (`content.business_metric`); log
+  families already carry `content.system_log`. `scoreboard_snapshot.py` scores a content class
+  without span gold or external goldens on these carrier documents, so `content.system_log`,
+  `content.database_dump` and `content.business_metric` leave "no gold". `run_baselines.py`
+  cuts the name from gitleaks `kubernetes-secret-yaml` findings (step `yaml_entry`) and names
+  `sql` rows `dump.sql`. **Detection change:** none (evaluation data only, the Rust detector is
+  untouched, no latency effect); the frozen corpora change only when the operator re-freezes
+  them. Dev rows of the current generator, exact F1: ARK 0 on the seven value entities (no rule;
+  its generic rules report up to all 44 values under another entity, the Kubernetes Secret
+  value as `dlp_password_assignment`, which also reports its 88 `doc_example`/`test_key`
+  values; a finding for G05); best baseline 50.0 age
+  secret key, 44.6 curl password, 14.0 Kubernetes Secret (gitleaks, which matches the latter
+  only in `.yaml` files and NuGet passwords only in `nuget.config`), 25.8 high-entropy string
+  (detect-secrets), 0 for PKCS#12 (a path-only gitleaks rule) and the symmetric key. ARK opt-in
+  document F1: `content.business_metric` 100, `content.database_dump` 99.7, `content.sql` 100,
+  `content.system_log` 0 (the log families hold no ERROR/FATAL line or stack trace).
+
 - Swedish, Canadian, Turkish and South African national numbers (B-LUHN: the checksum parts of
   T13 and T09), one label each with a check digit: `SE_ORGANISATIONSNUMMER`
   (`validators::se_organisationsnummer`, third digit 2 or more, Luhn), `CA_SIN` (`ca_sin`, Luhn,

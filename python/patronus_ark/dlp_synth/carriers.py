@@ -48,7 +48,7 @@ LANGUAGES = ("de", "en")
 VARIANTS = ("positive", "placeholder", "env_ref", "doc_example", "test_key", "lookalike")
 FORMATS = (
     "env", "yaml", "json", "toml", "hcl", "xml", "properties", "shell", "dockerfile",
-    "ci_yaml", "jupyter", "log", "http", "code", "chat", "ticket", "mail",
+    "ci_yaml", "jupyter", "log", "http", "code", "chat", "ticket", "mail", "sql",
 )
 KINDS = ("secret", "identifier", "fragment")
 ESCAPES = ("json", "xml", "indent")
@@ -192,21 +192,17 @@ def hard_negative_value(generator: str, variant: str) -> str:
     except KeyError:
         raise CarrierError(f"unknown generator {generator!r}") from None
     parts = []
-    since_literal = ""
+    since_literal = literal = ""
     for segment in segments:
         if "lit" in segment:
             parts.append(segment["lit"])
-            since_literal = ""
+            since_literal, literal = "", segment["lit"]
             continue
         if "alphabet" in segment:
             parts.append(_fill(alphabets[segment["alphabet"]], segment["len"], variant))
         elif "checksum" in segment:
             check = "0" * recipes.CHECKSUM_LENGTHS[segment["checksum"]]
-            valid = (
-                recipes.crc32_base62(since_literal)
-                if segment["checksum"] == "crc32_base62"
-                else recipes.iso7064_mod11_10(since_literal)
-            )
+            valid = recipes.checksum(segment["checksum"], since_literal, literal)
             parts.append(check if check != valid else "1" * len(check))
         else:
             parts.append(_hard_negative_encoded(segment, alphabets, variant))

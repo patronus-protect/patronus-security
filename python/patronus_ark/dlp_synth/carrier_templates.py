@@ -57,6 +57,8 @@ CONFIG = frozenset({"secret", "identifier"})
 PROSE = frozenset({"secret", "identifier", "fragment"})
 CODE = ("content.source_code",)
 LOG = ("content.system_log",)
+DUMP = ("content.database_dump", "content.sql")
+METRIC = ("content.business_metric",)
 
 
 def _code(id, language, split, code_language, template, env_ref, escape=("json",), multiline=True):
@@ -65,8 +67,12 @@ def _code(id, language, split, code_language, template, env_ref, escape=("json",
     )
 
 
-def _prose(id, format, language, split, template, env_ref):
-    return Family(id, format, language, split, _t(template), env_ref, (), 0, True, PROSE)
+def _prose(id, format, language, split, template, env_ref, content=()):
+    return Family(id, format, language, split, _t(template), env_ref, (), 0, True, PROSE, content)
+
+
+def _dump(id, language, split, template, env_ref):
+    return Family(id, "sql", language, split, _t(template), env_ref, ("json",), 0, True, CONFIG, DUMP)
 
 
 FAMILIES = (
@@ -1257,6 +1263,193 @@ FAMILIES = (
         """,
         ("<<value>>", "${<<KEY>>} (wird Ihnen separat per Post zugestellt)"),
     ),
+    # ── GOLD-D6 (both splits): database dumps and internal business figures ──
+    _dump(
+        "sql.mysqldump_settings", "en", "dev",
+        """
+        -- MySQL dump 10.13  Distrib 8.0.36, for Linux (x86_64)
+        --
+        -- Host: db-prod-01    Database: billing
+        -- ------------------------------------------------------
+        -- Server version       8.0.36
+
+        /*!40101 SET NAMES utf8mb4 */;
+
+        --
+        -- Table structure for table `integration_settings`
+        --
+
+        DROP TABLE IF EXISTS `integration_settings`;
+        CREATE TABLE `integration_settings` (
+          `id` int NOT NULL AUTO_INCREMENT,
+          `name` varchar(64) NOT NULL,
+          `value` text NOT NULL,
+          `updated_at` datetime NOT NULL,
+          PRIMARY KEY (`id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+        --
+        -- Dumping data for table `integration_settings`
+        --
+
+        LOCK TABLES `integration_settings` WRITE;
+        INSERT INTO `integration_settings` VALUES (1,'export.endpoint','https://api.example.com/v2','2026-09-14 08:12:44'),(2,'<<key>>','<<value>>','2026-09-14 08:12:44'),(3,'export.batch_size','500','2026-09-14 08:12:44');
+        UNLOCK TABLES;
+
+        -- Dump completed on 2026-09-14  8:13:02
+        """,
+        ("'<<value>>'", "'${<<KEY>>}'"),
+    ),
+    _dump(
+        "sql.pg_dump_de", "de", "dev",
+        """
+        --
+        -- PostgreSQL database dump
+        --
+
+        -- Dumped from database version 16.4
+        -- Dumped by pg_dump version 16.4
+        -- Sicherung der ERP-Datenbank, nächtlicher Lauf
+
+        SET statement_timeout = 0;
+        SET client_encoding = 'UTF8';
+        SET standard_conforming_strings = on;
+
+        --
+        -- Name: schnittstellen; Type: TABLE; Schema: public; Owner: erp
+        --
+
+        CREATE TABLE public.schnittstellen (
+            id integer NOT NULL,
+            bezeichnung text NOT NULL,
+            zugangsdaten text NOT NULL,
+            geaendert_am timestamp without time zone NOT NULL
+        );
+
+        --
+        -- Data for Name: schnittstellen; Type: TABLE DATA; Schema: public; Owner: erp
+        --
+
+        INSERT INTO public.schnittstellen (id, bezeichnung, zugangsdaten, geaendert_am) VALUES (1, 'Lieferantenportal – <<label>>', '<<value>>', '2026-09-14 07:55:10');
+        INSERT INTO public.schnittstellen (id, bezeichnung, zugangsdaten, geaendert_am) VALUES (2, 'Lagerverwaltung', 'siehe Vault', '2026-09-14 07:55:10');
+
+        --
+        -- PostgreSQL database dump complete
+        --
+        """,
+        ("'<<value>>'", "current_setting('erp.<<key>>')"),
+    ),
+    _prose(
+        "mail.en.board_update", "mail", "en", "dev",
+        """
+        From: Dana Whitfield <dana.whitfield@example.com>
+        To: leadership@example.com
+        Subject: CONFIDENTIAL – Q3 numbers before the board call
+        Date: Thu, 01 Oct 2026 18:40:02 +0200
+
+        Hi all,
+
+        preliminary Q3 figures, internal only until the earnings release:
+
+        Revenue: EUR 48.3m (plan 46.9m, +3% vs. forecast)
+        Gross margin: 61%
+        EBITDA: EUR 9.8m
+        FY2026 forecast: EUR 192m revenue
+
+        The finance dashboard refresh still uses the <<label>> from the runbook: <<value>>
+
+        Dana
+        """,
+        ("<<value>>", "(in the vault as <<key>>, the job reads ${<<KEY>>})"),
+        METRIC,
+    ),
+    _prose(
+        "ticket.de.controlling", "ticket", "de", "dev",
+        """
+        Ticket #31877 – Controlling-Export für die Vorstandsvorlage
+        Priorität: mittel · Komponente: bi-export · Vertraulichkeit: intern
+
+        Beschreibung:
+        Für die Vorstandsvorlage Q3 werden diese Kennzahlen aus dem Data Warehouse benötigt (Stand 30.09.):
+        Umsatz: 48.300.000 EUR (Plan 46,9 Mio. EUR)
+        Rohertragsmarge: 61,4 %
+        EBITDA-Marge: 20,2 %
+        Der Export-Job meldet sich mit diesem Zugang an (<<label>>): <<value>>
+        """,
+        ("<<value>>", "${<<KEY>>} aus der Umgebung des Export-Jobs"),
+        METRIC,
+    ),
+    _dump(
+        "sql.sqlite_dump", "en", "holdout",
+        """
+        PRAGMA foreign_keys=OFF;
+        BEGIN TRANSACTION;
+        CREATE TABLE app_settings (name TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT);
+        INSERT INTO app_settings VALUES('sync.target','https://hooks.example.com/orders','2026-08-30T10:02:11Z');
+        INSERT INTO app_settings VALUES('<<key>>','<<value>>','2026-08-30T10:02:11Z');
+        CREATE TABLE sync_runs (id INTEGER PRIMARY KEY, started TEXT, status TEXT);
+        INSERT INTO sync_runs VALUES(1,'2026-08-30T10:05:00Z','ok');
+        COMMIT;
+        """,
+        ("'<<value>>'", "'env:<<KEY>>'"),
+    ),
+    _dump(
+        "sql.mariadb_dump_de", "de", "holdout",
+        """
+        -- MariaDB dump 10.19  Distrib 10.11.8-MariaDB, for debian-linux-gnu (x86_64)
+        --
+        -- Host: localhost    Database: warenwirtschaft
+        -- ------------------------------------------------------
+        -- Sicherung vom 14.09.2026 (Mandantenkonfiguration)
+
+        DROP TABLE IF EXISTS `mandanten_konfiguration`;
+        CREATE TABLE `mandanten_konfiguration` (
+          `mandant` char(4) NOT NULL,
+          `schluessel` varchar(64) NOT NULL,
+          `wert` text NOT NULL,
+          PRIMARY KEY (`mandant`,`schluessel`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_german2_ci;
+
+        LOCK TABLES `mandanten_konfiguration` WRITE;
+        INSERT INTO `mandanten_konfiguration` (`mandant`, `schluessel`, `wert`) VALUES ('0001','waehrung','EUR'),('0001','<<key>>','<<value>>'),('0002','waehrung','CHF');
+        UNLOCK TABLES;
+
+        -- Dump completed on 2026-09-14  2:00:41
+        """,
+        ("'<<value>>'", "'${<<KEY>>}'"),
+    ),
+    _prose(
+        "chat.en.finance", "chat", "en", "holdout",
+        """
+        Marcus Lee 17:48
+        heads-up before the all-hands: H1 revenue landed at EUR 31.2m, net margin 8.5%, and the salary band for the new team leads is 95–110k 🤫
+
+        Elena Rossi 17:52
+        thanks, keep that out of #general. Also the BI sync needs the <<label>> again: <<value>>
+        """,
+        ("<<value>>", "{{ <<key>> }} from the finance vault"),
+        METRIC,
+    ),
+    _prose(
+        "mail.de.budgetklausur", "mail", "de", "holdout",
+        """
+        Betreff: VERTRAULICH: Forecast 2027 und Gehaltsrunde
+
+        Liebe Kolleginnen und Kollegen,
+
+        vorab die internen Eckwerte für die Budgetklausur:
+        Forecast Umsatz 2027: 212 Mio. EUR
+        Deckungsbeitrag: 18,6 %
+        Gehaltsbudget neu: 4,5 %
+
+        Für den Planungs-Export bitte diesen Zugang verwenden (<<label>>): <<value>>
+
+        Viele Grüße
+        Thomas Brandt, Finanzen
+        """,
+        ("<<value>>", "${<<KEY>>} (kommt separat vom Controlling)"),
+        METRIC,
+    ),
 )
 
 
@@ -1566,6 +1759,48 @@ PROFILES = {
     ),
     "data.cloudant.credentials": Profile(
         "data.cloudant.credentials", "API_KEY", "secret", "cloudant_password", "Cloudant password", "Cloudant-Passwort",
+    ),
+    # GOLD-D6: credential and key entities without an ARK rule.
+    "credential.cli_password": Profile(
+        "credential.cli_password", "CREDENTIAL", "secret", "upload_command", "curl upload command",
+        "curl-Upload-Befehl",
+        {
+            "curl_user_password": "curl -u ci-deploy:<<value>> -T build.tgz https://nexus.example.com/repository/raw/",
+            "curl_user_only": "curl -u <<value>> -T build.tgz https://nexus.example.com/repository/raw/",
+        },
+    ),
+    "credential.file.nuget_config": Profile(
+        "credential.file.nuget_config", "CREDENTIAL", "secret", "nuget_source_credentials",
+        "NuGet.Config credentials", "NuGet.Config-Zugangsdaten",
+        {
+            "nuget_cleartext_password": '<add key="ClearTextPassword" value="<<value>>" />',
+            "nuget_username": '<add key="Username" value="<<value>>" />',
+        },
+    ),
+    "credential.kubernetes_secret": Profile(
+        "credential.kubernetes_secret", "CREDENTIAL", "secret", "k8s_secret_manifest", "Kubernetes Secret manifest",
+        "Kubernetes-Secret-Manifest",
+        {
+            "kubernetes_secret_data": (
+                "{apiVersion: v1, kind: Secret, metadata: {name: billing-db}, type: Opaque, data: { password: <<value>> }}"
+            ),
+            "kubernetes_configmap_binary": (
+                "{apiVersion: v1, kind: ConfigMap, metadata: {name: billing-ui}, binaryData: { logo.png: <<value>> }}"
+            ),
+        },
+    ),
+    "credential.high_entropy_string": Profile(
+        "credential.high_entropy_string", "CREDENTIAL", "secret", "app_secret", "application secret", "Anwendungs-Secret"
+    ),
+    "key.age_secret_key": Profile(
+        "key.age_secret_key", "PRIVATE_KEY", "secret", "sops_age_key", "age secret key", "geheimer age-Schlüssel"
+    ),
+    "key.pkcs12_file": Profile(
+        "key.pkcs12_file", "PRIVATE_KEY", "secret", "keystore_p12_base64", "PKCS#12 keystore (base64)",
+        "PKCS#12-Keystore (Base64)",
+    ),
+    "key.symmetric_key": Profile(
+        "key.symmetric_key", "CRYPTO_KEY", "secret", "encryption_key", "encryption key", "Verschlüsselungsschlüssel"
     ),
 }
 

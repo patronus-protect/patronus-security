@@ -315,3 +315,30 @@ def basic_auth_pair(value: str) -> tuple[str, str] | None:
     if not separator or not user or not password or ":" in user:
         return None
     return user, password
+
+
+BECH32 = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
+
+
+def bech32_decode(value: str) -> tuple[str, bytes] | None:
+    """``(hrp, data bytes)`` of a single-case BIP 173 Bech32 string with zero padding bits, or ``None``."""
+    if value.lower() != value and value.upper() != value:
+        return None
+    lowered = value.lower()
+    hrp, separator, data = lowered.rpartition("1")
+    if not separator or not hrp or len(data) < 6 or any(char not in BECH32 for char in data):
+        return None
+    values = [ord(char) >> 5 for char in hrp] + [0] + [ord(char) & 31 for char in hrp] + [BECH32.index(c) for c in data]
+    check = 1
+    for value_5bit in values:
+        top = check >> 25
+        check = (check & 0x1FFFFFF) << 5 ^ value_5bit
+        for bit, generator in enumerate((0x3B6A57B2, 0x26508E6D, 0x1EA119FA, 0x3D4233DD, 0x2A1462B3)):
+            check ^= generator if top >> bit & 1 else 0
+    if check != 1:
+        return None
+    bits = "".join(f"{BECH32.index(char):05b}" for char in data[:-6])
+    padding = len(bits) % 8
+    if padding >= 5 or (padding and int(bits[-padding:], 2)):
+        return None
+    return hrp, int(bits[: len(bits) - padding] or "0", 2).to_bytes((len(bits) - padding) // 8, "big")

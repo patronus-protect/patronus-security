@@ -87,7 +87,10 @@ def _covers(m: dict[str, Any] | None) -> bool:
 def dlp_results(reports: dict[str, dict[str, Any]], extended: dict[str, Any] | None,
                 entity_map: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     """Per-entity and per-group results: default profile for every tool, ARK's opt-in profile for
-    default-off families. Without ``extended`` (no opt-in run) those families stay unmeasured."""
+    default-off families. Without ``extended`` (no opt-in run) those families stay unmeasured.
+
+    A content class without span gold is scored per document: on the external content goldens
+    if they hold it, else on the carrier rows (``content_labels``, GOLD-D6)."""
     taxonomy = entity_map["taxonomy"]
 
     def family(group: str | None) -> str:
@@ -97,6 +100,7 @@ def dlp_results(reports: dict[str, dict[str, Any]], extended: dict[str, Any] | N
     opt_in_classes = set((extended or {}).get("opt_in_classes") or [])
     ext_groups = (extended or {}).get("synthetic", {}).get("groups", {})
     ext_documents = ((extended or {}).get("external") or {}).get("documents", {})
+    carrier_documents = (extended or {}).get("synthetic", {}).get("documents", {})
 
     groups: dict[str, Any] = {}
     for group, meta in taxonomy.items():
@@ -126,10 +130,11 @@ def dlp_results(reports: dict[str, dict[str, Any]], extended: dict[str, Any] | N
             if entity_id not in opt_in_classes:
                 continue
             entry = {"gold": 0, "profile": "extended"}
+            document = next((documents[entity_id] for documents in (ext_documents, carrier_documents)
+                             if documents.get(entity_id, {}).get("gold")), None)
             if ext_groups.get(group, {}).get("gold"):
                 entry.update(gold=ext_groups[group]["gold"], extended={"ark": _metrics(ext_groups[group])})
-            elif ext_documents.get(entity_id, {}).get("gold"):
-                document = ext_documents[entity_id]
+            elif document:
                 entry.update(gold=document["gold"], level="document", extended={"ark": _metrics(document)})
                 groups[group] = dict(entry)
             entities[entity_id] = entry

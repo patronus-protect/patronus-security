@@ -28,7 +28,7 @@ REPO = Path(__file__).resolve().parents[2]
 ENTITY_MAP = REPO / "research/dlp/entity_map.yaml"
 FORMATS = {
     "env", "yaml", "json", "toml", "hcl", "xml", "properties", "shell", "dockerfile",
-    "ci_yaml", "jupyter", "log", "http", "code", "chat", "ticket", "mail",
+    "ci_yaml", "jupyter", "log", "http", "code", "chat", "ticket", "mail", "sql",
 }
 CODE_LANGUAGES = {"python", "javascript", "typescript", "go", "java", "csharp", "rust", "ruby"}
 HARD_NEGATIVES = {"placeholder", "env_ref", "doc_example", "test_key", "lookalike"}
@@ -53,6 +53,8 @@ STRUCTURAL = {
     "pem_openssh_ed25519_private_key": lambda v: any(
         checks.is_valid_openssh_ed25519(b) for _, b in checks.pem_blocks(v)
     ),
+    "age_secret_key": lambda v: checks.bech32_decode(v) is not None,
+    "pkcs12_keystore": lambda v: (raw := checks.b64decode(v)) is not None and raw.startswith(b"\x30\x82"),
 }
 # Value patterns of rules without a validator (mirrors ark-core/src/detectors/dlp/rules/): a
 # doc-example or test-key value must still match them, so only structural validation
@@ -195,12 +197,24 @@ class ProfileTests(unittest.TestCase):
             self.assertLessEqual(set(family.content), content, family.id)
 
     def test_entity_families_with_synthetic_gold_have_a_profile_for_every_entity(self):
-        # GOLD-D2/D3/D4: every entity of these families gets carrier gold, with or without an ARK rule.
-        families = {"comm", "identity", "commerce", "devops", "ci", "vcs", "registry", "hosting", "cloud", "data"}
+        # GOLD-D2/D3/D4/D6: every entity of these families gets carrier gold, with or without an ARK rule.
+        families = {
+            "comm", "identity", "commerce", "devops", "ci", "vcs", "registry", "hosting", "cloud", "data", "credential",
+            "key",
+        }
         entity_map = yaml.safe_load(ENTITY_MAP.read_text(encoding="utf-8"))
         expected = {entity["id"] for entity in entity_map["entities"] if entity["id"].split(".")[0] in families}
         covered = {profile.entity for profile in carriers.profiles().values()}
         self.assertEqual(expected - covered, set())
+
+    def test_every_content_class_has_families_in_both_languages_of_each_split(self):
+        # GOLD-D6: content classes are scored per document on the families that carry their label.
+        entity_map = yaml.safe_load(ENTITY_MAP.read_text(encoding="utf-8"))
+        content = {entity["id"] for entity in entity_map["entities"] if entity["id"].startswith("content.")}
+        for split in carriers.SPLITS:
+            for label in content:
+                languages = {f.language for f in carriers.families(split) if label in f.content}
+                self.assertEqual(languages, {"de", "en"}, f"{split} {label}")
 
     def test_key_forms(self):
         self.assertEqual(
@@ -240,6 +254,17 @@ class BuildTests(unittest.TestCase):
         same = [row for row in subset if row["rule_id"] == "dlp_github_token" and row["variant"] == "positive"]
         self.assertEqual([row["id"] for row in other], [row["id"] for row in same])
         self.assertFalse({row["text"] for row in other} & {row["text"] for row in same})
+
+    def test_high_entropy_positives_clear_the_detect_secrets_limit(self):
+        # Review of #205: dev seed 42 put a 4.46-bit value in ticket.de.schnittstelle.
+        for split in carriers.SPLITS:
+            for seed in (42, SEED):
+                rows = carriers.build(split, seed, rules=["credential.high_entropy_string"], variants=["positive"])
+                self.assertTrue(rows, split)
+                for row in rows:
+                    value = recipes.generate(row["generator"], row["seed"])
+                    limit = recipes.load_generators()[row["generator"]]["entropy_above"]
+                    self.assertGreater(recipes.shannon_entropy(value), limit, row["id"])
 
     def test_rows_only_use_families_of_their_split(self):
         for split, rows in self.rows.items():
@@ -416,6 +441,8 @@ class BuildTests(unittest.TestCase):
         self.assertTrue(all("content.source_code" in f.content for f in code))
         logs = [f for f in carriers.families() if f.format == "log"]
         self.assertTrue(all("content.system_log" in f.content for f in logs))
+        dumps = [f for f in carriers.families() if f.format == "sql"]
+        self.assertTrue(all(set(f.content) == {"content.database_dump", "content.sql"} for f in dumps))
 
 
 class CliTests(unittest.TestCase):

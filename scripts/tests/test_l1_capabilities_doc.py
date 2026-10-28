@@ -140,7 +140,11 @@ def test_converter_round_trip(tmp_path):
     assert dlp["entities"]["identifier.de.vat_id"] == {
         "gold": 8, "profile": "extended", "extended": {"ark": {"f1": 50.0, "precision": 75.0, "recall": 37.5}}}
     assert dlp["entities"]["content.sql"]["level"] == "document"
-    assert dlp["entities"]["content.sql"]["extended"]["ark"]["f1"] == 90.9
+    assert dlp["entities"]["content.sql"]["extended"]["ark"]["f1"] == 90.9  # external goldens first
+    # GOLD-D6: a content class without span or external gold is scored on the carrier documents.
+    assert dlp["entities"]["content.system_log"] == {"gold": 30, "profile": "extended", "level": "document",
+                                                     "extended": {"ark": {"f1": 72.0, "precision": 90.0, "recall": 60.0}}}
+    assert dlp["groups"]["dlp.content.system_log"] == dlp["entities"]["content.system_log"]
     assert "document.hr" not in dlp["entities"] and "action.secret_transfer" not in dlp["entities"]
     assert dlp["groups"]["API_KEY"]["default"]["gitleaks"]["f1"] == 50.0
     assert dlp["groups"]["dlp.de.vat_id"]["extended"]["ark"]["f1"] == 50.0
