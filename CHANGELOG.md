@@ -64,6 +64,36 @@ result shapes may be breaking for downstream users, and is called out explicitly
   `CREDITCARD` hard negatives that are valid RRNs, now annotated as `KR_RRN`; `balanced`/`recall`:
   also the bare hyphenated forms). The rule regexes are linear and bounded.
 
+### Detection changes
+
+- DLP L1 CI and hosting tokens (P06, all modes): nineteen new provider rules, each with a format
+  source in `research/dlp/rule_sources.yaml`. Prefix rules with a token boundary:
+  `dlp_azure_devops_pat` (84 alphanumerics with the signature `AZDO` at positions 76 to 80, both
+  cases), `dlp_circleci_token` (`CCIPAT_`/`CCIPRJ_`, a base58 UUID and 40 hex digits),
+  `dlp_vercel_token` (`vcp_`, `vci_`, `vca_`, `vcr_`, `vck_` and 56 alphanumerics with both cases),
+  `dlp_netlify_token` (`nfp_`), `dlp_flyio_token` (`fo1_`), `dlp_heroku_api_key` (`HRKU-AA`),
+  `dlp_render_api_key` (`rnd_` and 24 to 64 alphanumerics, only with `render` on the value's line
+  or up to five lines above, since Render documents no length), `dlp_cloudflare_origin_ca_key`
+  (`v1.0-`) and `dlp_digitalocean_token` (`dop_v1_`/`doo_v1_`/`dor_v1_`);
+  `dlp_flyio_macaroon_token` (`fm1a_`/`fm1r_`/`fm2_` and base64) has no token boundary because `/`
+  and `+` belong to the token. Key-anchored rules report a value under a key that names the
+  provider and ends in a credential noun right before the separator, tighter than the gitleaks
+  keyword rules: `dlp_bitbucket_client_secret` (`API_KEY`, subtype `secret_key`),
+  `dlp_azure_devops_legacy_pat`, `dlp_circleci_legacy_token`, `dlp_travis_token`,
+  `dlp_vercel_legacy_token`, `dlp_netlify_legacy_token`, `dlp_heroku_legacy_api_key`,
+  `dlp_railway_token` and `dlp_cloudflare_api_key`; IDs under provider keys without a credential
+  noun (`HEROKU_APP_ID`, `CIRCLE_SHA1`, `RAILWAY_PROJECT_ID`) stay silent. The baseline entities for
+  Bitbucket, Travis CI, Fly.io, Netlify, Heroku, Cloudflare and DigitalOcean become `shared`, Azure
+  DevOps, CircleCI, Vercel and Railway are new `shared` entities (TruffleHog detectors), Render is
+  `ark_only`; Drone CI, OpenShift, Defined Networking, Fastly and SettleMint stay `baseline_only`.
+  **Detection change:** these tokens are new findings; a value a generic rule reported before now
+  carries the provider rule. Dev scoreboard vs. 7790d59 (PASS, 67 checks): every group unchanged
+  (the frozen dev corpora predate the GOLD-D3/D4 rows, T19), FP/MB on benign code 0.053 → 0.053,
+  hard-negative FP 154 → 154; 100 KiB p95 13.38 → 12.16 ms, 10 MiB repo 6.05 → 6.12 MiB/s (same
+  host load for both builds). Every new regex is linear and bounded and has literal prefilter
+  keywords (the key-anchored rules start at the provider name). `dlp_l1.jsonl` gains 74 rows (39
+  positives, 35 hard negatives, DE + EN); new `rust/tests/dlp_hosting_tokens.rs`.
+
 ## [0.1.14] - 2026-10-28
 
 ### Added

@@ -150,7 +150,7 @@
     "dlp_azure_devops_pat": {
       "generators": ["azure_devops_pat"],
       "lookalike": ["azure_devops_pat_shifted"],
-      "probes": ["AZURE_DEVOPS_EXT_PAT=<<secret:0>>", "$ git clone https://build:<<secret:0>>@dev.azure.com/acme/shop/_git/api"]
+      "probes": ["AZURE_DEVOPS_EXT_PAT=<<secret:0>>", "$ echo <<secret:0>> | az devops login --organization https://dev.azure.com/acme"]
     },
     "dlp_azure_devops_legacy_pat": {
       "generators": ["azure_devops_legacy_pat"],
