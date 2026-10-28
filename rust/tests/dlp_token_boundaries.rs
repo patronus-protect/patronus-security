@@ -40,6 +40,17 @@ const BOUNDED: &[(&str, &str)] = &[
     ("dlp_gitlab_token", "-"),
     ("dlp_gitlab_oauth_secret", "-"),
     ("dlp_npm_token", ""),
+    ("dlp_dockerhub_token", "-"),
+    ("dlp_pypi_token", "-"),
+    ("dlp_rubygems_token", ""),
+    ("dlp_cratesio_token", ""),
+    ("dlp_packagist_token", ""),
+    ("dlp_jfrog_token", ""),
+    ("dlp_terraform_cloud_token", "-"),
+    ("dlp_pulumi_token", "-"),
+    ("dlp_vault_token", "-"),
+    ("dlp_vault_legacy_token", ""),
+    ("dlp_doppler_token", ""),
     ("dlp_stripe_key", "-"),
     ("dlp_stripe_webhook", "-"),
     ("dlp_slack_token", "-"),
@@ -160,6 +171,17 @@ fn prefix_rules_declare_their_token_boundary() {
     }
 }
 
+/// `text` with the context a context-gated rule needs on the line above:
+/// a key term for a wallet key (F01), a Vault term for a legacy Vault token
+/// (P05).
+fn with_context(rule: &str, text: String) -> String {
+    match rule {
+        "dlp_eth_private_key" => format!("wallet private key:\n{text}"),
+        "dlp_vault_legacy_token" => format!("Vault token:\n{text}"),
+        _ => text,
+    }
+}
+
 #[test]
 fn generated_values_between_delimiters_stay_findings() {
     for (rule, value) in bounded_values() {
@@ -179,12 +201,7 @@ fn generated_values_between_delimiters_stay_findings() {
             format!("{{\"msg\":\"retrying with\\n{value}\\tok\"}}"),
             format!("{{\"msg\":\"key=\\u0022{value}\\u0022\"}}"),
         ] {
-            // F01: a wallet key needs a key term; here on the line above.
-            let text = if rule == "dlp_eth_private_key" {
-                format!("wallet private key:\n{text}")
-            } else {
-                text
-            };
+            let text = with_context(rule, text);
             assert!(reports(&text, &value), "{rule}: {text:?}");
         }
     }
@@ -240,7 +257,10 @@ fn values_inside_base64_blobs_are_no_findings() {
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'/' | b'='));
         if !in_alphabet {
-            let text = format!("data:application/octet-stream;base64,{BLOB}+{value}/{BLOB}==");
+            let text = with_context(
+                rule,
+                format!("data:application/octet-stream;base64,{BLOB}+{value}/{BLOB}=="),
+            );
             assert!(reports(&text, &value), "{rule}: {text:?}");
             continue;
         }

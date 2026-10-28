@@ -1,20 +1,79 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-//! Provider-bound secret formats (LLM, cloud, source control, payment, chat).
+//! Provider-bound secret formats (LLM, cloud, source control, DevOps and
+//! package registries, payment, chat).
 use crate::{
     detectors::dlp::{
-        aws_context::{has_aws_secret_context, is_aws_secret_value},
+        aws_context::{has_aws_secret_context, is_aws_secret_value, lines_above},
         dlp::{DlpPattern, RuleMeta, SecretSubtype, ValidatorStrength},
         prefilter::ValueClass,
     },
-    detectors::validators::crc32_base62_valid,
+    detectors::validators::{
+        base64_decode, crc32_base62_valid, crc32_hex_valid, macaroon_v2_parse, Base64Kind,
+    },
     post_prediction::is_real_secret_assignment,
 };
+use std::ops::Range;
 
 /// GitHub token (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`) and npm token
 /// (`npm_`, F04): after the four-character prefix, 30 random base62
 /// characters and their CRC32 as six base62 digits.
 fn is_crc32_token(value: &str) -> bool {
     value.len() == 40 && value.get(4..).is_some_and(crc32_base62_valid)
+}
+
+/// P05: a PyPI API token is `pypi-` and the unpadded base64url of a complete
+/// Macaroon V2 whose location is PyPI or TestPyPI.
+fn is_pypi_token(value: &str) -> bool {
+    value
+        .strip_prefix("pypi-")
+        .and_then(|body| base64_decode(body, Base64Kind::UrlSafe))
+        .is_some_and(|raw| {
+            macaroon_v2_parse(&raw).is_some_and(|macaroon| {
+                matches!(
+                    macaroon.location,
+                    Some(b"pypi.org") | Some(b"test.pypi.org")
+                )
+            })
+        })
+}
+
+/// P05: a random base62 body has upper- and lower-case letters (one of them
+/// is missing with a chance below 10⁻⁵ for 24 characters); identifiers that
+/// only start like a token mostly lack one.
+fn has_both_cases(body: &str) -> bool {
+    body.bytes().any(|byte| byte.is_ascii_uppercase())
+        && body.bytes().any(|byte| byte.is_ascii_lowercase())
+}
+
+/// crates.io token: `cio` and a body with both cases.
+fn is_cratesio_token(value: &str) -> bool {
+    value.strip_prefix("cio").is_some_and(has_both_cases)
+}
+
+/// Legacy Vault token: `s.` and a body with both cases.
+fn is_vault_legacy_token(value: &str) -> bool {
+    value.strip_prefix("s.").is_some_and(has_both_cases)
+}
+
+/// Lines above the value's line in which a Vault term counts.
+const VAULT_CONTEXT_LINES: usize = 5;
+
+/// P05: a legacy Vault token (`s.` and 24 characters) shares its shape with
+/// member accesses and file names, so it needs Vault on its line or up to
+/// five lines above it (`VAULT_TOKEN=`, `X-Vault-Token:`, `vault login`, a
+/// "Vault token" label).
+fn has_vault_context(text: &str, value: Range<usize>) -> bool {
+    let start = lines_above(text, value.start, VAULT_CONTEXT_LINES);
+    let line_end = text[value.end..]
+        .find('\n')
+        .map_or(text.len(), |newline| value.end + newline);
+    [&text[start..value.start], &text[value.end..line_end]]
+        .iter()
+        .any(|part| {
+            part.as_bytes()
+                .windows(5)
+                .any(|window| window.eq_ignore_ascii_case(b"vault"))
+        })
 }
 
 pub(super) const RULES: &[DlpPattern] = &[
@@ -367,6 +426,230 @@ pub(super) const RULES: &[DlpPattern] = &[
             &["npm_"],
         )
         .with_provider("npm")
+        .with_min_entropy(3.0)
+        .with_boundary("")
+        .with_subtype(SecretSubtype::AccessToken),
+    },
+    // ── DevOps / package registries (P05) ────────────────────────────────────
+    // Docker Hub personal (`dckr_pat_`) and organization (`dckr_oat_`) access
+    // tokens: the prefix and 27 base64url characters.
+    DlpPattern {
+        name: "dlp_dockerhub_token",
+        pattern: r"dckr_(?:pat|oat)_[A-Za-z0-9_\-]{27}",
+        entity_group: "SECRET_TOKEN",
+        validator: None,
+        span_group: None,
+        base_score: 55,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://docs.docker.com/reference/api/hub/latest/",
+            &["dckr_pat_", "dckr_oat_"],
+        )
+        .with_provider("dockerhub")
+        .with_min_entropy(3.0)
+        .with_boundary("-")
+        .with_subtype(SecretSubtype::AccessToken),
+    },
+    // PyPI and TestPyPI API tokens: `pypi-` and a base64url Macaroon V2 whose
+    // header names the index (`AgEIcHlwaS5vcmc` is `02 01 08 pypi.org`).
+    DlpPattern {
+        name: "dlp_pypi_token",
+        pattern: r"pypi-AgE(?:IcHlwaS5vcmc|NdGVzdC5weXBpLm9yZw)[A-Za-z0-9_\-]{50,1000}",
+        entity_group: "SECRET_TOKEN",
+        validator: Some(is_pypi_token),
+        span_group: None,
+        base_score: 50,
+        meta: RuleMeta::new(
+            ValidatorStrength::Structure,
+            "gitleaks:pypi-upload-token",
+            &["pypi-age"],
+        )
+        .with_provider("pypi")
+        .with_min_entropy(3.0)
+        .with_test_prefixes(&["pypi-AgENdGVzdC5weXBpLm9yZw"])
+        .with_boundary("-")
+        .with_subtype(SecretSubtype::AccessToken),
+    },
+    DlpPattern {
+        name: "dlp_rubygems_token",
+        pattern: r"rubygems_[0-9a-f]{48}",
+        entity_group: "SECRET_TOKEN",
+        validator: None,
+        span_group: None,
+        base_score: 55,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:rubygems-api-token",
+            &["rubygems_"],
+        )
+        .with_provider("rubygems")
+        .with_min_entropy(3.0)
+        .with_boundary("")
+        .with_subtype(SecretSubtype::AccessToken),
+    },
+    // crates.io API tokens: `cio` and 32 random alphanumerics.
+    DlpPattern {
+        name: "dlp_cratesio_token",
+        pattern: r"cio[A-Za-z0-9]{32}",
+        entity_group: "SECRET_TOKEN",
+        validator: Some(is_cratesio_token),
+        span_group: None,
+        base_score: 45,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://github.com/rust-lang/crates.io/blob/main/crates/crates_io_database/src/utils/token.rs",
+            &["cio"],
+        )
+        .with_provider("cratesio")
+        .with_min_entropy(3.5)
+        .with_boundary("")
+        .with_subtype(SecretSubtype::AccessToken),
+    },
+    // Private Packagist tokens: a prefix per token kind, 60 hex characters and
+    // the CRC32 of both as eight hex digits.
+    DlpPattern {
+        name: "dlp_packagist_token",
+        pattern: r"packagist_(?:ort|out|uut|cut)_[0-9a-f]{68}",
+        entity_group: "SECRET_TOKEN",
+        validator: Some(crc32_hex_valid),
+        span_group: None,
+        base_score: 50,
+        meta: RuleMeta::new(
+            ValidatorStrength::Checksum,
+            "https://packagist.com/docs/composer-authentication",
+            &[
+                "packagist_ort_",
+                "packagist_out_",
+                "packagist_uut_",
+                "packagist_cut_",
+            ],
+        )
+        .with_provider("packagist")
+        .with_min_entropy(3.0)
+        .with_boundary("")
+        .with_subtype(SecretSubtype::AccessToken),
+    },
+    // JFrog Artifactory API keys (`AKCp`) and reference tokens (`cmVmd`, the
+    // base64 of `ref`).
+    DlpPattern {
+        name: "dlp_jfrog_token",
+        pattern: r"AKCp[A-Za-z0-9]{69}|cmVmd[A-Za-z0-9]{59}",
+        entity_group: "SECRET_TOKEN",
+        validator: None,
+        span_group: None,
+        base_score: 55,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:artifactory-api-key",
+            &["akcp", "cmvmd"],
+        )
+        .with_provider("jfrog")
+        .with_min_entropy(3.0)
+        .with_boundary("")
+        .with_subtype(SecretSubtype::AccessToken),
+    },
+    // HCP Terraform (Terraform Cloud/Enterprise) API tokens: 14
+    // alphanumerics, `.atlasv1.` and 60 to 70 characters.
+    DlpPattern {
+        name: "dlp_terraform_cloud_token",
+        pattern: r"[A-Za-z0-9]{14}\.atlasv1\.[A-Za-z0-9_=\-]{60,70}",
+        entity_group: "SECRET_TOKEN",
+        validator: None,
+        span_group: None,
+        base_score: 55,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:hashicorp-tf-api-token",
+            &[".atlasv1."],
+        )
+        .with_provider("terraform_cloud")
+        .with_min_entropy(3.0)
+        .with_boundary("-")
+        .with_subtype(SecretSubtype::AccessToken),
+    },
+    DlpPattern {
+        name: "dlp_pulumi_token",
+        pattern: r"pul-[0-9a-f]{40}",
+        entity_group: "SECRET_TOKEN",
+        validator: None,
+        span_group: None,
+        base_score: 55,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:pulumi-api-token",
+            &["pul-"],
+        )
+        .with_provider("pulumi")
+        .with_min_entropy(3.0)
+        .with_boundary("-")
+        .with_subtype(SecretSubtype::AccessToken),
+    },
+    // HashiCorp Vault 1.10+ service (`hvs.`) and batch (`hvb.`) tokens with
+    // the lengths of the gitleaks rules.
+    DlpPattern {
+        name: "dlp_vault_token",
+        pattern: r"hvs\.[A-Za-z0-9_\-]{90,120}|hvb\.[A-Za-z0-9_\-]{138,300}",
+        entity_group: "SECRET_TOKEN",
+        validator: None,
+        span_group: None,
+        base_score: 55,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:vault-service-token",
+            &["hvs.", "hvb."],
+        )
+        .with_provider("vault")
+        .with_min_entropy(3.0)
+        .with_boundary("-")
+        .with_subtype(SecretSubtype::AccessToken),
+    },
+    // Vault service tokens before 1.10: `s.` and 24 alphanumerics, only in
+    // Vault context.
+    DlpPattern {
+        name: "dlp_vault_legacy_token",
+        pattern: r"s\.[A-Za-z0-9]{24}",
+        entity_group: "SECRET_TOKEN",
+        validator: Some(is_vault_legacy_token),
+        span_group: None,
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:vault-service-token",
+            &["s."],
+        )
+        .with_provider("vault")
+        .with_min_entropy(3.5)
+        .with_boundary("")
+        .with_context_gate(has_vault_context)
+        .with_subtype(SecretSubtype::AccessToken),
+    },
+    // Doppler tokens: personal, CLI, service (optionally scoped), service
+    // account, service account identity, SCIM and audit tokens with 40 to 44
+    // alphanumerics.
+    DlpPattern {
+        name: "dlp_doppler_token",
+        pattern: concat!(
+            r"dp\.(?:pt|ct|sa|said|scim|audit)\.[A-Za-z0-9]{40,44}",
+            r"|dp\.st\.(?:[a-z0-9_\-]{2,35}\.)?[A-Za-z0-9]{40,44}",
+        ),
+        entity_group: "SECRET_TOKEN",
+        validator: None,
+        span_group: None,
+        base_score: 55,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://docs.doppler.com/reference/auth-token-formats",
+            &[
+                "dp.pt.",
+                "dp.ct.",
+                "dp.st.",
+                "dp.sa.",
+                "dp.said.",
+                "dp.scim.",
+                "dp.audit.",
+            ],
+        )
+        .with_provider("doppler")
         .with_min_entropy(3.0)
         .with_boundary("")
         .with_subtype(SecretSubtype::AccessToken),

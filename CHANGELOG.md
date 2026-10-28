@@ -398,6 +398,27 @@ result shapes may be breaking for downstream users, and is called out explicitly
   147.1 → 146.9 / 157.9 ms in two head runs (PASS, noise), 4 KiB 7.66 → 6.80 / 6.62 ms.
 ### Detection changes
 
+- DLP L1 DevOps and package-registry tokens (P05, all modes): eleven new provider rules, all
+  `SECRET_TOKEN` with subtype `access_token` and a format source in
+  `research/dlp/rule_sources.yaml`. `dlp_dockerhub_token` (`dckr_pat_`/`dckr_oat_`, 27 base64url
+  characters), `dlp_pypi_token` (`pypi-` and a base64url Macaroon V2 for `pypi.org` or
+  `test.pypi.org`, parsed completely by the new `validators::macaroon_v2_parse`, `structure`
+  strength, TestPyPI with severity `test`), `dlp_rubygems_token`, `dlp_cratesio_token` (`cio` and 32
+  alphanumerics with both cases), `dlp_packagist_token` (Private Packagist prefixes, 60 hex digits
+  and their CRC32, new `validators::crc32_hex_valid`, `checksum` strength; a generic rule does not
+  report a Packagist shape whose CRC32 fails), `dlp_jfrog_token` (`AKCp`, `cmVmd`),
+  `dlp_terraform_cloud_token` (`.atlasv1.`), `dlp_pulumi_token`, `dlp_vault_token` (`hvs.`, `hvb.`),
+  `dlp_vault_legacy_token` (`s.` and 24 characters, only with `vault` on the value's line or up to
+  five lines above) and `dlp_doppler_token` (all documented Doppler prefixes). The seven GOLD-D3
+  entities for PyPI, RubyGems, JFrog, Terraform Cloud, Pulumi, Vault and Doppler become `shared`;
+  Docker Hub, crates.io and Packagist are new `ark_only` entities. NuGet API keys have no vendor
+  format source and get no rule. **Detection change:** these tokens are new findings; a value a
+  generic rule reported before now carries the provider rule. Dev scoreboard vs. d4148d7 (PASS, 67
+  checks): every group unchanged (the frozen dev corpora predate the GOLD-D3 rows, T19), FP/MB on
+  benign code 0.053 → 0.053, hard-negative FP 154 → 154; 100 KiB p95 11.06 → 11.03 ms, 10 MiB repo
+  7.68 → 7.69 MiB/s. `dlp_l1.jsonl` gains 48 rows (25 positives, 23 hard negatives, DE + EN), new
+  generators with lookalikes and the recipe checksum kind `crc32_hex`; new
+  `rust/tests/dlp_registry_tokens.rs`.
 - DLP L1 (T17, all modes): `dlp_url_userinfo_password` reads the matched userinfo password
   percent-decoded before the F-GEN1 likeness check and also drops credential nouns masked with
   leetspeak digits and symbols, as Basic auth and connection strings already do. Test

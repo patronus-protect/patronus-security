@@ -8,7 +8,8 @@
 //! seed, alphabets concatenated from their chunks, literal segments copied,
 //! alphabet segments drawing `alphabet[next_u64() % alphabet.len()]` per
 //! character, checksum segments (`crc32_base62`, `iso7064_mod11_10`, `bech32`
-//! under the HRP of the last literal) over the text since the last literal, and encoded segments that build bytes from
+//! under the HRP of the last literal) over the text since the last literal
+//! (`crc32_hex` over the last literal and that text), and encoded segments that build bytes from
 //! hex/ASCII/random/alphabet parts and emit them as hex, base64 (padded,
 //! optionally wrapped), unpadded base64, base64url, bcrypt radix-64 or
 //! Base58Check. Placeholders may encode (`<<secret:N|base64>>`, `hex`, `url`,
@@ -215,6 +216,7 @@ fn shannon_entropy(value: &str) -> f64 {
 fn checksum_length(kind: &str) -> Option<usize> {
     match kind {
         "crc32_base62" => Some(6),
+        "crc32_hex" => Some(8),
         "iso7064_mod11_10" => Some(1),
         "bech32" => Some(6),
         _ => None,
@@ -705,6 +707,12 @@ impl GeneratorSet {
                 Segment::Checksum(Checksum { checksum }) => {
                     match checksum.as_str() {
                         "crc32_base62" => part = crc32_base62(&since_literal),
+                        "crc32_hex" => {
+                            part = format!(
+                                "{:08x}",
+                                crc32(format!("{literal}{since_literal}").as_bytes())
+                            )
+                        }
                         "bech32" => part = bech32_checksum(literal, &since_literal)?,
                         _ => part = iso7064_mod11_10(&since_literal)?,
                     }

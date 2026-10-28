@@ -1476,6 +1476,45 @@ PROFILES = {
         "GitLab-OAuth-Anwendungs-Secret",
     ),
     "dlp_npm_token": Profile("registry.npm.access_token", "SECRET_TOKEN", "secret", "npm_token", "npm token", "npm-Token"),
+    # P05: DevOps and package registries.
+    "dlp_jfrog_token": Profile(
+        "registry.jfrog.artifactory", "SECRET_TOKEN", "secret", "artifactory_api_key", "Artifactory API key",
+        "Artifactory-API-Schlüssel",
+    ),
+    "dlp_pypi_token": Profile(
+        "registry.pypi.upload_token", "SECRET_TOKEN", "secret", "pypi_api_token", "PyPI API token", "PyPI-API-Token"
+    ),
+    "dlp_rubygems_token": Profile(
+        "registry.rubygems.api_token", "SECRET_TOKEN", "secret", "gem_host_api_key", "RubyGems API key",
+        "RubyGems-API-Schlüssel",
+    ),
+    "dlp_terraform_cloud_token": Profile(
+        "devops.terraform_cloud.token", "SECRET_TOKEN", "secret", "tfe_token", "Terraform Cloud API token",
+        "Terraform-Cloud-API-Token",
+    ),
+    "dlp_pulumi_token": Profile(
+        "devops.pulumi.api_token", "SECRET_TOKEN", "secret", "pulumi_access_token", "Pulumi access token",
+        "Pulumi-Zugriffstoken",
+    ),
+    "dlp_vault_token": Profile("devops.vault.token", "SECRET_TOKEN", "secret", "vault_token", "Vault token", "Vault-Token"),
+    "dlp_doppler_token": Profile(
+        "devops.doppler.api_token", "SECRET_TOKEN", "secret", "doppler_token", "Doppler token", "Doppler-Token"
+    ),
+    "dlp_vault_legacy_token": Profile(
+        "devops.vault.token", "SECRET_TOKEN", "secret", "vault_token", "Vault token", "Vault-Token"
+    ),
+    "dlp_dockerhub_token": Profile(
+        "registry.dockerhub.access_token", "SECRET_TOKEN", "secret", "dockerhub_token", "Docker Hub access token",
+        "Docker-Hub-Zugriffstoken",
+    ),
+    "dlp_cratesio_token": Profile(
+        "registry.cratesio.api_token", "SECRET_TOKEN", "secret", "cargo_registry_token", "crates.io API token",
+        "crates.io-API-Token",
+    ),
+    "dlp_packagist_token": Profile(
+        "registry.packagist.token", "SECRET_TOKEN", "secret", "packagist_token", "Private Packagist token",
+        "Private-Packagist-Token",
+    ),
     "dlp_stripe_key": Profile("payment.stripe.secret_key", "PAYMENT_KEY", "secret", "stripe_secret_key", "Stripe secret key", "Stripe-Secret-Key"),
     "dlp_stripe_webhook": Profile("payment.stripe.webhook_secret", "PAYMENT_KEY", "secret", "stripe_webhook_secret", "Stripe webhook secret", "Stripe-Webhook-Secret"),
     "dlp_slack_token": Profile("comm.slack.token", "SECRET_TOKEN", "secret", "slack_token", "Slack token", "Slack-Token"),
@@ -1614,32 +1653,9 @@ PROFILES = {
     "ci.travisci.access_token": Profile(
         "ci.travisci.access_token", "SECRET_TOKEN", "secret", "travis_api_token", "Travis CI API token", "Travis-CI-API-Token"
     ),
-    "registry.jfrog.artifactory": Profile(
-        "registry.jfrog.artifactory", "SECRET_TOKEN", "secret", "artifactory_api_key", "Artifactory API key",
-        "Artifactory-API-Schlüssel",
-    ),
-    "registry.pypi.upload_token": Profile(
-        "registry.pypi.upload_token", "SECRET_TOKEN", "secret", "pypi_api_token", "PyPI API token", "PyPI-API-Token"
-    ),
-    "registry.rubygems.api_token": Profile(
-        "registry.rubygems.api_token", "SECRET_TOKEN", "secret", "gem_host_api_key", "RubyGems API key",
-        "RubyGems-API-Schlüssel",
-    ),
     "registry.clojars.api_token": Profile(
         "registry.clojars.api_token", "SECRET_TOKEN", "secret", "clojars_deploy_token", "Clojars deploy token",
         "Clojars-Deploy-Token",
-    ),
-    "devops.terraform_cloud.token": Profile(
-        "devops.terraform_cloud.token", "SECRET_TOKEN", "secret", "tfe_token", "Terraform Cloud API token",
-        "Terraform-Cloud-API-Token",
-    ),
-    "devops.pulumi.api_token": Profile(
-        "devops.pulumi.api_token", "SECRET_TOKEN", "secret", "pulumi_access_token", "Pulumi access token",
-        "Pulumi-Zugriffstoken",
-    ),
-    "devops.vault.token": Profile("devops.vault.token", "SECRET_TOKEN", "secret", "vault_token", "Vault token", "Vault-Token"),
-    "devops.doppler.api_token": Profile(
-        "devops.doppler.api_token", "SECRET_TOKEN", "secret", "doppler_token", "Doppler token", "Doppler-Token"
     ),
     "devops.prefect.api_token": Profile(
         "devops.prefect.api_token", "SECRET_TOKEN", "secret", "prefect_api_key", "Prefect API key", "Prefect-API-Schlüssel"

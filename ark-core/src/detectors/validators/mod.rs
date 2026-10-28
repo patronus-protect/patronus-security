@@ -3,7 +3,8 @@
 //!
 //! Offline structure and checksum primitives: CRC-32 and the CRC32-Base62
 //! suffix of GitHub/npm tokens, Base58/Base58Check, Bech32/Bech32m, strict
-//! canonical base64, DER TLV parsing, JWT headers and compact JWS, Shannon
+//! canonical base64, DER TLV parsing, JWT headers and compact JWS, Macaroon V2,
+//! the CRC32-hex suffix of Packagist tokens, Shannon
 //! entropy and character classes. Every function is pure, never panics on
 //! untrusted input and returns `None`/`false` for anything that does not parse
 //! completely. Format-specific checks (WIF version byte, PEM key types,
@@ -17,6 +18,7 @@ mod checksum;
 mod der;
 mod entropy;
 mod jwt;
+mod macaroon;
 
 pub use base58::{base58_decode, base58check_decode};
 pub use base64::{base64_decode, Base64Kind};
@@ -27,10 +29,11 @@ pub use charset::{
     in_alphabet, CharClasses, BASE32, BASE58, BASE62, BASE64, BASE64URL, BECH32, HEX_LOWER,
     HEX_UPPER,
 };
-pub use checksum::{crc32, crc32_base62, crc32_base62_valid, CRC32_BASE62_LENGTH};
+pub use checksum::{crc32, crc32_base62, crc32_base62_valid, crc32_hex_valid, CRC32_BASE62_LENGTH};
 pub use der::{der_integer_ok, der_parse, der_sequence, DerElement};
 pub use entropy::shannon_entropy;
 pub use jwt::{jwt_header, jwt_parse, Jwt, JwtHeader};
+pub use macaroon::{macaroon_v2_parse, MacaroonV2};
 
 #[cfg(test)]
 mod tests {
@@ -62,6 +65,8 @@ mod tests {
                         let _ = bech32_decode(&text);
                         let _ = jwt_parse(&text);
                         let _ = crc32_base62_valid(&text);
+                        let _ = crc32_hex_valid(&text);
+                        let _ = macaroon_v2_parse(&input);
                         let _ = shannon_entropy(&text);
                         for kind in [
                             Base64Kind::Standard,

@@ -2,6 +2,7 @@ import base64
 import hashlib
 import json
 import re
+import runpy
 import unittest
 import zlib
 
@@ -10,7 +11,9 @@ from patronus_ark.dlp_synth import recipes, rules
 
 
 # F01: rules whose strict hard negatives may also hold plain generator values (no key context).
-CONTEXT_GATED_RULES = {"dlp_eth_private_key"}
+CONTEXT_GATED_RULES = set(
+    runpy.run_path(str(benchmark.DATA_DIR / "generate_l1_goldens.py"))["DLP_CONTEXT_GATED_RULES"]
+)
 LOOKALIKE_GENERATORS = {name for entry in rules.load_rule_map().values() for name in entry.get("lookalike", [])}
 SECRET_GROUPS = {
     "API_KEY",
