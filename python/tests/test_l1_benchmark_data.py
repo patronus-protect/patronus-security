@@ -10,12 +10,14 @@ from patronus_ark.dlp_synth import recipes
 
 PII_LABELS = {
     "APPLICANT_ID",
+    "AT_SOCIAL_SECURITY_NUMBER",
     "AU_ABN",
     "AU_ACN",
     "AU_MEDICARE",
     "AU_TFN",
     "BE_NATIONAL_NUMBER",
     "CA_SIN",
+    "CH_AHV_NUMBER",
     "CREDITCARD",
     "CREDITCARD_CVV",
     "CREDITCARD_EXPIRY",
@@ -43,8 +45,10 @@ PII_LABELS = {
     "NL_BSN",
     "PASSPORT_NUMBER",
     "PATIENT_ID",
+    "IE_PPSN",
     "PHONE",
     "PHYSICIAN_NUMBER_LANR",
+    "PT_NIF",
     "SE_ORGANISATIONSNUMMER",
     "SE_PERSONNUMMER",
     "SG_NRIC_FIN",
@@ -90,8 +94,8 @@ PII_LABELS = {
     "ZA_ID_NUMBER",
 }
 # Languages of pii_l1: DE/EN, the FR/ES/IT/NL field names (T26) and the national languages of
-# country IDs (B-LUHN), whose rows only target the IDs of their country.
-NATIONAL_LANGUAGES = {"sv": "SE_", "tr": "TR_"}
+# country IDs (B-LUHN, B-EU2), whose rows only target the IDs of their country.
+NATIONAL_LANGUAGES = {"sv": "SE_", "tr": "TR_", "pt": "PT_"}
 PII_LANGUAGES = {"de", "en", "fr", "es", "it", "nl", *NATIONAL_LANGUAGES}
 
 DLP_LABELS = {
@@ -211,7 +215,7 @@ class L1BenchmarkDataTests(unittest.TestCase):
                 materialized = recipes.materialize_row(row)
                 self.assertEqual(row["suite"], name, row["id"])
                 # pii_l1 also carries FR/ES/IT/NL field names of the anchor rules (T26) and
-                # Swedish and Turkish rows of the country IDs (B-LUHN).
+                # Swedish, Turkish and Portuguese rows of the country IDs (B-LUHN, B-EU2).
                 languages = PII_LANGUAGES if name == "pii_l1" else {"de", "en"}
                 self.assertIn(row["language"], languages, row["id"])
                 if row["language"] in NATIONAL_LANGUAGES:
@@ -333,6 +337,12 @@ class SecondaryEntityGoldTests(unittest.TestCase):
                 self.assertEqual(row["target_label"], "CREDITCARD", row["id"])
                 annotated[("ZA_ID_NUMBER", row["language"])] += 1
                 continue
+            if [e["label"] for e in row["entities"]] == ["VAT_ID_PT"]:
+                # B-EU2: nine digits after `PT ` are the body of a Portuguese VAT ID, no NIF.
+                self.assertEqual(row["target_label"], "PT_NIF", row["id"])
+                self.assertTrue(row["entities"][0]["text"].startswith("PT "), row["id"])
+                annotated[("VAT_ID_PT", row["language"])] += 1
+                continue
             if [e["label"] for e in row["entities"]] == ["PHONE"]:
                 # B-PAN: the Luhn-valid digits after the `+` of a phone number are no card.
                 self.assertEqual(row["target_label"], "CREDITCARD", row["id"])
@@ -364,6 +374,7 @@ class SecondaryEntityGoldTests(unittest.TestCase):
                 ("IDENTITY_CARD_NUMBER", "en"): 1,
                 ("ZA_ID_NUMBER", "de"): 3,
                 ("ZA_ID_NUMBER", "en"): 3,
+                ("VAT_ID_PT", "en"): 1,
             },
         )
 

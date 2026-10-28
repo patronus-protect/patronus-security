@@ -6,7 +6,7 @@ These are the stable rule IDs accepted by execution-gate `rules`. Missing IDs in
 
 For coverage per benchmark entity, the comparison with Presidio and the secret scanners, and latency, see [L1 capabilities](l1-capabilities.md).
 
-## PII rules (129)
+## PII rules (135)
 
 All PII rules are eligible by default when PII L1 is enabled.
 
@@ -143,6 +143,12 @@ In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `
 | `pii_national_id_tr` | `TR_NATIONAL_ID` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |
 | `pii_id_number_za` | `ZA_ID_NUMBER` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |
 | `pii_id_number_za_context_free` | `ZA_ID_NUMBER` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
+| `pii_social_security_number_at` | `AT_SOCIAL_SECURITY_NUMBER` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |
+| `pii_social_security_number_at_context_free` | `AT_SOCIAL_SECURITY_NUMBER` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
+| `pii_ahv_number_ch` | `CH_AHV_NUMBER` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |
+| `pii_ahv_number_ch_context_free` | `CH_AHV_NUMBER` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
+| `pii_nif_pt` | `PT_NIF` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |
+| `pii_ppsn_ie` | `IE_PPSN` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |
 
 ### PII context lexicon
 
@@ -229,6 +235,10 @@ The context engine reads these DE/EN entries of `ark-core/src/detectors/anchor_l
 | `CA_SIN` | `pii.ca_social_insurance_number` |
 | `TR_NATIONAL_ID` | `pii.tr_national_id` |
 | `ZA_ID_NUMBER` | `pii.za_id_number` |
+| `AT_SOCIAL_SECURITY_NUMBER` | `pii.at_social_security_number`, `pii.social_insurance_number` |
+| `CH_AHV_NUMBER` | `pii.ch_ahv_number`, `pii.social_insurance_number` |
+| `PT_NIF` | `pii.pt_nif` |
+| `IE_PPSN` | `pii.ie_ppsn` |
 
 | Counter-context anchor | DE | EN |
 | --- | --- | --- |

@@ -105,6 +105,19 @@ pub static SUPPORT_LEXICON: &[(&str, &[&str])] = &[
     ("CA_SIN", &["pii.ca_social_insurance_number"]),
     ("TR_NATIONAL_ID", &["pii.tr_national_id"]),
     ("ZA_ID_NUMBER", &["pii.za_id_number"]),
+    (
+        "AT_SOCIAL_SECURITY_NUMBER",
+        &[
+            "pii.at_social_security_number",
+            "pii.social_insurance_number",
+        ],
+    ),
+    (
+        "CH_AHV_NUMBER",
+        &["pii.ch_ahv_number", "pii.social_insurance_number"],
+    ),
+    ("PT_NIF", &["pii.pt_nif"]),
+    ("IE_PPSN", &["pii.ie_ppsn"]),
     ("VAT_ID_DE", &["pii.vat_identifier"]),
     ("VAT_ID_AT", &["pii.vat_identifier"]),
     ("VAT_ID_CH", &["pii.vat_identifier"]),

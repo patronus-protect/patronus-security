@@ -2762,6 +2762,131 @@
     ]
   },
   {
+    "id": "pii.at_social_security_number",
+    "description": "Österreichische Sozialversicherungsnummer (Versicherungsnummer, VSNR)",
+    "en": [
+      "austrian social security number",
+      "austrian social insurance number",
+      "austrian insurance number"
+    ],
+    "de": [
+      "österreichische sozialversicherungsnummer",
+      "österreichische versicherungsnummer",
+      "sv-nummer",
+      "sv nummer",
+      "vsnr",
+      "vs-nr",
+      "e-card-nummer",
+      "e-card nummer"
+    ],
+    "shared": [],
+    "sources": [
+      "ark-core/src/detectors/pii/at.rs"
+    ]
+  },
+  {
+    "id": "pii.ch_ahv_number",
+    "description": "Schweizer AHV-Nummer (AHVN13, numéro AVS)",
+    "en": [
+      "swiss social security number",
+      "swiss social insurance number",
+      "ahv number",
+      "ahv no",
+      "avs number"
+    ],
+    "de": [
+      "schweizer sozialversicherungsnummer",
+      "ahv-nummer",
+      "ahv nummer",
+      "ahv-nr",
+      "ahv nr",
+      "ahv-versichertennummer",
+      "versichertennummer"
+    ],
+    "shared": [
+      "ahv",
+      "ahvn13",
+      "ahv_number",
+      "ahv-number",
+      "avs"
+    ],
+    "fr": [
+      "numéro avs",
+      "numero avs",
+      "n° avs",
+      "numéro d'assuré",
+      "numéro d’assuré"
+    ],
+    "it": [
+      "numero avs",
+      "numero d'assicurato",
+      "numero d’assicurato"
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/ch.rs"
+    ]
+  },
+  {
+    "id": "pii.pt_nif",
+    "description": "Portugiesische Steuernummer (NIF, número de contribuinte)",
+    "en": [
+      "portuguese tax number",
+      "portuguese tax id",
+      "portuguese tax identification number",
+      "portuguese nif",
+      "taxpayer number"
+    ],
+    "de": [
+      "portugiesische steuernummer",
+      "portugiesische steuer-id",
+      "portugiesische steueridentifikationsnummer"
+    ],
+    "shared": [
+      "nif",
+      "nif_pt",
+      "nif-pt",
+      "nipc",
+      "número de identificação fiscal",
+      "numero de identificacao fiscal",
+      "número de contribuinte",
+      "numero de contribuinte",
+      "nº de contribuinte",
+      "n.º de contribuinte",
+      "contribuinte n.º",
+      "contribuinte nº",
+      "contribuinte"
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/pt.rs"
+    ]
+  },
+  {
+    "id": "pii.ie_ppsn",
+    "description": "Irische PPS-Nummer (Personal Public Service Number)",
+    "en": [
+      "personal public service number",
+      "pps number",
+      "pps no",
+      "ppsn",
+      "pps_number",
+      "pps-number",
+      "irish social security number"
+    ],
+    "de": [
+      "irische pps-nummer",
+      "irische pps nummer",
+      "irische sozialversicherungsnummer",
+      "pps-nummer",
+      "pps nummer"
+    ],
+    "shared": [
+      "pps"
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/ie.rs"
+    ]
+  },
+  {
     "id": "pii.health_insurance_number",
     "description": "Krankenversicherungsnummer",
     "en": [

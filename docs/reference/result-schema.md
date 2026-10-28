@@ -402,7 +402,16 @@ an 8 or 9 and Luhn; `8001015009087`). With a term of the label near the value or
 `0.75`–`0.85`; bare, in `balanced`/`recall` only and at `0.55`, the organisationsnummer printed
 `NNNNNN-NNNN`, the SIN in hyphenated 3-3-3 groups and the thirteen digits of a South African ID
 number (also `800101 5009 087`). Ten bare digits, a SIN in 3-3-3 groups by spaces (the print form
-of a SIREN or a BSN) and the eleven digits of a T.C. Kimlik No need the term in every mode. The German document number rules keep
+of a SIREN or a BSN) and the eleven digits of a T.C. Kimlik No need the term in every mode. Four
+more (B-EU2): the Austrian social security number (`AT_SOCIAL_SECURITY_NUMBER`, serial from 100, a
+weighted check digit mod 11; `1237 010180`), the Swiss AHV number (`CH_AHV_NUMBER`, 756 and an
+EAN-13 check digit; `756.1234.5678.97`), the Portuguese NIF (`PT_NIF`, the mod-11 check of the
+Portuguese VAT ID, a label of its own; `501964843`) and the Irish PPS number (`IE_PPSN`, the check
+letter of the Irish VAT number; `1234567FA`). With a term (`Sozialversicherungsnummer`, `VSNR`,
+`AHV-Nummer`, `numéro AVS`, `NIF`, `número de contribuinte`, `PPSN`, `PPS number`) or as a key they
+are reported in every mode; bare, in `balanced`/`recall` only and at `0.55`, the Austrian number
+printed `NNNN DDMMYY` with a calendar date and the dotted AHV number. Nine digits after `PT ` are
+the body of a VAT ID, no NIF. The German document number rules keep
 their format check in every mode, since a printed nine-character serial carries no check digit. A context-bound rule (`pii_phone_de_national_proximity`: a national number such as
 `ist unter 0176 90817263 erreichbar`) reports only with a support term and no nearer counter term,
 in every mode including `strict`, and then scores at least `0.50`. Validators decide in every

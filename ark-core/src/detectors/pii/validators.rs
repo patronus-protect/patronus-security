@@ -1308,6 +1308,61 @@ pub fn za_id_number(s: &str) -> bool {
     })
 }
 
+/// Austrian social security number (B-EU2, Versicherungsnummer): ten digits,
+/// plain or `NNNN DDMMYY`. Three serial digits from 100 on, a check digit and six
+/// digits that are usually the birth date `DDMMYY`; when a day runs out of serials
+/// the date takes days above 31 and months above 12, so it is not checked. The
+/// fourth digit is the sum of the others weighted 3 7 9 5 8 4 2 1 6, mod 11;
+/// remainder 10 is never issued (the serial moves on).
+pub fn at_social_security_number(s: &str) -> bool {
+    let spaced = s.len() == 11 && s.as_bytes()[4] == b' ';
+    (spaced || s.len() == 10)
+        && separated_digits::<10>(s, b" ").is_some_and(|digits| {
+            let sum = weighted_sum(&digits[..3], &[3, 7, 9])
+                + weighted_sum(&digits[4..], &[5, 8, 4, 2, 1, 6]);
+            digits[0] != 0 && sum % 11 == digits[3]
+        })
+}
+
+/// Swiss AHV number (B-EU2, AHVN13, numéro AVS): thirteen digits, plain or
+/// `756.NNNN.NNNN.NN` by dots or spaces, the country code 756 and an EAN-13 check
+/// digit (weights 1 and 3 from the left, mod 10).
+pub fn ch_ahv_number(s: &str) -> bool {
+    separated_digits::<13>(s, b". ").is_some_and(|digits| {
+        digits[..3] == [7, 5, 6]
+            && (10 - weighted_sum(&digits[..12], &[1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3]) % 10) % 10
+                == digits[12]
+    })
+}
+
+/// Portuguese NIF (B-EU2, número de identificação fiscal): nine digits, plain or
+/// grouped 3-3-3 by spaces or hyphens, with the check of the Portuguese VAT ID
+/// (`pt_nif_check`).
+pub fn pt_nif(s: &str) -> bool {
+    grouped_digits::<9>(s).is_some_and(|digits| pt_nif_check(&digits))
+}
+
+/// Irish PPS number (B-EU2): seven digits, a check letter and an optional second
+/// letter: `A` or `B` (since 2013, counted as 1 and 2), `W`, `T` or `X` (older
+/// numbers, not counted). The check letter is the one of the Irish VAT number
+/// (`ie_check_letter`); seven zeros are never issued.
+pub fn ie_ppsn(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    if !matches!(bytes.len(), 8 | 9) {
+        return false;
+    }
+    let second = match bytes.get(8) {
+        None | Some(b'W' | b'T' | b'X') => 0,
+        Some(b'A') => 1,
+        Some(b'B') => 2,
+        Some(_) => return false,
+    };
+    let digits = s.get(..7).and_then(|head| separated_digits::<7>(head, b""));
+    digits.is_some_and(|digits| {
+        digits.iter().any(|&digit| digit != 0) && ie_check_letter(&digits, second) == bytes[7]
+    })
+}
+
 /// ISO 13616 Mod-97 check — IBAN validation.
 /// Strips whitespace before checking.
 pub fn mod97(s: &str) -> bool {
@@ -1767,8 +1822,8 @@ const IE_CHECK_LETTERS: &[u8; 23] = b"WABCDEFGHIJKLMNOPQRSTUV";
 /// Irish VAT number: `IE`, seven digits, a check letter and an optional second
 /// letter (since 2013), or the old form of a digit, a letter, `+` or `*`, five
 /// digits and the check letter (read as `0`, the five digits and the first
-/// digit). The check letter is `(Σ weights 8…2 + 9 × value of the second
-/// letter) mod 23` over `W A B … V`.
+/// digit). The check letter is `ie_check_letter` with the value of the second
+/// letter.
 pub fn ie_vat_id(s: &str) -> bool {
     // `vat_body` would drop the `+` or `*` of the old form.
     let compact: String = s
@@ -1802,8 +1857,15 @@ pub fn ie_vat_id(s: &str) -> bool {
     } else {
         return false;
     };
-    let sum = weighted_sum(&digits, &[8, 7, 6, 5, 4, 3, 2]) + 9 * second as u32;
-    digits.iter().any(|&digit| digit != 0) && IE_CHECK_LETTERS[(sum % 23) as usize] == bytes[7]
+    digits.iter().any(|&digit| digit != 0) && ie_check_letter(&digits, second as u32) == bytes[7]
+}
+
+/// Check letter of seven digits and the value of a second letter, shared by the
+/// Irish VAT number and the PPS number (B02, B-EU2): `(Σ weights 8…2 + 9 × second)
+/// mod 23` over `W A B … V`.
+fn ie_check_letter(digits: &[u32], second: u32) -> u8 {
+    let sum = weighted_sum(digits, &[8, 7, 6, 5, 4, 3, 2]) + 9 * second;
+    IE_CHECK_LETTERS[(sum % 23) as usize]
 }
 
 /// Lithuanian PVM mokėtojo kodas: `LT` and nine digits (legal person, eighth
@@ -1870,12 +1932,15 @@ pub fn pl_vat_id(s: &str) -> bool {
     weighted_sum(&digits[..9], &[6, 5, 7, 2, 3, 4, 5, 6, 7]) % 11 == digits[9]
 }
 
-/// Portuguese NIF with `PT`: nine digits without a leading zero, the last
-/// `11 − (weighted sum 9…2 mod 11)`, where 10 and 11 become 0.
+/// Portuguese VAT ID: `PT` and the nine digits of a NIF (`pt_nif_check`).
 pub fn pt_vat_id(s: &str) -> bool {
-    let Some(digits) = vat_digits(&vat_body(s, "PT"), 9) else {
-        return false;
-    };
+    vat_digits(&vat_body(s, "PT"), 9).is_some_and(|digits| pt_nif_check(&digits))
+}
+
+/// Whether nine digits are a Portuguese NIF, the body of the VAT ID and the
+/// personal tax number alike (B16, B-EU2): no leading zero, the last
+/// `11 − (weighted sum 9…2 mod 11)`, where 10 and 11 become 0.
+fn pt_nif_check(digits: &[u32]) -> bool {
     let check = (11 - weighted_sum(&digits[..8], &[9, 8, 7, 6, 5, 4, 3, 2]) % 11) % 11 % 10;
     digits[0] != 0 && check == digits[8]
 }
