@@ -461,6 +461,21 @@ Reisepass KR (T12, nur Form + Kontext) zählen nicht zu M3 und bleiben offen. Go
 (DE, EN, dazu `ko`-Zeilen) und im E05-Goldset (`ark_authored`), dazu die Recognizer-Tests
 (`presidio_favored`, Sprache `ko`).
 
+Stand B-ESIT: ARK 69, gemeinsam 28 (A11, A12). Drei Labels mit Kontrollbuchstabe, alle `shared` mit
+dem gleichnamigen Recognizer von presidio-analyzer 2.2.364: `ES_NIF` (`validators::es_nif`, DNI/NIF,
+acht Ziffern oder sieben eines alten DNI und der Kontrollbuchstabe mod 23), `ES_NIE` (`es_nie`, `X`/`Y`/`Z`
+als 0/1/2, sieben Ziffern, derselbe Buchstabe; geteilter Helfer mit `es_vat_id`) und `IT_FISCAL_CODE`
+(`it_fiscal_code`, 16 Zeichen, Monatsbuchstabe, Tag + 40 für Frauen, Omocodia, Kontrollbuchstabe über die
+Tabellen für ungerade/gerade Stellen mod 26). In jedem Modus meldet je eine Regel den Wert mit einem
+Begriff des Labels in der Nähe oder als Schlüssel (Lexika mit EN-, DE- und ES-/IT-Begriffen, jede
+Schreibweise); kontextfrei in `balanced`/`recall` (K05, 0,55) die Werte in Großbuchstaben. NIF/NIE direkt
+nach `ES ` bleiben der Rumpf der USt-IdNr. CIF und Partita IVA sind die USt-IdNr. von ES und IT ohne
+Präfix und nutzen deren B01-Validatoren (keine Doppelzählung): `pii_vat_id_es_proximity` meldet die
+blanke CIF unter `VAT_ID_ES` mit einem USt- oder CIF-Begriff, nur in `balanced`/`recall`, wie die blanke
+Partita IVA (`pii_vat_id_it_proximity`, B01). Presidio meldet auch Codici fiscali mit falschem
+Kontrollbuchstaben (`AAAAAA00B11C333N` der Recognizer-Tests), ARK nicht. Gold steht in `pii_l1` (DE,
+EN, dazu `es`- und `it`-Zeilen) und in den Recognizer-Tests (`presidio_favored`).
+
 Stand B02: ARK 24, gemeinsam 7. Dazu kommen die USt-IdNr. von BG, CY, CZ, DK, EE, EL, FI, HR, HU, IE
 und LT, gleiche Struktur wie B01 (je Land ein Label `VAT_ID_BG` … und ein Validator mit Prüfziffer,
 nur in `balanced`/`recall`), alle `ark_only`; Griechenland trägt im Label das MwSt.-Präfix `EL`, in

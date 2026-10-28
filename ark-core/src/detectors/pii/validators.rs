@@ -1713,11 +1713,9 @@ pub fn es_vat_id(s: &str) -> bool {
         return false;
     };
     let number = decimal(&middle);
-    let letter = |number: u64| ES_CONTROL_LETTERS[(number % 23) as usize];
     match first {
-        b'0'..=b'9' => last == letter(u64::from(first - b'0') * 10_000_000 + number),
-        b'X' | b'Y' | b'Z' => last == letter(u64::from(first - b'X') * 10_000_000 + number),
-        b'K' | b'L' | b'M' => last == letter(number),
+        b'0'..=b'9' | b'X' | b'Y' | b'Z' => es_dni_nie_letter(first, number, last),
+        b'K' | b'L' | b'M' => last == es_control_letter(number),
         b'A'..=b'H' | b'J' | b'N' | b'P'..=b'S' | b'U'..=b'W' => {
             let sum: u32 = middle
                 .iter()
@@ -1732,6 +1730,121 @@ pub fn es_vat_id(s: &str) -> bool {
         }
         _ => false,
     }
+}
+
+/// The control letter of a Spanish DNI or NIE number.
+fn es_control_letter(number: u64) -> u8 {
+    ES_CONTROL_LETTERS[(number % 23) as usize]
+}
+
+/// Whether `letter` controls a DNI (`first` a digit, eight digits in all) or an
+/// NIE (`first` `X`/`Y`/`Z`, counted as 0/1/2) whose last seven digits are `number`.
+fn es_dni_nie_letter(first: u8, number: u64, letter: u8) -> bool {
+    let lead = match first {
+        b'0'..=b'9' => first - b'0',
+        b'X' | b'Y' | b'Z' => first - b'X',
+        _ => return false,
+    };
+    letter == es_control_letter(u64::from(lead) * 10_000_000 + number)
+}
+
+/// The nine characters of a Spanish DNI/NIF or NIE without hyphens, uppercase;
+/// seven digits before the letter of an older DNI get a leading zero.
+fn es_personal_number(s: &str) -> Option<[u8; 9]> {
+    let compact: Vec<u8> = s
+        .bytes()
+        .filter(|&byte| byte != b'-')
+        .map(|byte| byte.to_ascii_uppercase())
+        .collect();
+    let mut value = [b'0'; 9];
+    match compact.len() {
+        9 => value.copy_from_slice(&compact),
+        8 if compact[0].is_ascii_digit() => value[1..].copy_from_slice(&compact),
+        _ => return None,
+    }
+    Some(value)
+}
+
+/// Spanish DNI/NIF of a person (B-ESIT): eight digits (seven of an older DNI)
+/// and the control letter of the number mod 23, optionally hyphenated before the
+/// letter, any case.
+pub fn es_nif(s: &str) -> bool {
+    es_personal_number(s).is_some_and(|value| es_personal_check(&value, b'0'..=b'9'))
+}
+
+/// Spanish NIE (B-ESIT, número de identidad de extranjero): `X`, `Y` or `Z`
+/// (counted as 0, 1, 2), seven digits and the control letter of the DNI,
+/// optionally hyphenated, any case.
+pub fn es_nie(s: &str) -> bool {
+    es_personal_number(s).is_some_and(|value| es_personal_check(&value, b'X'..=b'Z'))
+}
+
+/// Whether nine characters open with one of `first`, go on with seven digits and
+/// end with the control letter (`es_dni_nie_letter`).
+fn es_personal_check(value: &[u8; 9], first: std::ops::RangeInclusive<u8>) -> bool {
+    let middle = &value[1..8];
+    first.contains(&value[0])
+        && middle.iter().all(u8::is_ascii_digit)
+        && es_dni_nie_letter(
+            value[0],
+            middle
+                .iter()
+                .fold(0, |number, &byte| number * 10 + u64::from(byte - b'0')),
+            value[8],
+        )
+}
+
+/// Italian codice fiscale of a person (B-ESIT): six letters of surname and name,
+/// two year digits, a month letter (`ABCDEHLMPRST`), two day digits (01–31, plus
+/// 40 for women), a place code of a letter and three digits, and a check letter:
+/// characters at odd positions through the odd table, at even positions by their
+/// value, the sum mod 26. Duplicates replace digits by `LMNPQRSTUV` (omocodia).
+/// Any case.
+pub fn it_fiscal_code(s: &str) -> bool {
+    const ODD: [u32; 26] = [
+        1, 0, 5, 7, 9, 13, 15, 17, 19, 21, 2, 4, 18, 20, 11, 3, 6, 8, 12, 14, 16, 10, 22, 25, 24,
+        23,
+    ];
+    const DIGIT_POSITIONS: [usize; 7] = [6, 7, 9, 10, 12, 13, 14];
+    let bytes: Vec<u8> = s.bytes().map(|byte| byte.to_ascii_uppercase()).collect();
+    if bytes.len() != 16 || !bytes.iter().all(u8::is_ascii_alphanumeric) {
+        return false;
+    }
+    // The digit a position stands for, also when an omocodia letter replaces it.
+    let digit = |index: usize| match bytes[index] {
+        byte @ b'0'..=b'9' => Some(u32::from(byte - b'0')),
+        byte => b"LMNPQRSTUV"
+            .iter()
+            .position(|&letter| letter == byte)
+            .map(|position| position as u32),
+    };
+    let letters = [0, 1, 2, 3, 4, 5, 8, 11, 15];
+    if !letters
+        .iter()
+        .all(|&index| bytes[index].is_ascii_uppercase())
+        || !DIGIT_POSITIONS.iter().all(|&index| digit(index).is_some())
+        || !b"ABCDEHLMPRST".contains(&bytes[8])
+    {
+        return false;
+    }
+    let day = digit(9).unwrap_or(0) * 10 + digit(10).unwrap_or(0);
+    if !matches!(day, 1..=31 | 41..=71) {
+        return false;
+    }
+    // Value 0–25: a digit counts like the letter of its rank (`0` like `A`).
+    let value = |byte: u8| match byte {
+        b'0'..=b'9' => u32::from(byte - b'0'),
+        _ => u32::from(byte - b'A'),
+    };
+    let sum: u32 = bytes[..15]
+        .iter()
+        .enumerate()
+        .map(|(index, &byte)| match index % 2 {
+            0 => ODD[value(byte) as usize],
+            _ => value(byte),
+        })
+        .sum();
+    bytes[15] == b'A' + (sum % 26) as u8
 }
 
 // ── VAT identification numbers, part 2 (B02) ──────────────────────────────

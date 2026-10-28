@@ -1228,6 +1228,45 @@ def kr_brn(value: str) -> bool:
     total = sum(digit * weight for digit, weight in zip(digits, (1, 3, 7, 1, 3, 7, 1, 3, 5))) + digits[8] * 5 // 10
     return (10 - total % 10) % 10 == digits[9]
 
+
+def _es_personal_number(value: str, leads: str) -> bool:
+    compact = value.replace("-", "").upper()
+    if len(compact) == 8 and compact[:1].isdigit():
+        compact = "0" + compact
+    if len(compact) != 9 or compact[0] not in leads or _vat_digits(compact[1:8], 7) is None:
+        return False
+    lead = str("0123456789XYZ".index(compact[0]) % 10)
+    return compact[8] == ES_CONTROL_LETTERS[int(lead + compact[1:8]) % 23]
+
+
+def es_nif(value: str) -> bool:
+    """Port of ``validators::es_nif`` (eight digits, seven padded, control letter mod 23)."""
+    return _es_personal_number(value, "0123456789")
+
+
+def es_nie(value: str) -> bool:
+    """Port of ``validators::es_nie`` (X/Y/Z as 0/1/2, seven digits, control letter mod 23)."""
+    return _es_personal_number(value, "XYZ")
+
+
+_IT_FISCAL_ODD = (1, 0, 5, 7, 9, 13, 15, 17, 19, 21, 2, 4, 18, 20, 11, 3, 6, 8, 12, 14, 16, 10, 22, 25, 24, 23)
+
+
+def it_fiscal_code(value: str) -> bool:
+    """Port of ``validators::it_fiscal_code`` (16 characters, omocodia, month letter, day, check mod 26)."""
+    code = value.upper()
+    if len(code) != 16 or not code.isascii() or not code.isalnum():
+        return False
+    digits = {index: "0123456789".find(code[index]) if code[index].isdigit() else "LMNPQRSTUV".find(code[index])
+              for index in (6, 7, 9, 10, 12, 13, 14)}
+    if any(not code[index].isalpha() for index in (0, 1, 2, 3, 4, 5, 8, 11, 15)) or -1 in digits.values():
+        return False
+    if code[8] not in "ABCDEHLMPRST" or not (1 <= digits[9] * 10 + digits[10] <= 31 or 41 <= digits[9] * 10 + digits[10] <= 71):
+        return False
+    rank = [int(ch) if ch.isdigit() else ord(ch) - ord("A") for ch in code[:15]]
+    total = sum(_IT_FISCAL_ODD[r] if index % 2 == 0 else r for index, r in enumerate(rank))
+    return code[15] == chr(ord("A") + total % 26)
+
 # Python ports of every checksum validator (``checksums.ark`` with an algorithm in entity_map.yaml);
 # a task that adds one ports it here, or scripts/tests/test_l1_scoreboard.py is red.
 CHECKSUM_PORTS: dict[str, Callable[[str], bool]] = {
@@ -1299,6 +1338,9 @@ CHECKSUM_PORTS: dict[str, Callable[[str], bool]] = {
     "kr_rrn": kr_rrn,
     "kr_frn": kr_frn,
     "kr_brn": kr_brn,
+    "es_nif": es_nif,
+    "es_nie": es_nie,
+    "it_fiscal_code": it_fiscal_code,
 }
 
 
