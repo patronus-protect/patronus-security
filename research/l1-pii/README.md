@@ -446,6 +446,21 @@ PPSN stehen in `CONTEXT_BOUND_LABELS`. Gold steht in `pii_l1` (DE, EN, dazu FR-Z
 `pt`-Zeilen für die NIF); das eingefrorene E05-Goldset erzeugt die vier IDs nicht (`NOT_GENERATED`).
 Dev-Scoreboard unverändert (kein Gold für die neuen IDs in den Dev-Korpora, keine neuen Funde).
 
+Stand B-KR: ARK 66, gemeinsam 25 (A14, T12; nur die Prüfziffer-Teile). Drei Labels mit Prüfziffer,
+alle `shared` mit dem gleichnamigen Recognizer von presidio-analyzer 2.2.364: `KR_RRN`
+(`validators::kr_rrn`, 주민등록번호 `YYMMDD-GHHSSSC`: Geburtsdatum, Geschlechts- und Jahrhundertziffer
+1–4, Regionalcode ≤ 95, Prüfziffer `(11 − Summe gewichtet 2…9, 2…5 mod 11) mod 10`), `KR_FRN` (`kr_frn`,
+외국인등록번호, gleiche Form mit 5–8 und `(13 − …) mod 10`; geteilter Helfer `kr_registration_number`)
+und `KR_BRN` (`kr_brn`, 사업자등록번호 `NNN-NN-NNNNN`, gewichtet 1-3-7-1-3-7-1-3-5 plus Zehner der neunten
+Ziffer × 5, mod 10). Seit Oktober 2020 vergebene RRN tragen nach dem Regionalcode Zufallsziffern und
+bestehen die Prüfung nur zufällig; Presidio meldet sie trotzdem (Prüfung liefert `None`), ARK nicht. In
+jedem Modus meldet je eine Regel den Wert mit einem Begriff des Labels in der Nähe oder als Schlüssel
+(Lexika mit EN-, DE- und koreanischen Begriffen); kontextfrei in `balanced`/`recall` (K05, 0,55) die
+Bindestrich-Formen. 13 bzw. zehn blanke Ziffern brauchen in jedem Modus den Begriff. Führerschein und
+Reisepass KR (T12, nur Form + Kontext) zählen nicht zu M3 und bleiben offen. Gold steht in `pii_l1`
+(DE, EN, dazu `ko`-Zeilen) und im E05-Goldset (`ark_authored`), dazu die Recognizer-Tests
+(`presidio_favored`, Sprache `ko`).
+
 Stand B02: ARK 24, gemeinsam 7. Dazu kommen die USt-IdNr. von BG, CY, CZ, DK, EE, EL, FI, HR, HU, IE
 und LT, gleiche Struktur wie B01 (je Land ein Label `VAT_ID_BG` … und ein Validator mit Prüfziffer,
 nur in `balanced`/`recall`), alle `ark_only`; Griechenland trägt im Label das MwSt.-Präfix `EL`, in

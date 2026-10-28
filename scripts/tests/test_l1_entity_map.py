@@ -248,6 +248,16 @@ def test_at_ch_pt_ie_national_numbers_are_ark_only():
     assert entity_map.ark_label("VAT_ID_PT") == "pii.pt.vat_id"
 
 
+def test_korean_registration_numbers_are_shared_with_presidio():
+    # B-KR: the checksum part of A14 and T12, one label per numbering system, each matching the
+    # Presidio 2.2.364 entity of the same name.
+    entity_map = MODULE.load()
+    for entity_id, label in [("pii.kr.rrn", "KR_RRN"), ("pii.kr.frn", "KR_FRN"), ("pii.kr.brn", "KR_BRN")]:
+        assert entity_map.ark_label(label) == entity_id
+        assert entity_map.presidio_entity(label) == entity_id
+        assert entity_map.scope(entity_id) == "shared"
+
+
 def test_luhn_identifiers_are_shared_with_presidio():
     # B-LUHN: the checksum parts of T13 and T09, one label per numbering system, each matching the
     # Presidio 2.2.364 entity of the same name.
@@ -499,7 +509,7 @@ def test_checked_in_registry_order_matches_the_rust_order_test():
     expected = re.findall(r'\(\s*"(pii_\w+)",\s*"(\w+)",?\s*\)', rust_test)
     rules = _generate_docs().parse_native_patterns(MODULE.PII_SOURCE_PATH, "PiiPattern")
     assert [(rule["id"], rule["entity_group"]) for rule in rules] == expected
-    assert len(expected) == 136
+    assert len(expected) == 142
 
 
 def test_cli_check_succeeds_and_fails(tmp_path):

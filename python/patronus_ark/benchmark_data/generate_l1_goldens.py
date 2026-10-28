@@ -1506,7 +1506,7 @@ B_PAN_CARD_PRECISION_CASES = [
     n("CREDITCARD", "de", "pii_credit_card", "Sitzungs-Token: sess-507314925862-485275870833-t2VJdhdgBlIo58gou6ZuqmoL", "token segments"),
     n("CREDITCARD", "de", "pii_credit_card", "Südafrikanische ID-Nummer: 4506095123081", "ZA ID number (birth date 1945-06-09)", also=(("ZA_ID_NUMBER", "4506095123081"),)),
     n("CREDITCARD", "de", "pii_credit_card", "Südafrikanische ID-Nummer: 6804114321085", "ZA ID number (birth date 1968-04-11)", also=(("ZA_ID_NUMBER", "6804114321085"),)),
-    n("CREDITCARD", "de", "pii_credit_card", "Koreanische Registrierungsnummer: 470312-1081835", "KR resident registration number"),
+    n("CREDITCARD", "de", "pii_credit_card", "Koreanische Registrierungsnummer: 470312-1081835", "KR resident registration number", also=(("KR_RRN", "470312-1081835"),)),
     n("CREDITCARD", "de", "pii_credit_card", "Referenz 1748503543012", "13 digits without a card IIN"),
     n("CREDITCARD", "de", "pii_credit_card", "Belegnummer 3731 4925 8607 3149", "Amex prefix with 16 digits"),
     n("CREDITCARD", "en", "pii_credit_card", "Phone: +44 20 1234 5678", "digits after + of a phone number", also=(("PHONE", "+44 20 1234 5678"),)),
@@ -1517,19 +1517,19 @@ B_PAN_CARD_PRECISION_CASES = [
     n("CREDITCARD", "en", "pii_credit_card", "Session token: sess-507314925862-485275870833-t2VJdhdgBlIo58gou6ZuqmoL", "token segments"),
     n("CREDITCARD", "en", "pii_credit_card", "South African ID number: 6109240123185", "ZA ID number (birth date 1961-09-24)", also=(("ZA_ID_NUMBER", "6109240123185"),)),
     n("CREDITCARD", "en", "pii_credit_card", "SA ID: 4901015009082", "ZA ID number (birth date 1949-01-01)", also=(("ZA_ID_NUMBER", "4901015009082"),)),
-    n("CREDITCARD", "en", "pii_credit_card", "Resident Registration Number: 590724-1069401", "KR resident registration number"),
+    n("CREDITCARD", "en", "pii_credit_card", "Resident Registration Number: 590724-1069401", "KR resident registration number", also=(("KR_RRN", "590724-1069401"),)),
     n("CREDITCARD", "en", "pii_credit_card", "1748503543012", "13 digits without a card IIN (presidio-analyzer credit card test)"),
     n("CREDITCARD", "en", "pii_credit_card", "Reference 2731 4925 8607 3141", "no brand in the 27xx range above 2720"),
     n("CREDITCARD", "de", "pii_credit_card", "Rückruf unter +63 917 123 4565", "digits after + of a phone number (Maestro-shaped)", carrier="prose", also=(("PHONE", "+63 917 123 4565"),), mode="balanced"),
     n("CREDITCARD", "de", "pii_credit_card", "Südafrikanische ID-Nummer: 4506095123081", "ZA ID number (birth date 1945-06-09)", also=(("ZA_ID_NUMBER", "4506095123081"),), mode="balanced"),
     n("CREDITCARD", "de", "pii_credit_card", "Referenz 1748503543012", "13 digits without a card IIN", mode="balanced"),
     n("CREDITCARD", "de", "pii_credit_card", "Sitzungs-Token: sess-507314925862-485275870833-t2VJdhdgBlIo58gou6ZuqmoL", "token segments", mode="balanced"),
-    n("CREDITCARD", "de", "pii_credit_card", "Koreanische Registrierungsnummer: 640918-2196672", "KR resident registration number", mode="balanced"),
+    n("CREDITCARD", "de", "pii_credit_card", "Koreanische Registrierungsnummer: 640918-2196672", "KR resident registration number", also=(("KR_RRN", "640918-2196672"),), mode="balanced"),
     n("CREDITCARD", "en", "pii_credit_card", "Mobile: +63 917 123 4565", "digits after + of a phone number (Maestro-shaped)", also=(("PHONE", "+63 917 123 4565"),), mode="balanced"),
     n("CREDITCARD", "en", "pii_credit_card", "South African ID number: 6109240123185", "ZA ID number (birth date 1961-09-24)", also=(("ZA_ID_NUMBER", "6109240123185"),), mode="balanced"),
     n("CREDITCARD", "en", "pii_credit_card", "1748503543012", "13 digits without a card IIN (presidio-analyzer credit card test)", mode="balanced"),
     n("CREDITCARD", "en", "pii_credit_card", "Session token: sess-507314925862-485275870833-t2VJdhdgBlIo58gou6ZuqmoL", "token segments", mode="balanced"),
-    n("CREDITCARD", "en", "pii_credit_card", "RRN 450630-2848967", "KR resident registration number", mode="balanced"),
+    n("CREDITCARD", "en", "pii_credit_card", "RRN 450630-2848967", "KR resident registration number", also=(("KR_RRN", "450630-2848967"),), mode="balanced"),
 ]
 for _row in B_PAN_CARD_PRECISION_CASES:
     PII_CASES[_row["target_label"]].append(_row)
@@ -3935,6 +3935,99 @@ B_EU2_CASES = [
     n("IE_PPSN", "en", "pii_ppsn_ie", "PPS Number: 0000000W", "seven zeros are never issued"),
 ]
 for _row in B_EU2_CASES:
+    PII_CASES.setdefault(_row["target_label"], []).append(_row)
+
+# B-KR (A14, T12): Korean resident registration number (RRN, sex and century digit 1-4),
+# foreigner registration number (FRN, 5-8), both `YYMMDD-GHHSSSC` with a birth date, a region
+# code up to 95 and a check digit mod 11, and business registration number (BRN, `NNN-NN-NNNNN`,
+# weighted check digit mod 10), one label each. `pii_*_kr` report the value in every mode when a
+# term of the label stands near it or is its key. In balanced and recall the hyphenated forms are
+# also reported bare (K05). Thirteen bare digits (RRN, FRN) and ten (BRN) always need a term.
+# KO rows add the Korean field names. Hard negatives: failed checks, impossible dates, the other
+# registration number, values without a term, counter-context and parts of longer values.
+# Appended so existing ids stay stable.
+B_KR_CASES = [
+    # ── KR RRN ─────────────────────────────────────────────────────────────
+    p("KR_RRN", "en", "pii_rrn_kr", "Resident Registration Number: ", "660607-1248425"),
+    p("KR_RRN", "en", "pii_rrn_kr", "His RRN is ", "9601211021413", ".", carrier="prose"),
+    p("KR_RRN", "en", "pii_rrn_kr", '{"rrn": "', "190908-3734834", '"}', carrier="json"),
+    p("KR_RRN", "en", "pii_rrn_kr", "name,rrn\nJi-woo Park,", "5705161185690", "", carrier="csv", mode="balanced"),
+    p("KR_RRN", "en", "pii_rrn_kr_context_free", "Applicant ", "901117-1350297", " has been approved.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("KR_RRN", "en", "pii_rrn_kr_context_free", "", "810326-1648554", "", tags=("no_context",), mode="recall"),
+    p("KR_RRN", "de", "pii_rrn_kr", "Die koreanische Bürgernummer lautet ", "740311-2150890", ".", carrier="prose"),
+    p("KR_RRN", "de", "pii_rrn_kr", "Koreanische Resident Registration Number: ", "8505182262311"),
+    p("KR_RRN", "de", "pii_rrn_kr", "| Name | RRN |\n|---|---|\n| Min-jun Kim | ", "620203-1895734", " |", carrier="table"),
+    p("KR_RRN", "de", "pii_rrn_kr", "Als koreanische Registrierungsnummer ist ", "781023-1128592", " hinterlegt.", carrier="prose", mode="balanced"),
+    p("KR_RRN", "de", "pii_rrn_kr_context_free", "Bewerber ", "951207-2110974", " wurde angenommen.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("KR_RRN", "de", "pii_rrn_kr_context_free", "Neue Angabe: ", "860827-1689962", "", tags=("no_context",), mode="recall"),
+    p("KR_RRN", "ko", "pii_rrn_kr", "주민등록번호: ", "560515-1449594"),
+    p("KR_RRN", "ko", "pii_rrn_kr", "주민번호 ", "8301272749686", ""),
+    n("KR_RRN", "en", "pii_rrn_kr", "Resident Registration Number: 660607-1248426", "check digit fails"),
+    n("KR_RRN", "en", "pii_rrn_kr", "RRN: 001332-1234567", "month 13"),
+    n("KR_RRN", "en", "pii_rrn_kr", "Reference 6606071248425 was archived.", "thirteen bare digits without an RRN term", carrier="prose", mode="balanced"),
+    n("KR_RRN", "en", "pii_rrn_kr_context_free", "Invoice number 901117-1350297", "counter-context nearer", mode="balanced"),
+    n("KR_RRN", "en", "pii_rrn_kr_context_free", "Part 901117-1350297-2 is in stock.", "part of a longer value", carrier="prose", mode="balanced"),
+    n("KR_RRN", "en", "pii_rrn_kr_context_free", "960121+1021413", "plus instead of a hyphen (presidio-analyzer negative)", mode="balanced"),
+    n("KR_RRN", "de", "pii_rrn_kr", "Koreanische Bürgernummer: 740311-2150891", "check digit fails"),
+    n("KR_RRN", "de", "pii_rrn_kr", "Koreanische Bürgernummer: 740311-2960892", "region code above 95"),
+    n("KR_RRN", "de", "pii_rrn_kr", "Vorgang 7403112150890 wurde abgeschlossen.", "thirteen bare digits without an RRN term", carrier="prose", mode="balanced"),
+    n("KR_RRN", "de", "pii_rrn_kr_context_free", "Rechnungsnummer 951207-2110974", "counter-context nearer", mode="balanced"),
+    n("KR_RRN", "de", "pii_rrn_kr_context_free", "Teil 951207-2110974-1 ist lieferbar.", "part of a longer value", carrier="prose", mode="balanced"),
+    n("KR_RRN", "ko", "pii_rrn_kr", "주민등록번호: 560515-1449595", "check digit fails"),
+    # ── KR FRN ─────────────────────────────────────────────────────────────
+    p("KR_FRN", "en", "pii_frn_kr", "Foreigner Registration Number: ", "801221-5183058"),
+    p("KR_FRN", "en", "pii_frn_kr", "Please quote FRN ", "650222-6148847", " in all letters.", carrier="prose"),
+    p("KR_FRN", "en", "pii_frn_kr", '{"frn": "', "0002227652089", '"}', carrier="json"),
+    p("KR_FRN", "en", "pii_frn_kr", "name,frn\nGrace Roberts,", "8302016459457", "", carrier="csv", mode="balanced"),
+    p("KR_FRN", "en", "pii_frn_kr_context_free", "Applicant ", "980719-5078132", " has been approved.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("KR_FRN", "en", "pii_frn_kr_context_free", "", "800325-5890087", "", tags=("no_context",), mode="recall"),
+    p("KR_FRN", "de", "pii_frn_kr", "Koreanische Ausländerregistrierungsnummer: ", "740804-5302677"),
+    p("KR_FRN", "de", "pii_frn_kr", "Die Ausländerregistrierungsnummer lautet ", "6302065190255", ".", carrier="prose"),
+    p("KR_FRN", "de", "pii_frn_kr", "| Name | FRN |\n|---|---|\n| Sanne de Vries | ", "530422-6737290", " |", carrier="table"),
+    p("KR_FRN", "de", "pii_frn_kr", "Als koreanische Ausländerregistrierungsnummer ist ", "961014-6642746", " hinterlegt.", carrier="prose", mode="balanced"),
+    p("KR_FRN", "de", "pii_frn_kr_context_free", "Bewerberin ", "880216-6375537", " wurde angenommen.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("KR_FRN", "de", "pii_frn_kr_context_free", "Neue Angabe: ", "670515-5026069", "", tags=("no_context",), mode="recall"),
+    p("KR_FRN", "ko", "pii_frn_kr", "외국인등록번호: ", "810202-5941441"),
+    p("KR_FRN", "ko", "pii_frn_kr", "외국인번호 ", "0207067853937", ""),
+    n("KR_FRN", "en", "pii_frn_kr", "Foreigner Registration Number: 801221-5183059", "check digit fails"),
+    n("KR_FRN", "en", "pii_frn_kr", "FRN: 760413-1212134", "a resident's sex digit (presidio-analyzer negative)"),
+    n("KR_FRN", "en", "pii_frn_kr", "Reference 8012215183058 was archived.", "thirteen bare digits without an FRN term", carrier="prose", mode="balanced"),
+    n("KR_FRN", "en", "pii_frn_kr_context_free", "Invoice number 980719-5078132", "counter-context nearer", mode="balanced"),
+    n("KR_FRN", "en", "pii_frn_kr_context_free", "Part 980719-5078132-2 is in stock.", "part of a longer value", carrier="prose", mode="balanced"),
+    n("KR_FRN", "de", "pii_frn_kr", "Koreanische Ausländerregistrierungsnummer: 740804-5302678", "check digit fails"),
+    n("KR_FRN", "de", "pii_frn_kr", "Koreanische Ausländerregistrierungsnummer: 740231-5302677", "31 February"),
+    n("KR_FRN", "de", "pii_frn_kr", "Vorgang 7408045302677 wurde abgeschlossen.", "thirteen bare digits without an FRN term", carrier="prose", mode="balanced"),
+    n("KR_FRN", "de", "pii_frn_kr_context_free", "Rechnungsnummer 880216-6375537", "counter-context nearer", mode="balanced"),
+    n("KR_FRN", "de", "pii_frn_kr_context_free", "Teil 880216-6375537-1 ist lieferbar.", "part of a longer value", carrier="prose", mode="balanced"),
+    n("KR_FRN", "ko", "pii_frn_kr", "외국인등록번호: 810202-5941442", "check digit fails"),
+    # ── KR BRN ─────────────────────────────────────────────────────────────
+    p("KR_BRN", "en", "pii_brn_kr", "Business Registration Number: ", "104-82-13138"),
+    p("KR_BRN", "en", "pii_brn_kr", "My BRN is ", "1048656659", ".", carrier="prose"),
+    p("KR_BRN", "en", "pii_brn_kr", '{"brn": "', "534-57-86882", '"}', carrier="json"),
+    p("KR_BRN", "en", "pii_brn_kr", "company,brn\nHanbit Co.,", "2503998996", "", carrier="csv", mode="balanced"),
+    p("KR_BRN", "en", "pii_brn_kr_context_free", "Supplier ", "646-84-14125", " from Seoul", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("KR_BRN", "en", "pii_brn_kr_context_free", "", "080-91-24253", "", tags=("no_context",), mode="recall"),
+    p("KR_BRN", "de", "pii_brn_kr", "Koreanische Geschäftsregistrierungsnummer: ", "089-96-14155"),
+    p("KR_BRN", "de", "pii_brn_kr", "Die Geschäftsregistrierungsnummer lautet ", "7900727682", ".", carrier="prose"),
+    p("KR_BRN", "de", "pii_brn_kr", "| Firma | BRN |\n|---|---|\n| Hanbit Co. | ", "160-10-62044", " |", carrier="table"),
+    p("KR_BRN", "de", "pii_brn_kr", "Als koreanische Geschäftsregistrierungsnummer ist ", "942-81-10860", " hinterlegt.", carrier="prose", mode="balanced"),
+    p("KR_BRN", "de", "pii_brn_kr_context_free", "Lieferant ", "812-73-89552", " aus Seoul", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("KR_BRN", "de", "pii_brn_kr_context_free", "Neue Angabe: ", "733-79-69686", "", tags=("no_context",), mode="recall"),
+    p("KR_BRN", "ko", "pii_brn_kr", "사업자등록번호: ", "361-39-45561"),
+    p("KR_BRN", "ko", "pii_brn_kr", "사업자번호 ", "3885345320", ""),
+    n("KR_BRN", "en", "pii_brn_kr", "Business Registration Number: 104-82-13139", "check digit fails"),
+    n("KR_BRN", "en", "pii_brn_kr", "BRN: 110-81-4127A", "letter in place of a digit (presidio-analyzer negative)"),
+    n("KR_BRN", "en", "pii_brn_kr", "Reference 1048656659 was archived.", "ten bare digits without a BRN term", carrier="prose", mode="balanced"),
+    n("KR_BRN", "en", "pii_brn_kr_context_free", "Invoice number 646-84-14125", "counter-context nearer", mode="balanced"),
+    n("KR_BRN", "en", "pii_brn_kr_context_free", "Part 646-84-14125-2 is in stock.", "part of a longer value", carrier="prose", mode="balanced"),
+    n("KR_BRN", "de", "pii_brn_kr", "Koreanische Geschäftsregistrierungsnummer: 089-96-14156", "check digit fails"),
+    n("KR_BRN", "de", "pii_brn_kr", "Koreanische Geschäftsregistrierungsnummer: 000-00-00000", "one repeated digit"),
+    n("KR_BRN", "de", "pii_brn_kr", "Vorgang 0899614155 wurde abgeschlossen.", "ten bare digits without a BRN term", carrier="prose", mode="balanced"),
+    n("KR_BRN", "de", "pii_brn_kr_context_free", "Rechnungsnummer 812-73-89552", "counter-context nearer", mode="balanced"),
+    n("KR_BRN", "de", "pii_brn_kr_context_free", "Teil 812-73-89552-1 ist lieferbar.", "part of a longer value", carrier="prose", mode="balanced"),
+    n("KR_BRN", "ko", "pii_brn_kr", "사업자등록번호: 361-39-45562", "check digit fails"),
+]
+for _row in B_KR_CASES:
     PII_CASES.setdefault(_row["target_label"], []).append(_row)
 
 # DLP golden schema v2 (E13). Every DLP row names the rule it exercises (`rule_id`), the

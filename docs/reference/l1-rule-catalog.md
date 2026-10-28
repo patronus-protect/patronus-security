@@ -6,7 +6,7 @@ These are the stable rule IDs accepted by execution-gate `rules`. Missing IDs in
 
 For coverage per benchmark entity, the comparison with Presidio and the secret scanners, and latency, see [L1 capabilities](l1-capabilities.md).
 
-## PII rules (136)
+## PII rules (142)
 
 All PII rules are eligible by default when PII L1 is enabled.
 
@@ -150,6 +150,12 @@ In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `
 | `pii_ahv_number_ch_context_free` | `CH_AHV_NUMBER` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
 | `pii_nif_pt` | `PT_NIF` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |
 | `pii_ppsn_ie` | `IE_PPSN` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |
+| `pii_rrn_kr` | `KR_RRN` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |
+| `pii_rrn_kr_context_free` | `KR_RRN` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
+| `pii_frn_kr` | `KR_FRN` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |
+| `pii_frn_kr_context_free` | `KR_FRN` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
+| `pii_brn_kr` | `KR_BRN` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |
+| `pii_brn_kr_context_free` | `KR_BRN` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
 
 ### PII context lexicon
 
@@ -240,6 +246,9 @@ The context engine reads these DE/EN entries of `ark-core/src/detectors/anchor_l
 | `CH_AHV_NUMBER` | `pii.ch_ahv_number`, `pii.social_insurance_number` |
 | `PT_NIF` | `pii.pt_nif` |
 | `IE_PPSN` | `pii.ie_ppsn` |
+| `KR_RRN` | `pii.kr_resident_registration_number` |
+| `KR_FRN` | `pii.kr_foreigner_registration_number` |
+| `KR_BRN` | `pii.kr_business_registration_number` |
 
 | Counter-context anchor | DE | EN |
 | --- | --- | --- |

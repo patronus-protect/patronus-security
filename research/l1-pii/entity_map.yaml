@@ -253,6 +253,27 @@ entities:
     corpora:
       presidio-analyzer-recognizer-tests: [ZA_ID_NUMBER]
 
+  - id: pii.kr.rrn
+    scope: shared
+    ark: [KR_RRN]
+    presidio: [KR_RRN]
+    corpora:
+      presidio-analyzer-recognizer-tests: [KR_RRN]
+
+  - id: pii.kr.frn
+    scope: shared
+    ark: [KR_FRN]
+    presidio: [KR_FRN]
+    corpora:
+      presidio-analyzer-recognizer-tests: [KR_FRN]
+
+  - id: pii.kr.brn
+    scope: shared
+    ark: [KR_BRN]
+    presidio: [KR_BRN]
+    corpora:
+      presidio-analyzer-recognizer-tests: [KR_BRN]
+
   - id: entity.passport_number
     scope: shared
     ark: [PASSPORT_NUMBER]
@@ -433,9 +454,6 @@ entities:
   - {id: pii.in.gstin, scope: presidio_only, ark: [], presidio: [IN_GSTIN], corpora: {presidio-analyzer-recognizer-tests: [IN_GSTIN]}}
   - {id: pii.in.pan, scope: presidio_only, ark: [], presidio: [IN_PAN], corpora: {presidio-analyzer-recognizer-tests: [IN_PAN]}}
   - {id: pii.in.voter_id, scope: presidio_only, ark: [], presidio: [IN_VOTER], corpora: {presidio-analyzer-recognizer-tests: [IN_VOTER]}}
-  - {id: pii.kr.brn, scope: presidio_only, ark: [], presidio: [KR_BRN], corpora: {presidio-analyzer-recognizer-tests: [KR_BRN]}}
-  - {id: pii.kr.frn, scope: presidio_only, ark: [], presidio: [KR_FRN], corpora: {presidio-analyzer-recognizer-tests: [KR_FRN]}}
-  - {id: pii.kr.rrn, scope: presidio_only, ark: [], presidio: [KR_RRN], corpora: {presidio-analyzer-recognizer-tests: [KR_RRN]}}
   - {id: pii.ng.nin, scope: presidio_only, ark: [], presidio: [NG_NIN], corpora: {presidio-analyzer-recognizer-tests: [NG_NIN]}}
   - {id: pii.ph.tin, scope: presidio_only, ark: [], presidio: [PH_TIN], corpora: {presidio-analyzer-recognizer-tests: [PH_TIN]}}
   - {id: pii.ph.umid, scope: presidio_only, ark: [], presidio: [PH_UMID], corpora: {presidio-analyzer-recognizer-tests: [PH_UMID]}}
@@ -567,6 +585,9 @@ checksums:
     ch_ahv_number: {algorithm: "EAN-13 (gewichtet 1-3 mod 10)"}        # B-EU2, AHVN13, Präfix 756
     pt_nif: {algorithm: "11 − gewichtet 9…2 mod 11"}                  # B-EU2, NIF ohne PT, eigene Einheit neben pt_vat_id
     ie_ppsn: {algorithm: "Prüfbuchstabe gewichtet 8…2 (+ 9 × zweiter Buchstabe) mod 23"}  # B-EU2, PPS-Nummer
+    kr_rrn: {algorithm: "(11 − gewichtet 2…9, 2…5 mod 11) mod 10"}   # B-KR, plus Geburtsdatum, Geschlecht 1–4, Region ≤ 95
+    kr_frn: {algorithm: "(13 − gewichtet 2…9, 2…5 mod 11) mod 10"}   # B-KR, plus Geburtsdatum, Geschlecht 5–8, Region ≤ 95
+    kr_brn: {algorithm: "gewichtet 1-3-7-1-3-7-1-3-5 mod 10"}         # B-KR, Geschäftsregistrierungsnummer
     de_vat_id: {algorithm: "ISO 7064 MOD 11,10"}            # B01, USt-IdNr.
     at_vat_id: {algorithm: Luhn-Variante (6 − Summe) mod 10}  # B01, UID ATU
     ch_vat_id: {algorithm: gewichtet 5-4-3-2-7-6-5-4 mod 11}   # B01, UID CHE

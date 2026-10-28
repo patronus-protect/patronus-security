@@ -483,7 +483,13 @@ fn checksum_strength_is_reserved_for_real_check_digits() {
             "pii_ahv_number_ch",
             "pii_ahv_number_ch_context_free",
             "pii_nif_pt",
-            "pii_ppsn_ie"
+            "pii_ppsn_ie",
+            "pii_rrn_kr",
+            "pii_rrn_kr_context_free",
+            "pii_frn_kr",
+            "pii_frn_kr_context_free",
+            "pii_brn_kr",
+            "pii_brn_kr_context_free"
         ]
     );
 }
@@ -561,6 +567,12 @@ fn reference_scores_per_rule() {
         ("pii_ahv_number_ch_context_free", 0.55),
         ("pii_nif_pt", 0.60),
         ("pii_ppsn_ie", 0.60),
+        ("pii_rrn_kr", 0.60),
+        ("pii_rrn_kr_context_free", 0.55),
+        ("pii_frn_kr", 0.60),
+        ("pii_frn_kr_context_free", 0.55),
+        ("pii_brn_kr", 0.60),
+        ("pii_brn_kr_context_free", 0.55),
     ] {
         assert_eq!(rule_score(rule_id), expected, "{rule_id}");
     }

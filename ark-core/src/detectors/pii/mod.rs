@@ -23,6 +23,7 @@ mod fr;
 mod identifiers;
 mod ie;
 mod intl;
+mod kr;
 mod licence_plate;
 mod nl;
 mod nordic;

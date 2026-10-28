@@ -393,7 +393,7 @@
         "Handels-ID: 20220314-123456-ABC",
         "Paketversion: pkg-507314925862-485275870833-amd64",
         "Koreanische Bürgernummer: 4506091234569",
-        "Koreanische Registrierungsnummer: 470312-1081835",
+        "Koreanische Registrierungsnummer: 470312-1081836",
         "Referenz 1748503543012"
       ],
       "en": [
@@ -401,7 +401,7 @@
         "\"TradeID\": \"20220314-123456-ABC-IBK\"",
         "Package version: pkg-507314925862-485275870833-amd64",
         "Korean resident registration number: 6109242234568",
-        "Resident Registration Number: 590724-1069401",
+        "Resident Registration Number: 590724-1069402",
         "1748503543012"
       ]
     }
@@ -2253,6 +2253,99 @@
         "PPS Number: 8133989PA",
         "Reference 6913752R was archived."
       ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_rrn_kr",
+    "de": "Die koreanische Bürgernummer lautet 740311-2150890.",
+    "en": "Resident Registration Number: 660607-1248425",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Koreanische Bürgernummer: 740311-2150891",
+        "Vorgang 7403112150890 wurde abgeschlossen."
+      ],
+      "en": [
+        "RRN: 001332-1234567",
+        "Reference 6606071248425 was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_rrn_kr_context_free",
+    "de": "Bewerber 951207-2110974 wurde angenommen.",
+    "en": "Applicant 901117-1350297 has been approved.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die koreanische Bürgernummer des Bewerbers ist 620203-1895734.",
+        "en": "570516-1185690 is his resident registration number."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_frn_kr",
+    "de": "Koreanische Ausländerregistrierungsnummer: 740804-5302677",
+    "en": "Foreigner Registration Number: 801221-5183058",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Koreanische Ausländerregistrierungsnummer: 740804-5302678",
+        "Vorgang 7408045302677 wurde abgeschlossen."
+      ],
+      "en": [
+        "FRN: 760413-1212134",
+        "Reference 8012215183058 was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_frn_kr_context_free",
+    "de": "Bewerberin 880216-6375537 wurde angenommen.",
+    "en": "Applicant 980719-5078132 has been approved.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die Ausländerregistrierungsnummer der Bewerberin ist 530422-6737290.",
+        "en": "830201-6459457 is her foreigner registration number."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_brn_kr",
+    "de": "Koreanische Geschäftsregistrierungsnummer: 089-96-14155",
+    "en": "Business Registration Number: 1048656659",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Koreanische Geschäftsregistrierungsnummer: 089-96-14156",
+        "Vorgang 0899614155 wurde abgeschlossen."
+      ],
+      "en": [
+        "BRN: 110-81-4127A",
+        "Reference 1048656659 was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_brn_kr_context_free",
+    "de": "Lieferant 812-73-89552 aus Seoul",
+    "en": "Supplier 646-84-14125 from Seoul",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die Geschäftsregistrierungsnummer des Lieferanten ist 160-10-62044.",
+        "en": "942-81-10860 is its business registration number."
+      }
     }
   },
   {

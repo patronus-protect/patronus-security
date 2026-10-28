@@ -2887,6 +2887,90 @@
     ]
   },
   {
+    "id": "pii.kr_resident_registration_number",
+    "description": "Koreanische Bürgernummer (Resident Registration Number, 주민등록번호)",
+    "en": [
+      "resident registration number",
+      "resident registration no",
+      "resident-registration-number",
+      "resident_registration_number",
+      "korean resident registration number",
+      "korean rrn",
+      "korean national id",
+      "korean id number"
+    ],
+    "de": [
+      "koreanische resident registration number",
+      "koreanische bürgernummer",
+      "koreanische registrierungsnummer",
+      "koreanische einwohnernummer",
+      "koreanische personenkennziffer",
+      "koreanische id-nummer"
+    ],
+    "shared": [
+      "rrn",
+      "rrn#",
+      "주민등록번호",
+      "주민번호"
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/kr.rs"
+    ]
+  },
+  {
+    "id": "pii.kr_foreigner_registration_number",
+    "description": "Koreanische Ausländerregistrierungsnummer (Foreigner Registration Number, 외국인등록번호)",
+    "en": [
+      "foreigner registration number",
+      "foreigner registration no",
+      "foreigner-registration-number",
+      "foreigner_registration_number",
+      "alien registration number",
+      "korean frn",
+      "korean foreigner registration number"
+    ],
+    "de": [
+      "koreanische ausländerregistrierungsnummer",
+      "ausländerregistrierungsnummer",
+      "koreanische ausländernummer"
+    ],
+    "shared": [
+      "frn",
+      "외국인등록번호",
+      "외국인번호"
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/kr.rs"
+    ]
+  },
+  {
+    "id": "pii.kr_business_registration_number",
+    "description": "Koreanische Geschäftsregistrierungsnummer (Business Registration Number, 사업자등록번호)",
+    "en": [
+      "business registration number",
+      "business registration no",
+      "business-registration-number",
+      "business_registration_number",
+      "korean brn",
+      "korean business number",
+      "korean business registration number"
+    ],
+    "de": [
+      "koreanische geschäftsregistrierungsnummer",
+      "geschäftsregistrierungsnummer",
+      "koreanische unternehmensnummer",
+      "koreanische betriebsnummer"
+    ],
+    "shared": [
+      "brn",
+      "사업자등록번호",
+      "사업자번호"
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/kr.rs"
+    ]
+  },
+  {
     "id": "pii.health_insurance_number",
     "description": "Krankenversicherungsnummer",
     "en": [

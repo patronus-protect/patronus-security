@@ -11,10 +11,10 @@ What ARK L1 detects (PII and DLP), how it compares with Presidio and the secret 
 
 | | PII | DLP |
 | --- | --- | --- |
-| Result labels (entity groups) | 83 | 23 |
-| Regex rules | 136 | 75 (+5 relationship rules) |
-| Checksum-validated units (count rule T03) | 63 (Presidio 2.2.364: 35) | – |
-| Rules with a `checksum` or `structure` check | 89 | 8 |
+| Result labels (entity groups) | 86 | 23 |
+| Regex rules | 142 | 75 (+5 relationship rules) |
+| Checksum-validated units (count rule T03) | 66 (Presidio 2.2.364: 35) | – |
+| Rules with a `checksum` or `structure` check | 95 | 8 |
 | Default state | all rules on | credential/secret groups on, broader families opt-in |
 | Compared with | Presidio 2.2.364 (tuned) | gitleaks 8.30.1, TruffleHog 3.97.9, detect-secrets 1.5.0 |
 | Overall F1 (2026-10-24) | `balanced`: neutral 63.2, presidio_favored 54.3 | default profile: 88.6 (P 99.3, R 80.0) |
@@ -69,6 +69,9 @@ One row per benchmark entity of `research/l1-pii/entity_map.yaml`. Scope: `share
 | `pii.ca.sin` | shared | `CA_SIN` | `pii_sin_ca`, `pii_sin_ca_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `CA_SIN` |
 | `pii.tr.national_id` | shared | `TR_NATIONAL_ID` | `pii_national_id_tr` | checksum | on | `TR_NATIONAL_ID` |
 | `pii.za.id_number` | shared | `ZA_ID_NUMBER` | `pii_id_number_za`, `pii_id_number_za_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `ZA_ID_NUMBER` |
+| `pii.kr.rrn` | shared | `KR_RRN` | `pii_rrn_kr`, `pii_rrn_kr_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `KR_RRN` |
+| `pii.kr.frn` | shared | `KR_FRN` | `pii_frn_kr`, `pii_frn_kr_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `KR_FRN` |
+| `pii.kr.brn` | shared | `KR_BRN` | `pii_brn_kr`, `pii_brn_kr_context_free` | checksum | on (1 of 2 rules `balanced`/`recall` only) | `KR_BRN` |
 | `entity.passport_number` | shared | `PASSPORT_NUMBER` | `pii_passport_number_de`, `pii_passport_number_uk`, `pii_passport_number_two_letters`, `pii_passport_number_de_context_free`, `pii_passport_number_de_legacy` | checksum | on (2 of 5 rules `balanced`/`recall` only) | `US_PASSPORT`, `UK_PASSPORT`, `DE_PASSPORT`, `ES_PASSPORT`, `IT_PASSPORT`, `IN_PASSPORT`, `KR_PASSPORT` |
 | `pii.identity_card_number` | shared | `IDENTITY_CARD_NUMBER` | `pii_identity_card_number_de`, `pii_identity_card_number_de_context_free`, `pii_identity_card_number_de_legacy` | checksum | on (2 of 3 rules `balanced`/`recall` only) | `DE_ID_CARD`, `IT_IDENTITY_CARD` |
 | `entity.driver_license_number` | shared | `DRIVER_LICENSE_NUMBER` | `pii_driver_license_number_de`, `pii_driver_license_number_us`, `pii_driver_license_number_it`, `pii_driver_license_number_uk`, `pii_driver_license_number_uk_context_free` | format | on (1 of 5 rules `balanced`/`recall` only) | `US_DRIVER_LICENSE`, `UK_DRIVING_LICENCE`, `DE_FUEHRERSCHEIN`, `IT_DRIVER_LICENSE`, `KR_DRIVER_LICENSE` |
@@ -141,9 +144,6 @@ One row per benchmark entity of `research/l1-pii/entity_map.yaml`. Scope: `share
 | `pii.in.gstin` | presidio_only | – | – | – | – | `IN_GSTIN` |
 | `pii.in.pan` | presidio_only | – | – | – | – | `IN_PAN` |
 | `pii.in.voter_id` | presidio_only | – | – | – | – | `IN_VOTER` |
-| `pii.kr.brn` | presidio_only | – | – | – | – | `KR_BRN` |
-| `pii.kr.frn` | presidio_only | – | – | – | – | `KR_FRN` |
-| `pii.kr.rrn` | presidio_only | – | – | – | – | `KR_RRN` |
 | `pii.ng.nin` | presidio_only | – | – | – | – | `NG_NIN` |
 | `pii.ph.tin` | presidio_only | – | – | – | – | `PH_TIN` |
 | `pii.ph.umid` | presidio_only | – | – | – | – | `PH_UMID` |
@@ -155,7 +155,7 @@ One row per benchmark entity of `research/l1-pii/entity_map.yaml`. Scope: `share
 | `entity.date` | semantic | – | – | – | – | `DATE_TIME` |
 | `entity.street_address` | semantic | – | – | – | – | – |
 
-Entities: 34 shared, 49 ARK only, 24 Presidio only, 6 semantic. Hard-negative false positives (2026-10-24): ARK 0, Presidio 0.
+Entities: 37 shared, 49 ARK only, 21 Presidio only, 6 semantic. Hard-negative false positives (2026-10-24): ARK 0, Presidio 0.
 
 ### F1 per entity
 
@@ -193,6 +193,9 @@ Legend: `ARK x / Presidio y` = exact F1 of both; `no gold` = measured, but the f
 | `pii.ca.sin` | shared | 0 / 5 / 23 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
 | `pii.tr.national_id` | shared | 0 / 4 / 21 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
 | `pii.za.id_number` | shared | 0 / 3 / 23 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
+| `pii.kr.rrn` | shared | 0 / 5 / 24 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
+| `pii.kr.frn` | shared | 0 / 3 / 23 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
+| `pii.kr.brn` | shared | 0 / 2 / 27 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
 | `entity.passport_number` | shared | 98 / 29 / 24 | ARK 37.7 / Presidio 38.4 | ARK 34.3 / Presidio 51.3 | ARK 76.9 / Presidio 54.5 |
 | `pii.identity_card_number` | shared | 0 / 11 / 31 | no gold | ARK 42.9 / Presidio 84.2 | ARK 78.4 / Presidio 38.5 |
 | `entity.driver_license_number` | shared | 120 / 14 / 23 | ARK 37.1 / Presidio 6.2 | ARK 52.6 / Presidio 78.3 | ARK 72.2 / Presidio 48.1 |
@@ -265,9 +268,6 @@ Legend: `ARK x / Presidio y` = exact F1 of both; `no gold` = measured, but the f
 | `pii.in.gstin` | presidio_only | 0 / 3 / 24 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
 | `pii.in.pan` | presidio_only | 0 / 3 / 19 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
 | `pii.in.voter_id` | presidio_only | 0 / 3 / 23 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
-| `pii.kr.brn` | presidio_only | 0 / 2 / 27 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
-| `pii.kr.frn` | presidio_only | 0 / 3 / 23 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
-| `pii.kr.rrn` | presidio_only | 0 / 5 / 24 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
 | `pii.ng.nin` | presidio_only | 0 / 0 / 28 | no gold | no gold | ARK 0.0 / Presidio 0.0 |
 | `pii.ph.tin` | presidio_only | 0 / 3 / 24 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |
 | `pii.ph.umid` | presidio_only | 0 / 8 / 24 | no gold | ARK 0.0 / Presidio 0.0 | ARK 0.0 / Presidio 0.0 |

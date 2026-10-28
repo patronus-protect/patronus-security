@@ -447,7 +447,10 @@ fn context_bound_rules_score_at_least_the_balanced_threshold_with_support() {
             "pii_social_security_number_at",
             "pii_ahv_number_ch",
             "pii_nif_pt",
-            "pii_ppsn_ie"
+            "pii_ppsn_ie",
+            "pii_rrn_kr",
+            "pii_frn_kr",
+            "pii_brn_kr"
         ]
     );
     for pattern in bound {

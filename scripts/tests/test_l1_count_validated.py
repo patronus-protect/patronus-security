@@ -177,7 +177,8 @@ def test_checked_in_ark_count():
     # the DK CPR number, the NO fødselsnummer and the FI personal identity code, B-ACCT the ABA
     # routing number, B-EU1 the FR NIR, SIREN and SIRET, the NL BSN and the BE national number, B-LUHN
     # the SE organisationsnummer, the CA SIN, the TR T.C. Kimlik No and the ZA ID number, B-EU2 the AT social
-    # security number, the CH AHV number, the PT NIF (apart from the PT VAT ID) and the IE PPSN.
+    # security number, the CH AHV number, the PT NIF (apart from the PT VAT ID) and the IE PPSN, B-KR the
+    # KR resident, foreigner and business registration numbers.
     assert set(counts.ark) == {
         Unit("pii.credit_card.pan", None),
         Unit("pii.iban", None),
@@ -242,8 +243,11 @@ def test_checked_in_ark_count():
         Unit("pii.ch.ahv_number", "ch"),
         Unit("pii.pt.nif", "pt"),
         Unit("pii.ie.ppsn", "ie"),
+        Unit("pii.kr.rrn", "kr"),
+        Unit("pii.kr.frn", "kr"),
+        Unit("pii.kr.brn", "kr"),
     }
-    assert len(counts.ark) == 63
+    assert len(counts.ark) == 66
     assert counts.m3_met is False
 
 
@@ -374,7 +378,7 @@ def test_cli_count_json_and_check(tmp_path):
     payload = json.loads(result.stdout)
     assert payload["presidio_version"] == "2.2.364"
     assert payload["presidio"]["count"] == 35
-    assert payload["ark"]["count"] == 63
+    assert payload["ark"]["count"] == 66
     assert payload["m3"] == {"factor": 2, "target": 70, "met": False}
     assert {
         "entity_id": "pii.de.tax_id",
@@ -500,6 +504,17 @@ def test_cli_count_json_and_check(tmp_path):
         "pii.ch.ahv_number": ["pii_ahv_number_ch: ch_ahv_number", "pii_ahv_number_ch_context_free: ch_ahv_number"],
         "pii.pt.nif": ["pii_nif_pt: pt_nif"],
         "pii.ie.ppsn": ["pii_ppsn_ie: ie_ppsn"],
+    }
+    # B-KR: three Korean units, each shared with Presidio.
+    kr = {
+        unit["entity_id"]: unit["sources"]
+        for unit in payload["ark"]["units"]
+        if unit["entity_id"] in ("pii.kr.rrn", "pii.kr.frn", "pii.kr.brn")
+    }
+    assert kr == {
+        "pii.kr.rrn": ["pii_rrn_kr: kr_rrn", "pii_rrn_kr_context_free: kr_rrn"],
+        "pii.kr.frn": ["pii_frn_kr: kr_frn", "pii_frn_kr_context_free: kr_frn"],
+        "pii.kr.brn": ["pii_brn_kr: kr_brn", "pii_brn_kr_context_free: kr_brn"],
     }
     assert vat["pii.pt.vat_id"]["sources"] == ["pii_vat_id_pt: pt_vat_id"]
     # B02: the Greek rule keeps the VIES prefix EL, the benchmark ID follows ISO 3166 (gr).
