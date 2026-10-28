@@ -44,7 +44,9 @@ pub struct PiiPattern {
     /// grouped US SSN (B-SSN: separators and SSA ranges), the UK NINO (issued
     /// prefixes and suffixes, one letter case), the UK driving licence
     /// (surname, birth date and initials, B-UK) and the slashed German
-    /// Steuernummer (the groups of the Länder, Q-DE).
+    /// Steuernummer (the groups of the Länder, Q-DE). The regional phone rule (F01)
+    /// is here so that `strict` stays unchanged; its numbering plan and a phone term
+    /// stand in for a check digit.
     pub scored_only: bool,
 }
 
