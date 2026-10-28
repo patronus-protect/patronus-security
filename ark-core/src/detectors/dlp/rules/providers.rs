@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! Provider-bound secret formats (LLM, cloud, source control, DevOps and
-//! package registries, payment, chat).
+//! package registries, CI and hosting, payment, chat).
 use crate::{
     detectors::dlp::{
         aws_context::{has_aws_secret_context, is_aws_secret_value, lines_above},
@@ -55,15 +55,13 @@ fn is_vault_legacy_token(value: &str) -> bool {
     value.strip_prefix("s.").is_some_and(has_both_cases)
 }
 
-/// Lines above the value's line in which a Vault term counts.
-const VAULT_CONTEXT_LINES: usize = 5;
+/// Lines above the value's line in which a provider term counts.
+const TERM_CONTEXT_LINES: usize = 5;
 
-/// P05: a legacy Vault token (`s.` and 24 characters) shares its shape with
-/// member accesses and file names, so it needs Vault on its line or up to
-/// five lines above it (`VAULT_TOKEN=`, `X-Vault-Token:`, `vault login`, a
-/// "Vault token" label).
-fn has_vault_context(text: &str, value: Range<usize>) -> bool {
-    let start = lines_above(text, value.start, VAULT_CONTEXT_LINES);
+/// Whether `term` (lower-case ASCII) occurs, ASCII case-insensitive, on the
+/// value's line or up to five lines above it.
+fn has_term_nearby(text: &str, value: Range<usize>, term: &[u8]) -> bool {
+    let start = lines_above(text, value.start, TERM_CONTEXT_LINES);
     let line_end = text[value.end..]
         .find('\n')
         .map_or(text.len(), |newline| value.end + newline);
@@ -71,9 +69,53 @@ fn has_vault_context(text: &str, value: Range<usize>) -> bool {
         .iter()
         .any(|part| {
             part.as_bytes()
-                .windows(5)
-                .any(|window| window.eq_ignore_ascii_case(b"vault"))
+                .windows(term.len())
+                .any(|window| window.eq_ignore_ascii_case(term))
         })
+}
+
+/// P05: a legacy Vault token (`s.` and 24 characters) shares its shape with
+/// member accesses and file names, so it needs Vault on its line or up to
+/// five lines above it (`VAULT_TOKEN=`, `X-Vault-Token:`, `vault login`, a
+/// "Vault token" label).
+fn has_vault_context(text: &str, value: Range<usize>) -> bool {
+    has_term_nearby(text, value, b"vault")
+}
+
+/// P06: Render documents the `rnd_` prefix of its API keys but no length, so
+/// a `rnd_` value needs Render on its line or up to five lines above it
+/// (`RENDER_API_KEY=`, `render login`, a "Render API key" label).
+fn has_render_context(text: &str, value: Range<usize>) -> bool {
+    has_term_nearby(text, value, b"render")
+}
+
+/// P06: a random body after the provider prefix (`vcp_`, `rnd_`) with both
+/// cases.
+fn has_both_cases_after_prefix(value: &str) -> bool {
+    value
+        .split_once('_')
+        .is_some_and(|(_, body)| has_both_cases(body))
+}
+
+/// P06: a provider key and its value (gitleaks' keyword rules, tightened): the
+/// provider name, up to 30 key characters, a credential noun right before the
+/// separator (`TRAVIS_API_TOKEN=`, `"netlify_auth_token":`,
+/// `Heroku-API-Schlüssel:`, `Circle-Token:`), an optional opening quote and
+/// the value in group 1, which no further value character continues.
+/// `HEROKU_APP_ID`, `CIRCLE_SHA1` or `travis_build_id` name no credential.
+macro_rules! provider_key {
+    ($provider:literal, $value:literal) => {
+        concat!(
+            "(?i:",
+            $provider,
+            r")[A-Za-z0-9_.\- ]{0,30}?",
+            r"(?i:token|key|secret|pat|password|passwort|kennwort|schlüssel|schluessel)",
+            key_suffix!(),
+            r"(?:=>|:=|[=:,])[ \t]*\\?[\x22'`]?(",
+            $value,
+            r")(?:[^A-Za-z0-9_\-+/=]|$)",
+        )
+    };
 }
 
 pub(super) const RULES: &[DlpPattern] = &[
@@ -650,6 +692,359 @@ pub(super) const RULES: &[DlpPattern] = &[
             ],
         )
         .with_provider("doppler")
+        .with_min_entropy(3.0)
+        .with_boundary("")
+        .with_subtype(SecretSubtype::AccessToken),
+    },
+    // ── CI / hosting (P06) ───────────────────────────────────────────────────
+    // Bitbucket OAuth consumer secrets: 64 characters under a Bitbucket key.
+    DlpPattern {
+        name: "dlp_bitbucket_client_secret",
+        pattern: provider_key!("bitbucket", r"[A-Za-z0-9_=\-]{64}"),
+        entity_group: "API_KEY",
+        validator: None,
+        span_group: Some(1),
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:bitbucket-client-secret",
+            &["bitbucket"],
+        )
+        .with_provider("bitbucket")
+        .with_min_entropy(3.0)
+        .with_subtype(SecretSubtype::SecretKey),
+    },
+    // Azure DevOps personal access tokens since 2024: 84 alphanumerics with
+    // the fixed signature `AZDO` at positions 76 to 80.
+    DlpPattern {
+        name: "dlp_azure_devops_pat",
+        pattern: r"[A-Za-z0-9]{76}AZDO[A-Za-z0-9]{4}",
+        entity_group: "SECRET_TOKEN",
+        validator: Some(has_both_cases),
+        span_group: None,
+        base_score: 50,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://learn.microsoft.com/en-us/purview/sit-defn-azure-devops-personal-access-token",
+            &["azdo"],
+        )
+        .with_provider("azure_devops")
+        .with_min_entropy(3.0)
+        .with_boundary("")
+        .with_subtype(SecretSubtype::AccessToken),
+    },
+    // Azure DevOps personal access tokens before 2024: 52 lower-case
+    // alphanumerics, only under an Azure DevOps key (`AZURE_DEVOPS_EXT_PAT`,
+    // `AZDO_PERSONAL_ACCESS_TOKEN`, `VSTS_PAT`).
+    DlpPattern {
+        name: "dlp_azure_devops_legacy_pat",
+        pattern: provider_key!(r"azure[_.\- ]?devops|azdo|vsts", r"[a-z0-9]{52}"),
+        entity_group: "SECRET_TOKEN",
+        validator: None,
+        span_group: Some(1),
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/azuredevopspersonalaccesstoken/azuredevopspersonalaccesstoken.go",
+            &["azure", "azdo", "vsts"],
+        )
+        .with_provider("azure_devops")
+        .with_min_entropy(3.0)
+        .with_subtype(SecretSubtype::AccessToken),
+    },
+    // CircleCI personal (`CCIPAT_`) and project (`CCIPRJ_`) API tokens: a
+    // base58 UUID, `_` and 40 hex digits.
+    DlpPattern {
+        name: "dlp_circleci_token",
+        pattern: r"CCIP(?:AT|RJ)_[1-9A-HJ-NP-Za-km-z]{21,22}_[0-9a-fA-F]{40}",
+        entity_group: "SECRET_TOKEN",
+        validator: None,
+        span_group: None,
+        base_score: 55,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://circleci.com/changelog/new-format-for-api-access-tokens",
+            &["ccipat_", "cciprj_"],
+        )
+        .with_provider("circleci")
+        .with_min_entropy(3.0)
+        .with_boundary("")
+        .with_subtype(SecretSubtype::AccessToken),
+    },
+    // CircleCI API tokens before the prefixes: 40 hex digits, only under a
+    // CircleCI key (`CIRCLE_TOKEN`, `CIRCLECI_CLI_TOKEN`, `Circle-Token:`).
+    DlpPattern {
+        name: "dlp_circleci_legacy_token",
+        pattern: provider_key!("circle", r"[0-9a-fA-F]{40}"),
+        entity_group: "SECRET_TOKEN",
+        validator: None,
+        span_group: Some(1),
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/circleci/v1/circleci.go",
+            &["circle"],
+        )
+        .with_provider("circleci")
+        .with_min_entropy(3.0)
+        .with_subtype(SecretSubtype::AccessToken),
+    },
+    // Travis CI API tokens: 22 alphanumerics under a Travis key.
+    DlpPattern {
+        name: "dlp_travis_token",
+        pattern: provider_key!("travis", r"[A-Za-z0-9]{22}"),
+        entity_group: "SECRET_TOKEN",
+        validator: None,
+        span_group: Some(1),
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:travisci-access-token",
+            &["travis"],
+        )
+        .with_provider("travisci")
+        .with_min_entropy(3.0)
+        .with_subtype(SecretSubtype::AccessToken),
+    },
+    // Vercel personal (`vcp_`), integration (`vci_`), app access (`vca_`),
+    // app refresh (`vcr_`) tokens and API keys (`vck_`) with the 56
+    // alphanumerics of the documented tokens.
+    DlpPattern {
+        name: "dlp_vercel_token",
+        pattern: r"vc[pikar]_[A-Za-z0-9]{56}",
+        entity_group: "CLOUD_KEY",
+        validator: Some(has_both_cases_after_prefix),
+        span_group: None,
+        base_score: 50,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://vercel.com/changelog/new-token-formats-and-secret-scanning",
+            &["vcp_", "vci_", "vca_", "vcr_", "vck_"],
+        )
+        .with_provider("vercel")
+        .with_min_entropy(3.0)
+        .with_boundary("")
+        .with_subtype(SecretSubtype::AccessToken),
+    },
+    // Vercel access tokens before the prefixes: 24 alphanumerics under a
+    // Vercel key.
+    DlpPattern {
+        name: "dlp_vercel_legacy_token",
+        pattern: provider_key!("vercel", r"[A-Za-z0-9]{24}"),
+        entity_group: "CLOUD_KEY",
+        validator: None,
+        span_group: Some(1),
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/vercel/vercel.go",
+            &["vercel"],
+        )
+        .with_provider("vercel")
+        .with_min_entropy(3.0)
+        .with_subtype(SecretSubtype::AccessToken),
+    },
+    // Netlify personal access tokens: `nfp_` and 36 characters.
+    DlpPattern {
+        name: "dlp_netlify_token",
+        pattern: r"nfp_[A-Za-z0-9_]{36}",
+        entity_group: "CLOUD_KEY",
+        validator: Some(has_both_cases_after_prefix),
+        span_group: None,
+        base_score: 50,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/netlify/v2/netlify_v2.go",
+            &["nfp_"],
+        )
+        .with_provider("netlify")
+        .with_min_entropy(3.0)
+        .with_boundary("")
+        .with_subtype(SecretSubtype::AccessToken),
+    },
+    // Netlify access tokens before `nfp_`: 40 to 46 characters under a
+    // Netlify key.
+    DlpPattern {
+        name: "dlp_netlify_legacy_token",
+        pattern: provider_key!("netlify", r"[A-Za-z0-9_=\-]{40,46}"),
+        entity_group: "CLOUD_KEY",
+        validator: None,
+        span_group: Some(1),
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:netlify-access-token",
+            &["netlify"],
+        )
+        .with_provider("netlify")
+        .with_min_entropy(3.0)
+        .with_subtype(SecretSubtype::AccessToken),
+    },
+    // Fly.io OAuth tokens: `fo1_` and 43 base64url characters.
+    DlpPattern {
+        name: "dlp_flyio_token",
+        pattern: r"fo1_[A-Za-z0-9_\-]{43}",
+        entity_group: "CLOUD_KEY",
+        validator: None,
+        span_group: None,
+        base_score: 55,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:flyio-access-token",
+            &["fo1_"],
+        )
+        .with_provider("flyio")
+        .with_min_entropy(3.0)
+        .with_boundary("-")
+        .with_subtype(SecretSubtype::AccessToken),
+    },
+    // Fly.io macaroon tokens (`fm1a_`, `fm1r_`, `fm2_`): standard base64, so
+    // `/` and `+` belong to the token and no token boundary applies.
+    DlpPattern {
+        name: "dlp_flyio_macaroon_token",
+        pattern: r"fm(?:1[ar]|2)_[A-Za-z0-9+/]{100,4096}={0,3}",
+        entity_group: "CLOUD_KEY",
+        validator: None,
+        span_group: None,
+        base_score: 55,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:flyio-access-token",
+            &["fm1a_", "fm1r_", "fm2_"],
+        )
+        .with_provider("flyio")
+        .with_min_entropy(3.0)
+        .with_subtype(SecretSubtype::AccessToken),
+    },
+    // Heroku API keys since 2024: `HRKU-AA` and 58 characters.
+    DlpPattern {
+        name: "dlp_heroku_api_key",
+        pattern: r"HRKU-AA[A-Za-z0-9_\-]{58}",
+        entity_group: "CLOUD_KEY",
+        validator: None,
+        span_group: None,
+        base_score: 55,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:heroku-api-key-v2",
+            &["hrku-aa"],
+        )
+        .with_provider("heroku")
+        .with_min_entropy(3.0)
+        .with_boundary("-")
+        .with_subtype(SecretSubtype::ApiKey),
+    },
+    // Heroku API keys before `HRKU-`: a UUID under a Heroku key.
+    DlpPattern {
+        name: "dlp_heroku_legacy_api_key",
+        pattern: provider_key!(
+            "heroku",
+            r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+        ),
+        entity_group: "CLOUD_KEY",
+        validator: None,
+        span_group: Some(1),
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:heroku-api-key",
+            &["heroku"],
+        )
+        .with_provider("heroku")
+        .with_min_entropy(3.0)
+        .with_subtype(SecretSubtype::ApiKey),
+    },
+    // Render API keys: `rnd_` and a random body, only with Render context.
+    DlpPattern {
+        name: "dlp_render_api_key",
+        pattern: r"rnd_[A-Za-z0-9]{24,64}",
+        entity_group: "CLOUD_KEY",
+        validator: Some(has_both_cases_after_prefix),
+        span_group: None,
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://render.com/docs/cli",
+            &["rnd_"],
+        )
+        .with_provider("render")
+        .with_min_entropy(3.5)
+        .with_boundary("")
+        .with_context_gate(has_render_context)
+        .with_subtype(SecretSubtype::ApiKey),
+    },
+    // Railway account and project tokens: a UUID under a Railway key.
+    DlpPattern {
+        name: "dlp_railway_token",
+        pattern: provider_key!(
+            "railway",
+            r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+        ),
+        entity_group: "CLOUD_KEY",
+        validator: None,
+        span_group: Some(1),
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/railwayapp/railwayapp.go",
+            &["railway"],
+        )
+        .with_provider("railway")
+        .with_min_entropy(3.0)
+        .with_subtype(SecretSubtype::AccessToken),
+    },
+    // Cloudflare API tokens (40 characters) and Global API Keys (37 hex
+    // digits) under a Cloudflare key.
+    DlpPattern {
+        name: "dlp_cloudflare_api_key",
+        pattern: provider_key!("cloudflare", r"[A-Za-z0-9_\-]{40}|[0-9a-f]{37}"),
+        entity_group: "CLOUD_KEY",
+        validator: None,
+        span_group: Some(1),
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:cloudflare-api-key",
+            &["cloudflare"],
+        )
+        .with_provider("cloudflare")
+        .with_min_entropy(3.0)
+        .with_subtype(SecretSubtype::ApiKey),
+    },
+    // Cloudflare Origin CA keys: `v1.0-`, 24 hex digits, `-` and 146 hex
+    // digits.
+    DlpPattern {
+        name: "dlp_cloudflare_origin_ca_key",
+        pattern: r"v1\.0-[0-9a-f]{24}-[0-9a-f]{146}",
+        entity_group: "CLOUD_KEY",
+        validator: None,
+        span_group: None,
+        base_score: 55,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:cloudflare-origin-ca-key",
+            &["v1.0-"],
+        )
+        .with_provider("cloudflare")
+        .with_min_entropy(3.0)
+        .with_boundary("-")
+        .with_subtype(SecretSubtype::ApiKey),
+    },
+    // DigitalOcean personal access (`dop_v1_`), OAuth access (`doo_v1_`) and
+    // refresh tokens (`dor_v1_`) with 64 hex digits.
+    DlpPattern {
+        name: "dlp_digitalocean_token",
+        pattern: r"do[opr]_v1_[0-9a-f]{64}",
+        entity_group: "CLOUD_KEY",
+        validator: None,
+        span_group: None,
+        base_score: 55,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:digitalocean-pat",
+            &["dop_v1_", "doo_v1_", "dor_v1_"],
+        )
+        .with_provider("digitalocean")
         .with_min_entropy(3.0)
         .with_boundary("")
         .with_subtype(SecretSubtype::AccessToken),

@@ -147,6 +147,84 @@ rules:
     source_ref: https://docs.doppler.com/reference/auth-token-formats
     format: "Doppler tokens with 40-44 alphanumerics after the prefix: dp.pt. personal, dp.ct. CLI, dp.sa. service account, dp.said. service account identity, dp.scim. SCIM, dp.audit. audit, dp.st. service token with an optional scope segment of 2-35 characters [a-z0-9_-] and a dot (vendor regexes; gitleaks doppler-api-token covers dp.pt.; P05)"
 
+  # ── CI / hosting (P06) ───────────────────────────────────────────────────
+  dlp_bitbucket_client_secret:
+    provider: bitbucket
+    source_ref: gitleaks:bitbucket-client-secret
+    format: "Bitbucket OAuth consumer secret: 64 characters [A-Za-z0-9_=-] under a key with bitbucket and a credential noun right before the separator (gitleaks bitbucket-client-secret, tightened to a credential key; P06)"
+  dlp_azure_devops_pat:
+    provider: azure_devops
+    source_ref: https://learn.microsoft.com/en-us/purview/sit-defn-azure-devops-personal-access-token
+    format: "Azure DevOps personal access token since July 2024: 84 alphanumerics with the fixed signature AZDO at positions 76-80 (Microsoft Purview SIT definition; 84-character format: https://learn.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate), upper- and lower-case letters (P06)"
+  dlp_azure_devops_legacy_pat:
+    provider: azure_devops
+    source_ref: https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/azuredevopspersonalaccesstoken/azuredevopspersonalaccesstoken.go
+    format: "Azure DevOps personal access token before 2024: 52 lower-case alphanumerics (TruffleHog AzureDevopsPersonalAccessToken), only under an Azure DevOps key (azure devops, azdo or vsts and a credential noun right before the separator; P06)"
+  dlp_circleci_token:
+    provider: circleci
+    source_ref: https://circleci.com/changelog/new-format-for-api-access-tokens
+    format: "CircleCI personal (CCIPAT_) or project (CCIPRJ_) API token: prefix, base58 UUID (21-22 characters), _ and 40 hex digits (CircleCI changelog; TruffleHog CircleCI v2; P06)"
+  dlp_circleci_legacy_token:
+    provider: circleci
+    source_ref: https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/circleci/v1/circleci.go
+    format: "CircleCI API token before the prefixes: 40 hex digits (TruffleHog CircleCI v1), only under a key with circle and a credential noun right before the separator (CIRCLE_TOKEN, CIRCLECI_CLI_TOKEN, Circle-Token header; CIRCLE_SHA1 is no credential; P06)"
+  dlp_travis_token:
+    provider: travisci
+    source_ref: gitleaks:travisci-access-token
+    format: "Travis CI API token: 22 alphanumerics under a key with travis and a credential noun right before the separator (gitleaks travisci-access-token, tightened to a credential key; P06)"
+  dlp_vercel_token:
+    provider: vercel
+    source_ref: https://vercel.com/changelog/new-token-formats-and-secret-scanning
+    format: "Vercel personal (vcp_), integration (vci_), app access (vca_), app refresh (vcr_) token or API key (vck_) (prefixes from the changelog) and 56 alphanumerics with upper- and lower-case letters (length of the documented vca_/vcr_ examples, https://vercel.com/docs/sign-in-with-vercel/tokens; P06)"
+  dlp_vercel_legacy_token:
+    provider: vercel
+    source_ref: https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/vercel/vercel.go
+    format: "Vercel access token before the prefixes: 24 alphanumerics (TruffleHog Vercel), only under a key with vercel and a credential noun right before the separator (P06)"
+  dlp_netlify_token:
+    provider: netlify
+    source_ref: https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/netlify/v2/netlify_v2.go
+    format: "Netlify personal access token: nfp_ and 36 characters [A-Za-z0-9_] with upper- and lower-case letters (TruffleHog Netlify v2; P06)"
+  dlp_netlify_legacy_token:
+    provider: netlify
+    source_ref: gitleaks:netlify-access-token
+    format: "Netlify access token before nfp_: 40-46 characters [A-Za-z0-9_=-] under a key with netlify and a credential noun right before the separator (gitleaks netlify-access-token, tightened to a credential key; P06)"
+  dlp_flyio_token:
+    provider: flyio
+    source_ref: gitleaks:flyio-access-token
+    format: "Fly.io OAuth token: fo1_ and 43 characters [A-Za-z0-9_-] (P06)"
+  dlp_flyio_macaroon_token:
+    provider: flyio
+    source_ref: gitleaks:flyio-access-token
+    format: "Fly.io macaroon token: fm1a_, fm1r_ or fm2_ and 100-4096 standard base64 characters with up to three = (P06; no token boundary, since / and + belong to the token)"
+  dlp_heroku_api_key:
+    provider: heroku
+    source_ref: gitleaks:heroku-api-key-v2
+    format: "Heroku API key since 2024: HRKU-AA and 58 characters [A-Za-z0-9_-] (P06)"
+  dlp_heroku_legacy_api_key:
+    provider: heroku
+    source_ref: gitleaks:heroku-api-key
+    format: "Heroku API key before HRKU-: a UUID under a key with heroku and a credential noun right before the separator (HEROKU_API_KEY; HEROKU_APP_ID is no credential; gitleaks heroku-api-key, tightened to a credential key; P06)"
+  dlp_render_api_key:
+    provider: render
+    source_ref: https://render.com/docs/cli
+    format: "Render API key: rnd_ (documented RENDER_API_KEY example) and 24-64 alphanumerics with upper- and lower-case letters; Render documents no length, so a value needs render on its line or up to five lines above (P06)"
+  dlp_railway_token:
+    provider: railway
+    source_ref: https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/railwayapp/railwayapp.go
+    format: "Railway account or project token: a UUID (TruffleHog RailwayApp) under a key with railway and a credential noun right before the separator (RAILWAY_TOKEN, RAILWAY_API_TOKEN; P06)"
+  dlp_cloudflare_api_key:
+    provider: cloudflare
+    source_ref: gitleaks:cloudflare-api-key
+    format: "Cloudflare API token, 40 characters [A-Za-z0-9_-] (gitleaks cloudflare-api-key), or Global API Key, 37 lower-case hex digits (gitleaks cloudflare-global-api-key), under a key with cloudflare and a credential noun right before the separator (P06)"
+  dlp_cloudflare_origin_ca_key:
+    provider: cloudflare
+    source_ref: gitleaks:cloudflare-origin-ca-key
+    format: "Cloudflare Origin CA key: v1.0-, 24 lower-case hex digits, - and 146 lower-case hex digits (P06)"
+  dlp_digitalocean_token:
+    provider: digitalocean
+    source_ref: gitleaks:digitalocean-pat
+    format: "DigitalOcean personal access token dop_v1_ (gitleaks digitalocean-pat), OAuth access token doo_v1_ (digitalocean-access-token) or refresh token dor_v1_ (digitalocean-refresh-token) and 64 lower-case hex digits (P06)"
+
   # ── Payment ──────────────────────────────────────────────────────────────
   dlp_stripe_key:
     provider: stripe

@@ -334,6 +334,77 @@ entities:
     gitleaks: [doppler-api-token]
     trufflehog: [Doppler]
     backlog: P05
+  - id: vcs.bitbucket.client_secret
+    scope: shared
+    group: API_KEY
+    ark: [dlp_bitbucket_client_secret]
+    gitleaks: [bitbucket-client-secret]
+    backlog: P06
+  - id: vcs.azure_devops.pat
+    scope: shared
+    group: SECRET_TOKEN
+    ark: [dlp_azure_devops_pat, dlp_azure_devops_legacy_pat]
+    trufflehog: [AzureDevopsPersonalAccessToken]
+    backlog: P06
+  - id: ci.circleci.api_token
+    scope: shared
+    group: SECRET_TOKEN
+    ark: [dlp_circleci_token, dlp_circleci_legacy_token]
+    trufflehog: [CircleCI]
+    backlog: P06
+  - id: ci.travisci.access_token
+    scope: shared
+    group: SECRET_TOKEN
+    ark: [dlp_travis_token]
+    gitleaks: [travisci-access-token]
+    trufflehog: [TravisCI]
+    backlog: P06
+  - id: hosting.vercel.access_token
+    scope: shared
+    group: CLOUD_KEY
+    ark: [dlp_vercel_token, dlp_vercel_legacy_token]
+    trufflehog: [Vercel]
+    backlog: P06
+  - id: hosting.netlify.access_token
+    scope: shared
+    group: CLOUD_KEY
+    ark: [dlp_netlify_token, dlp_netlify_legacy_token]
+    gitleaks: [netlify-access-token]
+    trufflehog: [Netlify]
+    backlog: P06
+  - id: hosting.flyio.access_token
+    scope: shared
+    group: CLOUD_KEY
+    ark: [dlp_flyio_token, dlp_flyio_macaroon_token]
+    gitleaks: [flyio-access-token]
+    backlog: P06
+  - id: hosting.heroku.api_key
+    scope: shared
+    group: CLOUD_KEY
+    ark: [dlp_heroku_api_key, dlp_heroku_legacy_api_key]
+    gitleaks: [heroku-api-key, heroku-api-key-v2]
+    trufflehog: [Heroku]
+    backlog: P06
+  - id: hosting.railway.api_token
+    scope: shared
+    group: CLOUD_KEY
+    ark: [dlp_railway_token]
+    trufflehog: [RailwayApp]
+    backlog: P06
+  - id: hosting.cloudflare.api_key
+    scope: shared
+    group: CLOUD_KEY
+    ark: [dlp_cloudflare_api_key, dlp_cloudflare_origin_ca_key]
+    gitleaks: [cloudflare-api-key, cloudflare-global-api-key, cloudflare-origin-ca-key]
+    trufflehog: [CloudflareApiToken, CloudflareCaKey]
+    backlog: P06
+  - id: hosting.digitalocean.token
+    scope: shared
+    group: CLOUD_KEY
+    ark: [dlp_digitalocean_token]
+    gitleaks: [digitalocean-access-token, digitalocean-pat, digitalocean-refresh-token]
+    trufflehog: [DigitalOceanV2]
+    backlog: P06
   - id: payment.stripe.secret_key
     scope: shared
     group: PAYMENT_KEY
@@ -488,6 +559,11 @@ entities:
     group: SECRET_TOKEN
     ark: [dlp_packagist_token]
     backlog: P05
+  - id: hosting.render.api_key
+    scope: ark_only
+    group: CLOUD_KEY
+    ark: [dlp_render_api_key]
+    backlog: P06
   - id: crypto.ethereum.private_key
     scope: ark_only
     group: CRYPTO_KEY
@@ -578,23 +654,9 @@ entities:
   - {id: devops.codecov.access_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [codecov-access-token], backlog: P05}
   - {id: devops.sourcegraph.access_token, scope: baseline_only, group: SECRET_TOKEN,
      gitleaks: [sourcegraph-access-token], trufflehog: [Sourcegraph], backlog: P05}
-  # P06: CI/Hosting
-  - {id: vcs.bitbucket.client_secret, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [bitbucket-client-secret], backlog: P06}
+  # P06: CI/Hosting (ohne ARK-Regel)
   - {id: ci.droneci.access_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [droneci-access-token],
      trufflehog: [DroneCI], backlog: P06}
-  - {id: ci.travisci.access_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [travisci-access-token],
-     trufflehog: [TravisCI], backlog: P06}
-  - {id: hosting.flyio.access_token, scope: baseline_only, group: CLOUD_KEY, gitleaks: [flyio-access-token], backlog: P06}
-  - {id: hosting.netlify.access_token, scope: baseline_only, group: CLOUD_KEY, gitleaks: [netlify-access-token],
-     trufflehog: [Netlify], backlog: P06}
-  - {id: hosting.heroku.api_key, scope: baseline_only, group: CLOUD_KEY,
-     gitleaks: [heroku-api-key, heroku-api-key-v2], trufflehog: [Heroku], backlog: P06}
-  - {id: hosting.cloudflare.api_key, scope: baseline_only, group: CLOUD_KEY,
-     gitleaks: [cloudflare-api-key, cloudflare-global-api-key, cloudflare-origin-ca-key],
-     trufflehog: [CloudflareApiToken, CloudflareCaKey], backlog: P06}
-  - {id: hosting.digitalocean.token, scope: baseline_only, group: CLOUD_KEY,
-     gitleaks: [digitalocean-access-token, digitalocean-pat, digitalocean-refresh-token], trufflehog: [DigitalOceanV2],
-     backlog: P06}
   - {id: hosting.openshift.user_token, scope: baseline_only, group: CLOUD_KEY, gitleaks: [openshift-user-token], backlog: P06}
   - {id: hosting.defined_networking.api_token, scope: baseline_only, group: CLOUD_KEY,
      gitleaks: [defined-networking-api-token], backlog: P06}
