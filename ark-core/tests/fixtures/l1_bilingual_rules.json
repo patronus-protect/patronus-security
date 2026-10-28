@@ -3070,6 +3070,443 @@
   },
   {
     "category": "dlp",
+    "rule_id": "dlp_bitbucket_client_secret",
+    "de": "BITBUCKET_CLIENT_SECRET=<<secret\u003a0>>",
+    "en": "Bitbucket client secret: <<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "bitbucket_client_secret",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "BITBUCKET_CLIENT_SECRET=${BITBUCKET_CLIENT_SECRET}",
+        "Das Bitbucket-Client-Secret steht im Tresor."
+      ],
+      "en": [
+        "bitbucket_client_secret: ${{ secrets.BITBUCKET_CLIENT_SECRET }}",
+        "Bitbucket client secrets have 64 characters."
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_azure_devops_pat",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "azure_devops_pat",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "AZURE_DEVOPS_EXT_PAT=$(System.AccessToken)",
+        "Azure-DevOps-PATs haben 84 Zeichen mit AZDO an Position 76."
+      ],
+      "en": [
+        "AZURE_DEVOPS_EXT_PAT: $(AZDO_PAT)",
+        "Azure DevOps PATs are 84 characters long with AZDO at position 76."
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_azure_devops_legacy_pat",
+    "de": "AZURE_DEVOPS_EXT_PAT=<<secret\u003a0>>",
+    "en": "azdo_personal_access_token = \"<<secret\u003a0>>\"",
+    "secrets": [
+      {
+        "gen": "azure_devops_legacy_pat",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "AZURE_DEVOPS_EXT_PAT=${AZURE_DEVOPS_EXT_PAT}",
+        "Alte Azure-DevOps-PATs haben 52 Zeichen."
+      ],
+      "en": [
+        "azdo_personal_access_token = var.azdo_pat",
+        "Legacy Azure DevOps PATs have 52 characters."
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_circleci_token",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "circleci_personal_token",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "CIRCLECI_TOKEN=${CIRCLECI_TOKEN}",
+        "Persönliche CircleCI-Tokens beginnen mit CCIPAT_."
+      ],
+      "en": [
+        "curl -H \"Circle-Token: $CIRCLECI_TOKEN\" https://circleci.com/api/v2/me",
+        "Project tokens start with CCIPRJ_."
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_circleci_legacy_token",
+    "de": "CIRCLE_TOKEN=<<secret\u003a0>>",
+    "en": "Circle-Token: <<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "circleci_legacy_token",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "CIRCLE_TOKEN=${CIRCLE_TOKEN}",
+        "CircleCI-API-Tokens haben 40 Hex-Ziffern."
+      ],
+      "en": [
+        "CIRCLE_SHA1=0a1b2c3d4e5f60718293a4b5c6d7e8f901234567",
+        "circleci api tokens have 40 hex digits."
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_travis_token",
+    "de": "TRAVIS_API_TOKEN=<<secret\u003a0>>",
+    "en": "travis_token: \"<<secret\u003a0>>\"",
+    "secrets": [
+      {
+        "gen": "travisci_access_token",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "TRAVIS_API_TOKEN=${TRAVIS_API_TOKEN}",
+        "Travis-CI-Tokens haben 22 Zeichen."
+      ],
+      "en": [
+        "travis_token: ${{ secrets.TRAVIS_TOKEN }}",
+        "travis:\n  build_id: 1234567890123456789012"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_vercel_token",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "vercel_personal_token",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "VERCEL_TOKEN=${VERCEL_TOKEN}",
+        "Persönliche Vercel-Tokens beginnen mit vcp_."
+      ],
+      "en": [
+        "vercel deploy --token \"$VERCEL_TOKEN\"",
+        "App access tokens start with vca_."
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_vercel_legacy_token",
+    "de": "VERCEL_TOKEN=<<secret\u003a0>>",
+    "en": "\"vercelToken\": \"<<secret\u003a0>>\"",
+    "secrets": [
+      {
+        "gen": "vercel_legacy_token",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "VERCEL_TOKEN=${VERCEL_TOKEN}",
+        "Alte Vercel-Tokens haben 24 Zeichen."
+      ],
+      "en": [
+        "\"vercelToken\": process.env.VERCEL_TOKEN",
+        "VERCEL_PROJECT_ID=prj_0123456789abcdefghij"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_netlify_token",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "netlify_personal_token",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "NETLIFY_AUTH_TOKEN=${NETLIFY_AUTH_TOKEN}",
+        "Netlify-Tokens beginnen mit nfp_."
+      ],
+      "en": [
+        "netlify deploy --auth \"$NETLIFY_AUTH_TOKEN\"",
+        "Personal access tokens start with nfp_."
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_netlify_legacy_token",
+    "de": "NETLIFY_AUTH_TOKEN=<<secret\u003a0>>",
+    "en": "netlify_access_token: '<<secret\u003a0>>'",
+    "secrets": [
+      {
+        "gen": "netlify_access_token",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "NETLIFY_AUTH_TOKEN=${NETLIFY_AUTH_TOKEN}",
+        "Das Netlify-Zugriffstoken steht im Tresor."
+      ],
+      "en": [
+        "netlify_access_token: ${{ secrets.NETLIFY_AUTH_TOKEN }}",
+        "NETLIFY_SITE_ID=3f2b8c1e-9a4d-4e7b-b1c2-5d6e7f8a9b0c"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_flyio_token",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "flyio_oauth_token",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "FLY_API_TOKEN=${FLY_API_TOKEN}",
+        "Fly.io-Tokens beginnen mit fo1_ oder fm2_."
+      ],
+      "en": [
+        "flyctl deploy --access-token \"$FLY_API_TOKEN\"",
+        "Fly.io macaroon tokens start with fm2_."
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_flyio_macaroon_token",
+    "de": "FLY_API_TOKEN=<<secret\u003a0>>",
+    "en": "Authorization: FlyV1 <<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "flyio_macaroon_token",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "FLY_API_TOKEN=$(fly tokens create deploy)",
+        "Fly.io-Deploy-Tokens beginnen mit fm2_."
+      ],
+      "en": [
+        "Authorization: FlyV1 ${FLY_API_TOKEN}",
+        "Fly.io macaroon tokens start with fm2_."
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_heroku_api_key",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "heroku_api_key_v2",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "HEROKU_API_KEY=${HEROKU_API_KEY}",
+        "Heroku-API-Schlüssel beginnen mit HRKU-AA."
+      ],
+      "en": [
+        "heroku_api_key: ${{ secrets.HEROKU_API_KEY }}",
+        "Heroku API keys start with HRKU-AA."
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_heroku_legacy_api_key",
+    "de": "HEROKU_API_KEY=<<secret\u003a0>>",
+    "en": "\"heroku_api_key\": \"<<secret\u003a0>>\"",
+    "secrets": [
+      {
+        "gen": "heroku_api_key",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "HEROKU_API_KEY=${HEROKU_API_KEY}",
+        "# Heroku-App\nAPP_ID=3f2b8c1e-9a4d-4e7b-b1c2-5d6e7f8a9b0c"
+      ],
+      "en": [
+        "\"heroku_api_key\": \"${HEROKU_API_KEY}\"",
+        "heroku:\n  app_id: 3f2b8c1e-9a4d-4e7b-b1c2-5d6e7f8a9b0c"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_render_api_key",
+    "de": "RENDER_API_KEY=<<secret\u003a0>>",
+    "en": "Render API key: <<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "render_api_key",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "RENDER_API_KEY=${RENDER_API_KEY}",
+        "Render-API-Schlüssel beginnen mit rnd_."
+      ],
+      "en": [
+        "render_api_key: ${{ secrets.RENDER_API_KEY }}",
+        "Render API keys start with rnd_."
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_railway_token",
+    "de": "RAILWAY_TOKEN=<<secret\u003a0>>",
+    "en": "\"railwayApiToken\": \"<<secret\u003a0>>\"",
+    "secrets": [
+      {
+        "gen": "railway_token",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "RAILWAY_TOKEN=${RAILWAY_TOKEN}",
+        "RAILWAY_PROJECT_ID=3f2b8c1e-9a4d-4e7b-b1c2-5d6e7f8a9b0c"
+      ],
+      "en": [
+        "\"railwayApiToken\": process.env.RAILWAY_API_TOKEN",
+        "railway_service_id: 3f2b8c1e-9a4d-4e7b-b1c2-5d6e7f8a9b0c"
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_cloudflare_api_key",
+    "de": "CLOUDFLARE_API_TOKEN=<<secret\u003a0>>",
+    "en": "cloudflare_api_token = \"<<secret\u003a0>>\"",
+    "secrets": [
+      {
+        "gen": "cloudflare_api_token",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN}",
+        "CLOUDFLARE_ZONE_ID=0123456789abcdef0123456789abcdef"
+      ],
+      "en": [
+        "cloudflare_api_token = var.cloudflare_api_token",
+        "cloudflare_account_id = \"0123456789abcdef0123456789abcdef\""
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_cloudflare_origin_ca_key",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "cloudflare_origin_ca_key",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "CLOUDFLARE_API_USER_SERVICE_KEY=${ORIGIN_CA_KEY}",
+        "Origin-CA-Schlüssel beginnen mit v1.0-."
+      ],
+      "en": [
+        "X-Auth-User-Service-Key: $ORIGIN_CA_KEY",
+        "Origin CA keys start with v1.0-."
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_digitalocean_token",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "digitalocean_pat",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "DIGITALOCEAN_ACCESS_TOKEN=${DIGITALOCEAN_ACCESS_TOKEN}",
+        "DigitalOcean-Tokens beginnen mit dop_v1_."
+      ],
+      "en": [
+        "doctl auth init --access-token \"$DIGITALOCEAN_ACCESS_TOKEN\"",
+        "OAuth tokens start with doo_v1_."
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
     "rule_id": "dlp_stripe_key",
     "de": "<<secret\u003a0>>",
     "en": "<<secret\u003a0>>",
