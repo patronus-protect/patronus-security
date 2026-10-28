@@ -10,7 +10,7 @@ use super::context::Evidence;
 use super::context_anchors::PII_ANCHOR_PATTERNS;
 use super::score::{self, PiiMode, ValidatorStrength};
 use super::{
-    at, au, be, ca, ch, common, context, de, driver_license, fr, identifiers, ie, intl,
+    at, au, be, ca, ch, common, context, de, driver_license, fr, identifiers, ie, intl, kr,
     licence_plate, nl, nordic, overlap, pt, sg, tr, uk, us, validators, vat, za,
 };
 use crate::detectors::anchors;
@@ -190,6 +190,12 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     ch::AHV_NUMBER_CONTEXT_FREE,
     pt::NIF,
     ie::PPSN,
+    kr::RESIDENT_REGISTRATION_NUMBER,
+    kr::RESIDENT_REGISTRATION_NUMBER_CONTEXT_FREE,
+    kr::FOREIGNER_REGISTRATION_NUMBER,
+    kr::FOREIGNER_REGISTRATION_NUMBER_CONTEXT_FREE,
+    kr::BUSINESS_REGISTRATION_NUMBER,
+    kr::BUSINESS_REGISTRATION_NUMBER_CONTEXT_FREE,
 ];
 
 pub struct PiiPipeline {
@@ -648,7 +654,10 @@ impl NativeRegexDetector for PiiPipeline {
             | "pii_social_security_number_at"
             | "pii_ahv_number_ch"
             | "pii_nif_pt"
-            | "pii_ppsn_ie") => {
+            | "pii_ppsn_ie"
+            | "pii_rrn_kr"
+            | "pii_frn_kr"
+            | "pii_brn_kr") => {
                 let value = captures.get(0).unwrap().range();
                 // The digits after `PT ` are the body of a Portuguese VAT ID (B16),
                 // no NIF of their own.

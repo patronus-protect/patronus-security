@@ -30,6 +30,24 @@ result shapes may be breaking for downstream users, and is called out explicitly
   The rule regex is linear and bounded. `latency.py compare --engine ark-native` 100 KiB p95
   175.5 → 179.2 ms (+2.1 %), PASS.
 
+### Added
+
+- Korean resident, foreigner and business registration numbers with check digits (B-KR: A14 and the
+  checksum part of T12). Three new labels: `KR_RRN` (주민등록번호 `YYMMDD-GHHSSSC`: birth date, sex
+  and century digit 1–4, region code up to 95, check digit `(11 − weighted sum mod 11) mod 10`),
+  `KR_FRN` (외국인등록번호, the same form with 5–8 and `(13 − …) mod 10`) and `KR_BRN`
+  (사업자등록번호 `NNN-NN-NNNNN`, weighted 1-3-7-1-3-7-1-3-5 mod 10). `pii_rrn_kr`, `pii_frn_kr`
+  and `pii_brn_kr` report the value in every mode when a term of the label (EN, DE, Korean) stands
+  near it or is its key, also as a CSV cell next to numeric cells; in `balanced`/`recall` the
+  hyphenated forms are also reported bare at 0.55 (K05). Thirteen and ten bare digits always need a
+  term. RRNs issued since October 2020 carry no check digit and are not reported. The three
+  `presidio_only` ids `pii.kr.rrn`, `pii.kr.frn` and `pii.kr.brn` become `shared`; M3 ARK 63 → 66,
+  shared 22 → 25. The KR driving licence and passport (format and context only) stay out.
+  New `rust/tests/pii_kr.rs`, 76 new `pii_l1` rows (DE, EN, KO), rule fixture entries.
+  **Detection change** (`strict`: the three labels with a term or key, including the
+  `CREDITCARD` hard negatives that are valid RRNs, now annotated as `KR_RRN`; `balanced`/`recall`:
+  also the bare hyphenated forms). The rule regexes are linear and bounded.
+
 ## [0.1.14] - 2026-10-28
 
 ### Added

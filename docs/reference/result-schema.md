@@ -411,7 +411,14 @@ letter of the Irish VAT number; `1234567FA`). With a term (`Sozialversicherungsn
 `AHV-Nummer`, `numéro AVS`, `NIF`, `número de contribuinte`, `PPSN`, `PPS number`) or as a key they
 are reported in every mode; bare, in `balanced`/`recall` only and at `0.55`, the Austrian number
 printed `NNNN DDMMYY` with a calendar date and the dotted AHV number. Nine digits after `PT ` are
-the body of a VAT ID, no NIF. The German document number rules keep
+the body of a VAT ID, no NIF. Three Korean numbers (B-KR): the resident registration number
+(`KR_RRN`, birth date, sex and century digit 1–4, region code up to 95, a check digit mod 11;
+`960121-1021413`), the foreigner registration number (`KR_FRN`, the same form with 5–8;
+`911124-5678906`) and the business registration number (`KR_BRN`, a weighted check digit mod 10;
+`104-82-13138`). With a term (`RRN`, `resident registration number`, `주민등록번호`, `FRN`,
+`외국인등록번호`, `BRN`, `사업자등록번호`) or as a key they are reported in every mode, also as
+thirteen or ten plain digits; bare, in `balanced`/`recall` only and at `0.55`, the hyphenated
+forms. The German document number rules keep
 their format check in every mode, since a printed nine-character serial carries no check digit. A context-bound rule (`pii_phone_de_national_proximity`: a national number such as
 `ist unter 0176 90817263 erreichbar`) reports only with a support term and no nearer counter term,
 in every mode including `strict`, and then scores at least `0.50`. Validators decide in every

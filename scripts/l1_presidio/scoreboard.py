@@ -1191,6 +1191,43 @@ def ie_ppsn(value: str) -> bool:
     return digits is not None and any(digits) and _ie_check_letter(digits, second) == value[7]
 
 
+
+def _kr_registration_number(value: str, sexes: range, base: int) -> bool:
+    if len(value) == 14 and value[6] == "-":
+        value = value[:6] + value[7:]
+    digits = _separated_digits(value, 13, "")
+    if digits is None or digits[6] not in sexes:
+        return False
+    century = 1900 if digits[6] % 4 in (1, 2) else 2000
+    year, month, day = (digits[i] * 10 + digits[i + 1] for i in (0, 2, 4))
+    total = sum(digit * weight for digit, weight in zip(digits, (2, 3, 4, 5, 6, 7, 8, 9, 2, 3, 4, 5)))
+    return (
+        _valid_date(century + year, month, day)
+        and digits[7] * 10 + digits[8] <= 95
+        and (base - total % 11) % 10 == digits[12]
+    )
+
+
+def kr_rrn(value: str) -> bool:
+    """Port of ``validators::kr_rrn`` (YYMMDD-GHHSSSC, sex 1–4, region ≤ 95, (11 − sum mod 11) mod 10)."""
+    return _kr_registration_number(value, range(1, 5), 11)
+
+
+def kr_frn(value: str) -> bool:
+    """Port of ``validators::kr_frn`` (YYMMDD-GHHSSSC, sex 5–8, region ≤ 95, (13 − sum mod 11) mod 10)."""
+    return _kr_registration_number(value, range(5, 9), 13)
+
+
+def kr_brn(value: str) -> bool:
+    """Port of ``validators::kr_brn`` (ten digits or NNN-NN-NNNNN, weighted 1-3-7-1-3-7-1-3-5 mod 10)."""
+    if len(value) == 12 and value[3] == "-" and value[6] == "-":
+        value = value.replace("-", "")
+    digits = _separated_digits(value, 10, "")
+    if digits is None or len(set(digits)) == 1:
+        return False
+    total = sum(digit * weight for digit, weight in zip(digits, (1, 3, 7, 1, 3, 7, 1, 3, 5))) + digits[8] * 5 // 10
+    return (10 - total % 10) % 10 == digits[9]
+
 # Python ports of every checksum validator (``checksums.ark`` with an algorithm in entity_map.yaml);
 # a task that adds one ports it here, or scripts/tests/test_l1_scoreboard.py is red.
 CHECKSUM_PORTS: dict[str, Callable[[str], bool]] = {
@@ -1259,6 +1296,9 @@ CHECKSUM_PORTS: dict[str, Callable[[str], bool]] = {
     "ch_ahv_number": ch_ahv_number,
     "pt_nif": pt_nif,
     "ie_ppsn": ie_ppsn,
+    "kr_rrn": kr_rrn,
+    "kr_frn": kr_frn,
+    "kr_brn": kr_brn,
 }
 
 

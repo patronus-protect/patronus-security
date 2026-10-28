@@ -1340,6 +1340,59 @@ pub fn za_id_number(s: &str) -> bool {
     })
 }
 
+/// Korean resident registration number (B-KR, 주민등록번호): `YYMMDD-GHHSSSC`,
+/// hyphenated or thirteen digits, sex and century digit 1–4 (`kr_registration_number`)
+/// and the check digit `(11 − weighted sum mod 11) mod 10`. Numbers issued since
+/// October 2020 carry random digits after the region code and pass only by chance.
+pub fn kr_rrn(s: &str) -> bool {
+    kr_registration_number(s, 1..=4, 11)
+}
+
+/// Korean foreigner registration number (B-KR, 외국인등록번호): the form of the
+/// resident registration number with sex and century digit 5–8 and the check
+/// digit `(13 − weighted sum mod 11) mod 10`.
+pub fn kr_frn(s: &str) -> bool {
+    kr_registration_number(s, 5..=8, 13)
+}
+
+/// Thirteen digits `YYMMDD-GHHSSSC` with `G` in `sex` (odd and even pairs from
+/// 1900 and 2000 on), a calendar birth date, a region code `HH` up to 95 and the
+/// check digit `(base − Σ weights 2…9, 2…5 mod 11) mod 10`, shared by the RRN and
+/// the FRN.
+fn kr_registration_number(s: &str, sex: std::ops::RangeInclusive<u32>, base: u32) -> bool {
+    let hyphenated = s.len() == 14 && s.as_bytes()[6] == b'-';
+    (hyphenated || s.len() == 13)
+        && separated_digits::<13>(s, b"-").is_some_and(|digits| {
+            let century = if matches!(digits[6] % 4, 1 | 2) {
+                1900
+            } else {
+                2000
+            };
+            let sum = weighted_sum(&digits[..12], &[2, 3, 4, 5, 6, 7, 8, 9, 2, 3, 4, 5]);
+            sex.contains(&digits[6])
+                && birth_date(
+                    two_digits(&digits, 4),
+                    two_digits(&digits, 2),
+                    century + two_digits(&digits, 0),
+                )
+                && two_digits(&digits, 7) <= 95
+                && (base - sum % 11) % 10 == digits[12]
+        })
+}
+
+/// Korean business registration number (B-KR, 사업자등록번호): ten digits, plain
+/// or `NNN-NN-NNNNN`, not one repeated digit. The first nine weighted
+/// 1 3 7 1 3 7 1 3 5, plus the tens of the ninth times five, make the last digit
+/// `(10 − sum mod 10) mod 10`.
+pub fn kr_brn(s: &str) -> bool {
+    let hyphenated = s.len() == 12 && s.as_bytes()[3] == b'-' && s.as_bytes()[6] == b'-';
+    (hyphenated || s.len() == 10)
+        && separated_digits::<10>(s, b"-").is_some_and(|digits| {
+            let sum = weighted_sum(&digits[..9], &[1, 3, 7, 1, 3, 7, 1, 3, 5]) + digits[8] * 5 / 10;
+            !one_repeated_digit(&digits) && (10 - sum % 10) % 10 == digits[9]
+        })
+}
+
 /// Austrian social security number (B-EU2, Versicherungsnummer): ten digits,
 /// plain or `NNNN DDMMYY`. Three serial digits from 100 on, a check digit and six
 /// digits that are usually the birth date `DDMMYY`; when a day runs out of serials
