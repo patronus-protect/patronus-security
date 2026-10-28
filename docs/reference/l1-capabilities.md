@@ -12,7 +12,7 @@ What ARK L1 detects (PII and DLP), how it compares with Presidio and the secret 
 | | PII | DLP |
 | --- | --- | --- |
 | Result labels (entity groups) | 83 | 23 |
-| Regex rules | 135 | 64 (+5 relationship rules) |
+| Regex rules | 136 | 64 (+5 relationship rules) |
 | Checksum-validated units (count rule T03) | 63 (Presidio 2.2.364: 35) | – |
 | Rules with a `checksum` or `structure` check | 89 | 6 |
 | Default state | all rules on | credential/secret groups on, broader families opt-in |
@@ -42,7 +42,7 @@ One row per benchmark entity of `research/l1-pii/entity_map.yaml`. Scope: `share
 | Benchmark id | Scope | ARK label(s) | Rule ID(s) | Check | Default | Presidio entities |
 | --- | --- | --- | --- | --- | --- | --- |
 | `pii.email` | shared | `EMAIL` | `pii_email` | format | on | `EMAIL_ADDRESS` |
-| `pii.phone` | shared | `PHONE` | `pii_phone_international`, `pii_phone_de`, `pii_phone_de_national_context`, `pii_phone_de_national_proximity`, `pii_phone_us` | format | on | `PHONE_NUMBER` |
+| `pii.phone` | shared | `PHONE` | `pii_phone_international`, `pii_phone_de`, `pii_phone_de_national_context`, `pii_phone_de_national_proximity`, `pii_phone_us`, `pii_phone_regional` | format | on (1 of 6 rules `balanced`/`recall` only) | `PHONE_NUMBER` |
 | `pii.ip_address` | shared | `IP_ADDRESS` | `pii_ipv4`, `pii_ipv6_full`, `pii_ipv6_compressed`, `pii_ipv6_loopback` | format | on | `IP_ADDRESS` |
 | `pii.mac_address` | shared | `MAC_ADDRESS` | `pii_mac_address` | format | on | `MAC_ADDRESS` |
 | `pii.iban` | shared | `IBAN` | `pii_iban_de`, `pii_iban_generic` | checksum | on | `IBAN_CODE` |

@@ -11,7 +11,7 @@ use super::context_anchors::PII_ANCHOR_PATTERNS;
 use super::score::{self, PiiMode, ValidatorStrength};
 use super::{
     at, au, be, ca, ch, common, context, de, driver_license, fr, identifiers, ie, intl,
-    licence_plate, nl, nordic, overlap, pt, sg, tr, uk, us, vat, za,
+    licence_plate, nl, nordic, overlap, pt, sg, tr, uk, us, validators, vat, za,
 };
 use crate::detectors::anchors;
 use crate::detectors::obfuscation::{Deobfuscated, Level};
@@ -44,7 +44,9 @@ pub struct PiiPattern {
     /// grouped US SSN (B-SSN: separators and SSA ranges), the UK NINO (issued
     /// prefixes and suffixes, one letter case), the UK driving licence
     /// (surname, birth date and initials, B-UK) and the slashed German
-    /// Steuernummer (the groups of the Länder, Q-DE).
+    /// Steuernummer (the groups of the Länder, Q-DE). The regional phone rule (F01)
+    /// is here so that `strict` stays unchanged; its numbering plan and a phone term
+    /// stand in for a check digit.
     pub scored_only: bool,
 }
 
@@ -62,6 +64,7 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     de::PHONE_NATIONAL_CONTEXT,
     de::PHONE_NATIONAL_PROXIMITY,
     us::PHONE,
+    common::PHONE_REGIONAL,
     common::MAC_ADDRESS,
     intl::IBAN_DE,
     intl::IBAN_GENERIC,
@@ -607,6 +610,8 @@ impl NativeRegexDetector for PiiPipeline {
             "pii_phone_international" | "pii_phone_de" => {
                 context::opens_phone_number(text, captures.get(0).unwrap().start())
             }
+            // The numbering plan only after the context gate (F01): parsing is costly.
+            "pii_phone_regional" => validators::in_phone_region(captures.get(0).unwrap().as_str()),
             "pii_credit_card" => context::card_position(text, captures.get(0).unwrap().range()),
             // A term near the value does not make a fragment of a longer number
             // (`401127789-0`) an SSN, an NHS, a passport, an AU/SG or a Nordic number.

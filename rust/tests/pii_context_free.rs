@@ -9,12 +9,13 @@
 //! of a longer number, range or date) and drops below both thresholds when a
 //! counter-context term is nearer than any support term. A bare Steuer-ID also
 //! has to follow the digit distribution of issued IDs; validators are never
-//! relaxed. Four scored-only rules check a form without a check digit
+//! relaxed. Five scored-only rules check a form without a check digit
 //! (`FORMAT_RULES`): the grouped US SSN (`AAA-GG-SSSS`, B-SSN), whose SSA ranges
 //! and separators stand in for one, the UK NINO and driving licence (B-UK),
 //! whose issuing rules (prefix and suffix letters; surname, birth date and
 //! initials) do, and the German Steuernummer in the slashed groups of the
-//! Länder (`123/456/78901`, Q-DE).
+//! Länder (`123/456/78901`, Q-DE). The regional phone rule (F01) needs a phone
+//! term and a valid number of a regional numbering plan.
 
 use patronus_ark::detectors::pii::{
     pii::{PiiPattern, PII_PATTERNS},
@@ -94,11 +95,12 @@ const CONTEXT_BOUND_LABELS: [&str; 8] = [
     "IE_PPSN",
 ];
 /// Scored-only rules whose validator checks a form, not a check digit.
-const FORMAT_RULES: [&str; 4] = [
+const FORMAT_RULES: [&str; 5] = [
     "pii_driver_license_number_uk_context_free",
     "pii_ssn_us_context_free",
     "pii_ni_uk_context_free",
     TAX_NUMBER,
+    "pii_phone_regional",
 ];
 
 /// Issued Steuer-IDs: check digit valid, one digit twice or three times (not
@@ -132,6 +134,7 @@ fn scored_only_rules_are_unbound_checksum_rules() {
             .map(|pattern| pattern.name)
             .collect::<Vec<_>>(),
         [
+            "pii_phone_regional",
             STEUER_ID,
             "pii_driver_license_number_uk_context_free",
             "pii_ssn_us_context_free",
@@ -206,10 +209,11 @@ fn scored_only_rules_are_unbound_checksum_rules() {
         // The bare Partita IVA (B01), the old numeric document serial (F08) and the
         // LANR (B-DE1) are the unbound checksum rules that need a term; 11 bare
         // digits with a Luhn digit, 10 with a 7-3-1 digit or 9 with a mod-10 digit
-        // prove too little alone.
+        // prove too little alone. So does a regional national phone number (F01).
         assert_eq!(
             pattern.requires_context,
             [
+                "pii_phone_regional",
                 "pii_vat_id_it_proximity",
                 "pii_passport_number_de_legacy",
                 "pii_identity_card_number_de_legacy",
@@ -219,9 +223,12 @@ fn scored_only_rules_are_unbound_checksum_rules() {
             "{}",
             pattern.name
         );
-        // Bare, the checksum alone reaches the balanced threshold ...
+        // Bare, the checksum alone reaches the balanced threshold. The regional
+        // phone rule has no checksum and never emits bare; with support it does
+        // (`pii_context_engine.rs`) ...
         assert!(
-            score::rule_score(pattern) >= PiiMode::Balanced.min_score().unwrap(),
+            pattern.name == "pii_phone_regional"
+                || score::rule_score(pattern) >= PiiMode::Balanced.min_score().unwrap(),
             "{}",
             pattern.name
         );
