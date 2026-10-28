@@ -148,6 +148,7 @@ fn scored_only_rules_are_unbound_checksum_rules() {
             "pii_vat_id_it",
             "pii_vat_id_it_proximity",
             "pii_vat_id_es",
+            "pii_vat_id_es_proximity",
             "pii_vat_id_lu",
             "pii_vat_id_lv",
             "pii_vat_id_mt",
@@ -199,6 +200,9 @@ fn scored_only_rules_are_unbound_checksum_rules() {
             "pii_rrn_kr_context_free",
             "pii_frn_kr_context_free",
             "pii_brn_kr_context_free",
+            "pii_nif_es_context_free",
+            "pii_nie_es_context_free",
+            "pii_fiscal_code_it_context_free",
         ]
     );
     for pattern in scored_only {
@@ -209,7 +213,7 @@ fn scored_only_rules_are_unbound_checksum_rules() {
         };
         assert_eq!(pattern.strength, strength, "{}", pattern.name);
         assert!(!pattern.captured_value, "{}", pattern.name);
-        // The bare Partita IVA (B01), the old numeric document serial (F08) and the
+        // The bare Partita IVA (B01) and CIF (B-ESIT), the old numeric document serial (F08) and the
         // LANR (B-DE1) are the unbound checksum rules that need a term; 11 bare
         // digits with a Luhn digit, 10 with a 7-3-1 digit or 9 with a mod-10 digit
         // prove too little alone. So does a regional national phone number (F01).
@@ -218,6 +222,7 @@ fn scored_only_rules_are_unbound_checksum_rules() {
             [
                 "pii_phone_regional",
                 "pii_vat_id_it_proximity",
+                "pii_vat_id_es_proximity",
                 "pii_passport_number_de_legacy",
                 "pii_identity_card_number_de_legacy",
                 "pii_physician_number_lanr_de_proximity",
@@ -339,6 +344,9 @@ fn every_checksum_label_reports_a_bare_value_in_the_scored_modes() {
         ("KR_RRN", "960121-1021413", 0.55),
         ("KR_FRN", "911124-5678906", 0.55),
         ("KR_BRN", "104-82-13138", 0.55),
+        ("ES_NIF", "12345678Z", 0.55),
+        ("ES_NIE", "X1234567L", 0.55),
+        ("IT_FISCAL_CODE", "RSSMRA85T10A562S", 0.55),
     ];
     for label in PII_PATTERNS
         .iter()

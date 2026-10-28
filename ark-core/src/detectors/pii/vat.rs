@@ -9,7 +9,8 @@
 //! value with its country prefix without a field name, where the prefix, the
 //! form and the check digit carry the finding. Uppercase prefixes only; the
 //! value must stand alone (`context::stands_alone`). A bare Partita IVA (11
-//! digits without `IT`) also needs a VAT term nearby or as its key.
+//! digits without `IT`) and a bare Spanish CIF (without `ES`) also need a VAT
+//! term nearby or as their key.
 use super::{pii::PiiPattern, score::ValidatorStrength, validators};
 
 /// `DE136695976`, `DE 136 695 976`, `DE.136.695.976`, `DE-136-695-976`.
@@ -130,6 +131,22 @@ pub(super) const VAT_ID_ES: PiiPattern = PiiPattern {
     base_score: 20,
     captured_value: false,
     requires_context: false,
+    scored_only: true,
+};
+
+/// A bare CIF, the Spanish VAT ID of a company without `ES` (B-ESIT): "CIF:
+/// A58818501", `{"cif": "B-5837843-1"}`. An entity letter, seven digits and a
+/// control character, also hyphenated; like the bare Partita IVA it needs a VAT
+/// or CIF term on either side or as the structural key.
+pub(super) const VAT_ID_ES_PROXIMITY: PiiPattern = PiiPattern {
+    name: "pii_vat_id_es_proximity",
+    pattern: r"\b[A-HJNP-SU-W]-?[0-9]{7}-?[0-9A-J]\b",
+    entity_group: "VAT_ID_ES",
+    validator: Some(validators::es_vat_id),
+    strength: ValidatorStrength::Checksum,
+    base_score: 20,
+    captured_value: false,
+    requires_context: true,
     scored_only: true,
 };
 

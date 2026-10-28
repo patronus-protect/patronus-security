@@ -4030,6 +4030,111 @@ B_KR_CASES = [
 for _row in B_KR_CASES:
     PII_CASES.setdefault(_row["target_label"], []).append(_row)
 
+# B-ESIT (A11, A12): Spanish DNI/NIF (ES_NIF, eight digits and a control letter mod 23), NIE (ES_NIE,
+# X/Y/Z, seven digits and the same control letter), Italian codice fiscale (IT_FISCAL_CODE,
+# sixteen characters with omocodia and a check letter) and the bare Spanish CIF without the `ES`
+# prefix (VAT_ID_ES). `pii_nif_es`, `pii_nie_es` and `pii_fiscal_code_it` report the value in every
+# mode when a term of the label stands near it or is its key; in balanced and recall the bare
+# uppercase values are also reported (`*_context_free`). The bare CIF needs a term or key and is
+# balanced/recall only (`pii_vat_id_es_proximity`). ES and IT rows add the national field names.
+# Hard negatives: failed control letters, impossible months and days, the presidio-analyzer
+# negatives, values without a term in strict and parts of longer values. Appended so existing ids
+# stay stable.
+B_ESIT_CASES = [
+    # ── ES NIF ─────────────────────────────────────────────────────────────
+    p("ES_NIF", "en", "pii_nif_es", "NIF: ", "26187118P"),
+    p("ES_NIF", "en", "pii_nif_es", "His Spanish tax ID is ", "13887981-Y", ".", carrier="prose"),
+    p("ES_NIF", "en", "pii_nif_es", '{"dni": "', "41293901t", '"}', carrier="json"),
+    p("ES_NIF", "en", "pii_nif_es", "name,nif\nLucía García,", "05583042E", "", carrier="csv", mode="balanced"),
+    p("ES_NIF", "en", "pii_nif_es_context_free", "Applicant ", "90228694Q", " has been approved.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("ES_NIF", "en", "pii_nif_es_context_free", "", "99035597N", "", tags=("no_context",), mode="recall"),
+    p("ES_NIF", "de", "pii_nif_es", "Spanische Steuernummer: ", "35539592S"),
+    p("ES_NIF", "de", "pii_nif_es", "Die spanische Ausweisnummer (DNI) lautet ", "58375903-V", ".", carrier="prose"),
+    p("ES_NIF", "de", "pii_nif_es", "| Name | NIF |\n|---|---|\n| Lucía García | ", "88981932S", " |", carrier="table"),
+    p("ES_NIF", "de", "pii_nif_es", "Als spanische Steuernummer ist ", "20769085Q", " hinterlegt.", carrier="prose", mode="balanced"),
+    p("ES_NIF", "de", "pii_nif_es_context_free", "Bewerberin ", "88435808A", " wurde angenommen.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("ES_NIF", "de", "pii_nif_es_context_free", "Neue Angabe: ", "54782632J", "", tags=("no_context",), mode="recall"),
+    p("ES_NIF", "es", "pii_nif_es", "Número de identificación fiscal: ", "55555555K"),
+    p("ES_NIF", "es", "pii_nif_es", "Documento nacional de identidad ", "12345678Z", ""),
+    p("ES_NIF", "es", "pii_nif_es", '{"nombre": "Lucía García", "nif": "', "90025128T", '"}', carrier="json"),
+    n("ES_NIF", "en", "pii_nif_es", "NIF: 26187118Q", "control letter fails"),
+    n("ES_NIF", "en", "pii_nif_es", "DNI: 12345678a", "control letter fails (presidio-analyzer negative)"),
+    n("ES_NIF", "en", "pii_nif_es", "Reference 26187118P was archived.", "bare value without a NIF term in strict", carrier="prose"),
+    n("ES_NIF", "en", "pii_nif_es_context_free", "Applicant 90228694q has been approved.", "lowercase bare value without a NIF term", carrier="prose", mode="balanced"),
+    n("ES_NIF", "en", "pii_nif_es_context_free", "Ticket X90228694QA was closed.", "part of a longer token", carrier="prose", mode="balanced"),
+    n("ES_NIF", "de", "pii_nif_es", "Spanische Steuernummer: 35539592T", "control letter fails"),
+    n("ES_NIF", "de", "pii_nif_es", "DNI: 3553959S", "seven digits whose control letter fails"),
+    n("ES_NIF", "de", "pii_nif_es", "Vorgang 35539592S wurde abgeschlossen.", "bare value without a NIF term in strict", carrier="prose"),
+    n("ES_NIF", "de", "pii_nif_es_context_free", "Teil A88435808AB ist lieferbar.", "part of a longer token", carrier="prose", mode="balanced"),
+    n("ES_NIF", "de", "pii_nif_es_context_free", "Bewerberin 88435808B wurde angenommen.", "control letter fails", carrier="prose", mode="recall"),
+    n("ES_NIF", "es", "pii_nif_es", "Número de identificación fiscal: 55555555J", "control letter fails"),
+    # ── ES NIE ─────────────────────────────────────────────────────────────
+    p("ES_NIE", "en", "pii_nie_es", "NIE: ", "Z7904705R"),
+    p("ES_NIE", "en", "pii_nie_es", "Her foreigner identity number is ", "Y-9159146-P", ".", carrier="prose"),
+    p("ES_NIE", "en", "pii_nie_es", '{"nie": "', "x3952965r", '"}', carrier="json"),
+    p("ES_NIE", "en", "pii_nie_es", "name,nie\nAnna Novak,", "Z2930123C", "", carrier="csv", mode="balanced"),
+    p("ES_NIE", "en", "pii_nie_es_context_free", "Applicant ", "Y7120454J", " has been approved.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("ES_NIE", "en", "pii_nie_es_context_free", "", "Y6822343M", "", tags=("no_context",), mode="recall"),
+    p("ES_NIE", "de", "pii_nie_es", "Spanische Ausländer-Identifikationsnummer: ", "Z3116796W"),
+    p("ES_NIE", "de", "pii_nie_es", "Die NIE der Mieterin lautet ", "X6046833H", ".", carrier="prose"),
+    p("ES_NIE", "de", "pii_nie_es", "| Name | NIE |\n|---|---|\n| Anna Novak | ", "Y0903749R", " |", carrier="table"),
+    p("ES_NIE", "de", "pii_nie_es", "Als NIE ist ", "X1699369Z", " hinterlegt.", carrier="prose", mode="balanced"),
+    p("ES_NIE", "de", "pii_nie_es_context_free", "Bewerberin ", "X2418332C", " wurde angenommen.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("ES_NIE", "de", "pii_nie_es_context_free", "Neue Angabe: ", "Y4889065S", "", tags=("no_context",), mode="recall"),
+    p("ES_NIE", "es", "pii_nie_es", "Número de identidad de extranjero: ", "X9613851N"),
+    p("ES_NIE", "es", "pii_nie_es", "NIE ", "Y8063915Z", ""),
+    p("ES_NIE", "es", "pii_nie_es", '{"nombre": "Anna Novak", "nie": "', "Z8078221M", '"}', carrier="json"),
+    n("ES_NIE", "en", "pii_nie_es", "NIE: Z7904705S", "control letter fails"),
+    n("ES_NIE", "en", "pii_nie_es", "NIE: Y806391Q", "six digits (presidio-analyzer negative)"),
+    n("ES_NIE", "en", "pii_nie_es", "NIE: W8063915Q", "W is no NIE prefix (presidio-analyzer negative)"),
+    n("ES_NIE", "en", "pii_nie_es", "Reference Z7904705R was archived.", "bare value without a NIE term in strict", carrier="prose"),
+    n("ES_NIE", "en", "pii_nie_es_context_free", "Ticket AY7120454JB was closed.", "part of a longer token", carrier="prose", mode="balanced"),
+    n("ES_NIE", "de", "pii_nie_es", "Spanische Ausländer-Identifikationsnummer: Z3116796X", "control letter fails"),
+    n("ES_NIE", "de", "pii_nie_es", "NIE: W3116796W", "W is no NIE prefix"),
+    n("ES_NIE", "de", "pii_nie_es", "Vorgang X6046833H wurde abgeschlossen.", "bare value without a NIE term in strict", carrier="prose"),
+    n("ES_NIE", "de", "pii_nie_es_context_free", "Bewerberin x2418332c wurde angenommen.", "lowercase bare value without a NIE term", carrier="prose", mode="balanced"),
+    n("ES_NIE", "de", "pii_nie_es_context_free", "Teil BX2418332CA ist lieferbar.", "part of a longer token", carrier="prose", mode="recall"),
+    n("ES_NIE", "es", "pii_nie_es", "Número de identidad de extranjero: X9613851M", "control letter fails"),
+    # ── IT codice fiscale ──────────────────────────────────────────────────
+    p("IT_FISCAL_CODE", "en", "pii_fiscal_code_it", "Italian fiscal code: ", "BNCGLI80A41H501C"),
+    p("IT_FISCAL_CODE", "en", "pii_fiscal_code_it", "His Italian tax code is ", "vrdlcu72e15l219u", ".", carrier="prose"),
+    p("IT_FISCAL_CODE", "en", "pii_fiscal_code_it", '{"codice_fiscale": "', "RSSMRA85T10A56NH", '"}', carrier="json"),
+    p("IT_FISCAL_CODE", "en", "pii_fiscal_code_it", "name,fiscal code\nGiulia Bianchi,", "GRCLRA77P63L736M", "", carrier="csv", mode="balanced"),
+    p("IT_FISCAL_CODE", "en", "pii_fiscal_code_it_context_free", "Applicant ", "FRRPLA65C52D969N", " has been approved.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("IT_FISCAL_CODE", "en", "pii_fiscal_code_it_context_free", "", "PLLNDR83B12C351T", "", tags=("no_context",), mode="recall"),
+    p("IT_FISCAL_CODE", "de", "pii_fiscal_code_it", "Italienische Steuernummer: ", "CLMGNN58M70G273P"),
+    p("IT_FISCAL_CODE", "de", "pii_fiscal_code_it", "Die Steuernummer Italien des Kunden lautet ", "BRNMRC90H22F839W", ".", carrier="prose"),
+    p("IT_FISCAL_CODE", "de", "pii_fiscal_code_it", "| Name | Codice fiscale |\n|---|---|\n| Giulia Bianchi | ", "SPSNTN95L60H50MY", " |", carrier="table"),
+    p("IT_FISCAL_CODE", "de", "pii_fiscal_code_it", "Als italienische Steuernummer ist ", "DMCSFN69R50A944K", " hinterlegt.", carrier="prose", mode="balanced"),
+    p("IT_FISCAL_CODE", "de", "pii_fiscal_code_it_context_free", "Bewerberin ", "NRIFNC88A01D612F", " wurde angenommen.", carrier="prose", tags=("no_context",), mode="balanced"),
+    p("IT_FISCAL_CODE", "de", "pii_fiscal_code_it_context_free", "Neue Angabe: ", "MNTLSN92T45Z1Q4D", "", tags=("no_context",), mode="recall"),
+    p("IT_FISCAL_CODE", "it", "pii_fiscal_code_it", "Codice fiscale: ", "RSSMRA85T10A562S"),
+    p("IT_FISCAL_CODE", "it", "pii_fiscal_code_it", "C.F. ", "MRTMTT91D08F205J", ""),
+    p("IT_FISCAL_CODE", "it", "pii_fiscal_code_it", '{"nome": "Giulia Bianchi", "codice_fiscale": "', "GRCLRA77P63L736M", '"}', carrier="json"),
+    n("IT_FISCAL_CODE", "en", "pii_fiscal_code_it", "Italian fiscal code: BNCGLI80A41H501D", "check letter fails"),
+    n("IT_FISCAL_CODE", "en", "pii_fiscal_code_it", "Fiscal code: RSSMRA85F10A562R", "F is no month letter"),
+    n("IT_FISCAL_CODE", "en", "pii_fiscal_code_it", "Fiscal code: AAAAAA - 00B11C333N", "spaced dash inside the value (presidio-analyzer negative)"),
+    n("IT_FISCAL_CODE", "en", "pii_fiscal_code_it", "Reference BNCGLI80A41H501C was archived.", "bare value without a fiscal code term in strict", carrier="prose"),
+    n("IT_FISCAL_CODE", "en", "pii_fiscal_code_it_context_free", "Ticket XFRRPLA65C52D969N was closed.", "part of a longer token", carrier="prose", mode="balanced"),
+    n("IT_FISCAL_CODE", "de", "pii_fiscal_code_it", "Italienische Steuernummer: CLMGNN58M70G273Q", "check letter fails"),
+    n("IT_FISCAL_CODE", "de", "pii_fiscal_code_it", "Italienische Steuernummer: VRDLCU72I15L219E", "I is no month letter"),
+    n("IT_FISCAL_CODE", "de", "pii_fiscal_code_it", "Italienische Steuernummer: GRCLRA77P93L736P", "day 93"),
+    n("IT_FISCAL_CODE", "de", "pii_fiscal_code_it", "Vorgang CLMGNN58M70G273P wurde abgeschlossen.", "bare value without a fiscal code term in strict", carrier="prose"),
+    n("IT_FISCAL_CODE", "de", "pii_fiscal_code_it_context_free", "Bewerberin nrifnc88a01d612f wurde angenommen.", "lowercase bare value without a fiscal code term", carrier="prose", mode="balanced"),
+    n("IT_FISCAL_CODE", "it", "pii_fiscal_code_it", "Codice fiscale: RSSMRA85T10A562T", "check letter fails"),
+    # ── ES CIF without the ES prefix ───────────────────────────────────────
+    p("VAT_ID_ES", "en", "pii_vat_id_es_proximity", "CIF: ", "A58818501", "", mode="balanced"),
+    p("VAT_ID_ES", "en", "pii_vat_id_es_proximity", "The supplier's Spanish company tax ID is ", "Q2826000H", ".", carrier="prose", mode="recall"),
+    p("VAT_ID_ES", "de", "pii_vat_id_es_proximity", "Spanischer Lieferant, CIF ", "B58378431", "", mode="balanced"),
+    p("VAT_ID_ES", "es", "pii_vat_id_es_proximity", "Código de identificación fiscal: ", "A13585625", "", mode="balanced"),
+    p("VAT_ID_ES", "es", "pii_vat_id_es_proximity", '{"empresa": "García SL", "cif": "', "B82123456", '"}', carrier="json", mode="balanced"),
+    n("VAT_ID_ES", "en", "pii_vat_id_es_proximity", "CIF: A58818502", "CIF control digit fails", mode="balanced"),
+    n("VAT_ID_ES", "en", "pii_vat_id_es_proximity", "Reference A58818501 was archived.", "bare CIF without a term", carrier="prose", mode="recall"),
+    n("VAT_ID_ES", "de", "pii_vat_id_es_proximity", "CIF: I58378431", "no CIF starts with I", mode="balanced"),
+]
+for _row in B_ESIT_CASES:
+    PII_CASES.setdefault(_row["target_label"], []).append(_row)
+
 # DLP golden schema v2 (E13). Every DLP row names the rule it exercises (`rule_id`), the
 # document that carries the value (`carrier`), its difficulty `tags` and whether it is a
 # `known_gap`: a positive the detector misses today, reported by 13_l1_golden_eval but

@@ -6,7 +6,7 @@ These are the stable rule IDs accepted by execution-gate `rules`. Missing IDs in
 
 For coverage per benchmark entity, the comparison with Presidio and the secret scanners, and latency, see [L1 capabilities](l1-capabilities.md).
 
-## PII rules (142)
+## PII rules (149)
 
 All PII rules are eligible by default when PII L1 is enabled.
 
@@ -76,6 +76,7 @@ In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `
 | `pii_vat_id_it` | `VAT_ID_IT` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
 | `pii_vat_id_it_proximity` | `VAT_ID_IT` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.70–0.80 |
 | `pii_vat_id_es` | `VAT_ID_ES` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
+| `pii_vat_id_es_proximity` | `VAT_ID_ES` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.70–0.80 |
 | `pii_vat_id_lu` | `VAT_ID_LU` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
 | `pii_vat_id_lv` | `VAT_ID_LV` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
 | `pii_vat_id_mt` | `VAT_ID_MT` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
@@ -156,6 +157,12 @@ In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `
 | `pii_frn_kr_context_free` | `KR_FRN` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
 | `pii_brn_kr` | `KR_BRN` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |
 | `pii_brn_kr_context_free` | `KR_BRN` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
+| `pii_nif_es` | `ES_NIF` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |
+| `pii_nif_es_context_free` | `ES_NIF` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
+| `pii_nie_es` | `ES_NIE` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |
+| `pii_nie_es_context_free` | `ES_NIE` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
+| `pii_fiscal_code_it` | `IT_FISCAL_CODE` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |
+| `pii_fiscal_code_it_context_free` | `IT_FISCAL_CODE` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
 
 ### PII context lexicon
 
@@ -199,7 +206,7 @@ The context engine reads these DE/EN entries of `ark-core/src/detectors/anchor_l
 | `VAT_ID_NL` | `pii.vat_identifier` |
 | `VAT_ID_BE` | `pii.vat_identifier` |
 | `VAT_ID_IT` | `pii.vat_identifier` |
-| `VAT_ID_ES` | `pii.vat_identifier` |
+| `VAT_ID_ES` | `pii.vat_identifier`, `pii.es_cif` |
 | `VAT_ID_LU` | `pii.vat_identifier` |
 | `VAT_ID_LV` | `pii.vat_identifier` |
 | `VAT_ID_MT` | `pii.vat_identifier` |
@@ -249,6 +256,9 @@ The context engine reads these DE/EN entries of `ark-core/src/detectors/anchor_l
 | `KR_RRN` | `pii.kr_resident_registration_number` |
 | `KR_FRN` | `pii.kr_foreigner_registration_number` |
 | `KR_BRN` | `pii.kr_business_registration_number` |
+| `ES_NIF` | `pii.es_nif` |
+| `ES_NIE` | `pii.es_nie` |
+| `IT_FISCAL_CODE` | `pii.it_fiscal_code` |
 
 | Counter-context anchor | DE | EN |
 | --- | --- | --- |

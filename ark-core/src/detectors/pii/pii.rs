@@ -10,7 +10,7 @@ use super::context::Evidence;
 use super::context_anchors::PII_ANCHOR_PATTERNS;
 use super::score::{self, PiiMode, ValidatorStrength};
 use super::{
-    at, au, be, ca, ch, common, context, de, driver_license, fr, identifiers, ie, intl, kr,
+    at, au, be, ca, ch, common, context, de, driver_license, es, fr, identifiers, ie, intl, it, kr,
     licence_plate, nl, nordic, overlap, pt, sg, tr, uk, us, validators, vat, za,
 };
 use crate::detectors::anchors;
@@ -116,6 +116,7 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     vat::VAT_ID_IT,
     vat::VAT_ID_IT_PROXIMITY,
     vat::VAT_ID_ES,
+    vat::VAT_ID_ES_PROXIMITY,
     vat::VAT_ID_LU,
     vat::VAT_ID_LV,
     vat::VAT_ID_MT,
@@ -196,6 +197,12 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     kr::FOREIGNER_REGISTRATION_NUMBER_CONTEXT_FREE,
     kr::BUSINESS_REGISTRATION_NUMBER,
     kr::BUSINESS_REGISTRATION_NUMBER_CONTEXT_FREE,
+    es::NIF,
+    es::NIF_CONTEXT_FREE,
+    es::NIE,
+    es::NIE_CONTEXT_FREE,
+    it::FISCAL_CODE,
+    it::FISCAL_CODE_CONTEXT_FREE,
 ];
 
 pub struct PiiPipeline {
@@ -572,6 +579,22 @@ impl PiiPipeline {
     }
 }
 
+/// Whether the national number of `rule_id` at `start` is the body of a VAT ID
+/// after its country prefix: a Portuguese NIF after `PT ` (B16), a Spanish NIF
+/// or NIE and a bare CIF after `ES ` or `ES-` (B01), and eight digits and a letter after `CY `
+/// or `CY-`, a Cypriot VAT ID (B02) (B-ESIT).
+fn vat_body(rule_id: &str, text: &str, start: usize) -> bool {
+    let prefixes: &[&str] = match rule_id {
+        "pii_nif_pt" => &["PT "],
+        "pii_nif_es" | "pii_nif_es_context_free" => &["ES ", "ES-", "CY ", "CY-"],
+        "pii_nie_es" | "pii_nie_es_context_free" | "pii_vat_id_es_proximity" => &["ES ", "ES-"],
+        _ => return false,
+    };
+    prefixes
+        .iter()
+        .any(|prefix| text[..start].ends_with(prefix))
+}
+
 impl NativeRegexDetector for PiiPipeline {
     fn allows_match(
         &self,
@@ -657,11 +680,12 @@ impl NativeRegexDetector for PiiPipeline {
             | "pii_ppsn_ie"
             | "pii_rrn_kr"
             | "pii_frn_kr"
-            | "pii_brn_kr") => {
+            | "pii_brn_kr"
+            | "pii_nif_es"
+            | "pii_nie_es"
+            | "pii_fiscal_code_it") => {
                 let value = captures.get(0).unwrap().range();
-                // The digits after `PT ` are the body of a Portuguese VAT ID (B16),
-                // no NIF of their own.
-                if rule_id == "pii_nif_pt" && text[..value.start].ends_with("PT ") {
+                if vat_body(rule_id, text, value.start) {
                     return false;
                 }
                 context::structure_evidence(
@@ -671,6 +695,11 @@ impl NativeRegexDetector for PiiPipeline {
                 )
                 .is_some_and(|evidence| evidence.context.supports())
                     || context::stands_alone(text, value)
+            }
+            rule_id @ ("pii_nif_es_context_free"
+            | "pii_nie_es_context_free"
+            | "pii_vat_id_es_proximity") => {
+                !vat_body(rule_id, text, captures.get(0).unwrap().start())
             }
             "pii_passport_number_de_context_free"
             | "pii_identity_card_number_de_context_free"

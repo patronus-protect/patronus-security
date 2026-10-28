@@ -142,9 +142,9 @@ fn fr_es_it_nl_field_names_have_n_gated_positives_and_hard_negatives() {
             .iter()
             .find(|pattern| pattern.name == row.rule_id)
             .unwrap();
-        // B01, B-EU1, B-LUHN, B-EU2: country IDs also have rows in their national
-        // language; they bind no field name and are counted per label above.
-        if ["VAT_ID_", "FR_", "NL_", "BE_", "CA_", "CH_"]
+        // B01, B-EU1, B-LUHN, B-EU2, B-ESIT: country IDs also have rows in their
+        // national language; they bind no field name and are counted per label above.
+        if ["VAT_ID_", "FR_", "NL_", "BE_", "CA_", "CH_", "ES_", "IT_"]
             .iter()
             .any(|prefix| pattern.entity_group.starts_with(prefix))
         {

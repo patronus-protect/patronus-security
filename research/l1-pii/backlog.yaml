@@ -716,6 +716,7 @@ tasks:
 
   # M3 +3 (63)
   - id: B-ESIT
+    status: done
     title: "ES NIF/NIE/CIF (check letter) + IT Codice Fiscale (check letter) and Partita IVA"
     type: new-entity
     deps: [K05, B01]

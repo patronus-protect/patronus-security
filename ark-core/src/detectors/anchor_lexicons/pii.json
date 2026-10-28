@@ -2971,6 +2971,144 @@
     ]
   },
   {
+    "id": "pii.es_nif",
+    "description": "Spanische Personalsteuernummer (DNI/NIF, documento nacional de identidad)",
+    "en": [
+      "spanish nif",
+      "spanish tax id",
+      "spanish tax number",
+      "spanish tax identification number",
+      "spanish id number",
+      "spanish national id",
+      "spanish identity card number"
+    ],
+    "de": [
+      "spanische steuernummer",
+      "spanische steuer-id",
+      "spanische steueridentifikationsnummer",
+      "spanische ausweisnummer",
+      "spanische personalausweisnummer"
+    ],
+    "es": [
+      "número de identificación fiscal",
+      "numero de identificacion fiscal",
+      "documento nacional de identidad",
+      "número de dni",
+      "numero de dni",
+      "nº dni",
+      "n.º dni"
+    ],
+    "shared": [
+      "nif",
+      "dni",
+      "nif_es",
+      "nif-es",
+      "dni_es",
+      "dni-es"
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/es.rs"
+    ]
+  },
+  {
+    "id": "pii.es_nie",
+    "description": "Spanische Ausländer-Identifikationsnummer (NIE, número de identidad de extranjero)",
+    "en": [
+      "foreigner identity number",
+      "foreigner identification number",
+      "spanish nie",
+      "spanish foreigner number",
+      "foreign national identity number"
+    ],
+    "de": [
+      "spanische ausländer-identifikationsnummer",
+      "spanische ausländernummer",
+      "spanische ausländer-id"
+    ],
+    "es": [
+      "número de identidad de extranjero",
+      "numero de identidad de extranjero",
+      "número de identificación de extranjero",
+      "numero de identificacion de extranjero",
+      "número de extranjero",
+      "tarjeta de residencia"
+    ],
+    "shared": [
+      "nie",
+      "nie_es",
+      "nie-es",
+      "n.i.e."
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/es.rs"
+    ]
+  },
+  {
+    "id": "pii.it_fiscal_code",
+    "description": "Italienische Steuernummer (codice fiscale)",
+    "en": [
+      "fiscal code",
+      "italian fiscal code",
+      "italian tax code",
+      "italian tax id",
+      "italian tax number",
+      "italian personal tax code",
+      "tax code"
+    ],
+    "de": [
+      "italienische steuernummer",
+      "italienische steuer-id",
+      "italienischer steuercode",
+      "steuernummer italien"
+    ],
+    "it": [
+      "codice fiscale",
+      "codice-fiscale",
+      "codice_fiscale",
+      "codicefiscale",
+      "cod. fiscale",
+      "cod. fisc.",
+      "c.f.",
+      "tessera sanitaria"
+    ],
+    "shared": [
+      "codice fiscale",
+      "cf"
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/it.rs"
+    ]
+  },
+  {
+    "id": "pii.es_cif",
+    "description": "Spanische Unternehmenssteuernummer (CIF, código de identificación fiscal)",
+    "en": [
+      "spanish cif",
+      "spanish company tax id",
+      "spanish company tax number",
+      "spanish corporate tax id"
+    ],
+    "de": [
+      "spanische unternehmenssteuernummer",
+      "spanische firmensteuernummer"
+    ],
+    "es": [
+      "código de identificación fiscal",
+      "codigo de identificacion fiscal",
+      "nif de la empresa",
+      "nif de empresa"
+    ],
+    "shared": [
+      "cif",
+      "cif_es",
+      "cif-es",
+      "c.i.f."
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/vat.rs"
+    ]
+  },
+  {
     "id": "pii.health_insurance_number",
     "description": "Krankenversicherungsnummer",
     "en": [

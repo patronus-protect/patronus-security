@@ -32,6 +32,22 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Spanish NIF/NIE and the Italian codice fiscale with check letters, bare CIF (B-ESIT: A11, A12).
+  Three new labels: `ES_NIF` (DNI/NIF, eight digits or seven of an older DNI and the control letter
+  mod 23), `ES_NIE` (`X`/`Y`/`Z` as 0/1/2, seven digits, the same control letter) and
+  `IT_FISCAL_CODE` (sixteen characters, month letter, day plus 40 for women, omocodia letters, check
+  letter by the odd/even tables mod 26). `pii_nif_es`, `pii_nie_es` and `pii_fiscal_code_it` report
+  the value in every mode, in any case, when a term of the label (EN, DE, ES/IT) stands near it or is
+  its key; in `balanced`/`recall` the uppercase values are also reported bare at 0.55 (K05). A NIF or
+  NIE right after `ES `/`ES-` (a NIF also after `CY `/`CY-`) stays the body of a VAT ID. The CIF and the Partita IVA reuse the B01
+  VAT validators: the new `pii_vat_id_es_proximity` reports a bare CIF under `VAT_ID_ES` with a VAT or
+  CIF term (scored modes only, like the bare Partita IVA of `pii_vat_id_it_proximity`), so neither is
+  a second M3 unit. The three `presidio_only` ids `pii.es.nif`, `pii.es.nie` and
+  `pii.it.fiscal_code` become `shared`; M3 ARK 66 → 69. Presidio also reports codici fiscali with a
+  wrong check letter; ARK does not. New `rust/tests/pii_es_it.rs`, 86 new `pii_l1` rows (DE, EN,
+  ES, IT), rule fixture entries.
+  **Detection change** (`strict`: the three labels with a term or key; `balanced`/`recall`: also the
+  bare uppercase values and the bare CIF with a term). The rule regexes are linear and bounded.
 - Korean resident, foreigner and business registration numbers with check digits (B-KR: A14 and the
   checksum part of T12). Three new labels: `KR_RRN` (주민등록번호 `YYMMDD-GHHSSSC`: birth date, sex
   and century digit 1–4, region code up to 95, check digit `(11 − weighted sum mod 11) mod 10`),

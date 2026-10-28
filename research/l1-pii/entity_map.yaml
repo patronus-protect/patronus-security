@@ -274,6 +274,27 @@ entities:
     corpora:
       presidio-analyzer-recognizer-tests: [KR_BRN]
 
+  - id: pii.es.nif
+    scope: shared
+    ark: [ES_NIF]
+    presidio: [ES_NIF]
+    corpora:
+      presidio-analyzer-recognizer-tests: [ES_NIF]
+
+  - id: pii.es.nie
+    scope: shared
+    ark: [ES_NIE]
+    presidio: [ES_NIE]
+    corpora:
+      presidio-analyzer-recognizer-tests: [ES_NIE]
+
+  - id: pii.it.fiscal_code
+    scope: shared
+    ark: [IT_FISCAL_CODE]
+    presidio: [IT_FISCAL_CODE]
+    corpora:
+      presidio-analyzer-recognizer-tests: [IT_FISCAL_CODE]
+
   - id: entity.passport_number
     scope: shared
     ark: [PASSPORT_NUMBER]
@@ -446,9 +467,6 @@ entities:
   - {id: pii.uk.postcode, scope: presidio_only, ark: [], presidio: [UK_POSTCODE], corpora: {presidio-analyzer-recognizer-tests: [UK_POSTCODE]}}
   - {id: pii.de.commercial_register, scope: presidio_only, ark: [], presidio: [DE_HANDELSREGISTER], corpora: {presidio-analyzer-recognizer-tests: [DE_HANDELSREGISTER]}}
   - {id: pii.de.postal_code, scope: presidio_only, ark: [], presidio: [DE_PLZ], corpora: {presidio-analyzer-recognizer-tests: [DE_PLZ]}}
-  - {id: pii.es.nie, scope: presidio_only, ark: [], presidio: [ES_NIE], corpora: {presidio-analyzer-recognizer-tests: [ES_NIE]}}
-  - {id: pii.es.nif, scope: presidio_only, ark: [], presidio: [ES_NIF], corpora: {presidio-analyzer-recognizer-tests: [ES_NIF]}}
-  - {id: pii.it.fiscal_code, scope: presidio_only, ark: [], presidio: [IT_FISCAL_CODE], corpora: {presidio-analyzer-recognizer-tests: [IT_FISCAL_CODE]}}
   - {id: pii.pl.pesel, scope: presidio_only, ark: [], presidio: [PL_PESEL], corpora: {presidio-analyzer-recognizer-tests: [PL_PESEL]}}
   - {id: pii.in.aadhaar, scope: presidio_only, ark: [], presidio: [IN_AADHAAR], corpora: {presidio-analyzer-recognizer-tests: [IN_AADHAAR]}}
   - {id: pii.in.gstin, scope: presidio_only, ark: [], presidio: [IN_GSTIN], corpora: {presidio-analyzer-recognizer-tests: [IN_GSTIN]}}
@@ -588,6 +606,9 @@ checksums:
     kr_rrn: {algorithm: "(11 − gewichtet 2…9, 2…5 mod 11) mod 10"}   # B-KR, plus Geburtsdatum, Geschlecht 1–4, Region ≤ 95
     kr_frn: {algorithm: "(13 − gewichtet 2…9, 2…5 mod 11) mod 10"}   # B-KR, plus Geburtsdatum, Geschlecht 5–8, Region ≤ 95
     kr_brn: {algorithm: "gewichtet 1-3-7-1-3-7-1-3-5 mod 10"}         # B-KR, Geschäftsregistrierungsnummer
+    es_nif: {algorithm: Kontrollbuchstabe mod 23}                     # B-ESIT, DNI/NIF ohne ES
+    es_nie: {algorithm: Kontrollbuchstabe mod 23}                     # B-ESIT, NIE (X/Y/Z = 0/1/2)
+    it_fiscal_code: {algorithm: "Kontrollbuchstabe ungerade/gerade Tabelle mod 26"}  # B-ESIT, Codice Fiscale mit Omocodia
     de_vat_id: {algorithm: "ISO 7064 MOD 11,10"}            # B01, USt-IdNr.
     at_vat_id: {algorithm: Luhn-Variante (6 − Summe) mod 10}  # B01, UID ATU
     ch_vat_id: {algorithm: gewichtet 5-4-3-2-7-6-5-4 mod 11}   # B01, UID CHE

@@ -418,7 +418,14 @@ the body of a VAT ID, no NIF. Three Korean numbers (B-KR): the resident registra
 `104-82-13138`). With a term (`RRN`, `resident registration number`, `주민등록번호`, `FRN`,
 `외국인등록번호`, `BRN`, `사업자등록번호`) or as a key they are reported in every mode, also as
 thirteen or ten plain digits; bare, in `balanced`/`recall` only and at `0.55`, the hyphenated
-forms. The German document number rules keep
+forms. Three Spanish and Italian numbers with a check letter (B-ESIT): the DNI/NIF (`ES_NIF`, eight
+digits and a control letter mod 23; `12345678Z`), the NIE (`ES_NIE`, `X`/`Y`/`Z`, seven digits and
+the same letter; `X1234567L`) and the codice fiscale (`IT_FISCAL_CODE`, sixteen characters with a
+check letter mod 26; `RSSMRA85T10A562S`). With a term (`NIF`, `DNI`, `NIE`, `codice fiscale`,
+`fiscal code`) or as a key they are reported in every mode and any case; bare, in
+`balanced`/`recall` only and at `0.55`, the uppercase values. A NIF or NIE right after `ES ` (or a NIF after `CY `) is the
+body of a VAT ID. A bare CIF (`CIF: A58818501`) is a `VAT_ID_ES` in `balanced`/`recall` with a VAT
+or CIF term, like the bare Partita IVA. The German document number rules keep
 their format check in every mode, since a printed nine-character serial carries no check digit. A context-bound rule (`pii_phone_de_national_proximity`: a national number such as
 `ist unter 0176 90817263 erreichbar`) reports only with a support term and no nearer counter term,
 in every mode including `strict`, and then scores at least `0.50`. Validators decide in every
