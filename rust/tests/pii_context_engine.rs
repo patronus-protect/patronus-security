@@ -419,6 +419,7 @@ fn context_bound_rules_score_at_least_the_balanced_threshold_with_support() {
             "pii_passport_number_uk",
             "pii_passport_number_two_letters",
             "pii_vat_id_it_proximity",
+            "pii_vat_id_es_proximity",
             "pii_passport_number_de_legacy",
             "pii_identity_card_number_de_legacy",
             "pii_abn_au",
@@ -450,7 +451,10 @@ fn context_bound_rules_score_at_least_the_balanced_threshold_with_support() {
             "pii_ppsn_ie",
             "pii_rrn_kr",
             "pii_frn_kr",
-            "pii_brn_kr"
+            "pii_brn_kr",
+            "pii_nif_es",
+            "pii_nie_es",
+            "pii_fiscal_code_it"
         ]
     );
     for pattern in bound {

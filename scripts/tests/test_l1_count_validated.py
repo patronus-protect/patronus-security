@@ -178,7 +178,8 @@ def test_checked_in_ark_count():
     # routing number, B-EU1 the FR NIR, SIREN and SIRET, the NL BSN and the BE national number, B-LUHN
     # the SE organisationsnummer, the CA SIN, the TR T.C. Kimlik No and the ZA ID number, B-EU2 the AT social
     # security number, the CH AHV number, the PT NIF (apart from the PT VAT ID) and the IE PPSN, B-KR the
-    # KR resident, foreigner and business registration numbers.
+    # KR resident, foreigner and business registration numbers, B-ESIT the ES NIF, the ES NIE and the IT
+    # codice fiscale (the CIF and the Partita IVA are the ES and IT VAT IDs).
     assert set(counts.ark) == {
         Unit("pii.credit_card.pan", None),
         Unit("pii.iban", None),
@@ -246,8 +247,11 @@ def test_checked_in_ark_count():
         Unit("pii.kr.rrn", "kr"),
         Unit("pii.kr.frn", "kr"),
         Unit("pii.kr.brn", "kr"),
+        Unit("pii.es.nif", "es"),
+        Unit("pii.es.nie", "es"),
+        Unit("pii.it.fiscal_code", "it"),
     }
-    assert len(counts.ark) == 66
+    assert len(counts.ark) == 69
     assert counts.m3_met is False
 
 
@@ -378,7 +382,7 @@ def test_cli_count_json_and_check(tmp_path):
     payload = json.loads(result.stdout)
     assert payload["presidio_version"] == "2.2.364"
     assert payload["presidio"]["count"] == 35
-    assert payload["ark"]["count"] == 66
+    assert payload["ark"]["count"] == 69
     assert payload["m3"] == {"factor": 2, "target": 70, "met": False}
     assert {
         "entity_id": "pii.de.tax_id",
@@ -516,6 +520,20 @@ def test_cli_count_json_and_check(tmp_path):
         "pii.kr.frn": ["pii_frn_kr: kr_frn", "pii_frn_kr_context_free: kr_frn"],
         "pii.kr.brn": ["pii_brn_kr: kr_brn", "pii_brn_kr_context_free: kr_brn"],
     }
+    # B-ESIT: NIF, NIE and codice fiscale are units of their own; the bare CIF and Partita IVA rules
+    # reuse the VAT validators and count with the VAT IDs (no second unit).
+    es_it = {
+        unit["entity_id"]: unit["sources"]
+        for unit in payload["ark"]["units"]
+        if unit["entity_id"] in ("pii.es.nif", "pii.es.nie", "pii.it.fiscal_code")
+    }
+    assert es_it == {
+        "pii.es.nif": ["pii_nif_es: es_nif", "pii_nif_es_context_free: es_nif"],
+        "pii.es.nie": ["pii_nie_es: es_nie", "pii_nie_es_context_free: es_nie"],
+        "pii.it.fiscal_code": ["pii_fiscal_code_it: it_fiscal_code", "pii_fiscal_code_it_context_free: it_fiscal_code"],
+    }
+    assert vat["pii.es.vat_id"]["sources"] == ["pii_vat_id_es: es_vat_id", "pii_vat_id_es_proximity: es_vat_id"]
+    assert vat["pii.it.vat_code"]["sources"] == ["pii_vat_id_it: it_vat_id", "pii_vat_id_it_proximity: it_vat_id"]
     assert vat["pii.pt.vat_id"]["sources"] == ["pii_vat_id_pt: pt_vat_id"]
     # B02: the Greek rule keeps the VIES prefix EL, the benchmark ID follows ISO 3166 (gr).
     assert vat["pii.gr.vat_id"]["sources"] == ["pii_vat_id_el: el_vat_id"]

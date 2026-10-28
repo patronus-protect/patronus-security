@@ -2350,6 +2350,113 @@
   },
   {
     "category": "pii",
+    "rule_id": "pii_nif_es",
+    "de": "Spanische Steuernummer: 35539592S",
+    "en": "NIF: 26187118P",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Spanische Steuernummer: 35539592T",
+        "Vorgang 35539592S wurde abgeschlossen."
+      ],
+      "en": [
+        "DNI: 12345678a",
+        "Reference 26187118P was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_nif_es_context_free",
+    "de": "Bewerberin 88435808A wurde angenommen.",
+    "en": "Applicant 90228694Q has been approved.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die spanische Steuernummer der Bewerberin ist 20769085Q.",
+        "en": "13887981Y is her Spanish tax ID."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_nie_es",
+    "de": "Spanische Ausländer-Identifikationsnummer: Z3116796W",
+    "en": "NIE: Z7904705R",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Spanische Ausländer-Identifikationsnummer: Z3116796X",
+        "Vorgang X6046833H wurde abgeschlossen."
+      ],
+      "en": [
+        "NIE: W8063915Q",
+        "Reference Z7904705R was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_nie_es_context_free",
+    "de": "Bewerberin X2418332C wurde angenommen.",
+    "en": "Applicant Y7120454J has been approved.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die NIE der Bewerberin ist X1699369Z.",
+        "en": "Y9159146P is her foreigner identity number."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_fiscal_code_it",
+    "de": "Italienische Steuernummer: CLMGNN58M70G273P",
+    "en": "Italian fiscal code: BNCGLI80A41H501C",
+    "language_neutral": false,
+    "hard_negatives": {
+      "de": [
+        "Italienische Steuernummer: CLMGNN58M70G273Q",
+        "Vorgang CLMGNN58M70G273P wurde abgeschlossen."
+      ],
+      "en": [
+        "Fiscal code: RSSMRA85F10A562R",
+        "Reference BNCGLI80A41H501C was archived."
+      ]
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_fiscal_code_it_context_free",
+    "de": "Bewerberin NRIFNC88A01D612F wurde angenommen.",
+    "en": "Applicant FRRPLA65C52D969N has been approved.",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die italienische Steuernummer der Bewerberin ist DMCSFN69R50A944K.",
+        "en": "GRCLRA77P63L736M is her Italian tax code."
+      }
+    }
+  },
+  {
+    "category": "pii",
+    "rule_id": "pii_vat_id_es_proximity",
+    "de": "Spanischer Lieferant, CIF B58378431",
+    "en": "CIF: A58818501",
+    "language_neutral": false,
+    "pii_mode": "balanced",
+    "balanced": {
+      "context": {
+        "de": "Die spanische Unternehmenssteuernummer des Lieferanten ist B82123456.",
+        "en": "The supplier's Spanish company tax ID is Q2826000H."
+      }
+    }
+  },
+  {
+    "category": "pii",
     "rule_id": "pii_bban_gb",
     "de": "Unsere Bankverbindung (BBAN) lautet ZFJR88590163492773.",
     "en": "We store the bank account number (BBAN) SYIL09843639680686 of the payee.",

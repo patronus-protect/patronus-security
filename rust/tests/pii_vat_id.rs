@@ -59,7 +59,7 @@ const SCORED: [PiiMode; 2] = [PiiMode::Balanced, PiiMode::Recall];
 type Validator = fn(&str) -> bool;
 
 /// Rule, label and validator of every VAT rule, in registry order.
-const RULES: [(&str, &str, Validator); 20] = [
+const RULES: [(&str, &str, Validator); 21] = [
     ("pii_vat_id_de", "VAT_ID_DE", validators::de_vat_id),
     ("pii_vat_id_at", "VAT_ID_AT", validators::at_vat_id),
     ("pii_vat_id_ch", "VAT_ID_CH", validators::ch_vat_id),
@@ -73,6 +73,11 @@ const RULES: [(&str, &str, Validator); 20] = [
         validators::it_vat_id,
     ),
     ("pii_vat_id_es", "VAT_ID_ES", validators::es_vat_id),
+    (
+        "pii_vat_id_es_proximity",
+        "VAT_ID_ES",
+        validators::es_vat_id,
+    ),
     ("pii_vat_id_lu", "VAT_ID_LU", validators::lu_vat_id),
     ("pii_vat_id_lv", "VAT_ID_LV", validators::lv_vat_id),
     ("pii_vat_id_mt", "VAT_ID_MT", validators::mt_vat_id),
@@ -514,13 +519,17 @@ fn every_country_has_its_own_scored_only_checksum_rule() {
             "{rule}"
         );
     }
-    // Only the bare Partita IVA (11 digits without `IT`) needs a VAT term.
+    // Only the bare Partita IVA (11 digits without `IT`) and the bare CIF
+    // (without `ES`, B-ESIT) need a VAT term.
     let bound: Vec<_> = RULES
         .iter()
         .filter(|(rule, ..)| pattern(rule).requires_context)
         .map(|(rule, ..)| *rule)
         .collect();
-    assert_eq!(bound, ["pii_vat_id_it_proximity"]);
+    assert_eq!(
+        bound,
+        ["pii_vat_id_it_proximity", "pii_vat_id_es_proximity"]
+    );
 }
 
 #[test]

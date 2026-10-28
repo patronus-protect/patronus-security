@@ -258,6 +258,18 @@ def test_korean_registration_numbers_are_shared_with_presidio():
         assert entity_map.scope(entity_id) == "shared"
 
 
+def test_spanish_and_italian_personal_numbers_are_shared_with_presidio():
+    # B-ESIT: the check-letter numbers of A11 and A12, one label each, matching the Presidio 2.2.364
+    # entity of the same name; the CIF and the Partita IVA stay with the VAT IDs.
+    entity_map = MODULE.load()
+    for entity_id, label in [("pii.es.nif", "ES_NIF"), ("pii.es.nie", "ES_NIE"), ("pii.it.fiscal_code", "IT_FISCAL_CODE")]:
+        assert entity_map.ark_label(label) == entity_id
+        assert entity_map.presidio_entity(label) == entity_id
+        assert entity_map.scope(entity_id) == "shared"
+    assert entity_map.ark_label("VAT_ID_ES") == "pii.es.vat_id"
+    assert entity_map.ark_label("VAT_ID_IT") == "pii.it.vat_code"
+
+
 def test_luhn_identifiers_are_shared_with_presidio():
     # B-LUHN: the checksum parts of T13 and T09, one label per numbering system, each matching the
     # Presidio 2.2.364 entity of the same name.
@@ -509,7 +521,7 @@ def test_checked_in_registry_order_matches_the_rust_order_test():
     expected = re.findall(r'\(\s*"(pii_\w+)",\s*"(\w+)",?\s*\)', rust_test)
     rules = _generate_docs().parse_native_patterns(MODULE.PII_SOURCE_PATH, "PiiPattern")
     assert [(rule["id"], rule["entity_group"]) for rule in rules] == expected
-    assert len(expected) == 142
+    assert len(expected) == 149
 
 
 def test_cli_check_succeeds_and_fails(tmp_path):

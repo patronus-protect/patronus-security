@@ -72,6 +72,7 @@ const EXPECTED_ORDER: &[(&str, &str)] = &[
     ("pii_vat_id_it", "VAT_ID_IT"),
     ("pii_vat_id_it_proximity", "VAT_ID_IT"),
     ("pii_vat_id_es", "VAT_ID_ES"),
+    ("pii_vat_id_es_proximity", "VAT_ID_ES"),
     ("pii_vat_id_lu", "VAT_ID_LU"),
     ("pii_vat_id_lv", "VAT_ID_LV"),
     ("pii_vat_id_mt", "VAT_ID_MT"),
@@ -170,6 +171,12 @@ const EXPECTED_ORDER: &[(&str, &str)] = &[
     ("pii_frn_kr_context_free", "KR_FRN"),
     ("pii_brn_kr", "KR_BRN"),
     ("pii_brn_kr_context_free", "KR_BRN"),
+    ("pii_nif_es", "ES_NIF"),
+    ("pii_nif_es_context_free", "ES_NIF"),
+    ("pii_nie_es", "ES_NIE"),
+    ("pii_nie_es_context_free", "ES_NIE"),
+    ("pii_fiscal_code_it", "IT_FISCAL_CODE"),
+    ("pii_fiscal_code_it_context_free", "IT_FISCAL_CODE"),
 ];
 
 #[test]
