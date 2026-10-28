@@ -40,22 +40,24 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
-      rust: ${{ steps.filter.outputs.shared == 'true' || steps.filter.outputs.rust == 'true' || steps.filter.outputs.api == 'true' || steps.filter.outputs.coordinator == 'true' || steps.filter.outputs.protocol == 'true' || steps.filter.outputs.bindings == 'true' }}
-      core: ${{ steps.filter.outputs.shared == 'true' || steps.filter.outputs.core == 'true' }}
-      core_features: ${{ steps.filter.outputs.shared == 'true' || steps.filter.outputs.core_features == 'true' }}
-      pii: ${{ steps.filter.outputs.shared == 'true' || steps.filter.outputs.core_shared == 'true' || steps.filter.outputs.l1_shared == 'true' || steps.filter.outputs.pii == 'true' || steps.filter.outputs.golden == 'true' }}
-      dlp: ${{ steps.filter.outputs.shared == 'true' || steps.filter.outputs.core_shared == 'true' || steps.filter.outputs.l1_shared == 'true' || steps.filter.outputs.dlp == 'true' || steps.filter.outputs.golden == 'true' }}
-      wrapper_base: ${{ steps.filter.outputs.shared == 'true' || steps.filter.outputs.core == 'true' || steps.filter.outputs.wrapper == 'true' }}
-      wrapper: ${{ steps.filter.outputs.shared == 'true' || steps.filter.outputs.core == 'true' || steps.filter.outputs.wrapper == 'true' || steps.filter.outputs.core_shared == 'true' || steps.filter.outputs.l1_shared == 'true' || steps.filter.outputs.pii == 'true' || steps.filter.outputs.golden == 'true' || steps.filter.outputs.dlp == 'true' }}
-      api: ${{ steps.filter.outputs.shared == 'true' || steps.filter.outputs.engine == 'true' || steps.filter.outputs.api == 'true' || steps.filter.outputs.protocol == 'true' }}
-      coordinator: ${{ steps.filter.outputs.shared == 'true' || steps.filter.outputs.coordinator == 'true' }}
-      protocol: ${{ steps.filter.outputs.shared == 'true' || steps.filter.outputs.protocol == 'true' }}
-      bindings: ${{ steps.filter.outputs.shared == 'true' || steps.filter.outputs.engine == 'true' || steps.filter.outputs.bindings == 'true' }}
-      python: ${{ steps.filter.outputs.shared == 'true' || steps.filter.outputs.engine == 'true' || steps.filter.outputs.python == 'true' || steps.filter.outputs.api == 'true' || steps.filter.outputs.protocol == 'true' }}
-      throughput: ${{ steps.filter.outputs.shared == 'true' || steps.filter.outputs.throughput == 'true' }}
-      licenses: ${{ steps.filter.outputs.shared == 'true' || steps.filter.outputs.licenses == 'true' }}
+      rust: ${{ steps.scope.outputs.shared == 'true' || steps.scope.outputs.rust == 'true' || steps.scope.outputs.api == 'true' || steps.scope.outputs.coordinator == 'true' || steps.scope.outputs.protocol == 'true' || steps.scope.outputs.bindings == 'true' }}
+      core: ${{ steps.scope.outputs.shared == 'true' || steps.scope.outputs.core == 'true' }}
+      core_features: ${{ steps.scope.outputs.shared == 'true' || steps.scope.outputs.core_features == 'true' }}
+      pii: ${{ steps.scope.outputs.shared == 'true' || steps.scope.outputs.core_shared == 'true' || steps.scope.outputs.l1_shared == 'true' || steps.scope.outputs.pii == 'true' || steps.scope.outputs.golden == 'true' }}
+      dlp: ${{ steps.scope.outputs.shared == 'true' || steps.scope.outputs.core_shared == 'true' || steps.scope.outputs.l1_shared == 'true' || steps.scope.outputs.dlp == 'true' || steps.scope.outputs.golden == 'true' }}
+      wrapper_base: ${{ steps.scope.outputs.shared == 'true' || steps.scope.outputs.core == 'true' || steps.scope.outputs.wrapper == 'true' }}
+      wrapper: ${{ steps.scope.outputs.shared == 'true' || steps.scope.outputs.core == 'true' || steps.scope.outputs.wrapper == 'true' || steps.scope.outputs.core_shared == 'true' || steps.scope.outputs.l1_shared == 'true' || steps.scope.outputs.pii == 'true' || steps.scope.outputs.golden == 'true' || steps.scope.outputs.dlp == 'true' }}
+      api: ${{ steps.scope.outputs.shared == 'true' || steps.scope.outputs.engine == 'true' || steps.scope.outputs.api == 'true' || steps.scope.outputs.protocol == 'true' }}
+      coordinator: ${{ steps.scope.outputs.shared == 'true' || steps.scope.outputs.coordinator == 'true' }}
+      protocol: ${{ steps.scope.outputs.shared == 'true' || steps.scope.outputs.protocol == 'true' }}
+      bindings: ${{ steps.scope.outputs.shared == 'true' || steps.scope.outputs.engine == 'true' || steps.scope.outputs.bindings == 'true' }}
+      python: ${{ steps.scope.outputs.shared == 'true' || steps.scope.outputs.engine == 'true' || steps.scope.outputs.python == 'true' || steps.scope.outputs.api == 'true' || steps.scope.outputs.protocol == 'true' }}
+      throughput: ${{ steps.scope.outputs.shared == 'true' || steps.scope.outputs.throughput == 'true' }}
+      licenses: ${{ steps.scope.outputs.shared == 'true' || steps.scope.outputs.licenses == 'true' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: dorny/paths-filter@v4
         id: filter
         with:
@@ -63,6 +65,19 @@ jobs:
           base: ${{ github.ref }}
           predicate-quantifier: some-with-excludes
           filters: .github/ci-paths.yml
+          list-files: json
+      - name: Exclude release-only version changes
+        id: scope
+        env:
+          CI_PATH_SELECTIONS: ${{ toJSON(steps.filter.outputs) }}
+          CI_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: python scripts/ci_version_changes.py
+      - name: Test CI selection and release metadata
+        run: |
+          python -m venv .ci-venv
+          .ci-venv/bin/python -m pip install pytest PyYAML
+          .ci-venv/bin/python -m pytest scripts/tests/test_ci_*.py scripts/tests/test_release_*.py -q
+          .ci-venv/bin/python scripts/release_version.py
 
   rust:
     needs: changes

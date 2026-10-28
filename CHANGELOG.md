@@ -9,8 +9,33 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ## [Unreleased]
 
+### Changed
+
+- Regional phone numbers via the `phonenumber` crate (F01). New rule `pii_phone_regional` (`PHONE`,
+  `balanced`/`recall` only, after the other phone rules, which keep their spans): a grouped national
+  number without a country prefix (`Mobile: 416 60 039`, `call me on 03.93.92.16.85`,
+  `0688 843 79 56`, `(64) 3591-3246`) with seven to twelve digits, not a date, supported by a phone
+  term of the lexicon or a structural key, and valid in one of 24 numbering plans (DE, AT, CH, FR,
+  BE, NL, LU, IT, ES, PT, IE, GB, DK, NO, SE, FI, PL, CZ, US, CA, BR, IL, IN, JP) per the
+  libphonenumber metadata of `phonenumber` 0.3.10 (Apache-2.0; both cargo-deny license checks
+  pass). The plan is checked only after the context gate, so digit runs without a phone term are
+  never parsed. Validator `regional_phone` is format only (`checksums.ark`, no M3 change).
+  T01 placeholder numbers (NANP 555-01xx, `+1 000-000-0000`) stay positive. New
+  `rust/tests/pii_phone_regional.rs`, 21 new `pii_l1` rows (11 positives, 10 hard negatives, DE and
+  EN, `balanced`), rule fixture entry with hard negatives. **Detection change** (`balanced`/`recall`
+  only; `strict` output is byte-identical): the national numbers above are new `PHONE` findings.
+  Dev scoreboard vs. b455201 (PASS in strict and balanced, no new hard-negative FP), exact F1
+  balanced: phone `presidio_favored` 80.5 → 91.8 (Presidio tuned 65.1, precision 100.0), `neutral`
+  81.9 → 82.1 (tuned 36.7), `ark_authored` unchanged; L1 F1 balanced `presidio_favored` +1.5 pp.
+  The rule regex is linear and bounded. `latency.py compare --engine ark-native` 100 KiB p95
+  175.5 → 179.2 ms (+2.1 %), PASS.
+
+## [0.1.14] - 2026-10-28
+
 ### Added
 
+- Standalone `patronus-ark-core` Python package, initially published as 0.1.14,
+  with local native scanning and optional Wolf Defender through the shared Core.
 - Shared `WolfExecutionOptions` for configurable total window tokens, content overlap,
   and actual ONNX window batching. Existing constructors retain 256 total tokens,
   no overlap, and batch size 1. Core owns streaming windows, masks, per-row logits,
@@ -37,24 +62,6 @@ result shapes may be breaking for downstream users, and is called out explicitly
   caller constructs its `ScanControl`.
 - Validate generic classifier output shapes and finite values before interpreting
   predictions; preserve existing public methods and add checked decoding helpers.
-- Regional phone numbers via the `phonenumber` crate (F01). New rule `pii_phone_regional` (`PHONE`,
-  `balanced`/`recall` only, after the other phone rules, which keep their spans): a grouped national
-  number without a country prefix (`Mobile: 416 60 039`, `call me on 03.93.92.16.85`,
-  `0688 843 79 56`, `(64) 3591-3246`) with seven to twelve digits, not a date, supported by a phone
-  term of the lexicon or a structural key, and valid in one of 24 numbering plans (DE, AT, CH, FR,
-  BE, NL, LU, IT, ES, PT, IE, GB, DK, NO, SE, FI, PL, CZ, US, CA, BR, IL, IN, JP) per the
-  libphonenumber metadata of `phonenumber` 0.3.10 (Apache-2.0; both cargo-deny license checks
-  pass). The plan is checked only after the context gate, so digit runs without a phone term are
-  never parsed. Validator `regional_phone` is format only (`checksums.ark`, no M3 change).
-  T01 placeholder numbers (NANP 555-01xx, `+1 000-000-0000`) stay positive. New
-  `rust/tests/pii_phone_regional.rs`, 21 new `pii_l1` rows (11 positives, 10 hard negatives, DE and
-  EN, `balanced`), rule fixture entry with hard negatives. **Detection change** (`balanced`/`recall`
-  only; `strict` output is byte-identical): the national numbers above are new `PHONE` findings.
-  Dev scoreboard vs. b455201 (PASS in strict and balanced, no new hard-negative FP), exact F1
-  balanced: phone `presidio_favored` 80.5 → 91.8 (Presidio tuned 65.1, precision 100.0), `neutral`
-  81.9 → 82.1 (tuned 36.7), `ark_authored` unchanged; L1 F1 balanced `presidio_favored` +1.5 pp.
-  The rule regex is linear and bounded. `latency.py compare --engine ark-native` 100 KiB p95
-  175.5 → 179.2 ms (+2.1 %), PASS.
 - Contact and account fields (Q-CONTACT, quality floor F1 ≥ 80). Field-bound values that the
   rules missed: `pii_username` binds `user=<value>` in log and query lines (`auth failed
   user=oeztuerk90`; `user` only with `=`), no longer reads `login issues` as `login is` + `sues`

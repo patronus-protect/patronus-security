@@ -3,14 +3,14 @@
 Local PII, DLP and prompt-injection scanning with optional Wolf Defender.
 This package binds only `patronus-ark-core`, under MIT OR Apache-2.0.
 
-Before the Core Python release is available on PyPI, install the matching built
-wheel into your application environment. Set `PATRONUS_ARK_CORE_WHEEL` to its path:
+Install the Core Python package into the same environment as your application:
 
 ```sh
-python -m pip install "$PATRONUS_ARK_CORE_WHEEL"
+python -m pip install 'patronus-ark-core>=0.1.14'
 ```
 
-After publication, install with `python -m pip install patronus-ark-core`.
+Version **0.1.14** is the first standalone Core Python release. Model weights
+are separate assets; native checks do not need a model or an API connection.
 
 ```python
 from patronus_ark_core import Scanner, ScanControl, ScannerConfig
@@ -69,3 +69,29 @@ Build from the repository using a virtual environment:
 Published wheels include CPU Wolf support. Source builds may opt out with
 `maturin build --no-default-features`; such builds reject Wolf configuration.
 Model weights are separate assets, not bundled with the Python package.
+
+## Publishing setup
+
+The first upload uses a GitHub Actions pending publisher configured at
+[PyPI account publishing](https://pypi.org/manage/account/publishing/) with:
+
+| Field | Value |
+|---|---|
+| PyPI project name | `patronus-ark-core` |
+| Owner | `patronus-protect` |
+| Repository | `patronus-security` |
+| Workflow filename | `core-python.yml` |
+| Environment | `release` |
+
+The filename is relative to `.github/workflows/`. Use the existing `release`
+environment, matching the publish job in `core-python.yml`. Registering the
+pending publisher neither uploads files nor reserves the package name. PyPI
+creates the project and converts the publisher on the first successful upload.
+
+The Core Python workflow builds and tests wheels on Linux, macOS and Windows,
+and rebuilds the source distribution. Publishing requires a separate manual
+workflow dispatch with `publish: true`; its default is `false`. Preparing the
+release or merging changes does not request publication. Keep `publish` off
+until the release commit and publisher are reviewed.
+
+See [PyPI's pending-publisher instructions](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/).

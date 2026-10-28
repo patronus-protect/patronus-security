@@ -93,7 +93,7 @@ jobs:
           components: clippy, rustfmt
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11.18"
+          python-version: "3.11.9"
       - run: python scripts/bootstrap_python_tls.py
       - name: Pin ort for macOS Intel
         if: matrix.legacy_ort

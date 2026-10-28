@@ -32,7 +32,7 @@ def route(*paths):
         )
     outputs = {}
     for name, expression in WORKFLOW["jobs"]["changes"]["outputs"].items():
-        inputs = re.findall(r"steps\.filter\.outputs\.(\w+) == 'true'", expression)
+        inputs = re.findall(r"steps\.scope\.outputs\.(\w+) == 'true'", expression)
         assert inputs, expression
         outputs[name] = "true" if any(flags[key] for key in inputs) else "false"
     return outputs
@@ -172,6 +172,20 @@ def test_core_python_markdown_does_not_select_rust_or_bindings():
     flags = route("ark-core/python/README.md")
     assert flags["rust"] == flags["core"] == flags["bindings"] == "false"
     assert MODULE.plan("clippy", flags) == []
+
+
+@pytest.mark.parametrize("path", [
+    ".github/workflows/ci.yml", ".github/workflows/release.yml", ".github/ci-paths.yml",
+    "scripts/ci_rust_tests.py", "scripts/ci_version_changes.py", "scripts/tests/test_ci_version_changes.py",
+])
+def test_ci_selection_changes_use_lightweight_tests_without_native_builds(path):
+    assert set(route(path).values()) == {"false"}
+
+
+def test_changes_job_runs_selection_and_release_tests_before_reporting():
+    steps = WORKFLOW["jobs"]["changes"]["steps"]
+    assert any("pytest scripts/tests/test_ci_*.py scripts/tests/test_release_*.py" in step.get("run", "") for step in steps)
+    assert any(step.get("id") == "scope" and step["run"] == "python scripts/ci_version_changes.py" for step in steps)
 
 
 def test_workflow_uses_exclusion_aware_filters_and_conditional_jobs():

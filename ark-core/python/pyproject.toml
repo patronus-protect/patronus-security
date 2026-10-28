@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "patronus-ark-core"
-version = "0.1.13"
+version = "0.1.14"
 description = "Local PII, DLP and prompt-injection scanning with optional Wolf Defender inference"
 readme = "README.md"
 requires-python = ">=3.11"

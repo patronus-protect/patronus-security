@@ -1,12 +1,9 @@
-# Changes to build inputs or CI selection itself require the full test set.
+# Changes to build inputs require the full test set; selection logic is tested in changes.
 shared:
   - '**/Cargo.toml'
   - 'Cargo.lock'
   - 'rust-toolchain.toml'
   - '.cargo/**'
-  - '.github/workflows/ci.yml'
-  - '.github/ci-paths.yml'
-  - 'scripts/ci_rust_tests.py'
 rust:
   - '**/*.rs'
   - 'ark-core/**'
@@ -100,10 +97,11 @@ bindings:
 python:
   - 'python/**'
   - 'scripts/**'
+  - '!scripts/ci_*.py'
+  - '!scripts/tests/test_ci_*.py'
   - 'research/**'
   - 'requirements-test.txt'
   - '.python-version'
-  - '.github/workflows/release.yml'
   - '!**/*.md'
 throughput:
   - 'ark-core/src/**'
