@@ -726,6 +726,7 @@ tasks:
 
   # M3 +3 (66)
   - id: B-KR
+    status: done
     title: "KR RRN, BRN, FRN (check digits) + KR driving licence and passport (context)"
     type: new-entity
     deps: [K05]
