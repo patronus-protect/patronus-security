@@ -9,8 +9,12 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ## [Unreleased]
 
+## [0.1.14] - 2026-10-28
+
 ### Added
 
+- Standalone `patronus-ark-core` Python package, initially published as 0.1.14,
+  with local native scanning and optional Wolf Defender through the shared Core.
 - Shared `WolfExecutionOptions` for configurable total window tokens, content overlap,
   and actual ONNX window batching. Existing constructors retain 256 total tokens,
   no overlap, and batch size 1. Core owns streaming windows, masks, per-row logits,
