@@ -348,6 +348,9 @@ fn values_need_a_term_a_valid_check_and_a_value_of_their_own() {
         // the body of a Spanish VAT ID
         ("ES_NIF", "NIF-IVA: ES 12345678Z"),
         ("ES_NIE", "NIF-IVA: ES X1234567L"),
+        ("ES_NIE", "ES-X1234567L"),
+        ("ES_NIF", "VAT: CY-51032288A"),
+        ("ES_NIF", "CY 51032288A"),
     ] {
         assert_silent(text, label, &MODES);
     }
@@ -412,6 +415,15 @@ fn bare_cif_and_partita_iva_need_a_term() {
     }
     for text in ["A58818501", "Reference B58378431", "CIF: A58818502"] {
         assert_silent(text, "VAT_ID_ES", &MODES);
+    }
+    // The body of a prefixed VAT ID is no bare CIF of its own.
+    for text in ["{\"vat_id\": \"ES B58378431\"}", "CIF: ES-A58818501"] {
+        for mode in SCORED {
+            assert!(
+                !rules(text, mode).iter().any(|(rule, _)| rule == CIF),
+                "{mode}: {text}"
+            );
+        }
     }
 }
 

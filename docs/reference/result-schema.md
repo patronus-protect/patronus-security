@@ -423,7 +423,7 @@ digits and a control letter mod 23; `12345678Z`), the NIE (`ES_NIE`, `X`/`Y`/`Z`
 the same letter; `X1234567L`) and the codice fiscale (`IT_FISCAL_CODE`, sixteen characters with a
 check letter mod 26; `RSSMRA85T10A562S`). With a term (`NIF`, `DNI`, `NIE`, `codice fiscale`,
 `fiscal code`) or as a key they are reported in every mode and any case; bare, in
-`balanced`/`recall` only and at `0.55`, the uppercase values. A NIF or NIE right after `ES ` is the
+`balanced`/`recall` only and at `0.55`, the uppercase values. A NIF or NIE right after `ES ` (or a NIF after `CY `) is the
 body of a VAT ID. A bare CIF (`CIF: A58818501`) is a `VAT_ID_ES` in `balanced`/`recall` with a VAT
 or CIF term, like the bare Partita IVA. The German document number rules keep
 their format check in every mode, since a printed nine-character serial carries no check digit. A context-bound rule (`pii_phone_de_national_proximity`: a national number such as

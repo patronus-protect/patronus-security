@@ -580,17 +580,19 @@ impl PiiPipeline {
 }
 
 /// Whether the national number of `rule_id` at `start` is the body of a VAT ID
-/// after its country prefix and a space: a Portuguese NIF after `PT ` (B16), a
-/// Spanish NIF or NIE after `ES ` (B01, B-ESIT).
+/// after its country prefix: a Portuguese NIF after `PT ` (B16), a Spanish NIF
+/// or NIE and a bare CIF after `ES ` or `ES-` (B01), and eight digits and a letter after `CY `
+/// or `CY-`, a Cypriot VAT ID (B02) (B-ESIT).
 fn vat_body(rule_id: &str, text: &str, start: usize) -> bool {
-    let prefix = match rule_id {
-        "pii_nif_pt" => "PT ",
-        "pii_nif_es" | "pii_nif_es_context_free" | "pii_nie_es" | "pii_nie_es_context_free" => {
-            "ES "
-        }
+    let prefixes: &[&str] = match rule_id {
+        "pii_nif_pt" => &["PT "],
+        "pii_nif_es" | "pii_nif_es_context_free" => &["ES ", "ES-", "CY ", "CY-"],
+        "pii_nie_es" | "pii_nie_es_context_free" | "pii_vat_id_es_proximity" => &["ES ", "ES-"],
         _ => return false,
     };
-    text[..start].ends_with(prefix)
+    prefixes
+        .iter()
+        .any(|prefix| text[..start].ends_with(prefix))
 }
 
 impl NativeRegexDetector for PiiPipeline {
@@ -694,7 +696,9 @@ impl NativeRegexDetector for PiiPipeline {
                 .is_some_and(|evidence| evidence.context.supports())
                     || context::stands_alone(text, value)
             }
-            rule_id @ ("pii_nif_es_context_free" | "pii_nie_es_context_free") => {
+            rule_id @ ("pii_nif_es_context_free"
+            | "pii_nie_es_context_free"
+            | "pii_vat_id_es_proximity") => {
                 !vat_body(rule_id, text, captures.get(0).unwrap().start())
             }
             "pii_passport_number_de_context_free"

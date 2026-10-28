@@ -39,7 +39,7 @@ result shapes may be breaking for downstream users, and is called out explicitly
   letter by the odd/even tables mod 26). `pii_nif_es`, `pii_nie_es` and `pii_fiscal_code_it` report
   the value in every mode, in any case, when a term of the label (EN, DE, ES/IT) stands near it or is
   its key; in `balanced`/`recall` the uppercase values are also reported bare at 0.55 (K05). A NIF or
-  NIE right after `ES ` stays the body of the Spanish VAT ID. The CIF and the Partita IVA reuse the B01
+  NIE right after `ES `/`ES-` (a NIF also after `CY `/`CY-`) stays the body of a VAT ID. The CIF and the Partita IVA reuse the B01
   VAT validators: the new `pii_vat_id_es_proximity` reports a bare CIF under `VAT_ID_ES` with a VAT or
   CIF term (scored modes only, like the bare Partita IVA of `pii_vat_id_it_proximity`), so neither is
   a second M3 unit. The three `presidio_only` ids `pii.es.nif`, `pii.es.nie` and

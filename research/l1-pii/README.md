@@ -469,7 +469,7 @@ als 0/1/2, sieben Ziffern, derselbe Buchstabe; geteilter Helfer mit `es_vat_id`)
 Tabellen für ungerade/gerade Stellen mod 26). In jedem Modus meldet je eine Regel den Wert mit einem
 Begriff des Labels in der Nähe oder als Schlüssel (Lexika mit EN-, DE- und ES-/IT-Begriffen, jede
 Schreibweise); kontextfrei in `balanced`/`recall` (K05, 0,55) die Werte in Großbuchstaben. NIF/NIE direkt
-nach `ES ` bleiben der Rumpf der USt-IdNr. CIF und Partita IVA sind die USt-IdNr. von ES und IT ohne
+nach `ES `/`ES-` (NIF auch nach `CY `/`CY-`) bleiben der Rumpf der USt-IdNr. CIF und Partita IVA sind die USt-IdNr. von ES und IT ohne
 Präfix und nutzen deren B01-Validatoren (keine Doppelzählung): `pii_vat_id_es_proximity` meldet die
 blanke CIF unter `VAT_ID_ES` mit einem USt- oder CIF-Begriff, nur in `balanced`/`recall`, wie die blanke
 Partita IVA (`pii_vat_id_it_proximity`, B01). Presidio meldet auch Codici fiscali mit falschem
