@@ -73,7 +73,7 @@ pub fn is_aws_secret_value(value: &str) -> bool {
 
 /// Byte index of the start of the line `lines` lines above the line of
 /// `index`, not more than `WINDOW_BYTES` before it.
-fn lines_above(text: &str, index: usize, lines: usize) -> usize {
+pub(super) fn lines_above(text: &str, index: usize, lines: usize) -> usize {
     let mut start = text[..index].rfind('\n').map_or(0, |newline| newline + 1);
     for _ in 0..lines {
         if start == 0 {

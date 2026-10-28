@@ -285,6 +285,55 @@ entities:
     trufflehog: [NpmToken]
     detect_secrets: [NpmDetector]
     backlog: F04
+  - id: registry.pypi.upload_token
+    scope: shared
+    group: SECRET_TOKEN
+    ark: [dlp_pypi_token]
+    gitleaks: [pypi-upload-token]
+    trufflehog: [PyPI]
+    detect_secrets: [PypiTokenDetector]
+    backlog: P05
+  - id: registry.rubygems.api_token
+    scope: shared
+    group: SECRET_TOKEN
+    ark: [dlp_rubygems_token]
+    gitleaks: [rubygems-api-token]
+    trufflehog: [RubyGems]
+    backlog: P05
+  - id: registry.jfrog.artifactory
+    scope: shared
+    group: SECRET_TOKEN
+    ark: [dlp_jfrog_token]
+    gitleaks: [artifactory-api-key, artifactory-reference-token, jfrog-api-key, jfrog-identity-token]
+    detect_secrets: [ArtifactoryDetector]
+    backlog: P05
+  - id: devops.terraform_cloud.token
+    scope: shared
+    group: SECRET_TOKEN
+    ark: [dlp_terraform_cloud_token]
+    gitleaks: [hashicorp-tf-api-token, hashicorp-tf-password]
+    trufflehog: [TerraformCloudPersonalToken]
+    backlog: P05
+  - id: devops.pulumi.api_token
+    scope: shared
+    group: SECRET_TOKEN
+    ark: [dlp_pulumi_token]
+    gitleaks: [pulumi-api-token]
+    trufflehog: [Pulumi]
+    backlog: P05
+  - id: devops.vault.token
+    scope: shared
+    group: SECRET_TOKEN
+    ark: [dlp_vault_token, dlp_vault_legacy_token]
+    gitleaks: [vault-batch-token, vault-service-token]
+    backlog: P05
+  - id: devops.doppler.api_token
+    scope: shared
+    group: SECRET_TOKEN
+    ark: [dlp_doppler_token]
+    gitleaks: [doppler-api-token]
+    trufflehog: [Doppler]
+    backlog: P05
   - id: payment.stripe.secret_key
     scope: shared
     group: PAYMENT_KEY
@@ -424,6 +473,21 @@ entities:
     group: PAYMENT_KEY
     ark: [dlp_stripe_webhook]
     backlog: F10
+  - id: registry.dockerhub.access_token
+    scope: ark_only
+    group: SECRET_TOKEN
+    ark: [dlp_dockerhub_token]
+    backlog: P05
+  - id: registry.cratesio.api_token
+    scope: ark_only
+    group: SECRET_TOKEN
+    ark: [dlp_cratesio_token]
+    backlog: P05
+  - id: registry.packagist.token
+    scope: ark_only
+    group: SECRET_TOKEN
+    ark: [dlp_packagist_token]
+    backlog: P05
   - id: crypto.ethereum.private_key
     scope: ark_only
     group: CRYPTO_KEY
@@ -501,23 +565,8 @@ entities:
      gitleaks: [yandex-access-token, yandex-api-key, yandex-aws-access-token], backlog: P03}
   # P04: EU-Cloud
   - {id: cloud.scalingo.api_token, scope: baseline_only, group: CLOUD_KEY, gitleaks: [scalingo-api-token], backlog: P04}
-  # P05: DevOps/Registries
-  - {id: registry.jfrog.artifactory, scope: baseline_only, group: SECRET_TOKEN,
-     gitleaks: [artifactory-api-key, artifactory-reference-token, jfrog-api-key, jfrog-identity-token],
-     detect_secrets: [ArtifactoryDetector], backlog: P05}
-  - {id: registry.pypi.upload_token, scope: baseline_only, group: SECRET_TOKEN,
-     gitleaks: [pypi-upload-token], trufflehog: [PyPI], detect_secrets: [PypiTokenDetector], backlog: P05}
-  - {id: registry.rubygems.api_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [rubygems-api-token],
-     trufflehog: [RubyGems], backlog: P05}
+  # P05: DevOps/Registries (ohne ARK-Regel)
   - {id: registry.clojars.api_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [clojars-api-token], backlog: P05}
-  - {id: devops.terraform_cloud.token, scope: baseline_only, group: SECRET_TOKEN,
-     gitleaks: [hashicorp-tf-api-token, hashicorp-tf-password], trufflehog: [TerraformCloudPersonalToken], backlog: P05}
-  - {id: devops.pulumi.api_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [pulumi-api-token],
-     trufflehog: [Pulumi], backlog: P05}
-  - {id: devops.vault.token, scope: baseline_only, group: SECRET_TOKEN,
-     gitleaks: [vault-batch-token, vault-service-token], backlog: P05}
-  - {id: devops.doppler.api_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [doppler-api-token],
-     trufflehog: [Doppler], backlog: P05}
   - {id: devops.prefect.api_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [prefect-api-token],
      trufflehog: [Prefect], backlog: P05}
   - {id: devops.infracost.api_token, scope: baseline_only, group: SECRET_TOKEN, gitleaks: [infracost-api-token], backlog: P05}

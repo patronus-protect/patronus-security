@@ -12,9 +12,9 @@ What ARK L1 detects (PII and DLP), how it compares with Presidio and the secret 
 | | PII | DLP |
 | --- | --- | --- |
 | Result labels (entity groups) | 83 | 23 |
-| Regex rules | 136 | 64 (+5 relationship rules) |
+| Regex rules | 136 | 75 (+5 relationship rules) |
 | Checksum-validated units (count rule T03) | 63 (Presidio 2.2.364: 35) | – |
-| Rules with a `checksum` or `structure` check | 89 | 6 |
+| Rules with a `checksum` or `structure` check | 89 | 8 |
 | Default state | all rules on | credential/secret groups on, broader families opt-in |
 | Compared with | Presidio 2.2.364 (tuned) | gitleaks 8.30.1, TruffleHog 3.97.9, detect-secrets 1.5.0 |
 | Overall F1 (2026-10-24) | `balanced`: neutral 63.2, presidio_favored 54.3 | default profile: 88.6 (P 99.3, R 80.0) |
@@ -294,7 +294,7 @@ Legend: `ARK x / best baseline y (name)` = exact F1 of ARK and of the best basel
 | `API_KEY` | provider_secret | on | 9 | 7 | 320 | ARK 100.0 / best baseline 99.5 (TruffleHog) |
 | `CLOUD_KEY` | provider_secret | on | 5 | 5 | 200 | ARK 100.0 / best baseline 49.1 (gitleaks) |
 | `PAYMENT_KEY` | provider_secret | on | 2 | 2 | 80 | ARK 100.0 / best baseline 39.2 (gitleaks) |
-| `SECRET_TOKEN` | provider_secret | on | 11 | 11 | 360 | ARK 99.2 / best baseline 71.7 (TruffleHog) |
+| `SECRET_TOKEN` | provider_secret | on | 22 | 21 | 360 | ARK 99.2 / best baseline 71.7 (TruffleHog) |
 | `CREDENTIAL` | generic_credential | on | 10 | 9 | 320 | ARK 96.8 / best baseline 23.7 (gitleaks) |
 | `PASSWORD_HASH` | generic_credential | on | 1 | 1 | 40 | ARK 91.9 / best baseline 0.0 (gitleaks, TruffleHog, detect-secrets) |
 | `PRIVATE_KEY` | key_material | on | 2 | 1 | 37 | ARK 88.1 / best baseline 56.1 (detect-secrets) |
@@ -343,6 +343,13 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `vcs.gitlab.token` | shared | `SECRET_TOKEN` | `dlp_gitlab_token` | format | on | gitleaks: `gitlab-cicd-job-token`, `gitlab-deploy-token`, `gitlab-feature-flag-client-token`, `gitlab-feed-token`, `gitlab-incoming-mail-token`, `gitlab-kubernetes-agent-token`, `gitlab-ptt`, `gitlab-rrt`, `gitlab-runner-authentication-token`, `gitlab-runner-authentication-token-routable`, `gitlab-scim-token`; TruffleHog: `Gitlab` |
 | `vcs.gitlab.oauth_app_secret` | shared | `API_KEY` | `dlp_gitlab_oauth_secret` | format | on | gitleaks: `gitlab-oauth-app-secret` |
 | `registry.npm.access_token` | shared | `SECRET_TOKEN` | `dlp_npm_token` | checksum | on | gitleaks: `npm-access-token`; TruffleHog: `NpmToken`; detect-secrets: `NpmDetector` |
+| `registry.pypi.upload_token` | shared | `SECRET_TOKEN` | `dlp_pypi_token` | structure | on | gitleaks: `pypi-upload-token`; TruffleHog: `PyPI`; detect-secrets: `PypiTokenDetector` |
+| `registry.rubygems.api_token` | shared | `SECRET_TOKEN` | `dlp_rubygems_token` | format | on | gitleaks: `rubygems-api-token`; TruffleHog: `RubyGems` |
+| `registry.jfrog.artifactory` | shared | `SECRET_TOKEN` | `dlp_jfrog_token` | format | on | gitleaks: `artifactory-api-key`, `artifactory-reference-token`, `jfrog-api-key`, `jfrog-identity-token`; detect-secrets: `ArtifactoryDetector` |
+| `devops.terraform_cloud.token` | shared | `SECRET_TOKEN` | `dlp_terraform_cloud_token` | format | on | gitleaks: `hashicorp-tf-api-token`, `hashicorp-tf-password`; TruffleHog: `TerraformCloudPersonalToken` |
+| `devops.pulumi.api_token` | shared | `SECRET_TOKEN` | `dlp_pulumi_token` | format | on | gitleaks: `pulumi-api-token`; TruffleHog: `Pulumi` |
+| `devops.vault.token` | shared | `SECRET_TOKEN` | `dlp_vault_token`, `dlp_vault_legacy_token` | format | on | gitleaks: `vault-batch-token`, `vault-service-token` |
+| `devops.doppler.api_token` | shared | `SECRET_TOKEN` | `dlp_doppler_token` | format | on | gitleaks: `doppler-api-token`; TruffleHog: `Doppler` |
 | `payment.stripe.secret_key` | shared | `PAYMENT_KEY` | `dlp_stripe_key` | format | on | gitleaks: `stripe-access-token`; TruffleHog: `Stripe`; detect-secrets: `StripeDetector` |
 | `comm.slack.token` | shared | `SECRET_TOKEN` | `dlp_slack_token` | format | on | gitleaks: `slack-bot-token`, `slack-user-token`, `slack-legacy-bot-token`, `slack-legacy-token`, `slack-legacy-workspace-token`; TruffleHog: `Slack`; detect-secrets: `SlackDetector` |
 | `comm.discord.bot_token` | shared | `SECRET_TOKEN` | `dlp_discord_token` | format | on | TruffleHog: `DiscordBotToken`; detect-secrets: `DiscordBotTokenDetector` |
@@ -363,6 +370,9 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `content.database_dump` | shared | `dlp.content.database_dump` | `dlp_database_dump_insert`, `dlp_database_dump_header` | format | off | – |
 | `content.system_log` | shared | `dlp.content.system_log` | `dlp_stacktrace_block`, `dlp_structured_system_log` | format | off | – |
 | `payment.stripe.webhook_secret` | ark_only | `PAYMENT_KEY` | `dlp_stripe_webhook` | format | on | – |
+| `registry.dockerhub.access_token` | ark_only | `SECRET_TOKEN` | `dlp_dockerhub_token` | format | on | – |
+| `registry.cratesio.api_token` | ark_only | `SECRET_TOKEN` | `dlp_cratesio_token` | format | on | – |
+| `registry.packagist.token` | ark_only | `SECRET_TOKEN` | `dlp_packagist_token` | checksum | on | – |
 | `crypto.ethereum.private_key` | ark_only | `CRYPTO_KEY` | `dlp_eth_private_key` | format | on | – |
 | `crypto.bitcoin.wif` | ark_only | `CRYPTO_KEY` | `dlp_btc_wif` | checksum | on | – |
 | `credential.url_userinfo_token` | ark_only | `SECRET_TOKEN` | `dlp_url_userinfo_token` | none | on | – |
@@ -392,14 +402,7 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `cloud.ibm.credentials` | baseline_only | `CLOUD_KEY` | – | – | – | detect-secrets: `IbmCloudIamDetector`, `IbmCosHmacDetector`, `SoftlayerDetector` |
 | `cloud.yandex.credentials` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `yandex-access-token`, `yandex-api-key`, `yandex-aws-access-token` |
 | `cloud.scalingo.api_token` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `scalingo-api-token` |
-| `registry.jfrog.artifactory` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `artifactory-api-key`, `artifactory-reference-token`, `jfrog-api-key`, `jfrog-identity-token`; detect-secrets: `ArtifactoryDetector` |
-| `registry.pypi.upload_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `pypi-upload-token`; TruffleHog: `PyPI`; detect-secrets: `PypiTokenDetector` |
-| `registry.rubygems.api_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `rubygems-api-token`; TruffleHog: `RubyGems` |
 | `registry.clojars.api_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `clojars-api-token` |
-| `devops.terraform_cloud.token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `hashicorp-tf-api-token`, `hashicorp-tf-password`; TruffleHog: `TerraformCloudPersonalToken` |
-| `devops.pulumi.api_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `pulumi-api-token`; TruffleHog: `Pulumi` |
-| `devops.vault.token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `vault-batch-token`, `vault-service-token` |
-| `devops.doppler.api_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `doppler-api-token`; TruffleHog: `Doppler` |
 | `devops.prefect.api_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `prefect-api-token`; TruffleHog: `Prefect` |
 | `devops.infracost.api_token` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `infracost-api-token` |
 | `devops.octopus_deploy.api_key` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `octopus-deploy-api-key` |
@@ -504,7 +507,7 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `public.ip_address` | out_of_scope | – | – | – | – | detect-secrets: `IPPublicDetector` |
 | `public.legal_finance_document` | out_of_scope | – | – | – | – | – |
 
-Entities: 36 shared, 17 ARK only, 113 baseline only, 11 out of scope.
+Entities: 43 shared, 20 ARK only, 106 baseline only, 11 out of scope.
 
 #### F1 and recall per entity
 
@@ -529,6 +532,13 @@ Exact F1 and recall in percent on the dev split, measured 2026-10-24; same cells
 | `vcs.gitlab.token` | shared | `SECRET_TOKEN` | 0 | no gold | no gold |
 | `vcs.gitlab.oauth_app_secret` | shared | `API_KEY` | 0 | no gold | no gold |
 | `registry.npm.access_token` | shared | `SECRET_TOKEN` | 40 | ARK 100.0 / best baseline 97.6 (TruffleHog) | ARK 100.0 / best baseline 100.0 (TruffleHog) |
+| `registry.pypi.upload_token` | shared | `SECRET_TOKEN` | 0 | no gold | no gold |
+| `registry.rubygems.api_token` | shared | `SECRET_TOKEN` | 0 | no gold | no gold |
+| `registry.jfrog.artifactory` | shared | `SECRET_TOKEN` | 0 | no gold | no gold |
+| `devops.terraform_cloud.token` | shared | `SECRET_TOKEN` | 0 | no gold | no gold |
+| `devops.pulumi.api_token` | shared | `SECRET_TOKEN` | 0 | no gold | no gold |
+| `devops.vault.token` | shared | `SECRET_TOKEN` | 0 | no gold | no gold |
+| `devops.doppler.api_token` | shared | `SECRET_TOKEN` | 0 | no gold | no gold |
 | `payment.stripe.secret_key` | shared | `PAYMENT_KEY` | 40 | ARK 100.0 / best baseline 49.4 (gitleaks) | ARK 100.0 / best baseline 95.0 (gitleaks) |
 | `comm.slack.token` | shared | `SECRET_TOKEN` | 40 | ARK 100.0 / best baseline 72.7 (TruffleHog) | ARK 100.0 / best baseline 100.0 (gitleaks, TruffleHog, detect-secrets) |
 | `comm.discord.bot_token` | shared | `SECRET_TOKEN` | 40 | ARK 100.0 / best baseline 50.0 (detect-secrets) | ARK 100.0 / best baseline 100.0 (detect-secrets) |
@@ -549,6 +559,9 @@ Exact F1 and recall in percent on the dev split, measured 2026-10-24; same cells
 | `content.database_dump` | shared | `dlp.content.database_dump` | 0 | no gold | no gold |
 | `content.system_log` | shared | `dlp.content.system_log` | 0 | no gold | no gold |
 | `payment.stripe.webhook_secret` | ark_only | `PAYMENT_KEY` | 40 | ARK 100.0 / no baseline | ARK 100.0 / no baseline |
+| `registry.dockerhub.access_token` | ark_only | `SECRET_TOKEN` | – | – | – |
+| `registry.cratesio.api_token` | ark_only | `SECRET_TOKEN` | – | – | – |
+| `registry.packagist.token` | ark_only | `SECRET_TOKEN` | – | – | – |
 | `crypto.ethereum.private_key` | ark_only | `CRYPTO_KEY` | 40 | ARK 100.0 / no baseline | ARK 100.0 / no baseline |
 | `crypto.bitcoin.wif` | ark_only | `CRYPTO_KEY` | 40 | ARK 100.0 / no baseline | ARK 100.0 / no baseline |
 | `credential.url_userinfo_token` | ark_only | `SECRET_TOKEN` | 0 | no gold | no gold |
@@ -578,14 +591,7 @@ Exact F1 and recall in percent on the dev split, measured 2026-10-24; same cells
 | `cloud.ibm.credentials` | baseline_only | `CLOUD_KEY` | 0 | no gold | no gold |
 | `cloud.yandex.credentials` | baseline_only | `CLOUD_KEY` | 0 | no gold | no gold |
 | `cloud.scalingo.api_token` | baseline_only | `CLOUD_KEY` | 0 | no gold | no gold |
-| `registry.jfrog.artifactory` | baseline_only | `SECRET_TOKEN` | 0 | no gold | no gold |
-| `registry.pypi.upload_token` | baseline_only | `SECRET_TOKEN` | 0 | no gold | no gold |
-| `registry.rubygems.api_token` | baseline_only | `SECRET_TOKEN` | 0 | no gold | no gold |
 | `registry.clojars.api_token` | baseline_only | `SECRET_TOKEN` | 0 | no gold | no gold |
-| `devops.terraform_cloud.token` | baseline_only | `SECRET_TOKEN` | 0 | no gold | no gold |
-| `devops.pulumi.api_token` | baseline_only | `SECRET_TOKEN` | 0 | no gold | no gold |
-| `devops.vault.token` | baseline_only | `SECRET_TOKEN` | 0 | no gold | no gold |
-| `devops.doppler.api_token` | baseline_only | `SECRET_TOKEN` | 0 | no gold | no gold |
 | `devops.prefect.api_token` | baseline_only | `SECRET_TOKEN` | 0 | no gold | no gold |
 | `devops.infracost.api_token` | baseline_only | `SECRET_TOKEN` | 0 | no gold | no gold |
 | `devops.octopus_deploy.api_key` | baseline_only | `SECRET_TOKEN` | 0 | no gold | no gold |

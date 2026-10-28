@@ -219,6 +219,19 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   generische Zuweisung und den URL-Parameter desselben Werts. `dlp_url_userinfo_password` nimmt
   auch Userinfo ohne Benutzernamen (`redis://:…@host`). URL-Userinfo von
   `postgres://`/`mysql://`/`mongodb+srv://`/`amqp://` bleibt bei `dlp_url_userinfo_password`.
+  Seit P05 decken elf Provider-Regeln DevOps- und Paket-Registries ab (`SECRET_TOKEN`, Untertyp
+  `access_token`): Docker Hub (`dckr_pat_`/`dckr_oat_`, 27 Zeichen), PyPI (`pypi-` und ein
+  base64url-Macaroon V2, das vollständig geparst wird: Version, Header mit Location `pypi.org` oder
+  `test.pypi.org` (Severity `test`) und Identifier, Caveat-Abschnitte, 32-Byte-Signatur;
+  Stärke `structure`), RubyGems (`rubygems_`), crates.io (`cio` und 32 Zeichen mit Groß- und
+  Kleinbuchstaben), Private Packagist (`packagist_ort_`/`_out_`/`_uut_`/`_cut_`, 60 Hex-Ziffern
+  und die CRC32 von Präfix und Zufallsteil als acht Hex-Ziffern; Stärke `checksum`, eine
+  generische Regel meldet ein Packagist-Token mit falscher CRC32 nicht), JFrog (`AKCp`, `cmVmd`),
+  HCP Terraform (`.atlasv1.`), Pulumi (`pul-`), Vault (`hvs.`/`hvb.`; das alte `s.`-Format nur mit
+  `vault` auf der Zeile oder bis zu fünf Zeilen darüber, `dlp_vault_legacy_token`) und Doppler
+  (alle dokumentierten Präfixe). Ein NuGet-API-Key (`oy2…`) hat keine Herstellerquelle für sein
+  Format und bleibt ohne eigene Regel; Clojars, Prefect, Infracost, Octopus Deploy, Harness, Snyk,
+  Sonar, Codecov und Sourcegraph (Entity-Map `backlog: P05`) bleiben `baseline_only`.
 - Validatoren sind schwach: `is_secret_value` prüft nur Länge, Platzhalter und Env-Referenzen.
   Prüfsummen fehlen ganz: JWT-Struktur und PEM/DER (Base58Check für WIF seit
   K08/F02, GitHub CRC32 seit F03, npm CRC32 seit F04).

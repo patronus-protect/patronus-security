@@ -101,6 +101,52 @@ rules:
     source_ref: gitleaks:npm-access-token
     format: "npm_ prefix, exactly 36 base62 characters: 30 random and their CRC32 as 6 base62 digits (npm token format 2021, same layout as GitHub tokens; F04)"
 
+  # ── DevOps / package registries (P05) ─────────────────────────────────────
+  dlp_dockerhub_token:
+    provider: dockerhub
+    source_ref: https://docs.docker.com/reference/api/hub/latest/
+    format: "Docker Hub personal access token dckr_pat_ or organization access token dckr_oat_ (prefixes from the Docker Hub API reference, access-token examples), exactly 27 base64url characters (length of the documented dckr_oat_ example; P05)"
+  dlp_pypi_token:
+    provider: pypi
+    source_ref: gitleaks:pypi-upload-token
+    format: "pypi- and the unpadded base64url of a Macaroon V2 (https://pypi.org/help/#apitoken): version 0x02, header with location pypi.org (AgEIcHlwaS5vcmc, gitleaks pypi-upload-token) or test.pypi.org (AgENdGVzdC5weXBpLm9yZw, severity test) and an identifier, caveat sections, a 32-byte signature; the whole macaroon must parse (P05)"
+  dlp_rubygems_token:
+    provider: rubygems
+    source_ref: gitleaks:rubygems-api-token
+    format: "rubygems_ prefix and exactly 48 lower-case hex digits (https://guides.rubygems.org/api-key-scopes/; P05)"
+  dlp_cratesio_token:
+    provider: cratesio
+    source_ref: https://github.com/rust-lang/crates.io/blob/main/crates/crates_io_database/src/utils/token.rs
+    format: "cio prefix (TOKEN_PREFIX) and exactly 32 random alphanumerics (TOKEN_LENGTH, rand Alphanumeric) with upper- and lower-case letters (P05)"
+  dlp_packagist_token:
+    provider: packagist
+    source_ref: https://packagist.com/docs/composer-authentication
+    format: "Private Packagist token: packagist_ort_ (organization read-only), packagist_out_ (organization update), packagist_uut_ (user update) or packagist_cut_ (Conductor), 60 lower-case hex digits and the CRC32 of prefix and random part as 8 zero-padded lower-case hex digits; legacy tokens without prefix (60 hex) are not matched (P05)"
+  dlp_jfrog_token:
+    provider: jfrog
+    source_ref: gitleaks:artifactory-api-key
+    format: "JFrog Artifactory API key AKCp and exactly 69 alphanumerics (gitleaks artifactory-api-key) or reference token cmVmd and exactly 59 alphanumerics (gitleaks artifactory-reference-token; P05)"
+  dlp_terraform_cloud_token:
+    provider: terraform_cloud
+    source_ref: gitleaks:hashicorp-tf-api-token
+    format: "HCP Terraform/Terraform Enterprise API token: 14 alphanumerics, .atlasv1. and 60-70 characters [A-Za-z0-9_=-] (P05)"
+  dlp_pulumi_token:
+    provider: pulumi
+    source_ref: gitleaks:pulumi-api-token
+    format: "pul- prefix and exactly 40 lower-case hex digits (P05)"
+  dlp_vault_token:
+    provider: vault
+    source_ref: gitleaks:vault-service-token
+    format: "HashiCorp Vault 1.10+ service token hvs. with 90-120 characters [A-Za-z0-9_-] (gitleaks vault-service-token) or batch token hvb. with 138-300 (gitleaks vault-batch-token; prefixes: https://developer.hashicorp.com/vault/docs/concepts/tokens; P05)"
+  dlp_vault_legacy_token:
+    provider: vault
+    source_ref: gitleaks:vault-service-token
+    format: "Vault service token before 1.10: s. and exactly 24 alphanumerics with upper- and lower-case letters (gitleaks vault-service-token), only with Vault on the value's line or up to five lines above (P05)"
+  dlp_doppler_token:
+    provider: doppler
+    source_ref: https://docs.doppler.com/reference/auth-token-formats
+    format: "Doppler tokens with 40-44 alphanumerics after the prefix: dp.pt. personal, dp.ct. CLI, dp.sa. service account, dp.said. service account identity, dp.scim. SCIM, dp.audit. audit, dp.st. service token with an optional scope segment of 2-35 characters [a-z0-9_-] and a dot (vendor regexes; gitleaks doppler-api-token covers dp.pt.; P05)"
+
   # ── Payment ──────────────────────────────────────────────────────────────
   dlp_stripe_key:
     provider: stripe
