@@ -4056,8 +4056,9 @@ def dx(
     return dlp_row(row, rule, carrier, tags, False)
 
 
-# F01: rules that report a value only in its key context, also in `strict`.
-DLP_CONTEXT_GATED_RULES = ("dlp_eth_private_key",)
+# F01: rules that report a value only in its key context, also in `strict` (P05: legacy Vault
+# tokens only next to a Vault term).
+DLP_CONTEXT_GATED_RULES = ("dlp_eth_private_key", "dlp_vault_legacy_token")
 
 
 def dc(
@@ -4114,6 +4115,12 @@ DLP_LOOKALIKE_GENERATORS = (
     "aws_secret_access_key_long", "aws_secret_access_key_hex",
     # F-HTTP: random base64 that decodes to no user:password pair
     "http_basic_credentials",
+    # P05
+    "dockerhub_pat_short", "pypi_upload_token_truncated", "pypi_upload_token_no_signature",
+    "artifactory_api_key_short",
+    "rubygems_api_key_upper_hex", "cratesio_api_token_short", "packagist_token_bad_crc",
+    "terraform_cloud_token_short", "pulumi_access_token_short", "vault_legacy_service_token_short",
+    "doppler_personal_token_short", "doppler_cli_token_long",
 )
 
 
@@ -9830,6 +9837,281 @@ DLP_T15_CASES = {
     ],
 }
 for _label, _rows in DLP_T15_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
+
+# P05: DevOps and package-registry tokens. `dlp_dockerhub_token` (`dckr_pat_`/`dckr_oat_` and 27
+# base64url characters), `dlp_pypi_token` (`pypi-` and a base64url Macaroon V2 for pypi.org or
+# test.pypi.org that must parse completely), `dlp_rubygems_token`, `dlp_cratesio_token` (`cio`
+# and 32 alphanumerics with both cases), `dlp_packagist_token` (Private Packagist prefixes, 60 hex
+# characters and their CRC32 at checksum strength), `dlp_jfrog_token` (`AKCp` API keys and
+# `cmVmd` reference tokens), `dlp_terraform_cloud_token` (`.atlasv1.`), `dlp_pulumi_token`,
+# `dlp_vault_token` (`hvs.`/`hvb.`), `dlp_vault_legacy_token` (`s.` and 24 characters, only with
+# Vault context) and `dlp_doppler_token` (all documented Doppler prefixes). Hard negatives are
+# shapes with a wrong length, alphabet, structure or check value, example/test fills, references,
+# documented prefixes and a legacy-Vault shape without Vault context.
+DLP_P05_CASES = {
+    "SECRET_TOKEN": [
+        ds(
+            "SECRET_TOKEN", "de", "dlp_dockerhub_token",
+            "# Zugang zum Docker Hub für den Release-Job\nDOCKERHUB_USERNAME=acmebuild\n"
+            "DOCKERHUB_TOKEN=<<secret:0>>\n",
+            "dockerhub_pat", 17101, carrier="env",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_dockerhub_token",
+            "      - name: Log in to Docker Hub\n        run: echo \"<<secret:0>>\" | "
+            "docker login -u acme --password-stdin\n",
+            "dockerhub_org_token", 17102, carrier="yaml",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_pypi_token",
+            "# ~/.pypirc für den Paket-Upload\n[pypi]\nusername = __token__\npassword = <<secret:0>>\n",
+            "pypi_upload_token", 17103, carrier="ini",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_pypi_token",
+            "$ TWINE_USERNAME=__token__ TWINE_PASSWORD=<<secret:0>> twine upload dist/*\n",
+            "pypi_upload_token", 17104, carrier="cli",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_pypi_token",
+            "[testpypi]\nrepository = https://test.pypi.org/legacy/\nusername = __token__\n"
+            "password = <<secret:0>>\n",
+            "pypi_test_upload_token", 17105, carrier="ini",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_rubygems_token",
+            "# ~/.gem/credentials\n---\n:rubygems_api_key: <<secret:0>>\n",
+            "rubygems_api_key", 17106, carrier="yaml",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_rubygems_token",
+            "      - run: gem push pkg/*.gem\n        env:\n          GEM_HOST_API_KEY: <<secret:0>>\n",
+            "rubygems_api_key", 17107, carrier="yaml",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_cratesio_token",
+            "# ~/.cargo/credentials.toml, nur auf dem Release-Server\n[registry]\ntoken = \"<<secret:0>>\"\n",
+            "cratesio_api_token", 17108, carrier="toml",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_cratesio_token",
+            "$ cargo login <<secret:0>>\n       Login token for `crates-io` saved\n",
+            "cratesio_api_token", 17109, carrier="cli",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_packagist_token",
+            "{\n    \"http-basic\": {\n        \"repo.packagist.com\": {\n            \"username\": \"token\",\n"
+            "            \"password\": \"<<secret:0>>\"\n        }\n    }\n}\n",
+            "packagist_org_token", 17110, carrier="json",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_packagist_token",
+            "$ composer config --global --auth http-basic.repo.packagist.com token <<secret:0>>\n",
+            "packagist_user_token", 17111, carrier="cli",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_jfrog_token",
+            "2026-10-27T08:12:44Z WARN artifactory: Upload mit API-Key <<secret:0>> abgelehnt (403)\n",
+            "artifactory_api_key", 17112, carrier="log",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_jfrog_token",
+            "GET /artifactory/api/repositories HTTP/1.1\nHost: acme.jfrog.io\n"
+            "Authorization: Bearer <<secret:0>>\n",
+            "artifactory_reference_token", 17113, carrier="http",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_terraform_cloud_token",
+            "# ~/.terraformrc für den Build-Agenten\ncredentials \"app.terraform.io\" {\n"
+            "  token = \"<<secret:0>>\"\n}\n",
+            "terraform_cloud_token", 17114, carrier="hcl",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_terraform_cloud_token",
+            "TF_TOKEN_app_terraform_io=<<secret:0>>\nTF_WORKSPACE=prod-eu\n",
+            "terraform_cloud_token", 17115, carrier="env",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_pulumi_token",
+            "Hallo Team,\n\ndas Pulumi-Token für den Stack prod lautet <<secret:0>>\n\n"
+            "Bitte nach dem Rollout rotieren.\n",
+            "pulumi_access_token", 17116, carrier="prose",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_pulumi_token",
+            "env:\n  PULUMI_ACCESS_TOKEN: <<secret:0>>\n  PULUMI_STACK: acme/prod\n",
+            "pulumi_access_token", 17117, carrier="yaml",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_vault_token",
+            "# Anmeldung am Tresor vor dem Deploy\n$ vault login <<secret:0>>\n",
+            "vault_service_token", 17118, carrier="cli",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_vault_token",
+            "GET /v1/secret/data/payments HTTP/1.1\nHost: vault.example.com\n"
+            "X-Vault-Token: <<secret:0>>\n",
+            "vault_batch_token", 17119, carrier="http",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_vault_legacy_token",
+            "# Vault (alter Cluster, 1.8)\nVAULT_ADDR=https://vault.example.com:8200\nVAULT_TOKEN=<<secret:0>>\n",
+            "vault_legacy_service_token", 17120, carrier="env",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_vault_legacy_token",
+            "Hi Sam,\n\nthe Vault root token from the old cluster is still <<secret:0>>\n\n"
+            "Please revoke it after the migration.\n",
+            "vault_legacy_service_token", 17121, carrier="prose",
+        ),
+        ds(
+            "SECRET_TOKEN", "de", "dlp_doppler_token",
+            "services:\n  api:\n    environment:\n      # Service-Token der Konfiguration prd\n"
+            "      DOPPLER_TOKEN: <<secret:0>>\n",
+            "doppler_service_token", 17122, carrier="yaml",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_doppler_token",
+            "$ doppler secrets download --no-file --format env --token <<secret:0>>\n",
+            "doppler_cli_token", 17123, carrier="cli",
+        ),
+        ds(
+            "SECRET_TOKEN", "en", "dlp_doppler_token",
+            "{\"doppler\": {\"project\": \"billing\", \"token\": \"<<secret:0>>\"}}\n",
+            "doppler_personal_token", 17124, carrier="json",
+        ),
+        dl(
+            "SECRET_TOKEN", "de", "dlp_dockerhub_token",
+            "2026-10-27 08:12:44 WARN login: verworfener Wert <<secret:0>> (26 Zeichen)\n",
+            "dockerhub_pat_short", 17131, "dckr_pat_ shape with 26 instead of 27 characters", carrier="log",
+        ),
+        dl(
+            "SECRET_TOKEN", "de", "dlp_pypi_token",
+            "2026-10-27 08:12:44 WARN upload: abgeschnittener Wert <<secret:0>>\n",
+            "pypi_upload_token_truncated", 17132, "pypi- shape cut after the macaroon location", carrier="log",
+        ),
+        dn(
+            "SECRET_TOKEN", "de", "dlp_rubygems_token",
+            "RubyGems-API-Schlüssel beginnen mit rubygems_ und haben 48 Hex-Ziffern.",
+            "documented prefix without a value", carrier="prose",
+        ),
+        dl(
+            "SECRET_TOKEN", "de", "dlp_cratesio_token",
+            "2026-10-27 08:12:44 WARN publish: verworfener Wert <<secret:0>> (31 Zeichen)\n",
+            "cratesio_api_token_short", 17133, "cio shape with 31 instead of 32 characters", carrier="log",
+        ),
+        dx(
+            "SECRET_TOKEN", "de", "dlp_packagist_token",
+            "{\"http-basic\": {\"repo.packagist.com\": {\"username\": \"token\", \"password\": \"<<secret:0>>\"}}}\n",
+            "packagist_org_token", "deadbeef", "test value (deadbeef fill, zero checksum)", carrier="json",
+        ),
+        dx(
+            "SECRET_TOKEN", "de", "dlp_jfrog_token",
+            "# Beispiel aus der Doku\nARTIFACTORY_API_KEY=<<secret:0>>\n",
+            "artifactory_api_key", "BEISPIEL", "documented example value (BEISPIEL fill)", carrier="env",
+        ),
+        dn(
+            "SECRET_TOKEN", "de", "dlp_terraform_cloud_token",
+            "credentials \"app.terraform.io\" {\n  # kommt aus dem Tresor\n  token = var.tfe_token\n}\n",
+            "variable reference", carrier="hcl",
+        ),
+        dl(
+            "SECRET_TOKEN", "de", "dlp_pulumi_token",
+            "2026-10-27 08:12:44 WARN pulumi: verworfener Wert <<secret:0>> (39 Ziffern)\n",
+            "pulumi_access_token_short", 17134, "pul- shape with 39 instead of 40 hex digits", carrier="log",
+        ),
+        dn(
+            "SECRET_TOKEN", "de", "dlp_vault_token",
+            "# Token kommt zur Laufzeit aus dem Agenten\nexport VAULT_TOKEN=\"$(cat /vault/secrets/token)\"\n",
+            "command substitution", carrier="cli",
+        ),
+        dl(
+            "SECRET_TOKEN", "de", "dlp_vault_legacy_token",
+            "2026-10-27 08:12:44 WARN vault: verworfener Wert <<secret:0>> (23 Zeichen)\n",
+            "vault_legacy_service_token_short", 17135, "legacy s. shape with 23 instead of 24 characters",
+            carrier="log",
+        ),
+        dl(
+            "SECRET_TOKEN", "de", "dlp_doppler_token",
+            "2026-10-27 08:12:44 WARN doppler: verworfener Wert <<secret:0>> (36 Zeichen)\n",
+            "doppler_personal_token_short", 17136, "dp.pt. shape with 36 instead of 40 to 44 characters",
+            carrier="log",
+        ),
+        dx(
+            "SECRET_TOKEN", "en", "dlp_dockerhub_token",
+            "# docs example\nDOCKERHUB_TOKEN=<<secret:0>>\n",
+            "dockerhub_pat", "EXAMPLE", "documented example value (EXAMPLE fill)", carrier="env",
+        ),
+        dl(
+            "SECRET_TOKEN", "en", "dlp_pypi_token",
+            "2026-10-27T08:12:44Z WARN twine: rejected <<secret:0>> (signature too short)\n",
+            "pypi_upload_token_no_signature", 17141, "pypi- macaroon with a 31-byte signature", carrier="log",
+        ),
+        dl(
+            "SECRET_TOKEN", "en", "dlp_rubygems_token",
+            "2026-10-27T08:12:44Z WARN gem: rejected <<secret:0>> (upper-case hex)\n",
+            "rubygems_api_key_upper_hex", 17142, "rubygems_ shape with upper-case hex digits", carrier="log",
+        ),
+        dx(
+            "SECRET_TOKEN", "en", "dlp_cratesio_token",
+            "# test fixture\n[registry]\ntoken = \"<<secret:0>>\"\n",
+            "cratesio_api_token", "TESTKEY", "test key (TESTKEY fill)", carrier="toml",
+        ),
+        dl(
+            "SECRET_TOKEN", "en", "dlp_packagist_token",
+            "2026-10-27T08:12:44Z WARN composer: rejected <<secret:0>> (bad checksum)\n",
+            "packagist_token_bad_crc", 17143, "packagist_ort_ shape with a wrong CRC32", carrier="log",
+        ),
+        dn(
+            "SECRET_TOKEN", "en", "dlp_jfrog_token",
+            "      - run: jf rt upload \"dist/*.tgz\" npm-local/\n        env:\n"
+            "          JFROG_CLI_API_KEY: ${{ secrets.ARTIFACTORY_API_KEY }}\n",
+            "GitHub Actions secret reference", carrier="yaml",
+        ),
+        dl(
+            "SECRET_TOKEN", "en", "dlp_terraform_cloud_token",
+            "2026-10-27T08:12:44Z WARN tfe: rejected <<secret:0>> (59 characters after .atlasv1.)\n",
+            "terraform_cloud_token_short", 17144, ".atlasv1. shape with 59 characters after the marker",
+            carrier="log",
+        ),
+        dn(
+            "SECRET_TOKEN", "en", "dlp_pulumi_token",
+            "Pulumi access tokens start with pul- followed by 40 hex digits.",
+            "documented prefix without a value", carrier="prose",
+        ),
+        dx(
+            "SECRET_TOKEN", "en", "dlp_vault_token",
+            "# example from the runbook\nexport VAULT_TOKEN=<<secret:0>>\n",
+            "vault_service_token", "EXAMPLE", "documented example value (EXAMPLE fill)", carrier="cli",
+        ),
+        dn(
+            "SECRET_TOKEN", "en", "dlp_vault_legacy_token",
+            "2026-10-27T08:12:44Z INFO export: wrote reports.Qm7Kx2Lp9Rt4Vb8Nw3Yz6Jh1 (300 rows)\n",
+            "s. token shape at the end of a file name", carrier="log",
+        ),
+        dl(
+            "SECRET_TOKEN", "en", "dlp_doppler_token",
+            "2026-10-27T08:12:44Z WARN doppler: rejected <<secret:0>> (45 characters)\n",
+            "doppler_cli_token_long", 17145, "dp.ct. shape with 45 instead of at most 44 characters",
+            carrier="log",
+        ),
+        dc(
+            "SECRET_TOKEN", "de", "dlp_vault_legacy_token",
+            "2026-10-27 08:12:44 INFO cache: Eintrag <<secret:0>> nach 300 s verworfen\n",
+            "vault_legacy_service_token", 17151, "s. token shape without a Vault term", carrier="log",
+            mode="strict",
+        ),
+        dc(
+            "SECRET_TOKEN", "en", "dlp_vault_legacy_token",
+            "2026-10-27T08:12:44Z INFO cache: evicted <<secret:0>> after 300s\n",
+            "vault_legacy_service_token", 17152, "s. token shape without a Vault term", carrier="log",
+            mode="strict",
+        ),
+    ],
+}
+for _label, _rows in DLP_P05_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
 

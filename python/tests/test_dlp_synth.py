@@ -217,13 +217,14 @@ def authress(value, account="acc_"):
     )
 
 
-def pypi_macaroon(value):
-    """PyPI API token: pypi- + unpadded base64url of a macaroon v2 (location pypi.org, UUID
-    identifier, one caveat, 32-byte signature; gitleaks pypi-upload-token needs
-    pypi-AgEIcHlwaS5vcmc and 50+ characters after it)."""
+def pypi_macaroon(value, location="pypi.org", signature=32):
+    """PyPI API token: pypi- + unpadded base64url of a macaroon v2 (location pypi.org or
+    test.pypi.org, UUID identifier, one caveat, 32-byte signature; gitleaks pypi-upload-token
+    needs pypi-AgEIcHlwaS5vcmc and 50+ characters after it)."""
     body = value.removeprefix("pypi-")
     raw = checks.b64url_decode(body)
-    if not value.startswith("pypi-") or raw is None or not body.startswith("AgEIcHlwaS5vcmc"):
+    header = bytes([2, 1, len(location)]) + location.encode("ascii")
+    if not value.startswith("pypi-") or raw is None or not raw.startswith(header):
         return False
     # Version 2, then fields of type, length and data; None marks an end-of-section byte.
     fields, offset = [], 1
@@ -238,7 +239,7 @@ def pypi_macaroon(value):
     return (
         offset == len(raw)
         and len(fields) == 7
-        and fields[0] == (1, b"pypi.org")
+        and fields[0] == (1, location.encode("ascii"))
         and fields[1][0] == 2
         and uuid_shaped(fields[1][1].decode("ascii"))
         and fields[2] is None
@@ -247,7 +248,7 @@ def pypi_macaroon(value):
         and fields[4] is None
         and fields[5] is None
         and fields[6][0] == 6
-        and len(fields[6][1]) == 32
+        and len(fields[6][1]) == signature
     )
 
 
@@ -591,6 +592,18 @@ CHECKS = {
     "vault_legacy_service_token": prefixed("s.", ALNUM, 24),
     "vault_batch_token": prefixed("hvb.", B64URL, 138),
     "doppler_personal_token": prefixed("dp.pt.", ALNUM, 43),
+    # P05
+    "doppler_service_token": prefixed("dp.st.prd.", ALNUM, 44),
+    "doppler_cli_token": prefixed("dp.ct.", ALNUM, 40),
+    "doppler_service_account_token": prefixed("dp.sa.", ALNUM, 42),
+    "doppler_scim_token": prefixed("dp.scim.", ALNUM, 43),
+    "doppler_audit_token": prefixed("dp.audit.", ALNUM, 44),
+    "pypi_test_upload_token": lambda v: pypi_macaroon(v, "test.pypi.org"),
+    "dockerhub_pat": prefixed("dckr_pat_", B64URL, 27),
+    "dockerhub_org_token": prefixed("dckr_oat_", B64URL, 27),
+    "cratesio_api_token": prefixed("cio", ALNUM, 32),
+    "packagist_org_token": lambda v: checks.has_valid_crc32_hex_suffix(v, "packagist_out_"),
+    "packagist_user_token": lambda v: checks.has_valid_crc32_hex_suffix(v, "packagist_uut_"),
     "prefect_api_key": prefixed("pnu_", ALNUM, 36),
     "infracost_api_key": prefixed("ico-", ALNUM, 32),
     "octopus_deploy_api_key": prefixed("API-", UPPER_ALNUM, 26),
@@ -721,6 +734,14 @@ LOOKALIKE_FAILURES = {
         CHECKS[name](v) for name in ("vault_service_token", "vault_legacy_service_token", "vault_batch_token")
     ),
     "doppler_personal_token_short": CHECKS["doppler_personal_token"],
+    # P05
+    "doppler_cli_token_long": lambda v: any(prefixed("dp.ct.", ALNUM, n)(v) for n in range(40, 45)),
+    "pypi_upload_token_no_signature": pypi_macaroon,
+    "dockerhub_pat_short": CHECKS["dockerhub_pat"],
+    "cratesio_api_token_short": CHECKS["cratesio_api_token"],
+    "packagist_token_bad_crc": lambda v: any(
+        checks.has_valid_crc32_hex_suffix(v, f"packagist_{kind}_") for kind in ("ort", "out", "uut", "cut")
+    ),
     "prefect_api_key_short": CHECKS["prefect_api_key"],
     "infracost_api_key_short": CHECKS["infracost_api_key"],
     "octopus_deploy_api_key_lower": CHECKS["octopus_deploy_api_key"],

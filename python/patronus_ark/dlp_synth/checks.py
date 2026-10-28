@@ -50,6 +50,17 @@ def has_valid_crc32_suffix(token: str, prefix: str) -> bool:
     )
 
 
+def has_valid_crc32_hex_suffix(token: str, prefix: str) -> bool:
+    """Packagist layout: ``prefix`` + 60 lower-case hex chars + CRC-32 of both as 8 hex chars."""
+    body = token.removeprefix(prefix)
+    return (
+        token.startswith(prefix)
+        and len(body) == 68
+        and all(character in "0123456789abcdef" for character in body)
+        and format(zlib.crc32((prefix + body[:60]).encode("ascii")), "08x") == body[60:]
+    )
+
+
 def base58check_decode(value: str) -> bytes | None:
     """Return the payload of a Base58Check string, or ``None`` if it is invalid."""
     if not value or any(character not in BASE58 for character in value):

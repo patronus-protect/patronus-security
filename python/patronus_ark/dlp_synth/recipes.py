@@ -15,8 +15,9 @@ carrier ``template`` with ``<<secret:N>>`` placeholders. The generator spec live
     ``alphabet[next_u64() % len(alphabet)]``.
   - ``{"checksum": kind}`` appends a check value computed over the text emitted since
     the most recent literal segment: ``crc32_base62`` (CRC-32/ISO-HDLC as 6 base62
-    digits ``0-9A-Za-z``, zero-padded; GitHub/npm token layout),
-    ``iso7064_mod11_10`` (one check digit; German USt-IdNr.) or ``bech32`` (the six
+    digits ``0-9A-Za-z``, zero-padded; GitHub/npm token layout), ``crc32_hex``
+    (CRC-32/ISO-HDLC of the most recent literal and that text as 8 lower-case hex digits;
+    Packagist tokens), ``iso7064_mod11_10`` (one check digit; German USt-IdNr.) or ``bech32`` (the six
     BIP 173 checksum characters of that text as Bech32 data, with the human-readable part
     taken from the most recent literal, which ends in the separator ``1``; upper case if
     that literal is; age keys).
@@ -93,7 +94,7 @@ _JSON_ESCAPES = {'"': '\\"', "\\": "\\\\", "\n": "\\n", "\r": "\\r", "\t": "\\t"
 _MASK = (1 << 64) - 1
 BASE62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
-CHECKSUM_LENGTHS = {"crc32_base62": 6, "iso7064_mod11_10": 1, "bech32": 6}
+CHECKSUM_LENGTHS = {"crc32_base62": 6, "crc32_hex": 8, "iso7064_mod11_10": 1, "bech32": 6}
 BECH32 = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
 _BECH32_GENERATOR = (0x3B6A57B2, 0x26508E6D, 0x1EA119FA, 0x3D4233DD, 0x2A1462B3)
 ENCODINGS = {"hex", "base64", "base64_unpadded", "base64url", "bcrypt64", "base58check"}
@@ -328,6 +329,8 @@ def checksum(kind: str, data: str, literal: str) -> str:
     """The check value of ``kind`` over ``data``, the text since ``literal`` (the most recent literal)."""
     if kind == "crc32_base62":
         return crc32_base62(data)
+    if kind == "crc32_hex":
+        return f"{zlib.crc32((literal + data).encode('ascii')):08x}"
     if kind == "iso7064_mod11_10":
         return iso7064_mod11_10(data)
     return bech32_checksum(literal, data)

@@ -88,6 +88,60 @@
       "lookalike": ["npm_bad_crc", "npm_short", "npm_long"],
       "probes": ["//registry.npmjs.org/:_authToken=<<secret:0>>", "NPM_TOKEN=<<secret:0>>"]
     },
+    "dlp_dockerhub_token": {
+      "generators": ["dockerhub_pat", "dockerhub_org_token"],
+      "lookalike": ["dockerhub_pat_short"],
+      "probes": ["DOCKERHUB_TOKEN=<<secret:0>>", "$ echo \"<<secret:0>>\" | docker login -u ci-bot --password-stdin"]
+    },
+    "dlp_pypi_token": {
+      "generators": ["pypi_upload_token", "pypi_test_upload_token"],
+      "lookalike": ["pypi_upload_token_truncated", "pypi_upload_token_no_signature"],
+      "probes": ["[pypi]\nusername = __token__\npassword = <<secret:0>>", "TWINE_PASSWORD=<<secret:0>>"]
+    },
+    "dlp_rubygems_token": {
+      "generators": ["rubygems_api_key"],
+      "lookalike": ["rubygems_api_key_upper_hex"],
+      "probes": ["GEM_HOST_API_KEY=<<secret:0>>", "---\n:rubygems_api_key: <<secret:0>>"]
+    },
+    "dlp_cratesio_token": {
+      "generators": ["cratesio_api_token"],
+      "lookalike": ["cratesio_api_token_short"],
+      "probes": ["CARGO_REGISTRY_TOKEN=<<secret:0>>", "[registry]\ntoken = \"<<secret:0>>\""]
+    },
+    "dlp_packagist_token": {
+      "generators": ["packagist_org_token", "packagist_user_token"],
+      "lookalike": ["packagist_token_bad_crc"],
+      "probes": ["COMPOSER_AUTH='{\"http-basic\": {\"repo.packagist.com\": {\"username\": \"token\", \"password\": \"<<secret:0>>\"}}}'", "$ composer config --global --auth http-basic.repo.packagist.com token <<secret:0>>"]
+    },
+    "dlp_jfrog_token": {
+      "generators": ["artifactory_api_key", "artifactory_reference_token"],
+      "lookalike": ["artifactory_api_key_short"],
+      "probes": ["ARTIFACTORY_API_KEY=<<secret:0>>", "curl -H \"X-JFrog-Art-Api: <<secret:0>>\" https://acme.jfrog.io/artifactory/api/repositories"]
+    },
+    "dlp_terraform_cloud_token": {
+      "generators": ["terraform_cloud_token"],
+      "lookalike": ["terraform_cloud_token_short"],
+      "probes": ["TF_TOKEN_app_terraform_io=<<secret:0>>", "credentials \"app.terraform.io\" {\n  token = \"<<secret:0>>\"\n}"]
+    },
+    "dlp_pulumi_token": {
+      "generators": ["pulumi_access_token"],
+      "lookalike": ["pulumi_access_token_short"],
+      "probes": ["PULUMI_ACCESS_TOKEN=<<secret:0>>", "Das Pulumi-Token <<secret:0>> stand im Build-Log."]
+    },
+    "dlp_vault_token": {
+      "generators": ["vault_service_token", "vault_batch_token"],
+      "probes": ["VAULT_TOKEN=<<secret:0>>", "curl -H \"X-Vault-Token: <<secret:0>>\" https://vault.example.com/v1/secret/data/app"]
+    },
+    "dlp_vault_legacy_token": {
+      "generators": ["vault_legacy_service_token"],
+      "lookalike": ["vault_legacy_service_token_short"],
+      "probes": ["VAULT_TOKEN=<<secret:0>>", "The Vault token for the deploy job is <<secret:0>>"]
+    },
+    "dlp_doppler_token": {
+      "generators": ["doppler_personal_token", "doppler_service_token", "doppler_cli_token", "doppler_service_account_token", "doppler_scim_token", "doppler_audit_token"],
+      "lookalike": ["doppler_personal_token_short", "doppler_cli_token_long"],
+      "probes": ["DOPPLER_TOKEN=<<secret:0>>", "$ doppler secrets download --token <<secret:0>> --no-file"]
+    },
     "dlp_stripe_key": {
       "generators": ["stripe_secret_live", "stripe_restricted_test", "stripe_secret_test_long"],
       "probes": ["STRIPE_SECRET_KEY=<<secret:0>>", "Stripe.api_key = \"<<secret:0>>\""]
@@ -270,14 +324,7 @@
     "vcs.bitbucket.client_secret": {"generators": ["bitbucket_client_secret"], "lookalike": ["bitbucket_client_secret_short"]},
     "ci.droneci.access_token": {"generators": ["droneci_access_token"], "lookalike": ["droneci_access_token_short"]},
     "ci.travisci.access_token": {"generators": ["travisci_access_token"], "lookalike": ["travisci_access_token_short"]},
-    "registry.jfrog.artifactory": {"generators": ["artifactory_api_key", "artifactory_reference_token"], "lookalike": ["artifactory_api_key_short"]},
-    "registry.pypi.upload_token": {"generators": ["pypi_upload_token"], "lookalike": ["pypi_upload_token_truncated"]},
-    "registry.rubygems.api_token": {"generators": ["rubygems_api_key"], "lookalike": ["rubygems_api_key_upper_hex"]},
     "registry.clojars.api_token": {"generators": ["clojars_deploy_token"], "lookalike": ["clojars_deploy_token_short"]},
-    "devops.terraform_cloud.token": {"generators": ["terraform_cloud_token"], "lookalike": ["terraform_cloud_token_short"]},
-    "devops.pulumi.api_token": {"generators": ["pulumi_access_token"], "lookalike": ["pulumi_access_token_short"]},
-    "devops.vault.token": {"generators": ["vault_service_token", "vault_legacy_service_token", "vault_batch_token"], "lookalike": ["vault_legacy_service_token_short"]},
-    "devops.doppler.api_token": {"generators": ["doppler_personal_token"], "lookalike": ["doppler_personal_token_short"]},
     "devops.prefect.api_token": {"generators": ["prefect_api_key"], "lookalike": ["prefect_api_key_short"]},
     "devops.infracost.api_token": {"generators": ["infracost_api_key"], "lookalike": ["infracost_api_key_short"]},
     "devops.octopus_deploy.api_key": {"generators": ["octopus_deploy_api_key"], "lookalike": ["octopus_deploy_api_key_lower"]},

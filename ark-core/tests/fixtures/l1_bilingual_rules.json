@@ -2617,6 +2617,259 @@
   },
   {
     "category": "dlp",
+    "rule_id": "dlp_dockerhub_token",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "dockerhub_pat",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "DOCKERHUB_TOKEN=${DOCKERHUB_TOKEN}",
+        "Docker-Hub-Tokens beginnen mit dckr_pat_."
+      ],
+      "en": [
+        "echo \"$DOCKERHUB_TOKEN\" | docker login -u acme --password-stdin",
+        "Organization access tokens start with dckr_oat_."
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_pypi_token",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "pypi_upload_token",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "[pypi]\nusername = __token__\npassword = <hier-token-eintragen>",
+        "PyPI-API-Tokens beginnen mit pypi-AgEIcHlwaS5vcmc."
+      ],
+      "en": [
+        "TWINE_PASSWORD=${{ secrets.PYPI_API_TOKEN }}",
+        "PyPI API tokens start with pypi- followed by a macaroon."
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_rubygems_token",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "rubygems_api_key",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "GEM_HOST_API_KEY=${RUBYGEMS_API_KEY}",
+        "RubyGems-API-Schlüssel beginnen mit rubygems_."
+      ],
+      "en": [
+        ":rubygems_api_key: <%= ENV['RUBYGEMS_API_KEY'] %>",
+        "RubyGems API keys start with rubygems_ followed by 48 hex digits."
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_cratesio_token",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "cratesio_api_token",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "CARGO_REGISTRY_TOKEN=${{ secrets.CRATES_IO_TOKEN }}",
+        "crates.io-Tokens beginnen mit cio."
+      ],
+      "en": [
+        "cargo publish --token \"$CARGO_REGISTRY_TOKEN\"",
+        "crates.io API tokens start with cio followed by 32 characters."
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_packagist_token",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "packagist_org_token",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "COMPOSER_AUTH=${COMPOSER_AUTH}",
+        "Private-Packagist-Tokens beginnen mit packagist_out_."
+      ],
+      "en": [
+        "composer config --global --auth http-basic.repo.packagist.com token \"$PACKAGIST_TOKEN\"",
+        "User tokens start with packagist_uut_ and end in a CRC32 checksum."
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_jfrog_token",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "artifactory_api_key",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "ARTIFACTORY_API_KEY=${ARTIFACTORY_API_KEY}",
+        "Artifactory-API-Keys beginnen mit AKCp."
+      ],
+      "en": [
+        "JFROG_CLI_API_KEY: ${{ secrets.ARTIFACTORY_API_KEY }}",
+        "Reference tokens start with cmVmd."
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_terraform_cloud_token",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "terraform_cloud_token",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "credentials \"app.terraform.io\" {\n  token = var.tfe_token\n}",
+        "Terraform-Cloud-Tokens enthalten .atlasv1. in der Mitte."
+      ],
+      "en": [
+        "TF_TOKEN_app_terraform_io=${TFC_TOKEN}",
+        "HCP Terraform API tokens contain .atlasv1. after 14 characters."
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_pulumi_token",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "pulumi_access_token",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "PULUMI_ACCESS_TOKEN=${PULUMI_ACCESS_TOKEN}",
+        "Pulumi-Tokens beginnen mit pul-."
+      ],
+      "en": [
+        "PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}",
+        "Pulumi access tokens start with pul- followed by 40 hex digits."
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_vault_token",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "vault_service_token",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "export VAULT_TOKEN=\"$(cat /vault/secrets/token)\"",
+        "Service-Tokens beginnen mit hvs., Batch-Tokens mit hvb."
+      ],
+      "en": [
+        "X-Vault-Token: {{ vault_token }}",
+        "Vault 1.10 service tokens start with hvs."
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_vault_legacy_token",
+    "de": "VAULT_TOKEN=<<secret\u003a0>>",
+    "en": "Vault token: <<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "vault_legacy_service_token",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "VAULT_TOKEN=${VAULT_TOKEN}",
+        "Alte Vault-Tokens beginnen mit s. und haben 24 Zeichen."
+      ],
+      "en": [
+        "vault login -method=userpass username=deploy",
+        "Legacy Vault service tokens start with s. followed by 24 characters."
+      ]
+    },
+    "language_neutral": false
+  },
+  {
+    "category": "dlp",
+    "rule_id": "dlp_doppler_token",
+    "de": "<<secret\u003a0>>",
+    "en": "<<secret\u003a0>>",
+    "secrets": [
+      {
+        "gen": "doppler_service_token",
+        "seed": 1
+      }
+    ],
+    "hard_negatives": {
+      "de": [
+        "DOPPLER_TOKEN=${DOPPLER_TOKEN}",
+        "Doppler-Service-Tokens beginnen mit dp.st."
+      ],
+      "en": [
+        "doppler run --token \"$DOPPLER_TOKEN\" -- npm start",
+        "Doppler personal tokens start with dp.pt."
+      ]
+    },
+    "language_neutral": true
+  },
+  {
+    "category": "dlp",
     "rule_id": "dlp_stripe_key",
     "de": "<<secret\u003a0>>",
     "en": "<<secret\u003a0>>",
