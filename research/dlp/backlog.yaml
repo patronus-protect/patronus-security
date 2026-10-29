@@ -369,7 +369,7 @@ tasks:
   - {id: P02, title: "LLM/AI II: Azure OpenAI (context), LangSmith, Pinecone, Weights & Biases, ElevenLabs, AssemblyAI, Deepgram, Stability", type: new-entity, deps: [P01]}
   - {id: P03, title: "Hyperscalers: AWS session token/MWS, Azure Storage AccountKey + SAS + Entra client secret, GCP service account JSON, Alibaba, Tencent, IBM Cloud, Oracle OCI", type: new-entity, deps: [F05, G-URL]}
   - {id: P05, title: "DevOps/registries: Docker Hub PAT, PyPI (macaroon structure), RubyGems, NuGet, crates.io, Packagist, JFrog, Terraform Cloud, Pulumi, Vault, Doppler", type: new-entity, deps: [F04], status: done}
-  - {id: P06, title: "CI/hosting: Bitbucket, Azure DevOps PAT (context), CircleCI, Travis, Vercel, Netlify, Fly.io, Heroku, Render, Railway, Cloudflare, DigitalOcean", type: new-entity, deps: [P05]}
+  - {id: P06, title: "CI/hosting: Bitbucket, Azure DevOps PAT (context), CircleCI, Travis, Vercel, Netlify, Fly.io, Heroku, Render, Railway, Cloudflare, DigitalOcean", type: new-entity, deps: [P05], status: done}
   - {id: P07, title: "Observability: Datadog, New Relic, Sentry (token + DSN), Grafana (cloud/service account), Dynatrace, Splunk HEC, Elastic, Honeycomb, PagerDuty", type: new-entity, deps: [K04]}
   - {id: P08, title: "Communication/webhooks: Slack/Teams/Discord webhook URLs, Telegram bot, Twilio (SK/AC + context), SendGrid, Mailgun, Mailchimp, Postmark, Brevo", type: new-entity, deps: [F-PROV]}
   - {id: P09, title: "Payment/commerce: PayPal/Braintree, Square, Adyen, Mollie, Klarna, Shopify (all token types), Coinbase, Plaid, GoCardless", type: new-entity, deps: [F-PROV]}
