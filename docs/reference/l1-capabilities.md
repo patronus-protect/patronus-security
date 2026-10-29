@@ -12,9 +12,9 @@ What ARK L1 detects (PII and DLP), how it compares with Presidio and the secret 
 | | PII | DLP |
 | --- | --- | --- |
 | Result labels (entity groups) | 91 | 23 |
-| Regex rules | 152 | 94 (+5 relationship rules) |
+| Regex rules | 152 | 111 (+5 relationship rules) |
 | Checksum-validated units (count rule T03) | 71 (Presidio 2.2.364: 35) | – |
-| Rules with a `checksum` or `structure` check | 105 | 8 |
+| Rules with a `checksum` or `structure` check | 105 | 13 |
 | Default state | all rules on | credential/secret groups on, broader families opt-in |
 | Compared with | Presidio 2.2.364 (tuned) | gitleaks 8.30.1, TruffleHog 3.97.9, detect-secrets 1.5.0 |
 | Overall F1 (2026-10-29) | `balanced`: neutral 67.3, presidio_favored 69.7 | default profile: 88.6 (P 99.3, R 80.0) |
@@ -293,10 +293,10 @@ Legend: `ARK x / best baseline y (name)` = exact F1 of ARK and of the best basel
 
 | Result label | Family | Default | Rules | Entities | Gold | F1 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `API_KEY` | provider_secret | on | 10 | 8 | 320 | ARK 100.0 / best baseline 99.5 (TruffleHog) |
+| `API_KEY` | provider_secret | on | 19 | 14 | 320 | ARK 100.0 / best baseline 99.5 (TruffleHog) |
 | `CLOUD_KEY` | provider_secret | on | 18 | 13 | 200 | ARK 100.0 / best baseline 49.1 (gitleaks) |
 | `PAYMENT_KEY` | provider_secret | on | 2 | 2 | 80 | ARK 100.0 / best baseline 39.2 (gitleaks) |
-| `SECRET_TOKEN` | provider_secret | on | 27 | 24 | 360 | ARK 99.2 / best baseline 71.7 (TruffleHog) |
+| `SECRET_TOKEN` | provider_secret | on | 35 | 28 | 360 | ARK 99.2 / best baseline 71.7 (TruffleHog) |
 | `CREDENTIAL` | generic_credential | on | 10 | 9 | 320 | ARK 96.8 / best baseline 23.7 (gitleaks) |
 | `PASSWORD_HASH` | generic_credential | on | 1 | 1 | 40 | ARK 91.9 / best baseline 0.0 (gitleaks, TruffleHog, detect-secrets) |
 | `PRIVATE_KEY` | key_material | on | 2 | 1 | 37 | ARK 88.1 / best baseline 56.1 (detect-secrets) |
@@ -363,6 +363,13 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `hosting.railway.api_token` | shared | `CLOUD_KEY` | `dlp_railway_token` | format | on | TruffleHog: `RailwayApp` |
 | `hosting.cloudflare.api_key` | shared | `CLOUD_KEY` | `dlp_cloudflare_api_key`, `dlp_cloudflare_origin_ca_key` | format | on | gitleaks: `cloudflare-api-key`, `cloudflare-global-api-key`, `cloudflare-origin-ca-key`; TruffleHog: `CloudflareApiToken`, `CloudflareCaKey` |
 | `hosting.digitalocean.token` | shared | `CLOUD_KEY` | `dlp_digitalocean_token` | format | on | gitleaks: `digitalocean-access-token`, `digitalocean-pat`, `digitalocean-refresh-token`; TruffleHog: `DigitalOceanV2` |
+| `observability.datadog.access_token` | shared | `API_KEY` | `dlp_datadog_api_key` | format | on | gitleaks: `datadog-access-token`; TruffleHog: `DatadogToken`, `DatadogApikey` |
+| `observability.newrelic.key` | shared | `API_KEY` | `dlp_newrelic_user_api_key`, `dlp_newrelic_insert_key`, `dlp_newrelic_license_key`, `dlp_newrelic_legacy_license_key` | format | on | gitleaks: `new-relic-insert-key`, `new-relic-user-api-key`; TruffleHog: `NewRelicPersonalApiKey`, `NewRelicUserKey`, `NewRelicInsightsInsertKey`, `NewRelicLicenseKey` |
+| `observability.sentry.token` | shared | `SECRET_TOKEN` | `dlp_sentry_user_token`, `dlp_sentry_org_token`, `dlp_sentry_auth_token` | structure | on | gitleaks: `sentry-access-token`, `sentry-org-token`, `sentry-user-token`; TruffleHog: `SentryToken`, `SentryOrgToken` |
+| `observability.grafana.token` | shared | `SECRET_TOKEN` | `dlp_grafana_api_key`, `dlp_grafana_cloud_token`, `dlp_grafana_service_account_token` | checksum | on | gitleaks: `grafana-api-key`, `grafana-cloud-api-token`, `grafana-service-account-token`; TruffleHog: `Grafana`, `GrafanaServiceAccount` |
+| `observability.dynatrace.api_token` | shared | `SECRET_TOKEN` | `dlp_dynatrace_token` | format | on | gitleaks: `dynatrace-api-token` |
+| `observability.honeycomb.api_key` | shared | `API_KEY` | `dlp_honeycomb_api_key` | format | on | TruffleHog: `Honeycomb` |
+| `observability.pagerduty.api_key` | shared | `API_KEY` | `dlp_pagerduty_api_key` | format | on | TruffleHog: `PagerDutyApiKey` |
 | `payment.stripe.secret_key` | shared | `PAYMENT_KEY` | `dlp_stripe_key` | format | on | gitleaks: `stripe-access-token`; TruffleHog: `Stripe`; detect-secrets: `StripeDetector` |
 | `comm.slack.token` | shared | `SECRET_TOKEN` | `dlp_slack_token` | format | on | gitleaks: `slack-bot-token`, `slack-user-token`, `slack-legacy-bot-token`, `slack-legacy-token`, `slack-legacy-workspace-token`; TruffleHog: `Slack`; detect-secrets: `SlackDetector` |
 | `comm.discord.bot_token` | shared | `SECRET_TOKEN` | `dlp_discord_token` | format | on | TruffleHog: `DiscordBotToken`; detect-secrets: `DiscordBotTokenDetector` |
@@ -387,6 +394,9 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `registry.cratesio.api_token` | ark_only | `SECRET_TOKEN` | `dlp_cratesio_token` | format | on | – |
 | `registry.packagist.token` | ark_only | `SECRET_TOKEN` | `dlp_packagist_token` | checksum | on | – |
 | `hosting.render.api_key` | ark_only | `CLOUD_KEY` | `dlp_render_api_key` | format | on | – |
+| `observability.sentry.dsn_secret` | ark_only | `API_KEY` | `dlp_sentry_dsn_secret` | format | on | – |
+| `observability.splunk.hec_token` | ark_only | `SECRET_TOKEN` | `dlp_splunk_hec_token` | format | on | – |
+| `observability.elastic.api_key` | ark_only | `API_KEY` | `dlp_elastic_api_key` | structure | on | – |
 | `crypto.ethereum.private_key` | ark_only | `CRYPTO_KEY` | `dlp_eth_private_key` | format | on | – |
 | `crypto.bitcoin.wif` | ark_only | `CRYPTO_KEY` | `dlp_btc_wif` | checksum | on | – |
 | `credential.url_userinfo_token` | ark_only | `SECRET_TOKEN` | `dlp_url_userinfo_token` | none | on | – |
@@ -430,11 +440,6 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `hosting.defined_networking.api_token` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `defined-networking-api-token` |
 | `hosting.fastly.api_token` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `fastly-api-token`; TruffleHog: `FastlyPersonalToken` |
 | `hosting.settlemint.access_token` | baseline_only | `CLOUD_KEY` | – | – | – | gitleaks: `settlemint-application-access-token`, `settlemint-personal-access-token`, `settlemint-service-access-token` |
-| `observability.datadog.access_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `datadog-access-token` |
-| `observability.newrelic.key` | baseline_only | `API_KEY` | – | – | – | gitleaks: `new-relic-insert-key`, `new-relic-user-api-key` |
-| `observability.sentry.token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `sentry-access-token`, `sentry-org-token`, `sentry-user-token` |
-| `observability.grafana.token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `grafana-api-key`, `grafana-cloud-api-token`, `grafana-service-account-token` |
-| `observability.dynatrace.api_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `dynatrace-api-token` |
 | `observability.sumologic.access_token` | baseline_only | `API_KEY` | – | – | – | gitleaks: `sumologic-access-token` |
 | `comm.webhook_url` | baseline_only | `SECRET_TOKEN` | – | – | – | gitleaks: `slack-webhook-url`, `microsoft-teams-webhook`; TruffleHog: `SlackWebhook`, `MicrosoftTeamsWebhook`; detect-secrets: `SlackDetector` |
 | `comm.discord.api_credentials` | baseline_only | `API_KEY` | – | – | – | gitleaks: `discord-api-token`, `discord-client-secret` |
@@ -514,7 +519,7 @@ One row per entity of `research/dlp/entity_map.yaml`. Scope: `shared` (ARK and a
 | `public.ip_address` | out_of_scope | – | – | – | – | detect-secrets: `IPPublicDetector` |
 | `public.legal_finance_document` | out_of_scope | – | – | – | – | – |
 
-Entities: 54 shared, 21 ARK only, 99 baseline only, 11 out of scope.
+Entities: 61 shared, 24 ARK only, 94 baseline only, 11 out of scope.
 
 #### F1 and recall per entity
 
@@ -557,6 +562,13 @@ Exact F1 and recall in percent on the dev split, measured 2026-10-29; same cells
 | `hosting.railway.api_token` | shared | `CLOUD_KEY` | 0 | no gold | no gold |
 | `hosting.cloudflare.api_key` | shared | `CLOUD_KEY` | 0 | no gold | no gold |
 | `hosting.digitalocean.token` | shared | `CLOUD_KEY` | 0 | no gold | no gold |
+| `observability.datadog.access_token` | shared | `API_KEY` | 0 | no gold | no gold |
+| `observability.newrelic.key` | shared | `API_KEY` | 0 | no gold | no gold |
+| `observability.sentry.token` | shared | `SECRET_TOKEN` | 0 | no gold | no gold |
+| `observability.grafana.token` | shared | `SECRET_TOKEN` | 0 | no gold | no gold |
+| `observability.dynatrace.api_token` | shared | `SECRET_TOKEN` | 0 | no gold | no gold |
+| `observability.honeycomb.api_key` | shared | `API_KEY` | – | – | – |
+| `observability.pagerduty.api_key` | shared | `API_KEY` | – | – | – |
 | `payment.stripe.secret_key` | shared | `PAYMENT_KEY` | 40 | ARK 100.0 / best baseline 49.4 (gitleaks) | ARK 100.0 / best baseline 95.0 (gitleaks) |
 | `comm.slack.token` | shared | `SECRET_TOKEN` | 40 | ARK 100.0 / best baseline 72.7 (TruffleHog) | ARK 100.0 / best baseline 100.0 (gitleaks, TruffleHog, detect-secrets) |
 | `comm.discord.bot_token` | shared | `SECRET_TOKEN` | 40 | ARK 100.0 / best baseline 50.0 (detect-secrets) | ARK 100.0 / best baseline 100.0 (detect-secrets) |
@@ -581,6 +593,9 @@ Exact F1 and recall in percent on the dev split, measured 2026-10-29; same cells
 | `registry.cratesio.api_token` | ark_only | `SECRET_TOKEN` | 0 | no gold | no gold |
 | `registry.packagist.token` | ark_only | `SECRET_TOKEN` | 0 | no gold | no gold |
 | `hosting.render.api_key` | ark_only | `CLOUD_KEY` | 0 | no gold | no gold |
+| `observability.sentry.dsn_secret` | ark_only | `API_KEY` | – | – | – |
+| `observability.splunk.hec_token` | ark_only | `SECRET_TOKEN` | – | – | – |
+| `observability.elastic.api_key` | ark_only | `API_KEY` | – | – | – |
 | `crypto.ethereum.private_key` | ark_only | `CRYPTO_KEY` | 40 | ARK 100.0 / no baseline | ARK 100.0 / no baseline |
 | `crypto.bitcoin.wif` | ark_only | `CRYPTO_KEY` | 40 | ARK 100.0 / no baseline | ARK 100.0 / no baseline |
 | `credential.url_userinfo_token` | ark_only | `SECRET_TOKEN` | 0 | no gold | no gold |
@@ -624,11 +639,6 @@ Exact F1 and recall in percent on the dev split, measured 2026-10-29; same cells
 | `hosting.defined_networking.api_token` | baseline_only | `CLOUD_KEY` | 0 | no gold | no gold |
 | `hosting.fastly.api_token` | baseline_only | `CLOUD_KEY` | 0 | no gold | no gold |
 | `hosting.settlemint.access_token` | baseline_only | `CLOUD_KEY` | 0 | no gold | no gold |
-| `observability.datadog.access_token` | baseline_only | `API_KEY` | 0 | no gold | no gold |
-| `observability.newrelic.key` | baseline_only | `API_KEY` | 0 | no gold | no gold |
-| `observability.sentry.token` | baseline_only | `API_KEY` | 0 | no gold | no gold |
-| `observability.grafana.token` | baseline_only | `API_KEY` | 0 | no gold | no gold |
-| `observability.dynatrace.api_token` | baseline_only | `API_KEY` | 0 | no gold | no gold |
 | `observability.sumologic.access_token` | baseline_only | `API_KEY` | 0 | no gold | no gold |
 | `comm.webhook_url` | baseline_only | `SECRET_TOKEN` | 0 | no gold | no gold |
 | `comm.discord.api_credentials` | baseline_only | `API_KEY` | 0 | no gold | no gold |

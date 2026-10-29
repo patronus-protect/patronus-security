@@ -254,6 +254,27 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   einem Provider-Abschnitt (`heroku:\n  api_key: …`, Terraform `provider "cloudflare" { api_token
   = … }`) bleibt bei den generischen Regeln. Drone CI, OpenShift, Defined Networking, Fastly und
   SettleMint (Entity-Map `backlog: P06`) bleiben `baseline_only`.
+  Seit P07 decken siebzehn Provider-Regeln Observability ab. Tokens sind `SECRET_TOKEN`
+  (`access_token`), Schlüssel `API_KEY` (`api_key`). Präfix-Regeln mit Token-Grenze: New Relic
+  User Key (`NRAK-`), Insert Key (`NRII-`, 32 oder 25 Zeichen) und Lizenzschlüssel (32 Hex oder
+  `eu01xx` und 26, Suffix `FFFFNRAL`), Sentry User Token (`sntryu_`), Grafana-Dienstkonto-Token
+  (`glsa_`, Prüfsumme: CRC32 von `glsa_` und Secret, Little-Endian-Hex wie in Grafanas
+  `satokengen`) und Dynatrace (`dt0c01`, `dt0s01`–`dt0s16`). Base64-Tokens ohne Token-Grenze werden
+  dekodiert und als JSON geprüft (Struktur): Sentry Org Token (`sntrys_`, Payload mit numerischem
+  `iat`), alter Grafana-API-Key (`{"k","n","id"}`) und Grafana Cloud (`glc_`, Objekt mit `k`).
+  Schlüsselgebunden (`provider_key!`): Datadog (32 Hex oder 40 Zeichen unter `datadog`/`dd_`/
+  `ddApi…`), New-Relic-Lizenzschlüssel ohne Suffix (40 Hex), alte Sentry-Tokens (64 Hex), Splunk HEC
+  (GUID, auch `Authorization: Splunk`), Elasticsearch (`id:api_key` oder dessen Base64, auch
+  `Authorization: ApiKey`; Struktur), Honeycomb (22 Zeichen beider Schreibweisen oder 32 Hex, auch
+  `x-honeycomb-team` und `OTEL_EXPORTER_OTLP_HEADERS`) und PagerDuty (20 Zeichen oder 32-Hex-
+  Integration-Key; das Schema `Token token=` teilt PagerDuty mit Rails, dort nur mit `pagerduty` auf
+  der Zeile oder bis zu fünf Zeilen darüber). Vom Sentry-DSN zählt nur der Secret Key des alten
+  Formats (`https://<public>:<secret>@host/<projekt>`); ein DSN mit dem Public Key allein ist laut
+  Sentry öffentlich und kein Treffer, ebenso das Datadog-Client-Token (`pub` und 32 Hex) für
+  Browser-SDKs, auch nicht unter einem generischen Schlüssel (`value_shape`, `PublicKey`). Ohne
+  belegbare Längenangabe bleiben die präfixierten Honeycomb-Ingest-Keys ohne eigene Regel (unter
+  einem Honeycomb-Schlüssel greifen die generischen Regeln); Sumo Logic (Entity-Map
+  `backlog: P07`) bleibt `baseline_only`.
 - Validatoren sind schwach: `is_secret_value` prüft nur Länge, Platzhalter und Env-Referenzen.
   Prüfsummen fehlen ganz: JWT-Struktur und PEM/DER (Base58Check für WIF seit
   K08/F02, GitHub CRC32 seit F03, npm CRC32 seit F04).
