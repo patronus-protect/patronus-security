@@ -9,8 +9,8 @@
 //! value with its country prefix without a field name, where the prefix, the
 //! form and the check digit carry the finding. Uppercase prefixes only; the
 //! value must stand alone (`context::stands_alone`). A bare Partita IVA (11
-//! digits without `IT`), a bare Spanish CIF (without `ES`) and a bare Polish NIP
-//! (without `PL`) also need a VAT term nearby or as their key.
+//! digits without `IT`) and a bare Spanish CIF (without `ES`) also need a VAT
+//! term nearby or as their key, a bare Polish NIP (without `PL`) a NIP term.
 use super::{pii::PiiPattern, score::ValidatorStrength, validators};
 
 /// `DE136695976`, `DE 136 695 976`, `DE.136.695.976`, `DE-136-695-976`.
@@ -348,8 +348,8 @@ pub(super) const VAT_ID_PL: PiiPattern = PiiPattern {
 
 /// A bare NIP, the Polish VAT ID without `PL` (A13): "NIP: 5260250995",
 /// `{"nip": "526-025-09-95"}`. Ten digits with a mod-11 digit prove too little
-/// alone; like the bare Partita IVA it needs a VAT or NIP term on either side or
-/// as the structural key.
+/// alone; it needs a NIP term on either side or as the structural key
+/// (`PiiPipeline::allows_match`), a generic VAT term is not enough.
 pub(super) const VAT_ID_PL_PROXIMITY: PiiPattern = PiiPattern {
     name: "pii_vat_id_pl_proximity",
     pattern: r"\b[0-9]{3}[ \-]?(?:[0-9]{3}[ \-]?[0-9]{2}[ \-]?[0-9]{2}|[0-9]{2}[ \-]?[0-9]{2}[ \-]?[0-9]{3})\b",

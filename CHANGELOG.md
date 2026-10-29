@@ -40,11 +40,12 @@ result shapes may be breaking for downstream users, and is called out explicitly
   PL) stands near it or is its key, also as a CSV cell; bare runs of nine, eleven or fourteen digits
   are never reported. The NIP reuses the B16 validator of the Polish VAT ID: the new
   `pii_vat_id_pl_proximity` reports a bare NIP (ten digits, also `NNN-NNN-NN-NN` or
-  `NNN-NN-NN-NNN`) under `VAT_ID_PL` with a VAT or NIP term (new lexicon `pii.pl_nip`), scored
-  modes only, like the bare Partita IVA and CIF, so it is no second M3 unit; the digits after
+  `NNN-NN-NN-NNN`) under `VAT_ID_PL` when a NIP term (new lexicon `pii.pl_nip`) decides or is its
+  key, scored modes only (a generic VAT term near ten valid digits is as often the spaced VAT ID
+  of another country, `SK 928 762 01 99`, or another number such as an NPI), like the bare Partita IVA and CIF, so it is no second M3 unit; the digits after
   `PL `/`PL-` stay the body of the VAT ID. The `presidio_only` id `pii.pl.pesel` becomes `shared`,
   `pii.pl.regon` is new and `ark_only`; M3 ARK 69 → 71, shared 28 → 29. New `rust/tests/pii_pl.rs`,
-  66 new `pii_l1` rows (DE, EN, PL), rule fixture entries.
+  68 new `pii_l1` rows (DE, EN, PL), rule fixture entries.
   **Detection change** (`strict`: PESEL and REGON with a term or key; `balanced`/`recall`: also the
   bare NIP with a term). The rule regexes are linear and bounded.
 - Spanish NIF/NIE and the Italian codice fiscale with check letters, bare CIF (B-ESIT: A11, A12).

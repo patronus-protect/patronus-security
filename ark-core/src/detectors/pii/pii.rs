@@ -705,9 +705,25 @@ impl NativeRegexDetector for PiiPipeline {
             }
             rule_id @ ("pii_nif_es_context_free"
             | "pii_nie_es_context_free"
-            | "pii_vat_id_es_proximity"
-            | "pii_vat_id_pl_proximity") => {
+            | "pii_vat_id_es_proximity") => {
                 !vat_body(rule_id, text, captures.get(0).unwrap().start())
+            }
+            // Ten valid digits near a generic VAT term are as often the VAT ID of
+            // another country (`SK 928 762 01 99`) or another number (an NPI): the
+            // deciding term or key of a bare NIP is a NIP term.
+            rule_id @ "pii_vat_id_pl_proximity" => {
+                let value = captures.get(0).unwrap().range();
+                !vat_body(rule_id, text, value.start)
+                    && context::structure_evidence(
+                        prepared.structure(),
+                        value.clone(),
+                        pattern.entity_group,
+                    )
+                    .unwrap_or_else(|| {
+                        context::evidence(text, (value.start, value.end), pattern.entity_group)
+                    })
+                    .anchor
+                        == Some("pii.pl_nip")
             }
             "pii_passport_number_de_context_free"
             | "pii_identity_card_number_de_context_free"

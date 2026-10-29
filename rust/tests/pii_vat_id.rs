@@ -524,8 +524,9 @@ fn every_country_has_its_own_scored_only_checksum_rule() {
             "{rule}"
         );
     }
-    // Only the bare Partita IVA (11 digits without `IT`), the bare CIF
-    // (without `ES`, B-ESIT) and the bare NIP (without `PL`, A13) need a VAT term.
+    // Only the bare Partita IVA (11 digits without `IT`) and the bare CIF
+    // (without `ES`, B-ESIT) need a VAT term, the bare NIP (without `PL`, A13) a
+    // NIP term.
     let bound: Vec<_> = RULES
         .iter()
         .filter(|(rule, ..)| pattern(rule).requires_context)

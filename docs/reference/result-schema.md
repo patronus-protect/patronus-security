@@ -429,8 +429,8 @@ or CIF term, like the bare Partita IVA. Two Polish numbers with a check digit (A
 (`PL_PESEL`, eleven digits with the birth date and a check digit weighted 1-3-7-9 mod 10;
 `02070803628`) and the REGON (`PL_REGON`, nine digits or fourteen of a local unit, weighted mod 11;
 `123456785`). They are reported in every mode with a term (`PESEL`, `REGON`) or as a key, never
-bare. A bare NIP (`NIP: 5260250995`) is a `VAT_ID_PL` in `balanced`/`recall` with a VAT or NIP
-term. The German document number rules keep
+bare. A bare NIP (`NIP: 5260250995`) is a `VAT_ID_PL` in `balanced`/`recall` with a NIP term
+(a generic VAT term is not enough). The German document number rules keep
 their format check in every mode, since a printed nine-character serial carries no check digit. A context-bound rule (`pii_phone_de_national_proximity`: a national number such as
 `ist unter 0176 90817263 erreichbar`) reports only with a support term and no nearer counter term,
 in every mode including `strict`, and then scores at least `0.50`. Validators decide in every

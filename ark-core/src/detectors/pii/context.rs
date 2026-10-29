@@ -148,7 +148,7 @@ pub static SUPPORT_LEXICON: &[(&str, &[&str])] = &[
     ("VAT_ID_LU", &["pii.vat_identifier"]),
     ("VAT_ID_LV", &["pii.vat_identifier"]),
     ("VAT_ID_MT", &["pii.vat_identifier"]),
-    ("VAT_ID_PL", &["pii.vat_identifier", "pii.pl_nip"]),
+    ("VAT_ID_PL", &["pii.pl_nip", "pii.vat_identifier"]),
     ("VAT_ID_PT", &["pii.vat_identifier"]),
     ("VAT_ID_RO", &["pii.vat_identifier"]),
     ("VAT_ID_SE", &["pii.vat_identifier"]),
