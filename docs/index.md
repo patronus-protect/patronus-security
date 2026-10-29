@@ -28,6 +28,11 @@ while (event := scanner.consume_next_event(timeout=1.0)) is not None:
         break  # terminal "finished" event
 ```
 
+!!! tip "Only need PII, DLP and prompt injection?"
+    [Ark Core](getting-started/core.md) (`patronus-ark-core`) runs the same native L1 rules plus
+    optional local Wolf Defender inference, synchronously and without the queue or L2/L3 models.
+    It is licensed MIT OR Apache-2.0.
+
 ## Why layered
 
 Each category is scanned by up to three layers, escalating only when needed:
@@ -52,7 +57,8 @@ material for four different needs:
 
 - **[Getting started](getting-started/installation.md)**
 
-    Install the library and run your first scan. Start here if you are new.
+    Install the library and run your first scan. Start here if you are new, and see
+    [Ark Core](getting-started/core.md) for the lightweight L1 + Wolf package.
 
 - **[Tutorials](USAGE.md)**
 
@@ -90,6 +96,8 @@ Eleven scan categories cover prompt-level, data-level, and agentic-tool-level ri
 See [Categories](concepts/categories.md) for what each one classifies and which layers back it.
 
 ## License
+
+Ark Core, distributed as `patronus-ark-core`, is licensed **MIT OR Apache-2.0**.
 
 Patronus Ark, distributed as `patronus-ark`, is **dual-licensed**:
 

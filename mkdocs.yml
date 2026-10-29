@@ -86,6 +86,7 @@ nav:
   - Getting started:
       - Installation: getting-started/installation.md
       - Quickstart: getting-started/quickstart.md
+      - "Ark Core: L1 and Wolf only": getting-started/core.md
   - Tutorials:
       - Examples walkthrough: USAGE.md
   - How-to guides:
