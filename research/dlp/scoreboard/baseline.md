@@ -8,6 +8,26 @@ code). Alle Zahlen stammen aus dem **Dev-Split** (`$ARK_L1_DEV_DATA`, Manifest-S
 kommt mit H06. Lücken stehen am Ende als TRIAGE-Kandidaten; der Backlog wird erst im nächsten
 `TRIAGE`-Lauf ergänzt.
 
+## Aktueller Stand: Scoreboard 2026-10-29
+
+Gemessen auf `main` `9cb48cc`, Dev-Split, Default-Profil; Snapshot
+[`research/scoreboard/2026-10-29.json`](../../scoreboard/2026-10-29.json). Die Abschnitte darunter sind die
+Historie (E14, Stand 2026-10-19/20).
+
+| Tool | P | R | F1 exakt | HN-FP (Spans) | Code-FP/MB | Doku-FP/MB |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| ark | 99,3 | 80,0 | **88,6** | 10 | 0,053 | 0,133 |
+| gitleaks | 49,1 | 53,4 | 51,1 | 974 | 0,212 | 0,0 |
+| trufflehog | 63,2 | 36,4 | 46,2 | 326 | 1,430 | 0,0 |
+| detect-secrets | 33,9 | 51,6 | 40,9 | 1 731 | 36,283 | 0,0 |
+
+| Meilenstein | Stand 2026-10-29 (2026-10-24) | Urteil |
+|---|---|---|
+| M1 Provider-Parität | Recall ≥ max(gitleaks, TruffleHog) auf allen 20 gemeinsamen Entitäten mit Gold; Code-FP/MB 0,053 (0,13) gegen gitleaks 0,21 | erfüllt |
+| M2 Generische Secrets | CREDENTIAL F1 ARK 96,8 (96,8) gegen gitleaks 23,7 | erfüllt |
+| M3 Breite | 62/206 gitleaks-Regeln gemappt, 30,1 % (38/206); 72 Secret-Regeln / 60 Entitäten (40 / 36); 7 Offline-Strukturprüfungen (4); 15 Klassen ohne Baseline-Pendant (15) | verfehlt |
+| M4 Latenz | 100 KiB p95 11,7 ms (14,0), gemessen unter Runner-Last; Durchsatz 8,16 MiB/s (8,18) gegen gitleaks 4,16 | erfüllt |
+
 ## Datenlage und Reproduktion
 
 | Komponente | Umfang | bewertet |
