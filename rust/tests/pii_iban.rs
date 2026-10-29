@@ -252,13 +252,21 @@ fn every_registry_country_is_found_compact_grouped_and_lowercase() {
         ] {
             let field = format!("IBAN: {value}");
             for mode in MODES {
-                assert_eq!(ibans(&field, mode), [value.clone()], "{mode:?}: {field}");
+                assert_eq!(
+                    ibans(&field, mode),
+                    std::slice::from_ref(&value),
+                    "{mode:?}: {field}"
+                );
             }
             for prose in [
                 format!("Bitte überweisen Sie auf {value} bis Freitag."),
                 format!("Please wire the amount to {value} by Friday."),
             ] {
-                assert_eq!(ibans(&prose, PiiMode::Strict), [value.clone()], "{prose}");
+                assert_eq!(
+                    ibans(&prose, PiiMode::Strict),
+                    std::slice::from_ref(&value),
+                    "{prose}"
+                );
             }
         }
     }
