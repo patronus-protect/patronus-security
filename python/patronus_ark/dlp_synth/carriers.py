@@ -192,9 +192,10 @@ def hard_negative_value(generator: str, variant: str) -> str:
     except KeyError:
         raise CarrierError(f"unknown generator {generator!r}") from None
     parts = []
-    since_literal = literal = ""
+    since_literal = literal = before_literal = ""
     for segment in segments:
         if "lit" in segment:
+            before_literal = "".join(parts)
             parts.append(segment["lit"])
             since_literal, literal = "", segment["lit"]
             continue
@@ -202,7 +203,7 @@ def hard_negative_value(generator: str, variant: str) -> str:
             parts.append(_fill(alphabets[segment["alphabet"]], segment["len"], variant))
         elif "checksum" in segment:
             check = "0" * recipes.CHECKSUM_LENGTHS[segment["checksum"]]
-            valid = recipes.checksum(segment["checksum"], since_literal, literal)
+            valid = recipes.checksum(segment["checksum"], since_literal, literal, before_literal)
             parts.append(check if check != valid else "1" * len(check))
         else:
             parts.append(_hard_negative_encoded(segment, alphabets, variant))

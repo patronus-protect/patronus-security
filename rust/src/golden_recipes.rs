@@ -9,7 +9,8 @@
 //! alphabet segments drawing `alphabet[next_u64() % alphabet.len()]` per
 //! character, checksum segments (`crc32_base62`, `iso7064_mod11_10`, `bech32`
 //! under the HRP of the last literal) over the text since the last literal
-//! (`crc32_hex` over the last literal and that text), and encoded segments that build bytes from
+//! (`crc32_hex` over the last literal and that text, `crc32_hex_le` over the text before the
+//! last literal as little-endian hex), and encoded segments that build bytes from
 //! hex/ASCII/random/alphabet parts and emit them as hex, base64 (padded,
 //! optionally wrapped), unpadded base64, base64url, bcrypt radix-64 or
 //! Base58Check. Placeholders may encode (`<<secret:N|base64>>`, `hex`, `url`,
@@ -217,6 +218,7 @@ fn checksum_length(kind: &str) -> Option<usize> {
     match kind {
         "crc32_base62" => Some(6),
         "crc32_hex" => Some(8),
+        "crc32_hex_le" => Some(8),
         "iso7064_mod11_10" => Some(1),
         "bech32" => Some(6),
         _ => None,
@@ -685,13 +687,16 @@ impl GeneratorSet {
     ) -> Result<String, RecipeError> {
         let mut value = String::new();
         let mut filled = false;
-        // Checksums cover the text emitted since the most recent literal.
+        // Checksums cover the text emitted since the most recent literal
+        // (`crc32_hex_le`: the text before it).
         let mut since_literal = String::new();
         let mut literal = "";
+        let mut before_literal = 0;
         for segment in &generator.segments {
             let mut part = String::new();
             match segment {
                 Segment::Literal(Literal { lit }) => {
+                    before_literal = value.len();
                     value.push_str(lit);
                     since_literal.clear();
                     literal = lit;
@@ -712,6 +717,13 @@ impl GeneratorSet {
                                 "{:08x}",
                                 crc32(format!("{literal}{since_literal}").as_bytes())
                             )
+                        }
+                        "crc32_hex_le" => {
+                            part = crc32(&value.as_bytes()[..before_literal])
+                                .to_le_bytes()
+                                .iter()
+                                .map(|byte| format!("{byte:02x}"))
+                                .collect()
                         }
                         "bech32" => part = bech32_checksum(literal, &since_literal)?,
                         _ => part = iso7064_mod11_10(&since_literal)?,

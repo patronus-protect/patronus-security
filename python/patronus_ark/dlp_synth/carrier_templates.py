@@ -1579,6 +1579,75 @@ PROFILES = {
         "hosting.digitalocean.token", "CLOUD_KEY", "secret", "digitalocean_access_token", "DigitalOcean access token",
         "DigitalOcean-Zugriffstoken",
     ),
+    # P07: observability.
+    "dlp_datadog_api_key": Profile(
+        "observability.datadog.access_token", "API_KEY", "secret", "datadog_api_key", "Datadog API key",
+        "Datadog-API-Schlüssel",
+    ),
+    "dlp_newrelic_user_api_key": Profile(
+        "observability.newrelic.key", "API_KEY", "secret", "newrelic_user_key", "New Relic user key",
+        "New-Relic-User-Key",
+    ),
+    "dlp_newrelic_insert_key": Profile(
+        "observability.newrelic.key", "API_KEY", "secret", "newrelic_insert_key", "New Relic insert key",
+        "New-Relic-Insert-Key",
+    ),
+    "dlp_newrelic_license_key": Profile(
+        "observability.newrelic.key", "API_KEY", "secret", "new_relic_license_key", "New Relic license key",
+        "New-Relic-Lizenzschlüssel",
+    ),
+    "dlp_newrelic_legacy_license_key": Profile(
+        "observability.newrelic.key", "API_KEY", "secret", "new_relic_license_key", "New Relic license key",
+        "New-Relic-Lizenzschlüssel",
+    ),
+    "dlp_sentry_user_token": Profile(
+        "observability.sentry.token", "SECRET_TOKEN", "secret", "sentry_auth_token", "Sentry auth token",
+        "Sentry-Auth-Token",
+    ),
+    "dlp_sentry_org_token": Profile(
+        "observability.sentry.token", "SECRET_TOKEN", "secret", "sentry_auth_token", "Sentry auth token",
+        "Sentry-Auth-Token",
+    ),
+    "dlp_sentry_auth_token": Profile(
+        "observability.sentry.token", "SECRET_TOKEN", "secret", "sentry_auth_token", "Sentry auth token",
+        "Sentry-Auth-Token",
+    ),
+    "dlp_sentry_dsn_secret": Profile(
+        "observability.sentry.dsn_secret", "API_KEY", "secret", "sentry_dsn", "Sentry DSN", "Sentry-DSN",
+        "https://3f9c1e7a2b4d4c6e8a0b1c2d3e4f5a6b:<<value>>@o450123.ingest.sentry.io/5512345",
+    ),
+    "dlp_grafana_api_key": Profile(
+        "observability.grafana.token", "SECRET_TOKEN", "secret", "grafana_api_key", "Grafana API key",
+        "Grafana-API-Schlüssel",
+    ),
+    "dlp_grafana_cloud_token": Profile(
+        "observability.grafana.token", "SECRET_TOKEN", "secret", "grafana_cloud_token", "Grafana Cloud token",
+        "Grafana-Cloud-Token",
+    ),
+    "dlp_grafana_service_account_token": Profile(
+        "observability.grafana.token", "SECRET_TOKEN", "secret", "grafana_service_account_token",
+        "Grafana service account token", "Grafana-Dienstkonto-Token",
+    ),
+    "dlp_dynatrace_token": Profile(
+        "observability.dynatrace.api_token", "SECRET_TOKEN", "secret", "dynatrace_api_token", "Dynatrace API token",
+        "Dynatrace-API-Token",
+    ),
+    "dlp_splunk_hec_token": Profile(
+        "observability.splunk.hec_token", "SECRET_TOKEN", "secret", "splunk_hec_token", "Splunk HEC token",
+        "Splunk-HEC-Token",
+    ),
+    "dlp_elastic_api_key": Profile(
+        "observability.elastic.api_key", "API_KEY", "secret", "elastic_api_key", "Elastic API key",
+        "Elastic-API-Schlüssel",
+    ),
+    "dlp_honeycomb_api_key": Profile(
+        "observability.honeycomb.api_key", "API_KEY", "secret", "honeycomb_api_key", "Honeycomb API key",
+        "Honeycomb-API-Schlüssel",
+    ),
+    "dlp_pagerduty_api_key": Profile(
+        "observability.pagerduty.api_key", "API_KEY", "secret", "pagerduty_api_key", "PagerDuty API key",
+        "PagerDuty-API-Schlüssel",
+    ),
     "dlp_stripe_key": Profile("payment.stripe.secret_key", "PAYMENT_KEY", "secret", "stripe_secret_key", "Stripe secret key", "Stripe-Secret-Key"),
     "dlp_stripe_webhook": Profile("payment.stripe.webhook_secret", "PAYMENT_KEY", "secret", "stripe_webhook_secret", "Stripe webhook secret", "Stripe-Webhook-Secret"),
     "dlp_slack_token": Profile("comm.slack.token", "SECRET_TOKEN", "secret", "slack_token", "Slack token", "Slack-Token"),

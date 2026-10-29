@@ -232,6 +232,88 @@
       "lookalike": ["digitalocean_pat_short"],
       "probes": ["DIGITALOCEAN_ACCESS_TOKEN=<<secret:0>>", "$ doctl auth init --access-token <<secret:0>>"]
     },
+    "dlp_datadog_api_key": {
+      "generators": ["datadog_api_key", "datadog_app_key"],
+      "lookalike": ["datadog_api_key_short", "datadog_client_token"],
+      "probes": ["DD_API_KEY=<<secret:0>>", "curl -H \"DD-APPLICATION-KEY: <<secret:0>>\" https://api.datadoghq.eu/api/v1/validate"]
+    },
+    "dlp_newrelic_user_api_key": {
+      "generators": ["newrelic_user_api_key"],
+      "lookalike": ["newrelic_user_api_key_short"],
+      "probes": ["NEW_RELIC_API_KEY=<<secret:0>>", "curl -H \"Api-Key: <<secret:0>>\" https://api.newrelic.com/graphql"]
+    },
+    "dlp_newrelic_insert_key": {
+      "generators": ["newrelic_insert_key"],
+      "lookalike": ["newrelic_insert_key_short"],
+      "probes": ["NEW_RELIC_INSERT_KEY=<<secret:0>>", "X-Insert-Key: <<secret:0>>"]
+    },
+    "dlp_newrelic_license_key": {
+      "generators": ["newrelic_license_key", "newrelic_license_key_eu"],
+      "lookalike": ["newrelic_license_key_short"],
+      "probes": ["NEW_RELIC_LICENSE_KEY=<<secret:0>>", "common: &default_settings\n  license_key: '<<secret:0>>'"]
+    },
+    "dlp_newrelic_legacy_license_key": {
+      "generators": ["newrelic_legacy_license_key"],
+      "probes": ["NEW_RELIC_LICENSE_KEY=<<secret:0>>", "newrelic.license_key = \"<<secret:0>>\""]
+    },
+    "dlp_sentry_user_token": {
+      "generators": ["sentry_user_token"],
+      "lookalike": ["sentry_user_token_short"],
+      "probes": ["SENTRY_AUTH_TOKEN=<<secret:0>>", "$ sentry-cli --auth-token <<secret:0>> releases list"]
+    },
+    "dlp_sentry_org_token": {
+      "generators": ["sentry_org_token"],
+      "lookalike": ["sentry_org_token_no_iat"],
+      "probes": ["SENTRY_AUTH_TOKEN=<<secret:0>>", "[auth]\ntoken=<<secret:0>>"]
+    },
+    "dlp_sentry_auth_token": {
+      "generators": ["sentry_auth_token"],
+      "probes": ["SENTRY_AUTH_TOKEN=<<secret:0>>", "{\"sentryAuthToken\": \"<<secret:0>>\"}"]
+    },
+    "dlp_sentry_dsn_secret": {
+      "generators": ["sentry_dsn_secret_key"],
+      "probes": ["SENTRY_DSN=https://3f9c1e7a2b4d4c6e8a0b1c2d3e4f5a6b\u003a<<secret\u003a0>>@o450123.ingest.sentry.io/5512345", "Sentry.init({ dsn: \"https://3f9c1e7a2b4d4c6e8a0b1c2d3e4f5a6b\u003a<<secret\u003a0>>@sentry.example.com/12\" });"]
+    },
+    "dlp_grafana_api_key": {
+      "generators": ["grafana_api_key"],
+      "lookalike": ["grafana_api_key_unterminated"],
+      "probes": ["GRAFANA_API_KEY=<<secret:0>>", "Authorization: Bearer <<secret:0>>"]
+    },
+    "dlp_grafana_cloud_token": {
+      "generators": ["grafana_cloud_token"],
+      "lookalike": ["grafana_cloud_token_random"],
+      "probes": ["GRAFANA_CLOUD_TOKEN=<<secret:0>>", "$ grafana-agent --metrics.password <<secret:0>>"]
+    },
+    "dlp_grafana_service_account_token": {
+      "generators": ["grafana_service_account_token"],
+      "lookalike": ["grafana_service_account_token_bad_crc"],
+      "probes": ["GRAFANA_SERVICE_ACCOUNT_TOKEN=<<secret:0>>", "curl -H \"Authorization: Bearer <<secret:0>>\" https://grafana.example.com/api/search"]
+    },
+    "dlp_dynatrace_token": {
+      "generators": ["dynatrace_api_token", "dynatrace_platform_token"],
+      "lookalike": ["dynatrace_api_token_short"],
+      "probes": ["DT_API_TOKEN=<<secret:0>>", "Authorization: Api-Token <<secret:0>>"]
+    },
+    "dlp_splunk_hec_token": {
+      "generators": ["splunk_hec_token"],
+      "lookalike": ["splunk_hec_token_short"],
+      "probes": ["SPLUNK_HEC_TOKEN=<<secret:0>>", "curl -k https://splunk.example.com:8088/services/collector -H \"Authorization: Splunk <<secret:0>>\""]
+    },
+    "dlp_elastic_api_key": {
+      "generators": ["elastic_api_key", "elastic_api_key_pair"],
+      "lookalike": ["elastic_api_key_short"],
+      "probes": ["ELASTIC_API_KEY=<<secret:0>>", "output.elasticsearch:\n  hosts: [\"https://es.example.com:9200\"]\n  elasticsearch_api_key: \"<<secret:0>>\""]
+    },
+    "dlp_honeycomb_api_key": {
+      "generators": ["honeycomb_api_key", "honeycomb_classic_key"],
+      "lookalike": ["honeycomb_api_key_short"],
+      "probes": ["HONEYCOMB_API_KEY=<<secret:0>>", "OTEL_EXPORTER_OTLP_HEADERS=\"x-honeycomb-team=<<secret:0>>\""]
+    },
+    "dlp_pagerduty_api_key": {
+      "generators": ["pagerduty_user_token", "pagerduty_api_key", "pagerduty_integration_key"],
+      "lookalike": ["pagerduty_api_key_short"],
+      "probes": ["PAGERDUTY_API_KEY=<<secret:0>>", "pagerduty:\n  pagerduty_token: \"<<secret:0>>\""]
+    },
     "dlp_stripe_key": {
       "generators": ["stripe_secret_live", "stripe_restricted_test", "stripe_secret_test_long"],
       "probes": ["STRIPE_SECRET_KEY=<<secret:0>>", "Stripe.api_key = \"<<secret:0>>\""]
