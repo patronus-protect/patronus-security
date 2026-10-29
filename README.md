@@ -46,6 +46,39 @@ Full Ark builds on Core: it runs the same native detectors and the same Wolf run
 results match between the two. For an HTTP service, [`ark-api`](https://github.com/patronus-protect/patronus-security/blob/main/ark-api/README.md) wraps the full
 runtime; see [Deploy the HTTP API](https://patronus-protect.github.io/patronus-security/how-to/deploy-http-api/).
 
+## How L1 compares
+
+Native L1 alone — no model, the same rules in Core and Ark — measured against the established
+open-source tools on 2026-10-29 (commit `9cb48cc`, dev split, exact span match).
+
+**PII vs. [Presidio](https://github.com/microsoft/presidio)** 2.2.364 with tuned recognizers,
+Ark in the `balanced` mode:
+
+| Corpus family | Ark L1 F1 | Presidio F1 |
+| --- | ---: | ---: |
+| Neutral public corpora (Gretel finance, ai4privacy) | **67.3** | 40.5 |
+| Presidio's own evaluator and recognizer test data | 69.7 | **71.4** |
+| Ark's DE/EU synthetic set ¹ | **81.1** | 39.6 |
+
+Ark validates checksums for 69 identifier units, Presidio for 35; neither tool raises a false
+positive on the hard negatives of the deciding families.
+
+**Secrets (DLP) vs. secret scanners**, Ark in its default profile:
+
+| Tool | Precision | Recall | F1 | Hard-negative FPs | FPs per MB of benign code |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| **Ark L1** | **99.3** | **80.0** | **88.6** | **10** | **0.05** |
+| gitleaks 8.30.1 | 49.1 | 53.4 | 51.1 | 974 | 0.21 |
+| TruffleHog 3.97.9 ² | 63.2 | 36.4 | 46.2 | 326 | 1.43 |
+| detect-secrets 1.5.0 | 33.9 | 51.6 | 40.9 | 1,731 | 36.28 |
+
+The DLP scan runs at 8.16 MiB/s against 4.16 MiB/s for gitleaks, with a 100 KiB p95 of 11.7 ms.
+
+¹ Written by us for German and EU identifiers; reported for completeness, not used to decide
+milestones. ² Run with `--no-verification`, so it scores formats only, like the other tools.
+These are our own measurements; per-entity results, corpora and method are in
+[L1 capabilities](https://patronus-protect.github.io/patronus-security/reference/l1-capabilities/).
+
 ## Quickstart: Ark Core
 
 ```bash
