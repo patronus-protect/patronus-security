@@ -66,6 +66,22 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Detection changes
 
+- DLP L1 (T18, all modes): the T06 example check of the generic rules (`dlp_env_var_secret`,
+  `dlp_generic_credential_assignment` and the other generic assignments) treats a value as
+  machine-issued not only when it is 32 or more hex digits, but also when it holds a hex, digit
+  or base62 run of at least 24 characters next to a shorter prefix or suffix (`SK…`, `dapi…`,
+  `…-us10`, `shippo_live_…`, `sqp_…`, `CLOJARS_…`, dash-separated hex groups;
+  `credentials::machine_issued_run`), and applies the fixed-format repetition check to that run.
+  Documented example and test values of providers without an ARK rule (`deadbeef…`,
+  `1234567890…` fills) are dropped without example context; hand-typed weak passwords
+  (`abcabcabcabc`, `Passwort123!`) and values with a random run stay findings. **Detection
+  change:** on the GOLD-D2 baseline-entity rows of the current dev carrier generator (seed
+  20261011, 4,664 `doc_example`/`test_key` rows), hard-negative FP of the two generic rules
+  445 → 10 (the rest are 1Password `ops_` base64 blobs without a machine run); positives
+  unchanged (exact TP 4,327 → 4,327), no span gained anywhere. The check runs only on a matched
+  generic value; `latency.py bench` 100 KiB p95 11.18 → 11.11 ms (noise). `dlp_l1.jsonl` gains
+  22 rows (10 positives, 12 hard negatives as fill recipes, DE + EN).
+
 - DLP L1 CI and hosting tokens (P06, all modes): nineteen new provider rules, each with a format
   source in `research/dlp/rule_sources.yaml`. Prefix rules with a token boundary:
   `dlp_azure_devops_pat` (84 alphanumerics with the signature `AZDO` at positions 76 to 80, both

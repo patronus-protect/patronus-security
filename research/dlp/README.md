@@ -112,7 +112,12 @@ Stacked PR, erst bei grüner GitHub-CI), Branch-Präfix `dlp/`. Agent-Prompt: [`
   keinen Wert. Der Beispiel-Check (T06) zählt zusätzlich ein auf die Feldlänge gekürztes
   Markerwort am Wortende (`Eexampl0123!`) und behandelt einen generischen Wert aus mindestens
   32 Hex-Ziffern wie ein festes Format (`deadbeef…` ist ein Beispiel, `abcabcabcabc` bleibt ein
-  schwaches echtes Passwort). Übergangslösung, bis K05 die Werte strukturell extrahiert.
+  schwaches echtes Passwort). Seit T18 gilt das auch für den Lauf eines maschinell ausgestellten
+  Werts von Anbietern ohne ARK-Regel: ein Hex-, Ziffern- oder Base62-Lauf ab 24 Zeichen neben
+  einem kürzeren Präfix oder Suffix (`SK…`, `dapi…`, `…-us10`, `shippo_live_…`, Hex-Gruppen mit
+  Bindestrich; `credentials::machine_issued_run`). Wiederholte Blöcke in diesem Lauf machen den
+  Wert zum Beispiel; ein Wert mit anderen Zeichen (`Passwort123!`) oder ohne Präfix/Suffix bleibt
+  ein gewähltes Passwort. Übergangslösung, bis K05 die Werte strukturell extrahiert.
   Seit T09 beginnen `dlp_password_assignment`, `dlp_generic_credential_assignment`,
   `dlp_csrf_token` und `dlp_password_hash` am Credential-Nomen ohne `\b`: zusammengesetzte
   (`db_password`, `service_secret`) und camelCase-Schlüssel (`dbPassword`, `ClientSecret`,

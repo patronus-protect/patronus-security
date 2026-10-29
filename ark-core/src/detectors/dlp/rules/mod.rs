@@ -193,14 +193,15 @@ pub fn is_example_match(
     let example_context = || credentials::has_example_context(text, range.start, range.end);
     match check {
         ExampleCheck::Off => false,
-        // F-GEN2: a long hex value under a generic key is machine-issued,
-        // so repeated chunks (`deadbeef…`) mark it as an example as for a
-        // fixed format; hand-typed passwords (`abcabcabcabc`) are shorter.
-        ExampleCheck::Generic => credentials::is_example_value(
-            &value,
-            credentials::is_machine_hex(&value),
-            example_context,
-        ),
+        // F-GEN2, T18: the machine-issued run of a generic value (a long
+        // hex value, the run of `SK…`, `…-us10`, `shippo_live_…`) takes the
+        // fixed-format check, so repeated chunks (`deadbeef…`) mark it as an
+        // example; hand-typed passwords (`abcabcabcabc`) have no such run.
+        ExampleCheck::Generic => {
+            credentials::machine_issued_run(&value).is_some_and(|run| {
+                credentials::low_variety(run) == credentials::LowVariety::Repeated
+            }) || credentials::is_example_value(&value, false, example_context)
+        }
         ExampleCheck::FixedFormat => credentials::is_example_value(&value, true, example_context),
     }
 }

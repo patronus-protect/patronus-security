@@ -477,12 +477,52 @@ fn ends_with_cut_marker(word: &str) -> bool {
 /// 128-bit keys and longer.
 const MACHINE_HEX_MIN_LEN: usize = 32;
 
-/// F-GEN2: `value` is a hex string of at least [`MACHINE_HEX_MIN_LEN`]
-/// digits, the shape of generated API secrets and digests. The backslash of
-/// an escaped closing quote (`…deadbeef\"` in a notebook) does not count.
-pub fn is_machine_hex(value: &str) -> bool {
+/// Characters of a hex, digit or base62 run that, next to a short prefix or
+/// suffix, make a generic value machine-issued (T18).
+const MACHINE_RUN_MIN_LEN: usize = 24;
+
+/// The machine-issued part of a generic value (F-GEN2, T18), to which the
+/// fixed-format repetition check applies: a whole value of at least
+/// [`MACHINE_HEX_MIN_LEN`] hex digits, the shape of generated API secrets and
+/// digests, or a run of at least [`MACHINE_RUN_MIN_LEN`] characters next to a
+/// shorter prefix or suffix, the shape of provider-issued keys (`SK…`,
+/// `dapi…`, `…-us10`, `shippo_live_…`, dash-separated hex groups). The run is
+/// the longest `-`/`_`-separated segment, without a letter prefix glued to a
+/// hex run (`SK`, `dapi`). A value with other characters is chosen, not
+/// issued. The backslash of an escaped closing quote (`…deadbeef\"` in a
+/// notebook) does not count.
+pub fn machine_issued_run(value: &str) -> Option<&str> {
     let value = value.trim_end_matches('\\');
-    value.len() >= MACHINE_HEX_MIN_LEN && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+    if value.len() >= MACHINE_HEX_MIN_LEN && value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Some(value);
+    }
+    if !value
+        .bytes()
+        .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+    {
+        return None;
+    }
+    let run = value
+        .split(['-', '_'])
+        .map(|segment| {
+            let hex_start = segment
+                .bytes()
+                .rposition(|byte| !byte.is_ascii_hexdigit())
+                .map_or(0, |index| index + 1);
+            let hex_run = &segment[hex_start..];
+            if hex_run.len() >= MACHINE_RUN_MIN_LEN
+                && segment[..hex_start]
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphabetic())
+            {
+                hex_run
+            } else {
+                segment
+            }
+        })
+        .max_by_key(|run| run.len())?;
+    (run.len() >= MACHINE_RUN_MIN_LEN && run.len() < value.len() && 2 * run.len() > value.len())
+        .then_some(run)
 }
 
 /// How a value lacks variety (T06), see [`low_variety`].
@@ -719,8 +759,8 @@ fn floor_char_boundary(text: &str, mut index: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::{
-        has_example_context, has_example_marker, is_example_value, is_low_variety, is_machine_hex,
-        low_variety, LowVariety,
+        has_example_context, has_example_marker, is_example_value, is_low_variety, low_variety,
+        machine_issued_run, LowVariety,
     };
 
     /// Deterministic pseudo-random base62 strings (SplitMix64).
@@ -781,12 +821,57 @@ mod tests {
 
     #[test]
     fn long_hex_values_take_the_fixed_format_check() {
-        assert!(is_machine_hex("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"));
-        assert!(is_machine_hex("1234567890123456789012345678901234567890"));
-        assert!(is_machine_hex("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\\"));
-        assert!(!is_machine_hex("deadbeefdeadbeef"));
-        assert!(!is_machine_hex("abcabcabcabc"));
-        assert!(!is_machine_hex("Kx7pQ2vL1234567890abcdefRt4Mw8Zn3"));
+        let hex = "deadbeef".repeat(5);
+        for value in [hex.as_str(), &"1234567890".repeat(4)] {
+            assert_eq!(machine_issued_run(value), Some(value));
+        }
+        assert_eq!(machine_issued_run(&format!("{hex}\\")), Some(hex.as_str()));
+        assert_eq!(machine_issued_run(&hex[..16]), None);
+        assert_eq!(machine_issued_run("abcabcabcabc"), None);
+        assert_eq!(
+            machine_issued_run("Kx7pQ2vL1234567890abcdefRt4Mw8Zn3"),
+            None
+        );
+    }
+
+    #[test]
+    fn runs_next_to_a_short_prefix_or_suffix_are_machine_issued() {
+        let hex = "deadbeef".repeat(4);
+        let digits = "1234567890".repeat(4);
+        for (value, run) in [
+            (format!("SK{hex}"), hex.as_str()),
+            (format!("dapi{}", &digits[..32]), &digits[..32]),
+            (format!("{hex}-us10"), hex.as_str()),
+            (format!("{hex}-deadbeef-deadbeef"), hex.as_str()),
+            (format!("shippo_live_{digits}"), digits.as_str()),
+            (
+                format!("sgp_local_{hex}deadbeef"),
+                &format!("{hex}deadbeef"),
+            ),
+            (
+                format!("xapp-1-A0B1C2D3E4F-1123456789012-{digits}{digits}"),
+                &format!("{digits}{digits}"),
+            ),
+            (
+                format!("svc_{}", "Kx7pQ2vLRt4Mw8Zn3aB9cD0e"),
+                "Kx7pQ2vLRt4Mw8Zn3aB9cD0e",
+            ),
+        ] {
+            assert_eq!(machine_issued_run(&value), Some(run), "{value}");
+        }
+        for value in [
+            // No prefix or suffix, a run under 24 characters, a run shorter
+            // than the rest, or characters of a chosen password.
+            "Zq7Zq7Zq7Zq7Zq7Zq7Zq7Zq7",
+            "abcd1234abcd1234abcd1234",
+            "svc_abcabcabcabcabcabc",
+            "Sommerurlaub-am-Meer-2026-abcabcabcabcabcabcabcabc",
+            "Passwort123!",
+            "deadbeefdeadbeefdeadbeefdeadbeef!",
+            "x.deadbeefdeadbeefdeadbeefdeadbeef",
+        ] {
+            assert_eq!(machine_issued_run(value), None, "{value}");
+        }
     }
 
     #[test]
