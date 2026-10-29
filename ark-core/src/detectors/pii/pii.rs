@@ -11,7 +11,7 @@ use super::context_anchors::PII_ANCHOR_PATTERNS;
 use super::score::{self, PiiMode, ValidatorStrength};
 use super::{
     at, au, be, ca, ch, common, context, de, driver_license, es, fr, identifiers, ie, intl, it, kr,
-    licence_plate, nl, nordic, overlap, pt, sg, tr, uk, us, validators, vat, za,
+    licence_plate, nl, nordic, overlap, pl, pt, sg, tr, uk, us, validators, vat, za,
 };
 use crate::detectors::anchors;
 use crate::detectors::obfuscation::{Deobfuscated, Level};
@@ -121,6 +121,7 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     vat::VAT_ID_LV,
     vat::VAT_ID_MT,
     vat::VAT_ID_PL,
+    vat::VAT_ID_PL_PROXIMITY,
     vat::VAT_ID_PT,
     vat::VAT_ID_RO,
     vat::VAT_ID_SE,
@@ -203,6 +204,8 @@ pub static PII_PATTERNS: &[PiiPattern] = &[
     es::NIE_CONTEXT_FREE,
     it::FISCAL_CODE,
     it::FISCAL_CODE_CONTEXT_FREE,
+    pl::PESEL,
+    pl::REGON,
 ];
 
 pub struct PiiPipeline {
@@ -582,12 +585,14 @@ impl PiiPipeline {
 /// Whether the national number of `rule_id` at `start` is the body of a VAT ID
 /// after its country prefix: a Portuguese NIF after `PT ` (B16), a Spanish NIF
 /// or NIE and a bare CIF after `ES ` or `ES-` (B01), and eight digits and a letter after `CY `
-/// or `CY-`, a Cypriot VAT ID (B02) (B-ESIT).
+/// or `CY-`, a Cypriot VAT ID (B02) (B-ESIT), and a bare NIP after `PL ` or `PL-`
+/// (B16, A13).
 fn vat_body(rule_id: &str, text: &str, start: usize) -> bool {
     let prefixes: &[&str] = match rule_id {
         "pii_nif_pt" => &["PT "],
         "pii_nif_es" | "pii_nif_es_context_free" => &["ES ", "ES-", "CY ", "CY-"],
         "pii_nie_es" | "pii_nie_es_context_free" | "pii_vat_id_es_proximity" => &["ES ", "ES-"],
+        "pii_vat_id_pl_proximity" => &["PL ", "PL-"],
         _ => return false,
     };
     prefixes
@@ -604,7 +609,11 @@ impl NativeRegexDetector for PiiPipeline {
     ) -> bool {
         let pattern = &PII_PATTERNS[index];
         let text = prepared.text();
-        if pattern.scored_only && !context::stands_alone(text, captures.get(0).unwrap().range()) {
+        // The bare NIP checks this after its structural key (below).
+        if pattern.scored_only
+            && self.rule_ids[index] != "pii_vat_id_pl_proximity"
+            && !context::stands_alone(text, captures.get(0).unwrap().range())
+        {
             return false;
         }
         if pattern.requires_context {
@@ -683,7 +692,9 @@ impl NativeRegexDetector for PiiPipeline {
             | "pii_brn_kr"
             | "pii_nif_es"
             | "pii_nie_es"
-            | "pii_fiscal_code_it") => {
+            | "pii_fiscal_code_it"
+            | "pii_pesel_pl"
+            | "pii_regon_pl") => {
                 let value = captures.get(0).unwrap().range();
                 if vat_body(rule_id, text, value.start) {
                     return false;
@@ -700,6 +711,34 @@ impl NativeRegexDetector for PiiPipeline {
             | "pii_nie_es_context_free"
             | "pii_vat_id_es_proximity") => {
                 !vat_body(rule_id, text, captures.get(0).unwrap().start())
+            }
+            // Ten valid digits near a generic VAT term are as often the VAT ID of
+            // another country (`SK 928 762 01 99`) or another number (an NPI): the
+            // deciding term or key of a bare NIP is a NIP term. A cell under a NIP
+            // key is the whole value, also between numeric cells
+            // (`nip,employees\n5260250995,42`); in prose the digits stand alone.
+            rule_id @ "pii_vat_id_pl_proximity" => {
+                let value = captures.get(0).unwrap().range();
+                if vat_body(rule_id, text, value.start) {
+                    return false;
+                }
+                match context::structure_evidence(
+                    prepared.structure(),
+                    value.clone(),
+                    pattern.entity_group,
+                ) {
+                    Some(evidence) => evidence.anchor == Some("pii.pl_nip"),
+                    None => {
+                        context::stands_alone(text, value.clone())
+                            && context::evidence(
+                                text,
+                                (value.start, value.end),
+                                pattern.entity_group,
+                            )
+                            .anchor
+                                == Some("pii.pl_nip")
+                    }
+                }
             }
             "pii_passport_number_de_context_free"
             | "pii_identity_card_number_de_context_free"

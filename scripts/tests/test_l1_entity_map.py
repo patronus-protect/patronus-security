@@ -270,6 +270,18 @@ def test_spanish_and_italian_personal_numbers_are_shared_with_presidio():
     assert entity_map.ark_label("VAT_ID_IT") == "pii.it.vat_code"
 
 
+def test_polish_pesel_is_shared_and_regon_is_ark_only():
+    # A13: one label per numbering system; PESEL matches the Presidio 2.2.364 entity of the same name,
+    # Presidio has no REGON recognizer, and the NIP stays with the PL VAT ID.
+    entity_map = MODULE.load()
+    assert entity_map.ark_label("PL_PESEL") == "pii.pl.pesel"
+    assert entity_map.presidio_entity("PL_PESEL") == "pii.pl.pesel"
+    assert entity_map.scope("pii.pl.pesel") == "shared"
+    assert entity_map.ark_label("PL_REGON") == "pii.pl.regon"
+    assert entity_map.scope("pii.pl.regon") == "ark_only"
+    assert entity_map.ark_label("VAT_ID_PL") == "pii.pl.vat_id"
+
+
 def test_luhn_identifiers_are_shared_with_presidio():
     # B-LUHN: the checksum parts of T13 and T09, one label per numbering system, each matching the
     # Presidio 2.2.364 entity of the same name.
@@ -521,7 +533,7 @@ def test_checked_in_registry_order_matches_the_rust_order_test():
     expected = re.findall(r'\(\s*"(pii_\w+)",\s*"(\w+)",?\s*\)', rust_test)
     rules = _generate_docs().parse_native_patterns(MODULE.PII_SOURCE_PATH, "PiiPattern")
     assert [(rule["id"], rule["entity_group"]) for rule in rules] == expected
-    assert len(expected) == 149
+    assert len(expected) == 152
 
 
 def test_cli_check_succeeds_and_fails(tmp_path):

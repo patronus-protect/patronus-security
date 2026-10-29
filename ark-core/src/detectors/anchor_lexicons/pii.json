@@ -3109,6 +3109,85 @@
     ]
   },
   {
+    "id": "pii.pl_pesel",
+    "description": "Polnische Personenkennzahl (PESEL, Powszechny Elektroniczny System Ewidencji Ludności)",
+    "en": [
+      "polish national identification number",
+      "polish national id",
+      "polish personal id number",
+      "polish pesel",
+      "pesel number",
+      "pesel no"
+    ],
+    "de": [
+      "polnische personenkennzahl",
+      "polnische identifikationsnummer",
+      "polnische personennummer",
+      "pesel-nummer"
+    ],
+    "shared": [
+      "pesel",
+      "pesel#",
+      "numer pesel",
+      "nr pesel"
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/pl.rs"
+    ]
+  },
+  {
+    "id": "pii.pl_regon",
+    "description": "Polnische statistische Unternehmensnummer (REGON)",
+    "en": [
+      "polish statistical number",
+      "polish business registry number",
+      "polish company registration number",
+      "regon number",
+      "regon no"
+    ],
+    "de": [
+      "polnische statistiknummer",
+      "polnische unternehmensnummer",
+      "regon-nummer"
+    ],
+    "shared": [
+      "regon",
+      "numer regon",
+      "nr regon"
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/pl.rs"
+    ]
+  },
+  {
+    "id": "pii.pl_nip",
+    "description": "Polnische Steuer-Identifikationsnummer (NIP, Numer Identyfikacji Podatkowej)",
+    "en": [
+      "polish tax identification number",
+      "polish tax id",
+      "polish tax number",
+      "polish vat number",
+      "nip number",
+      "nip no"
+    ],
+    "de": [
+      "polnische steuernummer",
+      "polnische steuer-identifikationsnummer",
+      "polnische umsatzsteuernummer",
+      "nip-nummer"
+    ],
+    "shared": [
+      "nip",
+      "nip#",
+      "numer nip",
+      "nr nip",
+      "numer identyfikacji podatkowej"
+    ],
+    "sources": [
+      "ark-core/src/detectors/pii/vat.rs"
+    ]
+  },
+  {
     "id": "pii.health_insurance_number",
     "description": "Krankenversicherungsnummer",
     "en": [

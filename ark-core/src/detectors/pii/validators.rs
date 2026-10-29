@@ -1393,6 +1393,49 @@ pub fn kr_brn(s: &str) -> bool {
         })
 }
 
+/// Polish PESEL (A13): eleven digits `YYMMDDZZZXC`, a calendar birth date from
+/// 1900 to 2100 whose century is added to the month (+0 for 1900, +20 for 2000,
+/// +40 for 2100; the +80 of the 1800s and +60 of the 2200s are not accepted) and
+/// the check digit `(10 − weighted sum 1 3 7 9 … mod 10) mod 10`.
+pub fn pl_pesel(s: &str) -> bool {
+    separated_digits::<11>(s, b"").is_some_and(|digits| {
+        let month = two_digits(&digits, 2);
+        let century = match month / 20 {
+            0 => 1900,
+            1 => 2000,
+            2 => 2100,
+            _ => return false,
+        };
+        let sum = weighted_sum(&digits[..10], &[1, 3, 7, 9, 1, 3, 7, 9, 1, 3]);
+        birth_date(
+            two_digits(&digits, 4),
+            month % 20,
+            century + two_digits(&digits, 0),
+        ) && (10 - sum % 10) % 10 == digits[10]
+    })
+}
+
+/// Polish REGON (A13): nine digits weighted 8 9 2 3 4 5 6 7, or fourteen whose
+/// first nine are a REGON of their own (the unit) weighted 2 4 8 5 0 9 7 3 6 1 2
+/// 4 8; the check digit is the sum mod 11, where 10 becomes 0. One repeated digit
+/// is not accepted.
+pub fn pl_regon(s: &str) -> bool {
+    fn check(digits: &[u32], weights: &[u32]) -> bool {
+        weighted_sum(digits, weights) % 11 % 10 == digits[weights.len()]
+    }
+    const NINE: [u32; 8] = [8, 9, 2, 3, 4, 5, 6, 7];
+    match s.len() {
+        9 => separated_digits::<9>(s, b"")
+            .is_some_and(|digits| !one_repeated_digit(&digits) && check(&digits, &NINE)),
+        14 => separated_digits::<14>(s, b"").is_some_and(|digits| {
+            !one_repeated_digit(&digits[..9])
+                && check(&digits[..9], &NINE)
+                && check(&digits, &[2, 4, 8, 5, 0, 9, 7, 3, 6, 1, 2, 4, 8])
+        }),
+        _ => false,
+    }
+}
+
 /// Austrian social security number (B-EU2, Versicherungsnummer): ten digits,
 /// plain or `NNNN DDMMYY`. Three serial digits from 100 on, a check digit and six
 /// digits that are usually the birth date `DDMMYY`; when a day runs out of serials

@@ -53,6 +53,8 @@ PII_LABELS = {
     "KR_FRN",
     "KR_RRN",
     "PHONE",
+    "PL_PESEL",
+    "PL_REGON",
     "PHYSICIAN_NUMBER_LANR",
     "PT_NIF",
     "SE_ORGANISATIONSNUMMER",
@@ -100,8 +102,8 @@ PII_LABELS = {
     "ZA_ID_NUMBER",
 }
 # Languages of pii_l1: DE/EN, the FR/ES/IT/NL field names (T26) and the national languages of
-# country IDs (B-LUHN, B-EU2, B-KR), whose rows only target the IDs of their country.
-NATIONAL_LANGUAGES = {"sv": "SE_", "tr": "TR_", "pt": "PT_", "ko": "KR_"}
+# country IDs (B-LUHN, B-EU2, B-KR, A13), whose rows only target the IDs of their country.
+NATIONAL_LANGUAGES = {"sv": "SE_", "tr": "TR_", "pt": "PT_", "ko": "KR_", "pl": "PL_"}
 PII_LANGUAGES = {"de", "en", "fr", "es", "it", "nl", *NATIONAL_LANGUAGES}
 
 DLP_LABELS = {
@@ -221,8 +223,8 @@ class L1BenchmarkDataTests(unittest.TestCase):
                 materialized = recipes.materialize_row(row)
                 self.assertEqual(row["suite"], name, row["id"])
                 # pii_l1 also carries FR/ES/IT/NL field names of the anchor rules (T26) and
-                # Swedish, Turkish, Portuguese and Korean rows of the country IDs (B-LUHN, B-EU2,
-                # B-KR).
+                # Swedish, Turkish, Portuguese, Korean and Polish rows of the country IDs (B-LUHN,
+                # B-EU2, B-KR, A13).
                 languages = PII_LANGUAGES if name == "pii_l1" else {"de", "en"}
                 self.assertIn(row["language"], languages, row["id"])
                 if row["language"] in NATIONAL_LANGUAGES:

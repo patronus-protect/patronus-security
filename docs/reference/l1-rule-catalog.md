@@ -6,7 +6,7 @@ These are the stable rule IDs accepted by execution-gate `rules`. Missing IDs in
 
 For coverage per benchmark entity, the comparison with Presidio and the secret scanners, and latency, see [L1 capabilities](l1-capabilities.md).
 
-## PII rules (149)
+## PII rules (152)
 
 All PII rules are eligible by default when PII L1 is enabled.
 
@@ -81,6 +81,7 @@ In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `
 | `pii_vat_id_lv` | `VAT_ID_LV` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
 | `pii_vat_id_mt` | `VAT_ID_MT` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
 | `pii_vat_id_pl` | `VAT_ID_PL` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
+| `pii_vat_id_pl_proximity` | `VAT_ID_PL` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.70–0.80 |
 | `pii_vat_id_pt` | `VAT_ID_PT` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
 | `pii_vat_id_ro` | `VAT_ID_RO` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
 | `pii_vat_id_se` | `VAT_ID_SE` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
@@ -163,6 +164,8 @@ In the default `strict` PII mode every finding scores `1.0`. In `balanced` and `
 | `pii_nie_es_context_free` | `ES_NIE` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
 | `pii_fiscal_code_it` | `IT_FISCAL_CODE` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |
 | `pii_fiscal_code_it_context_free` | `IT_FISCAL_CODE` | yes | checksum | 20 | key or proximity, `balanced`/`recall` only | 0.55–0.80 |
+| `pii_pesel_pl` | `PL_PESEL` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |
+| `pii_regon_pl` | `PL_REGON` | yes | checksum | 25 | key or proximity (required) | 0.75–0.85 |
 
 ### PII context lexicon
 
@@ -210,7 +213,7 @@ The context engine reads these DE/EN entries of `ark-core/src/detectors/anchor_l
 | `VAT_ID_LU` | `pii.vat_identifier` |
 | `VAT_ID_LV` | `pii.vat_identifier` |
 | `VAT_ID_MT` | `pii.vat_identifier` |
-| `VAT_ID_PL` | `pii.vat_identifier` |
+| `VAT_ID_PL` | `pii.pl_nip`, `pii.vat_identifier` |
 | `VAT_ID_PT` | `pii.vat_identifier` |
 | `VAT_ID_RO` | `pii.vat_identifier` |
 | `VAT_ID_SE` | `pii.vat_identifier` |
@@ -259,6 +262,8 @@ The context engine reads these DE/EN entries of `ark-core/src/detectors/anchor_l
 | `ES_NIF` | `pii.es_nif` |
 | `ES_NIE` | `pii.es_nie` |
 | `IT_FISCAL_CODE` | `pii.it_fiscal_code` |
+| `PL_PESEL` | `pii.pl_pesel` |
+| `PL_REGON` | `pii.pl_regon` |
 
 | Counter-context anchor | DE | EN |
 | --- | --- | --- |

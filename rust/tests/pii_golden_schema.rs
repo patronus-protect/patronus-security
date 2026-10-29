@@ -11,11 +11,17 @@ use patronus_ark::detectors::pii::pii::PII_PATTERNS;
 use serde::Deserialize;
 
 const LANGUAGES: [&str; 2] = ["de", "en"];
-/// B-LUHN, B-EU2, B-KR: national languages of country IDs outside FR/ES/IT/NL
-/// (Swedish organisationsnummer, Turkish T.C. Kimlik No, Portuguese NIF, Korean
-/// registration numbers); rows of the country ID only.
-const NATIONAL_LANGUAGES: [(&str, &str); 4] =
-    [("sv", "SE_"), ("tr", "TR_"), ("pt", "PT_"), ("ko", "KR_")];
+/// B-LUHN, B-EU2, B-KR, A13: national languages of country IDs outside
+/// FR/ES/IT/NL (Swedish organisationsnummer, Turkish T.C. Kimlik No, Portuguese
+/// NIF, Korean registration numbers, Polish PESEL and REGON); rows of the country
+/// ID only.
+const NATIONAL_LANGUAGES: [(&str, &str); 5] = [
+    ("sv", "SE_"),
+    ("tr", "TR_"),
+    ("pt", "PT_"),
+    ("ko", "KR_"),
+    ("pl", "PL_"),
+];
 const MIN_PER_LANGUAGE: usize = 5;
 
 #[derive(Deserialize)]

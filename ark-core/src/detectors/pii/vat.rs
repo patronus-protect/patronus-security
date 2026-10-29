@@ -10,7 +10,7 @@
 //! form and the check digit carry the finding. Uppercase prefixes only; the
 //! value must stand alone (`context::stands_alone`). A bare Partita IVA (11
 //! digits without `IT`) and a bare Spanish CIF (without `ES`) also need a VAT
-//! term nearby or as their key.
+//! term nearby or as their key, a bare Polish NIP (without `PL`) a NIP term.
 use super::{pii::PiiPattern, score::ValidatorStrength, validators};
 
 /// `DE136695976`, `DE 136 695 976`, `DE.136.695.976`, `DE-136-695-976`.
@@ -343,6 +343,22 @@ pub(super) const VAT_ID_PL: PiiPattern = PiiPattern {
     base_score: 20,
     captured_value: false,
     requires_context: false,
+    scored_only: true,
+};
+
+/// A bare NIP, the Polish VAT ID without `PL` (A13): "NIP: 5260250995",
+/// `{"nip": "526-025-09-95"}`. Ten digits with a mod-11 digit prove too little
+/// alone; it needs a NIP term on either side or as the structural key
+/// (`PiiPipeline::allows_match`), a generic VAT term is not enough.
+pub(super) const VAT_ID_PL_PROXIMITY: PiiPattern = PiiPattern {
+    name: "pii_vat_id_pl_proximity",
+    pattern: r"\b[0-9]{3}[ \-]?(?:[0-9]{3}[ \-]?[0-9]{2}[ \-]?[0-9]{2}|[0-9]{2}[ \-]?[0-9]{2}[ \-]?[0-9]{3})\b",
+    entity_group: "VAT_ID_PL",
+    validator: Some(validators::pl_vat_id),
+    strength: ValidatorStrength::Checksum,
+    base_score: 20,
+    captured_value: false,
+    requires_context: true,
     scored_only: true,
 };
 
