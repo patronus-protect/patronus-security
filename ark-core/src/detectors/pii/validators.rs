@@ -1491,6 +1491,78 @@ pub fn ie_ppsn(s: &str) -> bool {
     })
 }
 
+/// Length of the IBAN of `country` (two letters, any case) in the SWIFT IBAN
+/// registry; `None` for a country without IBAN (B-IBAN, T21).
+pub fn iban_length(country: &[u8]) -> Option<usize> {
+    let [first, second] = country else {
+        return None;
+    };
+    Some(
+        match [first.to_ascii_uppercase(), second.to_ascii_uppercase()].as_slice() {
+            b"NO" => 15,
+            b"BE" => 16,
+            b"DK" | b"FI" | b"FK" | b"FO" | b"GL" | b"NL" | b"SD" => 18,
+            b"MK" | b"SI" => 19,
+            b"AT" | b"BA" | b"EE" | b"KZ" | b"LT" | b"LU" | b"MN" | b"XK" => 20,
+            b"CH" | b"HR" | b"LI" | b"LV" => 21,
+            b"BG" | b"BH" | b"CR" | b"DE" | b"GB" | b"GE" | b"IE" | b"ME" | b"RS" | b"VA" => 22,
+            b"AE" | b"GI" | b"IL" | b"IQ" | b"OM" | b"SO" | b"TL" => 23,
+            b"AD" | b"CZ" | b"ES" | b"MD" | b"PK" | b"RO" | b"SA" | b"SE" | b"SK" | b"TN"
+            | b"VG" => 24,
+            b"LY" | b"PT" | b"ST" => 25,
+            b"IS" | b"TR" => 26,
+            b"BI" | b"DJ" | b"FR" | b"GR" | b"IT" | b"MC" | b"MR" | b"SM" => 27,
+            b"AL" | b"AZ" | b"BY" | b"CY" | b"DO" | b"GT" | b"HN" | b"HU" | b"LB" | b"NI"
+            | b"PL" | b"SV" => 28,
+            b"BR" | b"EG" | b"PS" | b"QA" | b"UA" => 29,
+            b"JO" | b"KW" | b"MU" | b"YE" => 30,
+            b"MT" | b"SC" => 31,
+            b"LC" => 32,
+            b"RU" => 33,
+            _ => return None,
+        },
+    )
+}
+
+/// An IBAN of the SWIFT IBAN registry (B-IBAN): a registry country, exactly its
+/// length, two check digits, letters and digits only, and [`mod97`]. Whitespace
+/// is ignored and letters count in either case, so `gb82 west 1234 5698 7654 32`
+/// passes; a SEPA creditor ID (`DE98ZZZ09999999999`) has no IBAN length.
+pub fn iban(s: &str) -> bool {
+    let compact: String = s
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .map(|c| c.to_ascii_uppercase())
+        .collect();
+    let bytes = compact.as_bytes();
+    bytes.len() > 4
+        && iban_length(&bytes[..2]) == Some(bytes.len())
+        && bytes[2..4].iter().all(u8::is_ascii_digit)
+        && bytes.iter().all(u8::is_ascii_alphanumeric)
+        && mod97(&compact)
+}
+
+/// Byte length of the IBAN at the start of `s`, a match that may run past it:
+/// the prefix holding the registry length of its country in characters other
+/// than spaces, when `s` ends there or a space follows. `None` without a
+/// registry country or when `s` is shorter or the value runs on.
+pub fn iban_end(s: &str) -> Option<usize> {
+    let bytes = s.as_bytes();
+    let length = iban_length(bytes.get(..2)?)?;
+    let mut count = 0;
+    for (index, &byte) in bytes.iter().enumerate() {
+        if byte == b' ' {
+            continue;
+        }
+        count += 1;
+        if count == length {
+            let end = index + 1;
+            return matches!(bytes.get(end), None | Some(b' ')).then_some(end);
+        }
+    }
+    None
+}
+
 /// ISO 13616 Mod-97 check — IBAN validation.
 /// Strips whitespace before checking.
 pub fn mod97(s: &str) -> bool {

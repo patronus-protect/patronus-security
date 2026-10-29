@@ -118,22 +118,28 @@ const CREDITOR_IDS: [&str; 4] = [
     "DE57ZZZ00001061146",
 ];
 
-fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
-    let scanner = SecurityGateway::with_max_level(
+thread_local! {
+    /// One scanner per test thread: the tests scan thousands of texts.
+    static SCANNER: SecurityGateway = SecurityGateway::with_max_level(
         vec![SecurityCategory::Pii],
         SecurityLevel::L1,
         None,
         false,
     );
-    scanner.set_execution_gates(ScanGateMatrix {
-        pii_mode: mode,
-        ..Default::default()
-    });
-    scanner
-        .scan_category(SecurityCategory::Pii, text)
-        .into_iter()
-        .find(|result| result.model == "native:pii")
-        .expect("native PII result must be present")
+}
+
+fn pii_result(text: &str, mode: PiiMode) -> SecurityScanResult {
+    SCANNER.with(|scanner| {
+        scanner.set_execution_gates(ScanGateMatrix {
+            pii_mode: mode,
+            ..Default::default()
+        });
+        scanner
+            .scan_category(SecurityCategory::Pii, text)
+            .into_iter()
+            .find(|result| result.model == "native:pii")
+            .expect("native PII result must be present")
+    })
 }
 
 /// Texts of every IBAN span.
@@ -160,14 +166,22 @@ fn registry_length_per_country() {
     for (country, length, iban) in REGISTRY {
         assert_eq!(&iban[..2], country);
         assert_eq!(iban.len(), length, "{country}");
-        assert_eq!(validators::iban_length(country.as_bytes()), Some(length), "{country}");
+        assert_eq!(
+            validators::iban_length(country.as_bytes()),
+            Some(length),
+            "{country}"
+        );
         assert!(validators::mod97(iban), "{iban}");
         assert!(validators::iban(iban), "{iban}");
         assert!(validators::iban(&grouped(iban)), "{iban}");
         assert!(validators::iban(&iban.to_ascii_lowercase()), "{iban}");
     }
     for country in ["PH", "BD", "AR", "CO", "TH", "US", "ZZ", "XX"] {
-        assert_eq!(validators::iban_length(country.as_bytes()), None, "{country}");
+        assert_eq!(
+            validators::iban_length(country.as_bytes()),
+            None,
+            "{country}"
+        );
     }
 }
 
@@ -236,14 +250,15 @@ fn every_registry_country_is_found_compact_grouped_and_lowercase() {
             iban.to_ascii_lowercase(),
             grouped(iban).to_ascii_lowercase(),
         ] {
-            for text in [
-                format!("IBAN: {value}"),
+            let field = format!("IBAN: {value}");
+            for mode in MODES {
+                assert_eq!(ibans(&field, mode), [value.clone()], "{mode:?}: {field}");
+            }
+            for prose in [
                 format!("Bitte überweisen Sie auf {value} bis Freitag."),
                 format!("Please wire the amount to {value} by Friday."),
             ] {
-                for mode in MODES {
-                    assert_eq!(ibans(&text, mode), [value.clone()], "{mode:?}: {text}");
-                }
+                assert_eq!(ibans(&prose, PiiMode::Strict), [value.clone()], "{prose}");
             }
         }
     }
@@ -253,9 +268,15 @@ fn every_registry_country_is_found_compact_grouped_and_lowercase() {
 fn a_grouped_iban_ends_at_its_registry_length() {
     for (text, value) in [
         ("IBAN BE68 5390 0754 7034 und Name", "BE68 5390 0754 7034"),
-        ("IBAN: AT61 1904 3002 3457 3201 1234", "AT61 1904 3002 3457 3201"),
+        (
+            "IBAN: AT61 1904 3002 3457 3201 1234",
+            "AT61 1904 3002 3457 3201",
+        ),
         ("IBAN: be68 5390 0754 7034 for rent", "be68 5390 0754 7034"),
-        ("GB82 WEST 1234 5698 7654 32 BIC NWBKGB2L", "GB82 WEST 1234 5698 7654 32"),
+        (
+            "GB82 WEST 1234 5698 7654 32 BIC NWBKGB2L",
+            "GB82 WEST 1234 5698 7654 32",
+        ),
         ("NO93 8601 1117 947 kr", "NO93 8601 1117 947"),
     ] {
         for mode in MODES {

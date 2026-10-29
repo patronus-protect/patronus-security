@@ -54,7 +54,7 @@ pub trait NativeRegexDetector {
     fn rule_scan(&self, _text: &str) -> Option<dlp::prefilter::RuleScan> {
         None
     }
-    /// The matches of rule `index`, identical to `regex.captures_iter(text)`.
+    /// The matches of rule `index`; by default `regex.captures_iter(text)`.
     fn rule_captures<'t>(
         &self,
         _index: usize,

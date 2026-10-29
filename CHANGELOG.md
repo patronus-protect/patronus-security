@@ -11,6 +11,21 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Changed
 
+- IBAN per the SWIFT IBAN registry (B-IBAN: T05, T21, F03). New validator `iban` for
+  `pii_iban_de` and `pii_iban_generic`: a registry country (89), exactly its registry length, two
+  check digits, letters and digits only, and MOD-97 (`mod97` itself is unchanged); the scoreboard
+  port is `iban_registry`, `checksums.ark` lists `iban` instead of `mod97` (no M3 change).
+  `pii_iban_generic` reads every registry country compact or in blocks of four with letters
+  (`GB82 WEST 1234 5698 7654 32`, `IT60 X054 2811 …`), all upper or all lower case
+  (`nl91 abna 0417 1643 00`); `pii_iban_de` also takes `de`. A grouped match that runs into the
+  next word or block (`BE68 5390 0754 7034 und`) is cut at the registry length of its country
+  before validation. New `rust/tests/pii_iban.rs` (one vector per registry country, wrong lengths
+  with passing MOD-97, creditor IDs, grouped and lowercase detection), 26 new `pii_l1` rows (13
+  positives, 13 hard negatives, DE and EN), the two grouped AT/GB known gaps are positives now,
+  rule fixture with creditor-ID hard negatives. **Detection change** (every mode, `strict`
+  included as the task requires): grouped and lowercase IBANs of all registry countries are new
+  `IBAN` findings; values with a non-registry length, among them SEPA creditor IDs such as
+  `DE30ZZZ56545348553` that pass MOD-97, are no longer reported.
 - Regional phone numbers via the `phonenumber` crate (F01). New rule `pii_phone_regional` (`PHONE`,
   `balanced`/`recall` only, after the other phone rules, which keep their spans): a grouped national
   number without a country prefix (`Mobile: 416 60 039`, `call me on 03.93.92.16.85`,

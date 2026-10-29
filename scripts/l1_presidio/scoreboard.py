@@ -463,7 +463,7 @@ IBAN_REGISTRY_LENGTHS: dict[str, int] = {
 
 
 def iban_registry(value: str) -> bool:
-    """IBAN of the SWIFT registry: known country, its exact length, alphanumeric, MOD-97 (any case, any spacing)."""
+    """Port of ``validators::iban``: known registry country, its exact length, alphanumeric, MOD-97 (any case, any spacing)."""
     compact = "".join(ch for ch in value if not ch.isspace()).upper()
     return (
         IBAN_REGISTRY_LENGTHS.get(compact[:2]) == len(compact)
@@ -1354,7 +1354,7 @@ def pl_regon(value: str) -> bool:
 CHECKSUM_PORTS: dict[str, Callable[[str], bool]] = {
     "luhn": luhn,
     "payment_card": payment_card,
-    "mod97": mod97,
+    "iban": iban_registry,
     "steuer_id": steuer_id,
     "steuer_id_issued": steuer_id_issued,
     "de_vat_id": de_vat_id,
