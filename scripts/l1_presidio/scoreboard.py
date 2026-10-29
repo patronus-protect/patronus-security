@@ -22,6 +22,10 @@ without map entry (the synthetic DE/EU set) on every L1 id, and a row with
 ``scored_entities`` (a Presidio recognizer test case) only on those ids. Exact = same
 id, start and end; overlap = a gold span counts as found if a prediction of the same id
 overlaps it, a prediction counts as correct if it overlaps gold of the same id.
+Gold that cannot be a real value is ignored (``IGNORED_GOLD``): a ``pii.iban`` span whose compact
+value fails the SWIFT IBAN registry (country in the registry, its exact length, MOD-97) is
+neither required nor penalised, i.e. it is no gold and predictions overlapping it are dropped, for
+every engine and split alike.
 
 Predictions come from ``run_ark.py`` of the respective commit. The head runs with
 ``--ark-python`` (default: ``$VIRTUAL_ENV/bin/python``), which must import the
@@ -257,6 +261,38 @@ def _row_scope(row: dict[str, Any], emap: Any, where: str) -> tuple[str, str, se
     return corpus, family, allowed
 
 
+Span = tuple[str | None, int, int]
+
+
+def _row_spans(
+    row: dict[str, Any], spans: list[dict[str, Any]], emap: Any, where: str
+) -> tuple[str, str, set[Span], set[Span], set[Span]]:
+    """Corpus, family, scored gold, all predictions and scored predictions of one gold row.
+
+    Gold of an ``IGNORED_GOLD`` id failing its check is dropped together with every scored prediction
+    of that id overlapping it, so it neither counts as missed nor as a false positive."""
+    corpus, family, allowed = _row_scope(row, emap, where)
+    gold = {_span(e, e.get("entity_type", e.get("label")), where) for e in row.get("entities", [])}
+    gold = {item for item in gold if item[0] in allowed}
+    predicted_all = {_span(s, resolve_label(s, emap), where) for s in spans}
+    predicted = {item for item in predicted_all if item[0] in allowed}
+    ignored = {
+        item for item in gold if item[0] in IGNORED_GOLD and not IGNORED_GOLD[item[0]](_gold_value(row, item, where))
+    }
+    if ignored:
+        gold -= ignored
+        predicted = {item for item in predicted if not any(_overlaps(item, g) for g in ignored)}
+    return corpus, family, gold, predicted_all, predicted
+
+
+def _gold_value(row: dict[str, Any], item: Span, where: str) -> str:
+    """Annotated value without surrounding markup (``gap_value``)."""
+    text = row.get("text")
+    if not isinstance(text, str):
+        raise ScoreboardError(f"{where}: gold row without text")
+    return gap_value(text[item[1] : item[2]])
+
+
 def score_rows(
     gold_rows: Iterable[dict[str, Any]], prediction_rows: Iterable[dict[str, Any]], emap: Any, dataset: str = ""
 ) -> dict[str, Any]:
@@ -272,11 +308,7 @@ def score_rows(
         rows += 1
         row_id = row["id"]
         where = f"{dataset}:{row_id}"
-        corpus, family, allowed = _row_scope(row, emap, where)
-        gold = {_span(e, e.get("entity_type", e.get("label")), where) for e in row.get("entities", [])}
-        gold = {item for item in gold if item[0] in allowed}
-        predicted_all = {_span(s, resolve_label(s, emap), where) for s in predictions[row_id]}
-        predicted = {item for item in predicted_all if item[0] in allowed}
+        corpus, family, gold, predicted_all, predicted = _row_spans(row, predictions[row_id], emap, where)
         for hn in row.get("hard_negatives", []) or []:
             _, start, end = _span(hn, None, where)
             # A hard negative with entity_type only forbids that id (a recognizer's negative case).
@@ -412,6 +444,32 @@ def mod97(value: str) -> bool:
             if digit.isascii() and digit.isdigit():
                 remainder = (remainder * 10 + int(digit)) % 97
     return remainder == 1
+
+
+# Total IBAN length per country of the SWIFT IBAN registry (ISO 13616); French, British and Finnish
+# territories issue IBANs under FR, GB and FI. Countries outside it (experimental or Faker-made formats)
+# have no IBAN.
+IBAN_REGISTRY_LENGTHS: dict[str, int] = {
+    "AD": 24, "AE": 23, "AL": 28, "AT": 20, "AZ": 28, "BA": 20, "BE": 16, "BG": 22, "BH": 22, "BI": 27,
+    "BR": 29, "BY": 28, "CH": 21, "CR": 22, "CY": 28, "CZ": 24, "DE": 22, "DJ": 27, "DK": 18, "DO": 28,
+    "EE": 20, "EG": 29, "ES": 24, "FI": 18, "FK": 18, "FO": 18, "FR": 27, "GB": 22, "GE": 22, "GI": 23,
+    "GL": 18, "GR": 27, "GT": 28, "HN": 28, "HR": 21, "HU": 28, "IE": 22, "IL": 23, "IQ": 23, "IS": 26,
+    "IT": 27, "JO": 30, "KW": 30, "KZ": 20, "LB": 28, "LC": 32, "LI": 21, "LT": 20, "LU": 20, "LV": 21,
+    "LY": 25, "MC": 27, "MD": 24, "ME": 22, "MK": 19, "MN": 20, "MR": 27, "MT": 31, "MU": 30, "NI": 28,
+    "NL": 18, "NO": 15, "OM": 23, "PK": 24, "PL": 28, "PS": 29, "PT": 25, "QA": 29, "RO": 24, "RS": 22,
+    "RU": 33, "SA": 24, "SC": 31, "SD": 18, "SE": 24, "SI": 19, "SK": 24, "SM": 27, "SO": 23, "ST": 25,
+    "SV": 28, "TL": 23, "TN": 24, "TR": 26, "UA": 29, "VA": 22, "VG": 24, "XK": 20, "YE": 30,
+}
+
+
+def iban_registry(value: str) -> bool:
+    """IBAN of the SWIFT registry: known country, its exact length, alphanumeric, MOD-97 (any case, any spacing)."""
+    compact = "".join(ch for ch in value if not ch.isspace()).upper()
+    return (
+        IBAN_REGISTRY_LENGTHS.get(compact[:2]) == len(compact)
+        and compact.isascii() and compact.isalnum() and compact[2:4].isdigit()
+        and mod97(compact)
+    )
 
 
 def steuer_id(value: str) -> bool:
@@ -1343,6 +1401,9 @@ CHECKSUM_PORTS: dict[str, Callable[[str], bool]] = {
     "it_fiscal_code": it_fiscal_code,
 }
 
+# Gold the scoring ignores when its check fails: values that cannot exist (``_row_spans``).
+IGNORED_GOLD: dict[str, Callable[[str], bool]] = {"pii.iban": iban_registry}
+
 
 def count_validated_module() -> Any:
     import count_validated  # noqa: PLC0415 - only the gold-gap report needs the registry
@@ -1399,14 +1460,10 @@ def gold_gaps(
     )
     for row in gold_rows:
         where = f"{dataset}:{row['id']}"
-        corpus, _, allowed = _row_scope(row, emap, where)
         text = row.get("text")
         if not isinstance(text, str):
             raise ScoreboardError(f"{where}: gold row without text")
-        gold = {_span(e, e.get("entity_type", e.get("label")), where) for e in row.get("entities", [])}
-        gold = {item for item in gold if item[0] in allowed}
-        predicted = {_span(s, resolve_label(s, emap), where) for s in predictions[row["id"]]}
-        predicted = {item for item in predicted if item[0] in allowed}
+        corpus, _, gold, _, predicted = _row_spans(row, predictions[row["id"]], emap, where)
         values: dict[str, list[tuple[str, int, int]]] = defaultdict(list)
         for label, start, end in gold:
             values[label].append((gap_value(text[start:end]), start, end))

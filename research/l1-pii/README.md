@@ -61,6 +61,13 @@ Entschieden am 2026-10-21 (TRIAGE 2026-W43, Abschnitt Modus und Buckets 13 + 14;
   Die Validatoren laufen als Python-Ports der Rust-Funktionen (`CHECKSUM_PORTS` in `scoreboard.py`); eine
   Aufgabe, die in `checksums.ark` einen Prüfziffer-Validator einstuft, portiert ihn dort, sonst ist
   `scripts/tests/test_l1_scoreboard.py` rot.
+- **Unmögliche IBAN-Gold-Werte zählen nicht (B-IBAN, entschieden 2026-10-29):** ARK bleibt streng am
+  SWIFT-IBAN-Register. Ein `pii.iban`-Gold-Span, dessen Wert ohne Leerzeichen das Register nicht besteht
+  (Land im Register, genau dessen Länge, MOD-97), ist kein Gold: Er fehlt keiner Engine (kein FN), und
+  Vorhersagen derselben ID, die ihn überlappen, zählen nicht als FP. Die Regel gilt für alle Engines
+  (ARK je Modus, Presidio je Profil), Dev und Holdout, Gate, Meilensteine und den Gold-Lücken-Bericht
+  (`IGNORED_GOLD` und `IBAN_REGISTRY_LENGTHS` in `scoreboard.py`). Betroffen sind vor allem von Faker
+  erzeugte Werte (falsche Länge wie GB mit 21 Zeichen, Länder ohne IBAN wie PH, BD, AR, CO, TH).
 
 ## Fairness-Regel: Quellfamilien
 
