@@ -4140,7 +4140,7 @@ for _row in B_ESIT_CASES:
 # whose first nine are a REGON of their own) and the bare NIP without the `PL` prefix (VAT_ID_PL,
 # the B16 validator). `pii_pesel_pl` and `pii_regon_pl` report the value in every mode when a term
 # of the label stands near it or is its key; bare digits always need the term. The bare NIP needs
-# a VAT or NIP term or key and is balanced/recall only (`pii_vat_id_pl_proximity`). PL rows add
+# a NIP term or key (a generic VAT term is not enough) and is balanced/recall only (`pii_vat_id_pl_proximity`). PL rows add
 # the Polish field names. Hard negatives: failed check digits, impossible dates, a fourteen-digit
 # REGON with a wrong first nine, values without a term and parts of longer values. Appended so
 # existing ids stay stable.
@@ -4205,15 +4205,17 @@ A13_CASES = [
     p("VAT_ID_PL", "de", "pii_vat_id_pl_proximity", "Die NIP des Lieferanten lautet ", "2311045017", ".", carrier="prose", mode="recall"),
     p("VAT_ID_PL", "de", "pii_vat_id_pl_proximity", "Firma;NIP\nPolmex;", "4695147471", "", carrier="csv", mode="balanced"),
     n("VAT_ID_PL", "en", "pii_vat_id_pl_proximity", "NIP: 5260250996", "check digit fails", mode="balanced"),
-    n("VAT_ID_PL", "en", "pii_vat_id_pl_proximity", "Reference 5260250995 was archived.", "ten bare digits without a VAT or NIP term", carrier="prose", mode="recall"),
+    n("VAT_ID_PL", "en", "pii_vat_id_pl_proximity", "Reference 5260250995 was archived.", "ten bare digits without a NIP term", carrier="prose", mode="recall"),
     n("VAT_ID_PL", "en", "pii_vat_id_pl_proximity", "NIP: 5260250995-1", "part of a longer value", mode="balanced"),
     n("VAT_ID_PL", "en", "pii_vat_id_pl_proximity", "Invoice number 2143864618 is overdue.", "invoice number with a valid check digit", carrier="prose", mode="balanced"),
     n("VAT_ID_PL", "en", "pii_vat_id_pl_proximity", "NIP: 9840551520", "check digit fails", mode="recall"),
     n("VAT_ID_PL", "de", "pii_vat_id_pl_proximity", "NIP-Nummer: 4106325384", "check digit fails", mode="balanced"),
-    n("VAT_ID_PL", "de", "pii_vat_id_pl_proximity", "Bitte 4106325383 übernehmen.", "ten bare digits without a VAT or NIP term", carrier="prose", mode="balanced"),
+    n("VAT_ID_PL", "de", "pii_vat_id_pl_proximity", "Bitte 4106325383 übernehmen.", "ten bare digits without a NIP term", carrier="prose", mode="balanced"),
     n("VAT_ID_PL", "de", "pii_vat_id_pl_proximity", "NIP-Nummer: 4106325383-1", "part of a longer value", mode="balanced"),
     n("VAT_ID_PL", "de", "pii_vat_id_pl_proximity", "Rechnungsnummer 1343644803 ist offen.", "invoice number with a valid check digit", carrier="prose", mode="balanced"),
     n("VAT_ID_PL", "de", "pii_vat_id_pl_proximity", "NIP-Nummer: 497-305-06-11", "check digit fails", mode="recall"),
+    n("VAT_ID_PL", "en", "pii_vat_id_pl_proximity", "VAT number: 5260250995", "generic VAT term without a NIP term", mode="balanced"),
+    n("VAT_ID_PL", "de", "pii_vat_id_pl_proximity", "USt-IdNr.: 2143864618", "generic VAT term without a NIP term", mode="balanced"),
 ]
 for _row in A13_CASES:
     PII_CASES.setdefault(_row["target_label"], []).append(_row)

@@ -8,7 +8,7 @@
 //! is reported in every mode when a term of the label stands near it or is its
 //! key; bare digits need the term in every mode. The NIP is the body of the
 //! Polish VAT ID: without `PL` it reuses the B16 validator under `VAT_ID_PL` and,
-//! like the bare Partita IVA, needs a VAT or NIP term (balanced/recall only).
+//! unlike the bare Partita IVA, needs a NIP term (balanced/recall only).
 
 use patronus_ark::detectors::pii::{
     pii::{PiiPattern, PII_PATTERNS},
@@ -310,6 +310,20 @@ fn a_bare_nip_needs_a_term_and_is_reported_in_the_scored_modes_only() {
         "Invoice number 2143864618 is overdue.",
     ] {
         assert_silent(text, "VAT_ID_PL", &MODES);
+    }
+    // A generic VAT term does not make ten valid digits a NIP: the VAT ID of
+    // another country with a spaced prefix, another number before a VAT term.
+    for text in [
+        "VAT number: 5260250995",
+        "{\"country\": \"SK\", \"vat_id\": \"SK 928 762 01 99\"}",
+        "Please quote National Provider Identifier 2877096117 in any reply. The VAT ID on file is DE136695976.",
+    ] {
+        for mode in MODES {
+            assert!(
+                !rules(text, mode).iter().any(|(rule, _)| rule == NIP),
+                "{mode}: {text}"
+            );
+        }
     }
     // The body of a prefixed VAT ID is no bare NIP of its own.
     for text in ["NIP: PL 5260250995", "{\"vat_id\": \"PL 526-025-09-95\"}"] {

@@ -2496,6 +2496,14 @@
     "en": "NIP: 5260250995",
     "language_neutral": false,
     "pii_mode": "balanced",
+    "hard_negatives": {
+      "de": [
+        "USt-IdNr.: 2143864618"
+      ],
+      "en": [
+        "VAT number: 5260250995"
+      ]
+    },
     "balanced": {
       "context": {
         "de": "Die NIP des Lieferanten lautet 2311045017.",
