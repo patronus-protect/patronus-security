@@ -26,6 +26,9 @@ result shapes may be breaking for downstream users, and is called out explicitly
   included as the task requires): grouped and lowercase IBANs of all registry countries are new
   `IBAN` findings; values with a non-registry length, among them SEPA creditor IDs such as
   `DE30ZZZ56545348553` that pass MOD-97, are no longer reported.
+  Dev scoreboard vs. 6c680c7 (PASS in strict and balanced, no new hard-negative FP): `pii.iban`
+  exact F1 75.0 → 97.8 in both modes; L1 F1 strict +1.0 pp, balanced +0.9 pp. The rule regex is
+  linear and bounded; the cut is one pass over the match, only for over-long grouped matches.
 - Regional phone numbers via the `phonenumber` crate (F01). New rule `pii_phone_regional` (`PHONE`,
   `balanced`/`recall` only, after the other phone rules, which keep their spans): a grouped national
   number without a country prefix (`Mobile: 416 60 039`, `call me on 03.93.92.16.85`,
