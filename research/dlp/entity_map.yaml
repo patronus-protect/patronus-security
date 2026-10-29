@@ -405,6 +405,52 @@ entities:
     gitleaks: [digitalocean-access-token, digitalocean-pat, digitalocean-refresh-token]
     trufflehog: [DigitalOceanV2]
     backlog: P06
+  - id: observability.datadog.access_token
+    scope: shared
+    group: API_KEY
+    ark: [dlp_datadog_api_key]
+    gitleaks: [datadog-access-token]
+    trufflehog: [DatadogToken, DatadogApikey]
+    backlog: P07
+  - id: observability.newrelic.key
+    scope: shared
+    group: API_KEY
+    ark: [dlp_newrelic_user_api_key, dlp_newrelic_insert_key, dlp_newrelic_license_key, dlp_newrelic_legacy_license_key]
+    gitleaks: [new-relic-insert-key, new-relic-user-api-key]
+    trufflehog: [NewRelicPersonalApiKey, NewRelicUserKey, NewRelicInsightsInsertKey, NewRelicLicenseKey]
+    backlog: P07
+  - id: observability.sentry.token
+    scope: shared
+    group: SECRET_TOKEN
+    ark: [dlp_sentry_user_token, dlp_sentry_org_token, dlp_sentry_auth_token]
+    gitleaks: [sentry-access-token, sentry-org-token, sentry-user-token]
+    trufflehog: [SentryToken, SentryOrgToken]
+    backlog: P07
+  - id: observability.grafana.token
+    scope: shared
+    group: SECRET_TOKEN
+    ark: [dlp_grafana_api_key, dlp_grafana_cloud_token, dlp_grafana_service_account_token]
+    gitleaks: [grafana-api-key, grafana-cloud-api-token, grafana-service-account-token]
+    trufflehog: [Grafana, GrafanaServiceAccount]
+    backlog: P07
+  - id: observability.dynatrace.api_token
+    scope: shared
+    group: SECRET_TOKEN
+    ark: [dlp_dynatrace_token]
+    gitleaks: [dynatrace-api-token]
+    backlog: P07
+  - id: observability.honeycomb.api_key
+    scope: shared
+    group: API_KEY
+    ark: [dlp_honeycomb_api_key]
+    trufflehog: [Honeycomb]
+    backlog: P07
+  - id: observability.pagerduty.api_key
+    scope: shared
+    group: API_KEY
+    ark: [dlp_pagerduty_api_key]
+    trufflehog: [PagerDutyApiKey]
+    backlog: P07
   - id: payment.stripe.secret_key
     scope: shared
     group: PAYMENT_KEY
@@ -564,6 +610,21 @@ entities:
     group: CLOUD_KEY
     ark: [dlp_render_api_key]
     backlog: P06
+  - id: observability.sentry.dsn_secret
+    scope: ark_only
+    group: API_KEY
+    ark: [dlp_sentry_dsn_secret]
+    backlog: P07
+  - id: observability.splunk.hec_token
+    scope: ark_only
+    group: SECRET_TOKEN
+    ark: [dlp_splunk_hec_token]
+    backlog: P07
+  - id: observability.elastic.api_key
+    scope: ark_only
+    group: API_KEY
+    ark: [dlp_elastic_api_key]
+    backlog: P07
   - id: crypto.ethereum.private_key
     scope: ark_only
     group: CRYPTO_KEY
@@ -665,15 +726,7 @@ entities:
   - {id: hosting.settlemint.access_token, scope: baseline_only, group: CLOUD_KEY,
      gitleaks: [settlemint-application-access-token, settlemint-personal-access-token,
        settlemint-service-access-token], backlog: P06}
-  # P07: Observability
-  - {id: observability.datadog.access_token, scope: baseline_only, group: API_KEY, gitleaks: [datadog-access-token], backlog: P07}
-  - {id: observability.newrelic.key, scope: baseline_only, group: API_KEY,
-     gitleaks: [new-relic-insert-key, new-relic-user-api-key], backlog: P07}
-  - {id: observability.sentry.token, scope: baseline_only, group: API_KEY,
-     gitleaks: [sentry-access-token, sentry-org-token, sentry-user-token], backlog: P07}
-  - {id: observability.grafana.token, scope: baseline_only, group: API_KEY,
-     gitleaks: [grafana-api-key, grafana-cloud-api-token, grafana-service-account-token], backlog: P07}
-  - {id: observability.dynatrace.api_token, scope: baseline_only, group: API_KEY, gitleaks: [dynatrace-api-token], backlog: P07}
+  # P07: Observability (ohne ARK-Regel)
   - {id: observability.sumologic.access_token, scope: baseline_only, group: API_KEY, gitleaks: [sumologic-access-token], backlog: P07}
   # P08: Kommunikation/Webhooks
   - {id: comm.webhook_url, scope: baseline_only, group: SECRET_TOKEN, subtype: webhook_url,

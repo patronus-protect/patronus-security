@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! Provider-bound secret formats (LLM, cloud, source control, DevOps and
-//! package registries, CI and hosting, payment, chat).
+//! package registries, CI and hosting, observability, payment, chat).
 use crate::{
     detectors::dlp::{
         aws_context::{has_aws_secret_context, is_aws_secret_value, lines_above},
@@ -8,11 +8,12 @@ use crate::{
         prefilter::ValueClass,
     },
     detectors::validators::{
-        base64_decode, crc32_base62_valid, crc32_hex_valid, macaroon_v2_parse, Base64Kind,
+        base64_decode, crc32, crc32_base62_valid, crc32_hex_valid, macaroon_v2_parse, Base64Kind,
     },
     post_prediction::is_real_secret_assignment,
 };
-use std::ops::Range;
+use serde_json::{Map, Value};
+use std::{borrow::Cow, ops::Range};
 
 /// GitHub token (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`) and npm token
 /// (`npm_`, F04): after the four-character prefix, 30 random base62
@@ -97,6 +98,94 @@ fn has_both_cases_after_prefix(value: &str) -> bool {
         .is_some_and(|(_, body)| has_both_cases(body))
 }
 
+/// P07: the JSON object that the standard base64 `body` (padded or not)
+/// encodes, the payload of Grafana and Sentry tokens.
+fn base64_json_object(body: &str) -> Option<Map<String, Value>> {
+    let raw = base64_decode(body, Base64Kind::Standard)
+        .or_else(|| base64_decode(body, Base64Kind::StandardUnpadded))?;
+    match serde_json::from_slice(&raw).ok()? {
+        Value::Object(object) => Some(object),
+        _ => None,
+    }
+}
+
+/// P07: a Sentry org auth token is `sntrys_`, the base64 of a JSON payload
+/// with a numeric `iat` (issued at), `_` and the secret.
+fn is_sentry_org_token(value: &str) -> bool {
+    value
+        .strip_prefix("sntrys_")
+        .and_then(|rest| rest.rsplit_once('_'))
+        .and_then(|(payload, _)| base64_json_object(payload))
+        .is_some_and(|payload| payload.get("iat").is_some_and(Value::is_number))
+}
+
+/// P07: a legacy Grafana API key is the base64 of `{"k": key, "n": name,
+/// "id": org id}`.
+fn is_grafana_api_key(value: &str) -> bool {
+    base64_json_object(value).is_some_and(|key| {
+        key.get("k").is_some_and(Value::is_string)
+            && key.get("n").is_some_and(Value::is_string)
+            && key.get("id").is_some_and(Value::is_number)
+    })
+}
+
+/// P07: a Grafana Cloud access policy token is `glc_` and the base64 of a JSON
+/// object that holds the key in `k`.
+fn is_grafana_cloud_token(value: &str) -> bool {
+    value
+        .strip_prefix("glc_")
+        .and_then(base64_json_object)
+        .is_some_and(|token| token.get("k").is_some_and(Value::is_string))
+}
+
+/// P07: a Grafana service account token is `glsa_`, 32 alphanumerics, `_` and
+/// the CRC32 of everything before that `_`, its little-endian bytes as eight
+/// lower-case hex digits.
+fn is_grafana_service_account_token(value: &str) -> bool {
+    value.rsplit_once('_').is_some_and(|(key, checksum)| {
+        checksum == format!("{:08x}", crc32(key.as_bytes()).swap_bytes())
+    })
+}
+
+/// P07: an Elasticsearch API key is `id:api_key` (20 and 22 base64url
+/// characters, the `api_key` with both cases), as written in Beats and Logstash
+/// configs, or the standard base64 of that pair (the `encoded` key of the
+/// `ApiKey` scheme).
+fn is_elastic_api_key(value: &str) -> bool {
+    let pair = if value.contains(':') {
+        Cow::Borrowed(value)
+    } else {
+        match base64_decode(value, Base64Kind::Standard).and_then(|raw| String::from_utf8(raw).ok())
+        {
+            Some(pair) => Cow::Owned(pair),
+            None => return false,
+        }
+    };
+    let base64url = |part: &str, len: usize| {
+        part.len() == len
+            && part
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+    };
+    pair.split_once(':')
+        .is_some_and(|(id, key)| base64url(id, 20) && base64url(key, 22) && has_both_cases(key))
+}
+
+/// P07: a random alphanumeric key (Honeycomb's 22, PagerDuty's 20 characters)
+/// has both cases; the 32-digit hex forms are lower-case by format.
+fn is_mixed_case_or_hex_key(value: &str) -> bool {
+    value.len() == 32 || has_both_cases(value)
+}
+
+/// P07: the PagerDuty `Token token=` scheme is also Rails' token scheme, so a
+/// value needs PagerDuty on its line or up to five lines above; a PagerDuty
+/// key names it already.
+fn has_pagerduty_context(text: &str, value: Range<usize>) -> bool {
+    [&b"pagerduty"[..], b"pager_duty", b"pager-duty"]
+        .iter()
+        .any(|term| has_term_nearby(text, value.clone(), term))
+}
+
 /// P06: a provider key and its value (gitleaks' keyword rules, tightened): the
 /// provider name, up to 30 key characters, a credential noun right before the
 /// separator (`TRAVIS_API_TOKEN=`, `"netlify_auth_token":`,
@@ -104,7 +193,7 @@ fn has_both_cases_after_prefix(value: &str) -> bool {
 /// the value in group 1, which no further value character continues.
 /// `HEROKU_APP_ID`, `CIRCLE_SHA1` or `travis_build_id` name no credential.
 macro_rules! provider_key {
-    ($provider:literal, $value:literal) => {
+    ($provider:literal, $value:expr) => {
         concat!(
             "(?i:",
             $provider,
@@ -112,6 +201,29 @@ macro_rules! provider_key {
             r"(?i:token|key|secret|pat|password|passwort|kennwort|schlüssel|schluessel)",
             key_suffix!(),
             r"(?:=>|:=|[=:,])[ \t]*\\?[\x22'`]?(",
+            $value,
+            r")(?:[^A-Za-z0-9_\-+/=]|$)",
+        )
+    };
+}
+
+/// A UUID in either case (legacy Heroku API keys, Railway and Splunk HEC
+/// tokens).
+macro_rules! uuid {
+    () => {
+        r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+    };
+}
+
+/// P07: the value after an HTTP `Authorization` header and its scheme
+/// (`Authorization: Splunk <token>`, `"authorization": "ApiKey <key>"`) in
+/// group 1, which no further value character continues.
+macro_rules! authorization_scheme {
+    ($scheme:literal, $value:expr) => {
+        concat!(
+            r"(?i:authorization)\\?[\x22']?[ \t]*[:=][ \t]*\\?[\x22']?",
+            $scheme,
+            r"[ \t]+(",
             $value,
             r")(?:[^A-Za-z0-9_\-+/=]|$)",
         )
@@ -937,10 +1049,7 @@ pub(super) const RULES: &[DlpPattern] = &[
     // Heroku API keys before `HRKU-`: a UUID under a Heroku key.
     DlpPattern {
         name: "dlp_heroku_legacy_api_key",
-        pattern: provider_key!(
-            "heroku",
-            r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
-        ),
+        pattern: provider_key!("heroku", uuid!()),
         entity_group: "CLOUD_KEY",
         validator: None,
         span_group: Some(1),
@@ -976,10 +1085,7 @@ pub(super) const RULES: &[DlpPattern] = &[
     // Railway account and project tokens: a UUID under a Railway key.
     DlpPattern {
         name: "dlp_railway_token",
-        pattern: provider_key!(
-            "railway",
-            r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
-        ),
+        pattern: provider_key!("railway", uuid!()),
         entity_group: "CLOUD_KEY",
         validator: None,
         span_group: Some(1),
@@ -1048,6 +1154,347 @@ pub(super) const RULES: &[DlpPattern] = &[
         .with_min_entropy(3.0)
         .with_boundary("")
         .with_subtype(SecretSubtype::AccessToken),
+    },
+    // ── Observability (P07) ──────────────────────────────────────────────────
+    // Datadog API keys (32 hex digits) and application keys (40 characters)
+    // under a Datadog key (`DD_API_KEY`, `DD-APPLICATION-KEY:`, `ddApiKey`,
+    // `datadog_app_key`). A client token (`pub` and 32 hex digits) is public.
+    DlpPattern {
+        name: "dlp_datadog_api_key",
+        pattern: provider_key!(
+            r"datadog|(?-u:\b)dd(?:[_\-]|api|app)",
+            r"[a-z0-9]{40}|[0-9a-f]{32}"
+        ),
+        entity_group: "API_KEY",
+        validator: None,
+        span_group: Some(1),
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:datadog-access-token",
+            &["datadog", "dd_", "dd-", "ddapi", "ddapp"],
+        )
+        .with_provider("datadog")
+        .with_min_entropy(3.0)
+        .with_subtype(SecretSubtype::ApiKey),
+    },
+    // New Relic user API keys: `NRAK-` and 27 alphanumerics.
+    DlpPattern {
+        name: "dlp_newrelic_user_api_key",
+        pattern: r"NRAK-[A-Za-z0-9]{27}",
+        entity_group: "API_KEY",
+        validator: None,
+        span_group: None,
+        base_score: 55,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:new-relic-user-api-key",
+            &["nrak-"],
+        )
+        .with_provider("newrelic")
+        .with_min_entropy(3.0)
+        .with_boundary("")
+        .with_subtype(SecretSubtype::ApiKey),
+    },
+    // New Relic Insights insert keys: `NRII-` and 32 (gitleaks) or 25
+    // (TruffleHog) characters.
+    DlpPattern {
+        name: "dlp_newrelic_insert_key",
+        pattern: r"NRII-(?:[A-Za-z0-9_\-]{32}|[A-Za-z0-9_\-]{25})",
+        entity_group: "API_KEY",
+        validator: None,
+        span_group: None,
+        base_score: 55,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:new-relic-insert-key",
+            &["nrii-"],
+        )
+        .with_provider("newrelic")
+        .with_min_entropy(3.0)
+        .with_boundary("-")
+        .with_subtype(SecretSubtype::ApiKey),
+    },
+    // New Relic license (ingest) keys: 32 hex digits, or `eu01xx` and 26, and
+    // the suffix `FFFFNRAL`.
+    DlpPattern {
+        name: "dlp_newrelic_license_key",
+        pattern: r"(?:[0-9a-f]{32}|eu01xx[0-9a-f]{26})FFFFNRAL",
+        entity_group: "API_KEY",
+        validator: None,
+        span_group: None,
+        base_score: 50,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/newreliclicensekey/newreliclicensekey.go",
+            &["ffffnral"],
+        )
+        .with_provider("newrelic")
+        .with_min_entropy(3.0)
+        .with_boundary("")
+        .with_subtype(SecretSubtype::ApiKey),
+    },
+    // New Relic license keys without the suffix: 40 hex digits under a New
+    // Relic key (`NEW_RELIC_LICENSE_KEY`, `newrelic.license_key`).
+    DlpPattern {
+        name: "dlp_newrelic_legacy_license_key",
+        pattern: provider_key!(r"new[_.\- ]?relic", r"[0-9a-f]{40}"),
+        entity_group: "API_KEY",
+        validator: None,
+        span_group: Some(1),
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://docs.newrelic.com/docs/apis/intro-apis/new-relic-api-keys/",
+            &["relic"],
+        )
+        .with_provider("newrelic")
+        .with_min_entropy(3.0)
+        .with_subtype(SecretSubtype::ApiKey),
+    },
+    // Sentry user auth tokens: `sntryu_` and 64 hex digits.
+    DlpPattern {
+        name: "dlp_sentry_user_token",
+        pattern: r"sntryu_[0-9a-f]{64}",
+        entity_group: "SECRET_TOKEN",
+        validator: None,
+        span_group: None,
+        base_score: 55,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:sentry-user-token",
+            &["sntryu_"],
+        )
+        .with_provider("sentry")
+        .with_min_entropy(3.0)
+        .with_boundary("")
+        .with_subtype(SecretSubtype::AccessToken),
+    },
+    // Sentry org auth tokens: `sntrys_`, the base64 of a JSON payload with
+    // `iat`, `_` and 43 base64 characters. Standard base64, so `/` and `+`
+    // belong to the token and no token boundary applies.
+    DlpPattern {
+        name: "dlp_sentry_org_token",
+        pattern: r"sntrys_eyJpYXQiO[A-Za-z0-9+/]{10,600}={0,2}_[A-Za-z0-9+/]{43}",
+        entity_group: "SECRET_TOKEN",
+        validator: Some(is_sentry_org_token),
+        span_group: None,
+        base_score: 50,
+        meta: RuleMeta::new(
+            ValidatorStrength::Structure,
+            "gitleaks:sentry-org-token",
+            &["sntrys_"],
+        )
+        .with_provider("sentry")
+        .with_min_entropy(3.0)
+        .with_subtype(SecretSubtype::AccessToken),
+    },
+    // Sentry auth tokens before the prefixes: 64 hex digits under a Sentry key
+    // (`SENTRY_AUTH_TOKEN`).
+    DlpPattern {
+        name: "dlp_sentry_auth_token",
+        pattern: provider_key!("sentry", r"[0-9a-f]{64}"),
+        entity_group: "SECRET_TOKEN",
+        validator: None,
+        span_group: Some(1),
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "gitleaks:sentry-access-token",
+            &["sentry"],
+        )
+        .with_provider("sentry")
+        .with_min_entropy(3.0)
+        .with_subtype(SecretSubtype::AccessToken),
+    },
+    // The secret key of a legacy Sentry DSN
+    // (`https://<public key>:<secret key>@host/<project id>`). A DSN with the
+    // public key only is safe to expose (Sentry docs) and no finding.
+    DlpPattern {
+        name: "dlp_sentry_dsn_secret",
+        pattern: concat!(
+            r"https?://[0-9a-f]{32}:([0-9a-f]{32})@[A-Za-z0-9.\-]{1,253}(?::[0-9]{1,5})?",
+            r"/(?:[A-Za-z0-9._\-]{1,64}/){0,4}[0-9]{1,20}(?:[^A-Za-z0-9_\-/]|$)",
+        ),
+        entity_group: "API_KEY",
+        validator: None,
+        span_group: Some(1),
+        base_score: 50,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://docs.sentry.io/concepts/key-terms/dsn-explainer/",
+            &["://"],
+        )
+        .with_provider("sentry")
+        .with_min_entropy(3.0)
+        .with_subtype(SecretSubtype::SecretKey),
+    },
+    // Legacy Grafana API keys: the base64 of `{"k":…,"n":…,"id":…}`, so they
+    // start with `eyJrIjoi`.
+    DlpPattern {
+        name: "dlp_grafana_api_key",
+        pattern: r"eyJrIjoi[A-Za-z0-9+/]{70,400}={0,3}",
+        entity_group: "SECRET_TOKEN",
+        validator: Some(is_grafana_api_key),
+        span_group: None,
+        base_score: 50,
+        meta: RuleMeta::new(
+            ValidatorStrength::Structure,
+            "gitleaks:grafana-api-key",
+            &["eyjrijoi"],
+        )
+        .with_provider("grafana")
+        .with_min_entropy(3.0)
+        .with_subtype(SecretSubtype::AccessToken),
+    },
+    // Grafana Cloud access policy tokens: `glc_` and the base64 of a JSON
+    // object with the key.
+    DlpPattern {
+        name: "dlp_grafana_cloud_token",
+        pattern: r"glc_[A-Za-z0-9+/]{32,400}={0,3}",
+        entity_group: "SECRET_TOKEN",
+        validator: Some(is_grafana_cloud_token),
+        span_group: None,
+        base_score: 50,
+        meta: RuleMeta::new(
+            ValidatorStrength::Structure,
+            "gitleaks:grafana-cloud-api-token",
+            &["glc_"],
+        )
+        .with_provider("grafana")
+        .with_min_entropy(3.0)
+        .with_subtype(SecretSubtype::AccessToken),
+    },
+    // Grafana service account tokens: `glsa_`, 32 alphanumerics, `_` and a
+    // CRC32 as eight hex digits.
+    DlpPattern {
+        name: "dlp_grafana_service_account_token",
+        pattern: r"glsa_[A-Za-z0-9]{32}_[0-9a-f]{8}",
+        entity_group: "SECRET_TOKEN",
+        validator: Some(is_grafana_service_account_token),
+        span_group: None,
+        base_score: 55,
+        meta: RuleMeta::new(
+            ValidatorStrength::Checksum,
+            "https://github.com/grafana/grafana/blob/main/pkg/components/satokengen/tokengen.go",
+            &["glsa_"],
+        )
+        .with_provider("grafana")
+        .with_min_entropy(3.0)
+        .with_boundary("")
+        .with_subtype(SecretSubtype::AccessToken),
+    },
+    // Dynatrace access (`dt0c01`) and platform/API tokens (`dt0s01` …
+    // `dt0s16`): prefix, 24-character public portion and 64-character secret.
+    DlpPattern {
+        name: "dlp_dynatrace_token",
+        pattern: r"dt0[cs][0-9]{2}\.[A-Za-z0-9]{24}\.[A-Za-z0-9]{64}",
+        entity_group: "SECRET_TOKEN",
+        validator: None,
+        span_group: None,
+        base_score: 55,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://docs.dynatrace.com/docs/manage/identity-access-management/access-tokens-and-oauth-clients/access-tokens",
+            &["dt0c", "dt0s"],
+        )
+        .with_provider("dynatrace")
+        .with_min_entropy(3.0)
+        .with_boundary("")
+        .with_subtype(SecretSubtype::AccessToken),
+    },
+    // Splunk HTTP Event Collector tokens: a GUID under a Splunk key or after
+    // `Authorization: Splunk`.
+    DlpPattern {
+        name: "dlp_splunk_hec_token",
+        pattern: concat!(
+            provider_key!("splunk", uuid!()),
+            "|",
+            authorization_scheme!("Splunk", uuid!()),
+        ),
+        entity_group: "SECRET_TOKEN",
+        validator: None,
+        span_group: Some(1),
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://docs.splunk.com/Documentation/Splunk/latest/Data/UsetheHTTPEventCollector",
+            &["splunk"],
+        )
+        .with_provider("splunk")
+        .with_min_entropy(3.0)
+        .with_subtype(SecretSubtype::AccessToken),
+    },
+    // Elasticsearch API keys under an Elastic key (`id:api_key` or its
+    // base64) or after `Authorization: ApiKey`.
+    DlpPattern {
+        name: "dlp_elastic_api_key",
+        pattern: concat!(
+            provider_key!(
+                "elastic",
+                r"[A-Za-z0-9+/]{56,120}={0,2}|[A-Za-z0-9_\-]{20}:[A-Za-z0-9_\-]{22}"
+            ),
+            "|",
+            authorization_scheme!("ApiKey", r"[A-Za-z0-9+/]{56,120}={0,2}"),
+        ),
+        entity_group: "API_KEY",
+        validator: Some(is_elastic_api_key),
+        span_group: Some(1),
+        base_score: 45,
+        meta: RuleMeta::new(
+            ValidatorStrength::Structure,
+            "https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-security-create-api-key",
+            &["elastic", "authorization"],
+        )
+        .with_provider("elastic")
+        .with_min_entropy(3.0)
+        .with_subtype(SecretSubtype::ApiKey),
+    },
+    // Honeycomb configuration and ingest keys (22 alphanumerics) and Classic
+    // keys (32 hex digits) under a Honeycomb key or in the
+    // `x-honeycomb-team` header (also in `OTEL_EXPORTER_OTLP_HEADERS`).
+    DlpPattern {
+        name: "dlp_honeycomb_api_key",
+        pattern: concat!(
+            provider_key!("honeycomb", r"[0-9a-f]{32}|[A-Za-z0-9]{22}"),
+            r"|(?i:x-honeycomb-team)\\?[\x22']?[ \t]*[:=,][ \t]*\\?[\x22']?",
+            r"([0-9a-f]{32}|[A-Za-z0-9]{22})(?:[^A-Za-z0-9_\-+/=]|$)",
+        ),
+        entity_group: "API_KEY",
+        validator: Some(is_mixed_case_or_hex_key),
+        span_group: Some(1),
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/honeycomb/honeycomb.go",
+            &["honeycomb"],
+        )
+        .with_provider("honeycomb")
+        .with_min_entropy(3.0)
+        .with_subtype(SecretSubtype::ApiKey),
+    },
+    // PagerDuty REST API keys (20 characters, user tokens `u+…`) and Events
+    // API integration keys (32 hex digits) under a PagerDuty key, and REST keys
+    // in the `Token token=` scheme with PagerDuty context.
+    DlpPattern {
+        name: "dlp_pagerduty_api_key",
+        pattern: concat!(
+            provider_key!(r"pagerduty|pager[_\-]duty", r"[A-Za-z0-9_+\-]{20}|[0-9a-f]{32}"),
+            r"|(?i:token)[ \t]+token=\\?[\x22']?([A-Za-z0-9_+\-]{20})(?:[^A-Za-z0-9_\-+/=]|$)",
+        ),
+        entity_group: "API_KEY",
+        validator: Some(is_mixed_case_or_hex_key),
+        span_group: Some(1),
+        base_score: 40,
+        meta: RuleMeta::new(
+            ValidatorStrength::Format,
+            "https://github.com/trufflesecurity/trufflehog/blob/main/pkg/detectors/pagerdutyapikey/pagerdutyapikey.go",
+            &["pagerduty", "pager_duty", "pager-duty", "token="],
+        )
+        .with_provider("pagerduty")
+        .with_min_entropy(3.0)
+        .with_context_gate(has_pagerduty_context)
+        .with_subtype(SecretSubtype::ApiKey),
     },
     // ── Payment ───────────────────────────────────────────────────────────────
     DlpPattern {
