@@ -20,8 +20,8 @@ result shapes may be breaking for downstream users, and is called out explicitly
   (`nl91 abna 0417 1643 00`); `pii_iban_de` also takes `de`. A grouped match that runs into the
   next word or block (`BE68 5390 0754 7034 und`) is cut at the registry length of its country
   before validation. New `rust/tests/pii_iban.rs` (one vector per registry country, wrong lengths
-  with passing MOD-97, creditor IDs, grouped and lowercase detection), 26 new `pii_l1` rows (13
-  positives, 13 hard negatives, DE and EN), the two grouped AT/GB known gaps are positives now,
+  with passing MOD-97, creditor IDs, grouped and lowercase detection), 25 new `pii_l1` rows (13
+  positives, 12 hard negatives, DE and EN), the two grouped AT/GB known gaps are positives now,
   rule fixture with creditor-ID hard negatives. **Detection change** (every mode, `strict`
   included as the task requires): grouped and lowercase IBANs of all registry countries are new
   `IBAN` findings; values with a non-registry length, among them SEPA creditor IDs such as
