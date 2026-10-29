@@ -426,7 +426,7 @@ fn provider_keys_without_a_credential_noun_hold_no_secret() {
     let hex32 = random(5, HEX, 32);
     let hex40 = random(5, HEX, 40);
     let uuid = generated("splunk_hec_token", 5);
-    for (rule_id, text) in [
+    for (index, (rule_id, text)) in [
         ("dlp_datadog_api_key", format!("DD_TRACE_ID={hex32}")),
         ("dlp_datadog_api_key", format!("DD_VERSION={hex40}")),
         ("dlp_datadog_api_key", format!("datadog_org_id: {hex32}")),
@@ -463,8 +463,11 @@ fn provider_keys_without_a_credential_noun_hold_no_secret() {
             "dlp_splunk_hec_token",
             format!("Authorization: Bearer {uuid}"),
         ),
-    ] {
-        assert!(entry(&text, rule_id).is_none(), "{rule_id}: {text:?}");
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        assert!(entry(&text, rule_id).is_none(), "{rule_id}: case {index}");
     }
 }
 
