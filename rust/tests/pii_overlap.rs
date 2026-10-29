@@ -128,22 +128,22 @@ fn assert_strict_overlap(text: &str, label: &str, value: &str) {
 
 /// Valid IBANs whose BBAN digits are a card number (Luhn plus a Maestro IIN, B-PAN):
 /// strict reports a card inside them.
-const IBANS_WITH_LUHN_DIGITS: [(&str, &str); 4] = [
+const IBANS_WITH_LUHN_DIGITS: [(&str, &str); 5] = [
     ("DE94 5001 0517 5401 2345 65", "5001 0517 5401 2345 65"),
     ("DE11 6005 0101 7400 1234 56", "6005 0101 7400 1234 56"),
     ("DE87 6605 0101 1002 3456 78", "6605 0101 1002 3456 78"),
     ("DE45 5005 0201 1234 5678 98", "5005 0201 1234 5678 98"),
+    // Grouped IBANs outside DE are reported since B-IBAN (T05).
+    ("AT29 5600 0001 2345 6785", "5600 0001 2345 6785"),
 ];
 
 /// IBAN forms whose check digits fail, with card-number BBAN digits.
-const IBAN_FORMS_WITH_LUHN_DIGITS: [(&str, &str); 6] = [
+const IBAN_FORMS_WITH_LUHN_DIGITS: [(&str, &str); 5] = [
     ("DE74 6009 0800 1237 8945 61", "6009 0800 1237 8945 61"),
     ("DE34 6659 4134 6836 7322 13", "6659 4134 6836 7322 13"),
     ("DE90 5007 0010 1755 2630 33", "5007 0010 1755 2630 33"),
     ("AT77 5761 4565 6741 3978", "5761 4565 6741 3978"),
     ("AT56 6000 0123 4567 8900", "6000 0123 4567 8900"),
-    // Valid, but grouped IBANs outside DE are not reported yet (T05).
-    ("AT29 5600 0001 2345 6785", "5600 0001 2345 6785"),
 ];
 
 /// Phone numbers whose digits after `+` pass Luhn; since B-PAN no card starts after `+`.
@@ -161,7 +161,7 @@ fn checksum_vectors_pass_or_fail_what_they_name() {
         assert!(validators::luhn(digits), "{digits}");
     }
     for (form, digits) in IBAN_FORMS_WITH_LUHN_DIGITS {
-        assert_eq!(validators::mod97(form), form.starts_with("AT29"), "{form}");
+        assert!(!validators::mod97(form), "{form}");
         assert!(validators::payment_card(digits), "{digits}");
     }
     for (_, digits) in IBANS_WITH_LUHN_DIGITS {
