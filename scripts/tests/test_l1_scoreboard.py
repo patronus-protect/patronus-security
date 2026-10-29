@@ -57,7 +57,7 @@ def pred(row_id, spans):
 
 
 def test_exact_and_overlap_counts():
-    rows = [gold("a", [("pii.email", 0, 10), ("pii.phone", 20, 30), ("pii.iban", 40, 60)])]
+    rows = [gold("a", [("pii.email", 0, 10), ("pii.phone", 20, 30), ("pii.credit_card.pan", 40, 60)])]
     preds = [pred("a", [("pii.email", 0, 10), ("pii.phone", 18, 30), ("pii.iban", 70, 80)])]
     result = MODULE.score_rows(rows, preds, EMAP, "t")
     counts = result["buckets"]["all"]
@@ -610,7 +610,8 @@ def test_gold_gaps_count_duplicate_values_and_checksum_invalid_gold():
     # the e-mail value is another id.
     assert gaps["pii.email"] == {"gold": 2, "gold_invalid": None, "invalid_found": None, "duplicate_fp": 3}
     assert gaps["pii.credit_card.pan"] == {"gold": 2, "gold_invalid": 1, "invalid_found": 0, "duplicate_fp": 0}
-    assert gaps["pii.iban"] == {"gold": 2, "gold_invalid": 1, "invalid_found": 0, "duplicate_fp": 0}
+    # The IBAN failing MOD-97 is no registry IBAN: ignored gold, not a gap (IGNORED_GOLD).
+    assert gaps["pii.iban"] == {"gold": 1, "gold_invalid": 0, "invalid_found": 0, "duplicate_fp": 0}
     assert "pii.phone" not in gaps
     # Gold on the mailto copy: the bracketed copy is the gap.
     text = "Mail [dee@bank.example](mailto:dee@bank.example)"
@@ -619,7 +620,7 @@ def test_gold_gaps_count_duplicate_values_and_checksum_invalid_gold():
     assert gaps[GRETEL]["pii.email"]["duplicate_fp"] == 1
     gaps = MODULE.gold_gaps(rows, presidio, EMAP)[GRETEL]
     assert gaps["pii.email"]["duplicate_fp"] == 1
-    assert gaps["pii.credit_card.pan"]["invalid_found"] == 1 and gaps["pii.iban"]["invalid_found"] == 1
+    assert gaps["pii.credit_card.pan"]["invalid_found"] == 1 and gaps["pii.iban"]["invalid_found"] == 0
 
 
 def test_gold_gaps_follow_the_scored_ids_of_a_row():
@@ -652,7 +653,7 @@ def test_gold_gaps_change_no_metric(tmp_path):
     assert f"| {GRETEL} | pii.email | 2 | 3 | 3 | 1 |" in lines
     assert "| Corpus | Entity | Validator | Gold | Invalid | ark-strict | ark-balanced | presidio-tuned |" in lines
     assert f"| {GRETEL} | pii.credit_card.pan | payment_card | 2 | 1 | 0 | 0 | 1 |" in lines
-    assert f"| {GRETEL} | pii.iban | mod97 | 2 | 1 | 0 | 0 | 1 |" in lines
+    assert f"| {GRETEL} | pii.iban | mod97 | 1 | 0 | 0 | 0 | 0 |" in lines
 
 
 def test_gold_validators_cover_every_checksum_validator():
@@ -1024,7 +1025,7 @@ def data(tmp_path):
         "synthetic/s.jsonl": [gold(f"d{i}", [("pii.email", 0, 10)], hard_negatives=[(50, 60)]) for i in range(10)],
     })
     holdout = frozen_split(tmp_path / "holdout", {
-        "c.jsonl": [gold(f"h{i}", [("pii.iban", 0, 22)], corpus=GRETEL, language="en") for i in range(10)],
+        "c.jsonl": [gold(f"h{i}", [("pii.credit_card.pan", 0, 22)], corpus=GRETEL, language="en") for i in range(10)],
     })
     return {"dev": dev, "holdout": holdout}
 
@@ -1088,12 +1089,12 @@ def test_gate_detects_regression_on_holdout(repo, data, tmp_path):
     assert builds.base_builds == [base]
     assert lines[-1] == "RESULT: REGRESSION"
     for mode in ("strict", "balanced"):
-        assert any(line.startswith(f"  {mode} holdout entity/pii.iban exact F1 100.0 -> ") for line in lines)
+        assert any(line.startswith(f"  {mode} holdout entity/pii.credit_card.pan exact F1 100.0 -> ") for line in lines)
         assert report["modes"][mode]["dev"]["compare"]["regressions"] == []
     # Holdout row ids never reach stdout.
     assert not any("h0" in line or "h1" in line for line in lines)
     # Per-entity tables are printed for dev only, one per mode.
-    assert not any("pii.iban" in line for line in lines if not line.startswith(("  strict holdout", "  balanced holdout")))
+    assert not any("pii.credit_card.pan" in line for line in lines if not line.startswith(("  strict holdout", "  balanced holdout")))
     assert "dev per entity, strict (head; Δ vs base in pp):" in lines
     assert "dev per entity, balanced (head; Δ vs base in pp):" in lines
     # Aggregates per mode and source family for both splits; the family regression is named, the rows are not.
@@ -1127,7 +1128,7 @@ def test_gate_fails_on_a_regression_in_either_mode(repo, data, tmp_path, mode):
     other = "balanced" if mode == "strict" else "strict"
     assert report["modes"][mode]["holdout"]["compare"]["regressions"]
     assert report["modes"][other]["holdout"]["compare"]["regressions"] == []
-    assert any(line.startswith(f"  {mode} holdout entity/pii.iban") for line in lines)
+    assert any(line.startswith(f"  {mode} holdout entity/pii.credit_card.pan") for line in lines)
     assert not any(line.startswith(f"  {other} holdout entity/") for line in lines)
 
 
@@ -1267,3 +1268,75 @@ def test_build_base_failure_is_an_infrastructure_error(repo, tmp_path):
     with pytest.raises(MODULE.ScoreboardError, match="no matching package"):
         MODULE.build_base(repo, sha, "k", tmp_path / "cache", sys.executable, str(cargo))
     assert not (tmp_path / "cache" / "builds" / "k" / ".ready").exists()
+
+
+# ── ignored gold: IBANs outside the SWIFT registry ───────────────────────
+
+
+def iban(country, bban):
+    """MOD-97-valid IBAN for any country code and BBAN (check digits searched with the port)."""
+    return next(f"{country}{check:02d}{bban}" for check in range(2, 99) if MODULE.mod97(f"{country}{check:02d}{bban}"))
+
+
+def grouped(value):
+    return " ".join(value[i : i + 4] for i in range(0, len(value), 4))
+
+
+def test_iban_registry_needs_a_registry_country_its_length_and_mod97():
+    table = MODULE.IBAN_REGISTRY_LENGTHS
+    assert all(len(code) == 2 and code.isupper() and 15 <= length <= 34 for code, length in table.items())
+    assert (table["DE"], table["GB"], table["NO"], table["RU"], table["MT"]) == (22, 22, 15, 33, 31)
+    de = iban("DE", "3704004405320130" + "00")
+    assert MODULE.iban_registry(de) and MODULE.iban_registry(grouped(de)) and MODULE.iban_registry(grouped(de).lower())
+    assert not MODULE.iban_registry(de[:2] + f"{(int(de[2:4]) + 1) % 97:02d}" + de[4:])  # MOD-97 fails
+    # Faker-style values: MOD-97 holds, but GB is 22 characters and PH, BD, AR, CO, TH, IR have no IBAN.
+    assert not MODULE.iban_registry(iban("GB", "WEST" + "1234569876543"))
+    assert not MODULE.iban_registry(iban("GB", "WEST" + "123456987654321"))
+    assert MODULE.iban_registry(iban("GB", "WEST" + "12345698765432"))
+    for country in ("PH", "BD", "AR", "CO", "TH", "IR"):
+        assert country not in table
+        assert not MODULE.iban_registry(iban(country, "1234567890123456" + "7890"))
+    assert not MODULE.iban_registry(iban("NL", "ABNA" + "041716430")) and not MODULE.iban_registry("DE")
+
+
+def test_synthetic_ibans_are_registry_ibans():
+    """The ark_authored generator never writes gold the scoreboard would ignore."""
+    spec = importlib.util.spec_from_file_location("l1_synth_goldset_for_scoreboard", SCRIPT.with_name("synth_goldset.py"))
+    synth = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = synth
+    spec.loader.exec_module(synth)
+    rng = synth.Rng("iban-registry")
+    for country in (*synth.IBAN_SPECS, "BE"):
+        for _ in range(20):
+            assert MODULE.iban_registry(synth.make_iban(rng, country)), country
+
+
+def test_non_registry_iban_gold_is_neither_missed_nor_a_false_positive():
+    real = iban("DE", "37040044" + "0532013000")
+    fake, bad_length = iban("PH", "1234567890123456"), iban("GB", "WEST" + "1234569876543")
+    text = f"Pay {grouped(real)} or {fake}; old {bad_length}; ref 12345678901234567890."
+    row = annotated("r", text, [("pii.iban", grouped(real), 0), ("pii.iban", fake, 0), ("pii.iban", bad_length, 0)])
+    spans = [_span_of(text, value) for value in (grouped(real), fake, bad_length)]
+    engines = {
+        # Ark finds the registry IBAN only; Presidio (IBAN_CODE) all three; a third engine overlaps the fake one.
+        "ark": [pred("r", spans[:1])],
+        "presidio": [{"id": "r", "evidence_spans": [
+            {"presidio_entity": "IBAN_CODE", "start": start, "end": end} for _, start, end in spans
+        ]}],
+        "overlap": [pred("r", [spans[0], ("pii.iban", spans[1][1] + 2, spans[1][2] + 3)])],
+    }
+    for name, predictions in engines.items():
+        counts = MODULE.score_rows([row], predictions, EMAP, "g.jsonl")["buckets"]["entity/pii.iban"]
+        assert counts == {"gold": 1, "predicted": 1, "exact": 1, "gold_found": 1, "predicted_correct": 1}, name
+    # Only predictions overlapping ignored gold drop out; another IBAN prediction stays a false positive.
+    other = _span_of(text, "12345678901234567890")
+    counts = MODULE.score_rows([row], [pred("r", [spans[0], other])], EMAP)["buckets"]["entity/pii.iban"]
+    assert counts["predicted"] == 2 and counts["exact"] == 1
+    # Gold gaps follow the same rule.
+    gaps = MODULE.gold_gaps([row], engines["presidio"], EMAP)[GRETEL]["pii.iban"]
+    assert gaps == {"gold": 1, "gold_invalid": 0, "invalid_found": 0, "duplicate_fp": 0}
+
+
+def _span_of(text, value):
+    start = text.index(value)
+    return "pii.iban", start, start + len(value)

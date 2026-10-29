@@ -451,7 +451,9 @@ tasks:
     accept: >-
       T21 accept in full (length table with a test per country, creditor IDs as hard negatives DE + EN,
       mod97 unchanged, no IBAN gold value lost) plus grouped blocks of four with letters and lowercase
-      variants for every registry country; presidio_favored IBAN F1 >= tuned and neutral IBAN F1 >= tuned
+      variants for every registry country; presidio_favored IBAN F1 >= tuned and neutral IBAN F1 >= tuned.
+      Gold note (2026-10-29): the scoreboard ignores pii.iban gold that fails the SWIFT registry (country,
+      exact length, MOD-97) for every engine, so Faker-made non-registry IBANs no longer count as lost recall
 
   # M3 +8 (11)
   - id: B01
@@ -484,7 +486,13 @@ tasks:
       T24 accept in full (format-only rule for 6-9 alphanumerics with at least 5 digits after an explicit
       passport field name, DE passport form values failing ICAO 9303 stay negative); US passport and AT/CH
       passport/ID numbers and IT carta d'identità/ES pasaporte as format + context rules on the same
-      mechanism (IT patente goes to F15); neutral and presidio_favored passport F1 >= tuned in balanced
+      mechanism (IT patente goes to F15); neutral and presidio_favored passport F1 >= tuned in balanced.
+      Holdout HN-FP cause (run 20261022T171514Z, 1 new HN-FP, entity.passport_number, presidio-analyzer
+      recognizer negative): the generic passport field-name rule (T24) must not report a single letter
+      followed by exactly 6 digits (7 chars). Add that shape as a golden hard negative after 'passport
+      number'. US passport stays exactly 9 digits or 1 letter + 8 digits; national forms (DE ICAO, AT/CH
+      letter + 7 digits, IT/ES 9 chars) keep their own exact lengths. Gate: 0 new HN-FP on dev and
+      holdout; passport exact F1 not below the earlier level.
 
   # M3 +11 (24)
   - id: B02
