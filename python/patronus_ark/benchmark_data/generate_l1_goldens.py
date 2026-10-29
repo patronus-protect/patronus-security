@@ -10729,6 +10729,128 @@ DLP_P06_CASES = {
 for _label, _rows in DLP_P06_CASES.items():
     DLP_CASES[_label].extend(_rows)
 
+# T18: providers without an ARK rule (GOLD-D2 baseline entities) issue values with a hex, digit or
+# base62 run next to a short prefix or suffix (`SK…`, `…-us10`, `shippo_live_…`, dash-separated
+# hex groups). The generic rules apply the fixed-format repetition check to that run, so
+# documented example and test fills are hard negatives even without example context; the same
+# shapes with a random run stay findings. Fills are recipes, as for T06.
+DLP_T18_CASES = {
+    "CREDENTIAL": [
+        ds(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "# Telefonie (Hotline)\nTWILIO_REGION=de1\nTWILIO_API_KEY=<<secret:0>>\n",
+            "twilio_api_key", 18101, carrier="env",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "newsletter:\n  liste: kunden-de\n  api_key: <<secret:0>>\n",
+            "mailchimp_api_key", 18102, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "{\n  \"versand\": {\n    \"anbieter\": \"shippo\",\n    \"api_token\": \"<<secret:0>>\"\n  }\n}\n",
+            "shippo_live_token", 18103, carrier="json",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "$ export DATABRICKS_TOKEN=<<secret:0>>\n$ databricks clusters list\n",
+            "databricks_api_token", 18104, carrier="cli",
+        ),
+        ds(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "Hallo Team, für Sonar gilt ab heute: der API-Schlüssel ist <<secret:0>> – bitte im Tresor ablegen.",
+            "sonar_user_token", 18105, carrier="prose",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "MAILGUN_DOMAIN=mg.example.com\nMAILGUN_API_KEY=<<secret:0>>\n",
+            "mailgun_private_api_key", 18106, carrier="env",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "[sonar]\nhost = \"https://sonar.internal\"\ntoken = \"<<secret:0>>\"\n",
+            "sonar_project_token", 18107, carrier="toml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "2026-10-29T08:14:02Z DEBUG deploy: publishing with api_key=<<secret:0>>\n",
+            "clojars_deploy_token", 18108, carrier="log",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "deploy:\n  stage: release\n  variables:\n    SRC_ACCESS_TOKEN: <<secret:0>>\n",
+            "sourcegraph_local_access_token", 18109, carrier="yaml",
+        ),
+        ds(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "client = Client(\n    api_key=\"<<secret:0>>\",\n)\n",
+            "twilio_api_key", 18110, carrier="code",
+        ),
+        dx(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "# Telefonie (Hotline)\nTWILIO_REGION=de1\nTWILIO_API_KEY=<<secret:0>>\n",
+            "twilio_api_key", "deadbeef", "test value (deadbeef fill)", carrier="env",
+        ),
+        dx(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "newsletter:\n  liste: kunden-de\n  api_key: <<secret:0>>\n",
+            "mailchimp_api_key", "1234567890", "test value (1234567890 fill)", carrier="yaml",
+        ),
+        dx(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "{\n  \"versand\": {\n    \"anbieter\": \"shippo\",\n    \"api_token\": \"<<secret:0>>\"\n  }\n}\n",
+            "shippo_live_token", "deadbeef", "test value (deadbeef fill)", carrier="json",
+        ),
+        dx(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "$ export DATABRICKS_TOKEN=<<secret:0>>\n$ databricks clusters list\n",
+            "databricks_api_token", "0123456789", "test value (0123456789 fill)", carrier="cli",
+        ),
+        dx(
+            "CREDENTIAL", "de", "dlp_generic_credential_assignment",
+            "Hallo Team, für Sonar gilt ab heute: der API-Schlüssel ist <<secret:0>> – bitte im Tresor ablegen.",
+            "sonar_user_token", "1234567890", "test value (1234567890 fill)", carrier="prose",
+        ),
+        dx(
+            "CREDENTIAL", "de", "dlp_env_var_secret",
+            "MAILGUN_API_KEY=<<secret:0>>\n",
+            "mailgun_private_api_key", "0123456789", "test value (0123456789 fill)", carrier="env",
+        ),
+        dx(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "MAILGUN_DOMAIN=mg.example.com\nMAILGUN_API_KEY=<<secret:0>>\n",
+            "mailgun_private_api_key", "deadbeef", "test value (deadbeef fill)", carrier="env",
+        ),
+        dx(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "[sonar]\nhost = \"https://sonar.internal\"\ntoken = \"<<secret:0>>\"\n",
+            "sonar_project_token", "1234567890", "test value (1234567890 fill)", carrier="toml",
+        ),
+        dx(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "2026-10-29T08:14:02Z DEBUG deploy: publishing with api_key=<<secret:0>>\n",
+            "clojars_deploy_token", "deadbeef", "test value (deadbeef fill)", carrier="log",
+        ),
+        dx(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "deploy:\n  stage: release\n  variables:\n    SRC_ACCESS_TOKEN: <<secret:0>>\n",
+            "sourcegraph_local_access_token", "1234567890", "test value (1234567890 fill)", carrier="yaml",
+        ),
+        dx(
+            "CREDENTIAL", "en", "dlp_generic_credential_assignment",
+            "client = Client(\n    api_key=\"<<secret:0>>\",\n)\n",
+            "twilio_api_key", "0123456789", "test value (0123456789 fill)", carrier="code",
+        ),
+        dx(
+            "CREDENTIAL", "en", "dlp_env_var_secret",
+            "SLACK_APP_TOKEN=<<secret:0>>\n",
+            "slack_app_token", "1234567890", "test value (1234567890 fill)", carrier="env",
+        ),
+    ],
+}
+for _label, _rows in DLP_T18_CASES.items():
+    DLP_CASES[_label].extend(_rows)
+
 
 def flatten(suite: str, cases: dict[str, list[dict]]) -> list[dict]:
     rows = []

@@ -650,3 +650,100 @@ fn long_markers_inside_a_word_are_no_markers() {
         assert_silent(text);
     }
 }
+
+/// T18: providers without an ARK rule issue values with a hex, digit or
+/// base62 run next to a short prefix or suffix (`SK…`, `…-us10`,
+/// `shippo_live_…`, dash-separated hex groups). The generic rules apply the
+/// fixed-format repetition check to that run.
+fn machine_issued_shapes(mut body: impl FnMut(usize) -> String) -> Vec<String> {
+    vec![
+        format!("SK{}", body(32)),
+        format!("dapi{}", body(32)),
+        format!("{}-us10", body(32)),
+        format!("{}-{}-{}", body(32), body(8), body(8)),
+        format!("shippo_live_{}", body(40)),
+        format!("sgp_local_{}", body(40)),
+        format!("sqp_{}", body(40)),
+        format!("CLOJARS_{}", body(60)),
+        format!("xapp-1-A0B1C2D3E4F-1123456789012-{}", body(64)),
+    ]
+}
+
+#[test]
+fn generic_rules_check_machine_issued_runs_as_fixed_format() {
+    for fill_word in ["deadbeef", "DEADBEEF", "1234567890", "0123456789"] {
+        for value in machine_issued_shapes(|length| fill(fill_word, length)) {
+            for text in [
+                format!("TWILIO_API_KEY={value}"),
+                format!("  MAILCHIMP_API_KEY: \"{value}\"\n"),
+                format!("{{\"api_key\": \"{value}\"}}"),
+                format!("client_secret = '{value}'"),
+                format!("Der API-Schlüssel ist {value}"),
+                format!("export SONAR_TOKEN={value}"),
+            ] {
+                assert_silent(&text);
+            }
+        }
+    }
+}
+
+#[test]
+fn machine_issued_values_with_a_random_run_stay_detected() {
+    let mut seed = 0;
+    let values = machine_issued_shapes(|length| {
+        seed += 1;
+        random(1800 + seed, HEX, length)
+    });
+    for value in &values {
+        assert_reported(
+            &format!("TWILIO_API_KEY={value}"),
+            "dlp_env_var_secret",
+            value,
+        );
+        assert_reported(
+            &format!("client_secret: {value}"),
+            "dlp_generic_credential_assignment",
+            value,
+        );
+    }
+}
+
+#[test]
+fn hand_typed_repetitions_without_a_machine_run_stay_detected() {
+    for (text, rule_id, value) in [
+        (
+            "password=abcabcabcabc",
+            "dlp_password_assignment",
+            "abcabcabcabc",
+        ),
+        (
+            "Passwort: Passwort123!",
+            "dlp_password_assignment",
+            "Passwort123!",
+        ),
+        // A repeated run without prefix or suffix, or one shorter than 24.
+        (
+            "SERVICE_TOKEN=Zq7Zq7Zq7Zq7Zq7Zq7Zq7Zq7",
+            "dlp_env_var_secret",
+            "Zq7Zq7Zq7Zq7Zq7Zq7Zq7Zq7",
+        ),
+        (
+            "SERVICE_TOKEN=abcd1234abcd1234abcd1234",
+            "dlp_env_var_secret",
+            "abcd1234abcd1234abcd1234",
+        ),
+        (
+            "SERVICE_TOKEN=svc_abcabcabcabcabcabc",
+            "dlp_env_var_secret",
+            "svc_abcabcabcabcabcabc",
+        ),
+        // The rest around the run is longer than the run.
+        (
+            "client_secret: Sommerurlaub-am-Meer-2026-abcabcabcabcabcabcabcabc",
+            "dlp_generic_credential_assignment",
+            "Sommerurlaub-am-Meer-2026-abcabcabcabcabcabcabcabc",
+        ),
+    ] {
+        assert_reported(text, rule_id, value);
+    }
+}
