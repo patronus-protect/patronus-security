@@ -48,6 +48,9 @@ result shapes may be breaking for downstream users, and is called out explicitly
   68 new `pii_l1` rows (DE, EN, PL), rule fixture entries.
   **Detection change** (`strict`: PESEL and REGON with a term or key; `balanced`/`recall`: also the
   bare NIP with a term). The rule regexes are linear and bounded.
+  - **Detection change** (`balanced`/`recall`): a bare NIP in a cell under a NIP key is reported
+    also next to a numeric cell (`nip,employees\n5260250995,42`), like PESEL and REGON; in prose
+    the digits still have to stand alone.
 - Spanish NIF/NIE and the Italian codice fiscale with check letters, bare CIF (B-ESIT: A11, A12).
   Three new labels: `ES_NIF` (DNI/NIF, eight digits or seven of an older DNI and the control letter
   mod 23), `ES_NIE` (`X`/`Y`/`Z` as 0/1/2, seven digits, the same control letter) and

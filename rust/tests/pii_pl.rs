@@ -269,7 +269,10 @@ fn a_structural_cell_is_a_value_of_its_own_next_to_numeric_cells() {
         assert_reports(NIP, text, "5260250995", &SCORED);
         assert_silent(text, "VAT_ID_PL", &[PiiMode::Strict]);
     }
-    for text in ["vat,employees\n5260250995,42", "nip,employees\n5260250995-1,42"] {
+    for text in [
+        "vat,employees\n5260250995,42",
+        "nip,employees\n5260250995-1,42",
+    ] {
         for mode in MODES {
             assert!(
                 !rules(text, mode).iter().any(|(rule, _)| rule == NIP),

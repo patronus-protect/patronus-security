@@ -609,7 +609,11 @@ impl NativeRegexDetector for PiiPipeline {
     ) -> bool {
         let pattern = &PII_PATTERNS[index];
         let text = prepared.text();
-        if pattern.scored_only && !context::stands_alone(text, captures.get(0).unwrap().range()) {
+        // The bare NIP checks this after its structural key (below).
+        if pattern.scored_only
+            && self.rule_ids[index] != "pii_vat_id_pl_proximity"
+            && !context::stands_alone(text, captures.get(0).unwrap().range())
+        {
             return false;
         }
         if pattern.requires_context {
@@ -710,20 +714,31 @@ impl NativeRegexDetector for PiiPipeline {
             }
             // Ten valid digits near a generic VAT term are as often the VAT ID of
             // another country (`SK 928 762 01 99`) or another number (an NPI): the
-            // deciding term or key of a bare NIP is a NIP term.
+            // deciding term or key of a bare NIP is a NIP term. A cell under a NIP
+            // key is the whole value, also between numeric cells
+            // (`nip,employees\n5260250995,42`); in prose the digits stand alone.
             rule_id @ "pii_vat_id_pl_proximity" => {
                 let value = captures.get(0).unwrap().range();
-                !vat_body(rule_id, text, value.start)
-                    && context::structure_evidence(
-                        prepared.structure(),
-                        value.clone(),
-                        pattern.entity_group,
-                    )
-                    .unwrap_or_else(|| {
-                        context::evidence(text, (value.start, value.end), pattern.entity_group)
-                    })
-                    .anchor
-                        == Some("pii.pl_nip")
+                if vat_body(rule_id, text, value.start) {
+                    return false;
+                }
+                match context::structure_evidence(
+                    prepared.structure(),
+                    value.clone(),
+                    pattern.entity_group,
+                ) {
+                    Some(evidence) => evidence.anchor == Some("pii.pl_nip"),
+                    None => {
+                        context::stands_alone(text, value.clone())
+                            && context::evidence(
+                                text,
+                                (value.start, value.end),
+                                pattern.entity_group,
+                            )
+                            .anchor
+                                == Some("pii.pl_nip")
+                    }
+                }
             }
             "pii_passport_number_de_context_free"
             | "pii_identity_card_number_de_context_free"
