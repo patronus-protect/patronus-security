@@ -32,6 +32,21 @@ result shapes may be breaking for downstream users, and is called out explicitly
 
 ### Added
 
+- Polish PESEL and REGON with check digits, bare NIP (A13). Two new labels: `PL_PESEL` (eleven
+  digits `YYMMDDZZZXC`, a birth date from 1900 to 2100 with the century in the month, check digit
+  weighted 1-3-7-9 mod 10) and `PL_REGON` (nine digits weighted 8-9-2-3-4-5-6-7 mod 11, or fourteen
+  whose first nine are a REGON of their own, weighted 2-4-8-5-0-9-7-3-6-1-2-4-8 mod 11).
+  `pii_pesel_pl` and `pii_regon_pl` report the value in every mode when a term of the label (EN, DE,
+  PL) stands near it or is its key, also as a CSV cell; bare runs of nine, eleven or fourteen digits
+  are never reported. The NIP reuses the B16 validator of the Polish VAT ID: the new
+  `pii_vat_id_pl_proximity` reports a bare NIP (ten digits, also `NNN-NNN-NN-NN` or
+  `NNN-NN-NN-NNN`) under `VAT_ID_PL` with a VAT or NIP term (new lexicon `pii.pl_nip`), scored
+  modes only, like the bare Partita IVA and CIF, so it is no second M3 unit; the digits after
+  `PL `/`PL-` stay the body of the VAT ID. The `presidio_only` id `pii.pl.pesel` becomes `shared`,
+  `pii.pl.regon` is new and `ark_only`; M3 ARK 69 → 71, shared 28 → 29. New `rust/tests/pii_pl.rs`,
+  66 new `pii_l1` rows (DE, EN, PL), rule fixture entries.
+  **Detection change** (`strict`: PESEL and REGON with a term or key; `balanced`/`recall`: also the
+  bare NIP with a term). The rule regexes are linear and bounded.
 - Spanish NIF/NIE and the Italian codice fiscale with check letters, bare CIF (B-ESIT: A11, A12).
   Three new labels: `ES_NIF` (DNI/NIF, eight digits or seven of an older DNI and the control letter
   mod 23), `ES_NIE` (`X`/`Y`/`Z` as 0/1/2, seven digits, the same control letter) and

@@ -468,6 +468,19 @@ Reisepass KR (T12, nur Form + Kontext) zählen nicht zu M3 und bleiben offen. Go
 (DE, EN, dazu `ko`-Zeilen) und im E05-Goldset (`ark_authored`), dazu die Recognizer-Tests
 (`presidio_favored`, Sprache `ko`).
 
+Stand A13: ARK 71, gemeinsam 29. Zwei Labels mit Prüfziffer: `PL_PESEL` (`validators::pl_pesel`, elf
+Ziffern `YYMMDDZZZXC`, Geburtsdatum 1900–2100 mit dem Jahrhundert im Monat, Prüfziffer
+`(10 − gewichtet 1-3-7-9 mod 10) mod 10`, `shared` mit dem Recognizer `PL_PESEL` von presidio-analyzer
+2.2.364) und `PL_REGON` (`pl_regon`, neun Ziffern gewichtet 8-9-2-3-4-5-6-7 mod 11 oder vierzehn, deren
+erste neun selbst eine REGON sind, gewichtet 2-4-8-5-0-9-7-3-6-1-2-4-8 mod 11; `ark_only`). Beide meldet je
+eine Regel in jedem Modus mit einem Begriff des Labels in der Nähe oder als Schlüssel (Lexika mit EN-,
+DE- und PL-Begriffen); blanke Ziffernfolgen nie, auch nicht in `balanced`/`recall`. Die NIP ist die
+USt-IdNr. PL ohne Präfix und nutzt den B16-Validator `pl_vat_id` (keine Doppelzählung):
+`pii_vat_id_pl_proximity` meldet die blanke NIP unter `VAT_ID_PL` mit einem USt- oder NIP-Begriff, nur in
+`balanced`/`recall`, wie die blanke Partita IVA und CIF; nach `PL `/`PL-` bleibt sie Rumpf der USt-IdNr.
+Gold steht in `pii_l1` (DE, EN, dazu `pl`-Zeilen), für PESEL auch im E05-Goldset (`ark_authored`) und in
+den Recognizer-Tests (`presidio_favored`); die REGON erzeugt kein Goldset (`NOT_GENERATED`).
+
 Stand B-ESIT: ARK 69, gemeinsam 28 (A11, A12). Drei Labels mit Kontrollbuchstabe, alle `shared` mit
 dem gleichnamigen Recognizer von presidio-analyzer 2.2.364: `ES_NIF` (`validators::es_nif`, DNI/NIF,
 acht Ziffern oder sieben eines alten DNI und der Kontrollbuchstabe mod 23), `ES_NIE` (`es_nie`, `X`/`Y`/`Z`

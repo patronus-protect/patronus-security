@@ -255,7 +255,8 @@ def test_checked_in_ark_count():
         Unit("pii.pl.regon", "pl"),
     }
     assert len(counts.ark) == 71
-    assert counts.m3_met is False
+    # A13 reaches the M3 target (2 × 35 = 70).
+    assert counts.m3_met is True
 
 
 def test_ark_rules_are_read_from_the_pii_registry():
@@ -386,7 +387,7 @@ def test_cli_count_json_and_check(tmp_path):
     assert payload["presidio_version"] == "2.2.364"
     assert payload["presidio"]["count"] == 35
     assert payload["ark"]["count"] == 71
-    assert payload["m3"] == {"factor": 2, "target": 70, "met": False}
+    assert payload["m3"] == {"factor": 2, "target": 70, "met": True}
     assert {
         "entity_id": "pii.de.tax_id",
         "country": "de",

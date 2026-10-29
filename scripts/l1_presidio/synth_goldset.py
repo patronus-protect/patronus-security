@@ -2758,13 +2758,14 @@ def generate_vat(
     return rows
 
 
-# Entity-map ids that no goldset generates: the B-NORD DK CPR number and NO fødselsnummer and the
-# B-EU1 and B-EU2 national numbers of FR, NL, BE, AT, CH, PT and IE (gold so far only in pii_l1 and
-# the rule fixture).
+# Entity-map ids that no goldset generates: the B-NORD DK CPR number and NO fødselsnummer, the
+# B-EU1 and B-EU2 national numbers of FR, NL, BE, AT, CH, PT and IE and the A13 PL REGON (gold so far
+# only in pii_l1 and the rule fixture).
 NOT_GENERATED = frozenset(
     {"pii.dk.cpr", "pii.no.fodselsnummer"}
     | {"pii.fr.nir", "pii.fr.siren", "pii.fr.siret", "pii.nl.bsn", "pii.be.national_number"}
     | {"pii.at.social_security_number", "pii.ch.ahv_number", "pii.pt.nif", "pii.ie.ppsn"}
+    | {"pii.pl.regon"}
 )
 
 

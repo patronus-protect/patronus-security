@@ -1325,6 +1325,30 @@ def it_fiscal_code(value: str) -> bool:
     total = sum(_IT_FISCAL_ODD[r] if index % 2 == 0 else r for index, r in enumerate(rank))
     return code[15] == chr(ord("A") + total % 26)
 
+def pl_pesel(value: str) -> bool:
+    """Port of ``validators::pl_pesel`` (11 digits, birth date 1900–2100 with the century in the month, 1-3-7-9 mod 10)."""
+    digits = _separated_digits(value, 11, "")
+    if digits is None or digits[2] * 10 + digits[3] >= 60:
+        return False
+    month = digits[2] * 10 + digits[3]
+    year = (1900, 2000, 2100)[month // 20] + digits[0] * 10 + digits[1]
+    total = sum(digit * weight for digit, weight in zip(digits, (1, 3, 7, 9, 1, 3, 7, 9, 1, 3)))
+    return _valid_date(year, month % 20, digits[4] * 10 + digits[5]) and (10 - total % 10) % 10 == digits[10]
+
+
+def pl_regon(value: str) -> bool:
+    """Port of ``validators::pl_regon`` (9 digits weighted mod 11, or 14 whose first nine are a REGON)."""
+    digits = _separated_digits(value, len(value), "") if len(value) in (9, 14) else None
+    if digits is None or len(set(digits[:9])) == 1:
+        return False
+
+    def check(weights: tuple[int, ...]) -> bool:
+        return sum(digit * weight for digit, weight in zip(digits, weights)) % 11 % 10 == digits[len(weights)]
+
+    nine = check((8, 9, 2, 3, 4, 5, 6, 7))
+    return nine if len(digits) == 9 else nine and check((2, 4, 8, 5, 0, 9, 7, 3, 6, 1, 2, 4, 8))
+
+
 # Python ports of every checksum validator (``checksums.ark`` with an algorithm in entity_map.yaml);
 # a task that adds one ports it here, or scripts/tests/test_l1_scoreboard.py is red.
 CHECKSUM_PORTS: dict[str, Callable[[str], bool]] = {
@@ -1399,6 +1423,8 @@ CHECKSUM_PORTS: dict[str, Callable[[str], bool]] = {
     "es_nif": es_nif,
     "es_nie": es_nie,
     "it_fiscal_code": it_fiscal_code,
+    "pl_pesel": pl_pesel,
+    "pl_regon": pl_regon,
 }
 
 # Gold the scoring ignores when its check fails: values that cannot exist (``_row_spans``).

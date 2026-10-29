@@ -116,10 +116,9 @@ fn pesel_validator_checks_the_date_and_check_digit() {
         "02070803628",
         "44051401359",
         "90110536890",
-        // month + 20: born in 2005; + 80: born in 1899
+        // month + 20: born in 2005
         "05241690065",
         "05310456684",
-        "99832799684",
         "01252230429",
     ] {
         assert!(validators::pl_pesel(valid), "{valid}");
@@ -129,9 +128,10 @@ fn pesel_validator_checks_the_date_and_check_digit() {
         "02070803629",
         "44051401358",
         "12345678901",
-        // month 13, 30 February
+        // month 13, 30 February, month + 80: born in 1899 (not accepted)
         "02130803627",
         "50023004039",
+        "99832799684",
         // form
         "0207080362",
         "020708036281",
@@ -177,7 +177,12 @@ fn regon_validator_checks_nine_and_fourteen_digits() {
 #[test]
 fn the_bare_nip_reuses_the_vat_validator() {
     // B16 validator without the country prefix: one unit with the VAT ID.
-    for valid in ["5260250995", "526-025-09-95", "943-16-38-485", "PL5260250995"] {
+    for valid in [
+        "5260250995",
+        "526-025-09-95",
+        "943-16-38-485",
+        "PL5260250995",
+    ] {
         assert!(validators::pl_vat_id(valid), "{valid}");
     }
     for invalid in ["5260250996", "526025099", "52602509951"] {
@@ -315,5 +320,10 @@ fn a_bare_nip_needs_a_term_and_is_reported_in_the_scored_modes_only() {
             );
         }
     }
-    assert_reports("pii_vat_id_pl", "NIP: PL 5260250995", "PL 5260250995", &SCORED);
+    assert_reports(
+        "pii_vat_id_pl",
+        "NIP: PL 5260250995",
+        "PL 5260250995",
+        &SCORED,
+    );
 }
