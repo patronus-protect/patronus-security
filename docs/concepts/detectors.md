@@ -4,8 +4,8 @@ Native detectors are the rule-based Rust checks that make up **L1**. They need n
 assets and are available fully offline. Their runtime scales with the input and enabled rule
 inventory: short inputs are cheap, while sufficiently large inputs can take milliseconds rather
 than microseconds. This page catalogues the detectors by family. The source lives under
-[`ark-core/src/detectors/`](https://github.com/patronus-protect/patronus-security/tree/main/rust/src/detectors)
-and [`ark-core/src/threat/`](https://github.com/patronus-protect/patronus-security/tree/main/rust/src/threat).
+[`ark-core/src/detectors/`](https://github.com/patronus-protect/patronus-security/tree/main/ark-core/src/detectors)
+and [`ark-core/src/threat/`](https://github.com/patronus-protect/patronus-security/tree/main/ark-core/src/threat).
 
 All built-in L1 rules produce source-bound evidence first. Regex captures, lexical matches,
 ordered token relations, structural matches, and decoded payloads use the shared component
@@ -68,7 +68,7 @@ their score and evidence in the typed decision contract without becoming finding
 | `cross_tool_instruction` | Instructions that try to make one tool act on another's behalf. |
 | `agentic_control_abuse` | Abuse of agent control flow (loops, planning, autonomy) to subvert intent. |
 
-The [`ark-core/src/threat/`](https://github.com/patronus-protect/patronus-security/tree/main/rust/src/threat)
+The [`ark-core/src/threat/`](https://github.com/patronus-protect/patronus-security/tree/main/ark-core/src/threat)
 module provides shared pattern- and obfuscation-detection primitives used internally by several
 injection and DLP detectors. The `threat` category also has a native L1 producer,
 [`native:threat_l1`](../reference/threat-l1.md), before its NTDB L2 stage (see

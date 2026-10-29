@@ -4,6 +4,10 @@ Patronus Ark ships as a Rust crate (`patronus-ark`) and a Python package (`patro
 imported as `patronus_ark`). Both are built from the same Rust core, so you install whichever
 fits your stack — no repository checkout required.
 
+!!! tip "Lightweight alternative"
+    For PII, DLP and prompt injection only — native L1 rules plus optional Wolf Defender, no
+    queue and no L2/L3 assets — install [Ark Core](core.md) (`patronus-ark-core`) instead.
+
 ## Requirements
 
 | | Minimum | Notes |

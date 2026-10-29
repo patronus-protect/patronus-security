@@ -1,65 +1,67 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" width="1200" height="300" role="img" aria-label="Patronus Ark — layered security scanning for LLM and agent traffic">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 380" width="1200" height="380" role="img" aria-label="Patronus Ark — local security scanning for AI and agent traffic">
   <title>Patronus Ark</title>
-  <desc>Shield mark containing three stacked layers, with the Patronus Ark wordmark and the L1, L2 and L3 scanning layers.</desc>
-
+  <desc>Pixel-art ark next to the Ark wordmark: local scanning for prompt injection, DLP and PII.</desc>
   <defs>
-    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#0e1626"/>
-      <stop offset="55%" stop-color="#101d33"/>
-      <stop offset="100%" stop-color="#0c1322"/>
-    </linearGradient>
-    <linearGradient id="rim" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#38bdf8"/>
-      <stop offset="100%" stop-color="#818cf8"/>
-    </linearGradient>
-    <linearGradient id="wordAccent" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stop-color="#38bdf8"/>
-      <stop offset="100%" stop-color="#a78bfa"/>
-    </linearGradient>
-    <clipPath id="shieldClip">
-      <path d="M50 2 L98 21 L98 67 C98 99 76 117 50 125 C24 117 2 99 2 67 L2 21 Z"/>
-    </clipPath>
+    <pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="12" cy="12" r="1.2" fill="#e8eff8"/>
+    </pattern>
+    <clipPath id="card"><rect width="1200" height="380" rx="22"/></clipPath>
   </defs>
 
-  <rect x="0" y="0" width="1200" height="300" rx="22" fill="url(#panel)"/>
-  <rect x="0.75" y="0.75" width="1198.5" height="298.5" rx="21.5" fill="none" stroke="#1e293b" stroke-width="1.5"/>
+  <g clip-path="url(#card)">
+    <rect width="1200" height="380" fill="#ffffff"/>
+    <rect width="1200" height="380" fill="url(#dots)"/>
+  </g>
+  <rect x="0.75" y="0.75" width="1198.5" height="378.5" rx="21.5" fill="none" stroke="#e3ecf6" stroke-width="1.5"/>
 
-  <!-- Mark: shield with three layer strata, widest at the base -->
-  <g transform="translate(92 88)">
-    <g clip-path="url(#shieldClip)">
-      <rect x="0" y="0" width="100" height="127" fill="#0b1220"/>
-      <!-- Traffic funnels downward: every request enters L1, few reach L3 -->
-      <rect x="13" y="29" width="74" height="19" rx="6" fill="#34d399"/>
-      <rect x="24" y="58" width="52" height="19" rx="6" fill="#fbbf24"/>
-      <rect x="37" y="87" width="26" height="17" rx="6" fill="#a78bfa"/>
-    </g>
-    <path d="M50 2 L98 21 L98 67 C98 99 76 117 50 125 C24 117 2 99 2 67 L2 21 Z"
-          fill="none" stroke="url(#rim)" stroke-width="3.5" stroke-linejoin="round"/>
+  <!-- Mark: pixel ark -->
+  <g shape-rendering="crispEdges">
+    <rect x="174" y="70" width="42" height="14" fill="#102440"/>
+    <rect x="160" y="84" width="28" height="14" fill="#102440"/>
+    <rect x="188" y="84" width="14" height="14" fill="#dceeff"/>
+    <rect x="202" y="84" width="28" height="14" fill="#102440"/>
+    <rect x="146" y="98" width="28" height="14" fill="#102440"/>
+    <rect x="174" y="98" width="42" height="14" fill="#dceeff"/>
+    <rect x="216" y="98" width="28" height="14" fill="#102440"/>
+    <rect x="132" y="112" width="28" height="14" fill="#102440"/>
+    <rect x="160" y="112" width="70" height="14" fill="#dceeff"/>
+    <rect x="230" y="112" width="28" height="14" fill="#102440"/>
+    <rect x="118" y="126" width="154" height="14" fill="#102440"/>
+    <rect x="132" y="140" width="14" height="14" fill="#102440"/>
+    <rect x="146" y="140" width="14" height="14" fill="#dceeff"/>
+    <rect x="160" y="140" width="14" height="14" fill="#102440"/>
+    <rect x="174" y="140" width="14" height="14" fill="#dceeff"/>
+    <rect x="188" y="140" width="14" height="14" fill="#102440"/>
+    <rect x="202" y="140" width="14" height="14" fill="#dceeff"/>
+    <rect x="216" y="140" width="14" height="14" fill="#102440"/>
+    <rect x="230" y="140" width="14" height="14" fill="#dceeff"/>
+    <rect x="244" y="140" width="14" height="14" fill="#102440"/>
+    <rect x="132" y="154" width="126" height="14" fill="#102440"/>
+    <rect x="90" y="168" width="28" height="14" fill="#102440"/>
+    <rect x="132" y="168" width="126" height="14" fill="#102440"/>
+    <rect x="272" y="168" width="28" height="14" fill="#102440"/>
+    <rect x="90" y="182" width="210" height="14" fill="#102440"/>
+    <rect x="90" y="196" width="14" height="14" fill="#102440"/>
+    <rect x="104" y="196" width="182" height="14" fill="#dceeff"/>
+    <rect x="286" y="196" width="14" height="14" fill="#102440"/>
+    <rect x="104" y="210" width="182" height="14" fill="#102440"/>
+    <rect x="118" y="224" width="154" height="14" fill="#102440"/>
+    <rect x="90" y="266" width="42" height="14" fill="#4eabff"/>
+    <rect x="146" y="266" width="42" height="14" fill="#4eabff"/>
+    <rect x="202" y="266" width="42" height="14" fill="#4eabff"/>
+    <rect x="258" y="266" width="42" height="14" fill="#4eabff"/>
   </g>
 
   <!-- Wordmark -->
-  <g font-family="system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif">
-    <text x="248" y="142" font-size="60" font-weight="700" letter-spacing="1.5" fill="#f1f5f9">PATRONUS</text>
-    <text x="592" y="142" font-size="60" font-weight="700" letter-spacing="1.5" fill="url(#wordAccent)">ARK</text>
-    <text x="251" y="182" font-size="20" font-weight="400" letter-spacing="0.2" fill="#94a3b8">Layered security scanning for LLM and agent traffic</text>
-    <text x="251" y="219" font-size="15" font-weight="500" letter-spacing="1.4" fill="#64748b">PROMPT INJECTION &#183; DLP &#183; PII &#183; AGENTIC TOOL RISK</text>
-
-    <!-- Layer legend -->
-    <g transform="translate(872 74)">
-      <rect x="0" y="0" width="272" height="46" rx="10" fill="#111e33" stroke="#1e3a5f" stroke-width="1"/>
-      <circle cx="24" cy="23" r="7" fill="#34d399"/>
-      <text x="44" y="21" font-size="14" font-weight="600" fill="#e2e8f0">L1 &#183; native rules</text>
-      <text x="44" y="36" font-size="12" fill="#7c8ba1">no model assets</text>
-
-      <rect x="0" y="55" width="272" height="46" rx="10" fill="#111e33" stroke="#1e3a5f" stroke-width="1"/>
-      <circle cx="24" cy="78" r="7" fill="#fbbf24"/>
-      <text x="44" y="76" font-size="14" font-weight="600" fill="#e2e8f0">L2 &#183; NTDB packages</text>
-      <text x="44" y="91" font-size="12" fill="#7c8ba1">non-transformer, stops most traffic</text>
-
-      <rect x="0" y="110" width="272" height="46" rx="10" fill="#111e33" stroke="#1e3a5f" stroke-width="1"/>
-      <circle cx="24" cy="133" r="7" fill="#a78bfa"/>
-      <text x="44" y="131" font-size="14" font-weight="600" fill="#e2e8f0">L3 &#183; ONNX transformers</text>
-      <text x="44" y="146" font-size="12" fill="#7c8ba1">background worker, on promotion</text>
-    </g>
+  <g font-family="'Inter', 'Helvetica Neue', Helvetica, Arial, system-ui, sans-serif">
+    <text x="372" y="84" font-size="15" font-weight="500" letter-spacing="3.2" fill="#527391">PATRONUS &#183; OPEN SECURITY SCANNING</text>
+    <text x="368" y="158" font-size="64" font-weight="700" letter-spacing="-1" fill="#102440">Ark</text>
+    <text x="372" y="210" font-size="27" font-weight="400" fill="#102440">Local scanning for prompt injection, DLP and PII</text>
+    <text x="372" y="245" font-size="27" font-weight="400" fill="#102440">in AI and agent traffic.</text>
+    <text x="372" y="290" font-size="17" font-weight="400" fill="#527391">Rust &amp; Python &#183; Native L1 rules &#183; Wolf Defender &#183; L2/L3 models</text>
   </g>
+
+  <!-- Progress rule -->
+  <line x1="54" y1="324" x2="1146" y2="324" stroke="#e9f3fd" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="54" cy="324" r="5" fill="#4eabff"/>
 </svg>
